@@ -16,56 +16,20 @@ use super::{
 
 defx! {
 
-	pub struct InputHeaders[Types: HWTypes] {
-		pub headers: VecDeque<Header<Types>>,
-	}
-
-	validate this (else InputHeaderError) {
-		is_nonempty: this.headers.len() > 0
-	}
-
-	with { #[derive(Ord, PartialOrd,)] };
-}
-
-defx! {
-
-	pub struct ChainBlocks[T: ChainTypes] {
+	pub struct NonemptyContinuousHeaders[T: ChainTypes] {
 		pub headers: VecDeque<Header<T>>,
 	}
 
-	validate this (else ChainBlocksError) {
+	validate this (else NonemptyContinuousHeadersError) {
 
-		block_heights_are_continuous: pairs.clone().all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height),
+		is_nonempty: this.headers.len() > 0,
 		parent_hashes_match: pairs.clone().all(|(a, b)| a.hash == b.parent_hash),
+		block_heights_are_continuous: pairs.clone().all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height),
 
 		( where pairs = this.headers.iter().zip(this.headers.iter().skip(1)) )
 	}
 
-	with {
-		#[derive(
-			Ord, PartialOrd,
-		)]
-	};
-
-// impl<T: ChainTypes> Validate for ChainBlocks<T> {
-// 	type Error = VoteValidationError;
-
-// 	fn is_valid(&self) -> Result<(), Self::Error> {
-// 		let mut pairs = self.headers.iter().zip(self.headers.iter().skip(1));
-
-// 		if !pairs
-// 			.clone()
-// 			.all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height)
-// 		{
-// 			Err(VoteValidationError::BlockHeightsNotContinuous)
-// 		} else if !pairs.all(|(a, b)| a.hash == b.parent_hash) {
-// 			Err(VoteValidationError::ParentHashMismatch)
-// 		} else {
-// 			Ok(())
-// 		}
-// 	}
-// }
-
+	with { #[derive( Ord, PartialOrd,)] };
 }
 
 #[derive(
@@ -110,16 +74,9 @@ impl<T: ChainTypes> MergeInfo<T> {
 			None
 		}
 	}
-
-	pub fn get_added_block_heights(&self) -> Option<RangeInclusive<T::ChainBlockNumber>> {
-		if let (Some(first), Some(last)) = (self.added.front(), self.added.back()) {
-			Some(first.block_height..=last.block_height)
-		} else {
-			None
-		}
-	}
 }
 
+#[derive(Debug)]
 pub enum MergeFailure<T: ChainTypes> {
 	// If we get a new range of blocks, [lowest_new_block, ...], where the parent of
 	// `lowest_new_block` should, by block number, be `existing_wrong_parent`, but who's
@@ -156,45 +113,19 @@ pub fn trim_to_length<A>(items: &mut VecDeque<A>, target_length: usize) -> VecDe
 	result
 }
 
-pub fn head_and_tail<A: Clone>(items: &VecDeque<A>) -> Option<(A, VecDeque<A>)> {
-	let items = items.clone();
-	items.clone().pop_front().map(|head| (head, items))
-}
-
 #[derive(Debug)]
 pub enum VoteValidationError<T: HWTypes> {
 	BlockHeightsNotContinuous,
 	ParentHashMismatch,
 	EmptyVote,
 	BlockNotMatchingRequestedHeight,
-	ChainBlocksError(ChainBlocksError<T>),
-	InputHeaderError(InputHeaderError<T>),
+	NonemptyContinuousHeadersError(NonemptyContinuousHeadersError<T>),
 }
 
-impl<T: ChainTypes> ChainBlocks<T> {
+impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	pub fn first_height(&self) -> Option<T::ChainBlockNumber> {
 		self.headers.front().map(|h| h.block_height)
 	}
-}
-
-pub fn validate_vote_and_height<T: HWTypes>(
-	next_height: T::ChainBlockNumber,
-	other: &VecDeque<Header<T>>,
-) -> Result<(), VoteValidationError<T>> {
-	// a vote has to be nonempty
-	if other.is_empty() {
-		return Err(VoteValidationError::EmptyVote)
-	}
-
-	// a vote has to start with the next block we expect
-	if other.front().unwrap().block_height != next_height {
-		return Err(VoteValidationError::BlockHeightsNotContinuous)
-	}
-
-	// a vote has to be continous
-	ChainBlocks::<T> { headers: other.clone() }
-		.is_valid()
-		.map_err(VoteValidationError::ChainBlocksError) // validate_continous_headers(other)
 }
 
 pub enum ChainBlocksMergeResult<N> {
@@ -202,7 +133,7 @@ pub enum ChainBlocksMergeResult<N> {
 	FailedMissing { range: Range<N> },
 }
 
-impl<T: ChainTypes> ChainBlocks<T> {
+impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	//
 	// We have the following assumptions:
 	//

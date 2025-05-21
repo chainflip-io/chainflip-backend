@@ -15,7 +15,7 @@ use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
 
 use crate::electoral_systems::{
 	block_height_tracking::{
-		primitives::InputHeaders,
+		primitives::NonemptyContinuousHeaders,
 		state_machine::{tests::*, BHWState, BlockHeightWitnesser},
 		HWTypes, HeightWitnesserProperties,
 	},
@@ -80,7 +80,7 @@ pub fn test_all() {
 				let bhw_input = match index {
 					HeightWitnesserProperties { witness_from_index } =>
 						if witness_from_index == 0 {
-							InputHeaders { headers: VecDeque::from([best_block]) }
+							NonemptyContinuousHeaders { headers: VecDeque::from([best_block]) }
 						} else {
 							let headers = (witness_from_index..=chain.get_best_block_height())
 								.map(|height| chain.get_block_header(height));
@@ -88,7 +88,7 @@ pub fn test_all() {
 								continue;
 							}
 							if let Some(headers) = headers.into_iter().collect::<Option<Vec<_>>>() {
-								InputHeaders { headers: VecDeque::from_iter(headers) }
+								NonemptyContinuousHeaders { headers: VecDeque::from_iter(headers) }
 							} else {
 								continue
 							}

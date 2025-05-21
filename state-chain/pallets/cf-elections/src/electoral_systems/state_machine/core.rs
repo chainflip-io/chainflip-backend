@@ -1,3 +1,4 @@
+use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
 use sp_std::collections::{btree_map::BTreeMap, vec_deque::VecDeque};
 
 use codec::{Decode, Encode};
@@ -101,13 +102,18 @@ macro_rules! derive_error_enum {
 pub(crate) use derive_error_enum;
 
 macro_rules! derive_validation_statements {
-	($this:ident, struct $( pub $Field:ident: $Type:ty ),*
+	($this:ident, $Error:ident, struct { $( $(#[doc = $doc_text:tt])* pub $Field:ident: $Type:ty, )* }
 	) => {
 		$(
-			$this.$Field.validate().map_err(Self::$Field)?;
-		),*
+			$this.$Field.is_valid().map_err($Error::$Field)?;
+		)*
+	};
+
+	($Error:ident, $this:ident, enum { $( $anything:tt )* }
+	) => {
 	};
 }
+pub(crate) use derive_validation_statements;
 
 /// Syntax sugar for adding validation code to types with validity requirements
 macro_rules! defx {
@@ -160,6 +166,8 @@ macro_rules! defx {
 						let $prop_var = $prop_var_value;
 					)*
 				)?
+
+				crate::electoral_systems::state_machine::core::derive_validation_statements!($this, $Error, $def { $($Definition)* } );
 
 				$(
 					frame_support::ensure!($prop, $Error::$prop_name);
@@ -358,7 +366,32 @@ impl<A, B: sp_std::fmt::Debug + Clone> Validate for Result<A, B> {
 	}
 }
 
+impl<C: ChainWitnessConfig> Validate for BlockWitnessRange<C> {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		// TODO, actually check something
+		Ok(())
+	}
+}
+
+impl Validate for bool {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
 impl Validate for u8 {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+impl Validate for u32 {
 	type Error = ();
 
 	fn is_valid(&self) -> Result<(), Self::Error> {

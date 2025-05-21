@@ -329,6 +329,8 @@ where
 		let num_authorities = consensus_votes.num_authorities();
 
 		for vote in consensus_votes.active_votes() {
+			// TODO call vote.is_valid here
+
 			// insert vote if it is valid for the given properties
 			if Bounds::Statemachine::validate(&properties, &vote).is_ok() {
 				log::info!("inserting vote {vote:?}");

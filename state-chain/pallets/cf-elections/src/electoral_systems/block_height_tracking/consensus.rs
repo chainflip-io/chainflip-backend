@@ -2,7 +2,7 @@ use cf_chains::witness_period::BlockZero;
 use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
 use super::{
-	primitives::{validate_vote_and_height, InputHeaders},
+	primitives::{validate_vote_and_height, NonemptyContinuousHeaders},
 	HWTypes, HeightWitnesserProperties,
 };
 use crate::electoral_systems::state_machine::consensus::{
@@ -10,7 +10,7 @@ use crate::electoral_systems::state_machine::consensus::{
 };
 
 pub struct BlockHeightTrackingConsensus<T: HWTypes> {
-	votes: Vec<InputHeaders<T>>,
+	votes: Vec<NonemptyContinuousHeaders<T>>,
 }
 
 impl<T: HWTypes> Default for BlockHeightTrackingConsensus<T> {
@@ -20,8 +20,8 @@ impl<T: HWTypes> Default for BlockHeightTrackingConsensus<T> {
 }
 
 impl<T: HWTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
-	type Vote = InputHeaders<T>;
-	type Result = InputHeaders<T>;
+	type Vote = NonemptyContinuousHeaders<T>;
+	type Result = NonemptyContinuousHeaders<T>;
 	type Settings = (Threshold, HeightWitnesserProperties<T>);
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
@@ -45,7 +45,7 @@ impl<T: HWTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
 				.map(|result| {
 					let mut headers = VecDeque::new();
 					headers.push_back(result);
-					InputHeaders { headers }
+					NonemptyContinuousHeaders { headers }
 				})
 				.map(|result| {
 					log::info!("block_height: initial consensus: {result:?}");
@@ -58,14 +58,6 @@ impl<T: HWTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
 				StagedConsensus::new();
 
 			for mut vote in self.votes.clone() {
-				// ensure that the vote is valid
-				if let Err(err) =
-					validate_vote_and_height(properties.witness_from_index, &vote.headers)
-				{
-					log::warn!("received invalid vote: {err:?} ");
-					continue;
-				}
-
 				// we count a given vote as multiple votes for all nonempty subchains
 				while !vote.headers.is_empty() {
 					consensus.insert_vote((vote.headers.len(), vote.clone()));

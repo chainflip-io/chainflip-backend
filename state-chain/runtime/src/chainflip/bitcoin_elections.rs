@@ -22,7 +22,7 @@ use pallet_cf_elections::{
 	electoral_system::{ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		block_height_tracking::{
-			consensus::BlockHeightTrackingConsensus, primitives::InputHeaders,
+			consensus::BlockHeightTrackingConsensus, primitives::NonemptyContinuousHeaders,
 			state_machine::BlockHeightWitnesser, BlockHeightChangeHook, ChainProgressFor,
 			ChainTypes, HWTypes, HeightWitnesserProperties,
 		},
@@ -110,8 +110,8 @@ impls! {
 		type ElectionIdentifierExtra = ();
 		type ElectionProperties = HeightWitnesserProperties<Self>;
 		type ElectionState = ();
-		type VoteStorage = vote_storage::bitmap::Bitmap<InputHeaders<Self>>;
-		type Consensus = InputHeaders<Self>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<NonemptyContinuousHeaders<Self>>;
+		type Consensus = NonemptyContinuousHeaders<Self>;
 		type OnFinalizeContext = Vec<()>;
 		type OnFinalizeReturn = Vec<ChainProgressFor<Self>>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;

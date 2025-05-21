@@ -156,14 +156,20 @@ pub trait Statemachine: AbstractApi + 'static {
 		states: impl Strategy<Value = Self::State>,
 		settings: impl Strategy<Value = Self::Settings>,
 		inputs: impl Fn(Self::Query) -> BoxedStrategy<Self::Response>,
-		context: impl Strategy<Value = Self::Context>,
+		context: impl Strategy<Value = Self::Context> + Clone,
 	) where
+		Self::Query: sp_std::fmt::Debug + Clone + Send + PartialEq,
+		Self::Response: sp_std::fmt::Debug + Clone + Send,
 		Self::State: sp_std::fmt::Debug + Clone + Send,
 		Self::Context: sp_std::fmt::Debug + Clone + Send,
 		Self::Settings: sp_std::fmt::Debug + Clone + Send,
 		Self::Error: sp_std::fmt::Debug,
 	{
-		use proptest::test_runner::{Config, FileFailurePersistence};
+		use proptest::{
+			prop_oneof,
+			sample::select,
+			test_runner::{Config, FileFailurePersistence},
+		};
 
 		let mut runner = TestRunner::new(Config {
 			source_file: Some(path),
@@ -174,95 +180,105 @@ pub trait Statemachine: AbstractApi + 'static {
 			..Default::default()
 		});
 
-		/*
-				runner
-					.run(
-						&((states, settings).prop_flat_map(|(mut state, settings)| {
-							(Just(state.clone()), inputs(Self::input_index(&mut state)), Just(settings))
-						})),
-						run_with_timeout(
-							10,
-							|(mut state, input, settings): (Self::State, Either<Self::Context, Api::Response>, Self::Settings)| {
-								println!("running test");
-								// ensure that inputs are well formed
-								assert!(
-									state.is_valid().is_ok(),
-									"input state not valid {:?}",
-									state.is_valid()
-								);
-
-								// ensure input has correct index
-								Self::validate(&Self::input_index(&mut state), &input)
-									.map_err(|err| format!("input has wrong index: {err:?}"))
-									.unwrap();
-
-								// backup state
-								let mut prev_state = state.clone();
-
-								// run step function and ensure that output is valid
-								let output = Self::step(&mut state, input.clone(), &settings);
-								assert!(output.is_valid().is_ok(), "step function failed");
-
-								// ensure that state is still well formed
-								assert!(
-									state.is_valid().is_ok(),
-									"state after step function is not valid ({:?})",
-									state
-								);
-
-								// ensure that step function computed valid state
-								Self::step_specification(
-									&mut prev_state,
-									&input,
-									&output,
-									&settings,
-									&state,
-								);
-
-								println!("done test");
-								Ok(())
-							},
-						),
+		runner
+			.run(
+				&((states, settings).prop_flat_map(|(mut state, settings)| {
+					(
+						Just(state.clone()),
+						prop_oneof![
+							context.clone().prop_map(Either::Left),
+							select(Self::input_index(&mut state))
+								.prop_flat_map(|index| (Just(index.clone()), inputs(index)))
+								.prop_map(Either::Right),
+						],
+						Just(settings),
 					)
-					.unwrap();
-			}
-		}
+				})),
+				run_with_timeout(
+					10,
+					|(mut state, input, settings): (
+						Self::State,
+						Either<Self::Context, (Self::Query, Self::Response)>,
+						Self::Settings,
+					)| {
+						println!("running test");
+						// ensure that inputs are well formed
+						assert!(
+							state.is_valid().is_ok(),
+							"input state not valid {:?}",
+							state.is_valid()
+						);
 
-		#[cfg(test)]
-		pub fn run_with_timeout<
-			A: Send + Clone + Debug + 'static,
-			B: Send + 'static,
-			F: Fn(A) -> B + Send + Clone + 'static,
-		>(
-			seconds: u64,
-			f: F,
-		) -> impl Fn(A) -> B {
-			move |a| {
-				let f1 = f.clone();
-				let a1 = a.clone();
-				tokio::runtime::Builder::new_current_thread()
-					.enable_all()
-					.build()
-					.unwrap()
-					.block_on(async move {
-						let f2 = f1.clone();
-						let a2 = a1.clone();
-						let a3 = a1.clone();
-						tokio::time::timeout(
-							std::time::Duration::from_secs(seconds),
-							tokio::task::spawn_blocking(move || f2(a2)),
-						)
-						.await
-						.map_err(move |_| format!("task failed with input {:#?}", a3))
-						.map_err(|err| {
-							println!("{err}");
-							err
-						})
-						.unwrap()
-					})
-					.unwrap()
+						// ensure input has correct index
+						Self::validate_input(&Self::input_index(&mut state), &input)
+							.map_err(|err| format!("input has wrong index: {err:?}"))
+							.unwrap();
 
-		 */
+						// backup state
+						let mut prev_state = state.clone();
+
+						// run step function and ensure that output is valid
+						let output = Self::step(&mut state, input.clone(), &settings);
+						assert!(output.is_valid().is_ok(), "step function failed");
+
+						// ensure that state is still well formed
+						assert!(
+							state.is_valid().is_ok(),
+							"state after step function is not valid ({:?})",
+							state
+						);
+
+						// ensure that step function computed valid state
+						Self::step_specification(
+							&mut prev_state,
+							&input,
+							&output,
+							&settings,
+							&state,
+						);
+
+						println!("done test");
+						Ok(())
+					},
+				),
+			)
+			.unwrap();
+	}
+}
+
+#[cfg(test)]
+pub fn run_with_timeout<
+	A: Send + Clone + Debug + 'static,
+	B: Send + 'static,
+	F: Fn(A) -> B + Send + Clone + 'static,
+>(
+	seconds: u64,
+	f: F,
+) -> impl Fn(A) -> B {
+	move |a| {
+		let f1 = f.clone();
+		let a1 = a.clone();
+		tokio::runtime::Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.unwrap()
+			.block_on(async move {
+				let f2 = f1.clone();
+				let a2 = a1.clone();
+				let a3 = a1.clone();
+				tokio::time::timeout(
+					std::time::Duration::from_secs(seconds),
+					tokio::task::spawn_blocking(move || f2(a2)),
+				)
+				.await
+				.map_err(move |_| format!("task failed with input {:#?}", a3))
+				.map_err(|err| {
+					println!("{err}");
+					err
+				})
+				.unwrap()
+			})
+			.unwrap()
 	}
 }
 

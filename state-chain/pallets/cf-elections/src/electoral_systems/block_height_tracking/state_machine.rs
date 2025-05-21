@@ -2,15 +2,14 @@ use super::{
 	super::state_machine::{
 		core::Validate, state_machine::Statemachine, state_machine_es::SMInput,
 	},
-	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
+	primitives::{
+		trim_to_length, Header, MergeFailure, NonemptyContinuousHeaders, VoteValidationError,
+	},
 	ChainProgress, ChainProgressFor, HWTypes, HeightWitnesserProperties,
 };
-use crate::electoral_systems::{
-	block_height_tracking::primitives::InputHeaders,
-	state_machine::{
-		core::{defx, Hook},
-		state_machine::AbstractApi,
-	},
+use crate::electoral_systems::state_machine::{
+	core::{defx, Hook},
+	state_machine::AbstractApi,
 };
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
@@ -26,16 +25,13 @@ defx! {
 
 	pub enum BHWState[T: HWTypes] {
 		Starting,
-		Running { headers: VecDeque<Header<T>>, witness_from: T::ChainBlockNumber },
+		Running { headers: NonemptyContinuousHeaders<T>, witness_from: T::ChainBlockNumber },
 	}
 
 	validate this (else BHWStateError) {
 		is_valid: match this {
 			BHWState::Starting => true,
-			BHWState::Running { headers, witness_from: _ } =>
-				InputHeaders::<T> { headers: headers.clone() }
-					.is_valid()
-					.is_ok(),
+			BHWState::Running { headers, witness_from: _ } => headers.is_valid().is_ok()
 		}
 	};
 
@@ -63,14 +59,14 @@ defx! {
 
 	impl AbstractApi {
 		type Query = HeightWitnesserProperties<T>;
-		type Response = InputHeaders<T>;
+		type Response = NonemptyContinuousHeaders<T>;
 		type Error = VoteValidationError<T>;
 
 		fn validate(
 			base: &HeightWitnesserProperties<T>,
-			this: &InputHeaders<T>,
+			this: &NonemptyContinuousHeaders<T>,
 		) -> Result<(), Self::Error> {
-			this.is_valid().map_err(VoteValidationError::InputHeaderError)?;
+			this.is_valid().map_err(VoteValidationError::NonemptyContinuousHeadersError)?;
 
 			if base.witness_from_index.is_zero() {
 				Ok(())
@@ -169,7 +165,7 @@ defx! {
 					let first = new_headers.headers.front().unwrap().block_height;
 					let last = new_headers.headers.back().unwrap().block_height;
 					s.state = BHWState::Running {
-						headers: new_headers.headers.clone(),
+						headers: new_headers.clone(),
 						witness_from: last.saturating_forward(1),
 					};
 					let hashes = new_headers
@@ -181,7 +177,7 @@ defx! {
 				},
 
 				BHWState::Running { headers, witness_from } => {
-					let mut chainblocks = ChainBlocks { headers: headers.clone() };
+					let mut chainblocks = headers.clone();
 
 					match chainblocks.merge(new_headers.headers) {
 						Ok(merge_info) => {
@@ -193,10 +189,10 @@ defx! {
 
 							let _ = trim_to_length(&mut chainblocks.headers, T::BLOCK_BUFFER_SIZE);
 
-							*headers = chainblocks.headers;
-							*witness_from = headers.back().unwrap().block_height.saturating_forward(1);
+							*headers = chainblocks;
+							*witness_from = headers.headers.back().unwrap().block_height.saturating_forward(1);
 
-							let highest_seen = headers.back().unwrap().block_height;
+							let highest_seen = headers.headers.back().unwrap().block_height;
 							s.block_height_update.run(highest_seen);
 
 							// if we merge after a reorg, and the blocks we got are the same
@@ -209,7 +205,7 @@ defx! {
 							existing_wrong_parent,
 						}) => {
 							log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
-							*witness_from = headers.front().unwrap().block_height;
+							*witness_from = headers.headers.front().unwrap().block_height;
 							Ok(ChainProgress::None)
 						},
 
@@ -232,7 +228,9 @@ defx! {
 pub mod tests {
 	use crate::{
 		electoral_systems::{
-			block_height_tracking::{BlockHeightChangeHook, ChainTypes},
+			block_height_tracking::{
+				primitives::NonemptyContinuousHeaders, BlockHeightChangeHook, ChainTypes,
+			},
 			block_witnesser::state_machine::HookTypeFor,
 			state_machine::core::{hook_test_utils::MockHook, Serde, TypesFor, Validate},
 		},
@@ -256,12 +254,12 @@ pub mod tests {
 			primitives::Header,
 			HWTypes, HeightWitnesserProperties,
 		},
-		BHWState, BlockHeightWitnesser, InputHeaders,
+		BHWState, BlockHeightWitnesser,
 	};
 
 	pub fn generate_input<T: HWTypes>(
 		properties: HeightWitnesserProperties<T>,
-	) -> impl Strategy<Value = InputHeaders<T>>
+	) -> impl Strategy<Value = NonemptyContinuousHeaders<T>>
 	where
 		T::ChainBlockHash: Arbitrary,
 		T::ChainBlockNumber: Arbitrary + BlockZero,
@@ -277,7 +275,7 @@ pub mod tests {
 						hash: h1.clone(),
 						parent_hash: h0.clone(),
 					});
-				InputHeaders::<T>{ headers: headers.collect() }
+				NonemptyContinuousHeaders::<T>{ headers: headers.collect() }
 			}
 		}
 	}
@@ -300,7 +298,7 @@ pub mod tests {
 					} else {
 						headers.headers.back().unwrap().block_height.saturating_forward(1)
 					};
-					BHWState::Running { headers: headers.headers, witness_from }
+					BHWState::Running { headers, witness_from }
 				}
 			}
 		]
@@ -348,63 +346,73 @@ pub mod tests {
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 	}
 
-	/*
+	#[test]
+	pub fn test_dsm() {
+		BlockHeightWitnesser::<TypesFor<(u32, Vec<char>, ())>>::test(
+			module_path!(),
+			generate_state(),
+			Just(()),
+			|index| {
+				prop_do! {
+					let input in generate_input(index);
+					return input
+				}
+				.boxed()
+			},
+			Just(()),
+		);
+	}
 
-	   #[test]
-	   pub fn test_dsm() {
-		   BlockHeightTrackingSM::<(u32, Vec<char>, ())>::test(
-			   module_path!(),
-			   generate_state(),
-			   Just(()),
-			   |indices| {
-				   prop_oneof![
-					   Just(SMInput::Context(())),
-					   prop_do! {
-						   let index in select(indices);
-						   let input in generate_input(index);
-						   return SMInput::Consensus((index, input))
-					   }
-				   ]
-				   .boxed()
-			   },
-		   );
-	   }
+	#[test]
+	pub fn test_merge() {
+		let mut x: NonemptyContinuousHeaders<TypesFor<(u32, Vec<char>, ())>> =
+			NonemptyContinuousHeaders {
+				headers: [Header { block_height: 100, hash: vec!['a'], parent_hash: vec!['z'] }]
+					.into(),
+			};
 
-	   struct TestChain {}
-	   impl ChainWitnessConfig for TestChain {
-		   const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
-		   type ChainBlockNumber = u32;
-	   }
+		let result =
+			x.merge([Header { block_height: 100, hash: vec!['b'], parent_hash: vec!['y'] }].into());
 
-	   impl ChainTypes for TestTypes2 {
-		   type ChainBlockNumber = BlockWitnessRange<TestChain>;
-		   type ChainBlockHash = bool;
+		println!("{x:?} and result {result:?}");
 
-		   const SAFETY_MARGIN: u32 = 16;
-	   }
+		assert!(x.headers.is_empty());
+	}
 
-	   #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
-	   struct TestTypes2 {}
-	   impl HWTypes for TestTypes2 {
-		   const BLOCK_BUFFER_SIZE: usize = 16;
-		   type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
-	   }
+	struct TestChain {}
+	impl ChainWitnessConfig for TestChain {
+		const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+		type ChainBlockNumber = u32;
+	}
 
-	   #[test]
-	   pub fn test_dsm2() {
-		   BlockHeightTrackingSM::<TestTypes2>::test(
-			   module_path!(),
-			   generate_state(),
-			   Just(()),
-			   |indices| {
-				   prop_do! {
-					   let index in select(indices);
-					   let input in generate_input(index);
-					   return SMInput::Consensus((index, input))
-				   }
-				   .boxed()
-			   },
-		   );
-	   }
-	*/
+	impl ChainTypes for TestTypes2 {
+		type ChainBlockNumber = BlockWitnessRange<TestChain>;
+		type ChainBlockHash = bool;
+
+		const SAFETY_MARGIN: u32 = 16;
+	}
+
+	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+	struct TestTypes2 {}
+	impl HWTypes for TestTypes2 {
+		const BLOCK_BUFFER_SIZE: usize = 16;
+		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
+	}
+
+	#[test]
+	pub fn test_dsm2() {
+		BlockHeightWitnesser::<TestTypes2>::test(
+			module_path!(),
+			generate_state(),
+			Just(()),
+			|index| {
+				prop_do! {
+					let input in generate_input(index);
+					return input
+				}
+				.boxed()
+			},
+			Just(()),
+		);
+	}
 }
