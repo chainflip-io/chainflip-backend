@@ -1,12 +1,16 @@
 use crate::electoral_systems::{
 	block_height_tracking::{
 		consensus::BlockHeightTrackingConsensus,
-		primitives::{Header, VoteValidationError},
+		primitives::{
+			Header, NonemptyContinuousHeaders, NonemptyContinuousHeadersError, VoteValidationError,
+		},
+		state_machine::BlockHeightWitnesser,
 		ChainTypes, HWTypes, HeightWitnesserProperties,
 	},
 	state_machine::{
 		consensus::{ConsensusMechanism, Threshold},
 		core::{hook_test_utils::EmptyHook, TypesFor},
+		state_machine::AbstractApi,
 	},
 };
 use cf_chains::{mocks::MockEthereum, Chain};
@@ -44,32 +48,35 @@ fn block_height_witnesser_first_consensus() {
 	let mut bh_consensus: BlockHeightTrackingConsensus<BHTypes> =
 		BlockHeightTrackingConsensus::default();
 
-	bh_consensus.insert_vote(InputHeaders::<BHTypes>(VecDeque::from([
-		Header::<BHTypes> { block_height: 5, hash: 1234, parent_hash: 000 },
-		Header::<BHTypes> { block_height: 6, hash: 1234, parent_hash: 000 },
-	])));
-	bh_consensus.insert_vote(InputHeaders::<BHTypes>(VecDeque::from([
-		Header::<BHTypes> { block_height: 6, hash: 1234, parent_hash: 000 },
-		Header::<BHTypes> { block_height: 7, hash: 1234, parent_hash: 000 },
-	])));
-	bh_consensus.insert_vote(InputHeaders::<BHTypes>(VecDeque::from([
-		Header::<BHTypes> { block_height: 5, hash: 1234, parent_hash: 000 },
-		Header::<BHTypes> { block_height: 6, hash: 1234, parent_hash: 000 },
-	])));
-	bh_consensus.insert_vote(InputHeaders::<BHTypes>(VecDeque::from([Header::<BHTypes> {
-		block_height: 5,
-		hash: 1234,
-		parent_hash: 000,
-	}])));
+	bh_consensus.insert_vote(
+		[
+			Header { block_height: 5, hash: 1234, parent_hash: 000 },
+			Header { block_height: 6, hash: 1234, parent_hash: 000 },
+		]
+		.into(),
+	);
+	bh_consensus.insert_vote(
+		[
+			Header { block_height: 6, hash: 1234, parent_hash: 000 },
+			Header { block_height: 7, hash: 1234, parent_hash: 000 },
+		]
+		.into(),
+	);
+	bh_consensus.insert_vote(
+		[
+			Header { block_height: 5, hash: 1234, parent_hash: 000 },
+			Header { block_height: 6, hash: 1234, parent_hash: 000 },
+		]
+		.into(),
+	);
+	bh_consensus.insert_vote([Header { block_height: 5, hash: 1234, parent_hash: 000 }].into());
 	let consensus =
 		bh_consensus.check_consensus(&(Threshold { threshold: 3 }, BHW_PROPERTIES_STARTUP));
 	assert_eq!(
 		consensus,
-		Some(InputHeaders::<BHTypes>(VecDeque::from([Header::<BHTypes> {
-			block_height: 6,
-			hash: 1234,
-			parent_hash: 000,
-		},])))
+		Some(NonemptyContinuousHeaders {
+			headers: [Header::<BHTypes> { block_height: 6, hash: 1234, parent_hash: 000 }].into()
+		})
 	)
 }
 
@@ -81,87 +88,123 @@ fn block_height_witnesser_running_consensus() {
 	let mut bh_consensus: BlockHeightTrackingConsensus<BHTypes> =
 		BlockHeightTrackingConsensus::default();
 
-	bh_consensus.insert_vote(InputHeaders::<BHTypes>(VecDeque::from([
-		Header::<BHTypes> { block_height: 5, hash: 5, parent_hash: 0 },
-		Header::<BHTypes> { block_height: 6, hash: 6, parent_hash: 5 },
-		Header::<BHTypes> { block_height: 7, hash: 7, parent_hash: 6 },
-	])));
-	bh_consensus.insert_vote(InputHeaders::<BHTypes>(VecDeque::from([
-		Header::<BHTypes> { block_height: 5, hash: 5, parent_hash: 0 },
-		Header::<BHTypes> { block_height: 6, hash: 6, parent_hash: 5 },
-		Header::<BHTypes> { block_height: 7, hash: 7, parent_hash: 6 },
-	])));
-	bh_consensus.insert_vote(InputHeaders::<BHTypes>(VecDeque::from([
-		Header::<BHTypes> { block_height: 5, hash: 5, parent_hash: 0 },
-		Header::<BHTypes> { block_height: 6, hash: 6, parent_hash: 5 },
-	])));
-	bh_consensus.insert_vote(InputHeaders::<BHTypes>(VecDeque::from([
-		Header::<BHTypes> { block_height: 5, hash: 5, parent_hash: 0 },
-		Header::<BHTypes> { block_height: 6, hash: 6, parent_hash: 5 },
-		Header::<BHTypes> { block_height: 7, hash: 777, parent_hash: 6 },
-	])));
-	let consensus =
-		bh_consensus.check_consensus(&(Threshold { threshold: 3 }, BHW_PROPERTIES_RUNNING));
-	assert_eq!(
-		consensus,
-		Some(InputHeaders::<BHTypes>(VecDeque::from([
-			Header::<BHTypes> { block_height: 5, hash: 5, parent_hash: 0 },
-			Header::<BHTypes> { block_height: 6, hash: 6, parent_hash: 5 },
-		])))
+	bh_consensus.insert_vote(
+		[
+			Header { block_height: 5, hash: 5, parent_hash: 0 },
+			Header { block_height: 6, hash: 6, parent_hash: 5 },
+			Header { block_height: 7, hash: 7, parent_hash: 6 },
+		]
+		.into(),
 	);
-	bh_consensus.insert_vote(InputHeaders::<BHTypes>(VecDeque::from([
-		Header::<BHTypes> { block_height: 5, hash: 5, parent_hash: 0 },
-		Header::<BHTypes> { block_height: 6, hash: 6, parent_hash: 5 },
-		Header::<BHTypes> { block_height: 7, hash: 7, parent_hash: 6 },
-	])));
+	bh_consensus.insert_vote(
+		[
+			Header { block_height: 5, hash: 5, parent_hash: 0 },
+			Header { block_height: 6, hash: 6, parent_hash: 5 },
+			Header { block_height: 7, hash: 7, parent_hash: 6 },
+		]
+		.into(),
+	);
+	bh_consensus.insert_vote(
+		[
+			Header { block_height: 5, hash: 5, parent_hash: 0 },
+			Header { block_height: 6, hash: 6, parent_hash: 5 },
+		]
+		.into(),
+	);
+	bh_consensus.insert_vote(
+		[
+			Header { block_height: 5, hash: 5, parent_hash: 0 },
+			Header { block_height: 6, hash: 6, parent_hash: 5 },
+			Header { block_height: 7, hash: 777, parent_hash: 6 },
+		]
+		.into(),
+	);
 	let consensus =
 		bh_consensus.check_consensus(&(Threshold { threshold: 3 }, BHW_PROPERTIES_RUNNING));
 	assert_eq!(
 		consensus,
-		Some(InputHeaders::<BHTypes>(VecDeque::from([
-			Header::<BHTypes> { block_height: 5, hash: 5, parent_hash: 0 },
-			Header::<BHTypes> { block_height: 6, hash: 6, parent_hash: 5 },
-			Header::<BHTypes> { block_height: 7, hash: 7, parent_hash: 6 },
-		])))
+		Some(NonemptyContinuousHeaders::<BHTypes> {
+			headers: [
+				Header { block_height: 5, hash: 5, parent_hash: 0 },
+				Header { block_height: 6, hash: 6, parent_hash: 5 },
+			]
+			.into()
+		})
+	);
+	bh_consensus.insert_vote(
+		[
+			Header { block_height: 5, hash: 5, parent_hash: 0 },
+			Header { block_height: 6, hash: 6, parent_hash: 5 },
+			Header { block_height: 7, hash: 7, parent_hash: 6 },
+		]
+		.into(),
+	);
+	let consensus =
+		bh_consensus.check_consensus(&(Threshold { threshold: 3 }, BHW_PROPERTIES_RUNNING));
+	assert_eq!(
+		consensus,
+		Some(NonemptyContinuousHeaders::<BHTypes> {
+			headers: [
+				Header { block_height: 5, hash: 5, parent_hash: 0 },
+				Header { block_height: 6, hash: 6, parent_hash: 5 },
+				Header { block_height: 7, hash: 7, parent_hash: 6 },
+			]
+			.into()
+		})
 	);
 }
 
 #[test]
 fn test_validate_vote_and_height() {
-	let result = validate_vote_and_height(
-		BHW_PROPERTIES_RUNNING.witness_from_index,
-		&VecDeque::<Header<BHTypes>>::from([]),
+	let result = BlockHeightWitnesser::<BHTypes>::validate(&BHW_PROPERTIES_RUNNING, &[].into());
+	assert_eq!(
+		result.unwrap_err(),
+		VoteValidationError::NonemptyContinuousHeadersError(
+			NonemptyContinuousHeadersError::is_nonempty
+		)
 	);
-	assert_eq!(result.unwrap_err(), VoteValidationError::EmptyVote);
-	let result = validate_vote_and_height(
-		BHW_PROPERTIES_RUNNING.witness_from_index,
-		&VecDeque::from([
-			Header::<BHTypes> { block_height: 5, hash: 5, parent_hash: 0 },
-			Header::<BHTypes> { block_height: 6, hash: 6, parent_hash: 5 },
-		]),
+	let result = BlockHeightWitnesser::<BHTypes>::validate(
+		&BHW_PROPERTIES_RUNNING,
+		&[
+			Header { block_height: 5, hash: 5, parent_hash: 0 },
+			Header { block_height: 6, hash: 6, parent_hash: 5 },
+		]
+		.into(),
 	);
 	assert!(result.is_ok());
-	let result = validate_vote_and_height(
-		BHW_PROPERTIES_RUNNING.witness_from_index,
-		&VecDeque::from([Header::<BHTypes> { block_height: 6, hash: 6, parent_hash: 5 }]),
+	let result = BlockHeightWitnesser::<BHTypes>::validate(
+		&BHW_PROPERTIES_RUNNING,
+		&[Header { block_height: 6, hash: 6, parent_hash: 5 }].into(),
 	);
 	assert_eq!(result.unwrap_err(), VoteValidationError::BlockNotMatchingRequestedHeight);
 
-	let result = validate_vote_and_height(
-		BHW_PROPERTIES_RUNNING.witness_from_index,
-		&VecDeque::from([
-			Header::<BHTypes> { block_height: 5, hash: 5, parent_hash: 0 },
-			Header::<BHTypes> { block_height: 6, hash: 6, parent_hash: 4 },
-		]),
+	let result = BlockHeightWitnesser::<BHTypes>::validate(
+		&BHW_PROPERTIES_RUNNING,
+		&[
+			Header { block_height: 5, hash: 5, parent_hash: 0 },
+			Header { block_height: 6, hash: 6, parent_hash: 4 },
+		]
+		.into(),
 	);
-	assert_eq!(result.unwrap_err(), VoteValidationError::ParentHashMismatch);
+	assert_eq!(
+		result.unwrap_err(),
+		VoteValidationError::NonemptyContinuousHeadersError(
+			NonemptyContinuousHeadersError::parent_hashes_match
+		)
+	);
 
-	let result = validate_vote_and_height(
-		BHW_PROPERTIES_RUNNING.witness_from_index,
-		&VecDeque::from([
-			Header::<BHTypes> { block_height: 5, hash: 5, parent_hash: 0 },
-			Header::<BHTypes> { block_height: 7, hash: 7, parent_hash: 7 },
-		]),
+	let result = BlockHeightWitnesser::<BHTypes>::validate(
+		&BHW_PROPERTIES_RUNNING,
+		&[
+			Header { block_height: 5, hash: 5, parent_hash: 0 },
+			Header { block_height: 7, hash: 7, parent_hash: 5 },
+		]
+		.into(),
 	);
-	assert_eq!(result.unwrap_err(), VoteValidationError::BlockHeightsNotContinuous);
+	assert_eq!(
+		result.unwrap_err(),
+		VoteValidationError::NonemptyContinuousHeadersError(
+			NonemptyContinuousHeadersError::block_heights_are_continuous
+		)
+	);
 }

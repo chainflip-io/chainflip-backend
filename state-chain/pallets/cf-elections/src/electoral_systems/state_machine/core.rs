@@ -64,7 +64,7 @@ macro_rules! derive_error_enum {
 	($Error:ident [$($ParamsDef:tt)*], struct { $( $(#[doc = $doc_text:tt])* pub $Field:ident: $Type:ty, )* } { $( $property:ident ),* }
 	) => {
 
-		#[derive_where::derive_where(Debug)]
+		#[derive_where::derive_where(Debug, PartialEq)]
 		#[allow(non_camel_case_types)]
 		pub enum $Error<$($ParamsDef)*> {
 
@@ -82,7 +82,7 @@ macro_rules! derive_error_enum {
 	($Error:ident [$($ParamName:ident: $ParamType:tt),*], enum { $( $anything:tt )* } { $( $property:ident ),* }
 	) => {
 
-		#[derive_where::derive_where(Debug; )]
+		#[derive_where::derive_where(Debug, PartialEq; )]
 		#[allow(non_camel_case_types)]
 		pub enum $Error<$($ParamName: $ParamType),*> {
 
@@ -318,7 +318,7 @@ pub mod hook_test_utils {
 
 /// A type which can be validated.
 pub trait Validate {
-	type Error: sp_std::fmt::Debug;
+	type Error: sp_std::fmt::Debug + PartialEq;
 	fn is_valid(&self) -> Result<(), Self::Error>;
 }
 
@@ -355,7 +355,7 @@ impl<A: Validate> Validate for VecDeque<A> {
 	}
 }
 
-impl<A, B: sp_std::fmt::Debug + Clone> Validate for Result<A, B> {
+impl<A, B: sp_std::fmt::Debug + Clone + PartialEq> Validate for Result<A, B> {
 	type Error = B;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {

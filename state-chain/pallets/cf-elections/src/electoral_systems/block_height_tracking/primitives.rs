@@ -32,6 +32,12 @@ defx! {
 	with { #[derive( Ord, PartialOrd,)] };
 }
 
+impl<X: IntoIterator<Item = Header<T>>, T: ChainTypes> From<X> for NonemptyContinuousHeaders<T> {
+	fn from(value: X) -> Self {
+		NonemptyContinuousHeaders { headers: value.into_iter().collect() }
+	}
+}
+
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
@@ -113,7 +119,7 @@ pub fn trim_to_length<A>(items: &mut VecDeque<A>, target_length: usize) -> VecDe
 	result
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum VoteValidationError<T: HWTypes> {
 	BlockHeightsNotContinuous,
 	ParentHashMismatch,
