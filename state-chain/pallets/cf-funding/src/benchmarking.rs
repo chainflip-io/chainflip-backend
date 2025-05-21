@@ -18,6 +18,7 @@
 
 use super::*;
 
+use cf_primitives::AccountRole;
 use cf_traits::Chainflip;
 use frame_benchmarking::v2::*;
 use frame_support::{
@@ -189,6 +190,23 @@ mod benchmarks {
 		bind_executor_address(RawOrigin::Signed(caller.clone()), Default::default());
 
 		assert!(BoundExecutorAddress::<T>::contains_key(&caller));
+	}
+
+	#[benchmark]
+	fn rebalance() {
+		let validators = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
+			AccountRole::Validator,
+			2,
+		)
+		.unwrap();
+
+		let sender = validators[0].clone();
+		let recipient = validators[1].clone();
+
+		fund_with_minimum::<T>(&sender);
+
+		#[extrinsic_call]
+		rebalance(RawOrigin::Signed(sender), recipient, Default::default(), RedemptionAmount::Max);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

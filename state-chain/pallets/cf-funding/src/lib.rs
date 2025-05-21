@@ -677,7 +677,7 @@ pub mod pallet {
 		/// - [ExecutorBindingRestrictionViolated](Error::ExecutorBindingRestrictionViolated)
 		/// - [AccountBindingRestrictionViolated](Error::AccountBindingRestrictionViolated)
 		#[pallet::call_index(11)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::rebalance())]
 		pub fn rebalance(
 			origin: OriginFor<T>,
 			recipient_account_id: AccountId<T>,
