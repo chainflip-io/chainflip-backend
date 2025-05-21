@@ -166,12 +166,11 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		&mut self,
 		chain_progress: ChainProgressInner<T::ChainBlockNumber>,
 		block_data: Option<(T::ChainBlockNumber, T::BlockData, u32)>,
-		safety_margin: u32,
 	) {
 		if let Some(block_data) = block_data {
 			self.process_block_data(block_data);
 		}
-		self.process_chain_progress(chain_progress, safety_margin);
+		self.process_chain_progress(chain_progress);
 	}
 
 	pub fn process_block_data(
@@ -189,7 +188,6 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	pub fn process_chain_progress(
 		&mut self,
 		chain_progress: ChainProgressInner<T::ChainBlockNumber>,
-		safety_margin: u32,
 	) {
 		let last_block: T::ChainBlockNumber;
 		match chain_progress {
@@ -198,22 +196,27 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			},
 			ChainProgressInner::Reorg(range) => {
 				last_block = *range.start();
-
+				let expiry = range.end().saturating_forward(T::SAFETY_MARGIN as usize);
 				for n in range.clone() {
-					self.blocks_data.remove(&n);
-				}
-
-				for (event, stored_expiry) in self.processed_events.iter_mut() {
-					let expiry = range.end().saturating_forward(safety_margin as usize);
-					let new_expiry = stored_expiry.clone().max(expiry);
-					self.delete_data.run(BlockProcessorEvent::UpdatingExpiry {
-						event: event.clone(),
-						from: stored_expiry.clone(),
-						to: new_expiry,
-						safety_margin,
-						range: range.clone(),
-					});
-					*stored_expiry = new_expiry;
+					if let Some(block_info) = self.blocks_data.remove(&n) {
+						let age_range: Range<u32> = 0..block_info.next_age_to_process;
+						self.process_rules_for_ages_and_block(
+							n,
+							age_range,
+							&block_info.block_data,
+							block_info.safety_margin,
+						)
+						.iter()
+						.for_each(|(_, event)| match self.processed_events.get_mut(&event) {
+							Some(stored_expiry) =>
+								if *stored_expiry < expiry {
+									*stored_expiry = expiry;
+								},
+							None => {
+								self.processed_events.insert(event.clone(), expiry);
+							},
+						});
+					}
 				}
 			},
 		}
@@ -301,32 +304,16 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 
 		events
 			.into_iter()
-			.filter(|(block_number, event)| {
-				let expiry = block_number
-					.saturating_forward(safety_margin as usize)
-					.saturating_forward(last_age as usize);
-				match self.processed_events.get_mut(event) {
-					Some(stored_expiry) => {
-						if *stored_expiry < expiry {
-							*stored_expiry = expiry;
-						}
-						false
-					},
-					None => {
-						self.processed_events.insert(event.clone(), expiry);
-						true
-					},
-				}
-			})
+			.filter(|(block_number, event)| !self.processed_events.contains_key(event))
 			.collect()
 	}
 
 	fn clean_old(&mut self, last_height: T::ChainBlockNumber) {
-		let removed_blocks = self.blocks_data.extract_if(|_key, block_info| {
-			block_info.next_age_to_process > block_info.safety_margin
+		let removed_blocks = self.blocks_data.extract_if(|block_number, _| {
+			block_number.saturating_forward(T::SAFETY_MARGIN as usize) > last_height
 		});
 		let removed_events =
-			self.processed_events.extract_if(|_, expiry_block| *expiry_block <= last_height);
+			self.processed_events.extract_if(|_, expiry_block| *expiry_block < last_height);
 
 		for (n, block) in removed_blocks {
 			self.delete_data.run(BlockProcessorEvent::DeleteBlock((n, block)));
@@ -481,24 +468,20 @@ pub(crate) mod tests {
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(11),
 			Some((9, vec![1], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		assert_eq!(processor.blocks_data.len(), 1, "Only one blockdata added to the processor");
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(11),
 			Some((10, vec![4], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(11),
 			Some((11, vec![7], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		assert_eq!(processor.blocks_data.len(), 3, "Only three blockdata added to the processor");
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(12),
 			Some((12, vec![10], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		assert_eq!(
 			processor.blocks_data.len(),
@@ -515,22 +498,18 @@ pub(crate) mod tests {
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(9),
 			Some((9, vec![1, 2, 3], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(10),
 			Some((10, vec![4, 5, 6], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(11),
 			Some((11, vec![7, 8, 9], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Reorg(RangeInclusive::new(9, 11)),
 			None,
-			SAFETY_MARGIN,
 		);
 		assert!(!processor.blocks_data.contains_key(&9));
 		assert!(!processor.blocks_data.contains_key(&10));
@@ -546,24 +525,17 @@ pub(crate) mod tests {
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(9),
 			Some((9, vec![1, 2, 3], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(10),
 			Some((10, vec![4, 5, 6], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(11),
 			Some((11, vec![7, 8, 9], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 
-		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Reorg(9u8..=11),
-			None,
-			SAFETY_MARGIN,
-		);
+		processor.process_block_data_and_chain_progress(ChainProgressInner::Reorg(9u8..=11), None);
 
 		// We reprocessed the reorged blocks, now all the deposit end up in block 11
 		let result = processor.process_rules_for_ages_and_block(
@@ -584,7 +556,6 @@ pub(crate) mod tests {
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(9),
 			Some((9, vec![1, 2, 3], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		// we receive next block which contains a deposit already processed (reorg detected later)
 		let result =
@@ -604,12 +575,10 @@ pub(crate) mod tests {
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(9),
 			Some((9, vec![1, 2, 3], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(9),
 			Some((10, vec![3, 4], SAFETY_MARGIN * 2)),
-			SAFETY_MARGIN,
 		);
 
 		assert_eq!(
@@ -628,22 +597,18 @@ pub(crate) mod tests {
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(101),
 			Some((101, vec![1], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(102),
 			Some((102, vec![], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(103),
 			Some((103, vec![], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(104),
 			Some((104, vec![], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
@@ -652,7 +617,6 @@ pub(crate) mod tests {
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Reorg(RangeInclusive::new(101, 105)),
 			None,
-			SAFETY_MARGIN,
 		);
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
@@ -669,18 +633,12 @@ pub(crate) mod tests {
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(101),
 			Some((101, vec![1, 2], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(102),
 			Some((102, vec![3], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
-		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(103),
-			None,
-			SAFETY_MARGIN,
-		);
+		processor.process_block_data_and_chain_progress(ChainProgressInner::Progress(103), None);
 
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
@@ -689,7 +647,6 @@ pub(crate) mod tests {
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Reorg(RangeInclusive::new(101, 103)),
 			None,
-			SAFETY_MARGIN,
 		);
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
@@ -699,7 +656,6 @@ pub(crate) mod tests {
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(104),
 			Some((101u8, vec![1], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
@@ -708,7 +664,6 @@ pub(crate) mod tests {
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(104),
 			Some((102, vec![2], SAFETY_MARGIN)),
-			SAFETY_MARGIN,
 		);
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(2)),
@@ -725,18 +680,12 @@ pub(crate) mod tests {
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(101),
 			Some((101, vec![1, 2], SAFETY_MARGIN * 2)),
-			SAFETY_MARGIN,
 		);
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(102),
 			Some((102, vec![3], SAFETY_MARGIN * 2)),
-			SAFETY_MARGIN,
 		);
-		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(103),
-			None,
-			SAFETY_MARGIN,
-		);
+		processor.process_block_data_and_chain_progress(ChainProgressInner::Progress(103), None);
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
 			Some(101u8.saturating_add((SAFETY_MARGIN as u8 * 2).into()).saturating_add(1)).as_ref(),
@@ -744,7 +693,6 @@ pub(crate) mod tests {
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Reorg(RangeInclusive::new(101, 103)),
 			None,
-			SAFETY_MARGIN,
 		);
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
@@ -753,18 +701,12 @@ pub(crate) mod tests {
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(101),
 			Some((101, vec![1, 2], 1)),
-			SAFETY_MARGIN,
 		);
 		processor.process_block_data_and_chain_progress(
 			ChainProgressInner::Progress(102),
 			Some((102, vec![3], 1)),
-			SAFETY_MARGIN,
 		);
-		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(103),
-			None,
-			SAFETY_MARGIN,
-		);
+		processor.process_block_data_and_chain_progress(ChainProgressInner::Progress(103), None);
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
 			Some(103u8.saturating_add((SAFETY_MARGIN as u8 * 2).into())).as_ref(),
@@ -855,10 +797,8 @@ impl<
 				.process_block_data_and_chain_progress(
 					ChainProgressInner::Progress(last_height),
 					Some((n, deposits, *set)),
-					*set,
 				),
-			SMBlockProcessorInput::ChainProgress(inner) =>
-				s.process_block_data_and_chain_progress(inner, None, *set),
+			SMBlockProcessorInput::ChainProgress(inner) => s.process_chain_progress(inner),
 		}
 	}
 

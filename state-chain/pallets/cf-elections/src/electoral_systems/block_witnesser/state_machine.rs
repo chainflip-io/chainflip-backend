@@ -250,10 +250,8 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					));
 				}
 
-				s.block_processor.process_chain_progress(
-					ChainProgressInner::Progress(*range.end()),
-					T::SAFETY_MARGIN,
-				);
+				s.block_processor
+					.process_chain_progress(ChainProgressInner::Progress(*range.end()));
 			},
 
 			SMInput::Context(ChainProgress::Reorg(hashes, range)) => {
@@ -270,10 +268,8 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					));
 				}
 
-				s.block_processor.process_chain_progress(
-					ChainProgressInner::Reorg(range.clone()),
-					T::SAFETY_MARGIN,
-				);
+				s.block_processor
+					.process_chain_progress(ChainProgressInner::Reorg(range.clone()));
 			},
 
 			SMInput::Context(ChainProgress::None) => (),
@@ -292,7 +288,6 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 							s.elections.seen_heights_below.saturating_backward(1),
 						),
 						Some((properties.block_height, blockdata, settings.safety_margin)),
-						T::SAFETY_MARGIN,
 					)
 				}
 			},
