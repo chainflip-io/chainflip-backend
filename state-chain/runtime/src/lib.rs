@@ -1399,6 +1399,7 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	MigrationsForV1_10,
+	migrations::btc_elections_migrations::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1453,6 +1454,7 @@ impl frame_support::traits::UncheckedOnRuntimeUpgrade for NoopMigration {
 		Default::default()
 	}
 }
+
 #[allow(unused_macros)]
 macro_rules! instanced_migrations {
 	(

@@ -113,6 +113,7 @@ pub fn trim_to_length<A>(items: &mut VecDeque<A>, target_length: usize) -> VecDe
 	result
 }
 
+
 #[derive(Debug)]
 pub enum VoteValidationError<T: HWTypes> {
 	BlockHeightsNotContinuous,
