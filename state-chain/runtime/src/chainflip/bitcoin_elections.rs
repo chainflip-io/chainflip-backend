@@ -22,10 +22,9 @@ use pallet_cf_elections::{
 	electoral_system::{ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		block_height_tracking::{
-			consensus::BlockHeightTrackingConsensus,
-			state_machine::{BlockHeightWitnesser, InputHeaders},
-			BlockHeightChangeHook, ChainProgressFor, ChainTypes, HWTypes,
-			HeightWitnesserProperties,
+			consensus::BlockHeightTrackingConsensus, primitives::InputHeaders,
+			state_machine::BlockHeightWitnesser, BlockHeightChangeHook, ChainProgressFor,
+			ChainTypes, HWTypes, HeightWitnesserProperties,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
@@ -42,7 +41,7 @@ use pallet_cf_elections::{
 		},
 		liveness::Liveness,
 		state_machine::{
-			core::{hook_test_utils::EmptyHook, Hook},
+			core::{hook_test_utils::EmptyHook, Hook, Validate},
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 		unsafe_median::{UnsafeMedian, UpdateFeeHook},

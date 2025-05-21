@@ -191,6 +191,14 @@ pub enum BWElectionType<T: ChainTypes> {
 	SafeBlockHeight,
 }
 
+impl<T: ChainTypes> Validate for BWElectionType<T> {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
 #[derive(Debug)]
 pub struct BWStatemachine<Types: BWTypes> {
 	_phantom: sp_std::marker::PhantomData<Types>,
@@ -565,10 +573,19 @@ pub mod tests {
 	// }
 
 	impl<
-			N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static,
-			H: Serde + Ord + Clone + Debug + Default + 'static,
-			D: Serde + Ord + Clone + Debug + Default + 'static,
-		> BWTypes for (N, H, Vec<D>)
+			N: Validate
+				+ Serde
+				+ Copy
+				+ Ord
+				+ SaturatingStep
+				+ Step
+				+ BlockZero
+				+ Debug
+				+ Default
+				+ 'static,
+			H: Validate + Serde + Ord + Clone + Debug + Default + 'static,
+			D: Validate + Serde + Ord + Clone + Debug + Default + 'static,
+		> BWTypes for TypesFor<(N, H, Vec<D>)>
 	{
 		type ElectionProperties = ();
 		type ElectionPropertiesHook = MockHook<HookTypeFor<Self, ElectionPropertiesHook>>;

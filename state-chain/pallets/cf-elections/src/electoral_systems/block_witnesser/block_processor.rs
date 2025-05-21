@@ -348,7 +348,7 @@ pub(crate) mod tests {
 					BWProcessorTypes, ExecuteHook, HookTypeFor, LogEventHook, RulesHook,
 				},
 			},
-			state_machine::core::{hook_test_utils::MockHook, Hook, Serde},
+			state_machine::core::{hook_test_utils::MockHook, Hook, Serde, TypesFor, Validate},
 		},
 		*,
 	};
@@ -380,8 +380,10 @@ pub(crate) mod tests {
 		}
 	}
 
-	impl<Types: BWProcessorTypes<Event = MockBtcEvent<E>, BlockData = Vec<E>>, E: Clone>
-		Hook<HookTypeFor<Types, RulesHook>> for Types
+	impl<
+			Types: Validate + BWProcessorTypes<Event = MockBtcEvent<E>, BlockData = Vec<E>>,
+			E: Clone,
+		> Hook<HookTypeFor<Types, RulesHook>> for Types
 	{
 		fn run(
 			&mut self,
@@ -417,8 +419,10 @@ pub(crate) mod tests {
 		}
 	}
 
-	impl<Types: BWProcessorTypes<Event = MockBtcEvent<E>, BlockData = Vec<E>>, E: Clone + Ord>
-		Hook<HookTypeFor<Types, ExecuteHook>> for Types
+	impl<
+			Types: Validate + BWProcessorTypes<Event = MockBtcEvent<E>, BlockData = Vec<E>>,
+			E: Clone + Ord,
+		> Hook<HookTypeFor<Types, ExecuteHook>> for Types
 	{
 		fn run(&mut self, events: Vec<(Types::ChainBlockNumber, Types::Event)>) {
 			let mut chosen: BTreeMap<E, (Types::ChainBlockNumber, Types::Event)> = BTreeMap::new();
@@ -450,7 +454,8 @@ pub(crate) mod tests {
 	}
 
 	impl<
-			N: Serde
+			N: Validate
+				+ Serde
 				+ Copy
 				+ Ord
 				+ SaturatingStep
@@ -459,18 +464,18 @@ pub(crate) mod tests {
 				+ sp_std::fmt::Debug
 				+ Default
 				+ 'static,
-			H: Serde + Ord + Clone + Debug + Default + 'static,
-			D: Serde + Ord + Clone + Debug + Default + 'static,
-		> BWProcessorTypes for (N, H, Vec<D>)
+			H: Validate + Serde + Ord + Clone + Debug + Default + 'static,
+			D: Validate + Serde + Ord + Clone + Debug + Default + 'static,
+		> BWProcessorTypes for TypesFor<(N, H, Vec<D>)>
 	{
 		type BlockData = Vec<D>;
 		type Event = MockBtcEvent<D>;
-		type Rules = (N, H, Vec<D>);
+		type Rules = TypesFor<(N, H, Vec<D>)>;
 		type Execute = MockHook<HookTypeFor<Self, ExecuteHook>>;
 		type LogEventHook = MockHook<HookTypeFor<Self, LogEventHook>>;
 	}
 
-	type Types = (u8, Vec<u8>, Vec<u8>);
+	type Types = TypesFor<(u8, Vec<u8>, Vec<u8>)>;
 
 	/// tests that the processor correcly keep up to SAFETY MARGIN blocks (3), and remove them once
 	/// the safety margin elapsed

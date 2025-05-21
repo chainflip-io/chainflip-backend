@@ -47,9 +47,11 @@ defx! {
 		/// debug hook
 		pub events: T::ElectionTrackerEventHook,
 
-	} 
-	
+	}
+
 	validate this (else ElectionTrackerError) {
+
+		is_valid: true
 
 		// queued_elections_are_consequtive:
 		// 	this.queued_elections.keys().zip(this.queued_elections.keys().skip(1))
@@ -324,6 +326,14 @@ pub struct OptimisticBlock<T: BWTypes> {
 	pub data: T::BlockData,
 }
 
+impl<T: BWTypes> Validate for OptimisticBlock<T> {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
 #[derive_where(Debug, Clone, PartialEq, Eq;)]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub enum ElectionTrackerEvent<T: BWTypes> {
@@ -352,6 +362,14 @@ pub enum UpdateSafeElectionsReason {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct CompactHeightTracker<N> {
 	elections: VecDeque<Range<N>>,
+}
+
+impl<N> Validate for CompactHeightTracker<N> {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
 }
 
 impl<N: Step + Ord> CompactHeightTracker<N> {

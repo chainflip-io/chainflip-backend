@@ -5,9 +5,12 @@ use super::{
 	primitives::{trim_to_length, ChainBlocks, Header, MergeFailure, VoteValidationError},
 	ChainProgress, ChainProgressFor, HWTypes, HeightWitnesserProperties,
 };
-use crate::electoral_systems::state_machine::{
-	core::{defx, Hook},
-	state_machine::AbstractApi,
+use crate::electoral_systems::{
+	block_height_tracking::primitives::InputHeaders,
+	state_machine::{
+		core::{defx, Hook},
+		state_machine::AbstractApi,
+	},
 };
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
@@ -17,36 +20,14 @@ use scale_info::{prelude::format, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::vec_deque::VecDeque, fmt::Debug, vec::Vec};
 
-//------------------------ inputs ---------------------------
-
-defx! {
-
-	pub struct InputHeaders[Types: HWTypes] {
-		pub headers: VecDeque<Header<Types>>
-	}
-
-	validate this (else InputHeaderError) {
-
-		is_nonempty: this.headers.len() > 0,
-		block_heights_are_continuous: pairs.clone().all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height),
-		parent_hashes_match: pairs.clone().all(|(a, b)| a.hash == b.parent_hash),
-
-		( where pairs = this.headers.iter().zip(this.headers.iter().skip(1)) )
-	}
-
-	with { #[derive(Ord, PartialOrd,)] };
-}
-
 //------------------------ state ---------------------------
-
-
 
 defx! {
 
 	pub enum BHWState[T: HWTypes] {
 		Starting,
 		Running { headers: VecDeque<Header<T>>, witness_from: T::ChainBlockNumber },
-	} 
+	}
 
 	validate this (else BHWStateError) {
 		is_valid: match this {
@@ -64,7 +45,6 @@ defx! {
 		}
 	}
 }
-
 
 defx! {
 
@@ -84,7 +64,7 @@ defx! {
 	impl AbstractApi {
 		type Query = HeightWitnesserProperties<T>;
 		type Response = InputHeaders<T>;
-		type Error = VoteValidationError;
+		type Error = VoteValidationError<T>;
 
 		fn validate(
 			base: &HeightWitnesserProperties<T>,
@@ -248,15 +228,13 @@ defx! {
 
 //------------------------ state machine ---------------------------
 
-
-
 #[cfg(test)]
 pub mod tests {
 	use crate::{
 		electoral_systems::{
 			block_height_tracking::{BlockHeightChangeHook, ChainTypes},
 			block_witnesser::state_machine::HookTypeFor,
-			state_machine::core::{hook_test_utils::MockHook, Serde},
+			state_machine::core::{hook_test_utils::MockHook, Serde, TypesFor, Validate},
 		},
 		prop_do,
 	};
@@ -330,10 +308,19 @@ pub mod tests {
 	}
 
 	impl<
-			N: Serde + Copy + Ord + SaturatingStep + Step + BlockZero + Debug + Default + 'static,
-			H: Serde + Ord + Clone + Debug + 'static,
-			D: Serde + Ord + Clone + Debug + 'static,
-		> ChainTypes for (N, H, D)
+			N: Validate
+				+ Serde
+				+ Copy
+				+ Ord
+				+ SaturatingStep
+				+ Step
+				+ BlockZero
+				+ Debug
+				+ Default
+				+ 'static,
+			H: Validate + Serde + Ord + Clone + Debug + 'static,
+			D: Validate + Serde + Ord + Clone + Debug + 'static,
+		> ChainTypes for TypesFor<(N, H, D)>
 	{
 		type ChainBlockNumber = N;
 		type ChainBlockHash = H;
@@ -343,7 +330,8 @@ pub mod tests {
 	}
 
 	impl<
-			N: Serde
+			N: Validate
+				+ Serde
 				+ Copy
 				+ Ord
 				+ SaturatingStep
@@ -352,9 +340,9 @@ pub mod tests {
 				+ sp_std::fmt::Debug
 				+ Default
 				+ 'static,
-			H: Serde + Ord + Clone + Debug + 'static,
-			D: Serde + Ord + Clone + Debug + 'static,
-		> HWTypes for (N, H, D)
+			H: Validate + Serde + Ord + Clone + Debug + 'static,
+			D: Validate + Serde + Ord + Clone + Debug + 'static,
+		> HWTypes for TypesFor<(N, H, D)>
 	{
 		const BLOCK_BUFFER_SIZE: usize = 16;
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;

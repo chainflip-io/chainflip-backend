@@ -15,7 +15,8 @@ use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
 
 use crate::electoral_systems::{
 	block_height_tracking::{
-		state_machine::{tests::*, BHWState, BlockHeightWitnesser, InputHeaders},
+		primitives::InputHeaders,
+		state_machine::{tests::*, BHWState, BlockHeightWitnesser},
 		HWTypes, HeightWitnesserProperties,
 	},
 	block_witnesser::{
@@ -58,7 +59,7 @@ pub trait AbstractVoter<M: Statemachine> {
 
 #[test]
 pub fn test_all() {
-	type Types = (u8, usize, Vec<char>);
+	type Types = TypesFor<(u8, usize, Vec<char>)>;
 	type BW = BWStatemachine<Types>;
 	type BHW = BlockHeightWitnesser<Types>;
 

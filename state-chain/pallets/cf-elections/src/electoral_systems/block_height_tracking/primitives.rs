@@ -6,10 +6,75 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::vec_deque::VecDeque;
 
+use crate::electoral_systems::state_machine::core::defx;
+
 use super::{
-	super::state_machine::core::Validate, state_machine::InputHeaderError, ChainProgress,
-	ChainProgressFor, ChainTypes,
+	super::state_machine::core::Validate, ChainProgress, ChainProgressFor, ChainTypes, HWTypes,
 };
+
+//------------------------ inputs ---------------------------
+
+impl<X> Validate for VecDeque<X> {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		todo!()
+	}
+}
+
+defx! {
+
+	pub struct InputHeaders[Types: HWTypes] {
+		pub headers: VecDeque<Header<Types>>,
+	}
+
+	validate this (else InputHeaderError) {
+		is_nonempty: this.headers.len() > 0
+	}
+
+	with { #[derive(Ord, PartialOrd,)] };
+}
+
+defx! {
+
+	pub struct ChainBlocks[T: ChainTypes] {
+		pub headers: VecDeque<Header<T>>,
+	}
+
+	validate this (else ChainBlocksError) {
+
+		block_heights_are_continuous: pairs.clone().all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height),
+		parent_hashes_match: pairs.clone().all(|(a, b)| a.hash == b.parent_hash),
+
+		( where pairs = this.headers.iter().zip(this.headers.iter().skip(1)) )
+	}
+
+	with {
+		#[derive(
+			Ord, PartialOrd,
+		)]
+	};
+
+// impl<T: ChainTypes> Validate for ChainBlocks<T> {
+// 	type Error = VoteValidationError;
+
+// 	fn is_valid(&self) -> Result<(), Self::Error> {
+// 		let mut pairs = self.headers.iter().zip(self.headers.iter().skip(1));
+
+// 		if !pairs
+// 			.clone()
+// 			.all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height)
+// 		{
+// 			Err(VoteValidationError::BlockHeightsNotContinuous)
+// 		} else if !pairs.all(|(a, b)| a.hash == b.parent_hash) {
+// 			Err(VoteValidationError::ParentHashMismatch)
+// 		} else {
+// 			Ok(())
+// 		}
+// 	}
+// }
+
+}
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
@@ -97,21 +162,13 @@ pub fn head_and_tail<A: Clone>(items: &VecDeque<A>) -> Option<(A, VecDeque<A>)> 
 }
 
 #[derive(Debug)]
-pub enum VoteValidationError {
+pub enum VoteValidationError<T: HWTypes> {
 	BlockHeightsNotContinuous,
 	ParentHashMismatch,
 	EmptyVote,
 	BlockNotMatchingRequestedHeight,
-	InputHeaderError(InputHeaderError),
-}
-
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-)]
-/// Invariant:
-/// This should always be a continuous chain of block headers
-pub struct ChainBlocks<T: ChainTypes> {
-	pub headers: VecDeque<Header<T>>,
+	ChainBlocksError(ChainBlocksError<T>),
+	InputHeaderError(InputHeaderError<T>),
 }
 
 impl<T: ChainTypes> ChainBlocks<T> {
@@ -120,29 +177,10 @@ impl<T: ChainTypes> ChainBlocks<T> {
 	}
 }
 
-impl<T: ChainTypes> Validate for ChainBlocks<T> {
-	type Error = VoteValidationError;
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		let mut pairs = self.headers.iter().zip(self.headers.iter().skip(1));
-
-		if !pairs
-			.clone()
-			.all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height)
-		{
-			Err(VoteValidationError::BlockHeightsNotContinuous)
-		} else if !pairs.all(|(a, b)| a.hash == b.parent_hash) {
-			Err(VoteValidationError::ParentHashMismatch)
-		} else {
-			Ok(())
-		}
-	}
-}
-
-pub fn validate_vote_and_height<T: ChainTypes>(
+pub fn validate_vote_and_height<T: HWTypes>(
 	next_height: T::ChainBlockNumber,
 	other: &VecDeque<Header<T>>,
-) -> Result<(), VoteValidationError> {
+) -> Result<(), VoteValidationError<T>> {
 	// a vote has to be nonempty
 	if other.is_empty() {
 		return Err(VoteValidationError::EmptyVote)
@@ -154,7 +192,9 @@ pub fn validate_vote_and_height<T: ChainTypes>(
 	}
 
 	// a vote has to be continous
-	ChainBlocks::<T> { headers: other.clone() }.is_valid() // validate_continous_headers(other)
+	ChainBlocks::<T> { headers: other.clone() }
+		.is_valid()
+		.map_err(VoteValidationError::ChainBlocksError) // validate_continous_headers(other)
 }
 
 pub enum ChainBlocksMergeResult<N> {

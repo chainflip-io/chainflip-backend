@@ -33,7 +33,8 @@ use pallet_cf_elections::{
 	electoral_system::ElectoralSystemTypes,
 	electoral_systems::{
 		block_height_tracking::{
-			primitives::Header, state_machine::InputHeaders, HWTypes, HeightWitnesserProperties,
+			primitives::{Header, InputHeaders},
+			HWTypes, HeightWitnesserProperties,
 		},
 		block_witnesser::state_machine::{BWElectionProperties, BWElectionType},
 	},
