@@ -58,7 +58,7 @@ macro_rules! defx {
 		pub $def:tt $Name:tt [$($ParamName:ident: $ParamType:tt),*] {
 			$($Definition:tt)*
 		} 
-		validate $this:ident $unused:tt (else $Error:ident) {
+		validate $this:ident (else $Error:ident) {
 			$($prop_name:ident : $prop:expr),*
 
 			$(,

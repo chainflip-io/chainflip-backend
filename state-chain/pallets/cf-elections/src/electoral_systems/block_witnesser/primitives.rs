@@ -49,7 +49,7 @@ defx! {
 
 	} 
 	
-	validate this struct (else ElectionTrackerError) {
+	validate this (else ElectionTrackerError) {
 
 		// queued_elections_are_consequtive:
 		// 	this.queued_elections.keys().zip(this.queued_elections.keys().skip(1))
@@ -60,8 +60,6 @@ defx! {
 
 	} with {
 
-		// #[derive_where(Debug, Clone, PartialEq, Eq;)]
-		// #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 		#[codec(encode_bound(
 			T::ChainBlockNumber: Encode,
 			T::ChainBlockHash: Encode,

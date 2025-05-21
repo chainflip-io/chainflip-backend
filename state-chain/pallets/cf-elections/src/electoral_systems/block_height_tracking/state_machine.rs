@@ -25,7 +25,7 @@ defx! {
 		pub headers: VecDeque<Header<Types>>
 	}
 
-	validate this struct (else InputHeaderError) {
+	validate this (else InputHeaderError) {
 
 		is_nonempty: this.headers.len() > 0,
 		block_heights_are_continuous: pairs.clone().all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height),
@@ -48,7 +48,7 @@ defx! {
 		Running { headers: VecDeque<Header<T>>, witness_from: T::ChainBlockNumber },
 	} 
 
-	validate this enum (else BHWStateError) {
+	validate this (else BHWStateError) {
 		is_valid: match this {
 			BHWState::Starting => true,
 			BHWState::Running { headers, witness_from: _ } =>
@@ -73,7 +73,7 @@ defx! {
 		pub block_height_update: T::BlockHeightChangeHook,
 	}
 
-	validate this struct (else BlockHeightWitnesserError) {
+	validate this (else BlockHeightWitnesserError) {
 		is_valid: this.state.is_valid().is_ok()
 	}
 
