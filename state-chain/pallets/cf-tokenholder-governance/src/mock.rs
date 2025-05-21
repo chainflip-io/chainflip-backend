@@ -108,7 +108,7 @@ impl BroadcastAnyChainGovKey for MockBroadcaster {
 			GovKeyBroadcasted::put((chain, old_key, new_key));
 			Ok(())
 		} else {
-			Err(SetGovKeyWithAggKeyError::Failed)
+			Err(SetGovKeyWithAggKeyError::FailedToBuildAPICall)
 		}
 	}
 

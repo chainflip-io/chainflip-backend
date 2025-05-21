@@ -761,14 +761,14 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 		new_gov_key: <SolanaCrypto as ChainCrypto>::GovKey,
 	) -> Result<Self, SetGovKeyWithAggKeyError> {
 		// Lookup environment variables, such as aggkey and durable nonce.
-		let agg_key =
-			Environment::current_agg_key().map_err(|_e| SetGovKeyWithAggKeyError::Failed)?;
-		let sol_api_environment =
-			Environment::api_environment().map_err(|_e| SetGovKeyWithAggKeyError::Failed)?;
-		let compute_price =
-			Environment::compute_price().map_err(|_e| SetGovKeyWithAggKeyError::Failed)?;
-		let durable_nonce =
-			Environment::nonce_account().map_err(|_e| SetGovKeyWithAggKeyError::Failed)?;
+		let agg_key = Environment::current_agg_key()
+			.map_err(|_e| SetGovKeyWithAggKeyError::CurrentAggKeyUnavailable)?;
+		let sol_api_environment = Environment::api_environment()
+			.map_err(|_e| SetGovKeyWithAggKeyError::SolApiEnvironmentUnavailable)?;
+		let compute_price = Environment::compute_price()
+			.map_err(|_e| SetGovKeyWithAggKeyError::ComputePriceUnavailable)?;
+		let durable_nonce = Environment::nonce_account()
+			.map_err(|_e| SetGovKeyWithAggKeyError::NonceUnavailable)?;
 
 		// Build the transaction
 		let transaction = SolanaTransactionBuilder::set_gov_key_with_agg_key(
@@ -790,7 +790,7 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 				e,
 				durable_nonce
 			);
-			SetGovKeyWithAggKeyError::Failed
+			SetGovKeyWithAggKeyError::FailedToBuildAPICall
 		})?;
 
 		Ok(Self {

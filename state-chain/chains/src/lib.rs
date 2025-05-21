@@ -491,7 +491,14 @@ pub enum SetAggKeyWithAggKeyError {
 
 #[derive(RuntimeDebug, Clone, PartialEq, Eq)]
 pub enum SetGovKeyWithAggKeyError {
-	Failed,
+	FailedToBuildAPICall,
+	VaultAccountNotSet,
+	CurrentAggKeyUnavailable,
+	NonceUnavailable,
+	ComputePriceUnavailable,
+	SolApiEnvironmentUnavailable,
+	FailedToDecodeKey,
+	UnsupportedChain,
 	DispatchError(DispatchError),
 }
 
