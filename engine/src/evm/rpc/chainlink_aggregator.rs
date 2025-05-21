@@ -79,7 +79,8 @@ mod tests {
 	const BTC_USD_AGGREGATOR_ARBITRUM_ADDRESS: &str = "0x6ce185860a4963106506C203335A2910413708e9"; // heartbeat: 86400s, Deviation 0.05%, Decimals 8
 	const ETH_USD_AGGREGATOR_ARBITRUM_ADDRESS: &str = "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612"; // heartbeat: 86400s, Deviation 0.05%, Decimals 8
 
-	const LOCALNET_PRICE_FEED: &str = "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44";
+	const LOCALNET_ETH_PRICE_FEED: &str = "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44";
+	const LOCALNET_ARB_PRICE_FEED: &str = "0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f";
 
 	fn print_round_data(chain_name: &str, round_data: (u128, I256, U256, U256, u128)) {
 		println!(
@@ -142,7 +143,7 @@ mod tests {
 
 	#[tokio::test]
 	#[ignore = "Requires connection to localnet"]
-	async fn eth_chainlink_aggregator_test_temp() {
+	async fn eth_chainlink_aggregator_localnet() {
 		let settings = Settings::new_test().unwrap();
 
 		let eth_client = EvmRpcSigningClient::new(
@@ -160,7 +161,30 @@ mod tests {
 		print_round_data(
 			"Ethereum",
 			eth_client
-				.latest_round_data(H160::from_str(LOCALNET_PRICE_FEED).unwrap())
+				.latest_round_data(H160::from_str(LOCALNET_ETH_PRICE_FEED).unwrap())
+				.await
+				.unwrap(),
+		);
+	}
+
+	#[tokio::test]
+	#[ignore = "Requires connection to localnet"]
+	async fn arb_chainlink_aggregator_localnet() {
+		let settings = Settings::new_test().unwrap();
+
+		let eth_client = EvmRpcSigningClient::new(
+			settings.clone().eth.private_key_file,
+			"http://localhost:8547".into(),
+			412346u64,
+			"Arbitrum",
+		)
+		.unwrap()
+		.await;
+
+		print_round_data(
+			"Arbitrum",
+			eth_client
+				.latest_round_data(H160::from_str(LOCALNET_ARB_PRICE_FEED).unwrap())
 				.await
 				.unwrap(),
 		);

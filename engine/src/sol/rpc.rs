@@ -271,6 +271,8 @@ impl SolRpcApi for SolRpcClient {
 		Ok(signature)
 	}
 
+	// NOTE: If the payer doesn't have SOL the simulation will fail, even if `simulate_transacion`
+	// would not change any state. Make sure the payer is a funded account.
 	async fn simulate_transaction(
 		&self,
 		transaction: String,
@@ -416,7 +418,7 @@ mod tests {
 
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
-	async fn test_sol_simulate_transaction() {
+	async fn test_sol_simulate_transaction_devnet() {
 		let sol_rpc_client = SolRpcClient::new(
 			SecretUrl::from("https://api.devnet.solana.com".to_string()),
 			Some(SolHash::from_str("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG").unwrap()),
@@ -525,6 +527,82 @@ mod tests {
 		// // 	pub timestamp: u32,
 		// // 	pub answer: i128,
 		// // }
+		let round_id = u32::from_le_bytes(decoded_return_data[0..4].try_into().unwrap());
+		let slot = u64::from_le_bytes(decoded_return_data[4..12].try_into().unwrap());
+		let timestamp = u32::from_le_bytes(decoded_return_data[12..16].try_into().unwrap());
+		let answer = i128::from_le_bytes(decoded_return_data[16..32].try_into().unwrap());
+
+		println!(
+			"Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}",
+			round_id, slot, timestamp, answer
+		);
+	}
+
+	#[ignore = "requires access to external RPC"]
+	#[tokio::test]
+	async fn test_sol_simulate_transaction_localnet() {
+		let sol_rpc_client =
+			SolRpcClient::new(SecretUrl::from("http://127.0.0.1:8899".to_string()), None)
+				.unwrap()
+				.await;
+
+		// chainlinkProgramId (`HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny`) =>
+		// 0xf14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d175602 BTC Devnet feed
+		// (`6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe`) =>
+		// 0x502b9d5731648a1c61dcf689240e2d2c799393430d9f1d584e368ec4e5243c5f Devnet Payer
+		// (`5GaMJ6MMdjCtSBADfWjYSupzk3voYbpGnfi7dkZY9S6a`) =>
+		// 0x3f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7
+		// let serialized_transaction =
+		// hex::decode("
+		// 010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080010002033f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7f14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d175602502b9d5731648a1c61dcf689240e2d2c799393430d9f1d584e368ec4e5243c5f13dcef863a734d75a53ceea4596b64111f9577af432cf6c0c2aed5cb527a733f010101020927fb829f2e88a4a90400"
+		// ).unwrap(); Localnet Price Mock ID (`DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X`) =>
+		// 0xbc2c1593df59eda489a29f2b6e99fa0d63a8e5e86c29984804d57a0cc67d9706 Localnet feed
+		// (`GRZmvuxuxCXyrabSuMdqwbn53Bht9wDRMqitgL49nNFK`) =>
+		// 0xe52a4d3dd66dca7c1ae1282207564968b7d21a05d239ccdd7d332aa98139e6da Localnet payer
+		// (`HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp`) =>
+		// 0xf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb
+		// Modified PriceFeedMock Program (chainlinkProgramId), price feed (chainlinkFeed) and payer
+		// because we need a funded account.
+		let serialized_transaction = hex::decode("01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008001000203f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fbbc2c1593df59eda489a29f2b6e99fa0d63a8e5e86c29984804d57a0cc67d9706e52a4d3dd66dca7c1ae1282207564968b7d21a05d239ccdd7d332aa98139e6da13dcef863a734d75a53ceea4596b64111f9577af432cf6c0c2aed5cb527a733f010101020927fb829f2e88a4a90400").unwrap();
+
+		let encoded_transaction = BASE64_STANDARD.encode(&serialized_transaction);
+
+		println!("encoded_transaction: {:?}", encoded_transaction);
+
+		let simulation_result = sol_rpc_client
+			.simulate_transaction(
+				encoded_transaction,
+				RpcSimulateTransactionConfig {
+					sig_verify: false,
+					replace_recent_blockhash: true,
+					commitment: Some(CommitmentConfig::processed()),
+					encoding: Some(UiTransactionEncoding::Base64),
+					accounts: None,
+					min_context_slot: None,
+					inner_instructions: false,
+				},
+			)
+			.await
+			.unwrap();
+		println!("simulation_result: {:?}", simulation_result);
+		println!("return data: {:?}", simulation_result.value.return_data);
+
+		let return_data = simulation_result
+			.value
+			.return_data
+			.as_ref()
+			.expect("Expected return data to be Some");
+
+		// TODO: We could also assert that the return_data.program_id matches the programID we have
+		// serialized-encoded.
+		let decoded_return_data = BASE64_STANDARD.decode(return_data.data.0.clone()).unwrap();
+		assert_eq!(return_data.data.1, UiReturnDataEncoding::Base64);
+
+		println!("decoded_return_data: {:?}", decoded_return_data);
+
+		// Verify length (expect 32 bytes)
+		assert_eq!(decoded_return_data.len(), 32);
+
 		let round_id = u32::from_le_bytes(decoded_return_data[0..4].try_into().unwrap());
 		let slot = u64::from_le_bytes(decoded_return_data[4..12].try_into().unwrap());
 		let timestamp = u32::from_le_bytes(decoded_return_data[12..16].try_into().unwrap());

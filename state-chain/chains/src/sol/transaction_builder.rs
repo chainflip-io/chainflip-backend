@@ -1082,4 +1082,36 @@ pub mod test {
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}
+
+	#[test]
+	fn can_create_price_feed_query_for_simulation() {
+		use crate::sol::sol_tx_core::{consts::const_address, Instruction};
+
+		let payer: SolAddress = const_address("5GaMJ6MMdjCtSBADfWjYSupzk3voYbpGnfi7dkZY9S6a");
+
+		let chainlink_program_id: SolAddress =
+			const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny");
+		let chainlink_feed: SolAddress =
+			const_address("6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe");
+
+		let account_metas = vec![AccountMeta::new_readonly(chainlink_feed.into(), false)];
+
+		// Buffer.concat([QUERY_INSTRUCTION_DISCRIMINATOR, queryByte])
+		let data: Vec<u8> = vec![0x27, 0xfb, 0x82, 0x9f, 0x2e, 0x88, 0xa4, 0xa9, 0x01];
+
+		let instructions =
+			vec![Instruction::new_with_bincode(chainlink_program_id.into(), &data, account_metas)];
+
+		let transaction = SolVersionedTransaction::new_unsigned(SolVersionedMessage::new(
+			&instructions,
+			Some(payer.into()),
+			None,
+			&[],
+		));
+		let serialized_tx = transaction.clone().finalize_and_serialize().unwrap();
+
+		// TODO: Use this serialized payload in `test_sol_simulate_transaction_devnet` and check why
+		// it's not working.
+		println!("serialized_tx: {:?}", hex::encode(serialized_tx));
+	}
 }
