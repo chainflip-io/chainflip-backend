@@ -14,14 +14,6 @@ use super::{
 
 //------------------------ inputs ---------------------------
 
-impl<X> Validate for VecDeque<X> {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		todo!()
-	}
-}
-
 defx! {
 
 	pub struct InputHeaders[Types: HWTypes] {
@@ -83,6 +75,14 @@ pub struct Header<T: ChainTypes> {
 	pub block_height: T::ChainBlockNumber,
 	pub hash: T::ChainBlockHash,
 	pub parent_hash: T::ChainBlockHash,
+}
+
+impl<T: ChainTypes> Validate for Header<T> {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
 }
 
 #[derive(

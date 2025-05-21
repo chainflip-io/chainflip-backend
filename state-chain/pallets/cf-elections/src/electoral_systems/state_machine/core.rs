@@ -1,4 +1,4 @@
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::collections::{btree_map::BTreeMap, vec_deque::VecDeque};
 
 use codec::{Decode, Encode};
 use derive_where::derive_where;
@@ -332,6 +332,14 @@ impl<A: Validate, B: Validate> Validate for BTreeMap<A, B> {
 }
 
 impl<A: Validate> Validate for Vec<A> {
+	type Error = A::Error;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		self.iter().map(Validate::is_valid).collect()
+	}
+}
+
+impl<A: Validate> Validate for VecDeque<A> {
 	type Error = A::Error;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
