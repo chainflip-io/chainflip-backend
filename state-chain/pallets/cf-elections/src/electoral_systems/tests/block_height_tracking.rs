@@ -1,8 +1,7 @@
 use crate::electoral_systems::{
 	block_height_tracking::{
 		consensus::BlockHeightTrackingConsensus,
-		primitives::{validate_vote_and_height, Header, VoteValidationError},
-		state_machine::InputHeaders,
+		primitives::{Header, VoteValidationError},
 		ChainTypes, HWTypes, HeightWitnesserProperties,
 	},
 	state_machine::{

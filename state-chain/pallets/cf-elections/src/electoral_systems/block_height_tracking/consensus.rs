@@ -1,10 +1,7 @@
 use cf_chains::witness_period::BlockZero;
 use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
-use super::{
-	primitives::NonemptyContinuousHeaders,
-	HWTypes, HeightWitnesserProperties,
-};
+use super::{primitives::NonemptyContinuousHeaders, HWTypes, HeightWitnesserProperties};
 use crate::electoral_systems::state_machine::consensus::{
 	ConsensusMechanism, MultipleVotes, StagedConsensus, SupermajorityConsensus, Threshold,
 };

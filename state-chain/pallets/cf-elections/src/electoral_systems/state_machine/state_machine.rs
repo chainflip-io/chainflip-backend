@@ -125,11 +125,7 @@ pub trait Statemachine: AbstractApi + 'static {
 	/// The state transition function, it takes the state, and an input,
 	/// and assumes that both state and index are valid, and furthermore
 	/// that the input has the index `input_index(s)`.
-	fn step(
-		s: &mut Self::State,
-		input: Either<Self::Context, (Self::Query, Self::Response)>,
-		set: &Self::Settings,
-	) -> Self::Output;
+	fn step(s: &mut Self::State, input: InputOf<Self>, set: &Self::Settings) -> Self::Output;
 
 	/// Contains an optional specification of the `step` function.
 	/// Takes a state, input and next state as arguments. During testing it is verified
@@ -137,7 +133,7 @@ pub trait Statemachine: AbstractApi + 'static {
 	#[cfg(test)]
 	fn step_specification(
 		_before: &mut Self::State,
-		_input: &Either<Self::Context, (Self::Query, Self::Response)>,
+		_input: &InputOf<Self>,
 		_output: &Self::Output,
 		_settings: &Self::Settings,
 		_after: &Self::State,
