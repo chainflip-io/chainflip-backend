@@ -292,7 +292,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 							s.elections.seen_heights_below.saturating_backward(1),
 						),
 						Some((properties.block_height, blockdata, settings.safety_margin)),
-						settings.safety_margin,
+						T::SAFETY_MARGIN,
 					)
 				}
 			},
