@@ -1488,7 +1488,6 @@ macro_rules! instanced_migrations {
 	}
 }
 
-
 type MigrationsForV1_10 = ();
 
 #[cfg(feature = "runtime-benchmarks")]
