@@ -1911,7 +1911,6 @@ fn can_only_rebalance_as_and_to_validator() {
 fn rebalance_restricted_funds() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
-		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
 		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
@@ -1936,18 +1935,22 @@ fn rebalance_restricted_funds() {
 			TX_HASH
 		));
 
+		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT);
+
+		assert_eq!(
+			RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS),
+			Some(AMOUNT).as_ref()
+		);
+
 		assert_ok!(Funding::rebalance(
 			OriginTrait::signed(ALICE),
 			BOB,
 			Some(RESTRICTED_ADDRESS),
-			AMOUNT_MINUS_FEE.into()
+			AMOUNT.into()
 		));
 
 		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS), None);
-		assert_eq!(
-			RestrictedBalances::<Test>::get(BOB).get(&RESTRICTED_ADDRESS),
-			Some(&AMOUNT_MINUS_FEE)
-		);
+		assert_eq!(RestrictedBalances::<Test>::get(BOB).get(&RESTRICTED_ADDRESS), Some(&AMOUNT));
 	});
 }
 
@@ -1995,7 +1998,7 @@ fn rebalance_only_a_apart_of_the_restricted_funds() {
 
 		assert_eq!(
 			*RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
-			AMOUNT - AMOUNT_MOVE
+			AMOUNT_MOVE
 		);
 	});
 }

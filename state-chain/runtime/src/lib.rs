@@ -1611,6 +1611,7 @@ impl_runtime_apis! {
 				&restricted_balances,
 				RedemptionAmount::Max,
 				None,
+				true,
 			);
 			ValidatorInfo {
 				balance: account_info.total(),
