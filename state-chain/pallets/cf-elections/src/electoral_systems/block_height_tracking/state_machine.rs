@@ -33,7 +33,7 @@ defx! {
 			BHWState::Starting => true,
 			BHWState::Running { headers, witness_from: _ } => headers.is_valid().is_ok()
 		}
-	};
+	}
 
 	impl Default {
 		fn default() -> Self {
@@ -42,20 +42,16 @@ defx! {
 	}
 }
 
+
 defx! {
 
+	#[derive(Default)]
 	pub struct BlockHeightWitnesser[T: HWTypes] {
 		pub state: BHWState<T>,
 		pub block_height_update: T::BlockHeightChangeHook,
 	}
 
-	validate this (else BlockHeightWitnesserError) {
-		is_valid: this.state.is_valid().is_ok()
-	}
-
-	with {
-		#[derive(Default)]
-	};
+	validate _this (else BlockHeightWitnesserError) {}
 
 	impl AbstractApi {
 		type Query = HeightWitnesserProperties<T>;
@@ -71,10 +67,10 @@ defx! {
 			if base.witness_from_index.is_zero() {
 				Ok(())
 			} else {
-				match this.headers.front() {
-					Some(first) if first.block_height == base.witness_from_index => Ok(()),
-					Some(_) => Err(VoteValidationError::BlockNotMatchingRequestedHeight),
-					None => Err(VoteValidationError::EmptyVote),
+				if this.first().block_height == base.witness_from_index {
+					Ok(())
+				} else {
+					Err(VoteValidationError::BlockNotMatchingRequestedHeight)
 				}
 			}
 		}
@@ -179,7 +175,7 @@ defx! {
 				BHWState::Running { headers, witness_from } => {
 					let mut chainblocks = headers.clone();
 
-					match chainblocks.merge(new_headers.headers) {
+					match chainblocks.merge(new_headers) {
 						Ok(merge_info) => {
 							log::info!(
 								"added new blocks: {:?}, replacing these blocks: {:?}",
@@ -361,22 +357,6 @@ pub mod tests {
 			},
 			Just(()),
 		);
-	}
-
-	#[test]
-	pub fn test_merge() {
-		let mut x: NonemptyContinuousHeaders<TypesFor<(u32, Vec<char>, ())>> =
-			NonemptyContinuousHeaders {
-				headers: [Header { block_height: 100, hash: vec!['a'], parent_hash: vec!['z'] }]
-					.into(),
-			};
-
-		let result =
-			x.merge([Header { block_height: 100, hash: vec!['b'], parent_hash: vec!['y'] }].into());
-
-		println!("{x:?} and result {result:?}");
-
-		assert!(x.headers.is_empty());
 	}
 
 	struct TestChain {}

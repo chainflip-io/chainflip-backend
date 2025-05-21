@@ -43,9 +43,20 @@ macro_rules! impls {
 
 /// Adds the type parameters to all given implementatios
 macro_rules! implementations {
-	([$($Name:tt)*], [$($Parameters:tt)*], impl $Trait:tt { $($TraitDef:tt)* } $($rest:tt)* ) => {
+	([$($Name:tt)*], [$($Parameters:tt)*], impl { $($Implementation:tt)* } $($rest:tt)* ) => {
 
-		impl <$($Parameters)*> $Trait for $($Name)* {
+		impl <$($Parameters)*> $($Name)* {
+			$($Implementation)*
+		}
+
+		crate::electoral_systems::state_machine::core::implementations! {
+			[$($Name)*], [$($Parameters)*], $($rest)*
+		}
+	};
+
+	([$($Name:tt)*], [$($Parameters:tt)*], impl$(<$($TraitParamName:ident: $TraitParamPath:path),*>)? $Trait:path { $($TraitDef:tt)* } $($rest:tt)* ) => {
+
+		impl <$($Parameters)*, $($($TraitParamName: $TraitParamPath),*)?> $Trait for $($Name)* {
 			$($TraitDef)*
 		}
 
@@ -118,6 +129,7 @@ pub(crate) use derive_validation_statements;
 /// Syntax sugar for adding validation code to types with validity requirements
 macro_rules! defx {
 	(
+		$(#[$($Attributes:tt)*])?
 		pub $def:tt $Name:tt [$($ParamName:ident: $ParamType:tt),*] {
 			$($Definition:tt)*
 		}
@@ -131,11 +143,6 @@ macro_rules! defx {
 				),*
 			))?
 		}
-		$(
-			with {
-				$($Attributes:tt)*
-			}
-		)?;
 
 		$($rest:tt)*
 	) => {
@@ -148,7 +155,7 @@ macro_rules! defx {
 		)]
 
 		$(
-			$($Attributes)*
+			#[$($Attributes)*]
 		)?
 		pub $def $Name<$($ParamName: $ParamType),*> {
 			$($Definition)*

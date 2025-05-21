@@ -189,7 +189,7 @@ fn test_validate_vote_and_height() {
 	assert_eq!(
 		result.unwrap_err(),
 		VoteValidationError::NonemptyContinuousHeadersError(
-			NonemptyContinuousHeadersError::parent_hashes_match
+			NonemptyContinuousHeadersError::matching_hashes
 		)
 	);
 
@@ -204,7 +204,7 @@ fn test_validate_vote_and_height() {
 	assert_eq!(
 		result.unwrap_err(),
 		VoteValidationError::NonemptyContinuousHeadersError(
-			NonemptyContinuousHeadersError::block_heights_are_continuous
+			NonemptyContinuousHeadersError::continuous_heights
 		)
 	);
 }

@@ -22,7 +22,12 @@ use crate::electoral_systems::state_machine::core::{defx, fst, Hook, Validate};
 use super::state_machine::{BWElectionType, BWTypes};
 
 defx! {
-
+	#[codec(encode_bound(
+		T::ChainBlockNumber: Encode,
+		T::ChainBlockHash: Encode,
+		T::BlockData: Encode,
+		T::ElectionTrackerEventHook: Encode
+	))]
 	pub struct ElectionTracker2[T: BWTypes] {
 		/// The lowest block we haven't seen yet. I.e., we have seen blocks below.
 		pub seen_heights_below: T::ChainBlockNumber,
@@ -60,17 +65,7 @@ defx! {
 		// queued_safe_height_is_not_queued:
 		// 	this.queued_safe_elections.clone().all(|height| !this.queued_elections.contains_key(&height))
 
-	} with {
-
-		#[codec(encode_bound(
-			T::ChainBlockNumber: Encode,
-			T::ChainBlockHash: Encode,
-			T::BlockData: Encode,
-			T::ElectionTrackerEventHook: Encode
-		))]
-
-	};
-
+	}
 }
 
 impl<T: BWTypes> ElectionTracker2<T> {
