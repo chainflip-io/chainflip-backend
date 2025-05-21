@@ -9,7 +9,6 @@ use crate::electoral_systems::{
 	state_machine::{
 		core::Validate,
 		state_machine::{AbstractApi, Statemachine},
-		state_machine_es::SMInput,
 	},
 };
 use codec::{Decode, Encode};

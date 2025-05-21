@@ -32,50 +32,6 @@ pub enum SMInput<Consensus, Context> {
 	Context(Context),
 }
 
-/// Derivation of an instance of `IndexedValidate` for the input of an electoral state machine,
-/// The index is `Vec<ElectionProperties>`.
-///
-/// This validation trait is automatically derived if there is an instance of
-/// `IndexedValidate<Properties, Consensus>`, which is more straight-forward to implement when
-/// implementing an electoral state machine.
-// impl<
-// 		T: IndexedValidate<Properties, Consensus>,
-// 		Properties: PartialEq,
-// 		Consensus,
-// 		Context: Validate,
-// 	> IndexedValidate<Vec<Properties>, SMInput<(Properties, Consensus), Context>> for T
-// {
-// 	type Error = SMInputValidateError<Properties, Consensus, Context, T>;
-
-// 	fn validate(
-// 		index: &Vec<Properties>,
-// 		value: &SMInput<(Properties, Consensus), Context>,
-// 	) -> Result<(), Self::Error> {
-// 		match value {
-// 			SMInput::Consensus((property, consensus)) =>
-// 				if index.contains(property) {
-// 					T::validate(property, consensus).map_err(SMInputValidateError::InvalidConsensus)
-// 				} else {
-// 					Err(SMInputValidateError::WrongIndex)
-// 				},
-
-// 			SMInput::Context(context) =>
-// 				context.is_valid().map_err(SMInputValidateError::InvalidContext),
-// 		}
-// 	}
-// }
-
-/// Custom error type for validation of `SMInput`.
-// #[derive_where(Debug; T::Error: Debug, Context::Error: Debug)]
-// pub enum SMInputValidateError<Properties, Consensus, Context: Validate, T>
-// where
-// 	T: IndexedValidate<Properties, Consensus>,
-// {
-// 	WrongIndex,
-// 	InvalidConsensus(T::Error),
-// 	InvalidContext(Context::Error),
-// }
-
 /// Main trait for deriving an electoral system from a state machine and consensus mechanism.
 /// It ensures that all the associated types match up as required. See the documentation for
 /// `StatemachineElectoralSystem` for more information on how to implement it.

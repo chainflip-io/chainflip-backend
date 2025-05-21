@@ -14,9 +14,6 @@ pub trait AbstractApi {
 	type Error;
 
 	fn validate(query: &Self::Query, response: &Self::Response) -> Result<(), Self::Error>;
-
-	// fn validate_many(queries: &Vec<Self::Query>, response: &Self::Response) -> Result<(),
-	// Self::Error>;
 }
 
 /// Custom error type for validation of `SMInput`.
