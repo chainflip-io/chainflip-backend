@@ -1176,14 +1176,6 @@ pub mod pallet {
 					dca_parameters.clone(),
 				)?;
 
-			// TODO: deduplicate this with assemble_and_validate_broker_fees
-			let affiliate_fees = affiliate_fees
-				.into_iter()
-				.filter(|beneficiary| beneficiary.bps > 0)
-				.collect::<Vec<_>>()
-				.try_into()
-				.expect("Filtering out will always fit");
-
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				destination_address,
@@ -1508,17 +1500,17 @@ pub mod pallet {
 			if total_fee_bps > MAX_BASIS_POINTS {
 				FeeTaken { remaining_amount: stable_amount, fee: 0 }
 			} else {
-				let total_fee = broker_fees.iter().fold(
-					0u128,
-					|fee_accumulator, Beneficiary { account, bps }| {
+				let total_fee = broker_fees
+					.iter()
+					.filter(|Beneficiary { account: _, bps }| *bps > 0)
+					.fold(0u128, |fee_accumulator, Beneficiary { account, bps }| {
 						let fee = Permill::from_parts(*bps as u32 * BASIS_POINTS_PER_MILLION) *
 							stable_amount;
 
 						T::BalanceApi::credit_account(account, STABLE_ASSET, fee);
 
 						fee_accumulator.saturating_add(fee)
-					},
-				);
+					});
 
 				assert!(total_fee <= stable_amount, "Broker fee cannot be more than the amount");
 
@@ -2277,15 +2269,6 @@ pub mod pallet {
 			let beneficiaries = [Beneficiary { account: broker_id, bps: broker_commission }]
 				.into_iter()
 				.chain(affiliate_fees.iter().cloned())
-				.filter_map(
-					|beneficiary| {
-						if beneficiary.bps > 0 {
-							Some(beneficiary)
-						} else {
-							None
-						}
-					},
-				)
 				.collect::<Vec<_>>()
 				.try_into()
 				.expect(
