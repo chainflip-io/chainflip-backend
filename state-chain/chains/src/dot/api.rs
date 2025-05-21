@@ -77,7 +77,7 @@ impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		fetch_params: Vec<FetchAssetParams<Polkadot>>,
 		transfer_params: Vec<(TransferAssetParams<Polkadot>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
@@ -99,11 +99,11 @@ impl<E> SetGovKeyWithAggKey<PolkadotCrypto> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		maybe_old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
-	) -> Result<Self, ()> {
-		let vault = E::try_vault_account().ok_or(())?;
+	) -> Result<Self, SetGovKeyWithAggKeyError> {
+		let vault = E::try_vault_account().ok_or(SetGovKeyWithAggKeyError::VaultAccountNotSet)?;
 
 		Ok(Self::ChangeGovKey(rotate_vault_proxy::extrinsic_builder(
 			E::replay_protection(false),
@@ -118,7 +118,7 @@ impl<E> SetAggKeyWithAggKey<PolkadotCrypto> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		maybe_old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
 	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
@@ -138,7 +138,7 @@ impl<E> ExecutexSwapAndCall<Polkadot> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_transfer_param: TransferAssetParams<Polkadot>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
@@ -154,7 +154,7 @@ impl<E> TransferFallback<Polkadot> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_transfer_param: TransferAssetParams<Polkadot>,
 	) -> Result<Self, TransferFallbackError> {
 		Err(TransferFallbackError::Unsupported)

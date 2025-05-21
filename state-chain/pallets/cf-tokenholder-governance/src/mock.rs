@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{self as pallet_cf_tokenholder_governance};
-use cf_chains::{Chain, ChainCrypto, Ethereum, ForeignChain};
+use cf_chains::{Chain, ChainCrypto, Ethereum, ForeignChain, SetGovKeyWithAggKeyError};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_on_account_funded, impl_mock_waived_fees,
 	mocks::fee_payment::MockFeePayment, BroadcastAnyChainGovKey, CommKeyBroadcaster, WaivedFees,
@@ -103,12 +103,12 @@ impl BroadcastAnyChainGovKey for MockBroadcaster {
 		chain: cf_chains::ForeignChain,
 		old_key: Option<Vec<u8>>,
 		new_key: Vec<u8>,
-	) -> Result<(), ()> {
+	) -> Result<(), SetGovKeyWithAggKeyError> {
 		if Self::broadcast_success() {
 			GovKeyBroadcasted::put((chain, old_key, new_key));
 			Ok(())
 		} else {
-			Err(())
+			Err(SetGovKeyWithAggKeyError::FailedToBuildAPICall)
 		}
 	}
 

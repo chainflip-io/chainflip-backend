@@ -3388,3 +3388,75 @@ fn test_various_refund_reasons() {
 		RefundReason::InvalidDcaParameters,
 	);
 }
+
+// Test that the storage is rolled back if a transactional call fails.
+// This is more a test of the general idea of pattern then a specific call implementation.
+#[test]
+fn rollback_storage_if_transactional_call_fails() {
+	new_test_ext().execute_with(|| {
+		use cf_chains::{
+			evm::EvmCrypto, AllBatch, AllBatchError, ApiCall, ChainCrypto, FetchAssetParams,
+			TransferAssetParams,
+		};
+		use cf_primitives::EgressId;
+		use frame_support::{CloneNoBound, DebugNoBound, PartialEqNoBound};
+		use scale_info::TypeInfo;
+		use sp_core::{Decode, Encode};
+
+		#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+		pub struct RollbackStorageCall;
+
+		impl ApiCall<EvmCrypto> for RollbackStorageCall {
+			fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
+				unimplemented!()
+			}
+
+			fn signed(
+				self,
+				_threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
+				_signer: <EvmCrypto as ChainCrypto>::AggKey,
+			) -> Self {
+				unimplemented!()
+			}
+
+			fn chain_encoded(&self) -> Vec<u8> {
+				unimplemented!()
+			}
+
+			fn is_signed(&self) -> bool {
+				unimplemented!()
+			}
+
+			fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
+				unimplemented!()
+			}
+
+			fn refresh_replay_protection(&mut self) {
+				unimplemented!()
+			}
+
+			fn signer(&self) -> Option<<EvmCrypto as ChainCrypto>::AggKey> {
+				unimplemented!()
+			}
+		}
+
+		ChannelIdCounter::<Test, Instance1>::put(100);
+
+		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 100);
+
+		impl AllBatch<Ethereum> for RollbackStorageCall {
+			fn new_unsigned_impl(
+				_fetch_params: Vec<FetchAssetParams<Ethereum>>,
+				_transfer_params: Vec<(TransferAssetParams<Ethereum>, EgressId)>,
+			) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+				ChannelIdCounter::<Test, Instance1>::put(101);
+				Err(AllBatchError::VaultAccountNotSet)
+			}
+		}
+
+		let call_result = RollbackStorageCall::new_unsigned(vec![], vec![]);
+
+		assert!(call_result.is_err(), "Expected the call to fail");
+		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 100);
+	});
+}

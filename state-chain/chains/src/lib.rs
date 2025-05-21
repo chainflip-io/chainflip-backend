@@ -33,6 +33,7 @@ use crate::{
 };
 use ccm_checker::{CcmValidityChecker, CcmValidityError, DecodedCcmAdditionalData};
 use core::{fmt::Display, iter::Step};
+use frame_support::storage::transactional;
 use sol::api::VaultSwapAccountAndSender;
 use sp_std::marker::PhantomData;
 
@@ -485,11 +486,40 @@ pub trait ChainEnvironment<
 pub enum SetAggKeyWithAggKeyError {
 	Failed,
 	FinalTransactionExceededMaxLength,
+	DispatchError(DispatchError),
+}
+
+#[derive(RuntimeDebug, Clone, PartialEq, Eq)]
+pub enum SetGovKeyWithAggKeyError {
+	FailedToBuildAPICall,
+	VaultAccountNotSet,
+	CurrentAggKeyUnavailable,
+	NonceUnavailable,
+	ComputePriceUnavailable,
+	SolApiEnvironmentUnavailable,
+	FailedToDecodeKey,
+	UnsupportedChain,
+	DispatchError(DispatchError),
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
+	/// DO NOT OVERRIDE THIS METHOD.
+	///
+	/// Instead implement the `new_unsigned_impl` method.
+	///
+	/// This method is executing `new_unsigned_impl` transactional to avoid undefined on-chain
+	/// storage by rolling back all changes if the transaction fails.
 	fn new_unsigned(
+		maybe_old_key: Option<<C as ChainCrypto>::AggKey>,
+		new_key: <C as ChainCrypto>::AggKey,
+	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
+		transactional::with_storage_layer(|| Self::new_unsigned_impl(maybe_old_key, new_key))
+	}
+
+	/// This needs to be implemented for each chain and includes the logic for building the
+	/// transaction. It should return an error if the transaction building has failed.
+	fn new_unsigned_impl(
 		maybe_old_key: Option<<C as ChainCrypto>::AggKey>,
 		new_key: <C as ChainCrypto>::AggKey,
 	) -> Result<Option<Self>, SetAggKeyWithAggKeyError>;
@@ -497,10 +527,25 @@ pub trait SetAggKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 
 #[allow(clippy::result_unit_err)]
 pub trait SetGovKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
+	/// DO NOT OVERRIDE THIS METHOD.
+	///
+	/// Instead implement the `new_unsigned_impl` method.
+	///
+	/// This method is executing `new_unsigned_impl` transactional to avoid undefined on-chain
+	/// storage by rolling back all changes if the transaction fails.
 	fn new_unsigned(
 		maybe_old_key: Option<<C as ChainCrypto>::GovKey>,
 		new_key: <C as ChainCrypto>::GovKey,
-	) -> Result<Self, ()>;
+	) -> Result<Self, SetGovKeyWithAggKeyError> {
+		transactional::with_storage_layer(|| Self::new_unsigned_impl(maybe_old_key, new_key))
+	}
+
+	/// This needs to be implemented for each chain and includes the logic for building the
+	/// transaction. It should return an error if the transaction building has failed.
+	fn new_unsigned_impl(
+		maybe_old_key: Option<<C as ChainCrypto>::GovKey>,
+		new_key: <C as ChainCrypto>::GovKey,
+	) -> Result<Self, SetGovKeyWithAggKeyError>;
 }
 
 pub trait SetCommKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
@@ -524,7 +569,21 @@ pub trait RegisterRedemption: ApiCall<<Ethereum as Chain>::ChainCrypto> {
 }
 
 pub trait FetchAndCloseSolanaVaultSwapAccounts: ApiCall<<Solana as Chain>::ChainCrypto> {
+	/// DO NOT OVERRIDE THIS METHOD.
+	///
+	/// Instead implement the `new_unsigned_impl` method.
+	///
+	/// This method is executing `new_unsigned_impl` transactional to avoid undefined on-chain
+	/// storage by rolling back all changes if the transaction fails.
 	fn new_unsigned(
+		accounts: Vec<VaultSwapAccountAndSender>,
+	) -> Result<Self, SolanaTransactionBuildingError> {
+		transactional::with_storage_layer(|| Self::new_unsigned_impl(accounts))
+	}
+
+	/// This needs to be implemented for each chain and includes the logic for building the
+	/// transaction. It should return an error if the transaction building has failed.
+	fn new_unsigned_impl(
 		accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<Self, SolanaTransactionBuildingError>;
 }
@@ -556,6 +615,36 @@ pub enum AllBatchError {
 impl From<DispatchError> for AllBatchError {
 	fn from(e: DispatchError) -> Self {
 		AllBatchError::DispatchError(e)
+	}
+}
+
+impl From<DispatchError> for ExecutexSwapAndCallError {
+	fn from(e: DispatchError) -> Self {
+		ExecutexSwapAndCallError::DispatchError(e)
+	}
+}
+
+impl From<DispatchError> for SetAggKeyWithAggKeyError {
+	fn from(e: DispatchError) -> Self {
+		SetAggKeyWithAggKeyError::DispatchError(e)
+	}
+}
+
+impl From<DispatchError> for SetGovKeyWithAggKeyError {
+	fn from(e: DispatchError) -> Self {
+		SetGovKeyWithAggKeyError::DispatchError(e)
+	}
+}
+
+impl From<DispatchError> for SolanaTransactionBuildingError {
+	fn from(e: DispatchError) -> Self {
+		SolanaTransactionBuildingError::DispatchError(e)
+	}
+}
+
+impl From<DispatchError> for TransferFallbackError {
+	fn from(e: DispatchError) -> Self {
+		TransferFallbackError::DispatchError(e)
 	}
 }
 
@@ -597,10 +686,25 @@ pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
 }
 
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
-	fn new_unsigned(
+	/// DO NOT OVERRIDE THIS METHOD.
+	///
+	/// Instead implement the `new_unsigned_impl` method.
+	///
+	/// This method is executing `new_unsigned_impl` transactional to avoid undefined on-chain
+	/// storage by rolling back all changes if the transaction fails.
+	fn new_unsigned_impl(
 		fetch_params: Vec<FetchAssetParams<C>>,
 		transfer_params: Vec<(TransferAssetParams<C>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError>;
+
+	/// This needs to be implemented for each chain and includes the logic for building the
+	/// transaction. It should return an error if the transaction building has failed.
+	fn new_unsigned(
+		fetch_params: Vec<FetchAssetParams<C>>,
+		transfer_params: Vec<(TransferAssetParams<C>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		transactional::with_storage_layer(|| Self::new_unsigned_impl(fetch_params, transfer_params))
+	}
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
@@ -618,7 +722,35 @@ pub enum ExecutexSwapAndCallError {
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
+	/// DO NOT OVERRIDE THIS METHOD.
+	///
+	/// Instead implement the `new_unsigned_impl` method.
+	///
+	/// This method is executing `new_unsigned_impl` transactional to avoid undefined on-chain
+	/// storage by rolling back all changes if the transaction fails.
 	fn new_unsigned(
+		transfer_param: TransferAssetParams<C>,
+		source_chain: ForeignChain,
+		source_address: Option<ForeignChainAddress>,
+		gas_budget: GasAmount,
+		message: Vec<u8>,
+		ccm_additional_data: DecodedCcmAdditionalData,
+	) -> Result<Self, ExecutexSwapAndCallError> {
+		transactional::with_storage_layer(|| {
+			Self::new_unsigned_impl(
+				transfer_param,
+				source_chain,
+				source_address,
+				gas_budget,
+				message,
+				ccm_additional_data,
+			)
+		})
+	}
+
+	/// This needs to be implemented for each chain and includes the logic for building the
+	/// transaction. It should return an error if the transaction building has failed.
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<C>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
@@ -634,9 +766,26 @@ pub enum TransferFallbackError {
 	Unsupported,
 	/// Failed to lookup the given token address, so the asset is invalid.
 	CannotLookupTokenAddress,
+	/// Some other DispatchError occurred.
+	DispatchError(DispatchError),
 }
+
 pub trait TransferFallback<C: Chain>: ApiCall<C::ChainCrypto> {
-	fn new_unsigned(transfer_param: TransferAssetParams<C>) -> Result<Self, TransferFallbackError>;
+	/// DO NOT OVERRIDE THIS METHOD.
+	///
+	/// Instead implement the `new_unsigned_impl` method.
+	///
+	/// This method is executing `new_unsigned_impl` transactional to avoid undefined on-chain
+	/// storage by rolling back all changes if the transaction fails.
+	fn new_unsigned(transfer_param: TransferAssetParams<C>) -> Result<Self, TransferFallbackError> {
+		transactional::with_storage_layer(|| Self::new_unsigned_impl(transfer_param))
+	}
+
+	/// This needs to be implemented for each chain and includes the logic for building the
+	/// transaction. It should return an error if the transaction building has failed.
+	fn new_unsigned_impl(
+		transfer_param: TransferAssetParams<C>,
+	) -> Result<Self, TransferFallbackError>;
 }
 
 pub trait FeeRefundCalculator<C: Chain> {
