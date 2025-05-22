@@ -638,7 +638,7 @@ mod tests {
 		// let serialized_transaction =
 		// hex::decode("
 		// 010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080010002033f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7f14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d1756024b9be964820950a986a6318e5c4639a02e3e1bcf24f4767ac622414d6690fd6a1c16a7f6351b28c0d5c39d8483ce2319373696d3ef6ed1cb0e836b6310d99b4e010101020927fb829f2e88a4a90100"
-		// ).unwrap(); Manual ETH Devnet => Using the BTC payload but insterting manually the ETH
+		// ).unwrap(); Manual ETH Devnet => Using the BTC payload but inserting manually the ETH
 		// Address => Seems to work => Following bytes that change seem to be part of the recent
 		// blockhash, which doesn't matter. Therefore we can just have a hardcoded payload and
 		// just insert the address neeeded (decoded bs58) depending on the network.
@@ -676,5 +676,50 @@ mod tests {
 
 		// BTC has 8 decimals
 		assert_eq!(value, 8);
+	}
+
+	#[test]
+	fn engine_can_create_price_feed_query_for_simulation() {
+		use cf_chains::sol::{SolVersionedMessage, SolVersionedTransaction};
+		use sol_prim::{consts::const_address, AccountMeta, Instruction};
+
+		let payer: SolAddress = const_address("5GaMJ6MMdjCtSBADfWjYSupzk3voYbpGnfi7dkZY9S6a");
+
+		let chainlink_program_id: SolAddress =
+			const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny");
+		let chainlink_feed: SolAddress =
+			const_address("6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe");
+
+		let account_metas = vec![AccountMeta::new_readonly(chainlink_feed.into(), false)];
+
+		// Stands for "sha256("global:latest_round_data")[0:8]"
+		// // const QUERY_INSTRUCTION_DISCRIMINATOR = Buffer.from([
+		// //   0x27, 0xfb, 0x82, 0x9f, 0x2e, 0x88, 0xa4, 0xa9,
+		// // ]);
+
+		// // enum Query {
+		// //     Version,
+		// //     Decimals,
+		// //     Description,
+		// //     RoundData { round_id: u32 },
+		// //     LatestRoundData,
+		// //     Aggregator,
+		// // }
+		// Buffer.concat([QUERY_INSTRUCTION_DISCRIMINATOR, queryByte])
+		let data: [u8; 9] = [0x27, 0xfb, 0x82, 0x9f, 0x2e, 0x88, 0xa4, 0xa9, 0x04];
+
+		let instructions =
+			vec![Instruction::new_with_bincode(chainlink_program_id.into(), &data, account_metas)];
+		println!("instructions: {:?}", instructions);
+
+		let transaction = SolVersionedTransaction::new_unsigned(SolVersionedMessage::new(
+			&instructions,
+			Some(payer.into()),
+			None,
+			&[],
+		));
+		let serialized_tx = transaction.clone().finalize_and_serialize().unwrap();
+
+		println!("serialized_tx: {:?}", hex::encode(serialized_tx));
 	}
 }
