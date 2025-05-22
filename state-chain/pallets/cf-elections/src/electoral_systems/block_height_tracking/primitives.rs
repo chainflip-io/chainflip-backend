@@ -26,82 +26,65 @@ defx! {
 
 		( where pairs = this.headers.iter().zip(this.headers.iter().skip(1)) )
 	}
-
-	impl<X: IntoIterator<Item = Header<T>>> From<X> {
-		fn from(value: X) -> Self {
-			NonemptyContinuousHeaders { headers: value.into_iter().collect() }
-		}
+}
+impl<T: ChainTypes, X: IntoIterator<Item = Header<T>>> From<X> for NonemptyContinuousHeaders<T> {
+	fn from(value: X) -> Self {
+		NonemptyContinuousHeaders { headers: value.into_iter().collect() }
 	}
-	impl {
-		pub fn first_height(&self) -> Option<T::ChainBlockNumber> {
-			self.headers.front().map(|h| h.block_height)
-		}
-		pub fn last(&self) -> &Header<T> {
-			self.headers.back().unwrap()
-		}
-		pub fn first(&self) -> &Header<T> {
-			self.headers.front().unwrap()
-		}
-		// Assumptions:
-		//   1. `other`: a. is well-formed (contains incrementing heights) b. is nonempty
-		// 	 2. `self`: a. is well-formed (contains incrementing heights)
-		//   3. one of the following cases holds
-		//       - case 1: `other` starts exactly after `self` ends OR self is `Default::default()`
-		//       - case 2: (`self` and `other` start at the same block) AND (self is nonempty)
-		//
-		pub fn merge(&mut self, other: NonemptyContinuousHeaders<T>) -> Result<MergeInfo<T>, MergeFailure<T>> {
-
-			// this is "assumption (3): case 1"
-			//
-			// This means that our new blocks start exactly after the ones we already have,
-			// so we have to append them to our existing ones. And make sure that the hash/parent
-			// hashes match.
-			if self.last().block_height.saturating_forward(1) == other.first().block_height {
-				if self.last().hash == other.first().parent_hash {
-					self.headers.append(&mut other.headers.clone());
-					Ok(MergeInfo { removed: VecDeque::new(), added: other.headers })
-				} else {
-					Err(MergeFailure::ReorgWithUnknownRoot {
-						new_block: other.first().clone(),
-						existing_wrong_parent: self.headers.back().cloned(),
-					})
-				}
+}
+impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
+	pub fn first_height(&self) -> Option<T::ChainBlockNumber> {
+		self.headers.front().map(|h| h.block_height)
+	}
+	pub fn last(&self) -> &Header<T> {
+		self.headers.back().unwrap()
+	}
+	pub fn first(&self) -> &Header<T> {
+		self.headers.front().unwrap()
+	}
+	pub fn merge(
+		&mut self,
+		other: NonemptyContinuousHeaders<T>,
+	) -> Result<MergeInfo<T>, MergeFailure<T>> {
+		if self.last().block_height.saturating_forward(1) == other.first().block_height {
+			if self.last().hash == other.first().parent_hash {
+				self.headers.append(&mut other.headers.clone());
+				Ok(MergeInfo { removed: VecDeque::new(), added: other.headers })
 			} else {
-				// this is "assumption (3): case 2"
-				if self.first().block_height == other.first().block_height {
-					// extract common prefix of headers
-					let mut self_headers = self.headers.clone();
-					let mut other_headers = other.headers.clone();
-					let common_headers = extract_common_prefix(&mut self_headers, &mut other_headers);
-
-					// set headers to `common_headers` + `other_headers`
-					self.headers = common_headers;
-					self.headers.append(&mut other_headers.clone());
-
-					Ok(MergeInfo { removed: self_headers, added: other_headers })
-				} else {
-					Err(MergeFailure::InternalError("expected either case 1 or case 2 to hold!"))
-				}
+				Err(MergeFailure::ReorgWithUnknownRoot {
+					new_block: other.first().clone(),
+					existing_wrong_parent: self.headers.back().cloned(),
+				})
+			}
+		} else {
+			if self.first().block_height == other.first().block_height {
+				let mut self_headers = self.headers.clone();
+				let mut other_headers = other.headers.clone();
+				let common_headers = extract_common_prefix(&mut self_headers, &mut other_headers);
+				self.headers = common_headers;
+				self.headers.append(&mut other_headers.clone());
+				Ok(MergeInfo { removed: self_headers, added: other_headers })
+			} else {
+				Err(MergeFailure::InternalError("expected either case 1 or case 2 to hold!"))
 			}
 		}
 	}
 }
 
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-)]
-pub struct Header<T: ChainTypes> {
-	pub block_height: T::ChainBlockNumber,
-	pub hash: T::ChainBlockHash,
-	pub parent_hash: T::ChainBlockHash,
+defx! {
+	#[derive(Ord, PartialOrd)]
+	pub struct Header[T: ChainTypes] {
+		pub block_height: T::ChainBlockNumber,
+		pub hash: T::ChainBlockHash,
+		pub parent_hash: T::ChainBlockHash,
+	}
+
+	validate this (else HeaderError) {}
 }
 
-impl<T: ChainTypes> Validate for Header<T> {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
+pub enum ChainBlocksMergeResult<N> {
+	Extended { new_highest: N },
+	FailedMissing { range: Range<N> },
 }
 
 #[derive(
@@ -121,8 +104,9 @@ impl<T: ChainTypes> MergeInfo<T> {
 				.map(|header| (header.block_height, header.hash.clone()))
 				.collect();
 
-			let f =
-				if self.removed.is_empty() { ChainProgress::Range } else { ChainProgress::Reorg };
+			use ChainProgress::*;
+
+			let f = if self.removed.is_empty() { Range } else { Reorg };
 
 			Some(f(hashes, first_added.block_height..=last_added.block_height))
 		} else {
@@ -137,7 +121,6 @@ pub enum MergeFailure<T: ChainTypes> {
 	// `lowest_new_block` should, by block number, be `existing_wrong_parent`, but who's
 	// hash doesn't match with `lowest_new_block`'s parent hash.
 	ReorgWithUnknownRoot { new_block: Header<T>, existing_wrong_parent: Option<Header<T>> },
-
 	InternalError(&'static str),
 }
 
@@ -159,15 +142,4 @@ pub fn trim_to_length<A>(items: &mut VecDeque<A>, target_length: usize) -> VecDe
 		}
 	}
 	result
-}
-
-#[derive(Debug, PartialEq)]
-pub enum VoteValidationError<T: HWTypes> {
-	BlockNotMatchingRequestedHeight,
-	NonemptyContinuousHeadersError(NonemptyContinuousHeadersError<T>),
-}
-
-pub enum ChainBlocksMergeResult<N> {
-	Extended { new_highest: N },
-	FailedMissing { range: Range<N> },
 }

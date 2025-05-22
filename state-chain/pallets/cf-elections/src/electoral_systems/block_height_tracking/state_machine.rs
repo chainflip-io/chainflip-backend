@@ -2,9 +2,7 @@ use super::{
 	super::state_machine::{
 		core::Validate, state_machine::Statemachine, state_machine_es::SMInput,
 	},
-	primitives::{
-		trim_to_length, Header, MergeFailure, NonemptyContinuousHeaders, VoteValidationError,
-	},
+	primitives::{trim_to_length, Header, MergeFailure, NonemptyContinuousHeaders},
 	ChainProgress, ChainProgressFor, HWTypes, HeightWitnesserProperties,
 };
 use crate::electoral_systems::state_machine::{
@@ -13,7 +11,6 @@ use crate::electoral_systems::state_machine::{
 };
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
-use frame_support::pallet_prelude::MaxEncodedLen;
 use itertools::Either;
 use scale_info::{prelude::format, TypeInfo};
 use serde::{Deserialize, Serialize};
@@ -42,6 +39,11 @@ defx! {
 	}
 }
 
+#[derive(Debug, PartialEq)]
+pub enum VoteValidationError<T: HWTypes> {
+	BlockNotMatchingRequestedHeight,
+	NonemptyContinuousHeadersError(NonemptyContinuousHeadersError<T>),
+}
 
 defx! {
 
