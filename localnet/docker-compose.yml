@@ -11,7 +11,7 @@ services:
   solana-init:
     # Not using v1.1.0 because we want to test the Swap Endpoint upgrade logic to be run in mainnet.
     # The Swap Endpoint program is the only difference between the two images.
-    image: ghcr.io/chainflip-io/solana-localnet-ledger:v1.0.0-alt-manager
+    image: ghcr.io/chainflip-io/solana-localnet-ledger:v1.1.1-rc0
     pull_policy: if_not_present
     container_name: init-solana
     platform: linux/amd64
