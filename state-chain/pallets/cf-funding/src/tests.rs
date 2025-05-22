@@ -2172,8 +2172,101 @@ fn fund_rebalance_and_redeem_dosent_allow_unauthorized_redemptions() {
 		let api_call_1 = api_calls.pop().unwrap();
 		let api_call_2 = api_calls.pop().unwrap();
 
+		let successful_redemption_amount_1 = api_call_1.amount;
+		let successful_redemption_amount_2 = api_call_2.amount;
+
 		// Note: No tax is taken during the redemption since we redeem all.
-		assert_eq!(api_call_1.amount, AMOUNT / 2);
-		assert_eq!(api_call_2.amount, AMOUNT / 2);
+		assert_eq!(successful_redemption_amount_1, AMOUNT / 2);
+		assert_eq!(successful_redemption_amount_2, AMOUNT / 2);
+
+		// Proof balance integrity of all operations.
+		assert_eq!(
+			AMOUNT,
+			Flip::total_balance_of(&ALICE) +
+				Flip::total_balance_of(&BOB) +
+				successful_redemption_amount_1 +
+				successful_redemption_amount_2
+		);
+	});
+}
+
+#[test]
+fn rebalance_during_redemption_dosent_lead_to_double_spending() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const AMOUNT_TO_REDEEM: u128 = 50;
+		const REBALANCE_AMOUNT_TO_HIGH: u128 = 60;
+		const REBALANCE_AMOUNT: u128 = 30;
+		const TAX: u128 = 5;
+
+		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&BOB
+		));
+
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			UNRESTRICTED_ADDRESS,
+			TX_HASH
+		));
+
+		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT);
+
+		assert_ok!(Funding::redeem(
+			OriginTrait::signed(ALICE),
+			RedemptionAmount::Exact(AMOUNT_TO_REDEEM),
+			UNRESTRICTED_ADDRESS,
+			Default::default()
+		));
+
+		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT_TO_REDEEM - TAX);
+
+		assert!(PendingRedemptions::<Test>::get(ALICE).is_some());
+
+		assert_noop!(
+			Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				Some(UNRESTRICTED_ADDRESS),
+				REBALANCE_AMOUNT_TO_HIGH.into()
+			),
+			Error::<Test>::InsufficientBalance
+		);
+
+		assert_ok!(Funding::rebalance(
+			OriginTrait::signed(ALICE),
+			BOB,
+			Some(UNRESTRICTED_ADDRESS),
+			REBALANCE_AMOUNT.into()
+		));
+
+		let on_chain_balance_alice = Flip::total_balance_of(&ALICE);
+		let on_chain_balance_bob = Flip::total_balance_of(&BOB);
+
+		assert_eq!(on_chain_balance_alice, AMOUNT - AMOUNT_TO_REDEEM - REBALANCE_AMOUNT - TAX);
+		assert_eq!(on_chain_balance_bob, REBALANCE_AMOUNT);
+
+		assert!(PendingRedemptions::<Test>::get(ALICE).is_some());
+
+		let mut api_calls = MockFundingBroadcaster::get_pending_api_calls();
+		assert_eq!(api_calls.len(), 1);
+
+		let api_call_1 = api_calls.pop().unwrap();
+
+		let successful_redemption_amount = api_call_1.amount;
+
+		assert_eq!(successful_redemption_amount, AMOUNT_TO_REDEEM);
+
+		assert_eq!(
+			AMOUNT,
+			on_chain_balance_alice + on_chain_balance_bob + successful_redemption_amount + TAX
+		);
 	});
 }
