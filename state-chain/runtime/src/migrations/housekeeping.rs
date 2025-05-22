@@ -54,6 +54,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN =>
 				if crate::VERSION.spec_version == 1_09_05 {
+					CfeEvents::<Runtime>::kill();
 					match <EthereumApi<EvmEnvironment> as RejectCall<Ethereum>>::new_unsigned(
 						evm::DepositDetails {
 							tx_hashes: Some(vec![H256::from_str(
