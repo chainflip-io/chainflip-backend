@@ -1594,7 +1594,11 @@ where
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
-				network_fee_hundredth_pips: api.cf_network_fees(hash)?.regular_network_fee.rate,
+				network_fee_hundredth_pips: api
+					.cf_network_fees(hash)?
+					.regular_network_fee
+					.standard_rate_and_minimum
+					.rate,
 				swap_retry_delay_blocks: api.cf_swap_retry_delay_blocks(hash)?,
 				max_swap_retry_duration_blocks: swap_limits.max_swap_retry_duration_blocks,
 				max_swap_request_duration_blocks: swap_limits.max_swap_request_duration_blocks,
@@ -2017,7 +2021,7 @@ mod test {
 	};
 	use sp_core::H160;
 	use sp_runtime::AccountId32;
-	use state_chain_runtime::runtime_apis::OwedAmount;
+	use state_chain_runtime::runtime_apis::{NetworkFeeDetails, OwedAmount};
 
 	/*
 		changing any of these serialization tests signifies a breaking change in the
@@ -2196,13 +2200,63 @@ mod test {
 					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				},
 				network_fees: NetworkFees {
-					regular_network_fee: FeeRateAndMinimum {
-						rate: Permill::from_percent(1),
-						minimum: 123u32.into(),
+					regular_network_fee: NetworkFeeDetails {
+						standard_rate_and_minimum: FeeRateAndMinimum {
+							rate: Permill::from_perthousand(1),
+							minimum: 100_u32.into(),
+						},
+						rates: any::AssetMap {
+							eth: eth::AssetMap {
+								eth: Permill::from_perthousand(20),
+								flip: Permill::from_perthousand(10),
+								usdc: Permill::from_perthousand(1),
+								usdt: Permill::from_perthousand(1),
+							},
+							btc: btc::AssetMap { btc: Permill::from_perthousand(40) },
+							dot: dot::AssetMap { dot: Permill::from_perthousand(50) },
+							arb: arb::AssetMap {
+								eth: Permill::from_perthousand(1),
+								usdc: Permill::from_perthousand(1),
+							},
+							sol: sol::AssetMap {
+								sol: Permill::from_perthousand(1),
+								usdc: Permill::from_perthousand(1),
+							},
+							hub: hub::AssetMap {
+								dot: Permill::from_perthousand(1),
+								usdc: Permill::from_perthousand(1),
+								usdt: Permill::from_perthousand(1),
+							},
+						},
 					},
-					internal_swap_network_fee: FeeRateAndMinimum {
-						rate: Permill::from_percent(2),
-						minimum: 456u32.into(),
+					internal_swap_network_fee: NetworkFeeDetails {
+						standard_rate_and_minimum: FeeRateAndMinimum {
+							rate: Permill::from_perthousand(20),
+							minimum: 200_u32.into(),
+						},
+						rates: any::AssetMap {
+							eth: eth::AssetMap {
+								eth: Permill::from_perthousand(20),
+								flip: Permill::from_perthousand(20),
+								usdc: Permill::from_perthousand(420),
+								usdt: Permill::from_perthousand(249),
+							},
+							btc: btc::AssetMap { btc: Permill::from_perthousand(20) },
+							dot: dot::AssetMap { dot: Permill::from_perthousand(20) },
+							arb: arb::AssetMap {
+								eth: Permill::from_perthousand(20),
+								usdc: Permill::from_perthousand(123),
+							},
+							sol: sol::AssetMap {
+								sol: Permill::from_perthousand(20),
+								usdc: Permill::from_perthousand(456),
+							},
+							hub: hub::AssetMap {
+								dot: Permill::from_perthousand(20),
+								usdc: Permill::from_perthousand(789),
+								usdt: Permill::from_perthousand(101),
+							},
+						},
 					},
 				},
 			},

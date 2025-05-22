@@ -46,9 +46,9 @@ use crate::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DispatchErrorWithMessage,
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		NetworkFees, RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
-		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
-		VaultAddresses, VaultSwapDetails,
+		NetworkFeeDetails, NetworkFees, RuntimeApiPenalty, SimulateSwapAdditionalOrder,
+		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
+		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -2724,9 +2724,21 @@ impl_runtime_apis! {
 		}
 
 		fn cf_network_fees() -> NetworkFees{
+			let regular_network_fee = pallet_cf_swapping::NetworkFee::<Runtime>::get();
+			let internal_swap_network_fee = pallet_cf_swapping::InternalSwapNetworkFee::<Runtime>::get();
 			NetworkFees {
-				regular_network_fee: pallet_cf_swapping::NetworkFee::<Runtime>::get(),
-				internal_swap_network_fee: pallet_cf_swapping::InternalSwapNetworkFee::<Runtime>::get(),
+				regular_network_fee: NetworkFeeDetails{
+					rates: AssetMap::from_fn(|asset|{
+						pallet_cf_swapping::NetworkFeeForAsset::<Runtime>::get(asset).unwrap_or(regular_network_fee.rate)
+					}),
+					standard_rate_and_minimum: regular_network_fee,
+				},
+				internal_swap_network_fee: NetworkFeeDetails{
+					rates: AssetMap::from_fn(|asset|{
+						pallet_cf_swapping::InternalSwapNetworkFeeForAsset::<Runtime>::get(asset).unwrap_or(internal_swap_network_fee.rate)
+					}),
+					standard_rate_and_minimum: internal_swap_network_fee,
+				},
 			}
 		}
 	}

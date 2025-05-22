@@ -47,7 +47,7 @@ use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_runtime::{DispatchError, Percent};
+use sp_runtime::{DispatchError, Percent, Permill};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
@@ -380,9 +380,15 @@ pub struct TradingStrategyLimits {
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct NetworkFeeDetails {
+	pub standard_rate_and_minimum: FeeRateAndMinimum,
+	pub rates: AssetMap<Permill>,
+}
+
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
 pub struct NetworkFees {
-	pub regular_network_fee: FeeRateAndMinimum,
-	pub internal_swap_network_fee: FeeRateAndMinimum,
+	pub regular_network_fee: NetworkFeeDetails,
+	pub internal_swap_network_fee: NetworkFeeDetails,
 }
 
 // READ THIS BEFORE UPDATING THIS TRAIT:
