@@ -2040,3 +2040,140 @@ fn ensure_bonded_address_condition_hold_during_rebalance() {
 		);
 	});
 }
+
+#[test]
+fn fund_rebalance_and_redeem_dosent_allow_unauthorized_redemptions() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x02; 20]);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&BOB
+		));
+
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			vec![RESTRICTED_ADDRESS],
+			vec![],
+		));
+
+		// Fund ALICE with 100 FLIP.
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS,
+			TX_HASH
+		));
+
+		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT);
+
+		// Try to rebalance to BOBs liquid funds.
+		assert_noop!(
+			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+			Error::<Test>::InsufficientUnrestrictedFunds
+		);
+
+		// Try to rebalance to BOB under an unrestricted address.
+		assert_noop!(
+			Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				Some(UNRESTRICTED_ADDRESS),
+				AMOUNT.into()
+			),
+			Error::<Test>::InsufficientUnrestrictedFunds
+		);
+
+		// Rebalance to BOB under a restricted address.
+		assert_ok!(Funding::rebalance(
+			OriginTrait::signed(ALICE),
+			BOB,
+			Some(RESTRICTED_ADDRESS),
+			AMOUNT.into()
+		));
+
+		assert_eq!(Flip::total_balance_of(&BOB), AMOUNT);
+
+		// Try to redeem some funds to an unrestricted address.
+		assert_noop!(
+			Funding::redeem(
+				OriginTrait::signed(BOB),
+				RedemptionAmount::Exact(AMOUNT / 2),
+				UNRESTRICTED_ADDRESS,
+				Default::default()
+			),
+			Error::<Test>::InsufficientUnrestrictedFunds
+		);
+
+		// Try to rebalance to ALICE liquid funds.
+		assert_noop!(
+			Funding::rebalance(OriginTrait::signed(BOB), ALICE, None, AMOUNT.into()),
+			Error::<Test>::InsufficientUnrestrictedFunds
+		);
+
+		// Try to rebalance to ALICE under an unrestricted address.
+		assert_noop!(
+			Funding::rebalance(
+				OriginTrait::signed(BOB),
+				ALICE,
+				Some(UNRESTRICTED_ADDRESS),
+				AMOUNT.into()
+			),
+			Error::<Test>::InsufficientUnrestrictedFunds
+		);
+
+		// Rebalance to ALICE under a restricted address.
+		assert_ok!(Funding::rebalance(
+			OriginTrait::signed(BOB),
+			ALICE,
+			Some(RESTRICTED_ADDRESS),
+			(AMOUNT / 2).into()
+		));
+
+		assert_ok!(
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_as_validator(&BOB)
+		);
+
+		assert_ok!(
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_as_validator(&ALICE)
+		);
+
+		// Redeem successfully all funds to BOB to the restricted address.
+		assert_ok!(Funding::redeem(
+			OriginTrait::signed(BOB),
+			RedemptionAmount::Max,
+			RESTRICTED_ADDRESS,
+			Default::default()
+		));
+
+		// Redeem successfully all funds to ALICE to the restricted address.
+		assert_ok!(Funding::redeem(
+			OriginTrait::signed(ALICE),
+			RedemptionAmount::Max,
+			RESTRICTED_ADDRESS,
+			Default::default()
+		));
+
+		assert_eq!(Flip::total_balance_of(&BOB), 0);
+		assert_eq!(Flip::total_balance_of(&ALICE), 0);
+
+		assert!(PendingRedemptions::<Test>::get(BOB).is_some());
+		assert!(PendingRedemptions::<Test>::get(ALICE).is_some());
+
+		let mut api_calls = MockFundingBroadcaster::get_pending_api_calls();
+		assert_eq!(api_calls.len(), 2);
+
+		let api_call_1 = api_calls.pop().unwrap();
+		let api_call_2 = api_calls.pop().unwrap();
+
+		// Note: No tax is taken during the redemption since we redeem all.
+		assert_eq!(api_call_1.amount, AMOUNT / 2);
+		assert_eq!(api_call_2.amount, AMOUNT / 2);
+	});
+}

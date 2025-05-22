@@ -72,7 +72,7 @@ cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockRegisterRedemption {
-	amount: <Ethereum as Chain>::ChainAmount,
+	pub amount: <Ethereum as Chain>::ChainAmount,
 }
 
 impl cf_chains::RegisterRedemption for MockRegisterRedemption {
