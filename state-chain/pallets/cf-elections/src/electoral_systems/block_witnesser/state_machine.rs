@@ -287,7 +287,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 						ChainProgressInner::Progress(
 							s.elections.seen_heights_below.saturating_backward(1),
 						),
-						Some((properties.block_height, blockdata, settings.safety_margin)),
+						(properties.block_height, blockdata, settings.safety_margin),
 					)
 				}
 			},
@@ -512,7 +512,7 @@ pub mod tests {
 					processed_events:Default::default(),
 					rules:Default::default(),
 					execute:Default::default(),
-					delete_data: Default::default()
+					log_event: Default::default()
 				},
 				_phantom: core::marker::PhantomData,
 			})

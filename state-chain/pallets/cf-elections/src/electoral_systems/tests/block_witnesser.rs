@@ -16,14 +16,11 @@
 
 use core::ops::RangeInclusive;
 
-use super::{
-	mocks::{Check, TestSetup},
-	register_checks,
-};
+use super::{mocks::Check, register_checks};
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
 	electoral_systems::{
-		block_height_tracking::{ChainProgress, ChainProgressFor, ChainTypes},
+		block_height_tracking::{ChainProgressFor, ChainTypes},
 		block_witnesser::{
 			state_machine::{
 				BWElectionProperties, BWElectionType, BWProcessorTypes, ElectionPropertiesHook,
@@ -72,7 +69,7 @@ impl ChainTypes for Types {
 	type ChainBlockNumber = u64;
 	type ChainBlockHash = u64;
 
-	const SAFETY_MARGIN: u32 = SAFETY_MARGIN;
+	const SAFETY_BUFFER: u32 = SAFETY_MARGIN;
 }
 
 impl BWProcessorTypes for Types {

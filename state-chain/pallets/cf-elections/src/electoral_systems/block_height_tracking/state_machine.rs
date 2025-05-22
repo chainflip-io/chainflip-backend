@@ -340,7 +340,7 @@ pub mod tests {
 		type ChainBlockHash = H;
 
 		// TODO we could make this a parameter to test with different margins
-		const SAFETY_MARGIN: u32 = 16;
+		const SAFETY_BUFFER: u32 = 16;
 	}
 
 	impl<
@@ -391,7 +391,7 @@ pub mod tests {
 		type ChainBlockNumber = BlockWitnessRange<TestChain>;
 		type ChainBlockHash = bool;
 
-		const SAFETY_MARGIN: u32 = 16;
+		const SAFETY_BUFFER: u32 = 16;
 	}
 
 	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
