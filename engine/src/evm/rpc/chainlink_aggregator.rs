@@ -39,6 +39,9 @@ pub trait AggregatorV3InterfaceRpcApi {
 
 #[async_trait::async_trait]
 impl AggregatorV3InterfaceRpcApi for EvmRpcClient {
+	// TODO: This call will only get the price of one asset, we can't batch them. If we want to
+	// reduce one to a single call we'll need to write a small program that makes all the calls and
+	// returns all the data as one. Since we use EVM as a fallback it's probably not necessary.
 	async fn latest_round_data(
 		&self,
 		aggregator_address: H160,

@@ -24,6 +24,10 @@ use cf_chains::sol::{SolVersionedMessage, SolVersionedTransaction};
 
 // TODO: We could consider hardcoding the serialized transaction so we don't have to serialize it
 // every time.
+// TODO: Simulating a transation will only return the return data of the last instruction. This
+// means we'lll need an rpc call per asset. If we want to reduce one to a single call we'll need to
+// write a small program that makes all the CPI calls and returns all the data as one.
+// Since we use Solana as the main chain it might be worth it.
 fn build_and_serialize_query_transaction(
 	payer: SolAddress,
 	chainlink_program_id: SolAddress,
