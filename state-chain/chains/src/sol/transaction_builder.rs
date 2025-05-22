@@ -1096,11 +1096,25 @@ pub mod test {
 
 		let account_metas = vec![AccountMeta::new_readonly(chainlink_feed.into(), false)];
 
+		// Stands for "sha256("global:latest_round_data")[0:8]"
+		// // const QUERY_INSTRUCTION_DISCRIMINATOR = Buffer.from([
+		// //   0x27, 0xfb, 0x82, 0x9f, 0x2e, 0x88, 0xa4, 0xa9,
+		// // ]);
+
+		// // enum Query {
+		// //     Version,
+		// //     Decimals,
+		// //     Description,
+		// //     RoundData { round_id: u32 },
+		// //     LatestRoundData,
+		// //     Aggregator,
+		// // }
 		// Buffer.concat([QUERY_INSTRUCTION_DISCRIMINATOR, queryByte])
-		let data: Vec<u8> = vec![0x27, 0xfb, 0x82, 0x9f, 0x2e, 0x88, 0xa4, 0xa9, 0x01];
+		let data: [u8; 9] = [0x27, 0xfb, 0x82, 0x9f, 0x2e, 0x88, 0xa4, 0xa9, 0x04];
 
 		let instructions =
 			vec![Instruction::new_with_bincode(chainlink_program_id.into(), &data, account_metas)];
+		println!("instructions: {:?}", instructions);
 
 		let transaction = SolVersionedTransaction::new_unsigned(SolVersionedMessage::new(
 			&instructions,
@@ -1110,8 +1124,6 @@ pub mod test {
 		));
 		let serialized_tx = transaction.clone().finalize_and_serialize().unwrap();
 
-		// TODO: Use this serialized payload in `test_sol_simulate_transaction_devnet` and check why
-		// it's not working.
 		println!("serialized_tx: {:?}", hex::encode(serialized_tx));
 	}
 }
