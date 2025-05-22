@@ -1,0 +1,10 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: eth
+---
+{
+  "chain": "Ethereum",
+  "calldata": "0x11223344",
+  "value": "0xbc614e",
+  "to": "0xdddddddddddddddddddddddddddddddddddddddd"
+}

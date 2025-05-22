@@ -1,0 +1,10 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: response
+---
+{
+  "tx_details": {
+    "tx_hash": "0xf0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0",
+    "response": "E2aBDC008BaEa1d4Dd2eeE4f0BEa61f6f91897cC"
+  }
+}

@@ -1,0 +1,17 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "base_asset": {
+    "chain": "Ethereum",
+    "asset": "ETH"
+  },
+  "quote_asset": {
+    "chain": "Ethereum",
+    "asset": "USDC"
+  },
+  "sell": "0x12d687",
+  "buy": "0x12d687",
+  "range_order": "0x12d687"
+}

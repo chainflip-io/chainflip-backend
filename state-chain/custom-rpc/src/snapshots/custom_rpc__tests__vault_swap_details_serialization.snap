@@ -1,0 +1,9 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: btc
+---
+{
+  "chain": "Bitcoin",
+  "nulldata_payload": "0x00010203",
+  "deposit_address": "1Pc9wMdCRguVVrZ9Paz8MSgUd47cYfyeQH"
+}

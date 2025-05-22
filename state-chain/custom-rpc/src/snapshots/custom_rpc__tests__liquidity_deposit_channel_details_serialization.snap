@@ -1,0 +1,8 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "deposit_address": "E2aBDC008BaEa1d4Dd2eeE4f0BEa61f6f91897cC",
+  "deposit_chain_expiry_block": 500
+}
