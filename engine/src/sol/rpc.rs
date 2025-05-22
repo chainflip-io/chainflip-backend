@@ -426,68 +426,9 @@ mod tests {
 		.unwrap()
 		.await;
 
-		// Serialized Versioned transaction from:
-		// const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
-		// const chainlinkProgramId = new PublicKey(
-		//   "HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny"
-		// );
-		// const chainlinkFeed = new PublicKey(
-		// 	// "Cv4T27XbjVoKUYwP72NQQanvZeA7W4YF9L4EnYT9kx5o" // BTC Mainnet
-		// 	"6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe" // BTC Devnet
-		// 	// "CzZQBrJCLqjXRfMjRN3fhbxur2QYHUzkpaRwkWsiPqbz" /// From docs example
-		//   );
-
-		// Stands for "sha256("global:latest_round_data")[0:8]"
-		// const QUERY_INSTRUCTION_DISCRIMINATOR = Buffer.from([
-		//   0x27, 0xfb, 0x82, 0x9f, 0x2e, 0x88, 0xa4, 0xa9,
-		// ]);
-
-		// // enum Query {
-		// //     Version,
-		// //     Decimals,
-		// //     Description,
-		// //     RoundData { round_id: u32 },
-		// //     LatestRoundData,
-		// //     Aggregator,
-		// // }
-		// const queryByte = Buffer.from([0x04]); // Adjust based on your Query enum variant
-
-		// const instruction = new TransactionInstruction({
-		//   programId: chainlinkProgramId,
-		//   keys: [
-		// 	{
-		// 	  pubkey: chainlinkFeed,
-		// 	  isSigner: false,
-		// 	  isWritable: false,
-		// 	},
-		//   ],
-		//   data: Buffer.concat([QUERY_INSTRUCTION_DISCRIMINATOR, queryByte]), // 8-byte
-		// discriminator + query enun  });
-
-		// const { blockhash } = await connection.getLatestBlockhash("confirmed");
-		// const messageV0 = new TransactionMessage({
-		//   payerKey: pg.wallet.publicKey,
-		//   recentBlockhash: blockhash,
-		//   instructions: [instruction],
-		// }).compileToV0Message();
-		// const tx = new VersionedTransaction(messageV0);
-		// const serializedTx = tx.serialize();
-
-		// let serialized_transaction =
-		// hex::decode("
-		// 010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080010002033f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7f14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d175602b22f4bfe7b663a29da31c40b32ab0b6f96c8ab1946c517b2c056710a352719adb190c20c1c0414dc233cb92bd86b436aeacf0f00b72798464f22e4029ccaa68b010101020927fb829f2e88a4a90400"
-		// ).unwrap();
-
-		// BTC Devnet (`6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe`)
-		// Serialized from Solana playground code
-		// let serialized_transaction =
-		// hex::decode("
-		// 010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080010002033f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7f14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d175602502b9d5731648a1c61dcf689240e2d2c799393430d9f1d584e368ec4e5243c5f13dcef863a734d75a53ceea4596b64111f9577af432cf6c0c2aed5cb527a733f010101020927fb829f2e88a4a90400"
-		// ).unwrap(); Serialized from `can_create_price_feed_query_for_simulation` test
+		// Manually encoded for testing purposes
 		let serialized_transaction =  hex::decode("010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080010002033f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7502b9d5731648a1c61dcf689240e2d2c799393430d9f1d584e368ec4e5243c5ff14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d1756020000000000000000000000000000000000000000000000000000000000000000010201010927fb829f2e88a4a90400").unwrap();
 		let encoded_transaction = BASE64_STANDARD.encode(&serialized_transaction);
-
-		println!("encoded_transaction: {:?}", encoded_transaction);
 
 		let simulation_result = sol_rpc_client
 			.simulate_transaction(
@@ -504,8 +445,6 @@ mod tests {
 			)
 			.await
 			.unwrap();
-		println!("simulation_result: {:?}", simulation_result);
-		println!("return data: {:?}", simulation_result.value.return_data);
 
 		let return_data = simulation_result
 			.value
@@ -513,34 +452,9 @@ mod tests {
 			.as_ref()
 			.expect("Expected return data to be Some");
 
-		// TODO: We could also assert that the return_data.program_id matches the programID we have
-		// serialized-encoded.
 		let decoded_return_data = BASE64_STANDARD.decode(return_data.data.0.clone()).unwrap();
 		assert_eq!(return_data.data.1, UiReturnDataEncoding::Base64);
-
-		println!("decoded_return_data: {:?}", decoded_return_data);
-
-		// Verify length (expect 32 bytes)
 		assert_eq!(decoded_return_data.len(), 32);
-
-		// // Manually parse the bytes (little-endian). We could also borsh deserialize it.
-		// // Reference code: https://github.com/smartcontractkit/chainlink-solana/blob/develop/contracts/programs/store/src/lib.rs#L219
-		// // #[derive(AnchorSerialize, AnchorDeserialize)]
-		// // pub struct Round {
-		// // 	pub round_id: u32,
-		// // 	pub slot: u64,
-		// // 	pub timestamp: u32,
-		// // 	pub answer: i128,
-		// // }
-		let round_id = u32::from_le_bytes(decoded_return_data[0..4].try_into().unwrap());
-		let slot = u64::from_le_bytes(decoded_return_data[4..12].try_into().unwrap());
-		let timestamp = u32::from_le_bytes(decoded_return_data[12..16].try_into().unwrap());
-		let answer = i128::from_le_bytes(decoded_return_data[16..32].try_into().unwrap());
-
-		println!(
-			"Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}",
-			round_id, slot, timestamp, answer
-		);
 	}
 
 	#[ignore = "requires access to external RPC"]
@@ -551,28 +465,9 @@ mod tests {
 				.unwrap()
 				.await;
 
-		// chainlinkProgramId (`HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny`) =>
-		// 0xf14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d175602 BTC Devnet feed
-		// (`6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe`) =>
-		// 0x502b9d5731648a1c61dcf689240e2d2c799393430d9f1d584e368ec4e5243c5f Devnet Payer
-		// (`5GaMJ6MMdjCtSBADfWjYSupzk3voYbpGnfi7dkZY9S6a`) =>
-		// 0x3f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7
-		// let serialized_transaction =
-		// hex::decode("
-		// 010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080010002033f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7f14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d175602502b9d5731648a1c61dcf689240e2d2c799393430d9f1d584e368ec4e5243c5f13dcef863a734d75a53ceea4596b64111f9577af432cf6c0c2aed5cb527a733f010101020927fb829f2e88a4a90400"
-		// ).unwrap(); Localnet Price Mock ID (`DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X`) =>
-		// 0xbc2c1593df59eda489a29f2b6e99fa0d63a8e5e86c29984804d57a0cc67d9706 Localnet feed
-		// (`GRZmvuxuxCXyrabSuMdqwbn53Bht9wDRMqitgL49nNFK`) =>
-		// 0xe52a4d3dd66dca7c1ae1282207564968b7d21a05d239ccdd7d332aa98139e6da Localnet payer
-		// (`HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp`) =>
-		// 0xf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb
-		// Modified PriceFeedMock Program (chainlinkProgramId), price feed (chainlinkFeed) and payer
-		// because we need a funded account.
+		// Manually encoded for testing purposes
 		let serialized_transaction = hex::decode("01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008001000203f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fbbc2c1593df59eda489a29f2b6e99fa0d63a8e5e86c29984804d57a0cc67d9706e52a4d3dd66dca7c1ae1282207564968b7d21a05d239ccdd7d332aa98139e6da13dcef863a734d75a53ceea4596b64111f9577af432cf6c0c2aed5cb527a733f010101020927fb829f2e88a4a90400").unwrap();
-
 		let encoded_transaction = BASE64_STANDARD.encode(&serialized_transaction);
-
-		println!("encoded_transaction: {:?}", encoded_transaction);
 
 		let simulation_result = sol_rpc_client
 			.simulate_transaction(
@@ -589,8 +484,6 @@ mod tests {
 			)
 			.await
 			.unwrap();
-		println!("simulation_result: {:?}", simulation_result);
-		println!("return data: {:?}", simulation_result.value.return_data);
 
 		let return_data = simulation_result
 			.value
@@ -598,25 +491,9 @@ mod tests {
 			.as_ref()
 			.expect("Expected return data to be Some");
 
-		// TODO: We could also assert that the return_data.program_id matches the programID we have
-		// serialized-encoded.
 		let decoded_return_data = BASE64_STANDARD.decode(return_data.data.0.clone()).unwrap();
 		assert_eq!(return_data.data.1, UiReturnDataEncoding::Base64);
-
-		println!("decoded_return_data: {:?}", decoded_return_data);
-
-		// Verify length (expect 32 bytes)
 		assert_eq!(decoded_return_data.len(), 32);
-
-		let round_id = u32::from_le_bytes(decoded_return_data[0..4].try_into().unwrap());
-		let slot = u64::from_le_bytes(decoded_return_data[4..12].try_into().unwrap());
-		let timestamp = u32::from_le_bytes(decoded_return_data[12..16].try_into().unwrap());
-		let answer = i128::from_le_bytes(decoded_return_data[16..32].try_into().unwrap());
-
-		println!(
-			"Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}",
-			round_id, slot, timestamp, answer
-		);
 	}
 
 	#[ignore = "requires access to external RPC"]
@@ -676,50 +553,5 @@ mod tests {
 
 		// BTC has 8 decimals
 		assert_eq!(value, 8);
-	}
-
-	#[test]
-	fn engine_can_create_price_feed_query_for_simulation() {
-		use cf_chains::sol::{SolVersionedMessage, SolVersionedTransaction};
-		use sol_prim::{consts::const_address, AccountMeta, Instruction};
-
-		let payer: SolAddress = const_address("5GaMJ6MMdjCtSBADfWjYSupzk3voYbpGnfi7dkZY9S6a");
-
-		let chainlink_program_id: SolAddress =
-			const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny");
-		let chainlink_feed: SolAddress =
-			const_address("6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe");
-
-		let account_metas = vec![AccountMeta::new_readonly(chainlink_feed.into(), false)];
-
-		// Stands for "sha256("global:latest_round_data")[0:8]"
-		// // const QUERY_INSTRUCTION_DISCRIMINATOR = Buffer.from([
-		// //   0x27, 0xfb, 0x82, 0x9f, 0x2e, 0x88, 0xa4, 0xa9,
-		// // ]);
-
-		// // enum Query {
-		// //     Version,
-		// //     Decimals,
-		// //     Description,
-		// //     RoundData { round_id: u32 },
-		// //     LatestRoundData,
-		// //     Aggregator,
-		// // }
-		// Buffer.concat([QUERY_INSTRUCTION_DISCRIMINATOR, queryByte])
-		let data: [u8; 9] = [0x27, 0xfb, 0x82, 0x9f, 0x2e, 0x88, 0xa4, 0xa9, 0x04];
-
-		let instructions =
-			vec![Instruction::new_with_bincode(chainlink_program_id.into(), &data, account_metas)];
-		println!("instructions: {:?}", instructions);
-
-		let transaction = SolVersionedTransaction::new_unsigned(SolVersionedMessage::new(
-			&instructions,
-			Some(payer.into()),
-			None,
-			&[],
-		));
-		let serialized_tx = transaction.clone().finalize_and_serialize().unwrap();
-
-		println!("serialized_tx: {:?}", hex::encode(serialized_tx));
 	}
 }
