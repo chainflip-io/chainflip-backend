@@ -41,7 +41,7 @@ use pallet_cf_elections::{
 		},
 		liveness::Liveness,
 		state_machine::{
-			core::{hook_test_utils::EmptyHook, Hook, Validate},
+			core::{hook_test_utils::EmptyHook, Hook},
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 		unsafe_median::{UnsafeMedian, UpdateFeeHook},

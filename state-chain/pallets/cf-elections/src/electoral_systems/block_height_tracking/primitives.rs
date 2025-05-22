@@ -1,4 +1,4 @@
-use core::ops::{Range, RangeInclusive};
+use core::ops::Range;
 
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
@@ -8,9 +8,7 @@ use sp_std::collections::vec_deque::VecDeque;
 
 use crate::electoral_systems::state_machine::core::defx;
 
-use super::{
-	super::state_machine::core::Validate, ChainProgress, ChainProgressFor, ChainTypes, HWTypes,
-};
+use super::{super::state_machine::core::Validate, ChainProgress, ChainProgressFor, ChainTypes};
 
 //------------------------ inputs ---------------------------
 

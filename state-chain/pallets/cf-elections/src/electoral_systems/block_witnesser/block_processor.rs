@@ -5,19 +5,13 @@ use core::{
 
 use crate::electoral_systems::{
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
-	state_machine::core::{hook_test_utils::MockHook, Hook, Validate},
+	state_machine::core::{Hook, Validate},
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use derive_where::derive_where;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
-use sp_std::{
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	fmt::Debug,
-	marker::PhantomData,
-	vec,
-	vec::Vec,
-};
+use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, vec, vec::Vec};
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
