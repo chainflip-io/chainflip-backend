@@ -415,7 +415,7 @@ fn can_only_redeem_if_redemption_check_passes() {
 			&ALICE
 		));
 
-		CanRedeem::set(false);
+		MockRedemptionChecker::set_can_redeem(ALICE, false);
 
 		// Redeem fails of RedemptionCheck fails.
 		assert_noop!(
@@ -429,7 +429,7 @@ fn can_only_redeem_if_redemption_check_passes() {
 		);
 
 		// Can redeem now
-		CanRedeem::set(true);
+		MockRedemptionChecker::set_can_redeem(ALICE, true);
 
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
@@ -2268,5 +2268,53 @@ fn rebalance_during_redemption_dosent_lead_to_double_spending() {
 			AMOUNT,
 			on_chain_balance_alice + on_chain_balance_bob + successful_redemption_amount + TAX
 		);
+	});
+}
+
+#[test]
+fn rebalance_to_non_bidding_validator_fails() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const REBALANCE_AMOUNT: u128 = 30;
+		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&BOB
+		));
+
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			UNRESTRICTED_ADDRESS,
+			TX_HASH
+		));
+
+		MockRedemptionChecker::set_can_redeem(ALICE, false);
+
+		// ALICE is bidding, BOB not, so rebalance should fail
+		assert_noop!(
+			Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				Some(UNRESTRICTED_ADDRESS),
+				REBALANCE_AMOUNT.into()
+			),
+			Error::<Test>::CannotRebalanceToBiddingValidator
+		);
+
+		MockRedemptionChecker::set_can_redeem(BOB, false);
+
+		// IF ALICE is bidding, and BOB is as well, rebalance should succeed
+		assert_ok!(Funding::rebalance(
+			OriginTrait::signed(ALICE),
+			BOB,
+			Some(UNRESTRICTED_ADDRESS),
+			REBALANCE_AMOUNT.into()
+		));
 	});
 }

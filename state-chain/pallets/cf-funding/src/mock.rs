@@ -27,7 +27,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{derive_impl, parameter_types};
 use scale_info::TypeInfo;
 use sp_runtime::{traits::IdentityLookup, AccountId32, DispatchError, DispatchResult, Permill};
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 // Use a realistic account id for compatibility with `RegisterRedemption`.
 type AccountId = AccountId32;
@@ -126,7 +126,8 @@ impl ApiCall<EvmCrypto> for MockRegisterRedemption {
 }
 
 parameter_types! {
-	pub static CanRedeem: bool = true;
+	pub static CanRedeem: HashMap<AccountId, bool> = HashMap::new();
+	pub static IsBiddingInCurrentAuction: bool = false;
 }
 
 pub const BIDDING_ERR: DispatchError =
@@ -136,9 +137,17 @@ pub struct MockRedemptionChecker;
 impl RedemptionCheck for MockRedemptionChecker {
 	type ValidatorId = AccountId;
 
-	fn ensure_can_redeem(_validator_id: &Self::ValidatorId) -> DispatchResult {
-		frame_support::ensure!(CanRedeem::get(), BIDDING_ERR);
+	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult {
+		frame_support::ensure!(CanRedeem::get().get(validator_id).unwrap_or(&true), BIDDING_ERR);
 		Ok(())
+	}
+}
+
+impl MockRedemptionChecker {
+	pub fn set_can_redeem(validator_id: AccountId, can_redeem: bool) {
+		let mut can_redeem_map = CanRedeem::get();
+		can_redeem_map.insert(validator_id, can_redeem);
+		CanRedeem::set(can_redeem_map);
 	}
 }
 

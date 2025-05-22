@@ -302,6 +302,10 @@ pub mod pallet {
 
 		/// The execution of this extrinsic is restricted only to validators.
 		RestrictedToValidators,
+
+		/// During auction phase its not possible to rebalance to a non-bidding validator if the
+		/// source validator is currently bidding.
+		CannotRebalanceToNotBiddingValidator,
 	}
 
 	#[pallet::call]
@@ -685,6 +689,13 @@ pub mod pallet {
 			amount: RedemptionAmount<FlipBalance<T>>,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
+
+			if T::RedemptionChecker::ensure_can_redeem(&source).is_err() {
+				ensure!(
+					T::RedemptionChecker::ensure_can_redeem(&recipient_account_id).is_err(),
+					Error::<T>::CannotRebalanceToBiddingValidator
+				);
+			}
 
 			ensure!(
 				T::AccountRoleRegistry::has_account_role(&source, AccountRole::Validator) &&
