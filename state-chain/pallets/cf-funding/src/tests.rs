@@ -2304,7 +2304,7 @@ fn rebalance_to_non_bidding_validator_fails() {
 				Some(UNRESTRICTED_ADDRESS),
 				REBALANCE_AMOUNT.into()
 			),
-			Error::<Test>::CannotRebalanceToBiddingValidator
+			Error::<Test>::CannotRebalanceToNotBiddingValidator
 		);
 
 		MockRedemptionChecker::set_can_redeem(BOB, false);
@@ -2316,5 +2316,81 @@ fn rebalance_to_non_bidding_validator_fails() {
 			Some(UNRESTRICTED_ADDRESS),
 			REBALANCE_AMOUNT.into()
 		));
+	});
+}
+
+#[test]
+fn ensure_bound_address_restriction_is_enforced_during_rebalance() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const ADDRESS_A: EthereumAddress = H160([0x01; 20]);
+		const ADDRESS_B: EthereumAddress = H160([0x02; 20]);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&BOB
+		));
+
+		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), ADDRESS_A));
+
+		assert_noop!(
+			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+			Error::<Test>::AccountBindingRestrictionViolated
+		);
+
+		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(BOB), ADDRESS_B));
+
+		assert_noop!(
+			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+			Error::<Test>::AccountBindingRestrictionViolated
+		);
+
+		BoundRedeemAddress::<Test>::insert(BOB, ADDRESS_A);
+
+		assert_noop!(
+			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+			Error::<Test>::InsufficientBalance
+		);
+	});
+}
+
+#[test]
+fn ensure_executor_address_restriction_is_enforced_during_rebalance() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const ADDRESS_A: EthereumAddress = H160([0x01; 20]);
+		const ADDRESS_B: EthereumAddress = H160([0x02; 20]);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&BOB
+		));
+
+		assert_ok!(Funding::bind_executor_address(RuntimeOrigin::signed(ALICE), ADDRESS_A));
+
+		assert_noop!(
+			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+			Error::<Test>::ExecutorBindingRestrictionViolated
+		);
+
+		assert_ok!(Funding::bind_executor_address(RuntimeOrigin::signed(BOB), ADDRESS_B));
+
+		assert_noop!(
+			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+			Error::<Test>::ExecutorBindingRestrictionViolated
+		);
+
+		BoundExecutorAddress::<Test>::insert(BOB, ADDRESS_A);
+
+		assert_noop!(
+			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+			Error::<Test>::InsufficientBalance
+		);
 	});
 }

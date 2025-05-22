@@ -693,7 +693,7 @@ pub mod pallet {
 			if T::RedemptionChecker::ensure_can_redeem(&source).is_err() {
 				ensure!(
 					T::RedemptionChecker::ensure_can_redeem(&recipient_account_id).is_err(),
-					Error::<T>::CannotRebalanceToBiddingValidator
+					Error::<T>::CannotRebalanceToNotBiddingValidator
 				);
 			}
 
