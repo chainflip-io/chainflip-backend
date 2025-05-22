@@ -1,0 +1,35 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: range
+---
+{
+  "RangeOrder": {
+    "base_asset": {
+      "chain": "Bitcoin",
+      "asset": "BTC"
+    },
+    "quote_asset": {
+      "chain": "Ethereum",
+      "asset": "USDC"
+    },
+    "id": "0x1e240",
+    "tick_range": {
+      "start": -100,
+      "end": 100
+    },
+    "liquidity_total": "0x1e240",
+    "collected_fees": {
+      "base": "0x1e240",
+      "quote": "0x5ba0"
+    },
+    "size_change": {
+      "increase": {
+        "liquidity": "0x1e240",
+        "amounts": {
+          "base": "0x1e240",
+          "quote": "0x9fbf1"
+        }
+      }
+    }
+  }
+}

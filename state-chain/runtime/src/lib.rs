@@ -46,9 +46,10 @@ use crate::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DispatchErrorWithMessage,
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		NetworkFeeDetails, NetworkFees, RuntimeApiPenalty, SimulateSwapAdditionalOrder,
-		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
-		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		NetworkFeeDetails, NetworkFees, OpenedDepositChannels, RuntimeApiPenalty,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
+		TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
+		VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -2573,7 +2574,7 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_all_open_deposit_channels() -> Vec<(AccountId, ChannelActionType, ChainAccounts)> {
+		fn cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels> {
 			use sp_std::collections::btree_set::BTreeSet;
 
 			#[allow(clippy::type_complexity)]
@@ -2604,13 +2605,14 @@ impl_runtime_apis! {
 
 			accounts.into_iter().map(|key| {
 				let (account_id, channel_action_type) = key.clone();
-				(account_id, channel_action_type, ChainAccounts {
+				OpenedDepositChannels {
+					account_id, channel_action_type, deposit_channels: ChainAccounts {
 					chain_accounts: [
 						btc_chain_accounts.get(&key).cloned().unwrap_or_default(),
 						eth_chain_accounts.get(&key).cloned().unwrap_or_default(),
 						arb_chain_accounts.get(&key).cloned().unwrap_or_default(),
 					].into_iter().flatten().collect()
-				})
+				}}
 			}).collect()
 		}
 

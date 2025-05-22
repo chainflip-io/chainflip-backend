@@ -1,0 +1,41 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: sol
+---
+{
+  "chain": "Solana",
+  "program_id": "11111111111111111111111111111111",
+  "accounts": [
+    {
+      "pubkey": "11111111111111111111111111111111",
+      "is_signer": false,
+      "is_writable": false
+    },
+    {
+      "pubkey": "HDXwMGmSvaHNUj2oghHWq6E5b7VJeFmo6vxUzDknJxQf",
+      "is_signer": false,
+      "is_writable": true
+    },
+    {
+      "pubkey": "HMNXdshU7AspkuXpZHwMQqmc5RuhzP9SDkHo6yqyod45",
+      "is_signer": true,
+      "is_writable": true
+    },
+    {
+      "pubkey": "HRHpnBAUhUB3tznKzbGGhiYNKb7ufSqFn9xTAMtaYxNn",
+      "is_signer": false,
+      "is_writable": true
+    },
+    {
+      "pubkey": "11111111111111111111111111111111",
+      "is_signer": false,
+      "is_writable": true
+    },
+    {
+      "pubkey": "11111111111111111111111111111111",
+      "is_signer": false,
+      "is_writable": false
+    }
+  ],
+  "data": "0xa3265ce2f3698dc440420f00000000000500000020000000f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f10a00000001040000007c1d0f0700000000000000000600000000010203040520000000f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3"
+}

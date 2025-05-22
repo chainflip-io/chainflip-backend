@@ -1,0 +1,14 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "tx_hash": "0xf0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0",
+  "egress_id": [
+    "Ethereum",
+    1
+  ],
+  "egress_amount": "0x1e240",
+  "egress_fee": "0x39447",
+  "destination_address": "E2aBDC008BaEa1d4Dd2eeE4f0BEa61f6f91897cC"
+}

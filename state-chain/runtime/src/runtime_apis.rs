@@ -331,6 +331,13 @@ impl<AccountId, C: Chain> From<ChannelAction<AccountId, C>> for ChannelActionTyp
 }
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub struct OpenedDepositChannels {
+	pub account_id: AccountId32,
+	pub channel_action_type: ChannelActionType,
+	pub deposit_channels: ChainAccounts,
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub enum TransactionScreeningEvent<TxId> {
 	TransactionRejectionRequestReceived {
 		account_id: <Runtime as frame_system::Config>::AccountId,
@@ -576,7 +583,7 @@ decl_runtime_apis!(
 			affiliate: Option<AccountId32>,
 		) -> Vec<(AccountId32, AffiliateDetails)>;
 		fn cf_vault_addresses() -> VaultAddresses;
-		fn cf_all_open_deposit_channels() -> Vec<(AccountId32, ChannelActionType, ChainAccounts)>;
+		fn cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>;
 		fn cf_get_trading_strategies(
 			lp_id: Option<AccountId32>,
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;

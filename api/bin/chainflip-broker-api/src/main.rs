@@ -30,13 +30,15 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	primitives::{
-		state_chain_runtime::runtime_apis::{ChainAccounts, VaultAddresses, VaultSwapDetails},
+		state_chain_runtime::runtime_apis::{
+			ChainAccounts, OpenedDepositChannels, VaultAddresses, VaultSwapDetails,
+		},
 		AccountRole, AffiliateDetails, Affiliates, Asset, BasisPoints,
 	},
 	rpc_types::H256,
 	settings::StateChain,
-	AccountId32, AddressString, BrokerApi, ChannelActionType, ChannelId, DepositMonitorApi,
-	EthereumAddress, OperatorApi, SignedExtrinsicApi, StateChainApi,
+	AccountId32, AddressString, BrokerApi, ChannelId, DepositMonitorApi, EthereumAddress,
+	OperatorApi, SignedExtrinsicApi, StateChainApi,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
@@ -216,9 +218,7 @@ impl BrokerRpcApiServer for RpcServerImpl {
 			.map_err(RpcApiError::ClientError)
 	}
 
-	async fn all_open_deposit_channels(
-		&self,
-	) -> RpcResult<Vec<(AccountId32, ChannelActionType, ChainAccounts)>> {
+	async fn all_open_deposit_channels(&self) -> RpcResult<Vec<OpenedDepositChannels>> {
 		self.api
 			.raw_client()
 			.cf_all_open_deposit_channels(None)

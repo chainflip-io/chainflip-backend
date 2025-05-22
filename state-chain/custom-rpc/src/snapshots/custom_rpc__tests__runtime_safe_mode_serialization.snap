@@ -1,0 +1,109 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "emissions": {
+    "emissions_sync_enabled": true
+  },
+  "funding": {
+    "redeem_enabled": true
+  },
+  "swapping": {
+    "swaps_enabled": true,
+    "withdrawals_enabled": true,
+    "broker_registration_enabled": true
+  },
+  "liquidity_provider": {
+    "deposit_enabled": true,
+    "withdrawal_enabled": true,
+    "internal_swaps_enabled": true
+  },
+  "validator": {
+    "authority_rotation_enabled": true,
+    "start_bidding_enabled": true,
+    "stop_bidding_enabled": true
+  },
+  "pools": {
+    "range_order_update_enabled": true,
+    "limit_order_update_enabled": true
+  },
+  "trading_strategies": {
+    "strategy_updates_enabled": true,
+    "strategy_closure_enabled": true,
+    "strategy_execution_enabled": true
+  },
+  "reputation": {
+    "reporting_enabled": true
+  },
+  "asset_balances": {
+    "reconciliation_enabled": true
+  },
+  "threshold_signature_evm": {
+    "slashing_enabled": true
+  },
+  "threshold_signature_bitcoin": {
+    "slashing_enabled": true
+  },
+  "threshold_signature_polkadot": {
+    "slashing_enabled": true
+  },
+  "threshold_signature_solana": {
+    "slashing_enabled": true
+  },
+  "broadcast_ethereum": {
+    "retry_enabled": true
+  },
+  "broadcast_bitcoin": {
+    "retry_enabled": true
+  },
+  "broadcast_polkadot": {
+    "retry_enabled": true
+  },
+  "broadcast_arbitrum": {
+    "retry_enabled": true
+  },
+  "broadcast_solana": {
+    "retry_enabled": true
+  },
+  "broadcast_assethub": {
+    "retry_enabled": true
+  },
+  "witnesser": "CodeGreen",
+  "ingress_egress_ethereum": {
+    "boost_deposits_enabled": true,
+    "add_boost_funds_enabled": true,
+    "stop_boosting_enabled": true,
+    "deposits_enabled": true
+  },
+  "ingress_egress_bitcoin": {
+    "boost_deposits_enabled": true,
+    "add_boost_funds_enabled": true,
+    "stop_boosting_enabled": true,
+    "deposits_enabled": true
+  },
+  "ingress_egress_polkadot": {
+    "boost_deposits_enabled": true,
+    "add_boost_funds_enabled": true,
+    "stop_boosting_enabled": true,
+    "deposits_enabled": true
+  },
+  "ingress_egress_arbitrum": {
+    "boost_deposits_enabled": true,
+    "add_boost_funds_enabled": true,
+    "stop_boosting_enabled": true,
+    "deposits_enabled": true
+  },
+  "ingress_egress_solana": {
+    "boost_deposits_enabled": true,
+    "add_boost_funds_enabled": true,
+    "stop_boosting_enabled": true,
+    "deposits_enabled": true
+  },
+  "ingress_egress_assethub": {
+    "boost_deposits_enabled": true,
+    "add_boost_funds_enabled": true,
+    "stop_boosting_enabled": true,
+    "deposits_enabled": true
+  }
+}
