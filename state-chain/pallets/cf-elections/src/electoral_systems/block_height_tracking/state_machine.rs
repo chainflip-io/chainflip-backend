@@ -1,7 +1,7 @@
 use super::{
 	super::state_machine::{core::Validate, state_machine::Statemachine},
 	primitives::{MergeFailure, NonemptyContinuousHeaders, NonemptyContinuousHeadersError},
-	ChainBlockNumberOf, ChainProgress, ChainTypes, HWTypes, HeightWitnesserProperties,
+	BHWTypes, ChainBlockNumberOf, ChainProgress, ChainTypes, HeightWitnesserProperties,
 };
 use crate::electoral_systems::state_machine::{
 	core::{defx, Hook},
@@ -23,7 +23,7 @@ pub enum VoteValidationError<C: ChainTypes> {
 //------------------------ state ---------------------------
 defx! {
 
-	pub enum BHWState[T: HWTypes] {
+	pub enum BHWState[T: BHWTypes] {
 		Starting,
 		Running { headers: NonemptyContinuousHeaders<T::Chain>, witness_from: ChainBlockNumberOf<T::Chain> },
 	}
@@ -45,14 +45,14 @@ defx! {
 //------------------------ state machine ---------------------------
 defx! {
 	#[derive(Default)]
-	pub struct BlockHeightWitnesser[T: HWTypes] {
+	pub struct BlockHeightWitnesser[T: BHWTypes] {
 		pub state: BHWState<T>,
 		pub block_height_update: T::BlockHeightChangeHook,
 	}
 
 	validate _this (else BlockHeightWitnesserError) {}
 }
-impl<T: HWTypes> AbstractApi for BlockHeightWitnesser<T> {
+impl<T: BHWTypes> AbstractApi for BlockHeightWitnesser<T> {
 	type Query = HeightWitnesserProperties<T>;
 	type Response = NonemptyContinuousHeaders<T::Chain>;
 	type Error = VoteValidationError<T::Chain>;
@@ -72,7 +72,7 @@ impl<T: HWTypes> AbstractApi for BlockHeightWitnesser<T> {
 		}
 	}
 }
-impl<T: HWTypes> Statemachine for BlockHeightWitnesser<T> {
+impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 	type State = BlockHeightWitnesser<T>;
 	type Context = ();
 	type Settings = ();
@@ -215,12 +215,12 @@ pub mod tests {
 		super::{
 			super::state_machine::{state_machine::Statemachine, state_machine_es::SMInput},
 			primitives::Header,
-			HWTypes, HeightWitnesserProperties,
+			BHWTypes, HeightWitnesserProperties,
 		},
 		BHWState, BlockHeightWitnesser,
 	};
 
-	pub fn generate_input<T: HWTypes>(
+	pub fn generate_input<T: BHWTypes>(
 		properties: HeightWitnesserProperties<T>,
 	) -> impl Strategy<Value = NonemptyContinuousHeaders<T::Chain>>
 	where
@@ -243,7 +243,7 @@ pub mod tests {
 		}
 	}
 
-	pub fn generate_state<T: HWTypes>() -> impl Strategy<Value = BlockHeightWitnesser<T>>
+	pub fn generate_state<T: BHWTypes>() -> impl Strategy<Value = BlockHeightWitnesser<T>>
 	where
 		ChainBlockHashOf<T::Chain>: Arbitrary,
 		ChainBlockNumberOf<T::Chain>: Arbitrary + BlockZero,
@@ -303,7 +303,7 @@ pub mod tests {
 				+ 'static,
 			H: Validate + Serde + Ord + Clone + Debug + 'static,
 			D: Validate + Serde + Ord + Clone + Debug + 'static,
-		> HWTypes for TypesFor<(N, H, D)>
+		> BHWTypes for TypesFor<(N, H, D)>
 	{
 		const BLOCK_BUFFER_SIZE: usize = 16;
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
@@ -342,7 +342,7 @@ pub mod tests {
 
 	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Serialize, Deserialize)]
 	struct TestTypes2 {}
-	impl HWTypes for TestTypes2 {
+	impl BHWTypes for TestTypes2 {
 		const BLOCK_BUFFER_SIZE: usize = 16;
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 		type Chain = TypesFor<TestChain>;

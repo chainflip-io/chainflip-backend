@@ -37,7 +37,7 @@ pub trait ChainTypes: Ord + Clone + Debug + 'static {
 pub type ChainBlockNumberOf<T> = <T as ChainTypes>::ChainBlockNumber;
 pub type ChainBlockHashOf<T> = <T as ChainTypes>::ChainBlockHash;
 
-pub trait HWTypes: Ord + Clone + Debug + Sized + 'static {
+pub trait BHWTypes: Ord + Clone + Debug + Sized + 'static {
 	type Chain: ChainTypes;
 	type BlockHeightChangeHook: Hook<HookTypeFor<Self, BlockHeightChangeHook>> + CommonTraits;
 
@@ -46,14 +46,14 @@ pub trait HWTypes: Ord + Clone + Debug + Sized + 'static {
 }
 
 pub struct BlockHeightChangeHook;
-impl<T: HWTypes> HookType for HookTypeFor<T, BlockHeightChangeHook> {
+impl<T: BHWTypes> HookType for HookTypeFor<T, BlockHeightChangeHook> {
 	type Input = ChainBlockNumberOf<T::Chain>;
 	type Output = ();
 }
 
 defx! {
 	#[cfg_attr(test, derive(Arbitrary))]
-	pub struct HeightWitnesserProperties[T: HWTypes] {
+	pub struct HeightWitnesserProperties[T: BHWTypes] {
 		/// An election starts with a given block number,
 		/// meaning that engines have to submit all blocks they know of starting with this height.
 		pub witness_from_index: <T::Chain as ChainTypes>::ChainBlockNumber,

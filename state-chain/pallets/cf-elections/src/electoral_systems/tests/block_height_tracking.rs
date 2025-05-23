@@ -3,7 +3,7 @@ use crate::electoral_systems::{
 		consensus::BlockHeightTrackingConsensus,
 		primitives::{Header, NonemptyContinuousHeaders, NonemptyContinuousHeadersError},
 		state_machine::{BlockHeightWitnesser, VoteValidationError},
-		ChainTypes, HWTypes, HeightWitnesserProperties,
+		BHWTypes, ChainTypes, HeightWitnesserProperties,
 	},
 	state_machine::{
 		consensus::{ConsensusMechanism, Threshold},
@@ -29,7 +29,7 @@ impl ChainTypes for BHTypes {
 	const SAFETY_BUFFER: u32 = 8;
 }
 
-impl HWTypes for BHTypes {
+impl BHWTypes for BHTypes {
 	const BLOCK_BUFFER_SIZE: usize = 6;
 	type BlockHeightChangeHook = EmptyHook;
 }

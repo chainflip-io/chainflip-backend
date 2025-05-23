@@ -23,8 +23,8 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		block_height_tracking::{
 			consensus::BlockHeightTrackingConsensus, primitives::NonemptyContinuousHeaders,
-			state_machine::BlockHeightWitnesser, BlockHeightChangeHook, ChainProgress, ChainTypes,
-			HWTypes, HeightWitnesserProperties,
+			state_machine::BlockHeightWitnesser, BHWTypes, BlockHeightChangeHook, ChainProgress,
+			ChainTypes, HeightWitnesserProperties,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
@@ -97,7 +97,7 @@ impls! {
 	for TypesFor<BitcoinBlockHeightTracking>:
 
 	/// Associating the SM related types to the struct
-	HWTypes {
+	BHWTypes {
 		const BLOCK_BUFFER_SIZE: usize = SAFETY_BUFFER as usize;
 		type BlockHeightChangeHook = Self;
 		type Chain = BitcoinChain;
