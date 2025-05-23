@@ -223,6 +223,7 @@ async function main(): Promise<void> {
     'ETH',
     amountToFineAmount(price.get('Eth')!.toString(), ethereumPriceFeedDecimals),
   );
+  // TODO: Set up Solana price feed?
 
   // Confirmation
   logger.info('Waiting for new epoch...');

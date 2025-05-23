@@ -30,30 +30,21 @@ use cf_chains::sol::{SolVersionedMessage, SolVersionedTransaction};
 // Since we use Solana as the main chain it might be worth it.
 fn build_and_serialize_query_transaction(
 	payer: SolAddress,
+	oracle_price_query_helper: SolAddress,
 	chainlink_program_id: SolAddress,
-	feed_address: SolAddress,
+	feed_addresses: Vec<SolAddress>,
 ) -> Result<Vec<u8>, anyhow::Error> {
-	let account_metas = vec![AccountMeta::new_readonly(feed_address.into(), false)];
+	let mut account_metas = vec![AccountMeta::new_readonly(chainlink_program_id.into(), false)];
+	account_metas.extend(
+		feed_addresses
+			.into_iter()
+			.map(|feed| AccountMeta::new_readonly(feed.into(), false)),
+	);
 
-	// Stands for "sha256("global:latest_round_data")[0:8]"
-	// // const QUERY_INSTRUCTION_DISCRIMINATOR = Buffer.from([
-	// //   0x27, 0xfb, 0x82, 0x9f, 0x2e, 0x88, 0xa4, 0xa9,
-	// // ]);
-
-	// // enum Query {
-	// //     Version,
-	// //     Decimals,
-	// //     Description,
-	// //     RoundData { round_id: u32 },
-	// //     LatestRoundData,
-	// //     Aggregator,
-	// // }
-	// Buffer.concat([QUERY_INSTRUCTION_DISCRIMINATOR, queryByte])
-	let data: [u8; 9] = [0x27, 0xfb, 0x82, 0x9f, 0x2e, 0x88, 0xa4, 0xa9, 0x04];
+	let data: [u8; 8] = [0x01, 0x6e, 0x41, 0xfb, 0x87, 0x03, 0xae, 0x26];
 
 	let instructions =
-		vec![Instruction::new_with_bincode(chainlink_program_id.into(), &data, account_metas)];
-	println!("instructions: {:?}", instructions);
+		vec![Instruction::new_with_bincode(oracle_price_query_helper.into(), &data, account_metas)];
 
 	let transaction = SolVersionedTransaction::new_unsigned(SolVersionedMessage::new(
 		&instructions,
@@ -69,21 +60,39 @@ fn build_and_serialize_query_transaction(
 
 fn decode_query_return_data(
 	return_data: &UiTransactionReturnData,
-) -> Result<(u32, u64, u32, i128), anyhow::Error> {
+) -> Result<Vec<(u32, u64, u32, i128, u8)>, anyhow::Error> {
 	// TODO: We could also assert that the return_data.program_id matches the programID we have
 	// serialized-encoded.
+	// TODO: Change assertions and handle failures gracefully.
 	let decoded_return_data = BASE64_STANDARD.decode(return_data.data.0.clone())?;
 	assert_eq!(return_data.data.1, UiReturnDataEncoding::Base64);
 
-	// Verify length (expect 32 bytes)
-	assert_eq!(decoded_return_data.len(), 32);
+	let num_entries = u32::from_le_bytes(decoded_return_data[0..4].try_into()?);
+	let expected_len = 4 + num_entries as usize * 33;
 
-	let round_id = u32::from_le_bytes(decoded_return_data[0..4].try_into()?);
-	let slot = u64::from_le_bytes(decoded_return_data[4..12].try_into()?);
-	let timestamp = u32::from_le_bytes(decoded_return_data[12..16].try_into()?);
-	let answer = i128::from_le_bytes(decoded_return_data[16..32].try_into()?);
+	assert_eq!(
+		decoded_return_data.len(),
+		expected_len,
+		"Decoded return data length does not match expected length"
+	);
 
-	Ok((round_id, slot, timestamp, answer))
+	let mut results = Vec::new();
+	for i in 0..num_entries as usize {
+		let start = 4 + i * 33;
+		let chunk = &decoded_return_data[start..start + 33];
+
+		let round_id = u32::from_le_bytes(chunk[0..4].try_into()?);
+		let slot = u64::from_le_bytes(chunk[4..12].try_into()?);
+		let timestamp = u32::from_le_bytes(chunk[12..16].try_into()?);
+		let answer = i128::from_le_bytes(chunk[16..32].try_into()?);
+		let decimal = u8::from_le_bytes(chunk[32..33].try_into()?);
+
+		assert_eq!(decimal, 8, "Decimals missmatch");
+
+		results.push((round_id, slot, timestamp, answer, decimal));
+	}
+
+	Ok(results)
 }
 
 #[cfg(test)]
@@ -127,13 +136,18 @@ mod tests {
 					const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny");
 				let chainlink_feed: SolAddress =
 					const_address("6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe");
+				let oracle_query_helper: SolAddress =
+					const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z");
 
 				let serialized_transaction = build_and_serialize_query_transaction(
 					payer,
+					oracle_query_helper,
 					chainlink_program_id,
-					chainlink_feed,
+					vec![chainlink_feed],
 				)
 				.unwrap();
+
+				println!("Serialized transaction: {:?}", serialized_transaction);
 
 				let simulation_result = client.simulate_transaction(serialized_transaction).await;
 
@@ -143,12 +157,14 @@ mod tests {
 					.as_ref()
 					.expect("Expected return data to be Some");
 
-				let (round_id, slot, timestamp, answer) =
+				let oracle_results: Vec<(u32, u64, u32, i128, u8)> =
 					decode_query_return_data(return_data).unwrap();
 
+				let (round_id, slot, timestamp, answer, decimals) = oracle_results.first().unwrap();
+
 				println!(
-					"Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}",
-					round_id, slot, timestamp, answer
+					"Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}, Decimals: {}",
+					round_id, slot, timestamp, answer, decimals
 				);
 
 				Ok(())
@@ -182,11 +198,14 @@ mod tests {
 					const_address("DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X");
 				let chainlink_feed: SolAddress =
 					const_address("GRZmvuxuxCXyrabSuMdqwbn53Bht9wDRMqitgL49nNFK");
+				let oracle_query_helper: SolAddress =
+					const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z");
 
 				let serialized_transaction = build_and_serialize_query_transaction(
 					payer,
+					oracle_query_helper,
 					chainlink_program_id,
-					chainlink_feed,
+					vec![chainlink_feed],
 				)
 				.unwrap();
 
@@ -198,12 +217,14 @@ mod tests {
 					.as_ref()
 					.expect("Expected return data to be Some");
 
-				let (round_id, slot, timestamp, answer) =
+				let oracle_results: Vec<(u32, u64, u32, i128, u8)> =
 					decode_query_return_data(return_data).unwrap();
 
+				let (round_id, slot, timestamp, answer, decimals) = oracle_results.first().unwrap();
+
 				println!(
-					"Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}",
-					round_id, slot, timestamp, answer
+					"Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}, Decimals: {}",
+					round_id, slot, timestamp, answer, decimals
 				);
 
 				Ok(())
