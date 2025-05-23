@@ -79,7 +79,7 @@ pub struct OpenChannelDetails<ChainBlockNumber> {
 	pub close_block: ChainBlockNumber,
 }
 
-const SAFETY_MARGIN: u32 = 8;
+const SAFETY_BUFFER: u32 = 8;
 
 // ------------------------ block height tracking ---------------------------
 /// The electoral system for block height tracking
@@ -91,11 +91,11 @@ impls! {
 	ChainTypes {
 		type ChainBlockNumber = btc::BlockNumber;
 		type ChainBlockHash = btc::Hash;
-		const SAFETY_MARGIN: u32 = SAFETY_MARGIN;
+		const SAFETY_BUFFER: u32 = SAFETY_BUFFER;
 	}
 	/// Associating the SM related types to the struct
 	HWTypes {
-		const BLOCK_BUFFER_SIZE: usize = SAFETY_MARGIN as usize;
+		const BLOCK_BUFFER_SIZE: usize = SAFETY_BUFFER as usize;
 		type BlockHeightChangeHook = Self;
 	}
 
@@ -159,7 +159,7 @@ impls! {
 		type ChainBlockNumber = btc::BlockNumber;
 		type ChainBlockHash = btc::Hash;
 
-		const SAFETY_MARGIN: u32 = SAFETY_MARGIN;
+		const SAFETY_BUFFER: u32 = SAFETY_BUFFER;
 	}
 
 	/// Associating BW processor types
@@ -254,7 +254,7 @@ impls! {
 		type ChainBlockNumber = btc::BlockNumber;
 		type ChainBlockHash = btc::Hash;
 
-		const SAFETY_MARGIN: u32 = SAFETY_MARGIN;
+		const SAFETY_BUFFER: u32 = SAFETY_BUFFER;
 	}
 
 	/// Associating BW processor types
@@ -359,7 +359,7 @@ impls! {
 		type ChainBlockNumber = btc::BlockNumber;
 		type ChainBlockHash = btc::Hash;
 
-		const SAFETY_MARGIN: u32 = SAFETY_MARGIN;
+		const SAFETY_BUFFER: u32 = SAFETY_BUFFER;
 	}
 
 	/// Associating BW processor types

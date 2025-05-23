@@ -11,6 +11,7 @@ use crate::electoral_systems::{
 		state_machine::{AbstractApi, Statemachine},
 	},
 };
+use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use core::ops::Range;
 use derive_where::derive_where;
@@ -261,10 +262,8 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					));
 				}
 
-				s.block_processor.process_chain_progress(
-					ChainProgressInner::Progress(*range.end()),
-					T::SAFETY_MARGIN,
-				);
+				s.block_processor
+					.process_chain_progress(ChainProgressInner::Progress(*range.end()));
 			},
 
 			Either::Left(ChainProgress::Reorg(hashes, range)) => {
@@ -281,10 +280,8 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					));
 				}
 
-				s.block_processor.process_chain_progress(
-					ChainProgressInner::Reorg(range.clone()),
-					T::SAFETY_MARGIN,
-				);
+				s.block_processor
+					.process_chain_progress(ChainProgressInner::Reorg(range.clone()));
 			},
 
 			Either::Left(ChainProgress::None) => (),
@@ -298,11 +295,12 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					&blockhash,
 					blockdata,
 				) {
-					s.block_processor.process_block_data((
-						properties.block_height,
-						blockdata,
-						settings.safety_margin,
-					));
+					s.block_processor.process_block_data_and_chain_progress(
+						ChainProgressInner::Progress(
+							s.elections.seen_heights_below.saturating_backward(1),
+						),
+						(properties.block_height, blockdata, settings.safety_margin),
+					)
 				}
 			},
 		};
@@ -526,7 +524,7 @@ pub mod tests {
 					processed_events:Default::default(),
 					rules:Default::default(),
 					execute:Default::default(),
-					delete_data: Default::default()
+					log_event: Default::default()
 				},
 				_phantom: core::marker::PhantomData,
 			})

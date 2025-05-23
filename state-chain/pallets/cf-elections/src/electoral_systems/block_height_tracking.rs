@@ -32,7 +32,10 @@ pub trait ChainTypes: Ord + Clone + Debug + 'static {
 		+ Validate;
 	type ChainBlockHash: Validate + Serde + Ord + Clone + Debug + 'static;
 
-	const SAFETY_MARGIN: u32;
+	/// IMPORTANT: this value must always be greater than the safety margin we use, and represent
+	/// the buffer of data we keep around (in number of blocks) both in the ElectionTracker and in
+	/// the BlockProcessor
+	const SAFETY_BUFFER: u32;
 }
 
 pub trait HWTypes: ChainTypes {

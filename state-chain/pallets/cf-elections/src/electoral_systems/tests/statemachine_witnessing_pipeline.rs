@@ -158,7 +158,7 @@ pub fn test_all() {
             processed_events: Default::default(),
             rules: Default::default(),
             execute: MockHook::new(()),
-            delete_data: MockHook::new(()),
+            log_event: MockHook::new(()),
         };
         let mut bw_state: BlockWitnesserState<Types> = BlockWitnesserState {
             elections: Default::default(),
@@ -231,7 +231,7 @@ pub fn test_all() {
                         .map(BWTrace::ET));
 
                     bw_history.extend(
-                        bw_state.block_processor.delete_data
+                        bw_state.block_processor.log_event
                         .take_history()
                         .into_iter()
                         .map(BWTrace::Event));
@@ -261,7 +261,7 @@ pub fn test_all() {
                         .map(BWTrace::ET));
 
                     bw_history.extend(
-                        bw_state.block_processor.delete_data
+                        bw_state.block_processor.log_event
                         .take_history()
                         .into_iter()
                         .map(BWTrace::Event)

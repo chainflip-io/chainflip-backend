@@ -28,7 +28,7 @@ type BHTypes = TypesFor<BlockHeightWitnesserDefinition>;
 impl ChainTypes for BHTypes {
 	type ChainBlockNumber = u64;
 	type ChainBlockHash = u64;
-	const SAFETY_MARGIN: u32 = 8;
+	const SAFETY_BUFFER: u32 = 8;
 }
 
 impl HWTypes for BHTypes {
