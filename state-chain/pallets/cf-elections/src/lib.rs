@@ -117,14 +117,24 @@
 //! "BitmapComponent" are set via the VoteStorage trait, and how an "AuthorityVote" is split up into
 //! or reconstructed from the others is also configured via that trait.
 
+#![allow(incomplete_features)]
 #![feature(try_find)]
+#![feature(step_trait)]
+#![feature(trait_alias)]
+#![feature(associated_type_defaults)]
+#![feature(unsized_const_params)]
+#![feature(btree_extract_if)]
+#![feature(impl_trait_in_assoc_type)]
 #![cfg_attr(test, feature(closure_track_caller))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+extern crate core;
+
 pub mod electoral_system;
 pub mod electoral_system_runner;
+#[macro_use]
 pub mod electoral_systems;
 mod mock;
 mod tests;
@@ -288,7 +298,10 @@ pub mod pallet {
 		/// specifically in Solana's chain/fee tracking trait impls as those traits do not allow
 		/// errors to be returned, this is ok, but should be avoided in future.
 		#[derive(Debug, PartialEq, Eq)]
-		pub struct CorruptStorageError {}
+		pub struct CorruptStorageError {
+			// force usage of new() to log
+			_no_construct: (),
+		}
 		impl CorruptStorageError {
 			/// We use this function to create this error type (and make the struct impossible to
 			/// create without it) so it is easier to find all locations we create the error, and so
@@ -300,7 +313,7 @@ pub mod pallet {
 					"Election pallet CorruptStorageError at '{}'.",
 					core::panic::Location::caller()
 				);
-				Self {}
+				Self { _no_construct: () }
 			}
 		}
 	}
@@ -432,7 +445,7 @@ pub mod pallet {
 	/// invalidated. This should be set as low as possible, I'd suggest using 8 blocks, which
 	/// equates to 48 seconds.
 	#[pallet::storage]
-	pub(crate) type SharedDataReferenceLifetime<T: Config<I>, I: 'static = ()> =
+	pub type SharedDataReferenceLifetime<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Stores the number of references to a shared vote. We also store the block number at which
@@ -645,6 +658,7 @@ pub mod pallet {
 				));
 				ElectionProperties::<T, I>::insert(election_identifier, properties);
 				ElectionState::<T, I>::insert(unique_monotonic_identifier, state);
+				log::debug!("Created new election with identifier {unique_monotonic_identifier:?}");
 				Ok(election_identifier)
 			}
 
@@ -716,6 +730,7 @@ pub mod pallet {
 				ElectionProperties::<T, I>::remove(composite_election_identifier);
 				ElectionState::<T, I>::remove(unique_monotonic_identifier);
 				ElectionConsensusHistory::<T, I>::remove(unique_monotonic_identifier);
+				log::debug!("Deleted election with identifier {unique_monotonic_identifier:?}");
 			}
 
 			fn refresh_election(
@@ -1640,6 +1655,7 @@ pub mod pallet {
 								}
 							}
 
+							log::info!("calling on_finalize for ElectionSystemRunner");
 							T::ElectoralSystemRunner::on_finalize(election_identifiers)?;
 
 							Ok(())
