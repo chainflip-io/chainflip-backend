@@ -84,9 +84,9 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, LogEventHook> {
 
 pub trait BWProcessorTypes: Sized + Debug + Clone + Eq {
 	type Chain: ChainTypes;
-	type BlockData: PartialEq + Clone + Debug + Eq + Ord + Serde + 'static;
+	type BlockData: PartialEq + Clone + Debug + Eq + Ord + Serde + Encode + 'static;
 
-	type Event: Serde + Debug + Clone + Eq + Ord;
+	type Event: Serde + Debug + Clone + Eq + Ord + Encode;
 	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + Serde + Debug + Clone + Eq;
 	type Execute: Hook<HookTypeFor<Self, ExecuteHook>> + Default + Serde + Debug + Clone + Eq;
 
@@ -464,7 +464,10 @@ pub mod tests {
 	};
 
 	use super::*;
-	use crate::prop_do;
+	use crate::{
+		electoral_systems::block_height_tracking::{ChainBlockHashTrait, ChainBlockNumberTrait},
+		prop_do,
+	};
 	use hook_test_utils::*;
 	use proptest::collection::*;
 
@@ -557,18 +560,9 @@ pub mod tests {
 	// }
 
 	impl<
-			N: Validate
-				+ Serde
-				+ Copy
-				+ Ord
-				+ SaturatingStep
-				+ Step
-				+ BlockZero
-				+ Debug
-				+ Default
-				+ 'static,
-			H: Validate + Serde + Ord + Clone + Debug + Default + 'static,
-			D: Validate + Serde + Ord + Clone + Debug + Default + 'static,
+			N: ChainBlockNumberTrait,
+			H: ChainBlockHashTrait,
+			D: Validate + Serde + Ord + Clone + Debug + Default + Encode + Decode + 'static,
 		> BWTypes for TypesFor<(N, H, Vec<D>)>
 	{
 		type ElectionProperties = ();

@@ -19,7 +19,7 @@ pub mod consensus;
 pub mod primitives;
 pub mod state_machine;
 
-pub trait CommonTraits = Debug + Clone + Serde;
+pub trait CommonTraits = Debug + Clone + Serde + Encode + Decode;
 
 pub trait ChainBlockNumberTrait =
 	CommonTraits + SaturatingStep + Step + BlockZero + Copy + Ord + 'static + Sized + Validate;
