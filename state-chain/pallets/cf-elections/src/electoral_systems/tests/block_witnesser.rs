@@ -70,10 +70,11 @@ impl ChainTypes for Types {
 	type ChainBlockNumber = u64;
 	type ChainBlockHash = u64;
 
-	const SAFETY_BUFFER: u32 = SAFETY_MARGIN;
+	const SAFETY_BUFFER: usize = SAFETY_MARGIN;
 }
 
 impl BWProcessorTypes for Types {
+	type Chain = Types;
 	type BlockData = Vec<u8>;
 	type Event = ();
 	type Rules = MockHook<HookTypeFor<Self, RulesHook>, "rules">;
@@ -105,14 +106,14 @@ impl ElectoralSystemTypes for Types {
 	type VoteStorage =
 		vote_storage::bitmap::Bitmap<(BlockData, Option<<Self as ChainTypes>::ChainBlockHash>)>;
 	type Consensus = (BlockData, Option<<Self as ChainTypes>::ChainBlockHash>);
-	type OnFinalizeContext = Vec<ChainProgress<Self>>;
+	type OnFinalizeContext = Vec<Option<ChainProgress<Self>>>;
 	type OnFinalizeReturn = Vec<()>;
 }
 
 /// Associating the state machine and consensus mechanism to the struct
 impl StatemachineElectoralSystemTypes for Types {
 	// both context and return have to be vectors, these are the item types
-	type OnFinalizeContextItem = ChainProgress<Self>;
+	type OnFinalizeContextItem = Option<ChainProgress<Self>>;
 	type OnFinalizeReturnItem = ();
 
 	// the actual state machine and consensus mechanisms of this ES
@@ -209,7 +210,7 @@ fn create_votes_expectation(
 }
 
 const MAX_CONCURRENT_ELECTIONS: ElectionCount = 5;
-const SAFETY_MARGIN: u32 = 3;
+const SAFETY_MARGIN: usize = 3;
 const MOCK_BW_ELECTION_PROPERTIES: BWElectionProperties<Types> = BWElectionProperties {
 	election_type: BWElectionType::<Types>::SafeBlockHeight,
 	block_height: 2,

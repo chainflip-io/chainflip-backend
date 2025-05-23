@@ -202,9 +202,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	///   - `BPChainProgress::reorg(range)` for a reorganization event, where `range` defines the
 	///     blocks affected.
 	pub fn process_chain_progress(&mut self, progress: BPChainProgress<T::Chain>) {
-		let expiry = progress
-			.highest_block_height
-			.saturating_forward(T::Chain::SAFETY_BUFFER as usize);
+		let expiry = progress.highest_block_height.saturating_forward(T::Chain::SAFETY_BUFFER);
 
 		if let Some(heights) = progress.removed_block_heights.clone() {
 			for n in heights {
@@ -323,7 +321,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	/// Removes old block data and events based on the SAFETY_BUFFER
 	fn clean_old(&mut self, last_height: ChainBlockNumberOf<T::Chain>) {
 		let removed_blocks = self.blocks_data.extract_if(|block_number, _| {
-			block_number.saturating_forward(T::Chain::SAFETY_BUFFER as usize) <= last_height
+			block_number.saturating_forward(T::Chain::SAFETY_BUFFER) <= last_height
 		});
 		let removed_events =
 			self.processed_events.extract_if(|_, expiry_block| *expiry_block <= last_height);
@@ -513,7 +511,7 @@ pub(crate) mod tests {
 		);
 		assert_eq!(
 			processor.blocks_data.len(),
-			Types::SAFETY_BUFFER as usize,
+			Types::SAFETY_BUFFER,
 			"Max Types::SAFETY_BUFFER (16) blocks stored at any time"
 		);
 	}

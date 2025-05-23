@@ -14,27 +14,27 @@ use scale_info::{prelude::format, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
 
-#[derive(Debug, PartialEq)]
-pub enum VoteValidationError<C: ChainTypes> {
-	BlockNotMatchingRequestedHeight,
-	NonemptyContinuousHeadersError(NonemptyContinuousHeadersError<C>),
-}
-
-//------------------------ state ---------------------------
 defx! {
-
-	pub enum BHWState[T: BHWTypes] {
+	/// Phase that the Block Height Witnesser is currently in.
+	///
+	/// When started for the first time, the BHW has a special `Starting` phase,
+	/// in which it queries the engines to vote for an arbitrary continous chain of
+	/// headers.
+	///
+	/// When it's already running it keeps a record of the previous chain of headers,
+	/// and the next block it's going to witness from.
+	pub enum BHWPhase[T: BHWTypes] {
 		Starting,
 		Running { headers: NonemptyContinuousHeaders<T::Chain>, witness_from: ChainBlockNumberOf<T::Chain> },
 	}
-
 	validate this (else BHWStateError) {
+		// TODO since this only recursively checks that the contents are valid, it is possible to
+		// derive this check in the defx macro, just as it is derived for structs.
 		is_valid: match this {
-			BHWState::Starting => true,
-			BHWState::Running { headers, witness_from: _ } => headers.is_valid().is_ok()
+			BHWPhase::Starting => true,
+			BHWPhase::Running { headers, witness_from: _ } => headers.is_valid().is_ok()
 		}
 	}
-
 	impl Default {
 		fn default() -> Self {
 			Self::Starting
@@ -42,14 +42,16 @@ defx! {
 	}
 }
 
-//------------------------ state machine ---------------------------
 defx! {
+	/// The main Block Height Witnesser (BHW) type.
+	///
+	/// It contains the state of the BHW state machine, and it's also the type
+	/// this state machine is associated to.
 	#[derive(Default)]
 	pub struct BlockHeightWitnesser[T: BHWTypes] {
-		pub state: BHWState<T>,
+		pub phase: BHWPhase<T>,
 		pub block_height_update: T::BlockHeightChangeHook,
 	}
-
 	validate _this (else BlockHeightWitnesserError) {}
 }
 impl<T: BHWTypes> AbstractApi for BlockHeightWitnesser<T> {
@@ -57,14 +59,16 @@ impl<T: BHWTypes> AbstractApi for BlockHeightWitnesser<T> {
 	type Response = NonemptyContinuousHeaders<T::Chain>;
 	type Error = VoteValidationError<T::Chain>;
 	fn validate(
-		base: &HeightWitnesserProperties<T>,
-		this: &NonemptyContinuousHeaders<T::Chain>,
+		query: &HeightWitnesserProperties<T>,
+		response: &NonemptyContinuousHeaders<T::Chain>,
 	) -> Result<(), Self::Error> {
-		this.is_valid().map_err(VoteValidationError::NonemptyContinuousHeadersError)?;
-		if base.witness_from_index.is_zero() {
+		response
+			.is_valid()
+			.map_err(VoteValidationError::NonemptyContinuousHeadersError)?;
+		if query.witness_from_index.is_zero() {
 			Ok(())
 		} else {
-			if this.first().block_height == base.witness_from_index {
+			if response.first().block_height == query.witness_from_index {
 				Ok(())
 			} else {
 				Err(VoteValidationError::BlockNotMatchingRequestedHeight)
@@ -78,9 +82,9 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 	type Settings = ();
 	type Output = Result<Option<ChainProgress<T::Chain>>, &'static str>;
 	fn input_index(s: &mut Self::State) -> Vec<Self::Query> {
-		let witness_from_index = match s.state {
-			BHWState::Starting => ChainBlockNumberOf::<T::Chain>::zero(),
-			BHWState::Running { headers: _, witness_from } => witness_from,
+		let witness_from_index = match s.phase {
+			BHWPhase::Starting => ChainBlockNumberOf::<T::Chain>::zero(),
+			BHWPhase::Running { headers: _, witness_from } => witness_from,
 		};
 		Vec::from([HeightWitnesserProperties { witness_from_index }])
 	}
@@ -93,8 +97,8 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 		after: &Self::State,
 	) {
 		use cf_chains::witness_period::SaturatingStep;
-		use BHWState::*;
-		match (&before.state, &after.state) {
+		use BHWPhase::*;
+		match (&before.phase, &after.phase) {
 			(Starting, Starting) => assert!(
 				*input == Either::Left(()),
 				"BHW should remain in Starting state only if it doesn't get a vote as input."
@@ -141,17 +145,15 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 			Either::Left(_) => return Ok(None),
 			Either::Right((_properties, consensus)) => consensus,
 		};
-		match &mut s.state {
-			BHWState::Starting => {
-				let first = new_headers.first().block_height;
-				let last = new_headers.last().block_height;
-				s.state = BHWState::Running {
+		match &mut s.phase {
+			BHWPhase::Starting => {
+				s.phase = BHWPhase::Running {
 					headers: new_headers.clone(),
-					witness_from: last.saturating_forward(1),
+					witness_from: new_headers.last().block_height.saturating_forward(1),
 				};
 				Ok(Some(ChainProgress { headers: new_headers, removed: None }))
 			},
-			BHWState::Running { headers, witness_from } => match headers.merge(new_headers) {
+			BHWPhase::Running { headers, witness_from } => match headers.merge(new_headers) {
 				Ok(merge_info) => {
 					log::info!(
 						"added new blocks: {:?}, replacing these blocks: {:?}",
@@ -159,7 +161,7 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 						merge_info.removed
 					);
 
-					headers.trim_to_length(T::BLOCK_BUFFER_SIZE);
+					headers.trim_to_length(T::Chain::SAFETY_BUFFER);
 
 					let highest_seen = headers.last().block_height;
 					s.block_height_update.run(highest_seen);
@@ -183,7 +185,12 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 	}
 }
 
-//------------------------ state machine ---------------------------
+/// A vote submitted to the BHW might not be valid due to these reasons.
+#[derive(Debug, PartialEq)]
+pub enum VoteValidationError<C: ChainTypes> {
+	BlockNotMatchingRequestedHeight,
+	NonemptyContinuousHeadersError(NonemptyContinuousHeadersError<C>),
+}
 
 #[cfg(test)]
 pub mod tests {
@@ -206,18 +213,16 @@ pub mod tests {
 	use proptest::{
 		prelude::{any, prop, Arbitrary, Just, Strategy},
 		prop_oneof,
-		sample::select,
 	};
 	use serde::{Deserialize, Serialize};
 	use sp_std::{fmt::Debug, iter::Step};
 
 	use super::{
 		super::{
-			super::state_machine::{state_machine::Statemachine, state_machine_es::SMInput},
-			primitives::Header,
-			BHWTypes, HeightWitnesserProperties,
+			super::state_machine::state_machine::Statemachine, primitives::Header, BHWTypes,
+			HeightWitnesserProperties,
 		},
-		BHWState, BlockHeightWitnesser,
+		BHWPhase, BlockHeightWitnesser,
 	};
 
 	pub fn generate_input<T: BHWTypes>(
@@ -250,7 +255,7 @@ pub mod tests {
 		T::BlockHeightChangeHook: Default + sp_std::fmt::Debug,
 	{
 		prop_oneof![
-			Just(BHWState::Starting),
+			Just(BHWPhase::Starting),
 			prop_do! {
 				let is_reorg_without_known_root in any::<bool>();
 				let n in any::<HeightWitnesserProperties<T>>();
@@ -261,11 +266,14 @@ pub mod tests {
 					} else {
 						headers.headers.back().unwrap().block_height.saturating_forward(1)
 					};
-					BHWState::Running { headers, witness_from }
+					BHWPhase::Running { headers, witness_from }
 				}
 			}
 		]
-		.prop_map(|state| BlockHeightWitnesser { state, block_height_update: Default::default() })
+		.prop_map(|state| BlockHeightWitnesser {
+			phase: state,
+			block_height_update: Default::default(),
+		})
 	}
 
 	impl<
@@ -287,7 +295,7 @@ pub mod tests {
 		type ChainBlockHash = H;
 
 		// TODO we could make this a parameter to test with different margins
-		const SAFETY_BUFFER: u32 = 16;
+		const SAFETY_BUFFER: usize = 16;
 	}
 
 	impl<
@@ -305,7 +313,6 @@ pub mod tests {
 			D: Validate + Serde + Ord + Clone + Debug + 'static,
 		> BHWTypes for TypesFor<(N, H, D)>
 	{
-		const BLOCK_BUFFER_SIZE: usize = 16;
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 		type Chain = Self;
 	}
@@ -337,13 +344,12 @@ pub mod tests {
 		type ChainBlockNumber = BlockWitnessRange<TestChain>;
 		type ChainBlockHash = bool;
 
-		const SAFETY_BUFFER: u32 = 16;
+		const SAFETY_BUFFER: usize = 16;
 	}
 
 	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Serialize, Deserialize)]
 	struct TestTypes2 {}
 	impl BHWTypes for TestTypes2 {
-		const BLOCK_BUFFER_SIZE: usize = 16;
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 		type Chain = TypesFor<TestChain>;
 	}

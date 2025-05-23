@@ -1,5 +1,3 @@
-use core::ops::Range;
-
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -13,6 +11,14 @@ use super::{super::state_machine::core::Validate, ChainProgress, ChainTypes};
 //------------------------ inputs ---------------------------
 
 defx! {
+	/// Non-empty, continous chain of block headers.
+	///
+	/// This means that:
+	///  - There's at least one header
+	///  - The `block_height`s of the headers are consequtive
+	///  - The `parent_hash` of a header matches with the `hash` of the block before it
+	///
+	/// These properties are verified as part of the `Validate` implementation derived by the `defx` macro.
 	#[derive(Ord, PartialOrd)]
 	pub struct NonemptyContinuousHeaders[T: ChainTypes] {
 		pub headers: VecDeque<Header<T>>,
@@ -40,10 +46,30 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	pub fn first(&self) -> &Header<T> {
 		self.headers.front().unwrap()
 	}
+	/// Tries to merge the `other` chain of headers into `self`.
+	///
+	/// This function assumes that either of the following holds:
+	///  - `self` and `other` form a continuous chain
+	///  - `self` and `other` start at the same block
+	///
+	/// If this doesn't hold it *will* return a `MergeFailure::InternalError`.
 	pub fn merge(
 		&mut self,
 		other: NonemptyContinuousHeaders<T>,
 	) -> Result<MergeInfo<T>, MergeFailure<T>> {
+		fn extract_common_prefix<A: PartialEq>(
+			a: &mut VecDeque<A>,
+			b: &mut VecDeque<A>,
+		) -> VecDeque<A> {
+			let mut prefix = VecDeque::new();
+
+			while a.front().is_some() && (a.front() == b.front()) {
+				prefix.push_back(a.pop_front().unwrap());
+				b.pop_front();
+			}
+			prefix
+		}
+
 		if self.last().block_height.saturating_forward(1) == other.first().block_height {
 			if self.last().hash == other.first().parent_hash {
 				self.headers.append(&mut other.headers.clone());
@@ -74,22 +100,7 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	}
 }
 
-defx! {
-	#[derive(Ord, PartialOrd)]
-	pub struct Header[T: ChainTypes] {
-		pub block_height: T::ChainBlockNumber,
-		pub hash: T::ChainBlockHash,
-		pub parent_hash: T::ChainBlockHash,
-	}
-
-	validate this (else HeaderError) {}
-}
-
-pub enum ChainBlocksMergeResult<N> {
-	Extended { new_highest: N },
-	FailedMissing { range: Range<N> },
-}
-
+/// Information returned if the `merge` function for `NonEmptyContinuousHeaders` was successful.
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
@@ -97,7 +108,6 @@ pub struct MergeInfo<T: ChainTypes> {
 	pub removed: VecDeque<Header<T>>,
 	pub added: VecDeque<Header<T>>,
 }
-
 impl<T: ChainTypes> MergeInfo<T> {
 	pub fn into_chain_progress(&self) -> Option<ChainProgress<T>> {
 		if self.added.is_empty() {
@@ -112,6 +122,8 @@ impl<T: ChainTypes> MergeInfo<T> {
 	}
 }
 
+/// Information returned if the `merge` function for `NonEmptyContinuousHeaders` encountered an
+/// error.
 #[derive(Debug)]
 pub enum MergeFailure<T: ChainTypes> {
 	// If we get a new range of blocks, [lowest_new_block, ...], where the parent of
@@ -121,12 +133,13 @@ pub enum MergeFailure<T: ChainTypes> {
 	InternalError(&'static str),
 }
 
-fn extract_common_prefix<A: PartialEq>(a: &mut VecDeque<A>, b: &mut VecDeque<A>) -> VecDeque<A> {
-	let mut prefix = VecDeque::new();
-
-	while a.front().is_some() && (a.front() == b.front()) {
-		prefix.push_back(a.pop_front().unwrap());
-		b.pop_front();
+defx! {
+	/// Block header for a given chain `C` as used by the BHW.
+	#[derive(Ord, PartialOrd)]
+	pub struct Header[C: ChainTypes] {
+		pub block_height: C::ChainBlockNumber,
+		pub hash: C::ChainBlockHash,
+		pub parent_hash: C::ChainBlockHash,
 	}
-	prefix
+	validate this (else HeaderError) {}
 }

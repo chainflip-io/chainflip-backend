@@ -16,7 +16,7 @@ use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
 use crate::electoral_systems::{
 	block_height_tracking::{
 		primitives::NonemptyContinuousHeaders,
-		state_machine::{tests::*, BHWState, BlockHeightWitnesser},
+		state_machine::{tests::*, BHWPhase, BlockHeightWitnesser},
 		BHWTypes, HeightWitnesserProperties,
 	},
 	block_witnesser::{
@@ -150,7 +150,7 @@ pub fn test_all() {
 
         // prepare the state machines
         let mut bhw_state: BlockHeightWitnesser<Types> = BlockHeightWitnesser {
-            state: BHWState::Starting,
+            phase: BHWPhase::Starting,
             block_height_update: MockHook::new(())
         };
         let block_processor: BlockProcessor<Types> = BlockProcessor {

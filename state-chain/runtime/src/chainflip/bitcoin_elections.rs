@@ -79,14 +79,14 @@ pub struct OpenChannelDetails<ChainBlockNumber> {
 	pub close_block: ChainBlockNumber,
 }
 
-const SAFETY_BUFFER: u32 = 8;
+const SAFETY_BUFFER: usize = 8;
 
 pub struct BitcoinChainTag;
 pub type BitcoinChain = TypesFor<BitcoinChainTag>;
 impl ChainTypes for BitcoinChain {
 	type ChainBlockNumber = btc::BlockNumber;
 	type ChainBlockHash = btc::Hash;
-	const SAFETY_BUFFER: u32 = SAFETY_BUFFER;
+	const SAFETY_BUFFER: usize = SAFETY_BUFFER;
 }
 
 // ------------------------ block height tracking ---------------------------
@@ -98,7 +98,6 @@ impls! {
 
 	/// Associating the SM related types to the struct
 	BHWTypes {
-		const BLOCK_BUFFER_SIZE: usize = SAFETY_BUFFER as usize;
 		type BlockHeightChangeHook = Self;
 		type Chain = BitcoinChain;
 	}

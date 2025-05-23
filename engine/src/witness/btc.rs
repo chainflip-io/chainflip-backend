@@ -33,7 +33,7 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		block_height_tracking::{
 			primitives::{Header, NonemptyContinuousHeaders},
-			BHWTypes, ChainTypes, HeightWitnesserProperties,
+			ChainTypes, HeightWitnesserProperties,
 		},
 		block_witnesser::state_machine::{BWElectionProperties, BWElectionType},
 	},
@@ -127,9 +127,9 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 					"bht: election_property=0, best_block_height={}, submitting last 6 blocks.",
 					best_block_header.block_height
 				);
-				best_block_header.block_height.saturating_sub(
-					TypesFor::<BitcoinBlockHeightTracking>::BLOCK_BUFFER_SIZE as u64,
-				)
+				best_block_header
+					.block_height
+					.saturating_sub(BitcoinChain::SAFETY_BUFFER as u64)
 			} else {
 				latest_block_height
 			};

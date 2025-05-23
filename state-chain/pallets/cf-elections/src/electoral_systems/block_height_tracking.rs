@@ -32,7 +32,7 @@ pub trait ChainTypes: Ord + Clone + Debug + 'static {
 	/// IMPORTANT: this value must always be greater than the safety margin we use, and represent
 	/// the buffer of data we keep around (in number of blocks) both in the ElectionTracker and in
 	/// the BlockProcessor
-	const SAFETY_BUFFER: u32;
+	const SAFETY_BUFFER: usize;
 }
 pub type ChainBlockNumberOf<T> = <T as ChainTypes>::ChainBlockNumber;
 pub type ChainBlockHashOf<T> = <T as ChainTypes>::ChainBlockHash;
@@ -40,9 +40,6 @@ pub type ChainBlockHashOf<T> = <T as ChainTypes>::ChainBlockHash;
 pub trait BHWTypes: Ord + Clone + Debug + Sized + 'static {
 	type Chain: ChainTypes;
 	type BlockHeightChangeHook: Hook<HookTypeFor<Self, BlockHeightChangeHook>> + CommonTraits;
-
-	// TODO remove this one, replace by SAFETY_MARGIN
-	const BLOCK_BUFFER_SIZE: usize;
 }
 
 pub struct BlockHeightChangeHook;

@@ -131,7 +131,7 @@ pub(crate) use derive_validation_statements;
 /// Syntax sugar for adding validation code to types with validity requirements
 macro_rules! defx {
 	(
-		$(#[$($Attributes:tt)*])?
+		$(#[$($Attributes:tt)*])*
 		pub $def:tt $Name:tt [$($ParamName:ident $(: $ParamType:tt)?),*] {
 			$($Definition:tt)*
 		}
@@ -159,7 +159,7 @@ macro_rules! defx {
 
 		$(
 			#[$($Attributes)*]
-		)?
+		)*
 		pub $def $Name<$($ParamName: $($ParamType)?),*> {
 			$($Definition)*
 		}
