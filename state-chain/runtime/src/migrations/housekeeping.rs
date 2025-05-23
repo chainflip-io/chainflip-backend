@@ -43,10 +43,6 @@ pub type Migration = (
 	solana_remove_unused_channels_state::SolanaRemoveUnusedChannelsState,
 );
 
-const REFUND_ADDRESS: &str = "0x39296AF2e64065D99Aaf57E03FF4d80eB6368A5b";
-const REFUND_AMOUNT: u128 = 308498000000;
-const CHANNEL_ADDRESS: &str = "0x52aa289646e5068185a30f79e95175f10ce6c48f";
-
 pub struct NetworkSpecificHousekeeping;
 
 impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
@@ -54,40 +50,55 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN =>
 				if crate::VERSION.spec_version == 1_09_05 {
-					CfeEvents::<Runtime>::kill();
-					match <EthereumApi<EvmEnvironment> as RejectCall<Ethereum>>::new_unsigned(
-						evm::DepositDetails {
-							tx_hashes: Some(vec![H256::from_str(
-								"0x71ddf79e091b2af49bdd023a014d33038d71cea051342aea0dd714a7efccc375",
-							)
-							.unwrap()]),
-						},
-						EthereumAddress::from_str(REFUND_ADDRESS).unwrap(),
-						REFUND_AMOUNT,
-						Asset::Usdt,
-						Some(EvmFetchId::Fetch(
-							EthereumAddress::from_str(CHANNEL_ADDRESS).unwrap(),
-						)),
-					) {
-						Ok(reject_transaction) => {
-							let broadcast_id = EthereumBroadcaster::threshold_sign_and_broadcast(
-								reject_transaction,
-								None,
-								|_| None,
-							);
-							log::info!(
-								"Rejected transaction successfully broadcasted with id: {:?}",
-								broadcast_id
-							);
+					const REFUNDS: [(&str, &str, u128, &str); 2] = [
+						(
+							"0x39296AF2e64065D99Aaf57E03FF4d80eB6368A5b",
+							"0x52aa289646e5068185a30f79e95175f10ce6c48f",
+							308498000000,
+							"0x71ddf79e091b2af49bdd023a014d33038d71cea051342aea0dd714a7efccc375",
+						),
+						(
+							"0x591d17873798e573cE77D1d8F6B1e2eb5990647c",
+							"0xc89d8d1f136900390b09b9c70a658a1ad7b96369",
+							3000000000,
+							"0x9831311a2c88b3784572d84f53f5a06956014ae49937acfcef684880a216b66a",
+						),
+					];
 
-							// Without doing this the events are cleared on_initialise and so the
-							// engine will never see them.
-							RuntimeUpgradeEvents::<Runtime>::put(CfeEvents::<Runtime>::take());
-						},
-						Err(e) => {
-							log::error!("Failed to reject transaction: {:?}", e);
-						},
+					CfeEvents::<Runtime>::kill();
+
+					for (refund_address, channel_address, refund_amount, tx_hash) in REFUNDS {
+						match <EthereumApi<EvmEnvironment> as RejectCall<Ethereum>>::new_unsigned(
+							evm::DepositDetails {
+								tx_hashes: Some(vec![H256::from_str(tx_hash).unwrap()]),
+							},
+							EthereumAddress::from_str(refund_address).unwrap(),
+							refund_amount,
+							Asset::Usdt,
+							Some(EvmFetchId::Fetch(
+								EthereumAddress::from_str(channel_address).unwrap(),
+							)),
+						) {
+							Ok(reject_transaction) => {
+								let broadcast_id =
+									EthereumBroadcaster::threshold_sign_and_broadcast(
+										reject_transaction,
+										None,
+										|_| None,
+									);
+								log::info!(
+									"Rejected transaction successfully broadcasted with id: {:?}",
+									broadcast_id
+								);
+							},
+							Err(e) => {
+								log::error!("Failed to reject transaction: {:?}", e);
+							},
+						}
 					}
+					// Without doing this the events are cleared on_initialise and so
+					// the engine will never see them.
+					RuntimeUpgradeEvents::<Runtime>::put(CfeEvents::<Runtime>::take());
 				} else {
 					log::info!("Runtime version is not 1.9.5, skipping migration.");
 				},
