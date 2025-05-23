@@ -1,8 +1,7 @@
 use super::{
 	super::state_machine::{core::Validate, state_machine::Statemachine},
 	primitives::{MergeFailure, NonemptyContinuousHeaders, NonemptyContinuousHeadersError},
-	ChainBlockNumberOf, ChainProgress, ChainProgressFor, ChainTypes, HWTypes,
-	HeightWitnesserProperties,
+	ChainBlockNumberOf, ChainProgress, ChainTypes, HWTypes, HeightWitnesserProperties,
 };
 use crate::electoral_systems::state_machine::{
 	core::{defx, Hook},

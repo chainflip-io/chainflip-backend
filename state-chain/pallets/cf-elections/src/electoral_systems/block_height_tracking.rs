@@ -19,11 +19,11 @@ pub mod consensus;
 pub mod primitives;
 pub mod state_machine;
 
-trait CommonTraits = Debug + Clone + Serde;
+pub trait CommonTraits = Debug + Clone + Serde;
 
 pub trait ChainBlockNumberTrait =
-	SaturatingStep + Step + BlockZero + Debug + Copy + Ord + Serde + 'static + Sized + Validate;
-pub trait ChainBlockHashTrait = Validate + Serde + Ord + Clone + Debug + 'static;
+	CommonTraits + SaturatingStep + Step + BlockZero + Copy + Ord + 'static + Sized + Validate;
+pub trait ChainBlockHashTrait = CommonTraits + Validate + Ord + 'static;
 
 pub trait ChainTypes: Ord + Clone + Debug + 'static {
 	type ChainBlockNumber: ChainBlockNumberTrait;
@@ -34,8 +34,8 @@ pub trait ChainTypes: Ord + Clone + Debug + 'static {
 	/// the BlockProcessor
 	const SAFETY_BUFFER: u32;
 }
-pub type ChainBlockNumberOf<T: ChainTypes> = T::ChainBlockNumber;
-pub type ChainBlockHashOf<T: ChainTypes> = T::ChainBlockHash;
+pub type ChainBlockNumberOf<T> = <T as ChainTypes>::ChainBlockNumber;
+pub type ChainBlockHashOf<T> = <T as ChainTypes>::ChainBlockHash;
 
 pub trait HWTypes: Ord + Clone + Debug + Sized + 'static {
 	type Chain: ChainTypes;
@@ -51,21 +51,14 @@ impl<T: HWTypes> HookType for HookTypeFor<T, BlockHeightChangeHook> {
 	type Output = ();
 }
 
-#[cfg_attr(test, derive(Arbitrary))]
-#[derive_where(
-	Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd;
-)]
-#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub struct HeightWitnesserProperties<T: HWTypes> {
-	/// An election starts with a given block number,
-	/// meaning that engines have to submit all blocks they know of starting with this height.
-	pub witness_from_index: <T::Chain as ChainTypes>::ChainBlockNumber,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub enum ChainProgressType {
-	Continous,
-	Reorg,
+defx! {
+	#[cfg_attr(test, derive(Arbitrary))]
+	pub struct HeightWitnesserProperties[T: HWTypes] {
+		/// An election starts with a given block number,
+		/// meaning that engines have to submit all blocks they know of starting with this height.
+		pub witness_from_index: <T::Chain as ChainTypes>::ChainBlockNumber,
+	}
+	validate _this (else HeightWitnesserPropertiesError) {}
 }
 
 defx! {
@@ -73,15 +66,5 @@ defx! {
 		pub headers: NonemptyContinuousHeaders<T>,
 		pub removed: Option<RangeInclusive<ChainBlockNumberOf<T>>>,
 	}
-
-	validate _this (else ChainProgressError) {
-		// TODO: ensure that the defx macro calls the is_valid
-		// on `headers` automatically!
-	}
-
+	validate _this (else ChainProgressError) {}
 }
-pub type ChainProgressFor<T> = ChainProgress<T>;
-
-//-------- implementation of block height tracking as a state machine --------------
-
-pub trait BlockHeightTrait = PartialEq + Ord + Copy + Step + BlockZero;

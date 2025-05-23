@@ -4,10 +4,8 @@ use super::{
 	primitives::{ElectionTracker2, ElectionTrackerEvent, SafeModeStatus},
 };
 use crate::electoral_systems::{
-	block_height_tracking::{
-		ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainProgressFor, ChainTypes,
-	},
-	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
+	block_height_tracking::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes},
+	block_witnesser::block_processor::BlockProcessor,
 	state_machine::{
 		core::Validate,
 		state_machine::{AbstractApi, Statemachine},
@@ -226,7 +224,7 @@ impl<T: BWTypes> AbstractApi for BWStatemachine<T> {
 }
 
 impl<T: BWTypes> Statemachine for BWStatemachine<T> {
-	type Context = Option<ChainProgressFor<T::Chain>>;
+	type Context = Option<ChainProgress<T::Chain>>;
 	type Settings = BlockWitnesserSettings;
 	type Output = Result<(), &'static str>;
 	type State = BlockWitnesserState<T>;

@@ -8,7 +8,7 @@ use sp_std::collections::vec_deque::VecDeque;
 
 use crate::electoral_systems::state_machine::core::{both, defx};
 
-use super::{super::state_machine::core::Validate, ChainProgress, ChainProgressFor, ChainTypes};
+use super::{super::state_machine::core::Validate, ChainProgress, ChainTypes};
 
 //------------------------ inputs ---------------------------
 
@@ -99,7 +99,7 @@ pub struct MergeInfo<T: ChainTypes> {
 }
 
 impl<T: ChainTypes> MergeInfo<T> {
-	pub fn into_chain_progress(&self) -> Option<ChainProgressFor<T>> {
+	pub fn into_chain_progress(&self) -> Option<ChainProgress<T>> {
 		if self.added.is_empty() {
 			None
 		} else {

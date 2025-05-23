@@ -23,8 +23,8 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		block_height_tracking::{
 			consensus::BlockHeightTrackingConsensus, primitives::NonemptyContinuousHeaders,
-			state_machine::BlockHeightWitnesser, BlockHeightChangeHook, ChainProgressFor,
-			ChainTypes, HWTypes, HeightWitnesserProperties,
+			state_machine::BlockHeightWitnesser, BlockHeightChangeHook, ChainProgress, ChainTypes,
+			HWTypes, HeightWitnesserProperties,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
@@ -117,7 +117,7 @@ impls! {
 		type VoteStorage = vote_storage::bitmap::Bitmap<NonemptyContinuousHeaders<BitcoinChain>>;
 		type Consensus = NonemptyContinuousHeaders<BitcoinChain>;
 		type OnFinalizeContext = Vec<()>;
-		type OnFinalizeReturn = Vec<Option<ChainProgressFor<BitcoinChain>>>;
+		type OnFinalizeReturn = Vec<Option<ChainProgress<BitcoinChain>>>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
 
@@ -125,7 +125,7 @@ impls! {
 	StatemachineElectoralSystemTypes {
 		// both context and return have to be vectors, these are the item types
 		type OnFinalizeContextItem = ();
-		type OnFinalizeReturnItem = Option<ChainProgressFor<BitcoinChain>>;
+		type OnFinalizeReturnItem = Option<ChainProgress<BitcoinChain>>;
 
 		// the actual state machine and consensus mechanisms of this ES
 		type ConsensusMechanism = BlockHeightTrackingConsensus<Self>;
@@ -191,7 +191,7 @@ impls! {
 		type ElectionState = ();
 		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataDepositChannel, Option<btc::Hash>)>;
 		type Consensus = (BlockDataDepositChannel, Option<btc::Hash>);
-		type OnFinalizeContext = Vec<Option<ChainProgressFor<BitcoinChain>>>;
+		type OnFinalizeContext = Vec<Option<ChainProgress<BitcoinChain>>>;
 		type OnFinalizeReturn = Vec<()>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
@@ -199,7 +199,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		// both context and return have to be vectors, these are the item types
-		type OnFinalizeContextItem = Option<ChainProgressFor<BitcoinChain>>;
+		type OnFinalizeContextItem = Option<ChainProgress<BitcoinChain>>;
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
@@ -282,7 +282,7 @@ impls! {
 		type ElectionState = ();
 		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataVaultDeposit, Option<btc::Hash>)>;
 		type Consensus = (BlockDataVaultDeposit, Option<btc::Hash>);
-		type OnFinalizeContext = Vec<Option<ChainProgressFor<BitcoinChain>>>;
+		type OnFinalizeContext = Vec<Option<ChainProgress<BitcoinChain>>>;
 		type OnFinalizeReturn = Vec<()>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
@@ -290,7 +290,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		// both context and return have to be vectors, these are the item types
-		type OnFinalizeContextItem = Option<ChainProgressFor<BitcoinChain>>;
+		type OnFinalizeContextItem = Option<ChainProgress<BitcoinChain>>;
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
@@ -381,7 +381,7 @@ impls! {
 		type ElectionState = ();
 		type VoteStorage = vote_storage::bitmap::Bitmap<(EgressBlockData, Option<btc::Hash>)>;
 		type Consensus = (EgressBlockData, Option<btc::Hash>);
-		type OnFinalizeContext = Vec<Option<ChainProgressFor<BitcoinChain>>>;
+		type OnFinalizeContext = Vec<Option<ChainProgress<BitcoinChain>>>;
 		type OnFinalizeReturn = Vec<()>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 	}
@@ -389,7 +389,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		// both context and return have to be vectors, these are the item types
-		type OnFinalizeContextItem = Option<ChainProgressFor<BitcoinChain>>;
+		type OnFinalizeContextItem = Option<ChainProgress<BitcoinChain>>;
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
