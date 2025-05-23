@@ -44,12 +44,16 @@ use futures::{stream, FutureExt, StreamExt};
 use jsonrpsee::{core::async_trait, server::ServerBuilder, PendingSubscriptionSink};
 use std::{
 	path::PathBuf,
-	sync::{atomic::AtomicBool, Arc},
+	sync::{
+		atomic::{AtomicBool, AtomicU32, Ordering},
+		Arc,
+	},
 };
 use tracing::log;
 
 pub struct RpcServerImpl {
 	api: StateChainApi,
+	request_counter: AtomicU32,
 }
 
 impl RpcServerImpl {
@@ -60,6 +64,7 @@ impl RpcServerImpl {
 		Ok(Self {
 			api: StateChainApi::connect(scope, StateChain { ws_endpoint, signing_key_file })
 				.await?,
+			request_counter: Default::default(),
 		})
 	}
 }
@@ -88,7 +93,10 @@ impl BrokerRpcApiServer for RpcServerImpl {
 		dca_parameters: Option<DcaParameters>,
 		wait_for_finality: Option<bool>,
 	) -> RpcResult<SwapDepositAddress> {
-		Ok(self
+		let request_id = self.request_counter.fetch_add(1, Ordering::Relaxed);
+
+		log::info!("Request Swap deposit address #{request_id}: {source_asset:?} -> {destination_asset:?} [{destination_address}]");
+		let swap_deposit_address = self
 			.api
 			.broker_api()
 			.request_swap_deposit_address(
@@ -103,7 +111,11 @@ impl BrokerRpcApiServer for RpcServerImpl {
 				dca_parameters,
 				wait_for_finality,
 			)
-			.await?)
+			.await?;
+
+		log::info!("Response Swap deposit address #{request_id}: {swap_deposit_address:?}");
+
+		Ok(swap_deposit_address)
 	}
 
 	async fn withdraw_fees(
