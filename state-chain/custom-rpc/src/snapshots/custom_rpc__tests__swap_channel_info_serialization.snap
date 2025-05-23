@@ -1,0 +1,15 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "deposit_address": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "source_asset": {
+    "chain": "Ethereum",
+    "asset": "ETH"
+  },
+  "destination_asset": {
+    "chain": "Solana",
+    "asset": "SOL"
+  }
+}

@@ -1,0 +1,26 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "swap_id": 1,
+  "swap_request_id": 10,
+  "base_asset": {
+    "chain": "Bitcoin",
+    "asset": "BTC"
+  },
+  "quote_asset": {
+    "chain": "Ethereum",
+    "asset": "USDC"
+  },
+  "side": "sell",
+  "amount": "0x3039",
+  "source_asset": {
+    "chain": "Bitcoin",
+    "asset": "BTC"
+  },
+  "source_amount": "0x3039",
+  "execute_at": 31,
+  "remaining_chunks": 42,
+  "chunk_interval": 10
+}

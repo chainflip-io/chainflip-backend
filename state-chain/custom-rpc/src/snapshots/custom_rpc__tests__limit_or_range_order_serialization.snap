@@ -1,0 +1,25 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: limit
+---
+{
+  "LimitOrder": {
+    "base_asset": {
+      "chain": "Bitcoin",
+      "asset": "BTC"
+    },
+    "quote_asset": {
+      "chain": "Ethereum",
+      "asset": "USDC"
+    },
+    "side": "buy",
+    "id": "0x1e240",
+    "tick": -100,
+    "sell_amount_total": "0x5ba0",
+    "collected_fees": "0x8707",
+    "bought_amount": "0xb26e",
+    "sell_amount_change": {
+      "increase": "0x3039"
+    }
+  }
+}

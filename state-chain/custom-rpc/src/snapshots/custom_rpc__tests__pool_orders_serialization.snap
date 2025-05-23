@@ -1,0 +1,43 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "limit_orders": {
+    "asks": [
+      {
+        "lp": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+        "id": "0x1e240",
+        "tick": -100,
+        "sell_amount": "0x39447",
+        "fees_earned": "0x5464e",
+        "original_sell_amount": "0x6f855"
+      }
+    ],
+    "bids": [
+      {
+        "lp": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+        "id": "0x9fbf1",
+        "tick": -200,
+        "sell_amount": "0xbadf8",
+        "fees_earned": "0xd5fff",
+        "original_sell_amount": "0xf1206"
+      }
+    ]
+  },
+  "range_orders": [
+    {
+      "lp": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
+      "id": "0x350b",
+      "range": {
+        "start": -400,
+        "end": 400
+      },
+      "liquidity": 24680,
+      "fees_earned": {
+        "base": "0x17cfb",
+        "quote": "0x15194"
+      }
+    }
+  ]
+}

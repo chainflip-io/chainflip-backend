@@ -1,0 +1,5 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: hex
+---
+"0x75bcd15"
