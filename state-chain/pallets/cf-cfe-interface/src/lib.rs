@@ -68,6 +68,13 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
+	// TMP: Just to allow migration to insert events that would've been emitted and seen from the
+	// actions dispatched, however, due to events being cleared on_initialise, the engine will
+	// never see them, unless they are inserted here by the runtime upgrade.
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub type RuntimeUpgradeEvents<T: Config> = StorageValue<_, Vec<CfeEvent<T>>, ValueQuery>;
+
 	#[pallet::storage]
 	#[pallet::getter(fn get_cfe_events)]
 	#[pallet::unbounded]
@@ -77,6 +84,11 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			CfeEvents::<T>::kill();
+
+			// TMP: See comment on `RuntimeUpgradeEvents` for more details.
+			for event in RuntimeUpgradeEvents::<T>::take() {
+				CfeEvents::<T>::append(event);
+			}
 
 			T::WeightInfo::clear_events()
 		}
