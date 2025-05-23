@@ -7,7 +7,7 @@ use tokio::{
 	time::timeout,
 };
 
-const MAX_WAIT_TIME_FOR_REQUEST: Duration = Duration::new(6, 0);
+const MAX_WAIT_TIME_FOR_REQUEST: Duration = Duration::from_secs(6);
 
 type PinBoxedFuture<ResultType> =
 	Pin<Box<dyn Future<Output = Result<ResultType, anyhow::Error>> + Send>>;
@@ -71,10 +71,10 @@ impl<
 								} else if let Some(result_senders) = in_flight.get_mut(&request_key) {
 									result_senders.push(result_to_caller_sender);
 								} else {
-									let result_to_cache_sender = cache_sender.clone();
+									let cache_sender = cache_sender.clone();
 									in_flight.insert(request_key.clone(), vec![result_to_caller_sender]);
 									scope.spawn(async move {
-										let _ = result_to_cache_sender.send((request_key, future.await));
+										let _ = cache_sender.send((request_key, future.await));
 										Ok(())
 									})
 								}
@@ -95,14 +95,14 @@ impl<
 		future: TypedFutureGenerator<ResultType, Client>,
 		key: Key,
 	) -> Result<ResultType, anyhow::Error> {
-		let (tx, rx) = oneshot::channel::<Result<ResultType, anyhow::Error>>();
+		let (result_sender, result_receiver) =
+			oneshot::channel::<Result<ResultType, anyhow::Error>>();
 		let client = self.client.clone();
 		let future = future(client);
-		self.request_sender.send((future, key, tx)).expect(
+		self.request_sender.send((future, key, result_sender)).expect(
 			"Inner loop containing the receiver should never exits, engine is shutting down",
 		);
-		let result = timeout(MAX_WAIT_TIME_FOR_REQUEST, rx).await???;
-		Ok(result)
+		timeout(MAX_WAIT_TIME_FOR_REQUEST, result_receiver).await??
 	}
 }
 
