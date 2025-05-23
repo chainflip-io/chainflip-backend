@@ -43,7 +43,7 @@ use sp_core::bounded::alloc::collections::VecDeque;
 use state_chain_runtime::{
 	chainflip::{
 		bitcoin_elections::{
-			BitcoinBlockHeightTracking, BitcoinBlockHeightTrackingES,
+			BitcoinBlockHeightTracking, BitcoinBlockHeightTrackingES, BitcoinChain,
 			BitcoinDepositChannelWitnessingES, BitcoinElectoralSystemRunner, BitcoinLiveness,
 		},
 		elections::TypesFor,
@@ -90,18 +90,17 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 
 		let mut headers = VecDeque::new();
 
-		let header_from_btc_header =
-			|header: BlockHeader| -> anyhow::Result<Header<TypesFor<BitcoinBlockHeightTracking>>> {
-				Ok(Header {
-					block_height: header.height,
-					hash: header.hash.to_byte_array().into(),
-					parent_hash: header
-						.previous_block_hash
-						.ok_or_else(|| anyhow::anyhow!("No parent hash"))?
-						.to_byte_array()
-						.into(),
-				})
-			};
+		let header_from_btc_header = |header: BlockHeader| -> anyhow::Result<Header<BitcoinChain>> {
+			Ok(Header {
+				block_height: header.height,
+				hash: header.hash.to_byte_array().into(),
+				parent_hash: header
+					.previous_block_hash
+					.ok_or_else(|| anyhow::anyhow!("No parent hash"))?
+					.to_byte_array()
+					.into(),
+			})
+		};
 
 		let get_header = |index: BlockNumber| {
 			async move {

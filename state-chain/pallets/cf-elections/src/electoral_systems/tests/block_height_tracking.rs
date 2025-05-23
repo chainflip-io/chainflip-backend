@@ -1,10 +1,8 @@
 use crate::electoral_systems::{
 	block_height_tracking::{
 		consensus::BlockHeightTrackingConsensus,
-		primitives::{
-			Header, NonemptyContinuousHeaders, NonemptyContinuousHeadersError, VoteValidationError,
-		},
-		state_machine::BlockHeightWitnesser,
+		primitives::{Header, NonemptyContinuousHeaders, NonemptyContinuousHeadersError},
+		state_machine::{BlockHeightWitnesser, VoteValidationError},
 		ChainTypes, HWTypes, HeightWitnesserProperties,
 	},
 	state_machine::{

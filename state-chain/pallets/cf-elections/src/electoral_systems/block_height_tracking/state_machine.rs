@@ -1,9 +1,8 @@
 use super::{
 	super::state_machine::{core::Validate, state_machine::Statemachine},
-	primitives::{
-		trim_to_length, MergeFailure, NonemptyContinuousHeaders, NonemptyContinuousHeadersError,
-	},
-	ChainProgress, ChainProgressFor, HWTypes, HeightWitnesserProperties,
+	primitives::{MergeFailure, NonemptyContinuousHeaders, NonemptyContinuousHeadersError},
+	ChainBlockNumberOf, ChainProgress, ChainProgressFor, ChainTypes, HWTypes,
+	HeightWitnesserProperties,
 };
 use crate::electoral_systems::state_machine::{
 	core::{defx, Hook},
@@ -17,9 +16,9 @@ use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
 
 #[derive(Debug, PartialEq)]
-pub enum VoteValidationError<T: HWTypes> {
+pub enum VoteValidationError<C: ChainTypes> {
 	BlockNotMatchingRequestedHeight,
-	NonemptyContinuousHeadersError(NonemptyContinuousHeadersError<T>),
+	NonemptyContinuousHeadersError(NonemptyContinuousHeadersError<C>),
 }
 
 //------------------------ state ---------------------------
@@ -27,7 +26,7 @@ defx! {
 
 	pub enum BHWState[T: HWTypes] {
 		Starting,
-		Running { headers: NonemptyContinuousHeaders<T>, witness_from: T::ChainBlockNumber },
+		Running { headers: NonemptyContinuousHeaders<T::Chain>, witness_from: ChainBlockNumberOf<T::Chain> },
 	}
 
 	validate this (else BHWStateError) {
@@ -56,11 +55,11 @@ defx! {
 }
 impl<T: HWTypes> AbstractApi for BlockHeightWitnesser<T> {
 	type Query = HeightWitnesserProperties<T>;
-	type Response = NonemptyContinuousHeaders<T>;
-	type Error = VoteValidationError<T>;
+	type Response = NonemptyContinuousHeaders<T::Chain>;
+	type Error = VoteValidationError<T::Chain>;
 	fn validate(
 		base: &HeightWitnesserProperties<T>,
-		this: &NonemptyContinuousHeaders<T>,
+		this: &NonemptyContinuousHeaders<T::Chain>,
 	) -> Result<(), Self::Error> {
 		this.is_valid().map_err(VoteValidationError::NonemptyContinuousHeadersError)?;
 		if base.witness_from_index.is_zero() {
@@ -78,10 +77,10 @@ impl<T: HWTypes> Statemachine for BlockHeightWitnesser<T> {
 	type State = BlockHeightWitnesser<T>;
 	type Context = ();
 	type Settings = ();
-	type Output = Result<ChainProgressFor<T>, &'static str>;
+	type Output = Result<Option<ChainProgress<T::Chain>>, &'static str>;
 	fn input_index(s: &mut Self::State) -> Vec<Self::Query> {
 		let witness_from_index = match s.state {
-			BHWState::Starting => T::ChainBlockNumber::zero(),
+			BHWState::Starting => ChainBlockNumberOf::<T::Chain>::zero(),
 			BHWState::Running { headers: _, witness_from } => witness_from,
 		};
 		Vec::from([HeightWitnesserProperties { witness_from_index }])
@@ -140,63 +139,46 @@ impl<T: HWTypes> Statemachine for BlockHeightWitnesser<T> {
 		_settings: &(),
 	) -> Self::Output {
 		let new_headers = match input {
-			Either::Left(_) => return Ok(ChainProgress::None),
+			Either::Left(_) => return Ok(None),
 			Either::Right((_properties, consensus)) => consensus,
 		};
 		match &mut s.state {
 			BHWState::Starting => {
-				let first = new_headers.headers.front().unwrap().block_height;
-				let last = new_headers.headers.back().unwrap().block_height;
+				let first = new_headers.first().block_height;
+				let last = new_headers.last().block_height;
 				s.state = BHWState::Running {
 					headers: new_headers.clone(),
 					witness_from: last.saturating_forward(1),
 				};
-				let hashes = new_headers
-					.headers
-					.into_iter()
-					.map(|hash| (hash.block_height, hash.hash))
-					.collect();
-				Ok(ChainProgress::Range(hashes, first..=last))
+				Ok(Some(ChainProgress { headers: new_headers, removed: None }))
 			},
-			BHWState::Running { headers, witness_from } => {
-				let mut chainblocks = headers.clone();
-				match chainblocks.merge(new_headers) {
-					Ok(merge_info) => {
-						log::info!(
-							"added new blocks: {:?}, replacing these blocks: {:?}",
-							merge_info.added,
-							merge_info.removed
-						);
+			BHWState::Running { headers, witness_from } => match headers.merge(new_headers) {
+				Ok(merge_info) => {
+					log::info!(
+						"added new blocks: {:?}, replacing these blocks: {:?}",
+						merge_info.added,
+						merge_info.removed
+					);
 
-						let _ = trim_to_length(&mut chainblocks.headers, T::BLOCK_BUFFER_SIZE);
+					headers.trim_to_length(T::BLOCK_BUFFER_SIZE);
 
-						*headers = chainblocks;
-						*witness_from =
-							headers.headers.back().unwrap().block_height.saturating_forward(1);
+					let highest_seen = headers.last().block_height;
+					s.block_height_update.run(highest_seen);
+					*witness_from = highest_seen.saturating_forward(1);
 
-						let highest_seen = headers.headers.back().unwrap().block_height;
-						s.block_height_update.run(highest_seen);
+					Ok(merge_info.into_chain_progress())
+				},
+				Err(MergeFailure::ReorgWithUnknownRoot { new_block, existing_wrong_parent }) => {
+					log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
+					*witness_from = headers.headers.front().unwrap().block_height;
+					Ok(None)
+				},
 
-						// if we merge after a reorg, and the blocks we got are the same
-						// as the ones we previously had, then `into_chain_progress` might
-						// return `None`. In that case we return our current state.
-						Ok(merge_info.into_chain_progress().unwrap_or(ChainProgress::None))
-					},
-					Err(MergeFailure::ReorgWithUnknownRoot {
-						new_block,
-						existing_wrong_parent,
-					}) => {
-						log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
-						*witness_from = headers.headers.front().unwrap().block_height;
-						Ok(ChainProgress::None)
-					},
-
-					Err(MergeFailure::InternalError(reason)) => {
-						let str = format!("internal error in block height tracker: {reason}");
-						log::error!("internal error in block height tracker: {reason}");
-						Err(str.leak())
-					},
-				}
+				Err(MergeFailure::InternalError(reason)) => {
+					let str = format!("internal error in block height tracker: {reason}");
+					log::error!("internal error in block height tracker: {reason}");
+					Err(str.leak())
+				},
 			},
 		}
 	}
@@ -209,7 +191,8 @@ pub mod tests {
 	use crate::{
 		electoral_systems::{
 			block_height_tracking::{
-				primitives::NonemptyContinuousHeaders, BlockHeightChangeHook, ChainTypes,
+				primitives::NonemptyContinuousHeaders, BlockHeightChangeHook, ChainBlockHashOf,
+				ChainBlockNumberOf, ChainTypes,
 			},
 			block_witnesser::state_machine::HookTypeFor,
 			state_machine::core::{hook_test_utils::MockHook, Serde, TypesFor, Validate},
@@ -226,6 +209,7 @@ pub mod tests {
 		prop_oneof,
 		sample::select,
 	};
+	use serde::{Deserialize, Serialize};
 	use sp_std::{fmt::Debug, iter::Step};
 
 	use super::{
@@ -239,14 +223,14 @@ pub mod tests {
 
 	pub fn generate_input<T: HWTypes>(
 		properties: HeightWitnesserProperties<T>,
-	) -> impl Strategy<Value = NonemptyContinuousHeaders<T>>
+	) -> impl Strategy<Value = NonemptyContinuousHeaders<T::Chain>>
 	where
-		T::ChainBlockHash: Arbitrary,
-		T::ChainBlockNumber: Arbitrary + BlockZero,
+		ChainBlockHashOf<T::Chain>: Arbitrary,
+		ChainBlockNumberOf<T::Chain>: Arbitrary + BlockZero,
 	{
 		prop_do! {
-			let header_data in prop::collection::vec(any::<T::ChainBlockHash>(), 2..10);
-			let random_index in any::<T::ChainBlockNumber>();
+			let header_data in prop::collection::vec(any::<ChainBlockHashOf<T::Chain>>(), 2..10);
+			let random_index in any::<ChainBlockNumberOf<T::Chain>>();
 			let first_height = if properties.witness_from_index.is_zero() { random_index } else { properties.witness_from_index };
 			return {
 				let headers =
@@ -255,15 +239,15 @@ pub mod tests {
 						hash: h1.clone(),
 						parent_hash: h0.clone(),
 					});
-				NonemptyContinuousHeaders::<T>{ headers: headers.collect() }
+				NonemptyContinuousHeaders::<T::Chain>{ headers: headers.collect() }
 			}
 		}
 	}
 
 	pub fn generate_state<T: HWTypes>() -> impl Strategy<Value = BlockHeightWitnesser<T>>
 	where
-		T::ChainBlockHash: Arbitrary,
-		T::ChainBlockNumber: Arbitrary + BlockZero,
+		ChainBlockHashOf<T::Chain>: Arbitrary,
+		ChainBlockNumberOf<T::Chain>: Arbitrary + BlockZero,
 		T::BlockHeightChangeHook: Default + sp_std::fmt::Debug,
 	{
 		prop_oneof![
@@ -324,6 +308,7 @@ pub mod tests {
 	{
 		const BLOCK_BUFFER_SIZE: usize = 16;
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
+		type Chain = Self;
 	}
 
 	#[test]
@@ -349,18 +334,19 @@ pub mod tests {
 		type ChainBlockNumber = u32;
 	}
 
-	impl ChainTypes for TestTypes2 {
+	impl ChainTypes for TypesFor<TestChain> {
 		type ChainBlockNumber = BlockWitnessRange<TestChain>;
 		type ChainBlockHash = bool;
 
 		const SAFETY_BUFFER: u32 = 16;
 	}
 
-	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Serialize, Deserialize)]
 	struct TestTypes2 {}
 	impl HWTypes for TestTypes2 {
 		const BLOCK_BUFFER_SIZE: usize = 16;
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
+		type Chain = TypesFor<TestChain>;
 	}
 
 	#[test]

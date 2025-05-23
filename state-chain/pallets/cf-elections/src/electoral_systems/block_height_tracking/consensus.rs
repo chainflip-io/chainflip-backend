@@ -7,7 +7,7 @@ use crate::electoral_systems::state_machine::consensus::{
 };
 
 pub struct BlockHeightTrackingConsensus<T: HWTypes> {
-	votes: Vec<NonemptyContinuousHeaders<T>>,
+	votes: Vec<NonemptyContinuousHeaders<T::Chain>>,
 }
 
 impl<T: HWTypes> Default for BlockHeightTrackingConsensus<T> {
@@ -17,8 +17,8 @@ impl<T: HWTypes> Default for BlockHeightTrackingConsensus<T> {
 }
 
 impl<T: HWTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
-	type Vote = NonemptyContinuousHeaders<T>;
-	type Result = NonemptyContinuousHeaders<T>;
+	type Vote = NonemptyContinuousHeaders<T::Chain>;
+	type Result = NonemptyContinuousHeaders<T::Chain>;
 	type Settings = (Threshold, HeightWitnesserProperties<T>);
 
 	fn insert_vote(&mut self, vote: Self::Vote) {

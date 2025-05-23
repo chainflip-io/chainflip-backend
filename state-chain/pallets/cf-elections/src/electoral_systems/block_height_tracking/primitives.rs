@@ -6,7 +6,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::vec_deque::VecDeque;
 
-use crate::electoral_systems::state_machine::core::defx;
+use crate::electoral_systems::state_machine::core::{both, defx};
 
 use super::{super::state_machine::core::Validate, ChainProgress, ChainProgressFor, ChainTypes};
 
@@ -67,6 +67,11 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 			}
 		}
 	}
+	pub fn trim_to_length(&mut self, target_length: usize) {
+		while self.headers.len() > target_length {
+			self.headers.pop_front();
+		}
+	}
 }
 
 defx! {
@@ -95,20 +100,14 @@ pub struct MergeInfo<T: ChainTypes> {
 
 impl<T: ChainTypes> MergeInfo<T> {
 	pub fn into_chain_progress(&self) -> Option<ChainProgressFor<T>> {
-		if let (Some(first_added), Some(last_added)) = (self.added.front(), self.added.back()) {
-			let hashes = self
-				.added
-				.iter()
-				.map(|header| (header.block_height, header.hash.clone()))
-				.collect();
-
-			use ChainProgress::*;
-
-			let f = if self.removed.is_empty() { Range } else { Reorg };
-
-			Some(f(hashes, first_added.block_height..=last_added.block_height))
-		} else {
+		if self.added.is_empty() {
 			None
+		} else {
+			Some(ChainProgress {
+				headers: self.added.clone().into(),
+				removed: both(self.removed.front(), self.removed.back())
+					.map(|(first, last)| first.block_height..=last.block_height),
+			})
 		}
 	}
 }
@@ -130,14 +129,4 @@ fn extract_common_prefix<A: PartialEq>(a: &mut VecDeque<A>, b: &mut VecDeque<A>)
 		b.pop_front();
 	}
 	prefix
-}
-
-pub fn trim_to_length<A>(items: &mut VecDeque<A>, target_length: usize) -> VecDeque<A> {
-	let mut result = VecDeque::new();
-	while items.len() > target_length {
-		if let Some(front) = items.pop_front() {
-			result.push_back(front);
-		}
-	}
-	result
 }

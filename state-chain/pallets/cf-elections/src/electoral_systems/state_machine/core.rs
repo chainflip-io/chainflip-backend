@@ -1,3 +1,5 @@
+use core::ops::RangeInclusive;
+
 use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
 use sp_std::collections::{btree_map::BTreeMap, vec_deque::VecDeque};
 
@@ -130,7 +132,7 @@ pub(crate) use derive_validation_statements;
 macro_rules! defx {
 	(
 		$(#[$($Attributes:tt)*])?
-		pub $def:tt $Name:tt [$($ParamName:ident: $ParamType:tt),*] {
+		pub $def:tt $Name:tt [$($ParamName:ident $(: $ParamType:tt)?),*] {
 			$($Definition:tt)*
 		}
 		validate $this:ident (else $Error:ident) {
@@ -147,21 +149,22 @@ macro_rules! defx {
 		$($rest:tt)*
 	) => {
 
-		crate::electoral_systems::state_machine::core::derive_error_enum!{$Error [ $($ParamName: $ParamType),* ], $def { $($Definition)* } { $($prop_name),* } }
+		crate::electoral_systems::state_machine::core::derive_error_enum!{$Error [ $($ParamName: $($ParamType)?),* ], $def { $($Definition)* } { $($prop_name),* } }
 
 
 		#[derive(
 			Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize,
 		)]
+		#[serde(bound(deserialize = "", serialize = ""))]
 
 		$(
 			#[$($Attributes)*]
 		)?
-		pub $def $Name<$($ParamName: $ParamType),*> {
+		pub $def $Name<$($ParamName: $($ParamType)?),*> {
 			$($Definition)*
 		}
 
-		impl<$($ParamName: $ParamType),*> Validate for $Name<$($ParamName),*> {
+		impl<$($ParamName: $($ParamType)?),*> Validate for $Name<$($ParamName),*> {
 
 			type Error = $Error<$($ParamName),*>;
 
@@ -183,10 +186,10 @@ macro_rules! defx {
 			}
 		}
 
-		crate::electoral_systems::state_machine::core::implementations!{[$Name<$($ParamName),*>], [ $($ParamName: $ParamType),* ], $($rest)*}
+		crate::electoral_systems::state_machine::core::implementations!{[$Name<$($ParamName),*>], [ $($ParamName: $($ParamType)?),* ], $($rest)*}
 	};
 }
-pub(crate) use defx; // <-- the trick
+pub(crate) use defx;
 
 /// Type which can be used for implementing traits that
 /// contain only type definitions, as used in many parts of
@@ -362,6 +365,24 @@ impl<A: Validate> Validate for VecDeque<A> {
 	}
 }
 
+impl<A: Validate> Validate for Option<A> {
+	type Error = A::Error;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		self.as_ref().map(Validate::is_valid).unwrap_or(Ok(()))
+	}
+}
+
+impl<A: Validate> Validate for RangeInclusive<A> {
+	type Error = A::Error;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		self.start().is_valid()?;
+		self.end().is_valid()?;
+		Ok(())
+	}
+}
+
 impl<A, B: sp_std::fmt::Debug + Clone + PartialEq> Validate for Result<A, B> {
 	type Error = B;
 
@@ -447,4 +468,7 @@ pub fn fst<A, B>((a, _): (A, B)) -> A {
 }
 pub fn snd<A, B>((_, b): (A, B)) -> B {
 	b
+}
+pub fn both<A, B>(x: Option<A>, y: Option<B>) -> Option<(A, B)> {
+	x.and_then(|x| y.map(|y| (x, y)))
 }

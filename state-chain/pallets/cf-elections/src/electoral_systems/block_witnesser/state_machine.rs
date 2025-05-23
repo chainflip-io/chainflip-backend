@@ -1,10 +1,12 @@
 use super::{
 	super::state_machine::core::*,
-	block_processor::BlockProcessorEvent,
+	block_processor::{BPChainProgress, BlockProcessorEvent},
 	primitives::{ElectionTracker2, ElectionTrackerEvent, SafeModeStatus},
 };
 use crate::electoral_systems::{
-	block_height_tracking::{ChainProgress, ChainProgressFor, ChainTypes},
+	block_height_tracking::{
+		ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainProgressFor, ChainTypes,
+	},
 	block_witnesser::{block_processor::BlockProcessor, primitives::ChainProgressInner},
 	state_machine::{
 		core::Validate,
@@ -60,19 +62,19 @@ impl<T: BWTypes> HookType for HookTypeFor<T, SafeModeEnabledHook> {
 
 pub struct ElectionPropertiesHook;
 impl<T: BWTypes> HookType for HookTypeFor<T, ElectionPropertiesHook> {
-	type Input = T::ChainBlockNumber;
+	type Input = ChainBlockNumberOf<T::Chain>;
 	type Output = T::ElectionProperties;
 }
 
 pub struct RulesHook;
 impl<T: BWProcessorTypes> HookType for HookTypeFor<T, RulesHook> {
-	type Input = (T::ChainBlockNumber, Range<u32>, T::BlockData, u32);
-	type Output = Vec<(T::ChainBlockNumber, T::Event)>;
+	type Input = (ChainBlockNumberOf<T::Chain>, Range<u32>, T::BlockData, u32);
+	type Output = Vec<(ChainBlockNumberOf<T::Chain>, T::Event)>;
 }
 
 pub struct ExecuteHook;
 impl<T: BWProcessorTypes> HookType for HookTypeFor<T, ExecuteHook> {
-	type Input = Vec<(T::ChainBlockNumber, T::Event)>;
+	type Input = Vec<(ChainBlockNumberOf<T::Chain>, T::Event)>;
 	type Output = ();
 }
 
@@ -82,7 +84,8 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, LogEventHook> {
 	type Output = ();
 }
 
-pub trait BWProcessorTypes: ChainTypes + Sized {
+pub trait BWProcessorTypes: Sized + Debug + Clone + Eq {
+	type Chain: ChainTypes;
 	type BlockData: PartialEq + Clone + Debug + Eq + Ord + Serde + 'static;
 
 	type Event: Serde + Debug + Clone + Eq + Ord;
@@ -118,8 +121,8 @@ pub struct BlockWitnesserSettings {
 )]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound(
-	T::ChainBlockNumber: Encode,
-	T::ChainBlockHash: Encode,
+	ChainBlockNumberOf<T::Chain>: Encode,
+	ChainBlockHashOf<T::Chain>: Encode,
 	T::ElectionPropertiesHook: Encode,
 	T::SafeModeEnabledHook: Encode,
 	T::BlockData: Encode,
@@ -162,29 +165,29 @@ where
 #[derive_where(Debug, Clone, PartialEq, Eq;)]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound(
-	T::ChainBlockHash: Encode,
-	T::ChainBlockNumber: Encode,
+	ChainBlockHashOf<T::Chain>: Encode,
+	ChainBlockNumberOf<T::Chain>: Encode,
 	T::ElectionProperties: Encode,
 ))]
 pub struct BWElectionProperties<T: BWTypes> {
-	pub election_type: BWElectionType<T>,
-	pub block_height: T::ChainBlockNumber,
+	pub election_type: BWElectionType<T::Chain>,
+	pub block_height: ChainBlockNumberOf<T::Chain>,
 	pub properties: T::ElectionProperties,
 }
 
 #[derive_where(Debug, Clone, PartialEq, Eq;)]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound(
-	T::ChainBlockHash: Encode,
-	T::ChainBlockNumber: Encode,
+	ChainBlockHashOf<C>: Encode,
+	ChainBlockNumberOf<C>: Encode,
 ))]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
-pub enum BWElectionType<T: ChainTypes> {
+pub enum BWElectionType<C: ChainTypes> {
 	/// Querying blocks we haven't received a hash for yet
 	Optimistic,
 
 	/// Querying blocks by hash
-	ByHash(T::ChainBlockHash),
+	ByHash(C::ChainBlockHash),
 
 	/// Querying "old" blocks that are below the safety margin,
 	/// and thus we don't care about the hash anymore
@@ -206,12 +209,12 @@ pub struct BWStatemachine<Types: BWTypes> {
 
 impl<T: BWTypes> AbstractApi for BWStatemachine<T> {
 	type Query = BWElectionProperties<T>;
-	type Response = (T::BlockData, Option<T::ChainBlockHash>);
+	type Response = (T::BlockData, Option<ChainBlockHashOf<T::Chain>>);
 	type Error = ();
 
 	fn validate(
 		index: &BWElectionProperties<T>,
-		(_, hash): &(T::BlockData, Option<T::ChainBlockHash>),
+		(_, hash): &(T::BlockData, Option<ChainBlockHashOf<T::Chain>>),
 	) -> Result<(), Self::Error> {
 		use BWElectionType::*;
 		// ensure that a hash is only provided for `Optimistic` elections.
@@ -223,7 +226,7 @@ impl<T: BWTypes> AbstractApi for BWStatemachine<T> {
 }
 
 impl<T: BWTypes> Statemachine for BWStatemachine<T> {
-	type Context = ChainProgressFor<T>;
+	type Context = Option<ChainProgressFor<T::Chain>>;
 	type Settings = BlockWitnesserSettings;
 	type Output = Result<(), &'static str>;
 	type State = BlockWitnesserState<T>;
@@ -247,14 +250,12 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 		settings: &Self::Settings,
 	) -> Self::Output {
 		match i {
-			// TODO: unify these two cases
-			Either::Left(ChainProgress::Range(hashes, range)) => {
-				for (height, block) in s.elections.schedule_range(
-					range.clone(),
-					hashes.clone(),
-					settings.safety_margin as usize,
-					false,
-				) {
+			Either::Left(Some(progress)) => {
+				let removed_block_heights = progress.removed.clone();
+
+				for (height, block) in
+					s.elections.schedule_range(progress, settings.safety_margin as usize)
+				{
 					s.block_processor.process_block_data((
 						height,
 						block.data,
@@ -262,29 +263,13 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					));
 				}
 
-				s.block_processor
-					.process_chain_progress(ChainProgressInner::Progress(*range.end()));
+				s.block_processor.process_chain_progress(BPChainProgress {
+					highest_block_height: s.elections.seen_heights_below.saturating_backward(1),
+					removed_block_heights,
+				});
 			},
 
-			Either::Left(ChainProgress::Reorg(hashes, range)) => {
-				for (height, block) in s.elections.schedule_range(
-					range.clone(),
-					hashes.clone(),
-					settings.safety_margin as usize,
-					true,
-				) {
-					s.block_processor.process_block_data((
-						height,
-						block.data,
-						settings.safety_margin,
-					));
-				}
-
-				s.block_processor
-					.process_chain_progress(ChainProgressInner::Reorg(range.clone()));
-			},
-
-			Either::Left(ChainProgress::None) => (),
+			Either::Left(None) => {},
 
 			Either::Right((properties, (blockdata, blockhash))) => {
 				log::info!("got {:?} block data: {:?}", properties.election_type, blockdata);
@@ -296,9 +281,13 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					blockdata,
 				) {
 					s.block_processor.process_block_data_and_chain_progress(
-						ChainProgressInner::Progress(
-							s.elections.seen_heights_below.saturating_backward(1),
-						),
+						BPChainProgress {
+							highest_block_height: s
+								.elections
+								.seen_heights_below
+								.saturating_backward(1),
+							removed_block_heights: None,
+						},
 						(properties.block_height, blockdata, settings.safety_margin),
 					)
 				}
@@ -362,7 +351,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			let could_increase = |s: &Self::State| s.elections.next_election > s.elections.next_priority_election;
 			let is_first_consensus = matches!(input,Context(FirstConsensus(..)));
 			let is_reorg = matches!(input, Context(Range(range)) if *range.start() <= before.elections.next_election);
-			let scheduled = |s: &Self::State| T::ChainBlockNumber::steps_between(&s.elections.next_election,&s.elections.next_priority_election).0 ;
+			let scheduled = |s: &Self::State| ChainBlockNumberOf<T::Chain>::steps_between(&s.elections.next_election,&s.elections.next_priority_election).0 ;
 			let outstanding = |s: &Self::State| scheduled(s) + s.elections.ongoing.len();
 
 			"an increase of `highest_priority` can only happen if `could_increase` holds before"
@@ -486,8 +475,8 @@ pub mod tests {
 		T: BWTypes<SafeModeEnabledHook = MockHook<HookTypeFor<T, SafeModeEnabledHook>>>,
 	>() -> impl Strategy<Value = BlockWitnesserState<T>>
 	where
-		T::ChainBlockNumber: Arbitrary,
-		T::ChainBlockHash: Arbitrary,
+		ChainBlockNumberOf<T::Chain>: Arbitrary,
+		ChainBlockHashOf<T::Chain>: Arbitrary,
 		T::ElectionPropertiesHook: Default + Clone + Debug + Eq,
 		T::BlockData: Default + Clone + Debug + Eq,
 	{
@@ -495,16 +484,16 @@ pub mod tests {
 			let (next_election, seen_heights_below,
 				 priority_elections_below,
 				safemode_enabled) in (
-				any::<T::ChainBlockNumber>(),
-				any::<T::ChainBlockNumber>(),
-				any::<T::ChainBlockNumber>(),
+				any::<ChainBlockNumberOf<T::Chain>>(),
+				any::<ChainBlockNumberOf<T::Chain>>(),
+				any::<ChainBlockNumberOf<T::Chain>>(),
 				any::<bool>().prop_map(|b| if b {SafeModeStatus::Enabled} else {SafeModeStatus::Disabled})
 			);
 
 			let (ongoing, queued_elections) in
 			(
-				proptest::collection::vec((any::<T::ChainBlockNumber>(), any::<BWElectionType<T>>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election)),
-				proptest::collection::vec((any::<T::ChainBlockNumber>(), any::<T::ChainBlockHash>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election))
+				proptest::collection::vec((any::<ChainBlockNumberOf<T::Chain>>(), any::<BWElectionType<T::Chain>>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election)),
+				proptest::collection::vec((any::<ChainBlockNumberOf<T::Chain>>(), any::<ChainBlockHashOf<T::Chain>>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election))
 			);
 			LazyJust::new(move || BlockWitnesserState {
 				elections: ElectionTracker2 {
@@ -535,20 +524,20 @@ pub mod tests {
 	// 	indices: Vec<Self::Query>,
 	// ) -> BoxedStrategy<<BWStatemachine<T> as Statemachine>::Input>
 	// where
-	// 	T::ChainBlockNumber: Arbitrary,
-	// 	T::ChainBlockHash: Arbitrary,
+	// 	ChainBlockNumberOf<T::Chain>: Arbitrary,
+	// 	ChainBlockHashOf<T::Chain>: Arbitrary,
 	// 	T::BlockData: Arbitrary,
 	// {
 	// 	let generate_input = |index: BWElectionProperties<T>| {
 	// 		prop_oneof![
-	// 			(any::<T::BlockData>(), any::<Option<T::ChainBlockHash>>())
+	// 			(any::<T::BlockData>(), any::<Option<ChainBlockHashOf<T::Chain>>>())
 	// 				.prop_map(move |data| (SMInput::Consensus((index.clone(), data)))),
 	// 			prop_oneof![
 	// 				Just(ChainProgress::None),
 	// 				(
-	// 					any::<T::ChainBlockNumber>(),
-	// 					btree_map(any::<T::ChainBlockNumber>(), any::<T::ChainBlockHash>(), 0..20)
-	// 				)
+	// 					any::<ChainBlockNumberOf<T::Chain>>(),
+	// 					btree_map(any::<ChainBlockNumberOf<T::Chain>>(), any::<ChainBlockHashOf<T::Chain>>(),
+	// 0..20) 				)
 	// 					.prop_map(|(a, hashes)| ChainProgress::Range(
 	// 						hashes.clone(),
 	// 						a..=a.saturating_forward(hashes.len())

@@ -1,6 +1,7 @@
 use crate::{
-	electoral_systems::state_machine::consensus::{
-		ConsensusMechanism, SupermajorityConsensus, Threshold,
+	electoral_systems::{
+		block_height_tracking::ChainBlockHashOf,
+		state_machine::consensus::{ConsensusMechanism, SupermajorityConsensus, Threshold},
 	},
 	SharedDataHash,
 };
@@ -11,7 +12,7 @@ use super::state_machine::{BWElectionProperties, BWTypes};
 
 pub struct BWConsensus<T: BWTypes> {
 	pub consensus: SupermajorityConsensus<SharedDataHash>,
-	pub data: BTreeMap<SharedDataHash, (T::BlockData, Option<T::ChainBlockHash>)>,
+	pub data: BTreeMap<SharedDataHash, (T::BlockData, Option<ChainBlockHashOf<T::Chain>>)>,
 	pub _phantom: sp_std::marker::PhantomData<T>,
 }
 
@@ -27,10 +28,10 @@ impl<T: BWTypes> Default for BWConsensus<T> {
 
 impl<T: BWTypes> ConsensusMechanism for BWConsensus<T>
 where
-	(T::BlockData, Option<T::ChainBlockHash>): Hashable,
+	(T::BlockData, Option<ChainBlockHashOf<T::Chain>>): Hashable,
 {
-	type Vote = (T::BlockData, Option<T::ChainBlockHash>);
-	type Result = (T::BlockData, Option<T::ChainBlockHash>);
+	type Vote = (T::BlockData, Option<ChainBlockHashOf<T::Chain>>);
+	type Result = (T::BlockData, Option<ChainBlockHashOf<T::Chain>>);
 	type Settings = (Threshold, BWElectionProperties<T>);
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
