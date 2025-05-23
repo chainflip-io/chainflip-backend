@@ -4,20 +4,15 @@ use core::{
 };
 
 use crate::electoral_systems::{
+	block_height_tracking::{ChainBlockNumberOf, ChainProgress, ChainTypes},
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
-	state_machine::core::{hook_test_utils::MockHook, Hook, Validate},
+	state_machine::core::{Hook, Validate},
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use derive_where::derive_where;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
-use sp_std::{
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	fmt::Debug,
-	marker::PhantomData,
-	vec,
-	vec::Vec,
-};
+use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, vec, vec::Vec};
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
@@ -54,7 +49,7 @@ use proptest_derive::Arbitrary;
 ///     - `Execute`: A hook to dedup and execute generated events.
 /// 	- `LogEventHook`: A hook to log events, used for testing
 #[derive_where(Debug, Clone, PartialEq, Eq;
-	T::ChainBlockNumber: Debug + Clone + Eq,
+	ChainBlockNumberOf<T::Chain>: Debug + Clone + Eq,
 	T::BlockData: Debug + Clone + Eq,
 	T::Event: Debug + Clone + Eq,
 	T::Rules: Debug + Clone + Eq,
@@ -63,7 +58,7 @@ use proptest_derive::Arbitrary;
 )]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound(
-	T::ChainBlockNumber: Encode,
+	ChainBlockNumberOf<T::Chain>: Encode,
 	T::BlockData: Encode,
 	T::Event: Encode,
 	T::Rules: Encode,
@@ -75,10 +70,10 @@ pub struct BlockProcessor<T: BWProcessorTypes> {
 	/// be processed and the safety margin). The "age" represents the block height difference
 	/// between head of the chain and block that we are processing, and it's used to know what
 	/// rules have already been processed for such block
-	pub blocks_data: BTreeMap<T::ChainBlockNumber, BlockProcessingInfo<T::BlockData>>,
+	pub blocks_data: BTreeMap<ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>>,
 	/// A mapping from event to their corresponding expiration block_number (which is defined as
 	/// block_number + safety margin)
-	pub processed_events: BTreeMap<T::Event, T::ChainBlockNumber>,
+	pub processed_events: BTreeMap<T::Event, ChainBlockNumberOf<T::Chain>>,
 	pub rules: T::Rules,
 	pub execute: T::Execute,
 	pub log_event: T::LogEventHook,
@@ -97,27 +92,43 @@ impl<BlockData> BlockProcessingInfo<BlockData> {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub enum BlockProcessorEvent<T: BWProcessorTypes> {
 	NewBlock {
-		height: T::ChainBlockNumber,
+		height: ChainBlockNumberOf<T::Chain>,
 		data: T::BlockData,
 	},
 	ProcessingBlockForAges {
-		height: T::ChainBlockNumber,
+		height: ChainBlockNumberOf<T::Chain>,
 		ages: Range<u32>,
 	},
-	DeleteBlock((T::ChainBlockNumber, BlockProcessingInfo<T::BlockData>)),
+	DeleteBlock((ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>)),
 	DeleteEvents(Vec<T::Event>),
 	StoreReorgedEvents {
-		block: (T::ChainBlockNumber, BlockProcessingInfo<T::BlockData>),
+		block: (ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>),
 		events: Vec<T::Event>,
-		new_block_number: T::ChainBlockNumber,
+		new_block_number: ChainBlockNumberOf<T::Chain>,
 	},
 	UpdatingExpiry {
 		event: T::Event,
-		from: T::ChainBlockNumber,
-		to: T::ChainBlockNumber,
+		from: ChainBlockNumberOf<T::Chain>,
+		to: ChainBlockNumberOf<T::Chain>,
 		safety_margin: u32,
-		range: RangeInclusive<T::ChainBlockNumber>,
+		range: RangeInclusive<ChainBlockNumberOf<T::Chain>>,
 	},
+}
+
+pub struct BPChainProgress<T: ChainTypes> {
+	pub highest_block_height: T::ChainBlockNumber,
+	pub removed_block_heights: Option<RangeInclusive<T::ChainBlockNumber>>,
+}
+impl<T: ChainTypes> BPChainProgress<T> {
+	fn up_to(highest_block_height: T::ChainBlockNumber) -> Self {
+		Self { highest_block_height, removed_block_heights: None }
+	}
+	fn reorg(
+		highest_block_height: T::ChainBlockNumber,
+		removed_block_heights: RangeInclusive<T::ChainBlockNumber>,
+	) -> Self {
+		Self { highest_block_height, removed_block_heights: Some(removed_block_heights) }
+	}
 }
 
 impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
@@ -137,11 +148,11 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	/// Processes incoming block data and chain progress updates.
 	pub fn process_block_data_and_chain_progress(
 		&mut self,
-		chain_progress: ChainProgressInner<T::ChainBlockNumber>,
-		block_data: (T::ChainBlockNumber, T::BlockData, u32),
+		progress: BPChainProgress<T::Chain>,
+		block_data: (ChainBlockNumberOf<T::Chain>, T::BlockData, u32),
 	) {
 		self.process_block_data(block_data);
-		self.process_chain_progress(chain_progress);
+		self.process_chain_progress(progress);
 	}
 
 	/// This method adds new Block Data to the BlockProcessor
@@ -151,7 +162,11 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	/// - `block_data`: A tuple `(block_number, block_data, safety_margin)`
 	pub fn process_block_data(
 		&mut self,
-		(block_number, block_data, safety_margin): (T::ChainBlockNumber, T::BlockData, u32),
+		(block_number, block_data, safety_margin): (
+			ChainBlockNumberOf<T::Chain>,
+			T::BlockData,
+			u32,
+		),
 	) {
 		self.log_event.run(BlockProcessorEvent::NewBlock {
 			height: block_number.clone(),
@@ -183,41 +198,42 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	/// # Parameters
 	///
 	/// - `chain_progress`: Indicates the current state of the blockchain. It can either be:
-	///   - `ChainProgressInner::Progress(last_height)` for a simple progress update.
-	///   - `ChainProgressInner::Reorg(range)` for a reorganization event, where `range` defines the
+	///   - `BPChainProgress::up_to(last_height)` for a simple progress update.
+	///   - `BPChainProgress::reorg(range)` for a reorganization event, where `range` defines the
 	///     blocks affected.
-	pub fn process_chain_progress(
-		&mut self,
-		chain_progress: ChainProgressInner<T::ChainBlockNumber>,
-	) {
-		let last_block: T::ChainBlockNumber;
-		match chain_progress {
-			ChainProgressInner::Progress(last_height) => {
-				last_block = last_height;
-			},
-			ChainProgressInner::Reorg(range) => {
-				last_block = *range.start();
-				let expiry = range.end().saturating_forward(T::SAFETY_BUFFER as usize);
-				for n in range.clone() {
-					if let Some(block_info) = self.blocks_data.remove(&n) {
-						let age_range: Range<u32> = 0..block_info.next_age_to_process;
-						self.process_rules_for_ages_and_block(
-							n,
-							age_range,
-							&block_info.block_data,
-							block_info.safety_margin,
-						)
-						.iter()
-						.for_each(|(_, event)| {
-							self.processed_events.insert(event.clone(), expiry);
-						});
-					}
+	pub fn process_chain_progress(&mut self, progress: BPChainProgress<T::Chain>) {
+		let expiry = progress.highest_block_height.saturating_forward(T::Chain::SAFETY_BUFFER);
+
+		if let Some(heights) = progress.removed_block_heights.clone() {
+			for n in heights {
+				self.blocks_data.remove(&n);
+				if let Some(block_info) = self.blocks_data.remove(&n) {
+					let age_range: Range<u32> = 0..block_info.next_age_to_process;
+					self.process_rules_for_ages_and_block(
+						n,
+						age_range,
+						&block_info.block_data,
+						block_info.safety_margin,
+					)
+					.iter()
+					.for_each(|(_, event)| {
+						self.processed_events.insert(event.clone(), expiry);
+					});
 				}
-			},
+			}
 		}
-		let events = self.process_rules(last_block);
+
+		let events = self.process_rules(progress.highest_block_height);
 		self.execute.run(events);
-		self.clean_old(last_block);
+		self.clean_old(progress.highest_block_height);
+	}
+
+	fn process_reorg(removed_block_heights: RangeInclusive<ChainBlockNumberOf<T::Chain>>) {}
+
+	fn process_up_to(&mut self, highest_block_height: ChainBlockNumberOf<T::Chain>) {
+		let events = self.process_rules(highest_block_height);
+		self.execute.run(events);
+		self.clean_old(highest_block_height);
 	}
 
 	/// Processes the stored block data to generate events by applying the provided rules.
@@ -236,11 +252,12 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	/// A vector of (block height, events (`T::Event`)) generated during the processing rules.
 	fn process_rules(
 		&mut self,
-		last_height: T::ChainBlockNumber,
-	) -> Vec<(T::ChainBlockNumber, T::Event)> {
-		let mut last_events: Vec<(T::ChainBlockNumber, T::Event)> = vec![];
+		last_height: ChainBlockNumberOf<T::Chain>,
+	) -> Vec<(ChainBlockNumberOf<T::Chain>, T::Event)> {
+		let mut last_events: Vec<(ChainBlockNumberOf<T::Chain>, T::Event)> = vec![];
 		for (block_height, mut block_info) in self.blocks_data.clone() {
-			let new_age = T::ChainBlockNumber::steps_between(&block_height, &last_height).0;
+			let new_age =
+				ChainBlockNumberOf::<T::Chain>::steps_between(&block_height, &last_height).0;
 			// We ensure that we don't break anything in case the new age < next_age_to_process
 			if new_age as u32 >= block_info.next_age_to_process {
 				let age_range: Range<u32> =
@@ -287,12 +304,12 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	/// any event already processed.
 	fn process_rules_for_ages_and_block(
 		&mut self,
-		block_number: T::ChainBlockNumber,
+		block_number: ChainBlockNumberOf<T::Chain>,
 		age: Range<u32>,
 		data: &T::BlockData,
 		safety_margin: u32,
-	) -> Vec<(T::ChainBlockNumber, T::Event)> {
-		let events: Vec<(T::ChainBlockNumber, T::Event)> =
+	) -> Vec<(ChainBlockNumberOf<T::Chain>, T::Event)> {
+		let events: Vec<(ChainBlockNumberOf<T::Chain>, T::Event)> =
 			self.rules.run((block_number, age, data.clone(), safety_margin));
 
 		events
@@ -302,9 +319,9 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	}
 
 	/// Removes old block data and events based on the SAFETY_BUFFER
-	fn clean_old(&mut self, last_height: T::ChainBlockNumber) {
+	fn clean_old(&mut self, last_height: ChainBlockNumberOf<T::Chain>) {
 		let removed_blocks = self.blocks_data.extract_if(|block_number, _| {
-			block_number.saturating_forward(T::SAFETY_BUFFER as usize) <= last_height
+			block_number.saturating_forward(T::Chain::SAFETY_BUFFER) <= last_height
 		});
 		let removed_events =
 			self.processed_events.extract_if(|_, expiry_block| *expiry_block <= last_height);
@@ -322,9 +339,9 @@ pub(crate) mod tests {
 
 	use crate::{
 		electoral_systems::{
-			block_height_tracking::ChainTypes,
+			block_height_tracking::{ChainBlockNumberOf, ChainTypes},
 			block_witnesser::{
-				block_processor::BlockProcessor,
+				block_processor::{BPChainProgress, BlockProcessor},
 				primitives::ChainProgressInner,
 				state_machine::{
 					BWProcessorTypes, ExecuteHook, HookTypeFor, LogEventHook, RulesHook,
@@ -367,13 +384,13 @@ pub(crate) mod tests {
 		fn run(
 			&mut self,
 			(block, age, block_data, safety_margin): (
-				Types::ChainBlockNumber,
+				ChainBlockNumberOf<Types::Chain>,
 				Range<u32>,
 				Vec<E>,
 				u32,
 			),
-		) -> Vec<(Types::ChainBlockNumber, MockBtcEvent<E>)> {
-			let mut results: Vec<(Types::ChainBlockNumber, MockBtcEvent<E>)> = vec![];
+		) -> Vec<(ChainBlockNumberOf<Types::Chain>, MockBtcEvent<E>)> {
+			let mut results: Vec<(ChainBlockNumberOf<Types::Chain>, MockBtcEvent<E>)> = vec![];
 			if age.contains(&0u32) {
 				results.extend(
 					block_data
@@ -403,8 +420,9 @@ pub(crate) mod tests {
 			E: Clone + Ord,
 		> Hook<HookTypeFor<Types, ExecuteHook>> for Types
 	{
-		fn run(&mut self, events: Vec<(Types::ChainBlockNumber, Types::Event)>) {
-			let mut chosen: BTreeMap<E, (Types::ChainBlockNumber, Types::Event)> = BTreeMap::new();
+		fn run(&mut self, events: Vec<(ChainBlockNumberOf<Types::Chain>, Types::Event)>) {
+			let mut chosen: BTreeMap<E, (ChainBlockNumberOf<Types::Chain>, Types::Event)> =
+				BTreeMap::new();
 
 			for (block, event) in events {
 				let deposit: E = event.deposit_witness().clone();
@@ -447,6 +465,7 @@ pub(crate) mod tests {
 			D: Validate + Serde + Ord + Clone + Debug + Default + 'static,
 		> BWProcessorTypes for TypesFor<(N, H, Vec<D>)>
 	{
+		type Chain = Self;
 		type BlockData = Vec<D>;
 		type Event = MockBtcEvent<D>;
 		type Rules = TypesFor<(N, H, Vec<D>)>;
@@ -463,36 +482,36 @@ pub(crate) mod tests {
 		let mut processor = BlockProcessor::<Types>::default();
 
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(11),
+			BPChainProgress::up_to(11),
 			(9, vec![1], SAFETY_MARGIN),
 		);
 		assert_eq!(processor.blocks_data.len(), 1, "Only one blockdata added to the processor");
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(11),
+			BPChainProgress::up_to(11),
 			(10, vec![4], SAFETY_MARGIN),
 		);
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(11),
+			BPChainProgress::up_to(11),
 			(11, vec![7], SAFETY_MARGIN),
 		);
 		assert_eq!(processor.blocks_data.len(), 3, "Only three blockdata added to the processor");
 		for i in 0..Types::SAFETY_BUFFER as u8 {
 			processor.process_block_data_and_chain_progress(
-				ChainProgressInner::Progress(i),
+				BPChainProgress::up_to(i),
 				(i, vec![i], SAFETY_MARGIN),
 			);
 		}
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(16),
+			BPChainProgress::up_to(16),
 			(16, vec![7], SAFETY_MARGIN),
 		);
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(17),
+			BPChainProgress::up_to(17),
 			(17, vec![7], SAFETY_MARGIN),
 		);
 		assert_eq!(
 			processor.blocks_data.len(),
-			Types::SAFETY_BUFFER as usize,
+			Types::SAFETY_BUFFER,
 			"Max Types::SAFETY_BUFFER (16) blocks stored at any time"
 		);
 	}
@@ -503,18 +522,18 @@ pub(crate) mod tests {
 		let mut processor = BlockProcessor::<Types>::default();
 
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(9),
+			BPChainProgress::up_to(9),
 			(9, vec![1, 2, 3], SAFETY_MARGIN),
 		);
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(10),
+			BPChainProgress::up_to(10),
 			(10, vec![4, 5, 6], SAFETY_MARGIN),
 		);
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(11),
+			BPChainProgress::up_to(11),
 			(11, vec![7, 8, 9], SAFETY_MARGIN),
 		);
-		processor.process_chain_progress(ChainProgressInner::Reorg(RangeInclusive::new(9, 11)));
+		processor.process_chain_progress(BPChainProgress::reorg(11, RangeInclusive::new(9, 11)));
 		assert!(!processor.blocks_data.contains_key(&9));
 		assert!(!processor.blocks_data.contains_key(&10));
 		assert!(!processor.blocks_data.contains_key(&11));
@@ -527,19 +546,19 @@ pub(crate) mod tests {
 		let mut processor = BlockProcessor::<Types>::default();
 		// We processed pre-witnessing (boost) for the followings deposit
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(9),
+			BPChainProgress::up_to(9),
 			(9, vec![1, 2, 3], SAFETY_MARGIN),
 		);
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(10),
+			BPChainProgress::up_to(10),
 			(10, vec![4, 5, 6], SAFETY_MARGIN),
 		);
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(11),
+			BPChainProgress::up_to(11),
 			(11, vec![7, 8, 9], SAFETY_MARGIN),
 		);
 
-		processor.process_chain_progress(ChainProgressInner::Reorg(9..=11));
+		processor.process_chain_progress(BPChainProgress::reorg(11, 9..=11));
 
 		// We reprocessed the reorged blocks, now all the deposit end up in block 11
 		let result = processor.process_rules_for_ages_and_block(
@@ -560,15 +579,16 @@ pub(crate) mod tests {
 		let mut processor = BlockProcessor::<Types>::default();
 
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(101),
+			BPChainProgress::up_to(101),
 			(101, vec![1], SAFETY_MARGIN),
 		);
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(102),
+			BPChainProgress::up_to(102),
 			(102, vec![2], SAFETY_MARGIN),
 		);
 		assert_eq!(processor.processed_events.len(), 0);
-		processor.process_chain_progress(ChainProgressInner::Reorg(RangeInclusive::new(101, 103)));
+		processor
+			.process_chain_progress(BPChainProgress::reorg(103, RangeInclusive::new(101, 103)));
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
 			Some(103u8.saturating_add((Types::SAFETY_BUFFER as u8).into())).as_ref(),
@@ -586,15 +606,16 @@ pub(crate) mod tests {
 		let mut processor = BlockProcessor::<Types>::default();
 
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(101),
+			BPChainProgress::up_to(101),
 			(101, vec![1], SAFETY_MARGIN),
 		);
-		processor.process_chain_progress(ChainProgressInner::Reorg(RangeInclusive::new(101, 101)));
+		processor
+			.process_chain_progress(BPChainProgress::reorg(101, RangeInclusive::new(101, 101)));
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
 			Some(101u8.saturating_add(Types::SAFETY_BUFFER as u8)).as_ref(),
 		);
-		processor.process_chain_progress(ChainProgressInner::Progress(
+		processor.process_chain_progress(BPChainProgress::up_to(
 			101u8.saturating_add(Types::SAFETY_BUFFER as u8),
 		));
 		assert_eq!(processor.processed_events.get(&MockBtcEvent::PreWitness(1)), None,);
@@ -606,17 +627,18 @@ pub(crate) mod tests {
 		let mut processor = BlockProcessor::<Types>::default();
 
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(101),
+			BPChainProgress::up_to(101),
 			(101, vec![1], SAFETY_MARGIN),
 		);
 		processor.process_block_data_and_chain_progress(
-			ChainProgressInner::Progress(102),
+			BPChainProgress::up_to(102),
 			(102, vec![2], SAFETY_MARGIN * 2),
 		);
-		processor.process_chain_progress(ChainProgressInner::Progress(106u8));
+		processor.process_chain_progress(BPChainProgress::up_to(106u8));
 		//At this point we dispatch full witness only for deposit 1(safety margin 3) and not
 		// 2(safety margin 6) to check it we simulate a reorg to check which events get saved
-		processor.process_chain_progress(ChainProgressInner::Reorg(RangeInclusive::new(101, 106)));
+		processor
+			.process_chain_progress(BPChainProgress::reorg(106, RangeInclusive::new(101, 106)));
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::Witness(1)),
 			Some(106u8.saturating_add(Types::SAFETY_BUFFER as u8)).as_ref(),
@@ -630,8 +652,12 @@ pub(crate) mod tests {
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
 pub enum SMBlockProcessorInput<T: BWProcessorTypes> {
-	NewBlockData(T::ChainBlockNumber, T::ChainBlockNumber, T::BlockData),
-	ChainProgress(ChainProgressInner<T::ChainBlockNumber>),
+	NewBlockData(
+		<T::Chain as ChainTypes>::ChainBlockNumber,
+		<T::Chain as ChainTypes>::ChainBlockNumber,
+		T::BlockData,
+	),
+	ChainProgress(ChainProgressInner<ChainBlockNumberOf<T::Chain>>),
 }
 
 impl<T: BWProcessorTypes> Validate for BlockProcessor<T> {
@@ -642,9 +668,9 @@ impl<T: BWProcessorTypes> Validate for BlockProcessor<T> {
 }
 #[allow(dead_code)]
 pub struct SMBlockProcessorOutput<T: BWProcessorTypes> {
-	events: Vec<(T::ChainBlockNumber, T::Event)>,
-	deleted_data: BTreeMap<T::ChainBlockNumber, BlockProcessingInfo<T::BlockData>>,
-	deleted_events: Vec<(T::ChainBlockNumber, (Vec<T::Event>, u32))>,
+	events: Vec<(ChainBlockNumberOf<T::Chain>, T::Event)>,
+	deleted_data: BTreeMap<ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>>,
+	deleted_events: Vec<(ChainBlockNumberOf<T::Chain>, (Vec<T::Event>, u32))>,
 }
 impl<T: BWProcessorTypes> Validate for SMBlockProcessorOutput<T> {
 	type Error = ();
@@ -660,11 +686,11 @@ pub struct SMBlockProcessor<T: BWProcessorTypes> {
 /*
 use crate::electoral_systems::state_machine::core::IndexedValidate;
 impl<T: BWProcessorTypes + 'static + Debug>
-	IndexedValidate<BTreeSet<T::ChainBlockNumber>, SMBlockProcessorInput<T>> for SMBlockProcessor<T>
+	IndexedValidate<BTreeSet<ChainBlockNumberOf<T::Chain>>, SMBlockProcessorInput<T>> for SMBlockProcessor<T>
 {
 	type Error = ();
 	fn validate(
-		index: &BTreeSet<T::ChainBlockNumber>,
+		index: &BTreeSet<ChainBlockNumberOf<T::Chain>>,
 		value: &SMBlockProcessorInput<T>,
 	) -> Result<(), Self::Error> {
 		match value {
@@ -697,7 +723,7 @@ impl<
 	> Statemachine for SMBlockProcessor<T>
 {
 	type Input = SMBlockProcessorInput<T>;
-	type InputIndex = BTreeSet<T::ChainBlockNumber>;
+	type InputIndex = BTreeSet<ChainBlockNumberOf<T::Chain>>;
 	type Settings = u32;
 	type Output = ();
 	type State = BlockProcessor<T>;
@@ -710,7 +736,7 @@ impl<
 		match i {
 			SMBlockProcessorInput::NewBlockData(last_height, n, deposits) => s
 				.process_block_data_and_chain_progress(
-					ChainProgressInner::Progress(last_height),
+					BPChainProgress::up_to(last_height),
 					(n, deposits, *set),
 				),
 			SMBlockProcessorInput::ChainProgress(inner) => s.process_chain_progress(inner),
@@ -788,7 +814,7 @@ impl<
 		};
 
 		let reorg =
-			matches!(input, SMBlockProcessorInput::ChainProgress(ChainProgressInner::Reorg(_)));
+			matches!(input, SMBlockProcessorInput::ChainProgress(BPChainProgress::reorg(_)));
 		let blocks = |d: &BlocksData<T>| {
 			d.values()
 				.map(|block_info| block_info.block_data.clone())
