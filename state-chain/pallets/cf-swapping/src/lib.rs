@@ -2274,7 +2274,7 @@ pub mod pallet {
 			Ok(beneficiaries)
 		}
 
-		pub(super) fn get_network_fee_for_swap(
+		pub fn get_network_fee_for_swap(
 			input_asset: Asset,
 			output_asset: Asset,
 			is_internal_swap: bool,

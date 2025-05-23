@@ -459,6 +459,7 @@ decl_runtime_apis!(
 			ccm_data: Option<CcmData>,
 			exclude_fees: BTreeSet<FeeTypes>,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
+			is_internal: Option<bool>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
 		fn cf_pool_info(
 			base_asset: Asset,

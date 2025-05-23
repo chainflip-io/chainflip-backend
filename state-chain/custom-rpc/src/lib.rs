@@ -753,6 +753,7 @@ pub trait CustomApi {
 		ccm_data: Option<CcmData>,
 		exclude_fees: Option<BTreeSet<FeeTypes>>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
+		is_internal: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2>;
 	#[method(name = "required_asset_ratio_for_range_order")]
@@ -1473,6 +1474,7 @@ where
 			None,
 			None,
 			additional_orders,
+			None,
 			at,
 		)
 	}
@@ -1487,6 +1489,7 @@ where
 		ccm_data: Option<CcmData>,
 		exclude_fees: Option<BTreeSet<FeeTypes>>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
+		is_internal: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
 		let amount = amount
@@ -1544,6 +1547,7 @@ where
 					ccm_data,
 					exclude_fees.unwrap_or_default(),
 					additional_orders,
+					is_internal,
 				)?
 				.map(|simulated_swap_info_v2| {
 					into_rpc_swap_output(simulated_swap_info_v2, from_asset, to_asset)
