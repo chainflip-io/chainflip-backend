@@ -80,7 +80,7 @@ impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled);
 pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
-	use cf_primitives::BroadcastId;
+	use cf_primitives::{AccountRole, BroadcastId};
 	use cf_traits::RedemptionCheck;
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
@@ -299,6 +299,13 @@ pub mod pallet {
 
 		/// The account cannot be reaped before it is unregistered.
 		AccountMustBeUnregistered,
+
+		/// The execution of this extrinsic is restricted only to validators.
+		RestrictedToValidators,
+
+		/// During auction phase its not possible to rebalance to a non-bidding validator if the
+		/// source validator is currently bidding.
+		CannotRebalanceToNotBiddingValidator,
 	}
 
 	#[pallet::call]
@@ -397,6 +404,7 @@ pub mod pallet {
 				&restricted_balances,
 				amount,
 				Some(&address),
+				true,
 			);
 
 			ensure!(
@@ -424,7 +432,9 @@ pub mod pallet {
 				RestrictedBalances::<T>::insert(&account_id, &restricted_balances);
 			}
 
-			let remaining_balance = T::Flip::balance(&account_id)
+			let current_balance = T::Flip::balance(&account_id);
+
+			let remaining_balance = current_balance
 				.checked_sub(&redeem_amount)
 				.ok_or(Error::<T>::InsufficientBalance)?;
 
@@ -656,6 +666,137 @@ pub mod pallet {
 			});
 			Ok(())
 		}
+
+		/// Rebalance funds between to validator accounts under the same address binding conditions
+		/// as a full redemption. Additionally, checks that no address binding conditions are
+		/// violated.
+		///
+		/// ## Events
+		///
+		/// - [Rebalance](Event::Rebalance)
+		///
+		/// ## Errors
+		///
+		/// - [RestrictedToValidators](Error::RestrictedToValidators)
+		/// - [ExecutorBindingRestrictionViolated](Error::ExecutorBindingRestrictionViolated)
+		/// - [AccountBindingRestrictionViolated](Error::AccountBindingRestrictionViolated)
+		#[pallet::call_index(11)]
+		#[pallet::weight(T::WeightInfo::rebalance())]
+		pub fn rebalance(
+			origin: OriginFor<T>,
+			recipient_account_id: AccountId<T>,
+			redemption_address: Option<EthereumAddress>,
+			amount: RedemptionAmount<FlipBalance<T>>,
+		) -> DispatchResult {
+			let source = ensure_signed(origin)?;
+
+			if T::RedemptionChecker::ensure_can_redeem(&source).is_err() {
+				ensure!(
+					T::RedemptionChecker::ensure_can_redeem(&recipient_account_id).is_err(),
+					Error::<T>::CannotRebalanceToNotBiddingValidator
+				);
+			}
+
+			ensure!(
+				T::AccountRoleRegistry::has_account_role(&source, AccountRole::Validator) &&
+					T::AccountRoleRegistry::has_account_role(
+						&recipient_account_id,
+						AccountRole::Validator
+					),
+				Error::<T>::RestrictedToValidators
+			);
+
+			ensure!(
+				BoundExecutorAddress::<T>::get(&source) ==
+					BoundExecutorAddress::<T>::get(&recipient_account_id),
+				Error::<T>::ExecutorBindingRestrictionViolated
+			);
+
+			ensure!(
+				BoundRedeemAddress::<T>::get(&source) ==
+					BoundRedeemAddress::<T>::get(&recipient_account_id),
+				Error::<T>::AccountBindingRestrictionViolated
+			);
+
+			let mut restricted_balances = RestrictedBalances::<T>::get(&source);
+
+			let CalculatedRedeemAmount {
+				debit_amount,
+				redeem_amount,
+				redemption_fee: _,
+				restricted_deficit,
+			} = Self::calculate_redeem_amount(
+				&source,
+				&restricted_balances,
+				amount,
+				redemption_address.as_ref(),
+				false,
+			);
+
+			if let Some(address) = redemption_address {
+				if let Some(bound_address) = BoundRedeemAddress::<T>::get(&source) {
+					ensure!(
+						bound_address == address || restricted_balances.contains_key(&address),
+						Error::<T>::AccountBindingRestrictionViolated
+					);
+				}
+
+				// If necessary, update account restrictions.
+				if let Some(restricted_balance) = restricted_balances.get_mut(&address) {
+					restricted_balance.saturating_reduce(debit_amount);
+					// ensure that the remaining restricted balance is zero or above MinimumFunding
+					ensure!(
+						restricted_balance.is_zero() ||
+							*restricted_balance >= MinimumFunding::<T>::get(),
+						Error::<T>::RestrictedBalanceBelowMinimumFunding
+					);
+
+					if restricted_balance.is_zero() {
+						restricted_balances.remove(&address);
+					}
+					RestrictedBalances::<T>::insert(&source, &restricted_balances);
+					RestrictedBalances::<T>::mutate(&recipient_account_id, |restrictions| {
+						restrictions
+							.entry(address)
+							.and_modify(|balance| *balance += redeem_amount)
+							.or_insert(redeem_amount);
+					});
+				}
+			}
+
+			let remaining_balance = T::Flip::balance(&source)
+				.checked_sub(&redeem_amount)
+				.ok_or(Error::<T>::InsufficientBalance)?;
+
+			ensure!(
+				remaining_balance == Zero::zero() ||
+					remaining_balance >= MinimumFunding::<T>::get(),
+				Error::<T>::BelowMinimumFunding
+			);
+
+			ensure!(
+				remaining_balance >=
+					restricted_balances.values().copied().sum::<FlipBalance<T>>() -
+						restricted_deficit,
+				Error::<T>::InsufficientUnrestrictedFunds
+			);
+
+			T::Flip::try_transfer_funds_internally(redeem_amount, &source, &recipient_account_id)?;
+
+			if T::Flip::balance(&source).is_zero() {
+				frame_system::Provider::<T>::killed(&recipient_account_id).unwrap_or_else(|e| {
+					// This shouldn't happen, and not much we can do if it does except fix
+					// it on a subsequent release. Consequences are minor.
+					log::error!(
+						"Unexpected reference count error while reaping the account {:?}: {:?}.",
+						recipient_account_id,
+						e
+					);
+				})
+			}
+
+			Ok(())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -712,6 +853,7 @@ impl<T: Config> Pallet<T> {
 		restricted_balances: &BTreeMap<EthereumAddress, FlipBalance<T>>,
 		amount: RedemptionAmount<FlipBalance<T>>,
 		maybe_address: Option<&EthereumAddress>,
+		tax: bool,
 	) -> CalculatedRedeemAmount<T::Amount> {
 		// In case the balance is lower than the sum of restricted addresses we take this
 		// discrepancy into account so that restricted addresses can still redeem.
@@ -736,7 +878,8 @@ impl<T: Config> Pallet<T> {
 
 		let redemption_fee = match amount {
 			RedemptionAmount::Max if liquid_balance == T::Flip::balance(account_id) => Zero::zero(),
-			_ => RedemptionTax::<T>::get(),
+			_ if tax => RedemptionTax::<T>::get(),
+			_ => Zero::zero(),
 		};
 
 		let (debit_amount, redeem_amount) = match amount {

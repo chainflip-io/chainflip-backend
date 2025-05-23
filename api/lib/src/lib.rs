@@ -307,6 +307,25 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		println!("Vanity name set at tx {tx_hash:#x}.");
 		Ok(())
 	}
+
+	async fn request_rebalance(
+		&self,
+		amount: RedemptionAmount,
+		redemption_address: Option<EthereumAddress>,
+		recipient_account_id: AccountId32,
+	) -> Result<H256> {
+		let (tx_hash, ..) = self
+			.submit_signed_extrinsic(pallet_cf_funding::Call::rebalance {
+				amount,
+				recipient_account_id,
+				redemption_address,
+			})
+			.await
+			.until_in_block()
+			.await?;
+
+		Ok(tx_hash)
+	}
 }
 
 #[async_trait]

@@ -204,6 +204,8 @@ pub mod pallet {
 		NoPendingRedemptionForThisID,
 		/// Account is bonded.
 		AccountBonded,
+		/// Not possible to transfer to the sender account.
+		CanNotTransferToSelf,
 	}
 
 	#[pallet::hooks]
@@ -619,6 +621,22 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 		Self::settle(account_id, imbalance.into());
 		T::OnAccountFunded::on_account_funded(account_id, Self::balance(account_id));
 		Ok(())
+	}
+
+	fn try_transfer_funds_internally(
+		amount: Self::Balance,
+		from: &Self::AccountId,
+		to: &Self::AccountId,
+	) -> Result<(), DispatchError> {
+		ensure!(from != to, Error::<T>::CanNotTransferToSelf);
+		if let Some(from_imbalance) = Pallet::<T>::try_debit(from, amount) {
+			from_imbalance.offset(Pallet::<T>::credit(to, amount));
+			T::OnAccountFunded::on_account_funded(from, Self::balance(from));
+			T::OnAccountFunded::on_account_funded(to, Self::balance(to));
+			Ok(())
+		} else {
+			Err(Error::<T>::InsufficientLiquidity.into())
+		}
 	}
 }
 
