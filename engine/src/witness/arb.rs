@@ -318,7 +318,7 @@ mod tests {
 						NodeContainer { primary: WsHttpEndpoints { ws_endpoint: "ws://localhost:8548".into(), http_endpoint: "http://localhost:8547".into()}, backup: None },
 						expected_arb_chain_id,
 						"arb_rpc",
-						"arb_subscribe",
+						"arb_subscribe_client",
 						"Arbitrum",
 						Arbitrum::WITNESS_PERIOD,
 					).unwrap()
