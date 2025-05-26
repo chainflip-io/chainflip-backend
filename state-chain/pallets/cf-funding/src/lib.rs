@@ -432,21 +432,12 @@ pub mod pallet {
 				RestrictedBalances::<T>::insert(&account_id, &restricted_balances);
 			}
 
-			let remaining_balance = T::Flip::balance(&account_id)
-				.checked_sub(&redeem_amount)
-				.ok_or(Error::<T>::InsufficientBalance)?;
-
-			ensure!(
-				remaining_balance == Zero::zero() ||
-					remaining_balance >= MinimumFunding::<T>::get(),
-				Error::<T>::BelowMinimumFunding
-			);
-			ensure!(
-				remaining_balance >=
-					restricted_balances.values().copied().sum::<FlipBalance<T>>() -
-						restricted_deficit,
-				Error::<T>::InsufficientUnrestrictedFunds
-			);
+			Self::check_remaining_balance(
+				T::Flip::balance(&account_id)
+					.checked_sub(&redeem_amount)
+					.ok_or(Error::<T>::InsufficientBalance)?,
+				restricted_balances.values().copied().sum::<FlipBalance<T>>() - restricted_deficit,
+			)?;
 
 			// Update the account balance.
 			if redeem_amount > Zero::zero() {
@@ -752,22 +743,12 @@ pub mod pallet {
 				}
 			}
 
-			let remaining_balance = T::Flip::balance(&source)
-				.checked_sub(&redeem_amount)
-				.ok_or(Error::<T>::InsufficientBalance)?;
-
-			ensure!(
-				remaining_balance == Zero::zero() ||
-					remaining_balance >= MinimumFunding::<T>::get(),
-				Error::<T>::BelowMinimumFunding
-			);
-
-			ensure!(
-				remaining_balance >=
-					restricted_balances.values().copied().sum::<FlipBalance<T>>() -
-						restricted_deficit,
-				Error::<T>::InsufficientUnrestrictedFunds
-			);
+			Self::check_remaining_balance(
+				T::Flip::balance(&source)
+					.checked_sub(&redeem_amount)
+					.ok_or(Error::<T>::InsufficientBalance)?,
+				restricted_balances.values().copied().sum::<FlipBalance<T>>() - restricted_deficit,
+			)?;
 
 			T::Flip::try_transfer_funds_internally(redeem_amount, &source, &recipient_account_id)?;
 
@@ -824,6 +805,23 @@ impl<T: Config> Pallet<T> {
 		}
 
 		T::Flip::credit_funds(account_id, amount)
+	}
+
+	/// Ensures that the remaining balance is above the minimum funding and the total restricted
+	/// amount.
+	fn check_remaining_balance(
+		remaining_balance: T::Amount,
+		restricted_balances: FlipBalance<T>,
+	) -> DispatchResult {
+		ensure!(
+			remaining_balance == Zero::zero() || remaining_balance >= MinimumFunding::<T>::get(),
+			Error::<T>::BelowMinimumFunding
+		);
+		ensure!(
+			remaining_balance >= restricted_balances,
+			Error::<T>::InsufficientUnrestrictedFunds
+		);
+		Ok(())
 	}
 
 	fn kill_account_if_zero_balance(account_id: &T::AccountId) {
