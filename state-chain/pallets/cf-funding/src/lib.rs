@@ -432,9 +432,7 @@ pub mod pallet {
 				RestrictedBalances::<T>::insert(&account_id, &restricted_balances);
 			}
 
-			let current_balance = T::Flip::balance(&account_id);
-
-			let remaining_balance = current_balance
+			let remaining_balance = T::Flip::balance(&account_id)
 				.checked_sub(&redeem_amount)
 				.ok_or(Error::<T>::InsufficientBalance)?;
 
