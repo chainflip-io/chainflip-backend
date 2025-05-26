@@ -203,8 +203,7 @@ pub trait Statemachine: AbstractApi + 'static {
 
 						// ensure input has correct index
 						Self::validate_input(&Self::input_index(&mut state), &input)
-							.map_err(|err| format!("input has wrong index: {err:?}"))
-							.unwrap();
+							.expect(&format!("input has wrong index: {input:?}"));
 
 						// backup state
 						let mut prev_state = state.clone();
@@ -258,8 +257,7 @@ pub fn run_with_timeout<
 
 		receiver
 			.recv_timeout(std::time::Duration::from_secs(seconds))
-			.map_err(|err| format!("task failed due to timeout with input {:#?}", a))
-			.unwrap()
+			.expect(&format!("task failed due to timeout with input {a:#?}"))
 	}
 }
 
