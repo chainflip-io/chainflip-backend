@@ -665,7 +665,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Rebalance funds between to validator accounts under the same address binding conditions
+		/// Rebalance funds between two validator accounts under the same address binding conditions
 		/// as a full redemption. Additionally, checks that no address binding conditions are
 		/// violated.
 		///
