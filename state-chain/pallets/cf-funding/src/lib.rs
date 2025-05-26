@@ -519,17 +519,7 @@ pub mod pallet {
 			T::Flip::finalize_redemption(&account_id)
 				.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
 
-			if T::Flip::balance(&account_id).is_zero() {
-				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
-					// This shouldn't happen, and not much we can do if it does except fix it on a
-					// subsequent release. Consequences are minor.
-					log::error!(
-						"Unexpected reference count error while reaping the account {:?}: {:?}.",
-						account_id,
-						e
-					);
-				})
-			}
+			Self::kill_account_if_zero_balance(&account_id);
 
 			Self::deposit_event(Event::RedemptionSettled(account_id, redeemed_amount));
 
@@ -781,17 +771,7 @@ pub mod pallet {
 
 			T::Flip::try_transfer_funds_internally(redeem_amount, &source, &recipient_account_id)?;
 
-			if T::Flip::balance(&source).is_zero() {
-				frame_system::Provider::<T>::killed(&source).unwrap_or_else(|e| {
-					// This shouldn't happen, and not much we can do if it does except fix
-					// it on a subsequent release. Consequences are minor.
-					log::error!(
-						"Unexpected reference count error while reaping the account {:?}: {:?}.",
-						source,
-						e
-					);
-				})
-			}
+			Self::kill_account_if_zero_balance(&source);
 
 			Ok(())
 		}
@@ -844,6 +824,18 @@ impl<T: Config> Pallet<T> {
 		}
 
 		T::Flip::credit_funds(account_id, amount)
+	}
+
+	fn kill_account_if_zero_balance(account_id: &T::AccountId) {
+		if T::Flip::balance(account_id).is_zero() {
+			frame_system::Provider::<T>::killed(account_id).unwrap_or_else(|e| {
+				log::error!(
+					"Unexpected reference count error while reaping the account {:?}: {:?}.",
+					account_id,
+					e
+				);
+			});
+		}
 	}
 
 	pub fn calculate_redeem_amount(
