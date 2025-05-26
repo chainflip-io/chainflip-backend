@@ -475,6 +475,24 @@ impl<T: Config> Pallet<T> {
 	pub fn deposit_pending_redemption(account_id: &T::AccountId, amount: T::Balance) -> Deficit<T> {
 		Deficit::from_pending_redemptions_reserve(account_id, amount)
 	}
+
+	/// Transfer liquid funds from one account to another.
+	pub fn transfer(
+		from: &T::AccountId,
+		to: &T::AccountId,
+		amount: T::Balance,
+	) -> Result<(), DispatchError> {
+		let surplus = Self::try_debit_from_liquid_funds(from, amount)
+			.ok_or(Error::<T>::InsufficientLiquidity)?;
+		let _ = match surplus.offset(Self::credit(to, amount)) {
+			frame_support::traits::SameOrOther::None => Ok::<_, Error<T>>(()),
+			frame_support::traits::SameOrOther::Same(s) =>
+				s.drop_zero().map_err(|_| Error::<T>::InsufficientLiquidity.into()),
+			frame_support::traits::SameOrOther::Other(d) =>
+				d.drop_zero().map_err(|_| Error::<T>::InsufficientLiquidity.into()),
+		}?;
+		Ok(())
+	}
 }
 
 impl<T: Config> FundingInfo for Pallet<T> {
@@ -629,14 +647,10 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 		to: &Self::AccountId,
 	) -> Result<(), DispatchError> {
 		ensure!(from != to, Error::<T>::CanNotTransferToSelf);
-		if let Some(from_imbalance) = Pallet::<T>::try_debit(from, amount) {
-			from_imbalance.offset(Pallet::<T>::credit(to, amount));
-			T::OnAccountFunded::on_account_funded(from, Self::balance(from));
-			T::OnAccountFunded::on_account_funded(to, Self::balance(to));
-			Ok(())
-		} else {
-			Err(Error::<T>::InsufficientLiquidity.into())
-		}
+		Pallet::<T>::transfer(from, to, amount)?;
+		T::OnAccountFunded::on_account_funded(from, Self::balance(from));
+		T::OnAccountFunded::on_account_funded(to, Self::balance(to));
+		Ok(())
 	}
 }
 
