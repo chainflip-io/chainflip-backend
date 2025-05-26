@@ -647,8 +647,7 @@ pub mod pallet {
 		}
 
 		/// Rebalance funds between two validator accounts under the same address binding conditions
-		/// as a full redemption. Additionally, checks that no address binding conditions are
-		/// violated.
+		/// as a full redemption.
 		///
 		/// ## Events
 		///
