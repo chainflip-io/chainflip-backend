@@ -1840,7 +1840,6 @@ fn only_governance_can_update_settings() {
 fn rebalance_unrestricted_funds() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
-		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
 		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
@@ -1868,9 +1867,25 @@ fn rebalance_unrestricted_funds() {
 			OriginTrait::signed(ALICE),
 			BOB,
 			Some(UNRESTRICTED_ADDRESS),
-			AMOUNT_MINUS_FEE.into()
+			AMOUNT.into()
 		));
-		assert_eq!(Flip::total_balance_of(&BOB), AMOUNT_MINUS_FEE, "Total balance to be correct.");
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
+			RuntimeEvent::Funding(Event::Funded {
+				account_id: ALICE,
+				tx_hash: _,
+				funds_added: AMOUNT,
+				total_balance: AMOUNT
+			}),
+			RuntimeEvent::System(frame_system::Event::KilledAccount { account: ALICE }),
+			RuntimeEvent::Funding(Event::Rebalance {
+				source_account_id: ALICE,
+				recipient_account_id: BOB,
+				amount: AMOUNT,
+			}),
+		);
+		assert_eq!(Flip::total_balance_of(&BOB), AMOUNT, "Total balance to be correct.");
 	});
 }
 
