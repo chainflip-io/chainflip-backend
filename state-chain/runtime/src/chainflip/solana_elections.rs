@@ -15,8 +15,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	chainflip::ReportFailedLivenessCheck, AccountId, Environment, Runtime, SolanaBroadcaster,
-	SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner,
+	chainflip::ReportFailedLivenessCheck, constants::common::LIVENESS_CHECK_DURATION, AccountId,
+	Environment, Runtime, SolanaBroadcaster, SolanaChainTracking, SolanaIngressEgress,
+	SolanaThresholdSigner,
 };
 
 use cf_chains::{
@@ -86,8 +87,6 @@ pub type SolanaElectoralSystemRunner = CompositeRunner<
 	RunnerStorageAccess<Runtime, SolanaInstance>,
 	SolanaElectionHooks,
 >;
-
-const LIVENESS_CHECK_DURATION: BlockNumberFor<Runtime> = 10;
 
 /// Creates an initial state to initialize the pallet with.
 pub fn initial_state(

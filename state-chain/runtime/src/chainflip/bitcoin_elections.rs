@@ -3,6 +3,7 @@ use crate::{
 		address_derivation::btc::derive_current_and_previous_epoch_private_btc_vaults,
 		ReportFailedLivenessCheck,
 	},
+	constants::common::LIVENESS_CHECK_DURATION,
 	BitcoinChainTracking, BitcoinIngressEgress, Runtime,
 };
 use cf_chains::{
@@ -557,8 +558,6 @@ impl
 		Ok(())
 	}
 }
-
-const LIVENESS_CHECK_DURATION: BlockNumberFor<Runtime> = 10;
 
 // Channel expiry:
 // We need to process elections in order, even after a safe mode pause. This is to ensure channel
