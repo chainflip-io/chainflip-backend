@@ -843,7 +843,7 @@ impl<T: Config> Pallet<T> {
 		restricted_balances: &BTreeMap<EthereumAddress, FlipBalance<T>>,
 		amount: RedemptionAmount<FlipBalance<T>>,
 		maybe_address: Option<&EthereumAddress>,
-		tax: bool,
+		should_pay_tax: bool,
 	) -> CalculatedRedeemAmount<T::Amount> {
 		// In case the balance is lower than the sum of restricted addresses we take this
 		// discrepancy into account so that restricted addresses can still redeem.
@@ -868,7 +868,7 @@ impl<T: Config> Pallet<T> {
 
 		let redemption_fee = match amount {
 			RedemptionAmount::Max if liquid_balance == T::Flip::balance(account_id) => Zero::zero(),
-			_ if tax => RedemptionTax::<T>::get(),
+			_ if should_pay_tax => RedemptionTax::<T>::get(),
 			_ => Zero::zero(),
 		};
 
