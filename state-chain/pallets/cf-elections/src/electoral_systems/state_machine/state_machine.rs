@@ -194,7 +194,6 @@ pub trait Statemachine: AbstractApi + 'static {
 						Either<Self::Context, (Self::Query, Self::Response)>,
 						Self::Settings,
 					)| {
-						println!("running test");
 						// ensure that inputs are well formed
 						assert!(
 							state.is_valid().is_ok(),
@@ -249,28 +248,17 @@ pub fn run_with_timeout<
 	f: F,
 ) -> impl Fn(A) -> B {
 	move |a| {
-		let f1 = f.clone();
+		let (sender, receiver) = std::sync::mpsc::channel();
 		let a1 = a.clone();
-		tokio::runtime::Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.unwrap()
-			.block_on(async move {
-				let f2 = f1.clone();
-				let a2 = a1.clone();
-				let a3 = a1.clone();
-				tokio::time::timeout(
-					std::time::Duration::from_secs(seconds),
-					tokio::task::spawn_blocking(move || f2(a2)),
-				)
-				.await
-				.map_err(move |_| format!("task failed with input {:#?}", a3))
-				.map_err(|err| {
-					println!("{err}");
-					err
-				})
-				.unwrap()
-			})
+		let f1 = f.clone();
+		std::thread::spawn(move || {
+			let result = f1(a1);
+			sender.send(result).unwrap();
+		});
+
+		receiver
+			.recv_timeout(std::time::Duration::from_secs(seconds))
+			.map_err(|err| format!("task failed due to timeout with input {:#?}", a))
 			.unwrap()
 	}
 }
