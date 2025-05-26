@@ -254,6 +254,13 @@ pub mod pallet {
 
 		/// An account has been bound to an executor address.
 		BoundExecutorAddress { account_id: AccountId<T>, address: EthereumAddress },
+
+		/// A rebalance between two accounts has been executed.
+		Rebalance {
+			source_account_id: AccountId<T>,
+			recipient_account_id: AccountId<T>,
+			amount: FlipBalance<T>,
+		},
 	}
 
 	#[pallet::error]
@@ -658,6 +665,11 @@ pub mod pallet {
 		/// - [RestrictedToValidators](Error::RestrictedToValidators)
 		/// - [ExecutorBindingRestrictionViolated](Error::ExecutorBindingRestrictionViolated)
 		/// - [AccountBindingRestrictionViolated](Error::AccountBindingRestrictionViolated)
+		/// - [CanNotRebalanceToNotBiddingValidator](Error::CanNotRebalanceToNotBiddingValidator)
+		/// - [InsufficientBalance](Error::InsufficientBalance)
+		/// - [BelowMinimumFunding](Error::BelowMinimumFunding)
+		/// - [InsufficientUnrestrictedFunds](Error::InsufficientUnrestrictedFunds)
+		/// - [RestrictedBalanceBelowMinimumFunding](Error::RestrictedBalanceBelowMinimumFunding)
 		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::rebalance())]
 		pub fn rebalance(
@@ -752,6 +764,12 @@ pub mod pallet {
 			T::Flip::try_transfer_funds_internally(redeem_amount, &source, &recipient_account_id)?;
 
 			Self::kill_account_if_zero_balance(&source);
+
+			Self::deposit_event(Event::Rebalance {
+				source_account_id: source,
+				recipient_account_id,
+				amount: redeem_amount,
+			});
 
 			Ok(())
 		}
