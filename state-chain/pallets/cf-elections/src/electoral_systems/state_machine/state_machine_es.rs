@@ -1,4 +1,8 @@
 use cf_utilities::success_threshold_from_share_count;
+use frame_support::{
+	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	Parameter,
+};
 use itertools::Either;
 use sp_std::{fmt::Debug, vec::Vec};
 
@@ -33,51 +37,30 @@ pub enum SMInput<Consensus, Context> {
 /// Main trait for deriving an electoral system from a state machine and consensus mechanism.
 /// It ensures that all the associated types match up as required. See the documentation for
 /// `StatemachineElectoralSystem` for more information on how to implement it.
-pub trait StatemachineElectoralSystemTypes:
-	'static
-	+ Sized
-	+ ElectoralSystemTypes<
-		ElectoralUnsynchronisedStateMapKey = (),
-		ElectoralUnsynchronisedStateMapValue = (),
-		ElectoralSettings = (),
-		ElectionIdentifierExtra = (),
-		ElectionState = (),
-		OnFinalizeContext = Vec<Self::OnFinalizeContextItem>,
-		OnFinalizeReturn = Vec<Self::OnFinalizeReturnItem>,
+pub trait StatemachineElectoralSystemTypes: 'static + Sized {
+	type ValidatorId: Parameter + Member;
+	type StateChainBlockNumber: Parameter + Member + Ord;
 
-		// NOTE, we currently require that the consensus has the same type as the votes,
-		// this makes a few bounds simpler, but is not an inherent restriction.
-		// If required this can be lifted in the future.
-		Consensus = VoteOf<Self>
-	>
-{
-	type OnFinalizeContextItem: Clone + Debug;
 	type OnFinalizeReturnItem;
+	type VoteStorage: VoteStorage;
 
 	type Statemachine: StatemachineForES<Self> + 'static;
-	type ConsensusMechanism: ConsensusMechanismForES<Self> + 'static;
+	type ConsensusMechanism: ConsensusMechanismForES<Self::Statemachine> + 'static;
 }
 
 /// Convenience wrapper of the `Statemachine` trait. Given an electoral system `ES`,
 /// this trait defines the conditions on the state machine's associated types for it
 /// to be possible to derive an electoral system.
 pub trait StatemachineForES<ES: StatemachineElectoralSystemTypes> = Statemachine<
-	Context = ES::OnFinalizeContextItem,
-	State = ES::ElectoralUnsynchronisedState,
-	Settings = ES::ElectoralUnsynchronisedSettings,
 	Output = Result<ES::OnFinalizeReturnItem, &'static str>,
-	Query = ES::ElectionProperties,
-	Response = ES::Consensus,
+	Response = <ES::VoteStorage as VoteStorage>::Vote,
 >;
 
 /// Convenience wrapper of the `ConsensusMechanism` trait. Given an electoral system `ES`,
 /// this trait defines the conditions on the consensus mechanism's associated types for it
 /// to be possible to derive an electoral system.
-pub trait ConsensusMechanismForES<ES: StatemachineElectoralSystemTypes> = ConsensusMechanism<
-	Vote = VoteOf<ES>,
-	Result = ES::Consensus,
-	Settings = (Threshold, ES::ElectionProperties),
->;
+pub trait ConsensusMechanismForES<S: Statemachine> =
+	ConsensusMechanism<Vote = S::Response, Result = S::Response, Settings = (Threshold, S::Query)>;
 
 /// ### Electoral system derived from a state machine.
 ///
@@ -114,23 +97,27 @@ pub struct StatemachineElectoralSystem<Bounds: StatemachineElectoralSystemTypes>
 	_phantom: core::marker::PhantomData<Bounds>,
 }
 
-impl<Bounds: StatemachineElectoralSystemTypes> ElectoralSystemTypes
-	for StatemachineElectoralSystem<Bounds>
+impl<S: StatemachineElectoralSystemTypes> ElectoralSystemTypes for StatemachineElectoralSystem<S>
+where
+	<S::Statemachine as Statemachine>::State: Parameter + Member + MaybeSerializeDeserialize,
+	<S::Statemachine as Statemachine>::Settings: Parameter + Member + MaybeSerializeDeserialize,
+	<S::Statemachine as AbstractApi>::Query: Parameter + Member,
+	<S::Statemachine as AbstractApi>::Response: Parameter + Member + Eq,
 {
-	type ValidatorId = Bounds::ValidatorId;
-	type StateChainBlockNumber = Bounds::StateChainBlockNumber;
-	type ElectoralUnsynchronisedState = Bounds::ElectoralUnsynchronisedState;
-	type ElectoralUnsynchronisedStateMapKey = Bounds::ElectoralUnsynchronisedStateMapKey;
-	type ElectoralUnsynchronisedStateMapValue = Bounds::ElectoralUnsynchronisedStateMapValue;
-	type ElectoralUnsynchronisedSettings = Bounds::ElectoralUnsynchronisedSettings;
-	type ElectoralSettings = Bounds::ElectoralSettings;
-	type ElectionIdentifierExtra = Bounds::ElectionIdentifierExtra;
-	type ElectionProperties = Bounds::ElectionProperties;
-	type ElectionState = Bounds::ElectionState;
-	type VoteStorage = Bounds::VoteStorage;
-	type Consensus = Bounds::Consensus;
-	type OnFinalizeContext = Bounds::OnFinalizeContext;
-	type OnFinalizeReturn = Bounds::OnFinalizeReturn;
+	type ValidatorId = S::ValidatorId;
+	type StateChainBlockNumber = S::StateChainBlockNumber;
+	type ElectoralUnsynchronisedState = <S::Statemachine as Statemachine>::State;
+	type ElectoralUnsynchronisedStateMapKey = ();
+	type ElectoralUnsynchronisedStateMapValue = ();
+	type ElectoralUnsynchronisedSettings = <S::Statemachine as Statemachine>::Settings;
+	type ElectoralSettings = ();
+	type ElectionIdentifierExtra = ();
+	type ElectionProperties = <S::Statemachine as AbstractApi>::Query;
+	type ElectionState = ();
+	type VoteStorage = S::VoteStorage;
+	type Consensus = <S::Statemachine as AbstractApi>::Response;
+	type OnFinalizeContext = Vec<<S::Statemachine as Statemachine>::Context>;
+	type OnFinalizeReturn = Vec<S::OnFinalizeReturnItem>;
 }
 
 /// ### Implementation of the `ElectoralSystem` trait for a given state machine and consensus mechanism.
@@ -172,10 +159,15 @@ impl<Bounds: StatemachineElectoralSystemTypes> ElectoralSystemTypes
 ///    step transitions, and thus doesn't notice that `A` got removed and added back.
 ///  - In the currently implemented ESs this is not a problem, but has to be checked when new state
 ///    machines are designed.
-impl<Bounds: StatemachineElectoralSystemTypes> ElectoralSystem
-	for StatemachineElectoralSystem<Bounds>
+impl<S: StatemachineElectoralSystemTypes> ElectoralSystem for StatemachineElectoralSystem<S>
 where
-	<Bounds::VoteStorage as VoteStorage>::Properties: Default,
+	<S::VoteStorage as VoteStorage>::Properties: Default,
+	<S::Statemachine as Statemachine>::State: Parameter + Member + MaybeSerializeDeserialize,
+	<S::Statemachine as Statemachine>::Settings: Parameter + Member + MaybeSerializeDeserialize,
+	<S::Statemachine as AbstractApi>::Query: Parameter + Member,
+	<S::Statemachine as AbstractApi>::Response: Parameter + Member + Eq,
+
+	<S::Statemachine as Statemachine>::Context: Debug + Clone,
 {
 	fn generate_vote_properties(
 		_election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
@@ -203,7 +195,7 @@ where
 		// define step function which progresses the state machine
 		// by one input
 		let mut step = |input| {
-			Bounds::Statemachine::step(&mut state, input, &settings)
+			S::Statemachine::step(&mut state, input, &settings)
 				.map(|output| {
 					result.push(output);
 				})
@@ -232,7 +224,7 @@ where
 		}
 
 		// gather the input indices after all state transitions
-		let input_indices: Vec<_> = Bounds::Statemachine::input_index(&mut state);
+		let input_indices: Vec<_> = S::Statemachine::input_index(&mut state);
 		let mut open_elections = Vec::new();
 
 		// delete elections which are no longer in the input indices
@@ -242,7 +234,7 @@ where
 		// be kept open.
 		for election_identifier in election_identifiers {
 			let election = ElectoralAccess::election_mut(election_identifier);
-			let properties: <Bounds as ElectoralSystemTypes>::ElectionProperties =
+			let properties: <S::Statemachine as AbstractApi>::Query =
 				election.properties()?;
 			if !input_indices.contains(&properties) {
 				election.delete();
@@ -271,14 +263,14 @@ where
 		consensus_votes: crate::electoral_system::ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		let properties = election_access.properties()?;
-		let mut consensus = Bounds::ConsensusMechanism::default();
+		let mut consensus = S::ConsensusMechanism::default();
 		let num_authorities = consensus_votes.num_authorities();
 
 		for vote in consensus_votes.active_votes() {
 			// TODO call vote.is_valid here
 
 			// insert vote if it is valid for the given properties
-			if Bounds::Statemachine::validate(&properties, &vote).is_ok() {
+			if S::Statemachine::validate(&properties, &vote).is_ok() {
 				consensus.insert_vote(vote);
 			} else {
 				log::warn!("Received invalid vote: expected base {properties:?} but vote was not in fiber ({:?})", vote);
