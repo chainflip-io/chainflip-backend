@@ -414,7 +414,6 @@ impls! {
 	/// implementation of reading vault hook
 	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
 		fn run(&mut self, _block_witness_root: BlockNumber) -> Vec<Hash> {
-			// we just loop through this, no need to know the block
 			TransactionOutIdToBroadcastId::<Runtime, BitcoinInstance>::iter()
 				.map(|(tx_id, _)| tx_id)
 				.collect::<Vec<_>>()
@@ -501,7 +500,6 @@ impl
 	) -> Result<(), CorruptStorageError> {
 		let current_sc_block_number = crate::System::block_number();
 
-		log::info!("BitcoinElectionHooks::called");
 		let chain_progress = BitcoinBlockHeightTrackingES::on_finalize::<
 			DerivedElectoralAccess<
 				_,
@@ -510,7 +508,6 @@ impl
 			>,
 		>(block_height_tracking_identifiers, &Vec::from([()]))?;
 
-		log::info!("BitcoinElectionHooks::on_finalize: {:?}", chain_progress);
 		BitcoinDepositChannelWitnessingES::on_finalize::<
 			DerivedElectoralAccess<
 				_,
@@ -580,7 +577,6 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 		),
 		unsynchronised_settings: (
 			Default::default(),
-			// TODO: Write a migration to set this too.
 			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 3 },
 			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 3 },
 			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 0 },
