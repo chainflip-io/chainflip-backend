@@ -218,6 +218,7 @@ pub mod tests {
 	use serde::{Deserialize, Serialize};
 	use sp_std::{fmt::Debug, vec::Vec};
 
+
 	use super::{
 		super::{
 			super::state_machine::state_machine::Statemachine, primitives::Header, BHWTypes,
@@ -287,7 +288,7 @@ pub mod tests {
 		const SAFETY_BUFFER: usize = 16;
 	}
 
-	impl<N: ChainBlockNumberTrait, H: ChainBlockHashTrait, D: 'static> BHWTypes
+  impl<N: ChainBlockNumberTrait, H: ChainBlockHashTrait, D: 'static> BHWTypes
 		for TypesFor<(N, H, D)>
 	{
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;

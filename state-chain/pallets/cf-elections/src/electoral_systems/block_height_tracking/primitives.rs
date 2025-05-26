@@ -6,6 +6,7 @@ use sp_std::collections::vec_deque::VecDeque;
 
 use crate::electoral_systems::state_machine::core::{both, def_derive, defx};
 
+
 use super::{super::state_machine::core::Validate, ChainProgress, ChainTypes};
 
 //------------------------ inputs ---------------------------
@@ -99,6 +100,7 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 		}
 	}
 }
+
 
 def_derive! {
 	/// Information returned if the `merge` function for `NonEmptyContinuousHeaders` was successful.
