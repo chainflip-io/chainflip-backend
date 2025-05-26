@@ -17,37 +17,40 @@ use sp_std::{
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 
-use crate::electoral_systems::state_machine::core::{defx, fst, Hook, Validate};
+use crate::electoral_systems::{
+	block_height_tracking::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress},
+	state_machine::core::{defx, fst, Hook, Validate},
+};
 
 use super::state_machine::{BWElectionType, BWTypes};
 
 defx! {
 	#[codec(encode_bound(
-		T::ChainBlockNumber: Encode,
-		T::ChainBlockHash: Encode,
+		ChainBlockNumberOf<T::Chain>: Encode,
+		ChainBlockHashOf<T::Chain>: Encode,
 		T::BlockData: Encode,
 		T::ElectionTrackerEventHook: Encode
 	))]
 	pub struct ElectionTracker2[T: BWTypes] {
 		/// The lowest block we haven't seen yet. I.e., we have seen blocks below.
-		pub seen_heights_below: T::ChainBlockNumber,
+		pub seen_heights_below: ChainBlockNumberOf<T::Chain>,
 
 		/// We always create elections until the next priority height, even if we
 		/// are in safe mode.
-		pub priority_elections_below: T::ChainBlockNumber,
+		pub priority_elections_below: ChainBlockNumberOf<T::Chain>,
 
 		/// Block hashes we got from the BHW.
-		pub queued_elections: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
+		pub queued_elections: BTreeMap<ChainBlockNumberOf<T::Chain>, ChainBlockHashOf<T::Chain>>,
 
 		/// Block heights which are queued but already past the safetymargin don't
 		/// have associated hashes. We just store a list of block height ranges.
-		pub queued_safe_elections: CompactHeightTracker<T::ChainBlockNumber>,
+		pub queued_safe_elections: CompactHeightTracker<ChainBlockNumberOf<T::Chain>>,
 
 		/// Hashes of elections currently ongoing
-		pub ongoing: BTreeMap<T::ChainBlockNumber, BWElectionType<T>>,
+		pub ongoing: BTreeMap<ChainBlockNumberOf<T::Chain>, BWElectionType<T::Chain>>,
 
 		/// Optimistic blocks
-		pub optimistic_block_cache: BTreeMap<T::ChainBlockNumber, OptimisticBlock<T>>,
+		pub optimistic_block_cache: BTreeMap<ChainBlockNumberOf<T::Chain>, OptimisticBlock<T>>,
 
 		/// debug hook
 		pub events: T::ElectionTrackerEventHook,
@@ -58,12 +61,9 @@ defx! {
 
 		is_valid: true
 
-		// queued_elections_are_consequtive:
-		// 	this.queued_elections.keys().zip(this.queued_elections.keys().skip(1))
-		// 	.all(|(left, right)| left.saturating_forward(1) == *right),
-
-		// queued_safe_height_is_not_queued:
-		// 	this.queued_safe_elections.clone().all(|height| !this.queued_elections.contains_key(&height))
+		// TODO:
+		// - there are no hashes for old elections
+		//-  elections and safe elections are disjoined
 
 	}
 }
@@ -72,7 +72,7 @@ impl<T: BWTypes> ElectionTracker2<T> {
 	pub fn update_safe_elections(
 		&mut self,
 		reason: UpdateSafeElectionsReason,
-		f: impl Fn(&mut CompactHeightTracker<T::ChainBlockNumber>),
+		f: impl Fn(&mut CompactHeightTracker<ChainBlockNumberOf<T::Chain>>),
 	) {
 		let old = self.queued_safe_elections.clone();
 		f(&mut self.queued_safe_elections);
@@ -125,9 +125,9 @@ impl<T: BWTypes> ElectionTracker2<T> {
 	///  - The election was `ByHash`, but it got too old and its type changed to `SafeBlockHeight`
 	pub fn mark_election_done(
 		&mut self,
-		height: T::ChainBlockNumber,
-		received: &BWElectionType<T>,
-		received_hash: &Option<T::ChainBlockHash>,
+		height: ChainBlockNumberOf<T::Chain>,
+		received: &BWElectionType<T::Chain>,
+		received_hash: &Option<ChainBlockHashOf<T::Chain>>,
 		received_data: T::BlockData,
 	) -> Option<T::BlockData> {
 		// update the lowest unseen block,
@@ -211,11 +211,16 @@ impl<T: BWTypes> ElectionTracker2<T> {
 	/// This function schedules all elections up to `range.end()`
 	pub fn schedule_range(
 		&mut self,
-		range: RangeInclusive<T::ChainBlockNumber>,
-		mut hashes: BTreeMap<T::ChainBlockNumber, T::ChainBlockHash>,
+		// range: RangeInclusive<ChainBlockNumberOf<T::Chain>>,
+		// mut hashes: BTreeMap<ChainBlockNumberOf<T::Chain>, ChainBlockHashOf<T::Chain>>,
+		progress: ChainProgress<T::Chain>,
+
 		safety_margin: usize,
-		is_reorg: bool,
-	) -> Vec<(T::ChainBlockNumber, OptimisticBlock<T>)> {
+	) -> Vec<(ChainBlockNumberOf<T::Chain>, OptimisticBlock<T>)> {
+		todo!()
+
+		/*
+
 		// Check whether there is a reorg concerning elections we have started previously.
 		// If there is, we ensure that all ongoing or previously finished elections inside the reorg
 		// range are going to be restarted once there is the capacity to do so.
@@ -288,9 +293,10 @@ impl<T: BWTypes> ElectionTracker2<T> {
 		});
 
 		optimistic_blocks.into_iter().collect()
+		 */
 	}
 
-	fn next_election(&self) -> Option<T::ChainBlockNumber> {
+	fn next_election(&self) -> Option<ChainBlockNumberOf<T::Chain>> {
 		self.queued_elections.first_key_value().map(fst).cloned()
 	}
 }
@@ -298,8 +304,8 @@ impl<T: BWTypes> ElectionTracker2<T> {
 impl<T: BWTypes> Default for ElectionTracker2<T> {
 	fn default() -> Self {
 		Self {
-			seen_heights_below: T::ChainBlockNumber::zero(),
-			priority_elections_below: T::ChainBlockNumber::zero(),
+			seen_heights_below: ChainBlockNumberOf::<T::Chain>::zero(),
+			priority_elections_below: ChainBlockNumberOf::<T::Chain>::zero(),
 			queued_elections: Default::default(),
 			ongoing: Default::default(),
 			queued_safe_elections: Default::default(),
@@ -312,12 +318,12 @@ impl<T: BWTypes> Default for ElectionTracker2<T> {
 #[derive_where(Debug, Clone, PartialEq, Eq;)]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound(
-	T::ChainBlockNumber: Encode,
-	T::ChainBlockHash: Encode,
+	ChainBlockNumberOf<T::Chain>: Encode,
+	ChainBlockHashOf<T::Chain>: Encode,
 	T::BlockData: Encode,
 ))]
 pub struct OptimisticBlock<T: BWTypes> {
-	pub hash: T::ChainBlockHash,
+	pub hash: ChainBlockHashOf<T::Chain>,
 	pub data: T::BlockData,
 }
 
@@ -333,14 +339,14 @@ impl<T: BWTypes> Validate for OptimisticBlock<T> {
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub enum ElectionTrackerEvent<T: BWTypes> {
 	ComparingBlocks {
-		height: T::ChainBlockNumber,
-		hash: Option<T::ChainBlockHash>,
-		received: BWElectionType<T>,
-		current: BWElectionType<T>,
+		height: ChainBlockNumberOf<T::Chain>,
+		hash: Option<ChainBlockHashOf<T::Chain>>,
+		received: BWElectionType<T::Chain>,
+		current: BWElectionType<T::Chain>,
 	},
 	UpdateSafeElections {
-		old: CompactHeightTracker<T::ChainBlockNumber>,
-		new: CompactHeightTracker<T::ChainBlockNumber>,
+		old: CompactHeightTracker<ChainBlockNumberOf<T::Chain>>,
+		new: CompactHeightTracker<ChainBlockNumberOf<T::Chain>>,
 		reason: UpdateSafeElectionsReason,
 	},
 }
