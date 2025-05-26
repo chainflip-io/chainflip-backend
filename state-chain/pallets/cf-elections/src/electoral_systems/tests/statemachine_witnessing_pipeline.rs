@@ -17,7 +17,7 @@ use crate::electoral_systems::{
 	block_height_tracking::{
 		primitives::NonemptyContinuousHeaders,
 		state_machine::{tests::*, BHWPhase, BlockHeightWitnesser},
-		BHWTypes, HeightWitnesserProperties,
+		BHWTypes, ChainBlockNumberOf, HeightWitnesserProperties,
 	},
 	block_witnesser::{
 		block_processor::{
@@ -176,7 +176,7 @@ pub fn test_all() {
         enum BWTrace<T: BWTypes, T0: BHWTypes> {
             Input(InputOf<BWStatemachine<T>>),
             InputBHW(InputOf<BlockHeightWitnesser<T0>>),
-            Output(Vec<(T::ChainBlockNumber, T::Event)>),
+            Output(Vec<(ChainBlockNumberOf<T::Chain>, T::Event)>),
             Event(BlockProcessorEvent<T>),
             ET(ElectionTrackerEvent<T>)
         }
