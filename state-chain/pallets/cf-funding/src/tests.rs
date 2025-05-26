@@ -2409,3 +2409,34 @@ fn ensure_executor_address_restriction_is_enforced_during_rebalance() {
 		);
 	});
 }
+
+#[test]
+fn cannot_rebalance_illiquid_funds() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 100;
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&BOB
+		));
+
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS,
+			TX_HASH
+		));
+
+		// Bond ALICE.
+		Bonder::<Test>::update_bond(&ALICE, AMOUNT);
+
+		assert_noop!(
+			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+			pallet_cf_flip::Error::<Test>::InsufficientLiquidity
+		);
+	});
+}
