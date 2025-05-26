@@ -406,7 +406,7 @@ mod tests {
 				let (_state_chain_stream, _unfinalised_state_chain_stream, state_chain_client) =
 					state_chain_observer::client::StateChainClient::connect_without_account(
 						scope,
-						&"wss://archive.perseverance.chainflip.io",
+						&"wss://archive.sisyphos.chainflip.io",
 					)
 					.await?;
 
@@ -419,9 +419,10 @@ mod tests {
 					.await
 					.unwrap();
 
-				// any broadcast ids below 600
+				// change for each network
+				const MAX_BROADCAST_ID: u32 = 700;
 				let (arb_ids_to_delete, arb_ids_to_keep): (Vec<(_, _)>, Vec<(_, _)>) =
-					arb_tx_out_ids.into_iter().partition(|(_, value)| value.0 < 600);
+					arb_tx_out_ids.into_iter().partition(|(_, value)| value.0 < MAX_BROADCAST_ID);
 
 				println!("arb_ids_to_delete: {:?}", arb_ids_to_delete.len());
 				println!("arb_ids_to_keep: {:?}", arb_ids_to_keep.len());
@@ -445,13 +446,28 @@ mod tests {
 								[prefix_hash.0.as_slice(), &hashed_key].concat()
 							})
 							.collect(),
-					})
-					.encode();
+					});
 
-				let kill_storage_call_hex = hex::encode(kill_storage_call);
+				// let kill_storage_call = kill_storage_call.encode();
+				// let kill_storage_call_hex = hex::encode(kill_storage_call);
 
-				let mut file = File::create("extrinsic_bytes.txt").unwrap();
-				file.write_all(&kill_storage_call_hex.as_bytes()).unwrap();
+				// let mut file = File::create("extrinsic_bytes.txt").unwrap();
+				// file.write_all(&kill_storage_call_hex.as_bytes()).unwrap();
+
+				let wrapped_in_gov = state_chain_runtime::RuntimeCall::Governance(
+					pallet_cf_governance::Call::propose_governance_extrinsic {
+						call: Box::new(state_chain_runtime::RuntimeCall::Governance(
+							pallet_cf_governance::Call::call_as_sudo {
+								call: Box::new(kill_storage_call),
+							},
+						)),
+						execution: Default::default(),
+					},
+				);
+
+				let wrapped_in_gov_hex = hex::encode(wrapped_in_gov.encode());
+				let mut file = File::create("extrinsic_bytes_wrapped_in_gov.txt").unwrap();
+				file.write_all(&wrapped_in_gov_hex.as_bytes()).unwrap();
 
 				Ok(())
 			}
