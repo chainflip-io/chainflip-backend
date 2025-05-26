@@ -396,6 +396,7 @@ mod tests {
 
 	use super::*;
 	use cf_chains::instances::ArbitrumInstance;
+	use cf_primitives::BroadcastId;
 	use codec::Encode;
 
 	#[tokio::test]
@@ -458,5 +459,19 @@ mod tests {
 		})
 		.await
 		.unwrap()
+	}
+
+	#[test]
+	fn verify_storage_for_old_tx_out_ids() {
+		use codec::Decode;
+		let decoded: (
+			BroadcastId,
+			pallet_cf_broadcast::ChainBlockNumberFor<
+				state_chain_runtime::Runtime,
+				ArbitrumInstance,
+			>,
+		) = Decode::decode(&mut &hex::decode("eb0100003042620400000000").unwrap()[..]).unwrap();
+
+		println!("decoded: {:?}", decoded);
 	}
 }
