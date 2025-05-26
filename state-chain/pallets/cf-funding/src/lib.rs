@@ -782,12 +782,12 @@ pub mod pallet {
 			T::Flip::try_transfer_funds_internally(redeem_amount, &source, &recipient_account_id)?;
 
 			if T::Flip::balance(&source).is_zero() {
-				frame_system::Provider::<T>::killed(&recipient_account_id).unwrap_or_else(|e| {
+				frame_system::Provider::<T>::killed(&source).unwrap_or_else(|e| {
 					// This shouldn't happen, and not much we can do if it does except fix
 					// it on a subsequent release. Consequences are minor.
 					log::error!(
 						"Unexpected reference count error while reaping the account {:?}: {:?}.",
-						recipient_account_id,
+						source,
 						e
 					);
 				})
