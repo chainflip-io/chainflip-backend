@@ -2304,7 +2304,7 @@ fn rebalance_to_non_bidding_validator_fails() {
 				Some(UNRESTRICTED_ADDRESS),
 				REBALANCE_AMOUNT.into()
 			),
-			Error::<Test>::CannotRebalanceToNotBiddingValidator
+			Error::<Test>::CanNotRebalanceToNotBiddingValidator
 		);
 
 		MockRedemptionChecker::set_can_redeem(BOB, false);

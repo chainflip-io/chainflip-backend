@@ -305,7 +305,7 @@ pub mod pallet {
 
 		/// During auction phase its not possible to rebalance to a non-bidding validator if the
 		/// source validator is currently bidding.
-		CannotRebalanceToNotBiddingValidator,
+		CanNotRebalanceToNotBiddingValidator,
 	}
 
 	#[pallet::call]
@@ -671,7 +671,7 @@ pub mod pallet {
 			if T::RedemptionChecker::ensure_can_redeem(&source).is_err() {
 				ensure!(
 					T::RedemptionChecker::ensure_can_redeem(&recipient_account_id).is_err(),
-					Error::<T>::CannotRebalanceToNotBiddingValidator
+					Error::<T>::CanNotRebalanceToNotBiddingValidator
 				);
 			}
 
