@@ -6,7 +6,7 @@ use core::{
 use crate::electoral_systems::{
 	block_height_tracking::{ChainBlockNumberOf, ChainProgress, ChainTypes},
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
-  state_machine::core::{def_derive, Hook, Validate},
+	state_machine::core::{def_derive, Hook, Validate},
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};

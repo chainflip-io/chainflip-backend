@@ -35,7 +35,7 @@ pub struct HookTypeFor<Tag1, Tag2> {
 }
 
 pub trait BWTypes: 'static + Sized + BWProcessorTypes {
-	type ElectionProperties: Validate + CommonTraits + 'static;
+	type ElectionProperties: Debug + Clone + Encode + Decode + Eq + 'static;
 	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>> + CommonTraits;
 	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>> + CommonTraits;
 
@@ -83,7 +83,7 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, LogEventHook> {
 
 pub trait BWProcessorTypes: Sized + Debug + Clone + Eq {
 	type Chain: ChainTypes;
-	type BlockData: Validate + CommonTraits + Ord + 'static;
+	type BlockData: CommonTraits + Ord + 'static;
 
 	type Event: CommonTraits + Ord + Encode;
 	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + CommonTraits;
@@ -123,13 +123,19 @@ defx! {
 	validate _this (else BlockWitnesserError) {}
 }
 
-defx! {
-	pub struct BWElectionProperties[T: BWTypes] {
+def_derive! {
+	#[no_serde]
+	pub struct BWElectionProperties<T: BWTypes> {
 		pub election_type: BWElectionType<T::Chain>,
 		pub block_height: ChainBlockNumberOf<T::Chain>,
 		pub properties: T::ElectionProperties,
 	}
-	validate _this (else BWElectionPropertiesError) {}
+}
+impl<T: BWTypes> Validate for BWElectionProperties<T> {
+	type Error = ();
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
 }
 
 defx! {
