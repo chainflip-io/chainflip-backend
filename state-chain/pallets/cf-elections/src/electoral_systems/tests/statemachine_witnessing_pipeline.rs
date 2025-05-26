@@ -282,7 +282,6 @@ pub fn test_all() {
             total_outputs.append(&mut bw_outputs);
         }
 
-        // println!("----- outputs begin ------");
         use std::fmt::Write;
         let mut printed: String = Default::default();
         for output in total_outputs.clone() {
