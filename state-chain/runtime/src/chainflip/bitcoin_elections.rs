@@ -559,11 +559,6 @@ impl
 	}
 }
 
-// Channel expiry:
-// We need to process elections in order, even after a safe mode pause. This is to ensure channel
-// expiry is done correctly. During safe mode pause, we could get into a situation where the current
-// state suggests that a channel is expired, but at the time of a previous block which we have not
-// yet processed, the channel was not expired.
 pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 	InitialState {
 		unsynchronised_state: (
