@@ -7,6 +7,7 @@ use super::{
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use derive_where::derive_where;
+use frame_support::pallet_prelude::MaybeSerializeDeserialize;
 use primitives::{Header, NonemptyContinuousHeaders};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -19,7 +20,7 @@ pub mod consensus;
 pub mod primitives;
 pub mod state_machine;
 
-pub trait CommonTraits = Debug + Clone + Serde + Encode + Decode;
+pub trait CommonTraits = Debug + Clone + Encode + Decode + MaybeSerializeDeserialize + Eq;
 
 pub trait ChainBlockNumberTrait =
 	CommonTraits + SaturatingStep + Step + BlockZero + Copy + Ord + 'static + Sized + Validate;

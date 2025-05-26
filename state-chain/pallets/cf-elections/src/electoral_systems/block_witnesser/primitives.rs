@@ -25,12 +25,6 @@ use crate::electoral_systems::{
 use super::state_machine::{BWElectionType, BWTypes};
 
 defx! {
-	#[codec(encode_bound(
-		ChainBlockNumberOf<T::Chain>: Encode,
-		ChainBlockHashOf<T::Chain>: Encode,
-		T::BlockData: Encode,
-		T::ElectionTrackerEventHook: Encode
-	))]
 	pub struct ElectionTracker2[T: BWTypes] {
 		/// The lowest block we haven't seen yet. I.e., we have seen blocks below.
 		pub seen_heights_below: ChainBlockNumberOf<T::Chain>,
@@ -317,11 +311,6 @@ impl<T: BWTypes> Default for ElectionTracker2<T> {
 
 #[derive_where(Debug, Clone, PartialEq, Eq;)]
 #[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
-#[codec(encode_bound(
-	ChainBlockNumberOf<T::Chain>: Encode,
-	ChainBlockHashOf<T::Chain>: Encode,
-	T::BlockData: Encode,
-))]
 pub struct OptimisticBlock<T: BWTypes> {
 	pub hash: ChainBlockHashOf<T::Chain>,
 	pub data: T::BlockData,
@@ -336,7 +325,7 @@ impl<T: BWTypes> Validate for OptimisticBlock<T> {
 }
 
 #[derive_where(Debug, Clone, PartialEq, Eq;)]
-#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub enum ElectionTrackerEvent<T: BWTypes> {
 	ComparingBlocks {
 		height: ChainBlockNumberOf<T::Chain>,

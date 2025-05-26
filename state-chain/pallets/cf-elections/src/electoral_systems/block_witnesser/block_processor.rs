@@ -49,7 +49,7 @@ use proptest_derive::Arbitrary;
 ///     - `Execute`: A hook to dedup and execute generated events.
 /// 	- `LogEventHook`: A hook to log events, used for testing
 #[derive_where(Debug, Clone, PartialEq, Eq;)]
-#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct BlockProcessor<T: BWProcessorTypes> {
 	/// A mapping from block numbers to their corresponding BlockInfo (block data, the next age to
 	/// be processed and the safety margin). The "age" represents the block height difference
@@ -74,7 +74,7 @@ impl<BlockData> BlockProcessingInfo<BlockData> {
 		BlockProcessingInfo { block_data, next_age_to_process: Default::default(), safety_margin }
 	}
 }
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BlockProcessorEvent<T: BWProcessorTypes> {
 	NewBlock {
 		height: ChainBlockNumberOf<T::Chain>,

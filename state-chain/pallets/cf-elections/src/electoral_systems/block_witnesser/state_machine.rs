@@ -4,7 +4,7 @@ use super::{
 	primitives::{ElectionTracker2, ElectionTrackerEvent, SafeModeStatus},
 };
 use crate::electoral_systems::{
-	block_height_tracking::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes},
+	block_height_tracking::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes, CommonTraits},
 	block_witnesser::block_processor::BlockProcessor,
 	state_machine::{
 		core::Validate,
@@ -33,16 +33,11 @@ pub struct HookTypeFor<Tag1, Tag2> {
 }
 
 pub trait BWTypes: 'static + Sized + BWProcessorTypes {
-	type ElectionProperties: PartialEq + Clone + Eq + Debug + 'static;
-	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>>;
-	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>>;
+	type ElectionProperties: Validate + CommonTraits + 'static;
+	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>> + CommonTraits;
+	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>> + CommonTraits;
 
-	type ElectionTrackerEventHook: Hook<HookTypeFor<Self, ElectionTrackerEventHook>>
-		+ Default
-		+ Serde
-		+ Debug
-		+ Clone
-		+ Eq;
+	type ElectionTrackerEventHook: Hook<HookTypeFor<Self, ElectionTrackerEventHook>> + CommonTraits + Default;
 }
 
 // hook types
@@ -84,13 +79,13 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, LogEventHook> {
 
 pub trait BWProcessorTypes: Sized + Debug + Clone + Eq {
 	type Chain: ChainTypes;
-	type BlockData: PartialEq + Clone + Debug + Eq + Ord + Serde + Encode + 'static;
+	type BlockData: CommonTraits + Ord + 'static;
 
-	type Event: Serde + Debug + Clone + Eq + Ord + Encode;
-	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + Serde + Debug + Clone + Eq;
-	type Execute: Hook<HookTypeFor<Self, ExecuteHook>> + Default + Serde + Debug + Clone + Eq;
+	type Event: CommonTraits + Ord + Encode;
+	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + CommonTraits;
+	type Execute: Hook<HookTypeFor<Self, ExecuteHook>> + Default + CommonTraits;
 
-	type LogEventHook: Hook<HookTypeFor<Self, LogEventHook>> + Default + Serde + Debug + Clone + Eq;
+	type LogEventHook: Hook<HookTypeFor<Self, LogEventHook>> + Default + CommonTraits;
 }
 
 #[derive(
@@ -112,93 +107,43 @@ pub struct BlockWitnesserSettings {
 	pub safety_margin: u32,
 }
 
-#[derive_where(Debug, Clone, PartialEq, Eq;
-	T::SafeModeEnabledHook: Debug + Clone + Eq,
-	T::ElectionPropertiesHook: Debug + Clone + Eq,
-	BlockProcessor<T>: Debug + Clone + Eq,
-)]
-#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
-#[codec(encode_bound(
-	ChainBlockNumberOf<T::Chain>: Encode,
-	ChainBlockHashOf<T::Chain>: Encode,
-	T::ElectionPropertiesHook: Encode,
-	T::SafeModeEnabledHook: Encode,
-	T::BlockData: Encode,
-	T::ElectionTrackerEventHook: Encode,
-
-	BlockProcessor<T>: Encode,
-))]
-pub struct BlockWitnesserState<T: BWTypes> {
-	pub elections: ElectionTracker2<T>,
-	pub generate_election_properties_hook: T::ElectionPropertiesHook,
-	pub safemode_enabled: T::SafeModeEnabledHook,
-	pub block_processor: BlockProcessor<T>,
-	pub _phantom: sp_std::marker::PhantomData<T>,
-}
-
-impl<T: BWTypes> Validate for BlockWitnesserState<T> {
-	type Error = &'static str;
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
+defx! {
+	#[derive(Default)]
+	pub struct BlockWitnesserState[T: BWTypes] {
+		pub elections: ElectionTracker2<T>,
+		pub generate_election_properties_hook: T::ElectionPropertiesHook,
+		pub safemode_enabled: T::SafeModeEnabledHook,
+		pub block_processor: BlockProcessor<T>,
+		pub _phantom: sp_std::marker::PhantomData<T>,
 	}
+	validate _this (else BlockWitnesserError) {}
 }
 
-impl<T: BWTypes> Default for BlockWitnesserState<T>
-where
-	T::ElectionPropertiesHook: Default,
-	T::SafeModeEnabledHook: Default,
-{
-	fn default() -> Self {
-		Self {
-			elections: Default::default(),
-			generate_election_properties_hook: Default::default(),
-			safemode_enabled: Default::default(),
-			block_processor: Default::default(),
-			_phantom: Default::default(),
-		}
+defx! {
+	pub struct BWElectionProperties[T: BWTypes] {
+		pub election_type: BWElectionType<T::Chain>,
+		pub block_height: ChainBlockNumberOf<T::Chain>,
+		pub properties: T::ElectionProperties,
 	}
+	validate _this (else BWElectionPropertiesError) {}
 }
 
-#[derive_where(Debug, Clone, PartialEq, Eq;)]
-#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
-#[codec(encode_bound(
-	ChainBlockHashOf<T::Chain>: Encode,
-	ChainBlockNumberOf<T::Chain>: Encode,
-	T::ElectionProperties: Encode,
-))]
-pub struct BWElectionProperties<T: BWTypes> {
-	pub election_type: BWElectionType<T::Chain>,
-	pub block_height: ChainBlockNumberOf<T::Chain>,
-	pub properties: T::ElectionProperties,
-}
+defx! {
+	#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
+	pub enum BWElectionType[C: ChainTypes] {
+		/// Querying blocks we haven't received a hash for yet
+		Optimistic,
 
-#[derive_where(Debug, Clone, PartialEq, Eq;)]
-#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
-#[codec(encode_bound(
-	ChainBlockHashOf<C>: Encode,
-	ChainBlockNumberOf<C>: Encode,
-))]
-#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
-pub enum BWElectionType<C: ChainTypes> {
-	/// Querying blocks we haven't received a hash for yet
-	Optimistic,
+		/// Querying blocks by hash
+		ByHash(C::ChainBlockHash),
 
-	/// Querying blocks by hash
-	ByHash(C::ChainBlockHash),
-
-	/// Querying "old" blocks that are below the safety margin,
-	/// and thus we don't care about the hash anymore
-	SafeBlockHeight,
-}
-
-impl<T: ChainTypes> Validate for BWElectionType<T> {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
+		/// Querying "old" blocks that are below the safety margin,
+		/// and thus we don't care about the hash anymore
+		SafeBlockHeight,
 	}
+	validate _this (else BWElectionTypeError) {}
 }
+
 
 #[derive(Debug)]
 pub struct BWStatemachine<Types: BWTypes> {
@@ -479,6 +424,7 @@ pub mod tests {
 		ChainBlockNumberOf<T::Chain>: Arbitrary,
 		ChainBlockHashOf<T::Chain>: Arbitrary,
 		T::ElectionPropertiesHook: Default + Clone + Debug + Eq,
+		T::ElectionTrackerEventHook: Default + Clone + Debug + Eq,
 		T::BlockData: Default + Clone + Debug + Eq,
 	{
 		prop_do! {
@@ -562,7 +508,7 @@ pub mod tests {
 	impl<
 			N: ChainBlockNumberTrait,
 			H: ChainBlockHashTrait,
-			D: Validate + Serde + Ord + Clone + Debug + Default + Encode + Decode + 'static,
+			D: Validate + Ord + Default + CommonTraits + 'static,
 		> BWTypes for TypesFor<(N, H, Vec<D>)>
 	{
 		type ElectionProperties = ();

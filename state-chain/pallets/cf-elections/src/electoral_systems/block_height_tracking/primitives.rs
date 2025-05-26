@@ -102,7 +102,8 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 
 /// Information returned if the `merge` function for `NonEmptyContinuousHeaders` was successful.
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+	// Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Ord, PartialOrd,
 )]
 pub struct MergeInfo<T: ChainTypes> {
 	pub removed: VecDeque<Header<T>>,

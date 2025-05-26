@@ -153,10 +153,11 @@ macro_rules! defx {
 
 
 		#[derive(
+			// Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo,
 			Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize,
 		)]
-		#[serde(bound(deserialize = "", serialize = ""))]
-
+		// #[cfg_attr(test, derive(Deserialize, Serialize))]
+		// #[cfg_attr(test, serde(bound(deserialize = "", serialize = "")))]
 		$(
 			#[$($Attributes)*]
 		)*
@@ -333,6 +334,14 @@ pub trait Validate {
 }
 
 impl Validate for () {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+impl<T> Validate for sp_std::marker::PhantomData<T> {
 	type Error = ();
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
