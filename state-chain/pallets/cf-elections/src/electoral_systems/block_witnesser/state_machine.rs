@@ -4,7 +4,9 @@ use super::{
 	primitives::{ElectionTracker2, ElectionTrackerEvent, SafeModeStatus},
 };
 use crate::electoral_systems::{
-	block_height_tracking::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes, CommonTraits},
+	block_height_tracking::{
+		ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes, CommonTraits,
+	},
 	block_witnesser::block_processor::BlockProcessor,
 	state_machine::{
 		core::Validate,
@@ -37,7 +39,9 @@ pub trait BWTypes: 'static + Sized + BWProcessorTypes {
 	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>> + CommonTraits;
 	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>> + CommonTraits;
 
-	type ElectionTrackerEventHook: Hook<HookTypeFor<Self, ElectionTrackerEventHook>> + CommonTraits + Default;
+	type ElectionTrackerEventHook: Hook<HookTypeFor<Self, ElectionTrackerEventHook>>
+		+ CommonTraits
+		+ Default;
 }
 
 // hook types
@@ -79,7 +83,7 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, LogEventHook> {
 
 pub trait BWProcessorTypes: Sized + Debug + Clone + Eq {
 	type Chain: ChainTypes;
-	type BlockData: CommonTraits + Ord + 'static;
+	type BlockData: Validate + CommonTraits + Ord + 'static;
 
 	type Event: CommonTraits + Ord + Encode;
 	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + CommonTraits;
@@ -143,7 +147,6 @@ defx! {
 	}
 	validate _this (else BWElectionTypeError) {}
 }
-
 
 #[derive(Debug)]
 pub struct BWStatemachine<Types: BWTypes> {

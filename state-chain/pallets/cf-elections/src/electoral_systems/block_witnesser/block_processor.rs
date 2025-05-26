@@ -6,7 +6,7 @@ use core::{
 use crate::electoral_systems::{
 	block_height_tracking::{ChainBlockNumberOf, ChainProgress, ChainTypes},
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
-	state_machine::core::{Hook, Validate},
+	state_machine::core::{def_derive, Hook, Validate},
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
@@ -74,30 +74,31 @@ impl<BlockData> BlockProcessingInfo<BlockData> {
 		BlockProcessingInfo { block_data, next_age_to_process: Default::default(), safety_margin }
 	}
 }
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum BlockProcessorEvent<T: BWProcessorTypes> {
-	NewBlock {
-		height: ChainBlockNumberOf<T::Chain>,
-		data: T::BlockData,
-	},
-	ProcessingBlockForAges {
-		height: ChainBlockNumberOf<T::Chain>,
-		ages: Range<u32>,
-	},
-	DeleteBlock((ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>)),
-	DeleteEvents(Vec<T::Event>),
-	StoreReorgedEvents {
-		block: (ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>),
-		events: Vec<T::Event>,
-		new_block_number: ChainBlockNumberOf<T::Chain>,
-	},
-	UpdatingExpiry {
-		event: T::Event,
-		from: ChainBlockNumberOf<T::Chain>,
-		to: ChainBlockNumberOf<T::Chain>,
-		safety_margin: u32,
-		range: RangeInclusive<ChainBlockNumberOf<T::Chain>>,
-	},
+def_derive! {
+	pub enum BlockProcessorEvent<T: BWProcessorTypes> {
+		NewBlock {
+			height: ChainBlockNumberOf<T::Chain>,
+			data: T::BlockData,
+		},
+		ProcessingBlockForAges {
+			height: ChainBlockNumberOf<T::Chain>,
+			ages: Range<u32>,
+		},
+		DeleteBlock((ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>)),
+		DeleteEvents(Vec<T::Event>),
+		StoreReorgedEvents {
+			block: (ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>),
+			events: Vec<T::Event>,
+			new_block_number: ChainBlockNumberOf<T::Chain>,
+		},
+		UpdatingExpiry {
+			event: T::Event,
+			from: ChainBlockNumberOf<T::Chain>,
+			to: ChainBlockNumberOf<T::Chain>,
+			safety_margin: u32,
+			range: RangeInclusive<ChainBlockNumberOf<T::Chain>>,
+		},
+	}
 }
 
 pub struct BPChainProgress<T: ChainTypes> {

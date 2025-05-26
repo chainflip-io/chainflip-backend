@@ -1,7 +1,7 @@
 use core::ops::RangeInclusive;
 
 use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
-use sp_std::collections::{btree_map::BTreeMap, vec_deque::VecDeque};
+use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque};
 
 use codec::{Decode, Encode};
 use derive_where::derive_where;
@@ -128,6 +128,18 @@ macro_rules! derive_validation_statements {
 }
 pub(crate) use derive_validation_statements;
 
+macro_rules! def_derive {
+	($($Definition:tt)*) => {
+		#[derive(
+			Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo,
+		)]
+		#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+		#[cfg_attr(feature = "std", serde(bound(deserialize = "", serialize = "")))]
+		$($Definition)*
+	};
+}
+pub(crate) use def_derive;
+
 /// Syntax sugar for adding validation code to types with validity requirements
 macro_rules! defx {
 	(
@@ -152,17 +164,13 @@ macro_rules! defx {
 		crate::electoral_systems::state_machine::core::derive_error_enum!{$Error [ $($ParamName: $($ParamType)?),* ], $def { $($Definition)* } { $($prop_name),* } }
 
 
-		#[derive(
-			// Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo,
-			Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize,
-		)]
-		// #[cfg_attr(test, derive(Deserialize, Serialize))]
-		// #[cfg_attr(test, serde(bound(deserialize = "", serialize = "")))]
-		$(
-			#[$($Attributes)*]
-		)*
-		pub $def $Name<$($ParamName: $($ParamType)?),*> {
-			$($Definition)*
+		crate::electoral_systems::state_machine::core::def_derive!{
+			$(
+				#[$($Attributes)*]
+			)*
+			pub $def $Name<$($ParamName: $($ParamType)?),*> {
+				$($Definition)*
+			}
 		}
 
 		impl<$($ParamName: $($ParamType)?),*> Validate for $Name<$($ParamName),*> {
@@ -358,6 +366,14 @@ impl<A: Validate, B: Validate> Validate for BTreeMap<A, B> {
 	}
 }
 
+impl<A: Validate> Validate for BTreeSet<A> {
+	type Error = A::Error;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		self.iter().map(|a| a.is_valid()).collect()
+	}
+}
+
 impl<A: Validate> Validate for Vec<A> {
 	type Error = A::Error;
 
@@ -421,6 +437,14 @@ impl Validate for bool {
 }
 
 impl Validate for u8 {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+impl Validate for u16 {
 	type Error = ();
 
 	fn is_valid(&self) -> Result<(), Self::Error> {

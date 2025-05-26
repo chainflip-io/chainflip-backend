@@ -4,7 +4,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::vec_deque::VecDeque;
 
-use crate::electoral_systems::state_machine::core::{both, defx};
+use crate::electoral_systems::state_machine::core::{both, def_derive, defx};
 
 use super::{super::state_machine::core::Validate, ChainProgress, ChainTypes};
 
@@ -100,14 +100,13 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	}
 }
 
-/// Information returned if the `merge` function for `NonEmptyContinuousHeaders` was successful.
-#[derive(
-	// Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Ord, PartialOrd,
-)]
-pub struct MergeInfo<T: ChainTypes> {
-	pub removed: VecDeque<Header<T>>,
-	pub added: VecDeque<Header<T>>,
+def_derive! {
+	/// Information returned if the `merge` function for `NonEmptyContinuousHeaders` was successful.
+	#[derive(Ord, PartialOrd,)]
+	pub struct MergeInfo<T: ChainTypes> {
+		pub removed: VecDeque<Header<T>>,
+		pub added: VecDeque<Header<T>>,
+	}
 }
 impl<T: ChainTypes> MergeInfo<T> {
 	pub fn into_chain_progress(&self) -> Option<ChainProgress<T>> {
