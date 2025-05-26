@@ -14,8 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//! Chainflip runtime storage migrations.
+use cf_runtime_utilities::PlaceholderMigration;
 
-pub mod housekeeping;
+use crate::Pallet;
 
-pub mod boost_refactor;
+pub type PalletMigration<T> = (PlaceholderMigration<1, Pallet<T>>,);

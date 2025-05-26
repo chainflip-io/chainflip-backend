@@ -46,6 +46,7 @@ pub mod funding_info;
 pub mod ingress_egress_fee_handler;
 pub mod key_provider;
 pub mod key_rotator;
+pub mod lending_pools;
 pub mod liability_tracker;
 pub mod offence_reporting;
 pub mod on_account_funded;

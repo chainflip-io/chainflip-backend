@@ -22,6 +22,7 @@ use cfe_events::{KeyHandoverRequest, KeygenRequest, TxBroadcastRequest};
 pub use liquidity::*;
 pub mod safe_mode;
 pub use safe_mode::*;
+pub mod lending;
 mod swapping;
 
 use cf_chains::SetGovKeyWithAggKeyError;

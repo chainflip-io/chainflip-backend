@@ -531,7 +531,7 @@ mod boost_pool_rpc {
 	}
 
 	impl BoostPoolDetailsRpc {
-		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails) -> Self {
+		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails<AccountId32>) -> Self {
 			BoostPoolDetailsRpc {
 				asset,
 				fee_tier,
@@ -585,7 +585,7 @@ mod boost_pool_rpc {
 	}
 
 	impl BoostPoolFeesRpc {
-		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails) -> Self {
+		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails<AccountId32>) -> Self {
 			BoostPoolFeesRpc {
 				fee_tier,
 				asset,
@@ -2019,9 +2019,9 @@ mod test {
 		chains::assets::{any, arb, btc, dot, eth, hub},
 		FLIPPERINOS_PER_FLIP,
 	};
+	use pallet_cf_lending_pools::OwedAmount;
 	use sp_core::H160;
 	use sp_runtime::AccountId32;
-	use state_chain_runtime::runtime_apis::{NetworkFeeDetails, OwedAmount};
 
 	/*
 		changing any of these serialization tests signifies a breaking change in the
@@ -2393,7 +2393,7 @@ mod test {
 	const ID_1: AccountId32 = AccountId32::new([1; 32]);
 	const ID_2: AccountId32 = AccountId32::new([2; 32]);
 
-	fn boost_details_1() -> BoostPoolDetails {
+	fn boost_details_1() -> BoostPoolDetails<AccountId32> {
 		BoostPoolDetails {
 			available_amounts: BTreeMap::from([(ID_1.clone(), 10_000)]),
 			pending_boosts: BTreeMap::from([
@@ -2411,7 +2411,7 @@ mod test {
 		}
 	}
 
-	fn boost_details_2() -> BoostPoolDetails {
+	fn boost_details_2() -> BoostPoolDetails<AccountId32> {
 		BoostPoolDetails {
 			available_amounts: BTreeMap::from([]),
 			pending_boosts: BTreeMap::from([(
