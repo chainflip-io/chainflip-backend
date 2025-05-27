@@ -21,7 +21,7 @@ defx! {
 	/// These properties are verified as part of the `Validate` implementation derived by the `defx` macro.
 	#[derive(Ord, PartialOrd)]
 	pub struct NonemptyContinuousHeaders[T: ChainTypes] {
-		pub headers: VecDeque<Header<T>>,
+		pub(crate) headers: VecDeque<Header<T>>,
 	}
 	validate this (else NonemptyContinuousHeadersError) {
 		is_nonempty: this.headers.len() > 0,
@@ -37,6 +37,13 @@ impl<T: ChainTypes, X: IntoIterator<Item = Header<T>>> From<X> for NonemptyConti
 	}
 }
 impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
+	pub fn try_new(
+		headers: VecDeque<Header<T>>,
+	) -> Result<Self, NonemptyContinuousHeadersError<T>> {
+		let result = Self { headers };
+		result.is_valid()?;
+		Ok(result)
+	}
 	pub fn first_height(&self) -> Option<T::ChainBlockNumber> {
 		self.headers.front().map(|h| h.block_height)
 	}

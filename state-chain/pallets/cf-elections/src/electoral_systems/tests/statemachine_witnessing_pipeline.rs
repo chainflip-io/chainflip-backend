@@ -33,7 +33,6 @@ use crate::electoral_systems::{
 	state_machine::{
 		core::{hook_test_utils::MockHook, TypesFor, Validate},
 		state_machine::{AbstractApi, InputOf, Statemachine},
-		state_machine_es::SMInput,
 		test_utils::{BTreeMultiSet, Container},
 	},
 };

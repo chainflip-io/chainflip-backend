@@ -91,29 +91,12 @@ impl BWTypes for Types {
 	type ElectionTrackerEventHook = MockHook<HookTypeFor<Self, ElectionTrackerEventHook>>;
 }
 
-/// Associating the ES related types to the struct
-impl ElectoralSystemTypes for Types {
-	type ValidatorId = ValidatorId;
-	type StateChainBlockNumber = u64;
-	type ElectoralUnsynchronisedState = BlockWitnesserState<Self>;
-	type ElectoralUnsynchronisedStateMapKey = ();
-	type ElectoralUnsynchronisedStateMapValue = ();
-	type ElectoralUnsynchronisedSettings = BlockWitnesserSettings;
-	type ElectoralSettings = ();
-	type ElectionIdentifierExtra = ();
-	type ElectionProperties = BWElectionProperties<Self>;
-	type ElectionState = ();
-	type VoteStorage =
-		vote_storage::bitmap::Bitmap<(BlockData, Option<<Self as ChainTypes>::ChainBlockHash>)>;
-	type Consensus = (BlockData, Option<<Self as ChainTypes>::ChainBlockHash>);
-	type OnFinalizeContext = Vec<Option<ChainProgress<Self>>>;
-	type OnFinalizeReturn = Vec<()>;
-}
-
 /// Associating the state machine and consensus mechanism to the struct
 impl StatemachineElectoralSystemTypes for Types {
-	// both context and return have to be vectors, these are the item types
-	type OnFinalizeContextItem = Option<ChainProgress<Self>>;
+	type ValidatorId = ValidatorId;
+	type StateChainBlockNumber = u64;
+	type VoteStorage =
+		vote_storage::bitmap::Bitmap<(BlockData, Option<<Self as ChainTypes>::ChainBlockHash>)>;
 	type OnFinalizeReturnItem = ();
 
 	// the actual state machine and consensus mechanisms of this ES
