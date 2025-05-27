@@ -1,0 +1,19 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "failing_count": 100,
+  "validators": [
+    [
+      "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+      "Romantic<>Robot",
+      true
+    ],
+    [
+      "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
+      "[Waldo.The.Unfounded]",
+      false
+    ]
+  ]
+}

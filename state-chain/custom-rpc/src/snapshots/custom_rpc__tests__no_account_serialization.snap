@@ -1,0 +1,5 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: "serde_json::to_value(RpcAccountInfo::unregistered(0,\nany::AssetMap::default())).unwrap()"
+---
+{"asset_balances":{"Arbitrum":{"ETH":"0x0","USDC":"0x0"},"Assethub":{"DOT":"0x0","USDC":"0x0","USDT":"0x0"},"Bitcoin":{"BTC":"0x0"},"Ethereum":{"ETH":"0x0","FLIP":"0x0","USDC":"0x0","USDT":"0x0"},"Polkadot":{"DOT":"0x0"},"Solana":{"SOL":"0x0","USDC":"0x0"}},"flip_balance":"0x0","role":"unregistered"}

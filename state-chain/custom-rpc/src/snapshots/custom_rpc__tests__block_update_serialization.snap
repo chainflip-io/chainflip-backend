@@ -1,0 +1,58 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "block_hash": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "block_number": 100,
+  "timestamp": 1233456,
+  "fills": [
+    {
+      "limit_order": {
+        "lp": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+        "base_asset": {
+          "chain": "Solana",
+          "asset": "SOL"
+        },
+        "quote_asset": {
+          "chain": "Ethereum",
+          "asset": "USDC"
+        },
+        "side": "buy",
+        "id": "0x1e240",
+        "tick": -100,
+        "sold": "0x5ba0",
+        "bought": "0x5ba0",
+        "fees": "0x7b",
+        "remaining": "0x1c8"
+      }
+    },
+    {
+      "range_order": {
+        "lp": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
+        "base_asset": {
+          "chain": "Arbitrum",
+          "asset": "ETH"
+        },
+        "quote_asset": {
+          "chain": "Ethereum",
+          "asset": "USDC"
+        },
+        "id": "0x39447",
+        "range": {
+          "start": -100,
+          "end": 100
+        },
+        "bought_amounts": {
+          "base": "0xd431",
+          "quote": "0xff98"
+        },
+        "fees": {
+          "base": "0xff98",
+          "quote": "0x12aff"
+        },
+        "liquidity": "0x8aa52"
+      }
+    }
+  ]
+}

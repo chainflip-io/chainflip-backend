@@ -1,0 +1,10 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: arb
+---
+{
+  "chain": "Arbitrum",
+  "calldata": "0x11223344",
+  "value": "0x23cace",
+  "to": "0xcccccccccccccccccccccccccccccccccccccccc"
+}

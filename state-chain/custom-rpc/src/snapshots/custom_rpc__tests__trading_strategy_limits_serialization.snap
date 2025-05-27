@@ -1,0 +1,60 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "minimum_deployment_amount": {
+    "Ethereum": {
+      "ETH": 123456,
+      "FLIP": 123456,
+      "USDC": 123456,
+      "USDT": 123456
+    },
+    "Polkadot": {
+      "DOT": 123456
+    },
+    "Bitcoin": {
+      "BTC": 123456
+    },
+    "Arbitrum": {
+      "ETH": 123456,
+      "USDC": 123456
+    },
+    "Solana": {
+      "SOL": 123456,
+      "USDC": 123456
+    },
+    "Assethub": {
+      "DOT": 123456,
+      "USDT": 123456,
+      "USDC": 123456
+    }
+  },
+  "minimum_added_funds_amount": {
+    "Ethereum": {
+      "ETH": 654321,
+      "FLIP": 654321,
+      "USDC": 654321,
+      "USDT": 654321
+    },
+    "Polkadot": {
+      "DOT": 654321
+    },
+    "Bitcoin": {
+      "BTC": 654321
+    },
+    "Arbitrum": {
+      "ETH": 654321,
+      "USDC": 654321
+    },
+    "Solana": {
+      "SOL": 654321,
+      "USDC": 654321
+    },
+    "Assethub": {
+      "DOT": 654321,
+      "USDT": 654321,
+      "USDC": 654321
+    }
+  }
+}

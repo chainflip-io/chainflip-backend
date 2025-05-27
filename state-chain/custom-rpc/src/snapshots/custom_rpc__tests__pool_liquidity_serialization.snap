@@ -1,0 +1,26 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "limit_orders": {
+    "asks": [
+      {
+        "tick": -100,
+        "amount": "0x1e240"
+      }
+    ],
+    "bids": [
+      {
+        "tick": -200,
+        "amount": "0x39447"
+      }
+    ]
+  },
+  "range_orders": [
+    {
+      "tick": -300,
+      "liquidity": "0x5464e"
+    }
+  ]
+}

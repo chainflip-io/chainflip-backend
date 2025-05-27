@@ -1,0 +1,13 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "chain_id": 100,
+  "max_priority_fee_per_gas": "0x1e240",
+  "max_fee_per_gas": "0x39447",
+  "gas_limit": "0x5464e",
+  "contract": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "value": "0x6f855",
+  "data": "0001020304"
+}
