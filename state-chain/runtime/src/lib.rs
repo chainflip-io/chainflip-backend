@@ -78,7 +78,7 @@ use cf_chains::{
 	VaultSwapExtraParameters, VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
-	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
+	Affiliates, BasisPoints, Beneficiary, BroadcastId, ChannelId, DcaParameters, EpochIndex,
 	NetworkEnvironment, STABLE_ASSET,
 };
 use cf_traits::{
@@ -2536,6 +2536,27 @@ impl_runtime_apis! {
 				ForeignChain::Solana => build_cf_parameters_for_chain!(Solana),
 				_ => Err(DispatchErrorWithMessage::from("Unsupported source chain for encoding cf_parameters"))?,
 			})
+		}
+
+		fn cf_get_preallocated_deposit_channels(account_id: <Runtime as frame_system::Config>::AccountId, chain: ForeignChain) -> Vec<ChannelId> {
+
+			fn preallocated_deposit_channels_for_chain<T: pallet_cf_ingress_egress::Config<I>, I: 'static>(
+				account_id: &<T as frame_system::Config>::AccountId,
+			) -> Vec<ChannelId>
+			{
+				pallet_cf_ingress_egress::PreallocatedChannels::<T, I>::iter_prefix(account_id)
+					.map(|(_, channel)| channel.channel_id)
+					.collect()
+			}
+
+			match chain {
+				ForeignChain::Bitcoin => preallocated_deposit_channels_for_chain::<Runtime, BitcoinInstance>(&account_id),
+				ForeignChain::Ethereum => preallocated_deposit_channels_for_chain::<Runtime, EthereumInstance>(&account_id),
+				ForeignChain::Polkadot => preallocated_deposit_channels_for_chain::<Runtime, PolkadotInstance>(&account_id),
+				ForeignChain::Arbitrum => preallocated_deposit_channels_for_chain::<Runtime, ArbitrumInstance>(&account_id),
+				ForeignChain::Solana => preallocated_deposit_channels_for_chain::<Runtime, SolanaInstance>(&account_id),
+				ForeignChain::Assethub => preallocated_deposit_channels_for_chain::<Runtime, AssethubInstance>(&account_id),
+			}
 		}
 
 		fn cf_get_open_deposit_channels(account_id: Option<<Runtime as frame_system::Config>::AccountId>) -> ChainAccounts {
