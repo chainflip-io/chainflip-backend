@@ -25,7 +25,7 @@ use crate::electoral_systems::{
 use super::state_machine::{BWElectionType, BWTypes};
 
 defx! {
-	pub struct ElectionTracker2[T: BWTypes] {
+	pub struct ElectionTracker[T: BWTypes] {
 		/// The lowest block we haven't seen yet. I.e., we have seen blocks below.
 		pub seen_heights_below: ChainBlockNumberOf<T::Chain>,
 
@@ -62,7 +62,7 @@ defx! {
 	}
 }
 
-impl<T: BWTypes> ElectionTracker2<T> {
+impl<T: BWTypes> ElectionTracker<T> {
 	pub fn update_safe_elections(
 		&mut self,
 		reason: UpdateSafeElectionsReason,
@@ -202,14 +202,11 @@ impl<T: BWTypes> ElectionTracker2<T> {
 			})
 	}
 
-	/// This function schedules all elections up to `range.end()`
+	/// This function schedules all elections up to the last block_height we've seen + 1 (for
+	/// optimistic block)
 	pub fn schedule_range(
 		&mut self,
-		// range: RangeInclusive<ChainBlockNumberOf<T::Chain>>,
-		// mut hashes: BTreeMap<ChainBlockNumberOf<T::Chain>, ChainBlockHashOf<T::Chain>>,
 		progress: ChainProgress<T::Chain>,
-
-		safety_margin: usize,
 	) -> Vec<(ChainBlockNumberOf<T::Chain>, OptimisticBlock<T>)> {
 		// Check whether there is a reorg concerning elections we have started previously.
 		// If there is, we ensure that all ongoing or previously finished elections inside the reorg
@@ -229,6 +226,7 @@ impl<T: BWTypes> ElectionTracker2<T> {
 			self.queued_safe_elections.remove(removed.clone());
 		}
 
+		let last_seen_height = progress.headers.last().block_height;
 		// QUESTION: currently, the following check ensures that
 		// the highest scheduled election never decreases. Do we want this?
 		// It's difficult to imagine a situation where the highest block number
@@ -236,32 +234,27 @@ impl<T: BWTypes> ElectionTracker2<T> {
 		// case we simply keep the higher number that doesn't seem to be too much of a problem.
 		self.seen_heights_below = max(
 			self.seen_heights_below.clone(),
-			progress.headers.last().block_height.saturating_forward(1),
+			last_seen_height.saturating_forward(1),
 		);
 
 		// if there are elections ongoing for the block heights we received, we stop them
 		self.ongoing.retain(|height, _| !progress.headers.contains(height));
 
-		let mut remaining: BTreeMap<ChainBlockNumberOf<T::Chain>, ChainBlockHashOf<T::Chain>> =
-			Default::default();
-		// if we have optimistic blocks for the hashes we received, we will return them
-		let optimistic_blocks: BTreeMap<_, _> = {
-			let mut result = Vec::new();
-			progress.headers.headers.iter().for_each(|header| {
-				if let Some(optimistic_block) =
-					self.optimistic_block_cache.remove(&header.block_height)
-				{
-					if optimistic_block.hash == header.hash {
-						result.push((header.block_height, optimistic_block));
-					} else {
-						remaining.insert(header.block_height, header.hash.clone());
+		let (optimistic_blocks, mut remaining): (BTreeMap<_, _>, BTreeMap<_, _>) =
+			progress.headers.headers.into_iter().fold(
+				(BTreeMap::new(), BTreeMap::new()),
+				|(mut optimistic_blocks, mut remaining), header| {
+					match self.optimistic_block_cache.remove(&header.block_height) {
+						Some(optimistic_block) if optimistic_block.hash == header.hash => {
+							optimistic_blocks.insert(header.block_height, optimistic_block);
+						},
+						_ => {
+							remaining.insert(header.block_height, header.hash.clone());
+						},
 					}
-				} else {
-					remaining.insert(header.block_height, header.hash.clone());
-				}
-			});
-			result.into_iter().collect()
-		};
+					(optimistic_blocks, remaining)
+				},
+			);
 
 		// adding all hashes to the queue
 		self.queued_elections.append(&mut remaining);
@@ -270,7 +263,7 @@ impl<T: BWTypes> ElectionTracker2<T> {
 		let _ = self
 			.queued_elections
 			.extract_if(|height, _| {
-				height.saturating_forward(safety_margin) < progress.headers.last().block_height
+				height.saturating_forward(T::Chain::SAFETY_BUFFER) < last_seen_height
 			})
 			.map(fst)
 			.for_each(|height| {
@@ -279,7 +272,7 @@ impl<T: BWTypes> ElectionTracker2<T> {
 
 		// move ongoing elections from ByHash to SafeBlockHeight if they become old enough
 		self.ongoing.iter_mut().for_each(|(height, ty)| {
-			if height.saturating_forward(safety_margin) < progress.headers.last().block_height {
+			if height.saturating_forward(T::Chain::SAFETY_BUFFER) < last_seen_height {
 				*ty = BWElectionType::SafeBlockHeight;
 			}
 		});
@@ -291,7 +284,7 @@ impl<T: BWTypes> ElectionTracker2<T> {
 	}
 }
 
-impl<T: BWTypes> Default for ElectionTracker2<T> {
+impl<T: BWTypes> Default for ElectionTracker<T> {
 	fn default() -> Self {
 		Self {
 			seen_heights_below: ChainBlockNumberOf::<T::Chain>::zero(),
