@@ -205,8 +205,6 @@ where
 			log::debug!("ESSM: checking consensus for {election_identifier:?}");
 			if let Some(input) = election_access.check_consensus()?.has_consensus() {
 				log::debug!("ESSM: stepping with input {input:?}");
-
-				// Creates a corrupt storage
 				step(Either::Right((election_access.properties()?, input)))?;
 			}
 		}
