@@ -214,6 +214,76 @@ mod tests {
 
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
+	async fn can_query_multiple_devnet() {
+		task_scope::task_scope(|scope| {
+			async {
+				let client = SolRetryRpcClient::new(
+					scope,
+					NodeContainer {
+						primary: HttpEndpoint {
+							http_endpoint: "https://api.devnet.solana.com".into(),
+						},
+						backup: None,
+					},
+					Some(
+						SolHash::from_str("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG").unwrap(),
+					),
+					Solana::WITNESS_PERIOD,
+				)
+				.await
+				.unwrap();
+
+				let payer: SolAddress =
+					const_address("5GaMJ6MMdjCtSBADfWjYSupzk3voYbpGnfi7dkZY9S6a");
+				let chainlink_program_id: SolAddress =
+					const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny");
+				let chainlink_feeds = vec![
+					const_address("6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe"),
+					const_address("669U43LNHx7LsVj95uYksnhXUfWKDsdzVqev3V4Jpw3P"),
+				];
+				let oracle_query_helper: SolAddress =
+					const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z");
+
+				let serialized_transaction = build_and_serialize_query_transaction(
+					payer,
+					oracle_query_helper,
+					chainlink_program_id,
+					chainlink_feeds,
+				)
+				.unwrap();
+
+				let simulation_result = client.simulate_transaction(serialized_transaction).await;
+
+				let return_data = simulation_result
+					.value
+					.return_data
+					.as_ref()
+					.expect("Expected return data to be Some");
+
+				let oracle_results: Vec<(u32, u64, u32, i128, u8, String)> =
+					decode_query_return_data(return_data, oracle_query_helper).unwrap();
+
+				for (result_index, (round_id, slot, timestamp, answer, decimals, description)) in
+					oracle_results.iter().enumerate()
+				{
+					println!(
+						"Index {}: Description: {}, Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}, Decimals: {}",
+						result_index,
+						round_id, slot, timestamp, answer, decimals, description
+					);
+					assert_eq!(*decimals, 8);
+				}
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	#[ignore = "requires access to external RPC"]
+	#[tokio::test]
 	async fn can_build_query_tx_and_simulate_localnet() {
 		task_scope::task_scope(|scope| {
 			async {
