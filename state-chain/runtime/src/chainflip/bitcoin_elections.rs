@@ -507,9 +507,21 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 		),
 		unsynchronised_settings: (
 			Default::default(),
-			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 3 },
-			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 3 },
-			BlockWitnesserSettings { max_concurrent_elections: 15, safety_margin: 0 },
+			BlockWitnesserSettings {
+				max_concurrent_elections: 15,
+				safety_margin: 3,
+				max_optimistic_elections: 1,
+			},
+			BlockWitnesserSettings {
+				max_concurrent_elections: 15,
+				safety_margin: 3,
+				max_optimistic_elections: 1,
+			},
+			BlockWitnesserSettings {
+				max_concurrent_elections: 15,
+				safety_margin: 0,
+				max_optimistic_elections: 1,
+			},
 			Default::default(),
 			(),
 		),

@@ -74,7 +74,12 @@ impl<T: BWTypes> ElectionTracker<T> {
 		self.events.run(ElectionTrackerEvent::UpdateSafeElections { old, new, reason });
 	}
 
-	pub fn start_more_elections(&mut self, max_ongoing: usize, safemode: SafeModeStatus) {
+	pub fn start_more_elections(
+		&mut self,
+		max_ongoing: usize,
+		max_optimistic: u8,
+		safemode: SafeModeStatus,
+	) {
 		// In case of a reorg we still want to recreate elections for blocks which we had
 		// elections for previously AND were touched by the reorg
 		let start_all_below = match safemode {
@@ -97,7 +102,10 @@ impl<T: BWTypes> ElectionTracker<T> {
 			.queued_elections
 			.extract_if(|n, _| *n < start_all_below)
 			.map(|(height, hash)| (height, ByHash(hash)));
-		let opti_elections = iter::once((self.seen_heights_below, Optimistic));
+
+		let opti_elections = (self.seen_heights_below..
+			self.seen_heights_below.saturating_forward(max_optimistic as usize))
+			.map(|x| (x, Optimistic));
 
 		self.ongoing.extend(
 			safe_elections

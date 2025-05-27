@@ -31,7 +31,10 @@ use crate::electoral_systems::{
 		},
 	},
 	state_machine::{
-		core::{hook_test_utils::MockHook, TypesFor, Validate},
+		core::{
+			hook_test_utils::{ConstantHook, MockHook},
+			TypesFor, Validate,
+		},
 		state_machine::{AbstractApi, InputOf, Statemachine},
 		test_utils::{BTreeMultiSet, Container},
 	},
@@ -201,25 +204,26 @@ pub fn test_all() {
         // prepare the state machines
         let mut bhw_state: BlockHeightWitnesser<Types> = BlockHeightWitnesser {
             phase: BHWPhase::Starting,
-            block_height_update: MockHook::new(())
+            block_height_update: Default::default()
         };
         let block_processor: BlockProcessor<Types> = BlockProcessor {
             blocks_data: Default::default(),
             processed_events: Default::default(),
             rules: Default::default(),
-            execute: MockHook::new(()),
-            log_event: MockHook::new(()),
+            execute: Default::default(),
+            log_event: Default::default(),
         };
         let mut bw_state: BlockWitnesserState<Types> = BlockWitnesserState {
             elections: Default::default(),
             generate_election_properties_hook: Default::default(),
-            safemode_enabled: MockHook::new(SafeModeStatus::Disabled),
+            safemode_enabled: MockHook::new(ConstantHook::new(SafeModeStatus::Disabled)),
             block_processor,
             _phantom: core::marker::PhantomData,
         };
         let bw_settings = BlockWitnesserSettings {
             max_concurrent_elections: 4,
             safety_margin: SAFETY_MARGIN,
+            max_optimistic_elections: 1,
         };
 
         #[derive(Clone, Debug)]
