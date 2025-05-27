@@ -65,6 +65,8 @@ impl<T: BHWTypes> AbstractApi for BlockHeightWitnesser<T> {
 		response
 			.is_valid()
 			.map_err(VoteValidationError::NonemptyContinuousHeadersError)?;
+		// We always accept the first vote, when the electoral system is started.
+		// See the `step` function for the block height witnessing.
 		if query.witness_from_index.is_zero() {
 			Ok(())
 		} else {
@@ -155,7 +157,7 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 			},
 			BHWPhase::Running { headers, witness_from } => match headers.merge(new_headers) {
 				Ok(merge_info) => {
-					log::info!(
+					log::debug!(
 						"added new blocks: {:?}, replacing these blocks: {:?}",
 						merge_info.added,
 						merge_info.removed
