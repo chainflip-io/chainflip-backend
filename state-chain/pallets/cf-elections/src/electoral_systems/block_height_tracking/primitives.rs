@@ -4,7 +4,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::vec_deque::VecDeque;
 
-use crate::electoral_systems::state_machine::core::{both, def_derive, defx};
+use crate::electoral_systems::state_machine::core::{def_derive, defx};
 
 use super::{super::state_machine::core::Validate, ChainProgress, ChainTypes};
 
@@ -99,7 +99,7 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 				self.headers.append(&mut other_headers.clone());
 				Ok(MergeInfo { removed: self_headers, added: other_headers })
 			} else {
-				Err(MergeFailure::InternalError("expected either case 1 or case 2 to hold!"))
+				Err(MergeFailure::InternalError)
 			}
 		}
 	}
@@ -118,19 +118,6 @@ def_derive! {
 		pub added: VecDeque<Header<T>>,
 	}
 }
-impl<T: ChainTypes> MergeInfo<T> {
-	pub fn into_chain_progress(&self) -> Option<ChainProgress<T>> {
-		if self.added.is_empty() {
-			None
-		} else {
-			Some(ChainProgress {
-				headers: self.added.clone().into(),
-				removed: both(self.removed.front(), self.removed.back())
-					.map(|(first, last)| first.block_height..=last.block_height),
-			})
-		}
-	}
-}
 
 /// Information returned if the `merge` function for `NonEmptyContinuousHeaders` encountered an
 /// error.
@@ -140,7 +127,9 @@ pub enum MergeFailure<T: ChainTypes> {
 	// `lowest_new_block` should, by block number, be `existing_wrong_parent`, but who's
 	// hash doesn't match with `lowest_new_block`'s parent hash.
 	ReorgWithUnknownRoot { new_block: Header<T>, existing_wrong_parent: Option<Header<T>> },
-	InternalError(&'static str),
+
+	// Internal error. Should never happen.
+	InternalError,
 }
 
 defx! {

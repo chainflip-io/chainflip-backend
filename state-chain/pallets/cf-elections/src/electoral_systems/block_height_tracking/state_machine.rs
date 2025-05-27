@@ -65,6 +65,8 @@ impl<T: BHWTypes> AbstractApi for BlockHeightWitnesser<T> {
 		response
 			.is_valid()
 			.map_err(VoteValidationError::NonemptyContinuousHeadersError)?;
+		// We always accept the first vote, when the electoral system is started.
+		// See the `step` function for the block height witnessing.
 		if query.witness_from_index.is_zero() {
 			Ok(())
 		} else {
@@ -155,7 +157,7 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 			},
 			BHWPhase::Running { headers, witness_from } => match headers.merge(new_headers) {
 				Ok(merge_info) => {
-					log::info!(
+					log::debug!(
 						"added new blocks: {:?}, replacing these blocks: {:?}",
 						merge_info.added,
 						merge_info.removed
@@ -167,7 +169,16 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 					s.block_height_update.run(highest_seen);
 					*witness_from = highest_seen.saturating_forward(1);
 
-					Ok(merge_info.into_chain_progress())
+					Ok(if merge_info.added.is_empty() {
+						None
+					} else {
+						Some(ChainProgress {
+							headers: merge_info.added.clone().into(),
+							removed: merge_info.removed.front().and_then(|f| {
+								merge_info.removed.back().map(|l| f.block_height..=l.block_height)
+							}),
+						})
+					})
 				},
 				Err(MergeFailure::ReorgWithUnknownRoot { new_block, existing_wrong_parent }) => {
 					log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
@@ -175,10 +186,9 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 					Ok(None)
 				},
 
-				Err(MergeFailure::InternalError(reason)) => {
-					let str = format!("internal error in block height tracker: {reason}");
-					log::error!("internal error in block height tracker: {reason}");
-					Err(str.leak())
+				Err(MergeFailure::InternalError) => {
+					log::error!("internal error in block height tracker with state: {:?}", s);
+					Err("internal error in block height tracker")
 				},
 			},
 		}

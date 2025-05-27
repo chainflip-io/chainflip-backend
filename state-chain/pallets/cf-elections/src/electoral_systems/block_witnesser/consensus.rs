@@ -1,7 +1,7 @@
 use crate::{
 	electoral_systems::{
 		block_height_tracking::ChainBlockHashOf,
-		state_machine::consensus::{ConsensusMechanism, SupermajorityConsensus, Threshold},
+		state_machine::consensus::{ConsensusMechanism, SupermajorityConsensus, SuccessThreshold},
 	},
 	SharedDataHash,
 };
@@ -32,7 +32,7 @@ where
 {
 	type Vote = (T::BlockData, Option<ChainBlockHashOf<T::Chain>>);
 	type Result = (T::BlockData, Option<ChainBlockHashOf<T::Chain>>);
-	type Settings = (Threshold, BWElectionProperties<T>);
+	type Settings = (SuccessThreshold, BWElectionProperties<T>);
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
 		let vote_hash = SharedDataHash::of(&vote);

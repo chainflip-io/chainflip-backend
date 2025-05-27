@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-	consensus::{ConsensusMechanism, Threshold},
+	consensus::{ConsensusMechanism, SuccessThreshold},
 	state_machine::{AbstractApi, Statemachine},
 };
 
@@ -42,8 +42,11 @@ pub trait StatemachineForES<ES: StatemachineElectoralSystemTypes> = Statemachine
 /// Convenience wrapper of the `ConsensusMechanism` trait. Given an electoral system `ES`,
 /// this trait defines the conditions on the consensus mechanism's associated types for it
 /// to be possible to derive an electoral system.
-pub trait ConsensusMechanismForES<S: Statemachine> =
-	ConsensusMechanism<Vote = S::Response, Result = S::Response, Settings = (Threshold, S::Query)>;
+pub trait ConsensusMechanismForES<S: Statemachine> = ConsensusMechanism<
+	Vote = S::Response,
+	Result = S::Response,
+	Settings = (SuccessThreshold, S::Query),
+>;
 
 /// ### Electoral system derived from a state machine.
 ///
@@ -260,7 +263,9 @@ where
 		}
 
 		Ok(consensus.check_consensus(&(
-			Threshold { threshold: success_threshold_from_share_count(num_authorities) },
+			SuccessThreshold {
+				success_threshold: success_threshold_from_share_count(num_authorities),
+			},
 			properties,
 		)))
 	}
