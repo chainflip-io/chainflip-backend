@@ -338,6 +338,7 @@ pub struct BlockHeader {
 	pub strippedsize: Option<usize>,
 	pub size: Option<usize>,
 	pub weight: Option<usize>,
+	pub target: Option<String>,
 }
 
 #[async_trait::async_trait]
