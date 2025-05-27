@@ -508,6 +508,3 @@ pub fn fst<A, B>((a, _): (A, B)) -> A {
 pub fn snd<A, B>((_, b): (A, B)) -> B {
 	b
 }
-pub fn both<A, B>(x: Option<A>, y: Option<B>) -> Option<(A, B)> {
-	x.and_then(|x| y.map(|y| (x, y)))
-}

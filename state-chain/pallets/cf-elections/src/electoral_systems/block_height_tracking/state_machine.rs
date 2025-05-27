@@ -169,7 +169,16 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 					s.block_height_update.run(highest_seen);
 					*witness_from = highest_seen.saturating_forward(1);
 
-					Ok(merge_info.into_chain_progress())
+					Ok(if merge_info.added.is_empty() {
+						None
+					} else {
+						Some(ChainProgress {
+							headers: merge_info.added.clone().into(),
+							removed: merge_info.removed.front().and_then(|f| {
+								merge_info.removed.back().map(|l| f.block_height..=l.block_height)
+							}),
+						})
+					})
 				},
 				Err(MergeFailure::ReorgWithUnknownRoot { new_block, existing_wrong_parent }) => {
 					log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");

@@ -4,7 +4,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::vec_deque::VecDeque;
 
-use crate::electoral_systems::state_machine::core::{both, def_derive, defx};
+use crate::electoral_systems::state_machine::core::{def_derive, defx};
 
 use super::{super::state_machine::core::Validate, ChainProgress, ChainTypes};
 
@@ -113,19 +113,6 @@ def_derive! {
 	pub struct MergeInfo<T: ChainTypes> {
 		pub removed: VecDeque<Header<T>>,
 		pub added: VecDeque<Header<T>>,
-	}
-}
-impl<T: ChainTypes> MergeInfo<T> {
-	pub fn into_chain_progress(&self) -> Option<ChainProgress<T>> {
-		if self.added.is_empty() {
-			None
-		} else {
-			Some(ChainProgress {
-				headers: self.added.clone().into(),
-				removed: both(self.removed.front(), self.removed.back())
-					.map(|(first, last)| first.block_height..=last.block_height),
-			})
-		}
 	}
 }
 

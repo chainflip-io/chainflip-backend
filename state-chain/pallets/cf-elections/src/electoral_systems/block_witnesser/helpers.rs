@@ -42,17 +42,6 @@ impl<K: Ord> With<K> for BTreeSet<K> {
 	}
 }
 
-pub trait Merge {
-	fn merge(self, other: Self) -> Self;
-}
-
-impl<K: Ord> Merge for BTreeSet<K> {
-	fn merge(mut self, mut rhs: BTreeSet<K>) -> Self {
-		self.append(&mut rhs);
-		self
-	}
-}
-
 pub trait IntoSet<X> {
 	fn into_set(self) -> BTreeSet<X>;
 }
