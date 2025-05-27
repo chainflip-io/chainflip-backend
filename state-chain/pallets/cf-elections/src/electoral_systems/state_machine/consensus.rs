@@ -28,8 +28,8 @@ pub struct SupermajorityConsensus<Vote: PartialEq> {
 	votes: BTreeMap<Vote, u32>,
 }
 
-pub struct Threshold {
-	pub threshold: u32,
+pub struct SuccessThreshold {
+	pub success_threshold: u32,
 }
 
 impl<Vote: PartialEq> Default for SupermajorityConsensus<Vote> {
@@ -41,7 +41,7 @@ impl<Vote: PartialEq> Default for SupermajorityConsensus<Vote> {
 impl<Vote: Ord + PartialEq + Clone> ConsensusMechanism for SupermajorityConsensus<Vote> {
 	type Vote = Vote;
 	type Result = Vote;
-	type Settings = Threshold;
+	type Settings = SuccessThreshold;
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
 		*self.votes.entry(vote).or_insert(0) += 1;
@@ -49,7 +49,7 @@ impl<Vote: Ord + PartialEq + Clone> ConsensusMechanism for SupermajorityConsensu
 
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
 		self.votes.iter().max_by_key(|(_, count)| *count).and_then(|(vote, count)| {
-			if *count >= settings.threshold {
+			if *count >= settings.success_threshold {
 				Some(vote.clone())
 			} else {
 				None
@@ -146,7 +146,8 @@ where
 #[cfg(test)]
 mod testssss {
 	use crate::electoral_systems::state_machine::consensus::{
-		ConsensusMechanism, MultipleVotes, StagedConsensus, SupermajorityConsensus, Threshold,
+		ConsensusMechanism, MultipleVotes, StagedConsensus, SuccessThreshold,
+		SupermajorityConsensus,
 	};
 
 	#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
@@ -162,15 +163,16 @@ mod testssss {
 		supermajority.insert_vote(MockVote(1));
 		supermajority.insert_vote(MockVote(2));
 		supermajority.insert_vote(MockVote(2));
-		let consensus = supermajority.check_consensus(&Threshold { threshold: 3 });
+		let consensus = supermajority.check_consensus(&SuccessThreshold { success_threshold: 3 });
 		assert_eq!(consensus, None);
 
 		supermajority.insert_vote(MockVote(1));
-		let consensus = supermajority.check_consensus(&Threshold { threshold: 3 });
+		let consensus = supermajority.check_consensus(&SuccessThreshold { success_threshold: 3 });
 		assert_eq!(consensus, Some(MockVote(1)));
 
 		supermajority.insert_vote(MockVote(2));
-		let consensus = supermajority.check_consensus(&Threshold { threshold: 3 });
+		// ??
+		let consensus = supermajority.check_consensus(&SuccessThreshold { success_threshold: 3 });
 		assert_eq!(consensus, Some(MockVote(2)));
 	}
 
@@ -180,25 +182,25 @@ mod testssss {
 		staged.insert_vote((1, MockVote(2)));
 		staged.insert_vote((1, MockVote(2)));
 		staged.insert_vote((1, MockVote(2)));
-		let consensus = staged.check_consensus(&Threshold { threshold: 3 });
+		let consensus = staged.check_consensus(&SuccessThreshold { success_threshold: 3 });
 		assert_eq!(consensus, Some(MockVote(2)));
 
 		staged.insert_vote((2, MockVote(1)));
 		staged.insert_vote((2, MockVote(1)));
 		staged.insert_vote((2, MockVote(2)));
-		let consensus = staged.check_consensus(&Threshold { threshold: 3 });
+		let consensus = staged.check_consensus(&SuccessThreshold { success_threshold: 3 });
 		assert_eq!(consensus, Some(MockVote(2)));
 
 		staged.insert_vote((3, MockVote(1)));
 		staged.insert_vote((3, MockVote(1)));
 		staged.insert_vote((3, MockVote(1)));
-		let consensus = staged.check_consensus(&Threshold { threshold: 3 });
+		let consensus = staged.check_consensus(&SuccessThreshold { success_threshold: 3 });
 		assert_eq!(consensus, Some(MockVote(1)));
 
 		staged.insert_vote((4, MockVote(6)));
 		staged.insert_vote((4, MockVote(6)));
 		staged.insert_vote((4, MockVote(6)));
-		let consensus = staged.check_consensus(&Threshold { threshold: 3 });
+		let consensus = staged.check_consensus(&SuccessThreshold { success_threshold: 3 });
 		assert_eq!(consensus, Some(MockVote(6)));
 	}
 
@@ -208,11 +210,11 @@ mod testssss {
 		multiple.insert_vote(vec![MockVote(1), MockVote(2)]);
 		multiple.insert_vote(vec![MockVote(1), MockVote(2)]);
 		multiple.insert_vote(vec![MockVote(3), MockVote(4)]);
-		let consensus = multiple.check_consensus(&Threshold { threshold: 3 });
+		let consensus = multiple.check_consensus(&SuccessThreshold { success_threshold: 3 });
 		assert_eq!(consensus, None);
 
 		multiple.insert_vote(vec![MockVote(2), MockVote(4)]);
-		let consensus = multiple.check_consensus(&Threshold { threshold: 3 });
+		let consensus = multiple.check_consensus(&SuccessThreshold { success_threshold: 3 });
 		assert_eq!(consensus, Some(MockVote(2)));
 	}
 }

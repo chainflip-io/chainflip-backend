@@ -6,7 +6,7 @@ use crate::electoral_systems::{
 		BHWTypes, ChainTypes, HeightWitnesserProperties,
 	},
 	state_machine::{
-		consensus::{ConsensusMechanism, Threshold},
+		consensus::{ConsensusMechanism, SuccessThreshold},
 		core::{hook_test_utils::EmptyHook, TypesFor},
 		state_machine::AbstractApi,
 	},
@@ -69,7 +69,7 @@ fn block_height_witnesser_first_consensus() {
 	);
 	bh_consensus.insert_vote([Header { block_height: 5, hash: 1234, parent_hash: 000 }].into());
 	let consensus =
-		bh_consensus.check_consensus(&(Threshold { threshold: 3 }, BHW_PROPERTIES_STARTUP));
+		bh_consensus.check_consensus(&(SuccessThreshold { success_threshold: 3 }, BHW_PROPERTIES_STARTUP));
 	assert_eq!(
 		consensus,
 		Some(NonemptyContinuousHeaders {
@@ -118,7 +118,7 @@ fn block_height_witnesser_running_consensus() {
 		.into(),
 	);
 	let consensus =
-		bh_consensus.check_consensus(&(Threshold { threshold: 3 }, BHW_PROPERTIES_RUNNING));
+		bh_consensus.check_consensus(&(SuccessThreshold { success_threshold: 3 }, BHW_PROPERTIES_RUNNING));
 	assert_eq!(
 		consensus,
 		Some(NonemptyContinuousHeaders::<BHTypes> {
@@ -138,7 +138,7 @@ fn block_height_witnesser_running_consensus() {
 		.into(),
 	);
 	let consensus =
-		bh_consensus.check_consensus(&(Threshold { threshold: 3 }, BHW_PROPERTIES_RUNNING));
+		bh_consensus.check_consensus(&(SuccessThreshold { success_threshold: 3 }, BHW_PROPERTIES_RUNNING));
 	assert_eq!(
 		consensus,
 		Some(NonemptyContinuousHeaders::<BHTypes> {

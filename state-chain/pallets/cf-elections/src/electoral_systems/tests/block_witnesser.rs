@@ -31,7 +31,7 @@ use crate::{
 		},
 		mocks::ElectoralSystemState,
 		state_machine::{
-			consensus::{ConsensusMechanism, Threshold},
+			consensus::{ConsensusMechanism, SuccessThreshold},
 			core::{hook_test_utils::MockHook, Hook, TypesFor},
 			state_machine::AbstractApi,
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
@@ -206,18 +206,18 @@ fn block_witnesser_consensus() {
 	bw_consensus.insert_vote((vec![1, 3, 5], Some(2)));
 	bw_consensus.insert_vote((vec![1, 3, 5], Some(2)));
 	bw_consensus.insert_vote((vec![1, 3], Some(2)));
-	let consensus =
-		bw_consensus.check_consensus(&(Threshold { threshold: 3 }, MOCK_BW_ELECTION_PROPERTIES));
+	let consensus = bw_consensus
+		.check_consensus(&(SuccessThreshold { success_threshold: 3 }, MOCK_BW_ELECTION_PROPERTIES));
 	assert_eq!(consensus, None);
 
 	bw_consensus.insert_vote((vec![1, 3, 5], Some(3)));
-	let consensus =
-		bw_consensus.check_consensus(&(Threshold { threshold: 3 }, MOCK_BW_ELECTION_PROPERTIES));
+	let consensus = bw_consensus
+		.check_consensus(&(SuccessThreshold { success_threshold: 3 }, MOCK_BW_ELECTION_PROPERTIES));
 	assert_eq!(consensus, None);
 
 	bw_consensus.insert_vote((vec![1, 3, 5], Some(2)));
-	let consensus =
-		bw_consensus.check_consensus(&(Threshold { threshold: 3 }, MOCK_BW_ELECTION_PROPERTIES));
+	let consensus = bw_consensus
+		.check_consensus(&(SuccessThreshold { success_threshold: 3 }, MOCK_BW_ELECTION_PROPERTIES));
 	assert_eq!(consensus, Some((vec![1, 3, 5], Some(2))));
 }
 /*

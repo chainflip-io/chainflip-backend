@@ -3,7 +3,7 @@ use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
 use super::{primitives::NonemptyContinuousHeaders, BHWTypes, HeightWitnesserProperties};
 use crate::electoral_systems::state_machine::consensus::{
-	ConsensusMechanism, MultipleVotes, StagedConsensus, SupermajorityConsensus, Threshold,
+	ConsensusMechanism, MultipleVotes, StagedConsensus, SuccessThreshold, SupermajorityConsensus,
 };
 
 pub struct BlockHeightTrackingConsensus<T: BHWTypes> {
@@ -19,7 +19,7 @@ impl<T: BHWTypes> Default for BlockHeightTrackingConsensus<T> {
 impl<T: BHWTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
 	type Vote = NonemptyContinuousHeaders<T::Chain>;
 	type Result = NonemptyContinuousHeaders<T::Chain>;
-	type Settings = (Threshold, HeightWitnesserProperties<T>);
+	type Settings = (SuccessThreshold, HeightWitnesserProperties<T>);
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
 		self.votes.push(vote);
