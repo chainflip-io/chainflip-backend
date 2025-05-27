@@ -181,6 +181,7 @@ pub fn test_all() {
 	}
 
 	let mut runner = TestRunner::new(Config {
+		source_file: Some(file!()),
 		cases: 256 * 16 * 16 * 4,
 		failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
 			"proptest-regressions-full-pipeline",

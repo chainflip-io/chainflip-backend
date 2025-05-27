@@ -243,21 +243,23 @@ impl<T: BWTypes> ElectionTracker2<T> {
 		self.ongoing.retain(|height, _| !hashes.contains_key(height));
 
 		// if we have optimistic blocks for the hashes we received, we will return them
-		let optimistic_blocks: BTreeMap<_, _> = if !is_reorg {
-			if self.queued_elections.is_empty() {
-				// we only want to use the single next block
-				let next_queued_height = hashes.first_key_value().unwrap().0.clone();
 
-				self.optimistic_block_cache
-					.extract_if(|height, block| {
-						hashes.get(height) == Some(&block.hash) && *height == next_queued_height
-					})
-					.collect()
-			} else {
-				Default::default()
-			}
-		} else {
-			Default::default()
+		let optimistic_blocks: BTreeMap<_, _> = {
+			let mut result = vec![];
+			progress.headers.headers.iter().for_each(|header| {
+				if let Some(optimistic_block) =
+					self.optimistic_block_cache.remove(&header.block_height)
+				{
+					if optimistic_block.hash == header.hash {
+						result.push((header.block_height, optimistic_block));
+					} else {
+						remaining.insert(header.block_height, header.hash.clone());
+					}
+				} else {
+					remaining.insert(header.block_height, header.hash.clone());
+				}
+			});
+			result.into_iter().collect()
 		};
 
 		// remove those hashes for which we had optimistic blocks

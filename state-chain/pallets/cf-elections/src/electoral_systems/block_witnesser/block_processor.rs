@@ -88,7 +88,7 @@ def_derive! {
 		DeleteBlock((ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>)),
 		DeleteEvents(Vec<T::Event>),
 		StoreReorgedEvents {
-			block: (ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>),
+			block: ChainBlockNumberOf<T::Chain>,
 			events: Vec<T::Event>,
 			new_block_number: ChainBlockNumberOf<T::Chain>,
 		},
@@ -193,19 +193,20 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 
 		if let Some(heights) = progress.removed_block_heights.clone() {
 			for n in heights {
-				self.blocks_data.remove(&n);
 				if let Some(block_info) = self.blocks_data.remove(&n) {
 					let age_range: Range<u32> = 0..block_info.next_age_to_process;
-					self.process_rules_for_ages_and_block(
-						n,
-						age_range,
-						&block_info.block_data,
-						block_info.safety_margin,
-					)
-					.iter()
-					.for_each(|(_, event)| {
-						self.processed_events.insert(event.clone(), expiry);
-					});
+
+					self.rules
+						.run((n, age_range, block_info.block_data, block_info.safety_margin))
+						.iter()
+						.for_each(|(height, event)| {
+							self.log_event.run(BlockProcessorEvent::StoreReorgedEvents {
+								block: *height,
+								events: [event.clone()].into_iter().collect(),
+								new_block_number: expiry,
+							});
+							self.processed_events.insert(event.clone(), expiry);
+						});
 				}
 			}
 		}
