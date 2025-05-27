@@ -1711,6 +1711,7 @@ impl_runtime_apis! {
 			ccm_data: Option<CcmData>,
 			exclude_fees: BTreeSet<FeeTypes>,
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
+			is_internal: Option<bool>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
 			if let Some(additional_orders) = additional_orders {
 				for (index, additional_order) in additional_orders.into_iter().enumerate() {
@@ -1811,7 +1812,11 @@ impl_runtime_apis! {
 
 			if include_fee(FeeTypes::Network) {
 				fees_vec.push(FeeType::NetworkFee(NetworkFeeTracker::new(
-					pallet_cf_swapping::NetworkFee::<Runtime>::get(),
+					pallet_cf_swapping::Pallet::<Runtime>::get_network_fee_for_swap(
+						input_asset,
+						output_asset,
+						is_internal.unwrap_or(false),
+					),
 				)));
 			}
 
