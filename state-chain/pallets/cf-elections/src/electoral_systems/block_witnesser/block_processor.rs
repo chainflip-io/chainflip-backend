@@ -6,7 +6,7 @@ use core::{
 use crate::electoral_systems::{
 	block_height_tracking::{ChainBlockNumberOf, ChainProgress, ChainTypes},
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
-	state_machine::core::{Hook, Validate},
+	state_machine::core::{def_derive, Hook, Validate},
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
@@ -48,23 +48,8 @@ use proptest_derive::Arbitrary;
 ///     - `Rules`: A hook to process block data and generate events.
 ///     - `Execute`: A hook to dedup and execute generated events.
 /// 	- `LogEventHook`: A hook to log events, used for testing
-#[derive_where(Debug, Clone, PartialEq, Eq;
-	ChainBlockNumberOf<T::Chain>: Debug + Clone + Eq,
-	T::BlockData: Debug + Clone + Eq,
-	T::Event: Debug + Clone + Eq,
-	T::Rules: Debug + Clone + Eq,
-	T::Execute: Debug + Clone + Eq,
-	T::LogEventHook: Debug + Clone + Eq,
-)]
-#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
-#[codec(encode_bound(
-	ChainBlockNumberOf<T::Chain>: Encode,
-	T::BlockData: Encode,
-	T::Event: Encode,
-	T::Rules: Encode,
-	T::Execute: Encode,
-	T::LogEventHook: Encode,
-))]
+#[derive_where(Debug, Clone, PartialEq, Eq;)]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct BlockProcessor<T: BWProcessorTypes> {
 	/// A mapping from block numbers to their corresponding BlockInfo (block data, the next age to
 	/// be processed and the safety margin). The "age" represents the block height difference
@@ -89,30 +74,32 @@ impl<BlockData> BlockProcessingInfo<BlockData> {
 		BlockProcessingInfo { block_data, next_age_to_process: Default::default(), safety_margin }
 	}
 }
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub enum BlockProcessorEvent<T: BWProcessorTypes> {
-	NewBlock {
-		height: ChainBlockNumberOf<T::Chain>,
-		data: T::BlockData,
-	},
-	ProcessingBlockForAges {
-		height: ChainBlockNumberOf<T::Chain>,
-		ages: Range<u32>,
-	},
-	DeleteBlock((ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>)),
-	DeleteEvents(Vec<T::Event>),
-	StoreReorgedEvents {
-		block: (ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>),
-		events: Vec<T::Event>,
-		new_block_number: ChainBlockNumberOf<T::Chain>,
-	},
-	UpdatingExpiry {
-		event: T::Event,
-		from: ChainBlockNumberOf<T::Chain>,
-		to: ChainBlockNumberOf<T::Chain>,
-		safety_margin: u32,
-		range: RangeInclusive<ChainBlockNumberOf<T::Chain>>,
-	},
+
+def_derive! {
+	pub enum BlockProcessorEvent<T: BWProcessorTypes> {
+		NewBlock {
+			height: ChainBlockNumberOf<T::Chain>,
+			data: T::BlockData,
+		},
+		ProcessingBlockForAges {
+			height: ChainBlockNumberOf<T::Chain>,
+			ages: Range<u32>,
+		},
+		DeleteBlock((ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>)),
+		DeleteEvents(Vec<T::Event>),
+		StoreReorgedEvents {
+			block: (ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>),
+			events: Vec<T::Event>,
+			new_block_number: ChainBlockNumberOf<T::Chain>,
+		},
+		UpdatingExpiry {
+			event: T::Event,
+			from: ChainBlockNumberOf<T::Chain>,
+			to: ChainBlockNumberOf<T::Chain>,
+			safety_margin: u32,
+			range: RangeInclusive<ChainBlockNumberOf<T::Chain>>,
+		},
+	}
 }
 
 pub struct BPChainProgress<T: ChainTypes> {
@@ -339,7 +326,10 @@ pub(crate) mod tests {
 
 	use crate::{
 		electoral_systems::{
-			block_height_tracking::{ChainBlockNumberOf, ChainTypes},
+			block_height_tracking::{
+				ChainBlockHashTrait, ChainBlockNumberOf, ChainBlockNumberTrait, ChainTypes,
+				CommonTraits,
+			},
 			block_witnesser::{
 				block_processor::{BPChainProgress, BlockProcessor},
 				primitives::ChainProgressInner,
@@ -358,12 +348,24 @@ pub(crate) mod tests {
 	};
 	use frame_support::{Deserialize, Serialize};
 	use proptest_derive::Arbitrary;
-	use sp_std::fmt::Debug;
+	use sp_std::{fmt::Debug, vec::Vec};
 	use std::collections::BTreeMap;
 
 	const SAFETY_MARGIN: u32 = 3;
 
-	#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Arbitrary)]
+	#[derive(
+		Debug,
+		Clone,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Serialize,
+		Deserialize,
+		Arbitrary,
+		Encode,
+		Decode,
+	)]
 	pub enum MockBtcEvent<E> {
 		PreWitness(E),
 		Witness(E),
@@ -451,18 +453,9 @@ pub(crate) mod tests {
 	}
 
 	impl<
-			N: Validate
-				+ Serde
-				+ Copy
-				+ Ord
-				+ SaturatingStep
-				+ Step
-				+ BlockZero
-				+ sp_std::fmt::Debug
-				+ Default
-				+ 'static,
-			H: Validate + Serde + Ord + Clone + Debug + Default + 'static,
-			D: Validate + Serde + Ord + Clone + Debug + Default + 'static,
+			N: ChainBlockNumberTrait,
+			H: ChainBlockHashTrait,
+			D: CommonTraits + Validate + Ord + Default + 'static,
 		> BWProcessorTypes for TypesFor<(N, H, Vec<D>)>
 	{
 		type Chain = Self;

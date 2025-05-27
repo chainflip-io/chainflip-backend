@@ -3,15 +3,16 @@
 
 pub mod chainstate_simulation;
 
-use core::marker::PhantomData;
+use codec::{EncodeLike, WrapperTypeDecode, WrapperTypeEncode};
+use core::{fmt::Display, marker::PhantomData, ops::Deref};
+use itertools::{Either, Itertools};
+use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
+use serde::{Deserialize, Serialize};
+use sp_std::{fmt::Debug, vec::Vec};
 use std::{
 	collections::{BTreeMap, BTreeSet, VecDeque},
 	hash::DefaultHasher,
 };
-
-use frame_support::ensure;
-use itertools::{Either, Itertools};
-use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
 
 use crate::electoral_systems::{
 	block_height_tracking::{
@@ -38,6 +39,43 @@ use crate::electoral_systems::{
 };
 use chainstate_simulation::*;
 
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
+struct EncodableChar(u8);
+impl Deref for EncodableChar {
+	type Target = u8;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+impl From<u8> for EncodableChar {
+	fn from(value: u8) -> Self {
+		Self(value)
+	}
+}
+impl WrapperTypeDecode for EncodableChar {
+	type Wrapped = u8;
+}
+impl WrapperTypeEncode for EncodableChar {}
+impl EncodeLike<u8> for EncodableChar {}
+impl Debug for EncodableChar {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
+impl Display for EncodableChar {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
+impl Validate for EncodableChar {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
 macro_rules! if_matches {
     ($($tt:tt)+) => {
         |x| matches!(x, $($tt)+)
@@ -59,7 +97,7 @@ pub trait AbstractVoter<M: Statemachine> {
 
 #[test]
 pub fn test_all() {
-	type Types = TypesFor<(u8, usize, Vec<char>)>;
+	type Types = TypesFor<(u8, u32, Vec<EncodableChar>)>;
 	type BW = BWStatemachine<Types>;
 	type BHW = BlockHeightWitnesser<Types>;
 
@@ -114,15 +152,27 @@ pub fn test_all() {
 					Optimistic =>
 						if let Some(block_data) = chain.get_block_by_height(index.block_height) {
 							let header = chain.get_block_header(index.block_height).unwrap();
-							inputs.push(Either::Right((index, (block_data, Some(header.hash)))));
+							inputs.push(Either::Right((
+								index,
+								(
+									block_data.into_iter().map(|c| (c as u8).into()).collect(),
+									Some(header.hash),
+								),
+							)));
 						},
 					ByHash(hash) =>
 						if let Some(block_data) = chain.get_block_by_hash(hash) {
-							inputs.push(Either::Right((index, (block_data, None))));
+							inputs.push(Either::Right((
+								index,
+								(block_data.into_iter().map(|c| (c as u8).into()).collect(), None),
+							)));
 						},
 					SafeBlockHeight =>
 						if let Some(block_data) = chain.get_block_by_height(index.block_height) {
-							inputs.push(Either::Right((index, (block_data, None))));
+							inputs.push(Either::Right((
+								index,
+								(block_data.into_iter().map(|c| (c as u8).into()).collect(), None),
+							)));
 						},
 				}
 			}
@@ -286,15 +336,15 @@ pub fn test_all() {
             }
             for (height, event) in output {
                 let event = match event {
-                    MockBtcEvent::PreWitness(data) => format!("Pre {}", data as char),
-                    MockBtcEvent::Witness(data) => format!("Wit {}", data as char),
+                    MockBtcEvent::PreWitness(data) => format!("Pre {}", data),
+                    MockBtcEvent::Witness(data) => format!("Wit {}", data),
                 };
                 write!(printed, "{height}: {}, ", event).unwrap();
             }
             writeln!(printed, "").unwrap();
         }
 
-        let counted_events : Container<BTreeMultiSet<(u8, MockBtcEvent<char>)>> = total_outputs.into_iter().flatten().collect();
+        let counted_events : Container<BTreeMultiSet<(u8, MockBtcEvent<EncodableChar>)>> = total_outputs.into_iter().flatten().collect();
 
         // verify that each event was emitted only one time 
         for (event, count) in counted_events.0.0.clone() {
@@ -306,7 +356,7 @@ pub fn test_all() {
         }
 
         // ensure that we only emit witness events that are on the final chain
-        let emitted_witness_events : BTreeSet<_> = counted_events.0.0.keys().map(|(a,b)|b).filter_map(try_get!(MockBtcEvent::Witness)).map(|event| *event as char).collect();
+        let emitted_witness_events : BTreeSet<_> = counted_events.0.0.keys().map(|(a,b)|b).filter_map(try_get!(MockBtcEvent::Witness)).map(|event| event.0 as char).collect();
         let expected_witness_events : BTreeSet<_> = finalized_events.into_iter().cloned().collect();
         assert_eq!(emitted_witness_events, expected_witness_events,
             "got witness events: {emitted_witness_events:?}, expected_witness_events: {expected_witness_events:?}, bw_input_history: {}",

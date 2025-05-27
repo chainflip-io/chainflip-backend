@@ -13,6 +13,8 @@ use core::{
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use proptest::{collection::*, prelude::*};
 
+type BlockId = u32;
+
 /// The basic data structure involved is an ordered tree which:
 ///  - a leaf represents a single block
 ///  - a branch represents a forked
@@ -131,7 +133,7 @@ pub struct Consumer {
 }
 
 pub struct FilledBlock<E> {
-	block_id: usize,
+	block_id: BlockId,
 	data: Vec<E>,
 	data_delays: Vec<usize>,
 }
@@ -139,7 +141,7 @@ pub struct FilledBlock<E> {
 pub fn fill_block<E: Clone>(
 	input: ForkedBlock<Consumer>,
 	events: &mut Vec<E>,
-	block_id: &mut usize,
+	block_id: &mut BlockId,
 ) -> ForkedBlock<FilledBlock<E>> {
 	use ForkedBlock::*;
 	match input {
@@ -163,7 +165,7 @@ pub fn fill_block<E: Clone>(
 pub fn fill_chain<E: Clone>(
 	chain: ForkedChain<Consumer>,
 	events: &mut Vec<E>,
-	block_id: &mut usize,
+	block_id: &mut BlockId,
 ) -> ForkedChain<FilledBlock<E>> {
 	chain.into_iter().map(|block| fill_block(block, events, block_id)).collect()
 }
@@ -201,7 +203,7 @@ pub fn create_time_steps<E: Clone>(chain: &ForkedChain<FilledBlock<E>>) -> Vec<F
 #[derive(Debug, Clone)]
 pub struct FlatBlock<E> {
 	pub events: Vec<E>,
-	pub block_id: usize,
+	pub block_id: BlockId,
 }
 
 // Temp
@@ -307,7 +309,7 @@ pub fn blocks_into_chain_progression(
 	FlatChainProgression { chains: time_steps, age: 0 }
 }
 
-pub struct MockChain<E, T: ChainTypes<ChainBlockHash = usize>> {
+pub struct MockChain<E, T: ChainTypes<ChainBlockHash = BlockId>> {
 	// heights and blocks
 	pub chain: Vec<(T::ChainBlockNumber, FlatBlock<E>)>,
 	pub _phantom: std::marker::PhantomData<T>,
@@ -318,7 +320,7 @@ use sp_std::iter::Step;
 // type MockChain<E> = Vec<FlatBlock<E>>;
 type N = u8;
 
-impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = usize>> MockChain<E, T> {
+impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> MockChain<E, T> {
 	pub fn new_with_offset(offset: usize, blocks: Vec<FlatBlock<E>>) -> MockChain<E, T> {
 		Self {
 			chain: blocks
@@ -332,7 +334,7 @@ impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = usize>> MockCh
 		}
 	}
 
-	pub fn get_hash_by_height(&self, height: T::ChainBlockNumber) -> Option<usize> {
+	pub fn get_hash_by_height(&self, height: T::ChainBlockNumber) -> Option<BlockId> {
 		self.chain
 			.iter()
 			.find(|(h, block)| *h == height)

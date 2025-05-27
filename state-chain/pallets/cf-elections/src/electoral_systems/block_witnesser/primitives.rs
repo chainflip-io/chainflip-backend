@@ -19,18 +19,12 @@ use proptest_derive::Arbitrary;
 
 use crate::electoral_systems::{
 	block_height_tracking::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress},
-	state_machine::core::{defx, fst, Hook, Validate},
+	state_machine::core::{def_derive, defx, fst, Hook, Validate},
 };
 
 use super::state_machine::{BWElectionType, BWTypes};
 
 defx! {
-	#[codec(encode_bound(
-		ChainBlockNumberOf<T::Chain>: Encode,
-		ChainBlockHashOf<T::Chain>: Encode,
-		T::BlockData: Encode,
-		T::ElectionTrackerEventHook: Encode
-	))]
 	pub struct ElectionTracker2[T: BWTypes] {
 		/// The lowest block we haven't seen yet. I.e., we have seen blocks below.
 		pub seen_heights_below: ChainBlockNumberOf<T::Chain>,
@@ -315,18 +309,12 @@ impl<T: BWTypes> Default for ElectionTracker2<T> {
 	}
 }
 
-#[derive_where(Debug, Clone, PartialEq, Eq;)]
-#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
-#[codec(encode_bound(
-	ChainBlockNumberOf<T::Chain>: Encode,
-	ChainBlockHashOf<T::Chain>: Encode,
-	T::BlockData: Encode,
-))]
-pub struct OptimisticBlock<T: BWTypes> {
-	pub hash: ChainBlockHashOf<T::Chain>,
-	pub data: T::BlockData,
+def_derive! {
+	pub struct OptimisticBlock<T: BWTypes> {
+		pub hash: ChainBlockHashOf<T::Chain>,
+		pub data: T::BlockData,
+	}
 }
-
 impl<T: BWTypes> Validate for OptimisticBlock<T> {
 	type Error = ();
 
@@ -335,28 +323,29 @@ impl<T: BWTypes> Validate for OptimisticBlock<T> {
 	}
 }
 
-#[derive_where(Debug, Clone, PartialEq, Eq;)]
-#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub enum ElectionTrackerEvent<T: BWTypes> {
-	ComparingBlocks {
-		height: ChainBlockNumberOf<T::Chain>,
-		hash: Option<ChainBlockHashOf<T::Chain>>,
-		received: BWElectionType<T::Chain>,
-		current: BWElectionType<T::Chain>,
-	},
-	UpdateSafeElections {
-		old: CompactHeightTracker<ChainBlockNumberOf<T::Chain>>,
-		new: CompactHeightTracker<ChainBlockNumberOf<T::Chain>>,
-		reason: UpdateSafeElectionsReason,
-	},
+def_derive! {
+	pub enum ElectionTrackerEvent<T: BWTypes> {
+		ComparingBlocks {
+			height: ChainBlockNumberOf<T::Chain>,
+			hash: Option<ChainBlockHashOf<T::Chain>>,
+			received: BWElectionType<T::Chain>,
+			current: BWElectionType<T::Chain>,
+		},
+		UpdateSafeElections {
+			old: CompactHeightTracker<ChainBlockNumberOf<T::Chain>>,
+			new: CompactHeightTracker<ChainBlockNumberOf<T::Chain>>,
+			reason: UpdateSafeElectionsReason,
+		},
+	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub enum UpdateSafeElectionsReason {
-	OutOfSafetyMargin,
-	SafeElectionScheduled,
-	GotOptimisticBlock,
-	ReorgReceived,
+def_derive! {
+	pub enum UpdateSafeElectionsReason {
+		OutOfSafetyMargin,
+		SafeElectionScheduled,
+		GotOptimisticBlock,
+		ReorgReceived,
+	}
 }
 
 #[derive_where(Default; )]
@@ -364,7 +353,6 @@ pub enum UpdateSafeElectionsReason {
 pub struct CompactHeightTracker<N> {
 	elections: VecDeque<Range<N>>,
 }
-
 impl<N> Validate for CompactHeightTracker<N> {
 	type Error = ();
 

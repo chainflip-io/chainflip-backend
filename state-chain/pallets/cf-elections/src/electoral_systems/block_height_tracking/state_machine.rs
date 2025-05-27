@@ -194,11 +194,12 @@ pub enum VoteValidationError<C: ChainTypes> {
 
 #[cfg(test)]
 pub mod tests {
+
 	use crate::{
 		electoral_systems::{
 			block_height_tracking::{
 				primitives::NonemptyContinuousHeaders, BlockHeightChangeHook, ChainBlockHashOf,
-				ChainBlockNumberOf, ChainTypes,
+				ChainBlockHashTrait, ChainBlockNumberOf, ChainBlockNumberTrait, ChainTypes,
 			},
 			block_witnesser::state_machine::HookTypeFor,
 			state_machine::core::{hook_test_utils::MockHook, Serde, TypesFor, Validate},
@@ -215,7 +216,7 @@ pub mod tests {
 		prop_oneof,
 	};
 	use serde::{Deserialize, Serialize};
-	use sp_std::{fmt::Debug, iter::Step};
+	use sp_std::{fmt::Debug, vec::Vec};
 
 	use super::{
 		super::{
@@ -276,20 +277,8 @@ pub mod tests {
 		})
 	}
 
-	impl<
-			N: Validate
-				+ Serde
-				+ Copy
-				+ Ord
-				+ SaturatingStep
-				+ Step
-				+ BlockZero
-				+ Debug
-				+ Default
-				+ 'static,
-			H: Validate + Serde + Ord + Clone + Debug + 'static,
-			D: Validate + Serde + Ord + Clone + Debug + 'static,
-		> ChainTypes for TypesFor<(N, H, D)>
+	impl<N: ChainBlockNumberTrait, H: ChainBlockHashTrait, D: 'static> ChainTypes
+		for TypesFor<(N, H, D)>
 	{
 		type ChainBlockNumber = N;
 		type ChainBlockHash = H;
@@ -298,20 +287,8 @@ pub mod tests {
 		const SAFETY_BUFFER: usize = 16;
 	}
 
-	impl<
-			N: Validate
-				+ Serde
-				+ Copy
-				+ Ord
-				+ SaturatingStep
-				+ Step
-				+ BlockZero
-				+ sp_std::fmt::Debug
-				+ Default
-				+ 'static,
-			H: Validate + Serde + Ord + Clone + Debug + 'static,
-			D: Validate + Serde + Ord + Clone + Debug + 'static,
-		> BHWTypes for TypesFor<(N, H, D)>
+	impl<N: ChainBlockNumberTrait, H: ChainBlockHashTrait, D: 'static> BHWTypes
+		for TypesFor<(N, H, D)>
 	{
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 		type Chain = Self;
@@ -319,7 +296,7 @@ pub mod tests {
 
 	#[test]
 	pub fn test_dsm() {
-		BlockHeightWitnesser::<TypesFor<(u32, Vec<char>, ())>>::test(
+		BlockHeightWitnesser::<TypesFor<(u32, Vec<u8>, ())>>::test(
 			module_path!(),
 			generate_state(),
 			Just(()),
