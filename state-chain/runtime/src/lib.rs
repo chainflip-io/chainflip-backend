@@ -1502,6 +1502,13 @@ type MigrationsForV1_10 = (
 		// All work done in the BitcoinInstance but we still want to increment the version in other pallets:
 		exclude_instances: [EthereumInstance, PolkadotInstance, SolanaInstance, ArbitrumInstance, AssethubInstance],
 	),
+	VersionedMigration<
+		15,
+		16,
+		migrations::safe_mode::SafeModeMigration,
+		pallet_cf_environment::Pallet<Runtime>,
+		<Runtime as frame_system::Config>::DbWeight,
+	>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]

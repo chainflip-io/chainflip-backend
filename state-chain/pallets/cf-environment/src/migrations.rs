@@ -50,8 +50,10 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	}
 }
 
-// Migration for Updating Solana's Api Environments.
-pub type PalletMigration<T> = (PlaceholderMigration<14, Pallet<T>>,);
+pub type PalletMigration<T> = (
+	PlaceholderMigration<15, Pallet<T>>,
+	/* a migration from 15 to 16 in in state-chain/runtime/src/migrations/safe_mode.rs */
+);
 
 #[cfg(test)]
 mod tests {

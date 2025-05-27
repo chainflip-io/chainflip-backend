@@ -2012,6 +2012,7 @@ mod test {
 
 	use cf_chains::address::EncodedAddress;
 	use pallet_cf_swapping::FeeRateAndMinimum;
+	use state_chain_runtime::runtime_apis::NetworkFeeDetails;
 
 	use super::*;
 	use cf_chains::{assets::sol, btc::ScriptPubkey};

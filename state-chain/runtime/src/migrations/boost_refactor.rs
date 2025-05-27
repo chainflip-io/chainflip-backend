@@ -20,7 +20,7 @@ use cf_chains::instances::{
 };
 use codec::{Decode, Encode};
 use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight, *};
-use sp_runtime::Percent;
+use sp_runtime::{Percent, TryRuntimeError};
 use sp_std::vec::Vec;
 
 pub struct BoostRefactorMigration;
@@ -210,7 +210,8 @@ impl UncheckedOnRuntimeUpgrade for BoostRefactorMigration {
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		let number_of_pools = old::BoostPools::<Runtime, BitcoinInstance>::iter().count() as u32;
 		let network_fee_deduction =
-			old::NetworkFeeDeductionFromBoostPercent::<Runtime, BitcoinInstance>::get().unwrap();
+			old::NetworkFeeDeductionFromBoostPercent::<Runtime, BitcoinInstance>::get()
+				.unwrap_or_default();
 
 		let data = PreUpgradeData { number_of_pools, network_fee_deduction };
 

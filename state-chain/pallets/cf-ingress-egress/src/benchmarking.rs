@@ -273,7 +273,6 @@ mod benchmarks {
 
 	#[benchmark]
 	fn boost_finalised() {
-		use sp_runtime::Percent;
 		use strum::IntoEnumIterator;
 
 		let asset = TargetChainAsset::<T, I>::iter().next().unwrap();
