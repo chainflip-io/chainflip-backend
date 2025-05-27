@@ -74,7 +74,7 @@ pub(crate) use implementations;
 
 /// Derive error enum cases from a struct or enum definition
 macro_rules! derive_error_enum {
-	($Error:ident [$($ParamsDef:tt)*], struct { $( $(#[doc = $doc_text:tt])* pub $Field:ident: $Type:ty, )* } { $( $property:ident ),* }
+	($Error:ident [$($ParamsDef:tt)*], struct { $( $(#[doc = $doc_text:tt])* $vis:vis $Field:ident: $Type:ty, )* } { $( $property:ident ),* }
 	) => {
 
 		#[derive_where::derive_where(Debug, PartialEq)]
@@ -107,7 +107,7 @@ macro_rules! derive_error_enum {
 				$property,
 			)*
 
-			PhantomCase(sp_std::marker::PhantomData<($($ParamName),*)>)
+			PhantomCase(sp_std::marker::PhantomData<($($ParamName,)*)>)
 		}
 
 	};
@@ -115,7 +115,7 @@ macro_rules! derive_error_enum {
 pub(crate) use derive_error_enum;
 
 macro_rules! derive_validation_statements {
-	($this:ident, $Error:ident, struct { $( $(#[doc = $doc_text:tt])* pub $Field:ident: $Type:ty, )* }
+	($this:ident, $Error:ident, struct { $( $(#[doc = $doc_text:tt])* $vis:vis $Field:ident: $Type:ty, )* }
 	) => {
 		$(
 			$this.$Field.is_valid().map_err($Error::$Field)?;

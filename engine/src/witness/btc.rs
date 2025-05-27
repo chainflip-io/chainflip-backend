@@ -135,16 +135,11 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 			}
 			headers.push_back(best_block_header);
 
-			// We should have a chain of hashees.
-			if headers.iter().zip(headers.iter().skip(1)).all(|(a, b)| a.hash == b.parent_hash) {
-				tracing::info!(
-					"BTC BHW: Submitting vote for (witness_from={latest_block_height})with {} headers",
-					headers.len()
-				);
-				Ok(Some(NonemptyContinuousHeaders { headers }))
-			} else {
-				Err(anyhow::anyhow!("BTC BHW: Headers do not form a chain"))
-			}
+			let headers_len = headers.len();
+			NonemptyContinuousHeaders::try_new(headers)
+				.inspect(|_| tracing::info!("BTC BHW: Submitting vote for (witness_from={latest_block_height})with {headers_len} headers",))
+				.map(Some)
+				.map_err(|err| anyhow::format_err!("BTC BHW: {err:?}"))
 		}
 	}
 }
