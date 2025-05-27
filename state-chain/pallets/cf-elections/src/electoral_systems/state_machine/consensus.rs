@@ -44,11 +44,7 @@ impl<Vote: Ord + PartialEq + Clone> ConsensusMechanism for SupermajorityConsensu
 	type Settings = Threshold;
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
-		if let Some(count) = self.votes.get_mut(&vote) {
-			*count += 1;
-		} else {
-			self.votes.insert(vote, 1);
-		}
+		*self.votes.entry(vote).or_insert(0) += 1;
 	}
 
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
@@ -95,13 +91,7 @@ impl<Stage: ConsensusMechanism, Index: Ord + Copy> ConsensusMechanism
 	type Settings = Stage::Settings;
 
 	fn insert_vote(&mut self, (index, vote): Self::Vote) {
-		if let Some(stage) = self.stages.get_mut(&index) {
-			stage.insert_vote(vote)
-		} else {
-			let mut stage = Stage::default();
-			stage.insert_vote(vote);
-			self.stages.insert(index, stage);
-		}
+		self.stages.entry(index).or_insert_with(Stage::default).insert_vote(vote);
 	}
 
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
