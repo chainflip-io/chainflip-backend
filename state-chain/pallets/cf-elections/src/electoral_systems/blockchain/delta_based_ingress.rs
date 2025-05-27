@@ -225,10 +225,14 @@ where
 	}
 
 	fn is_vote_needed(
-		(_, _, _): (VotePropertiesOf<Self>, PartialVoteOf<Self>, AuthorityVoteOf<Self>),
-		(_, proposed_vote): (PartialVoteOf<Self>, VoteOf<Self>),
+		(_, current_partial_vote, _): (
+			VotePropertiesOf<Self>,
+			PartialVoteOf<Self>,
+			AuthorityVoteOf<Self>,
+		),
+		(proposed_partial_vote, _): (PartialVoteOf<Self>, VoteOf<Self>),
 	) -> bool {
-		!proposed_vote.is_empty()
+		current_partial_vote != proposed_partial_vote
 	}
 
 	fn generate_vote_properties(

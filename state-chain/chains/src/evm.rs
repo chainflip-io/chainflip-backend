@@ -39,7 +39,20 @@ use sp_std::{convert::TryFrom, str, vec};
 
 use crate::DepositDetailsToTransactionInId;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Default,
+	Serialize,
+	Deserialize,
+	Ord,
+	PartialOrd,
+)]
 pub struct DepositDetails {
 	// In the case of EVM Native Deposits (ETH or arbETH), because we need to detect ingresses by
 	// checking balances rather than using events, there can be more than one hash associated with
@@ -372,7 +385,9 @@ impl Tokenizable for AggKey {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq, Serialize)]
+#[derive(
+	Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq, Serialize, Deserialize,
+)]
 pub struct SchnorrVerificationComponents {
 	/// Scalar component
 	pub s: [u8; 32],
@@ -661,7 +676,19 @@ impl From<CheckedTransactionParameter> for TransactionVerificationError {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Copy,
+	Serialize,
+	Deserialize,
+)]
 pub struct TransactionFee {
 	// priority + base
 	pub effective_gas_price: EthAmount,
