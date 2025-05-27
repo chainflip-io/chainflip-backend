@@ -14,19 +14,58 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::sol::rpc_client_api::*;
-
+use crate::sol::{retry_rpc::SolRetryRpcApi, rpc_client_api::*};
 use cf_chains::sol::SolAddress;
-use sol_prim::{AccountMeta, Instruction};
+use sol_prim::{consts::const_address, AccountMeta, Instruction};
 
 use base64::{prelude::BASE64_STANDARD, Engine};
 use cf_chains::sol::{SolVersionedMessage, SolVersionedTransaction};
 use std::str::FromStr;
 
-// TODO: Write a function (like the current test) that queries and displays all the info.
+// Simulating a tranasction requires a payer, even if the simulation doesn't require a tx fee.
+// We use a prefunded account for this purpose.
+const PREFUNDED_ACCOUNT: SolAddress = const_address("CsS34ewTFLGqrpckPRww5hbWr4QJQ1J3ZA5D7WL4Ni3K");
+
+pub async fn get_price_feeds<SolRetryRpcClient>(
+	sol_client: &SolRetryRpcClient,
+	oracle_query_helper: SolAddress,
+	chainlink_program_id: SolAddress,
+	feed_addresses: Vec<SolAddress>,
+) -> Result<Vec<PriceFeedData>, anyhow::Error>
+where
+	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
+{
+	let serialized_transaction = build_and_serialize_query_transaction(
+		oracle_query_helper,
+		chainlink_program_id,
+		feed_addresses,
+	)
+	.map_err(|e| anyhow::anyhow!("Failed to build and serialize the query transaction: {:?}", e))?;
+
+	// TODO: We might want to use a min_context_slot here if we store a consensus one in the SC.
+	// Maybe not if we are just storing the consensus timestamp, which we will be storing
+	// because it's consistent across all chains. If we do that we also need to return the
+	// min context slot from the simulation.
+	let simulation_result = sol_client.simulate_transaction(serialized_transaction).await;
+
+	let return_data = simulation_result
+		.value
+		.return_data
+		.as_ref()
+		.expect("Expected return data to be Some");
+
+	let price_feeds = decode_query_return_data(return_data, oracle_query_helper)
+		.map_err(|e| anyhow::anyhow!("Failed to decode the query return data: {:?}", e))?;
+
+	Ok(price_feeds)
+}
+
+// NOTE: This builds a transaction with the default compute units (200k). This should be enough for
+// querying more than 10 feeds so we don't bother extending the compute budget. If that was not
+// enough, the compute budget extension instruction needs to be added to the transaction before
+// serialization.
 fn build_and_serialize_query_transaction(
-	payer: SolAddress,
-	oracle_price_query_helper: SolAddress,
+	oracle_query_helper: SolAddress,
 	chainlink_program_id: SolAddress,
 	feed_addresses: Vec<SolAddress>,
 ) -> Result<Vec<u8>, anyhow::Error> {
@@ -40,14 +79,14 @@ fn build_and_serialize_query_transaction(
 	let discriminator_query_price_feeds: [u8; 8] = [0x27, 0x52, 0x35, 0x4e, 0x17, 0x26, 0x3e, 0xc3];
 
 	let instructions = vec![Instruction::new_with_bincode(
-		oracle_price_query_helper.into(),
+		oracle_query_helper.into(),
 		&discriminator_query_price_feeds,
 		account_metas,
 	)];
 
 	let transaction = SolVersionedTransaction::new_unsigned(SolVersionedMessage::new(
 		&instructions,
-		Some(payer.into()),
+		Some(PREFUNDED_ACCOUNT.into()),
 		None,
 		&[],
 	));
@@ -57,20 +96,20 @@ fn build_and_serialize_query_transaction(
 		.map_err(|e| anyhow::anyhow!("Failed to serialize oracle query transaction: {:?}", e))
 }
 
-// Returned data is Vec<PriceFeedData>
-// #[derive(AnchorSerialize, AnchorDeserialize)]
-// pub struct PriceFeedData {
-//     pub round_id: u32,
-//     pub slot: u64,
-//     pub timestamp: u32,
-//     pub answer: i128,
-//     pub decimals: u8,
-//     pub description: String,
-// }
+pub struct PriceFeedData {
+	pub round_id: u32,
+	pub slot: u64,
+	pub timestamp: u32,
+	pub answer: i128,
+	pub decimals: u8,
+	pub description: String,
+}
+
+// Expected returned data is Vec<PriceFeedData>
 fn decode_query_return_data(
 	return_data: &UiTransactionReturnData,
 	expected_program_id: SolAddress,
-) -> Result<Vec<(u32, u64, u32, i128, u8, String)>, anyhow::Error> {
+) -> Result<Vec<PriceFeedData>, anyhow::Error> {
 	let decoded_return_data = BASE64_STANDARD.decode(return_data.data.0.clone())?;
 	if return_data.data.1 != UiReturnDataEncoding::Base64 {
 		return Err(anyhow::anyhow!(
@@ -113,7 +152,7 @@ fn decode_query_return_data(
 		let description =
 			String::from_utf8(decoded_return_data[string_start..string_end].to_vec())?;
 
-		results.push((round_id, slot, timestamp, answer, decimals, description));
+		results.push(PriceFeedData { round_id, slot, timestamp, answer, decimals, description });
 
 		// Update offset for the next entry
 		offset = string_end;
@@ -144,6 +183,8 @@ mod tests {
 
 	use super::*;
 
+	// TODO: Add same test for mainnet to make sure the account is prefunded correctly.
+
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
 	async fn can_build_query_tx_and_simulate_devnet() {
@@ -165,8 +206,6 @@ mod tests {
 				.await
 				.unwrap();
 
-				let payer: SolAddress =
-					const_address("5GaMJ6MMdjCtSBADfWjYSupzk3voYbpGnfi7dkZY9S6a");
 				let chainlink_program_id: SolAddress =
 					const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny");
 				let chainlink_feed: SolAddress =
@@ -175,7 +214,6 @@ mod tests {
 					const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z");
 
 				let serialized_transaction = build_and_serialize_query_transaction(
-					payer,
 					oracle_query_helper,
 					chainlink_program_id,
 					vec![chainlink_feed],
@@ -190,11 +228,11 @@ mod tests {
 					.as_ref()
 					.expect("Expected return data to be Some");
 
-				let oracle_results: Vec<(u32, u64, u32, i128, u8, String)> =
+				let price_feeds =
 					decode_query_return_data(return_data, oracle_query_helper).unwrap();
 
-				let (round_id, slot, timestamp, answer, decimals, description) =
-					oracle_results.first().unwrap();
+				let PriceFeedData { round_id, slot, timestamp, answer, decimals, description } =
+					price_feeds.first().unwrap();
 
 				println!(
 					"Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}, Decimals: {}, Description: {}",
@@ -233,8 +271,6 @@ mod tests {
 				.await
 				.unwrap();
 
-				let payer: SolAddress =
-					const_address("5GaMJ6MMdjCtSBADfWjYSupzk3voYbpGnfi7dkZY9S6a");
 				let chainlink_program_id: SolAddress =
 					const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny");
 				let chainlink_feeds = vec![
@@ -245,7 +281,6 @@ mod tests {
 					const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z");
 
 				let serialized_transaction = build_and_serialize_query_transaction(
-					payer,
 					oracle_query_helper,
 					chainlink_program_id,
 					chainlink_feeds,
@@ -260,12 +295,13 @@ mod tests {
 					.as_ref()
 					.expect("Expected return data to be Some");
 
-				let oracle_results: Vec<(u32, u64, u32, i128, u8, String)> =
+				let price_feeds =
 					decode_query_return_data(return_data, oracle_query_helper).unwrap();
 
-				for (result_index, (round_id, slot, timestamp, answer, decimals, description)) in
-					oracle_results.iter().enumerate()
-				{
+				for (result_index, price_feed) in price_feeds.iter().enumerate() {
+					let PriceFeedData { round_id, slot, timestamp, answer, decimals, description } =
+						price_feed;
+
 					println!(
 						"Index {}: Description: {}, Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}, Decimals: {}",
 						result_index,
@@ -299,8 +335,6 @@ mod tests {
 				.await
 				.unwrap();
 
-				let payer: SolAddress =
-					const_address("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp");
 				let chainlink_program_id: SolAddress =
 					const_address("DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X");
 				let chainlink_feed: SolAddress =
@@ -309,7 +343,6 @@ mod tests {
 					const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z");
 
 				let serialized_transaction = build_and_serialize_query_transaction(
-					payer,
 					oracle_query_helper,
 					chainlink_program_id,
 					vec![chainlink_feed],
@@ -323,11 +356,11 @@ mod tests {
 					.as_ref()
 					.expect("Expected return data to be Some");
 
-				let oracle_results: Vec<(u32, u64, u32, i128, u8, String)> =
+				let price_feeds =
 					decode_query_return_data(return_data, oracle_query_helper).unwrap();
 
-				let (round_id, slot, timestamp, answer, decimals, description) =
-					oracle_results.first().unwrap();
+				let PriceFeedData { round_id, slot, timestamp, answer, decimals, description } =
+					price_feeds.first().unwrap();
 
 				println!(
 					"Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}, Decimals: {}, Description: {}",

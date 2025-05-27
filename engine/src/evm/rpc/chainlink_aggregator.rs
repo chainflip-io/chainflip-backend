@@ -35,12 +35,16 @@ pub trait AggregatorV3InterfaceRpcApi {
 		&self,
 		aggregator_address: H160,
 	) -> Result<(u128, I256, U256, U256, u128)>;
+
+	async fn decimals(&self, aggregator_address: H160) -> Result<u8>;
+
+	async fn description(&self, aggregator_address: H160) -> Result<String>;
 }
 
 #[async_trait::async_trait]
 impl AggregatorV3InterfaceRpcApi for EvmRpcClient {
-	// TODO: This call will only get the price of one asset, we can't batch them. If we want to
-	// reduce one to a single call we'll need to write a small program that makes all the calls and
+	// This call will only get the price of one asset, we can't batch them. If we want to reduce
+	// one to a single call we'll need to write a small program that makes all the calls and
 	// returns all the data as one. Since we use EVM as a fallback it's probably not necessary.
 	async fn latest_round_data(
 		&self,
@@ -54,6 +58,18 @@ impl AggregatorV3InterfaceRpcApi for EvmRpcClient {
 
 		Ok((round_id, answer, started_at, updated_at, answered_in_round))
 	}
+
+	async fn decimals(&self, aggregator_address: H160) -> Result<u8> {
+		let aggregator = AggregatorV3Interface::new(aggregator_address, self.provider.clone());
+		let decimals = aggregator.decimals().call().await?;
+		Ok(decimals)
+	}
+
+	async fn description(&self, aggregator_address: H160) -> Result<String> {
+		let aggregator = AggregatorV3Interface::new(aggregator_address, self.provider.clone());
+		let description = aggregator.description().call().await?;
+		Ok(description)
+	}
 }
 
 #[async_trait::async_trait]
@@ -63,6 +79,14 @@ impl AggregatorV3InterfaceRpcApi for EvmRpcSigningClient {
 		aggregator_address: H160,
 	) -> Result<(u128, I256, U256, U256, u128)> {
 		self.rpc_client.latest_round_data(aggregator_address).await
+	}
+
+	async fn decimals(&self, aggregator_address: H160) -> Result<u8> {
+		self.rpc_client.decimals(aggregator_address).await
+	}
+
+	async fn description(&self, aggregator_address: H160) -> Result<String> {
+		self.rpc_client.description(aggregator_address).await
 	}
 }
 
@@ -142,6 +166,40 @@ mod tests {
 				.await
 				.unwrap(),
 		);
+
+		println!(
+			"{} - Decimals {}",
+			"Ethereum",
+			eth_client
+				.decimals(H160::from_str(BTC_USD_AGGREGATOR_ETHEREUM_ADDRESS).unwrap())
+				.await
+				.unwrap()
+		);
+		println!(
+			"{} - Decimals {}",
+			"Arbitrum",
+			arb_client
+				.decimals(H160::from_str(BTC_USD_AGGREGATOR_ARBITRUM_ADDRESS).unwrap())
+				.await
+				.unwrap()
+		);
+
+		println!(
+			"{} - Description {}",
+			"Ethereum",
+			eth_client
+				.description(H160::from_str(ETH_USD_AGGREGATOR_ETHEREUM_ADDRESS).unwrap())
+				.await
+				.unwrap()
+		);
+		println!(
+			"{} - Description {}",
+			"Arbitrum",
+			arb_client
+				.description(H160::from_str(ETH_USD_AGGREGATOR_ARBITRUM_ADDRESS).unwrap())
+				.await
+				.unwrap()
+		);
 	}
 
 	#[tokio::test]
@@ -151,10 +209,10 @@ mod tests {
 
 		let eth_client = EvmRpcSigningClient::new(
 			settings.clone().eth.private_key_file,
-			"http://localhost:8545".into(), // This should be starting localnet
-			10997u64,                       // I believe this is the localnet chain id
-			// "http://127.0.0.1:8545".into(), // This works when starting it with "npx hardhat node"
-			// 31337u64,                       // This works when starting it with "npx hardhat
+			"http://localhost:8545".into(), // Bouncer localnet
+			10997u64,                       // Bouncer localnet chain id
+			// "http://127.0.0.1:8545".into(), // Hardhat node ("npx hardhat node")
+			// 31337u64,                       // Hardhat node ("npx hardhat node")
 			// node"
 			"Ethereum",
 		)
@@ -167,6 +225,15 @@ mod tests {
 				.latest_round_data(H160::from_str(LOCALNET_ETH_PRICE_FEED).unwrap())
 				.await
 				.unwrap(),
+		);
+
+		println!(
+			"{} - Description {}",
+			"Ethereum",
+			eth_client
+				.description(H160::from_str(LOCALNET_ETH_PRICE_FEED).unwrap())
+				.await
+				.unwrap()
 		);
 	}
 
@@ -190,6 +257,15 @@ mod tests {
 				.latest_round_data(H160::from_str(LOCALNET_ARB_PRICE_FEED).unwrap())
 				.await
 				.unwrap(),
+		);
+
+		println!(
+			"{} - Description {}",
+			"Arbitrum",
+			eth_client
+				.description(H160::from_str(LOCALNET_ARB_PRICE_FEED).unwrap())
+				.await
+				.unwrap()
 		);
 	}
 }

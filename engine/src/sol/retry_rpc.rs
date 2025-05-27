@@ -268,6 +268,9 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 			.await
 	}
 
+	// TODO: We should consider using the `min_context_slot` here using the previous consensus one
+	// in some way so the queries are not too stale. The SC will already take care of that like in
+	// nonces but we can also have it here.
 	async fn simulate_transaction(
 		&self,
 		serialized_transaction: Vec<u8>,
