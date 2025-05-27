@@ -198,9 +198,7 @@ pub fn test_all() {
                     bw_history.push(BWTrace::InputBHW(input.clone()));
 
                     let output = BHW::step(&mut bhw_state, input, &())
-                    .map_err(|err| format!("err: {err} with history: {bw_history:?}"))
-                    .unwrap();
-                    // .expect(&format!("BHW failed with history: {bw_history:?}"));
+                        .expect(&format!("BHW failed with history: {bw_history:?}"));
 
                     outputs.push(output);
                 }
@@ -219,8 +217,7 @@ pub fn test_all() {
                     bw_history.push(BWTrace::Input(Either::Left(bhw_output.clone())));
 
                     bw_state.elections.is_valid()
-                        .map_err(|err| format!("err: {err:?} with history: {}", print_bw_history(&bw_history)))
-                        .unwrap();
+                        .expect(&format!("BW failed with history: {}", print_bw_history(&bw_history)));
 
                     BW::step(&mut bw_state, Either::Left(bhw_output), &bw_settings).unwrap();
 
@@ -249,8 +246,7 @@ pub fn test_all() {
                     bw_history.push(BWTrace::Input(input.clone()));
 
                     bw_state.elections.is_valid()
-                        .map_err(|err| format!("err: {err:?} with history: {}", print_bw_history(&bw_history)))
-                        .unwrap();
+                        .expect(&format!("BW failed with history: {}", print_bw_history(&bw_history)));
 
                     BW::step(&mut bw_state, input, &bw_settings).unwrap();
 
@@ -282,7 +278,6 @@ pub fn test_all() {
             total_outputs.append(&mut bw_outputs);
         }
 
-        // println!("----- outputs begin ------");
         use std::fmt::Write;
         let mut printed: String = Default::default();
         for output in total_outputs.clone() {
@@ -313,7 +308,7 @@ pub fn test_all() {
         // ensure that we only emit witness events that are on the final chain
         let emitted_witness_events : BTreeSet<_> = counted_events.0.0.keys().map(|(a,b)|b).filter_map(try_get!(MockBtcEvent::Witness)).map(|event| *event as char).collect();
         let expected_witness_events : BTreeSet<_> = finalized_events.into_iter().cloned().collect();
-        assert!(emitted_witness_events == expected_witness_events,
+        assert_eq!(emitted_witness_events, expected_witness_events,
             "got witness events: {emitted_witness_events:?}, expected_witness_events: {expected_witness_events:?}, bw_input_history: {}",
             bw_history.iter().map(|event| format!("{event:?}")).intersperse("\n".to_string()).collect::<String>()
         );

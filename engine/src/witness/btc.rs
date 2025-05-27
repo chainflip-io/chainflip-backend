@@ -60,7 +60,7 @@ use crate::{
 	},
 	witness::btc::deposits::{deposit_witnesses, map_script_addresses},
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 
 use state_chain_runtime::chainflip::bitcoin_elections::{
 	BitcoinEgressWitnessingES, BitcoinFeeTracking, BitcoinVaultDepositWitnessingES,
@@ -82,10 +82,9 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 	async fn vote(
 		&self,
 		_settings: <BitcoinBlockHeightTrackingES as ElectoralSystemTypes>::ElectoralSettings,
-		// We could use 0 as a special case (to avoid requiring an Option)
 		properties: <BitcoinBlockHeightTrackingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightTrackingES>>, anyhow::Error> {
-		tracing::info!("Block height tracking called properties: {:?}", properties);
+		tracing::debug!("BTC BHW: Block height tracking called properties: {:?}", properties);
 		let HeightWitnesserProperties { witness_from_index: latest_block_height } = properties;
 
 		let mut headers = VecDeque::new();
@@ -102,29 +101,23 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 			})
 		};
 
-		let get_header = |index: BlockNumber| {
-			async move {
-				let block_hash = self.client.block_hash(index).await?;
-				let header = self.client.block_header(block_hash).await?;
-				// tracing::info!("bht: Voting for block height tracking: {:?}", header.height);
-				// Order from lowest to highest block index.
-				header_from_btc_header(header)
-			}
-		};
-
 		let best_block_hash = self.client.best_block_hash().await?;
 		let best_block_header = self.client.block_header(best_block_hash).await?;
 		if best_block_hash != best_block_header.hash {
-			return Err(anyhow::anyhow!("best_block_hash do not match best header hash"))
+			bail!(
+				"BTC BHW: best_block_hash {best_block_hash:?} do not match best header hash {:?}",
+				best_block_header.hash
+			);
 		}
+
 		let best_block_header = header_from_btc_header(best_block_header)?;
 		if best_block_header.block_height <= latest_block_height {
-			tracing::info!("btc: no new blocks found since best block height is {} for witness_from={latest_block_height}", best_block_header.block_height);
+			tracing::debug!("BTC BHW: no new blocks found since best block height is {} for witness_from={latest_block_height}", best_block_header.block_height);
 			return Ok(None)
 		} else {
 			let witness_from_index = if latest_block_height == 0 {
-				tracing::info!(
-					"bht: election_property=0, best_block_height={}, submitting last 6 blocks.",
+				tracing::debug!(
+					"BTC BHW: election_property=0, best_block_height={}, submitting last 6 blocks.",
 					best_block_header.block_height
 				);
 				best_block_header
@@ -134,29 +127,23 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 				latest_block_height
 			};
 
-			// fetch the headers we haven't got yet
+			// Fetch the headers we haven't got yet.
 			for index in witness_from_index..best_block_header.block_height {
-				// let header = self.client.block_header(index).await?;
-				// tracing::info!("bht: Voting for block height tracking: {:?}", header.height);
-				// Order from lowest to highest block index.
-				headers.push_back(get_header(index).await?);
+				headers.push_back(header_from_btc_header(
+					self.client.block_header(self.client.block_hash(index).await?).await?,
+				)?);
 			}
-
 			headers.push_back(best_block_header);
-			tracing::info!(
-				"bht: Voting for block height tracking: {:?}",
-				headers.iter().map(|h| h.block_height)
-			);
 
 			// We should have a chain of hashees.
 			if headers.iter().zip(headers.iter().skip(1)).all(|(a, b)| a.hash == b.parent_hash) {
 				tracing::info!(
-					"bht: Submitting vote for (witness_from={latest_block_height})with {} headers",
+					"BTC BHW: Submitting vote for (witness_from={latest_block_height})with {} headers",
 					headers.len()
 				);
 				Ok(Some(NonemptyContinuousHeaders { headers }))
 			} else {
-				Err(anyhow::anyhow!("bht: Headers do not form a chain"))
+				Err(anyhow::anyhow!("BTC BHW: Headers do not form a chain"))
 			}
 		}
 	}

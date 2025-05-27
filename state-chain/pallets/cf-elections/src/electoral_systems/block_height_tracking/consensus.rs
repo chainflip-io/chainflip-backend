@@ -39,15 +39,7 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
 
 			consensus
 				.check_consensus(threshold)
-				.map(|result| {
-					let mut headers = VecDeque::new();
-					headers.push_back(result);
-					NonemptyContinuousHeaders { headers }
-				})
-				.map(|result| {
-					log::info!("block_height: initial consensus: {result:?}");
-					result
-				})
+				.map(|result| NonemptyContinuousHeaders { headers: [result].into_iter().collect() })
 		} else {
 			// This is the actual consensus finding, once the engine is running
 
