@@ -175,10 +175,9 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 					Ok(None)
 				},
 
-				Err(MergeFailure::InternalError(reason)) => {
-					let str = format!("internal error in block height tracker: {reason}");
-					log::error!("internal error in block height tracker: {reason}");
-					Err(str.leak())
+				Err(MergeFailure::InternalError) => {
+					log::error!("internal error in block height tracker with state: {:?}", s);
+					Err("internal error in block height tracker")
 				},
 			},
 		}

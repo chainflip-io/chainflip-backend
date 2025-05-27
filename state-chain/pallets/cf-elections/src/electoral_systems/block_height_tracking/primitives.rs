@@ -96,7 +96,7 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 				self.headers.append(&mut other_headers.clone());
 				Ok(MergeInfo { removed: self_headers, added: other_headers })
 			} else {
-				Err(MergeFailure::InternalError("expected either case 1 or case 2 to hold!"))
+				Err(MergeFailure::InternalError)
 			}
 		}
 	}
@@ -137,7 +137,9 @@ pub enum MergeFailure<T: ChainTypes> {
 	// `lowest_new_block` should, by block number, be `existing_wrong_parent`, but who's
 	// hash doesn't match with `lowest_new_block`'s parent hash.
 	ReorgWithUnknownRoot { new_block: Header<T>, existing_wrong_parent: Option<Header<T>> },
-	InternalError(&'static str),
+
+	// Internal error. Should never happen.
+	InternalError,
 }
 
 defx! {
