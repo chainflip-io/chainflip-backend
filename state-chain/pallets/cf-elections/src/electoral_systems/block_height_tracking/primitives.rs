@@ -46,6 +46,9 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	pub fn first(&self) -> &Header<T> {
 		self.headers.front().unwrap()
 	}
+	pub fn contains(&self, block_height: &T::ChainBlockNumber) -> bool {
+		self.first().block_height <= *block_height && *block_height <= self.last().block_height
+	}
 	/// Tries to merge the `other` chain of headers into `self`.
 	///
 	/// This function assumes that either of the following holds:

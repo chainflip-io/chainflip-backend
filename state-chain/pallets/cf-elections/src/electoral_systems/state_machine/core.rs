@@ -107,7 +107,7 @@ macro_rules! derive_error_enum {
 				$property,
 			)*
 
-			PhantomCase(sp_std::marker::PhantomData<($($ParamName),*)>)
+			PhantomCase(sp_std::marker::PhantomData<($($ParamName,)*)>)
 		}
 
 	};
