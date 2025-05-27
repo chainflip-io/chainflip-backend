@@ -103,28 +103,12 @@ impls! {
 		type Chain = BitcoinChain;
 	}
 
-	/// Associating the ES related types to the struct
-	ElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type ElectoralUnsynchronisedState = BlockHeightWitnesser<Self>;
-		type ElectoralUnsynchronisedStateMapKey = ();
-		type ElectoralUnsynchronisedStateMapValue = ();
-		type ElectoralUnsynchronisedSettings = ();
-		type ElectoralSettings = ();
-		type ElectionIdentifierExtra = ();
-		type ElectionProperties = HeightWitnesserProperties<Self>;
-		type ElectionState = ();
-		type VoteStorage = vote_storage::bitmap::Bitmap<NonemptyContinuousHeaders<BitcoinChain>>;
-		type Consensus = NonemptyContinuousHeaders<BitcoinChain>;
-		type OnFinalizeContext = Vec<()>;
-		type OnFinalizeReturn = Vec<Option<ChainProgress<BitcoinChain>>>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-	}
-
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
-		// both context and return have to be vectors, these are the item types
-		type OnFinalizeContextItem = ();
+		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
+		type StateChainBlockNumber = BlockNumberFor<Runtime>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<NonemptyContinuousHeaders<BitcoinChain>>;
+
 		type OnFinalizeReturnItem = Option<ChainProgress<BitcoinChain>>;
 
 		// the actual state machine and consensus mechanisms of this ES
@@ -178,28 +162,12 @@ impls! {
 		type ElectionTrackerEventHook = EmptyHook;
 	}
 
-	/// Associating the ES related types to the struct
-	ElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type ElectoralUnsynchronisedState = BlockWitnesserState<Self>;
-		type ElectoralUnsynchronisedStateMapKey = ();
-		type ElectoralUnsynchronisedStateMapValue = ();
-		type ElectoralUnsynchronisedSettings = BlockWitnesserSettings;
-		type ElectoralSettings = ();
-		type ElectionIdentifierExtra = ();
-		type ElectionProperties = BWElectionProperties<Self>;
-		type ElectionState = ();
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataDepositChannel, Option<btc::Hash>)>;
-		type Consensus = (BlockDataDepositChannel, Option<btc::Hash>);
-		type OnFinalizeContext = Vec<Option<ChainProgress<BitcoinChain>>>;
-		type OnFinalizeReturn = Vec<()>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-	}
-
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
-		// both context and return have to be vectors, these are the item types
-		type OnFinalizeContextItem = Option<ChainProgress<BitcoinChain>>;
+		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataDepositChannel, Option<btc::Hash>)>;
+		type StateChainBlockNumber = BlockNumberFor<Runtime>;
+
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
@@ -269,28 +237,12 @@ impls! {
 		type ElectionTrackerEventHook = EmptyHook;
 	}
 
-	/// Associating the ES related types to the struct
-	ElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type ElectoralUnsynchronisedState = BlockWitnesserState<Self>;
-		type ElectoralUnsynchronisedStateMapKey = ();
-		type ElectoralUnsynchronisedStateMapValue = ();
-		type ElectoralUnsynchronisedSettings = BlockWitnesserSettings;
-		type ElectoralSettings = ();
-		type ElectionIdentifierExtra = ();
-		type ElectionProperties = BWElectionProperties<Self>;
-		type ElectionState = ();
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataVaultDeposit, Option<btc::Hash>)>;
-		type Consensus = (BlockDataVaultDeposit, Option<btc::Hash>);
-		type OnFinalizeContext = Vec<Option<ChainProgress<BitcoinChain>>>;
-		type OnFinalizeReturn = Vec<()>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-	}
-
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
-		// both context and return have to be vectors, these are the item types
-		type OnFinalizeContextItem = Option<ChainProgress<BitcoinChain>>;
+		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataVaultDeposit, Option<btc::Hash>)>;
+		type StateChainBlockNumber = BlockNumberFor<Runtime>;
+
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
@@ -368,28 +320,12 @@ impls! {
 		type ElectionTrackerEventHook = EmptyHook;
 	}
 
-	/// Associating the ES related types to the struct
-	ElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type ElectoralUnsynchronisedState = BlockWitnesserState<Self>;
-		type ElectoralUnsynchronisedStateMapKey = ();
-		type ElectoralUnsynchronisedStateMapValue = ();
-		type ElectoralUnsynchronisedSettings = BlockWitnesserSettings;
-		type ElectoralSettings = ();
-		type ElectionIdentifierExtra = ();
-		type ElectionProperties = BWElectionProperties<Self>;
-		type ElectionState = ();
-		type VoteStorage = vote_storage::bitmap::Bitmap<(EgressBlockData, Option<btc::Hash>)>;
-		type Consensus = (EgressBlockData, Option<btc::Hash>);
-		type OnFinalizeContext = Vec<Option<ChainProgress<BitcoinChain>>>;
-		type OnFinalizeReturn = Vec<()>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-	}
-
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
-		// both context and return have to be vectors, these are the item types
-		type OnFinalizeContextItem = Option<ChainProgress<BitcoinChain>>;
+		type StateChainBlockNumber = BlockNumberFor<Runtime>;
+		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(EgressBlockData, Option<btc::Hash>)>;
+
 		type OnFinalizeReturnItem = ();
 
 		// the actual state machine and consensus mechanisms of this ES
