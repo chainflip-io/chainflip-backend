@@ -2758,6 +2758,7 @@ dependencies = [
  "pallet-cf-funding",
  "pallet-cf-governance",
  "pallet-cf-ingress-egress",
+ "pallet-cf-lending-pools",
  "pallet-cf-lp",
  "pallet-cf-pools",
  "pallet-cf-swapping",
@@ -8350,7 +8351,6 @@ dependencies = [
  "generic-typeinfo-derive",
  "hex-literal",
  "log",
- "nanorand",
  "pallet-cf-governance",
  "parity-scale-codec",
  "scale-info",
@@ -8362,6 +8362,26 @@ dependencies = [
  "strum 0.26.3",
  "strum_macros 0.26.4",
  "utilities",
+]
+
+[[package]]
+name = "pallet-cf-lending-pools"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-primitives",
+ "cf-runtime-utilities",
+ "cf-test-utilities",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "nanorand",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B2)",
 ]
 
 [[package]]
@@ -13703,6 +13723,7 @@ dependencies = [
  "pallet-cf-funding",
  "pallet-cf-governance",
  "pallet-cf-ingress-egress",
+ "pallet-cf-lending-pools",
  "pallet-cf-lp",
  "pallet-cf-pools",
  "pallet-cf-reputation",

@@ -17,10 +17,10 @@
 use super::*;
 use crate::{
 	tests::{ALICE, BROKER},
-	Asset, BoostPoolId, DepositChannelLookup, DepositFailedDetails, DepositFailedReason,
-	DepositWitness, Event, ReportExpiresAt, ScheduledEgressFetchOrTransfer,
-	ScheduledTransactionsForRejection, TransactionRejectionStatus, TransactionsMarkedForRejection,
-	VaultDepositWitness, MARKED_TX_EXPIRATION_BLOCKS,
+	Asset, DepositChannelLookup, DepositFailedDetails, DepositFailedReason, DepositWitness, Event,
+	ReportExpiresAt, ScheduledEgressFetchOrTransfer, ScheduledTransactionsForRejection,
+	TransactionRejectionStatus, TransactionsMarkedForRejection, VaultDepositWitness,
+	MARKED_TX_EXPIRATION_BLOCKS,
 };
 use cf_chains::{
 	address::EncodedAddress,
@@ -29,12 +29,7 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets::btc, Beneficiaries, Beneficiary, ChannelId};
 use cf_test_utilities::{assert_has_event, assert_has_matching_event};
-use cf_traits::{
-	mocks::{
-		account_role_registry::MockAccountRoleRegistry, swap_request_api::MockSwapRequestHandler,
-	},
-	AccountRoleRegistry, BalanceApi, DepositApi,
-};
+use cf_traits::{mocks::swap_request_api::MockSwapRequestHandler, DepositApi};
 use frame_support::{
 	assert_noop, assert_ok,
 	instances::Instance2,
@@ -85,23 +80,6 @@ mod helpers {
 	}
 
 	pub fn setup_boost_swap() -> ForeignChainAddress {
-		assert_ok!(
-			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
-				&ALICE,
-			)
-		);
-
-		assert_ok!(BitcoinIngressEgress::create_boost_pools(
-			RuntimeOrigin::root(),
-			vec![BoostPoolId { asset: btc::Asset::Btc, tier: 10 }],
-		));
-
-		<Test as crate::Config<Instance2>>::Balance::credit_account(
-			&ALICE,
-			btc::Asset::Btc.into(),
-			1000,
-		);
-
 		let (_, address, _, _) = BitcoinIngressEgress::request_swap_deposit_address(
 			btc::Asset::Btc,
 			btc::Asset::Btc.into(),
@@ -119,12 +97,7 @@ mod helpers {
 		)
 		.unwrap();
 
-		assert_ok!(BitcoinIngressEgress::add_boost_funds(
-			RuntimeOrigin::signed(ALICE),
-			btc::Asset::Btc,
-			1000,
-			10
-		));
+		MockBoostLendingApi::set_available_amount(DEFAULT_DEPOSIT_AMOUNT.into());
 
 		address
 	}
