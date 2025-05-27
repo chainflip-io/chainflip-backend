@@ -484,12 +484,12 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(), DispatchError> {
 		let surplus = Self::try_debit_from_liquid_funds(from, amount)
 			.ok_or(Error::<T>::InsufficientLiquidity)?;
-		let _ = match surplus.offset(Self::credit(to, amount)) {
+		match surplus.offset(Self::credit(to, amount)) {
 			frame_support::traits::SameOrOther::None => Ok::<_, Error<T>>(()),
 			frame_support::traits::SameOrOther::Same(s) =>
-				s.drop_zero().map_err(|_| Error::<T>::InsufficientLiquidity.into()),
+				s.drop_zero().map_err(|_| Error::<T>::InsufficientLiquidity),
 			frame_support::traits::SameOrOther::Other(d) =>
-				d.drop_zero().map_err(|_| Error::<T>::InsufficientLiquidity.into()),
+				d.drop_zero().map_err(|_| Error::<T>::InsufficientLiquidity),
 		}?;
 		Ok(())
 	}
