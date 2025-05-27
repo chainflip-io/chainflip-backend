@@ -197,8 +197,6 @@ where
 		// initialize the result value
 		let mut result = Vec::new();
 
-		// read state
-		log::debug!("ESSM: reading state & settings");
 		let mut state = ElectoralAccess::unsynchronised_state()?;
 		let settings = ElectoralAccess::unsynchronised_settings()?;
 
@@ -244,25 +242,21 @@ where
 		// be kept open.
 		for election_identifier in election_identifiers {
 			let election = ElectoralAccess::election_mut(election_identifier);
-			log::debug!("ESSM: getting properties");
-			let properties = election.properties()?;
+			let properties: <Bounds as ElectoralSystemTypes>::ElectionProperties =
+				election.properties()?;
 			if !input_indices.contains(&properties) {
-				log::info!("deleting election for {properties:?}");
 				election.delete();
 			} else {
-				log::info!("keeping election for {properties:?}");
-				open_elections.push(properties.clone());
+				open_elections.push(properties);
 			}
 		}
 
 		// Create elections for new input indices which weren't open before,
 		// i.e. contained in `input_indices` but not in `open_elections`.
-		for index in input_indices.iter().filter(|index| !open_elections.contains(index)) {
-			log::info!("creating election for {index:?}");
-			ElectoralAccess::new_election((), index.clone(), ())?;
+		for index in input_indices.into_iter().filter(|index| !open_elections.contains(index)) {
+			ElectoralAccess::new_election((), index, ())?;
 		}
 
-		log::debug!("ESSM: setting state");
 		ElectoralAccess::set_unsynchronised_state(state)?;
 
 		Ok(result)
@@ -276,9 +270,7 @@ where
 		_previous_consensus: Option<&Self::Consensus>,
 		consensus_votes: crate::electoral_system::ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
-		log::debug!("ESSM consensus: reading properties");
 		let properties = election_access.properties()?;
-		log::debug!("ESSM consensus: reading properties done");
 		let mut consensus = Bounds::ConsensusMechanism::default();
 		let num_authorities = consensus_votes.num_authorities();
 
@@ -287,14 +279,12 @@ where
 
 			// insert vote if it is valid for the given properties
 			if Bounds::Statemachine::validate(&properties, &vote).is_ok() {
-				log::info!("inserting vote {vote:?}");
 				consensus.insert_vote(vote);
 			} else {
 				log::warn!("Received invalid vote: expected base {properties:?} but vote was not in fiber ({:?})", vote);
 			}
 		}
 
-		log::debug!("ESSM consensus: calling consensus mechanism");
 		Ok(consensus.check_consensus(&(
 			Threshold { threshold: success_threshold_from_share_count(num_authorities) },
 			properties,
