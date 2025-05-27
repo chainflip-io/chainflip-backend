@@ -1,7 +1,7 @@
 use super::{
 	super::state_machine::core::*,
 	block_processor::{BPChainProgress, BlockProcessorEvent},
-	primitives::{ElectionTracker2, ElectionTrackerEvent, SafeModeStatus},
+	primitives::{ElectionTracker, ElectionTrackerEvent, SafeModeStatus},
 };
 use crate::electoral_systems::{
 	block_height_tracking::{
@@ -114,7 +114,7 @@ pub struct BlockWitnesserSettings {
 defx! {
 	#[derive(Default)]
 	pub struct BlockWitnesserState[T: BWTypes] {
-		pub elections: ElectionTracker2<T>,
+		pub elections: ElectionTracker<T>,
 		pub generate_election_properties_hook: T::ElectionPropertiesHook,
 		pub safemode_enabled: T::SafeModeEnabledHook,
 		pub block_processor: BlockProcessor<T>,
@@ -205,9 +205,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			Either::Left(Some(progress)) => {
 				let removed_block_heights = progress.removed.clone();
 
-				for (height, block) in
-					s.elections.schedule_range(progress, settings.safety_margin as usize)
-				{
+				for (height, block) in s.elections.schedule_range(progress) {
 					s.block_processor.process_block_data((
 						height,
 						block.data,
@@ -452,7 +450,7 @@ pub mod tests {
 				proptest::collection::vec((any::<ChainBlockNumberOf<T::Chain>>(), any::<ChainBlockHashOf<T::Chain>>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move |(height, _)| *height < next_election))
 			);
 			LazyJust::new(move || BlockWitnesserState {
-				elections: ElectionTracker2 {
+				elections: ElectionTracker {
 					// queued_next_safe_height: None,
 					queued_elections: BTreeMap::from_iter(queued_elections.clone()),
 					seen_heights_below,

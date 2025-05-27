@@ -18,14 +18,14 @@ use sp_std::{
 use proptest_derive::Arbitrary;
 
 use crate::electoral_systems::{
-	block_height_tracking::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress},
+	block_height_tracking::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes},
 	state_machine::core::{def_derive, defx, fst, Hook, Validate},
 };
 
 use super::state_machine::{BWElectionType, BWTypes};
 
 defx! {
-	pub struct ElectionTracker2[T: BWTypes] {
+	pub struct ElectionTracker[T: BWTypes] {
 		/// The lowest block we haven't seen yet. I.e., we have seen blocks below.
 		pub seen_heights_below: ChainBlockNumberOf<T::Chain>,
 
@@ -62,7 +62,7 @@ defx! {
 	}
 }
 
-impl<T: BWTypes> ElectionTracker2<T> {
+impl<T: BWTypes> ElectionTracker<T> {
 	pub fn update_safe_elections(
 		&mut self,
 		reason: UpdateSafeElectionsReason,
@@ -202,24 +202,17 @@ impl<T: BWTypes> ElectionTracker2<T> {
 			})
 	}
 
-	/// This function schedules all elections up to `range.end()`
+	/// This function schedules all elections up to the last block_height we've seen + 1 (for
+	/// optimistic block)
 	pub fn schedule_range(
 		&mut self,
-		// range: RangeInclusive<ChainBlockNumberOf<T::Chain>>,
-		// mut hashes: BTreeMap<ChainBlockNumberOf<T::Chain>, ChainBlockHashOf<T::Chain>>,
 		progress: ChainProgress<T::Chain>,
-
-		safety_margin: usize,
 	) -> Vec<(ChainBlockNumberOf<T::Chain>, OptimisticBlock<T>)> {
-		todo!()
-
-		/*
-
 		// Check whether there is a reorg concerning elections we have started previously.
 		// If there is, we ensure that all ongoing or previously finished elections inside the reorg
 		// range are going to be restarted once there is the capacity to do so.
 		if let Some(next_election) = self.next_election() {
-			if *range.start() < next_election {
+			if progress.removed.clone().is_some_and(|range| *range.start() < next_election) {
 				// we set this value such that even in case of a reorg we create elections for up to
 				// this block
 				self.priority_elections_below =
@@ -229,51 +222,47 @@ impl<T: BWTypes> ElectionTracker2<T> {
 
 		// if there are safe elections scheduled for the reorg range, unschedule them,
 		// because it might be that we're gonna schedule them by-hash
-		self.queued_safe_elections.remove(range.clone());
+		if let Some(ref removed) = progress.removed {
+			self.queued_safe_elections.remove(removed.clone());
+		}
 
+		let last_seen_height = progress.headers.last().block_height;
 		// QUESTION: currently, the following check ensures that
 		// the highest scheduled election never decreases. Do we want this?
 		// It's difficult to imagine a situation where the highest block number
 		// after a reorg is lower than it was previously, and also, even if, in that
 		// case we simply keep the higher number that doesn't seem to be too much of a problem.
 		self.seen_heights_below =
-			max(self.seen_heights_below.clone(), range.end().clone().saturating_forward(1));
+			max(self.seen_heights_below.clone(), last_seen_height.saturating_forward(1));
 
 		// if there are elections ongoing for the block heights we received, we stop them
-		self.ongoing.retain(|height, _| !hashes.contains_key(height));
+		self.ongoing.retain(|height, _| !progress.headers.contains(height));
 
-		// if we have optimistic blocks for the hashes we received, we will return them
-		let optimistic_blocks: BTreeMap<_, _> = if !is_reorg {
-			if self.queued_elections.is_empty() {
-				// we only want to use the single next block
-				let next_queued_height = hashes.first_key_value().unwrap().0.clone();
-
-				self.optimistic_block_cache
-					.extract_if(|height, block| {
-						hashes.get(height) == Some(&block.hash) && *height == next_queued_height
-					})
-					.collect()
-			} else {
-				Default::default()
-			}
-		} else {
-			Default::default()
-		};
-
-		// remove those hashes for which we had optimistic blocks
-		let _ = hashes
-			.extract_if(|height, hash| {
-				optimistic_blocks.get(&height).map(|block| block.hash == *hash).unwrap_or(false)
-			})
-			.collect::<Vec<_>>();
+		let (optimistic_blocks, mut remaining): (BTreeMap<_, _>, BTreeMap<_, _>) =
+			progress.headers.headers.into_iter().fold(
+				(BTreeMap::new(), BTreeMap::new()),
+				|(mut optimistic_blocks, mut remaining), header| {
+					match self.optimistic_block_cache.remove(&header.block_height) {
+						Some(optimistic_block) if optimistic_block.hash == header.hash => {
+							optimistic_blocks.insert(header.block_height, optimistic_block);
+						},
+						_ => {
+							remaining.insert(header.block_height, header.hash.clone());
+						},
+					}
+					(optimistic_blocks, remaining)
+				},
+			);
 
 		// adding all hashes to the queue
-		self.queued_elections.append(&mut hashes);
+		self.queued_elections.append(&mut remaining);
 
 		// clean up the queue by removing old hashes
 		let _ = self
 			.queued_elections
-			.extract_if(|height, _| height.saturating_forward(safety_margin) < *range.end())
+			.extract_if(|height, _| {
+				height.saturating_forward(T::Chain::SAFETY_BUFFER) < last_seen_height
+			})
 			.map(fst)
 			.for_each(|height| {
 				self.queued_safe_elections.insert(height);
@@ -281,21 +270,19 @@ impl<T: BWTypes> ElectionTracker2<T> {
 
 		// move ongoing elections from ByHash to SafeBlockHeight if they become old enough
 		self.ongoing.iter_mut().for_each(|(height, ty)| {
-			if height.saturating_forward(safety_margin) < *range.end() {
+			if height.saturating_forward(T::Chain::SAFETY_BUFFER) < last_seen_height {
 				*ty = BWElectionType::SafeBlockHeight;
 			}
 		});
 
 		optimistic_blocks.into_iter().collect()
-		 */
 	}
-
 	fn next_election(&self) -> Option<ChainBlockNumberOf<T::Chain>> {
 		self.queued_elections.first_key_value().map(fst).cloned()
 	}
 }
 
-impl<T: BWTypes> Default for ElectionTracker2<T> {
+impl<T: BWTypes> Default for ElectionTracker<T> {
 	fn default() -> Self {
 		Self {
 			seen_heights_below: ChainBlockNumberOf::<T::Chain>::zero(),
