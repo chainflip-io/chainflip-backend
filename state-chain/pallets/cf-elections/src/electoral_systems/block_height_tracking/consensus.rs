@@ -40,10 +40,6 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
 			consensus
 				.check_consensus(threshold)
 				.map(|result| NonemptyContinuousHeaders { headers: [result].into_iter().collect() })
-				.map(|result| {
-					log::info!("block_height: initial consensus: {result:?}");
-					result
-				})
 		} else {
 			// This is the actual consensus finding, once the engine is running
 
