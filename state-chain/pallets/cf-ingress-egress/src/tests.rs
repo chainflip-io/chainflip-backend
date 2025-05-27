@@ -558,19 +558,11 @@ fn reused_address_channel_id_matches() {
 		>(CHANNEL_ID, EthAsset::Eth)
 		.unwrap();
 		DepositChannelPool::<Test, Instance1>::insert(CHANNEL_ID, new_channel.clone());
-		let (reused_channel_id, reused_address, ..) = EthereumIngressEgress::open_channel(
-			&ALICE,
-			EthAsset::Eth,
-			ChannelAction::LiquidityProvision {
-				lp_account: 0,
-				refund_address: ForeignChainAddress::Eth([0u8; 20].into()),
-			},
-			0,
-		)
-		.unwrap();
+		let reused_channel =
+			EthereumIngressEgress::allocate_channel(&ALICE, EthAsset::Eth).unwrap();
 		// The reused details should be the same as before.
-		assert_eq!(new_channel.channel_id, reused_channel_id);
-		assert_eq!(new_channel.address, reused_address);
+		assert_eq!(new_channel.channel_id, reused_channel.channel_id);
+		assert_eq!(new_channel.address, reused_channel.address);
 	});
 }
 
@@ -1559,9 +1551,11 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 			OriginTrait::root(),
 			vec![PalletConfigUpdate::ChannelOpeningFee { fee: FEE }].try_into().unwrap()
 		));
+		let deposit_channel_1 =
+			EthereumIngressEgress::allocate_channel(&CHANNEL_REQUESTER, EthAsset::Eth).unwrap();
 		assert_ok!(EthereumIngressEgress::open_channel(
 			&CHANNEL_REQUESTER,
-			EthAsset::Eth,
+			deposit_channel_1,
 			ChannelAction::LiquidityProvision {
 				lp_account: CHANNEL_REQUESTER,
 				refund_address: ForeignChainAddress::Eth(Default::default()),
@@ -1575,10 +1569,12 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 				.try_into()
 				.unwrap()
 		));
+		let deposit_channel2 =
+			EthereumIngressEgress::allocate_channel(&CHANNEL_REQUESTER, EthAsset::Eth).unwrap();
 		assert_err!(
 			EthereumIngressEgress::open_channel(
 				&CHANNEL_REQUESTER,
-				EthAsset::Eth,
+				deposit_channel2,
 				ChannelAction::LiquidityProvision {
 					lp_account: CHANNEL_REQUESTER,
 					refund_address: ForeignChainAddress::Eth(Default::default()),
@@ -1767,15 +1763,7 @@ fn ingress_fee_is_withheld_or_scheduled_for_swap() {
 #[test]
 fn safe_mode_prevents_deposit_channel_creation() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(EthereumIngressEgress::open_channel(
-			&ALICE,
-			EthAsset::Eth,
-			ChannelAction::LiquidityProvision {
-				lp_account: 0,
-				refund_address: ForeignChainAddress::Eth(Default::default())
-			},
-			0,
-		));
+		assert_ok!(EthereumIngressEgress::allocate_channel(&ALICE, EthAsset::Eth,));
 
 		use cf_traits::SetSafeMode;
 
@@ -1788,15 +1776,7 @@ fn safe_mode_prevents_deposit_channel_creation() {
 		});
 
 		assert_err!(
-			EthereumIngressEgress::open_channel(
-				&ALICE,
-				EthAsset::Eth,
-				ChannelAction::LiquidityProvision {
-					lp_account: 0,
-					refund_address: ForeignChainAddress::Eth(Default::default())
-				},
-				0,
-			),
+			EthereumIngressEgress::allocate_channel(&ALICE, EthAsset::Eth,),
 			crate::Error::<Test, Instance1>::DepositChannelCreationDisabled
 		);
 	});
@@ -2434,24 +2414,15 @@ fn private_and_regular_channel_ids_do_not_overlap() {
 		const PRIVATE_CHANNEL_ID: u64 = 2;
 		const REGULAR_CHANNEL_ID_2: u64 = 3;
 
-		let open_regular_channel_expecting_id = |expected_channel_id: u64| {
-			let (channel_id, ..) = EthereumIngressEgress::open_channel(
-				&ALICE,
-				EthAsset::Eth,
-				ChannelAction::LiquidityProvision {
-					lp_account: 0,
-					refund_address: ForeignChainAddress::Eth(Default::default()),
-				},
-				0,
-			)
-			.unwrap();
+		let allocate_regular_channel_expecting_id = |expected_channel_id: u64| {
+			let channel = EthereumIngressEgress::allocate_channel(&ALICE, EthAsset::Eth).unwrap();
 
-			assert_eq!(channel_id, expected_channel_id);
+			assert_eq!(channel.channel_id, expected_channel_id);
 		};
 
 		// Open a regular channel first to check that ids of regular
 		// and private channels do not overlap:
-		open_regular_channel_expecting_id(REGULAR_CHANNEL_ID_1);
+		allocate_regular_channel_expecting_id(REGULAR_CHANNEL_ID_1);
 
 		// This method is used, for example, by the swapping pallet when requesting
 		// a channel id for private broker channels:
@@ -2459,7 +2430,7 @@ fn private_and_regular_channel_ids_do_not_overlap() {
 
 		// Open a regular channel again to check that opening a private channel
 		// updates the channel id counter:
-		open_regular_channel_expecting_id(REGULAR_CHANNEL_ID_2);
+		allocate_regular_channel_expecting_id(REGULAR_CHANNEL_ID_2);
 	});
 }
 

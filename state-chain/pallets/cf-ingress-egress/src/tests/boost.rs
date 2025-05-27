@@ -1056,10 +1056,13 @@ fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 			DEFAULT_DEPOSIT_AMOUNT,
 			TIER_5_BPS
 		));
+		let channel = EthereumIngressEgress::allocate_channel(
+			&ALICE, EthAsset::Eth
+		).unwrap();
 
 		let (_, address, _, _) = EthereumIngressEgress::open_channel(
 			&ALICE,
-			EthAsset::Eth,
+			channel,
 			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: ForeignChainAddress::Eth([0u8; 20].into()) },
 			TIER_5_BPS,
 		)

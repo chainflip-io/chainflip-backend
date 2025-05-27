@@ -415,6 +415,10 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	SetBoostDelay {
 		delay_blocks: BlockNumberFor<T>,
 	},
+	SetMaximumPreallocatedChannels {
+		account_role: AccountRole,
+		num_channels: u8,
+	},
 }
 
 #[frame_support::pallet]
@@ -883,6 +887,24 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	/// Stores configuration param for maximum number of pre-allocated channels per account role.
+	#[pallet::storage]
+	#[pallet::getter(fn maximum_preallocated_channels)]
+	pub type MaximumPreallocatedChannels<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, AccountRole, u8, ValueQuery>;
+
+	/// Stores pre-allocated channels per account.
+	#[pallet::storage]
+	pub type PreallocatedChannels<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		Twox64Concat,
+		ChannelId,
+		DepositChannel<T::TargetChain>,
+		OptionQuery,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -1047,6 +1069,9 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			destination_address: TargetChainAccount<T, I>,
+		},
+		MaximumPreallocatedChannelsSet {
+			num_channels: u8,
 		},
 	}
 
@@ -1518,6 +1543,15 @@ pub mod pallet {
 					PalletConfigUpdate::SetBoostDelay { delay_blocks } => {
 						BoostDelayBlocks::<T, I>::set(delay_blocks);
 						Self::deposit_event(Event::<T, I>::BoostDelaySet { delay_blocks });
+					},
+					PalletConfigUpdate::SetMaximumPreallocatedChannels {
+						account_role,
+						num_channels,
+					} => {
+						MaximumPreallocatedChannels::<T, I>::set(account_role, num_channels);
+						Self::deposit_event(Event::<T, I>::MaximumPreallocatedChannelsSet {
+							num_channels,
+						});
 					},
 				}
 			}
@@ -3017,26 +3051,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(current_height, expiry_height, recycle_height)
 	}
 
-	/// Opens a channel for the given asset and registers it with the given action.
-	///
-	/// May re-use an existing deposit address, depending on chain configuration.
-	///
-	/// The requester must have enough FLIP available to pay the channel opening fee.
+	/// Allocates a channel for the given asset
+	/// May re-use an existing channels, depending on chain configuration. The channel is added to
+	/// the preallocated channels list up to the maximum number of channels allowed for the
+	/// requester.
 	#[allow(clippy::type_complexity)]
-	fn open_channel(
+	fn allocate_channel(
 		requester: &T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
-		action: ChannelAction<T::AccountId, T::TargetChain>,
-		boost_fee: BasisPoints,
-	) -> Result<
-		(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>, T::Amount),
-		DispatchError,
-	> {
+	) -> Result<DepositChannel<T::TargetChain>, DispatchError> {
 		ensure!(T::SafeMode::get().deposits_enabled, Error::<T, I>::DepositChannelCreationDisabled);
-
-		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
-		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
-		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
 
 		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
 			DepositChannelPool::<T, I>::drain().next()
@@ -3065,6 +3089,37 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)
 		};
 
+		let requester_role = T::AccountRoleRegistry::account_role(requester);
+		let max_pre_allocated_channels = MaximumPreallocatedChannels::<T, I>::get(requester_role);
+		let num_pre_allocated_channels =
+			PreallocatedChannels::<T, I>::iter_prefix(requester).count();
+
+		// Add the channel to the preallocated channels list
+		if num_pre_allocated_channels < max_pre_allocated_channels as usize {
+			PreallocatedChannels::<T, I>::insert(requester, channel_id, deposit_channel.clone());
+		}
+
+		Ok(deposit_channel)
+	}
+
+	/// Opens a channel and registers it with the given action.
+	/// The requester must have enough FLIP available to pay the channel opening fee.
+	#[allow(clippy::type_complexity)]
+	fn open_channel(
+		requester: &T::AccountId, // TODO: remove this once we save it into DepositChannel struch
+		deposit_channel: DepositChannel<T::TargetChain>,
+		action: ChannelAction<T::AccountId, T::TargetChain>,
+		boost_fee: BasisPoints,
+	) -> Result<
+		(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>, T::Amount),
+		DispatchError,
+	> {
+		ensure!(T::SafeMode::get().deposits_enabled, Error::<T, I>::DepositChannelCreationDisabled);
+
+		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
+		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
+		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
+
 		let deposit_address = deposit_channel.address.clone();
 
 		let (current_height, expiry_height, recycle_height) =
@@ -3078,7 +3133,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&deposit_address,
 			DepositChannelDetails {
 				owner: requester.clone(),
-				deposit_channel,
+				deposit_channel: deposit_channel.clone(),
 				opened_at: current_height,
 				expires_at: expiry_height,
 				action,
@@ -3088,12 +3143,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 		<T::IngressSource as IngressSource>::open_channel(
 			deposit_address.clone(),
-			source_asset,
+			deposit_channel.asset,
 			expiry_height,
 			<frame_system::Pallet<T>>::block_number(),
 		)?;
 
-		Ok((channel_id, deposit_address, expiry_height, channel_opening_fee))
+		Ok((deposit_channel.channel_id, deposit_address, expiry_height, channel_opening_fee))
 	}
 
 	pub fn get_failed_call(broadcast_id: BroadcastId) -> Option<FailedForeignChainCall> {
@@ -3359,9 +3414,16 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
+		// Try to get a pre-allocated channel first, if not request new one
+		let deposit_channel =
+			match PreallocatedChannels::<T, I>::iter_prefix(&lp_account).drain().next() {
+				Some((_, chan)) => chan,
+				None => Self::allocate_channel(&lp_account, source_asset)?,
+			};
+
 		let (channel_id, deposit_address, expiry_block, channel_opening_fee) = Self::open_channel(
 			&lp_account,
-			source_asset,
+			deposit_channel,
 			ChannelAction::LiquidityProvision { lp_account: lp_account.clone(), refund_address },
 			boost_fee,
 		)?;
@@ -3394,9 +3456,16 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 			T::SwapParameterValidation::validate_dca_params(params)?;
 		}
 
+		// Try to get a pre-allocated channel first, if not request new one
+		let deposit_channel =
+			match PreallocatedChannels::<T, I>::iter_prefix(&broker_id).drain().next() {
+				Some((_, chan)) => chan,
+				None => Self::allocate_channel(&broker_id, source_asset)?,
+			};
+
 		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(
 			&broker_id,
-			source_asset,
+			deposit_channel,
 			ChannelAction::Swap {
 				destination_asset,
 				destination_address,
