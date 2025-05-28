@@ -19,7 +19,7 @@ use proptest_derive::Arbitrary;
 
 use crate::electoral_systems::{
 	block_height_tracking::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes},
-	state_machine::core::{def_derive, defx, fst, Hook, Validate},
+	state_machine::core::{def_derive, defx, Hook, Validate},
 };
 
 use super::state_machine::{BWElectionType, BWTypes};
@@ -276,7 +276,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 		optimistic_blocks.into_iter().collect()
 	}
 	fn next_election(&self) -> Option<ChainBlockNumberOf<T::Chain>> {
-		self.queued_elections.first_key_value().map(fst).cloned()
+		self.queued_elections.keys().next().cloned()
 	}
 }
 
