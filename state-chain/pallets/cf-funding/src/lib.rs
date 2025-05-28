@@ -288,7 +288,7 @@ impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled);
 pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
-	use cf_primitives::{AccountRole, BroadcastId};
+	use cf_primitives::BroadcastId;
 	use cf_traits::RedemptionCheck;
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
@@ -514,9 +514,6 @@ pub mod pallet {
 
 		/// The account cannot be reaped before it is unregistered.
 		AccountMustBeUnregistered,
-
-		/// The execution of this extrinsic is restricted only to validators.
-		RestrictedToValidators,
 
 		/// During auction phase its not possible to rebalance to a non-bidding validator if the
 		/// source validator is currently bidding.
@@ -849,19 +846,9 @@ pub mod pallet {
 			amount: RedemptionAmount<FlipBalance<T>>,
 		) -> DispatchResult {
 			let source_account_id = ensure_signed(origin)?;
-			// ensure!(
-			// 	frame_system::Pallet::<T>::account_exists(&recipient_account_id),
-			// 	Error::<T>::AccountMustExist
-			// );
 			ensure!(
-				T::AccountRoleRegistry::has_account_role(
-					&source_account_id,
-					AccountRole::Validator
-				) && T::AccountRoleRegistry::has_account_role(
-					&recipient_account_id,
-					AccountRole::Validator
-				),
-				Error::<T>::RestrictedToValidators
+				frame_system::Pallet::<T>::account_exists(&recipient_account_id),
+				Error::<T>::AccountMustExist
 			);
 
 			if let RedemptionAmount::Exact(amount) = amount {
@@ -903,20 +890,20 @@ pub mod pallet {
 				&recipient_account_id,
 			)?;
 
-			// if T::Flip::balance(&source_account_id).is_zero() {
-			// 	ensure!(
-			// 		T::AccountRoleRegistry::is_unregistered(&source_account_id),
-			// 		Error::<T>::AccountMustBeUnregistered
-			// 	);
-			// }
-
-			Self::kill_account_if_zero_balance(&source_account_id);
+			if T::Flip::balance(&source_account_id).is_zero() {
+				ensure!(
+					T::AccountRoleRegistry::is_unregistered(&source_account_id),
+					Error::<T>::AccountMustBeUnregistered
+				);
+			}
 
 			Self::deposit_event(Event::Rebalance {
-				source_account_id,
+				source_account_id: source_account_id.clone(),
 				recipient_account_id,
 				amount: redemption.redeem_amount,
 			});
+
+			Self::kill_account_if_zero_balance(&source_account_id);
 
 			Ok(())
 		}
