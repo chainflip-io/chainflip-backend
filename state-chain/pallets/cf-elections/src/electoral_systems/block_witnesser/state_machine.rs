@@ -118,7 +118,6 @@ defx! {
 		pub generate_election_properties_hook: T::ElectionPropertiesHook,
 		pub safemode_enabled: T::SafeModeEnabledHook,
 		pub block_processor: BlockProcessor<T>,
-		pub _phantom: sp_std::marker::PhantomData<T>,
 	}
 	validate _this (else BlockWitnesserError) {}
 }
@@ -469,7 +468,6 @@ pub mod tests {
 					execute:Default::default(),
 					log_event: Default::default()
 				},
-				_phantom: core::marker::PhantomData,
 			})
 		}
 	}
