@@ -34,7 +34,7 @@ defx! {
 		pub priority_elections_below: ChainBlockNumberOf<T::Chain>,
 
 		/// Block hashes we got from the BHW.
-		pub queued_elections: BTreeMap<ChainBlockNumberOf<T::Chain>, ChainBlockHashOf<T::Chain>>,
+		pub queued_hash_elections: BTreeMap<ChainBlockNumberOf<T::Chain>, ChainBlockHashOf<T::Chain>>,
 
 		/// Block heights which are queued but already past the safetymargin don't
 		/// have associated hashes. We just store a list of block height ranges.
@@ -53,12 +53,40 @@ defx! {
 
 	validate this (else ElectionTrackerError) {
 
-		is_valid: true
+		seen_heights_below_is_updated: {
+			this.seen_heights_below > this.queued_hash_elections.keys().max().cloned().unwrap_or_default()
+			&& this.seen_heights_below > this.queued_safe_elections.get_all_heights().iter().max().cloned().unwrap_or_default()
+			&& this.seen_heights_below > this.ongoing.keys().max().cloned().unwrap_or_default()
+		},
 
-		// TODO:
-		// - there are no hashes for old elections
-		//-  elections and safe elections are disjoined
+		optimistic_block_cache_is_cleared: this.optimistic_block_cache.iter().all(|(height, _block)|
+			height.saturating_forward(T::Chain::SAFETY_BUFFER) > this.seen_heights_below
+		),
 
+		ongoing_elections_are_not_queued_by_hash:
+			this.ongoing.keys().cloned().collect::<BTreeSet<_>>()
+				.intersection(&this.queued_hash_elections.keys().cloned().collect())
+				.collect::<Vec<_>>().is_empty(),
+
+		ongoing_elections_are_not_queued_by_safe:
+			this.ongoing.keys().cloned().collect::<BTreeSet<_>>()
+				.intersection(&this.queued_safe_elections.get_all_heights())
+				.collect::<Vec<_>>().is_empty(),
+
+		elections_queued_by_hash_and_safe_are_disjoint:
+			this.queued_hash_elections.keys().cloned().collect::<BTreeSet<_>>()
+				.intersection(&this.queued_safe_elections.get_all_heights())
+				.collect::<Vec<_>>().is_empty(),
+
+		elections_queued_by_hash_are_inside_safety_buffer:
+			this.queued_hash_elections.keys().all(
+				|height| height.saturating_forward(T::Chain::SAFETY_BUFFER) > this.seen_heights_below
+			),
+
+		elections_queued_by_safe_are_outside_safety_buffer:
+			this.queued_hash_elections.keys().all(
+				|height| height.saturating_forward(T::Chain::SAFETY_BUFFER) < this.seen_heights_below
+			)
 	}
 }
 
@@ -94,7 +122,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 			.map(|height| (height, SafeBlockHeight));
 
 		let hash_elections = self
-			.queued_elections
+			.queued_hash_elections
 			.extract_if(|n, _| *n < start_all_below)
 			.map(|(height, hash)| (height, ByHash(hash)));
 		let opti_elections = iter::once((self.seen_heights_below, Optimistic));
@@ -255,10 +283,10 @@ impl<T: BWTypes> ElectionTracker<T> {
 			);
 
 		// adding all hashes to the queue
-		self.queued_elections.append(&mut remaining);
+		self.queued_hash_elections.append(&mut remaining);
 
 		// clean up the queue by removing old hashes
-		self.queued_elections
+		self.queued_hash_elections
 			.extract_if(|height, _| {
 				height.saturating_forward(T::Chain::SAFETY_BUFFER) < last_seen_height
 			})
@@ -276,13 +304,13 @@ impl<T: BWTypes> ElectionTracker<T> {
 		optimistic_blocks.into_iter().collect()
 	}
 	fn next_election(&self) -> Option<ChainBlockNumberOf<T::Chain>> {
-		self.queued_elections.keys().next().cloned()
+		self.queued_hash_elections.keys().next().cloned()
 	}
 	pub fn lowest_in_progress_height(&self) -> ChainBlockNumberOf<T::Chain> {
 		*self
 			.ongoing
 			.keys()
-			.chain(self.queued_elections.keys())
+			.chain(self.queued_hash_elections.keys())
 			.chain(self.queued_safe_elections.get_all_heights().iter())
 			.min()
 			.unwrap_or(&self.seen_heights_below)
@@ -294,7 +322,7 @@ impl<T: BWTypes> Default for ElectionTracker<T> {
 		Self {
 			seen_heights_below: ChainBlockNumberOf::<T::Chain>::zero(),
 			priority_elections_below: ChainBlockNumberOf::<T::Chain>::zero(),
-			queued_elections: Default::default(),
+			queued_hash_elections: Default::default(),
 			ongoing: Default::default(),
 			queued_safe_elections: Default::default(),
 			optimistic_block_cache: Default::default(),

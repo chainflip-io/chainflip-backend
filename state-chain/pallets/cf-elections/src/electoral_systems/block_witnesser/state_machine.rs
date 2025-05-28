@@ -466,7 +466,7 @@ pub mod tests {
 			LazyJust::new(move || BlockWitnesserState {
 				elections: ElectionTracker {
 					// queued_next_safe_height: None,
-					queued_elections: BTreeMap::from_iter(queued_elections.clone()),
+					queued_hash_elections: BTreeMap::from_iter(queued_elections.clone()),
 					seen_heights_below,
 					priority_elections_below,
 					ongoing: BTreeMap::from_iter(ongoing.clone()),
