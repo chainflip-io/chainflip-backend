@@ -59,12 +59,40 @@ defx! {
 
 	validate this (else ElectionTrackerError) {
 
-		is_valid: true
+		seen_heights_below_is_updated: {
+			this.seen_heights_below > this.queued_hash_elections.keys().max().cloned().unwrap_or_default()
+			&& this.seen_heights_below > this.queued_safe_elections.get_all_heights().iter().max().cloned().unwrap_or_default()
+			&& this.seen_heights_below > this.ongoing.keys().max().cloned().unwrap_or_default()
+		},
 
-		// TODO:
-		// - there are no hashes for old elections
-		//-  elections and safe elections are disjoined
+		optimistic_block_cache_is_cleared: this.optimistic_block_cache.iter().all(|(height, _block)|
+			height.saturating_forward(T::Chain::SAFETY_BUFFER) > this.seen_heights_below
+		),
 
+		ongoing_elections_are_not_queued_by_hash:
+			this.ongoing.keys().cloned().collect::<BTreeSet<_>>()
+				.intersection(&this.queued_hash_elections.keys().cloned().collect())
+				.collect::<Vec<_>>().is_empty(),
+
+		ongoing_elections_are_not_queued_by_safe:
+			this.ongoing.keys().cloned().collect::<BTreeSet<_>>()
+				.intersection(&this.queued_safe_elections.get_all_heights())
+				.collect::<Vec<_>>().is_empty(),
+
+		elections_queued_by_hash_and_safe_are_disjoint:
+			this.queued_hash_elections.keys().cloned().collect::<BTreeSet<_>>()
+				.intersection(&this.queued_safe_elections.get_all_heights())
+				.collect::<Vec<_>>().is_empty(),
+
+		elections_queued_by_hash_are_inside_safety_buffer:
+			this.queued_hash_elections.keys().all(
+				|height| height.saturating_forward(T::Chain::SAFETY_BUFFER) > this.seen_heights_below
+			),
+
+		elections_queued_by_safe_are_outside_safety_buffer:
+			this.queued_hash_elections.keys().all(
+				|height| height.saturating_forward(T::Chain::SAFETY_BUFFER) < this.seen_heights_below
+			)
 	}
 }
 
