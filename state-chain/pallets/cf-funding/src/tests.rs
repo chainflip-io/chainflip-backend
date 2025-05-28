@@ -1834,607 +1834,642 @@ fn only_governance_can_update_settings() {
 	});
 }
 
-#[test]
-fn rebalance_unrestricted_funds() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 100;
-		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+pub mod rebalancing {
+	use super::*;
+	#[test]
+	fn rebalance_unrestricted_funds() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&ALICE
-		));
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+					&ALICE
+				)
+			);
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&BOB
-		));
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB)
+			);
 
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			AMOUNT,
-			UNRESTRICTED_ADDRESS,
-			TX_HASH
-		));
-		assert_eq!(
-			frame_system::Pallet::<Test>::providers(&ALICE),
-			1,
-			"Funding pallet should increment the provider count on account creation."
-		);
-		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT, "Total balance to be correct.");
-		assert_ok!(Funding::rebalance(
-			OriginTrait::signed(ALICE),
-			BOB,
-			Some(UNRESTRICTED_ADDRESS),
-			AMOUNT.into()
-		));
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Funding(Event::Funded {
-				account_id: ALICE,
-				tx_hash: _,
-				funds_added: AMOUNT,
-				total_balance: AMOUNT
-			}),
-			RuntimeEvent::System(frame_system::Event::KilledAccount { account: ALICE }),
-			RuntimeEvent::Funding(Event::Rebalance {
-				source_account_id: ALICE,
-				recipient_account_id: BOB,
-				amount: AMOUNT,
-			}),
-		);
-		assert_eq!(Flip::total_balance_of(&BOB), AMOUNT, "Total balance to be correct.");
-	});
-}
-
-#[test]
-fn can_only_rebalance_as_and_to_validator() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 100;
-		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
-		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
-
-		assert_noop!(
-			Funding::rebalance(
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				AMOUNT,
+				UNRESTRICTED_ADDRESS,
+				TX_HASH
+			));
+			assert_eq!(
+				frame_system::Pallet::<Test>::providers(&ALICE),
+				1,
+				"Funding pallet should increment the provider count on account creation."
+			);
+			assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT, "Total balance to be correct.");
+			assert_ok!(Funding::rebalance(
 				OriginTrait::signed(ALICE),
 				BOB,
 				Some(UNRESTRICTED_ADDRESS),
-				AMOUNT_MINUS_FEE.into()
-			),
-			Error::<Test>::RestrictedToValidators
-		);
+				AMOUNT.into()
+			));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
+				RuntimeEvent::Funding(Event::Funded {
+					account_id: ALICE,
+					tx_hash: _,
+					funds_added: AMOUNT,
+					total_balance: AMOUNT
+				}),
+				RuntimeEvent::System(frame_system::Event::KilledAccount { account: ALICE }),
+				RuntimeEvent::Funding(Event::Rebalance {
+					source_account_id: ALICE,
+					recipient_account_id: BOB,
+					amount: AMOUNT,
+				}),
+			);
+			assert_eq!(Flip::total_balance_of(&BOB), AMOUNT, "Total balance to be correct.");
+		});
+	}
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&ALICE
-		));
+	#[test]
+	fn can_only_rebalance_as_and_to_validator() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const AMOUNT_MINUS_FEE: u128 = AMOUNT;
+			const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 
-		assert_noop!(
-			Funding::rebalance(
-				OriginTrait::signed(ALICE),
-				BOB,
-				Some(UNRESTRICTED_ADDRESS),
-				AMOUNT_MINUS_FEE.into()
-			),
-			Error::<Test>::RestrictedToValidators
-		);
-	});
-}
+			assert_noop!(
+				Funding::rebalance(
+					OriginTrait::signed(ALICE),
+					BOB,
+					Some(UNRESTRICTED_ADDRESS),
+					AMOUNT_MINUS_FEE.into()
+				),
+				Error::<Test>::RestrictedToValidators
+			);
 
-#[test]
-fn rebalance_restricted_funds() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 100;
-		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+					&ALICE
+				)
+			);
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&ALICE
-		));
+			assert_noop!(
+				Funding::rebalance(
+					OriginTrait::signed(ALICE),
+					BOB,
+					Some(UNRESTRICTED_ADDRESS),
+					AMOUNT_MINUS_FEE.into()
+				),
+				Error::<Test>::RestrictedToValidators
+			);
+		});
+	}
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&BOB
-		));
+	#[test]
+	fn rebalance_restricted_funds() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 
-		assert_ok!(Funding::update_restricted_addresses(
-			RuntimeOrigin::root(),
-			vec![RESTRICTED_ADDRESS],
-			vec![],
-		));
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+					&ALICE
+				)
+			);
 
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			AMOUNT,
-			RESTRICTED_ADDRESS,
-			TX_HASH
-		));
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB)
+			);
 
-		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT);
+			assert_ok!(Funding::update_restricted_addresses(
+				RuntimeOrigin::root(),
+				vec![RESTRICTED_ADDRESS],
+				vec![],
+			));
 
-		assert_eq!(
-			RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS),
-			Some(AMOUNT).as_ref()
-		);
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				AMOUNT,
+				RESTRICTED_ADDRESS,
+				TX_HASH
+			));
 
-		assert_ok!(Funding::rebalance(
-			OriginTrait::signed(ALICE),
-			BOB,
-			Some(RESTRICTED_ADDRESS),
-			AMOUNT.into()
-		));
+			assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT);
 
-		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS), None);
-		assert_eq!(RestrictedBalances::<Test>::get(BOB).get(&RESTRICTED_ADDRESS), Some(&AMOUNT));
-	});
-}
+			assert_eq!(
+				RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS),
+				Some(AMOUNT).as_ref()
+			);
 
-#[test]
-fn rebalance_only_a_apart_of_the_restricted_funds() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 100;
-		const AMOUNT_MOVE: u128 = AMOUNT / 2;
-		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&ALICE
-		));
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&BOB
-		));
-
-		assert_ok!(Funding::update_restricted_addresses(
-			RuntimeOrigin::root(),
-			vec![RESTRICTED_ADDRESS],
-			vec![],
-		));
-
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			AMOUNT,
-			RESTRICTED_ADDRESS,
-			TX_HASH
-		));
-
-		assert_ok!(Funding::rebalance(
-			OriginTrait::signed(ALICE),
-			BOB,
-			Some(RESTRICTED_ADDRESS),
-			RedemptionAmount::Exact(AMOUNT_MOVE)
-		));
-
-		// We burn the redemption tax from the restricted balance of the sender.
-		assert_eq!(
-			*RestrictedBalances::<Test>::get(BOB).get(&RESTRICTED_ADDRESS).unwrap(),
-			AMOUNT_MOVE
-		);
-
-		assert_eq!(
-			*RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
-			AMOUNT_MOVE
-		);
-	});
-}
-
-#[test]
-fn ensure_bounded_address_condition_hold_during_rebalance() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 100;
-		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
-		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&ALICE
-		));
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&BOB
-		));
-
-		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), H160([0x02; 20])));
-		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(BOB), H160([0x03; 20])));
-
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			AMOUNT,
-			RESTRICTED_ADDRESS,
-			TX_HASH
-		));
-
-		assert_noop!(
-			Funding::rebalance(
+			assert_ok!(Funding::rebalance(
 				OriginTrait::signed(ALICE),
 				BOB,
 				Some(RESTRICTED_ADDRESS),
-				AMOUNT_MINUS_FEE.into()
-			),
-			Error::<Test>::AccountBindingRestrictionViolated
-		);
-	});
-}
+				AMOUNT.into()
+			));
 
-#[test]
-fn fund_rebalance_and_redeem_dosent_allow_unauthorized_redemptions() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 100;
-		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
-		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x02; 20]);
+			assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS), None);
+			assert_eq!(
+				RestrictedBalances::<Test>::get(BOB).get(&RESTRICTED_ADDRESS),
+				Some(&AMOUNT)
+			);
+		});
+	}
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&ALICE
-		));
+	#[test]
+	fn rebalance_only_a_apart_of_the_restricted_funds() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const AMOUNT_MOVE: u128 = AMOUNT / 2;
+			const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&BOB
-		));
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+					&ALICE
+				)
+			);
 
-		assert_ok!(Funding::update_restricted_addresses(
-			RuntimeOrigin::root(),
-			vec![RESTRICTED_ADDRESS],
-			vec![],
-		));
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB)
+			);
 
-		// Fund ALICE with 100 FLIP.
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			AMOUNT,
-			RESTRICTED_ADDRESS,
-			TX_HASH
-		));
+			assert_ok!(Funding::update_restricted_addresses(
+				RuntimeOrigin::root(),
+				vec![RESTRICTED_ADDRESS],
+				vec![],
+			));
 
-		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT);
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				AMOUNT,
+				RESTRICTED_ADDRESS,
+				TX_HASH
+			));
 
-		// Try to rebalance to BOBs liquid funds.
-		assert_noop!(
-			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
-			Error::<Test>::InsufficientUnrestrictedFunds
-		);
-
-		// Try to rebalance to BOB under an unrestricted address.
-		assert_noop!(
-			Funding::rebalance(
+			assert_ok!(Funding::rebalance(
 				OriginTrait::signed(ALICE),
 				BOB,
-				Some(UNRESTRICTED_ADDRESS),
+				Some(RESTRICTED_ADDRESS),
+				RedemptionAmount::Exact(AMOUNT_MOVE)
+			));
+
+			// We burn the redemption tax from the restricted balance of the sender.
+			assert_eq!(
+				*RestrictedBalances::<Test>::get(BOB).get(&RESTRICTED_ADDRESS).unwrap(),
+				AMOUNT_MOVE
+			);
+
+			assert_eq!(
+				*RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
+				AMOUNT_MOVE
+			);
+		});
+	}
+
+	#[test]
+	fn ensure_bounded_address_condition_hold_during_rebalance() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const AMOUNT_MINUS_FEE: u128 = AMOUNT;
+			const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+					&ALICE
+				)
+			);
+
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB)
+			);
+
+			assert_ok!(Funding::bind_redeem_address(
+				RuntimeOrigin::signed(ALICE),
+				H160([0x02; 20])
+			));
+			assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(BOB), H160([0x03; 20])));
+
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				AMOUNT,
+				RESTRICTED_ADDRESS,
+				TX_HASH
+			));
+
+			assert_noop!(
+				Funding::rebalance(
+					OriginTrait::signed(ALICE),
+					BOB,
+					Some(RESTRICTED_ADDRESS),
+					AMOUNT_MINUS_FEE.into()
+				),
+				Error::<Test>::AccountBindingRestrictionViolated
+			);
+		});
+	}
+
+	#[test]
+	fn fund_rebalance_and_redeem_dosent_allow_unauthorized_redemptions() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+			const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x02; 20]);
+
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+					&ALICE
+				)
+			);
+
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB)
+			);
+
+			assert_ok!(Funding::update_restricted_addresses(
+				RuntimeOrigin::root(),
+				vec![RESTRICTED_ADDRESS],
+				vec![],
+			));
+
+			// Fund ALICE with 100 FLIP.
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				AMOUNT,
+				RESTRICTED_ADDRESS,
+				TX_HASH
+			));
+
+			assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT);
+
+			// Try to rebalance to BOBs liquid funds.
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::InsufficientUnrestrictedFunds
+			);
+
+			// Try to rebalance to BOB under an unrestricted address.
+			assert_noop!(
+				Funding::rebalance(
+					OriginTrait::signed(ALICE),
+					BOB,
+					Some(UNRESTRICTED_ADDRESS),
+					AMOUNT.into()
+				),
+				Error::<Test>::InsufficientUnrestrictedFunds
+			);
+
+			// Rebalance to BOB under a restricted address.
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				Some(RESTRICTED_ADDRESS),
 				AMOUNT.into()
-			),
-			Error::<Test>::InsufficientUnrestrictedFunds
-		);
+			));
 
-		// Rebalance to BOB under a restricted address.
-		assert_ok!(Funding::rebalance(
-			OriginTrait::signed(ALICE),
-			BOB,
-			Some(RESTRICTED_ADDRESS),
-			AMOUNT.into()
-		));
+			assert_eq!(Flip::total_balance_of(&BOB), AMOUNT);
 
-		assert_eq!(Flip::total_balance_of(&BOB), AMOUNT);
+			// Try to redeem some funds to an unrestricted address.
+			assert_noop!(
+				Funding::redeem(
+					OriginTrait::signed(BOB),
+					RedemptionAmount::Exact(AMOUNT / 2),
+					UNRESTRICTED_ADDRESS,
+					Default::default()
+				),
+				Error::<Test>::InsufficientUnrestrictedFunds
+			);
 
-		// Try to redeem some funds to an unrestricted address.
-		assert_noop!(
-			Funding::redeem(
-				OriginTrait::signed(BOB),
-				RedemptionAmount::Exact(AMOUNT / 2),
-				UNRESTRICTED_ADDRESS,
-				Default::default()
-			),
-			Error::<Test>::InsufficientUnrestrictedFunds
-		);
+			// Try to rebalance to ALICE liquid funds.
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(BOB), ALICE, None, AMOUNT.into()),
+				Error::<Test>::InsufficientUnrestrictedFunds
+			);
 
-		// Try to rebalance to ALICE liquid funds.
-		assert_noop!(
-			Funding::rebalance(OriginTrait::signed(BOB), ALICE, None, AMOUNT.into()),
-			Error::<Test>::InsufficientUnrestrictedFunds
-		);
+			// Try to rebalance to ALICE under an unrestricted address.
+			assert_noop!(
+				Funding::rebalance(
+					OriginTrait::signed(BOB),
+					ALICE,
+					Some(UNRESTRICTED_ADDRESS),
+					AMOUNT.into()
+				),
+				Error::<Test>::InsufficientUnrestrictedFunds
+			);
 
-		// Try to rebalance to ALICE under an unrestricted address.
-		assert_noop!(
-			Funding::rebalance(
+			// Rebalance to ALICE under a restricted address.
+			assert_ok!(Funding::rebalance(
 				OriginTrait::signed(BOB),
 				ALICE,
-				Some(UNRESTRICTED_ADDRESS),
-				AMOUNT.into()
-			),
-			Error::<Test>::InsufficientUnrestrictedFunds
-		);
+				Some(RESTRICTED_ADDRESS),
+				(AMOUNT / 2).into()
+			));
 
-		// Rebalance to ALICE under a restricted address.
-		assert_ok!(Funding::rebalance(
-			OriginTrait::signed(BOB),
-			ALICE,
-			Some(RESTRICTED_ADDRESS),
-			(AMOUNT / 2).into()
-		));
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_as_validator(
+					&BOB
+				)
+			);
 
-		assert_ok!(
-			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_as_validator(&BOB)
-		);
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_as_validator(
+					&ALICE
+				)
+			);
 
-		assert_ok!(
-			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_as_validator(&ALICE)
-		);
+			// Redeem successfully all funds to BOB to the restricted address.
+			assert_ok!(Funding::redeem(
+				OriginTrait::signed(BOB),
+				RedemptionAmount::Max,
+				RESTRICTED_ADDRESS,
+				Default::default()
+			));
 
-		// Redeem successfully all funds to BOB to the restricted address.
-		assert_ok!(Funding::redeem(
-			OriginTrait::signed(BOB),
-			RedemptionAmount::Max,
-			RESTRICTED_ADDRESS,
-			Default::default()
-		));
-
-		// Redeem successfully all funds to ALICE to the restricted address.
-		assert_ok!(Funding::redeem(
-			OriginTrait::signed(ALICE),
-			RedemptionAmount::Max,
-			RESTRICTED_ADDRESS,
-			Default::default()
-		));
-
-		assert_eq!(Flip::total_balance_of(&BOB), 0);
-		assert_eq!(Flip::total_balance_of(&ALICE), 0);
-
-		assert!(PendingRedemptions::<Test>::get(BOB).is_some());
-		assert!(PendingRedemptions::<Test>::get(ALICE).is_some());
-
-		let mut api_calls = MockFundingBroadcaster::get_pending_api_calls();
-		assert_eq!(api_calls.len(), 2);
-
-		let api_call_1 = api_calls.pop().unwrap();
-		let api_call_2 = api_calls.pop().unwrap();
-
-		let successful_redemption_amount_1 = api_call_1.amount;
-		let successful_redemption_amount_2 = api_call_2.amount;
-
-		// Note: No tax is taken during the redemption since we redeem all.
-		assert_eq!(successful_redemption_amount_1, AMOUNT / 2);
-		assert_eq!(successful_redemption_amount_2, AMOUNT / 2);
-
-		// Proof balance integrity of all operations.
-		assert_eq!(
-			AMOUNT,
-			Flip::total_balance_of(&ALICE) +
-				Flip::total_balance_of(&BOB) +
-				successful_redemption_amount_1 +
-				successful_redemption_amount_2
-		);
-	});
-}
-
-#[test]
-fn rebalance_during_redemption_dosent_lead_to_double_spending() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 100;
-		const AMOUNT_TO_REDEEM: u128 = 50;
-		const REBALANCE_AMOUNT_TO_HIGH: u128 = 60;
-		const REBALANCE_AMOUNT: u128 = 30;
-		const TAX: u128 = 5;
-
-		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&ALICE
-		));
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&BOB
-		));
-
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			AMOUNT,
-			UNRESTRICTED_ADDRESS,
-			TX_HASH
-		));
-
-		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT);
-
-		assert_ok!(Funding::redeem(
-			OriginTrait::signed(ALICE),
-			RedemptionAmount::Exact(AMOUNT_TO_REDEEM),
-			UNRESTRICTED_ADDRESS,
-			Default::default()
-		));
-
-		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT_TO_REDEEM - TAX);
-
-		assert!(PendingRedemptions::<Test>::get(ALICE).is_some());
-
-		assert_noop!(
-			Funding::rebalance(
+			// Redeem successfully all funds to ALICE to the restricted address.
+			assert_ok!(Funding::redeem(
 				OriginTrait::signed(ALICE),
-				BOB,
-				Some(UNRESTRICTED_ADDRESS),
-				REBALANCE_AMOUNT_TO_HIGH.into()
-			),
-			Error::<Test>::InsufficientBalance
-		);
+				RedemptionAmount::Max,
+				RESTRICTED_ADDRESS,
+				Default::default()
+			));
 
-		assert_ok!(Funding::rebalance(
-			OriginTrait::signed(ALICE),
-			BOB,
-			Some(UNRESTRICTED_ADDRESS),
-			REBALANCE_AMOUNT.into()
-		));
+			assert_eq!(Flip::total_balance_of(&BOB), 0);
+			assert_eq!(Flip::total_balance_of(&ALICE), 0);
 
-		let on_chain_balance_alice = Flip::total_balance_of(&ALICE);
-		let on_chain_balance_bob = Flip::total_balance_of(&BOB);
+			assert!(PendingRedemptions::<Test>::get(BOB).is_some());
+			assert!(PendingRedemptions::<Test>::get(ALICE).is_some());
 
-		assert_eq!(on_chain_balance_alice, AMOUNT - AMOUNT_TO_REDEEM - REBALANCE_AMOUNT - TAX);
-		assert_eq!(on_chain_balance_bob, REBALANCE_AMOUNT);
+			let mut api_calls = MockFundingBroadcaster::get_pending_api_calls();
+			assert_eq!(api_calls.len(), 2);
 
-		assert!(PendingRedemptions::<Test>::get(ALICE).is_some());
+			let api_call_1 = api_calls.pop().unwrap();
+			let api_call_2 = api_calls.pop().unwrap();
 
-		let mut api_calls = MockFundingBroadcaster::get_pending_api_calls();
-		assert_eq!(api_calls.len(), 1);
+			let successful_redemption_amount_1 = api_call_1.amount;
+			let successful_redemption_amount_2 = api_call_2.amount;
 
-		let api_call_1 = api_calls.pop().unwrap();
+			// Note: No tax is taken during the redemption since we redeem all.
+			assert_eq!(successful_redemption_amount_1, AMOUNT / 2);
+			assert_eq!(successful_redemption_amount_2, AMOUNT / 2);
 
-		let successful_redemption_amount = api_call_1.amount;
+			// Proof balance integrity of all operations.
+			assert_eq!(
+				AMOUNT,
+				Flip::total_balance_of(&ALICE) +
+					Flip::total_balance_of(&BOB) +
+					successful_redemption_amount_1 +
+					successful_redemption_amount_2
+			);
+		});
+	}
 
-		assert_eq!(successful_redemption_amount, AMOUNT_TO_REDEEM);
+	#[test]
+	fn rebalance_during_redemption_dosent_lead_to_double_spending() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const AMOUNT_TO_REDEEM: u128 = 50;
+			const REBALANCE_AMOUNT_TO_HIGH: u128 = 60;
+			const REBALANCE_AMOUNT: u128 = 30;
+			const TAX: u128 = 5;
 
-		assert_eq!(
-			AMOUNT,
-			on_chain_balance_alice + on_chain_balance_bob + successful_redemption_amount + TAX
-		);
-	});
-}
+			const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 
-#[test]
-fn rebalance_to_non_bidding_validator_fails() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 100;
-		const REBALANCE_AMOUNT: u128 = 30;
-		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+					&ALICE
+				)
+			);
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&ALICE
-		));
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB)
+			);
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&BOB
-		));
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				AMOUNT,
+				UNRESTRICTED_ADDRESS,
+				TX_HASH
+			));
 
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			AMOUNT,
-			UNRESTRICTED_ADDRESS,
-			TX_HASH
-		));
+			assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT);
 
-		MockRedemptionChecker::set_can_redeem(ALICE, false);
+			assert_ok!(Funding::redeem(
+				OriginTrait::signed(ALICE),
+				RedemptionAmount::Exact(AMOUNT_TO_REDEEM),
+				UNRESTRICTED_ADDRESS,
+				Default::default()
+			));
 
-		// ALICE is bidding, BOB not, so rebalance should fail
-		assert_noop!(
-			Funding::rebalance(
+			assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT_TO_REDEEM - TAX);
+
+			assert!(PendingRedemptions::<Test>::get(ALICE).is_some());
+
+			assert_noop!(
+				Funding::rebalance(
+					OriginTrait::signed(ALICE),
+					BOB,
+					Some(UNRESTRICTED_ADDRESS),
+					REBALANCE_AMOUNT_TO_HIGH.into()
+				),
+				Error::<Test>::InsufficientBalance
+			);
+
+			assert_ok!(Funding::rebalance(
 				OriginTrait::signed(ALICE),
 				BOB,
 				Some(UNRESTRICTED_ADDRESS),
 				REBALANCE_AMOUNT.into()
-			),
-			Error::<Test>::CanNotRebalanceToNotBiddingValidator
-		);
+			));
 
-		MockRedemptionChecker::set_can_redeem(BOB, false);
+			let on_chain_balance_alice = Flip::total_balance_of(&ALICE);
+			let on_chain_balance_bob = Flip::total_balance_of(&BOB);
 
-		// IF ALICE is bidding, and BOB is as well, rebalance should succeed
-		assert_ok!(Funding::rebalance(
-			OriginTrait::signed(ALICE),
-			BOB,
-			Some(UNRESTRICTED_ADDRESS),
-			REBALANCE_AMOUNT.into()
-		));
-	});
-}
+			assert_eq!(on_chain_balance_alice, AMOUNT - AMOUNT_TO_REDEEM - REBALANCE_AMOUNT - TAX);
+			assert_eq!(on_chain_balance_bob, REBALANCE_AMOUNT);
 
-#[test]
-fn ensure_bound_address_restriction_is_enforced_during_rebalance() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 100;
-		const ADDRESS_A: EthereumAddress = H160([0x01; 20]);
-		const ADDRESS_B: EthereumAddress = H160([0x02; 20]);
+			assert!(PendingRedemptions::<Test>::get(ALICE).is_some());
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&ALICE
-		));
+			let mut api_calls = MockFundingBroadcaster::get_pending_api_calls();
+			assert_eq!(api_calls.len(), 1);
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&BOB
-		));
+			let api_call_1 = api_calls.pop().unwrap();
 
-		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), ADDRESS_A));
+			let successful_redemption_amount = api_call_1.amount;
 
-		assert_noop!(
-			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
-			Error::<Test>::AccountBindingRestrictionViolated
-		);
+			assert_eq!(successful_redemption_amount, AMOUNT_TO_REDEEM);
 
-		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(BOB), ADDRESS_B));
+			assert_eq!(
+				AMOUNT,
+				on_chain_balance_alice + on_chain_balance_bob + successful_redemption_amount + TAX
+			);
+		});
+	}
 
-		assert_noop!(
-			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
-			Error::<Test>::AccountBindingRestrictionViolated
-		);
+	#[test]
+	fn rebalance_to_non_bidding_validator_fails() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const REBALANCE_AMOUNT: u128 = 30;
+			const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 
-		BoundRedeemAddress::<Test>::insert(BOB, ADDRESS_A);
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+					&ALICE
+				)
+			);
 
-		assert_noop!(
-			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
-			Error::<Test>::InsufficientBalance
-		);
-	});
-}
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB)
+			);
 
-#[test]
-fn ensure_executor_address_restriction_is_enforced_during_rebalance() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 100;
-		const ADDRESS_A: EthereumAddress = H160([0x01; 20]);
-		const ADDRESS_B: EthereumAddress = H160([0x02; 20]);
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				AMOUNT,
+				UNRESTRICTED_ADDRESS,
+				TX_HASH
+			));
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&ALICE
-		));
+			MockRedemptionChecker::set_can_redeem(ALICE, false);
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&BOB
-		));
+			// ALICE is bidding, BOB not, so rebalance should fail
+			assert_noop!(
+				Funding::rebalance(
+					OriginTrait::signed(ALICE),
+					BOB,
+					Some(UNRESTRICTED_ADDRESS),
+					REBALANCE_AMOUNT.into()
+				),
+				Error::<Test>::CanNotRebalanceToNotBiddingValidator
+			);
 
-		assert_ok!(Funding::bind_executor_address(RuntimeOrigin::signed(ALICE), ADDRESS_A));
+			MockRedemptionChecker::set_can_redeem(BOB, false);
 
-		assert_noop!(
-			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
-			Error::<Test>::ExecutorBindingRestrictionViolated
-		);
+			// IF ALICE is bidding, and BOB is as well, rebalance should succeed
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				Some(UNRESTRICTED_ADDRESS),
+				REBALANCE_AMOUNT.into()
+			));
+		});
+	}
 
-		assert_ok!(Funding::bind_executor_address(RuntimeOrigin::signed(BOB), ADDRESS_B));
+	#[test]
+	fn ensure_bound_address_restriction_is_enforced_during_rebalance() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const ADDRESS_A: EthereumAddress = H160([0x01; 20]);
+			const ADDRESS_B: EthereumAddress = H160([0x02; 20]);
 
-		assert_noop!(
-			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
-			Error::<Test>::ExecutorBindingRestrictionViolated
-		);
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+					&ALICE
+				)
+			);
 
-		BoundExecutorAddress::<Test>::insert(BOB, ADDRESS_A);
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB)
+			);
 
-		assert_noop!(
-			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
-			Error::<Test>::InsufficientBalance
-		);
-	});
-}
+			assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), ADDRESS_A));
 
-#[test]
-fn cannot_rebalance_illiquid_funds() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 100;
-		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::AccountBindingRestrictionViolated
+			);
 
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&ALICE
-		));
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&BOB
-		));
+			assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(BOB), ADDRESS_B));
 
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			AMOUNT,
-			RESTRICTED_ADDRESS,
-			TX_HASH
-		));
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::AccountBindingRestrictionViolated
+			);
 
-		// Bond ALICE.
-		Bonder::<Test>::update_bond(&ALICE, AMOUNT);
+			BoundRedeemAddress::<Test>::insert(BOB, ADDRESS_A);
 
-		assert_noop!(
-			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
-			Error::<Test>::BondViolation,
-		);
-	});
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::InsufficientBalance
+			);
+		});
+	}
+
+	#[test]
+	fn ensure_executor_address_restriction_is_enforced_during_rebalance() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const ADDRESS_A: EthereumAddress = H160([0x01; 20]);
+			const ADDRESS_B: EthereumAddress = H160([0x02; 20]);
+
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+					&ALICE
+				)
+			);
+
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB)
+			);
+
+			assert_ok!(Funding::bind_executor_address(RuntimeOrigin::signed(ALICE), ADDRESS_A));
+
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::ExecutorBindingRestrictionViolated
+			);
+
+			assert_ok!(Funding::bind_executor_address(RuntimeOrigin::signed(BOB), ADDRESS_B));
+
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::ExecutorBindingRestrictionViolated
+			);
+
+			BoundExecutorAddress::<Test>::insert(BOB, ADDRESS_A);
+
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::InsufficientBalance
+			);
+		});
+	}
+
+	#[test]
+	fn cannot_rebalance_illiquid_funds() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+					&ALICE
+				)
+			);
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB)
+			);
+
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				AMOUNT,
+				RESTRICTED_ADDRESS,
+				TX_HASH
+			));
+
+			// Bond ALICE.
+			Bonder::<Test>::update_bond(&ALICE, AMOUNT);
+
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::BondViolation,
+			);
+		});
+	}
 }
