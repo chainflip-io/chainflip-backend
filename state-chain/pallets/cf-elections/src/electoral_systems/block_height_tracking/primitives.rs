@@ -85,7 +85,7 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 				self.headers.append(&mut other.headers.clone());
 				Ok(MergeInfo { removed: VecDeque::new(), added: other.headers })
 			} else {
-				Err(MergeFailure::ReorgWithUnknownRoot {
+				Err(MergeFailure::Reorg {
 					new_block: other.first().clone(),
 					existing_wrong_parent: self.headers.back().cloned(),
 				})
@@ -126,7 +126,7 @@ pub enum MergeFailure<T: ChainTypes> {
 	// If we get a new range of blocks, [lowest_new_block, ...], where the parent of
 	// `lowest_new_block` should, by block number, be `existing_wrong_parent`, but who's
 	// hash doesn't match with `lowest_new_block`'s parent hash.
-	ReorgWithUnknownRoot { new_block: Header<T>, existing_wrong_parent: Option<Header<T>> },
+	Reorg { new_block: Header<T>, existing_wrong_parent: Option<Header<T>> },
 
 	// Internal error. Should never happen.
 	InternalError,
