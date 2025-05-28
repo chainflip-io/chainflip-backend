@@ -1883,11 +1883,6 @@ pub mod rebalancing {
 			self
 		}
 
-		fn with_deposit(mut self, amount: u128, address: EthereumAddress) -> Self {
-			self.deposits.push((amount, address));
-			self
-		}
-
 		fn with_bound_redeem_address(mut self, address: EthereumAddress) -> Self {
 			self.bound_redeem_address = Some(address);
 			self
@@ -2063,9 +2058,9 @@ pub mod rebalancing {
 			assert_ok!(setup_test(
 				vec![
 					AccountSetup::new(ALICE)
-						.as_validator()
+						.with_validator_role()
 						.with_balance(AMOUNT, Some(RESTRICTED_ADDRESS)),
-					AccountSetup::new(BOB).as_validator(),
+					AccountSetup::new(BOB).with_validator_role(),
 				],
 				vec![RESTRICTED_ADDRESS]
 			));
@@ -2091,33 +2086,67 @@ pub mod rebalancing {
 	}
 
 	#[test]
-	fn ensure_bounded_address_condition_hold_during_rebalance() {
+	fn ensure_bound_address_restrictions_enforced_during_rebalance() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 100;
-			const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+			const ADDRESS_A: EthereumAddress = H160([0x01; 20]);
+			const ADDRESS_B: EthereumAddress = H160([0x02; 20]);
 
 			assert_ok!(setup_test(
 				vec![
 					AccountSetup::new(ALICE)
-						.as_validator()
-						.with_balance(AMOUNT, Some(RESTRICTED_ADDRESS))
-						.with_bound_redeem_address(H160([0x02; 20])),
+						.with_balance(AMOUNT, None)
+						.with_bound_redeem_address(ADDRESS_A),
 					AccountSetup::new(BOB)
-						.as_validator()
-						.with_bound_redeem_address(H160([0x03; 20])),
+						.with_balance(AMOUNT, None)
+						.with_bound_redeem_address(ADDRESS_B),
+					AccountSetup::new(CHARLIE).with_balance(AMOUNT, None),
 				],
 				vec![]
 			));
 
+			// Case: Rebalance to account with different bound address.
 			assert_noop!(
-				Funding::rebalance(
-					OriginTrait::signed(ALICE),
-					BOB,
-					Some(RESTRICTED_ADDRESS),
-					AMOUNT.into()
-				),
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, MIN_FUNDING.into()),
 				Error::<Test>::AccountBindingRestrictionViolated
 			);
+			// Case: Rebalance to account with no bound address.
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), CHARLIE, None, MIN_FUNDING.into()),
+				Error::<Test>::AccountBindingRestrictionViolated
+			);
+			// Case: Rebalance from account with no bound address to account with bound address.
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(CHARLIE),
+				ALICE,
+				None,
+				MIN_FUNDING.into()
+			),);
+		});
+	}
+
+	#[test]
+	fn rebalancing_amount_must_be_above_min_funding() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+
+			assert_ok!(setup_test(
+				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None), AccountSetup::new(BOB),],
+				vec![]
+			));
+
+			// Try to rebalance with an amount below the minimum funding.
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, (MIN_FUNDING - 1).into()),
+				Error::<Test>::MinimumRebalanceAmount
+			);
+			// Rebalance with the minimum funding amount.
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				None,
+				MIN_FUNDING.into()
+			));
 		});
 	}
 
@@ -2132,7 +2161,7 @@ pub mod rebalancing {
 			assert_ok!(setup_test(
 				vec![
 					AccountSetup::new(ALICE)
-						.as_validator()
+						.with_validator_role()
 						.with_balance(AMOUNT, Some(RESTRICTED_ADDRESS)),
 					AccountSetup::new(BOB),
 				],
@@ -2256,7 +2285,7 @@ pub mod rebalancing {
 	}
 
 	#[test]
-	fn rebalance_during_redemption_dosent_lead_to_double_spending() {
+	fn rebalance_during_redemption_doesnt_lead_to_double_spending() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 100;
 			const AMOUNT_TO_REDEEM: u128 = 50;
@@ -2268,9 +2297,9 @@ pub mod rebalancing {
 			assert_ok!(setup_test(
 				vec![
 					AccountSetup::new(ALICE)
-						.as_validator()
+						.with_validator_role()
 						.with_balance(AMOUNT, Some(UNRESTRICTED_ADDRESS)),
-					AccountSetup::new(BOB).as_validator(),
+					AccountSetup::new(BOB).with_validator_role(),
 				],
 				vec![]
 			));
@@ -2333,10 +2362,10 @@ pub mod rebalancing {
 			assert_ok!(setup_test(
 				vec![
 					AccountSetup::new(ALICE)
-						.as_validator()
+						.with_validator_role()
 						.with_balance(AMOUNT, Some(UNRESTRICTED_ADDRESS))
 						.with_can_redeem(false),
-					AccountSetup::new(BOB).as_validator(),
+					AccountSetup::new(BOB).with_validator_role(),
 				],
 				vec![]
 			));
@@ -2373,8 +2402,8 @@ pub mod rebalancing {
 
 			assert_ok!(setup_test(
 				vec![
-					AccountSetup::new(ALICE).as_validator().with_bound_redeem_address(ADDRESS_A),
-					AccountSetup::new(BOB).as_validator(),
+					AccountSetup::new(ALICE).with_bound_redeem_address(ADDRESS_A),
+					AccountSetup::new(BOB),
 				],
 				vec![]
 			));
@@ -2410,8 +2439,8 @@ pub mod rebalancing {
 
 			assert_ok!(setup_test(
 				vec![
-					AccountSetup::new(ALICE).as_validator().with_bound_executor_address(ADDRESS_A),
-					AccountSetup::new(BOB).as_validator(),
+					AccountSetup::new(ALICE).with_bound_executor_address(ADDRESS_A),
+					AccountSetup::new(BOB),
 				],
 				vec![]
 			));
@@ -2447,10 +2476,9 @@ pub mod rebalancing {
 			assert_ok!(setup_test(
 				vec![
 					AccountSetup::new(ALICE)
-						.as_validator()
 						.with_balance(AMOUNT, Some(RESTRICTED_ADDRESS))
 						.with_bond(AMOUNT),
-					AccountSetup::new(BOB).as_validator(),
+					AccountSetup::new(BOB),
 				],
 				vec![]
 			));
