@@ -272,6 +272,9 @@ pub trait ReputationResetter {
 pub trait RedemptionCheck {
 	type ValidatorId;
 	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult;
+	fn can_redeem(validator_id: &Self::ValidatorId) -> bool {
+		Self::ensure_can_redeem(validator_id).is_ok()
+	}
 }
 
 pub trait OnAccountFunded {
@@ -310,6 +313,13 @@ pub trait Funding {
 
 	/// Reverts a pending redemption in the case of an expiry or cancellation.
 	fn revert_redemption(account_id: &Self::AccountId) -> Result<(), DispatchError>;
+
+	/// Directly transfers funds from an account A to an account B.
+	fn try_transfer_funds_internally(
+		amount: Self::Balance,
+		from: &Self::AccountId,
+		to: &Self::AccountId,
+	) -> Result<(), DispatchError>;
 }
 
 pub trait AccountInfo {

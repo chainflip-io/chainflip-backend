@@ -145,6 +145,9 @@ async fn run_cli() -> Result<()> {
 				Redeem { amount, eth_address, executor_address } => {
 					request_redemption(api, amount, eth_address, executor_address).await?;
 				},
+				Rebalance { recipient_account_id, amount, redemption_address } => {
+					request_rebalance(api, recipient_account_id, amount, redemption_address).await?;
+				},
 				BindRedeemAddress { eth_address } => {
 					bind_redeem_address(api.operator_api(), &eth_address).await?;
 				},
@@ -262,6 +265,62 @@ async fn request_redemption(
 		"Your redemption request has State Chain transaction hash: `{tx_hash:#x}`.\n
 		View your redemption's progress on the Auctions app."
 	);
+
+	Ok(())
+}
+
+async fn request_rebalance(
+	api: StateChainApi,
+	recipient_account_id: String,
+	amount: Option<f64>,
+	supplied_redemption_address: Option<String>,
+) -> Result<()> {
+	use anyhow::anyhow;
+	use std::str::FromStr;
+
+	// Check validity of the redeem address
+	let redemption_address = if let Some(supplied_address) = supplied_redemption_address {
+		Some(EthereumAddress::from(
+			clean_hex_address::<[u8; 20]>(&supplied_address).context("Invalid address")?,
+		))
+	} else {
+		None
+	};
+
+	let redemption_address_or: String = if let Some(redemption_address) = redemption_address {
+		format!("With address: {redemption_address:?}")
+	} else {
+		"No address provided".to_string()
+	};
+
+	let recipient_account_id = AccountId32::from_str(&recipient_account_id)
+		.map_err(|err| anyhow!("Failed to parse AccountId: {}", err))
+		.context("Invalid account ID provided")?;
+
+	// Calculate the redemption amount
+	let redeem_amount = flip_to_redemption_amount(amount);
+
+	match redeem_amount {
+		RedemptionAmount::Exact(atomic_amount) => {
+			println!( "Submitting rebalance of funds with amount `{}` FLIP (`{atomic_amount}` Flipperinos) under address binding condition: {redemption_address_or}.", flipperino_to_flip_string(atomic_amount));
+		},
+		RedemptionAmount::Max => {
+			println!(
+				"Submitting rebalance of funds with MAX amount under address binding condition: {redemption_address_or}."
+			);
+		},
+	};
+
+	if !confirm_submit() {
+		return Ok(())
+	}
+
+	let tx_hash = api
+		.operator_api()
+		.request_rebalance(redeem_amount, redemption_address, recipient_account_id)
+		.await?;
+
+	println!("Rebalance request has State Chain transaction hash: `{tx_hash:#x}`.");
 
 	Ok(())
 }
