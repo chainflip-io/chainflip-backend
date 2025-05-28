@@ -258,13 +258,11 @@ impl<T: BWTypes> ElectionTracker<T> {
 		self.queued_elections.append(&mut remaining);
 
 		// clean up the queue by removing old hashes
-		let _ = self
-			.queued_elections
+		self.queued_elections
 			.extract_if(|height, _| {
 				height.saturating_forward(T::Chain::SAFETY_BUFFER) < last_seen_height
 			})
-			.map(fst)
-			.for_each(|height| {
+			.for_each(|(height, _)| {
 				self.queued_safe_elections.insert(height);
 			});
 
