@@ -270,6 +270,9 @@ pub trait ReputationResetter {
 pub trait RedemptionCheck {
 	type ValidatorId;
 	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult;
+	fn can_redeem(validator_id: &Self::ValidatorId) -> bool {
+		Self::ensure_can_redeem(validator_id).is_ok()
+	}
 }
 
 pub trait OnAccountFunded {

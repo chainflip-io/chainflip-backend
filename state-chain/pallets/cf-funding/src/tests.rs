@@ -31,8 +31,6 @@ use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 use pallet_cf_flip::{Bonder, FlipSlasher};
 use sp_runtime::DispatchError;
 
-type FlipError = pallet_cf_flip::Error<Test>;
-
 const ETH_DUMMY_ADDR: EthereumAddress = H160([42u8; 20]);
 const ETH_ZERO_ADDRESS: EthereumAddress = H160([0u8; 20]);
 const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
@@ -365,7 +363,7 @@ fn cannot_redeem_bond() {
 				ETH_DUMMY_ADDR,
 				Default::default()
 			),
-			FlipError::InsufficientLiquidity
+			Error::<Test>::BondViolation
 		);
 
 		// Alice *can* withdraw 100
@@ -385,7 +383,7 @@ fn cannot_redeem_bond() {
 				ETH_DUMMY_ADDR,
 				Default::default()
 			),
-			FlipError::InsufficientLiquidity
+			Error::<Test>::BondViolation,
 		);
 
 		// Once she is no longer bonded, Alice can redeem her funds.
@@ -1291,7 +1289,7 @@ mod test_restricted_balances {
 		(
 			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_2),
 			RESTRICTED_ADDRESS_2,
-			Some(FlipError::InsufficientLiquidity)
+			Some(Error::<Test>::BondViolation)
 		),
 	];
 	// With the mid-sized bond, both restricted balances are blocked by the bond.
@@ -1306,12 +1304,12 @@ mod test_restricted_balances {
 		(
 			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_1),
 			RESTRICTED_ADDRESS_1,
-			Some(FlipError::InsufficientLiquidity)
+			Some(Error::<Test>::BondViolation)
 		),
 		(
 			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_2),
 			RESTRICTED_ADDRESS_2,
-			Some(FlipError::InsufficientLiquidity)
+			Some(Error::<Test>::BondViolation)
 		),
 	];
 	// If the bond is higher than the sum of restrictions, it takes priority over both.
@@ -1321,7 +1319,7 @@ mod test_restricted_balances {
 		(
 			RedemptionAmount::<FlipBalance>::Exact(UNRESTRICTED_BALANCE),
 			UNRESTRICTED_ADDRESS,
-			Some(FlipError::InsufficientLiquidity)
+			Some(Error::<Test>::BondViolation)
 		),
 		(
 			RedemptionAmount::<FlipBalance>::Exact(UNRESTRICTED_BALANCE - 50),
@@ -1331,12 +1329,12 @@ mod test_restricted_balances {
 		(
 			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_1),
 			RESTRICTED_ADDRESS_1,
-			Some(FlipError::InsufficientLiquidity)
+			Some(Error::<Test>::BondViolation)
 		),
 		(
 			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_2),
 			RESTRICTED_ADDRESS_2,
-			Some(FlipError::InsufficientLiquidity)
+			Some(Error::<Test>::BondViolation)
 		),
 	];
 
@@ -2019,7 +2017,7 @@ fn rebalance_only_a_apart_of_the_restricted_funds() {
 }
 
 #[test]
-fn ensure_bonded_address_condition_hold_during_rebalance() {
+fn ensure_bounded_address_condition_hold_during_rebalance() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 100;
 		const AMOUNT_MINUS_FEE: u128 = AMOUNT;
@@ -2436,7 +2434,7 @@ fn cannot_rebalance_illiquid_funds() {
 
 		assert_noop!(
 			Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
-			pallet_cf_flip::Error::<Test>::InsufficientLiquidity
+			Error::<Test>::BondViolation,
 		);
 	});
 }
