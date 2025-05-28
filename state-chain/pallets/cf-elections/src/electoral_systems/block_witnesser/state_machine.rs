@@ -108,6 +108,7 @@ pub trait BWProcessorTypes: Sized + Debug + Clone + Eq {
 )]
 pub struct BlockWitnesserSettings {
 	pub max_concurrent_elections: u16,
+	pub max_optimistic_elections: u8,
 	pub safety_margin: u32,
 }
 
@@ -246,6 +247,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 
 		s.elections.start_more_elections(
 			settings.max_concurrent_elections as usize,
+			settings.max_optimistic_elections,
 			s.safemode_enabled.run(()),
 		);
 
@@ -461,7 +463,7 @@ pub mod tests {
 					events: Default::default()
 				},
 				generate_election_properties_hook: Default::default(),
-				safemode_enabled: MockHook::new(safemode_enabled),
+				safemode_enabled: MockHook::new(ConstantHook::new(safemode_enabled)),
 				block_processor: BlockProcessor {
 					blocks_data:Default::default(),
 					processed_events:Default::default(),

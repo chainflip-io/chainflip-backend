@@ -20,7 +20,7 @@ use super::{mocks::Check, register_checks};
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
 	electoral_systems::{
-		block_height_tracking::{ChainProgress, ChainTypes},
+		block_height_tracking::{primitives::Header, ChainProgress, ChainTypes},
 		block_witnesser::{
 			state_machine::{
 				BWElectionProperties, BWElectionType, BWProcessorTypes, ElectionPropertiesHook,
@@ -29,10 +29,10 @@ use crate::{
 			},
 			*,
 		},
-		mocks::ElectoralSystemState,
+		mocks::{ElectoralSystemState, TestSetup},
 		state_machine::{
 			consensus::{ConsensusMechanism, SuccessThreshold},
-			core::{hook_test_utils::MockHook, Hook, TypesFor},
+			core::{hook_test_utils::MockHook, Hook, HookType, TypesFor},
 			state_machine::AbstractApi,
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
@@ -65,6 +65,18 @@ impl Hook<HookTypeFor<Types, SafeModeEnabledHook>> for Types {
 		SafeModeStatus::Disabled
 	}
 }
+impl Hook<HookTypeFor<Types, RulesHook>> for Types {
+	fn run(
+		&mut self,
+		(height, ages, data, _): <HookTypeFor<Types, RulesHook> as HookType>::Input,
+	) -> <HookTypeFor<Types, RulesHook> as HookType>::Output {
+		if ages.contains(&0) {
+			data.into_iter().map(|x| (height, x)).collect()
+		} else {
+			Vec::new()
+		}
+	}
+}
 
 impl ChainTypes for Types {
 	type ChainBlockNumber = u64;
@@ -76,8 +88,8 @@ impl ChainTypes for Types {
 impl BWProcessorTypes for Types {
 	type Chain = Types;
 	type BlockData = Vec<u8>;
-	type Event = ();
-	type Rules = MockHook<HookTypeFor<Self, RulesHook>, "rules">;
+	type Event = u8;
+	type Rules = MockHook<HookTypeFor<Self, RulesHook>, "rules", Self>;
 	type Execute = MockHook<HookTypeFor<Self, ExecuteHook>, "execute">;
 	type LogEventHook = MockHook<HookTypeFor<Self, LogEventHook>, "delete">;
 }
@@ -122,6 +134,13 @@ register_checks! {
 				state.unsynchronised_state.block_processor.rules.call_history.iter().filter(|(_, age, _event, _)| age.contains(&0)).count()
 			};
 			assert_eq!(count(post) - count(pre), n, "execute PreWitness event should have been called {} times in this `on_finalize`!", n);
+		},
+		emitted_prewitness_events(pre, post, events: Vec<u8>) {
+			let get_events = |state: &ElectoralSystemState<StatemachineElectoralSystem<TypesFor<MockBlockProcessorDefinition>>>| {
+				state.unsynchronised_state.block_processor.execute.call_history.iter().flatten().map(|(_, event)| event).cloned().collect::<Vec<_>>()
+			};
+			let actual_events = get_events(post).into_iter().skip(get_events(pre).len()).collect::<Vec<_>>();
+			assert_eq!(actual_events, events, "emitted prewitness events not correct!");
 		},
 		// process_block_data_called_n_times(_pre, _post, n: u8) {
 		// 	assert_eq!(PROCESS_BLOCK_DATA_HOOK_CALLED.with(|hook_called| hook_called.get()), n, "process_block_data should have been called {} times so far!", n);
@@ -220,82 +239,88 @@ fn block_witnesser_consensus() {
 		.check_consensus(&(SuccessThreshold { success_threshold: 3 }, MOCK_BW_ELECTION_PROPERTIES));
 	assert_eq!(consensus, Some((vec![1, 3, 5], Some(2))));
 }
-/*
 
-// We start an election for a block and there is nothing there. The base case.
+// We start an election for a block, receive it and emit PreWitness events for it. The base case.
+// (no optimistic elections)
 #[test]
 fn no_block_data_success() {
-	const NEXT_BLOCK_RECEIVED: ChainBlockNumber = 1;
+	const NEXT_HEADER_RECEIVED: Header<Types> = Header { block_height: 1, hash: 1, parent_hash: 0 };
+	const TX_RECEIVED: u8 = 42;
 	TestSetup::<SimpleBlockWitnesser>::default()
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
-			safety_margin: SAFETY_MARGIN,
+			max_optimistic_elections: 0,
+			safety_margin: SAFETY_MARGIN as u32,
 		})
 		.build()
 		.test_on_finalize(
-			&vec![ChainProgress::FirstConsensus(range_n(NEXT_BLOCK_RECEIVED, 1))],
+			&vec![Some(ChainProgress { headers: [NEXT_HEADER_RECEIVED].into(), removed: None })],
 			|_| {},
 			vec![
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
 				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(0),
-				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(1),
+				Check::<SimpleBlockWitnesser>::emitted_prewitness_events(vec![]),
 			],
 		)
 		.expect_consensus(
-			generate_votes((0..20).collect(), Default::default(), Default::default(), vec![]),
-			Some(vec![]),
+			generate_votes(
+				(0..20).collect(),
+				Default::default(),
+				Default::default(),
+				vec![TX_RECEIVED],
+			),
+			Some((vec![TX_RECEIVED], None)),
 		)
 		.test_on_finalize(
-			&vec![ChainProgress::None],
+			&vec![None],
 			|_| {},
 			vec![
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(0),
 				// No extra calls
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(0),
 				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(1),
-				// Check::<SimpleBlockWitnesser>::process_block_data_called_n_times(2),
-				// We should receive an empty block data, but still get the block number. This is
-				// necessary so we can track the last chain block we've processed.
-				// Check::<SimpleBlockWitnesser>::process_block_data_called_last_with(vec![(
-				// 	NEXT_BLOCK_RECEIVED,
-				// 	vec![],
-				// )]),
+				Check::<SimpleBlockWitnesser>::emitted_prewitness_events(vec![TX_RECEIVED]),
 			],
 		);
 }
 
 #[test]
 fn creates_multiple_elections_below_maximum_when_required() {
-	const INIT_LAST_BLOCK_RECEIVED: ChainBlockNumber = 0;
-	const NUMBER_OF_ELECTIONS: ElectionCount = MAX_CONCURRENT_ELECTIONS - 1;
+	const HEADERS_RECEIVED: [Header<Types>; 3] = [
+		Header { block_height: 1, hash: 1, parent_hash: 0 },
+		Header { block_height: 2, hash: 2, parent_hash: 1 },
+		Header { block_height: 3, hash: 3, parent_hash: 2 },
+	];
+	assert!(HEADERS_RECEIVED.len() < MAX_CONCURRENT_ELECTIONS as usize);
+
 	TestSetup::<SimpleBlockWitnesser>::default()
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
-			safety_margin: SAFETY_MARGIN,
+			safety_margin: SAFETY_MARGIN as u32,
+			max_optimistic_elections: 0,
 		})
 		.build()
 		.test_on_finalize(
 			// Process multiple elections, but still less than the maximum concurrent
-			&vec![ChainProgress::FirstConsensus(range_n(
-				INIT_LAST_BLOCK_RECEIVED,
-				NUMBER_OF_ELECTIONS as u64,
-			))],
+			&vec![Some(ChainProgress { headers: HEADERS_RECEIVED.into(), removed: None })],
 			|pre_state| {
 				assert_eq!(pre_state.unsynchronised_state.elections.ongoing.len(), 0);
 			},
 			vec![
 				Check::<SimpleBlockWitnesser>::election_state_is(),
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-					NUMBER_OF_ELECTIONS as u8,
+					HEADERS_RECEIVED.len() as u8,
 				),
-				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(NUMBER_OF_ELECTIONS),
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(
+					HEADERS_RECEIVED.len() as u16
+				),
 			],
 		)
 		.expect_consensus_multi(vec![
 			(
 				generate_votes((0..20).collect(), Default::default(), Default::default(), vec![]),
-				Some(vec![]),
+				Some((vec![], None)),
 			),
 			(
 				generate_votes(
@@ -304,17 +329,17 @@ fn creates_multiple_elections_below_maximum_when_required() {
 					Default::default(),
 					vec![1, 3, 4],
 				),
-				Some(vec![1, 3, 4]),
+				Some((vec![1, 3, 4], None)),
 			),
 			// no progress on external chain but on finalize called again
 		])
 		.test_on_finalize(
 			// same block again
-			&vec![ChainProgress::None],
+			&vec![None],
 			|pre_state| {
 				assert_eq!(
 					pre_state.unsynchronised_state.elections.ongoing.len(),
-					NUMBER_OF_ELECTIONS as usize
+					HEADERS_RECEIVED.len()
 				);
 			},
 			vec![
@@ -322,21 +347,35 @@ fn creates_multiple_elections_below_maximum_when_required() {
 				// we are left with `NUMBER_OF_ELECTIONS - 2` elections for which
 				// we regenerate election properties in this `on_finalize`.
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
-					NUMBER_OF_ELECTIONS as u8 - 2,
+					HEADERS_RECEIVED.len() as u8 - 2,
 				),
 				// we should have resolved two elections
-				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(NUMBER_OF_ELECTIONS - 2),
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(
+					HEADERS_RECEIVED.len() as u16 - 2,
+				),
 			],
 		);
 }
 
 #[test]
 fn creates_multiple_elections_limited_by_maximum() {
-	const INIT_LAST_BLOCK_RECEIVED: ChainBlockNumber = 0;
 	const NUMBER_OF_ELECTIONS_REQUIRED: ElectionCount = MAX_CONCURRENT_ELECTIONS * 2;
+	const HEADERS_RECEIVED: [Header<Types>; NUMBER_OF_ELECTIONS_REQUIRED as usize] = [
+		Header { block_height: 1, hash: 1, parent_hash: 0 },
+		Header { block_height: 2, hash: 2, parent_hash: 1 },
+		Header { block_height: 3, hash: 3, parent_hash: 2 },
+		Header { block_height: 4, hash: 4, parent_hash: 3 },
+		Header { block_height: 5, hash: 5, parent_hash: 4 },
+		Header { block_height: 6, hash: 6, parent_hash: 5 },
+		Header { block_height: 7, hash: 7, parent_hash: 6 },
+		Header { block_height: 8, hash: 8, parent_hash: 7 },
+		Header { block_height: 9, hash: 9, parent_hash: 8 },
+		Header { block_height: 10, hash: 10, parent_hash: 9 },
+	];
+
 	let consensus_resolutions: Vec<(
 		ConsensusVotes<SimpleBlockWitnesser>,
-		Option<<Types as ElectoralSystemTypes>::Consensus>,
+		Option<<StatemachineElectoralSystem<Types> as ElectoralSystemTypes>::Consensus>,
 	)> = vec![
 		create_votes_expectation(vec![]),
 		create_votes_expectation(vec![1, 3, 4]),
@@ -346,15 +385,13 @@ fn creates_multiple_elections_limited_by_maximum() {
 	TestSetup::<SimpleBlockWitnesser>::default()
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_concurrent_elections: MAX_CONCURRENT_ELECTIONS,
-			safety_margin: SAFETY_MARGIN,
+			max_optimistic_elections: 0,
+			safety_margin: SAFETY_MARGIN as u32,
 		})
 		.build()
 		.test_on_finalize(
-			// Process multiple elections, but still elss than the maximum concurrent
-			&vec![ChainProgress::Range(range_n(
-				INIT_LAST_BLOCK_RECEIVED,
-				NUMBER_OF_ELECTIONS_REQUIRED as u64,
-			))],
+			// Process multiple elections, more than the maximum concurrent
+			&vec![Some(ChainProgress { headers: HEADERS_RECEIVED.into(), removed: None })],
 			|pre_state| {
 				assert_eq!(pre_state.unsynchronised_state.elections.ongoing.len(), 0);
 			},
@@ -371,7 +408,7 @@ fn creates_multiple_elections_limited_by_maximum() {
 		// we now have space to start new elections.
 		.expect_consensus_multi(consensus_resolutions)
 		.test_on_finalize(
-			&vec![ChainProgress::None],
+			&vec![None],
 			|pre_state| {
 				assert_eq!(
 					pre_state.unsynchronised_state.elections.ongoing.len(),
@@ -390,6 +427,7 @@ fn creates_multiple_elections_limited_by_maximum() {
 		);
 }
 
+/*
 #[test]
 fn reorg_clears_on_going_elections_and_continues() {
 	const INIT_LAST_BLOCK_RECEIVED: ChainBlockNumber = 10;
