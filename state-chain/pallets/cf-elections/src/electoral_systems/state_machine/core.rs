@@ -508,11 +508,3 @@ impl Validate for H256 {
 
 /// Encapsulating usual constraints on types meant to be serialized
 pub trait Serde = Serialize + for<'a> Deserialize<'a>;
-
-// Nice functions to have
-pub fn fst<A, B>((a, _): (A, B)) -> A {
-	a
-}
-pub fn snd<A, B>((_, b): (A, B)) -> B {
-	b
-}
