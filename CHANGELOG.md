@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.9.5] - 2025-05-28
+
+### Fixes
+
+- Fix: Correctly deserialize BTC getblock response after 0.29.0 Bitcoin update: ([#5891](https://github.com/chainflip-io/chainflip-backend/pull/5891))
+
+
 ## [1.9.4] - 2025-05-21
 
 ### Fixes
