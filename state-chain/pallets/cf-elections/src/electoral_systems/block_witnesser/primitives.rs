@@ -348,18 +348,7 @@ impl<N> Validate for CompactHeightTracker<N> {
 
 impl<N: Step + Ord> CompactHeightTracker<N> {
 	pub fn extract(&mut self, max_elements: usize) -> Vec<N> {
-		let mut result = Vec::new();
-		for r in self.elections.iter_mut() {
-			while result.len() < max_elements {
-				if let Some(x) = r.next() {
-					result.push(x);
-				} else {
-					// TODO: delete ranges when they are empty
-					break;
-				}
-			}
-		}
-		result
+		self.elections.iter_mut().flatten().take(max_elements).collect()
 	}
 
 	pub fn insert(&mut self, item: N) {
