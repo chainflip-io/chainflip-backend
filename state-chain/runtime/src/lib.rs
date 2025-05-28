@@ -2544,8 +2544,8 @@ impl_runtime_apis! {
 				account_id: &<T as frame_system::Config>::AccountId,
 			) -> Vec<ChannelId>
 			{
-				pallet_cf_ingress_egress::PreallocatedChannels::<T, I>::iter_prefix(account_id)
-					.map(|(_, channel)| channel.channel_id)
+				pallet_cf_ingress_egress::PreallocatedChannels::<T, I>::get(account_id).iter()
+					.map(|channel| channel.channel_id)
 					.collect()
 			}
 

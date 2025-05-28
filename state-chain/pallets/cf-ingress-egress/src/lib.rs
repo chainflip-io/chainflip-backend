@@ -433,7 +433,10 @@ pub mod pallet {
 	use frame_support::traits::{ConstU128, EnsureOrigin, IsType};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::{Percent, SaturatedConversion};
-	use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+	use sp_std::{
+		collections::{btree_map::BTreeMap, vec_deque::VecDeque},
+		vec::Vec,
+	};
 
 	pub(crate) type ChannelRecycleQueue<T, I> =
 		Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>;
@@ -895,14 +898,12 @@ pub mod pallet {
 
 	/// Stores pre-allocated channels per account.
 	#[pallet::storage]
-	pub type PreallocatedChannels<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type PreallocatedChannels<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		T::AccountId,
-		Twox64Concat,
-		ChannelId,
-		DepositChannel<T::TargetChain>,
-		OptionQuery,
+		VecDeque<DepositChannel<T::TargetChain>>,
+		ValueQuery,
 	>;
 
 	#[pallet::event]
@@ -3051,63 +3052,50 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(current_height, expiry_height, recycle_height)
 	}
 
-	/// Allocates a channel for the given asset
+	/// Returns a deposit channel for the given asset, either by reusing an existing channel or
+	/// generating a new one.
+	#[allow(clippy::type_complexity)]
+	fn next_channel(
+		source_asset: TargetChainAsset<T, I>,
+	) -> Result<DepositChannel<T::TargetChain>, DispatchError> {
+		match DepositChannelPool::<T, I>::drain().next() {
+			Some((_, mut deposit_channel)) => {
+				deposit_channel.asset = source_asset;
+				Ok(deposit_channel)
+			},
+			None => {
+				let next_channel_id = Self::allocate_next_channel_id()?;
+				Ok(DepositChannel::generate_new::<T::AddressDerivation>(
+					next_channel_id,
+					source_asset,
+				)
+				.map_err(|e| match e {
+					AddressDerivationError::MissingPolkadotVault =>
+						Error::<T, I>::MissingPolkadotVault,
+					AddressDerivationError::MissingBitcoinVault =>
+						Error::<T, I>::MissingBitcoinVault,
+					AddressDerivationError::BitcoinChannelIdTooLarge =>
+						Error::<T, I>::BitcoinChannelIdTooLarge,
+					AddressDerivationError::SolanaDerivationError { .. } =>
+						Error::<T, I>::SolanaAddressDerivationError,
+					AddressDerivationError::MissingSolanaApiEnvironment =>
+						Error::<T, I>::MissingSolanaApiEnvironment,
+					AddressDerivationError::MissingAssethubVault =>
+						Error::<T, I>::MissingAssethubVault,
+				})?)
+			},
+		}
+	}
+
+	/// Opens a channel for the given asset and registers it with the given action.
 	/// May re-use an existing channels, depending on chain configuration. The channel is added to
 	/// the preallocated channels list up to the maximum number of channels allowed for the
 	/// requester.
-	#[allow(clippy::type_complexity)]
-	fn allocate_channel(
-		requester: &T::AccountId,
-		source_asset: TargetChainAsset<T, I>,
-	) -> Result<DepositChannel<T::TargetChain>, DispatchError> {
-		ensure!(T::SafeMode::get().deposits_enabled, Error::<T, I>::DepositChannelCreationDisabled);
-
-		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
-			DepositChannelPool::<T, I>::drain().next()
-		{
-			deposit_channel.asset = source_asset;
-			(deposit_channel, channel_id)
-		} else {
-			let next_channel_id = Self::allocate_next_channel_id()?;
-			(
-				DepositChannel::generate_new::<T::AddressDerivation>(next_channel_id, source_asset)
-					.map_err(|e| match e {
-						AddressDerivationError::MissingPolkadotVault =>
-							Error::<T, I>::MissingPolkadotVault,
-						AddressDerivationError::MissingBitcoinVault =>
-							Error::<T, I>::MissingBitcoinVault,
-						AddressDerivationError::BitcoinChannelIdTooLarge =>
-							Error::<T, I>::BitcoinChannelIdTooLarge,
-						AddressDerivationError::SolanaDerivationError { .. } =>
-							Error::<T, I>::SolanaAddressDerivationError,
-						AddressDerivationError::MissingSolanaApiEnvironment =>
-							Error::<T, I>::MissingSolanaApiEnvironment,
-						AddressDerivationError::MissingAssethubVault =>
-							Error::<T, I>::MissingAssethubVault,
-					})?,
-				next_channel_id,
-			)
-		};
-
-		let requester_role = T::AccountRoleRegistry::account_role(requester);
-		let max_pre_allocated_channels = MaximumPreallocatedChannels::<T, I>::get(requester_role);
-		let num_pre_allocated_channels =
-			PreallocatedChannels::<T, I>::iter_prefix(requester).count();
-
-		// Add the channel to the preallocated channels list
-		if num_pre_allocated_channels < max_pre_allocated_channels as usize {
-			PreallocatedChannels::<T, I>::insert(requester, channel_id, deposit_channel.clone());
-		}
-
-		Ok(deposit_channel)
-	}
-
-	/// Opens a channel and registers it with the given action.
 	/// The requester must have enough FLIP available to pay the channel opening fee.
 	#[allow(clippy::type_complexity)]
 	fn open_channel(
-		requester: &T::AccountId, // TODO: remove this once we save it into DepositChannel struch
-		deposit_channel: DepositChannel<T::TargetChain>,
+		requester: &T::AccountId,
+		source_asset: TargetChainAsset<T, I>,
 		action: ChannelAction<T::AccountId, T::TargetChain>,
 		boost_fee: BasisPoints,
 	) -> Result<
@@ -3119,6 +3107,34 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
 		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
 		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
+
+		let requester_role = T::AccountRoleRegistry::account_role(requester);
+		let max_pre_allocated_channels = MaximumPreallocatedChannels::<T, I>::get(requester_role);
+
+		// Allocate a channel for the requester, always try to first allocate from the
+		// pre-allocated channels list
+		let deposit_channel =
+			match PreallocatedChannels::<T, I>::mutate(requester, |queue| queue.pop_front()) {
+				// Try to get a pre-allocated channel first
+				// make sure to set the asset on the channel
+				Some(mut deposit_channel) => {
+					deposit_channel.asset = source_asset;
+					deposit_channel
+				},
+				None => {
+					// if there are no pre-allocated channels, take the next channel
+					// from the pool of recycled channels, or generate a new channel entirely.
+					Self::next_channel(source_asset)?
+				},
+			};
+
+		// Proactively pre-allocate new channels for the requester
+		let num_pre_allocated_channels = PreallocatedChannels::<T, I>::get(requester).len();
+		for _ in 0..(max_pre_allocated_channels as usize).saturating_sub(num_pre_allocated_channels)
+		{
+			let new_chan = Self::next_channel(source_asset)?;
+			PreallocatedChannels::<T, I>::mutate(requester, |queue| queue.push_back(new_chan));
+		}
 
 		let deposit_address = deposit_channel.address.clone();
 
@@ -3415,15 +3431,9 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		DispatchError,
 	> {
 		// Try to get a pre-allocated channel first, if not request new one
-		let deposit_channel =
-			match PreallocatedChannels::<T, I>::iter_prefix(&lp_account).drain().next() {
-				Some((_, chan)) => chan,
-				None => Self::allocate_channel(&lp_account, source_asset)?,
-			};
-
 		let (channel_id, deposit_address, expiry_block, channel_opening_fee) = Self::open_channel(
 			&lp_account,
-			deposit_channel,
+			source_asset,
 			ChannelAction::LiquidityProvision { lp_account: lp_account.clone(), refund_address },
 			boost_fee,
 		)?;
@@ -3457,15 +3467,9 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		}
 
 		// Try to get a pre-allocated channel first, if not request new one
-		let deposit_channel =
-			match PreallocatedChannels::<T, I>::iter_prefix(&broker_id).drain().next() {
-				Some((_, chan)) => chan,
-				None => Self::allocate_channel(&broker_id, source_asset)?,
-			};
-
 		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(
 			&broker_id,
-			deposit_channel,
+			source_asset,
 			ChannelAction::Swap {
 				destination_asset,
 				destination_address,

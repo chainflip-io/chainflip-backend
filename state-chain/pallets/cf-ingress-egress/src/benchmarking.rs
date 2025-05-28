@@ -242,11 +242,9 @@ mod benchmarks {
 		asset: TargetChainAsset<T, I>,
 		fee_tier: BoostPoolTier,
 	) -> TargetChainAccount<T, I> {
-		let deposit_channel = Pallet::<T, I>::allocate_channel(lp_account, asset).unwrap();
-
 		let (_channel_id, deposit_address, ..) = Pallet::<T, I>::open_channel(
 			lp_account,
-			deposit_channel,
+			asset,
 			ChannelAction::LiquidityProvision {
 				lp_account: lp_account.clone(),
 				refund_address: ForeignChainAddress::benchmark_value(),
@@ -413,11 +411,9 @@ mod benchmarks {
 			));
 		}
 
-		let deposit_channel = Pallet::<T, I>::allocate_channel(&boosters[0], asset).unwrap();
-
 		let (_channel_id, deposit_address, ..) = Pallet::<T, I>::open_channel(
 			&boosters[0],
-			deposit_channel,
+			asset,
 			ChannelAction::LiquidityProvision {
 				lp_account: boosters[0].clone(),
 				refund_address: ForeignChainAddress::benchmark_value(),
