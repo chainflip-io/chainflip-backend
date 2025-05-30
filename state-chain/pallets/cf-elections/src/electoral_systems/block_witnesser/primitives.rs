@@ -65,6 +65,12 @@ defx! {
 			&& this.seen_heights_below > this.ongoing.keys().max().cloned().unwrap_or_default()
 		},
 
+		ongoing_elections_are_lower_than_queued: {
+			let highest_ongoing = this.ongoing.keys().max().cloned().unwrap_or_default();
+			this.queued_hash_elections.keys().all(|height| highest_ongoing < *height)
+			&& this.queued_safe_elections.get_all_heights().iter().all(|height| highest_ongoing < *height)
+		},
+
 		optimistic_block_cache_is_cleared: this.optimistic_block_cache.iter().all(|(height, _block)|
 			height.saturating_forward(T::Chain::SAFETY_BUFFER) > this.seen_heights_below
 		),
@@ -90,7 +96,7 @@ defx! {
 			),
 
 		elections_queued_by_safe_are_outside_safety_buffer:
-			this.queued_hash_elections.keys().all(
+			this.queued_safe_elections.get_all_heights().iter().all(
 				|height| height.saturating_forward(T::Chain::SAFETY_BUFFER) < this.seen_heights_below
 			)
 	}
