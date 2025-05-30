@@ -293,7 +293,7 @@ pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
 			);
 
 			// generate a large number of empty blocks, so all processors can run until completion
-			blocks.extend((0..=18).map(|_| {
+			blocks.extend((0..=30).map(|_| {
 				ForkedBlock::Block(Consumer {
 					ignore: 0,
 					drop: 0,
