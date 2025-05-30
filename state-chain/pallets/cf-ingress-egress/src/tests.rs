@@ -1602,6 +1602,21 @@ fn preallocated_channels_are_allocated_first() {
 		assert!(preallocated_channels_1.contains(&deposit_channel_2));
 		assert_eq!(preallocated_channels_2, vec![3, 4]);
 
+		// Change the max preallocated channels for AccountRole::LiquidityProvider to 3
+		assert_ok!(EthereumIngressEgress::update_pallet_config(
+			OriginTrait::root(),
+			vec![PalletConfigUpdate::SetMaximumPreallocatedChannels {
+				account_role: AccountRole::LiquidityProvider,
+				num_channels: 4
+			}]
+			.try_into()
+			.unwrap()
+		));
+		assert_eq!(
+			MaximumPreallocatedChannels::<Test, Instance1>::get(AccountRole::LiquidityProvider),
+			4
+		);
+
 		let (deposit_channel_3, _, _, _) =
 			EthereumIngressEgress::open_channel(&ALICE, EthAsset::Eth, chan_action.clone(), 0)
 				.unwrap();
@@ -1610,7 +1625,7 @@ fn preallocated_channels_are_allocated_first() {
 			.map(|chan| chan.channel_id)
 			.collect::<Vec<_>>();
 		assert!(preallocated_channels_1.contains(&deposit_channel_3));
-		assert_eq!(preallocated_channels_3, vec![4, 5]);
+		assert_eq!(preallocated_channels_3, vec![4, 5, 6, 7]);
 
 		// Since we have max 2 preallocated channels, the next allocation should be not from
 		// initial preallocated list.
@@ -1622,7 +1637,7 @@ fn preallocated_channels_are_allocated_first() {
 			.map(|chan| chan.channel_id)
 			.collect::<Vec<_>>();
 		assert!(!preallocated_channels_1.contains(&deposit_channel_4));
-		assert_eq!(preallocated_channels_4, vec![5, 6]);
+		assert_eq!(preallocated_channels_4, vec![5, 6, 7, 8]);
 	});
 }
 
