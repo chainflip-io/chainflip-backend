@@ -19,7 +19,7 @@ use proptest_derive::Arbitrary;
 
 use crate::electoral_systems::{
 	block_height_tracking::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes},
-	state_machine::core::{def_derive, defx, fst, Hook, Validate},
+	state_machine::core::{def_derive, defx, Hook, Validate},
 };
 
 use super::state_machine::{BWElectionType, BWTypes};
@@ -258,13 +258,11 @@ impl<T: BWTypes> ElectionTracker<T> {
 		self.queued_elections.append(&mut remaining);
 
 		// clean up the queue by removing old hashes
-		let _ = self
-			.queued_elections
+		self.queued_elections
 			.extract_if(|height, _| {
 				height.saturating_forward(T::Chain::SAFETY_BUFFER) < last_seen_height
 			})
-			.map(fst)
-			.for_each(|height| {
+			.for_each(|(height, _)| {
 				self.queued_safe_elections.insert(height);
 			});
 
@@ -278,7 +276,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 		optimistic_blocks.into_iter().collect()
 	}
 	fn next_election(&self) -> Option<ChainBlockNumberOf<T::Chain>> {
-		self.queued_elections.first_key_value().map(fst).cloned()
+		self.queued_elections.keys().next().cloned()
 	}
 }
 
@@ -351,15 +349,19 @@ impl<N> Validate for CompactHeightTracker<N> {
 impl<N: Step + Ord> CompactHeightTracker<N> {
 	pub fn extract(&mut self, max_elements: usize) -> Vec<N> {
 		let mut result = Vec::new();
-		for r in self.elections.iter_mut() {
+		let mut remove = Vec::new();
+		for (i, range) in self.elections.iter_mut().enumerate() {
 			while result.len() < max_elements {
-				if let Some(x) = r.next() {
+				if let Some(x) = range.next() {
 					result.push(x);
 				} else {
-					// TODO: delete ranges when they are empty
+					remove.push(i);
 					break;
 				}
 			}
+		}
+		for i in remove {
+			self.elections.remove(i);
 		}
 		result
 	}

@@ -115,6 +115,8 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 			tracing::debug!("BTC BHW: no new blocks found since best block height is {} for witness_from={latest_block_height}", best_block_header.block_height);
 			return Ok(None)
 		} else {
+			// The `latest_block_height == 0` is a special case for when starting up the
+			// electoral system for the first time.
 			let witness_from_index = if latest_block_height == 0 {
 				tracing::debug!(
 					"BTC BHW: election_property=0, best_block_height={}, submitting last 6 blocks.",

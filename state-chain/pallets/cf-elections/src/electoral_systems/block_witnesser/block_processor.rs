@@ -216,8 +216,6 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		self.clean_old(progress.highest_block_height);
 	}
 
-	fn process_reorg(removed_block_heights: RangeInclusive<ChainBlockNumberOf<T::Chain>>) {}
-
 	fn process_up_to(&mut self, highest_block_height: ChainBlockNumberOf<T::Chain>) {
 		let events = self.process_rules(highest_block_height);
 		self.execute.run(events);
