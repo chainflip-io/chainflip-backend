@@ -212,10 +212,13 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					));
 				}
 
-				s.block_processor.process_chain_progress(BPChainProgress {
-					highest_block_height: s.elections.seen_heights_below.saturating_backward(1),
-					removed_block_heights,
-				});
+				s.block_processor.process_chain_progress(
+					BPChainProgress {
+						highest_block_height: s.elections.seen_heights_below.saturating_backward(1),
+						removed_block_heights,
+					},
+					s.elections.lowest_queued_or_ongoing_election(),
+				);
 			},
 
 			Either::Left(None) => {},
@@ -238,6 +241,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 							removed_block_heights: None,
 						},
 						(properties.block_height, blockdata, settings.safety_margin),
+						s.elections.lowest_queued_or_ongoing_election(),
 					)
 				}
 			},
