@@ -179,9 +179,9 @@ pub fn test_all() {
 
 	let mut runner = TestRunner::new(Config {
 		source_file: Some(file!()),
-		// TODO: we had previously a quite high number (256 * 256 * 4),
-		// but currently it is takes infeasably long to have this many iterations,
-		// due to having increased the empty block buffer created on the main chain.
+		// TODO: we had previously a much higher number (256 * 256 * 4),
+		// but currently it takes a *very* long to test with this many iterations.
+		// Appearently due to having increased the empty block buffer on the main chain.
 		cases: 256 * 4,
 		failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
 			"proptest-regressions-full-pipeline",
