@@ -46,7 +46,7 @@ pub struct ConsumerParameters {
 	time_steps_per_block: RangeInclusive<usize>,
 	max_data_delay: usize,
 
-	resolution_delay_value: usize,
+	max_resolution_delay: usize,
 	resolution_delay_probability_weight: u32,
 }
 
@@ -70,7 +70,7 @@ pub fn generate_consumer(p: ConsumerParameters) -> impl Strategy<Value = Consume
 		p.time_steps_per_block,
 		prop_oneof![
 			100 => Just(0),
-			p.resolution_delay_probability_weight => Just(p.resolution_delay_value),
+			p.resolution_delay_probability_weight => 0..p.max_resolution_delay,
 		],
 	)
 		.prop_flat_map(move |(drop, ignore, take, time_steps, resolution_delay)| {
@@ -273,8 +273,8 @@ pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
 			max_ignore: 2,
 			time_steps_per_block: 1..=3,
 			max_data_delay: 2,
-			resolution_delay_value: 17,
-			resolution_delay_probability_weight: 10,
+			max_resolution_delay: 24,
+			resolution_delay_probability_weight: 100,
 		},
 	};
 	generate_consumer_chain(p)
@@ -293,7 +293,7 @@ pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
 			);
 
 			// generate a large number of empty blocks, so all processors can run until completion
-			blocks.extend((0..=18).map(|_| {
+			blocks.extend((0..=25).map(|_| {
 				ForkedBlock::Block(Consumer {
 					ignore: 0,
 					drop: 0,
