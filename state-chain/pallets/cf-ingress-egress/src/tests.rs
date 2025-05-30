@@ -23,9 +23,10 @@ use crate::{
 	DepositChannelLookup, DepositChannelPool, DepositFailedDetails, DepositFailedReason,
 	DepositOrigin, DepositWitness, DisabledEgressAssets, EgressDustLimit, Event,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FailedRejections,
-	FetchOrTransfer, MinimumDeposit, NetworkFeeDeductionFromBoostPercent, Pallet,
-	PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter, RefundReason,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, VaultDepositWitness, WitnessSafetyMargin,
+	FetchOrTransfer, MaximumPreallocatedChannels, MinimumDeposit,
+	NetworkFeeDeductionFromBoostPercent, Pallet, PalletConfigUpdate, PalletSafeMode,
+	PreallocatedChannels, PrewitnessedDepositIdCounter, RefundReason, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer, VaultDepositWitness, WitnessSafetyMargin,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -40,8 +41,8 @@ use cf_chains::{
 	TransferAssetParams,
 };
 use cf_primitives::{
-	AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries, Beneficiary, ChannelId,
-	DcaParameters, ForeignChain, MAX_AFFILIATES,
+	AccountRole, AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries,
+	Beneficiary, ChannelId, DcaParameters, ForeignChain, MAX_AFFILIATES,
 };
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -60,16 +61,19 @@ use cf_traits::{
 		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
-	BalanceApi, DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, FundingInfo,
-	GetBlockHeight, SafeMode, ScheduledEgressDetails, SwapOutputAction, SwapRequestType,
+	AccountRoleRegistry, BalanceApi, DepositApi, EgressApi, EpochInfo,
+	FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, SafeMode, ScheduledEgressDetails,
+	SwapOutputAction, SwapRequestType,
 };
 
 #[cfg(test)]
 use cf_utilities::assert_matches;
 
+use cf_primitives::chains::assets::btc;
+use cf_traits::mocks::account_role_registry::MockAccountRoleRegistry;
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
-	instances::Instance1,
+	instances::{Instance1, Instance2},
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
@@ -1546,6 +1550,96 @@ fn all_batch_errors_are_logged_as_event() {
 				},
 			));
 		});
+}
+
+#[test]
+fn preallocated_channels_are_allocated_first_no_channels_pool() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+				&ALICE,
+			)
+		);
+
+		// Set 2 max preallocated channels for AccountRole::LiquidityProvider
+		assert_ok!(BitcoinIngressEgress::update_pallet_config(
+			OriginTrait::root(),
+			vec![PalletConfigUpdate::SetMaximumPreallocatedChannels {
+				account_role: AccountRole::LiquidityProvider,
+				num_channels: 2
+			}]
+			.try_into()
+			.unwrap()
+		));
+		assert_eq!(
+			MaximumPreallocatedChannels::<Test, Instance2>::get(AccountRole::LiquidityProvider),
+			2
+		);
+
+		let chan_action = ChannelAction::LiquidityProvision {
+			lp_account: ALICE,
+			refund_address: ForeignChainAddress::Eth(Default::default()),
+		};
+
+		let _deposit_channel_1 =
+			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
+				.unwrap();
+
+		let preallocated_channels_1 = PreallocatedChannels::<Test, Instance2>::get(ALICE)
+			.iter()
+			.map(|chan| chan.channel_id)
+			.collect::<Vec<_>>();
+		assert_eq!(preallocated_channels_1, vec![2, 3]);
+
+		// If we try to allocate another channel, it should be one from the initial
+		// preallocated list.
+		let (deposit_channel_2, _, _, _) =
+			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
+				.unwrap();
+		let preallocated_channels_2 = PreallocatedChannels::<Test, Instance2>::get(ALICE)
+			.iter()
+			.map(|chan| chan.channel_id)
+			.collect::<Vec<_>>();
+		assert!(preallocated_channels_1.contains(&deposit_channel_2));
+		assert_eq!(preallocated_channels_2, vec![3, 4]);
+
+		// Change the max preallocated channels for AccountRole::LiquidityProvider to 3
+		assert_ok!(BitcoinIngressEgress::update_pallet_config(
+			OriginTrait::root(),
+			vec![PalletConfigUpdate::SetMaximumPreallocatedChannels {
+				account_role: AccountRole::LiquidityProvider,
+				num_channels: 4
+			}]
+			.try_into()
+			.unwrap()
+		));
+		assert_eq!(
+			MaximumPreallocatedChannels::<Test, Instance2>::get(AccountRole::LiquidityProvider),
+			4
+		);
+
+		let (deposit_channel_3, _, _, _) =
+			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
+				.unwrap();
+		let preallocated_channels_3 = PreallocatedChannels::<Test, Instance2>::get(ALICE)
+			.iter()
+			.map(|chan| chan.channel_id)
+			.collect::<Vec<_>>();
+		assert!(preallocated_channels_1.contains(&deposit_channel_3));
+		assert_eq!(preallocated_channels_3, vec![4, 5, 6, 7]);
+
+		// Since we have max 2 preallocated channels, the next allocation should be not from
+		// initial preallocated list.
+		let (deposit_channel_4, _, _, _) =
+			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
+				.unwrap();
+		let preallocated_channels_4 = PreallocatedChannels::<Test, Instance2>::get(ALICE)
+			.iter()
+			.map(|chan| chan.channel_id)
+			.collect::<Vec<_>>();
+		assert!(!preallocated_channels_1.contains(&deposit_channel_4));
+		assert_eq!(preallocated_channels_4, vec![5, 6, 7, 8]);
+	});
 }
 
 #[test]

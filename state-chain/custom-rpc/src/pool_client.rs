@@ -34,7 +34,7 @@ use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, HeaderBackend, StorageProvider,
 };
 use sc_transaction_pool::FullPool;
-use sc_transaction_pool_api::{TransactionPool, TransactionStatus};
+use sc_transaction_pool_api::{TransactionPool, TransactionStatus, TransactionStatusStreamFor};
 use sp_api::{ApiError, CallApiAt, Core, Metadata};
 use sp_block_builder::BlockBuilder;
 use sp_core::crypto::AccountId32;
@@ -44,7 +44,7 @@ use sp_runtime::{
 	Either,
 };
 use state_chain_runtime::{runtime_apis::CustomRuntimeApi, AccountId, Hash, Nonce, RuntimeCall};
-use std::{collections::HashMap, future::Future, marker::PhantomData, ops::Deref, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, ops::Deref, pin::Pin, sync::Arc};
 use substrate_frame_rpc_system::{System, SystemApiServer};
 
 const SIGNED_EXTRINSIC_LIFETIME: state_chain_runtime::BlockNumber = 128;
@@ -60,6 +60,8 @@ pub enum PoolClientError {
 	PoolSubmitError(usize),
 	#[error("Could not acquire lock for transaction pool")]
 	PoolLockingError,
+	#[error("Unexpected end of stream")]
+	UnexpectedEndOfStream,
 	#[error("{0:?}")]
 	TransactionStatusError(&'static str),
 
@@ -226,7 +228,7 @@ where
 		Ok(Decode::decode(&mut &call_data[..])?)
 	}
 
-	async fn get_extrinsic_data_dynamic(
+	pub async fn get_extrinsic_data_dynamic(
 		&self,
 		block_hash: Hash,
 		extrinsic_index: usize,
@@ -461,17 +463,13 @@ where
 		Err(PoolClientError::PoolSubmitError(MAX_POOL_SUBMISSION_RETRIES))
 	}
 
-	async fn submit_watch<T, Fut, F>(
+	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress.
+	/// if successful, it returns a `TransactionStatus` stream otherwise returns a PoolClientError
+	pub async fn submit_watch(
 		&self,
 		call: RuntimeCall,
-		until_finalized: bool,
 		dry_run: bool,
-		get_extrinsic_fn: F,
-	) -> Result<T, PoolClientError>
-	where
-		Fut: Future<Output = Result<T, PoolClientError>> + Send,
-		F: Fn(Hash, usize) -> Fut + Send,
-	{
+	) -> Result<Pin<Box<TransactionStatusStreamFor<FullPool<B, C>>>>, PoolClientError> {
 		if dry_run {
 			self.dry_run_extrinsic(call.clone()).await?;
 		}
@@ -521,52 +519,10 @@ where
 		// release the semaphore permit as soon as possible
 		drop(permit);
 
-		let mut status_stream = maybe_status_stream
+		let status_stream = maybe_status_stream
 			.ok_or_else(|| PoolClientError::PoolSubmitError(MAX_POOL_SUBMISSION_RETRIES))?;
 
-		// Periodically poll the transaction pool to check inclusion status
-		while let Some(status) = status_stream.next().await {
-			match status {
-				TransactionStatus::InBlock((block_hash, tx_index)) =>
-					if !until_finalized {
-						return get_extrinsic_fn(block_hash, tx_index).await
-					},
-				TransactionStatus::Finalized((block_hash, tx_index)) =>
-					if until_finalized {
-						return get_extrinsic_fn(block_hash, tx_index).await
-					},
-				TransactionStatus::Future |
-				TransactionStatus::Ready |
-				TransactionStatus::Broadcast(_) => {
-					// Do nothing, just wait for the transaction to be included
-				},
-				TransactionStatus::Invalid => {
-					return Err(PoolClientError::TransactionStatusError(
-						"transaction is no longer valid in the current state"
-					))
-				},
-				TransactionStatus::Dropped => {
-					return Err(PoolClientError::TransactionStatusError(
-						"transaction was dropped from the pool because of the limit"
-					))
-				},
-				TransactionStatus::Usurped(_hash) => {
-					return Err(PoolClientError::TransactionStatusError(
-						"Transaction has been replaced in the pool, by another transaction that provides the same tags for example same (sender, nonce)."
-					))
-				},
-				TransactionStatus::FinalityTimeout(_block_hash) => {
-					return Err(PoolClientError::TransactionStatusError(
-						"Maximum number of finality watchers has been reached"
-					))
-				},
-				TransactionStatus::Retracted(_block_hash) => {
-					return Err(PoolClientError::TransactionStatusError("The block this transaction was included in has been retracted."))
-				},
-			}
-		}
-
-		Err(PoolClientError::TransactionStatusError("Unexpected end of status stream"))
+		Ok(status_stream)
 	}
 
 	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress.
@@ -584,10 +540,26 @@ where
 		until_finalized: bool,
 		dry_run: bool,
 	) -> Result<ExtrinsicData<Vec<state_chain_runtime::RuntimeEvent>>, PoolClientError> {
-		self.submit_watch(call, until_finalized, dry_run, |block_hash, extrinsic_index| {
-			self.get_extrinsic_data_static(block_hash, extrinsic_index)
-		})
-		.await
+		let mut status_stream = self.submit_watch(call, dry_run).await?;
+
+		// Periodically poll the transaction pool to check inclusion status
+		while let Some(status) = status_stream.next().await {
+			match status {
+				TransactionStatus::InBlock((block_hash, tx_index)) =>
+					if !until_finalized {
+						return self.get_extrinsic_data_static(block_hash, tx_index).await
+					},
+				TransactionStatus::Finalized((block_hash, tx_index)) =>
+					if until_finalized {
+						return self.get_extrinsic_data_static(block_hash, tx_index).await
+					},
+				_ =>
+					if let Some(e) = is_transaction_status_error(&status) {
+						return Err(e);
+					},
+			}
+		}
+		Err(PoolClientError::UnexpectedEndOfStream)
 	}
 
 	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress.
@@ -605,10 +577,65 @@ where
 		until_finalized: bool,
 		dry_run: bool,
 	) -> Result<ExtrinsicData<DynamicEvents>, PoolClientError> {
-		self.submit_watch(call, until_finalized, dry_run, |block_hash, extrinsic_index| {
-			self.get_extrinsic_data_dynamic(block_hash, extrinsic_index)
-		})
-		.await
+		let mut status_stream = self.submit_watch(call, dry_run).await?;
+
+		while let Some(status) = status_stream.next().await {
+			match status {
+				TransactionStatus::InBlock((block_hash, tx_index)) =>
+					if !until_finalized {
+						return self.get_extrinsic_data_dynamic(block_hash, tx_index).await
+					},
+				TransactionStatus::Finalized((block_hash, tx_index)) =>
+					if until_finalized {
+						return self.get_extrinsic_data_dynamic(block_hash, tx_index).await
+					},
+				_ =>
+					if let Some(e) = is_transaction_status_error(&status) {
+						return Err(e);
+					},
+			}
+		}
+		Err(PoolClientError::UnexpectedEndOfStream)
+	}
+}
+
+pub fn is_transaction_status_error(
+	status: &TransactionStatus<Hash, Hash>,
+) -> Option<PoolClientError> {
+	match status {
+		TransactionStatus::InBlock(_) | TransactionStatus::Finalized(_) => {
+			// This should be handled separately
+			None
+		},
+		TransactionStatus::Future |
+		TransactionStatus::Ready |
+		TransactionStatus::Broadcast(_) => {
+			// Do nothing, just wait for the transaction to be included
+			None
+		},
+		TransactionStatus::Invalid => {
+			Some(PoolClientError::TransactionStatusError(
+				"transaction is no longer valid in the current state"
+			))
+		},
+		TransactionStatus::Dropped => {
+			Some(PoolClientError::TransactionStatusError(
+				"transaction was dropped from the pool because of the limit"
+			))
+		},
+		TransactionStatus::Usurped(_hash) => {
+			Some(PoolClientError::TransactionStatusError(
+				"Transaction has been replaced in the pool, by another transaction that provides the same tags for example same (sender, nonce)."
+			))
+		},
+		TransactionStatus::FinalityTimeout(_block_hash) => {
+			Some(PoolClientError::TransactionStatusError(
+				"Maximum number of finality watchers has been reached"
+			))
+		},
+		TransactionStatus::Retracted(_block_hash) => {
+			Some(PoolClientError::TransactionStatusError("The block this transaction was included in has been retracted."))
+		},
 	}
 }
 
