@@ -277,9 +277,9 @@ pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
 			resolution_delay_probability_weight: 100,
 		},
 	};
-	generate_consumer_chain(p)
+	generate_consumer_chain(p.clone())
 		// turn into chain progression
-		.prop_map(|mut blocks| {
+		.prop_map(move |mut blocks| {
 			// insert first empty parent block
 			blocks.insert(
 				0,
@@ -293,7 +293,8 @@ pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
 			);
 
 			// generate a large number of empty blocks, so all processors can run until completion
-			blocks.extend((0..=25).map(|_| {
+			// since witnessing of blocks is delayed by at most `max_resolution_delay`, we use it as base value.
+			blocks.extend((0..=(p.item_parameters.max_resolution_delay+3)).map(|_| {
 				ForkedBlock::Block(Consumer {
 					ignore: 0,
 					drop: 0,
