@@ -96,13 +96,14 @@ pub trait AbstractVoter<M: Statemachine> {
 
 #[test]
 pub fn test_all() {
-	type Types = TypesFor<(u8, u32, Vec<EncodableChar>)>;
+	type Event = String;
+	type Types = TypesFor<(u8, u32, Vec<Event>)>;
 	type BW = BWStatemachine<Types>;
 	type BHW = BlockHeightWitnesser<Types>;
 
 	const OFFSET: usize = 20;
 
-	impl AbstractVoter<BHW> for FlatChainProgression<char> {
+	impl AbstractVoter<BHW> for FlatChainProgression<Event> {
 		fn vote(&mut self, indices: Vec<<BHW as AbstractApi>::Query>) -> Option<Vec<InputOf<BHW>>> {
 			let chain = MockChain::new_with_offset(OFFSET, self.get_next_chain()?);
 
@@ -139,12 +140,12 @@ pub fn test_all() {
 		}
 	}
 
-	impl AbstractVoter<BW> for FlatChainProgression<char> {
+	impl AbstractVoter<BW> for FlatChainProgression<String> {
 		fn vote(&mut self, indices: Vec<<BW as AbstractApi>::Query>) -> Option<Vec<InputOf<BW>>> {
 			let mut inputs = Vec::new();
 			for index in indices {
 				let chain =
-					MockChain::<char, Types>::new_with_offset(OFFSET, self.get_next_chain()?);
+					MockChain::<String, Types>::new_with_offset(OFFSET, self.get_next_chain()?);
 
 				use BWElectionType::*;
 				match index.election_type {
@@ -153,24 +154,21 @@ pub fn test_all() {
 							let header = chain.get_block_header(index.block_height).unwrap();
 							inputs.push(Either::Right((
 								index,
-								(
-									block_data.into_iter().map(|c| (c as u8).into()).collect(),
-									Some(header.hash),
-								),
+								(block_data.into_iter().collect(), Some(header.hash)),
 							)));
 						},
 					ByHash(hash) =>
 						if let Some(block_data) = chain.get_block_by_hash(hash) {
 							inputs.push(Either::Right((
 								index,
-								(block_data.into_iter().map(|c| (c as u8).into()).collect(), None),
+								(block_data.into_iter().collect(), None),
 							)));
 						},
 					SafeBlockHeight =>
 						if let Some(block_data) = chain.get_block_by_height(index.block_height) {
 							inputs.push(Either::Right((
 								index,
-								(block_data.into_iter().map(|c| (c as u8).into()).collect(), None),
+								(block_data.into_iter().collect(), None),
 							)));
 						},
 				}
@@ -181,7 +179,10 @@ pub fn test_all() {
 
 	let mut runner = TestRunner::new(Config {
 		source_file: Some(file!()),
-		cases: 256 * 16 * 16 * 4,
+		// TODO: we had previously a quite high number (256 * 256 * 4),
+		// but currently it is takes infeasably long to have this many iterations,
+		// due to having increased the empty block buffer created on the main chain.
+		cases: 256 * 4,
 		failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
 			"proptest-regressions-full-pipeline",
 		))),
@@ -344,7 +345,7 @@ pub fn test_all() {
             writeln!(printed, "").unwrap();
         }
 
-        let counted_events : Container<BTreeMultiSet<(u8, MockBtcEvent<EncodableChar>)>> = total_outputs.into_iter().flatten().collect();
+        let counted_events : Container<BTreeMultiSet<(u8, MockBtcEvent<Event>)>> = total_outputs.into_iter().flatten().collect();
 
         // verify that each event was emitted only one time 
         for (event, count) in counted_events.0.0.clone() {
@@ -356,7 +357,7 @@ pub fn test_all() {
         }
 
         // ensure that we only emit witness events that are on the final chain
-        let emitted_witness_events : BTreeSet<_> = counted_events.0.0.keys().map(|(a,b)|b).filter_map(try_get!(MockBtcEvent::Witness)).map(|event| event.0 as char).collect();
+        let emitted_witness_events : BTreeSet<_> = counted_events.0.0.keys().map(|(a,b)|b).filter_map(try_get!(MockBtcEvent::Witness)).map(|event| event.clone()).collect();
         let expected_witness_events : BTreeSet<_> = finalized_events.into_iter().cloned().collect();
         assert_eq!(emitted_witness_events, expected_witness_events,
             "got witness events: {emitted_witness_events:?}, expected_witness_events: {expected_witness_events:?}, bw_input_history: {}",

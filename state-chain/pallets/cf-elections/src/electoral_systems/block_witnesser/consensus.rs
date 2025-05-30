@@ -1,7 +1,7 @@
 use crate::{
 	electoral_systems::{
 		block_height_tracking::ChainBlockHashOf,
-		state_machine::consensus::{ConsensusMechanism, SupermajorityConsensus, SuccessThreshold},
+		state_machine::consensus::{ConsensusMechanism, SuccessThreshold, SupermajorityConsensus},
 	},
 	SharedDataHash,
 };
