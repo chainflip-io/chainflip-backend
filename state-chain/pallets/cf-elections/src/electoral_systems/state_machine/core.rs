@@ -380,6 +380,14 @@ impl<A: Validate> Validate for BTreeSet<A> {
 	}
 }
 
+impl Validate for String {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
 impl<A: Validate> Validate for Vec<A> {
 	type Error = A::Error;
 
