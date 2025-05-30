@@ -69,10 +69,11 @@ use cf_traits::{
 #[cfg(test)]
 use cf_utilities::assert_matches;
 
+use cf_primitives::chains::assets::btc;
 use cf_traits::mocks::account_role_registry::MockAccountRoleRegistry;
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
-	instances::Instance1,
+	instances::{Instance1, Instance2},
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
@@ -1552,7 +1553,7 @@ fn all_batch_errors_are_logged_as_event() {
 }
 
 #[test]
-fn preallocated_channels_are_allocated_first() {
+fn preallocated_channels_are_allocated_first_no_channels_pool() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(
 			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
@@ -1561,7 +1562,7 @@ fn preallocated_channels_are_allocated_first() {
 		);
 
 		// Set 2 max preallocated channels for AccountRole::LiquidityProvider
-		assert_ok!(EthereumIngressEgress::update_pallet_config(
+		assert_ok!(BitcoinIngressEgress::update_pallet_config(
 			OriginTrait::root(),
 			vec![PalletConfigUpdate::SetMaximumPreallocatedChannels {
 				account_role: AccountRole::LiquidityProvider,
@@ -1571,7 +1572,7 @@ fn preallocated_channels_are_allocated_first() {
 			.unwrap()
 		));
 		assert_eq!(
-			MaximumPreallocatedChannels::<Test, Instance1>::get(AccountRole::LiquidityProvider),
+			MaximumPreallocatedChannels::<Test, Instance2>::get(AccountRole::LiquidityProvider),
 			2
 		);
 
@@ -1581,10 +1582,10 @@ fn preallocated_channels_are_allocated_first() {
 		};
 
 		let _deposit_channel_1 =
-			EthereumIngressEgress::open_channel(&ALICE, EthAsset::Eth, chan_action.clone(), 0)
+			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
 				.unwrap();
 
-		let preallocated_channels_1 = PreallocatedChannels::<Test, Instance1>::get(ALICE)
+		let preallocated_channels_1 = PreallocatedChannels::<Test, Instance2>::get(ALICE)
 			.iter()
 			.map(|chan| chan.channel_id)
 			.collect::<Vec<_>>();
@@ -1593,9 +1594,9 @@ fn preallocated_channels_are_allocated_first() {
 		// If we try to allocate another channel, it should be one from the initial
 		// preallocated list.
 		let (deposit_channel_2, _, _, _) =
-			EthereumIngressEgress::open_channel(&ALICE, EthAsset::Eth, chan_action.clone(), 0)
+			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
 				.unwrap();
-		let preallocated_channels_2 = PreallocatedChannels::<Test, Instance1>::get(ALICE)
+		let preallocated_channels_2 = PreallocatedChannels::<Test, Instance2>::get(ALICE)
 			.iter()
 			.map(|chan| chan.channel_id)
 			.collect::<Vec<_>>();
@@ -1603,7 +1604,7 @@ fn preallocated_channels_are_allocated_first() {
 		assert_eq!(preallocated_channels_2, vec![3, 4]);
 
 		// Change the max preallocated channels for AccountRole::LiquidityProvider to 3
-		assert_ok!(EthereumIngressEgress::update_pallet_config(
+		assert_ok!(BitcoinIngressEgress::update_pallet_config(
 			OriginTrait::root(),
 			vec![PalletConfigUpdate::SetMaximumPreallocatedChannels {
 				account_role: AccountRole::LiquidityProvider,
@@ -1613,14 +1614,14 @@ fn preallocated_channels_are_allocated_first() {
 			.unwrap()
 		));
 		assert_eq!(
-			MaximumPreallocatedChannels::<Test, Instance1>::get(AccountRole::LiquidityProvider),
+			MaximumPreallocatedChannels::<Test, Instance2>::get(AccountRole::LiquidityProvider),
 			4
 		);
 
 		let (deposit_channel_3, _, _, _) =
-			EthereumIngressEgress::open_channel(&ALICE, EthAsset::Eth, chan_action.clone(), 0)
+			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
 				.unwrap();
-		let preallocated_channels_3 = PreallocatedChannels::<Test, Instance1>::get(ALICE)
+		let preallocated_channels_3 = PreallocatedChannels::<Test, Instance2>::get(ALICE)
 			.iter()
 			.map(|chan| chan.channel_id)
 			.collect::<Vec<_>>();
@@ -1630,9 +1631,9 @@ fn preallocated_channels_are_allocated_first() {
 		// Since we have max 2 preallocated channels, the next allocation should be not from
 		// initial preallocated list.
 		let (deposit_channel_4, _, _, _) =
-			EthereumIngressEgress::open_channel(&ALICE, EthAsset::Eth, chan_action.clone(), 0)
+			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
 				.unwrap();
-		let preallocated_channels_4 = PreallocatedChannels::<Test, Instance1>::get(ALICE)
+		let preallocated_channels_4 = PreallocatedChannels::<Test, Instance2>::get(ALICE)
 			.iter()
 			.map(|chan| chan.channel_id)
 			.collect::<Vec<_>>();

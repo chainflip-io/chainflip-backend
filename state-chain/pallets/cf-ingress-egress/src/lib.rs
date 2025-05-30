@@ -3052,36 +3052,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(current_height, expiry_height, recycle_height)
 	}
 
-	/// Returns a deposit channel for the given asset, either by reusing an existing channel or
-	/// generating a new one.
+	/// Generates a new deposit channel for the given asset
 	#[allow(clippy::type_complexity)]
-	fn next_channel(
+	fn generate_new_channel(
 		source_asset: TargetChainAsset<T, I>,
 	) -> Result<DepositChannel<T::TargetChain>, DispatchError> {
-		match DepositChannelPool::<T, I>::drain().next() {
-			Some((_, deposit_channel)) => Ok(deposit_channel),
-			None => {
-				let next_channel_id = Self::allocate_next_channel_id()?;
-				Ok(DepositChannel::generate_new::<T::AddressDerivation>(
-					next_channel_id,
-					source_asset,
-				)
-				.map_err(|e| match e {
-					AddressDerivationError::MissingPolkadotVault =>
-						Error::<T, I>::MissingPolkadotVault,
-					AddressDerivationError::MissingBitcoinVault =>
-						Error::<T, I>::MissingBitcoinVault,
-					AddressDerivationError::BitcoinChannelIdTooLarge =>
-						Error::<T, I>::BitcoinChannelIdTooLarge,
-					AddressDerivationError::SolanaDerivationError { .. } =>
-						Error::<T, I>::SolanaAddressDerivationError,
-					AddressDerivationError::MissingSolanaApiEnvironment =>
-						Error::<T, I>::MissingSolanaApiEnvironment,
-					AddressDerivationError::MissingAssethubVault =>
-						Error::<T, I>::MissingAssethubVault,
-				})?)
-			},
-		}
+		let next_channel_id = Self::allocate_next_channel_id()?;
+		Ok(DepositChannel::generate_new::<T::AddressDerivation>(next_channel_id, source_asset)
+			.map_err(|e| match e {
+				AddressDerivationError::MissingPolkadotVault => Error::<T, I>::MissingPolkadotVault,
+				AddressDerivationError::MissingBitcoinVault => Error::<T, I>::MissingBitcoinVault,
+				AddressDerivationError::BitcoinChannelIdTooLarge =>
+					Error::<T, I>::BitcoinChannelIdTooLarge,
+				AddressDerivationError::SolanaDerivationError { .. } =>
+					Error::<T, I>::SolanaAddressDerivationError,
+				AddressDerivationError::MissingSolanaApiEnvironment =>
+					Error::<T, I>::MissingSolanaApiEnvironment,
+				AddressDerivationError::MissingAssethubVault => Error::<T, I>::MissingAssethubVault,
+			})?)
 	}
 
 	/// Opens a channel for the given asset and registers it with the given action.
@@ -3109,12 +3097,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// pre-allocated channels list
 		let mut deposit_channel =
 			match PreallocatedChannels::<T, I>::mutate(requester, |queue| queue.pop_front()) {
-				// Try to get a pre-allocated channel first
 				Some(channel) => channel,
-				None =>
 				// if there are no pre-allocated channels, take the next channel
 				// from the pool of recycled channels, or generate a new channel entirely.
-					Self::next_channel(source_asset)?,
+				None => match DepositChannelPool::<T, I>::drain().next() {
+					Some((_, deposit_channel)) => deposit_channel,
+					None => Self::generate_new_channel(source_asset)?,
+				},
 			};
 		// Make sure to set the asset on the channel, in case it was recycled
 		deposit_channel.asset = source_asset;
@@ -3129,9 +3118,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		)) as usize)
 			.saturating_sub(PreallocatedChannels::<T, I>::get(requester).len())
 		{
-			// It doesn't what source asset we pass here, because it will be overridden
-			let new_channel = Self::next_channel(source_asset)?;
-			PreallocatedChannels::<T, I>::mutate(requester, |queue| queue.push_back(new_channel));
+			// For Ethereum and Arbitrum, only pre-allocate channels from the global pool of
+			// addresses. For other chains, preallocate a newly generated channel
+			match source_asset.into() {
+				ForeignChain::Ethereum | ForeignChain::Arbitrum => {
+					if let Some((_, reused_channel)) = DepositChannelPool::<T, I>::drain().next() {
+						PreallocatedChannels::<T, I>::mutate(requester, |queue| {
+							queue.push_back(reused_channel)
+						});
+					}
+				},
+				_ => {
+					// It doesn't matter what source asset we pass here, because source_asset
+					// is only used by Ethereum and Arbitrum chains and ignore for other chains.
+					let new_channel = Self::generate_new_channel(source_asset)?;
+					PreallocatedChannels::<T, I>::mutate(requester, |queue| {
+						queue.push_back(new_channel)
+					});
+				},
+			}
 		}
 
 		let deposit_address = deposit_channel.address.clone();
