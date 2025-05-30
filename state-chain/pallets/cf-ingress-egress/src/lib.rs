@@ -3059,10 +3059,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		source_asset: TargetChainAsset<T, I>,
 	) -> Result<DepositChannel<T::TargetChain>, DispatchError> {
 		match DepositChannelPool::<T, I>::drain().next() {
-			Some((_, mut deposit_channel)) => {
-				deposit_channel.asset = source_asset;
-				Ok(deposit_channel)
-			},
+			Some((_, deposit_channel)) => Ok(deposit_channel),
 			None => {
 				let next_channel_id = Self::allocate_next_channel_id()?;
 				Ok(DepositChannel::generate_new::<T::AddressDerivation>(
@@ -3108,32 +3105,33 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
 		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
 
-		let requester_role = T::AccountRoleRegistry::account_role(requester);
-		let max_pre_allocated_channels = MaximumPreallocatedChannels::<T, I>::get(requester_role);
-
 		// Allocate a channel for the requester, always try to first allocate from the
 		// pre-allocated channels list
-		let deposit_channel =
+		let mut deposit_channel =
 			match PreallocatedChannels::<T, I>::mutate(requester, |queue| queue.pop_front()) {
 				// Try to get a pre-allocated channel first
-				// make sure to set the asset on the channel
-				Some(mut deposit_channel) => {
-					deposit_channel.asset = source_asset;
-					deposit_channel
-				},
-				None => {
-					// if there are no pre-allocated channels, take the next channel
-					// from the pool of recycled channels, or generate a new channel entirely.
-					Self::next_channel(source_asset)?
-				},
+				Some(channel) => channel,
+				None =>
+				// if there are no pre-allocated channels, take the next channel
+				// from the pool of recycled channels, or generate a new channel entirely.
+					Self::next_channel(source_asset)?,
 			};
+		// Make sure to set the asset on the channel, in case it was recycled
+		deposit_channel.asset = source_asset;
 
-		// Proactively pre-allocate new channels for the requester
-		let num_pre_allocated_channels = PreallocatedChannels::<T, I>::get(requester).len();
-		for _ in 0..(max_pre_allocated_channels as usize).saturating_sub(num_pre_allocated_channels)
+		// Proactively pre-allocate new channels for the requester,
+		// This is done after the above loop deliberately to ensure that we always respect per-role
+		// preallocated channels limits and cater for cases when the configured
+		// MaximumPreallocatedChannels changes, or a channel is allocated from the pre-allocated
+		// channels list.
+		for _ in 0..(MaximumPreallocatedChannels::<T, I>::get(T::AccountRoleRegistry::account_role(
+			requester,
+		)) as usize)
+			.saturating_sub(PreallocatedChannels::<T, I>::get(requester).len())
 		{
-			let new_chan = Self::next_channel(source_asset)?;
-			PreallocatedChannels::<T, I>::mutate(requester, |queue| queue.push_back(new_chan));
+			// It doesn't what source asset we pass here, because it will be overridden
+			let new_channel = Self::next_channel(source_asset)?;
+			PreallocatedChannels::<T, I>::mutate(requester, |queue| queue.push_back(new_channel));
 		}
 
 		let deposit_address = deposit_channel.address.clone();
