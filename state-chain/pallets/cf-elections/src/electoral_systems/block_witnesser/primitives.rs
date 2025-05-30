@@ -278,7 +278,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 	fn next_election(&self) -> Option<ChainBlockNumberOf<T::Chain>> {
 		self.queued_elections.keys().next().cloned()
 	}
-	pub fn lowest_queued_or_ongoing_election(&self) -> ChainBlockNumberOf<T::Chain> {
+	pub fn lowest_in_progress_height(&self) -> ChainBlockNumberOf<T::Chain> {
 		*self
 			.ongoing
 			.keys()
