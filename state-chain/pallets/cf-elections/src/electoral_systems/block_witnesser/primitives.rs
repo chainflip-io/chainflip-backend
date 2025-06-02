@@ -54,35 +54,37 @@ defx! {
 	validate this (else ElectionTrackerError) {
 
 		seen_heights_below_is_updated: {
-			this.seen_heights_below > this.queued_hash_elections.keys().max().cloned().unwrap_or_default()
-			&& this.seen_heights_below > this.queued_safe_elections.get_all_heights().iter().max().cloned().unwrap_or_default()
-			&& this.seen_heights_below > this.ongoing.keys().max().cloned().unwrap_or_default()
-		},
-
-		ongoing_elections_are_lower_than_queued: {
-			let highest_ongoing = this.ongoing.keys().max().cloned().unwrap_or_default();
-			this.queued_hash_elections.keys().all(|height| highest_ongoing < *height)
-			&& this.queued_safe_elections.get_all_heights().iter().all(|height| highest_ongoing < *height)
+			this.queued_hash_elections.keys()
+			.chain(this.queued_safe_elections.get_all_heights().iter())
+			.max()
+			.cloned()
+			.map(|max_height| max_height < this.seen_heights_below)
+			.unwrap_or(true)
 		},
 
 		optimistic_block_cache_is_cleared: this.optimistic_block_cache.iter().all(|(height, _block)|
 			height.saturating_forward(T::Chain::SAFETY_BUFFER) > this.seen_heights_below
 		),
 
-		ongoing_elections_are_not_queued_by_hash:
-			this.ongoing.keys().cloned().collect::<BTreeSet<_>>()
-				.intersection(&this.queued_hash_elections.keys().cloned().collect())
-				.collect::<Vec<_>>().is_empty(),
+		//--- disjointness of all elections ---
+		// The following properties verify that the three sets of
+		//  - ongoing,
+		//  - queued by hash,
+		//  - and queued by height
+		// elections are pairwise disjoint. They also ensure that they
+		// adhere to the following ordering:
+		//
+		// |--- ongoing ---|--- queued by height ---|--- queued by hash ---||
+		//                                          |<-- SAFETY_BUFFER  -->||
+		//                                                                  ^- seen_heights_below
+		// >> increasing block heights >>
+		//
 
-		ongoing_elections_are_not_queued_by_safe:
-			this.ongoing.keys().cloned().collect::<BTreeSet<_>>()
-				.intersection(&this.queued_safe_elections.get_all_heights())
-				.collect::<Vec<_>>().is_empty(),
-
-		elections_queued_by_hash_and_safe_are_disjoint:
-			this.queued_hash_elections.keys().cloned().collect::<BTreeSet<_>>()
-				.intersection(&this.queued_safe_elections.get_all_heights())
-				.collect::<Vec<_>>().is_empty(),
+		ongoing_elections_are_lower_than_queued: {
+			let highest_ongoing = this.ongoing.keys().max().cloned().unwrap_or_default();
+			this.queued_hash_elections.keys().all(|height| highest_ongoing < *height)
+			&& this.queued_safe_elections.get_all_heights().iter().all(|height| highest_ongoing < *height)
+		},
 
 		elections_queued_by_hash_are_inside_safety_buffer:
 			this.queued_hash_elections.keys().all(
@@ -269,8 +271,10 @@ impl<T: BWTypes> ElectionTracker<T> {
 		self.seen_heights_below =
 			max(self.seen_heights_below.clone(), last_seen_height.saturating_forward(1));
 
-		// if there are elections ongoing for the block heights we received, we stop them
-		self.ongoing.retain(|height, _| !progress.headers.contains(height));
+		// if there are elections ongoing for the block heights we removed, we stop them
+		self.ongoing.retain(|height, _| {
+			!progress.removed.as_ref().is_some_and(|range| range.contains(height))
+		});
 
 		let (optimistic_blocks, mut remaining): (BTreeMap<_, _>, BTreeMap<_, _>) =
 			progress.headers.headers.into_iter().fold(
