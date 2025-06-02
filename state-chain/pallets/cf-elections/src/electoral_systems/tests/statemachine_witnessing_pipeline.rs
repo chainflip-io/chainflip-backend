@@ -197,7 +197,6 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		generate_election_properties_hook: Default::default(),
 		safemode_enabled: MockHook::new(SafeModeStatus::Disabled),
 		block_processor,
-		_phantom: core::marker::PhantomData,
 	};
 	let bw_settings =
 		BlockWitnesserSettings { max_concurrent_elections: 4, safety_margin: SAFETY_MARGIN };

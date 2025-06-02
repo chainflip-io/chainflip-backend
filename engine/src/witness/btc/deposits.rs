@@ -215,10 +215,6 @@ pub fn egress_witnessing(
 				if hash == tx_hash {
 					return Some(TransactionConfirmation {
 						tx_out_id: hash,
-						// we don't care about this value for btc (we don't refund out aggkey)
-						// the correct value to put here should be the aggKey which signed the tx
-						// (either current or previous) I guess we can derive it from
-						// VerobseTransaction, if yes how?
 						signer_id: DepositAddress::new([0; 32], 0).script_pubkey(),
 						tx_fee: tx.fee.unwrap_or_default().to_sat(),
 						tx_metadata: (),
