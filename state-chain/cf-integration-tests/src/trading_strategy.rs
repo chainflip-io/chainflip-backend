@@ -120,3 +120,69 @@ fn basic_usage() {
 
 	});
 }
+
+#[test]
+fn can_close_strategy_with_fully_executed_orders() {
+	const DECIMALS: u128 = 10u128.pow(6);
+	const AMOUNT: AssetAmount = 10_000 * DECIMALS;
+
+	super::genesis::with_test_defaults()
+		.with_additional_accounts(&[
+			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+		])
+		.build()
+		.execute_with(|| {
+			new_pool(BASE_ASSET, 0, price_at_tick(0).unwrap());
+			turn_off_thresholds();
+
+			// Start trading strategy
+			register_refund_addresses(&DORIS);
+			credit_account(&DORIS, BASE_ASSET, AMOUNT * 4);
+			const STRATEGY: TradingStrategy =
+				TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: BASE_ASSET };
+			assert_ok!(TradingStrategyPallet::deploy_strategy(
+				RuntimeOrigin::signed(DORIS),
+				STRATEGY.clone(),
+				BTreeMap::from_iter([(BASE_ASSET, AMOUNT)]),
+			));
+
+			// Get the strategy ID from the emitted event
+            let strategy_id = assert_events_match!(
+                Runtime,
+                RuntimeEvent::TradingStrategy(
+                    pallet_cf_trading_strategy::Event::StrategyDeployed{account_id: DORIS, strategy_id, strategy: STRATEGY}) => strategy_id
+            );
+
+			// Setting a LO alongside the strategy to make it easier to fully
+			// consume the strategy's order
+			assert_ok!(state_chain_runtime::LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(DORIS),
+				BASE_ASSET,
+				Asset::Usdc,
+				cf_amm::common::Side::Sell,
+				0,
+				Some(10),
+				AMOUNT * 3,
+			));
+
+
+			// This swap will fully consume strategy's order so it will be removed
+			// upon sweeping
+			let (_egress_id, _swap_input_amount, _swap_output_amount) = do_eth_swap(
+				QUOTE_ASSET.try_into().unwrap(),
+				BASE_ASSET.try_into().unwrap(),
+				&ZION,
+				AMOUNT * 2,
+			);
+
+
+			// In the past this would fail with "OrderDoesNotExist" since implicit
+			// sweeping (executed before every order update) was pre-removing it
+			// and we were effectively trying to remove the same order twice.
+			assert_ok!(TradingStrategyPallet::close_strategy(
+				RuntimeOrigin::signed(DORIS),
+				strategy_id
+			));
+		});
+}
