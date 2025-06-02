@@ -3,7 +3,7 @@ use codec::{Decode, Encode};
 use core::{
 	cmp::min,
 	iter::Step,
-	ops::{Range, RangeInclusive},
+	ops::{Range, RangeBounds, RangeInclusive},
 };
 use derive_where::derive_where;
 use scale_info::TypeInfo;
