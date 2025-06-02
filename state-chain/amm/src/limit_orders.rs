@@ -787,22 +787,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			let positions = &mut self.positions[!SD::INPUT_SIDE];
 			let fixed_pools = &mut self.fixed_pools[!SD::INPUT_SIDE];
 
-			let position = match positions.get(&(sqrt_price, lp.clone())) {
-				Some(position) => position.clone(),
-				None =>
-					if amount == u128::MAX.into() {
-						// We are removing the order anyway so not being able to
-						// find it is not a problem (this happens if implicit sweeping
-						// pre-removes the order if it was fully executed).
-						return Ok((
-							Default::default(),
-							Default::default(),
-							PositionInfo::default(),
-						));
-					} else {
-						return Err(PositionError::NonExistent);
-					},
-			};
+			let position = positions
+				.get(&(sqrt_price, lp.clone()))
+				.ok_or(PositionError::NonExistent)?
+				.clone();
 			let option_fixed_pool = fixed_pools.get(&sqrt_price);
 
 			let (collected_amounts, option_position) =
