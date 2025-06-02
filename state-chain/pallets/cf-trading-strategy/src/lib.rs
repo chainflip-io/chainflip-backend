@@ -59,6 +59,7 @@ impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closur
 )]
 pub enum TradingStrategy {
 	TickZeroCentered { spread_tick: Tick, base_asset: Asset },
+	AsymmetricBuySell { buy_tick: Tick, sell_tick: Tick, base_asset: Asset },
 }
 
 #[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -85,7 +86,8 @@ impl TradingStrategy {
 	}
 	pub fn supported_assets(&self) -> BTreeSet<Asset> {
 		match self {
-			TradingStrategy::TickZeroCentered { base_asset, .. } =>
+			TradingStrategy::TickZeroCentered { base_asset, .. } |
+			TradingStrategy::AsymmetricBuySell { base_asset, .. } =>
 				BTreeSet::from_iter([*base_asset, STABLE_ASSET]),
 		}
 	}
@@ -93,6 +95,17 @@ impl TradingStrategy {
 		match self {
 			TradingStrategy::TickZeroCentered { spread_tick, base_asset } => {
 				if *spread_tick < 0 || *spread_tick > cf_amm_math::MAX_TICK {
+					return Err(Error::<T>::InvalidTick)
+				}
+				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
+			},
+			TradingStrategy::AsymmetricBuySell { buy_tick, sell_tick, base_asset } => {
+				if buy_tick >= sell_tick ||
+					*buy_tick > cf_amm_math::MAX_TICK ||
+					*sell_tick > cf_amm_math::MAX_TICK ||
+					*buy_tick < cf_amm_math::MIN_TICK ||
+					*sell_tick < cf_amm_math::MIN_TICK
+				{
 					return Err(Error::<T>::InvalidTick)
 				}
 				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
@@ -209,6 +222,40 @@ pub mod pallet {
 			weight_used += T::DbWeight::get().reads(1);
 			let limit_order_update_weight = T::LpOrdersWeights::update_limit_order_weight();
 
+			// Strategy to update a buy and a sell limit order, used by TickZeroCentered &
+			// AsymmetricBuySell
+			let buy_sell_strategy = |strategy_id, buy_tick, sell_tick, base_asset| -> Weight {
+				let mut weight_used: Weight = Weight::zero();
+				for (side, tick) in [(Side::Buy, buy_tick), (Side::Sell, sell_tick)] {
+					let sell_asset = if side == Side::Buy { STABLE_ASSET } else { base_asset };
+
+					weight_used += T::DbWeight::get().reads(1);
+					let balance = T::BalanceApi::get_balance(&strategy_id, sell_asset);
+
+					// Minimum threshold of 1 to prevent updating with 0 amounts
+					let threshold = core::cmp::max(
+						order_update_thresholds.get(&sell_asset).copied().unwrap_or(u128::MAX),
+						1,
+					);
+
+					if balance >= threshold {
+						weight_used += limit_order_update_weight;
+
+						// We expect this to fail if the pool does not exist
+						let _result = T::PoolApi::update_limit_order(
+							&strategy_id,
+							base_asset,
+							STABLE_ASSET,
+							side,
+							STRATEGY_ORDER_ID,
+							Some(tick),
+							IncreaseOrDecrease::Increase(balance),
+						);
+					}
+				}
+				weight_used
+			};
+
 			for (_, strategy_id, strategy) in Strategies::<T>::iter() {
 				match strategy {
 					TradingStrategy::TickZeroCentered { spread_tick, base_asset } => {
@@ -220,37 +267,18 @@ pub mod pallet {
 						}
 
 						let tick = core::cmp::max(spread_tick, 0);
-						for (side, tick) in [(Side::Buy, -tick), (Side::Sell, tick)] {
-							let sell_asset =
-								if side == Side::Buy { STABLE_ASSET } else { base_asset };
+						weight_used += buy_sell_strategy(strategy_id, -tick, tick, base_asset);
+					},
+					TradingStrategy::AsymmetricBuySell { buy_tick, sell_tick, base_asset } => {
+						let new_weight_estimate =
+							weight_used.saturating_add(limit_order_update_weight * 2);
 
-							weight_used += T::DbWeight::get().reads(1);
-							let balance = T::BalanceApi::get_balance(&strategy_id, sell_asset);
-
-							// Minimum threshold of 1 to prevent updating with 0 amounts
-							let threshold = core::cmp::max(
-								order_update_thresholds
-									.get(&sell_asset)
-									.copied()
-									.unwrap_or(u128::MAX),
-								1,
-							);
-
-							if balance >= threshold {
-								weight_used += limit_order_update_weight;
-
-								// We expect this to fail if the pool does not exist
-								let _result = T::PoolApi::update_limit_order(
-									&strategy_id,
-									base_asset,
-									STABLE_ASSET,
-									side,
-									STRATEGY_ORDER_ID,
-									Some(tick),
-									IncreaseOrDecrease::Increase(balance),
-								);
-							}
+						if remaining_weight.checked_sub(&new_weight_estimate).is_none() {
+							break;
 						}
+
+						weight_used +=
+							buy_sell_strategy(strategy_id, buy_tick, sell_tick, base_asset);
 					},
 				}
 			}
