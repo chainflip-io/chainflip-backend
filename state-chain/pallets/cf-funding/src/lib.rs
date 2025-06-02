@@ -218,7 +218,7 @@ impl<T: Config> Redemption<T> {
 		);
 		if account_balance == debit_amount {
 			ensure!(
-				T::AccountRoleRegistry::is_unregistered(&account_id),
+				T::AccountRoleRegistry::is_unregistered(account_id),
 				Error::<T>::AccountMustBeUnregistered
 			);
 		}

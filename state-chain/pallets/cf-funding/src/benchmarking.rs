@@ -205,6 +205,8 @@ mod benchmarks {
 
 		fund_with_minimum::<T>(&sender);
 
+		T::AccountRoleRegistry::deregister_as_validator(&sender).unwrap();
+
 		#[extrinsic_call]
 		rebalance(RawOrigin::Signed(sender), recipient, Default::default(), RedemptionAmount::Max);
 	}
