@@ -3118,24 +3118,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		)) as usize)
 			.saturating_sub(PreallocatedChannels::<T, I>::get(requester).len())
 		{
-			// For Ethereum and Arbitrum, only pre-allocate channels from the global pool of
-			// addresses. For other chains, preallocate a newly generated channel
-			match source_asset.into() {
-				ForeignChain::Ethereum | ForeignChain::Arbitrum => {
-					if let Some((_, reused_channel)) = DepositChannelPool::<T, I>::drain().next() {
-						PreallocatedChannels::<T, I>::mutate(requester, |queue| {
-							queue.push_back(reused_channel)
-						});
-					}
-				},
-				_ => {
-					// It doesn't matter what source asset we pass here, because source_asset
-					// is only used by Ethereum and Arbitrum chains and ignore for other chains.
-					let new_channel = Self::generate_new_channel(source_asset)?;
+			// For chains that preallocation is not enabled such as Ethereum and Arbitrum,
+			// only pre-allocate channels from the global pool of addresses, for other chains,
+			// preallocate a newly generated channel.
+			if !Into::<ForeignChain>::into(source_asset).can_preallocate_addresses() {
+				if let Some((_, reused_channel)) = DepositChannelPool::<T, I>::drain().next() {
 					PreallocatedChannels::<T, I>::mutate(requester, |queue| {
-						queue.push_back(new_channel)
+						queue.push_back(reused_channel)
 					});
-				},
+				}
+			} else {
+				// It doesn't matter what source asset we pass here, because source_asset
+				// is ignored by chains that support preallocation.
+				let new_channel = Self::generate_new_channel(source_asset)?;
+				PreallocatedChannels::<T, I>::mutate(requester, |queue| {
+					queue.push_back(new_channel)
+				});
 			}
 		}
 

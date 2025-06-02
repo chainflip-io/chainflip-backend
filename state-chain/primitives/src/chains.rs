@@ -149,6 +149,17 @@ impl ForeignChain {
 			ForeignChain::Assethub => true,
 		}
 	}
+
+	pub const fn can_preallocate_addresses(self) -> bool {
+		match self {
+			ForeignChain::Ethereum => false,
+			ForeignChain::Polkadot => true,
+			ForeignChain::Bitcoin => true,
+			ForeignChain::Arbitrum => false,
+			ForeignChain::Solana => true,
+			ForeignChain::Assethub => true,
+		}
+	}
 }
 
 #[test]
