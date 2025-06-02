@@ -3307,10 +3307,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Vec<DepositChannelDetails<T, I>> {
 		debug_assert!(<T::TargetChain as Chain>::is_block_witness_root(block_height));
 
-		// Opened at: 1, Expires at: 122, Processed up to: 0, not active at 163
 		DepositChannelLookup::<T, I>::iter_values()
 			.filter_map(|details| {
-				// TODO: Subtract safety from opened_at
 				if details.opened_at <= block_height &&
 					(
 						block_height <= details.expires_at
