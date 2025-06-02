@@ -148,12 +148,12 @@ pub struct Consumer {
 	resolution_delay: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FilledBlock<E> {
-	block_id: BlockId,
-	data: Vec<E>,
-	data_delays: Vec<usize>,
-	resolution_delay: usize,
+	pub block_id: BlockId,
+	pub data: Vec<E>,
+	pub data_delays: Vec<usize>,
+	pub resolution_delay: usize,
 }
 
 pub fn fill_block<E: Clone>(
@@ -293,8 +293,9 @@ pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
 			);
 
 			// generate a large number of empty blocks, so all processors can run until completion
-			// since witnessing of blocks is delayed by at most `max_resolution_delay`, we use it as base value.
-			blocks.extend((0..=(p.item_parameters.max_resolution_delay+3)).map(|_| {
+			// since witnessing of blocks is delayed by at most `max_resolution_delay`, we use it as
+			// base value.
+			blocks.extend((0..=(p.item_parameters.max_resolution_delay + 3)).map(|_| {
 				ForkedBlock::Block(Consumer {
 					ignore: 0,
 					drop: 0,
@@ -348,7 +349,8 @@ pub fn print_blocks(
 impl Debug for ForkedFilledChain {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		writeln!(f, "chains:")?;
-		print_blocks(&self.blocks, 0, f)
+		print_blocks(&self.blocks, 0, f)?;
+		writeln!(f, "chains (debug): {:#?}", self.blocks)
 	}
 }
 
