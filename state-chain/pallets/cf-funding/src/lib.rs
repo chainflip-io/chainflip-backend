@@ -884,7 +884,7 @@ pub mod pallet {
 			redemption.burn_fee()?;
 			redemption.update_restricted_balances(Some(&recipient_account_id))?;
 
-			T::Flip::try_transfer_funds_internally(
+			T::Flip::try_transfer(
 				redemption.redeem_amount,
 				&source_account_id,
 				&recipient_account_id,

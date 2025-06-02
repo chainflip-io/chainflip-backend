@@ -313,7 +313,7 @@ pub trait Funding {
 	fn revert_redemption(account_id: &Self::AccountId) -> Result<(), DispatchError>;
 
 	/// Directly transfers funds from an account A to an account B.
-	fn try_transfer_funds_internally(
+	fn try_transfer(
 		amount: Self::Balance,
 		from: &Self::AccountId,
 		to: &Self::AccountId,

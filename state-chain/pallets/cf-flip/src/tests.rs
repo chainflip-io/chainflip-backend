@@ -695,7 +695,7 @@ mod transfer {
 			assert_eq!(Flip::total_balance_of(&BOB), 50);
 			let previous_issuance = TotalIssuance::<Test>::get();
 
-			assert_ok!(Flip::try_transfer_funds_internally(AMOUNT, &ALICE, &BOB));
+			assert_ok!(Flip::try_transfer(AMOUNT, &ALICE, &BOB));
 
 			assert_eq!(Flip::total_balance_of(&ALICE), 90);
 			assert_eq!(Flip::total_balance_of(&BOB), 60);
@@ -707,7 +707,7 @@ mod transfer {
 	fn transfer_with_insufficient_sender_balance() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
-				Flip::try_transfer_funds_internally(110, &ALICE, &BOB),
+				Flip::try_transfer(110, &ALICE, &BOB),
 				Error::<Test>::InsufficientLiquidity
 			);
 		});
@@ -717,7 +717,7 @@ mod transfer {
 	fn can_not_transfer_funds_to_myself() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
-				Flip::try_transfer_funds_internally(50, &ALICE, &ALICE),
+				Flip::try_transfer(50, &ALICE, &ALICE),
 				Error::<Test>::CanNotTransferToSelf
 			);
 		});

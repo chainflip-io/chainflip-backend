@@ -641,7 +641,7 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 		Ok(())
 	}
 
-	fn try_transfer_funds_internally(
+	fn try_transfer(
 		amount: Self::Balance,
 		from: &Self::AccountId,
 		to: &Self::AccountId,
