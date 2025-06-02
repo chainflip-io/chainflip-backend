@@ -14,6 +14,7 @@ use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use proptest::{collection::*, prelude::*};
 
 type BlockId = u32;
+type Event = String;
 
 /// The basic data structure involved is an ordered tree which:
 ///  - a leaf represents a single block
@@ -44,6 +45,9 @@ pub struct ConsumerParameters {
 	// settings for `data delays`
 	time_steps_per_block: RangeInclusive<usize>,
 	max_data_delay: usize,
+
+	max_resolution_delay: usize,
+	resolution_delay_probability_weight: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -59,16 +63,25 @@ pub struct ConsumerChainParameters {
 
 pub fn generate_consumer(p: ConsumerParameters) -> impl Strategy<Value = Consumer> {
 	let p = p.clone();
-	(0..=p.max_drop, 0..=p.max_ignore, p.take, p.time_steps_per_block).prop_flat_map(
-		move |(drop, ignore, take, time_steps)| {
+	(
+		0..=p.max_drop,
+		0..=p.max_ignore,
+		p.take,
+		p.time_steps_per_block,
+		prop_oneof![
+			100 => Just(0),
+			p.resolution_delay_probability_weight => 0..p.max_resolution_delay,
+		],
+	)
+		.prop_flat_map(move |(drop, ignore, take, time_steps, resolution_delay)| {
 			vec(0..p.max_data_delay, time_steps).prop_map(move |data_delays| Consumer {
 				drop,
 				ignore,
 				take,
 				data_delays,
+				resolution_delay,
 			})
-		},
-	)
+		})
 }
 
 pub fn trim_forked_block<A>(block: ForkedBlock<A>, max_length: usize) -> ForkedBlock<A> {
@@ -130,12 +143,17 @@ pub struct Consumer {
 	/// of this structure. This describes how views of the chainstate are generated
 	/// when this block is the "current" one.
 	data_delays: Vec<usize>,
+
+	/// how long to delay resolution of this block
+	resolution_delay: usize,
 }
 
+#[derive(Clone, Debug)]
 pub struct FilledBlock<E> {
-	block_id: BlockId,
-	data: Vec<E>,
-	data_delays: Vec<usize>,
+	pub block_id: BlockId,
+	pub data: Vec<E>,
+	pub data_delays: Vec<usize>,
+	pub resolution_delay: usize,
 }
 
 pub fn fill_block<E: Clone>(
@@ -145,7 +163,7 @@ pub fn fill_block<E: Clone>(
 ) -> ForkedBlock<FilledBlock<E>> {
 	use ForkedBlock::*;
 	match input {
-		Block(Consumer { ignore, drop, take, data_delays }) => {
+		Block(Consumer { ignore, drop, take, data_delays, resolution_delay }) => {
 			let current_block_id = block_id.clone();
 			*block_id = *block_id + 1;
 			{
@@ -156,6 +174,7 @@ pub fn fill_block<E: Clone>(
 				data: block_events.collect(),
 				data_delays: data_delays.clone(),
 				block_id: current_block_id,
+				resolution_delay,
 			})
 		},
 		Fork(blocks) => Fork(fill_chain(blocks, &mut events.clone(), block_id)),
@@ -176,8 +195,12 @@ pub fn create_time_steps<E: Clone>(chain: &ForkedChain<FilledBlock<E>>) -> Vec<F
 	use ForkedBlock::*;
 	for block in chain {
 		match block {
-			Block(FilledBlock { data, data_delays, block_id }) => {
-				current_blocks.push(FlatBlock { events: data.clone(), block_id: *block_id });
+			Block(FilledBlock { data, data_delays, block_id, resolution_delay }) => {
+				current_blocks.push(FlatBlock {
+					events: data.clone(),
+					block_id: *block_id,
+					resolution_delay: *resolution_delay,
+				});
 				chains.push(FlatChain {
 					blocks: current_blocks.clone(),
 					data_delays: data_delays.clone(),
@@ -204,6 +227,10 @@ pub fn create_time_steps<E: Clone>(chain: &ForkedChain<FilledBlock<E>>) -> Vec<F
 pub struct FlatBlock<E> {
 	pub events: Vec<E>,
 	pub block_id: BlockId,
+
+	/// This block data is only going to resolve once this block is
+	/// this deep in the chain.
+	resolution_delay: usize,
 }
 
 // Temp
@@ -213,12 +240,24 @@ pub struct FlatChain<E> {
 	data_delays: Vec<usize>,
 }
 
-pub fn make_events() -> Vec<char> {
-	(0..26u8)
+pub fn make_events() -> Vec<String> {
+	let char_stream = (0..26u8)
 		.into_iter()
 		.map(|x| (b'a' + x) as char)
-		.chain((0..26u8).into_iter().map(|x| (b'A' + x) as char))
-		.chain((0..10u8).into_iter().map(|x| (b'0' + x) as char))
+		.chain((0..26u8).into_iter().map(|x| ((b'A' + x) as char)))
+		.map(|x| x.to_string());
+
+	char_stream
+		.clone()
+		.chain((0..10u8).into_iter().map(|x| ((b'0' + x) as char).to_string()))
+		// two char events
+		.chain(char_stream.clone().flat_map(|x| {
+			char_stream.clone().map(move |y| {
+				let mut res = x.clone();
+				res.push_str(&y);
+				res
+			})
+		}))
 		.collect()
 }
 
@@ -234,24 +273,35 @@ pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
 			max_ignore: 2,
 			time_steps_per_block: 1..=3,
 			max_data_delay: 2,
+			max_resolution_delay: 24,
+			resolution_delay_probability_weight: 100,
 		},
 	};
-	generate_consumer_chain(p)
+	generate_consumer_chain(p.clone())
 		// turn into chain progression
-		.prop_map(|mut blocks| {
+		.prop_map(move |mut blocks| {
 			// insert first empty parent block
 			blocks.insert(
 				0,
-				ForkedBlock::Block(Consumer { ignore: 0, drop: 0, take: 0, data_delays: vec![0] }),
+				ForkedBlock::Block(Consumer {
+					ignore: 0,
+					drop: 0,
+					take: 0,
+					data_delays: vec![0],
+					resolution_delay: 0,
+				}),
 			);
 
 			// generate a large number of empty blocks, so all processors can run until completion
-			blocks.extend((0..=10).map(|_| {
+			// since witnessing of blocks is delayed by at most `max_resolution_delay`, we use it as
+			// base value.
+			blocks.extend((0..=(p.item_parameters.max_resolution_delay + 3)).map(|_| {
 				ForkedBlock::Block(Consumer {
 					ignore: 0,
 					drop: 0,
 					take: 0,
 					data_delays: vec![0, 0, 0, 0, 0],
+					resolution_delay: 0,
 				})
 			}));
 
@@ -263,11 +313,11 @@ pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
 }
 
 pub struct ForkedFilledChain {
-	pub blocks: ForkedChain<FilledBlock<char>>,
+	pub blocks: ForkedChain<FilledBlock<Event>>,
 }
 
 pub fn print_blocks(
-	blocks: &ForkedChain<FilledBlock<char>>,
+	blocks: &ForkedChain<FilledBlock<Event>>,
 	height: usize,
 	f: &mut core::fmt::Formatter<'_>,
 ) -> core::fmt::Result {
@@ -280,8 +330,10 @@ pub fn print_blocks(
 	for block in blocks {
 		match block {
 			Fork(blocks) => forks.push((current_string.len(), blocks)),
-			Block(FilledBlock { data, data_delays, block_id }) =>
-				current_string.push_str(&format!("{block_id}: {data:?} [{data_delays:?}] -> ")),
+			Block(FilledBlock { data, data_delays, block_id, resolution_delay }) => current_string
+				.push_str(&format!(
+					"{block_id}: {data:?} [{data_delays:?}; {resolution_delay:?}] -> "
+				)),
 		}
 	}
 
@@ -297,15 +349,15 @@ pub fn print_blocks(
 impl Debug for ForkedFilledChain {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		writeln!(f, "chains:")?;
-		print_blocks(&self.blocks, 0, f)
+		print_blocks(&self.blocks, 0, f)?;
+		writeln!(f, "chains (debug): {:#?}", self.blocks)
 	}
 }
 
-pub fn blocks_into_chain_progression(
-	filled_chain: &ForkedChain<FilledBlock<char>>,
-) -> FlatChainProgression<char> {
-	let time_steps = create_time_steps(&filled_chain);
-
+pub fn blocks_into_chain_progression<E: Clone>(
+	filled_chain: &ForkedChain<FilledBlock<E>>,
+) -> FlatChainProgression<E> {
+	let time_steps = create_time_steps(filled_chain);
 	FlatChainProgression { chains: time_steps, age: 0 }
 }
 
@@ -317,7 +369,6 @@ pub struct MockChain<E, T: ChainTypes<ChainBlockHash = BlockId>> {
 
 use crate::electoral_systems::block_height_tracking::{primitives::Header, ChainTypes};
 use sp_std::iter::Step;
-// type MockChain<E> = Vec<FlatBlock<E>>;
 type N = u8;
 
 impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> MockChain<E, T> {
@@ -359,12 +410,24 @@ impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> Mock
 		self.chain
 			.iter()
 			.find(|(height, block)| block.block_id == hash)
+			// Return `None` if the resolution_delay of the block hasn't passed yet.
+			// This simulates blocks where the rpc call fails for some reason and thus the
+			// election never resolves.
+			.filter(|(height, block)| {
+				height.saturating_forward(block.resolution_delay) <= self.get_best_block_height()
+			})
 			.map(|(height, block)| block.events.clone())
 	}
 	pub fn get_block_by_height(&self, number: T::ChainBlockNumber) -> Option<Vec<E>> {
 		self.chain
 			.iter()
 			.find(|(height, block)| *height == number)
+			// Return `None` if the resolution_delay of the block hasn't passed yet.
+			// This simulates blocks where the rpc call fails for some reason and thus the
+			// election never resolves.
+			.filter(|(height, block)| {
+				height.saturating_forward(block.resolution_delay) <= self.get_best_block_height()
+			})
 			.map(|(height, block)| block.events.clone())
 	}
 	pub fn get_best_block_header(&self) -> Header<T> {
