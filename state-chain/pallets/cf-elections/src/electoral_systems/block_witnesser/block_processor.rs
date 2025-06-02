@@ -258,12 +258,13 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	/// A vector of (block height, events (`T::Event`)) generated during the processing rules.
 	fn process_rules(
 		&mut self,
-		last_height: ChainBlockNumberOf<T::Chain>,
+		highest_block_height: ChainBlockNumberOf<T::Chain>,
 	) -> Vec<(ChainBlockNumberOf<T::Chain>, T::Event)> {
 		let mut last_events: Vec<(ChainBlockNumberOf<T::Chain>, T::Event)> = vec![];
 		for (block_height, mut block_info) in self.blocks_data.clone() {
 			let new_age =
-				ChainBlockNumberOf::<T::Chain>::steps_between(&block_height, &last_height).0;
+				ChainBlockNumberOf::<T::Chain>::steps_between(&block_height, &highest_block_height)
+					.0;
 			// We ensure that we don't break anything in case the new age < next_age_to_process
 			if new_age as u32 >= block_info.next_age_to_process {
 				let age_range: Range<u32> =
