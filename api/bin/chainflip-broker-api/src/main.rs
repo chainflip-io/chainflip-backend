@@ -86,7 +86,6 @@ impl BrokerRpcApiServer for RpcServerImpl {
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
-		wait_for_finality: Option<bool>,
 	) -> RpcResult<SwapDepositAddress> {
 		Ok(self
 			.api
@@ -101,7 +100,6 @@ impl BrokerRpcApiServer for RpcServerImpl {
 				affiliate_fees,
 				refund_parameters,
 				dca_parameters,
-				wait_for_finality,
 			)
 			.await?)
 	}

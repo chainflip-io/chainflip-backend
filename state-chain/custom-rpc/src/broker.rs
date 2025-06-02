@@ -208,7 +208,6 @@ where
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
-		_wait_for_finality: Option<bool>,
 	) -> RpcResult<SwapDepositAddress> {
 		let mut status_stream = self
 			.signed_pool_client

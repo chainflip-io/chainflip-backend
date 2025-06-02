@@ -40,7 +40,6 @@ pub trait BrokerRpcApi {
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
-		wait_for_finality: Option<bool>,
 	) -> RpcResult<SwapDepositAddress>;
 
 	#[method(name = "withdraw_fees", aliases = ["broker_withdrawFees"])]
