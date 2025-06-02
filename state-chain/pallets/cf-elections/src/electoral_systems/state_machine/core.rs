@@ -383,6 +383,7 @@ impl<A: Validate> Validate for BTreeSet<A> {
 	}
 }
 
+#[cfg(test)]
 impl Validate for String {
 	type Error = ();
 
