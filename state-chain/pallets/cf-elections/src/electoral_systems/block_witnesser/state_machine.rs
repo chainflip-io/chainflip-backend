@@ -212,10 +212,18 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					));
 				}
 
-				s.block_processor.process_chain_progress(BPChainProgress {
-					highest_block_height: s.elections.seen_heights_below.saturating_backward(1),
-					removed_block_heights,
-				});
+				s.block_processor.process_chain_progress(
+					BPChainProgress {
+						highest_block_height: s.elections.seen_heights_below.saturating_backward(1),
+						removed_block_heights,
+					},
+					// NOTE: we use the lowest "in progress" height for expiring block and event
+					// data, this way if one BW election is stuck (e.g. due to failing rpc
+					// call), no event data is going to be deleted. That's why we can't use
+					// the `highest_seen` block height, because that one progresses always
+					// following data from the BHW, ignoring ongoing elections.
+					s.elections.lowest_in_progress_height(),
+				);
 			},
 
 			Either::Left(None) => {},
@@ -238,6 +246,13 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 							removed_block_heights: None,
 						},
 						(properties.block_height, blockdata, settings.safety_margin),
+						// NOTE: we use the lowest "in progress" height for expiring block and
+						// event data, this way if one BW election is stuck (e.g. due to
+						// failing rpc call), no event data is going to be deleted. That's
+						// why we can't use the `highest_seen` block height, because that one
+						// progresses always following data from the BHW, ignoring ongoing
+						// elections.
+						s.elections.lowest_in_progress_height(),
 					)
 				}
 			},

@@ -368,7 +368,7 @@ pub fn test_all() {
 		// TODO: we had previously a much higher number (256 * 256 * 4),
 		// but currently it takes a *very* long to test with this many iterations.
 		// Appearently due to having increased the empty block buffer on the main chain.
-		cases: 256 * 4,
+		cases: 256 * 16,
 		failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
 			"proptest-regressions-full-pipeline",
 		))),

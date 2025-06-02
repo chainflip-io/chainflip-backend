@@ -9,7 +9,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{
 	cmp::max,
-	collections::{btree_map::BTreeMap, vec_deque::VecDeque},
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque},
 	iter,
 	vec::Vec,
 };
@@ -278,6 +278,15 @@ impl<T: BWTypes> ElectionTracker<T> {
 	fn next_election(&self) -> Option<ChainBlockNumberOf<T::Chain>> {
 		self.queued_elections.keys().next().cloned()
 	}
+	pub fn lowest_in_progress_height(&self) -> ChainBlockNumberOf<T::Chain> {
+		*self
+			.ongoing
+			.keys()
+			.chain(self.queued_elections.keys())
+			.chain(self.queued_safe_elections.get_all_heights().iter())
+			.min()
+			.unwrap_or(&self.seen_heights_below)
+	}
 }
 
 impl<T: BWTypes> Default for ElectionTracker<T> {
@@ -384,6 +393,10 @@ impl<N: Step + Ord> CompactHeightTracker<N> {
 		for r in self.elections.iter_mut() {
 			range_difference(r, &(range.start().clone()..N::forward(range.end().clone(), 1)))
 		}
+	}
+
+	fn get_all_heights(&self) -> BTreeSet<N> {
+		self.elections.iter().flat_map(|r| r.clone()).collect()
 	}
 }
 
