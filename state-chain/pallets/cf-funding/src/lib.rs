@@ -216,6 +216,12 @@ impl<T: Config> Redemption<T> {
 			remaining_balance == Zero::zero() || remaining_balance >= minimum_funding,
 			Error::<T>::BelowMinimumFunding
 		);
+		if account_balance == debit_amount {
+			ensure!(
+				T::AccountRoleRegistry::is_unregistered(&account_id),
+				Error::<T>::AccountMustBeUnregistered
+			);
+		}
 
 		Ok(Redemption {
 			redeem_amount,
@@ -240,6 +246,11 @@ impl<T: Config> Redemption<T> {
 		Ok(())
 	}
 
+	/// Apply required changes to the restricted balances of affected accounts.
+	///
+	/// Restricted balances of the source account will be reduced by the total debit amount, and if
+	/// a target account is provided, the restricted balance of the target account will be
+	/// increased by the redeem amount.
 	pub fn update_restricted_balances(
 		&self,
 		target: Option<&T::AccountId>,
@@ -622,12 +633,6 @@ pub mod pallet {
 			// Update the account balance.
 			if redeem_amount > Zero::zero() {
 				T::Flip::try_initiate_redemption(&account_id, redeem_amount)?;
-				if T::Flip::balance(&account_id).is_zero() {
-					ensure!(
-						T::AccountRoleRegistry::is_unregistered(&account_id),
-						Error::<T>::AccountMustBeUnregistered
-					);
-				}
 
 				// Send the transaction.
 				let contract_expiry =
@@ -889,13 +894,6 @@ pub mod pallet {
 				&source_account_id,
 				&recipient_account_id,
 			)?;
-
-			if T::Flip::balance(&source_account_id).is_zero() {
-				ensure!(
-					T::AccountRoleRegistry::is_unregistered(&source_account_id),
-					Error::<T>::AccountMustBeUnregistered
-				);
-			}
 
 			Self::deposit_event(Event::Rebalance {
 				source_account_id: source_account_id.clone(),
