@@ -2,7 +2,7 @@ use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use core::{
 	iter::Step,
-	ops::{Range, RangeInclusive},
+	ops::{Range, RangeBounds, RangeInclusive},
 };
 use derive_where::derive_where;
 use scale_info::TypeInfo;
@@ -59,15 +59,22 @@ defx! {
 
 	validate this (else ElectionTrackerError) {
 
+		//--- highest block is updated ---
+		// The `seen_heights_below` value should always be one more than the highest seen block.
+		// This property takes into account all queued and ongoing elections, except "optimistic",
+		// since those are for blocks that we haven't seen yet.
 		seen_heights_below_is_updated: {
 			this.queued_hash_elections.keys()
 			.chain(this.queued_safe_elections.get_all_heights().iter())
+			.chain(this.ongoing.iter().filter(|(_, election_type)| **election_type != BWElectionType::Optimistic).map(|(height, _)| height))
 			.max()
 			.cloned()
 			.map(|max_height| max_height < this.seen_heights_below)
 			.unwrap_or(true)
 		},
 
+		//--- ensure that we delete old data ---
+		// We should only store data received from optimistic elections for at most SAFETY_BUFFER blocks.
 		optimistic_block_cache_is_cleared: this.optimistic_block_cache.iter().all(|(height, _block)|
 			height.saturating_forward(T::Chain::SAFETY_BUFFER) > this.seen_heights_below
 		),
@@ -107,6 +114,12 @@ defx! {
 impl<T: BWTypes> ElectionTracker<T> {
 	pub fn start_more_elections(&mut self, max_ongoing: usize, safemode: SafeModeStatus) {
 		use BWElectionType::*;
+
+		// First we remove all Optimistic elections, we're going to recreate them if needed.
+		// This ensures that ongoing optimistic elections don't block more important ByHash
+		// elections.
+		self.ongoing
+			.retain(|_, election_type| *election_type != Optimistic);
 
 		// schedule at most `max_new_elections`
 		let max_new_elections = max_ongoing.saturating_sub(self.ongoing.len());
@@ -337,7 +350,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 				},
 			);
 
-		// adding all hashes to the queue
+		// add all remaining hashes to the queue
 		self.queued_hash_elections.append(&mut remaining);
 
 		let is_safe_height = |height: &ChainBlockNumberOf<T::Chain>| {
