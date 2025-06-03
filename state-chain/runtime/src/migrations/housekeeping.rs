@@ -49,21 +49,13 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	fn on_runtime_upgrade() -> Weight {
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN =>
-				if crate::VERSION.spec_version == 1_09_05 {
-					const REFUNDS: [(&str, &str, u128, &str); 2] = [
-						(
-							"0x39296AF2e64065D99Aaf57E03FF4d80eB6368A5b",
-							"0x52aa289646e5068185a30f79e95175f10ce6c48f",
-							308498000000,
-							"0x71ddf79e091b2af49bdd023a014d33038d71cea051342aea0dd714a7efccc375",
-						),
-						(
-							"0x591d17873798e573cE77D1d8F6B1e2eb5990647c",
-							"0xc89d8d1f136900390b09b9c70a658a1ad7b96369",
-							3000000000,
-							"0x9831311a2c88b3784572d84f53f5a06956014ae49937acfcef684880a216b66a",
-						),
-					];
+				if crate::VERSION.spec_version == 1_09_06 {
+					const REFUNDS: [(&str, &str, u128, &str); 1] = [(
+						"0xa22A37BD55E2b6A549488000973Ee6b9a93B5842",
+						"0xffa59724dab53cca2a24151125e58377736d415c",
+						127743983594,
+						"0x4e67fd7f174d3c67674b879beb28daccc0837d55b8e712fda0f230a42f2b53f8",
+					)];
 
 					CfeEvents::<Runtime>::kill();
 
@@ -100,7 +92,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 					// the engine will never see them.
 					RuntimeUpgradeEvents::<Runtime>::put(CfeEvents::<Runtime>::take());
 				} else {
-					log::info!("Runtime version is not 1.9.5, skipping migration.");
+					log::info!("Runtime version is not 1.9.6, skipping migration.");
 				},
 			genesis_hashes::PERSEVERANCE => {
 				log::info!("🧹 No housekeeping required for Perseverance.");
