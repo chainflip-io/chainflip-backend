@@ -3095,19 +3095,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// Allocate a channel for the requester, always try to first allocate from the
 		// pre-allocated channels list
-		let deposit_channel =
+		let mut deposit_channel =
 			match PreallocatedChannels::<T, I>::mutate(requester, |queue| queue.pop_front()) {
 				Some(channel) => channel,
 				// if there are no pre-allocated channels, take the next channel
 				// from the pool of recycled channels, or generate a new channel entirely.
 				None => match DepositChannelPool::<T, I>::drain().next() {
-					Some((_, mut deposit_channel)) => {
-						deposit_channel.asset = source_asset;
-						deposit_channel
-					},
+					Some((_, deposit_channel)) => deposit_channel,
 					None => Self::generate_new_channel(source_asset)?,
 				},
 			};
+		deposit_channel.asset = source_asset;
 
 		// Proactively pre-allocate new channels for the requester,
 		// This is done after the above loop deliberately to ensure that we always respect per-role
@@ -3167,12 +3165,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			<frame_system::Pallet<T>>::block_number(),
 		)?;
 
-		Ok((
-			deposit_channel.channel_id,
-			deposit_channel.address,
-			expiry_height,
-			channel_opening_fee,
-		))
+		Ok((deposit_channel.channel_id, deposit_address, expiry_height, channel_opening_fee))
 	}
 
 	pub fn get_failed_call(broadcast_id: BroadcastId) -> Option<FailedForeignChainCall> {
