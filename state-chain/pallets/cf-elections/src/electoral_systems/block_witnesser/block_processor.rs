@@ -4,7 +4,7 @@ use core::{
 };
 
 use crate::electoral_systems::{
-	block_height_tracking::{ChainBlockNumberOf, ChainProgress, ChainTypes},
+	block_height_tracking::{ChainBlockNumberOf, ChainTypes},
 	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
 	state_machine::core::{def_derive, Hook, Validate},
 };
@@ -106,6 +106,8 @@ pub struct BPChainProgress<T: ChainTypes> {
 	pub highest_block_height: T::ChainBlockNumber,
 	pub removed_block_heights: Option<RangeInclusive<T::ChainBlockNumber>>,
 }
+
+#[cfg(test)]
 impl<T: ChainTypes> BPChainProgress<T> {
 	fn up_to(highest_block_height: T::ChainBlockNumber) -> Self {
 		Self { highest_block_height, removed_block_heights: None }
@@ -167,10 +169,8 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			u32,
 		),
 	) {
-		self.log_event.run(BlockProcessorEvent::NewBlock {
-			height: block_number.clone(),
-			data: block_data.clone(),
-		});
+		self.log_event
+			.run(BlockProcessorEvent::NewBlock { height: block_number, data: block_data.clone() });
 		self.blocks_data
 			.insert(block_number, BlockProcessingInfo::new(block_data, safety_margin));
 	}
@@ -232,16 +232,6 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		self.clean_old(lowest_in_progress_height);
 	}
 
-	fn process_up_to(
-		&mut self,
-		highest_block_height: ChainBlockNumberOf<T::Chain>,
-		lowest_in_progress_height: ChainBlockNumberOf<T::Chain>,
-	) {
-		let events = self.process_rules(highest_block_height);
-		self.execute.run(events);
-		self.clean_old(lowest_in_progress_height);
-	}
-
 	/// Processes the stored block data to generate events by applying the provided rules.
 	///
 	/// This method iterates over all the blocks in `blocks_data` and, for each block,
@@ -271,7 +261,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 					(block_info.next_age_to_process)..new_age.saturating_add(1) as u32;
 
 				self.log_event.run(BlockProcessorEvent::ProcessingBlockForAges {
-					height: block_height.clone(),
+					height: block_height,
 					ages: age_range.clone(),
 				});
 
@@ -353,20 +343,15 @@ pub(crate) mod tests {
 			},
 			block_witnesser::{
 				block_processor::{BPChainProgress, BlockProcessor},
-				primitives::ChainProgressInner,
 				state_machine::{
 					BWProcessorTypes, ExecuteHook, HookTypeFor, LogEventHook, RulesHook,
 				},
 			},
-			state_machine::core::{hook_test_utils::MockHook, Hook, Serde, TypesFor, Validate},
+			state_machine::core::{hook_test_utils::MockHook, Hook, TypesFor, Validate},
 		},
 		*,
 	};
-	use cf_chains::witness_period::{BlockZero, SaturatingStep};
-	use core::{
-		iter::Step,
-		ops::{Range, RangeInclusive},
-	};
+	use core::ops::{Range, RangeInclusive};
 	use frame_support::{Deserialize, Serialize};
 	use proptest_derive::Arbitrary;
 	use sp_std::{fmt::Debug, vec::Vec};
@@ -689,6 +674,7 @@ impl<T: BWProcessorTypes> Validate for BlockProcessor<T> {
 	}
 }
 #[allow(dead_code)]
+#[allow(clippy::type_complexity)]
 pub struct SMBlockProcessorOutput<T: BWProcessorTypes> {
 	events: Vec<(ChainBlockNumberOf<T::Chain>, T::Event)>,
 	deleted_data: BTreeMap<ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>>,

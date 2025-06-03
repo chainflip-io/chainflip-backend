@@ -4,30 +4,25 @@
 pub mod chainstate_simulation;
 
 use codec::{EncodeLike, WrapperTypeDecode, WrapperTypeEncode};
-use core::{fmt::Display, marker::PhantomData, ops::Deref};
-use itertools::{Either, Itertools};
+use core::{fmt::Display, ops::Deref};
+use itertools::Either;
 use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
 use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
-use std::{
-	collections::{BTreeMap, BTreeSet, VecDeque},
-	hash::DefaultHasher,
-};
+use std::collections::{BTreeSet, VecDeque};
 
 use crate::electoral_systems::{
 	block_height_tracking::{
 		primitives::NonemptyContinuousHeaders,
-		state_machine::{tests::*, BHWPhase, BlockHeightWitnesser},
+		state_machine::{BHWPhase, BlockHeightWitnesser},
 		BHWTypes, ChainBlockNumberOf, HeightWitnesserProperties,
 	},
 	block_witnesser::{
-		block_processor::{
-			tests::MockBtcEvent, BlockProcessingInfo, BlockProcessor, BlockProcessorEvent,
-		},
+		block_processor::{tests::MockBtcEvent, BlockProcessor, BlockProcessorEvent},
 		primitives::{ElectionTrackerEvent, SafeModeStatus},
 		state_machine::{
-			tests::*, BWElectionProperties, BWElectionType, BWProcessorTypes, BWStatemachine,
-			BWTypes, BlockWitnesserSettings, BlockWitnesserState,
+			tests::*, BWElectionProperties, BWElectionType, BWStatemachine, BWTypes,
+			BlockWitnesserSettings, BlockWitnesserState,
 		},
 	},
 	state_machine::{
@@ -73,12 +68,6 @@ impl Validate for EncodableChar {
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		Ok(())
 	}
-}
-
-macro_rules! if_matches {
-    ($($tt:tt)+) => {
-        |x| matches!(x, $($tt)+)
-    };
 }
 
 macro_rules! try_get {
@@ -234,7 +223,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 				bw_history.push(BWTrace::InputBHW(input.clone()));
 
 				let output = BHW::step(&mut bhw_state, input, &())
-					.expect(&format!("BHW failed with history: {bw_history:?}"));
+					.unwrap_or_else(|_| panic!("BHW failed with history: {bw_history:?}"));
 
 				outputs.push(output);
 			}
@@ -254,10 +243,9 @@ fn run_simulation(blocks: ForkedFilledChain) {
 			for bhw_output in bhw_outputs {
 				bw_history.push(BWTrace::Input(Either::Left(bhw_output.clone())));
 
-				bw_state
-					.elections
-					.is_valid()
-					.expect(&format!("BW failed with history: {}", print_bw_history(&bw_history)));
+				bw_state.elections.is_valid().unwrap_or_else(|_| {
+					panic!("BW failed with history: {}", print_bw_history(&bw_history))
+				});
 
 				BW::step(&mut bw_state, Either::Left(bhw_output), &bw_settings).unwrap();
 
@@ -283,10 +271,9 @@ fn run_simulation(blocks: ForkedFilledChain) {
 			for input in inputs {
 				bw_history.push(BWTrace::Input(input.clone()));
 
-				bw_state
-					.elections
-					.is_valid()
-					.expect(&format!("BW failed with history: {}", print_bw_history(&bw_history)));
+				bw_state.elections.is_valid().unwrap_or_else(|_| {
+					panic!("BW failed with history: {}", print_bw_history(&bw_history))
+				});
 
 				BW::step(&mut bw_state, input, &bw_settings).unwrap();
 
@@ -328,7 +315,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 			};
 			write!(printed, "{height}: {}, ", event).unwrap();
 		}
-		writeln!(printed, "").unwrap();
+		writeln!(printed).unwrap();
 	}
 
 	let counted_events: Container<BTreeMultiSet<(u8, MockBtcEvent<Event>)>> =
@@ -348,9 +335,9 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		.0
 		 .0
 		.keys()
-		.map(|(a, b)| b)
+		.map(|(_, b)| b)
 		.filter_map(try_get!(MockBtcEvent::Witness))
-		.map(|event| event.clone())
+		.cloned()
 		.collect();
 	let expected_witness_events: BTreeSet<_> = finalized_events.into_iter().cloned().collect();
 	assert_eq!(emitted_witness_events, expected_witness_events,

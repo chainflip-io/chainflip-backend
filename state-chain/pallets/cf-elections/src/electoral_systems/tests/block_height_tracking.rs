@@ -12,7 +12,7 @@ use crate::electoral_systems::{
 	},
 };
 use cf_chains::{mocks::MockEthereum, Chain};
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::BTreeSet;
 type ChainBlockNumber = <MockEthereum as Chain>::ChainBlockNumber;
 type ValidatorId = u16;
 type BlockData = Vec<u8>;

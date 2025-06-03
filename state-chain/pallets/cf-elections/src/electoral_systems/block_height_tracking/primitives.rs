@@ -6,7 +6,7 @@ use sp_std::collections::vec_deque::VecDeque;
 
 use crate::electoral_systems::state_machine::core::{def_derive, defx};
 
-use super::{super::state_machine::core::Validate, ChainProgress, ChainTypes};
+use super::{super::state_machine::core::Validate, ChainTypes};
 
 //------------------------ inputs ---------------------------
 
@@ -90,17 +90,15 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 					existing_wrong_parent: self.headers.back().cloned(),
 				})
 			}
+		} else if self.first().block_height == other.first().block_height {
+			let mut self_headers = self.headers.clone();
+			let mut other_headers = other.headers.clone();
+			let common_headers = extract_common_prefix(&mut self_headers, &mut other_headers);
+			self.headers = common_headers;
+			self.headers.append(&mut other_headers.clone());
+			Ok(MergeInfo { removed: self_headers, added: other_headers })
 		} else {
-			if self.first().block_height == other.first().block_height {
-				let mut self_headers = self.headers.clone();
-				let mut other_headers = other.headers.clone();
-				let common_headers = extract_common_prefix(&mut self_headers, &mut other_headers);
-				self.headers = common_headers;
-				self.headers.append(&mut other_headers.clone());
-				Ok(MergeInfo { removed: self_headers, added: other_headers })
-			} else {
-				Err(MergeFailure::InternalError)
-			}
+			Err(MergeFailure::InternalError)
 		}
 	}
 	pub fn trim_to_length(&mut self, target_length: usize) {

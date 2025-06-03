@@ -422,10 +422,8 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 
 #[cfg(test)]
 pub mod tests {
-	use sp_std::iter::Step;
 	use std::collections::BTreeMap;
 
-	use cf_chains::witness_period::{BlockZero, SaturatingStep};
 	use proptest::{
 		prelude::{any, Arbitrary, BoxedStrategy, Just, Strategy},
 		prop_oneof,
@@ -439,7 +437,6 @@ pub mod tests {
 		prop_do,
 	};
 	use hook_test_utils::*;
-	use proptest::collection::*;
 
 	const SAFETY_MARGIN: u32 = 3;
 	fn generate_state<

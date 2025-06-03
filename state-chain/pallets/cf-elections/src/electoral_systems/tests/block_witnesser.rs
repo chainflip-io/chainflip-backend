@@ -20,7 +20,7 @@ use super::{mocks::Check, register_checks};
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
 	electoral_systems::{
-		block_height_tracking::{ChainProgress, ChainTypes},
+		block_height_tracking::ChainTypes,
 		block_witnesser::{
 			state_machine::{
 				BWElectionProperties, BWElectionType, BWProcessorTypes, ElectionPropertiesHook,
@@ -33,7 +33,6 @@ use crate::{
 		state_machine::{
 			consensus::{ConsensusMechanism, SuccessThreshold},
 			core::{hook_test_utils::MockHook, Hook, TypesFor},
-			state_machine::AbstractApi,
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 	},
@@ -43,7 +42,7 @@ use cf_chains::{mocks::MockEthereum, Chain};
 use consensus::BWConsensus;
 use primitives::SafeModeStatus;
 use sp_std::collections::btree_set::BTreeSet;
-use state_machine::{BWStatemachine, BWTypes, BlockWitnesserSettings, BlockWitnesserState};
+use state_machine::{BWStatemachine, BWTypes};
 
 fn range_n(start: u64, count: u64) -> RangeInclusive<u64> {
 	assert!(count > 0);

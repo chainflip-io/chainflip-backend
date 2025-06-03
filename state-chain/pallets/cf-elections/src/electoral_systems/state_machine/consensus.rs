@@ -91,7 +91,7 @@ impl<Stage: ConsensusMechanism, Index: Ord + Copy> ConsensusMechanism
 	type Settings = Stage::Settings;
 
 	fn insert_vote(&mut self, (index, vote): Self::Vote) {
-		self.stages.entry(index).or_insert_with(Stage::default).insert_vote(vote);
+		self.stages.entry(index).or_default().insert_vote(vote);
 	}
 
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {

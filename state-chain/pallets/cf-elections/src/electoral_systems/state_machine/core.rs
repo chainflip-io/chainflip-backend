@@ -327,9 +327,7 @@ pub mod hook_test_utils {
 
 	impl<X: HookType<Output = ()>> Hook<X> for EmptyHook {
 		#[inline]
-		fn run(&mut self, _input: <X as HookType>::Input) -> <X as HookType>::Output {
-			()
-		}
+		fn run(&mut self, _input: <X as HookType>::Input) -> <X as HookType>::Output {}
 	}
 
 	impl Validate for EmptyHook {
@@ -379,7 +377,7 @@ impl<A: Validate> Validate for BTreeSet<A> {
 	type Error = A::Error;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		self.iter().map(|a| a.is_valid()).collect()
+		self.iter().try_for_each(Validate::is_valid)
 	}
 }
 
@@ -396,7 +394,7 @@ impl<A: Validate> Validate for Vec<A> {
 	type Error = A::Error;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		self.iter().map(Validate::is_valid).collect()
+		self.iter().try_for_each(Validate::is_valid)
 	}
 }
 
@@ -404,7 +402,7 @@ impl<A: Validate> Validate for VecDeque<A> {
 	type Error = A::Error;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		self.iter().map(Validate::is_valid).collect()
+		self.iter().try_for_each(Validate::is_valid)
 	}
 }
 

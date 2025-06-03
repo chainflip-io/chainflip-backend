@@ -368,7 +368,6 @@ pub struct MockChain<E, T: ChainTypes<ChainBlockHash = BlockId>> {
 }
 
 use crate::electoral_systems::block_height_tracking::{primitives::Header, ChainTypes};
-use sp_std::iter::Step;
 type N = u8;
 
 impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> MockChain<E, T> {
@@ -388,7 +387,7 @@ impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> Mock
 	pub fn get_hash_by_height(&self, height: T::ChainBlockNumber) -> Option<BlockId> {
 		self.chain
 			.iter()
-			.find(|(h, block)| *h == height)
+			.find(|(h, _block)| *h == height)
 			.map(|(_, block)| block.block_id)
 	}
 
@@ -409,26 +408,26 @@ impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> Mock
 	pub fn get_block_by_hash(&self, hash: T::ChainBlockHash) -> Option<Vec<E>> {
 		self.chain
 			.iter()
-			.find(|(height, block)| block.block_id == hash)
+			.find(|(_height, block)| block.block_id == hash)
 			// Return `None` if the resolution_delay of the block hasn't passed yet.
 			// This simulates blocks where the rpc call fails for some reason and thus the
 			// election never resolves.
 			.filter(|(height, block)| {
 				height.saturating_forward(block.resolution_delay) <= self.get_best_block_height()
 			})
-			.map(|(height, block)| block.events.clone())
+			.map(|(_height, block)| block.events.clone())
 	}
 	pub fn get_block_by_height(&self, number: T::ChainBlockNumber) -> Option<Vec<E>> {
 		self.chain
 			.iter()
-			.find(|(height, block)| *height == number)
+			.find(|(height, _block)| *height == number)
 			// Return `None` if the resolution_delay of the block hasn't passed yet.
 			// This simulates blocks where the rpc call fails for some reason and thus the
 			// election never resolves.
 			.filter(|(height, block)| {
 				height.saturating_forward(block.resolution_delay) <= self.get_best_block_height()
 			})
-			.map(|(height, block)| block.events.clone())
+			.map(|(_height, block)| block.events.clone())
 	}
 	pub fn get_best_block_header(&self) -> Header<T> {
 		let best_height = self.get_best_block_height();

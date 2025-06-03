@@ -102,7 +102,7 @@ pub trait Statemachine: AbstractApi + 'static {
 	fn input_index(s: &mut Self::State) -> Vec<Self::Query>;
 
 	fn validate_input(
-		index: &Vec<Self::Query>,
+		index: &[Self::Query],
 		value: &InputOf<Self>,
 	) -> Result<(), SMInputValidateError<Self::Context, Self::Error>>
 	where
