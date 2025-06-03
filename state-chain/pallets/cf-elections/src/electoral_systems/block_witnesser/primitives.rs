@@ -47,8 +47,7 @@ defx! {
 		pub optimistic_block_cache: BTreeMap<ChainBlockNumberOf<T::Chain>, OptimisticBlock<T>>,
 
 		/// debug hook
-		pub debug_events: T::ElectionTrackerEventHook,
-
+		pub debug_events: T::ElectionTrackerDebugEventHook,
 	}
 
 	validate this (else ElectionTrackerError) {

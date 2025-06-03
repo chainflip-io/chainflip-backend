@@ -23,8 +23,8 @@ use crate::{
 		block_witnesser::{
 			state_machine::{
 				BWElectionProperties, BWElectionType, BWProcessorTypes, ElectionPropertiesHook,
-				ElectionTrackerEventHook, ExecuteHook, HookTypeFor, LogEventHook, RulesHook,
-				SafeModeEnabledHook,
+				ElectionTrackerDebugEventHook, ExecuteHook, HookTypeFor, DebugEventHook,
+				RulesHook, SafeModeEnabledHook,
 			},
 			*,
 		},
@@ -76,7 +76,7 @@ impl BWProcessorTypes for Types {
 	type Event = ();
 	type Rules = MockHook<HookTypeFor<Self, RulesHook>, "rules">;
 	type Execute = MockHook<HookTypeFor<Self, ExecuteHook>, "execute">;
-	type LogEventHook = MockHook<HookTypeFor<Self, LogEventHook>, "delete">;
+	type DebugEventHook = MockHook<HookTypeFor<Self, DebugEventHook>, "delete">;
 }
 
 /// Associating BW types to the struct
@@ -85,7 +85,7 @@ impl BWTypes for Types {
 	type ElectionPropertiesHook =
 		MockHook<HookTypeFor<Self, ElectionPropertiesHook>, "generate_election_properties">;
 	type SafeModeEnabledHook = Self;
-	type ElectionTrackerEventHook = MockHook<HookTypeFor<Self, ElectionTrackerEventHook>>;
+	type ElectionTrackerDebugEventHook = MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;
 }
 
 /// Associating the state machine and consensus mechanism to the struct

@@ -47,7 +47,7 @@ use proptest_derive::Arbitrary;
 ///     - `Event`: The type of event generated from processing blocks.
 ///     - `Rules`: A hook to process block data and generate events.
 ///     - `Execute`: A hook to dedup and execute generated events.
-/// 	- `LogEventHook`: A hook to log events, used for testing
+/// 	- `DebugEventHook`: A hook to log events, used for testing
 #[derive_where(Debug, Clone, PartialEq, Eq;)]
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct BlockProcessor<T: BWProcessorTypes> {
@@ -61,7 +61,7 @@ pub struct BlockProcessor<T: BWProcessorTypes> {
 	pub processed_events: BTreeMap<T::Event, ChainBlockNumberOf<T::Chain>>,
 	pub rules: T::Rules,
 	pub execute: T::Execute,
-	pub debug_events: T::LogEventHook,
+	pub debug_events: T::DebugEventHook,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct BlockProcessingInfo<BlockData> {
@@ -344,7 +344,7 @@ pub(crate) mod tests {
 			block_witnesser::{
 				block_processor::{BPChainProgress, BlockProcessor},
 				state_machine::{
-					BWProcessorTypes, ExecuteHook, HookTypeFor, LogEventHook, RulesHook,
+					BWProcessorTypes, DebugEventHook, ExecuteHook, HookTypeFor, RulesHook,
 				},
 			},
 			state_machine::core::{hook_test_utils::MockHook, Hook, TypesFor, Validate},
@@ -469,7 +469,7 @@ pub(crate) mod tests {
 		type Event = MockBtcEvent<D>;
 		type Rules = TypesFor<(N, H, Vec<D>)>;
 		type Execute = MockHook<HookTypeFor<Self, ExecuteHook>>;
-		type LogEventHook = MockHook<HookTypeFor<Self, LogEventHook>>;
+		type DebugEventHook = MockHook<HookTypeFor<Self, DebugEventHook>>;
 	}
 
 	type Types = TypesFor<(u8, Vec<u8>, Vec<u8>)>;
@@ -718,10 +718,10 @@ impl<T: BWProcessorTypes + 'static + Debug>
 
 use crate::electoral_systems::state_machine::state_machine::Statemachine;
 
-use super::state_machine::{ExecuteHook, HookTypeFor, LogEventHook};
+use super::state_machine::{ExecuteHook, HookTypeFor, DebugEventHook};
 impl<
 		T: BWProcessorTypes<
-				LogEventHook = MockHook<HookTypeFor<T, LogEventHook>>,
+				DebugEventHook = MockHook<HookTypeFor<T, DebugEventHook>>,
 				Execute = MockHook<HookTypeFor<T, ExecuteHook>>,
 			>
 			+ 'static

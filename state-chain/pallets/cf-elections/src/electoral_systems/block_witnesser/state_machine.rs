@@ -39,14 +39,14 @@ pub trait BWTypes: 'static + Sized + BWProcessorTypes {
 	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>> + CommonTraits;
 	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>> + CommonTraits;
 
-	type ElectionTrackerEventHook: Hook<HookTypeFor<Self, ElectionTrackerEventHook>>
+	type ElectionTrackerDebugEventHook: Hook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>
 		+ CommonTraits
 		+ Default;
 }
 
 // hook types
-pub struct ElectionTrackerEventHook;
-impl<T: BWTypes> HookType for HookTypeFor<T, ElectionTrackerEventHook> {
+pub struct ElectionTrackerDebugEventHook;
+impl<T: BWTypes> HookType for HookTypeFor<T, ElectionTrackerDebugEventHook> {
 	type Input = ElectionTrackerEvent<T>;
 	type Output = ();
 }
@@ -75,8 +75,8 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, ExecuteHook> {
 	type Output = ();
 }
 
-pub struct LogEventHook;
-impl<T: BWProcessorTypes> HookType for HookTypeFor<T, LogEventHook> {
+pub struct DebugEventHook;
+impl<T: BWProcessorTypes> HookType for HookTypeFor<T, DebugEventHook> {
 	type Input = BlockProcessorEvent<T>;
 	type Output = ();
 }
@@ -89,7 +89,7 @@ pub trait BWProcessorTypes: Sized + Debug + Clone + Eq {
 	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + CommonTraits;
 	type Execute: Hook<HookTypeFor<Self, ExecuteHook>> + Default + CommonTraits;
 
-	type LogEventHook: Hook<HookTypeFor<Self, LogEventHook>> + Default + CommonTraits;
+	type DebugEventHook: Hook<HookTypeFor<Self, DebugEventHook>> + Default + CommonTraits;
 }
 
 #[derive(
@@ -443,7 +443,7 @@ pub mod tests {
 	// 	ChainBlockNumberOf<T::Chain>: Arbitrary,
 	// 	ChainBlockHashOf<T::Chain>: Arbitrary,
 	// 	T::ElectionPropertiesHook: Default + Clone + Debug + Eq,
-	// 	T::ElectionTrackerEventHook: Default + Clone + Debug + Eq,
+	// 	T::ElectionTrackerDebugEventHook: Default + Clone + Debug + Eq,
 	// 	T::BlockData: Default + Clone + Debug + Eq,
 	// {
 	// 	prop_do! {
@@ -535,7 +535,8 @@ pub mod tests {
 		type ElectionProperties = ();
 		type ElectionPropertiesHook = MockHook<HookTypeFor<Self, ElectionPropertiesHook>>;
 		type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>>;
-		type ElectionTrackerEventHook = MockHook<HookTypeFor<Self, ElectionTrackerEventHook>>;
+		type ElectionTrackerDebugEventHook =
+			MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;
 	}
 
 	// type Types = (u32, Vec<u8>, Vec<u8>);
