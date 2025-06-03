@@ -7,13 +7,15 @@
 // For example: ./commands/update_price_feed.ts BTC 123456
 
 import { Asset } from '@chainflip/cli';
-import { updateEvmPriceFeed } from '../shared/update_price_feed';
+import { updatePriceFeed } from '../shared/update_price_feed';
 import { runWithTimeoutAndExit } from '../shared/utils';
+import { globalLogger } from '../shared/utils/logger';
 
-export async function updatePriceFeed(asset: string, price: string) {
-  await updateEvmPriceFeed(asset as Asset, price);
+export async function updatePriceFeeds(asset: string, price: string) {
+  await updatePriceFeed(globalLogger, 'Ethereum', asset as Asset, price);
+  await updatePriceFeed(globalLogger, 'Solana', asset as Asset, price);
 }
 
 const asset = process.argv[2];
 const price = process.argv[3].trim();
-await runWithTimeoutAndExit(updatePriceFeed(asset, price), 20);
+await runWithTimeoutAndExit(updatePriceFeeds(asset, price), 20);

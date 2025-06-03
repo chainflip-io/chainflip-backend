@@ -82,6 +82,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	sol_usdc_token_vault_ata: SolAddress(bs58_array(
 		"9CGLwcPknpYs3atgwtjMX7RhgvBgaqK8wwCvXnmjEoL9",
 	)),
+	// TODO: Update values
 	sol_durable_nonces_and_accounts: [
 		(
 			const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
@@ -291,6 +292,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"2tmtGLQcBd11BMiE9B1tAkQXwmPNgR79Meki2Eme4Ec9",
 	)),
 	sol_alt_manager_program: SolAddress(bs58_array("49XegQyykAXwzigc6u7gXbaLjhKfNadWMZwFiovzjwUw")),
+	// TODO: update values
 	sol_address_lookup_table_account: (
 		SolAddress(bs58_array("DevMVEbBZirFWmiVu851LUY3d6ajRassAKghUhrHvNSb")),
 		[

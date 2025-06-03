@@ -134,6 +134,8 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44';
         case 'PRICE_FEED_ETH':
           return '0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f';
+        case 'PRICE_FEED_SOL':
+          return '0x4A679253410272dd5232B3Ff7cF5dbB88f295319';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -183,11 +185,14 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT':
           return 'EWaGcrFXhf9Zq8yxSdpAa75kZmDXkRxaP17sYiL6UpZN';
         case 'USER_ADDRESS_LOOKUP_TABLE':
+          // TODO: Update this
           return 'G2wCNFGQHKTteiwAGf8nyRVHAbaZnqGg15HRyRjhugBf';
+        case 'PRICE_FEED_MOCK':
+          return 'DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X';
         case 'PRICE_FEED_BTC':
-          return 'GRZmvuxuxCXyrabSuMdqwbn53Bht9wDRMqitgL49nNFK';
+          return 'HDSV2wFxmsrmCwwY34QzaVkvmJpG7VF8S9fX2iThynjG';
         case 'PRICE_FEED_ETH':
-          return '3Tnp6ZdsxcJzrG7W3xCcVxB8QhL2HXYwrFgeWe5vQ5Dp';
+          return '8U3c4SqXaXKPQiarNH3xHXiVoBLYbkqkzusthyJJjGrE';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
