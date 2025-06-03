@@ -249,7 +249,7 @@ services:
       start_period: 10s
 
   deposit-monitor:
-    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-pr-124}
+    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-6d8704f45fa79a9634a1d9f5ae8098913a896854}
     platform: linux/amd64
     container_name: deposit-monitor
     restart: unless-stopped
@@ -267,7 +267,7 @@ services:
       - CFDM_NETWORK=Localnet
       - CFDM_PERSISTENT_STATE_DIR=/persistent_state
       - CFDM_CRITICAL_ELLIPTIC_RISK_SCORE=8.0
-      - CFDM_ELLIPTIC_CATEGORIES_TO_IGNORE_ANCESTOR_SCORES="Low Risk Rule"
+      - CFDM_ELLIPTIC_RULES_TO_IGNORE_ANCESTOR_SCORES=Low Risk Rule
       - CFDM_ELLIPTIC_MIN_ANCESTOR_CONTRIBUTION_PERCENTAGE=2.0
       - CFDM_BROKER_API_URL=${CFDM_BROKER_API_URL}
       - CFDM_BROKER_API_MONITOR_ALL_BROKER_IDS=true

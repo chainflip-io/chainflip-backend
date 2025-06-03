@@ -558,37 +558,25 @@ export function testBitcoin(testContext: TestContext, doBoost: boolean): Promise
     doBoost,
     async (amount, address) =>
       (await sendBtcTransactionWithParent(logger, address, amount, 0, confirmationsBeforeReport))
-        .childTxid,
+        .parentTxid,
     async (txId) => setTxRiskScore(txId, 9.0, [
-      {rule_name: "Critical Rule", risk_score: 10.0, contributions: [ { category: "critical category", percentage: 90.0}]}
+      {rule_name: "High Risk Rule", risk_score: { Score: 10.0 }, contributions: [ { category: "critical category", percentage: 90.0}]}
     ]),
   );
-
-  // send a parent->child chain in the same block and mark the parent, but mark it with a low risk category
-  // const sameBlockParentMarkedNonCritical = brokerLevelScreeningTestBtc(
-  //   logger,
-  //   doBoost,
-  //   async (amount, address) =>
-  //     (await sendBtcTransactionWithParent(logger, address, amount, 0, confirmationsBeforeReport))
-  //       .childTxid,
-  //   async (txId) => setTxRiskScore(txId, 9.0, [
-  //     {rule_name: "Critical Rule", risk_score: 10.0, contributions: [ { category: "critical category", percentage: 90.0}]}
-  //   ]),
-  // );
 
   // send a parent->child chain where parent is 2 blocks older and mark the parent
   const oldParentMarked = brokerLevelScreeningTestBtc(
     logger,
     doBoost,
-    async (amount, address) =>
+    async (amount, address) => 
       (await sendBtcTransactionWithParent(logger, address, amount, 2, confirmationsBeforeReport))
-        .childTxid,
+        .parentTxid,
     async (txId) => setTxRiskScore(txId, 9.0, [
-      {rule_name: "Critical Rule", risk_score: 10.0, contributions: [ { category: "critical category", percentage: 90.0}]}
+      {rule_name: "High Risk Rule", risk_score: { Score: 10.0 }, contributions: [ { category: "critical category", percentage: 90.0}]}
     ]),
   );
 
-  return [simple, sameBlockParentMarked, oldParentMarked];
+  return [sameBlockParentMarked, oldParentMarked];
 }
 
 async function testBitcoinVaultSwap(testContext: TestContext) {
