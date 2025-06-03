@@ -69,7 +69,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 	) {
 		let old = self.queued_safe_elections.clone();
 		f(&mut self.queued_safe_elections);
-		let new: CompactHeightTracker<_> = self.queued_safe_elections.clone();
+		let new = self.queued_safe_elections.clone();
 		self.debug_events
 			.run(ElectionTrackerEvent::UpdateSafeElections { old, new, reason });
 	}
