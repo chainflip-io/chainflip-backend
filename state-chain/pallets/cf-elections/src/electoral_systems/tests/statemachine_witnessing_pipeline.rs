@@ -76,6 +76,7 @@ macro_rules! try_get {
     };
 }
 
+#[allow(clippy::type_complexity)]
 pub trait AbstractVoter<M: Statemachine> {
 	fn vote(
 		&mut self,
@@ -102,22 +103,19 @@ impl AbstractVoter<BHW> for FlatChainProgression<Event> {
 				continue;
 			}
 
-			let bhw_input = match index {
-				HeightWitnesserProperties { witness_from_index } =>
-					if witness_from_index == 0 {
-						NonemptyContinuousHeaders { headers: VecDeque::from([best_block]) }
-					} else {
-						let headers = (witness_from_index..=chain.get_best_block_height())
-							.map(|height| chain.get_block_header(height));
-						if headers.len() == 0 {
-							continue;
-						}
-						if let Some(headers) = headers.into_iter().collect::<Option<Vec<_>>>() {
-							NonemptyContinuousHeaders { headers: VecDeque::from_iter(headers) }
-						} else {
-							continue
-						}
-					},
+			let bhw_input = if index.witness_from_index == 0 {
+				NonemptyContinuousHeaders { headers: VecDeque::from([best_block]) }
+			} else {
+				let headers = (index.witness_from_index..=chain.get_best_block_height())
+					.map(|height| chain.get_block_header(height));
+				if headers.len() == 0 {
+					continue;
+				}
+				if let Some(headers) = headers.into_iter().collect::<Option<Vec<_>>>() {
+					NonemptyContinuousHeaders { headers: VecDeque::from_iter(headers) }
+				} else {
+					continue
+				}
 			};
 
 			result.push(Either::Right((index, bhw_input)));

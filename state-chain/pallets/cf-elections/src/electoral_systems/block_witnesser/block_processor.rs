@@ -151,9 +151,8 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		progress: BPChainProgress<T::Chain>,
 		block_data: (ChainBlockNumberOf<T::Chain>, T::BlockData, u32),
 	) {
-		let highest_block_height = progress.highest_block_height.clone();
 		self.process_block_data(block_data);
-		self.process_chain_progress(progress, highest_block_height);
+		self.process_chain_progress(progress, progress.highest_block_height);
 	}
 
 	/// This method adds new Block Data to the BlockProcessor
@@ -404,7 +403,7 @@ pub(crate) mod tests {
 					block_data
 						.iter()
 						.map(|deposit_witness| {
-							(block.clone(), MockBtcEvent::PreWitness(deposit_witness.clone()))
+							(block, MockBtcEvent::PreWitness(deposit_witness.clone()))
 						})
 						.collect::<Vec<_>>(),
 				)
@@ -414,7 +413,7 @@ pub(crate) mod tests {
 					block_data
 						.iter()
 						.map(|deposit_witness| {
-							(block.clone(), MockBtcEvent::Witness(deposit_witness.clone()))
+							(block, MockBtcEvent::Witness(deposit_witness.clone()))
 						})
 						.collect::<Vec<_>>(),
 				)
@@ -593,11 +592,11 @@ pub(crate) mod tests {
 		);
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
-			Some(103u8.saturating_add((Types::SAFETY_BUFFER as u8).into())).as_ref(),
+			Some(103u8.saturating_add(Types::SAFETY_BUFFER as u8)).as_ref(),
 		);
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(2)),
-			Some(103u8.saturating_add((Types::SAFETY_BUFFER as u8).into())).as_ref(),
+			Some(103u8.saturating_add(Types::SAFETY_BUFFER as u8)).as_ref(),
 		);
 	}
 

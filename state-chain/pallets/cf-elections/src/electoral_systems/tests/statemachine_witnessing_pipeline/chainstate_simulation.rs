@@ -164,8 +164,8 @@ pub fn fill_block<E: Clone>(
 	use ForkedBlock::*;
 	match input {
 		Block(Consumer { ignore, drop, take, data_delays, resolution_delay }) => {
-			let current_block_id = block_id.clone();
-			*block_id = *block_id + 1;
+			let current_block_id = *block_id;
+			*block_id += 1;
 			{
 				let _dropped_events = events.drain(ignore..(ignore + drop));
 			}
@@ -244,7 +244,7 @@ pub fn make_events() -> Vec<String> {
 	let char_stream = (0..26u8)
 		.into_iter()
 		.map(|x| (b'a' + x) as char)
-		.chain((0..26u8).into_iter().map(|x| ((b'A' + x) as char)))
+		.chain((0..26u8).map(|x| ((b'A' + x) as char)))
 		.map(|x| x.to_string());
 
 	char_stream
@@ -368,7 +368,6 @@ pub struct MockChain<E, T: ChainTypes<ChainBlockHash = BlockId>> {
 }
 
 use crate::electoral_systems::block_height_tracking::{primitives::Header, ChainTypes};
-type N = u8;
 
 impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> MockChain<E, T> {
 	pub fn new_with_offset(offset: usize, blocks: Vec<FlatBlock<E>>) -> MockChain<E, T> {
@@ -394,7 +393,7 @@ impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> Mock
 	pub fn get_best_block_height(&self) -> T::ChainBlockNumber {
 		self.chain
 			.iter()
-			.map(|(height, _)| height.clone())
+			.map(|(height, _)| *height)
 			.max()
 			.unwrap_or(T::ChainBlockNumber::zero())
 	}
@@ -431,10 +430,9 @@ impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> Mock
 	}
 	pub fn get_best_block_header(&self) -> Header<T> {
 		let best_height = self.get_best_block_height();
-		self.get_block_header(best_height).expect(&format!(
-			"getting block for height {best_height:?} failed for chain {:?}",
-			self.chain
-		))
+		self.get_block_header(best_height).unwrap_or_else(|| {
+			panic!("getting block for height {best_height:?} failed for chain {:?}", self.chain)
+		})
 	}
 }
 
