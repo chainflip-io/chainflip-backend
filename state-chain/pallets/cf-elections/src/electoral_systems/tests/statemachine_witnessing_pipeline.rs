@@ -179,7 +179,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		processed_events: Default::default(),
 		rules: Default::default(),
 		execute: MockHook::new(()),
-		log_event: MockHook::new(()),
+		debug_events: MockHook::new(()),
 	};
 	let mut bw_state: BlockWitnesserState<Types> = BlockWitnesserState {
 		elections: Default::default(),
@@ -256,7 +256,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 				bw_history.extend(
 					bw_state
 						.block_processor
-						.log_event
+						.debug_events
 						.take_history()
 						.into_iter()
 						.map(BWTrace::Event),
@@ -284,7 +284,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 				bw_history.extend(
 					bw_state
 						.block_processor
-						.log_event
+						.debug_events
 						.take_history()
 						.into_iter()
 						.map(BWTrace::Event),

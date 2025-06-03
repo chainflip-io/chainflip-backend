@@ -47,7 +47,7 @@ defx! {
 		pub optimistic_block_cache: BTreeMap<ChainBlockNumberOf<T::Chain>, OptimisticBlock<T>>,
 
 		/// debug hook
-		pub events: T::ElectionTrackerEventHook,
+		pub debug_events: T::ElectionTrackerEventHook,
 
 	}
 
@@ -70,8 +70,9 @@ impl<T: BWTypes> ElectionTracker<T> {
 	) {
 		let old = self.queued_safe_elections.clone();
 		f(&mut self.queued_safe_elections);
-		let new = self.queued_safe_elections.clone();
-		self.events.run(ElectionTrackerEvent::UpdateSafeElections { old, new, reason });
+		let new: CompactHeightTracker<_> = self.queued_safe_elections.clone();
+		self.debug_events
+			.run(ElectionTrackerEvent::UpdateSafeElections { old, new, reason });
 	}
 
 	pub fn start_more_elections(&mut self, max_ongoing: usize, safemode: SafeModeStatus) {
@@ -137,7 +138,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 			.get(&height)
 			.cloned()
 			.and_then(|current| {
-				self.events.run(ElectionTrackerEvent::ComparingBlocks {
+				self.debug_events.run(ElectionTrackerEvent::ComparingBlocks {
 					height,
 					hash: received_hash.clone(),
 					received: received.clone(),
@@ -297,7 +298,7 @@ impl<T: BWTypes> Default for ElectionTracker<T> {
 			ongoing: Default::default(),
 			queued_safe_elections: Default::default(),
 			optimistic_block_cache: Default::default(),
-			events: Default::default(),
+			debug_events: Default::default(),
 		}
 	}
 }

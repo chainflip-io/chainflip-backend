@@ -473,7 +473,7 @@ pub mod tests {
 	// 				ongoing: BTreeMap::from_iter(ongoing.clone()),
 	// 				queued_safe_elections: Default::default(),
 	// 				optimistic_block_cache: Default::default(),
-	// 				events: Default::default()
+	// 				debug_events: Default::default()
 	// 			},
 	// 			generate_election_properties_hook: Default::default(),
 	// 			safemode_enabled: MockHook::new(safemode_enabled),
@@ -482,7 +482,7 @@ pub mod tests {
 	// 				processed_events:Default::default(),
 	// 				rules:Default::default(),
 	// 				execute:Default::default(),
-	// 				log_event: Default::default()
+	// 				debug_events: Default::default()
 	// 			},
 	// 		})
 	// 	}
