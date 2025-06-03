@@ -35,7 +35,9 @@ use pallet_cf_elections::{
 			primitives::{Header, NonemptyContinuousHeaders},
 			ChainTypes, HeightWitnesserProperties,
 		},
-		block_witnesser::state_machine::{BWElectionProperties, BWElectionType},
+		block_witnesser::state_machine::{
+			BWElectionProperties, BWElectionType, BWProcessorTypes, BWTypes,
+		},
 	},
 	VoteOf,
 };
@@ -143,13 +145,13 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 	}
 }
 
-async fn query_election_block<T: ChainTypes>(
+async fn query_election_block<T: BWTypes>(
 	client: &BtcCachingClient,
 	block_height: btc::BlockNumber,
 	election_type: BWElectionType<T>,
 ) -> Result<(Vec<VerboseTransaction>, Option<btc::Hash>)>
 where
-	T::ChainBlockHash: AsRef<[u8]>,
+	<<T as BWProcessorTypes>::Chain as ChainTypes>::ChainBlockHash: AsRef<[u8]>,
 {
 	match election_type {
 		BWElectionType::Optimistic => {
@@ -166,6 +168,11 @@ where
 			let block_hash = client.block_hash(block_height).await?;
 			let block = client.block(block_hash).await?;
 			Ok((block.txdata, None))
+		},
+		// Should never enter here, we always convert Governance election to SafeBlockHeight
+		_ => {
+			tracing::error!("Should never create Governance elections");
+			Ok((vec![], None))
 		},
 	}
 }

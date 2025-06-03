@@ -50,7 +50,11 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		self,
 		blockchain::delta_based_ingress::BackoffSettings,
-		composite::{tags::G, tuple_7_impls::Hooks, CompositeRunner},
+		composite::{
+			tags::G,
+			tuple_7_impls::{CompositeElectionProperties, Hooks},
+			CompositeRunner,
+		},
 		exact_value::ExactValueHook,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
@@ -725,4 +729,12 @@ pub(crate) fn initiate_solana_alt_election(alts: Vec<SolAddress>) {
 		//The error should not happen as long as the election identifiers don't overflow
 		log::error!("Cannot start Solana ALT witnessing election: {:?}", e);
 	})
+}
+
+pub struct SolanaGovernanceElectionHook;
+
+impl pallet_cf_elections::GovernanceElectionHook for SolanaGovernanceElectionHook {
+	type Properties = ();
+
+	fn start(_properties: Self::Properties) {}
 }

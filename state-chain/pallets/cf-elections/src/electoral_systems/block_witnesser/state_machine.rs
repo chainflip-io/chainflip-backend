@@ -35,7 +35,14 @@ pub struct HookTypeFor<Tag1, Tag2> {
 }
 
 pub trait BWTypes: 'static + Sized + BWProcessorTypes {
-	type ElectionProperties: Debug + Clone + Encode + Decode + Eq + 'static;
+	type ElectionProperties: Debug
+		+ Clone
+		+ Encode
+		+ Decode
+		+ Eq
+		+ 'static
+		+ Serialize
+		+ for<'a> Deserialize<'a>;
 	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>> + CommonTraits;
 	type SafeModeEnabledHook: Hook<HookTypeFor<(), SafeModeEnabledHook>> + CommonTraits;
 
@@ -125,7 +132,7 @@ defx! {
 def_derive! {
 	#[no_serde]
 	pub struct BWElectionProperties<T: BWTypes> {
-		pub election_type: BWElectionType<T::Chain>,
+		pub election_type: BWElectionType<T>,
 		pub block_height: ChainBlockNumberOf<T::Chain>,
 		pub properties: T::ElectionProperties,
 	}
@@ -139,16 +146,18 @@ impl<T: BWTypes> Validate for BWElectionProperties<T> {
 
 defx! {
 	#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
-	pub enum BWElectionType[C: ChainTypes] {
+	pub enum BWElectionType[T: BWTypes] {
 		/// Querying blocks we haven't received a hash for yet
 		Optimistic,
 
 		/// Querying blocks by hash
-		ByHash(C::ChainBlockHash),
+		ByHash(<<T as BWProcessorTypes>::Chain as ChainTypes>::ChainBlockHash),
 
 		/// Querying "old" blocks that are below the safety margin,
 		/// and thus we don't care about the hash anymore
 		SafeBlockHeight,
+
+		Governance(T::ElectionProperties),
 	}
 	validate _this (else BWElectionTypeError) {}
 }
@@ -188,10 +197,19 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			.ongoing
 			.clone()
 			.into_iter()
-			.map(|(block_height, election_type)| BWElectionProperties {
-				properties: state.generate_election_properties_hook.run(block_height),
-				election_type,
-				block_height,
+			.map(|(block_height, election_type)| match election_type {
+				/// Governance elections are always converted to SafeBlockHeight but use the
+				/// corresponding Properties instead of fetching it from the Hook
+				BWElectionType::Governance(properties) => BWElectionProperties {
+					properties,
+					election_type: BWElectionType::SafeBlockHeight,
+					block_height,
+				},
+				_ => BWElectionProperties {
+					properties: state.generate_election_properties_hook.run(block_height),
+					election_type,
+					block_height,
+				},
 			})
 			.collect()
 	}

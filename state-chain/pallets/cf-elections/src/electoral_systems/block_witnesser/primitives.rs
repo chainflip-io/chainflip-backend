@@ -41,7 +41,7 @@ defx! {
 		pub queued_safe_elections: CompactHeightTracker<ChainBlockNumberOf<T::Chain>>,
 
 		/// Hashes of elections currently ongoing
-		pub ongoing: BTreeMap<ChainBlockNumberOf<T::Chain>, BWElectionType<T::Chain>>,
+		pub ongoing: BTreeMap<ChainBlockNumberOf<T::Chain>, BWElectionType<T>>,
 
 		/// Optimistic blocks
 		pub optimistic_block_cache: BTreeMap<ChainBlockNumberOf<T::Chain>, OptimisticBlock<T>>,
@@ -120,7 +120,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 	pub fn mark_election_done(
 		&mut self,
 		height: ChainBlockNumberOf<T::Chain>,
-		received: &BWElectionType<T::Chain>,
+		received: &BWElectionType<T>,
 		received_hash: &Option<ChainBlockHashOf<T::Chain>>,
 		received_data: T::BlockData,
 	) -> Option<T::BlockData> {
@@ -199,6 +199,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 				// Otherwise we know that this block is correct and can be forwarded to the
 				// block processor, thus we return it here.
 				ByHash(_) | SafeBlockHeight => Some(received_data),
+				_ => None,
 			})
 	}
 
@@ -321,8 +322,8 @@ def_derive! {
 		ComparingBlocks {
 			height: ChainBlockNumberOf<T::Chain>,
 			hash: Option<ChainBlockHashOf<T::Chain>>,
-			received: BWElectionType<T::Chain>,
-			current: BWElectionType<T::Chain>,
+			received: BWElectionType<T>,
+			current: BWElectionType<T>,
 		},
 		UpdateSafeElections {
 			old: CompactHeightTracker<ChainBlockNumberOf<T::Chain>>,
