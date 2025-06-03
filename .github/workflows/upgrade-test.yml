@@ -178,8 +178,8 @@ jobs:
           ./localnet/manage.sh
           git reset --hard
 
-      # TODO: This is a temporary workaround to insert the image nonces. Remove after 1.10 is released.
-      - name: Nonce workaround
+      # TODO: This is a temporary workaround to insert the image nonces and the ALT address. Remove after 1.10 is released.
+      - name: Solana initial values workaround
         if: inputs.run-job
         run: |
           git checkout ${{ github.sha }}
@@ -187,7 +187,7 @@ jobs:
           cd bouncer
           pnpm install --frozen-lockfile
           ./commands/force_sol_nonces.ts
-
+          ./commands/set_sol_alt.ts
 
         # TODO: This is a temporary workaround to do the initial price feed setup. Remove after 1.10 is released.
       - name: Setup price feeds
