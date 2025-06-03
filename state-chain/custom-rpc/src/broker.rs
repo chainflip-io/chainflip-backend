@@ -264,10 +264,7 @@ where
 				},
 				TransactionStatus::Finalized((block_hash, tx_index)) =>
 					return self.extract_swap_deposit_address(block_hash, tx_index).await,
-				_ =>
-					if let Some(e) = is_transaction_status_error(&status) {
-						Err(CfApiError::from(e))?;
-					},
+				_ => is_transaction_status_error(&status).map_err(CfApiError::from)?,
 			}
 		}
 		Err(CfApiError::from(PoolClientError::UnexpectedEndOfStream))?

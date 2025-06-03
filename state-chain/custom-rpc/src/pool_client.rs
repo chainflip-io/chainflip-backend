@@ -519,10 +519,7 @@ where
 		// release the semaphore permit as soon as possible
 		drop(permit);
 
-		let status_stream = maybe_status_stream
-			.ok_or_else(|| PoolClientError::PoolSubmitError(MAX_POOL_SUBMISSION_RETRIES))?;
-
-		Ok(status_stream)
+		maybe_status_stream.ok_or(PoolClientError::PoolSubmitError(MAX_POOL_SUBMISSION_RETRIES))
 	}
 
 	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress.
@@ -553,10 +550,7 @@ where
 					if until_finalized {
 						return self.get_extrinsic_data_static(block_hash, tx_index).await
 					},
-				_ =>
-					if let Some(e) = is_transaction_status_error(&status) {
-						return Err(e);
-					},
+				_ => is_transaction_status_error(&status)?,
 			}
 		}
 		Err(PoolClientError::UnexpectedEndOfStream)
@@ -589,10 +583,7 @@ where
 					if until_finalized {
 						return self.get_extrinsic_data_dynamic(block_hash, tx_index).await
 					},
-				_ =>
-					if let Some(e) = is_transaction_status_error(&status) {
-						return Err(e);
-					},
+				_ => is_transaction_status_error(&status)?,
 			}
 		}
 		Err(PoolClientError::UnexpectedEndOfStream)
@@ -601,40 +592,40 @@ where
 
 pub fn is_transaction_status_error(
 	status: &TransactionStatus<Hash, Hash>,
-) -> Option<PoolClientError> {
+) -> Result<(), PoolClientError> {
 	match status {
 		TransactionStatus::InBlock(_) | TransactionStatus::Finalized(_) => {
 			// This should be handled separately
-			None
+			Ok(())
 		},
 		TransactionStatus::Future |
 		TransactionStatus::Ready |
 		TransactionStatus::Broadcast(_) => {
 			// Do nothing, just wait for the transaction to be included
-			None
+			Ok(())
 		},
 		TransactionStatus::Invalid => {
-			Some(PoolClientError::TransactionStatusError(
+			Err(PoolClientError::TransactionStatusError(
 				"transaction is no longer valid in the current state"
 			))
 		},
 		TransactionStatus::Dropped => {
-			Some(PoolClientError::TransactionStatusError(
+			Err(PoolClientError::TransactionStatusError(
 				"transaction was dropped from the pool because of the limit"
 			))
 		},
 		TransactionStatus::Usurped(_hash) => {
-			Some(PoolClientError::TransactionStatusError(
+			Err(PoolClientError::TransactionStatusError(
 				"Transaction has been replaced in the pool, by another transaction that provides the same tags for example same (sender, nonce)."
 			))
 		},
 		TransactionStatus::FinalityTimeout(_block_hash) => {
-			Some(PoolClientError::TransactionStatusError(
+			Err(PoolClientError::TransactionStatusError(
 				"Maximum number of finality watchers has been reached"
 			))
 		},
 		TransactionStatus::Retracted(_block_hash) => {
-			Some(PoolClientError::TransactionStatusError("The block this transaction was included in has been retracted."))
+			Err(PoolClientError::TransactionStatusError("The block this transaction was included in has been retracted."))
 		},
 	}
 }
