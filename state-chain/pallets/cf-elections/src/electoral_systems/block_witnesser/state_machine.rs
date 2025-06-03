@@ -422,17 +422,16 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 
 #[cfg(test)]
 pub mod tests {
-	use std::collections::BTreeMap;
+	// use std::collections::BTreeMap;
 
-	use proptest::{
-		prelude::{any, Arbitrary, Strategy},
-		strategy::LazyJust,
-	};
+	// use proptest::{
+	// 	prelude::{any, Arbitrary, Strategy},
+	// 	strategy::LazyJust,
+	// };
 
 	use super::*;
-	use crate::{
-		electoral_systems::block_height_tracking::{ChainBlockHashTrait, ChainBlockNumberTrait},
-		prop_do,
+	use crate::electoral_systems::block_height_tracking::{
+		ChainBlockHashTrait, ChainBlockNumberTrait,
 	};
 	use hook_test_utils::*;
 

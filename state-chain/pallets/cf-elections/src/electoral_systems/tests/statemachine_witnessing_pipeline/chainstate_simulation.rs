@@ -25,16 +25,6 @@ pub enum ForkedBlock<A> {
 	Fork(Vec<ForkedBlock<A>>),
 }
 
-impl<A> ForkedBlock<A> {
-	pub fn map<B>(self, f: &mut impl FnMut(A) -> B) -> ForkedBlock<B> {
-		use ForkedBlock::*;
-		match self {
-			Block(a) => Block(f(a)),
-			Fork(blocks) => Fork(blocks.into_iter().map(|block| block.map(f)).collect()),
-		}
-	}
-}
-
 /// Parameters describing what kind of forked blocks are generated.
 #[derive(Debug, Clone)]
 pub struct ConsumerParameters {
@@ -242,14 +232,13 @@ pub struct FlatChain<E> {
 
 pub fn make_events() -> Vec<String> {
 	let char_stream = (0..26u8)
-		.into_iter()
 		.map(|x| (b'a' + x) as char)
 		.chain((0..26u8).map(|x| ((b'A' + x) as char)))
 		.map(|x| x.to_string());
 
 	char_stream
 		.clone()
-		.chain((0..10u8).into_iter().map(|x| ((b'0' + x) as char).to_string()))
+		.chain((0..10u8).map(|x| ((b'0' + x) as char).to_string()))
 		// two char events
 		.chain(char_stream.clone().flat_map(|x| {
 			char_stream.clone().map(move |y| {

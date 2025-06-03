@@ -16,7 +16,6 @@
 
 use core::ops::RangeInclusive;
 
-use super::{mocks::Check, register_checks};
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
 	electoral_systems::{
@@ -29,7 +28,6 @@ use crate::{
 			},
 			*,
 		},
-		mocks::ElectoralSystemState,
 		state_machine::{
 			consensus::{ConsensusMechanism, SuccessThreshold},
 			core::{hook_test_utils::MockHook, Hook, TypesFor},
@@ -38,23 +36,23 @@ use crate::{
 	},
 	vote_storage,
 };
-use cf_chains::{mocks::MockEthereum, Chain};
 use consensus::BWConsensus;
 use primitives::SafeModeStatus;
 use sp_std::collections::btree_set::BTreeSet;
 use state_machine::{BWStatemachine, BWTypes};
 
+#[allow(dead_code)]
 fn range_n(start: u64, count: u64) -> RangeInclusive<u64> {
 	assert!(count > 0);
 	// TODO: Test with other witness ranges.
 	start..=start + count - 1
 }
 
-type ChainBlockNumber = <MockEthereum as Chain>::ChainBlockNumber;
+// type ChainBlockNumber = <MockEthereum as Chain>::ChainBlockNumber;
 type ValidatorId = u16;
 type BlockData = Vec<u8>;
 type ElectionProperties = BTreeSet<u16>;
-type ElectionCount = u16;
+// type ElectionCount = u16;
 
 struct MockBlockProcessorDefinition;
 type Types = TypesFor<MockBlockProcessorDefinition>;
@@ -106,36 +104,39 @@ impl StatemachineElectoralSystemTypes for Types {
 /// Generating the state machine-based electoral system
 type SimpleBlockWitnesser = StatemachineElectoralSystem<Types>;
 
-register_checks! {
-	SimpleBlockWitnesser {
-		generate_election_properties_called_n_times(pre, post, n: u8) {
-			let pre_calls = pre.unsynchronised_state.generate_election_properties_hook.call_history.len();
-			let post_calls = post.unsynchronised_state.generate_election_properties_hook.call_history.len();
-			assert_eq!((post_calls - pre_calls) as u8, n, "generate_election_properties should have been called {} times in this `on_finalize`!", n);
-		},
-		number_of_open_elections_is(_pre, post, n: ElectionCount) {
-			assert_eq!(post.unsynchronised_state.elections.ongoing.len(), n as usize, "Number of open elections should be {}", n);
-		},
-		rules_hook_called_n_times_for_age_zero(pre, post, n: usize) {
-			let count = |state: &ElectoralSystemState<StatemachineElectoralSystem<TypesFor<MockBlockProcessorDefinition>>>| {
-				state.unsynchronised_state.block_processor.rules.call_history.iter().filter(|(_, age, _event, _)| age.contains(&0)).count()
-			};
-			assert_eq!(count(post) - count(pre), n, "execute PreWitness event should have been called {} times in this `on_finalize`!", n);
-		},
-		// process_block_data_called_n_times(_pre, _post, n: u8) {
-		// 	assert_eq!(PROCESS_BLOCK_DATA_HOOK_CALLED.with(|hook_called| hook_called.get()), n, "process_block_data should have been called {} times so far!", n);
-		// },
-		// process_block_data_called_last_with(_pre, _post, block_data: Vec<(ChainBlockNumber, BlockData)>) {
-		// 	assert_eq!(PROCESS_BLOCK_DATA_CALLED_WITH.with(|old_block_data| old_block_data.borrow().clone()), block_data, "process_block_data should have been called with {:?}", block_data);
-		// },
-		// unprocessed_data_is(_pre, post, data: Vec<(ChainBlockNumber, BlockData)>) {
-		// 	// assert_eq!(post.unsynchronised_state.unprocessed_data, data, "Unprocessed data should be {:?}", data);
-		// },
-		election_state_is(_pre, post) {
-			println!("election state is: {:?}", post.unsynchronised_state.elections)
-		}
-	}
-}
+// register_checks! {
+// 	SimpleBlockWitnesser {
+// 		generate_election_properties_called_n_times(pre, post, n: u8) {
+// 			let pre_calls = pre.unsynchronised_state.generate_election_properties_hook.call_history.len();
+// 			let post_calls =
+// post.unsynchronised_state.generate_election_properties_hook.call_history.len(); 			assert_eq!
+// ((post_calls - pre_calls) as u8, n, "generate_election_properties should have been called {}
+// times in this `on_finalize`!", n); 		},
+// 		number_of_open_elections_is(_pre, post, n: ElectionCount) {
+// 			assert_eq!(post.unsynchronised_state.elections.ongoing.len(), n as usize, "Number of open
+// elections should be {}", n); 		},
+// 		rules_hook_called_n_times_for_age_zero(pre, post, n: usize) {
+// 			let count = |state:
+// &ElectoralSystemState<StatemachineElectoralSystem<TypesFor<MockBlockProcessorDefinition>>>| {
+// 				state.unsynchronised_state.block_processor.rules.call_history.iter().filter(|(_, age, _event,
+// _)| age.contains(&0)).count() 			};
+// 			assert_eq!(count(post) - count(pre), n, "execute PreWitness event should have been called {}
+// times in this `on_finalize`!", n); 		},
+// 		// process_block_data_called_n_times(_pre, _post, n: u8) {
+// 		// 	assert_eq!(PROCESS_BLOCK_DATA_HOOK_CALLED.with(|hook_called| hook_called.get()), n,
+// "process_block_data should have been called {} times so far!", n); 		// },
+// 		// process_block_data_called_last_with(_pre, _post, block_data: Vec<(ChainBlockNumber,
+// BlockData)>) { 		// 	assert_eq!(PROCESS_BLOCK_DATA_CALLED_WITH.with(|old_block_data|
+// old_block_data.borrow().clone()), block_data, "process_block_data should have been called with
+// {:?}", block_data); 		// },
+// 		// unprocessed_data_is(_pre, post, data: Vec<(ChainBlockNumber, BlockData)>) {
+// 		// 	// assert_eq!(post.unsynchronised_state.unprocessed_data, data, "Unprocessed data should be
+// {:?}", data); 		// },
+// 		election_state_is(_pre, post) {
+// 			println!("election state is: {:?}", post.unsynchronised_state.elections)
+// 		}
+// 	}
+// }
 
 fn generate_votes(
 	correct_voters: BTreeSet<ValidatorId>,
@@ -174,6 +175,7 @@ fn generate_votes(
 }
 
 // Util to create a successful set of votes, along with the consensus expectation.
+#[allow(dead_code)]
 fn create_votes_expectation(
 	consensus: BlockData,
 ) -> (
@@ -191,7 +193,7 @@ fn create_votes_expectation(
 	)
 }
 
-const MAX_CONCURRENT_ELECTIONS: ElectionCount = 5;
+// const MAX_CONCURRENT_ELECTIONS: ElectionCount = 5;
 const SAFETY_MARGIN: usize = 3;
 const MOCK_BW_ELECTION_PROPERTIES: BWElectionProperties<Types> = BWElectionProperties {
 	election_type: BWElectionType::<Types>::SafeBlockHeight,

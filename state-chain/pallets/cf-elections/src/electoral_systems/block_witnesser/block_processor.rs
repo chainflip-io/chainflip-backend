@@ -152,7 +152,8 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		block_data: (ChainBlockNumberOf<T::Chain>, T::BlockData, u32),
 	) {
 		self.process_block_data(block_data);
-		self.process_chain_progress(progress, progress.highest_block_height);
+		let highest_block_height = progress.highest_block_height;
+		self.process_chain_progress(progress, highest_block_height);
 	}
 
 	/// This method adds new Block Data to the BlockProcessor

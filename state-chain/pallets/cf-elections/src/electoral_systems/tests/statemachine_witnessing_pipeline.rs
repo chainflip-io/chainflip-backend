@@ -15,14 +15,13 @@ use crate::electoral_systems::{
 	block_height_tracking::{
 		primitives::NonemptyContinuousHeaders,
 		state_machine::{BHWPhase, BlockHeightWitnesser},
-		BHWTypes, ChainBlockNumberOf, HeightWitnesserProperties,
+		BHWTypes, ChainBlockNumberOf,
 	},
 	block_witnesser::{
 		block_processor::{tests::MockBtcEvent, BlockProcessor, BlockProcessorEvent},
 		primitives::{ElectionTrackerEvent, SafeModeStatus},
 		state_machine::{
-			tests::*, BWElectionProperties, BWElectionType, BWStatemachine, BWTypes,
-			BlockWitnesserSettings, BlockWitnesserState,
+			BWElectionType, BWStatemachine, BWTypes, BlockWitnesserSettings, BlockWitnesserState,
 		},
 	},
 	state_machine::{
@@ -86,7 +85,10 @@ pub trait AbstractVoter<M: Statemachine> {
 
 type Event = String;
 type Types = TypesFor<(u8, u32, Vec<Event>)>;
+
+#[allow(clippy::upper_case_acronyms)]
 type BW = BWStatemachine<Types>;
+#[allow(clippy::upper_case_acronyms)]
 type BHW = BlockHeightWitnesser<Types>;
 
 const OFFSET: usize = 20;
@@ -192,6 +194,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	enum BWTrace<T: BWTypes, T0: BHWTypes> {
 		Input(InputOf<BWStatemachine<T>>),
 		InputBHW(InputOf<BlockHeightWitnesser<T0>>),
+		#[allow(dead_code)]
 		Output(Vec<(ChainBlockNumberOf<T::Chain>, T::Event)>),
 		Event(BlockProcessorEvent<T>),
 		ET(ElectionTrackerEvent<T>),
