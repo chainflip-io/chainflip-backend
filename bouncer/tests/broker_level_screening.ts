@@ -114,12 +114,13 @@ async function setMockmode(mode: Mockmode) {
  * @param txid Hash of the transaction we want to report.
  * @param score Risk score for this transaction. Can be in range [0.0, 10.0].
  */
-async function setTxRiskScore(txid: string, score: number) {
+async function setTxRiskScore(txid: string, score: number, rule_evaluation_details: any[] = []) {
   await postToDepositMonitor(':6070/riskscore', [
     txid,
     {
       risk_score: { Score: score },
       unknown_contribution_percentage: 0.0,
+      rule_evaluation_details
     },
   ]);
 }
@@ -558,8 +559,22 @@ export function testBitcoin(testContext: TestContext, doBoost: boolean): Promise
     async (amount, address) =>
       (await sendBtcTransactionWithParent(logger, address, amount, 0, confirmationsBeforeReport))
         .childTxid,
-    async (txId) => setTxRiskScore(txId, 9.0),
+    async (txId) => setTxRiskScore(txId, 9.0, [
+      {rule_name: "Critical Rule", risk_score: 10.0, contributions: [ { category: "critical category", percentage: 90.0}]}
+    ]),
   );
+
+  // send a parent->child chain in the same block and mark the parent, but mark it with a low risk category
+  // const sameBlockParentMarkedNonCritical = brokerLevelScreeningTestBtc(
+  //   logger,
+  //   doBoost,
+  //   async (amount, address) =>
+  //     (await sendBtcTransactionWithParent(logger, address, amount, 0, confirmationsBeforeReport))
+  //       .childTxid,
+  //   async (txId) => setTxRiskScore(txId, 9.0, [
+  //     {rule_name: "Critical Rule", risk_score: 10.0, contributions: [ { category: "critical category", percentage: 90.0}]}
+  //   ]),
+  // );
 
   // send a parent->child chain where parent is 2 blocks older and mark the parent
   const oldParentMarked = brokerLevelScreeningTestBtc(
@@ -568,7 +583,9 @@ export function testBitcoin(testContext: TestContext, doBoost: boolean): Promise
     async (amount, address) =>
       (await sendBtcTransactionWithParent(logger, address, amount, 2, confirmationsBeforeReport))
         .childTxid,
-    async (txId) => setTxRiskScore(txId, 9.0),
+    async (txId) => setTxRiskScore(txId, 9.0, [
+      {rule_name: "Critical Rule", risk_score: 10.0, contributions: [ { category: "critical category", percentage: 90.0}]}
+    ]),
   );
 
   return [simple, sameBlockParentMarked, oldParentMarked];
