@@ -182,13 +182,14 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 	type Output = Result<(), &'static str>;
 	type State = BlockWitnesserState<T>;
 
-	fn input_index(s: &mut Self::State) -> Vec<Self::Query> {
-		s.elections
+	fn input_index(state: &mut Self::State) -> Vec<Self::Query> {
+		state
+			.elections
 			.ongoing
 			.clone()
 			.into_iter()
 			.map(|(block_height, election_type)| BWElectionProperties {
-				properties: s.generate_election_properties_hook.run(block_height),
+				properties: state.generate_election_properties_hook.run(block_height),
 				election_type,
 				block_height,
 			})
@@ -196,25 +197,28 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 	}
 
 	fn step(
-		s: &mut Self::State,
-		i: Either<Self::Context, (Self::Query, Self::Response)>,
+		state: &mut Self::State,
+		input: Either<Self::Context, (Self::Query, Self::Response)>,
 		settings: &Self::Settings,
 	) -> Self::Output {
-		match i {
+		match input {
 			Either::Left(Some(progress)) => {
 				let removed_block_heights = progress.removed.clone();
 
-				for (height, block) in s.elections.schedule_range(progress) {
-					s.block_processor.process_block_data((
+				for (height, block) in state.elections.schedule_range(progress) {
+					state.block_processor.process_block_data((
 						height,
 						block.data,
 						settings.safety_margin,
 					));
 				}
 
-				s.block_processor.process_chain_progress(
+				state.block_processor.process_chain_progress(
 					BPChainProgress {
-						highest_block_height: s.elections.seen_heights_below.saturating_backward(1),
+						highest_block_height: state
+							.elections
+							.seen_heights_below
+							.saturating_backward(1),
 						removed_block_heights,
 					},
 					// NOTE: we use the lowest "in progress" height for expiring block and event
@@ -222,7 +226,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					// call), no event data is going to be deleted. That's why we can't use
 					// the `highest_seen` block height, because that one progresses always
 					// following data from the BHW, ignoring ongoing elections.
-					s.elections.lowest_in_progress_height(),
+					state.elections.lowest_in_progress_height(),
 				);
 			},
 
@@ -231,15 +235,15 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			Either::Right((properties, (blockdata, blockhash))) => {
 				log::info!("got {:?} block data: {:?}", properties.election_type, blockdata);
 
-				if let Some(blockdata) = s.elections.mark_election_done(
+				if let Some(blockdata) = state.elections.mark_election_done(
 					properties.block_height,
 					&properties.election_type,
 					&blockhash,
 					blockdata,
 				) {
-					s.block_processor.process_block_data_and_chain_progress(
+					state.block_processor.process_block_data_and_chain_progress(
 						BPChainProgress {
-							highest_block_height: s
+							highest_block_height: state
 								.elections
 								.seen_heights_below
 								.saturating_backward(1),
@@ -252,15 +256,15 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 						// why we can't use the `highest_seen` block height, because that one
 						// progresses always following data from the BHW, ignoring ongoing
 						// elections.
-						s.elections.lowest_in_progress_height(),
+						state.elections.lowest_in_progress_height(),
 					)
 				}
 			},
 		};
 
-		s.elections.start_more_elections(
+		state.elections.start_more_elections(
 			settings.max_concurrent_elections as usize,
-			s.safemode_enabled.run(()),
+			state.safemode_enabled.run(()),
 		);
 
 		Ok(())

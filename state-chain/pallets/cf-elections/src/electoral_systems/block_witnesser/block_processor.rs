@@ -197,7 +197,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	/// # Parameters
 	///
 	/// - `chain_progress`: Indicates the current state of the blockchain. It can either be:
-	///   - `BPChainProgress::up_to(last_height)` for a simple progress update.
+	///   - `BPChainProgress::up_to(height_block_height)` for a simple progress update.
 	///   - `BPChainProgress::reorg(range)` for a reorganization event, where `range` defines the
 	///     blocks affected.
 	pub fn process_chain_progress(
@@ -251,19 +251,20 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	///
 	/// # Parameters
 	///
-	/// - `last_height`: The current highest block number in the chain.
+	/// - `highest_block_height`: The current highest block number in the chain.
 	///
 	/// # Returns
 	///
 	/// A vector of (block height, events (`T::Event`)) generated during the processing rules.
 	fn process_rules(
 		&mut self,
-		last_height: ChainBlockNumberOf<T::Chain>,
+		highest_block_height: ChainBlockNumberOf<T::Chain>,
 	) -> Vec<(ChainBlockNumberOf<T::Chain>, T::Event)> {
 		let mut last_events: Vec<(ChainBlockNumberOf<T::Chain>, T::Event)> = vec![];
 		for (block_height, mut block_info) in self.blocks_data.clone() {
 			let new_age =
-				ChainBlockNumberOf::<T::Chain>::steps_between(&block_height, &last_height).0;
+				ChainBlockNumberOf::<T::Chain>::steps_between(&block_height, &highest_block_height)
+					.0;
 			// We ensure that we don't break anything in case the new age < next_age_to_process
 			if new_age as u32 >= block_info.next_age_to_process {
 				let age_range: Range<u32> =
@@ -755,9 +756,9 @@ impl<
 
 	fn step(s: &mut Self::State, i: Self::Input, set: &Self::Settings) -> Self::Output {
 		match i {
-			SMBlockProcessorInput::NewBlockData(last_height, n, deposits) => s
+			SMBlockProcessorInput::NewBlockData(highest_block_height, n, deposits) => s
 				.process_block_data_and_chain_progress_test(
-					BPChainProgress::up_to(last_height),
+					BPChainProgress::up_to(highest_block_height),
 					(n, deposits, *set),
 				),
 			SMBlockProcessorInput::ChainProgress(inner) => s.process_chain_progress(inner),

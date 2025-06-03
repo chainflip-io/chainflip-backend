@@ -367,7 +367,10 @@ impl<A: Validate, B: Validate> Validate for BTreeMap<A, B> {
 	type Error = Either<A::Error, B::Error>;
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		// TODO implement!
+		for (k, v) in self {
+			k.is_valid().map_err(Either::Left)?;
+			v.is_valid().map_err(Either::Right)?;
+		}
 		Ok(())
 	}
 }
@@ -380,6 +383,7 @@ impl<A: Validate> Validate for BTreeSet<A> {
 	}
 }
 
+#[cfg(test)]
 impl Validate for String {
 	type Error = ();
 
