@@ -14,6 +14,7 @@ async function forceRecoverSolNonce(nonceAddress: string, nonceValue: string) {
 }
 
 async function main() {
+  // TODO: To update values with final nonces
   await forceRecoverSolNonce(
     '2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw',
     '3bqiCT1g42BUtGvAqiQKafc7mpgARb9xN2TPy5zERFbo',
