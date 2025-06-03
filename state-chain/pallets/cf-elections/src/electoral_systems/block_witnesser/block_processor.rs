@@ -47,7 +47,7 @@ use proptest_derive::Arbitrary;
 ///     - `Event`: The type of event generated from processing blocks.
 ///     - `Rules`: A hook to process block data and generate events.
 ///     - `Execute`: A hook to dedup and execute generated events.
-/// 	- `LogEventHook`: A hook to log events, used for testing
+/// 	- `DebugEventHook`: A hook to log events, used for testing
 #[derive_where(Debug, Clone, PartialEq, Eq;)]
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct BlockProcessor<T: BWProcessorTypes> {
@@ -61,7 +61,7 @@ pub struct BlockProcessor<T: BWProcessorTypes> {
 	pub processed_events: BTreeMap<T::Event, ChainBlockNumberOf<T::Chain>>,
 	pub rules: T::Rules,
 	pub execute: T::Execute,
-	pub log_event: T::LogEventHook,
+	pub debug_events: T::DebugEventHook,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct BlockProcessingInfo<BlockData> {
@@ -129,7 +129,7 @@ impl<BlockWitnessingProcessorDefinition: BWProcessorTypes> Default
 			processed_events: Default::default(),
 			rules: Default::default(),
 			execute: Default::default(),
-			log_event: Default::default(),
+			debug_events: Default::default(),
 		}
 	}
 }
@@ -169,7 +169,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			u32,
 		),
 	) {
-		self.log_event
+		self.debug_events
 			.run(BlockProcessorEvent::NewBlock { height: block_number, data: block_data.clone() });
 		self.blocks_data
 			.insert(block_number, BlockProcessingInfo::new(block_data, safety_margin));
@@ -216,7 +216,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 						.run((n, age_range, block_info.block_data, block_info.safety_margin))
 						.iter()
 						.for_each(|(height, event)| {
-							self.log_event.run(BlockProcessorEvent::StoreReorgedEvents {
+							self.debug_events.run(BlockProcessorEvent::StoreReorgedEvents {
 								block: *height,
 								events: [event.clone()].into_iter().collect(),
 								new_block_number: expiry,
@@ -260,7 +260,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 				let age_range: Range<u32> =
 					(block_info.next_age_to_process)..new_age.saturating_add(1) as u32;
 
-				self.log_event.run(BlockProcessorEvent::ProcessingBlockForAges {
+				self.debug_events.run(BlockProcessorEvent::ProcessingBlockForAges {
 					height: block_height,
 					ages: age_range.clone(),
 				});
@@ -325,9 +325,9 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 			.extract_if(|_, expiry_block| *expiry_block <= lowest_in_progress_height);
 
 		for (n, block) in removed_blocks {
-			self.log_event.run(BlockProcessorEvent::DeleteBlock((n, block)));
+			self.debug_events.run(BlockProcessorEvent::DeleteBlock((n, block)));
 		}
-		self.log_event
+		self.debug_events
 			.run(BlockProcessorEvent::DeleteEvents(removed_events.map(|(a, _)| a).collect()));
 	}
 }
@@ -344,7 +344,7 @@ pub(crate) mod tests {
 			block_witnesser::{
 				block_processor::{BPChainProgress, BlockProcessor},
 				state_machine::{
-					BWProcessorTypes, ExecuteHook, HookTypeFor, LogEventHook, RulesHook,
+					BWProcessorTypes, DebugEventHook, ExecuteHook, HookTypeFor, RulesHook,
 				},
 			},
 			state_machine::core::{hook_test_utils::MockHook, Hook, TypesFor, Validate},
@@ -469,7 +469,7 @@ pub(crate) mod tests {
 		type Event = MockBtcEvent<D>;
 		type Rules = TypesFor<(N, H, Vec<D>)>;
 		type Execute = MockHook<HookTypeFor<Self, ExecuteHook>>;
-		type LogEventHook = MockHook<HookTypeFor<Self, LogEventHook>>;
+		type DebugEventHook = MockHook<HookTypeFor<Self, DebugEventHook>>;
 	}
 
 	type Types = TypesFor<(u8, Vec<u8>, Vec<u8>)>;
@@ -718,10 +718,10 @@ impl<T: BWProcessorTypes + 'static + Debug>
 
 use crate::electoral_systems::state_machine::state_machine::Statemachine;
 
-use super::state_machine::{ExecuteHook, HookTypeFor, LogEventHook};
+use super::state_machine::{ExecuteHook, HookTypeFor, DebugEventHook};
 impl<
 		T: BWProcessorTypes<
-				LogEventHook = MockHook<HookTypeFor<T, LogEventHook>>,
+				DebugEventHook = MockHook<HookTypeFor<T, DebugEventHook>>,
 				Execute = MockHook<HookTypeFor<T, ExecuteHook>>,
 			>
 			+ 'static
@@ -787,7 +787,7 @@ impl<
 				.collect()
 		};
 
-		let history = &post.log_event.call_history;
+		let history = &post.debug_event.call_history;
 		let deleted_blocks: BTreeMap<_, _> = history
 			.iter()
 			.filter_map(|event| match event {

@@ -150,7 +150,7 @@ impls! {
 		type Event = BtcEvent<DepositWitness<Bitcoin>>;
 		type Rules = Self;
 		type Execute = Self;
-		type LogEventHook = EmptyHook;
+		type DebugEventHook = EmptyHook;
 	}
 
 	/// Associating BW types to the struct
@@ -158,7 +158,7 @@ impls! {
 		type ElectionProperties = ElectionPropertiesDepositChannel;
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
-		type ElectionTrackerEventHook = EmptyHook;
+		type ElectionTrackerDebugEventHook = EmptyHook;
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
@@ -225,7 +225,7 @@ impls! {
 		type Rules = Self;
 		type Execute = Self;
 
-		type LogEventHook = EmptyHook;
+		type DebugEventHook = EmptyHook;
 	}
 
 	/// Associating BW types to the struct
@@ -233,7 +233,7 @@ impls! {
 		type ElectionProperties = ElectionPropertiesVaultDeposit;
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
-		type ElectionTrackerEventHook = EmptyHook;
+		type ElectionTrackerDebugEventHook = EmptyHook;
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
@@ -308,7 +308,7 @@ impls! {
 		type Rules = Self;
 		type Execute = Self;
 
-		type LogEventHook = EmptyHook;
+		type DebugEventHook = EmptyHook;
 	}
 
 	/// Associating BW types to the struct
@@ -316,7 +316,7 @@ impls! {
 		type ElectionProperties = ElectionPropertiesEgressWitnessing;
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
-		type ElectionTrackerEventHook = EmptyHook;
+		type ElectionTrackerDebugEventHook = EmptyHook;
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
