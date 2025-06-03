@@ -6,7 +6,7 @@ use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::V
 use codec::{Decode, Encode};
 use derive_where::derive_where;
 use itertools::Either;
-use scale_info::TypeInfo;
+use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use sp_std::{fmt::Debug, vec::Vec};
