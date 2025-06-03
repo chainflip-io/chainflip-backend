@@ -11,13 +11,6 @@ use crate::electoral_systems::{
 		state_machine::AbstractApi,
 	},
 };
-use cf_chains::{mocks::MockEthereum, Chain};
-use std::collections::{BTreeSet, VecDeque};
-type ChainBlockNumber = <MockEthereum as Chain>::ChainBlockNumber;
-type ValidatorId = u16;
-type BlockData = Vec<u8>;
-type ElectionProperties = BTreeSet<u16>;
-type ElectionCount = u16;
 
 struct BlockHeightWitnesserDefinition;
 

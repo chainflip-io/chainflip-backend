@@ -4,30 +4,24 @@
 pub mod chainstate_simulation;
 
 use codec::{EncodeLike, WrapperTypeDecode, WrapperTypeEncode};
-use core::{fmt::Display, marker::PhantomData, ops::Deref};
-use itertools::{Either, Itertools};
+use core::{fmt::Display, ops::Deref};
+use itertools::Either;
 use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
 use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
-use std::{
-	collections::{BTreeMap, BTreeSet, VecDeque},
-	hash::DefaultHasher,
-};
+use std::collections::{BTreeSet, VecDeque};
 
 use crate::electoral_systems::{
 	block_height_tracking::{
 		primitives::NonemptyContinuousHeaders,
-		state_machine::{tests::*, BHWPhase, BlockHeightWitnesser},
-		BHWTypes, ChainBlockNumberOf, HeightWitnesserProperties,
+		state_machine::{BHWPhase, BlockHeightWitnesser},
+		BHWTypes, ChainBlockNumberOf,
 	},
 	block_witnesser::{
-		block_processor::{
-			tests::MockBtcEvent, BlockProcessingInfo, BlockProcessor, BlockProcessorEvent,
-		},
+		block_processor::{tests::MockBtcEvent, BlockProcessor, BlockProcessorEvent},
 		primitives::{ElectionTrackerEvent, SafeModeStatus},
 		state_machine::{
-			tests::*, BWElectionProperties, BWElectionType, BWProcessorTypes, BWStatemachine,
-			BWTypes, BlockWitnesserSettings, BlockWitnesserState,
+			BWElectionType, BWStatemachine, BWTypes, BlockWitnesserSettings, BlockWitnesserState,
 		},
 	},
 	state_machine::{
@@ -75,18 +69,13 @@ impl Validate for EncodableChar {
 	}
 }
 
-macro_rules! if_matches {
-    ($($tt:tt)+) => {
-        |x| matches!(x, $($tt)+)
-    };
-}
-
 macro_rules! try_get {
     ($($tt:tt)+) => {
         |x| match x {$($tt)+(x) => Some(x), _ => None}
     };
 }
 
+#[allow(clippy::type_complexity)]
 pub trait AbstractVoter<M: Statemachine> {
 	fn vote(
 		&mut self,
@@ -96,7 +85,10 @@ pub trait AbstractVoter<M: Statemachine> {
 
 type Event = String;
 type Types = TypesFor<(u8, u32, Vec<Event>)>;
+
+#[allow(clippy::upper_case_acronyms)]
 type BW = BWStatemachine<Types>;
+#[allow(clippy::upper_case_acronyms)]
 type BHW = BlockHeightWitnesser<Types>;
 
 const OFFSET: usize = 20;
@@ -113,22 +105,19 @@ impl AbstractVoter<BHW> for FlatChainProgression<Event> {
 				continue;
 			}
 
-			let bhw_input = match index {
-				HeightWitnesserProperties { witness_from_index } =>
-					if witness_from_index == 0 {
-						NonemptyContinuousHeaders { headers: VecDeque::from([best_block]) }
-					} else {
-						let headers = (witness_from_index..=chain.get_best_block_height())
-							.map(|height| chain.get_block_header(height));
-						if headers.len() == 0 {
-							continue;
-						}
-						if let Some(headers) = headers.into_iter().collect::<Option<Vec<_>>>() {
-							NonemptyContinuousHeaders { headers: VecDeque::from_iter(headers) }
-						} else {
-							continue
-						}
-					},
+			let bhw_input = if index.witness_from_index == 0 {
+				NonemptyContinuousHeaders { headers: VecDeque::from([best_block]) }
+			} else {
+				let headers = (index.witness_from_index..=chain.get_best_block_height())
+					.map(|height| chain.get_block_header(height));
+				if headers.len() == 0 {
+					continue;
+				}
+				if let Some(headers) = headers.into_iter().collect::<Option<Vec<_>>>() {
+					NonemptyContinuousHeaders { headers: VecDeque::from_iter(headers) }
+				} else {
+					continue
+				}
 			};
 
 			result.push(Either::Right((index, bhw_input)));
@@ -205,6 +194,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	enum BWTrace<T: BWTypes, T0: BHWTypes> {
 		Input(InputOf<BWStatemachine<T>>),
 		InputBHW(InputOf<BlockHeightWitnesser<T0>>),
+		#[allow(dead_code)]
 		Output(Vec<(ChainBlockNumberOf<T::Chain>, T::Event)>),
 		Event(BlockProcessorEvent<T>),
 		ET(ElectionTrackerEvent<T>),
@@ -234,7 +224,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 				bw_history.push(BWTrace::InputBHW(input.clone()));
 
 				let output = BHW::step(&mut bhw_state, input, &())
-					.expect(&format!("BHW failed with history: {bw_history:?}"));
+					.unwrap_or_else(|_| panic!("BHW failed with history: {bw_history:?}"));
 
 				outputs.push(output);
 			}
@@ -254,10 +244,9 @@ fn run_simulation(blocks: ForkedFilledChain) {
 			for bhw_output in bhw_outputs {
 				bw_history.push(BWTrace::Input(Either::Left(bhw_output.clone())));
 
-				bw_state
-					.elections
-					.is_valid()
-					.expect(&format!("BW failed with history: {}", print_bw_history(&bw_history)));
+				bw_state.elections.is_valid().unwrap_or_else(|_| {
+					panic!("BW failed with history: {}", print_bw_history(&bw_history))
+				});
 
 				BW::step(&mut bw_state, Either::Left(bhw_output), &bw_settings).unwrap();
 
@@ -283,10 +272,9 @@ fn run_simulation(blocks: ForkedFilledChain) {
 			for input in inputs {
 				bw_history.push(BWTrace::Input(input.clone()));
 
-				bw_state
-					.elections
-					.is_valid()
-					.expect(&format!("BW failed with history: {}", print_bw_history(&bw_history)));
+				bw_state.elections.is_valid().unwrap_or_else(|_| {
+					panic!("BW failed with history: {}", print_bw_history(&bw_history))
+				});
 
 				BW::step(&mut bw_state, input, &bw_settings).unwrap();
 
@@ -328,7 +316,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 			};
 			write!(printed, "{height}: {}, ", event).unwrap();
 		}
-		writeln!(printed, "").unwrap();
+		writeln!(printed).unwrap();
 	}
 
 	let counted_events: Container<BTreeMultiSet<(u8, MockBtcEvent<Event>)>> =
@@ -348,9 +336,9 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		.0
 		 .0
 		.keys()
-		.map(|(a, b)| b)
+		.map(|(_, b)| b)
 		.filter_map(try_get!(MockBtcEvent::Witness))
-		.map(|event| event.clone())
+		.cloned()
 		.collect();
 	let expected_witness_events: BTreeSet<_> = finalized_events.into_iter().cloned().collect();
 	assert_eq!(emitted_witness_events, expected_witness_events,

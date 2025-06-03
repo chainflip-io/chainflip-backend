@@ -202,6 +202,7 @@ where
 	// TODO: factor out with above.
 	// Note: it's important that these expectations are executed in order, as some tests rely on
 	// testing that the order several elections are processed does not matter.
+	#[allow(dead_code)]
 	pub fn expect_consensus_multi(
 		self,
 		votes_and_expectations: Vec<(ConsensusVotes<ES>, Option<ES::Consensus>)>,

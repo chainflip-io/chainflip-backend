@@ -7,11 +7,10 @@ use super::{
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use derive_where::derive_where;
-use frame_support::pallet_prelude::MaybeSerializeDeserialize;
-use primitives::{Header, NonemptyContinuousHeaders};
+use primitives::NonemptyContinuousHeaders;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, fmt::Debug};
+use sp_std::fmt::Debug;
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;

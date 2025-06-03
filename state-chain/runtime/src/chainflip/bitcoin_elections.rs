@@ -25,15 +25,14 @@ use pallet_cf_elections::{
 		block_height_tracking::{
 			consensus::BlockHeightTrackingConsensus, primitives::NonemptyContinuousHeaders,
 			state_machine::BlockHeightWitnesser, BHWTypes, BlockHeightChangeHook, ChainProgress,
-			ChainTypes, HeightWitnesserProperties,
+			ChainTypes,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
 			primitives::SafeModeStatus,
 			state_machine::{
-				BWElectionProperties, BWProcessorTypes, BWStatemachine, BWTypes,
-				BlockWitnesserSettings, BlockWitnesserState, ElectionPropertiesHook, HookTypeFor,
-				SafeModeEnabledHook,
+				BWProcessorTypes, BWStatemachine, BWTypes, BlockWitnesserSettings,
+				ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook,
 			},
 		},
 		composite::{

@@ -1,5 +1,5 @@
 use cf_chains::witness_period::BlockZero;
-use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
+use sp_std::vec::Vec;
 
 use super::{primitives::NonemptyContinuousHeaders, BHWTypes, HeightWitnesserProperties};
 use crate::electoral_systems::state_machine::consensus::{

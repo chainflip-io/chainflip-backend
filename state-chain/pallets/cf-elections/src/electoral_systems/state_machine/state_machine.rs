@@ -102,7 +102,7 @@ pub trait Statemachine: AbstractApi + 'static {
 	fn input_index(s: &mut Self::State) -> Vec<Self::Query>;
 
 	fn validate_input(
-		index: &Vec<Self::Query>,
+		index: &[Self::Query],
 		value: &InputOf<Self>,
 	) -> Result<(), SMInputValidateError<Self::Context, Self::Error>>
 	where
@@ -187,6 +187,7 @@ pub trait Statemachine: AbstractApi + 'static {
 						Just(settings),
 					)
 				})),
+				#[allow(clippy::type_complexity)]
 				run_with_timeout(
 					10,
 					|(mut state, input, settings): (
@@ -203,7 +204,7 @@ pub trait Statemachine: AbstractApi + 'static {
 
 						// ensure input has correct index
 						Self::validate_input(&Self::input_index(&mut state), &input)
-							.expect(&format!("input has wrong index: {input:?}"));
+							.unwrap_or_else(|_| panic!("input has wrong index: {input:?}"));
 
 						// backup state
 						let mut prev_state = state.clone();
@@ -257,7 +258,7 @@ pub fn run_with_timeout<
 
 		receiver
 			.recv_timeout(std::time::Duration::from_secs(seconds))
-			.expect(&format!("task failed due to timeout with input {a:#?}"))
+			.unwrap_or_else(|_| panic!("task failed due to timeout with input {a:#?}"))
 	}
 }
 

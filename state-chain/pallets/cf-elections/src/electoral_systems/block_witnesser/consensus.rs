@@ -10,6 +10,7 @@ use sp_std::collections::btree_map::BTreeMap;
 
 use super::state_machine::{BWElectionProperties, BWTypes};
 
+#[allow(clippy::type_complexity)]
 pub struct BWConsensus<T: BWTypes> {
 	pub consensus: SupermajorityConsensus<SharedDataHash>,
 	pub data: BTreeMap<SharedDataHash, (T::BlockData, Option<ChainBlockHashOf<T::Chain>>)>,

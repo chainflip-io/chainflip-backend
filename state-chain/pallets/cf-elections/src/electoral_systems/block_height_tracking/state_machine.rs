@@ -10,7 +10,7 @@ use crate::electoral_systems::state_machine::{
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use itertools::Either;
-use scale_info::{prelude::format, TypeInfo};
+use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
 
@@ -67,14 +67,12 @@ impl<T: BHWTypes> AbstractApi for BlockHeightWitnesser<T> {
 			.map_err(VoteValidationError::NonemptyContinuousHeadersError)?;
 		// We always accept the first vote, when the electoral system is started.
 		// See the `step` function for the block height witnessing.
-		if query.witness_from_index.is_zero() {
+		if query.witness_from_index.is_zero() ||
+			response.first().block_height == query.witness_from_index
+		{
 			Ok(())
 		} else {
-			if response.first().block_height == query.witness_from_index {
-				Ok(())
-			} else {
-				Err(VoteValidationError::BlockNotMatchingRequestedHeight)
-			}
+			Err(VoteValidationError::BlockNotMatchingRequestedHeight)
 		}
 	}
 }
@@ -212,13 +210,13 @@ pub mod tests {
 				ChainBlockHashTrait, ChainBlockNumberOf, ChainBlockNumberTrait, ChainTypes,
 			},
 			block_witnesser::state_machine::HookTypeFor,
-			state_machine::core::{hook_test_utils::MockHook, Serde, TypesFor, Validate},
+			state_machine::core::{hook_test_utils::MockHook, TypesFor},
 		},
 		prop_do,
 	};
 	use cf_chains::{
 		self,
-		witness_period::{BlockWitnessRange, BlockZero, SaturatingStep},
+		witness_period::{BlockWitnessRange, BlockZero},
 		ChainWitnessConfig,
 	};
 	use proptest::{

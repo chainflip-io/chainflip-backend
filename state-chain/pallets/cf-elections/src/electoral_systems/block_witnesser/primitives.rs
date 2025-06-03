@@ -78,8 +78,8 @@ impl<T: BWTypes> ElectionTracker<T> {
 		// In case of a reorg we still want to recreate elections for blocks which we had
 		// elections for previously AND were touched by the reorg
 		let start_all_below = match safemode {
-			SafeModeStatus::Disabled => self.seen_heights_below.clone(),
-			SafeModeStatus::Enabled => self.priority_elections_below.clone(),
+			SafeModeStatus::Disabled => self.seen_heights_below,
+			SafeModeStatus::Enabled => self.priority_elections_below,
 		};
 
 		use BWElectionType::*;
@@ -215,8 +215,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 			if progress.removed.clone().is_some_and(|range| *range.start() < next_election) {
 				// we set this value such that even in case of a reorg we create elections for up to
 				// this block
-				self.priority_elections_below =
-					max(next_election, self.priority_elections_below.clone());
+				self.priority_elections_below = max(next_election, self.priority_elections_below);
 			}
 		}
 
@@ -233,7 +232,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 		// after a reorg is lower than it was previously, and also, even if, in that
 		// case we simply keep the higher number that doesn't seem to be too much of a problem.
 		self.seen_heights_below =
-			max(self.seen_heights_below.clone(), last_seen_height.saturating_forward(1));
+			max(self.seen_heights_below, last_seen_height.saturating_forward(1));
 
 		// if there are elections ongoing for the block heights we received, we stop them
 		self.ongoing.retain(|height, _| !progress.headers.contains(height));

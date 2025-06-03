@@ -41,12 +41,9 @@ use pallet_cf_elections::{
 };
 use sp_core::bounded::alloc::collections::VecDeque;
 use state_chain_runtime::{
-	chainflip::{
-		bitcoin_elections::{
-			BitcoinBlockHeightTracking, BitcoinBlockHeightTrackingES, BitcoinChain,
-			BitcoinDepositChannelWitnessingES, BitcoinElectoralSystemRunner, BitcoinLiveness,
-		},
-		elections::TypesFor,
+	chainflip::bitcoin_elections::{
+		BitcoinBlockHeightTrackingES, BitcoinChain, BitcoinDepositChannelWitnessingES,
+		BitcoinElectoralSystemRunner, BitcoinLiveness,
 	},
 	BitcoinInstance,
 };

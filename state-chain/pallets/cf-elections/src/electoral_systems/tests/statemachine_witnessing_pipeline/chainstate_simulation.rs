@@ -25,16 +25,6 @@ pub enum ForkedBlock<A> {
 	Fork(Vec<ForkedBlock<A>>),
 }
 
-impl<A> ForkedBlock<A> {
-	pub fn map<B>(self, f: &mut impl FnMut(A) -> B) -> ForkedBlock<B> {
-		use ForkedBlock::*;
-		match self {
-			Block(a) => Block(f(a)),
-			Fork(blocks) => Fork(blocks.into_iter().map(|block| block.map(f)).collect()),
-		}
-	}
-}
-
 /// Parameters describing what kind of forked blocks are generated.
 #[derive(Debug, Clone)]
 pub struct ConsumerParameters {
@@ -164,8 +154,8 @@ pub fn fill_block<E: Clone>(
 	use ForkedBlock::*;
 	match input {
 		Block(Consumer { ignore, drop, take, data_delays, resolution_delay }) => {
-			let current_block_id = block_id.clone();
-			*block_id = *block_id + 1;
+			let current_block_id = *block_id;
+			*block_id += 1;
 			{
 				let _dropped_events = events.drain(ignore..(ignore + drop));
 			}
@@ -242,14 +232,13 @@ pub struct FlatChain<E> {
 
 pub fn make_events() -> Vec<String> {
 	let char_stream = (0..26u8)
-		.into_iter()
 		.map(|x| (b'a' + x) as char)
-		.chain((0..26u8).into_iter().map(|x| ((b'A' + x) as char)))
+		.chain((0..26u8).map(|x| ((b'A' + x) as char)))
 		.map(|x| x.to_string());
 
 	char_stream
 		.clone()
-		.chain((0..10u8).into_iter().map(|x| ((b'0' + x) as char).to_string()))
+		.chain((0..10u8).map(|x| ((b'0' + x) as char).to_string()))
 		// two char events
 		.chain(char_stream.clone().flat_map(|x| {
 			char_stream.clone().map(move |y| {
@@ -368,8 +357,6 @@ pub struct MockChain<E, T: ChainTypes<ChainBlockHash = BlockId>> {
 }
 
 use crate::electoral_systems::block_height_tracking::{primitives::Header, ChainTypes};
-use sp_std::iter::Step;
-type N = u8;
 
 impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> MockChain<E, T> {
 	pub fn new_with_offset(offset: usize, blocks: Vec<FlatBlock<E>>) -> MockChain<E, T> {
@@ -388,14 +375,14 @@ impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> Mock
 	pub fn get_hash_by_height(&self, height: T::ChainBlockNumber) -> Option<BlockId> {
 		self.chain
 			.iter()
-			.find(|(h, block)| *h == height)
+			.find(|(h, _block)| *h == height)
 			.map(|(_, block)| block.block_id)
 	}
 
 	pub fn get_best_block_height(&self) -> T::ChainBlockNumber {
 		self.chain
 			.iter()
-			.map(|(height, _)| height.clone())
+			.map(|(height, _)| *height)
 			.max()
 			.unwrap_or(T::ChainBlockNumber::zero())
 	}
@@ -409,33 +396,32 @@ impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> Mock
 	pub fn get_block_by_hash(&self, hash: T::ChainBlockHash) -> Option<Vec<E>> {
 		self.chain
 			.iter()
-			.find(|(height, block)| block.block_id == hash)
+			.find(|(_height, block)| block.block_id == hash)
 			// Return `None` if the resolution_delay of the block hasn't passed yet.
 			// This simulates blocks where the rpc call fails for some reason and thus the
 			// election never resolves.
 			.filter(|(height, block)| {
 				height.saturating_forward(block.resolution_delay) <= self.get_best_block_height()
 			})
-			.map(|(height, block)| block.events.clone())
+			.map(|(_height, block)| block.events.clone())
 	}
 	pub fn get_block_by_height(&self, number: T::ChainBlockNumber) -> Option<Vec<E>> {
 		self.chain
 			.iter()
-			.find(|(height, block)| *height == number)
+			.find(|(height, _block)| *height == number)
 			// Return `None` if the resolution_delay of the block hasn't passed yet.
 			// This simulates blocks where the rpc call fails for some reason and thus the
 			// election never resolves.
 			.filter(|(height, block)| {
 				height.saturating_forward(block.resolution_delay) <= self.get_best_block_height()
 			})
-			.map(|(height, block)| block.events.clone())
+			.map(|(_height, block)| block.events.clone())
 	}
 	pub fn get_best_block_header(&self) -> Header<T> {
 		let best_height = self.get_best_block_height();
-		self.get_block_header(best_height).expect(&format!(
-			"getting block for height {best_height:?} failed for chain {:?}",
-			self.chain
-		))
+		self.get_block_header(best_height).unwrap_or_else(|| {
+			panic!("getting block for height {best_height:?} failed for chain {:?}", self.chain)
+		})
 	}
 }
 
