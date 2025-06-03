@@ -23,7 +23,7 @@ use cf_chains::sol::{SolVersionedMessage, SolVersionedTransaction};
 use std::str::FromStr;
 
 // Simulating a tranasction requires a payer, even if the simulation doesn't require a tx fee.
-// We use a prefunded account for this purpose.
+// We use a prefunded account for this purpose. The keys have been burnt.
 const PREFUNDED_ACCOUNT: SolAddress = const_address("CsS34ewTFLGqrpckPRww5hbWr4QJQ1J3ZA5D7WL4Ni3K");
 
 pub async fn get_price_feeds<SolRetryRpcClient>(
@@ -183,7 +183,8 @@ mod tests {
 
 	use super::*;
 
-	// TODO: Add same test for mainnet to make sure the account is prefunded correctly.
+	// TODO: Add same test for mainnet to make sure the account is prefunded correctly. Also
+	// update the devnet `oracle_query_helper` when deployed
 
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
