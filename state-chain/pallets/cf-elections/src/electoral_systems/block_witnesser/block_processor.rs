@@ -197,7 +197,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	/// # Parameters
 	///
 	/// - `chain_progress`: Indicates the current state of the blockchain. It can either be:
-	///   - `BPChainProgress::up_to(last_height)` for a simple progress update.
+	///   - `BPChainProgress::up_to(height_block_height)` for a simple progress update.
 	///   - `BPChainProgress::reorg(range)` for a reorganization event, where `range` defines the
 	///     blocks affected.
 	pub fn process_chain_progress(
@@ -251,7 +251,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	///
 	/// # Parameters
 	///
-	/// - `last_height`: The current highest block number in the chain.
+	/// - `highest_block_height`: The current highest block number in the chain.
 	///
 	/// # Returns
 	///
@@ -756,9 +756,9 @@ impl<
 
 	fn step(s: &mut Self::State, i: Self::Input, set: &Self::Settings) -> Self::Output {
 		match i {
-			SMBlockProcessorInput::NewBlockData(last_height, n, deposits) => s
+			SMBlockProcessorInput::NewBlockData(highest_block_height, n, deposits) => s
 				.process_block_data_and_chain_progress_test(
-					BPChainProgress::up_to(last_height),
+					BPChainProgress::up_to(highest_block_height),
 					(n, deposits, *set),
 				),
 			SMBlockProcessorInput::ChainProgress(inner) => s.process_chain_progress(inner),
