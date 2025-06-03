@@ -59,6 +59,7 @@ impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closur
 )]
 pub enum TradingStrategy {
 	TickZeroCentered { spread_tick: Tick, base_asset: Asset },
+	SimpleBuySell { buy_tick: Tick, sell_tick: Tick, base_asset: Asset },
 }
 
 #[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -85,7 +86,8 @@ impl TradingStrategy {
 	}
 	pub fn supported_assets(&self) -> BTreeSet<Asset> {
 		match self {
-			TradingStrategy::TickZeroCentered { base_asset, .. } =>
+			TradingStrategy::TickZeroCentered { base_asset, .. } |
+			TradingStrategy::SimpleBuySell { base_asset, .. } =>
 				BTreeSet::from_iter([*base_asset, STABLE_ASSET]),
 		}
 	}
@@ -93,6 +95,17 @@ impl TradingStrategy {
 		match self {
 			TradingStrategy::TickZeroCentered { spread_tick, base_asset } => {
 				if *spread_tick < 0 || *spread_tick > cf_amm_math::MAX_TICK {
+					return Err(Error::<T>::InvalidTick)
+				}
+				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
+			},
+			TradingStrategy::SimpleBuySell { buy_tick, sell_tick, base_asset } => {
+				if buy_tick >= sell_tick ||
+					*buy_tick > cf_amm_math::MAX_TICK ||
+					*sell_tick > cf_amm_math::MAX_TICK ||
+					*buy_tick < cf_amm_math::MIN_TICK ||
+					*sell_tick < cf_amm_math::MIN_TICK
+				{
 					return Err(Error::<T>::InvalidTick)
 				}
 				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
@@ -211,16 +224,21 @@ pub mod pallet {
 
 			for (_, strategy_id, strategy) in Strategies::<T>::iter() {
 				match strategy {
-					TradingStrategy::TickZeroCentered { spread_tick, base_asset } => {
+					TradingStrategy::TickZeroCentered { base_asset, .. } |
+					TradingStrategy::SimpleBuySell { base_asset, .. } => {
 						let new_weight_estimate =
 							weight_used.saturating_add(limit_order_update_weight * 2);
 
 						if remaining_weight.checked_sub(&new_weight_estimate).is_none() {
 							break;
 						}
-
-						let tick = core::cmp::max(spread_tick, 0);
-						for (side, tick) in [(Side::Buy, -tick), (Side::Sell, tick)] {
+						let (buy_tick, sell_tick) = match strategy {
+							TradingStrategy::TickZeroCentered { spread_tick, .. } =>
+								(-spread_tick, spread_tick),
+							TradingStrategy::SimpleBuySell { buy_tick, sell_tick, .. } =>
+								(buy_tick, sell_tick),
+						};
+						for (side, tick) in [(Side::Buy, buy_tick), (Side::Sell, sell_tick)] {
 							let sell_asset =
 								if side == Side::Buy { STABLE_ASSET } else { base_asset };
 
