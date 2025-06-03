@@ -401,7 +401,7 @@ fn can_create_asymmetric_buy_sell_strategy() {
 
 			assert_ok!(TradingStrategyPallet::deploy_strategy(
 				RuntimeOrigin::signed(LP),
-				TradingStrategy::AsymmetricBuySell {
+				TradingStrategy::SimpleBuySell {
 					buy_tick: BUY_TICK,
 					sell_tick: SELL_TICK,
 					base_asset: BASE_ASSET
@@ -413,7 +413,7 @@ fn can_create_asymmetric_buy_sell_strategy() {
 			let (lp_id, strategy_id, strategy) = Strategies::<Test>::iter().next().unwrap();
 			assert_eq!(
 				strategy,
-				TradingStrategy::AsymmetricBuySell {
+				TradingStrategy::SimpleBuySell {
 					buy_tick: BUY_TICK,
 					sell_tick: SELL_TICK,
 					base_asset: BASE_ASSET
@@ -432,7 +432,7 @@ fn can_create_asymmetric_buy_sell_strategy() {
 				RuntimeEvent::TradingStrategyPallet(Event::<Test>::StrategyDeployed {
 					account_id: LP,
 					strategy_id: id,
-					strategy: TradingStrategy::AsymmetricBuySell {
+					strategy: TradingStrategy::SimpleBuySell {
 						buy_tick: BUY_TICK,
 						sell_tick: SELL_TICK,
 						base_asset: BASE_ASSET
@@ -598,14 +598,14 @@ fn strategy_deployment_validation() {
 			}
 		}
 
-		// AsymmetricBuySell strategy validation
+		// SimpleBuySell strategy validation
 		{
 			// Invalid buy/sell ticks
 			for tick in [i32::MAX, cf_amm_math::MAX_TICK + 1, cf_amm_math::MIN_TICK - 1] {
 				assert_err!(
 					TradingStrategyPallet::deploy_strategy(
 						RuntimeOrigin::signed(LP),
-						TradingStrategy::AsymmetricBuySell {
+						TradingStrategy::SimpleBuySell {
 							buy_tick: -tick,
 							sell_tick: 0,
 							base_asset: BASE_ASSET
@@ -617,7 +617,7 @@ fn strategy_deployment_validation() {
 				assert_err!(
 					TradingStrategyPallet::deploy_strategy(
 						RuntimeOrigin::signed(LP),
-						TradingStrategy::AsymmetricBuySell {
+						TradingStrategy::SimpleBuySell {
 							buy_tick: 0,
 							sell_tick: tick,
 							base_asset: BASE_ASSET
@@ -632,7 +632,7 @@ fn strategy_deployment_validation() {
 			assert_err!(
 				TradingStrategyPallet::deploy_strategy(
 					RuntimeOrigin::signed(LP),
-					TradingStrategy::AsymmetricBuySell {
+					TradingStrategy::SimpleBuySell {
 						buy_tick: 10,
 						sell_tick: -10,
 						base_asset: BASE_ASSET
@@ -646,7 +646,7 @@ fn strategy_deployment_validation() {
 			assert_err!(
 				TradingStrategyPallet::deploy_strategy(
 					RuntimeOrigin::signed(LP),
-					TradingStrategy::AsymmetricBuySell {
+					TradingStrategy::SimpleBuySell {
 						buy_tick: 0,
 						sell_tick: 0,
 						base_asset: BASE_ASSET
