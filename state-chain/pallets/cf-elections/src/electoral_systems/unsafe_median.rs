@@ -120,6 +120,7 @@ impl<
 				election_access.delete();
 				ElectoralAccess::set_unsynchronised_state(consensus.clone())?;
 				Hook::update_fee(consensus);
+				ElectoralAccess::new_election((), (), ())?;
 			}
 		} else {
 			ElectoralAccess::new_election((), (), ())?;
