@@ -16,7 +16,11 @@
 
 use crate::sol::{retry_rpc::SolRetryRpcApi, rpc_client_api::*};
 use cf_chains::sol::SolAddress;
-use sol_prim::{consts::const_address, AccountMeta, Instruction};
+use sol_prim::{
+	consts::const_address,
+	program_instructions::{oracle_query_helpers::OracleQueryHelperProgram, InstructionExt},
+	AccountMeta,
+};
 
 use base64::{prelude::BASE64_STANDARD, Engine};
 use cf_chains::sol::{SolVersionedMessage, SolVersionedTransaction};
@@ -64,29 +68,18 @@ where
 // querying more than 10 feeds so we don't bother extending the compute budget. If that was not
 // enough, the compute budget extension instruction needs to be added to the transaction before
 // serialization.
-// TODO: Probably add the program to the `foreign_chains/*/program_instructions.rs` like the other
-// ones and then do like we do in the `instruction_builder` so it has the additional checks for the
-// discriminator and the function call itself. Only potential issue is if that requires importing
-// a bunch of types/dependencies from the SC. To try.
 fn build_and_serialize_query_transaction(
 	oracle_query_helper: SolAddress,
 	oracle_program_id: SolAddress,
 	feed_addresses: Vec<SolAddress>,
 ) -> Result<Vec<u8>, anyhow::Error> {
-	let mut account_metas = vec![AccountMeta::new_readonly(oracle_program_id.into(), false)];
-	account_metas.extend(
-		feed_addresses
-			.into_iter()
-			.map(|feed| AccountMeta::new_readonly(feed.into(), false)),
-	);
-
-	let discriminator_query_price_feeds: [u8; 8] = [0x27, 0x52, 0x35, 0x4e, 0x17, 0x26, 0x3e, 0xc3];
-
-	let instructions = vec![Instruction::new_with_bincode(
-		oracle_query_helper.into(),
-		&discriminator_query_price_feeds,
-		account_metas,
-	)];
+	let price_feed_metas: Vec<AccountMeta> = feed_addresses
+		.into_iter()
+		.map(|feed_account| AccountMeta::new(feed_account.into(), false))
+		.collect();
+	let instructions = vec![OracleQueryHelperProgram::with_id(oracle_query_helper)
+		.query_price_feeds(oracle_program_id)
+		.with_additional_accounts(price_feed_metas)];
 
 	let transaction = SolVersionedTransaction::new_unsigned(SolVersionedMessage::new(
 		&instructions,
@@ -187,8 +180,8 @@ mod tests {
 
 	use super::*;
 
-	// TODO: Add same test for mainnet to make sure the account is prefunded correctly. Also
-	// update the devnet `oracle_query_helper` when deployed
+	// TODO: Add same test for mainnet when the `oracle_query_helper` is deployed to make sure
+	// it works and that the account is prefunded correctly.
 
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
