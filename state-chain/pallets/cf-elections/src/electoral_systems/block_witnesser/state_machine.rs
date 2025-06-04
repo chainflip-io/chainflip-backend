@@ -35,14 +35,7 @@ pub struct HookTypeFor<Tag1, Tag2> {
 }
 
 pub trait BWTypes: 'static + Sized + BWProcessorTypes {
-	type ElectionProperties: Debug
-		+ Clone
-		+ Encode
-		+ Decode
-		+ Eq
-		+ 'static
-		+ Serialize
-		+ for<'a> Deserialize<'a>;
+	type ElectionProperties: CommonTraits;
 	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>> + CommonTraits;
 	type SafeModeEnabledHook: Hook<HookTypeFor<(), SafeModeEnabledHook>> + CommonTraits;
 
@@ -129,10 +122,16 @@ defx! {
 	validate _this (else BlockWitnesserError) {}
 }
 
+def_derive!(
+	pub enum EngineElectionType<C: ChainTypes> {
+		ByHash(C::ChainBlockHash),
+		BlockHeight(bool),
+	}
+);
 def_derive! {
 	#[no_serde]
 	pub struct BWElectionProperties<T: BWTypes> {
-		pub election_type: BWElectionType<T>,
+		pub election_type: EngineElectionType<T::Chain>,
 		pub block_height: ChainBlockNumberOf<T::Chain>,
 		pub properties: T::ElectionProperties,
 	}
@@ -151,7 +150,7 @@ defx! {
 		Optimistic,
 
 		/// Querying blocks by hash
-		ByHash(<<T as BWProcessorTypes>::Chain as ChainTypes>::ChainBlockHash),
+		ByHash(ChainBlockHashOf<T::Chain>),
 
 		/// Querying "old" blocks that are below the safety margin,
 		/// and thus we don't care about the hash anymore
@@ -176,10 +175,10 @@ impl<T: BWTypes> AbstractApi for BWStatemachine<T> {
 		index: &BWElectionProperties<T>,
 		(_, hash): &(T::BlockData, Option<ChainBlockHashOf<T::Chain>>),
 	) -> Result<(), Self::Error> {
-		use BWElectionType::*;
+		use EngineElectionType::*;
 		// ensure that a hash is only provided for `Optimistic` elections.
 		match (&index.election_type, hash) {
-			(ByHash(_), None) | (Optimistic, Some(_)) | (SafeBlockHeight, None) => Ok(()),
+			(ByHash(_), None) | (BlockHeight(true), Some(_)) | (BlockHeight(false), None) => Ok(()),
 			_ => Err(()),
 		}
 	}
@@ -198,16 +197,24 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			.clone()
 			.into_iter()
 			.map(|(block_height, election_type)| match election_type {
-				/// Governance elections are always converted to SafeBlockHeight but use the
-				/// corresponding Properties instead of fetching it from the Hook
 				BWElectionType::Governance(properties) => BWElectionProperties {
 					properties,
-					election_type: BWElectionType::SafeBlockHeight,
+					election_type: EngineElectionType::BlockHeight(false),
 					block_height,
 				},
-				_ => BWElectionProperties {
+				BWElectionType::Optimistic => BWElectionProperties {
 					properties: state.generate_election_properties_hook.run(block_height),
-					election_type,
+					election_type: EngineElectionType::BlockHeight(true),
+					block_height,
+				},
+				BWElectionType::SafeBlockHeight => BWElectionProperties {
+					properties: state.generate_election_properties_hook.run(block_height),
+					election_type: EngineElectionType::BlockHeight(false),
+					block_height,
+				},
+				BWElectionType::ByHash(hash) => BWElectionProperties {
+					properties: state.generate_election_properties_hook.run(block_height),
+					election_type: EngineElectionType::ByHash(hash),
 					block_height,
 				},
 			})

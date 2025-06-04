@@ -22,7 +22,7 @@ use crate::electoral_systems::{
 	state_machine::core::{def_derive, defx, Hook, Validate},
 };
 
-use super::state_machine::{BWElectionType, BWTypes};
+use super::state_machine::{BWElectionType, BWTypes, EngineElectionType};
 
 defx! {
 	pub struct ElectionTracker[T: BWTypes] {
@@ -120,7 +120,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 	pub fn mark_election_done(
 		&mut self,
 		height: ChainBlockNumberOf<T::Chain>,
-		received: &BWElectionType<T>,
+		received: &EngineElectionType<T::Chain>,
 		received_hash: &Option<ChainBlockHashOf<T::Chain>>,
 		received_data: T::BlockData,
 	) -> Option<T::BlockData> {
@@ -147,17 +147,23 @@ impl<T: BWTypes> ElectionTracker<T> {
 				match (received, &current) {
 					// if we receive a result for the same election type as is currently open,
 					// we close it
-					(a, b) if a == b => Some(current),
+					(EngineElectionType::BlockHeight(false), SafeBlockHeight) => Some(current),
 
+					// Governance elections must always match safeHeight
+					(EngineElectionType::BlockHeight(false), Governance(_)) => Some(current),
 					// if we get consensus for a by-hash election whose hash doesn't match with
 					// the hash we have currently, we keep it open
-					(ByHash(a), ByHash(b)) if a != b => None,
-
+					(EngineElectionType::ByHash(a), ByHash(b)) =>
+						if a == b {
+							Some(current)
+						} else {
+							None
+						},
 					// if we get an optimistic consensus for an election that is already by-hash,
 					// we check whether the `received_hash` is the same as the hash we're currently
 					// querying for. If it is, we accept the optimistic block as result for the
 					// by-hash election. otherwise we keep the by-hash election open.
-					(Optimistic, ByHash(current_hash)) =>
+					(EngineElectionType::BlockHeight(true), ByHash(current_hash)) =>
 						if received_hash.as_ref() == Some(current_hash) {
 							Some(current)
 						} else {
@@ -168,13 +174,13 @@ impl<T: BWTypes> ElectionTracker<T> {
 					// safety-margin we ignore it, it's safer to re-query by block height. This
 					// should virtually never happen, only in case where the querying takes a *very*
 					// long time.
-					(Optimistic, SafeBlockHeight) => None,
+					(EngineElectionType::BlockHeight(true), SafeBlockHeight) => None,
 
 					// If we get a by-hash consensus for an election that is already past
 					// safety-margin, we ignore it. We've already deleted the hash for this
 					// election from storage, so we can't check whether we got the correct
 					// block. It's safer to re-query.
-					(ByHash(_), SafeBlockHeight) => None,
+					(EngineElectionType::ByHash(_), SafeBlockHeight) => None,
 
 					// All other cases should be impossible
 					(_, _) => None,
@@ -322,7 +328,7 @@ def_derive! {
 		ComparingBlocks {
 			height: ChainBlockNumberOf<T::Chain>,
 			hash: Option<ChainBlockHashOf<T::Chain>>,
-			received: BWElectionType<T>,
+			received: EngineElectionType<T::Chain>,
 			current: BWElectionType<T>,
 		},
 		UpdateSafeElections {

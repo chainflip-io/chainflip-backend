@@ -33,10 +33,10 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		block_height_tracking::{
 			primitives::{Header, NonemptyContinuousHeaders},
-			ChainTypes, HeightWitnesserProperties,
+			ChainBlockHashOf, ChainTypes, HeightWitnesserProperties,
 		},
 		block_witnesser::state_machine::{
-			BWElectionProperties, BWElectionType, BWProcessorTypes, BWTypes,
+			BWElectionProperties, BWElectionType, BWProcessorTypes, BWTypes, EngineElectionType,
 		},
 	},
 	VoteOf,
@@ -145,34 +145,27 @@ impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter 
 	}
 }
 
-async fn query_election_block<T: BWTypes>(
+async fn query_election_block<C: ChainTypes>(
 	client: &BtcCachingClient,
 	block_height: btc::BlockNumber,
-	election_type: BWElectionType<T>,
+	election_type: EngineElectionType<C>,
 ) -> Result<(Vec<VerboseTransaction>, Option<btc::Hash>)>
 where
-	<<T as BWProcessorTypes>::Chain as ChainTypes>::ChainBlockHash: AsRef<[u8]>,
+	ChainBlockHashOf<C>: AsRef<[u8]>,
 {
 	match election_type {
-		BWElectionType::Optimistic => {
-			let block_hash = client.block_hash(block_height).await?;
-			let block = client.block(block_hash).await?;
-			Ok((block.txdata, Some(block.header.hash.to_byte_array().into())))
-		},
-		BWElectionType::ByHash(hash) => {
+		EngineElectionType::ByHash(hash) => {
 			let block =
 				client.block(bitcoin::BlockHash::from_slice(hash.as_ref()).unwrap()).await?;
 			Ok((block.txdata, None))
 		},
-		BWElectionType::SafeBlockHeight => {
+		EngineElectionType::BlockHeight(submit_hash) => {
 			let block_hash = client.block_hash(block_height).await?;
 			let block = client.block(block_hash).await?;
-			Ok((block.txdata, None))
-		},
-		// Should never enter here, we always convert Governance election to SafeBlockHeight
-		_ => {
-			tracing::error!("Should never create Governance elections");
-			Ok((vec![], None))
+			Ok((
+				block.txdata,
+				if submit_hash { Some(block.header.hash.to_byte_array().into()) } else { None },
+			))
 		},
 	}
 }

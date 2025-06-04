@@ -171,7 +171,9 @@ pub mod pallet {
 
 	use crate::{
 		electoral_system_runner::RunnerStorageAccessTrait,
-		electoral_systems::block_witnesser::state_machine::BWElectionType,
+		electoral_systems::{
+			block_height_tracking::CommonTraits, block_witnesser::state_machine::BWElectionType,
+		},
 	};
 	use bitmap_components::ElectionBitmapComponents;
 	pub use electoral_system::{
@@ -388,15 +390,7 @@ pub mod pallet {
 	}
 
 	pub trait GovernanceElectionHook {
-		type Properties: Clone
-			+ PartialEq
-			+ Debug
-			+ Encode
-			+ Decode
-			+ TypeInfo
-			+ Send
-			+ Sync
-			+ 'static;
+		type Properties: Clone + PartialEq + Debug + Encode + Decode + TypeInfo + Send + Sync;
 
 		fn start(properties: Self::Properties);
 	}

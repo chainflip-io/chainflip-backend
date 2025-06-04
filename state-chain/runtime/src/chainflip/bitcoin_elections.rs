@@ -551,9 +551,10 @@ impl pallet_cf_elections::GovernanceElectionHook for BitcoinGovernanceElectionHo
 	type Properties = (<BitcoinChain as ChainTypes>::ChainBlockNumber, ElectionTypes);
 
 	fn start(properties: Self::Properties) {
-		match properties {
-			(block_height, ElectionTypes::DepositChannels(channels)) => {
-				let _ =
+		let (block_height, election_type) = properties.clone();
+		match election_type {
+			ElectionTypes::DepositChannels(channels) => {
+				if let Err(e) =
 					RunnerStorageAccess::<Runtime, BitcoinInstance>::mutate_unsynchronised_state(
 						|state: &mut (_, _, _, _, _, _)| {
 							state
@@ -564,10 +565,12 @@ impl pallet_cf_elections::GovernanceElectionHook for BitcoinGovernanceElectionHo
 								.or_insert(BWElectionType::Governance(channels));
 							Ok(())
 						},
-					);
+					) {
+					log::error!("{e:?}: Failed to create governance election with properties: {properties:?}");
+				}
 			},
-			(block_height, ElectionTypes::Vaults(vaults)) => {
-				let _ =
+			ElectionTypes::Vaults(vaults) => {
+				if let Err(e) =
 					RunnerStorageAccess::<Runtime, BitcoinInstance>::mutate_unsynchronised_state(
 						|state: &mut (_, _, _, _, _, _)| {
 							state
@@ -578,10 +581,12 @@ impl pallet_cf_elections::GovernanceElectionHook for BitcoinGovernanceElectionHo
 								.or_insert(BWElectionType::Governance(vaults));
 							Ok(())
 						},
-					);
+					) {
+					log::error!("{e:?}: Failed to create governance election with properties: {properties:?}");
+				}
 			},
-			(block_height, ElectionTypes::Egresses(egresses)) => {
-				let _ =
+			ElectionTypes::Egresses(egresses) => {
+				if let Err(e) =
 					RunnerStorageAccess::<Runtime, BitcoinInstance>::mutate_unsynchronised_state(
 						|state: &mut (_, _, _, _, _, _)| {
 							state
@@ -592,7 +597,9 @@ impl pallet_cf_elections::GovernanceElectionHook for BitcoinGovernanceElectionHo
 								.or_insert(BWElectionType::Governance(egresses));
 							Ok(())
 						},
-					);
+					) {
+					log::error!("{e:?}: Failed to create governance election with properties: {properties:?}");
+				}
 			},
 		}
 	}
