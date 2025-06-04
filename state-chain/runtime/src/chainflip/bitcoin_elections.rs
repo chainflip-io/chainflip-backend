@@ -491,7 +491,11 @@ impl
 				pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get()
 					.unwrap()
 					.block_height
-					.saturating_sub(3),
+					// We subtract the safety buffer so we don't ask for liveness for blocks that
+					// could be reorged out.
+					.saturating_sub(BitcoinChain::SAFETY_BUFFER)
+					.try_into()
+					.map_err(|_| CorruptStorageError::new())?,
 			),
 		)?;
 
