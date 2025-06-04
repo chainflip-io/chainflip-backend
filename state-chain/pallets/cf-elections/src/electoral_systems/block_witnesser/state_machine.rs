@@ -37,7 +37,7 @@ pub struct HookTypeFor<Tag1, Tag2> {
 pub trait BWTypes: 'static + Sized + BWProcessorTypes {
 	type ElectionProperties: Debug + Clone + Encode + Decode + Eq + 'static;
 	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>> + CommonTraits;
-	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>> + CommonTraits;
+	type SafeModeEnabledHook: Hook<HookTypeFor<(), SafeModeEnabledHook>> + CommonTraits;
 
 	type ElectionTrackerDebugEventHook: Hook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>
 		+ CommonTraits
@@ -52,7 +52,7 @@ impl<T: BWTypes> HookType for HookTypeFor<T, ElectionTrackerDebugEventHook> {
 }
 
 pub struct SafeModeEnabledHook;
-impl<T: BWTypes> HookType for HookTypeFor<T, SafeModeEnabledHook> {
+impl HookType for HookTypeFor<(), SafeModeEnabledHook> {
 	type Input = ();
 	type Output = SafeModeStatus;
 }
@@ -534,7 +534,7 @@ pub mod tests {
 	{
 		type ElectionProperties = ();
 		type ElectionPropertiesHook = MockHook<HookTypeFor<Self, ElectionPropertiesHook>>;
-		type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>>;
+		type SafeModeEnabledHook = MockHook<HookTypeFor<(), SafeModeEnabledHook>>;
 		type ElectionTrackerDebugEventHook =
 			MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;
 	}

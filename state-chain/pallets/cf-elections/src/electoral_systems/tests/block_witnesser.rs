@@ -22,8 +22,8 @@ use crate::{
 		block_height_tracking::ChainTypes,
 		block_witnesser::{
 			state_machine::{
-				BWElectionProperties, BWElectionType, BWProcessorTypes, ElectionPropertiesHook,
-				ElectionTrackerDebugEventHook, ExecuteHook, HookTypeFor, DebugEventHook,
+				BWElectionProperties, BWElectionType, BWProcessorTypes, DebugEventHook,
+				ElectionPropertiesHook, ElectionTrackerDebugEventHook, ExecuteHook, HookTypeFor,
 				RulesHook, SafeModeEnabledHook,
 			},
 			*,
@@ -57,7 +57,7 @@ type ElectionProperties = BTreeSet<u16>;
 struct MockBlockProcessorDefinition;
 type Types = TypesFor<MockBlockProcessorDefinition>;
 
-impl Hook<HookTypeFor<Types, SafeModeEnabledHook>> for Types {
+impl Hook<HookTypeFor<(), SafeModeEnabledHook>> for Types {
 	fn run(&mut self, _input: ()) -> SafeModeStatus {
 		SafeModeStatus::Disabled
 	}
