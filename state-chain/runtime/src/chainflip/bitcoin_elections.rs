@@ -434,8 +434,6 @@ impl
 			>,
 		),
 	) -> Result<(), CorruptStorageError> {
-		let current_sc_block_number = crate::System::block_number();
-
 		let chain_progress = BitcoinBlockHeightTrackingES::on_finalize::<
 			DerivedElectoralAccess<
 				_,
@@ -459,9 +457,6 @@ impl
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
 		>(vault_deposits_identifiers.clone(), &chain_progress.clone())?;
-
-		let last_btc_block =
-			pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get().unwrap();
 
 		BitcoinEgressWitnessingES::on_finalize::<
 			DerivedElectoralAccess<
@@ -487,7 +482,13 @@ impl
 			>,
 		>(
 			liveness_identifiers,
-			&(current_sc_block_number, last_btc_block.block_height.saturating_sub(3)),
+			&(
+				crate::System::block_number(),
+				pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get()
+					.unwrap()
+					.block_height
+					.saturating_sub(3),
+			),
 		)?;
 
 		Ok(())
