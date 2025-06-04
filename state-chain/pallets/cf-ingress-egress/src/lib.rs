@@ -3105,13 +3105,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					None => Self::generate_new_channel(source_asset)?,
 				},
 			};
+		// Make sure to set the asset, in case the channel was allocated from the pre-allocated
+		// channels list or from the deposit channels pool.
 		deposit_channel.asset = source_asset;
 
 		// Proactively pre-allocate new channels for the requester,
 		// This is done after the above loop deliberately to ensure that we always respect per-role
-		// preallocated channels limits and cater for cases when the configured
-		// MaximumPreallocatedChannels changes, or a channel is allocated from the pre-allocated
-		// channels list.
+		// preallocated channels limits and cater for cases when MaximumPreallocatedChannels config
+		// changes, or a channel is allocated from the pre-allocated channels list.
 		for _ in 0..(MaximumPreallocatedChannels::<T, I>::get(T::AccountRoleRegistry::account_role(
 			requester,
 		)) as usize)
@@ -3165,7 +3166,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			<frame_system::Pallet<T>>::block_number(),
 		)?;
 
-		Ok((deposit_channel.channel_id, deposit_address, expiry_height, channel_opening_fee))
+		Ok((
+			deposit_channel.channel_id,
+			deposit_channel.address,
+			expiry_height,
+			channel_opening_fee,
+		))
 	}
 
 	pub fn get_failed_call(broadcast_id: BroadcastId) -> Option<FailedForeignChainCall> {
@@ -3431,7 +3437,6 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		// Try to get a pre-allocated channel first, if not request new one
 		let (channel_id, deposit_address, expiry_block, channel_opening_fee) = Self::open_channel(
 			&lp_account,
 			source_asset,
@@ -3467,7 +3472,6 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 			T::SwapParameterValidation::validate_dca_params(params)?;
 		}
 
-		// Try to get a pre-allocated channel first, if not request new one
 		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(
 			&broker_id,
 			source_asset,

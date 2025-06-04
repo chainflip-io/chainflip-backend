@@ -424,10 +424,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		// in the previous finalized block, we can return it immediately.
 		let (_tx_hash, events, header, ..) = block_fut.until_in_block().await?;
 		let swap_deposit_address = extract_swap_deposit_address(events, header)?;
-		if preallocated_channels
-			.iter()
-			.any(|channel_id| channel_id == &swap_deposit_address.channel_id)
-		{
+		if preallocated_channels.contains(&swap_deposit_address.channel_id) {
 			return Ok(swap_deposit_address);
 		};
 

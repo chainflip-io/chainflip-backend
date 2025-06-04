@@ -1556,6 +1556,8 @@ fn all_batch_errors_are_logged_as_event() {
 
 #[test]
 fn preallocated_channels_from_global_pool() {
+	const MAX_PREALLOCATED_CHANNELS_OF_2: u8 = 2;
+
 	new_test_ext().execute_with(|| {
 		// Mock the channels pool to have 4 channels
 		let mut init_pool_ids = vec![100, 101, 102, 103];
@@ -1586,19 +1588,19 @@ fn preallocated_channels_from_global_pool() {
 			)
 		);
 
-		// Set 2 max preallocated channels for AccountRole::LiquidityProvider
+		// Set MAX_PREALLOCATED_CHANNELS_OF_2 for AccountRole::LiquidityProvider
 		assert_ok!(EthereumIngressEgress::update_pallet_config(
 			OriginTrait::root(),
 			vec![PalletConfigUpdate::SetMaximumPreallocatedChannels {
 				account_role: AccountRole::LiquidityProvider,
-				num_channels: 2
+				num_channels: MAX_PREALLOCATED_CHANNELS_OF_2
 			}]
 			.try_into()
 			.unwrap()
 		));
 		assert_eq!(
 			MaximumPreallocatedChannels::<Test, Instance1>::get(AccountRole::LiquidityProvider),
-			2
+			MAX_PREALLOCATED_CHANNELS_OF_2
 		);
 
 		let chan_action = ChannelAction::LiquidityProvision {
@@ -1624,9 +1626,10 @@ fn preallocated_channels_from_global_pool() {
 			.iter()
 			.collect::<HashSet<_>>()
 			.is_subset(&init_pool_ids.iter().collect()));
+		assert!(!preallocated_channels_1.contains(&deposit_channel_1));
 
 		// STEP 2: If we try to allocate another channel, it should be one from one of the
-		// preallocated_channels_1 list from the step1
+		// previous preallocated_channels_1 list from the step1
 		let (deposit_channel_2, _, _, _) =
 			EthereumIngressEgress::open_channel(&ALICE, EthAsset::Eth, chan_action.clone(), 0)
 				.unwrap();
@@ -1635,6 +1638,7 @@ fn preallocated_channels_from_global_pool() {
 			.map(|chan| chan.channel_id)
 			.collect::<Vec<_>>();
 		assert!(preallocated_channels_1.contains(&deposit_channel_2));
+		assert!(!preallocated_channels_2.contains(&deposit_channel_2));
 
 		// Now the preallocated channels should have 2 elements, one replaced from the global pool
 		// which is actually the last element from the global pool
@@ -1643,9 +1647,9 @@ fn preallocated_channels_from_global_pool() {
 		assert_eq!(init_pool_ids.len(), 1);
 		assert!(preallocated_channels_2.contains(&init_pool_ids[0]));
 
-		// STEP 3: If we allocate another channel, it should be one from the preallocated list.
-		// however the preallocation list should fill to MAX 2 because we don't have any more pool
-		// channels.
+		// STEP 3: If we allocate another channel, it should be one from the previous preallocated
+		// list. however the preallocation list should not fill to MAX of 2 because we don't have
+		// any more pool channels.
 		let (deposit_channel_3, _, _, _) =
 			EthereumIngressEgress::open_channel(&ALICE, EthAsset::Eth, chan_action.clone(), 0)
 				.unwrap();
@@ -1654,10 +1658,11 @@ fn preallocated_channels_from_global_pool() {
 			.map(|chan| chan.channel_id)
 			.collect::<Vec<_>>();
 		assert!(preallocated_channels_2.contains(&deposit_channel_3));
+		assert!(!preallocated_channels_3.contains(&deposit_channel_3));
 		assert_eq!(preallocated_channels_3.len(), 1);
 
-		// STEP 4: If we allocate another channel, it should be one from the preallocated list.
-		// however the preallocation list should be empty now.
+		// STEP 4: If we allocate another channel, it should be one from the previous preallocated
+		// list. however the preallocation list should be empty now.
 		let (deposit_channel_4, _, _, _) =
 			EthereumIngressEgress::open_channel(&ALICE, EthAsset::Eth, chan_action.clone(), 0)
 				.unwrap();
@@ -1666,12 +1671,15 @@ fn preallocated_channels_from_global_pool() {
 			.map(|chan| chan.channel_id)
 			.collect::<Vec<_>>();
 		assert!(preallocated_channels_3.contains(&deposit_channel_4));
-		assert_eq!(preallocated_channels_4.len(), 0);
+		assert!(preallocated_channels_4.is_empty());
 	});
 }
 
 #[test]
 fn preallocated_channels_no_global_pool() {
+	const MAX_PREALLOCATED_CHANNELS_OF_2: u8 = 2;
+	const MAX_PREALLOCATED_CHANNELS_OF_4: u8 = 4;
+
 	new_test_ext().execute_with(|| {
 		assert_ok!(
 			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
@@ -1679,19 +1687,19 @@ fn preallocated_channels_no_global_pool() {
 			)
 		);
 
-		// Set 2 max preallocated channels for AccountRole::LiquidityProvider
+		// Set MAX_PREALLOCATED_CHANNELS_OF_2 for AccountRole::LiquidityProvider
 		assert_ok!(BitcoinIngressEgress::update_pallet_config(
 			OriginTrait::root(),
 			vec![PalletConfigUpdate::SetMaximumPreallocatedChannels {
 				account_role: AccountRole::LiquidityProvider,
-				num_channels: 2
+				num_channels: MAX_PREALLOCATED_CHANNELS_OF_2
 			}]
 			.try_into()
 			.unwrap()
 		));
 		assert_eq!(
 			MaximumPreallocatedChannels::<Test, Instance2>::get(AccountRole::LiquidityProvider),
-			2
+			MAX_PREALLOCATED_CHANNELS_OF_2
 		);
 
 		let chan_action = ChannelAction::LiquidityProvision {
@@ -1699,7 +1707,9 @@ fn preallocated_channels_no_global_pool() {
 			refund_address: ForeignChainAddress::Eth(Default::default()),
 		};
 
-		let _deposit_channel_1 =
+		// STEP 1: If we allocate a channel, it should be newly generated with id of 1
+		// also the preallocated channels list should have 2 new channels with ids: 2, 3
+		let (deposit_channel_1, _, _, _) =
 			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
 				.unwrap();
 
@@ -1707,10 +1717,11 @@ fn preallocated_channels_no_global_pool() {
 			.iter()
 			.map(|chan| chan.channel_id)
 			.collect::<Vec<_>>();
+		assert_eq!(deposit_channel_1, 1);
 		assert_eq!(preallocated_channels_1, vec![2, 3]);
 
-		// If we try to allocate another channel, it should be one from the initial
-		// preallocated list.
+		// STEP 2: If we try to allocate another channel, it should be one from the initial
+		// preallocated_channels_1 list.
 		let (deposit_channel_2, _, _, _) =
 			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
 				.unwrap();
@@ -1721,21 +1732,23 @@ fn preallocated_channels_no_global_pool() {
 		assert!(preallocated_channels_1.contains(&deposit_channel_2));
 		assert_eq!(preallocated_channels_2, vec![3, 4]);
 
-		// Change the max preallocated channels for AccountRole::LiquidityProvider to 3
+		// Change the max preallocated channels for AccountRole::LiquidityProvider
 		assert_ok!(BitcoinIngressEgress::update_pallet_config(
 			OriginTrait::root(),
 			vec![PalletConfigUpdate::SetMaximumPreallocatedChannels {
 				account_role: AccountRole::LiquidityProvider,
-				num_channels: 4
+				num_channels: MAX_PREALLOCATED_CHANNELS_OF_4
 			}]
 			.try_into()
 			.unwrap()
 		));
 		assert_eq!(
 			MaximumPreallocatedChannels::<Test, Instance2>::get(AccountRole::LiquidityProvider),
-			4
+			MAX_PREALLOCATED_CHANNELS_OF_4
 		);
 
+		// STEP 3: If we try to allocate another channel, it should also be one from the initial
+		// preallocated_channels_1 list.
 		let (deposit_channel_3, _, _, _) =
 			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
 				.unwrap();
@@ -1744,10 +1757,11 @@ fn preallocated_channels_no_global_pool() {
 			.map(|chan| chan.channel_id)
 			.collect::<Vec<_>>();
 		assert!(preallocated_channels_1.contains(&deposit_channel_3));
+		assert!(preallocated_channels_2.contains(&deposit_channel_3));
 		assert_eq!(preallocated_channels_3, vec![4, 5, 6, 7]);
 
-		// Since we have max 2 preallocated channels, the next allocation should be not from
-		// initial preallocated list.
+		// STEP 4: Since we initially had max of 2 preallocated channels that were consumed in steps
+		// 2 and 3, the next allocation should not from the initial preallocated_channels_1 list.
 		let (deposit_channel_4, _, _, _) =
 			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
 				.unwrap();
@@ -1756,6 +1770,7 @@ fn preallocated_channels_no_global_pool() {
 			.map(|chan| chan.channel_id)
 			.collect::<Vec<_>>();
 		assert!(!preallocated_channels_1.contains(&deposit_channel_4));
+		assert!(preallocated_channels_3.contains(&deposit_channel_4));
 		assert_eq!(preallocated_channels_4, vec![5, 6, 7, 8]);
 	});
 }

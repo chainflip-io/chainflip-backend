@@ -255,10 +255,7 @@ where
 					// If the extracted deposit channel was pre-allocated to this broker
 					// in the previous finalized block, we can return it immediately.
 					// Otherwise, we need to wait for the transaction to be finalized.
-					if pre_allocated_channels
-						.iter()
-						.any(|channel_id| channel_id == &swap_deposit_address.channel_id)
-					{
+					if pre_allocated_channels.contains(&swap_deposit_address.channel_id) {
 						return Ok(swap_deposit_address);
 					}
 				},
