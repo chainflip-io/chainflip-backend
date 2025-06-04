@@ -162,6 +162,8 @@ pub enum CliCommand {
 	},
 	#[clap(about = "Request a rebalance of FLIP to another validator account")]
 	Rebalance {
+		#[clap(help = "The account ID of the recipient.")]
+		recipient_account_id: String,
 		#[clap(
 			help = "Amount to transfer in FLIP (omit this option to redeem all available FLIP). Up to 6 decimal places, any more are rounded.",
 			long = "exact"
@@ -171,8 +173,6 @@ pub enum CliCommand {
 			help = "An optional Ethereum address under which restriction conditions we transfer the FLIP."
 		)]
 		restricted_address: Option<String>,
-		#[clap(help = "The account ID of the recipient.")]
-		recipient_account_id: String,
 	},
 	#[clap(
 		about = "Irreversible action that restricts your account to only be able to redeem to the specified address"
