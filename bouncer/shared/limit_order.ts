@@ -28,9 +28,9 @@ export async function limitOrder(
       event.data.lp === lp.address && event.data.baseAsset === ccy && event.data.id === String(0),
   }).event;
   await lpMutex.runExclusive(async () => {
+    const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityPools
       .setLimitOrder(ccy.toLowerCase(), 'usdc', 'sell', orderId, tick, fineAmount, null, null)
-      .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
-  });
+      .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
   await orderCreatedEvent;
 }
