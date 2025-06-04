@@ -1,30 +1,14 @@
 import { BN } from '@polkadot/util';
 import { Asset, Chain } from '@chainflip/cli';
 import Web3 from 'web3';
+import { PublicKey, Transaction, TransactionInstruction } from '@solana/web3.js';
 import { signAndSendTxEvm } from '../shared/send_evm';
 import { amountToFineAmount, getContractAddress, getEvmEndpoint } from '../shared/utils';
 import { Logger } from '../shared/utils/logger';
-import { PublicKey, Transaction, TransactionInstruction } from '@solana/web3.js';
 import { signAndSendTxSol } from './send_sol';
 
 // All price feeds are using 8 decimals
 const PRICE_FEED_DECIMALS = 8;
-
-export async function updatePriceFeed(logger: Logger, chain: Chain, asset: Asset, price: string) {
-  if (asset !== 'BTC' && asset !== 'ETH') {
-    throw new Error(`Unsupported price feed asset: ${asset}`);
-  }
-
-  // For now only using Ethereum price feeds
-  switch (chain) {
-    case 'Ethereum':
-      await updateEvmPriceFeed(logger, 'Ethereum', asset, price);
-    case 'Solana':
-      return updateSolanaPriceFeed(logger, asset, price);
-    default:
-      throw new Error(`Unsupported chain for price feed update: ${chain}`);
-  }
-}
 
 async function updateSolanaPriceFeed(logger: Logger, asset: Asset, price: string) {
   const finePrice = amountToFineAmount(price, PRICE_FEED_DECIMALS);
@@ -36,7 +20,7 @@ async function updateSolanaPriceFeed(logger: Logger, asset: Asset, price: string
   const priceBN = new BN(finePrice);
   const priceBuffer = priceBN.toBuffer('le', 16);
 
-  let tx = new Transaction().add(
+  const tx = new Transaction().add(
     new TransactionInstruction({
       data: Buffer.concat([Buffer.from(updatePriceDiscriminator), priceBuffer]),
       keys: [{ pubkey: priceFeedAddress, isSigner: false, isWritable: true }],
@@ -127,4 +111,22 @@ async function updateEvmPriceFeed(logger: Logger, chain: Chain, asset: Asset, pr
   );
   const txData = priceFeedContract.methods.updatePrice(finePrice).encodeABI();
   await signAndSendTxEvm(logger, chain, priceFeedAddress, '0', txData);
+}
+
+export async function updatePriceFeed(logger: Logger, chain: Chain, asset: Asset, price: string) {
+  if (asset !== 'BTC' && asset !== 'ETH' && asset !== 'SOL') {
+    throw new Error(`Unsupported price feed asset: ${asset}`);
+  }
+
+  // For now only using Ethereum price feeds
+  switch (chain) {
+    case 'Ethereum':
+      await updateEvmPriceFeed(logger, 'Ethereum', asset, price);
+      break;
+    case 'Solana':
+      await updateSolanaPriceFeed(logger, asset, price);
+      break;
+    default:
+      throw new Error(`Unsupported chain for price feed update: ${chain}`);
+  }
 }

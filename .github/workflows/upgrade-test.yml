@@ -23,8 +23,7 @@ on:
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v2.1.13
-  # TODO: To update
-  SOLANA_PROGRAMS_VERSION: v1.2.0-rc1
+  SOLANA_PROGRAMS_VERSION: v1.2.0
   NODE_COUNT: "1-node"
 
 permissions:
@@ -211,8 +210,7 @@ jobs:
           pnpm install --frozen-lockfile
           # TODO: This is a temporary workaround to patch the user address lookup table in the bouncer.
           # To remove after 1.10 is released.
-          # TODO: To update final USER_ADDRESS_LOOKUP_TABLE
-          sed -i 's/4eUGPyr3krnw8tD3rL3UBXXdy1cx8Sf9HKVESZUAatqv/XYZ/g' shared/utils.ts
+          sed -i 's/4eUGPyr3krnw8tD3rL3UBXXdy1cx8Sf9HKVESZUAatqv/6fs9L33QGxsYnjBtUFtdnJubA1mVqzqsETgAKG34U9RM/g' shared/utils.ts
           ./fast_bouncer.sh
 
       - name: Upgrade network 🚀
