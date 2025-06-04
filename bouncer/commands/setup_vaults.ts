@@ -182,32 +182,53 @@ async function main(): Promise<void> {
 
   // Step 7
   logger.info('Registering Vaults with state chain');
+  const polkadotVaultCreatedEvent = observeEvent(
+    logger,
+    'polkadotVault:VaultActivationCompleted',
+  ).event;
   await submitGovernanceExtrinsic((chainflip) =>
     chainflip.tx.environment.witnessPolkadotVaultCreation(dotVaultAddress, {
       blockNumber: dotVaultEvent.block,
       extrinsicIndex: dotVaultEvent.eventIndex,
     }),
   );
+  await polkadotVaultCreatedEvent;
+
+  const assethubVaultCreatedEvent = observeEvent(
+    logger,
+    'assethubVault:VaultActivationCompleted',
+  ).event;
   await submitGovernanceExtrinsic((chainflip) =>
     chainflip.tx.environment.witnessAssethubVaultCreation(hubVaultAddress, {
       blockNumber: hubVaultEvent.block,
       extrinsicIndex: hubVaultEvent.eventIndex,
     }),
   );
+  await assethubVaultCreatedEvent;
+
+  const bitcoinBlocknumberSetEvent = observeEvent(
+    logger,
+    'environment:BitcoinBlockNumberSetForVault',
+  ).event;
   await submitGovernanceExtrinsic(async (chainflip) =>
     chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(
       await btcClient.getBlockCount(),
       btcKey,
     ),
   );
+  await bitcoinBlocknumberSetEvent;
 
+  const arbitrumInitializedEvent = observeEvent(logger, 'environment:ArbitrumInitialized').event;
   await submitGovernanceExtrinsic(async (chainflip) =>
     chainflip.tx.environment.witnessInitializeArbitrumVault(await arbClient.eth.getBlockNumber()),
   );
+  await arbitrumInitializedEvent;
 
+  const solanaInitializedEvent = observeEvent(logger, 'environment:SolanaInitialized').event;
   await submitGovernanceExtrinsic(async (chainflip) =>
     chainflip.tx.environment.witnessInitializeSolanaVault(await solClient.getSlot()),
   );
+  await solanaInitializedEvent;
 
   // Confirmation
   logger.info('Waiting for new epoch...');
