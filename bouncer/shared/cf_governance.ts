@@ -25,8 +25,9 @@ export async function submitGovernanceExtrinsic(
 
   const extrinsic = await cb(httpApi);
   await snowWhiteMutex.runExclusive(async () => {
+    const nonce = await httpApi.rpc.system.accountNextIndex(snowWhite.address);
     await httpApi.tx.governance
       .proposeGovernanceExtrinsic(extrinsic, preAuthorise)
-      .signAndSend(snowWhite, { nonce: -1 }, handleSubstrateError(httpApi));
+      .signAndSend(snowWhite, { nonce }, handleSubstrateError(httpApi));
   });
 }

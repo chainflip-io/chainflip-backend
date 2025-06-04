@@ -102,6 +102,8 @@ export async function upgradeSwapEndpoint(logger: Logger) {
     `solana program extend --keypair shared/id.json --commitment confirmed --url localhost 35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT 4192`,
   );
 
+  const solanaGovCallEvent = observeEvent(logger, 'environment:SolanaGovCallDispatched').event;
+
   // Use governance to upgrade the Swap Endpoint program.
   await submitGovernanceExtrinsic(async (chainflip) =>
     chainflip.tx.environment.dispatchSolanaGovCall({
@@ -112,6 +114,7 @@ export async function upgradeSwapEndpoint(logger: Logger) {
       },
     }),
   );
+  await solanaGovCallEvent;
 }
 
 export async function initializeSolanaPrograms(

@@ -430,9 +430,10 @@ async function testEvmLiquidityDeposit(
 
   console.log('Requesting ' + sourceAsset + ' deposit address');
   await lpMutex.runExclusive(async () => {
+    const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
       .requestLiquidityDepositAddress(sourceAsset, null)
-      .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
+      .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
   });
 
   let depositAddress;
