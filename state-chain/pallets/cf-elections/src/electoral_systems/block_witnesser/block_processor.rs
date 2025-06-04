@@ -423,41 +423,6 @@ pub(crate) mod tests {
 	}
 
 	impl<
-			Types: Validate + BWProcessorTypes<Event = MockBtcEvent<E>, BlockData = Vec<E>>,
-			E: Clone + Ord,
-		> Hook<HookTypeFor<Types, ExecuteHook>> for Types
-	{
-		fn run(&mut self, events: Vec<(ChainBlockNumberOf<Types::Chain>, Types::Event)>) {
-			let mut chosen: BTreeMap<E, (ChainBlockNumberOf<Types::Chain>, Types::Event)> =
-				BTreeMap::new();
-
-			for (block, event) in events {
-				let deposit: E = event.deposit_witness().clone();
-
-				match chosen.get(&deposit) {
-					None => {
-						// No event yet for this deposit, store it
-						chosen.insert(deposit, (block, event));
-					},
-					Some((_, existing_event)) => {
-						// There's already an event for this deposit
-						match (existing_event, &event) {
-							// If we already have a Witness, do nothing
-							(MockBtcEvent::Witness(_), MockBtcEvent::PreWitness(_)) => (),
-							// If we have a PreWitness and the new event is a Witness, override it
-							(MockBtcEvent::PreWitness(_), MockBtcEvent::Witness(_)) => {
-								chosen.insert(deposit, (block, event));
-							},
-							// This should be impossible to reach!
-							(_, _) => (),
-						}
-					},
-				}
-			}
-		}
-	}
-
-	impl<
 			N: ChainBlockNumberTrait,
 			H: ChainBlockHashTrait,
 			D: CommonTraits + Validate + Ord + Default + 'static,
