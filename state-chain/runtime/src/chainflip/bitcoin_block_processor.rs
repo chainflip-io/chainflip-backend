@@ -29,9 +29,9 @@ pub enum BtcEvent<T> {
 }
 
 impl<T> BtcEvent<T> {
-	fn deposit_witness(&self) -> &T {
+	fn inner_witness(&self) -> &T {
 		match self {
-			BtcEvent::PreWitness(dw) | BtcEvent::Witness(dw) => dw,
+			BtcEvent::PreWitness(w) | BtcEvent::Witness(w) => w,
 		}
 	}
 }
@@ -49,14 +49,14 @@ fn dedup_events<T: Ord + Clone>(
 	let mut chosen: BTreeMap<T, (BlockNumber, BtcEvent<T>)> = BTreeMap::new();
 
 	for (block, event) in events {
-		let deposit = event.deposit_witness().clone();
+		let witness = event.inner_witness().clone();
 
 		// Only insert if no event exists yet, or if we're upgrading from PreWitness to Witness
-		if !chosen.contains_key(&deposit) ||
-			(matches!(chosen.get(&deposit), Some((_, BtcEvent::PreWitness(_)))) &&
+		if !chosen.contains_key(&witness) ||
+			(matches!(chosen.get(&witness), Some((_, BtcEvent::PreWitness(_)))) &&
 				matches!(event, BtcEvent::Witness(_)))
 		{
-			chosen.insert(deposit, (block, event));
+			chosen.insert(witness, (block, event));
 		}
 	}
 
@@ -90,9 +90,7 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultD
 		&mut self,
 		events: Vec<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)>,
 	) {
-		let deduped_events = dedup_events(events);
-
-		for (block, event) in &deduped_events {
+		for (block, event) in &dedup_events(events) {
 			match event {
 				BtcEvent::PreWitness(deposit) => {
 					BitcoinIngressEgress::process_vault_swap_request_prewitness(

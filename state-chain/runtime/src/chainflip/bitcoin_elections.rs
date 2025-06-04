@@ -53,6 +53,7 @@ use pallet_cf_ingress_egress::{
 	DepositChannelDetails, DepositWitness, PalletSafeMode, VaultDepositWitness,
 };
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get, MaxEncodedLen};
 use sp_std::vec::Vec;
 
@@ -132,6 +133,46 @@ impls! {
 pub type BitcoinBlockHeightTrackingES =
 	StatemachineElectoralSystem<TypesFor<BitcoinBlockHeightTracking>>;
 
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Debug,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+	Default,
+)]
+pub struct DepositSafeModeHook {}
+
+impl Hook<HookTypeFor<(), SafeModeEnabledHook>> for DepositSafeModeHook {
+	fn run(&mut self, _input: ()) -> SafeModeStatus {
+		if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
+			PalletSafeMode<BitcoinInstance>,
+		>>::get()
+		.deposits_enabled
+		{
+			SafeModeStatus::Disabled
+		} else {
+			SafeModeStatus::Enabled
+		}
+	}
+}
+
+use pallet_cf_elections::electoral_systems::state_machine::core::Validate;
+impl Validate for DepositSafeModeHook {
+	type Error = ();
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
 // ------------------------ deposit channel witnessing ---------------------------
 /// The electoral system for deposit channel witnessing
 pub struct BitcoinDepositChannelWitnessing;
@@ -157,7 +198,7 @@ impls! {
 	BWTypes {
 		type ElectionProperties = ElectionPropertiesDepositChannel;
 		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = Self;
+		type SafeModeEnabledHook = DepositSafeModeHook;
 		type ElectionTrackerDebugEventHook = EmptyHook;
 	}
 
@@ -172,21 +213,6 @@ impls! {
 		// the actual state machine and consensus mechanisms of this ES
 		type Statemachine = BWStatemachine<Self>;
 		type ConsensusMechanism = BWConsensus<Self>;
-	}
-
-	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
-				PalletSafeMode<BitcoinInstance>,
-			>>::get()
-			.deposits_enabled
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
-		}
 	}
 
 	/// implementation of reading deposit channels hook
@@ -232,7 +258,7 @@ impls! {
 	BWTypes {
 		type ElectionProperties = ElectionPropertiesVaultDeposit;
 		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = Self;
+		type SafeModeEnabledHook = DepositSafeModeHook;
 		type ElectionTrackerDebugEventHook = EmptyHook;
 	}
 
@@ -247,21 +273,6 @@ impls! {
 		// the actual state machine and consensus mechanisms of this ES
 		type Statemachine = BWStatemachine<Self>;
 		type ConsensusMechanism = BWConsensus<Self>;
-	}
-
-	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
-				PalletSafeMode<BitcoinInstance>,
-			>>::get()
-			.deposits_enabled
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
-		}
 	}
 
 	/// implementation of reading vault hook
@@ -335,15 +346,8 @@ impls! {
 	/// implementation of safe mode reading hook
 	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
 		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
-				PalletSafeMode<BitcoinInstance>,
-			>>::get()
-			.deposits_enabled
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
+			// TODO: Add egress witnessing safe mode: PRO-2311
+			SafeModeStatus::Disabled
 		}
 	}
 
@@ -434,8 +438,6 @@ impl
 			>,
 		),
 	) -> Result<(), CorruptStorageError> {
-		let current_sc_block_number = crate::System::block_number();
-
 		let chain_progress = BitcoinBlockHeightTrackingES::on_finalize::<
 			DerivedElectoralAccess<
 				_,
@@ -459,9 +461,6 @@ impl
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
 		>(vault_deposits_identifiers.clone(), &chain_progress.clone())?;
-
-		let last_btc_block =
-			pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get().unwrap();
 
 		BitcoinEgressWitnessingES::on_finalize::<
 			DerivedElectoralAccess<
@@ -487,7 +486,17 @@ impl
 			>,
 		>(
 			liveness_identifiers,
-			&(current_sc_block_number, last_btc_block.block_height.saturating_sub(3)),
+			&(
+				crate::System::block_number(),
+				pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get()
+					.unwrap()
+					.block_height
+					// We subtract the safety buffer so we don't ask for liveness for blocks that
+					// could be reorged out.
+					.saturating_sub(BitcoinChain::SAFETY_BUFFER)
+					.try_into()
+					.map_err(|_| CorruptStorageError::new())?,
+			),
 		)?;
 
 		Ok(())

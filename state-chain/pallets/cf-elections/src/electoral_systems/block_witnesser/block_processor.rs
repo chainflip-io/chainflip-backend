@@ -151,9 +151,8 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		progress: BPChainProgress<T::Chain>,
 		block_data: (ChainBlockNumberOf<T::Chain>, T::BlockData, u32),
 	) {
-		self.process_block_data(block_data);
 		let highest_block_height = progress.highest_block_height;
-		self.process_chain_progress(progress, highest_block_height);
+		self.process_block_data_and_chain_progress(progress, block_data, highest_block_height);
 	}
 
 	/// This method adds new Block Data to the BlockProcessor
@@ -355,7 +354,6 @@ pub(crate) mod tests {
 	use frame_support::{Deserialize, Serialize};
 	use proptest_derive::Arbitrary;
 	use sp_std::{fmt::Debug, vec::Vec};
-	use std::collections::BTreeMap;
 
 	const SAFETY_MARGIN: u32 = 3;
 
@@ -375,13 +373,6 @@ pub(crate) mod tests {
 	pub enum MockBtcEvent<E> {
 		PreWitness(E),
 		Witness(E),
-	}
-	impl<E> MockBtcEvent<E> {
-		pub fn deposit_witness(&self) -> &E {
-			match self {
-				MockBtcEvent::PreWitness(dw) | MockBtcEvent::Witness(dw) => dw,
-			}
-		}
 	}
 
 	impl<
@@ -420,41 +411,6 @@ pub(crate) mod tests {
 				)
 			}
 			results
-		}
-	}
-
-	impl<
-			Types: Validate + BWProcessorTypes<Event = MockBtcEvent<E>, BlockData = Vec<E>>,
-			E: Clone + Ord,
-		> Hook<HookTypeFor<Types, ExecuteHook>> for Types
-	{
-		fn run(&mut self, events: Vec<(ChainBlockNumberOf<Types::Chain>, Types::Event)>) {
-			let mut chosen: BTreeMap<E, (ChainBlockNumberOf<Types::Chain>, Types::Event)> =
-				BTreeMap::new();
-
-			for (block, event) in events {
-				let deposit: E = event.deposit_witness().clone();
-
-				match chosen.get(&deposit) {
-					None => {
-						// No event yet for this deposit, store it
-						chosen.insert(deposit, (block, event));
-					},
-					Some((_, existing_event)) => {
-						// There's already an event for this deposit
-						match (existing_event, &event) {
-							// If we already have a Witness, do nothing
-							(MockBtcEvent::Witness(_), MockBtcEvent::PreWitness(_)) => (),
-							// If we have a PreWitness and the new event is a Witness, override it
-							(MockBtcEvent::PreWitness(_), MockBtcEvent::Witness(_)) => {
-								chosen.insert(deposit, (block, event));
-							},
-							// This should be impossible to reach!
-							(_, _) => (),
-						}
-					},
-				}
-			}
 		}
 	}
 
@@ -605,24 +561,28 @@ pub(crate) mod tests {
 	/// SAFETY_BUFFER after which we delete them
 	#[test]
 	fn already_processed_events_saved_and_removed_correctly() {
-		let mut processor = BlockProcessor::<Types>::default();
+		let mut processor: BlockProcessor<TypesFor<(u8, Vec<u8>, Vec<u8>)>> =
+			BlockProcessor::<Types>::default();
+		const FIRST_BLOCK_HEIGHT: u8 = 101;
 
 		processor.process_block_data_and_chain_progress_test(
-			BPChainProgress::up_to(101),
-			(101, vec![1], SAFETY_MARGIN),
+			BPChainProgress::up_to(FIRST_BLOCK_HEIGHT),
+			(FIRST_BLOCK_HEIGHT, vec![1], SAFETY_MARGIN),
 		);
 		processor.process_chain_progress(
-			BPChainProgress::reorg(101, RangeInclusive::new(101, 101)),
-			101,
+			BPChainProgress::reorg(
+				FIRST_BLOCK_HEIGHT,
+				RangeInclusive::new(FIRST_BLOCK_HEIGHT, FIRST_BLOCK_HEIGHT),
+			),
+			FIRST_BLOCK_HEIGHT,
 		);
+		let next_block_height = FIRST_BLOCK_HEIGHT.saturating_add(Types::SAFETY_BUFFER as u8);
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
-			Some(101u8.saturating_add(Types::SAFETY_BUFFER as u8)).as_ref(),
+			Some(next_block_height).as_ref(),
 		);
-		processor.process_chain_progress(
-			BPChainProgress::up_to(101u8.saturating_add(Types::SAFETY_BUFFER as u8)),
-			101u8.saturating_add(Types::SAFETY_BUFFER as u8),
-		);
+		processor
+			.process_chain_progress(BPChainProgress::up_to(next_block_height), next_block_height);
 		assert_eq!(processor.processed_events.get(&MockBtcEvent::PreWitness(1)), None,);
 	}
 
