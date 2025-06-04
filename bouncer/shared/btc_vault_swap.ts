@@ -111,9 +111,10 @@ export async function openPrivateBtcChannel(logger: Logger, brokerUri: string): 
   }).event;
   logger.trace('Opening private BTC channel');
   await brokerMutex.runExclusive(async () => {
+    const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     await chainflip.tx.swapping
       .openPrivateBtcChannel()
-      .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
+      .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
   });
   return Number((await openedChannelEvent).data.channelId);
 }
@@ -132,9 +133,10 @@ export async function registerAffiliate(
 
   logger.trace('Registering affiliate');
   await brokerMutex.runExclusive(async () => {
+    const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     await chainflip.tx.swapping
       .registerAffiliate(withdrawalAddress)
-      .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
+      .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
   });
 
   return registeredEvent;

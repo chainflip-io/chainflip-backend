@@ -25,9 +25,10 @@ export async function sendHubDot(address: string, amount: string) {
   // race conditions (this doesn't impact performance significantly as
   // waiting for block confirmation can still be done concurrently)
   await assethubSigningMutex.runExclusive(async () => {
+    const nonce = await assethub.rpc.system.accountNextIndex(alice.address);
     await assethub.tx.balances
       .transferKeepAlive(address, parseInt(planckAmount))
-      .signAndSend(alice, { nonce: -1 }, ({ status, dispatchError }) => {
+      .signAndSend(alice, { nonce }, ({ status, dispatchError }) => {
         if (dispatchError !== undefined) {
           if (dispatchError.isModule) {
             const decoded = assethub.registry.findMetaError(dispatchError.asModule);
