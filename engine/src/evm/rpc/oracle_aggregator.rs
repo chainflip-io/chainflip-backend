@@ -168,16 +168,14 @@ mod tests {
 		);
 
 		println!(
-			"{} - Decimals {}",
-			"Ethereum",
+			"Ethereum - Decimals {}",
 			eth_client
 				.decimals(H160::from_str(BTC_USD_AGGREGATOR_ETHEREUM_ADDRESS).unwrap())
 				.await
 				.unwrap()
 		);
 		println!(
-			"{} - Decimals {}",
-			"Arbitrum",
+			"Arbitrum - Decimals {}",
 			arb_client
 				.decimals(H160::from_str(BTC_USD_AGGREGATOR_ARBITRUM_ADDRESS).unwrap())
 				.await
@@ -185,16 +183,14 @@ mod tests {
 		);
 
 		println!(
-			"{} - Description {}",
-			"Ethereum",
+			"Ethereum - Description {}",
 			eth_client
 				.description(H160::from_str(ETH_USD_AGGREGATOR_ETHEREUM_ADDRESS).unwrap())
 				.await
 				.unwrap()
 		);
 		println!(
-			"{} - Description {}",
-			"Arbitrum",
+			"Arbitrum - Description {}",
 			arb_client
 				.description(H160::from_str(ETH_USD_AGGREGATOR_ARBITRUM_ADDRESS).unwrap())
 				.await
@@ -227,8 +223,7 @@ mod tests {
 		);
 
 		println!(
-			"{} - Description {}",
-			"Ethereum",
+			"Ethereum - Description {}",
 			eth_client
 				.description(H160::from_str(LOCALNET_ETH_PRICE_FEED).unwrap())
 				.await
@@ -259,8 +254,7 @@ mod tests {
 		);
 
 		println!(
-			"{} - Description {}",
-			"Arbitrum",
+			"Arbitrum - Description {}",
 			eth_client
 				.description(H160::from_str(LOCALNET_ARB_PRICE_FEED).unwrap())
 				.await

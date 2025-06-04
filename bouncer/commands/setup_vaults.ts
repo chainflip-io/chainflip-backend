@@ -222,7 +222,9 @@ async function main(): Promise<void> {
 
   // Confirmation
   logger.info('Waiting for new epoch...');
-  await observeEvent(logger, 'validator:NewEpoch').event;
+  await observeEvent(logger, 'validator:NewEpoch', {
+    historicalCheckBlocks: 10,
+  }).event;
 
   logger.info('New Epoch');
   logger.info('Vault Setup completed');
