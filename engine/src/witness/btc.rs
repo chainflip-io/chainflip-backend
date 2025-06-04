@@ -159,7 +159,7 @@ where
 				client.block(bitcoin::BlockHash::from_slice(hash.as_ref()).unwrap()).await?;
 			Ok((block.txdata, None))
 		},
-		EngineElectionType::BlockHeight(submit_hash) => {
+		EngineElectionType::BlockHeight { submit_hash } => {
 			let block_hash = client.block_hash(block_height).await?;
 			let block = client.block(block_hash).await?;
 			Ok((

@@ -21,7 +21,8 @@ use crate::electoral_systems::{
 		block_processor::{tests::MockBtcEvent, BlockProcessor, BlockProcessorEvent},
 		primitives::{ElectionTrackerEvent, SafeModeStatus},
 		state_machine::{
-			BWElectionType, BWStatemachine, BWTypes, BlockWitnesserSettings, BlockWitnesserState,
+			BWStatemachine, BWTypes, BlockWitnesserSettings, BlockWitnesserState,
+			EngineElectionType,
 		},
 	},
 	state_machine::{
@@ -133,26 +134,25 @@ impl AbstractVoter<BW> for FlatChainProgression<String> {
 		for index in indices {
 			let chain = MockChain::<String, Types>::new_with_offset(OFFSET, self.get_next_chain()?);
 
-			use BWElectionType::*;
 			match index.election_type {
-				Optimistic =>
+				EngineElectionType::BlockHeight { submit_hash } => {
 					if let Some(block_data) = chain.get_block_by_height(index.block_height) {
 						let header = chain.get_block_header(index.block_height).unwrap();
 						inputs.push(Either::Right((
 							index,
-							(block_data.into_iter().collect(), Some(header.hash)),
+							(
+								block_data.into_iter().collect(),
+								if submit_hash { Some(header.hash) } else { None },
+							),
 						)));
-					},
-				ByHash(hash) =>
+					}
+				},
+				EngineElectionType::ByHash(hash) => {
 					if let Some(block_data) = chain.get_block_by_hash(hash) {
 						inputs
 							.push(Either::Right((index, (block_data.into_iter().collect(), None))));
-					},
-				SafeBlockHeight =>
-					if let Some(block_data) = chain.get_block_by_height(index.block_height) {
-						inputs
-							.push(Either::Right((index, (block_data.into_iter().collect(), None))));
-					},
+					}
+				},
 			}
 		}
 		Some(inputs)

@@ -125,7 +125,7 @@ defx! {
 def_derive!(
 	pub enum EngineElectionType<C: ChainTypes> {
 		ByHash(C::ChainBlockHash),
-		BlockHeight(bool),
+		BlockHeight { submit_hash: bool },
 	}
 );
 def_derive! {
@@ -178,7 +178,9 @@ impl<T: BWTypes> AbstractApi for BWStatemachine<T> {
 		use EngineElectionType::*;
 		// ensure that a hash is only provided for `Optimistic` elections.
 		match (&index.election_type, hash) {
-			(ByHash(_), None) | (BlockHeight(true), Some(_)) | (BlockHeight(false), None) => Ok(()),
+			(ByHash(_), None) |
+			(BlockHeight { submit_hash: true }, Some(_)) |
+			(BlockHeight { submit_hash: false }, None) => Ok(()),
 			_ => Err(()),
 		}
 	}
@@ -199,17 +201,17 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			.map(|(block_height, election_type)| match election_type {
 				BWElectionType::Governance(properties) => BWElectionProperties {
 					properties,
-					election_type: EngineElectionType::BlockHeight(false),
+					election_type: EngineElectionType::BlockHeight { submit_hash: false },
 					block_height,
 				},
 				BWElectionType::Optimistic => BWElectionProperties {
 					properties: state.generate_election_properties_hook.run(block_height),
-					election_type: EngineElectionType::BlockHeight(true),
+					election_type: EngineElectionType::BlockHeight { submit_hash: true },
 					block_height,
 				},
 				BWElectionType::SafeBlockHeight => BWElectionProperties {
 					properties: state.generate_election_properties_hook.run(block_height),
-					election_type: EngineElectionType::BlockHeight(false),
+					election_type: EngineElectionType::BlockHeight { submit_hash: false },
 					block_height,
 				},
 				BWElectionType::ByHash(hash) => BWElectionProperties {

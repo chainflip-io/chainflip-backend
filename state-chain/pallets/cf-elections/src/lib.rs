@@ -171,9 +171,7 @@ pub mod pallet {
 
 	use crate::{
 		electoral_system_runner::RunnerStorageAccessTrait,
-		electoral_systems::{
-			block_height_tracking::CommonTraits, block_witnesser::state_machine::BWElectionType,
-		},
+		electoral_systems::block_height_tracking::CommonTraits,
 	};
 	use bitmap_components::ElectionBitmapComponents;
 	pub use electoral_system::{

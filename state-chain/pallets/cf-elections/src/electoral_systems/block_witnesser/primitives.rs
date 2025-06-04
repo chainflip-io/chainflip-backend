@@ -17,10 +17,10 @@ use sp_std::{
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 
-use crate::{electoral_systems::{
+use crate::electoral_systems::{
 	block_height_tracking::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes},
 	state_machine::core::{def_derive, defx, Hook, Validate},
-}, GovernanceElectionHook};
+};
 
 use super::state_machine::{BWElectionType, BWTypes, EngineElectionType};
 
@@ -146,11 +146,13 @@ impl<T: BWTypes> ElectionTracker<T> {
 
 				match (received, &current) {
 					//---------------------------
-					// if we receive a result for the same election type as is currently open, we close it.
-					// There are 4 cases here, and we close the ongoing election if it matches our current query.
+					// if we receive a result for the same election type as is currently open, we
+					// close it. There are 4 cases here, and we close the ongoing election if
+					// it matches our current query.
 
 					// case 1 (optimistic)
-					(EngineElectionType::BlockHeight(true), Optimistic) => Some(current),
+					(EngineElectionType::BlockHeight { submit_hash: true }, Optimistic) =>
+						Some(current),
 
 					// case 2 (by hash):
 					// if we get consensus for a by-hash election whose hash doesn't match with
@@ -163,23 +165,28 @@ impl<T: BWTypes> ElectionTracker<T> {
 						},
 
 					// case 3 (safe height):
-					(EngineElectionType::BlockHeight(false), SafeBlockHeight) => Some(current),
+					(EngineElectionType::BlockHeight { submit_hash: false }, SafeBlockHeight) =>
+						Some(current),
 
 					// case 4 (governance):
 					// these are treated the same as safe height
-					(EngineElectionType::BlockHeight(false), Governance(_)) => Some(current),
+					(EngineElectionType::BlockHeight { submit_hash: false }, Governance(_)) =>
+						Some(current),
 
 					//---------------------------
-					// if we receive another result for an optimistic election (with hash submission), there
-					// are 3 cases to consider.
-					// 
+					// if we receive another result for an optimistic election (with hash
+					// submission), there are 3 cases to consider.
+					//
 
 					// case 1 (optimistic election changed into by-hash):
 					// if we get an optimistic consensus for an election that is already by-hash,
 					// we check whether the `received_hash` is the same as the hash we're currently
 					// querying for. If it is, we accept the optimistic block as result for the
 					// by-hash election. otherwise we keep the by-hash election open.
-					(EngineElectionType::BlockHeight(true), ByHash(current_hash)) =>
+					(
+						EngineElectionType::BlockHeight { submit_hash: true },
+						ByHash(current_hash),
+					) =>
 						if received_hash.as_ref() == Some(current_hash) {
 							Some(current)
 						} else {
@@ -191,14 +198,16 @@ impl<T: BWTypes> ElectionTracker<T> {
 					// safety-margin we ignore it, it's safer to re-query by block height. This
 					// should virtually never happen, only in case where the querying takes a *very*
 					// long time.
-					(EngineElectionType::BlockHeight(true), SafeBlockHeight) => None,
+					(EngineElectionType::BlockHeight { submit_hash: true }, SafeBlockHeight) =>
+						None,
 
 					// case 3 (optimistic election changed into governance election):
 					// this should not be possible, so we ignore the election result.
-					(EngineElectionType::BlockHeight(true), Governance(_)) => None,
+					(EngineElectionType::BlockHeight { submit_hash: true }, Governance(_)) => None,
 
 					//---------------------------
-					// if we receive another result for a by-hash election, there are 2 cases to consider:
+					// if we receive another result for a by-hash election, there are 2 cases to
+					// consider:
 
 					// case 1 (by-hash election changed into safe height):
 					// If we get a by-hash consensus for an election that is already past
@@ -212,23 +221,23 @@ impl<T: BWTypes> ElectionTracker<T> {
 					(EngineElectionType::ByHash(_), Governance(_)) => None,
 
 					//---------------------------
-					// the following 3 cases should be impossible 
+					// the following 3 cases should be impossible
 
 					// case 1 and 2 (election changes back into optimistic)
 					// both are impossible since hash and block height
 					// elections cannot change (back) into optimistic elections.
-					// This is currently guaranteed by the fact that we only start Optimistic elections
-					// starting from `seen_heights_below` and this value is monotonically increasing.
+					// This is currently guaranteed by the fact that we only start Optimistic
+					// elections starting from `seen_heights_below` and this value is
+					// monotonically increasing.
 					(EngineElectionType::ByHash(_), Optimistic) => None,
-					(EngineElectionType::BlockHeight(false), Optimistic) => None,
+					(EngineElectionType::BlockHeight { submit_hash: false }, Optimistic) => None,
 
 					// case 3 (election changes back into by-hash)
 					// similar to the previous two, the boundary between safe-height and by-hash
-					// elections is demarked by (`seen_heights_below - SAFETY_BUFFER`). Since this value 
-					// is monotonically increasing, once an election is scheduled safe-height it cannot
-					// change back to being ByHash.
-					(EngineElectionType::BlockHeight(false), ByHash(_)) => None,
-					
+					// elections is demarked by (`seen_heights_below - SAFETY_BUFFER`). Since this
+					// value is monotonically increasing, once an election is scheduled
+					// safe-height it cannot change back to being ByHash.
+					(EngineElectionType::BlockHeight { submit_hash: false }, ByHash(_)) => None,
 				}
 			})
 			.inspect(|_| {
