@@ -194,7 +194,7 @@ where
 						}
 						// TODO: Use block hash you got this vote tasks details from as the based of the mortal of the extrinsic
 						state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::vote {
-							authority_votes: BTreeMap::from_iter(votes).try_into().unwrap(/*Safe due to chunking*/),
+							authority_votes: Box::new(BTreeMap::from_iter(votes).try_into().unwrap(/*Safe due to chunking*/)),
 						}).await;
 					}
 				}).await;
@@ -279,7 +279,7 @@ where
 								// which keeps decreasing exponentially (i.e. with the current values => 2 blocks delay: 1 in 40k, 3 blocks delay: 1 in 4million ...)
 								if (reference_details.created..reference_details.expires).contains(&block_info.number) && rng.gen_bool(required_full_vote_probability(authority_count, 0.01)) {
 									self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::provide_shared_data {
-										shared_data: shared_data.clone(),
+										shared_data: Box::new(shared_data.clone()),
 									}).await;
 								}
 							}

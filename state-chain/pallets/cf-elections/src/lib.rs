@@ -183,6 +183,7 @@ pub mod pallet {
 	};
 	use itertools::Itertools;
 	use sp_std::{
+		boxed::Box,
 		collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 		vec::Vec,
 	};
@@ -1260,10 +1261,13 @@ pub mod pallet {
 		#[pallet::weight((T::WeightInfo::vote(authority_votes.len() as u32), DispatchClass::Operational))]
 		pub fn vote(
 			origin: OriginFor<T>,
-			authority_votes: BoundedBTreeMap<
-				ElectionIdentifierOf<T::ElectoralSystemRunner>,
-				AuthorityVoteOf<T::ElectoralSystemRunner>,
-				ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
+			// Box to avoid RuntimeCall size
+			authority_votes: Box<
+				BoundedBTreeMap<
+					ElectionIdentifierOf<T::ElectoralSystemRunner>,
+					AuthorityVoteOf<T::ElectoralSystemRunner>,
+					ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
+				>,
 			>,
 		) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
@@ -1274,7 +1278,7 @@ pub mod pallet {
 				Error::<T, I>::NotContributing
 			);
 
-			for (election_identifier, authority_vote) in authority_votes {
+			for (election_identifier, authority_vote) in *authority_votes {
 				// if an identifier refers to a non existent election, skip this vote,
 				// but continue processing others.
 				let unique_monotonic_identifier = if let Ok(unique_monotonic_identifier) =
@@ -1366,10 +1370,10 @@ pub mod pallet {
 		#[pallet::weight((T::WeightInfo::provide_shared_data(), DispatchClass::Operational))]
 		pub fn provide_shared_data(
 			origin: OriginFor<T>,
-			shared_data: <<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as VoteStorage>::SharedData,
+			shared_data: Box<<<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as VoteStorage>::SharedData>,
 		) -> DispatchResult {
 			Self::ensure_can_vote(origin)?;
-			Self::inner_provide_shared_data(shared_data)?;
+			Self::inner_provide_shared_data(*shared_data)?;
 			Ok(())
 		}
 
@@ -1423,10 +1427,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::initialize())]
 		pub fn initialize(
 			origin: OriginFor<T>,
-			initial_state: InitialStateOf<T, I>,
+			initial_state: Box<InitialStateOf<T, I>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::internally_initialize(initial_state)?;
+			Self::internally_initialize(*initial_state)?;
 			Ok(())
 		}
 
