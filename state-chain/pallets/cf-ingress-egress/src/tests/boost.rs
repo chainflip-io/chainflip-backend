@@ -23,7 +23,7 @@ use cf_traits::{
 	mocks::tracked_data_provider::TrackedDataProvider, BalanceApi, SafeMode, SetSafeMode,
 };
 use frame_support::instances::Instance1;
-use mocks::lending_pools::MockBoostLendingApi;
+use mocks::lending_pools::MockBoostApi;
 use sp_runtime::Percent;
 use sp_std::collections::btree_map::BTreeMap;
 
@@ -126,7 +126,7 @@ fn basic_passive_boosting() {
 		const ASSET: EthAsset = EthAsset::Eth;
 		const DEPOSIT_AMOUNT: AssetAmount = 500_000_000;
 
-		MockBoostLendingApi::set_available_amount(DEPOSIT_AMOUNT);
+		MockBoostApi::set_available_amount(DEPOSIT_AMOUNT);
 
 		setup();
 
@@ -157,7 +157,7 @@ fn basic_passive_boosting() {
 			}));
 
 			assert_boosted(deposit_address, prewitnessed_deposit_id);
-			assert!(MockBoostLendingApi::is_deposit_boosted(prewitnessed_deposit_id));
+			assert!(MockBoostApi::is_deposit_boosted(prewitnessed_deposit_id));
 
 			// Channel action is immediately executed (LP gets credited in this case):
 			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), LP_BALANCE_AFTER_BOOST);
@@ -190,7 +190,7 @@ fn basic_passive_boosting() {
 			// boosting), meaning LP's funds are unchanged:
 			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), LP_BALANCE_AFTER_BOOST);
 
-			assert!(!MockBoostLendingApi::is_deposit_boosted(prewitnessed_deposit_id));
+			assert!(!MockBoostApi::is_deposit_boosted(prewitnessed_deposit_id));
 		}
 	});
 }
@@ -229,7 +229,7 @@ fn witnessed_amount_does_not_match_boosted() {
 		const WITNESSED_DEPOSIT_AMOUNT: AssetAmount = PREWITNESSED_DEPOSIT_AMOUNT + 1;
 
 		setup();
-		MockBoostLendingApi::set_available_amount(PREWITNESSED_DEPOSIT_AMOUNT * 10);
+		MockBoostApi::set_available_amount(PREWITNESSED_DEPOSIT_AMOUNT * 10);
 
 		// ==== LP sends funds to liquidity deposit address, which gets pre-witnessed ====
 		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, TIER_5_BPS);
@@ -240,7 +240,7 @@ fn witnessed_amount_does_not_match_boosted() {
 			PREWITNESSED_DEPOSIT_AMOUNT * TIER_5_BPS as u128 / MAX_BASIS_POINTS as u128;
 
 		assert_boosted(deposit_address, deposit_id);
-		assert!(MockBoostLendingApi::is_deposit_boosted(deposit_id));
+		assert!(MockBoostApi::is_deposit_boosted(deposit_id));
 
 		assert_eq!(
 			get_lp_eth_balance(&LP_ACCOUNT),
@@ -253,7 +253,7 @@ fn witnessed_amount_does_not_match_boosted() {
 
 		// The channels is still boosted:
 		assert_boosted(deposit_address, deposit_id);
-		assert!(MockBoostLendingApi::is_deposit_boosted(deposit_id));
+		assert!(MockBoostApi::is_deposit_boosted(deposit_id));
 
 		assert_eq!(
 			get_lp_eth_balance(&LP_ACCOUNT),
@@ -266,7 +266,7 @@ fn witnessed_amount_does_not_match_boosted() {
 
 		// The channel should no longer be boosted:
 		assert_not_boosted(deposit_address);
-		assert!(!MockBoostLendingApi::is_deposit_boosted(deposit_id));
+		assert!(!MockBoostApi::is_deposit_boosted(deposit_id));
 
 		// Now that the boost has been finalised, the next deposit can be boosted again:
 		{
@@ -285,7 +285,7 @@ fn double_prewitness_due_to_reorg() {
 		const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT * BOOST_FEE_BPS as u128 / 10_000;
 
 		setup();
-		MockBoostLendingApi::set_available_amount(DEPOSIT_AMOUNT * 10);
+		MockBoostApi::set_available_amount(DEPOSIT_AMOUNT * 10);
 
 		// ==== LP sends funds to liquidity deposit address, which gets pre-witnessed ====
 		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, BOOST_FEE_BPS);
@@ -298,7 +298,7 @@ fn double_prewitness_due_to_reorg() {
 		{
 			assert_boosted(deposit_address, deposit_id1);
 			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), LP_BALANCE_AFTER_BOOST);
-			assert!(MockBoostLendingApi::is_deposit_boosted(deposit_id1));
+			assert!(MockBoostApi::is_deposit_boosted(deposit_id1));
 		}
 
 		// Due to reorg, the same deposit is pre-witnessed again, but it has no effect since
@@ -313,7 +313,7 @@ fn double_prewitness_due_to_reorg() {
 			witness_deposit(deposit_address, EthAsset::Eth, DEPOSIT_AMOUNT);
 
 			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), LP_BALANCE_AFTER_BOOST);
-			assert!(!MockBoostLendingApi::is_deposit_boosted(deposit_id2));
+			assert!(!MockBoostApi::is_deposit_boosted(deposit_id2));
 		}
 	});
 }
@@ -324,7 +324,7 @@ fn zero_boost_fee_deposit() {
 		const DEPOSIT_AMOUNT: AssetAmount = 250_000_000;
 
 		setup();
-		MockBoostLendingApi::set_available_amount(DEPOSIT_AMOUNT);
+		MockBoostApi::set_available_amount(DEPOSIT_AMOUNT);
 
 		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 0);
 		let deposit_id = prewitness_deposit(deposit_address, EthAsset::Eth, DEPOSIT_AMOUNT);
@@ -333,7 +333,7 @@ fn zero_boost_fee_deposit() {
 		{
 			assert_not_boosted(deposit_address);
 			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), INIT_LP_BALANCE);
-			assert!(!MockBoostLendingApi::is_deposit_boosted(deposit_id));
+			assert!(!MockBoostApi::is_deposit_boosted(deposit_id));
 		}
 
 		// When the deposit is finalised, it is processed as normal:
@@ -353,7 +353,7 @@ fn insufficient_funds_for_boost() {
 		const DEPOSIT_AMOUNT: AssetAmount = 1_000_000_000;
 
 		setup();
-		MockBoostLendingApi::set_available_amount(DEPOSIT_AMOUNT / 2);
+		MockBoostApi::set_available_amount(DEPOSIT_AMOUNT / 2);
 
 		let (channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 10);
 		let deposit_id = prewitness_deposit(deposit_address, EthAsset::Eth, DEPOSIT_AMOUNT);
@@ -361,7 +361,7 @@ fn insufficient_funds_for_boost() {
 		// The deposit is pre-witnessed, but no channel action took place:
 		{
 			assert_not_boosted(deposit_address);
-			assert!(!MockBoostLendingApi::is_deposit_boosted(deposit_id));
+			assert!(!MockBoostApi::is_deposit_boosted(deposit_id));
 			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), INIT_LP_BALANCE);
 		}
 
@@ -393,14 +393,14 @@ fn lost_funds_are_acknowledged_by_boost_pool() {
 		const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT * TIER_5_BPS as u128 / 10_000;
 
 		setup();
-		MockBoostLendingApi::set_available_amount(DEPOSIT_AMOUNT);
+		MockBoostApi::set_available_amount(DEPOSIT_AMOUNT);
 
 		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, TIER_5_BPS);
 
 		let deposit_id = prewitness_deposit(deposit_address, EthAsset::Eth, DEPOSIT_AMOUNT);
 
 		assert_boosted(deposit_address, deposit_id);
-		assert!(MockBoostLendingApi::is_deposit_boosted(deposit_id));
+		assert!(MockBoostApi::is_deposit_boosted(deposit_id));
 
 		assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE);
 
@@ -412,8 +412,8 @@ fn lost_funds_are_acknowledged_by_boost_pool() {
 			EthereumIngressEgress::on_idle(recycle_block, Weight::MAX);
 
 			assert_not_boosted(deposit_address);
-			assert!(!MockBoostLendingApi::is_deposit_boosted(deposit_id));
-			assert_eq!(MockBoostLendingApi::get_available_amount(), BOOST_FEE);
+			assert!(!MockBoostApi::is_deposit_boosted(deposit_id));
+			assert_eq!(MockBoostApi::get_available_amount(), BOOST_FEE);
 
 			System::assert_last_event(RuntimeEvent::EthereumIngressEgress(
 				Event::BoostedDepositLost {
@@ -448,7 +448,7 @@ fn boosting_deposits_is_disabled_by_safe_mode() {
 		const DEPOSIT_AMOUNT: AssetAmount = 250_000_000;
 
 		setup();
-		MockBoostLendingApi::set_available_amount(DEPOSIT_AMOUNT);
+		MockBoostApi::set_available_amount(DEPOSIT_AMOUNT);
 
 		boosting_with_safe_mode(false);
 
@@ -478,7 +478,7 @@ fn boosting_deposits_is_disabled_by_safe_mode() {
 fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 	new_test_ext().execute_with(|| {
 		setup();
-		MockBoostLendingApi::set_available_amount(DEFAULT_DEPOSIT_AMOUNT * 10);
+		MockBoostApi::set_available_amount(DEFAULT_DEPOSIT_AMOUNT * 10);
 
 		let (_, address, _, _) = EthereumIngressEgress::open_channel(
 			&ALICE,
@@ -530,21 +530,21 @@ fn taking_network_fee_from_boost_fee() {
 		const DEPOSIT_AMOUNT: AssetAmount = 100_000;
 
 		setup();
-		MockBoostLendingApi::set_available_amount(DEPOSIT_AMOUNT);
+		MockBoostApi::set_available_amount(DEPOSIT_AMOUNT);
 
 		// ==== LP sends funds to liquidity deposit address, which gets pre-witnessed ====
 		let deposit_address = request_deposit_address_eth(LP_ACCOUNT, TIER_5_BPS).1;
 
 		// First check that with a zero network fee portion, no network fee is collected:
 		{
-			assert_eq!(MockBoostLendingApi::get_network_fee_percent(), Percent::from_percent(0));
+			assert_eq!(MockBoostApi::get_network_fee_percent(), Percent::from_percent(0));
 
 			let _ = prewitness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
 
 			// After full deposit all of boost fee should be credited to the pool:
 			witness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
 
-			assert_eq!(MockBoostLendingApi::get_available_amount(), DEPOSIT_AMOUNT + 50);
+			assert_eq!(MockBoostApi::get_available_amount(), DEPOSIT_AMOUNT + 50);
 
 			assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests(), vec![]);
 
@@ -565,12 +565,12 @@ fn taking_network_fee_from_boost_fee() {
 
 		// Now check that non-zero network fee portion results in network fee collected:
 		{
-			MockBoostLendingApi::set_network_fee_percent(Percent::from_percent(20));
+			MockBoostApi::set_network_fee_percent(Percent::from_percent(20));
 			let _ = prewitness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
 
 			// Only some of the full boost fee is credited to the pool:
 			witness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
-			assert_eq!(MockBoostLendingApi::get_available_amount(), DEPOSIT_AMOUNT + 50 + 40);
+			assert_eq!(MockBoostApi::get_available_amount(), DEPOSIT_AMOUNT + 50 + 40);
 
 			assert_eq!(
 				MockSwapRequestHandler::<Test>::get_swap_requests(),
@@ -627,7 +627,7 @@ mod vault_swaps {
 			const CHANNEL_ID: ChannelId = 1;
 
 			setup();
-			MockBoostLendingApi::set_available_amount(DEPOSIT_AMOUNT * 10);
+			MockBoostApi::set_available_amount(DEPOSIT_AMOUNT * 10);
 
 			let tx_id = [9u8; 32].into();
 
@@ -668,7 +668,7 @@ mod vault_swaps {
 					PREWITNESS_DEPOSIT_ID
 				);
 
-				assert!(MockBoostLendingApi::is_deposit_boosted(PREWITNESS_DEPOSIT_ID));
+				assert!(MockBoostApi::is_deposit_boosted(PREWITNESS_DEPOSIT_ID));
 
 				assert_eq!(
 					MockSwapRequestHandler::<Test>::get_swap_requests(),
@@ -729,7 +729,7 @@ mod vault_swaps {
 					PREWITNESS_DEPOSIT_ID_2
 				);
 
-				assert!(MockBoostLendingApi::is_deposit_boosted(PREWITNESS_DEPOSIT_ID_2));
+				assert!(MockBoostApi::is_deposit_boosted(PREWITNESS_DEPOSIT_ID_2));
 
 				assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests().len(), 2);
 			}
@@ -744,7 +744,7 @@ mod vault_swaps {
 				// No new swap is initiated:
 				assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests().len(), 2);
 
-				assert!(!MockBoostLendingApi::is_deposit_boosted(PREWITNESS_DEPOSIT_ID));
+				assert!(!MockBoostApi::is_deposit_boosted(PREWITNESS_DEPOSIT_ID));
 
 				assert_has_matching_event!(
 					Test,
@@ -789,7 +789,7 @@ mod delayed_boosting {
 		new_test_ext().execute_with(|| {
 			BoostDelayBlocks::<Test, Instance1>::set(BOOST_DELAY);
 			assert_eq!(System::current_block_number(), PREWITNESSED_AT_BLOCK);
-			MockBoostLendingApi::set_available_amount(DEPOSIT_AMOUNT);
+			MockBoostApi::set_available_amount(DEPOSIT_AMOUNT);
 
 			setup();
 		})

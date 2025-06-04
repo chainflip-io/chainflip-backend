@@ -18,6 +18,7 @@
 mod tests;
 
 use cf_primitives::AssetAmount;
+use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode};
 use frame_support::{
 	sp_runtime::{
@@ -180,25 +181,25 @@ where
 	pub fn stop_lending(
 		&mut self,
 		lender_id: AccountId,
-	) -> Result<(AssetAmount, BTreeSet<LoanId>), Error> {
+	) -> Result<(AssetAmount, BTreeSet<LoanUsage>), Error> {
 		let Some(lender_unlocked_amount) = self.amounts.remove(&lender_id) else {
 			return Err(Error::AccountNotFoundInPool);
 		};
 
 		self.available_amount.saturating_reduce(lender_unlocked_amount);
 
-		let pending_loans: BTreeSet<_> = self
+		let (pending_loans, pending_loans_usage): (BTreeSet<_>, BTreeSet<_>) = self
 			.pending_loans
 			.iter()
 			.filter(|(_, loan)| loan.shares.contains_key(&lender_id))
-			.map(|(prewitnessed_deposit_id, _)| *prewitnessed_deposit_id)
-			.collect();
+			.map(|(loan_id, loan)| (*loan_id, loan.usage.clone()))
+			.unzip();
 
 		if !pending_loans.is_empty() {
 			self.pending_withdrawals.insert(lender_id, pending_loans.clone());
 		}
 
-		Ok((lender_unlocked_amount.into_asset_amount(), pending_loans))
+		Ok((lender_unlocked_amount.into_asset_amount(), pending_loans_usage))
 	}
 
 	/// Attempt to use pool's available funds to create a loan of `amount_to_borrow`.
@@ -344,7 +345,7 @@ where
 		for lp_id in shares.keys() {
 			if let Some(pending_loans) = self.pending_withdrawals.get_mut(lp_id) {
 				if !pending_loans.remove(&loan_id) {
-					log::warn!("Withdrawing lender contributed to loan {loan_id}, but it is not in pending withdrawals");
+					log_or_panic!("Withdrawing lender contributed to loan {loan_id}, but it is not in pending withdrawals");
 				}
 
 				if pending_loans.is_empty() {

@@ -57,7 +57,7 @@ use cf_traits::{
 		chain_tracking::ChainTracker,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
 		funding_info::MockFundingInfo,
-		lending_pools::MockBoostLendingApi,
+		lending_pools::MockBoostApi,
 		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
@@ -2528,7 +2528,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 	};
 
 	new_test_ext().execute_with(|| {
-		MockBoostLendingApi::set_available_amount(DEPOSIT_AMOUNT);
+		MockBoostApi::set_available_amount(DEPOSIT_AMOUNT);
 
 		// Increase the minimum deposit amount:
 		MinimumDeposit::<Test, Instance1>::insert(EthAsset::Eth, DEPOSIT_AMOUNT + 1);
@@ -2572,7 +2572,7 @@ mod evm_transaction_rejection {
 	use cf_traits::{
 		mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, DepositApi,
 	};
-	use mocks::lending_pools::MockBoostLendingApi;
+	use mocks::lending_pools::MockBoostApi;
 	use std::str::FromStr;
 
 	const ETH: EthAsset = EthAsset::Eth;
@@ -2995,7 +2995,7 @@ mod evm_transaction_rejection {
 		new_test_ext()
 			// Add boost liquidity
 			.then_execute_at_next_block(|_| {
-				MockBoostLendingApi::set_available_amount(DEPOSIT_AMOUNT);
+				MockBoostApi::set_available_amount(DEPOSIT_AMOUNT);
 			})
 			.request_deposit_addresses::<Instance1>(&[DepositRequest::SimpleSwap {
 				source_asset: ETH_ETH,
@@ -3107,7 +3107,7 @@ mod evm_transaction_rejection {
 		new_test_ext()
 			// Add boost liquidity
 			.then_execute_at_next_block(|_| {
-				MockBoostLendingApi::set_available_amount(1_000_000);
+				MockBoostApi::set_available_amount(1_000_000);
 			})
 			.request_deposit_addresses::<Instance1>(&[DepositRequest::SimpleSwap {
 				source_asset: ETH_ETH,

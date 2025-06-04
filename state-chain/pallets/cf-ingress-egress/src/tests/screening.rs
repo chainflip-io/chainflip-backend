@@ -97,7 +97,7 @@ mod helpers {
 		)
 		.unwrap();
 
-		MockBoostLendingApi::set_available_amount(DEFAULT_DEPOSIT_AMOUNT.into());
+		MockBoostApi::set_available_amount(DEFAULT_DEPOSIT_AMOUNT.into());
 
 		address
 	}

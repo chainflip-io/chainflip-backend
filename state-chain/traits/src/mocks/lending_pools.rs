@@ -16,17 +16,17 @@
 
 use std::collections::BTreeMap;
 
-use crate::lending::{BoostFinalisationOutcome, BoostLendingApi, BoostOutcome};
+use crate::lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome};
 
 use cf_primitives::{Asset, AssetAmount, BasisPoints, PrewitnessedDepositId};
 use frame_support::{pallet_prelude::*, sp_runtime::Percent};
 
 use super::{MockPallet, MockPalletStorage};
 
-pub struct MockBoostLendingApi {}
+pub struct MockBoostApi {}
 
-impl MockPallet for MockBoostLendingApi {
-	const PREFIX: &'static [u8] = b"MockBoostLendingApi";
+impl MockPallet for MockBoostApi {
+	const PREFIX: &'static [u8] = b"MockBoostApi";
 }
 
 const AVAILABLE_FUNDS: &[u8] = b"AVAILABLE_FUNDS";
@@ -41,7 +41,7 @@ struct BoostAmounts {
 
 type BoostedDeposits = BTreeMap<PrewitnessedDepositId, BoostAmounts>;
 
-impl MockBoostLendingApi {
+impl MockBoostApi {
 	pub fn set_available_amount(amount: AssetAmount) {
 		Self::put_value(AVAILABLE_FUNDS, amount);
 	}
@@ -91,7 +91,7 @@ impl MockBoostLendingApi {
 	}
 }
 
-impl BoostLendingApi for MockBoostLendingApi {
+impl BoostApi for MockBoostApi {
 	fn try_boosting(
 		deposit_id: PrewitnessedDepositId,
 		_asset: Asset,

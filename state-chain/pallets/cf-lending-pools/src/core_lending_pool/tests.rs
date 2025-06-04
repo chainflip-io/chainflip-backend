@@ -193,7 +193,6 @@ fn withdrawing_twice_is_no_op() {
 	check_pool(&pool, [(LENDER_2, AMOUNT_2)]);
 }
 
-// TOOD: extend this to have more than 1 loan:
 #[test]
 fn withdrawing_with_a_pending_loan() {
 	const LOAN_AMOUNT: AssetAmount = 1000;
@@ -202,12 +201,15 @@ fn withdrawing_with_a_pending_loan() {
 	pool.add_funds(LENDER_1, 1500);
 	pool.add_funds(LENDER_2, 1500);
 
-	assert_eq!(pool.new_loan(LOAN_AMOUNT, USAGE), Ok(LOAN_1));
-	assert_eq!(pool.new_loan(LOAN_AMOUNT, USAGE), Ok(LOAN_2));
+	const USAGE_1: LoanUsage = LoanUsage::Boost(2);
+	const USAGE_2: LoanUsage = LoanUsage::Boost(3);
+
+	assert_eq!(pool.new_loan(LOAN_AMOUNT, USAGE_1), Ok(LOAN_1));
+	assert_eq!(pool.new_loan(LOAN_AMOUNT, USAGE_2), Ok(LOAN_2));
 	check_pool(&pool, [(LENDER_1, 500), (LENDER_2, 500)]);
 
 	// Only some of the funds are available immediately, and some are in pending withdrawals:
-	assert_eq!(pool.stop_lending(LENDER_1), Ok((500, BTreeSet::from_iter([LOAN_1, LOAN_2]))));
+	assert_eq!(pool.stop_lending(LENDER_1), Ok((500, BTreeSet::from_iter([USAGE_1, USAGE_2]))));
 	check_pending_withdrawals(&pool, [(LENDER_1, vec![LOAN_1, LOAN_2])]);
 	check_pool(&pool, [(LENDER_2, 500)]);
 
@@ -240,7 +242,7 @@ fn adding_funds_during_pending_withdrawal_from_same_lender() {
 
 	check_pending_loans(&pool, [(LOAN_1, vec![(LENDER_1, 25), (LENDER_2, 75)])]);
 
-	assert_eq!(pool.stop_lending(LENDER_1), Ok((500, BTreeSet::from_iter([LOAN_1]))));
+	assert_eq!(pool.stop_lending(LENDER_1), Ok((500, BTreeSet::from_iter([USAGE]))));
 
 	check_pending_withdrawals(&pool, [(LENDER_1, vec![LOAN_1])]);
 	check_pool(&pool, [(LENDER_2, 1500)]);
@@ -271,7 +273,7 @@ fn new_lender_only_affects_new_loans() {
 	assert_eq!(pool.new_loan(LOAN_AMOUNT, USAGE), Ok(LOAN_1));
 
 	check_pool(&pool, [(LENDER_1, 500), (LENDER_2, 500)]);
-	assert_eq!(pool.stop_lending(LENDER_1), Ok((500, BTreeSet::from_iter([LOAN_1]))));
+	assert_eq!(pool.stop_lending(LENDER_1), Ok((500, BTreeSet::from_iter([USAGE]))));
 	check_pool(&pool, [(LENDER_2, 500)]);
 
 	// A new lender adding funds should not affect the other accounts, including the

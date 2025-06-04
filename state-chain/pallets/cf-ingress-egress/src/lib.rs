@@ -53,7 +53,7 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode,
-	lending::{BoostLendingApi, BoostOutcome},
+	lending::{BoostApi, BoostOutcome},
 	AccountRoleRegistry, AdjustedFeeEstimationApi, AffiliateRegistry, AssetConverter,
 	AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
@@ -677,7 +677,7 @@ pub mod pallet {
 
 		type AffiliateRegistry: AffiliateRegistry<AccountId = Self::AccountId>;
 
-		type BoostLendingApi: cf_traits::lending::BoostLendingApi;
+		type BoostApi: cf_traits::lending::BoostApi;
 
 		#[pallet::constant]
 		type AllowTransactionReports: Get<bool>;
@@ -1543,7 +1543,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 
 			if let BoostStatus::Boosted { prewitnessed_deposit_id, amount } = boost_status {
-				T::BoostLendingApi::process_deposit_as_lost(
+				T::BoostApi::process_deposit_as_lost(
 					prewitnessed_deposit_id,
 					deposit_channel.asset.into(),
 				);
@@ -2202,7 +2202,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// Only boost on non-zero fee and if the channel isn't already boosted:
 		if T::SafeMode::get().boost_deposits_enabled && boost_fee > 0 {
-			match T::BoostLendingApi::try_boosting(
+			match T::BoostApi::try_boosting(
 				prewitnessed_deposit_id,
 				asset.into(),
 				amount.into(),
@@ -2472,8 +2472,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		match action_to_perform {
 			ActionToPerform::FinaliseBoost { prewitnessed_deposit_id } => {
 				let network_fee_from_boost =
-					T::BoostLendingApi::finalise_boost(prewitnessed_deposit_id, asset.into())
-						.network_fee;
+					T::BoostApi::finalise_boost(prewitnessed_deposit_id, asset.into()).network_fee;
 
 				let network_fee_swap_request_id = if network_fee_from_boost > 0u32.into() {
 					// NOTE: if asset is FLIP, we shouldn't need to swap, but it should still work,

@@ -30,7 +30,7 @@ pub struct BoostFinalisationOutcome {
 	pub network_fee: AssetAmount,
 }
 
-pub trait BoostLendingApi {
+pub trait BoostApi {
 	fn try_boosting(
 		deposit_id: PrewitnessedDepositId,
 		asset: Asset,

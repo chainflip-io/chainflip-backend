@@ -46,8 +46,9 @@ use frame_support::{
 	transactional,
 };
 
-use cf_traits::lending::{BoostFinalisationOutcome, BoostLendingApi, BoostOutcome};
+use cf_traits::lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome};
 
+use cf_runtime_utilities::log_or_panic;
 use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
 use weights::WeightInfo;
 
@@ -98,7 +99,7 @@ pub struct BoostPoolId {
 }
 
 // Rename this to LoanPurpose?
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
 pub enum LoanUsage {
 	Boost(PrewitnessedDepositId),
 }
@@ -266,6 +267,8 @@ pub mod pallet {
 		AccountNotFoundInBoostPool,
 		/// You cannot add 0 to a boost pool.
 		AddBoostAmountMustBeNonZero,
+		/// Not enough available liquidity to boost a deposit
+		InsufficientBoostLiquidity,
 	}
 
 	#[pallet::call]
@@ -361,16 +364,12 @@ pub mod pallet {
 
 			// Map pending loans to pending boosts (for now we do it the expensive way, but
 			// if needed we could optimise this with a map loan_id -> boost_id):
-			let pending_boosts = {
-				BoostedDeposits::<T>::iter_prefix(asset)
-					.filter_map(|(deposit_id, pool_contributions)| {
-						pool_contributions
-							.values()
-							.any(|contribution| pending_loans.contains(&contribution.loan_id))
-							.then_some(deposit_id)
-					})
-					.collect()
-			};
+			let pending_boosts = pending_loans
+				.into_iter()
+				.filter_map(|loan_usage| match loan_usage {
+					LoanUsage::Boost(deposit_id) => Some(deposit_id),
+				})
+				.collect();
 
 			Self::deposit_event(Event::StoppedBoosting {
 				booster_id: booster,
@@ -422,7 +421,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> BoostLendingApi for Pallet<T> {
+impl<T: Config> BoostApi for Pallet<T> {
 	#[transactional]
 	fn try_boosting(
 		deposit_id: PrewitnessedDepositId,
@@ -511,7 +510,7 @@ impl<T: Config> BoostLendingApi for Pallet<T> {
 			}
 		}
 
-		Err("Insufficient boost funds".into())
+		Err(Error::<T>::InsufficientBoostLiquidity.into())
 	}
 
 	fn finalise_boost(deposit_id: PrewitnessedDepositId, asset: Asset) -> BoostFinalisationOutcome {
@@ -542,6 +541,7 @@ impl<T: Config> BoostLendingApi for Pallet<T> {
 
 	fn process_deposit_as_lost(deposit_id: PrewitnessedDepositId, asset: Asset) {
 		let Some(pool_contributions) = BoostedDeposits::<T>::take(asset, deposit_id) else {
+			log_or_panic!("Boost record for a lost deposit not found: {}", deposit_id);
 			return;
 		};
 
