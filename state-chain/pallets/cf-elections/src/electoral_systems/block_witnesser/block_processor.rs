@@ -375,13 +375,6 @@ pub(crate) mod tests {
 		PreWitness(E),
 		Witness(E),
 	}
-	impl<E> MockBtcEvent<E> {
-		pub fn deposit_witness(&self) -> &E {
-			match self {
-				MockBtcEvent::PreWitness(dw) | MockBtcEvent::Witness(dw) => dw,
-			}
-		}
-	}
 
 	impl<
 			Types: Validate + BWProcessorTypes<Event = MockBtcEvent<E>, BlockData = Vec<E>>,
