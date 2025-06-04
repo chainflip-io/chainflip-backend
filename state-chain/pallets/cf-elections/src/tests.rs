@@ -43,7 +43,7 @@ fn votes_not_provided_until_shared_data_is_provided() {
 		.new_election()
 		.assert_calls_noop(
 			&authorities[..],
-			|_| Call::<_, _>::provide_shared_data { shared_data: () },
+			|_| Call::<_, _>::provide_shared_data { shared_data: Box::new(()) },
 			Error::<Test, _>::UnreferencedSharedData,
 		)
 		.assume_consensus()
@@ -70,7 +70,7 @@ fn votes_not_provided_until_shared_data_is_provided() {
 	// Case 1: Provide Shared Data through provide_shared_data extrinsic:
 	let case_1 = TestRunner::from_snapshot(initial_test_state.clone())
 		.assert_calls_ok(&authorities[..1], |_| Call::<Test, Instance1>::provide_shared_data {
-			shared_data: (),
+			shared_data: Box::new(()),
 		});
 
 	// Case 2: Provide Shared Data through vote extrinsic:
@@ -206,17 +206,21 @@ impl ElectoralSystemRunnerTestExt for TestRunner<TestContext> {
 							(
 								OriginTrait::signed(*id),
 								Call::<Test, I>::vote {
-									authority_votes: BoundedBTreeMap::try_from(
-										sp_std::iter::once((
-											ElectionIdentifierOf::<MockElectoralSystemRunner>::new(
-												*umi,
-												(),
-											),
-											vote.clone(),
-										))
-										.collect::<BTreeMap<_, _>>(),
-									)
-									.unwrap(),
+									authority_votes:
+										Box::new(
+											BoundedBTreeMap::try_from(
+												sp_std::iter::once(
+													(
+														ElectionIdentifierOf::<
+															MockElectoralSystemRunner,
+														>::new(*umi, ()),
+														vote.clone(),
+													),
+												)
+												.collect::<BTreeMap<_, _>>(),
+											)
+											.unwrap(),
+										),
 								},
 								expected_outcome.clone().map_err(Into::into),
 							)

@@ -3260,11 +3260,12 @@ mod test {
 	// Introduced from polkadot
 	#[test]
 	fn call_size() {
+		let call_size = core::mem::size_of::<RuntimeCall>();
 		assert!(
-			core::mem::size_of::<RuntimeCall>() <= CALL_ENUM_MAX_SIZE,
+			call_size <= CALL_ENUM_MAX_SIZE,
 			r"
-			Polkadot suggests a 230 byte limit for the size of the Call type. We use {} but this runtime's call size
-			is {}. If this test fails then you have just added a call variant that exceed the limit.
+			Polkadot suggests a 230 byte limit for the size of the Call type. We use {CALL_ENUM_MAX_SIZE} but this runtime's call size
+			is {call_size}. If this test fails then you have just added a call variant that exceed the limit.
 
 			Congratulations!
 
@@ -3276,9 +3277,7 @@ mod test {
 			  - https://github.com/paritytech/substrate/pull/9418
 			  - https://rust-lang.github.io/rust-clippy/master/#large_enum_variant
 			  - https://fasterthanli.me/articles/peeking-inside-a-rust-enum
-			",
-			CALL_ENUM_MAX_SIZE,
-			core::mem::size_of::<RuntimeCall>(),
+			"
 		);
 	}
 }
