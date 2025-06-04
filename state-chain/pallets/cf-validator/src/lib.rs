@@ -80,6 +80,18 @@ pub enum PalletConfigUpdate {
 	AuctionParameters { parameters: SetSizeParameters },
 	MinimumReportedCfeVersion { version: SemVer },
 	MaxAuthoritySetContractionPercentage { percentage: Percent },
+	MinimumAuctionBid { minimum_flip_bid: u32 },
+}
+
+struct DefaultMinimumAuctionBid<T, const MIN_BID: u32>(PhantomData<T>);
+
+impl<T: Config, const MIN_BID: u32> Get<T::Amount> for DefaultMinimumAuctionBid<T, MIN_BID>
+where
+	T: Config,
+{
+	fn get() -> T::Amount {
+		FLIPPERINOS_PER_FLIP.saturating_mul(MIN_BID.into()).into()
+	}
 }
 
 type RuntimeRotationState<T> =
@@ -313,6 +325,11 @@ pub mod pallet {
 	#[pallet::getter(fn max_authority_set_contraction_percentage)]
 	pub(super) type MaxAuthoritySetContractionPercentage<T: Config> =
 		StorageValue<_, Percent, ValueQuery>;
+
+	/// Minimum bid amount required to participate in auctions. Default is 50_000 FLIP.
+	#[pallet::storage]
+	pub(super) type MinimumAuctionBid<T: Config> =
+		StorageValue<_, T::Amount, ValueQuery, DefaultMinimumAuctionBid<T, 50_000>>;
 
 	/// Store the list of accounts that are active bidders.
 	#[pallet::storage]
@@ -562,6 +579,11 @@ pub mod pallet {
 				},
 				PalletConfigUpdate::MaxAuthoritySetContractionPercentage { percentage } => {
 					MaxAuthoritySetContractionPercentage::<T>::put(percentage);
+				},
+				PalletConfigUpdate::MinimumAuctionBid { minimum_flip_bid } => {
+					MinimumAuctionBid::<T>::set(
+						FLIPPERINOS_PER_FLIP.saturating_mul(minimum_flip_bid.into()).into(),
+					);
 				},
 			}
 
@@ -1507,6 +1529,24 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 		validators
 			.into_iter()
 			.filter(|id| NodeCFEVersion::<T>::get(id) >= min_version)
+			.collect()
+	}
+}
+
+pub struct QualifyByMinimumBid<T>(PhantomData<T>);
+
+impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumBid<T> {
+	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
+		T::FundingInfo::balance(validator_id.into_ref()) >= MinimumAuctionBid::<T>::get()
+	}
+
+	fn filter_qualified(
+		validators: BTreeSet<<T as Chainflip>::ValidatorId>,
+	) -> BTreeSet<<T as Chainflip>::ValidatorId> {
+		let min_bid = MinimumAuctionBid::<T>::get();
+		validators
+			.into_iter()
+			.filter(|id| T::FundingInfo::balance(id.into_ref()) >= min_bid)
 			.collect()
 	}
 }
