@@ -1,0 +1,30 @@
+{
+  "address": "GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z",
+  "metadata": {
+    "name": "oracle_query_helper",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "query_price_feeds",
+      "discriminator": [
+        39,
+        82,
+        53,
+        78,
+        23,
+        38,
+        62,
+        195
+      ],
+      "accounts": [
+        {
+          "name": "chainlink_program"
+        }
+      ],
+      "args": []
+    }
+  ]
+}

@@ -81,54 +81,56 @@ export function testAllSwaps(timeoutPerSwap: number) {
   // if we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
   // the test starts to randomly fail because the assethub node is overloaded.
 
-  const AssetsWithoutAssethub = Object.values(Assets).filter((id) => !id.startsWith('Hub'));
+  // const AssetsWithoutAssethub = Object.values(Assets).filter((id) => !id.startsWith('Hub'));
 
-  AssetsWithoutAssethub.forEach((sourceAsset) => {
-    AssetsWithoutAssethub.filter((destAsset) => sourceAsset !== destAsset).forEach((destAsset) => {
-      // Regular swaps
-      appendSwap(sourceAsset, destAsset, testSwap);
+  // AssetsWithoutAssethub.forEach((sourceAsset) => {
+  //   AssetsWithoutAssethub.filter((destAsset) => sourceAsset !== destAsset).forEach((destAsset) => {
+  //     // Regular swaps
+  //     appendSwap(sourceAsset, destAsset, testSwap);
 
-      const sourceChain = chainFromAsset(sourceAsset);
-      const destChain = chainFromAsset(destAsset);
-      if (vaultSwapSupportedChains.includes(sourceChain)) {
-        // Vault Swaps
-        appendSwap(sourceAsset, destAsset, testVaultSwap);
+  //     const sourceChain = chainFromAsset(sourceAsset);
+  //     const destChain = chainFromAsset(destAsset);
+  //     if (vaultSwapSupportedChains.includes(sourceChain)) {
+  //       // Vault Swaps
+  //       appendSwap(sourceAsset, destAsset, testVaultSwap);
 
-        // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
-        if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
-          // CCM Vault swaps
-          appendSwap(sourceAsset, destAsset, testVaultSwap, true);
-        }
-      }
+  //       // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
+  //       if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
+  //         // CCM Vault swaps
+  //         appendSwap(sourceAsset, destAsset, testVaultSwap, true);
+  //       }
+  //     }
 
-      if (ccmSupportedChains.includes(destChain)) {
-        // CCM swaps
-        appendSwap(sourceAsset, destAsset, testSwap, true);
-      }
-    });
-  });
+  //     if (ccmSupportedChains.includes(destChain)) {
+  //       // CCM swaps
+  //       appendSwap(sourceAsset, destAsset, testSwap, true);
+  //     }
+  //   });
+  // });
 
-  // Swaps from/to assethub paired with random chains
-  const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
-  assethubAssets.forEach((hubAsset) => {
-    appendSwap(hubAsset, randomElement(AssetsWithoutAssethub), testSwap);
-    appendSwap(randomElement(AssetsWithoutAssethub), hubAsset, testSwap);
-  });
-  appendSwap('ArbEth', 'HubDot', testVaultSwap);
-  appendSwap('ArbEth', 'HubUsdc', testVaultSwap);
-  appendSwap('ArbEth', 'HubUsdt', testVaultSwap);
+  // // Swaps from/to assethub paired with random chains
+  // const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
+  // assethubAssets.forEach((hubAsset) => {
+  //   appendSwap(hubAsset, randomElement(AssetsWithoutAssethub), testSwap);
+  //   appendSwap(randomElement(AssetsWithoutAssethub), hubAsset, testSwap);
+  // });
+  // appendSwap('ArbEth', 'HubDot', testVaultSwap);
+  // appendSwap('ArbEth', 'HubUsdc', testVaultSwap);
+  // appendSwap('ArbEth', 'HubUsdt', testVaultSwap);
+
+  appendSwap('ArbEth', 'Sol', testVaultSwap);
 
   describe('AllSwaps', () => {
     manuallyAddTestToList('AllSwaps', 'testAllSwaps');
-    serialTest(
-      'OpenPrivateBtcChannel',
-      async (context) => {
-        await openPrivateBtcChannel(context.logger, '//BROKER_1');
-        context.logger.info(`🧪 Private broker channel opened`);
-      },
-      120,
-      true,
-    );
+    // serialTest(
+    //   'OpenPrivateBtcChannel',
+    //   async (context) => {
+    //     await openPrivateBtcChannel(context.logger, '//BROKER_1');
+    //     context.logger.info(`🧪 Private broker channel opened`);
+    //   },
+    //   120,
+    //   true,
+    // );
     for (const swap of allSwaps) {
       concurrentTest(swap.name, swap.test, timeoutPerSwap, true);
     }

@@ -64,6 +64,10 @@ where
 // querying more than 10 feeds so we don't bother extending the compute budget. If that was not
 // enough, the compute budget extension instruction needs to be added to the transaction before
 // serialization.
+// TODO: Probably add the program to the `foreign_chains/*/program_instructions.rs` like the other ones
+// and then do like we do in the `instruction_builder` so it has the additional checks for the
+// discriminator and the function call itself. Only potential issue is if that requires importing
+// a bunch of types/dependencies from the SC. To try.
 fn build_and_serialize_query_transaction(
 	oracle_query_helper: SolAddress,
 	oracle_program_id: SolAddress,

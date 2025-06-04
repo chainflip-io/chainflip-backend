@@ -36,6 +36,8 @@ unzip -u ${ZIP_FILE} \
     'swap_endpoint.json' \
     'swap_endpoint.ts' \
     'alt_manager.json' \
+    'oracle_query_helper.json' \
+    'oracle_query_helper.ts' \
     -d $TARGET_DIR
 
 rm ${ZIP_FILE}
