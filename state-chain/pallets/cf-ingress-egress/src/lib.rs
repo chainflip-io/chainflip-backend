@@ -647,6 +647,9 @@ pub mod pallet {
 		/// Sets if the pallet should automatically manage the closing of channels.
 		const MANAGE_CHANNEL_LIFETIME: bool;
 
+		/// Sets if the chain supports pre-allocating addresses.
+		const CAN_PREALLOCATE_ADDRESSES: bool;
+
 		/// A hook to tell witnesses to start witnessing an opened channel.
 		type IngressSource: IngressSource<
 			Chain = Self::TargetChain,
@@ -3118,21 +3121,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		)) as usize)
 			.saturating_sub(PreallocatedChannels::<T, I>::get(requester).len())
 		{
-			// For chains that preallocation is not enabled such as Ethereum and Arbitrum,
-			// only pre-allocate channels from the global pool of addresses, for other chains,
-			// preallocate a newly generated channel.
-			if !Into::<ForeignChain>::into(source_asset).can_preallocate_addresses() {
-				if let Some((_, reused_channel)) = DepositChannelPool::<T, I>::drain().next() {
-					PreallocatedChannels::<T, I>::mutate(requester, |queue| {
-						queue.push_back(reused_channel)
-					});
-				}
-			} else {
+			// For chains that support preallocation, pre-allocate a newly generated channel.
+			// For other chains that preallocation is not enabled such as Ethereum and Arbitrum,
+			// only pre-allocate from the global pool of channels
+			if T::CAN_PREALLOCATE_ADDRESSES {
 				// It doesn't matter what source asset we pass here, because source_asset
 				// is ignored by chains that support preallocation.
 				let new_channel = Self::generate_new_channel(source_asset)?;
 				PreallocatedChannels::<T, I>::mutate(requester, |queue| {
 					queue.push_back(new_channel)
+				});
+			} else if let Some((_, reused_channel)) = DepositChannelPool::<T, I>::drain().next() {
+				PreallocatedChannels::<T, I>::mutate(requester, |queue| {
+					queue.push_back(reused_channel)
 				});
 			}
 		}

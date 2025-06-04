@@ -413,6 +413,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
+	const CAN_PREALLOCATE_ADDRESSES: bool = false;
 	type IngressSource = DummyIngressSource<Ethereum, BlockNumberFor<Runtime>>;
 	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
@@ -442,6 +443,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
+	const CAN_PREALLOCATE_ADDRESSES: bool = true;
 	type IngressSource = DummyIngressSource<Polkadot, BlockNumberFor<Runtime>>;
 	type TargetChain = Polkadot;
 	type AddressDerivation = AddressDerivation;
@@ -471,6 +473,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
+	const CAN_PREALLOCATE_ADDRESSES: bool = true;
 	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Runtime>>;
 	type TargetChain = Bitcoin;
 	type AddressDerivation = AddressDerivation;
@@ -500,6 +503,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
+	const CAN_PREALLOCATE_ADDRESSES: bool = false;
 	type IngressSource = DummyIngressSource<Arbitrum, BlockNumberFor<Runtime>>;
 	type TargetChain = Arbitrum;
 	type AddressDerivation = AddressDerivation;
@@ -529,6 +533,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = false;
+	const CAN_PREALLOCATE_ADDRESSES: bool = true;
 	type IngressSource = SolanaIngress;
 	type TargetChain = Solana;
 	type AddressDerivation = AddressDerivation;
@@ -558,6 +563,7 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
+	const CAN_PREALLOCATE_ADDRESSES: bool = true;
 	type IngressSource = DummyIngressSource<Assethub, BlockNumberFor<Runtime>>;
 	type TargetChain = Assethub;
 	type AddressDerivation = AddressDerivation;
