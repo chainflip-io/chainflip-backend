@@ -344,7 +344,7 @@ impls! {
 	}
 
 	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
+	Hook<HookTypeFor<(), SafeModeEnabledHook>> {
 		fn run(&mut self, _input: ()) -> SafeModeStatus {
 			// TODO: Add egress witnessing safe mode: PRO-2311
 			SafeModeStatus::Disabled
@@ -493,9 +493,11 @@ impl
 					.block_height
 					// We subtract the safety buffer so we don't ask for liveness for blocks that
 					// could be reorged out.
-					.saturating_sub(BitcoinChain::SAFETY_BUFFER)
-					.try_into()
-					.map_err(|_| CorruptStorageError::new())?,
+					.saturating_sub(
+						BitcoinChain::SAFETY_BUFFER
+							.try_into()
+							.map_err(|_| CorruptStorageError::new())?,
+					),
 			),
 		)?;
 
