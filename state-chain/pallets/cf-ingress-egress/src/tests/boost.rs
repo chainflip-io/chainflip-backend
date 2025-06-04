@@ -78,7 +78,11 @@ fn request_deposit_address_eth(account_id: u64, max_boost_fee: BasisPoints) -> (
 }
 
 #[track_caller]
-fn prewitness_deposit(deposit_address: H160, asset: EthAsset, amount: AssetAmount) -> u64 {
+fn prewitness_deposit(
+	deposit_address: H160,
+	asset: EthAsset,
+	amount: AssetAmount,
+) -> PrewitnessedDepositId {
 	assert_ok!(EthereumIngressEgress::process_channel_deposit_prewitness(
 		DepositWitness::<Ethereum> {
 			deposit_address,
@@ -622,8 +626,8 @@ mod vault_swaps {
 
 			const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT * TIER_5_BPS as u128 / 10_000;
 			const INGRESS_FEE: AssetAmount = 1000000;
-			const PREWITNESS_DEPOSIT_ID: PrewitnessedDepositId = 1;
-			const PREWITNESS_DEPOSIT_ID_2: PrewitnessedDepositId = 2;
+			const PREWITNESS_DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(1);
+			const PREWITNESS_DEPOSIT_ID_2: PrewitnessedDepositId = PrewitnessedDepositId(2);
 			const CHANNEL_ID: ChannelId = 1;
 
 			setup();

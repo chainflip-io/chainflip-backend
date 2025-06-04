@@ -90,7 +90,7 @@ mod benchmarks {
 		create_boost_pool::<T>();
 
 		const ASSET: Asset = Asset::Eth;
-		const DEPOSIT_ID: PrewitnessedDepositId = 0;
+		const DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(0);
 
 		let boosters: Vec<_> = (0..n).map(|i| setup_booster_account::<T>(ASSET, i)).collect();
 
@@ -141,7 +141,12 @@ mod benchmarks {
 		const PENDING_BOOSTS_COUNT: usize = 50;
 
 		for deposit_id in 0..PENDING_BOOSTS_COUNT {
-			assert_ok!(Pallet::<T>::try_boosting(deposit_id as u64, asset, 1000, TIER_5_BPS));
+			assert_ok!(Pallet::<T>::try_boosting(
+				PrewitnessedDepositId(deposit_id as u64),
+				asset,
+				1000,
+				TIER_5_BPS
+			));
 		}
 
 		#[block]

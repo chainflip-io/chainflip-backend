@@ -2018,7 +2018,7 @@ mod test {
 	use cf_chains::{assets::sol, btc::ScriptPubkey};
 	use cf_primitives::{
 		chains::assets::{any, arb, btc, dot, eth, hub},
-		FLIPPERINOS_PER_FLIP,
+		PrewitnessedDepositId, FLIPPERINOS_PER_FLIP,
 	};
 	use pallet_cf_lending_pools::OwedAmount;
 	use sp_core::H160;
@@ -2399,13 +2399,16 @@ mod test {
 			available_amounts: BTreeMap::from([(ID_1.clone(), 10_000)]),
 			pending_boosts: BTreeMap::from([
 				(
-					0,
+					PrewitnessedDepositId(0),
 					BTreeMap::from([
 						(ID_1.clone(), OwedAmount { total: 200, fee: 10 }),
 						(ID_2.clone(), OwedAmount { total: 2_000, fee: 100 }),
 					]),
 				),
-				(1, BTreeMap::from([(ID_1.clone(), OwedAmount { total: 1_000, fee: 50 })])),
+				(
+					PrewitnessedDepositId(1),
+					BTreeMap::from([(ID_1.clone(), OwedAmount { total: 1_000, fee: 50 })]),
+				),
 			]),
 			pending_withdrawals: Default::default(),
 			network_fee_deduction_percent: Percent::from_percent(40),
@@ -2416,15 +2419,15 @@ mod test {
 		BoostPoolDetails {
 			available_amounts: BTreeMap::from([]),
 			pending_boosts: BTreeMap::from([(
-				0,
+				PrewitnessedDepositId(0),
 				BTreeMap::from([
 					(ID_1.clone(), OwedAmount { total: 1_000, fee: 50 }),
 					(ID_2.clone(), OwedAmount { total: 2_000, fee: 100 }),
 				]),
 			)]),
 			pending_withdrawals: BTreeMap::from([
-				(ID_1.clone(), BTreeSet::from([0])),
-				(ID_2.clone(), BTreeSet::from([0])),
+				(ID_1.clone(), BTreeSet::from([PrewitnessedDepositId(0)])),
+				(ID_2.clone(), BTreeSet::from([PrewitnessedDepositId(0)])),
 			]),
 			network_fee_deduction_percent: Percent::from_percent(0),
 		}

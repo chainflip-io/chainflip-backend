@@ -33,7 +33,9 @@ mod tests;
 
 mod benchmarking;
 
-use cf_primitives::{Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId};
+use cf_primitives::{
+	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
+};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, PoolApi, SwapRequestHandler,
 };
@@ -75,7 +77,7 @@ pub enum PalletConfigUpdate {
 	SetNetworkFeeDeductionFromBoost { deduction_percent: Percent },
 }
 
-pub type CorePoolId = u32;
+define_wrapper_type!(CorePoolId, u32);
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BoostPool {
@@ -398,7 +400,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	fn new_core_pool(asset: Asset) -> CorePoolId {
 		let core_pool_id = NextCorePoolId::<T>::get();
-		NextCorePoolId::<T>::set(core_pool_id + 1);
+		NextCorePoolId::<T>::set(CorePoolId(core_pool_id.0 + 1));
 
 		CorePools::<T>::insert(asset, core_pool_id, CoreLendingPool::default());
 
@@ -739,7 +741,7 @@ pub mod migration_support {
 		boost_pool: old::BoostPool<T::AccountId>,
 	) {
 		let core_pool_id = NextCorePoolId::<T>::get();
-		NextCorePoolId::<T>::set(core_pool_id + 1);
+		NextCorePoolId::<T>::set(CorePoolId(core_pool_id.0 + 1));
 
 		let (core_pool, pool_contributions) =
 			deconstruct_legacy_boost_pool::<T>(core_pool_id, boost_pool);
@@ -798,13 +800,13 @@ pub mod migration_support {
 					deposit_id,
 					BoostPoolContribution {
 						core_pool_id,
-						loan_id,
+						loan_id: loan_id.into(),
 						boosted_amount: total_boosted_amount.into_asset_amount(),
 						network_fee: 0, // keeping things simple
 					},
 				);
 
-				(loan_id, PendingLoan { usage: LoanUsage::Boost(deposit_id), shares })
+				(loan_id.into(), PendingLoan { usage: LoanUsage::Boost(deposit_id), shares })
 			})
 			.collect();
 
@@ -825,7 +827,7 @@ pub mod migration_support {
 
 		(
 			CoreLendingPool {
-				next_loan_id,
+				next_loan_id: next_loan_id.into(),
 				available_amount: old_pool.available_amount,
 				amounts: old_pool.amounts,
 				pending_loans,
@@ -847,11 +849,11 @@ pub mod migration_support {
 		const AMOUNT_1: ScaledAmount = ScaledAmount::from_raw(200_000);
 		const AMOUNT_2: ScaledAmount = ScaledAmount::from_raw(300_000);
 
-		const DEPOSIT_1: PrewitnessedDepositId = 7;
-		const DEPOSIT_2: PrewitnessedDepositId = 8;
+		const DEPOSIT_1: PrewitnessedDepositId = PrewitnessedDepositId(7);
+		const DEPOSIT_2: PrewitnessedDepositId = PrewitnessedDepositId(8);
 
-		const LOAN_1: LoanId = 0; // Corresponds to DEPOSIT_1
-		const LOAN_2: LoanId = 1; // Corresponds to DEPOSIT_2
+		const LOAN_1: LoanId = LoanId(0); // Corresponds to DEPOSIT_1
+		const LOAN_2: LoanId = LoanId(1); // Corresponds to DEPOSIT_2
 
 		fn old_pool_mock() -> old::BoostPool<u64> {
 			let pending_boosts = BTreeMap::from_iter([
@@ -907,7 +909,7 @@ pub mod migration_support {
 
 		#[test]
 		fn test_core_pool_from_legacy_boost_pool() {
-			const CORE_POOL_ID: CorePoolId = 3;
+			const CORE_POOL_ID: CorePoolId = CorePoolId(3);
 
 			let (core_pool, contributions) =
 				deconstruct_legacy_boost_pool::<mocks::Test>(CORE_POOL_ID, old_pool_mock());

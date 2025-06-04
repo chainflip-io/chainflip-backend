@@ -203,7 +203,7 @@ fn basic_boosting() {
 	new_test_ext().execute_with(|| {
 		const BOOST_FUNDS: AssetAmount = 500_000_000;
 		const DEPOSIT_AMOUNT: AssetAmount = 250_000_000;
-		const DEPOSIT_ID: PrewitnessedDepositId = 1;
+		const DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(1);
 
 		setup();
 
@@ -242,7 +242,7 @@ fn boosted_deposit_is_lost() {
 	new_test_ext().execute_with(|| {
 		const BOOST_FUNDS: AssetAmount = 500_000_000;
 		const DEPOSIT_AMOUNT: AssetAmount = 250_000_000;
-		const DEPOSIT_ID: PrewitnessedDepositId = 1;
+		const DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(1);
 
 		setup();
 
@@ -275,7 +275,7 @@ fn stop_boosting() {
 	new_test_ext().execute_with(|| {
 		const BOOSTER_AMOUNT_1: AssetAmount = 500_000_000;
 		const DEPOSIT_AMOUNT: AssetAmount = 250_000_000;
-		const DEPOSIT_ID: PrewitnessedDepositId = 1;
+		const DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(1);
 
 		setup();
 
@@ -324,7 +324,7 @@ fn skip_zero_amount_pool() {
 	// 10 bps has 0 available funds, but we are able to skip it and
 	// boost with the next tier pool
 
-	const DEPOSIT_ID: PrewitnessedDepositId = 1;
+	const DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(1);
 	new_test_ext().execute_with(|| {
 		const POOL_AMOUNT: AssetAmount = 500_000_000;
 		const DEPOSIT_AMOUNT: AssetAmount = 1_000_000_000;
@@ -545,7 +545,12 @@ fn boost_account_balance() {
 		));
 
 		// A portion of the funds will is pending due to an unfinalised boost
-		assert_ok!(LendingPools::try_boosting(0, Asset::Eth, BOOSTED_AMOUNT, TIER_30_BPS));
+		assert_ok!(LendingPools::try_boosting(
+			PrewitnessedDepositId(0),
+			Asset::Eth,
+			BOOSTED_AMOUNT,
+			TIER_30_BPS
+		));
 
 		let boost_fee = BOOSTED_AMOUNT * TIER_5_BPS as u128 / 10_000;
 
@@ -568,7 +573,7 @@ fn boost_pool_details() {
 		const ETH_AMOUNT_2: AssetAmount = 25_000;
 		const BOOSTED_AMOUNT: AssetAmount = 30_000;
 
-		const DEPOSIT_ID: PrewitnessedDepositId = 3;
+		const DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(3);
 
 		const NETWORK_FEE_DEDUCTION: Percent = Percent::from_percent(50);
 

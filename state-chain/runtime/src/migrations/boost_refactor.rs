@@ -234,7 +234,7 @@ impl UncheckedOnRuntimeUpgrade for BoostRefactorMigration {
 			number_of_pools as usize
 		);
 
-		assert_eq!(pallet_cf_lending_pools::NextCorePoolId::<Runtime>::get(), number_of_pools);
+		assert_eq!(pallet_cf_lending_pools::NextCorePoolId::<Runtime>::get().0, number_of_pools);
 
 		assert_eq!(
 			pallet_cf_lending_pools::NetworkFeeDeductionFromBoostPercent::<Runtime>::get(),

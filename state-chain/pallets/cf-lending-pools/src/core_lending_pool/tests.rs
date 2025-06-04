@@ -14,6 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_primitives::PrewitnessedDepositId;
+
 use super::*;
 
 type AccountId = u32;
@@ -23,11 +25,11 @@ const LENDER_1: AccountId = 1;
 const LENDER_2: AccountId = 2;
 const LENDER_3: AccountId = 3;
 
-const LOAN_1: LoanId = 0;
-const LOAN_2: LoanId = 1;
+const LOAN_1: LoanId = LoanId(0);
+const LOAN_2: LoanId = LoanId(1);
 
 // The exact value in unimportant in tests
-const USAGE: LoanUsage = LoanUsage::Boost(0);
+const USAGE: LoanUsage = LoanUsage::Boost(PrewitnessedDepositId(0));
 
 #[test]
 fn test_scaled_amount() {
@@ -117,7 +119,7 @@ fn basic_lending() {
 	pool.add_funds(LENDER_1, LOAN_AMOUNT);
 
 	// Create a loan
-	assert_eq!(pool.new_loan(LOAN_AMOUNT, LoanUsage::Boost(0)), Ok(LOAN_1));
+	assert_eq!(pool.new_loan(LOAN_AMOUNT, LoanUsage::Boost(PrewitnessedDepositId(0))), Ok(LOAN_1));
 	check_pool(&pool, [(LENDER_1, 0)]);
 	check_pending_loans(&pool, [(LOAN_1, vec![(LENDER_1, 100)])]);
 
@@ -201,8 +203,8 @@ fn withdrawing_with_a_pending_loan() {
 	pool.add_funds(LENDER_1, 1500);
 	pool.add_funds(LENDER_2, 1500);
 
-	const USAGE_1: LoanUsage = LoanUsage::Boost(2);
-	const USAGE_2: LoanUsage = LoanUsage::Boost(3);
+	const USAGE_1: LoanUsage = LoanUsage::Boost(PrewitnessedDepositId(2));
+	const USAGE_2: LoanUsage = LoanUsage::Boost(PrewitnessedDepositId(3));
 
 	assert_eq!(pool.new_loan(LOAN_AMOUNT, USAGE_1), Ok(LOAN_1));
 	assert_eq!(pool.new_loan(LOAN_AMOUNT, USAGE_2), Ok(LOAN_2));
@@ -315,9 +317,11 @@ fn small_rewards_accumulate() {
 	const SMALL_DEPOSIT: AssetAmount = 500;
 	const FEE: AssetAmount = 5;
 
-	assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(LOAN_1));
+	const LOAN_1: u64 = 1;
 
-	pool.finalise_loan(LOAN_1, SMALL_DEPOSIT + FEE);
+	assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(LoanId(LOAN_1)));
+
+	pool.finalise_loan(LoanId(LOAN_1), SMALL_DEPOSIT + FEE);
 
 	// LENDER_2 earns ~0.25 (it is rounded down when converted to AssetAmount,
 	// but the fractional part isn't lost)
@@ -325,8 +329,8 @@ fn small_rewards_accumulate() {
 
 	// 4 more loans like that and LENDER_2 should have withdrawable fees:
 	for loan_id in (LOAN_1 + 1)..=(LOAN_1 + 4) {
-		assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(loan_id));
-		pool.finalise_loan(loan_id, SMALL_DEPOSIT + FEE);
+		assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(LoanId(loan_id)));
+		pool.finalise_loan(LoanId(loan_id), SMALL_DEPOSIT + FEE);
 	}
 
 	// Note the increase in LENDER_2's balance:

@@ -41,7 +41,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries, Beneficiary, ChannelId,
-	DcaParameters, ForeignChain, MAX_AFFILIATES,
+	DcaParameters, ForeignChain, PrewitnessedDepositId, MAX_AFFILIATES,
 };
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -2551,7 +2551,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 		// we already boosted it:
 		MinimumDeposit::<Test, Instance1>::insert(EthAsset::Eth, DEPOSIT_AMOUNT + 1);
 		assert!(full_witness(BoostStatus::Boosted {
-			prewitnessed_deposit_id: 1,
+			prewitnessed_deposit_id: PrewitnessedDepositId(1),
 			amount: DEPOSIT_AMOUNT
 		})
 		.is_ok());

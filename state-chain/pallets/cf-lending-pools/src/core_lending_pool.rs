@@ -17,7 +17,7 @@
 #[cfg(test)]
 mod tests;
 
-use cf_primitives::AssetAmount;
+use cf_primitives::{define_wrapper_type, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode};
 use frame_support::{
@@ -140,7 +140,15 @@ mod scaled_amount {
 // NOTE: temporarily exposing this to help with migration
 pub use scaled_amount::ScaledAmount;
 
-pub type LoanId = u64;
+define_wrapper_type!(LoanId, u64, extra_derives: Ord, PartialOrd);
+
+impl core::ops::Add<u64> for LoanId {
+	type Output = Self;
+
+	fn add(self, rhs: u64) -> Self::Output {
+		LoanId(self.0 + rhs)
+	}
+}
 
 type UnlockedFunds<AccountId> = Vec<(AccountId, AssetAmount)>;
 
@@ -209,7 +217,7 @@ where
 		usage: LoanUsage,
 	) -> Result<LoanId, &'static str> {
 		let loan_id = self.next_loan_id;
-		self.next_loan_id += 1;
+		self.next_loan_id.0 += 1;
 
 		let mut total_contributed = ScaledAmount::default();
 		let amount_to_borrow = ScaledAmount::from_asset_amount(amount_to_borrow);
@@ -263,7 +271,7 @@ where
 		// Some "lucky" lender may be credited some (inconsequential) amount back to
 		// ensure that we correctly account for every single atomic unit even in presence
 		// of rounding errors:
-		let lucky_index = WyRand::new_seed(loan_id).generate_range(0..self.amounts.len());
+		let lucky_index = WyRand::new_seed(loan_id.0).generate_range(0..self.amounts.len());
 		if let Some((_lp_id, amount)) = self.amounts.iter_mut().nth(lucky_index) {
 			amount.saturating_accrue(excess_contributed);
 		}
@@ -308,7 +316,8 @@ where
 			// Some "lucky" lender may receive some (inconsequential) amount to
 			// ensure that we correctly account for every single atomic unit even in presence
 			// of rounding errors:
-			let lucky_index = WyRand::new_seed(loan_id).generate_range(0..amounts_to_credit.len());
+			let lucky_index =
+				WyRand::new_seed(loan_id.0).generate_range(0..amounts_to_credit.len());
 			if let Some((_lp_id, amount)) = amounts_to_credit.iter_mut().nth(lucky_index) {
 				amount.saturating_accrue(remaining_to_credit);
 			}

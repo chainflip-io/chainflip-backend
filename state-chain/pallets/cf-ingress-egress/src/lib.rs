@@ -2195,10 +2195,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 
-		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<T, I>::mutate(|id| -> u64 {
-			*id = id.saturating_add(1);
-			*id
-		});
+		let prewitnessed_deposit_id =
+			PrewitnessedDepositIdCounter::<T, I>::mutate(|id| -> PrewitnessedDepositId {
+				*id = PrewitnessedDepositId(id.0.saturating_add(1));
+				*id
+			});
 
 		// Only boost on non-zero fee and if the channel isn't already boosted:
 		if T::SafeMode::get().boost_deposits_enabled && boost_fee > 0 {
