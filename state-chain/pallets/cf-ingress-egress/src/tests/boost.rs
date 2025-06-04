@@ -1057,7 +1057,7 @@ fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 			TIER_5_BPS
 		));
 
-		let (_, address, _, _) = EthereumIngressEgress::open_channel(
+		let (deposit_channel, _, _) = EthereumIngressEgress::open_channel(
 			&ALICE, EthAsset::Eth,
 			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: ForeignChainAddress::Eth([0u8; 20].into()) },
 			TIER_5_BPS,
@@ -1075,7 +1075,7 @@ fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 					deposit_details: Default::default(),
 				// This deposit should succeed:
 				}, DepositWitness {
-					deposit_address: address,
+					deposit_address: deposit_channel.address,
 					asset: EthAsset::Eth,
 					amount: DEFAULT_DEPOSIT_AMOUNT,
 					deposit_details: Default::default(),
@@ -1086,7 +1086,7 @@ fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::EthereumIngressEgress(Event::DepositBoosted { deposit_address, .. }) if deposit_address == &Some(address)
+			RuntimeEvent::EthereumIngressEgress(Event::DepositBoosted { deposit_address, .. }) if deposit_address == &Some(deposit_channel.address)
 		);
 	});
 }

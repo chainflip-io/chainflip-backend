@@ -242,7 +242,7 @@ mod benchmarks {
 		asset: TargetChainAsset<T, I>,
 		fee_tier: BoostPoolTier,
 	) -> TargetChainAccount<T, I> {
-		let (_channel_id, deposit_address, ..) = Pallet::<T, I>::open_channel(
+		let (deposit_channel, ..) = Pallet::<T, I>::open_channel(
 			lp_account,
 			asset,
 			ChannelAction::LiquidityProvision {
@@ -255,7 +255,7 @@ mod benchmarks {
 
 		assert_ok!(Pallet::<T, I>::process_channel_deposit_prewitness(
 			DepositWitness::<T::TargetChain> {
-				deposit_address: deposit_address.clone(),
+				deposit_address: deposit_channel.address.clone(),
 				asset,
 				amount: TargetChainAmount::<T, I>::from(1000u32),
 				deposit_details: BenchmarkValue::benchmark_value()
@@ -263,7 +263,7 @@ mod benchmarks {
 			BenchmarkValue::benchmark_value()
 		));
 
-		deposit_address
+		deposit_channel.address
 	}
 
 	#[benchmark]
@@ -411,7 +411,7 @@ mod benchmarks {
 			));
 		}
 
-		let (_channel_id, deposit_address, ..) = Pallet::<T, I>::open_channel(
+		let (deposit_channel, ..) = Pallet::<T, I>::open_channel(
 			&boosters[0],
 			asset,
 			ChannelAction::LiquidityProvision {
@@ -429,7 +429,7 @@ mod benchmarks {
 		{
 			assert_ok!(Pallet::<T, I>::process_channel_deposit_prewitness(
 				DepositWitness::<T::TargetChain> {
-					deposit_address,
+					deposit_address: deposit_channel.address,
 					asset,
 					amount: TargetChainAmount::<T, I>::from(1000u32),
 					deposit_details: BenchmarkValue::benchmark_value()

@@ -3087,7 +3087,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		action: ChannelAction<T::AccountId, T::TargetChain>,
 		boost_fee: BasisPoints,
 	) -> Result<
-		(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>, T::Amount),
+		(DepositChannel<T::TargetChain>, TargetChainBlockNumber<T, I>, T::Amount),
 		DispatchError,
 	> {
 		ensure!(T::SafeMode::get().deposits_enabled, Error::<T, I>::DepositChannelCreationDisabled);
@@ -3167,12 +3167,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			<frame_system::Pallet<T>>::block_number(),
 		)?;
 
-		Ok((
-			deposit_channel.channel_id,
-			deposit_channel.address,
-			expiry_height,
-			channel_opening_fee,
-		))
+		Ok((deposit_channel, expiry_height, channel_opening_fee))
 	}
 
 	pub fn get_failed_call(broadcast_id: BroadcastId) -> Option<FailedForeignChainCall> {
@@ -3438,7 +3433,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		let (channel_id, deposit_address, expiry_block, channel_opening_fee) = Self::open_channel(
+		let (deposit_channel, expiry_block, channel_opening_fee) = Self::open_channel(
 			&lp_account,
 			source_asset,
 			ChannelAction::LiquidityProvision { lp_account: lp_account.clone(), refund_address },
@@ -3446,8 +3441,10 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		)?;
 
 		Ok((
-			channel_id,
-			<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(deposit_address),
+			deposit_channel.channel_id,
+			<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
+				deposit_channel.address,
+			),
 			expiry_block,
 			channel_opening_fee,
 		))
@@ -3473,7 +3470,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 			T::SwapParameterValidation::validate_dca_params(params)?;
 		}
 
-		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(
+		let (deposit_channel, expiry_height, channel_opening_fee) = Self::open_channel(
 			&broker_id,
 			source_asset,
 			ChannelAction::Swap {
@@ -3488,8 +3485,10 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		)?;
 
 		Ok((
-			channel_id,
-			<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(deposit_address),
+			deposit_channel.channel_id,
+			<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
+				deposit_channel.address,
+			),
 			expiry_height,
 			channel_opening_fee,
 		))
