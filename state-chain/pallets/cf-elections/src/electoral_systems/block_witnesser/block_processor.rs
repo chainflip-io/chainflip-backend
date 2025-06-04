@@ -354,7 +354,6 @@ pub(crate) mod tests {
 	use frame_support::{Deserialize, Serialize};
 	use proptest_derive::Arbitrary;
 	use sp_std::{fmt::Debug, vec::Vec};
-	use std::collections::BTreeMap;
 
 	const SAFETY_MARGIN: u32 = 3;
 
@@ -562,24 +561,28 @@ pub(crate) mod tests {
 	/// SAFETY_BUFFER after which we delete them
 	#[test]
 	fn already_processed_events_saved_and_removed_correctly() {
-		let mut processor = BlockProcessor::<Types>::default();
+		let mut processor: BlockProcessor<TypesFor<(u8, Vec<u8>, Vec<u8>)>> =
+			BlockProcessor::<Types>::default();
+		const FIRST_BLOCK_HEIGHT: u8 = 101;
 
 		processor.process_block_data_and_chain_progress_test(
-			BPChainProgress::up_to(101),
-			(101, vec![1], SAFETY_MARGIN),
+			BPChainProgress::up_to(FIRST_BLOCK_HEIGHT),
+			(FIRST_BLOCK_HEIGHT, vec![1], SAFETY_MARGIN),
 		);
 		processor.process_chain_progress(
-			BPChainProgress::reorg(101, RangeInclusive::new(101, 101)),
-			101,
+			BPChainProgress::reorg(
+				FIRST_BLOCK_HEIGHT,
+				RangeInclusive::new(FIRST_BLOCK_HEIGHT, FIRST_BLOCK_HEIGHT),
+			),
+			FIRST_BLOCK_HEIGHT,
 		);
+		let next_block_height = FIRST_BLOCK_HEIGHT.saturating_add(Types::SAFETY_BUFFER as u8);
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
-			Some(101u8.saturating_add(Types::SAFETY_BUFFER as u8)).as_ref(),
+			Some(next_block_height).as_ref(),
 		);
-		processor.process_chain_progress(
-			BPChainProgress::up_to(101u8.saturating_add(Types::SAFETY_BUFFER as u8)),
-			101u8.saturating_add(Types::SAFETY_BUFFER as u8),
-		);
+		processor
+			.process_chain_progress(BPChainProgress::up_to(next_block_height), next_block_height);
 		assert_eq!(processor.processed_events.get(&MockBtcEvent::PreWitness(1)), None,);
 	}
 
