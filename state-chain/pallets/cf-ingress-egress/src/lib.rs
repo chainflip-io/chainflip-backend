@@ -3060,19 +3060,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn generate_new_channel(
 		source_asset: TargetChainAsset<T, I>,
 	) -> Result<DepositChannel<T::TargetChain>, DispatchError> {
-		let next_channel_id = Self::allocate_next_channel_id()?;
-		Ok(DepositChannel::generate_new::<T::AddressDerivation>(next_channel_id, source_asset)
-			.map_err(|e| match e {
-				AddressDerivationError::MissingPolkadotVault => Error::<T, I>::MissingPolkadotVault,
-				AddressDerivationError::MissingBitcoinVault => Error::<T, I>::MissingBitcoinVault,
-				AddressDerivationError::BitcoinChannelIdTooLarge =>
-					Error::<T, I>::BitcoinChannelIdTooLarge,
-				AddressDerivationError::SolanaDerivationError { .. } =>
-					Error::<T, I>::SolanaAddressDerivationError,
-				AddressDerivationError::MissingSolanaApiEnvironment =>
-					Error::<T, I>::MissingSolanaApiEnvironment,
-				AddressDerivationError::MissingAssethubVault => Error::<T, I>::MissingAssethubVault,
-			})?)
+		Ok(DepositChannel::generate_new::<T::AddressDerivation>(
+			Self::allocate_next_channel_id()?,
+			source_asset,
+		)
+		.map_err(|e| match e {
+			AddressDerivationError::MissingPolkadotVault => Error::<T, I>::MissingPolkadotVault,
+			AddressDerivationError::MissingBitcoinVault => Error::<T, I>::MissingBitcoinVault,
+			AddressDerivationError::BitcoinChannelIdTooLarge =>
+				Error::<T, I>::BitcoinChannelIdTooLarge,
+			AddressDerivationError::SolanaDerivationError { .. } =>
+				Error::<T, I>::SolanaAddressDerivationError,
+			AddressDerivationError::MissingSolanaApiEnvironment =>
+				Error::<T, I>::MissingSolanaApiEnvironment,
+			AddressDerivationError::MissingAssethubVault => Error::<T, I>::MissingAssethubVault,
+		})?)
 	}
 
 	/// Opens a channel for the given asset and registers it with the given action.

@@ -23,6 +23,7 @@ use cf_chains::{evm::to_evm_address, CcmChannelMetadataUnchecked};
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_primitives::{DcaParameters, ForeignChain};
 use cf_rpc_types::{RedemptionAmount, RefundParametersRpc};
+use futures::future::BoxFuture;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::Serialize;
@@ -365,60 +366,54 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
-		let (_, (block_fut, finalized_fut)) = self
-			.submit_signed_extrinsic_with_dry_run(
-				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
-					source_asset,
-					destination_asset,
-					destination_address: destination_address
-						.try_parse_to_encoded_address(destination_asset.into())?,
-					broker_commission,
-					channel_metadata,
-					boost_fee: boost_fee.unwrap_or_default(),
-					affiliate_fees: affiliate_fees.unwrap_or_default(),
-					refund_parameters: refund_parameters.try_map_address(|addr| {
-						addr.try_parse_to_encoded_address(source_asset.into())
-					})?,
-					dca_parameters,
-				},
-			)
-			.await?;
+		let submit_signed_extrinsic_fut = self.submit_signed_extrinsic_with_dry_run(
+			pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
+				source_asset,
+				destination_asset,
+				destination_address: destination_address
+					.try_parse_to_encoded_address(destination_asset.into())?,
+				broker_commission,
+				channel_metadata,
+				boost_fee: boost_fee.unwrap_or_default(),
+				affiliate_fees: affiliate_fees.unwrap_or_default(),
+				refund_parameters: refund_parameters.try_map_address(|addr| {
+					addr.try_parse_to_encoded_address(source_asset.into())
+				})?,
+				dca_parameters,
+			},
+		);
 
 		// Get the pre-allocated channels from the previous finalized block
-		let preallocated_channels =
+		let preallocated_channels_fut: BoxFuture<'static, Result<Vec<ChannelId>>> =
 			match source_asset.into() {
-				ForeignChain::Bitcoin => preallocated_channels_for_chain::<
+				ForeignChain::Bitcoin => Box::pin(preallocated_channels_for_chain::<
 					state_chain_runtime::Runtime,
 					BitcoinInstance,
-				>(self.base_rpc_client(), &self.account_id())
-				.await?,
-				ForeignChain::Ethereum => preallocated_channels_for_chain::<
+				>(self.base_rpc_client(), self.account_id())),
+				ForeignChain::Ethereum => Box::pin(preallocated_channels_for_chain::<
 					state_chain_runtime::Runtime,
 					EthereumInstance,
-				>(self.base_rpc_client(), &self.account_id())
-				.await?,
-				ForeignChain::Polkadot => preallocated_channels_for_chain::<
+				>(self.base_rpc_client(), self.account_id())),
+				ForeignChain::Polkadot => Box::pin(preallocated_channels_for_chain::<
 					state_chain_runtime::Runtime,
 					PolkadotInstance,
-				>(self.base_rpc_client(), &self.account_id())
-				.await?,
-				ForeignChain::Arbitrum => preallocated_channels_for_chain::<
+				>(self.base_rpc_client(), self.account_id())),
+				ForeignChain::Arbitrum => Box::pin(preallocated_channels_for_chain::<
 					state_chain_runtime::Runtime,
 					ArbitrumInstance,
-				>(self.base_rpc_client(), &self.account_id())
-				.await?,
-				ForeignChain::Solana =>
-					preallocated_channels_for_chain::<state_chain_runtime::Runtime, SolanaInstance>(
-						self.base_rpc_client(),
-						&self.account_id(),
-					)
-					.await?,
-				ForeignChain::Assethub => preallocated_channels_for_chain::<
+				>(self.base_rpc_client(), self.account_id())),
+				ForeignChain::Solana => Box::pin(preallocated_channels_for_chain::<
+					state_chain_runtime::Runtime,
+					SolanaInstance,
+				>(self.base_rpc_client(), self.account_id())),
+				ForeignChain::Assethub => Box::pin(preallocated_channels_for_chain::<
 					state_chain_runtime::Runtime,
 					AssethubInstance,
-				>(self.base_rpc_client(), &self.account_id())
-				.await?,
+				>(self.base_rpc_client(), self.account_id())),
 			};
+
+		let ((_, (block_fut, finalized_fut)), preallocated_channels) =
+			futures::try_join!(submit_signed_extrinsic_fut, preallocated_channels_fut)?;
 
 		// If the extracted deposit channel was pre-allocated to this broker
 		// in the previous finalized block, we can return it immediately.
@@ -732,12 +727,12 @@ pub fn generate_ethereum_key(
 
 async fn preallocated_channels_for_chain<T: pallet_cf_ingress_egress::Config<I>, I: 'static>(
 	client: Arc<DefaultRpcClient>,
-	account_id: &T::AccountId,
+	account_id: T::AccountId,
 ) -> Result<Vec<ChannelId>> {
 	Ok(client
 		.storage_map_entry::<pallet_cf_ingress_egress::PreallocatedChannels<T, I>>(
 			client.latest_finalized_block_hash().await?,
-			account_id,
+			&account_id,
 		)
 		.await?
 		.iter()
