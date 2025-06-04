@@ -15,7 +15,6 @@ import {
   getEvmEndpoint,
   getSolConnection,
   deferredPromise,
-  amountToFineAmount,
 } from '../shared/utils';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
 import {
@@ -219,8 +218,7 @@ async function main(): Promise<void> {
   await updatePriceFeed(logger, 'Ethereum', 'SOL', price.get('Sol')!.toString());
   await updatePriceFeed(logger, 'Solana', 'BTC', price.get('Btc')!.toString());
   await updatePriceFeed(logger, 'Solana', 'ETH', price.get('Eth')!.toString());
-  // TODO: To add when we get the final image.
-  // await updatePriceFeed(logger, 'Solana', 'SOL', price.get('Sol')!.toString());
+  await updatePriceFeed(logger, 'Solana', 'SOL', price.get('Sol')!.toString());
 
   // Confirmation
   logger.info('Waiting for new epoch...');

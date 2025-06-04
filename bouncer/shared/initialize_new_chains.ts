@@ -1,7 +1,5 @@
 import Web3 from 'web3';
-import { execSync } from 'child_process';
 import {
-  Connection,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -14,7 +12,6 @@ import {
   encodeSolAddress,
   solanaNumberOfNonces,
   solanaNumberOfAdditionalNonces,
-  decodeSolAddress,
 } from '../shared/utils';
 import { sendSol, signAndSendTxSol } from '../shared/send_sol';
 import { getSolanaVaultIdl, getKeyManagerAbi } from '../shared/contract_interfaces';

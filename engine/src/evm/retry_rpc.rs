@@ -15,8 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod address_checker;
-pub mod oracle_aggregator;
 pub mod node_interface;
+pub mod oracle_aggregator;
 
 use ethers::{
 	prelude::*,
