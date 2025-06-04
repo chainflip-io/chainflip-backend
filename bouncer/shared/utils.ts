@@ -185,14 +185,15 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT':
           return 'EWaGcrFXhf9Zq8yxSdpAa75kZmDXkRxaP17sYiL6UpZN';
         case 'USER_ADDRESS_LOOKUP_TABLE':
-          // TODO: Update this
-          return 'G2wCNFGQHKTteiwAGf8nyRVHAbaZnqGg15HRyRjhugBf';
+          return '6fs9L33QGxsYnjBtUFtdnJubA1mVqzqsETgAKG34U9RM';
         case 'PRICE_FEED_MOCK':
           return 'DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X';
         case 'PRICE_FEED_BTC':
           return 'HDSV2wFxmsrmCwwY34QzaVkvmJpG7VF8S9fX2iThynjG';
         case 'PRICE_FEED_ETH':
           return '8U3c4SqXaXKPQiarNH3xHXiVoBLYbkqkzusthyJJjGrE';
+        case 'PRICE_FEED_SOL':
+          return 'CrjmdLxTkmd5bxTQjE82FNgiuxeoY3G4EzzhDJ4RH9Wx';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
