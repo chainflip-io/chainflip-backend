@@ -149,7 +149,7 @@ async fn run_cli() -> Result<()> {
 						RedeemDestination::parse_external(eth_address, executor_address)?
 					).await?;
 				},
-				Rebalance { recipient_account_id, amount, restricted_address } => {
+				Rebalance { amount, recipient_account_id, restricted_address } => {
 					request_rebalance_or_redemption(
 						api,
 						amount,
