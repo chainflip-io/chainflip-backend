@@ -24,6 +24,8 @@ pub mod safe_mode;
 pub use safe_mode::*;
 mod swapping;
 
+use cf_chains::SetGovKeyWithAggKeyError;
+
 pub use swapping::{
 	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
 	SwapRequestTypeEncoded, SwapType,
@@ -937,7 +939,7 @@ pub trait BroadcastAnyChainGovKey {
 		chain: ForeignChain,
 		old_key: Option<Vec<u8>>,
 		new_key: Vec<u8>,
-	) -> Result<(), ()>;
+	) -> Result<(), SetGovKeyWithAggKeyError>;
 
 	fn is_govkey_compatible(chain: ForeignChain, key: &[u8]) -> bool;
 }

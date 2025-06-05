@@ -22,8 +22,9 @@ use cf_amm::{
 };
 use cf_chains::{
 	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
-	sol::SolInstructionRpc, CcmChannelMetadataUnchecked, Chain, ChainCrypto, ForeignChainAddress,
-	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
+	sol::SolInstructionRpc, CcmChannelMetadataUnchecked, Chain, ChainCrypto,
+	ChannelRefundParametersEncoded, ForeignChainAddress, VaultSwapExtraParametersEncoded,
+	VaultSwapInputEncoded,
 };
 use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
@@ -46,7 +47,7 @@ use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_runtime::{DispatchError, Percent};
+use sp_runtime::{DispatchError, Percent, Permill};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
@@ -379,9 +380,15 @@ pub struct TradingStrategyLimits {
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct NetworkFeeDetails {
+	pub standard_rate_and_minimum: FeeRateAndMinimum,
+	pub rates: AssetMap<Permill>,
+}
+
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
 pub struct NetworkFees {
-	pub regular_network_fee: FeeRateAndMinimum,
-	pub internal_swap_network_fee: FeeRateAndMinimum,
+	pub regular_network_fee: NetworkFeeDetails,
+	pub internal_swap_network_fee: NetworkFeeDetails,
 }
 
 // READ THIS BEFORE UPDATING THIS TRAIT:
@@ -550,6 +557,18 @@ decl_runtime_apis!(
 			broker: AccountId32,
 			vault_swap: VaultSwapDetails<String>,
 		) -> Result<VaultSwapInputEncoded, DispatchErrorWithMessage>;
+		fn cf_encode_cf_parameters(
+			broker: AccountId32,
+			source_asset: Asset,
+			destination_address: EncodedAddress,
+			destination_asset: Asset,
+			refund_parameters: ChannelRefundParametersEncoded,
+			dca_parameters: Option<DcaParameters>,
+			boost_fee: BasisPoints,
+			broker_commission: BasisPoints,
+			affiliate_fees: Affiliates<AccountId32>,
+			channel_metadata: Option<CcmChannelMetadataUnchecked>,
+		) -> Result<Vec<u8>, DispatchErrorWithMessage>;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
 		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
 		fn cf_affiliate_details(

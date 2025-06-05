@@ -24,7 +24,7 @@ use cf_test_utilities::{
 	assert_events_eq, assert_events_match, assert_matching_event_count, last_event,
 };
 use cf_traits::{mocks::balance_api::MockBalance, BalanceApi, PoolApi, SwappingApi};
-use frame_support::{assert_noop, assert_ok, traits::Hooks};
+use frame_support::{assert_noop, assert_ok};
 use sp_core::bounded_vec;
 use sp_runtime::BoundedVec;
 
@@ -166,6 +166,8 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			0,
 			Some(0),
 			100,
+			None,
+			None,
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
@@ -175,6 +177,8 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			0,
 			Some(tick),
 			100_000,
+			None,
+			None,
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
@@ -184,6 +188,8 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			1,
 			Some(tick),
 			10_000,
+			None,
+			None,
 		));
 		assert_eq!(
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE), false),
@@ -371,93 +377,126 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 }
 
 #[test]
-fn can_execute_scheduled_limit_order() {
-	new_test_ext().execute_with(|| {
-		let order_id = 0;
-		assert_ok!(LiquidityPools::new_pool(
-			RuntimeOrigin::root(),
-			Asset::Flip,
-			STABLE_ASSET,
-			400_000u32,
-			price_at_tick(0).unwrap(),
-		));
-
+fn can_execute_scheduled_limit_order_updates() {
+	fn test_scheduled_limit_order_update(
+		update: impl Fn(OrderId, u64, AssetAmount) -> DispatchResult,
+	) {
+		const DISPATCH_AT: u64 = 6;
+		const ORDER_ID: u64 = 0;
 		const AMOUNT: AssetAmount = 55;
 
-		MockBalance::credit_account(&ALICE, STABLE_ASSET, AMOUNT);
-		assert_ok!(LiquidityPools::schedule_limit_order_update(
-			RuntimeOrigin::signed(ALICE),
-			Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
-				base_asset: Asset::Flip,
-				quote_asset: STABLE_ASSET,
-				side: Side::Buy,
-				id: order_id,
-				option_tick: Some(100),
-				sell_amount: AMOUNT,
-			}),
-			6
-		));
-		assert_eq!(
-			last_event::<Test>(),
-			RuntimeEvent::LiquidityPools(Event::LimitOrderSetOrUpdateScheduled {
-				lp: ALICE,
-				order_id,
-				dispatch_at: 6,
-			})
-		);
-		assert!(!ScheduledLimitOrderUpdates::<Test>::get(6).is_empty());
-		LiquidityPools::on_initialize(6);
-		assert!(
-			ScheduledLimitOrderUpdates::<Test>::get(6).is_empty(),
-			"Should be empty, but is {:?}",
-			ScheduledLimitOrderUpdates::<Test>::get(6)
-		);
-		assert_eq!(
-			last_event::<Test>(),
-			RuntimeEvent::LiquidityPools(Event::ScheduledLimitOrderUpdateDispatchSuccess {
-				lp: ALICE,
-				order_id,
-			})
-		);
-	});
-}
+		new_test_ext()
+			.execute_with(|| {
+				assert_ok!(LiquidityPools::new_pool(
+					RuntimeOrigin::root(),
+					Asset::Flip,
+					STABLE_ASSET,
+					400_000u32,
+					price_at_tick(0).unwrap(),
+				));
 
-#[test]
-fn schedule_rejects_unsupported_calls() {
-	new_test_ext().execute_with(|| {
-		assert_noop!(
-			LiquidityPools::schedule_limit_order_update(
+				MockBalance::credit_account(&ALICE, STABLE_ASSET, AMOUNT);
+				assert_ok!(update(ORDER_ID, DISPATCH_AT, AMOUNT));
+				assert_eq!(
+					last_event::<Test>(),
+					RuntimeEvent::LiquidityPools(Event::LimitOrderSetOrUpdateScheduled {
+						lp: ALICE,
+						order_id: ORDER_ID,
+						dispatch_at: DISPATCH_AT,
+					})
+				);
+				assert!(!ScheduledLimitOrderUpdates::<Test>::get(DISPATCH_AT).is_empty());
+			})
+			.then_process_blocks_until_block(DISPATCH_AT)
+			.then_execute_with(|_| {
+				assert!(ScheduledLimitOrderUpdates::<Test>::get(DISPATCH_AT).is_empty());
+				assert_eq!(
+					last_event::<Test>(),
+					RuntimeEvent::LiquidityPools(Event::ScheduledLimitOrderUpdateDispatchSuccess {
+						lp: ALICE,
+						order_id: ORDER_ID,
+					})
+				);
+			});
+	}
+
+	test_scheduled_limit_order_update(
+		|order_id: OrderId, dispatch_at: u64, amount: AssetAmount| {
+			LiquidityPools::set_limit_order(
 				RuntimeOrigin::signed(ALICE),
-				Box::new(pallet_cf_pools::Call::<Test>::set_pool_fees {
-					base_asset: Asset::Eth,
-					quote_asset: STABLE_ASSET,
-					fee_hundredth_pips: 0,
-				}),
-				6
-			),
-			Error::<Test>::UnsupportedCall
-		);
-	});
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				order_id,
+				Some(100),
+				amount,
+				Some(dispatch_at),
+				None,
+			)
+		},
+	);
+
+	test_scheduled_limit_order_update(
+		|order_id: OrderId, dispatch_at: u64, amount: AssetAmount| {
+			LiquidityPools::update_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				order_id,
+				Some(100),
+				IncreaseOrDecrease::Increase(amount),
+				Some(dispatch_at),
+			)
+		},
+	);
 }
 
 #[test]
-fn cant_schedule_in_the_past() {
+fn test_dispatch_at_validation() {
+	const CURRENT_BLOCK: u64 = 10;
 	new_test_ext().then_execute_at_block(10u32, |_| {
 		assert_noop!(
-			LiquidityPools::schedule_limit_order_update(
+			LiquidityPools::update_limit_order(
 				RuntimeOrigin::signed(ALICE),
-				Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
-					base_asset: Asset::Flip,
-					quote_asset: STABLE_ASSET,
-					side: Side::Buy,
-					id: 0,
-					option_tick: Some(0),
-					sell_amount: 55,
-				}),
-				9
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				0,
+				Some(0),
+				IncreaseOrDecrease::Decrease(55),
+				// 1 block in the past
+				Some(CURRENT_BLOCK - 1)
 			),
-			Error::<Test>::LimitOrderUpdateExpired
+			Error::<Test>::InvalidDispatchAt
 		);
+
+		assert_noop!(
+			LiquidityPools::update_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				0,
+				Some(0),
+				IncreaseOrDecrease::Decrease(55),
+				// Too far in the future
+				Some(CURRENT_BLOCK + (SCHEDULE_UPDATE_LIMIT_BLOCKS as u64) + 1)
+			),
+			Error::<Test>::InvalidDispatchAt
+		);
+
+		assert_ok!(LiquidityPools::update_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Flip,
+			STABLE_ASSET,
+			Side::Buy,
+			0,
+			Some(0),
+			IncreaseOrDecrease::Decrease(55),
+			// Valid dispatch at
+			Some(CURRENT_BLOCK + (SCHEDULE_UPDATE_LIMIT_BLOCKS as u64))
+		));
 	});
 }
 
@@ -523,6 +562,8 @@ fn can_get_all_pool_orders() {
 			4,
 			Some(100),
 			500_000,
+			None,
+			None,
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
@@ -532,6 +573,8 @@ fn can_get_all_pool_orders() {
 			5,
 			Some(1000),
 			600_000,
+			None,
+			None,
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
@@ -541,6 +584,8 @@ fn can_get_all_pool_orders() {
 			6,
 			Some(100),
 			700_000,
+			None,
+			None,
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
@@ -550,6 +595,8 @@ fn can_get_all_pool_orders() {
 			7,
 			Some(1000),
 			800_000,
+			None,
+			None,
 		));
 
 		assert_eq!(
@@ -887,7 +934,9 @@ fn test_cancel_orders_batch() {
 			Side::Sell,
 			0,
 			Some(TICK),
-			5_000
+			5_000,
+			None,
+			None,
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
@@ -896,7 +945,9 @@ fn test_cancel_orders_batch() {
 			Side::Sell,
 			1,
 			Some(TICK + POOL_FEE_BPS as Tick),
-			15_000
+			15_000,
+			None,
+			None,
 		));
 
 		assert_eq!(
@@ -1032,7 +1083,9 @@ fn auto_sweeping() {
 					Side::Sell,
 					1,
 					Some(100),
-					amount
+					amount,
+					None,
+					None,
 				));
 			}
 
@@ -1067,7 +1120,9 @@ fn auto_sweeping() {
 				Side::Buy,
 				1,
 				Some(0),
-				5_000
+				5_000,
+				None,
+				None,
 			));
 
 			// Note: increase due to implicit sweeping in `set_limit_order`
@@ -1121,7 +1176,9 @@ fn cancel_all_limit_orders_for_account() {
 				side,
 				ORDER_ID,
 				Some(100),
-				AMOUNT
+				AMOUNT,
+				None,
+				None,
 			));
 		}
 
@@ -1262,7 +1319,9 @@ fn test_sweeping_when_updating_limit_order() {
 				Side::Sell,
 				1,
 				Some(0),
-				amount
+				amount,
+				None,
+				None,
 			));
 			MockBalance::credit_account(&lp, STABLE_ASSET, amount);
 			assert_ok!(LiquidityPools::set_limit_order(
@@ -1272,7 +1331,9 @@ fn test_sweeping_when_updating_limit_order() {
 				Side::Buy,
 				2,
 				Some(0),
-				amount
+				amount,
+				None,
+				None,
 			));
 		}
 		assert_eq!(get_balance(&ALICE), (0, 0));
@@ -1297,7 +1358,9 @@ fn test_sweeping_when_updating_limit_order() {
 			Side::Sell,
 			1,
 			None,
-			10_000
+			10_000,
+			None,
+			None,
 		));
 		assert_eq!(get_balance(&ALICE), (0, 5000));
 
@@ -1313,7 +1376,9 @@ fn test_sweeping_when_updating_limit_order() {
 			Side::Sell,
 			1,
 			None,
-			1000
+			1000,
+			None,
+			None,
 		));
 		assert_eq!(get_balance(&BOB), (9000, 5000));
 	});
@@ -1401,4 +1466,154 @@ fn test_sweeping_when_updating_range_order() {
 		));
 		assert_eq!(HistoricalEarnedFees::<Test>::get(BOB, STABLE_ASSET), EXPECTED_FEES);
 	});
+}
+
+#[test]
+fn test_limit_order_auto_close() {
+	const ASSET: Asset = Asset::Flip;
+	const CLOSE_ORDER_AT: u64 = 10;
+	const DISPATCH_AT: u64 = 5;
+	const AMOUNT: AssetAmount = 10_000;
+	const ORDER_ID: u64 = 1;
+
+	new_test_ext()
+		.execute_with(|| {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				ASSET,
+				STABLE_ASSET,
+				0,
+				price_at_tick(0).unwrap(),
+			));
+
+			MockBalance::credit_account(&ALICE, ASSET, AMOUNT);
+
+			// Make sure that a close order at block that is in the past is not accepted
+			assert_noop!(
+				LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					ASSET,
+					STABLE_ASSET,
+					Side::Sell,
+					ORDER_ID,
+					Some(5),
+					AMOUNT,
+					None,
+					Some(0), // Block 0 will always be in the past
+				),
+				Error::<Test>::InvalidCloseOrderAt
+			);
+
+			// Test close order block validation
+			assert_noop!(
+				LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					ASSET,
+					STABLE_ASSET,
+					Side::Sell,
+					ORDER_ID,
+					Some(5),
+					AMOUNT,
+					// Schedule the call for the same block as the close order, so it
+					// should be rejected
+					Some(CLOSE_ORDER_AT),
+					Some(CLOSE_ORDER_AT),
+				),
+				Error::<Test>::InvalidCloseOrderAt
+			);
+			assert_noop!(
+				LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					ASSET,
+					STABLE_ASSET,
+					Side::Sell,
+					ORDER_ID,
+					Some(5),
+					AMOUNT,
+					// Schedule the call for after the close order, so it should be rejected
+					Some(CLOSE_ORDER_AT + 1),
+					Some(CLOSE_ORDER_AT),
+				),
+				Error::<Test>::InvalidCloseOrderAt
+			);
+			assert_noop!(
+				LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					ASSET,
+					STABLE_ASSET,
+					Side::Sell,
+					ORDER_ID,
+					Some(5),
+					AMOUNT,
+					Some(DISPATCH_AT),
+					// Schedule the close order for too far in the future
+					Some((SCHEDULE_UPDATE_LIMIT_BLOCKS as u64) + 2),
+				),
+				Error::<Test>::InvalidCloseOrderAt
+			);
+
+			// Set a limit order with an expiry block in the future
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				ASSET,
+				STABLE_ASSET,
+				Side::Sell,
+				ORDER_ID,
+				Some(5),
+				AMOUNT,
+				Some(DISPATCH_AT),
+				Some(CLOSE_ORDER_AT),
+			));
+
+			// Check that the event for scheduling the opening of the order is emitted
+			assert_events_match!(
+				Test,
+				RuntimeEvent::LiquidityPools(Event::LimitOrderSetOrUpdateScheduled {
+					lp: ALICE,
+					order_id: ORDER_ID,
+					dispatch_at: DISPATCH_AT,
+				}) => ()
+			);
+		})
+		.then_process_blocks_until_block(DISPATCH_AT)
+		.then_execute_with(|_| {
+			// Check that the event for scheduling the expire order is emitted
+			assert_events_match!(
+				Test,
+				RuntimeEvent::LiquidityPools(Event::LimitOrderSetOrUpdateScheduled {
+					lp: ALICE,
+					order_id: ORDER_ID,
+					dispatch_at: CLOSE_ORDER_AT,
+				}) => ()
+			);
+
+			// The order should be present in the pool
+			assert_eq!(
+				LiquidityPools::pool_orders(ASSET, STABLE_ASSET, Some(ALICE), false)
+					.unwrap()
+					.limit_orders
+					.asks
+					.len(),
+				1
+			);
+		})
+		.then_process_blocks_until_block(CLOSE_ORDER_AT)
+		.then_execute_with(|_| {
+			// The order should be removed after the expiry block
+			assert_events_match!(
+				Test,
+				RuntimeEvent::LiquidityPools(Event::ScheduledLimitOrderUpdateDispatchSuccess {
+					lp: ALICE,
+					order_id: ORDER_ID,
+				}) => ()
+			);
+			assert_eq!(
+				LiquidityPools::pool_orders(ASSET, STABLE_ASSET, Some(ALICE), false)
+					.unwrap()
+					.limit_orders
+					.asks
+					.len(),
+				0
+			);
+		});
 }

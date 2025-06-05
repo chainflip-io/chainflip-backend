@@ -16,6 +16,8 @@
 
 #![cfg(test)]
 
+use std::collections::BTreeSet;
+
 use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinFeeInfo},
@@ -216,12 +218,12 @@ impl RecoverDurableNonce for MockSolEnvironment {
 
 impl
 	ChainEnvironment<
-		Vec<SolAddress>,
+		BTreeSet<SolAddress>,
 		AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
 	> for MockSolEnvironment
 {
 	fn lookup(
-		_alts: Vec<SolAddress>,
+		_alts: BTreeSet<SolAddress>,
 	) -> Option<AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>> {
 		None
 	}

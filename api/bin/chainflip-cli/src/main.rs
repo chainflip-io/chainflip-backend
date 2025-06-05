@@ -66,7 +66,7 @@ async fn run_cli() -> Result<()> {
 
 	let cli_settings = CLISettings::new(command_line_opts.clone()).context(
 		r#"Please ensure your config file path is configured correctly and the file is valid.
-			You can also just set all configurations required as command line arguments."#,
+			You can also just set all configurations required as command line arguments. In this case, don't specify a config-root path."#,
 	)?;
 
 	println!(
@@ -417,7 +417,7 @@ async fn count_witnesses(
 			println!("List of witness votes:\n {:?}", value.validators);
 		},
 		None => {
-			println!("The hash you provided lead to no results")
+			println!("The hash you provided leads to no results")
 		},
 	}
 
@@ -561,7 +561,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 		eprintln!(
 			"💡 You can save the private key files to a directory using the --path argument:"
 		);
-		eprintln!("💡 `chainflip-cli --seed-phrase $MY_SEED_PHRASE --path $PATH_TO_KEYS_DIR`");
+		eprintln!("💡 `chainflip-cli generate-keys --seed-phrase $MY_SEED_PHRASE --path $PATH_TO_KEYS_DIR`");
 	}
 
 	Ok(())

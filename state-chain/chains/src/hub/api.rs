@@ -89,7 +89,7 @@ impl<E> AllBatch<Assethub> for AssethubApi<E>
 where
 	E: AssethubEnvironment + ReplayProtectionProvider<Assethub>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		fetch_params: Vec<FetchAssetParams<Assethub>>,
 		transfer_params: Vec<(TransferAssetParams<Assethub>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
@@ -111,11 +111,11 @@ impl<E> SetGovKeyWithAggKey<PolkadotCrypto> for AssethubApi<E>
 where
 	E: AssethubEnvironment + ReplayProtectionProvider<Assethub>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		maybe_old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
-	) -> Result<Self, ()> {
-		let vault = E::try_vault_account().ok_or(())?;
+	) -> Result<Self, SetGovKeyWithAggKeyError> {
+		let vault = E::try_vault_account().ok_or(SetGovKeyWithAggKeyError::VaultAccountNotSet)?;
 
 		Ok(Self::ChangeGovKey(rotate_vault_proxy::extrinsic_builder(
 			E::replay_protection(false),
@@ -130,7 +130,7 @@ impl<E> SetAggKeyWithAggKey<PolkadotCrypto> for AssethubApi<E>
 where
 	E: AssethubEnvironment + ReplayProtectionProvider<Assethub>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		maybe_old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
 	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
@@ -150,7 +150,7 @@ impl<E> ExecutexSwapAndCall<Assethub> for AssethubApi<E>
 where
 	E: AssethubEnvironment + ReplayProtectionProvider<Assethub>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Assethub>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
@@ -179,7 +179,7 @@ impl<E> TransferFallback<Assethub> for AssethubApi<E>
 where
 	E: AssethubEnvironment + ReplayProtectionProvider<Assethub>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_transfer_param: TransferAssetParams<Assethub>,
 	) -> Result<Self, TransferFallbackError> {
 		Err(TransferFallbackError::Unsupported)

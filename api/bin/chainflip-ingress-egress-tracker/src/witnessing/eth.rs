@@ -67,7 +67,7 @@ where
 			nodes,
 			env_params.eth_chain_id.into(),
 			"eth_rpc",
-			"eth_subscribe",
+			"eth_subscribe_client",
 			"Ethereum",
 			Ethereum::WITNESS_PERIOD,
 		)?

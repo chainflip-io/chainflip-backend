@@ -78,7 +78,7 @@ where
 	E: ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount>
 		+ ChainEnvironment<(), AggKey>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_fetch_params: Vec<FetchAssetParams<Bitcoin>>,
 		transfer_params: Vec<(TransferAssetParams<Bitcoin>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
@@ -132,7 +132,7 @@ impl<E> SetAggKeyWithAggKey<BitcoinCrypto> for BitcoinApi<E>
 where
 	E: ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_maybe_old_key: Option<<BitcoinCrypto as ChainCrypto>::AggKey>,
 		_new_key: <BitcoinCrypto as ChainCrypto>::AggKey,
 	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
@@ -151,7 +151,7 @@ impl<E> From<batch_transfer::BatchTransfer> for BitcoinApi<E> {
 
 // TODO: Implement transfer / transfer and call for Bitcoin.
 impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for BitcoinApi<E> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_transfer_param: TransferAssetParams<Bitcoin>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
@@ -186,7 +186,7 @@ where
 
 // transfer_fallback is unsupported for Bitcoin.
 impl<E: ReplayProtectionProvider<Bitcoin>> TransferFallback<Bitcoin> for BitcoinApi<E> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_transfer_param: TransferAssetParams<Bitcoin>,
 	) -> Result<Self, TransferFallbackError> {
 		Err(TransferFallbackError::Unsupported)

@@ -59,6 +59,7 @@ impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closur
 )]
 pub enum TradingStrategy {
 	TickZeroCentered { spread_tick: Tick, base_asset: Asset },
+	SimpleBuySell { buy_tick: Tick, sell_tick: Tick, base_asset: Asset },
 }
 
 #[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -85,7 +86,8 @@ impl TradingStrategy {
 	}
 	pub fn supported_assets(&self) -> BTreeSet<Asset> {
 		match self {
-			TradingStrategy::TickZeroCentered { base_asset, .. } =>
+			TradingStrategy::TickZeroCentered { base_asset, .. } |
+			TradingStrategy::SimpleBuySell { base_asset, .. } =>
 				BTreeSet::from_iter([*base_asset, STABLE_ASSET]),
 		}
 	}
@@ -93,6 +95,17 @@ impl TradingStrategy {
 		match self {
 			TradingStrategy::TickZeroCentered { spread_tick, base_asset } => {
 				if *spread_tick < 0 || *spread_tick > cf_amm_math::MAX_TICK {
+					return Err(Error::<T>::InvalidTick)
+				}
+				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
+			},
+			TradingStrategy::SimpleBuySell { buy_tick, sell_tick, base_asset } => {
+				if buy_tick >= sell_tick ||
+					*buy_tick > cf_amm_math::MAX_TICK ||
+					*sell_tick > cf_amm_math::MAX_TICK ||
+					*buy_tick < cf_amm_math::MIN_TICK ||
+					*sell_tick < cf_amm_math::MIN_TICK
+				{
 					return Err(Error::<T>::InvalidTick)
 				}
 				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
@@ -211,16 +224,21 @@ pub mod pallet {
 
 			for (_, strategy_id, strategy) in Strategies::<T>::iter() {
 				match strategy {
-					TradingStrategy::TickZeroCentered { spread_tick, base_asset } => {
+					TradingStrategy::TickZeroCentered { base_asset, .. } |
+					TradingStrategy::SimpleBuySell { base_asset, .. } => {
 						let new_weight_estimate =
 							weight_used.saturating_add(limit_order_update_weight * 2);
 
 						if remaining_weight.checked_sub(&new_weight_estimate).is_none() {
 							break;
 						}
-
-						let tick = core::cmp::max(spread_tick, 0);
-						for (side, tick) in [(Side::Buy, -tick), (Side::Sell, tick)] {
+						let (buy_tick, sell_tick) = match strategy {
+							TradingStrategy::TickZeroCentered { spread_tick, .. } =>
+								(-spread_tick, spread_tick),
+							TradingStrategy::SimpleBuySell { buy_tick, sell_tick, .. } =>
+								(buy_tick, sell_tick),
+						};
+						for (side, tick) in [(Side::Buy, buy_tick), (Side::Sell, sell_tick)] {
 							let sell_asset =
 								if side == Side::Buy { STABLE_ASSET } else { base_asset };
 
@@ -491,13 +509,21 @@ impl<T: Config> Pallet<T> {
 			return None
 		}
 
+		// Check if the funding contains an unsupported asset
+		if funding.is_empty() ||
+			funding.keys().any(|asset| !strategy.supported_assets().contains(asset))
+		{
+			return None
+		}
+
 		Some(
 			strategy.supported_assets().into_iter().fold(FixedU64::default(), |acc, asset| {
 				let min_required = *minimum.get(&asset).expect("checked above");
-				let fraction_of_required = if min_required == 0 {
+				let funds = *funding.get(&asset).unwrap_or(&0);
+				let fraction_of_required = if funds >= min_required {
 					FixedU64::one()
 				} else {
-					FixedU64::from_rational(*funding.get(&asset).unwrap_or(&0), min_required)
+					FixedU64::from_rational(funds, min_required)
 				};
 				acc + fraction_of_required
 			}) >= FixedU64::one(),

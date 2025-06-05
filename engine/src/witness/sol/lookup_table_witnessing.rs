@@ -10,7 +10,7 @@ use crate::sol::{
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 use sol_prim::{AddressLookupTableAccount, Slot};
-use std::str::FromStr;
+use std::{collections::BTreeSet, str::FromStr};
 
 // We want to return None if the account is not found or there is any error. It should
 // only error if the rpc call fails or returns an unrecognized format response. That is
@@ -18,11 +18,12 @@ use std::str::FromStr;
 // not being a valid ALT we still want to reach consensus.
 pub async fn get_lookup_table_state<SolRetryRpcClient>(
 	sol_rpc: &SolRetryRpcClient,
-	lookup_table_addresses: Vec<SolAddress>,
+	lookup_table_addresses: BTreeSet<SolAddress>,
 ) -> Result<AltWitnessingConsensusResult<Vec<AddressLookupTableAccount>>, anyhow::Error>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
+	let lookup_table_addresses = lookup_table_addresses.into_iter().collect::<Vec<_>>();
 	sol_rpc
 		.get_multiple_accounts(
 			&lookup_table_addresses[..],
@@ -289,11 +290,13 @@ mod tests {
 				.await
 				.unwrap();
 
-				let mainnet_empty_address: SolAddress =
+				let mainnet_empty_address =
 					SolAddress::from_str("ASriuNGwqUosyrUYNrpjMNUsGYAKFAVB4e3bVpeaRC7Y").unwrap();
 
 				let addresses =
-					get_lookup_table_state(&client, vec![mainnet_empty_address]).await.unwrap();
+					get_lookup_table_state(&client, BTreeSet::from([mainnet_empty_address]))
+						.await
+						.unwrap();
 
 				assert_eq!(addresses, AltWitnessingConsensusResult::Invalid);
 
@@ -301,7 +304,9 @@ mod tests {
 					SolAddress::from_str("3bVqyf58hQHsxbjnqnSkopnoyEHB9v9KQwhZj7h1DucW").unwrap();
 
 				let addresses =
-					get_lookup_table_state(&client, vec![mainnet_nonce_account]).await.unwrap();
+					get_lookup_table_state(&client, BTreeSet::from([mainnet_nonce_account]))
+						.await
+						.unwrap();
 
 				assert_eq!(addresses, AltWitnessingConsensusResult::Invalid);
 
