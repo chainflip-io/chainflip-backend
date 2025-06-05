@@ -903,13 +903,6 @@ pub mod pallet {
 			broadcast_id: BroadcastId,
 			egress_ids: Vec<EgressId>,
 		},
-		MinimumDepositSet {
-			asset: TargetChainAsset<T, I>,
-			minimum_deposit: TargetChainAmount<T, I>,
-		},
-		DepositChannelLifetimeSet {
-			lifetime: TargetChainBlockNumber<T, I>,
-		},
 		DepositFailed {
 			block_height: TargetChainBlockNumber<T, I>,
 			reason: DepositFailedReason,
@@ -943,9 +936,6 @@ pub mod pallet {
 			error: AllBatchError,
 		},
 		ChannelOpeningFeePaid {
-			fee: T::Amount,
-		},
-		ChannelOpeningFeeSet {
 			fee: T::Amount,
 		},
 		DepositBoosted {
@@ -999,19 +989,13 @@ pub mod pallet {
 			broker_id: T::AccountId,
 			short_affiliate_id: AffiliateShortId,
 		},
-		WitnessSafetyMarginSet {
-			margin: TargetChainBlockNumber<T, I>,
-		},
-		BoostDelaySet {
-			delay_blocks: BlockNumberFor<T>,
-		},
 		InvalidCcmRefunded {
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			destination_address: TargetChainAccount<T, I>,
 		},
-		MaximumPreallocatedChannelsSet {
-			num_channels: u8,
+		PalletConfigUpdated {
+			update: PalletConfigUpdate<T, I>,
 		},
 	}
 
@@ -1442,37 +1426,27 @@ pub mod pallet {
 					PalletConfigUpdate::<T, I>::ChannelOpeningFee { fee } => {
 						let fee = fee.unique_saturated_into();
 						ChannelOpeningFee::<T, I>::set(fee);
-						Self::deposit_event(Event::<T, I>::ChannelOpeningFeeSet { fee });
 					},
 					PalletConfigUpdate::<T, I>::SetMinimumDeposit { asset, minimum_deposit } => {
 						MinimumDeposit::<T, I>::insert(asset, minimum_deposit);
-						Self::deposit_event(Event::<T, I>::MinimumDepositSet {
-							asset,
-							minimum_deposit,
-						});
 					},
 					PalletConfigUpdate::<T, I>::SetDepositChannelLifetime { lifetime } => {
 						DepositChannelLifetime::<T, I>::set(lifetime);
-						Self::deposit_event(Event::<T, I>::DepositChannelLifetimeSet { lifetime });
 					},
 					PalletConfigUpdate::SetWitnessSafetyMargin { margin } => {
 						WitnessSafetyMargin::<T, I>::set(Some(margin));
-						Self::deposit_event(Event::<T, I>::WitnessSafetyMarginSet { margin });
 					},
 					PalletConfigUpdate::SetBoostDelay { delay_blocks } => {
 						BoostDelayBlocks::<T, I>::set(delay_blocks);
-						Self::deposit_event(Event::<T, I>::BoostDelaySet { delay_blocks });
 					},
 					PalletConfigUpdate::SetMaximumPreallocatedChannels {
 						account_role,
 						num_channels,
 					} => {
 						MaximumPreallocatedChannels::<T, I>::set(account_role, num_channels);
-						Self::deposit_event(Event::<T, I>::MaximumPreallocatedChannelsSet {
-							num_channels,
-						});
 					},
 				}
+				Self::deposit_event(Event::<T, I>::PalletConfigUpdated { update });
 			}
 
 			Ok(())
