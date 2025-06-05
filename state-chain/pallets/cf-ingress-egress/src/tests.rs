@@ -1872,22 +1872,33 @@ fn can_update_all_config_items() {
 		// Check that the events were emitted
 		assert_events_eq!(
 			Test,
-			RuntimeEvent::EthereumIngressEgress(Event::ChannelOpeningFeeSet {
-				fee: NEW_OPENING_FEE
+			RuntimeEvent::EthereumIngressEgress(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::ChannelOpeningFee { fee: NEW_OPENING_FEE }
 			}),
-			RuntimeEvent::EthereumIngressEgress(Event::MinimumDepositSet {
-				asset: EthAsset::Flip,
-				minimum_deposit: NEW_MIN_DEPOSIT_FLIP
+			RuntimeEvent::EthereumIngressEgress(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::SetMinimumDeposit {
+					asset: EthAsset::Flip,
+					minimum_deposit: NEW_MIN_DEPOSIT_FLIP
+				}
 			}),
-			RuntimeEvent::EthereumIngressEgress(Event::MinimumDepositSet {
-				asset: EthAsset::Eth,
-				minimum_deposit: NEW_MIN_DEPOSIT_ETH
+			RuntimeEvent::EthereumIngressEgress(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::SetMinimumDeposit {
+					asset: EthAsset::Eth,
+					minimum_deposit: NEW_MIN_DEPOSIT_ETH
+				}
 			}),
-			RuntimeEvent::EthereumIngressEgress(Event::DepositChannelLifetimeSet {
-				lifetime: NEW_DEPOSIT_CHANNEL_LIFETIME
+			RuntimeEvent::EthereumIngressEgress(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::SetDepositChannelLifetime {
+					lifetime: NEW_DEPOSIT_CHANNEL_LIFETIME
+				}
 			}),
-			RuntimeEvent::EthereumIngressEgress(Event::BoostDelaySet {
-				delay_blocks: NEW_BOOST_DELAY_BLOCKS
+			RuntimeEvent::EthereumIngressEgress(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::SetWitnessSafetyMargin {
+					margin: NEW_WITNESS_SAFETY_MARGIN
+				}
+			}),
+			RuntimeEvent::EthereumIngressEgress(Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::SetBoostDelay { delay_blocks: NEW_BOOST_DELAY_BLOCKS }
 			}),
 		);
 
