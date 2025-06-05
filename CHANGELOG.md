@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.9.6] - 2025-06-05
+
+### Fixes
+
+- Fix order close bug preventing closing Automated Stablecoin Strategies in some cases. ([#[5901](https://github.com/chainflip-io/chainflip-backend/pull/5901)])
+- Update types for new Assethub and Polkadot XCM runtime upgrade release. ([#[5911](https://github.com/chainflip-io/chainflip-backend/pull/5911)])
+
 ## [1.9.5] - 2025-05-28
 
 ### Fixes
