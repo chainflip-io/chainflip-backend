@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use cf_primitives::{AccountId, ChannelId, EpochIndex};
 use futures_core::Future;
 use itertools::Itertools;
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness, VaultDepositWitness};
+use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 use state_chain_runtime::BitcoinInstance;
 
 use super::{
@@ -43,7 +43,7 @@ use bitcoin::{hashes::Hash, BlockHash};
 use cf_chains::{
 	assets::btc,
 	btc::{deposit_address::DepositAddress, Utxo, UtxoId},
-	Bitcoin,
+	Bitcoin, DepositChannel,
 };
 use pallet_cf_broadcast::TransactionConfirmation;
 
@@ -126,7 +126,12 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					}
 				}
 
-				let deposit_addresses = map_script_addresses(deposit_channels);
+				let deposit_addresses = map_script_addresses(
+					deposit_channels
+						.into_iter()
+						.map(|deposit_channel| deposit_channel.deposit_channel)
+						.collect(),
+				);
 
 				let deposit_witnesses = deposit_witnesses(&txs, &deposit_addresses);
 
@@ -228,14 +233,14 @@ pub fn egress_witnessing(
 }
 
 pub fn map_script_addresses(
-	deposit_channels: Vec<DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance>>,
+	deposit_channels: Vec<DepositChannel<Bitcoin>>,
 ) -> HashMap<Vec<u8>, DepositAddress> {
 	deposit_channels
 		.into_iter()
 		.map(|channel| {
-			assert_eq!(channel.deposit_channel.asset, btc::Asset::Btc);
-			let deposit_address = channel.deposit_channel.state;
-			let script_pubkey = channel.deposit_channel.address;
+			assert_eq!(channel.asset, btc::Asset::Btc);
+			let deposit_address = channel.state;
+			let script_pubkey = channel.address;
 
 			(script_pubkey.bytes(), deposit_address)
 		})
@@ -253,7 +258,7 @@ pub mod tests {
 		Amount, ScriptBuf, Txid,
 	};
 	use cf_chains::{btc::deposit_address::DepositAddress, DepositChannel};
-	use pallet_cf_ingress_egress::{BoostStatus, ChannelAction};
+	use pallet_cf_ingress_egress::{BoostStatus, ChannelAction, DepositChannelDetails};
 	use rand::{seq::SliceRandom, Rng, SeedableRng};
 	use sp_runtime::AccountId32;
 
@@ -329,8 +334,15 @@ pub mod tests {
 			None,
 		)];
 
-		let deposit_witnesses =
-			deposit_witnesses(&txs, &map_script_addresses(vec![(fake_details(deposit_address))]));
+		let deposit_witnesses = deposit_witnesses(
+			&txs,
+			&map_script_addresses(
+				vec![(fake_details(deposit_address))]
+					.into_iter()
+					.map(|deposit_channel| deposit_channel.deposit_channel)
+					.collect(),
+			),
+		);
 		assert_eq!(deposit_witnesses.len(), 1);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
 	}
@@ -356,8 +368,15 @@ pub mod tests {
 			fake_transaction(vec![], None),
 		];
 
-		let deposit_witnesses =
-			deposit_witnesses(&txs, &map_script_addresses(vec![fake_details(deposit_address)]));
+		let deposit_witnesses = deposit_witnesses(
+			&txs,
+			&map_script_addresses(
+				vec![fake_details(deposit_address)]
+					.into_iter()
+					.map(|deposit_channel| deposit_channel.deposit_channel)
+					.collect(),
+			),
+		);
 		assert_eq!(deposit_witnesses.len(), 1);
 		assert_eq!(deposit_witnesses[0].amount, LARGEST_UTXO_TO_DEPOSIT);
 	}
@@ -387,10 +406,15 @@ pub mod tests {
 		let deposit_witnesses = deposit_witnesses(
 			&txs,
 			// watching 2 addresses
-			&map_script_addresses(vec![
-				fake_details(deposit_address_1.clone()),
-				fake_details(deposit_address_2.clone()),
-			]),
+			&map_script_addresses(
+				vec![
+					fake_details(deposit_address_1.clone()),
+					fake_details(deposit_address_2.clone()),
+				]
+				.into_iter()
+				.map(|deposit_channel| deposit_channel.deposit_channel)
+				.collect(),
+			),
 		);
 
 		// We should have one deposit per address.
@@ -407,10 +431,12 @@ pub mod tests {
 		let address_2 = DepositAddress::new([0; 32], 1232);
 		DepositAddress::new([0; 32], 0);
 
-		let addresses = map_script_addresses(vec![
-			fake_details(address_1.clone()),
-			fake_details(address_2.clone()),
-		]);
+		let addresses = map_script_addresses(
+			vec![fake_details(address_1.clone()), fake_details(address_2.clone())]
+				.into_iter()
+				.map(|deposit_channel| deposit_channel.deposit_channel)
+				.collect(),
+		);
 
 		let txs: Vec<VerboseTransaction> = vec![
 			fake_transaction(
@@ -498,8 +524,15 @@ pub mod tests {
 			),
 		];
 
-		let deposit_witnesses =
-			deposit_witnesses(&txs, &map_script_addresses(vec![fake_details(address)]));
+		let deposit_witnesses = deposit_witnesses(
+			&txs,
+			&map_script_addresses(
+				vec![fake_details(address)]
+					.into_iter()
+					.map(|deposit_channel| deposit_channel.deposit_channel)
+					.collect(),
+			),
+		);
 		assert_eq!(deposit_witnesses.len(), 2);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
 		assert_eq!(deposit_witnesses[1].amount, UTXO_WITNESSED_2);

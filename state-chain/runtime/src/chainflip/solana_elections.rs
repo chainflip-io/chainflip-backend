@@ -726,3 +726,11 @@ pub(crate) fn initiate_solana_alt_election(alts: Vec<SolAddress>) {
 		log::error!("Cannot start Solana ALT witnessing election: {:?}", e);
 	})
 }
+
+pub struct SolanaGovernanceElectionHook;
+
+impl pallet_cf_elections::GovernanceElectionHook for SolanaGovernanceElectionHook {
+	type Properties = ();
+
+	fn start(_properties: Self::Properties) {}
+}

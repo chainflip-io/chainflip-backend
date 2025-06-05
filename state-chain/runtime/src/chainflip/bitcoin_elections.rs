@@ -12,7 +12,7 @@ use cf_chains::{
 		BtcAmount, Hash,
 	},
 	instances::BitcoinInstance,
-	Bitcoin, Chain,
+	Bitcoin, Chain, DepositChannel,
 };
 use cf_primitives::{AccountId, ChannelId};
 use cf_runtime_utilities::log_or_panic;
@@ -21,6 +21,7 @@ use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_broadcast::{TransactionConfirmation, TransactionOutIdToBroadcastId};
 use pallet_cf_elections::{
 	electoral_system::{ElectoralSystem, ElectoralSystemTypes},
+	electoral_system_runner::RunnerStorageAccessTrait,
 	electoral_systems::{
 		block_height_tracking::{
 			consensus::BlockHeightTrackingConsensus, primitives::NonemptyContinuousHeaders,
@@ -31,7 +32,7 @@ use pallet_cf_elections::{
 			consensus::BWConsensus,
 			primitives::SafeModeStatus,
 			state_machine::{
-				BWProcessorTypes, BWStatemachine, BWTypes, BlockWitnesserSettings,
+				BWElectionType, BWProcessorTypes, BWStatemachine, BWTypes, BlockWitnesserSettings,
 				ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook,
 			},
 		},
@@ -49,9 +50,7 @@ use pallet_cf_elections::{
 	vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };
-use pallet_cf_ingress_egress::{
-	DepositChannelDetails, DepositWitness, PalletSafeMode, VaultDepositWitness,
-};
+use pallet_cf_ingress_egress::{DepositWitness, PalletSafeMode, VaultDepositWitness};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get, MaxEncodedLen};
@@ -177,7 +176,7 @@ impl Validate for DepositSafeModeHook {
 /// The electoral system for deposit channel witnessing
 pub struct BitcoinDepositChannelWitnessing;
 
-type ElectionPropertiesDepositChannel = Vec<DepositChannelDetails<Runtime, BitcoinInstance>>;
+type ElectionPropertiesDepositChannel = Vec<DepositChannel<Bitcoin>>;
 pub(crate) type BlockDataDepositChannel = Vec<DepositWitness<Bitcoin>>;
 
 impls! {
@@ -220,9 +219,11 @@ impls! {
 		fn run(
 			&mut self,
 			block_witness_root: btc::BlockNumber,
-		) -> Vec<DepositChannelDetails<Runtime, BitcoinInstance>> {
+		) -> Vec<DepositChannel<Bitcoin>> {
 			// TODO: Channel expiry
-			BitcoinIngressEgress::active_deposit_channels_at(block_witness_root)
+			BitcoinIngressEgress::active_deposit_channels_at(block_witness_root).into_iter().map(|deposit_channel_details| {
+				deposit_channel_details.deposit_channel
+			}).collect()
 		}
 	}
 
@@ -532,5 +533,72 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 			LIVENESS_CHECK_DURATION,
 		),
 		shared_data_reference_lifetime: 8,
+	}
+}
+
+pub struct BitcoinGovernanceElectionHook;
+
+#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
+pub enum ElectionTypes {
+	DepositChannels(ElectionPropertiesDepositChannel),
+	Vaults(ElectionPropertiesVaultDeposit),
+	Egresses(ElectionPropertiesEgressWitnessing),
+}
+
+impl pallet_cf_elections::GovernanceElectionHook for BitcoinGovernanceElectionHook {
+	type Properties = (<BitcoinChain as ChainTypes>::ChainBlockNumber, ElectionTypes);
+
+	fn start(properties: Self::Properties) {
+		let (block_height, election_type) = properties.clone();
+		match election_type {
+			ElectionTypes::DepositChannels(channels) => {
+				if let Err(e) =
+					RunnerStorageAccess::<Runtime, BitcoinInstance>::mutate_unsynchronised_state(
+						|state: &mut (_, _, _, _, _, _)| {
+							state
+								.1
+								.elections
+								.ongoing
+								.entry(block_height)
+								.or_insert(BWElectionType::Governance(channels));
+							Ok(())
+						},
+					) {
+					log::error!("{e:?}: Failed to create governance election with properties: {properties:?}");
+				}
+			},
+			ElectionTypes::Vaults(vaults) => {
+				if let Err(e) =
+					RunnerStorageAccess::<Runtime, BitcoinInstance>::mutate_unsynchronised_state(
+						|state: &mut (_, _, _, _, _, _)| {
+							state
+								.2
+								.elections
+								.ongoing
+								.entry(block_height)
+								.or_insert(BWElectionType::Governance(vaults));
+							Ok(())
+						},
+					) {
+					log::error!("{e:?}: Failed to create governance election with properties: {properties:?}");
+				}
+			},
+			ElectionTypes::Egresses(egresses) => {
+				if let Err(e) =
+					RunnerStorageAccess::<Runtime, BitcoinInstance>::mutate_unsynchronised_state(
+						|state: &mut (_, _, _, _, _, _)| {
+							state
+								.3
+								.elections
+								.ongoing
+								.entry(block_height)
+								.or_insert(BWElectionType::Governance(egresses));
+							Ok(())
+						},
+					) {
+					log::error!("{e:?}: Failed to create governance election with properties: {properties:?}");
+				}
+			},
+		}
 	}
 }

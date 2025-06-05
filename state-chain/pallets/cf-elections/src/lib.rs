@@ -169,14 +169,16 @@ pub mod pallet {
 	use crate::electoral_system::ConsensusStatus;
 	pub use access_impls::RunnerStorageAccess;
 
-	use crate::electoral_system_runner::RunnerStorageAccessTrait;
+	use crate::{
+		electoral_system_runner::RunnerStorageAccessTrait,
+		electoral_systems::block_height_tracking::CommonTraits,
+	};
 	use bitmap_components::ElectionBitmapComponents;
 	pub use electoral_system::{
 		AuthorityVoteOf, ConsensusVote, ConsensusVotes, ElectionIdentifierOf, ElectoralSystemTypes,
 		IndividualComponentOf, PartialVoteOf, VoteOf, VotePropertiesOf, VoteStorageOf,
 	};
 	pub use electoral_system_runner::ElectoralSystemRunner;
-
 	use frame_support::{
 		sp_runtime::traits::BlockNumberProvider, storage::bounded_btree_map::BoundedBTreeMap,
 		Deserialize, Serialize, StorageDoubleMap as _,
@@ -185,6 +187,7 @@ pub mod pallet {
 	use sp_std::{
 		boxed::Box,
 		collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+		fmt::Debug,
 		vec::Vec,
 	};
 	use vote_storage::{AuthorityVote, VoteComponents, VoteStorage};
@@ -384,6 +387,11 @@ pub mod pallet {
 		}
 	}
 
+	pub trait GovernanceElectionHook {
+		type Properties: Clone + PartialEq + Debug + Encode + Decode + TypeInfo + Send + Sync;
+
+		fn start(properties: Self::Properties);
+	}
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
@@ -404,6 +412,7 @@ pub mod pallet {
 			StateChainBlockNumber = BlockNumberFor<Self>,
 		>;
 
+		type CreateGovernanceElectionHook: GovernanceElectionHook;
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
@@ -1610,6 +1619,19 @@ pub mod pallet {
 				},
 				Some(_) => Err(Error::<T, I>::NotPaused.into()),
 			}
+		}
+
+		#[pallet::call_index(38)]
+		#[pallet::weight(T::WeightInfo::validate_storage())]
+		pub fn start_new_block_witnesser_election(
+			origin: OriginFor<T>,
+			properties: <T::CreateGovernanceElectionHook as GovernanceElectionHook>::Properties,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			T::CreateGovernanceElectionHook::start(properties);
+
+			Ok(())
 		}
 	}
 

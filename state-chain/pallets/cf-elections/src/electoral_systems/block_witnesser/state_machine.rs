@@ -35,7 +35,7 @@ pub struct HookTypeFor<Tag1, Tag2> {
 }
 
 pub trait BWTypes: 'static + Sized + BWProcessorTypes {
-	type ElectionProperties: Debug + Clone + Encode + Decode + Eq + 'static;
+	type ElectionProperties: CommonTraits;
 	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>> + CommonTraits;
 	type SafeModeEnabledHook: Hook<HookTypeFor<(), SafeModeEnabledHook>> + CommonTraits;
 
@@ -122,10 +122,16 @@ defx! {
 	validate _this (else BlockWitnesserError) {}
 }
 
+def_derive!(
+	pub enum EngineElectionType<C: ChainTypes> {
+		ByHash(C::ChainBlockHash),
+		BlockHeight { submit_hash: bool },
+	}
+);
 def_derive! {
 	#[no_serde]
 	pub struct BWElectionProperties<T: BWTypes> {
-		pub election_type: BWElectionType<T::Chain>,
+		pub election_type: EngineElectionType<T::Chain>,
 		pub block_height: ChainBlockNumberOf<T::Chain>,
 		pub properties: T::ElectionProperties,
 	}
@@ -139,16 +145,18 @@ impl<T: BWTypes> Validate for BWElectionProperties<T> {
 
 defx! {
 	#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
-	pub enum BWElectionType[C: ChainTypes] {
+	pub enum BWElectionType[T: BWTypes] {
 		/// Querying blocks we haven't received a hash for yet
 		Optimistic,
 
 		/// Querying blocks by hash
-		ByHash(C::ChainBlockHash),
+		ByHash(<<T as BWProcessorTypes>::Chain as ChainTypes>::ChainBlockHash),
 
 		/// Querying "old" blocks that are below the safety margin,
 		/// and thus we don't care about the hash anymore
 		SafeBlockHeight,
+
+		Governance(T::ElectionProperties),
 	}
 	validate _this (else BWElectionTypeError) {}
 }
@@ -167,10 +175,12 @@ impl<T: BWTypes> AbstractApi for BWStatemachine<T> {
 		index: &BWElectionProperties<T>,
 		(_, hash): &(T::BlockData, Option<ChainBlockHashOf<T::Chain>>),
 	) -> Result<(), Self::Error> {
-		use BWElectionType::*;
+		use EngineElectionType::*;
 		// ensure that a hash is only provided for `Optimistic` elections.
 		match (&index.election_type, hash) {
-			(ByHash(_), None) | (Optimistic, Some(_)) | (SafeBlockHeight, None) => Ok(()),
+			(ByHash(_), None) |
+			(BlockHeight { submit_hash: true }, Some(_)) |
+			(BlockHeight { submit_hash: false }, None) => Ok(()),
 			_ => Err(()),
 		}
 	}
@@ -188,10 +198,27 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			.ongoing
 			.clone()
 			.into_iter()
-			.map(|(block_height, election_type)| BWElectionProperties {
-				properties: state.generate_election_properties_hook.run(block_height),
-				election_type,
-				block_height,
+			.map(|(block_height, election_type)| match election_type {
+				BWElectionType::Governance(properties) => BWElectionProperties {
+					properties,
+					election_type: EngineElectionType::BlockHeight { submit_hash: false },
+					block_height,
+				},
+				BWElectionType::Optimistic => BWElectionProperties {
+					properties: state.generate_election_properties_hook.run(block_height),
+					election_type: EngineElectionType::BlockHeight { submit_hash: true },
+					block_height,
+				},
+				BWElectionType::SafeBlockHeight => BWElectionProperties {
+					properties: state.generate_election_properties_hook.run(block_height),
+					election_type: EngineElectionType::BlockHeight { submit_hash: false },
+					block_height,
+				},
+				BWElectionType::ByHash(hash) => BWElectionProperties {
+					properties: state.generate_election_properties_hook.run(block_height),
+					election_type: EngineElectionType::ByHash(hash),
+					block_height,
+				},
 			})
 			.collect()
 	}

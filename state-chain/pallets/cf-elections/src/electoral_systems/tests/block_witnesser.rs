@@ -22,9 +22,9 @@ use crate::{
 		block_height_tracking::ChainTypes,
 		block_witnesser::{
 			state_machine::{
-				BWElectionProperties, BWElectionType, BWProcessorTypes, DebugEventHook,
-				ElectionPropertiesHook, ElectionTrackerDebugEventHook, ExecuteHook, HookTypeFor,
-				RulesHook, SafeModeEnabledHook,
+				BWElectionProperties, BWProcessorTypes, DebugEventHook, ElectionPropertiesHook,
+				ElectionTrackerDebugEventHook, ExecuteHook, HookTypeFor, RulesHook,
+				SafeModeEnabledHook,
 			},
 			*,
 		},
@@ -196,7 +196,7 @@ fn create_votes_expectation(
 // const MAX_CONCURRENT_ELECTIONS: ElectionCount = 5;
 const SAFETY_MARGIN: usize = 3;
 const MOCK_BW_ELECTION_PROPERTIES: BWElectionProperties<Types> = BWElectionProperties {
-	election_type: BWElectionType::<Types>::SafeBlockHeight,
+	election_type: state_machine::EngineElectionType::<Types>::BlockHeight { submit_hash: false },
 	block_height: 2,
 	properties: BTreeSet::new(),
 };
