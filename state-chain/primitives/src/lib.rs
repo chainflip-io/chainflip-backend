@@ -89,6 +89,9 @@ pub use chains::{assets::any::Asset, ForeignChain};
 /// An index to a block.
 pub type BlockNumber = u32;
 
+/// Transaction's index within the block in which it was included.
+pub type TxIndex = usize;
+
 pub type FlipBalance = u128;
 
 pub type CeremonyId = u64;
