@@ -28,8 +28,20 @@ use std::str::FromStr;
 
 // Simulating a tranasction requires a payer, even if the simulation doesn't require a tx fee.
 // We use a prefunded account for this purpose. The keys have been burnt.
+#[allow(dead_code)]
 const PREFUNDED_ACCOUNT: SolAddress = const_address("CsS34ewTFLGqrpckPRww5hbWr4QJQ1J3ZA5D7WL4Ni3K");
 
+#[allow(dead_code)]
+pub struct PriceFeedData {
+	pub round_id: u32,
+	pub slot: u64,
+	pub timestamp: u32,
+	pub answer: i128,
+	pub decimals: u8,
+	pub description: String,
+}
+
+#[allow(dead_code)]
 pub async fn get_price_feeds<SolRetryRpcClient>(
 	sol_client: &SolRetryRpcClient,
 	oracle_query_helper: SolAddress,
@@ -91,15 +103,6 @@ fn build_and_serialize_query_transaction(
 		.clone()
 		.finalize_and_serialize()
 		.map_err(|e| anyhow::anyhow!("Failed to serialize oracle query transaction: {:?}", e))
-}
-
-pub struct PriceFeedData {
-	pub round_id: u32,
-	pub slot: u64,
-	pub timestamp: u32,
-	pub answer: i128,
-	pub decimals: u8,
-	pub description: String,
 }
 
 // Expected returned data is Vec<PriceFeedData>
