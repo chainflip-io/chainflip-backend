@@ -23,7 +23,7 @@ use cf_chains::{evm::to_evm_address, CcmChannelMetadataUnchecked};
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_primitives::{DcaParameters, ForeignChain};
 use cf_rpc_types::{RedemptionAmount, RefundParametersRpc};
-use futures::future::BoxFuture;
+use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::Serialize;
@@ -366,22 +366,28 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
-		let submit_signed_extrinsic_fut = self.submit_signed_extrinsic_with_dry_run(
-			pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
-				source_asset,
-				destination_asset,
-				destination_address: destination_address
-					.try_parse_to_encoded_address(destination_asset.into())?,
-				broker_commission,
-				channel_metadata,
-				boost_fee: boost_fee.unwrap_or_default(),
-				affiliate_fees: affiliate_fees.unwrap_or_default(),
-				refund_parameters: refund_parameters.try_map_address(|addr| {
-					addr.try_parse_to_encoded_address(source_asset.into())
-				})?,
-				dca_parameters,
-			},
-		);
+		let submit_signed_extrinsic_fut = self
+			.submit_signed_extrinsic_with_dry_run(
+				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
+					source_asset,
+					destination_asset,
+					destination_address: destination_address
+						.try_parse_to_encoded_address(destination_asset.into())?,
+					broker_commission,
+					channel_metadata,
+					boost_fee: boost_fee.unwrap_or_default(),
+					affiliate_fees: affiliate_fees.unwrap_or_default(),
+					refund_parameters: refund_parameters.try_map_address(|addr| {
+						addr.try_parse_to_encoded_address(source_asset.into())
+					})?,
+					dca_parameters,
+				},
+			)
+			.and_then(|(_, (block_fut, finalized_fut))| async move {
+				let (_tx_hash, events, header, ..) = block_fut.until_in_block().await?;
+				Ok((extract_swap_deposit_address(events, header)?, finalized_fut))
+			})
+			.boxed();
 
 		// Get the pre-allocated channels from the previous finalized block
 		let preallocated_channels_fut: BoxFuture<'static, Result<Vec<ChannelId>>> =
@@ -412,13 +418,11 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 				>(self.base_rpc_client(), self.account_id())),
 			};
 
-		let ((_, (block_fut, finalized_fut)), preallocated_channels) =
+		let ((swap_deposit_address, finalized_fut), preallocated_channels) =
 			futures::try_join!(submit_signed_extrinsic_fut, preallocated_channels_fut)?;
 
 		// If the extracted deposit channel was pre-allocated to this broker
 		// in the previous finalized block, we can return it immediately.
-		let (_tx_hash, events, header, ..) = block_fut.until_in_block().await?;
-		let swap_deposit_address = extract_swap_deposit_address(events, header)?;
 		if preallocated_channels.contains(&swap_deposit_address.channel_id) {
 			return Ok(swap_deposit_address);
 		};
