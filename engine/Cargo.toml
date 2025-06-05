@@ -42,8 +42,8 @@ num-derive = { workspace = true }
 num-traits = { workspace = true }
 secp256k1 = { workspace = true, features = ["hashes"] }
 serde = { workspace = true, default-features = true, features = [
-  "derive",
-  "rc",
+	"derive",
+	"rc",
 ] }
 serde_json = { workspace = true }
 sha2 = { workspace = true, default-features = true }
@@ -55,7 +55,7 @@ url = { workspace = true }
 web3 = { workspace = true, features = ["ws-tls-tokio"] }
 zeroize = { workspace = true }
 curve25519-dalek = { workspace = true, default-features = true, features = [
-  "serde",
+	"serde",
 ] }
 ed25519-dalek = { workspace = true }
 pin-project = { workspace = true }
@@ -98,11 +98,11 @@ sol-prim = { workspace = true, features = ["pda", "str", "serde", "scale"] }
 # substrate deps
 cf-amm = { workspace = true, default-features = true }
 codec = { workspace = true, default-features = true, features = [
-  "derive",
-  "full",
+	"derive",
+	"full",
 ] }
 frame-metadata = { workspace = true, default-features = true, features = [
-  "current",
+	"current",
 ] }
 frame-metadata-hash-extension = { workspace = true }
 frame-support = { workspace = true, default-features = true }
@@ -110,7 +110,7 @@ frame-system = { workspace = true, default-features = true }
 sc-rpc-api = { workspace = true, default-features = true }
 sc-transaction-pool-api = { workspace = true, default-features = true }
 scale-info = { workspace = true, default-features = true, features = [
-  "derive",
+	"derive",
 ] }
 sp-core = { workspace = true, default-features = true }
 sp-rpc = { workspace = true, default-features = true }
@@ -133,7 +133,7 @@ multisig = { workspace = true, features = ["test"] }
 rlp = { workspace = true, default-features = true }
 tempfile = { workspace = true }
 cf-utilities = { workspace = true, default-features = true, features = [
-  "test-utils",
+	"test-utils",
 ] }
 serde_path_to_error = { workspace = true }
 
