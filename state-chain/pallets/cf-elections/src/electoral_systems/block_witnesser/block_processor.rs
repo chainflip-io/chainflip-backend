@@ -102,6 +102,7 @@ def_derive! {
 	}
 }
 
+#[derive(Clone)]
 pub struct BPChainProgress<T: ChainTypes> {
 	pub highest_block_height: T::ChainBlockNumber,
 	pub removed_block_heights: Option<RangeInclusive<T::ChainBlockNumber>>,
@@ -142,7 +143,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		lowest_in_progress_height: ChainBlockNumberOf<T::Chain>,
 	) {
 		self.insert_block_data(block_data);
-		self.process_chain_progress(progress, lowest_in_progress_height);
+		self.process_reorg_and_chain_progress(progress, lowest_in_progress_height);
 	}
 
 	#[cfg(test)]
@@ -199,7 +200,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	///   - `BPChainProgress::up_to(height_block_height)` for a simple progress update.
 	///   - `BPChainProgress::reorg(range)` for a reorganization event, where `range` defines the
 	///     blocks affected.
-	pub fn process_chain_progress(
+	pub fn process_reorg(
 		&mut self,
 		progress: BPChainProgress<T::Chain>,
 		lowest_in_progress_height: ChainBlockNumberOf<T::Chain>,
@@ -225,10 +226,25 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 				}
 			}
 		}
+	}
 
+	pub fn process_chain_progress(
+		&mut self,
+		progress: BPChainProgress<T::Chain>,
+		lowest_in_progress_height: ChainBlockNumberOf<T::Chain>,
+	) {
 		let events = self.process_rules(progress.highest_block_height);
 		self.execute.run(events);
 		self.clean_old(lowest_in_progress_height);
+	}
+
+	pub fn process_reorg_and_chain_progress(
+		&mut self,
+		progress: BPChainProgress<T::Chain>,
+		lowest_in_progress_height: ChainBlockNumberOf<T::Chain>,
+	) {
+		self.process_reorg(progress.clone(), lowest_in_progress_height);
+		self.process_chain_progress(progress, lowest_in_progress_height);
 	}
 
 	/// Processes the stored block data to generate events by applying the provided rules.
@@ -489,7 +505,7 @@ pub(crate) mod tests {
 			(11, vec![7, 8, 9], SAFETY_MARGIN),
 		);
 		processor
-			.process_chain_progress(BPChainProgress::reorg(11, RangeInclusive::new(9, 11)), 11);
+			.process_reorg_and_chain_progress(BPChainProgress::reorg(11, RangeInclusive::new(9, 11)), 11);
 		assert!(!processor.blocks_data.contains_key(&9));
 		assert!(!processor.blocks_data.contains_key(&10));
 		assert!(!processor.blocks_data.contains_key(&11));
@@ -514,7 +530,7 @@ pub(crate) mod tests {
 			(11, vec![7, 8, 9], SAFETY_MARGIN),
 		);
 
-		processor.process_chain_progress(BPChainProgress::reorg(11, 9..=11), 11);
+		processor.process_reorg_and_chain_progress(BPChainProgress::reorg(11, 9..=11), 11);
 
 		// We reprocessed the reorged blocks, now all the deposit end up in block 11
 		let result = processor.process_rules_for_ages_and_block(
@@ -543,7 +559,7 @@ pub(crate) mod tests {
 			(102, vec![2], SAFETY_MARGIN),
 		);
 		assert_eq!(processor.processed_events.len(), 0);
-		processor.process_chain_progress(
+		processor.process_reorg_and_chain_progress(
 			BPChainProgress::reorg(103, RangeInclusive::new(101, 103)),
 			103,
 		);
@@ -569,7 +585,7 @@ pub(crate) mod tests {
 			BPChainProgress::up_to(FIRST_BLOCK_HEIGHT),
 			(FIRST_BLOCK_HEIGHT, vec![1], SAFETY_MARGIN),
 		);
-		processor.process_chain_progress(
+		processor.process_reorg_and_chain_progress(
 			BPChainProgress::reorg(
 				FIRST_BLOCK_HEIGHT,
 				RangeInclusive::new(FIRST_BLOCK_HEIGHT, FIRST_BLOCK_HEIGHT),
@@ -582,7 +598,7 @@ pub(crate) mod tests {
 			Some(next_block_height).as_ref(),
 		);
 		processor
-			.process_chain_progress(BPChainProgress::up_to(next_block_height), next_block_height);
+			.process_reorg_and_chain_progress(BPChainProgress::up_to(next_block_height), next_block_height);
 		assert_eq!(processor.processed_events.get(&MockBtcEvent::PreWitness(1)), None,);
 	}
 
@@ -599,10 +615,10 @@ pub(crate) mod tests {
 			BPChainProgress::up_to(102),
 			(102, vec![2], SAFETY_MARGIN * 2),
 		);
-		processor.process_chain_progress(BPChainProgress::up_to(106u8), 106u8);
+		processor.process_reorg_and_chain_progress(BPChainProgress::up_to(106u8), 106u8);
 		//At this point we dispatch full witness only for deposit 1(safety margin 3) and not
 		// 2(safety margin 6) to check it we simulate a reorg to check which events get saved
-		processor.process_chain_progress(
+		processor.process_reorg_and_chain_progress(
 			BPChainProgress::reorg(106, RangeInclusive::new(101, 106)),
 			106,
 		);

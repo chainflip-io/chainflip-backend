@@ -232,6 +232,22 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			Either::Left(Some(progress)) => {
 				let removed_block_heights = progress.removed.clone();
 
+				state.block_processor.process_reorg(
+					BPChainProgress {
+						highest_block_height: state
+							.elections
+							.seen_heights_below
+							.saturating_backward(1),
+						removed_block_heights: removed_block_heights.clone(),
+					},
+					// NOTE: we use the lowest "in progress" height for expiring block and event
+					// data, this way if one BW election is stuck (e.g. due to failing rpc
+					// call), no event data is going to be deleted. That's why we can't use
+					// the `highest_seen` block height, because that one progresses always
+					// following data from the BHW, ignoring ongoing elections.
+					state.elections.lowest_in_progress_height(),
+				);
+
 				for (height, optimistic_block) in state.elections.schedule_range(progress) {
 					state.block_processor.insert_block_data((
 						height,

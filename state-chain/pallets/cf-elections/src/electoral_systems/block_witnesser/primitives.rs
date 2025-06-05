@@ -273,19 +273,19 @@ impl<T: BWTypes> ElectionTracker<T> {
 		// because it might be that we're gonna schedule them by-hash
 		if let Some(ref removed) = progress.removed {
 			self.queued_safe_elections.remove(removed.clone());
-		}
 
-		let last_seen_height = progress.headers.last().block_height;
-		// QUESTION: currently, the following check ensures that
-		// the highest scheduled election never decreases. Do we want this?
-		// It's difficult to imagine a situation where the highest block number
-		// after a reorg is lower than it was previously, and also, even if, in that
-		// case we simply keep the higher number that doesn't seem to be too much of a problem.
-		self.seen_heights_below =
-			max(self.seen_heights_below, last_seen_height.saturating_forward(1));
+		}
 
 		// if there are elections ongoing for the block heights we received, we stop them
 		self.ongoing.retain(|height, _| !progress.headers.contains(height));
+
+		let last_seen_height = progress.headers.last().block_height;
+
+		// We definitely want to ensure that `self.seen_heights_below` is monotonically
+		// increasing in order to have saner invariants hold for the other components
+		// of the election tracker.
+		self.seen_heights_below =
+			max(self.seen_heights_below, last_seen_height.saturating_forward(1));
 
 		let (optimistic_blocks, mut remaining): (BTreeMap<_, _>, BTreeMap<_, _>) =
 			progress.headers.headers.into_iter().fold(
@@ -343,6 +343,7 @@ impl<T: BWTypes> Default for ElectionTracker<T> {
 		Self {
 			seen_heights_below: ChainBlockNumberOf::<T::Chain>::zero(),
 			priority_elections_up_to: ChainBlockNumberOf::<T::Chain>::zero(),
+			highest_ever_ongoing_election: ChainBlockNumberOf::<T::Chain>::zero(),
 			queued_elections: Default::default(),
 			ongoing: Default::default(),
 			queued_safe_elections: Default::default(),
