@@ -37,7 +37,7 @@ use pallet_cf_elections::{
 			},
 		},
 		composite::{
-			tuple_6_impls::{CompositeElectionProperties, DerivedElectoralAccess, Hooks},
+			tuple_6_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
 		},
 		liveness::Liveness,
@@ -50,9 +50,7 @@ use pallet_cf_elections::{
 	vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };
-use pallet_cf_ingress_egress::{
-	DepositChannelDetails, DepositWitness, PalletSafeMode, VaultDepositWitness,
-};
+use pallet_cf_ingress_egress::{DepositWitness, PalletSafeMode, VaultDepositWitness};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get, MaxEncodedLen};

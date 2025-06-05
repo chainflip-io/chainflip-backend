@@ -35,9 +35,7 @@ use pallet_cf_elections::{
 			primitives::{Header, NonemptyContinuousHeaders},
 			ChainBlockHashOf, ChainTypes, HeightWitnesserProperties,
 		},
-		block_witnesser::state_machine::{
-			BWElectionProperties, BWElectionType, BWProcessorTypes, BWTypes, EngineElectionType,
-		},
+		block_witnesser::state_machine::{BWElectionProperties, EngineElectionType},
 	},
 	VoteOf,
 };

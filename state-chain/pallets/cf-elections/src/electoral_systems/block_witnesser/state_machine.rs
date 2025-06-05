@@ -150,7 +150,7 @@ defx! {
 		Optimistic,
 
 		/// Querying blocks by hash
-		ByHash(ChainBlockHashOf<T::Chain>),
+		ByHash(<<T as BWProcessorTypes>::Chain as ChainTypes>::ChainBlockHash),
 
 		/// Querying "old" blocks that are below the safety margin,
 		/// and thus we don't care about the hash anymore

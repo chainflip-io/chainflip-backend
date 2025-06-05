@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use cf_primitives::{AccountId, ChannelId, EpochIndex};
 use futures_core::Future;
 use itertools::Itertools;
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness, VaultDepositWitness};
+use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 use state_chain_runtime::BitcoinInstance;
 
 use super::{
@@ -258,7 +258,7 @@ pub mod tests {
 		Amount, ScriptBuf, Txid,
 	};
 	use cf_chains::{btc::deposit_address::DepositAddress, DepositChannel};
-	use pallet_cf_ingress_egress::{BoostStatus, ChannelAction};
+	use pallet_cf_ingress_egress::{BoostStatus, ChannelAction, DepositChannelDetails};
 	use rand::{seq::SliceRandom, Rng, SeedableRng};
 	use sp_runtime::AccountId32;
 

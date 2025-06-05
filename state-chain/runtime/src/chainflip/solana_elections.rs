@@ -50,11 +50,7 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		self,
 		blockchain::delta_based_ingress::BackoffSettings,
-		composite::{
-			tags::G,
-			tuple_7_impls::{CompositeElectionProperties, Hooks},
-			CompositeRunner,
-		},
+		composite::{tags::G, tuple_7_impls::Hooks, CompositeRunner},
 		exact_value::ExactValueHook,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
