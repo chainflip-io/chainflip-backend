@@ -867,22 +867,17 @@ pub mod pallet {
 				);
 			}
 
-			if let Some(bound_executor_address) = BoundExecutorAddress::<T>::get(&source_account_id)
-			{
-				ensure!(
-					Some(bound_executor_address) ==
-						BoundExecutorAddress::<T>::get(&recipient_account_id),
-					Error::<T>::ExecutorBindingRestrictionViolated
-				);
-			}
+			ensure!(
+				BoundExecutorAddress::<T>::get(&source_account_id) ==
+					BoundExecutorAddress::<T>::get(&recipient_account_id),
+				Error::<T>::ExecutorBindingRestrictionViolated
+			);
 
-			if let Some(bound_redeem_address) = BoundRedeemAddress::<T>::get(&source_account_id) {
-				ensure!(
-					Some(bound_redeem_address) ==
-						BoundRedeemAddress::<T>::get(&recipient_account_id),
-					Error::<T>::AccountBindingRestrictionViolated
-				);
-			}
+			ensure!(
+				BoundRedeemAddress::<T>::get(&source_account_id) ==
+					BoundRedeemAddress::<T>::get(&recipient_account_id),
+				Error::<T>::AccountBindingRestrictionViolated
+			);
 
 			let redemption =
 				Redemption::<T>::for_rebalance(&source_account_id, amount, redemption_address)?;

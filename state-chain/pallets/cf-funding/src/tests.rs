@@ -2116,12 +2116,10 @@ pub mod rebalancing {
 				Error::<Test>::AccountBindingRestrictionViolated
 			);
 			// Case: Rebalance from account with no bound address to account with bound address.
-			assert_ok!(Funding::rebalance(
-				OriginTrait::signed(CHARLIE),
-				ALICE,
-				None,
-				MIN_FUNDING.into()
-			),);
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(CHARLIE), ALICE, None, MIN_FUNDING.into()),
+				Error::<Test>::AccountBindingRestrictionViolated
+			);
 		});
 	}
 
