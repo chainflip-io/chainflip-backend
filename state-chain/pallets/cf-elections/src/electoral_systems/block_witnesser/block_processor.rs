@@ -141,7 +141,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		block_data: (ChainBlockNumberOf<T::Chain>, T::BlockData, u32),
 		lowest_in_progress_height: ChainBlockNumberOf<T::Chain>,
 	) {
-		self.process_block_data(block_data);
+		self.insert_block_data(block_data);
 		self.process_chain_progress(progress, lowest_in_progress_height);
 	}
 
@@ -160,7 +160,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	/// # Parameters
 	///
 	/// - `block_data`: A tuple `(block_number, block_data, safety_margin)`
-	pub fn process_block_data(
+	pub fn insert_block_data(
 		&mut self,
 		(block_number, block_data, safety_margin): (
 			ChainBlockNumberOf<T::Chain>,

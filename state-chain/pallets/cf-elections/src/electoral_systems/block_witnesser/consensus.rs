@@ -1,11 +1,13 @@
 use crate::{
 	electoral_systems::{
-		block_height_tracking::ChainBlockHashOf,
+		block_height_tracking::{consensus, ChainBlockHashOf},
 		state_machine::consensus::{ConsensusMechanism, SuccessThreshold, SupermajorityConsensus},
 	},
 	SharedDataHash,
 };
+use cf_runtime_utilities::log_or_panic;
 use frame_support::Hashable;
+use log::log;
 use sp_std::collections::btree_map::BTreeMap;
 
 use super::state_machine::{BWElectionProperties, BWTypes};
@@ -42,8 +44,13 @@ where
 	}
 
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
-		self.consensus
-			.check_consensus(&settings.0)
-			.map(|consensus| self.data.get(&consensus).expect("hash of vote should exist").clone())
+		self.consensus.check_consensus(&settings.0).and_then(|consensus| {
+			if let Some(data) = self.data.get(&consensus) {
+				Some(data.clone())
+			} else {
+				log_or_panic!("Expected data to exist for hash");
+				None
+			}
+		})
 	}
 }

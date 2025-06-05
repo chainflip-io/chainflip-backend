@@ -31,7 +31,14 @@ defx! {
 
 		/// We always create elections until the next priority height, even if we
 		/// are in safe mode.
-		pub priority_elections_below: ChainBlockNumberOf<T::Chain>,
+		pub priority_elections_up_to: ChainBlockNumberOf<T::Chain>,
+
+		/// We need to keep track of which block heights we have scheduled elections for previously,
+		/// since in case of reorgs we have to set `priority_elections_up_to` such that these heights
+		/// are going to be queried for even in safe mode.
+		/// Since the boundary between ongoing and queued_elections is fuzzy (due to reorgs currently
+		/// ongoing elections might turn into scheduled ones), it is clearer to keep track of this separately.
+		pub highest_ever_ongoing_election: ChainBlockNumberOf<T::Chain>,
 
 		/// Block hashes we got from the BHW.
 		pub queued_elections: BTreeMap<ChainBlockNumberOf<T::Chain>, ChainBlockHashOf<T::Chain>>,
@@ -62,26 +69,7 @@ defx! {
 }
 
 impl<T: BWTypes> ElectionTracker<T> {
-	pub fn update_safe_elections(
-		&mut self,
-		reason: UpdateSafeElectionsReason,
-		f: impl Fn(&mut CompactHeightTracker<ChainBlockNumberOf<T::Chain>>),
-	) {
-		let old = self.queued_safe_elections.clone();
-		f(&mut self.queued_safe_elections);
-		let new = self.queued_safe_elections.clone();
-		self.debug_events
-			.run(ElectionTrackerEvent::UpdateSafeElections { old, new, reason });
-	}
-
 	pub fn start_more_elections(&mut self, max_ongoing: usize, safemode: SafeModeStatus) {
-		// In case of a reorg we still want to recreate elections for blocks which we had
-		// elections for previously AND were touched by the reorg
-		let start_all_below = match safemode {
-			SafeModeStatus::Disabled => self.seen_heights_below,
-			SafeModeStatus::Enabled => self.priority_elections_below,
-		};
-
 		use BWElectionType::*;
 
 		// schedule at most `max_new_elections`
@@ -95,7 +83,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 
 		let hash_elections = self
 			.queued_elections
-			.extract_if(|n, _| *n < start_all_below)
+			.extract_if(|_, _| true)
 			.map(|(height, hash)| (height, ByHash(hash)));
 		let opti_elections = iter::once((self.seen_heights_below, Optimistic));
 
@@ -103,8 +91,20 @@ impl<T: BWTypes> ElectionTracker<T> {
 			safe_elections
 				.chain(hash_elections)
 				.chain(opti_elections)
+				// In case of a reorg we still want to recreate elections for blocks which we had
+				// elections for previously AND were touched by the reorg
+				.take_while(|(height, _)| {
+					safemode == SafeModeStatus::Disabled ||
+						*height <= self.highest_ever_ongoing_election
+				})
 				.take(max_new_elections),
 		);
+
+		// Make sure that we always update the highest ever ongoing election after we have scheduled
+		// new ones
+		self.ongoing.last_key_value().inspect(|(height, _)| {
+			self.highest_ever_ongoing_election = max(self.highest_ever_ongoing_election, **height);
+		});
 	}
 
 	/// If an election is done we remove it from the ongoing list.
@@ -269,17 +269,6 @@ impl<T: BWTypes> ElectionTracker<T> {
 		&mut self,
 		progress: ChainProgress<T::Chain>,
 	) -> Vec<(ChainBlockNumberOf<T::Chain>, OptimisticBlock<T>)> {
-		// Check whether there is a reorg concerning elections we have started previously.
-		// If there is, we ensure that all ongoing or previously finished elections inside the reorg
-		// range are going to be restarted once there is the capacity to do so.
-		if let Some(next_election) = self.next_election() {
-			if progress.removed.clone().is_some_and(|range| *range.start() < next_election) {
-				// we set this value such that even in case of a reorg we create elections for up to
-				// this block
-				self.priority_elections_below = max(next_election, self.priority_elections_below);
-			}
-		}
-
 		// if there are safe elections scheduled for the reorg range, unschedule them,
 		// because it might be that we're gonna schedule them by-hash
 		if let Some(ref removed) = progress.removed {
@@ -353,7 +342,7 @@ impl<T: BWTypes> Default for ElectionTracker<T> {
 	fn default() -> Self {
 		Self {
 			seen_heights_below: ChainBlockNumberOf::<T::Chain>::zero(),
-			priority_elections_below: ChainBlockNumberOf::<T::Chain>::zero(),
+			priority_elections_up_to: ChainBlockNumberOf::<T::Chain>::zero(),
 			queued_elections: Default::default(),
 			ongoing: Default::default(),
 			queued_safe_elections: Default::default(),

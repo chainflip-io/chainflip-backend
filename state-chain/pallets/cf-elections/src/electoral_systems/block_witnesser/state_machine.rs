@@ -232,10 +232,10 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			Either::Left(Some(progress)) => {
 				let removed_block_heights = progress.removed.clone();
 
-				for (height, block) in state.elections.schedule_range(progress) {
-					state.block_processor.process_block_data((
+				for (height, optimistic_block) in state.elections.schedule_range(progress) {
+					state.block_processor.insert_block_data((
 						height,
-						block.data,
+						optimistic_block.data,
 						settings.safety_margin,
 					));
 				}
