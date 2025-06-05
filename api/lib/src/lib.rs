@@ -238,32 +238,32 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 	) -> Result<H256> {
 		let call = RuntimeCall::from(pallet_cf_funding::Call::redeem { amount, address, executor });
 
-		let (tx_hash, ..) =
-			self.submit_signed_extrinsic_with_dry_run(call).await?.until_in_block().await?;
-
-		Ok(tx_hash)
+		Ok(self
+			.submit_signed_extrinsic_with_dry_run(call)
+			.await?
+			.until_in_block()
+			.await?
+			.tx_hash)
 	}
 
 	async fn bind_redeem_address(&self, address: EthereumAddress) -> Result<H256> {
-		let (tx_hash, ..) = self
+		Ok(self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::bind_redeem_address { address })
 			.await
 			.until_in_block()
-			.await?;
-
-		Ok(tx_hash)
+			.await?
+			.tx_hash)
 	}
 
 	async fn bind_executor_address(&self, executor_address: EthereumAddress) -> Result<H256> {
-		let (tx_hash, ..) = self
+		Ok(self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::bind_executor_address {
 				executor_address,
 			})
 			.await
 			.until_finalized()
-			.await?;
-
-		Ok(tx_hash)
+			.await?
+			.tx_hash)
 	}
 
 	async fn register_account_role(&self, role: AccountRole) -> Result<H256> {
@@ -277,9 +277,12 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			AccountRole::Unregistered => bail!("Cannot register account role {:?}", role),
 		};
 
-		let (tx_hash, ..) =
-			self.submit_signed_extrinsic_with_dry_run(call).await?.until_in_block().await?;
-		Ok(tx_hash)
+		Ok(self
+			.submit_signed_extrinsic_with_dry_run(call)
+			.await?
+			.until_in_block()
+			.await?
+			.tx_hash)
 	}
 
 	async fn rotate_session_keys(&self) -> Result<H256> {
@@ -288,7 +291,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		let aura_key: [u8; 32] = raw_keys[0..32].try_into().unwrap();
 		let grandpa_key: [u8; 32] = raw_keys[32..64].try_into().unwrap();
 
-		let (tx_hash, ..) = self
+		Ok(self
 			.submit_signed_extrinsic(pallet_cf_validator::Call::set_keys {
 				keys: SessionKeys {
 					aura: AuraId::from(SrPublic::from_raw(aura_key)),
@@ -298,13 +301,12 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			})
 			.await
 			.until_in_block()
-			.await?;
-
-		Ok(tx_hash)
+			.await?
+			.tx_hash)
 	}
 
 	async fn set_vanity_name(&self, name: String) -> Result<()> {
-		let (tx_hash, ..) = self
+		let tx_hash = self
 			.submit_signed_extrinsic(pallet_cf_account_roles::Call::set_vanity_name {
 				name: name.into_bytes().try_into().or_else(|_| {
 					bail!("Name too long. Max length is {} characters.", MAX_LENGTH_FOR_VANITY_NAME,)
@@ -312,7 +314,8 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			})
 			.await
 			.until_in_block()
-			.await?;
+			.await?
+			.tx_hash;
 		println!("Vanity name set at tx {tx_hash:#x}.");
 		Ok(())
 	}
@@ -384,8 +387,11 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 				},
 			)
 			.and_then(|(_, (block_fut, finalized_fut))| async move {
-				let (_tx_hash, events, header, ..) = block_fut.until_in_block().await?;
-				Ok((extract_swap_deposit_address(events, header)?, finalized_fut))
+				let extrinsic_data = block_fut.until_in_block().await?;
+				Ok((
+					extract_swap_deposit_address(extrinsic_data.events, extrinsic_data.header)?,
+					finalized_fut,
+				))
 			})
 			.boxed();
 
@@ -406,15 +412,15 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		};
 
 		// Worst case, we need to wait for the transaction to be finalized.
-		let (_tx_hash, events, header, ..) = finalized_fut.until_finalized().await?;
-		extract_swap_deposit_address(events, header)
+		let extrinsic_data = finalized_fut.until_finalized().await?;
+		extract_swap_deposit_address(extrinsic_data.events, extrinsic_data.header)
 	}
 	async fn withdraw_fees(
 		&self,
 		asset: Asset,
 		destination_address: AddressString,
 	) -> Result<WithdrawFeesDetail> {
-		let (tx_hash, events, ..) = self
+		let extrinsic_data = self
 			.submit_signed_extrinsic(RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
 				asset,
 				destination_address: destination_address
@@ -426,7 +432,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			.await?;
 
 		extract_event!(
-			events,
+			extrinsic_data.events,
 			state_chain_runtime::RuntimeEvent::Swapping,
 			pallet_cf_swapping::Event::WithdrawalRequested,
 			{
@@ -437,7 +443,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 				..
 			},
 			WithdrawFeesDetail {
-				tx_hash,
+				tx_hash: extrinsic_data.tx_hash,
 				egress_id: *egress_id,
 				egress_amount: (*egress_amount).into(),
 				egress_fee: (*egress_fee).into(),
@@ -455,13 +461,14 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 	}
 
 	async fn open_private_btc_channel(&self) -> Result<ChannelId> {
-		let (_, events, ..) = self
+		let events = self
 			.submit_signed_extrinsic_with_dry_run(RuntimeCall::from(
 				pallet_cf_swapping::Call::open_private_btc_channel {},
 			))
 			.await?
 			.until_in_block()
-			.await?;
+			.await?
+			.events;
 
 		extract_event!(
 			&events,
@@ -473,13 +480,14 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 	}
 
 	async fn close_private_btc_channel(&self) -> Result<ChannelId> {
-		let (_, events, ..) = self
+		let events = self
 			.submit_signed_extrinsic_with_dry_run(RuntimeCall::from(
 				pallet_cf_swapping::Call::close_private_btc_channel {},
 			))
 			.await?
 			.until_in_block()
-			.await?;
+			.await?
+			.events;
 
 		extract_event!(
 			&events,
@@ -491,13 +499,14 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 	}
 
 	async fn register_affiliate(&self, withdrawal_address: EthereumAddress) -> Result<AccountId32> {
-		let (_, events, ..) = self
+		let events = self
 			.submit_signed_extrinsic_with_dry_run(pallet_cf_swapping::Call::register_affiliate {
 				withdrawal_address,
 			})
 			.await?
 			.until_in_block()
-			.await?;
+			.await?
+			.events;
 
 		extract_event!(
 			&events,
@@ -512,7 +521,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		&self,
 		affiliate_account_id: AccountId32,
 	) -> Result<WithdrawFeesDetail> {
-		let (tx_hash, events, ..) = self
+		let extrinsic_data = self
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::affiliate_withdrawal_request { affiliate_account_id },
 			)
@@ -521,7 +530,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			.await?;
 
 		extract_event!(
-			events,
+			extrinsic_data.events,
 			state_chain_runtime::RuntimeEvent::Swapping,
 			pallet_cf_swapping::Event::WithdrawalRequested,
 			{
@@ -532,7 +541,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 				..
 			},
 			WithdrawFeesDetail {
-				tx_hash,
+				tx_hash: extrinsic_data.tx_hash,
 				egress_id: *egress_id,
 				egress_amount: (*egress_amount).into(),
 				egress_fee: (*egress_fee).into(),
@@ -545,7 +554,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		&self,
 		minimum_fee_bps: BasisPoints,
 	) -> Result<H256> {
-		let (tx_hash, events, ..) = self
+		let extrinsic_data = self
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::set_vault_swap_minimum_broker_fee { minimum_fee_bps },
 			)
@@ -554,11 +563,11 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			.await?;
 
 		extract_event!(
-			events,
+			extrinsic_data.events,
 			state_chain_runtime::RuntimeEvent::Swapping,
 			pallet_cf_swapping::Event::VaultSwapMinimumBrokerFeeSet,
 			{ .. },
-			tx_hash
+			extrinsic_data.tx_hash
 		)
 	}
 }
@@ -569,9 +578,12 @@ pub trait SimpleSubmissionApi: SignedExtrinsicApi {
 	where
 		C: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static,
 	{
-		let (tx_hash, ..) =
-			self.submit_signed_extrinsic_with_dry_run(call).await?.until_in_block().await?;
-		Ok(tx_hash)
+		Ok(self
+			.submit_signed_extrinsic_with_dry_run(call)
+			.await?
+			.until_in_block()
+			.await?
+			.tx_hash)
 	}
 }
 

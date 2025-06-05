@@ -264,7 +264,9 @@ where
 				tx_hash,
 				events: dynamic_events,
 				header: signed_block.block.header().clone(),
+				tx_index: extrinsic_index,
 				dispatch_info,
+				block_hash,
 			}),
 			Either::Right(dispatch_error) => Err(PoolClientError::ExtrinsicDispatchError(
 				self.runtime_decoder(block_hash).await?.decode_dispatch_error(dispatch_error),
@@ -325,7 +327,9 @@ where
 				tx_hash,
 				events: extrinsic_events,
 				header: signed_block.block.header().clone(),
+				tx_index: extrinsic_index,
 				dispatch_info,
+				block_hash,
 			});
 
 		match result {
@@ -381,20 +385,12 @@ where
 		match wait_for {
 			WaitFor::NoWait =>
 				Ok(WaitForResult::TransactionHash(self.submit_one(call, dry_run).await?)),
-			WaitFor::InBlock => Ok(WaitForResult::Details(
-				self.submit_watch_static(call, false, dry_run).await.map(
-					|ExtrinsicData { tx_hash, events, header, dispatch_info }| {
-						(tx_hash, events, header, dispatch_info)
-					},
-				)?,
-			)),
-			WaitFor::Finalized => Ok(WaitForResult::Details(
-				self.submit_watch_static(call, true, dry_run).await.map(
-					|ExtrinsicData { tx_hash, events, header, dispatch_info }| {
-						(tx_hash, events, header, dispatch_info)
-					},
-				)?,
-			)),
+			WaitFor::InBlock => Ok(WaitForResult::Details(Box::new(
+				self.submit_watch_static(call, false, dry_run).await?,
+			))),
+			WaitFor::Finalized => Ok(WaitForResult::Details(Box::new(
+				self.submit_watch_static(call, true, dry_run).await?,
+			))),
 		}
 	}
 
@@ -407,12 +403,12 @@ where
 		match wait_for {
 			WaitFor::NoWait =>
 				Ok(WaitForDynamicResult::TransactionHash(self.submit_one(call, dry_run).await?)),
-			WaitFor::InBlock => Ok(WaitForDynamicResult::Data(
+			WaitFor::InBlock => Ok(WaitForDynamicResult::Data(Box::new(
 				self.submit_watch_dynamic(call, false, dry_run).await?,
-			)),
-			WaitFor::Finalized => Ok(WaitForDynamicResult::Data(
+			))),
+			WaitFor::Finalized => Ok(WaitForDynamicResult::Data(Box::new(
 				self.submit_watch_dynamic(call, true, dry_run).await?,
-			)),
+			))),
 		}
 	}
 

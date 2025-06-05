@@ -45,7 +45,7 @@ use cf_rpc_apis::{
 		LpRpcApiServer, OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange,
 		RangeOrderSizeJson, SwapRequestResponse,
 	},
-	OrderFills, RedemptionAmount, SwapChannelInfo,
+	ExtrinsicResponse, OrderFills, RedemptionAmount, SwapChannelInfo,
 };
 use cf_utilities::{rpc::NumberOrHex, try_parse_number_or_hex};
 use frame_support::BoundedVec;
@@ -198,17 +198,6 @@ where
 		Ok(tx_hash)
 	}
 
-	async fn request_liquidity_deposit_address_legacy(
-		&self,
-		asset: Asset,
-		wait_for: Option<WaitFor>,
-		boost_fee: Option<BasisPoints>,
-	) -> RpcResult<ApiWaitForResult<AddressString>> {
-		Ok(self.request_liquidity_deposit_address(asset, wait_for, boost_fee).await.map(
-			|wait_for_result| wait_for_result.map_details(|response| response.deposit_address),
-		)?)
-	}
-
 	async fn request_liquidity_deposit_address(
 		&self,
 		asset: Asset,
@@ -230,20 +219,19 @@ where
 				.map_err(CfApiError::from)?
 			{
 				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
-				WaitForDynamicResult::Data(ExtrinsicData { tx_hash, events, .. }) =>
-					extract_from_first_matching_event!(
-						events,
-						cf_static_runtime::liquidity_provider::events::LiquidityDepositAddressReady,
-						{ deposit_address, deposit_chain_expiry_block },
-						ApiWaitForResult::TxDetails {
-							tx_hash,
-							response: LiquidityDepositChannelDetails {
-								deposit_address: AddressString::from_encoded_address(deposit_address.0),
-								deposit_chain_expiry_block,
-							}
+				WaitForDynamicResult::Data(extrinsic_data) => extract_from_first_matching_event!(
+					extrinsic_data.events,
+					cf_static_runtime::liquidity_provider::events::LiquidityDepositAddressReady,
+					{ deposit_address, deposit_chain_expiry_block },
+					ApiWaitForResult::TxDetails {
+						tx_hash: extrinsic_data.tx_hash,
+						response: LiquidityDepositChannelDetails {
+							deposit_address: AddressString::from_encoded_address(deposit_address.0),
+							deposit_chain_expiry_block,
 						}
-					)
-					.map_err(CfApiError::from)?,
+					}
+				)
+				.map_err(CfApiError::from)?,
 			},
 		)
 	}
@@ -252,7 +240,7 @@ where
 		&self,
 		asset: Asset,
 		boost_fee: Option<BasisPoints>,
-	) -> RpcResult<LiquidityDepositChannelDetails> {
+	) -> RpcResult<ExtrinsicResponse<LiquidityDepositChannelDetails>> {
 		let mut status_stream = self
 			.signed_pool_client
 			.submit_watch(
@@ -283,14 +271,24 @@ where
 					// in the previous finalized block, we can return it immediately.
 					// Otherwise, we need to wait for the transaction to be finalized.
 					if pre_allocated_channels.contains(&channel_id) {
-						return Ok(channel_details);
+						return Ok(ExtrinsicResponse {
+							block_number: self.rpc_backend.block_number_for(block_hash)?,
+							block_hash,
+							tx_index,
+							response: channel_details,
+						});
 					}
 				},
 				TransactionStatus::Finalized((block_hash, tx_index)) => {
 					let (_, channel_details) = self
 						.extract_liquidity_deposit_channel_details(block_hash, tx_index)
 						.await?;
-					return Ok(channel_details);
+					return Ok(ExtrinsicResponse {
+						block_number: self.rpc_backend.block_number_for(block_hash)?,
+						block_hash,
+						tx_index,
+						response: channel_details,
+					});
 				},
 				_ => is_transaction_status_error(&status).map_err(CfApiError::from)?,
 			}
@@ -350,19 +348,16 @@ where
 				.map_err(CfApiError::from)?
 			{
 				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
-				WaitForDynamicResult::Data(data) => {
-					let ExtrinsicData { tx_hash, events, .. } = data;
-					extract_from_first_matching_event!(
-						events,
-						cf_static_runtime::liquidity_provider::events::WithdrawalEgressScheduled,
-						{ egress_id },
-						ApiWaitForResult::TxDetails {
-							tx_hash,
-							response: (egress_id.0 .0, egress_id.1)
-						}
-					)
-					.map_err(CfApiError::from)?
-				},
+				WaitForDynamicResult::Data(extrinsic_data) => extract_from_first_matching_event!(
+					extrinsic_data.events,
+					cf_static_runtime::liquidity_provider::events::WithdrawalEgressScheduled,
+					{ egress_id },
+					ApiWaitForResult::TxDetails {
+						tx_hash: extrinsic_data.tx_hash,
+						response: (egress_id.0 .0, egress_id.1)
+					}
+				)
+				.map_err(CfApiError::from)?,
 			},
 		)
 	}
@@ -708,16 +703,16 @@ where
 				.map_err(CfApiError::from)?
 			{
 				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
-				WaitForDynamicResult::Data(data) => {
-					let ExtrinsicData { tx_hash, events, .. } = data;
-					extract_from_first_matching_event!(
-						events,
-						cf_static_runtime::swapping::events::SwapRequested,
-						{ swap_request_id },
-						ApiWaitForResult::TxDetails { tx_hash, response: swap_request_id.0.into() }
-					)
-					.map_err(CfApiError::from)?
-				},
+				WaitForDynamicResult::Data(extrinsic_data) => extract_from_first_matching_event!(
+					extrinsic_data.events,
+					cf_static_runtime::swapping::events::SwapRequested,
+					{ swap_request_id },
+					ApiWaitForResult::TxDetails {
+						tx_hash: extrinsic_data.tx_hash,
+						response: swap_request_id.0.into()
+					}
+				)
+				.map_err(CfApiError::from)?,
 			},
 		)
 	}
@@ -808,10 +803,10 @@ fn into_api_wait_for_dynamic_result<T>(
 ) -> Result<ApiWaitForResult<T>, DynamicEventError> {
 	match from {
 		WaitForDynamicResult::TransactionHash(tx_hash) => Ok(ApiWaitForResult::TxHash(tx_hash)),
-		WaitForDynamicResult::Data(data) => {
-			let ExtrinsicData { tx_hash, events, .. } = data;
-			Ok(ApiWaitForResult::TxDetails { tx_hash, response: map_events(&events)? })
-		},
+		WaitForDynamicResult::Data(extrinsic_data) => Ok(ApiWaitForResult::TxDetails {
+			tx_hash: extrinsic_data.tx_hash,
+			response: map_events(&extrinsic_data.events)?,
+		}),
 	}
 }
 

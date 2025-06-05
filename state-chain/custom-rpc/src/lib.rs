@@ -1127,6 +1127,8 @@ where
 
 #[derive(thiserror::Error, Debug)]
 pub enum CfApiError {
+	#[error("Header not found for block {0:?}")]
+	HeaderNotFoundError(Hash),
 	#[error(transparent)]
 	ClientError(#[from] jsonrpsee::core::client::Error),
 	#[error("{0:?}")]
@@ -1179,6 +1181,7 @@ impl From<CfApiError> for RpcApiError {
 			},
 			CfApiError::ErrorObject(object) => RpcApiError::ErrorObject(object),
 			CfApiError::OtherError(error) => RpcApiError::ErrorObject(internal_error(error)),
+			CfApiError::HeaderNotFoundError(_) => RpcApiError::ErrorObject(internal_error(error)),
 			CfApiError::SubstrateClientError(error) =>
 				RpcApiError::ErrorObject(call_error(error, CfErrorCode::SubstrateClientError)),
 			CfApiError::PoolClientError(error) =>
