@@ -39,8 +39,8 @@ thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["full"] }
 tracing = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true, features = [
-  "json",
-  "env-filter",
+	"json",
+	"env-filter",
 ] }
 url = { workspace = true, optional = true }
 warp = { workspace = true, optional = true }
@@ -56,32 +56,32 @@ reqwest = { workspace = true, features = ["rustls-tls"] }
 
 [features]
 std = [
-  "dep:anyhow",
-  "dep:async-broadcast",
-  "dep:predicates",
-  "dep:mockall",
-  "dep:futures",
-  "dep:futures-util",
-  "dep:tokio",
-  "hex/std",
-  "dep:async-channel",
-  "itertools/use_std",
-  "dep:pin-project",
-  "dep:prometheus",
-  "dep:serde",
-  "serde?/std",
-  "dep:scale-info",
-  "dep:scale-json",
-  "dep:thiserror",
-  "dep:tracing",
-  "dep:tracing-subscriber",
-  "dep:warp",
-  "dep:sp-core",
-  "sp-core?/std",
-  "dep:num-traits",
-  "dep:regex",
-  "dep:url",
-  "dep:clap",
+	"dep:anyhow",
+	"dep:async-broadcast",
+	"dep:predicates",
+	"dep:mockall",
+	"dep:futures",
+	"dep:futures-util",
+	"dep:tokio",
+	"hex/std",
+	"dep:async-channel",
+	"itertools/use_std",
+	"dep:pin-project",
+	"dep:prometheus",
+	"dep:serde",
+	"serde?/std",
+	"dep:scale-info",
+	"dep:scale-json",
+	"dep:thiserror",
+	"dep:tracing",
+	"dep:tracing-subscriber",
+	"dep:warp",
+	"dep:sp-core",
+	"sp-core?/std",
+	"dep:num-traits",
+	"dep:regex",
+	"dep:url",
+	"dep:clap",
 ]
 default = ["std"]
 test-utils = ["dep:tempfile", "dep:tracing", "dep:tracing-subscriber"]
