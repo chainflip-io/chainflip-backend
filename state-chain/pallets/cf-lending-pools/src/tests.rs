@@ -234,6 +234,11 @@ fn basic_boosting() {
 			get_available_amount_for_booster(Asset::Eth, TIER_5_BPS, BOOSTER_1),
 			Some(BOOST_FUNDS + TOTAL_BOOST_FEE - NETWORK_FEE)
 		);
+
+		// Check that finalising boost also finalises the loan:
+		for pool in CorePools::<Test>::iter_values() {
+			assert!(pool.pending_loans.is_empty());
+		}
 	});
 }
 

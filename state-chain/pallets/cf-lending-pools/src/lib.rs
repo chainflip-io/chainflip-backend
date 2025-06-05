@@ -530,10 +530,11 @@ impl<T: Config> BoostApi for Pallet<T> {
 			CorePools::<T>::mutate(asset, core_pool_id, |pool| {
 				if let Some(pool) = pool {
 					for (booster_id, unlocked_amount) in
-						pool.finalise_loan(*loan_id, boosted_amount.saturating_sub(*network_fee))
+						pool.make_repayment(*loan_id, boosted_amount.saturating_sub(*network_fee))
 					{
 						T::Balance::credit_account(&booster_id, asset, unlocked_amount);
 					}
+					pool.finalise_loan(*loan_id);
 				}
 			});
 		}
@@ -550,7 +551,7 @@ impl<T: Config> BoostApi for Pallet<T> {
 		for BoostPoolContribution { core_pool_id, loan_id, .. } in pool_contributions.values() {
 			CorePools::<T>::mutate(asset, core_pool_id, |pool| {
 				if let Some(pool) = pool {
-					let _ = pool.finalise_loan(*loan_id, 0);
+					pool.finalise_loan(*loan_id);
 				}
 			});
 		}

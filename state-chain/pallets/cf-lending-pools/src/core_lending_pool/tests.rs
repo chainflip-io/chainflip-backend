@@ -131,7 +131,8 @@ fn basic_lending() {
 
 	// Finalising the loan with the remaining amount. There should
 	// now be no pending loans:
-	assert_eq!(pool.finalise_loan(LOAN_1, LOAN_AMOUNT / 2), vec![]);
+	assert_eq!(pool.make_repayment(LOAN_1, LOAN_AMOUNT / 2), vec![]);
+	pool.finalise_loan(LOAN_1);
 	check_pool(&pool, [(LENDER_1, LOAN_AMOUNT)]);
 	check_pending_loans(&pool, []);
 }
@@ -150,9 +151,21 @@ fn zero_amount_loan() {
 
 	// If for whatever reason the returned amount isn't zero
 	// that works correctly too:
-	pool.finalise_loan(LOAN_1, 1000);
+	pool.make_repayment(LOAN_1, 1000);
 	check_pool(&pool, [(LENDER_1, 1500)]);
-	check_pending_loans(&pool, []);
+}
+
+#[test]
+fn zero_amount_repayment() {
+	// A zero amount repayment doesn't make much sense, but it is
+	// worth showing that it works as expected
+
+	let mut pool = CoreLendingPool::default();
+	pool.add_funds(LENDER_1, 500);
+
+	assert_eq!(pool.new_loan(0, USAGE), Ok(LOAN_1));
+	assert_eq!(pool.make_repayment(LOAN_1, 0), vec![]);
+	check_pool(&pool, [(LENDER_1, 500)]);
 }
 
 // Basic withdrawing: no pending loans
@@ -216,13 +229,15 @@ fn withdrawing_with_a_pending_loan() {
 	check_pool(&pool, [(LENDER_2, 500)]);
 
 	// LENDER_1 is withdrawing, so their portion of the repayment leaves the pool
-	assert_eq!(pool.finalise_loan(LOAN_1, LOAN_AMOUNT), vec![(LENDER_1, 500)]);
+	assert_eq!(pool.make_repayment(LOAN_1, LOAN_AMOUNT), vec![(LENDER_1, 500)]);
+	pool.finalise_loan(LOAN_1);
 	// LENDER_1 is still waiting for 1 more loan to finalise:
 	check_pending_withdrawals(&pool, [(LENDER_1, vec![LOAN_2])]);
 
-	// LOAN_2 is finalised (with 0 amount which could correspond to, for example,
+	// LOAN_2 is finalised without repayment (which could correspond to, for example,
 	// a boosted deposit being lost); the exiting lender should now be fully out:
-	assert_eq!(pool.finalise_loan(LOAN_2, 0), vec![]);
+	assert_eq!(pool.make_repayment(LOAN_2, 0), vec![]);
+	pool.finalise_loan(LOAN_2);
 	check_pending_withdrawals(&pool, []);
 	check_pending_loans(&pool, []);
 	check_pool(&pool, [(LENDER_2, 1000)]);
@@ -259,8 +274,8 @@ fn adding_funds_during_pending_withdrawal_from_same_lender() {
 	check_pool(&pool, [(LENDER_1, 1000), (LENDER_2, 1500)]);
 
 	// Lender 1 is no longer withdrawing, so pending funds go into available pool
-	// on finalisation:
-	assert_eq!(pool.finalise_loan(LOAN_1, LOAN_AMOUNT), vec![]);
+	// on repayment:
+	assert_eq!(pool.make_repayment(LOAN_1, LOAN_AMOUNT), vec![]);
 	check_pool(&pool, [(LENDER_1, 1500), (LENDER_2, AMOUNT_2)]);
 }
 
@@ -295,13 +310,13 @@ fn new_lender_only_affects_new_loans() {
 	);
 	check_pool(&pool, [(LENDER_2, 250), (LENDER_3, 750)]);
 
-	assert_eq!(pool.finalise_loan(LOAN_1, LOAN_AMOUNT), vec![(LENDER_1, 500)]);
+	assert_eq!(pool.make_repayment(LOAN_1, LOAN_AMOUNT), vec![(LENDER_1, 500)]);
 
 	// LENDER_2 does not get credited for a loan in which they didn't participate:
 	check_pool(&pool, [(LENDER_2, 750), (LENDER_3, 750)]);
 
 	// LENDER_2 does get credited for Loan 2:
-	assert_eq!(pool.finalise_loan(LOAN_2, LOAN_AMOUNT), vec![]);
+	assert_eq!(pool.make_repayment(LOAN_2, LOAN_AMOUNT), vec![]);
 	check_pool(&pool, [(LENDER_2, 1000), (LENDER_3, 1500)]);
 }
 
@@ -321,7 +336,7 @@ fn small_rewards_accumulate() {
 
 	assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(LoanId(LOAN_1)));
 
-	pool.finalise_loan(LoanId(LOAN_1), SMALL_DEPOSIT + FEE);
+	pool.make_repayment(LoanId(LOAN_1), SMALL_DEPOSIT + FEE);
 
 	// LENDER_2 earns ~0.25 (it is rounded down when converted to AssetAmount,
 	// but the fractional part isn't lost)
@@ -330,7 +345,7 @@ fn small_rewards_accumulate() {
 	// 4 more loans like that and LENDER_2 should have withdrawable fees:
 	for loan_id in (LOAN_1 + 1)..=(LOAN_1 + 4) {
 		assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(LoanId(loan_id)));
-		pool.finalise_loan(LoanId(loan_id), SMALL_DEPOSIT + FEE);
+		pool.make_repayment(LoanId(loan_id), SMALL_DEPOSIT + FEE);
 	}
 
 	// Note the increase in LENDER_2's balance:
@@ -377,7 +392,7 @@ fn handling_rounding_errors() {
 	// Importantly, we total amount is as expected:
 	assert_eq!(EXPECTED_REMAINING_AMOUNTS.into_iter().sum::<u128>(), 6_000);
 
-	pool.finalise_loan(LOAN_1, LOAN_AMOUNT);
+	pool.make_repayment(LOAN_1, LOAN_AMOUNT);
 
 	// Again, one of the amounts is larger after loan repayment (the index is the same
 	// because we use loan id as the seed into rng):

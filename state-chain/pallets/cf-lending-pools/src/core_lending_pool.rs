@@ -340,13 +340,7 @@ where
 		unlocked_funds
 	}
 
-	pub fn finalise_loan(
-		&mut self,
-		loan_id: LoanId,
-		repayment_amount: AssetAmount,
-	) -> UnlockedFunds<AccountId> {
-		let unlocked_funds = self.make_repayment(loan_id, repayment_amount);
-
+	pub fn finalise_loan(&mut self, loan_id: LoanId) {
 		let Some(PendingLoan { shares, .. }) = self.pending_loans.remove(&loan_id) else {
 			return Default::default();
 		};
@@ -362,8 +356,6 @@ where
 				}
 			}
 		}
-
-		unlocked_funds
 	}
 
 	pub fn get_available_amount(&self) -> AssetAmount {
