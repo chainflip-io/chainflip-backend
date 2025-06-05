@@ -1765,7 +1765,7 @@ fn preallocated_channels_no_global_pool() {
 		assert_eq!(preallocated_channels_3, vec![4, 5, 6, 7]);
 
 		// STEP 4: Since we initially had max of 2 preallocated channels that were consumed in steps
-		// 2 and 3, the next allocation should not from the initial preallocated_channels_1 list.
+		// 2 and 3, the next allocation should not be from the initial preallocated_channels_1 list.
 		let (deposit_channel_4, _, _) =
 			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
 				.unwrap();
