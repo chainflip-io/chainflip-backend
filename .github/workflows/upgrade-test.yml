@@ -215,6 +215,7 @@ jobs:
           # and we no longer need to test the upgrade process. To remove after 1.10 is released.
           sed -i '/^\s*await upgradeSwapEndpoint(logger);/d'  shared/initialize_new_chains.ts
           ./fast_bouncer.sh
+          git reset --hard
 
       - name: Upgrade network 🚀
         if: inputs.run-job
