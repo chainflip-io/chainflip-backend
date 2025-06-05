@@ -16,6 +16,7 @@
 
 use crate::{
 	backend::{CustomRpcBackend, NotificationBehaviour},
+	get_preallocated_channels,
 	pool_client::{is_transaction_status_error, PoolClientError, SignedPoolClient},
 	CfApiError,
 };
@@ -24,7 +25,7 @@ use cf_chains::{address::AddressString, CcmChannelMetadataUnchecked, ChannelRefu
 use cf_node_client::{
 	extract_from_first_matching_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
 };
-use cf_primitives::{Affiliates, Asset, BasisPoints, ChannelId, ForeignChain};
+use cf_primitives::{Affiliates, Asset, BasisPoints, ChannelId};
 use cf_rpc_apis::{
 	broker::{
 		try_into_refund_parameters_encoded, try_into_swap_extra_params_encoded,
@@ -234,16 +235,10 @@ where
 			.map_err(CfApiError::from)?;
 
 		// Get the pre-allocated channels from the previous finalized block
-		let source_chain: ForeignChain = source_asset.into();
-		let pre_allocated_channels = self.rpc_backend.with_runtime_api(
-			Some(self.rpc_backend.client.info().finalized_hash),
-			|api, hash| {
-				api.cf_get_preallocated_deposit_channels(
-					hash,
-					self.signed_pool_client.account_id(),
-					source_chain,
-				)
-			},
+		let pre_allocated_channels = get_preallocated_channels(
+			&self.rpc_backend,
+			self.signed_pool_client.account_id(),
+			source_asset.into(),
 		)?;
 
 		while let Some(status) = status_stream.next().await {

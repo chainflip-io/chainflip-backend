@@ -14,7 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use super::SimpleSubmissionApi;
+use super::{
+	extract_liquidity_deposit_channel_details, fetch_preallocated_channels, SimpleSubmissionApi,
+};
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
@@ -28,20 +30,20 @@ use cf_primitives::{
 	AccountId, ApiWaitForResult, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters,
 	EgressId, Price, SwapRequestId, WaitFor,
 };
-use chainflip_engine::state_chain_observer::client::{
-	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
-	StateChainClient,
-};
-use frame_support::{pallet_prelude::ConstU32, BoundedVec};
-use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE};
-use sp_core::H256;
-use state_chain_runtime::RuntimeCall;
-use std::ops::Range;
-
 pub use cf_rpc_types::lp::{
 	CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails,
 	OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange, RangeOrderSizeJson,
 };
+use chainflip_engine::state_chain_observer::client::{
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, UntilInBlock},
+	DefaultRpcClient, StateChainClient,
+};
+use frame_support::{pallet_prelude::ConstU32, BoundedVec};
+use futures::{FutureExt, TryFutureExt};
+use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE};
+use sp_core::H256;
+use state_chain_runtime::RuntimeCall;
+use std::{ops::Range, sync::Arc};
 
 fn collect_range_order_returns(
 	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
@@ -129,7 +131,11 @@ fn filter_orders(
 	})
 }
 
-impl LpApi for StateChainClient {}
+impl LpApi for StateChainClient {
+	fn base_rpc_client(&self) -> Arc<DefaultRpcClient> {
+		self.base_rpc_client.clone()
+	}
+}
 
 fn into_api_wait_for_result<T>(
 	from: WaitForResult,
@@ -146,6 +152,8 @@ fn into_api_wait_for_result<T>(
 
 #[async_trait]
 pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
+	fn base_rpc_client(&self) -> Arc<DefaultRpcClient>;
+
 	async fn register_liquidity_refund_address(
 		&self,
 		chain: ForeignChain,
@@ -183,28 +191,49 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 
 		Ok(match wait_for_result {
 			WaitForResult::TransactionHash(tx_hash) => return Ok(ApiWaitForResult::TxHash(tx_hash)),
-			WaitForResult::Details(details) => {
-				let (tx_hash, events, ..) = details;
-				let encoded_address = events
-					.into_iter()
-					.find_map(|event| match event {
-						state_chain_runtime::RuntimeEvent::LiquidityProvider(
-							pallet_cf_lp::Event::LiquidityDepositAddressReady {
-								deposit_address,
-								deposit_chain_expiry_block,
-								..
-							},
-						) => Some(LiquidityDepositChannelDetails {
-							deposit_address: AddressString::from_encoded_address(deposit_address),
-							deposit_chain_expiry_block,
-						}),
-						_ => None,
-					})
-					.ok_or_else(|| anyhow!("No LiquidityDepositAddressReady event was found"))?;
-
-				ApiWaitForResult::TxDetails { tx_hash, response: encoded_address }
+			WaitForResult::Details((tx_hash, events, ..)) => {
+				let (_, details) = extract_liquidity_deposit_channel_details(events)?;
+				ApiWaitForResult::TxDetails { tx_hash, response: details }
 			},
 		})
+	}
+
+	async fn request_liquidity_deposit_address_v2(
+		&self,
+		asset: Asset,
+		boost_fee: Option<BasisPoints>,
+	) -> Result<LiquidityDepositChannelDetails> {
+		let submit_signed_extrinsic_fut = self
+			.submit_signed_extrinsic_with_dry_run(
+				pallet_cf_lp::Call::request_liquidity_deposit_address {
+					asset,
+					boost_fee: boost_fee.unwrap_or_default(),
+				},
+			)
+			.and_then(|(_, (block_fut, finalized_fut))| async move {
+				let (_tx_hash, events, _header, ..) = block_fut.until_in_block().await?;
+				let (channel_id, details) = extract_liquidity_deposit_channel_details(events)?;
+				Ok((channel_id, details, finalized_fut))
+			})
+			.boxed();
+
+		// Get the pre-allocated channels from the previous finalized block
+		let preallocated_channels_fut =
+			fetch_preallocated_channels(self.base_rpc_client(), self.account_id(), asset.into());
+
+		let ((channel_id, details, finalized_fut), preallocated_channels) =
+			futures::try_join!(submit_signed_extrinsic_fut, preallocated_channels_fut)?;
+
+		// If the extracted deposit channel was pre-allocated to this lp
+		// in the previous finalized block, we can return it immediately.
+		if preallocated_channels.contains(&channel_id) {
+			return Ok(details);
+		};
+
+		// Worst case, we need to wait for the transaction to be finalized.
+		let (_tx_hash, events, ..) = finalized_fut.until_finalized().await?;
+		let (_channel_id, details) = extract_liquidity_deposit_channel_details(events)?;
+		Ok(details)
 	}
 
 	async fn withdraw_asset(

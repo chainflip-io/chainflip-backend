@@ -16,8 +16,8 @@
 
 use crate::{
 	backend::{CustomRpcBackend, NotificationBehaviour},
-	order_fills,
-	pool_client::SignedPoolClient,
+	get_preallocated_channels, order_fills,
+	pool_client::{is_transaction_status_error, PoolClientError, SignedPoolClient},
 	CfApiError, RpcResult, StorageQueryApi,
 };
 use anyhow::anyhow;
@@ -36,8 +36,8 @@ use cf_node_client::{
 };
 use cf_primitives::{
 	chains::{assets::any::AssetMap, Arbitrum, Bitcoin, Ethereum, Polkadot, Solana},
-	ApiWaitForResult, Asset, BasisPoints, BlockNumber, DcaParameters, EgressId, ForeignChain,
-	Price, WaitFor,
+	ApiWaitForResult, Asset, BasisPoints, BlockNumber, ChannelId, DcaParameters, EgressId,
+	ForeignChain, Price, WaitFor,
 };
 use cf_rpc_apis::{
 	lp::{
@@ -49,6 +49,7 @@ use cf_rpc_apis::{
 };
 use cf_utilities::{rpc::NumberOrHex, try_parse_number_or_hex};
 use frame_support::BoundedVec;
+use futures::StreamExt;
 use jsonrpsee::{core::async_trait, tokio, PendingSubscriptionSink};
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, MAX_ORDERS_DELETE};
@@ -57,6 +58,7 @@ use sc_client_api::{
 	HeaderBackend, StorageProvider,
 };
 use sc_transaction_pool::FullPool;
+use sc_transaction_pool_api::{TransactionStatus, TxIndex};
 use sp_api::CallApiAt;
 use sp_core::{crypto::AccountId32, U256};
 use sp_runtime::traits::Block as BlockT;
@@ -132,6 +134,29 @@ where
 			rpc_backend: CustomRpcBackend::new(client.clone(), backend, executor),
 			signed_pool_client: SignedPoolClient::new(client, pool, pair),
 		}
+	}
+
+	async fn extract_liquidity_deposit_channel_details(
+		&self,
+		block_hash: Hash,
+		tx_index: TxIndex,
+	) -> RpcResult<(ChannelId, LiquidityDepositChannelDetails)> {
+		let ExtrinsicData { events, .. } = self
+			.signed_pool_client
+			.get_extrinsic_data_dynamic(block_hash, tx_index)
+			.await
+			.map_err(CfApiError::from)?;
+
+		Ok(extract_from_first_matching_event!(
+			events,
+			cf_static_runtime::liquidity_provider::events::LiquidityDepositAddressReady,
+			{ channel_id, deposit_address, deposit_chain_expiry_block },
+			(channel_id, LiquidityDepositChannelDetails {
+					deposit_address: AddressString::from_encoded_address(deposit_address.0),
+					deposit_chain_expiry_block,
+			})
+		)
+		.map_err(CfApiError::from)?)
 	}
 }
 
@@ -221,6 +246,56 @@ where
 					.map_err(CfApiError::from)?,
 			},
 		)
+	}
+
+	async fn request_liquidity_deposit_address_v2(
+		&self,
+		asset: Asset,
+		boost_fee: Option<BasisPoints>,
+	) -> RpcResult<LiquidityDepositChannelDetails> {
+		let mut status_stream = self
+			.signed_pool_client
+			.submit_watch(
+				RuntimeCall::from(pallet_cf_lp::Call::request_liquidity_deposit_address {
+					asset,
+					boost_fee: boost_fee.unwrap_or_default(),
+				}),
+				false,
+			)
+			.await
+			.map_err(CfApiError::from)?;
+
+		// Get the pre-allocated channels from the previous finalized block
+		let pre_allocated_channels = get_preallocated_channels(
+			&self.rpc_backend,
+			self.signed_pool_client.account_id(),
+			asset.into(),
+		)?;
+
+		while let Some(status) = status_stream.next().await {
+			match status {
+				TransactionStatus::InBlock((block_hash, tx_index)) => {
+					let (channel_id, channel_details) = self
+						.extract_liquidity_deposit_channel_details(block_hash, tx_index)
+						.await?;
+
+					// If the extracted deposit channel was pre-allocated to this lp
+					// in the previous finalized block, we can return it immediately.
+					// Otherwise, we need to wait for the transaction to be finalized.
+					if pre_allocated_channels.contains(&channel_id) {
+						return Ok(channel_details);
+					}
+				},
+				TransactionStatus::Finalized((block_hash, tx_index)) => {
+					let (_, channel_details) = self
+						.extract_liquidity_deposit_channel_details(block_hash, tx_index)
+						.await?;
+					return Ok(channel_details);
+				},
+				_ => is_transaction_status_error(&status).map_err(CfApiError::from)?,
+			}
+		}
+		Err(CfApiError::from(PoolClientError::UnexpectedEndOfStream))?
 	}
 
 	async fn register_liquidity_refund_address(

@@ -34,7 +34,7 @@ pub trait LpRpcApi {
 	#[method(name = "register_account")]
 	async fn register_account(&self) -> RpcResult<Hash>;
 
-	#[deprecated(note = "Use `request_liquidity_deposit_address` instead")]
+	#[deprecated(note = "Use `request_liquidity_deposit_address_v2` instead")]
 	#[method(name = "liquidity_deposit")]
 	async fn request_liquidity_deposit_address_legacy(
 		&self,
@@ -43,6 +43,7 @@ pub trait LpRpcApi {
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ApiWaitForResult<AddressString>>;
 
+	#[deprecated(note = "Use `request_liquidity_deposit_address_v2` instead")]
 	#[method(name = "request_liquidity_deposit_address")]
 	async fn request_liquidity_deposit_address(
 		&self,
@@ -50,6 +51,13 @@ pub trait LpRpcApi {
 		wait_for: Option<WaitFor>,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ApiWaitForResult<LiquidityDepositChannelDetails>>;
+
+	#[method(name = "request_liquidity_deposit_address_v2")]
+	async fn request_liquidity_deposit_address_v2(
+		&self,
+		asset: Asset,
+		boost_fee: Option<BasisPoints>,
+	) -> RpcResult<LiquidityDepositChannelDetails>;
 
 	#[method(name = "register_liquidity_refund_address")]
 	async fn register_liquidity_refund_address(
