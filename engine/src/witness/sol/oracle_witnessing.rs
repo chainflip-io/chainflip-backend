@@ -47,6 +47,7 @@ pub async fn get_price_feeds<SolRetryRpcClient>(
 	oracle_query_helper: SolAddress,
 	oracle_program_id: SolAddress,
 	feed_addresses: Vec<SolAddress>,
+	min_context_slot: Option<u64>,
 ) -> Result<Vec<PriceFeedData>, anyhow::Error>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
@@ -58,11 +59,8 @@ where
 	)
 	.map_err(|e| anyhow::anyhow!("Failed to build and serialize the query transaction: {:?}", e))?;
 
-	// TODO: We might want to use a min_context_slot here if we store a consensus one in the SC.
-	// Maybe not if we are just storing the consensus timestamp, which we will be storing
-	// because it's consistent across all chains. If we do that we also need to return the
-	// min context slot from the simulation.
-	let simulation_result = sol_client.simulate_transaction(serialized_transaction).await;
+	let simulation_result =
+		sol_client.simulate_transaction(serialized_transaction, min_context_slot).await;
 
 	let return_data = simulation_result
 		.value
@@ -126,6 +124,7 @@ fn decode_query_return_data(
 		));
 	}
 
+	// Manually deserialize return data - Vec<PriceFeedData>
 	let mut offset = 4;
 	let num_entries = u32::from_le_bytes(decoded_return_data[0..offset].try_into()?);
 
@@ -184,7 +183,7 @@ mod tests {
 	use super::*;
 
 	// TODO: Add same test for mainnet when the `oracle_query_helper` is deployed to make sure
-	// it works and that the account is prefunded correctly.
+	// it works and that the prefunded account is prefunded correctly.
 
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
@@ -221,7 +220,8 @@ mod tests {
 				)
 				.unwrap();
 
-				let simulation_result = client.simulate_transaction(serialized_transaction).await;
+				let simulation_result =
+					client.simulate_transaction(serialized_transaction, None).await;
 
 				let return_data = simulation_result
 					.value
@@ -288,7 +288,8 @@ mod tests {
 				)
 				.unwrap();
 
-				let simulation_result = client.simulate_transaction(serialized_transaction).await;
+				let simulation_result =
+					client.simulate_transaction(serialized_transaction, None).await;
 
 				let return_data = simulation_result
 					.value
@@ -350,7 +351,8 @@ mod tests {
 				)
 				.unwrap();
 
-				let simulation_result = client.simulate_transaction(serialized_transaction).await;
+				let simulation_result =
+					client.simulate_transaction(serialized_transaction, None).await;
 				let return_data = simulation_result
 					.value
 					.return_data

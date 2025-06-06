@@ -108,6 +108,7 @@ pub trait SolRetryRpcApi: Clone {
 	async fn simulate_transaction(
 		&self,
 		serialized_transaction: Vec<u8>,
+		min_context_slot: Option<u64>,
 	) -> Response<RpcSimulateTransactionResult>;
 }
 
@@ -268,12 +269,10 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 			.await
 	}
 
-	// TODO: We should consider using the `min_context_slot` here using the previous consensus one
-	// in some way so the queries are not too stale. The SC will already take care of that like in
-	// nonces but we can also have it here.
 	async fn simulate_transaction(
 		&self,
 		serialized_transaction: Vec<u8>,
+		min_context_slot: Option<u64>,
 	) -> Response<RpcSimulateTransactionResult> {
 		let encoded_transaction = BASE64_STANDARD.encode(&serialized_transaction);
 		let config = RpcSimulateTransactionConfig {
@@ -282,7 +281,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 			commitment: Some(CommitmentConfig::processed()),
 			encoding: Some(UiTransactionEncoding::Base64),
 			accounts: None,
-			min_context_slot: None,
+			min_context_slot,
 			inner_instructions: false,
 		};
 
@@ -378,6 +377,7 @@ pub mod mocks {
 			async fn simulate_transaction(
 				&self,
 				serialized_transaction: Vec<u8>,
+				min_context_slot: Option<u64>,
 			) -> Response<RpcSimulateTransactionResult>;
 		}
 	}
@@ -552,7 +552,7 @@ mod tests {
 				let serialized_transaction: Vec<u8> = hex::decode("010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080010002033f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7f14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d175602502b9d5731648a1c61dcf689240e2d2c799393430d9f1d584e368ec4e5243c5f13dcef863a734d75a53ceea4596b64111f9577af432cf6c0c2aed5cb527a733f010101020927fb829f2e88a4a90400").expect("Decoding failed");
 
 				let simulation_result = retry_client
-				.simulate_transaction(serialized_transaction).await;
+				.simulate_transaction(serialized_transaction, None).await;
 
 				let price_feed_result = simulation_result.value.return_data.unwrap();
 

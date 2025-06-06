@@ -23,12 +23,6 @@ use super::{EvmRpcClient, EvmRpcSigningClient};
 
 abigen!(AggregatorV3Interface, "$CF_ETH_CONTRACT_ABI_ROOT/AggregatorV3Interface.json");
 
-// TODO: In the SC / elections check that current time < `updated_at` + `heartbeat` => Staleness
-// Check price increase between the SC price and new price to be within a reasonable margin before
-// update Check if the price has moved a lot in a period of updates.
-// Check that the "Updated At" is monotonically increasing.
-// Don't care about RoundId, Started At and `Answered in round``.
-
 #[async_trait::async_trait]
 pub trait AggregatorV3InterfaceRpcApi {
 	async fn latest_round_data(
