@@ -128,11 +128,7 @@ impl Hook<HookTypeFor<TypesEgressWitnessing, ExecuteHook>> for TypesEgressWitnes
 impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDepositChannelWitnessing {
 	fn run(
 		&mut self,
-		(age, block_data, safety_margin): (
-			Range<u32>,
-			BlockDataDepositChannel,
-			u32,
-		),
+		(age, block_data, safety_margin): (Range<u32>, BlockDataDepositChannel, u32),
 	) -> Vec<BtcEvent<DepositWitness<Bitcoin>>> {
 		let mut results: Vec<BtcEvent<DepositWitness<Bitcoin>>> = vec![];
 		if age.contains(&0u32) {
@@ -158,13 +154,9 @@ impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDeposi
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDepositWitnessing {
 	fn run(
 		&mut self,
-		(age, block_data, safety_margin): (
-			Range<u32>,
-			BlockDataVaultDeposit,
-			u32,
-		),
+		(age, block_data, safety_margin): (Range<u32>, BlockDataVaultDeposit, u32),
 	) -> Vec<BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>> {
-		let mut results: Vec< BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>> = vec![];
+		let mut results: Vec<BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>> = vec![];
 		if age.contains(&0u32) {
 			results.extend(
 				block_data

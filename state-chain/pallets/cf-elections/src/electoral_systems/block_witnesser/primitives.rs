@@ -101,7 +101,7 @@ defx! {
 
 		elections_queued_by_hash_are_inside_safety_buffer:
 			this.queued_hash_elections.keys().all(
-				|height| height.saturating_forward(T::Chain::SAFETY_BUFFER) > this.seen_heights_below
+				|height| height.saturating_forward(T::Chain::SAFETY_BUFFER) >= this.seen_heights_below
 			),
 
 		elections_queued_by_safe_are_outside_safety_buffer:
@@ -118,8 +118,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 		// First we remove all Optimistic elections, we're going to recreate them if needed.
 		// This ensures that ongoing optimistic elections don't block more important ByHash
 		// elections.
-		self.ongoing
-			.retain(|_, election_type| *election_type != Optimistic);
+		self.ongoing.retain(|_, election_type| *election_type != Optimistic);
 
 		// schedule at most `max_new_elections`
 		let max_new_elections = max_ongoing.saturating_sub(self.ongoing.len());

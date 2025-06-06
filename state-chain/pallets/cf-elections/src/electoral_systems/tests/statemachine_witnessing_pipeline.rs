@@ -223,8 +223,10 @@ fn run_simulation(blocks: ForkedFilledChain) {
 
 				history.push(BWTrace::InputBHW(input.clone()));
 
-				let output = BHW::step(&mut bhw_state, input, &())
-					.unwrap_or_else(|_| panic!("BHW failed with history: {history:?} and state: {bhw_state:#?}"));
+				let output =
+					BHW::step(&mut bhw_state, input, &()).unwrap_or_else(|err| {
+						panic!("{err:?}, BHW failed with history: {history:?} and state: {bhw_state:#?}")
+					});
 
 				outputs.push(output);
 			}
@@ -244,8 +246,11 @@ fn run_simulation(blocks: ForkedFilledChain) {
 			for bhw_output in bhw_outputs {
 				history.push(BWTrace::Input(Either::Left(bhw_output.clone())));
 
-				bw_state.elections.is_valid().unwrap_or_else(|_| {
-					panic!("BW failed with history: {} and state: {bw_state:#?}", print_bw_history(&history))
+				bw_state.elections.is_valid().unwrap_or_else(|err| {
+					panic!(
+						"{err:?}, BW failed with history: {} and state: {bw_state:#?}",
+						print_bw_history(&history)
+					)
 				});
 
 				BW::step(&mut bw_state, Either::Left(bhw_output), &bw_settings).unwrap();
@@ -273,8 +278,11 @@ fn run_simulation(blocks: ForkedFilledChain) {
 			for input in inputs {
 				history.push(BWTrace::Input(input.clone()));
 
-				bw_state.elections.is_valid().unwrap_or_else(|_| {
-					panic!("BW failed with history: {} and state: {bw_state:#?}", print_bw_history(&history))
+				bw_state.elections.is_valid().unwrap_or_else(|err| {
+					panic!(
+						"{err:?}, BW failed with history: {} and state: {bw_state:#?}",
+						print_bw_history(&history)
+					)
 				});
 
 				BW::step(&mut bw_state, input, &bw_settings).unwrap();
@@ -358,7 +366,7 @@ pub fn test_all() {
 		// TODO: we had previously a much higher number (256 * 256 * 4),
 		// but currently it takes a *very* long to test with this many iterations.
 		// Appearently due to having increased the empty block buffer on the main chain.
-		cases: 256 * 30,
+		cases: 256 * 60,
 		failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
 			"proptest-regressions-full-pipeline",
 		))),
