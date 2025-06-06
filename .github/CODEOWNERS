@@ -34,7 +34,7 @@ engine-upgrade-utils/ @nmammeri
 
 /state-chain/amm/ @martin-chainflip
 /state-chain/cfe-events/ @msgmaxim
-/state-chain/custom-rpc/ @chainflip-io/web
+/state-chain/custom-rpc/ @chainflip-io/web @nmammeri
 /state-chain/pallets/cf-elections/ @MxmUrw @marcellorigotti
 /state-chain/pallets/cf-pools/ @martin-chainflip
 /state-chain/pallets/cf-swapping/ @msgmaxim
