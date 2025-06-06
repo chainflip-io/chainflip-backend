@@ -24,16 +24,18 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
+use sp_std::boxed::Box;
 
 use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, DeregistrationCheck};
 use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::{DispatchResult, StorageVersion},
-	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnNewAccount},
+	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnNewAccount, OriginTrait},
 	BoundedVec,
 };
 use sp_core::ConstU32;
+use sp_runtime::traits::Dispatchable;
 
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
 pub use pallet::*;
@@ -110,6 +112,12 @@ pub mod pallet {
 			sub_account_id: T::AccountId,
 			sub_account_index: SubAccountIndex,
 		},
+		SubAccountCallExecuted {
+			account_id: T::AccountId,
+			sub_account_id: T::AccountId,
+			sub_account_index: SubAccountIndex,
+			call: Box<T::RuntimeCall>,
+		},
 	}
 
 	#[pallet::error]
@@ -124,6 +132,8 @@ pub mod pallet {
 		SubAccountAlreadyExists,
 		/// The sub-account ID derivation failed.
 		SubAccountIdDerivationFailed,
+		/// Failed to execute the call of a sub-account.
+		FailedToExecuteCallOnBehalfOfSubAccount,
 	}
 
 	#[pallet::genesis_config]
@@ -196,6 +206,33 @@ pub mod pallet {
 				sub_account_index,
 			});
 			Ok(())
+		}
+
+		#[pallet::call_index(2)]
+		#[pallet::weight(0)]
+		pub fn as_sub_account(
+			origin: OriginFor<T>,
+			sub_account_index: SubAccountIndex,
+			call: Box<T::RuntimeCall>,
+		) -> DispatchResult {
+			let mut origin = origin;
+			let account_id = ensure_signed(origin.clone())?;
+			let sub_account_id = SubAccounts::<T>::get(&account_id, &sub_account_index);
+			ensure!(sub_account_id.is_some(), Error::<T>::UnknownAccount);
+			let sub_account_id = sub_account_id.unwrap();
+			origin.set_caller_from(frame_system::RawOrigin::Signed(sub_account_id.clone()));
+			if let Ok(post_info) = call.clone().dispatch(origin) {
+				// TODO: Correct the weight of the extrinsic.
+				Self::deposit_event(Event::SubAccountCallExecuted {
+					account_id: account_id.clone(),
+					sub_account_id: sub_account_id.clone(),
+					sub_account_index,
+					call: call.clone(),
+				});
+				Ok(())
+			} else {
+				Err(DispatchError::from(Error::<T>::FailedToExecuteCallOnBehalfOfSubAccount))
+			}
 		}
 	}
 }
