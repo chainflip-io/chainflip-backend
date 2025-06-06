@@ -107,7 +107,7 @@ pub trait BWProcessorTypes: Sized + Debug + Clone + Eq {
 	Default,
 )]
 pub struct BlockWitnesserSettings {
-	pub max_concurrent_elections: u16,
+	pub max_ongoing_elections: u16,
 	pub safety_margin: u32,
 }
 
@@ -233,80 +233,50 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 				let removed_block_heights = progress.removed.clone();
 
 				state.block_processor.process_reorg(
-					BPChainProgress {
-						highest_block_height: state
-							.elections
-							.seen_heights_below
-							.saturating_backward(1),
-						removed_block_heights: removed_block_heights.clone(),
-					},
-					// NOTE: we use the lowest "in progress" height for expiring block and event
-					// data, this way if one BW election is stuck (e.g. due to failing rpc
-					// call), no event data is going to be deleted. That's why we can't use
-					// the `highest_seen` block height, because that one progresses always
-					// following data from the BHW, ignoring ongoing elections.
-					state.elections.lowest_in_progress_height(),
+					state.elections.seen_heights_below,
+					removed_block_heights.clone(),
 				);
 
-				for (height, optimistic_block) in state.elections.schedule_range(progress) {
-					state.block_processor.insert_block_data((
+				for (height, accepted_optimistic_block) in state.elections.schedule_range(progress)
+				{
+					state.block_processor.insert_block_data(
 						height,
-						optimistic_block.data,
+						accepted_optimistic_block.data,
 						settings.safety_margin,
-					));
+					);
 				}
-
-				state.block_processor.process_chain_progress(
-					BPChainProgress {
-						highest_block_height: state
-							.elections
-							.seen_heights_below
-							.saturating_backward(1),
-						removed_block_heights,
-					},
-					// NOTE: we use the lowest "in progress" height for expiring block and event
-					// data, this way if one BW election is stuck (e.g. due to failing rpc
-					// call), no event data is going to be deleted. That's why we can't use
-					// the `highest_seen` block height, because that one progresses always
-					// following data from the BHW, ignoring ongoing elections.
-					state.elections.lowest_in_progress_height(),
-				);
 			},
 
 			Either::Left(None) => {},
 
 			Either::Right((properties, (blockdata, blockhash))) => {
-				log::info!("got {:?} block data: {:?}", properties.election_type, blockdata);
-
 				if let Some(blockdata) = state.elections.mark_election_done(
 					properties.block_height,
 					&properties.election_type,
 					&blockhash,
 					blockdata,
 				) {
-					state.block_processor.process_block_data_and_chain_progress(
-						BPChainProgress {
-							highest_block_height: state
-								.elections
-								.seen_heights_below
-								.saturating_backward(1),
-							removed_block_heights: None,
-						},
-						(properties.block_height, blockdata, settings.safety_margin),
-						// NOTE: we use the lowest "in progress" height for expiring block and
-						// event data, this way if one BW election is stuck (e.g. due to
-						// failing rpc call), no event data is going to be deleted. That's
-						// why we can't use the `highest_seen` block height, because that one
-						// progresses always following data from the BHW, ignoring ongoing
-						// elections.
-						state.elections.lowest_in_progress_height(),
-					)
+					state.block_processor.insert_block_data(
+						properties.block_height,
+						blockdata,
+						settings.safety_margin,
+					);
 				}
 			},
 		};
 
+		state.block_processor.process_blocks_up_to(
+			state.elections.seen_heights_below,
+			// NOTE: we use the lowest "in progress" height for expiring block and event
+			// data, this way if one BW election is stuck (e.g. due to failing rpc
+			// call), no event data is going to be deleted. That's why we can't use
+			// the `highest_seen` block height, because that one progresses always
+			// following data from the BHW, ignoring ongoing elections.
+			state.elections.lowest_in_progress_height(),
+		);
+
 		state.elections.start_more_elections(
-			settings.max_concurrent_elections as usize,
+			settings.max_ongoing_elections as usize,
 			state.safemode_enabled.run(()),
 		);
 

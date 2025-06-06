@@ -188,7 +188,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		block_processor,
 	};
 	let bw_settings =
-		BlockWitnesserSettings { max_concurrent_elections: 4, safety_margin: SAFETY_MARGIN };
+		BlockWitnesserSettings { max_ongoing_elections: 4, safety_margin: SAFETY_MARGIN };
 
 	#[derive(Clone, Debug)]
 	enum BWTrace<T: BWTypes, T0: BHWTypes> {
@@ -358,7 +358,7 @@ pub fn test_all() {
 		// TODO: we had previously a much higher number (256 * 256 * 4),
 		// but currently it takes a *very* long to test with this many iterations.
 		// Appearently due to having increased the empty block buffer on the main chain.
-		cases: 256 * 16,
+		cases: 256 * 30,
 		failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
 			"proptest-regressions-full-pipeline",
 		))),

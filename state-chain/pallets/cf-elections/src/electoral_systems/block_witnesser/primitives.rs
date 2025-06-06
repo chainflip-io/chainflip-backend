@@ -41,7 +41,7 @@ defx! {
 		pub highest_ever_ongoing_election: ChainBlockNumberOf<T::Chain>,
 
 		/// Block hashes we got from the BHW.
-		pub queued_elections: BTreeMap<ChainBlockNumberOf<T::Chain>, ChainBlockHashOf<T::Chain>>,
+		pub queued_hash_elections: BTreeMap<ChainBlockNumberOf<T::Chain>, ChainBlockHashOf<T::Chain>>,
 
 		/// Block heights which are queued but already past the safetymargin don't
 		/// have associated hashes. We just store a list of block height ranges.
@@ -82,7 +82,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 			.map(|height| (height, SafeBlockHeight));
 
 		let hash_elections = self
-			.queued_elections
+			.queued_hash_elections
 			.extract_if(|_, _| true)
 			.map(|(height, hash)| (height, ByHash(hash)));
 		let opti_elections = iter::once((self.seen_heights_below, Optimistic));
@@ -269,15 +269,13 @@ impl<T: BWTypes> ElectionTracker<T> {
 		&mut self,
 		progress: ChainProgress<T::Chain>,
 	) -> Vec<(ChainBlockNumberOf<T::Chain>, OptimisticBlock<T>)> {
-		// if there are safe elections scheduled for the reorg range, unschedule them,
-		// because it might be that we're gonna schedule them by-hash
+		// If there was a reorg, remove any references to the reorged heights
+		// in the election tracker.
 		if let Some(ref removed) = progress.removed {
 			self.queued_safe_elections.remove(removed.clone());
-
+			self.queued_hash_elections.retain(|height, _| !removed.contains(height));
+			self.ongoing.retain(|height, _| !removed.contains(height));
 		}
-
-		// if there are elections ongoing for the block heights we received, we stop them
-		self.ongoing.retain(|height, _| !progress.headers.contains(height));
 
 		let last_seen_height = progress.headers.last().block_height;
 
@@ -287,7 +285,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 		self.seen_heights_below =
 			max(self.seen_heights_below, last_seen_height.saturating_forward(1));
 
-		let (optimistic_blocks, mut remaining): (BTreeMap<_, _>, BTreeMap<_, _>) =
+		let (accepted_optimistic_blocks, mut remaining): (BTreeMap<_, _>, BTreeMap<_, _>) =
 			progress.headers.headers.into_iter().fold(
 				(BTreeMap::new(), BTreeMap::new()),
 				|(mut optimistic_blocks, mut remaining), header| {
@@ -304,34 +302,33 @@ impl<T: BWTypes> ElectionTracker<T> {
 			);
 
 		// adding all hashes to the queue
-		self.queued_elections.append(&mut remaining);
+		self.queued_hash_elections.append(&mut remaining);
+
+		let is_safe_height = |height: &ChainBlockNumberOf<T::Chain>| {
+			height.saturating_forward(T::Chain::SAFETY_BUFFER) < self.seen_heights_below
+		};
 
 		// clean up the queue by removing old hashes
-		self.queued_elections
-			.extract_if(|height, _| {
-				height.saturating_forward(T::Chain::SAFETY_BUFFER) < last_seen_height
-			})
+		self.queued_hash_elections
+			.extract_if(|height, _| is_safe_height(height))
 			.for_each(|(height, _)| {
 				self.queued_safe_elections.insert(height);
 			});
 
 		// move ongoing elections from ByHash to SafeBlockHeight if they become old enough
 		self.ongoing.iter_mut().for_each(|(height, ty)| {
-			if height.saturating_forward(T::Chain::SAFETY_BUFFER) < last_seen_height {
+			if is_safe_height(height) {
 				*ty = BWElectionType::SafeBlockHeight;
 			}
 		});
 
-		optimistic_blocks.into_iter().collect()
-	}
-	fn next_election(&self) -> Option<ChainBlockNumberOf<T::Chain>> {
-		self.queued_elections.keys().next().cloned()
+		accepted_optimistic_blocks.into_iter().collect()
 	}
 	pub fn lowest_in_progress_height(&self) -> ChainBlockNumberOf<T::Chain> {
 		*self
 			.ongoing
 			.keys()
-			.chain(self.queued_elections.keys())
+			.chain(self.queued_hash_elections.keys())
 			.chain(self.queued_safe_elections.get_all_heights().iter())
 			.min()
 			.unwrap_or(&self.seen_heights_below)
@@ -344,7 +341,7 @@ impl<T: BWTypes> Default for ElectionTracker<T> {
 			seen_heights_below: ChainBlockNumberOf::<T::Chain>::zero(),
 			priority_elections_up_to: ChainBlockNumberOf::<T::Chain>::zero(),
 			highest_ever_ongoing_election: ChainBlockNumberOf::<T::Chain>::zero(),
-			queued_elections: Default::default(),
+			queued_hash_elections: Default::default(),
 			ongoing: Default::default(),
 			queued_safe_elections: Default::default(),
 			optimistic_block_cache: Default::default(),
