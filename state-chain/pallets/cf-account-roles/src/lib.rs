@@ -39,10 +39,14 @@ use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
 pub use pallet::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
 
+use frame_support::Hashable;
+use sp_runtime::traits::TrailingZeroInput;
+
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 pub const MAX_LENGTH_FOR_VANITY_NAME: u32 = 64;
 
 type VanityName = BoundedVec<u8, ConstU32<MAX_LENGTH_FOR_VANITY_NAME>>;
+pub type SubAccountIndex = u8;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -79,6 +83,12 @@ pub mod pallet {
 	pub type VanityNames<T: Config> =
 		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>;
 
+	/// Registered sub-accounts by sub-account index for an account.
+	#[pallet::storage]
+	#[pallet::getter(fn sub_accounts)]
+	pub type SubAccounts<T: Config> =
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, SubAccountIndex, T::AccountId>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -95,6 +105,11 @@ pub mod pallet {
 			account_id: T::AccountId,
 			name: VanityName,
 		},
+		SubAccountCreated {
+			account_id: T::AccountId,
+			sub_account_id: T::AccountId,
+			sub_account_index: SubAccountIndex,
+		},
 	}
 
 	#[pallet::error]
@@ -105,6 +120,10 @@ pub mod pallet {
 		AccountRoleAlreadyRegistered,
 		/// Invalid characters in the name.
 		InvalidCharactersInName,
+		/// The sub-account already exists.
+		SubAccountAlreadyExists,
+		/// The sub-account ID derivation failed.
+		SubAccountIdDerivationFailed,
 	}
 
 	#[pallet::genesis_config]
@@ -150,6 +169,32 @@ pub mod pallet {
 				vanity_names.insert(account_id.clone(), name.clone());
 			});
 			Self::deposit_event(Event::VanityNameSet { account_id, name });
+			Ok(())
+		}
+
+		#[pallet::call_index(1)]
+		#[pallet::weight(0)]
+		pub fn derive_sub_account(
+			origin: OriginFor<T>,
+			sub_account_index: SubAccountIndex,
+		) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+			ensure!(
+				!SubAccounts::<T>::contains_key(&account_id, &sub_account_index),
+				Error::<T>::SubAccountAlreadyExists
+			);
+			let sub_account_id: T::AccountId = Decode::decode(&mut TrailingZeroInput::new(
+				(*b"chainflip/subaccount", account_id.clone(), sub_account_index)
+					.blake2_256()
+					.as_ref(),
+			))
+			.map_err(|_| Error::<T>::SubAccountIdDerivationFailed)?;
+			SubAccounts::<T>::insert(&account_id, &sub_account_index, &sub_account_id);
+			Self::deposit_event(Event::SubAccountCreated {
+				account_id: account_id.clone(),
+				sub_account_id,
+				sub_account_index,
+			});
 			Ok(())
 		}
 	}
