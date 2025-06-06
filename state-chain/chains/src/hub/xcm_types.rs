@@ -26,8 +26,9 @@
 // --derive PartialEq --derive TypeInfo --file metadata.txt >
 // state-chain/chains/src/hub/xcm_types.rs
 
-// Then run "cargo fmt" to make the file readable and manually go through through it to remove
-// unwanted types
+// Then run "cargo fmt" to make the file readable and manually go through through it to fix
+// any issues (things like remove the outer api mod, change the "use" directives, remove unnecessary
+// types)
 
 // Also rename all instances of "runtime_types" in this file to "hub_runtime_types"
 
@@ -38,8 +39,20 @@ use scale_info::TypeInfo;
 pub mod hub_runtime_types {
 	use super::*;
 	pub mod asset_hub_polkadot_runtime {
-
 		use super::*;
+		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		pub enum OriginCaller {
+			#[codec(index = 0)]
+			System(
+				hub_runtime_types::frame_support::dispatch::RawOrigin<
+					::sp_core::crypto::AccountId32,
+				>,
+			),
+			#[codec(index = 31)]
+			PolkadotXcm(hub_runtime_types::pallet_xcm::pallet::Origin),
+			#[codec(index = 32)]
+			CumulusXcm(hub_runtime_types::cumulus_pallet_xcm::pallet::Origin),
+		}
 		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 		pub struct Runtime;
 		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
@@ -69,10 +82,36 @@ pub mod hub_runtime_types {
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 			pub struct BoundedVec<_0>(pub sp_std::vec::Vec<_0>);
 		}
-		pub mod weak_bounded_vec {
+	}
+	pub mod cumulus_pallet_xcm {
+		use super::*;
+		pub mod pallet {
 			use super::*;
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-			pub struct WeakBoundedVec<_0>(pub sp_std::vec::Vec<_0>);
+			pub enum Origin {
+				#[codec(index = 0)]
+				Relay,
+				#[codec(index = 1)]
+				SiblingParachain(hub_runtime_types::polkadot_parachain_primitives::primitives::Id),
+			}
+		}
+	}
+	pub mod cumulus_primitives_core {
+		use super::*;
+		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		pub struct CollationInfo {
+			pub upward_messages: sp_std::vec::Vec<sp_std::vec::Vec<::core::primitive::u8>>,
+			pub horizontal_messages: sp_std::vec::Vec<
+				hub_runtime_types::polkadot_core_primitives::OutboundHrmpMessage<
+					hub_runtime_types::polkadot_parachain_primitives::primitives::Id,
+				>,
+			>,
+			pub new_validation_code: ::core::option::Option<
+				hub_runtime_types::polkadot_parachain_primitives::primitives::ValidationCode,
+			>,
+			pub processed_downward_messages: ::core::primitive::u32,
+			pub hrmp_watermark: ::core::primitive::u32,
+			pub head_data: hub_runtime_types::polkadot_parachain_primitives::primitives::HeadData,
 		}
 	}
 	pub mod frame_metadata_hash_extension {
@@ -209,9 +248,9 @@ pub mod hub_runtime_types {
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 			pub enum Origin {
 				#[codec(index = 0)]
-				Xcm(hub_runtime_types::staging_xcm::v4::location::Location),
+				Xcm(hub_runtime_types::staging_xcm::v5::location::Location),
 				#[codec(index = 1)]
-				Response(hub_runtime_types::staging_xcm::v4::location::Location),
+				Response(hub_runtime_types::staging_xcm::v5::location::Location),
 			}
 		}
 	}
@@ -221,6 +260,18 @@ pub mod hub_runtime_types {
 		pub struct OutboundHrmpMessage<_0> {
 			pub recipient: _0,
 			pub data: sp_std::vec::Vec<::core::primitive::u8>,
+		}
+	}
+	pub mod polkadot_parachain_primitives {
+		use super::*;
+		pub mod primitives {
+			use super::*;
+			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			pub struct HeadData(pub sp_std::vec::Vec<::core::primitive::u8>);
+			#[derive(Clone, Debug, Decode, Encode, Eq, PartialEq, TypeInfo, codec::CompactAs)]
+			pub struct Id(pub ::core::primitive::u32);
+			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			pub struct ValidationCode(pub sp_std::vec::Vec<::core::primitive::u8>);
 		}
 	}
 	pub mod sp_arithmetic {
@@ -246,6 +297,13 @@ pub mod hub_runtime_types {
 			}
 		}
 	}
+	pub mod sp_consensus_slots {
+		use super::*;
+		#[derive(Clone, Debug, Decode, Encode, Eq, PartialEq, TypeInfo, codec::CompactAs)]
+		pub struct Slot(pub ::core::primitive::u64);
+		#[derive(Clone, Debug, Decode, Encode, Eq, PartialEq, TypeInfo, codec::CompactAs)]
+		pub struct SlotDuration(pub ::core::primitive::u64);
+	}
 	pub mod sp_core {
 		use super::*;
 		pub mod crypto {
@@ -255,9 +313,8 @@ pub mod hub_runtime_types {
 		}
 		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 		pub struct OpaqueMetadata(pub sp_std::vec::Vec<::core::primitive::u8>);
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-		pub enum Void {}
 	}
+
 	pub mod sp_runtime {
 		use super::*;
 		pub mod generic {
@@ -816,6 +873,52 @@ pub mod hub_runtime_types {
 					Mortal255(::core::primitive::u8),
 				}
 			}
+			pub mod header {
+				use super::*;
+				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				pub struct Header<_0> {
+					pub parent_hash: ::sp_core::H256,
+					#[codec(compact)]
+					pub number: _0,
+					pub state_root: ::sp_core::H256,
+					pub extrinsics_root: ::sp_core::H256,
+					pub digest: hub_runtime_types::sp_runtime::generic::digest::Digest,
+				}
+			}
+		}
+		pub mod proving_trie {
+			use super::*;
+			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			pub enum TrieError {
+				#[codec(index = 0)]
+				InvalidStateRoot,
+				#[codec(index = 1)]
+				IncompleteDatabase,
+				#[codec(index = 2)]
+				ValueAtIncompleteKey,
+				#[codec(index = 3)]
+				DecoderError,
+				#[codec(index = 4)]
+				InvalidHash,
+				#[codec(index = 5)]
+				DuplicateKey,
+				#[codec(index = 6)]
+				ExtraneousNode,
+				#[codec(index = 7)]
+				ExtraneousValue,
+				#[codec(index = 8)]
+				ExtraneousHashReference,
+				#[codec(index = 9)]
+				InvalidChildReference,
+				#[codec(index = 10)]
+				ValueMismatch,
+				#[codec(index = 11)]
+				IncompleteProof,
+				#[codec(index = 12)]
+				RootMismatch,
+				#[codec(index = 13)]
+				DecodeError,
+			}
 		}
 		pub mod transaction_validity {
 			use super::*;
@@ -843,6 +946,10 @@ pub mod hub_runtime_types {
 				MandatoryValidation,
 				#[codec(index = 10)]
 				BadSigner,
+				#[codec(index = 11)]
+				IndeterminateImplicit,
+				#[codec(index = 12)]
+				UnknownOrigin,
 			}
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 			pub enum TransactionSource {
@@ -908,6 +1015,8 @@ pub mod hub_runtime_types {
 			Unavailable,
 			#[codec(index = 13)]
 			RootNotAllowed,
+			#[codec(index = 14)]
+			Trie(hub_runtime_types::sp_runtime::proving_trie::TrieError),
 		}
 		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 		pub struct DispatchErrorWithPostInfo<_0> {
@@ -1172,21 +1281,6 @@ pub mod hub_runtime_types {
 				pub struct Location {
 					pub parents: ::core::primitive::u8,
 					pub interior: hub_runtime_types::staging_xcm::v4::junctions::Junctions,
-				}
-			}
-			pub mod traits {
-				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-				pub enum Outcome {
-					#[codec(index = 0)]
-					Complete { used: hub_runtime_types::sp_weights::weight_v2::Weight },
-					#[codec(index = 1)]
-					Incomplete {
-						used: hub_runtime_types::sp_weights::weight_v2::Weight,
-						error: hub_runtime_types::xcm::v3::traits::Error,
-					},
-					#[codec(index = 2)]
-					Error { error: hub_runtime_types::xcm::v3::traits::Error },
 				}
 			}
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
@@ -1656,72 +1750,24 @@ pub mod hub_runtime_types {
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 			pub struct Xcm2(pub sp_std::vec::Vec<hub_runtime_types::staging_xcm::v4::Instruction2>);
 		}
-	}
-	pub mod xcm {
-		use super::*;
-		pub mod double_encoded {
+		pub mod v5 {
 			use super::*;
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-			pub struct DoubleEncoded {
-				pub encoded: sp_std::vec::Vec<::core::primitive::u8>,
-			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-			pub struct DoubleEncoded2 {
-				pub encoded: sp_std::vec::Vec<::core::primitive::u8>,
-			}
-		}
-		pub mod v2 {
-			use super::*;
-			pub mod junction {
+			pub mod asset {
 				use super::*;
 				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-				pub enum Junction {
-					#[codec(index = 0)]
-					Parachain(#[codec(compact)] ::core::primitive::u32),
-					#[codec(index = 1)]
-					AccountId32 {
-						network: hub_runtime_types::xcm::v2::NetworkId,
-						id: [::core::primitive::u8; 32usize],
-					},
-					#[codec(index = 2)]
-					AccountIndex64 {
-						network: hub_runtime_types::xcm::v2::NetworkId,
-						#[codec(compact)]
-						index: ::core::primitive::u64,
-					},
-					#[codec(index = 3)]
-					AccountKey20 {
-						network: hub_runtime_types::xcm::v2::NetworkId,
-						key: [::core::primitive::u8; 20usize],
-					},
-					#[codec(index = 4)]
-					PalletInstance(::core::primitive::u8),
-					#[codec(index = 5)]
-					GeneralIndex(#[codec(compact)] ::core::primitive::u128),
-					#[codec(index = 6)]
-					GeneralKey(
-						hub_runtime_types::bounded_collections::weak_bounded_vec::WeakBoundedVec<
-							::core::primitive::u8,
-						>,
-					),
-					#[codec(index = 7)]
-					OnlyChild,
-					#[codec(index = 8)]
-					Plurality {
-						id: hub_runtime_types::xcm::v2::BodyId,
-						part: hub_runtime_types::xcm::v2::BodyPart,
-					},
+				pub struct Asset {
+					pub id: hub_runtime_types::staging_xcm::v5::asset::AssetId,
+					pub fun: hub_runtime_types::staging_xcm::v5::asset::Fungibility,
 				}
-			}
-			pub mod multiasset {
-				use super::*;
 				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-				pub enum AssetId {
+				pub enum AssetFilter {
 					#[codec(index = 0)]
-					Concrete(hub_runtime_types::xcm::v2::multilocation::MultiLocation),
+					Definite(hub_runtime_types::staging_xcm::v5::asset::Assets),
 					#[codec(index = 1)]
-					Abstract(sp_std::vec::Vec<::core::primitive::u8>),
+					Wild(hub_runtime_types::staging_xcm::v5::asset::WildAsset),
 				}
+				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				pub struct AssetId(pub hub_runtime_types::staging_xcm::v5::location::Location);
 				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 				pub enum AssetInstance {
 					#[codec(index = 0)]
@@ -1736,32 +1782,46 @@ pub mod hub_runtime_types {
 					Array16([::core::primitive::u8; 16usize]),
 					#[codec(index = 5)]
 					Array32([::core::primitive::u8; 32usize]),
-					#[codec(index = 6)]
-					Blob(sp_std::vec::Vec<::core::primitive::u8>),
 				}
+				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				pub enum AssetTransferFilter {
+					#[codec(index = 0)]
+					Teleport(hub_runtime_types::staging_xcm::v5::asset::AssetFilter),
+					#[codec(index = 1)]
+					ReserveDeposit(hub_runtime_types::staging_xcm::v5::asset::AssetFilter),
+					#[codec(index = 2)]
+					ReserveWithdraw(hub_runtime_types::staging_xcm::v5::asset::AssetFilter),
+				}
+				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				pub struct Assets(
+					pub sp_std::vec::Vec<hub_runtime_types::staging_xcm::v5::asset::Asset>,
+				);
 				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 				pub enum Fungibility {
 					#[codec(index = 0)]
 					Fungible(#[codec(compact)] ::core::primitive::u128),
 					#[codec(index = 1)]
-					NonFungible(hub_runtime_types::xcm::v2::multiasset::AssetInstance),
+					NonFungible(hub_runtime_types::staging_xcm::v5::asset::AssetInstance),
 				}
 				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-				pub struct MultiAsset {
-					pub id: hub_runtime_types::xcm::v2::multiasset::AssetId,
-					pub fun: hub_runtime_types::xcm::v2::multiasset::Fungibility,
-				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-				pub enum MultiAssetFilter {
+				pub enum WildAsset {
 					#[codec(index = 0)]
-					Definite(hub_runtime_types::xcm::v2::multiasset::MultiAssets),
+					All,
 					#[codec(index = 1)]
-					Wild(hub_runtime_types::xcm::v2::multiasset::WildMultiAsset),
+					AllOf {
+						id: hub_runtime_types::staging_xcm::v5::asset::AssetId,
+						fun: hub_runtime_types::staging_xcm::v5::asset::WildFungibility,
+					},
+					#[codec(index = 2)]
+					AllCounted(#[codec(compact)] ::core::primitive::u32),
+					#[codec(index = 3)]
+					AllOfCounted {
+						id: hub_runtime_types::staging_xcm::v5::asset::AssetId,
+						fun: hub_runtime_types::staging_xcm::v5::asset::WildFungibility,
+						#[codec(compact)]
+						count: ::core::primitive::u32,
+					},
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-				pub struct MultiAssets(
-					pub sp_std::vec::Vec<hub_runtime_types::xcm::v2::multiasset::MultiAsset>,
-				);
 				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 				pub enum WildFungibility {
 					#[codec(index = 0)]
@@ -1769,236 +1829,166 @@ pub mod hub_runtime_types {
 					#[codec(index = 1)]
 					NonFungible,
 				}
+			}
+			pub mod junction {
+				use super::*;
 				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-				pub enum WildMultiAsset {
+				pub enum Junction {
 					#[codec(index = 0)]
-					All,
+					Parachain(#[codec(compact)] ::core::primitive::u32),
 					#[codec(index = 1)]
-					AllOf {
-						id: hub_runtime_types::xcm::v2::multiasset::AssetId,
-						fun: hub_runtime_types::xcm::v2::multiasset::WildFungibility,
+					AccountId32 {
+						network: ::core::option::Option<
+							hub_runtime_types::staging_xcm::v5::junction::NetworkId,
+						>,
+						id: [::core::primitive::u8; 32usize],
 					},
+					#[codec(index = 2)]
+					AccountIndex64 {
+						network: ::core::option::Option<
+							hub_runtime_types::staging_xcm::v5::junction::NetworkId,
+						>,
+						#[codec(compact)]
+						index: ::core::primitive::u64,
+					},
+					#[codec(index = 3)]
+					AccountKey20 {
+						network: ::core::option::Option<
+							hub_runtime_types::staging_xcm::v5::junction::NetworkId,
+						>,
+						key: [::core::primitive::u8; 20usize],
+					},
+					#[codec(index = 4)]
+					PalletInstance(::core::primitive::u8),
+					#[codec(index = 5)]
+					GeneralIndex(#[codec(compact)] ::core::primitive::u128),
+					#[codec(index = 6)]
+					GeneralKey {
+						length: ::core::primitive::u8,
+						data: [::core::primitive::u8; 32usize],
+					},
+					#[codec(index = 7)]
+					OnlyChild,
+					#[codec(index = 8)]
+					Plurality {
+						id: hub_runtime_types::xcm::v3::junction::BodyId,
+						part: hub_runtime_types::xcm::v3::junction::BodyPart,
+					},
+					#[codec(index = 9)]
+					GlobalConsensus(hub_runtime_types::staging_xcm::v5::junction::NetworkId),
+				}
+				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				pub enum NetworkId {
+					#[codec(index = 0)]
+					ByGenesis([::core::primitive::u8; 32usize]),
+					#[codec(index = 1)]
+					ByFork {
+						block_number: ::core::primitive::u64,
+						block_hash: [::core::primitive::u8; 32usize],
+					},
+					#[codec(index = 2)]
+					Polkadot,
+					#[codec(index = 3)]
+					Kusama,
+					#[codec(index = 7)]
+					Ethereum {
+						#[codec(compact)]
+						chain_id: ::core::primitive::u64,
+					},
+					#[codec(index = 8)]
+					BitcoinCore,
+					#[codec(index = 9)]
+					BitcoinCash,
+					#[codec(index = 10)]
+					PolkadotBulletin,
 				}
 			}
-			pub mod multilocation {
+			pub mod junctions {
 				use super::*;
 				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 				pub enum Junctions {
 					#[codec(index = 0)]
 					Here,
 					#[codec(index = 1)]
-					X1(hub_runtime_types::xcm::v2::junction::Junction),
+					X1([hub_runtime_types::staging_xcm::v5::junction::Junction; 1usize]),
 					#[codec(index = 2)]
-					X2(
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-					),
+					X2([hub_runtime_types::staging_xcm::v5::junction::Junction; 2usize]),
 					#[codec(index = 3)]
-					X3(
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-					),
+					X3([hub_runtime_types::staging_xcm::v5::junction::Junction; 3usize]),
 					#[codec(index = 4)]
-					X4(
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-					),
+					X4([hub_runtime_types::staging_xcm::v5::junction::Junction; 4usize]),
 					#[codec(index = 5)]
-					X5(
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-					),
+					X5([hub_runtime_types::staging_xcm::v5::junction::Junction; 5usize]),
 					#[codec(index = 6)]
-					X6(
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-					),
+					X6([hub_runtime_types::staging_xcm::v5::junction::Junction; 6usize]),
 					#[codec(index = 7)]
-					X7(
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-					),
+					X7([hub_runtime_types::staging_xcm::v5::junction::Junction; 7usize]),
 					#[codec(index = 8)]
-					X8(
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-						hub_runtime_types::xcm::v2::junction::Junction,
-					),
+					X8([hub_runtime_types::staging_xcm::v5::junction::Junction; 8usize]),
 				}
+			}
+			pub mod location {
+				use super::*;
 				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-				pub struct MultiLocation {
+				pub struct Location {
 					pub parents: ::core::primitive::u8,
-					pub interior: hub_runtime_types::xcm::v2::multilocation::Junctions,
+					pub interior: hub_runtime_types::staging_xcm::v5::junctions::Junctions,
 				}
 			}
 			pub mod traits {
 				use super::*;
 				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-				pub enum Error {
+				pub enum Outcome {
 					#[codec(index = 0)]
-					Overflow,
+					Complete { used: hub_runtime_types::sp_weights::weight_v2::Weight },
 					#[codec(index = 1)]
-					Unimplemented,
+					Incomplete {
+						used: hub_runtime_types::sp_weights::weight_v2::Weight,
+						error: hub_runtime_types::xcm::v5::traits::Error,
+					},
 					#[codec(index = 2)]
-					UntrustedReserveLocation,
-					#[codec(index = 3)]
-					UntrustedTeleportLocation,
-					#[codec(index = 4)]
-					MultiLocationFull,
-					#[codec(index = 5)]
-					MultiLocationNotInvertible,
-					#[codec(index = 6)]
-					BadOrigin,
-					#[codec(index = 7)]
-					InvalidLocation,
-					#[codec(index = 8)]
-					AssetNotFound,
-					#[codec(index = 9)]
-					FailedToTransactAsset,
-					#[codec(index = 10)]
-					NotWithdrawable,
-					#[codec(index = 11)]
-					LocationCannotHold,
-					#[codec(index = 12)]
-					ExceedsMaxMessageSize,
-					#[codec(index = 13)]
-					DestinationUnsupported,
-					#[codec(index = 14)]
-					Transport,
-					#[codec(index = 15)]
-					Unroutable,
-					#[codec(index = 16)]
-					UnknownClaim,
-					#[codec(index = 17)]
-					FailedToDecode,
-					#[codec(index = 18)]
-					MaxWeightInvalid,
-					#[codec(index = 19)]
-					NotHoldingFees,
-					#[codec(index = 20)]
-					TooExpensive,
-					#[codec(index = 21)]
-					Trap(::core::primitive::u64),
-					#[codec(index = 22)]
-					UnhandledXcmVersion,
-					#[codec(index = 23)]
-					WeightLimitReached(::core::primitive::u64),
-					#[codec(index = 24)]
-					Barrier,
-					#[codec(index = 25)]
-					WeightNotComputable,
+					Error { error: hub_runtime_types::xcm::v5::traits::Error },
 				}
 			}
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-			pub enum BodyId {
+			pub enum Hint {
 				#[codec(index = 0)]
-				Unit,
-				#[codec(index = 1)]
-				Named(
-					hub_runtime_types::bounded_collections::weak_bounded_vec::WeakBoundedVec<
-						::core::primitive::u8,
-					>,
-				),
-				#[codec(index = 2)]
-				Index(#[codec(compact)] ::core::primitive::u32),
-				#[codec(index = 3)]
-				Executive,
-				#[codec(index = 4)]
-				Technical,
-				#[codec(index = 5)]
-				Legislative,
-				#[codec(index = 6)]
-				Judicial,
-				#[codec(index = 7)]
-				Defense,
-				#[codec(index = 8)]
-				Administration,
-				#[codec(index = 9)]
-				Treasury,
-			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-			pub enum BodyPart {
-				#[codec(index = 0)]
-				Voice,
-				#[codec(index = 1)]
-				Members {
-					#[codec(compact)]
-					count: ::core::primitive::u32,
-				},
-				#[codec(index = 2)]
-				Fraction {
-					#[codec(compact)]
-					nom: ::core::primitive::u32,
-					#[codec(compact)]
-					denom: ::core::primitive::u32,
-				},
-				#[codec(index = 3)]
-				AtLeastProportion {
-					#[codec(compact)]
-					nom: ::core::primitive::u32,
-					#[codec(compact)]
-					denom: ::core::primitive::u32,
-				},
-				#[codec(index = 4)]
-				MoreThanProportion {
-					#[codec(compact)]
-					nom: ::core::primitive::u32,
-					#[codec(compact)]
-					denom: ::core::primitive::u32,
-				},
+				AssetClaimer { location: hub_runtime_types::staging_xcm::v5::location::Location },
 			}
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 			pub enum Instruction {
 				#[codec(index = 0)]
-				WithdrawAsset(hub_runtime_types::xcm::v2::multiasset::MultiAssets),
+				WithdrawAsset(hub_runtime_types::staging_xcm::v5::asset::Assets),
 				#[codec(index = 1)]
-				ReserveAssetDeposited(hub_runtime_types::xcm::v2::multiasset::MultiAssets),
+				ReserveAssetDeposited(hub_runtime_types::staging_xcm::v5::asset::Assets),
 				#[codec(index = 2)]
-				ReceiveTeleportedAsset(hub_runtime_types::xcm::v2::multiasset::MultiAssets),
+				ReceiveTeleportedAsset(hub_runtime_types::staging_xcm::v5::asset::Assets),
 				#[codec(index = 3)]
 				QueryResponse {
 					#[codec(compact)]
 					query_id: ::core::primitive::u64,
-					response: hub_runtime_types::xcm::v2::Response,
-					#[codec(compact)]
-					max_weight: ::core::primitive::u64,
+					response: hub_runtime_types::staging_xcm::v5::Response,
+					max_weight: hub_runtime_types::sp_weights::weight_v2::Weight,
+					querier: ::core::option::Option<
+						hub_runtime_types::staging_xcm::v5::location::Location,
+					>,
 				},
 				#[codec(index = 4)]
 				TransferAsset {
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssets,
-					beneficiary: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
+					assets: hub_runtime_types::staging_xcm::v5::asset::Assets,
+					beneficiary: hub_runtime_types::staging_xcm::v5::location::Location,
 				},
 				#[codec(index = 5)]
 				TransferReserveAsset {
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssets,
-					dest: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
+					assets: hub_runtime_types::staging_xcm::v5::asset::Assets,
+					dest: hub_runtime_types::staging_xcm::v5::location::Location,
 					xcm: ::core::primitive::bool,
 				},
 				#[codec(index = 6)]
 				Transact {
-					origin_type: hub_runtime_types::xcm::v2::OriginKind,
-					#[codec(compact)]
-					require_weight_at_most: ::core::primitive::u64,
+					origin_kind: hub_runtime_types::xcm::v3::OriginKind,
+					fallback_max_weight:
+						::core::option::Option<hub_runtime_types::sp_weights::weight_v2::Weight>,
 					call: hub_runtime_types::xcm::double_encoded::DoubleEncoded,
 				},
 				#[codec(index = 7)]
@@ -2027,60 +2017,47 @@ pub mod hub_runtime_types {
 				#[codec(index = 10)]
 				ClearOrigin,
 				#[codec(index = 11)]
-				DescendOrigin(hub_runtime_types::xcm::v2::multilocation::Junctions),
+				DescendOrigin(hub_runtime_types::staging_xcm::v5::junctions::Junctions),
 				#[codec(index = 12)]
-				ReportError {
-					#[codec(compact)]
-					query_id: ::core::primitive::u64,
-					dest: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
-					#[codec(compact)]
-					max_response_weight: ::core::primitive::u64,
-				},
+				ReportError(hub_runtime_types::staging_xcm::v5::QueryResponseInfo),
 				#[codec(index = 13)]
 				DepositAsset {
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssetFilter,
-					#[codec(compact)]
-					max_assets: ::core::primitive::u32,
-					beneficiary: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
+					assets: hub_runtime_types::staging_xcm::v5::asset::AssetFilter,
+					beneficiary: hub_runtime_types::staging_xcm::v5::location::Location,
 				},
 				#[codec(index = 14)]
 				DepositReserveAsset {
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssetFilter,
-					#[codec(compact)]
-					max_assets: ::core::primitive::u32,
-					dest: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
+					assets: hub_runtime_types::staging_xcm::v5::asset::AssetFilter,
+					dest: hub_runtime_types::staging_xcm::v5::location::Location,
 					xcm: ::core::primitive::bool,
 				},
 				#[codec(index = 15)]
 				ExchangeAsset {
-					give: hub_runtime_types::xcm::v2::multiasset::MultiAssetFilter,
-					receive: hub_runtime_types::xcm::v2::multiasset::MultiAssets,
+					give: hub_runtime_types::staging_xcm::v5::asset::AssetFilter,
+					want: hub_runtime_types::staging_xcm::v5::asset::Assets,
+					maximal: ::core::primitive::bool,
 				},
 				#[codec(index = 16)]
 				InitiateReserveWithdraw {
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssetFilter,
-					reserve: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
+					assets: hub_runtime_types::staging_xcm::v5::asset::AssetFilter,
+					reserve: hub_runtime_types::staging_xcm::v5::location::Location,
 					xcm: ::core::primitive::bool,
 				},
 				#[codec(index = 17)]
 				InitiateTeleport {
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssetFilter,
-					dest: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
+					assets: hub_runtime_types::staging_xcm::v5::asset::AssetFilter,
+					dest: hub_runtime_types::staging_xcm::v5::location::Location,
 					xcm: ::core::primitive::bool,
 				},
 				#[codec(index = 18)]
-				QueryHolding {
-					#[codec(compact)]
-					query_id: ::core::primitive::u64,
-					dest: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssetFilter,
-					#[codec(compact)]
-					max_response_weight: ::core::primitive::u64,
+				ReportHolding {
+					response_info: hub_runtime_types::staging_xcm::v5::QueryResponseInfo,
+					assets: hub_runtime_types::staging_xcm::v5::asset::AssetFilter,
 				},
 				#[codec(index = 19)]
 				BuyExecution {
-					fees: hub_runtime_types::xcm::v2::multiasset::MultiAsset,
-					weight_limit: hub_runtime_types::xcm::v2::WeightLimit,
+					fees: hub_runtime_types::staging_xcm::v5::asset::Asset,
+					weight_limit: hub_runtime_types::xcm::v3::WeightLimit,
 				},
 				#[codec(index = 20)]
 				RefundSurplus,
@@ -2092,8 +2069,8 @@ pub mod hub_runtime_types {
 				ClearError,
 				#[codec(index = 24)]
 				ClaimAsset {
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssets,
-					ticket: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
+					assets: hub_runtime_types::staging_xcm::v5::asset::Assets,
+					ticket: hub_runtime_types::staging_xcm::v5::location::Location,
 				},
 				#[codec(index = 25)]
 				Trap(#[codec(compact)] ::core::primitive::u64),
@@ -2101,44 +2078,152 @@ pub mod hub_runtime_types {
 				SubscribeVersion {
 					#[codec(compact)]
 					query_id: ::core::primitive::u64,
-					#[codec(compact)]
-					max_response_weight: ::core::primitive::u64,
+					max_response_weight: hub_runtime_types::sp_weights::weight_v2::Weight,
 				},
 				#[codec(index = 27)]
 				UnsubscribeVersion,
+				#[codec(index = 28)]
+				BurnAsset(hub_runtime_types::staging_xcm::v5::asset::Assets),
+				#[codec(index = 29)]
+				ExpectAsset(hub_runtime_types::staging_xcm::v5::asset::Assets),
+				#[codec(index = 30)]
+				ExpectOrigin(
+					::core::option::Option<hub_runtime_types::staging_xcm::v5::location::Location>,
+				),
+				#[codec(index = 31)]
+				ExpectError(
+					::core::option::Option<(
+						::core::primitive::u32,
+						hub_runtime_types::xcm::v5::traits::Error,
+					)>,
+				),
+				#[codec(index = 32)]
+				ExpectTransactStatus(hub_runtime_types::xcm::v3::MaybeErrorCode),
+				#[codec(index = 33)]
+				QueryPallet {
+					module_name: sp_std::vec::Vec<::core::primitive::u8>,
+					response_info: hub_runtime_types::staging_xcm::v5::QueryResponseInfo,
+				},
+				#[codec(index = 34)]
+				ExpectPallet {
+					#[codec(compact)]
+					index: ::core::primitive::u32,
+					name: sp_std::vec::Vec<::core::primitive::u8>,
+					module_name: sp_std::vec::Vec<::core::primitive::u8>,
+					#[codec(compact)]
+					crate_major: ::core::primitive::u32,
+					#[codec(compact)]
+					min_crate_minor: ::core::primitive::u32,
+				},
+				#[codec(index = 35)]
+				ReportTransactStatus(hub_runtime_types::staging_xcm::v5::QueryResponseInfo),
+				#[codec(index = 36)]
+				ClearTransactStatus,
+				#[codec(index = 37)]
+				UniversalOrigin(hub_runtime_types::staging_xcm::v5::junction::Junction),
+				#[codec(index = 38)]
+				ExportMessage {
+					network: hub_runtime_types::staging_xcm::v5::junction::NetworkId,
+					destination: hub_runtime_types::staging_xcm::v5::junctions::Junctions,
+					xcm: ::core::primitive::bool,
+				},
+				#[codec(index = 39)]
+				LockAsset {
+					asset: hub_runtime_types::staging_xcm::v5::asset::Asset,
+					unlocker: hub_runtime_types::staging_xcm::v5::location::Location,
+				},
+				#[codec(index = 40)]
+				UnlockAsset {
+					asset: hub_runtime_types::staging_xcm::v5::asset::Asset,
+					target: hub_runtime_types::staging_xcm::v5::location::Location,
+				},
+				#[codec(index = 41)]
+				NoteUnlockable {
+					asset: hub_runtime_types::staging_xcm::v5::asset::Asset,
+					owner: hub_runtime_types::staging_xcm::v5::location::Location,
+				},
+				#[codec(index = 42)]
+				RequestUnlock {
+					asset: hub_runtime_types::staging_xcm::v5::asset::Asset,
+					locker: hub_runtime_types::staging_xcm::v5::location::Location,
+				},
+				#[codec(index = 43)]
+				SetFeesMode { jit_withdraw: ::core::primitive::bool },
+				#[codec(index = 44)]
+				SetTopic([::core::primitive::u8; 32usize]),
+				#[codec(index = 45)]
+				ClearTopic,
+				#[codec(index = 46)]
+				AliasOrigin(hub_runtime_types::staging_xcm::v5::location::Location),
+				#[codec(index = 47)]
+				UnpaidExecution {
+					weight_limit: hub_runtime_types::xcm::v3::WeightLimit,
+					check_origin: ::core::option::Option<
+						hub_runtime_types::staging_xcm::v5::location::Location,
+					>,
+				},
+				#[codec(index = 48)]
+				PayFees { asset: hub_runtime_types::staging_xcm::v5::asset::Asset },
+				#[codec(index = 49)]
+				InitiateTransfer {
+					destination: hub_runtime_types::staging_xcm::v5::location::Location,
+					remote_fees: ::core::option::Option<
+						hub_runtime_types::staging_xcm::v5::asset::AssetTransferFilter,
+					>,
+					preserve_origin: ::core::primitive::bool,
+					assets: hub_runtime_types::bounded_collections::bounded_vec::BoundedVec<
+						hub_runtime_types::staging_xcm::v5::asset::AssetTransferFilter,
+					>,
+					remote_xcm: ::core::primitive::bool,
+				},
+				#[codec(index = 50)]
+				ExecuteWithOrigin {
+					descendant_origin: ::core::option::Option<
+						hub_runtime_types::staging_xcm::v5::junctions::Junctions,
+					>,
+					xcm: ::core::primitive::bool,
+				},
+				#[codec(index = 51)]
+				SetHints {
+					hints: hub_runtime_types::bounded_collections::bounded_vec::BoundedVec<
+						hub_runtime_types::staging_xcm::v5::Hint,
+					>,
+				},
 			}
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 			pub enum Instruction2 {
 				#[codec(index = 0)]
-				WithdrawAsset(hub_runtime_types::xcm::v2::multiasset::MultiAssets),
+				WithdrawAsset(hub_runtime_types::staging_xcm::v5::asset::Assets),
 				#[codec(index = 1)]
-				ReserveAssetDeposited(hub_runtime_types::xcm::v2::multiasset::MultiAssets),
+				ReserveAssetDeposited(hub_runtime_types::staging_xcm::v5::asset::Assets),
 				#[codec(index = 2)]
-				ReceiveTeleportedAsset(hub_runtime_types::xcm::v2::multiasset::MultiAssets),
+				ReceiveTeleportedAsset(hub_runtime_types::staging_xcm::v5::asset::Assets),
 				#[codec(index = 3)]
 				QueryResponse {
 					#[codec(compact)]
 					query_id: ::core::primitive::u64,
-					response: hub_runtime_types::xcm::v2::Response,
-					#[codec(compact)]
-					max_weight: ::core::primitive::u64,
+					response: hub_runtime_types::staging_xcm::v5::Response,
+					max_weight: hub_runtime_types::sp_weights::weight_v2::Weight,
+					querier: ::core::option::Option<
+						hub_runtime_types::staging_xcm::v5::location::Location,
+					>,
 				},
 				#[codec(index = 4)]
 				TransferAsset {
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssets,
-					beneficiary: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
+					assets: hub_runtime_types::staging_xcm::v5::asset::Assets,
+					beneficiary: hub_runtime_types::staging_xcm::v5::location::Location,
 				},
 				#[codec(index = 5)]
 				TransferReserveAsset {
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssets,
-					dest: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
-					xcm: hub_runtime_types::xcm::v2::Xcm,
+					assets: hub_runtime_types::staging_xcm::v5::asset::Assets,
+					dest: hub_runtime_types::staging_xcm::v5::location::Location,
+					xcm: hub_runtime_types::staging_xcm::v5::Xcm,
 				},
 				#[codec(index = 6)]
 				Transact {
-					origin_type: hub_runtime_types::xcm::v2::OriginKind,
-					#[codec(compact)]
-					require_weight_at_most: ::core::primitive::u64,
+					origin_kind: hub_runtime_types::xcm::v3::OriginKind,
+					fallback_max_weight:
+						::core::option::Option<hub_runtime_types::sp_weights::weight_v2::Weight>,
 					call: hub_runtime_types::xcm::double_encoded::DoubleEncoded2,
 				},
 				#[codec(index = 7)]
@@ -2167,60 +2252,47 @@ pub mod hub_runtime_types {
 				#[codec(index = 10)]
 				ClearOrigin,
 				#[codec(index = 11)]
-				DescendOrigin(hub_runtime_types::xcm::v2::multilocation::Junctions),
+				DescendOrigin(hub_runtime_types::staging_xcm::v5::junctions::Junctions),
 				#[codec(index = 12)]
-				ReportError {
-					#[codec(compact)]
-					query_id: ::core::primitive::u64,
-					dest: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
-					#[codec(compact)]
-					max_response_weight: ::core::primitive::u64,
-				},
+				ReportError(hub_runtime_types::staging_xcm::v5::QueryResponseInfo),
 				#[codec(index = 13)]
 				DepositAsset {
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssetFilter,
-					#[codec(compact)]
-					max_assets: ::core::primitive::u32,
-					beneficiary: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
+					assets: hub_runtime_types::staging_xcm::v5::asset::AssetFilter,
+					beneficiary: hub_runtime_types::staging_xcm::v5::location::Location,
 				},
 				#[codec(index = 14)]
 				DepositReserveAsset {
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssetFilter,
-					#[codec(compact)]
-					max_assets: ::core::primitive::u32,
-					dest: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
-					xcm: hub_runtime_types::xcm::v2::Xcm,
+					assets: hub_runtime_types::staging_xcm::v5::asset::AssetFilter,
+					dest: hub_runtime_types::staging_xcm::v5::location::Location,
+					xcm: hub_runtime_types::staging_xcm::v5::Xcm,
 				},
 				#[codec(index = 15)]
 				ExchangeAsset {
-					give: hub_runtime_types::xcm::v2::multiasset::MultiAssetFilter,
-					receive: hub_runtime_types::xcm::v2::multiasset::MultiAssets,
+					give: hub_runtime_types::staging_xcm::v5::asset::AssetFilter,
+					want: hub_runtime_types::staging_xcm::v5::asset::Assets,
+					maximal: ::core::primitive::bool,
 				},
 				#[codec(index = 16)]
 				InitiateReserveWithdraw {
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssetFilter,
-					reserve: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
-					xcm: hub_runtime_types::xcm::v2::Xcm,
+					assets: hub_runtime_types::staging_xcm::v5::asset::AssetFilter,
+					reserve: hub_runtime_types::staging_xcm::v5::location::Location,
+					xcm: hub_runtime_types::staging_xcm::v5::Xcm,
 				},
 				#[codec(index = 17)]
 				InitiateTeleport {
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssetFilter,
-					dest: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
-					xcm: hub_runtime_types::xcm::v2::Xcm,
+					assets: hub_runtime_types::staging_xcm::v5::asset::AssetFilter,
+					dest: hub_runtime_types::staging_xcm::v5::location::Location,
+					xcm: hub_runtime_types::staging_xcm::v5::Xcm,
 				},
 				#[codec(index = 18)]
-				QueryHolding {
-					#[codec(compact)]
-					query_id: ::core::primitive::u64,
-					dest: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssetFilter,
-					#[codec(compact)]
-					max_response_weight: ::core::primitive::u64,
+				ReportHolding {
+					response_info: hub_runtime_types::staging_xcm::v5::QueryResponseInfo,
+					assets: hub_runtime_types::staging_xcm::v5::asset::AssetFilter,
 				},
 				#[codec(index = 19)]
 				BuyExecution {
-					fees: hub_runtime_types::xcm::v2::multiasset::MultiAsset,
-					weight_limit: hub_runtime_types::xcm::v2::WeightLimit,
+					fees: hub_runtime_types::staging_xcm::v5::asset::Asset,
+					weight_limit: hub_runtime_types::xcm::v3::WeightLimit,
 				},
 				#[codec(index = 20)]
 				RefundSurplus,
@@ -2232,8 +2304,8 @@ pub mod hub_runtime_types {
 				ClearError,
 				#[codec(index = 24)]
 				ClaimAsset {
-					assets: hub_runtime_types::xcm::v2::multiasset::MultiAssets,
-					ticket: hub_runtime_types::xcm::v2::multilocation::MultiLocation,
+					assets: hub_runtime_types::staging_xcm::v5::asset::Assets,
+					ticket: hub_runtime_types::staging_xcm::v5::location::Location,
 				},
 				#[codec(index = 25)]
 				Trap(#[codec(compact)] ::core::primitive::u64),
@@ -2241,65 +2313,184 @@ pub mod hub_runtime_types {
 				SubscribeVersion {
 					#[codec(compact)]
 					query_id: ::core::primitive::u64,
-					#[codec(compact)]
-					max_response_weight: ::core::primitive::u64,
+					max_response_weight: hub_runtime_types::sp_weights::weight_v2::Weight,
 				},
 				#[codec(index = 27)]
 				UnsubscribeVersion,
-			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-			pub enum NetworkId {
-				#[codec(index = 0)]
-				Any,
-				#[codec(index = 1)]
-				Named(
-					hub_runtime_types::bounded_collections::weak_bounded_vec::WeakBoundedVec<
-						::core::primitive::u8,
-					>,
+				#[codec(index = 28)]
+				BurnAsset(hub_runtime_types::staging_xcm::v5::asset::Assets),
+				#[codec(index = 29)]
+				ExpectAsset(hub_runtime_types::staging_xcm::v5::asset::Assets),
+				#[codec(index = 30)]
+				ExpectOrigin(
+					::core::option::Option<hub_runtime_types::staging_xcm::v5::location::Location>,
 				),
-				#[codec(index = 2)]
-				Polkadot,
-				#[codec(index = 3)]
-				Kusama,
+				#[codec(index = 31)]
+				ExpectError(
+					::core::option::Option<(
+						::core::primitive::u32,
+						hub_runtime_types::xcm::v5::traits::Error,
+					)>,
+				),
+				#[codec(index = 32)]
+				ExpectTransactStatus(hub_runtime_types::xcm::v3::MaybeErrorCode),
+				#[codec(index = 33)]
+				QueryPallet {
+					module_name: sp_std::vec::Vec<::core::primitive::u8>,
+					response_info: hub_runtime_types::staging_xcm::v5::QueryResponseInfo,
+				},
+				#[codec(index = 34)]
+				ExpectPallet {
+					#[codec(compact)]
+					index: ::core::primitive::u32,
+					name: sp_std::vec::Vec<::core::primitive::u8>,
+					module_name: sp_std::vec::Vec<::core::primitive::u8>,
+					#[codec(compact)]
+					crate_major: ::core::primitive::u32,
+					#[codec(compact)]
+					min_crate_minor: ::core::primitive::u32,
+				},
+				#[codec(index = 35)]
+				ReportTransactStatus(hub_runtime_types::staging_xcm::v5::QueryResponseInfo),
+				#[codec(index = 36)]
+				ClearTransactStatus,
+				#[codec(index = 37)]
+				UniversalOrigin(hub_runtime_types::staging_xcm::v5::junction::Junction),
+				#[codec(index = 38)]
+				ExportMessage {
+					network: hub_runtime_types::staging_xcm::v5::junction::NetworkId,
+					destination: hub_runtime_types::staging_xcm::v5::junctions::Junctions,
+					xcm: hub_runtime_types::staging_xcm::v5::Xcm,
+				},
+				#[codec(index = 39)]
+				LockAsset {
+					asset: hub_runtime_types::staging_xcm::v5::asset::Asset,
+					unlocker: hub_runtime_types::staging_xcm::v5::location::Location,
+				},
+				#[codec(index = 40)]
+				UnlockAsset {
+					asset: hub_runtime_types::staging_xcm::v5::asset::Asset,
+					target: hub_runtime_types::staging_xcm::v5::location::Location,
+				},
+				#[codec(index = 41)]
+				NoteUnlockable {
+					asset: hub_runtime_types::staging_xcm::v5::asset::Asset,
+					owner: hub_runtime_types::staging_xcm::v5::location::Location,
+				},
+				#[codec(index = 42)]
+				RequestUnlock {
+					asset: hub_runtime_types::staging_xcm::v5::asset::Asset,
+					locker: hub_runtime_types::staging_xcm::v5::location::Location,
+				},
+				#[codec(index = 43)]
+				SetFeesMode { jit_withdraw: ::core::primitive::bool },
+				#[codec(index = 44)]
+				SetTopic([::core::primitive::u8; 32usize]),
+				#[codec(index = 45)]
+				ClearTopic,
+				#[codec(index = 46)]
+				AliasOrigin(hub_runtime_types::staging_xcm::v5::location::Location),
+				#[codec(index = 47)]
+				UnpaidExecution {
+					weight_limit: hub_runtime_types::xcm::v3::WeightLimit,
+					check_origin: ::core::option::Option<
+						hub_runtime_types::staging_xcm::v5::location::Location,
+					>,
+				},
+				#[codec(index = 48)]
+				PayFees { asset: hub_runtime_types::staging_xcm::v5::asset::Asset },
+				#[codec(index = 49)]
+				InitiateTransfer {
+					destination: hub_runtime_types::staging_xcm::v5::location::Location,
+					remote_fees: ::core::option::Option<
+						hub_runtime_types::staging_xcm::v5::asset::AssetTransferFilter,
+					>,
+					preserve_origin: ::core::primitive::bool,
+					assets: hub_runtime_types::bounded_collections::bounded_vec::BoundedVec<
+						hub_runtime_types::staging_xcm::v5::asset::AssetTransferFilter,
+					>,
+					remote_xcm: hub_runtime_types::staging_xcm::v5::Xcm,
+				},
+				#[codec(index = 50)]
+				ExecuteWithOrigin {
+					descendant_origin: ::core::option::Option<
+						hub_runtime_types::staging_xcm::v5::junctions::Junctions,
+					>,
+					xcm: ::core::primitive::bool,
+				},
+				#[codec(index = 51)]
+				SetHints {
+					hints: hub_runtime_types::bounded_collections::bounded_vec::BoundedVec<
+						hub_runtime_types::staging_xcm::v5::Hint,
+					>,
+				},
 			}
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-			pub enum OriginKind {
-				#[codec(index = 0)]
-				Native,
-				#[codec(index = 1)]
-				SovereignAccount,
-				#[codec(index = 2)]
-				Superuser,
-				#[codec(index = 3)]
-				Xcm,
+			pub struct PalletInfo {
+				#[codec(compact)]
+				pub index: ::core::primitive::u32,
+				pub name: hub_runtime_types::bounded_collections::bounded_vec::BoundedVec<
+					::core::primitive::u8,
+				>,
+				pub module_name: hub_runtime_types::bounded_collections::bounded_vec::BoundedVec<
+					::core::primitive::u8,
+				>,
+				#[codec(compact)]
+				pub major: ::core::primitive::u32,
+				#[codec(compact)]
+				pub minor: ::core::primitive::u32,
+				#[codec(compact)]
+				pub patch: ::core::primitive::u32,
+			}
+			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			pub struct QueryResponseInfo {
+				pub destination: hub_runtime_types::staging_xcm::v5::location::Location,
+				#[codec(compact)]
+				pub query_id: ::core::primitive::u64,
+				pub max_weight: hub_runtime_types::sp_weights::weight_v2::Weight,
 			}
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 			pub enum Response {
 				#[codec(index = 0)]
 				Null,
 				#[codec(index = 1)]
-				Assets(hub_runtime_types::xcm::v2::multiasset::MultiAssets),
+				Assets(hub_runtime_types::staging_xcm::v5::asset::Assets),
 				#[codec(index = 2)]
 				ExecutionResult(
 					::core::option::Option<(
 						::core::primitive::u32,
-						hub_runtime_types::xcm::v2::traits::Error,
+						hub_runtime_types::xcm::v5::traits::Error,
 					)>,
 				),
 				#[codec(index = 3)]
 				Version(::core::primitive::u32),
+				#[codec(index = 4)]
+				PalletsInfo(
+					hub_runtime_types::bounded_collections::bounded_vec::BoundedVec<
+						hub_runtime_types::staging_xcm::v5::PalletInfo,
+					>,
+				),
+				#[codec(index = 5)]
+				DispatchResult(hub_runtime_types::xcm::v3::MaybeErrorCode),
 			}
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-			pub enum WeightLimit {
-				#[codec(index = 0)]
-				Unlimited,
-				#[codec(index = 1)]
-				Limited(#[codec(compact)] ::core::primitive::u64),
+			pub struct Xcm(pub sp_std::vec::Vec<hub_runtime_types::staging_xcm::v5::Instruction>);
+			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			pub struct Xcm2(pub sp_std::vec::Vec<hub_runtime_types::staging_xcm::v5::Instruction2>);
+		}
+	}
+	pub mod xcm {
+		use super::*;
+		pub mod double_encoded {
+			use super::*;
+			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			pub struct DoubleEncoded {
+				pub encoded: sp_std::vec::Vec<::core::primitive::u8>,
 			}
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-			pub struct Xcm(pub sp_std::vec::Vec<hub_runtime_types::xcm::v2::Instruction>);
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-			pub struct Xcm2(pub sp_std::vec::Vec<hub_runtime_types::xcm::v2::Instruction2>);
+			pub struct DoubleEncoded2 {
+				pub encoded: sp_std::vec::Vec<::core::primitive::u8>,
+			}
 		}
 		pub mod v3 {
 			use super::*;
@@ -3165,48 +3356,141 @@ pub mod hub_runtime_types {
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 			pub struct Xcm2(pub sp_std::vec::Vec<hub_runtime_types::xcm::v3::Instruction2>);
 		}
+		pub mod v5 {
+			use super::*;
+			pub mod traits {
+				use super::*;
+				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				pub enum Error {
+					#[codec(index = 0)]
+					Overflow,
+					#[codec(index = 1)]
+					Unimplemented,
+					#[codec(index = 2)]
+					UntrustedReserveLocation,
+					#[codec(index = 3)]
+					UntrustedTeleportLocation,
+					#[codec(index = 4)]
+					LocationFull,
+					#[codec(index = 5)]
+					LocationNotInvertible,
+					#[codec(index = 6)]
+					BadOrigin,
+					#[codec(index = 7)]
+					InvalidLocation,
+					#[codec(index = 8)]
+					AssetNotFound,
+					#[codec(index = 9)]
+					FailedToTransactAsset,
+					#[codec(index = 10)]
+					NotWithdrawable,
+					#[codec(index = 11)]
+					LocationCannotHold,
+					#[codec(index = 12)]
+					ExceedsMaxMessageSize,
+					#[codec(index = 13)]
+					DestinationUnsupported,
+					#[codec(index = 14)]
+					Transport,
+					#[codec(index = 15)]
+					Unroutable,
+					#[codec(index = 16)]
+					UnknownClaim,
+					#[codec(index = 17)]
+					FailedToDecode,
+					#[codec(index = 18)]
+					MaxWeightInvalid,
+					#[codec(index = 19)]
+					NotHoldingFees,
+					#[codec(index = 20)]
+					TooExpensive,
+					#[codec(index = 21)]
+					Trap(::core::primitive::u64),
+					#[codec(index = 22)]
+					ExpectationFalse,
+					#[codec(index = 23)]
+					PalletNotFound,
+					#[codec(index = 24)]
+					NameMismatch,
+					#[codec(index = 25)]
+					VersionIncompatible,
+					#[codec(index = 26)]
+					HoldingWouldOverflow,
+					#[codec(index = 27)]
+					ExportError,
+					#[codec(index = 28)]
+					ReanchorFailed,
+					#[codec(index = 29)]
+					NoDeal,
+					#[codec(index = 30)]
+					FeesNotMet,
+					#[codec(index = 31)]
+					LockError,
+					#[codec(index = 32)]
+					NoPermission,
+					#[codec(index = 33)]
+					Unanchored,
+					#[codec(index = 34)]
+					NotDepositable,
+					#[codec(index = 35)]
+					TooManyAssets,
+					#[codec(index = 36)]
+					UnhandledXcmVersion,
+					#[codec(index = 37)]
+					WeightLimitReached(hub_runtime_types::sp_weights::weight_v2::Weight),
+					#[codec(index = 38)]
+					Barrier,
+					#[codec(index = 39)]
+					WeightNotComputable,
+					#[codec(index = 40)]
+					ExceedsStackLimit,
+				}
+			}
+		}
 		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum VersionedAssetId {
 			#[codec(index = 3)]
 			V3(hub_runtime_types::xcm::v3::multiasset::AssetId),
 			#[codec(index = 4)]
 			V4(hub_runtime_types::staging_xcm::v4::asset::AssetId),
+			#[codec(index = 5)]
+			V5(hub_runtime_types::staging_xcm::v5::asset::AssetId),
 		}
 		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum VersionedAssets {
-			#[codec(index = 1)]
-			V2(hub_runtime_types::xcm::v2::multiasset::MultiAssets),
 			#[codec(index = 3)]
 			V3(hub_runtime_types::xcm::v3::multiasset::MultiAssets),
 			#[codec(index = 4)]
 			V4(hub_runtime_types::staging_xcm::v4::asset::Assets),
+			#[codec(index = 5)]
+			V5(hub_runtime_types::staging_xcm::v5::asset::Assets),
 		}
 		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum VersionedLocation {
-			#[codec(index = 1)]
-			V2(hub_runtime_types::xcm::v2::multilocation::MultiLocation),
 			#[codec(index = 3)]
 			V3(hub_runtime_types::staging_xcm::v3::multilocation::MultiLocation),
 			#[codec(index = 4)]
 			V4(hub_runtime_types::staging_xcm::v4::location::Location),
+			#[codec(index = 5)]
+			V5(hub_runtime_types::staging_xcm::v5::location::Location),
 		}
 		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum VersionedXcm {
-			#[codec(index = 2)]
-			V2(hub_runtime_types::xcm::v2::Xcm),
 			#[codec(index = 3)]
 			V3(hub_runtime_types::xcm::v3::Xcm),
 			#[codec(index = 4)]
 			V4(hub_runtime_types::staging_xcm::v4::Xcm),
+			#[codec(index = 5)]
+			V5(hub_runtime_types::staging_xcm::v5::Xcm),
 		}
 		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum VersionedXcm2 {
-			#[codec(index = 2)]
-			V2(hub_runtime_types::xcm::v2::Xcm2),
 			#[codec(index = 3)]
 			V3(hub_runtime_types::xcm::v3::Xcm2),
 			#[codec(index = 4)]
 			V4(hub_runtime_types::staging_xcm::v4::Xcm2),
+			#[codec(index = 5)]
+			V5(hub_runtime_types::staging_xcm::v5::Xcm2),
 		}
 	}
 	pub mod xcm_runtime_apis {
@@ -3247,7 +3531,7 @@ pub mod hub_runtime_types {
 			}
 			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 			pub struct XcmDryRunEffects<_0> {
-				pub execution_result: hub_runtime_types::staging_xcm::v4::traits::Outcome,
+				pub execution_result: hub_runtime_types::staging_xcm::v5::traits::Outcome,
 				pub emitted_events: sp_std::vec::Vec<_0>,
 				pub forwarded_xcms: sp_std::vec::Vec<(
 					hub_runtime_types::xcm::VersionedLocation,

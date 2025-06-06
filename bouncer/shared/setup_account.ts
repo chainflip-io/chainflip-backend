@@ -17,9 +17,10 @@ export async function setupLpAccount(logger: Logger, uri: string) {
   }).event;
 
   await lpMutex.runExclusive(async () => {
+    const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
       .registerLpAccount()
-      .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
+      .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
   });
   await eventHandle;
 
@@ -45,9 +46,10 @@ export async function setupBrokerAccount(logger: Logger, uri: string) {
     }).event;
 
     await lpMutex.runExclusive(async () => {
+      const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
       await chainflip.tx.swapping
         .registerAsBroker()
-        .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
+        .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
     });
     await eventHandle;
 

@@ -206,9 +206,10 @@ async function testTransferAsset(logger: Logger) {
   // Destination account needs a refund address too.
   const chain = shortChainFromAsset(testAsset);
   const refundAddress = await newAddress(testAsset, '//LP_2');
+  const nonce = await chainflip.rpc.system.accountNextIndex(destinationLpAccount.address);
   await chainflip.tx.liquidityProvider
     .registerLiquidityRefundAddress({ [chain]: refundAddress })
-    .signAndSend(destinationLpAccount, { nonce: -1 }, handleSubstrateError(chainflip));
+    .signAndSend(destinationLpAccount, { nonce }, handleSubstrateError(chainflip));
 
   const oldBalanceSource = await getLpBalance(sourceLpAccount.address);
   const oldBalanceDestination = await getLpBalance(destinationLpAccount.address);
