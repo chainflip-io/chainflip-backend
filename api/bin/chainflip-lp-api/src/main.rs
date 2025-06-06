@@ -101,6 +101,14 @@ impl LpRpcApiServer for RpcServerImpl {
 			.await?)
 	}
 
+	async fn request_liquidity_deposit_address_v2(
+		&self,
+		asset: Asset,
+		boost_fee: Option<BasisPoints>,
+	) -> RpcResult<LiquidityDepositChannelDetails> {
+		Ok(self.api.lp_api().request_liquidity_deposit_address_v2(asset, boost_fee).await?)
+	}
+
 	async fn register_liquidity_refund_address(
 		&self,
 		chain: ForeignChain,

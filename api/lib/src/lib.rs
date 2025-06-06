@@ -20,9 +20,10 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::address::AddressString;
 use cf_chains::{evm::to_evm_address, CcmChannelMetadataUnchecked};
-use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
+use cf_primitives::{DcaParameters, ForeignChain};
 use cf_rpc_types::{RedemptionAmount, RefundParametersRpc};
+use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::Serialize;
@@ -31,7 +32,7 @@ use sp_consensus_grandpa::AuthorityId as GrandpaId;
 pub use sp_core::crypto::AccountId32;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256};
 pub use state_chain_runtime::chainflip::BlockUpdate;
-use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
+use state_chain_runtime::{opaque::SessionKeys, RuntimeCall, RuntimeEvent};
 use zeroize::Zeroize;
 pub mod primitives {
 	pub use cf_chains::{
@@ -44,6 +45,10 @@ pub mod primitives {
 	pub use state_chain_runtime::{self, BlockNumber, Hash};
 }
 pub use cf_chains::eth::Address as EthereumAddress;
+use cf_chains::instances::{
+	ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
+	SolanaInstance,
+};
 pub use cf_node_client::WaitForResult;
 
 pub use chainflip_engine::{
@@ -63,8 +68,8 @@ pub mod queries;
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
 // TODO: consider exporting lp types under another alias to avoid shadowing this crate's lp module.
+use cf_rpc_types::lp::LiquidityDepositChannelDetails;
 pub use cf_rpc_types::{self as rpc_types, broker::*};
-
 use cf_utilities::task_scope::Scope;
 use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
@@ -190,6 +195,10 @@ impl GovernanceApi for StateChainClient {}
 impl BrokerApi for StateChainClient {
 	fn raw_rpc_client(&self) -> &jsonrpsee::ws_client::WsClient {
 		&self.base_rpc_client.raw_rpc_client
+	}
+
+	fn base_rpc_client(&self) -> Arc<DefaultRpcClient> {
+		self.base_rpc_client.clone()
 	}
 }
 #[async_trait]
@@ -343,6 +352,8 @@ macro_rules! extract_event {
 pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static {
 	fn raw_rpc_client(&self) -> &jsonrpsee::ws_client::WsClient;
 
+	fn base_rpc_client(&self) -> Arc<DefaultRpcClient>;
+
 	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,
@@ -354,9 +365,8 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
-		wait_for_finality: Option<bool>,
 	) -> Result<SwapDepositAddress> {
-		let extrinsic_progress = self
+		let submit_signed_extrinsic_fut = self
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 					source_asset,
@@ -373,38 +383,31 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 					dca_parameters,
 				},
 			)
-			.await?;
+			.and_then(|(_, (block_fut, finalized_fut))| async move {
+				let (_tx_hash, events, header, ..) = block_fut.until_in_block().await?;
+				Ok((extract_swap_deposit_address(events, header)?, finalized_fut))
+			})
+			.boxed();
 
-		let (_tx_hash, events, header, ..) = if wait_for_finality.unwrap_or_default() {
-			extrinsic_progress.until_finalized().await?
-		} else {
-			extrinsic_progress.until_in_block().await?
+		// Get the pre-allocated channels from the previous finalized block
+		let preallocated_channels_fut = fetch_preallocated_channels(
+			self.base_rpc_client(),
+			self.account_id(),
+			source_asset.into(),
+		);
+
+		let ((swap_deposit_address, finalized_fut), preallocated_channels) =
+			futures::try_join!(submit_signed_extrinsic_fut, preallocated_channels_fut)?;
+
+		// If the extracted deposit channel was pre-allocated to this broker
+		// in the previous finalized block, we can return it immediately.
+		if preallocated_channels.contains(&swap_deposit_address.channel_id) {
+			return Ok(swap_deposit_address);
 		};
 
-		extract_event!(
-			events,
-			state_chain_runtime::RuntimeEvent::Swapping,
-			pallet_cf_swapping::Event::SwapDepositAddressReady,
-			{
-				deposit_address,
-				channel_id,
-				source_chain_expiry_block,
-				channel_opening_fee,
-				refund_parameters,
-				..
-			},
-			SwapDepositAddress {
-				address: AddressString::from_encoded_address(deposit_address),
-				issued_block: header.number,
-				channel_id: *channel_id,
-				source_chain_expiry_block: (*source_chain_expiry_block).into(),
-				channel_opening_fee: (*channel_opening_fee).into(),
-				refund_parameters: refund_parameters
-					.map_address(|refund_address| {
-						AddressString::from_encoded_address(&refund_address)
-					}),
-			}
-		)
+		// Worst case, we need to wait for the transaction to be finalized.
+		let (_tx_hash, events, header, ..) = finalized_fut.until_finalized().await?;
+		extract_swap_deposit_address(events, header)
 	}
 	async fn withdraw_fees(
 		&self,
@@ -702,6 +705,109 @@ pub fn generate_ethereum_key(
 		},
 		to_evm_address(public_key),
 	))
+}
+
+fn fetch_preallocated_channels(
+	rpc_client: Arc<DefaultRpcClient>,
+	account_id: AccountId32,
+	chain: ForeignChain,
+) -> BoxFuture<'static, Result<Vec<ChannelId>>> {
+	async fn preallocated_channels_for_chain<T: pallet_cf_ingress_egress::Config<I>, I: 'static>(
+		client: Arc<DefaultRpcClient>,
+		account_id: T::AccountId,
+	) -> Result<Vec<ChannelId>> {
+		Ok(client
+			.storage_map_entry::<pallet_cf_ingress_egress::PreallocatedChannels<T, I>>(
+				client.latest_finalized_block_hash().await?,
+				&account_id,
+			)
+			.await?
+			.iter()
+			.map(|channel| channel.channel_id)
+			.collect())
+	}
+
+	match chain {
+		ForeignChain::Bitcoin => Box::pin(preallocated_channels_for_chain::<
+			state_chain_runtime::Runtime,
+			BitcoinInstance,
+		>(rpc_client, account_id)),
+		ForeignChain::Ethereum => Box::pin(preallocated_channels_for_chain::<
+			state_chain_runtime::Runtime,
+			EthereumInstance,
+		>(rpc_client, account_id)),
+		ForeignChain::Polkadot => Box::pin(preallocated_channels_for_chain::<
+			state_chain_runtime::Runtime,
+			PolkadotInstance,
+		>(rpc_client, account_id)),
+		ForeignChain::Arbitrum => Box::pin(preallocated_channels_for_chain::<
+			state_chain_runtime::Runtime,
+			ArbitrumInstance,
+		>(rpc_client, account_id)),
+		ForeignChain::Solana => Box::pin(preallocated_channels_for_chain::<
+			state_chain_runtime::Runtime,
+			SolanaInstance,
+		>(rpc_client, account_id)),
+		ForeignChain::Assethub => Box::pin(preallocated_channels_for_chain::<
+			state_chain_runtime::Runtime,
+			AssethubInstance,
+		>(rpc_client, account_id)),
+	}
+}
+
+fn extract_swap_deposit_address(
+	events: Vec<RuntimeEvent>,
+	header: state_chain_runtime::Header,
+) -> Result<SwapDepositAddress> {
+	extract_event!(
+		events,
+		state_chain_runtime::RuntimeEvent::Swapping,
+		pallet_cf_swapping::Event::SwapDepositAddressReady,
+		{
+			deposit_address,
+			channel_id,
+			source_chain_expiry_block,
+			channel_opening_fee,
+			refund_parameters,
+			..
+		},
+		SwapDepositAddress {
+			address: AddressString::from_encoded_address(deposit_address),
+			issued_block: header.number,
+			channel_id: *channel_id,
+			source_chain_expiry_block: (*source_chain_expiry_block).into(),
+			channel_opening_fee: (*channel_opening_fee).into(),
+			refund_parameters: refund_parameters
+				.map_address(|refund_address| {
+					AddressString::from_encoded_address(&refund_address)
+				}),
+		}
+	)
+}
+
+fn extract_liquidity_deposit_channel_details(
+	events: Vec<RuntimeEvent>,
+) -> Result<(ChannelId, LiquidityDepositChannelDetails)> {
+	events
+		.into_iter()
+		.find_map(|event| match event {
+			state_chain_runtime::RuntimeEvent::LiquidityProvider(
+				pallet_cf_lp::Event::LiquidityDepositAddressReady {
+					channel_id,
+					deposit_address,
+					deposit_chain_expiry_block,
+					..
+				},
+			) => Some((
+				channel_id,
+				LiquidityDepositChannelDetails {
+					deposit_address: AddressString::from_encoded_address(deposit_address),
+					deposit_chain_expiry_block,
+				},
+			)),
+			_ => None,
+		})
+		.ok_or_else(|| anyhow!("No LiquidityDepositAddressReady event was found"))
 }
 
 #[cfg(test)]
