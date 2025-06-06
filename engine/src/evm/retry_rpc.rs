@@ -16,6 +16,7 @@
 
 pub mod address_checker;
 pub mod node_interface;
+pub mod oracle_aggregator;
 
 use ethers::{
 	prelude::*,

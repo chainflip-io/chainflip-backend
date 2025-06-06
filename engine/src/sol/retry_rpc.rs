@@ -104,6 +104,12 @@ pub trait SolRetryRpcApi: Clone {
 		&self,
 		transaction: SolanaTransactionData,
 	) -> anyhow::Result<SolSignature>;
+
+	async fn simulate_transaction(
+		&self,
+		serialized_transaction: Vec<u8>,
+		min_context_slot: Option<u64>,
+	) -> Response<RpcSimulateTransactionResult>;
 }
 
 #[async_trait::async_trait]
@@ -262,6 +268,40 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 			)
 			.await
 	}
+
+	async fn simulate_transaction(
+		&self,
+		serialized_transaction: Vec<u8>,
+		min_context_slot: Option<u64>,
+	) -> Response<RpcSimulateTransactionResult> {
+		let encoded_transaction = BASE64_STANDARD.encode(&serialized_transaction);
+		let config = RpcSimulateTransactionConfig {
+			sig_verify: false,
+			replace_recent_blockhash: true,
+			commitment: Some(CommitmentConfig::processed()),
+			encoding: Some(UiTransactionEncoding::Base64),
+			accounts: None,
+			min_context_slot,
+			inner_instructions: false,
+		};
+
+		self.rpc_retry_client
+			.request(
+				RequestLog::new(
+					"simulateTransaction".to_string(),
+					Some(format!("0x{}, {:?}", hex::encode(&serialized_transaction), config)),
+				),
+				Box::pin(move |client| {
+					let encoded_transaction = encoded_transaction.clone();
+					let config = config.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						client.simulate_transaction(encoded_transaction, config).await
+					})
+				}),
+			)
+			.await
+	}
 }
 
 #[async_trait::async_trait]
@@ -333,6 +373,12 @@ pub mod mocks {
 
 			async fn broadcast_transaction(&self, transaction: SolanaTransactionData)
 				-> anyhow::Result<SolSignature>;
+
+			async fn simulate_transaction(
+				&self,
+				serialized_transaction: Vec<u8>,
+				min_context_slot: Option<u64>,
+			) -> Response<RpcSimulateTransactionResult>;
 		}
 	}
 }
@@ -474,6 +520,44 @@ mod tests {
 				.broadcast_transaction(SolanaTransactionData {serialized_transaction: signed_and_serialized_tx, skip_preflight: true}).await.unwrap();
 
 				println!("tx_signature: {:?}", tx_signature);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap()
+	}
+
+	#[tokio::test]
+	#[ignore = "requires external public rpc"]
+	async fn test_sol_simulate_transaction() {
+		task_scope(|scope| {
+			async move {
+				let retry_client = SolRetryRpcClient::new(
+					scope,
+					NodeContainer {
+						primary: HttpEndpoint {
+							http_endpoint: "https://api.devnet.solana.com".into(),
+						},
+						backup: None,
+					},
+					None,
+					Solana::WITNESS_PERIOD,
+				)
+				.await
+				.unwrap();
+
+				// Serialized `latest_round_data` encoded transaction
+				let serialized_transaction: Vec<u8> = hex::decode("010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080010002033f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7f14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d175602502b9d5731648a1c61dcf689240e2d2c799393430d9f1d584e368ec4e5243c5f13dcef863a734d75a53ceea4596b64111f9577af432cf6c0c2aed5cb527a733f010101020927fb829f2e88a4a90400").expect("Decoding failed");
+
+				let simulation_result = retry_client
+				.simulate_transaction(serialized_transaction, None).await;
+
+				let price_feed_result = simulation_result.value.return_data.unwrap();
+
+				// The returned data will need to be decoded on a layer above.
+				println!("price_feed_result: {:?}", price_feed_result);
 
 				Ok(())
 			}

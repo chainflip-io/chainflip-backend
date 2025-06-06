@@ -943,6 +943,26 @@ pub mod alt_managers {
 	);
 }
 
+pub mod oracle_query_helpers {
+	use super::*;
+
+	solana_program!(
+		idl_path: concat!(
+			env!("CF_SOL_PROGRAM_IDL_ROOT"), "/",
+			env!("CF_SOL_PROGRAM_IDL_TAG"), "/" ,
+			"oracle_query_helper.json"
+		),
+		OracleQueryHelperProgram {
+			query_price_feeds => QueryPriceFeeds {
+				args: [],
+				account_metas: [
+					chainlink_program: { signer: false, writable: false },
+				]
+			},
+		}
+	);
+}
+
 #[cfg(test)]
 mod idl {
 	use serde::{Deserialize, Serialize};
