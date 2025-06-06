@@ -1,0 +1,7 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "swap_request_id": 100
+}

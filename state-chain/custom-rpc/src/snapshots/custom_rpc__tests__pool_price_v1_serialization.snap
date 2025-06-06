@@ -1,0 +1,9 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "price": "0xbc614e",
+  "sqrt_price": "0x5397fb1",
+  "tick": -100
+}

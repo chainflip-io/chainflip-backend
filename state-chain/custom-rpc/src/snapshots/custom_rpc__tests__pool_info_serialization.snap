@@ -1,0 +1,24 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "limit_order_fee_hundredth_pips": 100,
+  "range_order_fee_hundredth_pips": 200,
+  "range_order_total_fees_earned": {
+    "base": "0x457",
+    "quote": "0x8ae"
+  },
+  "limit_order_total_fees_earned": {
+    "base": "0xd05",
+    "quote": "0x115c"
+  },
+  "range_total_swap_inputs": {
+    "base": "0x15b3",
+    "quote": "0x1a0a"
+  },
+  "limit_total_swap_inputs": {
+    "base": "0x1e61",
+    "quote": "0x22b8"
+  }
+}
