@@ -314,7 +314,6 @@ impl MockStorageAccess {
 		identifier: ElectionIdentifierOf<ES>,
 		state: ES::ElectionState,
 	) {
-		println!("Setting election state for identifier: {:?}", identifier);
 		ELECTION_STATE.with(|old_state| {
 			let mut state_ref = old_state.borrow_mut();
 			state_ref.insert(identifier.unique_monotonic().encode(), state.encode());

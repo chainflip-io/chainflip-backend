@@ -16,7 +16,9 @@
 
 use super::*;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, Serialize, Deserialize,
+)]
 pub struct DepositChannel<C: Chain> {
 	// TODO: also add pending deposits into this as a Deque.
 	pub channel_id: ChannelId,
