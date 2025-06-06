@@ -1,0 +1,67 @@
+[package]
+name = "pallet-cf-lending-pools"
+version = "0.1.0"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+description = "The lending pools pallet."
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "Apache-2.0"
+publish = false
+repository = "https://github.com/chainflip-io/chainflip-backend"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[lints]
+workspace = true
+
+[dependencies]
+log = { workspace = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
+nanorand = { workspace = true, features = ["wyrand"] }
+
+# Local deps
+cf-primitives = { workspace = true }
+cf-chains = { workspace = true }
+cf-traits = { workspace = true }
+cf-runtime-utilities = { workspace = true }
+
+
+# Parity deps
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+sp-std = { workspace = true }
+frame-benchmarking = { workspace = true, optional = true }
+
+
+[dev-dependencies]
+cf-test-utilities = { workspace = true, default-features = true }
+
+[features]
+default = ["std"]
+std = [
+	"cf-primitives/std",
+	"cf-traits/std",
+	"nanorand/std",
+	"sp-std/std",
+	"codec/std",
+	"frame-support/std",
+	"frame-system/std",
+	"frame-benchmarking?/std",
+]
+runtime-benchmarks = [
+	"frame-support/runtime-benchmarks",
+	"cf-chains/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"cf-traits/runtime-benchmarks",
+	"cf-runtime-utilities/runtime-benchmarks",
+	"frame-benchmarking/runtime-benchmarks",
+]
+try-runtime = [
+	"cf-runtime-utilities/try-runtime",
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"cf-traits/try-runtime",
+]

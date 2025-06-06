@@ -31,7 +31,7 @@ use cf_traits::{
 		egress_handler::MockEgressHandler, pool_api::MockPoolApi,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	AccountRoleRegistry, BalanceApi, BoostApi, MinimumDeposit,
+	AccountRoleRegistry, BalanceApi, BoostBalancesApi, MinimumDeposit,
 };
 use frame_support::{
 	assert_ok, derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160,
@@ -173,18 +173,17 @@ impl crate::Config for Test {
 	type BalanceApi = MockBalanceApi;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = MockFeePayment<Self>;
-	type BoostApi = MockIngressEgressBoostApi;
+	type BoostBalancesApi = MockIngressEgressBoostApi;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type MinimumDeposit = MockMinimumDepositProvider;
 }
 
 pub struct MockIngressEgressBoostApi;
-impl BoostApi for MockIngressEgressBoostApi {
+impl BoostBalancesApi for MockIngressEgressBoostApi {
 	type AccountId = AccountId;
-	type AssetMap = cf_chains::assets::any::AssetMap<AssetAmount>;
 
-	fn boost_pool_account_balances(_who: &Self::AccountId) -> Self::AssetMap {
-		Self::AssetMap::from_fn(|_| BoostBalance::get())
+	fn boost_pool_account_balance(_who: &Self::AccountId, _asset: Asset) -> AssetAmount {
+		BoostBalance::get()
 	}
 }
 

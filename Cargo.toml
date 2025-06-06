@@ -49,6 +49,7 @@ members = [
   "state-chain/pallets/cf-vaults",
   "state-chain/pallets/cf-witnesser",
   "state-chain/pallets/cf-trading-strategy",
+  "state-chain/pallets/cf-lending-pools",
   "state-chain/primitives",
   "state-chain/runtime",
   "state-chain/runtime-utilities",
@@ -267,6 +268,7 @@ pallet-cf-validator = { path = "state-chain/pallets/cf-validator", default-featu
 pallet-cf-vaults = { path = "state-chain/pallets/cf-vaults", default-features = false }
 pallet-cf-witnesser = { path = "state-chain/pallets/cf-witnesser", default-features = false }
 pallet-cf-trading-strategy = { path = "state-chain/pallets/cf-trading-strategy", default-features = false }
+pallet-cf-lending-pools = { path = "state-chain/pallets/cf-lending-pools", default-features = false }
 
 cf-amm = { path = "state-chain/amm", default-features = false }
 cf-amm-math = { path = "state-chain/amm-math", default-features = false }

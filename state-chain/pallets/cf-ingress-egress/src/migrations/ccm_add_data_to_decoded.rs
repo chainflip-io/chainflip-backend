@@ -15,6 +15,8 @@ use cf_chains::{address::IntoForeignChainAddress, CcmChannelMetadataUnchecked};
 //
 // SPDX-License-Identifier: Apache-2.0
 use frame_support::traits::UncheckedOnRuntimeUpgrade;
+#[cfg(feature = "try-runtime")]
+use sp_std::collections::btree_set::BTreeSet;
 
 use crate::Config;
 

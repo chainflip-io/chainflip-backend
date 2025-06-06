@@ -2,16 +2,15 @@ import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli
 import assert from 'assert';
 import {
   lpMutex,
-  chainFromAsset,
   shortChainFromAsset,
   amountToFineAmount,
   assetDecimals,
-  ingressEgressPalletForChain,
   ChainflipExtrinsicSubmitter,
   calculateFeeWithBps,
   amountToFineAmountBigInt,
   newAddress,
   createStateChainKeypair,
+  chainFromAsset,
 } from '../shared/utils';
 import { send } from '../shared/send';
 import { depositLiquidity } from '../shared/deposit_liquidity';
@@ -37,22 +36,15 @@ export async function stopBoosting<T = any>(
 
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
-  const observeStoppedBoosting = observeEvent(
-    logger,
-    `${chainFromAsset(asset).toLowerCase()}IngressEgress:StoppedBoosting`,
-    {
-      test: (event) =>
-        event.data.boosterId === lp.address &&
-        event.data.boostPool.asset === asset &&
-        event.data.boostPool.tier === boostTier.toString(),
-    },
-  ).event;
+  const observeStoppedBoosting = observeEvent(logger, `lendingPools:StoppedBoosting`, {
+    test: (event) =>
+      event.data.boosterId === lp.address &&
+      event.data.boostPool.asset === asset &&
+      event.data.boostPool.tier === boostTier.toString(),
+  }).event;
 
   const extrinsicResult: any = await extrinsicSubmitter.submit(
-    chainflip.tx[ingressEgressPalletForChain(chainFromAsset(asset))].stopBoosting(
-      shortChainFromAsset(asset).toUpperCase(),
-      boostTier,
-    ),
+    chainflip.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier),
     errorOnFail,
   );
   if (!extrinsicResult?.dispatchError) {
@@ -77,21 +69,17 @@ export async function addBoostFunds(
 
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
-  const observeBoostFundsAdded = observeEvent(
-    logger,
-    `${chainFromAsset(asset).toLowerCase()}IngressEgress:BoostFundsAdded`,
-    {
-      test: (event) =>
-        event.data.boosterId === lp.address &&
-        event.data.boostPool.asset === asset &&
-        event.data.boostPool.tier === boostTier.toString(),
-    },
-  );
+  const observeBoostFundsAdded = observeEvent(logger, `lendingPools:BoostFundsAdded`, {
+    test: (event) =>
+      event.data.boosterId === lp.address &&
+      event.data.boostPool.asset === asset &&
+      event.data.boostPool.tier === boostTier.toString(),
+  });
 
   // Add funds to the boost pool
   logger.debug(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
   await extrinsicSubmitter.submit(
-    chainflip.tx[ingressEgressPalletForChain(chainFromAsset(asset))].addBoostFunds(
+    chainflip.tx.lendingPools.addBoostFunds(
       shortChainFromAsset(asset).toUpperCase(),
       amountToFineAmount(amount.toString(), assetDecimals(asset)),
       boostTier,
@@ -206,7 +194,7 @@ export async function testBoostingSwap(testContext: TestContext) {
   const boostPoolTier = 4;
 
   const boostPool: any = (
-    await chainflip.query.bitcoinIngressEgress.boostPools(Assets.Btc, boostPoolTier)
+    await chainflip.query.lendingPools.boostPools(Assets.Btc, boostPoolTier)
   ).toJSON();
 
   // Create the boost pool if it doesn't exist
