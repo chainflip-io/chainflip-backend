@@ -31,8 +31,6 @@ use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 use pallet_cf_flip::{Bonder, FlipSlasher};
 use sp_runtime::DispatchError;
 
-type FlipError = pallet_cf_flip::Error<Test>;
-
 const ETH_DUMMY_ADDR: EthereumAddress = H160([42u8; 20]);
 const ETH_ZERO_ADDRESS: EthereumAddress = H160([0u8; 20]);
 const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
@@ -365,7 +363,7 @@ fn cannot_redeem_bond() {
 				ETH_DUMMY_ADDR,
 				Default::default()
 			),
-			FlipError::InsufficientLiquidity
+			Error::<Test>::BondViolation
 		);
 
 		// Alice *can* withdraw 100
@@ -385,7 +383,7 @@ fn cannot_redeem_bond() {
 				ETH_DUMMY_ADDR,
 				Default::default()
 			),
-			FlipError::InsufficientLiquidity
+			Error::<Test>::BondViolation,
 		);
 
 		// Once she is no longer bonded, Alice can redeem her funds.
@@ -415,7 +413,7 @@ fn can_only_redeem_if_redemption_check_passes() {
 			&ALICE
 		));
 
-		CanRedeem::set(false);
+		MockRedemptionChecker::set_can_redeem(ALICE, false);
 
 		// Redeem fails of RedemptionCheck fails.
 		assert_noop!(
@@ -429,7 +427,7 @@ fn can_only_redeem_if_redemption_check_passes() {
 		);
 
 		// Can redeem now
-		CanRedeem::set(true);
+		MockRedemptionChecker::set_can_redeem(ALICE, true);
 
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
@@ -1291,7 +1289,7 @@ mod test_restricted_balances {
 		(
 			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_2),
 			RESTRICTED_ADDRESS_2,
-			Some(FlipError::InsufficientLiquidity)
+			Some(Error::<Test>::BondViolation)
 		),
 	];
 	// With the mid-sized bond, both restricted balances are blocked by the bond.
@@ -1306,12 +1304,12 @@ mod test_restricted_balances {
 		(
 			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_1),
 			RESTRICTED_ADDRESS_1,
-			Some(FlipError::InsufficientLiquidity)
+			Some(Error::<Test>::BondViolation)
 		),
 		(
 			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_2),
 			RESTRICTED_ADDRESS_2,
-			Some(FlipError::InsufficientLiquidity)
+			Some(Error::<Test>::BondViolation)
 		),
 	];
 	// If the bond is higher than the sum of restrictions, it takes priority over both.
@@ -1321,7 +1319,7 @@ mod test_restricted_balances {
 		(
 			RedemptionAmount::<FlipBalance>::Exact(UNRESTRICTED_BALANCE),
 			UNRESTRICTED_ADDRESS,
-			Some(FlipError::InsufficientLiquidity)
+			Some(Error::<Test>::BondViolation)
 		),
 		(
 			RedemptionAmount::<FlipBalance>::Exact(UNRESTRICTED_BALANCE - 50),
@@ -1331,12 +1329,12 @@ mod test_restricted_balances {
 		(
 			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_1),
 			RESTRICTED_ADDRESS_1,
-			Some(FlipError::InsufficientLiquidity)
+			Some(Error::<Test>::BondViolation)
 		),
 		(
 			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_2),
 			RESTRICTED_ADDRESS_2,
-			Some(FlipError::InsufficientLiquidity)
+			Some(Error::<Test>::BondViolation)
 		),
 	];
 
@@ -1834,4 +1832,659 @@ fn only_governance_can_update_settings() {
 			sp_runtime::traits::BadOrigin,
 		);
 	});
+}
+
+pub mod rebalancing {
+	use cf_primitives::AccountRole;
+	use sp_runtime::AccountId32;
+
+	use super::*;
+
+	#[derive(Debug, Clone)]
+	struct AccountSetup {
+		account: AccountId32,
+		initial_balance: u128,
+		funding_address: Option<EthereumAddress>,
+		deposits: Vec<(u128, EthereumAddress)>,
+		bound_redeem_address: Option<EthereumAddress>,
+		bound_executor_address: Option<EthereumAddress>,
+		bond: Option<u128>,
+		role: Option<AccountRole>,
+		can_redeem: bool,
+	}
+
+	impl AccountSetup {
+		fn new(account: AccountId32) -> Self {
+			Self {
+				account,
+				// default is not zero because an account with zero balance can't exist.
+				initial_balance: MIN_FUNDING,
+				funding_address: None,
+				deposits: Vec::new(),
+				bound_redeem_address: None,
+				bound_executor_address: None,
+				bond: None,
+				role: None,
+				can_redeem: true,
+			}
+		}
+
+		fn account(&self) -> AccountId32 {
+			self.account.clone()
+		}
+
+		fn with_balance(
+			mut self,
+			initial_balance: u128,
+			funding_address: Option<EthereumAddress>,
+		) -> Self {
+			self.initial_balance = initial_balance;
+			self.funding_address = funding_address;
+			self
+		}
+
+		fn with_bound_redeem_address(mut self, address: EthereumAddress) -> Self {
+			self.bound_redeem_address = Some(address);
+			self
+		}
+
+		fn with_bound_executor_address(mut self, address: EthereumAddress) -> Self {
+			self.bound_executor_address = Some(address);
+			self
+		}
+
+		fn with_bond(mut self, bond: u128) -> Self {
+			self.bond = Some(bond);
+			self
+		}
+
+		fn with_role(mut self, role: AccountRole) -> Self {
+			self.role = Some(role);
+			self
+		}
+
+		fn with_validator_role(self) -> Self {
+			self.with_role(AccountRole::Validator)
+		}
+
+		fn with_can_redeem(mut self, can_redeem: bool) -> Self {
+			self.can_redeem = can_redeem;
+			self
+		}
+	}
+
+	fn setup_test(
+		accounts: Vec<AccountSetup>,
+		restricted_addresses: Vec<EthereumAddress>,
+	) -> Result<(), sp_runtime::DispatchError> {
+		// Set up restricted addresses
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			restricted_addresses,
+			vec![],
+		));
+
+		// Set up accounts
+		for setup in accounts {
+			if let Some(role) = setup.role {
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_account_role(
+					&setup.account,
+					role,
+				)?;
+			}
+
+			MockRedemptionChecker::set_can_redeem(setup.account(), setup.can_redeem);
+
+			if setup.initial_balance > 0 {
+				let funding_address = setup.funding_address.unwrap_or_default();
+				Funding::funded(
+					RuntimeOrigin::root(),
+					setup.account(),
+					setup.initial_balance,
+					funding_address,
+					TX_HASH,
+				)?;
+			} else {
+				panic!("Account setup requires a non-zero initial balance.");
+			}
+
+			for (amount, address) in setup.deposits.clone().into_iter().rev() {
+				Funding::funded(RuntimeOrigin::root(), setup.account(), amount, address, TX_HASH)?;
+			}
+
+			if let Some(address) = setup.bound_redeem_address {
+				Funding::bind_redeem_address(RuntimeOrigin::signed(setup.account()), address)?;
+			}
+
+			if let Some(address) = setup.bound_executor_address {
+				Funding::bind_executor_address(RuntimeOrigin::signed(setup.account()), address)?;
+			}
+
+			if let Some(bond) = setup.bond {
+				Bonder::<Test>::update_bond(&setup.account, bond);
+			}
+		}
+
+		Ok(())
+	}
+
+	#[test]
+	fn rebalance_unrestricted_funds() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+			assert_ok!(setup_test(
+				vec![
+					AccountSetup::new(ALICE).with_balance(AMOUNT, Some(UNRESTRICTED_ADDRESS)),
+					AccountSetup::new(BOB),
+				],
+				vec![]
+			));
+
+			// ALICE funds BOB with 100 unrestricted FLIP.
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				Some(UNRESTRICTED_ADDRESS),
+				AMOUNT.into()
+			));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
+				RuntimeEvent::Funding(Event::Funded {
+					account_id: ALICE,
+					tx_hash: _,
+					funds_added: AMOUNT,
+					total_balance: AMOUNT
+				}),
+				RuntimeEvent::System(frame_system::Event::NewAccount { account: BOB }),
+				RuntimeEvent::Funding(Event::Funded {
+					account_id: BOB,
+					tx_hash: _,
+					funds_added: MIN_FUNDING,
+					total_balance: MIN_FUNDING
+				}),
+				RuntimeEvent::Funding(Event::Rebalance {
+					source_account_id: ALICE,
+					recipient_account_id: BOB,
+					amount: AMOUNT,
+				}),
+			);
+			assert_eq!(
+				Flip::total_balance_of(&BOB),
+				AMOUNT + MIN_FUNDING,
+				"Total balance to be correct."
+			);
+		});
+	}
+
+	#[test]
+	fn rebalance_restricted_funds() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+			assert_ok!(setup_test(
+				vec![
+					AccountSetup::new(ALICE).with_balance(AMOUNT, Some(RESTRICTED_ADDRESS)),
+					AccountSetup::new(BOB),
+				],
+				vec![RESTRICTED_ADDRESS]
+			));
+
+			// ALICE funds BOB with 100 restricted FLIP.
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				Some(RESTRICTED_ADDRESS),
+				AMOUNT.into()
+			));
+			assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS), None);
+			assert_eq!(
+				RestrictedBalances::<Test>::get(BOB).get(&RESTRICTED_ADDRESS),
+				Some(&AMOUNT)
+			);
+		});
+	}
+
+	#[test]
+	fn rebalance_only_a_apart_of_the_restricted_funds() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const AMOUNT_MOVE: u128 = AMOUNT / 2;
+			const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+			assert_ok!(setup_test(
+				vec![
+					AccountSetup::new(ALICE)
+						.with_validator_role()
+						.with_balance(AMOUNT, Some(RESTRICTED_ADDRESS)),
+					AccountSetup::new(BOB).with_validator_role(),
+				],
+				vec![RESTRICTED_ADDRESS]
+			));
+
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				Some(RESTRICTED_ADDRESS),
+				RedemptionAmount::Exact(AMOUNT_MOVE)
+			));
+
+			// We burn the redemption tax from the restricted balance of the sender.
+			assert_eq!(
+				*RestrictedBalances::<Test>::get(BOB).get(&RESTRICTED_ADDRESS).unwrap(),
+				AMOUNT_MOVE
+			);
+
+			assert_eq!(
+				*RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
+				AMOUNT_MOVE
+			);
+		});
+	}
+
+	#[test]
+	fn ensure_bound_address_restrictions_enforced_during_rebalance() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const ADDRESS_A: EthereumAddress = H160([0x01; 20]);
+			const ADDRESS_B: EthereumAddress = H160([0x02; 20]);
+
+			assert_ok!(setup_test(
+				vec![
+					AccountSetup::new(ALICE)
+						.with_balance(AMOUNT, None)
+						.with_bound_redeem_address(ADDRESS_A),
+					AccountSetup::new(BOB)
+						.with_balance(AMOUNT, None)
+						.with_bound_redeem_address(ADDRESS_B),
+					AccountSetup::new(CHARLIE).with_balance(AMOUNT, None),
+				],
+				vec![]
+			));
+
+			// Case: Rebalance to account with different bound address.
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, MIN_FUNDING.into()),
+				Error::<Test>::AccountBindingRestrictionViolated
+			);
+			// Case: Rebalance to account with no bound address.
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), CHARLIE, None, MIN_FUNDING.into()),
+				Error::<Test>::AccountBindingRestrictionViolated
+			);
+			// Case: Rebalance from account with no bound address to account with bound address.
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(CHARLIE), ALICE, None, MIN_FUNDING.into()),
+				Error::<Test>::AccountBindingRestrictionViolated
+			);
+		});
+	}
+
+	#[test]
+	fn rebalancing_amount_must_be_above_min_funding() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+
+			assert_ok!(setup_test(
+				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None), AccountSetup::new(BOB),],
+				vec![]
+			));
+
+			// Try to rebalance with an amount below the minimum funding.
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, (MIN_FUNDING - 1).into()),
+				Error::<Test>::MinimumRebalanceAmount
+			);
+			// Rebalance with the minimum funding amount.
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				None,
+				MIN_FUNDING.into()
+			));
+		});
+	}
+
+	#[test]
+	fn fund_rebalance_and_redeem_dosent_allow_unauthorized_redemptions() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const REBALANCE_AMOUNT: u128 = 50;
+			const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+			const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x02; 20]);
+
+			assert_ok!(setup_test(
+				vec![
+					AccountSetup::new(ALICE)
+						.with_validator_role()
+						.with_balance(AMOUNT, Some(RESTRICTED_ADDRESS)),
+					AccountSetup::new(BOB),
+				],
+				vec![RESTRICTED_ADDRESS]
+			));
+
+			// Try to rebalance to BOBs liquid funds.
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::InsufficientUnrestrictedFunds
+			);
+
+			// Try to rebalance to BOB under an unrestricted address.
+			assert_noop!(
+				Funding::rebalance(
+					OriginTrait::signed(ALICE),
+					BOB,
+					Some(UNRESTRICTED_ADDRESS),
+					AMOUNT.into()
+				),
+				Error::<Test>::InsufficientUnrestrictedFunds
+			);
+
+			// Rebalance to BOB under a restricted address.
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				Some(RESTRICTED_ADDRESS),
+				REBALANCE_AMOUNT.into()
+			));
+
+			// Try to redeem some funds to an unrestricted address.
+			assert_noop!(
+				Funding::redeem(
+					OriginTrait::signed(BOB),
+					REBALANCE_AMOUNT.into(),
+					UNRESTRICTED_ADDRESS,
+					Default::default()
+				),
+				Error::<Test>::InsufficientUnrestrictedFunds
+			);
+
+			// Try to rebalance to ALICE liquid funds.
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(BOB), ALICE, None, REBALANCE_AMOUNT.into()),
+				Error::<Test>::InsufficientUnrestrictedFunds
+			);
+
+			// Try to rebalance to ALICE under an unrestricted address.
+			assert_noop!(
+				Funding::rebalance(
+					OriginTrait::signed(BOB),
+					ALICE,
+					Some(UNRESTRICTED_ADDRESS),
+					REBALANCE_AMOUNT.into()
+				),
+				Error::<Test>::InsufficientUnrestrictedFunds
+			);
+
+			// Rebalance back to ALICE under a restricted address.
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(BOB),
+				ALICE,
+				Some(RESTRICTED_ADDRESS),
+				REBALANCE_AMOUNT.into()
+			));
+
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_as_validator(
+					&ALICE
+				)
+			);
+
+			assert_eq!(Flip::total_balance_of(&BOB), MIN_FUNDING);
+			assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT);
+
+			// Redeem successfully all funds to BOB to the restricted address.
+			assert_ok!(Funding::redeem(
+				OriginTrait::signed(BOB),
+				RedemptionAmount::Max,
+				RESTRICTED_ADDRESS,
+				Default::default()
+			));
+
+			// Redeem successfully all funds to ALICE to the restricted address.
+			assert_ok!(Funding::redeem(
+				OriginTrait::signed(ALICE),
+				RedemptionAmount::Max,
+				RESTRICTED_ADDRESS,
+				Default::default()
+			));
+
+			assert_eq!(Flip::total_balance_of(&BOB), 0);
+			assert_eq!(Flip::total_balance_of(&ALICE), 0);
+
+			assert!(PendingRedemptions::<Test>::get(BOB).is_some());
+			assert!(PendingRedemptions::<Test>::get(ALICE).is_some());
+
+			let mut api_calls = MockFundingBroadcaster::get_pending_api_calls();
+			assert_eq!(api_calls.len(), 2);
+
+			let api_call_a = api_calls.pop().unwrap();
+			let api_call_b = api_calls.pop().unwrap();
+
+			let successful_redemption_amount_a = api_call_a.amount;
+			let successful_redemption_amount_b = api_call_b.amount;
+
+			// Note: No tax is taken during the redemption since we redeem all.
+			assert_eq!(successful_redemption_amount_a, AMOUNT);
+			assert_eq!(successful_redemption_amount_b, MIN_FUNDING);
+
+			// Proof balance integrity of all operations.
+			assert_eq!(
+				AMOUNT + MIN_FUNDING, // MIN_FUNDING is the initial balance of BOB
+				Flip::total_balance_of(&ALICE) +
+					Flip::total_balance_of(&BOB) +
+					successful_redemption_amount_a +
+					successful_redemption_amount_b
+			);
+		});
+	}
+
+	#[test]
+	fn rebalance_during_redemption_doesnt_lead_to_double_spending() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const AMOUNT_TO_REDEEM: u128 = 50;
+			const REBALANCE_AMOUNT_TO_HIGH: u128 = 60;
+			const REBALANCE_AMOUNT: u128 = 30;
+			const TAX: u128 = 5;
+			const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+			assert_ok!(setup_test(
+				vec![
+					AccountSetup::new(ALICE)
+						.with_validator_role()
+						.with_balance(AMOUNT, Some(UNRESTRICTED_ADDRESS)),
+					AccountSetup::new(BOB).with_validator_role(),
+				],
+				vec![]
+			));
+
+			assert_ok!(Funding::redeem(
+				OriginTrait::signed(ALICE),
+				RedemptionAmount::Exact(AMOUNT_TO_REDEEM),
+				UNRESTRICTED_ADDRESS,
+				Default::default()
+			));
+
+			assert_noop!(
+				Funding::rebalance(
+					OriginTrait::signed(ALICE),
+					BOB,
+					Some(UNRESTRICTED_ADDRESS),
+					REBALANCE_AMOUNT_TO_HIGH.into()
+				),
+				Error::<Test>::InsufficientBalance
+			);
+
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				Some(UNRESTRICTED_ADDRESS),
+				REBALANCE_AMOUNT.into()
+			));
+
+			let on_chain_balance_alice = Flip::total_balance_of(&ALICE);
+			let on_chain_balance_bob = Flip::total_balance_of(&BOB);
+
+			assert_eq!(on_chain_balance_alice, AMOUNT - AMOUNT_TO_REDEEM - REBALANCE_AMOUNT - TAX);
+			assert_eq!(on_chain_balance_bob, MIN_FUNDING + REBALANCE_AMOUNT);
+
+			assert!(PendingRedemptions::<Test>::get(ALICE).is_some());
+
+			let mut api_calls = MockFundingBroadcaster::get_pending_api_calls();
+			assert_eq!(api_calls.len(), 1);
+
+			let api_call_1 = api_calls.pop().unwrap();
+
+			let successful_redemption_amount = api_call_1.amount;
+
+			assert_eq!(successful_redemption_amount, AMOUNT_TO_REDEEM);
+
+			assert_eq!(
+				AMOUNT + MIN_FUNDING, // MIN_FUNDING is the initial balance of BOB
+				on_chain_balance_alice + on_chain_balance_bob + successful_redemption_amount + TAX
+			);
+		});
+	}
+
+	#[test]
+	fn rebalance_to_non_bidding_validator_fails() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const REBALANCE_AMOUNT: u128 = 30;
+			const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+			assert_ok!(setup_test(
+				vec![
+					AccountSetup::new(ALICE)
+						.with_validator_role()
+						.with_balance(AMOUNT, Some(UNRESTRICTED_ADDRESS))
+						.with_can_redeem(false),
+					AccountSetup::new(BOB).with_validator_role(),
+				],
+				vec![]
+			));
+
+			// ALICE is bidding, BOB not, so rebalance should fail
+			assert_noop!(
+				Funding::rebalance(
+					OriginTrait::signed(ALICE),
+					BOB,
+					Some(UNRESTRICTED_ADDRESS),
+					REBALANCE_AMOUNT.into()
+				),
+				Error::<Test>::CanNotRebalanceToNotBiddingValidator
+			);
+
+			MockRedemptionChecker::set_can_redeem(BOB, false);
+
+			// IF ALICE is bidding, and BOB is as well, rebalance should succeed
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(ALICE),
+				BOB,
+				Some(UNRESTRICTED_ADDRESS),
+				REBALANCE_AMOUNT.into()
+			));
+		});
+	}
+
+	#[test]
+	fn ensure_bound_address_restriction_is_enforced_during_rebalance() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const ADDRESS_A: EthereumAddress = H160([0x01; 20]);
+			const ADDRESS_B: EthereumAddress = H160([0x02; 20]);
+
+			assert_ok!(setup_test(
+				vec![
+					AccountSetup::new(ALICE).with_bound_redeem_address(ADDRESS_A),
+					AccountSetup::new(BOB),
+				],
+				vec![]
+			));
+
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::AccountBindingRestrictionViolated
+			);
+
+			// Update BOB's bound address
+			assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(BOB), ADDRESS_B));
+
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::AccountBindingRestrictionViolated
+			);
+
+			BoundRedeemAddress::<Test>::insert(BOB, ADDRESS_A);
+
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::InsufficientBalance
+			);
+		});
+	}
+
+	#[test]
+	fn ensure_executor_address_restriction_is_enforced_during_rebalance() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const ADDRESS_A: EthereumAddress = H160([0x01; 20]);
+			const ADDRESS_B: EthereumAddress = H160([0x02; 20]);
+
+			assert_ok!(setup_test(
+				vec![
+					AccountSetup::new(ALICE).with_bound_executor_address(ADDRESS_A),
+					AccountSetup::new(BOB),
+				],
+				vec![]
+			));
+
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::ExecutorBindingRestrictionViolated
+			);
+
+			// Update BOB's bound executor address
+			assert_ok!(Funding::bind_executor_address(RuntimeOrigin::signed(BOB), ADDRESS_B));
+
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::ExecutorBindingRestrictionViolated
+			);
+
+			BoundExecutorAddress::<Test>::insert(BOB, ADDRESS_A);
+
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::InsufficientBalance
+			);
+		});
+	}
+
+	#[test]
+	fn cannot_rebalance_illiquid_funds() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+
+			assert_ok!(setup_test(
+				vec![
+					AccountSetup::new(ALICE)
+						.with_balance(AMOUNT, Some(RESTRICTED_ADDRESS))
+						.with_bond(AMOUNT),
+					AccountSetup::new(BOB),
+				],
+				vec![]
+			));
+
+			assert_noop!(
+				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
+				Error::<Test>::BondViolation,
+			);
+		});
+	}
 }

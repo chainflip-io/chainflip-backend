@@ -76,3 +76,18 @@ pub enum OrderFilled {
 }
 
 pub type RefundParametersRpc = ChannelRefundParameters<AddressString>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RebalanceOutcome {
+	pub source_account_id: AccountId32,
+	pub recipient_account_id: AccountId32,
+	pub amount: FlipBalance,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RedemptionOutcome {
+	pub source_account_id: AccountId32,
+	pub redeem_address: EthereumAddress,
+	pub amount: FlipBalance,
+	pub tx_hash: H256,
+}

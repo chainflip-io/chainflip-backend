@@ -147,7 +147,7 @@ pub enum CliCommand {
 	#[clap(subcommand)]
 	Validator(ValidatorSubcommands),
 	#[clap(
-		about = "Request a redemption. After requesting the redemption, please proceed to the Auctions App to complete the redeeming process."
+		about = "Request a redemption. After requesting the redemption, please proceed to theAuctions App to complete the redeeming process."
 	)]
 	Redeem {
 		#[clap(
@@ -161,6 +161,21 @@ pub enum CliCommand {
 			help = "Optional executor address. If specified, only this address will be able to execute the redemption."
 		)]
 		executor_address: Option<String>,
+	},
+	#[clap(about = "Rebalance FLIP by transferring it to another account.")]
+	Rebalance {
+		#[clap(
+			help = "Amount to transfer in FLIP (omit this option to redeem all available FLIP). Up to 6 decimal places, any more are rounded.",
+			long = "exact"
+		)]
+		amount: Option<f64>,
+		#[clap(help = "The State Chain account ID of the recipient.")]
+		recipient_account_id: String,
+		#[clap(
+			help = "An optional Ethereum address under which restriction conditions we transfer the FLIP.",
+			long = "restricted-address"
+		)]
+		restricted_address: Option<String>,
 	},
 	#[clap(
 		about = "Irreversible action that restricts your account to only be able to redeem to the specified address"
