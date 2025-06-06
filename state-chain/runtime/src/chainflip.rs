@@ -138,6 +138,10 @@ impl RewardsDistribution for BackupNodeEmissions {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	fn distribute() {
+		if Emissions::backup_node_emission_per_block() == 0 {
+			return
+		}
+
 		let backup_nodes =
 			Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>();
 		if backup_nodes.is_empty() {
