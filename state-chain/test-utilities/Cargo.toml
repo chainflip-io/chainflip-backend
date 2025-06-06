@@ -21,7 +21,7 @@ sp-runtime = { workspace = true, default-features = true }
 
 [dev-dependencies]
 scale-info = { workspace = true, default-features = true, features = [
-    "derive",
+	"derive",
 ] }
 
 [features]

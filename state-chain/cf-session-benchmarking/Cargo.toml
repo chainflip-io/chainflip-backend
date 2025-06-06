@@ -19,7 +19,7 @@ workspace = true
 rand = { workspace = true, features = ["std_rng"], optional = true }
 
 pallet-session = { workspace = true, features = [
-  "historical",
+	"historical",
 ], optional = true }
 
 codec = { workspace = true, features = ["derive"], optional = true }
@@ -36,12 +36,12 @@ default = ["std"]
 std = []
 
 runtime-benchmarks = [
-  "frame-benchmarking/runtime-benchmarks",
-  "frame-support/runtime-benchmarks",
-  "frame-system/runtime-benchmarks",
-  "sp-runtime/runtime-benchmarks",
-  "rand",
-  "sp-std",
-  "codec",
-  "pallet-session",
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+	"rand",
+	"sp-std",
+	"codec",
+	"pallet-session",
 ]
