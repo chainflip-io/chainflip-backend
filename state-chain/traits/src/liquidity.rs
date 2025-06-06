@@ -14,6 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 pub use cf_amm::common::{PoolPairsMap, Side};
 use cf_chains::assets::any::AssetMap;
 use cf_primitives::{Asset, AssetAmount, Tick};
@@ -153,6 +155,12 @@ pub trait PoolApi {
 		)
 	}
 
+	fn get_open_limit_orders(
+		base_asset: Asset,
+		quote_asset: Asset,
+		account: Self::AccountId,
+	) -> Result<LimitOrders, DispatchError>;
+
 	#[cfg(feature = "runtime-benchmarks")]
 	fn create_pool(
 		base_asset: Asset,
@@ -176,4 +184,16 @@ pub trait BoostApi {
 	type AssetMap;
 
 	fn boost_pool_account_balances(who: &Self::AccountId) -> Self::AssetMap;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct LimitOrder {
+	pub tick: Tick,
+	pub sell_amount: AssetAmount,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct LimitOrders {
+	pub base: BTreeMap<OrderId, LimitOrder>,
+	pub quote: BTreeMap<OrderId, LimitOrder>,
 }

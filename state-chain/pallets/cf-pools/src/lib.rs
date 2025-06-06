@@ -1206,6 +1206,79 @@ impl<T: Config> PoolApi for Pallet<T> {
 		result
 	}
 
+	fn get_open_limit_orders(
+		base_asset: Asset,
+		quote_asset: Asset,
+		account: Self::AccountId,
+	) -> Result<cf_traits::LimitOrders, DispatchError> {
+		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
+			.ok_or(Error::<T>::PoolDoesNotExist)?;
+
+		Ok(cf_traits::LimitOrders {
+			base: pool
+				.limit_orders_cache
+				.base
+				// Get the orders for this account
+				.get(&account)
+				.map(|orders| {
+					orders
+						.iter()
+						// We don't need all the details, so just map the relevant ones
+						.map(|(order_id, tick)| {
+							(
+								*order_id,
+								cf_traits::LimitOrder {
+									tick: *tick,
+									// Find the amount my looking in the pool state for the position
+									sell_amount: pool
+										.pool_state
+										.limit_order(
+											&(account.clone(), *order_id),
+											Side::Sell,
+											*tick,
+										)
+										.map(|(_, position_info)| {
+											position_info.amount.saturated_into()
+										})
+										.unwrap_or(0),
+								},
+							)
+						})
+						.collect()
+				})
+				.unwrap_or_default(),
+			quote: pool
+				.limit_orders_cache
+				.quote
+				.get(&account)
+				.map(|orders| {
+					orders
+						.iter()
+						.map(|(order_id, tick)| {
+							(
+								*order_id,
+								cf_traits::LimitOrder {
+									tick: *tick,
+									sell_amount: pool
+										.pool_state
+										.limit_order(
+											&(account.clone(), *order_id),
+											Side::Buy,
+											*tick,
+										)
+										.map(|(_, position_info)| {
+											position_info.amount.saturated_into()
+										})
+										.unwrap_or(0),
+								},
+							)
+						})
+						.collect()
+				})
+				.unwrap_or_default(),
+		})
+	}
+
 	fn pools() -> Vec<PoolPairsMap<Asset>> {
 		Pools::<T>::iter_keys().map(|asset_pair| asset_pair.assets()).collect()
 	}

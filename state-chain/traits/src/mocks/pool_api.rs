@@ -14,8 +14,8 @@ use frame_support::{
 use scale_info::TypeInfo;
 
 use crate::{
-	mocks::balance_api::MockBalance, BalanceApi, IncreaseOrDecrease, LpOrdersWeightsProvider,
-	OrderId, PoolApi,
+	mocks::balance_api::MockBalance, BalanceApi, IncreaseOrDecrease, LimitOrders,
+	LpOrdersWeightsProvider, OrderId, PoolApi,
 };
 
 use super::{MockPallet, MockPalletStorage};
@@ -169,6 +169,14 @@ impl PoolApi for MockPoolApi {
 		_fee_hundredth_pips: u32,
 		_initial_price: cf_primitives::Price,
 	) -> DispatchResult {
+		unimplemented!()
+	}
+
+	fn get_open_limit_orders(
+		base_asset: Asset,
+		quote_asset: Asset,
+		account: u64,
+	) -> Result<LimitOrders, DispatchError> {
 		unimplemented!()
 	}
 }

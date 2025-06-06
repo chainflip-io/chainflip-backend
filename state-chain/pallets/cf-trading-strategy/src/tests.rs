@@ -298,7 +298,7 @@ fn automated_strategy_basic_usage() {
 						base_asset: BASE_ASSET,
 						account_id: strategy_id,
 						side: Side::Buy,
-						order_id: STRATEGY_ORDER_ID,
+						order_id: STRATEGY_ORDER_ID_0,
 						tick: -SPREAD_TICK,
 						amount: QUOTE_AMOUNT
 					},
@@ -306,7 +306,7 @@ fn automated_strategy_basic_usage() {
 						base_asset: BASE_ASSET,
 						account_id: strategy_id,
 						side: Side::Sell,
-						order_id: STRATEGY_ORDER_ID,
+						order_id: STRATEGY_ORDER_ID_0,
 						tick: SPREAD_TICK,
 						amount: BASE_AMOUNT
 					}
@@ -365,7 +365,7 @@ fn automated_strategy_basic_usage() {
 						base_asset: BASE_ASSET,
 						account_id: strategy_id,
 						side: Side::Buy,
-						order_id: STRATEGY_ORDER_ID,
+						order_id: STRATEGY_ORDER_ID_0,
 						tick: -SPREAD_TICK,
 						amount: QUOTE_AMOUNT
 					},
@@ -373,7 +373,7 @@ fn automated_strategy_basic_usage() {
 						base_asset: BASE_ASSET,
 						account_id: strategy_id,
 						side: Side::Sell,
-						order_id: STRATEGY_ORDER_ID,
+						order_id: STRATEGY_ORDER_ID_0,
 						tick: SPREAD_TICK,
 						amount: BASE_AMOUNT + ADDITIONAL_BASE_AMOUNT * 2
 					}
@@ -460,7 +460,7 @@ fn can_create_asymmetric_buy_sell_strategy() {
 						base_asset: BASE_ASSET,
 						account_id: strategy_id,
 						side: Side::Buy,
-						order_id: STRATEGY_ORDER_ID,
+						order_id: STRATEGY_ORDER_ID_0,
 						tick: BUY_TICK,
 						amount: QUOTE_AMOUNT
 					},
@@ -468,7 +468,7 @@ fn can_create_asymmetric_buy_sell_strategy() {
 						base_asset: BASE_ASSET,
 						account_id: strategy_id,
 						side: Side::Sell,
-						order_id: STRATEGY_ORDER_ID,
+						order_id: STRATEGY_ORDER_ID_0,
 						tick: SELL_TICK,
 						amount: BASE_AMOUNT
 					}
@@ -959,5 +959,93 @@ mod safe_mode {
 			.then_execute_at_next_block(|_| {
 				assert_eq!(MockPoolApi::get_limit_orders().len(), 2);
 			});
+	}
+}
+
+mod inventory_based_strategy {
+	use super::*;
+	use cf_traits::{LimitOrder, LimitOrders};
+
+	#[test]
+	fn logic_test() {
+		#[track_caller]
+		fn test_logic(
+			base_amount: AssetAmount,
+			quote_amount: AssetAmount,
+			min_buy_tick: Tick,
+			max_buy_tick: Tick,
+			min_sell_tick: Tick,
+			max_sell_tick: Tick,
+			expected_orders: LimitOrders,
+		) {
+			let zero_thresholds = BTreeMap::from_iter([(BASE_ASSET, 0), (QUOTE_ASSET, 0)]);
+
+			assert_eq!(
+				TradingStrategyPallet::inventory_base_strategy_logic(
+					BASE_ASSET,
+					base_amount,
+					quote_amount,
+					min_buy_tick,
+					max_buy_tick,
+					min_sell_tick,
+					max_sell_tick,
+					&zero_thresholds
+				),
+				expected_orders,
+			);
+		}
+
+		// 50/50 split exactly
+		test_logic(
+			1000,
+			1000,
+			-10,
+			0,
+			0,
+			10,
+			LimitOrders {
+				// We expect one order each side at the average tick of each range
+				base: BTreeMap::from_iter([(1, LimitOrder { tick: -5, sell_amount: 1000 })]),
+				quote: BTreeMap::from_iter([(1, LimitOrder { tick: 5, sell_amount: 1000 })]),
+			},
+		);
+
+		// 25/75 split
+		test_logic(
+			1000,
+			3000,
+			-10,
+			0,
+			0,
+			10,
+			LimitOrders {
+				// We expect 2 orders on one side (one at the average and one aggressive) and one on
+				// the other (defensive).
+				base: BTreeMap::from_iter([(0, LimitOrder { tick: -8, sell_amount: 1000 })]),
+				quote: BTreeMap::from_iter([
+					(1, LimitOrder { tick: 5, sell_amount: 2000 }),
+					(0, LimitOrder { tick: 3, sell_amount: 1000 }),
+				]),
+			},
+		);
+
+		// 1/99 split
+		test_logic(
+			10,
+			990,
+			-10,
+			0,
+			0,
+			10,
+			LimitOrders {
+				// Similar to before, one max defensive order
+				base: BTreeMap::from_iter([(0, LimitOrder { tick: -10, sell_amount: 10 })]),
+				// then one average and one aggressive order
+				quote: BTreeMap::from_iter([
+					(1, LimitOrder { tick: 5, sell_amount: 500 }),
+					(0, LimitOrder { tick: 0, sell_amount: 490 }),
+				]),
+			},
+		);
 	}
 }
