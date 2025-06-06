@@ -4,7 +4,7 @@
 // This command takes two argument.
 // It will update the on-chain price feed for that asset.
 //
-// For example: ./commands/update_price_feed.ts BTC 123456
+// For example: ./commands/update_price_feeds.ts BTC 123456
 
 import { Asset } from '@chainflip/cli';
 import { updatePriceFeed } from '../shared/update_price_feed';
