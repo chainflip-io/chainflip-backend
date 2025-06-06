@@ -65,8 +65,8 @@ impl<T: BWTypes> HookType for HookTypeFor<T, ElectionPropertiesHook> {
 
 pub struct RulesHook;
 impl<T: BWProcessorTypes> HookType for HookTypeFor<T, RulesHook> {
-	type Input = (ChainBlockNumberOf<T::Chain>, Range<u32>, T::BlockData, u32);
-	type Output = Vec<(ChainBlockNumberOf<T::Chain>, T::Event)>;
+	type Input = (Range<u32>, T::BlockData, u32);
+	type Output = Vec<T::Event>;
 }
 
 pub struct ExecuteHook;

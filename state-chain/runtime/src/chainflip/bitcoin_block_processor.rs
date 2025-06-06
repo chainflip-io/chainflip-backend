@@ -128,19 +128,18 @@ impl Hook<HookTypeFor<TypesEgressWitnessing, ExecuteHook>> for TypesEgressWitnes
 impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDepositChannelWitnessing {
 	fn run(
 		&mut self,
-		(block, age, block_data, safety_margin): (
-			BlockNumber,
+		(age, block_data, safety_margin): (
 			Range<u32>,
 			BlockDataDepositChannel,
 			u32,
 		),
-	) -> Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)> {
-		let mut results: Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)> = vec![];
+	) -> Vec<BtcEvent<DepositWitness<Bitcoin>>> {
+		let mut results: Vec<BtcEvent<DepositWitness<Bitcoin>>> = vec![];
 		if age.contains(&0u32) {
 			results.extend(
 				block_data
 					.iter()
-					.map(|deposit_witness| (block, BtcEvent::PreWitness(deposit_witness.clone())))
+					.map(|deposit_witness| BtcEvent::PreWitness(deposit_witness.clone()))
 					.collect::<Vec<_>>(),
 			)
 		}
@@ -148,7 +147,7 @@ impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDeposi
 			results.extend(
 				block_data
 					.iter()
-					.map(|deposit_witness| (block, BtcEvent::Witness(deposit_witness.clone())))
+					.map(|deposit_witness| BtcEvent::Witness(deposit_witness.clone()))
 					.collect::<Vec<_>>(),
 			)
 		}
@@ -159,22 +158,18 @@ impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDeposi
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDepositWitnessing {
 	fn run(
 		&mut self,
-		(block, age, block_data, safety_margin): (
-			BlockNumber,
+		(age, block_data, safety_margin): (
 			Range<u32>,
 			BlockDataVaultDeposit,
 			u32,
 		),
-	) -> Vec<(BlockNumber, BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>)> {
-		let mut results: Vec<(
-			BlockNumber,
-			BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>,
-		)> = vec![];
+	) -> Vec<BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>> {
+		let mut results: Vec< BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>> = vec![];
 		if age.contains(&0u32) {
 			results.extend(
 				block_data
 					.iter()
-					.map(|vault_deposit| (block, BtcEvent::PreWitness(vault_deposit.clone())))
+					.map(|vault_deposit| BtcEvent::PreWitness(vault_deposit.clone()))
 					.collect::<Vec<_>>(),
 			)
 		}
@@ -182,7 +177,7 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDep
 			results.extend(
 				block_data
 					.iter()
-					.map(|vault_deposit| (block, BtcEvent::Witness(vault_deposit.clone())))
+					.map(|vault_deposit| BtcEvent::Witness(vault_deposit.clone()))
 					.collect::<Vec<_>>(),
 			)
 		}
@@ -193,12 +188,12 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDep
 impl Hook<HookTypeFor<TypesEgressWitnessing, RulesHook>> for TypesEgressWitnessing {
 	fn run(
 		&mut self,
-		(block, age, block_data, safety_margin): (BlockNumber, Range<u32>, EgressBlockData, u32),
-	) -> Vec<(BlockNumber, BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>)> {
+		(age, block_data, safety_margin): (Range<u32>, EgressBlockData, u32),
+	) -> Vec<BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>> {
 		if age.contains(&safety_margin) {
 			return block_data
 				.iter()
-				.map(|egress_witness| (block, BtcEvent::Witness(egress_witness.clone())))
+				.map(|egress_witness| BtcEvent::Witness(egress_witness.clone()))
 				.collect::<Vec<_>>();
 		}
 		vec![]
