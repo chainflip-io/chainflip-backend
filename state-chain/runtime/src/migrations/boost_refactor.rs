@@ -18,13 +18,15 @@ use cf_chains::instances::{
 	ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
 	SolanaInstance,
 };
+use cf_primitives::Asset;
 use codec::{Decode, Encode};
 use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight, *};
 use sp_runtime::{Percent, TryRuntimeError};
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub struct BoostRefactorMigration;
-use crate::Runtime;
+use crate::{AccountId, Runtime};
+use pallet_cf_lending_pools::ScaledAmount;
 
 mod old {
 
@@ -130,6 +132,7 @@ mod old {
 struct PreUpgradeData {
 	number_of_pools: u32,
 	network_fee_deduction: Percent,
+	boost_balances: BTreeMap<AccountId, ScaledAmount>,
 }
 
 fn migrate_boost_status<AccountId, BlockNumber>(
@@ -142,6 +145,40 @@ fn migrate_boost_status<AccountId, BlockNumber>(
 		old::BoostStatus::Boosted { prewitnessed_deposit_id, pools: _, amount } =>
 			pallet_cf_ingress_egress::BoostStatus::Boosted { prewitnessed_deposit_id, amount },
 	}
+}
+
+/// Total available balances in BTC boost pools before migration:
+fn old_boost_balances() -> BTreeMap<AccountId, ScaledAmount> {
+	let mut balances: BTreeMap<AccountId, ScaledAmount> = Default::default();
+
+	for (_, pool) in
+		old::BoostPools::<Runtime, BitcoinInstance>::iter_prefix(cf_chains::assets::btc::Asset::Btc)
+	{
+		for (acc_id, amount) in pool.amounts {
+			let entry = balances.entry(acc_id).or_default();
+			*entry = *entry + amount;
+		}
+	}
+
+	balances
+}
+
+// Total available balances in boost pools (including what's in ongoing boosts) after migration:
+fn new_boost_balances() -> BTreeMap<AccountId, ScaledAmount> {
+	let mut balances: BTreeMap<AccountId, ScaledAmount> = Default::default();
+
+	for (_, pool) in pallet_cf_lending_pools::BoostPools::<Runtime>::iter_prefix(Asset::Btc) {
+		if let Some(pool) =
+			pallet_cf_lending_pools::CorePools::<Runtime>::get(Asset::Btc, pool.core_pool_id)
+		{
+			for (acc_id, amount) in pool.amounts {
+				let entry = balances.entry(acc_id).or_default();
+				*entry = *entry + amount;
+			}
+		}
+	}
+
+	balances
 }
 
 impl UncheckedOnRuntimeUpgrade for BoostRefactorMigration {
@@ -213,7 +250,11 @@ impl UncheckedOnRuntimeUpgrade for BoostRefactorMigration {
 			old::NetworkFeeDeductionFromBoostPercent::<Runtime, BitcoinInstance>::get()
 				.unwrap_or_default();
 
-		let data = PreUpgradeData { number_of_pools, network_fee_deduction };
+		let data = PreUpgradeData {
+			number_of_pools,
+			network_fee_deduction,
+			boost_balances: old_boost_balances(),
+		};
 
 		Ok(data.encode())
 	}
@@ -221,7 +262,7 @@ impl UncheckedOnRuntimeUpgrade for BoostRefactorMigration {
 	/// See [`Hooks::post_upgrade`].
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		let PreUpgradeData { number_of_pools, network_fee_deduction } =
+		let PreUpgradeData { number_of_pools, network_fee_deduction, boost_balances } =
 			PreUpgradeData::decode(&mut state.as_slice()).unwrap();
 
 		assert_eq!(
@@ -233,6 +274,8 @@ impl UncheckedOnRuntimeUpgrade for BoostRefactorMigration {
 			pallet_cf_lending_pools::BoostPools::<Runtime>::iter().count(),
 			number_of_pools as usize
 		);
+
+		assert_eq!(new_boost_balances(), boost_balances);
 
 		assert_eq!(pallet_cf_lending_pools::NextCorePoolId::<Runtime>::get().0, number_of_pools);
 
