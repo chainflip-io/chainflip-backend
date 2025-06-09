@@ -130,7 +130,7 @@ async function testBoostingForAsset(
     'Boost pool must be empty for test',
   );
 
-  // Add boost funds
+  // Add boost funds. Adding on 1% to make sure that there is enough left after fees are taken.
   await depositLiquidity(logger, asset, amount * 1.01, false, lpUri);
   await addBoostFunds(logger, asset, boostFee, amount, lpUri);
 
@@ -217,5 +217,5 @@ export async function testBoostingSwap(testContext: TestContext) {
   }
 
   // Pre-witnessing is only enabled for btc at the moment. Add the other assets here when it's enabled for them.
-  await testBoostingForAsset(Assets.Btc, boostPoolTier, '//LP_1', 0.1, testContext);
+  await testBoostingForAsset(Assets.Btc, boostPoolTier, '//LP_1', 0.5, testContext);
 }

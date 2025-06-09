@@ -13,7 +13,7 @@ import {
   createStateChainKeypair,
 } from '../shared/utils';
 import { send } from '../shared/send';
-import { getChainflipApi, observeEvent } from './utils/substrate';
+import { Event, getChainflipApi, observeEvent } from './utils/substrate';
 import { Logger } from './utils/logger';
 
 export async function depositLiquidity(
@@ -67,14 +67,25 @@ export async function depositLiquidity(
 
   logger.trace(`Received ${ccy} deposit address: ${ingressAddress}`);
   logger.trace(`Initiating transfer of ${amount} ${ccy} to ${ingressAddress}`);
+
+  function checkAccountCreditedEvent(event: Event): boolean {
+    if (event.data.asset === ccy && event.data.accountId === lp.address) {
+      if (
+        isWithinOnePercent(
+          BigInt(event.data.amountCredited.replace(/,/g, '')),
+          BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
+        )
+      ) {
+        return true;
+      }
+      logger.warn(
+        `Account credited event amount mismatch: expected within 1% of ${amountToFineAmount(String(amount), assetDecimals(ccy))}, got ${event.data.amountCredited} ${ccy}`,
+      );
+    }
+    return false;
+  }
   eventHandle = observeEvent(logger, 'assetBalances:AccountCredited', {
-    test: (event) =>
-      event.data.asset === ccy &&
-      event.data.accountId === lp.address &&
-      isWithinOnePercent(
-        BigInt(event.data.amountCredited.replace(/,/g, '')),
-        BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
-      ),
+    test: checkAccountCreditedEvent,
     finalized: waitForFinalization,
   }).event;
 
