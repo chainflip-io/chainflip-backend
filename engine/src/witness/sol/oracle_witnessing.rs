@@ -66,7 +66,7 @@ where
 		.value
 		.return_data
 		.as_ref()
-		.expect("Expected return data to be Some");
+		.ok_or_else(|| anyhow::anyhow!("Expected return data to be Some"))?;
 
 	let price_feeds = decode_query_return_data(return_data, oracle_query_helper)
 		.map_err(|e| anyhow::anyhow!("Failed to decode the query return data: {:?}", e))?;
@@ -110,18 +110,15 @@ fn decode_query_return_data(
 ) -> Result<Vec<PriceFeedData>, anyhow::Error> {
 	let decoded_return_data = BASE64_STANDARD.decode(return_data.data.0.clone())?;
 	if return_data.data.1 != UiReturnDataEncoding::Base64 {
-		return Err(anyhow::anyhow!(
-			"Expected return data encoding to be Base64, found {:?}",
-			return_data.data.1
-		));
+		anyhow::bail!("Expected return data encoding to be Base64, found {:?}", return_data.data.1);
 	}
 	let program_id = SolAddress::from_str(&return_data.program_id)?;
 	if program_id != expected_program_id {
-		return Err(anyhow::anyhow!(
+		anyhow::bail!(
 			"Program ID mismatch: expected {}, found {}",
 			expected_program_id,
 			program_id
-		));
+		);
 	}
 
 	// Manually deserialize return data - Vec<PriceFeedData>
@@ -131,7 +128,7 @@ fn decode_query_return_data(
 	let mut results = Vec::new();
 	for _ in 0..num_entries {
 		if offset + 37 > decoded_return_data.len() {
-			return Err(anyhow::anyhow!("Insufficient data length"));
+			anyhow::bail!(anyhow::anyhow!("Insufficient data length"));
 		}
 
 		let round_id = u32::from_le_bytes(decoded_return_data[offset..offset + 4].try_into()?);
@@ -146,7 +143,7 @@ fn decode_query_return_data(
 		let string_start = offset + 37;
 		let string_end = string_start + string_length as usize;
 		if string_end > decoded_return_data.len() {
-			return Err(anyhow::anyhow!("Insufficient data for string content"));
+			anyhow::bail!("Insufficient data for string content");
 		}
 		let description =
 			String::from_utf8(decoded_return_data[string_start..string_end].to_vec())?;
@@ -159,10 +156,10 @@ fn decode_query_return_data(
 
 	// Check for extra bytes
 	if offset != decoded_return_data.len() {
-		return Err(anyhow::anyhow!(
+		anyhow::bail!(
 			"Unexpected trailing bytes: {} bytes remaining",
 			decoded_return_data.len() - offset
-		));
+		);
 	}
 
 	Ok(results)
