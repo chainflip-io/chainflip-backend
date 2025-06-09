@@ -332,7 +332,7 @@ fn small_rewards_accumulate() {
 	const SMALL_DEPOSIT: AssetAmount = 500;
 	const FEE: AssetAmount = 5;
 
-	const LOAN_1: u64 = 1;
+	const LOAN_1: u64 = 0;
 
 	assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(LoanId(LOAN_1)));
 

@@ -368,8 +368,8 @@ pub mod pallet {
 			// if needed we could optimise this with a map loan_id -> boost_id):
 			let pending_boosts = pending_loans
 				.into_iter()
-				.filter_map(|loan_usage| match loan_usage {
-					LoanUsage::Boost(deposit_id) => Some(deposit_id),
+				.map(|loan_usage| match loan_usage {
+					LoanUsage::Boost(deposit_id) => deposit_id,
 				})
 				.collect();
 
