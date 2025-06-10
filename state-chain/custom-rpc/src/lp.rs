@@ -204,6 +204,15 @@ where
 		wait_for: Option<WaitFor>,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ApiWaitForResult<LiquidityDepositChannelDetails>> {
+		let wait_for_param = match wait_for {
+			Some(WaitFor::InBlock) => Err(anyhow!(
+				"InBlock waiting is not allowed for this method. \
+				Use request_liquidity_deposit_address_v2 instead."
+			))?,
+			Some(value) => value,
+			None => WaitFor::Finalized,
+		};
+
 		Ok(
 			match self
 				.signed_pool_client
@@ -212,7 +221,7 @@ where
 						asset,
 						boost_fee: boost_fee.unwrap_or_default(),
 					}),
-					wait_for.unwrap_or_default(),
+					wait_for_param,
 					false,
 				)
 				.await

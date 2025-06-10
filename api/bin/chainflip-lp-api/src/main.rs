@@ -78,10 +78,19 @@ impl LpRpcApiServer for RpcServerImpl {
 		wait_for: Option<WaitFor>,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ApiWaitForResult<LiquidityDepositChannelDetails>> {
+		let wait_for_param = match wait_for {
+			Some(WaitFor::InBlock) => Err(anyhow!(
+				"InBlock waiting is not allowed for this method. \
+				Use request_liquidity_deposit_address_v2 instead."
+			))?,
+			Some(value) => value,
+			None => WaitFor::Finalized,
+		};
+
 		Ok(self
 			.api
 			.lp_api()
-			.request_liquidity_deposit_address(asset, wait_for.unwrap_or_default(), boost_fee)
+			.request_liquidity_deposit_address(asset, wait_for_param, boost_fee)
 			.await?)
 	}
 
