@@ -22,7 +22,8 @@ use cf_primitives::{
 	DcaParameters, EgressId, ForeignChain, Price, WaitFor,
 };
 use cf_rpc_types::{
-	AccountId32, BlockUpdate, BoundedVec, ConstU32, EthereumAddress, Hash, NumberOrHex, OrderFills,
+	AccountId32, BlockUpdate, BoundedVec, ConstU32, EthereumAddress, ExtrinsicResponse, Hash,
+	NumberOrHex, OrderFills,
 };
 use jsonrpsee::proc_macros::rpc;
 use std::ops::Range;
@@ -33,15 +34,6 @@ pub use cf_rpc_types::lp::*;
 pub trait LpRpcApi {
 	#[method(name = "register_account")]
 	async fn register_account(&self) -> RpcResult<Hash>;
-
-	#[deprecated(note = "Use `request_liquidity_deposit_address_v2` instead")]
-	#[method(name = "liquidity_deposit")]
-	async fn request_liquidity_deposit_address_legacy(
-		&self,
-		asset: Asset,
-		wait_for: Option<WaitFor>,
-		boost_fee: Option<BasisPoints>,
-	) -> RpcResult<ApiWaitForResult<AddressString>>;
 
 	#[deprecated(note = "Use `request_liquidity_deposit_address_v2` instead")]
 	#[method(name = "request_liquidity_deposit_address")]
@@ -57,7 +49,7 @@ pub trait LpRpcApi {
 		&self,
 		asset: Asset,
 		boost_fee: Option<BasisPoints>,
-	) -> RpcResult<LiquidityDepositChannelDetails>;
+	) -> RpcResult<ExtrinsicResponse<LiquidityDepositChannelDetails>>;
 
 	#[method(name = "register_liquidity_refund_address")]
 	async fn register_liquidity_refund_address(
