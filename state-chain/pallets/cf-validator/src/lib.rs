@@ -83,17 +83,6 @@ pub enum PalletConfigUpdate {
 	MinimumAuctionBid { minimum_flip_bid: u32 },
 }
 
-struct DefaultMinimumAuctionBid<T, const MIN_BID: u32>(PhantomData<T>);
-
-impl<T: Config, const MIN_BID: u32> Get<T::Amount> for DefaultMinimumAuctionBid<T, MIN_BID>
-where
-	T: Config,
-{
-	fn get() -> T::Amount {
-		FLIPPERINOS_PER_FLIP.saturating_mul(MIN_BID.into()).into()
-	}
-}
-
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
@@ -326,10 +315,9 @@ pub mod pallet {
 	pub(super) type MaxAuthoritySetContractionPercentage<T: Config> =
 		StorageValue<_, Percent, ValueQuery>;
 
-	/// Minimum bid amount required to participate in auctions. Default is 50_000 FLIP.
+	/// Minimum bid amount required to participate in auctions.
 	#[pallet::storage]
-	pub(super) type MinimumAuctionBid<T: Config> =
-		StorageValue<_, T::Amount, ValueQuery, DefaultMinimumAuctionBid<T, 50_000>>;
+	pub(super) type MinimumAuctionBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
 	/// Store the list of accounts that are active bidders.
 	#[pallet::storage]
