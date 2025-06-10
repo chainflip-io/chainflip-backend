@@ -30,8 +30,6 @@ use sp_core::{ConstU32, Get, H256, U256};
 use sp_std::{
 	cmp::{Ord, PartialOrd},
 	collections::btree_map::BTreeMap,
-	fmt,
-	ops::{Deref, DerefMut},
 	vec::Vec,
 };
 
@@ -44,19 +42,19 @@ macro_rules! define_wrapper_type {
 		#[derive(
 			Clone,
 			Copy,
-			RuntimeDebug,
+			frame_support::sp_runtime::RuntimeDebug,
 			PartialEq,
 			Eq,
 			Encode,
 			Decode,
 			TypeInfo,
-			MaxEncodedLen,
+			frame_support::pallet_prelude::MaxEncodedLen,
 			Default,
 			$($( $extra_derive ),*)?
 		)]
 		pub struct $name(pub $inner);
 
-		impl Deref for $name {
+		impl sp_std::ops::Deref for $name {
 			type Target = $inner;
 
 			fn deref(&self) -> &Self::Target {
@@ -64,7 +62,7 @@ macro_rules! define_wrapper_type {
 			}
 		}
 
-		impl DerefMut for $name {
+		impl sp_std::ops::DerefMut for $name {
 			fn deref_mut(&mut self) -> &mut Self::Target {
 				&mut self.0
 			}
@@ -76,8 +74,8 @@ macro_rules! define_wrapper_type {
 			}
 		}
 
-		impl fmt::Display for $name {
-			fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		impl sp_std::fmt::Display for $name {
+			fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 				write!(f, "{}", self.0)
 			}
 		}
@@ -135,7 +133,7 @@ define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize);
 
 define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
 
-pub type PrewitnessedDepositId = u64;
+define_wrapper_type!(PrewitnessedDepositId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
 
 pub type BoostPoolTier = u16;
 

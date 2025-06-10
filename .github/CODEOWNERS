@@ -1,43 +1,42 @@
+.github @chainflip-io/platform
+
+/api/bin/chainflip-ingress-egress-tracker @chainflip-io/web
+/api/ @nmammeri
+
+/bouncer/shared/sol_vault_swap.ts @albert-llimos
+/bouncer/tests/gaslimit_ccm.ts @albert-llimos
 /bouncer/ @martin-chainflip
 
-/bouncer/shared/upgrade_network.ts @kylezs
-/bouncer/commands/upgrade_network.ts @kylezs
-.github/workflows/upgrade-test.yml @kylezs
+/charts/ @chainflip-io/platform
 
-/state-chain/custom-rpc/ @chainflip-io/web
-/api/bin/chainflip-ingress-egress-tracker @chainflip-io/web
+/contract-interfaces/ @albert-llimos
 
-.github @chainflip-io/platform
 /engine/config/CI/config/Settings.toml @chainflip-io/platform
-/localnet/ @chainflip-io/platform
-
-/state-chain/pallets/cf-pools/ @martin-chainflip
-/state-chain/pallets/cf-elections/ @kylezs
-/state-chain/amm/ @martin-chainflip
-
-/state-chain/ @dandanlen
-
-/utilities/with_std/task_scope @kylezs
-
 /engine/multisig/ @msgmaxim
 /engine/src/p2p/ @msgmaxim
 /engine/src/p2p.rs @msgmaxim
-
-/engine/state_chain_observer/client/ @kylezs
-/engine/src/witness/ @kylezs
-/engine/src/witness.rs @kylezs
-/engine/src/evm/ @kylezs
-/engine/src/btc/ @kylezs
-/engine/src/dot/ @kylezs
-/engine/src/retrier.rs @kylezs
-
-/contract-interfaces/ @albert-llimos
-/foreign-chains/ @albert-llimos
+/engine/src/evm/ @albert-llimos
+/engine/src/sol/ @albert-llimos
+/engine/src/witness/btc/ @msgmaxim
 /engine/src/witness/sol/ @albert-llimos
 /engine/src/witness/evm/ @albert-llimos
 /engine/src/witness/eth/ @albert-llimos
 /engine/src/witness/arb/ @albert-llimos
-/engine/src/sol/ @albert-llimos
-/engine/src/evm/ @albert-llimos
-/bouncer/tests/gaslimit_ccm.ts @albert-llimos
-/bouncer/shared/sol_vault_swap.ts @albert-llimos
+
+engine-dylib/ @nmammeri
+engine-proc-macros/ @nmammeri
+engine-runner-bin/ @nmammeri
+engine-upgrade-utils/ @nmammeri
+
+/foreign-chains/ @albert-llimos @syan095
+
+/localnet/ @chainflip-io/platform
+
+/state-chain/amm/ @martin-chainflip
+/state-chain/cfe-events/ @msgmaxim
+/state-chain/custom-rpc/ @chainflip-io/web @nmammeri
+/state-chain/pallets/cf-elections/ @MxmUrw @marcellorigotti
+/state-chain/pallets/cf-pools/ @martin-chainflip
+/state-chain/pallets/cf-swapping/ @msgmaxim
+/state-chain/pallets/cf-trading-strategy/ @msgmaxim
+/state-chain/ @dandanlen

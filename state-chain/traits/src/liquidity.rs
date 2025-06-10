@@ -134,25 +134,6 @@ pub trait PoolApi {
 
 	fn cancel_all_limit_orders(account: &Self::AccountId) -> DispatchResult;
 
-	fn cancel_limit_order(
-		account: &Self::AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
-		side: Side,
-		id: OrderId,
-		tick: Tick,
-	) -> DispatchResult {
-		Self::update_limit_order(
-			account,
-			base_asset,
-			quote_asset,
-			side,
-			id,
-			Some(tick),
-			IncreaseOrDecrease::Decrease(AssetAmount::MAX),
-		)
-	}
-
 	#[cfg(feature = "runtime-benchmarks")]
 	fn create_pool(
 		base_asset: Asset,
@@ -171,9 +152,8 @@ pub trait SwappingApi {
 	) -> Result<AssetAmount, DispatchError>;
 }
 
-pub trait BoostApi {
+pub trait BoostBalancesApi {
 	type AccountId;
-	type AssetMap;
 
-	fn boost_pool_account_balances(who: &Self::AccountId) -> Self::AssetMap;
+	fn boost_pool_account_balance(lp: &Self::AccountId, asset: Asset) -> AssetAmount;
 }

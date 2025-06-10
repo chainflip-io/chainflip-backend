@@ -398,11 +398,18 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 }
 
 #[test]
-fn expect_swap_id_to_be_emitted() {
+fn affiliates_with_0_bps_and_swap_id_are_getting_emitted_in_events() {
 	const AMOUNT: AssetAmount = 500;
 
 	new_test_ext()
 		.then_execute_at_block(INIT_BLOCK, |_| {
+			let beneficiaries: Beneficiaries<u64> = bounded_vec![
+				Beneficiary { account: BROKER, bps: 0 },
+				Beneficiary { account: 123, bps: 0 },
+			];
+
+			let affiliates: Affiliates<u64> = bounded_vec![Beneficiary { account: 123, bps: 0 },];
+
 			// 1. Request a deposit address -> SwapDepositAddressReady
 			assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
 				RuntimeOrigin::signed(BROKER),
@@ -412,13 +419,13 @@ fn expect_swap_id_to_be_emitted() {
 				0,
 				None,
 				0,
-				Default::default(),
+				affiliates.clone(),
 				REFUND_PARAMS,
 				None,
 			));
 
 			// 2. Schedule the swap -> SwapScheduled
-			swap_with_custom_broker_fee(Asset::Eth, Asset::Usdc, AMOUNT, bounded_vec![]);
+			swap_with_custom_broker_fee(Asset::Eth, Asset::Usdc, AMOUNT, beneficiaries.clone());
 
 			// 3. Process swaps -> SwapExecuted, SwapEgressScheduled
 			assert_event_sequence!(
@@ -429,12 +436,14 @@ fn expect_swap_id_to_be_emitted() {
 					source_asset: Asset::Eth,
 					destination_asset: Asset::Usdc,
 					channel_id: 0,
+					ref affiliate_fees,
 					..
-				}),
+				}) if *affiliate_fees == affiliates,
 				RuntimeEvent::Swapping(Event::SwapRequested {
 					swap_request_id: SwapRequestId(1),
+					ref broker_fees,
 					..
-				}),
+				}) if *broker_fees == beneficiaries,
 				RuntimeEvent::Swapping(Event::SwapScheduled {
 					swap_request_id: SwapRequestId(1),
 					swap_id: SwapId(1),

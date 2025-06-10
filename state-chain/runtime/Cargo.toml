@@ -60,6 +60,7 @@ pallet-cf-vaults = { workspace = true }
 pallet-cf-witnesser = { workspace = true }
 pallet-cf-cfe-interface = { workspace = true }
 pallet-cf-trading-strategy = { workspace = true }
+pallet-cf-lending-pools = { workspace = true }
 
 # SCALE
 codec = { workspace = true, features = ["derive"] }
@@ -135,6 +136,7 @@ runtime-benchmarks = [
 	"pallet-cf-threshold-signature/runtime-benchmarks",
 	"pallet-cf-tokenholder-governance/runtime-benchmarks",
 	"pallet-cf-trading-strategy/runtime-benchmarks",
+	"pallet-cf-lending-pools/runtime-benchmarks",
 	"pallet-cf-validator/runtime-benchmarks",
 	"pallet-cf-vaults/runtime-benchmarks",
 	"pallet-cf-witnesser/runtime-benchmarks",
@@ -186,6 +188,7 @@ std = [
 	"pallet-cf-vaults/std",
 	"pallet-cf-witnesser/std",
 	"pallet-cf-trading-strategy/std",
+	"pallet-cf-lending-pools/std",
 	"pallet-grandpa/std",
 	"pallet-session/std",
 	"pallet-timestamp/std",
@@ -238,6 +241,7 @@ try-runtime = [
 	"pallet-cf-vaults/try-runtime",
 	"pallet-cf-witnesser/try-runtime",
 	"pallet-cf-trading-strategy/try-runtime",
+	"pallet-cf-lending-pools/try-runtime",
 	"pallet-cf-cfe-interface/try-runtime",
 	"pallet-timestamp/try-runtime",
 	"pallet-transaction-payment/try-runtime",
