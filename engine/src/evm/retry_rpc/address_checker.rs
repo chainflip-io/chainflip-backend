@@ -40,6 +40,12 @@ pub trait AddressCheckerRetryRpcApi {
 		contract_address: H160,
 		addresses: Vec<H160>,
 	) -> Vec<U256>;
+
+	async fn query_price_feeds(
+		&self,
+		contract_address: H160,
+		aggregator_addresses: Vec<H160>,
+	) -> Vec<PriceFeedData>;
 }
 
 #[async_trait::async_trait]
@@ -84,6 +90,28 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.balances(block_hash, contract_address, addresses).await
+					})
+				}),
+			)
+			.await
+	}
+
+	async fn query_price_feeds(
+		&self,
+		contract_address: H160,
+		aggregator_addresses: Vec<H160>,
+	) -> Vec<PriceFeedData> {
+		self.rpc_retry_client
+			.request(
+				RequestLog::new(
+					"query_price_feeds".to_string(),
+					Some(format!("{contract_address:?}, {aggregator_addresses:?}")),
+				),
+				Box::pin(move |client| {
+					let aggregator_addresses = aggregator_addresses.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						client.query_price_feeds(contract_address, aggregator_addresses).await
 					})
 				}),
 			)
