@@ -70,16 +70,12 @@ export async function depositLiquidity(
 
   function checkAccountCreditedEvent(event: Event): boolean {
     if (event.data.asset === ccy && event.data.accountId === lp.address) {
-      if (
-        isWithinOnePercent(
-          BigInt(event.data.amountCredited.replace(/,/g, '')),
-          BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
-        )
-      ) {
+      const expectedAmount = BigInt(amountToFineAmount(String(amount), assetDecimals(ccy)));
+      if (isWithinOnePercent(BigInt(event.data.amountCredited.replace(/,/g, '')), expectedAmount)) {
         return true;
       }
       logger.warn(
-        `Account credited event amount mismatch: expected within 1% of ${amountToFineAmount(String(amount), assetDecimals(ccy))}, got ${event.data.amountCredited} ${ccy}`,
+        `Account credited event amount mismatch: expected within 1% of ${expectedAmount}, got ${event.data.amountCredited} ${ccy}`,
       );
     }
     return false;
