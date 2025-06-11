@@ -656,6 +656,86 @@ fn strategy_deployment_validation() {
 				Error::<Test>::InvalidTick
 			);
 		}
+		// Inventory based strategy
+		{
+			// Invalid tick ranges
+			for (min_buy_tick, max_buy_tick, min_sell_tick, max_sell_tick) in
+				[(-1, 2, 0, 2), (1, 0, 0, -1), (-1, 10, 0, 1)]
+			{
+				assert_err!(
+					TradingStrategyPallet::deploy_strategy(
+						RuntimeOrigin::signed(LP),
+						TradingStrategy::InventoryBased {
+							min_buy_tick,
+							max_buy_tick,
+							min_sell_tick,
+							max_sell_tick,
+							base_asset: BASE_ASSET
+						},
+						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+					),
+					Error::<Test>::InvalidTick
+				);
+			} // Invalid buy/sell ticks
+			for tick in [i32::MAX, cf_amm_math::MAX_TICK + 1, cf_amm_math::MIN_TICK - 1] {
+				assert_err!(
+					TradingStrategyPallet::deploy_strategy(
+						RuntimeOrigin::signed(LP),
+						TradingStrategy::InventoryBased {
+							min_buy_tick: tick,
+							max_buy_tick: 0,
+							min_sell_tick: 0,
+							max_sell_tick: 1,
+							base_asset: BASE_ASSET
+						},
+						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+					),
+					Error::<Test>::InvalidTick
+				);
+				assert_err!(
+					TradingStrategyPallet::deploy_strategy(
+						RuntimeOrigin::signed(LP),
+						TradingStrategy::InventoryBased {
+							min_buy_tick: -1,
+							max_buy_tick: tick,
+							min_sell_tick: 0,
+							max_sell_tick: 1,
+							base_asset: BASE_ASSET
+						},
+						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+					),
+					Error::<Test>::InvalidTick
+				);
+				assert_err!(
+					TradingStrategyPallet::deploy_strategy(
+						RuntimeOrigin::signed(LP),
+						TradingStrategy::InventoryBased {
+							min_buy_tick: -1,
+							max_buy_tick: 0,
+							min_sell_tick: tick,
+							max_sell_tick: 1,
+							base_asset: BASE_ASSET
+						},
+						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+					),
+					Error::<Test>::InvalidTick
+				);
+				assert_err!(
+					TradingStrategyPallet::deploy_strategy(
+						RuntimeOrigin::signed(LP),
+						TradingStrategy::InventoryBased {
+							min_buy_tick: -1,
+							max_buy_tick: 0,
+							min_sell_tick: 0,
+							max_sell_tick: tick,
+							base_asset: BASE_ASSET
+						},
+						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+					),
+					Error::<Test>::InvalidTick
+				);
+			}
+		}
 	});
 }
 
@@ -978,8 +1058,6 @@ mod inventory_based_strategy {
 			max_sell_tick: Tick,
 			expected_orders: LimitOrders,
 		) {
-			let zero_thresholds = BTreeMap::from_iter([(BASE_ASSET, 0), (QUOTE_ASSET, 0)]);
-
 			assert_eq!(
 				TradingStrategyPallet::inventory_base_strategy_logic(
 					BASE_ASSET,
@@ -989,7 +1067,6 @@ mod inventory_based_strategy {
 					max_buy_tick,
 					min_sell_tick,
 					max_sell_tick,
-					&zero_thresholds
 				),
 				expected_orders,
 			);
@@ -1010,42 +1087,224 @@ mod inventory_based_strategy {
 			},
 		);
 
-		// 25/75 split
+		// 24/76 split
 		test_logic(
-			1000,
-			3000,
+			2400,
+			7600,
 			-10,
 			0,
 			0,
 			10,
 			LimitOrders {
-				// We expect 2 orders on one side (one at the average and one aggressive) and one on
-				// the other (defensive).
-				base: BTreeMap::from_iter([(0, LimitOrder { tick: -8, sell_amount: 1000 })]),
+				// One somewhat defensive order
+				base: BTreeMap::from_iter([(0, LimitOrder { tick: -8, sell_amount: 2400 })]),
+				// One average and one somewhat aggressive order
 				quote: BTreeMap::from_iter([
-					(1, LimitOrder { tick: 5, sell_amount: 2000 }),
-					(0, LimitOrder { tick: 3, sell_amount: 1000 }),
+					(1, LimitOrder { tick: 5, sell_amount: 5000 }),
+					(0, LimitOrder { tick: 2, sell_amount: 2600 }),
 				]),
 			},
 		);
+		// 76/24 split
+		test_logic(
+			7600,
+			2400,
+			-10,
+			0,
+			0,
+			10,
+			LimitOrders {
+				base: BTreeMap::from_iter([
+					(1, LimitOrder { tick: -5, sell_amount: 5000 }),
+					(0, LimitOrder { tick: -2, sell_amount: 2600 }),
+				]),
+				quote: BTreeMap::from_iter([(0, LimitOrder { tick: 8, sell_amount: 2400 })]),
+			},
+		);
 
-		// 1/99 split
+		// 1/99 split Asymmetric
 		test_logic(
 			10,
 			990,
 			-10,
 			0,
 			0,
-			10,
+			5,
 			LimitOrders {
-				// Similar to before, one max defensive order
+				// One max defensive order
 				base: BTreeMap::from_iter([(0, LimitOrder { tick: -10, sell_amount: 10 })]),
-				// then one average and one aggressive order
+				// One average and one max aggressive order
 				quote: BTreeMap::from_iter([
-					(1, LimitOrder { tick: 5, sell_amount: 500 }),
+					(1, LimitOrder { tick: 3, sell_amount: 500 }),
 					(0, LimitOrder { tick: 0, sell_amount: 490 }),
 				]),
 			},
 		);
+
+		// Overlapping tick ranges
+		test_logic(
+			2400,
+			7600,
+			1,
+			3,
+			0,
+			5,
+			LimitOrders {
+				base: BTreeMap::from_iter([(0, LimitOrder { tick: 1, sell_amount: 2400 })]),
+				quote: BTreeMap::from_iter([
+					(1, LimitOrder { tick: 3, sell_amount: 5000 }),
+					(0, LimitOrder { tick: 1, sell_amount: 2600 }),
+				]),
+			},
+		);
+
+		// Only a single tick range
+		test_logic(
+			2400,
+			7600,
+			-1,
+			0,
+			0,
+			1,
+			LimitOrders {
+				// Should always round defensively
+				base: BTreeMap::from_iter([(0, LimitOrder { tick: -1, sell_amount: 2400 })]),
+				quote: BTreeMap::from_iter([
+					(1, LimitOrder { tick: 1, sell_amount: 5000 }),
+					(0, LimitOrder { tick: 0, sell_amount: 2600 }),
+				]),
+			},
+		);
 	}
+}
+
+#[test]
+fn inventory_based_strategy_update_threshold() {
+	const STARTING_AMOUNT: AssetAmount = 10_000;
+	const THRESHOLD: AssetAmount = 1000;
+
+	new_test_ext()
+		.then_execute_at_next_block(|_| {
+			// Set all thresholds to zero
+			set_thresholds(0);
+
+			// Now set just the update threshold
+			let thresholds =
+				BTreeMap::from_iter([(BASE_ASSET, THRESHOLD), (QUOTE_ASSET, THRESHOLD)]);
+			LimitOrderUpdateThresholds::<Test>::set(thresholds.clone());
+
+			let initial_amounts: BTreeMap<_, _> =
+				[(BASE_ASSET, STARTING_AMOUNT), (QUOTE_ASSET, STARTING_AMOUNT)].into();
+
+			for (asset, amount) in initial_amounts.clone() {
+				MockLpRegistration::register_refund_address(LP, asset.into());
+				MockBalance::credit_account(&LP, asset, amount);
+			}
+
+			assert_ok!(TradingStrategyPallet::deploy_strategy(
+				RuntimeOrigin::signed(LP),
+				TradingStrategy::InventoryBased {
+					base_asset: BASE_ASSET,
+					min_buy_tick: -10,
+					max_buy_tick: 0,
+					min_sell_tick: 0,
+					max_sell_tick: 10,
+				},
+				initial_amounts.clone(),
+			));
+		})
+		.then_execute_at_next_block(|_| {
+			let (_, strategy_id, _) = Strategies::<Test>::iter().next().unwrap();
+			// The strategy should have created two limit orders:
+			assert_eq!(
+				MockPoolApi::get_limit_orders(),
+				vec![
+					MockLimitOrder {
+						base_asset: BASE_ASSET,
+						account_id: strategy_id,
+						side: Side::Buy,
+						order_id: STRATEGY_ORDER_ID_0,
+						tick: -5,
+						amount: STARTING_AMOUNT
+					},
+					MockLimitOrder {
+						base_asset: BASE_ASSET,
+						account_id: strategy_id,
+						side: Side::Sell,
+						order_id: STRATEGY_ORDER_ID_0,
+						tick: 5,
+						amount: STARTING_AMOUNT
+					}
+				]
+			);
+
+			// Now we add some funds to simulate the order being executed.
+			// But we add an amount that is below the threshold, so the limit orders should not be
+			// updated:
+			MockBalance::credit_account(&strategy_id, STABLE_ASSET, THRESHOLD - 1);
+
+			strategy_id
+		})
+		.then_execute_at_next_block(|strategy_id| {
+			// Confirm that the limit orders have not been updated:
+			assert_eq!(
+				MockPoolApi::get_limit_orders(),
+				vec![
+					MockLimitOrder {
+						base_asset: BASE_ASSET,
+						account_id: strategy_id,
+						side: Side::Buy,
+						order_id: STRATEGY_ORDER_ID_0,
+						tick: -5,
+						amount: STARTING_AMOUNT
+					},
+					MockLimitOrder {
+						base_asset: BASE_ASSET,
+						account_id: strategy_id,
+						side: Side::Sell,
+						order_id: STRATEGY_ORDER_ID_0,
+						tick: 5,
+						amount: STARTING_AMOUNT
+					}
+				]
+			);
+
+			// Now add the last little bit to reach the threshold:
+			MockBalance::credit_account(&strategy_id, STABLE_ASSET, 1);
+			assert_eq!(MockBalance::get_balance(&strategy_id, STABLE_ASSET), THRESHOLD);
+
+			strategy_id
+		})
+		.then_execute_at_next_block(|strategy_id| {
+			// The limit orders should now have been updated:
+			assert_eq!(
+				MockPoolApi::get_limit_orders(),
+				vec![
+					MockLimitOrder {
+						base_asset: BASE_ASSET,
+						account_id: strategy_id,
+						side: Side::Buy,
+						order_id: STRATEGY_ORDER_ID_1,
+						tick: -5,
+						amount: STARTING_AMOUNT
+					},
+					MockLimitOrder {
+						base_asset: BASE_ASSET,
+						account_id: strategy_id,
+						side: Side::Buy,
+						order_id: STRATEGY_ORDER_ID_0,
+						tick: -4,
+						amount: THRESHOLD
+					},
+					MockLimitOrder {
+						base_asset: BASE_ASSET,
+						account_id: strategy_id,
+						side: Side::Sell,
+						order_id: STRATEGY_ORDER_ID_0,
+						tick: 6,
+						amount: STARTING_AMOUNT
+					}
+				]
+			);
+		});
 }

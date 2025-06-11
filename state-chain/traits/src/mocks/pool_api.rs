@@ -14,7 +14,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 
 use crate::{
-	mocks::balance_api::MockBalance, BalanceApi, IncreaseOrDecrease, LimitOrders,
+	mocks::balance_api::MockBalance, BalanceApi, IncreaseOrDecrease, LimitOrder, LimitOrders,
 	LpOrdersWeightsProvider, OrderId, PoolApi,
 };
 
@@ -174,10 +174,37 @@ impl PoolApi for MockPoolApi {
 
 	fn get_open_limit_orders(
 		base_asset: Asset,
-		quote_asset: Asset,
+		_quote_asset: Asset,
 		account: u64,
 	) -> Result<LimitOrders, DispatchError> {
-		unimplemented!()
+		Ok(LimitOrders {
+			base: Self::get_value::<LimitOrderStorage>(LIMIT_ORDERS)
+				.unwrap_or_default()
+				.into_iter()
+				.filter_map(
+					|((base, account_id, side, order_id), TickAndAmount { tick, amount })| {
+						if account_id == account && side == Side::Buy && base_asset == base {
+							Some((order_id, LimitOrder { sell_amount: amount, tick }))
+						} else {
+							None
+						}
+					},
+				)
+				.collect(),
+			quote: Self::get_value::<LimitOrderStorage>(LIMIT_ORDERS)
+				.unwrap_or_default()
+				.into_iter()
+				.filter_map(
+					|((base, account_id, side, order_id), TickAndAmount { tick, amount })| {
+						if account_id == account && side == Side::Sell && base_asset == base {
+							Some((order_id, LimitOrder { sell_amount: amount, tick }))
+						} else {
+							None
+						}
+					},
+				)
+				.collect(),
+		})
 	}
 }
 

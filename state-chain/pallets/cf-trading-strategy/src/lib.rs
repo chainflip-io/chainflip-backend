@@ -27,17 +27,15 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use core::cmp::min;
-use std::path::absolute;
-
 use cf_primitives::{Asset, AssetAmount, StablecoinDefaults, Tick, STABLE_ASSET};
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
 	IncreaseOrDecrease, LpOrdersWeightsProvider, LpRegistration, OrderId, PoolApi, Side,
 };
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{traits::One, FixedPointNumber, FixedU64, Permill},
+	sp_runtime::{traits::One, FixedU64, Permill},
 	traits::HandleLifetime,
 };
 use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
@@ -136,9 +134,9 @@ impl TradingStrategy {
 				max_sell_tick,
 				base_asset,
 			} => {
-				// TODO JAMIE: let neg min spread
 				if min_buy_tick >= max_buy_tick ||
 					min_sell_tick >= max_sell_tick ||
+					max_sell_tick <= max_buy_tick ||
 					*max_buy_tick > cf_amm_math::MAX_TICK ||
 					*max_sell_tick > cf_amm_math::MAX_TICK ||
 					*min_buy_tick < cf_amm_math::MIN_TICK ||
@@ -325,6 +323,10 @@ pub mod pallet {
 
 						let balance_quote = T::BalanceApi::get_balance(&strategy_id, STABLE_ASSET);
 						let balance_base = T::BalanceApi::get_balance(&strategy_id, base_asset);
+						println!(
+							"Strategy {:?} has balance: {} base, {} quote",
+							strategy_id, balance_base, balance_quote
+						);
 						let cf_traits::LimitOrders {
 							base: open_orders_base,
 							quote: open_orders_quote,
@@ -353,21 +355,70 @@ pub mod pallet {
 							max_buy_tick,
 							min_sell_tick,
 							max_sell_tick,
-							&order_update_thresholds,
 						);
-
-						[
-							(Side::Buy, new_orders.base, open_orders_base),
-							(Side::Sell, new_orders.quote, open_orders_quote),
-						]
-						.iter()
-						.for_each(|(side, new_orders, open_orders)| {
+						let base_threshold = core::cmp::max(
+							order_update_thresholds.get(&base_asset).copied().unwrap_or(u128::MAX),
+							1,
+						);
+						let quote_threshold = core::cmp::max(
+							order_update_thresholds
+								.get(&STABLE_ASSET)
+								.copied()
+								.unwrap_or(u128::MAX),
+							1,
+						);
+						let orders = [
+							(Side::Buy, new_orders.base, open_orders_base, base_threshold),
+							(Side::Sell, new_orders.quote, open_orders_quote, quote_threshold),
+						];
+						orders.iter().for_each(|(side, new_orders, open_orders, _)| {
+							[STRATEGY_ORDER_ID_0, STRATEGY_ORDER_ID_1].iter().for_each(
+								|order_id| {
+									// Do closing of orders first, so we have the funds for
+									// creating the orders later
+									match (new_orders.get(&order_id), open_orders.get(&order_id)) {
+										(None, Some(open_order)) => {
+											println!(
+												"Closing order {:?} for with tick {} and amount {}",
+												order_id, open_order.tick, open_order.sell_amount
+											);
+											// Close the order
+											let _result = T::PoolApi::cancel_limit_order(
+												&strategy_id,
+												base_asset,
+												STABLE_ASSET,
+												*side,
+												*order_id,
+												open_order.tick,
+											);
+										},
+										_ => {
+											// Other actions will be done later
+										},
+									}
+								},
+							);
+						});
+						orders.iter().for_each(|(side, new_orders, open_orders, threshold)| {
 							[STRATEGY_ORDER_ID_0, STRATEGY_ORDER_ID_1].iter().for_each(|order_id| {
+								println!(
+									"new orders: {:?}, open orders: {:?}, threshold: {}",
+									new_orders, open_orders, threshold
+								);
 								match (new_orders.get(&order_id), open_orders.get(&order_id)) {
-									(Some(desired_order), Some(open_order))
-										if desired_order.tick != open_order.tick =>
+									(Some(new_order), Some(open_order))
+										if new_order.tick != open_order.tick ||
+											// Only if the difference in amount is greater than the threshold to update
+											(new_order.sell_amount as i128 -
+												open_order.sell_amount as i128)
+												.abs() as u128 > *threshold =>
 									{
-										// Close the old order and create a new one at the new tick
+										println!(
+											"Updating order {:?} for with new tick {} and amount {}",
+											order_id, new_order.tick, new_order.sell_amount
+										);
+										// Close the old order and create a new one at the new
+										// tick/amount
 										let _result = T::PoolApi::cancel_limit_order(
 											&strategy_id,
 											base_asset,
@@ -381,32 +432,27 @@ pub mod pallet {
 											base_asset,
 											STABLE_ASSET,
 											*side,
-											STRATEGY_ORDER_ID_0,
-											Some(desired_order.tick),
-											IncreaseOrDecrease::Increase(desired_order.sell_amount),
+											*order_id,
+											Some(new_order.tick),
+											IncreaseOrDecrease::Increase(new_order.sell_amount),
 										);
 									},
-									(Some(desired_order), None) => {
-										// create a new order
+									(Some(desired_order), None)
+										if desired_order.sell_amount > *threshold =>
+									{
+										println!(
+											"Creating new {:?} order {:?} for strategy with tick {} and amount {}", side,
+											order_id, desired_order.tick, desired_order.sell_amount
+										);
+										// Create a new order
 										let _result = T::PoolApi::update_limit_order(
 											&strategy_id,
 											base_asset,
 											STABLE_ASSET,
 											*side,
-											STRATEGY_ORDER_ID_0,
+											*order_id,
 											Some(desired_order.tick),
 											IncreaseOrDecrease::Increase(desired_order.sell_amount),
-										);
-									},
-									(None, Some(open_order)) => {
-										// Close the order
-										let _result = T::PoolApi::cancel_limit_order(
-											&strategy_id,
-											base_asset,
-											STABLE_ASSET,
-											*side,
-											*order_id,
-											open_order.tick,
 										);
 									},
 									_ => {
@@ -684,7 +730,6 @@ impl<T: Config> Pallet<T> {
 		max_buy_tick: Tick,
 		min_sell_tick: Tick,
 		max_sell_tick: Tick,
-		order_update_thresholds: &BTreeMap<Asset, AssetAmount>,
 	) -> cf_traits::LimitOrders {
 		let mut desired_orders =
 			cf_traits::LimitOrders { base: BTreeMap::new(), quote: BTreeMap::new() };
@@ -697,25 +742,6 @@ impl<T: Config> Pallet<T> {
 		]
 		.into_iter()
 		.for_each(|(asset, amount, tick_1, tick_2)| {
-			let fraction_of_total = if base_amount + quote_amount == 0 {
-				//0.into()
-				Permill::zero()
-			} else {
-				//FixedU64::from_rational(amount, quote_amount + base_amount)
-				if asset == base_asset {
-					Permill::from_rational(amount, base_amount + quote_amount)
-				} else {
-					Permill::one() - Permill::from_rational(amount, base_amount + quote_amount)
-				}
-			};
-			//let percent = fraction_of_total.checked_mul_int(100).unwrap();
-			//println!("fraction: {:?}%", percent);
-
-			println!(
-				"InventoryBased strategy logic for asset: {:?}, amount: {}, ticks: ({}, {})",
-				asset, amount, tick_1, tick_2
-			);
-
 			let order_list = if asset == base_asset {
 				&mut desired_orders.base
 			} else {
@@ -723,39 +749,80 @@ impl<T: Config> Pallet<T> {
 			};
 
 			// Simple order logic:
-			if amount >= half_total {
+			if amount > half_total {
+				println!(
+					"Desired order 1 is {} at tick {} with amount {}",
+					asset,
+					if asset == base_asset {
+						(tick_1 + tick_2) / 2
+					} else {
+						(tick_1 + tick_2 + 1) / 2
+					},
+					half_total
+				);
 				order_list.insert(
 					STRATEGY_ORDER_ID_1,
 					cf_traits::LimitOrder {
-						tick: (tick_1.saturating_add(tick_2)) / 2,
+						tick: if asset == base_asset {
+							(tick_1 + tick_2) / 2
+						} else {
+							(tick_1 + tick_2 + 1) / 2
+						},
 						sell_amount: half_total,
 					},
 				);
 			}
 
-			// Minimum threshold of 1 to prevent updating with 0 amounts
-			let threshold = core::cmp::max(
-				order_update_thresholds.get(&asset).copied().unwrap_or(u128::MAX),
-				1,
-			);
-
 			// Dynamic order logic:
-			let remaining_amount = amount % half_total;
-			if remaining_amount >= threshold {
-				// if let Some(tick) =
-				// 	fraction_of_total.checked_mul_int(tick_2 - tick_1).map(|tick| tick + tick_1)
-				// {
-				let tick_offset = tick_1.abs();
+			let remaining_amount = if amount <= half_total { amount } else { amount % half_total };
+			if remaining_amount > 0 {
+				let fraction_of_total = if base_amount + quote_amount == 0 {
+					Permill::zero()
+				} else {
+					if asset == base_asset {
+						Permill::from_rational(amount, base_amount + quote_amount)
+					} else {
+						Permill::one() - Permill::from_rational(amount, base_amount + quote_amount)
+					}
+				};
 				let tick = (fraction_of_total * (((tick_2 - tick_1).abs()) as u32)) as i32 + tick_1;
 				order_list.insert(
 					STRATEGY_ORDER_ID_0,
 					cf_traits::LimitOrder { tick, sell_amount: remaining_amount },
 				);
-				//}
+				println!(
+					"Desired order 0 is {} at tick {} with amount {}",
+					asset, tick, remaining_amount
+				);
 			}
 		});
 
-		// TODO JAMIE: Sanity check that the orders are within the ranges.
+		// Sanity check that the orders are within the ranges
+		if desired_orders
+			.base
+			.values()
+			.any(|order| order.tick < min_buy_tick && order.tick > max_buy_tick) ||
+			desired_orders
+				.quote
+				.values()
+				.any(|order| order.tick < min_sell_tick && order.tick > max_sell_tick)
+		{
+			log_or_panic!("Inventory-based strategy logic produced orders outside of the specified tick ranges.");
+			desired_orders.base.clear();
+			desired_orders.quote.clear();
+		}
+
+		// Sanity check the total amount in orders
+		if base_amount + quote_amount !=
+			desired_orders.base.values().fold(0, |acc, order| acc + order.sell_amount) +
+				desired_orders.quote.values().fold(0, |acc, order| acc + order.sell_amount)
+		{
+			log_or_panic!(
+				"Inventory-based strategy logic produced orders with incorrect total amount."
+			);
+			desired_orders.base.clear();
+			desired_orders.quote.clear();
+		}
 
 		desired_orders
 	}
