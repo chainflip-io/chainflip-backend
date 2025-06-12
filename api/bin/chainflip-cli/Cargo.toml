@@ -17,8 +17,8 @@ config = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true, default-features = true, features = ["serde"] }
 serde = { workspace = true, default-features = true, features = [
-    "derive",
-    "rc",
+	"derive",
+	"rc",
 ] }
 tokio = { workspace = true, features = ["full"] }
 serde_json = { workspace = true }
