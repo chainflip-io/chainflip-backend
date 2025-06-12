@@ -23,7 +23,7 @@ on:
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v2.1.13
-  SOLANA_PROGRAMS_VERSION: v1.2.0
+  SOLANA_PROGRAMS_VERSION: v1.2.2
   EVM_CONTRACTS_VERSION: v1.2.1-rc1
   NODE_COUNT: "1-node"
 
@@ -212,7 +212,7 @@ jobs:
           pnpm install --frozen-lockfile
           # TODO: This is a temporary workaround to patch the user address lookup table in the bouncer.
           # To remove after 1.10 is released.
-          sed -i 's/4eUGPyr3krnw8tD3rL3UBXXdy1cx8Sf9HKVESZUAatqv/6fs9L33QGxsYnjBtUFtdnJubA1mVqzqsETgAKG34U9RM/g' shared/utils.ts
+          sed -i 's/4eUGPyr3krnw8tD3rL3UBXXdy1cx8Sf9HKVESZUAatqv/9J7p5fmNjRjdYRyutwssUBRLYmJEmK7fwBpYxhtnxYTG/g' shared/utils.ts
           # TODO: Skip the Swap Endpoint program upgrade as the new image already contains the latest one
           # and we no longer need to test the upgrade process. To remove after 1.10 is released.
           sed -i '/^\s*await upgradeSwapEndpoint(logger);/d'  shared/initialize_new_chains.ts

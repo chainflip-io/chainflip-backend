@@ -53,7 +53,7 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	}
 }
 
-// Migration for Updating Solana's Api Environments.
+// Migration for Updating the EVM's Address Checkers's address
 pub type PalletMigration<T> = (
 	VersionedMigration<
 		15,

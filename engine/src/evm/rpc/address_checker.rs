@@ -208,7 +208,7 @@ mod tests {
 
 		let eth_client = EvmRpcSigningClient::new(
 			settings.clone().eth.private_key_file,
-			"https://sepolia.infura.io/v3/327486c4905348609d2424aec513b322<YOUR_API_KEY>".into(),
+			"https://sepolia.infura.io/v3/<YOUR_API_KEY>".into(),
 			11155111u64,
 			"Ethereum",
 		)
