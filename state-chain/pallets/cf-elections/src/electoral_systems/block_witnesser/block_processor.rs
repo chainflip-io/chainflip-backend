@@ -5,17 +5,14 @@ use core::{
 
 use crate::electoral_systems::{
 	block_height_tracking::{ChainBlockNumberOf, ChainTypes},
-	block_witnesser::{primitives::ChainProgressInner, state_machine::BWProcessorTypes},
+	block_witnesser::state_machine::BWProcessorTypes,
 	state_machine::core::{def_derive, Hook, Validate},
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use derive_where::derive_where;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, vec::Vec};
-
-#[cfg(test)]
-use proptest_derive::Arbitrary;
+use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec::Vec};
 
 ///
 /// BlockProcessor
@@ -252,6 +249,13 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 	}
 }
 
+impl<T: BWProcessorTypes> Validate for BlockProcessor<T> {
+	type Error = ();
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
 
@@ -477,12 +481,5 @@ pub(crate) mod tests {
 				(102u8, MockBtcEvent::PreWitness(2u8))
 			]]
 		);
-	}
-}
-
-impl<T: BWProcessorTypes> Validate for BlockProcessor<T> {
-	type Error = ();
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
 	}
 }
