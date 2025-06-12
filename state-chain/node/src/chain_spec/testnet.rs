@@ -253,7 +253,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		),
 		(
 			const_address("Bu3sdWtBh5TJishgK3vneh2zJg1rjLqWN5mFTHxWspwJ"),
-			const_hash("CDH52v1QQFWDc2iGd4c6mR2GsRaxW7j3mU5a8iPmZxj"),
+			const_hash("CDH52v1QQFWDc2iGd44c6mR2GsRaxW7j3mU5a8iPmZxj"),
 		),
 		(
 			const_address("GvBbUTE312RXU5iXAcNWt6CuVbfsPs5Nk28D6qvU6NF3"),
