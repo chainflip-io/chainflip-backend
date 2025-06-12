@@ -1,6 +1,6 @@
 use super::{
 	super::state_machine::core::*,
-	block_processor::{BPChainProgress, BlockProcessorEvent},
+	block_processor::BlockProcessorEvent,
 	primitives::{ElectionTracker, ElectionTrackerEvent, SafeModeStatus},
 };
 use crate::electoral_systems::{
@@ -13,7 +13,6 @@ use crate::electoral_systems::{
 		state_machine::{AbstractApi, Statemachine},
 	},
 };
-use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use core::ops::Range;
 use derive_where::derive_where;
@@ -230,13 +229,12 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 	) -> Self::Output {
 		match input {
 			Either::Left(Some(progress)) => {
-				let removed_block_heights = progress.removed.clone();
-
-				state.block_processor.process_reorg(
-					state.elections.seen_heights_below,
-					removed_block_heights.clone(),
-				);
-
+				if let Some(ref removed_block_heights) = progress.removed {
+					state.block_processor.process_reorg(
+						state.elections.seen_heights_below,
+						removed_block_heights.clone(),
+					);
+				}
 				for (height, accepted_optimistic_block) in state.elections.schedule_range(progress)
 				{
 					state.block_processor.insert_block_data(

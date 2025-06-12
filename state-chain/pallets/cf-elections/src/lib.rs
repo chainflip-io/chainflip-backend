@@ -228,6 +228,12 @@ pub mod pallet {
 		BlockNumberFor<T>,
 	>;
 
+	type AuthorityVotes<T, I> = BoundedBTreeMap<
+		ElectionIdentifierOf<<T as Config<I>>::ElectoralSystemRunner>,
+		AuthorityVoteOf<<T as Config<I>>::ElectoralSystemRunner>,
+		ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
+	>;
+
 	/// A unique identifier for an election.
 	#[derive(
 		PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Encode, Decode, TypeInfo, Default,
@@ -1271,13 +1277,7 @@ pub mod pallet {
 		pub fn vote(
 			origin: OriginFor<T>,
 			// Box to avoid RuntimeCall size
-			authority_votes: Box<
-				BoundedBTreeMap<
-					ElectionIdentifierOf<T::ElectoralSystemRunner>,
-					AuthorityVoteOf<T::ElectoralSystemRunner>,
-					ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
-				>,
-			>,
+			authority_votes: Box<AuthorityVotes<T, I>>,
 		) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 

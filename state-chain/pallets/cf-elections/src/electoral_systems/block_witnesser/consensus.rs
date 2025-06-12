@@ -1,13 +1,12 @@
 use crate::{
 	electoral_systems::{
-		block_height_tracking::{consensus, ChainBlockHashOf},
+		block_height_tracking::ChainBlockHashOf,
 		state_machine::consensus::{ConsensusMechanism, SuccessThreshold, SupermajorityConsensus},
 	},
 	SharedDataHash,
 };
 use cf_runtime_utilities::log_or_panic;
 use frame_support::Hashable;
-use log::log;
 use sp_std::collections::btree_map::BTreeMap;
 
 use super::state_machine::{BWElectionProperties, BWTypes};
