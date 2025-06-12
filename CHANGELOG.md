@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.9.3] - 2025-05-16
+
+### Fixes
+
+- RPC endpoint now report ingress/egress fees for HubUSDC and HubUSDT in correct curreny
+- Adjusted egress fee calculation for Assethub CCM calls
+
 ## [1.8.2] - 2025-02-12
 
 - Prevent blocking of fetches due to small edge case ([#5631](https://github.com/chainflip-io/chainflip-backend/pull/5631))

@@ -43,6 +43,7 @@ use cf_traits::{
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
+		lending_pools::MockBoostApi,
 		pool_api::MockPoolApi,
 		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::MockSwapRequestHandler,
@@ -143,6 +144,7 @@ impl Config<Instance1> for Test {
 	type AffiliateRegistry = MockAffiliateRegistry;
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
+	type BoostApi = MockBoostApi;
 }
 
 impl Config<Instance2> for Test {
@@ -173,6 +175,7 @@ impl Config<Instance2> for Test {
 	type AffiliateRegistry = MockAffiliateRegistry;
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
+	type BoostApi = MockBoostApi;
 }
 
 impl_mock_chainflip!(Test);

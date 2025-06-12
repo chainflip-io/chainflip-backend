@@ -101,7 +101,7 @@ impl<C> HubUnfinalisedSource<C> {
 	}
 }
 
-const TIMEOUT: Duration = Duration::from_secs(20);
+const TIMEOUT: Duration = Duration::from_secs(36);
 const RESTART_STREAM_DELAY: Duration = Duration::from_secs(6);
 
 #[async_trait::async_trait]

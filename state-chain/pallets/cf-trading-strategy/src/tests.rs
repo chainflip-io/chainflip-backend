@@ -29,8 +29,11 @@ use crate::{mock::*, *};
 
 const BASE_ASSET: Asset = Asset::Usdt;
 const QUOTE_ASSET: Asset = cf_primitives::STABLE_ASSET;
+const INVALID_ASSET: Asset = Asset::Flip;
 const BASE_AMOUNT: AssetAmount = 100_000;
 const QUOTE_AMOUNT: AssetAmount = 50_000;
+
+const THRESHOLD: AssetAmount = 1_000;
 
 const SPREAD_TICK: Tick = 1;
 
@@ -51,15 +54,16 @@ macro_rules! assert_balances {
 	};
 }
 
-fn turn_off_thresholds() {
-	let zero_thresholds = BTreeMap::from_iter([(BASE_ASSET, 0), (QUOTE_ASSET, 0)]);
-	MinimumDeploymentAmountForStrategy::<Test>::set(zero_thresholds.clone());
-	MinimumAddedFundsToStrategy::<Test>::set(zero_thresholds.clone());
-	LimitOrderUpdateThresholds::<Test>::set(zero_thresholds.clone());
+fn set_thresholds(amount: AssetAmount) {
+	let thresholds =
+		BTreeMap::from_iter([(BASE_ASSET, amount), (QUOTE_ASSET, amount), (INVALID_ASSET, amount)]);
+	MinimumDeploymentAmountForStrategy::<Test>::set(thresholds.clone());
+	MinimumAddedFundsToStrategy::<Test>::set(thresholds.clone());
+	LimitOrderUpdateThresholds::<Test>::set(thresholds.clone());
 }
 
 fn deploy_strategy() -> AccountId {
-	turn_off_thresholds();
+	set_thresholds(0);
 
 	let initial_amounts: BTreeMap<_, _> =
 		[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into();
@@ -111,23 +115,29 @@ fn check_asset_validation(f: impl Fn(BTreeMap<Asset, u128>) -> DispatchResult) {
 	// These attempts should fail due to invalid assets provided:
 	assert_err!(f(BTreeMap::from_iter([])), Error::<Test>::InvalidAssetsForStrategy);
 	assert_err!(
-		f(BTreeMap::from_iter([(Asset::Flip, 1000)])),
+		f(BTreeMap::from_iter([(INVALID_ASSET, THRESHOLD)])),
 		Error::<Test>::InvalidAssetsForStrategy
 	);
 	assert_err!(
-		f(BTreeMap::from_iter([(QUOTE_ASSET, QUOTE_AMOUNT), (Asset::Flip, 1000)])),
+		f(BTreeMap::from_iter([(QUOTE_ASSET, QUOTE_AMOUNT), (INVALID_ASSET, THRESHOLD)])),
 		Error::<Test>::InvalidAssetsForStrategy
 	);
 	assert_err!(
 		f(BTreeMap::from_iter([
 			(QUOTE_ASSET, QUOTE_AMOUNT),
 			(BASE_ASSET, BASE_AMOUNT),
-			(Asset::Flip, 1000)
+			(INVALID_ASSET, THRESHOLD)
 		])),
 		Error::<Test>::InvalidAssetsForStrategy
 	);
 
-	// Should be OK to provide one of &the assets (or both):
+	// Make sure we don't panic on unrealistic values. We should just get insufficient balance
+	// error:
+	assert!(f(BTreeMap::from_iter([(QUOTE_ASSET, u128::MAX), (BASE_ASSET, u128::MAX)])).is_err());
+	assert!(f(BTreeMap::from_iter([(QUOTE_ASSET, u128::MAX), (BASE_ASSET, 0)])).is_err());
+	assert!(f(BTreeMap::from_iter([(QUOTE_ASSET, 0), (BASE_ASSET, u128::MAX)])).is_err());
+
+	// Should be OK to provide one of the assets (or both):
 	assert_ok!(f(BTreeMap::from_iter([(QUOTE_ASSET, QUOTE_AMOUNT)])));
 	assert_ok!(f(BTreeMap::from_iter([(BASE_ASSET, BASE_AMOUNT)])));
 	assert_ok!(f(BTreeMap::from_iter([(QUOTE_ASSET, QUOTE_AMOUNT), (BASE_ASSET, BASE_AMOUNT)])));
@@ -139,7 +149,7 @@ fn asset_validation_on_deploy_strategy() {
 		MockLpRegistration::register_refund_address(LP, BASE_ASSET.into());
 		MockLpRegistration::register_refund_address(LP, QUOTE_ASSET.into());
 
-		turn_off_thresholds();
+		set_thresholds(THRESHOLD);
 
 		check_asset_validation(|funding| {
 			TradingStrategyPallet::deploy_strategy(
@@ -155,6 +165,8 @@ fn asset_validation_on_deploy_strategy() {
 fn asset_validation_on_adding_funds_to_strategy() {
 	new_test_ext().then_execute_at_next_block(|_| {
 		let strategy_id = deploy_strategy();
+
+		set_thresholds(THRESHOLD);
 
 		check_asset_validation(|funding| {
 			TradingStrategyPallet::add_funds_to_strategy(
@@ -371,6 +383,101 @@ fn automated_strategy_basic_usage() {
 }
 
 #[test]
+fn can_create_asymmetric_buy_sell_strategy() {
+	const BUY_TICK: Tick = -5;
+	const SELL_TICK: Tick = 10;
+
+	new_test_ext()
+		.then_execute_at_next_block(|_| {
+			set_thresholds(0);
+
+			let initial_amounts: BTreeMap<_, _> =
+				[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into();
+
+			for (asset, amount) in initial_amounts.clone() {
+				MockLpRegistration::register_refund_address(LP, asset.into());
+				MockBalance::credit_account(&LP, asset, amount);
+			}
+
+			assert_ok!(TradingStrategyPallet::deploy_strategy(
+				RuntimeOrigin::signed(LP),
+				TradingStrategy::SimpleBuySell {
+					buy_tick: BUY_TICK,
+					sell_tick: SELL_TICK,
+					base_asset: BASE_ASSET
+				},
+				initial_amounts.clone(),
+			));
+
+			// An entry for the trading agent is created:
+			let (lp_id, strategy_id, strategy) = Strategies::<Test>::iter().next().unwrap();
+			assert_eq!(
+				strategy,
+				TradingStrategy::SimpleBuySell {
+					buy_tick: BUY_TICK,
+					sell_tick: SELL_TICK,
+					base_asset: BASE_ASSET
+				}
+			);
+			assert_eq!(lp_id, LP);
+
+			assert!(
+				frame_system::Account::<Test>::contains_key(strategy_id),
+				"Account not created"
+			);
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::System(frame_system::Event::NewAccount { .. }),
+				RuntimeEvent::TradingStrategyPallet(Event::<Test>::StrategyDeployed {
+					account_id: LP,
+					strategy_id: id,
+					strategy: TradingStrategy::SimpleBuySell {
+						buy_tick: BUY_TICK,
+						sell_tick: SELL_TICK,
+						base_asset: BASE_ASSET
+					},
+				}) if id == strategy_id,
+				RuntimeEvent::TradingStrategyPallet(Event::<Test>::FundsAddedToStrategy {
+					strategy_id: id,
+					amounts: ref amounts_in_event
+
+				}) if id == strategy_id && amounts_in_event == &initial_amounts,
+			);
+
+			// The funds are moved from the LP to the strategy:
+			assert_balances!(strategy_id, BASE_AMOUNT, QUOTE_AMOUNT);
+			assert_balances!(LP, 0, 0);
+
+			strategy_id
+		})
+		.then_execute_at_next_block(|strategy_id| {
+			// The strategy should have created two limit orders:
+			assert_eq!(
+				MockPoolApi::get_limit_orders(),
+				vec![
+					MockLimitOrder {
+						base_asset: BASE_ASSET,
+						account_id: strategy_id,
+						side: Side::Buy,
+						order_id: STRATEGY_ORDER_ID,
+						tick: BUY_TICK,
+						amount: QUOTE_AMOUNT
+					},
+					MockLimitOrder {
+						base_asset: BASE_ASSET,
+						account_id: strategy_id,
+						side: Side::Sell,
+						order_id: STRATEGY_ORDER_ID,
+						tick: SELL_TICK,
+						amount: BASE_AMOUNT
+					}
+				]
+			);
+		});
+}
+
+#[test]
 fn closing_strategy() {
 	const ADDITIONAL_BASE_AMOUNT: AssetAmount = 5_000;
 	new_test_ext()
@@ -473,12 +580,77 @@ fn strategy_deployment_validation() {
 			Error::<Test>::InvalidAssetsForStrategy
 		);
 
-		// Invalid spread
-		for tick in [-1, i32::MAX, cf_amm_math::MAX_TICK + 1] {
+		// TickZeroCentered strategy validation
+		{
+			// Invalid spread
+			for tick in [-1, i32::MAX, cf_amm_math::MAX_TICK + 1] {
+				assert_err!(
+					TradingStrategyPallet::deploy_strategy(
+						RuntimeOrigin::signed(LP),
+						TradingStrategy::TickZeroCentered {
+							spread_tick: tick,
+							base_asset: BASE_ASSET
+						},
+						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+					),
+					Error::<Test>::InvalidTick
+				);
+			}
+		}
+
+		// SimpleBuySell strategy validation
+		{
+			// Invalid buy/sell ticks
+			for tick in [i32::MAX, cf_amm_math::MAX_TICK + 1, cf_amm_math::MIN_TICK - 1] {
+				assert_err!(
+					TradingStrategyPallet::deploy_strategy(
+						RuntimeOrigin::signed(LP),
+						TradingStrategy::SimpleBuySell {
+							buy_tick: -tick,
+							sell_tick: 0,
+							base_asset: BASE_ASSET
+						},
+						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+					),
+					Error::<Test>::InvalidTick
+				);
+				assert_err!(
+					TradingStrategyPallet::deploy_strategy(
+						RuntimeOrigin::signed(LP),
+						TradingStrategy::SimpleBuySell {
+							buy_tick: 0,
+							sell_tick: tick,
+							base_asset: BASE_ASSET
+						},
+						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+					),
+					Error::<Test>::InvalidTick
+				);
+			}
+
+			// Buy must be smaller than sell
 			assert_err!(
 				TradingStrategyPallet::deploy_strategy(
 					RuntimeOrigin::signed(LP),
-					TradingStrategy::TickZeroCentered { spread_tick: tick, base_asset: BASE_ASSET },
+					TradingStrategy::SimpleBuySell {
+						buy_tick: 10,
+						sell_tick: -10,
+						base_asset: BASE_ASSET
+					},
+					[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+				),
+				Error::<Test>::InvalidTick
+			);
+
+			// Buy cannot be equal to sell
+			assert_err!(
+				TradingStrategyPallet::deploy_strategy(
+					RuntimeOrigin::signed(LP),
+					TradingStrategy::SimpleBuySell {
+						buy_tick: 0,
+						sell_tick: 0,
+						base_asset: BASE_ASSET
+					},
 					[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
 				),
 				Error::<Test>::InvalidTick
@@ -670,7 +842,7 @@ mod safe_mode {
 	#[test]
 	fn deploy_strategy_safe_mode() {
 		new_test_ext().then_execute_with(|_| {
-			turn_off_thresholds();
+			set_thresholds(0);
 
 			let initial_amounts: BTreeMap<_, _> =
 				[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, QUOTE_AMOUNT)].into();

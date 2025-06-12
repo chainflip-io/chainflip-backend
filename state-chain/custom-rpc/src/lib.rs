@@ -531,7 +531,7 @@ mod boost_pool_rpc {
 	}
 
 	impl BoostPoolDetailsRpc {
-		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails) -> Self {
+		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails<AccountId32>) -> Self {
 			BoostPoolDetailsRpc {
 				asset,
 				fee_tier,
@@ -585,7 +585,7 @@ mod boost_pool_rpc {
 	}
 
 	impl BoostPoolFeesRpc {
-		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails) -> Self {
+		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails<AccountId32>) -> Self {
 			BoostPoolFeesRpc {
 				fee_tier,
 				asset,
@@ -753,6 +753,7 @@ pub trait CustomApi {
 		ccm_data: Option<CcmData>,
 		exclude_fees: Option<BTreeSet<FeeTypes>>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
+		is_internal: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2>;
 	#[method(name = "required_asset_ratio_for_range_order")]
@@ -1476,6 +1477,7 @@ where
 			None,
 			None,
 			additional_orders,
+			None,
 			at,
 		)
 	}
@@ -1490,6 +1492,7 @@ where
 		ccm_data: Option<CcmData>,
 		exclude_fees: Option<BTreeSet<FeeTypes>>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
+		is_internal: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
 		let amount = amount
@@ -1547,6 +1550,7 @@ where
 					ccm_data,
 					exclude_fees.unwrap_or_default(),
 					additional_orders,
+					is_internal,
 				)?
 				.map(|simulated_swap_info_v2| {
 					into_rpc_swap_output(simulated_swap_info_v2, from_asset, to_asset)
@@ -1597,7 +1601,11 @@ where
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
-				network_fee_hundredth_pips: api.cf_network_fees(hash)?.regular_network_fee.rate,
+				network_fee_hundredth_pips: api
+					.cf_network_fees(hash)?
+					.regular_network_fee
+					.standard_rate_and_minimum
+					.rate,
 				swap_retry_delay_blocks: api.cf_swap_retry_delay_blocks(hash)?,
 				max_swap_retry_duration_blocks: swap_limits.max_swap_retry_duration_blocks,
 				max_swap_request_duration_blocks: swap_limits.max_swap_request_duration_blocks,
@@ -2028,16 +2036,17 @@ mod test {
 
 	use cf_chains::address::EncodedAddress;
 	use pallet_cf_swapping::FeeRateAndMinimum;
+	use state_chain_runtime::runtime_apis::NetworkFeeDetails;
 
 	use super::*;
 	use cf_chains::{assets::sol, btc::ScriptPubkey};
 	use cf_primitives::{
 		chains::assets::{any, arb, btc, dot, eth, hub},
-		FLIPPERINOS_PER_FLIP,
+		PrewitnessedDepositId, FLIPPERINOS_PER_FLIP,
 	};
+	use pallet_cf_lending_pools::OwedAmount;
 	use sp_core::H160;
 	use sp_runtime::AccountId32;
-	use state_chain_runtime::runtime_apis::OwedAmount;
 
 	/*
 		changing any of these serialization tests signifies a breaking change in the
@@ -2216,13 +2225,63 @@ mod test {
 					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				},
 				network_fees: NetworkFees {
-					regular_network_fee: FeeRateAndMinimum {
-						rate: Permill::from_percent(1),
-						minimum: 123u32.into(),
+					regular_network_fee: NetworkFeeDetails {
+						standard_rate_and_minimum: FeeRateAndMinimum {
+							rate: Permill::from_perthousand(1),
+							minimum: 100_u32.into(),
+						},
+						rates: any::AssetMap {
+							eth: eth::AssetMap {
+								eth: Permill::from_perthousand(20),
+								flip: Permill::from_perthousand(10),
+								usdc: Permill::from_perthousand(1),
+								usdt: Permill::from_perthousand(1),
+							},
+							btc: btc::AssetMap { btc: Permill::from_perthousand(40) },
+							dot: dot::AssetMap { dot: Permill::from_perthousand(50) },
+							arb: arb::AssetMap {
+								eth: Permill::from_perthousand(1),
+								usdc: Permill::from_perthousand(1),
+							},
+							sol: sol::AssetMap {
+								sol: Permill::from_perthousand(1),
+								usdc: Permill::from_perthousand(1),
+							},
+							hub: hub::AssetMap {
+								dot: Permill::from_perthousand(1),
+								usdc: Permill::from_perthousand(1),
+								usdt: Permill::from_perthousand(1),
+							},
+						},
 					},
-					internal_swap_network_fee: FeeRateAndMinimum {
-						rate: Permill::from_percent(2),
-						minimum: 456u32.into(),
+					internal_swap_network_fee: NetworkFeeDetails {
+						standard_rate_and_minimum: FeeRateAndMinimum {
+							rate: Permill::from_perthousand(20),
+							minimum: 200_u32.into(),
+						},
+						rates: any::AssetMap {
+							eth: eth::AssetMap {
+								eth: Permill::from_perthousand(20),
+								flip: Permill::from_perthousand(20),
+								usdc: Permill::from_perthousand(420),
+								usdt: Permill::from_perthousand(249),
+							},
+							btc: btc::AssetMap { btc: Permill::from_perthousand(20) },
+							dot: dot::AssetMap { dot: Permill::from_perthousand(20) },
+							arb: arb::AssetMap {
+								eth: Permill::from_perthousand(20),
+								usdc: Permill::from_perthousand(123),
+							},
+							sol: sol::AssetMap {
+								sol: Permill::from_perthousand(20),
+								usdc: Permill::from_perthousand(456),
+							},
+							hub: hub::AssetMap {
+								dot: Permill::from_perthousand(20),
+								usdc: Permill::from_perthousand(789),
+								usdt: Permill::from_perthousand(101),
+							},
+						},
 					},
 				},
 			},
@@ -2359,37 +2418,40 @@ mod test {
 	const ID_1: AccountId32 = AccountId32::new([1; 32]);
 	const ID_2: AccountId32 = AccountId32::new([2; 32]);
 
-	fn boost_details_1() -> BoostPoolDetails {
+	fn boost_details_1() -> BoostPoolDetails<AccountId32> {
 		BoostPoolDetails {
 			available_amounts: BTreeMap::from([(ID_1.clone(), 10_000)]),
 			pending_boosts: BTreeMap::from([
 				(
-					0,
+					PrewitnessedDepositId(0),
 					BTreeMap::from([
 						(ID_1.clone(), OwedAmount { total: 200, fee: 10 }),
 						(ID_2.clone(), OwedAmount { total: 2_000, fee: 100 }),
 					]),
 				),
-				(1, BTreeMap::from([(ID_1.clone(), OwedAmount { total: 1_000, fee: 50 })])),
+				(
+					PrewitnessedDepositId(1),
+					BTreeMap::from([(ID_1.clone(), OwedAmount { total: 1_000, fee: 50 })]),
+				),
 			]),
 			pending_withdrawals: Default::default(),
 			network_fee_deduction_percent: Percent::from_percent(40),
 		}
 	}
 
-	fn boost_details_2() -> BoostPoolDetails {
+	fn boost_details_2() -> BoostPoolDetails<AccountId32> {
 		BoostPoolDetails {
 			available_amounts: BTreeMap::from([]),
 			pending_boosts: BTreeMap::from([(
-				0,
+				PrewitnessedDepositId(0),
 				BTreeMap::from([
 					(ID_1.clone(), OwedAmount { total: 1_000, fee: 50 }),
 					(ID_2.clone(), OwedAmount { total: 2_000, fee: 100 }),
 				]),
 			)]),
 			pending_withdrawals: BTreeMap::from([
-				(ID_1.clone(), BTreeSet::from([0])),
-				(ID_2.clone(), BTreeSet::from([0])),
+				(ID_1.clone(), BTreeSet::from([PrewitnessedDepositId(0)])),
+				(ID_2.clone(), BTreeSet::from([PrewitnessedDepositId(0)])),
 			]),
 			network_fee_deduction_percent: Percent::from_percent(0),
 		}

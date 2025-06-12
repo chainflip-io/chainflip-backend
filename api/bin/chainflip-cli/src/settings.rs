@@ -37,7 +37,8 @@ use std::{
 #[derive(Parser, Clone, Debug)]
 #[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct CLICommandLineOptions {
-	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
+	// Specifying a config root implies the existence of a Settings.toml file
+	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT, help = "Specifying a config root implies the existence of a Settings.toml file there.")]
 	pub config_root: String,
 
 	#[clap(flatten)]
@@ -142,10 +143,11 @@ pub enum CliCommand {
 	/// Liquidity provider specific commands
 	#[clap(subcommand, name = "lp")]
 	LiquidityProvider(LiquidityProviderSubcommands),
+	/// Validator specific commands
 	#[clap(subcommand)]
 	Validator(ValidatorSubcommands),
 	#[clap(
-		about = "Request a redemption. After requesting the redemption, please proceed to the  to complete the redeeming process."
+		about = "Request a redemption. After requesting the redemption, please proceed to the Auctions App to complete the redeeming process."
 	)]
 	Redeem {
 		#[clap(
@@ -178,9 +180,6 @@ pub enum CliCommand {
 	GetBoundRedeemAddress,
 	#[clap(about = "Shows the executor address your account is bound to")]
 	GetBoundExecutorAddress,
-	#[clap(
-		about = "Submit an extrinsic to request generation of a redemption certificate (redeeming all available FLIP)"
-	)]
 	#[clap(about = "Set your account role to the Validator, Broker, Liquidity Provider")]
 	RegisterAccountRole {
 		#[clap(help = "Validator (v), Liquidity Provider (lp), Broker (b)", value_parser = account_role_parser)]

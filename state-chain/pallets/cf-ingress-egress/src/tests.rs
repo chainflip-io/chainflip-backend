@@ -23,10 +23,10 @@ use crate::{
 	DepositChannelLookup, DepositChannelPool, DepositFailedDetails, DepositFailedReason,
 	DepositOrigin, DepositWitness, DisabledEgressAssets, EgressDustLimit, Event,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FailedRejections,
-	FetchOrTransfer, MaximumPreallocatedChannels, MinimumDeposit,
-	NetworkFeeDeductionFromBoostPercent, Pallet, PalletConfigUpdate, PalletSafeMode,
-	PreallocatedChannels, PrewitnessedDepositIdCounter, RefundReason, ScheduledEgressCcm,
-	ScheduledEgressFetchOrTransfer, VaultDepositWitness, WitnessSafetyMargin,
+	FetchOrTransfer, MaximumPreallocatedChannels, MinimumDeposit, Pallet, PalletConfigUpdate,
+	PalletSafeMode, PendingPrewitnessedDeposit, PreallocatedChannels, PrewitnessedDepositIdCounter,
+	RefundReason, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, VaultDepositWitness,
+	WitnessSafetyMargin,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -42,7 +42,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries,
-	Beneficiary, ChannelId, DcaParameters, ForeignChain, MAX_AFFILIATES,
+	Beneficiary, ChannelId, DcaParameters, ForeignChain, PrewitnessedDepositId, MAX_AFFILIATES,
 };
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -58,6 +58,7 @@ use cf_traits::{
 		chain_tracking::ChainTracker,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
 		funding_info::MockFundingInfo,
+		lending_pools::MockBoostApi,
 		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
@@ -80,7 +81,7 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_core::{bounded_vec, H160, U256};
-use sp_runtime::{DispatchError, DispatchResult, Percent};
+use sp_runtime::{DispatchError, DispatchResult};
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
 const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
@@ -1828,7 +1829,6 @@ fn can_update_all_config_items() {
 		const NEW_MIN_DEPOSIT_FLIP: u128 = 100;
 		const NEW_MIN_DEPOSIT_ETH: u128 = 200;
 		const NEW_DEPOSIT_CHANNEL_LIFETIME: u64 = 99;
-		const NETWORK_FEE_DEDUCTION: Percent = Percent::from_parts(50);
 		const NEW_WITNESS_SAFETY_MARGIN: u64 = 300;
 		const NEW_BOOST_DELAY_BLOCKS: u64 = 20;
 		// Check that the default values are different from the new ones
@@ -1854,9 +1854,6 @@ fn can_update_all_config_items() {
 				PalletConfigUpdate::SetDepositChannelLifetime {
 					lifetime: NEW_DEPOSIT_CHANNEL_LIFETIME
 				},
-				PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
-					deduction_percent: NETWORK_FEE_DEDUCTION
-				},
 				PalletConfigUpdate::SetWitnessSafetyMargin { margin: NEW_WITNESS_SAFETY_MARGIN },
 				PalletConfigUpdate::SetBoostDelay { delay_blocks: NEW_BOOST_DELAY_BLOCKS }
 			]
@@ -1869,10 +1866,6 @@ fn can_update_all_config_items() {
 		assert_eq!(MinimumDeposit::<Test, Instance1>::get(EthAsset::Flip), NEW_MIN_DEPOSIT_FLIP);
 		assert_eq!(MinimumDeposit::<Test, Instance1>::get(EthAsset::Eth), NEW_MIN_DEPOSIT_ETH);
 		assert_eq!(DepositChannelLifetime::<Test, Instance1>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
-		assert_eq!(
-			NetworkFeeDeductionFromBoostPercent::<Test, Instance1>::get(),
-			NETWORK_FEE_DEDUCTION
-		);
 		assert_eq!(WitnessSafetyMargin::<Test, Instance1>::get(), Some(NEW_WITNESS_SAFETY_MARGIN));
 		assert_eq!(BoostDelayBlocks::<Test, Instance1>::get(), NEW_BOOST_DELAY_BLOCKS);
 
@@ -1892,9 +1885,6 @@ fn can_update_all_config_items() {
 			}),
 			RuntimeEvent::EthereumIngressEgress(Event::DepositChannelLifetimeSet {
 				lifetime: NEW_DEPOSIT_CHANNEL_LIFETIME
-			}),
-			RuntimeEvent::EthereumIngressEgress(Event::NetworkFeeDeductionFromBoostSet {
-				deduction_percent: NETWORK_FEE_DEDUCTION
 			}),
 			RuntimeEvent::EthereumIngressEgress(Event::BoostDelaySet {
 				delay_blocks: NEW_BOOST_DELAY_BLOCKS
@@ -2733,54 +2723,68 @@ fn assembling_broker_fees() {
 }
 
 #[test]
-fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
+fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
+	const DEPOSIT_AMOUNT: AssetAmount = 100;
+
+	let deposit = PendingPrewitnessedDeposit::<Test, Instance1> {
+		block_height: 0,
+		amount: DEPOSIT_AMOUNT,
+		asset: EthAsset::Eth,
+		deposit_details: Default::default(),
+		deposit_address: None,
+		source_address: None,
+		action: ChannelAction::LiquidityProvision {
+			lp_account: 0,
+			refund_address: ForeignChainAddress::Eth(Default::default()),
+		},
+		boost_fee: 5,
+		channel_id: None,
+		origin: DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
+	};
+
+	let full_witness = |boost_status| {
+		EthereumIngressEgress::process_full_witness_deposit_inner(
+			deposit.deposit_address,
+			deposit.asset,
+			deposit.amount,
+			deposit.deposit_details.clone(),
+			deposit.source_address.clone(),
+			boost_status,
+			deposit.boost_fee,
+			deposit.channel_id,
+			deposit.action.clone(),
+			deposit.block_height,
+			deposit.origin.clone(),
+		)
+	};
+
 	new_test_ext().execute_with(|| {
-		const DEPOSIT_AMOUNT: AssetAmount = 100;
+		MockBoostApi::set_available_amount(DEPOSIT_AMOUNT);
 
 		// Increase the minimum deposit amount:
 		MinimumDeposit::<Test, Instance1>::insert(EthAsset::Eth, DEPOSIT_AMOUNT + 1);
 
+		// If we never boosted a deposit, it the full witness should be ignored:
 		assert_eq!(
-			EthereumIngressEgress::process_full_witness_deposit_inner(
-				None,
-				EthAsset::Eth,
-				DEPOSIT_AMOUNT,
-				Default::default(),
-				None,
-				BoostStatus::NotBoosted,
-				0,
-				None,
-				ChannelAction::LiquidityProvision {
-					lp_account: 0,
-					refund_address: ForeignChainAddress::Eth(Default::default()),
-				},
-				0,
-				DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
-			)
-			.err(),
+			full_witness(BoostStatus::NotBoosted).err(),
 			Some(DepositFailedReason::BelowMinimumDeposit)
 		);
 
-		assert!(EthereumIngressEgress::process_full_witness_deposit_inner(
-			None,
-			EthAsset::Eth,
-			DEPOSIT_AMOUNT,
-			Default::default(),
-			None,
-			BoostStatus::Boosted {
-				prewitnessed_deposit_id: 0,
-				pools: vec![],
-				amount: DEPOSIT_AMOUNT,
-			},
-			0,
-			None,
-			ChannelAction::LiquidityProvision {
-				lp_account: 0,
-				refund_address: ForeignChainAddress::Eth(Default::default()),
-			},
-			0,
-			DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
-		)
+		// Temporarily reduce the min deposit so the the prewitnessed deposit can be boosted:
+		MinimumDeposit::<Test, Instance1>::insert(EthAsset::Eth, DEPOSIT_AMOUNT);
+
+		assert_matches!(
+			EthereumIngressEgress::process_prewitness_deposit_inner(deposit.clone()),
+			BoostStatus::Boosted { .. }
+		);
+
+		// Min deposit is increased again, but now the deposit will be processed since
+		// we already boosted it:
+		MinimumDeposit::<Test, Instance1>::insert(EthAsset::Eth, DEPOSIT_AMOUNT + 1);
+		assert!(full_witness(BoostStatus::Boosted {
+			prewitnessed_deposit_id: PrewitnessedDepositId(1),
+			amount: DEPOSIT_AMOUNT
+		})
 		.is_ok());
 	});
 }
@@ -2789,8 +2793,8 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_not_boosted() {
 mod evm_transaction_rejection {
 	use super::*;
 	use crate::{
-		boost_pool, BoostPools, ScheduledTransactionsForRejection, TransactionRejectionDetails,
-		TransactionRejectionStatus, TransactionsMarkedForRejection,
+		ScheduledTransactionsForRejection, TransactionRejectionDetails, TransactionRejectionStatus,
+		TransactionsMarkedForRejection,
 	};
 	use cf_chains::{
 		assets::eth::Asset as EthAsset, evm::H256, ChannelLifecycleHooks,
@@ -2799,6 +2803,7 @@ mod evm_transaction_rejection {
 	use cf_traits::{
 		mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, DepositApi,
 	};
+	use mocks::lending_pools::MockBoostApi;
 	use std::str::FromStr;
 
 	const ETH: EthAsset = EthAsset::Eth;
@@ -3216,15 +3221,12 @@ mod evm_transaction_rejection {
 	#[test]
 	fn mark_after_prewitness_has_no_effect() {
 		const TAINTED_TX_ID: H256 = H256::repeat_byte(0xab);
+		const DEPOSIT_AMOUNT: AssetAmount = 1_000_000;
 
 		new_test_ext()
 			// Add boost liquidity
 			.then_execute_at_next_block(|_| {
-				BoostPools::<Test, Instance1>::insert(ETH_ETH, 10, {
-					let mut pool = boost_pool::BoostPool::new(10);
-					pool.add_funds(1234, 1_000_000);
-					pool
-				});
+				MockBoostApi::set_available_amount(DEPOSIT_AMOUNT);
 			})
 			.request_deposit_addresses::<Instance1>(&[DepositRequest::SimpleSwap {
 				source_asset: ETH_ETH,
@@ -3241,7 +3243,7 @@ mod evm_transaction_rejection {
 						DepositWitness::<Ethereum> {
 							deposit_address: *deposit_address,
 							asset: ETH_ETH,
-							amount: 1_000_000,
+							amount: DEPOSIT_AMOUNT,
 							deposit_details: DepositDetails {
 								tx_hashes: Some(vec![TAINTED_TX_ID])
 							}
@@ -3336,11 +3338,7 @@ mod evm_transaction_rejection {
 		new_test_ext()
 			// Add boost liquidity
 			.then_execute_at_next_block(|_| {
-				BoostPools::<Test, Instance1>::insert(ETH_ETH, 10, {
-					let mut pool = boost_pool::BoostPool::new(10);
-					pool.add_funds(1234, 1_000_000);
-					pool
-				});
+				MockBoostApi::set_available_amount(1_000_000);
 			})
 			.request_deposit_addresses::<Instance1>(&[DepositRequest::SimpleSwap {
 				source_asset: ETH_ETH,
@@ -3618,4 +3616,76 @@ fn test_various_refund_reasons() {
 		},
 		RefundReason::InvalidDcaParameters,
 	);
+}
+
+// Test that the storage is rolled back if a transactional call fails.
+// This is more a test of the general idea of pattern then a specific call implementation.
+#[test]
+fn rollback_storage_if_transactional_call_fails() {
+	new_test_ext().execute_with(|| {
+		use cf_chains::{
+			evm::EvmCrypto, AllBatch, AllBatchError, ApiCall, ChainCrypto, FetchAssetParams,
+			TransferAssetParams,
+		};
+		use cf_primitives::EgressId;
+		use frame_support::{CloneNoBound, DebugNoBound, PartialEqNoBound};
+		use scale_info::TypeInfo;
+		use sp_core::{Decode, Encode};
+
+		#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+		pub struct RollbackStorageCall;
+
+		impl ApiCall<EvmCrypto> for RollbackStorageCall {
+			fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
+				unimplemented!()
+			}
+
+			fn signed(
+				self,
+				_threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
+				_signer: <EvmCrypto as ChainCrypto>::AggKey,
+			) -> Self {
+				unimplemented!()
+			}
+
+			fn chain_encoded(&self) -> Vec<u8> {
+				unimplemented!()
+			}
+
+			fn is_signed(&self) -> bool {
+				unimplemented!()
+			}
+
+			fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
+				unimplemented!()
+			}
+
+			fn refresh_replay_protection(&mut self) {
+				unimplemented!()
+			}
+
+			fn signer(&self) -> Option<<EvmCrypto as ChainCrypto>::AggKey> {
+				unimplemented!()
+			}
+		}
+
+		ChannelIdCounter::<Test, Instance1>::put(100);
+
+		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 100);
+
+		impl AllBatch<Ethereum> for RollbackStorageCall {
+			fn new_unsigned_impl(
+				_fetch_params: Vec<FetchAssetParams<Ethereum>>,
+				_transfer_params: Vec<(TransferAssetParams<Ethereum>, EgressId)>,
+			) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+				ChannelIdCounter::<Test, Instance1>::put(101);
+				Err(AllBatchError::VaultAccountNotSet)
+			}
+		}
+
+		let call_result = RollbackStorageCall::new_unsigned(vec![], vec![]);
+
+		assert!(call_result.is_err(), "Expected the call to fail");
+		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 100);
+	});
 }

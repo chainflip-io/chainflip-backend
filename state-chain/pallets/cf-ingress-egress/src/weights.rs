@@ -53,13 +53,8 @@ pub trait WeightInfo {
 	fn finalise_ingress(a: u32, ) -> Weight;
 	fn vault_transfer_failed() -> Weight;
 	fn ccm_broadcast_failed() -> Weight;
-	fn add_boost_funds() -> Weight;
-	fn process_deposit_as_lost(n: u32, ) -> Weight;
 	fn vault_swap_request() -> Weight;
-	fn stop_boosting() -> Weight;
-	fn deposit_boosted() -> Weight;
 	fn boost_finalised() -> Weight;
-	fn create_boost_pools() -> Weight;
 	fn mark_transaction_for_rejection() -> Weight;
 }
 
@@ -176,40 +171,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityPools::Pools` (r:1 w:0)
-	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `AssetBalances::FreeBalances` (r:1 w:1)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::BoostPools` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn add_boost_funds() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1441`
-		//  Estimated: `4906`
-		// Minimum execution time: 42_720_000 picoseconds.
-		Weight::from_parts(43_403_000, 4906)
-			.saturating_add(T::DbWeight::get().reads(5_u64))
-			.saturating_add(T::DbWeight::get().writes(2_u64))
-	}
-	/// Storage: `EthereumIngressEgress::BoostPools` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `n` is `[1, 100]`.
-	fn process_deposit_as_lost(n: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `403 + n * (105 ±0)`
-		//  Estimated: `3867 + n * (105 ±0)`
-		// Minimum execution time: 13_463_000 picoseconds.
-		Weight::from_parts(16_188_831, 3867)
-			// Standard Error: 3_771
-			.saturating_add(Weight::from_parts(703_084, 0).saturating_mul(n.into()))
-			.saturating_add(T::DbWeight::get().reads(1_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-			.saturating_add(Weight::from_parts(0, 105).saturating_mul(n.into()))
-	}
 	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
 	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `Swapping::MaximumSwapAmount` (r:1 w:0)
@@ -227,48 +188,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Minimum execution time: 16_000_000 picoseconds.
 		Weight::from_parts(17_000_000, 3568)
 			.saturating_add(T::DbWeight::get().reads(4_u64))
-			.saturating_add(T::DbWeight::get().writes(4_u64))
-	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::BoostPools` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `AssetBalances::FreeBalances` (r:1 w:1)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn stop_boosting() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `5294`
-		//  Estimated: `8759`
-		// Minimum execution time: 73_766_000 picoseconds.
-		Weight::from_parts(75_219_000, 8759)
-			.saturating_add(T::DbWeight::get().reads(4_u64))
-			.saturating_add(T::DbWeight::get().writes(2_u64))
-	}
-	/// Storage: `EthereumIngressEgress::MinimumDeposit` (r:1 w:0)
-	/// Proof: `EthereumIngressEgress::MinimumDeposit` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::PrewitnessedDepositIdCounter` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::PrewitnessedDepositIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::BoostPools` (r:2 w:1)
-	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumChainTracking::FeeMultiplier` (r:1 w:0)
-	/// Proof: `EthereumChainTracking::FeeMultiplier` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
-	/// Storage: `EthereumChainTracking::CurrentChainState` (r:1 w:0)
-	/// Proof: `EthereumChainTracking::CurrentChainState` (`max_values`: Some(1), `max_size`: Some(40), added: 535, mode: `MaxEncodedLen`)
-	/// Storage: `AssetBalances::WithheldAssets` (r:1 w:1)
-	/// Proof: `AssetBalances::WithheldAssets` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn deposit_boosted() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `6059`
-		//  Estimated: `11999`
-		// Minimum execution time: 118_124_000 picoseconds.
-		Weight::from_parts(119_162_000, 11999)
-			.saturating_add(T::DbWeight::get().reads(9_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
 	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:1 w:1)
@@ -291,17 +210,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(330_581_000, 91237)
 			.saturating_add(T::DbWeight::get().reads(35_u64))
 			.saturating_add(T::DbWeight::get().writes(33_u64))
-	}
-	/// Storage: `EthereumIngressEgress::BoostPools` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn create_boost_pools() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `206`
-		//  Estimated: `3671`
-		// Minimum execution time: 12_538_000 picoseconds.
-		Weight::from_parts(13_219_000, 3671)
-			.saturating_add(T::DbWeight::get().reads(1_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 	/// Storage: `EthereumIngressEgress::TransactionsMarkedForRejection` (r:1 w:1)
 	/// Proof: `EthereumIngressEgress::TransactionsMarkedForRejection` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -428,40 +336,6 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityPools::Pools` (r:1 w:0)
-	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `AssetBalances::FreeBalances` (r:1 w:1)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::BoostPools` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn add_boost_funds() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1441`
-		//  Estimated: `4906`
-		// Minimum execution time: 42_720_000 picoseconds.
-		Weight::from_parts(43_403_000, 4906)
-			.saturating_add(ParityDbWeight::get().reads(5_u64))
-			.saturating_add(ParityDbWeight::get().writes(2_u64))
-	}
-	/// Storage: `EthereumIngressEgress::BoostPools` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `n` is `[1, 100]`.
-	fn process_deposit_as_lost(n: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `403 + n * (105 ±0)`
-		//  Estimated: `3867 + n * (105 ±0)`
-		// Minimum execution time: 13_463_000 picoseconds.
-		Weight::from_parts(16_188_831, 3867)
-			// Standard Error: 3_771
-			.saturating_add(Weight::from_parts(703_084, 0).saturating_mul(n.into()))
-			.saturating_add(ParityDbWeight::get().reads(1_u64))
-			.saturating_add(ParityDbWeight::get().writes(1_u64))
-			.saturating_add(Weight::from_parts(0, 105).saturating_mul(n.into()))
-	}
 	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
 	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `Swapping::MaximumSwapAmount` (r:1 w:0)
@@ -479,48 +353,6 @@ impl WeightInfo for () {
 		// Minimum execution time: 16_000_000 picoseconds.
 		Weight::from_parts(17_000_000, 3568)
 			.saturating_add(ParityDbWeight::get().reads(4_u64))
-			.saturating_add(ParityDbWeight::get().writes(4_u64))
-	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::BoostPools` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `AssetBalances::FreeBalances` (r:1 w:1)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn stop_boosting() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `5294`
-		//  Estimated: `8759`
-		// Minimum execution time: 73_766_000 picoseconds.
-		Weight::from_parts(75_219_000, 8759)
-			.saturating_add(ParityDbWeight::get().reads(4_u64))
-			.saturating_add(ParityDbWeight::get().writes(2_u64))
-	}
-	/// Storage: `EthereumIngressEgress::MinimumDeposit` (r:1 w:0)
-	/// Proof: `EthereumIngressEgress::MinimumDeposit` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::PrewitnessedDepositIdCounter` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::PrewitnessedDepositIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::BoostPools` (r:2 w:1)
-	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumChainTracking::FeeMultiplier` (r:1 w:0)
-	/// Proof: `EthereumChainTracking::FeeMultiplier` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
-	/// Storage: `EthereumChainTracking::CurrentChainState` (r:1 w:0)
-	/// Proof: `EthereumChainTracking::CurrentChainState` (`max_values`: Some(1), `max_size`: Some(40), added: 535, mode: `MaxEncodedLen`)
-	/// Storage: `AssetBalances::WithheldAssets` (r:1 w:1)
-	/// Proof: `AssetBalances::WithheldAssets` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn deposit_boosted() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `6059`
-		//  Estimated: `11999`
-		// Minimum execution time: 118_124_000 picoseconds.
-		Weight::from_parts(119_162_000, 11999)
-			.saturating_add(ParityDbWeight::get().reads(9_u64))
 			.saturating_add(ParityDbWeight::get().writes(4_u64))
 	}
 	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:1 w:1)
@@ -543,17 +375,6 @@ impl WeightInfo for () {
 		Weight::from_parts(330_581_000, 91237)
 			.saturating_add(ParityDbWeight::get().reads(35_u64))
 			.saturating_add(ParityDbWeight::get().writes(33_u64))
-	}
-	/// Storage: `EthereumIngressEgress::BoostPools` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn create_boost_pools() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `206`
-		//  Estimated: `3671`
-		// Minimum execution time: 12_538_000 picoseconds.
-		Weight::from_parts(13_219_000, 3671)
-			.saturating_add(ParityDbWeight::get().reads(1_u64))
-			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `EthereumIngressEgress::TransactionsMarkedForRejection` (r:1 w:1)
 	/// Proof: `EthereumIngressEgress::TransactionsMarkedForRejection` (`max_values`: None, `max_size`: None, mode: `Measured`)

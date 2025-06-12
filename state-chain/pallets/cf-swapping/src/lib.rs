@@ -447,6 +447,12 @@ pub enum PalletConfigUpdate<T: Config> {
 	/// Set the network fee rate and minimum in USDC that will be used just for internal swaps
 	/// (credit on-chain swaps)
 	SetInternalSwapNetworkFee { rate: Option<Permill>, minimum: Option<AssetAmount> },
+	/// Set a custom network fee for a specific asset. Set to None to remove the custom network fee
+	/// rate for that asset and fallback to the standard network fee.
+	SetNetworkFeeForAsset { asset: Asset, rate: Option<Permill> },
+	/// Set a custom network fee for internal swaps for a specific asset. Set to None to remove the
+	/// custom network fee rate for that asset and fallback to the standard internal network fee.
+	SetInternalSwapNetworkFeeForAsset { asset: Asset, rate: Option<Permill> },
 }
 
 impl_pallet_safe_mode! {
@@ -648,6 +654,19 @@ pub mod pallet {
 	/// swaps).
 	#[pallet::storage]
 	pub type InternalSwapNetworkFee<T: Config> = StorageValue<_, FeeRateAndMinimum, ValueQuery>;
+
+	/// A custom network fee for a specific asset. A swap will use the highest fee rate (custom or
+	/// standard) between the input and output asset.
+	#[pallet::storage]
+	pub type NetworkFeeForAsset<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, Permill, OptionQuery>;
+
+	/// A custom network fee for internal swaps for a specific asset.
+	/// A swap will use the highest fee rate (custom or standard) between the input and output
+	/// asset.
+	#[pallet::storage]
+	pub type InternalSwapNetworkFeeForAsset<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, Permill, OptionQuery>;
 
 	/// Set by the broker, this is the minimum broker commission that the broker will accept for a
 	/// vault swap.
@@ -1030,7 +1049,7 @@ pub mod pallet {
 		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
 		pub fn update_pallet_config(
 			origin: OriginFor<T>,
-			updates: BoundedVec<PalletConfigUpdate<T>, ConstU32<10>>,
+			updates: BoundedVec<PalletConfigUpdate<T>, ConstU32<100>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -1102,6 +1121,19 @@ pub mod pallet {
 							},
 						}
 					},
+					PalletConfigUpdate::SetNetworkFeeForAsset { asset, rate } => {
+						if let Some(rate) = rate {
+							NetworkFeeForAsset::<T>::insert(asset, rate);
+						} else {
+							NetworkFeeForAsset::<T>::remove(asset);
+						}
+					},
+					PalletConfigUpdate::SetInternalSwapNetworkFeeForAsset { asset, rate } =>
+						if let Some(rate) = rate {
+							InternalSwapNetworkFeeForAsset::<T>::insert(asset, rate);
+						} else {
+							InternalSwapNetworkFeeForAsset::<T>::remove(asset);
+						},
 				}
 				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
 			}
@@ -1223,14 +1255,6 @@ pub mod pallet {
 					refund_params_internal,
 					dca_parameters.clone(),
 				)?;
-
-			// TODO: deduplicate this with assemble_and_validate_broker_fees
-			let affiliate_fees = affiliate_fees
-				.into_iter()
-				.filter(|beneficiary| beneficiary.bps > 0)
-				.collect::<Vec<_>>()
-				.try_into()
-				.expect("Filtering out will always fit");
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
@@ -1536,17 +1560,17 @@ pub mod pallet {
 			if total_fee_bps > MAX_BASIS_POINTS {
 				FeeTaken { remaining_amount: stable_amount, fee: 0 }
 			} else {
-				let total_fee = broker_fees.iter().fold(
-					0u128,
-					|fee_accumulator, Beneficiary { account, bps }| {
+				let total_fee = broker_fees
+					.iter()
+					.filter(|Beneficiary { account: _, bps }| *bps > 0)
+					.fold(0u128, |fee_accumulator, Beneficiary { account, bps }| {
 						let fee = Permill::from_parts(*bps as u32 * BASIS_POINTS_PER_MILLION) *
 							stable_amount;
 
 						T::BalanceApi::credit_account(account, STABLE_ASSET, fee);
 
 						fee_accumulator.saturating_add(fee)
-					},
-				);
+					});
 
 				assert!(total_fee <= stable_amount, "Broker fee cannot be more than the amount");
 
@@ -2224,15 +2248,6 @@ pub mod pallet {
 			let beneficiaries = [Beneficiary { account: broker_id, bps: broker_commission }]
 				.into_iter()
 				.chain(affiliate_fees.iter().cloned())
-				.filter_map(
-					|beneficiary| {
-						if beneficiary.bps > 0 {
-							Some(beneficiary)
-						} else {
-							None
-						}
-					},
-				)
 				.collect::<Vec<_>>()
 				.try_into()
 				.expect(
@@ -2240,6 +2255,31 @@ pub mod pallet {
 				);
 			Pallet::<T>::validate_broker_fees(&beneficiaries)?;
 			Ok(beneficiaries)
+		}
+
+		pub fn get_network_fee_for_swap(
+			input_asset: Asset,
+			output_asset: Asset,
+			is_internal_swap: bool,
+		) -> FeeRateAndMinimum {
+			let (input_asset_fee, output_asset_fee, minimum) = if is_internal_swap {
+				let default_fee = InternalSwapNetworkFee::<T>::get();
+				(
+					InternalSwapNetworkFeeForAsset::<T>::get(input_asset)
+						.unwrap_or(default_fee.rate),
+					InternalSwapNetworkFeeForAsset::<T>::get(output_asset)
+						.unwrap_or(default_fee.rate),
+					default_fee.minimum,
+				)
+			} else {
+				let default_fee = NetworkFee::<T>::get();
+				(
+					NetworkFeeForAsset::<T>::get(input_asset).unwrap_or(default_fee.rate),
+					NetworkFeeForAsset::<T>::get(output_asset).unwrap_or(default_fee.rate),
+					default_fee.minimum,
+				)
+			};
+			FeeRateAndMinimum { rate: input_asset_fee.max(output_asset_fee), minimum }
 		}
 	}
 
@@ -2342,7 +2382,7 @@ pub mod pallet {
 				SwapRequestType::IngressEgressFee => {
 					// No minimum network fee for ingress/egress fee swaps
 					let fees = vec![FeeType::NetworkFee(NetworkFeeTracker::new_without_minimum(
-						NetworkFee::<T>::get(),
+						Pallet::<T>::get_network_fee_for_swap(input_asset, output_asset, false),
 					))];
 
 					Self::schedule_swap(
@@ -2372,13 +2412,13 @@ pub mod pallet {
 						DcaState::create_with_first_chunk(net_amount, dca_params);
 
 					// Choose correct network fee for the swap
-					let mut fees = vec![FeeType::NetworkFee(
-						if matches!(output_action, SwapOutputAction::CreditOnChain { .. }) {
-							NetworkFeeTracker::new(InternalSwapNetworkFee::<T>::get())
-						} else {
-							NetworkFeeTracker::new(NetworkFee::<T>::get())
-						},
-					)];
+					let mut fees = vec![FeeType::NetworkFee(NetworkFeeTracker::new(
+						Pallet::<T>::get_network_fee_for_swap(
+							input_asset,
+							output_asset,
+							matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
+						),
+					))];
 
 					// Add broker fees if any
 					if !broker_fees.is_empty() {

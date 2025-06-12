@@ -418,7 +418,7 @@ mod tests {
 					settings.eth.nodes,
 					U256::from(1337u64),
 					"eth_rpc",
-					"eth_subscribe",
+					"eth_subscribe_client",
 					"Ethereum",
 					Ethereum::WITNESS_PERIOD,
 				)

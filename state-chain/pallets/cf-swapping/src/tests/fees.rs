@@ -1056,3 +1056,169 @@ fn gas_calculation_can_handle_extreme_swap_rate() {
 		);
 	});
 }
+
+#[test]
+fn test_get_network_fee() {
+	const REGULAR_NETWORK_FEE: u32 = 5;
+	const INTERNAL_SWAP_NETWORK_FEE: u32 = 6;
+	const MINIMUM_NETWORK_FEE: AssetAmount = 123;
+
+	fn test_get_fee(
+		input_asset_fee: (Asset, Option<u32>),
+		output_asset_fee: (Asset, Option<u32>),
+		is_internal: bool,
+		expected_fee: u32,
+	) {
+		new_test_ext().execute_with(|| {
+			// Set the standard network fee
+			if is_internal {
+				InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
+					rate: Permill::from_percent(INTERNAL_SWAP_NETWORK_FEE),
+					minimum: MINIMUM_NETWORK_FEE,
+				});
+			} else {
+				NetworkFee::<Test>::set(FeeRateAndMinimum {
+					rate: Permill::from_percent(REGULAR_NETWORK_FEE),
+					minimum: MINIMUM_NETWORK_FEE,
+				});
+			}
+
+			// Set the custom network fees for the assets
+			if let (asset, Some(fee)) = input_asset_fee {
+				if is_internal {
+					InternalSwapNetworkFeeForAsset::<Test>::insert(
+						asset,
+						Permill::from_percent(fee),
+					);
+				} else {
+					NetworkFeeForAsset::<Test>::insert(asset, Permill::from_percent(fee));
+				}
+			}
+			if let (asset, Some(fee)) = output_asset_fee {
+				if is_internal {
+					InternalSwapNetworkFeeForAsset::<Test>::insert(
+						asset,
+						Permill::from_percent(fee),
+					);
+				} else {
+					NetworkFeeForAsset::<Test>::insert(asset, Permill::from_percent(fee));
+				}
+			}
+
+			// Get the network fee for the swap
+			let fee = Pallet::<Test>::get_network_fee_for_swap(
+				input_asset_fee.0,
+				output_asset_fee.0,
+				is_internal,
+			);
+
+			// Check that the fee rate and minimum are as expected
+			assert_eq!(fee.minimum, MINIMUM_NETWORK_FEE);
+			assert_eq!(fee.rate, Permill::from_percent(expected_fee));
+		});
+	}
+
+	fn test_all(is_internal: bool) {
+		let network_fee = if is_internal { INTERNAL_SWAP_NETWORK_FEE } else { REGULAR_NETWORK_FEE };
+
+		// The Standard network fee is used as a default when no custom fee is set
+		test_get_fee((Asset::Flip, None), (Asset::Eth, None), is_internal, network_fee);
+		test_get_fee(
+			// Using a fee that is lower than the standard network fee, so the standard fee of the
+			// other asset will be used.
+			(Asset::Flip, Some(network_fee - 1)),
+			(Asset::Eth, None),
+			is_internal,
+			network_fee,
+		);
+		test_get_fee(
+			(Asset::Flip, None),
+			// Using a fee that is lower than the standard network fee, so the standard fee of the
+			// other asset will be used.
+			(Asset::Eth, Some(network_fee - 2)),
+			is_internal,
+			network_fee,
+		);
+
+		// When above the standard network fee, The highest of the 2 custom fees is used.
+		test_get_fee(
+			(Asset::Flip, Some(network_fee + 10)),
+			(Asset::Eth, Some(network_fee + 15)),
+			is_internal,
+			network_fee + 15,
+		);
+		test_get_fee(
+			(Asset::Flip, None),
+			(Asset::Eth, Some(network_fee + 15)),
+			is_internal,
+			network_fee + 15,
+		);
+		test_get_fee(
+			(Asset::Flip, Some(network_fee + 15)),
+			(Asset::Eth, Some(network_fee + 10)),
+			is_internal,
+			network_fee + 15,
+		);
+	}
+
+	// Run test for both internal and regular swaps
+	test_all(false);
+	test_all(true);
+}
+
+#[test]
+fn test_swap_with_custom_network_fee_for_asset() {
+	const FEE_RATE_FLIP: Permill = Permill::from_percent(10);
+	const FEE_RATE_ETH: Permill = Permill::from_percent(5);
+	const NETWORK_FEE: Permill = Permill::from_percent(1);
+
+	// We expect the higher fee rate to be used.
+	let expected_fee = FEE_RATE_FLIP * INPUT_AMOUNT;
+
+	const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+
+	new_test_ext()
+		.execute_with(|| {
+			// Set the swap rate to 1 to make the test simple
+			SwapRate::set(1.0);
+
+			// Set the standard network fee
+			NetworkFee::<Test>::set(FeeRateAndMinimum { rate: NETWORK_FEE, minimum: 0 });
+
+			// Set custom network fees for specific assets
+			NetworkFeeForAsset::<Test>::insert(Asset::Flip, FEE_RATE_FLIP);
+			NetworkFeeForAsset::<Test>::insert(Asset::Eth, FEE_RATE_ETH);
+
+			// Now do a swap
+			Swapping::init_swap_request(
+				Asset::Flip,
+				INPUT_AMOUNT,
+				Asset::Eth,
+				SwapRequestType::Regular {
+					output_action: SwapOutputAction::Egress {
+						output_address: ForeignChainAddress::Eth([1; 20].into()),
+						ccm_deposit_metadata: None,
+					},
+				},
+				Default::default(),
+				None,
+				None,
+				SwapOrigin::Vault {
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: Some(BROKER),
+				},
+			);
+		})
+		.then_process_blocks_until_block(SWAP_BLOCK)
+		.then_execute_with(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted {
+					input_amount: INPUT_AMOUNT,
+					output_amount,
+					network_fee,
+					..
+				}) if *network_fee == expected_fee && *output_amount == INPUT_AMOUNT - expected_fee
+			);
+		});
+}

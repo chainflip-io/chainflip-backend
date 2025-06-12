@@ -22,7 +22,10 @@ use cfe_events::{KeyHandoverRequest, KeygenRequest, TxBroadcastRequest};
 pub use liquidity::*;
 pub mod safe_mode;
 pub use safe_mode::*;
+pub mod lending;
 mod swapping;
+
+use cf_chains::SetGovKeyWithAggKeyError;
 
 pub use swapping::{
 	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
@@ -929,7 +932,7 @@ pub trait BroadcastAnyChainGovKey {
 		chain: ForeignChain,
 		old_key: Option<Vec<u8>>,
 		new_key: Vec<u8>,
-	) -> Result<(), ()>;
+	) -> Result<(), SetGovKeyWithAggKeyError>;
 
 	fn is_govkey_compatible(chain: ForeignChain, key: &[u8]) -> bool;
 }

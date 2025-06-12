@@ -96,7 +96,7 @@ impl<E> SetAggKeyWithAggKey<EvmCrypto> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_old_key: Option<<EvmCrypto as ChainCrypto>::AggKey>,
 		new_key: <EvmCrypto as ChainCrypto>::AggKey,
 	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
@@ -111,10 +111,10 @@ impl<E> SetGovKeyWithAggKey<EvmCrypto> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_maybe_old_key: Option<<EvmCrypto as ChainCrypto>::GovKey>,
 		new_gov_key: <EvmCrypto as ChainCrypto>::GovKey,
-	) -> Result<Self, ()> {
+	) -> Result<Self, SetGovKeyWithAggKeyError> {
 		Ok(Self::SetGovKeyWithAggKey(EvmTransactionBuilder::new_unsigned(
 			E::replay_protection(E::key_manager_address()),
 			set_gov_key_with_agg_key::SetGovKeyWithAggKey::new(new_gov_key),
@@ -183,7 +183,7 @@ impl<E> AllBatch<Ethereum> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<(TransferAssetParams<Ethereum>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
@@ -205,7 +205,7 @@ impl<E> ExecutexSwapAndCall<Ethereum> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
@@ -237,7 +237,7 @@ impl<E> TransferFallback<Ethereum> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Ethereum>,
 	) -> Result<Self, TransferFallbackError> {
 		let transfer_param = EncodableTransferAssetParams {
