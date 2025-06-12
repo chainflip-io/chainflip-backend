@@ -82,9 +82,10 @@ async function testWithdrawCollectedAffiliateFees(
   logger.debug('Affiliate account ID:', affiliateAccountId);
   logger.debug('Withdraw address:', withdrawAddress);
 
+  const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
   await chainflip.tx.swapping
     .affiliateWithdrawalRequest(affiliateAccountId)
-    .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
+    .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
 
   logger.info('Withdrawal request sent!');
   logger.debug('Waiting for balance change... Observing address:', withdrawAddress);
