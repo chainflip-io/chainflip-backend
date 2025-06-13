@@ -2801,9 +2801,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Opens a channel for the given asset and registers it with the given action.
-	/// May re-use an existing channels, depending on chain configuration. The channel is added to
+	///
+	/// May re-use an existing channel, depending on pallet configuration. The channel is added to
 	/// the preallocated channels list up to the maximum number of channels allowed for the
 	/// requester.
+	///
 	/// The requester must have enough FLIP available to pay the channel opening fee.
 	#[allow(clippy::type_complexity)]
 	fn open_channel(
@@ -2821,49 +2823,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
 		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
 
-		// Allocate a channel for the requester, always try to first allocate from the
-		// pre-allocated channels list
-		let mut deposit_channel =
-			match PreallocatedChannels::<T, I>::mutate(requester, |queue| queue.pop_front()) {
-				Some(channel) => channel,
-				// if there are no pre-allocated channels, take the next channel
-				// from the pool of recycled channels, or generate a new channel entirely.
-				None => match DepositChannelPool::<T, I>::drain().next() {
-					Some((_, deposit_channel)) => deposit_channel,
-					None => Self::generate_new_channel(source_asset)?,
-				},
-			};
-		// Make sure to set the asset, in case the channel was allocated from the pre-allocated
-		// channels list or from the deposit channels pool.
-		deposit_channel.asset = source_asset;
-
-		// Proactively pre-allocate new channels for the requester,
-		// This is done after the above loop deliberately to ensure that we always respect per-role
-		// preallocated channels limits and cater for cases when MaximumPreallocatedChannels config
-		// changes, or a channel is allocated from the pre-allocated channels list.
-		for _ in 0..(MaximumPreallocatedChannels::<T, I>::get(T::AccountRoleRegistry::account_role(
-			requester,
-		)) as usize)
-			.saturating_sub(PreallocatedChannels::<T, I>::get(requester).len())
-		{
-			// For chains where pre-allocating new channels is not enabled such as Ethereum and
-			// Arbitrum, only pre-allocate from the global pool. For other chains, always
-			// pre-allocate a newly generated channel.
-			if T::ONLY_PREALLOCATE_FROM_POOL {
-				if let Some((_, reused_channel)) = DepositChannelPool::<T, I>::drain().next() {
-					PreallocatedChannels::<T, I>::mutate(requester, |queue| {
-						queue.push_back(reused_channel)
-					});
-				}
-			} else {
-				// It doesn't matter what source asset we pass here, because source_asset
-				// is ignored by chains that support preallocation.
-				let new_channel = Self::generate_new_channel(source_asset)?;
-				PreallocatedChannels::<T, I>::mutate(requester, |queue| {
-					queue.push_back(new_channel)
-				});
+		let deposit_channel = PreallocatedChannels::<T, I>::mutate(requester, |queue| {
+			// Always fill up the list to one above capacity, then pop the first channel.
+			for _ in queue.len()..=
+				MaximumPreallocatedChannels::<T, I>::get(T::AccountRoleRegistry::account_role(
+					requester,
+				)) as usize
+			{
+				if let Some((_id, channel)) = DepositChannelPool::<T, I>::drain().next() {
+					queue.push_back(channel);
+				} else if T::ONLY_PREALLOCATE_FROM_POOL {
+					break;
+				} else {
+					queue.push_back(Self::generate_new_channel(source_asset)?);
+				};
 			}
-		}
+			let mut deposit_channel = if let Some(deposit_channel) = queue.pop_front() {
+				deposit_channel
+			} else {
+				// If the queue is empty, generate a new channel.
+				Self::generate_new_channel(source_asset)?
+			};
+			// Make sure to set the asset, in case the channel was allocated from the pre-allocated
+			// channels list or from the deposit channels pool.
+			deposit_channel.asset = source_asset;
+			Ok::<_, DispatchError>(deposit_channel)
+		})?;
 
 		let (current_height, expiry_height, recycle_height) =
 			Self::expiry_and_recycle_block_height();
