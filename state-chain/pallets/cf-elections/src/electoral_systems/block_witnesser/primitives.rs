@@ -69,6 +69,11 @@ defx! {
 			.unwrap_or(true)
 		},
 
+		// The `highest_ever_ongoing_election` should always be updated when new elections are created. 
+		highest_ever_ongoing_election_is_updated: {
+			this.ongoing.keys().all(|height| *height <= this.highest_ever_ongoing_election)
+		},
+
 		//--- ensure that we delete old data ---
 		// We should only store data received from optimistic elections for at most SAFETY_BUFFER blocks.
 		optimistic_block_cache_is_cleared: this.optimistic_block_cache.iter().all(|(height, _block)|
