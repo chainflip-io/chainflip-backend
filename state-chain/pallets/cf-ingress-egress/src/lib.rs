@@ -617,7 +617,7 @@ pub mod pallet {
 		/// Sets if the pallet should automatically manage the closing of channels.
 		const MANAGE_CHANNEL_LIFETIME: bool;
 
-		/// Sets if the chain supports pre-allocating addresses.
+		/// If true, pre-allocated channels will only be taken from the pool of recycled channels.
 		const ONLY_PREALLOCATE_FROM_POOL: bool;
 
 		/// A hook to tell witnesses to start witnessing an opened channel.
