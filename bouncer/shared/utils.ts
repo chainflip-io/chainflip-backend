@@ -145,8 +145,6 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
         case 'KEY_MANAGER':
           return '0x5FbDB2315678afecb367f032d93F642f64180aa3';
-        case 'ADDRESS_CHECKER':
-          return '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
         case 'ArbEth':
           return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
         case 'ArbUsdc':
@@ -185,7 +183,7 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT':
           return 'EWaGcrFXhf9Zq8yxSdpAa75kZmDXkRxaP17sYiL6UpZN';
         case 'USER_ADDRESS_LOOKUP_TABLE':
-          return '6fs9L33QGxsYnjBtUFtdnJubA1mVqzqsETgAKG34U9RM';
+          return '9J7p5fmNjRjdYRyutwssUBRLYmJEmK7fwBpYxhtnxYTG';
         case 'PRICE_FEED_MOCK':
           return 'DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X';
         case 'PRICE_FEED_BTC':
