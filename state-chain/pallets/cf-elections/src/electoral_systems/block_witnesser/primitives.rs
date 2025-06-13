@@ -467,27 +467,6 @@ impl<N: Step + Ord> CompactHeightTracker<N> {
 		CompactHeightTrackerExtract { tracker: self }
 	}
 
-	pub fn extract(&mut self, max_elements: usize) -> Vec<N> {
-		let mut result = Vec::new();
-		let mut remove = Vec::new();
-		for (i, range) in self.elections.iter_mut().enumerate() {
-			while result.len() < max_elements {
-				if let Some(x) = range.next() {
-					result.push(x);
-				} else {
-					remove.push(i);
-					break;
-				}
-			}
-		}
-		for _ in 0..self.elections.len() {
-			if self.elections.front().is_some_and(|range| range.is_empty()) {
-				self.elections.remove(0);
-			}
-		}
-		result
-	}
-
 	pub fn insert(&mut self, item: N) {
 		if let Some(back) = self.elections.back_mut() {
 			if back.end == item {
@@ -528,24 +507,6 @@ impl<'a, N: Step> Iterator for CompactHeightTrackerExtract<'a, N> {
 			self.tracker.elections.pop_front();
 		}
 		result
-	}
-}
-
-fn range_difference<N: Ord + Clone>(r: &mut Range<N>, s: &Range<N>) {
-	// ```
-	// [-- r --]
-	//     [-- s --]
-	// ```
-	if s.contains(&r.end) {
-		r.end = s.start.clone();
-	}
-
-	// ```
-	//     [-- r --]
-	// [-- s --]
-	// ```
-	if s.contains(&r.start) {
-		r.start = s.end.clone();
 	}
 }
 
