@@ -300,7 +300,8 @@ impl LpRpcApiServer for RpcServerImpl {
 			.api
 			.operator_api()
 			.request_redemption(redeem_amount, redeem_address, executor_address)
-			.await?)
+			.await?
+			.tx_hash)
 	}
 
 	async fn subscribe_order_fills(&self, pending_sink: PendingSubscriptionSink) {

@@ -22,7 +22,7 @@ pub use cf_chains::address::AddressString;
 use cf_chains::{evm::to_evm_address, CcmChannelMetadataUnchecked};
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_primitives::{DcaParameters, ForeignChain};
-use cf_rpc_types::{RedemptionAmount, RefundParametersRpc};
+use cf_rpc_types::{RebalanceOutcome, RedemptionAmount, RedemptionOutcome, RefundParametersRpc};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
@@ -75,6 +75,18 @@ use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
 	StateChainClient,
 };
+
+macro_rules! extract_event {
+	($events:expr, $runtime_event_variant:path, $pallet_event_variant:path, $pattern:tt, $result:expr) => {
+		if let Some($runtime_event_variant($pallet_event_variant $pattern)) = $events.iter().find(|event| {
+			matches!(event, $runtime_event_variant($pallet_event_variant { .. }))
+		}) {
+			Ok($result)
+		} else {
+			bail!("No {}({}) event was found", stringify!($runtime_event_variant), stringify!($pallet_event_variant));
+		}
+	};
+}
 
 lazy_static::lazy_static! {
 	static ref API_VERSION: SemVer = SemVer {
@@ -235,15 +247,29 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		amount: RedemptionAmount,
 		address: EthereumAddress,
 		executor: Option<EthereumAddress>,
-	) -> Result<H256> {
-		let call = RuntimeCall::from(pallet_cf_funding::Call::redeem { amount, address, executor });
+	) -> Result<RedemptionOutcome> {
+		let extrinsic_data = self
+			.submit_signed_extrinsic_with_dry_run(pallet_cf_funding::Call::redeem {
+				amount,
+				address,
+				executor,
+			})
+			.await?
+			.until_finalized()
+			.await?;
 
-		Ok(self
-			.submit_signed_extrinsic_with_dry_run(call)
-			.await?
-			.until_in_block()
-			.await?
-			.tx_hash)
+		extract_event!(
+			extrinsic_data.events,
+			state_chain_runtime::RuntimeEvent::Funding,
+			pallet_cf_funding::Event::RedemptionRequested,
+			{ account_id, amount, .. },
+			RedemptionOutcome {
+				source_account_id: account_id.clone(),
+				redeem_address: address,
+				amount: *amount,
+				tx_hash: extrinsic_data.tx_hash
+			}
+		)
 	}
 
 	async fn bind_redeem_address(&self, address: EthereumAddress) -> Result<H256> {
@@ -319,6 +345,35 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		println!("Vanity name set at tx {tx_hash:#x}.");
 		Ok(())
 	}
+
+	async fn request_rebalance(
+		&self,
+		amount: RedemptionAmount,
+		redemption_address: Option<EthereumAddress>,
+		recipient_account_id: AccountId32,
+	) -> Result<RebalanceOutcome> {
+		let extrinsic_data = self
+			.submit_signed_extrinsic_with_dry_run(pallet_cf_funding::Call::rebalance {
+				amount,
+				recipient_account_id,
+				redemption_address,
+			})
+			.await?
+			.until_finalized()
+			.await?;
+
+		extract_event!(
+			extrinsic_data.events,
+			state_chain_runtime::RuntimeEvent::Funding,
+			pallet_cf_funding::Event::Rebalance,
+			{ source_account_id, recipient_account_id, amount, },
+			RebalanceOutcome {
+				source_account_id: source_account_id.clone(),
+				recipient_account_id: recipient_account_id.clone(),
+				amount: *amount
+			}
+		)
+	}
 }
 
 #[async_trait]
@@ -337,18 +392,6 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 
 		Ok(())
 	}
-}
-
-macro_rules! extract_event {
-    ($events:expr, $runtime_event_variant:path, $pallet_event_variant:path, $pattern:tt, $result:expr) => {
-        if let Some($runtime_event_variant($pallet_event_variant $pattern)) = $events.iter().find(|event| {
-            matches!(event, $runtime_event_variant($pallet_event_variant { .. }))
-        }) {
-        	Ok($result)
-        } else {
-            bail!("No {}({}) event was found", stringify!($runtime_event_variant), stringify!($pallet_event_variant));
-        }
-    };
 }
 
 #[async_trait]
