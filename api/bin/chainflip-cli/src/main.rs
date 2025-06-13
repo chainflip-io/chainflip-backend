@@ -31,7 +31,7 @@ use cf_utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 use chainflip_api::{
 	self as api,
 	lp::LiquidityDepositChannelDetails,
-	primitives::{state_chain_runtime, WaitFor, FLIPPERINOS_PER_FLIP},
+	primitives::{state_chain_runtime, FLIPPERINOS_PER_FLIP},
 	rpc_types::{RebalanceOutcome, RedemptionAmount, RedemptionOutcome},
 	BrokerApi,
 };
@@ -101,13 +101,12 @@ async fn run_cli() -> Result<()> {
 					} => {
 						let LiquidityDepositChannelDetails { deposit_address, deposit_chain_expiry_block } = api
 							.lp_api()
-							.request_liquidity_deposit_address(
+							.request_liquidity_deposit_address_v2(
 								asset,
-								WaitFor::InBlock,
 								boost_fee,
 							)
 							.await?
-							.unwrap_details();
+							.response;
 						println!("Deposit Address: {deposit_address}\nDeposit chain expiry block: {deposit_chain_expiry_block}");
 					},
 

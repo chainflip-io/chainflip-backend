@@ -32,7 +32,7 @@ use cf_chains::{
 use cf_node_client::events_decoder;
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
 	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
 use cf_rpc_apis::{
@@ -1128,6 +1128,8 @@ where
 
 #[derive(thiserror::Error, Debug)]
 pub enum CfApiError {
+	#[error("Header not found for block {0:?}")]
+	HeaderNotFoundError(Hash),
 	#[error(transparent)]
 	ClientError(#[from] jsonrpsee::core::client::Error),
 	#[error("{0:?}")]
@@ -1180,6 +1182,7 @@ impl From<CfApiError> for RpcApiError {
 			},
 			CfApiError::ErrorObject(object) => RpcApiError::ErrorObject(object),
 			CfApiError::OtherError(error) => RpcApiError::ErrorObject(internal_error(error)),
+			CfApiError::HeaderNotFoundError(_) => RpcApiError::ErrorObject(internal_error(error)),
 			CfApiError::SubstrateClientError(error) =>
 				RpcApiError::ErrorObject(call_error(error, CfErrorCode::SubstrateClientError)),
 			CfApiError::PoolClientError(error) =>
@@ -2008,6 +2011,23 @@ where
 
 		results_for_each_asset.map(|inner| inner.into_iter().flatten().collect())
 	}
+}
+
+/// Returns the preallocated channel IDs for a given account and chain on the last finalized block.
+fn get_preallocated_channels<C, B, BE>(
+	rpc_backend: &CustomRpcBackend<C, B, BE>,
+	account_id: AccountId32,
+	chain: ForeignChain,
+) -> RpcResult<Vec<ChannelId>>
+where
+	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
+	BE: Backend<B> + Send + Sync + 'static,
+	C: sp_api::ProvideRuntimeApi<B> + HeaderBackend<B> + Send + Sync + 'static,
+	C::Api: CustomRuntimeApi<B>,
+{
+	rpc_backend.with_runtime_api(Some(rpc_backend.client.info().finalized_hash), |api, hash| {
+		api.cf_get_preallocated_deposit_channels(hash, account_id, chain)
+	})
 }
 
 #[cfg(test)]

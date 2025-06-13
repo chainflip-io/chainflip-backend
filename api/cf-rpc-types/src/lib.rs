@@ -20,7 +20,7 @@ use cf_amm::common::{PoolPairsMap, Side};
 use cf_chains::{
 	address::AddressString, address::ToHumanreadableAddress, Chain, ChannelRefundParameters,
 };
-use cf_primitives::{AccountId, Asset, FlipBalance, Tick};
+use cf_primitives::{AccountId, Asset, BlockNumber, FlipBalance, Tick, TxIndex};
 use frame_support::{Deserialize, Serialize};
 use std::ops::Range;
 
@@ -33,6 +33,14 @@ pub use state_chain_runtime::{chainflip::BlockUpdate, Hash};
 pub mod broker;
 /// Defines all LP related RPC types
 pub mod lp;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ExtrinsicResponse<Response> {
+	pub block_number: BlockNumber,
+	pub block_hash: Hash,
+	pub tx_index: TxIndex,
+	pub response: Response,
+}
 
 pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 

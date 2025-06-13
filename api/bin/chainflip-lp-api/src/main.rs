@@ -19,7 +19,7 @@ use cf_primitives::{
 	chains::{Arbitrum, Solana},
 	ApiWaitForResult, BasisPoints, BlockNumber, DcaParameters, EgressId, Price, WaitFor,
 };
-use cf_rpc_apis::{lp::LpRpcApiServer, RpcApiError, RpcResult};
+use cf_rpc_apis::{lp::LpRpcApiServer, ExtrinsicResponse, RpcApiError, RpcResult};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	rpc::NumberOrHex,
@@ -72,33 +72,34 @@ impl RpcServerImpl {
 
 #[async_trait]
 impl LpRpcApiServer for RpcServerImpl {
-	async fn request_liquidity_deposit_address_legacy(
-		&self,
-		asset: Asset,
-		wait_for: Option<WaitFor>,
-		boost_fee: Option<BasisPoints>,
-	) -> RpcResult<ApiWaitForResult<AddressString>> {
-		Ok(self
-			.api
-			.lp_api()
-			.request_liquidity_deposit_address(asset, wait_for.unwrap_or_default(), boost_fee)
-			.await
-			.map(|wait_for_result| {
-				wait_for_result.map_details(|response| response.deposit_address)
-			})?)
-	}
-
 	async fn request_liquidity_deposit_address(
 		&self,
 		asset: Asset,
 		wait_for: Option<WaitFor>,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ApiWaitForResult<LiquidityDepositChannelDetails>> {
+		let wait_for_param = match wait_for {
+			Some(WaitFor::InBlock) => Err(anyhow!(
+				"InBlock waiting is not allowed for this method. \
+				Use request_liquidity_deposit_address_v2 instead."
+			))?,
+			Some(value) => value,
+			None => WaitFor::Finalized,
+		};
+
 		Ok(self
 			.api
 			.lp_api()
-			.request_liquidity_deposit_address(asset, wait_for.unwrap_or_default(), boost_fee)
+			.request_liquidity_deposit_address(asset, wait_for_param, boost_fee)
 			.await?)
+	}
+
+	async fn request_liquidity_deposit_address_v2(
+		&self,
+		asset: Asset,
+		boost_fee: Option<BasisPoints>,
+	) -> RpcResult<ExtrinsicResponse<LiquidityDepositChannelDetails>> {
+		Ok(self.api.lp_api().request_liquidity_deposit_address_v2(asset, boost_fee).await?)
 	}
 
 	async fn register_liquidity_refund_address(
