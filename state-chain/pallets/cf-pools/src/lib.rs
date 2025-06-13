@@ -1226,12 +1226,12 @@ impl<T: Config> PoolApi for Pallet<T> {
 						// We don't need all the details, so just map the relevant ones
 						.map(|(order_id, tick)| {
 							(
-								*order_id,
-								cf_traits::LimitOrder {
-									tick: *tick,
-									// Find the amount my looking in the pool state for the position
-									sell_amount: pool
-										.pool_state
+								*tick,
+								(
+									*order_id,
+									// Find the amount by looking in the pool state for the
+									// position
+									pool.pool_state
 										.limit_order(
 											&(account.clone(), *order_id),
 											Side::Sell,
@@ -1241,7 +1241,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 											position_info.amount.saturated_into()
 										})
 										.unwrap_or(0),
-								},
+								),
 							)
 						})
 						.collect()
@@ -1256,11 +1256,10 @@ impl<T: Config> PoolApi for Pallet<T> {
 						.iter()
 						.map(|(order_id, tick)| {
 							(
-								*order_id,
-								cf_traits::LimitOrder {
-									tick: *tick,
-									sell_amount: pool
-										.pool_state
+								*tick,
+								(
+									*order_id,
+									pool.pool_state
 										.limit_order(
 											&(account.clone(), *order_id),
 											Side::Buy,
@@ -1270,7 +1269,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 											position_info.amount.saturated_into()
 										})
 										.unwrap_or(0),
-								},
+								),
 							)
 						})
 						.collect()

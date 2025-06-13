@@ -28,7 +28,6 @@ mod mock;
 mod tests;
 
 use cf_primitives::{Asset, AssetAmount, StablecoinDefaults, Tick, STABLE_ASSET};
-use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
 	IncreaseOrDecrease, LpOrdersWeightsProvider, LpRegistration, OrderId, PoolApi, Side,
@@ -340,12 +339,10 @@ pub mod pallet {
 						let sum_quote = balance_quote +
 							open_orders_quote
 								.iter()
-								.fold(0, |acc, (_, order)| acc + order.sell_amount);
+								.fold(0, |acc, (_, (_, amount))| acc + amount);
 
 						let sum_base = balance_base +
-							open_orders_base
-								.iter()
-								.fold(0, |acc, (_, order)| acc + order.sell_amount);
+							open_orders_base.iter().fold(0, |acc, (_, (_, amount))| acc + amount);
 
 						let new_orders = Self::inventory_base_strategy_logic(
 							base_asset,
@@ -367,100 +364,112 @@ pub mod pallet {
 								.unwrap_or(u128::MAX),
 							1,
 						);
+						println!("New orders: {:?}", new_orders);
 						let orders = [
-							(Side::Buy, new_orders.base, open_orders_base, base_threshold),
-							(Side::Sell, new_orders.quote, open_orders_quote, quote_threshold),
+							(Side::Sell, new_orders.base, open_orders_base, base_threshold),
+							(Side::Buy, new_orders.quote, open_orders_quote, quote_threshold),
 						];
-						orders.iter().for_each(|(side, new_orders, open_orders, _)| {
-							[STRATEGY_ORDER_ID_0, STRATEGY_ORDER_ID_1].iter().for_each(
-								|order_id| {
-									// Do closing of orders first, so we have the funds for
-									// creating the orders later
-									match (new_orders.get(&order_id), open_orders.get(&order_id)) {
-										(None, Some(open_order)) => {
-											println!(
-												"Closing order {:?} for with tick {} and amount {}",
-												order_id, open_order.tick, open_order.sell_amount
-											);
-											// Close the order
-											let _result = T::PoolApi::cancel_limit_order(
-												&strategy_id,
-												base_asset,
-												STABLE_ASSET,
-												*side,
-												*order_id,
-												open_order.tick,
-											);
-										},
-										_ => {
-											// Other actions will be done later
-										},
-									}
-								},
-							);
-						});
-						orders.iter().for_each(|(side, new_orders, open_orders, threshold)| {
-							[STRATEGY_ORDER_ID_0, STRATEGY_ORDER_ID_1].iter().for_each(|order_id| {
-								println!(
-									"new orders: {:?}, open orders: {:?}, threshold: {}",
-									new_orders, open_orders, threshold
-								);
-								match (new_orders.get(&order_id), open_orders.get(&order_id)) {
-									(Some(new_order), Some(open_order))
-										if new_order.tick != open_order.tick ||
+						#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
+						// First we want to remove any order before creating updated/new ones
+						enum LoopAction {
+							Removal,
+							Creation,
+						}
+						[LoopAction::Removal, LoopAction::Creation].into_iter().for_each(
+							|action| {
+								println!("Processing orders for action: {:?}", action);
+								orders.iter().for_each(
+									|(side, new_orders, open_orders, threshold)| {
+										let ticks = new_orders
+											.keys()
+											.chain(open_orders.keys())
+											.collect::<BTreeSet<_>>();
+										println!("--ticks: {:?}", ticks);
+										ticks.into_iter().for_each(|tick| {
+											println!("Processing tick: {:?}", tick);
+											match (new_orders.get(&tick), open_orders.get(&tick)) {
+									(Some((new_order_id, new_amount)), Some((open_order_id, open_amount)))
+										if
 											// Only if the difference in amount is greater than the threshold to update
-											(new_order.sell_amount as i128 -
-												open_order.sell_amount as i128)
-												.abs() as u128 > *threshold =>
-									{
-										println!(
-											"Updating order {:?} for with new tick {} and amount {}",
-											order_id, new_order.tick, new_order.sell_amount
-										);
-										// Close the old order and create a new one at the new
-										// tick/amount
-										let _result = T::PoolApi::cancel_limit_order(
-											&strategy_id,
-											base_asset,
-											STABLE_ASSET,
-											*side,
-											*order_id,
-											open_order.tick,
-										);
-										let _result = T::PoolApi::update_limit_order(
-											&strategy_id,
-											base_asset,
-											STABLE_ASSET,
-											*side,
-											*order_id,
-											Some(new_order.tick),
-											IncreaseOrDecrease::Increase(new_order.sell_amount),
-										);
+											(*new_amount as i128 - *open_amount as i128)
+												.abs() as u128 >= *threshold =>
+											{
+												// Close the old order and create a new one at the new
+												// tick/amount
+												match action {
+													LoopAction::Removal => {
+														println!(
+															"Removing order {:?} for with tick {} and amount {}",
+															open_order_id, tick, open_amount
+														);
+														let _result = T::PoolApi::cancel_limit_order(
+															&strategy_id,
+															base_asset,
+															STABLE_ASSET,
+															*side,
+															*open_order_id,
+															*tick,
+														);
+													},
+													LoopAction::Creation => {
+														println!(
+															"Updating order {:?} for with tick {} and amount {}->{}",
+															new_order_id, tick, open_amount, new_amount,
+														);
+														let _result = T::PoolApi::update_limit_order(
+															&strategy_id,
+														base_asset,
+														STABLE_ASSET,
+														*side,
+														*new_order_id,
+														Some(*tick),
+														IncreaseOrDecrease::Increase(*new_amount),
+														);
+													}
+												}
+											},
+											(Some((new_order_id, new_amount)), None)
+												if *new_amount >= *threshold  && action == LoopAction::Creation =>
+											{
+												println!(
+													"Creating new {:?} order {:?} for strategy with tick {} and amount {}", side,
+													new_order_id, tick, new_amount
+												);
+												// Create a new order
+												let _result = T::PoolApi::update_limit_order(
+													&strategy_id,
+													base_asset,
+													STABLE_ASSET,
+													*side,
+													*new_order_id,
+													Some(*tick),
+													IncreaseOrDecrease::Increase(*new_amount),
+												);
+											},
+											(None, Some((order_id, amount))) if action == LoopAction::Removal => {
+												println!(
+													"Closing order {:?} for with tick {} and amount {}",
+													order_id, tick, amount
+												);
+												// Close the order
+												let _result = T::PoolApi::cancel_limit_order(
+													&strategy_id,
+													base_asset,
+													STABLE_ASSET,
+													*side,
+													*order_id,
+													*tick,
+												);
+											},
+											_ => {
+												// No action needed
+											},
+										}
+										})
 									},
-									(Some(desired_order), None)
-										if desired_order.sell_amount > *threshold =>
-									{
-										println!(
-											"Creating new {:?} order {:?} for strategy with tick {} and amount {}", side,
-											order_id, desired_order.tick, desired_order.sell_amount
-										);
-										// Create a new order
-										let _result = T::PoolApi::update_limit_order(
-											&strategy_id,
-											base_asset,
-											STABLE_ASSET,
-											*side,
-											*order_id,
-											Some(desired_order.tick),
-											IncreaseOrDecrease::Increase(desired_order.sell_amount),
-										);
-									},
-									_ => {
-										// No action needed
-									},
-								}
-							})
-						});
+								);
+							},
+						);
 					},
 				}
 			}
@@ -734,11 +743,11 @@ impl<T: Config> Pallet<T> {
 		let mut desired_orders =
 			cf_traits::LimitOrders { base: BTreeMap::new(), quote: BTreeMap::new() };
 
-		let half_total = (quote_amount + base_amount) / 2;
+		let half_total = (quote_amount.saturating_add(base_amount)) / 2;
 
 		[
-			(base_asset, base_amount, min_buy_tick, max_buy_tick),
-			(STABLE_ASSET, quote_amount, min_sell_tick, max_sell_tick),
+			(base_asset, base_amount, min_sell_tick, max_sell_tick),
+			(STABLE_ASSET, quote_amount, min_buy_tick, max_buy_tick),
 		]
 		.into_iter()
 		.for_each(|(asset, amount, tick_1, tick_2)| {
@@ -749,80 +758,83 @@ impl<T: Config> Pallet<T> {
 			};
 
 			// Simple order logic:
-			if amount > half_total {
-				println!(
-					"Desired order 1 is {} at tick {} with amount {}",
-					asset,
-					if asset == base_asset {
-						(tick_1 + tick_2) / 2
+			if amount >= half_total {
+				// Round the tick defensively
+				let tick = if asset == base_asset {
+					// Round up
+					let tick = tick_1 + tick_2;
+					if tick < 0 {
+						(tick) / 2
 					} else {
 						(tick_1 + tick_2 + 1) / 2
-					},
-					half_total
-				);
-				order_list.insert(
-					STRATEGY_ORDER_ID_1,
-					cf_traits::LimitOrder {
-						tick: if asset == base_asset {
-							(tick_1 + tick_2) / 2
-						} else {
-							(tick_1 + tick_2 + 1) / 2
-						},
-						sell_amount: half_total,
-					},
-				);
+					}
+				} else {
+					// Round down
+					let tick = tick_1 + tick_2;
+					if tick < 0 {
+						(tick - 1) / 2
+					} else {
+						(tick_1 + tick_2) / 2
+					}
+				};
+				println!("Desired order {} at tick {} with amount {}", asset, tick, half_total);
+				order_list.insert(tick, (STRATEGY_ORDER_ID_1, half_total));
 			}
 
 			// Dynamic order logic:
-			let remaining_amount = if amount <= half_total { amount } else { amount % half_total };
+			let remaining_amount = amount % half_total;
 			if remaining_amount > 0 {
-				let fraction_of_total = if base_amount + quote_amount == 0 {
+				let fraction_of_total = if base_amount.saturating_add(quote_amount) == 0 {
 					Permill::zero()
 				} else {
 					if asset == base_asset {
-						Permill::from_rational(amount, base_amount + quote_amount)
+						Permill::one() -
+							Permill::from_rational(
+								amount,
+								base_amount.saturating_add(quote_amount),
+							)
 					} else {
-						Permill::one() - Permill::from_rational(amount, base_amount + quote_amount)
+						Permill::from_rational(amount, base_amount.saturating_add(quote_amount))
 					}
 				};
 				let tick = (fraction_of_total * (((tick_2 - tick_1).abs()) as u32)) as i32 + tick_1;
-				order_list.insert(
-					STRATEGY_ORDER_ID_0,
-					cf_traits::LimitOrder { tick, sell_amount: remaining_amount },
-				);
+				order_list
+					.entry(tick)
+					.and_modify(|(_order_id, amount)| *amount += remaining_amount)
+					.or_insert((STRATEGY_ORDER_ID_0, remaining_amount));
 				println!(
-					"Desired order 0 is {} at tick {} with amount {}",
+					"Desired order {} at tick {} with amount {}",
 					asset, tick, remaining_amount
 				);
 			}
 		});
 
 		// Sanity check that the orders are within the ranges
-		if desired_orders
-			.base
-			.values()
-			.any(|order| order.tick < min_buy_tick && order.tick > max_buy_tick) ||
-			desired_orders
-				.quote
-				.values()
-				.any(|order| order.tick < min_sell_tick && order.tick > max_sell_tick)
-		{
-			log_or_panic!("Inventory-based strategy logic produced orders outside of the specified tick ranges.");
-			desired_orders.base.clear();
-			desired_orders.quote.clear();
-		}
+		// if desired_orders
+		// 	.base
+		// 	.values()
+		// 	.any(|order| order.tick < min_buy_tick && order.tick > max_buy_tick) ||
+		// 	desired_orders
+		// 		.quote
+		// 		.values()
+		// 		.any(|order| order.tick < min_sell_tick && order.tick > max_sell_tick)
+		// {
+		// 	log_or_panic!("Inventory-based strategy logic produced orders outside of the specified
+		// tick ranges."); 	desired_orders.base.clear();
+		// 	desired_orders.quote.clear();
+		// }
 
 		// Sanity check the total amount in orders
-		if base_amount + quote_amount !=
-			desired_orders.base.values().fold(0, |acc, order| acc + order.sell_amount) +
-				desired_orders.quote.values().fold(0, |acc, order| acc + order.sell_amount)
-		{
-			log_or_panic!(
-				"Inventory-based strategy logic produced orders with incorrect total amount."
-			);
-			desired_orders.base.clear();
-			desired_orders.quote.clear();
-		}
+		// if base_amount + quote_amount !=
+		// 	desired_orders.base.values().fold(0, |acc, order| acc + order.sell_amount) +
+		// 		desired_orders.quote.values().fold(0, |acc, order| acc + order.sell_amount)
+		// {
+		// 	log_or_panic!(
+		// 		"Inventory-based strategy logic produced orders with incorrect total amount."
+		// 	);
+		// 	desired_orders.base.clear();
+		// 	desired_orders.quote.clear();
+		// }
 
 		desired_orders
 	}

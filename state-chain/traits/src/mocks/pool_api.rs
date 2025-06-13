@@ -14,7 +14,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 
 use crate::{
-	mocks::balance_api::MockBalance, BalanceApi, IncreaseOrDecrease, LimitOrder, LimitOrders,
+	mocks::balance_api::MockBalance, BalanceApi, IncreaseOrDecrease, LimitOrders,
 	LpOrdersWeightsProvider, OrderId, PoolApi,
 };
 
@@ -107,17 +107,35 @@ impl PoolApi for MockPoolApi {
 			let limit_orders = limit_orders.get_or_insert_default();
 
 			let key = (base_asset, *account, side, id);
+			let amount_change = match amount_change {
+				IncreaseOrDecrease::Increase(_) => amount_change,
+				// Support for cancel order decreasing by u128::MAX
+				IncreaseOrDecrease::Decrease(amount) => {
+					let max_amount = limit_orders.get(&key).unwrap().amount;
+					IncreaseOrDecrease::Decrease(amount.min(max_amount))
+				},
+			};
 
 			let order = limit_orders.remove(&key);
 
 			// Handle balance changes
 			let sold_asset = if side == Side::Buy { quote_asset } else { base_asset };
+			println!(
+				"------- Updating limit order: account: {}, base_asset: {}, quote_asset: {}, side: {:?}, id: {}, tick: {:?}, amount_change: {:?}",
+				account, base_asset, quote_asset, side, id, option_tick, amount_change
+			);
 			match amount_change {
 				IncreaseOrDecrease::Increase(amount) =>
 					MockBalance::try_debit_account(account, sold_asset, amount).unwrap(),
 				IncreaseOrDecrease::Decrease(amount) =>
 					MockBalance::credit_account(account, sold_asset, amount),
 			};
+			println!(
+				"Account {} balance for asset {}: {}",
+				account,
+				sold_asset,
+				MockBalance::get_balance(account, sold_asset)
+			);
 
 			let maybe_order = match order {
 				None => {
@@ -183,8 +201,8 @@ impl PoolApi for MockPoolApi {
 				.into_iter()
 				.filter_map(
 					|((base, account_id, side, order_id), TickAndAmount { tick, amount })| {
-						if account_id == account && side == Side::Buy && base_asset == base {
-							Some((order_id, LimitOrder { sell_amount: amount, tick }))
+						if account_id == account && side == Side::Sell && base_asset == base {
+							Some((tick, (order_id, amount)))
 						} else {
 							None
 						}
@@ -196,8 +214,8 @@ impl PoolApi for MockPoolApi {
 				.into_iter()
 				.filter_map(
 					|((base, account_id, side, order_id), TickAndAmount { tick, amount })| {
-						if account_id == account && side == Side::Sell && base_asset == base {
-							Some((order_id, LimitOrder { sell_amount: amount, tick }))
+						if account_id == account && side == Side::Buy && base_asset == base {
+							Some((tick, (order_id, amount)))
 						} else {
 							None
 						}

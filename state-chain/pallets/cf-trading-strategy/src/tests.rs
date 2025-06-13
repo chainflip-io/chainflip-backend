@@ -1044,9 +1044,10 @@ mod safe_mode {
 
 mod inventory_based_strategy {
 	use super::*;
-	use cf_traits::{LimitOrder, LimitOrders};
+	use cf_traits::LimitOrders;
 
 	#[test]
+	// TODO JAMIE: Fuzzing for this test instead.
 	fn logic_test() {
 		#[track_caller]
 		fn test_logic(
@@ -1082,8 +1083,8 @@ mod inventory_based_strategy {
 			10,
 			LimitOrders {
 				// We expect one order each side at the average tick of each range
-				base: BTreeMap::from_iter([(1, LimitOrder { tick: -5, sell_amount: 1000 })]),
-				quote: BTreeMap::from_iter([(1, LimitOrder { tick: 5, sell_amount: 1000 })]),
+				base: BTreeMap::from_iter([(5, (1, 1000))]),
+				quote: BTreeMap::from_iter([(-5, (1, 1000))]),
 			},
 		);
 
@@ -1097,12 +1098,9 @@ mod inventory_based_strategy {
 			10,
 			LimitOrders {
 				// One somewhat defensive order
-				base: BTreeMap::from_iter([(0, LimitOrder { tick: -8, sell_amount: 2400 })]),
+				base: BTreeMap::from_iter([(8, (0, 2400))]),
 				// One average and one somewhat aggressive order
-				quote: BTreeMap::from_iter([
-					(1, LimitOrder { tick: 5, sell_amount: 5000 }),
-					(0, LimitOrder { tick: 2, sell_amount: 2600 }),
-				]),
+				quote: BTreeMap::from_iter([(-5, (1, 5000)), (-2, (0, 2600))]),
 			},
 		);
 		// 76/24 split
@@ -1114,11 +1112,8 @@ mod inventory_based_strategy {
 			0,
 			10,
 			LimitOrders {
-				base: BTreeMap::from_iter([
-					(1, LimitOrder { tick: -5, sell_amount: 5000 }),
-					(0, LimitOrder { tick: -2, sell_amount: 2600 }),
-				]),
-				quote: BTreeMap::from_iter([(0, LimitOrder { tick: 8, sell_amount: 2400 })]),
+				base: BTreeMap::from_iter([(5, (1, 5000)), (2, (0, 2600))]),
+				quote: BTreeMap::from_iter([(-8, (0, 2400))]),
 			},
 		);
 
@@ -1126,18 +1121,15 @@ mod inventory_based_strategy {
 		test_logic(
 			10,
 			990,
-			-10,
+			-5,
 			0,
 			0,
-			5,
+			10,
 			LimitOrders {
 				// One max defensive order
-				base: BTreeMap::from_iter([(0, LimitOrder { tick: -10, sell_amount: 10 })]),
+				base: BTreeMap::from_iter([(10, (0, 10))]),
 				// One average and one max aggressive order
-				quote: BTreeMap::from_iter([
-					(1, LimitOrder { tick: 3, sell_amount: 500 }),
-					(0, LimitOrder { tick: 0, sell_amount: 490 }),
-				]),
+				quote: BTreeMap::from_iter([(-3, (1, 500)), (0, (0, 490))]),
 			},
 		);
 
@@ -1150,11 +1142,8 @@ mod inventory_based_strategy {
 			0,
 			5,
 			LimitOrders {
-				base: BTreeMap::from_iter([(0, LimitOrder { tick: 1, sell_amount: 2400 })]),
-				quote: BTreeMap::from_iter([
-					(1, LimitOrder { tick: 3, sell_amount: 5000 }),
-					(0, LimitOrder { tick: 1, sell_amount: 2600 }),
-				]),
+				base: BTreeMap::from_iter([(4, (0, 2400))]),
+				quote: BTreeMap::from_iter([(2, (1, 5000)), (3, (0, 2600))]),
 			},
 		);
 
@@ -1168,11 +1157,8 @@ mod inventory_based_strategy {
 			1,
 			LimitOrders {
 				// Should always round defensively
-				base: BTreeMap::from_iter([(0, LimitOrder { tick: -1, sell_amount: 2400 })]),
-				quote: BTreeMap::from_iter([
-					(1, LimitOrder { tick: 1, sell_amount: 5000 }),
-					(0, LimitOrder { tick: 0, sell_amount: 2600 }),
-				]),
+				base: BTreeMap::from_iter([(1, (0, 2400))]),
+				quote: BTreeMap::from_iter([(-1, (1, 5000)), (0, (0, 2600))]),
 			},
 		);
 	}
@@ -1223,7 +1209,7 @@ fn inventory_based_strategy_update_threshold() {
 						base_asset: BASE_ASSET,
 						account_id: strategy_id,
 						side: Side::Buy,
-						order_id: STRATEGY_ORDER_ID_0,
+						order_id: STRATEGY_ORDER_ID_1,
 						tick: -5,
 						amount: STARTING_AMOUNT
 					},
@@ -1231,7 +1217,7 @@ fn inventory_based_strategy_update_threshold() {
 						base_asset: BASE_ASSET,
 						account_id: strategy_id,
 						side: Side::Sell,
-						order_id: STRATEGY_ORDER_ID_0,
+						order_id: STRATEGY_ORDER_ID_1,
 						tick: 5,
 						amount: STARTING_AMOUNT
 					}
@@ -1254,7 +1240,7 @@ fn inventory_based_strategy_update_threshold() {
 						base_asset: BASE_ASSET,
 						account_id: strategy_id,
 						side: Side::Buy,
-						order_id: STRATEGY_ORDER_ID_0,
+						order_id: STRATEGY_ORDER_ID_1,
 						tick: -5,
 						amount: STARTING_AMOUNT
 					},
@@ -1262,7 +1248,7 @@ fn inventory_based_strategy_update_threshold() {
 						base_asset: BASE_ASSET,
 						account_id: strategy_id,
 						side: Side::Sell,
-						order_id: STRATEGY_ORDER_ID_0,
+						order_id: STRATEGY_ORDER_ID_1,
 						tick: 5,
 						amount: STARTING_AMOUNT
 					}
@@ -1286,25 +1272,25 @@ fn inventory_based_strategy_update_threshold() {
 						side: Side::Buy,
 						order_id: STRATEGY_ORDER_ID_1,
 						tick: -5,
-						amount: STARTING_AMOUNT
-					},
-					MockLimitOrder {
-						base_asset: BASE_ASSET,
-						account_id: strategy_id,
-						side: Side::Buy,
-						order_id: STRATEGY_ORDER_ID_0,
-						tick: -4,
-						amount: THRESHOLD
+						amount: STARTING_AMOUNT + THRESHOLD
 					},
 					MockLimitOrder {
 						base_asset: BASE_ASSET,
 						account_id: strategy_id,
 						side: Side::Sell,
-						order_id: STRATEGY_ORDER_ID_0,
-						tick: 6,
+						order_id: STRATEGY_ORDER_ID_1,
+						tick: 5,
 						amount: STARTING_AMOUNT
-					}
+					},
 				]
 			);
 		});
+}
+
+#[test]
+fn my_test() {
+	let tick_1: Tick = 0;
+	let tick_2: Tick = 10;
+	let test = (tick_1 + tick_2 - 1) / 2;
+	println!("Test tick: {}", test);
 }

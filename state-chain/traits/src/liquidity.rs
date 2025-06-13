@@ -186,14 +186,15 @@ pub trait BoostApi {
 	fn boost_pool_account_balances(who: &Self::AccountId) -> Self::AssetMap;
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct LimitOrder {
-	pub tick: Tick,
-	pub sell_amount: AssetAmount,
-}
+// TODO JAMIE: delete this?
+// #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+// pub struct LimitOrder {
+// 	pub tick: Tick,
+// 	pub sell_amount: AssetAmount,
+// }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct LimitOrders {
-	pub base: BTreeMap<OrderId, LimitOrder>,
-	pub quote: BTreeMap<OrderId, LimitOrder>,
+	pub base: BTreeMap<Tick, (OrderId, AssetAmount)>,
+	pub quote: BTreeMap<Tick, (OrderId, AssetAmount)>,
 }
