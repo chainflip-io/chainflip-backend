@@ -1,10 +1,12 @@
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use core::{
+	cmp::min,
 	iter::Step,
 	ops::{Range, RangeBounds, RangeInclusive},
 };
 use derive_where::derive_where;
+use itertools::Itertools;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{
@@ -123,29 +125,38 @@ impl<T: BWTypes> ElectionTracker<T> {
 		// schedule at most `max_new_elections`
 		let max_new_elections = max_ongoing.saturating_sub(self.ongoing.len());
 
+		let opti_elections = || iter::once((self.seen_heights_below, Optimistic));
+
+		let all_block_heights = self
+			.queued_safe_elections
+			.get_all_heights()
+			.into_iter()
+			.chain(self.queued_hash_elections.keys().cloned())
+			.chain(opti_elections().map(|(height, _)| height));
+
+		let new_elections_count = all_block_heights
+			.take_while(|height| {
+				safemode == SafeModeStatus::Disabled ||
+					*height <= self.highest_ever_ongoing_election
+			})
+			.take(max_new_elections)
+			.count();
+
 		let safe_elections = self
 			.queued_safe_elections
-			.extract(max_new_elections)
-			.into_iter()
+			.extract_lazily()
 			.map(|height| (height, SafeBlockHeight));
 
 		let hash_elections = self
 			.queued_hash_elections
 			.extract_if(|_, _| true)
 			.map(|(height, hash)| (height, ByHash(hash)));
-		let opti_elections = iter::once((self.seen_heights_below, Optimistic));
 
 		self.ongoing.extend(
 			safe_elections
 				.chain(hash_elections)
-				.chain(opti_elections)
-				// In case of a reorg we still want to recreate elections for blocks which we had
-				// elections for previously AND were touched by the reorg
-				.take_while(|(height, _)| {
-					safemode == SafeModeStatus::Disabled ||
-						*height <= self.highest_ever_ongoing_election
-				})
-				.take(max_new_elections),
+				.chain(opti_elections())
+				.take(new_elections_count),
 		);
 
 		// Make sure that we always update the highest ever ongoing election after we have scheduled
@@ -320,7 +331,8 @@ impl<T: BWTypes> ElectionTracker<T> {
 		// If there was a reorg, remove any references to the reorged heights
 		// in the election tracker.
 		if let Some(ref removed) = progress.removed {
-			self.queued_safe_elections.remove(removed.clone());
+			self.queued_safe_elections
+				.remove(removed.start().clone()..removed.end().saturating_forward(1));
 			self.queued_hash_elections.retain(|height, _| !removed.contains(height));
 			self.ongoing.retain(|height, _| !removed.contains(height));
 		}
@@ -451,6 +463,10 @@ impl<N> Validate for CompactHeightTracker<N> {
 }
 
 impl<N: Step + Ord> CompactHeightTracker<N> {
+	pub fn extract_lazily<'a>(&'a mut self) -> CompactHeightTrackerExtract<'a, N> {
+		CompactHeightTrackerExtract { tracker: self }
+	}
+
 	pub fn extract(&mut self, max_elements: usize) -> Vec<N> {
 		let mut result = Vec::new();
 		let mut remove = Vec::new();
@@ -464,34 +480,54 @@ impl<N: Step + Ord> CompactHeightTracker<N> {
 				}
 			}
 		}
-		for i in remove {
-			self.elections.remove(i);
+		for _ in 0..self.elections.len() {
+			if self.elections.front().is_some_and(|range| range.is_empty()) {
+				self.elections.remove(0);
+			}
 		}
 		result
 	}
 
 	pub fn insert(&mut self, item: N) {
-		for r in self.elections.iter_mut().rev() {
-			let end_plus_one = N::forward(r.end.clone(), 1);
-			if item == end_plus_one {
-				r.end = end_plus_one;
-				return;
-			}
-			if r.contains(&item) {
+		if let Some(back) = self.elections.back_mut() {
+			if back.end == item {
+				back.end = N::forward(item, 1);
 				return;
 			}
 		}
 		self.elections.push_back(item.clone()..N::forward(item, 1));
 	}
 
-	pub fn remove(&mut self, range: RangeInclusive<N>) {
-		for r in self.elections.iter_mut() {
-			range_difference(r, &(range.start().clone()..N::forward(range.end().clone(), 1)))
-		}
+	pub fn remove(&mut self, remove: Range<N>) {
+		self.elections.iter_mut().for_each(|r| {
+			if r.end < remove.end {
+				r.end = min(&r.end, &remove.end).clone();
+			}
+			if r.start > remove.start {
+				r.start = max(&r.start, &remove.start).clone();
+			}
+		});
+		self.elections = self.elections.iter().filter(|r| !r.is_empty()).cloned().collect();
 	}
 
 	fn get_all_heights(&self) -> BTreeSet<N> {
 		self.elections.iter().flat_map(|r| r.clone()).collect()
+	}
+}
+
+pub struct CompactHeightTrackerExtract<'a, N> {
+	tracker: &'a mut CompactHeightTracker<N>,
+}
+
+impl<'a, N: Step> Iterator for CompactHeightTrackerExtract<'a, N> {
+	type Item = N;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let result = self.tracker.elections.front_mut().and_then(|range| range.next());
+		if self.tracker.elections.front().is_some_and(|front| front.is_empty()) {
+			self.tracker.elections.pop_front();
+		}
+		result
 	}
 }
 
