@@ -3,10 +3,9 @@ use codec::{Decode, Encode};
 use core::{
 	cmp::min,
 	iter::Step,
-	ops::{Range, RangeBounds, RangeInclusive},
+	ops::{Range, RangeInclusive},
 };
 use derive_where::derive_where;
-use itertools::Itertools;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{
