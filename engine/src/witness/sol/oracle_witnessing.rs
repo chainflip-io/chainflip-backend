@@ -189,8 +189,8 @@ mod tests {
 
 	use super::*;
 
-	// TODO: Add same test for mainnet when the `oracle_query_helper` is deployed to make sure
-	// it works and that the prefunded account is prefunded correctly.
+	// TODO: PRO-2320: Add same test for mainnet when the `oracle_query_helper` is deployed to make
+	// sure it works and that the prefunded account is prefunded correctly
 
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
