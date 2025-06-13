@@ -48,7 +48,7 @@ pub async fn get_price_feeds<SolRetryRpcClient>(
 	oracle_program_id: SolAddress,
 	feed_addresses: Vec<SolAddress>,
 	min_context_slot: Option<u64>,
-) -> Result<Vec<PriceFeedData>, anyhow::Error>
+) -> Result<(Vec<PriceFeedData>, i64, u64), anyhow::Error>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
@@ -62,16 +62,18 @@ where
 	let simulation_result =
 		sol_client.simulate_transaction(serialized_transaction, min_context_slot).await;
 
+	let query_slot = simulation_result.context.slot;
+
 	let return_data = simulation_result
 		.value
 		.return_data
 		.as_ref()
 		.ok_or_else(|| anyhow::anyhow!("Expected return data to be Some"))?;
 
-	let price_feeds = decode_query_return_data(return_data, oracle_query_helper)
+	let (price_feeds, query_timestamp) = decode_query_return_data(return_data, oracle_query_helper)
 		.map_err(|e| anyhow::anyhow!("Failed to decode the query return data: {:?}", e))?;
 
-	Ok(price_feeds)
+	Ok((price_feeds, query_timestamp, query_slot))
 }
 
 // NOTE: This builds a transaction with the default compute units (200k). This should be enough for
@@ -107,7 +109,7 @@ fn build_and_serialize_query_transaction(
 fn decode_query_return_data(
 	return_data: &UiTransactionReturnData,
 	expected_program_id: SolAddress,
-) -> Result<Vec<PriceFeedData>, anyhow::Error> {
+) -> Result<(Vec<PriceFeedData>, i64), anyhow::Error> {
 	let decoded_return_data = BASE64_STANDARD.decode(return_data.data.0.clone())?;
 	if return_data.data.1 != UiReturnDataEncoding::Base64 {
 		anyhow::bail!("Expected return data encoding to be Base64, found {:?}", return_data.data.1);
@@ -121,9 +123,17 @@ fn decode_query_return_data(
 		);
 	}
 
+	// It should always have 8 bytes for the query timestamp, followed by 4 bytes for the vector
+	// length.
+	let mut offset = 12;
+	if decoded_return_data.len() < offset {
+		anyhow::bail!("Insufficient data length for decoding");
+	}
+
+	let query_timestamp = i64::from_le_bytes(decoded_return_data[0..8].try_into()?);
+
 	// Manually deserialize return data - Vec<PriceFeedData>
-	let mut offset = 4;
-	let num_entries = u32::from_le_bytes(decoded_return_data[0..offset].try_into()?);
+	let num_entries = u32::from_le_bytes(decoded_return_data[8..offset].try_into()?);
 
 	let mut results = Vec::new();
 	for _ in 0..num_entries {
@@ -162,7 +172,7 @@ fn decode_query_return_data(
 		);
 	}
 
-	Ok(results)
+	Ok((results, query_timestamp))
 }
 
 #[cfg(test)]
@@ -179,8 +189,8 @@ mod tests {
 
 	use super::*;
 
-	// TODO: Add same test for mainnet when the `oracle_query_helper` is deployed to make sure
-	// it works and that the prefunded account is prefunded correctly.
+	// TODO: PRO-2320: Add same test for mainnet when the `oracle_query_helper` is deployed to make
+	// sure it works and that the prefunded account is prefunded correctly
 
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
@@ -208,7 +218,7 @@ mod tests {
 				let oracle_feed: SolAddress =
 					const_address("6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe");
 				let oracle_query_helper: SolAddress =
-					const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z");
+					const_address("HaAGuDMxS56xgoy9vzm1NtESKftoqpiHCysvXRULk7K7");
 
 				let serialized_transaction = build_and_serialize_query_transaction(
 					oracle_query_helper,
@@ -220,14 +230,18 @@ mod tests {
 				let simulation_result =
 					client.simulate_transaction(serialized_transaction, None).await;
 
+				let slot = simulation_result.context.slot;
+				println!("Simulation slot: {}", slot);
+
 				let return_data = simulation_result
 					.value
 					.return_data
 					.as_ref()
 					.expect("Expected return data to be Some");
 
-				let price_feeds =
+				let (price_feeds, query_timestamp) =
 					decode_query_return_data(return_data, oracle_query_helper).unwrap();
+				println!("Query Timestamp: {}", query_timestamp);
 
 				let PriceFeedData { round_id, slot, timestamp, answer, decimals, description } =
 					price_feeds.first().unwrap();
@@ -276,7 +290,7 @@ mod tests {
 					const_address("669U43LNHx7LsVj95uYksnhXUfWKDsdzVqev3V4Jpw3P"),
 				];
 				let oracle_query_helper: SolAddress =
-					const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z");
+					const_address("HaAGuDMxS56xgoy9vzm1NtESKftoqpiHCysvXRULk7K7");
 
 				let serialized_transaction = build_and_serialize_query_transaction(
 					oracle_query_helper,
@@ -294,7 +308,7 @@ mod tests {
 					.as_ref()
 					.expect("Expected return data to be Some");
 
-				let price_feeds =
+				let (price_feeds, _) =
 					decode_query_return_data(return_data, oracle_query_helper).unwrap();
 
 				for (result_index, price_feed) in price_feeds.iter().enumerate() {
@@ -356,7 +370,7 @@ mod tests {
 					.as_ref()
 					.expect("Expected return data to be Some");
 
-				let price_feeds =
+				let (price_feeds, _) =
 					decode_query_return_data(return_data, oracle_query_helper).unwrap();
 
 				let PriceFeedData { round_id, slot, timestamp, answer, decimals, description } =
