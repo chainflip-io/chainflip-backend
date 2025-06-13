@@ -30,15 +30,10 @@ defx! {
 		/// The lowest block we haven't seen yet. I.e., we have seen blocks below.
 		pub seen_heights_below: ChainBlockNumberOf<T::Chain>,
 
-		/// We always create elections until the next priority height, even if we
-		/// are in safe mode.
-		pub priority_elections_up_to: ChainBlockNumberOf<T::Chain>,
-
-		/// We need to keep track of which block heights we have scheduled elections for previously,
-		/// since in case of reorgs we have to set `priority_elections_up_to` such that these heights
-		/// are going to be queried for even in safe mode.
 		/// Since the boundary between ongoing and queued_elections is fuzzy (due to reorgs currently
-		/// ongoing elections might turn into scheduled ones), it is clearer to keep track of this separately.
+		/// ongoing elections might turn into scheduled ones), we're separately keeping track of the
+		/// block height we have ever scheduled elections for. In case of reorgs into safe-mode we're
+		/// always going to reschedule elections for heights up to this one.
 		pub highest_ever_ongoing_election: ChainBlockNumberOf<T::Chain>,
 
 		/// Block hashes we got from the BHW.
@@ -398,7 +393,6 @@ impl<T: BWTypes> Default for ElectionTracker<T> {
 	fn default() -> Self {
 		Self {
 			seen_heights_below: ChainBlockNumberOf::<T::Chain>::zero(),
-			priority_elections_up_to: ChainBlockNumberOf::<T::Chain>::zero(),
 			highest_ever_ongoing_election: ChainBlockNumberOf::<T::Chain>::zero(),
 			queued_hash_elections: Default::default(),
 			ongoing: Default::default(),
