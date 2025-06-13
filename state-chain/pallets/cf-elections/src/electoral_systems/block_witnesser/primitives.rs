@@ -487,7 +487,7 @@ impl<N: Step + Ord> CompactHeightTracker<N> {
 		self.elections = self.elections.iter().filter(|r| !r.is_empty()).cloned().collect();
 	}
 
-	fn get_all_heights(&self) -> BTreeSet<N> {
+	pub fn get_all_heights(&self) -> BTreeSet<N> {
 		self.elections.iter().flat_map(|r| r.clone()).collect()
 	}
 }

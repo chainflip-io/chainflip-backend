@@ -3,6 +3,8 @@ use super::{
 	block_processor::{BPChainProgress, BlockProcessorEvent},
 	primitives::{ElectionTracker, ElectionTrackerEvent, SafeModeStatus},
 };
+#[cfg(test)]
+use crate::electoral_systems::state_machine::state_machine::InputOf;
 use crate::electoral_systems::{
 	block_height_tracking::{
 		ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes, CommonTraits,
@@ -283,6 +285,76 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 		Ok(())
 	}
 
+	#[cfg(test)]
+	fn step_specification(
+		before: &mut Self::State,
+		input: &InputOf<Self>,
+		_output: &Self::Output,
+		settings: &Self::Settings,
+		after: &Self::State,
+	) {
+		use std::collections::BTreeSet;
+		use crate::electoral_systems::state_machine::test_utils::{BTreeMultiSet, Container};
+
+		// there should always be at most as many elections as given in the settings
+		// or more if we had more elections previously
+		assert!(
+			after.elections.ongoing.len() <=
+				sp_std::cmp::max(
+					settings.max_ongoing_elections as usize,
+					before.elections.ongoing.len()
+				),
+			"too many concurrent elections"
+		);
+
+		if before.safemode_enabled.run(()) == SafeModeStatus::Enabled {
+			assert_eq!(
+				before.elections.highest_ever_ongoing_election,
+				after.elections.highest_ever_ongoing_election,
+				"during safemode, no higher elections should be scheduled than heights that were scheduled before"
+			);
+		}
+
+		// Every block height is in a single state and isn't lost until it expires
+		let get_all_heights = |s: &Self::State| 
+			s.elections.ongoing.iter().filter(|(_, t)| **t != BWElectionType::Optimistic).map(|(h, _)| h).cloned()
+			.chain(s.elections.queued_hash_elections.keys().cloned())
+			.chain(s.elections.queued_safe_elections.get_all_heights().into_iter())
+			.chain(s.block_processor.blocks_data.keys().cloned())
+			.collect::<Vec<_>>();
+
+		let counted_heights: Container<BTreeMultiSet<_>> = get_all_heights(&after).into_iter().collect();
+
+		// we have unique heights
+		for (height, count) in counted_heights.0.0.clone() {
+			if count > 1 {
+				panic!("Got height {height:?} in total {count} times");
+			}
+		}
+
+		let new_heights = match input {
+			Either::Left(Some(progress)) => progress.headers.headers.iter().map(|block| block.block_height).collect(),
+			Either::Left(None) => todo!(),
+			Either::Right(_) => Vec::new(),
+		};
+
+		assert_eq!(
+			get_all_heights(&before).into_iter()
+				.filter(|h| *h < after.elections.seen_heights_below)
+				.chain(new_heights)
+				.collect::<BTreeSet<_>>(),
+			get_all_heights(&after).into_iter()
+				.filter(|h| *h < after.elections.seen_heights_below)
+				.collect::<BTreeSet<_>>(),
+			"wrong set of heights, before: {before:#?}, after {after:#?}, input {input:#?}"
+		);
+
+		
+
+
+		
+	}
+
 	/*
 	/// Specifiation for step function
 	#[cfg(test)]
@@ -303,29 +375,6 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			SafeModeStatus::Enabled => true,
 			SafeModeStatus::Disabled => false,
 		};
-
-		assert!(
-			// there should always be at most as many elections as given in the settings
-			// or more if we had more elections previously
-			after.elections.ongoing.len() <=
-				sp_std::cmp::max(
-					settings.max_concurrent_elections as usize,
-					before.elections.ongoing.len()
-				),
-			"too many concurrent elections"
-		);
-
-		// all new elections use the current reorg id as index
-		assert!(
-			after.elections.ongoing.iter().all(|(height, ix)| {
-				if !before.elections.ongoing.iter().contains(&(height, ix)) {
-					*ix == after.elections.reorg_id
-				} else {
-					true
-				}
-			}),
-			"new election with wrong index"
-		);
 
 		// ensure that as long as we are in safemode, `highest_priority` can increase only once
 		asserts! {

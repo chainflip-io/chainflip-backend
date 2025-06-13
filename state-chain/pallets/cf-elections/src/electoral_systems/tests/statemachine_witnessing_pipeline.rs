@@ -253,7 +253,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 					)
 				});
 
-				BW::step(&mut bw_state, Either::Left(bhw_output), &bw_settings).unwrap();
+				BW::step_and_validate(&mut bw_state, Either::Left(bhw_output), &bw_settings).unwrap();
 
 				history.extend(
 					bw_state.elections.debug_events.take_history().into_iter().map(BWTrace::ET),
@@ -285,7 +285,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 					)
 				});
 
-				BW::step(&mut bw_state, input, &bw_settings).unwrap();
+				BW::step_and_validate(&mut bw_state, input, &bw_settings).unwrap();
 
 				history.extend(
 					bw_state.elections.debug_events.take_history().into_iter().map(BWTrace::ET),
@@ -333,7 +333,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		total_outputs.into_iter().flatten().collect();
 
 	// verify that each event was emitted only one time
-	for (event, count) in counted_events.0 .0.clone() {
+	for (event, count) in counted_events.0.0.clone() {
 		if count > 1 {
 			panic!("Got event {event:?} in total {count} times           events: {printed}              bw_input_history: {}",
                 print_bw_history(&history)

@@ -125,7 +125,7 @@ pub trait Statemachine: AbstractApi + 'static {
 	/// The state transition function, it takes the state, and an input,
 	/// and assumes that both state and index are valid, and furthermore
 	/// that the input has the index `input_index(s)`.
-	fn step(s: &mut Self::State, input: InputOf<Self>, set: &Self::Settings) -> Self::Output;
+	fn step(state: &mut Self::State, input: InputOf<Self>, settings: &Self::Settings) -> Self::Output;
 
 	/// Contains an optional specification of the `step` function.
 	/// Takes a state, input and next state as arguments. During testing it is verified
@@ -138,6 +138,52 @@ pub trait Statemachine: AbstractApi + 'static {
 		_settings: &Self::Settings,
 		_after: &Self::State,
 	) {
+	}
+
+	/// Runs the step function and validates the input and state both before and after, as well as the output.
+	/// This does *not* check that the input is valid for the given state because if the SM is run as part of
+	/// an electoral system this might not always be the case.
+	#[cfg(test)]
+	fn step_and_validate(mut state: &mut Self::State, input: InputOf<Self>, settings: &Self::Settings) -> Self::Output 
+		where
+		Self::Query: sp_std::fmt::Debug + Clone + Send + PartialEq,
+		Self::Response: sp_std::fmt::Debug + Clone + Send,
+		Self::State: sp_std::fmt::Debug + Clone + Send,
+		Self::Context: sp_std::fmt::Debug + Clone + Send,
+		Self::Settings: sp_std::fmt::Debug + Clone + Send,
+		Self::Error: sp_std::fmt::Debug,
+	{
+
+		// ensure that inputs are well formed
+		assert!(
+			state.is_valid().is_ok(),
+			"input state not valid {:?}",
+			state.is_valid()
+		);
+		// backup state
+		let mut prev_state = state.clone();
+
+		// run step function and ensure that output is valid
+		let output = Self::step(&mut state, input.clone(), &settings);
+		assert!(output.is_valid().is_ok(), "step function failed");
+
+		// ensure that state is still well formed
+		assert!(
+			state.is_valid().is_ok(),
+			"state after step function is not valid ({:?})",
+			state
+		);
+
+		// ensure that step function computed valid state
+		Self::step_specification(
+			&mut prev_state,
+			&input,
+			&output,
+			&settings,
+			&state,
+		);
+
+		output
 	}
 
 	/// Given strategies `states` and `inputs` for generating arbitrary, valid values, runs the step
@@ -195,41 +241,14 @@ pub trait Statemachine: AbstractApi + 'static {
 						Either<Self::Context, (Self::Query, Self::Response)>,
 						Self::Settings,
 					)| {
-						// ensure that inputs are well formed
-						assert!(
-							state.is_valid().is_ok(),
-							"input state not valid {:?}",
-							state.is_valid()
-						);
 
 						// ensure input has correct index
 						Self::validate_input(&Self::input_index(&mut state), &input)
 							.unwrap_or_else(|_| panic!("input has wrong index: {input:?}"));
 
-						// backup state
-						let mut prev_state = state.clone();
+						// run step and verify all other properties
+						let _output = Self::step_and_validate(&mut state, input, &settings);
 
-						// run step function and ensure that output is valid
-						let output = Self::step(&mut state, input.clone(), &settings);
-						assert!(output.is_valid().is_ok(), "step function failed");
-
-						// ensure that state is still well formed
-						assert!(
-							state.is_valid().is_ok(),
-							"state after step function is not valid ({:?})",
-							state
-						);
-
-						// ensure that step function computed valid state
-						Self::step_specification(
-							&mut prev_state,
-							&input,
-							&output,
-							&settings,
-							&state,
-						);
-
-						println!("done test");
 						Ok(())
 					},
 				),
