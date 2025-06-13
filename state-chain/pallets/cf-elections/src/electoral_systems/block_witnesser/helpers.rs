@@ -60,6 +60,15 @@ macro_rules! prop_do {
     (return $($rest:tt)+) => {
         Just($($rest)+)
     };
+	($ctor:ident {
+		$($field:ident : $strat:expr,)*
+	}) => {
+		( $($strat,)* ).prop_map(
+			|($($field,)*)| $ctor {
+				$($field,)*
+			}
+		)
+	};
     ($expr:expr) => {$expr};
     (let $var:pat = $expr:expr; $($expr2:tt)+ ) => {
         {
@@ -70,6 +79,19 @@ macro_rules! prop_do {
     ($var:ident <<= $expr:expr; $($expr2:tt)+) => {
         $expr.prop_flat_map(move |$var| prop_do!($($expr2)+))
     };
+}
+
+#[macro_export]
+macro_rules! prop_construct {
+	($ctor:ident {
+		$($field:ident : $strat:expr,)*
+	}) => {
+		( $($strat,)* ).prop_map(
+			|($($field,)*)| $ctor {
+				$($field,)*
+			}
+		)
+	};
 }
 
 #[macro_export]

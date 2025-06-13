@@ -57,7 +57,7 @@ type ElectionProperties = BTreeSet<u16>;
 struct MockBlockProcessorDefinition;
 type Types = TypesFor<MockBlockProcessorDefinition>;
 
-impl Hook<HookTypeFor<(), SafeModeEnabledHook>> for Types {
+impl Hook<HookTypeFor<Self, SafeModeEnabledHook>> for Types {
 	fn run(&mut self, _input: ()) -> SafeModeStatus {
 		SafeModeStatus::Disabled
 	}

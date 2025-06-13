@@ -16,6 +16,8 @@ use sp_std::{
 };
 
 #[cfg(test)]
+use proptest::prelude::{any, Arbitrary, Strategy};
+#[cfg(test)]
 use proptest_derive::Arbitrary;
 
 use crate::electoral_systems::{
@@ -69,7 +71,7 @@ defx! {
 			.unwrap_or(true)
 		},
 
-		// The `highest_ever_ongoing_election` should always be updated when new elections are created. 
+		// The `highest_ever_ongoing_election` should always be updated when new elections are created.
 		highest_ever_ongoing_election_is_updated: {
 			this.ongoing.keys().all(|height| *height <= this.highest_ever_ongoing_election)
 		},
@@ -162,6 +164,11 @@ impl<T: BWTypes> ElectionTracker<T> {
 		// new ones
 		self.ongoing.last_key_value().inspect(|(height, _)| {
 			self.highest_ever_ongoing_election = max(self.highest_ever_ongoing_election, **height);
+		});
+
+		// clean up the optimistic block cache
+		self.optimistic_block_cache.retain(|height, _| {
+			height.saturating_forward(T::Chain::SAFETY_BUFFER) > self.seen_heights_below
 		});
 	}
 
@@ -316,8 +323,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 				},
 				// Otherwise we know that this block is correct and can be forwarded to the
 				// block processor, thus we return it here.
-				ByHash(_) | SafeBlockHeight => Some(received_data),
-				_ => None,
+				ByHash(_) | SafeBlockHeight | Governance(_) => Some(received_data),
 			})
 	}
 
@@ -386,7 +392,9 @@ impl<T: BWTypes> ElectionTracker<T> {
 	pub fn lowest_in_progress_height(&self) -> ChainBlockNumberOf<T::Chain> {
 		*self
 			.ongoing
-			.keys()
+			.iter()
+			.filter(|(_, t)| **t != BWElectionType::Optimistic)
+			.map(|(h, _)| h)
 			.chain(self.queued_hash_elections.keys())
 			.chain(self.queued_safe_elections.get_all_heights().iter())
 			.min()
@@ -406,6 +414,91 @@ impl<T: BWTypes> Default for ElectionTracker<T> {
 			debug_events: Default::default(),
 		}
 	}
+}
+
+#[cfg(test)]
+impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
+	type Parameters = ();
+
+	fn arbitrary_with(args: Self::Parameters) -> Self::Strategy {
+		use crate::{prop_construct, prop_do};
+		use frame_support::sp_runtime::SaturatedConversion;
+		use proptest::{
+			collection::{btree_map, btree_set, vec},
+			prelude::Just,
+		};
+		use sp_std::fmt::Debug;
+
+		fn block_number<N: SaturatingStep + Default + Debug + Clone>(
+			range: impl Strategy<Value = usize>,
+		) -> impl Strategy<Value = N> {
+			range.prop_map(|delta| N::default().saturating_forward(delta))
+		}
+
+		let into_block_number =
+			|x| <ChainBlockNumberOf<T::Chain> as Default>::default().saturating_forward(x);
+
+		// first we generate a btreemap of hash + safe elections
+
+		prop_do!(
+			let ongoing_below in any::<ChainBlockNumberOf<T::Chain>>();
+			let highest_seen_delta in any::<usize>();
+			let highest_ongoign_delta in any::<usize>();
+			let heights in btree_set(any::<ChainBlockNumberOf<T::Chain>>(), 0..40);
+			let currently_highest = heights.iter().max().cloned().unwrap_or(Default::default());
+			let seen_heights_below = currently_highest.saturating_forward(highest_seen_delta);
+			let highest_ever_ongoing = currently_highest.saturating_forward(highest_ongoign_delta);
+			let safe_elections_below = seen_heights_below.saturating_backward(T::Chain::SAFETY_BUFFER);
+			let ongoing = heights.iter().filter(|h| **h < ongoing_below).cloned().collect::<BTreeSet<_>>();
+			let safe = heights.iter().filter(|h| (ongoing_below..safe_elections_below).contains(*h)).cloned().collect::<BTreeSet<_>>();
+			let hash = heights.iter().filter(|h| (safe_elections_below..seen_heights_below).contains(*h)).cloned().collect::<BTreeSet<_>>();
+
+			Self {
+				seen_heights_below: Just(seen_heights_below),
+				highest_ever_ongoing_election: Just(highest_ever_ongoing),
+				ongoing: vec(any::<BWElectionType<T>>(), ongoing.len()..=ongoing.len())
+					.prop_map(move |types|
+						ongoing.clone().into_iter()
+						.zip(types.into_iter())
+						.collect::<BTreeMap<_,_>>())
+
+				,
+				queued_safe_elections: Just(
+					safe.into_iter().fold(CompactHeightTracker::new(), |mut acc, height| {
+						acc.insert(height);
+						acc
+					})
+				),
+				queued_hash_elections: Just(Default::default()),
+				// btree_map(
+				// 	block_number(start_hashed_elections..seen_heights_below),
+				// 	any::<ChainBlockHashOf<T::Chain>>(),
+				// 	0..20
+				// ),
+				optimistic_block_cache: Just(Default::default()),
+				debug_events: Just(Default::default()),
+			}
+		)
+		// (
+		// 	any::<ChainBlockNumberOf<T::Chain>>(),
+		// 	any::<ChainBlockNumberOf<T::Chain>>(),
+		// ).prop_map(
+		// 	|(
+		// 		seen_heights_below,
+		// 		highest_ever_ongoing_election,
+		// 	)| Self {
+		// 	seen_heights_below,
+		// 	highest_ever_ongoing_election,
+		// 	queued_hash_elections: Default::default(),
+		// 	queued_safe_elections: Default::default(),
+		// 	ongoing: Default::default(),
+		// 	optimistic_block_cache: Default::default(),
+		// 	debug_events: Default::default(),
+		// }
+		// )
+	}
+
+	type Strategy = impl Strategy<Value = Self> + Clone + sp_std::fmt::Debug + Sync + Send;
 }
 
 def_derive! {
@@ -460,7 +553,11 @@ impl<N> Validate for CompactHeightTracker<N> {
 	}
 }
 
-impl<N: Step + Ord> CompactHeightTracker<N> {
+impl<N: Clone + SaturatingStep + Ord> CompactHeightTracker<N> {
+	pub fn new() -> Self {
+		Self { elections: Default::default() }
+	}
+
 	pub fn extract_lazily<'a>(&'a mut self) -> CompactHeightTrackerExtract<'a, N> {
 		CompactHeightTrackerExtract { tracker: self }
 	}
@@ -468,11 +565,11 @@ impl<N: Step + Ord> CompactHeightTracker<N> {
 	pub fn insert(&mut self, item: N) {
 		if let Some(back) = self.elections.back_mut() {
 			if back.end == item {
-				back.end = N::forward(item, 1);
+				back.end = N::saturating_forward(item, 1);
 				return;
 			}
 		}
-		self.elections.push_back(item.clone()..N::forward(item, 1));
+		self.elections.push_back(item.clone()..N::saturating_forward(item, 1));
 	}
 
 	pub fn remove(&mut self, remove: Range<N>) {
@@ -487,7 +584,10 @@ impl<N: Step + Ord> CompactHeightTracker<N> {
 		self.elections = self.elections.iter().filter(|r| !r.is_empty()).cloned().collect();
 	}
 
-	fn get_all_heights(&self) -> BTreeSet<N> {
+	pub fn get_all_heights(&self) -> BTreeSet<N>
+	where
+		N: Step,
+	{
 		self.elections.iter().flat_map(|r| r.clone()).collect()
 	}
 }
@@ -508,6 +608,7 @@ impl<'a, N: Step> Iterator for CompactHeightTrackerExtract<'a, N> {
 	}
 }
 
+#[cfg_attr(test, derive(Arbitrary))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub enum SafeModeStatus {
 	Enabled,

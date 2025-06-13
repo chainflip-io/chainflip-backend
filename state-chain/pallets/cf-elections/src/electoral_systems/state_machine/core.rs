@@ -1,6 +1,8 @@
 use core::ops::RangeInclusive;
 
 use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
+#[cfg(test)]
+use proptest::prelude::{Arbitrary, Strategy};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque};
 
 use codec::{Decode, Encode};
@@ -224,6 +226,18 @@ impl<Tag> Validate for TypesFor<Tag> {
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		Ok(())
 	}
+}
+
+#[cfg(test)]
+impl<Tag: Sync + Send> Arbitrary for TypesFor<Tag> {
+	type Parameters = ();
+
+	fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+		use proptest::prelude::Just;
+		Just(TypesFor { _phantom: Default::default() })
+	}
+
+	type Strategy = impl Strategy<Value = Self> + Debug + Clone + Sync + Send;
 }
 
 pub trait HookType {

@@ -220,6 +220,7 @@ pub mod tests {
 		ChainWitnessConfig,
 	};
 	use proptest::{
+		arbitrary::arbitrary_with,
 		prelude::{any, prop, Arbitrary, Just, Strategy},
 		prop_oneof,
 	};
@@ -234,33 +235,38 @@ pub mod tests {
 		BHWPhase, BlockHeightWitnesser,
 	};
 
-	pub fn generate_input<T: BHWTypes>(
-		properties: HeightWitnesserProperties<T>,
-	) -> impl Strategy<Value = NonemptyContinuousHeaders<T::Chain>>
-	where
-		ChainBlockHashOf<T::Chain>: Arbitrary,
-		ChainBlockNumberOf<T::Chain>: Arbitrary + BlockZero,
-	{
-		prop_do! {
-			let header_data in prop::collection::vec(any::<ChainBlockHashOf<T::Chain>>(), 2..10);
-			let random_index in any::<ChainBlockNumberOf<T::Chain>>();
-			let first_height = if properties.witness_from_index.is_zero() { random_index } else { properties.witness_from_index };
-			return {
-				let headers =
-					header_data.iter().zip(header_data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
-						block_height: first_height.saturating_forward(ix),
-						hash: h1.clone(),
-						parent_hash: h0.clone(),
-					});
-				NonemptyContinuousHeaders::<T::Chain>{ headers: headers.collect() }
+	impl<C: ChainTypes> Arbitrary for NonemptyContinuousHeaders<C> {
+		type Parameters = ChainBlockNumberOf<C>;
+
+		fn arbitrary_with(witness_from_index: Self::Parameters) -> Self::Strategy {
+			prop_do! {
+				let header_data in prop::collection::vec(any::<ChainBlockHashOf<C>>(), 2..10);
+				let random_index in any::<ChainBlockNumberOf<C>>();
+				let first_height = if witness_from_index.is_zero() { random_index } else { witness_from_index };
+				return {
+					let headers =
+						header_data.iter().zip(header_data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
+							block_height: first_height.saturating_forward(ix),
+							hash: h1.clone(),
+							parent_hash: h0.clone(),
+						});
+					NonemptyContinuousHeaders::<C>{ headers: headers.collect() }
+				}
 			}
 		}
+
+		type Strategy = impl Strategy<Value = NonemptyContinuousHeaders<C>> + Clone + Debug + Send;
+	}
+
+	pub fn generate_input<T: BHWTypes>(
+		properties: HeightWitnesserProperties<T>,
+	) -> impl Strategy<Value = NonemptyContinuousHeaders<T::Chain>> {
+		arbitrary_with::<NonemptyContinuousHeaders<T::Chain>, _, _>(properties.witness_from_index)
 	}
 
 	pub fn generate_state<T: BHWTypes>() -> impl Strategy<Value = BlockHeightWitnesser<T>>
 	where
-		ChainBlockHashOf<T::Chain>: Arbitrary,
-		ChainBlockNumberOf<T::Chain>: Arbitrary + BlockZero,
+		ChainBlockNumberOf<T::Chain>: BlockZero,
 		T::BlockHeightChangeHook: Default + sp_std::fmt::Debug,
 	{
 		prop_oneof![

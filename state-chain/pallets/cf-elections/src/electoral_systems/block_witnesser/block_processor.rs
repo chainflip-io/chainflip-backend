@@ -262,7 +262,8 @@ pub(crate) mod tests {
 	use crate::{
 		electoral_systems::{
 			block_height_tracking::{
-				ChainBlockHashTrait, ChainBlockNumberTrait, ChainTypes, CommonTraits,
+				ChainBlockHashTrait, ChainBlockNumberOf, ChainBlockNumberTrait, ChainTypes,
+				CommonTraits, TestTraits,
 			},
 			block_witnesser::{
 				block_processor::BlockProcessor,
@@ -332,7 +333,7 @@ pub(crate) mod tests {
 	impl<
 			N: ChainBlockNumberTrait,
 			H: ChainBlockHashTrait,
-			D: CommonTraits + Validate + Ord + Default + 'static,
+			D: CommonTraits + TestTraits + Validate + Ord + Default + 'static,
 		> BWProcessorTypes for TypesFor<(N, H, Vec<D>)>
 	{
 		type Chain = Self;

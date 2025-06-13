@@ -304,9 +304,10 @@ pub mod witness_period {
 	impl<C: ChainWitnessConfig> Arbitrary for BlockWitnessRange<C>
 	where
 		C::ChainBlockNumber: Arbitrary,
+		<C::ChainBlockNumber as Arbitrary>::Strategy: Clone + Send + Sync,
 	{
 		type Parameters = ();
-		type Strategy = impl Strategy<Value = Self>;
+		type Strategy = impl Strategy<Value = Self> + Clone + Sync + Send;
 
 		fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
 			any::<C::ChainBlockNumber>().prop_map(|height| {
