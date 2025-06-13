@@ -200,7 +200,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		ET(ElectionTrackerEvent<T>),
 	}
 
-	let mut bw_history = Vec::new();
+	let mut history = Vec::new();
 	let mut total_outputs = Vec::new();
 
 	let print_bw_history = |bw_history: &Vec<BWTrace<Types, Types>>| {
@@ -221,10 +221,12 @@ fn run_simulation(blocks: ForkedFilledChain) {
 				// ensure that input is correct
 				BHW::validate_input(&BHW::input_index(&mut bhw_state), &input).unwrap();
 
-				bw_history.push(BWTrace::InputBHW(input.clone()));
+				history.push(BWTrace::InputBHW(input.clone()));
 
-				let output = BHW::step(&mut bhw_state, input, &())
-					.unwrap_or_else(|_| panic!("BHW failed with history: {bw_history:?}"));
+				let output =
+					BHW::step(&mut bhw_state, input, &()).unwrap_or_else(|err| {
+						panic!("{err:?}, BHW failed with history: {history:?} and state: {bhw_state:#?}")
+					});
 
 				outputs.push(output);
 			}
@@ -242,19 +244,22 @@ fn run_simulation(blocks: ForkedFilledChain) {
 
 			// run BW on BHW outputs (context)
 			for bhw_output in bhw_outputs {
-				bw_history.push(BWTrace::Input(Either::Left(bhw_output.clone())));
+				history.push(BWTrace::Input(Either::Left(bhw_output.clone())));
 
-				bw_state.elections.is_valid().unwrap_or_else(|_| {
-					panic!("BW failed with history: {}", print_bw_history(&bw_history))
+				bw_state.elections.is_valid().unwrap_or_else(|err| {
+					panic!(
+						"{err:?}, BW failed with history: {} and state: {bw_state:#?}",
+						print_bw_history(&history)
+					)
 				});
 
 				BW::step(&mut bw_state, Either::Left(bhw_output), &bw_settings).unwrap();
 
-				bw_history.extend(
+				history.extend(
 					bw_state.elections.debug_events.take_history().into_iter().map(BWTrace::ET),
 				);
 
-				bw_history.extend(
+				history.extend(
 					bw_state
 						.block_processor
 						.debug_events
@@ -264,26 +269,29 @@ fn run_simulation(blocks: ForkedFilledChain) {
 				);
 
 				let mut output = bw_state.block_processor.execute.take_history();
-				bw_history.extend(output.iter().cloned().map(BWTrace::Output));
+				history.extend(output.iter().cloned().map(BWTrace::Output));
 
 				outputs.append(&mut output);
 			}
 
 			// run on BW inputs (consensus)
 			for input in inputs {
-				bw_history.push(BWTrace::Input(input.clone()));
+				history.push(BWTrace::Input(input.clone()));
 
-				bw_state.elections.is_valid().unwrap_or_else(|_| {
-					panic!("BW failed with history: {}", print_bw_history(&bw_history))
+				bw_state.elections.is_valid().unwrap_or_else(|err| {
+					panic!(
+						"{err:?}, BW failed with history: {} and state: {bw_state:#?}",
+						print_bw_history(&history)
+					)
 				});
 
 				BW::step(&mut bw_state, input, &bw_settings).unwrap();
 
-				bw_history.extend(
+				history.extend(
 					bw_state.elections.debug_events.take_history().into_iter().map(BWTrace::ET),
 				);
 
-				bw_history.extend(
+				history.extend(
 					bw_state
 						.block_processor
 						.debug_events
@@ -293,7 +301,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 				);
 
 				let mut output = bw_state.block_processor.execute.take_history();
-				bw_history.extend(output.iter().cloned().map(BWTrace::Output));
+				history.extend(output.iter().cloned().map(BWTrace::Output));
 
 				outputs.append(&mut output);
 			}
@@ -328,7 +336,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	for (event, count) in counted_events.0 .0.clone() {
 		if count > 1 {
 			panic!("Got event {event:?} in total {count} times           events: {printed}              bw_input_history: {}",
-                print_bw_history(&bw_history)
+                print_bw_history(&history)
             );
 		}
 	}
@@ -345,7 +353,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	let expected_witness_events: BTreeSet<_> = finalized_events.into_iter().cloned().collect();
 	assert_eq!(emitted_witness_events, expected_witness_events,
             "got witness events: {emitted_witness_events:?}, expected_witness_events: {expected_witness_events:?}, bw_input_history: {}",
-            bw_history.iter().map(|event| format!("{event:?}")).intersperse("\n".to_string()).collect::<String>()
+            history.iter().map(|event| format!("{event:?}")).intersperse("\n".to_string()).collect::<String>()
         );
 }
 
@@ -358,7 +366,7 @@ pub fn test_all() {
 		// TODO: we had previously a much higher number (256 * 256 * 4),
 		// but currently it takes a *very* long to test with this many iterations.
 		// Appearently due to having increased the empty block buffer on the main chain.
-		cases: 256 * 30,
+		cases: 256 * 60,
 		failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
 			"proptest-regressions-full-pipeline",
 		))),

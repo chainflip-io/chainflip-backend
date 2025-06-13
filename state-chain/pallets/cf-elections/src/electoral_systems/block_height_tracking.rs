@@ -21,8 +21,16 @@ pub mod state_machine;
 
 pub trait CommonTraits = Debug + Clone + Encode + Decode + Serde + Eq;
 
-pub trait ChainBlockNumberTrait =
-	CommonTraits + SaturatingStep + Step + BlockZero + Copy + Ord + 'static + Sized + Validate;
+pub trait ChainBlockNumberTrait = CommonTraits
+	+ SaturatingStep
+	+ Step
+	+ Default
+	+ BlockZero
+	+ Copy
+	+ Ord
+	+ 'static
+	+ Sized
+	+ Validate;
 pub trait ChainBlockHashTrait = CommonTraits + Validate + Ord + 'static;
 
 pub trait ChainTypes: Ord + Clone + Debug + 'static {
