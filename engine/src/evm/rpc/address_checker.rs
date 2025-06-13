@@ -42,7 +42,7 @@ pub trait AddressCheckerRpcApi {
 		&self,
 		contract_address: H160,
 		aggregator_addresses: Vec<H160>,
-	) -> Result<Vec<PriceFeedData>>;
+	) -> Result<(U256, U256, Vec<PriceFeedData>)>;
 }
 
 #[async_trait::async_trait]
@@ -76,7 +76,7 @@ impl AddressCheckerRpcApi for EvmRpcClient {
 		&self,
 		contract_address: H160,
 		aggregator_addresses: Vec<H160>,
-	) -> Result<Vec<PriceFeedData>> {
+	) -> Result<(U256, U256, Vec<PriceFeedData>)> {
 		let price_feed_data = AddressChecker::new(contract_address, self.provider.clone())
 			.query_price_feeds(aggregator_addresses)
 			.call()
@@ -109,7 +109,7 @@ impl AddressCheckerRpcApi for EvmRpcSigningClient {
 		&self,
 		contract_address: H160,
 		aggregator_addresses: Vec<H160>,
-	) -> Result<Vec<PriceFeedData>> {
+	) -> Result<(U256, U256, Vec<PriceFeedData>)> {
 		self.rpc_client.query_price_feeds(contract_address, aggregator_addresses).await
 	}
 }
@@ -138,8 +138,11 @@ mod tests {
 	const LOCALNET_ETH_ADDRESS_CHECKER: &str = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 	const LOCALNET_ARB_ADDRESS_CHECKER: &str = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
 
-	fn print_round_data(chain_name: &str, price_feeds_data: Vec<PriceFeedData>) {
+	fn print_round_data(chain_name: &str, query_result: (U256, U256, Vec<PriceFeedData>)) {
+		let (query_block_number, query_block_timestamp, price_feeds_data) = query_result;
 		println!("Price feed data for chain: {}", chain_name);
+		println!("Query Block Number: {}", query_block_number);
+		println!("Query Block Timestamp: {}", query_block_timestamp);
 		for feed in price_feeds_data.iter() {
 			println!("  Round ID: {}", feed.round_id);
 			println!("  Answer: {}", feed.answer);
@@ -219,7 +222,7 @@ mod tests {
 			"Ethereum",
 			eth_client
 				.query_price_feeds(
-					H160::from_str("0xF6cBF92af48D75db89910502B192Ce6a18D8b620").unwrap(), // Deployed AddressChecker
+					H160::from_str("0xb421E1DEbd6803CcFdf09B4262F1bAEd4eAFD97b").unwrap(), // Deployed AddressChecker
 					vec![
 						H160::from_str("0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43").unwrap(), // Btc Sepolia
 						H160::from_str("0x694AA1769357215DE4FAC081bf1f309aDC325306").unwrap(), // Eth Sepolia

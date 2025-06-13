@@ -79,6 +79,16 @@
     "name": "queryPriceFeeds",
     "outputs": [
       {
+        "internalType": "uint256",
+        "name": "blockNumber",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "blockTimestamp",
+        "type": "uint256"
+      },
+      {
         "components": [
           {
             "internalType": "uint80",

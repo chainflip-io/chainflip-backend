@@ -45,7 +45,7 @@ pub trait AddressCheckerRetryRpcApi {
 		&self,
 		contract_address: H160,
 		aggregator_addresses: Vec<H160>,
-	) -> Vec<PriceFeedData>;
+	) -> (U256, U256, Vec<PriceFeedData>);
 }
 
 #[async_trait::async_trait]
@@ -100,7 +100,7 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 		&self,
 		contract_address: H160,
 		aggregator_addresses: Vec<H160>,
-	) -> Vec<PriceFeedData> {
+	) -> (U256, U256, Vec<PriceFeedData>) {
 		self.rpc_retry_client
 			.request(
 				RequestLog::new(
