@@ -18,9 +18,9 @@ use crate::{Config, Pallet};
 #[cfg(feature = "try-runtime")]
 use crate::{CurrentReleaseVersion, Get};
 use cf_runtime_utilities::PlaceholderMigration;
-use frame_support::{migrations::VersionedMigration, traits::OnRuntimeUpgrade};
 #[cfg(feature = "try-runtime")]
 use frame_support::{pallet_prelude::DispatchError, sp_runtime};
+use frame_support::{/* migrations::VersionedMigration, */ traits::OnRuntimeUpgrade};
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
@@ -56,14 +56,16 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 pub type PalletMigration<T> = (
 	PlaceholderMigration<15, Pallet<T>>,
 	/* a migration from 15 to 16 in in state-chain/runtime/src/migrations/safe_mode.rs */
-	VersionedMigration<
-		16,
-		17,
-		OracleQueryEnvironmentMigration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	PlaceholderMigration<17, Pallet<T>>,
+	PlaceholderMigration<16, Pallet<T>>,
+	// TODO: PRO-2320
+	// VersionedMigration<
+	// 	16,
+	// 	17,
+	// 	OracleQueryEnvironmentMigration<T>,
+	// 	Pallet<T>,
+	// 	<T as frame_system::Config>::DbWeight,
+	// >,
+	// PlaceholderMigration<17, Pallet<T>>,
 );
 
 #[cfg(test)]
