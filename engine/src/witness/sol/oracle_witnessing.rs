@@ -26,7 +26,7 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use cf_chains::sol::{SolVersionedMessage, SolVersionedTransaction};
 use std::str::FromStr;
 
-// Simulating a tranasction requires a payer, even if the simulation doesn't require a tx fee.
+// Simulating a transaction requires a payer, even if the simulation doesn't require a tx fee.
 // We use a prefunded account for this purpose. The keys have been burnt.
 #[allow(dead_code)]
 const PREFUNDED_ACCOUNT: SolAddress = const_address("CsS34ewTFLGqrpckPRww5hbWr4QJQ1J3ZA5D7WL4Ni3K");
