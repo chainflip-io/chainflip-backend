@@ -35,8 +35,9 @@ unzip -u ${ZIP_FILE} \
     'cf_tester.ts' \
     'swap_endpoint.json' \
     'swap_endpoint.ts' \
-    'swap_endpoint.so' \
     'alt_manager.json' \
+    'oracle_query_helper.json' \
+    'oracle_query_helper.ts' \
     -d $TARGET_DIR
 
 rm ${ZIP_FILE}
