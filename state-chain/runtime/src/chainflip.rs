@@ -28,8 +28,6 @@ mod signer_nomination;
 pub mod solana_elections;
 pub mod vault_swaps;
 
-use cf_chains::SetGovKeyWithAggKeyError;
-
 use crate::{
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
 	ArbitrumIngressEgress, AssethubBroadcaster, AssethubChainTracking, AssethubIngressEgress,
@@ -81,9 +79,9 @@ use cf_chains::{
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
 	},
 	AnyChain, ApiCall, Arbitrum, Assethub, CcmChannelMetadataChecked, CcmDepositMetadataChecked,
-	Chain, ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersGeneric, ForeignChain,
-	ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
-	Solana, TransactionBuilder,
+	Chain, ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersForChain,
+	ForeignChain, ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey,
+	SetGovKeyWithAggKey, SetGovKeyWithAggKeyError, Solana, TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
@@ -813,7 +811,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadataChecked>,
 				boost_fee: BasisPoints,
-				refund_parameters: ChannelRefundParametersGeneric<ForeignChainAddress>,
+				refund_parameters: ChannelRefundParametersForChain<AnyChain>,
 				dca_parameters: Option<DcaParameters>,
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {

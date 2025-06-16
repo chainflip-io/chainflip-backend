@@ -169,11 +169,9 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade
 							.transpose();
 						// Convert Refund param into Checked version.
 						let checked_refund_params =
-							RefundParametersChecked::try_from_refund_parameters_internal(
-								refund_params,
-								None,
-								old.deposit_channel.asset.into(),
-							);
+							RefundParametersChecked::try_from_refund_parameters_for_chain::<
+								cf_chains::AnyChain,
+							>(refund_params, None, old.deposit_channel.asset.into());
 						// Only succeed if both conversions work
 						if let (Ok(checked_ccm), Ok(checked_refund_params)) =
 							(checked_ccm, checked_refund_params)

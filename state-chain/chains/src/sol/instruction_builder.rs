@@ -132,7 +132,7 @@ mod test {
 			SolAddress, SolAddressLookupTableAccount, SolHash, SolVersionedMessage,
 			SolVersionedTransaction,
 		},
-		ChannelRefundParametersGeneric,
+		ChannelRefundParametersForChain,
 	};
 	use cf_primitives::{
 		chains::Solana, AccountId, AffiliateAndFee, AffiliateShortId, BasisPoints, DcaParameters,
@@ -185,8 +185,8 @@ mod test {
 		))
 	}
 
-	fn channel_refund_parameters() -> ChannelRefundParametersGeneric<SolAddress> {
-		ChannelRefundParametersGeneric {
+	fn channel_refund_parameters() -> ChannelRefundParametersForChain<Solana> {
+		ChannelRefundParametersForChain::<Solana> {
 			min_price: sp_core::U256::default(),
 			refund_address: DESTINATION_ADDRESS_SOL,
 			retry_duration: 10u32,

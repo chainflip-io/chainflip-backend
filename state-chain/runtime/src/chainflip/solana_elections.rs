@@ -32,7 +32,7 @@ use cf_chains::{
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolHash, SolSignature, SolTrackedData,
 		SolanaCrypto,
 	},
-	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersGeneric, FeeEstimationApi,
+	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain, FeeEstimationApi,
 	FetchAndCloseSolanaVaultSwapAccounts, ForeignChain, ForeignChainAddress, Solana,
 };
 use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters};
@@ -616,7 +616,7 @@ pub struct SolanaVaultSwapDetails {
 	pub swap_account: SolAddress,
 	pub creation_slot: u64,
 	pub broker_fee: Beneficiary<AccountId>,
-	pub refund_params: ChannelRefundParametersGeneric<SolAddress>,
+	pub refund_params: ChannelRefundParametersForChain<Solana>,
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: u8,
 	pub affiliate_fees: Affiliates<AffiliateShortId>,

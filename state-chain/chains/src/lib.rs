@@ -1240,7 +1240,19 @@ impl<AccountId> RefundParametersChecked<AccountId> {
 		)
 	}
 
-	pub fn try_from_refund_parameters_internal(
+	pub fn try_from_refund_parameters_for_chain<C: Chain>(
+		refund_param: ChannelRefundParametersForChain<C>,
+		source_address: Option<ForeignChainAddress>,
+		refund_asset: Asset,
+	) -> Result<Self, DispatchError> {
+		Self::try_from_refund_parameters_internal(
+			refund_param.map_address(|addr| addr.into_foreign_chain_address()),
+			source_address,
+			refund_asset,
+		)
+	}
+
+	fn try_from_refund_parameters_internal(
 		refund_param: ChannelRefundParametersGeneric<ForeignChainAddress>,
 		source_address: Option<ForeignChainAddress>,
 		refund_asset: Asset,
@@ -1286,6 +1298,8 @@ impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParametersGeneric<A> {
 pub type ChannelRefundParametersLegacy<RefundAddress> =
 	ChannelRefundParametersGeneric<RefundAddress, ()>;
 pub type ChannelRefundParameters = ChannelRefundParametersGeneric<EncodedAddress>;
+pub type ChannelRefundParametersForChain<C> =
+	ChannelRefundParametersGeneric<<C as Chain>::ChainAccount>;
 
 impl<A: Clone, RefundCcm: Clone> ChannelRefundParametersGeneric<A, RefundCcm> {
 	pub fn map_address<B, F: FnOnce(A) -> B>(

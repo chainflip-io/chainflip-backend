@@ -36,9 +36,9 @@ use cf_chains::{
 	eth::{api::EthereumApi, EthereumTrackedData},
 	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain, ChainState,
-	ChannelRefundParametersGeneric, DefaultRetryPolicy, Ethereum, ExecutexSwapAndCall,
-	ForeignChain, ForeignChainAddress, RetryPolicy, SwapOrigin, TransactionBuilder,
-	TransferAssetParams,
+	ChannelRefundParametersForChain, ChannelRefundParametersGeneric, DefaultRetryPolicy, Ethereum,
+	ExecutexSwapAndCall, ForeignChain, ForeignChainAddress, RetryPolicy, SwapOrigin,
+	TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{
 	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, EgressId,
@@ -75,7 +75,7 @@ use state_chain_runtime::{
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
 const ZION: AccountId = AccountId::new([0x22; 32]);
-const ETH_REFUND_PARAMS: ChannelRefundParametersGeneric<<Ethereum as Chain>::ChainAccount> =
+const ETH_REFUND_PARAMS: ChannelRefundParametersForChain<Ethereum> =
 	ChannelRefundParametersGeneric {
 		retry_duration: 5,
 		refund_address: H160([100u8; 20]),
