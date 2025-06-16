@@ -69,16 +69,24 @@ include!(concat!(env!("OUT_DIR"), "/cf_static_runtime.rs"));
 // TODO: To check this change
 impl<T>
 	From<
-		cf_static_runtime::runtime_types::cf_chains::ChannelRefundParameters<
+		cf_static_runtime::runtime_types::cf_chains::ChannelRefundParametersGeneric<
 			T,
-			Option<cf_static_runtime::runtime_types::cf_chains::CcmChannelMetadata>,
+			Option<
+				cf_static_runtime::runtime_types::cf_chains::CcmChannelMetadata<
+					cf_static_runtime::runtime_types::cf_chains::CcmAdditionalData,
+				>,
+			>,
 		>,
-	> for cf_chains::ChannelRefundParameters<T>
+	> for cf_chains::ChannelRefundParametersGeneric<T>
 {
 	fn from(
-		value: cf_static_runtime::runtime_types::cf_chains::ChannelRefundParameters<
+		value: cf_static_runtime::runtime_types::cf_chains::ChannelRefundParametersGeneric<
 			T,
-			Option<cf_static_runtime::runtime_types::cf_chains::CcmChannelMetadata>,
+			Option<
+				cf_static_runtime::runtime_types::cf_chains::CcmChannelMetadata<
+					cf_static_runtime::runtime_types::cf_chains::CcmAdditionalData,
+				>,
+			>,
 		>,
 	) -> Self {
 		Self {
@@ -91,7 +99,7 @@ impl<T>
 						.expect("Runtime message exceeds 15,000 bytes"),
 					gas_budget: metadata.gas_budget,
 					ccm_additional_data: cf_chains::CcmAdditionalData::try_from(
-						metadata.ccm_additional_data.0,
+						metadata.ccm_additional_data.0 .0.to_vec(),
 					)
 					.expect("Runtime ccm_additional_data exceeds 3,000 bytes"),
 				}

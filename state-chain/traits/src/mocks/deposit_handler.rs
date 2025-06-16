@@ -18,7 +18,7 @@ use super::{MockPallet, MockPalletStorage};
 use crate::{Chainflip, DepositApi};
 use cf_chains::{
 	address::ForeignChainAddress, dot::PolkadotAccountId, CcmChannelMetadataChecked, Chain,
-	ChannelRefundParametersDecoded, ForeignChain,
+	ChannelRefundParametersGeneric, ForeignChain,
 };
 use cf_primitives::{chains::assets::any, BasisPoints, Beneficiaries, ChannelId, DcaParameters};
 use codec::{Decode, Encode};
@@ -144,7 +144,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadataChecked>,
 		boost_fee: BasisPoints,
-		_refund_params: ChannelRefundParametersDecoded,
+		_refund_params: ChannelRefundParametersGeneric<C::ChainAccount>,
 		_dca_params: Option<DcaParameters>,
 	) -> Result<
 		(cf_primitives::ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount),

@@ -22,7 +22,7 @@ use cf_chains::{
 		deposit_address::DepositAddress, vault_swap_encoding::UtxoEncodedData, ScriptPubkey, Utxo,
 		UtxoId,
 	},
-	ChannelRefundParameters,
+	ChannelRefundParametersGeneric,
 };
 use cf_primitives::{AccountId, Beneficiary, ChannelId, DcaParameters};
 use cf_utilities::SliceToArray;
@@ -175,7 +175,7 @@ pub fn try_extract_vault_swap_witness(
 			.collect_vec()
 			.try_into()
 			.expect("runtime supports at least as many affiliates as we allow in UTXO encoding"),
-		refund_params: ChannelRefundParameters {
+		refund_params: ChannelRefundParametersGeneric {
 			retry_duration: data.parameters.retry_duration.into(),
 			refund_address,
 			min_price,
@@ -344,7 +344,7 @@ mod tests {
 				}),
 				affiliate_fees: bounded_vec![MOCK_SWAP_PARAMS.parameters.affiliates[0].into()],
 				deposit_metadata: None,
-				refund_params: ChannelRefundParameters {
+				refund_params: ChannelRefundParametersGeneric {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration.into(),
 					refund_address: refund_pubkey,
 					min_price: sqrt_price_to_price(bounded_sqrt_price(

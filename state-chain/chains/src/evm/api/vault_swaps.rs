@@ -23,8 +23,8 @@ pub mod x_swap_token;
 #[cfg(test)]
 pub mod test_utils {
 	use crate::{
-		cf_parameters::*, eth::Address as EthAddress, CcmChannelMetadataUnchecked,
-		ChannelRefundParameters,
+		cf_parameters::*, eth::Address as EthAddress, CcmChannelMetadataChecked,
+		ChannelRefundParametersGeneric,
 	};
 	use cf_primitives::{
 		chains::Ethereum, AccountId, AffiliateAndFee, AffiliateShortId, Beneficiary, DcaParameters,
@@ -47,11 +47,11 @@ pub mod test_utils {
 	pub fn broker_fee() -> Beneficiary<AccountId> {
 		Beneficiary { account: AccountId::from([0xF2; 32]), bps: 1u16 }
 	}
-	pub fn channel_metadata() -> CcmChannelMetadataUnchecked {
-		CcmChannelMetadataUnchecked {
+	pub fn channel_metadata() -> CcmChannelMetadataChecked {
+		CcmChannelMetadataChecked {
 			message: vec![0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06].try_into().unwrap(),
 			gas_budget: 1_000_000u128,
-			ccm_additional_data: vec![0x11, 0x22, 0x33, 0x44].try_into().unwrap(),
+			ccm_additional_data: crate::ccm_checker::DecodedCcmAdditionalData::NotRequired,
 		}
 	}
 	pub const BOOST_FEE: u8 = 100u8;
@@ -59,7 +59,7 @@ pub mod test_utils {
 
 	pub fn dummy_cf_parameter(with_ccm: bool) -> Vec<u8> {
 		build_cf_parameters::<Ethereum>(
-			ChannelRefundParameters {
+			ChannelRefundParametersGeneric {
 				retry_duration: 1u32,
 				refund_address: refund_address(),
 				min_price: Default::default(),

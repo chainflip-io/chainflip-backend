@@ -33,7 +33,7 @@ use super::{
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	cf_parameters::{
-		CfParameters, CfParametersRefundCcm, VaultSwapParameters, VersionedCfParameters,
+		CfParametersLegacy, CfParametersWithRefundCcm, VaultSwapParameters, VersionedCfParameters,
 	},
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
@@ -63,11 +63,11 @@ where
 			})
 			.map_err(|e| anyhow!(e))?
 		{
-			VersionedCfParameters::V0(CfParameters {
+			VersionedCfParameters::V0(CfParametersLegacy {
 				ccm_additional_data,
 				vault_swap_parameters,
 			}) => (ccm_additional_data, vault_swap_parameters.into()),
-			VersionedCfParameters::V1(CfParametersRefundCcm {
+			VersionedCfParameters::V1(CfParametersWithRefundCcm {
 				ccm_additional_data,
 				vault_swap_parameters,
 			}) => (ccm_additional_data, vault_swap_parameters),

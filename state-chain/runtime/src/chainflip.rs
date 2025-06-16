@@ -87,7 +87,7 @@ use cf_chains::{
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
 	},
 	AnyChain, ApiCall, Arbitrum, Assethub, CcmChannelMetadataChecked, CcmDepositMetadataChecked,
-	Chain, ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersDecoded, ForeignChain,
+	Chain, ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersGeneric, ForeignChain,
 	ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
 	Solana, TransactionBuilder,
 };
@@ -823,7 +823,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadataChecked>,
 				boost_fee: BasisPoints,
-				refund_parameters: ChannelRefundParametersDecoded,
+				refund_parameters: ChannelRefundParametersGeneric<ForeignChainAddress>,
 				dca_parameters: Option<DcaParameters>,
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
@@ -836,7 +836,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							broker_id,
 							channel_metadata,
 							boost_fee,
-							refund_parameters,
+							refund_parameters.try_map_address(|addr|addr.try_into()).map_err(|_|"Invalid Refund address")?,
 							dca_parameters,
 						).map(|(channel, address, block_number, channel_opening_fee)| (channel, address, block_number.into(), channel_opening_fee)),
 					)+

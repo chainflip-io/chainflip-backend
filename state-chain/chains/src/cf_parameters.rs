@@ -14,31 +14,38 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{CcmAdditionalData, CcmChannelMetadataUnchecked, Chain, ChannelRefundParameters};
+use crate::{
+	ccm_checker::DecodedCcmAdditionalData, AnyChainAsset, CcmAdditionalData,
+	CcmChannelMetadataChecked, Chain, ChannelRefundParametersGeneric,
+	ChannelRefundParametersLegacy, ForeignChainAddress,
+};
 use cf_primitives::{
 	AccountId, AffiliateAndFee, BasisPoints, Beneficiary, DcaParameters, MAX_AFFILIATES,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::ConstU32;
-use sp_runtime::{BoundedVec, Vec};
+use sp_runtime::{BoundedVec, DispatchError, Vec};
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub enum VersionedCfParameters<RefundAddress, CcmData = ()> {
-	V0(CfParameters<RefundAddress, CcmData>),
-	V1(CfParametersRefundCcm<RefundAddress, CcmData>),
+	#[deprecated]
+	V0(CfParametersLegacy<RefundAddress, CcmData>),
+	V1(CfParametersWithRefundCcm<RefundAddress, CcmData>),
 }
+pub type VersionedCcmCfParameters<RefundAddress> =
+	VersionedCfParameters<RefundAddress, CcmAdditionalData>;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct CfParametersGeneric<P, CcmData> {
+pub struct CfParametersGeneric<VaultSwapParam, CcmData> {
 	/// CCMs may require additional data (e.g. CCMs to Solana requires a list of addresses).
 	pub ccm_additional_data: CcmData,
-	pub vault_swap_parameters: P,
+	pub vault_swap_parameters: VaultSwapParam,
 }
 
-pub type CfParameters<RefundAddress, CcmData = ()> =
-	CfParametersGeneric<VaultSwapParametersV0<RefundAddress>, CcmData>;
-pub type CfParametersRefundCcm<RefundAddress, CcmData = ()> =
+pub type CfParametersLegacy<RefundAddress, CcmData = ()> =
+	CfParametersGeneric<VaultSwapParametersLegacy<RefundAddress>, CcmData>;
+pub type CfParametersWithRefundCcm<RefundAddress, CcmData = ()> =
 	CfParametersGeneric<VaultSwapParameters<RefundAddress>, CcmData>;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
@@ -49,42 +56,36 @@ pub struct VaultSwapParametersGeneric<R> {
 	pub broker_fee: Beneficiary<AccountId>,
 	pub affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
 }
-
-pub type VaultSwapParametersV0<RefundAddress> =
-	VaultSwapParametersGeneric<ChannelRefundParameters<RefundAddress, ()>>;
+pub type VaultSwapParametersLegacy<RefundAddress> =
+	VaultSwapParametersGeneric<ChannelRefundParametersLegacy<RefundAddress>>;
 pub type VaultSwapParameters<RefundAddress> =
-	VaultSwapParametersGeneric<ChannelRefundParameters<RefundAddress>>;
+	VaultSwapParametersGeneric<ChannelRefundParametersGeneric<RefundAddress>>;
 
-impl<RefundAddress> From<VaultSwapParametersV0<RefundAddress>>
-	for VaultSwapParameters<RefundAddress>
-{
-	fn from(params: VaultSwapParametersV0<RefundAddress>) -> Self {
-		VaultSwapParameters {
-			refund_params: ChannelRefundParameters {
-				retry_duration: params.refund_params.retry_duration,
-				refund_address: params.refund_params.refund_address,
-				min_price: params.refund_params.min_price,
-				refund_ccm_metadata: None,
-			},
-			dca_params: params.dca_params,
-			boost_fee: params.boost_fee,
-			broker_fee: params.broker_fee,
-			affiliate_fees: params.affiliate_fees,
-		}
+impl<RefundAddress: Clone> VaultSwapParameters<RefundAddress> {
+	pub fn validate(
+		&self,
+		refund_asset: AnyChainAsset,
+		refund_address_decoded: ForeignChainAddress,
+	) -> Result<(), DispatchError> {
+		self.refund_params.validate(refund_asset, refund_address_decoded)
 	}
 }
 
-pub type VersionedCcmCfParameters<RefundAddress> =
-	VersionedCfParameters<RefundAddress, CcmAdditionalData>;
-
-impl<RefundAddress> CfParametersRefundCcm<RefundAddress, CcmAdditionalData> {
-	pub fn with_ccm_data(
-		cf_parameters: CfParametersRefundCcm<RefundAddress, ()>,
-		data: CcmAdditionalData,
-	) -> Self {
-		CfParametersRefundCcm {
-			ccm_additional_data: data,
-			vault_swap_parameters: cf_parameters.vault_swap_parameters,
+impl<RefundAddress> From<VaultSwapParametersLegacy<RefundAddress>>
+	for VaultSwapParameters<RefundAddress>
+{
+	fn from(value: VaultSwapParametersLegacy<RefundAddress>) -> Self {
+		VaultSwapParameters {
+			refund_params: ChannelRefundParametersGeneric {
+				retry_duration: value.refund_params.retry_duration,
+				refund_address: value.refund_params.refund_address,
+				min_price: value.refund_params.min_price,
+				refund_ccm_metadata: None,
+			},
+			dca_params: value.dca_params,
+			boost_fee: value.boost_fee,
+			broker_fee: value.broker_fee,
+			affiliate_fees: value.affiliate_fees,
 		}
 	}
 }
@@ -93,13 +94,13 @@ impl<RefundAddress> CfParametersRefundCcm<RefundAddress, CcmAdditionalData> {
 /// The return type is encoded Vec<u8>, which circumvents the difference in return types depending
 /// on if CCM data is available.
 pub fn build_cf_parameters<C: Chain>(
-	refund_parameters: ChannelRefundParameters<C::ChainAccount>,
+	refund_parameters: ChannelRefundParametersGeneric<C::ChainAccount>,
 	dca_parameters: Option<DcaParameters>,
 	boost_fee: u8,
 	broker_id: AccountId,
 	broker_commission: BasisPoints,
 	affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
-	ccm: Option<&CcmChannelMetadataUnchecked>,
+	ccm: Option<&CcmChannelMetadataChecked>,
 ) -> Vec<u8> {
 	let vault_swap_parameters = VaultSwapParameters {
 		refund_params: refund_parameters,
@@ -109,13 +110,19 @@ pub fn build_cf_parameters<C: Chain>(
 		affiliate_fees,
 	};
 
-	match ccm {
-		Some(ccm) => VersionedCcmCfParameters::V1(CfParametersRefundCcm {
-			ccm_additional_data: ccm.ccm_additional_data.clone(),
-			vault_swap_parameters,
-		})
-		.encode(),
-		None => VersionedCfParameters::V1(CfParametersRefundCcm {
+	match ccm.map(|ccm| ccm.ccm_additional_data.clone()) {
+		Some(DecodedCcmAdditionalData::Solana(sol_ccm)) =>
+			VersionedCcmCfParameters::V1(CfParametersWithRefundCcm {
+				ccm_additional_data: CcmAdditionalData(
+					sol_ccm
+						.encode()
+						.try_into()
+						.expect("Checked CCM additional data is guaranteed to be valid."),
+				),
+				vault_swap_parameters,
+			})
+			.encode(),
+		_ => VersionedCfParameters::V1(CfParametersWithRefundCcm {
 			ccm_additional_data: (),
 			vault_swap_parameters,
 		})
@@ -126,17 +133,44 @@ pub fn build_cf_parameters<C: Chain>(
 pub fn decode_cf_parameters<RefundAddress: Decode, CcmData: Default + Decode>(
 	data: &[u8],
 ) -> Result<(VaultSwapParameters<RefundAddress>, CcmData), &'static str> {
-	let VersionedCfParameters::V0(CfParameters { ccm_additional_data, vault_swap_parameters }) =
-		VersionedCfParameters::decode(&mut &data[..])
-			.map_err(|_| "Failed to decode cf_parameter")?;
-
-	Ok((vault_swap_parameters.into(), ccm_additional_data))
+	VersionedCfParameters::<RefundAddress, CcmData>::decode(&mut &data[..])
+		.map(|decoded| match decoded {
+			#[allow(deprecated)]
+			VersionedCfParameters::V0(CfParametersLegacy {
+				ccm_additional_data,
+				vault_swap_parameters,
+			}) => (
+				VaultSwapParameters {
+					refund_params: ChannelRefundParametersGeneric {
+						retry_duration: vault_swap_parameters.refund_params.retry_duration,
+						refund_address: vault_swap_parameters.refund_params.refund_address,
+						min_price: vault_swap_parameters.refund_params.min_price,
+						refund_ccm_metadata: None,
+					},
+					dca_params: vault_swap_parameters.dca_params,
+					boost_fee: vault_swap_parameters.boost_fee,
+					broker_fee: vault_swap_parameters.broker_fee,
+					affiliate_fees: vault_swap_parameters.affiliate_fees,
+				},
+				ccm_additional_data,
+			),
+			VersionedCfParameters::V1(CfParametersWithRefundCcm {
+				ccm_additional_data,
+				vault_swap_parameters,
+			}) => (vault_swap_parameters, ccm_additional_data),
+		})
+		.map_err(|_| "Failed to decode cf_parameter")
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH, MAX_CCM_MSG_LENGTH};
+	use crate::{
+		ccm_checker::{DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData},
+		sol::{SolAddress, SolCcmAccounts, SolCcmAddress, SolPubkey},
+		CcmChannelMetadataChecked, CcmChannelMetadataUnchecked, ForeignChainAddress,
+		MAX_CCM_ADDITIONAL_DATA_LENGTH, MAX_CCM_MSG_LENGTH,
+	};
 	use cf_primitives::chains::AnyChain;
 
 	const MAX_VAULT_SWAP_PARAMETERS_LENGTH_V0: u32 = 1_000;
@@ -148,12 +182,55 @@ mod tests {
 	const MAX_CF_PARAM_LENGTH_V1: u32 =
 		MAX_CCM_ADDITIONAL_DATA_LENGTH + MAX_VAULT_SWAP_PARAMETERS_LENGTH_V1;
 
-	// This is without the enum byte nor CcmData
-	const REFERENCE_EXPECTED_V0_ENCODED_HEX: &str = "01000000000202020202020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000";
-	const REFERENCE_EXPECTED_V1_ENCODED_HEX: &str = "0100000000020202020202020202020202020202020202020200000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000";
-	const V0_ENUM_BYTE: u8 = 0;
-	const V1_ENUM_BYTE: u8 = 1;
-	const ZERO_LENGTH_CCM_ADDITIONAL_DATA: u8 = 0;
+	fn vault_swap_parameters_v0() -> VaultSwapParametersLegacy<ForeignChainAddress> {
+		VaultSwapParametersLegacy {
+			refund_params: ChannelRefundParametersLegacy {
+				retry_duration: 1,
+				refund_address: ForeignChainAddress::Eth(sp_core::H160::from([2; 20])),
+				min_price: Default::default(),
+				refund_ccm_metadata: (),
+			},
+			dca_params: Some(DcaParameters { number_of_chunks: 1u32, chunk_interval: 3u32 }),
+			boost_fee: 100u8,
+			broker_fee: Beneficiary { account: AccountId::new([0x00; 32]), bps: 1u16 },
+			affiliate_fees: sp_core::bounded_vec![],
+		}
+	}
+
+	fn vault_swap_parameters() -> VaultSwapParameters<ForeignChainAddress> {
+		VaultSwapParameters {
+			refund_params: ChannelRefundParametersGeneric {
+				retry_duration: 1,
+				refund_address: ForeignChainAddress::Eth([2; 20].into()),
+				min_price: Default::default(),
+				refund_ccm_metadata: Some(CcmChannelMetadataUnchecked {
+					message: vec![0x01, 0x02, 0x03].try_into().unwrap(),
+					gas_budget: 1_000,
+					ccm_additional_data: VersionedSolanaCcmAdditionalData::V1 {
+						ccm_accounts: SolCcmAccounts {
+							cf_receiver: SolCcmAddress {
+								pubkey: SolPubkey([0x03; 32]),
+								is_writable: true,
+							},
+							additional_accounts: vec![SolCcmAddress {
+								pubkey: SolPubkey([0x04; 32]),
+								is_writable: false,
+							}],
+							fallback_address: SolPubkey([0x05; 32]),
+						},
+						alts: vec![SolAddress([0x01; 32]), SolAddress([0x02; 32])],
+					}
+					.encode()
+					.try_into()
+					.unwrap(),
+				}),
+			},
+			dca_params: Some(DcaParameters { number_of_chunks: 1u32, chunk_interval: 3u32 }),
+			boost_fee: 100u8,
+			broker_fee: Beneficiary { account: AccountId::new([0x00; 32]), bps: 1u16 },
+			affiliate_fees: sp_core::bounded_vec![],
+		}
+	}
 
 	#[test]
 	fn test_cf_parameters_max_length_v0() {
@@ -162,10 +239,11 @@ mod tests {
 		struct MaxAccountLength([u8; 64]);
 		assert!(
 			MAX_VAULT_SWAP_PARAMETERS_LENGTH_V0 as usize >=
-				VaultSwapParametersV0::<MaxAccountLength>::max_encoded_len()
+				VaultSwapParametersLegacy::<MaxAccountLength>::max_encoded_len()
 		);
 		assert!(
-			MAX_CF_PARAM_LENGTH_V0 as usize >= CfParameters::<MaxAccountLength>::max_encoded_len()
+			MAX_CF_PARAM_LENGTH_V0 as usize >=
+				CfParametersLegacy::<MaxAccountLength>::max_encoded_len()
 		);
 	}
 
@@ -179,47 +257,35 @@ mod tests {
 				VaultSwapParameters::<MaxAccountLength>::max_encoded_len()
 		);
 		assert!(
-			MAX_CF_PARAM_LENGTH_V1 as usize >= CfParameters::<MaxAccountLength>::max_encoded_len()
+			MAX_CF_PARAM_LENGTH_V1 as usize >=
+				CfParametersWithRefundCcm::<MaxAccountLength>::max_encoded_len()
 		);
-	}
-	fn vault_swap_parameters_v0() -> VaultSwapParametersV0<ForeignChainAddress> {
-		VaultSwapParametersV0 {
-			refund_params: ChannelRefundParameters {
-				retry_duration: 1,
-				refund_address: ForeignChainAddress::Eth(sp_core::H160::from([2; 20])),
-				min_price: Default::default(),
-				refund_ccm_metadata: (),
-			},
-			dca_params: Some(DcaParameters { number_of_chunks: 1u32, chunk_interval: 3u32 }),
-			boost_fee: 100u8,
-			broker_fee: Beneficiary { account: AccountId::new([0x00; 32]), bps: 1u16 },
-			affiliate_fees: sp_core::bounded_vec![],
-		}
 	}
 
 	#[test]
-	fn test_versioned_cf_parameters() {
-		let cf_parameters = CfParameters {
+	#[allow(deprecated)]
+	fn test_versioned_cf_parameters_v0() {
+		let cf_parameters_v0 = CfParametersLegacy {
 			ccm_additional_data: (),
 			vault_swap_parameters: vault_swap_parameters_v0(),
 		};
-		let no_ccm_v0_encoded = VersionedCfParameters::V0(cf_parameters).encode();
+		let no_ccm_v0_encoded = VersionedCfParameters::V0(cf_parameters_v0).encode();
 
 		let expected_encoded: Vec<u8> =
 			hex::decode("00010000000002020202020202020202020202020202020202020000000000000000000000000000000000000000000000000000000000000000010100000003000000640000000000000000000000000000000000000000000000000000000000000000010000").unwrap();
 		assert_eq!(no_ccm_v0_encoded, expected_encoded);
 
-		let ccm_cf_parameters = CfParameters {
+		let ccm_cf_parameters_v0 = CfParametersLegacy {
 			ccm_additional_data: vec![0xF0, 0xF1, 0xF2, 0xF3].try_into().unwrap(),
 			vault_swap_parameters: vault_swap_parameters_v0(),
 		};
-		let ccm_v0_encoded = VersionedCcmCfParameters::V0(ccm_cf_parameters).encode();
+		let ccm_v0_encoded = VersionedCcmCfParameters::V0(ccm_cf_parameters_v0).encode();
 		assert_eq!(ccm_v0_encoded, hex::decode("0010f0f1f2f3010000000002020202020202020202020202020202020202020000000000000000000000000000000000000000000000000000000000000000010100000003000000640000000000000000000000000000000000000000000000000000000000000000010000").unwrap());
 	}
 
 	#[test]
-	fn can_decode_cf_parameters() {
-		let vault_swap_parameters = vault_swap_parameters_v0();
+	fn can_decode_cf_parameters_no_ccm() {
+		let vault_swap_parameters = vault_swap_parameters();
 
 		let encoded = build_cf_parameters::<AnyChain>(
 			vault_swap_parameters.refund_params.clone(),
@@ -232,8 +298,20 @@ mod tests {
 		);
 
 		assert_eq!(decode_cf_parameters(&encoded[..]), Ok((vault_swap_parameters.clone(), ())));
+	}
 
-		let ccm_additional_data = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
+	#[test]
+	fn can_decode_cf_parameters_with_ccm() {
+		let vault_swap_parameters = vault_swap_parameters();
+
+		let ccm_additional_data = VersionedSolanaCcmAdditionalData::V1 {
+			ccm_accounts: SolCcmAccounts {
+				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+				additional_accounts: vec![],
+				fallback_address: SolPubkey([0x02; 32]),
+			},
+			alts: vec![SolAddress([0x00; 32])],
+		};
 
 		let encoded = build_cf_parameters::<AnyChain>(
 			vault_swap_parameters.refund_params.clone(),
@@ -242,16 +320,19 @@ mod tests {
 			vault_swap_parameters.broker_fee.account.clone(),
 			vault_swap_parameters.broker_fee.bps,
 			vault_swap_parameters.affiliate_fees.clone(),
-			Some(&CcmChannelMetadataUnchecked {
+			Some(&CcmChannelMetadataChecked {
 				message: Default::default(),
 				gas_budget: Default::default(),
-				ccm_additional_data: ccm_additional_data.clone().try_into().unwrap(),
+				ccm_additional_data: DecodedCcmAdditionalData::Solana(ccm_additional_data.clone()),
 			}),
 		);
 
 		assert_eq!(
 			decode_cf_parameters(&encoded[..]),
-			Ok((vault_swap_parameters, ccm_additional_data))
+			Ok((
+				vault_swap_parameters,
+				CcmAdditionalData(ccm_additional_data.encode().try_into().unwrap())
+			))
 		);
 	}
 }

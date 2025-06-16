@@ -24,7 +24,8 @@ use crate::{
 		SolAddress, SolAsset, SolCcmAccounts, SolPubkey, MAX_CCM_USER_ALTS, MAX_USER_CCM_BYTES_SOL,
 		MAX_USER_CCM_BYTES_USDC,
 	},
-	CcmChannelMetadataUnchecked, Chain, ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH,
+	CcmAdditionalData, CcmChannelMetadataUnchecked, Chain, ForeignChainAddress,
+	MAX_CCM_ADDITIONAL_DATA_LENGTH,
 };
 use cf_primitives::{Asset, ForeignChain};
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -96,6 +97,18 @@ impl DecodedCcmAdditionalData {
 	}
 }
 
+impl From<DecodedCcmAdditionalData> for CcmAdditionalData {
+	fn from(value: DecodedCcmAdditionalData) -> Self {
+		CcmAdditionalData(match value {
+			DecodedCcmAdditionalData::NotRequired => Default::default(),
+			DecodedCcmAdditionalData::Solana(solana_ccm) => solana_ccm
+				.encode()
+				.try_into()
+				.expect("Decoded additional data is guaranteed to be valid."),
+		})
+	}
+}
+
 #[derive(
 	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord,
 )]
@@ -132,9 +145,12 @@ pub(crate) struct CcmValidityChecker;
 
 impl CcmValidityChecker {
 	/// Checks to see if a given CCM is valid. Currently this only applies to Solana and Assethub
-	/// chains. For Solana Chain: Performs decoding of the `cf_parameter`, and checks the expected
-	/// length. For Assethub Chain: Decodes the message into a supported extrinsic of the
-	/// PolkadotXcm pallet. Returns the decoded `cf_parameter`.
+	/// chains.
+	/// For Solana Chain: Performs decoding of the `cf_parameter`, and checks the expected length.
+	/// For Assethub Chain: Decodes the message into a supported extrinsic of the PolkadotXcm
+	/// pallet.
+	///
+	/// Returns `DecodedCcmAdditionalData`.
 	pub fn check_and_decode(
 		ccm: &CcmChannelMetadataUnchecked,
 		egress_asset: Asset,
@@ -151,7 +167,7 @@ impl CcmValidityChecker {
 					"Only Solana chain's asset will be checked. This conversion must succeed.",
 				);
 
-				// Check if the cf_parameter can be decoded
+				// Check if the ccm additional data can be decoded
 				let decoded_data = VersionedSolanaCcmAdditionalData::decode(
 					&mut &ccm.ccm_additional_data.0.clone()[..],
 				)
@@ -287,7 +303,9 @@ mod test {
 	use super::*;
 	use crate::{
 		sol::{
-			sol_tx_core::sol_test_values::{self, ccm_accounts, ccm_parameter_v1, user_alt},
+			sol_tx_core::sol_test_values::{
+				self, ccm_accounts, ccm_metadata_v1_unchecked, user_alt,
+			},
 			SolCcmAddress, SolPubkey, MAX_USER_CCM_BYTES_SOL,
 		},
 		CcmChannelMetadata,
@@ -302,9 +320,12 @@ mod test {
 
 	#[test]
 	fn can_verify_valid_ccm() {
-		let ccm = sol_test_values::ccm_parameter().channel_metadata;
 		assert_eq!(
-			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol, DEST_ADDR),
+			CcmValidityChecker::check_and_decode(
+				&sol_test_values::ccm_metadata_v0_unchecked(),
+				Asset::Sol,
+				DEST_ADDR
+			),
 			Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V0(
 				sol_test_values::ccm_accounts()
 			)))
@@ -405,7 +426,7 @@ mod test {
 
 	#[test]
 	fn can_check_for_redundant_data() {
-		let ccm = sol_test_values::ccm_parameter().channel_metadata;
+		let ccm = sol_test_values::ccm_metadata_v0_unchecked();
 
 		// Ok for Solana Chain
 		assert_ok!(CcmValidityChecker::check_and_decode(&ccm, Asset::Sol, DEST_ADDR));
@@ -431,7 +452,7 @@ mod test {
 
 	#[test]
 	fn only_check_against_solana_chain() {
-		let mut ccm = sol_test_values::ccm_parameter().channel_metadata;
+		let mut ccm = sol_test_values::ccm_metadata_v0_unchecked();
 
 		// Only fails for Solana chain.
 		ccm.message = [0x00; MAX_USER_CCM_BYTES_SOL + 1].to_vec().try_into().unwrap();
@@ -663,7 +684,7 @@ mod test {
 
 	#[test]
 	fn can_verify_destination_address() {
-		let ccm = sol_test_values::ccm_parameter().channel_metadata;
+		let ccm = sol_test_values::ccm_metadata_v0_unchecked();
 		assert_eq!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol, INVALID_DEST_ADDR),
 			Err(CcmValidityError::InvalidDestinationAddress)
@@ -672,7 +693,7 @@ mod test {
 
 	#[test]
 	fn additional_data_v1_support_works() {
-		let mut ccm = sol_test_values::ccm_parameter_v1().channel_metadata;
+		let mut ccm = ccm_metadata_v1_unchecked();
 		assert_eq!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol, DEST_ADDR),
 			Ok(DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V1 {
@@ -700,11 +721,12 @@ mod test {
 
 	#[test]
 	fn can_check_for_too_many_alts() {
-		let mut ccm = ccm_parameter_v1().channel_metadata;
-		ccm.ccm_additional_data = codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V1 {
+		let mut ccm = ccm_metadata_v1_unchecked();
+		ccm.ccm_additional_data = VersionedSolanaCcmAdditionalData::V1 {
 			ccm_accounts: ccm_accounts(),
 			alts: (0..=MAX_CCM_USER_ALTS).map(|i| SolAddress([i; 32])).collect(),
-		})
+		}
+		.encode()
 		.try_into()
 		.unwrap();
 
