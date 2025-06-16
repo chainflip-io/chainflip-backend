@@ -1606,6 +1606,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		refund_address: <T::TargetChain as Chain>::ChainAccount,
 		deposit_fetch_id: Option<<T::TargetChain as Chain>::DepositFetchId>,
 	) {
+		debug_assert!(
+			T::TargetChain::get() != ForeignChain::Solana,
+			"This should never be called for the Solana chain"
+		);
+
 		let AmountAndFeesWithheld {
 			amount_after_fees: amount_after_ingress_fees,
 			fees_withheld: _,
@@ -1619,33 +1624,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			tx.amount,
 		);
 		let AmountAndFeesWithheld { amount_after_fees: amount_to_refund, fees_withheld: _ } =
-			if let Some(ref refund_ccm) = tx.refund_ccm_metadata {
-				Self::withhold_ingress_or_egress_fee(
-					IngressOrEgress::EgressCcm {
+			Self::withhold_ingress_or_egress_fee(
+				match tx.refund_ccm_metadata {
+					Some(ref refund_ccm) => IngressOrEgress::EgressCcm {
 						gas_budget: refund_ccm.channel_metadata.gas_budget,
 						message_length: refund_ccm.channel_metadata.message.len(),
 					},
-					tx.asset,
-					amount_after_ingress_fees,
-				)
-			} else {
-				Self::withhold_ingress_or_egress_fee(
-					IngressOrEgress::Egress,
-					tx.asset,
-					amount_after_ingress_fees,
-				)
-			};
+					None => IngressOrEgress::Egress,
+				},
+				tx.asset,
+				amount_after_ingress_fees,
+			);
 
-		// In the case of CCM refund we need split up the potential fetch from the CCM refund
-		// because CCM egresses are to be done separately from a RejectCall. In that case the
-		// RejectCall will act as a potential fetch. In some scenarios no fetch is needed.
-		// The problem is that we can't know if the fetch is required until we don't call
-		// the internal functions (evm_all_batch_builder).
+		// By building the ccm call, we will know if a separate "fetch" is required as part of the
+		// refund.
 		let no_ccm_refund = tx.refund_ccm_metadata.is_none();
 		match <T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
 			tx.deposit_details.clone(),
 			refund_address.clone(),
-			if no_ccm_refund { Some(amount_to_refund) } else { None },
+			no_ccm_refund.then_some(amount_to_refund),
 			tx.asset,
 			deposit_fetch_id,
 		) {
@@ -1677,6 +1674,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		if let Some(ref ccm_refund_metadata) = tx.refund_ccm_metadata {
+			// Solana CCM refunds with ALT is not supported, since we don't witness ALT here.
+			if let DecodedCcmAdditionalData::Solana(sol_add_data) =
+				&ccm_refund_metadata.channel_metadata.ccm_additional_data
+			{
+				debug_assert!(
+					sol_add_data.alt_addresses().map(|alts| alts.is_empty()).unwrap_or(true),
+					"Solana CCM with ALT is not supported for refund CCMs"
+				);
+			}
+
 			if let Ok(api_call) =
 				<T::ChainApiCall as ExecutexSwapAndCall<T::TargetChain>>::new_unsigned(
 					TransferAssetParams {
@@ -1702,13 +1709,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					tx_id: tx.deposit_details.clone(),
 				});
 			} else {
-				// Solana CCM refunds are problematic after CcmAdditionalDataHandler is added in
-				// PR-5780. We will not have initialized the witnessing of ALT here so
-				// this will fail with ExecutexSwapAndCallError::TryAgainLater. For now we just
-				// rely on the fact that BLS is not supported in Solana.
-				// NOTE: This could be appending a rejection that might have an already succesful
+				// NOTE: This could be appending a rejection that might have an already successful
 				// fetch (RejectCall) but not the CCM refund. We must ensure that
-				// FailedRejections are not being retried (we don't do that currently).
+				// FailedRejections are not being retried.
 				FailedRejections::<T, I>::append(tx.clone());
 				Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
 					tx_id: tx.deposit_details.clone(),
@@ -2739,10 +2742,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			(None, None)
 		};
 
-		if T::SwapParameterValidation::validate_refund_params(refund_params.retry_duration).is_err()
-		{
-			return Err(RefundReason::InvalidRefundParameters);
-		}
+		T::SwapParameterValidation::validate_refund_params(refund_params.retry_duration)
+			.map_err(|_| RefundReason::InvalidRefundParameters)?;
 
 		if let Some(params) = &dca_params {
 			if T::SwapParameterValidation::validate_dca_params(params).is_err() {
