@@ -125,12 +125,12 @@ mod tests {
 	// ETHERUM MAINNET ADDRESSES
 	const BTC_USD_AGGREGATOR_ETHEREUM_ADDRESS: &str = "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c"; // heartbeat: 3600s, Deviation 0.5%, Decimals 8
 	const ETH_USD_AGGREGATOR_ETHEREUM_ADDRESS: &str = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"; // heartbeat: 3600s, Deviation 0.5%, Decimals 8
-	const ADDRESS_CHECKER_ETHEREUM_ADDRESS: &str = "0x0000000000000000000000000000000000000000"; // TODO: Update in PRO-2320 and test
+	const ADDRESS_CHECKER_ETHEREUM_ADDRESS: &str = "0x1562Ad6bb0e68980A3111F24531c964c7e155611";
 
 	// ARBITRUM ADDRESSES
 	const BTC_USD_AGGREGATOR_ARBITRUM_ADDRESS: &str = "0x6ce185860a4963106506C203335A2910413708e9"; // heartbeat: 86400s, Deviation 0.05%, Decimals 8
 	const ETH_USD_AGGREGATOR_ARBITRUM_ADDRESS: &str = "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612"; // heartbeat: 86400s, Deviation 0.05%, Decimals 8
-	const ADDRESS_CHECKER_ARBITRUM_ADDRESS: &str = "0x0000000000000000000000000000000000000000"; // TODO: Update in PRO-2320 and test
+	const ADDRESS_CHECKER_ARBITRUM_ADDRESS: &str = "0x69C700A0DEBAb9e349dd1f52ED62eb253a3c9892";
 
 	const LOCALNET_ETH_PRICE_FEED_BTC: &str = "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44";
 	const LOCALNET_ETH_PRICE_FEED_ETH: &str = "0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f";
@@ -156,7 +156,7 @@ mod tests {
 
 	#[tokio::test]
 	#[ignore = "requires access to external RPC"]
-	async fn eth_oracle_aggregator_test_mainnet() {
+	async fn oracle_aggregator_test_mainnet() {
 		let settings = Settings::new_test().unwrap();
 
 		let eth_client = EvmRpcSigningClient::new(
