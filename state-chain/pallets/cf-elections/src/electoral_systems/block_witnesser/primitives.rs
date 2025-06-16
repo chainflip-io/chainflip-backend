@@ -467,7 +467,7 @@ impl<N> Validate for CompactHeightTracker<N> {
 }
 
 impl<N: Step + Ord> CompactHeightTracker<N> {
-	pub fn extract_lazily<'a>(&'a mut self) -> CompactHeightTrackerExtract<'a, N> {
+	pub fn extract_lazily(&mut self) -> CompactHeightTrackerExtract<'_, N> {
 		CompactHeightTrackerExtract { tracker: self }
 	}
 
@@ -502,7 +502,7 @@ pub struct CompactHeightTrackerExtract<'a, N> {
 	tracker: &'a mut CompactHeightTracker<N>,
 }
 
-impl<'a, N: Step> Iterator for CompactHeightTrackerExtract<'a, N> {
+impl<N: Step> Iterator for CompactHeightTrackerExtract<'_, N> {
 	type Item = N;
 
 	fn next(&mut self) -> Option<Self::Item> {

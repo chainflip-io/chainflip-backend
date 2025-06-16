@@ -27,20 +27,20 @@ impl<Tag> Validate for TypesFor<Tag> {
 /// Syntax sugar for implementing multiple traits for a single type.
 ///
 /// Example use:
-/// ```
-/// impls! {
-///     for u8:
-///     Clone {
-///         ...
-///     }
-///     Copy {
-///         ...
-///     }
-///     Default {
-///         ...
-///     }
-/// }
-/// ```
+// ```
+// impls! {
+//     for u8:
+//     Clone {
+//         ...
+//     }
+//     Copy {
+//         ...
+//     }
+//     Default {
+//         ...
+//     }
+// }
+// ```
 macro_rules! impls {
     (for $name:ty: $(#[doc = $doc_text:tt])? $trait:ty {$($trait_impl:tt)*} $($rest:tt)*) => {
         $(#[doc = $doc_text])?
