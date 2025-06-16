@@ -302,11 +302,11 @@ async function testEvm(
 
   const ccmEventEmitted = refundParameters.refundCcmMetadata
     ? observeCcmReceived(
-      sourceAsset,
-      sourceAsset,
-      refundParameters.refundAddress,
-      refundParameters.refundCcmMetadata,
-    )
+        sourceAsset,
+        sourceAsset,
+        refundParameters.refundAddress,
+        refundParameters.refundCcmMetadata,
+      )
     : Promise.resolve();
 
   await Promise.all([
