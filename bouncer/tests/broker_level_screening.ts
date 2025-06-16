@@ -286,7 +286,7 @@ async function testEvm(
     logger.debug(`Initial deposit ${sourceAsset} received...`);
     // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
     // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
-    // succesfully to make sure the Deposit contract is deployed.
+    // successfully to make sure the Deposit contract is deployed.
     await waitForDepositContractDeployment(chain, swapParams.depositAddress);
   }
 
@@ -302,11 +302,11 @@ async function testEvm(
 
   const ccmEventEmitted = refundParameters.refundCcmMetadata
     ? observeCcmReceived(
-        sourceAsset,
-        sourceAsset,
-        refundParameters.refundAddress,
-        refundParameters.refundCcmMetadata,
-      )
+      sourceAsset,
+      sourceAsset,
+      refundParameters.refundAddress,
+      refundParameters.refundCcmMetadata,
+    )
     : Promise.resolve();
 
   await Promise.all([
