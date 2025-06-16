@@ -189,8 +189,75 @@ mod tests {
 
 	use super::*;
 
-	// TODO: PRO-2320: Add same test for mainnet when the `oracle_query_helper` is deployed to make
-	// sure it works and that the prefunded account is prefunded correctly
+	#[ignore = "requires access to external RPC"]
+	#[tokio::test]
+	async fn can_build_query_tx_and_simulate_mainnet() {
+		task_scope::task_scope(|scope| {
+			async {
+				let client = SolRetryRpcClient::new(
+					scope,
+					NodeContainer {
+						primary: HttpEndpoint {
+							http_endpoint: "https://api.mainnet-beta.solana.com".into(),
+						},
+						backup: None,
+					},
+					Some(
+						SolHash::from_str("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d").unwrap(),
+					),
+					Solana::WITNESS_PERIOD,
+				)
+				.await
+				.unwrap();
+
+				let oracle_program_id: SolAddress =
+					const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny");
+				let oracle_feed: SolAddress =
+					const_address("Cv4T27XbjVoKUYwP72NQQanvZeA7W4YF9L4EnYT9kx5o");
+				let oracle_query_helper: SolAddress =
+					const_address("5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX");
+
+				let serialized_transaction = build_and_serialize_query_transaction(
+					oracle_query_helper,
+					oracle_program_id,
+					vec![oracle_feed],
+				)
+				.unwrap();
+
+				let simulation_result =
+					client.simulate_transaction(serialized_transaction, None).await;
+
+				let slot = simulation_result.context.slot;
+				println!("Simulation slot: {}", slot);
+
+				let return_data = simulation_result
+					.value
+					.return_data
+					.as_ref()
+					.expect("Expected return data to be Some");
+
+				let (price_feeds, query_timestamp) =
+					decode_query_return_data(return_data, oracle_query_helper).unwrap();
+				println!("Query Timestamp: {}", query_timestamp);
+
+				let PriceFeedData { round_id, slot, timestamp, answer, decimals, description } =
+					price_feeds.first().unwrap();
+
+				println!(
+					"Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}, Decimals: {}, Description: {}",
+					round_id, slot, timestamp, answer, decimals, description
+				);
+
+				assert_eq!(*decimals, 8);
+				assert_eq!(description, "BTC / USD");
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
 
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
@@ -218,7 +285,7 @@ mod tests {
 				let oracle_feed: SolAddress =
 					const_address("6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe");
 				let oracle_query_helper: SolAddress =
-					const_address("HaAGuDMxS56xgoy9vzm1NtESKftoqpiHCysvXRULk7K7");
+					const_address("5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX");
 
 				let serialized_transaction = build_and_serialize_query_transaction(
 					oracle_query_helper,
@@ -290,7 +357,7 @@ mod tests {
 					const_address("669U43LNHx7LsVj95uYksnhXUfWKDsdzVqev3V4Jpw3P"),
 				];
 				let oracle_query_helper: SolAddress =
-					const_address("HaAGuDMxS56xgoy9vzm1NtESKftoqpiHCysvXRULk7K7");
+					const_address("5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX");
 
 				let serialized_transaction = build_and_serialize_query_transaction(
 					oracle_query_helper,
