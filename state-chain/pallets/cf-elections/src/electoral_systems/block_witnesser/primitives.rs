@@ -1,6 +1,7 @@
 use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use core::{
+	cmp::min,
 	iter::Step,
 	ops::{Range, RangeInclusive},
 };
@@ -29,15 +30,10 @@ defx! {
 		/// The lowest block we haven't seen yet. I.e., we have seen blocks below.
 		pub seen_heights_below: ChainBlockNumberOf<T::Chain>,
 
-		/// We always create elections until the next priority height, even if we
-		/// are in safe mode.
-		pub priority_elections_up_to: ChainBlockNumberOf<T::Chain>,
-
-		/// We need to keep track of which block heights we have scheduled elections for previously,
-		/// since in case of reorgs we have to set `priority_elections_up_to` such that these heights
-		/// are going to be queried for even in safe mode.
 		/// Since the boundary between ongoing and queued_elections is fuzzy (due to reorgs currently
-		/// ongoing elections might turn into scheduled ones), it is clearer to keep track of this separately.
+		/// ongoing elections might turn into scheduled ones), we're separately keeping track of the
+		/// block height we have ever scheduled elections for. In case of reorgs into safe-mode we're
+		/// always going to reschedule elections for heights up to this one.
 		pub highest_ever_ongoing_election: ChainBlockNumberOf<T::Chain>,
 
 		/// Block hashes we got from the BHW.
@@ -59,12 +55,60 @@ defx! {
 
 	validate this (else ElectionTrackerError) {
 
-		is_valid: true
+		//--- highest block is updated ---
+		// The `seen_heights_below` value should always be one more than the highest seen block.
+		// This property takes into account all queued and ongoing elections, except "optimistic",
+		// since those are for blocks that we haven't seen yet.
+		seen_heights_below_is_updated: {
+			this.queued_hash_elections.keys()
+			.chain(this.queued_safe_elections.get_all_heights().iter())
+			.chain(this.ongoing.iter().filter(|(_, election_type)| **election_type != BWElectionType::Optimistic).map(|(height, _)| height))
+			.max()
+			.cloned()
+			.map(|max_height| max_height < this.seen_heights_below)
+			.unwrap_or(true)
+		},
 
-		// TODO:
-		// - there are no hashes for old elections
-		//-  elections and safe elections are disjoined
+		// The `highest_ever_ongoing_election` should always be updated when new elections are created. 
+		highest_ever_ongoing_election_is_updated: {
+			this.ongoing.keys().all(|height| *height <= this.highest_ever_ongoing_election)
+		},
 
+		//--- ensure that we delete old data ---
+		// We should only store data received from optimistic elections for at most SAFETY_BUFFER blocks.
+		optimistic_block_cache_is_cleared: this.optimistic_block_cache.iter().all(|(height, _block)|
+			height.saturating_forward(T::Chain::SAFETY_BUFFER) > this.seen_heights_below
+		),
+
+		//--- disjointness of all elections ---
+		// The following properties verify that the three sets of
+		//  - ongoing,
+		//  - queued by hash,
+		//  - and queued by height
+		// elections are pairwise disjoint. They also ensure that they
+		// adhere to the following ordering:
+		//
+		// |--- ongoing ---|--- queued by height ---|--- queued by hash ---||
+		//                                          |<-- SAFETY_BUFFER  -->||
+		//                                                                  ^- seen_heights_below
+		// >> increasing block heights >>
+		//
+
+		ongoing_elections_are_lower_than_queued: {
+			let highest_ongoing = this.ongoing.keys().max().cloned().unwrap_or_default();
+			this.queued_hash_elections.keys().all(|height| highest_ongoing < *height)
+			&& this.queued_safe_elections.get_all_heights().iter().all(|height| highest_ongoing < *height)
+		},
+
+		elections_queued_by_hash_are_inside_safety_buffer:
+			this.queued_hash_elections.keys().all(
+				|height| height.saturating_forward(T::Chain::SAFETY_BUFFER) >= this.seen_heights_below
+			),
+
+		elections_queued_by_safe_are_outside_safety_buffer:
+			this.queued_safe_elections.get_all_heights().iter().all(
+				|height| height.saturating_forward(T::Chain::SAFETY_BUFFER) < this.seen_heights_below
+			)
 	}
 }
 
@@ -72,32 +116,46 @@ impl<T: BWTypes> ElectionTracker<T> {
 	pub fn start_more_elections(&mut self, max_ongoing: usize, safemode: SafeModeStatus) {
 		use BWElectionType::*;
 
+		// First we remove all Optimistic elections, we're going to recreate them if needed.
+		// This ensures that ongoing optimistic elections don't block more important ByHash
+		// elections.
+		self.ongoing.retain(|_, election_type| *election_type != Optimistic);
+
 		// schedule at most `max_new_elections`
 		let max_new_elections = max_ongoing.saturating_sub(self.ongoing.len());
 
+		let opti_elections = || iter::once((self.seen_heights_below, Optimistic));
+
+		let all_block_heights = self
+			.queued_safe_elections
+			.get_all_heights()
+			.into_iter()
+			.chain(self.queued_hash_elections.keys().cloned())
+			.chain(opti_elections().map(|(height, _)| height));
+
+		let new_elections_count = all_block_heights
+			.take_while(|height| {
+				safemode == SafeModeStatus::Disabled ||
+					*height <= self.highest_ever_ongoing_election
+			})
+			.take(max_new_elections)
+			.count();
+
 		let safe_elections = self
 			.queued_safe_elections
-			.extract(max_new_elections)
-			.into_iter()
+			.extract_lazily()
 			.map(|height| (height, SafeBlockHeight));
 
 		let hash_elections = self
 			.queued_hash_elections
 			.extract_if(|_, _| true)
 			.map(|(height, hash)| (height, ByHash(hash)));
-		let opti_elections = iter::once((self.seen_heights_below, Optimistic));
 
 		self.ongoing.extend(
 			safe_elections
 				.chain(hash_elections)
-				.chain(opti_elections)
-				// In case of a reorg we still want to recreate elections for blocks which we had
-				// elections for previously AND were touched by the reorg
-				.take_while(|(height, _)| {
-					safemode == SafeModeStatus::Disabled ||
-						*height <= self.highest_ever_ongoing_election
-				})
-				.take(max_new_elections),
+				.chain(opti_elections())
+				.take(new_elections_count),
 		);
 
 		// Make sure that we always update the highest ever ongoing election after we have scheduled
@@ -272,7 +330,8 @@ impl<T: BWTypes> ElectionTracker<T> {
 		// If there was a reorg, remove any references to the reorged heights
 		// in the election tracker.
 		if let Some(ref removed) = progress.removed {
-			self.queued_safe_elections.remove(removed.clone());
+			self.queued_safe_elections
+				.remove(removed.start().clone()..removed.end().saturating_forward(1));
 			self.queued_hash_elections.retain(|height, _| !removed.contains(height));
 			self.ongoing.retain(|height, _| !removed.contains(height));
 		}
@@ -301,7 +360,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 				},
 			);
 
-		// adding all hashes to the queue
+		// add all remaining hashes to the queue
 		self.queued_hash_elections.append(&mut remaining);
 
 		let is_safe_height = |height: &ChainBlockNumberOf<T::Chain>| {
@@ -339,7 +398,6 @@ impl<T: BWTypes> Default for ElectionTracker<T> {
 	fn default() -> Self {
 		Self {
 			seen_heights_below: ChainBlockNumberOf::<T::Chain>::zero(),
-			priority_elections_up_to: ChainBlockNumberOf::<T::Chain>::zero(),
 			highest_ever_ongoing_election: ChainBlockNumberOf::<T::Chain>::zero(),
 			queued_hash_elections: Default::default(),
 			ongoing: Default::default(),
@@ -403,43 +461,30 @@ impl<N> Validate for CompactHeightTracker<N> {
 }
 
 impl<N: Step + Ord> CompactHeightTracker<N> {
-	pub fn extract(&mut self, max_elements: usize) -> Vec<N> {
-		let mut result = Vec::new();
-		let mut remove = Vec::new();
-		for (i, range) in self.elections.iter_mut().enumerate() {
-			while result.len() < max_elements {
-				if let Some(x) = range.next() {
-					result.push(x);
-				} else {
-					remove.push(i);
-					break;
-				}
-			}
-		}
-		for i in remove {
-			self.elections.remove(i);
-		}
-		result
+	pub fn extract_lazily<'a>(&'a mut self) -> CompactHeightTrackerExtract<'a, N> {
+		CompactHeightTrackerExtract { tracker: self }
 	}
 
 	pub fn insert(&mut self, item: N) {
-		for r in self.elections.iter_mut().rev() {
-			let end_plus_one = N::forward(r.end.clone(), 1);
-			if item == end_plus_one {
-				r.end = end_plus_one;
-				return;
-			}
-			if r.contains(&item) {
+		if let Some(back) = self.elections.back_mut() {
+			if back.end == item {
+				back.end = N::forward(item, 1);
 				return;
 			}
 		}
 		self.elections.push_back(item.clone()..N::forward(item, 1));
 	}
 
-	pub fn remove(&mut self, range: RangeInclusive<N>) {
-		for r in self.elections.iter_mut() {
-			range_difference(r, &(range.start().clone()..N::forward(range.end().clone(), 1)))
-		}
+	pub fn remove(&mut self, remove: Range<N>) {
+		self.elections.iter_mut().for_each(|r| {
+			if r.end < remove.end {
+				r.end = min(&r.end, &remove.end).clone();
+			}
+			if r.start > remove.start {
+				r.start = max(&r.start, &remove.start).clone();
+			}
+		});
+		self.elections = self.elections.iter().filter(|r| !r.is_empty()).cloned().collect();
 	}
 
 	fn get_all_heights(&self) -> BTreeSet<N> {
@@ -447,21 +492,19 @@ impl<N: Step + Ord> CompactHeightTracker<N> {
 	}
 }
 
-fn range_difference<N: Ord + Clone>(r: &mut Range<N>, s: &Range<N>) {
-	// ```
-	// [-- r --]
-	//     [-- s --]
-	// ```
-	if s.contains(&r.end) {
-		r.end = s.start.clone();
-	}
+pub struct CompactHeightTrackerExtract<'a, N> {
+	tracker: &'a mut CompactHeightTracker<N>,
+}
 
-	// ```
-	//     [-- r --]
-	// [-- s --]
-	// ```
-	if s.contains(&r.start) {
-		r.start = s.end.clone();
+impl<'a, N: Step> Iterator for CompactHeightTrackerExtract<'a, N> {
+	type Item = N;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let result = self.tracker.elections.front_mut().and_then(|range| range.next());
+		if self.tracker.elections.front().is_some_and(|front| front.is_empty()) {
+			self.tracker.elections.pop_front();
+		}
+		result
 	}
 }
 
