@@ -84,7 +84,7 @@ pub enum OrderFilled {
 	},
 }
 
-pub type RefundParametersRpc = ChannelRefundParameters<AddressString>;
+pub type RefundParametersRpc = ChannelRefundParametersGeneric<AddressString>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RebalanceOutcome {
