@@ -15,9 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	ccm_checker::DecodedCcmAdditionalData, AnyChainAsset, CcmAdditionalData,
-	CcmChannelMetadataChecked, Chain, ChannelRefundParametersGeneric,
-	ChannelRefundParametersLegacy, ForeignChainAddress,
+	ccm_checker::DecodedCcmAdditionalData, CcmAdditionalData, CcmChannelMetadataChecked, Chain,
+	ChannelRefundParametersForChain, ChannelRefundParametersGeneric, ChannelRefundParametersLegacy,
 };
 use cf_primitives::{
 	AccountId, AffiliateAndFee, BasisPoints, Beneficiary, DcaParameters, MAX_AFFILIATES,
@@ -25,7 +24,7 @@ use cf_primitives::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::ConstU32;
-use sp_runtime::{BoundedVec, DispatchError, Vec};
+use sp_runtime::{BoundedVec, Vec};
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub enum VersionedCfParameters<RefundAddress, CcmData = ()> {
@@ -61,16 +60,6 @@ pub type VaultSwapParametersLegacy<RefundAddress> =
 pub type VaultSwapParameters<RefundAddress> =
 	VaultSwapParametersGeneric<ChannelRefundParametersGeneric<RefundAddress>>;
 
-impl<RefundAddress: Clone> VaultSwapParameters<RefundAddress> {
-	pub fn validate(
-		&self,
-		refund_asset: AnyChainAsset,
-		refund_address_decoded: ForeignChainAddress,
-	) -> Result<(), DispatchError> {
-		self.refund_params.validate(refund_asset, refund_address_decoded)
-	}
-}
-
 impl<RefundAddress> From<VaultSwapParametersLegacy<RefundAddress>>
 	for VaultSwapParameters<RefundAddress>
 {
@@ -94,7 +83,7 @@ impl<RefundAddress> From<VaultSwapParametersLegacy<RefundAddress>>
 /// The return type is encoded Vec<u8>, which circumvents the difference in return types depending
 /// on if CCM data is available.
 pub fn build_cf_parameters<C: Chain>(
-	refund_parameters: ChannelRefundParametersGeneric<C::ChainAccount>,
+	refund_parameters: ChannelRefundParametersForChain<C>,
 	dca_parameters: Option<DcaParameters>,
 	boost_fee: u8,
 	broker_id: AccountId,

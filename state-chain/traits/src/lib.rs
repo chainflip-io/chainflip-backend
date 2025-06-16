@@ -25,8 +25,6 @@ pub use safe_mode::*;
 pub mod lending;
 mod swapping;
 
-use cf_chains::{ChannelRefundParametersGeneric, SetGovKeyWithAggKeyError};
-
 pub use swapping::{
 	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
 	SwapRequestTypeEncoded, SwapType,
@@ -44,7 +42,8 @@ use cf_chains::{
 	assets::any::AssetMap,
 	ccm_checker::DecodedCcmAdditionalData,
 	sol::{SolAddress, SolHash},
-	ApiCall, CcmChannelMetadataChecked, CcmDepositMetadataChecked, Chain, ChainCrypto, Ethereum,
+	ApiCall, CcmChannelMetadataChecked, CcmDepositMetadataChecked, Chain, ChainCrypto,
+	ChannelRefundParametersForChain, Ethereum, SetGovKeyWithAggKeyError,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
@@ -781,7 +780,7 @@ pub trait DepositApi<C: Chain> {
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadataChecked>,
 		boost_fee: BasisPoints,
-		refund_params: ChannelRefundParametersGeneric<C::ChainAccount>,
+		refund_params: ChannelRefundParametersForChain<C>,
 		dca_params: Option<DcaParameters>,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 }

@@ -34,8 +34,6 @@ pub use state_chain_runtime::runtime_apis::{
 	VaultSwapDetails,
 };
 
-pub type RefundParameters = ChannelRefundParametersGeneric<AddressString>;
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SwapDepositAddress {
 	pub address: AddressString,
@@ -152,7 +150,6 @@ pub fn vault_swap_input_encoded_to_rpc(value: VaultSwapInputEncoded) -> VaultSwa
 	}
 }
 
-pub type ChannelRefundParametersRpc = ChannelRefundParametersGeneric<AddressString>;
 pub fn try_into_refund_parameters_encoded(
 	param: RefundParametersRpc,
 	chain: ForeignChain,
