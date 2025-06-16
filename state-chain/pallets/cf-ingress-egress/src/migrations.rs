@@ -23,15 +23,15 @@ mod transaction_rejection_details_ccm_migration;
 
 pub type PalletMigration<T, I> = (
 	VersionedMigration<
-		23,
 		24,
+		25,
 		ccm_add_data_to_decoded::CcmAdditionalDataToCheckedMigration<T, I>,
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,
 	VersionedMigration<
-		24,
 		25,
+		26,
 		transaction_rejection_details_ccm_migration::Migration<T, I>,
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,

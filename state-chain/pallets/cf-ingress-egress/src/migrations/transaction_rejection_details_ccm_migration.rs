@@ -45,6 +45,7 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for Migration<T, I> {
 	}
 
 	fn on_runtime_upgrade() -> Weight {
+		log::info!("🥨 Running migration for Ingress-Egress pallet: Migrating Transaction rejection details CCM data.");
 		let _ = crate::ScheduledTransactionsForRejection::<T, I>::translate::<
 			Vec<old::TransactionRejectionDetails<T, I>>,
 			_,
@@ -82,6 +83,7 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for Migration<T, I> {
 					.collect()
 			})
 		});
+		log::info!("🥨 Migration for Transaction rejection details CCM Complete.");
 
 		Weight::zero()
 	}
