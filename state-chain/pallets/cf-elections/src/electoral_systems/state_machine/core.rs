@@ -6,7 +6,7 @@ use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::V
 use codec::{Decode, Encode};
 use derive_where::derive_where;
 use itertools::Either;
-use scale_info::{prelude::string::String, TypeInfo};
+use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use sp_std::{fmt::Debug, vec::Vec};
@@ -253,27 +253,92 @@ pub mod hook_test_utils {
 		Serialize,
 		Deserialize,
 	)]
-	#[serde(bound = "T::Input: Serde, T::Output: Serde")]
-	pub struct MockHook<T: HookType, const NAME: &'static str = ""> {
-		pub state: T::Output,
+	#[serde(bound = "T::Input: Serde, WrappedHook: Serde")]
+	pub struct MockHook<
+		T: HookType,
+		const NAME: &'static str = "",
+		WrappedHook: Hook<T> = ConstantHook<T>,
+	> {
+		pub state: WrappedHook,
 		pub call_history: Vec<T::Input>,
 		pub _phantom: sp_std::marker::PhantomData<T>,
 	}
 
 	impls! {
-		for MockHook<T, NAME> where
+		for MockHook<T, NAME, WrappedHook> where
 		(
 			T: HookType,
 			const NAME: &'static str,
+			WrappedHook: Hook<T>
 		):
 
 		impl {
-			pub fn new(b: T::Output) -> Self {
+			pub fn new(b: WrappedHook) -> Self {
 				Self { state: b, call_history: Vec::new(), _phantom: Default::default() }
 			}
 
 			pub fn take_history(&mut self) -> Vec<T::Input> {
 				sp_std::mem::take(&mut self.call_history)
+			}
+		}
+
+		impl Validate {
+			type Error = ();
+
+			fn is_valid(&self) -> Result<(), ()> {
+				Ok(())
+			}
+		}
+
+		impl Default where (WrappedHook: Default)
+		{
+			fn default() -> Self {
+				Self::new(Default::default())
+			}
+		}
+
+		impl Hook<T> where (T::Input: Clone + Debug)
+		{
+			fn run(&mut self, input: T::Input) -> T::Output {
+				#[cfg(test)]
+				if !NAME.is_empty() {
+					println!("{} called for {input:?}", NAME);
+				}
+				self.call_history.push(input.clone());
+				self.state.run(input)
+			}
+		}
+	}
+
+	#[derive(
+		Clone,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Debug,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Serialize,
+		Deserialize,
+	)]
+	#[serde(bound = "T::Input: Serde, T::Output: Serde")]
+	pub struct ConstantHook<T: HookType> {
+		pub state: T::Output,
+		pub _phantom: sp_std::marker::PhantomData<T>,
+	}
+
+	impls! {
+		for ConstantHook<T> where
+		(
+			T: HookType,
+		):
+
+		impl {
+			pub fn new(b: T::Output) -> Self {
+				Self { state: b, _phantom: Default::default() }
 			}
 		}
 
@@ -294,12 +359,7 @@ pub mod hook_test_utils {
 
 		impl Hook<T> where (T::Input: Debug, T::Output: Clone)
 		{
-			fn run(&mut self, input: T::Input) -> T::Output {
-				#[cfg(test)]
-				if !NAME.is_empty() {
-					println!("{} called for {input:?}", NAME);
-				}
-				self.call_history.push(input);
+			fn run(&mut self, _input: T::Input) -> T::Output {
 				self.state.clone()
 			}
 		}
