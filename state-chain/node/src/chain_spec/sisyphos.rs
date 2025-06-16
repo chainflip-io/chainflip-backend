@@ -49,11 +49,11 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	state_chain_gateway_address: hex_literal::hex!("1F7fE41C798cc7b1D34BdC8de2dDDA4a4bE744D9"),
 	eth_key_manager_address: hex_literal::hex!("22f5562e6859924Db082b8B248ea0C974f148a17"),
 	eth_vault_address: hex_literal::hex!("a94d6b1853F3cb611Ed3cCb701b4fdA5a9DACe85"),
-	eth_address_checker_address: hex_literal::hex!("638e16DD15588B81257eBe9676FA1a0175FDB70a"),
+	eth_address_checker_address: hex_literal::hex!("26061f315570bddF11D9055411a3d811c5FF0148"),
 	arb_key_manager_address: hex_literal::hex!("7EA74208E2954a7294097C731434caD29c5094D8"),
 	arb_vault_address: hex_literal::hex!("8155BdD48CD011e1118b51A1C82be020A3E5c2f2"),
 	arb_usdc_token_address: hex_literal::hex!("75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"),
-	arb_address_checker_address: hex_literal::hex!("2e78F26e9798EBDe7F2b19736De6Aae4d51d6d34"),
+	arb_address_checker_address: hex_literal::hex!("564e411634189E68ecD570400eBCF783b4aF8688"),
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,
 	eth_init_agg_key: hex_literal::hex!(
