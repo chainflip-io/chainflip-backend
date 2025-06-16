@@ -23,7 +23,6 @@ use cf_primitives::AssetAmount;
 use codec::{Decode, Encode};
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_asset_balances::VaultImbalance;
-pub use pallet_cf_ingress_egress::OwedAmount;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
