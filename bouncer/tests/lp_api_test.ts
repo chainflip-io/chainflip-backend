@@ -97,6 +97,15 @@ async function testLiquidityDepositLegacy(logger: Logger) {
     },
   ).event;
 
+  // InBlock waiting is disabled for lp_request_liquidity_deposit_address, because of finality bug
+  await assert.rejects(
+    () => lpApiRpc(logger, `lp_request_liquidity_deposit_address`, [testRpcAsset, 'InBlock']),
+    (e: Error) =>
+      e.message ===
+      'InBlock waiting is not allowed for this method. Use request_liquidity_deposit_address_v2 instead.',
+    `Unexpected lp_request_liquidity_deposit_address result. Expected to return an error because InBlock waiting is not supported`,
+  );
+
   const liquidityDepositAddress = (
     await lpApiRpc(logger, `lp_request_liquidity_deposit_address`, [testRpcAsset, 'Finalized'])
   ).tx_details.response.deposit_address;
