@@ -25,7 +25,7 @@ pub use safe_mode::*;
 pub mod lending;
 mod swapping;
 
-use cf_chains::SetGovKeyWithAggKeyError;
+use cf_chains::{ChannelRefundParametersGeneric, SetGovKeyWithAggKeyError};
 
 pub use swapping::{
 	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
@@ -44,8 +44,7 @@ use cf_chains::{
 	assets::any::AssetMap,
 	ccm_checker::DecodedCcmAdditionalData,
 	sol::{SolAddress, SolHash},
-	ApiCall, CcmChannelMetadataChecked, CcmDepositMetadataChecked, Chain, ChainCrypto,
-	ChannelRefundParametersDecoded, Ethereum,
+	ApiCall, CcmChannelMetadataChecked, CcmDepositMetadataChecked, Chain, ChainCrypto, Ethereum,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
@@ -782,7 +781,7 @@ pub trait DepositApi<C: Chain> {
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadataChecked>,
 		boost_fee: BasisPoints,
-		refund_params: ChannelRefundParametersDecoded,
+		refund_params: ChannelRefundParametersGeneric<C::ChainAccount>,
 		dca_params: Option<DcaParameters>,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 }
@@ -1074,10 +1073,6 @@ pub trait SwapParameterValidation {
 	fn get_swap_limits() -> SwapLimits;
 	fn validate_dca_params(dca_params: &DcaParameters) -> Result<(), DispatchError>;
 	fn validate_refund_params(retry_duration: BlockNumber) -> Result<(), DispatchError>;
-	fn validate_ccm_refund_params(
-		asset: Asset,
-		refund_params: cf_chains::ChannelRefundParametersEncoded,
-	) -> Result<(), DispatchError>;
 	fn validate_broker_fees(
 		broker_fees: &Beneficiaries<Self::AccountId>,
 	) -> Result<(), DispatchError>;

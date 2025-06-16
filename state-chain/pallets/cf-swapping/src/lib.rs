@@ -21,8 +21,8 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
-	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersEncoded,
-	RefundParametersExtended, SwapOrigin, SwapRefundParameters,
+	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParameters, RefundParametersChecked,
+	SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
@@ -92,7 +92,7 @@ pub struct FeeTaken {
 }
 
 enum EgressType {
-	Regular { maybe_ccm_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>> },
+	Regular,
 	Refund { refund_fee: AssetAmount },
 }
 
@@ -405,7 +405,7 @@ impl DcaState {
 #[scale_info(skip_type_params(T))]
 enum SwapRequestState<T: Config> {
 	UserSwap {
-		refund_params: Option<RefundParametersExtended<T::AccountId>>,
+		refund_params: Option<RefundParametersChecked<T::AccountId>>,
 		output_action: SwapOutputAction<T::AccountId>,
 		dca_state: DcaState,
 	},
@@ -476,7 +476,7 @@ pub mod pallet {
 	use cf_amm::math::output_amount_ceil;
 	use cf_chains::{
 		address::EncodedAddress, AnyChain, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
-		Chain, RefundParametersExtended, RefundParametersExtendedEncoded,
+		Chain, RefundParametersChecked,
 	};
 	use cf_primitives::{
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
@@ -676,6 +676,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[allow(clippy::large_enum_variant)]
 	pub enum Event<T: Config> {
 		/// New swap has been requested
 		SwapRequested {
@@ -686,7 +687,7 @@ pub mod pallet {
 			origin: SwapOrigin<T::AccountId>,
 			request_type: SwapRequestTypeEncoded<T::AccountId>,
 			broker_fees: Beneficiaries<T::AccountId>,
-			refund_parameters: Option<RefundParametersExtendedEncoded<T::AccountId>>,
+			refund_parameters: Option<RefundParametersChecked<T::AccountId>>,
 			dca_parameters: Option<DcaParameters>,
 		},
 		SwapRequestCompleted {
@@ -706,7 +707,7 @@ pub mod pallet {
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
 			affiliate_fees: Affiliates<T::AccountId>,
-			refund_parameters: ChannelRefundParametersEncoded,
+			refund_parameters: ChannelRefundParameters,
 			dca_parameters: Option<DcaParameters>,
 		},
 		/// A swap is scheduled for the first time
@@ -986,7 +987,7 @@ pub mod pallet {
 			broker_commission: BasisPoints,
 			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 			boost_fee: BasisPoints,
-			refund_parameters: ChannelRefundParametersEncoded,
+			refund_parameters: ChannelRefundParameters,
 		) -> DispatchResult {
 			Self::request_swap_deposit_address_with_affiliates(
 				origin,
@@ -1200,7 +1201,7 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<T::AccountId>,
-			refund_parameters: ChannelRefundParametersEncoded,
+			refund_parameters: ChannelRefundParameters,
 			dca_parameters: Option<DcaParameters>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
@@ -1765,9 +1766,8 @@ pub mod pallet {
 									amount_to_refund,
 									request.input_asset,
 									address.clone(),
-									EgressType::Refund { refund_fee },
 									refund_params.refund_ccm_metadata.clone(),
-									true, /* refund */
+									EgressType::Refund { refund_fee },
 								);
 							},
 							AccountOrAddress::InternalAccount(account_id) => {
@@ -1805,9 +1805,8 @@ pub mod pallet {
 									*accumulated_output_amount,
 									request.output_asset,
 									output_address.clone(),
-									EgressType::Regular {
-										maybe_ccm_metadata: ccm_deposit_metadata.clone(),
-									},
+									ccm_deposit_metadata.clone(),
+									EgressType::Regular,
 								);
 							},
 							SwapOutputAction::CreditOnChain { account_id } => {
@@ -1901,9 +1900,8 @@ pub mod pallet {
 									dca_state.accumulated_output_amount,
 									swap.output_asset(),
 									output_address.clone(),
-									EgressType::Regular {
-										maybe_ccm_metadata: ccm_deposit_metadata.clone(),
-									},
+									ccm_deposit_metadata.clone(),
+									EgressType::Regular,
 								);
 							},
 							SwapOutputAction::CreditOnChain { account_id } => {
@@ -2056,7 +2054,7 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 			input_amount: AssetAmount,
-			refund_params: Option<&RefundParametersExtended<T::AccountId>>,
+			refund_params: Option<&RefundParametersChecked<T::AccountId>>,
 			swap_type: SwapType,
 			fees: Vec<FeeType<T>>,
 			swap_request_id: SwapRequestId,
@@ -2156,12 +2154,22 @@ pub mod pallet {
 			amount: AssetAmount,
 			asset: Asset,
 			address: ForeignChainAddress,
+			maybe_ccm_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
 			egress_type: EgressType,
 		) {
-			match egress_type {
-				EgressType::Refund { refund_fee } => {
-					match T::EgressHandler::schedule_egress(asset, amount, address, None) {
-						Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
+			let is_ccm = maybe_ccm_metadata.is_some();
+			match T::EgressHandler::schedule_egress(asset, amount, address, maybe_ccm_metadata) {
+				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
+					match egress_type {
+						EgressType::Regular =>
+							Self::deposit_event(Event::<T>::SwapEgressScheduled {
+								swap_request_id,
+								egress_id,
+								asset,
+								amount: egress_amount,
+								egress_fee: (fee_withheld, asset),
+							}),
+						EgressType::Refund { refund_fee } =>
 							Self::deposit_event(Event::<T>::RefundEgressScheduled {
 								swap_request_id,
 								egress_id,
@@ -2170,44 +2178,28 @@ pub mod pallet {
 								egress_fee: (fee_withheld, asset),
 								refund_fee,
 							}),
-						Err(err) => Self::deposit_event(Event::<T>::RefundEgressIgnored {
+					},
+				Err(err) => match egress_type {
+					EgressType::Regular => {
+						if is_ccm {
+							log_or_panic!("CCM egress scheduling should never fail.");
+						}
+						Self::deposit_event(Event::<T>::SwapEgressIgnored {
+							swap_request_id,
+							asset,
+							amount,
+							reason: err.into(),
+						});
+					},
+					EgressType::Refund { .. } =>
+						Self::deposit_event(Event::<T>::RefundEgressIgnored {
 							swap_request_id,
 							asset,
 							amount,
 							reason: err.into(),
 						}),
-					};
 				},
-				EgressType::Regular { maybe_ccm_metadata } => {
-					let is_ccm = maybe_ccm_metadata.is_some();
-					match T::EgressHandler::schedule_egress(
-						asset,
-						amount,
-						address,
-						maybe_ccm_metadata,
-					) {
-						Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
-							Self::deposit_event(Event::<T>::SwapEgressScheduled {
-								swap_request_id,
-								egress_id,
-								asset,
-								amount: egress_amount,
-								egress_fee: (fee_withheld, asset),
-							}),
-						Err(err) => {
-							if is_ccm {
-								log_or_panic!("CCM egress scheduling should never fail.");
-							}
-							Self::deposit_event(Event::<T>::SwapEgressIgnored {
-								swap_request_id,
-								asset,
-								amount,
-								reason: err.into(),
-							})
-						},
-					};
-				},
-			};
+			}
 		}
 
 		pub(super) fn take_refund_fee(
@@ -2296,7 +2288,7 @@ pub mod pallet {
 			output_asset: Asset,
 			request_type: SwapRequestType<Self::AccountId>,
 			broker_fees: Beneficiaries<Self::AccountId>,
-			refund_params: Option<RefundParametersExtended<Self::AccountId>>,
+			refund_params: Option<RefundParametersChecked<Self::AccountId>>,
 			dca_params: Option<DcaParameters>,
 			origin: SwapOrigin<Self::AccountId>,
 		) -> SwapRequestId {
@@ -2352,9 +2344,7 @@ pub mod pallet {
 				request_type: request_type.clone().into_encoded::<T::AddressConverter>(),
 				origin: origin.clone(),
 				broker_fees: broker_fees.clone(),
-				refund_parameters: refund_params
-					.clone()
-					.map(|params| params.to_encoded::<T::AddressConverter>()),
+				refund_parameters: refund_params.clone(),
 				dca_parameters: dca_params.clone(),
 			});
 
@@ -2550,28 +2540,6 @@ impl<T: Config> SwapParameterValidation for Pallet<T> {
 		Ok(())
 	}
 
-	// TODO: We might want to merge this with validate_refund_params but there's even rpc
-	// calls that use that so we might need to untangle it. However, having them separate
-	// is actually useful for Invalid Vault swap refunds because a failing
-	// `validate_refund_params` should cause a refund while a failing
-	// `validate_ccm_refund_params` should not, since the CCM refund data is invalid.
-	fn validate_ccm_refund_params(
-		asset: cf_primitives::Asset,
-		refund_params: cf_chains::ChannelRefundParametersEncoded,
-	) -> Result<(), DispatchError> {
-		if let Some(ccm) = refund_params.refund_ccm_metadata.as_ref() {
-			let source_chain: ForeignChain = (asset).into();
-			if !source_chain.ccm_support() {
-				return Err(DispatchError::from(Error::<T>::CcmUnsupportedForRefundChain));
-			}
-
-			let _ =
-				T::CcmValidityChecker::check_and_decode(ccm, asset, refund_params.refund_address)?;
-		}
-
-		Ok(())
-	}
-
 	fn validate_dca_params(params: &cf_primitives::DcaParameters) -> Result<(), DispatchError> {
 		let max_swap_request_duration_blocks = MaxSwapRequestDurationBlocks::<T>::get();
 
@@ -2680,7 +2648,7 @@ pub(crate) mod utilities {
 	}
 
 	pub(super) fn calculate_swap_refund_parameters<AccountId>(
-		params: &RefundParametersExtended<AccountId>,
+		params: &RefundParametersChecked<AccountId>,
 		execute_at_block: u32,
 		input_amount: AssetAmount,
 	) -> SwapRefundParameters {

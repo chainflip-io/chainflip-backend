@@ -75,7 +75,7 @@ pub mod old {
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct RefundParametersExtendedGeneric<Address, AccountId> {
 		pub retry_duration: cf_primitives::BlockNumber,
-		pub refund_destination: AccountOrAddress<Address, AccountId>,
+		pub refund_destination: AccountOrAddress<AccountId, Address>,
 		pub min_price: Price,
 		// Migration will add a refund_ccm_metadata
 	}
@@ -150,10 +150,10 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 
 		crate::SwapRequests::<T>::translate_values::<old::SwapRequest<T>, _>(|old_swap_request| {
 			Some(SwapRequest {
-				id: old_swap_requests.id,
-				input_asset: old_swap_requests.input_asset,
-				output_asset: old_swap_requests.output_asset,
-				state: match old_swap_requests.state {
+				id: old_swap_request.id,
+				input_asset: old_swap_request.input_asset,
+				output_asset: old_swap_request.output_asset,
+				state: match old_swap_request.state {
 					old::SwapRequestState::UserSwap {
 						refund_params,
 						output_action,
@@ -175,7 +175,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 						);
 						SwapRequestState::UserSwap {
 							refund_params: refund_params.map(|params| {
-								cf_chains::RefundParametersExtendedGeneric {
+								cf_chains::RefundParametersCheckedGeneric {
 									retry_duration: params.retry_duration,
 									refund_destination: params.refund_destination,
 									min_price: params.min_price,

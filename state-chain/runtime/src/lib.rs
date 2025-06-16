@@ -66,17 +66,17 @@ use cf_chains::{
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
-	ccm_checker::{check_ccm_for_blacklisted_accounts, DecodedCcmAdditionalData},
 	cf_parameters::build_cf_parameters,
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	hub,
 	instances::ChainInstanceAlias,
-	sol::{api::SolanaEnvironment, SolAddress, SolPubkey, SolanaCrypto},
-	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked, ChannelRefundParametersEncoded,
-	DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
-	VaultSwapExtraParameters, VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
+	sol::{SolAddress, SolanaCrypto},
+	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked, ChannelRefundParameters,
+	DefaultRetryPolicy, EvmVaultSwapExtraParameters, ForeignChain, Polkadot,
+	RefundParametersChecked, Solana, TransactionBuilder, VaultSwapExtraParameters,
+	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
 	Affiliates, BasisPoints, Beneficiary, BroadcastId, ChannelId, DcaParameters, EpochIndex,
@@ -2290,14 +2290,27 @@ impl_runtime_apis! {
 			let source_chain = ForeignChain::from(source_asset);
 			let destination_chain = ForeignChain::from(destination_asset);
 
+
+			// Validate refund duration.
 			let retry_duration = match &extra_parameters {
-				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => *retry_duration,
-				VaultSwapExtraParametersEncoded::Ethereum(extra_params) => extra_params.refund_parameters.retry_duration,
-				VaultSwapExtraParametersEncoded::Arbitrum(extra_params) => extra_params.refund_parameters.retry_duration,
-				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => refund_parameters.retry_duration,
+				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => {
+					*retry_duration
+				}
+				VaultSwapExtraParametersEncoded::Ethereum(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
+					RefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
+					refund_parameters.retry_duration
+				}
+				VaultSwapExtraParametersEncoded::Arbitrum(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
+					RefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
+					refund_parameters.retry_duration
+				}
+				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => {
+					RefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
+					refund_parameters.retry_duration
+				}
 			};
 
-			crate::chainflip::vault_swaps::validate_parameters(
+			let checked_ccm = crate::chainflip::vault_swaps::validate_parameters(
 				&broker,
 				source_chain,
 				&destination_address,
@@ -2333,71 +2346,6 @@ impl_runtime_apis! {
 				broker_commission,
 				affiliate_fees.clone(),
 			)?;
-
-			// Validate refund duration.
-			{
-				let retry_duration = match &extra_parameters {
-					VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => {
-						*retry_duration
-					}
-					VaultSwapExtraParametersEncoded::Ethereum(extra_params) => {
-						pallet_cf_swapping::Pallet::<Runtime>::validate_ccm_refund_params(source_asset, extra_params.refund_parameters.clone())?;
-						extra_params.refund_parameters.retry_duration
-					}
-					VaultSwapExtraParametersEncoded::Arbitrum(extra_params) => {
-						pallet_cf_swapping::Pallet::<Runtime>::validate_ccm_refund_params(source_asset, extra_params.refund_parameters.clone())?;
-						extra_params.refund_parameters.retry_duration
-					}
-					VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => {
-						pallet_cf_swapping::Pallet::<Runtime>::validate_ccm_refund_params(source_asset, refund_parameters.clone())?;
-						refund_parameters.retry_duration
-					}
-				};
-				pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
-			}
-
-			// Validate CCM.
-			if let Some(channel_metadata) = channel_metadata.as_ref() {
-				if source_chain == ForeignChain::Bitcoin {
-					return Err(DispatchErrorWithMessage::from("Vault swaps with CCM are not supported for the Bitcoin Chain"));
-				}
-				if !destination_chain.ccm_support() {
-					return Err(DispatchErrorWithMessage::from("Destination chain does not support CCM"));
-				}
-
-				// Ensure CCM message is valid
-				match channel_metadata.clone().to_checked(
-					destination_asset,
-					ChainAddressConverter::try_from_encoded_address(destination_address.clone())
-						.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?
-				).map(|checked| checked.ccm_additional_data)
-				{
-					Ok(DecodedCcmAdditionalData::Solana(decoded)) => {
-						let ccm_accounts = decoded.ccm_accounts();
-
-						// Ensure the CCM parameters do not contain blacklisted accounts.
-						// Load up environment variables.
-						let api_environment =
-							SolEnvironment::api_environment().map_err(|_| "Failed to load Solana API environment")?;
-
-						let agg_key: SolPubkey = SolEnvironment::current_agg_key()
-							.map_err(|_| "Failed to load Solana Agg key")?
-							.into();
-
-						let on_chain_key: SolPubkey = SolEnvironment::current_on_chain_key()
-							.map(|key| key.into())
-							.unwrap_or_else(|_| agg_key);
-
-						check_ccm_for_blacklisted_accounts(
-							&ccm_accounts,
-							vec![api_environment.token_vault_pda_account.into(), agg_key, on_chain_key],
-						)
-						.map_err(DispatchError::from)?;
-					},
-					Ok(DecodedCcmAdditionalData::NotRequired) => {},
-					Err(_) => return Err(DispatchErrorWithMessage::from("Solana Ccm additional data is invalid")),
-				};
-			}
 
 			// Encode swap
 			match (source_chain, extra_parameters) {
@@ -2439,7 +2387,7 @@ impl_runtime_apis! {
 						boost_fee,
 						affiliate_fees,
 						dca_parameters,
-						channel_metadata,
+						checked_ccm,
 					)
 				},
 				(
@@ -2459,7 +2407,7 @@ impl_runtime_apis! {
 					destination_address,
 					broker_commission,
 					refund_parameters,
-					channel_metadata,
+					checked_ccm,
 					boost_fee,
 					affiliate_fees,
 					dca_parameters,
@@ -2505,7 +2453,7 @@ impl_runtime_apis! {
 			source_asset: Asset,
 			destination_address: EncodedAddress,
 			destination_asset: Asset,
-			refund_parameters: ChannelRefundParametersEncoded,
+			refund_parameters: ChannelRefundParameters,
 			dca_parameters: Option<DcaParameters>,
 			boost_fee: BasisPoints,
 			broker_commission: BasisPoints,
@@ -2513,7 +2461,7 @@ impl_runtime_apis! {
 			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		) -> Result<Vec<u8>, DispatchErrorWithMessage> {
 			// Validate the parameters
-			crate::chainflip::vault_swaps::validate_parameters(
+			let checked_ccm = crate::chainflip::vault_swaps::validate_parameters(
 				&broker,
 				source_asset.into(),
 				&destination_address,
@@ -2549,7 +2497,7 @@ impl_runtime_apis! {
 						broker,
 						broker_commission,
 						affiliate_and_fees,
-						channel_metadata.as_ref(),
+						checked_ccm.as_ref(),
 					)
 				}
 			}

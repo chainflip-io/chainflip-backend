@@ -19,11 +19,11 @@ use crate::{
 	WhitelistedBrokers,
 };
 use cf_chains::{
-	address::{AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress},
+	address::{AddressDerivationApi, AddressDerivationError},
 	assets,
 	btc::{deposit_address::DepositAddress, BitcoinTrackedData},
 	eth::EthereumTrackedData,
-	Bitcoin, Chain, ChannelRefundParameters, Ethereum, ForeignChainAddress,
+	Bitcoin, Chain, ChannelRefundParametersGeneric, Ethereum, ForeignChainAddress,
 };
 use cf_primitives::ChannelId;
 use cf_test_utilities::{impl_test_helpers, TestExternalities};
@@ -381,9 +381,9 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						BROKER,
 						None,
 						10,
-						ChannelRefundParameters {
+						ChannelRefundParametersGeneric {
 							retry_duration: 5,
-							refund_address: refund_address.clone().into_foreign_chain_address(),
+							refund_address: refund_address.clone(),
 							min_price: U256::zero(),
 							refund_ccm_metadata: None,
 						},

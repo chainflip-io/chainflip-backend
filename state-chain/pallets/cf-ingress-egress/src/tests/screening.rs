@@ -25,7 +25,7 @@ use crate::{
 use cf_chains::{
 	address::EncodedAddress,
 	btc::{deposit_address::DepositAddress, Hash, ScriptPubkey, UtxoId},
-	Bitcoin, ChannelRefundParameters, ChannelRefundParametersDecoded, ForeignChainAddress,
+	Bitcoin, ForeignChainAddress,
 };
 use cf_primitives::{chains::assets::btc, Beneficiaries, Beneficiary, ChannelId};
 use cf_test_utilities::{assert_has_event, assert_has_matching_event};
@@ -88,9 +88,9 @@ mod helpers {
 			BROKER,
 			None,
 			10,
-			ChannelRefundParametersDecoded {
+			ChannelRefundParametersGeneric {
 				retry_duration: 100,
-				refund_address: ForeignChainAddress::Eth([1; 20].into()),
+				refund_address: ScriptPubkey::Taproot([0x01; 32]),
 				min_price: U256::from(0),
 				refund_ccm_metadata: None,
 			},
@@ -526,7 +526,7 @@ fn gets_rejected_if_vault_transaction_was_aborted_and_rejected() {
 			tx_id,
 			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
 			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParameters {
+			refund_params: ChannelRefundParametersGeneric {
 				retry_duration: 0,
 				min_price: U256::from(0),
 				refund_address: ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS),

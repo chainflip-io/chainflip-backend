@@ -21,7 +21,7 @@ use crate::{
 	CfApiError,
 };
 pub use cf_chains::eth::Address as EthereumAddress;
-use cf_chains::{address::AddressString, CcmChannelMetadataUnchecked, ChannelRefundParameters};
+use cf_chains::{address::AddressString, CcmChannelMetadataUnchecked};
 use cf_node_client::{
 	extract_from_first_matching_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
 };

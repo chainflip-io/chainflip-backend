@@ -62,22 +62,6 @@ impl SwapParameterValidation for MockSwapParameterValidation {
 		Ok(())
 	}
 
-	fn validate_ccm_refund_params(
-		asset: cf_primitives::Asset,
-		refund_params: cf_chains::ChannelRefundParametersEncoded,
-	) -> Result<(), DispatchError> {
-		if let Some(_ccm) = refund_params.refund_ccm_metadata.as_ref() {
-			let source_chain: cf_chains::ForeignChain = (asset).into();
-			if !source_chain.ccm_support() {
-				return Err(DispatchError::Other("Ccm not supported"));
-			}
-
-			// TODO: Add CcmValidityChecker::check_and_decode mock check as in the real pallet?
-		}
-
-		Ok(())
-	}
-
 	fn validate_dca_params(params: &cf_primitives::DcaParameters) -> Result<(), DispatchError> {
 		let limits = Self::get_swap_limits();
 

@@ -29,7 +29,7 @@ use codec::{Decode, Encode};
 
 pub mod old {
 	use super::*;
-	use cf_chains::CcmAdditionalData;
+	use cf_chains::{CcmAdditionalData, ChannelRefundParametersGeneric};
 
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct CrossChainMessage<C: Chain> {
@@ -63,13 +63,14 @@ pub mod old {
 	}
 
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+	#[allow(clippy::large_enum_variant)]
 	pub enum ChannelAction<AccountId, C: Chain> {
 		Swap {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: Option<CcmChannelMetadataUnchecked>,
-			refund_params: ChannelRefundParameters<ForeignChainAddress>,
+			refund_params: ChannelRefundParametersGeneric<ForeignChainAddress>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
@@ -157,13 +158,34 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade
 						destination_asset,
 						destination_address,
 						channel_metadata,
+						refund_params,
 						..
-					} => channel_metadata
-						.map(|ccm| ccm.clone().to_checked(destination_asset, destination_address))
-						.transpose(),
+					} => {
+						// Convert ccm into checked ccm.
+						let checked_ccm = channel_metadata
+							.map(|ccm| {
+								ccm.clone().to_checked(destination_asset, destination_address)
+							})
+							.transpose();
+						// Convert Refund param into Checked version.
+						let checked_refund_params =
+							RefundParametersChecked::try_from_refund_parameters_internal(
+								refund_params,
+								None,
+								old.deposit_channel.asset.into(),
+							);
+						// Only succeed if both conversions work
+						if let (Ok(checked_ccm), Ok(checked_refund_params)) =
+							(checked_ccm, checked_refund_params)
+						{
+							Ok(Some((checked_ccm, checked_refund_params)))
+						} else {
+							Err(())
+						}
+					},
 					_ => Ok(None),
 				}
-				.map(|checked_ccm| DepositChannelDetails {
+				.map(|converted| DepositChannelDetails {
 					owner: old.owner,
 					deposit_channel: old.deposit_channel,
 					opened_at: old.opened_at,
@@ -174,20 +196,28 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade
 							destination_address,
 							broker_fees,
 							channel_metadata: _,
-							refund_params,
+							refund_params: _,
 							dca_params,
-						} => ChannelAction::Swap {
-							destination_asset,
-							destination_address: destination_address.clone(),
-							broker_fees,
-							channel_metadata: checked_ccm,
-							refund_params,
-							dca_params,
+						} => {
+							let (checked_ccm, checked_refund_params) =
+								converted.expect("Swap variant data is converted above.");
+							ChannelAction::Swap {
+								destination_asset,
+								destination_address: destination_address.clone(),
+								broker_fees,
+								channel_metadata: checked_ccm,
+								refund_params: checked_refund_params,
+								dca_params,
+							}
 						},
 						old::ChannelAction::LiquidityProvision { lp_account, refund_address } =>
 							ChannelAction::LiquidityProvision { lp_account, refund_address },
 						old::ChannelAction::Refund { reason, refund_address } =>
-							ChannelAction::Refund { reason, refund_address },
+							ChannelAction::Refund {
+								reason,
+								refund_address,
+								refund_ccm_metadata: None,
+							},
 					},
 					boost_fee: old.boost_fee,
 					boost_status: old.boost_status,

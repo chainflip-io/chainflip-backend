@@ -18,7 +18,8 @@ use cf_amm::common::{PoolPairsMap, Side};
 /// cf-rpc-types module defines all RPC related types
 /// Common types are defined in here
 use cf_chains::{
-	address::AddressString, address::ToHumanreadableAddress, Chain, ChannelRefundParameters,
+	address::{AddressString, ToHumanreadableAddress},
+	Chain, ChannelRefundParametersGeneric,
 };
 use cf_primitives::{AccountId, Asset, BlockNumber, FlipBalance, Tick, TxIndex};
 use frame_support::{Deserialize, Serialize};
