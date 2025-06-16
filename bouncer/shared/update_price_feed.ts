@@ -118,7 +118,6 @@ export async function updatePriceFeed(logger: Logger, chain: Chain, asset: Asset
     throw new Error(`Unsupported price feed asset: ${asset}`);
   }
 
-  // For now only using Ethereum price feeds
   switch (chain) {
     case 'Ethereum':
       await updateEvmPriceFeed(logger, 'Ethereum', asset, price);
