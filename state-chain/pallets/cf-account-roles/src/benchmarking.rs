@@ -18,6 +18,7 @@
 
 use super::*;
 use frame_benchmarking::v2::*;
+use sp_std::vec;
 
 #[benchmarks]
 mod benchmarks {
@@ -32,5 +33,26 @@ mod benchmarks {
 		set_vanity_name(RawOrigin::Signed(caller.clone()), name.clone());
 
 		assert_eq!(VanityNames::<T>::get().get(&caller), Some(&name));
+	}
+
+	#[benchmark]
+	fn derive_sub_account() {
+		const SUB_ACCOUNT_INDEX: SubAccountIndex = 1;
+		let caller: T::AccountId = whitelisted_caller();
+
+		#[extrinsic_call]
+		derive_sub_account(RawOrigin::Signed(caller.clone()), SUB_ACCOUNT_INDEX);
+
+		assert!(SubAccounts::<T>::get(caller, SUB_ACCOUNT_INDEX).is_some())
+	}
+
+	#[benchmark]
+	fn as_sub_account() {
+		const SUB_ACCOUNT_INDEX: SubAccountIndex = 1;
+		let caller: T::AccountId = whitelisted_caller();
+		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
+
+		#[extrinsic_call]
+		as_sub_account(RawOrigin::Signed(caller.clone()), SUB_ACCOUNT_INDEX, call);
 	}
 }

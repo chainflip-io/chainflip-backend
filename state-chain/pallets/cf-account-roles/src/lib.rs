@@ -183,14 +183,14 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::derive_sub_account())]
 		pub fn derive_sub_account(
 			origin: OriginFor<T>,
 			sub_account_index: SubAccountIndex,
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 			ensure!(
-				!SubAccounts::<T>::contains_key(&account_id, &sub_account_index),
+				!SubAccounts::<T>::contains_key(&account_id, sub_account_index),
 				Error::<T>::SubAccountAlreadyExists
 			);
 			let sub_account_id: T::AccountId = Decode::decode(&mut TrailingZeroInput::new(
@@ -199,7 +199,7 @@ pub mod pallet {
 					.as_ref(),
 			))
 			.map_err(|_| Error::<T>::SubAccountIdDerivationFailed)?;
-			SubAccounts::<T>::insert(&account_id, &sub_account_index, &sub_account_id);
+			SubAccounts::<T>::insert(&account_id, sub_account_index, &sub_account_id);
 			Self::deposit_event(Event::SubAccountCreated {
 				account_id: account_id.clone(),
 				sub_account_id,
@@ -209,7 +209,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(2)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::as_sub_account())]
 		pub fn as_sub_account(
 			origin: OriginFor<T>,
 			sub_account_index: SubAccountIndex,
@@ -217,11 +217,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			let mut origin = origin;
 			let account_id = ensure_signed(origin.clone())?;
-			let sub_account_id = SubAccounts::<T>::get(&account_id, &sub_account_index);
+			let sub_account_id = SubAccounts::<T>::get(&account_id, sub_account_index);
 			ensure!(sub_account_id.is_some(), Error::<T>::UnknownAccount);
 			let sub_account_id = sub_account_id.unwrap();
 			origin.set_caller_from(frame_system::RawOrigin::Signed(sub_account_id.clone()));
-			if let Ok(post_info) = call.clone().dispatch(origin) {
+			if let Ok(_post_info) = call.clone().dispatch(origin) {
 				// TODO: Correct the weight of the extrinsic.
 				Self::deposit_event(Event::SubAccountCallExecuted {
 					account_id: account_id.clone(),
