@@ -15,7 +15,7 @@ import {
   observeSwapRequested,
   TransactionOrigin,
   defaultAssetAmounts,
-newAssetAddress,
+  newAssetAddress,
 } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
