@@ -378,6 +378,9 @@ async function testEvmVaultSwap(
 
   if (!receivedRefund) {
     throw new Error(
+      `Didn't receive funds refund to address ${ethereumRefundAddress} within timeout!`,
+    );
+  }
   logger.info(`Marked ${sourceAsset} vault swap was rejected and refunded 👍.`);
 }
 
@@ -613,33 +616,16 @@ export async function testBrokerLevelScreening(
   //           An alternative would be to increase the ArbEth safety margin on localnet.
 
   // test rejection of swaps by the responsible broker
-  await Promise.all([
-    testBrokerLevelScreeningBitcoin(testContext),
-    testBrokerLevelScreeningEthereum(testContext, 'Eth', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
-    ),
-    testBrokerLevelScreeningEthereum(testContext, 'Usdt', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
-    ),
-    testBrokerLevelScreeningEthereum(testContext, 'Flip', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
-    ),
-    testBrokerLevelScreeningEthereum(testContext, 'Usdc', async (txId) =>
-      setTxRiskScore('Ethereum', txId, 9.0),
-    ),
-    testBrokerLevelScreeningEthereum(
-      testContext,
-      'Eth',
-      async (txId) => setTxRiskScore('Ethereum', txId, 9.0),
-      true,
-    ),
-    testBrokerLevelScreeningEthereum(
-      testContext,
-      'Usdt',
-      async (txId) => setTxRiskScore('Ethereum', txId, 9.0),
-      true,
-    ),
-  ]);
+  await Promise.all(
+    [
+      testEvm(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+      testEvm(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+      testEvm(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+      testEvm(testContext, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    ]
+      .concat(testBitcoin(testContext, false))
+      .concat(testBoostedDeposits ? testBitcoin(testContext, true) : []),
+  );
 
   // test rejection of LP deposits and vault swaps:
   //  - this requires the rejecting broker to be whitelisted
