@@ -31,6 +31,7 @@ import { send } from 'shared/send';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { buildAndSendBtcVaultSwap, openPrivateBtcChannel } from 'shared/btc_vault_swap';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
+import { newCcmMetadata } from 'shared/swapping';
 
 const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_1');
@@ -301,11 +302,11 @@ async function testEvm(
 
   const ccmEventEmitted = refundParameters.refundCcmMetadata
     ? observeCcmReceived(
-        sourceAsset,
-        sourceAsset,
-        refundParameters.refundAddress,
-        refundParameters.refundCcmMetadata,
-      )
+      sourceAsset,
+      sourceAsset,
+      refundParameters.refundAddress,
+      refundParameters.refundCcmMetadata,
+    )
     : Promise.resolve();
 
   await Promise.all([
