@@ -15,10 +15,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::CfApiError;
-use cf_rpc_apis::{internal_error, RpcApiError};
+use cf_rpc_apis::{call_error, internal_error, CfErrorCode, RpcApiError};
 use futures::{stream, stream::StreamExt, FutureExt};
 use jsonrpsee::{types::error::ErrorObjectOwned, PendingSubscriptionSink, RpcModule};
 
+use cf_primitives::BlockNumber;
 use jsonrpsee::tokio::sync::Mutex;
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
@@ -33,7 +34,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use state_chain_runtime::{
 	chainflip::{get_header_timestamp, BlockUpdate},
 	runtime_apis::CustomRuntimeApi,
-	Hash,
+	Hash, Header,
 };
 use std::{fmt::Debug, marker::PhantomData, num::NonZero, sync::Arc};
 
@@ -194,6 +195,17 @@ where
 		+ StorageProvider<B, BE>,
 	C::Api: CustomRuntimeApi<B>,
 {
+	pub fn header_for(&self, block_hash: Hash) -> Result<Header, CfApiError> {
+		self.client
+			.header(block_hash)
+			.map_err(|e| call_error(e, CfErrorCode::OtherError))?
+			.ok_or_else(|| CfApiError::HeaderNotFoundError(block_hash))
+	}
+
+	pub fn block_number_for(&self, block_hash: Hash) -> Result<BlockNumber, CfApiError> {
+		Ok(self.header_for(block_hash)?.number)
+	}
+
 	fn chain_head_api(&self) -> RpcModule<ChainHead<BE, B, C>> {
 		ChainHead::new(
 			self.client.clone(),

@@ -27,7 +27,7 @@ use cf_chains::{
 	VaultSwapInputEncoded,
 };
 use cf_primitives::{
-	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
 	DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount, NetworkEnvironment, SemVer,
 };
 use cf_traits::SwapLimits;
@@ -562,6 +562,10 @@ decl_runtime_apis!(
 			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		) -> Result<Vec<u8>, DispatchErrorWithMessage>;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
+		fn cf_get_preallocated_deposit_channels(
+			account_id: AccountId32,
+			chain: ForeignChain,
+		) -> Vec<ChannelId>;
 		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
 		fn cf_affiliate_details(
 			broker: AccountId32,

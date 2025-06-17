@@ -97,9 +97,15 @@ async function testLiquidityDepositLegacy(logger: Logger) {
     },
   ).event;
 
+  await assert.rejects(
+    () => lpApiRpc(logger, `lp_request_liquidity_deposit_address`, [testRpcAsset, 'InBlock']),
+    (e: Error) => e.message.includes('InBlock waiting is not allowed for this method'),
+    `Unexpected lp_request_liquidity_deposit_address result. Expected to return an error because InBlock waiting is not allowed`,
+  );
+
   const liquidityDepositAddress = (
-    await lpApiRpc(logger, `lp_liquidity_deposit`, [testRpcAsset, 'InBlock'])
-  ).tx_details.response;
+    await lpApiRpc(logger, `lp_request_liquidity_deposit_address`, [testRpcAsset, 'Finalized'])
+  ).tx_details.response.deposit_address;
   const liquidityDepositEvent = await observeLiquidityDepositAddressReadyEvent;
 
   assert.strictEqual(
@@ -140,8 +146,8 @@ async function testLiquidityDeposit(logger: Logger) {
   ).event;
 
   const liquidityDepositAddress = (
-    await lpApiRpc(logger, `lp_request_liquidity_deposit_address`, [testRpcAsset, 'InBlock'])
-  ).tx_details.response.deposit_address;
+    await lpApiRpc(logger, `lp_request_liquidity_deposit_address_v2`, [testRpcAsset])
+  ).response.deposit_address;
   const liquidityDepositEvent = await observeLiquidityDepositAddressReadyEvent;
 
   assert.strictEqual(

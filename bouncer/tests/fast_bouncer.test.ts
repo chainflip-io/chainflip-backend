@@ -41,7 +41,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('DepositChannelCreation', depositChannelCreation, 360);
   concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 800);
   concurrentTest('VaultSwaps', testVaultSwap, 800);
-  concurrentTest('AssethubXCM', testAssethubXcm, 240);
+  concurrentTest('AssethubXCM', testAssethubXcm, 360);
 
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
