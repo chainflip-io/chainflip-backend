@@ -45,9 +45,9 @@ macro_rules! define_wrapper_type {
 			frame_support::sp_runtime::RuntimeDebug,
 			PartialEq,
 			Eq,
-			Encode,
-			Decode,
-			TypeInfo,
+			codec::Encode,
+			codec::Decode,
+			scale_info::TypeInfo,
 			frame_support::pallet_prelude::MaxEncodedLen,
 			Default,
 			$($( $extra_derive ),*)?
@@ -151,6 +151,8 @@ pub type Port = u16;
 
 pub const FLIP_DECIMALS: u32 = 18;
 pub const FLIPPERINOS_PER_FLIP: FlipBalance = 10u128.pow(FLIP_DECIMALS);
+
+pub const PRICE_FRACTIONAL_BITS: u32 = 128;
 
 // Bitcoin default fee, in sats per bytes, to be used if current fee is not available via chain
 // tracking.

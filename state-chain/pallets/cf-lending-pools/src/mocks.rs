@@ -48,6 +48,7 @@ impl pallet_cf_lending_pools::Config for Test {
 	type WeightInfo = ();
 	type Balance = cf_traits::mocks::balance_api::MockBalance;
 	type PoolApi = MockPoolApi;
+	type PriceApi = cf_traits::mocks::MockOraclePriceApi;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type SafeMode = MockRuntimeSafeMode;
 }

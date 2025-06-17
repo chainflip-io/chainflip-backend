@@ -1259,3 +1259,9 @@ pub trait PoolPriceProvider {
 pub trait CcmAdditionalDataHandler {
 	fn handle_ccm_additional_data(ccm_data: DecodedCcmAdditionalData);
 }
+
+// NOTE: this is just a placeholder and is likely to change
+pub trait OraclePriceApi {
+	// Price of `asset` in USDC
+	fn get_price(asset: Asset) -> Price;
+}

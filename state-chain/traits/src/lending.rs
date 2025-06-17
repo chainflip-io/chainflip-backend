@@ -14,7 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_primitives::{Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId};
+use cf_primitives::{
+	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
+};
 use sp_std::collections::btree_map::BTreeMap;
 
 use frame_support::pallet_prelude::DispatchError;
@@ -41,4 +43,34 @@ pub trait BoostApi {
 	fn finalise_boost(deposit_id: PrewitnessedDepositId, asset: Asset) -> BoostFinalisationOutcome;
 
 	fn process_deposit_as_lost(deposit_id: PrewitnessedDepositId, asset: Asset);
+}
+
+define_wrapper_type!(ChpLoanId, u64, extra_derives: PartialOrd, Ord);
+
+impl core::ops::Add<u64> for ChpLoanId {
+	type Output = Self;
+
+	fn add(self, rhs: u64) -> Self::Output {
+		ChpLoanId(self.0 + rhs)
+	}
+}
+
+pub trait ChpLendingApi {
+	type AccountId;
+
+	fn new_chp_loan(
+		borrower: Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> Result<ChpLoanId, DispatchError>;
+
+	fn make_repayment(
+		loan_id: ChpLoanId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> Result<(), DispatchError>;
+}
+
+pub trait ChpSystemApi {
+	fn process_loan_swap_outcome(loan_id: ChpLoanId, asset: Asset, amount: AssetAmount);
 }
