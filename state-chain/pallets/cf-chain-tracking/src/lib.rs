@@ -185,6 +185,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	pub fn inner_update_chain_height(
+		new_height: <T::TargetChain as Chain>::ChainBlockNumber,
+	) -> DispatchResult {
+		CurrentChainState::<T, I>::try_mutate(|previous_chain_state| {
+			ensure!(
+				new_height > previous_chain_state.as_ref().expect(NO_CHAIN_STATE).block_height,
+				Error::<T, I>::StaleDataSubmitted
+			);
+			previous_chain_state.as_mut().expect(NO_CHAIN_STATE).block_height = new_height;
+
+			Ok::<(), DispatchError>(())
+		})?;
+
+		Ok(())
+	}
+
 	pub fn inner_update_fee(new_fee: <T::TargetChain as Chain>::TrackedData) -> DispatchResult {
 		CurrentChainState::<T, I>::mutate(|previous_chain_state| {
 			previous_chain_state.as_mut().expect(NO_CHAIN_STATE).tracked_data = new_fee;

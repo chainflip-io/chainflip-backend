@@ -69,7 +69,7 @@ defx! {
 			.unwrap_or(true)
 		},
 
-		// The `highest_ever_ongoing_election` should always be updated when new elections are created. 
+		// The `highest_ever_ongoing_election` should always be updated when new elections are created.
 		highest_ever_ongoing_election_is_updated: {
 			this.ongoing.keys().all(|height| *height <= this.highest_ever_ongoing_election)
 		},
