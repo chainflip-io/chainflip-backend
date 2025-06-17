@@ -14,6 +14,8 @@
 // State partially processed, how do we test that the state still gets processed until all the state
 // is processed.
 
+use core::ops::{Range, RangeInclusive};
+
 use super::{mocks::Check, register_checks};
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
@@ -416,8 +418,6 @@ fn creates_multiple_elections_limited_by_maximum() {
 
 #[test]
 fn reorg_clears_on_going_elections_and_continues() {
-	const INIT_LAST_BLOCK_RECEIVED: ChainBlockNumber = 10;
-
 	const HEADERS_RECEIVED: [Header<Types>; MAX_CONCURRENT_ELECTIONS as usize] = [
 		Header { block_height: 11, hash: 11, parent_hash: 10 },
 		Header { block_height: 12, hash: 12, parent_hash: 11 },
@@ -427,19 +427,28 @@ fn reorg_clears_on_going_elections_and_continues() {
 	];
 	const NEXT_HEADER_RECEIVED: [Header<Types>; 1] =
 		[Header { block_height: 16, hash: 16, parent_hash: 15 }];
-	const REORG_HEADER_RECEIVED: [Header<Types>; 3] = [
+	const REORG_LENGTH: usize = 3;
+	const REORG_HEADERS_REMOVED: RangeInclusive<ChainBlockNumber> = 14..=13 + REORG_LENGTH as u64;
+	const REORG_NEW_HEADERS_RECEIVED: [Header<Types>; REORG_LENGTH] = [
 		Header { block_height: 14, hash: 140, parent_hash: 13 },
 		Header { block_height: 15, hash: 150, parent_hash: 140 },
 		Header { block_height: 16, hash: 160, parent_hash: 150 },
 	];
-	const LAST_HEADER_RECEIVED: [Header<Types>; 1] =
+	const POST_REORG_HEADER_RECEIVED: [Header<Types>; 1] =
 		[Header { block_height: 17, hash: 17, parent_hash: 160 }];
-	const NEXT_BLOCK_NUMBER: ChainBlockNumber =
-		INIT_LAST_BLOCK_RECEIVED + MAX_CONCURRENT_ELECTIONS as u64;
-	const REORG_LENGTH: ChainBlockNumber = 3;
 
-	let all_votes = (INIT_LAST_BLOCK_RECEIVED + 1..=NEXT_BLOCK_NUMBER)
-		.map(|_| create_votes_expectation(vec![5, 6, 7]))
+	const PRE_REORG_RECEIVED_TXS: [Range<u8>; MAX_CONCURRENT_ELECTIONS as usize] =
+		[5..8, 8..11, 11..14, 14..17, 17..20];
+
+	// there's a special tx that only appears post-reorg in a reorged block
+	const SPECIAL_POST_REORG_TX: u8 = 200;
+	assert!(PRE_REORG_RECEIVED_TXS
+		.iter()
+		.all(|range| !range.contains(&SPECIAL_POST_REORG_TX)));
+
+	let all_votes = PRE_REORG_RECEIVED_TXS
+		.iter()
+		.map(|range| create_votes_expectation(range.clone().collect()))
 		.collect::<Vec<_>>();
 
 	TestSetup::<SimpleBlockWitnesser>::default()
@@ -476,14 +485,17 @@ fn reorg_clears_on_going_elections_and_continues() {
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
 				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(5),
+
+				// Ensure that we emit prewitness events for all txs from all the votes that reached consensus
+				Check::<SimpleBlockWitnesser>::emitted_prewitness_events(PRE_REORG_RECEIVED_TXS.iter().cloned().flatten().collect()),
 			],
 		)
 		.then(|| println!("We're about to come to consensus on a block that will trigger a reorg."))
 		// Reorg occurs
 		.test_on_finalize(
 			&vec![Some(ChainProgress {
-				headers: REORG_HEADER_RECEIVED.into(),
-				removed: Some(14..=16),
+				headers: REORG_NEW_HEADERS_RECEIVED.into(),
+				removed: Some(REORG_HEADERS_REMOVED),
 			})],
 			|_| {},
 			// We reopen an election for reorged blocks
@@ -496,22 +508,23 @@ fn reorg_clears_on_going_elections_and_continues() {
 			],
 		)
 		.then(|| {
-			println!("We're about to come to consensus and the deposits end up in another block")
+			println!("We're about to come to consensus and the deposits end up in another block, there's also a new one")
 		})
 		.expect_consensus_multi(vec![
-			create_votes_expectation(vec![]),
-			create_votes_expectation(vec![]),
-			create_votes_expectation(vec![5, 6, 7]),
+			create_votes_expectation(vec![14, 15, SPECIAL_POST_REORG_TX]),
+			create_votes_expectation(vec![18]),
+			create_votes_expectation(vec![19, 16]),
 		])
 		.test_on_finalize(
-			&vec![Some(ChainProgress { headers: LAST_HEADER_RECEIVED.into(), removed: None })],
+			&vec![Some(ChainProgress { headers: POST_REORG_HEADER_RECEIVED.into(), removed: None })],
 			|_| {},
 			vec![
 				//we proceed as normal and open election for the new header
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
-				// No prewitness events emitted, since we already emitted this before the reorg
-				Check::<SimpleBlockWitnesser>::emitted_prewitness_events(vec![]),
+				// Emit only prewitness events for the one deposit that is new post-reorg
+				// All other deposits have been prewitnessed before.
+				Check::<SimpleBlockWitnesser>::emitted_prewitness_events(vec![SPECIAL_POST_REORG_TX]),
 			],
 		);
 }
