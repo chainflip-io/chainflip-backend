@@ -88,17 +88,16 @@ where
 					let _ = E::schedule_egress(
 						output_asset.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
 						input_amount.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
-						output_address.try_into().unwrap_or_else(|_| {
-							panic!(
-								"Unable to
-						convert"
-							)
-						}),
+						output_address.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
 						ccm_deposit_metadata,
 					);
 				},
 				SwapOutputAction::CreditOnChain { .. } => {
 					// do nothing: this behaviour is tested by the swapping pallet's tests
+				},
+				SwapOutputAction::CreditLendingPool { .. } => {
+					// do nothing: for now it is the test's responsibility to manually call
+					// process_loan_swap_outcome where required
 				},
 			},
 			_ => { /* do nothing */ },

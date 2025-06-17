@@ -25,6 +25,7 @@ cf-primitives = { workspace = true }
 cf-chains = { workspace = true }
 cf-traits = { workspace = true }
 cf-runtime-utilities = { workspace = true }
+cf-amm-math = { workspace = true }
 
 
 # Parity deps

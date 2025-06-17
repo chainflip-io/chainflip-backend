@@ -2010,3 +2010,45 @@ mod affiliates {
 		});
 	}
 }
+
+mod lending_fee_swaps {
+
+	use cf_traits::{lending::ChpLoanId, mocks::lending_pools::MockChpSystemApi};
+
+	use super::*;
+
+	#[test]
+	fn lending_fee_swap() {
+		const LOAN_ID: ChpLoanId = ChpLoanId(42);
+
+		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const FEE_AMOUNT: AssetAmount = 1000;
+
+		new_test_ext()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), INIT_BLOCK);
+
+				Swapping::init_swap_request(
+					INPUT_ASSET,
+					FEE_AMOUNT,
+					OUTPUT_ASSET,
+					SwapRequestType::Regular {
+						output_action: SwapOutputAction::CreditLendingPool { loan_id: LOAN_ID },
+					},
+					Default::default(), // no broker fees
+					None,               // no FoK
+					None,               // no DCA
+					SwapOrigin::Internal,
+				);
+			})
+			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_execute_with(|_| {
+				// Check that swapped fees would be returned to the lending
+				// pallet through ChpSystemApi:
+				assert_eq!(
+					MockChpSystemApi::get_swapped_fees(LOAN_ID),
+					Some(FEE_AMOUNT * DEFAULT_SWAP_RATE)
+				)
+			});
+	}
+}

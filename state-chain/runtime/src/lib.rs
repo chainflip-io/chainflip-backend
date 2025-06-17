@@ -345,6 +345,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type PoolPriceApi = LiquidityPools;
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
+	type ChpSystemApi = LendingPools;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -1177,6 +1178,16 @@ impl pallet_cf_lending_pools::Config for Runtime {
 	type SwapRequestHandler = Swapping;
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
+	type PriceApi = PriceApiStub;
+}
+
+// This is to be replaced with a real implementation
+pub struct PriceApiStub {}
+
+impl cf_traits::OraclePriceApi for PriceApiStub {
+	fn get_price(_asset: Asset) -> cf_primitives::Price {
+		sp_core::U256::one() << cf_primitives::PRICE_FRACTIONAL_BITS
+	}
 }
 
 #[frame_support::runtime]
