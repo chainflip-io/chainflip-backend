@@ -88,7 +88,7 @@ impl ChainTypes for Types {
 	type ChainBlockNumber = u64;
 	type ChainBlockHash = u64;
 
-	const SAFETY_BUFFER: usize = 6;
+	const SAFETY_BUFFER: usize = SAFETY_MARGIN * 2;
 }
 
 impl BWProcessorTypes for Types {
@@ -534,7 +534,7 @@ fn reorg_clears_on_going_elections_and_continues() {
 #[test]
 fn elections_resolved_out_of_order_has_no_impact() {
 	const INIT_LAST_BLOCK_RECEIVED: ChainBlockNumber = 0;
-	const NUMBER_OF_ELECTIONS: u16 = 2;
+	const NUMBER_OF_ELECTIONS: ElectionCount = 2;
 	const HEADERS_RECEIVED: [Header<Types>; NUMBER_OF_ELECTIONS as usize] = [
 		Header { block_height: 1, hash: 1, parent_hash: 0 },
 		Header { block_height: 2, hash: 2, parent_hash: 1 },
@@ -671,7 +671,7 @@ fn elections_resolved_out_of_order_has_no_impact() {
 
 #[test]
 fn optimistic_election_result_saved_and_used_or_discarded_correctly() {
-	const NUMBER_OF_ELECTIONS: u16 = 2;
+	const NUMBER_OF_ELECTIONS: ElectionCount = 2;
 
 	const HEADERS_RECEIVED: [Header<Types>; NUMBER_OF_ELECTIONS as usize] = [
 		Header { block_height: 11, hash: 11, parent_hash: 10 },

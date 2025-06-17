@@ -67,7 +67,6 @@ pub struct TestContext<ES: ElectoralSystem> {
 impl<ES: ElectoralSystem> TestSetup<ES>
 where
 	ES::ElectionIdentifierExtra: Default,
-	// ES::ElectionProperties: Default,
 	ES::ElectionState: Default,
 	ES::ElectoralUnsynchronisedStateMapKey: Ord,
 {

@@ -79,7 +79,6 @@ pub trait ConsensusMechanismForES<S: Statemachine> = ConsensusMechanism<
 ///
 /// 4. Enjoy your new electoral system! It is called `StatemachineElectoralSystem<ES>`, where `ES`
 ///    is the tag type from step 1.
-#[derive(Debug)]
 pub struct StatemachineElectoralSystem<ES: StatemachineElectoralSystemTypes> {
 	_phantom: core::marker::PhantomData<ES>,
 }
