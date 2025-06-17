@@ -19,8 +19,9 @@ use cf_chains::{
 	address::EncodedAddress,
 	assets::sol,
 	btc::ScriptPubkey,
+	dot::PolkadotAccountId,
 	sol::{SolAddress, SolAddressLookupTableAccount, SolApiEnvironment, SolPubkey},
-	Arbitrum, Bitcoin, Ethereum, EvmVaultSwapExtraParameters,
+	Arbitrum, Bitcoin, Ethereum, EvmVaultSwapExtraParameters, ForeignChainAddress,
 };
 
 use cf_primitives::{
@@ -107,19 +108,10 @@ fn test_lp_serialization() {
 	let lp = RpcAccountInfo::lp(
 		LiquidityProviderInfo {
 			refund_addresses: vec![
-				(
-					ForeignChain::Ethereum,
-					Some(cf_chains::ForeignChainAddress::Eth(H160::from([1; 20]))),
-				),
-				(
-					ForeignChain::Polkadot,
-					Some(cf_chains::ForeignChainAddress::Dot(Default::default())),
-				),
+				(ForeignChain::Ethereum, Some(ForeignChainAddress::Eth(H160::from([1; 20])))),
+				(ForeignChain::Polkadot, Some(ForeignChainAddress::Dot(Default::default()))),
 				(ForeignChain::Bitcoin, None),
-				(
-					ForeignChain::Arbitrum,
-					Some(cf_chains::ForeignChainAddress::Arb(H160::from([2; 20]))),
-				),
+				(ForeignChain::Arbitrum, Some(ForeignChainAddress::Arb(H160::from([2; 20])))),
 				(ForeignChain::Solana, None),
 			],
 			balances: vec![
@@ -931,14 +923,19 @@ fn vault_swap_input_serialization() {
 fn chain_accounts_serialization() {
 	let val = ChainAccounts {
 		chain_accounts: vec![
-			EncodedAddress::Eth([1u8; 20]),
-			EncodedAddress::Dot([2u8; 32]),
-			cf_chains::ForeignChainAddress::Btc(ScriptPubkey::Taproot([4u8; 32]))
+			ForeignChainAddress::Eth(cf_chains::evm::Address::from([1u8; 20]))
 				.to_encoded_address(Default::default()),
-			EncodedAddress::Btc(vec![4u8; 20]),
-			EncodedAddress::Arb([5u8; 20]),
-			EncodedAddress::Sol([6u8; 32]),
-			EncodedAddress::Hub([7u8; 32]),
+			ForeignChainAddress::Dot(PolkadotAccountId([2u8; 32]))
+				.to_encoded_address(Default::default()),
+			ForeignChainAddress::Btc(ScriptPubkey::P2WPKH([3u8; 20]))
+				.to_encoded_address(Default::default()),
+			ForeignChainAddress::Btc(ScriptPubkey::Taproot([4u8; 32]))
+				.to_encoded_address(Default::default()),
+			ForeignChainAddress::Arb(cf_chains::evm::Address::from([5u8; 20]))
+				.to_encoded_address(Default::default()),
+			ForeignChainAddress::Sol(SolAddress([6u8; 32])).to_encoded_address(Default::default()),
+			ForeignChainAddress::Hub(PolkadotAccountId([7u8; 32]))
+				.to_encoded_address(Default::default()),
 		],
 	};
 
