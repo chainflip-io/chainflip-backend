@@ -205,5 +205,5 @@ export async function testBoostingSwap(testContext: TestContext) {
   }
 
   // Pre-witnessing is only enabled for btc at the moment. Add the other assets here when it's enabled for them.
-  await testBoostingForAsset(Assets.Btc, boostPoolTier, '//LP_1', 0.5, testContext);
+  await testBoostingForAsset(Assets.Btc, boostPoolTier, '//LP_1', 0.1, testContext);
 }

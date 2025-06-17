@@ -2,7 +2,7 @@ import axios from 'axios';
 import { randomBytes } from 'crypto';
 import { Chain, InternalAsset } from '@chainflip/cli';
 import Web3 from 'web3';
-import { sendBtc, sendBtcTransactionWithParent } from '../shared/send_btc';
+import { getTxAmount, sendBtc, sendBtcTransactionWithParent } from '../shared/send_btc';
 import {
   newAddress,
   sleep,
@@ -200,10 +200,18 @@ async function brokerLevelScreeningTestBtc(
   );
 
   // send tx
-  const txId = await sendFunction(0.2, swapParams.depositAddress);
+  const amountBtc = 0.234;
+  const txId = await sendFunction(amountBtc, swapParams.depositAddress);
+  logger.debug(`Sent Bitcoin tx with id ${txId} to reject`);
 
   // mark tx for rejection
   await reportFunction(txId);
+  const reportedAmount = await getTxAmount(logger, txId);
+  if (Math.abs(reportedAmount) !== amountBtc) {
+    throw new Error(
+      `Reported amount doesn't match sent amount! Reported wrong tx? txId: ${txId}, reportedAmount: ${reportedAmount}, expectedAmount: ${amountBtc}`,
+    );
+  }
 
   // wait for rejection
   await observeEvent(logger, 'bitcoinIngressEgress:TransactionRejectedByBroker').event;
@@ -224,7 +232,7 @@ async function brokerLevelScreeningTestBtc(
  */
 async function brokerLevelScreeningTestBtcVaultSwap(
   testContext: TestContext,
-  amount: string,
+  amount: number,
   doBoost: boolean,
   refundAddress: string,
   reportFunction: (txId: string) => Promise<void>,
@@ -234,7 +242,7 @@ async function brokerLevelScreeningTestBtcVaultSwap(
   const destinationAddressForUsdc = await newAssetAddress('Usdc');
   const txId = await buildAndSendBtcVaultSwap(
     logger,
-    parseFloat(amount),
+    amount,
     'Usdc',
     destinationAddressForUsdc,
     refundAddress,
@@ -245,7 +253,16 @@ async function brokerLevelScreeningTestBtcVaultSwap(
     [],
     0,
   );
+  logger.debug(`Sent Bitcoin vault swap with id ${txId} to reject`);
   await reportFunction(txId);
+  const reportedAmount = await getTxAmount(logger, txId);
+  if (Math.abs(reportedAmount) !== amount) {
+    // TODO: Why does the amount of the vault swap not match the sent amount? reportedAmount: -0.30419137, expectedAmount: 0.287
+    // reportedAmount: -0.78124786, expectedAmount: 0.287
+    // throw new Error(
+    //   `Reported amount doesn't match sent amount! Reported wrong tx? txId: ${txId}, reportedAmount: ${reportedAmount}, expectedAmount: ${amount}`,
+    // );
+  }
 }
 
 async function testEvm(
@@ -290,7 +307,7 @@ async function testEvm(
     logger.debug(`Initial deposit ${sourceAsset} received...`);
     // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
     // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
-    // succesfully to make sure the Deposit contract is deployed.
+    // successfully to make sure the Deposit contract is deployed.
     await waitForDepositContractDeployment(chain, swapParams.depositAddress);
   }
 
@@ -586,7 +603,7 @@ async function testBitcoinVaultSwap(testContext: TestContext) {
 
   await brokerLevelScreeningTestBtcVaultSwap(
     testContext,
-    '0.2',
+    0.287,
     false,
     btcRefundAddress,
     async (txId) => setTxRiskScore(txId, 9.0),

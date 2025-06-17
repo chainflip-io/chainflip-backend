@@ -173,3 +173,12 @@ export async function sendBtcTransactionWithParent(
 
   return txids;
 }
+
+export async function getTxAmount(logger: Logger, txid: string): Promise<number> {
+  const transactionDetails = await btcClient.getTransaction(txid);
+  if (!transactionDetails || !transactionDetails.amount) {
+    throw new Error(`Transaction ${txid} not found or has no amount`);
+  }
+  logger.trace(`Transaction ${txid} amount: ${transactionDetails.amount}`);
+  return transactionDetails.amount;
+}
