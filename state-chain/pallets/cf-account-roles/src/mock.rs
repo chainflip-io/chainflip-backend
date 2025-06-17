@@ -42,6 +42,7 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = frame_system::EnsureRoot<<Self as frame_system::Config>::AccountId>;
 	type DeregistrationCheck = MockDeregistrationCheck<Self::AccountId>;
+	type RuntimeCall = RuntimeCall;
 	type WeightInfo = ();
 }
 
