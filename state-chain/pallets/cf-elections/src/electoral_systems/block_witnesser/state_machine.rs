@@ -84,9 +84,10 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, DebugEventHook> {
 	type Output = ();
 }
 
+pub trait BlockDataTrait = CommonTraits + TestTraits + MaybeArbitrary + Ord + 'static;
 pub trait BWProcessorTypes: Sized + Debug + Clone + Eq {
 	type Chain: ChainTypes;
-	type BlockData: CommonTraits + TestTraits + Ord + 'static;
+	type BlockData: BlockDataTrait;
 
 	type Event: CommonTraits + Ord + Encode;
 	type Rules: Hook<HookTypeFor<Self, RulesHook>> + Default + CommonTraits;
@@ -406,9 +407,8 @@ pub mod tests {
 		T: BWTypes<SafeModeEnabledHook = MockHook<HookTypeFor<T, SafeModeEnabledHook>>>,
 	>() -> impl Strategy<Value = BlockWitnesserState<T>>
 	where
-		T::ElectionPropertiesHook: Default + Clone + Debug + Eq,
-		T::ElectionTrackerDebugEventHook: Default + Clone + Debug + Eq,
-		T::BlockData: Default + Clone + Debug + Eq,
+		T::ElectionPropertiesHook: Default,
+		T::BlockData: Default,
 	{
 		(any::<SafeModeStatus>(), any::<ElectionTracker<T>>()).prop_map(|(safemode, elections)| {
 			BlockWitnesserState {
@@ -464,8 +464,16 @@ pub mod tests {
 
 	fn generate_context<C: ChainTypes + Arbitrary>(
 	) -> impl Strategy<Value = Option<ChainProgress<C>>> + Clone + Debug + Send {
-		// any::<Option<ChainProgress<C>>>()
-		Just(None)
+		any::<Option<ChainProgress<C>>>()
+	}
+
+	fn generate_settings(
+	) -> impl Strategy<Value = BlockWitnesserSettings> + Clone + Debug + Sync + Send {
+		prop_do! {
+			let max_ongoing_elections in 1..10u16;
+			let safety_margin in 1..5u32;
+			return BlockWitnesserSettings { safety_margin, max_ongoing_elections }
+		}
 	}
 
 	fn generate_input<T: BWTypes>(
@@ -483,11 +491,8 @@ pub mod tests {
 		}
 	}
 
-	impl<
-			N: ChainBlockNumberTrait,
-			H: ChainBlockHashTrait,
-			D: Validate + Ord + Default + CommonTraits + TestTraits + 'static,
-		> BWTypes for TypesFor<(N, H, Vec<D>)>
+	impl<N: ChainBlockNumberTrait, H: ChainBlockHashTrait, D: BlockDataTrait> BWTypes
+		for TypesFor<(N, H, Vec<D>)>
 	{
 		type ElectionProperties = ();
 		type ElectionPropertiesHook = MockHook<HookTypeFor<Self, ElectionPropertiesHook>>;
@@ -496,42 +501,24 @@ pub mod tests {
 			MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;
 	}
 
-	type Types = TypesFor<(u32, Vec<u8>, Vec<u8>)>;
-
 	#[test]
 	pub fn test_bw_statemachine() {
-		BWStatemachine::<Types>::test(
+		type Types1 = TypesFor<(u32, Vec<u8>, Vec<u8>)>;
+		BWStatemachine::<Types1>::test(
 			file!(),
 			generate_state(),
-			prop_do! {
-				let max_ongoing_elections in 1..10u16;
-				let safety_margin in 1..5u32;
-				return BlockWitnesserSettings { safety_margin, max_ongoing_elections }
-			},
-			generate_input::<Types>,
-			generate_context::<Types>(),
+			generate_settings(),
+			generate_input::<Types1>,
+			generate_context::<Types1>(),
 		);
-	}
 
-	/*
-
-	struct TestChain {}
-	impl ChainWitnessConfig for TestChain {
-		const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
-		type ChainBlockNumber = u32;
-	}
-
-	#[test]
-	pub fn test_bw_statemachine2() {
-		BWStatemachine::<BlockWitnessRange<TestChain>>::test(
+		type Types2 = TypesFor<(u8, Vec<u8>, Vec<u8>)>;
+		BWStatemachine::<Types2>::test(
 			file!(),
 			generate_state(),
-			prop_do! {
-				let max_concurrent_elections in 0..10u16;
-				return BlockWitnesserSettings { max_concurrent_elections, safety_margin: SAFETY_MARGIN}
-			},
-			generate_input::<BlockWitnessRange<TestChain>>,
+			generate_settings(),
+			generate_input::<Types2>,
+			generate_context::<Types2>(),
 		);
 	}
-	*/
 }

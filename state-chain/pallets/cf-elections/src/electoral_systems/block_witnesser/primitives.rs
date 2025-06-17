@@ -97,9 +97,12 @@ defx! {
 		//
 
 		ongoing_elections_are_lower_than_queued: {
-			let highest_ongoing = this.ongoing.keys().max().cloned().unwrap_or_default();
-			this.queued_hash_elections.keys().all(|height| highest_ongoing < *height)
-			&& this.queued_safe_elections.get_all_heights().iter().all(|height| highest_ongoing < *height)
+			if let Some(highest_ongoing) = this.ongoing.keys().max().cloned() {
+				this.queued_hash_elections.keys().all(|height| highest_ongoing < *height)
+				&& this.queued_safe_elections.get_all_heights().iter().all(|height| highest_ongoing < *height)
+			} else {
+				true
+			}
 		},
 
 		elections_queued_by_hash_are_inside_safety_buffer:
@@ -420,25 +423,12 @@ impl<T: BWTypes> Default for ElectionTracker<T> {
 impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 	type Parameters = ();
 
-	fn arbitrary_with(args: Self::Parameters) -> Self::Strategy {
-		use crate::{prop_construct, prop_do};
-		use frame_support::sp_runtime::SaturatedConversion;
+	fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+		use crate::prop_do;
 		use proptest::{
 			collection::{btree_map, btree_set, vec},
 			prelude::Just,
 		};
-		use sp_std::fmt::Debug;
-
-		fn block_number<N: SaturatingStep + Default + Debug + Clone>(
-			range: impl Strategy<Value = usize>,
-		) -> impl Strategy<Value = N> {
-			range.prop_map(|delta| N::default().saturating_forward(delta))
-		}
-
-		let into_block_number =
-			|x| <ChainBlockNumberOf<T::Chain> as Default>::default().saturating_forward(x);
-
-		// first we generate a btreemap of hash + safe elections
 
 		prop_do!(
 			let ongoing_below in any::<ChainBlockNumberOf<T::Chain>>();
@@ -448,7 +438,7 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 			let currently_highest = heights.iter().max().cloned().unwrap_or(Default::default());
 			let seen_heights_below = currently_highest.saturating_forward(highest_seen_delta);
 			let highest_ever_ongoing = currently_highest.saturating_forward(highest_ongoign_delta);
-			let safe_elections_below = seen_heights_below.saturating_backward(T::Chain::SAFETY_BUFFER);
+			let safe_elections_below = max(ongoing_below, seen_heights_below.saturating_backward(T::Chain::SAFETY_BUFFER));
 			let ongoing = heights.iter().filter(|h| **h < ongoing_below).cloned().collect::<BTreeSet<_>>();
 			let safe = heights.iter().filter(|h| (ongoing_below..safe_elections_below).contains(*h)).cloned().collect::<BTreeSet<_>>();
 			let hash = heights.iter().filter(|h| (safe_elections_below..seen_heights_below).contains(*h)).cloned().collect::<BTreeSet<_>>();
@@ -458,52 +448,44 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 				highest_ever_ongoing_election: Just(highest_ever_ongoing),
 				ongoing: vec(any::<BWElectionType<T>>(), ongoing.len()..=ongoing.len())
 					.prop_map(move |types|
-						ongoing.clone().into_iter()
-						.zip(types.into_iter())
-						.collect::<BTreeMap<_,_>>())
-
-				,
+						ongoing.clone()
+							.into_iter()
+							.zip(types.into_iter())
+							.collect::<BTreeMap<_,_>>()
+					),
 				queued_safe_elections: Just(
 					safe.into_iter().fold(CompactHeightTracker::new(), |mut acc, height| {
 						acc.insert(height);
 						acc
 					})
 				),
-				queued_hash_elections: Just(Default::default()),
-				// btree_map(
-				// 	block_number(start_hashed_elections..seen_heights_below),
-				// 	any::<ChainBlockHashOf<T::Chain>>(),
-				// 	0..20
-				// ),
-				optimistic_block_cache: Just(Default::default()),
+				queued_hash_elections: vec(any::<ChainBlockHashOf<T::Chain>>(), hash.len()..=hash.len())
+					.prop_map(move |hashes|
+						hash.clone()
+							.into_iter()
+							.zip(hashes.into_iter())
+							.collect::<BTreeMap<_,_>>()
+					),
+				optimistic_block_cache: btree_map(
+						any::<ChainBlockNumberOf<T::Chain>>(),
+						any::<OptimisticBlock<T>>(),
+						0..10
+					).prop_map(move |mut blocks| {
+						blocks.retain(|height, _| height.saturating_forward(T::Chain::SAFETY_BUFFER) > seen_heights_below);
+						blocks
+					}),
 				debug_events: Just(Default::default()),
 			}
 		)
-		// (
-		// 	any::<ChainBlockNumberOf<T::Chain>>(),
-		// 	any::<ChainBlockNumberOf<T::Chain>>(),
-		// ).prop_map(
-		// 	|(
-		// 		seen_heights_below,
-		// 		highest_ever_ongoing_election,
-		// 	)| Self {
-		// 	seen_heights_below,
-		// 	highest_ever_ongoing_election,
-		// 	queued_hash_elections: Default::default(),
-		// 	queued_safe_elections: Default::default(),
-		// 	ongoing: Default::default(),
-		// 	optimistic_block_cache: Default::default(),
-		// 	debug_events: Default::default(),
-		// }
-		// )
 	}
 
 	type Strategy = impl Strategy<Value = Self> + Clone + sp_std::fmt::Debug + Sync + Send;
 }
 
 def_derive! {
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct OptimisticBlock<T: BWTypes> {
-		pub hash: ChainBlockHashOf<T::Chain>,
+		pub hash: <T::Chain as ChainTypes>::ChainBlockHash,
 		pub data: T::BlockData,
 	}
 }

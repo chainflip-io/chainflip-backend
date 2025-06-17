@@ -232,7 +232,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		let deleted_blocks = self
 			.blocks_data
 			.extract_if(|block_number, _| {
-				block_number.saturating_forward(T::Chain::SAFETY_BUFFER) < seen_heights_below
+				block_number.saturating_forward(T::Chain::SAFETY_BUFFER) < lowest_in_progress_height
 			})
 			.collect();
 
@@ -267,7 +267,8 @@ pub(crate) mod tests {
 			block_witnesser::{
 				block_processor::BlockProcessor,
 				state_machine::{
-					BWProcessorTypes, DebugEventHook, ExecuteHook, HookTypeFor, RulesHook,
+					BWProcessorTypes, BlockDataTrait, DebugEventHook, ExecuteHook, HookTypeFor,
+					RulesHook,
 				},
 			},
 			state_machine::core::{hook_test_utils::MockHook, Hook, TypesFor, Validate},
@@ -329,11 +330,8 @@ pub(crate) mod tests {
 		}
 	}
 
-	impl<
-			N: ChainBlockNumberTrait,
-			H: ChainBlockHashTrait,
-			D: CommonTraits + TestTraits + Validate + Ord + Default + 'static,
-		> BWProcessorTypes for TypesFor<(N, H, Vec<D>)>
+	impl<N: ChainBlockNumberTrait, H: ChainBlockHashTrait, D: BlockDataTrait> BWProcessorTypes
+		for TypesFor<(N, H, Vec<D>)>
 	{
 		type Chain = Self;
 		type BlockData = Vec<D>;
