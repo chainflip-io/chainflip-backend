@@ -514,9 +514,12 @@ impl<N: Step> Iterator for CompactHeightTrackerExtract<'_, N> {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[derive(
+	Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Default,
+)]
 pub enum SafeModeStatus {
 	Enabled,
+	#[default]
 	Disabled,
 }
 

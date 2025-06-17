@@ -14,8 +14,6 @@
 // State partially processed, how do we test that the state still gets processed until all the state
 // is processed.
 
-use core::cell::RefCell;
-
 use super::{mocks::Check, register_checks};
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
@@ -34,7 +32,10 @@ use crate::{
 		mocks::{ElectoralSystemState, TestSetup},
 		state_machine::{
 			consensus::{ConsensusMechanism, SuccessThreshold},
-			core::{hook_test_utils::MockHook, Hook, HookType, TypesFor},
+			core::{
+				hook_test_utils::{ConstantHook, MockHook},
+				Hook, HookType, TypesFor,
+			},
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 	},
@@ -44,22 +45,6 @@ use consensus::BWConsensus;
 use primitives::SafeModeStatus;
 use sp_std::collections::btree_set::BTreeSet;
 use state_machine::{BWStatemachine, BWTypes};
-
-thread_local! {
-	static SAFE_MODE: RefCell<bool> = RefCell::new(false);
-}
-
-impl Hook<HookTypeFor<(), SafeModeEnabledHook>> for Types {
-	fn run(&mut self, _input: ()) -> SafeModeStatus {
-		SAFE_MODE.with(|safe_mode| {
-			if *safe_mode.borrow() {
-				SafeModeStatus::Enabled
-			} else {
-				SafeModeStatus::Disabled
-			}
-		})
-	}
-}
 
 type ChainBlockNumber = <Types as ChainTypes>::ChainBlockNumber;
 type ValidatorId = u16;
@@ -105,7 +90,7 @@ impl BWTypes for Types {
 	type ElectionProperties = ElectionProperties;
 	type ElectionPropertiesHook =
 		MockHook<HookTypeFor<Self, ElectionPropertiesHook>, "generate_election_properties">;
-	type SafeModeEnabledHook = Self;
+	type SafeModeEnabledHook = MockHook<HookTypeFor<(), SafeModeEnabledHook>, "safe_mode">;
 	type ElectionTrackerDebugEventHook = MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;
 }
 
@@ -803,14 +788,10 @@ fn with_safe_mode_enabled() {
 
 	let all_votes = (1..=5).map(|_| create_votes_expectation(vec![5, 6, 7])).collect::<Vec<_>>();
 
-	// Enable safe mode for this test only
-	SAFE_MODE.with(|safe_mode| {
-		*safe_mode.borrow_mut() = true;
-	});
-
 	TestSetup::<SimpleBlockWitnesser>::default()
 		.with_unsynchronised_state(BlockWitnesserState {
 			elections: ElectionTracker { highest_ever_ongoing_election: 7, ..Default::default() },
+			safemode_enabled: MockHook::new(ConstantHook::new(SafeModeStatus::Enabled)),
 			..Default::default()
 		})
 		.with_unsynchronised_settings(BlockWitnesserSettings {
@@ -842,14 +823,11 @@ fn with_safe_mode_enabled() {
 				);
 			},
 			vec![
-				// Only optimistic election is ongoing
+				// Only elections up to block 7 are open, hence 2 elections only since blocks from
+				// 1 to 5 were already witnessed
 				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(2),
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(2),
 				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(5),
 			],
 		);
-	// Optionally reset it at the end
-	SAFE_MODE.with(|safe_mode| {
-		*safe_mode.borrow_mut() = false;
-	});
 }
