@@ -71,21 +71,31 @@ impl PoolApi for MockPoolApi {
 		_who: &Self::AccountId,
 		_asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError> {
-		Ok(0)
+		unimplemented!();
 	}
 
 	fn open_order_balances(_who: &Self::AccountId) -> AssetMap<AssetAmount> {
-		AssetMap::from_fn(|_| 0)
+		unimplemented!();
 	}
 
 	fn pools() -> Vec<PoolPairsMap<Asset>> {
-		vec![]
+		unimplemented!();
 	}
 
 	fn cancel_all_limit_orders(who: &Self::AccountId) -> frame_support::dispatch::DispatchResult {
 		Self::mutate_value(LIMIT_ORDERS, |limit_orders: &mut Option<LimitOrderStorage>| {
 			if let Some(limit_orders) = limit_orders {
-				limit_orders.retain(|(_, account, _, _), _| account != who);
+				limit_orders.retain(|(asset, account, side, _), tick_amount| {
+					if account == who {
+						MockBalance::credit_account(
+							account,
+							if *side == Side::Sell { *asset } else { STABLE_ASSET },
+							tick_amount.amount,
+						);
+						return false;
+					}
+					true
+				});
 			}
 
 			Ok(())
@@ -107,6 +117,14 @@ impl PoolApi for MockPoolApi {
 			let limit_orders = limit_orders.get_or_insert_default();
 
 			let key = (base_asset, *account, side, id);
+			let amount_change = match amount_change {
+				IncreaseOrDecrease::Increase(_) => amount_change,
+				// Support for cancel order decreasing by u128::MAX
+				IncreaseOrDecrease::Decrease(amount) => {
+					let max_amount = limit_orders.get(&key).unwrap().amount;
+					IncreaseOrDecrease::Decrease(amount.min(max_amount))
+				},
+			};
 
 			let order = limit_orders.remove(&key);
 
@@ -143,8 +161,8 @@ impl PoolApi for MockPoolApi {
 							Some(order)
 						},
 						IncreaseOrDecrease::Decrease(amount) =>
-							if order.amount < amount {
-								// Negative amount means we are removing the order
+							if order.amount <= amount {
+								// Reduced to 0, so close the order
 								None
 							} else {
 								order.amount -= amount;
