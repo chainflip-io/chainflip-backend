@@ -144,7 +144,7 @@ where
 }
 
 #[cfg(test)]
-mod testssss {
+mod tests {
 	use crate::electoral_systems::state_machine::consensus::{
 		ConsensusMechanism, MultipleVotes, StagedConsensus, SuccessThreshold,
 		SupermajorityConsensus,

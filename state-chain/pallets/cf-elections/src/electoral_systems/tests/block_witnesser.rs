@@ -243,7 +243,7 @@ fn block_witnesser_consensus() {
 // We start an election for a block, receive it and emit PreWitness events for it. The base case.
 // (no optimistic elections)
 #[test]
-fn no_block_data_success() {
+fn election_starts_and_resolves_when_consensus_is_reached() {
 	const NEXT_HEADER_RECEIVED: Header<Types> = Header { block_height: 1, hash: 1, parent_hash: 0 };
 	const TX_RECEIVED: u8 = 42;
 	TestSetup::<SimpleBlockWitnesser>::default()
