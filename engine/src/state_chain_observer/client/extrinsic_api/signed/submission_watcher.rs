@@ -20,7 +20,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use cf_primitives::CfeCompatibility;
+use cf_primitives::{CfeCompatibility, TxIndex};
 use cf_utilities::{
 	future_map::FutureMap,
 	task_scope::{self, Scope},
@@ -35,12 +35,12 @@ use sp_runtime::{
 	traits::Hash, transaction_validity::TransactionValidityError, ApplyExtrinsicResult,
 	MultiAddress,
 };
-use state_chain_runtime::{BlockNumber, Nonce, UncheckedExtrinsic};
+use state_chain_runtime::{BlockNumber, Nonce, RuntimeEvent, UncheckedExtrinsic};
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{debug, error, info, warn};
 
-use cf_node_client::{error_decoder, signer, ExtrinsicDetails};
+use cf_node_client::{error_decoder, signer, ExtrinsicData};
 
 use crate::state_chain_observer::client::{
 	base_rpc_api,
@@ -87,7 +87,8 @@ impl From<ClientError> for DryRunError {
 	}
 }
 
-pub type ExtrinsicResult<OtherError> = Result<ExtrinsicDetails, ExtrinsicError<OtherError>>;
+pub type ExtrinsicResult<OtherError> =
+	Result<ExtrinsicData<Vec<RuntimeEvent>>, ExtrinsicError<OtherError>>;
 
 #[derive(Error, Debug)]
 pub enum FinalizationError {
@@ -408,6 +409,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		tx_hash: H256,
 		extrinsic_events: Vec<state_chain_runtime::RuntimeEvent>,
 		header: state_chain_runtime::Header,
+		extrinsic_index: TxIndex,
+		block_hash: state_chain_runtime::Hash,
 	) -> ExtrinsicResult<OtherError> {
 		// We expect to find a Success or Failed event, grab the dispatch info and send
 		// it with the events
@@ -425,7 +428,14 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				_ => None,
 			})
 			.expect(SUBSTRATE_BEHAVIOUR)
-			.map(|dispatch_info| (tx_hash, extrinsic_events, header, dispatch_info))
+			.map(|dispatch_info| ExtrinsicData {
+				tx_hash,
+				events: extrinsic_events,
+				header,
+				dispatch_info,
+				tx_index: extrinsic_index,
+				block_hash,
+			})
 	}
 
 	pub async fn watch_for_submission_in_block(&mut self) -> (RequestID, SubmissionID, H256, H256) {
@@ -508,6 +518,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						tx_hash,
 						extrinsic_events,
 						header.clone(),
+						extrinsic_index,
+						block_hash,
 					));
 				}
 			} else {
@@ -610,6 +622,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 								tx_hash,
 								extrinsic_events,
 								block.header.clone(),
+								extrinsic_index as usize,
+								block_hash,
 							);
 							info!(target: "state_chain_client", request_id = matching_request.id, submission_id = submission.id, "Request found in finalized block with hash {block_hash:?}, tx_hash {tx_hash:?}, and extrinsic index {extrinsic_index}.");
 							if let Some(until_in_block_sender) =

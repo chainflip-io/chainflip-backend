@@ -208,8 +208,12 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		Ok(())
 	}
 
+	fn account_role(id: &T::AccountId) -> AccountRole {
+		AccountRoles::<T>::get(id).unwrap_or_default()
+	}
+
 	fn has_account_role(id: &T::AccountId, role: AccountRole) -> bool {
-		AccountRoles::<T>::get(id).unwrap_or_default() == role
+		Self::account_role(id) == role
 	}
 
 	fn ensure_account_role(
