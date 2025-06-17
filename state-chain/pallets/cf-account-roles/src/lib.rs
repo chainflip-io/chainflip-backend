@@ -49,7 +49,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 pub const MAX_LENGTH_FOR_VANITY_NAME: u32 = 64;
 
 type VanityName = BoundedVec<u8, ConstU32<MAX_LENGTH_FOR_VANITY_NAME>>;
-pub type SubAccountIndex = u8;
+type SubAccountIndex = u8;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -91,7 +91,7 @@ pub mod pallet {
 	pub type VanityNames<T: Config> =
 		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>;
 
-	/// Registered sub-accounts by sub-account index for an account.
+	/// The associated sub accounts by the sub account index for a account.
 	#[pallet::storage]
 	#[pallet::getter(fn sub_accounts)]
 	pub type SubAccounts<T: Config> =
