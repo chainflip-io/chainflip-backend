@@ -64,9 +64,10 @@ export async function redeemFlip(
     test: (event) => event.data.accountId === flipWallet.address,
   }).event;
   const flipperinoRedeemAmount = intoFineAmount(flipAmount);
+  const flipNonce = await chainflip.rpc.system.accountNextIndex(flipWallet.address);
   await chainflip.tx.funding
     .redeem(flipperinoRedeemAmount, ethAddress, null)
-    .signAndSend(flipWallet, { nonce: -1 }, handleSubstrateError(chainflip));
+    .signAndSend(flipWallet, { nonce: flipNonce }, handleSubstrateError(chainflip));
 
   const redemptionRequestEvent = await redemptionRequestHandle;
   logger.debug('Redemption requested: ', redemptionRequestEvent.data.amount);
