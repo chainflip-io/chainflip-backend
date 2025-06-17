@@ -29,6 +29,7 @@ use sp_std::boxed::Box;
 use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, DeregistrationCheck};
 use frame_support::{
+	dispatch::GetDispatchInfo,
 	error::BadOrigin,
 	pallet_prelude::{DispatchResult, StorageVersion},
 	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnNewAccount, OriginTrait},
@@ -64,6 +65,11 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 		type WeightInfo: WeightInfo;
+		type RuntimeCall: Parameter
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
+			+ From<frame_system::Call<Self>>
+			+ From<Call<Self>>
+			+ GetDispatchInfo;
 	}
 
 	#[pallet::pallet]
@@ -116,7 +122,6 @@ pub mod pallet {
 			account_id: T::AccountId,
 			sub_account_id: T::AccountId,
 			sub_account_index: SubAccountIndex,
-			call: Box<T::RuntimeCall>,
 		},
 	}
 
@@ -209,11 +214,11 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::as_sub_account())]
+		#[pallet::weight(T::WeightInfo::as_sub_account().saturating_add(call.get_dispatch_info().weight))]
 		pub fn as_sub_account(
 			origin: OriginFor<T>,
 			sub_account_index: SubAccountIndex,
-			call: Box<T::RuntimeCall>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			let mut origin = origin;
 			let account_id = ensure_signed(origin.clone())?;
@@ -221,18 +226,18 @@ pub mod pallet {
 			ensure!(sub_account_id.is_some(), Error::<T>::UnknownAccount);
 			let sub_account_id = sub_account_id.unwrap();
 			origin.set_caller_from(frame_system::RawOrigin::Signed(sub_account_id.clone()));
-			if let Ok(_post_info) = call.clone().dispatch(origin) {
-				// TODO: Correct the weight of the extrinsic.
-				Self::deposit_event(Event::SubAccountCallExecuted {
-					account_id: account_id.clone(),
-					sub_account_id: sub_account_id.clone(),
-					sub_account_index,
-					call: call.clone(),
-				});
-				Ok(())
-			} else {
-				Err(DispatchError::from(Error::<T>::FailedToExecuteCallOnBehalfOfSubAccount))
-			}
+
+			call.clone()
+				.dispatch(origin)
+				.map_err(|_| Error::<T>::FailedToExecuteCallOnBehalfOfSubAccount)?;
+
+			Self::deposit_event(Event::SubAccountCallExecuted {
+				account_id: account_id.clone(),
+				sub_account_id: sub_account_id.clone(),
+				sub_account_index,
+			});
+
+			Ok(())
 		}
 	}
 }

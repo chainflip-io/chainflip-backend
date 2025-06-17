@@ -254,7 +254,6 @@ fn execute_as_sub_account() {
 				account_id: ALICE,
 				sub_account_id,
 				sub_account_index: SUB_ACCOUNT_INDEX,
-				call: _,
 			}) if *sub_account_id == SubAccounts::<Test>::get(ALICE, SUB_ACCOUNT_INDEX).unwrap()
 		);
 		assert!(VanityNames::<Test>::get().contains_key(&sub_account_id));
