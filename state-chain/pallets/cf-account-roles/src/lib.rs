@@ -187,6 +187,20 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Derives a sub-account by the given origin account id and a sub-account index.
+		/// Stores the account id against the sub-account index and origin account id.
+		///
+		/// The sub account is unmutual associated with the origin/parent account and the creation
+		/// fails if the sub-account already exists for the given index. It's possible to derive 256
+		/// sub-accounts per parent account. The parent account can execute calls on behalf of the
+		/// sub-account (see as_sub_account).
+		///
+		/// Events:
+		/// - `SubAccountCreated` if the sub-account is created.
+		///
+		/// Errors:
+		/// - `SubAccountAlreadyExists` if the sub-account already exists for the given index.
+		/// - `SubAccountIdDerivationFailed` if the sub-account id derivation fails.
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::derive_sub_account())]
 		pub fn derive_sub_account(
@@ -213,6 +227,17 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Executes a call on behalf of a sub-account. The account is getting identified by the
+		/// passed sub-account index.
+		///
+		/// The call is executed with the sub-account's account id as the dispatch origin.
+		///
+		/// Events:
+		/// - `SubAccountCallExecuted` if the call is executed.
+		///
+		/// Errors:
+		/// - `UnknownAccount` if the sub-account is not found.
+		/// - `FailedToExecuteCallOnBehalfOfSubAccount` if the call fails.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::as_sub_account().saturating_add(call.get_dispatch_info().weight))]
 		pub fn as_sub_account(
