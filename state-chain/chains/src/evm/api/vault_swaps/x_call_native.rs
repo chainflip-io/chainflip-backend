@@ -139,7 +139,7 @@ mod test {
 				.unwrap()
 		);
 
-		// Check against harcoded tested payload
+		// Check against hardcoded tested payload
 		assert_eq!(
 			runtime_payload,
 			[

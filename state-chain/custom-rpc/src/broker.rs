@@ -49,7 +49,7 @@ use sp_core::crypto::AccountId32;
 use sp_runtime::traits::Block as BlockT;
 use state_chain_runtime::{
 	runtime_apis::{
-		ChainAccounts, ChannelActionType, CustomRuntimeApi, VaultAddresses, VaultSwapDetails,
+		ChainAccounts, CustomRuntimeApi, OpenedDepositChannels, VaultAddresses, VaultSwapDetails,
 	},
 	AccountId, Hash, Nonce, RuntimeCall,
 };
@@ -428,9 +428,7 @@ where
 			.map_err(CfApiError::from)?)
 	}
 
-	async fn all_open_deposit_channels(
-		&self,
-	) -> RpcResult<Vec<(AccountId32, ChannelActionType, ChainAccounts)>> {
+	async fn all_open_deposit_channels(&self) -> RpcResult<Vec<OpenedDepositChannels>> {
 		Ok(self
 			.rpc_backend
 			.client

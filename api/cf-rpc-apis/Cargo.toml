@@ -18,5 +18,6 @@ jsonrpsee = { workspace = true, features = ["full"] }
 cf-chains = { workspace = true, default-features = true }
 cf-primitives = { workspace = true, default-features = true }
 cf-rpc-types = { workspace = true }
+state-chain-runtime = { workspace = true }
 
 
