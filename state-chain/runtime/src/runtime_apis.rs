@@ -321,12 +321,7 @@ impl<AccountId, C: Chain> From<ChannelAction<AccountId, C>> for ChannelActionTyp
 	}
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
-pub struct OpenedDepositChannels {
-	pub account_id: AccountId32,
-	pub channel_action_type: ChannelActionType,
-	pub deposit_channels: ChainAccounts,
-}
+pub type OpenedDepositChannels = (AccountId32, ChannelActionType, ChainAccounts);
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub enum TransactionScreeningEvent<TxId> {

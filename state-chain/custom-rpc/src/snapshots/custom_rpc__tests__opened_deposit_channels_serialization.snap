@@ -3,10 +3,10 @@ source: state-chain/custom-rpc/src/tests.rs
 expression: val
 ---
 [
-  {
-    "account_id": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
-    "channel_action_type": "LiquidityProvision",
-    "deposit_channels": {
+  [
+    "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+    "LiquidityProvision",
+    {
       "chain_accounts": [
         {
           "Eth": [
@@ -34,11 +34,11 @@ expression: val
         }
       ]
     }
-  },
-  {
-    "account_id": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
-    "channel_action_type": "Swap",
-    "deposit_channels": {
+  ],
+  [
+    "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+    "Swap",
+    {
       "chain_accounts": [
         {
           "Sol": [
@@ -78,11 +78,11 @@ expression: val
         }
       ]
     }
-  },
-  {
-    "account_id": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
-    "channel_action_type": "Refund",
-    "deposit_channels": {
+  ],
+  [
+    "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+    "Refund",
+    {
       "chain_accounts": [
         {
           "Eth": [
@@ -110,5 +110,5 @@ expression: val
         }
       ]
     }
-  }
+  ]
 ]

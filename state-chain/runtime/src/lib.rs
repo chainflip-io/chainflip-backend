@@ -2625,14 +2625,13 @@ impl_runtime_apis! {
 
 			accounts.into_iter().map(|key| {
 				let (account_id, channel_action_type) = key.clone();
-				OpenedDepositChannels {
-					account_id, channel_action_type, deposit_channels: ChainAccounts {
+				(account_id, channel_action_type, ChainAccounts {
 					chain_accounts: [
 						btc_chain_accounts.get(&key).cloned().unwrap_or_default(),
 						eth_chain_accounts.get(&key).cloned().unwrap_or_default(),
 						arb_chain_accounts.get(&key).cloned().unwrap_or_default(),
 					].into_iter().flatten().collect()
-				}}
+				})
 			}).collect()
 		}
 

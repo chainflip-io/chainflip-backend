@@ -936,7 +936,9 @@ fn chain_accounts_serialization() {
 		chain_accounts: vec![
 			EncodedAddress::Eth([1u8; 20]),
 			EncodedAddress::Dot([2u8; 32]),
-			EncodedAddress::Btc(vec![0x01, 0x02, 0x03, 0x04]),
+			cf_chains::ForeignChainAddress::Btc(ScriptPubkey::Taproot([4u8; 32]))
+				.to_encoded_address(Default::default()),
+			EncodedAddress::Btc(vec![4u8; 20]),
 			EncodedAddress::Arb([5u8; 20]),
 			EncodedAddress::Sol([6u8; 32]),
 			EncodedAddress::Hub([7u8; 32]),
@@ -998,28 +1000,22 @@ fn transaction_screening_events_serialization() {
 
 #[test]
 fn opened_deposit_channels_serialization() {
-	let val = vec![
-		OpenedDepositChannels {
-			account_id: ID_1,
-			channel_action_type: ChannelActionType::LiquidityProvision,
-			deposit_channels: ChainAccounts {
-				chain_accounts: vec![EncodedAddress::Eth([0x01; 20])],
-			},
-		},
-		OpenedDepositChannels {
-			account_id: ID_1,
-			channel_action_type: ChannelActionType::Swap,
-			deposit_channels: ChainAccounts {
-				chain_accounts: vec![EncodedAddress::Sol([0x02; 32])],
-			},
-		},
-		OpenedDepositChannels {
-			account_id: ID_1,
-			channel_action_type: ChannelActionType::Refund,
-			deposit_channels: ChainAccounts {
-				chain_accounts: vec![EncodedAddress::Eth([0x01; 20])],
-			},
-		},
+	let val: Vec<OpenedDepositChannels> = vec![
+		(
+			ID_1,
+			ChannelActionType::LiquidityProvision,
+			ChainAccounts { chain_accounts: vec![EncodedAddress::Eth([0x01; 20])] },
+		),
+		(
+			ID_1,
+			ChannelActionType::Swap,
+			ChainAccounts { chain_accounts: vec![EncodedAddress::Sol([0x02; 32])] },
+		),
+		(
+			ID_1,
+			ChannelActionType::Refund,
+			ChainAccounts { chain_accounts: vec![EncodedAddress::Eth([0x01; 20])] },
+		),
 	];
 
 	insta::assert_json_snapshot!(val);
