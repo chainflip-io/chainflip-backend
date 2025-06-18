@@ -28,7 +28,6 @@ use sp_runtime::{BoundedVec, Vec};
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub enum VersionedCfParameters<RefundAddress, CcmData = ()> {
-	#[deprecated]
 	V0(CfParametersLegacy<RefundAddress, CcmData>),
 	V1(CfParametersWithRefundCcm<RefundAddress, CcmData>),
 }
