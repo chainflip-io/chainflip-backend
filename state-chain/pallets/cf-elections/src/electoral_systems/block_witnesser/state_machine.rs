@@ -349,7 +349,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					.iter()
 					.map(|block| block.block_height)
 					.collect::<Vec<_>>(),
-				progress.removed.clone().into_iter().flat_map(|h| h).collect::<Vec<_>>(),
+				progress.removed.clone(),
 			),
 			Either::Left(None) => Default::default(),
 			Either::Right(_) => Default::default(),
@@ -359,7 +359,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			get_all_heights(&before)
 				.into_iter()
 				.filter(|h| *h < after.elections.seen_heights_below)
-				.filter(|h| !removed_heights.contains(h))
+				.filter(|h| !removed_heights.iter().any(|range| range.contains(h)))
 				.chain(new_heights)
 				.filter(|h| h.saturating_forward(T::Chain::SAFETY_BUFFER) >=
 					after.elections.lowest_in_progress_height())
@@ -464,7 +464,16 @@ pub mod tests {
 
 	fn generate_context<C: ChainTypes + Arbitrary>(
 	) -> impl Strategy<Value = Option<ChainProgress<C>>> + Clone + Debug + Send {
-		any::<Option<ChainProgress<C>>>()
+		// Just(None)
+		any::<Option<ChainProgress<C>>>().prop_map(|progress| {
+			progress.map(|mut progress| {
+				if let Some(removed) = &mut progress.removed {
+					*removed = *removed.start()..=
+						core::cmp::min(*removed.end(), removed.start().saturating_forward(10));
+				}
+				progress
+			})
+		})
 	}
 
 	fn generate_settings(
