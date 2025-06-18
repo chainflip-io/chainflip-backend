@@ -46,9 +46,10 @@ use crate::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DispatchErrorWithMessage,
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		NetworkFeeDetails, NetworkFees, RuntimeApiPenalty, SimulateSwapAdditionalOrder,
-		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
-		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		NetworkFeeDetails, NetworkFees, OpenedDepositChannels, RuntimeApiPenalty,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
+		TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
+		VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -2593,7 +2594,7 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_all_open_deposit_channels() -> Vec<(AccountId, ChannelActionType, ChainAccounts)> {
+		fn cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels> {
 			use sp_std::collections::btree_set::BTreeSet;
 
 			#[allow(clippy::type_complexity)]
