@@ -193,7 +193,7 @@ pub trait Statemachine: AbstractApi + 'static {
 		states: impl Strategy<Value = Self::State>,
 		settings: impl Strategy<Value = Self::Settings>,
 		inputs: impl Fn(Self::Query) -> BoxedStrategy<Self::Response>,
-		context: impl Strategy<Value = Self::Context> + Clone,
+		context: impl Fn(&Self::State) -> BoxedStrategy<Self::Context>,
 	) where
 		Self::Query: sp_std::fmt::Debug + Clone + Send + PartialEq,
 		Self::Response: sp_std::fmt::Debug + Clone + Send,
@@ -230,7 +230,7 @@ pub trait Statemachine: AbstractApi + 'static {
 							let weight =
 								if Self::input_index(&mut state).is_empty() { 0 } else { 1 };
 							prop_oneof![
-								1 => context.clone().prop_map(Either::Left),
+								1 => context(&state).prop_map(Either::Left),
 								weight => select(Self::input_index(&mut state))
 									.prop_flat_map(|index| (Just(index.clone()), inputs(index)))
 									.prop_map(Either::Right),

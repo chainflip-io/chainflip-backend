@@ -67,7 +67,7 @@ defx! {
 			.chain(this.ongoing.iter().filter(|(_, election_type)| **election_type != BWElectionType::Optimistic).map(|(height, _)| height))
 			.max()
 			.cloned()
-			.map(|max_height| max_height < this.seen_heights_below)
+			.map(|max_height| max_height.saturating_forward(1) <= this.seen_heights_below)
 			.unwrap_or(true)
 		},
 

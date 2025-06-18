@@ -321,7 +321,7 @@ pub mod tests {
 				}
 				.boxed()
 			},
-			Just(()),
+			|_| Just(()).boxed(),
 		);
 	}
 
@@ -358,7 +358,7 @@ pub mod tests {
 				}
 				.boxed()
 			},
-			Just(()),
+			|_| Just(()).boxed(),
 		);
 	}
 }
