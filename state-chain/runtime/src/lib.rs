@@ -1526,8 +1526,8 @@ type MigrationsForV1_10 = (
 	instanced_migrations!(
 		module: pallet_cf_ingress_egress,
 		migration: migrations::boost_refactor::BoostRefactorMigration,
-		from: 24,
-		to: 25,
+		from: 25,
+		to: 26,
 		include_instances: [BitcoinInstance],
 		// All work done in the BitcoinInstance but we still want to increment the version in other pallets:
 		exclude_instances: [EthereumInstance, PolkadotInstance, SolanaInstance, ArbitrumInstance, AssethubInstance],
