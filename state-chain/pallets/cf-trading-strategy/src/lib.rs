@@ -54,7 +54,7 @@ pub use pallet::*;
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 // Note that strategies can only create a limited number of orders per asset/side so we can just
-// have a fixed order id (at least until we develop more advanced strategies).
+// have fixed order ids (at least until we develop more advanced strategies).
 const STRATEGY_ORDER_ID_0: OrderId = 0;
 const STRATEGY_ORDER_ID_1: OrderId = 1;
 
@@ -144,9 +144,10 @@ impl TradingStrategy {
 				max_sell_tick,
 				base_asset,
 			} => {
-				if min_buy_tick >= max_buy_tick ||
-					min_sell_tick >= max_sell_tick ||
+				if min_buy_tick > max_buy_tick ||
+					min_sell_tick > max_sell_tick ||
 					max_sell_tick <= max_buy_tick ||
+					min_sell_tick <= min_buy_tick ||
 					*max_buy_tick > cf_amm_math::MAX_TICK ||
 					*max_sell_tick > cf_amm_math::MAX_TICK ||
 					*min_buy_tick < cf_amm_math::MIN_TICK ||
@@ -336,6 +337,7 @@ pub mod pallet {
 						let balance_base = T::BalanceApi::get_balance(&strategy_id, base_asset);
 						weight_used += T::DbWeight::get().reads(2);
 
+						// Minimum threshold of 1 to prevent updating with 0 amounts
 						let base_threshold = core::cmp::max(
 							order_update_thresholds.get(&base_asset).copied().unwrap_or(u128::MAX),
 							1,
@@ -368,16 +370,8 @@ pub mod pallet {
 							let base_amount = T::BalanceApi::get_balance(&strategy_id, base_asset);
 							weight_used += T::DbWeight::get().reads(2);
 
-							if quote_amount.saturating_add(base_amount) == 0 {
-								log_or_panic!(
-									"Strategy {:?} unexpectedly has no funds after closing orders.",
-									strategy_id
-								);
-								continue;
-							}
-
 							// Use the balance of assets to calculate the desired limit orders
-							let new_orders = Self::inventory_base_strategy_logic(
+							let new_orders = Self::inventory_based_strategy_logic(
 								base_amount,
 								quote_amount,
 								min_buy_tick,
@@ -665,7 +659,7 @@ impl<T: Config> Pallet<T> {
 		)
 	}
 
-	fn inventory_base_strategy_logic(
+	fn inventory_based_strategy_logic(
 		base_amount: AssetAmount,
 		quote_amount: AssetAmount,
 		min_buy_tick: Tick,
@@ -673,10 +667,14 @@ impl<T: Config> Pallet<T> {
 		min_sell_tick: Tick,
 		max_sell_tick: Tick,
 	) -> LimitOrders {
+		let total = quote_amount.saturating_add(base_amount);
+		if total == 0 {
+			return LimitOrders::default();
+		}
+		let half_total = total / 2;
+
 		let mut base_orders = BTreeMap::new();
 		let mut quote_orders = BTreeMap::new();
-
-		let half_total = (quote_amount.saturating_add(base_amount)) / 2;
 
 		[
 			(true, base_amount, min_sell_tick, max_sell_tick, &mut base_orders),
@@ -685,32 +683,26 @@ impl<T: Config> Pallet<T> {
 		.into_iter()
 		.for_each(|(is_base_asset, amount, tick_1, tick_2, order_list)| {
 			// Simple order logic:
-			if amount >= half_total {
+			let remaining_amount = if amount >= half_total {
 				// Get the average tick, making sure to round the tick defensively
 				let average_tick = Self::average_tick(tick_1, tick_2, is_base_asset);
 				order_list.insert(average_tick, (STRATEGY_ORDER_ID_1, half_total));
-			}
+				amount.saturating_sub(half_total)
+			} else {
+				amount
+			};
 
 			// Dynamic order logic:
-			let remaining_amount =
-				if amount >= half_total { amount.saturating_sub(half_total) } else { amount };
 			if remaining_amount > 0 {
 				// Calculate the faction of the total amount that is on this side
-				let fraction_of_total = if base_amount.saturating_add(quote_amount) == 0 {
-					Permill::zero()
-				} else {
+				let fraction_of_total = if is_base_asset {
 					// Invert the fraction if this is a base asset because we will move the tick in
 					// the opposite direction
-					if is_base_asset {
-						Permill::one() -
-							Permill::from_rational(
-								amount,
-								base_amount.saturating_add(quote_amount),
-							)
-					} else {
-						Permill::from_rational(amount, base_amount.saturating_add(quote_amount))
-					}
+					Permill::one() - Permill::from_rational(amount, total)
+				} else {
+					Permill::from_rational(amount, total)
 				};
+
 				// Calculate the tick based on the fraction of the total amount
 				let dynamic_tick =
 					(fraction_of_total * ((tick_2 - tick_1).unsigned_abs())) as i32 + tick_1;
@@ -723,51 +715,23 @@ impl<T: Config> Pallet<T> {
 			}
 		});
 
-		// Sanity check that the orders are within the ranges
-		if base_orders
-			.iter()
-			.any(|(tick, _)| *tick < min_sell_tick || *tick > max_sell_tick) ||
-			quote_orders
-				.iter()
-				.any(|(tick, _)| *tick < min_buy_tick || *tick > max_buy_tick)
-		{
-			log_or_panic!("Inventory-based strategy logic produced orders outside of the specified tick ranges.");
-			return Default::default();
-		}
-
-		// Sanity check the amount in orders
-		if base_amount != base_orders.values().map(|(_, amount)| *amount).sum::<AssetAmount>() ||
-			quote_amount != quote_orders.values().map(|(_, amount)| *amount).sum::<AssetAmount>()
-		{
-			log_or_panic!(
-				"Inventory-based strategy logic produced orders with incorrect total amount."
-			);
-			return Default::default();
-		}
-		if base_orders.values().any(|(_, amount)| *amount == 0) ||
-			quote_orders.values().any(|(_, amount)| *amount == 0)
-		{
-			log_or_panic!("Inventory-based strategy logic produced orders with zero amount.");
-			// In this case, its not so bad, just continue anyway
-		}
-
 		LimitOrders { base: base_orders, quote: quote_orders }
 	}
 
 	// Returns the average tick between two ticks, with rounding control.
 	fn average_tick(tick_1: Tick, tick_2: Tick, round_up: bool) -> Tick {
-		let tick = tick_1 + tick_2;
+		let tick = tick_1.saturating_add(tick_2);
 		if round_up {
 			// Round up
 			if tick < 0 {
 				(tick) / 2
 			} else {
-				(tick + 1) / 2
+				(tick.saturating_add(1)) / 2
 			}
 		} else {
 			// Round down
 			if tick < 0 {
-				(tick - 1) / 2
+				(tick.saturating_sub(1)) / 2
 			} else {
 				(tick) / 2
 			}

@@ -660,7 +660,7 @@ fn strategy_deployment_validation() {
 		{
 			// Invalid tick ranges
 			for (min_buy_tick, max_buy_tick, min_sell_tick, max_sell_tick) in
-				[(-1, 2, 0, 2), (1, 0, 0, -1), (-1, 10, 0, 1)]
+				[(-1, 2, 0, 2), (1, 0, 0, -1), (-1, 10, 0, 1), (-1, 0, -1, 1)]
 			{
 				assert_err!(
 					TradingStrategyPallet::deploy_strategy(
@@ -676,7 +676,8 @@ fn strategy_deployment_validation() {
 					),
 					Error::<Test>::InvalidTick
 				);
-			} // Invalid buy/sell ticks
+			}
+			// Invalid buy/sell ticks
 			for tick in [i32::MAX, cf_amm_math::MAX_TICK + 1, cf_amm_math::MIN_TICK - 1] {
 				assert_err!(
 					TradingStrategyPallet::deploy_strategy(
@@ -1056,18 +1057,48 @@ mod inventory_based_strategy {
 			min_sell_tick in -5..5_i32,
 			max_sell_tick in 5..10_i32,
 		) {
-			let expected_orders = TradingStrategyPallet::inventory_base_strategy_logic(
-				AssetAmount::from(base_amount),
-				AssetAmount::from(quote_amount),
+			let base_amount = AssetAmount::from(base_amount);
+			let quote_amount = AssetAmount::from(quote_amount);
+
+			let LimitOrders { base, quote } = TradingStrategyPallet::inventory_based_strategy_logic(
+				base_amount,
+				quote_amount,
 				min_buy_tick,
 				max_buy_tick,
 				min_sell_tick,
 				max_sell_tick,
 			);
 
-			// Only doing basic checks here. We rely on the function's built in sanity checks.
-			assert!(!expected_orders.base.is_empty());
-			assert!(!expected_orders.quote.is_empty());
+			assert!(!base.is_empty());
+			assert!(!quote.is_empty());
+
+			// Sanity check that the orders are within the ranges
+			assert!(
+				!base
+					.iter()
+					.any(|(tick, _)| *tick < min_sell_tick || *tick > max_sell_tick),
+			);
+			assert!(
+				!quote
+					.iter()
+					.any(|(tick, _)| *tick < min_buy_tick || *tick > max_buy_tick),
+			);
+
+			// Sanity check the amount in orders
+			assert_eq!(
+				base_amount,
+				base.values().map(|(_, amount)| *amount).sum::<AssetAmount>(),
+			);
+			assert_eq!(
+				quote_amount,
+				quote.values().map(|(_, amount)| *amount).sum::<AssetAmount>(),
+			);
+			assert!(
+				!base.values().any(|(_, amount)| *amount == 0),
+			);
+			assert!(
+				!quote.values().any(|(_, amount)| *amount == 0),
+			);
 		}
 	}
 
@@ -1084,7 +1115,7 @@ mod inventory_based_strategy {
 			expected_orders: LimitOrders,
 		) {
 			assert_eq!(
-				TradingStrategyPallet::inventory_base_strategy_logic(
+				TradingStrategyPallet::inventory_based_strategy_logic(
 					base_amount,
 					quote_amount,
 					min_buy_tick,
@@ -1201,7 +1232,7 @@ mod inventory_based_strategy {
 	}
 
 	#[test]
-	fn test_update_threshold() {
+	fn trigger_update_when_threshold_reached() {
 		const STARTING_AMOUNT: AssetAmount = 10_000;
 		const THRESHOLD: AssetAmount = 1000;
 
