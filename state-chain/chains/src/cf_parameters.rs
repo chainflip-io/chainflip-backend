@@ -111,7 +111,13 @@ pub fn build_cf_parameters<C: Chain>(
 				vault_swap_parameters,
 			})
 			.encode(),
-		_ => VersionedCfParameters::V1(CfParametersWithRefundCcm {
+		Some(DecodedCcmAdditionalData::NotRequired) =>
+			VersionedCcmCfParameters::V1(CfParametersWithRefundCcm {
+				ccm_additional_data: Default::default(),
+				vault_swap_parameters,
+			})
+			.encode(),
+		None => VersionedCfParameters::V1(CfParametersWithRefundCcm {
 			ccm_additional_data: (),
 			vault_swap_parameters,
 		})
@@ -322,6 +328,36 @@ mod tests {
 				vault_swap_parameters,
 				CcmAdditionalData(ccm_additional_data.encode().try_into().unwrap())
 			))
+		);
+	}
+
+	#[test]
+	fn can_decode_cf_parameters_with_ccm_evm() {
+		use crate::Asset;
+
+		let vault_swap_parameters = vault_swap_parameters();
+
+		let evm_additional_data: CcmChannelMetadataChecked = (CcmChannelMetadataUnchecked {
+			message: Default::default(),
+			gas_budget: Default::default(),
+			ccm_additional_data: Default::default(),
+		})
+		.to_checked(Asset::Eth, ForeignChainAddress::Eth([2; 20].into()))
+		.unwrap();
+
+		let encoded = build_cf_parameters::<AnyChain>(
+			vault_swap_parameters.refund_params.clone(),
+			vault_swap_parameters.dca_params.clone(),
+			vault_swap_parameters.boost_fee,
+			vault_swap_parameters.broker_fee.account.clone(),
+			vault_swap_parameters.broker_fee.bps,
+			vault_swap_parameters.affiliate_fees.clone(),
+			Some(&evm_additional_data),
+		);
+
+		assert_eq!(
+			decode_cf_parameters(&encoded[..]),
+			Ok((vault_swap_parameters, DecodedCcmAdditionalData::NotRequired))
 		);
 	}
 }
