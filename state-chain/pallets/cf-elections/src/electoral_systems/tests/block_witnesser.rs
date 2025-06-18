@@ -832,6 +832,7 @@ fn optimistic_election_result_saved_and_used_or_discarded_correctly() {
 				// Optimized block not processed since its hash didn't match the hash of the
 				// corresponding header received
 				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(0),
+				Check::<SimpleBlockWitnesser>::emitted_prewitness_events(vec![]),
 				Check::<SimpleBlockWitnesser>::open_elections_type_is(vec![
 					(14, BWElectionType::ByHash(14)),
 					(15, BWElectionType::Optimistic),
