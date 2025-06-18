@@ -259,3 +259,22 @@ fn execute_as_sub_account() {
 		assert!(VanityNames::<Test>::get().contains_key(&sub_account_id));
 	});
 }
+
+#[test]
+fn can_not_execute_as_sub_account_with_not_existing_sub_account() {
+	new_test_ext().execute_with(|| {
+		const UNKNOWN_SUB_ACCOUNT_INDEX: u8 = 1;
+		assert_noop!(
+			AccountRolesPallet::as_sub_account(
+				RuntimeOrigin::signed(ALICE),
+				UNKNOWN_SUB_ACCOUNT_INDEX,
+				Box::new(RuntimeCall::MockAccountRoles(
+					pallet_cf_account_roles::Call::<Test>::set_vanity_name {
+						name: "Test Account".to_string().into_bytes().try_into().unwrap()
+					},
+				))
+			),
+			Error::<Test>::UnknownAccount
+		);
+	});
+}
