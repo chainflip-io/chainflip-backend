@@ -1,23 +1,23 @@
 import { describe } from 'vitest';
-import { testBoostingSwap } from './boost';
-import { testVaultSwap } from './vault_swap_tests';
-import { testPolkadotRuntimeUpdate } from './polkadot_runtime_update';
-import { checkSolEventAccountsClosure } from '../shared/sol_vault_swap';
-import { checkAvailabilityAllSolanaNonces } from '../shared/utils';
-import { swapLessThanED } from './swap_less_than_existential_deposit_dot';
-import { testAllSwaps } from './all_swaps';
-import { testEvmDeposits } from './evm_deposits';
-import { testMultipleMembersGovernance } from './multiple_members_governance';
-import { testLpApi } from './lp_api_test';
-import { testBrokerFeeCollection } from './broker_fee_collection';
-import { testFillOrKill } from './fill_or_kill';
-import { testDCASwaps } from './DCA_test';
-import { testCancelOrdersBatch } from './create_and_delete_multiple_orders';
-import { depositChannelCreation } from './request_swap_deposit_address_with_affiliates';
-import { testBrokerLevelScreening } from './broker_level_screening';
-import { testFundRedeem } from './fund_redeem';
-import { concurrentTest, serialTest } from '../shared/utils/vitest';
-import { testAssethubXcm } from './assethub_xcm';
+import { testBoostingSwap } from 'tests/boost';
+import { testVaultSwap } from 'tests/vault_swap_tests';
+import { testPolkadotRuntimeUpdate } from 'tests/polkadot_runtime_update';
+import { checkSolEventAccountsClosure } from 'shared/sol_vault_swap';
+import { checkAvailabilityAllSolanaNonces } from 'shared/utils';
+import { swapLessThanED } from 'tests/swap_less_than_existential_deposit_dot';
+import { testAllSwaps } from 'tests/all_swaps';
+import { testEvmDeposits } from 'tests/evm_deposits';
+import { testMultipleMembersGovernance } from 'tests/multiple_members_governance';
+import { testLpApi } from 'tests/lp_api_test';
+import { testBrokerFeeCollection } from 'tests/broker_fee_collection';
+import { testFillOrKill } from 'tests/fill_or_kill';
+import { testDCASwaps } from 'tests/DCA_test';
+import { testCancelOrdersBatch } from 'tests/create_and_delete_multiple_orders';
+import { depositChannelCreation } from 'tests/request_swap_deposit_address_with_affiliates';
+import { testBrokerLevelScreening } from 'tests/broker_level_screening';
+import { testFundRedeem } from 'tests/fund_redeem';
+import { concurrentTest, serialTest } from 'shared/utils/vitest';
+import { testAssethubXcm } from 'tests/assethub_xcm';
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {

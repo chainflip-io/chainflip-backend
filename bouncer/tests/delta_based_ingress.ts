@@ -1,6 +1,6 @@
 import * as fs from 'fs';
-import { doPerformSwap } from '../shared/perform_swap';
-import { testSwap } from '../shared/swapping';
+import { doPerformSwap } from 'shared/perform_swap';
+import { testSwap } from 'shared/swapping';
 import {
   amountToFineAmount,
   Asset,
@@ -9,9 +9,9 @@ import {
   observeFetch,
   sleep,
   startEngines,
-} from '../shared/utils';
-import { observeEvent } from '../shared/utils/substrate';
-import { TestContext } from '../shared/utils/test_context';
+} from 'shared/utils';
+import { observeEvent } from 'shared/utils/substrate';
+import { TestContext } from 'shared/utils/test_context';
 
 // Test the delta based ingress feature of Solana works as intended.
 // The test will initiate and witness a swap from Solana. It will then restart the engine and ensure

@@ -9,7 +9,7 @@
 
 import { execSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
-import { testInfoFile } from '../shared/utils';
+import { testInfoFile } from 'shared/utils';
 
 // Check that a test file was provided as an argument
 const testFile = process.argv[2];

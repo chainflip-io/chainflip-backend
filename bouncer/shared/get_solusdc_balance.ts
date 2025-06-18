@@ -6,7 +6,7 @@ import {
   getContractAddress,
   getEncodedSolAddress,
   getSolConnection,
-} from './utils';
+} from 'shared/utils';
 
 export async function getSolUsdcBalance(address: string): Promise<string> {
   const connection = getSolConnection();

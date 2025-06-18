@@ -1,8 +1,8 @@
 import { BN } from '@polkadot/util';
 import { AugmentedEvent, SubmittableExtrinsicFunction } from '@polkadot/api/types';
-import { aliceKeyringPair } from '../shared/polkadot_keyring';
-import { Event, polkadotSigningMutex, sleep } from '../shared/utils';
-import { getPolkadotApi } from './utils/substrate';
+import { aliceKeyringPair } from 'shared/polkadot_keyring';
+import { Event, polkadotSigningMutex, sleep } from 'shared/utils';
+import { getPolkadotApi } from 'shared/utils/substrate';
 
 export async function handleDispatchError(result: { dispatchError?: string }) {
   await using polkadot = await getPolkadotApi();

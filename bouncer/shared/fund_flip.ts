@@ -1,7 +1,7 @@
 import type { HexString } from '@polkadot/util/types';
 import { fundStateChainAccount } from '@chainflip/cli';
 import { Wallet, ethers } from 'ethers';
-import { getNextEvmNonce } from './send_evm';
+import { getNextEvmNonce } from 'shared/send_evm';
 import {
   getContractAddress,
   hexPubkeyToFlipAddress,
@@ -9,11 +9,10 @@ import {
   getEvmEndpoint,
   getWhaleKey,
   assetDecimals,
-} from './utils';
-import { amountToFineAmount } from '../shared/utils';
-import { approveErc20 } from './approve_erc20';
-import { observeEvent } from './utils/substrate';
-import { Logger } from './utils/logger';
+ amountToFineAmount } from 'shared/utils';
+import { approveErc20 } from 'shared/approve_erc20';
+import { observeEvent } from 'shared/utils/substrate';
+import { Logger } from 'shared/utils/logger';
 
 export async function fundFlip(logger: Logger, scAddress: string, flipAmount: string) {
   // Doing effectively infinite approvals to prevent race conditions between tests

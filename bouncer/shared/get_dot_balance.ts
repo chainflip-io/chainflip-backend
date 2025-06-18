@@ -1,5 +1,5 @@
-import { fineAmountToAmount, assetDecimals } from './utils';
-import { getPolkadotApi } from './utils/substrate';
+import { fineAmountToAmount, assetDecimals } from 'shared/utils';
+import { getPolkadotApi } from 'shared/utils/substrate';
 
 export async function getDotBalance(address: string): Promise<string> {
   await using polkadot = await getPolkadotApi();

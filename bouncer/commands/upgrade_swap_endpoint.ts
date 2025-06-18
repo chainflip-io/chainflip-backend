@@ -1,9 +1,9 @@
 #!/usr/bin/env -S pnpm tsx
 
 import { Connection, PublicKey } from '@solana/web3.js';
-import { getSolConnection, runWithTimeoutAndExit, sleep } from '../shared/utils';
-import { upgradeSwapEndpoint } from '../shared/initialize_new_chains';
-import { globalLogger } from '../shared/utils/logger';
+import { getSolConnection, runWithTimeoutAndExit, sleep } from 'shared/utils';
+import { upgradeSwapEndpoint } from 'shared/initialize_new_chains';
+import { globalLogger } from 'shared/utils/logger';
 
 async function getProgramData(connection: Connection, programDataAccount: PublicKey) {
   const accountInfo = await connection.getAccountInfo(programDataAccount);

@@ -1,12 +1,12 @@
 import { describe } from 'vitest';
-import { testBtcUtxoConsolidation } from './btc_utxo_consolidation';
-import { testRotatesThroughBtcSwap } from './rotates_through_btc_swap';
-import { testRotateAndSwap } from './rotation_barrier';
-import { testSolanaVaultSettingsGovernance } from './solana_vault_settings_governance';
-import { serialTest } from '../shared/utils/vitest';
-import { testGasLimitCcmSwaps } from './gaslimit_ccm';
-import { testMinimumDeposit } from './minimum_deposit';
-import { testSwapAfterDisconnection } from './swap_after_temp_disconnecting_chains';
+import { testBtcUtxoConsolidation } from 'tests/btc_utxo_consolidation';
+import { testRotatesThroughBtcSwap } from 'tests/rotates_through_btc_swap';
+import { testRotateAndSwap } from 'tests/rotation_barrier';
+import { testSolanaVaultSettingsGovernance } from 'tests/solana_vault_settings_governance';
+import { serialTest } from 'shared/utils/vitest';
+import { testGasLimitCcmSwaps } from 'tests/gaslimit_ccm';
+import { testMinimumDeposit } from 'tests/minimum_deposit';
+import { testSwapAfterDisconnection } from 'tests/swap_after_temp_disconnecting_chains';
 
 // Tests that are ran by the ci-main-merge before the concurrent tests
 describe('SerialTests1', () => {

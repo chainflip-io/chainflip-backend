@@ -10,9 +10,9 @@
 // It also accepts non-encoded bs58 address representations:
 // ./commands/send_sol.ts 0x2f3fcadf740018f6037513959bab60d0dbef26888d264d54fc4d3d36c8cf5c91 1.2
 
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { sendSol } from '../shared/send_sol';
-import { globalLogger } from '../shared/utils/logger';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { sendSol } from 'shared/send_sol';
+import { globalLogger } from 'shared/utils/logger';
 
 async function main() {
   const solanaAddress = process.argv[2];

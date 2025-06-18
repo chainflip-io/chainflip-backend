@@ -11,10 +11,10 @@ import {
   decodeSolAddress,
   assetDecimals,
   createStateChainKeypair,
-} from '../shared/utils';
-import { send } from '../shared/send';
-import { getChainflipApi, observeEvent } from './utils/substrate';
-import { Logger } from './utils/logger';
+} from 'shared/utils';
+import { send } from 'shared/send';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { Logger } from 'shared/utils/logger';
 
 export async function depositLiquidity(
   logger: Logger,

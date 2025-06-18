@@ -6,9 +6,9 @@
 // For example: ./commands/range_order.ts Btc 10
 
 import { InternalAsset } from '@chainflip/cli';
-import { rangeOrder } from '../shared/range_order';
-import { parseAssetString, runWithTimeoutAndExit } from '../shared/utils';
-import { globalLogger } from '../shared/utils/logger';
+import { rangeOrder } from 'shared/range_order';
+import { parseAssetString, runWithTimeoutAndExit } from 'shared/utils';
+import { globalLogger } from 'shared/utils/logger';
 
 async function main() {
   const ccy = parseAssetString(process.argv[2]);

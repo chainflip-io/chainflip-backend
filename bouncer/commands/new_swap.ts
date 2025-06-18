@@ -17,10 +17,10 @@ import {
   assetPriceToInternalAssetPrice,
   decodeDotAddressForContract,
   isPolkadotAsset,
-} from '../shared/utils';
-import { requestNewSwap } from '../shared/perform_swap';
-import { DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
-import { globalLogger } from '../shared/utils/logger';
+} from 'shared/utils';
+import { requestNewSwap } from 'shared/perform_swap';
+import { DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
+import { globalLogger } from 'shared/utils/logger';
 
 interface Args {
   sourceAsset: string;

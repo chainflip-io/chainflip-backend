@@ -1,4 +1,4 @@
-import Keyring from '../polkadot/keyring';
+import Keyring from 'polkadot/keyring';
 
 export async function newDotAddress(seed: string): Promise<string> {
   const keyring = new Keyring({ type: 'sr25519' });

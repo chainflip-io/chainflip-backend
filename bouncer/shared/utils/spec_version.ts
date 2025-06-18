@@ -1,6 +1,6 @@
 import fs from 'fs';
-import { jsonRpc } from '../json_rpc';
-import { Logger } from './logger';
+import { jsonRpc } from 'shared/json_rpc';
+import { Logger } from 'shared/utils/logger';
 
 type RuntimeVersion = {
   specName: string;

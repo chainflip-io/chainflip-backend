@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
-import { getBalance as getBalanceShared } from '../shared/get_balance';
-import { parseAssetString } from '../shared/utils';
+import { getBalance as getBalanceShared } from 'shared/get_balance';
+import { parseAssetString } from 'shared/utils';
 
 async function getBalance(ccy: string, address: string) {
   const trimmedAddress = address.trim();

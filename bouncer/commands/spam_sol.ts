@@ -12,10 +12,10 @@
 // ./commands/spam_sol.ts Sol 0x2f3fcadf740018f6037513959bab60d0dbef26888d264d54fc4d3d36c8cf5c91 0.01 100
 
 import BigNumber from 'bignumber.js';
-import { sendSol } from '../shared/send_sol';
-import { assetDecimals, runWithTimeoutAndExit } from '../shared/utils';
-import { sendSolUsdc } from '../shared/send_solusdc';
-import { globalLogger, globalLogger as logger } from '../shared/utils/logger';
+import { sendSol } from 'shared/send_sol';
+import { assetDecimals, runWithTimeoutAndExit } from 'shared/utils';
+import { sendSolUsdc } from 'shared/send_solusdc';
+import { globalLogger, globalLogger as logger } from 'shared/utils/logger';
 
 async function main() {
   const asset = process.argv[2].trim() as 'Sol' | 'SolUsdc';
