@@ -1,5 +1,3 @@
-#[cfg(not(test))]
-use core::any::Any;
 use core::{iter::Step, ops::RangeInclusive};
 
 use super::{
@@ -26,13 +24,13 @@ pub mod state_machine;
 #[cfg(test)]
 pub trait TestTraits = Send + Sync;
 #[cfg(not(test))]
-pub trait TestTraits = Any;
+pub trait TestTraits = core::any::Any;
 
 #[cfg(test)]
 pub trait MaybeArbitrary = proptest::prelude::Arbitrary + Send + Sync
 where <Self as Arbitrary>::Strategy: Clone + Sync + Send;
 #[cfg(not(test))]
-pub trait MaybeArbitrary = Any;
+pub trait MaybeArbitrary = core::any::Any;
 
 pub trait CommonTraits = Debug + Clone + Encode + Decode + Serde + Eq;
 
