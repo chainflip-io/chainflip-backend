@@ -377,27 +377,13 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 
 #[cfg(test)]
 pub mod tests {
-	use core::ops::RangeInclusive;
-
-	use proptest::{
-		arbitrary::{self, arbitrary, arbitrary_with},
-		prelude::{any, Arbitrary, BoxedStrategy, Just, Strategy},
-		prop_oneof,
-		strategy::LazyJust,
-	};
+	use proptest::{arbitrary::arbitrary_with, prelude::*, prop_oneof};
 
 	use super::*;
 	use crate::{
-		electoral_systems::{
-			block_height_tracking::{
-				self, primitives::NonemptyContinuousHeaders, BHWTypes, ChainBlockHashTrait,
-				ChainBlockNumberTrait, HeightWitnesserProperties,
-			},
-			block_witnesser::primitives::CompactHeightTracker,
-		},
+		electoral_systems::block_height_tracking::{ChainBlockHashTrait, ChainBlockNumberTrait},
 		prop_do,
 	};
-	use frame_support::sp_runtime::offchain::http::Response;
 	use hook_test_utils::*;
 
 	fn generate_state<

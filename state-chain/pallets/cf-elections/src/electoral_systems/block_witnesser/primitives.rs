@@ -10,7 +10,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{
 	cmp::max,
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque},
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter,
 	vec::Vec,
 };

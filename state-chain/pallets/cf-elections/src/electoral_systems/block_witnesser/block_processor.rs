@@ -261,9 +261,7 @@ pub(crate) mod tests {
 
 	use crate::{
 		electoral_systems::{
-			block_height_tracking::{
-				ChainBlockHashTrait, ChainBlockNumberTrait, ChainTypes, CommonTraits, TestTraits,
-			},
+			block_height_tracking::{ChainBlockHashTrait, ChainBlockNumberTrait, ChainTypes},
 			block_witnesser::{
 				block_processor::BlockProcessor,
 				state_machine::{
