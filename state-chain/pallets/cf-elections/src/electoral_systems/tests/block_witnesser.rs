@@ -92,7 +92,7 @@ impl BWTypes for Types {
 	type ElectionProperties = ElectionProperties;
 	type ElectionPropertiesHook =
 		MockHook<HookTypeFor<Self, ElectionPropertiesHook>, "generate_election_properties">;
-	type SafeModeEnabledHook = MockHook<HookTypeFor<(), SafeModeEnabledHook>, "safe_mode">;
+	type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>, "safe_mode">;
 	type ElectionTrackerDebugEventHook = MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;
 }
 

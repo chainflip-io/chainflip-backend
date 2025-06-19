@@ -300,6 +300,11 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 		use cf_chains::witness_period::SaturatingStep;
 		use std::collections::BTreeSet;
 
+		assert!(
+			before.elections.seen_heights_below <= after.elections.seen_heights_below,
+			"`seen_heights_below` should be monotonically increasing"
+		);
+
 		// there should always be at most as many elections as given in the settings
 		// or more if we had more elections previously
 		assert!(
@@ -399,7 +404,7 @@ pub mod tests {
 			BlockWitnesserState {
 				elections,
 				generate_election_properties_hook: Default::default(),
-				safemode_enabled: MockHook::new(safemode),
+				safemode_enabled: MockHook::new(ConstantHook::new(safemode)),
 				block_processor: Default::default(),
 			}
 		})
@@ -438,9 +443,11 @@ pub mod tests {
 	fn generate_settings(
 	) -> impl Strategy<Value = BlockWitnesserSettings> + Clone + Debug + Sync + Send {
 		prop_do! {
-			let max_ongoing_elections in 1..10u16;
-			let safety_margin in 1..5u32;
-			return BlockWitnesserSettings { safety_margin, max_ongoing_elections }
+			BlockWitnesserSettings {
+				safety_margin: 1..5u32,
+				max_ongoing_elections: 1..10u16,
+				max_optimistic_elections: 0..3u8,
+			}
 		}
 	}
 
