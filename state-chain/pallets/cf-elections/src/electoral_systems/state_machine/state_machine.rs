@@ -213,7 +213,7 @@ pub trait Statemachine: AbstractApi + 'static {
 			failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
 				"proptest-regressions",
 			))),
-			cases: 256 * 16, // 256 is the default
+			cases: 256 * 10 * 16, // 256 is the default
 			..Default::default()
 		});
 

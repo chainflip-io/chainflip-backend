@@ -439,11 +439,17 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 			prelude::Just,
 		};
 
+		let chain_block_number = || {
+			(0..(u32::MAX / 2) as usize).prop_map(|delta| {
+				<ChainBlockNumberOf<T::Chain> as Default>::default().saturating_forward(delta)
+			})
+		};
+
 		prop_do!(
-			let ongoing_below in any::<ChainBlockNumberOf<T::Chain>>();
-			let highest_seen_delta in any::<usize>();
-			let highest_ongoign_delta in any::<usize>();
-			let heights in btree_set(any::<ChainBlockNumberOf<T::Chain>>(), 0..40);
+			let ongoing_below in chain_block_number();
+			let highest_seen_delta in 1..1000usize;
+			let highest_ongoign_delta in 0..1000usize;
+			let heights in btree_set(chain_block_number(), 0..40);
 			let currently_highest = heights.iter().max().cloned().unwrap_or(Default::default());
 			let seen_heights_below = currently_highest.saturating_forward(highest_seen_delta);
 			let highest_ever_ongoing = currently_highest.saturating_forward(highest_ongoign_delta);

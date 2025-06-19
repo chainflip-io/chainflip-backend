@@ -377,8 +377,6 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 
 #[cfg(test)]
 pub mod tests {
-	// use std::collections::BTreeMap;
-
 	use core::ops::RangeInclusive;
 
 	use proptest::{
@@ -402,7 +400,6 @@ pub mod tests {
 	use frame_support::sp_runtime::offchain::http::Response;
 	use hook_test_utils::*;
 
-	// const SAFETY_MARGIN: u32 = 3;
 	fn generate_state<
 		T: BWTypes<SafeModeEnabledHook = MockHook<HookTypeFor<T, SafeModeEnabledHook>>>,
 	>() -> impl Strategy<Value = BlockWitnesserState<T>>
@@ -418,48 +415,6 @@ pub mod tests {
 				block_processor: Default::default(),
 			}
 		})
-		/*
-			   prop_do! {
-				   let (next_election, seen_heights_below,
-						priority_elections_below,
-					   safemode_enabled) in (
-					   any::<ChainBlockNumberOf<T::Chain>>(),
-					   any::<ChainBlockNumberOf<T::Chain>>(),
-					   any::<ChainBlockNumberOf<T::Chain>>(),
-					   any::<bool>().prop_map(|b| if b {SafeModeStatus::Enabled} else {SafeModeStatus::Disabled})
-				   );
-
-				   let (ongoing, queued_elections) in
-				   (
-					   proptest::collection::vec((any::<ChainBlockNumberOf<T::Chain>>(),
-		   any::<BWElectionType<T::Chain>>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move
-		   |(height, _)| *height < next_election)),
-					   proptest::collection::vec((any::<ChainBlockNumberOf<T::Chain>>(),
-		   any::<ChainBlockHashOf<T::Chain>>()), 0..10).prop_map(move |xs| xs.into_iter().filter(move
-		   |(height, _)| *height < next_election)) 		);
-				   LazyJust::new(move || BlockWitnesserState {
-					   elections: ElectionTracker {
-						   // queued_next_safe_height: None,
-						   queued_elections: BTreeMap::from_iter(queued_elections.clone()),
-						   seen_heights_below,
-						   priority_elections_below,
-						   ongoing: BTreeMap::from_iter(ongoing.clone()),
-						   queued_safe_elections: Default::default(),
-						   optimistic_block_cache: Default::default(),
-						   debug_events: Default::default()
-					   },
-					   generate_election_properties_hook: Default::default(),
-					   safemode_enabled: MockHook::new(safemode_enabled),
-					   block_processor: BlockProcessor {
-						   blocks_data:Default::default(),
-						   processed_events:Default::default(),
-						   rules:Default::default(),
-						   execute:Default::default(),
-						   debug_events: Default::default()
-					   },
-				   })
-			   }
-		*/
 	}
 
 	fn generate_context<T: BWTypes>(
@@ -470,28 +425,26 @@ pub mod tests {
 	{
 		let safe_block_height =
 			state.elections.seen_heights_below.saturating_backward(T::Chain::SAFETY_BUFFER);
-		any::<Option<ChainProgress<T::Chain>>>()
-			.prop_map(|progress| {
-				progress.map(|mut progress| {
-					if let Some(removed) = &mut progress.removed {
-						*removed = *removed.start()..=
-							core::cmp::min(*removed.end(), removed.start().saturating_forward(10));
+
+		let seen_heights_below = state.elections.seen_heights_below.clone();
+
+		prop_oneof![
+			Just(None),
+			(0..T::Chain::SAFETY_BUFFER)
+				.prop_flat_map(move |x| arbitrary_with::<ChainProgress<T::Chain>, _, _>((
+					safe_block_height.saturating_forward(x),
+					Default::default()
+				)))
+				.prop_map(move |mut progress| {
+					if let Some(x) = progress.headers.headers.front() {
+						progress.removed =
+							Some(x.block_height..=seen_heights_below.saturating_backward(1));
 					}
-					progress
+
+					Some(progress)
 				})
-			})
-			.prop_filter("whence", move |progress| {
-				if let Some(progress) = progress {
-					progress
-						.headers
-						.headers
-						.iter()
-						.all(|header| header.block_height > safe_block_height)
-				} else {
-					true
-				}
-			})
-			.boxed()
+		]
+		.boxed()
 	}
 
 	fn generate_settings(
@@ -538,14 +491,5 @@ pub mod tests {
 			generate_input::<Types1>,
 			generate_context::<Types1>,
 		);
-
-		// type Types2 = TypesFor<(u8, Vec<u8>, Vec<u8>)>;
-		// BWStatemachine::<Types2>::test(
-		// 	file!(),
-		// 	generate_state(),
-		// 	generate_settings(),
-		// 	generate_input::<Types2>,
-		// 	generate_context::<Types2>,
-		// );
 	}
 }
