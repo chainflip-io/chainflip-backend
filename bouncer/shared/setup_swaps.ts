@@ -20,7 +20,7 @@ export const deposits = new Map<Asset, number>([
   ['HubUsdt', 250000],
 ]);
 
-const price = new Map<Asset, number>([
+export const price = new Map<Asset, number>([
   ['Dot', 10],
   ['Eth', 1000],
   ['ArbEth', 1000],
