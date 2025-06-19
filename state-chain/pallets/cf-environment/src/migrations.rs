@@ -63,7 +63,6 @@ pub type PalletMigration<T> = (
 	>,
 	PlaceholderMigration<16, Pallet<T>>,
 	/* a migration from 16 to 17 in in state-chain/runtime/src/migrations/safe_mode.rs */
-	PlaceholderMigration<17, Pallet<T>>,
 );
 
 #[cfg(test)]
