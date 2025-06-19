@@ -11,9 +11,9 @@
 // to 0xE16CCFc63368e8FC93f53ccE4e4f4b08c4C3E186
 
 import { HexString } from '@polkadot/util/types';
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { RedeemAmount, redeemFlip } from '../shared/redeem_flip';
-import { globalLogger } from '../shared/utils/logger';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { RedeemAmount, redeemFlip } from 'shared/redeem_flip';
+import { globalLogger } from 'shared/utils/logger';
 
 async function main(): Promise<void> {
   const flipSeed = process.argv[2];

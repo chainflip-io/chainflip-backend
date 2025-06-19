@@ -8,9 +8,9 @@
 // For example: ./commands/send_arbusdc.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6 1.2
 // will send 1.2 ArbUsdc to account 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 
-import { runWithTimeoutAndExit, getContractAddress } from '../shared/utils';
-import { sendErc20 } from '../shared/send_erc20';
-import { globalLogger } from '../shared/utils/logger';
+import { runWithTimeoutAndExit, getContractAddress } from 'shared/utils';
+import { sendErc20 } from 'shared/send_erc20';
+import { globalLogger } from 'shared/utils/logger';
 
 async function main(): Promise<void> {
   const arbitrumAddress = process.argv[2];

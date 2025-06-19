@@ -5,9 +5,9 @@ import {
   stateChainAssetFromAsset,
   isPolkadotAsset,
   newAddress,
-} from './utils';
-import { Logger } from './utils/logger';
-import { brokerApiEndpoint } from './json_rpc';
+} from 'shared/utils';
+import { Logger } from 'shared/utils/logger';
+import { brokerApiEndpoint } from 'shared/json_rpc';
 
 const defaultCommissionBps = 100; // 1%
 

@@ -28,9 +28,9 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
-import { upgradeNetworkGit, upgradeNetworkPrebuilt } from '../shared/upgrade_network';
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { SemVerLevel } from '../shared/bump_release_version';
+import { upgradeNetworkGit, upgradeNetworkPrebuilt } from 'shared/upgrade_network';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { SemVerLevel } from 'shared/bump_release_version';
 
 async function main(): Promise<void> {
   await yargs(hideBin(process.argv))

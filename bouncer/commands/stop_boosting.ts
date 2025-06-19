@@ -10,9 +10,9 @@
 // For example: ./commands/stop_boosting.ts Btc 5 "//LP_2"
 
 import { InternalAsset as Asset } from '@chainflip/cli';
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { stopBoosting } from '../tests/boost';
-import { globalLogger } from '../shared/utils/logger';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { stopBoosting } from 'tests/boost';
+import { globalLogger } from 'shared/utils/logger';
 
 async function main(): Promise<void> {
   const event = await stopBoosting(

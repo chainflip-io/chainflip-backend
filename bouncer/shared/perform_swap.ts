@@ -1,9 +1,9 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keyring } from '@polkadot/api';
-import { encodeAddress } from '../polkadot/util-crypto';
-import { DcaParams, newSwap, FillOrKillParamsX128 } from './new_swap';
-import { send, sendViaCfTester } from './send';
-import { getBalance } from './get_balance';
+import { encodeAddress } from 'polkadot/util-crypto';
+import { DcaParams, newSwap, FillOrKillParamsX128, CcmDepositMetadata } from 'shared/new_swap';
+import { send, sendViaCfTester } from 'shared/send';
+import { getBalance } from 'shared/get_balance';
 import {
   observeBalanceIncrease,
   observeCcmReceived,
@@ -26,14 +26,13 @@ import {
   newAddress,
   getContractAddress,
   isPolkadotAsset,
-} from '../shared/utils';
-import { CcmDepositMetadata } from '../shared/new_swap';
-import { SwapContext, SwapStatus } from './utils/swap_context';
-import { getChainflipApi, observeEvent } from './utils/substrate';
-import { executeEvmVaultSwap } from './evm_vault_swap';
-import { executeSolVaultSwap } from './sol_vault_swap';
-import { buildAndSendBtcVaultSwap } from './btc_vault_swap';
-import { Logger, throwError } from './utils/logger';
+} from 'shared/utils';
+import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
+import { executeSolVaultSwap } from 'shared/sol_vault_swap';
+import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
+import { Logger, throwError } from 'shared/utils/logger';
 
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;

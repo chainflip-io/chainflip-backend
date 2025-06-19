@@ -8,8 +8,8 @@
 // For example: ./commands/send_dot.ts 12QTpTMELPfdz2xr9AeeavstY8uMcpUqeKWDWiwarskk4hSB 1.2
 // will send 1.2 Dot to account 12QTpTMELPfdz2xr9AeeavstY8uMcpUqeKWDWiwarskk4hSB
 
-import { sendDot } from '../shared/send_dot';
-import { runWithTimeoutAndExit } from '../shared/utils';
+import { sendDot } from 'shared/send_dot';
+import { runWithTimeoutAndExit } from 'shared/utils';
 
 async function main() {
   const polkadotAddress = process.argv[2];

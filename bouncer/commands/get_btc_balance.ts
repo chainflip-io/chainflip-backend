@@ -1,5 +1,5 @@
 #!/usr/bin/env -S pnpm tsx
-import { getBtcBalance } from '../shared/get_btc_balance';
+import { getBtcBalance } from 'shared/get_btc_balance';
 
 export async function getBtcBalanceCommand(bitcoinAddress: string) {
   try {

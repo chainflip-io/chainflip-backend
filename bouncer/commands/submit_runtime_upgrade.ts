@@ -9,9 +9,9 @@
 //
 // For example: ./commands/submit_runtime_upgrade.ts /path/to/state_chain_runtime.compact.compressed.wasm '{"major": 1, "minor": 2, "patch": 3}' 50
 
-import { submitRuntimeUpgradeWithRestrictions } from '../shared/submit_runtime_upgrade';
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { globalLogger } from '../shared/utils/logger';
+import { submitRuntimeUpgradeWithRestrictions } from 'shared/submit_runtime_upgrade';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { globalLogger } from 'shared/utils/logger';
 
 async function main() {
   const wasmPath = process.argv[2];

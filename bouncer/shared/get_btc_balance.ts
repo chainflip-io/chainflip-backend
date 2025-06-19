@@ -1,4 +1,4 @@
-import { getBtcClient } from './utils';
+import { getBtcClient } from 'shared/utils';
 
 export async function getBtcBalance(bitcoinAddress: string): Promise<number> {
   const client = getBtcClient();

@@ -19,11 +19,8 @@
 import path from 'path';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import {
-  tryRuntimeUpgrade,
-  tryRuntimeUpgradeWithCompileRuntime,
-} from '../shared/try_runtime_upgrade';
-import { runWithTimeoutAndExit } from '../shared/utils';
+import { tryRuntimeUpgrade, tryRuntimeUpgradeWithCompileRuntime } from 'shared/try_runtime_upgrade';
+import { runWithTimeoutAndExit } from 'shared/utils';
 
 async function main(): Promise<void> {
   const args = await yargs(hideBin(process.argv))

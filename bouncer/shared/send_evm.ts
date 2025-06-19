@@ -9,8 +9,8 @@ import {
   sleep,
   assetDecimals,
   getContractAddress,
-} from './utils';
-import { Logger } from './utils/logger';
+} from 'shared/utils';
+import { Logger } from 'shared/utils/logger';
 
 const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
   Ethereum: undefined,

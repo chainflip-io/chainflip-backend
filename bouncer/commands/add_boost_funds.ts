@@ -11,9 +11,9 @@
 // For example: ./commands/add_boost_funds.ts Btc 5 0.1 "//LP_2"
 
 import { InternalAsset as Asset } from '@chainflip/cli';
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { addBoostFunds } from '../tests/boost';
-import { globalLogger } from '../shared/utils/logger';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { addBoostFunds } from 'tests/boost';
+import { globalLogger } from 'shared/utils/logger';
 
 await runWithTimeoutAndExit(
   addBoostFunds(

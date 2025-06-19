@@ -1,8 +1,8 @@
 import 'disposablestack/auto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Observable, Subject } from 'rxjs';
-import { deferredPromise, sleep } from '../utils';
-import { Logger } from './logger';
+import { deferredPromise, sleep } from 'shared/utils';
+import { Logger } from 'shared/utils/logger';
 
 // @ts-expect-error polyfilling
 Symbol.asyncDispose ??= Symbol('asyncDispose');

@@ -2,7 +2,7 @@ import axios from 'axios';
 import { randomBytes } from 'crypto';
 import { Chain, InternalAsset } from '@chainflip/cli';
 import Web3 from 'web3';
-import { sendBtc, sendBtcTransactionWithParent } from '../shared/send_btc';
+import { sendBtc, sendBtcTransactionWithParent } from 'shared/send_btc';
 import {
   newAddress,
   sleep,
@@ -16,19 +16,19 @@ import {
   chainContractId,
   chainFromAsset,
   ingressEgressPalletForChain,
-} from '../shared/utils';
-import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import Keyring from '../polkadot/keyring';
-import { requestNewSwap } from '../shared/perform_swap';
-import { FillOrKillParamsX128 } from '../shared/new_swap';
-import { getBtcBalance } from '../shared/get_btc_balance';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger } from '../shared/utils/logger';
-import { getBalance } from '../shared/get_balance';
-import { send } from '../shared/send';
-import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { buildAndSendBtcVaultSwap, openPrivateBtcChannel } from '../shared/btc_vault_swap';
-import { executeEvmVaultSwap } from '../shared/evm_vault_swap';
+} from 'shared/utils';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import Keyring from 'polkadot/keyring';
+import { requestNewSwap } from 'shared/perform_swap';
+import { FillOrKillParamsX128 } from 'shared/new_swap';
+import { getBtcBalance } from 'shared/get_btc_balance';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger } from 'shared/utils/logger';
+import { getBalance } from 'shared/get_balance';
+import { send } from 'shared/send';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { buildAndSendBtcVaultSwap, openPrivateBtcChannel } from 'shared/btc_vault_swap';
+import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 
 const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_1');

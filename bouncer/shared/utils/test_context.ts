@@ -1,5 +1,5 @@
-import { globalLogger, Logger } from './logger';
-import { SwapContext } from './swap_context';
+import { globalLogger, Logger } from 'shared/utils/logger';
+import { SwapContext } from 'shared/utils/swap_context';
 
 export class TestContext {
   public swapContext: SwapContext;

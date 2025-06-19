@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { globalLogger, Logger, loggerError, throwError } from './logger';
+import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logger';
 
 export enum SwapStatus {
   Initiated,

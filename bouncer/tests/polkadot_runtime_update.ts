@@ -4,14 +4,14 @@ import assert from 'assert';
 import { execSync } from 'child_process';
 
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-import { blake2AsU8a } from '../polkadot/util-crypto';
-import { amountToFineAmount, sleep, assetDecimals } from '../shared/utils';
-import { specVersion, getNetworkRuntimeVersion } from '../shared/utils/spec_version';
-import { handleDispatchError, submitAndGetEvent } from '../shared/polkadot_utils';
-import { testSwap } from '../shared/swapping';
-import { observeEvent, observeBadEvent, getPolkadotApi } from '../shared/utils/substrate';
-import { Logger, loggerChild } from '../shared/utils/logger';
-import { TestContext } from '../shared/utils/test_context';
+import { blake2AsU8a } from 'polkadot/util-crypto';
+import { amountToFineAmount, sleep, assetDecimals } from 'shared/utils';
+import { specVersion, getNetworkRuntimeVersion } from 'shared/utils/spec_version';
+import { handleDispatchError, submitAndGetEvent } from 'shared/polkadot_utils';
+import { testSwap } from 'shared/swapping';
+import { observeEvent, observeBadEvent, getPolkadotApi } from 'shared/utils/substrate';
+import { Logger, loggerChild } from 'shared/utils/logger';
+import { TestContext } from 'shared/utils/test_context';
 
 // Note: This test only passes if there is more than one node in the network due to the polkadot runtime upgrade causing broadcast failures due to bad signatures.
 
