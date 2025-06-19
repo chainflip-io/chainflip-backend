@@ -219,12 +219,12 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	while chains.has_chains() {
 		// run BHW
 		let bhw_outputs = if let Some(inputs) =
-			AbstractVoter::<BHW>::vote(&mut chains, BHW::input_index(&mut bhw_state))
+			AbstractVoter::<BHW>::vote(&mut chains, BHW::get_queries(&mut bhw_state))
 		{
 			let mut outputs = Vec::new();
 			for input in inputs {
 				// ensure that input is correct
-				BHW::validate_input(&BHW::input_index(&mut bhw_state), &input).unwrap();
+				BHW::validate_input(&BHW::get_queries(&mut bhw_state), &input).unwrap();
 
 				history.push(BWTrace::InputBHW(input.clone()));
 
@@ -243,7 +243,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		// ---- BW ----
 
 		let mut bw_outputs = if let Some(inputs) =
-			AbstractVoter::<BW>::vote(&mut chains, BW::input_index(&mut bw_state))
+			AbstractVoter::<BW>::vote(&mut chains, BW::get_queries(&mut bw_state))
 		{
 			let mut outputs = Vec::new();
 

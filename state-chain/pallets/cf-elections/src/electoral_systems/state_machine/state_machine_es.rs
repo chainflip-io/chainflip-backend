@@ -209,11 +209,11 @@ where
 			}
 		}
 
-		// gather the input indices after all state transitions
-		let input_indices: Vec<_> = ES::Statemachine::input_index(&mut state);
+		// gather the queries after all state transitions
+		let queries: Vec<_> = ES::Statemachine::get_queries(&mut state);
 		let mut open_elections = Vec::new();
 
-		// delete elections which are no longer in the input indices
+		// delete elections which are no longer queried for
 		// NOTE: This happens after *all* step functions have been run
 		// (thus cannot be part of the loop above) since we first want to
 		// apply *all* state transitions to determine which elections should
@@ -221,17 +221,17 @@ where
 		for election_identifier in election_identifiers {
 			let election = ElectoralAccess::election_mut(election_identifier);
 			let properties: <ES::Statemachine as AbstractApi>::Query = election.properties()?;
-			if !input_indices.contains(&properties) {
+			if !queries.contains(&properties) {
 				election.delete();
 			} else {
 				open_elections.push(properties);
 			}
 		}
 
-		// Create elections for new input indices which weren't open before,
-		// i.e. contained in `input_indices` but not in `open_elections`.
-		for index in input_indices.into_iter().filter(|index| !open_elections.contains(index)) {
-			ElectoralAccess::new_election((), index, ())?;
+		// Create elections for new queries which weren't open before,
+		// i.e. contained in `queries` but not in `open_elections`.
+		for query in queries.into_iter().filter(|query| !open_elections.contains(query)) {
+			ElectoralAccess::new_election((), query, ())?;
 		}
 
 		ElectoralAccess::set_unsynchronised_state(state)?;
@@ -256,7 +256,7 @@ where
 			if ES::Statemachine::validate(&properties, &vote).is_ok() {
 				consensus.insert_vote(vote);
 			} else {
-				log::warn!("Received invalid vote: expected base {properties:?} but vote was not in fiber ({:?})", vote);
+				log::warn!("Received invalid vote: response ({:?}) didn't match with the query {properties:?}", vote);
 			}
 		}
 

@@ -1,12 +1,15 @@
+use cf_chains::{
+	witness_period::{is_block_witness_root, BlockWitnessRange},
+	ChainWitnessConfig,
+};
 use core::ops::RangeInclusive;
-
-use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
 #[cfg(test)]
 use proptest::prelude::{Arbitrary, Strategy};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque};
 
 use codec::{Decode, Encode};
 use derive_where::derive_where;
+use frame_support::ensure;
 use itertools::Either;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -101,9 +104,8 @@ macro_rules! derive_error_enum {
 		#[allow(non_camel_case_types)]
 		pub enum $Error<$($ParamName: $ParamType),*> {
 
-			// $(
-			// 	$Field(<$Type as Validate>::Error),
-			// )*
+			// TODO call validate on all enum cases
+			// Currently we only have a single enum which would profit, and we do it manually there.
 
 			$(
 				$property,
@@ -419,7 +421,8 @@ pub trait Validate {
 	fn is_valid(&self) -> Result<(), Self::Error>;
 }
 
-impl Validate for () {
+#[duplicate::duplicate_item(Type; [ () ]; [ bool ]; [ char ]; [ u8 ]; [ u16 ]; [ u32 ]; [ u64 ]; [ usize ] ; [ H256 ])]
+impl Validate for Type {
 	type Error = ();
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -513,72 +516,7 @@ impl<C: ChainWitnessConfig> Validate for BlockWitnessRange<C> {
 	type Error = ();
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
-		// TODO, actually check something
-		Ok(())
-	}
-}
-
-impl Validate for bool {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
-
-impl Validate for u8 {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
-
-impl Validate for u16 {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
-
-impl Validate for u32 {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
-
-impl Validate for u64 {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
-
-impl Validate for usize {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
-
-impl Validate for char {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
-
-impl Validate for H256 {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
+		self.check_is_valid()
 	}
 }
 

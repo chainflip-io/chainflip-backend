@@ -69,19 +69,14 @@ pub enum SMInputValidateError<Context: Validate, Error> {
 /// ## Validation
 /// It is common to have certain validity requirements which one assumes to hold for either
 /// the input, state, or output. These are encoded by `Validate` bounds
-/// on the `Output` and `State` type, as well as an `IndexedValidateFor<InputIndex,Input>` bound on
-/// `Self`. The latter allows a tuple of (InputIndex, Input) to be checked for validity: i.e., given
-/// an input index, and an input, we not only check that the input is well formed, but we also
-/// ensure that the input is valid *for a given input index*.
+/// on the `Output` and `State` type, as well as an `AbstractApi` bound on
+/// `Self`. The latter allows a tuple of (Query, Response) to be checked for validity: i.e., given
+/// an query, and a response, we not only check that they are individually well formed, but we also
+/// ensure that the response is valid *for a given query*.
 ///
-/// For example, in the X, elections are created to witness block headers starting from a given
-/// height, in that case we can ensure that the received vector of block headers actually starts
-/// with the correct height.
-///
-/// Note: The `IndexedValidateFor` bound is somewhat strangely on `Self`, and not directly on either
-/// `Input` or `InputIndex` because this makes it possible to automatically derive an implementation
-/// for inputs of the form `SMInput<_,_>` from a simpler implementation of
-/// `IndexedValidateFor<ElectionProperties, Consensus>` for any ES.
+/// For example, in the BlockHeightWitnesser, elections are created to witness block headers
+/// starting from a given height, in that case we can ensure that the received vector of block
+/// headers actually starts with the correct height.
 ///
 /// ## Testing
 /// The state machine trait provides a convenience method `test(states, settings, inputs)` for
@@ -99,20 +94,19 @@ pub trait Statemachine: AbstractApi + 'static {
 
 	/// To every state, this function associates a set of input indices which
 	/// describes what kind of input(s) we want to receive next.
-	fn input_index(s: &mut Self::State) -> Vec<Self::Query>;
+	fn get_queries(state: &mut Self::State) -> Vec<Self::Query>;
 
 	fn validate_input(
-		index: &[Self::Query],
+		state: &mut Self::State,
 		value: &InputOf<Self>,
 	) -> Result<(), SMInputValidateError<Self::Context, Self::Error>>
 	where
 		Self::Query: PartialEq,
 	{
 		match value {
-			Either::Right((property, consensus)) =>
-				if index.contains(property) {
-					Self::validate(property, consensus)
-						.map_err(SMInputValidateError::InvalidConsensus)
+			Either::Right((query, response)) =>
+				if Self::get_queries(state).contains(query) {
+					Self::validate(query, response).map_err(SMInputValidateError::InvalidConsensus)
 				} else {
 					Err(SMInputValidateError::WrongIndex)
 				},
@@ -224,15 +218,15 @@ pub trait Statemachine: AbstractApi + 'static {
 						Just(state.clone()),
 						{
 							// If there are no input indices we don't want to take
-							// the branch that selects an input index. This code is
+							// the branch that selects a query. This code is
 							// a bit convoluted, but it was the most convenient way
 							// to select between two different strategies.
 							let weight =
-								if Self::input_index(&mut state).is_empty() { 0 } else { 1 };
+								if Self::get_queries(&mut state).is_empty() { 0 } else { 1 };
 							prop_oneof![
 								1 => context(&state).prop_map(Either::Left),
-								weight => select(Self::input_index(&mut state))
-									.prop_flat_map(|index| (Just(index.clone()), inputs(index)))
+								weight => select(Self::get_queries(&mut state))
+									.prop_flat_map(|query| (Just(query.clone()), inputs(query)))
 									.prop_map(Either::Right),
 							]
 						},
@@ -240,23 +234,23 @@ pub trait Statemachine: AbstractApi + 'static {
 					)
 				})),
 				#[allow(clippy::type_complexity)]
-				// run_with_timeout(
-				// 	500,
-				|(mut state, input, settings): (
-					Self::State,
-					Either<Self::Context, (Self::Query, Self::Response)>,
-					Self::Settings,
-				)| {
-					// ensure input has correct index
-					Self::validate_input(&Self::input_index(&mut state), &input)
-						.unwrap_or_else(|_| panic!("input has wrong index: {input:?}"));
+				run_with_timeout(
+					500,
+					|(mut state, input, settings): (
+						Self::State,
+						Either<Self::Context, (Self::Query, Self::Response)>,
+						Self::Settings,
+					)| {
+						// ensure input matches with the current queries
+						Self::validate_input(&mut state, &input)
+							.unwrap_or_else(|_| panic!("input has wrong index: {input:?}"));
 
-					// run step and verify all other properties
-					let _output = Self::step_and_validate(&mut state, input, &settings);
+						// run step and verify all other properties
+						let _output = Self::step_and_validate(&mut state, input, &settings);
 
-					Ok(())
-				},
-				// ),
+						Ok(())
+					},
+				),
 			)
 			.unwrap();
 	}

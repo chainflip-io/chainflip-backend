@@ -1,4 +1,4 @@
-use cf_chains::witness_period::{BlockZero, SaturatingStep};
+use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use core::{
 	cmp::min,
@@ -423,8 +423,8 @@ impl<T: BWTypes> ElectionTracker<T> {
 impl<T: BWTypes> Default for ElectionTracker<T> {
 	fn default() -> Self {
 		Self {
-			seen_heights_below: ChainBlockNumberOf::<T::Chain>::zero(),
-			highest_ever_ongoing_election: ChainBlockNumberOf::<T::Chain>::zero(),
+			seen_heights_below: ChainBlockNumberOf::<T::Chain>::default(),
+			highest_ever_ongoing_election: ChainBlockNumberOf::<T::Chain>::default(),
 			queued_hash_elections: Default::default(),
 			ongoing: Default::default(),
 			queued_safe_elections: Default::default(),

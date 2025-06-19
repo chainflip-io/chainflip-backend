@@ -197,7 +197,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 	type Output = Result<(), &'static str>;
 	type State = BlockWitnesserState<T>;
 
-	fn input_index(state: &mut Self::State) -> Vec<Self::Query> {
+	fn get_queries(state: &mut Self::State) -> Vec<Self::Query> {
 		state
 			.elections
 			.ongoing
