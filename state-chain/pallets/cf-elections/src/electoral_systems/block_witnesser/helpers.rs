@@ -82,19 +82,6 @@ macro_rules! prop_do {
 }
 
 #[macro_export]
-macro_rules! prop_construct {
-	($ctor:ident {
-		$($field:ident : $strat:expr,)*
-	}) => {
-		( $($strat,)* ).prop_map(
-			|($($field,)*)| $ctor {
-				$($field,)*
-			}
-		)
-	};
-}
-
-#[macro_export]
 macro_rules! asserts {
 	($description:tt in $expr:expr; $($tail:tt)*) => {
 		assert!($expr, $description);

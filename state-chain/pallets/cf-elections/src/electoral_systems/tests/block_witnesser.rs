@@ -58,7 +58,6 @@ type ElectionCount = u16;
 struct MockBlockProcessorDefinition;
 type Types = TypesFor<MockBlockProcessorDefinition>;
 
-
 impl Hook<HookTypeFor<Types, RulesHook>> for Types {
 	fn run(
 		&mut self,

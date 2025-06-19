@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use sp_std::{
 	cmp::max,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	iter,
 	vec::Vec,
 };
 
@@ -619,7 +618,7 @@ pub struct CompactHeightTrackerExtract<'a, N: Ord> {
 	tracker: &'a mut CompactHeightTracker<N>,
 }
 
-impl<N: Step> Iterator for CompactHeightTrackerExtract<'_, N> {
+impl<N: SaturatingStep + Ord + Clone> Iterator for CompactHeightTrackerExtract<'_, N> {
 	type Item = N;
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -636,7 +635,6 @@ impl<N: Step> Iterator for CompactHeightTrackerExtract<'_, N> {
 		}
 	}
 }
-
 
 #[test]
 pub fn test_compact_height() {
@@ -668,7 +666,6 @@ pub fn test_compact_height() {
 	tracker.remove(1..6);
 	assert_eq!(tracker.elections, [].into_iter().collect());
 }
-
 
 #[cfg_attr(test, derive(Arbitrary))]
 #[derive(

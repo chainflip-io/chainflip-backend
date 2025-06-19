@@ -52,7 +52,6 @@ use pallet_cf_elections::{
 };
 use pallet_cf_ingress_egress::{DepositWitness, PalletSafeMode, VaultDepositWitness};
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get, MaxEncodedLen};
 use sp_std::vec::Vec;
 
