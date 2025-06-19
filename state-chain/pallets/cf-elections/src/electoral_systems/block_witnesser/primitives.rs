@@ -127,7 +127,12 @@ defx! {
 }
 
 impl<T: BWTypes> ElectionTracker<T> {
-	pub fn start_more_elections(&mut self, max_ongoing: usize, safemode: SafeModeStatus) {
+	pub fn start_more_elections(
+		&mut self,
+		max_ongoing: usize,
+		max_optimistic: u8,
+		safemode: SafeModeStatus,
+	) {
 		use BWElectionType::*;
 
 		// First we remove all Optimistic elections, we're going to recreate them if needed.
@@ -138,14 +143,16 @@ impl<T: BWTypes> ElectionTracker<T> {
 		// schedule at most `max_new_elections`
 		let max_new_elections = max_ongoing.saturating_sub(self.ongoing.len());
 
-		let opti_elections = || iter::once((self.seen_heights_below, Optimistic));
+		let opti_elections = (self.seen_heights_below..
+			self.seen_heights_below.saturating_forward(max_optimistic as usize))
+			.map(|x| (x, Optimistic));
 
 		let all_block_heights = self
 			.queued_safe_elections
 			.get_all_heights()
 			.into_iter()
 			.chain(self.queued_hash_elections.keys().cloned())
-			.chain(opti_elections().map(|(height, _)| height));
+			.chain(opti_elections.clone().map(|(height, _)| height));
 
 		let new_elections_count = all_block_heights
 			.take_while(|height| {
@@ -168,7 +175,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 		self.ongoing.extend(
 			safe_elections
 				.chain(hash_elections)
-				.chain(opti_elections())
+				.chain(opti_elections)
 				.take(new_elections_count),
 		);
 
@@ -349,7 +356,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 		// in the election tracker.
 		if let Some(ref removed) = progress.removed {
 			self.queued_safe_elections
-				.remove(removed.start().clone()..removed.end().saturating_forward(1));
+				.remove(*removed.start()..removed.end().saturating_forward(1));
 			self.queued_hash_elections.retain(|height, _| !removed.contains(height));
 			self.ongoing.retain(|height, _| !removed.contains(height));
 		}
@@ -555,7 +562,7 @@ impl<N: Clone + SaturatingStep + Ord> CompactHeightTracker<N> {
 		Self { elections: Default::default() }
 	}
 
-	pub fn extract_lazily<'a>(&'a mut self) -> CompactHeightTrackerExtract<'a, N> {
+	pub fn extract_lazily(&mut self) -> CompactHeightTrackerExtract<'_, N> {
 		CompactHeightTrackerExtract { tracker: self }
 	}
 
@@ -612,7 +619,7 @@ pub struct CompactHeightTrackerExtract<'a, N: Ord> {
 	tracker: &'a mut CompactHeightTracker<N>,
 }
 
-impl<'a, N: SaturatingStep + Ord + Clone> Iterator for CompactHeightTrackerExtract<'a, N> {
+impl<N: Step> Iterator for CompactHeightTrackerExtract<'_, N> {
 	type Item = N;
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -629,6 +636,7 @@ impl<'a, N: SaturatingStep + Ord + Clone> Iterator for CompactHeightTrackerExtra
 		}
 	}
 }
+
 
 #[test]
 pub fn test_compact_height() {
@@ -661,10 +669,14 @@ pub fn test_compact_height() {
 	assert_eq!(tracker.elections, [].into_iter().collect());
 }
 
+
 #[cfg_attr(test, derive(Arbitrary))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[derive(
+	Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Default,
+)]
 pub enum SafeModeStatus {
 	Enabled,
+	#[default]
 	Disabled,
 }
 

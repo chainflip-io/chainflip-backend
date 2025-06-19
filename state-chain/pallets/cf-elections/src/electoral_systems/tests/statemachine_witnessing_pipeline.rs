@@ -172,23 +172,28 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		finalized_blocks.iter().flat_map(|block| block.events.iter()).collect();
 
 	// prepare the state machines
-	let mut bhw_state: BlockHeightWitnesser<Types> =
-		BlockHeightWitnesser { phase: BHWPhase::Starting, block_height_update: MockHook::new(()) };
+	let mut bhw_state: BlockHeightWitnesser<Types> = BlockHeightWitnesser {
+		phase: BHWPhase::Starting,
+		block_height_update: MockHook::default(),
+	};
 	let block_processor: BlockProcessor<Types> = BlockProcessor {
 		blocks_data: Default::default(),
 		processed_events: Default::default(),
 		rules: Default::default(),
-		execute: MockHook::new(()),
-		debug_events: MockHook::new(()),
+		execute: MockHook::default(),
+		debug_events: MockHook::default(),
 	};
 	let mut bw_state: BlockWitnesserState<Types> = BlockWitnesserState {
 		elections: Default::default(),
 		generate_election_properties_hook: Default::default(),
-		safemode_enabled: MockHook::new(SafeModeStatus::Disabled),
+		safemode_enabled: MockHook::new(ConstantHook::new(SafeModeStatus::Disabled)),
 		block_processor,
 	};
-	let bw_settings =
-		BlockWitnesserSettings { max_ongoing_elections: 4, safety_margin: SAFETY_MARGIN };
+	let bw_settings = BlockWitnesserSettings {
+		max_ongoing_elections: 4,
+		safety_margin: SAFETY_MARGIN,
+		max_optimistic_elections: 1,
+	};
 
 	#[derive(Clone, Debug)]
 	enum BWTrace<T: BWTypes, T0: BHWTypes> {
@@ -315,6 +320,8 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	}
 
 	use std::fmt::Write;
+
+	use crate::electoral_systems::state_machine::core::hook_test_utils::ConstantHook;
 	let mut printed: String = Default::default();
 	for output in total_outputs.clone() {
 		if output.len() == 0 {
