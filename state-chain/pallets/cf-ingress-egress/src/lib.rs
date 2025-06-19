@@ -1634,11 +1634,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		refund_address: <T::TargetChain as Chain>::ChainAccount,
 		deposit_fetch_id: Option<<T::TargetChain as Chain>::DepositFetchId>,
 	) {
-		debug_assert!(
-			T::TargetChain::get() != ForeignChain::Solana,
-			"This should never be called for the Solana chain"
-		);
-
 		let AmountAndFeesWithheld {
 			amount_after_fees: amount_after_ingress_fees,
 			fees_withheld: _,
@@ -1702,7 +1697,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		if let Some(ref ccm_refund_metadata) = tx.refund_ccm_metadata {
-			// Solana CCM refunds with ALT is not supported, since we don't witness ALT here.
+			let handle_ccm_failure = || {
+				FailedRejections::<T, I>::append(tx.clone());
+				Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
+					tx_id: tx.deposit_details.clone(),
+				});
+			};
+
+			// Solana CCM refunds with ALT is not supported, since we don't witness ALTs.
 			if let DecodedCcmAdditionalData::Solana(sol_add_data) =
 				&ccm_refund_metadata.channel_metadata.ccm_additional_data
 			{
@@ -1710,6 +1712,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					sol_add_data.alt_addresses().map(|alts| alts.is_empty()).unwrap_or(true),
 					"Solana CCM with ALT is not supported for refund CCMs"
 				);
+				handle_ccm_failure();
+				return;
 			}
 
 			if let Ok(api_call) =
@@ -1740,10 +1744,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// NOTE: This could be appending a rejection that might have an already successful
 				// fetch (RejectCall) but not the CCM refund. We must ensure that
 				// FailedRejections are not being retried.
-				FailedRejections::<T, I>::append(tx.clone());
-				Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
-					tx_id: tx.deposit_details.clone(),
-				});
+				handle_ccm_failure();
 			}
 		}
 	}
