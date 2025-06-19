@@ -27,7 +27,7 @@ use std::ops::Range;
 pub use cf_chains::eth::Address as EthereumAddress;
 pub use cf_utilities::rpc::NumberOrHex;
 pub use sp_core::{bounded::BoundedVec, crypto::AccountId32, ConstU32, H256, U256};
-pub use state_chain_runtime::{chainflip::BlockUpdate, Hash};
+pub use state_chain_runtime::{chainflip::BlockUpdate, runtime_apis::OpenedDepositChannels, Hash};
 
 /// Defines all broker related RPC types
 pub mod broker;

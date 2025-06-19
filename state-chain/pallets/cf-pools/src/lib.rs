@@ -1339,15 +1339,15 @@ pub struct PoolOrders<T: Config> {
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
 pub struct LimitOrderLiquidity {
-	tick: Tick,
-	amount: Amount,
+	pub tick: Tick,
+	pub amount: Amount,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
 pub struct RangeOrderLiquidity {
-	tick: Tick,
-	liquidity: Amount, /* TODO: Change (Using Amount as it is U256 so we get the right
-	                    * serialization) */
+	pub tick: Tick,
+	pub liquidity: Amount, /* TODO: Change (Using Amount as it is U256 so we get the right
+	                        * serialization) */
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
