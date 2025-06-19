@@ -1,7 +1,7 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keyring } from '@polkadot/api';
 import { encodeAddress } from 'polkadot/util-crypto';
-import { DcaParams, newSwap, FillOrKillParamsX128 , CcmDepositMetadata } from 'shared/new_swap';
+import { DcaParams, newSwap, FillOrKillParamsX128, CcmDepositMetadata } from 'shared/new_swap';
 import { send, sendViaCfTester } from 'shared/send';
 import { getBalance } from 'shared/get_balance';
 import {

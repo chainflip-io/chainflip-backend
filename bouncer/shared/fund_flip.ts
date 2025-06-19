@@ -9,7 +9,8 @@ import {
   getEvmEndpoint,
   getWhaleKey,
   assetDecimals,
- amountToFineAmount } from 'shared/utils';
+  amountToFineAmount,
+} from 'shared/utils';
 import { approveErc20 } from 'shared/approve_erc20';
 import { observeEvent } from 'shared/utils/substrate';
 import { Logger } from 'shared/utils/logger';

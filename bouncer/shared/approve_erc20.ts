@@ -1,6 +1,11 @@
 import Web3 from 'web3';
 import { InternalAsset as Asset } from '@chainflip/cli';
-import { amountToFineAmount, chainFromAsset, getEvmEndpoint , getContractAddress } from 'shared/utils';
+import {
+  amountToFineAmount,
+  chainFromAsset,
+  getEvmEndpoint,
+  getContractAddress,
+} from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { getErc20abi } from 'shared/contract_interfaces';
 import { Logger } from 'shared/utils/logger';
