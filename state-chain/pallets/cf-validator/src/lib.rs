@@ -71,16 +71,37 @@ type Ed25519Signature = ed25519::Signature;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
-	RegistrationBondPercentage { percentage: Percent },
-	AuctionBidCutoffPercentage { percentage: Percent },
-	RedemptionPeriodAsPercentage { percentage: Percent },
-	BackupRewardNodePercentage { percentage: Percent },
-	EpochDuration { blocks: u32 },
-	AuthoritySetMinSize { min_size: AuthorityCount },
-	AuctionParameters { parameters: SetSizeParameters },
-	MinimumReportedCfeVersion { version: SemVer },
-	MaxAuthoritySetContractionPercentage { percentage: Percent },
-	MinimumAuctionBid { minimum_flip_bid: u32 },
+	RegistrationBondPercentage {
+		percentage: Percent,
+	},
+	AuctionBidCutoffPercentage {
+		percentage: Percent,
+	},
+	RedemptionPeriodAsPercentage {
+		percentage: Percent,
+	},
+	BackupRewardNodePercentage {
+		percentage: Percent,
+	},
+	EpochDuration {
+		blocks: u32,
+	},
+	AuthoritySetMinSize {
+		min_size: AuthorityCount,
+	},
+	AuctionParameters {
+		parameters: SetSizeParameters,
+	},
+	MinimumReportedCfeVersion {
+		version: SemVer,
+	},
+	MaxAuthoritySetContractionPercentage {
+		percentage: Percent,
+	},
+	/// Note the `minimum_flip_bid` is in whole FLIP, not flipperinos.
+	MinimumAuctionBid {
+		minimum_flip_bid: u32,
+	},
 }
 
 type RuntimeRotationState<T> =
