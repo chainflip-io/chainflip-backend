@@ -10,12 +10,11 @@ use derive_where::derive_where;
 use primitives::NonemptyContinuousHeaders;
 #[cfg(test)]
 use proptest::prelude::Arbitrary;
+#[cfg(test)]
+use proptest_derive::Arbitrary;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::fmt::Debug;
-
-#[cfg(test)]
-use proptest_derive::Arbitrary;
 
 pub mod consensus;
 pub mod primitives;
