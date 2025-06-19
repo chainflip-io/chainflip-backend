@@ -2,6 +2,7 @@ import Web3 from 'web3';
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { doPerformSwap, requestNewSwap } from 'shared/perform_swap';
 import { prepareSwap, testSwap } from 'shared/swapping';
+import BigNumber from 'bignumber.js';
 import {
   observeFetch,
   sleep,
@@ -186,18 +187,16 @@ async function testDoubleDeposit(parentLogger: Logger, sourceAsset: Asset, destA
 
   // Do another deposit. Regardless of the fetch having been broadcasted or not, another swap
   // should be scheduled when we deposit again.
-  {
-    const swapRequestedHandle = observeSwapRequested(
-      logger,
-      sourceAsset,
-      destAsset,
-      { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
-      SwapRequestType.Regular,
-    );
+  const swapRequestedHandle = observeSwapRequested(
+    logger,
+    sourceAsset,
+    destAsset,
+    { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
+    SwapRequestType.Regular,
+  );
 
-    await send(logger, sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
-    await swapRequestedHandle;
-  }
+  await send(logger, sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
+  await swapRequestedHandle;
 }
 
 async function testEvmLegacyCfParametersVaultSwap(parentLogger: Logger) {

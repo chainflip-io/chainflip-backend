@@ -11,7 +11,7 @@ import {
   assetDecimals,
   stateChainAssetFromAsset,
   createEvmWalletAndFund,
-  newAddress,
+  newAssetAddress,
   decodeDotAddressForContract,
   getEvmEndpoint,
 } from 'shared/utils';
