@@ -24,7 +24,7 @@ pub mod x_swap_token;
 pub mod test_utils {
 	use crate::{
 		cf_parameters::*, eth::Address as EthAddress, CcmChannelMetadataChecked,
-		ChannelRefundParametersGeneric,
+		ChannelRefundParametersForChain,
 	};
 	use cf_primitives::{
 		chains::Ethereum, AccountId, AffiliateAndFee, AffiliateShortId, Beneficiary, DcaParameters,
@@ -59,7 +59,7 @@ pub mod test_utils {
 
 	pub fn dummy_cf_parameter(with_ccm: bool) -> Vec<u8> {
 		build_cf_parameters::<Ethereum>(
-			ChannelRefundParametersGeneric {
+			ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 1u32,
 				refund_address: refund_address(),
 				min_price: Default::default(),

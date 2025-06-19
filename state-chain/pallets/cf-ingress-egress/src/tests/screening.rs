@@ -88,7 +88,7 @@ mod helpers {
 			BROKER,
 			None,
 			10,
-			ChannelRefundParametersGeneric {
+			ChannelRefundParametersForChain::<Bitcoin> {
 				retry_duration: 100,
 				refund_address: ScriptPubkey::Taproot([0x01; 32]),
 				min_price: U256::from(0),
@@ -526,7 +526,7 @@ fn gets_rejected_if_vault_transaction_was_aborted_and_rejected() {
 			tx_id,
 			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
 			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParametersGeneric {
+			refund_params: ChannelRefundParametersForChain::<Bitcoin> {
 				retry_duration: 0,
 				min_price: U256::from(0),
 				refund_address: ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS),

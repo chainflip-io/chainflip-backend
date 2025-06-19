@@ -23,7 +23,7 @@ use cf_chains::{
 	assets,
 	btc::{deposit_address::DepositAddress, BitcoinTrackedData},
 	eth::EthereumTrackedData,
-	Bitcoin, Chain, ChannelRefundParametersGeneric, Ethereum, ForeignChainAddress,
+	Bitcoin, Chain, ChannelRefundParametersForChain, Ethereum, ForeignChainAddress,
 };
 use cf_primitives::ChannelId;
 use cf_test_utilities::{impl_test_helpers, TestExternalities};
@@ -381,7 +381,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						BROKER,
 						None,
 						10,
-						ChannelRefundParametersGeneric {
+						ChannelRefundParametersForChain::<<Test as Config<I>>::TargetChain> {
 							retry_duration: 5,
 							refund_address: refund_address.clone(),
 							min_price: U256::zero(),

@@ -688,7 +688,7 @@ mod test {
 				sol_test_values,
 			},
 		},
-		ChannelLifecycleHooks, ChannelRefundParametersGeneric,
+		ChannelLifecycleHooks, ChannelRefundParametersForChain,
 	};
 	use cf_primitives::{chains::assets::any::Asset, AffiliateShortId};
 	use sp_runtime::AccountId32;
@@ -753,7 +753,7 @@ mod test {
 				.unwrap()
 				.address;
 		let input_amount = 1_000_000_000u64;
-		let refund_parameters = ChannelRefundParametersGeneric {
+		let refund_parameters = ChannelRefundParametersForChain::<Solana> {
 			retry_duration: 15u32,
 			refund_address: SolAddress([0xF3; 32]),
 			min_price: 0.into(),
@@ -821,7 +821,7 @@ mod test {
 				.address;
 		let token_supported_account = SolPubkey([0xF5; 32]);
 		let input_amount = 1_000_000_000u64;
-		let refund_parameters = ChannelRefundParametersGeneric {
+		let refund_parameters = ChannelRefundParametersForChain::<Solana> {
 			retry_duration: 15u32,
 			refund_address: SolAddress([0xF3; 32]),
 			min_price: 0.into(),

@@ -20,7 +20,7 @@ use super::*;
 use crate::{BoostStatus, DisabledEgressAssets};
 use cf_chains::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
-	CcmChannelMetadataUnchecked, ChannelRefundParametersGeneric, DepositChannel,
+	CcmChannelMetadataUnchecked, ChannelRefundParametersForChain, DepositChannel,
 };
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
@@ -253,7 +253,7 @@ mod benchmarks {
 				deposit_details: BenchmarkValue::benchmark_value(),
 				broker_fee: None,
 				affiliate_fees: Default::default(),
-				refund_params: ChannelRefundParametersGeneric {
+				refund_params: ChannelRefundParametersForChain::<T::TargetChain> {
 					retry_duration: Default::default(),
 					refund_address: BenchmarkValue::benchmark_value(),
 					min_price: Default::default(),

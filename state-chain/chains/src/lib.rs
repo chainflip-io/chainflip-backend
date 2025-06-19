@@ -1202,6 +1202,8 @@ pub struct SwapRefundParameters {
 	PartialOrd,
 	Ord,
 )]
+/// Generic types for Unchecked version of Refund Parameters. Avoid using this type directly, and
+/// always use the appropriate type-aliased version.
 pub struct ChannelRefundParametersGeneric<A, RefundCcm = Option<CcmChannelMetadataUnchecked>> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: A,

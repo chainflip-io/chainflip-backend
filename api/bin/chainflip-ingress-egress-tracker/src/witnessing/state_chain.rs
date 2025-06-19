@@ -730,7 +730,7 @@ mod tests {
 		dot::PolkadotAccountId,
 		evm::{EvmTransactionMetadata, TransactionFee},
 		instances::ChainInstanceFor,
-		CcmChannelMetadata, Chain, ForeignChainAddress,
+		CcmChannelMetadata, Chain, ChannelRefundParametersForChain, ForeignChainAddress,
 	};
 	use cf_utilities::assert_ok;
 	use chainflip_api::primitives::AffiliateShortId;
@@ -1017,7 +1017,7 @@ mod tests {
 						bps: 10
 					}])
 					.unwrap(),
-					refund_params: ChannelRefundParametersGeneric {
+					refund_params: ChannelRefundParametersForChain::<Ethereum> {
 						refund_address: eth_address,
 						retry_duration: Default::default(),
 						min_price: Default::default(),
