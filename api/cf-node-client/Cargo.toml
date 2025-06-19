@@ -22,7 +22,7 @@ sp-version = { workspace = true }
 frame-system = { workspace = true, default-features = true }
 frame-support = { workspace = true, default-features = true }
 frame-metadata = { workspace = true, default-features = true, features = [
-    "current",
+	"current",
 ] }
 frame-metadata-hash-extension = { workspace = true }
 subxt = { workspace = true, features = ["runtime-wasm-path"] }
@@ -37,5 +37,3 @@ cf-traits = { workspace = true }
 [dev-dependencies]
 pallet-cf-funding = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
-
-
