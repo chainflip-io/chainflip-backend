@@ -54,15 +54,15 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 }
 
 pub type PalletMigration<T> = (
-	PlaceholderMigration<15, Pallet<T>>,
-	/* a migration from 15 to 16 in in state-chain/runtime/src/migrations/safe_mode.rs */
 	VersionedMigration<
+		15,
 		16,
-		17,
 		OracleQueryEnvironmentMigration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
+	PlaceholderMigration<16, Pallet<T>>,
+	/* a migration from 16 to 17 in in state-chain/runtime/src/migrations/safe_mode.rs */
 	PlaceholderMigration<17, Pallet<T>>,
 );
 
