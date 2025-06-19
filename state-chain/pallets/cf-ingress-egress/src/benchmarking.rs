@@ -20,7 +20,7 @@ use super::*;
 use crate::{BoostStatus, DisabledEgressAssets};
 use cf_chains::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
-	CcmChannelMetadataUnchecked, DepositChannel,
+	CcmChannelMetadataUnchecked, ChannelRefundParametersGeneric, DepositChannel,
 };
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;

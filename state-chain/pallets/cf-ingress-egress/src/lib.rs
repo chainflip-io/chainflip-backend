@@ -38,9 +38,9 @@ use cf_chains::{
 	instances::PalletInstanceAlias,
 	AccountOrAddress, AllBatch, AllBatchError, CcmChannelMetadataChecked, CcmDepositMetadata,
 	CcmDepositMetadataChecked, CcmDepositMetadataUnchecked, CcmMessage, Chain, ChainCrypto,
-	ChannelLifecycleHooks, ChannelRefundParametersForChain, ChannelRefundParametersGeneric,
-	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, DepositOriginType,
-	ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
+	ChannelLifecycleHooks, ChannelRefundParametersForChain, ConsolidateCall, DepositChannel,
+	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall,
+	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
 	IntoTransactionInIdForAnyChain, RefundParametersChecked, RejectCall, SwapOrigin,
 	TransferAssetParams,
 };
