@@ -44,7 +44,7 @@ impl<T: Config> ChpLoan<T> {
 	// Distribute funds (in loan's asset) among pools/participants
 	// according to their contributions. Reduces the owed principal
 	// amount if a principal repayment.
-	fn distribute_funds(&mut self, amount: AssetAmount, is_principal_repayment: bool) {
+	fn distribute_funds(&mut self, amount: AssetAmount) {
 		let principal_total = self.total_principal_amount();
 
 		for ChpPoolContribution { core_pool_id, loan_id, principal } in &mut self.pool_contributions
@@ -64,7 +64,9 @@ impl<T: Config> ChpLoan<T> {
 				}
 			});
 
-			if is_principal_repayment {
+			// We assume that any repayment goes towards reducing the principal amount,
+			// unless it is in finalising state where we only distribute fees:
+			if self.status != LoanStatus::Finalising {
 				principal.saturating_reduce(pool_to_receive);
 			}
 
@@ -361,7 +363,7 @@ impl<T: Config> ChpLendingApi for Pallet<T> {
 
 			T::Balance::try_debit_account(&loan.borrower_id, asset, amount)?;
 
-			loan.distribute_funds(amount, true);
+			loan.distribute_funds(amount);
 
 			if amount == principal_total {
 				T::Balance::credit_account(
@@ -393,7 +395,7 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 				LoanStatus::SoftLiquidation { .. } => {
 					// Use swapped asset to repay the loan:
 					let amount_to_repay = core::cmp::min(amount, loan.total_principal_amount());
-					loan.distribute_funds(amount_to_repay, true);
+					loan.distribute_funds(amount_to_repay);
 
 					// Any amount left after repaying the loan should be returned to the
 					// borrower:
@@ -411,7 +413,7 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 					unimplemented!()
 				},
 				LoanStatus::Finalising => {
-					loan.distribute_funds(amount, false);
+					loan.distribute_funds(amount);
 
 					for ChpPoolContribution { core_pool_id, loan_id, .. } in
 						&loan.pool_contributions
