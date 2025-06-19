@@ -82,12 +82,6 @@ pub enum TradingStrategy {
 	},
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub struct LimitOrders {
-	pub base: BTreeMap<Tick, (OrderId, AssetAmount)>,
-	pub quote: BTreeMap<Tick, (OrderId, AssetAmount)>,
-}
-
 #[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
 	MinimumDeploymentAmountForStrategy { asset: Asset, amount: Option<AssetAmount> },
@@ -326,7 +320,7 @@ pub mod pallet {
 						base_asset,
 					} => {
 						let new_weight_estimate =
-							weight_used.saturating_add(limit_order_update_weight * 6);
+							weight_used.saturating_add(limit_order_update_weight * 3);
 
 						if remaining_weight.checked_sub(&new_weight_estimate).is_none() {
 							break;
@@ -371,17 +365,24 @@ pub mod pallet {
 							weight_used += T::DbWeight::get().reads(2);
 
 							// Use the balance of assets to calculate the desired limit orders
-							let new_orders = Self::inventory_based_strategy_logic(
+							let total = quote_amount.saturating_add(base_amount);
+							let new_sell_orders = Self::inventory_based_strategy_logic(
 								base_amount,
-								quote_amount,
-								min_buy_tick,
-								max_buy_tick,
+								total,
 								min_sell_tick,
 								max_sell_tick,
+								Side::Sell,
+							);
+							let new_buy_orders = Self::inventory_based_strategy_logic(
+								quote_amount,
+								total,
+								min_buy_tick,
+								max_buy_tick,
+								Side::Buy,
 							);
 
 							// Create the new desired orders
-							[(Side::Sell, new_orders.base), (Side::Buy, new_orders.quote)]
+							[(Side::Sell, new_sell_orders), (Side::Buy, new_buy_orders)]
 								.into_iter()
 								.for_each(|(side, orders)| {
 									orders.iter().for_each(|(tick, (order_id, amount))| {
@@ -659,63 +660,72 @@ impl<T: Config> Pallet<T> {
 		)
 	}
 
+	/// Logic for one side of the inventory-based strategy.
+	///
+	/// Given the amount of asset on this side compared to the total amount on both sides, returns
+	/// the limit orders that should be created. The logic is as follows:
+	/// If there is too much asset on this side, ie amount > half_total, then we want 2 limit
+	/// orders:
+	/// 1. A simple order at the average tick between min_tick and max_tick, with half of the total
+	///    amount.
+	/// 2. A dynamic order at a tick that is more aggressive than the average tick with the
+	///    remaining amount.
+	///
+	/// The reason for splitting the order in 2 is to avoid having all of the asset at the most
+	///    aggressive tick get executed and become an order on the opposite side also at the most
+	///    aggressive tick, stuck in a non-profitable loop. By splitting the order at the half
+	///    total we maximize the chance of the strategy balancing out to 50/50 over time.
+	///
+	/// If there is not too much asset on this side, ie amount <= half_total, then we want 1 limit
+	/// order:
+	/// 1. A dynamic order at a tick that is more defensive than the average tick. This is the same
+	///    logic as the dynamic order above.
 	fn inventory_based_strategy_logic(
-		base_amount: AssetAmount,
-		quote_amount: AssetAmount,
-		min_buy_tick: Tick,
-		max_buy_tick: Tick,
-		min_sell_tick: Tick,
-		max_sell_tick: Tick,
-	) -> LimitOrders {
-		let total = quote_amount.saturating_add(base_amount);
+		amount: AssetAmount,
+		total: AssetAmount,
+		min_tick: Tick,
+		max_tick: Tick,
+		side: Side,
+	) -> BTreeMap<Tick, (OrderId, AssetAmount)> {
 		if total == 0 {
-			return LimitOrders::default();
+			return BTreeMap::default();
 		}
+		let mut orders = BTreeMap::new();
+
+		let fraction_of_total = if side == Side::Sell {
+			// The fraction for the sell side is inverted because we are moving the tick in the
+			// opposite direction
+			Permill::one() - Permill::from_rational(amount, total)
+		} else {
+			Permill::from_rational(amount, total)
+		};
 		let half_total = total / 2;
 
-		let mut base_orders = BTreeMap::new();
-		let mut quote_orders = BTreeMap::new();
+		// Simple order logic:
+		let remaining_amount = if amount >= half_total {
+			// Get the average tick, making sure to round the tick defensively
+			let round_up = side == Side::Sell;
+			let average_tick = Self::average_tick(min_tick, max_tick, round_up);
+			orders.insert(average_tick, (STRATEGY_ORDER_ID_1, half_total));
+			amount.saturating_sub(half_total)
+		} else {
+			amount
+		};
 
-		[
-			(true, base_amount, min_sell_tick, max_sell_tick, &mut base_orders),
-			(false, quote_amount, min_buy_tick, max_buy_tick, &mut quote_orders),
-		]
-		.into_iter()
-		.for_each(|(is_base_asset, amount, tick_1, tick_2, order_list)| {
-			// Simple order logic:
-			let remaining_amount = if amount >= half_total {
-				// Get the average tick, making sure to round the tick defensively
-				let average_tick = Self::average_tick(tick_1, tick_2, is_base_asset);
-				order_list.insert(average_tick, (STRATEGY_ORDER_ID_1, half_total));
-				amount.saturating_sub(half_total)
-			} else {
-				amount
-			};
+		// Dynamic order logic:
+		if remaining_amount > 0 {
+			// Calculate the tick based on the fraction of the total amount
+			let dynamic_tick =
+				(fraction_of_total * ((max_tick - min_tick).unsigned_abs())) as i32 + min_tick;
+			// Merge the order if its at the same tick as the simple order, or just add a new
+			// order.
+			orders
+				.entry(dynamic_tick)
+				.and_modify(|(_order_id, amount)| *amount += remaining_amount)
+				.or_insert((STRATEGY_ORDER_ID_0, remaining_amount));
+		}
 
-			// Dynamic order logic:
-			if remaining_amount > 0 {
-				// Calculate the faction of the total amount that is on this side
-				let fraction_of_total = if is_base_asset {
-					// Invert the fraction if this is a base asset because we will move the tick in
-					// the opposite direction
-					Permill::one() - Permill::from_rational(amount, total)
-				} else {
-					Permill::from_rational(amount, total)
-				};
-
-				// Calculate the tick based on the fraction of the total amount
-				let dynamic_tick =
-					(fraction_of_total * ((tick_2 - tick_1).unsigned_abs())) as i32 + tick_1;
-				// Merge the order if its at the same tick as the simple order, or just add a new
-				// order.
-				order_list
-					.entry(dynamic_tick)
-					.and_modify(|(_order_id, amount)| *amount += remaining_amount)
-					.or_insert((STRATEGY_ORDER_ID_0, remaining_amount));
-			}
-		});
-
-		LimitOrders { base: base_orders, quote: quote_orders }
+		orders
 	}
 
 	// Returns the average tick between two ticks, with rounding control.

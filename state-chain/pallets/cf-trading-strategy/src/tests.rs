@@ -1046,28 +1046,28 @@ mod safe_mode {
 mod inventory_based_strategy {
 	use super::*;
 
+	#[derive(Debug, Clone, PartialEq, Eq)]
+	struct LimitOrders {
+		base: BTreeMap<Tick, (OrderId, AssetAmount)>,
+		quote: BTreeMap<Tick, (OrderId, AssetAmount)>,
+	}
+
 	proptest! {
 		#![proptest_config(proptest::test_runner::Config::with_cases(1000))]
 		#[test]
 		fn logic_prop_test(
 			base_amount in 1..1000_u32,
 			quote_amount in 1..1000_u32,
-			min_buy_tick in -10..-5_i32,
+			min_buy_tick in -10..=-5_i32,
 			max_buy_tick in -5..5_i32,
-			min_sell_tick in -5..5_i32,
+			min_sell_tick in -5..=5_i32,
 			max_sell_tick in 5..10_i32,
 		) {
 			let base_amount = AssetAmount::from(base_amount);
 			let quote_amount = AssetAmount::from(quote_amount);
 
-			let LimitOrders { base, quote } = TradingStrategyPallet::inventory_based_strategy_logic(
-				base_amount,
-				quote_amount,
-				min_buy_tick,
-				max_buy_tick,
-				min_sell_tick,
-				max_sell_tick,
-			);
+			let base = TradingStrategyPallet::inventory_based_strategy_logic(base_amount, base_amount + quote_amount, min_sell_tick, max_sell_tick, Side::Sell);
+			let quote = TradingStrategyPallet::inventory_based_strategy_logic(quote_amount, base_amount + quote_amount, min_buy_tick, max_buy_tick, Side::Buy);
 
 			assert!(!base.is_empty());
 			assert!(!quote.is_empty());
@@ -1114,17 +1114,23 @@ mod inventory_based_strategy {
 			max_sell_tick: Tick,
 			expected_orders: LimitOrders,
 		) {
-			assert_eq!(
-				TradingStrategyPallet::inventory_based_strategy_logic(
+			let new_orders = LimitOrders {
+				base: TradingStrategyPallet::inventory_based_strategy_logic(
 					base_amount,
-					quote_amount,
-					min_buy_tick,
-					max_buy_tick,
+					base_amount + quote_amount,
 					min_sell_tick,
 					max_sell_tick,
+					Side::Sell,
 				),
-				expected_orders,
-			);
+				quote: TradingStrategyPallet::inventory_based_strategy_logic(
+					quote_amount,
+					base_amount + quote_amount,
+					min_buy_tick,
+					max_buy_tick,
+					Side::Buy,
+				),
+			};
+			assert_eq!(new_orders, expected_orders,);
 		}
 
 		// 50/50 split exactly
