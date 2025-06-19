@@ -204,7 +204,7 @@ declare module 'bitcoin-core' {
 
     getRpcInfo: (...args: unknown) => Promise<unknown>;
 
-    getTransaction: (...args: unknown) => Promise<{ confirmations: number }>;
+    getTransaction: (...args: unknown) => Promise<{ confirmations: number; amount: number }>;
 
     getTxOut: (...args: unknown) => Promise<unknown>;
 

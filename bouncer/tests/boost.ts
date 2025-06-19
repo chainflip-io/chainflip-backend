@@ -118,7 +118,7 @@ async function testBoostingForAsset(
     'Boost pool must be empty for test',
   );
 
-  // Add boost funds
+  // Add boost funds. Adding on 1% to make sure that there is enough left after fees are taken.
   await depositLiquidity(logger, asset, amount * 1.01, false, lpUri);
   await addBoostFunds(logger, asset, boostFee, amount, lpUri);
 
