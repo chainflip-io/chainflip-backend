@@ -645,7 +645,7 @@ mod vault_swaps {
 				tx_id,
 				broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
 				affiliate_fees: Default::default(),
-				refund_params: ChannelRefundParametersGeneric {
+				refund_params: ChannelRefundParametersForChain::<Ethereum> {
 					retry_duration: 2,
 					refund_address: [2; 20].into(),
 					min_price: Default::default(),
@@ -969,7 +969,7 @@ mod delayed_boosting {
 			tx_id: TX_ID,
 			broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
 			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParametersGeneric {
+			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 2,
 				refund_address: [2; 20].into(),
 				min_price: Default::default(),

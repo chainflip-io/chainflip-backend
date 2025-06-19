@@ -194,7 +194,7 @@ mod tests {
 
 	fn vault_swap_parameters() -> VaultSwapParameters<ForeignChainAddress> {
 		VaultSwapParameters {
-			refund_params: ChannelRefundParametersGeneric {
+			refund_params: ChannelRefundParametersForChain::<AnyChain> {
 				retry_duration: 1,
 				refund_address: ForeignChainAddress::Eth([2; 20].into()),
 				min_price: Default::default(),

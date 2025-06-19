@@ -36,10 +36,9 @@ use cf_chains::{
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
 	CcmChannelMetadata, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked, CcmDepositMetadata,
-	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain,
-	ChannelRefundParametersGeneric, DepositChannel, DepositOriginType, Ethereum,
-	ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin, TransactionInIdForAnyChain,
-	TransferAssetParams,
+	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain, DepositChannel,
+	DepositOriginType, Ethereum, ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin,
+	TransactionInIdForAnyChain, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries,
@@ -3570,7 +3569,7 @@ fn test_various_refund_reasons() {
 			tx_id: H256::default(),
 			broker_fee: None,
 			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParametersGeneric {
+			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 0,
 				min_price: U256::from(0),
 				refund_address: H160::default(),
@@ -3596,7 +3595,7 @@ fn test_various_refund_reasons() {
 			tx_id: H256::default(),
 			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
 			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParametersGeneric {
+			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 700,
 				min_price: U256::from(0),
 				refund_address: H160::default(),
@@ -3622,7 +3621,7 @@ fn test_various_refund_reasons() {
 			tx_id: H256::default(),
 			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
 			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParametersGeneric {
+			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 0,
 				min_price: U256::from(0),
 				refund_address: H160::default(),

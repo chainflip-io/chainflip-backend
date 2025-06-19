@@ -34,7 +34,7 @@ use cf_chains::{
 		SolPubkey, SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmDepositMetadata, CcmDepositMetadataChecked,
-	CcmDepositMetadataUnchecked, Chain, ChannelRefundParameters, ChannelRefundParametersGeneric,
+	CcmDepositMetadataUnchecked, Chain, ChannelRefundParameters, ChannelRefundParametersForChain,
 	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
 	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
 };
@@ -219,7 +219,7 @@ fn vault_swap_deposit_witness(
 		deposit_details: (),
 		broker_fee: Some(Beneficiary { account: broker, bps: 100u16 }),
 		affiliate_fees: Default::default(),
-		refund_params: ChannelRefundParametersGeneric {
+		refund_params: ChannelRefundParametersForChain::<Solana> {
 			retry_duration: REFUND_PARAMS.retry_duration,
 			refund_address: FALLBACK_ADDRESS,
 			min_price: REFUND_PARAMS.min_price,
