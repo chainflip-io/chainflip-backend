@@ -8,16 +8,28 @@ use cf_chains::witness_period::{BlockZero, SaturatingStep};
 use codec::{Decode, Encode};
 use derive_where::derive_where;
 use primitives::NonemptyContinuousHeaders;
+#[cfg(test)]
+use proptest::prelude::Arbitrary;
+#[cfg(test)]
+use proptest_derive::Arbitrary;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::fmt::Debug;
 
-#[cfg(test)]
-use proptest_derive::Arbitrary;
-
 pub mod consensus;
 pub mod primitives;
 pub mod state_machine;
+
+#[cfg(test)]
+pub trait TestTraits = Send + Sync;
+#[cfg(not(test))]
+pub trait TestTraits = core::any::Any;
+
+#[cfg(test)]
+pub trait MaybeArbitrary = proptest::prelude::Arbitrary + Send + Sync
+where <Self as Arbitrary>::Strategy: Clone + Sync + Send;
+#[cfg(not(test))]
+pub trait MaybeArbitrary = core::any::Any;
 
 pub trait CommonTraits = Debug + Clone + Encode + Decode + Serde + Eq;
 
@@ -30,8 +42,9 @@ pub trait ChainBlockNumberTrait = CommonTraits
 	+ Ord
 	+ 'static
 	+ Sized
-	+ Validate;
-pub trait ChainBlockHashTrait = CommonTraits + Validate + Ord + 'static;
+	+ Validate
+	+ MaybeArbitrary;
+pub trait ChainBlockHashTrait = CommonTraits + Validate + Ord + 'static + MaybeArbitrary;
 
 pub trait ChainTypes: Ord + Clone + Debug + 'static {
 	type ChainBlockNumber: ChainBlockNumberTrait;
@@ -67,9 +80,10 @@ defx! {
 }
 
 defx! {
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct ChainProgress[T: ChainTypes] {
 		pub headers: NonemptyContinuousHeaders<T>,
-		pub removed: Option<RangeInclusive<ChainBlockNumberOf<T>>>,
+		pub removed: Option<RangeInclusive<<T as ChainTypes>::ChainBlockNumber>>,
 	}
 	validate _this (else ChainProgressError) {}
 }

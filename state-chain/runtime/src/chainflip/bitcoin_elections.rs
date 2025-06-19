@@ -52,7 +52,6 @@ use pallet_cf_elections::{
 };
 use pallet_cf_ingress_egress::{DepositWitness, PalletSafeMode, VaultDepositWitness};
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get, MaxEncodedLen};
 use sp_std::vec::Vec;
 
@@ -132,46 +131,6 @@ impls! {
 pub type BitcoinBlockHeightTrackingES =
 	StatemachineElectoralSystem<TypesFor<BitcoinBlockHeightTracking>>;
 
-#[derive(
-	Clone,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Debug,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-	Default,
-)]
-pub struct DepositSafeModeHook {}
-
-impl Hook<HookTypeFor<(), SafeModeEnabledHook>> for DepositSafeModeHook {
-	fn run(&mut self, _input: ()) -> SafeModeStatus {
-		if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
-			PalletSafeMode<BitcoinInstance>,
-		>>::get()
-		.deposits_enabled
-		{
-			SafeModeStatus::Disabled
-		} else {
-			SafeModeStatus::Enabled
-		}
-	}
-}
-
-use pallet_cf_elections::electoral_systems::state_machine::core::Validate;
-impl Validate for DepositSafeModeHook {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
-
 // ------------------------ deposit channel witnessing ---------------------------
 /// The electoral system for deposit channel witnessing
 pub struct BitcoinDepositChannelWitnessing;
@@ -197,7 +156,7 @@ impls! {
 	BWTypes {
 		type ElectionProperties = ElectionPropertiesDepositChannel;
 		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = DepositSafeModeHook;
+		type SafeModeEnabledHook = Self;
 		type ElectionTrackerDebugEventHook = EmptyHook;
 	}
 
@@ -227,6 +186,19 @@ impls! {
 		}
 	}
 
+	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
+		fn run(&mut self, _input: ()) -> SafeModeStatus {
+			if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
+				PalletSafeMode<BitcoinInstance>,
+			>>::get()
+			.deposits_enabled
+			{
+				SafeModeStatus::Disabled
+			} else {
+				SafeModeStatus::Enabled
+			}
+		}
+	}
 }
 /// Generating the state machine-based electoral system
 pub type BitcoinDepositChannelWitnessingES =
@@ -259,7 +231,7 @@ impls! {
 	BWTypes {
 		type ElectionProperties = ElectionPropertiesVaultDeposit;
 		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = DepositSafeModeHook;
+		type SafeModeEnabledHook = Self;
 		type ElectionTrackerDebugEventHook = EmptyHook;
 	}
 
@@ -291,6 +263,20 @@ impls! {
 						.map(move |address| (address, broker_id.clone(), channel_id))
 				})
 				.collect::<Vec<_>>()
+		}
+	}
+
+	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
+		fn run(&mut self, _input: ()) -> SafeModeStatus {
+			if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
+				PalletSafeMode<BitcoinInstance>,
+			>>::get()
+			.deposits_enabled
+			{
+				SafeModeStatus::Disabled
+			} else {
+				SafeModeStatus::Enabled
+			}
 		}
 	}
 
@@ -345,7 +331,7 @@ impls! {
 	}
 
 	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<(), SafeModeEnabledHook>> {
+	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
 		fn run(&mut self, _input: ()) -> SafeModeStatus {
 			// TODO: Add egress witnessing safe mode: PRO-2311
 			SafeModeStatus::Disabled

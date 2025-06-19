@@ -258,7 +258,8 @@ fn run_simulation(blocks: ForkedFilledChain) {
 					)
 				});
 
-				BW::step(&mut bw_state, Either::Left(bhw_output), &bw_settings).unwrap();
+				BW::step_and_validate(&mut bw_state, Either::Left(bhw_output), &bw_settings)
+					.unwrap();
 
 				history.extend(
 					bw_state.elections.debug_events.take_history().into_iter().map(BWTrace::ET),
@@ -290,7 +291,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 					)
 				});
 
-				BW::step(&mut bw_state, input, &bw_settings).unwrap();
+				BW::step_and_validate(&mut bw_state, input, &bw_settings).unwrap();
 
 				history.extend(
 					bw_state.elections.debug_events.take_history().into_iter().map(BWTrace::ET),
