@@ -482,4 +482,24 @@ pub(crate) mod tests {
 			]]
 		);
 	}
+
+	/// Out of order blocks are correctly processed
+	#[test]
+	fn out_of_order_blocks_processed_correctly() {
+		let mut processor = BlockProcessor::<Types>::default();
+
+		processor.insert_block_data(102, vec![2], SAFETY_MARGIN);
+		processor.process_blocks_up_to(103, 103);
+		assert_eq!(
+			processor.execute.take_history(),
+			vec![vec![(102u8, MockBtcEvent::PreWitness(2u8))]]
+		);
+
+		processor.insert_block_data(101, vec![1], SAFETY_MARGIN);
+		processor.process_blocks_up_to(103, 103);
+		assert_eq!(
+			processor.execute.take_history(),
+			vec![vec![(101u8, MockBtcEvent::PreWitness(1u8)),]]
+		);
+	}
 }

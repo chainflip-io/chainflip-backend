@@ -107,6 +107,7 @@ pub trait BWProcessorTypes: Sized + Debug + Clone + Eq {
 )]
 pub struct BlockWitnesserSettings {
 	pub max_ongoing_elections: u16,
+	pub max_optimistic_elections: u8,
 	pub safety_margin: u32,
 }
 
@@ -275,6 +276,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 
 		state.elections.start_more_elections(
 			settings.max_ongoing_elections as usize,
+			settings.max_optimistic_elections,
 			state.safemode_enabled.run(()),
 		);
 

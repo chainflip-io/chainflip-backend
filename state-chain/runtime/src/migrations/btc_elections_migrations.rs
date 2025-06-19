@@ -34,9 +34,21 @@ impl OnRuntimeUpgrade for Migration {
 			unsynchronized_settings,
 			Some((
 				Default::default(),
-				BlockWitnesserSettings { max_ongoing_elections: 15, safety_margin: 3 },
-				BlockWitnesserSettings { max_ongoing_elections: 15, safety_margin: 3 },
-				BlockWitnesserSettings { max_ongoing_elections: 15, safety_margin: 0 },
+				BlockWitnesserSettings {
+					max_ongoing_elections: 15,
+					max_optimistic_elections: 1,
+					safety_margin: 3
+				},
+				BlockWitnesserSettings {
+					max_ongoing_elections: 15,
+					max_optimistic_elections: 1,
+					safety_margin: 3
+				},
+				BlockWitnesserSettings {
+					max_ongoing_elections: 15,
+					max_optimistic_elections: 1,
+					safety_margin: 0
+				},
 				Default::default(),
 				(),
 			))

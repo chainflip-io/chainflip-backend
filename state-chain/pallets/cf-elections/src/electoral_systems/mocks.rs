@@ -67,7 +67,6 @@ pub struct TestContext<ES: ElectoralSystem> {
 impl<ES: ElectoralSystem> TestSetup<ES>
 where
 	ES::ElectionIdentifierExtra: Default,
-	ES::ElectionProperties: Default,
 	ES::ElectionState: Default,
 	ES::ElectoralUnsynchronisedStateMapKey: Ord,
 {
@@ -111,7 +110,10 @@ where
 	}
 
 	// Useful for testing check_consensus since we already have an election.
-	pub fn build_with_initial_election(self) -> TestContext<ES> {
+	pub fn build_with_initial_election(self) -> TestContext<ES>
+	where
+		ES::ElectionProperties: Default,
+	{
 		let setup = self.clone();
 
 		// We need to clear the storage at every build so if there are multiple test contexts used
