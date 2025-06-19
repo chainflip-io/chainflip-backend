@@ -349,7 +349,7 @@ fn backup_rewards_event_gets_emitted_on_heartbeat_interval() {
 fn min_aution_bid_qualification() {
 	const GENESIS_BALANCE_IN_FLIP: u32 = (GENESIS_BALANCE / FLIPPERINOS_PER_FLIP) as u32;
 	super::genesis::with_test_defaults().build().execute_with(|| {
-		let (mut network, ..) = crate::authorities::fund_authorities_and_join_auction(0);
+		let _ = crate::authorities::fund_authorities_and_join_auction(0);
 
 		assert_ok!(Validator::update_pallet_config(
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
