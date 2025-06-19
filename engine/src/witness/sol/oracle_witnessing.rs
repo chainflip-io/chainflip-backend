@@ -14,7 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-
 use crate::sol::{retry_rpc::SolRetryRpcApi, rpc_client_api::*};
 use cf_chains::sol::SolAddress;
 use sol_prim::{
