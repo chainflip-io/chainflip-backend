@@ -4,7 +4,7 @@ use core::{
 };
 
 use crate::electoral_systems::{
-	block_height_tracking::{ChainBlockNumberOf, ChainTypes},
+	block_height_witnesser::{ChainBlockNumberOf, ChainTypes},
 	block_witnesser::state_machine::BWProcessorTypes,
 	state_machine::core::{def_derive, Hook, Validate},
 };
@@ -261,7 +261,7 @@ pub(crate) mod tests {
 
 	use crate::{
 		electoral_systems::{
-			block_height_tracking::{ChainBlockHashTrait, ChainBlockNumberTrait, ChainTypes},
+			block_height_witnesser::{ChainBlockHashTrait, ChainBlockNumberTrait, ChainTypes},
 			block_witnesser::{
 				block_processor::BlockProcessor,
 				state_machine::{

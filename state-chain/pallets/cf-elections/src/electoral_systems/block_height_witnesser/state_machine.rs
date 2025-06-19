@@ -205,7 +205,7 @@ pub mod tests {
 
 	use crate::{
 		electoral_systems::{
-			block_height_tracking::{
+			block_height_witnesser::{
 				primitives::NonemptyContinuousHeaders, BlockHeightChangeHook, ChainBlockHashOf,
 				ChainBlockHashTrait, ChainBlockNumberOf, ChainBlockNumberTrait, ChainTypes,
 			},

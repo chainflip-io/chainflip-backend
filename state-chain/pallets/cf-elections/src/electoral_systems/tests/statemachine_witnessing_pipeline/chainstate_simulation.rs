@@ -356,7 +356,7 @@ pub struct MockChain<E, T: ChainTypes<ChainBlockHash = BlockId>> {
 	pub _phantom: std::marker::PhantomData<T>,
 }
 
-use crate::electoral_systems::block_height_tracking::{primitives::Header, ChainTypes};
+use crate::electoral_systems::block_height_witnesser::{primitives::Header, ChainTypes};
 
 impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> MockChain<E, T> {
 	pub fn new_with_offset(offset: usize, blocks: Vec<FlatBlock<E>>) -> MockChain<E, T> {

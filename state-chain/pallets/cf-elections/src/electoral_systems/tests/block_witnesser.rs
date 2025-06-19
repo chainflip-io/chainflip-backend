@@ -20,7 +20,7 @@ use super::{mocks::Check, register_checks};
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
 	electoral_systems::{
-		block_height_tracking::{primitives::Header, ChainProgress, ChainTypes},
+		block_height_witnesser::{primitives::Header, ChainProgress, ChainTypes},
 		block_witnesser::{
 			primitives::ElectionTracker,
 			state_machine::{

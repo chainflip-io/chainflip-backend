@@ -6,17 +6,17 @@ use crate::electoral_systems::state_machine::consensus::{
 	ConsensusMechanism, MultipleVotes, StagedConsensus, SuccessThreshold, SupermajorityConsensus,
 };
 
-pub struct BlockHeightTrackingConsensus<T: BHWTypes> {
+pub struct BlockHeightWitnesserConsensus<T: BHWTypes> {
 	votes: Vec<NonemptyContinuousHeaders<T::Chain>>,
 }
 
-impl<T: BHWTypes> Default for BlockHeightTrackingConsensus<T> {
+impl<T: BHWTypes> Default for BlockHeightWitnesserConsensus<T> {
 	fn default() -> Self {
 		Self { votes: Default::default() }
 	}
 }
 
-impl<T: BHWTypes> ConsensusMechanism for BlockHeightTrackingConsensus<T> {
+impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 	type Vote = NonemptyContinuousHeaders<T::Chain>;
 	type Result = NonemptyContinuousHeaders<T::Chain>;
 	type Settings = (SuccessThreshold, HeightWitnesserProperties<T>);

@@ -6,7 +6,7 @@ use super::{
 #[cfg(test)]
 use crate::electoral_systems::state_machine::state_machine::InputOf;
 use crate::electoral_systems::{
-	block_height_tracking::{
+	block_height_witnesser::{
 		ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes, CommonTraits,
 		MaybeArbitrary, TestTraits,
 	},
@@ -388,7 +388,7 @@ pub mod tests {
 
 	use super::*;
 	use crate::{
-		electoral_systems::block_height_tracking::{ChainBlockHashTrait, ChainBlockNumberTrait},
+		electoral_systems::block_height_witnesser::{ChainBlockHashTrait, ChainBlockNumberTrait},
 		prop_do,
 	};
 	use hook_test_utils::*;

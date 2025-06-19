@@ -31,7 +31,7 @@ use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystemTypes,
 	electoral_systems::{
-		block_height_tracking::{
+		block_height_witnesser::{
 			primitives::{Header, NonemptyContinuousHeaders},
 			ChainBlockHashOf, ChainTypes, HeightWitnesserProperties,
 		},
@@ -42,7 +42,7 @@ use pallet_cf_elections::{
 use sp_core::bounded::alloc::collections::VecDeque;
 use state_chain_runtime::{
 	chainflip::bitcoin_elections::{
-		BitcoinBlockHeightTrackingES, BitcoinChain, BitcoinDepositChannelWitnessingES,
+		BitcoinBlockHeightWitnesserES, BitcoinChain, BitcoinDepositChannelWitnessingES,
 		BitcoinElectoralSystemRunner, BitcoinLiveness,
 	},
 	BitcoinInstance,
@@ -70,17 +70,17 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct BitcoinBlockHeightTrackingVoter {
+pub struct BitcoinBlockHeightWitnesserVoter {
 	client: BtcCachingClient,
 }
 
 #[async_trait::async_trait]
-impl VoterApi<BitcoinBlockHeightTrackingES> for BitcoinBlockHeightTrackingVoter {
+impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVoter {
 	async fn vote(
 		&self,
-		_settings: <BitcoinBlockHeightTrackingES as ElectoralSystemTypes>::ElectoralSettings,
-		properties: <BitcoinBlockHeightTrackingES as ElectoralSystemTypes>::ElectionProperties,
-	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightTrackingES>>, anyhow::Error> {
+		_settings: <BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectionProperties,
+	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightWitnesserES>>, anyhow::Error> {
 		tracing::debug!("BTC BHW: Block height tracking called properties: {:?}", properties);
 		let HeightWitnesserProperties { witness_from_index: latest_block_height } = properties;
 
@@ -300,7 +300,7 @@ where
 					scope,
 					state_chain_client,
 					CompositeVoter::<BitcoinElectoralSystemRunner, _>::new((
-						BitcoinBlockHeightTrackingVoter { client: client.clone() },
+						BitcoinBlockHeightWitnesserVoter { client: client.clone() },
 						BitcoinDepositChannelWitnessingVoter { client: client.clone() },
 						BitcoinVaultDepositWitnessingVoter { client: client.clone() },
 						BitcoinEgressWitnessingVoter { client: client.clone() },
