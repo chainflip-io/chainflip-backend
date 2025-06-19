@@ -66,7 +66,6 @@ impl Config for StateChainConfig {
 include!(concat!(env!("OUT_DIR"), "/cf_static_runtime.rs"));
 
 // Conversions from cf_static_runtime::runtime_types
-// TODO: To check this change
 impl<T>
 	From<
 		cf_static_runtime::runtime_types::cf_chains::ChannelRefundParametersGeneric<
