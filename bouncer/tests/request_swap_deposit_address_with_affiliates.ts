@@ -6,9 +6,9 @@ import { ApiPromise, Keyring } from '@polkadot/api';
 import { Asset, broker, chainConstants, getInternalAsset } from '@chainflip/cli';
 import assert from 'assert';
 import { z } from 'zod';
-import { getChainflipApi } from '../shared/utils/substrate';
-import { Chain, deferredPromise, handleSubstrateError, shortChainFromAsset } from '../shared/utils';
-import { TestContext } from '../shared/utils/test_context';
+import { getChainflipApi } from 'shared/utils/substrate';
+import { Chain, deferredPromise, handleSubstrateError, shortChainFromAsset } from 'shared/utils';
+import { TestContext } from 'shared/utils/test_context';
 
 function toEncodedAddress(chain: Chain, address: string) {
   switch (chain) {

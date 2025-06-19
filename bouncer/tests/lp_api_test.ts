@@ -15,14 +15,14 @@ import {
   shortChainFromAsset,
   newAddress,
   createStateChainKeypair,
-} from '../shared/utils';
-import { lpApiRpc } from '../shared/json_rpc';
-import { depositLiquidity } from '../shared/deposit_liquidity';
-import { sendEvmNative } from '../shared/send_evm';
-import { getBalance } from '../shared/get_balance';
-import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger, loggerChild } from '../shared/utils/logger';
+} from 'shared/utils';
+import { lpApiRpc } from 'shared/json_rpc';
+import { depositLiquidity } from 'shared/deposit_liquidity';
+import { sendEvmNative } from 'shared/send_evm';
+import { getBalance } from 'shared/get_balance';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger, loggerChild } from 'shared/utils/logger';
 
 type RpcAsset = {
   asset: string;

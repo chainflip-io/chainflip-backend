@@ -9,9 +9,9 @@
 // For example: ./commands/deposit_liquidity.ts Btc 1.5 '//LP_2'
 
 import { InternalAsset } from '@chainflip/cli';
-import { parseAssetString, runWithTimeoutAndExit } from '../shared/utils';
-import { depositLiquidity } from '../shared/deposit_liquidity';
-import { globalLogger } from '../shared/utils/logger';
+import { parseAssetString, runWithTimeoutAndExit } from 'shared/utils';
+import { depositLiquidity } from 'shared/deposit_liquidity';
+import { globalLogger } from 'shared/utils/logger';
 
 const asset = parseAssetString(process.argv[2]);
 const amount = parseFloat(process.argv[3]);

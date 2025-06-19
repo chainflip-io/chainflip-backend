@@ -1,7 +1,7 @@
-import { TestContext } from '../shared/utils/test_context';
-import { performSwap } from '../shared/perform_swap';
-import { observeBalanceIncrease } from '../shared/utils';
-import { getBalance } from '../shared/get_balance';
+import { TestContext } from 'shared/utils/test_context';
+import { performSwap } from 'shared/perform_swap';
+import { observeBalanceIncrease } from 'shared/utils';
+import { getBalance } from 'shared/get_balance';
 
 export async function testAssethubXcm(testContext: TestContext, _seed?: string) {
   const metadata = {

@@ -1,5 +1,5 @@
 import { execSync } from 'child_process';
-import { globalLogger } from './utils/logger';
+import { globalLogger } from 'shared/utils/logger';
 
 export type SemVerLevel = 'major' | 'minor' | 'patch';
 

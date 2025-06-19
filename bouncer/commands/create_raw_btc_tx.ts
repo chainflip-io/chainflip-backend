@@ -2,7 +2,7 @@
 // Constructs a very simple Raw BTC transaction. Can be used for manual testing a raw broadcast for example.
 // Usage: ./commands/create_raw_btc_tx.ts <bitcoin_address> <btc_amount>
 
-import { BTC_ENDPOINT, btcClient } from '../shared/send_btc';
+import { BTC_ENDPOINT, btcClient } from 'shared/send_btc';
 
 console.log(`Btc endpoint is set to '${BTC_ENDPOINT}'`);
 

@@ -1,8 +1,8 @@
 import assert from 'assert';
-import { lpMutex, handleSubstrateError, createStateChainKeypair } from './utils';
-import { getChainflipApi, observeEvent } from './utils/substrate';
-import { fundFlip } from './fund_flip';
-import { Logger } from './utils/logger';
+import { lpMutex, handleSubstrateError, createStateChainKeypair } from 'shared/utils';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { fundFlip } from 'shared/fund_flip';
+import { Logger } from 'shared/utils/logger';
 
 export async function setupLpAccount(logger: Logger, uri: string) {
   const lp = createStateChainKeypair(uri);

@@ -1,15 +1,15 @@
 #!/usr/bin/env -S pnpm tsx
 
 import { AddressOrPair } from '@polkadot/api/types';
-import { initializeAssethubChain } from '../shared/initialize_new_chains';
-import { DisposableApiPromise, getAssethubApi, observeEvent } from '../shared/utils/substrate';
-import { globalLogger, loggerChild, Logger } from '../shared/utils/logger';
-import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { createLpPool } from '../shared/create_lp_pool';
-import { depositLiquidity } from '../shared/deposit_liquidity';
-import { rangeOrder } from '../shared/range_order';
-import { deferredPromise, handleSubstrateError, runWithTimeoutAndExit } from '../shared/utils';
-import { aliceKeyringPair } from '../shared/polkadot_keyring';
+import { initializeAssethubChain } from 'shared/initialize_new_chains';
+import { DisposableApiPromise, getAssethubApi, observeEvent } from 'shared/utils/substrate';
+import { globalLogger, loggerChild, Logger } from 'shared/utils/logger';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { createLpPool } from 'shared/create_lp_pool';
+import { depositLiquidity } from 'shared/deposit_liquidity';
+import { rangeOrder } from 'shared/range_order';
+import { deferredPromise, handleSubstrateError, runWithTimeoutAndExit } from 'shared/utils';
+import { aliceKeyringPair } from 'shared/polkadot_keyring';
 
 export async function createAssethubVault(logger: Logger, api: DisposableApiPromise) {
   const { promise, resolve } = deferredPromise<{

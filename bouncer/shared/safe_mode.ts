@@ -1,6 +1,6 @@
-import { submitGovernanceExtrinsic } from './cf_governance';
-import { globalLogger } from './utils/logger';
-import { observeEvent } from './utils/substrate';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { globalLogger } from 'shared/utils/logger';
+import { observeEvent } from 'shared/utils/substrate';
 
 async function setSafeMode(mode: string, options?: TranslatedOptions) {
   const eventHandle = observeEvent(globalLogger, 'environment:RuntimeSafeModeUpdated');

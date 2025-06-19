@@ -23,15 +23,15 @@ import {
   decodeSolAddress,
   decodeDotAddressForContract,
   observeFetch,
-} from './utils';
-import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap';
+} from 'shared/utils';
+import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 
+import { getSolanaSwapEndpointIdl } from 'shared/contract_interfaces';
+import { getChainflipApi } from 'shared/utils/substrate';
+import { getBalance } from 'shared/get_balance';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger, throwError } from 'shared/utils/logger';
 import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.1.0/swap_endpoint';
-import { getSolanaSwapEndpointIdl } from './contract_interfaces';
-import { getChainflipApi } from './utils/substrate';
-import { getBalance } from './get_balance';
-import { TestContext } from './utils/test_context';
-import { Logger, throwError } from './utils/logger';
 
 const createdEventAccounts: [PublicKey, boolean][] = [];
 

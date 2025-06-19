@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { afterEach, beforeEach, it } from 'vitest';
-import { TestContext } from './test_context';
-import { testInfoFile } from '../utils';
+import { TestContext } from 'shared/utils/test_context';
+import { testInfoFile } from 'shared/utils';
 
 // Write the test name and function name to a file to be used by the `run_test.ts` command
 function writeTestInfoFile(name: string, functionName: string) {
