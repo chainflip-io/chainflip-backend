@@ -58,7 +58,7 @@ where
 				"Failed to decode cf_parameters: {cf_parameters:?} at block {block_height}"
 			)
 		})
-		.map_err(|e| anyhow::anyhow!(e))
+		.map_err(|e| anyhow!(e))
 }
 
 pub fn call_from_event<

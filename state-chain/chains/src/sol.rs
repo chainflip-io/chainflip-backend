@@ -520,7 +520,7 @@ pub struct DecodedXSwapParams {
 	pub from_token_account: Option<SolAddress>,
 	pub dst_address: crate::address::EncodedAddress,
 	pub dst_token: AnyChainAsset,
-	pub refund_parameters: ChannelRefundParameters<EncodedAddress>,
+	pub refund_parameters: ChannelRefundParameters,
 	pub dca_parameters: Option<DcaParameters>,
 	pub boost_fee: u8,
 	pub broker_id: cf_primitives::AccountId,
@@ -688,7 +688,7 @@ mod test {
 				sol_test_values,
 			},
 		},
-		ChannelLifecycleHooks,
+		ChannelLifecycleHooks, ChannelRefundParametersForChain,
 	};
 	use cf_primitives::{chains::assets::any::Asset, AffiliateShortId};
 	use sp_runtime::AccountId32;
@@ -753,10 +753,11 @@ mod test {
 				.unwrap()
 				.address;
 		let input_amount = 1_000_000_000u64;
-		let refund_parameters = ChannelRefundParameters {
+		let refund_parameters = ChannelRefundParametersForChain::<Solana> {
 			retry_duration: 15u32,
 			refund_address: SolAddress([0xF3; 32]),
 			min_price: 0.into(),
+			refund_ccm_metadata: None,
 		};
 		let dca_parameters = DcaParameters { number_of_chunks: 10u32, chunk_interval: 10u32 };
 		let boost_fee = 10u8;
@@ -801,7 +802,7 @@ mod test {
 				broker_id,
 				broker_commission,
 				affiliate_fees,
-				ccm: Some(channel_metadata),
+				ccm: Some(sol_test_values::ccm_metadata_v1_unchecked()),
 				seed: seed.to_vec().try_into().unwrap(),
 			})
 		);
@@ -820,10 +821,11 @@ mod test {
 				.address;
 		let token_supported_account = SolPubkey([0xF5; 32]);
 		let input_amount = 1_000_000_000u64;
-		let refund_parameters = ChannelRefundParameters {
+		let refund_parameters = ChannelRefundParametersForChain::<Solana> {
 			retry_duration: 15u32,
 			refund_address: SolAddress([0xF3; 32]),
 			min_price: 0.into(),
+			refund_ccm_metadata: None,
 		};
 		let dca_parameters = DcaParameters { number_of_chunks: 10u32, chunk_interval: 10u32 };
 		let boost_fee = 10u8;
@@ -869,7 +871,7 @@ mod test {
 				broker_id,
 				broker_commission,
 				affiliate_fees,
-				ccm: Some(channel_metadata),
+				ccm: Some(sol_test_values::ccm_metadata_v1_unchecked()),
 				seed: seed.to_vec().try_into().unwrap(),
 			})
 		);

@@ -36,8 +36,9 @@ use cf_chains::{
 	eth::{api::EthereumApi, EthereumTrackedData},
 	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain, ChainState,
-	ChannelRefundParameters, DefaultRetryPolicy, Ethereum, ExecutexSwapAndCall, ForeignChain,
-	ForeignChainAddress, RetryPolicy, SwapOrigin, TransactionBuilder, TransferAssetParams,
+	ChannelRefundParametersForChain, DefaultRetryPolicy, Ethereum, ExecutexSwapAndCall,
+	ForeignChain, ForeignChainAddress, RetryPolicy, SwapOrigin, TransactionBuilder,
+	TransferAssetParams,
 };
 use cf_primitives::{
 	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, EgressId,
@@ -74,11 +75,12 @@ use state_chain_runtime::{
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
 const ZION: AccountId = AccountId::new([0x22; 32]);
-const ETH_REFUND_PARAMS: ChannelRefundParameters<<Ethereum as Chain>::ChainAccount> =
-	ChannelRefundParameters {
+const ETH_REFUND_PARAMS: ChannelRefundParametersForChain<Ethereum> =
+	ChannelRefundParametersForChain::<Ethereum> {
 		retry_duration: 5,
 		refund_address: H160([100u8; 20]),
 		min_price: sp_core::U256::zero(),
+		refund_ccm_metadata: None,
 	};
 
 pub fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price) {

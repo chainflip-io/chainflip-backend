@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 import type { HexString } from '@polkadot/util/types';
 import {
   fineAmountToAmount,
-  newAddress,
+  newAssetAddress,
   observeBalanceIncrease,
   assetDecimals,
 } from 'shared/utils';
@@ -54,7 +54,7 @@ async function main(logger: Logger, providedSeed?: string) {
   const seed = providedSeed ?? randomBytes(32).toString('hex');
   const fundAmount = 1000;
   const redeemSCAddress = await newStatechainAddress(seed);
-  const redeemEthAddress = await newAddress('Eth', seed);
+  const redeemEthAddress = await newAssetAddress('Eth', seed);
   logger.debug(`Flip Redeem address: ${redeemSCAddress}`);
   logger.debug(`Eth  Redeem address: ${redeemEthAddress}`);
 

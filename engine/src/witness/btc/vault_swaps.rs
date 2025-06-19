@@ -22,7 +22,7 @@ use cf_chains::{
 		deposit_address::DepositAddress, vault_swap_encoding::UtxoEncodedData, ScriptPubkey, Utxo,
 		UtxoId,
 	},
-	ChannelRefundParameters,
+	Bitcoin, ChannelRefundParametersForChain,
 };
 use cf_primitives::{AccountId, Beneficiary, ChannelId, DcaParameters};
 use cf_utilities::SliceToArray;
@@ -175,10 +175,12 @@ pub fn try_extract_vault_swap_witness(
 			.collect_vec()
 			.try_into()
 			.expect("runtime supports at least as many affiliates as we allow in UTXO encoding"),
-		refund_params: ChannelRefundParameters {
+		refund_params: ChannelRefundParametersForChain::<Bitcoin> {
 			retry_duration: data.parameters.retry_duration.into(),
 			refund_address,
 			min_price,
+			// Bitcoin should never have a ccm refund
+			refund_ccm_metadata: None,
 		},
 		dca_params: Some(DcaParameters {
 			number_of_chunks: data.parameters.number_of_chunks.into(),
@@ -342,13 +344,14 @@ mod tests {
 				}),
 				affiliate_fees: bounded_vec![MOCK_SWAP_PARAMS.parameters.affiliates[0].into()],
 				deposit_metadata: None,
-				refund_params: ChannelRefundParameters {
+				refund_params: ChannelRefundParametersForChain::<Bitcoin> {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration.into(),
 					refund_address: refund_pubkey,
 					min_price: sqrt_price_to_price(bounded_sqrt_price(
 						MOCK_SWAP_PARAMS.parameters.min_output_amount.into(),
 						DEPOSIT_AMOUNT.into(),
 					)),
+					refund_ccm_metadata: None,
 				},
 				dca_params: Some(DcaParameters {
 					number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks.into(),

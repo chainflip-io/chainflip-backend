@@ -19,6 +19,7 @@ use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
 mod ccm_add_data_to_decoded;
+mod transaction_rejection_details_ccm_migration;
 
 pub type PalletMigration<T, I> = (
 	VersionedMigration<
@@ -28,5 +29,12 @@ pub type PalletMigration<T, I> = (
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<24, Pallet<T, I>>,
+	VersionedMigration<
+		24,
+		25,
+		transaction_rejection_details_ccm_migration::Migration<T, I>,
+		Pallet<T, I>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<25, Pallet<T, I>>,
 );
