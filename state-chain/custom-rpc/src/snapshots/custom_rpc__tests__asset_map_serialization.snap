@@ -1,0 +1,31 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "Ethereum": {
+    "ETH": "0x1f4",
+    "FLIP": "0x1f4",
+    "USDC": "0x1f4",
+    "USDT": "0x1f4"
+  },
+  "Polkadot": {
+    "DOT": "0x1f4"
+  },
+  "Bitcoin": {
+    "BTC": "0x1f4"
+  },
+  "Arbitrum": {
+    "ETH": "0x1f4",
+    "USDC": "0x1f4"
+  },
+  "Solana": {
+    "SOL": "0x1f4",
+    "USDC": "0x1f4"
+  },
+  "Assethub": {
+    "DOT": "0x1f4",
+    "USDT": "0x1f4",
+    "USDC": "0x1f4"
+  }
+}

@@ -1,0 +1,18 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "bids": [
+    {
+      "amount": "0xbc614e",
+      "sqrt_price": "0x5397fb1"
+    }
+  ],
+  "asks": [
+    {
+      "amount": "0x165ec15",
+      "sqrt_price": "0x5e30a78"
+    }
+  ]
+}

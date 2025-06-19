@@ -15,8 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::events_decoder::DynamicEvents;
+use cf_primitives::TxIndex;
 use frame_support::dispatch::DispatchInfo;
 use sp_core::H256;
+use state_chain_runtime::RuntimeEvent;
 
 pub mod error_decoder;
 pub mod events_decoder;
@@ -30,22 +32,20 @@ pub struct ExtrinsicData<Events> {
 	pub events: Events,
 	pub header: state_chain_runtime::Header,
 	pub dispatch_info: DispatchInfo,
+	pub block_hash: state_chain_runtime::Hash,
+	pub tx_index: TxIndex,
 }
-
-// TODO: deprecate/remove this in favour of ExtrinsicData<state_chain_runtime::RuntimeEvent>
-pub type ExtrinsicDetails =
-	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo);
 
 #[derive(Debug)]
 pub enum WaitForResult {
 	// The hash of the SC transaction that was submitted.
 	TransactionHash(H256),
-	Details(ExtrinsicDetails),
+	Details(Box<ExtrinsicData<Vec<RuntimeEvent>>>),
 }
 
 #[derive(Debug)]
 pub enum WaitForDynamicResult {
 	// The hash of the SC transaction that was submitted.
 	TransactionHash(H256),
-	Data(ExtrinsicData<DynamicEvents>),
+	Data(Box<ExtrinsicData<DynamicEvents>>),
 }

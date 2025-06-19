@@ -17,7 +17,7 @@
 use crate::RpcResult;
 
 use cf_chains::{eth::Address as EthereumAddress, CcmChannelMetadataUnchecked};
-use cf_rpc_types::{AccountId32, BlockUpdate, RefundParametersRpc, H256};
+use cf_rpc_types::{AccountId32, BlockUpdate, OpenedDepositChannels, RefundParametersRpc, H256};
 use jsonrpsee::proc_macros::rpc;
 
 pub use cf_primitives::DcaParameters;
@@ -40,7 +40,6 @@ pub trait BrokerRpcApi {
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
-		wait_for_finality: Option<bool>,
 	) -> RpcResult<SwapDepositAddress>;
 
 	#[method(name = "withdraw_fees", aliases = ["broker_withdrawFees"])]
@@ -94,9 +93,7 @@ pub trait BrokerRpcApi {
 	) -> RpcResult<ChainAccounts>;
 
 	#[method(name = "all_open_deposit_channels", aliases = ["broker_allOpenDepositChannels"])]
-	async fn all_open_deposit_channels(
-		&self,
-	) -> RpcResult<Vec<(AccountId32, ChannelActionType, ChainAccounts)>>;
+	async fn all_open_deposit_channels(&self) -> RpcResult<Vec<OpenedDepositChannels>>;
 
 	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
 	async fn subscribe_transaction_screening_events(&self);

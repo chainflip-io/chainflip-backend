@@ -14,11 +14,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+
 use crate::sol::{retry_rpc::SolRetryRpcApi, rpc_client_api::*};
 use cf_chains::sol::SolAddress;
 use sol_prim::{
 	consts::const_address,
-	program_instructions::{oracle_query_helpers::OracleQueryHelperProgram, InstructionExt},
+	program_instructions::{
+		oracle_query_helpers::OracleQueryHelperProgram, InstructionExt, PriceFeedData,
+		PriceFeedResponse,
+	},
 	AccountMeta,
 };
 
@@ -30,16 +34,6 @@ use std::str::FromStr;
 // We use a prefunded account for this purpose. The keys have been burnt.
 #[allow(dead_code)]
 const PREFUNDED_ACCOUNT: SolAddress = const_address("CsS34ewTFLGqrpckPRww5hbWr4QJQ1J3ZA5D7WL4Ni3K");
-
-#[allow(dead_code)]
-pub struct PriceFeedData {
-	pub round_id: u32,
-	pub slot: u64,
-	pub timestamp: u32,
-	pub answer: i128,
-	pub decimals: u8,
-	pub description: String,
-}
 
 #[allow(dead_code)]
 pub async fn get_price_feeds<SolRetryRpcClient>(
@@ -105,7 +99,6 @@ fn build_and_serialize_query_transaction(
 		.map_err(|e| anyhow::anyhow!("Failed to serialize oracle query transaction: {:?}", e))
 }
 
-// Expected returned data is Vec<PriceFeedData>
 fn decode_query_return_data(
 	return_data: &UiTransactionReturnData,
 	expected_program_id: SolAddress,
@@ -123,56 +116,11 @@ fn decode_query_return_data(
 		);
 	}
 
-	// It should always have 8 bytes for the query timestamp, followed by 4 bytes for the vector
-	// length.
-	let mut offset = 12;
-	if decoded_return_data.len() < offset {
-		anyhow::bail!("Insufficient data length for decoding");
-	}
+	let response = PriceFeedResponse::try_from(decoded_return_data).map_err(|e| {
+		anyhow::anyhow!("Failed to decode PriceFeedResponse from return data: {:?}", e)
+	})?;
 
-	let query_timestamp = i64::from_le_bytes(decoded_return_data[0..8].try_into()?);
-
-	// Manually deserialize return data - Vec<PriceFeedData>
-	let num_entries = u32::from_le_bytes(decoded_return_data[8..offset].try_into()?);
-
-	let mut results = Vec::new();
-	for _ in 0..num_entries {
-		if offset + 37 > decoded_return_data.len() {
-			anyhow::bail!(anyhow::anyhow!("Insufficient data length"));
-		}
-
-		let round_id = u32::from_le_bytes(decoded_return_data[offset..offset + 4].try_into()?);
-		let slot = u64::from_le_bytes(decoded_return_data[offset + 4..offset + 12].try_into()?);
-		let timestamp =
-			u32::from_le_bytes(decoded_return_data[offset + 12..offset + 16].try_into()?);
-		let answer = i128::from_le_bytes(decoded_return_data[offset + 16..offset + 32].try_into()?);
-		let decimals = u8::from_le_bytes(decoded_return_data[offset + 32..offset + 33].try_into()?);
-
-		let string_length =
-			u32::from_le_bytes(decoded_return_data[offset + 33..offset + 37].try_into()?);
-		let string_start = offset + 37;
-		let string_end = string_start + string_length as usize;
-		if string_end > decoded_return_data.len() {
-			anyhow::bail!("Insufficient data for string content");
-		}
-		let description =
-			String::from_utf8(decoded_return_data[string_start..string_end].to_vec())?;
-
-		results.push(PriceFeedData { round_id, slot, timestamp, answer, decimals, description });
-
-		// Update offset for the next entry
-		offset = string_end;
-	}
-
-	// Check for extra bytes
-	if offset != decoded_return_data.len() {
-		anyhow::bail!(
-			"Unexpected trailing bytes: {} bytes remaining",
-			decoded_return_data.len() - offset
-		);
-	}
-
-	Ok((results, query_timestamp))
+	Ok((response.results, response.query_timestamp))
 }
 
 #[cfg(test)]

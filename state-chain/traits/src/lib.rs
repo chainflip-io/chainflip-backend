@@ -794,6 +794,8 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 
 	fn has_account_role(who: &T::AccountId, role: AccountRole) -> bool;
 
+	fn account_role(who: &T::AccountId) -> AccountRole;
+
 	fn is_unregistered(who: &T::AccountId) -> bool {
 		Self::has_account_role(who, AccountRole::Unregistered)
 	}
