@@ -68,18 +68,50 @@ impl PoolApi for MockPoolApi {
 	}
 
 	fn open_order_count(
-		_who: &Self::AccountId,
-		_asset_pair: &PoolPairsMap<Asset>,
+		who: &Self::AccountId,
+		asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError> {
-		unimplemented!();
+		let limit_orders = Self::get_value::<LimitOrderStorage>(LIMIT_ORDERS).unwrap_or_default();
+		let count = limit_orders
+			.keys()
+			.filter(|(base_asset, account_id, _, _)| {
+				account_id == who && asset_pair.base == *base_asset
+			})
+			.count() as u32;
+		Ok(count)
 	}
 
-	fn open_order_balances(_who: &Self::AccountId) -> AssetMap<AssetAmount> {
-		unimplemented!();
+	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		AssetMap::from_fn(|asset| {
+			Self::get_value::<LimitOrderStorage>(LIMIT_ORDERS)
+				.unwrap_or_default()
+				.into_iter()
+				.filter_map(
+					|((base_asset, account_id, side, _), TickAndAmount { tick: _, amount })| {
+						if account_id == *who &&
+							((asset == base_asset && side == Side::Sell) ||
+								(asset == STABLE_ASSET && side == Side::Buy))
+						{
+							Some(amount)
+						} else {
+							None
+						}
+					},
+				)
+				.sum()
+		})
 	}
 
 	fn pools() -> Vec<PoolPairsMap<Asset>> {
-		unimplemented!();
+		Asset::all()
+			.filter_map(|asset| {
+				if asset != STABLE_ASSET {
+					Some(PoolPairsMap { base: asset, quote: STABLE_ASSET })
+				} else {
+					None
+				}
+			})
+			.collect()
 	}
 
 	fn cancel_all_limit_orders(who: &Self::AccountId) -> frame_support::dispatch::DispatchResult {
