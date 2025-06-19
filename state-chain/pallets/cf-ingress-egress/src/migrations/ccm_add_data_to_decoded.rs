@@ -29,7 +29,8 @@ use codec::{Decode, Encode};
 
 pub mod old {
 	use super::*;
-	use cf_chains::{CcmAdditionalData, ChannelRefundParametersGeneric};
+	use cf_chains::CcmAdditionalData;
+	use cf_primitives::Price;
 
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct CrossChainMessage<C: Chain> {
@@ -62,6 +63,13 @@ pub mod old {
 		pub boost_status: BoostStatus<TargetChainAmount<T, I>, BlockNumberFor<T>>,
 	}
 
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	pub struct ChannelRefundParameters<A> {
+		pub retry_duration: cf_primitives::BlockNumber,
+		pub refund_address: A,
+		pub min_price: Price,
+	}
+
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	#[allow(clippy::large_enum_variant)]
 	pub enum ChannelAction<AccountId, C: Chain> {
@@ -70,7 +78,7 @@ pub mod old {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: Option<CcmChannelMetadataUnchecked>,
-			refund_params: ChannelRefundParametersGeneric<ForeignChainAddress>,
+			refund_params: ChannelRefundParameters<ForeignChainAddress>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
@@ -171,7 +179,16 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade
 						let checked_refund_params =
 							RefundParametersChecked::try_from_refund_parameters_for_chain::<
 								cf_chains::AnyChain,
-							>(refund_params, None, old.deposit_channel.asset.into());
+							>(
+								cf_chains::ChannelRefundParametersForChain::<cf_chains::AnyChain> {
+									retry_duration: refund_params.retry_duration,
+									refund_address: refund_params.refund_address,
+									min_price: refund_params.min_price,
+									refund_ccm_metadata: None,
+								},
+								None,
+								old.deposit_channel.asset.into(),
+							);
 						// Only succeed if both conversions work
 						if let (Ok(checked_ccm), Ok(checked_refund_params)) =
 							(checked_ccm, checked_refund_params)
