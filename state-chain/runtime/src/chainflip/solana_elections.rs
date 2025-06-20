@@ -63,6 +63,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::DispatchResult;
 use sp_std::vec::Vec;
+use sp_std::collections::btree_set::BTreeSet;
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
