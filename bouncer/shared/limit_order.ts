@@ -32,5 +32,6 @@ export async function limitOrder(
     await chainflip.tx.liquidityPools
       .setLimitOrder(ccy.toLowerCase(), 'usdc', 'sell', orderId, tick, fineAmount, null, null)
       .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
+  });
   await orderCreatedEvent;
 }
