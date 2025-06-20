@@ -71,6 +71,7 @@ use frame_support::{
 use frame_system::pallet_prelude::*;
 use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
+use serde::{Deserialize, Serialize};
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{boxed::Box, vec, vec::Vec};
 pub use weights::WeightInfo;

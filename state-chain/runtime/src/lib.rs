@@ -1300,7 +1300,7 @@ mod runtime {
 	#[runtime::pallet_index(53)]
 	pub type LendingPools = pallet_cf_lending_pools;
 
-  #[runtime::pallet_index(54)]
+	#[runtime::pallet_index(54)]
 	pub type BitcoinElections = pallet_cf_elections<Instance3>;
 }
 
