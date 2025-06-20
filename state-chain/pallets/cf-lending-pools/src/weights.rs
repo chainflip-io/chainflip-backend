@@ -56,6 +56,9 @@ pub trait WeightInfo {
 	fn create_chp_pool() -> Weight;
 	fn add_chp_funds() -> Weight;
 	fn stop_chp_lending() -> Weight;
+	fn upkeep_active(n: u32, ) -> Weight;
+	fn upkeep_soft_liquidation(n: u32, ) -> Weight;
+	fn upkeep_no_action(n: u32, ) -> Weight;
 }
 
 /// Weights for pallet_cf_lending_pools using the Substrate node and recommended hardware.
@@ -69,9 +72,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 4_000_000 picoseconds.
-		Weight::from_parts(2_809_412, 0)
-			// Standard Error: 9_439
-			.saturating_add(Weight::from_parts(2_398_136, 0).saturating_mul(n.into()))
+		Weight::from_parts(2_883_224, 0)
+			// Standard Error: 17_342
+			.saturating_add(Weight::from_parts(2_518_173, 0).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
@@ -90,8 +93,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `1524`
 		//  Estimated: `4989`
-		// Minimum execution time: 35_000_000 picoseconds.
-		Weight::from_parts(35_000_000, 4989)
+		// Minimum execution time: 34_000_000 picoseconds.
+		Weight::from_parts(36_000_000, 4989)
 			.saturating_add(T::DbWeight::get().reads(6_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
@@ -105,9 +108,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		//  Measured:  `355 + n * (81 ±0)`
 		//  Estimated: `3819 + n * (81 ±0)`
 		// Minimum execution time: 11_000_000 picoseconds.
-		Weight::from_parts(12_732_563, 3819)
-			// Standard Error: 4_343
-			.saturating_add(Weight::from_parts(506_142, 0).saturating_mul(n.into()))
+		Weight::from_parts(15_586_582, 3819)
+			// Standard Error: 6_401
+			.saturating_add(Weight::from_parts(512_355, 0).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 			.saturating_add(Weight::from_parts(0, 81).saturating_mul(n.into()))
@@ -127,7 +130,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		//  Measured:  `4464`
 		//  Estimated: `7929`
 		// Minimum execution time: 62_000_000 picoseconds.
-		Weight::from_parts(64_000_000, 7929)
+		Weight::from_parts(66_000_000, 7929)
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
@@ -141,22 +144,22 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `109`
 		//  Estimated: `3574`
-		// Minimum execution time: 10_000_000 picoseconds.
-		Weight::from_parts(11_000_000, 3574)
+		// Minimum execution time: 11_000_000 picoseconds.
+		Weight::from_parts(12_000_000, 3574)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
 	}
-	/// Storage: `LendingPools::ChpPools` (r:1 w:1)
-	/// Proof: `LendingPools::ChpPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `LendingPools::NextCorePoolId` (r:1 w:1)
 	/// Proof: `LendingPools::NextCorePoolId` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `LendingPools::ChpPools` (r:1 w:1)
+	/// Proof: `LendingPools::ChpPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `LendingPools::CorePools` (r:0 w:1)
 	/// Proof: `LendingPools::CorePools` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn create_chp_pool() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `109`
 		//  Estimated: `3574`
-		// Minimum execution time: 10_000_000 picoseconds.
+		// Minimum execution time: 11_000_000 picoseconds.
 		Weight::from_parts(11_000_000, 3574)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
@@ -178,7 +181,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		//  Measured:  `1510`
 		//  Estimated: `4975`
 		// Minimum execution time: 35_000_000 picoseconds.
-		Weight::from_parts(36_000_000, 4975)
+		Weight::from_parts(37_000_000, 4975)
 			.saturating_add(T::DbWeight::get().reads(6_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
@@ -201,6 +204,60 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
+	/// Storage: `LendingPools::ChpConfig` (r:1 w:0)
+	/// Proof: `LendingPools::ChpConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `LendingPools::ChpLoans` (r:51 w:50)
+	/// Proof: `LendingPools::ChpLoans` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// The range of component `n` is `[1, 50]`.
+	fn upkeep_active(n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `271 + n * (139 ±0)`
+		//  Estimated: `3735 + n * (2614 ±0)`
+		// Minimum execution time: 12_000_000 picoseconds.
+		Weight::from_parts(7_265_722, 3735)
+			// Standard Error: 19_984
+			.saturating_add(Weight::from_parts(6_054_262, 0).saturating_mul(n.into()))
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(n.into())))
+			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
+			.saturating_add(Weight::from_parts(0, 2614).saturating_mul(n.into()))
+	}
+	/// Storage: `LendingPools::ChpConfig` (r:1 w:0)
+	/// Proof: `LendingPools::ChpConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `LendingPools::ChpLoans` (r:51 w:50)
+	/// Proof: `LendingPools::ChpLoans` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// The range of component `n` is `[1, 50]`.
+	fn upkeep_soft_liquidation(n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `271 + n * (155 ±0)`
+		//  Estimated: `3735 + n * (2630 ±0)`
+		// Minimum execution time: 12_000_000 picoseconds.
+		Weight::from_parts(8_419_394, 3735)
+			// Standard Error: 17_497
+			.saturating_add(Weight::from_parts(5_700_423, 0).saturating_mul(n.into()))
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(n.into())))
+			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
+			.saturating_add(Weight::from_parts(0, 2630).saturating_mul(n.into()))
+	}
+	/// Storage: `LendingPools::ChpConfig` (r:1 w:0)
+	/// Proof: `LendingPools::ChpConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `LendingPools::ChpLoans` (r:51 w:50)
+	/// Proof: `LendingPools::ChpLoans` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// The range of component `n` is `[1, 50]`.
+	fn upkeep_no_action(n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `271 + n * (139 ±0)`
+		//  Estimated: `3735 + n * (2614 ±0)`
+		// Minimum execution time: 13_000_000 picoseconds.
+		Weight::from_parts(7_697_303, 3735)
+			// Standard Error: 17_792
+			.saturating_add(Weight::from_parts(5_477_353, 0).saturating_mul(n.into()))
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(n.into())))
+			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
+			.saturating_add(Weight::from_parts(0, 2614).saturating_mul(n.into()))
+	}
 }
 
 // For backwards compatibility and tests
@@ -213,9 +270,9 @@ impl WeightInfo for () {
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 4_000_000 picoseconds.
-		Weight::from_parts(2_809_412, 0)
-			// Standard Error: 9_439
-			.saturating_add(Weight::from_parts(2_398_136, 0).saturating_mul(n.into()))
+		Weight::from_parts(2_883_224, 0)
+			// Standard Error: 17_342
+			.saturating_add(Weight::from_parts(2_518_173, 0).saturating_mul(n.into()))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
@@ -234,8 +291,8 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `1524`
 		//  Estimated: `4989`
-		// Minimum execution time: 35_000_000 picoseconds.
-		Weight::from_parts(35_000_000, 4989)
+		// Minimum execution time: 34_000_000 picoseconds.
+		Weight::from_parts(36_000_000, 4989)
 			.saturating_add(ParityDbWeight::get().reads(6_u64))
 			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
@@ -249,9 +306,9 @@ impl WeightInfo for () {
 		//  Measured:  `355 + n * (81 ±0)`
 		//  Estimated: `3819 + n * (81 ±0)`
 		// Minimum execution time: 11_000_000 picoseconds.
-		Weight::from_parts(12_732_563, 3819)
-			// Standard Error: 4_343
-			.saturating_add(Weight::from_parts(506_142, 0).saturating_mul(n.into()))
+		Weight::from_parts(15_586_582, 3819)
+			// Standard Error: 6_401
+			.saturating_add(Weight::from_parts(512_355, 0).saturating_mul(n.into()))
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(2_u64))
 			.saturating_add(Weight::from_parts(0, 81).saturating_mul(n.into()))
@@ -271,7 +328,7 @@ impl WeightInfo for () {
 		//  Measured:  `4464`
 		//  Estimated: `7929`
 		// Minimum execution time: 62_000_000 picoseconds.
-		Weight::from_parts(64_000_000, 7929)
+		Weight::from_parts(66_000_000, 7929)
 			.saturating_add(ParityDbWeight::get().reads(5_u64))
 			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
@@ -285,22 +342,22 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `109`
 		//  Estimated: `3574`
-		// Minimum execution time: 10_000_000 picoseconds.
-		Weight::from_parts(11_000_000, 3574)
+		// Minimum execution time: 11_000_000 picoseconds.
+		Weight::from_parts(12_000_000, 3574)
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(3_u64))
 	}
-	/// Storage: `LendingPools::ChpPools` (r:1 w:1)
-	/// Proof: `LendingPools::ChpPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `LendingPools::NextCorePoolId` (r:1 w:1)
 	/// Proof: `LendingPools::NextCorePoolId` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `LendingPools::ChpPools` (r:1 w:1)
+	/// Proof: `LendingPools::ChpPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `LendingPools::CorePools` (r:0 w:1)
 	/// Proof: `LendingPools::CorePools` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn create_chp_pool() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `109`
 		//  Estimated: `3574`
-		// Minimum execution time: 10_000_000 picoseconds.
+		// Minimum execution time: 11_000_000 picoseconds.
 		Weight::from_parts(11_000_000, 3574)
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(3_u64))
@@ -322,7 +379,7 @@ impl WeightInfo for () {
 		//  Measured:  `1510`
 		//  Estimated: `4975`
 		// Minimum execution time: 35_000_000 picoseconds.
-		Weight::from_parts(36_000_000, 4975)
+		Weight::from_parts(37_000_000, 4975)
 			.saturating_add(ParityDbWeight::get().reads(6_u64))
 			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
@@ -344,5 +401,59 @@ impl WeightInfo for () {
 		Weight::from_parts(39_000_000, 5562)
 			.saturating_add(ParityDbWeight::get().reads(5_u64))
 			.saturating_add(ParityDbWeight::get().writes(2_u64))
+	}
+	/// Storage: `LendingPools::ChpConfig` (r:1 w:0)
+	/// Proof: `LendingPools::ChpConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `LendingPools::ChpLoans` (r:51 w:50)
+	/// Proof: `LendingPools::ChpLoans` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// The range of component `n` is `[1, 50]`.
+	fn upkeep_active(n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `271 + n * (139 ±0)`
+		//  Estimated: `3735 + n * (2614 ±0)`
+		// Minimum execution time: 12_000_000 picoseconds.
+		Weight::from_parts(7_265_722, 3735)
+			// Standard Error: 19_984
+			.saturating_add(Weight::from_parts(6_054_262, 0).saturating_mul(n.into()))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().reads((1_u64).saturating_mul(n.into())))
+			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(n.into())))
+			.saturating_add(Weight::from_parts(0, 2614).saturating_mul(n.into()))
+	}
+	/// Storage: `LendingPools::ChpConfig` (r:1 w:0)
+	/// Proof: `LendingPools::ChpConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `LendingPools::ChpLoans` (r:51 w:50)
+	/// Proof: `LendingPools::ChpLoans` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// The range of component `n` is `[1, 50]`.
+	fn upkeep_soft_liquidation(n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `271 + n * (155 ±0)`
+		//  Estimated: `3735 + n * (2630 ±0)`
+		// Minimum execution time: 12_000_000 picoseconds.
+		Weight::from_parts(8_419_394, 3735)
+			// Standard Error: 17_497
+			.saturating_add(Weight::from_parts(5_700_423, 0).saturating_mul(n.into()))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().reads((1_u64).saturating_mul(n.into())))
+			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(n.into())))
+			.saturating_add(Weight::from_parts(0, 2630).saturating_mul(n.into()))
+	}
+	/// Storage: `LendingPools::ChpConfig` (r:1 w:0)
+	/// Proof: `LendingPools::ChpConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `LendingPools::ChpLoans` (r:51 w:50)
+	/// Proof: `LendingPools::ChpLoans` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// The range of component `n` is `[1, 50]`.
+	fn upkeep_no_action(n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `271 + n * (139 ±0)`
+		//  Estimated: `3735 + n * (2614 ±0)`
+		// Minimum execution time: 13_000_000 picoseconds.
+		Weight::from_parts(7_697_303, 3735)
+			// Standard Error: 17_792
+			.saturating_add(Weight::from_parts(5_477_353, 0).saturating_mul(n.into()))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().reads((1_u64).saturating_mul(n.into())))
+			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(n.into())))
+			.saturating_add(Weight::from_parts(0, 2614).saturating_mul(n.into()))
 	}
 }
