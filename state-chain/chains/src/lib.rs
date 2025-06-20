@@ -159,9 +159,14 @@ pub mod witness_period {
 	#[allow(clippy::result_unit_err)]
 	impl<C: ChainWitnessConfig> BlockWitnessRange<C> {
 		pub fn try_new(root: C::ChainBlockNumber) -> Result<Self, ()> {
+			let result = Self { root, _phantom: Default::default() };
+			result.check_is_valid()?;
+			Ok(result)
+		}
+		pub fn check_is_valid(&self) -> Result<(), ()> {
 			ensure!(C::WITNESS_PERIOD >= C::ChainBlockNumber::one(), ());
-			ensure!(is_block_witness_root(C::WITNESS_PERIOD, root), ());
-			Ok(Self { root, _phantom: Default::default() })
+			ensure!(is_block_witness_root(C::WITNESS_PERIOD, self.root), ());
+			Ok(())
 		}
 	}
 
@@ -249,16 +254,14 @@ pub mod witness_period {
 	}
 
 	impl<C: ChainWitnessConfig> SaturatingStep for BlockWitnessRange<C> {
-		fn saturating_forward(self, count: usize) -> Self {
-			let mut start = self;
-			start.root = start.root.saturating_add(C::WITNESS_PERIOD * (count as u32).into());
-			start
+		fn saturating_forward(mut self, count: usize) -> Self {
+			self.root = self.root.saturating_add(C::WITNESS_PERIOD * (count as u32).into());
+			self
 		}
 
-		fn saturating_backward(self, count: usize) -> Self {
-			let mut start = self;
-			start.root = start.root.saturating_sub(C::WITNESS_PERIOD * (count as u32).into());
-			start
+		fn saturating_backward(mut self, count: usize) -> Self {
+			self.root = self.root.saturating_sub(C::WITNESS_PERIOD * (count as u32).into());
+			self
 		}
 	}
 
@@ -269,32 +272,6 @@ pub mod witness_period {
 		}
 		fn saturating_backward(self, count: usize) -> Self {
 			self.saturating_sub(count.saturating_cast::<Integer>())
-		}
-	}
-
-	pub trait BlockZero {
-		fn zero() -> Self;
-		fn is_zero(&self) -> bool;
-	}
-
-	impl<C: ChainWitnessConfig> BlockZero for BlockWitnessRange<C> {
-		fn zero() -> Self {
-			Self { root: Zero::zero(), _phantom: Default::default() }
-		}
-
-		fn is_zero(&self) -> bool {
-			self.root.is_zero()
-		}
-	}
-
-	#[duplicate::duplicate_item(Integer; [ u8 ]; [ u16 ]; [ u32 ]; [ u64 ])]
-	impl BlockZero for Integer {
-		fn zero() -> Self {
-			0
-		}
-
-		fn is_zero(&self) -> bool {
-			*self == 0
 		}
 	}
 

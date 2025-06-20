@@ -1,9 +1,9 @@
-use cf_chains::witness_period::BlockZero;
 use sp_std::vec::Vec;
 
 use super::{primitives::NonemptyContinuousHeaders, BHWTypes, HeightWitnesserProperties};
 use crate::electoral_systems::state_machine::consensus::{
-	ConsensusMechanism, MultipleVotes, StagedConsensus, SuccessThreshold, SupermajorityConsensus,
+	ConsensusMechanism, MultipleVotes, StagedConsensus, StagedVote, SuccessThreshold,
+	SupermajorityConsensus,
 };
 
 pub struct BlockHeightWitnesserConsensus<T: BHWTypes> {
@@ -28,7 +28,7 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
 		let (threshold, properties) = settings;
 
-		if properties.witness_from_index.is_zero() {
+		if properties.witness_from_index == Default::default() {
 			// This is the case for finding an appropriate block number to start witnessing from
 
 			let mut consensus: MultipleVotes<SupermajorityConsensus<_>> = Default::default();
@@ -47,9 +47,13 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 				StagedConsensus::new();
 
 			for mut vote in self.votes.clone() {
-				// we count a given vote as multiple votes for all nonempty subchains
+				// we count a given vote as multiple votes for all nonempty subchains,
+				// the longest subchain that achieves consensus wins
 				while !vote.headers.is_empty() {
-					consensus.insert_vote((vote.headers.len(), vote.clone()));
+					consensus.insert_vote(StagedVote {
+						priority: vote.headers.len(),
+						vote: vote.clone(),
+					});
 					vote.headers.pop_back();
 				}
 			}

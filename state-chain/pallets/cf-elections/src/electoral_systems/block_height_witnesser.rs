@@ -4,7 +4,7 @@ use super::{
 	block_witnesser::state_machine::HookTypeFor,
 	state_machine::core::{defx, Hook, HookType, Serde, Validate},
 };
-use cf_chains::witness_period::{BlockZero, SaturatingStep};
+use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use derive_where::derive_where;
 use primitives::NonemptyContinuousHeaders;
@@ -37,7 +37,6 @@ pub trait ChainBlockNumberTrait = CommonTraits
 	+ SaturatingStep
 	+ Step
 	+ Default
-	+ BlockZero
 	+ Copy
 	+ Ord
 	+ 'static

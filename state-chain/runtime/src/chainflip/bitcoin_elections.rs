@@ -171,7 +171,7 @@ impls! {
 	}
 
 	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<(), SafeModeEnabledHook>> {
+	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
 		fn run(&mut self, _input: ()) -> SafeModeStatus {
 			if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
 				pallet_cf_ingress_egress::PalletSafeMode<BitcoinInstance>,
@@ -195,20 +195,6 @@ impls! {
 			BitcoinIngressEgress::active_deposit_channels_at(block_witness_root).into_iter().map(|deposit_channel_details| {
 				deposit_channel_details.deposit_channel
 			}).collect()
-		}
-	}
-
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
-				PalletSafeMode<BitcoinInstance>,
-			>>::get()
-			.deposits_enabled
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
 		}
 	}
 }
@@ -261,7 +247,7 @@ impls! {
 	}
 
 	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<(), SafeModeEnabledHook>> {
+	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
 		fn run(&mut self, _input: ()) -> SafeModeStatus {
 			if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
 				pallet_cf_ingress_egress::PalletSafeMode<BitcoinInstance>,
@@ -292,21 +278,6 @@ impls! {
 				.collect::<Vec<_>>()
 		}
 	}
-
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
-				PalletSafeMode<BitcoinInstance>,
-			>>::get()
-			.deposits_enabled
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
-		}
-	}
-
 }
 
 /// Generating the state machine-based electoral system

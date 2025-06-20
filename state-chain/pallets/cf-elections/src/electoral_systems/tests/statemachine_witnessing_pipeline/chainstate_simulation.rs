@@ -10,7 +10,7 @@ use core::{
 	ops::{Range, RangeInclusive},
 };
 
-use cf_chains::witness_period::{BlockZero, SaturatingStep};
+use cf_chains::witness_period::SaturatingStep;
 use proptest::{collection::*, prelude::*};
 
 type BlockId = u32;
@@ -365,7 +365,7 @@ impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> Mock
 				.into_iter()
 				.enumerate()
 				.map(|(height, block)| {
-					(T::ChainBlockNumber::zero().saturating_forward(offset + height), block)
+					(T::ChainBlockNumber::default().saturating_forward(offset + height), block)
 				})
 				.collect(),
 			_phantom: Default::default(),
@@ -384,7 +384,7 @@ impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> Mock
 			.iter()
 			.map(|(height, _)| *height)
 			.max()
-			.unwrap_or(T::ChainBlockNumber::zero())
+			.unwrap_or(T::ChainBlockNumber::default())
 	}
 
 	pub fn get_block_header(&self, height: T::ChainBlockNumber) -> Option<Header<T>> {

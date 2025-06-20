@@ -64,34 +64,47 @@ impl<Vote: Ord + PartialEq + Clone> ConsensusMechanism for SupermajorityConsensu
 /// Staged consensus.
 ///
 /// Votes are indexed by stages, and each stage is evaluated
-/// separately. Evaluation happens in reverse order of the stage index,
-/// i.e. the highest stage which achieves consensus determines the result.
+/// separately. Evaluation happens from highest priority to lowest,
+/// i.e. the highest priority stage which achieves consensus determines the result.
 /// If no stage achieves consensus, the result is inconclusive.
-pub struct StagedConsensus<Stage: ConsensusMechanism, Index: Ord> {
-	stages: BTreeMap<Index, Stage>,
+pub struct StagedConsensus<Stage: ConsensusMechanism, Priority: Ord> {
+	stages: BTreeMap<Priority, Stage>,
 }
 
-impl<Stage: ConsensusMechanism, Index: Ord> StagedConsensus<Stage, Index> {
+pub struct StagedVote<Stage: ConsensusMechanism, Priority: Ord> {
+	pub priority: Priority,
+	pub vote: Stage::Vote,
+}
+
+impl<Stage: ConsensusMechanism, Priority: Ord> From<(Priority, Stage::Vote)>
+	for StagedVote<Stage, Priority>
+{
+	fn from((priority, vote): (Priority, Stage::Vote)) -> Self {
+		Self { priority, vote }
+	}
+}
+
+impl<Stage: ConsensusMechanism, Priority: Ord> StagedConsensus<Stage, Priority> {
 	pub fn new() -> Self {
 		Self { stages: BTreeMap::new() }
 	}
 }
 
-impl<Stage: ConsensusMechanism, Index: Ord> Default for StagedConsensus<Stage, Index> {
+impl<Stage: ConsensusMechanism, Priority: Ord> Default for StagedConsensus<Stage, Priority> {
 	fn default() -> Self {
 		Self { stages: Default::default() }
 	}
 }
 
-impl<Stage: ConsensusMechanism, Index: Ord + Copy> ConsensusMechanism
-	for StagedConsensus<Stage, Index>
+impl<Stage: ConsensusMechanism, Priority: Ord + Copy> ConsensusMechanism
+	for StagedConsensus<Stage, Priority>
 {
 	type Result = Stage::Result;
-	type Vote = (Index, Stage::Vote);
+	type Vote = StagedVote<Stage, Priority>;
 	type Settings = Stage::Settings;
 
-	fn insert_vote(&mut self, (index, vote): Self::Vote) {
-		self.stages.entry(index).or_default().insert_vote(vote);
+	fn insert_vote(&mut self, vote: Self::Vote) {
+		self.stages.entry(vote.priority).or_default().insert_vote(vote.vote);
 	}
 
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
@@ -179,27 +192,27 @@ mod tests {
 	#[test]
 	fn test_staged_consensus() {
 		let mut staged = StagedConsensus::<SupermajorityConsensus<MockVote>, u32>::default();
-		staged.insert_vote((1, MockVote(2)));
-		staged.insert_vote((1, MockVote(2)));
-		staged.insert_vote((1, MockVote(2)));
+		staged.insert_vote((1, MockVote(2)).into());
+		staged.insert_vote((1, MockVote(2)).into());
+		staged.insert_vote((1, MockVote(2)).into());
 		let consensus = staged.check_consensus(&SuccessThreshold { success_threshold: 3 });
 		assert_eq!(consensus, Some(MockVote(2)));
 
-		staged.insert_vote((2, MockVote(1)));
-		staged.insert_vote((2, MockVote(1)));
-		staged.insert_vote((2, MockVote(2)));
+		staged.insert_vote((2, MockVote(1)).into());
+		staged.insert_vote((2, MockVote(1)).into());
+		staged.insert_vote((2, MockVote(2)).into());
 		let consensus = staged.check_consensus(&SuccessThreshold { success_threshold: 3 });
 		assert_eq!(consensus, Some(MockVote(2)));
 
-		staged.insert_vote((3, MockVote(1)));
-		staged.insert_vote((3, MockVote(1)));
-		staged.insert_vote((3, MockVote(1)));
+		staged.insert_vote((3, MockVote(1)).into());
+		staged.insert_vote((3, MockVote(1)).into());
+		staged.insert_vote((3, MockVote(1)).into());
 		let consensus = staged.check_consensus(&SuccessThreshold { success_threshold: 3 });
 		assert_eq!(consensus, Some(MockVote(1)));
 
-		staged.insert_vote((4, MockVote(6)));
-		staged.insert_vote((4, MockVote(6)));
-		staged.insert_vote((4, MockVote(6)));
+		staged.insert_vote((4, MockVote(6)).into());
+		staged.insert_vote((4, MockVote(6)).into());
+		staged.insert_vote((4, MockVote(6)).into());
 		let consensus = staged.check_consensus(&SuccessThreshold { success_threshold: 3 });
 		assert_eq!(consensus, Some(MockVote(6)));
 	}

@@ -197,7 +197,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 	type Output = Result<(), &'static str>;
 	type State = BlockWitnesserState<T>;
 
-	fn input_index(state: &mut Self::State) -> Vec<Self::Query> {
+	fn get_queries(state: &mut Self::State) -> Vec<Self::Query> {
 		state
 			.elections
 			.ongoing
@@ -333,13 +333,13 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 				.map(|(h, _)| h)
 				.cloned()
 				.chain(s.elections.queued_hash_elections.keys().cloned())
-				.chain(s.elections.queued_safe_elections.get_all_heights().into_iter())
+				.chain(s.elections.queued_safe_elections.get_all_heights())
 				.chain(s.block_processor.blocks_data.keys().cloned())
 				.collect::<Vec<_>>()
 		};
 
 		let counted_heights: Container<BTreeMultiSet<_>> =
-			get_all_heights(&after).into_iter().collect();
+			get_all_heights(after).into_iter().collect();
 
 		// we have unique heights
 		for (height, count) in counted_heights.0 .0.clone() {
@@ -363,7 +363,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 		};
 
 		assert_eq!(
-			get_all_heights(&before)
+			get_all_heights(before)
 				.into_iter()
 				.filter(|h| *h < after.elections.seen_heights_below)
 				.filter(|h| !removed_heights.iter().any(|range| range.contains(h)))
@@ -371,7 +371,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 				.filter(|h| h.saturating_forward(T::Chain::SAFETY_BUFFER) >=
 					after.elections.lowest_in_progress_height())
 				.collect::<BTreeSet<_>>(),
-			get_all_heights(&after)
+			get_all_heights(after)
 				.into_iter()
 				.filter(|h| *h < after.elections.seen_heights_below)
 				.collect::<BTreeSet<_>>(),
@@ -419,7 +419,7 @@ pub mod tests {
 		let safe_block_height =
 			state.elections.seen_heights_below.saturating_backward(T::Chain::SAFETY_BUFFER);
 
-		let seen_heights_below = state.elections.seen_heights_below.clone();
+		let seen_heights_below = state.elections.seen_heights_below;
 
 		prop_oneof![
 			Just(None),
@@ -440,8 +440,7 @@ pub mod tests {
 		.boxed()
 	}
 
-	fn generate_settings(
-	) -> impl Strategy<Value = BlockWitnesserSettings> + Clone + Debug + Sync + Send {
+	fn generate_settings() -> impl Strategy<Value = BlockWitnesserSettings> + Clone + Sync + Send {
 		prop_do! {
 			BlockWitnesserSettings {
 				safety_margin: 1..5u32,

@@ -7,7 +7,7 @@ use crate::electoral_systems::state_machine::{
 	core::{defx, Hook},
 	state_machine::AbstractApi,
 };
-use cf_chains::witness_period::{BlockZero, SaturatingStep};
+use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use itertools::Either;
 use scale_info::TypeInfo;
@@ -67,7 +67,7 @@ impl<T: BHWTypes> AbstractApi for BlockHeightWitnesser<T> {
 			.map_err(VoteValidationError::NonemptyContinuousHeadersError)?;
 		// We always accept the first vote, when the electoral system is started.
 		// See the `step` function for the block height witnessing.
-		if query.witness_from_index.is_zero() ||
+		if query.witness_from_index == Default::default() ||
 			response.first().block_height == query.witness_from_index
 		{
 			Ok(())
@@ -81,9 +81,9 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 	type Context = ();
 	type Settings = ();
 	type Output = Result<Option<ChainProgress<T::Chain>>, &'static str>;
-	fn input_index(s: &mut Self::State) -> Vec<Self::Query> {
+	fn get_queries(s: &mut Self::State) -> Vec<Self::Query> {
 		let witness_from_index = match s.phase {
-			BHWPhase::Starting => ChainBlockNumberOf::<T::Chain>::zero(),
+			BHWPhase::Starting => ChainBlockNumberOf::<T::Chain>::default(),
 			BHWPhase::Running { headers: _, witness_from } => witness_from,
 		};
 		Vec::from([HeightWitnesserProperties { witness_from_index }])
@@ -214,11 +214,7 @@ pub mod tests {
 		},
 		prop_do,
 	};
-	use cf_chains::{
-		self,
-		witness_period::{BlockWitnessRange, BlockZero},
-		ChainWitnessConfig,
-	};
+	use cf_chains::{self, witness_period::BlockWitnessRange, ChainWitnessConfig};
 	use proptest::{
 		arbitrary::arbitrary_with,
 		prelude::{any, prop, Arbitrary, Just, Strategy},
@@ -242,7 +238,7 @@ pub mod tests {
 			prop_do! {
 				let header_data in prop::collection::vec(any::<ChainBlockHashOf<C>>(), 2..10);
 				let random_index in any::<ChainBlockNumberOf<C>>();
-				let first_height = if witness_from_index.is_zero() { random_index } else { witness_from_index };
+				let first_height = if witness_from_index == Default::default() { random_index } else { witness_from_index };
 				return {
 					let headers =
 						header_data.iter().zip(header_data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
@@ -255,7 +251,7 @@ pub mod tests {
 			}
 		}
 
-		type Strategy = impl Strategy<Value = NonemptyContinuousHeaders<C>> + Clone + Debug + Send;
+		type Strategy = impl Strategy<Value = NonemptyContinuousHeaders<C>> + Clone + Send;
 	}
 
 	pub fn generate_input<T: BHWTypes>(
@@ -266,7 +262,6 @@ pub mod tests {
 
 	pub fn generate_state<T: BHWTypes>() -> impl Strategy<Value = BlockHeightWitnesser<T>>
 	where
-		ChainBlockNumberOf<T::Chain>: BlockZero,
 		T::BlockHeightChangeHook: Default + sp_std::fmt::Debug,
 	{
 		prop_oneof![
