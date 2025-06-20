@@ -23,20 +23,41 @@
 /engine/src/witness/eth/ @albert-llimos
 /engine/src/witness/arb/ @albert-llimos
 
-engine-dylib/ @nmammeri
-engine-proc-macros/ @nmammeri
-engine-runner-bin/ @nmammeri
-engine-upgrade-utils/ @nmammeri
+engine-dylib/ @nmammeri @dandanlen
+engine-proc-macros/ @nmammeri @dandanlen
+engine-runner-bin/ @nmammeri @dandanlen
+engine-upgrade-utils/ @nmammeri @dandanlen
 
 /foreign-chains/ @albert-llimos @syan095
 
 /localnet/ @chainflip-io/platform
 
-/state-chain/amm/ @martin-chainflip
-/state-chain/cfe-events/ @msgmaxim
-/state-chain/custom-rpc/ @chainflip-io/web @nmammeri
-/state-chain/pallets/cf-elections/ @MxmUrw @marcellorigotti
-/state-chain/pallets/cf-pools/ @martin-chainflip
-/state-chain/pallets/cf-swapping/ @msgmaxim
-/state-chain/pallets/cf-trading-strategy/ @msgmaxim
 /state-chain/ @dandanlen
+
+/state-chain/amm/ @martin-chainflip
+
+/state-chain/cfe-events/ @msgmaxim
+
+/state-chain/chains/arb.rs @albert-llimos @dandanlen @ramizhasan111
+/state-chain/chains/arb/ @albert-llimos @dandanlen @ramizhasan111
+/state-chain/chains/eth.rs @albert-llimos @dandanlen @ramizhasan111
+/state-chain/chains/eth/ @albert-llimos @dandanlen @ramizhasan111
+/state-chain/chains/evm.rs @albert-llimos @dandanlen @ramizhasan111
+/state-chain/chains/evm/ @albert-llimos @dandanlen @ramizhasan111
+/state-chain/chains/hub/ @martin-chainflip @dandanlen
+/state-chain/chains/sol.rs @albert-llimos @syan095 @ramizhasan111
+/state-chain/chains/sol/ @albert-llimos @syan095 @ramizhasan111
+
+/state-chain/custom-rpc/ @chainflip-io/web @nmammeri
+
+
+/state-chain/pallets/cf-broadcast/ @ramizhasan111 @dandanlen
+/state-chain/pallets/cf-threshold-signing/ @ramizhasan111 @dandanlen
+/state-chain/pallets/cf-vaults/ @ramizhasan111 @dandanlen
+/state-chain/pallets/cf-elections/ @MxmUrw @marcellorigotti
+/state-chain/pallets/cf-funding/ @Janislav @dandanlen
+/state-chain/pallets/cf-lending-pools/ @martin-chainflip @dandanlen @msgmaxim
+/state-chain/pallets/cf-pools/ @martin-chainflip @dandanlen @msgmaxim
+/state-chain/pallets/cf-swapping/ @msgmaxim @j4m1ef0rd
+/state-chain/pallets/cf-tokenholder-governance/ @Janislav @dandanlen
+/state-chain/pallets/cf-trading-strategy/ @msgmaxim @j4m1ef0rd
