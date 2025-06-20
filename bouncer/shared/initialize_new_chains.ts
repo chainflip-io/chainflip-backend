@@ -12,13 +12,13 @@ import {
   encodeSolAddress,
   solanaNumberOfNonces,
   solanaNumberOfAdditionalNonces,
-} from '../shared/utils';
-import { sendSol, signAndSendTxSol } from '../shared/send_sol';
-import { getSolanaVaultIdl, getKeyManagerAbi } from '../shared/contract_interfaces';
-import { signAndSendTxEvm } from '../shared/send_evm';
-import { submitGovernanceExtrinsic } from './cf_governance';
-import { observeEvent } from './utils/substrate';
-import { Logger } from './utils/logger';
+} from 'shared/utils';
+import { sendSol, signAndSendTxSol } from 'shared/send_sol';
+import { getSolanaVaultIdl, getKeyManagerAbi } from 'shared/contract_interfaces';
+import { signAndSendTxEvm } from 'shared/send_evm';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { observeEvent } from 'shared/utils/substrate';
+import { Logger } from 'shared/utils/logger';
 
 export async function initializeArbitrumChain(logger: Logger) {
   logger.info('Initializing Arbitrum');

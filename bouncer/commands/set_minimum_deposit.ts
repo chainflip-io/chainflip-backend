@@ -9,9 +9,9 @@
 // For example: ./commands/set_minimum_deposit.ts ETH 0.01
 // will reject any ETH deposit below 0.01 ETH.
 
-import { runWithTimeoutAndExit, parseAssetString, amountToFineAmountBigInt } from '../shared/utils';
-import { setMinimumDeposit } from '../shared/set_minimum_deposit';
-import { globalLogger } from '../shared/utils/logger';
+import { runWithTimeoutAndExit, parseAssetString, amountToFineAmountBigInt } from 'shared/utils';
+import { setMinimumDeposit } from 'shared/set_minimum_deposit';
+import { globalLogger } from 'shared/utils/logger';
 
 async function main() {
   const asset = parseAssetString(process.argv[2]);

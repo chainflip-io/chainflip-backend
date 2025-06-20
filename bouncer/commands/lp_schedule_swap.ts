@@ -19,10 +19,10 @@ import {
   createStateChainKeypair,
   handleSubstrateError,
   lpMutex,
-} from '../shared/utils';
-import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import { globalLogger as logger } from '../shared/utils/logger';
-import { depositLiquidity } from '../shared/deposit_liquidity';
+} from 'shared/utils';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { globalLogger as logger } from 'shared/utils/logger';
+import { depositLiquidity } from 'shared/deposit_liquidity';
 
 const args = process.argv.slice(2);
 if (args.length < 3) {

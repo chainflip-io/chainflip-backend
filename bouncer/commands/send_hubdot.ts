@@ -8,8 +8,8 @@
 // For example: ./commands/send_hubdot.ts 12QTpTMELPfdz2xr9AeeavstY8uMcpUqeKWDWiwarskk4hSB 1.2
 // will send 1.2 Dot to account 12QTpTMELPfdz2xr9AeeavstY8uMcpUqeKWDWiwarskk4hSB on Assethub
 
-import { sendHubDot } from '../shared/send_hubdot';
-import { runWithTimeoutAndExit } from '../shared/utils';
+import { sendHubDot } from 'shared/send_hubdot';
+import { runWithTimeoutAndExit } from 'shared/utils';
 
 async function main() {
   const polkadotAddress = process.argv[2];

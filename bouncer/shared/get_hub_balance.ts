@@ -1,5 +1,5 @@
-import { fineAmountToAmount, assetDecimals, HubAsset, getHubAssetId } from './utils';
-import { getAssethubApi } from './utils/substrate';
+import { fineAmountToAmount, assetDecimals, HubAsset, getHubAssetId } from 'shared/utils';
+import { getAssethubApi } from 'shared/utils/substrate';
 
 export async function getHubDotBalance(address: string): Promise<string> {
   await using assethub = await getAssethubApi();

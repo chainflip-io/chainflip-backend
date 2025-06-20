@@ -5,12 +5,12 @@ import {
   getContractAddress,
   getSolConnection,
   tryUntilSuccess,
-} from '../shared/utils';
-import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { getSolanaVaultIdl } from '../shared/contract_interfaces';
+} from 'shared/utils';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { getSolanaVaultIdl } from 'shared/contract_interfaces';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger } from 'shared/utils/logger';
 import { Vault } from '../../contract-interfaces/sol-program-idls/v1.2.2/vault';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger } from '../shared/utils/logger';
 
 type VaultSwapSettings = {
   minNativeSwapAmount: number;

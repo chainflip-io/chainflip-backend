@@ -64,11 +64,11 @@
         "patterns": [
           {
             "group": ["@polkadot/util-crypto"],
-            "message": "Please import this from './polkadot/util-crypto. It has already been initialized"
+            "message": "Please import this from 'polkadot/util-crypto. It has already been initialized"
           },
           {
             "group": ["@polkadot/keyring"],
-            "message": "Please import this from './polkadot/keyring. It has already been initialized"
+            "message": "Please import this from 'polkadot/keyring. It has already been initialized"
           }
         ]
       }

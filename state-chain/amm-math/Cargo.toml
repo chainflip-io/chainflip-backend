@@ -23,10 +23,10 @@ rand = { workspace = true, features = ["std"], optional = true }
 default = ["std"]
 slow-tests = ["dep:rand"]
 std = [
-    "cf-primitives/std",
-    "codec/std",
-    "scale-info/std",
-    "sp-core/std",
-    "sp-std/std",
-    "serde/std",
+	"cf-primitives/std",
+	"codec/std",
+	"scale-info/std",
+	"sp-core/std",
+	"sp-std/std",
+	"serde/std",
 ]

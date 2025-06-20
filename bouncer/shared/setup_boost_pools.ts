@@ -1,10 +1,10 @@
 import { InternalAssets as Assets, getInternalAsset, Chains } from '@chainflip/cli';
-import { chainFromAsset, Asset, decodeModuleError } from '../shared/utils';
-import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { getChainflipApi, Event, observeEvent } from './utils/substrate';
-import { addBoostFunds } from '../tests/boost';
-import { depositLiquidity } from './deposit_liquidity';
-import { Logger, throwError } from './utils/logger';
+import { chainFromAsset, Asset, decodeModuleError } from 'shared/utils';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { getChainflipApi, Event, observeEvent } from 'shared/utils/substrate';
+import { addBoostFunds } from 'tests/boost';
+import { depositLiquidity } from 'shared/deposit_liquidity';
+import { Logger, throwError } from 'shared/utils/logger';
 
 export type BoostPoolId = {
   asset: Asset;

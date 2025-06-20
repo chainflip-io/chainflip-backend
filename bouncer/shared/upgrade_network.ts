@@ -2,15 +2,15 @@ import { execSync } from 'child_process';
 import fs from 'fs/promises';
 import * as toml from 'toml';
 import path from 'path';
-import { SemVerLevel, bumpReleaseVersion } from './bump_release_version';
-import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
-import { compareSemVer, getNodesInfo, killEngines, sleep, startEngines } from './utils';
-import { bumpSpecVersionAgainstNetwork } from './utils/spec_version';
-import { compileBinaries } from './utils/compile_binaries';
-import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
-import { execWithLog } from './utils/exec_with_log';
-import { submitGovernanceExtrinsic } from './cf_governance';
-import { globalLogger as logger } from './utils/logger';
+import { SemVerLevel, bumpReleaseVersion } from 'shared/bump_release_version';
+import { simpleRuntimeUpgrade } from 'shared/simple_runtime_upgrade';
+import { compareSemVer, getNodesInfo, killEngines, sleep, startEngines } from 'shared/utils';
+import { bumpSpecVersionAgainstNetwork } from 'shared/utils/spec_version';
+import { compileBinaries } from 'shared/utils/compile_binaries';
+import { submitRuntimeUpgradeWithRestrictions } from 'shared/submit_runtime_upgrade';
+import { execWithLog } from 'shared/utils/exec_with_log';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { globalLogger as logger } from 'shared/utils/logger';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');

@@ -151,8 +151,8 @@ This logger already has the name of the test attached to it.
 Do not use `console.log` as it will not be logged to the file.
 
 ```ts
-import { TestContext } from '../shared/utils/test_context';
-import { Logger, throwError } from '../shared/utils/logger';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger, throwError } from 'shared/utils/logger';
 
 async function testCase(parentLogger: Logger, asset: Asset) {
   // Attach any contextual data to the logger as a binding. {"inputAsset": "Eth"}.
@@ -180,7 +180,7 @@ Another option for adding information to the logger is using the custom `loggerC
 This will append the given string to the `module` binding.
 
 ```ts
-import { loggerChild } from '../shared/utils/logger';
+import { loggerChild } from 'shared/utils/logger';
 
 const logger1 = loggerChild(parentLogger, `myTestCase`);
 const logger2 = loggerChild(logger1, `setupFunction`);
@@ -196,7 +196,7 @@ It has no bindings attached to it.
 It will still output to both `stdout` and the `bouncer.log` file.
 
 ```ts
-import { globalLogger } from '../shared/utils/logger';
+import { globalLogger } from 'shared/utils/logger';
 
 globalLogger.info('Executing my command');
 await observeEvent(globalLogger, 'someEvent');

@@ -92,19 +92,19 @@ substrate-build-script-utils = { workspace = true }
 [features]
 default = []
 runtime-benchmarks = [
-  "state-chain-runtime/runtime-benchmarks",
-  "frame-benchmarking/runtime-benchmarks",
-  "frame-benchmarking-cli/runtime-benchmarks",
-  "cf-chains/runtime-benchmarks",
-  "frame-system/runtime-benchmarks",
-  "sp-runtime/runtime-benchmarks",
+	"state-chain-runtime/runtime-benchmarks",
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-benchmarking-cli/runtime-benchmarks",
+	"cf-chains/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = [
-  "state-chain-runtime/try-runtime",
-  "frame-system/try-runtime",
-  "pallet-transaction-payment/try-runtime",
-  "sp-runtime/try-runtime",
-  "cf-chains/try-runtime",
+	"state-chain-runtime/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-transaction-payment/try-runtime",
+	"sp-runtime/try-runtime",
+	"cf-chains/try-runtime",
 ]
 
 [package.metadata.deb]
@@ -118,10 +118,10 @@ priority = "required"
 section = "rust"
 
 systemd-units = [
-  { unit-name = "chainflip-node", enable = false },
-  { unit-name = "chainflip-archive-node", enable = false },
-  { unit-name = "chainflip-rpc-node", enable = false },
-  { unit-name = "chainflip-genesis-node", enable = false },
+	{ unit-name = "chainflip-node", enable = false },
+	{ unit-name = "chainflip-archive-node", enable = false },
+	{ unit-name = "chainflip-rpc-node", enable = false },
+	{ unit-name = "chainflip-genesis-node", enable = false },
 ]
 
 [package.metadata.deb.variants.test]
@@ -130,44 +130,44 @@ maintainer-scripts = "package/test"
 [package.metadata.deb.variants.sisyphos]
 maintainer-scripts = "package/sisyphos"
 assets = [
-  [
-    "chainspecs/sisyphos.chainspec.raw.json",
-    "etc/chainflip/sisyphos.chainspec.json",
-    "644",
-  ],
-  [
-    "target/release/chainflip-node",
-    "usr/bin/",
-    "755",
-  ],
+	[
+	"chainspecs/sisyphos.chainspec.raw.json",
+	"etc/chainflip/sisyphos.chainspec.json",
+	"644",
+	],
+	[
+	"target/release/chainflip-node",
+	"usr/bin/",
+	"755",
+	],
 ]
 
 [package.metadata.deb.variants.perseverance]
 maintainer-scripts = "package/perseverance"
 assets = [
-  [
-    "chainspecs/perseverance.chainspec.raw.json",
-    "etc/chainflip/perseverance.chainspec.json",
-    "644",
-  ],
-  [
-    "target/release/chainflip-node",
-    "usr/bin/",
-    "755",
-  ],
+	[
+	"chainspecs/perseverance.chainspec.raw.json",
+	"etc/chainflip/perseverance.chainspec.json",
+	"644",
+	],
+	[
+	"target/release/chainflip-node",
+	"usr/bin/",
+	"755",
+	],
 ]
 
 [package.metadata.deb.variants.berghain]
 maintainer-scripts = "package/berghain"
 assets = [
-  [
-    "chainspecs/berghain.chainspec.raw.json",
-    "etc/chainflip/berghain.chainspec.json",
-    "644",
-  ],
-  [
-    "target/release/chainflip-node",
-    "usr/bin/",
-    "755",
-  ],
+	[
+	"chainspecs/berghain.chainspec.raw.json",
+	"etc/chainflip/berghain.chainspec.json",
+	"644",
+	],
+	[
+	"target/release/chainflip-node",
+	"usr/bin/",
+	"755",
+	],
 ]

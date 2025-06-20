@@ -8,32 +8,32 @@
 
 import { AddressOrPair } from '@polkadot/api/types';
 import Web3 from 'web3';
-import { submitGovernanceExtrinsic } from '../shared/cf_governance';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import {
   getBtcClient,
   handleSubstrateError,
   getEvmEndpoint,
   getSolConnection,
   deferredPromise,
-} from '../shared/utils';
-import { aliceKeyringPair } from '../shared/polkadot_keyring';
+} from 'shared/utils';
+import { aliceKeyringPair } from 'shared/polkadot_keyring';
 import {
   initializeArbitrumChain,
   initializeArbitrumContracts,
   initializeSolanaChain,
   initializeSolanaPrograms,
   initializeAssethubChain,
-} from '../shared/initialize_new_chains';
-import { globalLogger, loggerChild, Logger } from '../shared/utils/logger';
+} from 'shared/initialize_new_chains';
+import { globalLogger, loggerChild, Logger } from 'shared/utils/logger';
 import {
   getPolkadotApi,
   getAssethubApi,
   observeEvent,
   DisposableApiPromise,
-} from '../shared/utils/substrate';
-import { brokerApiEndpoint, lpApiEndpoint } from '../shared/json_rpc';
-import { updatePriceFeed } from '../shared/update_price_feed';
-import { price } from '../shared/setup_swaps';
+} from 'shared/utils/substrate';
+import { brokerApiEndpoint, lpApiEndpoint } from 'shared/json_rpc';
+import { updatePriceFeed } from 'shared/update_price_feed';
+import { price } from 'shared/setup_swaps';
 
 async function createPolkadotVault(logger: Logger, api: DisposableApiPromise) {
   const { promise, resolve } = deferredPromise<{

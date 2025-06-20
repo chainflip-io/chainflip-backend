@@ -1,8 +1,8 @@
-import { createLpPool } from '../shared/create_lp_pool';
-import { depositLiquidity } from './deposit_liquidity';
-import { rangeOrder } from '../shared/range_order';
-import { Asset } from './utils';
-import { Logger } from './utils/logger';
+import { createLpPool } from 'shared/create_lp_pool';
+import { depositLiquidity } from 'shared/deposit_liquidity';
+import { rangeOrder } from 'shared/range_order';
+import { Asset } from 'shared/utils';
+import { Logger } from 'shared/utils/logger';
 
 export const deposits = new Map<Asset, number>([
   ['Dot', 20000],

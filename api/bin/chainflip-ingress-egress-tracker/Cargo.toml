@@ -27,8 +27,8 @@ redis = { workspace = true, features = ["tokio-comp"] }
 
 sp-core = { workspace = true, default-features = true }
 codec = { workspace = true, default-features = true, features = [
-    "derive",
-    "full",
+	"derive",
+	"full",
 ] }
 
 # Local dependencies
