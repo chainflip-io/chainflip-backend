@@ -12,7 +12,7 @@ use sp_std::{fmt::Debug, vec::Vec};
 use std::collections::{BTreeSet, VecDeque};
 
 use crate::electoral_systems::{
-	block_height_tracking::{
+	block_height_witnesser::{
 		primitives::NonemptyContinuousHeaders,
 		state_machine::{BHWPhase, BlockHeightWitnesser},
 		BHWTypes, ChainBlockNumberOf,

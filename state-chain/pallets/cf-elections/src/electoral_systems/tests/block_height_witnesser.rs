@@ -1,6 +1,6 @@
 use crate::electoral_systems::{
-	block_height_tracking::{
-		consensus::BlockHeightTrackingConsensus,
+	block_height_witnesser::{
+		consensus::BlockHeightWitnesserConsensus,
 		primitives::{Header, NonemptyContinuousHeaders, NonemptyContinuousHeadersError},
 		state_machine::{BlockHeightWitnesser, VoteValidationError},
 		BHWTypes, ChainTypes, HeightWitnesserProperties,
@@ -36,8 +36,8 @@ const BHW_PROPERTIES_RUNNING: HeightWitnesserProperties<BHTypes> =
 /// we reach supermajority over.
 #[test]
 fn block_height_witnesser_first_consensus() {
-	let mut bh_consensus: BlockHeightTrackingConsensus<BHTypes> =
-		BlockHeightTrackingConsensus::default();
+	let mut bh_consensus: BlockHeightWitnesserConsensus<BHTypes> =
+		BlockHeightWitnesserConsensus::default();
 
 	bh_consensus.insert_vote(
 		[
@@ -76,8 +76,8 @@ fn block_height_witnesser_first_consensus() {
 /// all the correct hashes matching (`parent_hash` matching previous block hash)
 #[test]
 fn block_height_witnesser_running_consensus() {
-	let mut bh_consensus: BlockHeightTrackingConsensus<BHTypes> =
-		BlockHeightTrackingConsensus::default();
+	let mut bh_consensus: BlockHeightWitnesserConsensus<BHTypes> =
+		BlockHeightWitnesserConsensus::default();
 
 	bh_consensus.insert_vote(
 		[

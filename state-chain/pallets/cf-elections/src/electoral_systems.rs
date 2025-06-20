@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod block_height_tracking;
+pub mod block_height_witnesser;
 pub mod block_witnesser;
 pub mod blockchain;
 pub mod composite;

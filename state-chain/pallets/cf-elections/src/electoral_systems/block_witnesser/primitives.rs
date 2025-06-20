@@ -20,7 +20,7 @@ use proptest::prelude::{any, Arbitrary, Strategy};
 use proptest_derive::Arbitrary;
 
 use crate::electoral_systems::{
-	block_height_tracking::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes},
+	block_height_witnesser::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes},
 	state_machine::core::{def_derive, defx, Hook, Validate},
 };
 
