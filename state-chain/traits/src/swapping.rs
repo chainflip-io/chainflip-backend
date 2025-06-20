@@ -26,6 +26,8 @@ use cf_primitives::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
+use crate::lending::ChpLoanId;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SwapType {
 	Swap,
@@ -41,6 +43,9 @@ pub enum SwapOutputActionGeneric<Address, AccountId> {
 	},
 	CreditOnChain {
 		account_id: AccountId,
+	},
+	CreditLendingPool {
+		loan_id: ChpLoanId,
 	},
 }
 
@@ -62,6 +67,8 @@ impl<AccountId> SwapRequestType<AccountId> {
 						},
 					SwapOutputAction::CreditOnChain { account_id } =>
 						SwapOutputActionEncoded::CreditOnChain { account_id },
+					SwapOutputActionGeneric::CreditLendingPool { loan_id } =>
+						SwapOutputActionEncoded::CreditLendingPool { loan_id },
 				},
 			},
 		}
