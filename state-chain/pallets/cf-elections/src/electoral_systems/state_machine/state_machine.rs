@@ -143,7 +143,7 @@ pub trait Statemachine: AbstractApi + 'static {
 	/// the SM is run as part of an electoral system this might not always be the case.
 	#[cfg(test)]
 	fn step_and_validate(
-		mut state: &mut Self::State,
+		state: &mut Self::State,
 		input: InputOf<Self>,
 		settings: &Self::Settings,
 	) -> Self::Output
