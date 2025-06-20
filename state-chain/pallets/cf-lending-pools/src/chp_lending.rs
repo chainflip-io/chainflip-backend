@@ -28,6 +28,35 @@ pub struct ChpLoan<T: Config> {
 }
 
 impl<T: Config> ChpLoan<T> {
+	#[cfg(feature = "runtime-benchmarks")]
+	pub(crate) fn new(
+		loan_id: ChpLoanId,
+		asset: Asset,
+		created_at_block: BlockNumberFor<T>,
+		expiry_block: BlockNumberFor<T>,
+		borrower_id: T::AccountId,
+		usdc_collateral: AssetAmount,
+		fees_collected_usdc: AssetAmount,
+		pool_contributions: Vec<ChpPoolContribution>,
+		interest_rate: Perbill,
+		asset_price_at_creation: Price,
+		status: LoanStatus,
+	) -> Self {
+		Self {
+			loan_id,
+			asset,
+			created_at_block,
+			expiry_block,
+			borrower_id,
+			usdc_collateral,
+			fees_collected_usdc,
+			pool_contributions,
+			interest_rate,
+			asset_price_at_creation,
+			status,
+		}
+	}
+
 	fn total_principal_amount(&self) -> AssetAmount {
 		self.pool_contributions.iter().map(|c| c.principal).sum()
 	}
@@ -358,7 +387,7 @@ impl<T: Config> ChpLendingApi for Pallet<T> {
 			loan_id,
 			borrower_id: borrower.clone(),
 			asset,
-			amount_to_borrow,
+			amount: amount_to_borrow,
 		});
 
 		let loan = ChpLoan {

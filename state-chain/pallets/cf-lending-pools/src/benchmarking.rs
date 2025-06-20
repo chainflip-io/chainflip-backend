@@ -69,22 +69,19 @@ mod benchmarks {
 		id: u64,
 		status: LoanStatus,
 	) -> ChpLoan<T> {
-		ChpLoan::<T> {
-			loan_id: ChpLoanId(id),
+		ChpLoan::<T>::new(
+			ChpLoanId(id),
 			asset,
-			created_at_block: 1u32.into(),
-			expiry_block: 1_000u32.into(),
-			borrower_id: borrower,
-			usdc_collateral: 1_000_000u128,
-			fees_collected_usdc: 0u128,
-			pool_contributions: vec![ChpPoolContribution {
-				core_pool_id,
-				loan_id: LoanId(id),
-				principal: 1_000u128,
-			}],
-			interest_rate: Permill::from_parts(100),
+			1u32.into(),
+			1_000u32.into(),
+			borrower,
+			1_000_000u128,
+			0u128,
+			vec![ChpPoolContribution { core_pool_id, loan_id: LoanId(id), principal: 1_000u128 }],
+			Perbill::from_parts(100_000),
+			Default::default(),
 			status,
-		}
+		)
 	}
 
 	#[benchmark]
