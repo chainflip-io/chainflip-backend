@@ -347,7 +347,7 @@ impl<T: Config> ChpLendingApi for Pallet<T> {
 			loan_id,
 			borrower_id: borrower.clone(),
 			asset,
-			amount: amount_to_borrow,
+			amount_to_borrow,
 		});
 
 		let loan = ChpLoan {
