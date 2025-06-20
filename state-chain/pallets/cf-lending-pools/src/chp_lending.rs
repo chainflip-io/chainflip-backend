@@ -1,3 +1,6 @@
+use cf_amm_math::Price;
+use frame_support::sp_runtime::Perbill;
+
 use super::*;
 
 #[cfg(test)]
@@ -11,11 +14,16 @@ pub struct ChpLoan<T: Config> {
 	created_at_block: BlockNumberFor<T>,
 	expiry_block: BlockNumberFor<T>,
 	borrower_id: T::AccountId,
+	// Collateral amount (excluding anything that's in a swap during liquidation)
 	usdc_collateral: AssetAmount,
 	fees_collected_usdc: AssetAmount,
 	pool_contributions: Vec<ChpPoolContribution>,
-	// Interest charged on the principal amount every INTEREST_PAYMENT_INTERVAL blocks
-	interest_rate: Permill,
+	// Interest charged on the principal amount every block
+	interest_rate: Perbill,
+	// This is used to calculate the interest rate for the loan
+	// to make sure that the interest payments in USDC don't fluctuate
+	// with asset price movements.
+	asset_price_at_creation: Price,
 	status: LoanStatus,
 }
 
@@ -31,11 +39,15 @@ impl<T: Config> ChpLoan<T> {
 		let collateral_usdc = match self.status {
 			LoanStatus::Active => self.usdc_collateral,
 			LoanStatus::Finalising => {
-				// Should be unreachable
+				log_or_panic!(
+					"Overcollateralisation ratio should not be required during finalisation"
+				);
 				Default::default()
 			},
-			LoanStatus::SoftLiquidation { usdc_collateral } => usdc_collateral,
-			LoanStatus::HardLiquidation { usdc_collateral } => usdc_collateral,
+			LoanStatus::SoftLiquidation { usdc_collateral } =>
+				self.usdc_collateral + usdc_collateral,
+			LoanStatus::HardLiquidation { usdc_collateral } =>
+				self.usdc_collateral + usdc_collateral,
 		};
 
 		Permill::from_rational(collateral_usdc.saturating_sub(principal_in_usdc), principal_in_usdc)
@@ -140,10 +152,16 @@ pub fn process_interest_for_loan<T: Config>(
 		0u32.into()
 	{
 		for ChpPoolContribution { principal, .. } in &loan.pool_contributions {
-			let interest_amount_in_loan_asset = loan.interest_rate * *principal;
+			let interest_amount_in_loan_asset =
+				(loan.interest_rate.int_mul(INTEREST_PAYMENT_INTERVAL)) * *principal;
 
-			let usdc_interest_amount =
-				usdc_equivalent_amount::<T>(loan.asset, interest_amount_in_loan_asset);
+			// NOTE: we use asset price at the time the loan was created to make sure
+			// that interest payments are consistent/predictable.
+			let usdc_interest_amount = cf_amm_math::output_amount_ceil(
+				interest_amount_in_loan_asset.into(),
+				loan.asset_price_at_creation,
+			)
+			.unique_saturated_into();
 
 			loan.usdc_collateral.saturating_reduce(usdc_interest_amount);
 			loan.fees_collected_usdc.saturating_accrue(usdc_interest_amount);
@@ -251,10 +269,11 @@ pub fn chp_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 impl<T: Config> ChpLendingApi for Pallet<T> {
 	type AccountId = T::AccountId;
 
+	#[transactional]
 	fn new_chp_loan(
 		borrower: T::AccountId,
 		asset: Asset,
-		amount: AssetAmount,
+		amount_to_borrow: AssetAmount,
 	) -> Result<ChpLoanId, DispatchError> {
 		ensure!(T::SafeMode::get().chp_loans_enabled, Error::<T>::ChpLoansDisabled);
 
@@ -263,7 +282,7 @@ impl<T: Config> ChpLendingApi for Pallet<T> {
 
 		let chp_config = ChpConfig::<T>::get();
 
-		let usdc_collateral_amount = usdc_collateral_required::<T>(asset, amount);
+		let usdc_collateral_amount = usdc_collateral_required::<T>(asset, amount_to_borrow);
 
 		let chp_pool = ChpPools::<T>::get(asset).ok_or(Error::<T>::PoolDoesNotExist)?;
 
@@ -293,17 +312,17 @@ impl<T: Config> ChpLendingApi for Pallet<T> {
 
 				let total_liquidity = core_pool.get_available_amount() + liquidity_in_loans;
 
-				Permill::from_rational(liquidity_in_loans + amount, total_liquidity)
+				Permill::from_rational(liquidity_in_loans + amount_to_borrow, total_liquidity)
 			};
 
 			let core_loan_id = core_pool
-				.new_loan(amount, LoanUsage::ChpLoan(loan_id))
+				.new_loan(amount_to_borrow, LoanUsage::ChpLoan(loan_id))
 				.map_err(|_| Error::<T>::InsufficientLiquidity)?;
 
 			pool_contributions.push(ChpPoolContribution {
 				core_pool_id,
 				loan_id: core_loan_id,
-				principal: amount,
+				principal: amount_to_borrow,
 			});
 
 			Ok::<_, DispatchError>(utilisation)
@@ -311,7 +330,7 @@ impl<T: Config> ChpLendingApi for Pallet<T> {
 
 		let clearing_fee_amount = usdc_equivalent_amount::<T>(
 			asset,
-			chp_config.derive_clearing_fee(utilisation) * amount,
+			chp_config.derive_clearing_fee(utilisation) * amount_to_borrow,
 		);
 
 		T::Balance::try_debit_account(
@@ -320,7 +339,7 @@ impl<T: Config> ChpLendingApi for Pallet<T> {
 			usdc_collateral_amount + clearing_fee_amount,
 		)?;
 
-		T::Balance::credit_account(&borrower, asset, amount);
+		T::Balance::credit_account(&borrower, asset, amount_to_borrow);
 
 		let created_at_block = frame_system::Pallet::<T>::current_block_number();
 
@@ -328,7 +347,7 @@ impl<T: Config> ChpLendingApi for Pallet<T> {
 			loan_id,
 			borrower_id: borrower.clone(),
 			asset,
-			amount,
+			amount: amount_to_borrow,
 		});
 
 		let loan = ChpLoan {
@@ -342,6 +361,7 @@ impl<T: Config> ChpLendingApi for Pallet<T> {
 			fees_collected_usdc: clearing_fee_amount,
 			pool_contributions,
 			interest_rate: chp_config.derive_interest_rate(utilisation),
+			asset_price_at_creation: T::PriceApi::get_price(asset),
 		};
 
 		ChpLoans::<T>::insert(asset, loan_id, loan);
@@ -349,7 +369,7 @@ impl<T: Config> ChpLendingApi for Pallet<T> {
 		Ok(loan_id)
 	}
 
-	fn make_repayment(
+	fn try_making_repayment(
 		loan_id: ChpLoanId,
 		asset: Asset,
 		amount: AssetAmount,
@@ -381,7 +401,7 @@ impl<T: Config> ChpLendingApi for Pallet<T> {
 }
 
 impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
-	fn process_loan_swap_outcome(loan_id: ChpLoanId, asset: Asset, amount: AssetAmount) {
+	fn process_loan_swap_outcome(loan_id: ChpLoanId, asset: Asset, output_amount: AssetAmount) {
 		ChpLoans::<T>::mutate_exists(asset, loan_id, |maybe_loan| {
 			let Some(loan) = maybe_loan else {
 				log_or_panic!("Loan does not exist: {loan_id}");
@@ -394,7 +414,8 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 				},
 				LoanStatus::SoftLiquidation { .. } => {
 					// Use swapped asset to repay the loan:
-					let amount_to_repay = core::cmp::min(amount, loan.total_principal_amount());
+					let amount_to_repay =
+						core::cmp::min(output_amount, loan.total_principal_amount());
 					loan.distribute_funds(amount_to_repay);
 
 					// Any amount left after repaying the loan should be returned to the
@@ -402,7 +423,7 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 					T::Balance::credit_account(
 						&loan.borrower_id,
 						asset,
-						amount.saturating_sub(amount_to_repay),
+						output_amount.saturating_sub(amount_to_repay),
 					);
 
 					// Enter finalising state to swap the fees:
@@ -413,7 +434,7 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 					unimplemented!()
 				},
 				LoanStatus::Finalising => {
-					loan.distribute_funds(amount);
+					loan.distribute_funds(output_amount);
 
 					for ChpPoolContribution { core_pool_id, loan_id, .. } in
 						&loan.pool_contributions
