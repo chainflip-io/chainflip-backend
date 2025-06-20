@@ -73,3 +73,6 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2024-0438
 	--ignore RUSTSEC-2024-0442
 '''
+
+[build]
+rustflags = ["--cfg", "tokio_unstable"]

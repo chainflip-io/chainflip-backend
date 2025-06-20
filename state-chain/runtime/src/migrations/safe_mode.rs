@@ -57,7 +57,9 @@ fn migrate_ingress_egress_safe_mode<I: 'static>(
 	// Creating a default one first to get around _phantom being private
 	let mut safe_mode = pallet_cf_ingress_egress::PalletSafeMode::CODE_GREEN;
 	safe_mode.boost_deposits_enabled = old.boost_deposits_enabled;
-	safe_mode.deposits_enabled = old.deposits_enabled;
+	safe_mode.deposit_channel_witnessing_enabled = old.deposits_enabled;
+	safe_mode.vault_deposit_witnessing_enabled = old.deposits_enabled;
+	safe_mode.deposit_channel_creation_enabled = old.deposits_enabled;
 	safe_mode
 }
 

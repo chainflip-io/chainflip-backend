@@ -14,6 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#![feature(btree_extract_if)]
+#![feature(step_trait)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "512"]
 pub mod chainflip;
@@ -1137,6 +1139,15 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner = chainflip::solana_elections::SolanaElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+	type CreateGovernanceElectionHook = chainflip::solana_elections::SolanaGovernanceElectionHook;
+}
+
+impl pallet_cf_elections::Config<Instance3> for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = <Bitcoin as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
+	type RuntimeEvent = RuntimeEvent;
+	type ElectoralSystemRunner = chainflip::bitcoin_elections::BitcoinElectoralSystemRunner;
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+	type CreateGovernanceElectionHook = chainflip::bitcoin_elections::BitcoinGovernanceElectionHook;
 }
 
 impl pallet_cf_trading_strategy::Config for Runtime {
@@ -1288,6 +1299,9 @@ mod runtime {
 
 	#[runtime::pallet_index(53)]
 	pub type LendingPools = pallet_cf_lending_pools;
+
+	#[runtime::pallet_index(54)]
+	pub type BitcoinElections = pallet_cf_elections<Instance3>;
 }
 
 /// The address format for describing accounts.
@@ -1357,6 +1371,7 @@ pub type PalletExecutionOrder = (
 	AssethubChainTracking,
 	// Elections
 	SolanaElections,
+	BitcoinElections,
 	// Vaults
 	EthereumVault,
 	PolkadotVault,
@@ -1411,6 +1426,7 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	MigrationsForV1_10,
+	migrations::btc_elections_migrations::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1466,6 +1482,7 @@ impl frame_support::traits::UncheckedOnRuntimeUpgrade for NoopMigration {
 		Default::default()
 	}
 }
+
 #[allow(unused_macros)]
 macro_rules! instanced_migrations {
 	(
@@ -1521,6 +1538,7 @@ type MigrationsForV1_10 = (
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
 extern crate frame_benchmarking;
+extern crate core;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benches {
@@ -1556,13 +1574,21 @@ mod benches {
 }
 
 impl_runtime_apis! {
-	impl runtime_apis::ElectoralRuntimeApi<Block, SolanaInstance> for Runtime {
-		fn cf_electoral_data(account_id: AccountId) -> Vec<u8> {
+	impl runtime_apis::ElectoralRuntimeApi<Block> for Runtime {
+		fn cf_solana_electoral_data(account_id: AccountId) -> Vec<u8> {
 			SolanaElections::electoral_data(&account_id).encode()
 		}
 
-		fn cf_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+		fn cf_solana_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
 			SolanaElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+		}
+
+		fn cf_bitcoin_electoral_data(account_id: AccountId) -> Vec<u8> {
+			BitcoinElections::electoral_data(&account_id).encode()
+		}
+
+		fn cf_bitcoin_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+			BitcoinElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
 		}
 	}
 
@@ -3279,11 +3305,12 @@ mod test {
 	// Introduced from polkadot
 	#[test]
 	fn call_size() {
+		let call_size = core::mem::size_of::<RuntimeCall>();
 		assert!(
-			core::mem::size_of::<RuntimeCall>() <= CALL_ENUM_MAX_SIZE,
+			call_size <= CALL_ENUM_MAX_SIZE,
 			r"
-			Polkadot suggests a 230 byte limit for the size of the Call type. We use {} but this runtime's call size
-			is {}. If this test fails then you have just added a call variant that exceed the limit.
+			Polkadot suggests a 230 byte limit for the size of the Call type. We use {CALL_ENUM_MAX_SIZE} but this runtime's call size
+			is {call_size}. If this test fails then you have just added a call variant that exceed the limit.
 
 			Congratulations!
 
@@ -3295,9 +3322,7 @@ mod test {
 			  - https://github.com/paritytech/substrate/pull/9418
 			  - https://rust-lang.github.io/rust-clippy/master/#large_enum_variant
 			  - https://fasterthanli.me/articles/peeking-inside-a-rust-enum
-			",
-			CALL_ENUM_MAX_SIZE,
-			core::mem::size_of::<RuntimeCall>(),
+			"
 		);
 	}
 }

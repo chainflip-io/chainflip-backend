@@ -31,7 +31,7 @@ use frame_support::{
 	traits::{EnsureOrigin, Hooks, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_std::{boxed::Box, collections::btree_map::BTreeMap, vec, vec::Vec};
 
 use crate::Call;
 
@@ -92,15 +92,17 @@ mod benchmarks {
 		validators.iter().for_each(|v| {
 			assert_ok!(Pallet::<T, I>::vote(
 				RawOrigin::Signed(v.clone()).into(),
-				BoundedBTreeMap::try_from(
-					[(
-						election_identifier,
-						AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(vote_value.clone()),
-					)]
-					.into_iter()
-					.collect::<BTreeMap<_, _>>(),
-				)
-				.unwrap(),
+				Box::new(
+					BoundedBTreeMap::try_from(
+						[(
+							election_identifier,
+							AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(vote_value.clone()),
+						)]
+						.into_iter()
+						.collect::<BTreeMap<_, _>>(),
+					)
+					.unwrap()
+				),
 			));
 		});
 		election_identifier
@@ -116,17 +118,19 @@ mod benchmarks {
 		#[extrinsic_call]
 		vote(
 			RawOrigin::Signed(validator_id.into()),
-			BoundedBTreeMap::try_from(
-				iter::repeat((
-					next_election.0,
-					AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
-						BenchmarkValue::benchmark_value(),
-					),
-				))
-				.take(n as usize)
-				.collect::<BTreeMap<_, _>>(),
-			)
-			.unwrap(),
+			Box::new(
+				BoundedBTreeMap::try_from(
+					iter::repeat((
+						next_election.0,
+						AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+							BenchmarkValue::benchmark_value(),
+						),
+					))
+					.take(n as usize)
+					.collect::<BTreeMap<_, _>>(),
+				)
+				.unwrap(),
+			),
 		);
 	}
 
@@ -178,17 +182,19 @@ mod benchmarks {
 
 		assert_ok!(Pallet::<T, I>::vote(
 			RawOrigin::Signed(caller).into(),
-			BoundedBTreeMap::try_from(
-				[(
-					next_election.0,
-					AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
-						BenchmarkValue::benchmark_value()
-					),
-				)]
-				.into_iter()
-				.collect::<BTreeMap<_, _>>(),
-			)
-			.unwrap(),
+			Box::new(
+				BoundedBTreeMap::try_from(
+					[(
+						next_election.0,
+						AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+							BenchmarkValue::benchmark_value()
+						),
+					)]
+					.into_iter()
+					.collect::<BTreeMap<_, _>>(),
+				)
+				.unwrap()
+			),
 		));
 
 		ElectionConsensusHistoryUpToDate::<T, I>::insert(next_election.0.unique_monotonic(), epoch);
@@ -215,17 +221,19 @@ mod benchmarks {
 
 		assert_ok!(Pallet::<T, I>::vote(
 			RawOrigin::Signed(caller).into(),
-			BoundedBTreeMap::try_from(
-				[(
-					next_election.0,
-					AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
-						BenchmarkValue::benchmark_value()
-					),
-				)]
-				.into_iter()
-				.collect::<BTreeMap<_, _>>(),
-			)
-			.unwrap(),
+			Box::new(
+				BoundedBTreeMap::try_from(
+					[(
+						next_election.0,
+						AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+							BenchmarkValue::benchmark_value()
+						),
+					)]
+					.into_iter()
+					.collect::<BTreeMap<_, _>>(),
+				)
+				.unwrap()
+			),
 		));
 
 		ElectionConsensusHistoryUpToDate::<T, I>::insert(next_election.0.unique_monotonic(), epoch);
@@ -255,21 +263,26 @@ mod benchmarks {
 
 		assert_ok!(Pallet::<T, I>::vote(
 			RawOrigin::Signed(validator_id.clone()).into(),
-			BoundedBTreeMap::try_from(
-				[(
-					election_identifier,
-					AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
-						BenchmarkValue::benchmark_value()
-					),
-				)]
-				.into_iter()
-				.collect::<BTreeMap<_, _>>(),
-			)
-			.unwrap(),
+			Box::new(
+				BoundedBTreeMap::try_from(
+					[(
+						election_identifier,
+						AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+							BenchmarkValue::benchmark_value()
+						),
+					)]
+					.into_iter()
+					.collect::<BTreeMap<_, _>>(),
+				)
+				.unwrap()
+			),
 		));
 
 		#[extrinsic_call]
-		provide_shared_data(RawOrigin::Signed(validator_id), BenchmarkValue::benchmark_value());
+		provide_shared_data(
+			RawOrigin::Signed(validator_id),
+			Box::new(BenchmarkValue::benchmark_value()),
+		);
 
 		assert_eq!(
 			SharedData::<T, I>::get(SharedDataHash::of::<
@@ -282,7 +295,8 @@ mod benchmarks {
 	#[benchmark]
 	fn initialize() {
 		Status::<T, I>::set(None);
-		let call = Call::<T, I>::initialize { initial_state: BenchmarkValue::benchmark_value() };
+		let call =
+			Call::<T, I>::initialize { initial_state: Box::new(BenchmarkValue::benchmark_value()) };
 
 		#[block]
 		{
@@ -302,8 +316,10 @@ mod benchmarks {
 	fn update_settings() {
 		// Initialize the elections
 		Status::<T, I>::set(None);
-		assert_ok!(Call::<T, I>::initialize { initial_state: BenchmarkValue::benchmark_value() }
-			.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()));
+		assert_ok!(Call::<T, I>::initialize {
+			initial_state: Box::new(BenchmarkValue::benchmark_value())
+		}
+		.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()));
 		let next_election = NextElectionIdentifier::<T, I>::get();
 
 		// Clear the storage so it can be "re-set".
@@ -332,8 +348,10 @@ mod benchmarks {
 	fn set_shared_data_reference_lifetime() {
 		// Initialize the elections
 		Status::<T, I>::set(None);
-		assert_ok!(Call::<T, I>::initialize { initial_state: BenchmarkValue::benchmark_value() }
-			.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()));
+		assert_ok!(Call::<T, I>::initialize {
+			initial_state: Box::new(BenchmarkValue::benchmark_value())
+		}
+		.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()));
 
 		assert_eq!(SharedDataReferenceLifetime::<T, I>::get(), Default::default());
 		let lifetime = BlockNumberFor::<T>::from(100u32);

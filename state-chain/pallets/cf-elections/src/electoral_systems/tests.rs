@@ -18,6 +18,8 @@ pub(crate) use super::mocks;
 
 pub(crate) use crate::register_checks;
 
+mod block_height_witnesser;
+pub mod block_witnesser;
 pub mod delta_based_ingress;
 pub mod egress_success;
 pub mod exact_value;
@@ -25,5 +27,6 @@ pub mod liveness;
 pub mod monotonic_change;
 pub mod monotonic_median;
 pub mod solana_vault_swap_accounts;
+pub mod statemachine_witnessing_pipeline;
 pub mod unsafe_median;
 pub mod utils;

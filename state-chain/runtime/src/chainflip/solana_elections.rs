@@ -15,9 +15,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	AccountId, Environment, Offence, Reputation, Runtime, SolanaBroadcaster, SolanaChainTracking,
-	SolanaIngressEgress, SolanaThresholdSigner,
+	chainflip::ReportFailedLivenessCheck, constants::common::LIVENESS_CHECK_DURATION, AccountId,
+	Environment, Runtime, SolanaBroadcaster, SolanaChainTracking, SolanaIngressEgress,
+	SolanaThresholdSigner,
 };
+
 use cf_chains::{
 	address::EncodedAddress,
 	assets::{any::Asset, sol::Asset as SolAsset},
@@ -33,13 +35,13 @@ use cf_chains::{
 		SolanaCrypto,
 	},
 	CcmDepositMetadataUnchecked, Chain, ChannelRefundParameters, FeeEstimationApi,
-	FetchAndCloseSolanaVaultSwapAccounts, ForeignChain, ForeignChainAddress, Solana,
+	FetchAndCloseSolanaVaultSwapAccounts, ForeignChainAddress, Solana,
 };
 use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, Broadcaster, Chainflip,
-	ElectionEgressWitnesser, GetBlockHeight, IngressSource, SolanaNonceWatch,
+	AdjustedFeeEstimationApi, Broadcaster, Chainflip, ElectionEgressWitnesser, GetBlockHeight,
+	IngressSource, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -50,7 +52,6 @@ use pallet_cf_elections::{
 		blockchain::delta_based_ingress::BackoffSettings,
 		composite::{tags::G, tuple_7_impls::Hooks, CompositeRunner},
 		exact_value::ExactValueHook,
-		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
 		solana_vault_swap_accounts::{FromSolOrNot, SolanaVaultSwapAccountsHook},
@@ -65,6 +66,7 @@ use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
+use electoral_systems::liveness::Liveness;
 
 use super::SolEnvironment;
 
@@ -85,8 +87,6 @@ pub type SolanaElectoralSystemRunner = CompositeRunner<
 	RunnerStorageAccess<Runtime, SolanaInstance>,
 	SolanaElectionHooks,
 >;
-
-const LIVENESS_CHECK_DURATION: BlockNumberFor<Runtime> = 10;
 
 /// Creates an initial state to initialize the pallet with.
 pub fn initial_state(
@@ -159,22 +159,15 @@ pub type SolanaEgressWitnessing = electoral_systems::exact_value::ExactValue<
 	BlockNumberFor<Runtime>,
 >;
 
-pub type SolanaLiveness = electoral_systems::liveness::Liveness<
+pub type SolanaLiveness = Liveness<
 	<Solana as Chain>::ChainBlockNumber,
 	SolHash,
 	cf_primitives::BlockNumber,
-	OnCheckCompleteHook,
+	ReportFailedLivenessCheck<Solana>,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
 >;
 
-pub struct OnCheckCompleteHook;
-
-impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for OnCheckCompleteHook {
-	fn on_check_complete(validator_ids: BTreeSet<<Runtime as Chainflip>::ValidatorId>) {
-		Reputation::report_many(Offence::FailedLivenessCheck(ForeignChain::Solana), validator_ids);
-	}
-}
 pub type SolanaVaultSwapTracking =
 	electoral_systems::solana_vault_swap_accounts::SolanaVaultSwapAccounts<
 		VaultSwapAccountAndSender,
@@ -732,4 +725,12 @@ pub(crate) fn initiate_solana_alt_election(alts: BTreeSet<SolAddress>) {
 		//The error should not happen as long as the election identifiers don't overflow
 		log::error!("Cannot start Solana ALT witnessing election: {:?}", e);
 	})
+}
+
+pub struct SolanaGovernanceElectionHook;
+
+impl pallet_cf_elections::GovernanceElectionHook for SolanaGovernanceElectionHook {
+	type Properties = ();
+
+	fn start(_properties: Self::Properties) {}
 }
