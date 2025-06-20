@@ -161,7 +161,7 @@ pub trait Statemachine: AbstractApi + 'static {
 		let mut prev_state = state.clone();
 
 		// run step function and ensure that output is valid
-		let output = Self::step(&mut state, input.clone(), &settings);
+		let output = Self::step(state, input.clone(), settings);
 		assert!(output.is_valid().is_ok(), "step function failed");
 
 		// ensure that state is still well formed
@@ -173,7 +173,7 @@ pub trait Statemachine: AbstractApi + 'static {
 		);
 
 		// ensure that step function computed valid state
-		Self::step_specification(&mut prev_state, &input, &output, &settings, &state);
+		Self::step_specification(&mut prev_state, &input, &output, settings, state);
 
 		output
 	}

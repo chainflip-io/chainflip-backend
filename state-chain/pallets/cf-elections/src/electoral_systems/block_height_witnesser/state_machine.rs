@@ -251,7 +251,7 @@ pub mod tests {
 			}
 		}
 
-		type Strategy = impl Strategy<Value = NonemptyContinuousHeaders<C>> + Clone + Debug + Send;
+		type Strategy = impl Strategy<Value = NonemptyContinuousHeaders<C>> + Clone + Send;
 	}
 
 	pub fn generate_input<T: BHWTypes>(

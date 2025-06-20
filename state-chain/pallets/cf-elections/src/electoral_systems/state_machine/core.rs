@@ -1,7 +1,4 @@
-use cf_chains::{
-	witness_period::BlockWitnessRange,
-	ChainWitnessConfig,
-};
+use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
 use core::ops::RangeInclusive;
 #[cfg(test)]
 use proptest::prelude::{Arbitrary, Strategy};
@@ -238,7 +235,7 @@ impl<Tag: Sync + Send> Arbitrary for TypesFor<Tag> {
 		Just(TypesFor { _phantom: Default::default() })
 	}
 
-	type Strategy = impl Strategy<Value = Self> + Debug + Clone + Sync + Send;
+	type Strategy = impl Strategy<Value = Self> + Clone + Sync + Send;
 }
 
 pub trait HookType {

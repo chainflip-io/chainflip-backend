@@ -500,7 +500,7 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 		)
 	}
 
-	type Strategy = impl Strategy<Value = Self> + Clone + sp_std::fmt::Debug + Sync + Send;
+	type Strategy = impl Strategy<Value = Self> + Clone + Sync + Send;
 }
 
 def_derive! {
