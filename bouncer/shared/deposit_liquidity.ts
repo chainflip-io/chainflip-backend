@@ -46,9 +46,10 @@ export async function depositLiquidity(
 
     logger.debug('Registering Liquidity Refund Address for ' + ccy + ': ' + refundAddress);
     await lpMutex.runExclusive(async () => {
+      const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
       await chainflip.tx.liquidityProvider
         .registerLiquidityRefundAddress({ [chain]: refundAddress })
-        .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
+        .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
     });
   }
 
@@ -58,9 +59,10 @@ export async function depositLiquidity(
 
   logger.debug(`Requesting ${ccy} deposit address`);
   await lpMutex.runExclusive(async () => {
+    const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
       .requestLiquidityDepositAddress(ccy, null)
-      .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
+      .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
   });
 
   const ingressAddress = (await eventHandle).data.depositAddress[chain];

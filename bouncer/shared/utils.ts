@@ -1097,8 +1097,9 @@ export async function submitChainflipExtrinsic(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let extrinsicResult: any;
+  const nonce = await chainflipApi.rpc.system.accountNextIndex(account.address);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await extrinsic.signAndSend(account, { nonce: -1 }, (arg: any) => {
+  await extrinsic.signAndSend(account, { nonce }, (arg: any) => {
     if (arg.blockNumber !== undefined || arg.dispatchError !== undefined) {
       extrinsicResult = arg;
     }
