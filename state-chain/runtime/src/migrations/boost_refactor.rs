@@ -147,6 +147,7 @@ fn migrate_boost_status<AccountId, BlockNumber>(
 	}
 }
 
+#[cfg(feature = "try-runtime")]
 /// Total available balances in BTC boost pools before migration:
 fn old_boost_balances() -> BTreeMap<AccountId, ScaledAmount> {
 	let mut balances: BTreeMap<AccountId, ScaledAmount> = Default::default();
@@ -163,6 +164,7 @@ fn old_boost_balances() -> BTreeMap<AccountId, ScaledAmount> {
 	balances
 }
 
+#[cfg(feature = "try-runtime")]
 // Total available balances in boost pools (including what's in ongoing boosts) after migration:
 fn new_boost_balances() -> BTreeMap<AccountId, ScaledAmount> {
 	let mut balances: BTreeMap<AccountId, ScaledAmount> = Default::default();

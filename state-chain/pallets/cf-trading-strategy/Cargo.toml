@@ -36,6 +36,7 @@ sp-std = { workspace = true }
 
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }
+proptest = { workspace = true, default-features = true }
 
 [features]
 default = ["std"]

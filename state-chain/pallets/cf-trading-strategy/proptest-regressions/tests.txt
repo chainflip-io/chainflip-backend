@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+xs 3329754862 2273774448 2189099788 1503670460 # shrinks to base_amount = 1, quote_amount = 0, min_buy_tick = 0, max_buy_tick = 0, min_sell_tick = 0, max_sell_tick = 0
+xs 1139950984 4120974845 2582338804 754522590 # shrinks to base_amount = 266, quote_amount = 1, min_buy_tick = -7, max_buy_tick = 0, min_sell_tick = 0, max_sell_tick = 5
