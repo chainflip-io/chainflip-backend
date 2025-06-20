@@ -365,7 +365,9 @@ impl_pallet_safe_mode! {
 	boost_deposits_enabled,
 	add_boost_funds_enabled,
 	stop_boosting_enabled,
-	deposits_enabled,
+	deposit_channel_creation_enabled,
+	deposit_channel_witnessing_enabled,
+	vault_deposit_witnessing_enabled,
 }
 
 /// Calls to the external chains that has failed to be broadcast/accepted by the target chain.
@@ -3084,7 +3086,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>, T::Amount),
 		DispatchError,
 	> {
-		ensure!(T::SafeMode::get().deposits_enabled, Error::<T, I>::DepositChannelCreationDisabled);
+		ensure!(
+			T::SafeMode::get().deposit_channel_creation_enabled,
+			Error::<T, I>::DepositChannelCreationDisabled
+		);
 
 		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
 		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;

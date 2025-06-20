@@ -168,6 +168,7 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	//TODO: to be removed once all chains are converted to election based witnessing
 	pub fn inner_update_chain_state(new_chain_state: ChainState<T::TargetChain>) -> DispatchResult {
 		CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {
 			ensure!(
@@ -181,6 +182,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})?;
 
 		Self::deposit_event(Event::<T, I>::ChainStateUpdated { new_chain_state });
+
+		Ok(())
+	}
+
+	pub fn inner_update_chain_height(
+		new_height: <T::TargetChain as Chain>::ChainBlockNumber,
+	) -> DispatchResult {
+		CurrentChainState::<T, I>::try_mutate(|previous_chain_state| {
+			ensure!(
+				new_height > previous_chain_state.as_ref().expect(NO_CHAIN_STATE).block_height,
+				Error::<T, I>::StaleDataSubmitted
+			);
+			previous_chain_state.as_mut().expect(NO_CHAIN_STATE).block_height = new_height;
+
+			Ok::<(), DispatchError>(())
+		})?;
 
 		Ok(())
 	}

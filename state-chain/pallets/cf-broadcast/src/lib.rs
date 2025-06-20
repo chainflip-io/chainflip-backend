@@ -62,6 +62,7 @@ type AggKey<T, I> =
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
 	retry_enabled,
+	egress_witnessing_enabled
 }
 
 /// The number of broadcast attempts that were made before this one.

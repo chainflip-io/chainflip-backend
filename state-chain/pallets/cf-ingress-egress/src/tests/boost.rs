@@ -839,8 +839,10 @@ fn boosting_with_safe_mode(enable: bool) {
 
 	let boost_mode = if enable { PalletSafeMode::CODE_GREEN } else { PalletSafeMode::CODE_RED };
 
-	let new_mode =
-		PalletSafeMode { deposits_enabled: get_safe_mode().deposits_enabled, ..boost_mode };
+	let new_mode = PalletSafeMode {
+		deposit_channel_creation_enabled: get_safe_mode().deposit_channel_creation_enabled,
+		..boost_mode
+	};
 
 	assert!(get_safe_mode() != new_mode, "Boosting is already in the requested mode");
 
