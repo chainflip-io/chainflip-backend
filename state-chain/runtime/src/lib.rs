@@ -278,7 +278,10 @@ impl pallet_cf_validator::Config for Runtime {
 						chainflip::ValidatorRoleQualification,
 						(
 							pallet_cf_validator::QualifyByCfeVersion<Self>,
-							ReputationPointsQualification<Self>,
+							(
+								ReputationPointsQualification<Self>,
+								pallet_cf_validator::QualifyByMinimumBid<Self>,
+							),
 						),
 					),
 				),

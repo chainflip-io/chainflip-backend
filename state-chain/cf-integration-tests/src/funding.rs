@@ -344,3 +344,41 @@ fn backup_rewards_event_gets_emitted_on_heartbeat_interval() {
 			);
 		});
 }
+
+#[test]
+fn min_aution_bid_qualification() {
+	const GENESIS_BALANCE_IN_FLIP: u32 = (GENESIS_BALANCE / FLIPPERINOS_PER_FLIP) as u32;
+	super::genesis::with_test_defaults().build().execute_with(|| {
+		let _ = crate::authorities::fund_authorities_and_join_auction(0);
+
+		assert_ok!(Validator::update_pallet_config(
+			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+			pallet_cf_validator::PalletConfigUpdate::MinimumAuctionBid {
+				minimum_flip_bid: GENESIS_BALANCE_IN_FLIP
+			}
+		));
+		assert!(
+			Validator::get_qualified_bidders::<
+				<Runtime as pallet_cf_validator::Config>::KeygenQualification,
+			>()
+			.len() == Validator::current_authorities().len(),
+			"All genesis authorities should be qualified as bidders."
+		);
+		assert_ok!(Validator::update_pallet_config(
+			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+			pallet_cf_validator::PalletConfigUpdate::MinimumAuctionBid {
+				minimum_flip_bid: GENESIS_BALANCE_IN_FLIP + 1
+			}
+		));
+		assert!(
+			Validator::get_qualified_bidders::<
+				<Runtime as pallet_cf_validator::Config>::KeygenQualification,
+			>()
+			.is_empty(),
+			"No authorities should be qualified if minimum bid is above their balance. Qualified bidders: {:?}",
+			Validator::get_qualified_bidders::<
+				<Runtime as pallet_cf_validator::Config>::KeygenQualification,
+			>()
+		);
+	});
+}
