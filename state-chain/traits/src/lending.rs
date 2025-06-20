@@ -64,7 +64,7 @@ pub trait ChpLendingApi {
 		amount: AssetAmount,
 	) -> Result<ChpLoanId, DispatchError>;
 
-	fn make_repayment(
+	fn try_making_repayment(
 		loan_id: ChpLoanId,
 		asset: Asset,
 		amount: AssetAmount,

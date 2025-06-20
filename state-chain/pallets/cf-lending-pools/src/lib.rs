@@ -47,7 +47,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{BlockNumberProvider, Saturating, UniqueSaturatedInto, Zero},
-		Percent, Permill, Perquintill,
+		Perbill, Percent, Permill, Perquintill,
 	},
 	transactional,
 };
@@ -127,10 +127,13 @@ enum LoanStatus {
 	// Loan has not yet been repaid in full
 	Active,
 	// A swap has been created from USDC collateral into the borrowed asset
+	// (using soft liquidation parameters)
 	SoftLiquidation { usdc_collateral: AssetAmount },
+	// A swap has been created from USDC collateral into the borrowed asset
+	// (using hard liquidation parameters)
+	HardLiquidation { usdc_collateral: AssetAmount },
 	// Principal has been repaid in full and we are awaiting for collected
 	// fees to be swapped into the pools asset
-	HardLiquidation { usdc_collateral: AssetAmount },
 	Finalising,
 }
 
@@ -143,32 +146,38 @@ pub struct ChpPoolContribution {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct ChpConfiguration {
+	/// Clearing fee is computed as clearing_fee_base + utilisation *
+	/// clearing_fee_utilisation_factor
 	pub clearing_fee_base: Permill,
 	pub clearing_fee_utilisation_factor: Permill,
-	pub interest_base: Permill,
-	pub interest_utilisation_factor: Permill,
+	/// Interest is computed as interest_base + utilisation *
+	/// interest_utilisation_factor
+	pub interest_base: Perbill,
+	pub interest_utilisation_factor: Perbill,
 
+	/// The % above 100% of the loan principal amount that must be covered
+	/// by collateral in order to create a loan.
 	pub overcollateralisation_target: Permill,
+	/// Reaching this threshold will trigger a top-up of the collateral
 	pub overcollateralisation_topup_threshold: Permill,
+	/// Reaching this threshold will trigger soft liquidation of the loan
 	pub overcollateralisation_soft_threshold: Permill,
+	/// Reaching this threshold will trigger hard liquidation of the loan
 	pub overcollateralisation_hard_threshold: Permill,
 
+	/// Maximum duration of a loan in blocks upon reaching which the loan will be (soft) liquidated
 	pub max_loan_duration: u32,
 }
 
 impl ChpConfiguration {
 	fn derive_clearing_fee(&self, utilisation: Permill) -> Permill {
-		Permill::from_parts(
-			self.clearing_fee_base.deconstruct() +
-				utilisation * self.clearing_fee_utilisation_factor.deconstruct(),
-		)
+		self.clearing_fee_base + utilisation * self.clearing_fee_utilisation_factor
 	}
 
-	fn derive_interest_rate(&self, utilisation: Permill) -> Permill {
-		Permill::from_parts(
-			self.interest_base.deconstruct() +
-				utilisation * self.interest_utilisation_factor.deconstruct(),
-		)
+	fn derive_interest_rate(&self, utilisation: Permill) -> Perbill {
+		self.interest_base +
+			Perbill::from_parts(utilisation.deconstruct() * 1000) *
+				self.interest_utilisation_factor
 	}
 }
 
@@ -373,7 +382,7 @@ pub mod pallet {
 		/// The specified pool does not exist.
 		PoolDoesNotExist,
 		/// The account id is not a member of the boost pool.
-		AccountNotFoundInBoostPool,
+		AccountNotFoundInPool,
 		/// You cannot add 0 to a boost pool.
 		AmountMustBeNonZero,
 		/// Not enough available liquidity to boost a deposit
@@ -482,7 +491,7 @@ pub mod pallet {
 
 					pool.stop_lending(booster.clone()).map_err(|e| match e {
 						core_lending_pool::Error::AccountNotFoundInPool =>
-							Error::<T>::AccountNotFoundInBoostPool,
+							Error::<T>::AccountNotFoundInPool,
 					})
 				})?;
 
@@ -584,7 +593,7 @@ pub mod pallet {
 
 					pool.stop_lending(lender_id.clone()).map_err(|e| match e {
 						core_lending_pool::Error::AccountNotFoundInPool =>
-							Error::<T>::AccountNotFoundInBoostPool,
+							Error::<T>::AccountNotFoundInPool,
 					})
 				})?;
 

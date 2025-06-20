@@ -16,8 +16,8 @@ const MAX_LOAN_DURATION: u32 = 30;
 const CLEARING_FEE_BASE: Permill = Permill::from_parts(100);
 const CLEARING_FEE_UTILISATION_FACTOR: Permill = Permill::from_parts(100);
 
-const INTEREST_BASE: Permill = Permill::from_parts(10);
-const INTEREST_UTILISATION_FACTOR: Permill = Permill::from_parts(10);
+const INTEREST_BASE: Perbill = Perbill::from_parts(1000);
+const INTEREST_UTILISATION_FACTOR: Perbill = Perbill::from_parts(1000);
 
 const LENDER: u64 = BOOSTER_1;
 
@@ -28,7 +28,7 @@ const PRINCIPAL: AssetAmount = 1_000_000;
 // This much is required to create the loan
 const INIT_COLLATERAL: AssetAmount = (PRINCIPAL + PRINCIPAL / 5) * SWAP_RATE; // 20% overcollateralisation
 
-const EXPECTED_INTEREST: Permill = Permill::from_parts(15); // 50% utilisation expected
+const EXPECTED_INTEREST_PER_BLOCK: Perbill = Perbill::from_parts(1_500); // 50% utilisation expected
 const EXPECTED_CLEARING_FEE: Permill = Permill::from_parts(150); // 50% utilisation expected
 
 const LOAN_ID: ChpLoanId = ChpLoanId(0);
@@ -83,10 +83,11 @@ fn basic_chp_lending() {
 
 	let init_lp_balance_usdc = INIT_COLLATERAL + clearing_fee_usdc; // just enough to create the loan
 
-	let interest_charge_btc_1 = EXPECTED_INTEREST * PRINCIPAL;
+	let interest_charge_btc_1 =
+		EXPECTED_INTEREST_PER_BLOCK.int_mul(INTEREST_PAYMENT_INTERVAL) * PRINCIPAL;
 	let interest_charge_usdc_1 = interest_charge_btc_1 * SWAP_RATE;
 
-	let interest_charge_btc_2 = EXPECTED_INTEREST * PRINCIPAL / 2;
+	let interest_charge_btc_2 = interest_charge_btc_1 / 2;
 	let interest_charge_usdc_2 = interest_charge_btc_2 * SWAP_RATE;
 
 	let total_fees_btc = clearing_fee_btc + interest_charge_btc_1 + interest_charge_btc_2;
@@ -127,7 +128,8 @@ fn basic_chp_lending() {
 						loan_id: LoanId(0),
 						principal: PRINCIPAL,
 					}],
-					interest_rate: EXPECTED_INTEREST
+					interest_rate: EXPECTED_INTEREST_PER_BLOCK,
+					asset_price_at_creation: U256::from(SWAP_RATE) << PRICE_FRACTIONAL_BITS
 				}
 			);
 		})
@@ -140,7 +142,7 @@ fn basic_chp_lending() {
 			assert_eq!(loan.fees_collected_usdc, clearing_fee_usdc + interest_charge_usdc_1);
 		})
 		.then_execute_with(|_| {
-			assert_ok!(LendingPools::make_repayment(LOAN_ID, ASSET, PRINCIPAL / 2));
+			assert_ok!(LendingPools::try_making_repayment(LOAN_ID, ASSET, PRINCIPAL / 2));
 			assert_eq!(MockBalance::get_balance(&LP, ASSET), PRINCIPAL / 2);
 
 			let loan = ChpLoans::<Test>::get(ASSET, LOAN_ID).unwrap();
@@ -164,7 +166,7 @@ fn basic_chp_lending() {
 		})
 		.then_execute_with(|_| {
 			// Repaying the remainder of the borrowed amount should finalise the loan:
-			assert_ok!(LendingPools::make_repayment(LOAN_ID, ASSET, PRINCIPAL / 2));
+			assert_ok!(LendingPools::try_making_repayment(LOAN_ID, ASSET, PRINCIPAL / 2));
 
 			let loan = ChpLoans::<Test>::get(ASSET, LOAN_ID).unwrap();
 			assert_eq!(loan.status, LoanStatus::Finalising);
@@ -244,7 +246,7 @@ fn stop_lending() {
 		assert_eq!(MockBalance::get_balance(&LENDER, COLLATERAL_ASSET), 0);
 
 		// Once the loan is repaid, the lender should get the remaining amount:
-		assert_ok!(LendingPools::make_repayment(LOAN_ID, ASSET, PRINCIPAL));
+		assert_ok!(LendingPools::try_making_repayment(LOAN_ID, ASSET, PRINCIPAL));
 		assert_eq!(MockBalance::get_balance(&LENDER, ASSET), PRINCIPAL * 2);
 		assert_eq!(MockBalance::get_balance(&LENDER, COLLATERAL_ASSET), 0);
 		assert_eq!(ChpLoans::<Test>::get(ASSET, LOAN_ID).unwrap().status, LoanStatus::Finalising);
@@ -380,7 +382,8 @@ fn soft_liquidation() {
 fn loan_expiration() {
 	const EXPIRY_BLOCK: u64 = INIT_BLOCK + MAX_LOAN_DURATION as u64;
 
-	let interest_charge_usdc = EXPECTED_INTEREST * PRINCIPAL * SWAP_RATE;
+	let interest_charge_usdc =
+		EXPECTED_INTEREST_PER_BLOCK.int_mul(INTEREST_PAYMENT_INTERVAL) * PRINCIPAL * SWAP_RATE;
 
 	new_test_ext()
 		.execute_with(|| {
