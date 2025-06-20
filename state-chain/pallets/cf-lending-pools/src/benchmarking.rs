@@ -38,6 +38,11 @@ mod benchmarks {
 		));
 	}
 
+	fn setup_chp_pool<T: Config>(asset: Asset) {
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		assert_ok!(Pallet::<T>::create_chp_pool(origin, asset));
+	}
+
 	fn setup_booster_account<T: Config>(asset: Asset, seed: u32) -> T::AccountId {
 		use frame_support::traits::OnNewAccount;
 		let caller: T::AccountId = account("booster", 0, seed);
@@ -53,6 +58,24 @@ mod benchmarks {
 		T::Balance::credit_account(&caller, asset, 5_000_000_000_000_000_000u128);
 
 		caller
+	}
+
+	#[benchmark]
+	fn update_pallet_config(n: Linear<1, MAX_PALLET_CONFIG_UPDATE>) {
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		let updates = vec![
+			PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
+				deduction_percent: Percent::from_percent(10),
+			};
+			n as usize
+		]
+		.try_into()
+		.expect("Length is within the configured len");
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::update_pallet_config(origin, updates));
+		}
 	}
 
 	#[benchmark]
@@ -182,4 +205,62 @@ mod benchmarks {
 		}
 		assert_eq!(BoostPools::<T>::iter().count(), 1);
 	}
+
+	#[benchmark]
+	fn create_chp_pool() {
+		#[block]
+		{
+			setup_chp_pool::<T>(Asset::Btc);
+		}
+	}
+
+	#[benchmark]
+	fn add_chp_funds() {
+		let asset = Asset::Btc;
+		let lp_account = setup_booster_account::<T>(asset, 0);
+		setup_chp_pool::<T>(asset);
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::add_chp_funds(
+				RawOrigin::Signed(lp_account).into(),
+				asset,
+				1_000_000_000_000u128,
+			));
+		}
+	}
+
+	#[benchmark]
+	fn stop_chp_lending() {
+		let asset = Asset::Btc;
+		let lp_account = setup_booster_account::<T>(asset, 0);
+		let core_pool_id = NextCorePoolId::<T>::get();
+
+		setup_chp_pool::<T>(asset);
+		assert_ok!(Pallet::<T>::add_chp_funds(
+			RawOrigin::Signed(lp_account.clone()).into(),
+			asset,
+			1_000_000_000_000u128,
+		));
+		assert_ok!(Pallet::<T>::add_chp_funds(
+			RawOrigin::Signed(lp_account.clone()).into(),
+			asset,
+			2_000_000_000_000u128,
+		));
+
+		// Pessimistically add pending loans.
+		CorePools::<T>::mutate(asset, core_pool_id, |maybe_pool| {
+			let pool = maybe_pool.as_mut().expect("Pool was created above");
+			for i in 0..10 {
+				assert_ok!(pool.new_loan(1_000_000_000u128, LoanUsage::ChpLoan(ChpLoanId(i))));
+			}
+		});
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::stop_chp_lending(RawOrigin::Signed(lp_account).into(), asset,));
+		}
+	}
+
+	impl_benchmark_test_suite!(Pallet, crate::mocks::new_test_ext(), crate::mocks::Test,);
 }
