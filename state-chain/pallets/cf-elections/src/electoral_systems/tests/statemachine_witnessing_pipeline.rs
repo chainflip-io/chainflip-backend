@@ -224,7 +224,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 			let mut outputs = Vec::new();
 			for input in inputs {
 				// ensure that input is correct
-				BHW::validate_input(&BHW::get_queries(&mut bhw_state), &input).unwrap();
+				BHW::validate_input(&mut bhw_state, &input).unwrap();
 
 				history.push(BWTrace::InputBHW(input.clone()));
 

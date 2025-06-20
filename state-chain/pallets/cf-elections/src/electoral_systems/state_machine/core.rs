@@ -1,5 +1,5 @@
 use cf_chains::{
-	witness_period::{is_block_witness_root, BlockWitnessRange},
+	witness_period::BlockWitnessRange,
 	ChainWitnessConfig,
 };
 use core::ops::RangeInclusive;
@@ -9,7 +9,6 @@ use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::V
 
 use codec::{Decode, Encode};
 use derive_where::derive_where;
-use frame_support::ensure;
 use itertools::Either;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
