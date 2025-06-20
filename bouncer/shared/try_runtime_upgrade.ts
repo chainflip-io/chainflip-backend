@@ -3,11 +3,11 @@
 
 import path from 'path';
 import { ApiPromise, HttpProvider } from '@polkadot/api';
-import { compileBinaries } from './utils/compile_binaries';
-import { mkTmpDir, execWithRustLog } from './utils/exec_with_log';
-import { CHAINFLIP_HTTP_ENDPOINT } from './utils/substrate';
-import { retryRpcCall } from './utils';
-import { globalLogger as logger } from './utils/logger';
+import { compileBinaries } from 'shared/utils/compile_binaries';
+import { mkTmpDir, execWithRustLog } from 'shared/utils/exec_with_log';
+import { CHAINFLIP_HTTP_ENDPOINT } from 'shared/utils/substrate';
+import { retryRpcCall } from 'shared/utils';
+import { globalLogger as logger } from 'shared/utils/logger';
 
 async function createSnapshotFile(networkUrl: string, blockHash: string): Promise<boolean> {
   const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;

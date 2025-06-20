@@ -44,8 +44,8 @@ impl<E> SetAggKeyWithAggKey<EvmCrypto> for ArbitrumApi<E>
 where
 	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
 {
-	fn new_unsigned(
-		_old_key: Option<<EvmCrypto as ChainCrypto>::AggKey>,
+	fn new_unsigned_impl(
+		_maybe_old_key: Option<<EvmCrypto as ChainCrypto>::AggKey>,
 		new_key: <EvmCrypto as ChainCrypto>::AggKey,
 	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
 		Ok(Some(Self::SetAggKeyWithAggKey(EvmTransactionBuilder::new_unsigned(
@@ -59,7 +59,7 @@ impl<E> AllBatch<Arbitrum> for ArbitrumApi<E>
 where
 	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		fetch_params: Vec<FetchAssetParams<Arbitrum>>,
 		transfer_params: Vec<(TransferAssetParams<Arbitrum>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
@@ -80,7 +80,7 @@ impl<E> ExecutexSwapAndCall<Arbitrum> for ArbitrumApi<E>
 where
 	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Arbitrum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
@@ -112,7 +112,7 @@ impl<E> TransferFallback<Arbitrum> for ArbitrumApi<E>
 where
 	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
 {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Arbitrum>,
 	) -> Result<Self, TransferFallbackError> {
 		let transfer_param = EncodableTransferAssetParams {

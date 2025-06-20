@@ -115,7 +115,7 @@ thread_local! {
 }
 
 impl AllBatch<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<(TransferAssetParams<Ethereum>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
@@ -166,7 +166,7 @@ pub struct MockEthExecutexSwapAndCall<MockEvmEnvironment> {
 }
 
 impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
@@ -198,7 +198,7 @@ pub struct MockEthTransferFallback<MockEvmEnvironment> {
 }
 
 impl TransferFallback<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Ethereum>,
 	) -> Result<Self, TransferFallbackError> {
 		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
@@ -285,7 +285,7 @@ pub struct MockBtcTransferFallback<MockBtcEnvironment> {
 }
 
 impl TransferFallback<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		_transfer_param: TransferAssetParams<Bitcoin>,
 	) -> Result<Self, TransferFallbackError> {
 		Err(TransferFallbackError::Unsupported)
@@ -303,7 +303,7 @@ pub struct MockBtcExecutexSwapAndCall<MockBtcEnvironment> {
 }
 
 impl ExecutexSwapAndCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		transfer_param: TransferAssetParams<Bitcoin>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
@@ -340,7 +340,7 @@ impl MockBtcAllBatch<MockBtcEnvironment> {
 }
 
 impl AllBatch<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
-	fn new_unsigned(
+	fn new_unsigned_impl(
 		fetch_params: Vec<FetchAssetParams<Bitcoin>>,
 		transfer_params: Vec<(TransferAssetParams<Bitcoin>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {

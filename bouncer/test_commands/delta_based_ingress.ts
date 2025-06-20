@@ -12,10 +12,10 @@
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { testDeltaBasedIngress } from '../tests/delta_based_ingress';
-import { TestContext } from '../shared/utils/test_context';
-import { globalLogger } from '../shared/utils/logger';
-import { runWithTimeoutAndExit } from '../shared/utils';
+import { testDeltaBasedIngress } from 'tests/delta_based_ingress';
+import { TestContext } from 'shared/utils/test_context';
+import { globalLogger } from 'shared/utils/logger';
+import { runWithTimeoutAndExit } from 'shared/utils';
 
 // Test Solana's delta based ingress
 async function main(): Promise<void> {

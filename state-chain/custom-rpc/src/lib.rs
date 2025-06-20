@@ -32,7 +32,7 @@ use cf_chains::{
 use cf_node_client::events_decoder;
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
 	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
 use cf_rpc_apis::{
@@ -77,9 +77,9 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
-		ChannelActionType, CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi,
-		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		NetworkFees, RuntimeApiPenalty, SimulatedSwapInformation, TradingStrategyInfo,
+		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
+		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
+		OpenedDepositChannels, RuntimeApiPenalty, SimulatedSwapInformation, TradingStrategyInfo,
 		TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
 		VaultSwapDetails,
 	},
@@ -98,6 +98,9 @@ pub mod lp;
 pub mod monitoring;
 pub mod order_fills;
 pub mod pool_client;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
@@ -531,7 +534,7 @@ mod boost_pool_rpc {
 	}
 
 	impl BoostPoolDetailsRpc {
-		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails) -> Self {
+		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails<AccountId32>) -> Self {
 			BoostPoolDetailsRpc {
 				asset,
 				fee_tier,
@@ -585,7 +588,7 @@ mod boost_pool_rpc {
 	}
 
 	impl BoostPoolFeesRpc {
-		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails) -> Self {
+		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails<AccountId32>) -> Self {
 			BoostPoolFeesRpc {
 				fee_tier,
 				asset,
@@ -753,6 +756,7 @@ pub trait CustomApi {
 		ccm_data: Option<CcmData>,
 		exclude_fees: Option<BTreeSet<FeeTypes>>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
+		is_internal: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2>;
 	#[method(name = "required_asset_ratio_for_range_order")]
@@ -1039,7 +1043,7 @@ pub trait CustomApi {
 	fn cf_all_open_deposit_channels(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<(state_chain_runtime::AccountId, ChannelActionType, ChainAccounts)>>;
+	) -> RpcResult<Vec<OpenedDepositChannels>>;
 
 	#[method(name = "get_trading_strategies")]
 	fn cf_get_trading_strategies(
@@ -1142,6 +1146,8 @@ where
 
 #[derive(thiserror::Error, Debug)]
 pub enum CfApiError {
+	#[error("Header not found for block {0:?}")]
+	HeaderNotFoundError(Hash),
 	#[error(transparent)]
 	ClientError(#[from] jsonrpsee::core::client::Error),
 	#[error("{0:?}")]
@@ -1194,6 +1200,7 @@ impl From<CfApiError> for RpcApiError {
 			},
 			CfApiError::ErrorObject(object) => RpcApiError::ErrorObject(object),
 			CfApiError::OtherError(error) => RpcApiError::ErrorObject(internal_error(error)),
+			CfApiError::HeaderNotFoundError(_) => RpcApiError::ErrorObject(internal_error(error)),
 			CfApiError::SubstrateClientError(error) =>
 				RpcApiError::ErrorObject(call_error(error, CfErrorCode::SubstrateClientError)),
 			CfApiError::PoolClientError(error) =>
@@ -1311,7 +1318,7 @@ where
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
 		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
 		cf_vault_addresses() -> VaultAddresses,
-		cf_all_open_deposit_channels() -> Vec<(state_chain_runtime::AccountId, ChannelActionType, ChainAccounts)>,
+		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
 	}
 
@@ -1488,6 +1495,7 @@ where
 			None,
 			None,
 			additional_orders,
+			None,
 			at,
 		)
 	}
@@ -1502,6 +1510,7 @@ where
 		ccm_data: Option<CcmData>,
 		exclude_fees: Option<BTreeSet<FeeTypes>>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
+		is_internal: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
 		let amount = amount
@@ -1559,6 +1568,7 @@ where
 					ccm_data,
 					exclude_fees.unwrap_or_default(),
 					additional_orders,
+					is_internal,
 				)?
 				.map(|simulated_swap_info_v2| {
 					into_rpc_swap_output(simulated_swap_info_v2, from_asset, to_asset)
@@ -1609,7 +1619,11 @@ where
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
-				network_fee_hundredth_pips: api.cf_network_fees(hash)?.regular_network_fee.rate,
+				network_fee_hundredth_pips: api
+					.cf_network_fees(hash)?
+					.regular_network_fee
+					.standard_rate_and_minimum
+					.rate,
 				swap_retry_delay_blocks: api.cf_swap_retry_delay_blocks(hash)?,
 				max_swap_retry_duration_blocks: swap_limits.max_swap_retry_duration_blocks,
 				max_swap_request_duration_blocks: swap_limits.max_swap_request_duration_blocks,
@@ -2038,430 +2052,19 @@ where
 	}
 }
 
-#[cfg(test)]
-mod test {
-	use std::collections::BTreeSet;
-
-	use cf_chains::address::EncodedAddress;
-	use pallet_cf_swapping::FeeRateAndMinimum;
-
-	use super::*;
-	use cf_chains::{assets::sol, btc::ScriptPubkey};
-	use cf_primitives::{
-		chains::assets::{any, arb, btc, dot, eth, hub},
-		FLIPPERINOS_PER_FLIP,
-	};
-	use sp_core::H160;
-	use sp_runtime::AccountId32;
-	use state_chain_runtime::runtime_apis::OwedAmount;
-
-	/*
-		changing any of these serialization tests signifies a breaking change in the
-		API. please make sure to get approval from the product team before merging
-		any changes that break a serialization test.
-
-		if approval is received and a new breaking change is introduced, please
-		stale the review and get a new review from someone on product.
-	*/
-
-	#[test]
-	fn test_no_account_serialization() {
-		insta::assert_snapshot!(serde_json::to_value(RpcAccountInfo::unregistered(
-			0,
-			any::AssetMap::default()
-		))
-		.unwrap());
-	}
-
-	#[test]
-	fn test_broker_serialization() {
-		use cf_chains::btc::BitcoinNetwork;
-		let broker = RpcAccountInfo::broker(
-			BrokerInfo {
-				earned_fees: vec![
-					(Asset::Eth, 0),
-					(Asset::Btc, 0),
-					(Asset::Flip, 1000000000000000000),
-					(Asset::Usdc, 0),
-					(Asset::Usdt, 0),
-					(Asset::Dot, 0),
-					(Asset::ArbEth, 0),
-					(Asset::ArbUsdc, 0),
-					(Asset::Sol, 0),
-					(Asset::SolUsdc, 0),
-				],
-				btc_vault_deposit_address: Some(
-					ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
-				),
-				bond: 0,
-				affiliates: vec![(
-					AccountId32::new([1; 32]),
-					AffiliateDetails {
-						short_id: 1.into(),
-						withdrawal_address: H160::from([0xcf; 20]),
-					},
-				)],
-			},
-			0,
-		);
-		insta::assert_json_snapshot!(broker);
-	}
-
-	#[test]
-	fn test_lp_serialization() {
-		let lp = RpcAccountInfo::lp(
-			LiquidityProviderInfo {
-				refund_addresses: vec![
-					(
-						ForeignChain::Ethereum,
-						Some(cf_chains::ForeignChainAddress::Eth(H160::from([1; 20]))),
-					),
-					(
-						ForeignChain::Polkadot,
-						Some(cf_chains::ForeignChainAddress::Dot(Default::default())),
-					),
-					(ForeignChain::Bitcoin, None),
-					(
-						ForeignChain::Arbitrum,
-						Some(cf_chains::ForeignChainAddress::Arb(H160::from([2; 20]))),
-					),
-					(ForeignChain::Solana, None),
-				],
-				balances: vec![
-					(Asset::Eth, u128::MAX),
-					(Asset::Btc, 0),
-					(Asset::Flip, u128::MAX / 2),
-					(Asset::Usdc, 0),
-					(Asset::Usdt, 0),
-					(Asset::Dot, 0),
-					(Asset::ArbEth, 1),
-					(Asset::ArbUsdc, 2),
-					(Asset::Sol, 3),
-					(Asset::SolUsdc, 4),
-				],
-				earned_fees: any::AssetMap {
-					eth: eth::AssetMap {
-						eth: 0u32.into(),
-						flip: u64::MAX.into(),
-						usdc: (u64::MAX / 2 - 1).into(),
-						usdt: 0u32.into(),
-					},
-					btc: btc::AssetMap { btc: 0u32.into() },
-					dot: dot::AssetMap { dot: 0u32.into() },
-					arb: arb::AssetMap { eth: 1u32.into(), usdc: 2u32.into() },
-					sol: sol::AssetMap { sol: 2u32.into(), usdc: 4u32.into() },
-					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
-				},
-				boost_balances: any::AssetMap {
-					btc: btc::AssetMap {
-						btc: vec![LiquidityProviderBoostPoolInfo {
-							fee_tier: 5,
-							total_balance: 100_000_000,
-							available_balance: 50_000_000,
-							in_use_balance: 50_000_000,
-							is_withdrawing: false,
-						}],
-					},
-					..Default::default()
-				},
-			},
-			cf_primitives::NetworkEnvironment::Mainnet,
-			0,
-		);
-
-		insta::assert_snapshot!(serde_json::to_value(lp).unwrap());
-	}
-
-	#[test]
-	fn test_validator_serialization() {
-		let validator = RpcAccountInfo::validator(ValidatorInfo {
-			balance: FLIPPERINOS_PER_FLIP,
-			bond: FLIPPERINOS_PER_FLIP,
-			last_heartbeat: 0,
-			reputation_points: 0,
-			keyholder_epochs: vec![123],
-			is_current_authority: true,
-			is_bidding: false,
-			is_current_backup: false,
-			is_online: true,
-			is_qualified: true,
-			bound_redeem_address: Some(H160::from([1; 20])),
-			apy_bp: Some(100u32),
-			restricted_balances: BTreeMap::from_iter(vec![(
-				H160::from([1; 20]),
-				FLIPPERINOS_PER_FLIP,
-			)]),
-			estimated_redeemable_balance: 0,
-		});
-
-		insta::assert_snapshot!(serde_json::to_value(validator).unwrap());
-	}
-
-	#[test]
-	fn test_environment_serialization() {
-		let env = RpcEnvironment {
-			swapping: SwappingEnvironment {
-				maximum_swap_amounts: any::AssetMap {
-					eth: eth::AssetMap {
-						eth: Some(0u32.into()),
-						flip: None,
-						usdc: Some((u64::MAX / 2 - 1).into()),
-						usdt: None,
-					},
-					btc: btc::AssetMap { btc: Some(0u32.into()) },
-					dot: dot::AssetMap { dot: None },
-					arb: arb::AssetMap { eth: None, usdc: Some(0u32.into()) },
-					sol: sol::AssetMap { sol: None, usdc: None },
-					hub: hub::AssetMap { dot: None, usdc: None, usdt: None },
-				},
-				network_fee_hundredth_pips: Permill::from_percent(100),
-				swap_retry_delay_blocks: 5,
-				max_swap_retry_duration_blocks: 600,
-				max_swap_request_duration_blocks: 14400,
-				minimum_chunk_size: any::AssetMap {
-					eth: eth::AssetMap {
-						eth: 123_u32.into(),
-						flip: 0u32.into(),
-						usdc: 456_u32.into(),
-						usdt: 0u32.into(),
-					},
-					btc: btc::AssetMap { btc: 789_u32.into() },
-					dot: dot::AssetMap { dot: 0u32.into() },
-					arb: arb::AssetMap { eth: 0u32.into(), usdc: 101112_u32.into() },
-					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
-					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
-				},
-				network_fees: NetworkFees {
-					regular_network_fee: FeeRateAndMinimum {
-						rate: Permill::from_percent(1),
-						minimum: 123u32.into(),
-					},
-					internal_swap_network_fee: FeeRateAndMinimum {
-						rate: Permill::from_percent(2),
-						minimum: 456u32.into(),
-					},
-				},
-			},
-			ingress_egress: IngressEgressEnvironment {
-				minimum_deposit_amounts: any::AssetMap {
-					eth: eth::AssetMap {
-						eth: 0u32.into(),
-						flip: u64::MAX.into(),
-						usdc: (u64::MAX / 2 - 1).into(),
-						usdt: 0u32.into(),
-					},
-					btc: btc::AssetMap { btc: 0u32.into() },
-					dot: dot::AssetMap { dot: 0u32.into() },
-					arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
-					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
-					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
-				},
-				ingress_fees: any::AssetMap {
-					eth: eth::AssetMap {
-						eth: Some(0u32.into()),
-						flip: Some(AssetAmount::MAX.into()),
-						usdc: None,
-						usdt: None,
-					},
-					btc: btc::AssetMap { btc: Some(0u32.into()) },
-					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
-					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
-					sol: sol::AssetMap { sol: Some(0u32.into()), usdc: None },
-					hub: hub::AssetMap {
-						dot: Some((u64::MAX / 2 - 1).into()),
-						usdc: None,
-						usdt: None,
-					},
-				},
-				egress_fees: any::AssetMap {
-					eth: eth::AssetMap {
-						eth: Some(0u32.into()),
-						usdc: None,
-						flip: Some(AssetAmount::MAX.into()),
-						usdt: None,
-					},
-					btc: btc::AssetMap { btc: Some(0u32.into()) },
-					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
-					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
-					sol: sol::AssetMap { sol: Some(1u32.into()), usdc: None },
-					hub: hub::AssetMap {
-						dot: Some((u64::MAX / 2 - 1).into()),
-						usdc: None,
-						usdt: None,
-					},
-				},
-				witness_safety_margins: HashMap::from([
-					(ForeignChain::Bitcoin, Some(3u64)),
-					(ForeignChain::Ethereum, Some(3u64)),
-					(ForeignChain::Polkadot, None),
-					(ForeignChain::Arbitrum, None),
-					(ForeignChain::Solana, None),
-					(ForeignChain::Assethub, None),
-				]),
-				egress_dust_limits: any::AssetMap {
-					eth: eth::AssetMap {
-						eth: 0u32.into(),
-						usdc: (u64::MAX / 2 - 1).into(),
-						flip: AssetAmount::MAX.into(),
-						usdt: 0u32.into(),
-					},
-					btc: btc::AssetMap { btc: 0u32.into() },
-					dot: dot::AssetMap { dot: 0u32.into() },
-					arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
-					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
-					hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
-				},
-				channel_opening_fees: HashMap::from([
-					(ForeignChain::Bitcoin, 0u32.into()),
-					(ForeignChain::Ethereum, 1000u32.into()),
-					(ForeignChain::Polkadot, 1000u32.into()),
-					(ForeignChain::Arbitrum, 1000u32.into()),
-					(ForeignChain::Solana, 1000u32.into()),
-					(ForeignChain::Assethub, 1000u32.into()),
-				]),
-			},
-			funding: FundingEnvironment {
-				redemption_tax: 0u32.into(),
-				minimum_funding_amount: 0u32.into(),
-			},
-			pools: {
-				let pool_info: RpcPoolInfo = PoolInfo {
-					limit_order_fee_hundredth_pips: 0,
-					range_order_fee_hundredth_pips: 100,
-					range_order_total_fees_earned: Default::default(),
-					limit_order_total_fees_earned: Default::default(),
-					range_total_swap_inputs: Default::default(),
-					limit_total_swap_inputs: Default::default(),
-				}
-				.into();
-				PoolsEnvironment {
-					fees: any::AssetMap {
-						eth: eth::AssetMap {
-							eth: None,
-							usdc: None,
-							flip: Some(pool_info),
-							usdt: Some(pool_info),
-						},
-						btc: btc::AssetMap { btc: Some(pool_info) },
-						dot: dot::AssetMap { dot: Some(pool_info) },
-						arb: arb::AssetMap { eth: Some(pool_info), usdc: Some(pool_info) },
-						sol: sol::AssetMap { sol: Some(pool_info), usdc: None },
-						hub: hub::AssetMap {
-							dot: Some(pool_info),
-							usdc: Some(pool_info),
-							usdt: Some(pool_info),
-						},
-					},
-				}
-			},
-		};
-
-		insta::assert_snapshot!(serde_json::to_value(env).unwrap());
-	}
-
-	#[test]
-	fn test_boost_depth_serialization() {
-		let val: BoostPoolDepthResponse = vec![
-			BoostPoolDepth {
-				asset: Asset::Flip,
-				tier: 10,
-				available_amount: 1_000_000_000 * FLIPPERINOS_PER_FLIP,
-			},
-			BoostPoolDepth { asset: Asset::Flip, tier: 30, available_amount: 0 },
-		];
-		insta::assert_json_snapshot!(val);
-	}
-
-	const ID_1: AccountId32 = AccountId32::new([1; 32]);
-	const ID_2: AccountId32 = AccountId32::new([2; 32]);
-
-	fn boost_details_1() -> BoostPoolDetails {
-		BoostPoolDetails {
-			available_amounts: BTreeMap::from([(ID_1.clone(), 10_000)]),
-			pending_boosts: BTreeMap::from([
-				(
-					0,
-					BTreeMap::from([
-						(ID_1.clone(), OwedAmount { total: 200, fee: 10 }),
-						(ID_2.clone(), OwedAmount { total: 2_000, fee: 100 }),
-					]),
-				),
-				(1, BTreeMap::from([(ID_1.clone(), OwedAmount { total: 1_000, fee: 50 })])),
-			]),
-			pending_withdrawals: Default::default(),
-			network_fee_deduction_percent: Percent::from_percent(40),
-		}
-	}
-
-	fn boost_details_2() -> BoostPoolDetails {
-		BoostPoolDetails {
-			available_amounts: BTreeMap::from([]),
-			pending_boosts: BTreeMap::from([(
-				0,
-				BTreeMap::from([
-					(ID_1.clone(), OwedAmount { total: 1_000, fee: 50 }),
-					(ID_2.clone(), OwedAmount { total: 2_000, fee: 100 }),
-				]),
-			)]),
-			pending_withdrawals: BTreeMap::from([
-				(ID_1.clone(), BTreeSet::from([0])),
-				(ID_2.clone(), BTreeSet::from([0])),
-			]),
-			network_fee_deduction_percent: Percent::from_percent(0),
-		}
-	}
-
-	#[test]
-	fn test_boost_details_serialization() {
-		let val: BoostPoolDetailsResponse = vec![
-			BoostPoolDetailsRpc::new(Asset::ArbEth, 10, boost_details_1()),
-			BoostPoolDetailsRpc::new(Asset::Btc, 30, boost_details_2()),
-		];
-
-		insta::assert_json_snapshot!(val);
-	}
-
-	#[test]
-	fn test_boost_fees_serialization() {
-		let val: BoostPoolFeesResponse =
-			vec![BoostPoolFeesRpc::new(Asset::Btc, 10, boost_details_1())];
-
-		insta::assert_json_snapshot!(val);
-	}
-
-	#[test]
-	fn test_swap_output_serialization() {
-		insta::assert_snapshot!(serde_json::to_value(RpcSwapOutputV2 {
-			output: 1_000_000_000_000_000_000u128.into(),
-			intermediary: Some(1_000_000u128.into()),
-			network_fee: RpcFee { asset: Asset::Usdc, amount: 1_000u128.into() },
-			ingress_fee: RpcFee { asset: Asset::Flip, amount: 500u128.into() },
-			egress_fee: RpcFee { asset: Asset::Eth, amount: 1_000_000u128.into() },
-			broker_commission: RpcFee { asset: Asset::Usdc, amount: 100u128.into() },
-		})
-		.unwrap());
-	}
-
-	#[test]
-	fn test_vault_addresses_custom_rpc() {
-		let val: VaultAddresses = VaultAddresses {
-			ethereum: EncodedAddress::Eth([0; 20]),
-			arbitrum: EncodedAddress::Arb([1; 20]),
-			bitcoin: vec![(ID_1.clone(), EncodedAddress::Btc(Vec::new()))],
-		};
-		insta::assert_json_snapshot!(val);
-	}
-
-	#[test]
-	fn test_trading_strategies_custom_rpc() {
-		use pallet_cf_trading_strategy::TradingStrategy;
-
-		let val = TradingStrategyInfoHexAmounts {
-			lp_id: ID_1,
-			strategy_id: ID_2,
-			strategy: TradingStrategy::TickZeroCentered { spread_tick: 1, base_asset: Asset::Usdt },
-			balance: vec![(Asset::Usdc, 500u128.into()), (Asset::Usdt, 1_000u128.into())],
-		};
-		insta::assert_json_snapshot!(val);
-	}
+/// Returns the preallocated channel IDs for a given account and chain on the last finalized block.
+fn get_preallocated_channels<C, B, BE>(
+	rpc_backend: &CustomRpcBackend<C, B, BE>,
+	account_id: AccountId32,
+	chain: ForeignChain,
+) -> RpcResult<Vec<ChannelId>>
+where
+	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
+	BE: Backend<B> + Send + Sync + 'static,
+	C: sp_api::ProvideRuntimeApi<B> + HeaderBackend<B> + Send + Sync + 'static,
+	C::Api: CustomRuntimeApi<B>,
+{
+	rpc_backend.with_runtime_api(Some(rpc_backend.client.info().finalized_hash), |api, hash| {
+		api.cf_get_preallocated_deposit_channels(hash, account_id, chain)
+	})
 }

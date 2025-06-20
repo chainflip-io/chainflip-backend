@@ -1,8 +1,8 @@
 import Web3 from 'web3';
-import { sendDot } from './send_dot';
-import { sendBtc } from './send_btc';
-import { sendErc20 } from './send_erc20';
-import { sendEvmNative, signAndSendTxEvm } from './send_evm';
+import { sendDot } from 'shared/send_dot';
+import { sendBtc } from 'shared/send_btc';
+import { sendErc20 } from 'shared/send_erc20';
+import { sendEvmNative, signAndSendTxEvm } from 'shared/send_evm';
 import {
   getContractAddress,
   defaultAssetAmounts,
@@ -11,14 +11,14 @@ import {
   getEvmEndpoint,
   assetDecimals,
   Asset,
-} from './utils';
-import { approveErc20 } from './approve_erc20';
-import { getCFTesterAbi } from './contract_interfaces';
-import { sendSol } from './send_sol';
-import { sendSolUsdc } from './send_solusdc';
-import { sendHubDot } from './send_hubdot';
-import { sendHubAsset } from './send_hubasset';
-import { Logger } from './utils/logger';
+} from 'shared/utils';
+import { approveErc20 } from 'shared/approve_erc20';
+import { getCFTesterAbi } from 'shared/contract_interfaces';
+import { sendSol } from 'shared/send_sol';
+import { sendSolUsdc } from 'shared/send_solusdc';
+import { sendHubDot } from 'shared/send_hubdot';
+import { sendHubAsset } from 'shared/send_hubasset';
+import { Logger } from 'shared/utils/logger';
 
 const cfTesterAbi = await getCFTesterAbi();
 

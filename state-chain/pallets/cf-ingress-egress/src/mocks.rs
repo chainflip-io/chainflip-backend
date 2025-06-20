@@ -43,6 +43,7 @@ use cf_traits::{
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
+		lending_pools::MockBoostApi,
 		pool_api::MockPoolApi,
 		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::MockSwapRequestHandler,
@@ -119,6 +120,7 @@ impl Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
+	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
 	type IngressSource = DummyIngressSource<Ethereum, BlockNumberFor<Self>>;
 	type TargetChain = Ethereum;
 	type AddressDerivation = MockAddressDerivation;
@@ -142,12 +144,14 @@ impl Config<Instance1> for Test {
 	type AffiliateRegistry = MockAffiliateRegistry;
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
+	type BoostApi = MockBoostApi;
 }
 
 impl Config<Instance2> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
+	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
 	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Self>>;
 	type TargetChain = Bitcoin;
 	type AddressDerivation = MockAddressDerivation;
@@ -171,6 +175,7 @@ impl Config<Instance2> for Test {
 	type AffiliateRegistry = MockAffiliateRegistry;
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
+	type BoostApi = MockBoostApi;
 }
 
 impl_mock_chainflip!(Test);

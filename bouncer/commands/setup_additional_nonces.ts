@@ -6,9 +6,9 @@ import {
   getSolWhaleKeyPair,
   runWithTimeoutAndExit,
   solanaNumberOfAdditionalNonces,
-} from '../shared/utils';
-import { signAndSendTxSol } from '../shared/send_sol';
-import { globalLogger } from '../shared/utils/logger';
+} from 'shared/utils';
+import { signAndSendTxSol } from 'shared/send_sol';
+import { globalLogger } from 'shared/utils/logger';
 
 // This is to be used for the upgrade test to setup the additional nonces addded in the
 // 1.9 release.

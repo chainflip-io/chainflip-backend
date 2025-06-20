@@ -284,13 +284,13 @@ impl SignedExtrinsicApi for SignedExtrinsicClient {
 			self.submit_signed_extrinsic(call.clone()).await;
 
 		// can dedup this and put it into details whether in block or finalised
-		let details = match wait_for {
+		let extrinsic_data = match wait_for {
 			WaitFor::NoWait => return Ok(WaitForResult::TransactionHash(hash)),
 			WaitFor::InBlock => until_in_block.until_in_block().await?,
 			WaitFor::Finalized => until_finalized.until_finalized().await?,
 		};
 
-		Ok(WaitForResult::Details(details))
+		Ok(WaitForResult::Details(Box::new(extrinsic_data)))
 	}
 
 	/// Dry run the call, and only submit the extrinsic onto the chain

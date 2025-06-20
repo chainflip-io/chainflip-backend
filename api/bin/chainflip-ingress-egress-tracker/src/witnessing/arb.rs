@@ -64,7 +64,7 @@ where
 			nodes,
 			env_params.arb_chain_id.into(),
 			"arb_rpc",
-			"arb_subscribe",
+			"arb_subscribe_client",
 			"Arbitrum",
 			Arbitrum::WITNESS_PERIOD,
 		)?

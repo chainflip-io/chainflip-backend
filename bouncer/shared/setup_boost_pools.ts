@@ -1,15 +1,10 @@
-import { InternalAssets as Assets, chainConstants, getInternalAsset, Chains } from '@chainflip/cli';
-import {
-  ingressEgressPalletForChain,
-  chainFromAsset,
-  Asset,
-  decodeModuleError,
-} from '../shared/utils';
-import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { getChainflipApi, Event, observeEvent } from './utils/substrate';
-import { addBoostFunds } from '../tests/boost';
-import { depositLiquidity } from './deposit_liquidity';
-import { Logger, throwError } from './utils/logger';
+import { InternalAssets as Assets, getInternalAsset, Chains } from '@chainflip/cli';
+import { chainFromAsset, Asset, decodeModuleError } from 'shared/utils';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { getChainflipApi, Event, observeEvent } from 'shared/utils/substrate';
+import { addBoostFunds } from 'tests/boost';
+import { depositLiquidity } from 'shared/deposit_liquidity';
+import { Logger, throwError } from 'shared/utils/logger';
 
 export type BoostPoolId = {
   asset: Asset;
@@ -39,15 +34,11 @@ export async function createBoostPools(logger: Logger, newPools: BoostPoolId[]):
       throwError(logger, new Error(`Tier value: ${pool.tier} must be larger than 0`));
     }
 
-    const observeBoostPoolCreated = observeEvent(
-      logger,
-      `${chain.toLowerCase()}IngressEgress:BoostPoolCreated`,
-      {
-        test: (event) =>
-          event.data.boostPool.asset === pool.asset &&
-          Number(event.data.boostPool.tier) === pool.tier,
-      },
-    ).event;
+    const observeBoostPoolCreated = observeEvent(logger, `lendingPools:BoostPoolCreated`, {
+      test: (event) =>
+        event.data.boostPool.asset === pool.asset &&
+        Number(event.data.boostPool.tier) === pool.tier,
+    }).event;
     const observeGovernanceFailedExecution = observeEvent(
       logger,
       `governance:FailedExecution`,
@@ -60,9 +51,7 @@ export async function createBoostPools(logger: Logger, newPools: BoostPoolId[]):
   logger.debug(
     `Creating boost pools for chain ${chain} via governance: ${JSON.stringify(newPools)}`,
   );
-  await submitGovernanceExtrinsic((api) =>
-    api.tx[ingressEgressPalletForChain(chain)].createBoostPools(newPools),
-  );
+  await submitGovernanceExtrinsic((api) => api.tx.lendingPools.createBoostPools(newPools));
 
   const boostPoolEvents = await Promise.all(observeBoostPoolEvents);
   for (const event of boostPoolEvents) {
@@ -70,38 +59,26 @@ export async function createBoostPools(logger: Logger, newPools: BoostPoolId[]):
       const error = decodeModuleError(event.data[0].Module, await getChainflipApi());
       throwError(logger, new Error(`Failed to create boost pool: ${error}`));
     }
-    logger.info(
+    logger.debug(
       `Boost pools created for ${event.data.boostPool.asset} at ${event.data.boostPool.tier} bps`,
     );
   }
 }
 
-/// Creates 5, 10 and 30 bps tier boost pools for all assets on all chains and then funds the Btc boost pools with some BTC.
+/// Creates 5, 10 and 30 bps tier boost pools for Btc and then funds them.
 export async function setupBoostPools(logger: Logger): Promise<void> {
-  logger.info('Creating Boost Pools');
-  const boostPoolCreationPromises: Promise<void>[] = [];
-
-  for (const chain of Object.values(Chains)) {
-    logger.debug(`Creating boost pools for all ${chain} assets`);
-    const newPools: BoostPoolId[] = [];
-
-    for (const asset of chainConstants[chain].assets) {
-      for (const tier of boostPoolTiers) {
-        if (tier <= 0) {
-          throwError(logger, new Error(`Invalid tier value: ${tier}`));
-        }
-        newPools.push({
-          asset: getInternalAsset({ asset, chain }),
-          tier,
-        });
-      }
-    }
-    boostPoolCreationPromises.push(createBoostPools(logger, newPools));
+  logger.info('Creating BTC Boost Pools');
+  const newPools: BoostPoolId[] = [];
+  for (const tier of boostPoolTiers) {
+    newPools.push({
+      asset: getInternalAsset({ asset: 'BTC', chain: Chains.Bitcoin }),
+      tier,
+    });
   }
-  await Promise.all(boostPoolCreationPromises);
+  await createBoostPools(logger, newPools);
 
-  // Add some boost funds for Btc to each boost tier
-  logger.info('Funding Boost Pools');
+  // Add some boost funds to each Btc boost tier
+  logger.info('Funding BTC Boost Pools');
   const btcIngressFee = 0.0001; // Some small amount to cover the ingress fee
   await depositLiquidity(
     logger,

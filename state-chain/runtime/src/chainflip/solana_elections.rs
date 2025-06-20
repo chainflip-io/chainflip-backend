@@ -193,7 +193,7 @@ pub type SolanaVaultSwapTracking =
 	Ord,
 	PartialOrd,
 )]
-pub struct SolanaAltWitnessingIdentifier(pub Vec<SolAddress>);
+pub struct SolanaAltWitnessingIdentifier(pub BTreeSet<SolAddress>);
 
 pub type SolanaAltWitnessing = electoral_systems::exact_value::ExactValue<
 	SolanaAltWitnessingIdentifier,
@@ -205,7 +205,7 @@ pub type SolanaAltWitnessing = electoral_systems::exact_value::ExactValue<
 >;
 
 pub fn solana_alt_result(
-	alts: Vec<SolAddress>,
+	alts: BTreeSet<SolAddress>,
 ) -> Option<AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>> {
 	SolanaAltWitnessing::take_election_result::<
 		DerivedElectoralAccess<
@@ -707,7 +707,7 @@ impl FromSolOrNot for SolanaVaultSwapDetails {
 	}
 }
 
-pub(crate) fn initiate_solana_alt_election(alts: Vec<SolAddress>) {
+pub(crate) fn initiate_solana_alt_election(alts: BTreeSet<SolAddress>) {
 	if alts.is_empty() {
 		return
 	}

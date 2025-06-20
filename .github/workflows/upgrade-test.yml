@@ -23,6 +23,8 @@ on:
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v2.1.13
+  SOLANA_PROGRAMS_VERSION: v1.2.2
+  EVM_CONTRACTS_VERSION: v1.2.1
   NODE_COUNT: "1-node"
 
 permissions:
@@ -171,8 +173,34 @@ jobs:
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
           touch ./localnet/.setup_complete
+          # TODO: This is a temporary fix to allow the localnet docker-compose.yml from an older commit to run the latest solana and EVM images. Remove after 1.10 is released.
+          sed -i 's|ghcr.io/chainflip-io/solana-localnet-ledger:v[^ ]*|ghcr.io/chainflip-io/solana-localnet-ledger:${{ env.SOLANA_PROGRAMS_VERSION }}|g' localnet/docker-compose.yml
+          sed -i "s/v1\.1\.2-usdt/$EVM_CONTRACTS_VERSION/g" localnet/docker-compose.yml
           ./localnet/manage.sh
           git reset --hard
+
+      # TODO: This is a temporary workaround to insert the image nonces and the ALT address. Remove after 1.10 is released.
+      - name: Solana initial values workaround
+        if: inputs.run-job
+        run: |
+          git checkout ${{ github.sha }}
+          git rev-parse HEAD
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./commands/force_sol_nonces.ts
+          ./commands/set_sol_alt.ts
+
+        # TODO: This is a temporary workaround to do the initial price feed setup. Remove after 1.10 is released.
+      - name: Setup price feeds
+        if: inputs.run-job
+        run: |
+          git checkout ${{ github.sha }}
+          git rev-parse HEAD
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./commands/update_price_feeds.ts BTC 10000
+          ./commands/update_price_feeds.ts ETH 1000
+          ./commands/update_price_feeds.ts SOL 100
 
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
@@ -182,7 +210,14 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
+          # TODO: This is a temporary workaround to patch the user address lookup table in the bouncer.
+          # To remove after 1.10 is released.
+          sed -i 's/4eUGPyr3krnw8tD3rL3UBXXdy1cx8Sf9HKVESZUAatqv/9J7p5fmNjRjdYRyutwssUBRLYmJEmK7fwBpYxhtnxYTG/g' shared/utils.ts
+          # TODO: Skip the Swap Endpoint program upgrade as the new image already contains the latest one
+          # and we no longer need to test the upgrade process. To remove after 1.10 is released.
+          sed -i '/^\s*await upgradeSwapEndpoint(logger);/d'  shared/initialize_new_chains.ts
           ./fast_bouncer.sh
+          git reset --hard
 
       - name: Upgrade network 🚀
         if: inputs.run-job
@@ -199,18 +234,6 @@ jobs:
             --localnet_init ./../localnet/init \
             --oldVersion "${{ env.OLD_BIN_VERSION }}"
 
-      # This step is to mimick the Swap Endpoint upgrade to be done in mainnet. After 1.10 we can
-      # consider updating the Solana image and removing this step.
-      - name: Upgrade Solana Swap Endpoint
-        if: inputs.run-job
-        id: upgrade-solana-swap-endpoint
-        run: |
-          git checkout ${{ github.sha }}
-          git rev-parse HEAD
-          cd bouncer
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          ./commands/upgrade_swap_endpoint.ts
-
       - name: Run bouncer after upgrade 🙅‍♂️
         if: inputs.run-job
         id: post-upgrade-bouncer
@@ -222,63 +245,63 @@ jobs:
           pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
 
       - name: Print chainflip-engine logs 🚗
-        if: inputs.run-job
+        if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine.*log
 
       - name: Print solana logs ☀️
-        if: inputs.run-job
+        if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         run: |
           cat /tmp/solana/*.log
           cat /tmp/solana/test-ledger/validator.log
 
       - name: Print new pre-upgrade chainflip-engine logs 🚗
-        if: inputs.run-job
+        if: inputs.run-job || failure() || cancelled()
         # In the case of a compatible upgrade, we don't expect any logs here
         continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine-pre-upgrade.*log
 
       - name: Print new post-upgrade chainflip-engine logs 🚗
-        if: inputs.run-job
+        if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine-post-upgrade.*log
 
       - name: Print chainflip-node logs 📡
-        if: inputs.run-job
+        if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-node.*log
 
       - name: Print chainflip-broker-api logs 💼
-        if: inputs.run-job
+        if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-broker-api.*log
 
       - name: Print chainflip-lp-api logs 🤑
-        if: inputs.run-job
+        if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-lp-api.*log
 
       - name: Print chainflip-deposit-monitor logs 🔬
-        if: inputs.run-job
+        if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-deposit-monitor.*log
 
       - name: Print localnet init debug logs 🕵️‍♂️
-        if: inputs.run-job
+        if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         run: |
           cat /tmp/chainflip/debug.log
 
       - name: Upload Localnet Logs 💾
-        if: inputs.run-job
+        if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
@@ -287,7 +310,7 @@ jobs:
             /tmp/chainflip/*/chainflip-*.*log
 
       - name: Upload Chainflip Logs 💾
-        if: inputs.run-job
+        if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
@@ -296,7 +319,7 @@ jobs:
             /tmp/chainflip/logs/*.log
 
       - name: Upload Bouncer Logs 💾
-        if: inputs.run-job
+        if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
@@ -335,7 +358,7 @@ jobs:
             /tmp/chainflip/snapshots/*.snap
 
       - name: Clean Up docker containers 🧹
-        if: inputs.run-job
+        if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         run: |
           ls -alR /tmp/chainflip

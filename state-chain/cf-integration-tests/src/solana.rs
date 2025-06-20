@@ -61,6 +61,7 @@ use pallet_cf_ingress_egress::{
 use pallet_cf_validator::RotationPhase;
 use sp_core::ConstU32;
 use sp_runtime::BoundedBTreeMap;
+use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation,
@@ -116,6 +117,7 @@ fn setup_sol_environments() {
 	);
 }
 
+#[track_caller]
 fn schedule_deposit_to_swap(
 	who: AccountId,
 	from: Asset,
@@ -555,7 +557,7 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 
 			testnet.move_to_the_next_epoch();
 
-			// Register 2 CCMs with overlapping ALTs
+			// Register CCMs with overlapping ALTs
 			let user_alts =
 				[SolAddress([0xF0; 32]), SolAddress([0xF1; 32]), SolAddress([0xF2; 32])];
 			let mut ccm_0 = sol_test_values::ccm_parameter().channel_metadata;
@@ -575,6 +577,15 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 				.try_into()
 				.unwrap();
 
+			let mut ccm_2 = sol_test_values::ccm_parameter().channel_metadata;
+			ccm_2.ccm_additional_data =
+				codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V1 {
+					ccm_accounts: sol_test_values::ccm_accounts(),
+					alts: vec![user_alts[1], user_alts[0], user_alts[1]],
+				})
+				.try_into()
+				.unwrap();
+
 			let mut next_swap_id =
 				(*pallet_cf_swapping::SwapRequestIdCounter::<Runtime>::get() + 1).into();
 			assert_eq!(
@@ -582,7 +593,6 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 				next_swap_id,
 			);
 
-			//Sol -> Usdc -> SolUsdc consumes 2 swap IDs
 			*next_swap_id += 2;
 			assert_eq!(
 				schedule_deposit_to_swap(BOB, Asset::SolUsdc, Asset::Sol, Some(ccm_1)),
@@ -591,6 +601,11 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 			*next_swap_id += 1;
 			assert_eq!(
 				schedule_deposit_to_swap(ALICE, Asset::Sol, Asset::SolUsdc, Some(ccm_0)),
+				next_swap_id
+			);
+			*next_swap_id += 1;
+			assert_eq!(
+				schedule_deposit_to_swap(ALICE, Asset::Sol, Asset::SolUsdc, Some(ccm_2)),
 				next_swap_id
 			);
 
@@ -636,6 +651,19 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 					},
 				]),
 			);
+			vote_for_alt_election(
+				32,
+				AltWitnessingConsensusResult::Valid(vec![
+					SolAddressLookupTableAccount {
+						key: user_alts[0].into(),
+						addresses: vec![SolPubkey([0xE0; 32]), SolPubkey([0xE1; 32])],
+					},
+					SolAddressLookupTableAccount {
+						key: user_alts[1].into(),
+						addresses: vec![SolPubkey([0xE2; 32]), SolPubkey([0xE3; 32])],
+					},
+				]),
+			);
 			testnet.move_forward_blocks(1);
 
 			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
@@ -656,6 +684,12 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 					egress_id: (ForeignChain::Solana, 3),
 				},
 			));
+			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
+				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
+					broadcast_id: 6,
+					egress_id: (ForeignChain::Solana, 4),
+				},
+			));
 
 			// All CCMs are egressed successfully. Unsynchronised map states are consumed correctly.
 			assert_eq!(
@@ -664,12 +698,12 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 				Some(0)
 			);
 			assert!(SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(
-				&SolanaAltWitnessingIdentifier(vec![user_alts[0], user_alts[1]])
+				&SolanaAltWitnessingIdentifier(BTreeSet::from([user_alts[0], user_alts[1]]))
 			)
 			.unwrap()
 			.is_none());
 			assert!(SolanaAltWitnessingElectoralAccess::unsynchronised_state_map(
-				&SolanaAltWitnessingIdentifier(vec![user_alts[1], user_alts[2]])
+				&SolanaAltWitnessingIdentifier(BTreeSet::from([user_alts[1], user_alts[2]]))
 			)
 			.unwrap()
 			.is_none());

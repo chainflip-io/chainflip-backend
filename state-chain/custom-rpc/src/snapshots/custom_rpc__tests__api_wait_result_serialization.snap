@@ -1,0 +1,7 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: hash
+---
+{
+  "tx_hash": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+}

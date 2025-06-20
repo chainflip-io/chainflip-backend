@@ -2,8 +2,8 @@ import assert from 'assert';
 import { InternalAssets as Assets, executeRedemption, getRedemptionDelay } from '@chainflip/cli';
 import type { HexString } from '@polkadot/util/types';
 import { Wallet, ethers } from 'ethers';
-import { getNextEvmNonce } from './send_evm';
-import { getGatewayAbi } from './contract_interfaces';
+import { getNextEvmNonce } from 'shared/send_evm';
+import { getGatewayAbi } from 'shared/contract_interfaces';
 import {
   sleep,
   handleSubstrateError,
@@ -15,9 +15,9 @@ import {
   getWhaleKey,
   assetDecimals,
   createStateChainKeypair,
-} from './utils';
-import { getChainflipApi, observeEvent } from './utils/substrate';
-import { Logger } from './utils/logger';
+} from 'shared/utils';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { Logger } from 'shared/utils/logger';
 
 export type RedeemAmount = 'Max' | { Exact: string };
 

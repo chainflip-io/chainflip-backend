@@ -37,7 +37,8 @@ use std::{
 #[derive(Parser, Clone, Debug)]
 #[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct CLICommandLineOptions {
-	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
+	// Specifying a config root implies the existence of a Settings.toml file
+	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT, help = "Specifying a config root implies the existence of a Settings.toml file there.")]
 	pub config_root: String,
 
 	#[clap(flatten)]
@@ -142,10 +143,11 @@ pub enum CliCommand {
 	/// Liquidity provider specific commands
 	#[clap(subcommand, name = "lp")]
 	LiquidityProvider(LiquidityProviderSubcommands),
+	/// Validator specific commands
 	#[clap(subcommand)]
 	Validator(ValidatorSubcommands),
 	#[clap(
-		about = "Request a redemption. After requesting the redemption, please proceed to the  to complete the redeeming process."
+		about = "Request a redemption. After requesting the redemption, please proceed to theAuctions App to complete the redeeming process."
 	)]
 	Redeem {
 		#[clap(
@@ -159,6 +161,21 @@ pub enum CliCommand {
 			help = "Optional executor address. If specified, only this address will be able to execute the redemption."
 		)]
 		executor_address: Option<String>,
+	},
+	#[clap(about = "Rebalance FLIP by transferring it to another account.")]
+	Rebalance {
+		#[clap(
+			help = "Amount to transfer in FLIP (omit this option to redeem all available FLIP). Up to 6 decimal places, any more are rounded.",
+			long = "exact"
+		)]
+		amount: Option<f64>,
+		#[clap(help = "The State Chain account ID of the recipient.")]
+		recipient_account_id: String,
+		#[clap(
+			help = "An optional Ethereum address under which restriction conditions we transfer the FLIP.",
+			long = "restricted-address"
+		)]
+		restricted_address: Option<String>,
 	},
 	#[clap(
 		about = "Irreversible action that restricts your account to only be able to redeem to the specified address"
@@ -178,9 +195,6 @@ pub enum CliCommand {
 	GetBoundRedeemAddress,
 	#[clap(about = "Shows the executor address your account is bound to")]
 	GetBoundExecutorAddress,
-	#[clap(
-		about = "Submit an extrinsic to request generation of a redemption certificate (redeeming all available FLIP)"
-	)]
 	#[clap(about = "Set your account role to the Validator, Broker, Liquidity Provider")]
 	RegisterAccountRole {
 		#[clap(help = "Validator (v), Liquidity Provider (lp), Broker (b)", value_parser = account_role_parser)]

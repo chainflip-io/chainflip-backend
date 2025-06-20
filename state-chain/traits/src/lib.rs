@@ -22,7 +22,10 @@ use cfe_events::{KeyHandoverRequest, KeygenRequest, TxBroadcastRequest};
 pub use liquidity::*;
 pub mod safe_mode;
 pub use safe_mode::*;
+pub mod lending;
 mod swapping;
+
+use cf_chains::SetGovKeyWithAggKeyError;
 
 pub use swapping::{
 	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
@@ -270,6 +273,9 @@ pub trait ReputationResetter {
 pub trait RedemptionCheck {
 	type ValidatorId;
 	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult;
+	fn can_redeem(validator_id: &Self::ValidatorId) -> bool {
+		Self::ensure_can_redeem(validator_id).is_ok()
+	}
 }
 
 pub trait OnAccountFunded {
@@ -308,6 +314,13 @@ pub trait Funding {
 
 	/// Reverts a pending redemption in the case of an expiry or cancellation.
 	fn revert_redemption(account_id: &Self::AccountId) -> Result<(), DispatchError>;
+
+	/// Directly transfers funds from an account A to an account B.
+	fn try_transfer(
+		amount: Self::Balance,
+		from: &Self::AccountId,
+		to: &Self::AccountId,
+	) -> Result<(), DispatchError>;
 }
 
 pub trait AccountInfo {
@@ -781,6 +794,8 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 
 	fn has_account_role(who: &T::AccountId, role: AccountRole) -> bool;
 
+	fn account_role(who: &T::AccountId) -> AccountRole;
+
 	fn is_unregistered(who: &T::AccountId) -> bool {
 		Self::has_account_role(who, AccountRole::Unregistered)
 	}
@@ -927,7 +942,7 @@ pub trait BroadcastAnyChainGovKey {
 		chain: ForeignChain,
 		old_key: Option<Vec<u8>>,
 		new_key: Vec<u8>,
-	) -> Result<(), ()>;
+	) -> Result<(), SetGovKeyWithAggKeyError>;
 
 	fn is_govkey_compatible(chain: ForeignChain, key: &[u8]) -> bool;
 }

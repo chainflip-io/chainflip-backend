@@ -1,7 +1,5 @@
 import Web3 from 'web3';
-import { execSync } from 'child_process';
 import {
-  Connection,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -14,14 +12,13 @@ import {
   encodeSolAddress,
   solanaNumberOfNonces,
   solanaNumberOfAdditionalNonces,
-  decodeSolAddress,
-} from '../shared/utils';
-import { sendSol, signAndSendTxSol } from '../shared/send_sol';
-import { getSolanaVaultIdl, getKeyManagerAbi } from '../shared/contract_interfaces';
-import { signAndSendTxEvm } from '../shared/send_evm';
-import { submitGovernanceExtrinsic } from './cf_governance';
-import { observeEvent } from './utils/substrate';
-import { Logger } from './utils/logger';
+} from 'shared/utils';
+import { sendSol, signAndSendTxSol } from 'shared/send_sol';
+import { getSolanaVaultIdl, getKeyManagerAbi } from 'shared/contract_interfaces';
+import { signAndSendTxEvm } from 'shared/send_evm';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { observeEvent } from 'shared/utils/substrate';
+import { Logger } from 'shared/utils/logger';
 
 export async function initializeArbitrumChain(logger: Logger) {
   logger.info('Initializing Arbitrum');
@@ -83,42 +80,7 @@ function bigNumberToU64Buffer(number: bigint): Buffer {
   return buf;
 }
 
-export async function upgradeSwapEndpoint(logger: Logger) {
-  logger.info('Upgrading Solana Swap Endpoint program');
-
-  // Deploy latest Swap endpoint from buffer to test the upgrade process that will be done in mainnet.
-  // Deploy program in a buffer, set the authority to the upgrade signer PDA (controlled by the aggKey),
-  // extend the buffer for the new length and use SC governance to upgrade the program.
-  const bufferAddress = new PublicKey('8vgLUrLVbA8NYbv2Jug9BYQkrGupi32mGU1UxTf35i57');
-  execSync(
-    `solana program write-buffer --keypair shared/id.json --commitment confirmed --url localhost --buffer  ../contract-interfaces/sol-program-idls/buffer.json ../contract-interfaces/sol-program-idls/v1.1.0/swap_endpoint.so`,
-  );
-  // Updgrade signer PDA: `H7G2avdmRSQyVxPcgZJPGXVCPhC61TMAKdvYBRF42zJ9`
-  execSync(
-    `solana program set-buffer-authority 8vgLUrLVbA8NYbv2Jug9BYQkrGupi32mGU1UxTf35i57 --keypair shared/id.json --commitment confirmed --url localhost --new-buffer-authority H7G2avdmRSQyVxPcgZJPGXVCPhC61TMAKdvYBRF42zJ9`,
-  );
-  // Extend bytes - Initial length: 361480 - Needed length: 357288 -  Need to extend: 4192
-  execSync(
-    `solana program extend --keypair shared/id.json --commitment confirmed --url localhost 35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT 4192`,
-  );
-
-  // Use governance to upgrade the Swap Endpoint program.
-  await submitGovernanceExtrinsic(async (chainflip) =>
-    chainflip.tx.environment.dispatchSolanaGovCall({
-      UpgradeProgram: {
-        program_address: decodeSolAddress(getContractAddress('Solana', 'SWAP_ENDPOINT')),
-        buffer_address: decodeSolAddress(bufferAddress.toString()),
-        spill_address: decodeSolAddress(getSolWhaleKeyPair().publicKey.toString()),
-      },
-    }),
-  );
-}
-
-export async function initializeSolanaPrograms(
-  logger: Logger,
-  solClient: Connection,
-  solKey: string,
-) {
+export async function initializeSolanaPrograms(logger: Logger, solKey: string) {
   function createUpgradeAuthorityInstruction(
     programId: PublicKey,
     upgradeAuthority: PublicKey,
@@ -289,6 +251,4 @@ export async function initializeSolanaPrograms(
     }),
   );
   await signAndSendTxSol(logger, tx);
-
-  await upgradeSwapEndpoint(logger);
 }

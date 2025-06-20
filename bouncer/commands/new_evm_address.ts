@@ -6,7 +6,7 @@
 // For example: ./commands/new_evm_address.ts foobar
 // returns: 0xE16CCFc63368e8FC93f53ccE4e4f4b08c4C3E186
 
-import { newEvmAddress } from '../shared/new_evm_address';
+import { newEvmAddress } from 'shared/new_evm_address';
 
 async function main(): Promise<void> {
   const seed = process.argv[2] ?? '';

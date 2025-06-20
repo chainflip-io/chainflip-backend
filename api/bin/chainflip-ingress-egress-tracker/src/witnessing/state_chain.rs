@@ -716,6 +716,7 @@ where
 		SolanaElections(_) |
 		BitcoinElections(_) |
 		TradingStrategy(_) => {},
+		LendingPools(_) => {},
 	};
 
 	Ok(())

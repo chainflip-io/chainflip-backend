@@ -493,3 +493,59 @@ fn test_refund_parameter_validation() {
 		);
 	});
 }
+
+#[test]
+fn test_zero_refund_amount_remaining() {
+	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+
+	new_test_ext()
+		.then_execute_at_block(INIT_BLOCK, |_| {
+			// Set a refund fee to the swap amount
+			NetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: Permill::zero(),
+				minimum: INPUT_AMOUNT,
+			});
+
+			// A swap with 0 retry duration, so it will be refunded immediately
+			insert_swaps(&[fok_swap(
+				Some(TestRefundParams { retry_duration: 0, min_output: INPUT_AMOUNT }),
+				false,
+			)]);
+
+			assert_swaps_scheduled_for_block(&[1.into()], SWAPS_SCHEDULED_FOR_BLOCK);
+		})
+		.then_execute_at_block(SWAPS_SCHEDULED_FOR_BLOCK, |_| {
+			// Trigger a refund
+			MockSwappingApi::set_swaps_should_fail(true);
+		})
+		.then_execute_with(|_| {
+			// The refund should ignored and all of the swap amount should be swapped for fees
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
+				RuntimeEvent::Swapping(Event::SwapRequested {
+					swap_request_id: SwapRequestId(2),
+					input_asset: Asset::Usdc,
+					input_amount: INPUT_AMOUNT,
+					output_asset: Asset::Flip,
+					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapScheduled {
+					swap_request_id: SwapRequestId(2),
+					input_amount: INPUT_AMOUNT,
+					..
+				}),
+				RuntimeEvent::Swapping(Event::RefundEgressIgnored {
+					swap_request_id: SwapRequestId(1),
+					amount: 0,
+					asset: INPUT_ASSET,
+					reason,
+					..
+				}) if reason == DispatchError::from(Error::<Test>::NoRefundAmountRemaining),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: SwapRequestId(1),
+					..
+				}),
+			);
+		});
+}

@@ -267,7 +267,7 @@ async fn run_main(
 					settings.eth.nodes,
 					expected_eth_chain_id,
 					"eth_rpc",
-					"eth_subscribe",
+					"eth_subscribe_client",
 					"Ethereum",
 					cf_chains::Ethereum::WITNESS_PERIOD,
 				)?
@@ -287,7 +287,7 @@ async fn run_main(
 					settings.arb.nodes,
 					expected_arb_chain_id,
 					"arb_rpc",
-					"arb_subscribe",
+					"arb_subscribe_client",
 					"Arbitrum",
 					cf_chains::Arbitrum::WITNESS_PERIOD,
 				)?

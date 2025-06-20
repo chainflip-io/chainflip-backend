@@ -4,8 +4,8 @@
 // This command takes no arguments.
 // This command will create 3 tiers of boost pools for every asset. Tiers: 5, 10 and 30 bps.
 
-import { setupBoostPools } from '../shared/setup_boost_pools';
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { globalLogger } from '../shared/utils/logger';
+import { setupBoostPools } from 'shared/setup_boost_pools';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { globalLogger } from 'shared/utils/logger';
 
 await runWithTimeoutAndExit(setupBoostPools(globalLogger), 120);

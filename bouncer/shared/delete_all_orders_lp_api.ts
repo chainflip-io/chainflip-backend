@@ -1,7 +1,7 @@
-import { lpApiRpc } from './json_rpc';
-import { createStateChainKeypair } from './utils';
-import { Logger } from './utils/logger';
-import { getChainflipApi } from './utils/substrate';
+import { lpApiRpc } from 'shared/json_rpc';
+import { createStateChainKeypair } from 'shared/utils';
+import { Logger } from 'shared/utils/logger';
+import { getChainflipApi } from 'shared/utils/substrate';
 
 export async function DeleteAllOrdersLpApi(logger: Logger) {
   await using chainflip = await getChainflipApi();
