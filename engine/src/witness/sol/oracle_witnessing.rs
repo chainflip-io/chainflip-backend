@@ -147,116 +147,74 @@ mod tests {
 
 	async fn run_query_test(config: TestConfig) -> Result<(), anyhow::Error> {
 		task_scope::task_scope(|scope| {
-            async {
-                let sol_hash = config.sol_hash.map(|hash| {
-                    SolHash::from_str(hash).expect("Invalid SolHash")
-                });
+			async {
+				let sol_hash =
+					config.sol_hash.map(|hash| SolHash::from_str(hash).expect("Invalid SolHash"));
 
-                let client = SolRetryRpcClient::new(
-                    scope,
-                    NodeContainer {
-                        primary: HttpEndpoint {
-                            http_endpoint: config.endpoint.into(),
-                        },
-                        backup: None,
-                    },
-                    sol_hash,
-                    Solana::WITNESS_PERIOD,
-                )
-                .await?;
+				let client = SolRetryRpcClient::new(
+					scope,
+					NodeContainer {
+						primary: HttpEndpoint { http_endpoint: config.endpoint.into() },
+						backup: None,
+					},
+					sol_hash,
+					Solana::WITNESS_PERIOD,
+				)
+				.await?;
 
-                let oracle_program_id = const_address(config.oracle_program_id);
-                let oracle_feeds = config
-                    .oracle_feeds.clone()
-                    .into_iter()
-                    .map(const_address)
-                    .collect::<Vec<_>>();
-                let oracle_query_helper = const_address(config.oracle_query_helper);
+				let oracle_program_id = const_address(config.oracle_program_id);
+				let oracle_feeds =
+					config.oracle_feeds.clone().into_iter().map(const_address).collect::<Vec<_>>();
+				let oracle_query_helper = const_address(config.oracle_query_helper);
 
-                let serialized_transaction = build_and_serialize_query_transaction(
-                    oracle_query_helper,
-                    oracle_program_id,
-                    oracle_feeds,
-                )?;
+				let serialized_transaction = build_and_serialize_query_transaction(
+					oracle_query_helper,
+					oracle_program_id,
+					oracle_feeds,
+				)?;
 
-                let simulation_result = client.simulate_transaction(serialized_transaction, None).await;
-                let return_data = simulation_result
-                    .value
-                    .return_data
-                    .as_ref()
-                    .expect("Expected return data to be Some");
+				let simulation_result =
+					client.simulate_transaction(serialized_transaction, None).await;
+				let return_data = simulation_result
+					.value
+					.return_data
+					.as_ref()
+					.expect("Expected return data to be Some");
 
-                let (price_feeds, query_timestamp) =
-                    decode_query_return_data(return_data, oracle_query_helper)?;
+				let (price_feeds, query_timestamp) =
+					decode_query_return_data(return_data, oracle_query_helper)?;
 
-                println!("Query Timestamp: {}", query_timestamp);
+				println!("Query Timestamp: {}", query_timestamp);
+				// Ensure the number of price feeds matches the number of expected descriptions
+				assert_eq!(
+					price_feeds.len(),
+					config.expected_description.len(),
+					"Mismatch between number of price feeds and expected descriptions"
+				);
 
-                if config.oracle_feeds.len() > 1 {
-                    // Ensure the number of price feeds matches the number of expected descriptions
-                    assert_eq!(
-                        price_feeds.len(),
-                        config.expected_description.len(),
-                        "Mismatch between number of price feeds and expected descriptions"
-                    );
+				for (result_index, (price_feed, expected_desc)) in
+					price_feeds.iter().zip(config.expected_description.iter()).enumerate()
+				{
+					let PriceFeedData { round_id, slot, timestamp, answer, decimals, description } =
+						price_feed;
 
-                    for (result_index, (price_feed, expected_desc)) in price_feeds
-                        .iter()
-                        .zip(config.expected_description.iter())
-                        .enumerate()
-                    {
-                        let PriceFeedData {
-                            round_id,
-                            slot,
-                            timestamp,
-                            answer,
-                            decimals,
-                            description,
-                        } = price_feed;
+					println!(
+						"Index {}: Description: {}, Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}, Decimals: {}",
+						result_index, description, round_id, slot, timestamp, answer, decimals
+					);
+					assert_eq!(*decimals, 8);
+					assert_eq!(
+						description, expected_desc,
+						"Description mismatch at index {}",
+						result_index
+					);
+				}
 
-                        println!(
-                            "Index {}: Description: {}, Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}, Decimals: {}",
-                            result_index, description, round_id, slot, timestamp, answer, decimals
-                        );
-                        assert_eq!(*decimals, 8);
-                        assert_eq!(
-                            description, expected_desc,
-                            "Description mismatch at index {}",
-                            result_index
-                        );
-                    }
-                } else {
-                    let PriceFeedData {
-                        round_id,
-                        slot,
-                        timestamp,
-                        answer,
-                        decimals,
-                        description,
-                    } = price_feeds.first().expect("Expected at least one price feed");
-
-                    println!(
-                        "Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}, Decimals: {}, Description: {}",
-                        round_id, slot, timestamp, answer, decimals, description
-                    );
-
-                    assert_eq!(*decimals, 8);
-                    assert_eq!(
-                        config.expected_description.len(),
-                        1,
-                        "Expected exactly one description for single feed"
-                    );
-                    assert_eq!(
-                        description,
-                        config.expected_description[0],
-                        "Description mismatch for single feed"
-                    );
-                }
-
-                Ok(())
-            }
-            .boxed()
-        })
-        .await
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
 	}
 
 	#[ignore = "requires access to external RPC"]

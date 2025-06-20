@@ -25,7 +25,6 @@ use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 use sp_std::vec::Vec;
 
 mod oracle_query_environment;
-pub use oracle_query_environment::OracleQueryEnvironmentMigration;
 
 // NOTE: Do not remove this. This is used to update the on-chain version for CFE compatibility
 // checks.
@@ -57,7 +56,7 @@ pub type PalletMigration<T> = (
 	VersionedMigration<
 		15,
 		16,
-		OracleQueryEnvironmentMigration<T>,
+		oracle_query_environment::OracleQueryEnvironmentMigration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
