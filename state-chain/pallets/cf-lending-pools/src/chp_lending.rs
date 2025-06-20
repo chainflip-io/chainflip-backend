@@ -250,7 +250,7 @@ pub fn chp_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 					let overcollateralisation_ratio = loan.overcollateralisation_ratio();
 
 					if overcollateralisation_ratio < config.overcollateralisation_hard_threshold {
-						// TODO: cancel soft liquidation swap and initiate a hard liquidaiton one
+						// TODO: cancel soft liquidation swap and initiate a hard liquidation one
 						unimplemented!();
 					}
 				},

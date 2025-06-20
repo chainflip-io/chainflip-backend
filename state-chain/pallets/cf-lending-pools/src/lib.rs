@@ -55,7 +55,7 @@ use frame_support::{
 use cf_traits::lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome, ChpLoanId};
 
 use cf_runtime_utilities::log_or_panic;
-use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
+use frame_system::pallet_prelude::*;
 use weights::WeightInfo;
 
 pub use core_lending_pool::{CoreLendingPool, LoanId};
@@ -89,6 +89,7 @@ define_wrapper_type!(CorePoolId, u32);
 
 const COLLATERAL_ASSET: Asset = Asset::Usdc;
 const INTEREST_PAYMENT_INTERVAL: u32 = 10; // interest is charged every minute
+const MAX_PALLET_CONFIG_UPDATE: u32 = 10; // used to bound no. of updates per extrinsic
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BoostPool {
@@ -413,10 +414,10 @@ pub mod pallet {
 		///
 		/// Requires Governance.
 		#[pallet::call_index(0)]
-		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
+		#[pallet::weight(T::WeightInfo::update_pallet_config(updates.len() as u32))]
 		pub fn update_pallet_config(
 			origin: OriginFor<T>,
-			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
+			updates: BoundedVec<PalletConfigUpdate, ConstU32<MAX_PALLET_CONFIG_UPDATE>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -532,7 +533,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::create_boost_pools())] // TODO: own benchmark
+		#[pallet::weight(T::WeightInfo::create_chp_pool())]
 		pub fn create_chp_pool(origin: OriginFor<T>, asset: Asset) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -540,7 +541,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::add_boost_funds())] // TODO: own benchmark
+		#[pallet::weight(T::WeightInfo::add_chp_funds())]
 		pub fn add_chp_funds(
 			origin: OriginFor<T>,
 			asset: Asset,
@@ -575,7 +576,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(6)]
-		#[pallet::weight(T::WeightInfo::add_boost_funds())] // TODO: own benchmark
+		#[pallet::weight(T::WeightInfo::stop_chp_lending())]
 		pub fn stop_chp_lending(origin: OriginFor<T>, asset: Asset) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().stop_chp_lending_enabled,
