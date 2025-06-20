@@ -125,7 +125,7 @@ pub struct ChpPool {
 }
 
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
-enum LoanStatus {
+pub(crate) enum LoanStatus {
 	// Loan has not yet been repaid in full
 	Active,
 	// A swap has been created from USDC collateral into the borrowed asset

@@ -41,7 +41,7 @@ frame-benchmarking = { workspace = true, optional = true }
 cf-test-utilities = { workspace = true, default-features = true }
 
 [features]
-default = ["std"]
+default = ["std", "runtime-benchmarks"]
 std = [
 	"cf-primitives/std",
 	"cf-traits/std",
