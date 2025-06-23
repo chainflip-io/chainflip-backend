@@ -42,6 +42,7 @@ pub trait BWTypes: 'static + Sized + BWProcessorTypes {
 	type ElectionProperties: MaybeArbitrary + CommonTraits + TestTraits;
 	type ElectionPropertiesHook: Hook<HookTypeFor<Self, ElectionPropertiesHook>> + CommonTraits;
 	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>> + CommonTraits;
+	type ProcessedUpToHook: Hook<HookTypeFor<Self, ProcessedUpToHook>> + CommonTraits;
 
 	type ElectionTrackerDebugEventHook: Hook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>
 		+ CommonTraits
@@ -77,6 +78,12 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, RulesHook> {
 pub struct ExecuteHook;
 impl<T: BWProcessorTypes> HookType for HookTypeFor<T, ExecuteHook> {
 	type Input = Vec<(ChainBlockNumberOf<T::Chain>, T::Event)>;
+	type Output = ();
+}
+
+pub struct ProcessedUpToHook;
+impl<T: BWProcessorTypes> HookType for HookTypeFor<T, ProcessedUpToHook> {
+	type Input = ChainBlockNumberOf<T::Chain>;
 	type Output = ();
 }
 
@@ -125,6 +132,7 @@ defx! {
 		pub generate_election_properties_hook: T::ElectionPropertiesHook,
 		pub safemode_enabled: T::SafeModeEnabledHook,
 		pub block_processor: BlockProcessor<T>,
+		pub processed_up_to: T::ProcessedUpToHook,
 	}
 	validate _this (else BlockWitnesserError) {}
 }
@@ -206,10 +214,6 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			.clone()
 			.into_iter()
 			.map(|(block_height, election_type)| {
-				// We apply the SAFETY_BUFFER before we fetch the election_properties,
-				// this makes sure that if txs that have been submitted post channel creation,
-				// but due to reorg ended up in an external chain block that's below the channels `opened_at`,
-				// are still witnessed. (See PRO-2306).
 				let height_for_election_properties = block_height.saturating_forward(T::Chain::SAFETY_BUFFER);
 				match election_type {
 					BWElectionType::Governance(properties) => BWElectionProperties {
@@ -278,6 +282,8 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			},
 		};
 
+		let lowest_in_progress_height = state.elections.lowest_in_progress_height();
+
 		state.block_processor.process_blocks_up_to(
 			state.elections.seen_heights_below,
 			// NOTE: we use the lowest "in progress" height for expiring block and event
@@ -285,7 +291,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			// call), no event data is going to be deleted. That's why we can't use
 			// the `highest_seen` block height, because that one progresses always
 			// following data from the BHW, ignoring ongoing elections.
-			state.elections.lowest_in_progress_height(),
+			lowest_in_progress_height,
 		);
 
 		state.elections.start_more_elections(
@@ -293,6 +299,9 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			settings.max_optimistic_elections,
 			state.safemode_enabled.run(()),
 		);
+
+		// We subtract 1 since that is the block that we have processed up to.
+		state.processed_up_to.run(lowest_in_progress_height.saturating_backward(1));
 
 		Ok(())
 	}
@@ -407,6 +416,7 @@ pub mod tests {
 	>() -> impl Strategy<Value = BlockWitnesserState<T>>
 	where
 		T::ElectionPropertiesHook: Default,
+		T::ProcessedUpToHook: Default,
 		T::BlockData: Default,
 	{
 		(any::<SafeModeStatus>(), any::<ElectionTracker<T>>()).prop_map(|(safemode, elections)| {
@@ -414,6 +424,7 @@ pub mod tests {
 				elections,
 				generate_election_properties_hook: Default::default(),
 				safemode_enabled: MockHook::new(ConstantHook::new(safemode)),
+				processed_up_to: Default::default(),
 				block_processor: Default::default(),
 			}
 		})
@@ -482,6 +493,8 @@ pub mod tests {
 		type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>>;
 		type ElectionTrackerDebugEventHook =
 			MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;
+		type ProcessedUpToHook =
+			MockHook<HookTypeFor<Self, ProcessedUpToHook>>;
 	}
 
 	#[test]

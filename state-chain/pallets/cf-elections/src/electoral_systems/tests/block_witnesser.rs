@@ -24,10 +24,7 @@ use crate::{
 		block_witnesser::{
 			primitives::ElectionTracker,
 			state_machine::{
-				BWElectionProperties, BWElectionType, BWProcessorTypes, BlockWitnesserSettings,
-				BlockWitnesserState, DebugEventHook, ElectionPropertiesHook,
-				ElectionTrackerDebugEventHook, ExecuteHook, HookTypeFor, RulesHook,
-				SafeModeEnabledHook,
+				BWElectionProperties, BWElectionType, BWProcessorTypes, BlockWitnesserSettings, BlockWitnesserState, DebugEventHook, ElectionPropertiesHook, ElectionTrackerDebugEventHook, ExecuteHook, HookTypeFor, ProcessedUpToHook, RulesHook, SafeModeEnabledHook
 			},
 			*,
 		},
@@ -93,6 +90,7 @@ impl BWTypes for Types {
 	type ElectionPropertiesHook =
 		MockHook<HookTypeFor<Self, ElectionPropertiesHook>, "generate_election_properties">;
 	type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>, "safe_mode">;
+	type ProcessedUpToHook = MockHook<HookTypeFor<Self, ProcessedUpToHook>, "processed_up_to">;
 	type ElectionTrackerDebugEventHook = MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;
 }
 
