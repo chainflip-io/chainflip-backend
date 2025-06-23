@@ -24,7 +24,7 @@ use cf_chains::{
 	evm::{SchnorrVerificationComponents, H256},
 	instances::ChainInstanceFor,
 	AnyChain, Arbitrum, Assethub, Bitcoin, CcmDepositMetadataUnchecked, Chain, ChainCrypto,
-	ChannelRefundParametersGeneric, Ethereum, ForeignChainAddress, IntoTransactionInIdForAnyChain,
+	ChannelRefundParameters, Ethereum, ForeignChainAddress, IntoTransactionInIdForAnyChain,
 	Polkadot, TransactionInIdForAnyChain,
 };
 use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
@@ -151,7 +151,7 @@ enum WitnessInformation {
 		deposit_details: Option<DepositDetails>,
 		broker_fee: Option<Beneficiary<AccountId32>>,
 		affiliate_fees: Affiliates<AccountId32>,
-		refund_params: Option<ChannelRefundParametersGeneric<TrackerAddress>>,
+		refund_params: Option<ChannelRefundParameters<TrackerAddress>>,
 		dca_params: Option<DcaParameters>,
 		max_boost_fee: BasisPoints,
 	},

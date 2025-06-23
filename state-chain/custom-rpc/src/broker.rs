@@ -22,7 +22,7 @@ use crate::{
 };
 pub use cf_chains::eth::Address as EthereumAddress;
 use cf_chains::{
-	address::AddressString, CcmChannelMetadataUnchecked, ChannelRefundParametersGeneric,
+	address::AddressString, CcmChannelMetadataUnchecked, ChannelRefundParameters,
 };
 use cf_node_client::{
 	extract_from_first_matching_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
@@ -152,7 +152,7 @@ where
 				channel_id,
 				source_chain_expiry_block: source_chain_expiry_block.into(),
 				channel_opening_fee: channel_opening_fee.into(),
-				refund_parameters: ChannelRefundParametersGeneric::from(refund_parameters)
+				refund_parameters: ChannelRefundParameters::from(refund_parameters)
 				.map_address(|refund_address| {
 					AddressString::from_encoded_address(&refund_address.0)
 				}),

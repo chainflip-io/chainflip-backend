@@ -34,7 +34,7 @@ pub struct SwapRefundParameters {
 )]
 /// Generic types for Unchecked version of Refund Parameters. Avoid using this type directly, and
 /// always use the appropriate type-aliased version.
-pub struct ChannelRefundParametersGeneric<A, RefundCcm = Option<CcmChannelMetadataUnchecked>> {
+pub struct ChannelRefundParameters<A, RefundCcm = Option<CcmChannelMetadataUnchecked>> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: A,
 	pub min_price: Price,
@@ -85,7 +85,7 @@ impl<AccountId> RefundParametersChecked<AccountId> {
 	}
 
 	fn try_from_refund_parameters_internal(
-		refund_param: ChannelRefundParametersGeneric<ForeignChainAddress>,
+		refund_param: ChannelRefundParameters<ForeignChainAddress>,
 		source_address: Option<ForeignChainAddress>,
 		refund_asset: Asset,
 	) -> Result<Self, DispatchError> {
@@ -117,7 +117,7 @@ impl<AccountId> RefundParametersChecked<AccountId> {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParametersGeneric<A> {
+impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParameters<A> {
 	fn benchmark_value() -> Self {
 		Self {
 			retry_duration: BenchmarkValue::benchmark_value(),
@@ -127,18 +127,13 @@ impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParametersGeneric<A> {
 		}
 	}
 }
-pub type ChannelRefundParametersLegacy<RefundAddress> =
-	ChannelRefundParametersGeneric<RefundAddress, ()>;
-pub type ChannelRefundParametersEncoded = ChannelRefundParametersGeneric<EncodedAddress>;
-pub type ChannelRefundParametersForChain<C> =
-	ChannelRefundParametersGeneric<<C as Chain>::ChainAccount>;
+pub type ChannelRefundParametersLegacy<RefundAddress> = ChannelRefundParameters<RefundAddress, ()>;
+pub type ChannelRefundParametersEncoded = ChannelRefundParameters<EncodedAddress>;
+pub type ChannelRefundParametersForChain<C> = ChannelRefundParameters<<C as Chain>::ChainAccount>;
 
-impl<A: Clone, RefundCcm: Clone> ChannelRefundParametersGeneric<A, RefundCcm> {
-	pub fn map_address<B, F: FnOnce(A) -> B>(
-		&self,
-		f: F,
-	) -> ChannelRefundParametersGeneric<B, RefundCcm> {
-		ChannelRefundParametersGeneric {
+impl<A: Clone, RefundCcm: Clone> ChannelRefundParameters<A, RefundCcm> {
+	pub fn map_address<B, F: FnOnce(A) -> B>(&self, f: F) -> ChannelRefundParameters<B, RefundCcm> {
+		ChannelRefundParameters {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address.clone()),
 			min_price: self.min_price,
@@ -148,8 +143,8 @@ impl<A: Clone, RefundCcm: Clone> ChannelRefundParametersGeneric<A, RefundCcm> {
 	pub fn try_map_address<B, E, F: FnOnce(A) -> Result<B, E>>(
 		&self,
 		f: F,
-	) -> Result<ChannelRefundParametersGeneric<B, RefundCcm>, E> {
-		Ok(ChannelRefundParametersGeneric {
+	) -> Result<ChannelRefundParameters<B, RefundCcm>, E> {
+		Ok(ChannelRefundParameters {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address.clone())?,
 			min_price: self.min_price,
@@ -158,7 +153,7 @@ impl<A: Clone, RefundCcm: Clone> ChannelRefundParametersGeneric<A, RefundCcm> {
 	}
 }
 
-impl<RefundAddress> ChannelRefundParametersGeneric<RefundAddress> {
+impl<RefundAddress> ChannelRefundParameters<RefundAddress> {
 	pub fn validate(
 		&self,
 		refund_asset: Asset,

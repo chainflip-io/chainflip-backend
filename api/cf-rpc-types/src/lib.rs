@@ -19,7 +19,7 @@ use cf_amm::common::{PoolPairsMap, Side};
 /// Common types are defined in here
 use cf_chains::{
 	address::{AddressString, ToHumanreadableAddress},
-	Chain, ChannelRefundParametersGeneric,
+	Chain, ChannelRefundParameters,
 };
 use cf_primitives::{AccountId, Asset, BlockNumber, FlipBalance, Tick, TxIndex};
 use frame_support::{Deserialize, Serialize};
@@ -84,7 +84,7 @@ pub enum OrderFilled {
 	},
 }
 
-pub type RefundParametersRpc = ChannelRefundParametersGeneric<AddressString>;
+pub type RefundParametersRpc = ChannelRefundParameters<AddressString>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RebalanceOutcome {

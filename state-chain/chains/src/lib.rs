@@ -1189,7 +1189,7 @@ pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
 )]
 pub struct EvmVaultSwapExtraParameters<Address, Amount> {
 	pub input_amount: Amount,
-	pub refund_parameters: ChannelRefundParametersGeneric<Address>,
+	pub refund_parameters: ChannelRefundParameters<Address>,
 }
 impl<Address: Clone, Amount> EvmVaultSwapExtraParameters<Address, Amount> {
 	pub fn try_map_address<AddressOther, E>(
@@ -1229,7 +1229,7 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 		#[cfg_attr(feature = "std", serde(with = "bounded_hex"))]
 		seed: SolSeed,
 		input_amount: Amount,
-		refund_parameters: ChannelRefundParametersGeneric<Address>,
+		refund_parameters: ChannelRefundParameters<Address>,
 		from_token_account: Option<Address>,
 	},
 }

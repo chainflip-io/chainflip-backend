@@ -68,7 +68,7 @@ include!(concat!(env!("OUT_DIR"), "/cf_static_runtime.rs"));
 // Conversions from cf_static_runtime::runtime_types
 impl<T>
 	From<
-		cf_static_runtime::runtime_types::cf_chains::refund_parameters::ChannelRefundParametersGeneric<
+		cf_static_runtime::runtime_types::cf_chains::refund_parameters::ChannelRefundParameters<
 			T,
 			Option<
 				cf_static_runtime::runtime_types::cf_chains::CcmChannelMetadata<
@@ -76,10 +76,10 @@ impl<T>
 				>,
 			>,
 		>,
-	> for cf_chains::ChannelRefundParametersGeneric<T>
+	> for cf_chains::ChannelRefundParameters<T>
 {
 	fn from(
-		value: cf_static_runtime::runtime_types::cf_chains::refund_parameters::ChannelRefundParametersGeneric<
+		value: cf_static_runtime::runtime_types::cf_chains::refund_parameters::ChannelRefundParameters<
 			T,
 			Option<
 				cf_static_runtime::runtime_types::cf_chains::CcmChannelMetadata<

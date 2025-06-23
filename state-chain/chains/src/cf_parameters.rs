@@ -16,7 +16,7 @@
 
 use crate::{
 	ccm_checker::DecodedCcmAdditionalData, CcmAdditionalData, CcmChannelMetadataChecked, Chain,
-	ChannelRefundParametersForChain, ChannelRefundParametersGeneric, ChannelRefundParametersLegacy,
+	ChannelRefundParameters, ChannelRefundParametersForChain, ChannelRefundParametersLegacy,
 };
 use cf_primitives::{
 	AccountId, AffiliateAndFee, BasisPoints, Beneficiary, DcaParameters, MAX_AFFILIATES,
@@ -57,14 +57,14 @@ pub struct VaultSwapParametersGeneric<R> {
 pub type VaultSwapParametersLegacy<RefundAddress> =
 	VaultSwapParametersGeneric<ChannelRefundParametersLegacy<RefundAddress>>;
 pub type VaultSwapParameters<RefundAddress> =
-	VaultSwapParametersGeneric<ChannelRefundParametersGeneric<RefundAddress>>;
+	VaultSwapParametersGeneric<ChannelRefundParameters<RefundAddress>>;
 
 impl<RefundAddress> From<VaultSwapParametersLegacy<RefundAddress>>
 	for VaultSwapParameters<RefundAddress>
 {
 	fn from(value: VaultSwapParametersLegacy<RefundAddress>) -> Self {
 		VaultSwapParameters {
-			refund_params: ChannelRefundParametersGeneric {
+			refund_params: ChannelRefundParameters {
 				retry_duration: value.refund_params.retry_duration,
 				refund_address: value.refund_params.refund_address,
 				min_price: value.refund_params.min_price,
@@ -135,7 +135,7 @@ pub fn decode_cf_parameters<RefundAddress: Decode, CcmData: Default + Decode>(
 				vault_swap_parameters,
 			}) => (
 				VaultSwapParameters {
-					refund_params: ChannelRefundParametersGeneric {
+					refund_params: ChannelRefundParameters {
 						retry_duration: vault_swap_parameters.refund_params.retry_duration,
 						refund_address: vault_swap_parameters.refund_params.refund_address,
 						min_price: vault_swap_parameters.refund_params.min_price,
