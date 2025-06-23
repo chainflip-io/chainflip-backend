@@ -6,6 +6,7 @@ use core::{
 	ops::{Range, RangeInclusive},
 };
 use derive_where::derive_where;
+use generic_typeinfo_derive::GenericTypeInfo;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{
@@ -27,6 +28,8 @@ use crate::electoral_systems::{
 use super::state_machine::{BWElectionType, BWTypes, EngineElectionType};
 
 defx! {
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(T::Chain::NAME)]
 	pub struct ElectionTracker[T: BWTypes] {
 		/// The lowest block we haven't seen yet. I.e., we have seen blocks below.
 		pub seen_heights_below: ChainBlockNumberOf<T::Chain>,
@@ -504,6 +507,8 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 }
 
 def_derive! {
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(T::Chain::NAME)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct OptimisticBlock<T: BWTypes> {
 		pub hash: <T::Chain as ChainTypes>::ChainBlockHash,
@@ -519,6 +524,8 @@ impl<T: BWTypes> Validate for OptimisticBlock<T> {
 }
 
 def_derive! {
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(T::Chain::NAME)]
 	pub enum ElectionTrackerEvent<T: BWTypes> {
 		ComparingBlocks {
 			height: ChainBlockNumberOf<T::Chain>,
@@ -535,6 +542,7 @@ def_derive! {
 }
 
 def_derive! {
+	#[derive(TypeInfo)]
 	pub enum UpdateSafeElectionsReason {
 		OutOfSafetyMargin,
 		SafeElectionScheduled,

@@ -12,6 +12,7 @@ use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use derive_where::derive_where;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
+use generic_typeinfo_derive::GenericTypeInfo;
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec::Vec};
 
 ///
@@ -46,7 +47,8 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec::Vec};
 ///     - `Execute`: A hook to dedup and execute generated events.
 /// 	- `DebugEventHook`: A hook to log events, used for testing
 #[derive_where(Debug, Clone, PartialEq, Eq;)]
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[derive(Encode, Decode, Serialize, Deserialize, GenericTypeInfo)]
+#[expand_name_with(T::Chain::NAME)]
 pub struct BlockProcessor<T: BWProcessorTypes> {
 	/// A mapping from block numbers to their corresponding BlockInfo (block data, the next age to
 	/// be processed and the safety margin). The "age" represents the block height difference
@@ -73,6 +75,7 @@ impl<BlockData> BlockProcessingInfo<BlockData> {
 }
 
 def_derive! {
+	#[derive(TypeInfo)]
 	pub enum BlockProcessorEvent<T: BWProcessorTypes> {
 		NewBlock {
 			height: ChainBlockNumberOf<T::Chain>,
@@ -292,6 +295,7 @@ pub(crate) mod tests {
 		Arbitrary,
 		Encode,
 		Decode,
+		TypeInfo,
 	)]
 	pub enum MockBtcEvent<E> {
 		PreWitness(E),

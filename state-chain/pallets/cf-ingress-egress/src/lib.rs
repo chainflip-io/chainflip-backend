@@ -433,13 +433,14 @@ pub mod pallet {
 		Eq,
 		Encode,
 		Decode,
-		TypeInfo,
 		MaxEncodedLen,
 		Serialize,
 		Deserialize,
 		Ord,
 		PartialOrd,
+		GenericTypeInfo,
 	)]
+	#[expand_name_with(C::NAME)]
 	pub struct DepositWitness<C: Chain> {
 		pub deposit_address: C::ChainAccount,
 		pub asset: C::ChainAsset,
@@ -520,7 +521,9 @@ pub mod pallet {
 	)]
 	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub enum DepositFailedDetails<T: Config<I>, I: 'static> {
+		#[replace_typename_with(DepositFailedDepositChannelVariant)]
 		DepositChannel { deposit_witness: DepositWitness<T::TargetChain> },
+		#[replace_typename_with(DepositFailedVaultVariant)]
 		Vault { vault_witness: Box<VaultDepositWitness<T, I>> },
 	}
 

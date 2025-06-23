@@ -131,13 +131,13 @@ pub(crate) use derive_validation_statements;
 macro_rules! def_derive {
 	(#[no_serde] $($Definition:tt)*) => {
 		#[derive(
-			Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo,
+			Debug, Clone, PartialEq, Eq, Encode, Decode,
 		)]
 		$($Definition)*
 	};
 	($($Definition:tt)*) => {
 		#[derive(
-			Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo,
+			Debug, Clone, PartialEq, Eq, Encode, Decode,
 		)]
 		#[derive(Deserialize, Serialize)]
 		#[serde(bound(deserialize = "", serialize = ""))]

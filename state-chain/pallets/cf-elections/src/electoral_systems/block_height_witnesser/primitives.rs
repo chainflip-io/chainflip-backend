@@ -1,5 +1,6 @@
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
+use generic_typeinfo_derive::GenericTypeInfo;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::vec_deque::VecDeque;
@@ -20,6 +21,8 @@ defx! {
 	///
 	/// These properties are verified as part of the `Validate` implementation derived by the `defx` macro.
 	#[derive(Ord, PartialOrd)]
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(T::NAME)]
 	pub struct NonemptyContinuousHeaders[T: ChainTypes] {
 		pub(crate) headers: VecDeque<Header<T>>,
 	}
@@ -133,6 +136,8 @@ pub enum MergeFailure<T: ChainTypes> {
 defx! {
 	/// Block header for a given chain `C` as used by the BHW.
 	#[derive(Ord, PartialOrd)]
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(C::NAME)]
 	pub struct Header[C: ChainTypes] {
 		pub block_height: C::ChainBlockNumber,
 		pub hash: C::ChainBlockHash,
