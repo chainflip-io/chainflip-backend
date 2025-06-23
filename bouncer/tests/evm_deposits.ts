@@ -2,6 +2,7 @@ import Web3 from 'web3';
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { doPerformSwap, requestNewSwap } from 'shared/perform_swap';
 import { prepareSwap, testSwap } from 'shared/swapping';
+import { Keyring } from '@polkadot/api';
 import {
   observeFetch,
   sleep,
@@ -17,16 +18,20 @@ import {
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
+  stateChainAssetFromAsset,
 } from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
-import { getCFTesterAbi } from 'shared/contract_interfaces';
+import { getCFTesterAbi, getEvmVaultAbi } from 'shared/contract_interfaces';
 import { send } from 'shared/send';
 
-import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
+import { observeEvent, observeBadEvent, getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger, throwError } from 'shared/utils/logger';
+import { ChannelRefundParameters } from 'shared/sol_vault_swap';
+import { newEvmAddress } from 'shared/new_evm_address';
 
 const cfTesterAbi = await getCFTesterAbi();
+const cfEvmVaultAbi = await getEvmVaultAbi();
 
 async function testSuccessiveDepositEvm(
   sourceAsset: Asset,
@@ -199,6 +204,64 @@ async function testDoubleDeposit(parentLogger: Logger, sourceAsset: Asset, destA
   }
 }
 
+async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, destAsset: Asset) {
+  const web3 = new Web3(getEvmEndpoint(chainFromAsset(sourceAsset)));
+  const cfVaultAddress = getContractAddress(chainFromAsset(sourceAsset), 'VAULT');
+  const cfVaultContract = new web3.eth.Contract(cfEvmVaultAbi, cfVaultAddress);
+  const { destAddress, tag } = await prepareSwap(parentLogger, sourceAsset, destAsset);
+  const logger = parentLogger.child({ tag });
+  await using chainflip = await getChainflipApi();
+
+  const refundParams: ChannelRefundParameters = {
+    retry_duration: 10,
+    refund_address: newEvmAddress('refund_eth'),
+    min_price: '0x0',
+  };
+
+  console.log('destAddress', destAddress);
+
+  const cfParameters = (await chainflip.rpc(
+    `cf_encode_cf_parameters`,
+    new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_1').address,
+    { chain: chainFromAsset(sourceAsset), asset: stateChainAssetFromAsset(sourceAsset) },
+    { chain: chainFromAsset(destAsset), asset: stateChainAssetFromAsset(destAsset) },
+    destAddress,
+    1, // broker_comission
+    refundParams,
+  )) as string;
+
+  const amount = BigInt(
+    amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset)),
+  );
+
+  const txData = cfVaultContract.methods
+    .xSwapNative(
+      chainContractId(chainFromAsset(destAsset)),
+      destAsset === 'Dot' || destAddress === 'Hub'
+        ? decodeDotAddressForContract(destAddress)
+        : destAddress,
+      assetContractId(destAsset),
+      cfParameters,
+    )
+    .encodeABI();
+
+  const receipt = await signAndSendTxEvm(
+    logger,
+    chainFromAsset(sourceAsset),
+    cfVaultAddress,
+    amount.toString(),
+    txData,
+  );
+
+  await observeSwapRequested(
+    logger,
+    sourceAsset,
+    destAsset,
+    { type: TransactionOrigin.VaultSwapEvm, txHash: receipt.transactionHash },
+    SwapRequestType.Regular,
+  );
+}
+
 export async function testEvmDeposits(testContext: TestContext) {
   const depositTests = Promise.all([
     testSuccessiveDepositEvm('Eth', 'Dot', testContext),
@@ -232,10 +295,16 @@ export async function testEvmDeposits(testContext: TestContext) {
     testDoubleDeposit(testContext.logger, 'ArbUsdc', 'Btc'),
   ]);
 
+  const testEncodingCfParameters = Promise.all([
+    testEncodeCfParameters(testContext.logger, 'ArbEth', 'Eth'),
+    testEncodeCfParameters(testContext.logger, 'Eth', 'Dot'),
+  ]);
+
   await Promise.all([
     depositTests,
     noDuplicatedWitnessingTest,
     multipleTxSwapsTest,
     doubleDepositTests,
+    testEncodingCfParameters,
   ]);
 }
