@@ -16,6 +16,7 @@ use crate::electoral_systems::{
 		state_machine::{AbstractApi, Statemachine},
 	},
 };
+use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use core::ops::Range;
 use derive_where::derive_where;
@@ -23,6 +24,7 @@ use itertools::Either;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
+
 
 /// Type which can be used for implementing traits that
 /// contain only type definitions, as used in many parts of
@@ -203,27 +205,34 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			.ongoing
 			.clone()
 			.into_iter()
-			.map(|(block_height, election_type)| match election_type {
-				BWElectionType::Governance(properties) => BWElectionProperties {
-					properties,
-					election_type: EngineElectionType::BlockHeight { submit_hash: false },
-					block_height,
-				},
-				BWElectionType::Optimistic => BWElectionProperties {
-					properties: state.generate_election_properties_hook.run(block_height),
-					election_type: EngineElectionType::BlockHeight { submit_hash: true },
-					block_height,
-				},
-				BWElectionType::SafeBlockHeight => BWElectionProperties {
-					properties: state.generate_election_properties_hook.run(block_height),
-					election_type: EngineElectionType::BlockHeight { submit_hash: false },
-					block_height,
-				},
-				BWElectionType::ByHash(hash) => BWElectionProperties {
-					properties: state.generate_election_properties_hook.run(block_height),
-					election_type: EngineElectionType::ByHash(hash),
-					block_height,
-				},
+			.map(|(block_height, election_type)| {
+				// We apply the SAFETY_BUFFER before we fetch the election_properties,
+				// this makes sure that if txs that have been submitted post channel creation,
+				// but due to reorg ended up in an external chain block that's below the channels `opened_at`,
+				// are still witnessed. (See PRO-2306).
+				let height_for_election_properties = block_height.saturating_forward(T::Chain::SAFETY_BUFFER);
+				match election_type {
+					BWElectionType::Governance(properties) => BWElectionProperties {
+						properties,
+						election_type: EngineElectionType::BlockHeight { submit_hash: false },
+						block_height,
+					},
+					BWElectionType::Optimistic => BWElectionProperties {
+						properties: state.generate_election_properties_hook.run(height_for_election_properties),
+						election_type: EngineElectionType::BlockHeight { submit_hash: true },
+						block_height,
+					},
+					BWElectionType::SafeBlockHeight => BWElectionProperties {
+						properties: state.generate_election_properties_hook.run(height_for_election_properties),
+						election_type: EngineElectionType::BlockHeight { submit_hash: false },
+						block_height,
+					},
+					BWElectionType::ByHash(hash) => BWElectionProperties {
+						properties: state.generate_election_properties_hook.run(height_for_election_properties),
+						election_type: EngineElectionType::ByHash(hash),
+						block_height,
+					},
+				}
 			})
 			.collect()
 	}
