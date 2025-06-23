@@ -3100,10 +3100,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		debug_assert!(<T::TargetChain as Chain>::is_block_witness_root(opened_at_or_before));
 
 		DepositChannelLookup::<T, I>::iter_values()
-			.filter(|details| 
-				details.opened_at <= opened_at_or_before &&
-					details.expires_at < expires_after
-			)
+			.filter(|details| {
+				details.opened_at <= opened_at_or_before && details.expires_at < expires_after
+			})
 			.collect()
 	}
 }

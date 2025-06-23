@@ -25,7 +25,6 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
 
-
 /// Type which can be used for implementing traits that
 /// contain only type definitions, as used in many parts of
 /// the state machine based electoral systems.
@@ -213,30 +212,27 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			.ongoing
 			.clone()
 			.into_iter()
-			.map(|(block_height, election_type)| {
-				let height_for_election_properties = block_height.saturating_forward(T::Chain::SAFETY_BUFFER);
-				match election_type {
-					BWElectionType::Governance(properties) => BWElectionProperties {
-						properties,
-						election_type: EngineElectionType::BlockHeight { submit_hash: false },
-						block_height,
-					},
-					BWElectionType::Optimistic => BWElectionProperties {
-						properties: state.generate_election_properties_hook.run(height_for_election_properties),
-						election_type: EngineElectionType::BlockHeight { submit_hash: true },
-						block_height,
-					},
-					BWElectionType::SafeBlockHeight => BWElectionProperties {
-						properties: state.generate_election_properties_hook.run(height_for_election_properties),
-						election_type: EngineElectionType::BlockHeight { submit_hash: false },
-						block_height,
-					},
-					BWElectionType::ByHash(hash) => BWElectionProperties {
-						properties: state.generate_election_properties_hook.run(height_for_election_properties),
-						election_type: EngineElectionType::ByHash(hash),
-						block_height,
-					},
-				}
+			.map(|(block_height, election_type)| match election_type {
+				BWElectionType::Governance(properties) => BWElectionProperties {
+					properties,
+					election_type: EngineElectionType::BlockHeight { submit_hash: false },
+					block_height,
+				},
+				BWElectionType::Optimistic => BWElectionProperties {
+					properties: state.generate_election_properties_hook.run(block_height),
+					election_type: EngineElectionType::BlockHeight { submit_hash: true },
+					block_height,
+				},
+				BWElectionType::SafeBlockHeight => BWElectionProperties {
+					properties: state.generate_election_properties_hook.run(block_height),
+					election_type: EngineElectionType::BlockHeight { submit_hash: false },
+					block_height,
+				},
+				BWElectionType::ByHash(hash) => BWElectionProperties {
+					properties: state.generate_election_properties_hook.run(block_height),
+					election_type: EngineElectionType::ByHash(hash),
+					block_height,
+				},
 			})
 			.collect()
 	}
@@ -493,8 +489,7 @@ pub mod tests {
 		type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>>;
 		type ElectionTrackerDebugEventHook =
 			MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;
-		type ProcessedUpToHook =
-			MockHook<HookTypeFor<Self, ProcessedUpToHook>>;
+		type ProcessedUpToHook = MockHook<HookTypeFor<Self, ProcessedUpToHook>>;
 	}
 
 	#[test]

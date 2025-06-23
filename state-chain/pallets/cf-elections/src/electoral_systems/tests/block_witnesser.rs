@@ -24,7 +24,10 @@ use crate::{
 		block_witnesser::{
 			primitives::ElectionTracker,
 			state_machine::{
-				BWElectionProperties, BWElectionType, BWProcessorTypes, BlockWitnesserSettings, BlockWitnesserState, DebugEventHook, ElectionPropertiesHook, ElectionTrackerDebugEventHook, ExecuteHook, HookTypeFor, ProcessedUpToHook, RulesHook, SafeModeEnabledHook
+				BWElectionProperties, BWElectionType, BWProcessorTypes, BlockWitnesserSettings,
+				BlockWitnesserState, DebugEventHook, ElectionPropertiesHook,
+				ElectionTrackerDebugEventHook, ExecuteHook, HookTypeFor, ProcessedUpToHook,
+				RulesHook, SafeModeEnabledHook,
 			},
 			*,
 		},
