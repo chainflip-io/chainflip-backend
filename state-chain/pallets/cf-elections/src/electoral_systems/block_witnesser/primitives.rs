@@ -17,6 +17,8 @@ use sp_std::{
 #[cfg(test)]
 use proptest::prelude::{any, Arbitrary, Strategy};
 #[cfg(test)]
+use proptest::{prop_assert_eq, proptest};
+#[cfg(test)]
 use proptest_derive::Arbitrary;
 
 use crate::electoral_systems::{
@@ -543,6 +545,8 @@ def_derive! {
 	}
 }
 
+/// There is some assumption regardint CompactHeightTracker:
+/// - we can only insert at the end
 #[derive_where(Default; )]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct CompactHeightTracker<N: Ord> {
@@ -665,6 +669,92 @@ pub fn test_compact_height() {
 	tracker.insert(5u8);
 	tracker.remove(1..6);
 	assert_eq!(tracker.elections, [].into_iter().collect());
+}
+
+#[cfg(test)]
+mod prop_tests {
+	use super::*;
+	use proptest::prelude::*;
+	use std::collections::BTreeSet;
+
+	#[derive(Debug, Clone)]
+	enum TrackerOp {
+		Insert(u8),
+		Remove { start: u8, end: u8 },
+	}
+
+	fn tracker_ops_strategy() -> impl Strategy<Value = Vec<TrackerOp>> {
+		// First, generate a set of unique inserts
+		prop::collection::btree_set(any::<u8>(), 1..100).prop_flat_map(|insert_set| {
+			let inserts: Vec<_> = insert_set.iter().cloned().map(|n| TrackerOp::Insert(n.saturating_sub(1))).collect();
+			// Now, generate removes that only target present elements
+			let removes_strategy = {
+				let vec: Vec<u8> = insert_set.into_iter().collect();
+				prop::collection::vec(
+					(0..vec.len()).prop_flat_map(move |i| {
+						let start = vec[i];
+						let end =
+							if i + 1 < vec.len() { vec[i + 1] } else { start.saturating_add(1) };
+						Just(TrackerOp::Remove { start, end })
+					}),
+					0..20,
+				)
+				.prop_shuffle()
+			};
+			removes_strategy.prop_map(move |removes| {
+				let mut ops = inserts.clone();
+				ops.extend(removes);
+				ops
+			})
+		})
+	}
+
+	proptest! {
+		#![proptest_config(ProptestConfig {
+			cases: 1000, .. ProptestConfig::default()
+		  })]
+		#[test]
+		fn prop_tracker_ops_hold_invariants(ops in tracker_ops_strategy()) {
+			let mut tracker = CompactHeightTracker::new();
+			let mut reference = BTreeSet::new();
+
+			for op in &ops {
+				match *op {
+					TrackerOp::Insert(x) => {
+						tracker.insert(x);
+						reference.insert(x);
+					}
+					TrackerOp::Remove { start, end } => {
+						tracker.remove(start..end);
+						reference = reference.into_iter().filter(|&v| !(start <= v && v < end)).collect();
+					}
+				}
+
+				let tracker_heights = tracker.get_all_heights();
+				prop_assert_eq!(&tracker_heights, &reference, "Tracker heights do not match reference set");
+
+				// No duplicate heights
+				prop_assert_eq!(tracker_heights.len(), reference.iter().count());
+
+				// Ranges in elections are non-overlapping and sorted
+				let mut last_end = None;
+				for (&start, &end) in tracker.elections.iter() {
+					if let Some(prev_end) = last_end {
+						prop_assert!(prev_end <= start, "Ranges overlap or are out of order");
+					}
+					prop_assert!(start < end, "Range start must be less than end");
+					last_end = Some(end);
+				}
+
+				// All heights in get_all_heights are covered by the ranges in elections
+				let mut covered = BTreeSet::new();
+				for (&start, &end) in tracker.elections.iter() {
+					covered.extend(start..end);
+				}
+				prop_assert_eq!(tracker_heights, covered);
+			}
+		}
+	}
 }
 
 #[cfg_attr(test, derive(Arbitrary))]
