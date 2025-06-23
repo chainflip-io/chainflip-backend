@@ -59,7 +59,7 @@ impl<AccountId> RefundParametersChecked<AccountId> {
 	}
 
 	pub fn try_from_refund_parameters<Converter: AddressConverter>(
-		refund_param: ChannelRefundParameters,
+		refund_param: ChannelRefundParametersEncoded,
 		source_address: Option<ForeignChainAddress>,
 		refund_asset: Asset,
 	) -> Result<Self, DispatchError> {
@@ -129,7 +129,7 @@ impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParametersGeneric<A> {
 }
 pub type ChannelRefundParametersLegacy<RefundAddress> =
 	ChannelRefundParametersGeneric<RefundAddress, ()>;
-pub type ChannelRefundParameters = ChannelRefundParametersGeneric<EncodedAddress>;
+pub type ChannelRefundParametersEncoded = ChannelRefundParametersGeneric<EncodedAddress>;
 pub type ChannelRefundParametersForChain<C> =
 	ChannelRefundParametersGeneric<<C as Chain>::ChainAccount>;
 

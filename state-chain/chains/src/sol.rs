@@ -34,8 +34,8 @@ use crate::{
 		AccountBump, SlotNumber,
 	},
 	AnyChainAsset, CcmAdditionalData, CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmParams,
-	ChannelRefundParameters, DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi,
-	FeeRefundCalculator, TypeInfo,
+	ChannelRefundParametersEncoded, DepositChannel, DepositDetailsToTransactionInId,
+	FeeEstimationApi, FeeRefundCalculator, TypeInfo,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -520,7 +520,7 @@ pub struct DecodedXSwapParams {
 	pub from_token_account: Option<SolAddress>,
 	pub dst_address: crate::address::EncodedAddress,
 	pub dst_token: AnyChainAsset,
-	pub refund_parameters: ChannelRefundParameters,
+	pub refund_parameters: ChannelRefundParametersEncoded,
 	pub dca_parameters: Option<DcaParameters>,
 	pub boost_fee: u8,
 	pub broker_id: cf_primitives::AccountId,

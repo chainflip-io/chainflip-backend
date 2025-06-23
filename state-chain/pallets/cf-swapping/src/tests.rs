@@ -266,7 +266,7 @@ fn generate_ccm_deposit() -> CcmDepositMetadataUnchecked<ForeignChainAddress> {
 	}
 }
 
-const REFUND_PARAMS: ChannelRefundParameters = ChannelRefundParameters {
+const REFUND_PARAMS: ChannelRefundParametersEncoded = ChannelRefundParametersEncoded {
 	retry_duration: 100,
 	refund_address: EncodedAddress::Eth([1; 20]),
 	min_price: U256::zero(),

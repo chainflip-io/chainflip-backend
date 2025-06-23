@@ -36,7 +36,7 @@ use cf_chains::{
 		sol_tx_core::address_derivation::derive_associated_token_account, DecodedXSwapParams,
 		SolAmount, SolInstruction, SolPubkey,
 	},
-	Arbitrum, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked, ChannelRefundParameters,
+	Arbitrum, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked, ChannelRefundParametersEncoded,
 	Ethereum, ForeignChain, Solana, VaultSwapExtraParameters, VaultSwapInputEncoded,
 };
 use cf_primitives::{
@@ -150,7 +150,7 @@ pub fn evm_vault_swap<A>(
 	destination_asset: Asset,
 	destination_address: EncodedAddress,
 	broker_commission: BasisPoints,
-	refund_params: ChannelRefundParameters,
+	refund_params: ChannelRefundParametersEncoded,
 	boost_fee: u8,
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
@@ -270,7 +270,7 @@ pub fn solana_vault_swap<A>(
 	destination_asset: Asset,
 	destination_address: EncodedAddress,
 	broker_commission: BasisPoints,
-	refund_parameters: ChannelRefundParameters,
+	refund_parameters: ChannelRefundParametersEncoded,
 	channel_metadata: Option<CcmChannelMetadataChecked>,
 	boost_fee: u8,
 	affiliate_fees: Affiliates<AccountId>,

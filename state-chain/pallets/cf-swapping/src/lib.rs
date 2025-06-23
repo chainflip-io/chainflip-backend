@@ -21,8 +21,8 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
-	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParameters, RefundParametersChecked,
-	SwapOrigin, SwapRefundParameters,
+	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersEncoded,
+	RefundParametersChecked, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
@@ -707,7 +707,7 @@ pub mod pallet {
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
 			affiliate_fees: Affiliates<T::AccountId>,
-			refund_parameters: ChannelRefundParameters,
+			refund_parameters: ChannelRefundParametersEncoded,
 			dca_parameters: Option<DcaParameters>,
 		},
 		/// A swap is scheduled for the first time
@@ -987,7 +987,7 @@ pub mod pallet {
 			broker_commission: BasisPoints,
 			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 			boost_fee: BasisPoints,
-			refund_parameters: ChannelRefundParameters,
+			refund_parameters: ChannelRefundParametersEncoded,
 		) -> DispatchResult {
 			Self::request_swap_deposit_address_with_affiliates(
 				origin,
@@ -1201,7 +1201,7 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<T::AccountId>,
-			refund_parameters: ChannelRefundParameters,
+			refund_parameters: ChannelRefundParametersEncoded,
 			dca_parameters: Option<DcaParameters>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
