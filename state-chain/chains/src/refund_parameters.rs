@@ -23,25 +23,63 @@ pub enum AccountOrAddress<AccountId, Address> {
 	PartialOrd,
 	Ord,
 )]
-/// Generic types for Unchecked version of Refund Parameters. Avoid using this type directly, and
-/// always use the appropriate type-aliased version.
-pub struct ChannelRefundParameters<A, RefundCcm = Option<CcmChannelMetadataUnchecked>> {
+/// Generic type for Refund Parameters.
+///
+/// The abstract `RefundDetails` represents additional metadata that may be required for refunding
+/// via CCM. Before verification this is an unchecked byte payload.
+pub struct ChannelRefundParameters<A, CcmRefundDetails> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: A,
 	pub min_price: Price,
-	pub refund_ccm_metadata: RefundCcm,
+	pub refund_ccm_metadata: CcmRefundDetails,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
-pub struct RefundParametersCheckedGeneric<Address, AccountId> {
-	pub retry_duration: cf_primitives::BlockNumber,
-	pub refund_destination: AccountOrAddress<AccountId, Address>,
-	pub min_price: Price,
-	pub refund_ccm_metadata: Option<CcmDepositMetadataChecked<Address>>,
+pub type ChannelRefundParametersUnchecked<A> =
+	ChannelRefundParameters<A, Option<CcmChannelMetadataUnchecked>>;
+pub type ChannelRefundParametersChecked<AccountId> = ChannelRefundParameters<
+	AccountOrAddress<ForeignChainAddress, AccountId>,
+	Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
+>;
+pub type ChannelRefundParametersLegacy<RefundAddress> = ChannelRefundParameters<RefundAddress, ()>;
+pub type ChannelRefundParametersUncheckedEncoded = ChannelRefundParametersUnchecked<EncodedAddress>;
+pub type ChannelRefundParametersForChain<C> =
+	ChannelRefundParametersUnchecked<<C as Chain>::ChainAccount>;
+
+impl<A, D: Clone> ChannelRefundParameters<A, D> {
+	pub fn map_refund_address<B, F: FnOnce(&A) -> B>(&self, f: F) -> ChannelRefundParameters<B, D> {
+		ChannelRefundParameters {
+			retry_duration: self.retry_duration,
+			refund_address: f(&self.refund_address),
+			min_price: self.min_price,
+			refund_ccm_metadata: self.refund_ccm_metadata.clone(),
+		}
+	}
+	pub fn try_map_refund_address<B, E, F: FnOnce(&A) -> Result<B, E>>(
+		&self,
+		f: F,
+	) -> Result<ChannelRefundParameters<B, D>, E> {
+		Ok(ChannelRefundParameters {
+			retry_duration: self.retry_duration,
+			refund_address: f(&self.refund_address)?,
+			min_price: self.min_price,
+			refund_ccm_metadata: self.refund_ccm_metadata.clone(),
+		})
+	}
 }
 
-pub type ChannelRefundParametersChecked<AccountId> =
-	RefundParametersCheckedGeneric<ForeignChainAddress, AccountId>;
+impl ChannelRefundParametersUncheckedEncoded {
+	pub fn into_checked(
+		self,
+		source_address: Option<ForeignChainAddress>,
+		refund_asset: Asset,
+	) -> Result<ChannelRefundParametersChecked<ForeignChainAddress>, DispatchError> {
+		ChannelRefundParametersChecked::try_from_refund_parameters_internal(
+			self,
+			source_address,
+			refund_asset,
+		)
+	}
+}
 
 impl<AccountId> ChannelRefundParametersChecked<AccountId> {
 	pub fn min_output_amount(&self, input_amount: AssetAmount) -> AssetAmount {
@@ -88,15 +126,13 @@ impl<AccountId> ChannelRefundParametersChecked<AccountId> {
 
 		Ok(ChannelRefundParametersChecked::<AccountId> {
 			retry_duration: refund_param.retry_duration,
-			refund_destination: AccountOrAddress::ExternalAddress(
-				refund_param.refund_address.clone(),
-			),
+			refund_address: AccountOrAddress::ExternalAddress(refund_param.refund_address.clone()),
 			min_price: refund_param.min_price,
 			refund_ccm_metadata: refund_param
 				.refund_ccm_metadata
-				.map(|ccm| {
+				.map(|channel_metadata| {
 					CcmDepositMetadataUnchecked {
-						channel_metadata: ccm,
+						channel_metadata,
 						source_chain: refund_param.refund_address.chain(),
 						source_address,
 					}
@@ -108,7 +144,9 @@ impl<AccountId> ChannelRefundParametersChecked<AccountId> {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParameters<A> {
+impl<A: BenchmarkValue, D: BenchmarkValue> BenchmarkValue
+	for ChannelRefundParameters<A, Option<D>>
+{
 	fn benchmark_value() -> Self {
 		Self {
 			retry_duration: BenchmarkValue::benchmark_value(),
@@ -118,33 +156,10 @@ impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParameters<A> {
 		}
 	}
 }
-pub type ChannelRefundParametersLegacy<RefundAddress> = ChannelRefundParameters<RefundAddress, ()>;
-pub type ChannelRefundParametersEncoded = ChannelRefundParameters<EncodedAddress>;
-pub type ChannelRefundParametersForChain<C> = ChannelRefundParameters<<C as Chain>::ChainAccount>;
 
-impl<A: Clone, RefundCcm: Clone> ChannelRefundParameters<A, RefundCcm> {
-	pub fn map_address<B, F: FnOnce(A) -> B>(&self, f: F) -> ChannelRefundParameters<B, RefundCcm> {
-		ChannelRefundParameters {
-			retry_duration: self.retry_duration,
-			refund_address: f(self.refund_address.clone()),
-			min_price: self.min_price,
-			refund_ccm_metadata: self.refund_ccm_metadata.clone(),
-		}
-	}
-	pub fn try_map_address<B, E, F: FnOnce(A) -> Result<B, E>>(
-		&self,
-		f: F,
-	) -> Result<ChannelRefundParameters<B, RefundCcm>, E> {
-		Ok(ChannelRefundParameters {
-			retry_duration: self.retry_duration,
-			refund_address: f(self.refund_address.clone())?,
-			min_price: self.min_price,
-			refund_ccm_metadata: self.refund_ccm_metadata.clone(),
-		})
-	}
-}
-
-impl<RefundAddress> ChannelRefundParameters<RefundAddress> {
+impl<A, CcmChannelMetadataUnchecked>
+	ChannelRefundParameters<A, Option<CcmChannelMetadataUnchecked>>
+{
 	pub fn validate(
 		&self,
 		refund_asset: Asset,
