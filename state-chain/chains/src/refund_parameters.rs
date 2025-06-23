@@ -9,15 +9,6 @@ pub enum AccountOrAddress<AccountId, Address> {
 	ExternalAddress(Address),
 }
 
-/// Refund parameter used within the swapping pallet.
-#[derive(
-	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
-)]
-pub struct SwapRefundParameters {
-	pub refund_block: cf_primitives::BlockNumber,
-	pub min_output: cf_primitives::AssetAmount,
-}
-
 #[derive(
 	Clone,
 	Debug,
@@ -49,10 +40,10 @@ pub struct RefundParametersCheckedGeneric<Address, AccountId> {
 	pub refund_ccm_metadata: Option<CcmDepositMetadataChecked<Address>>,
 }
 
-pub type RefundParametersChecked<AccountId> =
+pub type ChannelRefundParametersChecked<AccountId> =
 	RefundParametersCheckedGeneric<ForeignChainAddress, AccountId>;
 
-impl<AccountId> RefundParametersChecked<AccountId> {
+impl<AccountId> ChannelRefundParametersChecked<AccountId> {
 	pub fn min_output_amount(&self, input_amount: AssetAmount) -> AssetAmount {
 		use sp_runtime::traits::UniqueSaturatedInto;
 		cf_amm_math::output_amount_ceil(input_amount.into(), self.min_price).unique_saturated_into()
@@ -95,7 +86,7 @@ impl<AccountId> RefundParametersChecked<AccountId> {
 			return Err("Invalid refund parameter: Ccm not supported for the refund chain.".into())
 		}
 
-		Ok(RefundParametersChecked::<AccountId> {
+		Ok(ChannelRefundParametersChecked::<AccountId> {
 			retry_duration: refund_param.retry_duration,
 			refund_destination: AccountOrAddress::ExternalAddress(
 				refund_param.refund_address.clone(),

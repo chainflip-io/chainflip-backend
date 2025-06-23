@@ -92,7 +92,7 @@ struct TestSwapParams {
 	input_asset: Asset,
 	output_asset: Asset,
 	input_amount: AssetAmount,
-	refund_params: Option<RefundParametersChecked<u64>>,
+	refund_params: Option<ChannelRefundParametersChecked<u64>>,
 	dca_params: Option<DcaParameters>,
 	output_address: ForeignChainAddress,
 	is_ccm: bool,
@@ -125,10 +125,10 @@ struct TestRefundParams {
 }
 
 impl TestRefundParams {
-	fn into_extended_params(self, input_amount: AssetAmount) -> RefundParametersChecked<u64> {
+	fn into_extended_params(self, input_amount: AssetAmount) -> ChannelRefundParametersChecked<u64> {
 		use cf_amm::math::{bounded_sqrt_price, sqrt_price_to_price};
 
-		RefundParametersChecked {
+		ChannelRefundParametersChecked {
 			retry_duration: self.retry_duration,
 			refund_destination: AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(
 				[10; 20].into(),

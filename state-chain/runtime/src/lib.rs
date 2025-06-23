@@ -75,7 +75,7 @@ use cf_chains::{
 	sol::{SolAddress, SolanaCrypto},
 	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked, ChannelRefundParametersEncoded,
 	DefaultRetryPolicy, EvmVaultSwapExtraParameters, ForeignChain, Polkadot,
-	RefundParametersChecked, Solana, TransactionBuilder, VaultSwapExtraParameters,
+	ChannelRefundParametersChecked, Solana, TransactionBuilder, VaultSwapExtraParameters,
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
@@ -2297,15 +2297,15 @@ impl_runtime_apis! {
 					*retry_duration
 				}
 				VaultSwapExtraParametersEncoded::Ethereum(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
-					RefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
+					ChannelRefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
 					refund_parameters.retry_duration
 				}
 				VaultSwapExtraParametersEncoded::Arbitrum(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
-					RefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
+					ChannelRefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
 					refund_parameters.retry_duration
 				}
 				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => {
-					RefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
+					ChannelRefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
 					refund_parameters.retry_duration
 				}
 			};

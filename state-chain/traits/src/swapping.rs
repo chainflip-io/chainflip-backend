@@ -17,8 +17,8 @@
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	ccm_checker::DecodedCcmAdditionalData,
-	AccountOrAddress, CcmDepositMetadata, Chain, ForeignChainAddress, RefundParametersChecked,
-	SwapOrigin,
+	AccountOrAddress, CcmDepositMetadata, Chain, ChannelRefundParametersChecked,
+	ForeignChainAddress, SwapOrigin,
 };
 use cf_primitives::{
 	Asset, AssetAmount, Beneficiaries, BlockNumber, DcaParameters, Price, SwapRequestId,
@@ -87,7 +87,7 @@ pub trait SwapRequestHandler {
 		output_asset: Asset,
 		request_type: SwapRequestType<Self::AccountId>,
 		broker_fees: Beneficiaries<Self::AccountId>,
-		refund_params: Option<RefundParametersChecked<Self::AccountId>>,
+		refund_params: Option<ChannelRefundParametersChecked<Self::AccountId>>,
 		dca_params: Option<DcaParameters>,
 		origin: SwapOrigin<Self::AccountId>,
 	) -> SwapRequestId;
@@ -141,7 +141,7 @@ pub trait SwapRequestHandler {
 				output_action: SwapOutputAction::CreditOnChain { account_id: account_id.clone() },
 			},
 			Default::default(), /* no broker fees */
-			Some(RefundParametersChecked {
+			Some(ChannelRefundParametersChecked {
 				retry_duration,
 				refund_destination: AccountOrAddress::InternalAccount(account_id.clone()),
 				min_price,

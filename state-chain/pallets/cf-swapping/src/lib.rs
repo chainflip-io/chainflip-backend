@@ -21,8 +21,8 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
-	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersEncoded,
-	RefundParametersChecked, SwapOrigin, SwapRefundParameters,
+	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersChecked,
+	ChannelRefundParametersEncoded, SwapOrigin,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
@@ -100,6 +100,13 @@ enum EgressType {
 pub struct AffiliateDetails {
 	pub short_id: AffiliateShortId,
 	pub withdrawal_address: EthereumAddress,
+}
+
+/// Refund parameter used within the swapping pallet.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct SwapRefundParameters {
+	pub refund_block: cf_primitives::BlockNumber,
+	pub min_output: cf_primitives::AssetAmount,
 }
 
 #[derive(CloneNoBound, DebugNoBound)]
@@ -405,7 +412,7 @@ impl DcaState {
 #[scale_info(skip_type_params(T))]
 enum SwapRequestState<T: Config> {
 	UserSwap {
-		refund_params: Option<RefundParametersChecked<T::AccountId>>,
+		refund_params: Option<ChannelRefundParametersChecked<T::AccountId>>,
 		output_action: SwapOutputAction<T::AccountId>,
 		dca_state: DcaState,
 	},
@@ -476,7 +483,7 @@ pub mod pallet {
 	use cf_amm::math::output_amount_ceil;
 	use cf_chains::{
 		address::EncodedAddress, AnyChain, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
-		Chain, RefundParametersChecked,
+		Chain, ChannelRefundParametersChecked,
 	};
 	use cf_primitives::{
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
@@ -687,7 +694,7 @@ pub mod pallet {
 			origin: SwapOrigin<T::AccountId>,
 			request_type: SwapRequestTypeEncoded<T::AccountId>,
 			broker_fees: Beneficiaries<T::AccountId>,
-			refund_parameters: Option<RefundParametersChecked<T::AccountId>>,
+			refund_parameters: Option<ChannelRefundParametersChecked<T::AccountId>>,
 			dca_parameters: Option<DcaParameters>,
 		},
 		SwapRequestCompleted {
@@ -2054,7 +2061,7 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 			input_amount: AssetAmount,
-			refund_params: Option<&RefundParametersChecked<T::AccountId>>,
+			refund_params: Option<&ChannelRefundParametersChecked<T::AccountId>>,
 			swap_type: SwapType,
 			fees: Vec<FeeType<T>>,
 			swap_request_id: SwapRequestId,
@@ -2288,7 +2295,7 @@ pub mod pallet {
 			output_asset: Asset,
 			request_type: SwapRequestType<Self::AccountId>,
 			broker_fees: Beneficiaries<Self::AccountId>,
-			refund_params: Option<RefundParametersChecked<Self::AccountId>>,
+			refund_params: Option<ChannelRefundParametersChecked<Self::AccountId>>,
 			dca_params: Option<DcaParameters>,
 			origin: SwapOrigin<Self::AccountId>,
 		) -> SwapRequestId {
@@ -2648,7 +2655,7 @@ pub(crate) mod utilities {
 	}
 
 	pub(super) fn calculate_swap_refund_parameters<AccountId>(
-		params: &RefundParametersChecked<AccountId>,
+		params: &ChannelRefundParametersChecked<AccountId>,
 		execute_at_block: u32,
 		input_amount: AssetAmount,
 	) -> SwapRefundParameters {

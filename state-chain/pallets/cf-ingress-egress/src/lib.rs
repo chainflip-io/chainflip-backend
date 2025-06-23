@@ -41,7 +41,7 @@ use cf_chains::{
 	ChannelLifecycleHooks, ChannelRefundParametersForChain, ConsolidateCall, DepositChannel,
 	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall,
 	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
-	IntoTransactionInIdForAnyChain, RefundParametersChecked, RejectCall, SwapOrigin,
+	IntoTransactionInIdForAnyChain, ChannelRefundParametersChecked, RejectCall, SwapOrigin,
 	TransferAssetParams,
 };
 use cf_primitives::{
@@ -529,7 +529,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: Option<CcmChannelMetadataChecked>,
-			refund_params: RefundParametersChecked<AccountId>,
+			refund_params: ChannelRefundParametersChecked<AccountId>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
@@ -2413,7 +2413,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		let checked_refund_params =
-			match RefundParametersChecked::try_from_refund_parameters_for_chain::<T::TargetChain>(
+			match ChannelRefundParametersChecked::try_from_refund_parameters_for_chain::<T::TargetChain>(
 				refund_params,
 				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
 				asset.into(),
@@ -2782,7 +2782,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let refund_address = refund_params.refund_address.clone();
 		let checked_refund_params =
-			match RefundParametersChecked::try_from_refund_parameters_for_chain::<T::TargetChain>(
+			match ChannelRefundParametersChecked::try_from_refund_parameters_for_chain::<T::TargetChain>(
 				refund_params,
 				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
 				source_asset.into(),
@@ -3301,7 +3301,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	> {
 		T::SwapParameterValidation::validate_refund_params(refund_params.retry_duration)?;
 
-		let checked_refund_param = RefundParametersChecked::try_from_refund_parameters_for_chain::<
+		let checked_refund_param = ChannelRefundParametersChecked::try_from_refund_parameters_for_chain::<
 			T::TargetChain,
 		>(refund_params, None, source_asset.into())?;
 

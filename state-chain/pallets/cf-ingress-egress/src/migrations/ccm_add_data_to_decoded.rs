@@ -177,7 +177,7 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade
 							.transpose();
 						// Convert Refund param into Checked version.
 						let checked_refund_params =
-							RefundParametersChecked::try_from_refund_parameters_for_chain::<
+							ChannelRefundParametersChecked::try_from_refund_parameters_for_chain::<
 								cf_chains::AnyChain,
 							>(
 								cf_chains::ChannelRefundParametersForChain::<cf_chains::AnyChain> {
