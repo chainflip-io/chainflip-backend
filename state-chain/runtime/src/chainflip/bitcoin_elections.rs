@@ -12,6 +12,7 @@ use cf_chains::{
 		BtcAmount, Hash,
 	},
 	instances::BitcoinInstance,
+	witness_period::SaturatingStep,
 	Bitcoin, Chain, DepositChannel,
 };
 use cf_primitives::{AccountId, ChannelId};
@@ -33,7 +34,7 @@ use pallet_cf_elections::{
 			primitives::SafeModeStatus,
 			state_machine::{
 				BWElectionType, BWProcessorTypes, BWStatemachine, BWTypes, BlockWitnesserSettings,
-				ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook,
+				ElectionPropertiesHook, HookTypeFor, ProcessedUpToHook, SafeModeEnabledHook,
 			},
 		},
 		composite::{
@@ -50,7 +51,7 @@ use pallet_cf_elections::{
 	vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };
-use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
+use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo, VaultDepositWitness};
 use scale_info::TypeInfo;
 use sp_core::{Decode, Encode, Get, MaxEncodedLen};
 use sp_std::vec::Vec;
@@ -154,6 +155,7 @@ impls! {
 		type ElectionProperties = ElectionPropertiesDepositChannel;
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
+		type ProcessedUpToHook = Self;
 		type ElectionTrackerDebugEventHook = EmptyHook;
 	}
 
@@ -185,16 +187,77 @@ impls! {
 		}
 	}
 
+	// --------------------- Interaction with deposit channels --------------------- //
+
+	// We apply the SAFETY_BUFFER before we fetch the election_properties,
+	// this makes sure that if txs that have been submitted post channel creation,
+	// but due to reorg ended up in an external chain block that's below the channels `opened_at`,
+	// are still witnessed. (See PRO-2306).
+	//
+	// We also apply SAFETY_BUFFER before expiring a deposit channel, in case there are reorgs
+	// which reorder transactions such they move back by a few blocks and are now within the valid
+	// range of a deposit channel.
+	//
+	// Thus, we have the following setup:
+	//
+	//                                   /- All deposits that happen in the SAFETY_BUFFER and are reorged
+	//                                   |  to *before* the expiry of the previous channel are going to be
+	//                                   |  witnessed for it.
+	//                                   |
+	//                                   |  All deposits that get into blocks after expire_at, inside the SAFETY_BUFFER,
+	//                                   |  are not going to be witnessed for any channel.
+	//                                   |
+	//                                   |                 /- Deposits that are made into the new channel could be reorged
+	//                                   |                 |  to blocks that are before opened_at. We apply the SAFETY_BUFFER
+	//                                   |                 |  and witness txs for a deposit channel even if they occur in blocks
+	//                                   |                 |  before opened_at.
+	//                                   |                 |
+	//                                   |  |<------------------------------------...->
+	//                                   v  |<-- SAFETY -->|
+	// |---- previous channel ----|--------------|---------|---- new channel -----...->
+	//                            |<-- SAFETY -->|         ^ opened_at
+	//                            ^ expire_at
+	//
+	// Critical case: we want to ensure that no deposits are double-witnessed. Let's say a boosted deposit for the previous
+	// channel is witnessed before expire_at of that channel. The deposit is ingressed. We now have a reorg which moves the
+	// deposit behind expire_at. In the meantime, the chain progresses SAFETY_BUFFER blocks, the channel is recycled and reused.
+	// Witnessing for the new channel begins SAFETY_BUFFER before opened_at, and thus includes the previously (reorged) deposit.
+	// Now let's say we have another reorg, which makes us rewitness the block with the deposit. This election is going to have
+	// the new deposit channel in its election properties and thus will witness the tx again. We won't emit a PreWitness event
+	// though, since the tx was already prewitnessed and reorged, and the blockprocessor filters out the already emitted events.
+	// **BUT**: If there wasn't emitted a Witness event previously for this tx, then we will now emit a Witness event into the new
+	// channel!
+	//
+	// CONCLUSION: There has to be at least 2*SAFETY_BUFFER distance between `expire_at` of the previous channel and `opened_at` of the recycled
+	// channel.
+	//
+
 	/// implementation of reading deposit channels hook
 	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
 		fn run(
 			&mut self,
-			block_witness_root: btc::BlockNumber,
+			height: btc::BlockNumber,
 		) -> Vec<DepositChannel<Bitcoin>> {
-			// TODO: Channel expiry
-			BitcoinIngressEgress::active_deposit_channels_at(block_witness_root).into_iter().map(|deposit_channel_details| {
+
+			BitcoinIngressEgress::active_deposit_channels_at(
+				// we advance by SAFETY_BUFFER before checking opened_at
+				height.saturating_forward(BitcoinChain::SAFETY_BUFFER),
+				// we don't advance for expiry
+				height
+			).into_iter().map(|deposit_channel_details| {
 				deposit_channel_details.deposit_channel
 			}).collect()
+		}
+	}
+
+	/// implementation of processed_up_to hook, this enables expiration of deposit channels
+	Hook<HookTypeFor<Self, ProcessedUpToHook>> {
+		fn run(
+			&mut self,
+			up_to: btc::BlockNumber,
+		) {
+			// we go back SAFETY_BUFFER, such that we only actually expire once this amount of blocks have been additionally processed.
+			ProcessedUpTo::<Runtime, BitcoinInstance>::set(up_to.saturating_backward(BitcoinChain::SAFETY_BUFFER));
 		}
 	}
 }
@@ -230,6 +293,7 @@ impls! {
 		type ElectionProperties = ElectionPropertiesVaultDeposit;
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
+		type ProcessedUpToHook = EmptyHook;
 		type ElectionTrackerDebugEventHook = EmptyHook;
 	}
 
@@ -312,6 +376,7 @@ impls! {
 		type ElectionProperties = ElectionPropertiesEgressWitnessing;
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
+		type ProcessedUpToHook = EmptyHook;
 		type ElectionTrackerDebugEventHook = EmptyHook;
 	}
 

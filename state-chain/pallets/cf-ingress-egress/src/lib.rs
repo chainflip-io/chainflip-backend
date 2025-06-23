@@ -3094,44 +3094,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	// This should only be used if we're using ProcessedUpTo to track the block height.
 	pub fn active_deposit_channels_at(
-		block_height: TargetChainBlockNumber<T, I>,
+		opened_at_or_before: TargetChainBlockNumber<T, I>,
+		expires_after: TargetChainBlockNumber<T, I>,
 	) -> Vec<DepositChannelDetails<T, I>> {
-		debug_assert!(<T::TargetChain as Chain>::is_block_witness_root(block_height));
+		debug_assert!(<T::TargetChain as Chain>::is_block_witness_root(opened_at_or_before));
 
 		DepositChannelLookup::<T, I>::iter_values()
-			.filter_map(|details| {
-				if details.opened_at <= block_height &&
-					(
-						block_height <= details.expires_at
-						// QUESTION: The following code should be discussed, I don't think we have
-						// to account for `ProcessedUpTo` in this place.
-						//
-						// &&
-						// // If we have not yet processed the expires_at block, then we shouldn't
-						// expire it yet. i.e. we should include it as an active channel.
-						// ProcessedUpTo::<T, I>::get() < details.expires_at)
-					) {
-					// TODO: Filter not filter_map
-					log::info!(
-						"Include channel: {:?} for height: {}",
-						details.deposit_channel,
-						block_height
-					);
-					Some(details)
-				} else {
-					log::info!(
-						"Don't include channel {:?} as it's not active at block height {:?}",
-						details.deposit_channel,
-						block_height
-					);
-					log::info!(
-						"Opened at: {:?}, Expires at: {:?}, Processed up to: {:?}",
-						details.opened_at,
-						details.expires_at,
-						ProcessedUpTo::<T, I>::get()
-					);
-					None
-				}
+			.filter(|details| {
+				details.opened_at <= opened_at_or_before && details.expires_at >= expires_after
 			})
 			.collect()
 	}

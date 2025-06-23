@@ -187,6 +187,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		elections: Default::default(),
 		generate_election_properties_hook: Default::default(),
 		safemode_enabled: MockHook::new(ConstantHook::new(SafeModeStatus::Disabled)),
+		processed_up_to: Default::default(),
 		block_processor,
 	};
 	let bw_settings = BlockWitnesserSettings {
