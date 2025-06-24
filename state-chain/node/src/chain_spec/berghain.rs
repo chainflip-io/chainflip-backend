@@ -410,6 +410,6 @@ pub const AUCTION_PARAMETERS: SetSizeParameters =
 	SetSizeParameters { min_size: 3, max_size: MAX_AUTHORITIES, max_expansion: MAX_AUTHORITIES };
 
 pub const BITCOIN_SAFETY_MARGIN: u64 = 2;
-pub const ETHEREUM_SAFETY_MARGIN: u64 = 6;
+pub const ETHEREUM_SAFETY_MARGIN: u64 = 2;
 pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;
 pub const SOLANA_SAFETY_MARGIN: u64 = 1; // Unused - we use "finalized" instead
