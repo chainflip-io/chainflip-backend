@@ -128,9 +128,8 @@ impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVote
 			};
 
 			// Compute the highest block height we want to fetch a header for,
-			// since for performance reasons we're bounding the number of headers submitted in one
-			// vote.
-			// We're submitting at most SAFETY_BUFFER headers.
+			// since for performance reasons we're bounding the number of headers
+			// submitted in one vote. We're submitting at most SAFETY_BUFFER headers.
 			let highest_submitted_height = std::cmp::min(
 				best_block_header.block_height,
 				witness_from_index.saturating_forward(BitcoinChain::SAFETY_BUFFER + 1),
