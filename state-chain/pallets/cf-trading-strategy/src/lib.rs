@@ -138,10 +138,21 @@ impl TradingStrategy {
 				max_sell_tick,
 				base_asset,
 			} => {
+				let average_buy_tick = Pallet::<T>::average_tick(
+					*min_buy_tick,
+					*max_buy_tick,
+					false, // round down
+				);
+				let average_sell_tick = Pallet::<T>::average_tick(
+					*min_sell_tick,
+					*max_sell_tick,
+					true, // round up
+				);
+
 				if min_buy_tick > max_buy_tick ||
 					min_sell_tick > max_sell_tick ||
-					max_sell_tick <= max_buy_tick ||
-					min_sell_tick <= min_buy_tick ||
+					min_sell_tick < &average_buy_tick ||
+					max_buy_tick > &average_sell_tick ||
 					*max_buy_tick > cf_amm_math::MAX_TICK ||
 					*max_sell_tick > cf_amm_math::MAX_TICK ||
 					*min_buy_tick < cf_amm_math::MIN_TICK ||

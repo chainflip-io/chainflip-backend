@@ -660,7 +660,7 @@ fn strategy_deployment_validation() {
 		{
 			// Invalid tick ranges
 			for (min_buy_tick, max_buy_tick, min_sell_tick, max_sell_tick) in
-				[(-1, 2, 0, 2), (1, 0, 0, -1), (-1, 10, 0, 1), (-1, 0, -1, 1)]
+				[(-1, 2, 0, 2), (1, 0, 0, -1), (-1, 10, 0, 1), (-5, 0, -4, 10), (-10, 4, 0, 5)]
 			{
 				assert_err!(
 					TradingStrategyPallet::deploy_strategy(
