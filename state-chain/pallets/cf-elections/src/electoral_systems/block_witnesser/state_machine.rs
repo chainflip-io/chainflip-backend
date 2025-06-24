@@ -349,35 +349,41 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			);
 		}
 
-		// Every block height is in a single state and isn't lost until it expires
-		let get_all_heights = |s: &Self::State, remove_expired: bool| {
-			s.elections
+		let nonoptimistic_elections = |elections: &ElectionTracker<T>| {
+			elections
 				.ongoing
 				.iter()
 				.filter(|(_, t)| **t != BWElectionType::Optimistic)
 				.map(|(h, _)| h)
 				.cloned()
-				.chain(s.elections.queued_hash_elections.keys().cloned())
-				.chain(s.elections.queued_safe_elections.get_all_heights())
-				.chain(
-					s.block_processor
-						.blocks_data
-						.keys()
-						.filter(|h| {
-							if remove_expired {
-								h.saturating_forward(T::Chain::SAFETY_BUFFER) <
-									s.elections.seen_heights_below
-							} else {
-								true
-							}
-						})
-						.cloned(),
-				)
+				.chain(elections.queued_hash_elections.keys().cloned())
+				.chain(elections.queued_safe_elections.get_all_heights())
 				.collect::<Vec<_>>()
 		};
 
+		// Every block height is in a single state and isn't lost until it expires
+		let get_all_heights =
+			|s: &Self::State, remove_expired: Option<ChainBlockNumberOf<T::Chain>>| {
+				nonoptimistic_elections(&s.elections)
+					.into_iter()
+					.chain(
+						s.block_processor
+							.blocks_data
+							.keys()
+							.filter(|h| {
+								if let Some(bound) = remove_expired {
+									h.saturating_forward(T::Chain::SAFETY_BUFFER) >= bound
+								} else {
+									true
+								}
+							})
+							.cloned(),
+					)
+					.collect::<Vec<_>>()
+			};
+
 		let counted_heights: Container<BTreeMultiSet<_>> =
-			get_all_heights(after, false).into_iter().collect();
+			get_all_heights(after, None).into_iter().collect();
 
 		// we have unique heights
 		for (height, count) in counted_heights.0 .0.clone() {
@@ -403,14 +409,18 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 		};
 
 		assert_eq!(
-			get_all_heights(before, true)
+			get_all_heights(before, Some(after.elections.seen_heights_below))
 				.into_iter()
 				.filter(|h| *h < after.elections.seen_heights_below)
 				.filter(|h| !removed_heights.iter().any(|range| range.contains(h)))
 				.chain(new_heights)
-				.filter(|h| h.saturating_forward(T::Chain::SAFETY_BUFFER) >= after.elections.seen_heights_below || Some(h) != received_height.as_ref())
+				.filter(|h| !(
+					h.saturating_forward(T::Chain::SAFETY_BUFFER) < after.elections.seen_heights_below
+					&& Some(h) == received_height.as_ref()
+					&& !nonoptimistic_elections(&after.elections).contains(h)
+				))
 				.collect::<BTreeSet<_>>(),
-			get_all_heights(after, false)
+			get_all_heights(after, None)
 				.into_iter()
 				.filter(|h| *h < after.elections.seen_heights_below)
 				.collect::<BTreeSet<_>>(),
