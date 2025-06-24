@@ -67,7 +67,6 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode;
-	boost_deposits_enabled,
 	add_boost_funds_enabled,
 	stop_boosting_enabled,
 }
