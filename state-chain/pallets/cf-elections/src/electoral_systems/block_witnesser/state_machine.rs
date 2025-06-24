@@ -398,7 +398,8 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 				None,
 			),
 			Either::Left(None) => Default::default(),
-			Either::Right((a, _)) => (Default::default(), Default::default(), Some(a.block_height)),
+			Either::Right((properties, _)) =>
+				(Default::default(), Default::default(), Some(properties.block_height)),
 		};
 
 		assert_eq!(
