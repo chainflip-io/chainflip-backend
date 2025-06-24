@@ -9,6 +9,7 @@ use crate::electoral_systems::state_machine::{
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
+use generic_typeinfo_derive::GenericTypeInfo;
 use itertools::Either;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,8 @@ defx! {
 	///
 	/// When it's already running it keeps a record of the previous chain of headers,
 	/// and the next block it's going to witness from.
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(T::Chain::NAME)]
 	pub enum BHWPhase[T: BHWTypes] {
 		Starting,
 		Running { headers: NonemptyContinuousHeaders<T::Chain>, witness_from: ChainBlockNumberOf<T::Chain> },
@@ -48,6 +51,8 @@ defx! {
 	/// It contains the state of the BHW state machine, and it's also the type
 	/// this state machine is associated to.
 	#[derive(Default)]
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(T::Chain::NAME)]
 	pub struct BlockHeightWitnesser[T: BHWTypes] {
 		pub phase: BHWPhase<T>,
 		pub block_height_update: T::BlockHeightChangeHook,
@@ -220,6 +225,7 @@ pub mod tests {
 		prelude::{any, prop, Arbitrary, Just, Strategy},
 		prop_oneof,
 	};
+	use scale_info::TypeInfo;
 	use serde::{Deserialize, Serialize};
 	use sp_std::{fmt::Debug, vec::Vec};
 
@@ -294,6 +300,7 @@ pub mod tests {
 
 		// TODO we could make this a parameter to test with different margins
 		const SAFETY_BUFFER: usize = 16;
+		const NAME: &'static str = "Mock";
 	}
 
 	impl<N: ChainBlockNumberTrait, H: ChainBlockHashTrait, D: 'static> BHWTypes
@@ -320,6 +327,7 @@ pub mod tests {
 		);
 	}
 
+	#[derive(TypeInfo)]
 	struct TestChain {}
 	impl ChainWitnessConfig for TestChain {
 		const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
@@ -331,9 +339,12 @@ pub mod tests {
 		type ChainBlockHash = bool;
 
 		const SAFETY_BUFFER: usize = 16;
+		const NAME: &'static str = "Mock";
 	}
 
-	#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Serialize, Deserialize)]
+	#[derive(
+		Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Serialize, Deserialize, TypeInfo,
+	)]
 	struct TestTypes2 {}
 	impl BHWTypes for TestTypes2 {
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;

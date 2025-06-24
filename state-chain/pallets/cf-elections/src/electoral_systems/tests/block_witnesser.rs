@@ -76,6 +76,7 @@ impl ChainTypes for Types {
 	type ChainBlockHash = u64;
 
 	const SAFETY_BUFFER: usize = SAFETY_MARGIN * 2;
+	const NAME: &'static str = "Mock";
 }
 
 impl BWProcessorTypes for Types {
@@ -95,6 +96,8 @@ impl BWTypes for Types {
 	type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>, "safe_mode">;
 	type ProcessedUpToHook = MockHook<HookTypeFor<Self, ProcessedUpToHook>, "processed_up_to">;
 	type ElectionTrackerDebugEventHook = MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;
+
+	const BWNAME: &'static str = "GenericBW";
 }
 
 /// Associating the state machine and consensus mechanism to the struct

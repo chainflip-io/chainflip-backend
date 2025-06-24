@@ -7,6 +7,7 @@ use super::{
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use derive_where::derive_where;
+use generic_typeinfo_derive::GenericTypeInfo;
 use primitives::NonemptyContinuousHeaders;
 #[cfg(test)]
 use proptest::prelude::Arbitrary;
@@ -31,7 +32,7 @@ where <Self as Arbitrary>::Strategy: Clone + Sync + Send;
 #[cfg(not(test))]
 pub trait MaybeArbitrary = core::any::Any;
 
-pub trait CommonTraits = Debug + Clone + Encode + Decode + Serde + Eq;
+pub trait CommonTraits = Debug + Clone + Encode + Decode + Serde + Eq + TypeInfo;
 
 pub trait ChainBlockNumberTrait = CommonTraits
 	+ SaturatingStep
@@ -53,6 +54,7 @@ pub trait ChainTypes: Ord + Clone + Debug + 'static {
 	/// the buffer of data we keep around (in number of blocks) both in the ElectionTracker and in
 	/// the BlockProcessor
 	const SAFETY_BUFFER: usize;
+	const NAME: &'static str;
 }
 pub type ChainBlockNumberOf<T> = <T as ChainTypes>::ChainBlockNumber;
 pub type ChainBlockHashOf<T> = <T as ChainTypes>::ChainBlockHash;
@@ -69,6 +71,8 @@ impl<T: BHWTypes> HookType for HookTypeFor<T, BlockHeightChangeHook> {
 }
 
 defx! {
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(T::Chain::NAME)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct HeightWitnesserProperties[T: BHWTypes] {
 		/// An election starts with a given block number,
@@ -79,6 +83,8 @@ defx! {
 }
 
 defx! {
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(T::NAME)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct ChainProgress[T: ChainTypes] {
 		pub headers: NonemptyContinuousHeaders<T>,

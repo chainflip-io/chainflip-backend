@@ -20,6 +20,7 @@ impl ChainTypes for BHTypes {
 	type ChainBlockNumber = u64;
 	type ChainBlockHash = u64;
 	const SAFETY_BUFFER: usize = 8;
+	const NAME: &'static str = "Mock";
 }
 
 impl BHWTypes for BHTypes {

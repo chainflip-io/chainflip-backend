@@ -20,6 +20,7 @@ use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use core::ops::Range;
 use derive_where::derive_where;
+use generic_typeinfo_derive::GenericTypeInfo;
 use itertools::Either;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -47,6 +48,8 @@ pub trait BWTypes: 'static + Sized + BWProcessorTypes {
 		+ CommonTraits
 		+ TestTraits
 		+ Default;
+
+	const BWNAME: &'static str;
 }
 
 // hook types
@@ -93,7 +96,7 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, DebugEventHook> {
 }
 
 pub trait BlockDataTrait = CommonTraits + TestTraits + MaybeArbitrary + Ord + 'static;
-pub trait BWProcessorTypes: Sized + Debug + Clone + Eq {
+pub trait BWProcessorTypes: Sized + 'static + Debug + Clone + Eq {
 	type Chain: ChainTypes;
 	type BlockData: BlockDataTrait;
 
@@ -125,6 +128,8 @@ pub struct BlockWitnesserSettings {
 }
 
 defx! {
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(T::Chain::NAME)]
 	#[derive(Default)]
 	pub struct BlockWitnesserState[T: BWTypes] {
 		pub elections: ElectionTracker<T>,
@@ -137,6 +142,8 @@ defx! {
 }
 
 def_derive!(
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(C::NAME)]
 	pub enum EngineElectionType<C: ChainTypes> {
 		ByHash(C::ChainBlockHash),
 		BlockHeight { submit_hash: bool },
@@ -144,6 +151,8 @@ def_derive!(
 );
 def_derive! {
 	#[no_serde]
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
 	pub struct BWElectionProperties<T: BWTypes> {
 		pub election_type: EngineElectionType<T::Chain>,
 		pub block_height: ChainBlockNumberOf<T::Chain>,
@@ -158,6 +167,8 @@ impl<T: BWTypes> Validate for BWElectionProperties<T> {
 }
 
 defx! {
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
 	#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 	pub enum BWElectionType[T: BWTypes] {
 		/// Querying blocks we haven't received a hash for yet
@@ -490,6 +501,8 @@ pub mod tests {
 		type ElectionTrackerDebugEventHook =
 			MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;
 		type ProcessedUpToHook = MockHook<HookTypeFor<Self, ProcessedUpToHook>>;
+
+		const BWNAME: &'static str = "GenericBW";
 	}
 
 	#[test]

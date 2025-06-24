@@ -1452,6 +1452,7 @@ dependencies = [
  "ethereum-types",
  "frame-support",
  "generic-array 1.2.0",
+ "generic-typeinfo-derive",
  "hex",
  "hex-literal",
  "itertools 0.13.0",

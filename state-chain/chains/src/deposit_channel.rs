@@ -15,10 +15,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use generic_typeinfo_derive::GenericTypeInfo;
+use scale_info::prelude::format;
 
 #[derive(
-	Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, Serialize, Deserialize,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+	GenericTypeInfo,
 )]
+#[expand_name_with(C::NAME)]
 pub struct DepositChannel<C: Chain> {
 	// TODO: also add pending deposits into this as a Deque.
 	pub channel_id: ChannelId,
