@@ -504,7 +504,7 @@ fn test_calculate_input_for_desired_output() {
 				cf_chains::assets::eth::Asset::Flip,
 				1000
 			),
-			Some(250)
+			250
 		);
 
 		// Desired output is gas asset, requires 1 swap leg. So output should be 1/2 of input.
@@ -1036,7 +1036,7 @@ fn gas_calculation_can_handle_extreme_swap_rate() {
 					cf_chains::assets::eth::Asset::Flip,
 					1000
 				),
-				None
+				0
 			);
 		}
 
@@ -1052,7 +1052,7 @@ fn gas_calculation_can_handle_extreme_swap_rate() {
 				cf_chains::assets::sol::Asset::SolUsdc,
 				u64::MAX
 			),
-			None
+			0
 		);
 	});
 }

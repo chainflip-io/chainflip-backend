@@ -2024,25 +2024,25 @@ impl_runtime_apis! {
 		fn cf_ingress_fee(generic_asset: Asset) -> Option<AssetAmount> {
 			match generic_asset.into() {
 				ForeignChainAndAsset::Ethereum(asset) => {
-					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
+					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_ingress_fee(asset)
-					)
+					))
 				},
 				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_ingress_fee(asset)),
 				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_ingress_fee(asset).into()),
 				ForeignChainAndAsset::Arbitrum(asset) => {
-					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
+					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_ingress_fee(asset)
-					)
+					))
 				},
 				ForeignChainAndAsset::Solana(asset) => Some(SolanaChainTrackingProvider::estimate_ingress_fee(asset).into()),
 				ForeignChainAndAsset::Assethub(asset) => {
-					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Assethub>(
+					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Assethub>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, AssethubInstance>::estimate_ingress_fee(asset)
-					)
+					))
 				},
 			}
 		}
@@ -2050,25 +2050,25 @@ impl_runtime_apis! {
 		fn cf_egress_fee(generic_asset: Asset) -> Option<AssetAmount> {
 			match generic_asset.into() {
 				ForeignChainAndAsset::Ethereum(asset) => {
-					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
+					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_egress_fee(asset)
-					)
+					))
 				},
 				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_egress_fee(asset)),
 				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_egress_fee(asset).into()),
 				ForeignChainAndAsset::Arbitrum(asset) => {
-					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
+					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_egress_fee(asset)
-					)
+					))
 				},
 				ForeignChainAndAsset::Solana(asset) => Some(SolanaChainTrackingProvider::estimate_egress_fee(asset).into()),
 				ForeignChainAndAsset::Assethub(asset) => {
-					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Assethub>(
+					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Assethub>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, AssethubInstance>::estimate_egress_fee(asset)
-					)
+					))
 				},
 			}
 		}

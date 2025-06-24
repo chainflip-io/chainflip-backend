@@ -429,6 +429,8 @@ pub const MAX_AFFILIATES: u32 = 5;
 // Beneficiaries can be 1 element larger since they include the primary broker:
 pub const MAX_BENEFICIARIES: u32 = MAX_AFFILIATES + 1;
 
+pub const REFERENCE_ETH_PRICE_IN_USD: AssetAmount = 2_200_000_000u128; //2200 usd
+
 pub type Affiliates<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_AFFILIATES>>;
 
 pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_BENEFICIARIES>>;

@@ -27,8 +27,8 @@ use cf_chains::{
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
 	BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
-	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
-	STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, REFERENCE_ETH_PRICE_IN_USD,
+	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -2462,14 +2462,24 @@ pub mod pallet {
 		fn calculate_input_for_gas_output<C: Chain>(
 			input_asset: C::ChainAsset,
 			required_gas: C::ChainAmount,
-		) -> Option<C::ChainAmount> {
+		) -> C::ChainAmount {
+			let input_asset_generic: Asset = input_asset.into();
 			Self::calculate_input_for_desired_output(
-				input_asset.into(),
+				input_asset_generic,
 				C::GAS_ASSET.into(),
 				required_gas.into(),
 				true,
 			)
 			.and_then(|amount| C::ChainAmount::try_from(amount).ok())
+			.unwrap_or_else(|| {
+				log::warn!("Unable to calculate input amount required for gas of {required_gas:?} for input asset ${input_asset:?}. Estimating the input amount based on a reference price.");
+				match input_asset_generic {
+					Asset::Usdc | Asset::Usdt => (REFERENCE_ETH_PRICE_IN_USD * required_gas.into())
+						.try_into()
+						.expect("we are just converting back to ChainAmount so should work"),
+					_ => C::ChainAmount::zero(),
+				}
+			})
 		}
 
 		fn calculate_input_for_desired_output(
