@@ -24,6 +24,7 @@ defx! {
 	#[derive(GenericTypeInfo)]
 	#[expand_name_with(T::NAME)]
 	pub struct NonemptyContinuousHeaders[T: ChainTypes] {
+		pub first: Header<T>,
 		pub(crate) headers: VecDeque<Header<T>>,
 	}
 	validate this (else NonemptyContinuousHeadersError) {
@@ -34,30 +35,42 @@ defx! {
 		( where pairs = this.headers.iter().zip(this.headers.iter().skip(1)) )
 	}
 }
-impl<T: ChainTypes, X: IntoIterator<Item = Header<T>>> From<X> for NonemptyContinuousHeaders<T> {
-	fn from(value: X) -> Self {
-		NonemptyContinuousHeaders { headers: value.into_iter().collect() }
-	}
-}
+// impl<T: ChainTypes, X: IntoIterator<Item = Header<T>>> From<X> for NonemptyContinuousHeaders<T> {
+// 	fn from(value: X) -> Self {
+// 		NonemptyContinuousHeaders { 
+// 			first: value.into_iter().next().unwr,
+// 			headers: value.into_iter().collect() 
+// 		}
+// 	}
+// }
 impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	pub fn try_new(
-		headers: VecDeque<Header<T>>,
+		mut headers: VecDeque<Header<T>>,
 	) -> Result<Self, NonemptyContinuousHeadersError<T>> {
-		let result = Self { headers };
-		result.is_valid()?;
-		Ok(result)
+		if let Some(header) = headers.pop_front() {
+			Ok(Self {
+				first: header,
+				headers
+			})
+		} else {
+			Err(NonemptyContinuousHeadersError::<T>::is_nonempty)
+		}
 	}
-	pub fn first_height(&self) -> Option<T::ChainBlockNumber> {
-		self.headers.front().map(|h| h.block_height)
+	pub fn first_height(&self) -> T::ChainBlockNumber {
+		self.first.block_height
+		// self.headers.front().map(|h| h.block_height)
 	}
 	pub fn last(&self) -> &Header<T> {
-		self.headers.back().unwrap()
+		self.headers.back().unwrap_or_else(||{
+			&self.first
+		})
 	}
 	pub fn first(&self) -> &Header<T> {
-		self.headers.front().unwrap()
+		&self.first
+		// self.headers.front().unwrap()
 	}
 	pub fn contains(&self, block_height: &T::ChainBlockNumber) -> bool {
-		self.first().block_height <= *block_height && *block_height <= self.last().block_height
+		self.first_height() <= *block_height && *block_height <= self.last().block_height
 	}
 	/// Tries to merge the `other` chain of headers into `self`.
 	///
@@ -91,9 +104,17 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 			Err(MergeFailure::InternalError)
 		}
 	}
+	
 	pub fn trim_to_length(&mut self, target_length: usize) {
-		while self.headers.len() > target_length && target_length > 0 {
-			self.headers.pop_front();
+		if self.headers.len() >= target_length && target_length > 0 {
+			let mut first = self.headers.pop_front();
+			while self.headers.len() >= target_length {
+				first = self.headers.pop_front();
+			}
+			self.first = first.unwrap();
+		} else {
+			self.first = self.last().clone();
+			self.headers = VecDeque::new();
 		}
 	}
 }
