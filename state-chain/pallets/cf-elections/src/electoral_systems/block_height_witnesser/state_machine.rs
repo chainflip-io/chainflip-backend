@@ -238,7 +238,7 @@ pub mod tests {
 			prop_do! {
 				let header_data in prop::collection::vec(any::<ChainBlockHashOf<C>>(), 2..(witness_from_index.1 as usize));
 				let random_index in any::<ChainBlockNumberOf<C>>();
-				let first_height = if witness_from_index.0 == Default::default { random_index } else { witness_from_index.0 };
+				let first_height = if witness_from_index.0 == Default::default() { random_index } else { witness_from_index.0 };
 				return {
 					let headers =
 						header_data.iter().zip(header_data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {

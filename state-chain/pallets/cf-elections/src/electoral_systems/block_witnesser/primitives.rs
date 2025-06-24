@@ -17,7 +17,7 @@ use sp_std::{
 #[cfg(test)]
 use proptest::prelude::{any, Arbitrary, Strategy};
 #[cfg(test)]
-use proptest::{prop_assert_eq, proptest};
+use proptest::proptest;
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 
@@ -686,7 +686,11 @@ mod prop_tests {
 	fn tracker_ops_strategy() -> impl Strategy<Value = Vec<TrackerOp>> {
 		// First, generate a set of unique inserts
 		prop::collection::btree_set(any::<u8>(), 1..100).prop_flat_map(|insert_set| {
-			let inserts: Vec<_> = insert_set.iter().cloned().map(|n| TrackerOp::Insert(n.saturating_sub(1))).collect();
+			let inserts: Vec<_> = insert_set
+				.iter()
+				.cloned()
+				.map(|n| TrackerOp::Insert(n.saturating_sub(1)))
+				.collect();
 			// Now, generate removes that only target present elements
 			let removes_strategy = {
 				let vec: Vec<u8> = insert_set.into_iter().collect();
@@ -726,7 +730,7 @@ mod prop_tests {
 					}
 					TrackerOp::Remove { start, end } => {
 						tracker.remove(start..end);
-						reference = reference.into_iter().filter(|&v| !(start <= v && v < end)).collect();
+						reference.retain(|&v| !(start <= v && v < end));
 					}
 				}
 
@@ -734,7 +738,7 @@ mod prop_tests {
 				prop_assert_eq!(&tracker_heights, &reference, "Tracker heights do not match reference set");
 
 				// No duplicate heights
-				prop_assert_eq!(tracker_heights.len(), reference.iter().count());
+				prop_assert_eq!(tracker_heights.len(), reference.len());
 
 				// Ranges in elections are non-overlapping and sorted
 				let mut last_end = None;

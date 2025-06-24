@@ -208,7 +208,6 @@ mod prop_tests {
 
 					extract_common_prefix(&mut first_headers, &mut second_headers);
 					prop_assert_eq!(merge_result.added, second_headers, "Added blocks do not match");
-					// prop_assert_eq!(merge_result.removed, );
 				},
 				Err(merge_failure) => {
 					match merge_failure {
