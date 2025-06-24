@@ -16,8 +16,6 @@
 
 use super::*;
 use generic_typeinfo_derive::GenericTypeInfo;
-use scale_info::prelude::format;
-
 #[derive(
 	Clone,
 	Debug,

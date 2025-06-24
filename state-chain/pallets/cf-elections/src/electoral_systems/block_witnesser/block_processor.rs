@@ -235,7 +235,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		let deleted_blocks = self
 			.blocks_data
 			.extract_if(|block_number, _| {
-				block_number.saturating_forward(T::Chain::SAFETY_BUFFER) < lowest_in_progress_height
+				block_number.saturating_forward(T::Chain::SAFETY_BUFFER) < seen_heights_below
 			})
 			.collect();
 
