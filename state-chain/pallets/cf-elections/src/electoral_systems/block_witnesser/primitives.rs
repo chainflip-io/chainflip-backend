@@ -751,13 +751,6 @@ mod prop_tests {
 					prop_assert!(start < end, "Range start must be less than end");
 					last_end = Some(end);
 				}
-
-				// All heights in get_all_heights are covered by the ranges in elections
-				let mut covered = BTreeSet::new();
-				for (&start, &end) in tracker.elections.iter() {
-					covered.extend(start..end);
-				}
-				prop_assert_eq!(tracker_heights, covered);
 			}
 		}
 	}

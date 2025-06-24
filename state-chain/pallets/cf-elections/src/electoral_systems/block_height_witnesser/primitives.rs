@@ -67,19 +67,6 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 		&mut self,
 		other: NonemptyContinuousHeaders<T>,
 	) -> Result<MergeInfo<T>, MergeFailure<T>> {
-		fn extract_common_prefix<A: PartialEq>(
-			a: &mut VecDeque<A>,
-			b: &mut VecDeque<A>,
-		) -> VecDeque<A> {
-			let mut prefix = VecDeque::new();
-
-			while a.front().is_some() && (a.front() == b.front()) {
-				prefix.push_back(a.pop_front().unwrap());
-				b.pop_front();
-			}
-			prefix
-		}
-
 		if self.last().block_height.saturating_forward(1) == other.first().block_height {
 			if self.last().hash == other.first().parent_hash {
 				self.headers.append(&mut other.headers.clone());
@@ -141,6 +128,16 @@ defx! {
 	validate this (else HeaderError) {}
 }
 
+fn extract_common_prefix<A: PartialEq>(a: &mut VecDeque<A>, b: &mut VecDeque<A>) -> VecDeque<A> {
+	let mut prefix = VecDeque::new();
+
+	while a.front().is_some() && (a.front() == b.front()) {
+		prefix.push_back(a.pop_front().unwrap());
+		b.pop_front();
+	}
+	prefix
+}
+
 #[cfg(test)]
 mod prop_tests {
 	use super::*;
@@ -166,12 +163,12 @@ mod prop_tests {
 			|first_chain| {
 				any::<bool>().prop_flat_map(move |val| {
 					let first_chain_clone = first_chain.clone();
-					let len = if first_chain_clone.headers.len() <= 2 {
-						first_chain_clone.headers.len().saturating_add(2) as u8
+					let len = first_chain_clone.headers.len();
+					let start = if val {
+						first_chain_clone.first_height().unwrap()
 					} else {
-						first_chain_clone.headers.len() as u8
+						first_chain_clone.last().block_height
 					};
-					let start = if val { 6 } else { first_chain_clone.last().block_height };
 					NonemptyContinuousHeaders::<MockChainTypes>::arbitrary_with((start, len))
 						.prop_map(move |second_chain| (first_chain_clone.clone(), second_chain))
 				})
@@ -179,27 +176,12 @@ mod prop_tests {
 		)
 	}
 
-	fn extract_common_prefix<A: PartialEq>(
-		a: &mut VecDeque<A>,
-		b: &mut VecDeque<A>,
-	) -> VecDeque<A> {
-		let mut prefix = VecDeque::new();
-
-		while a.front().is_some() && (a.front() == b.front()) {
-			prefix.push_back(a.pop_front().unwrap());
-			b.pop_front();
-		}
-		prefix
-	}
-
 	proptest! {
 		#![proptest_config(ProptestConfig {
 			cases: 10000, .. ProptestConfig::default()
 		  })]
 		#[test]
-		fn test_headers(header in header_strategy()){
-			let first_chain = header.0;
-			let second_chain = header.1;
+		fn test_headers((first_chain, second_chain) in header_strategy()){
 			let final_chain = first_chain.clone().merge(second_chain.clone());
 			match final_chain {
 				Ok(merge_result) => {

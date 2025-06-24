@@ -232,13 +232,13 @@ pub mod tests {
 	};
 
 	impl<C: ChainTypes> Arbitrary for NonemptyContinuousHeaders<C> {
-		type Parameters = (ChainBlockNumberOf<C>, u8);
+		type Parameters = (ChainBlockNumberOf<C>, usize);
 
-		fn arbitrary_with(witness_from_index: Self::Parameters) -> Self::Strategy {
+		fn arbitrary_with((witness_from_index, length): Self::Parameters) -> Self::Strategy {
 			prop_do! {
-				let header_data in prop::collection::vec(any::<ChainBlockHashOf<C>>(), 2..(witness_from_index.1 as usize));
+				let header_data in prop::collection::vec(any::<ChainBlockHashOf<C>>(), 2..(length+3));
 				let random_index in any::<ChainBlockNumberOf<C>>();
-				let first_height = if witness_from_index.0 == Default::default() { random_index } else { witness_from_index.0 };
+				let first_height = if witness_from_index == Default::default() { random_index } else { witness_from_index };
 				return {
 					let headers =
 						header_data.iter().zip(header_data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
