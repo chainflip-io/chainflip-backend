@@ -233,6 +233,7 @@ pub trait Statemachine: AbstractApi + 'static {
 						Just(settings),
 					)
 				})),
+				#[allow(clippy::type_complexity)]
 				|(mut state, input, settings): (
 					Self::State,
 					Either<Self::Context, (Self::Query, Self::Response)>,
