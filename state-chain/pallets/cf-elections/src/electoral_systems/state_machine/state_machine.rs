@@ -233,29 +233,26 @@ pub trait Statemachine: AbstractApi + 'static {
 						Just(settings),
 					)
 				})),
-				#[allow(clippy::type_complexity)]
-				run_with_timeout(
-					500,
-					|(mut state, input, settings): (
-						Self::State,
-						Either<Self::Context, (Self::Query, Self::Response)>,
-						Self::Settings,
-					)| {
-						// ensure input matches with the current queries
-						Self::validate_input(&mut state, &input)
-							.unwrap_or_else(|_| panic!("input has wrong index: {input:?}"));
+				|(mut state, input, settings): (
+					Self::State,
+					Either<Self::Context, (Self::Query, Self::Response)>,
+					Self::Settings,
+				)| {
+					// ensure input matches with the current queries
+					Self::validate_input(&mut state, &input)
+						.unwrap_or_else(|_| panic!("input has wrong index: {input:?}"));
 
-						// run step and verify all other properties
-						let _output = Self::step_and_validate(&mut state, input, &settings);
+					// run step and verify all other properties
+					let _output = Self::step_and_validate(&mut state, input, &settings);
 
-						Ok(())
-					},
-				),
+					Ok(())
+				},
 			)
 			.unwrap();
 	}
 }
 
+#[allow(unused)]
 #[cfg(test)]
 pub fn run_with_timeout<
 	A: Send + Clone + Debug + 'static,

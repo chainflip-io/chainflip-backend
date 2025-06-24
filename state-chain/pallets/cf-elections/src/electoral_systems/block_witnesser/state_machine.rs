@@ -350,7 +350,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 		}
 
 		// Every block height is in a single state and isn't lost until it expires
-		let get_all_heights = |s: &Self::State| {
+		let get_all_heights = |s: &Self::State, remove_expired: bool| {
 			s.elections
 				.ongoing
 				.iter()
@@ -359,12 +359,25 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 				.cloned()
 				.chain(s.elections.queued_hash_elections.keys().cloned())
 				.chain(s.elections.queued_safe_elections.get_all_heights())
-				.chain(s.block_processor.blocks_data.keys().cloned())
+				.chain(
+					s.block_processor
+						.blocks_data
+						.keys()
+						.filter(|h| {
+							if remove_expired {
+								h.saturating_forward(T::Chain::SAFETY_BUFFER) <
+									s.elections.seen_heights_below
+							} else {
+								true
+							}
+						})
+						.cloned(),
+				)
 				.collect::<Vec<_>>()
 		};
 
 		let counted_heights: Container<BTreeMultiSet<_>> =
-			get_all_heights(after).into_iter().collect();
+			get_all_heights(after, false).into_iter().collect();
 
 		// we have unique heights
 		for (height, count) in counted_heights.0 .0.clone() {
@@ -373,7 +386,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			}
 		}
 
-		let (new_heights, removed_heights) = match input {
+		let (new_heights, removed_heights, received_height) = match input {
 			Either::Left(Some(progress)) => (
 				progress
 					.headers
@@ -382,21 +395,21 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					.map(|block| block.block_height)
 					.collect::<Vec<_>>(),
 				progress.removed.clone(),
+				None,
 			),
 			Either::Left(None) => Default::default(),
-			Either::Right(_) => Default::default(),
+			Either::Right((a, _)) => (Default::default(), Default::default(), Some(a.block_height)),
 		};
 
 		assert_eq!(
-			get_all_heights(before)
+			get_all_heights(before, true)
 				.into_iter()
 				.filter(|h| *h < after.elections.seen_heights_below)
 				.filter(|h| !removed_heights.iter().any(|range| range.contains(h)))
 				.chain(new_heights)
-				.filter(|h| h.saturating_forward(T::Chain::SAFETY_BUFFER) >=
-					after.elections.lowest_in_progress_height())
+				.filter(|h| h.saturating_forward(T::Chain::SAFETY_BUFFER) >= after.elections.seen_heights_below || Some(h) != received_height.as_ref())
 				.collect::<BTreeSet<_>>(),
-			get_all_heights(after)
+			get_all_heights(after, false)
 				.into_iter()
 				.filter(|h| *h < after.elections.seen_heights_below)
 				.collect::<BTreeSet<_>>(),
