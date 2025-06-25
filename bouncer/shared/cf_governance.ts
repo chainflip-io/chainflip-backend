@@ -1,8 +1,8 @@
 import type { SubmittableExtrinsic } from '@polkadot/api/types';
 import { ApiPromise, HttpProvider } from '@polkadot/api';
-import Keyring from '../polkadot/keyring';
-import { handleSubstrateError, snowWhiteMutex } from './utils';
-import { CHAINFLIP_HTTP_ENDPOINT } from './utils/substrate';
+import Keyring from 'polkadot/keyring';
+import { handleSubstrateError, snowWhiteMutex } from 'shared/utils';
+import { CHAINFLIP_HTTP_ENDPOINT } from 'shared/utils/substrate';
 
 const snowWhiteUri =
   process.env.SNOWWHITE_URI ??
@@ -25,8 +25,9 @@ export async function submitGovernanceExtrinsic(
 
   const extrinsic = await cb(httpApi);
   await snowWhiteMutex.runExclusive(async () => {
+    const nonce = await httpApi.rpc.system.accountNextIndex(snowWhite.address);
     await httpApi.tx.governance
       .proposeGovernanceExtrinsic(extrinsic, preAuthorise)
-      .signAndSend(snowWhite, { nonce: -1 }, handleSubstrateError(httpApi));
+      .signAndSend(snowWhite, { nonce }, handleSubstrateError(httpApi));
   });
 }

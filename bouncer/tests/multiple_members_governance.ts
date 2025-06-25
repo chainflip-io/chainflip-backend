@@ -1,9 +1,9 @@
 import assert from 'assert';
-import { createStateChainKeypair, tryUntilSuccess } from '../shared/utils';
-import { snowWhite, submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger } from '../shared/utils/logger';
+import { createStateChainKeypair, tryUntilSuccess } from 'shared/utils';
+import { snowWhite, submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger } from 'shared/utils/logger';
 
 async function getGovernanceMembers(): Promise<string[]> {
   await using chainflip = await getChainflipApi();
@@ -50,7 +50,8 @@ async function submitWithMultipleGovernanceMembers(logger: Logger) {
   const proposalId = Number((await observeEvent(logger, 'governance:Proposed').event).data);
 
   // Note that with two members, we need to approve with the other account:
-  await chainflip.tx.governance.approve(proposalId).signAndSend(alice, { nonce: -1 });
+  const nonce = await chainflip.rpc.system.accountNextIndex(alice.address);
+  await chainflip.tx.governance.approve(proposalId).signAndSend(alice, { nonce });
 
   const executedProposalId = Number((await observeEvent(logger, 'governance:Executed').event).data);
   assert(proposalId === executedProposalId, 'Proposal Ids should match');

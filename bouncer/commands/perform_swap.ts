@@ -1,8 +1,8 @@
 #!/usr/bin/env -S pnpm tsx
 import { InternalAsset } from '@chainflip/cli';
-import { performSwap } from '../shared/perform_swap';
-import { parseAssetString } from '../shared/utils';
-import { globalLogger } from '../shared/utils/logger';
+import { performSwap } from 'shared/perform_swap';
+import { parseAssetString } from 'shared/utils';
+import { globalLogger } from 'shared/utils/logger';
 
 async function main() {
   const srcCcy = parseAssetString(process.argv[2]);

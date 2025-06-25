@@ -1,12 +1,12 @@
 import assert from 'assert';
-import { createStateChainKeypair, handleSubstrateError, lpMutex } from '../shared/utils';
-import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import { limitOrder } from '../shared/limit_order';
-import { rangeOrder } from '../shared/range_order';
-import { depositLiquidity } from '../shared/deposit_liquidity';
-import { deposits } from '../shared/setup_swaps';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger } from '../shared/utils/logger';
+import { createStateChainKeypair, handleSubstrateError, lpMutex } from 'shared/utils';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { limitOrder } from 'shared/limit_order';
+import { rangeOrder } from 'shared/range_order';
+import { depositLiquidity } from 'shared/deposit_liquidity';
+import { deposits } from 'shared/setup_swaps';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger } from 'shared/utils/logger';
 
 const DEFAULT_LP: string = '//LP_3';
 
@@ -90,9 +90,10 @@ export async function createAndDeleteMultipleOrders(
     test: (event) => event.data.lp === lp.address && event.data.baseAsset === 'Btc',
   }).event;
   await lpMutex.runExclusive(async () => {
+    const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityPools
       .cancelOrdersBatch(orderToDelete)
-      .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
+      .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
   });
   await orderDeleteEvent;
   logger.debug('All orders successfully deleted');

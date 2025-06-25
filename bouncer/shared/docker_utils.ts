@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { Logger } from './utils/logger';
+import { Logger } from 'shared/utils/logger';
 
 export function isNetworkConnected(containerName: string, networkName: string): boolean {
   const res = execSync(`docker inspect ${containerName}`);

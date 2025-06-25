@@ -8,10 +8,10 @@
 import {
   bumpAndBuildPolkadotRuntime,
   pushPolkadotRuntimeUpdate,
-} from '../tests/polkadot_runtime_update';
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { getNetworkRuntimeVersion } from '../shared/utils/spec_version';
-import { globalLogger } from '../shared/utils/logger';
+} from 'tests/polkadot_runtime_update';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { getNetworkRuntimeVersion } from 'shared/utils/spec_version';
+import { globalLogger } from 'shared/utils/logger';
 
 async function main(): Promise<void> {
   // Bump the spec version

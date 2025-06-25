@@ -16,8 +16,8 @@
 //
 // For example: ./commands/safe_mode.ts amber swapping_swapsEnabled,swapping_withdrawalsEnabled
 
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { setSafeModeToGreen, setSafeModeToAmber, setSafeModeToRed } from '../shared/safe_mode';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { setSafeModeToGreen, setSafeModeToAmber, setSafeModeToRed } from 'shared/safe_mode';
 
 async function main() {
   const mode = process.argv[2].toUpperCase();

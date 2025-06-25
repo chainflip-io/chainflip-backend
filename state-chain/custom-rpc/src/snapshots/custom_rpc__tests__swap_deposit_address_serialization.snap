@@ -1,0 +1,16 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "address": "8RMUMRxniKbs9kMDVb81RtWoLNz2zesz3JQLRZXZc5kh",
+  "issued_block": 100,
+  "channel_id": 200,
+  "source_chain_expiry_block": 100,
+  "channel_opening_fee": "0x1e240",
+  "refund_parameters": {
+    "retry_duration": 1000,
+    "refund_address": "E2aBDC008BaEa1d4Dd2eeE4f0BEa61f6f91897cC",
+    "min_price": "0x4d2"
+  }
+}

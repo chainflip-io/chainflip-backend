@@ -1,5 +1,10 @@
 import { PublicKey } from '@solana/web3.js';
-import { assetDecimals, fineAmountToAmount, getEncodedSolAddress, getSolConnection } from './utils';
+import {
+  assetDecimals,
+  fineAmountToAmount,
+  getEncodedSolAddress,
+  getSolConnection,
+} from 'shared/utils';
 
 export async function getSolBalance(address: string): Promise<string> {
   const connection = getSolConnection();

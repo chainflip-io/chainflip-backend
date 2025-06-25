@@ -1,20 +1,20 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { u8aToHex } from '@polkadot/util';
-import { randomAsHex } from '../polkadot/util-crypto';
-import { performSwap, performVaultSwap } from '../shared/perform_swap';
+import { randomAsHex } from 'polkadot/util-crypto';
+import { performSwap, performVaultSwap } from 'shared/perform_swap';
 import {
   newAddress,
   chainFromAsset,
   getContractAddress,
   ccmSupportedChains,
   solVersionedCcmAdditionalDataCodec,
-} from '../shared/utils';
-import { BtcAddressType } from '../shared/new_btc_address';
-import { CcmDepositMetadata } from '../shared/new_swap';
-import { SwapContext, SwapStatus } from './utils/swap_context';
-import { estimateCcmCfTesterGas } from './send_evm';
-import { Logger } from './utils/logger';
+} from 'shared/utils';
+import { BtcAddressType } from 'shared/new_btc_address';
+import { CcmDepositMetadata } from 'shared/new_swap';
+import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
+import { estimateCcmCfTesterGas } from 'shared/send_evm';
+import { Logger } from 'shared/utils/logger';
 
 let swapCount = 1;
 

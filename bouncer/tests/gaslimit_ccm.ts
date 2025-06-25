@@ -1,6 +1,6 @@
 import Web3 from 'web3';
 import { InternalAsset as Asset, Chain } from '@chainflip/cli';
-import { newCcmMetadata, prepareSwap } from '../shared/swapping';
+import { newCcmMetadata, prepareSwap } from 'shared/swapping';
 import {
   ccmSupportedChains,
   chainFromAsset,
@@ -12,14 +12,14 @@ import {
   sleep,
   SwapRequestType,
   TransactionOrigin,
-} from '../shared/utils';
-import { requestNewSwap } from '../shared/perform_swap';
-import { send } from '../shared/send';
-import { estimateCcmCfTesterGas, spamEvm } from '../shared/send_evm';
-import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
-import { CcmDepositMetadata } from '../shared/new_swap';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger } from '../shared/utils/logger';
+} from 'shared/utils';
+import { requestNewSwap } from 'shared/perform_swap';
+import { send } from 'shared/send';
+import { estimateCcmCfTesterGas, spamEvm } from 'shared/send_evm';
+import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
+import { CcmDepositMetadata } from 'shared/new_swap';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger } from 'shared/utils/logger';
 
 // Minimum and maximum gas consumption values to be in a useful range for testing. Not using very low numbers
 // to avoid flakiness in the tests expecting a broadcast abort due to not having enough gas.

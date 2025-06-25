@@ -1,0 +1,5 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+"0x00010203"

@@ -1,7 +1,7 @@
-import { submitRuntimeUpgrade } from './submit_runtime_upgrade';
-import { bumpSpecVersionAgainstNetwork, getNetworkRuntimeVersion } from './utils/spec_version';
-import { compileBinaries } from './utils/compile_binaries';
-import { Logger } from './utils/logger';
+import { submitRuntimeUpgrade } from 'shared/submit_runtime_upgrade';
+import { bumpSpecVersionAgainstNetwork, getNetworkRuntimeVersion } from 'shared/utils/spec_version';
+import { compileBinaries } from 'shared/utils/compile_binaries';
+import { Logger } from 'shared/utils/logger';
 
 // Do a runtime upgrade using the code in the projectRoot directory.
 export async function simpleRuntimeUpgrade(

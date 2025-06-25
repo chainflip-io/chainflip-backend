@@ -1,0 +1,41 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: eth
+---
+{
+  "source_asset": {
+    "chain": "Ethereum",
+    "asset": "ETH"
+  },
+  "destination_asset": {
+    "chain": "Solana",
+    "asset": "SOL"
+  },
+  "destination_address": "8RMUMRxniKbs9kMDVb81RtWoLNz2zesz3JQLRZXZc5kh",
+  "broker_commission": 100,
+  "extra_parameters": {
+    "chain": "Ethereum",
+    "input_amount": 1000000,
+    "refund_parameters": {
+      "retry_duration": 1000,
+      "refund_address": "E2aBDC008BaEa1d4Dd2eeE4f0BEa61f6f91897cC",
+      "min_price": "0x4d2"
+    }
+  },
+  "channel_metadata": {
+    "message": "00010203",
+    "gas_budget": "0x64",
+    "ccm_additional_data": "05060708"
+  },
+  "boost_fee": 100,
+  "affiliate_fees": [
+    {
+      "account": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+      "bps": 100
+    }
+  ],
+  "dca_parameters": {
+    "number_of_chunks": 100,
+    "chunk_interval": 10
+  }
+}

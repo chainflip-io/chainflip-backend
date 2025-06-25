@@ -8,16 +8,16 @@ import {
   handleSubstrateError,
   newAddress,
   sleep,
-} from '../shared/utils';
-import { getEarnedBrokerFees } from './broker_fee_collection';
-import { openPrivateBtcChannel, registerAffiliate } from '../shared/btc_vault_swap';
-import { setupBrokerAccount } from '../shared/setup_account';
-import { executeVaultSwap, performVaultSwap } from '../shared/perform_swap';
-import { prepareSwap } from '../shared/swapping';
-import { getChainflipApi } from '../shared/utils/substrate';
-import { getBalance } from '../shared/get_balance';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger } from '../shared/utils/logger';
+} from 'shared/utils';
+import { getEarnedBrokerFees } from 'tests/broker_fee_collection';
+import { openPrivateBtcChannel, registerAffiliate } from 'shared/btc_vault_swap';
+import { setupBrokerAccount } from 'shared/setup_account';
+import { executeVaultSwap, performVaultSwap } from 'shared/perform_swap';
+import { prepareSwap } from 'shared/swapping';
+import { getChainflipApi } from 'shared/utils/substrate';
+import { getBalance } from 'shared/get_balance';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger } from 'shared/utils/logger';
 
 // Fee to use for the broker and affiliates
 const commissionBps = 100;
@@ -82,9 +82,10 @@ async function testWithdrawCollectedAffiliateFees(
   logger.debug('Affiliate account ID:', affiliateAccountId);
   logger.debug('Withdraw address:', withdrawAddress);
 
+  const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
   await chainflip.tx.swapping
     .affiliateWithdrawalRequest(affiliateAccountId)
-    .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
+    .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
 
   logger.info('Withdrawal request sent!');
   logger.debug('Waiting for balance change... Observing address:', withdrawAddress);

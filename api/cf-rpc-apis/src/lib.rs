@@ -14,12 +14,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+pub use cf_rpc_types::*;
 use jsonrpsee::{
 	tracing::log,
 	types::{error::ErrorObjectOwned, ErrorCode, ErrorObject},
 };
-
-pub use cf_rpc_types::*;
 
 pub mod broker;
 pub mod lp;

@@ -11,8 +11,8 @@ import {
   getEncodedSolAddress,
   getSolConnection,
   getSolWhaleKeyPair,
-} from './utils';
-import { Logger } from './utils/logger';
+} from 'shared/utils';
+import { Logger } from 'shared/utils/logger';
 
 export async function signAndSendTxSol(logger: Logger, transaction: Transaction) {
   const connection = getSolConnection();

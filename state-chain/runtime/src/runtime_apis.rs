@@ -27,7 +27,7 @@ use cf_chains::{
 	VaultSwapInputEncoded,
 };
 use cf_primitives::{
-	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
 	DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount, NetworkEnvironment, SemVer,
 };
 use cf_traits::SwapLimits;
@@ -321,6 +321,8 @@ impl<AccountId, C: Chain> From<ChannelAction<AccountId, C>> for ChannelActionTyp
 	}
 }
 
+pub type OpenedDepositChannels = (AccountId32, ChannelActionType, ChainAccounts);
+
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub enum TransactionScreeningEvent<TxId> {
 	TransactionRejectionRequestReceived {
@@ -562,13 +564,17 @@ decl_runtime_apis!(
 			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		) -> Result<Vec<u8>, DispatchErrorWithMessage>;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
+		fn cf_get_preallocated_deposit_channels(
+			account_id: AccountId32,
+			chain: ForeignChain,
+		) -> Vec<ChannelId>;
 		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
 		fn cf_affiliate_details(
 			broker: AccountId32,
 			affiliate: Option<AccountId32>,
 		) -> Vec<(AccountId32, AffiliateDetails)>;
 		fn cf_vault_addresses() -> VaultAddresses;
-		fn cf_all_open_deposit_channels() -> Vec<(AccountId32, ChannelActionType, ChainAccounts)>;
+		fn cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>;
 		fn cf_get_trading_strategies(
 			lp_id: Option<AccountId32>,
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;

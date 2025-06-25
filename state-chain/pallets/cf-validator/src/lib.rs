@@ -71,15 +71,37 @@ type Ed25519Signature = ed25519::Signature;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
-	RegistrationBondPercentage { percentage: Percent },
-	AuctionBidCutoffPercentage { percentage: Percent },
-	RedemptionPeriodAsPercentage { percentage: Percent },
-	BackupRewardNodePercentage { percentage: Percent },
-	EpochDuration { blocks: u32 },
-	AuthoritySetMinSize { min_size: AuthorityCount },
-	AuctionParameters { parameters: SetSizeParameters },
-	MinimumReportedCfeVersion { version: SemVer },
-	MaxAuthoritySetContractionPercentage { percentage: Percent },
+	RegistrationBondPercentage {
+		percentage: Percent,
+	},
+	AuctionBidCutoffPercentage {
+		percentage: Percent,
+	},
+	RedemptionPeriodAsPercentage {
+		percentage: Percent,
+	},
+	BackupRewardNodePercentage {
+		percentage: Percent,
+	},
+	EpochDuration {
+		blocks: u32,
+	},
+	AuthoritySetMinSize {
+		min_size: AuthorityCount,
+	},
+	AuctionParameters {
+		parameters: SetSizeParameters,
+	},
+	MinimumReportedCfeVersion {
+		version: SemVer,
+	},
+	MaxAuthoritySetContractionPercentage {
+		percentage: Percent,
+	},
+	/// Note the `minimum_flip_bid` is in whole FLIP, not flipperinos.
+	MinimumAuctionBid {
+		minimum_flip_bid: u32,
+	},
 }
 
 type RuntimeRotationState<T> =
@@ -313,6 +335,10 @@ pub mod pallet {
 	#[pallet::getter(fn max_authority_set_contraction_percentage)]
 	pub(super) type MaxAuthoritySetContractionPercentage<T: Config> =
 		StorageValue<_, Percent, ValueQuery>;
+
+	/// Minimum bid amount required to participate in auctions.
+	#[pallet::storage]
+	pub(super) type MinimumAuctionBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
 	/// Store the list of accounts that are active bidders.
 	#[pallet::storage]
@@ -562,6 +588,11 @@ pub mod pallet {
 				},
 				PalletConfigUpdate::MaxAuthoritySetContractionPercentage { percentage } => {
 					MaxAuthoritySetContractionPercentage::<T>::put(percentage);
+				},
+				PalletConfigUpdate::MinimumAuctionBid { minimum_flip_bid } => {
+					MinimumAuctionBid::<T>::set(
+						FLIPPERINOS_PER_FLIP.saturating_mul(minimum_flip_bid.into()).into(),
+					);
 				},
 			}
 
@@ -1507,6 +1538,24 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 		validators
 			.into_iter()
 			.filter(|id| NodeCFEVersion::<T>::get(id) >= min_version)
+			.collect()
+	}
+}
+
+pub struct QualifyByMinimumBid<T>(PhantomData<T>);
+
+impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumBid<T> {
+	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
+		T::FundingInfo::balance(validator_id.into_ref()) >= MinimumAuctionBid::<T>::get()
+	}
+
+	fn filter_qualified(
+		validators: BTreeSet<<T as Chainflip>::ValidatorId>,
+	) -> BTreeSet<<T as Chainflip>::ValidatorId> {
+		let min_bid = MinimumAuctionBid::<T>::get();
+		validators
+			.into_iter()
+			.filter(|id| T::FundingInfo::balance(id.into_ref()) >= min_bid)
 			.collect()
 	}
 }

@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { sha256 } from '../shared/utils';
+import { sha256 } from 'shared/utils';
 
 export function newEvmAddress(seed: string): string {
   const secret = sha256(seed).toString('hex');

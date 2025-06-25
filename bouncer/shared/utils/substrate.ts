@@ -1,8 +1,8 @@
 import 'disposablestack/auto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Observable, Subject } from 'rxjs';
-import { deferredPromise, sleep } from '../utils';
-import { Logger } from './logger';
+import { deferredPromise, runWithTimeout, sleep } from 'shared/utils';
+import { Logger } from 'shared/utils/logger';
 
 // @ts-expect-error polyfilling
 Symbol.asyncDispose ??= Symbol('asyncDispose');
@@ -358,6 +358,7 @@ interface BaseOptions<T> {
   test?: EventTest<T>;
   finalized?: boolean;
   historicalCheckBlocks?: number;
+  timeoutSeconds?: number;
 }
 
 interface Options<T> extends BaseOptions<T> {
@@ -399,6 +400,7 @@ export function observeEvents<T = any>(
     test = () => true,
     finalized = false,
     historicalCheckBlocks = 0,
+    timeoutSeconds = 0,
     abortable = false,
   }: Options<T> | AbortableOptions<T> = {},
 ) {
@@ -429,26 +431,41 @@ export function observeEvents<T = any>(
       return foundEvents;
     }
 
-    // Subscribe to new events and wait for the first match
-    await using subscription = await subscribeHeads({ chain, finalized });
-    const subscriptionIterator = observableToIterable(subscription.observable, controller?.signal);
-    for await (const events of subscriptionIterator) {
-      for (const event of events) {
-        if (
-          event.name.section.includes(expectedSection) &&
-          event.name.method.includes(expectedMethod) &&
-          test(event)
-        ) {
-          foundEvents.push(event);
-          logger.trace(`Found event ${eventName} in block ${event.block}`);
+    const findEventSubscription = async () => {
+      // Subscribe to new events and wait for the first match
+      await using subscription = await subscribeHeads({ chain, finalized });
+      const subscriptionIterator = observableToIterable(
+        subscription.observable,
+        controller?.signal,
+      );
+      for await (const events of subscriptionIterator) {
+        for (const event of events) {
+          if (
+            event.name.section.includes(expectedSection) &&
+            event.name.method.includes(expectedMethod) &&
+            test(event)
+          ) {
+            foundEvents.push(event);
+            logger.trace(`Found event ${eventName} in block ${event.block}`);
+          }
+        }
+        if (foundEvents.length > 0) {
+          return foundEvents;
         }
       }
-      if (foundEvents.length > 0) {
-        return foundEvents;
-      }
-    }
 
-    return null;
+      return null;
+    };
+
+    if (timeoutSeconds > 0) {
+      return runWithTimeout(
+        findEventSubscription(),
+        timeoutSeconds,
+        logger,
+        `observing event ${eventName}`,
+      );
+    }
+    return findEventSubscription();
   };
 
   if (!controller) return { events: findEvent() } as Observer<T>;
@@ -485,6 +502,7 @@ export function observeEvent<T = any>(
     test = () => true,
     finalized = false,
     historicalCheckBlocks = 0,
+    timeoutSeconds = 0,
     abortable = false,
   }: Options<T> | AbortableOptions<T> = {},
 ): SingleEventObserver<T> | SingleEventAbortableObserver<T> {
@@ -494,6 +512,7 @@ export function observeEvent<T = any>(
       test,
       finalized,
       historicalCheckBlocks,
+      timeoutSeconds,
       abortable,
     });
 
@@ -508,6 +527,7 @@ export function observeEvent<T = any>(
     test,
     finalized,
     historicalCheckBlocks,
+    timeoutSeconds,
     abortable,
   });
 

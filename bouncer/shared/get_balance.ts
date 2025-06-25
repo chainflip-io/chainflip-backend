@@ -1,11 +1,11 @@
-import { Asset, getContractAddress } from './utils';
-import { getBtcBalance } from './get_btc_balance';
-import { getDotBalance } from './get_dot_balance';
-import { getEvmNativeBalance } from './get_evm_native_balance';
-import { getErc20Balance } from './get_erc20_balance';
-import { getSolBalance } from './get_sol_balance';
-import { getSolUsdcBalance } from './get_solusdc_balance';
-import { getHubAssetBalance, getHubDotBalance } from './get_hub_balance';
+import { Asset, getContractAddress } from 'shared/utils';
+import { getBtcBalance } from 'shared/get_btc_balance';
+import { getDotBalance } from 'shared/get_dot_balance';
+import { getEvmNativeBalance } from 'shared/get_evm_native_balance';
+import { getErc20Balance } from 'shared/get_erc20_balance';
+import { getSolBalance } from 'shared/get_sol_balance';
+import { getSolUsdcBalance } from 'shared/get_solusdc_balance';
+import { getHubAssetBalance, getHubDotBalance } from 'shared/get_hub_balance';
 
 export async function getBalance(asset: Asset, address: string): Promise<string> {
   // eslint-disable-next-line no-param-reassign

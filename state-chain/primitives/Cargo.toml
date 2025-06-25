@@ -33,13 +33,13 @@ serde_json = { workspace = true }
 [features]
 default = ["std"]
 std = [
-  "sp-core/std",
-  "sp-arithmetic/std",
-  "codec/std",
-  "frame-support/std",
-  "dep:hex",
-  "scale-info/std",
-  "serde/std",
-  "sp-std/std",
-  "strum/std",
+	"sp-core/std",
+	"sp-arithmetic/std",
+	"codec/std",
+	"frame-support/std",
+	"dep:hex",
+	"scale-info/std",
+	"serde/std",
+	"sp-std/std",
+	"strum/std",
 ]

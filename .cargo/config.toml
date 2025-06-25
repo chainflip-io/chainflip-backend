@@ -1,8 +1,8 @@
 [env]
 CF_ETH_CONTRACT_ABI_ROOT = { value = "contract-interfaces/eth-contract-abis", relative = true }
-CF_ETH_CONTRACT_ABI_TAG = "v1.1.2"
+CF_ETH_CONTRACT_ABI_TAG = "v1.2.1"
 CF_SOL_PROGRAM_IDL_ROOT = { value = "contract-interfaces/sol-program-idls", relative = true }
-CF_SOL_PROGRAM_IDL_TAG = "v1.1.0"
+CF_SOL_PROGRAM_IDL_TAG = "v1.2.2"
 CF_ARB_CONTRACT_ABI_ROOT = { value = "contract-interfaces/arb-contract-abis", relative = true }
 CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 
@@ -25,9 +25,9 @@ cf-build-production = "build --profile=production"
 # Check for feature inconsistencies.
 check-sc-features = '''
 tree --no-default-features --depth 1 --edges=features,normal
-    -p state-chain-*
-    -p pallet-cf-*
-    -p cf-*
+	-p state-chain-*
+	-p pallet-cf-*
+	-p cf-*
 '''
 
 # Requires `cargo-audit`. Run `cargo install cargo-audit` to install it.
@@ -51,23 +51,25 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2025-0017: The `trust-dns` project has been rebranded to `hickory-dns`. Used by substrate.
 # - RUSTSEC-2023-0091: Low severity, difficult to exploit of wasmtime, dependency of substrate.
 # - RUSTSEC-2024-0438: Wasmtime security issue for Windows devices, so not applicable. Dependency of substrate.
+# - RUSTSEC-2024-0442: Wasmtime jit debugger issue.
 cf-audit = '''
 audit -D unmaintained -D unsound
-    --ignore RUSTSEC-2021-0139
-    --ignore RUSTSEC-2020-0168
-    --ignore RUSTSEC-2022-0061
-    --ignore RUSTSEC-2022-0080
-    --ignore RUSTSEC-2024-0320
-    --ignore RUSTSEC-2024-0336
-    --ignore RUSTSEC-2024-0344
-    --ignore RUSTSEC-2024-0370
-    --ignore RUSTSEC-2024-0388
-    --ignore RUSTSEC-2024-0384
-    --ignore RUSTSEC-2024-0421
-    --ignore RUSTSEC-2025-0009
-    --ignore RUSTSEC-2025-0010
-    --ignore RUSTSEC-2024-0436
-    --ignore RUSTSEC-2025-0017
-    --ignore RUSTSEC-2023-0091
-    --ignore RUSTSEC-2024-0438
+	--ignore RUSTSEC-2021-0139
+	--ignore RUSTSEC-2020-0168
+	--ignore RUSTSEC-2022-0061
+	--ignore RUSTSEC-2022-0080
+	--ignore RUSTSEC-2024-0320
+	--ignore RUSTSEC-2024-0336
+	--ignore RUSTSEC-2024-0344
+	--ignore RUSTSEC-2024-0370
+	--ignore RUSTSEC-2024-0388
+	--ignore RUSTSEC-2024-0384
+	--ignore RUSTSEC-2024-0421
+	--ignore RUSTSEC-2025-0009
+	--ignore RUSTSEC-2025-0010
+	--ignore RUSTSEC-2024-0436
+	--ignore RUSTSEC-2025-0017
+	--ignore RUSTSEC-2023-0091
+	--ignore RUSTSEC-2024-0438
+	--ignore RUSTSEC-2024-0442
 '''

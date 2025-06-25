@@ -9,14 +9,14 @@ import {
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
-} from '../shared/utils';
-import { executeVaultSwap, requestNewSwap } from '../shared/perform_swap';
-import { send } from '../shared/send';
-import { getBalance } from '../shared/get_balance';
-import { observeEvent } from '../shared/utils/substrate';
-import { FillOrKillParamsX128 } from '../shared/new_swap';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger } from '../shared/utils/logger';
+} from 'shared/utils';
+import { executeVaultSwap, requestNewSwap } from 'shared/perform_swap';
+import { send } from 'shared/send';
+import { getBalance } from 'shared/get_balance';
+import { observeEvent } from 'shared/utils/substrate';
+import { FillOrKillParamsX128 } from 'shared/new_swap';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger } from 'shared/utils/logger';
 
 /// Do a swap with unrealistic minimum price so it gets refunded.
 async function testMinPriceRefund(
