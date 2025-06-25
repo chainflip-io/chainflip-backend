@@ -1066,8 +1066,8 @@ mod inventory_based_strategy {
 			let base_amount = AssetAmount::from(base_amount);
 			let quote_amount = AssetAmount::from(quote_amount);
 
-			let base = TradingStrategyPallet::inventory_based_strategy_logic(base_amount, base_amount + quote_amount, min_sell_tick, max_sell_tick, Side::Sell);
-			let quote = TradingStrategyPallet::inventory_based_strategy_logic(quote_amount, base_amount + quote_amount, min_buy_tick, max_buy_tick, Side::Buy);
+			let base = inventory_based_strategy_logic(base_amount, base_amount + quote_amount, min_sell_tick, max_sell_tick, Side::Sell);
+			let quote = inventory_based_strategy_logic(quote_amount, base_amount + quote_amount, min_buy_tick, max_buy_tick, Side::Buy);
 
 			assert!(!base.is_empty());
 			assert!(!quote.is_empty());
@@ -1115,14 +1115,14 @@ mod inventory_based_strategy {
 			expected_orders: LimitOrders,
 		) {
 			let new_orders = LimitOrders {
-				base: TradingStrategyPallet::inventory_based_strategy_logic(
+				base: inventory_based_strategy_logic(
 					base_amount,
 					base_amount + quote_amount,
 					min_sell_tick,
 					max_sell_tick,
 					Side::Sell,
 				),
-				quote: TradingStrategyPallet::inventory_based_strategy_logic(
+				quote: inventory_based_strategy_logic(
 					quote_amount,
 					base_amount + quote_amount,
 					min_buy_tick,

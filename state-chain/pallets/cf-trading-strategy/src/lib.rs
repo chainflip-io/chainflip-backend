@@ -138,12 +138,12 @@ impl TradingStrategy {
 				max_sell_tick,
 				base_asset,
 			} => {
-				let average_buy_tick = Pallet::<T>::average_tick(
+				let average_buy_tick = average_tick(
 					*min_buy_tick,
 					*max_buy_tick,
 					false, // round down
 				);
-				let average_sell_tick = Pallet::<T>::average_tick(
+				let average_sell_tick = average_tick(
 					*min_sell_tick,
 					*max_sell_tick,
 					true, // round up
@@ -377,14 +377,14 @@ pub mod pallet {
 
 							// Use the balance of assets to calculate the desired limit orders
 							let total = quote_amount.saturating_add(base_amount);
-							let new_sell_orders = Self::inventory_based_strategy_logic(
+							let new_sell_orders = inventory_based_strategy_logic(
 								base_amount,
 								total,
 								min_sell_tick,
 								max_sell_tick,
 								Side::Sell,
 							);
-							let new_buy_orders = Self::inventory_based_strategy_logic(
+							let new_buy_orders = inventory_based_strategy_logic(
 								quote_amount,
 								total,
 								min_buy_tick,
@@ -670,89 +670,86 @@ impl<T: Config> Pallet<T> {
 			}) >= FixedU64::one(),
 		)
 	}
+}
 
-	/// Logic for one side of the inventory-based strategy.
-	///
-	/// Given the amount of asset on this side compared to the total amount on both sides, returns
-	/// the limit orders that should be created. The logic is as follows:
-	/// If there is too much asset on this side, ie amount > half_total, then we want 2 limit
-	/// orders:
-	/// 1. A simple order at the average tick between min_tick and max_tick, with half of the total
-	///    amount.
-	/// 2. A dynamic order at a tick that is more aggressive than the average tick with the
-	///    remaining amount.
-	///
-	/// The reason for splitting the order in 2 is to avoid having all of the asset at the most
-	///    aggressive tick get executed and become an order on the opposite side also at the most
-	///    aggressive tick, stuck in a non-profitable loop. By splitting the order at the half
-	///    total we maximize the chance of the strategy balancing out to 50/50 over time.
-	///
-	/// If there is not too much asset on this side, ie amount <= half_total, then we want 1 limit
-	/// order:
-	/// 1. A dynamic order at a tick that is more defensive than the average tick. This is the same
-	///    logic as the dynamic order above.
-	fn inventory_based_strategy_logic(
-		amount: AssetAmount,
-		total: AssetAmount,
-		min_tick: Tick,
-		max_tick: Tick,
-		side: Side,
-	) -> BTreeMap<Tick, (OrderId, AssetAmount)> {
-		if total == 0 {
-			return BTreeMap::default();
-		}
-		let mut orders = BTreeMap::new();
-		let half_total = total / 2;
+/// Logic for one side of the inventory-based strategy.
+///
+/// Given the amount of asset on this side compared to the total amount on both sides, returns
+/// the limit orders that should be created. The logic is as follows:
+/// If there is too much asset on this side, ie amount > half_total, then we want 2 limit
+/// orders:
+/// 1. A simple order at the average tick between min_tick and max_tick, with half of the total
+///    amount.
+/// 2. A dynamic order at a tick that is more aggressive than the average tick with the remaining
+///    amount.
+///
+/// The reason for splitting the order in 2 is to avoid having all of the asset at the most
+///    aggressive tick get executed and become an order on the opposite side also at the most
+///    aggressive tick, stuck in a non-profitable loop. By splitting the order at the half
+///    total we maximize the chance of the strategy balancing out to 50/50 over time.
+///
+/// If there is not too much asset on this side, ie amount <= half_total, then we want 1 limit
+/// order:
+/// 1. A dynamic order at a tick that is more defensive than the average tick. This is the same
+///    logic as the dynamic order above.
+fn inventory_based_strategy_logic(
+	amount: AssetAmount,
+	total: AssetAmount,
+	min_tick: Tick,
+	max_tick: Tick,
+	side: Side,
+) -> BTreeMap<Tick, (OrderId, AssetAmount)> {
+	if total == 0 {
+		return BTreeMap::default();
+	}
+	let mut orders = BTreeMap::new();
+	let half_total = total / 2;
 
-		// Simple order logic:
-		let remaining_amount = if amount >= half_total {
-			// Get the average tick, making sure to round the tick defensively
-			let round_up = side == Side::Sell;
-			let average_tick = Self::average_tick(min_tick, max_tick, round_up);
-			orders.insert(average_tick, (STRATEGY_ORDER_ID_1, half_total));
-			amount.saturating_sub(half_total)
-		} else {
-			amount
-		};
+	// Simple order logic:
+	let remaining_amount = if amount >= half_total {
+		// Get the average tick, making sure to round the tick defensively
+		let round_up = side == Side::Sell;
+		let average_tick = average_tick(min_tick, max_tick, round_up);
+		orders.insert(average_tick, (STRATEGY_ORDER_ID_1, half_total));
+		amount.saturating_sub(half_total)
+	} else {
+		amount
+	};
 
-		// Dynamic order logic:
-		if remaining_amount > 0 {
-			// Calculate the tick based on the fraction of the total amount
-			let tick_adjustment = (Permill::from_rational(amount, total) *
-				((max_tick - min_tick).unsigned_abs())) as i32;
-			let dynamic_tick = if side == Side::Buy {
-				min_tick + tick_adjustment
-			} else {
-				max_tick - tick_adjustment
-			};
-			// Merge the order if its at the same tick as the simple order, or just add a new
-			// order.
-			orders
-				.entry(dynamic_tick)
-				.and_modify(|(_order_id, amount)| *amount += remaining_amount)
-				.or_insert((STRATEGY_ORDER_ID_0, remaining_amount));
-		}
-
+	// Dynamic order logic:
+	if remaining_amount > 0 {
+		// Calculate the tick based on the fraction of the total amount
+		let tick_adjustment =
+			(Permill::from_rational(amount, total) * ((max_tick - min_tick).unsigned_abs())) as i32;
+		let dynamic_tick =
+			if side == Side::Buy { min_tick + tick_adjustment } else { max_tick - tick_adjustment };
+		// Merge the order if its at the same tick as the simple order, or just add a new
+		// order.
 		orders
+			.entry(dynamic_tick)
+			.and_modify(|(_order_id, amount)| *amount += remaining_amount)
+			.or_insert((STRATEGY_ORDER_ID_0, remaining_amount));
 	}
 
-	// Returns the average tick between two ticks, with rounding control.
-	fn average_tick(tick_1: Tick, tick_2: Tick, round_up: bool) -> Tick {
-		let tick = tick_1.saturating_add(tick_2);
-		if round_up {
-			// Round up
-			if tick < 0 {
-				(tick) / 2
-			} else {
-				(tick.saturating_add(1)) / 2
-			}
+	orders
+}
+
+// Returns the average tick between two ticks, with rounding control.
+fn average_tick(tick_1: Tick, tick_2: Tick, round_up: bool) -> Tick {
+	let tick = tick_1.saturating_add(tick_2);
+	if round_up {
+		// Round up
+		if tick < 0 {
+			(tick) / 2
 		} else {
-			// Round down
-			if tick < 0 {
-				(tick.saturating_sub(1)) / 2
-			} else {
-				(tick) / 2
-			}
+			(tick.saturating_add(1)) / 2
+		}
+	} else {
+		// Round down
+		if tick < 0 {
+			(tick.saturating_sub(1)) / 2
+		} else {
+			(tick) / 2
 		}
 	}
 }
