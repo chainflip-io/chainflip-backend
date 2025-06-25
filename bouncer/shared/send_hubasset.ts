@@ -5,9 +5,9 @@ import {
   assetDecimals,
   HubAsset,
   getHubAssetId,
-} from './utils';
-import { aliceKeyringPair } from './polkadot_keyring';
-import { getAssethubApi } from './utils/substrate';
+} from 'shared/utils';
+import { aliceKeyringPair } from 'shared/polkadot_keyring';
+import { getAssethubApi } from 'shared/utils/substrate';
 
 export async function sendHubAsset(asset: HubAsset, address: string, amount: string) {
   const planckAmount = amountToFineAmount(amount, assetDecimals(asset));

@@ -6,7 +6,7 @@
 // For example: ./commands/new_statechain_address.ts foobar
 // returns: cFKRncCLfqn54fHG16d22ZMyGWgPgiShZehW7B2C65sYS5dff
 
-import { newStatechainAddress } from '../shared/new_statechain_address';
+import { newStatechainAddress } from 'shared/new_statechain_address';
 
 async function main(): Promise<void> {
   const seed = process.argv[2] ?? '0';

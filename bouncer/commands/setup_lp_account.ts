@@ -6,9 +6,9 @@
 //
 // For example: ./commands/setup_lp_account.ts //LP_3
 
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { setupLpAccount } from '../shared/setup_account';
-import { globalLogger } from '../shared/utils/logger';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { setupLpAccount } from 'shared/setup_account';
+import { globalLogger } from 'shared/utils/logger';
 
 async function main() {
   const lpKey = process.argv[2];

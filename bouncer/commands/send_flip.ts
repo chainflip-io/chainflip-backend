@@ -8,9 +8,9 @@
 // For example: ./commands/send_flip.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6 5.5
 // will send 5.5 Flip to the account with address 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 
-import { runWithTimeoutAndExit, getContractAddress } from '../shared/utils';
-import { sendErc20 } from '../shared/send_erc20';
-import { globalLogger } from '../shared/utils/logger';
+import { runWithTimeoutAndExit, getContractAddress } from 'shared/utils';
+import { sendErc20 } from 'shared/send_erc20';
+import { globalLogger } from 'shared/utils/logger';
 
 async function main(): Promise<void> {
   const ethereumAddress = process.argv[2];

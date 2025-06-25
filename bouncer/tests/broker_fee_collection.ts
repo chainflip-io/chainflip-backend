@@ -2,7 +2,7 @@ import assert from 'assert';
 import { randomBytes } from 'crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 
-import Keyring from '../polkadot/keyring';
+import Keyring from 'polkadot/keyring';
 import {
   brokerMutex,
   decodeDotAddressForContract,
@@ -16,12 +16,12 @@ import {
   observeSwapRequested,
   TransactionOrigin,
   defaultAssetAmounts,
-} from '../shared/utils';
-import { getBalance } from '../shared/get_balance';
-import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import { send } from '../shared/send';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger } from '../shared/utils/logger';
+} from 'shared/utils';
+import { getBalance } from 'shared/get_balance';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { send } from 'shared/send';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger } from 'shared/utils/logger';
 
 const commissionBps = 1000; // 10%
 

@@ -27,16 +27,16 @@ use cf_chains::{
 	VaultSwapInputEncoded,
 };
 use cf_primitives::{
-	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
-	DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount, NetworkEnvironment,
-	PrewitnessedDepositId, SemVer,
+	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
+	DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount, NetworkEnvironment, SemVer,
 };
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
 use core::{ops::Range, str};
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
-pub use pallet_cf_ingress_egress::{ChannelAction, OwedAmount};
+pub use pallet_cf_ingress_egress::ChannelAction;
+pub use pallet_cf_lending_pools::BoostPoolDetails;
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -47,7 +47,7 @@ use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_runtime::{DispatchError, Percent, Permill};
+use sp_runtime::{DispatchError, Permill};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
@@ -166,15 +166,6 @@ where
 	S: serde::Serializer,
 {
 	sp_core::U256::from(*amount).serialize(s)
-}
-
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
-pub struct BoostPoolDetails {
-	pub available_amounts: BTreeMap<AccountId32, AssetAmount>,
-	pub pending_boosts:
-		BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId32, OwedAmount<AssetAmount>>>,
-	pub pending_withdrawals: BTreeMap<AccountId32, BTreeSet<PrewitnessedDepositId>>,
-	pub network_fee_deduction_percent: Percent,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
@@ -330,6 +321,8 @@ impl<AccountId, C: Chain> From<ChannelAction<AccountId, C>> for ChannelActionTyp
 	}
 }
 
+pub type OpenedDepositChannels = (AccountId32, ChannelActionType, ChainAccounts);
+
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub enum TransactionScreeningEvent<TxId> {
 	TransactionRejectionRequestReceived {
@@ -459,6 +452,7 @@ decl_runtime_apis!(
 			ccm_data: Option<CcmData>,
 			exclude_fees: BTreeSet<FeeTypes>,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
+			is_internal: Option<bool>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
 		fn cf_pool_info(
 			base_asset: Asset,
@@ -527,7 +521,7 @@ decl_runtime_apis!(
 		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64>;
 		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
-		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails>;
+		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails<AccountId32>>;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
 		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 		fn cf_swap_retry_delay_blocks() -> u32;
@@ -570,13 +564,17 @@ decl_runtime_apis!(
 			channel_metadata: Option<CcmChannelMetadataUnchecked>,
 		) -> Result<Vec<u8>, DispatchErrorWithMessage>;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
+		fn cf_get_preallocated_deposit_channels(
+			account_id: AccountId32,
+			chain: ForeignChain,
+		) -> Vec<ChannelId>;
 		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
 		fn cf_affiliate_details(
 			broker: AccountId32,
 			affiliate: Option<AccountId32>,
 		) -> Vec<(AccountId32, AffiliateDetails)>;
 		fn cf_vault_addresses() -> VaultAddresses;
-		fn cf_all_open_deposit_channels() -> Vec<(AccountId32, ChannelActionType, ChainAccounts)>;
+		fn cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>;
 		fn cf_get_trading_strategies(
 			lp_id: Option<AccountId32>,
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;

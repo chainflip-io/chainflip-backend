@@ -1214,23 +1214,32 @@ impl<T: Config> PoolApi for Pallet<T> {
 		// Collect to avoid undefined behaviour (See StorageMap::iter_keys documentation).
 		// Note that we read one pool at a time to optimise memory usage.
 		for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
-			let pool = Pools::<T>::get(asset_pair).unwrap();
+			let mut pool = Pools::<T>::get(asset_pair).unwrap();
 
-			for (asset, orders) in
-				pool.limit_orders_cache.as_ref().into_iter().filter_map(|(asset, cache)| {
+			for (asset, orders) in pool
+				.limit_orders_cache
+				.as_ref()
+				.into_iter()
+				.filter_map(|(asset, cache)| {
 					cache.get(account).cloned().map(|orders| (asset, orders))
-				}) {
+				})
+				.collect::<Vec<_>>()
+			{
 				for (id, tick) in orders {
-					<Self as PoolApi>::cancel_limit_order(
+					Self::inner_update_limit_order_at_tick(
+						&mut pool,
 						account,
-						asset_pair.assets().base,
-						asset_pair.assets().quote,
+						&asset_pair,
 						asset.sell_order(),
 						id,
 						tick,
+						IncreaseOrDecrease::Decrease(Amount::MAX),
+						crate::NoOpStatus::Allow,
 					)?;
 				}
 			}
+
+			Pools::<T>::insert(asset_pair, pool);
 		}
 
 		Ok(())
@@ -1330,15 +1339,15 @@ pub struct PoolOrders<T: Config> {
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
 pub struct LimitOrderLiquidity {
-	tick: Tick,
-	amount: Amount,
+	pub tick: Tick,
+	pub amount: Amount,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
 pub struct RangeOrderLiquidity {
-	tick: Tick,
-	liquidity: Amount, /* TODO: Change (Using Amount as it is U256 so we get the right
-	                    * serialization) */
+	pub tick: Tick,
+	pub liquidity: Amount, /* TODO: Change (Using Amount as it is U256 so we get the right
+	                        * serialization) */
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]

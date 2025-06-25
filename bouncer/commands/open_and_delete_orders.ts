@@ -7,9 +7,9 @@
 // For example: ./commands/open_and_delete_orders.ts 5
 // will create 5 limit_order and then delete them all with a single extrinsic
 
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { globalLogger } from '../shared/utils/logger';
-import { createAndDeleteMultipleOrders } from '../tests/create_and_delete_multiple_orders';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { globalLogger } from 'shared/utils/logger';
+import { createAndDeleteMultipleOrders } from 'tests/create_and_delete_multiple_orders';
 
 async function main(): Promise<void> {
   if (!process.argv[2]) {

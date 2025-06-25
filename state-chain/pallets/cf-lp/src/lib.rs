@@ -20,8 +20,8 @@
 use cf_chains::{address::AddressConverter, AccountOrAddress, AnyChain, ForeignChainAddress};
 use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, DcaParameters, ForeignChain};
 use cf_traits::{
-	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, BoostApi, Chainflip, DepositApi,
-	EgressApi, LpRegistration, PoolApi, ScheduledEgressDetails, SwapRequestHandler,
+	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, BoostBalancesApi, Chainflip,
+	DepositApi, EgressApi, LpRegistration, PoolApi, ScheduledEgressDetails, SwapRequestHandler,
 };
 
 use sp_std::vec;
@@ -86,9 +86,8 @@ pub mod pallet {
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// The interface to access boosted balances
-		type BoostApi: BoostApi<
+		type BoostBalancesApi: BoostBalancesApi<
 			AccountId = <Self as frame_system::Config>::AccountId,
-			AssetMap = cf_chains::assets::any::AssetMap<AssetAmount>,
 		>;
 
 		type SwapRequestHandler: SwapRequestHandler<AccountId = Self::AccountId>;
@@ -305,12 +304,13 @@ pub mod pallet {
 				T::BalanceApi::free_balances(&account_id).iter().all(|(_, amount)| *amount == 0),
 				Error::<T>::FundsRemaining
 			);
-			ensure!(
-				T::BoostApi::boost_pool_account_balances(&account_id)
-					.iter()
-					.all(|(_asset, amount)| { *amount == 0 }),
-				Error::<T>::BoostedFundsRemaining
-			);
+
+			for asset in Asset::all() {
+				ensure!(
+					T::BoostBalancesApi::boost_pool_account_balance(&account_id, asset) == 0,
+					Error::<T>::BoostedFundsRemaining
+				);
+			}
 
 			let _ = LiquidityRefundAddress::<T>::clear_prefix(&account_id, u32::MAX, None);
 

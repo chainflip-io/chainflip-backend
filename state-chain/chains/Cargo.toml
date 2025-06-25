@@ -34,17 +34,17 @@ bech32 = { workspace = true }
 
 # Solana
 borsh = { workspace = true, features = [
-  "derive",
-  "unstable__schema",
-  "hashbrown",
+	"derive",
+	"unstable__schema",
+	"hashbrown",
 ] }
 generic-array = { workspace = true, features = ["serde"] }
 bs58 = { workspace = true, features = ["alloc"] }
 
 # Special case for Solana: We use bincode 2 for its no-std support.
 bincode = { version = "2.0.0-rc.3", default-features = false, features = [
-  "alloc",
-  "serde",
+	"alloc",
+	"serde",
 ] }
 curve25519-dalek = { workspace = true, optional = true }
 ed25519-dalek = { workspace = true, optional = true }
@@ -81,51 +81,51 @@ ed25519-dalek = { workspace = true, features = ["rand_core"] }
 [features]
 default = ["std"]
 std = [
-  "bech32/std",
-  "cf-amm-math/std",
-  "cf-primitives/std",
-  "cf-utilities/std",
-  "scale-info/std",
-  "codec/std",
-  "ethabi/full-serde",
-  "ethereum/std",
-  "ethereum-types/std",
-  "frame-support/std",
-  "hex/std",
-  "hex/serde",
-  "libsecp256k1/std",
-  "log/std",
-  "rlp/std",
-  "serde/std",
-  "sp-std/std",
-  "sp-core/std",
-  "sp-core/full_crypto",
-  "sp-io/std",
-  "dep:ss58-registry",
-  "dep:thiserror",
-  "dep:anyhow",
-  "strum/std",
-  "sp-runtime/std",
-  "anyhow?/std",
-  "bincode/std",
-  "bs58/std",
-  "cf-runtime-utilities/std",
-  "digest/std",
-  "ethabi/std",
-  "sha2/std",
-  "sol-prim/std",
-  "itertools/use_std",
-  # "borsh/std" not needed, it conflicts with borsh/hashbrown.
+	"bech32/std",
+	"cf-amm-math/std",
+	"cf-primitives/std",
+	"cf-utilities/std",
+	"scale-info/std",
+	"codec/std",
+	"ethabi/full-serde",
+	"ethereum/std",
+	"ethereum-types/std",
+	"frame-support/std",
+	"hex/std",
+	"hex/serde",
+	"libsecp256k1/std",
+	"log/std",
+	"rlp/std",
+	"serde/std",
+	"sp-std/std",
+	"sp-core/std",
+	"sp-core/full_crypto",
+	"sp-io/std",
+	"dep:ss58-registry",
+	"dep:thiserror",
+	"dep:anyhow",
+	"strum/std",
+	"sp-runtime/std",
+	"anyhow?/std",
+	"bincode/std",
+	"bs58/std",
+	"cf-runtime-utilities/std",
+	"digest/std",
+	"ethabi/std",
+	"sha2/std",
+	"sol-prim/std",
+	"itertools/use_std",
+	# "borsh/std" not needed, it conflicts with borsh/hashbrown.
 ]
 runtime-benchmarks = [
-  "frame-support/runtime-benchmarks",
-  "sp-runtime/runtime-benchmarks",
-  "cf-runtime-utilities/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+	"cf-runtime-utilities/runtime-benchmarks",
 ]
 try-runtime = [
-  "frame-support/try-runtime",
-  "sp-runtime/try-runtime",
-  "cf-runtime-utilities/try-runtime",
+	"frame-support/try-runtime",
+	"sp-runtime/try-runtime",
+	"cf-runtime-utilities/try-runtime",
 ]
 
 runtime-integration-tests = ["std", "dep:rand", "ed25519-dalek/rand_core",]

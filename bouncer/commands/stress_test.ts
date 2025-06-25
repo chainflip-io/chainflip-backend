@@ -7,8 +7,8 @@
 // For example: ./commands/stress_test.ts 3
 // will initiate a stress test generating 3 signatures
 
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { submitGovernanceExtrinsic } from '../shared/cf_governance';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 
 async function main(): Promise<void> {
   const signaturesCount = process.argv[2];

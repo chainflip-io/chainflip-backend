@@ -1,6 +1,6 @@
 // eslint-disable-next-line no-restricted-imports
 import type { KeyringPair } from '@polkadot/keyring/types';
-import Keyring from '../polkadot/keyring';
+import Keyring from 'polkadot/keyring';
 
 const aliceUri = process.env.POLKADOT_ALICE_URI || '//Alice';
 

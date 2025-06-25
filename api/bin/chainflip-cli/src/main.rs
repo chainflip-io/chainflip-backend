@@ -31,8 +31,8 @@ use cf_utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 use chainflip_api::{
 	self as api,
 	lp::LiquidityDepositChannelDetails,
-	primitives::{state_chain_runtime, WaitFor, FLIPPERINOS_PER_FLIP},
-	rpc_types::RedemptionAmount,
+	primitives::{state_chain_runtime, FLIPPERINOS_PER_FLIP},
+	rpc_types::{RebalanceOutcome, RedemptionAmount, RedemptionOutcome},
 	BrokerApi,
 };
 use clap::Parser;
@@ -101,13 +101,12 @@ async fn run_cli() -> Result<()> {
 					} => {
 						let LiquidityDepositChannelDetails { deposit_address, deposit_chain_expiry_block } = api
 							.lp_api()
-							.request_liquidity_deposit_address(
+							.request_liquidity_deposit_address_v2(
 								asset,
-								WaitFor::InBlock,
 								boost_fee,
 							)
 							.await?
-							.unwrap_details();
+							.response;
 						println!("Deposit Address: {deposit_address}\nDeposit chain expiry block: {deposit_chain_expiry_block}");
 					},
 
@@ -143,7 +142,18 @@ async fn run_cli() -> Result<()> {
 					},
 				},
 				Redeem { amount, eth_address, executor_address } => {
-					request_redemption(api, amount, eth_address, executor_address).await?;
+					request_rebalance_or_redemption(
+						api,
+						amount,
+						RedeemDestination::parse_external(eth_address, executor_address)?
+					).await?;
+				},
+				Rebalance { amount, recipient_account_id, restricted_address } => {
+					request_rebalance_or_redemption(
+						api,
+						amount,
+						RedeemDestination::parse_internal(recipient_account_id, restricted_address)?
+					).await?;
 				},
 				BindRedeemAddress { eth_address } => {
 					bind_redeem_address(api.operator_api(), &eth_address).await?;
@@ -217,51 +227,109 @@ fn flipperino_to_flip_string(atomic_amount: u128) -> String {
 	(BigDecimal::from(atomic_amount) / FLIPPERINOS_PER_FLIP).to_string()
 }
 
-async fn request_redemption(
+enum RedeemDestination {
+	External { redeem_address: EthereumAddress, executor_address: Option<EthereumAddress> },
+	Internal { recipient_account_id: AccountId32, restricted_address: Option<EthereumAddress> },
+}
+
+impl RedeemDestination {
+	fn parse_external(redeem_address: String, executor_address: Option<String>) -> Result<Self> {
+		Ok(Self::External {
+			redeem_address: EthereumAddress::from(
+				clean_hex_address::<[u8; 20]>(&redeem_address)
+					.context("Invalid ETH redeem address")?,
+			),
+			executor_address: executor_address
+				.map(|address| {
+					clean_hex_address::<[u8; 20]>(&address)
+						.context("Invalid executor address")
+						.map(EthereumAddress::from)
+				})
+				.transpose()?,
+		})
+	}
+	fn parse_internal(
+		recipient_account_id: String,
+		restricted_address: Option<String>,
+	) -> Result<Self> {
+		use std::str::FromStr;
+		Ok(Self::Internal {
+			recipient_account_id: AccountId32::from_str(&recipient_account_id)
+				.map_err(|err| anyhow::anyhow!("Failed to parse AccountId: {}", err))
+				.context("Invalid account ID provided")?,
+			restricted_address: restricted_address
+				.map(|address| {
+					clean_hex_address::<[u8; 20]>(&address)
+						.context("Invalid address")
+						.map(EthereumAddress::from)
+				})
+				.transpose()?,
+		})
+	}
+}
+
+async fn request_rebalance_or_redemption(
 	api: StateChainApi,
 	amount: Option<f64>,
-	supplied_redeem_address: String,
-	supplied_executor_address: Option<String>,
+	destination: RedeemDestination,
 ) -> Result<()> {
-	// Check validity of the redeem address
-	let redeem_address = EthereumAddress::from(
-		clean_hex_address::<[u8; 20]>(&supplied_redeem_address)
-			.context("Invalid redeem address")?,
-	);
-
-	// Check the validity of the executor address
-	let executor_address = if let Some(address) = supplied_executor_address {
-		Some(EthereumAddress::from(
-			clean_hex_address::<[u8; 20]>(&address).context("Invalid executor address")?,
-		))
-	} else {
-		None
-	};
-
-	// Calculate the redemption amount
 	let redeem_amount = flip_to_redemption_amount(amount);
-	match redeem_amount {
-		RedemptionAmount::Exact(atomic_amount) => {
-			println!( "Submitting redemption with amount `{}` FLIP (`{atomic_amount}` Flipperinos) to ETH address `{redeem_address:?}`.", flipperino_to_flip_string(atomic_amount));
+
+	println!(
+		"Submitting request to {} {} to {}...",
+		match destination {
+			RedeemDestination::External { .. } => "redeem",
+			RedeemDestination::Internal { .. } => "rebalance",
 		},
-		RedemptionAmount::Max => {
-			println!("Submitting redemption with MAX amount to ETH address `{redeem_address:?}`.");
+		match redeem_amount {
+			RedemptionAmount::Exact(atomic_amount) => format!(
+				"`{}` FLIP (`{}` Flipperinos)",
+				flipperino_to_flip_string(atomic_amount),
+				atomic_amount,
+			),
+			RedemptionAmount::Max => "MAX amount of FLIP".to_string(),
 		},
-	};
+		match destination {
+			RedeemDestination::External { ref redeem_address, .. } =>
+				format!("ETH address `{redeem_address:?}`"),
+			RedeemDestination::Internal { ref recipient_account_id, .. } =>
+				format!("account `{recipient_account_id}`"),
+		},
+	);
 
 	if !confirm_submit() {
 		return Ok(())
 	}
 
-	let tx_hash = api
-		.operator_api()
-		.request_redemption(redeem_amount, redeem_address, executor_address)
-		.await?;
+	match destination {
+		RedeemDestination::External { redeem_address, executor_address } => {
+			let RedemptionOutcome { source_account_id, redeem_address, amount, .. } = api
+				.operator_api()
+				.request_redemption(redeem_amount, redeem_address, executor_address)
+				.await?;
 
-	println!(
-		"Your redemption request has State Chain transaction hash: `{tx_hash:#x}`.\n
-		View your redemption's progress on the Auctions app."
-	);
+			println!(
+				"Redemption request succeeded: a redemption for {} FLIP from account {} to address {:?} will be initiated on Ethereum.\nView your redemption's progress on the Auctions app.",
+				flipperino_to_flip_string(amount),
+				source_account_id,
+				redeem_address,
+			);
+		},
+		RedeemDestination::Internal { recipient_account_id, restricted_address } => {
+			println!("Waiting for finality...");
+			let RebalanceOutcome { source_account_id, recipient_account_id, amount } = api
+				.operator_api()
+				.request_rebalance(redeem_amount, restricted_address, recipient_account_id)
+				.await?;
+
+			println!(
+				"Rebalance request succeeded: {} FLIP transferred from account {} to {}.",
+				flipperino_to_flip_string(amount),
+				source_account_id,
+				recipient_account_id,
+			);
+		},
+	}
 
 	Ok(())
 }

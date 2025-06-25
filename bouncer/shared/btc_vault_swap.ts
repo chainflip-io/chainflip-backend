@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { Chains } from '@chainflip/cli';
-import { waitForBtcTransaction, sendVaultTransaction } from '../shared/send_btc';
+import { waitForBtcTransaction, sendVaultTransaction } from 'shared/send_btc';
 import {
   Asset,
   assetDecimals,
@@ -11,10 +11,10 @@ import {
   fineAmountToAmount,
   handleSubstrateError,
   stateChainAssetFromAsset,
-} from '../shared/utils';
-import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import { fundFlip } from '../shared/fund_flip';
-import { Logger } from './utils/logger';
+} from 'shared/utils';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { fundFlip } from 'shared/fund_flip';
+import { Logger } from 'shared/utils/logger';
 
 interface BtcVaultSwapDetails {
   chain: string;

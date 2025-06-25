@@ -1,0 +1,9 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: val
+---
+{
+  "major": 1,
+  "minor": 23,
+  "patch": 35
+}

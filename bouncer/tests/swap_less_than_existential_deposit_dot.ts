@@ -1,7 +1,7 @@
-import { getDotBalance } from '../shared/get_dot_balance';
-import { performAndTrackSwap } from '../shared/perform_swap';
-import { TestContext } from '../shared/utils/test_context';
-import { getSwapRate, newAddress } from '../shared/utils';
+import { getDotBalance } from 'shared/get_dot_balance';
+import { performAndTrackSwap } from 'shared/perform_swap';
+import { TestContext } from 'shared/utils/test_context';
+import { getSwapRate, newAddress } from 'shared/utils';
 
 const DOT_EXISTENTIAL_DEPOSIT = 1;
 

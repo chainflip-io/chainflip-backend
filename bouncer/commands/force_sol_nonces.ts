@@ -1,8 +1,8 @@
 #!/usr/bin/env -S pnpm tsx
 
 import { PublicKey } from '@solana/web3.js';
-import { decodeSolAddress, runWithTimeoutAndExit } from '../shared/utils';
-import { submitGovernanceExtrinsic } from '../shared/cf_governance';
+import { decodeSolAddress, runWithTimeoutAndExit } from 'shared/utils';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 
 async function forceRecoverSolNonce(nonceAddress: string, nonceValue: string) {
   await submitGovernanceExtrinsic(async (chainflip) =>
@@ -16,203 +16,203 @@ async function forceRecoverSolNonce(nonceAddress: string, nonceValue: string) {
 async function main() {
   await forceRecoverSolNonce(
     '2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw',
-    '3bqiCT1g42BUtGvAqiQKafc7mpgARb9xN2TPy5zERFbo',
+    '8TZPeAWABEaH56pCBarps51BBfDXZxwTLXrGrdnVHMuU',
   );
   await forceRecoverSolNonce(
     'HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo',
-    '4U2y2p4zAa24PzVZJ5QKqav9N9GKMigjJVbWNfrhC3Je',
+    '9a2YpiECfkCiYPVkvBTmJv1K1e6sgQetWg8GeiJeNg2',
   );
   await forceRecoverSolNonce(
     'HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p',
-    '8jiG9huoUXBvNFCLUWJdESL7rRq22qjCtgVVz55MX9iA',
+    'ATYZxNFThQDSo5yodfCDvh6YZtFPBZqxyvikZupQtD5v',
   );
   await forceRecoverSolNonce(
     'HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2',
-    '6G6CsbEPp91JRLDgt6BohX7MK3ExmLq1Qm67yqnemHYu',
+    'AM9PB2yZS22EShV4CQbu9mEDsWyqM44HPwQvmHUhmgyU',
   );
   await forceRecoverSolNonce(
     'GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM',
-    '8DHyaCKuxvFGhLDy2kFU84nZ4xun99SfcpzWrUVcyACn',
+    '9FmKhHZGd1nMtYrCmvWFkXntSwGdxZAaGU3BGyAGMPxU',
   );
   await forceRecoverSolNonce(
     'EpmHm2aSPsB5ZZcDjqDhQ86h1BV32GFCbGSMuC58Y2tn',
-    'GeRKgUxBEr3r6urDeiTwyo7X47D3sowJZn9aqbjZsVGE',
+    'AyqJtbdjRT35CmJKfaiCjL6DCe5LfRjcNRkCtNhthmgg',
   );
   await forceRecoverSolNonce(
     '9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa',
-    '6mJwUTywoZE51Ri6RgM21TBy7Ak8j2DktHCgmzYh17Lz',
+    'D5ftBgbW2DQVbdRDXnU86fyF75EYjXahcFZhz2J6bQ3M',
   );
   await forceRecoverSolNonce(
     'J9dT7asYJFGS68NdgDCYjzU2Wi8uBoBusSHN1Z6JLWna',
-    '85ogFrtBCSeBNDPjEMJZnk6bQghENUDcKp6xxordAqtw',
+    '3zxwonz8r5zY8c2TaFzmQfD2NTWGe8sShF4cA5eyBxLb',
   );
   await forceRecoverSolNonce(
     'GUMpVpQFNYJvSbyTtUarZVL7UDUgErKzDTSVJhekUX55',
-    '3oMahdLKsDYu7pVTQHBzEkYfP11aqo72XXKDq9Uz2LNj',
+    'H9iuxcwHporFNG9Ufx6GbMJzxKshGTXVpFYRN3BxGXhL',
   );
   await forceRecoverSolNonce(
     'AUiHYbzH7qLZSkb3u7nAqtvqC7e41sEzgWjBEvXrpfGv',
-    'FT2c1WyMAeC2X3WaQHR6DmJRwiWKvQduAhiJ34g9M1ii',
+    'GoA9YN3X4dnNruw8KS8pykoziopE2iThyXypczD1JnxB',
   );
   await forceRecoverSolNonce(
     'BN2vyodNYQQTrx3gtaDAL2UGGVtZwFeF5M8krE5aYYES',
-    'GrZ21MGdPNfVGpMbC7yFiqNStoRjYi4Hw4pmiqcBnaaj',
+    '6M2xhGzhWQWSm1hn6SsZrSxXqwedJcvVCUU1tgb8x5gF',
   );
   await forceRecoverSolNonce(
     'Gwq9TAQCjbJtdnmtxQa3PbHFfbr6YTUBMDjEP9x2uXnH',
-    '3L7PSsX58vXtbZoWoCHpmKfuWGBWgPH7duSPnYW7BKTP',
+    '5hguE1bPSHGiHfzc3iCEL3TR1Uodk692sTDduRfb5y73',
   );
   await forceRecoverSolNonce(
     '3pGbKatko2ckoLEy139McfKiirNgy9brYxieNqFGdN1W',
-    'F7JuJ8RKYWGNfwf63Y9m6GBQFNzpMfMBnPrVT89dQzfV',
+    'hpFN3hwRjhx3Jdo3jTWtizbt8DvVBHBUTwKbqrxEDTU',
   );
   await forceRecoverSolNonce(
     '9Mcd8BTievK2yTvyiqG9Ft4HfDFf6mjGFBWMnCSRQP8S',
-    'FZmSB3pDqzE4KdNd8EmBPPpqN8FKgB88DNKXs1L1CmgK',
+    'FfsUaqctjptQfy2LpXEprW9fHpAFpMJNDx8VxDkryto5',
   );
   await forceRecoverSolNonce(
     'AEZG74RoqM6sxf79eTizq5ShB4JTuCkMVwUgtnC8H94z',
-    'D6w3Q65KGGCSVLYBXk8HeyJPd3Wfi7ywqKuQA6WD95Eh',
+    '6YJDJebBCgdXo6jTnHqztAxrrcVP7ARmDU532C3rvJQ3',
   );
   await forceRecoverSolNonce(
     'APLkgyCWi8DFAMF4KikjTu8YnUG1r7sMjVEfDiaBRZnS',
-    'Fte11ZNRR5tZieLiK7TVmCzWdqfyTktkpjQBo65ji6Rm',
+    'D25suHJDnB8kzBbT1zTVPqNzbSPB44ueVfGE5Fpcf7bm',
   );
   await forceRecoverSolNonce(
     '4ShNXTTHvpVt6bQdZTRdyW6yWXDzrPupdMuxajbEoGE4',
-    '4i8DRRYVMXhAy517pwvTTda9VS6AsD1DVK55rd4rhmSF',
+    '5SY1EquN355fvmr1Us9QF5NkgFtnpbemGRnWugpVJ1S6',
   );
   await forceRecoverSolNonce(
     'FgZp6NJYWw15U51ynfXCfU9vq3eVgDDAHMSfJ8fFBZZ8',
-    'BdrBRAQeUym5R7KKFtVZHBLdu5csb9N4bfTj6q9cvPvo',
+    'G1NKPL2YtdxCPS645sYqiRw2o93GhtXJhVsJM4WTpYPL',
   );
   await forceRecoverSolNonce(
     'ENQ9Mmg87KFLX8ncXRPDBSd7jhKCtPBi8QzAh4rkREgP',
-    '79boPVjqDj49oeM9gekFpvzHi3NbPkqaboJLRW1ebp8S',
+    'EoXakeH1rPj9aU4DUuGL3AiJNkXi54H13AJVug6Fp8a4',
   );
   await forceRecoverSolNonce(
     'Hhay1UwkzkFUgrGUYuiCvUwv7kErNzAcZnVRQ2fetT7K',
-    '2j3V4yEsLQBFkHAFpYVJE2zSBcn4MZGctdkGYycY7cJr',
+    'FjsyfRZvnqssMGihxi1JDhWf8ykhyGqXp1Z38R4iR4KH',
   );
   await forceRecoverSolNonce(
     '2fUVR42opcHgGLrY1eguDXLYfQPHQe9ReJNmRorVt9v8',
-    'BrcGnjB8iwSo61YDr23Udg5exZ2rrQyUWnjQBdiXgm6Q',
+    'Eqq9jnfVT3RfGZoq1VaxDwb7j3fnL7eBVunydveiEZ1t',
   );
   await forceRecoverSolNonce(
     'HfKr1wJASkW5UHs8yNWAqMeaYJdp8K2mdYwkbdVRdVrm',
-    'ARfKJp7fjXwM3TEPiYbYSwB7MXTCn72mWcaJD5YD4JEb',
+    '8SmRtgVHdd6n5kqGPoo8Lj5eoBU7XrUm9ttq7HcdAeXj',
   );
   await forceRecoverSolNonce(
     'DrpYkMpJWkpNqX9yYgQfc3uZrCVYobJ3RbTABcSkHJkM',
-    '8ocFizTc8y47pSiXFVApLZ7A1sNc8qChj6h8XmAvr36D',
+    'EEMocPQ355GrihDWApEak8f4Bo5BWiBrWxJw16Lh51Gc',
   );
   await forceRecoverSolNonce(
     'HCXc3o2go1Y2KhfnykLYXEvofLifXTb7GT13w4GsFmGw',
-    'Brrg6v64nU2qEDRV6mUQYmL8oZjJC7sw8MnkeniAv2Un',
+    '2JH9XGSHzjpFucS1K1tVDu3ScccGDJke19Fog8umT1cB',
   );
   await forceRecoverSolNonce(
     'FFKYhae4HSnMmA6JJfe8NNtZeySA9yRWLaHzE2jqfhBr',
-    '4W7BYj7BzZCudnkrUESAcn3SNshwXDNGPWnW1qdLKZRK',
+    'JCFTCXvAMoLLunMSKNfEtHb83Mc5H2Ruorq8kwKU2vS',
   );
   await forceRecoverSolNonce(
     'AaRrJovR9Npna4fuCJ17AB3cJAMzoNDaZymRTbGGzUZm',
-    'H8ozgM2tnY2BrtgUHWtnLDNAsNqtFinx2M1rufFyC8GW',
+    '7fPQo83ULM4g5wfGABCL2HjxMTXoAcvY7WnqQMzPU8ey',
   );
   await forceRecoverSolNonce(
     '5S8DzBBLvJUeyJccV4DekAK8KJA5PDcjwxRxCvgdyBEi',
-    'HUPysNeqUKTgoS4vJ6AVaiKwpxsLprJD5jmcA7yFkhjd',
+    '6Mf4dBPMs5T8dHBzhyiQvXRYjB4HfdTBNGzWbNKihvkG',
   );
   await forceRecoverSolNonce(
     'Cot1DQZpm859brrre7swrDhTYLj2NJbg3hdMKCHk5zSk',
-    'JBbeFz5NWAZDyaf7baRVWfxHRNzfTt6uLVycabrdqyFr',
+    'ugpSqqpQcXYybLeUumrKiDz7MJsbwvXudFFgBhVBYj8',
   );
   await forceRecoverSolNonce(
     '4mfDv7PisvtMhiyGmvD6vxRdVpB842XbUhimAZYxMEn9',
-    '8NsEEoAQZ1jfnwPVubwm3jx3LnwUdBiWgvSqTzkypGwX',
+    '8MQVzBr3RvdCQ5UPrGfMyfQbPkcjrmC2TRxxknUpp17q',
   );
   await forceRecoverSolNonce(
     'BHW7qFCNHTX5QD5yJpT1hn1VM817Ji5ksZqiXMfqGrsj',
-    'BU8A5DWHf9imu2FACGcDLvmoFNj6YjQZNVhkGurLHEGq',
+    'ihRRebrqvfSQ179gEsHzcfK8LseQNjG8qxWMzoWhPz1',
   );
   await forceRecoverSolNonce(
     'EJqZLeaxi2gVsJgQW4nbmxyWJukK25n7jB8qWKoDgWUN',
-    '55fo5L9j5YarVYautVVuaLnfUTbkoQwhJK22skVTqsaM',
+    '2hW1amHnHuRPGkhTK65sQE9ccz269XL1N6n3XgRay7BH',
   );
   await forceRecoverSolNonce(
     'BJqTPWyoqqgzhkLh1pbPh4KWBqg8kCUNzJ81avitSQrm',
-    'BviTbyREbcX8ENNj3iW143JGTZLF37F2jtRWSbWqvpoc',
+    'Gd7uCmncEREuVFp2fXAQts1YDF7xNy5g7dkzTNLHKidT',
   );
   await forceRecoverSolNonce(
     'EkmPmEmSbwm8EDDYtLtaDgcfuLNtW7MbKx5w3FUpaGjv',
-    'Bw6PNsg3AgaNkrwmCRVVt4FQ1qMvTLtacvzM4WcHJ2Gn',
+    '2nnJCWKtycWTs3VnNUD1BzxYJKHpMwTfuBMv3YCQKKoX',
   );
   await forceRecoverSolNonce(
     'CgwtCv8HQ67imnHEkz24TfXfyA2H5jurxcLGxAgDmNQj',
-    'GCQi8coVrWpiYDg7kr7XFgHgjWjAR1983Q54pKQ373Ak',
+    '6y6Ja45rAWgZEdovZhKkNWxVJJ7AaQdQhM6RfPhyESqU',
   );
   await forceRecoverSolNonce(
     'zfKsXSxJ4cTpKS7S6aHL1Hy3m1CEjQuySKSwkWvukQX',
-    '9gESB9ApcxXBKE7Z2qx9gxLC3oXYyjMzE4qTCVhkbtiC',
+    '635q9xuqpThW4UXp7ABvTzoZfeawkHPR7tNTtGtfjdzW',
   );
   await forceRecoverSolNonce(
     '2VvN1s6txNYyBdKpaC8b6AZKVqUQiQT2Exrpa7ffCgV6',
-    'J6wsTZ1wUb8XPfiqoZkJp58mat2keh3qh2BrWSTHUrC',
+    'ABZV1PZnrJSFMe9C8C3p9C1emgL8PVLbUXGp6wM4aGFW',
   );
   await forceRecoverSolNonce(
     'A2DT1dc4rA1uMry7WCLwoUEQQNjCAsAMkB4X9Lgo88zd',
-    '93ScfMZZCwMqxJAKEc2PRYvBroDoVywFmmhZoiSRp6kb',
+    'GPKU2dGqWyLvHKwHWrWmscH5TEjhNcxdwwrMTPx6tLM8',
   );
   await forceRecoverSolNonce(
     '9mNBRGfTMLsSsQUn4YZfRDBVXfQ6juEWbNUTwv2ir9gC',
-    'wbHfqsNRVmATYbvtjeJ2GZzWXK8CiUS9wCawuwXUWSQ',
+    '7PBYy3BaEtnP1H4j8toynDv7iJD7X8pW6tCEkBuZkfV7',
   );
   await forceRecoverSolNonce(
     '3jXiydxPx1P7Ggdja5yt384ryLJAW2c8LRGV8PPRT54C',
-    'J4ijyFp2VeSyVpaxdfaFQsVjAuEeXTzYybzA9KAfpzpZ',
+    'C6pejmGSjJerpJUbV3zaHYKDXDkPyAF9SJcYwsHCQ7og',
   );
   await forceRecoverSolNonce(
     '7ztGR1z28NpYjUaXyrGBzBGu62u1f9H9Pj9UVSKnT3yu',
-    '2rBreiwLCTH8sbBuCcttgPpGkjwvtVYujTHQj9urqqgA',
+    'FERfFzvtiQZ88x4nLyPp74XUmd45N5rneaLXrp95xWUi',
   );
   await forceRecoverSolNonce(
     '4GdnDTr5X4eJFHuzTEBLrz3tsREo8rQro7S9YDqrbMZ9',
-    '3Kpkfz28P7vyGeJTxt15UcsfkqWHBa6DcdtxfFAAxjgf',
+    '2sAvRoDqKc7fwqPUReBDJFnZABHvTZS52No3prT8QBV4',
   );
   await forceRecoverSolNonce(
     'ALxnH6TBKJPBFRfFZspQkxDjb9nGLUP5oxFFdZNRFgUu',
-    '9Qb2PWxkZUV8SXWckWxrmyXq7ykAHz9WMEiCdFBiu9LF',
+    '4ftNy1xY73CE5Tvt2k6wP7FrkLYaKFdbqTxcTr1nHJoB',
   );
   await forceRecoverSolNonce(
     'Bu3sdWtBh5TJishgK3vneh2zJg1rjLqWN5mFTHxWspwJ',
-    'DJSiZtVdcY82pHUknCEGGWutz82tApuhact8wmPvogvV',
+    'CDH52v1QQFWDc2iGd44c6mR2GsRaxW7j3mU5a8iPmZxj',
   );
   await forceRecoverSolNonce(
     'GvBbUTE312RXU5iXAcNWt6CuVbfsPs5Nk28D6qvU6NF3',
-    '5twVG69gCWidRsicKncB6AuDQssunLukFFW3mWe5xjEt',
+    '9jEjbmo9PY1VXN5n8ynvsHTxgVgqkkyX3v37gtWLwdVL',
   );
   await forceRecoverSolNonce(
     '2LLct8SsnkW3sD9Gu8CfxmDEjKAWtFXqLvA8ymMyuq8u',
-    'FzsrqQ6XjjXfUZ7zsrg2n4QpWHPUinh158KkRjJkqfgS',
+    'HPzoaZmsaiCLQh8hYcq8kAEb1n7RRmBiwznMgnHuiev9',
   );
   await forceRecoverSolNonce(
     'CQ9vUhC3dSa4LyZCpWVpNbXhSn6f7J3NQXWDDvMMk6aW',
-    'EqNgQDEUDnmg7mkHQYxkD6Pp3VeDsF6ppWkyk2jKN7K9',
+    'DJ4ZLxfa3Rzueo9zqY2zXJRkaoJwvNRigxemAz1z5Pxm',
   );
   await forceRecoverSolNonce(
     'Cw8GqRmKzCbp7UFfafECC9sf9f936Chgx3BkbSgnXfmU',
-    'B6bodiG9vDL6zfzoY7gaWKBeRD7RyuZ8mSbK4fU9rguy',
+    '13V9qLXm93RJeTChrpzpLC2bLatGKYWRqfDtYnXroVVq',
   );
   await forceRecoverSolNonce(
     'GFJ6m6YdNT1tUfAxyD2BiPSx8gwt3xe4jVAKdtdSUt8W',
-    'Bm37GpK9n83QK9cUaZ6Zrc8TGvSxK2EfJuYCPQEZ2WKb',
+    'EtNYHuALyNaWjLUSNRTppzkxc3eDntoQUwWrbfLBdvL',
   );
   await forceRecoverSolNonce(
     '7bphTuo5BKs4JJw5WPusCevmnoRk9ocFiB8EGgfwnh4c',
-    '3r7idtLjppis2HtbwcttUES6h7GejNnBVA1ueB6ijBWE',
+    'GvbiESUrxMH55onFzB3vg26JZ9KkGawNvy7Rdg2udgyE',
   );
   await forceRecoverSolNonce(
     'EFbUq18Mcdi2gGauRzmbNeD5ixaB7EYVk5JZgAF34LoS',
-    '4b9CDrda1ngSV86zkDVpAwUy64uCdqNYMpK4MQpxwGWT',
+    '59gozJZEnmyzWKVY6HjodTfmddWyotpAWb2HiCq6xq3o',
   );
 }
 

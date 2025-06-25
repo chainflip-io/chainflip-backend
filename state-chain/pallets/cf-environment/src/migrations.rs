@@ -18,11 +18,13 @@ use crate::{Config, Pallet};
 #[cfg(feature = "try-runtime")]
 use crate::{CurrentReleaseVersion, Get};
 use cf_runtime_utilities::PlaceholderMigration;
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::{migrations::VersionedMigration, traits::OnRuntimeUpgrade};
 #[cfg(feature = "try-runtime")]
 use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
+
+mod oracle_query_environment;
 
 // NOTE: Do not remove this. This is used to update the on-chain version for CFE compatibility
 // checks.
@@ -50,8 +52,17 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	}
 }
 
-// Migration for Updating Solana's Api Environments.
-pub type PalletMigration<T> = (PlaceholderMigration<14, Pallet<T>>,);
+pub type PalletMigration<T> = (
+	VersionedMigration<
+		15,
+		16,
+		oracle_query_environment::OracleQueryEnvironmentMigration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<16, Pallet<T>>,
+	/* a migration from 16 to 17 in in state-chain/runtime/src/migrations/safe_mode.rs */
+);
 
 #[cfg(test)]
 mod tests {

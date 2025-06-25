@@ -2,10 +2,10 @@
 
 import fs from 'fs';
 import toml from '@iarna/toml';
-import { compareSemVer, runWithTimeoutAndExit } from '../shared/utils';
-import { jsonRpc } from '../shared/json_rpc';
-import { specVersion } from '../shared/utils/spec_version';
-import { globalLogger as logger } from '../shared/utils/logger';
+import { compareSemVer, runWithTimeoutAndExit } from 'shared/utils';
+import { jsonRpc } from 'shared/json_rpc';
+import { specVersion } from 'shared/utils/spec_version';
+import { globalLogger as logger } from 'shared/utils/logger';
 
 export function tomlVersion(cargoFilePath: string): Promise<string> {
   return new Promise((resolve, reject) => {

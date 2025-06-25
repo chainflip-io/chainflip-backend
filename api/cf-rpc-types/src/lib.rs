@@ -20,19 +20,27 @@ use cf_amm::common::{PoolPairsMap, Side};
 use cf_chains::{
 	address::AddressString, address::ToHumanreadableAddress, Chain, ChannelRefundParameters,
 };
-use cf_primitives::{AccountId, Asset, FlipBalance, Tick};
+use cf_primitives::{AccountId, Asset, BlockNumber, FlipBalance, Tick, TxIndex};
 use frame_support::{Deserialize, Serialize};
 use std::ops::Range;
 
 pub use cf_chains::eth::Address as EthereumAddress;
 pub use cf_utilities::rpc::NumberOrHex;
 pub use sp_core::{bounded::BoundedVec, crypto::AccountId32, ConstU32, H256, U256};
-pub use state_chain_runtime::{chainflip::BlockUpdate, Hash};
+pub use state_chain_runtime::{chainflip::BlockUpdate, runtime_apis::OpenedDepositChannels, Hash};
 
 /// Defines all broker related RPC types
 pub mod broker;
 /// Defines all LP related RPC types
 pub mod lp;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ExtrinsicResponse<Response> {
+	pub block_number: BlockNumber,
+	pub block_hash: Hash,
+	pub tx_index: TxIndex,
+	pub response: Response,
+}
 
 pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 
@@ -76,3 +84,18 @@ pub enum OrderFilled {
 }
 
 pub type RefundParametersRpc = ChannelRefundParameters<AddressString>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RebalanceOutcome {
+	pub source_account_id: AccountId32,
+	pub recipient_account_id: AccountId32,
+	pub amount: FlipBalance,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RedemptionOutcome {
+	pub source_account_id: AccountId32,
+	pub redeem_address: EthereumAddress,
+	pub amount: FlipBalance,
+	pub tx_hash: H256,
+}

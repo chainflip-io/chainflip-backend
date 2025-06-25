@@ -17,7 +17,6 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod address_derivation;
 pub mod backup_node_rewards;
-pub mod boost_api;
 pub mod cons_key_rotator;
 pub mod decompose_recompose;
 pub mod epoch_transition;
@@ -138,6 +137,10 @@ impl RewardsDistribution for BackupNodeEmissions {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	fn distribute() {
+		if Emissions::backup_node_emission_per_block() == 0 {
+			return
+		}
+
 		let backup_nodes =
 			Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>();
 		if backup_nodes.is_empty() {

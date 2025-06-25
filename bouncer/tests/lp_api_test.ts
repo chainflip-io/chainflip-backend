@@ -15,14 +15,14 @@ import {
   shortChainFromAsset,
   newAddress,
   createStateChainKeypair,
-} from '../shared/utils';
-import { lpApiRpc } from '../shared/json_rpc';
-import { depositLiquidity } from '../shared/deposit_liquidity';
-import { sendEvmNative } from '../shared/send_evm';
-import { getBalance } from '../shared/get_balance';
-import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger, loggerChild } from '../shared/utils/logger';
+} from 'shared/utils';
+import { lpApiRpc } from 'shared/json_rpc';
+import { depositLiquidity } from 'shared/deposit_liquidity';
+import { sendEvmNative } from 'shared/send_evm';
+import { getBalance } from 'shared/get_balance';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger, loggerChild } from 'shared/utils/logger';
 
 type RpcAsset = {
   asset: string;
@@ -89,17 +89,25 @@ async function testRegisterLiquidityRefundAddress(parentLogger: Logger) {
 }
 
 async function testLiquidityDepositLegacy(logger: Logger) {
+  const lpAccount = createStateChainKeypair('//LP_API');
+
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
     logger,
     'liquidityProvider:LiquidityDepositAddressReady',
     {
-      test: (event) => event.data.depositAddress.Eth,
+      test: (event) => event.data.depositAddress.Eth && event.data.accountId === lpAccount.address,
     },
   ).event;
 
+  await assert.rejects(
+    () => lpApiRpc(logger, `lp_request_liquidity_deposit_address`, [testRpcAsset, 'InBlock']),
+    (e: Error) => e.message.includes('InBlock waiting is not allowed for this method'),
+    `Unexpected lp_request_liquidity_deposit_address result. Expected to return an error because InBlock waiting is not allowed`,
+  );
+
   const liquidityDepositAddress = (
-    await lpApiRpc(logger, `lp_liquidity_deposit`, [testRpcAsset, 'InBlock'])
-  ).tx_details.response;
+    await lpApiRpc(logger, `lp_request_liquidity_deposit_address`, [testRpcAsset, 'Finalized'])
+  ).tx_details.response.deposit_address;
   const liquidityDepositEvent = await observeLiquidityDepositAddressReadyEvent;
 
   assert.strictEqual(
@@ -131,17 +139,19 @@ async function testLiquidityDepositLegacy(logger: Logger) {
 }
 
 async function testLiquidityDeposit(logger: Logger) {
+  const lpAccount = createStateChainKeypair('//LP_API');
+
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
     logger,
     'liquidityProvider:LiquidityDepositAddressReady',
     {
-      test: (event) => event.data.depositAddress.Eth,
+      test: (event) => event.data.depositAddress.Eth && event.data.accountId === lpAccount.address,
     },
   ).event;
 
   const liquidityDepositAddress = (
-    await lpApiRpc(logger, `lp_request_liquidity_deposit_address`, [testRpcAsset, 'InBlock'])
-  ).tx_details.response.deposit_address;
+    await lpApiRpc(logger, `lp_request_liquidity_deposit_address_v2`, [testRpcAsset])
+  ).response.deposit_address;
   const liquidityDepositEvent = await observeLiquidityDepositAddressReadyEvent;
 
   assert.strictEqual(
