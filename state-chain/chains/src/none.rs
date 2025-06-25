@@ -44,6 +44,12 @@ impl Chain for NoneChain {
 	type ChainAssetMap<
 		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = AssetMap<T>;
+
+	fn reference_gas_asset_price_in_input_asset(
+		_input_asset: Self::ChainAsset,
+	) -> Self::ChainAmount {
+		0
+	}
 }
 
 impl FeeRefundCalculator<NoneChain> for () {

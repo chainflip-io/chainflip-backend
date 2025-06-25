@@ -271,6 +271,12 @@ impl Chain for Bitcoin {
 	// There is no need for replay protection on Bitcoin since it is a UTXO chain.
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
+
+	fn reference_gas_asset_price_in_input_asset(
+		_input_asset: Self::ChainAsset,
+	) -> Self::ChainAmount {
+		1u64
+	}
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]

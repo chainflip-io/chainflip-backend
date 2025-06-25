@@ -61,6 +61,15 @@ impl Chain for Arbitrum {
 	type TransactionRef = H256;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = evm::api::EvmReplayProtection;
+
+	fn reference_gas_asset_price_in_input_asset(
+		input_asset: Self::ChainAsset,
+	) -> Self::ChainAmount {
+		match input_asset {
+			assets::arb::Asset::ArbEth => 1u128,
+			assets::arb::Asset::ArbUsdc => super::eth::REFERENCE_ETH_PRICE_IN_USD,
+		}
+	}
 }
 
 #[derive(

@@ -129,6 +129,18 @@ impl Chain for MockEthereum {
 	type TransactionRef = u32;
 	type ReplayProtectionParams = ();
 	type ReplayProtection = EvmReplayProtection;
+
+	fn reference_gas_asset_price_in_input_asset(
+		input_asset: Self::ChainAsset,
+	) -> Self::ChainAmount {
+		match input_asset {
+			assets::eth::Asset::Usdt | assets::eth::Asset::Usdc =>
+				super::eth::REFERENCE_ETH_PRICE_IN_USD,
+			assets::eth::Asset::Flip =>
+				super::eth::REFERENCE_ETH_PRICE_IN_USD / super::eth::REFERENCE_FLIP_PRICE_IN_USD,
+			assets::eth::Asset::Eth => 1u128,
+		}
+	}
 }
 
 impl ToHumanreadableAddress for u64 {

@@ -54,13 +54,7 @@ impl AssetConverter for MockAssetConverter {
 		.and_then(|amount| C::ChainAmount::try_from(amount).ok())
 		.unwrap_or_else(|| {
 			log::warn!("nable to calculate input amount required for gas of {required_gas:?} for input asset ${input_asset:?}. Estimating the input amount based on a reference price.");
-			match input_asset_generic {
-				Asset::Usdc | Asset::Usdt => (required_gas.into() *
-					cf_primitives::REFERENCE_ETH_PRICE_IN_USD)
-					.try_into()
-					.expect("we are just converting back to ChainAmount so should work"),
-				_ => C::ChainAmount::zero(),
-			}
+			C::reference_gas_asset_price_in_input_asset(input_asset)*required_gas
 		})
 	}
 

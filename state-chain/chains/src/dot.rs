@@ -360,6 +360,14 @@ impl Chain for Polkadot {
 	type TransactionRef = PolkadotTransactionId;
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
+
+	fn reference_gas_asset_price_in_input_asset(
+		input_asset: Self::ChainAsset,
+	) -> Self::ChainAmount {
+		match input_asset {
+			assets::dot::Asset::Dot => 1u128,
+		}
+	}
 }
 
 pub type ResetProxyAccountNonce = bool;

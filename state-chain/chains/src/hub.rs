@@ -47,6 +47,8 @@ use sp_runtime::{
 	traits::{BlakeTwo256, DispatchInfoOf, Hash, SignedExtension},
 };
 
+pub const REFERENCE_HUBDOT_PRICE_IN_USD: PolkadotBalance = 34_000_000_000u128; //3.4 usd
+
 impl Chain for Assethub {
 	const NAME: &'static str = "Assethub";
 	const GAS_ASSET: Self::ChainAsset = assets::hub::Asset::HubDot;
@@ -70,6 +72,16 @@ impl Chain for Assethub {
 	type TransactionRef = PolkadotTransactionId;
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
+
+	fn reference_gas_asset_price_in_input_asset(
+		input_asset: Self::ChainAsset,
+	) -> Self::ChainAmount {
+		match input_asset {
+			assets::hub::Asset::HubUsdc | assets::hub::Asset::HubUsdt =>
+				REFERENCE_HUBDOT_PRICE_IN_USD,
+			assets::hub::Asset::HubDot => 1u128,
+		}
+	}
 }
 
 /// The payload being signed in transactions.

@@ -25,6 +25,7 @@ use crate::{
 	evm::{DeploymentStatus, EvmFetchId, EvmTransactionMetadata, Transaction},
 	Chain, FeeEstimationApi, *,
 };
+use assets::eth::Asset as EthAsset;
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Ethereum;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -43,9 +44,12 @@ pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_SEPOLIA: u64 = 11155111;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
+pub const REFERENCE_ETH_PRICE_IN_USD: AssetAmount = 2_200_000_000u128; //2200 usd
+pub const REFERENCE_FLIP_PRICE_IN_USD: AssetAmount = 330_000u128; //0.33 usd
+
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
-	const GAS_ASSET: Self::ChainAsset = assets::eth::Asset::Eth;
+	const GAS_ASSET: Self::ChainAsset = EthAsset::Eth;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 
 	type ChainCrypto = evm::EvmCrypto;
@@ -53,7 +57,7 @@ impl Chain for Ethereum {
 	type ChainAmount = EthAmount;
 	type TransactionFee = evm::TransactionFee;
 	type TrackedData = EthereumTrackedData;
-	type ChainAsset = assets::eth::Asset;
+	type ChainAsset = EthAsset;
 	type ChainAssetMap<
 		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = assets::eth::AssetMap<T>;
@@ -66,6 +70,16 @@ impl Chain for Ethereum {
 	type TransactionRef = H256;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EvmReplayProtection;
+
+	fn reference_gas_asset_price_in_input_asset(
+		input_asset: Self::ChainAsset,
+	) -> Self::ChainAmount {
+		match input_asset {
+			EthAsset::Usdt | EthAsset::Usdc => REFERENCE_ETH_PRICE_IN_USD,
+			EthAsset::Flip => REFERENCE_ETH_PRICE_IN_USD / REFERENCE_FLIP_PRICE_IN_USD,
+			EthAsset::Eth => 1u128,
+		}
+	}
 }
 
 #[derive(

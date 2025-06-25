@@ -98,6 +98,8 @@ pub const MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES: usize = 5;
 pub const MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS: u32 = 14400;
 pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES: usize = 3;
 
+pub const REFERENCE_SOL_PRICE_IN_USD: SolAmount = 145_000_000_000u64; //145 usd
+
 // Use serialized transaction
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct SolanaTransactionData {
@@ -134,6 +136,15 @@ impl Chain for Solana {
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 	type TransactionRef = SolSignature;
+
+	fn reference_gas_asset_price_in_input_asset(
+		input_asset: Self::ChainAsset,
+	) -> Self::ChainAmount {
+		match input_asset {
+			assets::sol::Asset::Sol => 1u64,
+			assets::sol::Asset::SolUsdc => REFERENCE_SOL_PRICE_IN_USD,
+		}
+	}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
