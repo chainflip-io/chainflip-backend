@@ -51,7 +51,7 @@ use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
 	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
-	ThresholdSignatureRequestId,
+	SubAccountIndex, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -1260,4 +1260,14 @@ pub trait PoolPriceProvider {
 
 pub trait CcmAdditionalDataHandler {
 	fn handle_ccm_additional_data(ccm_data: DecodedCcmAdditionalData);
+}
+
+/// This trait abstracts the logic regarding sub-accounts.
+pub trait SubAccountHandler<AccountId> {
+	/// Derive a sub-account from a parent account and fund it. Also copies all account restrictions
+	/// from the parent account.
+	fn derive_and_fund_sub_account(
+		parent_account_id: AccountId,
+		sub_account_index: SubAccountIndex,
+	) -> Result<AccountId, DispatchError>;
 }

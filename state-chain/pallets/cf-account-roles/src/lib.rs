@@ -27,7 +27,7 @@ pub mod migrations;
 use sp_std::boxed::Box;
 
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, DeregistrationCheck};
+use cf_traits::{AccountRoleRegistry, DeregistrationCheck, SubAccountHandler};
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	error::BadOrigin,
@@ -36,21 +36,19 @@ use frame_support::{
 	BoundedVec,
 };
 use sp_core::ConstU32;
+
 use sp_runtime::traits::Dispatchable;
+
+use cf_primitives::SubAccountIndex;
 
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
 pub use pallet::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
 
-use frame_support::Hashable;
-use sp_runtime::traits::TrailingZeroInput;
-
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 pub const MAX_LENGTH_FOR_VANITY_NAME: u32 = 64;
 
 type VanityName = BoundedVec<u8, ConstU32<MAX_LENGTH_FOR_VANITY_NAME>>;
-type SubAccountIndex = u8;
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -64,12 +62,13 @@ pub mod pallet {
 		type DeregistrationCheck: DeregistrationCheck<
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
-		type WeightInfo: WeightInfo;
 		type RuntimeCall: Parameter
 			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ From<frame_system::Call<Self>>
 			+ From<Call<Self>>
 			+ GetDispatchInfo;
+		type SubAccountHandler: SubAccountHandler<<Self as frame_system::Config>::AccountId>;
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -133,10 +132,6 @@ pub mod pallet {
 		AccountRoleAlreadyRegistered,
 		/// Invalid characters in the name.
 		InvalidCharactersInName,
-		/// The sub-account already exists.
-		SubAccountAlreadyExists,
-		/// The sub-account ID derivation failed.
-		SubAccountIdDerivationFailed,
 		/// Failed to execute the call of a sub-account.
 		FailedToExecuteCallOnBehalfOfSubAccount,
 	}
@@ -208,16 +203,10 @@ pub mod pallet {
 			sub_account_index: SubAccountIndex,
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
-			ensure!(
-				!SubAccounts::<T>::contains_key(&account_id, sub_account_index),
-				Error::<T>::SubAccountAlreadyExists
-			);
-			let sub_account_id: T::AccountId = Decode::decode(&mut TrailingZeroInput::new(
-				(*b"chainflip/subaccount", account_id.clone(), sub_account_index)
-					.blake2_256()
-					.as_ref(),
-			))
-			.map_err(|_| Error::<T>::SubAccountIdDerivationFailed)?;
+			let sub_account_id = T::SubAccountHandler::derive_and_fund_sub_account(
+				account_id.clone(),
+				sub_account_index,
+			)?;
 			SubAccounts::<T>::insert(&account_id, sub_account_index, &sub_account_id);
 			Self::deposit_event(Event::SubAccountCreated {
 				account_id: account_id.clone(),

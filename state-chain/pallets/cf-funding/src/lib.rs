@@ -33,7 +33,7 @@ mod tests;
 use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
-	Funding,
+	Funding, RedemptionCheck, SubAccountHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -43,11 +43,16 @@ use frame_support::{
 		traits::{CheckedSub, One, UniqueSaturatedInto, Zero},
 		Saturating,
 	},
-	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, StorageVersion, UnixTime},
+	traits::{
+		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OriginTrait, StorageVersion,
+		UnixTime,
+	},
+	Hashable,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
+use sp_runtime::{traits::TrailingZeroInput, DispatchError};
 use sp_std::{
 	cmp::{max, min},
 	collections::btree_map::BTreeMap,
@@ -538,6 +543,15 @@ pub mod pallet {
 
 		/// The rebalance amount must be at least the minimum funding amount.
 		MinimumRebalanceAmount,
+
+		/// The sub-account already exists.
+		SubAccountAlreadyExists,
+
+		/// The sub-account ID derivation failed.
+		SubAccountIdDerivationFailed,
+
+		/// Can not derive sub-account ID if the parent account is bidding in an auction.
+		CanNotDeriveSubAccountIdIfParentAccountIsBidding,
 	}
 
 	#[pallet::call]
@@ -971,5 +985,51 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 		RestrictedBalances::<T>::remove(account_id);
 		BoundExecutorAddress::<T>::remove(account_id);
 		BoundRedeemAddress::<T>::remove(account_id);
+	}
+}
+
+impl<T: Config> SubAccountHandler<T::AccountId> for Pallet<T> {
+	fn derive_and_fund_sub_account(
+		parent_account_id: T::AccountId,
+		sub_account_index: u8,
+	) -> Result<T::AccountId, DispatchError> {
+		if !T::RedemptionChecker::can_redeem(&parent_account_id) {
+			return Err(Error::<T>::CanNotDeriveSubAccountIdIfParentAccountIsBidding.into());
+		}
+
+		let sub_account_id: T::AccountId = Decode::decode(&mut TrailingZeroInput::new(
+			(*b"chainflip/subaccount", parent_account_id.clone(), sub_account_index)
+				.blake2_256()
+				.as_ref(),
+		))
+		.map_err(|_| Error::<T>::SubAccountIdDerivationFailed)?;
+
+		ensure!(
+			!frame_system::Pallet::<T>::account_exists(&sub_account_id),
+			Error::<T>::SubAccountAlreadyExists
+		);
+
+		frame_system::Provider::<T>::created(&sub_account_id)?;
+
+		let restricted_balances = RestrictedBalances::<T>::get(&parent_account_id);
+
+		if !restricted_balances.is_empty() {
+			RestrictedBalances::<T>::insert(&sub_account_id, restricted_balances);
+		}
+		if let Some(executor_address) = BoundExecutorAddress::<T>::get(&parent_account_id) {
+			BoundExecutorAddress::<T>::insert(&sub_account_id, executor_address);
+		}
+		if let Some(redeem_address) = BoundRedeemAddress::<T>::get(&parent_account_id) {
+			BoundRedeemAddress::<T>::insert(&sub_account_id, redeem_address);
+		}
+
+		Self::rebalance(
+			OriginFor::<T>::signed(parent_account_id.clone()),
+			sub_account_id.clone(),
+			None,
+			RedemptionAmount::Exact(MinimumFunding::<T>::get()),
+		)?;
+
+		Ok(sub_account_id)
 	}
 }

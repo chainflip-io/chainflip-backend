@@ -17,8 +17,10 @@
 #![cfg(test)]
 
 use crate::{self as pallet_cf_account_roles, Config};
-use cf_traits::mocks::deregistration_check::MockDeregistrationCheck;
+use cf_primitives::SubAccountIndex;
+use cf_traits::{mocks::deregistration_check::MockDeregistrationCheck, SubAccountHandler};
 use frame_support::derive_impl;
+use sp_runtime::DispatchError;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -38,11 +40,23 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = MockAccountRoles;
 }
 
+pub struct MockSubAccountHandler;
+
+impl SubAccountHandler<u64> for MockSubAccountHandler {
+	fn derive_and_fund_sub_account(
+		parent_account_id: u64,
+		sub_account_index: SubAccountIndex,
+	) -> Result<u64, DispatchError> {
+		Ok(parent_account_id + sub_account_index as u64)
+	}
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = frame_system::EnsureRoot<<Self as frame_system::Config>::AccountId>;
 	type DeregistrationCheck = MockDeregistrationCheck<Self::AccountId>;
 	type RuntimeCall = RuntimeCall;
+	type SubAccountHandler = MockSubAccountHandler;
 	type WeightInfo = ();
 }
 

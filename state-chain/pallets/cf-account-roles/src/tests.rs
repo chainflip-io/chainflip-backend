@@ -220,17 +220,6 @@ fn derive_sub_account() {
 }
 
 #[test]
-fn can_not_register_sub_account_twice() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(AccountRolesPallet::derive_sub_account(RuntimeOrigin::signed(ALICE), 0));
-		assert_noop!(
-			AccountRolesPallet::derive_sub_account(RuntimeOrigin::signed(ALICE), 0),
-			Error::<Test>::SubAccountAlreadyExists
-		);
-	});
-}
-
-#[test]
 fn execute_as_sub_account() {
 	new_test_ext().execute_with(|| {
 		const SUB_ACCOUNT_INDEX: u8 = 1;

@@ -628,6 +628,7 @@ impl pallet_cf_account_roles::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type DeregistrationCheck = (Bonder<Self>, TradingStrategyDeregistrationCheck<Self>);
 	type RuntimeCall = RuntimeCall;
+	type SubAccountHandler = Funding;
 	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;
 }
 
