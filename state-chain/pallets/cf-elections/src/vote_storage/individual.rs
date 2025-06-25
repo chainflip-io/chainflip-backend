@@ -15,8 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod composite;
-pub(crate) mod identity;
-pub(crate) mod shared;
+pub mod identity;
+pub mod shared;
 
 #[cfg(test)]
 mod tests;

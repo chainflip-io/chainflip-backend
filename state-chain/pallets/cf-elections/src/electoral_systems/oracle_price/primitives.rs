@@ -1,0 +1,89 @@
+use core::ops::{Range, RangeInclusive};
+
+use cf_primitives::Asset;
+use sp_std::ops::{Add, Index, IndexMut};
+
+use crate::electoral_systems::state_machine::common_imports::*;
+
+use crate::electoral_systems::oracle_price::state_machine::{ExternalChainBlockQueried, OPTypes};
+
+def_derive! {
+	#[derive(TypeInfo, PartialOrd, Ord)]
+	pub struct UnixTime{ pub seconds: u64 }
+}
+
+impl Add<Seconds> for UnixTime {
+	type Output = UnixTime;
+
+	fn add(self, rhs: Seconds) -> Self::Output {
+		UnixTime { seconds: self.seconds.saturating_add(rhs.0) }
+	}
+}
+
+def_derive! {
+	#[derive(TypeInfo, Copy)]
+	pub struct Seconds(pub u64);
+}
+
+pub trait AggregationValue = Ord + CommonTraits + 'static;
+pub trait Aggregation {
+	type Of<X: AggregationValue>: CommonTraits;
+	fn canonical<X: AggregationValue>(price: &Self::Of<X>) -> X;
+	fn compute<X: AggregationValue>(value: &[X]) -> Self::Of<X>;
+}
+pub type Apply<A: Aggregation, X> = A::Of<X>;
+
+def_derive! {
+	#[derive(TypeInfo)]
+	pub struct AggregatedF;
+}
+
+impl Aggregation for AggregatedF {
+	type Of<X: AggregationValue> = Aggregated<X>;
+
+	fn canonical<X: AggregationValue>(value: &Self::Of<X>) -> X {
+		value.median.clone()
+	}
+
+	fn compute<X: AggregationValue>(value: &[X]) -> Self::Of<X> {
+		compute_aggregated(value.iter().cloned().collect())
+	}
+}
+
+def_derive! {
+	#[derive(TypeInfo)]
+	pub struct Aggregated<A: CommonTraits> {
+		pub median: A,
+		pub iq_range: RangeInclusive<A>,
+	}
+}
+
+impl<A: CommonTraits> Aggregated<A> {
+	pub fn from_single_value(value: A) -> Self {
+		Self { median: value.clone(), iq_range: value.clone()..=value }
+	}
+}
+
+pub fn compute_median<A: Ord + Clone>(mut values: Vec<A>) -> A {
+	let half = (values.len() - 1) / 2;
+	let (_first_half, median, _second_half) = values.select_nth_unstable(half);
+	median.clone()
+}
+
+pub fn compute_aggregated<A: AggregationValue>(mut values: Vec<A>) -> Aggregated<A> {
+	let quarter = values.len() / 4;
+	let half = (values.len() - 1) / 2;
+	let (first_half, median, second_half) = values.select_nth_unstable(half);
+
+	// TODO, these two might need to be double checked
+	let (_, first_quartile, _) = first_half.select_nth_unstable(quarter);
+	let (_, third_quartile, _) = second_half.select_nth_unstable(quarter);
+
+	Aggregated { median: median.clone(), iq_range: first_quartile.clone()..=third_quartile.clone() }
+}
+
+struct MeanPriceData<Asset, Price: AggregationValue> {
+	timestamp: Aggregated<UnixTime>,
+	prices: BTreeMap<Asset, Aggregated<Price>>,
+	block: ExternalChainBlockQueried,
+}

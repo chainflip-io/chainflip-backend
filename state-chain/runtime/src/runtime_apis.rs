@@ -603,5 +603,9 @@ decl_runtime_apis!(
 		fn cf_bitcoin_electoral_data(account_id: AccountId32) -> Vec<u8>;
 
 		fn cf_bitcoin_filter_votes(account_id: AccountId32, proposed_votes: Vec<u8>) -> Vec<u8>;
+
+		fn cf_generic_electoral_data(account_id: AccountId32) -> Vec<u8>;
+
+		fn cf_generic_filter_votes(account_id: AccountId32, proposed_votes: Vec<u8>) -> Vec<u8>;
 	}
 );

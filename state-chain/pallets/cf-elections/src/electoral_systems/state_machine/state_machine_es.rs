@@ -9,7 +9,7 @@ use sp_std::{fmt::Debug, vec::Vec};
 use crate::{
 	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem},
 	vote_storage::VoteStorage,
-	AuthorityVoteOf, CorruptStorageError, ElectoralSystemTypes, PartialVoteOf, VotePropertiesOf,
+	CorruptStorageError, ElectoralSystemTypes, PartialVoteOf, VoteOf,
 };
 
 use super::{
@@ -28,7 +28,7 @@ pub trait StatemachineElectoralSystemTypes: 'static + Sized {
 	type VoteStorage: VoteStorage;
 
 	type Statemachine: StatemachineForES<Self> + 'static;
-	type ConsensusMechanism: ConsensusMechanismForES<Self::Statemachine> + 'static;
+	type ConsensusMechanism: ConsensusMechanismForES<Self> + 'static;
 }
 
 /// Convenience wrapper of the `Statemachine` trait. Given an electoral system `ES`,
@@ -36,16 +36,16 @@ pub trait StatemachineElectoralSystemTypes: 'static + Sized {
 /// to be possible to derive an electoral system.
 pub trait StatemachineForES<ES: StatemachineElectoralSystemTypes> = Statemachine<
 	Output = Result<ES::OnFinalizeReturnItem, &'static str>,
-	Response = <ES::VoteStorage as VoteStorage>::Vote,
+	// Response = <ES::ConsensusMechanism as ConsensusMechanism>::Result,
 >;
 
 /// Convenience wrapper of the `ConsensusMechanism` trait. Given an electoral system `ES`,
 /// this trait defines the conditions on the consensus mechanism's associated types for it
 /// to be possible to derive an electoral system.
-pub trait ConsensusMechanismForES<S: Statemachine> = ConsensusMechanism<
-	Vote = S::Response,
-	Result = S::Response,
-	Settings = (SuccessThreshold, S::Query),
+pub trait ConsensusMechanismForES<ES: StatemachineElectoralSystemTypes> = ConsensusMechanism<
+	Vote = <ES::VoteStorage as VoteStorage>::Vote,
+	Result = <ES::Statemachine as AbstractApi>::Response,
+	Settings = (SuccessThreshold, <ES::Statemachine as AbstractApi>::Query),
 >;
 
 /// ### Electoral system derived from a state machine.
@@ -253,7 +253,12 @@ where
 
 		for vote in consensus_votes.active_votes() {
 			// insert vote if it is valid for the given properties
-			if ES::Statemachine::validate(&properties, &vote).is_ok() {
+			if ES::Statemachine::validate(
+				&properties,
+				&ES::ConsensusMechanism::vote_as_consensus(&vote),
+			)
+			.is_ok()
+			{
 				consensus.insert_vote(vote);
 			} else {
 				log::debug!("Received invalid vote: response ({:?}) didn't match with the query {properties:?}", vote);
