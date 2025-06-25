@@ -2473,7 +2473,7 @@ pub mod pallet {
 			.and_then(|amount| C::ChainAmount::try_from(amount).ok())
 			.unwrap_or_else(|| {
 				log::warn!("Unable to calculate input amount required for gas of {required_gas:?} for input asset ${input_asset:?}. Estimating the input amount based on a reference price.");
-				C::reference_gas_asset_price_in_input_asset(input_asset)*required_gas
+				C::reference_gas_asset_price_in_input_asset(input_asset).saturating_mul(required_gas)
 			})
 		}
 
