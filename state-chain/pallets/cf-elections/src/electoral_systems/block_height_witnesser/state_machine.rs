@@ -238,11 +238,11 @@ pub mod tests {
 	};
 
 	impl<C: ChainTypes> Arbitrary for NonemptyContinuousHeaders<C> {
-		type Parameters = ChainBlockNumberOf<C>;
+		type Parameters = (ChainBlockNumberOf<C>, usize);
 
-		fn arbitrary_with(witness_from_index: Self::Parameters) -> Self::Strategy {
+		fn arbitrary_with((witness_from_index, length): Self::Parameters) -> Self::Strategy {
 			prop_do! {
-				let header_data in prop::collection::vec(any::<ChainBlockHashOf<C>>(), 2..10);
+				let header_data in prop::collection::vec(any::<ChainBlockHashOf<C>>(), 2..(length+3));
 				let random_index in any::<ChainBlockNumberOf<C>>();
 				let first_height = if witness_from_index == Default::default() { random_index } else { witness_from_index };
 				return {
@@ -263,7 +263,10 @@ pub mod tests {
 	pub fn generate_input<T: BHWTypes>(
 		properties: HeightWitnesserProperties<T>,
 	) -> impl Strategy<Value = NonemptyContinuousHeaders<T::Chain>> {
-		arbitrary_with::<NonemptyContinuousHeaders<T::Chain>, _, _>(properties.witness_from_index)
+		arbitrary_with::<NonemptyContinuousHeaders<T::Chain>, _, _>((
+			properties.witness_from_index,
+			10,
+		))
 	}
 
 	pub fn generate_state<T: BHWTypes>() -> impl Strategy<Value = BlockHeightWitnesser<T>>

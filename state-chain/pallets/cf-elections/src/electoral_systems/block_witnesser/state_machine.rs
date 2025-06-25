@@ -476,7 +476,7 @@ pub mod tests {
 			Just(None),
 			(0..T::Chain::SAFETY_BUFFER)
 				.prop_flat_map(move |x| arbitrary_with::<ChainProgress<T::Chain>, _, _>((
-					safe_block_height.saturating_forward(x),
+					(safe_block_height.saturating_forward(x), 10),
 					Default::default()
 				)))
 				.prop_map(move |mut progress| {
