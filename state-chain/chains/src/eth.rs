@@ -83,14 +83,14 @@ impl Chain for Ethereum {
 				1_000_000_000_000_000_000u128,
 				sp_runtime::Rounding::Up,
 			)
-			.unwrap_or(u128::MAX),
+			.unwrap_or(0u128),
 			EthAsset::Flip => multiply_by_rational_with_rounding(
 				required_gas,
 				REFERENCE_ETH_PRICE_IN_USD,
 				REFERENCE_FLIP_PRICE_IN_USD,
 				sp_runtime::Rounding::Up,
 			)
-			.unwrap_or(u128::MAX),
+			.unwrap_or(0u128),
 			EthAsset::Eth => required_gas,
 		}
 	}

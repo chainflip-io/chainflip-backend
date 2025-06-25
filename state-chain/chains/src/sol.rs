@@ -149,8 +149,8 @@ impl Chain for Solana {
 				1_000_000_000u128,
 				sp_runtime::Rounding::Up,
 			)
-			.map(|v| v.try_into().unwrap_or(u64::MAX))
-			.unwrap_or(u64::MAX),
+			.map(|v| v.try_into().unwrap_or(0u64))
+			.unwrap_or(0u64),
 		}
 	}
 }

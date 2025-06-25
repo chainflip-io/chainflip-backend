@@ -86,7 +86,7 @@ impl Chain for Assethub {
 					10_000_000_000u128,
 					sp_runtime::Rounding::Up,
 				)
-				.unwrap_or(u128::MAX),
+				.unwrap_or(0u128),
 			assets::hub::Asset::HubDot => required_gas,
 		}
 	}

@@ -75,7 +75,7 @@ impl Chain for Arbitrum {
 				1_000_000_000_000_000_000u128,
 				sp_runtime::Rounding::Up,
 			)
-			.unwrap_or(u128::MAX),
+			.unwrap_or(0u128),
 		}
 	}
 }
