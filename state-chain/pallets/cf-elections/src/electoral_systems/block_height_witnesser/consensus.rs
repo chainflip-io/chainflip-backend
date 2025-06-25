@@ -34,7 +34,7 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 			let mut consensus: MultipleVotes<SupermajorityConsensus<_>> = Default::default();
 
 			for vote in &self.votes {
-				consensus.insert_vote(vote.headers.iter().map(Clone::clone).collect())
+				consensus.insert_vote(vote.get_headers().into_iter().collect())
 			}
 
 			consensus
@@ -49,12 +49,12 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 			for mut vote in self.votes.clone() {
 				// we count a given vote as multiple votes for all nonempty subchains,
 				// the longest subchain that achieves consensus wins
-				while !vote.headers.is_empty() {
-					consensus.insert_vote(StagedVote {
-						priority: vote.headers.len(),
-						vote: vote.clone(),
-					});
-					vote.headers.pop_back();
+				while vote.len() > 1 {
+					consensus.insert_vote(StagedVote { priority: vote.len(), vote: vote.clone() });
+					vote.safe_pop_back();
+				}
+				if vote.len() == 1 {
+					consensus.insert_vote(StagedVote { priority: 1, vote: vote.clone() });
 				}
 			}
 
@@ -62,8 +62,8 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 				log::info!(
 					"(witness_from: {:?}): successful consensus for ranges: {:?}..={:?}",
 					properties,
-					result.headers.front(),
-					result.headers.back()
+					result.first(),
+					result.last()
 				);
 			})
 		}

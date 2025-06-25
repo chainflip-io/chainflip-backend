@@ -396,7 +396,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			Either::Left(Some(progress)) => (
 				progress
 					.headers
-					.headers
+					.get_headers()
 					.iter()
 					.map(|block| block.block_height)
 					.collect::<Vec<_>>(),
@@ -480,10 +480,9 @@ pub mod tests {
 					Default::default()
 				)))
 				.prop_map(move |mut progress| {
-					if let Some(x) = progress.headers.headers.front() {
-						progress.removed =
-							Some(x.block_height..=seen_heights_below.saturating_backward(1));
-					}
+					progress.removed = Some(
+						progress.headers.first_height()..=seen_heights_below.saturating_backward(1),
+					);
 
 					Some(progress)
 				})

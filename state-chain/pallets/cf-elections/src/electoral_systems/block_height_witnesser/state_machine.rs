@@ -185,7 +185,7 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 				},
 				Err(MergeFailure::Reorg { new_block, existing_wrong_parent }) => {
 					log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
-					*witness_from = headers.headers.front().unwrap().block_height;
+					*witness_from = headers.first_height();
 					Ok(None)
 				},
 
@@ -281,9 +281,9 @@ pub mod tests {
 				let headers in generate_input::<T>(n);
 				return {
 					let witness_from = if is_reorg_without_known_root {
-						headers.headers.front().unwrap().block_height
+						headers.first_height()
 					} else {
-						headers.headers.back().unwrap().block_height.saturating_forward(1)
+						headers.last().block_height.saturating_forward(1)
 					};
 					BHWPhase::Running { headers, witness_from }
 				}

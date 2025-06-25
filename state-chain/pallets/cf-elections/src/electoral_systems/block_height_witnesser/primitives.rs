@@ -24,8 +24,8 @@ defx! {
 	#[derive(GenericTypeInfo)]
 	#[expand_name_with(T::NAME)]
 	pub struct NonemptyContinuousHeaders[T: ChainTypes] {
-		pub first: Header<T>,
-		pub(crate) headers: VecDeque<Header<T>>,
+		first: Header<T>,
+		headers: VecDeque<Header<T>>,
 	}
 	validate this (else NonemptyContinuousHeadersError) {
 		is_nonempty: this.len() > 0,
@@ -67,6 +67,12 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	}
 	pub fn first(&self) -> &Header<T> {
 		&self.first
+	}
+	pub fn safe_pop_back(&mut self) -> Option<Header<T>> {
+		if let Some(last) = self.headers.pop_back() {
+			return Some(last);
+		}
+		None
 	}
 	pub fn contains(&self, block_height: &T::ChainBlockNumber) -> bool {
 		self.first_height() <= *block_height && *block_height <= self.last().block_height
@@ -134,8 +140,12 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 		None
 	}
 
-	fn len(&self) -> usize {
+	pub fn len(&self) -> usize {
 		self.headers.len() + 1usize
+	}
+
+	pub fn is_empty(&self) -> bool {
+		false
 	}
 }
 

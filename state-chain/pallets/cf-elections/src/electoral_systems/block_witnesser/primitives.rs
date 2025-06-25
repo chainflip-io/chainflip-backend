@@ -374,7 +374,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 			max(self.seen_heights_below, last_seen_height.saturating_forward(1));
 
 		let (accepted_optimistic_blocks, mut remaining): (BTreeMap<_, _>, BTreeMap<_, _>) =
-			progress.headers.headers.into_iter().fold(
+			progress.headers.get_headers().into_iter().fold(
 				(BTreeMap::new(), BTreeMap::new()),
 				|(mut optimistic_blocks, mut remaining), header| {
 					match self.optimistic_block_cache.remove(&header.block_height) {

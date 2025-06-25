@@ -102,7 +102,7 @@ impl AbstractVoter<BHW> for FlatChainProgression<Event> {
 
 		for index in indices {
 			let best_block = chain.get_best_block_header();
-			if best_block.block_height < index.witness_from_index || best_block.block_height == 0{
+			if best_block.block_height < index.witness_from_index || best_block.block_height == 0 {
 				continue;
 			}
 
