@@ -32,7 +32,7 @@ defx! {
 		matching_hashes: pairs.clone().all(|(a, b)| a.hash == b.parent_hash),
 		continuous_heights: pairs.clone().all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height),
 
-		( where pairs = this.headers.iter().zip(this.headers.iter().skip(1)) )
+		( where pairs = this.get_headers().into_iter().zip(this.get_headers().into_iter().skip(1)) )
 	}
 }
 #[cfg(test)]
@@ -197,7 +197,7 @@ mod prop_tests {
 		type ChainBlockHash = bool;
 
 		const SAFETY_BUFFER: usize = 3;
-		
+
 		const NAME: &'static str = "Mock";
 	}
 
