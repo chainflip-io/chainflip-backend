@@ -2,8 +2,8 @@ import assert from 'assert';
 import { InternalAssets as Assets, executeRedemption, getRedemptionDelay } from '@chainflip/cli';
 import type { HexString } from '@polkadot/util/types';
 import { Wallet, ethers } from 'ethers';
-import { getNextEvmNonce } from './send_evm';
-import { getGatewayAbi } from './contract_interfaces';
+import { getNextEvmNonce } from 'shared/send_evm';
+import { getGatewayAbi } from 'shared/contract_interfaces';
 import {
   sleep,
   handleSubstrateError,
@@ -15,9 +15,9 @@ import {
   getWhaleKey,
   assetDecimals,
   createStateChainKeypair,
-} from './utils';
-import { getChainflipApi, observeEvent } from './utils/substrate';
-import { Logger } from './utils/logger';
+} from 'shared/utils';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { Logger } from 'shared/utils/logger';
 
 export type RedeemAmount = 'Max' | { Exact: string };
 
@@ -64,9 +64,10 @@ export async function redeemFlip(
     test: (event) => event.data.accountId === flipWallet.address,
   }).event;
   const flipperinoRedeemAmount = intoFineAmount(flipAmount);
+  const flipNonce = await chainflip.rpc.system.accountNextIndex(flipWallet.address);
   await chainflip.tx.funding
     .redeem(flipperinoRedeemAmount, ethAddress, null)
-    .signAndSend(flipWallet, { nonce: -1 }, handleSubstrateError(chainflip));
+    .signAndSend(flipWallet, { nonce: flipNonce }, handleSubstrateError(chainflip));
 
   const redemptionRequestEvent = await redemptionRequestHandle;
   logger.debug('Redemption requested: ', redemptionRequestEvent.data.amount);

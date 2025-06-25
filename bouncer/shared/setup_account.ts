@@ -1,8 +1,8 @@
 import assert from 'assert';
-import { lpMutex, handleSubstrateError, createStateChainKeypair } from './utils';
-import { getChainflipApi, observeEvent } from './utils/substrate';
-import { fundFlip } from './fund_flip';
-import { Logger } from './utils/logger';
+import { lpMutex, handleSubstrateError, createStateChainKeypair } from 'shared/utils';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { fundFlip } from 'shared/fund_flip';
+import { Logger } from 'shared/utils/logger';
 
 export async function setupLpAccount(logger: Logger, uri: string) {
   const lp = createStateChainKeypair(uri);
@@ -17,9 +17,10 @@ export async function setupLpAccount(logger: Logger, uri: string) {
   }).event;
 
   await lpMutex.runExclusive(async () => {
+    const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
       .registerLpAccount()
-      .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
+      .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
   });
   await eventHandle;
 
@@ -45,9 +46,10 @@ export async function setupBrokerAccount(logger: Logger, uri: string) {
     }).event;
 
     await lpMutex.runExclusive(async () => {
+      const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
       await chainflip.tx.swapping
         .registerAsBroker()
-        .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
+        .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
     });
     await eventHandle;
 

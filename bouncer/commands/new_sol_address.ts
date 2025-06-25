@@ -6,7 +6,7 @@
 // For example: ./commands/new_sol_address.ts foobar
 // returns: 5Dd1drBHuBzHK7qGWzGQ2iR2KnbYZJbYuUfc88v5Cv4juWci
 
-import { newSolAddress } from '../shared/new_sol_address';
+import { newSolAddress } from 'shared/new_sol_address';
 
 async function main(): Promise<void> {
   const seed = process.argv[2] ?? '0';

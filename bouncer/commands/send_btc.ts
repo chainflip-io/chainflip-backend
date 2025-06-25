@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
-import { sendBtc } from '../shared/send_btc';
-import { globalLogger } from '../shared/utils/logger';
+import { sendBtc } from 'shared/send_btc';
+import { globalLogger } from 'shared/utils/logger';
 
 const bitcoinAddress = process.argv[2];
 const btcAmount = parseFloat(process.argv[3]);

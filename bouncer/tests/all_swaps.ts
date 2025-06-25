@@ -1,22 +1,17 @@
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import { describe } from 'vitest';
-import { SwapParams } from '../shared/perform_swap';
-import {
-  newCcmMetadata,
-  newVaultSwapCcmMetadata,
-  testSwap,
-  testVaultSwap,
-} from '../shared/swapping';
-import { btcAddressTypes } from '../shared/new_btc_address';
+import { SwapParams } from 'shared/perform_swap';
+import { newCcmMetadata, newVaultSwapCcmMetadata, testSwap, testVaultSwap } from 'shared/swapping';
+import { btcAddressTypes } from 'shared/new_btc_address';
 import {
   ccmSupportedChains,
   chainFromAsset,
   VaultSwapParams,
   vaultSwapSupportedChains,
-} from '../shared/utils';
-import { openPrivateBtcChannel } from '../shared/btc_vault_swap';
-import { TestContext } from '../shared/utils/test_context';
-import { manuallyAddTestToList, concurrentTest, serialTest } from '../shared/utils/vitest';
+} from 'shared/utils';
+import { openPrivateBtcChannel } from 'shared/btc_vault_swap';
+import { TestContext } from 'shared/utils/test_context';
+import { manuallyAddTestToList, concurrentTest, serialTest } from 'shared/utils/vitest';
 
 export async function initiateSwap(
   testContext: TestContext,

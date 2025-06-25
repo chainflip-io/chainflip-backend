@@ -2,7 +2,7 @@ import assert from 'assert';
 import { randomBytes } from 'crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 
-import Keyring from '../polkadot/keyring';
+import Keyring from 'polkadot/keyring';
 import {
   brokerMutex,
   decodeDotAddressForContract,
@@ -16,12 +16,12 @@ import {
   observeSwapRequested,
   TransactionOrigin,
   defaultAssetAmounts,
-} from '../shared/utils';
-import { getBalance } from '../shared/get_balance';
-import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import { send } from '../shared/send';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger } from '../shared/utils/logger';
+} from 'shared/utils';
+import { getBalance } from 'shared/get_balance';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { send } from 'shared/send';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger } from 'shared/utils/logger';
 
 const commissionBps = 1000; // 10%
 
@@ -34,11 +34,12 @@ export async function submitBrokerWithdrawal(
 ) {
   await using chainflip = await getChainflipApi();
   // Only allow one withdrawal at a time to stop nonce issues
-  return brokerMutex.runExclusive(async () =>
-    chainflip.tx.swapping
+  return brokerMutex.runExclusive(async () => {
+    const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
+    return chainflip.tx.swapping
       .withdraw(asset, addressObject)
-      .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
-  );
+      .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
+  });
 }
 
 const feeAsset = Assets.Usdc;
@@ -103,6 +104,7 @@ async function testBrokerFees(logger: Logger, inputAsset: Asset, seed?: string):
   };
 
   await brokerMutex.runExclusive(async () => {
+    const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     await chainflip.tx.swapping
       .requestSwapDepositAddress(
         inputAsset,
@@ -113,7 +115,7 @@ async function testBrokerFees(logger: Logger, inputAsset: Asset, seed?: string):
         0,
         refundParams,
       )
-      .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
+      .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
   });
 
   const res = (await addressPromise.event).data;

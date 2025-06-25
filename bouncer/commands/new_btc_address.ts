@@ -8,7 +8,7 @@
 // returns: mhTU7Bz4wv8ESLdB1GdXGs5kE1MBGvdSyb
 
 import assert from 'assert';
-import { isValidBtcAddressType, newBtcAddress } from '../shared/new_btc_address';
+import { isValidBtcAddressType, newBtcAddress } from 'shared/new_btc_address';
 
 async function main(): Promise<void> {
   const seed = process.argv[2] ?? '';

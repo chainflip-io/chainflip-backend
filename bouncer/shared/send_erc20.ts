@@ -1,9 +1,9 @@
 import Web3 from 'web3';
 import { Chain } from '@chainflip/cli';
-import { signAndSendTxEvm } from './send_evm';
-import { amountToFineAmount, getEvmEndpoint } from './utils';
-import { getErc20abi } from './contract_interfaces';
-import { Logger } from './utils/logger';
+import { signAndSendTxEvm } from 'shared/send_evm';
+import { amountToFineAmount, getEvmEndpoint } from 'shared/utils';
+import { getErc20abi } from 'shared/contract_interfaces';
+import { Logger } from 'shared/utils/logger';
 
 const erc20abi = await getErc20abi();
 

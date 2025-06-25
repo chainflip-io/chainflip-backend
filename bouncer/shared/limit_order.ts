@@ -5,9 +5,9 @@ import {
   lpMutex,
   assetDecimals,
   createStateChainKeypair,
-} from '../shared/utils';
-import { getChainflipApi, observeEvent } from './utils/substrate';
-import { Logger } from './utils/logger';
+} from 'shared/utils';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { Logger } from 'shared/utils/logger';
 
 export async function limitOrder(
   logger: Logger,
@@ -28,9 +28,10 @@ export async function limitOrder(
       event.data.lp === lp.address && event.data.baseAsset === ccy && event.data.id === String(0),
   }).event;
   await lpMutex.runExclusive(async () => {
+    const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityPools
       .setLimitOrder(ccy.toLowerCase(), 'usdc', 'sell', orderId, tick, fineAmount, null, null)
-      .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
+      .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
   });
   await orderCreatedEvent;
 }

@@ -1,6 +1,6 @@
 import Client from 'bitcoin-core';
-import { sleep, btcClientMutex } from './utils';
-import { Logger, throwError } from './utils/logger';
+import { sleep, btcClientMutex } from 'shared/utils';
+import { Logger, throwError } from 'shared/utils/logger';
 
 export const BTC_ENDPOINT = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
 

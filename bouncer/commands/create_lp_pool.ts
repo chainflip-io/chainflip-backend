@@ -6,9 +6,9 @@
 // initial price in USDC
 // For example: ./commands/create_lp_pool.ts btc 10000
 
-import { createLpPool } from '../shared/create_lp_pool';
-import { parseAssetString, runWithTimeoutAndExit } from '../shared/utils';
-import { globalLogger } from '../shared/utils/logger';
+import { createLpPool } from 'shared/create_lp_pool';
+import { parseAssetString, runWithTimeoutAndExit } from 'shared/utils';
+import { globalLogger } from 'shared/utils/logger';
 
 const initialPrice = parseFloat(process.argv[3]);
 const asset = parseAssetString(process.argv[2]);

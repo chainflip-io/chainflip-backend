@@ -9,8 +9,8 @@
 // It also accepts non-encoded bs58 address representations:
 // ./commands/get_solusdc_balance.ts 0x2f3fcadf740018f6037513959bab60d0dbef26888d264d54fc4d3d36c8cf5c91
 
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { getSolUsdcBalance } from '../shared/get_solusdc_balance';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { getSolUsdcBalance } from 'shared/get_solusdc_balance';
 
 export async function getSolUsdcBalanceCommand(address: string) {
   console.log(await getSolUsdcBalance(address));

@@ -19,10 +19,10 @@ import {
   createStateChainKeypair,
   handleSubstrateError,
   lpMutex,
-} from '../shared/utils';
-import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import { globalLogger as logger } from '../shared/utils/logger';
-import { depositLiquidity } from '../shared/deposit_liquidity';
+} from 'shared/utils';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { globalLogger as logger } from 'shared/utils/logger';
+import { depositLiquidity } from 'shared/deposit_liquidity';
 
 const args = process.argv.slice(2);
 if (args.length < 3) {
@@ -52,6 +52,7 @@ const swapEvent = observeEvent(logger, `swapping:CreditedOnChain`, {
 
 logger.info('Submitting on-chain swap extrinsic');
 await lpMutex.runExclusive(async () => {
+  const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
   await chainflip.tx.liquidityProvider
     .scheduleSwap(
       amountToFineAmount(amount.toString(), assetDecimals(inputAsset)),
@@ -61,7 +62,7 @@ await lpMutex.runExclusive(async () => {
       0,
       undefined,
     )
-    .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
+    .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
 });
 
 await swapEvent;

@@ -7,8 +7,8 @@
 // For example: ./commands/get_hubasset_balance.ts HubUsdc 5Dd1drBHuBzHK7qGWzGQ2iR2KnbYZJbYuUfc88v5Cv4juWci
 // might print: 1.2
 
-import { HubAsset, runWithTimeoutAndExit } from '../shared/utils';
-import { getHubAssetBalance } from '../shared/get_hub_balance';
+import { HubAsset, runWithTimeoutAndExit } from 'shared/utils';
+import { getHubAssetBalance } from 'shared/get_hub_balance';
 
 function stringToHubAsset(asset: string): HubAsset {
   if (asset === 'HubUsdc' || asset === 'HubUsdt') {

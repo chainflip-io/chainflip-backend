@@ -1,7 +1,7 @@
-import { submitGovernanceExtrinsic } from './cf_governance';
-import { observeEvent } from './utils/substrate';
-import { Asset } from './utils';
-import { Logger } from './utils/logger';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { observeEvent } from 'shared/utils/substrate';
+import { Asset } from 'shared/utils';
+import { Logger } from 'shared/utils/logger';
 
 export async function setMinimumDeposit(logger: Logger, asset: Asset, amount: bigint) {
   const eventHandle = observeEvent(logger, 'IngressEgress:MinimumDepositSet');
