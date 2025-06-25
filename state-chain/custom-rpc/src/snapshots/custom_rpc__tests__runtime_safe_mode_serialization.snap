@@ -34,7 +34,6 @@ expression: val
     "strategy_execution_enabled": true
   },
   "lending_pools": {
-    "boost_deposits_enabled": true,
     "add_boost_funds_enabled": true,
     "stop_boosting_enabled": true
   },

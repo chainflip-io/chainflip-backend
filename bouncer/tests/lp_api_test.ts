@@ -89,11 +89,13 @@ async function testRegisterLiquidityRefundAddress(parentLogger: Logger) {
 }
 
 async function testLiquidityDepositLegacy(logger: Logger) {
+  const lpAccount = createStateChainKeypair('//LP_API');
+
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
     logger,
     'liquidityProvider:LiquidityDepositAddressReady',
     {
-      test: (event) => event.data.depositAddress.Eth,
+      test: (event) => event.data.depositAddress.Eth && event.data.accountId === lpAccount.address,
     },
   ).event;
 
@@ -137,11 +139,13 @@ async function testLiquidityDepositLegacy(logger: Logger) {
 }
 
 async function testLiquidityDeposit(logger: Logger) {
+  const lpAccount = createStateChainKeypair('//LP_API');
+
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
     logger,
     'liquidityProvider:LiquidityDepositAddressReady',
     {
-      test: (event) => event.data.depositAddress.Eth,
+      test: (event) => event.data.depositAddress.Eth && event.data.accountId === lpAccount.address,
     },
   ).event;
 
