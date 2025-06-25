@@ -1150,6 +1150,14 @@ impl pallet_cf_elections::Config<Instance3> for Runtime {
 	type CreateGovernanceElectionHook = chainflip::bitcoin_elections::BitcoinGovernanceElectionHook;
 }
 
+impl pallet_cf_elections::Config for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = "GenericElections";
+	type RuntimeEvent = RuntimeEvent;
+	type ElectoralSystemRunner = chainflip::bitcoin_elections::BitcoinElectoralSystemRunner;
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+	type CreateGovernanceElectionHook = chainflip::bitcoin_elections::BitcoinGovernanceElectionHook;
+}
+
 impl pallet_cf_trading_strategy::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;
@@ -1302,6 +1310,9 @@ mod runtime {
 
 	#[runtime::pallet_index(54)]
 	pub type BitcoinElections = pallet_cf_elections<Instance3>;
+
+	#[runtime::pallet_index(55)]
+	pub type GenericElections = pallet_cf_elections;
 }
 
 /// The address format for describing accounts.
