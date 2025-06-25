@@ -17,15 +17,15 @@
 use cf_amm::common::{PoolPairsMap, Side};
 /// cf-rpc-types module defines all RPC related types
 /// Common types are defined in here
-use cf_chains::{
-	address::{AddressString, ToHumanreadableAddress},
-	Chain, ChannelRefundParameters,
-};
+use cf_chains::{address::ToHumanreadableAddress, Chain};
 use cf_primitives::{AccountId, Asset, BlockNumber, FlipBalance, Tick, TxIndex};
 use frame_support::{Deserialize, Serialize};
 use std::ops::Range;
 
-pub use cf_chains::eth::Address as EthereumAddress;
+pub use cf_chains::{
+	eth::Address as EthereumAddress,
+	refund_parameters::RpcChannelRefundParameters as RefundParametersRpc,
+};
 pub use cf_utilities::rpc::NumberOrHex;
 pub use sp_core::{bounded::BoundedVec, crypto::AccountId32, ConstU32, H256, U256};
 pub use state_chain_runtime::{chainflip::BlockUpdate, runtime_apis::OpenedDepositChannels, Hash};
@@ -83,8 +83,6 @@ pub enum OrderFilled {
 		liquidity: U256,
 	},
 }
-
-pub type RefundParametersRpc = ChannelRefundParameters<AddressString>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RebalanceOutcome {

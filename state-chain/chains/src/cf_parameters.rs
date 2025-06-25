@@ -17,6 +17,7 @@
 use crate::{
 	ccm_checker::DecodedCcmAdditionalData, CcmAdditionalData, CcmChannelMetadataChecked, Chain,
 	ChannelRefundParameters, ChannelRefundParametersForChain, ChannelRefundParametersLegacy,
+	ChannelRefundParametersUnchecked,
 };
 use cf_primitives::{
 	AccountId, AffiliateAndFee, BasisPoints, Beneficiary, DcaParameters, MAX_AFFILIATES,
@@ -57,7 +58,7 @@ pub struct VaultSwapParametersGeneric<R> {
 pub type VaultSwapParametersLegacy<RefundAddress> =
 	VaultSwapParametersGeneric<ChannelRefundParametersLegacy<RefundAddress>>;
 pub type VaultSwapParameters<RefundAddress> =
-	VaultSwapParametersGeneric<ChannelRefundParameters<RefundAddress>>;
+	VaultSwapParametersGeneric<ChannelRefundParametersUnchecked<RefundAddress>>;
 
 impl<RefundAddress> From<VaultSwapParametersLegacy<RefundAddress>>
 	for VaultSwapParameters<RefundAddress>

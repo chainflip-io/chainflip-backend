@@ -76,7 +76,7 @@ impl<T>
 				>,
 			>,
 		>,
-	> for cf_chains::ChannelRefundParameters<T>
+	> for cf_chains::ChannelRefundParametersUnchecked<T>
 {
 	fn from(
 		value: cf_static_runtime::runtime_types::cf_chains::refund_parameters::ChannelRefundParameters<

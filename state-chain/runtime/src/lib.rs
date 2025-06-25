@@ -73,9 +73,9 @@ use cf_chains::{
 	hub,
 	instances::ChainInstanceAlias,
 	sol::{SolAddress, SolanaCrypto},
-	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked, ChannelRefundParametersEncoded,
-	DefaultRetryPolicy, EvmVaultSwapExtraParameters, ForeignChain, Polkadot,
-	ChannelRefundParametersChecked, Solana, TransactionBuilder, VaultSwapExtraParameters,
+	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked,
+	ChannelRefundParametersUncheckedEncoded, DefaultRetryPolicy, EvmVaultSwapExtraParameters,
+	ForeignChain, Polkadot, Solana, TransactionBuilder, VaultSwapExtraParameters,
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
@@ -2297,15 +2297,15 @@ impl_runtime_apis! {
 					*retry_duration
 				}
 				VaultSwapExtraParametersEncoded::Ethereum(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
-					ChannelRefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
+					refund_parameters.clone().try_with_foreign_chain_refund_address::<ChainAddressConverter>()?.with_checked_metadata(None, source_asset)?;
 					refund_parameters.retry_duration
 				}
 				VaultSwapExtraParametersEncoded::Arbitrum(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
-					ChannelRefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
+					refund_parameters.clone().try_with_foreign_chain_refund_address::<ChainAddressConverter>()?.with_checked_metadata(None, source_asset)?;
 					refund_parameters.retry_duration
 				}
 				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => {
-					ChannelRefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
+					refund_parameters.clone().try_with_foreign_chain_refund_address::<ChainAddressConverter>()?.with_checked_metadata(None, source_asset)?;
 					refund_parameters.retry_duration
 				}
 			};
@@ -2453,7 +2453,7 @@ impl_runtime_apis! {
 			source_asset: Asset,
 			destination_address: EncodedAddress,
 			destination_asset: Asset,
-			refund_parameters: ChannelRefundParametersEncoded,
+			refund_parameters: ChannelRefundParametersUncheckedEncoded,
 			dca_parameters: Option<DcaParameters>,
 			boost_fee: BasisPoints,
 			broker_commission: BasisPoints,

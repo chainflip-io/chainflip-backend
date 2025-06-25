@@ -42,7 +42,6 @@ use address::{
 	AddressConverter, AddressDerivationApi, AddressDerivationError, EncodedAddress,
 	IntoForeignChainAddress, ToHumanreadableAddress,
 };
-use cf_amm_math::Price;
 use cf_primitives::{
 	Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
 	DcaParameters, EgressId, EthAmount, GasAmount, TxId,
@@ -1189,7 +1188,7 @@ pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
 )]
 pub struct EvmVaultSwapExtraParameters<Address, Amount> {
 	pub input_amount: Amount,
-	pub refund_parameters: ChannelRefundParameters<Address>,
+	pub refund_parameters: ChannelRefundParametersUnchecked<Address>,
 }
 impl<Address: Clone, Amount> EvmVaultSwapExtraParameters<Address, Amount> {
 	pub fn try_map_address<AddressOther, E>(
@@ -1229,7 +1228,7 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 		#[cfg_attr(feature = "std", serde(with = "bounded_hex"))]
 		seed: SolSeed,
 		input_amount: Amount,
-		refund_parameters: ChannelRefundParameters<Address>,
+		refund_parameters: ChannelRefundParametersUnchecked<Address>,
 		from_token_account: Option<Address>,
 	},
 }
