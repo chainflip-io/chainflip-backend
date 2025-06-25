@@ -17,7 +17,7 @@
 mod egress_witnessing;
 mod lookup_table_witnessing;
 mod nonce_witnessing;
-mod oracle_witnessing;
+pub mod oracle_witnessing;
 mod sol_deposits;
 mod vault_swaps_witnessing;
 use crate::{

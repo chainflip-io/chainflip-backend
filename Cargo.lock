@@ -1579,6 +1579,7 @@ dependencies = [
  "sp-api 34.0.0",
  "sp-core 34.0.0",
  "sp-runtime 39.0.0",
+ "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B3)",
  "sp-version 37.0.0",
  "state-chain-runtime",
  "subxt",
@@ -3483,6 +3484,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1e6a265c649f3f5979b601d26f1d05ada116434c87741c9493cb56218f76cbc"
 dependencies = [
  "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
+]
+
+[[package]]
+name = "enum-iterator"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c280b9e6b3ae19e152d8e31cf47f18389781e119d4013a2a2bb0180e5facc635"
+dependencies = [
+ "enum-iterator-derive",
+]
+
+[[package]]
+name = "enum-iterator-derive"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1ab991c1362ac86c61ab6f556cff143daa22e5a15e4e189df818b2fd19fe65b"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.96",
@@ -8260,6 +8281,7 @@ dependencies = [
  "cf-traits",
  "derive-where",
  "duplicate",
+ "enum-iterator",
  "frame-benchmarking",
  "frame-support",
  "frame-system",

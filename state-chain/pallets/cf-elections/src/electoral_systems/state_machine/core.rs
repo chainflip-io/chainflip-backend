@@ -417,7 +417,7 @@ pub trait Validate {
 	fn is_valid(&self) -> Result<(), Self::Error>;
 }
 
-#[duplicate::duplicate_item(Type; [ () ]; [ bool ]; [ char ]; [ u8 ]; [ u16 ]; [ u32 ]; [ u64 ]; [ usize ] ; [ H256 ])]
+#[duplicate::duplicate_item(Type; [ () ]; [ bool ]; [ char ]; [ u8 ]; [ u16 ]; [ u32 ]; [ u64 ]; [ usize ] ; [ H256 ] ; [ sp_std::time::Duration ])]
 impl Validate for Type {
 	type Error = ();
 
@@ -518,3 +518,16 @@ impl<C: ChainWitnessConfig> Validate for BlockWitnessRange<C> {
 
 /// Encapsulating usual constraints on types meant to be serialized
 pub trait Serde = Serialize + for<'a> Deserialize<'a>;
+
+#[cfg(test)]
+pub trait TestTraits = Send + Sync;
+#[cfg(not(test))]
+pub trait TestTraits = core::any::Any;
+
+#[cfg(test)]
+pub trait MaybeArbitrary = proptest::prelude::Arbitrary + Send + Sync
+where <Self as Arbitrary>::Strategy: Clone + Sync + Send;
+#[cfg(not(test))]
+pub trait MaybeArbitrary = core::any::Any;
+
+pub trait CommonTraits = Debug + Clone + Encode + Decode + Serde + Eq + TypeInfo;
