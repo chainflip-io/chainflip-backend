@@ -28,46 +28,45 @@ defx! {
 		pub(crate) headers: VecDeque<Header<T>>,
 	}
 	validate this (else NonemptyContinuousHeadersError) {
-		is_nonempty: this.headers.len() > 0,
+		is_nonempty: this.len() > 0,
 		matching_hashes: pairs.clone().all(|(a, b)| a.hash == b.parent_hash),
 		continuous_heights: pairs.clone().all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height),
 
 		( where pairs = this.headers.iter().zip(this.headers.iter().skip(1)) )
 	}
 }
-// impl<T: ChainTypes, X: IntoIterator<Item = Header<T>>> From<X> for NonemptyContinuousHeaders<T> {
-// 	fn from(value: X) -> Self {
-// 		NonemptyContinuousHeaders { 
-// 			first: value.into_iter().next().unwr,
-// 			headers: value.into_iter().collect() 
-// 		}
-// 	}
-// }
+#[cfg(test)]
+impl<T: ChainTypes, X: IntoIterator<Item = Header<T>> + Clone> From<X>
+	for NonemptyContinuousHeaders<T>
+{
+	fn from(value: X) -> Self {
+		NonemptyContinuousHeaders {
+			first: value.clone().into_iter().next().unwrap(),
+			headers: value.into_iter().skip(1).collect(),
+		}
+	}
+}
 impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	pub fn try_new(
 		mut headers: VecDeque<Header<T>>,
 	) -> Result<Self, NonemptyContinuousHeadersError<T>> {
 		if let Some(header) = headers.pop_front() {
-			Ok(Self {
-				first: header,
-				headers
-			})
+			Ok(Self { first: header, headers })
 		} else {
 			Err(NonemptyContinuousHeadersError::<T>::is_nonempty)
 		}
 	}
+	pub fn new(header: Header<T>, headers: Option<VecDeque<Header<T>>>) -> Self {
+		Self { first: header, headers: headers.unwrap_or_default() }
+	}
 	pub fn first_height(&self) -> T::ChainBlockNumber {
 		self.first.block_height
-		// self.headers.front().map(|h| h.block_height)
 	}
 	pub fn last(&self) -> &Header<T> {
-		self.headers.back().unwrap_or_else(||{
-			&self.first
-		})
+		self.headers.back().unwrap_or(&self.first)
 	}
 	pub fn first(&self) -> &Header<T> {
 		&self.first
-		// self.headers.front().unwrap()
 	}
 	pub fn contains(&self, block_height: &T::ChainBlockNumber) -> bool {
 		self.first_height() <= *block_height && *block_height <= self.last().block_height
@@ -94,28 +93,49 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 				})
 			}
 		} else if self.first().block_height == other.first().block_height {
-			let mut self_headers = self.headers.clone();
-			let mut other_headers = other.headers.clone();
-			let common_headers = extract_common_prefix(&mut self_headers, &mut other_headers);
-			self.headers = common_headers;
-			self.headers.append(&mut other_headers.clone());
+			let mut self_headers = self.get_headers();
+			let mut other_headers = other.get_headers();
+			let mut common_headers = extract_common_prefix(&mut self_headers, &mut other_headers);
+
+			*self = if let Some(first_header) = common_headers.pop_front() {
+				let mut result = Self::new(first_header, Some(common_headers));
+				result.headers.append(&mut other_headers.clone());
+				result
+			} else {
+				// if common header is empty we are sure that other_headers will at least contain 1
+				// header
+				let mut cloned_other = other_headers.clone();
+				Self::new(cloned_other.pop_front().unwrap(), Some(cloned_other))
+			};
+
 			Ok(MergeInfo { removed: self_headers, added: other_headers })
 		} else {
 			Err(MergeFailure::InternalError)
 		}
 	}
-	
+
+	pub fn get_headers(&self) -> VecDeque<Header<T>> {
+		[self.first.clone()].into_iter().chain(self.headers.clone()).collect()
+	}
+
 	pub fn trim_to_length(&mut self, target_length: usize) {
-		if self.headers.len() >= target_length && target_length > 0 {
-			let mut first = self.headers.pop_front();
-			while self.headers.len() >= target_length {
-				first = self.headers.pop_front();
-			}
-			self.first = first.unwrap();
-		} else {
-			self.first = self.last().clone();
-			self.headers = VecDeque::new();
+		while self.len() > target_length && target_length > 0 {
+			self.safe_pop_front();
 		}
+	}
+
+	// Return None if there is 1 element only
+	fn safe_pop_front(&mut self) -> Option<Header<T>> {
+		if let Some(next_header) = self.headers.pop_front() {
+			let result = self.first.clone();
+			self.first = next_header;
+			return Some(result);
+		}
+		None
+	}
+
+	fn len(&self) -> usize {
+		self.headers.len() + 1usize
 	}
 }
 
@@ -177,6 +197,8 @@ mod prop_tests {
 		type ChainBlockHash = bool;
 
 		const SAFETY_BUFFER: usize = 3;
+		
+		const NAME: &'static str = "Mock";
 	}
 
 	fn header_strategy() -> impl Strategy<
@@ -191,7 +213,7 @@ mod prop_tests {
 					let first_chain_clone = first_chain.clone();
 					let len = first_chain_clone.headers.len();
 					let start = if val {
-						first_chain_clone.first_height().unwrap()
+						first_chain_clone.first_height()
 					} else {
 						first_chain_clone.last().block_height
 					};
@@ -211,8 +233,8 @@ mod prop_tests {
 			let final_chain = first_chain.clone().merge(second_chain.clone());
 			match final_chain {
 				Ok(merge_result) => {
-					let mut first_headers = first_chain.headers;
-					let mut second_headers = second_chain.headers;
+					let mut first_headers = first_chain.get_headers();
+					let mut second_headers = second_chain.get_headers();
 
 					extract_common_prefix(&mut first_headers, &mut second_headers);
 					prop_assert_eq!(merge_result.added, second_headers, "Added blocks do not match");
@@ -224,7 +246,7 @@ mod prop_tests {
 								prop_assert_eq!(Some(first_chain.last()), existing_wrong_parent.as_ref(), "Existing wrong parent do not match");
 							},
 							MergeFailure::InternalError => {
-								prop_assert!((first_chain.last().block_height != second_chain.first_height().unwrap()) || (first_chain.first_height() != second_chain.first_height()));
+								prop_assert!((first_chain.last().block_height != second_chain.first_height()) || (first_chain.first_height() != second_chain.first_height()));
 							},
 						}
 				},

@@ -159,7 +159,7 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 				Ok(Some(ChainProgress { headers: new_headers, removed: None }))
 			},
 			BHWPhase::Running { headers, witness_from } => match headers.merge(new_headers) {
-				Ok(merge_info) => {
+				Ok(mut merge_info) => {
 					log::debug!(
 						"added new blocks: {:?}, replacing these blocks: {:?}",
 						merge_info.added,
@@ -172,15 +172,15 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 					s.block_height_update.run(highest_seen);
 					*witness_from = highest_seen.saturating_forward(1);
 
-					Ok(if merge_info.added.is_empty() {
-						None
-					} else {
+					Ok(if let Some(header) = merge_info.added.pop_front() {
 						Some(ChainProgress {
-							headers: merge_info.added.clone().into(),
+							headers: NonemptyContinuousHeaders::new(header, Some(merge_info.added)),
 							removed: merge_info.removed.front().and_then(|f| {
 								merge_info.removed.back().map(|l| f.block_height..=l.block_height)
 							}),
 						})
+					} else {
+						None
 					})
 				},
 				Err(MergeFailure::Reorg { new_block, existing_wrong_parent }) => {
@@ -252,7 +252,7 @@ pub mod tests {
 							hash: h1.clone(),
 							parent_hash: h0.clone(),
 						});
-					NonemptyContinuousHeaders::<C>{ headers: headers.collect() }
+					NonemptyContinuousHeaders::<C>::try_new(headers.collect()).unwrap()
 				}
 			}
 		}
