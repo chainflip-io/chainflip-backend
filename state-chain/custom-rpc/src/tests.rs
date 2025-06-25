@@ -788,6 +788,7 @@ fn vault_swap_details_serialization() {
 			calldata: vec![0x11, 0x22, 0x33, 0x44],
 			value: 12345678.into(),
 			to: H160([0xdd; 20]),
+			source_token_address: Some(H160([0xee; 20])),
 		},
 	};
 	let arb = VaultSwapDetails::<AddressString>::Arbitrum {
@@ -795,6 +796,7 @@ fn vault_swap_details_serialization() {
 			calldata: vec![0x11, 0x22, 0x33, 0x44],
 			value: 2345678.into(),
 			to: H160([0xcc; 20]),
+			source_token_address: Some(H160([0xbb; 20])),
 		},
 	};
 	let sol = VaultSwapDetails::<AddressString>::Solana {
