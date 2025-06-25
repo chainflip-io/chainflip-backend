@@ -34,6 +34,7 @@ use evm::api::EvmReplayProtection;
 use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
 use sp_std::{cmp::min, convert::TryInto, str};
 
 // Reference constants for the chain spec
@@ -71,13 +72,28 @@ impl Chain for Ethereum {
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EvmReplayProtection;
 
-	fn reference_gas_asset_price_in_input_asset(
+	fn input_asset_amount_using_reference_gas_asset_price(
 		input_asset: Self::ChainAsset,
+		required_gas: Self::ChainAmount,
 	) -> Self::ChainAmount {
 		match input_asset {
-			EthAsset::Usdt | EthAsset::Usdc => REFERENCE_ETH_PRICE_IN_USD,
-			EthAsset::Flip => REFERENCE_ETH_PRICE_IN_USD / REFERENCE_FLIP_PRICE_IN_USD,
-			EthAsset::Eth => 1u128,
+			EthAsset::Usdt | EthAsset::Usdc => multiply_by_rational_with_rounding(
+				required_gas,
+				REFERENCE_ETH_PRICE_IN_USD,
+				1_000_000_000_000_000_000u128,
+				sp_runtime::Rounding::Up,
+			)
+			.unwrap_or(u128::MAX),
+			EthAsset::Flip =>
+				multiply_by_rational_with_rounding(
+					required_gas,
+					REFERENCE_ETH_PRICE_IN_USD,
+					REFERENCE_FLIP_PRICE_IN_USD,
+					sp_runtime::Rounding::Up,
+				)
+				.unwrap_or(u128::MAX) /
+					1_000_000_000_000_000_000u128,
+			EthAsset::Eth => required_gas,
 		}
 	}
 }

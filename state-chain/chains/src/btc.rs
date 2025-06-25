@@ -272,10 +272,11 @@ impl Chain for Bitcoin {
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 
-	fn reference_gas_asset_price_in_input_asset(
+	fn input_asset_amount_using_reference_gas_asset_price(
 		_input_asset: Self::ChainAsset,
+		required_gas: Self::ChainAmount,
 	) -> Self::ChainAmount {
-		1u64
+		required_gas
 	}
 }
 

@@ -197,8 +197,10 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	}
 
 	/// estimate ingress fee in input asset using reference prices
-	fn reference_gas_asset_price_in_input_asset(input_asset: Self::ChainAsset)
-		-> Self::ChainAmount;
+	fn input_asset_amount_using_reference_gas_asset_price(
+		input_asset: Self::ChainAsset,
+		required_das: Self::ChainAmount,
+	) -> Self::ChainAmount;
 
 	type ChainCrypto: ChainCrypto;
 

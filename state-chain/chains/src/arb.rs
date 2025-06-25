@@ -30,6 +30,7 @@ pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Wor
 use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
 use sp_std::{cmp::min, str};
 
 use self::evm::EvmCrypto;
@@ -62,12 +63,19 @@ impl Chain for Arbitrum {
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = evm::api::EvmReplayProtection;
 
-	fn reference_gas_asset_price_in_input_asset(
+	fn input_asset_amount_using_reference_gas_asset_price(
 		input_asset: Self::ChainAsset,
+		required_gas: Self::ChainAmount,
 	) -> Self::ChainAmount {
 		match input_asset {
-			assets::arb::Asset::ArbEth => 1u128,
-			assets::arb::Asset::ArbUsdc => super::eth::REFERENCE_ETH_PRICE_IN_USD,
+			assets::arb::Asset::ArbEth => required_gas,
+			assets::arb::Asset::ArbUsdc => multiply_by_rational_with_rounding(
+				super::eth::REFERENCE_ETH_PRICE_IN_USD,
+				required_gas,
+				1_000_000_000_000_000_000u128,
+				sp_runtime::Rounding::Up,
+			)
+			.unwrap_or(u128::MAX),
 		}
 	}
 }

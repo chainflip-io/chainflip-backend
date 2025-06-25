@@ -52,8 +52,9 @@ impl Chain for AnyChain {
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 
-	fn reference_gas_asset_price_in_input_asset(
+	fn input_asset_amount_using_reference_gas_asset_price(
 		_input_asset: Self::ChainAsset,
+		_required_gas: Self::ChainAmount,
 	) -> Self::ChainAmount {
 		0
 	}

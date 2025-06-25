@@ -18,11 +18,14 @@
 
 use crate::{
 	address::IntoForeignChainAddress,
+	eth::{REFERENCE_ETH_PRICE_IN_USD, REFERENCE_FLIP_PRICE_IN_USD},
 	evm::{api::EvmReplayProtection, TransactionFee},
 	IntoTransactionInIdForAnyChain, *,
 };
+use cf_primitives::chains::assets::eth::Asset as EthAsset;
 use cf_utilities::SliceToArray;
 use sp_core::{ConstBool, H160};
+use sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
 use sp_std::marker::PhantomData;
 use std::cell::RefCell;
 
@@ -130,15 +133,28 @@ impl Chain for MockEthereum {
 	type ReplayProtectionParams = ();
 	type ReplayProtection = EvmReplayProtection;
 
-	fn reference_gas_asset_price_in_input_asset(
+	fn input_asset_amount_using_reference_gas_asset_price(
 		input_asset: Self::ChainAsset,
+		required_gas: Self::ChainAmount,
 	) -> Self::ChainAmount {
 		match input_asset {
-			assets::eth::Asset::Usdt | assets::eth::Asset::Usdc =>
-				super::eth::REFERENCE_ETH_PRICE_IN_USD,
-			assets::eth::Asset::Flip =>
-				super::eth::REFERENCE_ETH_PRICE_IN_USD / super::eth::REFERENCE_FLIP_PRICE_IN_USD,
-			assets::eth::Asset::Eth => 1u128,
+			EthAsset::Usdt | EthAsset::Usdc => multiply_by_rational_with_rounding(
+				required_gas,
+				REFERENCE_ETH_PRICE_IN_USD,
+				1_000_000_000_000_000_000u128,
+				sp_runtime::Rounding::Up,
+			)
+			.unwrap_or(u128::MAX),
+			EthAsset::Flip =>
+				multiply_by_rational_with_rounding(
+					required_gas,
+					REFERENCE_ETH_PRICE_IN_USD,
+					REFERENCE_FLIP_PRICE_IN_USD,
+					sp_runtime::Rounding::Up,
+				)
+				.unwrap_or(u128::MAX) /
+					1_000_000_000_000_000_000u128,
+			EthAsset::Eth => required_gas,
 		}
 	}
 }
