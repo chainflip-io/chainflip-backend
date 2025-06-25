@@ -16,7 +16,10 @@
 
 use cf_chains::Chain;
 use cf_primitives::{Asset, AssetAmount};
-use frame_support::sp_runtime::traits::{UniqueSaturatedInto, Zero};
+use frame_support::sp_runtime::{
+	traits::{UniqueSaturatedInto, Zero},
+	Saturating,
+};
 
 use crate::AssetConverter;
 
