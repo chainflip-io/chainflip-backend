@@ -240,18 +240,17 @@ pub mod pallet {
 			ensure!(sub_account_id.is_some(), Error::<T>::UnknownAccount);
 			let sub_account_id = sub_account_id.unwrap();
 			origin.set_caller_from(frame_system::RawOrigin::Signed(sub_account_id.clone()));
-
-			call.clone()
-				.dispatch(origin)
-				.map_err(|_| Error::<T>::FailedToExecuteCallOnBehalfOfSubAccount)?;
-
-			Self::deposit_event(Event::SubAccountCallExecuted {
-				account_id: account_id.clone(),
-				sub_account_id: sub_account_id.clone(),
-				sub_account_index,
-			});
-
-			Ok(())
+			match call.clone().dispatch(origin) {
+				Ok(_) => {
+					Self::deposit_event(Event::SubAccountCallExecuted {
+						account_id: account_id.clone(),
+						sub_account_id: sub_account_id.clone(),
+						sub_account_index,
+					});
+					Ok(())
+				},
+				Err(e) => Err(e.error),
+			}
 		}
 	}
 }
