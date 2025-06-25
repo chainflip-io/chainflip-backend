@@ -106,8 +106,19 @@ export async function requestNewSwap(
     dcaParams,
   );
 
-  const res = (await addressPromise).data;
+  // Set an aggressive timeout for the addressPromise. We expect an event within 3 blocks at most.
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      reject(
+        new Error(`Timeout waiting for deposit address for ${sourceAsset} -> ${destAsset} swap.`),
+      );
+    }, 18000);
+  });
 
+  // Wait for the addressPromise or the timeoutPromise to resolve (race)
+  const eventOrTimeout = await Promise.race([addressPromise, timeoutPromise]);
+
+  const res = eventOrTimeout.data;
   const depositAddress = res.depositAddress[shortChainFromAsset(sourceAsset)];
   const channelDestAddress = res.destinationAddress[shortChainFromAsset(destAsset)];
   const channelId = Number(res.channelId.replaceAll(',', ''));

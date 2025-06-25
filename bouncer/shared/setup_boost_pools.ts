@@ -1,4 +1,4 @@
-import { InternalAssets as Assets, chainConstants, getInternalAsset, Chains } from '@chainflip/cli';
+import { InternalAssets as Assets, getInternalAsset, Chains } from '@chainflip/cli';
 import {
   ingressEgressPalletForChain,
   chainFromAsset,
@@ -70,38 +70,26 @@ export async function createBoostPools(logger: Logger, newPools: BoostPoolId[]):
       const error = decodeModuleError(event.data[0].Module, await getChainflipApi());
       throwError(logger, new Error(`Failed to create boost pool: ${error}`));
     }
-    logger.info(
+    logger.debug(
       `Boost pools created for ${event.data.boostPool.asset} at ${event.data.boostPool.tier} bps`,
     );
   }
 }
 
-/// Creates 5, 10 and 30 bps tier boost pools for all assets on all chains and then funds the Btc boost pools with some BTC.
+/// Creates 5, 10 and 30 bps tier boost pools for Btc and then funds them.
 export async function setupBoostPools(logger: Logger): Promise<void> {
-  logger.info('Creating Boost Pools');
-  const boostPoolCreationPromises: Promise<void>[] = [];
-
-  for (const chain of Object.values(Chains)) {
-    logger.debug(`Creating boost pools for all ${chain} assets`);
-    const newPools: BoostPoolId[] = [];
-
-    for (const asset of chainConstants[chain].assets) {
-      for (const tier of boostPoolTiers) {
-        if (tier <= 0) {
-          throwError(logger, new Error(`Invalid tier value: ${tier}`));
-        }
-        newPools.push({
-          asset: getInternalAsset({ asset, chain }),
-          tier,
-        });
-      }
-    }
-    boostPoolCreationPromises.push(createBoostPools(logger, newPools));
+  logger.info('Creating BTC Boost Pools');
+  const newPools: BoostPoolId[] = [];
+  for (const tier of boostPoolTiers) {
+    newPools.push({
+      asset: getInternalAsset({ asset: 'BTC', chain: Chains.Bitcoin }),
+      tier,
+    });
   }
-  await Promise.all(boostPoolCreationPromises);
+  await createBoostPools(logger, newPools);
 
-  // Add some boost funds for Btc to each boost tier
-  logger.info('Funding Boost Pools');
+  // Add some boost funds to each Btc boost tier
+  logger.info('Funding BTC Boost Pools');
   const btcIngressFee = 0.0001; // Some small amount to cover the ingress fee
   await depositLiquidity(
     logger,
