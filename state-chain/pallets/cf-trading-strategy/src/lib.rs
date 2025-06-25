@@ -702,14 +702,6 @@ impl<T: Config> Pallet<T> {
 			return BTreeMap::default();
 		}
 		let mut orders = BTreeMap::new();
-
-		let fraction_of_total = if side == Side::Sell {
-			// The fraction for the sell side is inverted because we are moving the tick in the
-			// opposite direction
-			Permill::one() - Permill::from_rational(amount, total)
-		} else {
-			Permill::from_rational(amount, total)
-		};
 		let half_total = total / 2;
 
 		// Simple order logic:
@@ -726,8 +718,13 @@ impl<T: Config> Pallet<T> {
 		// Dynamic order logic:
 		if remaining_amount > 0 {
 			// Calculate the tick based on the fraction of the total amount
-			let dynamic_tick =
-				(fraction_of_total * ((max_tick - min_tick).unsigned_abs())) as i32 + min_tick;
+			let tick_adjustment = (Permill::from_rational(amount, total) *
+				((max_tick - min_tick).unsigned_abs())) as i32;
+			let dynamic_tick = if side == Side::Buy {
+				min_tick + tick_adjustment
+			} else {
+				max_tick - tick_adjustment
+			};
 			// Merge the order if its at the same tick as the simple order, or just add a new
 			// order.
 			orders
