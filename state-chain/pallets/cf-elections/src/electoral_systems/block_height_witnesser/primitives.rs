@@ -90,8 +90,8 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	) -> Result<MergeInfo<T>, MergeFailure<T>> {
 		if self.last().block_height.saturating_forward(1) == other.first().block_height {
 			if self.last().hash == other.first().parent_hash {
-				self.headers.append(&mut other.headers.clone());
-				Ok(MergeInfo { removed: VecDeque::new(), added: other.headers })
+				self.headers.append(&mut other.get_headers());
+				Ok(MergeInfo { removed: VecDeque::new(), added: other.get_headers() })
 			} else {
 				Err(MergeFailure::Reorg {
 					new_block: other.first().clone(),
