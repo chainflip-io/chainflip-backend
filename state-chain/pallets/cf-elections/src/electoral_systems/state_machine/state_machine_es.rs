@@ -7,9 +7,7 @@ use itertools::Either;
 use sp_std::{fmt::Debug, vec::Vec};
 
 use crate::{
-	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem},
-	vote_storage::VoteStorage,
-	CorruptStorageError, ElectoralSystemTypes, PartialVoteOf,
+	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem}, vote_storage::VoteStorage, AuthorityVoteOf, CorruptStorageError, ElectoralSystemTypes, PartialVoteOf, VotePropertiesOf
 };
 
 use super::{
@@ -266,5 +264,13 @@ where
 			},
 			properties,
 		)))
+	}
+
+	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
+		_election_access: &ElectionAccess,
+		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		_state_chain_block_number: Self::StateChainBlockNumber,
+	) -> Result<bool, CorruptStorageError> {
+		Ok(true)
 	}
 }
