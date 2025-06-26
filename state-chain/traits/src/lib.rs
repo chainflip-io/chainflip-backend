@@ -1270,4 +1270,14 @@ pub trait SubAccountHandler<AccountId> {
 		parent_account_id: AccountId,
 		sub_account_index: SubAccountIndex,
 	) -> Result<AccountId, DispatchError>;
+
+	fn derive_sub_account(
+		parent_account_id: AccountId,
+		sub_account_index: SubAccountIndex,
+	) -> Result<AccountId, DispatchError>;
+
+	fn sub_account_exists(
+		parent_account_id: AccountId,
+		sub_account_index: SubAccountIndex,
+	) -> Result<bool, DispatchError>;
 }

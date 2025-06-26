@@ -101,12 +101,6 @@ pub mod pallet {
 	pub type VanityNames<T: Config> =
 		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>;
 
-	/// The associated sub accounts by the sub account index for a account.
-	#[pallet::storage]
-	#[pallet::getter(fn sub_accounts)]
-	pub type SubAccounts<T: Config> =
-		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, SubAccountIndex, T::AccountId>;
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -218,7 +212,6 @@ pub mod pallet {
 				account_id.clone(),
 				sub_account_index,
 			)?;
-			SubAccounts::<T>::insert(&account_id, sub_account_index, &sub_account_id);
 			Self::deposit_event(Event::SubAccountCreated {
 				account_id: account_id.clone(),
 				sub_account_id,
@@ -247,8 +240,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let mut origin = origin;
 			let account_id = ensure_signed(origin.clone())?;
-			let sub_account_id = SubAccounts::<T>::get(&account_id, sub_account_index)
-				.ok_or(Error::<T>::UnknownAccount)?;
+			let sub_account_id =
+				T::SubAccountHandler::derive_sub_account(account_id.clone(), sub_account_index)?;
 			origin.set_caller_from(frame_system::RawOrigin::Signed(sub_account_id.clone()));
 			match call.clone().dispatch(origin) {
 				Ok(_) => {

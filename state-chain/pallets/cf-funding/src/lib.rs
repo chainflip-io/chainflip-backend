@@ -989,6 +989,20 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 }
 
 impl<T: Config> SubAccountHandler<T::AccountId> for Pallet<T> {
+	fn derive_sub_account(
+		parent_account_id: T::AccountId,
+		sub_account_index: u8,
+	) -> Result<T::AccountId, DispatchError> {
+		let sub_account_id: T::AccountId = Decode::decode(&mut TrailingZeroInput::new(
+			(*b"chainflip/subaccount", parent_account_id.clone(), sub_account_index)
+				.blake2_256()
+				.as_ref(),
+		))
+		.map_err(|_| Error::<T>::SubAccountIdDerivationFailed)?;
+
+		Ok(sub_account_id)
+	}
+
 	fn derive_and_fund_sub_account(
 		parent_account_id: T::AccountId,
 		sub_account_index: u8,
@@ -997,12 +1011,8 @@ impl<T: Config> SubAccountHandler<T::AccountId> for Pallet<T> {
 			return Err(Error::<T>::CanNotDeriveSubAccountIdIfParentAccountIsBidding.into());
 		}
 
-		let sub_account_id: T::AccountId = Decode::decode(&mut TrailingZeroInput::new(
-			(*b"chainflip/subaccount", parent_account_id.clone(), sub_account_index)
-				.blake2_256()
-				.as_ref(),
-		))
-		.map_err(|_| Error::<T>::SubAccountIdDerivationFailed)?;
+		let sub_account_id: T::AccountId =
+			Self::derive_sub_account(parent_account_id.clone(), sub_account_index)?;
 
 		ensure!(
 			!frame_system::Pallet::<T>::account_exists(&sub_account_id),
@@ -1031,5 +1041,13 @@ impl<T: Config> SubAccountHandler<T::AccountId> for Pallet<T> {
 		)?;
 
 		Ok(sub_account_id)
+	}
+
+	fn sub_account_exists(
+		parent_account_id: T::AccountId,
+		sub_account_index: u8,
+	) -> Result<bool, DispatchError> {
+		let account_id = Self::derive_sub_account(parent_account_id, sub_account_index)?;
+		Ok(frame_system::Pallet::<T>::account_exists(&account_id))
 	}
 }

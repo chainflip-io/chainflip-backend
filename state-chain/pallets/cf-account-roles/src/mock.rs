@@ -55,6 +55,20 @@ impl SubAccountHandler<u64> for MockSubAccountHandler {
 	) -> Result<u64, DispatchError> {
 		Ok(parent_account_id + sub_account_index as u64)
 	}
+
+	fn derive_sub_account(
+		parent_account_id: u64,
+		sub_account_index: SubAccountIndex,
+	) -> Result<u64, DispatchError> {
+		Ok(parent_account_id + sub_account_index as u64)
+	}
+
+	fn sub_account_exists(
+		_parent_account_id: u64,
+		_sub_account_index: SubAccountIndex,
+	) -> Result<bool, DispatchError> {
+		Ok(true)
+	}
 }
 
 impl Config for Test {

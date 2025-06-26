@@ -50,8 +50,6 @@ mod benchmarks {
 
 		#[extrinsic_call]
 		derive_sub_account(RawOrigin::Signed(caller.clone()), SUB_ACCOUNT_INDEX);
-
-		assert!(SubAccounts::<T>::get(caller, SUB_ACCOUNT_INDEX).is_some())
 	}
 
 	#[benchmark]
@@ -68,7 +66,9 @@ mod benchmarks {
 			SUB_ACCOUNT_INDEX,
 		));
 
-		assert!(SubAccounts::<T>::get(&caller, SUB_ACCOUNT_INDEX).is_some());
+		assert!(
+			T::SubAccountHandler::sub_account_exists(caller.clone(), SUB_ACCOUNT_INDEX).unwrap()
+		);
 
 		#[extrinsic_call]
 		as_sub_account(RawOrigin::Signed(caller), SUB_ACCOUNT_INDEX, call);

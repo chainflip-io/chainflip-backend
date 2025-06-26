@@ -212,9 +212,9 @@ fn derive_sub_account() {
 			Test,
 			RuntimeEvent::MockAccountRoles(Event::SubAccountCreated {
 				account_id: ALICE,
-				sub_account_id,
-				sub_account_index: 0,
-			}) if *sub_account_id == SubAccounts::<Test>::get(ALICE, 0).unwrap()
+				sub_account_id: _,
+				sub_account_index: _,
+			})
 		);
 	});
 }
@@ -227,7 +227,8 @@ fn execute_as_sub_account() {
 			RuntimeOrigin::signed(ALICE),
 			SUB_ACCOUNT_INDEX
 		));
-		let sub_account_id = SubAccounts::<Test>::get(ALICE, SUB_ACCOUNT_INDEX).unwrap();
+		let sub_account_id =
+			MockSubAccountHandler::derive_sub_account(ALICE, SUB_ACCOUNT_INDEX).unwrap();
 		assert_ok!(AccountRolesPallet::as_sub_account(
 			RuntimeOrigin::signed(ALICE),
 			SUB_ACCOUNT_INDEX,
@@ -241,29 +242,10 @@ fn execute_as_sub_account() {
 			Test,
 			RuntimeEvent::MockAccountRoles(Event::SubAccountCallExecuted {
 				account_id: ALICE,
-				sub_account_id,
+				sub_account_id: _,
 				sub_account_index: SUB_ACCOUNT_INDEX,
-			}) if *sub_account_id == SubAccounts::<Test>::get(ALICE, SUB_ACCOUNT_INDEX).unwrap()
+			})
 		);
 		assert!(VanityNames::<Test>::get().contains_key(&sub_account_id));
-	});
-}
-
-#[test]
-fn can_not_execute_as_sub_account_with_not_existing_sub_account() {
-	new_test_ext().execute_with(|| {
-		const UNKNOWN_SUB_ACCOUNT_INDEX: u8 = 1;
-		assert_noop!(
-			AccountRolesPallet::as_sub_account(
-				RuntimeOrigin::signed(ALICE),
-				UNKNOWN_SUB_ACCOUNT_INDEX,
-				Box::new(RuntimeCall::MockAccountRoles(
-					pallet_cf_account_roles::Call::<Test>::set_vanity_name {
-						name: "Test Account".to_string().into_bytes().try_into().unwrap()
-					},
-				))
-			),
-			Error::<Test>::UnknownAccount
-		);
 	});
 }
