@@ -18,7 +18,11 @@
 
 use crate::{self as pallet_cf_account_roles, Config};
 use cf_primitives::SubAccountIndex;
-use cf_traits::{mocks::deregistration_check::MockDeregistrationCheck, SubAccountHandler};
+use cf_traits::{
+	impl_mock_chainflip,
+	mocks::{deregistration_check::MockDeregistrationCheck, fee_payment::MockFeePayment},
+	SubAccountHandler,
+};
 use frame_support::derive_impl;
 use sp_runtime::DispatchError;
 
@@ -40,6 +44,8 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = MockAccountRoles;
 }
 
+impl_mock_chainflip!(Test);
+
 pub struct MockSubAccountHandler;
 
 impl SubAccountHandler<u64> for MockSubAccountHandler {
@@ -57,6 +63,8 @@ impl Config for Test {
 	type DeregistrationCheck = MockDeregistrationCheck<Self::AccountId>;
 	type RuntimeCall = RuntimeCall;
 	type SubAccountHandler = MockSubAccountHandler;
+	#[cfg(feature = "runtime-benchmarks")]
+	type FeePayment = MockFeePayment<Self>;
 	type WeightInfo = ();
 }
 

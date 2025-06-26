@@ -629,6 +629,8 @@ impl pallet_cf_account_roles::Config for Runtime {
 	type DeregistrationCheck = (Bonder<Self>, TradingStrategyDeregistrationCheck<Self>);
 	type RuntimeCall = RuntimeCall;
 	type SubAccountHandler = Funding;
+	#[cfg(feature = "runtime-benchmarks")]
+	type FeePayment = Flip;
 	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;
 }
 

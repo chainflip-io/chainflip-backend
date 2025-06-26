@@ -26,6 +26,11 @@ pub use weights::WeightInfo;
 pub mod migrations;
 use sp_std::boxed::Box;
 
+use cf_traits::Chainflip;
+
+#[cfg(not(feature = "runtime-benchmarks"))]
+use cf_traits::FeePayment;
+
 use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, DeregistrationCheck, SubAccountHandler};
 use frame_support::{
@@ -56,7 +61,7 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config: frame_system::Config + cf_traits::Chainflip {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 		type DeregistrationCheck: DeregistrationCheck<
@@ -68,6 +73,12 @@ pub mod pallet {
 			+ From<Call<Self>>
 			+ GetDispatchInfo;
 		type SubAccountHandler: SubAccountHandler<<Self as frame_system::Config>::AccountId>;
+
+		#[cfg(feature = "runtime-benchmarks")]
+		type FeePayment: cf_traits::FeePayment<
+			Amount = <Self as Chainflip>::Amount,
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 		type WeightInfo: WeightInfo;
 	}
 
@@ -236,9 +247,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let mut origin = origin;
 			let account_id = ensure_signed(origin.clone())?;
-			let sub_account_id = SubAccounts::<T>::get(&account_id, sub_account_index);
-			ensure!(sub_account_id.is_some(), Error::<T>::UnknownAccount);
-			let sub_account_id = sub_account_id.unwrap();
+			let sub_account_id = SubAccounts::<T>::get(&account_id, sub_account_index)
+				.ok_or(Error::<T>::UnknownAccount)?;
 			origin.set_caller_from(frame_system::RawOrigin::Signed(sub_account_id.clone()));
 			match call.clone().dispatch(origin) {
 				Ok(_) => {

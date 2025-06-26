@@ -21,6 +21,10 @@ use frame_benchmarking::v2::*;
 use frame_support::assert_ok;
 use sp_std::vec;
 
+use cf_traits::FeePayment;
+
+use cf_primitives::FLIPPERINOS_PER_FLIP;
+
 #[benchmarks]
 mod benchmarks {
 	use super::*;
@@ -39,7 +43,10 @@ mod benchmarks {
 	#[benchmark]
 	fn derive_sub_account() {
 		const SUB_ACCOUNT_INDEX: SubAccountIndex = 1;
+		const FLIP_BALANCE: u128 = 1000;
 		let caller: T::AccountId = whitelisted_caller();
+
+		T::FeePayment::mint_to_account(&caller, (FLIP_BALANCE * FLIPPERINOS_PER_FLIP).into());
 
 		#[extrinsic_call]
 		derive_sub_account(RawOrigin::Signed(caller.clone()), SUB_ACCOUNT_INDEX);
@@ -50,8 +57,11 @@ mod benchmarks {
 	#[benchmark]
 	fn as_sub_account() {
 		const SUB_ACCOUNT_INDEX: SubAccountIndex = 1;
+		const FLIP_BALANCE: u128 = 1000;
 		let caller: T::AccountId = whitelisted_caller();
 		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
+
+		T::FeePayment::mint_to_account(&caller, (FLIP_BALANCE * FLIPPERINOS_PER_FLIP).into());
 
 		assert_ok!(Pallet::<T>::derive_sub_account(
 			RawOrigin::Signed(caller.clone()).into(),
