@@ -122,6 +122,21 @@ impl<A, D> ChannelRefundParameters<A, D> {
 	}
 }
 
+#[cfg(feature = "std")]
+impl RpcChannelRefundParameters {
+	pub fn parse_refund_address_for_chain(
+		self,
+		chain: cf_primitives::ForeignChain,
+	) -> anyhow::Result<ChannelRefundParametersUncheckedEncoded> {
+		Ok(ChannelRefundParameters {
+			retry_duration: self.retry_duration,
+			refund_address: self.refund_address.try_parse_to_encoded_address(chain)?,
+			min_price: self.min_price,
+			refund_ccm_metadata: self.refund_ccm_metadata.clone(),
+		})
+	}
+}
+
 impl<A, D> ChannelRefundParameters<A, D> {
 	pub fn map_address<B, F: FnOnce(A) -> B>(self, f: F) -> ChannelRefundParameters<B, D> {
 		ChannelRefundParameters {

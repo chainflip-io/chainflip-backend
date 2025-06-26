@@ -28,9 +28,8 @@ use cf_node_client::{
 use cf_primitives::{Affiliates, Asset, BasisPoints, ChannelId};
 use cf_rpc_apis::{
 	broker::{
-		try_into_refund_parameters_encoded, try_into_swap_extra_params_encoded,
-		vault_swap_input_encoded_to_rpc, BrokerRpcApiServer, DcaParameters,
-		GetOpenDepositChannelsQuery, RpcBytes, SwapDepositAddress, TransactionInId,
+		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc, BrokerRpcApiServer,
+		DcaParameters, GetOpenDepositChannelsQuery, RpcBytes, SwapDepositAddress, TransactionInId,
 		VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
 	RefundParametersRpc, RpcResult, H256,
@@ -377,7 +376,7 @@ where
 				source_asset,
 				destination_address.try_parse_to_encoded_address(destination_asset.into())?,
 				destination_asset,
-				try_into_refund_parameters_encoded(refund_parameters, source_asset.into())?,
+				refund_parameters.parse_refund_address_for_chain(source_asset.into())?,
 				dca_parameters,
 				boost_fee.unwrap_or_default(),
 				broker_commission,
