@@ -196,6 +196,12 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		witness_period::block_witness_range(Self::WITNESS_PERIOD, block_number)
 	}
 
+	/// estimate ingress fee in input asset using reference prices
+	fn input_asset_amount_using_reference_gas_asset_price(
+		input_asset: Self::ChainAsset,
+		required_das: Self::ChainAmount,
+	) -> Self::ChainAmount;
+
 	type ChainCrypto: ChainCrypto;
 
 	type ChainBlockNumber: FullCodec

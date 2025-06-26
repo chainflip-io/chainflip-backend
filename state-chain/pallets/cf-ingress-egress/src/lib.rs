@@ -2916,14 +2916,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::accrue_withheld_fee(asset, sp_std::cmp::min(fee_estimate, available_amount));
 			fee_estimate
 		} else {
-			let transaction_fee = sp_std::cmp::min(T::AssetConverter::calculate_input_for_gas_output::<T::TargetChain>(
-				asset,
-				fee_estimate,
-			)
-			.unwrap_or_else(|| {
-				log::warn!("Unable to convert input to gas for input of {available_amount:?} ${asset:?}. Ignoring ingress egress fees.");
-				<T::TargetChain as Chain>::ChainAmount::zero()
-			}), available_amount);
+			let transaction_fee = sp_std::cmp::min(
+				T::AssetConverter::calculate_input_for_gas_output::<T::TargetChain>(
+					asset,
+					fee_estimate,
+				),
+				available_amount,
+			);
 
 			if !transaction_fee.is_zero() {
 				T::SwapRequestHandler::init_ingress_egress_fee_swap_request::<T::TargetChain>(

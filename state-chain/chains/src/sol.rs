@@ -43,7 +43,7 @@ use frame_support::{
 	Parameter,
 };
 use serde::{Deserialize, Serialize};
-use sp_runtime::traits::Member;
+use sp_runtime::{helpers_128bit::multiply_by_rational_with_rounding, traits::Member};
 
 use super::{Chain, ChainCrypto};
 
@@ -98,6 +98,8 @@ pub const MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES: usize = 5;
 pub const MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS: u32 = 14400;
 pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES: usize = 3;
 
+pub const REFERENCE_SOL_PRICE_IN_USD: u128 = 145_000_000u128; //145 usd
+
 // Use serialized transaction
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct SolanaTransactionData {
@@ -134,6 +136,23 @@ impl Chain for Solana {
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 	type TransactionRef = SolSignature;
+
+	fn input_asset_amount_using_reference_gas_asset_price(
+		input_asset: Self::ChainAsset,
+		required_gas: Self::ChainAmount,
+	) -> Self::ChainAmount {
+		match input_asset {
+			assets::sol::Asset::Sol => required_gas,
+			assets::sol::Asset::SolUsdc => multiply_by_rational_with_rounding(
+				required_gas.into(),
+				REFERENCE_SOL_PRICE_IN_USD,
+				1_000_000_000u128,
+				sp_runtime::Rounding::Up,
+			)
+			.map(|v| v.try_into().unwrap_or(0u64))
+			.unwrap_or(0u64),
+		}
+	}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

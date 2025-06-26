@@ -44,8 +44,11 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{
 	generic::SignedPayload,
+	helpers_128bit::multiply_by_rational_with_rounding,
 	traits::{BlakeTwo256, DispatchInfoOf, Hash, SignedExtension},
 };
+
+pub const REFERENCE_HUBDOT_PRICE_IN_USD: PolkadotBalance = 3_400_000u128; //3.4 usd
 
 impl Chain for Assethub {
 	const NAME: &'static str = "Assethub";
@@ -70,6 +73,23 @@ impl Chain for Assethub {
 	type TransactionRef = PolkadotTransactionId;
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
+
+	fn input_asset_amount_using_reference_gas_asset_price(
+		input_asset: Self::ChainAsset,
+		required_gas: Self::ChainAmount,
+	) -> Self::ChainAmount {
+		match input_asset {
+			assets::hub::Asset::HubUsdc | assets::hub::Asset::HubUsdt =>
+				multiply_by_rational_with_rounding(
+					required_gas,
+					REFERENCE_HUBDOT_PRICE_IN_USD,
+					10_000_000_000u128,
+					sp_runtime::Rounding::Up,
+				)
+				.unwrap_or(0u128),
+			assets::hub::Asset::HubDot => required_gas,
+		}
+	}
 }
 
 /// The payload being signed in transactions.
