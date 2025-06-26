@@ -554,9 +554,10 @@ def_derive! {
 }
 
 /// A compact representation of a set of block height ranges.
-/// Instead of storing individual block heights, we store them as ranges. This greatly minimizes storage usage.
-/// Since we expect new block heights to be only inserted at the end, the implementation is optimized for that use case.
-/// Inserting somewhere else will create correct, but non-optimal state, as it won't merge together ranges.
+/// Instead of storing individual block heights, we store them as ranges. This greatly minimizes
+/// storage usage. Since we expect new block heights to be only inserted at the end, the
+/// implementation is optimized for that use case. Inserting somewhere else will create correct, but
+/// non-optimal state, as it won't merge together ranges.
 #[derive_where(Default; )]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct CompactHeightTracker<N: Ord> {

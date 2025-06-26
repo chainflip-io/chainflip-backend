@@ -7,7 +7,9 @@ use itertools::Either;
 use sp_std::{fmt::Debug, vec::Vec};
 
 use crate::{
-	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem}, vote_storage::VoteStorage, AuthorityVoteOf, CorruptStorageError, ElectoralSystemTypes, PartialVoteOf, VotePropertiesOf
+	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem},
+	vote_storage::VoteStorage,
+	AuthorityVoteOf, CorruptStorageError, ElectoralSystemTypes, PartialVoteOf, VotePropertiesOf,
 };
 
 use super::{
