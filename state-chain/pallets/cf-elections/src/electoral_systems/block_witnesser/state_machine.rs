@@ -481,7 +481,8 @@ pub mod tests {
 				)))
 				.prop_map(move |mut progress| {
 					progress.removed = Some(
-						progress.headers.first_height()..=seen_heights_below.saturating_backward(1),
+						progress.headers.first().block_height..=
+							seen_heights_below.saturating_backward(1),
 					);
 
 					Some(progress)

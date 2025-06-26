@@ -51,9 +51,7 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 					consensus.insert_vote(StagedVote { priority: vote.len(), vote: vote.clone() });
 					vote.safe_pop_back();
 				}
-				if vote.len() == 1 {
-					consensus.insert_vote(StagedVote { priority: 1, vote: vote.clone() });
-				}
+				consensus.insert_vote(StagedVote { priority: 1, vote: vote.clone() });
 			}
 
 			consensus.check_consensus(threshold).inspect(|result| {

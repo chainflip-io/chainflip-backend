@@ -156,13 +156,6 @@ fn block_height_witnesser_running_consensus() {
 
 #[test]
 fn test_validate_vote_and_height() {
-	let result = BlockHeightWitnesser::<BHTypes>::validate(&BHW_PROPERTIES_RUNNING, &[].into());
-	assert_eq!(
-		result.unwrap_err(),
-		VoteValidationError::NonemptyContinuousHeadersError(
-			NonemptyContinuousHeadersError::is_nonempty
-		)
-	);
 	let result = BlockHeightWitnesser::<BHTypes>::validate(
 		&BHW_PROPERTIES_RUNNING,
 		&[

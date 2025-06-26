@@ -1,5 +1,6 @@
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
+use core::iter;
 use generic_typeinfo_derive::GenericTypeInfo;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -28,7 +29,7 @@ defx! {
 		headers: VecDeque<Header<T>>,
 	}
 	validate this (else NonemptyContinuousHeadersError) {
-		is_nonempty: this.len() > 0,
+		empty: true,
 		matching_hashes: pairs.clone().all(|(a, b)| a.hash == b.parent_hash),
 		continuous_heights: pairs.clone().all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height),
 
@@ -55,14 +56,11 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 			result.is_valid()?;
 			Ok(result)
 		} else {
-			Err(NonemptyContinuousHeadersError::<T>::is_nonempty)
+			Err(NonemptyContinuousHeadersError::<T>::empty)
 		}
 	}
 	pub fn new(header: Header<T>) -> Self {
 		Self { first: header, headers: Default::default() }
-	}
-	pub fn first_height(&self) -> T::ChainBlockNumber {
-		self.first.block_height
 	}
 	pub fn last(&self) -> &Header<T> {
 		self.headers.back().unwrap_or(&self.first)
@@ -96,8 +94,7 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 			let mut other_headers = other.get_headers();
 			let mut common_headers = extract_common_prefix(&mut self_headers, &mut other_headers);
 
-			let mut cloned_other = other_headers.clone();
-			common_headers.append(&mut cloned_other);
+			common_headers.append(&mut other_headers.clone());
 			//either common_headers or other_headers contain at least 1 element hence this cannot
 			// fail
 			*self = Self::try_new(common_headers).unwrap();
@@ -109,7 +106,7 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	}
 
 	pub fn get_headers(&self) -> VecDeque<Header<T>> {
-		[self.first.clone()].into_iter().chain(self.headers.clone()).collect()
+		iter::once(&self.first).chain(&self.headers).cloned().collect()
 	}
 
 	pub fn trim_to_length(&mut self, target_length: usize) {
@@ -133,13 +130,9 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 		}
 		None
 	}
-
+	#[allow(clippy::len_without_is_empty)]
 	pub fn len(&self) -> usize {
 		self.headers.len() + 1usize
-	}
-
-	pub fn is_empty(&self) -> bool {
-		false
 	}
 }
 
@@ -217,7 +210,7 @@ mod prop_tests {
 					let first_chain_clone = first_chain.clone();
 					let len = first_chain_clone.headers.len();
 					let start = if val {
-						first_chain_clone.first_height()
+						first_chain_clone.first().block_height
 					} else {
 						first_chain_clone.last().block_height
 					};
@@ -249,7 +242,7 @@ mod prop_tests {
 								prop_assert_eq!(Some(first_chain.last()), existing_wrong_parent.as_ref(), "Existing wrong parent do not match");
 							},
 							MergeFailure::InternalError => {
-								prop_assert!((first_chain.last().block_height != second_chain.first_height()) || (first_chain.first_height() != second_chain.first_height()));
+								prop_assert!((first_chain.last().block_height != second_chain.first().block_height) || (first_chain.first().block_height != second_chain.first().block_height));
 							},
 						}
 				},
