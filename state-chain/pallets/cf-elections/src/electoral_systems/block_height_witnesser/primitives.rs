@@ -36,6 +36,8 @@ defx! {
 		( where pairs = this.get_headers().into_iter().zip(this.get_headers().into_iter().skip(1)) )
 	}
 }
+/// This is an unsafe implementation of `into()` which panics if the input iterator is of length 0.
+/// Only use for tests!
 #[cfg(test)]
 impl<T: ChainTypes, X: IntoIterator<Item = Header<T>> + Clone> From<X>
 	for NonemptyContinuousHeaders<T>
@@ -115,7 +117,8 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 		}
 	}
 
-	// Return None if there is 1 element only
+	/// Extracts the first element. Returns None if there is 1 element only, as it cannot be
+	/// removed.
 	fn safe_pop_front(&mut self) -> Option<Header<T>> {
 		if let Some(next_header) = self.headers.pop_front() {
 			let result = self.first.clone();
@@ -124,6 +127,7 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 		}
 		None
 	}
+	/// Extracts the last element. Returns None if there is 1 element only, as it cannot be removed.
 	pub fn safe_pop_back(&mut self) -> Option<Header<T>> {
 		if let Some(last) = self.headers.pop_back() {
 			return Some(last);
