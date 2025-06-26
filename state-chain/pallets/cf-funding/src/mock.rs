@@ -23,7 +23,7 @@ use cf_traits::{
 	mocks::{broadcaster::MockBroadcaster, time_source},
 	AccountRoleRegistry, RedemptionCheck, WaivedFees,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{derive_impl, parameter_types};
 use scale_info::TypeInfo;
 use sp_runtime::{traits::IdentityLookup, AccountId32, DispatchError, DispatchResult, Permill};
@@ -70,7 +70,19 @@ impl pallet_cf_flip::Config for Test {
 
 cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub struct MockRegisterRedemption {
 	amount: <Ethereum as Chain>::ChainAmount,
 }
@@ -81,7 +93,7 @@ impl cf_chains::RegisterRedemption for MockRegisterRedemption {
 		amount: u128,
 		_address: &[u8; 20],
 		_expiry: u64,
-		_executor: Option<cf_chains::eth::Address>,
+		_executor: Option<cf_chains::evm::Address>,
 	) -> Self {
 		Self { amount }
 	}

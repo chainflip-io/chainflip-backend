@@ -22,18 +22,17 @@ use crate::evm::retry_rpc::EvmRetryRpcApi;
 
 use super::super::common::chain_source::Header;
 use anyhow::{anyhow, Result};
-use sp_core::{H160, H256, U256};
 
 use ethers::{
 	abi::ethereum_types::BloomInput,
-	types::{Bloom, Log},
+	types::{Address, Bloom, Log, TxHash, U256},
 };
 
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug, PartialEq, Eq)]
 pub struct Event<EventParameters: Debug> {
 	/// The transaction hash of the transaction that emitted this event
-	pub tx_hash: H256,
+	pub tx_hash: TxHash,
 	/// The index number of this particular log, in the list of logs emitted by the tx_hash
 	pub log_index: U256,
 	/// The event specific parameters

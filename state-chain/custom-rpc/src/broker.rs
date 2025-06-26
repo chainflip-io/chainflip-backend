@@ -19,7 +19,7 @@ use crate::{
 	pool_client::SignedPoolClient,
 	CfApiError,
 };
-pub use cf_chains::eth::Address as EthereumAddress;
+pub use cf_chains::evm::Address as EvmAddress;
 use cf_chains::{address::AddressString, CcmChannelMetadataUnchecked, ChannelRefundParameters};
 use cf_node_client::{
 	extract_from_first_matching_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
@@ -40,7 +40,7 @@ use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
 	HeaderBackend, StorageProvider,
 };
-use sc_transaction_pool::FullPool;
+use sc_transaction_pool::TransactionPoolWrapper;
 use sp_api::CallApiAt;
 use sp_core::crypto::AccountId32;
 use sp_runtime::traits::Block as BlockT;
@@ -111,7 +111,7 @@ where
 		client: Arc<C>,
 		backend: Arc<BE>,
 		executor: Arc<dyn sp_core::traits::SpawnNamed>,
-		pool: Arc<FullPool<B, C>>,
+		pool: Arc<TransactionPoolWrapper<B, C>>,
 		pair: sp_core::sr25519::Pair,
 	) -> Self {
 		Self {
@@ -455,10 +455,7 @@ where
 		.map_err(CfApiError::from)?)
 	}
 
-	async fn register_affiliate(
-		&self,
-		withdrawal_address: EthereumAddress,
-	) -> RpcResult<AccountId32> {
+	async fn register_affiliate(&self, withdrawal_address: EvmAddress) -> RpcResult<AccountId32> {
 		let ExtrinsicData { events, .. } = self
 			.signed_pool_client
 			.submit_watch_dynamic(

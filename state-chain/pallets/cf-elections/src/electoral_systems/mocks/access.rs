@@ -22,7 +22,7 @@ use crate::{
 	},
 	CorruptStorageError, ElectionIdentifier, UniqueMonotonicIdentifier,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use core::{cell::RefCell, cmp::Ord};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use std::collections::BTreeMap;

@@ -42,7 +42,7 @@ use cf_traits::{
 	ThresholdSigner, ThresholdSignerNomination,
 };
 use cfe_events::ThresholdSignatureRequest;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchResult,
 	ensure,
@@ -88,7 +88,9 @@ pub type KeygenResponseStatus<T, I> =
 pub type KeyHandoverResponseStatus<T, I> =
 	ResponseStatus<T, KeyHandoverSuccessVoters<T, I>, KeyHandoverFailureVoters<T, I>, I>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
+)]
 pub enum PalletConfigUpdate {
 	/// Set the maximum duration (in blocks) of a threshold signing ceremony before it is timed out
 	/// and retried.
@@ -101,14 +103,25 @@ pub enum PalletConfigUpdate {
 	KeygenSlashAmount { amount_to_slash: FlipBalance },
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum PalletOffence {
 	ParticipateSigningFailed,
 	FailedKeygen,
 	FailedKeyHandover,
 }
 
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum RequestType<Key, Participants> {
 	/// Uses the provided key and selects new participants from the provided epoch.
 	/// This signing request will be retried until success.
@@ -120,13 +133,25 @@ pub enum RequestType<Key, Participants> {
 }
 
 /// The type of a threshold *Ceremony* i.e. after a request has been emitted, it is then a ceremony.
-#[derive(Clone, Copy, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Clone, Copy, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo,
+)]
 pub enum ThresholdCeremonyType {
 	Standard,
 	KeygenVerification,
 }
 
-#[derive(Clone, Encode, Decode, GenericTypeInfo, PartialEq, Eq, Default, RuntimeDebug)]
+#[derive(
+	Clone,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	GenericTypeInfo,
+	PartialEq,
+	Eq,
+	Default,
+	RuntimeDebug,
+)]
 #[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 pub struct SignerAndSignatureResult<T: Config<I>, I: 'static = ()> {
 	pub signer: AggKeyFor<T, I>,
@@ -274,7 +299,9 @@ pub mod pallet {
 	};
 	use frame_system::ensure_none;
 	/// Context for tracking the progress of a threshold signature ceremony.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
+	#[derive(
+		Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
+	)]
 	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
 		pub request_context: RequestContext<T, I>,
@@ -297,7 +324,9 @@ pub mod pallet {
 		pub threshold_ceremony_type: ThresholdCeremonyType,
 	}
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
+	#[derive(
+		Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
+	)]
 	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct RequestContext<T: Config<I>, I: 'static> {
 		#[skip_name_expansion]
@@ -311,7 +340,9 @@ pub mod pallet {
 		pub payload: PayloadFor<T, I>,
 	}
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
+	#[derive(
+		Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, GenericTypeInfo,
+	)]
 	#[expand_name_with(<T::TargetChainCrypto as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct RequestInstruction<T: Config<I>, I: 'static> {
 		pub request_context: RequestContext<T, I>,
@@ -930,7 +961,18 @@ pub mod pallet {
 	}
 
 	#[pallet::origin]
-	#[derive(PartialEq, Eq, Copy, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	#[derive(
+		PartialEq,
+		Eq,
+		Copy,
+		Clone,
+		RuntimeDebug,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+		MaxEncodedLen,
+	)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct Origin<T: Config<I>, I: 'static = ()>(pub(super) PhantomData<(T, I)>);
 

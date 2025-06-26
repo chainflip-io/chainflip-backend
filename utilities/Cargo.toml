@@ -22,7 +22,7 @@ futures-util = { workspace = true, optional = true }
 hex = { workspace = true }
 itertools = { workspace = true }
 lazy_format = { workspace = true }
-lazy_static = { workspace = true }
+lazy_static = { workspace = true, optional = true }
 log = { workspace = true }
 mockall = { workspace = true, optional = true }
 num-traits = { workspace = true, optional = true }
@@ -31,7 +31,7 @@ predicates = { workspace = true, optional = true }
 prometheus = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
 scale-info = { workspace = true, optional = true }
-scopeguard = { workspace = true }
+scopeguard = { workspace = true, optional = true }
 serde = { workspace = true, optional = true, features = ["derive", "alloc"] }
 sp-core = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
@@ -59,9 +59,11 @@ std = [
   "dep:anyhow",
   "dep:async-broadcast",
   "dep:predicates",
+  "dep:lazy_static",
   "dep:mockall",
   "dep:futures",
   "dep:futures-util",
+  "dep:scopeguard",
   "dep:tokio",
   "hex/std",
   "dep:async-channel",

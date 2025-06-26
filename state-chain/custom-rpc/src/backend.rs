@@ -24,6 +24,7 @@ use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
 	HeaderBackend, StorageProvider,
 };
+use sc_rpc::utils::{spawn_subscription_task, BoundedVecDeque, PendingSubscription};
 use sc_rpc_spec_v2::chain_head::{
 	api::ChainHeadApiServer, ChainHead, ChainHeadConfig, FollowEvent,
 };
@@ -205,7 +206,7 @@ where
 	}
 
 	pub async fn new_subscription<
-		T: Serialize + Send + Clone + Eq + 'static,
+		T: Serialize + Send + Sync + Clone + Eq + 'static,
 		F: Fn(&C, state_chain_runtime::Hash) -> Result<T, RpcApiError> + Send + Clone + 'static,
 	>(
 		&self,
@@ -231,7 +232,7 @@ where
 	/// subscription can either filter out, or end the stream if the provided async closure returns
 	/// an error.
 	async fn new_subscription_with_state<
-		T: Serialize + Send + Clone + Eq + 'static,
+		T: Serialize + Send + Sync + Clone + Eq + 'static,
 		// State to carry forward between calls to the closure.
 		S: 'static + Clone + Send,
 		F: Fn(&C, state_chain_runtime::Hash, Option<&S>) -> Result<(T, S), RpcApiError>
@@ -415,10 +416,10 @@ where
 			.map(Result::unwrap)
 			.boxed();
 
-		self.executor.spawn(
-			"cf-rpc-update-subscription",
-			Some("rpc"),
-			sc_rpc::utils::pipe_from_stream(pending_sink, stream).boxed(),
+		spawn_subscription_task(
+			&self.executor,
+			PendingSubscription::from(pending_sink)
+				.pipe_from_stream(stream, BoundedVecDeque::default()),
 		);
 	}
 }

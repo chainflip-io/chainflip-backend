@@ -21,18 +21,18 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
+	self, address::EncodedAddress, assets::any::AssetMap, evm::Address as EvmAddress,
 	sol::SolInstructionRpc, CcmChannelMetadataUnchecked, Chain, ChainCrypto,
 	ChannelRefundParametersEncoded, ForeignChainAddress, VaultSwapExtraParametersEncoded,
 	VaultSwapInputEncoded,
 };
 use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
-	DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount, NetworkEnvironment,
+	DcaParameters, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment,
 	PrewitnessedDepositId, SemVer,
 };
 use cf_traits::SwapLimits;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use core::{ops::Range, str};
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
@@ -55,7 +55,9 @@ use sp_std::{
 
 type VanityName = Vec<u8>;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo, Serialize, Deserialize,
+)]
 #[serde(tag = "chain")]
 pub enum VaultSwapDetails<BtcAddress> {
 	Bitcoin {
@@ -77,7 +79,9 @@ pub enum VaultSwapDetails<BtcAddress> {
 	},
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo, Serialize, Deserialize,
+)]
 pub struct EvmVaultSwapDetails {
 	#[serde(with = "sp_core::bytes")]
 	pub calldata: Vec<u8>, // The encoded calldata payload including function selector
@@ -108,14 +112,36 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	Copy,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub enum BackupOrPassive {
 	Backup,
 	Passive,
 }
 
 // TEMP: so frontend doesn't break after removal of passive from backend
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	Copy,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub enum ChainflipAccountStateWithPassive {
 	CurrentAuthority,
 	BackupOrPassive(BackupOrPassive),
@@ -133,9 +159,9 @@ pub struct ValidatorInfo {
 	pub is_qualified: bool,
 	pub is_online: bool,
 	pub is_bidding: bool,
-	pub bound_redeem_address: Option<EthereumAddress>,
+	pub bound_redeem_address: Option<EvmAddress>,
 	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
-	pub restricted_balances: BTreeMap<EthereumAddress, AssetAmount>,
+	pub restricted_balances: BTreeMap<EvmAddress, AssetAmount>,
 	pub estimated_redeemable_balance: AssetAmount,
 }
 
@@ -149,7 +175,7 @@ pub struct BoostPoolDepth {
 	pub available_amount: AssetAmount,
 }
 
-#[derive(Encode, Decode, TypeInfo)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum SimulateSwapAdditionalOrder {
 	LimitOrder {
 		base_asset: Asset,
@@ -210,7 +236,7 @@ pub struct LiquidityProviderInfo {
 	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
 }
 
-#[derive(Encode, Decode, TypeInfo, Default)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Default)]
 pub struct BrokerInfo {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
 	pub btc_vault_deposit_address: Option<String>,
@@ -231,7 +257,7 @@ impl From<BrokerInfoLegacy> for BrokerInfo {
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct CcmData {
-	pub gas_budget: GasAmount,
+	pub gas_budget: AssetAmount,
 	pub message_length: u32,
 }
 
@@ -244,7 +270,7 @@ pub enum FeeTypes {
 }
 
 /// Struct that represents the estimated output of a Swap.
-#[derive(Encode, Decode, TypeInfo)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct SimulatedSwapInformation {
 	pub intermediary: Option<AssetAmount>,
 	pub output: AssetAmount,
@@ -289,13 +315,35 @@ impl core::fmt::Display for DispatchErrorWithMessage {
 #[cfg(feature = "std")]
 impl std::error::Error for DispatchErrorWithMessage {}
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+#[derive(
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	Eq,
+	PartialEq,
+	TypeInfo,
+	Debug,
+	Clone,
+)]
 pub struct FailingWitnessValidators {
 	pub failing_count: u32,
 	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+#[derive(
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	Eq,
+	PartialEq,
+	TypeInfo,
+	Debug,
+	Clone,
+)]
 pub struct ChainAccounts {
 	pub chain_accounts: Vec<EncodedAddress>,
 }
@@ -330,7 +378,18 @@ impl<AccountId, C: Chain> From<ChannelAction<AccountId, C>> for ChannelActionTyp
 	}
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+#[derive(
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	Eq,
+	PartialEq,
+	TypeInfo,
+	Debug,
+	Clone,
+)]
 pub enum TransactionScreeningEvent<TxId> {
 	TransactionRejectionRequestReceived {
 		account_id: <Runtime as frame_system::Config>::AccountId,
@@ -351,21 +410,32 @@ pub enum TransactionScreeningEvent<TxId> {
 pub type BrokerRejectionEventFor<C> =
 	TransactionScreeningEvent<<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId>;
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+#[derive(
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	Eq,
+	PartialEq,
+	TypeInfo,
+	Debug,
+	Clone,
+)]
 pub struct TransactionScreeningEvents {
 	pub btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>>,
 	pub eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>>,
 	pub arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>>,
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Serialize, Deserialize, Clone)]
 pub struct VaultAddresses {
 	pub ethereum: EncodedAddress,
 	pub arbitrum: EncodedAddress,
 	pub bitcoin: Vec<(AccountId32, EncodedAddress)>,
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Serialize, Deserialize, Clone)]
 pub struct TradingStrategyInfo<Amount> {
 	pub lp_id: AccountId32,
 	pub strategy_id: AccountId32,
@@ -373,19 +443,19 @@ pub struct TradingStrategyInfo<Amount> {
 	pub balance: Vec<(Asset, Amount)>,
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Serialize, Deserialize, Clone)]
 pub struct TradingStrategyLimits {
 	pub minimum_deployment_amount: AssetMap<Option<AssetAmount>>,
 	pub minimum_added_funds_amount: AssetMap<Option<AssetAmount>>,
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Serialize, Deserialize, Clone)]
 pub struct NetworkFeeDetails {
 	pub standard_rate_and_minimum: FeeRateAndMinimum,
 	pub rates: AssetMap<Permill>,
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Serialize, Deserialize, Clone)]
 pub struct NetworkFees {
 	pub regular_network_fee: NetworkFeeDetails,
 	pub internal_swap_network_fee: NetworkFeeDetails,
@@ -411,9 +481,9 @@ decl_runtime_apis!(
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
-		fn cf_eth_flip_token_address() -> EthereumAddress;
-		fn cf_eth_state_chain_gateway_address() -> EthereumAddress;
-		fn cf_eth_key_manager_address() -> EthereumAddress;
+		fn cf_eth_flip_token_address() -> EvmAddress;
+		fn cf_eth_state_chain_gateway_address() -> EvmAddress;
+		fn cf_eth_key_manager_address() -> EvmAddress;
 		fn cf_eth_chain_id() -> u64;
 		/// Returns the eth vault in the form [agg_key, active_from_eth_block]
 		fn cf_eth_vault() -> ([u8; 33], u32);

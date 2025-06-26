@@ -24,7 +24,16 @@ use crate::{btc::BitcoinTransaction, *};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 #[scale_info(skip_type_params(Environment))]
 #[allow(clippy::large_enum_variant)]
 pub enum BitcoinApi<Environment: 'static> {
@@ -36,7 +45,18 @@ pub enum BitcoinApi<Environment: 'static> {
 }
 pub type SelectedUtxosAndChangeAmount = (Vec<Utxo>, BtcAmount);
 
-#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+)]
 pub enum UtxoSelectionType {
 	SelectForConsolidation,
 	Some { output_amount: BtcAmount, number_of_outputs: u64 },
@@ -155,7 +175,7 @@ impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for Bitc
 		_transfer_param: TransferAssetParams<Bitcoin>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
-		_gas_budget: GasAmount,
+		_gas_budget: AssetAmount,
 		_message: Vec<u8>,
 		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {

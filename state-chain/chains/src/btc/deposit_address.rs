@@ -18,7 +18,17 @@ use crate::ChannelLifecycleHooks;
 
 use super::*;
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+)]
 pub struct TapscriptPath {
 	pub salt: u32,
 	pub tweaked_pubkey_bytes: [u8; 33],
@@ -37,7 +47,17 @@ impl TapscriptPath {
 	}
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+)]
 pub struct DepositAddress {
 	pub pubkey_x: [u8; 32],
 	pub script_path: Option<TapscriptPath>,

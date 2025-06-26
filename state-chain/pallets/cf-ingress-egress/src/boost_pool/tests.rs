@@ -16,7 +16,7 @@
 
 use super::*;
 use cf_chains::Ethereum;
-use cf_primitives::{AssetAmount, EthAmount, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS};
+use cf_primitives::{AssetAmount, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS};
 
 use sp_std::collections::btree_set::BTreeSet;
 
@@ -110,9 +110,9 @@ fn test_scaled_amount() {
 	// a large number of decimals and still fit into u128 after scaling up:
 
 	// 1 trillion FLIP (or ETH; other chains have smaller number of decimals)
-	let original: EthAmount = 1_000_000_000_000 * FLIPPERINOS_PER_FLIP;
+	let original: AssetAmount = 1_000_000_000_000 * FLIPPERINOS_PER_FLIP;
 	let scaled: ScaledAmount<Ethereum> = ScaledAmount::from_chain_amount(original);
-	let recovered: EthAmount = scaled.into_chain_amount();
+	let recovered: AssetAmount = scaled.into_chain_amount();
 	assert_eq!(original, recovered);
 }
 

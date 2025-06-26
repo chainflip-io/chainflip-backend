@@ -19,11 +19,14 @@ use crate::{
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use anyhow::ensure;
-use cf_chains::{instances::ChainInstanceFor, Chain};
+use cf_chains::{
+	evm::{Address, TransactionHash},
+	instances::ChainInstanceFor,
+	Chain,
+};
 use cf_primitives::EpochIndex;
 use ethers::types::Bloom;
 use futures_core::Future;
-use sp_core::H256;
 
 use crate::witness::{
 	common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
@@ -32,10 +35,9 @@ use crate::witness::{
 
 use std::collections::BTreeMap;
 
-use cf_chains::evm::DepositDetails;
+use cf_chains::evm::{Address as EvmAddress, DepositDetails, TransactionHash};
 use ethers::prelude::*;
 use itertools::Itertools;
-use sp_core::U256;
 
 use crate::evm::rpc::address_checker::*;
 
@@ -61,16 +63,17 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		process_call: ProcessCall,
 		eth_rpc: EvmRetryRpcClient,
 		native_asset: <Inner::Chain as cf_chains::Chain>::ChainAsset,
-		address_checker_address: H160,
-		vault_address: H160,
+		address_checker_address: EvmAddress,
+		vault_address: EvmAddress,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		Inner::Chain: cf_chains::Chain<
 			ChainAmount = u128,
 			DepositDetails = DepositDetails,
-			ChainAccount = H160,
+			ChainAccount = EvmAddress,
 		>,
-		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = (Bloom, Addresses<Inner>)>,
+		Inner:
+			ChunkedByVault<Index = u64, Hash = TransactionHash, Data = (Bloom, Addresses<Inner>)>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 			+ Send
 			+ Sync
@@ -140,14 +143,16 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 										.into_iter()
 										.map(|(to_addr, value, tx_hashes)| {
 											pallet_cf_ingress_egress::DepositWitness {
-												deposit_address: to_addr,
+												deposit_address: EvmAddress(to_addr.0),
 												asset: native_asset,
 												amount:
 													value
 													.try_into()
 													.expect("Ingress witness transfer value should fit u128"),
 												deposit_details: DepositDetails {
-													tx_hashes,
+													tx_hashes: tx_hashes.map(|hashes| {
+														hashes.into_iter().map(|h| TransactionHash(h)).collect()
+													}),
 												}
 											}
 										})

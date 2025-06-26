@@ -30,12 +30,12 @@ pub use weights::WeightInfo;
 #[cfg(test)]
 mod tests;
 
-use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
+use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
 	Funding,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	dispatch::DispatchResult,
 	ensure,
@@ -96,7 +96,9 @@ pub mod pallet {
 
 	pub type EthTransactionHash = [u8; 32];
 
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[derive(
+		Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo,
+	)]
 	pub enum RedemptionAmount<T: Parameter> {
 		Max,
 		Exact(T),

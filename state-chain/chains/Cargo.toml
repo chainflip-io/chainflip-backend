@@ -25,8 +25,6 @@ sol-prim = { workspace = true, features = ["pda", "str", "serde", "scale"] }
 
 # Ethereum
 ethabi = { workspace = true }
-ethereum-types = { workspace = true }
-ethereum = { workspace = true }
 rlp = { workspace = true }
 
 # Bitcoin
@@ -88,8 +86,6 @@ std = [
   "scale-info/std",
   "codec/std",
   "ethabi/full-serde",
-  "ethereum/std",
-  "ethereum-types/std",
   "frame-support/std",
   "hex/std",
   "hex/serde",
@@ -128,4 +124,4 @@ try-runtime = [
   "cf-runtime-utilities/try-runtime",
 ]
 
-runtime-integration-tests = ["std", "dep:rand", "ed25519-dalek/rand_core",]
+runtime-integration-tests = ["std", "dep:rand", "ed25519-dalek/rand_core"]

@@ -87,11 +87,11 @@ impl DotRpcClient {
 pub trait DotSubscribeApi: Send + Sync {
 	async fn subscribe_best_heads(
 		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
+	) -> Result<Pin<Box<dyn Stream<Item = Result<(PolkadotHash, PolkadotHeader)>> + Send>>>;
 
 	async fn subscribe_finalized_heads(
 		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
+	) -> Result<Pin<Box<dyn Stream<Item = Result<(PolkadotHash, PolkadotHeader)>> + Send>>>;
 }
 
 /// The trait that defines the stateless / non-subscription requests to Polkadot.
@@ -169,7 +169,7 @@ impl DotSubClient {
 impl DotSubscribeApi for DotSubClient {
 	async fn subscribe_best_heads(
 		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
+	) -> Result<Pin<Box<dyn Stream<Item = Result<(PolkadotHash, PolkadotHeader)>> + Send>>> {
 		let client = create_online_client(&self.ws_endpoint, self.expected_genesis_hash).await?;
 
 		Ok(Box::pin(
@@ -177,14 +177,14 @@ impl DotSubscribeApi for DotSubClient {
 				.blocks()
 				.subscribe_best()
 				.await?
-				.map(|result| result.map(|block| block.header().clone()))
+				.map(|result| result.map(|block| (block.hash(), block.header().clone())))
 				.map_err(|e| anyhow!("Error in best head stream: {e}")),
 		))
 	}
 
 	async fn subscribe_finalized_heads(
 		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
+	) -> Result<Pin<Box<dyn Stream<Item = Result<(PolkadotHash, PolkadotHeader)>> + Send>>> {
 		let client = create_online_client(&self.ws_endpoint, self.expected_genesis_hash).await?;
 
 		Ok(Box::pin(
@@ -192,7 +192,7 @@ impl DotSubscribeApi for DotSubClient {
 				.blocks()
 				.subscribe_finalized()
 				.await?
-				.map(|result| result.map(|block| block.header().clone()))
+				.map(|result| result.map(|block| (block.hash(), block.header().clone())))
 				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
 		))
 	}
@@ -226,7 +226,7 @@ async fn create_online_client(
 impl DotSubscribeApi for DotRpcClient {
 	async fn subscribe_best_heads(
 		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
+	) -> Result<Pin<Box<dyn Stream<Item = Result<(PolkadotHash, PolkadotHeader)>> + Send>>> {
 		Ok(Box::pin(
 			refresh_connection_on_error!(self, blocks, subscribe_best)?
 				.map(|block| block.map(|block| block.header().clone()))
@@ -236,7 +236,7 @@ impl DotSubscribeApi for DotRpcClient {
 
 	async fn subscribe_finalized_heads(
 		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
+	) -> Result<Pin<Box<dyn Stream<Item = Result<(PolkadotHash, PolkadotHeader)>> + Send>>> {
 		Ok(Box::pin(
 			refresh_connection_on_error!(self, blocks, subscribe_finalized)?
 				.map(|block| block.map(|block| block.header().clone()))

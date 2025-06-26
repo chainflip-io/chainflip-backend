@@ -22,15 +22,20 @@ pub mod benchmarking;
 pub mod deposit_address;
 
 use crate::{
-	evm::{DeploymentStatus, EvmFetchId, EvmTransactionMetadata, Transaction},
-	Chain, FeeEstimationApi, *,
+	evm::{self, DeploymentStatus, EvmFetchId, EvmTransactionMetadata, Transaction},
+	BenchmarkValue, Chain, DepositChannel, FeeEstimationApi, FeeRefundCalculator,
 };
-use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Ethereum;
-use codec::{Decode, Encode, MaxEncodedLen};
-pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Word};
+use cf_primitives::{chains::assets, AssetAmount};
+use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use evm::api::EvmReplayProtection;
-use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
+use frame_support::{
+	sp_runtime::{
+		traits::{Member, Zero},
+		FixedPointNumber, FixedU64, RuntimeDebug,
+	},
+	Parameter,
+};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{cmp::min, convert::TryInto, str};
@@ -50,7 +55,7 @@ impl Chain for Ethereum {
 
 	type ChainCrypto = evm::EvmCrypto;
 	type ChainBlockNumber = u64;
-	type ChainAmount = EthAmount;
+	type ChainAmount = AssetAmount;
 	type TransactionFee = evm::TransactionFee;
 	type TrackedData = EthereumTrackedData;
 	type ChainAsset = assets::eth::Asset;
@@ -63,7 +68,7 @@ impl Chain for Ethereum {
 	type DepositDetails = evm::DepositDetails;
 	type Transaction = Transaction;
 	type TransactionMetadata = EvmTransactionMetadata;
-	type TransactionRef = H256;
+	type TransactionRef = sp_core::H256;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EvmReplayProtection;
 }
@@ -76,6 +81,7 @@ impl Chain for Ethereum {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Serialize,
@@ -100,9 +106,9 @@ impl EthereumTrackedData {
 	pub fn calculate_ccm_gas_limit(
 		&self,
 		is_native_asset: bool,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message_length: usize,
-	) -> GasAmount {
+	) -> AssetAmount {
 		use crate::eth::fees::*;
 		// Adding one extra gas unit per message's length (byte) for the extra gas overhead of
 		// passing the message through the Vault. The extra gas per message's calldata byte
@@ -119,7 +125,7 @@ impl EthereumTrackedData {
 
 	pub fn calculate_transaction_fee(
 		&self,
-		gas_limit: GasAmount,
+		gas_limit: AssetAmount,
 	) -> <Ethereum as crate::Chain>::ChainAmount {
 		(self.base_fee + self.priority_fee).saturating_mul(gas_limit)
 	}
@@ -177,7 +183,7 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 	fn estimate_ccm_fee(
 		&self,
 		asset: <Ethereum as Chain>::ChainAsset,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message_length: usize,
 	) -> Option<<Ethereum as Chain>::ChainAmount> {
 		let gas_limit = self.calculate_ccm_gas_limit(
@@ -251,6 +257,8 @@ pub mod sig_constants {
 #[cfg(test)]
 mod lifecycle_tests {
 	use super::*;
+	use crate::ChannelLifecycleHooks;
+
 	const ETH: assets::eth::Asset = assets::eth::Asset::Eth;
 	const USDC: assets::eth::Asset = assets::eth::Asset::Usdc;
 

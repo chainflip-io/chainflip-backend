@@ -224,7 +224,7 @@ impl<T: Config<I>, I: 'static> AdjustedFeeEstimationApi<T::TargetChain> for Pall
 
 	fn estimate_ccm_fee(
 		asset: <T::TargetChain as Chain>::ChainAsset,
-		gas_budget: cf_primitives::GasAmount,
+		gas_budget: cf_primitives::AssetAmount,
 		message_length: usize,
 	) -> Option<<T::TargetChain as Chain>::ChainAmount> {
 		CurrentChainState::<T, I>::get()

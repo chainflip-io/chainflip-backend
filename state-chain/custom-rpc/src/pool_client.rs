@@ -23,7 +23,7 @@ use cf_node_client::{
 	ExtrinsicData, WaitForDynamicResult, WaitForResult,
 };
 use cf_primitives::WaitFor;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use futures::StreamExt;
 use jsonrpsee::{
@@ -33,8 +33,8 @@ use jsonrpsee::{
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, HeaderBackend, StorageProvider,
 };
-use sc_transaction_pool::FullPool;
-use sc_transaction_pool_api::{TransactionPool, TransactionStatus};
+use sc_transaction_pool::TransactionPoolWrapper;
+use sc_transaction_pool_api::{error::IntoPoolError, TransactionPool, TransactionStatus};
 use sp_api::{ApiError, CallApiAt, Core, Metadata};
 use sp_block_builder::BlockBuilder;
 use sp_core::crypto::AccountId32;
@@ -70,7 +70,7 @@ pub enum PoolClientError {
 	#[error("{0:?}")]
 	SubstrateClientError(#[from] sc_client_api::blockchain::Error),
 	#[error("{0:?}")]
-	TransactionPoolError(#[from] sc_transaction_pool::error::Error),
+	TransactionPoolError(#[from] sc_transaction_pool_api::error::Error),
 	#[error("{0:?}")]
 	TransactionValidityError(#[from] TransactionValidityError),
 	#[error("{0:?}")]
@@ -103,12 +103,12 @@ where
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
 {
 	client: Arc<C>,
-	pool: Arc<FullPool<B, C>>,
+	pool: Arc<TransactionPoolWrapper<B, C>>,
 	pool_semaphore: Arc<Semaphore>,
-	_phantom: PhantomData<(B, BE)>,
-	system_api: System<FullPool<B, C>, C, B>,
+	system_api: System<TransactionPoolWrapper<B, C>, C, B>,
 	pair_signer: PairSigner<sp_core::sr25519::Pair>,
 	runtime_decoders: Arc<RwLock<HashMap<u32, RuntimeDecoder>>>,
+	_phantom: PhantomData<(B, BE)>,
 }
 
 impl<C, B, BE> SignedPoolClient<C, B, BE>
@@ -132,10 +132,14 @@ where
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<B>
 		+ frame_system_rpc_runtime_api::AccountNonceApi<B, AccountId, Nonce>,
 {
-	pub fn new(client: Arc<C>, pool: Arc<FullPool<B, C>>, pair: sp_core::sr25519::Pair) -> Self {
+	pub fn new(
+		client: Arc<C>,
+		pool: Arc<TransactionPoolWrapper<B, C>>,
+		pair: sp_core::sr25519::Pair,
+	) -> Self {
 		Self {
 			_phantom: Default::default(),
-			system_api: System::new(client.clone(), pool.clone(), sc_rpc_api::DenyUnsafe::Yes),
+			system_api: System::new(client.clone(), pool.clone()),
 			pair_signer: PairSigner::new(pair),
 			runtime_decoders: Arc::new(RwLock::new(HashMap::new())),
 			pool_semaphore: Arc::new(Semaphore::new(1)), // Allow only 1 pool access at a time
@@ -447,15 +451,19 @@ where
 				.await
 			{
 				Ok(tx_hash) => return Ok(tx_hash),
-				Err(pool_error) =>
+				Err(pool_error) => {
+					let pool_error = pool_error
+						.into_pool_error()
+						.expect("Pool error conversion always succeeds");
 					if let Some(retry_msg) = is_retriable_pool_error(&pool_error) {
 						log::debug!(
 							target: "pool_client",
 							"Recoverable error: {retry_msg}."
 						);
 					} else {
-						Err(PoolClientError::from(pool_error))?
-					},
+						Err(pool_error)?
+					}
+				},
 			}
 		}
 		Err(PoolClientError::PoolSubmitError(MAX_POOL_SUBMISSION_RETRIES))
@@ -506,15 +514,19 @@ where
 					maybe_status_stream = Some(status_stream);
 					break;
 				},
-				Err(pool_error) =>
+				Err(pool_error) => {
+					let pool_error = pool_error
+						.into_pool_error()
+						.expect("Pool error conversion always succeeds");
 					if let Some(retry_msg) = is_retriable_pool_error(&pool_error) {
 						log::debug!(
 							target: "pool_client",
 							"Recoverable error: {retry_msg}."
 						);
 					} else {
-						Err(PoolClientError::from(pool_error))?
-					},
+						Err(pool_error)?
+					}
+				},
 			};
 		}
 
@@ -612,34 +624,31 @@ where
 	}
 }
 
-fn is_retriable_pool_error(pool_error: &sc_transaction_pool::error::Error) -> Option<&'static str> {
+fn is_retriable_pool_error(
+	pool_error: &sc_transaction_pool_api::error::Error,
+) -> Option<&'static str> {
+	use sc_transaction_pool_api::error::Error;
 	log::debug!(
 		target: "pool_client",
 		"Handling pool error: {pool_error}"
 	);
 	match pool_error {
-		sc_transaction_pool::error::Error::Pool(
-			sc_transaction_pool_api::error::Error::TooLowPriority { .. },
-		) => {
+		sc_transaction_pool_api::error::Error::TooLowPriority { .. } => {
 			// This occurs when a transaction with the same nonce is in the transaction pool
 			// and the priority is <= priority of that existing tx
 			Some(
 				"TooLowPriority error. Most likely occurs when a transaction with the same nonce is in the transaction pool",
 			)
 		},
-		sc_transaction_pool::error::Error::Pool(
-			sc_transaction_pool_api::error::Error::InvalidTransaction(
-				sp_runtime::transaction_validity::InvalidTransaction::Stale,
-			),
+		sc_transaction_pool_api::error::Error::InvalidTransaction(
+			sp_runtime::transaction_validity::InvalidTransaction::Stale,
 		) => {
 			// This occurs when the nonce has already been *consumed* i.e
 			// a transaction with that nonce is in a block
 			Some("InvalidTransaction::Stale error, most likely nonce too low")
 		},
-		sc_transaction_pool::error::Error::Pool(
-			sc_transaction_pool_api::error::Error::InvalidTransaction(
-				sp_runtime::transaction_validity::InvalidTransaction::BadProof,
-			),
+		sc_transaction_pool_api::error::Error::InvalidTransaction(
+			sp_runtime::transaction_validity::InvalidTransaction::BadProof,
 		) => {
 			// This occurs when the extra details used to sign the extrinsic such as the
 			// runtimeVersion are different from the verification side

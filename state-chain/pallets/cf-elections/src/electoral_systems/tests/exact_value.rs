@@ -20,7 +20,7 @@ use crate::{
 	electoral_systems::exact_value::*,
 	ElectionIdentifier,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::assert_ok;
 use scale_info::TypeInfo;
 
@@ -30,7 +30,19 @@ type WitnessExactValueWithStorage =
 type WitnessExactValueWithoutStorage =
 	ExactValue<MockIdentifier, Vec<u32>, (), MockHook<false>, u32, u64>;
 
-#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, PartialOrd, Ord, Default)]
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialOrd,
+	Ord,
+	Default,
+)]
 pub struct MockIdentifier(Vec<u32>);
 
 impl From<Vec<u32>> for MockIdentifier {

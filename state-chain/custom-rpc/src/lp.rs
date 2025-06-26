@@ -24,7 +24,7 @@ use anyhow::anyhow;
 use cf_amm::{common::Side, math::Tick};
 use cf_chains::{
 	address::{AddressString, ToHumanreadableAddress},
-	eth::Address as EthereumAddress,
+	evm::Address as EvmAddress,
 	instances::ChainInstanceFor,
 	Chain,
 };
@@ -56,7 +56,7 @@ use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
 	HeaderBackend, StorageProvider,
 };
-use sc_transaction_pool::FullPool;
+use sc_transaction_pool::TransactionPoolWrapper;
 use sp_api::CallApiAt;
 use sp_core::{crypto::AccountId32, U256};
 use sp_runtime::traits::Block as BlockT;
@@ -125,7 +125,7 @@ where
 		client: Arc<C>,
 		backend: Arc<BE>,
 		executor: Arc<dyn sp_core::traits::SpawnNamed>,
-		pool: Arc<FullPool<B, C>>,
+		pool: Arc<TransactionPoolWrapper<B, C>>,
 		pair: sp_core::sr25519::Pair,
 	) -> Self {
 		Self {
@@ -294,7 +294,7 @@ where
 
 	async fn transfer_asset(
 		&self,
-		amount: U256,
+		amount: NumberOrHex,
 		asset: Asset,
 		destination_account: AccountId32,
 	) -> RpcResult<Hash> {
@@ -446,7 +446,7 @@ where
 		.map_err(CfApiError::from)?)
 	}
 
-	async fn free_balances(&self) -> RpcResult<AssetMap<U256>> {
+	async fn free_balances(&self) -> RpcResult<AssetMap<NumberOrHex>> {
 		Ok(self
 			.rpc_backend
 			.client
@@ -472,9 +472,9 @@ where
 
 	async fn request_redemption(
 		&self,
-		redeem_address: EthereumAddress,
+		redeem_address: EvmAddress,
 		exact_amount: Option<NumberOrHex>,
-		executor_address: Option<EthereumAddress>,
+		executor_address: Option<EvmAddress>,
 	) -> RpcResult<Hash> {
 		let redeem_amount = if let Some(number_or_hex) = exact_amount {
 			RedemptionAmount::Exact(try_parse_number_or_hex(number_or_hex)?)

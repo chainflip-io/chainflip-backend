@@ -39,7 +39,7 @@ pub mod old {
 		pub source_chain: ForeignChain,
 		pub source_address: Option<ForeignChainAddress>,
 		pub ccm_additional_data: CcmAdditionalData,
-		pub gas_budget: GasAmount,
+		pub gas_budget: AssetAmount,
 	}
 
 	#[frame_support::storage_alias]

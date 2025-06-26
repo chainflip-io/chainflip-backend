@@ -133,6 +133,7 @@ impl Heartbeat for MockHeartbeat {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 )]

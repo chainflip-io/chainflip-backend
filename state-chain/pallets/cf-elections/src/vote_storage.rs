@@ -16,7 +16,7 @@
 
 use crate::{CorruptStorageError, SharedDataHash};
 
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{pallet_prelude::Member, Parameter};
 use scale_info::TypeInfo;
 
@@ -25,7 +25,7 @@ pub mod change;
 pub mod composite;
 pub(crate) mod individual;
 
-#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum AuthorityVote<PartialVote, Vote> {
 	PartialVote(PartialVote),
 	Vote(Vote),

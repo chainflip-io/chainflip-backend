@@ -23,8 +23,7 @@ pub mod x_swap_token;
 #[cfg(test)]
 pub mod test_utils {
 	use crate::{
-		cf_parameters::*, eth::Address as EthAddress, CcmChannelMetadataUnchecked,
-		ChannelRefundParameters,
+		cf_parameters::*, evm::Address, CcmChannelMetadataUnchecked, ChannelRefundParameters,
 	};
 	use cf_primitives::{
 		chains::Ethereum, AccountId, AffiliateAndFee, AffiliateShortId, Beneficiary, DcaParameters,
@@ -33,7 +32,7 @@ pub mod test_utils {
 	use frame_support::pallet_prelude::ConstU32;
 	use sp_runtime::BoundedVec;
 
-	pub fn refund_address() -> EthAddress {
+	pub fn refund_address() -> Address {
 		[0xF0; 20].into()
 	}
 	pub fn dca_parameter() -> DcaParameters {

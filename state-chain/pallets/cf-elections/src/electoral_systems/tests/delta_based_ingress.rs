@@ -21,7 +21,7 @@ use crate::{
 };
 use cf_primitives::Asset;
 use cf_traits::IngressSink;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::assert_ok;
 use sp_std::collections::btree_map::BTreeMap;
 use std::cell::RefCell;

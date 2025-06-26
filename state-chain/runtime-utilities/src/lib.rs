@@ -104,7 +104,7 @@ macro_rules! log_or_panic {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use codec::{Decode, Encode};
+	use codec::{Decode, DecodeWithMemTracking, Encode};
 	use frame_support::storage_alias;
 
 	#[storage_alias]
@@ -131,7 +131,7 @@ mod test {
 #[cfg(test)]
 mod test_derive {
 	use super::*;
-	use codec::{Decode, Encode};
+	use codec::{Decode, DecodeWithMemTracking, Encode};
 	use frame_support::{storage_alias, Twox64Concat};
 
 	#[storage_alias]
@@ -150,13 +150,13 @@ mod test_derive {
 	#[storage_alias]
 	type MapStore<T> = StorageMap<Pallet, Twox64Concat, u32, MyGenericEnumType<T>>;
 
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, EnumVariant)]
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, EnumVariant)]
 	enum MyEnumType {
 		A(u32),
 		B(Vec<u8>),
 	}
 
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, EnumVariant)]
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, EnumVariant)]
 	enum MyGenericEnumType<T: Config> {
 		A(T::Inner),
 		B(T::Inner),

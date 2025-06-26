@@ -23,17 +23,28 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, AssetAmount, Beneficiaries, BlockNumber, DcaParameters, Price, SwapRequestId,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone,
+	Copy,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum SwapType {
 	Swap,
 	NetworkFee,
 	IngressEgressFee,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum SwapOutputActionGeneric<Address, AccountId> {
 	Egress {
 		ccm_deposit_metadata: Option<CcmDepositMetadata<Address, DecodedCcmAdditionalData>>,
@@ -68,7 +79,7 @@ impl<AccountId> SwapRequestType<AccountId> {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum SwapRequestTypeGeneric<Address, AccountId> {
 	NetworkFee,
 	IngressEgressFee,

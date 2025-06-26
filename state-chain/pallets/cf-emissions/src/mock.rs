@@ -31,7 +31,7 @@ use cf_traits::{
 	},
 	Issuance, RewardsDistribution, WaivedFees,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{derive_impl, parameter_types, traits::Imbalance};
 use frame_system as system;
 use scale_info::TypeInfo;
@@ -99,7 +99,18 @@ impl RewardsDistribution for MockRewardsDistribution {
 	}
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub struct MockUpdateFlipSupply {
 	pub new_total_supply: u128,
 	pub block_number: u64,
@@ -148,7 +159,7 @@ impl ApiCall<MockEthereumChainCrypto> for MockUpdateFlipSupply {
 pub struct MockStateChainGatewayProvider;
 
 impl StateChainGatewayAddressProvider for MockStateChainGatewayProvider {
-	fn state_chain_gateway_address() -> cf_chains::eth::Address {
+	fn state_chain_gateway_address() -> cf_chains::evm::Address {
 		[0xcc; 20].into()
 	}
 }

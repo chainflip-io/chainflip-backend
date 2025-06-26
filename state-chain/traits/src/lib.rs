@@ -49,10 +49,10 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
-	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
+	EpochIndex, FlipBalance, ForeignChain, Ipv6Addr, NetworkEnvironment, Price, SemVer,
 	ThresholdSignatureRequestId,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::{DispatchResultWithPostInfo, Member},
@@ -174,7 +174,17 @@ impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
+#[derive(
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	RuntimeDebug,
+)]
 pub struct Bid<Id, Amount> {
 	pub bidder_id: Id,
 	pub amount: Amount,
@@ -366,7 +376,9 @@ pub trait EmissionsTrigger {
 ///
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
 /// otherwise they are considered offline.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default,
+)]
 pub struct NetworkState<ValidatorId> {
 	/// Those nodes that are considered offline
 	pub offline: Vec<ValidatorId>,
@@ -876,7 +888,15 @@ impl<A: DeregistrationCheck, B: DeregistrationCheck<AccountId = A::AccountId>> D
 }
 
 #[derive(
-	PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug,
+	PartialEqNoBound,
+	EqNoBound,
+	CloneNoBound,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	RuntimeDebug,
 )]
 pub struct ScheduledEgressDetails<C: Chain> {
 	pub egress_id: EgressId,
@@ -985,7 +1005,7 @@ pub trait AdjustedFeeEstimationApi<C: Chain> {
 
 	fn estimate_ccm_fee(
 		asset: C::ChainAsset,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message_length: usize,
 	) -> Option<C::ChainAmount>;
 }
@@ -1050,7 +1070,7 @@ pub trait FetchesTransfersLimitProvider {
 pub struct NoLimit;
 impl FetchesTransfersLimitProvider for NoLimit {}
 
-#[derive(Encode, Decode, TypeInfo)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct SwapLimits {
 	pub max_swap_retry_duration_blocks: BlockNumber,
 	pub max_swap_request_duration_blocks: BlockNumber,
@@ -1233,7 +1253,16 @@ pub trait LpOrdersWeightsProvider {
 }
 
 #[derive(
-	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 pub struct PoolPrice {
 	pub sell: Price,

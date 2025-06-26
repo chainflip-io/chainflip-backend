@@ -41,7 +41,7 @@ mod tests;
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, convert::Infallible, vec::Vec};
 
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::{U256, U512};
 
@@ -72,7 +72,16 @@ pub const MAX_TICK_GROSS_LIQUIDITY: Liquidity =
 	Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
 #[derive(
-	Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize, PartialEq,
+	Clone,
+	Debug,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+	PartialEq,
 )]
 pub struct Position {
 	/// The `depth` of this range order, this value is proportional to the value of the order i.e.
@@ -158,7 +167,16 @@ impl Position {
 }
 
 #[derive(
-	Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize, PartialEq,
+	Clone,
+	Debug,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+	PartialEq,
 )]
 pub struct TickDelta {
 	/// This is the change in the total amount of liquidity in the pool at this price, i.e. if the
@@ -177,7 +195,9 @@ pub struct TickDelta {
 	fee_growth_outside: PoolPairsMap<FeeGrowthQ128F128>,
 }
 
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize, PartialEq)]
+#[derive(
+	Clone, Debug, TypeInfo, Encode, Decode, DecodeWithMemTracking, Serialize, Deserialize, PartialEq,
+)]
 pub struct PoolState<LiquidityProvider: Ord> {
 	/// The percentage fee taken from swap inputs and earned by LPs. It is in units of 0.0001%.
 	/// I.e. 5000 means 0.5%.
@@ -437,20 +457,24 @@ pub enum LiquidityToAmountsError {
 	LiquidityTooLarge,
 }
 
-#[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[derive(
+	Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, DecodeWithMemTracking, MaxEncodedLen,
+)]
 pub struct Collected {
 	pub fees: PoolPairsMap<Amount>,
 	pub accumulative_fees: PoolPairsMap<Amount>,
 	pub original_sqrt_price: SqrtPriceQ64F96,
 }
 
-#[derive(Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[derive(Debug, PartialEq, Eq, TypeInfo, Encode, Decode, DecodeWithMemTracking, MaxEncodedLen)]
 pub enum Size {
 	Liquidity { liquidity: Liquidity },
 	Amount { maximum: PoolPairsMap<Amount>, minimum: PoolPairsMap<Amount> },
 }
 
-#[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[derive(
+	Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, DecodeWithMemTracking, MaxEncodedLen,
+)]
 pub struct PositionInfo {
 	pub liquidity: Liquidity,
 }

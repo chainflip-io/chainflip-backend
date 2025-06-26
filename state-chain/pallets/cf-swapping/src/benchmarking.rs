@@ -19,10 +19,9 @@
 use super::*;
 
 use cf_chains::{
-	address::EncodedAddress, benchmarking_value::BenchmarkValue, eth::Address as EthereumAddress,
-	evm::U256,
+	address::EncodedAddress, benchmarking_value::BenchmarkValue, evm::Address as EthereumAddress,
 };
-use cf_primitives::{AccountRole, AffiliateShortId, Beneficiary, FLIPPERINOS_PER_FLIP};
+use cf_primitives::{AccountRole, AffiliateShortId, Beneficiary, Price, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::{
@@ -59,7 +58,7 @@ mod benchmarks {
 			refund_parameters: ChannelRefundParametersEncoded {
 				retry_duration: 100,
 				refund_address: EncodedAddress::benchmark_value(),
-				min_price: U256::from(0),
+				min_price: Price::from(0),
 			},
 		};
 
@@ -103,7 +102,7 @@ mod benchmarks {
 			refund_parameters: ChannelRefundParametersEncoded {
 				retry_duration: 100,
 				refund_address: EncodedAddress::benchmark_value(),
-				min_price: U256::from(0),
+				min_price: Price::from(0),
 			},
 			affiliate_fees,
 			dca_parameters: None,

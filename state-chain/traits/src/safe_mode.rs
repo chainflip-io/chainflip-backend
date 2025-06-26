@@ -60,7 +60,7 @@ macro_rules! impl_runtime_safe_mode {
 		mod __inner {
 			use super::*;
 			use $crate::{SafeMode, SetSafeMode};
-			use codec::{Encode, Decode, MaxEncodedLen};
+			use codec::{Encode, Decode, DecodeWithMemTracking, MaxEncodedLen};
 			use frame_support::{
 				storage::StorageValue,
 				traits::Get,
@@ -68,7 +68,7 @@ macro_rules! impl_runtime_safe_mode {
 			};
 			use scale_info::TypeInfo;
 
-			#[derive(serde::Serialize, serde::Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, RuntimeDebug)]
+			#[derive(serde::Serialize, serde::Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, RuntimeDebug)]
 			pub struct $runtime_safe_mode {
 				$( pub $name: $pallet_safe_mode ),*
 			}
@@ -147,7 +147,7 @@ macro_rules! impl_pallet_safe_mode {
     (
         $pallet_safe_mode:ident; $($flag:ident),+ $(,)?
     ) => {
-        #[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
+        #[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
         pub struct $pallet_safe_mode {
             $(
                 pub $flag: bool,
@@ -178,7 +178,7 @@ macro_rules! impl_pallet_safe_mode {
     (
         $pallet_safe_mode:ident<$generic:ident>; $($flag:ident),+ $(,)?
     ) => {
-        #[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
+        #[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
 		#[scale_info(skip_type_params($generic))]
         pub struct $pallet_safe_mode<$generic: 'static> {
             $(
@@ -216,7 +216,7 @@ macro_rules! impl_pallet_safe_mode {
 #[cfg(test)]
 pub(crate) mod test {
 	use super::*;
-	use codec::{Decode, Encode, MaxEncodedLen};
+	use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 	use frame_support::{pallet_prelude::ValueQuery, storage_alias};
 	use scale_info::TypeInfo;
 
@@ -229,6 +229,7 @@ pub(crate) mod test {
 		serde::Deserialize,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		MaxEncodedLen,
 		TypeInfo,
 		Clone,
@@ -245,6 +246,7 @@ pub(crate) mod test {
 		serde::Deserialize,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		MaxEncodedLen,
 		TypeInfo,
 		Clone,

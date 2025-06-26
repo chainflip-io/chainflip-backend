@@ -20,19 +20,19 @@
 // of the inner member.
 
 use crate::{self as Flip, Config, ReserveId};
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	sp_runtime::{
 		traits::{CheckedAdd, CheckedSub, Saturating, Zero},
 		RuntimeDebug,
 	},
-	traits::{Imbalance, SameOrOther, TryDrop},
+	traits::{tokens::imbalance::TryMerge, Imbalance, SameOrOther, TryDrop},
 };
 use scale_info::TypeInfo;
 use sp_std::{cmp, mem, result};
 
 /// Internal sources of funds.
-#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
+#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum InternalSource<AccountId> {
 	/// A user account.
 	Account(AccountId),
@@ -43,7 +43,7 @@ pub enum InternalSource<AccountId> {
 }
 
 /// The origin of an imbalance.
-#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
+#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ImbalanceSource<AccountId> {
 	/// External, aka. off-chain.
 	External,
@@ -291,6 +291,18 @@ impl<T: Config> TryDrop for Surplus<T> {
 	}
 }
 
+impl<T: Config> TryMerge for Surplus<T> {
+	fn try_merge(mut self, other: Self) -> Result<Self, (Self, Self)> {
+		if self.source == other.source {
+			self.amount = self.amount.saturating_add(other.amount);
+			mem::forget(other);
+			Ok(self)
+		} else {
+			Err((self, other))
+		}
+	}
+}
+
 impl<T: Config> Imbalance<T::Balance> for Surplus<T> {
 	type Opposite = Deficit<T>;
 
@@ -348,6 +360,18 @@ impl<T: Config> Imbalance<T::Balance> for Surplus<T> {
 impl<T: Config> TryDrop for Deficit<T> {
 	fn try_drop(self) -> result::Result<(), Self> {
 		self.drop_zero()
+	}
+}
+
+impl<T: Config> TryMerge for Deficit<T> {
+	fn try_merge(mut self, other: Self) -> Result<Self, (Self, Self)> {
+		if self.source == other.source {
+			self.amount = self.amount.saturating_add(other.amount);
+			mem::forget(other);
+			Ok(self)
+		} else {
+			Err((self, other))
+		}
 	}
 }
 

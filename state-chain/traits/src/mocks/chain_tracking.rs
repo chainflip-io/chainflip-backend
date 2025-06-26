@@ -59,7 +59,7 @@ impl<C: Chain> AdjustedFeeEstimationApi<C> for ChainTracker<C> {
 
 	fn estimate_ccm_fee(
 		_asset: C::ChainAsset,
-		_gas_budget: cf_primitives::GasAmount,
+		_gas_budget: cf_primitives::AssetAmount,
 		_message_length: usize,
 	) -> Option<C::ChainAmount> {
 		Self::get_value(TRACKED_FEE_KEY)

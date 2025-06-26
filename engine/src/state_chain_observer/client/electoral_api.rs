@@ -18,7 +18,7 @@ use crate::state_chain_observer::client::{
 	base_rpc_api::RawRpcApi, extrinsic_api::signed::SignedExtrinsicApi, BaseRpcClient, BlockInfo,
 	StateChainClient,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use pallet_cf_elections::{ElectionIdentifierOf, ElectoralDataFor, VoteOf};
 use state_chain_runtime::SolanaInstance;
 use std::collections::{BTreeMap, BTreeSet};

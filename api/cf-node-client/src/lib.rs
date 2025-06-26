@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::events_decoder::DynamicEvents;
-use frame_support::dispatch::DispatchInfo;
+use frame_system::DispatchEventInfo;
 use sp_core::H256;
 
 pub mod error_decoder;
@@ -29,12 +29,12 @@ pub struct ExtrinsicData<Events> {
 	pub tx_hash: H256,
 	pub events: Events,
 	pub header: state_chain_runtime::Header,
-	pub dispatch_info: DispatchInfo,
+	pub dispatch_info: DispatchEventInfo,
 }
 
 // TODO: deprecate/remove this in favour of ExtrinsicData<state_chain_runtime::RuntimeEvent>
 pub type ExtrinsicDetails =
-	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo);
+	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchEventInfo);
 
 #[derive(Debug)]
 pub enum WaitForResult {

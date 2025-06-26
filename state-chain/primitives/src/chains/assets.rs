@@ -81,7 +81,7 @@ macro_rules! assets {
 
 		pub mod any {
 			use strum_macros::EnumIter;
-			use codec::{MaxEncodedLen, Encode, Decode};
+			use codec::{MaxEncodedLen, Encode, Decode, DecodeWithMemTracking};
 			use scale_info::TypeInfo;
 			use serde::{Serialize, Deserialize};
 			use core::ops::{Index, IndexMut};
@@ -95,6 +95,7 @@ macro_rules! assets {
 				Eq,
 				Encode,
 				Decode,
+				DecodeWithMemTracking,
 				TypeInfo,
 				MaxEncodedLen,
 				Hash,
@@ -340,7 +341,7 @@ macro_rules! assets {
 				type Asset;
 				fn from_fn<F: FnMut(Self::Asset) -> T>(f: F) -> Self;
 			}
-			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
+			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
 			pub struct AssetMap<T> {
 				$(
 					#[serde(rename = $chain_json)]
@@ -458,7 +459,7 @@ macro_rules! assets {
 		$(
 			pub mod $chain_member_and_module {
 				use super::any;
-				use codec::{MaxEncodedLen, Encode, Decode};
+				use codec::{MaxEncodedLen, Encode, Decode, DecodeWithMemTracking};
 				use scale_info::TypeInfo;
 				use serde::{Serialize, Deserialize};
 				use strum_macros::EnumIter;
@@ -490,6 +491,7 @@ macro_rules! assets {
 					Eq,
 					Encode,
 					Decode,
+					DecodeWithMemTracking,
 					TypeInfo,
 					MaxEncodedLen,
 					Hash,
@@ -538,12 +540,12 @@ macro_rules! assets {
 					}
 				}
 
-				#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+				#[derive(Clone, Debug, TypeInfo, Encode, Decode, DecodeWithMemTracking, MaxEncodedLen)]
 				pub enum AssetError {
 					Unsupported,
 				}
 
-				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
+				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
 				pub struct AssetMap<T> {
 					$(
 						#[serde(rename = $asset_json)]

@@ -57,7 +57,7 @@ impl<C: Chain> FeeEstimationApi<C> for TrackedDataProvider<C> {
 	fn estimate_ccm_fee(
 		&self,
 		asset: <C as Chain>::ChainAsset,
-		gas_budget: cf_primitives::GasAmount,
+		gas_budget: cf_primitives::AssetAmount,
 		message_length: usize,
 	) -> Option<<C as Chain>::ChainAmount> {
 		Self::get_value::<C::TrackedData>(TRACKED_DATA_KEY)

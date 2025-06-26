@@ -27,7 +27,9 @@ use super::*;
 
 const SCALE_FACTOR: u128 = 1000;
 /// Represents 1/SCALE_FACTOR of Asset amount as a way to gain extra precision.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, DefaultNoBound)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, DefaultNoBound,
+)]
 struct ScaledAmount<C: Chain> {
 	val: u128,
 	_phantom: PhantomData<C>,
@@ -100,7 +102,7 @@ impl<C: Chain> ScaledAmount<C> {
 
 type OwedAmountScaled<C> = OwedAmount<ScaledAmount<C>>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct OwedAmount<AmountT> {
 	pub total: AmountT,
 	pub fee: AmountT,
@@ -152,7 +154,7 @@ fn fee_from_provided_amount<C: Chain>(
 	Ok(ScaledAmount::from_raw(fee_amount))
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct BoostPool<AccountId, C: Chain> {
 	// Fee charged by the pool
 	fee_bps: BasisPoints,

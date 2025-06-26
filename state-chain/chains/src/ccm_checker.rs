@@ -27,13 +27,13 @@ use crate::{
 	CcmChannelMetadataUnchecked, Chain, ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH,
 };
 use cf_primitives::{Asset, ForeignChain};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::DispatchError;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum CcmValidityError {
 	CannotDecodeCcmAdditionalData,
 	CcmIsTooLong,
@@ -65,6 +65,7 @@ impl From<CcmValidityError> for DispatchError {
 	Debug,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	PartialEq,
 	Eq,
@@ -97,7 +98,18 @@ impl DecodedCcmAdditionalData {
 }
 
 #[derive(
-	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
 )]
 pub enum VersionedSolanaCcmAdditionalData {
 	V0(SolCcmAccounts),

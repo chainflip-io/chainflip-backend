@@ -16,7 +16,7 @@
 
 use crate::Runtime;
 use cf_chains::ForeignChain;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::RuntimeDebug;
 use pallet_cf_reputation::OffenceList;
 use pallet_grandpa::EquivocationOffence;
@@ -33,6 +33,7 @@ use scale_info::TypeInfo;
 	RuntimeDebug,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 )]

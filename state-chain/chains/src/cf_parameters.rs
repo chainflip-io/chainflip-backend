@@ -18,17 +18,21 @@ use crate::{CcmAdditionalData, CcmChannelMetadataUnchecked, Chain, ChannelRefund
 use cf_primitives::{
 	AccountId, AffiliateAndFee, BasisPoints, Beneficiary, DcaParameters, MAX_AFFILIATES,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::ConstU32;
 use sp_runtime::{BoundedVec, Vec};
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug,
+)]
 pub enum VersionedCfParameters<RefundAddress, CcmData = ()> {
 	V0(CfParameters<RefundAddress, CcmData>),
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug,
+)]
 pub struct CfParameters<RefundAddress, CcmData = ()> {
 	/// CCMs may require additional data (e.g. CCMs to Solana requires a list of addresses).
 	pub ccm_additional_data: CcmData,
@@ -50,7 +54,9 @@ impl<RefundAddress> CfParameters<RefundAddress, CcmAdditionalData> {
 	}
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug,
+)]
 pub struct VaultSwapParameters<RefundAddress> {
 	pub refund_params: ChannelRefundParameters<RefundAddress>,
 	pub dca_params: Option<DcaParameters>,
@@ -118,7 +124,7 @@ mod tests {
 	#[test]
 	fn test_cf_parameters_max_length() {
 		// Pessimistic assumption of some chain with 64 bytes of account data.
-		#[derive(Encode, Decode, MaxEncodedLen)]
+		#[derive(Encode, Decode, DecodeWithMemTracking, MaxEncodedLen)]
 		struct MaxAccountLength([u8; 64]);
 		assert!(
 			MAX_VAULT_SWAP_PARAMETERS_LENGTH as usize >=

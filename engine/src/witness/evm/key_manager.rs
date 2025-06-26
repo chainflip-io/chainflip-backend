@@ -15,7 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_chains::{
-	evm::{EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee},
+	evm::{
+		Address as EvmAddress, EvmCrypto, EvmTransactionMetadata, Hash,
+		SchnorrVerificationComponents, TransactionFee, TransactionHash,
+	},
 	instances::ChainInstanceFor,
 	Chain,
 };
@@ -25,7 +28,6 @@ use ethers::{
 	types::{Bloom, TransactionReceipt},
 };
 use futures_core::Future;
-use sp_core::{H160, H256};
 use tracing::{info, trace};
 
 use super::{
@@ -40,6 +42,10 @@ use crate::{
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use num_traits::Zero;
+
+fn convert_U256(u256: ethers::types::U256) -> cf_chains::evm::U256 {
+	cf_chains::evm::U256(u256.0)
+}
 
 abigen!(KeyManager, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IKeyManager.json");
 
@@ -70,17 +76,17 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		self,
 		process_call: ProcessCall,
 		eth_rpc: EvmRpcClient,
-		contract_address: H160,
+		contract_address: EvmAddress,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		// These are the types for EVM chains, so this adapter can be shared by all EVM chains.
-		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom>,
+		Inner: ChunkedByVault<Index = u64, Hash = TransactionHash, Data = Bloom>,
 		Inner::Chain: Chain<
 			ChainCrypto = EvmCrypto,
-			ChainAccount = H160,
+			ChainAccount = EvmAddress,
 			TransactionFee = TransactionFee,
 			TransactionMetadata = EvmTransactionMetadata,
-			TransactionRef = H256,
+			TransactionRef = TransactionHash,
 		>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 			+ Send
@@ -118,7 +124,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								new_agg_key.serialize(),
 							),
 							block_number: header.index,
-							tx_id: event.tx_hash,
+							tx_id: H256(event.tx_hash.0),
 						}
 						.into(),
 						KeyManagerEvents::SignatureAcceptedFilter(SignatureAcceptedFilter {
@@ -149,10 +155,10 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 							let transaction = eth_rpc.get_transaction(event.tx_hash).await;
 							let tx_metadata = EvmTransactionMetadata {
-								contract: to.expect("To have a contract"),
-								max_fee_per_gas: transaction.max_fee_per_gas,
-								max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
-								gas_limit: Some(transaction.gas),
+								contract: H160(to.expect("To have a contract").0),
+								max_fee_per_gas: convert_U256(transaction.max_fee_per_gas),
+								max_priority_fee_per_gas: convert_U256(transaction.max_priority_fee_per_gas),
+								gas_limit: Some(convert_U256(transaction.gas)),
 							};
 							pallet_cf_broadcast::Call::<
 								_,
@@ -162,10 +168,10 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 									s: sig_data.sig.into(),
 									k_times_g_address: sig_data.k_times_g_address.into(),
 								},
-								signer_id: from,
+								signer_id: from.0.into(),
 								tx_fee: TransactionFee { effective_gas_price, gas_used },
 								tx_metadata,
-								transaction_ref: transaction.hash,
+								transaction_ref: TransactionHash(transaction.hash.0),
 							}
 							.into()
 						},

@@ -20,7 +20,7 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_on_account_funded, impl_mock_waived_fees,
 	mocks::fee_payment::MockFeePayment, BroadcastAnyChainGovKey, CommKeyBroadcaster, WaivedFees,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{derive_impl, parameter_types, traits::HandleLifetime};
 use frame_system as system;
 

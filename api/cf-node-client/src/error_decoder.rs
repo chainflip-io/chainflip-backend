@@ -125,7 +125,7 @@ pub enum DispatchError {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::{Decode, Encode};
+	use codec::{Decode, DecodeWithMemTracking, Encode};
 	use sp_runtime::ModuleError;
 
 	#[test]

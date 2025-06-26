@@ -46,7 +46,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 pub const REFUND_FEE_MULTIPLE: AssetAmount = 100;
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum ExternalOwner {
 	Vault,
 	AggKey,
@@ -340,7 +340,18 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug, Serialize, Deserialize)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Clone,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+	Serialize,
+	Deserialize,
+)]
 pub enum VaultImbalance<A> {
 	/// There are more withheld assets than what is owed.
 	Surplus(A),

@@ -26,7 +26,7 @@ use cf_amm::{
 };
 use cf_chains::{
 	address::{AddressString, ForeignChainAddressHumanreadable, ToHumanreadableAddress},
-	eth::Address as EthereumAddress,
+	evm::Address as EvmAddress,
 	CcmChannelMetadataUnchecked, Chain, MAX_CCM_MSG_LENGTH,
 };
 use cf_node_client::events_decoder;
@@ -227,9 +227,9 @@ pub enum RpcAccountInfo {
 		is_qualified: bool,
 		is_online: bool,
 		is_bidding: bool,
-		bound_redeem_address: Option<EthereumAddress>,
+		bound_redeem_address: Option<EvmAddress>,
 		apy_bp: Option<u32>,
-		restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
+		restricted_balances: BTreeMap<EvmAddress, NumberOrHex>,
 		estimated_redeemable_balance: NumberOrHex,
 	},
 }
@@ -317,9 +317,9 @@ pub struct RpcAccountInfoV2 {
 	pub is_qualified: bool,
 	pub is_online: bool,
 	pub is_bidding: bool,
-	pub bound_redeem_address: Option<EthereumAddress>,
+	pub bound_redeem_address: Option<EvmAddress>,
 	pub apy_bp: Option<u32>,
-	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
+	pub restricted_balances: BTreeMap<EvmAddress, u128>,
 	pub estimated_redeemable_balance: NumberOrHex,
 }
 

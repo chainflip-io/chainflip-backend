@@ -24,7 +24,7 @@ use cf_primitives::{AccountId, Asset, FlipBalance, Tick};
 use frame_support::{Deserialize, Serialize};
 use std::ops::Range;
 
-pub use cf_chains::eth::Address as EthereumAddress;
+pub use cf_chains::evm::Address as EthereumAddress;
 pub use cf_utilities::rpc::NumberOrHex;
 pub use sp_core::{bounded::BoundedVec, crypto::AccountId32, ConstU32, H256, U256};
 pub use state_chain_runtime::{chainflip::BlockUpdate, Hash};

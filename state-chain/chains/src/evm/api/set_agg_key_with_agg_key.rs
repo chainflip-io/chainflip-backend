@@ -18,7 +18,7 @@ use crate::evm::AggKey;
 
 use super::*;
 
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use ethabi::Token;
 use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
@@ -26,7 +26,17 @@ use sp_std::vec;
 
 /// Represents all the arguments required to build the call to StateChainGateway's
 /// 'requestRedemption' function.
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+)]
 pub struct SetAggKeyWithAggKey {
 	/// The new public key.
 	pub new_key: AggKey,

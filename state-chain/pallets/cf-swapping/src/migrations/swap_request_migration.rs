@@ -22,7 +22,7 @@ use frame_support::pallet_prelude::Weight;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 
 struct FeeMigrationData {
 	pub accumulated_output_amount: AssetAmount,
@@ -62,14 +62,18 @@ pub mod old {
 	use cf_primitives::{Asset, Beneficiaries};
 	use frame_support::Twox64Concat;
 
-	#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[derive(
+		Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo,
+	)]
 	pub enum FeeType<T: Config> {
 		// Changing this NetworkFee a new struct
 		NetworkFee { min_fee_enforced: bool },
 		BrokerFee(Beneficiaries<T::AccountId>),
 	}
 
-	#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[derive(
+		Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo,
+	)]
 	pub struct Swap<T: Config> {
 		pub swap_id: SwapId,
 		pub swap_request_id: SwapRequestId,

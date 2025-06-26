@@ -81,6 +81,7 @@ pub const MAX_ORDERS_DELETE: u32 = 100;
 	Debug,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	PartialEq,
@@ -100,6 +101,7 @@ pub enum CloseOrder {
 	Debug,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	PartialEq,
@@ -157,6 +159,7 @@ impl AssetPair {
 	Default,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	PartialEq,
@@ -184,7 +187,7 @@ impl<T> AskBidMap<T> {
 	}
 }
 
-#[derive(Clone, Encode, DebugNoBound, Decode, TypeInfo, PartialEq, Eq)]
+#[derive(Clone, DebugNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq)]
 #[scale_info(skip_type_params(T))]
 struct LimitOrderUpdate<T: Config> {
 	pub lp: T::AccountId,
@@ -195,7 +198,7 @@ struct LimitOrderUpdate<T: Config> {
 	pub details: LimitOrderUpdateDetails<BlockNumberFor<T>>,
 }
 
-#[derive(Clone, Encode, DebugNoBound, Decode, TypeInfo, PartialEq, Eq)]
+#[derive(Clone, DebugNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq)]
 enum LimitOrderUpdateDetails<BlockNumber: sp_std::fmt::Debug> {
 	Update { option_tick: Option<Tick>, amount_change: IncreaseOrDecrease<AssetAmount> },
 	Set { option_tick: Option<Tick>, sell_amount: AssetAmount, close_order_at: Option<BlockNumber> },
@@ -322,7 +325,17 @@ impl<T: Config> LimitOrderUpdate<T> {
 	}
 }
 
-#[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone,
+	RuntimeDebugNoBound,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum PalletConfigUpdate {
 	LimitOrderAutoSweepingThreshold { asset: Asset, amount: AssetAmount },
 }
@@ -339,7 +352,7 @@ pub mod pallet {
 
 	use super::*;
 
-	#[derive(Clone, DebugNoBound, Encode, Decode, TypeInfo, PartialEq)]
+	#[derive(Clone, DebugNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq)]
 	#[scale_info(skip_type_params(T))]
 	pub struct Pool<T: Config> {
 		/// A cache of all the range orders that exist in the pool. This must be kept up to date
@@ -362,6 +375,7 @@ pub mod pallet {
 		Debug,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		TypeInfo,
 		MaxEncodedLen,
 		PartialEq,
@@ -394,6 +408,7 @@ pub mod pallet {
 		Debug,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		TypeInfo,
 		MaxEncodedLen,
 		PartialEq,
@@ -1273,6 +1288,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 	Debug,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	PartialEq,
@@ -1297,7 +1313,18 @@ pub struct PoolInfo {
 	pub limit_total_swap_inputs: PoolPairsMap<Amount>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
 #[serde(bound = "")]
 pub struct LimitOrder<T: Config> {
 	pub lp: T::AccountId,
@@ -1308,7 +1335,18 @@ pub struct LimitOrder<T: Config> {
 	pub original_sell_amount: Amount,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
 #[serde(bound = "")]
 pub struct RangeOrder<T: Config> {
 	pub lp: T::AccountId,
@@ -1318,7 +1356,18 @@ pub struct RangeOrder<T: Config> {
 	pub fees_earned: PoolPairsMap<Amount>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
 #[serde(bound = "")]
 pub struct PoolOrders<T: Config> {
 	/// Limit orders are groups by which asset they are selling.
@@ -1328,20 +1377,53 @@ pub struct PoolOrders<T: Config> {
 	pub range_orders: Vec<RangeOrder<T>>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
 pub struct LimitOrderLiquidity {
 	tick: Tick,
 	amount: Amount,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
 pub struct RangeOrderLiquidity {
 	tick: Tick,
 	liquidity: Amount, /* TODO: Change (Using Amount as it is U256 so we get the right
 	                    * serialization) */
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
 pub struct PoolLiquidity {
 	/// An ordered lists of the amount of assets available at each tick, if a tick contains zero
 	/// liquidity it will not be included in the list. Note limit order liquidity is split by which
@@ -1354,7 +1436,18 @@ pub struct PoolLiquidity {
 	pub range_orders: Vec<RangeOrderLiquidity>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
 pub struct UnidirectionalSubPoolDepth {
 	/// The current price in this sub pool, in the given direction of swaps.
 	pub price: Option<Price>,
@@ -1362,7 +1455,18 @@ pub struct UnidirectionalSubPoolDepth {
 	pub depth: Amount,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
 pub struct UnidirectionalPoolDepth {
 	/// The depth of the limit order pool.
 	pub limit_orders: UnidirectionalSubPoolDepth,
@@ -1370,19 +1474,52 @@ pub struct UnidirectionalPoolDepth {
 	pub range_orders: UnidirectionalSubPoolDepth,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
 pub struct PoolOrder {
 	pub amount: Amount,
 	pub sqrt_price: SqrtPriceQ64F96,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
 pub struct PoolOrderbook {
 	pub bids: Vec<PoolOrder>,
 	pub asks: Vec<PoolOrder>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
 pub struct PoolPriceV1 {
 	pub price: Price,
 	pub sqrt_price: SqrtPriceQ64F96,
@@ -1391,7 +1528,18 @@ pub struct PoolPriceV1 {
 
 pub type PoolPriceV2 = PoolPrice<SqrtPriceQ64F96>;
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
 pub struct PoolPrice<P> {
 	pub sell: Option<P>,
 	pub buy: Option<P>,

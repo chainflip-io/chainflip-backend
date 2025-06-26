@@ -19,7 +19,7 @@
 //! Chainflip Primitives
 //!
 //! Primitive types to be used across Chainflip's various crates.
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	BoundedVec, MultiSignature, Percent, RuntimeDebug,
@@ -49,6 +49,7 @@ macro_rules! define_wrapper_type {
 			Eq,
 			Encode,
 			Decode,
+			DecodeWithMemTracking,
 			TypeInfo,
 			MaxEncodedLen,
 			Default,
@@ -103,11 +104,7 @@ pub type EgressCounter = u64;
 
 pub type EgressId = (ForeignChain, EgressCounter);
 
-pub type EthAmount = u128;
-
 pub type AssetAmount = u128;
-
-pub type GasAmount = u128;
 
 pub type BasisPoints = u16;
 
@@ -232,7 +229,9 @@ pub const DEFAULT_MAX_AUTHORITY_SET_CONTRACTION: Percent = Percent::from_percent
 
 // Polkadot extrinsics are uniquely identified by <block number>-<extrinsic index>
 // https://wiki.polkadot.network/docs/build-protocol-info
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+#[derive(
+	Clone, Encode, Decode, DecodeWithMemTracking, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq,
+)]
 pub struct TxId {
 	pub block_number: PolkadotBlockNumber,
 	pub extrinsic_index: u32,
@@ -266,6 +265,7 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 	Clone,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	RuntimeDebug,
@@ -297,7 +297,9 @@ pub enum AccountRole {
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
 
 /// Struct that represents the estimated output of a Swap.
-#[derive(PartialEq, Default, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
+#[derive(
+	PartialEq, Default, Eq, Copy, Clone, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo,
+)]
 pub struct SwapOutput {
 	// Intermediary amount, if there's any
 	pub intermediary: Option<AssetAmount>,
@@ -307,7 +309,7 @@ pub struct SwapOutput {
 	pub network_fee: AssetAmount,
 }
 
-#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum SwapLeg {
 	FromStable,
 	ToStable,
@@ -326,6 +328,7 @@ pub type TransactionHash = [u8; 32];
 	Ord,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 )]
@@ -378,7 +381,18 @@ impl core::fmt::Display for SemVer {
 
 /// The network environment, used to determine which chains the Chainflip network is connected to.
 #[derive(
-	PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Default, Serialize, Deserialize,
+	PartialEq,
+	Eq,
+	Copy,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Default,
+	Serialize,
+	Deserialize,
 )]
 pub enum NetworkEnvironment {
 	/// Chainflip is connected to public mainnet chains.
@@ -440,6 +454,7 @@ pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_BENEFICIAR
 	MaxEncodedLen,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Serialize,
 	Deserialize,
@@ -451,7 +466,18 @@ pub struct Beneficiary<Id> {
 	pub bps: BasisPoints,
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Debug,
+)]
 pub struct AffiliateAndFee {
 	pub affiliate: AffiliateShortId,
 	pub fee: u8,
@@ -470,6 +496,7 @@ impl From<AffiliateAndFee> for Beneficiary<AffiliateShortId> {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Serialize,

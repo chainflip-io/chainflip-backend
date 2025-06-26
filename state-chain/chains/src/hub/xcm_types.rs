@@ -22,16 +22,16 @@
 // metadata.txt
 
 // subxt codegen --runtime-types-only --no-docs --no-default-derives --crate
-// 'parity_scale_codec' --derive Debug --derive Encode --derive Decode --derive Clone --derive Eq
-// --derive PartialEq --derive TypeInfo --file metadata.txt >
-// state-chain/chains/src/hub/xcm_types.rs
+// 'parity_scale_codec' --derive Debug --derive Encode --derive Decode --derive
+// DecodeWithMemTracking --derive Clone --derive Eq --derive PartialEq --derive TypeInfo --file
+// metadata.txt > state-chain/chains/src/hub/xcm_types.rs
 
 // Then run "cargo fmt" to make the file readable and manually go through through it to remove
 // unwanted types
 
 // Also rename all instances of "runtime_types" in this file to "hub_runtime_types"
 
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use scale_info::TypeInfo;
 
 #[allow(clippy::large_enum_variant)]
@@ -40,20 +40,22 @@ pub mod hub_runtime_types {
 	pub mod asset_hub_polkadot_runtime {
 
 		use super::*;
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub struct Runtime;
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum RuntimeCall {}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum RuntimeError {}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum RuntimeEvent {}
 	}
 	pub mod assets_common {
 		use super::*;
 		pub mod runtime_api {
 			use super::*;
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum FungiblesAccessError {
 				#[codec(index = 0)]
 				AssetIdConversionFailed,
@@ -66,22 +68,26 @@ pub mod hub_runtime_types {
 		use super::*;
 		pub mod bounded_vec {
 			use super::*;
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct BoundedVec<_0>(pub sp_std::vec::Vec<_0>);
 		}
 		pub mod weak_bounded_vec {
 			use super::*;
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct WeakBoundedVec<_0>(pub sp_std::vec::Vec<_0>);
 		}
 	}
 	pub mod frame_metadata_hash_extension {
 		use super::*;
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub struct CheckMetadataHash {
 			pub mode: hub_runtime_types::frame_metadata_hash_extension::Mode,
 		}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum Mode {
 			#[codec(index = 0)]
 			Disabled,
@@ -93,7 +99,9 @@ pub mod hub_runtime_types {
 		use super::*;
 		pub mod dispatch {
 			use super::*;
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum DispatchClass {
 				#[codec(index = 0)]
 				Normal,
@@ -102,20 +110,26 @@ pub mod hub_runtime_types {
 				#[codec(index = 2)]
 				Mandatory,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum Pays {
 				#[codec(index = 0)]
 				Yes,
 				#[codec(index = 1)]
 				No,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct PostDispatchInfo {
 				pub actual_weight:
 					::core::option::Option<hub_runtime_types::sp_weights::weight_v2::Weight>,
 				pub pays_fee: hub_runtime_types::frame_support::dispatch::Pays,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum RawOrigin<_0> {
 				#[codec(index = 0)]
 				Root,
@@ -132,44 +146,58 @@ pub mod hub_runtime_types {
 			use super::*;
 			pub mod check_genesis {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct CheckGenesis;
 			}
 			pub mod check_mortality {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct CheckMortality(pub hub_runtime_types::sp_runtime::generic::era::Era);
 			}
 			pub mod check_non_zero_sender {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct CheckNonZeroSender;
 			}
 			pub mod check_nonce {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct CheckNonce(#[codec(compact)] pub ::core::primitive::u32);
 			}
 			pub mod check_spec_version {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct CheckSpecVersion;
 			}
 			pub mod check_tx_version {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct CheckTxVersion;
 			}
 			pub mod check_weight {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct CheckWeight;
 			}
 		}
 	}
 	pub mod pallet_asset_conversion_tx_payment {
 		use super::*;
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub struct ChargeAssetTxPayment {
 			#[codec(compact)]
 			pub tip: ::core::primitive::u128,
@@ -181,20 +209,26 @@ pub mod hub_runtime_types {
 		use super::*;
 		pub mod types {
 			use super::*;
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct FeeDetails<_0> {
 				pub inclusion_fee: ::core::option::Option<
 					hub_runtime_types::pallet_transaction_payment::types::InclusionFee<_0>,
 				>,
 				pub tip: _0,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct InclusionFee<_0> {
 				pub base_fee: _0,
 				pub len_fee: _0,
 				pub adjusted_weight_fee: _0,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct RuntimeDispatchInfo<_0, _1> {
 				pub weight: _1,
 				pub class: hub_runtime_types::frame_support::dispatch::DispatchClass,
@@ -206,7 +240,9 @@ pub mod hub_runtime_types {
 		use super::*;
 		pub mod pallet {
 			use super::*;
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum Origin {
 				#[codec(index = 0)]
 				Xcm(hub_runtime_types::staging_xcm::v4::location::Location),
@@ -217,7 +253,7 @@ pub mod hub_runtime_types {
 	}
 	pub mod polkadot_core_primitives {
 		use super::*;
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub struct OutboundHrmpMessage<_0> {
 			pub recipient: _0,
 			pub data: sp_std::vec::Vec<::core::primitive::u8>,
@@ -225,7 +261,7 @@ pub mod hub_runtime_types {
 	}
 	pub mod sp_arithmetic {
 		use super::*;
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum ArithmeticError {
 			#[codec(index = 0)]
 			Underflow,
@@ -241,7 +277,9 @@ pub mod hub_runtime_types {
 			use super::*;
 			pub mod app_ed25519 {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct Public(pub [::core::primitive::u8; 32usize]);
 			}
 		}
@@ -250,12 +288,14 @@ pub mod hub_runtime_types {
 		use super::*;
 		pub mod crypto {
 			use super::*;
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct KeyTypeId(pub [::core::primitive::u8; 4usize]);
 		}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub struct OpaqueMetadata(pub sp_std::vec::Vec<::core::primitive::u8>);
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum Void {}
 	}
 	pub mod sp_runtime {
@@ -264,7 +304,9 @@ pub mod hub_runtime_types {
 			use super::*;
 			pub mod block {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct Block<_0, _1> {
 					pub header: _0,
 					pub extrinsics: sp_std::vec::Vec<_1>,
@@ -272,13 +314,17 @@ pub mod hub_runtime_types {
 			}
 			pub mod digest {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct Digest {
 					pub logs: sp_std::vec::Vec<
 						hub_runtime_types::sp_runtime::generic::digest::DigestItem,
 					>,
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum DigestItem {
 					#[codec(index = 6)]
 					PreRuntime(
@@ -300,7 +346,9 @@ pub mod hub_runtime_types {
 			}
 			pub mod era {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum Era {
 					#[codec(index = 0)]
 					Immortal,
@@ -819,7 +867,9 @@ pub mod hub_runtime_types {
 		}
 		pub mod transaction_validity {
 			use super::*;
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum InvalidTransaction {
 				#[codec(index = 0)]
 				Call,
@@ -844,7 +894,9 @@ pub mod hub_runtime_types {
 				#[codec(index = 10)]
 				BadSigner,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum TransactionSource {
 				#[codec(index = 0)]
 				InBlock,
@@ -853,14 +905,18 @@ pub mod hub_runtime_types {
 				#[codec(index = 2)]
 				External,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum TransactionValidityError {
 				#[codec(index = 0)]
 				Invalid(hub_runtime_types::sp_runtime::transaction_validity::InvalidTransaction),
 				#[codec(index = 1)]
 				Unknown(hub_runtime_types::sp_runtime::transaction_validity::UnknownTransaction),
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum UnknownTransaction {
 				#[codec(index = 0)]
 				CannotLookup,
@@ -869,7 +925,9 @@ pub mod hub_runtime_types {
 				#[codec(index = 2)]
 				Custom(::core::primitive::u8),
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct ValidTransaction {
 				pub priority: ::core::primitive::u64,
 				pub requires: sp_std::vec::Vec<sp_std::vec::Vec<::core::primitive::u8>>,
@@ -878,7 +936,7 @@ pub mod hub_runtime_types {
 				pub propagate: ::core::primitive::bool,
 			}
 		}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum DispatchError {
 			#[codec(index = 0)]
 			Other,
@@ -909,24 +967,24 @@ pub mod hub_runtime_types {
 			#[codec(index = 13)]
 			RootNotAllowed,
 		}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub struct DispatchErrorWithPostInfo<_0> {
 			pub post_info: _0,
 			pub error: hub_runtime_types::sp_runtime::DispatchError,
 		}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum ExtrinsicInclusionMode {
 			#[codec(index = 0)]
 			AllExtrinsics,
 			#[codec(index = 1)]
 			OnlyInherents,
 		}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub struct ModuleError {
 			pub index: ::core::primitive::u8,
 			pub error: [::core::primitive::u8; 4usize],
 		}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum MultiSignature {
 			#[codec(index = 0)]
 			Ed25519([::core::primitive::u8; 64usize]),
@@ -935,7 +993,7 @@ pub mod hub_runtime_types {
 			#[codec(index = 2)]
 			Ecdsa([::core::primitive::u8; 65usize]),
 		}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum TokenError {
 			#[codec(index = 0)]
 			FundsUnavailable,
@@ -958,7 +1016,7 @@ pub mod hub_runtime_types {
 			#[codec(index = 9)]
 			Blocked,
 		}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum TransactionalError {
 			#[codec(index = 0)]
 			LimitReached,
@@ -970,7 +1028,9 @@ pub mod hub_runtime_types {
 		use super::*;
 		pub mod weight_v2 {
 			use super::*;
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct Weight {
 				#[codec(compact)]
 				pub ref_time: ::core::primitive::u64,
@@ -985,7 +1045,9 @@ pub mod hub_runtime_types {
 			use super::*;
 			pub mod multilocation {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct MultiLocation {
 					pub parents: ::core::primitive::u8,
 					pub interior: hub_runtime_types::xcm::v3::junctions::Junctions,
@@ -996,21 +1058,29 @@ pub mod hub_runtime_types {
 			use super::*;
 			pub mod asset {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct Asset {
 					pub id: hub_runtime_types::staging_xcm::v4::asset::AssetId,
 					pub fun: hub_runtime_types::staging_xcm::v4::asset::Fungibility,
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum AssetFilter {
 					#[codec(index = 0)]
 					Definite(hub_runtime_types::staging_xcm::v4::asset::Assets),
 					#[codec(index = 1)]
 					Wild(hub_runtime_types::staging_xcm::v4::asset::WildAsset),
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct AssetId(pub hub_runtime_types::staging_xcm::v4::location::Location);
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum AssetInstance {
 					#[codec(index = 0)]
 					Undefined,
@@ -1025,18 +1095,24 @@ pub mod hub_runtime_types {
 					#[codec(index = 5)]
 					Array32([::core::primitive::u8; 32usize]),
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct Assets(
 					pub sp_std::vec::Vec<hub_runtime_types::staging_xcm::v4::asset::Asset>,
 				);
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum Fungibility {
 					#[codec(index = 0)]
 					Fungible(#[codec(compact)] ::core::primitive::u128),
 					#[codec(index = 1)]
 					NonFungible(hub_runtime_types::staging_xcm::v4::asset::AssetInstance),
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum WildAsset {
 					#[codec(index = 0)]
 					All,
@@ -1055,7 +1131,9 @@ pub mod hub_runtime_types {
 						count: ::core::primitive::u32,
 					},
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum WildFungibility {
 					#[codec(index = 0)]
 					Fungible,
@@ -1065,7 +1143,9 @@ pub mod hub_runtime_types {
 			}
 			pub mod junction {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum Junction {
 					#[codec(index = 0)]
 					Parachain(#[codec(compact)] ::core::primitive::u32),
@@ -1110,7 +1190,9 @@ pub mod hub_runtime_types {
 					#[codec(index = 9)]
 					GlobalConsensus(hub_runtime_types::staging_xcm::v4::junction::NetworkId),
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum NetworkId {
 					#[codec(index = 0)]
 					ByGenesis([::core::primitive::u8; 32usize]),
@@ -1144,7 +1226,9 @@ pub mod hub_runtime_types {
 			}
 			pub mod junctions {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum Junctions {
 					#[codec(index = 0)]
 					Here,
@@ -1168,7 +1252,9 @@ pub mod hub_runtime_types {
 			}
 			pub mod location {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct Location {
 					pub parents: ::core::primitive::u8,
 					pub interior: hub_runtime_types::staging_xcm::v4::junctions::Junctions,
@@ -1176,7 +1262,9 @@ pub mod hub_runtime_types {
 			}
 			pub mod traits {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum Outcome {
 					#[codec(index = 0)]
 					Complete { used: hub_runtime_types::sp_weights::weight_v2::Weight },
@@ -1189,7 +1277,9 @@ pub mod hub_runtime_types {
 					Error { error: hub_runtime_types::xcm::v3::traits::Error },
 				}
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum Instruction {
 				#[codec(index = 0)]
 				WithdrawAsset(hub_runtime_types::staging_xcm::v4::asset::Assets),
@@ -1396,7 +1486,9 @@ pub mod hub_runtime_types {
 					>,
 				},
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum Instruction2 {
 				#[codec(index = 0)]
 				WithdrawAsset(hub_runtime_types::staging_xcm::v4::asset::Assets),
@@ -1603,7 +1695,9 @@ pub mod hub_runtime_types {
 					>,
 				},
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct PalletInfo {
 				#[codec(compact)]
 				pub index: ::core::primitive::u32,
@@ -1620,14 +1714,18 @@ pub mod hub_runtime_types {
 				#[codec(compact)]
 				pub patch: ::core::primitive::u32,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct QueryResponseInfo {
 				pub destination: hub_runtime_types::staging_xcm::v4::location::Location,
 				#[codec(compact)]
 				pub query_id: ::core::primitive::u64,
 				pub max_weight: hub_runtime_types::sp_weights::weight_v2::Weight,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum Response {
 				#[codec(index = 0)]
 				Null,
@@ -1651,9 +1749,13 @@ pub mod hub_runtime_types {
 				#[codec(index = 5)]
 				DispatchResult(hub_runtime_types::xcm::v3::MaybeErrorCode),
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct Xcm(pub sp_std::vec::Vec<hub_runtime_types::staging_xcm::v4::Instruction>);
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct Xcm2(pub sp_std::vec::Vec<hub_runtime_types::staging_xcm::v4::Instruction2>);
 		}
 	}
@@ -1661,11 +1763,15 @@ pub mod hub_runtime_types {
 		use super::*;
 		pub mod double_encoded {
 			use super::*;
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct DoubleEncoded {
 				pub encoded: sp_std::vec::Vec<::core::primitive::u8>,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct DoubleEncoded2 {
 				pub encoded: sp_std::vec::Vec<::core::primitive::u8>,
 			}
@@ -1674,7 +1780,9 @@ pub mod hub_runtime_types {
 			use super::*;
 			pub mod junction {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum Junction {
 					#[codec(index = 0)]
 					Parachain(#[codec(compact)] ::core::primitive::u32),
@@ -1715,14 +1823,18 @@ pub mod hub_runtime_types {
 			}
 			pub mod multiasset {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum AssetId {
 					#[codec(index = 0)]
 					Concrete(hub_runtime_types::xcm::v2::multilocation::MultiLocation),
 					#[codec(index = 1)]
 					Abstract(sp_std::vec::Vec<::core::primitive::u8>),
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum AssetInstance {
 					#[codec(index = 0)]
 					Undefined,
@@ -1739,37 +1851,49 @@ pub mod hub_runtime_types {
 					#[codec(index = 6)]
 					Blob(sp_std::vec::Vec<::core::primitive::u8>),
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum Fungibility {
 					#[codec(index = 0)]
 					Fungible(#[codec(compact)] ::core::primitive::u128),
 					#[codec(index = 1)]
 					NonFungible(hub_runtime_types::xcm::v2::multiasset::AssetInstance),
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct MultiAsset {
 					pub id: hub_runtime_types::xcm::v2::multiasset::AssetId,
 					pub fun: hub_runtime_types::xcm::v2::multiasset::Fungibility,
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum MultiAssetFilter {
 					#[codec(index = 0)]
 					Definite(hub_runtime_types::xcm::v2::multiasset::MultiAssets),
 					#[codec(index = 1)]
 					Wild(hub_runtime_types::xcm::v2::multiasset::WildMultiAsset),
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct MultiAssets(
 					pub sp_std::vec::Vec<hub_runtime_types::xcm::v2::multiasset::MultiAsset>,
 				);
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum WildFungibility {
 					#[codec(index = 0)]
 					Fungible,
 					#[codec(index = 1)]
 					NonFungible,
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum WildMultiAsset {
 					#[codec(index = 0)]
 					All,
@@ -1782,7 +1906,9 @@ pub mod hub_runtime_types {
 			}
 			pub mod multilocation {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum Junctions {
 					#[codec(index = 0)]
 					Here,
@@ -1845,7 +1971,9 @@ pub mod hub_runtime_types {
 						hub_runtime_types::xcm::v2::junction::Junction,
 					),
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct MultiLocation {
 					pub parents: ::core::primitive::u8,
 					pub interior: hub_runtime_types::xcm::v2::multilocation::Junctions,
@@ -1853,7 +1981,9 @@ pub mod hub_runtime_types {
 			}
 			pub mod traits {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum Error {
 					#[codec(index = 0)]
 					Overflow,
@@ -1909,7 +2039,9 @@ pub mod hub_runtime_types {
 					WeightNotComputable,
 				}
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum BodyId {
 				#[codec(index = 0)]
 				Unit,
@@ -1936,7 +2068,9 @@ pub mod hub_runtime_types {
 				#[codec(index = 9)]
 				Treasury,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum BodyPart {
 				#[codec(index = 0)]
 				Voice,
@@ -1967,7 +2101,9 @@ pub mod hub_runtime_types {
 					denom: ::core::primitive::u32,
 				},
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum Instruction {
 				#[codec(index = 0)]
 				WithdrawAsset(hub_runtime_types::xcm::v2::multiasset::MultiAssets),
@@ -2107,7 +2243,9 @@ pub mod hub_runtime_types {
 				#[codec(index = 27)]
 				UnsubscribeVersion,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum Instruction2 {
 				#[codec(index = 0)]
 				WithdrawAsset(hub_runtime_types::xcm::v2::multiasset::MultiAssets),
@@ -2247,7 +2385,9 @@ pub mod hub_runtime_types {
 				#[codec(index = 27)]
 				UnsubscribeVersion,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum NetworkId {
 				#[codec(index = 0)]
 				Any,
@@ -2262,7 +2402,9 @@ pub mod hub_runtime_types {
 				#[codec(index = 3)]
 				Kusama,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum OriginKind {
 				#[codec(index = 0)]
 				Native,
@@ -2273,7 +2415,9 @@ pub mod hub_runtime_types {
 				#[codec(index = 3)]
 				Xcm,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum Response {
 				#[codec(index = 0)]
 				Null,
@@ -2289,23 +2433,31 @@ pub mod hub_runtime_types {
 				#[codec(index = 3)]
 				Version(::core::primitive::u32),
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum WeightLimit {
 				#[codec(index = 0)]
 				Unlimited,
 				#[codec(index = 1)]
 				Limited(#[codec(compact)] ::core::primitive::u64),
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct Xcm(pub sp_std::vec::Vec<hub_runtime_types::xcm::v2::Instruction>);
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct Xcm2(pub sp_std::vec::Vec<hub_runtime_types::xcm::v2::Instruction2>);
 		}
 		pub mod v3 {
 			use super::*;
 			pub mod junction {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum BodyId {
 					#[codec(index = 0)]
 					Unit,
@@ -2328,7 +2480,9 @@ pub mod hub_runtime_types {
 					#[codec(index = 9)]
 					Treasury,
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum BodyPart {
 					#[codec(index = 0)]
 					Voice,
@@ -2359,7 +2513,9 @@ pub mod hub_runtime_types {
 						denom: ::core::primitive::u32,
 					},
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum Junction {
 					#[codec(index = 0)]
 					Parachain(#[codec(compact)] ::core::primitive::u32),
@@ -2401,7 +2557,9 @@ pub mod hub_runtime_types {
 					#[codec(index = 9)]
 					GlobalConsensus(hub_runtime_types::xcm::v3::junction::NetworkId),
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum NetworkId {
 					#[codec(index = 0)]
 					ByGenesis([::core::primitive::u8; 32usize]),
@@ -2435,7 +2593,9 @@ pub mod hub_runtime_types {
 			}
 			pub mod junctions {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum Junctions {
 					#[codec(index = 0)]
 					Here,
@@ -2501,14 +2661,18 @@ pub mod hub_runtime_types {
 			}
 			pub mod multiasset {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum AssetId {
 					#[codec(index = 0)]
 					Concrete(hub_runtime_types::staging_xcm::v3::multilocation::MultiLocation),
 					#[codec(index = 1)]
 					Abstract([::core::primitive::u8; 32usize]),
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum AssetInstance {
 					#[codec(index = 0)]
 					Undefined,
@@ -2523,37 +2687,49 @@ pub mod hub_runtime_types {
 					#[codec(index = 5)]
 					Array32([::core::primitive::u8; 32usize]),
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum Fungibility {
 					#[codec(index = 0)]
 					Fungible(#[codec(compact)] ::core::primitive::u128),
 					#[codec(index = 1)]
 					NonFungible(hub_runtime_types::xcm::v3::multiasset::AssetInstance),
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct MultiAsset {
 					pub id: hub_runtime_types::xcm::v3::multiasset::AssetId,
 					pub fun: hub_runtime_types::xcm::v3::multiasset::Fungibility,
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum MultiAssetFilter {
 					#[codec(index = 0)]
 					Definite(hub_runtime_types::xcm::v3::multiasset::MultiAssets),
 					#[codec(index = 1)]
 					Wild(hub_runtime_types::xcm::v3::multiasset::WildMultiAsset),
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub struct MultiAssets(
 					pub sp_std::vec::Vec<hub_runtime_types::xcm::v3::multiasset::MultiAsset>,
 				);
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum WildFungibility {
 					#[codec(index = 0)]
 					Fungible,
 					#[codec(index = 1)]
 					NonFungible,
 				}
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum WildMultiAsset {
 					#[codec(index = 0)]
 					All,
@@ -2575,7 +2751,9 @@ pub mod hub_runtime_types {
 			}
 			pub mod traits {
 				use super::*;
-				#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+				#[derive(
+					Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+				)]
 				pub enum Error {
 					#[codec(index = 0)]
 					Overflow,
@@ -2659,7 +2837,9 @@ pub mod hub_runtime_types {
 					ExceedsStackLimit,
 				}
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum Instruction {
 				#[codec(index = 0)]
 				WithdrawAsset(hub_runtime_types::xcm::v3::multiasset::MultiAssets),
@@ -2868,7 +3048,9 @@ pub mod hub_runtime_types {
 					>,
 				},
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum Instruction2 {
 				#[codec(index = 0)]
 				WithdrawAsset(hub_runtime_types::xcm::v3::multiasset::MultiAssets),
@@ -3077,7 +3259,9 @@ pub mod hub_runtime_types {
 					>,
 				},
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum MaybeErrorCode {
 				#[codec(index = 0)]
 				Success,
@@ -3094,7 +3278,9 @@ pub mod hub_runtime_types {
 					>,
 				),
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum OriginKind {
 				#[codec(index = 0)]
 				Native,
@@ -3105,7 +3291,9 @@ pub mod hub_runtime_types {
 				#[codec(index = 3)]
 				Xcm,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct PalletInfo {
 				#[codec(compact)]
 				pub index: ::core::primitive::u32,
@@ -3122,14 +3310,18 @@ pub mod hub_runtime_types {
 				#[codec(compact)]
 				pub patch: ::core::primitive::u32,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct QueryResponseInfo {
 				pub destination: hub_runtime_types::staging_xcm::v3::multilocation::MultiLocation,
 				#[codec(compact)]
 				pub query_id: ::core::primitive::u64,
 				pub max_weight: hub_runtime_types::sp_weights::weight_v2::Weight,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum Response {
 				#[codec(index = 0)]
 				Null,
@@ -3153,26 +3345,32 @@ pub mod hub_runtime_types {
 				#[codec(index = 5)]
 				DispatchResult(hub_runtime_types::xcm::v3::MaybeErrorCode),
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum WeightLimit {
 				#[codec(index = 0)]
 				Unlimited,
 				#[codec(index = 1)]
 				Limited(hub_runtime_types::sp_weights::weight_v2::Weight),
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct Xcm(pub sp_std::vec::Vec<hub_runtime_types::xcm::v3::Instruction>);
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct Xcm2(pub sp_std::vec::Vec<hub_runtime_types::xcm::v3::Instruction2>);
 		}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum VersionedAssetId {
 			#[codec(index = 3)]
 			V3(hub_runtime_types::xcm::v3::multiasset::AssetId),
 			#[codec(index = 4)]
 			V4(hub_runtime_types::staging_xcm::v4::asset::AssetId),
 		}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum VersionedAssets {
 			#[codec(index = 1)]
 			V2(hub_runtime_types::xcm::v2::multiasset::MultiAssets),
@@ -3181,7 +3379,7 @@ pub mod hub_runtime_types {
 			#[codec(index = 4)]
 			V4(hub_runtime_types::staging_xcm::v4::asset::Assets),
 		}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum VersionedLocation {
 			#[codec(index = 1)]
 			V2(hub_runtime_types::xcm::v2::multilocation::MultiLocation),
@@ -3190,7 +3388,7 @@ pub mod hub_runtime_types {
 			#[codec(index = 4)]
 			V4(hub_runtime_types::staging_xcm::v4::location::Location),
 		}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum VersionedXcm {
 			#[codec(index = 2)]
 			V2(hub_runtime_types::xcm::v2::Xcm),
@@ -3199,7 +3397,7 @@ pub mod hub_runtime_types {
 			#[codec(index = 4)]
 			V4(hub_runtime_types::staging_xcm::v4::Xcm),
 		}
-		#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+		#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 		pub enum VersionedXcm2 {
 			#[codec(index = 2)]
 			V2(hub_runtime_types::xcm::v2::Xcm2),
@@ -3213,7 +3411,9 @@ pub mod hub_runtime_types {
 		use super::*;
 		pub mod conversions {
 			use super::*;
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum Error {
 				#[codec(index = 0)]
 				Unsupported,
@@ -3223,7 +3423,9 @@ pub mod hub_runtime_types {
 		}
 		pub mod dry_run {
 			use super::*;
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct CallDryRunEffects<_0> {
 				pub execution_result: ::core::result::Result<
 					hub_runtime_types::frame_support::dispatch::PostDispatchInfo,
@@ -3238,14 +3440,18 @@ pub mod hub_runtime_types {
 					sp_std::vec::Vec<hub_runtime_types::xcm::VersionedXcm>,
 				)>,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum Error {
 				#[codec(index = 0)]
 				Unimplemented,
 				#[codec(index = 1)]
 				VersionedConversionFailed,
 			}
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub struct XcmDryRunEffects<_0> {
 				pub execution_result: hub_runtime_types::staging_xcm::v4::traits::Outcome,
 				pub emitted_events: sp_std::vec::Vec<_0>,
@@ -3257,7 +3463,9 @@ pub mod hub_runtime_types {
 		}
 		pub mod fees {
 			use super::*;
-			#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+			#[derive(
+				Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo,
+			)]
 			pub enum Error {
 				#[codec(index = 0)]
 				Unimplemented,

@@ -35,7 +35,7 @@ use cf_primitives::{
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES, VAULT_UTXO_SIZE_IN_BYTES,
 };
 use cf_utilities::SliceToArray;
-use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::{cmp::max, mem::size_of};
 use frame_support::{
 	pallet_prelude::RuntimeDebug,
@@ -67,7 +67,9 @@ pub const BITCOIN_DUST_LIMIT: u64 = 600;
 
 pub type BlockNumber = u64;
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Copy,
+)]
 pub struct BitcoinFetchId(pub u64);
 
 pub type BtcAmount = u64;
@@ -87,6 +89,7 @@ pub type Hash = H256;
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Ord,
@@ -101,7 +104,9 @@ pub struct AggKey {
 	pub current: [u8; 32],
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq,
+)]
 pub struct BitcoinTransactionData {
 	pub encoded_transaction: Vec<u8>,
 }
@@ -123,6 +128,7 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Serialize,
@@ -185,6 +191,7 @@ impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Serialize,
@@ -273,7 +280,18 @@ impl Chain for Bitcoin {
 	type ReplayProtection = ();
 }
 
-#[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+#[derive(
+	Clone,
+	Copy,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+	Debug,
+	PartialEq,
+	Eq,
+)]
 pub enum PreviousOrCurrent {
 	Previous,
 	Current,
@@ -385,7 +403,18 @@ fn verify_single_threshold_signature(
 
 // TODO: Look at moving this into Utxo. They're exactly the same apart from the ChannelId
 // which could be made generic, if even necessary at all.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen, Default)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	Default,
+)]
 pub struct UtxoId {
 	// TxId of the transaction in which this utxo was created.
 	pub tx_id: Hash,
@@ -402,12 +431,12 @@ impl From<&DepositChannel<Bitcoin>> for BitcoinFetchId {
 const INTERNAL_PUBKEY: &[u8] =
 	&hex_literal::hex!("02eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum Error {
 	/// The address is invalid
 	InvalidAddress,
 }
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct Utxo {
 	pub id: UtxoId,
 	pub amount: BtcAmount,
@@ -426,7 +455,17 @@ impl DepositDetailsToTransactionInId<BitcoinCrypto> for Utxo {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+)]
 pub struct BitcoinOutput {
 	pub amount: u64,
 	pub script_pubkey: ScriptPubkey,
@@ -473,6 +512,7 @@ fn to_varint(value: u64) -> Vec<u8> {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	PartialOrd,
@@ -561,6 +601,7 @@ const MAX_SEGWIT_PROGRAM_BYTES: u32 = 40;
 	Ord,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	Serialize,
@@ -725,7 +766,7 @@ impl ScriptPubkey {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinTransaction {
 	pub inputs: Vec<Utxo>,
 	pub outputs: Vec<BitcoinOutput>,
@@ -991,7 +1032,17 @@ impl<T: SerializeBtc> SerializeBtc for &[T] {
 /// Subset of ops needed for Chainflip.
 ///
 /// For reference see https://en.bitcoin.it/wiki/Script
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+)]
 pub enum BitcoinOp {
 	PushUint { value: u32 },
 	PushBytes { bytes: BoundedVec<u8, ConstU32<MAX_PUSHABLE_BYTES>> },
@@ -1008,7 +1059,7 @@ pub enum BitcoinOp {
 	PushVersion { version: u8 },
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinScript {
 	bytes: Vec<u8>,
 }

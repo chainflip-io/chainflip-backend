@@ -1,5 +1,8 @@
 [package]
-authors = ["Chainflip team <https://github.com/chainflip-io>", "Anza Maintainers <maintainers@anza.xyz>"]
+authors = [
+	"Chainflip team <https://github.com/chainflip-io>",
+	"Anza Maintainers <maintainers@anza.xyz>",
+]
 name = "sol-prim"
 version = "0.1.0"
 edition = "2021"
@@ -23,7 +26,7 @@ bincode = { version = "2.0.0-rc.3", default-features = false, features = [
 	"serde",
 ] }
 generic-array = { workspace = true, features = ["serde"] }
-cf-utilities = { package = "utilities", path = "../../../utilities", default-features = false }
+cf-utilities = { workspace = true }
 bs58 = { workspace = true, optional = true }
 digest = { workspace = true, optional = true }
 serde = { workspace = true, optional = true, features = ["derive"] }

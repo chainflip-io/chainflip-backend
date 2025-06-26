@@ -15,14 +15,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::AddressDerivation;
-use crate::{BitcoinThresholdSigner, Environment, EpochKey, String};
+use crate::{BitcoinThresholdSigner, Environment, String};
 use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, EncodedAddress},
 	btc::{deposit_address::DepositAddress, AggKey, ScriptPubkey},
 	Bitcoin, Chain,
 };
 use cf_primitives::ChannelId;
-use cf_traits::KeyProvider;
+use cf_traits::{EpochKey, KeyProvider};
 
 pub struct BitcoinPrivateBrokerDepositAddresses<Address> {
 	pub previous: Option<Address>,

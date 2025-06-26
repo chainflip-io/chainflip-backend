@@ -27,7 +27,7 @@ use cf_chains::{
 		AggKey, Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
-	eth::Address as EvmAddress,
+	evm::Address as EvmAddress,
 	hub::{Assethub, OutputAccountId},
 	sol::{
 		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall},
@@ -67,7 +67,16 @@ const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters 
 type SignatureNonce = u64;
 
 #[derive(
-	Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebugNoBound, PartialEq, Eq, Default,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+	Clone,
+	RuntimeDebugNoBound,
+	PartialEq,
+	Eq,
+	Default,
 )]
 #[scale_info(skip_type_params(T))]
 pub enum SafeModeUpdate<T: Config> {

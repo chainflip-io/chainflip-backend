@@ -16,7 +16,7 @@
 
 use cf_chains::{ApiCall, Chain, ChainCrypto};
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
-use codec::MaxEncodedLen;
+use codec::{DecodeWithMemTracking, MaxEncodedLen};
 use core::marker::PhantomData;
 use frame_support::{
 	sp_runtime::{traits::Member, DispatchError},
@@ -38,6 +38,7 @@ impl<T> MockPallet for MockBroadcaster<T> {
 #[derive(
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	CloneNoBound,
 	Copy,
 	DefaultNoBound,

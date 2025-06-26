@@ -82,6 +82,7 @@ impl pallet_session::Config for Test {
 	type Keys = MockSessionKeys;
 	type RuntimeEvent = RuntimeEvent;
 	type NextSessionRotation = ();
+	type DisablingStrategy = ();
 	type WeightInfo = ();
 }
 pub const WINNING_BIDS: [Bid<ValidatorId, FlipBalance>; 4] = [
@@ -181,8 +182,15 @@ cf_test_utilities::impl_test_helpers! {
 	RuntimeGenesisConfig {
 		system: SystemConfig::default(),
 		session: SessionConfig {
-			keys: all_validators()
-				.into_iter()
+			non_authority_keys: [&WINNING_BIDS[..], &LOSING_BIDS[..]]
+				.concat()
+				.iter()
+				.map(|bid| bid.bidder_id)
+				.map(|i| (i, i, UintAuthorityId(i).into()))
+				.collect(),
+			keys: GENESIS_AUTHORITIES
+				.iter()
+				.copied()
 				.map(|i| (i, i, UintAuthorityId(i).into()))
 				.collect(),
 		},

@@ -82,6 +82,7 @@ impl pallet_transaction_payment::Config for Test {
 	type OperationalFeeMultiplier = ConstU8<5>;
 	type LengthToFee = ConstantMultiplier<u128, ConstU128<1_000_000>>;
 	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
 }
 
 // Build genesis storage according to the mock runtime.

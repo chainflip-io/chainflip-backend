@@ -20,16 +20,20 @@ pub mod api;
 pub mod benchmarking;
 
 use crate::{
-	evm::{DeploymentStatus, EvmFetchId},
-	*,
+	benchmarking_value::BenchmarkValue,
+	evm::{self, DeploymentStatus, EvmFetchId},
+	Chain, DepositChannel, FeeEstimationApi, FeeRefundCalculator,
 };
-use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Arbitrum;
-use codec::{Decode, Encode, MaxEncodedLen};
-pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Word};
-use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
+use cf_primitives::{chains::assets, AssetAmount};
+use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
+use frame_support::{
+	sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug},
+	Parameter,
+};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_runtime::traits::Member;
 use sp_std::{cmp::min, str};
 
 use self::evm::EvmCrypto;
@@ -45,20 +49,20 @@ impl Chain for Arbitrum {
 
 	type ChainCrypto = EvmCrypto;
 	type ChainBlockNumber = u64;
-	type ChainAmount = EthAmount;
+	type ChainAmount = AssetAmount;
 	type TransactionFee = evm::TransactionFee;
 	type TrackedData = ArbitrumTrackedData;
 	type ChainAsset = assets::arb::Asset;
 	type ChainAssetMap<
 		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = assets::arb::AssetMap<T>;
-	type ChainAccount = eth::Address;
+	type ChainAccount = evm::Address;
 	type DepositFetchId = EvmFetchId;
 	type DepositChannelState = DeploymentStatus;
 	type DepositDetails = evm::DepositDetails;
 	type Transaction = evm::Transaction;
 	type TransactionMetadata = evm::EvmTransactionMetadata;
-	type TransactionRef = H256;
+	type TransactionRef = sp_core::H256;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = evm::api::EvmReplayProtection;
 }
@@ -71,6 +75,7 @@ impl Chain for Arbitrum {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Serialize,
@@ -112,9 +117,9 @@ impl ArbitrumTrackedData {
 	pub fn calculate_ccm_gas_limit(
 		&self,
 		is_native_asset: bool,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message_length: usize,
-	) -> GasAmount {
+	) -> AssetAmount {
 		use crate::arb::fees::*;
 
 		let vault_gas_overhead = if is_native_asset {
@@ -145,7 +150,7 @@ impl ArbitrumTrackedData {
 
 	pub fn calculate_transaction_fee(
 		&self,
-		gas_limit: GasAmount,
+		gas_limit: AssetAmount,
 	) -> <Arbitrum as crate::Chain>::ChainAmount {
 		self.base_fee.saturating_mul(gas_limit)
 	}
@@ -205,7 +210,7 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 	fn estimate_ccm_fee(
 		&self,
 		asset: <Arbitrum as Chain>::ChainAsset,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message_length: usize,
 	) -> Option<<Arbitrum as Chain>::ChainAmount> {
 		let gas_limit = self.calculate_ccm_gas_limit(

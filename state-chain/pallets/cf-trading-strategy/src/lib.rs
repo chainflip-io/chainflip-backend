@@ -55,14 +55,33 @@ const STRATEGY_ORDER_ID: OrderId = 0;
 impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closure_enabled, strategy_execution_enabled);
 
 #[derive(
-	Clone, Debug, Encode, Decode, TypeInfo, serde::Serialize, serde::Deserialize, PartialEq, Eq,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	serde::Serialize,
+	serde::Deserialize,
+	PartialEq,
+	Eq,
 )]
 pub enum TradingStrategy {
 	TickZeroCentered { spread_tick: Tick, base_asset: Asset },
 	SimpleBuySell { buy_tick: Tick, sell_tick: Tick, base_asset: Asset },
 }
 
-#[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone,
+	RuntimeDebugNoBound,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum PalletConfigUpdate {
 	MinimumDeploymentAmountForStrategy { asset: Asset, amount: Option<AssetAmount> },
 	MinimumAddedFundsToStrategy { asset: Asset, amount: Option<AssetAmount> },

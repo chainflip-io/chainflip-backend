@@ -236,7 +236,7 @@ mod access {
 	use super::{CorruptStorageError, ElectionIdentifierOf, ElectoralSystem, ElectoralSystemTypes};
 
 	#[cfg(test)]
-	use codec::{Decode, Encode};
+	use codec::{Decode, DecodeWithMemTracking, Encode};
 
 	/// Represents the current consensus, and how it has changed since it was last checked (i.e.
 	/// 'check_consensus' was called).
