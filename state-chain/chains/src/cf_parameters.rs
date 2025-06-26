@@ -21,7 +21,7 @@ use crate::{
 use cf_primitives::{
 	AccountId, AffiliateAndFee, BasisPoints, Beneficiary, DcaParameters, MAX_AFFILIATES,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::ConstU32;
 use sp_runtime::BoundedVec;
@@ -29,13 +29,17 @@ use sp_std::prelude::Vec;
 
 /// The default type for CcmData is `()`, which is used for the (default) non-ccm case (ie. regular
 /// swaps).
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug,
+)]
 pub enum VersionedCfParameters<RefundAddress, CcmData = ()> {
 	V0(CfParametersV0<RefundAddress, CcmData>),
 	V1(CfParametersV1<RefundAddress, CcmData>),
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug,
+)]
 pub struct CfParameters<VaultSwapParam, CcmData> {
 	/// CCMs may require additional data (e.g. CCMs to Solana requires a list of addresses).
 	pub ccm_additional_data: CcmData,
@@ -47,7 +51,9 @@ pub type CfParametersV0<RefundAddress, CcmData = ()> =
 pub type CfParametersV1<RefundAddress, CcmData = ()> =
 	CfParameters<VaultSwapParametersV1<RefundAddress>, CcmData>;
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug,
+)]
 pub struct VaultSwapParameters<R> {
 	pub refund_params: R,
 	pub dca_params: Option<DcaParameters>,
@@ -216,7 +222,7 @@ mod tests {
 	use super::*;
 	use crate::{
 		ccm_checker::{DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData},
-		eth,
+		evm,
 		sol::{SolAddress, SolCcmAccounts, SolCcmAddress, SolPubkey},
 		CcmChannelMetadataChecked, CcmChannelMetadataUnchecked, ForeignChainAddress,
 		MAX_CCM_ADDITIONAL_DATA_LENGTH, MAX_CCM_MSG_LENGTH,
@@ -450,7 +456,7 @@ mod tests {
 			hex::decode("0064000000000256E2D1E11B03CDFC4BC0821AA90F4D735A1684B4C7AC477BB6644AFA7FFBF84700000000000000000000000000000000000000000070D0CD75A367987344A3896A18E1510E5429CA5E88357B6C2A2E306B3877380D000000").unwrap();
 
 		// Check that it decodes correctly
-		match decode_cf_parameters::<eth::Address, ()>(&encoded[..]) {
+		match decode_cf_parameters::<evm::Address, ()>(&encoded[..]) {
 			Ok((decoded_vault_swap_parameters, _ccm_additional_data)) => {
 				assert_eq!(decoded_vault_swap_parameters.refund_params.retry_duration, 100);
 			},
@@ -462,7 +468,7 @@ mod tests {
 	fn can_decode_live_cf_parameters_ccm() {
 		let encoded: Vec<u8> =
 			hex::decode("000064000000000256E2D1E11B03CDFC4BC0821AA90F4D735A1684B4C7AC477BB6644AFA7FFBF84700000000000000000000000000000000000000000070D0CD75A367987344A3896A18E1510E5429CA5E88357B6C2A2E306B3877380D000000").unwrap();
-		match decode_cf_parameters::<eth::Address, DecodedCcmAdditionalData>(&encoded[..]) {
+		match decode_cf_parameters::<evm::Address, DecodedCcmAdditionalData>(&encoded[..]) {
 			Ok((decoded_vault_swap_parameters, ccm_additional_data)) => {
 				assert_eq!(decoded_vault_swap_parameters.refund_params.retry_duration, 100);
 				assert_eq!(ccm_additional_data, DecodedCcmAdditionalData::NotRequired);

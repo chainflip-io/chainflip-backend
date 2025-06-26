@@ -1,6 +1,6 @@
 use cf_chains::witness_period::SaturatingStep;
 use cf_utilities::macros::*;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use core::{
 	cmp::min,
 	iter::Step,
@@ -583,7 +583,18 @@ derive_common_traits! {
 /// implementation is optimized for that use case. Inserting somewhere else will create correct, but
 /// non-optimal state, as it won't merge together ranges.
 #[derive_where(Default; )]
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+)]
 pub struct CompactHeightTracker<N: Ord> {
 	elections: BTreeMap<N, N>,
 }
@@ -791,7 +802,18 @@ mod prop_tests {
 
 #[cfg_attr(test, derive(Arbitrary))]
 #[derive(
-	Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Default,
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Default,
 )]
 pub enum SafeModeStatus {
 	Enabled,
@@ -800,7 +822,18 @@ pub enum SafeModeStatus {
 }
 
 #[cfg_attr(test, derive(Arbitrary))]
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+)]
 pub enum ChainProgressInner<ChainBlockNumber: SaturatingStep + PartialOrd> {
 	Progress(ChainBlockNumber),
 	Reorg(RangeInclusive<ChainBlockNumber>),

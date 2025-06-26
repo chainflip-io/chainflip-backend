@@ -15,12 +15,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_primitives::CeremonyId;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use scale_info::TypeInfo;
 
 use frame_support::{storage, StorageHasher, Twox64Concat};
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo,
+)]
 pub struct MockCeremonyIdProvider;
 
 impl MockCeremonyIdProvider {

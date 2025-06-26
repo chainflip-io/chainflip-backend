@@ -57,8 +57,8 @@ use frame_support::{
 	instances::*,
 	sp_runtime::traits::{BlakeTwo256, ConvertInto, One, OpaqueKeys, Verify},
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 pub use frame_system::Call as SystemCall;
-use frame_system::{offchain::SendTransactionTypes, pallet_prelude::BlockNumberFor};
 use pallet_cf_flip::{Bonder, FlipIssuance, FlipSlasher};
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
@@ -137,9 +137,24 @@ parameter_types! {
 /// `pallet_transaction_payment::ChargeTransactionPayment`.
 pub struct GetTransactionPayments;
 
-impl Get<pallet_transaction_payment::ChargeTransactionPayment<Runtime>> for GetTransactionPayments {
-	fn get() -> pallet_transaction_payment::ChargeTransactionPayment<Runtime> {
-		pallet_transaction_payment::ChargeTransactionPayment::from(Default::default())
+impl
+	Get<(
+		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
+		pallet_transaction_payment::Val<Runtime>,
+	)> for GetTransactionPayments
+{
+	fn get() -> (
+		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
+		pallet_transaction_payment::Val<Runtime>,
+	) {
+		(
+			pallet_transaction_payment::ChargeTransactionPayment::from(Default::default()),
+			// Used as a default value for the implicit parameter in transaction payment validation
+			// for non-native signed calls. This parameter is currently ignored, pending
+			// replacement of the current legacy implementation with TransactionExtension based
+			// validation.
+			pallet_transaction_payment::Val::NoCharge,
+		)
 	}
 }
 
@@ -490,14 +505,6 @@ impl pallet_cf_account_roles::Config for Runtime {
 	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;
 }
 
-impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
-where
-	RuntimeCall: From<LocalCall>,
-{
-	type Extrinsic = UncheckedExtrinsic;
-	type OverarchingCall = RuntimeCall;
-}
-
 impl pallet_session::Config for Runtime {
 	type SessionHandler = <opaque::SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type ShouldEndSession = Validator;
@@ -507,6 +514,7 @@ impl pallet_session::Config for Runtime {
 	type NextSessionRotation = Validator;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type ValidatorIdOf = ConvertInto;
+	type DisablingStrategy = ();
 	type WeightInfo = weights::pallet_session::SubstrateWeight<Runtime>;
 }
 
@@ -711,6 +719,7 @@ impl pallet_transaction_payment::Config for Runtime {
 	type WeightToFee = ConstantMultiplier<FlipBalance, ConstU128<{ TX_FEE_MULTIPLIER }>>;
 	type LengthToFee = ConstantMultiplier<FlipBalance, ConstU128<1_000_000>>;
 	type FeeMultiplierUpdate = ConstFeeMultiplier<FeeMultiplier>;
+	type WeightInfo = pallet_transaction_payment::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {

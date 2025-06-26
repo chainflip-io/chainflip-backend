@@ -33,13 +33,13 @@ pub use weights::WeightInfo;
 #[cfg(test)]
 mod tests;
 
-use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthAmount};
+use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, AssetAmount};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
 	FundAccount, Funding, FundingSource, GetMinimumFunding, RedemptionCheck, SpawnAccount,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	dispatch::{DispatchResult, GetDispatchInfo},
 	ensure,
@@ -344,8 +344,9 @@ pub mod pallet {
 		Eq,
 		Encode,
 		Decode,
-		TypeInfo,
+		DecodeWithMemTracking,
 		MaxEncodedLen,
+		TypeInfo,
 		Ord,
 		PartialOrd,
 		Serialize,
@@ -985,7 +986,7 @@ pub mod pallet {
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::execute_sc_call().saturating_add(
 			T::EthereumSCApi::decode(&mut &deposit_and_call.call[..])
-			.map( |c| c.get_dispatch_info().weight)
+			.map( |c| c.get_dispatch_info().call_weight)
 			.unwrap_or(Weight::zero())))]
 		pub fn execute_sc_call(
 			origin: OriginFor<T>,
@@ -1234,16 +1235,27 @@ impl<T: Config> GetMinimumFunding for Pallet<T> {
 		MinimumFunding::<T>::get().into()
 	}
 }
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, DebugNoBound)]
 pub struct EthereumDepositAndSCCall {
 	pub deposit: EthereumDeposit,
 	pub call: Vec<u8>,
 }
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	DebugNoBound,
+	Serialize,
+	Deserialize,
+)]
 pub enum EthereumDeposit {
-	FlipToSCGateway { amount: EthAmount },
-	Vault { asset: EthAsset, amount: EthAmount },
-	Transfer { asset: EthAsset, amount: EthAmount, destination: EthereumAddress },
+	FlipToSCGateway { amount: AssetAmount },
+	Vault { asset: EthAsset, amount: AssetAmount },
+	Transfer { asset: EthAsset, amount: AssetAmount, destination: EthereumAddress },
 	NoDeposit,
 }

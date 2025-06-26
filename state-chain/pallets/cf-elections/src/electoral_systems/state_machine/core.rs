@@ -4,7 +4,7 @@ use core::ops::RangeInclusive;
 use proptest::prelude::{Arbitrary, Strategy};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque};
 
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use derive_where::derive_where;
 use itertools::Either;
 use scale_info::TypeInfo;
@@ -196,7 +196,7 @@ pub(crate) use defx;
 /// contain only type definitions, as used in many parts of
 /// the state machine based electoral systems.
 #[derive_where(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord;)]
-#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound())]
 #[serde(bound = "")]
 #[scale_info(skip_type_params(Tag))]
@@ -250,6 +250,7 @@ pub mod hook_test_utils {
 		Debug,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		TypeInfo,
 		MaxEncodedLen,
 		Serialize,
@@ -322,6 +323,7 @@ pub mod hook_test_utils {
 		Debug,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		TypeInfo,
 		MaxEncodedLen,
 		Serialize,
@@ -381,6 +383,7 @@ pub mod hook_test_utils {
 		Debug,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		TypeInfo,
 		MaxEncodedLen,
 		Serialize,

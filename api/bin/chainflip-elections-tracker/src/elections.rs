@@ -17,7 +17,7 @@
 use std::{collections::BTreeMap, fmt::Display};
 
 use bitvec::prelude::*;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use pallet_cf_elections::{
 	ElectionIdentifierOf, ElectoralSystemTypes, IndividualComponentOf, UniqueMonotonicIdentifier,
 	electoral_system::BitmapComponentOf,

@@ -1,4 +1,4 @@
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use derive_where::derive_where;
 use pallet_cf_elections::electoral_systems::state_machine::core::Validate;
 use scale_info::TypeInfo;
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// contain only type definitions, as used in many parts of
 /// the state machine based electoral systems.
 #[derive_where(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord;)]
-#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound())]
 #[serde(bound = "")]
 #[scale_info(skip_type_params(Tag))]

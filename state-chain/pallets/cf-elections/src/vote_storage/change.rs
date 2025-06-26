@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	pallet_prelude::{Member, TypeInfo},
 	Parameter,
@@ -24,7 +24,9 @@ use super::{AuthorityVote, VoteComponents, VoteStorage};
 
 use crate::{CorruptStorageError, SharedDataHash};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+#[derive(
+	Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, DecodeWithMemTracking, TypeInfo,
+)]
 pub struct MonotonicChangeVote<Value, BlockHeight> {
 	pub value: Value,
 	pub block: BlockHeight,

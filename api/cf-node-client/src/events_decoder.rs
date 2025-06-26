@@ -16,7 +16,7 @@
 
 use crate::subxt_state_chain_config::{cf_static_runtime, StateChainConfig};
 use codec::Decode;
-use frame_support::dispatch::DispatchInfo;
+use frame_system::DispatchEventInfo;
 use sp_runtime::{DispatchError, Either};
 use subxt::{
 	events::StaticEvent,
@@ -184,7 +184,7 @@ impl DynamicEvents {
 	/// Extracts the extrinsic Success or Failed events
 	pub fn extrinsic_result(
 		&self,
-	) -> Result<Either<DispatchInfo, DispatchError>, DynamicEventError> {
+	) -> Result<Either<DispatchEventInfo, DispatchError>, DynamicEventError> {
 		for event in self.events.iter() {
 			match (event.pallet_name(), event.variant_name()) {
 				("System", "ExtrinsicSuccess") => {

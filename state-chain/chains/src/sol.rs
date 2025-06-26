@@ -17,7 +17,7 @@
 pub use cf_primitives::chains::Solana;
 
 use cf_primitives::{
-	AffiliateAndFee, BasisPoints, Beneficiary, ChannelId, DcaParameters, ForeignChain,
+	AffiliateAndFee, AssetAmount, BasisPoints, Beneficiary, ChannelId, DcaParameters, ForeignChain,
 	IngressOrEgress,
 };
 use sol_prim::program_instructions::FunctionDiscriminator;
@@ -38,7 +38,7 @@ use crate::{
 	ChannelRefundParametersUncheckedEncoded, DepositChannel, DepositDetailsToTransactionInId,
 	FeeEstimationApi, FeeRefundCalculator, TypeInfo,
 };
-use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	sp_runtime::{BoundedVec, RuntimeDebug},
 	Parameter,
@@ -102,7 +102,9 @@ pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES: usi
 pub const REFERENCE_SOL_PRICE_IN_USD: u64 = 220_000_000u64; //220 usd
 
 // Use serialized transaction
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq,
+)]
 pub struct SolanaTransactionData {
 	pub serialized_transaction: Vec<u8>,
 	pub skip_preflight: bool,
@@ -111,7 +113,18 @@ pub struct SolanaTransactionData {
 /// A Solana transaction in id is a tuple of the AccountAddress and the slot number.
 pub type SolanaTransactionInId = (SolAddress, u64);
 #[derive(
-	Ord, PartialOrd, Eq, PartialEq, Encode, Decode, Clone, Debug, TypeInfo, Serialize, Deserialize,
+	Ord,
+	PartialOrd,
+	Eq,
+	PartialEq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	Clone,
+	Debug,
+	TypeInfo,
+	Serialize,
+	Deserialize,
 )]
 pub enum VaultSwapOrDepositChannelId {
 	Channel(SolAddress),
@@ -245,6 +258,7 @@ pub mod compute_units_costs {
 	Clone,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Debug,
@@ -259,7 +273,7 @@ pub struct SolTrackedData {
 
 impl SolTrackedData {
 	pub fn calculate_ccm_compute_limit(
-		gas_budget: cf_primitives::GasAmount,
+		gas_budget: AssetAmount,
 		asset: SolAsset,
 	) -> SolComputeLimit {
 		use compute_units_costs::*;
@@ -389,7 +403,7 @@ impl address::ToHumanreadableAddress for SolAddress {
 
 impl crate::ChannelLifecycleHooks for AccountBump {}
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct SolanaDepositFetchId {
 	pub channel_id: ChannelId,
 	pub address: SolAddress,
@@ -493,7 +507,17 @@ pub mod signing_key {
 
 /// Solana Environment variables used when building the base API call.
 #[derive(
-	Encode, Decode, TypeInfo, Default, Clone, PartialEq, Eq, Debug, Serialize, Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Default,
+	Clone,
+	PartialEq,
+	Eq,
+	Debug,
+	Serialize,
+	Deserialize,
 )]
 pub struct SolApiEnvironment {
 	// For native Sol API calls.

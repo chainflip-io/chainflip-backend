@@ -7,7 +7,7 @@ use crate::{
 };
 use cf_chains::{btc::BlockNumber, instances::BitcoinInstance};
 use cf_primitives::chains::Bitcoin;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use pallet_cf_broadcast::TransactionConfirmation;
@@ -21,7 +21,18 @@ use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 use super::{bitcoin_elections::BitcoinDepositChannelWitnessing, elections::TypesFor};
 
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Ord,
+	PartialOrd,
 )]
 pub enum BtcEvent<T> {
 	PreWitness(T),

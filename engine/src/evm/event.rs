@@ -20,8 +20,6 @@ use ethers::abi::RawLog;
 use std::fmt::Debug;
 use web3::types::{Log, H256, U256};
 
-use super::core_h256;
-
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug, PartialEq, Eq)]
 pub struct Event<EventParameters: Debug> {
@@ -49,7 +47,7 @@ impl<EventParameters: Debug + ethers::contract::EthLogDecode> Event<EventParamet
 				.log_index
 				.ok_or_else(|| anyhow!("Could not get log index from ETH log"))?,
 			event_parameters: EventParameters::decode_log(&RawLog {
-				topics: log.topics.into_iter().map(core_h256).collect(),
+				topics: log.topics.into_iter().collect(),
 				data: log.data.0,
 			})?,
 		})

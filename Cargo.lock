@@ -557,7 +557,7 @@ dependencies = [
  "asn1-rs-derive 0.5.1",
  "asn1-rs-impl",
  "displaydoc",
- "nom",
+ "nom 7.1.3",
  "num-traits",
  "rusticata-macros",
  "thiserror 1.0.69",
@@ -573,7 +573,7 @@ dependencies = [
  "asn1-rs-derive 0.6.0",
  "asn1-rs-impl",
  "displaydoc",
- "nom",
+ "nom 7.1.3",
  "num-traits",
  "rusticata-macros",
  "thiserror 2.0.17",
@@ -1034,7 +1034,7 @@ name = "binary-merkle-tree"
 version = "16.0.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev#004223853ea8d5b471d4dff04c46f10cf3674848"
 dependencies = [
- "hash-db 0.16.0",
+ "hash-db",
  "log",
  "parity-scale-codec",
 ]
@@ -1045,7 +1045,7 @@ version = "16.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95c9f6900c9fd344d53fbdfb36e1343429079d73f4168c8ef48884bf15616dbd"
 dependencies = [
- "hash-db 0.16.0",
+ "hash-db",
  "log",
  "parity-scale-codec",
 ]
@@ -1572,7 +1572,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fac387a98bb7c37292057cffc56d62ecb629900026402633ae9160df93a8766"
 dependencies = [
- "nom",
+ "nom 7.1.3",
 ]
 
 [[package]]
@@ -1585,7 +1585,7 @@ dependencies = [
  "rand 0.8.5",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "utilities",
 ]
@@ -1599,7 +1599,7 @@ dependencies = [
  "rand 0.8.5",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -1623,8 +1623,6 @@ dependencies = [
  "duplicate",
  "ed25519-dalek",
  "ethabi",
- "ethereum",
- "ethereum-types 0.15.1",
  "frame-support",
  "generic-array 1.3.5",
  "generic-typeinfo-derive",
@@ -1647,9 +1645,9 @@ dependencies = [
  "sha2 0.10.9",
  "sha2-const",
  "sol-prim",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "ss58-registry",
  "strum 0.26.3",
@@ -1723,16 +1721,16 @@ dependencies = [
  "sp-block-builder",
  "sp-consensus-aura",
  "sp-consensus-grandpa",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-inherents",
  "sp-keyring",
  "sp-offchain",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-session",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-timestamp",
  "sp-transaction-pool",
- "sp-version 39.0.0",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "state-chain-runtime",
  "utilities",
 ]
@@ -1753,12 +1751,12 @@ dependencies = [
  "pallet-cf-pools",
  "parity-scale-codec",
  "scale-info",
- "sp-api 36.0.1",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
- "sp-version 39.0.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "state-chain-runtime",
- "subxt 0.41.0",
+ "subxt 0.42.1",
  "thiserror 1.0.69",
  "utilities",
 ]
@@ -1777,8 +1775,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-arithmetic 26.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "strum 0.26.3",
  "strum_macros 0.26.4",
@@ -1812,7 +1810,7 @@ dependencies = [
  "pallet-cf-pools",
  "pallet-cf-swapping",
  "serde",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "state-chain-runtime",
  "utilities",
 ]
@@ -1835,9 +1833,9 @@ dependencies = [
  "hex-literal",
  "log",
  "parity-scale-codec",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -1851,7 +1849,7 @@ dependencies = [
  "pallet-session",
  "parity-scale-codec",
  "rand 0.8.5",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -1863,9 +1861,9 @@ dependencies = [
  "frame-system",
  "parity-scale-codec",
  "scale-info",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -1884,8 +1882,8 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "strum 0.26.3",
 ]
@@ -2005,7 +2003,7 @@ dependencies = [
  "serde",
  "sp-consensus-aura",
  "sp-consensus-grandpa",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "state-chain-runtime",
  "tiny-bip39",
  "tokio",
@@ -2105,7 +2103,6 @@ dependencies = [
  "dyn-clone",
  "ed25519-dalek",
  "engine-upgrade-utils",
- "ethereum",
  "ethers",
  "frame-metadata 16.0.0",
  "frame-metadata-hash-extension",
@@ -2146,7 +2143,7 @@ dependencies = [
  "pin-project",
  "rand 0.8.5",
  "regex",
- "reqwest",
+ "reqwest 0.11.27",
  "rlp",
  "rocksdb",
  "sc-rpc-api",
@@ -2159,14 +2156,14 @@ dependencies = [
  "serde_path_to_error",
  "sha2 0.10.9",
  "sol-prim",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-rpc",
- "sp-runtime 41.1.0",
- "sp-version 39.0.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "state-chain-runtime",
  "substrate-build-script-utils",
  "substrate-frame-rpc-system",
- "subxt 0.41.0",
+ "subxt 0.42.1",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
@@ -2208,7 +2205,7 @@ dependencies = [
  "redis",
  "serde",
  "serde_json",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "state-chain-runtime",
  "substrate-build-script-utils",
  "tempfile",
@@ -2232,7 +2229,7 @@ dependencies = [
  "jsonrpsee",
  "pallet-cf-pools",
  "sc-rpc",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "substrate-build-script-utils",
  "tokio",
  "tracing",
@@ -2268,7 +2265,7 @@ dependencies = [
  "sc-consensus-aura",
  "sc-consensus-grandpa",
  "sc-consensus-grandpa-rpc",
- "sc-executor 0.42.0",
+ "sc-executor 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sc-keystore",
  "sc-network",
  "sc-offchain",
@@ -2280,17 +2277,17 @@ dependencies = [
  "sc-transaction-pool-api",
  "serde_json",
  "sol-prim",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-block-builder",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-aura",
  "sp-consensus-grandpa",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-inherents",
- "sp-io 40.0.1",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-keyring",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-timestamp",
  "state-chain-runtime",
  "substrate-build-script-utils",
@@ -2545,7 +2542,7 @@ dependencies = [
  "async-trait",
  "json5",
  "lazy_static",
- "nom",
+ "nom 7.1.3",
  "pathdiff",
  "ron",
  "rust-ini",
@@ -2649,6 +2646,15 @@ name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
+
+[[package]]
+name = "convert_case"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
+dependencies = [
+ "unicode-segmentation",
+]
 
 [[package]]
 name = "core-foundation"
@@ -2797,7 +2803,7 @@ dependencies = [
  "itertools 0.10.5",
  "log",
  "smallvec",
- "wasmparser",
+ "wasmparser 0.102.0",
  "wasmtime-types",
 ]
 
@@ -2967,8 +2973,8 @@ dependencies = [
  "sc-client-api",
  "sp-crypto-hashing 0.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-inherents",
- "sp-runtime 41.1.0",
- "sp-state-machine 0.45.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-storage 22.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "tracing",
 ]
@@ -2983,9 +2989,9 @@ dependencies = [
  "polkadot-parachain-primitives",
  "polkadot-primitives",
  "scale-info",
- "sp-api 36.0.1",
- "sp-runtime 41.1.0",
- "sp-trie 39.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "staging-xcm",
 ]
 
@@ -2998,9 +3004,9 @@ dependencies = [
  "cumulus-primitives-core",
  "parity-scale-codec",
  "scale-info",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-inherents",
- "sp-trie 39.1.0",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -3010,7 +3016,7 @@ source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-sub
 dependencies = [
  "sp-externalities 0.30.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-runtime-interface 29.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-trie 39.1.0",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -3025,10 +3031,10 @@ dependencies = [
  "parity-scale-codec",
  "polkadot-overseer",
  "sc-client-api",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-blockchain",
- "sp-state-machine 0.45.0",
- "sp-version 39.0.0",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
 ]
 
@@ -3040,9 +3046,9 @@ dependencies = [
  "cumulus-primitives-core",
  "parity-scale-codec",
  "polkadot-primitives",
- "sp-runtime 41.1.0",
- "sp-state-machine 0.45.0",
- "sp-trie 39.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -3133,12 +3139,12 @@ dependencies = [
  "scale-value 0.18.1",
  "serde",
  "serde_json",
- "sp-api 36.0.1",
- "sp-application-crypto 40.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-block-builder",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
- "sp-state-machine 0.45.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-transaction-pool",
  "state-chain-runtime",
  "substrate-frame-rpc-system",
@@ -3301,7 +3307,7 @@ checksum = "5cd0a5c643689626bec213c4d8bd4d96acc8ffdb4ad4bb6bc16abf27d5f4b553"
 dependencies = [
  "asn1-rs 0.6.2",
  "displaydoc",
- "nom",
+ "nom 7.1.3",
  "num-bigint",
  "num-traits",
  "rusticata-macros",
@@ -3315,7 +3321,7 @@ checksum = "07da5016415d5a3c4dd39b11ed26f915f52fc4e0dc197d87908bc916e51bc1a6"
 dependencies = [
  "asn1-rs 0.7.1",
  "displaydoc",
- "nom",
+ "nom 7.1.3",
  "num-bigint",
  "num-traits",
  "rusticata-macros",
@@ -3369,7 +3375,7 @@ version = "0.99.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6edb4b64a43d977b8e99788fe3a04d483834fba1215a7e02caa415b626497f7f"
 dependencies = [
- "convert_case",
+ "convert_case 0.4.0",
  "proc-macro2",
  "quote",
  "rustc_version",
@@ -3382,7 +3388,16 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
 dependencies = [
- "derive_more-impl",
+ "derive_more-impl 1.0.0",
+]
+
+[[package]]
+name = "derive_more"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10b768e943bed7bf2cab53df09f4bc34bfd217cdb57d971e769874c9a6710618"
+dependencies = [
+ "derive_more-impl 2.1.0",
 ]
 
 [[package]]
@@ -3393,6 +3408,20 @@ checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
 dependencies = [
  "proc-macro2",
  "quote",
+ "syn 2.0.110",
+ "unicode-xid",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d286bfdaf75e988b4a78e013ecd79c581e06399ab53fbacd2d916c2f904f30b"
+dependencies = [
+ "convert_case 0.10.0",
+ "proc-macro2",
+ "quote",
+ "rustc_version",
  "syn 2.0.110",
  "unicode-xid",
 ]
@@ -3738,7 +3767,7 @@ dependencies = [
  "engine-proc-macros",
  "engine-upgrade-utils",
  "predicates",
- "reqwest",
+ "reqwest 0.11.27",
  "tempfile",
 ]
 
@@ -3922,7 +3951,7 @@ version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7413c5f74cc903ea37386a8965a936cbeb334bd270862fdece542c1b2dcbc898"
 dependencies = [
- "ethereum-types 0.14.1",
+ "ethereum-types",
  "hex",
  "once_cell",
  "regex",
@@ -3949,35 +3978,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ethbloom"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c321610643004cf908ec0f5f2aa0d8f1f8e14b540562a2887a1111ff1ecbf7b"
-dependencies = [
- "crunchy",
- "fixed-hash",
- "tiny-keccak",
-]
-
-[[package]]
-name = "ethereum"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a89fb87a9e103f71b903b80b670200b54cc67a07578f070681f1fffb7396fb7"
-dependencies = [
- "bytes",
- "ethereum-types 0.14.1",
- "hash-db 0.15.2",
- "hash256-std-hasher",
- "parity-scale-codec",
- "rlp",
- "scale-info",
- "serde",
- "sha3",
- "triehash",
-]
-
-[[package]]
 name = "ethereum-eip712"
 version = "0.1.0"
 dependencies = [
@@ -4001,7 +4001,7 @@ version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02d215cbf040552efcbe99a38372fe80ab9d00268e20012b79fcd0f073edd8ee"
 dependencies = [
- "ethbloom 0.13.0",
+ "ethbloom",
  "fixed-hash",
  "impl-codec 0.6.0",
  "impl-rlp",
@@ -4009,18 +4009,6 @@ dependencies = [
  "primitive-types 0.12.2",
  "scale-info",
  "uint 0.9.5",
-]
-
-[[package]]
-name = "ethereum-types"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ab15ed80916029f878e0267c3a9f92b67df55e79af370bf66199059ae2b4ee3"
-dependencies = [
- "ethbloom 0.14.1",
- "fixed-hash",
- "primitive-types 0.13.1",
- "uint 0.10.0",
 ]
 
 [[package]]
@@ -4086,7 +4074,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "reqwest",
+ "reqwest 0.11.27",
  "serde",
  "serde_json",
  "syn 2.0.110",
@@ -4148,7 +4136,7 @@ checksum = "e79e5973c26d4baf0ce55520bd732314328cabe53193286671b47144145b9649"
 dependencies = [
  "chrono",
  "ethers-core",
- "reqwest",
+ "reqwest 0.11.27",
  "semver 1.0.27",
  "serde",
  "serde_json",
@@ -4173,7 +4161,7 @@ dependencies = [
  "futures-locks",
  "futures-util",
  "instant",
- "reqwest",
+ "reqwest 0.11.27",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -4205,7 +4193,7 @@ dependencies = [
  "jsonwebtoken",
  "once_cell",
  "pin-project",
- "reqwest",
+ "reqwest 0.11.27",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -4571,11 +4559,11 @@ dependencies = [
  "paste",
  "scale-info",
  "serde",
- "sp-api 36.0.1",
- "sp-application-crypto 40.1.0",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-runtime-interface 29.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-storage 22.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "static_assertions",
@@ -4611,29 +4599,29 @@ dependencies = [
  "sc-cli",
  "sc-client-api",
  "sc-client-db",
- "sc-executor 0.42.0",
+ "sc-executor 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sc-runtime-utilities",
  "sc-service",
  "sc-sysinfo",
  "serde",
  "serde_json",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-block-builder",
  "sp-blockchain",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-database",
  "sp-externalities 0.30.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-genesis-builder",
  "sp-inherents",
- "sp-io 40.0.1",
- "sp-keystore 0.42.0",
- "sp-runtime 41.1.0",
- "sp-state-machine 0.45.0",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-storage 22.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-timestamp",
  "sp-transaction-pool",
- "sp-trie 39.1.0",
- "sp-version 39.0.0",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-wasm-interface 21.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "subxt 0.38.1",
  "subxt-signer",
@@ -4657,11 +4645,11 @@ dependencies = [
 
 [[package]]
 name = "frame-decode"
-version = "0.7.1"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7cb8796f93fa038f979a014234d632e9688a120e745f936e2635123c77537f7"
+checksum = "6e56c0e51972d7b26ff76966c4d0f2307030df9daa5ce0885149ece1ab7ca5ad"
 dependencies = [
- "frame-metadata 21.0.0",
+ "frame-metadata 23.0.1",
  "parity-scale-codec",
  "scale-decode 0.16.1",
  "scale-info",
@@ -4681,9 +4669,9 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-tracing 17.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -4713,18 +4701,6 @@ dependencies = [
 
 [[package]]
 name = "frame-metadata"
-version = "18.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "daaf440c68eb2c3d88e5760fe8c7af3f9fee9181fab6c2f2c4e7cc48dcc40bb8"
-dependencies = [
- "cfg-if",
- "parity-scale-codec",
- "scale-info",
- "serde",
-]
-
-[[package]]
-name = "frame-metadata"
 version = "20.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26de808fa6461f2485dc51811aefed108850064994fb4a62b3ac21ffa62ac8df"
@@ -4737,13 +4713,14 @@ dependencies = [
 
 [[package]]
 name = "frame-metadata"
-version = "21.0.0"
+version = "23.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20dfd1d7eae1d94e32e869e2fb272d81f52dd8db57820a373adb83ea24d7d862"
+checksum = "9ba5be0edbdb824843a0f9c6f0906ecfc66c5316218d74457003218b24909ed0"
 dependencies = [
  "cfg-if",
  "parity-scale-codec",
  "scale-info",
+ "serde",
 ]
 
 [[package]]
@@ -4759,7 +4736,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -4784,21 +4761,21 @@ dependencies = [
  "scale-info",
  "serde",
  "serde_json",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-arithmetic 26.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-crypto-hashing-proc-macro 0.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-debug-derive 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-genesis-builder",
  "sp-inherents",
- "sp-io 40.0.1",
- "sp-metadata-ir 0.10.0",
- "sp-runtime 41.1.0",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-metadata-ir 0.10.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-staking",
- "sp-state-machine 0.45.0",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-tracing 17.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-trie 39.1.0",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-weights 31.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "tt-call",
 ]
@@ -4857,10 +4834,10 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
- "sp-version 39.0.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-weights 31.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -4874,8 +4851,8 @@ dependencies = [
  "frame-system",
  "parity-scale-codec",
  "scale-info",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -4885,7 +4862,7 @@ source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-sub
 dependencies = [
  "docify",
  "parity-scale-codec",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -4895,8 +4872,8 @@ source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-sub
 dependencies = [
  "frame-support",
  "parity-scale-codec",
- "sp-api 36.0.1",
- "sp-runtime 41.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -5030,7 +5007,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f2f12607f92c69b12ed746fabf9ca4f5c482cba46679c1a75b874ed7c26adb"
 dependencies = [
  "futures-io",
- "rustls 0.23.21",
+ "rustls 0.23.35",
  "rustls-pki-types",
 ]
 
@@ -5383,12 +5360,6 @@ dependencies = [
 
 [[package]]
 name = "hash-db"
-version = "0.15.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d23bd4e7b5eda0d0f3a307e8b381fdc8ba9000f26fbe912250c0a4cc3956364a"
-
-[[package]]
-name = "hash-db"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e7d7786361d7425ae2fe4f9e407eb0efaa0840f5212d109cc018c40c35c6ab4"
@@ -5440,6 +5411,7 @@ dependencies = [
  "allocator-api2",
  "equivalent",
  "foldhash 0.1.5",
+ "serde",
 ]
 
 [[package]]
@@ -5474,8 +5446,23 @@ checksum = "06683b93020a07e3dbcf5f8c0f6d40080d725bea7936fc01ad345c01b97dc270"
 dependencies = [
  "base64 0.21.7",
  "bytes",
- "headers-core",
+ "headers-core 0.2.0",
  "http 0.2.12",
+ "httpdate",
+ "mime",
+ "sha1",
+]
+
+[[package]]
+name = "headers"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3314d5adb5d94bcdf56771f2e50dbbc80bb4bdf88967526706205ac9eff24eb"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "headers-core 0.3.0",
+ "http 1.3.1",
  "httpdate",
  "mime",
  "sha1",
@@ -5488,6 +5475,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
 dependencies = [
  "http 0.2.12",
+]
+
+[[package]]
+name = "headers-core"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54b4a22553d4242c49fddb9ba998a99962b5cc6f22cb5a3482bec22522403ce4"
+dependencies = [
+ "http 1.3.1",
 ]
 
 [[package]]
@@ -5563,7 +5559,7 @@ dependencies = [
  "futures-channel",
  "futures-io",
  "futures-util",
- "idna 1.1.0",
+ "idna",
  "ipnet",
  "once_cell",
  "rand 0.8.5",
@@ -5588,7 +5584,7 @@ dependencies = [
  "futures-channel",
  "futures-io",
  "futures-util",
- "idna 1.1.0",
+ "idna",
  "ipnet",
  "once_cell",
  "rand 0.9.2",
@@ -5841,7 +5837,7 @@ dependencies = [
  "hyper 1.8.1",
  "hyper-util",
  "log",
- "rustls 0.23.21",
+ "rustls 0.23.35",
  "rustls-native-certs 0.8.2",
  "rustls-pki-types",
  "tokio",
@@ -5876,11 +5872,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyper-tls"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0"
+dependencies = [
+ "bytes",
+ "http-body-util",
+ "hyper 1.8.1",
+ "hyper-util",
+ "native-tls",
+ "tokio",
+ "tokio-native-tls",
+ "tower-service",
+]
+
+[[package]]
 name = "hyper-util"
 version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52e9a2a24dc5c6821e71a7030e1e14b7b632acac55c40e9d2e082c621261bb56"
 dependencies = [
+ "base64 0.22.1",
  "bytes",
  "futures-channel",
  "futures-core",
@@ -5888,7 +5901,9 @@ dependencies = [
  "http 1.3.1",
  "http-body 1.0.1",
  "hyper 1.8.1",
+ "ipnet",
  "libc",
+ "percent-encoding",
  "pin-project-lite",
  "socket2 0.6.1",
  "tokio",
@@ -6006,16 +6021,6 @@ name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
-
-[[package]]
-name = "idna"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d20d6b07bfbc108882d88ed8e37d39636dcc260e15e30c45e6ba089610b917c"
-dependencies = [
- "unicode-bidi",
- "unicode-normalization",
-]
 
 [[package]]
 name = "idna"
@@ -6284,6 +6289,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "469fb0b9cefa57e3ef31275ee7cacb78f2fdca44e4765491884a2b119d4eb130"
 
 [[package]]
+name = "iri-string"
+version = "0.7.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f867b9d1d896b67beb18518eda36fdb77a32ea590de864f1325b294a6d14397"
+dependencies = [
+ "memchr",
+ "serde",
+]
+
+[[package]]
 name = "is-terminal"
 version = "0.4.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6390,6 +6405,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "jni"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a87aa2bb7d2af34197c04845522473242e1aa17c12f4935d5856491a7fb8c97"
+dependencies = [
+ "cesu8",
+ "cfg-if",
+ "combine",
+ "jni-sys",
+ "log",
+ "thiserror 1.0.69",
+ "walkdir",
+ "windows-sys 0.45.0",
+]
+
+[[package]]
 name = "jni-sys"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6472,10 +6503,10 @@ dependencies = [
  "http 1.3.1",
  "jsonrpsee-core",
  "pin-project",
- "rustls 0.23.21",
+ "rustls 0.23.35",
  "rustls-pki-types",
- "rustls-platform-verifier",
- "soketto 0.8.1",
+ "rustls-platform-verifier 0.3.4",
+ "soketto",
  "thiserror 1.0.69",
  "tokio",
  "tokio-rustls 0.26.1",
@@ -6513,9 +6544,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-http-client"
-version = "0.24.8"
+version = "0.24.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87c24e981ad17798bbca852b0738bfb7b94816ed687bd0d5da60bfa35fa0fdc3"
+checksum = "f50c389d6e6a52eb7c3548a6600c90cf74d9b71cb5912209833f00a5479e9a01"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -6525,8 +6556,8 @@ dependencies = [
  "hyper-util",
  "jsonrpsee-core",
  "jsonrpsee-types",
- "rustls 0.23.21",
- "rustls-platform-verifier",
+ "rustls 0.23.35",
+ "rustls-platform-verifier 0.5.3",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -6567,7 +6598,7 @@ dependencies = [
  "route-recognizer",
  "serde",
  "serde_json",
- "soketto 0.8.1",
+ "soketto",
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
@@ -7042,7 +7073,7 @@ dependencies = [
  "quinn",
  "rand 0.8.5",
  "ring 0.17.14",
- "rustls 0.23.21",
+ "rustls 0.23.35",
  "socket2 0.5.10",
  "thiserror 1.0.69",
  "tokio",
@@ -7134,7 +7165,7 @@ dependencies = [
  "libp2p-identity",
  "rcgen",
  "ring 0.17.14",
- "rustls 0.23.21",
+ "rustls 0.23.35",
  "rustls-webpki 0.101.7",
  "thiserror 1.0.69",
  "x509-parser 0.16.0",
@@ -7171,7 +7202,7 @@ dependencies = [
  "parking_lot 0.12.5",
  "pin-project-lite",
  "rw-stream-sink",
- "soketto 0.8.1",
+ "soketto",
  "thiserror 1.0.69",
  "tracing",
  "url",
@@ -7608,7 +7639,7 @@ version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "808b50db46293432a45e63bc15ea51e0ab4c0a1647b8eb114e31a3e698dd6fbe"
 dependencies = [
- "hash-db 0.16.0",
+ "hash-db",
 ]
 
 [[package]]
@@ -7877,9 +7908,9 @@ dependencies = [
 
 [[package]]
 name = "multimap"
-version = "0.8.3"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
 
 [[package]]
 name = "multisig"
@@ -7913,8 +7944,8 @@ dependencies = [
  "secp256k1 0.29.1",
  "serde",
  "sha2 0.10.9",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "state-chain-runtime",
  "strum 0.26.3",
  "strum_macros 0.26.4",
@@ -8117,6 +8148,15 @@ checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
 dependencies = [
  "memchr",
  "minimal-lexical",
+]
+
+[[package]]
+name = "nom"
+version = "8.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df9761775871bdef83bee530e60050f7e54b1105350d6884eb0fb4f46c2f9405"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
@@ -8348,7 +8388,7 @@ dependencies = [
  "arrayvec 0.7.6",
  "auto_impl",
  "bytes",
- "ethereum-types 0.14.1",
+ "ethereum-types",
  "open-fastrlp-derive",
 ]
 
@@ -8534,9 +8574,9 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "sp-application-crypto 40.1.0",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-consensus-aura",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -8549,7 +8589,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
  "scale-info",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -8566,9 +8606,9 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -8588,9 +8628,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "utilities",
 ]
@@ -8614,9 +8654,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -8652,9 +8692,9 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -8686,8 +8726,8 @@ dependencies = [
  "scale-info",
  "serde",
  "serde_arrays",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "utilities",
 ]
@@ -8711,9 +8751,9 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-arithmetic 26.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -8737,9 +8777,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "utilities",
 ]
@@ -8759,9 +8799,9 @@ dependencies = [
  "quickcheck",
  "quickcheck_macros",
  "scale-info",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -8782,9 +8822,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "utilities",
 ]
@@ -8802,9 +8842,9 @@ dependencies = [
  "frame-system",
  "parity-scale-codec",
  "scale-info",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -8829,9 +8869,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "strum 0.26.3",
  "strum_macros 0.26.4",
@@ -8877,9 +8917,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -8902,9 +8942,9 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-arithmetic 26.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "utilities",
 ]
@@ -8925,9 +8965,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-staking",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
@@ -8953,9 +8993,9 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-arithmetic 26.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -8980,9 +9020,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "utilities",
 ]
@@ -9002,9 +9042,9 @@ dependencies = [
  "pallet-cf-flip",
  "parity-scale-codec",
  "scale-info",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -9053,10 +9093,10 @@ dependencies = [
  "quickcheck_macros",
  "scale-info",
  "serde",
- "sp-application-crypto 40.1.0",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "utilities",
 ]
@@ -9078,9 +9118,9 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "utilities",
 ]
@@ -9100,9 +9140,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "utilities",
 ]
@@ -9120,11 +9160,11 @@ dependencies = [
  "pallet-session",
  "parity-scale-codec",
  "scale-info",
- "sp-application-crypto 40.1.0",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-consensus-grandpa",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-session",
  "sp-staking",
 ]
@@ -9141,13 +9181,13 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-session",
  "sp-staking",
- "sp-state-machine 0.45.0",
- "sp-trie 39.1.0",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -9163,8 +9203,8 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "sp-inherents",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-storage 22.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-timestamp",
 ]
@@ -9180,9 +9220,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -9193,11 +9233,11 @@ dependencies = [
  "jsonrpsee",
  "pallet-transaction-payment-rpc-runtime-api",
  "parity-scale-codec",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-blockchain",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-rpc",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-weights 31.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -9208,8 +9248,8 @@ source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-sub
 dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
- "sp-api 36.0.1",
- "sp-runtime 41.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-weights 31.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -9616,8 +9656,8 @@ source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-sub
 dependencies = [
  "parity-scale-codec",
  "scale-info",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -9656,7 +9696,7 @@ dependencies = [
  "sc-authority-discovery",
  "sc-network",
  "sc-network-types",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "strum 0.26.3",
  "thiserror 1.0.69",
  "tracing-gum",
@@ -9677,10 +9717,10 @@ dependencies = [
  "sc-keystore",
  "schnorrkel",
  "serde",
- "sp-application-crypto 40.1.0",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-consensus-babe",
  "sp-consensus-slots",
- "sp-keystore 0.42.0",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-maybe-compressed-blob 11.0.0",
  "thiserror 1.0.69",
  "zstd 0.12.4",
@@ -9705,11 +9745,11 @@ dependencies = [
  "sc-network-types",
  "sc-transaction-pool-api",
  "smallvec",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-authority-discovery",
  "sp-blockchain",
  "sp-consensus-babe",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "substrate-prometheus-endpoint",
  "thiserror 1.0.69",
 ]
@@ -9729,7 +9769,7 @@ dependencies = [
  "polkadot-node-subsystem-types",
  "polkadot-primitives",
  "sc-client-api",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "tikv-jemalloc-ctl",
  "tracing-gum",
 ]
@@ -9745,8 +9785,8 @@ dependencies = [
  "polkadot-core-primitives",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-weights 31.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -9763,16 +9803,16 @@ dependencies = [
  "polkadot-parachain-primitives",
  "scale-info",
  "serde",
- "sp-api 36.0.1",
- "sp-application-crypto 40.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-arithmetic 26.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-authority-discovery",
  "sp-consensus-slots",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-inherents",
- "sp-io 40.0.1",
- "sp-keystore 0.42.0",
- "sp-runtime 41.1.0",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-staking",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
@@ -9799,37 +9839,15 @@ dependencies = [
 
 [[package]]
 name = "polkavm"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a3693e5efdb2bf74e449cd25fd777a28bd7ed87e41f5d5da75eb31b4de48b94"
-dependencies = [
- "libc",
- "log",
- "polkavm-assembler 0.9.0",
- "polkavm-common 0.9.0",
- "polkavm-linux-raw 0.9.0",
-]
-
-[[package]]
-name = "polkavm"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd044ab1d3b11567ab6b98ca71259a992b4034220d5972988a0e96518e5d343d"
 dependencies = [
  "libc",
  "log",
- "polkavm-assembler 0.18.0",
- "polkavm-common 0.18.0",
- "polkavm-linux-raw 0.18.0",
-]
-
-[[package]]
-name = "polkavm-assembler"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fa96d6d868243acc12de813dd48e756cbadcc8e13964c70d272753266deadc1"
-dependencies = [
- "log",
+ "polkavm-assembler",
+ "polkavm-common",
+ "polkavm-linux-raw",
 ]
 
 [[package]]
@@ -9843,30 +9861,12 @@ dependencies = [
 
 [[package]]
 name = "polkavm-common"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d9428a5cfcc85c5d7b9fc4b6a18c4b802d0173d768182a51cc7751640f08b92"
-dependencies = [
- "log",
-]
-
-[[package]]
-name = "polkavm-common"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31ff33982a807d8567645d4784b9b5d7ab87bcb494f534a57cadd9012688e102"
 dependencies = [
  "log",
- "polkavm-assembler 0.18.0",
-]
-
-[[package]]
-name = "polkavm-derive"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae8c4bea6f3e11cd89bb18bcdddac10bd9a24015399bd1c485ad68a985a19606"
-dependencies = [
- "polkavm-derive-impl-macro 0.9.0",
+ "polkavm-assembler",
 ]
 
 [[package]]
@@ -9875,19 +9875,7 @@ version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2eb703f3b6404c13228402e98a5eae063fd16b8f58afe334073ec105ee4117e"
 dependencies = [
- "polkavm-derive-impl-macro 0.18.0",
-]
-
-[[package]]
-name = "polkavm-derive-impl"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c4fdfc49717fb9a196e74a5d28e0bc764eb394a2c803eb11133a31ac996c60c"
-dependencies = [
- "polkavm-common 0.9.0",
- "proc-macro2",
- "quote",
- "syn 2.0.110",
+ "polkavm-derive-impl-macro",
 ]
 
 [[package]]
@@ -9896,19 +9884,9 @@ version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f2116a92e6e96220a398930f4c8a6cda1264206f3e2034fc9982bfd93f261f7"
 dependencies = [
- "polkavm-common 0.18.0",
+ "polkavm-common",
  "proc-macro2",
  "quote",
- "syn 2.0.110",
-]
-
-[[package]]
-name = "polkavm-derive-impl-macro"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ba81f7b5faac81e528eb6158a6f3c9e0bb1008e0ffa19653bc8dea925ecb429"
-dependencies = [
- "polkavm-derive-impl 0.9.0",
  "syn 2.0.110",
 ]
 
@@ -9918,7 +9896,7 @@ version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c16669ddc7433e34c1007d31080b80901e3e8e523cb9d4b441c3910cf9294b"
 dependencies = [
- "polkavm-derive-impl 0.18.1",
+ "polkavm-derive-impl",
  "syn 2.0.110",
 ]
 
@@ -9933,16 +9911,10 @@ dependencies = [
  "hashbrown 0.14.5",
  "log",
  "object 0.36.7",
- "polkavm-common 0.18.0",
+ "polkavm-common",
  "regalloc2 0.9.3",
  "rustc-demangle",
 ]
-
-[[package]]
-name = "polkavm-linux-raw"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26e85d3456948e650dff0cfc85603915847faf893ed1e66b020bb82ef4557120"
 
 [[package]]
 name = "polkavm-linux-raw"
@@ -10444,7 +10416,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash 2.1.1",
- "rustls 0.23.21",
+ "rustls 0.23.35",
  "socket2 0.6.1",
  "thiserror 2.0.17",
  "tokio",
@@ -10464,7 +10436,7 @@ dependencies = [
  "rand 0.9.2",
  "ring 0.17.14",
  "rustc-hash 2.1.1",
- "rustls 0.23.21",
+ "rustls 0.23.35",
  "rustls-pki-types",
  "slab",
  "thiserror 2.0.17",
@@ -10794,7 +10766,7 @@ dependencies = [
  "http-body 0.4.6",
  "hyper 0.14.32",
  "hyper-rustls 0.24.2",
- "hyper-tls",
+ "hyper-tls 0.5.0",
  "ipnet",
  "js-sys",
  "log",
@@ -10820,6 +10792,42 @@ dependencies = [
  "web-sys",
  "webpki-roots 0.25.4",
  "winreg",
+]
+
+[[package]]
+name = "reqwest"
+version = "0.12.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6eff9328d40131d43bd911d42d79eb6a47312002a4daefc9e37f17e74a7701a"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "futures-core",
+ "http 1.3.1",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.8.1",
+ "hyper-tls 0.6.0",
+ "hyper-util",
+ "js-sys",
+ "log",
+ "native-tls",
+ "percent-encoding",
+ "pin-project-lite",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sync_wrapper 1.0.2",
+ "tokio",
+ "tokio-native-tls",
+ "tower 0.5.2",
+ "tower-http 0.6.8",
+ "tower-service",
+ "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -11013,7 +11021,7 @@ version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf0c4a6ece9950b9abdb62b1cfcf2a68b3b67a10ba445b3bb85be2a293d0632"
 dependencies = [
- "nom",
+ "nom 7.1.3",
 ]
 
 [[package]]
@@ -11057,15 +11065,15 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.21"
+version = "0.23.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f287924602bf649d949c63dc8ac8b235fa5387d394020705b80c4eb597ce5b8"
+checksum = "533f54bc6a7d4f647e46ad909549eda97bf5afc1585190ef692b4286b198bd8f"
 dependencies = [
  "log",
  "once_cell",
  "ring 0.17.14",
  "rustls-pki-types",
- "rustls-webpki 0.102.8",
+ "rustls-webpki 0.103.8",
  "subtle 2.6.1",
  "zeroize",
 ]
@@ -11131,10 +11139,10 @@ checksum = "afbb878bdfdf63a336a5e63561b1835e7a8c91524f51621db870169eac84b490"
 dependencies = [
  "core-foundation 0.9.4",
  "core-foundation-sys",
- "jni",
+ "jni 0.19.0",
  "log",
  "once_cell",
- "rustls 0.23.21",
+ "rustls 0.23.35",
  "rustls-native-certs 0.7.3",
  "rustls-platform-verifier-android",
  "rustls-webpki 0.102.8",
@@ -11142,6 +11150,27 @@ dependencies = [
  "security-framework-sys",
  "webpki-roots 0.26.11",
  "winapi",
+]
+
+[[package]]
+name = "rustls-platform-verifier"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19787cda76408ec5404443dc8b31795c87cd8fec49762dc75fa727740d34acc1"
+dependencies = [
+ "core-foundation 0.10.1",
+ "core-foundation-sys",
+ "jni 0.21.1",
+ "log",
+ "once_cell",
+ "rustls 0.23.35",
+ "rustls-native-certs 0.8.2",
+ "rustls-platform-verifier-android",
+ "rustls-webpki 0.103.8",
+ "security-framework 3.5.1",
+ "security-framework-sys",
+ "webpki-root-certs 0.26.11",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -11165,6 +11194,16 @@ name = "rustls-webpki"
 version = "0.102.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64ca1bc8749bd4cf37b5ce386cc146580777b4e8572c7b97baf22c83f444bee9"
+dependencies = [
+ "rustls-pki-types",
+ "untrusted 0.9.0",
+]
+
+[[package]]
+name = "rustls-webpki"
+version = "0.103.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ffdfa2f5286e2247234e03f680868ac2815974dc39e00ea15adc445d0aafe52"
 dependencies = [
  "ring 0.17.14",
  "rustls-pki-types",
@@ -11198,6 +11237,12 @@ dependencies = [
  "byteorder",
  "derive_more 0.99.20",
 ]
+
+[[package]]
+name = "ruzstd"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5ff0cc5e135c8870a775d3320910cd9b564ec036b4dc0b8741629020be63f01"
 
 [[package]]
 name = "rw-stream-sink"
@@ -11251,12 +11296,12 @@ checksum = "3fc4972f129a0ea378b69fa7c186d63255606e362ad00795f00b869dea5265eb"
 
 [[package]]
 name = "sc-allocator"
-version = "30.0.0"
+version = "31.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a63e577eb150187ddd444a0a6f01e1ece0a5cfc592aacb4204d9f79bdc5265d"
+checksum = "7c10a9966875fcbde028c73697c6d5faad5f5d24e94b3c949fb1d063c727381d"
 dependencies = [
  "log",
- "sp-core 35.0.0",
+ "sp-core 36.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-wasm-interface 21.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror 1.0.69",
 ]
@@ -11267,7 +11312,7 @@ version = "31.0.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev#004223853ea8d5b471d4dff04c46f10cf3674848"
 dependencies = [
  "log",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-wasm-interface 21.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
 ]
@@ -11290,12 +11335,12 @@ dependencies = [
  "sc-client-api",
  "sc-network",
  "sc-network-types",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-authority-discovery",
  "sp-blockchain",
- "sp-core 36.1.0",
- "sp-keystore 0.42.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "substrate-prometheus-endpoint",
  "thiserror 1.0.69",
 ]
@@ -11312,12 +11357,12 @@ dependencies = [
  "sc-proposer-metrics",
  "sc-telemetry",
  "sc-transaction-pool-api",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-blockchain",
  "sp-consensus",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-inherents",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "substrate-prometheus-endpoint",
 ]
 
@@ -11327,13 +11372,13 @@ version = "0.44.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev#004223853ea8d5b471d4dff04c46f10cf3674848"
 dependencies = [
  "parity-scale-codec",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-block-builder",
  "sp-blockchain",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-inherents",
- "sp-runtime 41.1.0",
- "sp-trie 39.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -11347,18 +11392,18 @@ dependencies = [
  "parity-scale-codec",
  "sc-chain-spec-derive",
  "sc-client-api",
- "sc-executor 0.42.0",
+ "sc-executor 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sc-network",
  "sc-telemetry",
  "serde",
  "serde_json",
  "sp-blockchain",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-crypto-hashing 0.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-genesis-builder",
- "sp-io 40.0.1",
- "sp-runtime 41.1.0",
- "sp-state-machine 0.45.0",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-tracing 17.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -11405,12 +11450,12 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-blockchain",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-keyring",
- "sp-keystore 0.42.0",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-panic-handler 13.0.2 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-runtime 41.1.0",
- "sp-version 39.0.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
  "tokio",
 ]
@@ -11425,19 +11470,19 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.5",
- "sc-executor 0.42.0",
+ "sc-executor 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sc-transaction-pool-api",
  "sc-utils",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-blockchain",
  "sp-consensus",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-database",
  "sp-externalities 0.30.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-runtime 41.1.0",
- "sp-state-machine 0.45.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-storage 22.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-trie 39.1.0",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "substrate-prometheus-endpoint",
 ]
 
@@ -11446,7 +11491,7 @@ name = "sc-client-db"
 version = "0.46.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev#004223853ea8d5b471d4dff04c46f10cf3674848"
 dependencies = [
- "hash-db 0.16.0",
+ "hash-db",
  "kvdb",
  "kvdb-memorydb",
  "kvdb-rocksdb",
@@ -11460,11 +11505,11 @@ dependencies = [
  "schnellru",
  "sp-arithmetic 26.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-blockchain",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-database",
- "sp-runtime 41.1.0",
- "sp-state-machine 0.45.0",
- "sp-trie 39.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -11483,9 +11528,9 @@ dependencies = [
  "serde",
  "sp-blockchain",
  "sp-consensus",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
- "sp-state-machine 0.45.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "substrate-prometheus-endpoint",
  "thiserror 1.0.69",
 ]
@@ -11504,17 +11549,17 @@ dependencies = [
  "sc-consensus",
  "sc-consensus-slots",
  "sc-telemetry",
- "sp-api 36.0.1",
- "sp-application-crypto 40.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-block-builder",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-aura",
  "sp-consensus-slots",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-inherents",
- "sp-keystore 0.42.0",
- "sp-runtime 41.1.0",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "substrate-prometheus-endpoint",
  "thiserror 1.0.69",
 ]
@@ -11549,16 +11594,16 @@ dependencies = [
  "sc-transaction-pool-api",
  "sc-utils",
  "serde_json",
- "sp-api 36.0.1",
- "sp-application-crypto 40.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-arithmetic 26.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-grandpa",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-crypto-hashing 0.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-keystore 0.42.0",
- "sp-runtime 41.1.0",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "substrate-prometheus-endpoint",
  "thiserror 1.0.69",
 ]
@@ -11578,8 +11623,8 @@ dependencies = [
  "sc-rpc",
  "serde",
  "sp-blockchain",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
 ]
 
@@ -11600,32 +11645,32 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-slots",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-inherents",
- "sp-runtime 41.1.0",
- "sp-state-machine 0.45.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
 name = "sc-executor"
-version = "0.41.0"
+version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b450573fc0ca024bdcb6d508d61c104f862519ca7f78c416bd8042c9db32975"
+checksum = "b55c745bf88acb34bd606346c7de6cc06f334f627c1ff40380252a6e52ad9354"
 dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.5",
- "sc-executor-common 0.36.0",
- "sc-executor-polkavm 0.33.0",
- "sc-executor-wasmtime 0.36.0",
+ "sc-executor-common 0.38.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sc-executor-polkavm 0.35.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sc-executor-wasmtime 0.38.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "schnellru",
- "sp-api 35.0.0",
- "sp-core 35.0.0",
+ "sp-api 36.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-core 36.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-externalities 0.30.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-io 39.0.1",
+ "sp-io 40.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-panic-handler 13.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-runtime-interface 29.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-trie 38.0.0",
- "sp-version 38.0.0",
+ "sp-trie 39.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-version 39.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-wasm-interface 21.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
 ]
@@ -11637,30 +11682,30 @@ source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-sub
 dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.5",
- "sc-executor-common 0.38.0",
- "sc-executor-polkavm 0.35.0",
- "sc-executor-wasmtime 0.38.0",
+ "sc-executor-common 0.38.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sc-executor-polkavm 0.35.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sc-executor-wasmtime 0.38.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "schnellru",
- "sp-api 36.0.1",
- "sp-core 36.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-externalities 0.30.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-io 40.0.1",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-panic-handler 13.0.2 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-runtime-interface 29.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-trie 39.1.0",
- "sp-version 39.0.0",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-wasm-interface 21.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "tracing",
 ]
 
 [[package]]
 name = "sc-executor-common"
-version = "0.36.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27f5d872331b68ed4601488100f22e8aa16331de006b51d4c69353930c568a16"
+checksum = "2a2f84b9aa7664a9b401afbf423bcd3c1845f5adedf4f6030586808238a222df"
 dependencies = [
- "polkavm 0.9.3",
- "sc-allocator 30.0.0",
+ "polkavm",
+ "sc-allocator 31.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-maybe-compressed-blob 11.0.1",
  "sp-wasm-interface 21.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror 1.0.69",
@@ -11672,8 +11717,8 @@ name = "sc-executor-common"
 version = "0.38.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev#004223853ea8d5b471d4dff04c46f10cf3674848"
 dependencies = [
- "polkavm 0.18.0",
- "sc-allocator 31.0.0",
+ "polkavm",
+ "sc-allocator 31.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-maybe-compressed-blob 11.0.0",
  "sp-wasm-interface 21.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
@@ -11682,13 +11727,13 @@ dependencies = [
 
 [[package]]
 name = "sc-executor-polkavm"
-version = "0.33.0"
+version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16c4b3532c0f6dae1fcbe85f4582618042aefb9c8e2a03f855d298f56362daaa"
+checksum = "7eb4929b3457077f9b30ad397a724116f43f252a889ec334ec369f6cdad8f76c"
 dependencies = [
  "log",
- "polkavm 0.9.3",
- "sc-executor-common 0.36.0",
+ "polkavm",
+ "sc-executor-common 0.38.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-wasm-interface 21.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -11698,25 +11743,23 @@ version = "0.35.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev#004223853ea8d5b471d4dff04c46f10cf3674848"
 dependencies = [
  "log",
- "polkavm 0.18.0",
- "sc-executor-common 0.38.0",
+ "polkavm",
+ "sc-executor-common 0.38.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-wasm-interface 21.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
 name = "sc-executor-wasmtime"
-version = "0.36.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d04b8d98a96a83b56eeb1061cd4a7a1949b7c2c147d572d309c4e4d5c0d870f"
+checksum = "2b5ad79b030a1f91ef0f667e58ac35e1c9fa33a6b8a0ec1ae7fe4890322535ac"
 dependencies = [
  "anyhow",
- "cfg-if",
- "libc",
  "log",
  "parking_lot 0.12.5",
  "rustix 0.36.17",
- "sc-allocator 30.0.0",
- "sc-executor-common 0.36.0",
+ "sc-allocator 31.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sc-executor-common 0.38.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-runtime-interface 29.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-wasm-interface 21.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmtime",
@@ -11731,8 +11774,8 @@ dependencies = [
  "log",
  "parking_lot 0.12.5",
  "rustix 0.36.17",
- "sc-allocator 31.0.0",
- "sc-executor-common 0.38.0",
+ "sc-allocator 31.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sc-executor-common 0.38.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-runtime-interface 29.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-wasm-interface 21.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "wasmtime",
@@ -11751,7 +11794,7 @@ dependencies = [
  "sc-network",
  "sc-network-sync",
  "sp-blockchain",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -11762,9 +11805,9 @@ dependencies = [
  "array-bytes",
  "parking_lot 0.12.5",
  "serde_json",
- "sp-application-crypto 40.1.0",
- "sp-core 36.1.0",
- "sp-keystore 0.42.0",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
 ]
 
@@ -11787,12 +11830,12 @@ dependencies = [
  "sc-network",
  "sc-network-types",
  "sc-transaction-pool-api",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-consensus",
- "sp-core 36.1.0",
- "sp-keystore 0.42.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-mixnet",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
 ]
 
@@ -11834,8 +11877,8 @@ dependencies = [
  "smallvec",
  "sp-arithmetic 26.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-blockchain",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "substrate-prometheus-endpoint",
  "thiserror 1.0.69",
  "tokio",
@@ -11853,7 +11896,7 @@ source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-sub
 dependencies = [
  "bitflags 1.3.2",
  "parity-scale-codec",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -11870,7 +11913,7 @@ dependencies = [
  "sc-network-sync",
  "sc-network-types",
  "schnellru",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "substrate-prometheus-endpoint",
  "tracing",
 ]
@@ -11891,8 +11934,8 @@ dependencies = [
  "sc-network",
  "sc-network-types",
  "sp-blockchain",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
 ]
 
@@ -11923,8 +11966,8 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-grandpa",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "substrate-prometheus-endpoint",
  "thiserror 1.0.69",
  "tokio",
@@ -11946,7 +11989,7 @@ dependencies = [
  "sc-network-types",
  "sc-utils",
  "sp-consensus",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "substrate-prometheus-endpoint",
 ]
 
@@ -11987,18 +12030,18 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.5",
  "rand 0.8.5",
- "rustls 0.23.21",
+ "rustls 0.23.35",
  "sc-client-api",
  "sc-network",
  "sc-network-types",
  "sc-transaction-pool-api",
  "sc-utils",
- "sp-api 36.0.1",
- "sp-core 36.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-externalities 0.30.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-keystore 0.42.0",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-offchain",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "threadpool",
  "tracing",
 ]
@@ -12031,16 +12074,16 @@ dependencies = [
  "sc-transaction-pool-api",
  "sc-utils",
  "serde_json",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-blockchain",
- "sp-core 36.1.0",
- "sp-keystore 0.42.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-offchain",
  "sp-rpc",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-session",
  "sp-statement-store",
- "sp-version 39.0.0",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "tokio",
 ]
 
@@ -12057,10 +12100,10 @@ dependencies = [
  "scale-info",
  "serde",
  "serde_json",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-rpc",
- "sp-runtime 41.1.0",
- "sp-version 39.0.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
 ]
 
@@ -12085,7 +12128,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "tokio",
  "tower 0.4.13",
- "tower-http",
+ "tower-http 0.5.2",
 ]
 
 [[package]]
@@ -12109,12 +12152,12 @@ dependencies = [
  "sc-transaction-pool-api",
  "schnellru",
  "serde",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-blockchain",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-rpc",
- "sp-runtime 41.1.0",
- "sp-version 39.0.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
@@ -12126,11 +12169,11 @@ version = "0.2.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev#004223853ea8d5b471d4dff04c46f10cf3674848"
 dependencies = [
  "parity-scale-codec",
- "sc-executor 0.42.0",
- "sc-executor-common 0.38.0",
- "sp-core 36.1.0",
+ "sc-executor 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sc-executor-common 0.38.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-crypto-hashing 0.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-state-machine 0.45.0",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-wasm-interface 21.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
 ]
@@ -12155,7 +12198,7 @@ dependencies = [
  "sc-client-api",
  "sc-client-db",
  "sc-consensus",
- "sc-executor 0.42.0",
+ "sc-executor 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sc-informant",
  "sc-keystore",
  "sc-network",
@@ -12176,20 +12219,20 @@ dependencies = [
  "schnellru",
  "serde",
  "serde_json",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-blockchain",
  "sp-consensus",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-externalities 0.30.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-keystore 0.42.0",
- "sp-runtime 41.1.0",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-session",
- "sp-state-machine 0.45.0",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-storage 22.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-transaction-pool",
  "sp-transaction-storage-proof",
- "sp-trie 39.1.0",
- "sp-version 39.0.0",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "static_init",
  "substrate-prometheus-endpoint",
  "tempfile",
@@ -12207,7 +12250,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.5",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -12225,9 +12268,9 @@ dependencies = [
  "sc-telemetry",
  "serde",
  "serde_json",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-crypto-hashing 0.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-io 40.0.1",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -12265,11 +12308,11 @@ dependencies = [
  "sc-client-api",
  "sc-tracing-proc-macro",
  "serde",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-blockchain",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-rpc",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-tracing 17.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
  "tracing",
@@ -12306,11 +12349,11 @@ dependencies = [
  "sc-transaction-pool-api",
  "sc-utils",
  "serde",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-blockchain",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-crypto-hashing 0.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-tracing 17.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-transaction-pool",
  "substrate-prometheus-endpoint",
@@ -12332,8 +12375,8 @@ dependencies = [
  "parity-scale-codec",
  "serde",
  "sp-blockchain",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
 ]
 
@@ -12548,7 +12591,7 @@ dependencies = [
  "hex-literal",
  "log",
  "scale-info",
- "subxt 0.41.0",
+ "subxt 0.42.1",
  "tokio",
  "utilities",
 ]
@@ -13008,19 +13051,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sha-1"
-version = "0.9.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99cd6713db3cf16b6c84e06321e049a9b9f699826e16096d23bbcc44d15d51a6"
-dependencies = [
- "block-buffer 0.9.0",
- "cfg-if",
- "cpufeatures",
- "digest 0.9.0",
- "opaque-debug 0.3.1",
-]
-
-[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13239,7 +13269,7 @@ dependencies = [
  "libm",
  "libsecp256k1",
  "merlin",
- "nom",
+ "nom 7.1.3",
  "num-bigint",
  "num-rational",
  "num-traits",
@@ -13248,7 +13278,7 @@ dependencies = [
  "poly1305",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
- "ruzstd",
+ "ruzstd 0.6.0",
  "schnorrkel",
  "serde",
  "serde_json",
@@ -13257,9 +13287,63 @@ dependencies = [
  "siphasher 1.0.1",
  "slab",
  "smallvec",
- "soketto 0.8.1",
- "twox-hash",
- "wasmi",
+ "soketto",
+ "twox-hash 1.6.3",
+ "wasmi 0.32.3",
+ "x25519-dalek",
+ "zeroize",
+]
+
+[[package]]
+name = "smoldot"
+version = "0.19.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e16e5723359f0048bf64bfdfba64e5732a56847d42c4fd3fe56f18280c813413"
+dependencies = [
+ "arrayvec 0.7.6",
+ "async-lock",
+ "atomic-take",
+ "base64 0.22.1",
+ "bip39",
+ "blake2-rfc",
+ "bs58",
+ "chacha20",
+ "crossbeam-queue",
+ "derive_more 2.1.0",
+ "ed25519-zebra",
+ "either",
+ "event-listener 5.4.1",
+ "fnv",
+ "futures-lite",
+ "futures-util",
+ "hashbrown 0.15.5",
+ "hex",
+ "hmac 0.12.1",
+ "itertools 0.14.0",
+ "libm",
+ "libsecp256k1",
+ "merlin",
+ "nom 8.0.0",
+ "num-bigint",
+ "num-rational",
+ "num-traits",
+ "pbkdf2 0.12.2",
+ "pin-project",
+ "poly1305",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "ruzstd 0.8.2",
+ "schnorrkel",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sha3",
+ "siphasher 1.0.1",
+ "slab",
+ "smallvec",
+ "soketto",
+ "twox-hash 2.1.2",
+ "wasmi 0.40.0",
  "x25519-dalek",
  "zeroize",
 ]
@@ -13296,7 +13380,43 @@ dependencies = [
  "siphasher 1.0.1",
  "slab",
  "smol",
- "smoldot",
+ "smoldot 0.18.0",
+ "zeroize",
+]
+
+[[package]]
+name = "smoldot-light"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1bba9e591716567d704a8252feeb2f1261a286e1e2cbdd4e49e9197c34a14e2"
+dependencies = [
+ "async-channel 2.5.0",
+ "async-lock",
+ "base64 0.22.1",
+ "blake2-rfc",
+ "bs58",
+ "derive_more 2.1.0",
+ "either",
+ "event-listener 5.4.1",
+ "fnv",
+ "futures-channel",
+ "futures-lite",
+ "futures-util",
+ "hashbrown 0.15.5",
+ "hex",
+ "itertools 0.14.0",
+ "log",
+ "lru 0.12.5",
+ "parking_lot 0.12.5",
+ "pin-project",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "serde",
+ "serde_json",
+ "siphasher 1.0.1",
+ "slab",
+ "smol",
+ "smoldot 0.19.4",
  "zeroize",
 ]
 
@@ -13345,21 +13465,6 @@ dependencies = [
 
 [[package]]
 name = "soketto"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41d1c5305e39e09653383c2c7244f2f78b3bcae37cf50c64cb4789c9f5096ec2"
-dependencies = [
- "base64 0.13.1",
- "bytes",
- "futures",
- "httparse",
- "log",
- "rand 0.8.5",
- "sha-1",
-]
-
-[[package]]
-name = "soketto"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e859df029d160cb88608f5d7df7fb4753fd20fdfb4de5644f3d8b8440841721"
@@ -13393,7 +13498,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "sha2-const",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
  "utilities",
@@ -13415,24 +13520,24 @@ dependencies = [
 
 [[package]]
 name = "sp-api"
-version = "35.0.0"
+version = "36.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7538a61120585b0e1e89d9de57448732ea4d3f9d175cab882b3c86e9809612a0"
+checksum = "541da427f47dfb97f3dd0556fa3272bdc5dfa0d4c1ad53a22670a9bae4db63d7"
 dependencies = [
  "docify",
- "hash-db 0.16.0",
+ "hash-db",
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-api-proc-macro 21.0.2",
- "sp-core 35.0.0",
+ "sp-api-proc-macro 22.0.1",
+ "sp-core 36.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-externalities 0.30.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-metadata-ir 0.8.0",
- "sp-runtime 40.1.0",
+ "sp-metadata-ir 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-runtime 41.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-runtime-interface 29.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-state-machine 0.44.0",
- "sp-trie 38.0.0",
- "sp-version 38.0.0",
+ "sp-state-machine 0.45.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-trie 39.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-version 39.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror 1.0.69",
 ]
 
@@ -13442,35 +13547,20 @@ version = "36.0.1"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev#004223853ea8d5b471d4dff04c46f10cf3674848"
 dependencies = [
  "docify",
- "hash-db 0.16.0",
+ "hash-db",
  "log",
  "parity-scale-codec",
  "scale-info",
  "sp-api-proc-macro 22.0.0",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-externalities 0.30.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-metadata-ir 0.10.0",
- "sp-runtime 41.1.0",
+ "sp-metadata-ir 0.10.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-runtime-interface 29.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-state-machine 0.45.0",
- "sp-trie 39.1.0",
- "sp-version 39.0.0",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "sp-api-proc-macro"
-version = "21.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1b4dc9405403cef6bf181dba43bfd157f8900a8169e9975ece77be54491dad8"
-dependencies = [
- "Inflector",
- "blake2 0.10.6",
- "expander",
- "proc-macro-crate 3.4.0",
- "proc-macro2",
- "quote",
- "syn 2.0.110",
 ]
 
 [[package]]
@@ -13488,16 +13578,31 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-application-crypto"
-version = "39.0.0"
+name = "sp-api-proc-macro"
+version = "22.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f6850bd745fe9c0a200a8e729a82c8036250e1ad1ef24ed7498b2289935c974"
+checksum = "cedafdeaf15c774433ad8f5b00883bdf7d86e7c8b8e050e3439d4ae422114096"
+dependencies = [
+ "Inflector",
+ "blake2 0.10.6",
+ "expander",
+ "proc-macro-crate 3.4.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.110",
+]
+
+[[package]]
+name = "sp-application-crypto"
+version = "40.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba375ab65a76f7413d1bfe48122fd347ce7bd2047e36ecbbd78f12f5adaed121"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 35.0.0",
- "sp-io 39.0.1",
+ "sp-core 36.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-io 40.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -13508,8 +13613,8 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -13548,9 +13653,9 @@ source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-sub
 dependencies = [
  "parity-scale-codec",
  "scale-info",
- "sp-api 36.0.1",
- "sp-application-crypto 40.1.0",
- "sp-runtime 41.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -13558,9 +13663,9 @@ name = "sp-block-builder"
 version = "36.0.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev#004223853ea8d5b471d4dff04c46f10cf3674848"
 dependencies = [
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-inherents",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -13572,12 +13677,12 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.5",
  "schnellru",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-consensus",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-database",
- "sp-runtime 41.1.0",
- "sp-state-machine 0.45.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
  "tracing",
 ]
@@ -13591,8 +13696,8 @@ dependencies = [
  "futures",
  "log",
  "sp-inherents",
- "sp-runtime 41.1.0",
- "sp-state-machine 0.45.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
 ]
 
@@ -13604,11 +13709,11 @@ dependencies = [
  "async-trait",
  "parity-scale-codec",
  "scale-info",
- "sp-api 36.0.1",
- "sp-application-crypto 40.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-consensus-slots",
  "sp-inherents",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-timestamp",
 ]
 
@@ -13621,12 +13726,12 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-api 36.0.1",
- "sp-application-crypto 40.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-consensus-slots",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-inherents",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-timestamp",
 ]
 
@@ -13640,11 +13745,11 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-api 36.0.1",
- "sp-application-crypto 40.1.0",
- "sp-core 36.1.0",
- "sp-keystore 0.42.0",
- "sp-runtime 41.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -13660,10 +13765,11 @@ dependencies = [
 
 [[package]]
 name = "sp-core"
-version = "35.0.0"
+version = "36.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4532774405a712a366a98080cbb4daa28c38ddff0ec595902ad6ee6a78a809f8"
+checksum = "1cdbb58c21e6b27f2aadf3ff0c8b20a8ead13b9dfe63f46717fd59334517f3b4"
 dependencies = [
+ "ark-vrf",
  "array-bytes",
  "bitflags 1.3.2",
  "blake2 0.10.6",
@@ -13672,7 +13778,7 @@ dependencies = [
  "dyn-clonable",
  "ed25519-zebra",
  "futures",
- "hash-db 0.16.0",
+ "hash-db",
  "hash256-std-hasher",
  "impl-serde 0.5.0",
  "itertools 0.11.0",
@@ -13719,7 +13825,7 @@ dependencies = [
  "dyn-clonable",
  "ed25519-zebra",
  "futures",
- "hash-db 0.16.0",
+ "hash-db",
  "hash256-std-hasher",
  "impl-serde 0.5.0",
  "itertools 0.11.0",
@@ -13763,7 +13869,7 @@ dependencies = [
  "digest 0.10.7",
  "sha2 0.10.9",
  "sha3",
- "twox-hash",
+ "twox-hash 1.6.3",
 ]
 
 [[package]]
@@ -13776,7 +13882,7 @@ dependencies = [
  "digest 0.10.7",
  "sha2 0.10.9",
  "sha3",
- "twox-hash",
+ "twox-hash 1.6.3",
 ]
 
 [[package]]
@@ -13859,8 +13965,8 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde_json",
- "sp-api 36.0.1",
- "sp-runtime 41.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -13872,15 +13978,15 @@ dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
  "scale-info",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "sp-io"
-version = "39.0.1"
+version = "40.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "594a1c12ec7a1514caa878c2370902d116e6d7606a449c805bc91a4e62ef1ecf"
+checksum = "3e41d010bcc515d119901ff7ac83150c335d543c7f6c03be5c8fe08430b8a03b"
 dependencies = [
  "bytes",
  "docify",
@@ -13888,17 +13994,17 @@ dependencies = [
  "libsecp256k1",
  "log",
  "parity-scale-codec",
- "polkavm-derive 0.9.1",
+ "polkavm-derive",
  "rustversion",
  "secp256k1 0.28.2",
- "sp-core 35.0.0",
+ "sp-core 36.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-crypto-hashing 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-externalities 0.30.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-keystore 0.41.0",
+ "sp-keystore 0.42.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-runtime-interface 29.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-state-machine 0.44.0",
+ "sp-state-machine 0.45.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-tracing 17.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-trie 38.0.0",
+ "sp-trie 39.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "tracing-core",
 ]
@@ -13914,17 +14020,17 @@ dependencies = [
  "libsecp256k1",
  "log",
  "parity-scale-codec",
- "polkavm-derive 0.18.0",
+ "polkavm-derive",
  "rustversion",
  "secp256k1 0.28.2",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-crypto-hashing 0.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-externalities 0.30.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-keystore 0.42.0",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-runtime-interface 29.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-state-machine 0.45.0",
+ "sp-state-machine 0.45.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-tracing 17.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-trie 39.1.0",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "tracing",
  "tracing-core",
 ]
@@ -13934,20 +14040,20 @@ name = "sp-keyring"
 version = "41.0.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev#004223853ea8d5b471d4dff04c46f10cf3674848"
 dependencies = [
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "strum 0.26.3",
 ]
 
 [[package]]
 name = "sp-keystore"
-version = "0.41.0"
+version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1d41475fcdf253f9f0da839564c1b7f8a95c6a293ddfffd6e48e3671e76f33b"
+checksum = "45f893398a5330e28f219662c7a0afa174fb068d8f82d2a9990016c4b0bc4369"
 dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.5",
- "sp-core 35.0.0",
+ "sp-core 36.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-externalities 0.30.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -13958,7 +14064,7 @@ source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-sub
 dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.5",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-externalities 0.30.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
@@ -13983,11 +14089,11 @@ dependencies = [
 
 [[package]]
 name = "sp-metadata-ir"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "427be4e8e6a33cb8ffc8c91f8834b9c6f563daf246e8f0da16e9e0db3db55f5a"
+checksum = "82d1db25e362edbf5531b427d4bdfc2562bec6a031c3eb2a9145c0a0a01a572d"
 dependencies = [
- "frame-metadata 18.0.0",
+ "frame-metadata 20.0.0",
  "parity-scale-codec",
  "scale-info",
 ]
@@ -14009,8 +14115,8 @@ source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-sub
 dependencies = [
  "parity-scale-codec",
  "scale-info",
- "sp-api 36.0.1",
- "sp-application-crypto 40.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -14018,9 +14124,9 @@ name = "sp-offchain"
 version = "36.0.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev#004223853ea8d5b471d4dff04c46f10cf3674848"
 dependencies = [
- "sp-api 36.0.1",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -14049,14 +14155,14 @@ source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-sub
 dependencies = [
  "rustc-hash 1.1.0",
  "serde",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
 name = "sp-runtime"
-version = "40.1.0"
+version = "41.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d1356c519f12de28847f57638490b298b0bb35d7df032c6b2948c8a9a168abe"
+checksum = "3864101a28faba3d8eca026e3f56ea20dd1d979ce1bcc20152e86c9d82be52bf"
 dependencies = [
  "binary-merkle-tree 16.1.0",
  "docify",
@@ -14071,12 +14177,12 @@ dependencies = [
  "scale-info",
  "serde",
  "simple-mermaid",
- "sp-application-crypto 39.0.0",
+ "sp-application-crypto 40.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-arithmetic 26.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-core 35.0.0",
- "sp-io 39.0.1",
+ "sp-core 36.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-io 40.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-std 14.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-trie 38.0.0",
+ "sp-trie 39.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-weights 31.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "tuplex",
@@ -14100,12 +14206,12 @@ dependencies = [
  "scale-info",
  "serde",
  "simple-mermaid",
- "sp-application-crypto 40.1.0",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-arithmetic 26.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-trie 39.1.0",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-weights 31.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "tracing",
  "tuplex",
@@ -14120,7 +14226,7 @@ dependencies = [
  "bytes",
  "impl-trait-for-tuples",
  "parity-scale-codec",
- "polkavm-derive 0.18.0",
+ "polkavm-derive",
  "primitive-types 0.13.1",
  "sp-externalities 0.30.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-runtime-interface-proc-macro 18.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -14139,7 +14245,7 @@ dependencies = [
  "bytes",
  "impl-trait-for-tuples",
  "parity-scale-codec",
- "polkavm-derive 0.18.0",
+ "polkavm-derive",
  "primitive-types 0.13.1",
  "sp-externalities 0.30.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-runtime-interface-proc-macro 18.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
@@ -14184,10 +14290,10 @@ source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-sub
 dependencies = [
  "parity-scale-codec",
  "scale-info",
- "sp-api 36.0.1",
- "sp-core 36.1.0",
- "sp-keystore 0.42.0",
- "sp-runtime 41.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-keystore 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-staking",
 ]
 
@@ -14200,29 +14306,29 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
 name = "sp-state-machine"
-version = "0.44.0"
+version = "0.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bce4ee5ee6c614994077e6e317270eab6fde2bc346b028290286cbf9d0011b7e"
+checksum = "206508475c01ae2e14f171d35d7fc3eaa7278140d7940416591d49a784792ed6"
 dependencies = [
- "hash-db 0.16.0",
+ "hash-db",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.5",
  "rand 0.8.5",
  "smallvec",
- "sp-core 35.0.0",
+ "sp-core 36.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-externalities 0.30.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-panic-handler 13.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-trie 38.0.0",
+ "sp-trie 39.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror 1.0.69",
  "tracing",
- "trie-db 0.29.1",
+ "trie-db",
 ]
 
 [[package]]
@@ -14230,19 +14336,19 @@ name = "sp-state-machine"
 version = "0.45.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev#004223853ea8d5b471d4dff04c46f10cf3674848"
 dependencies = [
- "hash-db 0.16.0",
+ "hash-db",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.5",
  "rand 0.8.5",
  "smallvec",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-externalities 0.30.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-panic-handler 13.0.2 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-trie 39.1.0",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
  "tracing",
- "trie-db 0.30.0",
+ "trie-db",
 ]
 
 [[package]]
@@ -14258,12 +14364,12 @@ dependencies = [
  "rand 0.8.5",
  "scale-info",
  "sha2 0.10.9",
- "sp-api 36.0.1",
- "sp-application-crypto 40.1.0",
- "sp-core 36.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-application-crypto 40.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-crypto-hashing 0.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-externalities 0.30.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-runtime-interface 29.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
  "x25519-dalek",
@@ -14313,7 +14419,7 @@ dependencies = [
  "async-trait",
  "parity-scale-codec",
  "sp-inherents",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
 ]
 
@@ -14345,8 +14451,8 @@ name = "sp-transaction-pool"
 version = "36.0.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev#004223853ea8d5b471d4dff04c46f10cf3674848"
 dependencies = [
- "sp-api 36.0.1",
- "sp-runtime 41.1.0",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -14357,20 +14463,20 @@ dependencies = [
  "async-trait",
  "parity-scale-codec",
  "scale-info",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-inherents",
- "sp-runtime 41.1.0",
- "sp-trie 39.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-trie 39.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
 name = "sp-trie"
-version = "38.0.0"
+version = "39.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1851c4929ae88932c6bcdb9e60f4063e478ca612012af3b6d365c7dc9c591f7f"
+checksum = "a555bf4c42ca89e2e7bf2f11308806dad13cdbd7f8fd60cf2649f12b6ee809bf"
 dependencies = [
  "ahash 0.8.12",
- "hash-db 0.16.0",
+ "hash-db",
  "memory-db",
  "nohash-hasher",
  "parity-scale-codec",
@@ -14378,11 +14484,11 @@ dependencies = [
  "rand 0.8.5",
  "scale-info",
  "schnellru",
- "sp-core 35.0.0",
+ "sp-core 36.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-externalities 0.30.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror 1.0.69",
  "tracing",
- "trie-db 0.29.1",
+ "trie-db",
  "trie-root",
 ]
 
@@ -14392,7 +14498,7 @@ version = "39.1.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev#004223853ea8d5b471d4dff04c46f10cf3674848"
 dependencies = [
  "ahash 0.8.12",
- "hash-db 0.16.0",
+ "hash-db",
  "memory-db",
  "nohash-hasher",
  "parity-scale-codec",
@@ -14400,19 +14506,19 @@ dependencies = [
  "rand 0.8.5",
  "scale-info",
  "schnellru",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-externalities 0.30.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
  "tracing",
- "trie-db 0.30.0",
+ "trie-db",
  "trie-root",
 ]
 
 [[package]]
 name = "sp-version"
-version = "38.0.0"
+version = "39.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b7561e88742bc47b2f5fbdcab77a1cd98cf04117a3e163c1aadd58b9a592a18"
+checksum = "bd736a15ff2ea0a67c5a3bbdfd842d88f11f0774d7701a8d8a316f8deba276c5"
 dependencies = [
  "impl-serde 0.5.0",
  "parity-scale-codec",
@@ -14420,7 +14526,7 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-crypto-hashing-proc-macro 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-runtime 40.1.0",
+ "sp-runtime 41.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-std 14.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-version-proc-macro 15.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror 1.0.69",
@@ -14437,7 +14543,7 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-crypto-hashing-proc-macro 0.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-version-proc-macro 15.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "thiserror 1.0.69",
@@ -14590,7 +14696,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-weights 31.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "xcm-procedural",
 ]
@@ -14660,20 +14766,21 @@ dependencies = [
  "scale-info",
  "serde",
  "sol-prim",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-block-builder",
  "sp-consensus-aura",
  "sp-consensus-grandpa",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-genesis-builder",
  "sp-inherents",
- "sp-io 40.0.1",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-offchain",
- "sp-runtime 41.1.0",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-session",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-storage 22.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-transaction-pool",
- "sp-version 39.0.0",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "substrate-wasm-builder",
  "utilities",
 ]
@@ -14824,11 +14931,11 @@ dependencies = [
  "parity-scale-codec",
  "sc-rpc-api",
  "sc-transaction-pool-api",
- "sp-api 36.0.1",
+ "sp-api 36.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-block-builder",
  "sp-blockchain",
- "sp-core 36.1.0",
- "sp-runtime 41.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-runtime 41.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
 ]
 
 [[package]]
@@ -14861,13 +14968,13 @@ dependencies = [
  "parity-scale-codec",
  "parity-wasm",
  "polkavm-linker",
- "sc-executor 0.42.0",
+ "sc-executor 0.42.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "shlex",
- "sp-core 36.1.0",
- "sp-io 40.0.1",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
+ "sp-io 40.0.1 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "sp-maybe-compressed-blob 11.0.0",
  "sp-tracing 17.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
- "sp-version 39.0.0",
+ "sp-version 39.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "strum 0.26.3",
  "tempfile",
  "toml 0.8.23",
@@ -14925,13 +15032,14 @@ dependencies = [
 
 [[package]]
 name = "subxt"
-version = "0.41.0"
-source = "git+https://github.com/paritytech/subxt?rev=da3ea0b#da3ea0b528c00d2ec6cbc618f46db382dc7bd117"
+version = "0.42.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c7533d39317bed01100b37158740dcec27c0e1933f3bca19bdf12110f242248"
 dependencies = [
  "async-trait",
  "derive-where",
  "either",
- "frame-metadata 20.0.0",
+ "frame-metadata 23.0.1",
  "futures",
  "hex",
  "jsonrpsee",
@@ -14945,10 +15053,10 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-crypto-hashing 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "subxt-core 0.41.0",
- "subxt-lightclient 0.41.0",
- "subxt-macro 0.41.0",
- "subxt-metadata 0.41.0",
+ "subxt-core 0.42.1",
+ "subxt-lightclient 0.42.1",
+ "subxt-macro 0.42.1",
+ "subxt-metadata 0.42.1",
  "subxt-rpcs",
  "thiserror 2.0.17",
  "tokio",
@@ -14978,8 +15086,9 @@ dependencies = [
 
 [[package]]
 name = "subxt-codegen"
-version = "0.41.0"
-source = "git+https://github.com/paritytech/subxt?rev=da3ea0b#da3ea0b528c00d2ec6cbc618f46db382dc7bd117"
+version = "0.42.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91ded0fa15fa78c58b91e2a1c6bcef8a2bc68fe165d00e1dfb9787069351511c"
 dependencies = [
  "heck 0.5.0",
  "parity-scale-codec",
@@ -14987,7 +15096,7 @@ dependencies = [
  "quote",
  "scale-info",
  "scale-typegen 0.11.1",
- "subxt-metadata 0.41.0",
+ "subxt-metadata 0.42.1",
  "syn 2.0.110",
  "thiserror 2.0.17",
 ]
@@ -15023,14 +15132,15 @@ dependencies = [
 
 [[package]]
 name = "subxt-core"
-version = "0.41.0"
-source = "git+https://github.com/paritytech/subxt?rev=da3ea0b#da3ea0b528c00d2ec6cbc618f46db382dc7bd117"
+version = "0.42.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26c3574b60050e57cf23edf6521263b06e98a880073df330813bb04242633083"
 dependencies = [
  "base58",
  "blake2 0.10.6",
  "derive-where",
- "frame-decode 0.7.1",
- "frame-metadata 20.0.0",
+ "frame-decode 0.8.3",
+ "frame-metadata 23.0.1",
  "hashbrown 0.14.5",
  "hex",
  "impl-serde 0.5.0",
@@ -15045,7 +15155,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-crypto-hashing 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "subxt-metadata 0.41.0",
+ "subxt-metadata 0.42.1",
  "thiserror 2.0.17",
  "tracing",
 ]
@@ -15060,7 +15170,7 @@ dependencies = [
  "futures-util",
  "serde",
  "serde_json",
- "smoldot-light",
+ "smoldot-light 0.16.2",
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
@@ -15069,14 +15179,15 @@ dependencies = [
 
 [[package]]
 name = "subxt-lightclient"
-version = "0.41.0"
-source = "git+https://github.com/paritytech/subxt?rev=da3ea0b#da3ea0b528c00d2ec6cbc618f46db382dc7bd117"
+version = "0.42.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c546d42ca103c0a6a3434cadf4ca500d2a49e60af0842b0fdee6fbfa97aa02f"
 dependencies = [
  "futures",
  "futures-util",
  "serde",
  "serde_json",
- "smoldot-light",
+ "smoldot-light 0.17.2",
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
@@ -15101,21 +15212,23 @@ dependencies = [
 
 [[package]]
 name = "subxt-macro"
-version = "0.41.0"
-source = "git+https://github.com/paritytech/subxt?rev=da3ea0b#da3ea0b528c00d2ec6cbc618f46db382dc7bd117"
+version = "0.42.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d91d253492eb17c65bdb41e538d6a31508563757bd34ad6014cb03536cf31757"
 dependencies = [
  "darling",
  "parity-scale-codec",
  "proc-macro-error2",
  "quote",
- "sc-executor 0.41.0",
- "sc-executor-common 0.36.0",
+ "sc-executor 0.42.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sc-executor-common 0.38.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "scale-typegen 0.11.1",
- "sp-io 39.0.1",
+ "sp-io 40.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-maybe-compressed-blob 11.0.1",
- "sp-state-machine 0.44.0",
- "subxt-codegen 0.41.0",
- "subxt-utils-fetchmetadata 0.41.0",
+ "sp-state-machine 0.45.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "subxt-codegen 0.42.1",
+ "subxt-metadata 0.42.1",
+ "subxt-utils-fetchmetadata 0.42.1",
  "syn 2.0.110",
 ]
 
@@ -15135,11 +15248,12 @@ dependencies = [
 
 [[package]]
 name = "subxt-metadata"
-version = "0.41.0"
-source = "git+https://github.com/paritytech/subxt?rev=da3ea0b#da3ea0b528c00d2ec6cbc618f46db382dc7bd117"
+version = "0.42.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "243990ca4e0cdb74ef7458f1d5070a1bd5144d744cc146f23a32ab56d23e1db7"
 dependencies = [
- "frame-decode 0.7.1",
- "frame-metadata 20.0.0",
+ "frame-decode 0.8.3",
+ "frame-metadata 23.0.1",
  "hashbrown 0.14.5",
  "parity-scale-codec",
  "scale-info",
@@ -15149,11 +15263,12 @@ dependencies = [
 
 [[package]]
 name = "subxt-rpcs"
-version = "0.41.0"
-source = "git+https://github.com/paritytech/subxt?rev=da3ea0b#da3ea0b528c00d2ec6cbc618f46db382dc7bd117"
+version = "0.42.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55313e3652f5360b5ed878bfe1d62fe181ecb8c130c81278ab89d1580f89a7ed"
 dependencies = [
  "derive-where",
- "frame-metadata 20.0.0",
+ "frame-metadata 23.0.1",
  "futures",
  "hex",
  "impl-serde 0.5.0",
@@ -15162,8 +15277,8 @@ dependencies = [
  "primitive-types 0.13.1",
  "serde",
  "serde_json",
- "subxt-core 0.41.0",
- "subxt-lightclient 0.41.0",
+ "subxt-core 0.42.1",
+ "subxt-lightclient 0.42.1",
  "thiserror 2.0.17",
  "tokio-util",
  "tracing",
@@ -15212,8 +15327,9 @@ dependencies = [
 
 [[package]]
 name = "subxt-utils-fetchmetadata"
-version = "0.41.0"
-source = "git+https://github.com/paritytech/subxt?rev=da3ea0b#da3ea0b528c00d2ec6cbc618f46db382dc7bd117"
+version = "0.42.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62d3a6e9cb2fd2db8bf3cb0d03da691ac949259e620c9eb8f25764b2711805ca"
 dependencies = [
  "hex",
  "parity-scale-codec",
@@ -15230,7 +15346,7 @@ dependencies = [
  "fs2",
  "hex",
  "once_cell",
- "reqwest",
+ "reqwest 0.11.27",
  "semver 1.0.27",
  "serde",
  "serde_json",
@@ -15273,6 +15389,9 @@ name = "sync_wrapper"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
+dependencies = [
+ "futures-core",
+]
 
 [[package]]
 name = "synstructure"
@@ -15629,7 +15748,7 @@ version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f6d0975eaace0cf0fcadee4e4aaa5da15b5c079146f2cffb67c113be122bf37"
 dependencies = [
- "rustls 0.23.21",
+ "rustls 0.23.35",
  "tokio",
 ]
 
@@ -15680,7 +15799,7 @@ checksum = "7a9daff607c6d2bf6c16fd681ccb7eecc83e4e2cdc1ca067ffaadfca5de7f084"
 dependencies = [
  "futures-util",
  "log",
- "rustls 0.23.21",
+ "rustls 0.23.35",
  "rustls-native-certs 0.8.2",
  "rustls-pki-types",
  "tokio",
@@ -15848,6 +15967,7 @@ dependencies = [
  "futures-util",
  "pin-project-lite",
  "sync_wrapper 1.0.2",
+ "tokio",
  "tower-layer",
  "tower-service",
 ]
@@ -15864,6 +15984,24 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "pin-project-lite",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
+name = "tower-http"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4e6559d53cc268e5031cd8429d05415bc4cb4aefc4aa5d6cc35fbf5b924a1f8"
+dependencies = [
+ "bitflags 2.10.0",
+ "bytes",
+ "futures-util",
+ "http 1.3.1",
+ "http-body 1.0.1",
+ "iri-string",
+ "pin-project-lite",
+ "tower 0.5.2",
  "tower-layer",
  "tower-service",
 ]
@@ -15992,23 +16130,11 @@ dependencies = [
 
 [[package]]
 name = "trie-db"
-version = "0.29.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c992b4f40c234a074d48a757efeabb1a6be88af84c0c23f7ca158950cb0ae7f"
-dependencies = [
- "hash-db 0.16.0",
- "log",
- "rustc-hex",
- "smallvec",
-]
-
-[[package]]
-name = "trie-db"
 version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c0670ab45a6b7002c7df369fee950a27cf29ae0474343fd3a15aa15f691e7a6"
 dependencies = [
- "hash-db 0.16.0",
+ "hash-db",
  "log",
  "rustc-hex",
  "smallvec",
@@ -16020,17 +16146,7 @@ version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4ed310ef5ab98f5fa467900ed906cb9232dd5376597e00fd4cba2a449d06c0b"
 dependencies = [
- "hash-db 0.16.0",
-]
-
-[[package]]
-name = "triehash"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1631b201eb031b563d2e85ca18ec8092508e262a3196ce9bd10a67ec87b9f5c"
-dependencies = [
- "hash-db 0.15.2",
- "rlp",
+ "hash-db",
 ]
 
 [[package]]
@@ -16096,7 +16212,7 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.9.2",
- "rustls 0.23.21",
+ "rustls 0.23.35",
  "rustls-pki-types",
  "sha1",
  "thiserror 2.0.17",
@@ -16121,6 +16237,12 @@ dependencies = [
  "rand 0.8.5",
  "static_assertions",
 ]
+
+[[package]]
+name = "twox-hash"
+version = "2.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
 
 [[package]]
 name = "typenum"
@@ -16169,12 +16291,6 @@ name = "unicase"
 version = "2.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b844d17643ee918803943289730bec8aac480150456169e647ed0b576ba539"
-
-[[package]]
-name = "unicode-bidi"
-version = "0.3.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c1cb5db39152898a79168971543b1cb5020dff7fe43c8dc468b0885f5e29df5"
 
 [[package]]
 name = "unicode-ident"
@@ -16266,7 +16382,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08bc136a29a3d1758e07a9cca267be308aeebf5cfd5a10f3f67ab2097683ef5b"
 dependencies = [
  "form_urlencoded",
- "idna 1.1.0",
+ "idna",
  "percent-encoding",
  "serde",
 ]
@@ -16307,17 +16423,18 @@ dependencies = [
  "log",
  "mockall",
  "num-traits",
+ "parity-scale-codec",
  "pin-project",
  "predicates",
  "prometheus",
  "regex",
- "reqwest",
+ "reqwest 0.11.27",
  "scale-info",
  "scale-json",
  "scopeguard",
  "serde",
  "serde_json",
- "sp-core 36.1.0",
+ "sp-core 36.1.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.18.1-dev)",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
@@ -16477,7 +16594,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
- "headers",
+ "headers 0.3.9",
  "http 0.2.12",
  "hyper 0.14.32",
  "log",
@@ -16661,9 +16778,25 @@ dependencies = [
  "num-traits",
  "smallvec",
  "spin 0.9.8",
- "wasmi_collections",
- "wasmi_core",
+ "wasmi_collections 0.32.3",
+ "wasmi_core 0.32.3",
  "wasmparser-nostd",
+]
+
+[[package]]
+name = "wasmi"
+version = "0.40.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a19af97fcb96045dd1d6b4d23e2b4abdbbe81723dbc5c9f016eb52145b320063"
+dependencies = [
+ "arrayvec 0.7.6",
+ "multi-stash",
+ "smallvec",
+ "spin 0.9.8",
+ "wasmi_collections 0.40.0",
+ "wasmi_core 0.40.0",
+ "wasmi_ir",
+ "wasmparser 0.221.3",
 ]
 
 [[package]]
@@ -16678,6 +16811,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmi_collections"
+version = "0.40.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e80d6b275b1c922021939d561574bf376613493ae2b61c6963b15db0e8813562"
+
+[[package]]
 name = "wasmi_core"
 version = "0.32.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16690,6 +16829,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmi_core"
+version = "0.40.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a8c51482cc32d31c2c7ff211cd2bedd73c5bd057ba16a2ed0110e7a96097c33"
+dependencies = [
+ "downcast-rs",
+ "libm",
+]
+
+[[package]]
+name = "wasmi_ir"
+version = "0.40.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e431a14c186db59212a88516788bd68ed51f87aa1e08d1df742522867b5289a"
+dependencies = [
+ "wasmi_core 0.40.0",
+]
+
+[[package]]
 name = "wasmparser"
 version = "0.102.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16697,6 +16855,15 @@ checksum = "48134de3d7598219ab9eaf6b91b15d8e50d31da76b8519fe4ecfcec2cf35104b"
 dependencies = [
  "indexmap 1.9.3",
  "url",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.221.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d06bfa36ab3ac2be0dee563380147a5b81ba10dd8885d7fbbc9eb574be67d185"
+dependencies = [
+ "bitflags 2.10.0",
 ]
 
 [[package]]
@@ -16727,7 +16894,7 @@ dependencies = [
  "rayon",
  "serde",
  "target-lexicon",
- "wasmparser",
+ "wasmparser 0.102.0",
  "wasmtime-cache",
  "wasmtime-cranelift",
  "wasmtime-environ",
@@ -16782,7 +16949,7 @@ dependencies = [
  "object 0.30.4",
  "target-lexicon",
  "thiserror 1.0.69",
- "wasmparser",
+ "wasmparser 0.102.0",
  "wasmtime-cranelift-shared",
  "wasmtime-environ",
 ]
@@ -16817,7 +16984,7 @@ dependencies = [
  "serde",
  "target-lexicon",
  "thiserror 1.0.69",
- "wasmparser",
+ "wasmparser 0.102.0",
  "wasmtime-types",
 ]
 
@@ -16900,7 +17067,7 @@ dependencies = [
  "cranelift-entity",
  "serde",
  "thiserror 1.0.69",
- "wasmparser",
+ "wasmparser 0.102.0",
 ]
 
 [[package]]
@@ -16925,32 +17092,31 @@ dependencies = [
 
 [[package]]
 name = "web3"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5388522c899d1e1c96a4c307e3797e0f697ba7c77dd8e0e625ecba9dd0342937"
+version = "0.20.0"
+source = "git+https://github.com/tomusdrw/rust-web3?rev=3b01caf7fb7a151fc7ec69a2f42a35252912b3c8#3b01caf7fb7a151fc7ec69a2f42a35252912b3c8"
 dependencies = [
  "arrayvec 0.7.6",
- "base64 0.21.7",
+ "base64 0.22.1",
  "bytes",
  "derive_more 0.99.20",
  "ethabi",
- "ethereum-types 0.14.1",
+ "ethereum-types",
  "futures",
  "futures-timer",
- "headers",
+ "headers 0.4.1",
  "hex",
- "idna 0.4.0",
+ "idna",
  "jsonrpc-core",
  "log",
  "once_cell",
  "parking_lot 0.12.5",
  "pin-project",
- "reqwest",
+ "reqwest 0.12.25",
  "rlp",
- "secp256k1 0.27.0",
+ "secp256k1 0.29.1",
  "serde",
  "serde_json",
- "soketto 0.7.1",
+ "soketto",
  "tiny-keccak",
  "tokio",
  "tokio-stream",
@@ -16969,6 +17135,24 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "webpki-root-certs"
+version = "0.26.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75c7f0ef91146ebfb530314f5f1d24528d7f0767efbfd31dce919275413e393e"
+dependencies = [
+ "webpki-root-certs 1.0.4",
+]
+
+[[package]]
+name = "webpki-root-certs"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee3e3b5f5e80bc89f30ce8d0343bf4e5f12341c51f3e26cbeecbc7c85443e85b"
+dependencies = [
+ "rustls-pki-types",
 ]
 
 [[package]]
@@ -17508,7 +17692,7 @@ dependencies = [
  "data-encoding",
  "der-parser 9.0.0",
  "lazy_static",
- "nom",
+ "nom 7.1.3",
  "oid-registry 0.7.1",
  "rusticata-macros",
  "thiserror 1.0.69",
@@ -17525,7 +17709,7 @@ dependencies = [
  "data-encoding",
  "der-parser 10.0.0",
  "lazy_static",
- "nom",
+ "nom 7.1.3",
  "oid-registry 0.8.1",
  "rusticata-macros",
  "thiserror 2.0.17",

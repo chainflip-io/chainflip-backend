@@ -71,7 +71,6 @@ fn generate_authority_set<T: Config<I>, I: 'static>(
 	authority_set
 }
 
-#[expect(clippy::multiple_bound_locations)]
 #[instance_benchmarks( where
 	T: frame_system::Config
 	+ pallet_cf_validator::Config

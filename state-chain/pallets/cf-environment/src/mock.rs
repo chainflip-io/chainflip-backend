@@ -19,10 +19,10 @@
 use core::marker::PhantomData;
 use std::collections::BTreeSet;
 
-use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
+use crate::{self as pallet_cf_environment, Decode, DecodeWithMemTracking, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinFeeInfo},
-	eth,
+	evm,
 	sol::{
 		api::{
 			AllNonceAccounts, AltWitnessingConsensusResult, ApiEnvironment, ComputePrice,
@@ -47,7 +47,7 @@ use frame_support::{
 };
 use sp_core::{H160, H256};
 use sp_runtime::{
-	traits::{DispatchInfoOf, SignedExtension},
+	traits::{transaction_extension::AsTransactionExtension, DispatchInfoOf, SignedExtension},
 	DispatchError,
 };
 
@@ -132,7 +132,7 @@ parameter_types! {
 	pub static SolanaCallBroadcasted: Option<SolanaApi<MockSolEnvironment>> = None;
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct MockSolEnvironment;
 impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for MockSolEnvironment {
 	fn lookup(_s: ApiEnvironment) -> Option<SolApiEnvironment> {
@@ -248,7 +248,17 @@ impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 pub type MockBitcoinKeyProvider = MockKeyProvider<BitcoinCrypto>;
 
 /// A Mock payment extension that simply checks whether the account exists in the system.
-#[derive(Clone, DebugNoBound, DefaultNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Clone,
+	DebugNoBound,
+	DefaultNoBound,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 #[scale_info(skip_type_params(T))]
 pub struct MockPayment<T>(PhantomData<T>);
 
@@ -292,24 +302,24 @@ impl pallet_cf_environment::Config for Test {
 	type CurrentReleaseVersion = CurrentReleaseVersion;
 	type SolEnvironment = MockSolEnvironment;
 	type SolanaBroadcaster = MockSolanaBroadcaster<RuntimeCall>;
-	type TransactionPayments = MockPayment<Self>;
+	type TransactionPayments = AsTransactionExtension<MockPayment<Self>>;
 	type GetTransactionPayments = ();
 	type WeightInfo = ();
 }
 
-pub const STATE_CHAIN_GATEWAY_ADDRESS: eth::Address = H160([0u8; 20]);
-pub const ETH_KEY_MANAGER_ADDRESS: eth::Address = H160([1u8; 20]);
-pub const ETH_VAULT_ADDRESS: eth::Address = H160([2u8; 20]);
-pub const ETH_ADDRESS_CHECKER_ADDRESS: eth::Address = H160([3u8; 20]);
+pub const STATE_CHAIN_GATEWAY_ADDRESS: evm::Address = H160([0u8; 20]);
+pub const ETH_KEY_MANAGER_ADDRESS: evm::Address = H160([1u8; 20]);
+pub const ETH_VAULT_ADDRESS: evm::Address = H160([2u8; 20]);
+pub const ETH_ADDRESS_CHECKER_ADDRESS: evm::Address = H160([3u8; 20]);
 pub const ETH_CHAIN_ID: u64 = 1;
 
-pub const ARB_KEY_MANAGER_ADDRESS: eth::Address = H160([4u8; 20]);
-pub const ARB_VAULT_ADDRESS: eth::Address = H160([5u8; 20]);
-pub const ARB_USDC_TOKEN_ADDRESS: eth::Address = H160([6u8; 20]);
-pub const ARB_ADDRESS_CHECKER_ADDRESS: eth::Address = H160([7u8; 20]);
+pub const ARB_KEY_MANAGER_ADDRESS: evm::Address = H160([4u8; 20]);
+pub const ARB_VAULT_ADDRESS: evm::Address = H160([5u8; 20]);
+pub const ARB_USDC_TOKEN_ADDRESS: evm::Address = H160([6u8; 20]);
+pub const ARB_ADDRESS_CHECKER_ADDRESS: evm::Address = H160([7u8; 20]);
 pub const ARB_CHAIN_ID: u64 = 2;
 
-pub const ETH_SC_UTILS_ADDRESS: eth::Address = H160([8u8; 20]);
+pub const ETH_SC_UTILS_ADDRESS: evm::Address = H160([8u8; 20]);
 
 cf_test_utilities::impl_test_helpers! {
 	Test,
@@ -379,7 +389,7 @@ pub mod benchmarks_mock {
 		type CurrentReleaseVersion = CurrentReleaseVersion;
 		type SolEnvironment = MockSolEnvironment;
 		type SolanaBroadcaster = MockSolanaBroadcaster<RuntimeCall>;
-		type TransactionPayments = MockPayment<Self>;
+		type TransactionPayments = AsTransactionExtension<MockPayment<Self>>;
 		type GetTransactionPayments = ();
 		type WeightInfo = ();
 	}

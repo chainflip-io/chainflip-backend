@@ -43,7 +43,7 @@ use core::convert::Infallible;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::btree_map::BTreeMap;
 
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::{U256, U512};
 use sp_std::vec::Vec;
@@ -65,7 +65,17 @@ const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0] /* litt
 
 /// Represents a number exclusively between 0 and 1.
 #[derive(
-	Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
 )]
 #[cfg_attr(feature = "std", derive(Default))]
 struct FloatBetweenZeroAndOne {
@@ -309,7 +319,9 @@ pub enum BurnError {}
 #[derive(Debug)]
 pub enum CollectError {}
 
-#[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[derive(
+	Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, DecodeWithMemTracking, MaxEncodedLen,
+)]
 pub struct Collected {
 	/// The amount of fees earned by this position since the last collect.
 	pub fees: Amount,
@@ -327,7 +339,9 @@ pub struct Collected {
 	pub original_amount: Amount,
 }
 
-#[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[derive(
+	Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, DecodeWithMemTracking, MaxEncodedLen,
+)]
 pub struct PositionInfo {
 	/// The amount of liquidity in the position after the operation.
 	pub amount: Amount,
@@ -345,7 +359,16 @@ impl<'a> From<&'a Position> for PositionInfo {
 
 /// Represents a single LP position
 #[derive(
-	Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize, PartialEq,
+	Clone,
+	Debug,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+	PartialEq,
 )]
 struct Position {
 	/// Used to identify when the position was created and thereby determine if all the liquidity
@@ -376,7 +399,16 @@ struct Position {
 /// Represents a pool that is selling an amount of an asset at a specific/fixed price. A
 /// single fixed pool will contain the liquidity/assets for all limit orders at that specific price.
 #[derive(
-	Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize, PartialEq,
+	Clone,
+	Debug,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+	PartialEq,
 )]
 pub(super) struct FixedPool {
 	/// Whenever a FixedPool is destroyed and recreated i.e. all the liquidity in the FixedPool is
@@ -396,7 +428,9 @@ pub(super) struct FixedPool {
 	percent_remaining: FloatBetweenZeroAndOne,
 }
 
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize, PartialEq)]
+#[derive(
+	Clone, Debug, TypeInfo, Encode, Decode, DecodeWithMemTracking, Serialize, Deserialize, PartialEq,
+)]
 pub(super) struct PoolState<LiquidityProvider: Ord> {
 	/// The percentage fee taken from swap inputs and earned by LPs. It is in units of 0.0001%.
 	/// I.e. 5000 means 0.5%.

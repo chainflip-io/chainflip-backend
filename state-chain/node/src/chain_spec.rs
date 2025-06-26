@@ -830,6 +830,7 @@ fn testnet_genesis(
 			max_authority_set_contraction_percentage,
 		},
 		session: state_chain_runtime::SessionConfig {
+			non_authority_keys: vec![],
 			keys: initial_authorities
 				.iter()
 				.map(|x| (x.0.clone(), x.0.clone(), session_keys(x.1.clone(), x.2.clone())))

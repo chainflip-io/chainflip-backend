@@ -23,7 +23,7 @@ use cf_traits::{
 	mocks::{broadcaster::MockBroadcaster, time_source},
 	AccountRoleRegistry, RedemptionCheck, WaivedFees,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	derive_impl,
 	dispatch::{DispatchInfo, GetDispatchInfo},
@@ -31,10 +31,7 @@ use frame_support::{
 	traits::UnfilteredDispatchable,
 };
 use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{IdentityLookup, Zero},
-	AccountId32, DispatchError, DispatchResult, Permill,
-};
+use sp_runtime::{traits::IdentityLookup, AccountId32, DispatchError, DispatchResult, Permill};
 use std::{collections::HashMap, time::Duration};
 
 // Use a realistic account id for compatibility with `RegisterRedemption`.
@@ -75,7 +72,19 @@ impl pallet_cf_flip::Config for Test {
 	type CallIndexer = ();
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub struct MockRegisterRedemption {
 	pub amount: <Ethereum as Chain>::ChainAmount,
 }
@@ -86,7 +95,7 @@ impl cf_chains::RegisterRedemption for MockRegisterRedemption {
 		amount: u128,
 		_address: &[u8; 20],
 		_expiry: u64,
-		_executor: Option<cf_chains::eth::Address>,
+		_executor: Option<cf_chains::evm::Address>,
 	) -> Self {
 		Self { amount }
 	}
@@ -161,7 +170,9 @@ impl_mock_runtime_safe_mode! { funding: PalletSafeMode }
 pub type MockFundingBroadcaster = MockBroadcaster<(MockRegisterRedemption, RuntimeCall)>;
 
 //we define a variant here so that decoding can also fail. Empty type always successfully decodes.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, Ord, PartialOrd)]
+#[derive(
+	Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Debug, Ord, PartialOrd,
+)]
 pub enum EmptyCall {
 	Empty,
 }
@@ -177,7 +188,7 @@ impl UnfilteredDispatchable for EmptyCall {
 
 impl GetDispatchInfo for EmptyCall {
 	fn get_dispatch_info(&self) -> frame_support::dispatch::DispatchInfo {
-		DispatchInfo { weight: Zero::zero(), ..Default::default() }
+		DispatchInfo::default()
 	}
 }
 

@@ -15,14 +15,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	address::ForeignChainAddress, none::NoneChainCrypto, Chain, DepositDetailsToTransactionInId,
-	FeeRefundCalculator,
+	address::ForeignChainAddress, evm, none::NoneChainCrypto, Chain,
+	DepositDetailsToTransactionInId, FeeRefundCalculator,
 };
 use codec::{FullCodec, MaxEncodedLen};
 use frame_support::Parameter;
 use sp_runtime::traits::Member;
 
-use crate::{benchmarking_value::BenchmarkValue, eth::H160};
+use crate::benchmarking_value::BenchmarkValue;
 use cf_primitives::{
 	chains::{assets, AnyChain},
 	AssetAmount, ChannelId,
@@ -34,7 +34,7 @@ impl Chain for AnyChain {
 	const WITNESS_PERIOD: u64 = 1;
 	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = 1_000_000;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 1_000_000;
-	const BURN_ADDRESS: Self::ChainAccount = ForeignChainAddress::Eth(H160([0; 20]));
+	const BURN_ADDRESS: Self::ChainAccount = ForeignChainAddress::Eth(evm::Address::zero());
 
 	type ChainCrypto = NoneChainCrypto;
 	type ChainBlockNumber = u64;

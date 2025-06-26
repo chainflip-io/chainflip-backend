@@ -26,7 +26,7 @@ use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{DerivedIngressSink, IngressSink};
 use cf_utilities::success_threshold_from_share_count;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use core::cmp::Ordering;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -50,14 +50,36 @@ pub const MAXIMUM_CHANNELS_PER_ELECTION: u32 = 50;
 /// Represents the total ingressed amount over all time of a given asset at a particular
 /// `block_number`.
 #[derive(
-	Clone, Copy, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, Ord, PartialOrd,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Ord,
+	PartialOrd,
 )]
 pub struct ChannelTotalIngressed<BlockNumber, Amount> {
 	pub block_number: BlockNumber,
 	pub amount: Amount,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub struct OpenChannelDetails<Asset, BlockNumber> {
 	pub asset: Asset,
 	pub close_block: BlockNumber,
@@ -70,7 +92,17 @@ pub type OpenChannelDetailsFor<Sink> =
 	OpenChannelDetails<<Sink as IngressSink>::Asset, <Sink as IngressSink>::BlockNumber>;
 
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Default,
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Default,
 )]
 pub struct BackoffSettings<StateChainBlockNumber> {
 	// After this number of state chain blocks, we will backoff request frequency. To

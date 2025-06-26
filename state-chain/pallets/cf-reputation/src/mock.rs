@@ -80,6 +80,7 @@ pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 )]

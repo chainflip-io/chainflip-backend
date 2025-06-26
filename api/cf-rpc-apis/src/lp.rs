@@ -16,7 +16,7 @@
 
 use crate::{NotificationBehaviour, RpcResult};
 
-use cf_chains::{address::AddressString, evm::U256};
+use cf_chains::address::AddressString;
 use cf_primitives::{
 	chains::assets::any::AssetMap, ApiWaitForResult, Asset, BasisPoints, BlockNumber,
 	DcaParameters, EgressId, ForeignChain, PriceLimits, WaitFor,
@@ -69,7 +69,7 @@ pub trait LpRpcApi {
 	#[method(name = "transfer_asset")]
 	async fn transfer_asset(
 		&self,
-		amount: U256,
+		amount: NumberOrHex,
 		asset: Asset,
 		destination_account: AccountId32,
 	) -> RpcResult<Hash>;
@@ -124,7 +124,7 @@ pub trait LpRpcApi {
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>>;
 
 	#[method(name = "free_balances", aliases = ["lp_asset_balances"])]
-	async fn free_balances(&self) -> RpcResult<AssetMap<U256>>;
+	async fn free_balances(&self) -> RpcResult<AssetMap<NumberOrHex>>;
 
 	#[method(name = "get_open_swap_channels")]
 	async fn get_open_swap_channels(&self, at: Option<Hash>) -> RpcResult<OpenSwapChannels>;

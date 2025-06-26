@@ -26,7 +26,7 @@ use cf_test_utilities::assert_events_eq;
 use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, KeyRotator};
 use cfe_events::{KeyHandoverRequest, ThresholdSignatureRequest, TxBroadcastRequest};
 use chainflip_node::test_account_from_seed;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	inherent::ProvideInherent,
 	pallet_prelude::InherentData,

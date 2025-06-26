@@ -6,7 +6,7 @@ use super::{
 };
 use crate::generic_tools::*;
 use cf_chains::witness_period::SaturatingStep;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use generic_typeinfo_derive::GenericTypeInfo;
 use primitives::NonemptyContinuousHeaders;
 #[cfg(test)]
@@ -32,7 +32,8 @@ where <Self as Arbitrary>::Strategy: Clone + Sync + Send;
 #[cfg(not(test))]
 pub trait MaybeArbitrary = core::any::Any;
 
-pub trait CommonTraits = Debug + Clone + Encode + Decode + Serde + Eq + TypeInfo;
+pub trait CommonTraits =
+	Debug + Clone + Encode + Decode + DecodeWithMemTracking + Serde + Eq + TypeInfo;
 
 pub trait ChainBlockNumberTrait = CommonTraits
 	+ SaturatingStep

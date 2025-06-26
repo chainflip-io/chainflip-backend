@@ -19,7 +19,7 @@
 use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
-	eth::Address as EthereumAddress,
+	evm::Address as EthereumAddress,
 	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersUncheckedEncoded,
 	SwapOrigin,
 };
@@ -105,14 +105,18 @@ enum EgressType {
 	Refund { refund_fee: AssetAmount },
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Serialize, Deserialize, Copy, Clone, Debug,
+)]
 pub struct AffiliateDetails {
 	pub short_id: AffiliateShortId,
 	pub withdrawal_address: EthereumAddress,
 }
 
 /// Refund parameter used within the swapping pallet.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
+)]
 pub struct SwapRefundParameters {
 	pub refund_block: cf_primitives::BlockNumber,
 	pub price_limits: PriceLimits,
@@ -201,7 +205,7 @@ impl<T: Config> SwapState<T> {
 	}
 }
 
-#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub enum FeeType<T: Config> {
 	NetworkFee(NetworkFeeTracker),
@@ -209,14 +213,24 @@ pub enum FeeType<T: Config> {
 }
 
 #[derive(
-	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default, Serialize, Deserialize,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Default,
+	Serialize,
+	Deserialize,
 )]
 pub struct FeeRateAndMinimum {
 	pub rate: sp_runtime::Permill,
 	pub minimum: AssetAmount,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct NetworkFeeTracker {
 	network_fee: FeeRateAndMinimum,
 	// Total amount of stable asset that has been processed so far (before fees)
@@ -255,7 +269,7 @@ impl NetworkFeeTracker {
 	}
 }
 
-#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct Swap<T: Config> {
 	swap_id: SwapId,
@@ -275,7 +289,9 @@ impl<T: Config> Get<T::Amount> for DefaultBrokerBond<T> {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
+)]
 pub struct SwapLegInfo {
 	pub swap_id: SwapId,
 	pub swap_request_id: SwapRequestId,
@@ -313,7 +329,7 @@ impl<T: Config> Swap<T> {
 	}
 }
 
-#[derive(Debug, Decode, TypeInfo, Clone, PartialEq, Eq, Encode)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq)]
 pub enum SwapFailureReason {
 	/// Batch swap failed due to price impact limit
 	PriceImpactLimit,
@@ -362,7 +378,7 @@ impl<T: Config> From<DispatchError> for BatchExecutionError<T> {
 	}
 }
 
-#[derive(Clone, Copy, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq)]
 pub enum SwapRequestCompletionReason {
 	/// Aborted explicitly without waiting for timeout (e.g. used in liquidation swaps).
 	Aborted,
@@ -372,7 +388,7 @@ pub enum SwapRequestCompletionReason {
 	Executed,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct DcaState {
 	scheduled_chunks: BTreeSet<SwapId>,
 	remaining_input_amount: AssetAmount,
@@ -439,7 +455,9 @@ impl DcaState {
 }
 
 #[expect(clippy::large_enum_variant)]
-#[derive(CloneNoBound, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound, DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo,
+)]
 #[scale_info(skip_type_params(T))]
 enum SwapRequestState<T: Config> {
 	UserSwap {
@@ -451,7 +469,9 @@ enum SwapRequestState<T: Config> {
 	IngressEgressFee,
 }
 
-#[derive(CloneNoBound, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound, DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo,
+)]
 #[scale_info(skip_type_params(T))]
 struct SwapRequest<T: Config> {
 	id: SwapRequestId,
@@ -460,7 +480,17 @@ struct SwapRequest<T: Config> {
 	state: SwapRequestState<T>,
 }
 
-#[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone,
+	RuntimeDebugNoBound,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 #[scale_info(skip_type_params(T, I))]
 pub enum PalletConfigUpdate<T: Config> {
 	/// Set the maximum amount allowed to be put into a swap. Excess amounts are confiscated.

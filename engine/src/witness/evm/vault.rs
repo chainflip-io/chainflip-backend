@@ -17,9 +17,8 @@
 use crate::evm::retry_rpc::EvmRetryRpcApi;
 use anyhow::{anyhow, Result};
 use codec::Decode;
-use ethers::types::Bloom;
+use ethers::types::{Address, Bloom, H256};
 use futures_core::Future;
-use sp_core::H256;
 use std::collections::HashMap;
 
 use super::{
@@ -33,8 +32,7 @@ use super::{
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	cf_parameters::VaultSwapParametersV1,
-	eth::Address as EthereumAddress,
-	evm::DepositDetails,
+	evm::{Address as EvmAddress, DepositDetails},
 	CcmChannelMetadata, CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain,
 	ForeignChainAddress,
 };
@@ -62,7 +60,7 @@ where
 }
 
 pub fn call_from_event<
-	C: cf_chains::Chain<ChainAccount = EthereumAddress, ChainBlockNumber = u64>,
+	C: cf_chains::Chain<ChainAccount = EvmAddress, ChainBlockNumber = u64>,
 	CallBuilder: IngressCallBuilder<Chain = C>,
 >(
 	block_height: u64,
@@ -70,10 +68,10 @@ pub fn call_from_event<
 	// can be different for different EVM chains
 	native_asset: Asset,
 	source_chain: ForeignChain,
-	supported_assets: &HashMap<EthereumAddress, Asset>,
+	supported_assets: &HashMap<EvmAddress, Asset>,
 ) -> Result<Option<RuntimeCall>>
 where
-	EthereumAddress: IntoForeignChainAddress<C>,
+	EvmAddress: IntoForeignChainAddress<C>,
 {
 	fn try_into_encoded_address(chain: ForeignChain, bytes: Vec<u8>) -> Result<EncodedAddress> {
 		EncodedAddress::from_chain_bytes(chain, bytes)
@@ -237,7 +235,7 @@ where
 				.try_into()
 				.expect("Asset translated from EthereumAddress must be supported by the chain."),
 			amount: try_into_primitive(amount)?,
-			destination_address: recipient,
+			destination_address: recipient.0.into(),
 		})),
 		_ => None,
 	})
