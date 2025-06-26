@@ -33,6 +33,7 @@ pub mod elections;
 pub mod bitcoin_elections;
 pub mod solana_elections;
 pub mod vault_swaps;
+pub mod generic_elections;
 
 use cf_chains::SetGovKeyWithAggKeyError;
 

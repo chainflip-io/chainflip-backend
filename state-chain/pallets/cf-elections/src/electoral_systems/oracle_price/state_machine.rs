@@ -1,28 +1,32 @@
-use std::collections::BTreeMap;
+use cf_chains::witness_period::SaturatingStep;
 use enum_iterator::{all, Sequence};
 use itertools::{Either, Itertools};
-use sp_core::offchain::Duration;
-
+use crate::electoral_systems::state_machine::common_imports::*;
 
 use crate::electoral_systems::state_machine::state_machine::{AbstractApi, Statemachine};
 
-pub trait OPTTypes {
-    type ElectionTimeoutMeasurement;
-    type PriceStalenessMeasurement;
+
+pub trait OPTypes: 'static + Sized {
+    /// The partial order decides when we accept to the price,
+    /// namely when `old_aggregation < new_aggregation`. The default derived
+    /// implementation of the `PartialOrd` trait is not useful for this,
+    /// a manual, apprioprate implementation should be used.
+    type PriceData: PartialOrd;
+
+    type InternalTime: SaturatingStep + Ord;
 }
 
-pub type TIMESTAMP = i64;
-pub type PRICE = Vec<u8>;
+// pub type SCBLOCK = u32;
 
-impl DurationBetween for TIMESTAMP {
-    fn duration_to(&self, other: &Self) -> Duration {
-        Duration::from_millis((self - other) as u64)
-    }
-}
+// impl DurationBetween for TIMESTAMP {
+//     fn duration_to(&self, other: &Self) -> Duration {
+//         Duration::from_millis((self - other) as u64)
+//     }
+// }
 
-pub trait DurationBetween {
-    fn duration_to(&self, other: &Self) -> Duration;
-}
+// pub trait DurationBetween {
+//     fn duration_to(&self, other: &Self) -> Duration;
+// }
 
 
 
@@ -44,16 +48,20 @@ def_derive! {
     }
 }
 
+#[derive(PartialEq, Clone, Copy)]
 pub enum PriceState {
     UpToDate,
     Stale
 }
 
+
+
 pub struct PriceEntry {
     price: PRICE,
     timestamp: TIMESTAMP,
     block: ExternalChainBlockQueried,
-    state: PriceState
+    state: PriceState,
+    updated_at: SCBLOCK
 }
 
 impl PriceEntry {
@@ -104,15 +112,27 @@ impl PriceHistory {
 
         all::<ExternalPriceChain>()
             .map(|chain| 
-                PriceQuery { 
-                    query_type: self.prices
-                        .get(&chain)
-                        .map(|entry| entry.get_query(ages, settings))
-                        .unwrap_or(MaybeStaleRequestingLatest),
-                    chain, 
-                }
+                self.prices
+                    .get(&chain)
+                    .map(|entry| 
+                        (
+                            entry.state,
+                            PriceQuery { 
+                                query_type: entry.get_query(ages, settings),
+                                chain: chain.clone(), 
+                            }))
+                    .unwrap_or(
+                        (
+                            PriceState::Stale,
+                            PriceQuery {
+                                chain,
+                                query_type: MaybeStaleRequestingLatest,
+                            }
+                        )
+                    )
             )
-            .take_while_inclusive(|query| query.query_type == MaybeStaleRequestingLatest)
+            .take_while_inclusive(|(state, query)| *state == PriceState::Stale)
+            .map(|(state, query)| query)
             .collect()
     }
 
@@ -198,22 +218,29 @@ impl OraclePriceTrackerSettings {
     }
 }
 
-pub struct OraclePriceTracker {
-    prices_history: PriceHistory,
-    current_ages: Ages,
+defx! {
+    pub struct OraclePriceTracker[T: OPTypes] {
+        prices_history: PriceHistory,
+        current_ages: Ages<T>,
+    }
+    validate this (else OraclePriceTrackerError) {}
 }
 
-pub struct Ages {
-    old_age: TIMESTAMP,
-    stale_age: TIMESTAMP,
+def_derive!{
+    pub struct Ages<T: OPTypes> {
+        old_age: T::InternalTime,
+        stale_age: T::InternalTime,
+    }
 }
 
-
-pub struct OraclePriceTrackerContext {
-    current_time: TIMESTAMP
+defx!{
+    pub struct OraclePriceTrackerContext[T: OPTypes] {
+        current_time: T::InternalTime,
+    }
+    validate this (else OraclePriceContextError) {}
 }
 
-impl AbstractApi for OraclePriceTracker {
+impl<T: OPTypes> AbstractApi for OraclePriceTracker<T> {
     type Query = PriceQuery;
     type Response = PriceResponse;
     type Error = PriceResponseError;
@@ -223,11 +250,11 @@ impl AbstractApi for OraclePriceTracker {
     }
 }
 
-impl Statemachine for OraclePriceTracker {
-    type Context = OraclePriceTrackerContext;
+impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
+    type Context = OraclePriceTrackerContext<T>;
     type Settings = OraclePriceTrackerSettings;
     type Output = ();
-    type State = OraclePriceTracker;
+    type State = OraclePriceTracker<T>;
 
     fn get_queries(state: &mut Self::State, settings: &Self::Settings) -> Vec<Self::Query> {
         state.prices_history.get_queries(&state.current_ages, settings)
