@@ -4,7 +4,7 @@ import { Asset } from 'shared/utils';
 import { Logger } from 'shared/utils/logger';
 
 export async function setMinimumDeposit(logger: Logger, asset: Asset, amount: bigint) {
-  const eventHandle = observeEvent(logger, 'IngressEgress:MinimumDepositSet');
+  const eventHandle = observeEvent(logger, 'IngressEgress:PalletConfigUpdated');
   switch (asset) {
     case 'Btc':
       await submitGovernanceExtrinsic((api) =>
