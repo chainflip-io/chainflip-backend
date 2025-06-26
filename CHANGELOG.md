@@ -2,6 +2,10 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.9.7] - 2025-06-25
+
+- Update bouncer tests from main to allow CI checks to pass.
+
 ## [1.9.6] - 2025-06-05
 
 ### Fixes
@@ -14,7 +18,6 @@ All notable changes included in each Chainflip release will be documented in thi
 ### Fixes
 
 - Fix: Correctly deserialize BTC getblock response after 0.29.0 Bitcoin update: ([#5891](https://github.com/chainflip-io/chainflip-backend/pull/5891))
-
 
 ## [1.9.4] - 2025-05-21
 
