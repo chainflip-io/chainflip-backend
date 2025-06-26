@@ -114,12 +114,14 @@ async function setMockmode(mode: Mockmode) {
  * @param txid Hash of the transaction we want to report.
  * @param score Risk score for this transaction. Can be in range [0.0, 10.0].
  */
-async function setTxRiskScore(txid: string, score: number) {
+/* eslint-disable  @typescript-eslint/no-explicit-any */
+async function setTxRiskScore(txid: string, score: number, ruleEvaluationDetails: any[] = []) {
   await postToDepositMonitor(':6070/riskscore', [
     txid,
     {
       risk_score: { Score: score },
       unknown_contribution_percentage: 0.0,
+      rule_evaluation_details: ruleEvaluationDetails,
     },
   ]);
 }
@@ -558,8 +560,15 @@ export function testBitcoin(testContext: TestContext, doBoost: boolean): Promise
     doBoost,
     async (amount, address) =>
       (await sendBtcTransactionWithParent(logger, address, amount, 0, confirmationsBeforeReport))
-        .childTxid,
-    async (txId) => setTxRiskScore(txId, 9.0),
+        .parentTxid,
+    async (txId) =>
+      setTxRiskScore(txId, 9.0, [
+        {
+          rule_name: 'High Risk Rule',
+          risk_score: { Score: 10.0 },
+          contributions: [{ category: 'critical category', percentage: 90.0 }],
+        },
+      ]),
   );
 
   // send a parent->child chain where parent is 2 blocks older and mark the parent
@@ -568,8 +577,15 @@ export function testBitcoin(testContext: TestContext, doBoost: boolean): Promise
     doBoost,
     async (amount, address) =>
       (await sendBtcTransactionWithParent(logger, address, amount, 2, confirmationsBeforeReport))
-        .childTxid,
-    async (txId) => setTxRiskScore(txId, 9.0),
+        .parentTxid,
+    async (txId) =>
+      setTxRiskScore(txId, 9.0, [
+        {
+          rule_name: 'High Risk Rule',
+          risk_score: { Score: 10.0 },
+          contributions: [{ category: 'critical category', percentage: 90.0 }],
+        },
+      ]),
   );
 
   return [simple, sameBlockParentMarked, oldParentMarked];
