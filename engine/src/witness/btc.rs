@@ -20,8 +20,9 @@ pub mod vault_swaps;
 
 use crate::btc::rpc::{BtcRpcApi, VerboseTransaction};
 use bitcoin::{hashes::Hash, BlockHash};
-use cf_chains::btc::{
-	self, deposit_address::DepositAddress, BlockNumber, Hash as H256, CHANGE_ADDRESS_SALT,
+use cf_chains::{
+	btc::{self, deposit_address::DepositAddress, BlockNumber, Hash as H256, CHANGE_ADDRESS_SALT},
+	witness_period::SaturatingStep,
 };
 use cf_primitives::EpochIndex;
 use futures_core::Future;
@@ -126,13 +127,25 @@ impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVote
 				latest_block_height
 			};
 
+			// Compute the highest block height we want to fetch a header for,
+			// since for performance reasons we're bounding the number of headers
+			// submitted in one vote. We're submitting at most SAFETY_BUFFER headers.
+			let highest_submitted_height = std::cmp::min(
+				best_block_header.block_height,
+				witness_from_index.saturating_forward(BitcoinChain::SAFETY_BUFFER + 1),
+			);
+
 			// Fetch the headers we haven't got yet.
-			for index in witness_from_index..best_block_header.block_height {
+			for index in witness_from_index..highest_submitted_height {
 				headers.push_back(header_from_btc_header(
 					self.client.block_header(self.client.block_hash(index).await?).await?,
 				)?);
 			}
-			headers.push_back(best_block_header);
+
+			// If we submitted all headers up the highest, we also append the highest
+			if highest_submitted_height == best_block_header.block_height {
+				headers.push_back(best_block_header);
+			}
 
 			let headers_len = headers.len();
 			NonemptyContinuousHeaders::try_new(headers)
