@@ -51,13 +51,15 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 		mut headers: VecDeque<Header<T>>,
 	) -> Result<Self, NonemptyContinuousHeadersError<T>> {
 		if let Some(header) = headers.pop_front() {
-			Ok(Self { first: header, headers })
+			let result = Self { first: header, headers };
+			result.is_valid()?;
+			Ok(result)
 		} else {
 			Err(NonemptyContinuousHeadersError::<T>::is_nonempty)
 		}
 	}
-	pub fn new(header: Header<T>, headers: Option<VecDeque<Header<T>>>) -> Self {
-		Self { first: header, headers: headers.unwrap_or_default() }
+	pub fn new(header: Header<T>) -> Self {
+		Self { first: header, headers: Default::default() }
 	}
 	pub fn first_height(&self) -> T::ChainBlockNumber {
 		self.first.block_height
@@ -67,15 +69,6 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	}
 	pub fn first(&self) -> &Header<T> {
 		&self.first
-	}
-	pub fn safe_pop_back(&mut self) -> Option<Header<T>> {
-		if let Some(last) = self.headers.pop_back() {
-			return Some(last);
-		}
-		None
-	}
-	pub fn contains(&self, block_height: &T::ChainBlockNumber) -> bool {
-		self.first_height() <= *block_height && *block_height <= self.last().block_height
 	}
 	/// Tries to merge the `other` chain of headers into `self`.
 	///
@@ -103,16 +96,11 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 			let mut other_headers = other.get_headers();
 			let mut common_headers = extract_common_prefix(&mut self_headers, &mut other_headers);
 
-			*self = if let Some(first_header) = common_headers.pop_front() {
-				let mut result = Self::new(first_header, Some(common_headers));
-				result.headers.append(&mut other_headers.clone());
-				result
-			} else {
-				// if common header is empty we are sure that other_headers will at least contain 1
-				// header
-				let mut cloned_other = other_headers.clone();
-				Self::new(cloned_other.pop_front().unwrap(), Some(cloned_other))
-			};
+			let mut cloned_other = other_headers.clone();
+			common_headers.append(&mut cloned_other);
+			//either common_headers or other_headers contain at least 1 element hence this cannot
+			// fail
+			*self = Self::try_new(common_headers).unwrap();
 
 			Ok(MergeInfo { removed: self_headers, added: other_headers })
 		} else {
@@ -136,6 +124,12 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 			let result = self.first.clone();
 			self.first = next_header;
 			return Some(result);
+		}
+		None
+	}
+	pub fn safe_pop_back(&mut self) -> Option<Header<T>> {
+		if let Some(last) = self.headers.pop_back() {
+			return Some(last);
 		}
 		None
 	}
@@ -240,8 +234,7 @@ mod prop_tests {
 		  })]
 		#[test]
 		fn test_headers((first_chain, second_chain) in header_strategy()){
-			let final_chain = first_chain.clone().merge(second_chain.clone());
-			match final_chain {
+			match first_chain.clone().merge(second_chain.clone()) {
 				Ok(merge_result) => {
 					let mut first_headers = first_chain.get_headers();
 					let mut second_headers = second_chain.get_headers();

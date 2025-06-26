@@ -37,9 +37,7 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 				consensus.insert_vote(vote.get_headers().into_iter().collect())
 			}
 
-			consensus
-				.check_consensus(threshold)
-				.map(|result| NonemptyContinuousHeaders::new(result, None))
+			consensus.check_consensus(threshold).map(NonemptyContinuousHeaders::new)
 		} else {
 			// This is the actual consensus finding, once the engine is running
 

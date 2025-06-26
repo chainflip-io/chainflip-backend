@@ -66,10 +66,11 @@ fn block_height_witnesser_first_consensus() {
 		.check_consensus(&(SuccessThreshold { success_threshold: 3 }, BHW_PROPERTIES_STARTUP));
 	assert_eq!(
 		consensus,
-		Some(NonemptyContinuousHeaders::new(
-			Header::<BHTypes> { block_height: 6, hash: 1234, parent_hash: 000 },
-			None
-		))
+		Some(NonemptyContinuousHeaders::new(Header::<BHTypes> {
+			block_height: 6,
+			hash: 1234,
+			parent_hash: 000
+		}))
 	)
 }
 
