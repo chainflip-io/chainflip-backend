@@ -107,7 +107,7 @@ impl AbstractVoter<BHW> for FlatChainProgression<Event> {
 			}
 
 			let bhw_input = if index.witness_from_index == 0 {
-				NonemptyContinuousHeaders { headers: VecDeque::from([best_block]) }
+				NonemptyContinuousHeaders::try_new(VecDeque::from([best_block])).unwrap()
 			} else {
 				let headers = (index.witness_from_index..=chain.get_best_block_height())
 					.map(|height| chain.get_block_header(height));
@@ -115,7 +115,7 @@ impl AbstractVoter<BHW> for FlatChainProgression<Event> {
 					continue;
 				}
 				if let Some(headers) = headers.into_iter().collect::<Option<Vec<_>>>() {
-					NonemptyContinuousHeaders { headers: VecDeque::from_iter(headers) }
+					NonemptyContinuousHeaders::try_new(VecDeque::from_iter(headers)).unwrap()
 				} else {
 					continue
 				}

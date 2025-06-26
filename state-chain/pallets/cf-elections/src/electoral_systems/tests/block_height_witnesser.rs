@@ -66,9 +66,11 @@ fn block_height_witnesser_first_consensus() {
 		.check_consensus(&(SuccessThreshold { success_threshold: 3 }, BHW_PROPERTIES_STARTUP));
 	assert_eq!(
 		consensus,
-		Some(NonemptyContinuousHeaders {
-			headers: [Header::<BHTypes> { block_height: 6, hash: 1234, parent_hash: 000 }].into()
-		})
+		Some(NonemptyContinuousHeaders::new(Header::<BHTypes> {
+			block_height: 6,
+			hash: 1234,
+			parent_hash: 000
+		}))
 	)
 }
 
@@ -115,13 +117,16 @@ fn block_height_witnesser_running_consensus() {
 		.check_consensus(&(SuccessThreshold { success_threshold: 3 }, BHW_PROPERTIES_RUNNING));
 	assert_eq!(
 		consensus,
-		Some(NonemptyContinuousHeaders::<BHTypes> {
-			headers: [
-				Header { block_height: 5, hash: 5, parent_hash: 0 },
-				Header { block_height: 6, hash: 6, parent_hash: 5 },
-			]
-			.into()
-		})
+		Some(
+			NonemptyContinuousHeaders::<BHTypes>::try_new(
+				[
+					Header { block_height: 5, hash: 5, parent_hash: 0 },
+					Header { block_height: 6, hash: 6, parent_hash: 5 },
+				]
+				.into()
+			)
+			.unwrap()
+		)
 	);
 	bh_consensus.insert_vote(
 		[
@@ -135,26 +140,22 @@ fn block_height_witnesser_running_consensus() {
 		.check_consensus(&(SuccessThreshold { success_threshold: 3 }, BHW_PROPERTIES_RUNNING));
 	assert_eq!(
 		consensus,
-		Some(NonemptyContinuousHeaders::<BHTypes> {
-			headers: [
-				Header { block_height: 5, hash: 5, parent_hash: 0 },
-				Header { block_height: 6, hash: 6, parent_hash: 5 },
-				Header { block_height: 7, hash: 7, parent_hash: 6 },
-			]
-			.into()
-		})
+		Some(
+			NonemptyContinuousHeaders::<BHTypes>::try_new(
+				[
+					Header { block_height: 5, hash: 5, parent_hash: 0 },
+					Header { block_height: 6, hash: 6, parent_hash: 5 },
+					Header { block_height: 7, hash: 7, parent_hash: 6 },
+				]
+				.into()
+			)
+			.unwrap()
+		)
 	);
 }
 
 #[test]
 fn test_validate_vote_and_height() {
-	let result = BlockHeightWitnesser::<BHTypes>::validate(&BHW_PROPERTIES_RUNNING, &[].into());
-	assert_eq!(
-		result.unwrap_err(),
-		VoteValidationError::NonemptyContinuousHeadersError(
-			NonemptyContinuousHeadersError::is_nonempty
-		)
-	);
 	let result = BlockHeightWitnesser::<BHTypes>::validate(
 		&BHW_PROPERTIES_RUNNING,
 		&[

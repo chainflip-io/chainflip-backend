@@ -172,20 +172,18 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 					s.block_height_update.run(highest_seen);
 					*witness_from = highest_seen.saturating_forward(1);
 
-					Ok(if merge_info.added.is_empty() {
-						None
-					} else {
-						Some(ChainProgress {
-							headers: merge_info.added.clone().into(),
+					Ok(NonemptyContinuousHeaders::try_new(merge_info.added)
+						.map(|cont_headers| ChainProgress {
+							headers: cont_headers,
 							removed: merge_info.removed.front().and_then(|f| {
 								merge_info.removed.back().map(|l| f.block_height..=l.block_height)
 							}),
 						})
-					})
+						.ok())
 				},
 				Err(MergeFailure::Reorg { new_block, existing_wrong_parent }) => {
 					log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
-					*witness_from = headers.headers.front().unwrap().block_height;
+					*witness_from = headers.first().block_height;
 					Ok(None)
 				},
 
@@ -252,7 +250,7 @@ pub mod tests {
 							hash: h1.clone(),
 							parent_hash: h0.clone(),
 						});
-					NonemptyContinuousHeaders::<C>{ headers: headers.collect() }
+					NonemptyContinuousHeaders::<C>::try_new(headers.collect()).unwrap()
 				}
 			}
 		}
@@ -281,9 +279,9 @@ pub mod tests {
 				let headers in generate_input::<T>(n);
 				return {
 					let witness_from = if is_reorg_without_known_root {
-						headers.headers.front().unwrap().block_height
+						headers.first().block_height
 					} else {
-						headers.headers.back().unwrap().block_height.saturating_forward(1)
+						headers.last().block_height.saturating_forward(1)
 					};
 					BHWPhase::Running { headers, witness_from }
 				}
