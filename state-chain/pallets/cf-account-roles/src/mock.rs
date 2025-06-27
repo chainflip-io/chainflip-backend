@@ -17,14 +17,14 @@
 #![cfg(test)]
 
 use crate::{self as pallet_cf_account_roles, Config};
-use cf_primitives::SubAccountIndex;
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{deregistration_check::MockDeregistrationCheck, fee_payment::MockFeePayment},
-	SubAccountHandler,
 };
 use frame_support::derive_impl;
 use sp_runtime::DispatchError;
+
+use cf_traits::SpawnAccount;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -46,22 +46,22 @@ impl frame_system::Config for Test {
 
 impl_mock_chainflip!(Test);
 
-pub struct MockSubAccountHandler;
+pub struct MockSpawnAccount;
 
-impl SubAccountHandler<u64, u128> for MockSubAccountHandler {
-	fn derive_and_fund_sub_account(
-		parent_account_id: u64,
-		sub_account_index: SubAccountIndex,
-		_amount: Option<u128>,
-	) -> Result<u64, DispatchError> {
-		Ok(parent_account_id + sub_account_index as u64)
+impl SpawnAccount for MockSpawnAccount {
+	type AccountId = u64;
+	type Amount = u128;
+
+	fn spawn_sub_account(
+		_parent_account_id: Self::AccountId,
+		_sub_account_id: Self::AccountId,
+		_amount: Option<Self::Amount>,
+	) -> Result<(), DispatchError> {
+		Ok(())
 	}
 
-	fn derive_sub_account_and_ensure_it_exists(
-		parent_account_id: u64,
-		sub_account_index: SubAccountIndex,
-	) -> Result<u64, DispatchError> {
-		Ok(parent_account_id + sub_account_index as u64)
+	fn does_account_exist(_account_id: &Self::AccountId) -> bool {
+		true
 	}
 }
 
@@ -70,7 +70,7 @@ impl Config for Test {
 	type EnsureGovernance = frame_system::EnsureRoot<<Self as frame_system::Config>::AccountId>;
 	type DeregistrationCheck = MockDeregistrationCheck<Self::AccountId>;
 	type RuntimeCall = RuntimeCall;
-	type SubAccountHandler = MockSubAccountHandler;
+	type SpawnAccount = MockSpawnAccount;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = MockFeePayment<Self>;
 	type WeightInfo = ();

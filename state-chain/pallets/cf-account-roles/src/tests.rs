@@ -223,16 +223,15 @@ fn derive_sub_account() {
 fn execute_as_sub_account() {
 	new_test_ext().execute_with(|| {
 		const SUB_ACCOUNT_INDEX: u8 = 1;
+
+		let sub_account_id =
+			AccountRolesPallet::derive_sub_account_id(ALICE, SUB_ACCOUNT_INDEX).unwrap();
+
 		assert_ok!(AccountRolesPallet::derive_sub_account(
 			RuntimeOrigin::signed(ALICE),
 			SUB_ACCOUNT_INDEX,
 			None,
 		));
-		let sub_account_id = MockSubAccountHandler::derive_sub_account_and_ensure_it_exists(
-			ALICE,
-			SUB_ACCOUNT_INDEX,
-		)
-		.unwrap();
 		assert_ok!(AccountRolesPallet::as_sub_account(
 			RuntimeOrigin::signed(ALICE),
 			SUB_ACCOUNT_INDEX,

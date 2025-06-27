@@ -27,7 +27,7 @@ use cf_traits::{
 use sp_core::H160;
 
 use crate::BoundRedeemAddress;
-use cf_traits::SubAccountHandler;
+use cf_traits::SpawnAccount;
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 use pallet_cf_flip::{Bonder, FlipSlasher};
 use sp_runtime::DispatchError;
@@ -2494,7 +2494,7 @@ pub mod rebalancing_and_sub_accounting {
 		new_test_ext().execute_with(|| {
 			MockRedemptionChecker::set_can_redeem(ALICE, false);
 			assert_noop!(
-				Funding::derive_and_fund_sub_account(ALICE, 0, None),
+				Funding::spawn_sub_account(ALICE, BOB, None),
 				Error::<Test>::CanNotDeriveSubAccountIdIfParentAccountIsBidding,
 			);
 		});
@@ -2509,10 +2509,10 @@ pub mod rebalancing_and_sub_accounting {
 				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None)],
 				vec![]
 			));
-			let sub_account_id = Funding::derive_and_fund_sub_account(ALICE, 1, None).unwrap();
+			Funding::spawn_sub_account(ALICE, BOB, None).unwrap();
 
 			let balance_alice = Flip::total_balance_of(&ALICE);
-			let sub_account_balance = Flip::total_balance_of(&sub_account_id);
+			let sub_account_balance = Flip::total_balance_of(&BOB);
 
 			assert_eq!(balance_alice, AMOUNT - MINIMUM_FUNDING);
 			assert_eq!(sub_account_balance, MINIMUM_FUNDING);
@@ -2527,9 +2527,9 @@ pub mod rebalancing_and_sub_accounting {
 				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None)],
 				vec![]
 			));
-			Funding::derive_and_fund_sub_account(ALICE, 1, None).unwrap();
+			Funding::spawn_sub_account(ALICE, BOB, None).unwrap();
 			assert_noop!(
-				Funding::derive_and_fund_sub_account(ALICE, 1, None),
+				Funding::spawn_sub_account(ALICE, BOB, None),
 				Error::<Test>::SubAccountAlreadyExists,
 			);
 		});
@@ -2551,16 +2551,10 @@ pub mod rebalancing_and_sub_accounting {
 				vec![]
 			));
 
-			let sub_account_id = Funding::derive_and_fund_sub_account(ALICE, 1, None).unwrap();
+			Funding::spawn_sub_account(ALICE, BOB, None).unwrap();
 
-			assert_eq!(
-				BoundRedeemAddress::<Test>::get(&sub_account_id),
-				Some(RESTRICTED_ADDRESS_A)
-			);
-			assert_eq!(
-				BoundExecutorAddress::<Test>::get(&sub_account_id),
-				Some(RESTRICTED_ADDRESS_B)
-			);
+			assert_eq!(BoundRedeemAddress::<Test>::get(&BOB), Some(RESTRICTED_ADDRESS_A));
+			assert_eq!(BoundExecutorAddress::<Test>::get(&BOB), Some(RESTRICTED_ADDRESS_B));
 		});
 	}
 }

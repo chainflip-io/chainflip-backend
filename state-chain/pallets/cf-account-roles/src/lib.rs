@@ -31,20 +31,24 @@ use cf_traits::Chainflip;
 #[cfg(not(feature = "runtime-benchmarks"))]
 use cf_traits::FeePayment;
 
+use sp_runtime::{codec::Decode, DispatchError};
+
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, DeregistrationCheck, SubAccountHandler};
+use cf_traits::{AccountRoleRegistry, DeregistrationCheck, SpawnAccount};
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	error::BadOrigin,
 	pallet_prelude::{DispatchResult, StorageVersion},
 	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnNewAccount, OriginTrait},
-	BoundedVec,
+	BoundedVec, Hashable,
 };
 use sp_core::ConstU32;
 
+use sp_runtime::traits::TrailingZeroInput;
+
 use sp_runtime::traits::Dispatchable;
 
-use cf_primitives::SubAccountIndex;
+pub type SubAccountIndex = u8;
 
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
 pub use pallet::*;
@@ -72,11 +76,10 @@ pub mod pallet {
 			+ From<frame_system::Call<Self>>
 			+ From<Call<Self>>
 			+ GetDispatchInfo;
-		type SubAccountHandler: SubAccountHandler<
-			<Self as frame_system::Config>::AccountId,
-			<Self as Chainflip>::Amount,
+		type SpawnAccount: SpawnAccount<
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
 		>;
-
 		#[cfg(feature = "runtime-benchmarks")]
 		type FeePayment: cf_traits::FeePayment<
 			Amount = <Self as Chainflip>::Amount,
@@ -142,6 +145,8 @@ pub mod pallet {
 		InvalidCharactersInName,
 		/// Failed to execute the call of a sub-account.
 		FailedToExecuteCallOnBehalfOfSubAccount,
+		/// Failed to derive the sub-account id.
+		SubAccountIdDerivationFailed,
 	}
 
 	#[pallet::genesis_config]
@@ -212,11 +217,9 @@ pub mod pallet {
 			amount: Option<T::Amount>,
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
-			let sub_account_id = T::SubAccountHandler::derive_and_fund_sub_account(
-				account_id.clone(),
-				sub_account_index,
-				amount,
-			)?;
+			let sub_account_id =
+				Self::derive_sub_account_id(account_id.clone(), sub_account_index)?;
+			T::SpawnAccount::spawn_sub_account(account_id.clone(), sub_account_id.clone(), amount)?;
 			Self::deposit_event(Event::SubAccountCreated {
 				account_id: account_id.clone(),
 				sub_account_id,
@@ -245,10 +248,12 @@ pub mod pallet {
 		) -> DispatchResult {
 			let mut origin = origin;
 			let account_id = ensure_signed(origin.clone())?;
-			let sub_account_id = T::SubAccountHandler::derive_sub_account_and_ensure_it_exists(
-				account_id.clone(),
-				sub_account_index,
-			)?;
+			let sub_account_id =
+				Self::derive_sub_account_id(account_id.clone(), sub_account_index)?;
+			ensure!(
+				T::SpawnAccount::does_account_exist(&sub_account_id),
+				Error::<T>::UnknownAccount
+			);
 			origin.set_caller_from(frame_system::RawOrigin::Signed(sub_account_id.clone()));
 			match call.clone().dispatch(origin) {
 				Ok(_) => {
@@ -262,6 +267,20 @@ pub mod pallet {
 				Err(e) => Err(e.error),
 			}
 		}
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	pub fn derive_sub_account_id(
+		parent_account_id: T::AccountId,
+		sub_account_index: SubAccountIndex,
+	) -> Result<T::AccountId, DispatchError> {
+		Ok(Decode::decode(&mut TrailingZeroInput::new(
+			(*b"chainflip/subaccount", parent_account_id.clone(), sub_account_index)
+				.blake2_256()
+				.as_ref(),
+		))
+		.map_err(|_| Error::<T>::SubAccountIdDerivationFailed)?)
 	}
 }
 

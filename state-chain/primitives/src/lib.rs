@@ -114,8 +114,6 @@ pub type BasisPoints = u16;
 
 pub type BroadcastId = u32;
 
-pub type SubAccountIndex = u8;
-
 // TODO: Consider alternative representation for Price:
 //
 // increasing Price to U512 or switch to a f64 (f64 would only be for the external

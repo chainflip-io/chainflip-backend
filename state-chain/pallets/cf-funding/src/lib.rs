@@ -33,7 +33,7 @@ mod tests;
 use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
-	Funding, RedemptionCheck, SubAccountHandler,
+	Funding, RedemptionCheck, SpawnAccount,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -47,12 +47,11 @@ use frame_support::{
 		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OriginTrait, StorageVersion,
 		UnixTime,
 	},
-	Hashable,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
-use sp_runtime::{traits::TrailingZeroInput, DispatchError};
+use sp_runtime::DispatchError;
 use sp_std::{
 	cmp::{max, min},
 	collections::btree_map::BTreeMap,
@@ -991,41 +990,18 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> SubAccountHandler<T::AccountId, T::Amount> for Pallet<T> {
-	fn derive_sub_account_and_ensure_it_exists(
+impl<T: Config> SpawnAccount for Pallet<T> {
+	type AccountId = T::AccountId;
+	type Amount = T::Amount;
+
+	fn spawn_sub_account(
 		parent_account_id: T::AccountId,
-		sub_account_index: u8,
-	) -> Result<T::AccountId, DispatchError> {
-		let sub_account_id: T::AccountId = Decode::decode(&mut TrailingZeroInput::new(
-			(*b"chainflip/subaccount", parent_account_id.clone(), sub_account_index)
-				.blake2_256()
-				.as_ref(),
-		))
-		.map_err(|_| Error::<T>::SubAccountIdDerivationFailed)?;
-
-		ensure!(
-			frame_system::Pallet::<T>::account_exists(&sub_account_id),
-			Error::<T>::SubAccountDoesNotExist
-		);
-
-		Ok(sub_account_id)
-	}
-
-	fn derive_and_fund_sub_account(
-		parent_account_id: T::AccountId,
-		sub_account_index: u8,
-		amount: Option<T::Amount>,
-	) -> Result<T::AccountId, DispatchError> {
+		sub_account_id: T::AccountId,
+		initial_balance: Option<T::Amount>,
+	) -> Result<(), DispatchError> {
 		if !T::RedemptionChecker::can_redeem(&parent_account_id) {
 			return Err(Error::<T>::CanNotDeriveSubAccountIdIfParentAccountIsBidding.into());
 		}
-
-		let sub_account_id: T::AccountId = Decode::decode(&mut TrailingZeroInput::new(
-			(*b"chainflip/subaccount", parent_account_id.clone(), sub_account_index)
-				.blake2_256()
-				.as_ref(),
-		))
-		.map_err(|_| Error::<T>::SubAccountIdDerivationFailed)?;
 
 		ensure!(
 			!frame_system::Pallet::<T>::account_exists(&sub_account_id),
@@ -1045,9 +1021,13 @@ impl<T: Config> SubAccountHandler<T::AccountId, T::Amount> for Pallet<T> {
 			OriginFor::<T>::signed(parent_account_id.clone()),
 			sub_account_id.clone(),
 			None,
-			RedemptionAmount::Exact(amount.unwrap_or(MinimumFunding::<T>::get())),
+			RedemptionAmount::Exact(initial_balance.unwrap_or(MinimumFunding::<T>::get())),
 		)?;
 
-		Ok(sub_account_id)
+		Ok(())
+	}
+
+	fn does_account_exist(account_id: &T::AccountId) -> bool {
+		frame_system::Pallet::<T>::account_exists(account_id)
 	}
 }
