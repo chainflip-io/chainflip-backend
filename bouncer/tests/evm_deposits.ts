@@ -9,7 +9,6 @@ import {
   getContractAddress,
   decodeDotAddressForContract,
   defaultAssetAmounts,
-  amountToFineAmount,
   chainFromAsset,
   getEvmEndpoint,
   assetDecimals,
@@ -19,6 +18,7 @@ import {
   SwapRequestType,
   TransactionOrigin,
   stateChainAssetFromAsset,
+  amountToFineAmountBigInt,
 } from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { getCFTesterAbi, getEvmVaultAbi } from 'shared/contract_interfaces';
@@ -108,9 +108,7 @@ async function testTxMultipleVaultSwaps(
   const cfTesterAddress = getContractAddress(chainFromAsset(sourceAsset), 'CFTESTER');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cfTesterContract = new web3.eth.Contract(cfTesterAbi as any, cfTesterAddress);
-  const amount = BigInt(
-    amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset)),
-  );
+  const amount = amountToFineAmountBigInt(defaultAssetAmounts(sourceAsset), sourceAsset);
 
   const numSwaps = 2;
   const txData = cfTesterContract.methods
@@ -218,8 +216,6 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
     min_price: '0x0',
   };
 
-  console.log('destAddress', destAddress);
-
   const cfParameters = (await chainflip.rpc(
     `cf_encode_cf_parameters`,
     new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_1').address,
@@ -230,9 +226,7 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
     refundParams,
   )) as string;
 
-  const amount = BigInt(
-    amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset)),
-  );
+  const amount = amountToFineAmountBigInt(defaultAssetAmounts(sourceAsset), sourceAsset);
 
   const txData = cfVaultContract.methods
     .xSwapNative(
