@@ -18,10 +18,11 @@ use cf_chains::instances::{
 	ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
 	SolanaInstance,
 };
+#[cfg(feature = "try-runtime")]
 use cf_primitives::Asset;
 use codec::{Decode, Encode};
 use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight, *};
-use sp_runtime::{Percent, TryRuntimeError};
+use sp_runtime::Percent;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub struct BoostRefactorMigration;
@@ -246,7 +247,7 @@ impl UncheckedOnRuntimeUpgrade for BoostRefactorMigration {
 
 	/// See [`Hooks::pre_upgrade`].
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		let number_of_pools = old::BoostPools::<Runtime, BitcoinInstance>::iter().count() as u32;
 		let network_fee_deduction =
 			old::NetworkFeeDeductionFromBoostPercent::<Runtime, BitcoinInstance>::get()
@@ -263,7 +264,7 @@ impl UncheckedOnRuntimeUpgrade for BoostRefactorMigration {
 
 	/// See [`Hooks::post_upgrade`].
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
+	fn post_upgrade(state: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
 		let PreUpgradeData { number_of_pools, network_fee_deduction, boost_balances } =
 			PreUpgradeData::decode(&mut state.as_slice()).unwrap();
 

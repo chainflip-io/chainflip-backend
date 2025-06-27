@@ -34,8 +34,8 @@ use crate::{
 		AccountBump, SlotNumber,
 	},
 	AnyChainAsset, CcmAdditionalData, CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmParams,
-	ChannelRefundParameters, DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi,
-	FeeRefundCalculator, TypeInfo,
+	ChannelRefundParametersUncheckedEncoded, DepositChannel, DepositDetailsToTransactionInId,
+	FeeEstimationApi, FeeRefundCalculator, TypeInfo,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -520,7 +520,7 @@ pub struct DecodedXSwapParams {
 	pub from_token_account: Option<SolAddress>,
 	pub dst_address: crate::address::EncodedAddress,
 	pub dst_token: AnyChainAsset,
-	pub refund_parameters: ChannelRefundParameters,
+	pub refund_parameters: ChannelRefundParametersUncheckedEncoded,
 	pub dca_parameters: Option<DcaParameters>,
 	pub boost_fee: u8,
 	pub broker_id: cf_primitives::AccountId,
@@ -662,7 +662,7 @@ pub fn decode_sol_instruction_data(
 		from_token_account: src_token_from_account,
 		dst_address: EncodedAddress::from_chain_bytes(chain, dst_address)?,
 		dst_token: AnyChainAsset::try_from(dst_token).map_err(|_| "Invalid dst_token")?,
-		refund_parameters: refund_params.map_address(|addr| addr.into()),
+		refund_parameters: refund_params.map_address(Into::into),
 		dca_parameters: dca_params,
 		boost_fee,
 		broker_id: account,

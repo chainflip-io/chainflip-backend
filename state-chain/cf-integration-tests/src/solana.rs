@@ -34,7 +34,7 @@ use cf_chains::{
 		SolPubkey, SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmDepositMetadata, CcmDepositMetadataChecked,
-	CcmDepositMetadataUnchecked, Chain, ChannelRefundParameters, ChannelRefundParametersForChain,
+	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersUncheckedEncoded, ChannelRefundParametersForChain,
 	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
 	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
 };
@@ -88,7 +88,7 @@ const BOB: AccountId = AccountId::new([0x44; 32]);
 
 const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
 const FALLBACK_ADDRESS: SolAddress = SolAddress([0xf0; 32]);
-const REFUND_PARAMS: ChannelRefundParameters = ChannelRefundParameters {
+const REFUND_PARAMS: ChannelRefundParametersUncheckedEncoded = ChannelRefundParametersUncheckedEncoded {
 	retry_duration: 0,
 	refund_address: EncodedAddress::Sol(FALLBACK_ADDRESS.0),
 	min_price: sp_core::U256::zero(),
