@@ -21,6 +21,10 @@ use cf_traits::mocks::deregistration_check::MockDeregistrationCheck;
 use frame_support::{assert_noop, assert_ok, traits::HandleLifetime};
 use frame_system::Provider;
 
+use crate as pallet_cf_account_roles;
+
+use cf_test_utilities::assert_has_matching_event;
+
 type AccountRolesPallet = Pallet<Test>;
 
 const ALICE: u64 = 1;
@@ -197,5 +201,54 @@ fn deregistration_checks() {
 		assert!(
 			<Pallet<Test> as AccountRoleRegistry<_>>::deregister_account_role(&BOB, ROLE).is_ok()
 		);
+	});
+}
+
+#[test]
+fn derive_sub_account() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(AccountRolesPallet::derive_sub_account(RuntimeOrigin::signed(ALICE), 0, None));
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::MockAccountRoles(Event::SubAccountCreated {
+				account_id: ALICE,
+				sub_account_id: _,
+				sub_account_index: _,
+			})
+		);
+	});
+}
+
+#[test]
+fn execute_as_sub_account() {
+	new_test_ext().execute_with(|| {
+		const SUB_ACCOUNT_INDEX: u8 = 1;
+
+		let sub_account_id =
+			AccountRolesPallet::derive_sub_account_id(ALICE, SUB_ACCOUNT_INDEX).unwrap();
+
+		assert_ok!(AccountRolesPallet::derive_sub_account(
+			RuntimeOrigin::signed(ALICE),
+			SUB_ACCOUNT_INDEX,
+			None,
+		));
+		assert_ok!(AccountRolesPallet::as_sub_account(
+			RuntimeOrigin::signed(ALICE),
+			SUB_ACCOUNT_INDEX,
+			Box::new(RuntimeCall::MockAccountRoles(
+				pallet_cf_account_roles::Call::<Test>::set_vanity_name {
+					name: "Test Account".to_string().into_bytes().try_into().unwrap()
+				},
+			))
+		));
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::MockAccountRoles(Event::SubAccountCallExecuted {
+				account_id: ALICE,
+				sub_account_id: _,
+				sub_account_index: SUB_ACCOUNT_INDEX,
+			})
+		);
+		assert!(VanityNames::<Test>::get().contains_key(&sub_account_id));
 	});
 }

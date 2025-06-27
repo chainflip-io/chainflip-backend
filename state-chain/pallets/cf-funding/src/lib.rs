@@ -33,7 +33,7 @@ mod tests;
 use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
-	Funding,
+	Funding, RedemptionCheck, SpawnAccount,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -43,11 +43,15 @@ use frame_support::{
 		traits::{CheckedSub, One, UniqueSaturatedInto, Zero},
 		Saturating,
 	},
-	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, StorageVersion, UnixTime},
+	traits::{
+		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OriginTrait, StorageVersion,
+		UnixTime,
+	},
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
+use sp_runtime::DispatchError;
 use sp_std::{
 	cmp::{max, min},
 	collections::btree_map::BTreeMap,
@@ -538,6 +542,15 @@ pub mod pallet {
 
 		/// The rebalance amount must be at least the minimum funding amount.
 		MinimumRebalanceAmount,
+
+		/// The sub-account already exists.
+		SubAccountAlreadyExists,
+
+		/// Can not derive sub-account ID if the parent account is bidding in an auction.
+		CanNotDeriveSubAccountIdIfParentAccountIsBidding,
+
+		/// The sub-account does not exist.
+		SubAccountDoesNotExist,
 	}
 
 	#[pallet::call]
@@ -971,5 +984,47 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 		RestrictedBalances::<T>::remove(account_id);
 		BoundExecutorAddress::<T>::remove(account_id);
 		BoundRedeemAddress::<T>::remove(account_id);
+	}
+}
+
+impl<T: Config> SpawnAccount for Pallet<T> {
+	type AccountId = T::AccountId;
+	type Amount = T::Amount;
+
+	fn spawn_sub_account(
+		parent_account_id: T::AccountId,
+		sub_account_id: T::AccountId,
+		initial_balance: Option<T::Amount>,
+	) -> Result<(), DispatchError> {
+		if !T::RedemptionChecker::can_redeem(&parent_account_id) {
+			return Err(Error::<T>::CanNotDeriveSubAccountIdIfParentAccountIsBidding.into());
+		}
+
+		ensure!(
+			!frame_system::Pallet::<T>::account_exists(&sub_account_id),
+			Error::<T>::SubAccountAlreadyExists
+		);
+
+		frame_system::Provider::<T>::created(&sub_account_id)?;
+
+		if let Some(executor_address) = BoundExecutorAddress::<T>::get(&parent_account_id) {
+			BoundExecutorAddress::<T>::insert(&sub_account_id, executor_address);
+		}
+		if let Some(redeem_address) = BoundRedeemAddress::<T>::get(&parent_account_id) {
+			BoundRedeemAddress::<T>::insert(&sub_account_id, redeem_address);
+		}
+
+		Self::rebalance(
+			OriginFor::<T>::signed(parent_account_id.clone()),
+			sub_account_id.clone(),
+			None,
+			RedemptionAmount::Exact(initial_balance.unwrap_or(MinimumFunding::<T>::get())),
+		)?;
+
+		Ok(())
+	}
+
+	fn does_account_exist(account_id: &T::AccountId) -> bool {
+		frame_system::Pallet::<T>::account_exists(account_id)
 	}
 }

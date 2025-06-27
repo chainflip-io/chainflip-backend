@@ -49,6 +49,8 @@ use core::marker::PhantomData;
 /// Weight functions needed for pallet_cf_account_roles.
 pub trait WeightInfo {
 	fn set_vanity_name() -> Weight;
+	fn derive_sub_account() -> Weight;
+	fn as_sub_account() -> Weight;
 }
 
 /// Weights for pallet_cf_account_roles using the Substrate node and recommended hardware.
@@ -65,6 +67,18 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+
+	fn derive_sub_account() -> Weight {
+		Weight::from_parts(0, 0)
+			.saturating_add(T::DbWeight::get().reads(0_u64))
+			.saturating_add(T::DbWeight::get().writes(0_u64))
+	}
+
+	fn as_sub_account() -> Weight {
+		Weight::from_parts(0, 0)
+			.saturating_add(T::DbWeight::get().reads(0_u64))
+			.saturating_add(T::DbWeight::get().writes(0_u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -79,5 +93,17 @@ impl WeightInfo for () {
 		Weight::from_parts(15_116_000, 2031)
 			.saturating_add(ParityDbWeight::get().reads(1_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
+	}
+
+	fn derive_sub_account() -> Weight {
+		Weight::from_parts(0, 0)
+			.saturating_add(ParityDbWeight::get().reads(0_u64))
+			.saturating_add(ParityDbWeight::get().writes(0_u64))
+	}
+
+	fn as_sub_account() -> Weight {
+		Weight::from_parts(0, 0)
+			.saturating_add(ParityDbWeight::get().reads(0_u64))
+			.saturating_add(ParityDbWeight::get().writes(0_u64))
 	}
 }
