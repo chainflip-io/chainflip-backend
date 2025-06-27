@@ -546,9 +546,6 @@ pub mod pallet {
 		/// The sub-account already exists.
 		SubAccountAlreadyExists,
 
-		/// The sub-account ID derivation failed.
-		SubAccountIdDerivationFailed,
-
 		/// Can not derive sub-account ID if the parent account is bidding in an auction.
 		CanNotDeriveSubAccountIdIfParentAccountIsBidding,
 
