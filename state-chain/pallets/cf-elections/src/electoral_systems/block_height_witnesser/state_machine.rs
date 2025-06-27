@@ -86,7 +86,7 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 	type Context = ();
 	type Settings = ();
 	type Output = Result<Option<ChainProgress<T::Chain>>, &'static str>;
-	fn get_queries(s: &mut Self::State, _settings: &Self::Settings) -> Vec<Self::Query> {
+	fn get_queries(s: &mut Self::State) -> Vec<Self::Query> {
 		let witness_from_index = match s.phase {
 			BHWPhase::Starting => ChainBlockNumberOf::<T::Chain>::default(),
 			BHWPhase::Running { headers: _, witness_from } => witness_from,

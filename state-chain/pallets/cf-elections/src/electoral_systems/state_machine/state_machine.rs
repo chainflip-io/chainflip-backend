@@ -94,7 +94,7 @@ pub trait Statemachine: AbstractApi + 'static {
 
 	/// To every state, this function associates a set of input indices which
 	/// describes what kind of input(s) we want to receive next.
-	fn get_queries(state: &mut Self::State, settings: &Self::Settings) -> Vec<Self::Query>;
+	fn get_queries(state: &mut Self::State) -> Vec<Self::Query>;
 
 	fn validate_input(
 		state: &mut Self::State,
