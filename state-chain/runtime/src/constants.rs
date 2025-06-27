@@ -116,4 +116,9 @@ pub mod common {
 	/// dispatched to the witnessing deadline. After the deadline is passed, any authorities failed
 	/// to witness the dispatched call are penalized.
 	pub const LATE_WITNESS_GRACE_PERIOD: BlockNumber = 10u32;
+
+	/// How many blocks does a liveness election last. After `LIVENESS_CHECK_DURATION` blocks,
+	/// the liveness check will be performed, if validators have not voted OR voted for something
+	/// that wasn't the consensus value, they will be penalized.
+	pub const LIVENESS_CHECK_DURATION: BlockNumber = 10;
 }

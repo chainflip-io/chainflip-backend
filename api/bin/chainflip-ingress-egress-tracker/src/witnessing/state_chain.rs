@@ -713,7 +713,8 @@ where
 		Swapping(_) |
 		LiquidityProvider(_) |
 		LiquidityPools(_) |
-		SolanaElections(_) => {},
+		SolanaElections(_) |
+		BitcoinElections(_) |
 		TradingStrategy(_) => {},
 		LendingPools(_) => {},
 	};

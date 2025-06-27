@@ -198,7 +198,7 @@ fn vote_for_alt_election(
 			Runtime,
 			SolanaInstance,
 		>::vote {
-			authority_votes: vote.clone()
+			authority_votes: Box::new(vote.clone())
 		})
 		.dispatch_bypass_filter(RuntimeOrigin::signed(id)));
 	});
@@ -1077,7 +1077,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 
 				assert_ok!(SolanaElections::vote(
 					RuntimeOrigin::signed(v),
-					vote.clone()
+					Box::new(vote.clone())
 				));
 			}
 

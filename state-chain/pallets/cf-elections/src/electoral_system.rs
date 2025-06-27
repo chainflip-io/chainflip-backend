@@ -54,9 +54,9 @@ impl<ES: ElectoralSystemTypes> ConsensusVotes<ES> {
 
 /// A trait for defining all relevant types of an electoral system.
 pub trait ElectoralSystemTypes: 'static + Sized {
-	type ValidatorId: Parameter + Member + MaybeSerializeDeserialize;
+	type ValidatorId: Parameter + Member;
 
-	type StateChainBlockNumber: Parameter + Member + Ord + MaybeSerializeDeserialize;
+	type StateChainBlockNumber: Parameter + Member + Ord;
 
 	/// This is intended for storing any internal state of the ElectoralSystem. It is not
 	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
@@ -64,6 +64,9 @@ pub trait ElectoralSystemTypes: 'static + Sized {
 	///
 	/// Also note that if this state is changed that will not cause election's consensus to be
 	/// retested.
+	///
+	/// Note: This has the `MaybeSerializeDeserialize` bound because it appears in the genesis
+	/// config of the elections pallet, which has to be (de-)serializable.
 	type ElectoralUnsynchronisedState: Parameter + Member + MaybeSerializeDeserialize;
 	/// This is intended for storing any internal state of the ElectoralSystem. It is not
 	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
@@ -87,11 +90,17 @@ pub trait ElectoralSystemTypes: 'static + Sized {
 	///
 	/// Also note that if these settings are changed that will not cause election's consensus to be
 	/// retested.
+	///
+	/// Note: This has the `MaybeSerializeDeserialize` bound because it appears in the genesis
+	/// config of the elections pallet, which has to be (de-)serializable.
 	type ElectoralUnsynchronisedSettings: Parameter + Member + MaybeSerializeDeserialize;
 
 	/// Settings of the electoral system. These settings are synchronised with
 	/// elections, so all engines will have a consistent view of the electoral settings to use for a
 	/// given election.
+	///
+	/// Note: This has the `MaybeSerializeDeserialize` bound because it appears in the genesis
+	/// config of the elections pallet, which has to be (de-)serializable.
 	type ElectoralSettings: Parameter + Member + MaybeSerializeDeserialize + Eq;
 
 	/// Extra data stored along with the UniqueMonotonicIdentifier as part of the

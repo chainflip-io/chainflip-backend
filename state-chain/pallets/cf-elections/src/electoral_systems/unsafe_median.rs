@@ -30,6 +30,10 @@ use frame_support::{
 use itertools::Itertools;
 use sp_std::vec::Vec;
 
+pub trait UpdateFeeHook<Value> {
+	fn update_fee(fee: Value);
+}
+
 /// This electoral system calculates the median of all the authorities votes and stores the latest
 /// median in the `ElectoralUnsynchronisedState`. Each time consensus is gained, everyone is asked
 /// to revote, to provide a new updated value. *IMPORTANT*: This is not the most secure method as
@@ -38,12 +42,19 @@ use sp_std::vec::Vec;
 ///
 /// `Settings` can be used by governance to provide information to authorities about exactly how
 /// they should `vote`.
-pub struct UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId, StateChainBlockNumber>
-{
+pub struct UnsafeMedian<
+	Value,
+	UnsynchronisedSettings,
+	Settings,
+	Hook,
+	ValidatorId,
+	StateChainBlockNumber,
+> {
 	_phantom: core::marker::PhantomData<(
 		Value,
 		UnsynchronisedSettings,
 		Settings,
+		Hook,
 		ValidatorId,
 		StateChainBlockNumber,
 	)>,
@@ -52,10 +63,11 @@ impl<
 		Value: Member + Parameter + MaybeSerializeDeserialize + Ord + BenchmarkValue,
 		UnsynchronisedSettings: Member + Parameter + MaybeSerializeDeserialize,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
+		Hook: UpdateFeeHook<Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	> ElectoralSystemTypes
-	for UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId, StateChainBlockNumber>
+	for UnsafeMedian<Value, UnsynchronisedSettings, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	type ValidatorId = ValidatorId;
 	type StateChainBlockNumber = StateChainBlockNumber;
@@ -80,10 +92,11 @@ impl<
 		Value: Member + Parameter + MaybeSerializeDeserialize + Ord + BenchmarkValue,
 		UnsynchronisedSettings: Member + Parameter + MaybeSerializeDeserialize,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
+		Hook: UpdateFeeHook<Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	> ElectoralSystem
-	for UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId, StateChainBlockNumber>
+	for UnsafeMedian<Value, UnsynchronisedSettings, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
@@ -105,7 +118,8 @@ impl<
 			let election_access = ElectoralAccess::election_mut(election_identifier);
 			if let Some(consensus) = election_access.check_consensus()?.has_consensus() {
 				election_access.delete();
-				ElectoralAccess::set_unsynchronised_state(consensus)?;
+				ElectoralAccess::set_unsynchronised_state(consensus.clone())?;
+				Hook::update_fee(consensus);
 				ElectoralAccess::new_election((), (), ())?;
 			}
 		} else {
