@@ -1020,7 +1020,7 @@ pub trait AssetConverter {
 	fn calculate_input_for_gas_output<C: Chain>(
 		input_asset: C::ChainAsset,
 		required_gas: C::ChainAmount,
-	) -> Option<C::ChainAmount>;
+	) -> C::ChainAmount;
 
 	/// Calculate the amount that is required to receive the given amount of a different asset after
 	/// a swap.

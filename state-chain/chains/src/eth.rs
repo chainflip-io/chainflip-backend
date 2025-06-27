@@ -25,6 +25,7 @@ use crate::{
 	evm::{DeploymentStatus, EvmFetchId, EvmTransactionMetadata, Transaction},
 	Chain, FeeEstimationApi, *,
 };
+use assets::eth::Asset as EthAsset;
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Ethereum;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -33,6 +34,7 @@ use evm::api::EvmReplayProtection;
 use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
 use sp_std::{cmp::min, convert::TryInto, str};
 
 // Reference constants for the chain spec
@@ -43,9 +45,12 @@ pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_SEPOLIA: u64 = 11155111;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
+pub const REFERENCE_ETH_PRICE_IN_USD: AssetAmount = 2_200_000_000u128; //2200 usd
+pub const REFERENCE_FLIP_PRICE_IN_USD: AssetAmount = 330_000u128; //0.33 usd
+
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
-	const GAS_ASSET: Self::ChainAsset = assets::eth::Asset::Eth;
+	const GAS_ASSET: Self::ChainAsset = EthAsset::Eth;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 
 	type ChainCrypto = evm::EvmCrypto;
@@ -53,7 +58,7 @@ impl Chain for Ethereum {
 	type ChainAmount = EthAmount;
 	type TransactionFee = evm::TransactionFee;
 	type TrackedData = EthereumTrackedData;
-	type ChainAsset = assets::eth::Asset;
+	type ChainAsset = EthAsset;
 	type ChainAssetMap<
 		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = assets::eth::AssetMap<T>;
@@ -66,6 +71,29 @@ impl Chain for Ethereum {
 	type TransactionRef = H256;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EvmReplayProtection;
+
+	fn input_asset_amount_using_reference_gas_asset_price(
+		input_asset: Self::ChainAsset,
+		required_gas: Self::ChainAmount,
+	) -> Self::ChainAmount {
+		match input_asset {
+			EthAsset::Usdt | EthAsset::Usdc => multiply_by_rational_with_rounding(
+				required_gas,
+				REFERENCE_ETH_PRICE_IN_USD,
+				1_000_000_000_000_000_000u128,
+				sp_runtime::Rounding::Up,
+			)
+			.unwrap_or(0u128),
+			EthAsset::Flip => multiply_by_rational_with_rounding(
+				required_gas,
+				REFERENCE_ETH_PRICE_IN_USD,
+				REFERENCE_FLIP_PRICE_IN_USD,
+				sp_runtime::Rounding::Up,
+			)
+			.unwrap_or(0u128),
+			EthAsset::Eth => required_gas,
+		}
+	}
 }
 
 #[derive(

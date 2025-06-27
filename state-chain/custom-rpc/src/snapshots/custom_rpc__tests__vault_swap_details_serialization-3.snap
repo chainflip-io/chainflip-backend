@@ -1,10 +1,12 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
+assertion_line: 837
 expression: arb
 ---
 {
   "chain": "Arbitrum",
   "calldata": "0x11223344",
   "value": "0x23cace",
-  "to": "0xcccccccccccccccccccccccccccccccccccccccc"
+  "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+  "source_token_address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 }

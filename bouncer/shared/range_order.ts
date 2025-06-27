@@ -37,11 +37,12 @@ export async function rangeOrder(
       event.data.id === String(orderId || 0),
   }).event;
   await lpMutex.runExclusive(async () => {
+    const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityPools
       .setRangeOrder(ccy.toLowerCase(), 'usdc', orderId || 0, [-887272, 887272], {
         Liquidity: { Liquidity: liquidity },
       })
-      .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
+      .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
   });
   await orderCreatedEvent;
 }

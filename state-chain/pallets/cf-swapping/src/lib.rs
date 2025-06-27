@@ -2462,14 +2462,19 @@ pub mod pallet {
 		fn calculate_input_for_gas_output<C: Chain>(
 			input_asset: C::ChainAsset,
 			required_gas: C::ChainAmount,
-		) -> Option<C::ChainAmount> {
+		) -> C::ChainAmount {
+			let input_asset_generic: Asset = input_asset.into();
 			Self::calculate_input_for_desired_output(
-				input_asset.into(),
+				input_asset_generic,
 				C::GAS_ASSET.into(),
 				required_gas.into(),
 				true,
 			)
 			.and_then(|amount| C::ChainAmount::try_from(amount).ok())
+			.unwrap_or_else(|| {
+				log::warn!("Unable to calculate input amount required for gas of {required_gas:?} for input asset ${input_asset:?}. Estimating the input amount based on a reference price.");
+				C::input_asset_amount_using_reference_gas_asset_price(input_asset,required_gas)
+			})
 		}
 
 		fn calculate_input_for_desired_output(

@@ -89,11 +89,13 @@ async function testRegisterLiquidityRefundAddress(parentLogger: Logger) {
 }
 
 async function testLiquidityDepositLegacy(logger: Logger) {
+  const lpAccount = createStateChainKeypair('//LP_API');
+
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
     logger,
     'liquidityProvider:LiquidityDepositAddressReady',
     {
-      test: (event) => event.data.depositAddress.Eth,
+      test: (event) => event.data.depositAddress.Eth && event.data.accountId === lpAccount.address,
     },
   ).event;
 
@@ -137,11 +139,13 @@ async function testLiquidityDepositLegacy(logger: Logger) {
 }
 
 async function testLiquidityDeposit(logger: Logger) {
+  const lpAccount = createStateChainKeypair('//LP_API');
+
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
     logger,
     'liquidityProvider:LiquidityDepositAddressReady',
     {
-      test: (event) => event.data.depositAddress.Eth,
+      test: (event) => event.data.depositAddress.Eth && event.data.accountId === lpAccount.address,
     },
   ).event;
 
@@ -212,9 +216,10 @@ async function testTransferAsset(logger: Logger) {
   // Destination account needs a refund address too.
   const chain = shortChainFromAsset(testAsset);
   const refundAddress = await newAddress(testAsset, '//LP_2');
+  const nonce = await chainflip.rpc.system.accountNextIndex(destinationLpAccount.address);
   await chainflip.tx.liquidityProvider
     .registerLiquidityRefundAddress({ [chain]: refundAddress })
-    .signAndSend(destinationLpAccount, { nonce: -1 }, handleSubstrateError(chainflip));
+    .signAndSend(destinationLpAccount, { nonce }, handleSubstrateError(chainflip));
 
   const oldBalanceSource = await getLpBalance(sourceLpAccount.address);
   const oldBalanceDestination = await getLpBalance(destinationLpAccount.address);

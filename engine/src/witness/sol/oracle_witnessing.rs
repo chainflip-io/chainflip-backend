@@ -136,50 +136,45 @@ mod tests {
 
 	use super::*;
 
-	// TODO: PRO-2320: Add same test for mainnet when the `oracle_query_helper` is deployed to make
-	// sure it works and that the prefunded account is prefunded correctly
+	struct TestConfig {
+		endpoint: &'static str,
+		sol_hash: Option<&'static str>,
+		oracle_program_id: &'static str,
+		oracle_feeds: Vec<&'static str>,
+		oracle_query_helper: &'static str,
+		expected_description: Vec<&'static str>,
+	}
 
-	#[ignore = "requires access to external RPC"]
-	#[tokio::test]
-	async fn can_build_query_tx_and_simulate_devnet() {
+	async fn run_query_test(config: TestConfig) -> Result<(), anyhow::Error> {
 		task_scope::task_scope(|scope| {
 			async {
+				let sol_hash =
+					config.sol_hash.map(|hash| SolHash::from_str(hash).expect("Invalid SolHash"));
+
 				let client = SolRetryRpcClient::new(
 					scope,
 					NodeContainer {
-						primary: HttpEndpoint {
-							http_endpoint: "https://api.devnet.solana.com".into(),
-						},
+						primary: HttpEndpoint { http_endpoint: config.endpoint.into() },
 						backup: None,
 					},
-					Some(
-						SolHash::from_str("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG").unwrap(),
-					),
+					sol_hash,
 					Solana::WITNESS_PERIOD,
 				)
-				.await
-				.unwrap();
+				.await?;
 
-				let oracle_program_id: SolAddress =
-					const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny");
-				let oracle_feed: SolAddress =
-					const_address("6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe");
-				let oracle_query_helper: SolAddress =
-					const_address("HaAGuDMxS56xgoy9vzm1NtESKftoqpiHCysvXRULk7K7");
+				let oracle_program_id = const_address(config.oracle_program_id);
+				let oracle_feeds =
+					config.oracle_feeds.clone().into_iter().map(const_address).collect::<Vec<_>>();
+				let oracle_query_helper = const_address(config.oracle_query_helper);
 
 				let serialized_transaction = build_and_serialize_query_transaction(
 					oracle_query_helper,
 					oracle_program_id,
-					vec![oracle_feed],
-				)
-				.unwrap();
+					oracle_feeds,
+				)?;
 
 				let simulation_result =
 					client.simulate_transaction(serialized_transaction, None).await;
-
-				let slot = simulation_result.context.slot;
-				println!("Simulation slot: {}", slot);
-
 				let return_data = simulation_result
 					.value
 					.return_data
@@ -187,23 +182,66 @@ mod tests {
 					.expect("Expected return data to be Some");
 
 				let (price_feeds, query_timestamp) =
-					decode_query_return_data(return_data, oracle_query_helper).unwrap();
+					decode_query_return_data(return_data, oracle_query_helper)?;
+
 				println!("Query Timestamp: {}", query_timestamp);
-
-				let PriceFeedData { round_id, slot, timestamp, answer, decimals, description } =
-					price_feeds.first().unwrap();
-
-				println!(
-					"Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}, Decimals: {}, Description: {}",
-					round_id, slot, timestamp, answer, decimals, description
+				// Ensure the number of price feeds matches the number of expected descriptions
+				assert_eq!(
+					price_feeds.len(),
+					config.expected_description.len(),
+					"Mismatch between number of price feeds and expected descriptions"
 				);
 
-				assert_eq!(*decimals, 8);
-				assert_eq!(description, "BTC / USD");
+				for (result_index, (price_feed, expected_desc)) in
+					price_feeds.iter().zip(config.expected_description.iter()).enumerate()
+				{
+					let PriceFeedData { round_id, slot, timestamp, answer, decimals, description } =
+						price_feed;
+
+					println!(
+						"Index {}: Description: {}, Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}, Decimals: {}",
+						result_index, description, round_id, slot, timestamp, answer, decimals
+					);
+					assert_eq!(*decimals, 8);
+					assert_eq!(
+						description, expected_desc,
+						"Description mismatch at index {}",
+						result_index
+					);
+				}
 
 				Ok(())
 			}
 			.boxed()
+		})
+		.await
+	}
+
+	#[ignore = "requires access to external RPC"]
+	#[tokio::test]
+	async fn can_build_query_tx_and_simulate_mainnet() {
+		run_query_test(TestConfig {
+			endpoint: "https://api.mainnet-beta.solana.com",
+			sol_hash: Some("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"),
+			oracle_program_id: "HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny",
+			oracle_feeds: vec!["Cv4T27XbjVoKUYwP72NQQanvZeA7W4YF9L4EnYT9kx5o"],
+			oracle_query_helper: "5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX",
+			expected_description: vec!["BTC / USD"],
+		})
+		.await
+		.unwrap();
+	}
+
+	#[ignore = "requires access to external RPC"]
+	#[tokio::test]
+	async fn can_build_query_tx_and_simulate_devnet() {
+		run_query_test(TestConfig {
+			endpoint: "https://api.devnet.solana.com",
+			sol_hash: Some("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"),
+			oracle_program_id: "HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny",
+			oracle_feeds: vec!["6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe"],
+			oracle_query_helper: "5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX",
+			expected_description: vec!["BTC / USD"],
 		})
 		.await
 		.unwrap();
@@ -212,67 +250,16 @@ mod tests {
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
 	async fn can_query_multiple_devnet() {
-		task_scope::task_scope(|scope| {
-			async {
-				let client = SolRetryRpcClient::new(
-					scope,
-					NodeContainer {
-						primary: HttpEndpoint {
-							http_endpoint: "https://api.devnet.solana.com".into(),
-						},
-						backup: None,
-					},
-					Some(
-						SolHash::from_str("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG").unwrap(),
-					),
-					Solana::WITNESS_PERIOD,
-				)
-				.await
-				.unwrap();
-
-				let oracle_program_id: SolAddress =
-					const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny");
-				let oracle_feeds = vec![
-					const_address("6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe"),
-					const_address("669U43LNHx7LsVj95uYksnhXUfWKDsdzVqev3V4Jpw3P"),
-				];
-				let oracle_query_helper: SolAddress =
-					const_address("HaAGuDMxS56xgoy9vzm1NtESKftoqpiHCysvXRULk7K7");
-
-				let serialized_transaction = build_and_serialize_query_transaction(
-					oracle_query_helper,
-					oracle_program_id,
-					oracle_feeds,
-				)
-				.unwrap();
-
-				let simulation_result =
-					client.simulate_transaction(serialized_transaction, None).await;
-
-				let return_data = simulation_result
-					.value
-					.return_data
-					.as_ref()
-					.expect("Expected return data to be Some");
-
-				let (price_feeds, _) =
-					decode_query_return_data(return_data, oracle_query_helper).unwrap();
-
-				for (result_index, price_feed) in price_feeds.iter().enumerate() {
-					let PriceFeedData { round_id, slot, timestamp, answer, decimals, description } =
-						price_feed;
-
-					println!(
-						"Index {}: Description: {}, Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}, Decimals: {}",
-						result_index,
-						round_id, slot, timestamp, answer, decimals, description
-					);
-					assert_eq!(*decimals, 8);
-				}
-
-				Ok(())
-			}
-			.boxed()
+		run_query_test(TestConfig {
+			endpoint: "https://api.devnet.solana.com",
+			sol_hash: Some("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"),
+			oracle_program_id: "HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny",
+			oracle_feeds: vec![
+				"6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe",
+				"669U43LNHx7LsVj95uYksnhXUfWKDsdzVqev3V4Jpw3P",
+			],
+			oracle_query_helper: "5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX",
+			expected_description: vec!["BTC / USD", "ETH / USD"],
 		})
 		.await
 		.unwrap();
@@ -281,59 +268,13 @@ mod tests {
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
 	async fn can_build_query_tx_and_simulate_localnet() {
-		task_scope::task_scope(|scope| {
-			async {
-				let client = SolRetryRpcClient::new(
-					scope,
-					NodeContainer {
-						primary: HttpEndpoint { http_endpoint: "http://127.0.0.1:8899".into() },
-						backup: None,
-					},
-					None,
-					Solana::WITNESS_PERIOD,
-				)
-				.await
-				.unwrap();
-
-				let oracle_program_id: SolAddress =
-					const_address("DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X");
-				let oracle_feed: SolAddress =
-					const_address("HDSV2wFxmsrmCwwY34QzaVkvmJpG7VF8S9fX2iThynjG");
-				let oracle_query_helper: SolAddress =
-					const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z");
-
-				let serialized_transaction = build_and_serialize_query_transaction(
-					oracle_query_helper,
-					oracle_program_id,
-					vec![oracle_feed],
-				)
-				.unwrap();
-
-				let simulation_result =
-					client.simulate_transaction(serialized_transaction, None).await;
-				let return_data = simulation_result
-					.value
-					.return_data
-					.as_ref()
-					.expect("Expected return data to be Some");
-
-				let (price_feeds, _) =
-					decode_query_return_data(return_data, oracle_query_helper).unwrap();
-
-				let PriceFeedData { round_id, slot, timestamp, answer, decimals, description } =
-					price_feeds.first().unwrap();
-
-				println!(
-					"Round ID: {}, Slot: {}, Timestamp: {}, Answer: {}, Decimals: {}, Description: {}",
-					round_id, slot, timestamp, answer, decimals, description
-				);
-
-				assert_eq!(*decimals, 8);
-				assert_eq!(description, "BTC / USD");
-
-				Ok(())
-			}
-			.boxed()
+		run_query_test(TestConfig {
+			endpoint: "http://127.0.0.1:8899",
+			sol_hash: None,
+			oracle_program_id: "DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X",
+			oracle_feeds: vec!["HDSV2wFxmsrmCwwY34QzaVkvmJpG7VF8S9fX2iThynjG"],
+			oracle_query_helper: "GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z",
+			expected_description: vec!["BTC / USD"],
 		})
 		.await
 		.unwrap();

@@ -27,14 +27,19 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+#[macro_use]
+extern crate proptest;
+
 use cf_primitives::{Asset, AssetAmount, StablecoinDefaults, Tick, STABLE_ASSET};
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
 	IncreaseOrDecrease, LpOrdersWeightsProvider, LpRegistration, OrderId, PoolApi, Side,
 };
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{traits::One, FixedU64},
+	sp_runtime::{traits::One, FixedU64, Permill},
 	traits::HandleLifetime,
 };
 use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
@@ -48,9 +53,10 @@ pub use pallet::*;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-// Note that strategies can only create one order per asset/side so we can just
-// have a fixed order id (at least until we develop more advanced strategies).
-const STRATEGY_ORDER_ID: OrderId = 0;
+// Note that strategies can only create a limited number of orders per asset/side so we can just
+// have fixed order ids (at least until we develop more advanced strategies).
+const STRATEGY_ORDER_ID_0: OrderId = 0;
+const STRATEGY_ORDER_ID_1: OrderId = 1;
 
 impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closure_enabled, strategy_execution_enabled);
 
@@ -58,8 +64,22 @@ impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closur
 	Clone, Debug, Encode, Decode, TypeInfo, serde::Serialize, serde::Deserialize, PartialEq, Eq,
 )]
 pub enum TradingStrategy {
-	TickZeroCentered { spread_tick: Tick, base_asset: Asset },
-	SimpleBuySell { buy_tick: Tick, sell_tick: Tick, base_asset: Asset },
+	TickZeroCentered {
+		spread_tick: Tick,
+		base_asset: Asset,
+	},
+	SimpleBuySell {
+		buy_tick: Tick,
+		sell_tick: Tick,
+		base_asset: Asset,
+	},
+	InventoryBased {
+		min_buy_tick: Tick,
+		max_buy_tick: Tick,
+		min_sell_tick: Tick,
+		max_sell_tick: Tick,
+		base_asset: Asset,
+	},
 }
 
 #[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -87,7 +107,8 @@ impl TradingStrategy {
 	pub fn supported_assets(&self) -> BTreeSet<Asset> {
 		match self {
 			TradingStrategy::TickZeroCentered { base_asset, .. } |
-			TradingStrategy::SimpleBuySell { base_asset, .. } =>
+			TradingStrategy::SimpleBuySell { base_asset, .. } |
+			TradingStrategy::InventoryBased { base_asset, .. } =>
 				BTreeSet::from_iter([*base_asset, STABLE_ASSET]),
 		}
 	}
@@ -105,6 +126,37 @@ impl TradingStrategy {
 					*sell_tick > cf_amm_math::MAX_TICK ||
 					*buy_tick < cf_amm_math::MIN_TICK ||
 					*sell_tick < cf_amm_math::MIN_TICK
+				{
+					return Err(Error::<T>::InvalidTick)
+				}
+				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
+			},
+			TradingStrategy::InventoryBased {
+				min_buy_tick,
+				max_buy_tick,
+				min_sell_tick,
+				max_sell_tick,
+				base_asset,
+			} => {
+				let average_buy_tick = average_tick(
+					*min_buy_tick,
+					*max_buy_tick,
+					false, // round down
+				);
+				let average_sell_tick = average_tick(
+					*min_sell_tick,
+					*max_sell_tick,
+					true, // round up
+				);
+
+				if min_buy_tick > max_buy_tick ||
+					min_sell_tick > max_sell_tick ||
+					min_sell_tick < &average_buy_tick ||
+					max_buy_tick > &average_sell_tick ||
+					*max_buy_tick > cf_amm_math::MAX_TICK ||
+					*max_sell_tick > cf_amm_math::MAX_TICK ||
+					*min_buy_tick < cf_amm_math::MIN_TICK ||
+					*min_sell_tick < cf_amm_math::MIN_TICK
 				{
 					return Err(Error::<T>::InvalidTick)
 				}
@@ -237,6 +289,7 @@ pub mod pallet {
 								(-spread_tick, spread_tick),
 							TradingStrategy::SimpleBuySell { buy_tick, sell_tick, .. } =>
 								(buy_tick, sell_tick),
+							_ => unreachable!("Unreachable due to match above"),
 						};
 						for (side, tick) in [(Side::Buy, buy_tick), (Side::Sell, sell_tick)] {
 							let sell_asset =
@@ -263,11 +316,99 @@ pub mod pallet {
 									base_asset,
 									STABLE_ASSET,
 									side,
-									STRATEGY_ORDER_ID,
+									STRATEGY_ORDER_ID_0,
 									Some(tick),
 									IncreaseOrDecrease::Increase(balance),
 								);
 							}
+						}
+					},
+					TradingStrategy::InventoryBased {
+						min_buy_tick,
+						max_buy_tick,
+						min_sell_tick,
+						max_sell_tick,
+						base_asset,
+					} => {
+						let new_weight_estimate =
+							weight_used.saturating_add(limit_order_update_weight * 3);
+
+						if remaining_weight.checked_sub(&new_weight_estimate).is_none() {
+							break;
+						}
+
+						// Get the free balance and thresholds of both assets
+						let balance_quote = T::BalanceApi::get_balance(&strategy_id, STABLE_ASSET);
+						let balance_base = T::BalanceApi::get_balance(&strategy_id, base_asset);
+						weight_used += T::DbWeight::get().reads(2);
+
+						// Minimum threshold of 1 to prevent updating with 0 amounts
+						let base_threshold = core::cmp::max(
+							order_update_thresholds.get(&base_asset).copied().unwrap_or(u128::MAX),
+							1,
+						);
+						let quote_threshold = core::cmp::max(
+							order_update_thresholds
+								.get(&STABLE_ASSET)
+								.copied()
+								.unwrap_or(u128::MAX),
+							1,
+						);
+
+						// Wait until the total amount in the free balance is large enough to
+						// trigger an update of all orders.
+						if balance_quote + balance_base >= base_threshold.min(quote_threshold) {
+							// Close all open orders for the strategy
+							if let Err(e) = T::PoolApi::cancel_all_limit_orders(&strategy_id) {
+								log_or_panic!(
+									"Failed to cancel all limit orders for strategy {:?}: {:?}",
+									strategy_id,
+									e
+								);
+								continue;
+							}
+							weight_used += limit_order_update_weight * 3;
+
+							// Get the new balance now that the orders are closed
+							let quote_amount =
+								T::BalanceApi::get_balance(&strategy_id, STABLE_ASSET);
+							let base_amount = T::BalanceApi::get_balance(&strategy_id, base_asset);
+							weight_used += T::DbWeight::get().reads(2);
+
+							// Use the balance of assets to calculate the desired limit orders
+							let total = quote_amount.saturating_add(base_amount);
+							let new_sell_orders = inventory_based_strategy_logic(
+								base_amount,
+								total,
+								min_sell_tick,
+								max_sell_tick,
+								Side::Sell,
+							);
+							let new_buy_orders = inventory_based_strategy_logic(
+								quote_amount,
+								total,
+								min_buy_tick,
+								max_buy_tick,
+								Side::Buy,
+							);
+
+							// Create the new desired orders
+							[(Side::Sell, new_sell_orders), (Side::Buy, new_buy_orders)]
+								.into_iter()
+								.for_each(|(side, orders)| {
+									orders.iter().for_each(|(tick, (order_id, amount))| {
+										weight_used += limit_order_update_weight;
+										let _result = T::PoolApi::update_limit_order(
+											&strategy_id,
+											base_asset,
+											STABLE_ASSET,
+											side,
+											*order_id,
+											Some(*tick),
+											IncreaseOrDecrease::Increase(*amount),
+										);
+									})
+								});
 						}
 					},
 				}
@@ -528,6 +669,88 @@ impl<T: Config> Pallet<T> {
 				acc + fraction_of_required
 			}) >= FixedU64::one(),
 		)
+	}
+}
+
+/// Logic for one side of the inventory-based strategy.
+///
+/// Given the amount of asset on this side compared to the total amount on both sides, returns
+/// the limit orders that should be created. The logic is as follows:
+/// If there is too much asset on this side, ie amount > half_total, then we want 2 limit
+/// orders:
+/// 1. A simple order at the average tick between min_tick and max_tick, with half of the total
+///    amount.
+/// 2. A dynamic order at a tick that is more aggressive than the average tick with the remaining
+///    amount.
+///
+/// The reason for splitting the order in 2 is to avoid having all of the asset at the most
+///    aggressive tick get executed and become an order on the opposite side also at the most
+///    aggressive tick, stuck in a non-profitable loop. By splitting the order at the half
+///    total we maximize the chance of the strategy balancing out to 50/50 over time.
+///
+/// If there is not too much asset on this side, ie amount <= half_total, then we want 1 limit
+/// order:
+/// 1. A dynamic order at a tick that is more defensive than the average tick. This is the same
+///    logic as the dynamic order above.
+fn inventory_based_strategy_logic(
+	amount: AssetAmount,
+	total: AssetAmount,
+	min_tick: Tick,
+	max_tick: Tick,
+	side: Side,
+) -> BTreeMap<Tick, (OrderId, AssetAmount)> {
+	if total == 0 {
+		return BTreeMap::default();
+	}
+	let mut orders = BTreeMap::new();
+	let half_total = total / 2;
+
+	// Simple order logic:
+	let remaining_amount = if amount >= half_total {
+		// Get the average tick, making sure to round the tick defensively
+		let round_up = side == Side::Sell;
+		let average_tick = average_tick(min_tick, max_tick, round_up);
+		orders.insert(average_tick, (STRATEGY_ORDER_ID_1, half_total));
+		amount.saturating_sub(half_total)
+	} else {
+		amount
+	};
+
+	// Dynamic order logic:
+	if remaining_amount > 0 {
+		// Calculate the tick based on the fraction of the total amount
+		let tick_adjustment =
+			(Permill::from_rational(amount, total) * ((max_tick - min_tick).unsigned_abs())) as i32;
+		let dynamic_tick =
+			if side == Side::Buy { min_tick + tick_adjustment } else { max_tick - tick_adjustment };
+		// Merge the order if its at the same tick as the simple order, or just add a new
+		// order.
+		orders
+			.entry(dynamic_tick)
+			.and_modify(|(_order_id, amount)| *amount += remaining_amount)
+			.or_insert((STRATEGY_ORDER_ID_0, remaining_amount));
+	}
+
+	orders
+}
+
+// Returns the average tick between two ticks, with rounding control.
+fn average_tick(tick_1: Tick, tick_2: Tick, round_up: bool) -> Tick {
+	let tick = tick_1.saturating_add(tick_2);
+	if round_up {
+		// Round up
+		if tick < 0 {
+			(tick) / 2
+		} else {
+			(tick.saturating_add(1)) / 2
+		}
+	} else {
+		// Round down
+		if tick < 0 {
+			(tick.saturating_sub(1)) / 2
+		} else {
+			(tick) / 2
+		}
 	}
 }
 

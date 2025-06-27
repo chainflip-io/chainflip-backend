@@ -34,7 +34,7 @@ import { getChainflipApi, observeBadEvent, observeEvent } from 'shared/utils/sub
 import { execWithLog } from 'shared/utils/exec_with_log';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
-import { Logger, throwError } from 'shared/utils/logger';
+import { Logger, loggerError, throwError } from 'shared/utils/logger';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -306,15 +306,27 @@ export function stateChainAssetFromAsset(asset: Asset): string {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
-export const runWithTimeout = async <T>(promise: Promise<T>, seconds: number): Promise<T> =>
-  Promise.race([
+export async function runWithTimeout<T>(
+  promise: Promise<T>,
+  seconds: number,
+  logger?: Logger,
+  taskDescription?: string,
+): Promise<T> {
+  // Add the task description to the error message if provided
+  let error = new Error(
+    `Timed out after ${seconds}s.` + (taskDescription ? ` Waiting on: ${taskDescription}` : ''),
+  );
+  if (logger) {
+    // Add the logger info to the error message if a logger is provided
+    error = loggerError(logger, error);
+  }
+  return Promise.race([
     promise,
-    sleep(seconds * 1000, new Error(`Timed out after ${seconds}s.`), { ref: false }).then(
-      (error) => {
-        throw error;
-      },
-    ),
+    sleep(seconds * 1000, error, { ref: false }).then((e) => {
+      throw e;
+    }),
   ]);
+}
 
 /// Runs the given promise with a timeout and handles exiting the process. Used for running commands.
 export async function runWithTimeoutAndExit<T>(
@@ -1097,8 +1109,9 @@ export async function submitChainflipExtrinsic(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let extrinsicResult: any;
+  const nonce = await chainflipApi.rpc.system.accountNextIndex(account.address);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await extrinsic.signAndSend(account, { nonce: -1 }, (arg: any) => {
+  await extrinsic.signAndSend(account, { nonce }, (arg: any) => {
     if (arg.blockNumber !== undefined || arg.dispatchError !== undefined) {
       extrinsicResult = arg;
     }

@@ -131,6 +131,16 @@ impl Chain for MockEthereum {
 	type TransactionRef = u32;
 	type ReplayProtectionParams = ();
 	type ReplayProtection = EvmReplayProtection;
+
+	fn input_asset_amount_using_reference_gas_asset_price(
+		input_asset: Self::ChainAsset,
+		required_gas: Self::ChainAmount,
+	) -> Self::ChainAmount {
+		<Ethereum as Chain>::input_asset_amount_using_reference_gas_asset_price(
+			input_asset,
+			required_gas,
+		)
+	}
 }
 
 impl ToHumanreadableAddress for u64 {

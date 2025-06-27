@@ -42,9 +42,10 @@ async function createPolkadotVault(logger: Logger, api: DisposableApiPromise) {
   }>();
 
   const alice = await aliceKeyringPair();
+  const nonce = await api.rpc.system.accountNextIndex(alice.address);
   const unsubscribe = await api.tx.proxy
     .createPure(api.createType('ProxyType', 'Any'), 0, 0)
-    .signAndSend(alice, { nonce: -1 }, (result) => {
+    .signAndSend(alice, { nonce }, (result) => {
       if (result.isError) {
         handleSubstrateError(api)(result);
       }
@@ -83,6 +84,7 @@ async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, ke
     ]),
   );
 
+  const nonce = await api.rpc.system.accountNextIndex(alice.address);
   const unsubscribe = await api.tx.utility
     .batchAll([
       // Note the vault needs to be funded before we rotate.
@@ -90,7 +92,7 @@ async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, ke
       api.tx.balances.transferKeepAlive(key, 1000000000000),
       rotation,
     ])
-    .signAndSend(alice, { nonce: -1 }, (result) => {
+    .signAndSend(alice, { nonce }, (result) => {
       if (result.isError) {
         handleSubstrateError(api)(result);
       }
@@ -184,32 +186,53 @@ async function main(): Promise<void> {
 
   // Step 7
   logger.info('Registering Vaults with state chain');
+  const polkadotVaultCreatedEvent = observeEvent(
+    logger,
+    'polkadotVault:VaultActivationCompleted',
+  ).event;
   await submitGovernanceExtrinsic((chainflip) =>
     chainflip.tx.environment.witnessPolkadotVaultCreation(dotVaultAddress, {
       blockNumber: dotVaultEvent.block,
       extrinsicIndex: dotVaultEvent.eventIndex,
     }),
   );
+  await polkadotVaultCreatedEvent;
+
+  const assethubVaultCreatedEvent = observeEvent(
+    logger,
+    'assethubVault:VaultActivationCompleted',
+  ).event;
   await submitGovernanceExtrinsic((chainflip) =>
     chainflip.tx.environment.witnessAssethubVaultCreation(hubVaultAddress, {
       blockNumber: hubVaultEvent.block,
       extrinsicIndex: hubVaultEvent.eventIndex,
     }),
   );
+  await assethubVaultCreatedEvent;
+
+  const bitcoinBlocknumberSetEvent = observeEvent(
+    logger,
+    'environment:BitcoinBlockNumberSetForVault',
+  ).event;
   await submitGovernanceExtrinsic(async (chainflip) =>
     chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(
       await btcClient.getBlockCount(),
       btcKey,
     ),
   );
+  await bitcoinBlocknumberSetEvent;
 
+  const arbitrumInitializedEvent = observeEvent(logger, 'environment:ArbitrumInitialized').event;
   await submitGovernanceExtrinsic(async (chainflip) =>
     chainflip.tx.environment.witnessInitializeArbitrumVault(await arbClient.eth.getBlockNumber()),
   );
+  await arbitrumInitializedEvent;
 
+  const solanaInitializedEvent = observeEvent(logger, 'environment:SolanaInitialized').event;
   await submitGovernanceExtrinsic(async (chainflip) =>
     chainflip.tx.environment.witnessInitializeSolanaVault(await solClient.getSlot()),
   );
+  await solanaInitializedEvent;
 
   // Step 8
   logger.info('Setting up price feeds');

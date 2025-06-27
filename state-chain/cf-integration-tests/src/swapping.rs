@@ -153,8 +153,7 @@ pub fn do_eth_swap(
 		Swapping::calculate_input_for_gas_output::<Ethereum>(
 			from_eth_asset,
 			EthereumChainTracking::estimate_ingress_fee(from_eth_asset),
-		)
-		.unwrap_or_default(),
+		),
 		u128::MAX,
 	);
 	System::reset_events();
@@ -487,8 +486,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Swapping::calculate_input_for_gas_output::<Ethereum>(
 				EthAsset::Flip,
 				EthereumChainTracking::estimate_ingress_fee(EthAsset::Flip),
-			)
-			.unwrap(),
+			),
 			u128::MAX,
 		);
 		witness_call(RuntimeCall::EthereumIngressEgress(

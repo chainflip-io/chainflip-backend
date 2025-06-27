@@ -51,6 +51,13 @@ impl Chain for AnyChain {
 	type TransactionRef = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
+
+	fn input_asset_amount_using_reference_gas_asset_price(
+		_input_asset: Self::ChainAsset,
+		_required_gas: Self::ChainAmount,
+	) -> Self::ChainAmount {
+		0
+	}
 }
 
 impl FeeRefundCalculator<AnyChain> for () {
