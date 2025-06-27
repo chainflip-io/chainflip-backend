@@ -552,6 +552,9 @@ pub mod pallet {
 
 		/// Can not derive sub-account ID if the parent account is bidding in an auction.
 		CanNotDeriveSubAccountIdIfParentAccountIsBidding,
+
+		/// The sub-account does not exist.
+		SubAccountDoesNotExist,
 	}
 
 	#[pallet::call]
@@ -988,8 +991,8 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> SubAccountHandler<T::AccountId> for Pallet<T> {
-	fn derive_sub_account(
+impl<T: Config> SubAccountHandler<T::AccountId, T::Amount> for Pallet<T> {
+	fn derive_sub_account_and_ensure_it_exists(
 		parent_account_id: T::AccountId,
 		sub_account_index: u8,
 	) -> Result<T::AccountId, DispatchError> {
@@ -1000,19 +1003,29 @@ impl<T: Config> SubAccountHandler<T::AccountId> for Pallet<T> {
 		))
 		.map_err(|_| Error::<T>::SubAccountIdDerivationFailed)?;
 
+		ensure!(
+			frame_system::Pallet::<T>::account_exists(&sub_account_id),
+			Error::<T>::SubAccountDoesNotExist
+		);
+
 		Ok(sub_account_id)
 	}
 
 	fn derive_and_fund_sub_account(
 		parent_account_id: T::AccountId,
 		sub_account_index: u8,
+		amount: Option<T::Amount>,
 	) -> Result<T::AccountId, DispatchError> {
 		if !T::RedemptionChecker::can_redeem(&parent_account_id) {
 			return Err(Error::<T>::CanNotDeriveSubAccountIdIfParentAccountIsBidding.into());
 		}
 
-		let sub_account_id: T::AccountId =
-			Self::derive_sub_account(parent_account_id.clone(), sub_account_index)?;
+		let sub_account_id: T::AccountId = Decode::decode(&mut TrailingZeroInput::new(
+			(*b"chainflip/subaccount", parent_account_id.clone(), sub_account_index)
+				.blake2_256()
+				.as_ref(),
+		))
+		.map_err(|_| Error::<T>::SubAccountIdDerivationFailed)?;
 
 		ensure!(
 			!frame_system::Pallet::<T>::account_exists(&sub_account_id),
@@ -1021,11 +1034,6 @@ impl<T: Config> SubAccountHandler<T::AccountId> for Pallet<T> {
 
 		frame_system::Provider::<T>::created(&sub_account_id)?;
 
-		let restricted_balances = RestrictedBalances::<T>::get(&parent_account_id);
-
-		if !restricted_balances.is_empty() {
-			RestrictedBalances::<T>::insert(&sub_account_id, restricted_balances);
-		}
 		if let Some(executor_address) = BoundExecutorAddress::<T>::get(&parent_account_id) {
 			BoundExecutorAddress::<T>::insert(&sub_account_id, executor_address);
 		}
@@ -1037,17 +1045,9 @@ impl<T: Config> SubAccountHandler<T::AccountId> for Pallet<T> {
 			OriginFor::<T>::signed(parent_account_id.clone()),
 			sub_account_id.clone(),
 			None,
-			RedemptionAmount::Exact(MinimumFunding::<T>::get()),
+			RedemptionAmount::Exact(amount.unwrap_or(MinimumFunding::<T>::get())),
 		)?;
 
 		Ok(sub_account_id)
-	}
-
-	fn sub_account_exists(
-		parent_account_id: T::AccountId,
-		sub_account_index: u8,
-	) -> Result<bool, DispatchError> {
-		let account_id = Self::derive_sub_account(parent_account_id, sub_account_index)?;
-		Ok(frame_system::Pallet::<T>::account_exists(&account_id))
 	}
 }

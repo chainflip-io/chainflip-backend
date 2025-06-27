@@ -72,7 +72,10 @@ pub mod pallet {
 			+ From<frame_system::Call<Self>>
 			+ From<Call<Self>>
 			+ GetDispatchInfo;
-		type SubAccountHandler: SubAccountHandler<<Self as frame_system::Config>::AccountId>;
+		type SubAccountHandler: SubAccountHandler<
+			<Self as frame_system::Config>::AccountId,
+			<Self as Chainflip>::Amount,
+		>;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		type FeePayment: cf_traits::FeePayment<
@@ -206,11 +209,13 @@ pub mod pallet {
 		pub fn derive_sub_account(
 			origin: OriginFor<T>,
 			sub_account_index: SubAccountIndex,
+			amount: Option<T::Amount>,
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 			let sub_account_id = T::SubAccountHandler::derive_and_fund_sub_account(
 				account_id.clone(),
 				sub_account_index,
+				amount,
 			)?;
 			Self::deposit_event(Event::SubAccountCreated {
 				account_id: account_id.clone(),
@@ -240,8 +245,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			let mut origin = origin;
 			let account_id = ensure_signed(origin.clone())?;
-			let sub_account_id =
-				T::SubAccountHandler::derive_sub_account(account_id.clone(), sub_account_index)?;
+			let sub_account_id = T::SubAccountHandler::derive_sub_account_and_ensure_it_exists(
+				account_id.clone(),
+				sub_account_index,
+			)?;
 			origin.set_caller_from(frame_system::RawOrigin::Signed(sub_account_id.clone()));
 			match call.clone().dispatch(origin) {
 				Ok(_) => {

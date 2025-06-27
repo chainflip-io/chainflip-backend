@@ -1263,21 +1263,17 @@ pub trait CcmAdditionalDataHandler {
 }
 
 /// This trait abstracts the logic regarding sub-accounts.
-pub trait SubAccountHandler<AccountId> {
+pub trait SubAccountHandler<AccountId, Amount> {
 	/// Derive a sub-account from a parent account and fund it. Also copies all account restrictions
 	/// from the parent account.
 	fn derive_and_fund_sub_account(
 		parent_account_id: AccountId,
 		sub_account_index: SubAccountIndex,
+		amount: Option<Amount>,
 	) -> Result<AccountId, DispatchError>;
 
-	fn derive_sub_account(
+	fn derive_sub_account_and_ensure_it_exists(
 		parent_account_id: AccountId,
 		sub_account_index: SubAccountIndex,
 	) -> Result<AccountId, DispatchError>;
-
-	fn sub_account_exists(
-		parent_account_id: AccountId,
-		sub_account_index: SubAccountIndex,
-	) -> Result<bool, DispatchError>;
 }

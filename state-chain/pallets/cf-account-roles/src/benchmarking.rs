@@ -49,7 +49,7 @@ mod benchmarks {
 		T::FeePayment::mint_to_account(&caller, (FLIP_BALANCE * FLIPPERINOS_PER_FLIP).into());
 
 		#[extrinsic_call]
-		derive_sub_account(RawOrigin::Signed(caller.clone()), SUB_ACCOUNT_INDEX);
+		derive_sub_account(RawOrigin::Signed(caller.clone()), SUB_ACCOUNT_INDEX, None);
 	}
 
 	#[benchmark]
@@ -64,11 +64,8 @@ mod benchmarks {
 		assert_ok!(Pallet::<T>::derive_sub_account(
 			RawOrigin::Signed(caller.clone()).into(),
 			SUB_ACCOUNT_INDEX,
+			None,
 		));
-
-		assert!(
-			T::SubAccountHandler::sub_account_exists(caller.clone(), SUB_ACCOUNT_INDEX).unwrap()
-		);
 
 		#[extrinsic_call]
 		as_sub_account(RawOrigin::Signed(caller), SUB_ACCOUNT_INDEX, call);

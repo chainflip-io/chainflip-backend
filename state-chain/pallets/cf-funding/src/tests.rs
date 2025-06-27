@@ -2494,7 +2494,7 @@ pub mod rebalancing_and_sub_accounting {
 		new_test_ext().execute_with(|| {
 			MockRedemptionChecker::set_can_redeem(ALICE, false);
 			assert_noop!(
-				Funding::derive_and_fund_sub_account(ALICE, 0),
+				Funding::derive_and_fund_sub_account(ALICE, 0, None),
 				Error::<Test>::CanNotDeriveSubAccountIdIfParentAccountIsBidding,
 			);
 		});
@@ -2509,7 +2509,7 @@ pub mod rebalancing_and_sub_accounting {
 				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None)],
 				vec![]
 			));
-			let sub_account_id = Funding::derive_and_fund_sub_account(ALICE, 1).unwrap();
+			let sub_account_id = Funding::derive_and_fund_sub_account(ALICE, 1, None).unwrap();
 
 			let balance_alice = Flip::total_balance_of(&ALICE);
 			let sub_account_balance = Flip::total_balance_of(&sub_account_id);
@@ -2527,9 +2527,9 @@ pub mod rebalancing_and_sub_accounting {
 				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None)],
 				vec![]
 			));
-			Funding::derive_and_fund_sub_account(ALICE, 1).unwrap();
+			Funding::derive_and_fund_sub_account(ALICE, 1, None).unwrap();
 			assert_noop!(
-				Funding::derive_and_fund_sub_account(ALICE, 1),
+				Funding::derive_and_fund_sub_account(ALICE, 1, None),
 				Error::<Test>::SubAccountAlreadyExists,
 			);
 		});
@@ -2538,26 +2538,20 @@ pub mod rebalancing_and_sub_accounting {
 	#[test]
 	fn restrictions_are_getting_inherited_to_sub_accounts() {
 		new_test_ext().execute_with(|| {
-			use sp_std::collections::btree_map::BTreeMap;
 			const AMOUNT: u128 = 100;
 
 			const RESTRICTED_ADDRESS_A: EthereumAddress = H160([0x01; 20]);
 			const RESTRICTED_ADDRESS_B: EthereumAddress = H160([0x02; 20]);
-			const RESTRICTED_ADDRESS_C: EthereumAddress = H160([0x03; 20]);
 
 			BoundRedeemAddress::<Test>::insert(ALICE, RESTRICTED_ADDRESS_A);
 			BoundExecutorAddress::<Test>::insert(ALICE, RESTRICTED_ADDRESS_B);
-			RestrictedBalances::<Test>::insert(
-				ALICE,
-				BTreeMap::from_iter(vec![(RESTRICTED_ADDRESS_C, AMOUNT / 2)]),
-			);
 
 			assert_ok!(setup_test(
 				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None)],
 				vec![]
 			));
 
-			let sub_account_id = Funding::derive_and_fund_sub_account(ALICE, 1).unwrap();
+			let sub_account_id = Funding::derive_and_fund_sub_account(ALICE, 1, None).unwrap();
 
 			assert_eq!(
 				BoundRedeemAddress::<Test>::get(&sub_account_id),
@@ -2566,10 +2560,6 @@ pub mod rebalancing_and_sub_accounting {
 			assert_eq!(
 				BoundExecutorAddress::<Test>::get(&sub_account_id),
 				Some(RESTRICTED_ADDRESS_B)
-			);
-			assert_eq!(
-				RestrictedBalances::<Test>::get(&sub_account_id),
-				BTreeMap::from_iter(vec![(RESTRICTED_ADDRESS_C, AMOUNT / 2)])
 			);
 		});
 	}
