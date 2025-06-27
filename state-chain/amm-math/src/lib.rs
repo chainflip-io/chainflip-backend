@@ -97,7 +97,7 @@ pub fn output_amount_ceil(input: Amount, price: Price) -> Amount {
 	mul_div_ceil(input, price, U256::one() << PRICE_FRACTIONAL_BITS)
 }
 
-pub const PRICE_FRACTIONAL_BITS: u32 = 128;
+pub use cf_primitives::PRICE_FRACTIONAL_BITS;
 
 /// Converts from a [SqrtPriceQ64F96] to a [Price].
 ///
