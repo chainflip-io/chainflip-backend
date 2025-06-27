@@ -11,7 +11,6 @@ import {
   defaultAssetAmounts,
   chainFromAsset,
   getEvmEndpoint,
-  assetDecimals,
   chainContractId,
   assetContractId,
   observeSwapRequested,
