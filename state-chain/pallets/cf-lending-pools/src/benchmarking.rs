@@ -38,6 +38,13 @@ mod benchmarks {
 		));
 	}
 
+	fn setup_chp_pool<T: Config>(asset: Asset) -> CorePoolId {
+		let pool_id = NextCorePoolId::<T>::get();
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		assert_ok!(Pallet::<T>::create_chp_pool(origin, asset));
+		pool_id
+	}
+
 	fn setup_booster_account<T: Config>(asset: Asset, seed: u32) -> T::AccountId {
 		use frame_support::traits::OnNewAccount;
 		let caller: T::AccountId = account("booster", 0, seed);
@@ -53,6 +60,46 @@ mod benchmarks {
 		T::Balance::credit_account(&caller, asset, 5_000_000_000_000_000_000u128);
 
 		caller
+	}
+
+	fn chp_loan<T: Config>(
+		asset: Asset,
+		borrower: T::AccountId,
+		core_pool_id: CorePoolId,
+		id: u64,
+		status: LoanStatus,
+	) -> ChpLoan<T> {
+		ChpLoan::<T>::new(
+			ChpLoanId(id),
+			asset,
+			1u32.into(),
+			1_000u32.into(),
+			borrower,
+			1_000_000u128,
+			0u128,
+			vec![ChpPoolContribution { core_pool_id, loan_id: LoanId(id), principal: 1_000u128 }],
+			Perbill::from_parts(100_000),
+			Default::default(),
+			status,
+		)
+	}
+
+	#[benchmark]
+	fn update_pallet_config(n: Linear<1, MAX_PALLET_CONFIG_UPDATE>) {
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		let updates = vec![
+			PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
+				deduction_percent: Percent::from_percent(10),
+			};
+			n as usize
+		]
+		.try_into()
+		.expect("Length is within the configured len");
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::update_pallet_config(origin, updates));
+		}
 	}
 
 	#[benchmark]
@@ -182,4 +229,158 @@ mod benchmarks {
 		}
 		assert_eq!(BoostPools::<T>::iter().count(), 1);
 	}
+
+	#[benchmark]
+	fn create_chp_pool() {
+		#[block]
+		{
+			setup_chp_pool::<T>(Asset::Btc);
+		}
+	}
+
+	#[benchmark]
+	fn add_chp_funds() {
+		let asset = Asset::Btc;
+		let lp_account = setup_booster_account::<T>(asset, 0);
+		setup_chp_pool::<T>(asset);
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::add_chp_funds(
+				RawOrigin::Signed(lp_account).into(),
+				asset,
+				1_000_000_000_000u128,
+			));
+		}
+	}
+
+	#[benchmark]
+	fn stop_chp_lending() {
+		let asset = Asset::Btc;
+		let lp_account = setup_booster_account::<T>(asset, 0);
+		let core_pool_id = NextCorePoolId::<T>::get();
+
+		setup_chp_pool::<T>(asset);
+		assert_ok!(Pallet::<T>::add_chp_funds(
+			RawOrigin::Signed(lp_account.clone()).into(),
+			asset,
+			1_000_000_000_000u128,
+		));
+		assert_ok!(Pallet::<T>::add_chp_funds(
+			RawOrigin::Signed(lp_account.clone()).into(),
+			asset,
+			2_000_000_000_000u128,
+		));
+
+		// Pessimistically add pending loans.
+		CorePools::<T>::mutate(asset, core_pool_id, |maybe_pool| {
+			let pool = maybe_pool.as_mut().expect("Pool was created above");
+			for i in 0..10 {
+				assert_ok!(pool.new_loan(1_000_000_000u128, LoanUsage::ChpLoan(ChpLoanId(i))));
+			}
+		});
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::stop_chp_lending(RawOrigin::Signed(lp_account).into(), asset,));
+		}
+	}
+
+	#[benchmark]
+	fn upkeep_active(n: Linear<1, 50>) {
+		let asset = Asset::Btc;
+
+		let lp_account = setup_booster_account::<T>(asset, 0);
+		let borrower = setup_booster_account::<T>(Asset::Usdc, 1);
+		let core_pool_id = setup_chp_pool::<T>(asset);
+
+		assert_ok!(Pallet::<T>::add_chp_funds(
+			RawOrigin::Signed(lp_account).into(),
+			asset,
+			1_000_000_000_000u128,
+		));
+
+		for i in 0..n {
+			ChpLoans::<T>::insert(
+				asset,
+				ChpLoanId(i as u64),
+				chp_loan::<T>(asset, borrower.clone(), core_pool_id, i as u64, LoanStatus::Active),
+			);
+		}
+
+		#[block]
+		{
+			crate::chp_lending::chp_upkeep::<T>(2u32.into());
+		}
+	}
+
+	#[benchmark]
+	fn upkeep_soft_liquidation(n: Linear<1, 50>) {
+		let asset = Asset::Btc;
+
+		let lp_account = setup_booster_account::<T>(asset, 0);
+		let borrower = setup_booster_account::<T>(Asset::Usdc, 1);
+		let core_pool_id = setup_chp_pool::<T>(asset);
+
+		assert_ok!(Pallet::<T>::add_chp_funds(
+			RawOrigin::Signed(lp_account).into(),
+			asset,
+			1_000_000_000_000u128,
+		));
+
+		for i in 0..n {
+			ChpLoans::<T>::insert(
+				asset,
+				ChpLoanId(i as u64),
+				chp_loan::<T>(
+					asset,
+					borrower.clone(),
+					core_pool_id,
+					i as u64,
+					LoanStatus::SoftLiquidation { usdc_collateral: 1_000_000u128 },
+				),
+			);
+		}
+
+		#[block]
+		{
+			crate::chp_lending::chp_upkeep::<T>(2u32.into());
+		}
+	}
+
+	#[benchmark]
+	fn upkeep_no_action(n: Linear<1, 50>) {
+		let asset = Asset::Btc;
+
+		let lp_account = setup_booster_account::<T>(asset, 0);
+		let borrower = setup_booster_account::<T>(Asset::Usdc, 1);
+		let core_pool_id = setup_chp_pool::<T>(asset);
+
+		assert_ok!(Pallet::<T>::add_chp_funds(
+			RawOrigin::Signed(lp_account).into(),
+			asset,
+			1_000_000_000_000u128,
+		));
+
+		for i in 0..n {
+			ChpLoans::<T>::insert(
+				asset,
+				ChpLoanId(i as u64),
+				chp_loan::<T>(
+					asset,
+					borrower.clone(),
+					core_pool_id,
+					i as u64,
+					LoanStatus::Finalising,
+				),
+			);
+		}
+
+		#[block]
+		{
+			crate::chp_lending::chp_upkeep::<T>(2u32.into());
+		}
+	}
+
+	impl_benchmark_test_suite!(Pallet, crate::mocks::new_test_ext(), crate::mocks::Test,);
 }

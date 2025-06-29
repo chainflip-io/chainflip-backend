@@ -28,6 +28,35 @@ pub struct ChpLoan<T: Config> {
 }
 
 impl<T: Config> ChpLoan<T> {
+	#[cfg(feature = "runtime-benchmarks")]
+	pub(crate) fn new(
+		loan_id: ChpLoanId,
+		asset: Asset,
+		created_at_block: BlockNumberFor<T>,
+		expiry_block: BlockNumberFor<T>,
+		borrower_id: T::AccountId,
+		usdc_collateral: AssetAmount,
+		fees_collected_usdc: AssetAmount,
+		pool_contributions: Vec<ChpPoolContribution>,
+		interest_rate: Perbill,
+		asset_price_at_creation: Price,
+		status: LoanStatus,
+	) -> Self {
+		Self {
+			loan_id,
+			asset,
+			created_at_block,
+			expiry_block,
+			borrower_id,
+			usdc_collateral,
+			fees_collected_usdc,
+			pool_contributions,
+			interest_rate,
+			asset_price_at_creation,
+			status,
+		}
+	}
+
 	fn total_principal_amount(&self) -> AssetAmount {
 		self.pool_contributions.iter().map(|c| c.principal).sum()
 	}
@@ -218,8 +247,13 @@ pub fn process_collateral_topup<T: Config>(
 pub fn chp_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 	let config = ChpConfig::<T>::get();
 
+	// For weight calculation
+	let mut count_active = 0u32;
+	let mut count_soft_liquidation = 0u32;
+	let mut count_no_action = 0u32;
+
 	for (asset, loan_id) in ChpLoans::<T>::iter_keys() {
-		let _ = ChpLoans::<T>::try_mutate(asset, loan_id, |loan| {
+		let _ = ChpLoans::<T>::mutate(asset, loan_id, |loan| {
 			let loan = loan.as_mut().expect("keys read directly from storage just above");
 
 			if loan.status == LoanStatus::Active {
@@ -245,17 +279,20 @@ pub fn chp_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 					{
 						initiate_soft_liquidation::<T>(loan);
 					}
+					count_active += 1;
 				},
 				LoanStatus::SoftLiquidation { .. } => {
 					let overcollateralisation_ratio = loan.overcollateralisation_ratio();
 
 					if overcollateralisation_ratio < config.overcollateralisation_hard_threshold {
-						// TODO: cancel soft liquidation swap and initiate a hard liquidaiton one
+						// TODO: cancel soft liquidation swap and initiate a hard liquidation one
 						unimplemented!();
 					}
+					count_soft_liquidation += 1;
 				},
 				LoanStatus::Finalising | LoanStatus::HardLiquidation { .. } => {
 					// Nothing to do
+					count_no_action += 1;
 				},
 			}
 
@@ -263,7 +300,10 @@ pub fn chp_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 		});
 	}
 
-	Weight::zero() // TODO: benchmark
+	// Calculate final weight
+	T::WeightInfo::upkeep_active(count_active) +
+		T::WeightInfo::upkeep_soft_liquidation(count_soft_liquidation) +
+		T::WeightInfo::upkeep_no_action(count_no_action)
 }
 
 impl<T: Config> ChpLendingApi for Pallet<T> {
