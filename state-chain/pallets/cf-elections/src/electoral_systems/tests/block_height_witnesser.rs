@@ -25,6 +25,8 @@ impl ChainTypes for BHTypes {
 impl BHWTypes for BHTypes {
 	type Chain = BHTypes;
 	type BlockHeightChangeHook = EmptyHook;
+
+	type ReorgHook = EmptyHook;
 }
 
 const BHW_PROPERTIES_STARTUP: HeightWitnesserProperties<BHTypes> =

@@ -27,7 +27,7 @@ use pallet_cf_elections::{
 		block_height_witnesser::{
 			consensus::BlockHeightWitnesserConsensus, primitives::NonemptyContinuousHeaders,
 			state_machine::BlockHeightWitnesser, BHWTypes, BlockHeightChangeHook,
-			BlockHeightWitnesserSettings, ChainProgress, ChainTypes,
+			BlockHeightWitnesserSettings, ChainProgress, ChainTypes, ReorgHook,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
@@ -98,6 +98,7 @@ impls! {
 	BHWTypes {
 		type BlockHeightChangeHook = Self;
 		type Chain = BitcoinChain;
+		type ReorgHook = Self;
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
@@ -118,6 +119,17 @@ impls! {
 			if let Err(err) = BitcoinChainTracking::inner_update_chain_height(block_height) {
 				log::error!("Failed to update BTC chain height to {block_height:?}: {:?}", err);
 			}
+		}
+	}
+
+	Hook<HookTypeFor<Self, ReorgHook>> {
+		fn run(&mut self, input: (btc::BlockNumber, btc::BlockNumber)) {
+			pallet_cf_elections::Pallet::<Runtime, BitcoinInstance>::deposit_event(
+				pallet_cf_elections::Event::<Runtime, BitcoinInstance>::ReorgDetected{
+					first_block: input.0,
+					last_block: input.1,
+				}
+			);
 		}
 	}
 
@@ -554,11 +566,7 @@ impl
 					.block_height
 					// We subtract the safety buffer so we don't ask for liveness for blocks that
 					// could be reorged out.
-					.saturating_sub(
-						BITCOIN_MAINNET_SAFETY_BUFFER
-							.try_into()
-							.map_err(|_| CorruptStorageError::new())?,
-					),
+					.saturating_sub(BITCOIN_MAINNET_SAFETY_BUFFER.into()),
 			),
 		)?;
 

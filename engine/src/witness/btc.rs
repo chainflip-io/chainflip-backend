@@ -135,7 +135,6 @@ impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVote
 
 			// request headers for at most SAFETY_BUFFER heights, in parallel
 			let requests = (witness_from_index..highest_submitted_height)
-				.into_iter()
 				.map(|index| async move {
 					header_from_btc_header(
 						self.client.block_header(self.client.block_hash(index).await?).await?,

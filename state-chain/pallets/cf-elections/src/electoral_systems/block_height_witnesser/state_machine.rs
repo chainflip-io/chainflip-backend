@@ -59,6 +59,7 @@ defx! {
 	pub struct BlockHeightWitnesser[T: BHWTypes] {
 		pub phase: BHWPhase<T>,
 		pub block_height_update: T::BlockHeightChangeHook,
+		pub on_reorg: T::ReorgHook,
 	}
 	validate _this (else BlockHeightWitnesserError) {}
 }
@@ -179,13 +180,15 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 						.map(|cont_headers| ChainProgress {
 							headers: cont_headers,
 							removed: merge_info.removed.front().and_then(|f| {
-								merge_info.removed.back().map(|l| f.block_height..=l.block_height)
+								merge_info.removed.back().map(|l| {
+									s.on_reorg.run((f.block_height, l.block_height));
+									f.block_height..=l.block_height
+								})
 							}),
 						})
 						.ok())
 				},
-				Err(MergeFailure::Reorg { new_block, existing_wrong_parent }) => {
-					log::info!("detected a reorg: got block {new_block:?} whose parent hash does not match the parent block we have recorded: {existing_wrong_parent:?}");
+				Err(MergeFailure::Reorg) => {
 					*witness_from = headers.first().block_height;
 					Ok(None)
 				},
@@ -214,7 +217,7 @@ pub mod tests {
 			block_height_witnesser::{
 				primitives::NonemptyContinuousHeaders, BlockHeightChangeHook,
 				BlockHeightWitnesserSettings, ChainBlockHashOf, ChainBlockHashTrait,
-				ChainBlockNumberOf, ChainBlockNumberTrait, ChainTypes,
+				ChainBlockNumberOf, ChainBlockNumberTrait, ChainTypes, ReorgHook,
 			},
 			block_witnesser::state_machine::HookTypeFor,
 			state_machine::core::{hook_test_utils::MockHook, TypesFor},
@@ -274,6 +277,7 @@ pub mod tests {
 	pub fn generate_state<T: BHWTypes>() -> impl Strategy<Value = BlockHeightWitnesser<T>>
 	where
 		T::BlockHeightChangeHook: Default + sp_std::fmt::Debug,
+		T::ReorgHook: Default + sp_std::fmt::Debug,
 	{
 		prop_oneof![
 			Just(BHWPhase::Starting),
@@ -294,6 +298,7 @@ pub mod tests {
 		.prop_map(|state| BlockHeightWitnesser {
 			phase: state,
 			block_height_update: Default::default(),
+			on_reorg: Default::default(),
 		})
 	}
 
@@ -310,6 +315,7 @@ pub mod tests {
 		for TypesFor<(N, H, D)>
 	{
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
+		type ReorgHook = MockHook<HookTypeFor<Self, ReorgHook>>;
 		type Chain = Self;
 	}
 
@@ -350,6 +356,7 @@ pub mod tests {
 	struct TestTypes2 {}
 	impl BHWTypes for TestTypes2 {
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
+		type ReorgHook = MockHook<HookTypeFor<Self, ReorgHook>>;
 		type Chain = TypesFor<TestChain>;
 	}
 

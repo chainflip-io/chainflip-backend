@@ -423,7 +423,7 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::generate_deposit(pub fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Corrupted storage was detected, and so all elections and voting has been paused.
 		CorruptStorage,
@@ -436,6 +436,11 @@ pub mod pallet {
 		AllVotesNotCleared,
 		/// Received vote for an unknown election
 		UnknownElection(ElectionIdentifierOf<T::ElectoralSystemRunner>),
+
+		ReorgDetected {
+			first_block: u64,
+			last_block: u64,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]

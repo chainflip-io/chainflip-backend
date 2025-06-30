@@ -266,7 +266,7 @@ pub(crate) mod tests {
 
 	use crate::{
 		electoral_systems::{
-			block_height_witnesser::{ChainBlockHashTrait, ChainBlockNumberTrait, ChainTypes},
+			block_height_witnesser::{ChainBlockHashTrait, ChainBlockNumberTrait},
 			block_witnesser::{
 				block_processor::BlockProcessor,
 				state_machine::{

@@ -486,7 +486,7 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 			let currently_highest = heights.iter().max().cloned().unwrap_or(Default::default());
 			let seen_heights_below = currently_highest.saturating_forward(highest_seen_delta);
 			let highest_ever_ongoing = currently_highest.saturating_forward(highest_ongoign_delta);
-			let safe_elections_below = max(ongoing_below, seen_heights_below.saturating_backward(safety_buffer as usize));
+			let safe_elections_below = max(ongoing_below, seen_heights_below.saturating_backward(safety_buffer));
 			let ongoing = heights.iter().filter(|h| **h < ongoing_below).cloned().collect::<BTreeSet<_>>();
 			let safe = heights.iter().filter(|h| (ongoing_below..safe_elections_below).contains(*h)).cloned().collect::<BTreeSet<_>>();
 			let hash = heights.iter().filter(|h| (safe_elections_below..seen_heights_below).contains(*h)).cloned().collect::<BTreeSet<_>>();
@@ -520,7 +520,7 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 						any::<OptimisticBlock<T>>(),
 						0..10
 					).prop_map(move |mut blocks| {
-						blocks.retain(|height, _| height.saturating_forward(safety_buffer as usize) > seen_heights_below);
+						blocks.retain(|height, _| height.saturating_forward(safety_buffer) > seen_heights_below);
 						blocks
 					}),
 				debug_events: Just(Default::default()),
