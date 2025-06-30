@@ -52,10 +52,6 @@ pub trait ChainTypes: Ord + Clone + Debug + 'static {
 	type ChainBlockNumber: ChainBlockNumberTrait;
 	type ChainBlockHash: ChainBlockHashTrait;
 
-	// /// IMPORTANT: this value must always be greater than the safety margin we use, and represent
-	// /// the buffer of data we keep around (in number of blocks) both in the ElectionTracker and
-	// in /// the BlockProcessor
-	// const SAFETY_BUFFER: usize;
 	const NAME: &'static str;
 }
 pub type ChainBlockNumberOf<T> = <T as ChainTypes>::ChainBlockNumber;
