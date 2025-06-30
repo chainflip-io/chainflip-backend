@@ -89,7 +89,7 @@ def_derive! {
 		///
 		/// This setting determines the number of blocks we store in the BHW to infer the depth of reorgs.
 		///
-		/// If you change this value, consider also looking at the `safety_buffer` setting of the BlockWitnesser.
+		/// If you change this value, you should also look the `safety_buffer` setting of the BlockWitnesser.
 		///
 		/// Changing it at runtime is possible and should not have unintended consequences.
 		pub safety_buffer: u32
