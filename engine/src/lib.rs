@@ -303,8 +303,7 @@ async fn run_main(
 							.await
 							.expect(STATE_CHAIN_CONNECTION),
 					);
-					BtcRetryRpcClient::new(scope, settings.btc.nodes.clone(), expected_btc_network)
-						.await?
+					BtcRetryRpcClient::new(scope, settings.btc.nodes, expected_btc_network).await?
 				};
 				BtcCachingClient::new(scope, btc_client)
 			};
