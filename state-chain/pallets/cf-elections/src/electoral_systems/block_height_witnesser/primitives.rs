@@ -238,7 +238,6 @@ mod prop_tests {
 					match merge_failure {
 							MergeFailure::Reorg => {
 								prop_assert!(second_chain.first().parent_hash != first_chain.last().hash);
-								// prop_assert_eq!(first_chain.last(), &existing_wrong_parent, "Existing wrong parent do not match");
 							},
 							MergeFailure::InternalError => {
 								prop_assert!((first_chain.last().block_height != second_chain.first().block_height) || (first_chain.first().block_height != second_chain.first().block_height));
