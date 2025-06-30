@@ -444,8 +444,8 @@ impl<T: BWTypes> Default for ElectionTracker<T> {
 			optimistic_block_cache: Default::default(),
 			debug_events: Default::default(),
 
-			// WARNING: This should never be zero when the system is running.
-			// This value should be set from the actual BW settings at the very
+			// WARNING: This should always be set to a correct value when the system
+			// is running. This value is set from the actual BW settings at the very
 			// beginning of the BW step function.
 			//
 			// For additional safety, we initialize with a high value here.
