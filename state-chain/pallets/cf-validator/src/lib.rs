@@ -345,6 +345,29 @@ pub mod pallet {
 	#[pallet::getter(fn active_bidder)]
 	pub type ActiveBidder<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
+	/// Maps an account to its operator.
+	#[pallet::storage]
+	pub type AccountDelegations<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, T::AccountId, OptionQuery>;
+
+	/// Maps an operator account to it's allowed delegators.
+	#[pallet::storage]
+	#[pallet::getter(fn allowed_delegators)]
+	pub type AllowedDelegators<T: Config> =
+		StorageDoubleMap<_, Blake2_128Concat, T::AccountId, Blake2_128Concat, T::AccountId, ()>;
+
+	/// Maps an operator account to it's blocked delegators.
+	#[pallet::storage]
+	#[pallet::getter(fn blocked_delegators)]
+	pub type BlockedDelegators<T: Config> =
+		StorageDoubleMap<_, Blake2_128Concat, T::AccountId, Blake2_128Concat, T::AccountId, ()>;
+
+	/// Maps an operator account to a map of validator accounts it manages.
+	#[pallet::storage]
+	#[pallet::getter(fn validators_managed_by_operator)]
+	pub type ValidatorsManagedByOperator<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
