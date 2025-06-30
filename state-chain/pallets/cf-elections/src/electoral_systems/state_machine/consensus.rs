@@ -121,7 +121,12 @@ impl<Stage: ConsensusMechanism, Priority: Ord + Copy> ConsensusMechanism
 }
 
 //------ multiple votes -----------
-/// This is a consensus modifier which allows multiple votes to be cast
+/// This is a consensus modifier which allows multiple votes to be cast.
+///
+/// Note that there aren't any safeguards ensuring any kind of validity
+/// requirements. E.g. a 100 times repeated same vote would be accepted.
+/// Use this ONLY in contexts where validity is guaranteed by some other
+/// mechanism.
 pub struct MultipleVotes<Base: ConsensusMechanism> {
 	pub multi_votes: Vec<Vec<Base::Vote>>,
 }
