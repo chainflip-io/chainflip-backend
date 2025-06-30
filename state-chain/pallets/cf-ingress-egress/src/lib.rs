@@ -62,11 +62,9 @@ use cf_traits::{
 	SwapParameterValidation, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
-	OrdNoBound, PartialOrdNoBound,
-	__private::sp_tracing::warn,
 	pallet_prelude::{OptionQuery, *},
 	sp_runtime::{traits::Zero, DispatchError, Saturating},
-	transactional,
+	transactional, OrdNoBound, PartialOrdNoBound,
 };
 use frame_system::pallet_prelude::*;
 use generic_typeinfo_derive::GenericTypeInfo;
@@ -2322,7 +2320,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					BoostStatus::Boosted { prewitnessed_deposit_id, amount }
 				},
 				Err(_) => {
-					warn!("Try boosting failed!!!!");
 					Self::deposit_event(Event::InsufficientBoostLiquidity {
 						prewitnessed_deposit_id,
 						asset,
