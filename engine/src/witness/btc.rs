@@ -79,7 +79,7 @@ pub struct BitcoinBlockHeightWitnesserVoter {
 impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVoter {
 	async fn vote(
 		&self,
-		settings: <BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
+		_settings: <BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightWitnesserES>>, anyhow::Error> {
 		tracing::debug!("BTC BHW: Block height tracking called properties: {:?}", properties);
