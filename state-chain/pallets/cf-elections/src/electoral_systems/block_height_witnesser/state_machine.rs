@@ -181,7 +181,7 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 							headers: cont_headers,
 							removed: merge_info.removed.front().and_then(|f| {
 								merge_info.removed.back().map(|l| {
-									s.on_reorg.run((f.block_height, l.block_height));
+									s.on_reorg.run(f.block_height..=l.block_height);
 									f.block_height..=l.block_height
 								})
 							}),

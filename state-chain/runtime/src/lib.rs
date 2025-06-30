@@ -32,6 +32,7 @@ use crate::{
 		address_derivation::btc::{
 			derive_btc_vault_deposit_addresses, BitcoinPrivateBrokerDepositAddresses,
 		},
+		bitcoin_elections::BitcoinEvent,
 		calculate_account_apy,
 		solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
@@ -1143,6 +1144,7 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type ElectoralSystemRunner = chainflip::solana_elections::SolanaElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 	type CreateGovernanceElectionHook = chainflip::solana_elections::SolanaGovernanceElectionHook;
+	type CustomEvents = ();
 }
 
 impl pallet_cf_elections::Config<Instance3> for Runtime {
@@ -1151,6 +1153,7 @@ impl pallet_cf_elections::Config<Instance3> for Runtime {
 	type ElectoralSystemRunner = chainflip::bitcoin_elections::BitcoinElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 	type CreateGovernanceElectionHook = chainflip::bitcoin_elections::BitcoinGovernanceElectionHook;
+	type CustomEvents = BitcoinEvent;
 }
 
 impl pallet_cf_trading_strategy::Config for Runtime {

@@ -71,7 +71,7 @@ impl<T: BHWTypes> HookType for HookTypeFor<T, BlockHeightChangeHook> {
 
 pub struct ReorgHook;
 impl<T: BHWTypes> HookType for HookTypeFor<T, ReorgHook> {
-	type Input = (ChainBlockNumberOf<T::Chain>, ChainBlockNumberOf<T::Chain>);
+	type Input = RangeInclusive<ChainBlockNumberOf<T::Chain>>;
 	type Output = ();
 }
 
