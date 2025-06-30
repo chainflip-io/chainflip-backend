@@ -3,9 +3,12 @@ use super::{
 	primitives::{MergeFailure, NonemptyContinuousHeaders, NonemptyContinuousHeadersError},
 	BHWTypes, ChainBlockNumberOf, ChainProgress, ChainTypes, HeightWitnesserProperties,
 };
-use crate::electoral_systems::state_machine::{
-	core::{defx, Hook},
-	state_machine::AbstractApi,
+use crate::electoral_systems::{
+	block_height_witnesser::BlockHeightWitnesserSettings,
+	state_machine::{
+		core::{defx, Hook},
+		state_machine::AbstractApi,
+	},
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
@@ -84,7 +87,7 @@ impl<T: BHWTypes> AbstractApi for BlockHeightWitnesser<T> {
 impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 	type State = BlockHeightWitnesser<T>;
 	type Context = ();
-	type Settings = ();
+	type Settings = BlockHeightWitnesserSettings;
 	type Output = Result<Option<ChainProgress<T::Chain>>, &'static str>;
 	fn get_queries(s: &mut Self::State) -> Vec<Self::Query> {
 		let witness_from_index = match s.phase {
@@ -144,7 +147,7 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 	fn step(
 		s: &mut Self::State,
 		input: Either<Self::Context, (Self::Query, Self::Response)>,
-		_settings: &(),
+		settings: &BlockHeightWitnesserSettings,
 	) -> Self::Output {
 		let new_headers = match input {
 			Either::Left(_) => return Ok(None),
@@ -166,7 +169,7 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 						merge_info.removed
 					);
 
-					headers.trim_to_length(T::Chain::SAFETY_BUFFER);
+					headers.trim_to_length(settings.safety_buffer as usize);
 
 					let highest_seen = headers.last().block_height;
 					s.block_height_update.run(highest_seen);
@@ -209,8 +212,9 @@ pub mod tests {
 	use crate::{
 		electoral_systems::{
 			block_height_witnesser::{
-				primitives::NonemptyContinuousHeaders, BlockHeightChangeHook, ChainBlockHashOf,
-				ChainBlockHashTrait, ChainBlockNumberOf, ChainBlockNumberTrait, ChainTypes,
+				primitives::NonemptyContinuousHeaders, BlockHeightChangeHook,
+				BlockHeightWitnesserSettings, ChainBlockHashOf, ChainBlockHashTrait,
+				ChainBlockNumberOf, ChainBlockNumberTrait, ChainTypes,
 			},
 			block_witnesser::state_machine::HookTypeFor,
 			state_machine::core::{hook_test_utils::MockHook, TypesFor},
@@ -299,8 +303,6 @@ pub mod tests {
 		type ChainBlockNumber = N;
 		type ChainBlockHash = H;
 
-		// TODO we could make this a parameter to test with different margins
-		const SAFETY_BUFFER: usize = 16;
 		const NAME: &'static str = "Mock";
 	}
 
@@ -316,7 +318,7 @@ pub mod tests {
 		BlockHeightWitnesser::<TypesFor<(u32, Vec<u8>, ())>>::test(
 			module_path!(),
 			generate_state(),
-			Just(()),
+			(2..20u32).prop_map(|safety_buffer| BlockHeightWitnesserSettings { safety_buffer }),
 			|index| {
 				prop_do! {
 					let input in generate_input(index);
@@ -339,7 +341,6 @@ pub mod tests {
 		type ChainBlockNumber = BlockWitnessRange<TestChain>;
 		type ChainBlockHash = bool;
 
-		const SAFETY_BUFFER: usize = 16;
 		const NAME: &'static str = "Mock";
 	}
 
@@ -357,7 +358,7 @@ pub mod tests {
 		BlockHeightWitnesser::<TestTypes2>::test(
 			module_path!(),
 			generate_state(),
-			Just(()),
+			(2..20u32).prop_map(|safety_buffer| BlockHeightWitnesserSettings { safety_buffer }),
 			|index| {
 				prop_do! {
 					let input in generate_input(index);

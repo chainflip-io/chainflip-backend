@@ -75,7 +75,6 @@ impl ChainTypes for Types {
 	type ChainBlockNumber = u64;
 	type ChainBlockHash = u64;
 
-	const SAFETY_BUFFER: usize = SAFETY_MARGIN * 2;
 	const NAME: &'static str = "Mock";
 }
 
@@ -212,6 +211,7 @@ fn create_votes_expectation(
 
 const MAX_CONCURRENT_ELECTIONS: ElectionCount = 5;
 const SAFETY_MARGIN: usize = 3;
+const SAFETY_BUFFER: usize = SAFETY_MARGIN * 2;
 const MOCK_BW_ELECTION_PROPERTIES: BWElectionProperties<Types> = BWElectionProperties {
 	election_type: state_machine::EngineElectionType::<Types>::BlockHeight { submit_hash: false },
 	block_height: 2,
@@ -250,6 +250,7 @@ fn election_starts_and_resolves_when_consensus_is_reached() {
 			max_ongoing_elections: MAX_CONCURRENT_ELECTIONS,
 			max_optimistic_elections: 0,
 			safety_margin: SAFETY_MARGIN as u32,
+			safety_buffer: SAFETY_BUFFER as u32,
 		})
 		.build()
 		.test_on_finalize(
@@ -301,6 +302,7 @@ fn creates_multiple_elections_below_maximum_when_required() {
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_ongoing_elections: MAX_CONCURRENT_ELECTIONS,
 			safety_margin: SAFETY_MARGIN as u32,
+			safety_buffer: SAFETY_BUFFER as u32,
 			max_optimistic_elections: 0,
 		})
 		.build()
@@ -395,6 +397,7 @@ fn creates_multiple_elections_limited_by_maximum() {
 			max_ongoing_elections: MAX_CONCURRENT_ELECTIONS,
 			max_optimistic_elections: 0,
 			safety_margin: SAFETY_MARGIN as u32,
+			safety_buffer: SAFETY_BUFFER as u32,
 		})
 		.build()
 		.test_on_finalize(
@@ -483,6 +486,7 @@ fn reorg_clears_on_going_elections_and_continues() {
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_ongoing_elections: MAX_CONCURRENT_ELECTIONS,
 			safety_margin: SAFETY_MARGIN as u32,
+			safety_buffer: SAFETY_BUFFER as u32,
 			max_optimistic_elections: 0,
 		})
 		.build()
@@ -588,6 +592,7 @@ fn elections_resolved_out_of_order_has_no_impact() {
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_ongoing_elections: MAX_CONCURRENT_ELECTIONS,
 			safety_margin: SAFETY_MARGIN as u32,
+			safety_buffer: SAFETY_BUFFER as u32,
 			max_optimistic_elections: 0,
 		})
 		.build()
@@ -727,6 +732,7 @@ fn optimistic_election_result_saved_and_used_or_discarded_correctly() {
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_ongoing_elections: MAX_CONCURRENT_ELECTIONS,
 			safety_margin: SAFETY_MARGIN as u32,
+			safety_buffer: SAFETY_BUFFER as u32,
 			max_optimistic_elections: 1,
 		})
 		.build()
@@ -895,6 +901,7 @@ fn with_safe_mode_enabled() {
 		.with_unsynchronised_settings(BlockWitnesserSettings {
 			max_ongoing_elections: MAX_CONCURRENT_ELECTIONS,
 			safety_margin: SAFETY_MARGIN as u32,
+			safety_buffer: SAFETY_BUFFER as u32,
 			max_optimistic_elections: 0,
 		})
 		.build()

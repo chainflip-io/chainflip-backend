@@ -26,8 +26,8 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		block_height_witnesser::{
 			consensus::BlockHeightWitnesserConsensus, primitives::NonemptyContinuousHeaders,
-			state_machine::BlockHeightWitnesser, BHWTypes, BlockHeightChangeHook, ChainProgress,
-			ChainTypes,
+			state_machine::BlockHeightWitnesser, BHWTypes, BlockHeightChangeHook,
+			BlockHeightWitnesserSettings, ChainProgress, ChainTypes,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
@@ -79,14 +79,11 @@ pub struct OpenChannelDetails<ChainBlockNumber> {
 	pub close_block: ChainBlockNumber,
 }
 
-const SAFETY_BUFFER: usize = 8;
-
 pub struct BitcoinChainTag;
 pub type BitcoinChain = TypesFor<BitcoinChainTag>;
 impl ChainTypes for BitcoinChain {
 	type ChainBlockNumber = btc::BlockNumber;
 	type ChainBlockHash = btc::Hash;
-	const SAFETY_BUFFER: usize = SAFETY_BUFFER;
 	const NAME: &'static str = "Bitcoin";
 }
 
@@ -244,7 +241,7 @@ impls! {
 
 			BitcoinIngressEgress::active_deposit_channels_at(
 				// we advance by SAFETY_BUFFER before checking opened_at
-				height.saturating_forward(BitcoinChain::SAFETY_BUFFER),
+				height.saturating_forward(BITCOIN_MAINNET_SAFETY_BUFFER as usize),
 				// we don't advance for expiry
 				height
 			).into_iter().map(|deposit_channel_details| {
@@ -260,7 +257,7 @@ impls! {
 			up_to: btc::BlockNumber,
 		) {
 			// we go back SAFETY_BUFFER, such that we only actually expire once this amount of blocks have been additionally processed.
-			ProcessedUpTo::<Runtime, BitcoinInstance>::set(up_to.saturating_backward(BitcoinChain::SAFETY_BUFFER));
+			ProcessedUpTo::<Runtime, BitcoinInstance>::set(up_to.saturating_backward(BITCOIN_MAINNET_SAFETY_BUFFER as usize));
 		}
 	}
 }
@@ -558,7 +555,7 @@ impl
 					// We subtract the safety buffer so we don't ask for liveness for blocks that
 					// could be reorged out.
 					.saturating_sub(
-						BitcoinChain::SAFETY_BUFFER
+						BITCOIN_MAINNET_SAFETY_BUFFER
 							.try_into()
 							.map_err(|_| CorruptStorageError::new())?,
 					),
@@ -568,6 +565,8 @@ impl
 		Ok(())
 	}
 }
+
+pub const BITCOIN_MAINNET_SAFETY_BUFFER: u32 = 8;
 
 pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 	InitialState {
@@ -580,21 +579,24 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 			Default::default(),
 		),
 		unsynchronised_settings: (
-			Default::default(),
+			BlockHeightWitnesserSettings { safety_buffer: BITCOIN_MAINNET_SAFETY_BUFFER },
 			BlockWitnesserSettings {
 				max_ongoing_elections: 15,
 				max_optimistic_elections: 1,
-				safety_margin: 3,
+				safety_margin: 1,
+				safety_buffer: BITCOIN_MAINNET_SAFETY_BUFFER,
 			},
 			BlockWitnesserSettings {
 				max_ongoing_elections: 15,
 				max_optimistic_elections: 1,
-				safety_margin: 3,
+				safety_margin: 1,
+				safety_buffer: BITCOIN_MAINNET_SAFETY_BUFFER,
 			},
 			BlockWitnesserSettings {
 				max_ongoing_elections: 15,
 				max_optimistic_elections: 1,
 				safety_margin: 0,
+				safety_buffer: BITCOIN_MAINNET_SAFETY_BUFFER,
 			},
 			Default::default(),
 			(),
