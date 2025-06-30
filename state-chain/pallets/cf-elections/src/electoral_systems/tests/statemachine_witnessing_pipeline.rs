@@ -164,6 +164,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	let mut chains = blocks_into_chain_progression(&blocks.blocks);
 
 	const SAFETY_MARGIN: u32 = 8;
+	const SAFETY_BUFFER: u32 = 16;
 
 	// get final chain so we can check that we emitted the correct events:
 	let final_chain = chains.get_final_chain();
@@ -176,6 +177,8 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		phase: BHWPhase::Starting,
 		block_height_update: MockHook::default(),
 	};
+	let bhw_settings: BlockHeightWitnesserSettings =
+		BlockHeightWitnesserSettings { safety_buffer: SAFETY_BUFFER };
 	let block_processor: BlockProcessor<Types> = BlockProcessor {
 		blocks_data: Default::default(),
 		processed_events: Default::default(),
@@ -193,6 +196,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	let bw_settings = BlockWitnesserSettings {
 		max_ongoing_elections: 4,
 		safety_margin: SAFETY_MARGIN,
+		safety_buffer: SAFETY_BUFFER as u32,
 		max_optimistic_elections: 1,
 	};
 
@@ -230,7 +234,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 				history.push(BWTrace::InputBHW(input.clone()));
 
 				let output =
-					BHW::step(&mut bhw_state, input, &()).unwrap_or_else(|err| {
+					BHW::step(&mut bhw_state, input, &bhw_settings).unwrap_or_else(|err| {
 						panic!("{err:?}, BHW failed with history: {history:?} and state: {bhw_state:#?}")
 					});
 
@@ -322,7 +326,10 @@ fn run_simulation(blocks: ForkedFilledChain) {
 
 	use std::fmt::Write;
 
-	use crate::electoral_systems::state_machine::core::hook_test_utils::ConstantHook;
+	use crate::electoral_systems::{
+		block_height_witnesser::BlockHeightWitnesserSettings,
+		state_machine::core::hook_test_utils::ConstantHook,
+	};
 	let mut printed: String = Default::default();
 	for output in total_outputs.clone() {
 		if output.len() == 0 {

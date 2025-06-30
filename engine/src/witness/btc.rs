@@ -44,7 +44,7 @@ use sp_core::bounded::alloc::collections::VecDeque;
 use state_chain_runtime::{
 	chainflip::bitcoin_elections::{
 		BitcoinBlockHeightWitnesserES, BitcoinChain, BitcoinDepositChannelWitnessingES,
-		BitcoinElectoralSystemRunner, BitcoinLiveness,
+		BitcoinElectoralSystemRunner, BitcoinLiveness, BITCOIN_MAINNET_SAFETY_BUFFER,
 	},
 	BitcoinInstance,
 };
@@ -120,7 +120,7 @@ impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVote
 				);
 				best_block_header
 					.block_height
-					.saturating_sub(BitcoinChain::SAFETY_BUFFER as u64)
+					.saturating_sub(BITCOIN_MAINNET_SAFETY_BUFFER as u64)
 			} else {
 				witness_from_index
 			};
@@ -130,7 +130,7 @@ impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVote
 			// submitted in one vote. We're submitting at most SAFETY_BUFFER headers.
 			let highest_submitted_height = std::cmp::min(
 				best_block_header.block_height,
-				witness_from_index.saturating_forward(BitcoinChain::SAFETY_BUFFER + 1),
+				witness_from_index.saturating_forward(BITCOIN_MAINNET_SAFETY_BUFFER as usize + 1),
 			);
 
 			// request headers for at most SAFETY_BUFFER heights, in parallel

@@ -57,6 +57,14 @@ defx! {
 
 		/// debug hook
 		pub debug_events: T::ElectionTrackerDebugEventHook,
+
+		/// IMPORTANT: This value should always be greater than any reorg depth we expect to happen.
+		/// If we expect reorgs of at most depth 3, set this value to over 2 times that number, so let's
+		/// say 8.
+		///
+		/// This value is set from the BW statemachine implementation on every run of the step function,
+		/// following the same-named value in the BWSettings.
+		pub safety_buffer: u32,
 	}
 
 	validate this (else ElectionTrackerError) {
@@ -83,7 +91,7 @@ defx! {
 		//--- ensure that we delete old data ---
 		// We should only store data received from optimistic elections for at most SAFETY_BUFFER blocks.
 		optimistic_block_cache_is_cleared: this.optimistic_block_cache.iter().all(|(height, _block)|
-			height.saturating_forward(T::Chain::SAFETY_BUFFER) > this.seen_heights_below
+			height.saturating_forward(this.safety_buffer as usize) > this.seen_heights_below
 		),
 
 		//--- disjointness of all elections ---
@@ -120,12 +128,12 @@ defx! {
 
 		elections_queued_by_hash_are_inside_safety_buffer:
 			this.queued_hash_elections.keys().all(
-				|height| height.saturating_forward(T::Chain::SAFETY_BUFFER) >= this.seen_heights_below
+				|height| height.saturating_forward(this.safety_buffer as usize) >= this.seen_heights_below
 			),
 
 		elections_queued_by_safe_are_outside_safety_buffer:
 			this.queued_safe_elections.get_all_heights().iter().all(
-				|height| height.saturating_forward(T::Chain::SAFETY_BUFFER) < this.seen_heights_below
+				|height| height.saturating_forward(this.safety_buffer as usize) < this.seen_heights_below
 			)
 	}
 }
@@ -191,7 +199,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 
 		// clean up the optimistic block cache
 		self.optimistic_block_cache.retain(|height, _| {
-			height.saturating_forward(T::Chain::SAFETY_BUFFER) > self.seen_heights_below
+			height.saturating_forward(self.safety_buffer as usize) > self.seen_heights_below
 		});
 	}
 
@@ -393,7 +401,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 		self.queued_hash_elections.append(&mut remaining);
 
 		let is_safe_height = |height: &ChainBlockNumberOf<T::Chain>| {
-			height.saturating_forward(T::Chain::SAFETY_BUFFER) < self.seen_heights_below
+			height.saturating_forward(self.safety_buffer as usize) < self.seen_heights_below
 		};
 
 		// clean up the queue by removing old hashes
@@ -435,9 +443,22 @@ impl<T: BWTypes> Default for ElectionTracker<T> {
 			queued_safe_elections: Default::default(),
 			optimistic_block_cache: Default::default(),
 			debug_events: Default::default(),
+
+			// WARNING: This should always be set to a correct value when the system
+			// is running. This value is set from the actual BW settings at the very
+			// beginning of the BW step function.
+			//
+			// For additional safety, we initialize with a high value here.
+			safety_buffer: 100,
 		}
 	}
 }
+
+/// Even though the safety buffer can be updated through the settings, doing so
+/// could break the validity conditions on the ElectionTracker. We can't simulate
+/// dynamic SAFETY_BUFFER values, so we make this a constant.
+#[cfg(test)]
+pub const STATIC_SAFETY_BUFFER_FOR_TESTS: usize = 8;
 
 #[cfg(test)]
 impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
@@ -457,6 +478,7 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 		};
 
 		prop_do!(
+			let safety_buffer in Just(STATIC_SAFETY_BUFFER_FOR_TESTS);
 			let ongoing_below in chain_block_number();
 			let highest_seen_delta in 1..1000usize;
 			let highest_ongoign_delta in 0..1000usize;
@@ -464,12 +486,13 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 			let currently_highest = heights.iter().max().cloned().unwrap_or(Default::default());
 			let seen_heights_below = currently_highest.saturating_forward(highest_seen_delta);
 			let highest_ever_ongoing = currently_highest.saturating_forward(highest_ongoign_delta);
-			let safe_elections_below = max(ongoing_below, seen_heights_below.saturating_backward(T::Chain::SAFETY_BUFFER));
+			let safe_elections_below = max(ongoing_below, seen_heights_below.saturating_backward(safety_buffer as usize));
 			let ongoing = heights.iter().filter(|h| **h < ongoing_below).cloned().collect::<BTreeSet<_>>();
 			let safe = heights.iter().filter(|h| (ongoing_below..safe_elections_below).contains(*h)).cloned().collect::<BTreeSet<_>>();
 			let hash = heights.iter().filter(|h| (safe_elections_below..seen_heights_below).contains(*h)).cloned().collect::<BTreeSet<_>>();
 
 			Self {
+				safety_buffer: Just(safety_buffer as u32),
 				seen_heights_below: Just(seen_heights_below),
 				highest_ever_ongoing_election: Just(highest_ever_ongoing),
 				ongoing: vec(any::<BWElectionType<T>>(), ongoing.len()..=ongoing.len())
@@ -497,7 +520,7 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 						any::<OptimisticBlock<T>>(),
 						0..10
 					).prop_map(move |mut blocks| {
-						blocks.retain(|height, _| height.saturating_forward(T::Chain::SAFETY_BUFFER) > seen_heights_below);
+						blocks.retain(|height, _| height.saturating_forward(safety_buffer as usize) > seen_heights_below);
 						blocks
 					}),
 				debug_events: Just(Default::default()),
