@@ -45,7 +45,7 @@ mod benchmarks {
 		pool_id
 	}
 
-	fn setup_booster_account<T: Config>(asset: Asset, seed: u32) -> T::AccountId {
+	fn setup_lp_account<T: Config>(asset: Asset, seed: u32) -> T::AccountId {
 		use frame_support::traits::OnNewAccount;
 		let caller: T::AccountId = account("booster", 0, seed);
 
@@ -58,6 +58,7 @@ mod benchmarks {
 		T::Balance::credit_account(&caller, asset, 1_000_000);
 
 		T::Balance::credit_account(&caller, asset, 5_000_000_000_000_000_000u128);
+		T::Balance::credit_account(&caller, COLLATERAL_ASSET, 5_000_000_000_000_000_000u128);
 
 		caller
 	}
@@ -75,7 +76,7 @@ mod benchmarks {
 			1u32.into(),
 			1_000u32.into(),
 			borrower,
-			1_000_000u128,
+			1_000_000_000_000_000u128,
 			0u128,
 			vec![ChpPoolContribution { core_pool_id, loan_id: LoanId(id), principal: 1_000u128 }],
 			Perbill::from_parts(100_000),
@@ -110,7 +111,7 @@ mod benchmarks {
 
 		let asset = Asset::Eth;
 
-		let lp_account = setup_booster_account::<T>(asset, 0);
+		let lp_account = setup_lp_account::<T>(asset, 0);
 
 		#[block]
 		{
@@ -139,7 +140,7 @@ mod benchmarks {
 		const ASSET: Asset = Asset::Eth;
 		const DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(0);
 
-		let boosters: Vec<_> = (0..n).map(|i| setup_booster_account::<T>(ASSET, i)).collect();
+		let boosters: Vec<_> = (0..n).map(|i| setup_lp_account::<T>(ASSET, i)).collect();
 
 		for booster_id in &boosters {
 			assert_ok!(Pallet::<T>::add_boost_funds(
@@ -174,7 +175,7 @@ mod benchmarks {
 
 		let asset = Asset::Eth;
 
-		let lp_account = setup_booster_account::<T>(asset, 0);
+		let lp_account = setup_lp_account::<T>(asset, 0);
 
 		assert_ok!(Pallet::<T>::add_boost_funds(
 			RawOrigin::Signed(lp_account.clone()).into(),
@@ -241,7 +242,7 @@ mod benchmarks {
 	#[benchmark]
 	fn add_chp_funds() {
 		let asset = Asset::Btc;
-		let lp_account = setup_booster_account::<T>(asset, 0);
+		let lp_account = setup_lp_account::<T>(asset, 0);
 		setup_chp_pool::<T>(asset);
 
 		#[block]
@@ -257,7 +258,7 @@ mod benchmarks {
 	#[benchmark]
 	fn stop_chp_lending() {
 		let asset = Asset::Btc;
-		let lp_account = setup_booster_account::<T>(asset, 0);
+		let lp_account = setup_lp_account::<T>(asset, 0);
 		let core_pool_id = NextCorePoolId::<T>::get();
 
 		setup_chp_pool::<T>(asset);
@@ -265,11 +266,6 @@ mod benchmarks {
 			RawOrigin::Signed(lp_account.clone()).into(),
 			asset,
 			1_000_000_000_000u128,
-		));
-		assert_ok!(Pallet::<T>::add_chp_funds(
-			RawOrigin::Signed(lp_account.clone()).into(),
-			asset,
-			2_000_000_000_000u128,
 		));
 
 		// Pessimistically add pending loans.
@@ -290,8 +286,8 @@ mod benchmarks {
 	fn upkeep_active(n: Linear<1, 50>) {
 		let asset = Asset::Btc;
 
-		let lp_account = setup_booster_account::<T>(asset, 0);
-		let borrower = setup_booster_account::<T>(Asset::Usdc, 1);
+		let lp_account = setup_lp_account::<T>(asset, 0);
+		let borrower = setup_lp_account::<T>(Asset::Usdc, 1);
 		let core_pool_id = setup_chp_pool::<T>(asset);
 
 		assert_ok!(Pallet::<T>::add_chp_funds(
@@ -308,9 +304,25 @@ mod benchmarks {
 			);
 		}
 
+		let initial_collateral = ChpLoans::<T>::get(asset, ChpLoanId(0)).unwrap().usdc_collateral();
+		let initial_balance = T::Balance::get_balance(&borrower, COLLATERAL_ASSET);
+
 		#[block]
 		{
 			crate::chp_lending::chp_upkeep::<T>(2u32.into());
+		}
+
+		for i in 0..n {
+			let loan = ChpLoans::<T>::get(asset, ChpLoanId(i as u64)).unwrap();
+
+			// No interest is charged
+			assert!(loan.fees_collected_usdc().is_zero());
+
+			// No topup is done
+			assert_eq!(initial_balance, T::Balance::get_balance(&borrower, COLLATERAL_ASSET));
+
+			// No liquidation is initiated
+			assert_eq!(initial_collateral, loan.usdc_collateral());
 		}
 	}
 
@@ -318,8 +330,8 @@ mod benchmarks {
 	fn upkeep_soft_liquidation(n: Linear<1, 50>) {
 		let asset = Asset::Btc;
 
-		let lp_account = setup_booster_account::<T>(asset, 0);
-		let borrower = setup_booster_account::<T>(Asset::Usdc, 1);
+		let lp_account = setup_lp_account::<T>(asset, 0);
+		let borrower = setup_lp_account::<T>(Asset::Usdc, 1);
 		let core_pool_id = setup_chp_pool::<T>(asset);
 
 		assert_ok!(Pallet::<T>::add_chp_funds(
@@ -352,8 +364,8 @@ mod benchmarks {
 	fn upkeep_no_action(n: Linear<1, 50>) {
 		let asset = Asset::Btc;
 
-		let lp_account = setup_booster_account::<T>(asset, 0);
-		let borrower = setup_booster_account::<T>(Asset::Usdc, 1);
+		let lp_account = setup_lp_account::<T>(asset, 0);
+		let borrower = setup_lp_account::<T>(Asset::Usdc, 1);
 		let core_pool_id = setup_chp_pool::<T>(asset);
 
 		assert_ok!(Pallet::<T>::add_chp_funds(
@@ -380,6 +392,119 @@ mod benchmarks {
 		{
 			crate::chp_lending::chp_upkeep::<T>(2u32.into());
 		}
+	}
+
+	#[benchmark]
+	fn charge_interest_for_loan(n: Linear<1, 20>) {
+		let asset = Asset::Btc;
+		let lp_account = setup_lp_account::<T>(asset, 0);
+		let core_pool_id = setup_chp_pool::<T>(asset);
+		let initial_collateral = 1_000_000_000_000u128;
+		let mut loan = ChpLoan::<T>::new(
+			ChpLoanId(1),
+			asset,
+			Default::default(),
+			(INTEREST_PAYMENT_INTERVAL * 10).into(),
+			lp_account,
+			initial_collateral,
+			0u128,
+			(0..n)
+				.map(|id| ChpPoolContribution {
+					core_pool_id,
+					loan_id: LoanId(id as u64),
+					principal: 1_000_000u128,
+				})
+				.collect::<Vec<_>>(),
+			Perbill::from_parts(1_000_000),
+			cf_amm_math::price_at_tick(0).unwrap(),
+			LoanStatus::Active,
+		);
+
+		#[block]
+		{
+			let _ = crate::chp_lending::process_interest_for_loan::<T>(
+				INTEREST_PAYMENT_INTERVAL.into(),
+				&mut loan,
+			);
+		}
+
+		assert!(loan.usdc_collateral() < initial_collateral);
+		assert!(loan.fees_collected_usdc() > 0);
+	}
+
+	#[benchmark]
+	fn top_up_collateral() {
+		let asset = Asset::Btc;
+		let lp_account = setup_lp_account::<T>(asset, 0);
+		let core_pool_id = setup_chp_pool::<T>(asset);
+		let config = ChpConfiguration {
+			overcollateralisation_topup_threshold: Permill::from_percent(50),
+			overcollateralisation_target: Permill::one(),
+			..Default::default()
+		};
+
+		ChpConfig::<T>::set(config.clone());
+
+		let mut loan = ChpLoan::<T>::new(
+			ChpLoanId(1),
+			asset,
+			Default::default(),
+			(INTEREST_PAYMENT_INTERVAL * 10).into(),
+			lp_account.clone(),
+			1_000_000u128,
+			0u128,
+			vec![ChpPoolContribution {
+				core_pool_id,
+				loan_id: LoanId(1u64),
+				principal: 1_000_000u128,
+			}],
+			Perbill::from_parts(1_000_000),
+			cf_amm_math::price_at_tick(0).unwrap(),
+			LoanStatus::Active,
+		);
+
+		let initial_balance = T::Balance::get_balance(&lp_account, COLLATERAL_ASSET);
+
+		#[block]
+		{
+			let _ = crate::chp_lending::process_collateral_topup::<T>(&mut loan, &config);
+		}
+
+		// Ensure balance is reduced due to collateral top ups
+		assert!(T::Balance::get_balance(&lp_account, COLLATERAL_ASSET) < initial_balance);
+	}
+
+	#[benchmark]
+	fn initiate_soft_liquidation() {
+		let asset = Asset::Btc;
+		let lp_account = setup_lp_account::<T>(asset, 0);
+		let core_pool_id = setup_chp_pool::<T>(asset);
+
+		let mut loan = ChpLoan::<T>::new(
+			ChpLoanId(1),
+			asset,
+			Default::default(),
+			(INTEREST_PAYMENT_INTERVAL * 10).into(),
+			lp_account.clone(),
+			1_000_000u128,
+			0u128,
+			vec![ChpPoolContribution {
+				core_pool_id,
+				loan_id: LoanId(1u64),
+				principal: 1_000_000u128,
+			}],
+			Perbill::from_parts(1_000_000),
+			cf_amm_math::price_at_tick(0).unwrap(),
+			LoanStatus::Active,
+		);
+
+		#[block]
+		{
+			crate::chp_lending::initiate_soft_liquidation::<T>(&mut loan);
+		}
+
+		// All collaterals are liquidated
+		assert!(loan.usdc_collateral().is_zero());
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mocks::new_test_ext(), crate::mocks::Test,);
