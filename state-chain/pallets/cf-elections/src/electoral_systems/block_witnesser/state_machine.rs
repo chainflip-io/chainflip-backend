@@ -354,7 +354,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 		settings: &Self::Settings,
 		after: &Self::State,
 	) {
-		use crate::electoral_systems::state_machine::test_utils::{BTreeMultiSet, Container};
+		use crate::electoral_systems::state_machine::test_utils::BTreeMultiSet;
 		use cf_chains::witness_period::SaturatingStep;
 		use std::collections::BTreeSet;
 
@@ -420,11 +420,10 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 					.collect::<Vec<_>>()
 			};
 
-		let counted_heights: Container<BTreeMultiSet<_>> =
-			get_all_heights(after, None).into_iter().collect();
+		let counted_heights: BTreeMultiSet<_> = get_all_heights(after, None).into_iter().collect();
 
 		// we have unique heights
-		for (height, count) in counted_heights.0 .0.clone() {
+		for (height, count) in counted_heights.0.clone() {
 			if count > 1 {
 				panic!("Got height {height:?} in total {count} times");
 			}

@@ -28,7 +28,7 @@ use crate::electoral_systems::{
 	state_machine::{
 		core::{hook_test_utils::MockHook, TypesFor, Validate},
 		state_machine::{AbstractApi, InputOf, Statemachine},
-		test_utils::{BTreeMultiSet, Container},
+		test_utils::BTreeMultiSet,
 	},
 };
 use chainstate_simulation::*;
@@ -346,11 +346,11 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		writeln!(printed).unwrap();
 	}
 
-	let counted_events: Container<BTreeMultiSet<(u8, MockBtcEvent<Event>)>> =
+	let counted_events: BTreeMultiSet<(u8, MockBtcEvent<Event>)> =
 		total_outputs.into_iter().flatten().collect();
 
 	// verify that each event was emitted only one time
-	for (event, count) in counted_events.0 .0.clone() {
+	for (event, count) in counted_events.0.clone() {
 		if count > 1 {
 			panic!("Got event {event:?} in total {count} times           events: {printed}              bw_input_history: {}",
                 print_bw_history(&history)
@@ -361,7 +361,6 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	// ensure that we only emit witness events that are on the final chain
 	let emitted_witness_events: BTreeSet<_> = counted_events
 		.0
-		 .0
 		.keys()
 		.map(|(_, b)| b)
 		.filter_map(try_get!(MockBtcEvent::Witness))
