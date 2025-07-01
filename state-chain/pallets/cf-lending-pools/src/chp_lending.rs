@@ -97,9 +97,11 @@ fn usdc_equivalent_amount<T: Config>(asset: Asset, amount: AssetAmount) -> Asset
 	cf_amm_math::output_amount_ceil(amount.into(), asset_price).unique_saturated_into()
 }
 
-fn usdc_collateral_required<T: Config>(asset: Asset, loan_principal: AssetAmount) -> AssetAmount {
-	let config = ChpConfig::<T>::get();
-
+fn usdc_collateral_required<T: Config>(
+	asset: Asset,
+	loan_principal: AssetAmount,
+	config: &ChpConfiguration,
+) -> AssetAmount {
 	let usdc_loan_value = usdc_equivalent_amount::<T>(asset, loan_principal);
 
 	usdc_loan_value + config.overcollateralisation_target * usdc_loan_value
@@ -190,7 +192,7 @@ pub fn process_collateral_topup<T: Config>(
 ) -> Weight {
 	if loan.overcollateralisation_ratio() < config.overcollateralisation_topup_threshold {
 		let collateral_required =
-			usdc_collateral_required::<T>(loan.asset, loan.total_principal_amount());
+			usdc_collateral_required::<T>(loan.asset, loan.total_principal_amount(), config);
 
 		let topup_amount_required = collateral_required.saturating_sub(loan.usdc_collateral);
 
@@ -282,7 +284,8 @@ impl<T: Config> ChpLendingApi for Pallet<T> {
 
 		let chp_config = ChpConfig::<T>::get();
 
-		let usdc_collateral_amount = usdc_collateral_required::<T>(asset, amount_to_borrow);
+		let usdc_collateral_amount =
+			usdc_collateral_required::<T>(asset, amount_to_borrow, &chp_config);
 
 		let chp_pool = ChpPools::<T>::get(asset).ok_or(Error::<T>::PoolDoesNotExist)?;
 
