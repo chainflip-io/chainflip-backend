@@ -14,15 +14,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
+use std::{future::Future, time::Duration};
 
 use bitcoin::BlockHash;
 use cf_chains::btc;
 use cf_utilities::make_periodic_tick;
 use futures_util::stream;
+use tokio::time::sleep;
 
 use crate::{
-	btc::retry_rpc::BtcRetryRpcApi,
+	btc::rpc::BtcRpcApi,
 	witness::common::{
 		chain_source::{BoxChainStream, ChainClient, ChainSource, Header},
 		ExternalChainSource,
@@ -51,7 +52,7 @@ pub struct BtcSourceState {
 #[async_trait::async_trait]
 impl<C> ChainSource for BtcSource<C>
 where
-	C: BtcRetryRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()>,
+	C: Clone + BtcRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()>,
 {
 	type Index = <C as ChainClient>::Index;
 	type Hash = <C as ChainClient>::Hash;
@@ -101,7 +102,29 @@ where
 
 						tick.tick().await;
 
-						let best_block_header = client.best_block_header().await;
+						async fn until_success<A, Fut: Future<Output = anyhow::Result<A>>>(
+							f: impl Fn() -> Fut,
+						) -> A {
+							loop {
+								match f().await {
+									Ok(a) => return a,
+									Err(err) => tracing::warn!("Received error {err} when trying to query btc rpc. Retrying."),
+								}
+								sleep(Duration::from_secs(6)).await;
+							}
+						}
+
+						let client_c = client.clone();
+						let best_block_header = until_success(move || {
+							let client_c = client_c.clone();
+							async move {
+								let best_block_hash = client_c.best_block_hash().await?;
+								let best_block_header =
+									client_c.block_header(best_block_hash).await?;
+								Ok(best_block_header)
+							}
+						})
+						.await;
 
 						let yield_new_best_header: bool = match &mut stream_state {
 							Some(state)
@@ -156,7 +179,7 @@ where
 
 impl<C> ExternalChainSource for BtcSource<C>
 where
-	C: BtcRetryRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()> + Clone,
+	C: BtcRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()> + Clone,
 {
 	type Chain = cf_chains::Bitcoin;
 }

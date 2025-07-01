@@ -14,12 +14,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use cf_utilities::task_scope::Scope;
 use chainflip_api::primitives::EpochIndex;
 use chainflip_engine::{
-	btc::retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
+	btc::{retry_rpc::BtcRetryRpcClient, rpc::BtcRpcApi},
 	settings::NodeContainer,
 	state_chain_observer::client::{
 		stream_api::{StreamApi, UNFINALIZED},
@@ -31,6 +31,7 @@ use chainflip_engine::{
 	},
 };
 use futures::Future;
+use tokio::time::sleep;
 
 use crate::DepositTrackerSettings;
 
@@ -68,8 +69,15 @@ where
 			move |header| {
 				let btc_client = btc_client.clone();
 				async move {
-					let block = btc_client.block(header.hash).await;
-					(header.data, block.txdata)
+					loop {
+						match btc_client.block(header.hash).await {
+							Ok(block) => break (header.data, block.txdata),
+							Err(err) => tracing::warn!(
+								"Received error {err} when trying to query btc rpc. Retrying."
+							),
+						}
+						sleep(Duration::from_secs(6)).await;
+					}
 				}
 			}
 		})

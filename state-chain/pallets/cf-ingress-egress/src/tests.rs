@@ -2013,7 +2013,7 @@ fn safe_mode_prevents_deposit_channel_creation() {
 
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			ingress_egress_ethereum: PalletSafeMode {
-				deposits_enabled: false,
+				deposit_channel_creation_enabled: false,
 				..PalletSafeMode::CODE_GREEN
 			},
 			..MockRuntimeSafeMode::CODE_GREEN
@@ -2700,8 +2700,8 @@ fn assembling_broker_fees() {
 	new_test_ext().execute_with(|| {
 		let broker_fee = Beneficiary { account: BROKER, bps: 0 };
 
-		const AFFILIATE_IDS: [u64; 5] = [10, 20, 30, 40, 50];
-		const AFFILIATE_SHORT_IDS: [u8; 5] = [1, 2, 3, 4, 5];
+		const AFFILIATE_IDS: [u64; MAX_AFFILIATES as usize] = [10, 20, 30, 40, 50];
+		const AFFILIATE_SHORT_IDS: [u8; MAX_AFFILIATES as usize] = [1, 2, 3, 4, 5];
 
 		assert_eq!(AFFILIATE_IDS.len(), MAX_AFFILIATES as usize);
 

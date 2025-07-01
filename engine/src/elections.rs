@@ -38,6 +38,7 @@ use std::{
 	collections::{BTreeMap, HashMap},
 	sync::Arc,
 };
+use tokio::sync::mpsc;
 use tracing::Level;
 use voter_api::CompositeVoterApi;
 
@@ -58,6 +59,7 @@ pub struct Voter<
 	state_chain_client: Arc<StateChainClient>,
 	voter: RetrierClient<VoterClient>,
 	voter_name: &'static str,
+	cache_invalidation_senders: Option<Vec<mpsc::Sender<()>>>,
 	_phantom: core::marker::PhantomData<Instance>,
 }
 
@@ -76,6 +78,7 @@ where
 		scope: &Scope<'_, anyhow::Error>,
 		state_chain_client: Arc<StateChainClient>,
 		voter: VoterClient,
+		cache_invalidation_senders: Option<Vec<mpsc::Sender<()>>>,
 		voter_name: &'static str,
 	) -> Self {
 		Self {
@@ -89,6 +92,7 @@ where
 				MAXIMUM_CONCURRENT_VOTER_REQUESTS,
 			),
 			voter_name,
+			cache_invalidation_senders,
 			_phantom: Default::default(),
 		}
 	}
@@ -189,7 +193,7 @@ where
 						}
 						// TODO: Use block hash you got this vote tasks details from as the based of the mortal of the extrinsic
 						state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::vote {
-							authority_votes: BTreeMap::from_iter(votes).try_into().unwrap(/*Safe due to chunking*/),
+							authority_votes: Box::new(BTreeMap::from_iter(votes).try_into().unwrap(/*Safe due to chunking*/)),
 						}).await;
 					}
 				}).await;
@@ -232,6 +236,13 @@ where
 				if let Some(electoral_data) = self.state_chain_client.electoral_data(block_info).await {
 					authority_count = core::cmp::max(electoral_data.authority_count, 1);
 					if electoral_data.contributing {
+						if let Some(caches) = &self.cache_invalidation_senders {
+							for sender in caches {
+								if let Err(e) = sender.send(()).await {
+									self.log(Level::WARN, &format!("Cache receiver dropped: {e}"))
+								}
+							}
+						}
 						for (election_identifier, election_data) in electoral_data.current_elections {
 							if election_data.is_vote_desired {
 								if !vote_tasks.contains_key(&election_identifier) {
@@ -267,7 +278,7 @@ where
 								// which keeps decreasing exponentially (i.e. with the current values => 2 blocks delay: 1 in 40k, 3 blocks delay: 1 in 4million ...)
 								if (reference_details.created..reference_details.expires).contains(&block_info.number) && rng.gen_bool(required_full_vote_probability(authority_count, 0.01)) {
 									self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::provide_shared_data {
-										shared_data: shared_data.clone(),
+										shared_data: Box::new(shared_data.clone()),
 									}).await;
 								}
 							}

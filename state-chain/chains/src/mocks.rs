@@ -72,7 +72,9 @@ impl Get<ChainChoice> for MockBroadcastBarriers {
 	}
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
+)]
 pub struct MockEthereumTransactionMetadata;
 
 impl TransactionMetadata<MockEthereum> for MockEthereumTransactionMetadata {
@@ -262,7 +264,9 @@ impl FeeRefundCalculator<MockEthereum> for MockTransaction {
 	}
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Encode, Decode, TypeInfo)]
+#[derive(
+	Copy, Clone, Debug, PartialEq, Eq, Default, Encode, Decode, TypeInfo, Serialize, Deserialize,
+)]
 pub struct MockThresholdSignature<K, P> {
 	pub signing_key: K,
 	pub signed_payload: P,
