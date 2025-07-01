@@ -90,7 +90,7 @@ impl ChainTypes for BitcoinChain {
 }
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub enum BitcoinEvent {
+pub enum BitcoinElectoralEvents {
 	ReorgDetected { reorged_blocks: RangeInclusive<btc::BlockNumber> },
 }
 // ------------------------ block height tracking ---------------------------
@@ -129,10 +129,10 @@ impls! {
 	}
 
 	Hook<HookTypeFor<Self, ReorgHook>> {
-		fn run(&mut self, input: RangeInclusive<btc::BlockNumber>) {
+		fn run(&mut self, reorged_blocks: RangeInclusive<btc::BlockNumber>) {
 			pallet_cf_elections::Pallet::<Runtime, BitcoinInstance>::deposit_event(
-				pallet_cf_elections::Event::Custom(BitcoinEvent::ReorgDetected {
-					reorged_blocks: input,
+				pallet_cf_elections::Event::ElectoralEvent(BitcoinElectoralEvents::ReorgDetected {
+					reorged_blocks
 				})
 			);
 		}

@@ -54,7 +54,7 @@ impl pallet_cf_elections::Config<Instance1> for Test {
 
 	type CreateGovernanceElectionHook = MockGovernanceHook;
 
-	type CustomEvents = ();
+	type ElectoralEvents = ();
 }
 
 impl_mock_chainflip!(Test);

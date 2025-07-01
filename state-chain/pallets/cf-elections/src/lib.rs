@@ -421,7 +421,7 @@ pub mod pallet {
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 
-		type CustomEvents: Clone + Debug + TypeInfo + Eq;
+		type ElectoralEvents: Clone + Debug + TypeInfo + Eq;
 	}
 
 	#[pallet::event]
@@ -439,7 +439,7 @@ pub mod pallet {
 		/// Received vote for an unknown election
 		UnknownElection(ElectionIdentifierOf<T::ElectoralSystemRunner>),
 
-		Custom(T::CustomEvents),
+		ElectoralEvent(T::ElectoralEvents),
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
