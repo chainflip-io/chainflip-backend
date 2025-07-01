@@ -166,6 +166,7 @@ pub fn vault_deposits(
 			}
 			None
 		})
+		.sorted_by_key(|vault_swap| vault_swap.deposit_address.clone())
 		.collect()
 }
 
@@ -229,6 +230,11 @@ pub fn egress_witnessing(
 			}
 			None
 		})
+		.sorted_by_key(
+			|tx: &TransactionConfirmation<state_chain_runtime::Runtime, BitcoinInstance>| {
+				tx.tx_out_id
+			},
+		)
 		.collect::<Vec<_>>()
 }
 
