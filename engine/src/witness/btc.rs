@@ -151,7 +151,7 @@ impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVote
 
 			let headers_len = headers.len();
 			NonemptyContinuousHeaders::try_new(headers)
-				.inspect(|_| tracing::info!("BTC BHW: Submitting vote for (witness_from={witness_from_index})with {headers_len} headers",))
+				.inspect(|_| tracing::debug!("BTC BHW: Submitting vote for (witness_from={witness_from_index})with {headers_len} headers",))
 				.map(Some)
 				.map_err(|err| anyhow::format_err!("BTC BHW: {err:?}"))
 		}
@@ -307,7 +307,7 @@ where
 		+ Send
 		+ Sync,
 {
-	tracing::info!("Starting BTC witness");
+	tracing::debug!("Starting BTC witness");
 	scope.spawn(async move {
 		task_scope::task_scope(|scope| {
 			async {

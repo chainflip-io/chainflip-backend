@@ -55,7 +55,7 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 			}
 
 			consensus.check_consensus(threshold).inspect(|result| {
-				log::info!(
+				log::debug!(
 					"(witness_from: {:?}): successful consensus for ranges: {:?}..={:?}",
 					properties,
 					result.first(),

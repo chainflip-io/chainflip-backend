@@ -199,7 +199,7 @@ where
 		}
 
 		// step for each election that reached consensus
-		log::info!("ESSM: stepping for each election with consensus ({:?})", election_identifiers);
+		log::debug!("ESSM: stepping for each election with consensus ({:?})", election_identifiers);
 		for election_identifier in &election_identifiers {
 			let election_access = ElectoralAccess::election_mut(*election_identifier);
 			log::debug!("ESSM: checking consensus for {election_identifier:?}");
@@ -256,7 +256,7 @@ where
 			if ES::Statemachine::validate(&properties, &vote).is_ok() {
 				consensus.insert_vote(vote);
 			} else {
-				log::warn!("Received invalid vote: response ({:?}) didn't match with the query {properties:?}", vote);
+				log::debug!("Received invalid vote: response ({:?}) didn't match with the query {properties:?}", vote);
 			}
 		}
 
