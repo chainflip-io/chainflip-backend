@@ -68,8 +68,14 @@ where
 			move |header| {
 				let btc_client = btc_client.clone();
 				async move {
-					let block = btc_client.block(header.hash).await.expect("TODO: Delete this");
-					(header.data, block.txdata)
+					loop {
+						match btc_client.block(header.hash).await {
+							Ok(block) => break (header.data, block.txdata),
+							Err(err) => tracing::warn!(
+								"Received error {err} when trying to query btc rpc. Retrying."
+							),
+						}
+					}
 				}
 			}
 		})
