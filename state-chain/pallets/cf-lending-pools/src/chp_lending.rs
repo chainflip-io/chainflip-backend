@@ -262,14 +262,13 @@ pub fn chp_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 	let config = ChpConfig::<T>::get();
 
 	// For weight calculation
-	let mut count_active = 0u32;
-	let mut count_soft_liquidation = 0u32;
-	let mut count_no_action = 0u32;
+	let mut count_baseline = 0u32;
 	let mut weight_consumed: Weight = Default::default();
 
 	for (asset, loan_id) in ChpLoans::<T>::iter_keys() {
 		let _ = ChpLoans::<T>::mutate(asset, loan_id, |loan| {
 			let loan = loan.as_mut().expect("keys read directly from storage just above");
+			count_baseline += 1;
 
 			if loan.status == LoanStatus::Active {
 				weight_consumed += process_interest_for_loan::<T>(current_block, loan);
@@ -294,7 +293,6 @@ pub fn chp_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 					{
 						weight_consumed += initiate_soft_liquidation::<T>(loan);
 					}
-					count_active += 1;
 				},
 				LoanStatus::SoftLiquidation { .. } => {
 					let overcollateralisation_ratio = loan.overcollateralisation_ratio();
@@ -303,11 +301,9 @@ pub fn chp_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 						// TODO: cancel soft liquidation swap and initiate a hard liquidation one
 						unimplemented!();
 					}
-					count_soft_liquidation += 1;
 				},
 				LoanStatus::Finalising | LoanStatus::HardLiquidation { .. } => {
 					// Nothing to do
-					count_no_action += 1;
 				},
 			}
 
@@ -316,10 +312,7 @@ pub fn chp_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 	}
 
 	// Calculate final weight
-	weight_consumed +
-		T::WeightInfo::upkeep_active(count_active) +
-		T::WeightInfo::upkeep_soft_liquidation(count_soft_liquidation) +
-		T::WeightInfo::upkeep_no_action(count_no_action)
+	weight_consumed + T::WeightInfo::upkeep_baseline(count_baseline)
 }
 
 impl<T: Config> ChpLendingApi for Pallet<T> {
