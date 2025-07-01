@@ -21,6 +21,19 @@ mod old {
 	}
 
 	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+	pub struct BroadcastSafeMode {
+		pub retry_enabled: bool,
+	}
+
+	impl<I> From<BroadcastSafeMode> for pallet_cf_broadcast::PalletSafeMode<I> {
+		fn from(BroadcastSafeMode { retry_enabled }: BroadcastSafeMode) -> Self {
+			let mut sm = pallet_cf_broadcast::PalletSafeMode::<I>::default();
+			sm.retry_enabled = retry_enabled;
+			sm
+		}
+	}
+
+	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub struct RuntimeSafeMode {
 		pub emissions: pallet_cf_emissions::PalletSafeMode,
 		pub funding: pallet_cf_funding::PalletSafeMode,
@@ -35,12 +48,12 @@ mod old {
 		pub threshold_signature_bitcoin: pallet_cf_threshold_signature::PalletSafeMode<Instance3>,
 		pub threshold_signature_polkadot: pallet_cf_threshold_signature::PalletSafeMode<Instance15>,
 		pub threshold_signature_solana: pallet_cf_threshold_signature::PalletSafeMode<Instance5>,
-		pub broadcast_ethereum: pallet_cf_broadcast::PalletSafeMode<Instance1>,
-		pub broadcast_bitcoin: pallet_cf_broadcast::PalletSafeMode<Instance3>,
-		pub broadcast_polkadot: pallet_cf_broadcast::PalletSafeMode<Instance2>,
-		pub broadcast_arbitrum: pallet_cf_broadcast::PalletSafeMode<Instance4>,
-		pub broadcast_solana: pallet_cf_broadcast::PalletSafeMode<Instance5>,
-		pub broadcast_assethub: pallet_cf_broadcast::PalletSafeMode<Instance6>,
+		pub broadcast_ethereum: BroadcastSafeMode,
+		pub broadcast_bitcoin: BroadcastSafeMode,
+		pub broadcast_polkadot: BroadcastSafeMode,
+		pub broadcast_arbitrum: BroadcastSafeMode,
+		pub broadcast_solana: BroadcastSafeMode,
+		pub broadcast_assethub: BroadcastSafeMode,
 		pub witnesser: pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
 		pub ingress_egress_ethereum: IngressEgressSafeMode,
 		pub ingress_egress_bitcoin: IngressEgressSafeMode,
@@ -81,12 +94,12 @@ impl UncheckedOnRuntimeUpgrade for SafeModeMigration {
 					threshold_signature_bitcoin: old.threshold_signature_bitcoin,
 					threshold_signature_polkadot: old.threshold_signature_polkadot,
 					threshold_signature_solana: old.threshold_signature_solana,
-					broadcast_ethereum: old.broadcast_ethereum,
-					broadcast_bitcoin: old.broadcast_bitcoin,
-					broadcast_polkadot: old.broadcast_polkadot,
-					broadcast_arbitrum: old.broadcast_arbitrum,
-					broadcast_solana: old.broadcast_solana,
-					broadcast_assethub: old.broadcast_assethub,
+					broadcast_ethereum: old.broadcast_ethereum.into(),
+					broadcast_bitcoin: old.broadcast_bitcoin.into(),
+					broadcast_polkadot: old.broadcast_polkadot.into(),
+					broadcast_arbitrum: old.broadcast_arbitrum.into(),
+					broadcast_solana: old.broadcast_solana.into(),
+					broadcast_assethub: old.broadcast_assethub.into(),
 					witnesser: old.witnesser,
 					ingress_egress_ethereum: migrate_ingress_egress_safe_mode(old.ingress_egress_ethereum),
 					ingress_egress_bitcoin: migrate_ingress_egress_safe_mode(old.ingress_egress_bitcoin),
