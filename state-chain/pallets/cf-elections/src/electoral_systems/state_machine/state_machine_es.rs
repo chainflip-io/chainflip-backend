@@ -256,7 +256,7 @@ where
 			if ES::Statemachine::validate(&properties, &vote).is_ok() {
 				consensus.insert_vote(vote);
 			} else {
-				log::warn!("Received invalid vote: response ({:?}) didn't match with the query {properties:?}", vote);
+				log::debug!("Received invalid vote: response ({:?}) didn't match with the query {properties:?}", vote);
 			}
 		}
 
