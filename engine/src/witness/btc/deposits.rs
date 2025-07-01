@@ -231,10 +231,9 @@ pub fn egress_witnessing(
 			None
 		})
 		.sorted_by_key(
-			|tx: &TransactionConfirmation<
-				state_chain_runtime::Runtime,
-				pallet_cf_vaults::Instance3,
-			>| tx.tx_out_id,
+			|tx: &TransactionConfirmation<state_chain_runtime::Runtime, BitcoinInstance>| {
+				tx.tx_out_id
+			},
 		)
 		.collect::<Vec<_>>()
 }
