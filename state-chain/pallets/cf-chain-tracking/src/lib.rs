@@ -194,7 +194,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				new_height > previous_chain_state.as_ref().expect(NO_CHAIN_STATE).block_height,
 				Error::<T, I>::StaleDataSubmitted
 			);
-			previous_chain_state.as_mut().expect(NO_CHAIN_STATE).block_height = new_height;
+			let chain_state = previous_chain_state.as_mut().expect(NO_CHAIN_STATE);
+			chain_state.block_height = new_height;
+
+			// emit event for current state since Product uses the `block_height` information
+			Self::deposit_event(Event::<T, I>::ChainStateUpdated {
+				new_chain_state: chain_state.clone(),
+			});
 
 			Ok::<(), DispatchError>(())
 		})?;
@@ -206,6 +212,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		CurrentChainState::<T, I>::mutate(|previous_chain_state| {
 			previous_chain_state.as_mut().expect(NO_CHAIN_STATE).tracked_data = new_fee;
 		});
+
+		// We don't emit an event when just the fee is updated since Product doesn't use this
+		// information currently
 
 		Ok(())
 	}

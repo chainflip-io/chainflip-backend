@@ -64,7 +64,10 @@ strum = { workspace = true }
 thiserror = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 derive-where = "1.2.7"
-proptest = { version = "1.6", optional = true } # note this has to be in the normal dependencies because other packages depend on it
+# Note that `proptest` is only used if the "test" feature is enabled. This dependency can't be
+# moved to the dev-dependencies though because the tests of the elections pallet depend on the
+# implementation provided in this crate when "test" is enabled.
+proptest = { version = "1.6", optional = true }
 duplicate = "2.0.0"
 saturating_cast = "0.1.0"
 

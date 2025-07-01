@@ -1,5 +1,7 @@
 use core::{iter::Step, ops::RangeInclusive};
 
+use crate::electoral_systems::state_machine::core::def_derive;
+
 use super::{
 	block_witnesser::state_machine::HookTypeFor,
 	state_machine::core::{defx, Hook, HookType, Serde, Validate},
@@ -50,10 +52,6 @@ pub trait ChainTypes: Ord + Clone + Debug + 'static {
 	type ChainBlockNumber: ChainBlockNumberTrait;
 	type ChainBlockHash: ChainBlockHashTrait;
 
-	/// IMPORTANT: this value must always be greater than the safety margin we use, and represent
-	/// the buffer of data we keep around (in number of blocks) both in the ElectionTracker and in
-	/// the BlockProcessor
-	const SAFETY_BUFFER: usize;
 	const NAME: &'static str;
 }
 pub type ChainBlockNumberOf<T> = <T as ChainTypes>::ChainBlockNumber;
@@ -80,6 +78,22 @@ defx! {
 		pub witness_from_index: <T::Chain as ChainTypes>::ChainBlockNumber,
 	}
 	validate _this (else HeightWitnesserPropertiesError) {}
+}
+
+def_derive! {
+	#[derive(TypeInfo)]
+	pub struct BlockHeightWitnesserSettings {
+		/// IMPORTANT: This value should always be greater than any reorg depth we expect to happen.
+		/// If we expect reorgs of at most depth 3, set this value to over 2 times that number, so let's
+		/// say 8.
+		///
+		/// This setting determines the number of blocks we store in the BHW to infer the depth of reorgs.
+		///
+		/// If you change this value, you should also look the `safety_buffer` setting of the BlockWitnesser.
+		///
+		/// Changing it at runtime is possible and should not have unintended consequences.
+		pub safety_buffer: u32
+	}
 }
 
 defx! {

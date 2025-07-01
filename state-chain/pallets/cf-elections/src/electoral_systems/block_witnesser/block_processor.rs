@@ -156,8 +156,9 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		&mut self,
 		seen_heights_below: ChainBlockNumberOf<T::Chain>,
 		removed_block_heights: RangeInclusive<ChainBlockNumberOf<T::Chain>>,
+		safety_buffer: usize,
 	) {
-		let expiry = seen_heights_below.saturating_forward(T::Chain::SAFETY_BUFFER);
+		let expiry = seen_heights_below.saturating_forward(safety_buffer);
 		for height in removed_block_heights {
 			if let Some(block_info) = self.blocks_data.remove(&height) {
 				let age_range: Range<u32> = 0..block_info.next_age_to_process;
@@ -199,6 +200,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		&mut self,
 		seen_heights_below: ChainBlockNumberOf<T::Chain>,
 		lowest_in_progress_height: ChainBlockNumberOf<T::Chain>,
+		safety_buffer: usize,
 	) {
 		//--------- calculate new events ---------
 		let new_events: Vec<_> = self
@@ -235,7 +237,7 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		let deleted_blocks = self
 			.blocks_data
 			.extract_if(|block_number, _| {
-				block_number.saturating_forward(T::Chain::SAFETY_BUFFER) < seen_heights_below
+				block_number.saturating_forward(safety_buffer) < seen_heights_below
 			})
 			.collect();
 
@@ -282,6 +284,7 @@ pub(crate) mod tests {
 	use sp_std::{fmt::Debug, vec::Vec};
 
 	const SAFETY_MARGIN: u32 = 3;
+	const SAFETY_BUFFER: usize = 16;
 
 	#[derive(
 		Debug,
@@ -345,7 +348,7 @@ pub(crate) mod tests {
 
 	type Types = TypesFor<(u8, Vec<u8>, Vec<u8>)>;
 
-	/// tests that the processor correcly keep up to Types::SAFETY_BUFFER blocks (16), and remove
+	/// tests that the processor correcly keep up to SAFETY_BUFFER blocks (16), and remove
 	/// them once the SAFETY_BUFFER elapsed
 	#[test]
 	fn blocks_correctly_inserted_and_removed() {
@@ -356,15 +359,15 @@ pub(crate) mod tests {
 		processor.insert_block_data(10, vec![4], SAFETY_MARGIN);
 		processor.insert_block_data(11, vec![7], SAFETY_MARGIN);
 		assert_eq!(processor.blocks_data.len(), 3, "Only three blockdata added to the processor");
-		for i in 0..=Types::SAFETY_BUFFER as u8 {
+		for i in 0..=SAFETY_BUFFER as u8 {
 			processor.insert_block_data(i, vec![i], SAFETY_MARGIN);
 		}
 		processor.insert_block_data(17, vec![7], SAFETY_MARGIN);
 
-		processor.process_blocks_up_to(18, 18);
+		processor.process_blocks_up_to(18, 18, SAFETY_BUFFER);
 		assert_eq!(
 			processor.blocks_data.len(),
-			Types::SAFETY_BUFFER,
+			SAFETY_BUFFER,
 			"Max Types::SAFETY_BUFFER (16) blocks stored at any time"
 		);
 	}
@@ -377,8 +380,8 @@ pub(crate) mod tests {
 		processor.insert_block_data(9, vec![1, 2, 3], SAFETY_MARGIN);
 		processor.insert_block_data(10, vec![4, 5, 6], SAFETY_MARGIN);
 		processor.insert_block_data(11, vec![7, 8, 9], SAFETY_MARGIN);
-		processor.process_blocks_up_to(12, 12);
-		processor.process_reorg(18, 9..=11);
+		processor.process_blocks_up_to(12, 12, SAFETY_BUFFER);
+		processor.process_reorg(18, 9..=11, SAFETY_BUFFER);
 		assert!(!processor.blocks_data.contains_key(&9));
 		assert!(!processor.blocks_data.contains_key(&10));
 		assert!(!processor.blocks_data.contains_key(&11));
@@ -392,7 +395,7 @@ pub(crate) mod tests {
 		// We processed pre-witnessing (boost) for the followings deposit
 		processor.insert_block_data(9, vec![1, 2], SAFETY_MARGIN);
 		processor.insert_block_data(10, vec![4, 5], SAFETY_MARGIN);
-		processor.process_blocks_up_to(11, 11);
+		processor.process_blocks_up_to(11, 11, SAFETY_BUFFER);
 		assert_eq!(
 			processor.execute.take_history(),
 			vec![vec![
@@ -403,9 +406,9 @@ pub(crate) mod tests {
 			]]
 		);
 
-		processor.process_reorg(12, 9..=11);
+		processor.process_reorg(12, 9..=11, SAFETY_BUFFER);
 		processor.insert_block_data(11, vec![1, 2, 4, 5, 7], SAFETY_MARGIN);
-		processor.process_blocks_up_to(12, 12);
+		processor.process_blocks_up_to(12, 12, SAFETY_BUFFER);
 		// After reprocessing the reorged blocks we should have not re-emitted the same prewitness
 		// events for the same deposits, only the new detected deposit (7) is present
 
@@ -423,17 +426,17 @@ pub(crate) mod tests {
 
 		processor.insert_block_data(101, vec![1], SAFETY_MARGIN);
 		processor.insert_block_data(102, vec![2], SAFETY_MARGIN);
-		processor.process_blocks_up_to(103, 102);
+		processor.process_blocks_up_to(103, 102, SAFETY_BUFFER);
 
 		assert_eq!(processor.processed_events.len(), 0);
-		processor.process_reorg(103, 101..=102);
+		processor.process_reorg(103, 101..=102, SAFETY_BUFFER);
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
-			Some(103u8.saturating_add(Types::SAFETY_BUFFER as u8)).as_ref(),
+			Some(103u8.saturating_add(SAFETY_BUFFER as u8)).as_ref(),
 		);
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(2)),
-			Some(103u8.saturating_add(Types::SAFETY_BUFFER as u8)).as_ref(),
+			Some(103u8.saturating_add(SAFETY_BUFFER as u8)).as_ref(),
 		);
 	}
 
@@ -447,17 +450,18 @@ pub(crate) mod tests {
 			BlockProcessor::<Types>::default();
 
 		processor.insert_block_data(101, vec![1], SAFETY_MARGIN);
-		processor.process_blocks_up_to(102, 101);
-		processor.process_reorg(102, 101..=101);
+		processor.process_blocks_up_to(102, 101, SAFETY_BUFFER);
+		processor.process_reorg(102, 101..=101, SAFETY_BUFFER);
 
 		assert_eq!(
 			processor.processed_events.get(&MockBtcEvent::PreWitness(1)),
-			Some(102u8.saturating_add(Types::SAFETY_BUFFER as u8)).as_ref(),
+			Some(102u8.saturating_add(SAFETY_BUFFER as u8)).as_ref(),
 		);
 
 		processor.process_blocks_up_to(
-			102u8.saturating_add(Types::SAFETY_BUFFER as u8).saturating_add(1),
-			102u8.saturating_add(Types::SAFETY_BUFFER as u8).saturating_add(1),
+			102u8.saturating_add(SAFETY_BUFFER as u8).saturating_add(1),
+			102u8.saturating_add(SAFETY_BUFFER as u8).saturating_add(1),
+			SAFETY_BUFFER,
 		);
 		assert_eq!(processor.processed_events.get(&MockBtcEvent::PreWitness(1)), None,);
 	}
@@ -470,7 +474,7 @@ pub(crate) mod tests {
 		processor.insert_block_data(101, vec![1], SAFETY_MARGIN);
 
 		processor.insert_block_data(102, vec![2], SAFETY_MARGIN * 2);
-		processor.process_blocks_up_to(108, 108);
+		processor.process_blocks_up_to(108, 108, SAFETY_BUFFER);
 		//At this point we dispatch full witness only for deposit 1(safety margin 3) and not
 		// 2(safety margin 6)
 		assert_eq!(
@@ -489,14 +493,14 @@ pub(crate) mod tests {
 		let mut processor = BlockProcessor::<Types>::default();
 
 		processor.insert_block_data(102, vec![2], SAFETY_MARGIN);
-		processor.process_blocks_up_to(103, 103);
+		processor.process_blocks_up_to(103, 103, SAFETY_BUFFER);
 		assert_eq!(
 			processor.execute.take_history(),
 			vec![vec![(102u8, MockBtcEvent::PreWitness(2u8))]]
 		);
 
 		processor.insert_block_data(101, vec![1], SAFETY_MARGIN);
-		processor.process_blocks_up_to(103, 103);
+		processor.process_blocks_up_to(103, 103, SAFETY_BUFFER);
 		assert_eq!(
 			processor.execute.take_history(),
 			vec![vec![(101u8, MockBtcEvent::PreWitness(1u8)),]]

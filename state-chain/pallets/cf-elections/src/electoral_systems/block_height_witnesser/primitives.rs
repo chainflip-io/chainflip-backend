@@ -197,8 +197,6 @@ mod prop_tests {
 
 		type ChainBlockHash = bool;
 
-		const SAFETY_BUFFER: usize = 3;
-
 		const NAME: &'static str = "Mock";
 	}
 

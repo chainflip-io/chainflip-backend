@@ -125,6 +125,33 @@ pub struct BlockWitnesserSettings {
 	pub max_ongoing_elections: u16,
 	pub max_optimistic_elections: u8,
 	pub safety_margin: u32,
+
+	/// IMPORTANT: This value should always be greater than any reorg depth we expect to happen.
+	/// If we expect reorgs of at most depth 3, set this value to over 2 times that number, so
+	/// let's say 8.
+	///
+	/// This value determines:
+	///  - the point at which ByHash elections turn into BySafeHeight elections
+	///  - expiry of blockdata in the BlockProcessor
+	///  - expiry of left-over optimistic blocks in the cache
+	///
+	/// The ElectionTracker was written with the invariant in mind that the value
+	/// `seen_heights_below - safety_buffer` is monotonically increasing. There *might* be an
+	/// edge case where, if this value decreases (by increasing the safety_buffer), and there are
+	/// currently ongoing elections for blocks in the "skipped" range of heights, we would miss
+	/// elections for them.
+	///
+	/// DON'T change this value if either of the following is true:
+	///  - SAFEMODE is enabled.
+	///  - There are queued elections.
+	///  - There are many ongoing elections.
+	///
+	/// Also consider that non-overlapping of expiring and recycled deposit channels depends on a
+	/// different, const (!) SAFETY_BUFFER, that is not synced with this value.
+	///
+	/// If you have to change this value, consider also looking at the `safety_buffer` setting of
+	/// the BlockHeightWitnesser.
+	pub safety_buffer: u32,
 }
 
 defx! {
@@ -253,12 +280,17 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 		input: Either<Self::Context, (Self::Query, Self::Response)>,
 		settings: &Self::Settings,
 	) -> Self::Output {
+		// Update the cached safety buffer in the ElectionsTracker before
+		// doing anything else.
+		state.elections.safety_buffer = settings.safety_buffer;
+
 		match input {
 			Either::Left(Some(progress)) => {
 				if let Some(ref removed_block_heights) = progress.removed {
 					state.block_processor.process_reorg(
 						state.elections.seen_heights_below,
 						removed_block_heights.clone(),
+						settings.safety_buffer as usize,
 					);
 				}
 				for (height, accepted_optimistic_block) in state.elections.schedule_range(progress)
@@ -299,6 +331,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 			// the `highest_seen` block height, because that one progresses always
 			// following data from the BHW, ignoring ongoing elections.
 			lowest_in_progress_height,
+			settings.safety_buffer as usize,
 		);
 
 		state.elections.start_more_elections(
@@ -324,6 +357,11 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 		use crate::electoral_systems::state_machine::test_utils::{BTreeMultiSet, Container};
 		use cf_chains::witness_period::SaturatingStep;
 		use std::collections::BTreeSet;
+
+		assert!(
+			after.elections.safety_buffer == settings.safety_buffer,
+			"safety_buffer in ElectionsTracker should be updated"
+		);
 
 		assert!(
 			before.elections.seen_heights_below <= after.elections.seen_heights_below,
@@ -372,7 +410,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 							.keys()
 							.filter(|h| {
 								if let Some(bound) = remove_expired {
-									h.saturating_forward(T::Chain::SAFETY_BUFFER) >= bound
+									h.saturating_forward(settings.safety_buffer as usize) >= bound
 								} else {
 									true
 								}
@@ -415,7 +453,7 @@ impl<T: BWTypes> Statemachine for BWStatemachine<T> {
 				.filter(|h| !removed_heights.iter().any(|range| range.contains(h)))
 				.chain(new_heights)
 				.filter(|h| !(
-					h.saturating_forward(T::Chain::SAFETY_BUFFER) < after.elections.seen_heights_below
+					h.saturating_forward(settings.safety_buffer as usize) < after.elections.seen_heights_below
 					&& Some(h) == received_height.as_ref()
 					&& !nonoptimistic_elections(&after.elections).contains(h)
 				))
@@ -437,7 +475,10 @@ pub mod tests {
 
 	use super::*;
 	use crate::{
-		electoral_systems::block_height_witnesser::{ChainBlockHashTrait, ChainBlockNumberTrait},
+		electoral_systems::{
+			block_height_witnesser::{ChainBlockHashTrait, ChainBlockNumberTrait},
+			block_witnesser::primitives::STATIC_SAFETY_BUFFER_FOR_TESTS,
+		},
 		prop_do,
 	};
 	use hook_test_utils::*;
@@ -467,14 +508,16 @@ pub mod tests {
 	where
 		T::Chain: Arbitrary,
 	{
-		let safe_block_height =
-			state.elections.seen_heights_below.saturating_backward(T::Chain::SAFETY_BUFFER);
+		let safe_block_height = state
+			.elections
+			.seen_heights_below
+			.saturating_backward(STATIC_SAFETY_BUFFER_FOR_TESTS);
 
 		let seen_heights_below = state.elections.seen_heights_below;
 
 		prop_oneof![
 			Just(None),
-			(0..T::Chain::SAFETY_BUFFER)
+			(0..STATIC_SAFETY_BUFFER_FOR_TESTS)
 				.prop_flat_map(move |x| arbitrary_with::<ChainProgress<T::Chain>, _, _>((
 					(safe_block_height.saturating_forward(x), 10),
 					Default::default()
@@ -494,6 +537,7 @@ pub mod tests {
 	fn generate_settings() -> impl Strategy<Value = BlockWitnesserSettings> + Clone + Sync + Send {
 		prop_do! {
 			BlockWitnesserSettings {
+				safety_buffer: Just(STATIC_SAFETY_BUFFER_FOR_TESTS as u32),
 				safety_margin: 1..5u32,
 				max_ongoing_elections: 1..10u16,
 				max_optimistic_elections: 0..3u8,
