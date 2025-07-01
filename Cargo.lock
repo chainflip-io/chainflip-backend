@@ -1504,6 +1504,7 @@ dependencies = [
  "pallet-cf-funding",
  "pallet-cf-governance",
  "pallet-cf-ingress-egress",
+ "pallet-cf-lending-pools",
  "pallet-cf-lp",
  "pallet-cf-pools",
  "pallet-cf-reputation",

@@ -28,6 +28,7 @@ mod fee_scaling;
 mod funding;
 mod genesis;
 mod governance;
+mod lending;
 mod new_epoch;
 mod solana;
 mod swapping;

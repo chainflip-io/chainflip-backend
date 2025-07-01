@@ -21,7 +21,7 @@ mod chp_lending;
 mod core_lending_pool;
 
 use cf_chains::SwapOrigin;
-use chp_lending::ChpLoan;
+pub use chp_lending::ChpLoan;
 // Temporarily exposing this for a migration
 pub use core_lending_pool::{PendingLoan, ScaledAmount};
 
@@ -83,6 +83,7 @@ impl_pallet_safe_mode! {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
 	SetNetworkFeeDeductionFromBoost { deduction_percent: Percent },
+	SetChpConfig { config: ChpConfiguration },
 }
 
 define_wrapper_type!(CorePoolId, u32);
@@ -145,7 +146,7 @@ pub struct ChpPoolContribution {
 	principal: AssetAmount,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct ChpConfiguration {
 	/// Clearing fee is computed as clearing_fee_base + utilisation *
 	/// clearing_fee_utilisation_factor
@@ -424,6 +425,9 @@ pub mod pallet {
 				match update {
 					PalletConfigUpdate::SetNetworkFeeDeductionFromBoost { deduction_percent } =>
 						NetworkFeeDeductionFromBoostPercent::<T>::set(deduction_percent),
+					PalletConfigUpdate::SetChpConfig { ref config } => {
+						ChpConfig::<T>::set(config.clone());
+					},
 				}
 				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
 			}
