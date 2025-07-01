@@ -143,6 +143,24 @@ pub enum PalletOffence {
 	MissedAuthorshipSlot,
 }
 
+/// Represents a validator's default stance on accepting delegations
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum DelegationAcceptance {
+	/// Allow all delegators by default, except those explicitly blocked
+	Allow,
+	/// Deny all delegators by default, except those explicitly allowed
+	#[default] // Default to denying delegations
+	Deny,
+}
+
+/// Parameters for validator delegation preferences
+#[derive(Default, Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, Debug)]
+pub struct OperatorParameters {
+	pub fee: Percent,
+	/// Default delegation acceptance preference for this validator
+	pub delegation_acceptance: DelegationAcceptance,
+}
+
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding_enabled, stop_bidding_enabled);
 
 #[frame_support::pallet]
@@ -345,9 +363,14 @@ pub mod pallet {
 	#[pallet::getter(fn active_bidder)]
 	pub type ActiveBidder<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
-	/// Maps an account to its operator.
+	/// Maps an delegator to an operator.
 	#[pallet::storage]
-	pub type AccountDelegations<T: Config> =
+	pub type ManagedDelegations<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, T::AccountId, OptionQuery>;
+
+	/// Maps an operator to a validator.
+	#[pallet::storage]
+	pub type ManagedValidators<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, T::AccountId, OptionQuery>;
 
 	/// Maps an operator account to it's allowed delegators.
@@ -434,6 +457,8 @@ pub mod pallet {
 		AlreadyBidding,
 		/// We are in the auction phase
 		AuctionPhase,
+		/// Can only delegate to an operator if it's not already delegating.
+		AlreadyDelegating,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -822,6 +847,88 @@ pub mod pallet {
 				bidders.remove(&account_id).then_some(()).ok_or(Error::<T>::AlreadyNotBidding)
 			})?;
 			Self::deposit_event(Event::StoppedBidding { account_id });
+			Ok(())
+		}
+
+		#[pallet::call_index(10)]
+		#[pallet::weight(0)]
+		pub fn delegate(origin: OriginFor<T>, operator_id: T::AccountId) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+			ensure!(
+				!ManagedDelegations::<T>::contains_key(&account_id),
+				Error::<T>::AlreadyDelegating
+			);
+			ManagedDelegations::<T>::insert(account_id, operator_id);
+			Ok(())
+		}
+
+		#[pallet::call_index(11)]
+		#[pallet::weight(0)]
+		pub fn undelegate(origin: OriginFor<T>, operator_id: T::AccountId) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+			ManagedDelegations::<T>::remove(account_id);
+			Ok(())
+		}
+
+		#[pallet::call_index(12)]
+		#[pallet::weight(0)]
+		pub fn add_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+			// TODO: For now a validator can just be added. In the future we need a sig-up and
+			// sig-off process where the validator actively accepts during the sig-up process.
+			ensure!(
+				!ManagedValidators::<T>::contains_key(&account_id),
+				Error::<T>::AlreadyDelegating
+			);
+			ManagedValidators::<T>::insert(account_id, validator_id);
+			Ok(())
+		}
+
+		#[pallet::call_index(13)]
+		#[pallet::weight(0)]
+		pub fn remove_validator(
+			origin: OriginFor<T>,
+			validator_id: T::AccountId,
+		) -> DispatchResult {
+			// Can be called by the operator or by the validator.
+			let account_id = ensure_signed(origin)?;
+			ManagedValidators::<T>::remove(account_id);
+			Ok(())
+		}
+
+		#[pallet::call_index(14)]
+		#[pallet::weight(0)]
+		pub fn set_operator_parameters(
+			origin: OriginFor<T>,
+			operator_id: T::AccountId,
+			parameters: OperatorParameters,
+		) -> DispatchResult {
+			Ok(())
+		}
+
+		#[pallet::call_index(15)]
+		#[pallet::weight(0)]
+		pub fn set_delegation_fee(origin: OriginFor<T>, fee: Percent) -> DispatchResult {
+			Ok(())
+		}
+
+		#[pallet::call_index(16)]
+		#[pallet::weight(0)]
+		pub fn set_delegation_preferences(
+			origin: OriginFor<T>,
+			operator_id: T::AccountId,
+			acceptance: DelegationAcceptance,
+		) -> DispatchResult {
+			Ok(())
+		}
+
+		#[pallet::call_index(17)]
+		#[pallet::weight(0)]
+		pub fn block_delegator(
+			origin: OriginFor<T>,
+			operator_id: T::AccountId,
+			delegator_id: T::AccountId,
+		) -> DispatchResult {
 			Ok(())
 		}
 	}
