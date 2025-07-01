@@ -80,16 +80,13 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	pub fn merge(
 		&mut self,
 		other: NonemptyContinuousHeaders<T>,
-	) -> Result<MergeInfo<T>, MergeFailure<T>> {
+	) -> Result<MergeInfo<T>, MergeFailure> {
 		if self.last().block_height.saturating_forward(1) == other.first().block_height {
 			if self.last().hash == other.first().parent_hash {
 				self.headers.append(&mut other.get_headers());
 				Ok(MergeInfo { removed: VecDeque::new(), added: other.get_headers() })
 			} else {
-				Err(MergeFailure::Reorg {
-					new_block: other.first().clone(),
-					existing_wrong_parent: self.headers.back().cloned(),
-				})
+				Err(MergeFailure::Reorg)
 			}
 		} else if self.first().block_height == other.first().block_height {
 			let mut self_headers = self.get_headers();
@@ -152,11 +149,11 @@ def_derive! {
 /// Information returned if the `merge` function for `NonEmptyContinuousHeaders` encountered an
 /// error.
 #[derive(Debug)]
-pub enum MergeFailure<T: ChainTypes> {
+pub enum MergeFailure {
 	// If we get a new range of blocks, [lowest_new_block, ...], where the parent of
 	// `lowest_new_block` should, by block number, be `existing_wrong_parent`, but who's
 	// hash doesn't match with `lowest_new_block`'s parent hash.
-	Reorg { new_block: Header<T>, existing_wrong_parent: Option<Header<T>> },
+	Reorg,
 
 	// Internal error. Should never happen.
 	InternalError,
@@ -239,9 +236,8 @@ mod prop_tests {
 				},
 				Err(merge_failure) => {
 					match merge_failure {
-							MergeFailure::Reorg { new_block, existing_wrong_parent } => {
-								prop_assert_eq!(second_chain.first(), &new_block, "New blocks do not match");
-								prop_assert_eq!(Some(first_chain.last()), existing_wrong_parent.as_ref(), "Existing wrong parent do not match");
+							MergeFailure::Reorg => {
+								prop_assert!(second_chain.first().parent_hash != first_chain.last().hash);
 							},
 							MergeFailure::InternalError => {
 								prop_assert!((first_chain.last().block_height != second_chain.first().block_height) || (first_chain.first().block_height != second_chain.first().block_height));

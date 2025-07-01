@@ -60,11 +60,18 @@ pub type ChainBlockHashOf<T> = <T as ChainTypes>::ChainBlockHash;
 pub trait BHWTypes: Ord + Clone + Debug + Sized + 'static {
 	type Chain: ChainTypes;
 	type BlockHeightChangeHook: Hook<HookTypeFor<Self, BlockHeightChangeHook>> + CommonTraits;
+	type ReorgHook: Hook<HookTypeFor<Self, ReorgHook>> + CommonTraits;
 }
 
 pub struct BlockHeightChangeHook;
 impl<T: BHWTypes> HookType for HookTypeFor<T, BlockHeightChangeHook> {
 	type Input = ChainBlockNumberOf<T::Chain>;
+	type Output = ();
+}
+
+pub struct ReorgHook;
+impl<T: BHWTypes> HookType for HookTypeFor<T, ReorgHook> {
+	type Input = RangeInclusive<ChainBlockNumberOf<T::Chain>>;
 	type Output = ();
 }
 

@@ -420,10 +420,12 @@ pub mod pallet {
 		type CreateGovernanceElectionHook: GovernanceElectionHook;
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
+
+		type ElectoralEvents: Clone + Debug + TypeInfo + Eq;
 	}
 
 	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::generate_deposit(pub fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Corrupted storage was detected, and so all elections and voting has been paused.
 		CorruptStorage,
@@ -436,6 +438,8 @@ pub mod pallet {
 		AllVotesNotCleared,
 		/// Received vote for an unknown election
 		UnknownElection(ElectionIdentifierOf<T::ElectoralSystemRunner>),
+
+		ElectoralEvent(T::ElectoralEvents),
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]

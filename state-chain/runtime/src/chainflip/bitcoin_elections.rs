@@ -18,6 +18,7 @@ use cf_chains::{
 use cf_primitives::{AccountId, ChannelId};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::Chainflip;
+use core::ops::RangeInclusive;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_broadcast::{TransactionConfirmation, TransactionOutIdToBroadcastId};
 use pallet_cf_elections::{
@@ -27,7 +28,7 @@ use pallet_cf_elections::{
 		block_height_witnesser::{
 			consensus::BlockHeightWitnesserConsensus, primitives::NonemptyContinuousHeaders,
 			state_machine::BlockHeightWitnesser, BHWTypes, BlockHeightChangeHook,
-			BlockHeightWitnesserSettings, ChainProgress, ChainTypes,
+			BlockHeightWitnesserSettings, ChainProgress, ChainTypes, ReorgHook,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
@@ -54,6 +55,7 @@ use pallet_cf_elections::{
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo, VaultDepositWitness};
 use scale_info::TypeInfo;
 use sp_core::{Decode, Encode, Get, MaxEncodedLen};
+use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
 
 use super::{bitcoin_block_processor::BtcEvent, elections::TypesFor};
@@ -87,6 +89,10 @@ impl ChainTypes for BitcoinChain {
 	const NAME: &'static str = "Bitcoin";
 }
 
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub enum BitcoinElectoralEvents {
+	ReorgDetected { reorged_blocks: RangeInclusive<btc::BlockNumber> },
+}
 // ------------------------ block height tracking ---------------------------
 /// The electoral system for block height tracking
 pub struct BitcoinBlockHeightWitnesser;
@@ -98,6 +104,7 @@ impls! {
 	BHWTypes {
 		type BlockHeightChangeHook = Self;
 		type Chain = BitcoinChain;
+		type ReorgHook = Self;
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
@@ -118,6 +125,16 @@ impls! {
 			if let Err(err) = BitcoinChainTracking::inner_update_chain_height(block_height) {
 				log::error!("Failed to update BTC chain height to {block_height:?}: {:?}", err);
 			}
+		}
+	}
+
+	Hook<HookTypeFor<Self, ReorgHook>> {
+		fn run(&mut self, reorged_blocks: RangeInclusive<btc::BlockNumber>) {
+			pallet_cf_elections::Pallet::<Runtime, BitcoinInstance>::deposit_event(
+				pallet_cf_elections::Event::ElectoralEvent(BitcoinElectoralEvents::ReorgDetected {
+					reorged_blocks
+				})
+			);
 		}
 	}
 
@@ -554,11 +571,7 @@ impl
 					.block_height
 					// We subtract the safety buffer so we don't ask for liveness for blocks that
 					// could be reorged out.
-					.saturating_sub(
-						BITCOIN_MAINNET_SAFETY_BUFFER
-							.try_into()
-							.map_err(|_| CorruptStorageError::new())?,
-					),
+					.saturating_sub(BITCOIN_MAINNET_SAFETY_BUFFER.into()),
 			),
 		)?;
 

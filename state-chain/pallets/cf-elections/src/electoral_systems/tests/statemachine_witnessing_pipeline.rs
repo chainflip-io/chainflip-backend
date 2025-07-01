@@ -176,6 +176,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	let mut bhw_state: BlockHeightWitnesser<Types> = BlockHeightWitnesser {
 		phase: BHWPhase::Starting,
 		block_height_update: MockHook::default(),
+		on_reorg: MockHook::default(),
 	};
 	let bhw_settings: BlockHeightWitnesserSettings =
 		BlockHeightWitnesserSettings { safety_buffer: SAFETY_BUFFER };
@@ -196,7 +197,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	let bw_settings = BlockWitnesserSettings {
 		max_ongoing_elections: 4,
 		safety_margin: SAFETY_MARGIN,
-		safety_buffer: SAFETY_BUFFER as u32,
+		safety_buffer: SAFETY_BUFFER,
 		max_optimistic_elections: 1,
 	};
 

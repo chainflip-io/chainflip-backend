@@ -53,6 +53,8 @@ impl pallet_cf_elections::Config<Instance1> for Test {
 	type WeightInfo = ();
 
 	type CreateGovernanceElectionHook = MockGovernanceHook;
+
+	type ElectoralEvents = ();
 }
 
 impl_mock_chainflip!(Test);
