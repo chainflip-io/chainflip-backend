@@ -2412,7 +2412,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		let checked_refund_params =
-			match refund_params.with_foreign_chain_refund_address().with_checked_metadata(
+			match refund_params.map_refund_address_to_foreign_chain_address().into_checked(
 				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
 				asset.into(),
 			) {
@@ -2781,7 +2781,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let refund_address = refund_params.refund_address.clone();
 		let checked_refund_params =
-			match refund_params.with_foreign_chain_refund_address().with_checked_metadata(
+			match refund_params.map_refund_address_to_foreign_chain_address().into_checked(
 				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
 				source_asset.into(),
 			) {
@@ -3313,8 +3313,8 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 				broker_fees,
 				channel_metadata,
 				refund_params: refund_params
-					.with_foreign_chain_refund_address()
-					.with_checked_metadata(None, source_asset.into())?
+					.map_refund_address_to_foreign_chain_address()
+					.into_checked(None, source_asset.into())?
 					.map_address(AccountOrAddress::ExternalAddress),
 				dca_params,
 			},

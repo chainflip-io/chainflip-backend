@@ -1258,7 +1258,7 @@ pub mod pallet {
 					boost_fee,
 					refund_parameters
 						.clone()
-						.try_with_foreign_chain_refund_address::<T::AddressConverter>()?,
+						.try_map_refund_address_to_foreign_chain_address::<T::AddressConverter>()?,
 					dca_parameters.clone(),
 				)?;
 

@@ -39,6 +39,25 @@ pub enum AccountOrAddress<AccountId, Address> {
 	ExternalAddress(Address),
 }
 
+/// Generic type for Refund Parameters.
+///
+/// The abstract `RefundDetails` represents additional metadata that may be required for refunding
+/// via CCM. Before verification this is an unchecked byte payload.
+///
+/// Avoid constructing this type directly: prefer to use one of the aliases and/or conversion
+/// methods. Usually you start with `ChannelRefundParametersUnchecked` and then convert it via
+/// `ChannelRefundParametersUnchecked<ForeignChainAddress>` into
+/// `ChannelRefundParametersChecked<ForeignChainAddress>`.
+///
+/// Example:
+/// ```ignore
+/// let checked_params = unchecked_refund_params
+///     .map_refund_address_to_foreign_chain_address::<Solana>()
+///     .into_checked(
+///         source_address,
+///         refund_asset
+///     )?;
+/// ```
 #[derive(
 	Clone,
 	Debug,
@@ -53,24 +72,6 @@ pub enum AccountOrAddress<AccountId, Address> {
 	PartialOrd,
 	Ord,
 )]
-/// Generic type for Refund Parameters.
-///
-/// The abstract `RefundDetails` represents additional metadata that may be required for refunding
-/// via CCM. Before verification this is an unchecked byte payload.
-///
-/// Avoid constructing this type directly: prefer to use one of the aliases. Usually you start with
-/// `ChannelRefundParametersUnchecked` and then convert it via
-/// `ChannelRefundParametersUncheckedInternalAddress` into `ChannelRefundParametersCheckedInternal`.
-///
-/// Example:
-/// ```ignore
-/// let checked_params = unchecked_refund_params
-///     .with_foreign_chain_refund_address::<Solana>()
-///     .with_checked_metadata(
-///         source_address,
-///         refund_asset
-///     )?;
-/// ```
 pub struct ChannelRefundParameters<A, CcmRefundDetails> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: A,
@@ -87,14 +88,6 @@ pub type ChannelRefundParametersUnchecked<A> =
 /// Refund parameters with CCM metadata that *has* been checked for validity.
 pub type ChannelRefundParametersChecked<A> =
 	ChannelRefundParameters<A, Option<CcmDepositMetadataChecked<ForeignChainAddress>>>;
-
-/// Refund parameters with CCM metadata that has not yet been checked for validity, but where the
-/// refund address has been parsed into the internal `ForeignChainAddress` type.
-pub type ChannelRefundParametersUncheckedInternalAddress =
-	ChannelRefundParametersUnchecked<ForeignChainAddress>;
-
-/// The legacy refund parameters type that does not include any ccm refund metadata.
-pub type ChannelRefundParametersLegacy<RefundAddress> = ChannelRefundParameters<RefundAddress, ()>;
 
 /// Convenience alias for unchecked refund parameters with encoded addresses. This is most commonly
 /// used in State Chain events and extrinsics.
@@ -161,9 +154,9 @@ impl<A, D> ChannelRefundParameters<A, D> {
 
 impl<A> ChannelRefundParametersUnchecked<A> {
 	/// Converts the refund address into the ForeignChainAddress type.
-	pub fn with_foreign_chain_refund_address<C>(
+	pub fn map_refund_address_to_foreign_chain_address<C>(
 		self,
-	) -> ChannelRefundParametersUncheckedInternalAddress
+	) -> ChannelRefundParametersUnchecked<ForeignChainAddress>
 	where
 		C: Chain<ChainAccount = A>,
 		A: Clone + IntoForeignChainAddress<C>,
@@ -193,9 +186,9 @@ impl<A> ChannelRefundParametersUnchecked<A> {
 
 impl ChannelRefundParametersUncheckedEncoded {
 	/// Try to convert the refund address into the ForeignChainAddress type.
-	pub fn try_with_foreign_chain_refund_address<C: AddressConverter>(
+	pub fn try_map_refund_address_to_foreign_chain_address<C: AddressConverter>(
 		self,
-	) -> Result<ChannelRefundParametersUncheckedInternalAddress, DispatchError> {
+	) -> Result<ChannelRefundParametersUnchecked<ForeignChainAddress>, DispatchError> {
 		Ok(self.try_map_address(|addr| {
 			C::try_from_encoded_address(addr.clone()).map_err(|_| "Invalid refund address")
 		})?)
@@ -206,7 +199,7 @@ impl ChannelRefundParametersUncheckedEncoded {
 // constraint on this impl. We should be able to remove this requirement somehow.
 impl ChannelRefundParametersUnchecked<ForeignChainAddress> {
 	/// Checks the CCM Refund metadata payload and converts the address to the internal
-	pub fn with_checked_metadata(
+	pub fn into_checked(
 		self,
 		source_address: Option<ForeignChainAddress>,
 		refund_asset: Asset,

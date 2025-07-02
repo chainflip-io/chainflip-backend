@@ -2297,15 +2297,15 @@ impl_runtime_apis! {
 					*retry_duration
 				}
 				VaultSwapExtraParametersEncoded::Ethereum(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
-					refund_parameters.clone().try_with_foreign_chain_refund_address::<ChainAddressConverter>()?.with_checked_metadata(None, source_asset)?;
+					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
 					refund_parameters.retry_duration
 				}
 				VaultSwapExtraParametersEncoded::Arbitrum(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
-					refund_parameters.clone().try_with_foreign_chain_refund_address::<ChainAddressConverter>()?.with_checked_metadata(None, source_asset)?;
+					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
 					refund_parameters.retry_duration
 				}
 				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => {
-					refund_parameters.clone().try_with_foreign_chain_refund_address::<ChainAddressConverter>()?.with_checked_metadata(None, source_asset)?;
+					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
 					refund_parameters.retry_duration
 				}
 			};
