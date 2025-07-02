@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod chain_tracking;
+mod sc_utils;
 mod state_chain_gateway;
 
 use std::{collections::HashMap, sync::Arc};
@@ -40,7 +41,6 @@ use crate::{
 		extrinsic_api::signed::SignedExtrinsicApi,
 		storage_api::StorageApi,
 		stream_api::{StreamApi, FINALIZED},
-		STATE_CHAIN_CONNECTION,
 	},
 	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
 };
@@ -96,11 +96,18 @@ where
 		.context("Failed to get Vault contract address from SC")?;
 
 	let address_checker_address = state_chain_client
+		.storage_value::<pallet_cf_environment::EthereumScUtilsAddress<state_chain_runtime::Runtime>>(
+			state_chain_client.latest_finalized_block().hash,
+		)
+		.await
+		.expect("Failed to get Address Checker contract address from SC");
+
+	let sc_utils_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumAddressCheckerAddress<state_chain_runtime::Runtime>>(
 			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
-		.expect(STATE_CHAIN_CONNECTION);
+		.expect("Failed to get Sc Utils contract address from SC");
 
 	let supported_erc20_tokens: HashMap<EthAsset, H160> = state_chain_client
 		.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>, _>(
@@ -229,16 +236,23 @@ where
 		.spawn(scope);
 
 	eth_safe_vault_source
+		.clone()
 		.vault_witnessing::<EthCallBuilder, _, _, _>(
-			process_call,
+			process_call.clone(),
 			eth_client.clone(),
 			vault_address,
 			cf_primitives::Asset::Eth,
 			cf_primitives::ForeignChain::Ethereum,
 			supported_erc20_tokens,
 		)
-		.continuous("Vault".to_string(), db)
+		.continuous("Vault".to_string(), db.clone())
 		.logging("Vault")
+		.spawn(scope);
+	
+	eth_safe_vault_source
+		.sc_utils_witnessing(process_call, eth_client.clone(), sc_utils_address)
+		.continuous("ScUtils".to_string(), db)
+		.logging("ScUtils")
 		.spawn(scope);
 
 	Ok(())

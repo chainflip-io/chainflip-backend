@@ -140,6 +140,8 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '0x7a2088a1bFc9d81c55368AE168C2C02570cB814F';
         case 'PRICE_FEED_USDT':
           return '0x09635F643e140090A9A8Dcd712eD6285858ceBef';
+        case 'SC_UTILS':
+          return '0x7a2088a1bFc9d81c55368AE168C2C02570cB814F';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -566,12 +568,12 @@ function checkTransactionInMatches(actual: any, expected: TransactionOriginId): 
       ('Bitcoin' in actual.Vault.txId &&
         expected.type === TransactionOrigin.VaultSwapBitcoin &&
         actual.Vault.txId.Bitcoin ===
-          // Reverse byte order of BTC transactions
-          '0x' +
-            // eslint-disable-next-line @typescript-eslint/no-use-before-define
-            [...new Uint8Array(hexStringToBytesArray(expected.txId).reverse())]
-              .map((x) => x.toString(16).padStart(2, '0'))
-              .join(''))
+        // Reverse byte order of BTC transactions
+        '0x' +
+        // eslint-disable-next-line @typescript-eslint/no-use-before-define
+        [...new Uint8Array(hexStringToBytesArray(expected.txId).reverse())]
+          .map((x) => x.toString(16).padStart(2, '0'))
+          .join(''))
     );
   }
   if ('OnChainAccount' in actual) {

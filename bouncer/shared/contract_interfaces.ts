@@ -38,3 +38,6 @@ export const getCfTesterIdl = loadContractCached(
 export const getSolanaSwapEndpointIdl = loadContractCached(
   `../contract-interfaces/sol-program-idls/${CF_SOL_PROGRAM_IDL_TAG}/swap_endpoint.json`,
 );
+export const getEthScUtilsAbi = loadContractCached(
+  `../contract-interfaces/eth-contract-abis/${CF_ETH_CONTRACT_ABI_TAG}/IScUtils.json`,
+);
