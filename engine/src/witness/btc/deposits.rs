@@ -16,10 +16,10 @@
 
 use std::collections::HashMap;
 
-use cf_primitives::EpochIndex;
+use cf_primitives::{AccountId, ChannelId, EpochIndex};
 use futures_core::Future;
 use itertools::Itertools;
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
+use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 use state_chain_runtime::BitcoinInstance;
 
 use super::{
@@ -31,17 +31,21 @@ use super::{
 };
 use crate::{
 	btc::rpc::VerboseTransaction,
-	witness::common::{
-		chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses, RuntimeCallHasChain,
-		RuntimeHasChain,
+	witness::{
+		btc::vault_swaps::try_extract_vault_swap_witness,
+		common::{
+			chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
+			RuntimeCallHasChain, RuntimeHasChain,
+		},
 	},
 };
 use bitcoin::{hashes::Hash, BlockHash};
 use cf_chains::{
 	assets::btc,
 	btc::{deposit_address::DepositAddress, Utxo, UtxoId},
-	Bitcoin,
+	Bitcoin, DepositChannel,
 };
+use pallet_cf_broadcast::TransactionConfirmation;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn btc_deposits<ProcessCall, ProcessingFut>(
@@ -122,7 +126,12 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					}
 				}
 
-				let deposit_addresses = map_script_addresses(deposit_channels);
+				let deposit_addresses = map_script_addresses(
+					deposit_channels
+						.into_iter()
+						.map(|deposit_channel| deposit_channel.deposit_channel)
+						.collect(),
+				);
 
 				let deposit_witnesses = deposit_witnesses(&txs, &deposit_addresses);
 
@@ -144,7 +153,24 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	}
 }
 
-fn deposit_witnesses(
+pub fn vault_deposits(
+	txs: &[VerboseTransaction],
+	vaults: &Vec<(DepositAddress, AccountId, ChannelId)>,
+) -> Vec<VaultDepositWitness<state_chain_runtime::Runtime, BitcoinInstance>> {
+	txs.iter()
+		.filter_map(|tx| {
+			for (vault, broker, id) in vaults {
+				if let Some(vault_swap) = try_extract_vault_swap_witness(tx, vault, *id, broker) {
+					return Some(vault_swap);
+				}
+			}
+			None
+		})
+		.sorted_by_key(|vault_swap| vault_swap.deposit_address.clone())
+		.collect()
+}
+
+pub fn deposit_witnesses(
 	txs: &[VerboseTransaction],
 	deposit_addresses: &HashMap<Vec<u8>, DepositAddress>,
 ) -> Vec<DepositWitness<Bitcoin>> {
@@ -183,15 +209,44 @@ fn deposit_witnesses(
 		.collect()
 }
 
-fn map_script_addresses(
-	deposit_channels: Vec<DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance>>,
+pub fn egress_witnessing(
+	txs: &[VerboseTransaction],
+	monitored_tx_hashes: Vec<cf_chains::btc::Hash>,
+) -> Vec<TransactionConfirmation<state_chain_runtime::Runtime, BitcoinInstance>> {
+	monitored_tx_hashes
+		.into_iter()
+		.filter_map(|hash| {
+			for tx in txs {
+				let tx_hash: cf_chains::btc::Hash = tx.txid.to_byte_array().into();
+				if hash == tx_hash {
+					return Some(TransactionConfirmation {
+						tx_out_id: hash,
+						signer_id: DepositAddress::new([0; 32], 0).script_pubkey(),
+						tx_fee: tx.fee.unwrap_or_default().to_sat(),
+						tx_metadata: (),
+						transaction_ref: hash,
+					});
+				}
+			}
+			None
+		})
+		.sorted_by_key(
+			|tx: &TransactionConfirmation<state_chain_runtime::Runtime, BitcoinInstance>| {
+				tx.tx_out_id
+			},
+		)
+		.collect::<Vec<_>>()
+}
+
+pub fn map_script_addresses(
+	deposit_channels: Vec<DepositChannel<Bitcoin>>,
 ) -> HashMap<Vec<u8>, DepositAddress> {
 	deposit_channels
 		.into_iter()
 		.map(|channel| {
-			assert_eq!(channel.deposit_channel.asset, btc::Asset::Btc);
-			let deposit_address = channel.deposit_channel.state;
-			let script_pubkey = channel.deposit_channel.address;
+			assert_eq!(channel.asset, btc::Asset::Btc);
+			let deposit_address = channel.state;
+			let script_pubkey = channel.address;
 
 			(script_pubkey.bytes(), deposit_address)
 		})
@@ -209,7 +264,7 @@ pub mod tests {
 		Amount, ScriptBuf, Txid,
 	};
 	use cf_chains::{btc::deposit_address::DepositAddress, DepositChannel};
-	use pallet_cf_ingress_egress::{BoostStatus, ChannelAction};
+	use pallet_cf_ingress_egress::{BoostStatus, ChannelAction, DepositChannelDetails};
 	use rand::{seq::SliceRandom, Rng, SeedableRng};
 	use sp_runtime::AccountId32;
 
@@ -285,8 +340,15 @@ pub mod tests {
 			None,
 		)];
 
-		let deposit_witnesses =
-			deposit_witnesses(&txs, &map_script_addresses(vec![(fake_details(deposit_address))]));
+		let deposit_witnesses = deposit_witnesses(
+			&txs,
+			&map_script_addresses(
+				vec![(fake_details(deposit_address))]
+					.into_iter()
+					.map(|deposit_channel| deposit_channel.deposit_channel)
+					.collect(),
+			),
+		);
 		assert_eq!(deposit_witnesses.len(), 1);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
 	}
@@ -312,8 +374,15 @@ pub mod tests {
 			fake_transaction(vec![], None),
 		];
 
-		let deposit_witnesses =
-			deposit_witnesses(&txs, &map_script_addresses(vec![fake_details(deposit_address)]));
+		let deposit_witnesses = deposit_witnesses(
+			&txs,
+			&map_script_addresses(
+				vec![fake_details(deposit_address)]
+					.into_iter()
+					.map(|deposit_channel| deposit_channel.deposit_channel)
+					.collect(),
+			),
+		);
 		assert_eq!(deposit_witnesses.len(), 1);
 		assert_eq!(deposit_witnesses[0].amount, LARGEST_UTXO_TO_DEPOSIT);
 	}
@@ -343,10 +412,15 @@ pub mod tests {
 		let deposit_witnesses = deposit_witnesses(
 			&txs,
 			// watching 2 addresses
-			&map_script_addresses(vec![
-				fake_details(deposit_address_1.clone()),
-				fake_details(deposit_address_2.clone()),
-			]),
+			&map_script_addresses(
+				vec![
+					fake_details(deposit_address_1.clone()),
+					fake_details(deposit_address_2.clone()),
+				]
+				.into_iter()
+				.map(|deposit_channel| deposit_channel.deposit_channel)
+				.collect(),
+			),
 		);
 
 		// We should have one deposit per address.
@@ -363,10 +437,12 @@ pub mod tests {
 		let address_2 = DepositAddress::new([0; 32], 1232);
 		DepositAddress::new([0; 32], 0);
 
-		let addresses = map_script_addresses(vec![
-			fake_details(address_1.clone()),
-			fake_details(address_2.clone()),
-		]);
+		let addresses = map_script_addresses(
+			vec![fake_details(address_1.clone()), fake_details(address_2.clone())]
+				.into_iter()
+				.map(|deposit_channel| deposit_channel.deposit_channel)
+				.collect(),
+		);
 
 		let txs: Vec<VerboseTransaction> = vec![
 			fake_transaction(
@@ -454,8 +530,15 @@ pub mod tests {
 			),
 		];
 
-		let deposit_witnesses =
-			deposit_witnesses(&txs, &map_script_addresses(vec![fake_details(address)]));
+		let deposit_witnesses = deposit_witnesses(
+			&txs,
+			&map_script_addresses(
+				vec![fake_details(address)]
+					.into_iter()
+					.map(|deposit_channel| deposit_channel.deposit_channel)
+					.collect(),
+			),
+		);
 		assert_eq!(deposit_witnesses.len(), 2);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
 		assert_eq!(deposit_witnesses[1].amount, UTXO_WITNESSED_2);

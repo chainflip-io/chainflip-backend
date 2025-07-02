@@ -234,6 +234,16 @@ jobs:
             --localnet_init ./../localnet/init \
             --oldVersion "${{ env.OLD_BIN_VERSION }}"
 
+        # TODO: This is a temporary workaround to call election setup code. Remove after 1.10 is released.
+      - name: Setup elections
+        if: inputs.run-job
+        run: |
+          git checkout ${{ github.sha }}
+          git rev-parse HEAD
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./commands/setup_elections.ts
+
       - name: Run bouncer after upgrade 🙅‍♂️
         if: inputs.run-job
         id: post-upgrade-bouncer

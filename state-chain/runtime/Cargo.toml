@@ -17,6 +17,7 @@ substrate-wasm-builder = { workspace = true, optional = true }
 workspace = true
 
 [dependencies]
+derive-where = { workspace = true }
 hex-literal = { workspace = true }
 hex = { workspace = true }
 log = { workspace = true }
@@ -106,6 +107,8 @@ cf-test-utilities = { workspace = true, optional = true }
 
 [dev-dependencies]
 sp-io = { workspace = true, default-features = true }
+proptest = { version = "1.6"}
+proptest-derive = { version = "0.5.1" }
 
 [features]
 default = ["std"]

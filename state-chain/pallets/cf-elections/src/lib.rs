@@ -117,14 +117,24 @@
 //! "BitmapComponent" are set via the VoteStorage trait, and how an "AuthorityVote" is split up into
 //! or reconstructed from the others is also configured via that trait.
 
+#![allow(incomplete_features)]
 #![feature(try_find)]
+#![feature(step_trait)]
+#![feature(trait_alias)]
+#![feature(unsized_const_params)]
+#![feature(btree_extract_if)]
+#![feature(impl_trait_in_assoc_type)]
+#![feature(iter_intersperse)]
 #![cfg_attr(test, feature(closure_track_caller))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+extern crate core;
+
 pub mod electoral_system;
 pub mod electoral_system_runner;
+#[macro_use]
 pub mod electoral_systems;
 mod mock;
 mod tests;
@@ -158,21 +168,25 @@ pub mod pallet {
 	use crate::electoral_system::ConsensusStatus;
 	pub use access_impls::RunnerStorageAccess;
 
-	use crate::electoral_system_runner::RunnerStorageAccessTrait;
+	use crate::{
+		electoral_system_runner::RunnerStorageAccessTrait,
+		electoral_systems::block_height_witnesser::CommonTraits,
+	};
 	use bitmap_components::ElectionBitmapComponents;
 	pub use electoral_system::{
 		AuthorityVoteOf, ConsensusVote, ConsensusVotes, ElectionIdentifierOf, ElectoralSystemTypes,
 		IndividualComponentOf, PartialVoteOf, VoteOf, VotePropertiesOf, VoteStorageOf,
 	};
 	pub use electoral_system_runner::ElectoralSystemRunner;
-
 	use frame_support::{
 		sp_runtime::traits::BlockNumberProvider, storage::bounded_btree_map::BoundedBTreeMap,
 		Deserialize, Serialize, StorageDoubleMap as _,
 	};
 	use itertools::Itertools;
 	use sp_std::{
+		boxed::Box,
 		collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+		fmt::Debug,
 		vec::Vec,
 	};
 	use vote_storage::{AuthorityVote, VoteComponents, VoteStorage};
@@ -211,6 +225,12 @@ pub mod pallet {
 		<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectionProperties,
 		AuthorityVoteOf<T::ElectoralSystemRunner>,
 		BlockNumberFor<T>,
+	>;
+
+	type AuthorityVotes<T, I> = BoundedBTreeMap<
+		ElectionIdentifierOf<<T as Config<I>>::ElectoralSystemRunner>,
+		AuthorityVoteOf<<T as Config<I>>::ElectoralSystemRunner>,
+		ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
 	>;
 
 	/// A unique identifier for an election.
@@ -288,7 +308,10 @@ pub mod pallet {
 		/// specifically in Solana's chain/fee tracking trait impls as those traits do not allow
 		/// errors to be returned, this is ok, but should be avoided in future.
 		#[derive(Debug, PartialEq, Eq)]
-		pub struct CorruptStorageError {}
+		pub struct CorruptStorageError {
+			// force usage of new() to log
+			_no_construct: (),
+		}
 		impl CorruptStorageError {
 			/// We use this function to create this error type (and make the struct impossible to
 			/// create without it) so it is easier to find all locations we create the error, and so
@@ -300,7 +323,7 @@ pub mod pallet {
 					"Election pallet CorruptStorageError at '{}'.",
 					core::panic::Location::caller()
 				);
-				Self {}
+				Self { _no_construct: () }
 			}
 		}
 	}
@@ -369,6 +392,11 @@ pub mod pallet {
 		}
 	}
 
+	pub trait GovernanceElectionHook {
+		type Properties: Clone + PartialEq + Debug + Encode + Decode + TypeInfo + Send + Sync;
+
+		fn start(properties: Self::Properties);
+	}
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
@@ -389,12 +417,15 @@ pub mod pallet {
 			StateChainBlockNumber = BlockNumberFor<Self>,
 		>;
 
+		type CreateGovernanceElectionHook: GovernanceElectionHook;
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
+
+		type ElectoralEvents: Clone + Debug + TypeInfo + Eq;
 	}
 
 	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::generate_deposit(pub fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Corrupted storage was detected, and so all elections and voting has been paused.
 		CorruptStorage,
@@ -407,6 +438,8 @@ pub mod pallet {
 		AllVotesNotCleared,
 		/// Received vote for an unknown election
 		UnknownElection(ElectionIdentifierOf<T::ElectoralSystemRunner>),
+
+		ElectoralEvent(T::ElectoralEvents),
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -432,7 +465,7 @@ pub mod pallet {
 	/// invalidated. This should be set as low as possible, I'd suggest using 8 blocks, which
 	/// equates to 48 seconds.
 	#[pallet::storage]
-	pub(crate) type SharedDataReferenceLifetime<T: Config<I>, I: 'static = ()> =
+	pub type SharedDataReferenceLifetime<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Stores the number of references to a shared vote. We also store the block number at which
@@ -645,6 +678,7 @@ pub mod pallet {
 				));
 				ElectionProperties::<T, I>::insert(election_identifier, properties);
 				ElectionState::<T, I>::insert(unique_monotonic_identifier, state);
+				log::debug!("Created new election with identifier {unique_monotonic_identifier:?}");
 				Ok(election_identifier)
 			}
 
@@ -716,6 +750,7 @@ pub mod pallet {
 				ElectionProperties::<T, I>::remove(composite_election_identifier);
 				ElectionState::<T, I>::remove(unique_monotonic_identifier);
 				ElectionConsensusHistory::<T, I>::remove(unique_monotonic_identifier);
+				log::debug!("Deleted election with identifier {unique_monotonic_identifier:?}");
 			}
 
 			fn refresh_election(
@@ -1244,11 +1279,8 @@ pub mod pallet {
 		#[pallet::weight((T::WeightInfo::vote(authority_votes.len() as u32), DispatchClass::Operational))]
 		pub fn vote(
 			origin: OriginFor<T>,
-			authority_votes: BoundedBTreeMap<
-				ElectionIdentifierOf<T::ElectoralSystemRunner>,
-				AuthorityVoteOf<T::ElectoralSystemRunner>,
-				ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
-			>,
+			// Box to avoid RuntimeCall size
+			authority_votes: Box<AuthorityVotes<T, I>>,
 		) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 
@@ -1258,7 +1290,7 @@ pub mod pallet {
 				Error::<T, I>::NotContributing
 			);
 
-			for (election_identifier, authority_vote) in authority_votes {
+			for (election_identifier, authority_vote) in *authority_votes {
 				// if an identifier refers to a non existent election, skip this vote,
 				// but continue processing others.
 				let unique_monotonic_identifier = if let Ok(unique_monotonic_identifier) =
@@ -1350,10 +1382,10 @@ pub mod pallet {
 		#[pallet::weight((T::WeightInfo::provide_shared_data(), DispatchClass::Operational))]
 		pub fn provide_shared_data(
 			origin: OriginFor<T>,
-			shared_data: <<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as VoteStorage>::SharedData,
+			shared_data: Box<<<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as VoteStorage>::SharedData>,
 		) -> DispatchResult {
 			Self::ensure_can_vote(origin)?;
-			Self::inner_provide_shared_data(shared_data)?;
+			Self::inner_provide_shared_data(*shared_data)?;
 			Ok(())
 		}
 
@@ -1407,10 +1439,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::initialize())]
 		pub fn initialize(
 			origin: OriginFor<T>,
-			initial_state: InitialStateOf<T, I>,
+			initial_state: Box<InitialStateOf<T, I>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::internally_initialize(initial_state)?;
+			Self::internally_initialize(*initial_state)?;
 			Ok(())
 		}
 
@@ -1590,6 +1622,19 @@ pub mod pallet {
 				},
 				Some(_) => Err(Error::<T, I>::NotPaused.into()),
 			}
+		}
+
+		#[pallet::call_index(38)]
+		#[pallet::weight(T::WeightInfo::validate_storage())]
+		pub fn start_new_block_witnesser_election(
+			origin: OriginFor<T>,
+			properties: <T::CreateGovernanceElectionHook as GovernanceElectionHook>::Properties,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			T::CreateGovernanceElectionHook::start(properties);
+
+			Ok(())
 		}
 	}
 

@@ -267,6 +267,7 @@ where
 						SolanaVaultSwapsVoter { client: client.clone() },
 						SolanaAltWitnessingVoter { client },
 					)),
+					None,
 					"Solana",
 				)
 				.continuously_vote()

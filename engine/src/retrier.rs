@@ -57,7 +57,7 @@ pub enum RetryLimit {
 	Limit(Attempt),
 }
 
-type TypedFutureGenerator<T, Client> = Pin<
+pub(crate) type TypedFutureGenerator<T, Client> = Pin<
 	Box<
 		dyn Fn(Client) -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>>
 			+ Send

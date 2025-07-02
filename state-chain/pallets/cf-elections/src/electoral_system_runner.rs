@@ -219,15 +219,13 @@ pub trait RunnerStorageAccessTrait {
 	fn mutate_unsynchronised_state<
 		T,
 		F: for<'a> FnOnce(
-			&Self,
-			&'a <Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
+			&'a mut <Self::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
 		) -> Result<T, CorruptStorageError>,
 	>(
-		&self,
 		f: F,
-	) -> Result<T, CorruptStorageError> {
+	) -> Result<T, CorruptStorageError>{
 		let mut unsynchronised_state = Self::unsynchronised_state()?;
-		let t = f(self, &mut unsynchronised_state)?;
+		let t = f(&mut unsynchronised_state)?;
 		Self::set_unsynchronised_state(unsynchronised_state);
 		Ok(t)
 	}

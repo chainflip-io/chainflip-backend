@@ -44,7 +44,7 @@ use std::{
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::{
-	btc::retry_rpc::BtcRetryRpcApi,
+	btc::rpc::BtcRpcApi,
 	dot::retry_rpc::DotRetryRpcApi,
 	evm::retry_rpc::EvmRetrySigningRpcApi,
 	sol::retry_rpc::SolRetryRpcApi,
@@ -263,7 +263,7 @@ where
 	BlockStream: StreamApi<FINALIZED>,
 	EvmRpc: EvmRetrySigningRpcApi + Send + Sync + 'static,
 	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
-	BtcRpc: BtcRetryRpcApi + Send + Sync + 'static,
+	BtcRpc: BtcRpcApi + Send + Sync + Clone + 'static,
 	SolRpc: SolRetryRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
 	PolkadotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
