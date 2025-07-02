@@ -109,7 +109,7 @@ async function testBoostingForAsset(
   );
 
   const boostPoolDetails = (
-    (await jsonRpc(logger, 'cf_boost_pool_details', [Assets.Btc.toUpperCase()])) as any
+    (await jsonRpc(logger, 'cf_boost_pool_details', [asset.toUpperCase()])) as any
   )[0];
   assert.strictEqual(boostPoolDetails.fee_tier, boostFee, 'Unexpected lowest fee tier');
   assert.strictEqual(
@@ -142,7 +142,10 @@ async function testBoostingForAsset(
     {
       test: (event) => event.data.channelId === swapRequest.channelId.toString(),
     },
-  ).event;
+  ).event.then((event) => {
+    logger.trace('DepositFinalised event:', JSON.stringify(event));
+    return event;
+  });
   const observeSwapBoosted = observeEvent(
     logger,
     `${chainFromAsset(asset).toLowerCase()}IngressEgress:DepositBoosted`,
@@ -161,9 +164,6 @@ async function testBoostingForAsset(
   } else if (depositEvent.name.method !== 'DepositBoosted') {
     throwError(logger, new Error(`Unexpected event ${depositEvent.name.method}`));
   }
-
-  const depositFinalisedEvent = await observeDepositFinalised;
-  logger.trace('DepositFinalised event:', JSON.stringify(depositFinalisedEvent));
 
   // Stop boosting
   const stoppedBoostingEvent = await stopBoosting(logger, asset, boostFee, lpUri)!;
