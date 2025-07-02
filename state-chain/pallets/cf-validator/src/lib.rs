@@ -33,8 +33,9 @@ mod rotation_state;
 
 pub use auction_resolver::*;
 use cf_primitives::{
-	AuthorityCount, CfeCompatibility, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
-	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
+	AuthorityCount, CfeCompatibility, DelegationAcceptance, DelegationPreferences,
+	Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
+	FLIPPERINOS_PER_FLIP,
 };
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AsyncResult,
@@ -141,24 +142,6 @@ type BackupMap<T> = BTreeMap<ValidatorIdOf<T>, <T as Chainflip>::Amount>;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	MissedAuthorshipSlot,
-}
-
-/// Represents a validator's default stance on accepting delegations
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Default, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum DelegationAcceptance {
-	/// Allow all delegators by default, except those explicitly blocked
-	Allow,
-	/// Deny all delegators by default, except those explicitly allowed
-	#[default] // Default to denying delegations
-	Deny,
-}
-
-/// Parameters for validator delegation preferences
-#[derive(Default, Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, Debug)]
-pub struct DelegationPreferences {
-	pub fee: Percent,
-	/// Default delegation acceptance preference for this validator
-	pub delegation_acceptance: DelegationAcceptance,
 }
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding_enabled, stop_bidding_enabled);
@@ -377,13 +360,13 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn allowed_delegators)]
 	pub type AllowedDelegators<T: Config> =
-		StorageDoubleMap<_, Blake2_128Concat, T::AccountId, Blake2_128Concat, T::AccountId, ()>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
 	/// Maps an operator account to it's blocked delegators.
 	#[pallet::storage]
 	#[pallet::getter(fn blocked_delegators)]
 	pub type BlockedDelegators<T: Config> =
-		StorageDoubleMap<_, Blake2_128Concat, T::AccountId, Blake2_128Concat, T::AccountId, ()>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
 	/// Maps an operator account to a map of validator accounts it manages.
 	#[pallet::storage]
@@ -892,14 +875,14 @@ pub mod pallet {
 			// If deny - every delegator must be explicitly allowed.
 			if operator_parameters.delegation_acceptance == DelegationAcceptance::Deny {
 				ensure!(
-					AllowedDelegators::<T>::contains_key(&operator_id, &account_id),
+					AllowedDelegators::<T>::get(&operator_id).contains(&account_id),
 					Error::<T>::DelegatorBlocked
 				);
 			}
 
 			// If allow - every delegator must be explicitly blocked.
 			ensure!(
-				!BlockedDelegators::<T>::contains_key(&operator_id, &account_id),
+				!BlockedDelegators::<T>::get(&operator_id).contains(&account_id),
 				Error::<T>::DelegatorBlocked
 			);
 
@@ -979,7 +962,9 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn block_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
 			let operator_id = ensure_signed(origin)?;
-			BlockedDelegators::<T>::insert(&operator_id, &delegator_id, ());
+			BlockedDelegators::<T>::mutate(&operator_id, |delegators| {
+				delegators.insert(delegator_id.clone());
+			});
 
 			Self::deposit_event(Event::DelegatorBlocked {
 				operator: operator_id,
@@ -996,7 +981,9 @@ pub mod pallet {
 			delegator_id: T::AccountId,
 		) -> DispatchResult {
 			let operator_id = ensure_signed(origin)?;
-			BlockedDelegators::<T>::remove(&operator_id, &delegator_id);
+			BlockedDelegators::<T>::mutate(&operator_id, |delegators| {
+				delegators.remove(&delegator_id);
+			});
 
 			Self::deposit_event(Event::DelegatorUnblocked {
 				operator: operator_id,
@@ -1010,7 +997,9 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn allow_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
 			let operator_id = ensure_signed(origin)?;
-			AllowedDelegators::<T>::insert(&operator_id, &delegator_id, ());
+			AllowedDelegators::<T>::mutate(&operator_id, |delegators| {
+				delegators.insert(delegator_id.clone());
+			});
 
 			Self::deposit_event(Event::DelegatorAllowed {
 				operator: operator_id,
@@ -1027,13 +1016,31 @@ pub mod pallet {
 			delegator_id: T::AccountId,
 		) -> DispatchResult {
 			let operator_id = ensure_signed(origin)?;
-			AllowedDelegators::<T>::remove(&operator_id, &delegator_id);
+			AllowedDelegators::<T>::mutate(&operator_id, |delegators| {
+				delegators.remove(&delegator_id.clone());
+			});
 
 			Self::deposit_event(Event::DelegatorDisallowed {
 				operator: operator_id,
 				delegator: delegator_id,
 			});
 
+			Ok(())
+		}
+
+		#[pallet::call_index(21)]
+		#[pallet::weight(0)]
+		pub fn register_as_operator(origin: OriginFor<T>) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+			T::AccountRoleRegistry::register_as_operator(&account_id)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(22)]
+		#[pallet::weight(0)]
+		pub fn deregister_as_operator(origin: OriginFor<T>) -> DispatchResult {
+			let account_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+			T::AccountRoleRegistry::deregister_as_operator(&account_id)?;
 			Ok(())
 		}
 	}
@@ -1564,6 +1571,26 @@ impl<T: Config> Pallet<T> {
 		CurrentEpochStartedAt::<T>::get()
 			.saturating_add(RedemptionPeriodAsPercentage::<T>::get() * EpochDuration::<T>::get()) <=
 			frame_system::Pallet::<T>::current_block_number()
+	}
+
+	pub fn get_all_validators_by_operator(operator: &T::AccountId) -> Vec<T::AccountId> {
+		let mut validators = Vec::new();
+		for (validator, operator_id) in ManagedValidators::<T>::iter() {
+			if operator_id == *operator {
+				validators.push(validator);
+			}
+		}
+		validators
+	}
+
+	pub fn get_all_delegators_by_operator(operator: &T::AccountId) -> Vec<T::AccountId> {
+		let mut delegators = Vec::new();
+		for (delegator, operator_id) in ManagedDelegations::<T>::iter() {
+			if operator_id == *operator {
+				delegators.push(delegator);
+			}
+		}
+		delegators
 	}
 }
 

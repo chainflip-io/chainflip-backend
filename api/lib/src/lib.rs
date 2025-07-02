@@ -16,6 +16,7 @@
 
 use std::sync::Arc;
 
+use crate::primitives::DelegationPreferences;
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::address::AddressString;
@@ -301,6 +302,8 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			AccountRole::LiquidityProvider =>
 				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
 			AccountRole::Unregistered => bail!("Cannot register account role {:?}", role),
+			AccountRole::Operator =>
+				RuntimeCall::from(pallet_cf_validator::Call::register_as_operator {}),
 		};
 
 		Ok(self
