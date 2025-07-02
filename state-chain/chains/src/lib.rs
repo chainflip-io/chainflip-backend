@@ -465,12 +465,33 @@ pub struct FetchAssetParams<C: Chain> {
 	pub asset: <C as Chain>::ChainAsset,
 }
 
+#[cfg(feature = "runtime-benchmarks")]
+impl<C: Chain> BenchmarkValue for FetchAssetParams<C> {
+	fn benchmark_value() -> Self {
+		Self {
+			deposit_fetch_id: BenchmarkValue::benchmark_value(),
+			asset: BenchmarkValue::benchmark_value(),
+		}
+	}
+}
+
 /// Contains all the parameters required for transferring an asset on an external chain.
 #[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct TransferAssetParams<C: Chain> {
 	pub asset: <C as Chain>::ChainAsset,
 	pub amount: <C as Chain>::ChainAmount,
 	pub to: <C as Chain>::ChainAccount,
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<C: Chain> BenchmarkValue for TransferAssetParams<C> {
+	fn benchmark_value() -> Self {
+		Self {
+			asset: BenchmarkValue::benchmark_value(),
+			amount: BenchmarkValue::benchmark_value(),
+			to: BenchmarkValue::benchmark_value(),
+		}
+	}
 }
 
 /// Similar to [frame_support::StaticLookup] but with the `Key` as a type parameter instead of an
