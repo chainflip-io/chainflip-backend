@@ -79,6 +79,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				.await?
 				{
 					info!("Handling event: {event}");
+					println!("Handling event ScUtils");
 					let _call: state_chain_runtime::RuntimeCall = match event.event_parameters {
 						ScUtilsEvents::DepositToScGatewayAndScCallFilter(DepositToScGatewayAndScCallFilter {
 							sender,
@@ -102,6 +103,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
                         },
 						_ => {
 							trace!("Ignoring unused event: {event}");
+							println!("Ignoring unused event");
 							continue
 						},
 					};
