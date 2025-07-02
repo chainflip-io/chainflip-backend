@@ -136,6 +136,7 @@ async function testBoostingForAsset(
     boostFee,
   );
 
+  let first = true;
   const observeDepositFinalised = observeEvent(
     logger,
     `${chainFromAsset(asset).toLowerCase()}IngressEgress:DepositFinalised`,
@@ -144,6 +145,9 @@ async function testBoostingForAsset(
     },
   ).event.then((event) => {
     logger.trace('DepositFinalised event:', JSON.stringify(event));
+    if (first) {
+      throwError(logger, new Error('Received DepositFinalised event before DepositBoosted'));
+    }
     return event;
   });
   const observeSwapBoosted = observeEvent(
@@ -152,18 +156,24 @@ async function testBoostingForAsset(
     {
       test: (event) => event.data.channelId === swapRequest.channelId.toString(),
     },
-  ).event;
+  ).event.then((event) => {
+    logger.trace('DepositBoosted event:', JSON.stringify(event));
+    if (first) {
+      first = false;
+    }
+    return event;
+  });
 
   await send(logger, asset, swapRequest.depositAddress, amount.toString());
   logger.debug(`Sent ${amount} ${asset} to ${swapRequest.depositAddress}`);
 
   // Check that the swap was boosted
   const depositEvent = await Promise.race([observeSwapBoosted, observeDepositFinalised]);
-  if (depositEvent.name.method === 'DepositFinalised') {
-    throwError(logger, new Error('Deposit was finalised without seeing the DepositBoosted event'));
-  } else if (depositEvent.name.method !== 'DepositBoosted') {
-    throwError(logger, new Error(`Unexpected event ${depositEvent.name.method}`));
-  }
+  assert.strictEqual(
+    depositEvent.name.method,
+    'DepositBoosted',
+    'Expected DepositBoosted event, but got ' + depositEvent.name.method,
+  );
 
   // Stop boosting
   const stoppedBoostingEvent = await stopBoosting(logger, asset, boostFee, lpUri)!;
