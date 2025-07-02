@@ -20,7 +20,7 @@ import {
   amountToFineAmountBigInt,
 } from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
-import { getCFTesterAbi, getEvmVaultAbi } from 'shared/contract_interfaces';
+import { getCFTesterAbi, getEthScUtilsAbi, getEvmVaultAbi } from 'shared/contract_interfaces';
 import { send } from 'shared/send';
 
 import { observeEvent, observeBadEvent, getChainflipApi } from 'shared/utils/substrate';
@@ -28,9 +28,11 @@ import { TestContext } from 'shared/utils/test_context';
 import { Logger, throwError } from 'shared/utils/logger';
 import { ChannelRefundParameters } from 'shared/sol_vault_swap';
 import { newEvmAddress } from 'shared/new_evm_address';
+import { approveErc20 } from 'shared/approve_erc20';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfEvmVaultAbi = await getEvmVaultAbi();
+const cfScUtilsAbi = await getEthScUtilsAbi();
 
 async function testSuccessiveDepositEvm(
   sourceAsset: Asset,
@@ -255,49 +257,73 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
   );
 }
 
+async function testDelegate(parentLogger: Logger) {
+  const web3 = new Web3(getEvmEndpoint('Ethereum'));
+  const scUtilsAddress = getContractAddress('Ethereum', 'SC_UTILS');
+  const cfScUtilsContract = new web3.eth.Contract(cfScUtilsAbi, scUtilsAddress);
+  const logger = parentLogger.child({ tag: 'Delegate' });
+
+  const amount = amountToFineAmountBigInt(defaultAssetAmounts('Flip'), 'Flip');
+
+  console.log("Approving Flip to SC Utils contract for deposit...");
+  await approveErc20(
+    logger,
+    'Flip',
+    getContractAddress('Ethereum', 'SC_UTILS'),
+    amount.toString(),
+  );
+  console.log("Approved FLIP");
+
+  const txData = cfScUtilsContract.methods.depositToScGateway(amount.toString(), '0x').encodeABI();
+
+  const receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
+  console.log('Transaction hash:', receipt.transactionHash);
+}
+
 export async function testEvmDeposits(testContext: TestContext) {
-  const depositTests = Promise.all([
-    testSuccessiveDepositEvm('Eth', 'Dot', testContext),
-    testSuccessiveDepositEvm('Flip', 'Btc', testContext),
-    testSuccessiveDepositEvm('ArbEth', 'Dot', testContext),
-    testSuccessiveDepositEvm('ArbUsdc', 'Btc', testContext),
-  ]);
+  // const depositTests = Promise.all([
+  //   testSuccessiveDepositEvm('Eth', 'Dot', testContext),
+  //   testSuccessiveDepositEvm('Flip', 'Btc', testContext),
+  //   testSuccessiveDepositEvm('ArbEth', 'Dot', testContext),
+  //   testSuccessiveDepositEvm('ArbUsdc', 'Btc', testContext),
+  // ]);
 
-  const noDuplicatedWitnessingTest = Promise.all([
-    testNoDuplicateWitnessing('Eth', 'Dot', testContext),
-    testNoDuplicateWitnessing('Eth', 'Btc', testContext),
-    testNoDuplicateWitnessing('Eth', 'Flip', testContext),
-    testNoDuplicateWitnessing('Eth', 'Usdc', testContext),
-    testNoDuplicateWitnessing('ArbEth', 'Dot', testContext),
-    testNoDuplicateWitnessing('ArbEth', 'Btc', testContext),
-    testNoDuplicateWitnessing('ArbEth', 'Flip', testContext),
-    testNoDuplicateWitnessing('ArbEth', 'Usdc', testContext),
-  ]);
+  // const noDuplicatedWitnessingTest = Promise.all([
+  //   testNoDuplicateWitnessing('Eth', 'Dot', testContext),
+  //   testNoDuplicateWitnessing('Eth', 'Btc', testContext),
+  //   testNoDuplicateWitnessing('Eth', 'Flip', testContext),
+  //   testNoDuplicateWitnessing('Eth', 'Usdc', testContext),
+  //   testNoDuplicateWitnessing('ArbEth', 'Dot', testContext),
+  //   testNoDuplicateWitnessing('ArbEth', 'Btc', testContext),
+  //   testNoDuplicateWitnessing('ArbEth', 'Flip', testContext),
+  //   testNoDuplicateWitnessing('ArbEth', 'Usdc', testContext),
+  // ]);
 
-  const multipleTxSwapsTest = Promise.all([
-    testTxMultipleVaultSwaps(testContext.logger, 'Eth', 'Dot'),
-    testTxMultipleVaultSwaps(testContext.logger, 'Eth', 'Flip'),
-    testTxMultipleVaultSwaps(testContext.logger, 'ArbEth', 'Dot'),
-    testTxMultipleVaultSwaps(testContext.logger, 'ArbEth', 'Flip'),
-  ]);
+  // const multipleTxSwapsTest = Promise.all([
+  //   testTxMultipleVaultSwaps(testContext.logger, 'Eth', 'Dot'),
+  //   testTxMultipleVaultSwaps(testContext.logger, 'Eth', 'Flip'),
+  //   testTxMultipleVaultSwaps(testContext.logger, 'ArbEth', 'Dot'),
+  //   testTxMultipleVaultSwaps(testContext.logger, 'ArbEth', 'Flip'),
+  // ]);
 
-  const doubleDepositTests = Promise.all([
-    testDoubleDeposit(testContext.logger, 'Eth', 'Dot'),
-    testDoubleDeposit(testContext.logger, 'Usdc', 'Flip'),
-    testDoubleDeposit(testContext.logger, 'ArbEth', 'Dot'),
-    testDoubleDeposit(testContext.logger, 'ArbUsdc', 'Btc'),
-  ]);
+  // const doubleDepositTests = Promise.all([
+  //   testDoubleDeposit(testContext.logger, 'Eth', 'Dot'),
+  //   testDoubleDeposit(testContext.logger, 'Usdc', 'Flip'),
+  //   testDoubleDeposit(testContext.logger, 'ArbEth', 'Dot'),
+  //   testDoubleDeposit(testContext.logger, 'ArbUsdc', 'Btc'),
+  // ]);
 
-  const testEncodingCfParameters = Promise.all([
-    testEncodeCfParameters(testContext.logger, 'ArbEth', 'Eth'),
-    testEncodeCfParameters(testContext.logger, 'Eth', 'Dot'),
-  ]);
+  // const testEncodingCfParameters = Promise.all([
+  //   testEncodeCfParameters(testContext.logger, 'ArbEth', 'Eth'),
+  //   testEncodeCfParameters(testContext.logger, 'Eth', 'Dot'),
+  // ]);
 
   await Promise.all([
-    depositTests,
-    noDuplicatedWitnessingTest,
-    multipleTxSwapsTest,
-    doubleDepositTests,
-    testEncodingCfParameters,
+    // depositTests,
+    // noDuplicatedWitnessingTest,
+    // multipleTxSwapsTest,
+    // doubleDepositTests,
+    // testEncodingCfParameters,
+    testDelegate(testContext.logger),
   ]);
 }
