@@ -36,6 +36,7 @@ unzip -u ${ZIP_FILE} \
     'IAddressChecker.json' \
     'CFTester.json' \
     'IFLIP.json' \
+    'IScUtils.json' \
     -d $TARGET_DIR
 
 rm ${ZIP_FILE}

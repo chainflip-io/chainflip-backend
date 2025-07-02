@@ -1,6 +1,6 @@
 services:
   eth-init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.2.1-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.3.0-test2-${NODE_COUNT}
     pull_policy: if_not_present
     container_name: init
     platform: linux/amd64
@@ -18,7 +18,7 @@ services:
     command: /bin/sh -c "cp -R /solana/solana-ledger.tar.gz /test-ledger"
 
   arb-init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.2.1-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.3.0-test2-${NODE_COUNT}
     restart: always
     container_name: arb-init
     pull_policy: if_not_present
@@ -34,7 +34,7 @@ services:
       - "/tmp/chainflip/data/redis-data:/data"
 
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.2.1-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.3.0-test2-${NODE_COUNT}
     container_name: geth
     platform: linux/amd64
     ports:

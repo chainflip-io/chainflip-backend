@@ -179,6 +179,11 @@ pub mod pallet {
 	pub type EthereumAddressCheckerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn eth_sc_utils_address)]
+	/// The address of the Sc Utils contract on ETH
+	pub type EthereumScUtilsAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn ethereum_chain_id)]
 	/// The ETH chain id
 	pub type EthereumChainId<T> = StorageValue<_, cf_chains::evm::api::EvmChainId, ValueQuery>;
@@ -583,6 +588,7 @@ pub mod pallet {
 		pub eth_key_manager_address: EvmAddress,
 		pub eth_vault_address: EvmAddress,
 		pub eth_address_checker_address: EvmAddress,
+		pub eth_sc_utils_address: EvmAddress,
 		pub ethereum_chain_id: u64,
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
@@ -608,6 +614,7 @@ pub mod pallet {
 			EthereumKeyManagerAddress::<T>::set(self.eth_key_manager_address);
 			EthereumVaultAddress::<T>::set(self.eth_vault_address);
 			EthereumAddressCheckerAddress::<T>::set(self.eth_address_checker_address);
+			EthereumScUtilsAddress::<T>::set(self.eth_sc_utils_address);
 
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			EthereumSupportedAssets::<T>::insert(EthAsset::Flip, self.flip_token_address);
