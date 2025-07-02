@@ -29,7 +29,7 @@ use cf_chains::{
 		encode_swap_params_in_nulldata_payload, BtcCfParameters, UtxoEncodedData,
 	},
 	ccm_checker::{check_ccm_for_blacklisted_accounts, DecodedCcmAdditionalData},
-	cf_parameters::build_cf_parameters,
+	cf_parameters::build_and_encode_cf_parameters,
 	evm::api::{EvmCall, EvmEnvironmentProvider},
 	sol::{
 		api::SolanaEnvironment, instruction_builder::SolanaInstructionBuilder,
@@ -37,8 +37,8 @@ use cf_chains::{
 		SolAmount, SolInstruction, SolPubkey,
 	},
 	Arbitrum, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
-	ChannelRefundParametersUncheckedEncoded, Ethereum, ForeignChain, Solana,
-	VaultSwapExtraParameters, VaultSwapInputEncoded,
+	ChannelRefundParametersUncheckedEncoded, Ethereum, ForeignChain, VaultSwapExtraParameters,
+	VaultSwapInputEncoded,
 };
 use cf_primitives::{
 	AffiliateAndFee, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiary, DcaParameters,
@@ -157,30 +157,26 @@ pub fn evm_vault_swap<A>(
 	dca_parameters: Option<DcaParameters>,
 	channel_metadata: Option<CcmChannelMetadataChecked>,
 ) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
-	let refund_params = refund_params.try_map_address(|addr| {
-		Ok::<_, DispatchErrorWithMessage>(
-			ChainAddressConverter::try_from_encoded_address(addr)
-				.and_then(|addr| addr.try_into().map_err(|_| ()))
-				.map_err(|_| "Invalid refund address")?,
-		)
+	let refund_params = refund_params.try_map_address(|addr| match addr {
+		EncodedAddress::Eth(inner) | EncodedAddress::Arb(inner) => Ok(inner),
+		_ => Err(DispatchErrorWithMessage::from("Refund address must be an EVM address")),
 	})?;
 	let processed_affiliate_fees = to_affiliate_and_fees(&broker_id, affiliate_fees)?
 		.try_into()
 		.map_err(|_| "Too many affiliates.")?;
 
 	let cf_parameters = match ForeignChain::from(source_asset) {
-		ForeignChain::Ethereum => build_cf_parameters::<Ethereum>,
-		ForeignChain::Arbitrum => build_cf_parameters::<Arbitrum>,
+		ForeignChain::Ethereum | ForeignChain::Arbitrum => build_and_encode_cf_parameters(
+			refund_params,
+			dca_parameters,
+			boost_fee,
+			broker_id,
+			broker_commission,
+			processed_affiliate_fees,
+			channel_metadata.as_ref(),
+		),
 		_ => Err(DispatchErrorWithMessage::from("Unsupported source chain for EVM vault swap"))?,
-	}(
-		refund_params,
-		dca_parameters,
-		boost_fee,
-		broker_id,
-		broker_commission,
-		processed_affiliate_fees,
-		channel_metadata.as_ref(),
-	);
+	};
 
 	let calldata = match source_asset {
 		Asset::Eth | Asset::ArbEth =>
@@ -296,12 +292,9 @@ pub fn solana_vault_swap<A>(
 		.map_err(|_| "Too many affiliates")?;
 
 	let from = SolPubkey::try_from(from).map_err(|_| "Invalid Solana Address: from")?;
-	let refund_parameters = refund_parameters.try_map_address(|addr| {
-		Ok::<_, DispatchErrorWithMessage>(
-			ChainAddressConverter::try_from_encoded_address(addr)
-				.and_then(|addr| addr.try_into().map_err(|_| ()))
-				.map_err(|_| "Invalid refund address")?,
-		)
+	let refund_parameters = refund_parameters.try_map_address(|addr| match addr {
+		EncodedAddress::Sol(inner) => Ok(inner.into()),
+		_ => Err(DispatchErrorWithMessage::from("Invalid refund address.")),
 	})?;
 	let event_data_account =
 		cf_chains::sol::sol_tx_core::address_derivation::derive_vault_swap_account(
@@ -314,7 +307,7 @@ pub fn solana_vault_swap<A>(
 		.into();
 	let input_amount =
 		SolAmount::try_from(input_amount).map_err(|_| "Input amount exceeded MAX")?;
-	let cf_parameters = build_cf_parameters::<Solana>(
+	let cf_parameters = build_and_encode_cf_parameters::<sol_prim::Address>(
 		refund_parameters,
 		dca_parameters,
 		boost_fee,

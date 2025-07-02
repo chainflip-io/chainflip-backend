@@ -312,7 +312,7 @@ pub mod sol_test_values {
 		}
 	}
 
-	pub fn ccm_parameter() -> CcmDepositMetadataChecked<ForeignChainAddress> {
+	pub fn ccm_parameter_v0() -> CcmDepositMetadataChecked<ForeignChainAddress> {
 		CcmDepositMetadataChecked {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xff; 20].into())),
@@ -327,7 +327,7 @@ pub mod sol_test_values {
 	}
 
 	pub fn ccm_parameter_v1() -> CcmDepositMetadataChecked<ForeignChainAddress> {
-		let mut ccm = ccm_parameter();
+		let mut ccm = ccm_parameter_v0();
 		ccm.channel_metadata.ccm_additional_data =
 			DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V1 {
 				ccm_accounts: ccm_accounts(),
@@ -337,7 +337,7 @@ pub mod sol_test_values {
 	}
 
 	pub fn ccm_metadata_v0_unchecked() -> CcmChannelMetadataUnchecked {
-		let ccm_metadata = ccm_parameter().channel_metadata;
+		let ccm_metadata = ccm_parameter_v0().channel_metadata;
 		CcmChannelMetadataUnchecked {
 			message: ccm_metadata.message.clone(),
 			gas_budget: ccm_metadata.gas_budget,
@@ -349,7 +349,7 @@ pub mod sol_test_values {
 	}
 
 	pub fn ccm_metadata_v1_unchecked() -> CcmChannelMetadataUnchecked {
-		let ccm_metadata = ccm_parameter().channel_metadata;
+		let ccm_metadata = ccm_parameter_v0().channel_metadata;
 		CcmChannelMetadataUnchecked {
 			message: ccm_metadata.message.clone(),
 			gas_budget: ccm_metadata.gas_budget,

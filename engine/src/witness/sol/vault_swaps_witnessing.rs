@@ -27,7 +27,7 @@ use base64::Engine;
 use cf_chains::{
 	address::EncodedAddress,
 	assets::sol::Asset as SolAsset,
-	cf_parameters::VaultSwapParameters,
+	cf_parameters::VaultSwapParametersV1,
 	sol::{api::VaultSwapAccountAndSender, SolAddress},
 	CcmChannelMetadata, CcmDepositMetadata, ForeignChainAddress,
 };
@@ -127,7 +127,7 @@ pub async fn get_vault_swaps(
 
 						let (
 							deposit_metadata,
-							VaultSwapParameters {
+							VaultSwapParametersV1 {
 								refund_params,
 								dca_params,
 								boost_fee,

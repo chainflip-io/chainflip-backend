@@ -20,7 +20,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::{
 	address::EncodedAddress,
-	cf_parameters::VaultSwapParameters,
+	cf_parameters::VaultSwapParametersV1,
 	evm::{DepositDetails, H256},
 	Arbitrum, CcmDepositMetadataUnchecked, ForeignChainAddress,
 };
@@ -208,7 +208,9 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
 		tx_id: H256,
-		vault_swap_parameters: VaultSwapParameters<<Self::Chain as cf_chains::Chain>::ChainAccount>,
+		vault_swap_parameters: VaultSwapParametersV1<
+			<Self::Chain as cf_chains::Chain>::ChainAccount,
+		>,
 	) -> state_chain_runtime::RuntimeCall {
 		let deposit = vault_deposit_witness!(
 			source_asset,

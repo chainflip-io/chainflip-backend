@@ -26,7 +26,7 @@ use sp_std::{vec, vec::Vec};
 use crate::{
 	address::{self, EncodedAddress},
 	assets,
-	cf_parameters::VaultSwapParameters,
+	cf_parameters::VaultSwapParametersV1,
 	sol::sol_tx_core::{
 		instructions::program_instructions::swap_endpoints::{
 			SwapNativeParams, SwapTokenParams, XSwapNative, XSwapToken,
@@ -621,7 +621,7 @@ pub fn decode_sol_instruction_data(
 	let chain = ForeignChain::try_from(dst_chain).map_err(|_| "ForeignChain is invalid")?;
 
 	let (
-		VaultSwapParameters {
+		VaultSwapParametersV1 {
 			refund_params,
 			dca_params,
 			boost_fee,
@@ -677,7 +677,7 @@ pub fn decode_sol_instruction_data(
 mod test {
 	use super::*;
 	use crate::{
-		cf_parameters::build_cf_parameters,
+		cf_parameters::build_and_encode_cf_parameters,
 		sol::{
 			compute_units_costs::*,
 			instruction_builder::SolanaInstructionBuilder,
@@ -775,7 +775,7 @@ mod test {
 			seed.to_vec().try_into().unwrap(),
 			event_data_account.into(),
 			input_amount,
-			build_cf_parameters::<Solana>(
+			build_and_encode_cf_parameters(
 				refund_parameters.clone(),
 				Some(dca_parameters.clone()),
 				boost_fee,
@@ -844,7 +844,7 @@ mod test {
 			event_data_account.into(),
 			token_supported_account,
 			input_amount,
-			build_cf_parameters::<Solana>(
+			build_and_encode_cf_parameters(
 				refund_parameters.clone(),
 				Some(dca_parameters.clone()),
 				boost_fee,
