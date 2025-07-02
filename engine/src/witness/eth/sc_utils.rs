@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_chains::{Chain, Ethereum};
+use cf_primitives::AccountId;
 use ethers::{prelude::abigen, types::Bloom};
 use sp_core::{H160, H256};
 use tracing::{info, trace};
@@ -38,7 +39,8 @@ use anyhow::Result;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub enum ScCall {
-	DelegateTo { sc_account: H256 },
+	// TODO: What type should the `sc_account` be?
+	DelegateTo { sc_account: AccountId },
 }
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
@@ -61,10 +63,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			+ 'static,
 		ProcessingFut: Future<Output = ()> + Send + 'static,
 	{
-		info!("Starting ScUtils witnessing!0");
-		println!("Starting ScUtils witnessing!1");
-		trace!("Starting ScUtils witnessing!2");
-
 		self.then::<Result<Bloom>, _, _>(move |epoch, header| {
 			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
 
@@ -79,7 +77,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				.await?
 				{
 					info!("Handling event: {event}");
-					println!("Handling event ScUtils");
 					let _call: state_chain_runtime::RuntimeCall = match event.event_parameters {
 						ScUtilsEvents::DepositToScGatewayAndScCallFilter(DepositToScGatewayAndScCallFilter {
 							sender,
@@ -87,23 +84,19 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
                             amount,
                             sc_call
 						}) => {
-							println!("Witnessed DepositToScGatewayAndScCall!");
-                            trace!("Witnessed DepositToScGatewayAndScCall event: {sender}, {signer}, {amount}, {sc_call}, {0}", epoch.index);
                             match ScCall::decode(&mut &sc_call[..]) {
                                 Ok(ScCall::DelegateTo { sc_account }) => {
-									println!("Successfully Decoded ScCall!");
+									println!("Successfully Decoded ScCall! {:?}, amount: {amount}, sender: {sender}, signer: {signer}, epoch index {:?}", sc_account, epoch.index);
                                     trace!("Successfully decoded ScCall::DelegateTo with sc_account: {sc_account}");
                                 },
-                                Err(e) => {
+                                Err(_e) => {
 									println!("Failed to decode ScCall");
-                                    trace!("Failed to decode ScCall: {e}");
                                 }
                             }
                             continue
                         },
 						_ => {
 							trace!("Ignoring unused event: {event}");
-							println!("Ignoring unused event");
 							continue
 						},
 					};
@@ -114,5 +107,21 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				Result::Ok(header.data)
 			}
 		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_sc_call_encode() {
+		let sc_call_delegate =
+			ScCall::DelegateTo { sc_account: AccountId::new([0xF4; 32]) }.encode();
+		assert_eq!(
+			sc_call_delegate,
+			hex::decode("00f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4")
+				.unwrap()
+		);
 	}
 }
