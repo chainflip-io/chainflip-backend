@@ -155,7 +155,7 @@ pub enum DelegationAcceptance {
 
 /// Parameters for validator delegation preferences
 #[derive(Default, Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, Debug)]
-pub struct OperatorParameters {
+pub struct DelegationPreferences {
 	pub fee: Percent,
 	/// Default delegation acceptance preference for this validator
 	pub delegation_acceptance: DelegationAcceptance,
@@ -368,7 +368,7 @@ pub mod pallet {
 	pub type ManagedDelegations<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, T::AccountId, OptionQuery>;
 
-	/// Maps an operator to a validator.
+	/// Maps an validator to an operator.
 	#[pallet::storage]
 	pub type ManagedValidators<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, T::AccountId, OptionQuery>;
@@ -390,6 +390,12 @@ pub mod pallet {
 	#[pallet::getter(fn validators_managed_by_operator)]
 	pub type ValidatorsManagedByOperator<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
+
+	/// Maps an operator account to it's parameters.
+	#[pallet::storage]
+	#[pallet::getter(fn operator_parameters)]
+	pub type OperatorParameters<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, DelegationPreferences, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -417,6 +423,18 @@ pub mod pallet {
 		/// The rotation transaction(s) for the previous rotation are still pending to be
 		/// succesfully broadcast, therefore, cannot start a new epoch rotation.
 		PreviousRotationStillPending,
+		/// A delegation has been created.
+		DelegationCreated { delegator: T::AccountId, operator: T::AccountId },
+		/// A delegation has been removed.
+		DelegationRemoved { delegator: T::AccountId, operator: T::AccountId },
+		/// A delegator has been blocked by an operator.
+		DelegatorBlocked { operator: T::AccountId, delegator: T::AccountId },
+		/// A delegator has been unblocked by an operator.
+		DelegatorUnblocked { operator: T::AccountId, delegator: T::AccountId },
+		/// A delegator has been allowed by an operator.
+		DelegatorAllowed { operator: T::AccountId, delegator: T::AccountId },
+		/// A delegator has been disallowed by an operator.
+		DelegatorDisallowed { operator: T::AccountId, delegator: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -459,6 +477,14 @@ pub mod pallet {
 		AuctionPhase,
 		/// Can only delegate to an operator if it's not already delegating.
 		AlreadyDelegating,
+		/// Delegator is blocked by the operator.
+		DelegatorBlocked,
+		/// Account is not delegating to the specified operator.
+		NotDelegatingToOperator,
+		/// Account does not exist.
+		ValidatorDoesNotExist,
+		/// Not authorized.
+		NotAuthorized,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -854,11 +880,37 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn delegate(origin: OriginFor<T>, operator_id: T::AccountId) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
+
 			ensure!(
 				!ManagedDelegations::<T>::contains_key(&account_id),
 				Error::<T>::AlreadyDelegating
 			);
-			ManagedDelegations::<T>::insert(account_id, operator_id);
+
+			let operator_parameters = OperatorParameters::<T>::get(&operator_id)
+				.expect("Operator parameters should exist! TODO: Handle this can never happen!");
+
+			// If deny - every delegator must be explicitly allowed.
+			if operator_parameters.delegation_acceptance == DelegationAcceptance::Deny {
+				ensure!(
+					AllowedDelegators::<T>::contains_key(&operator_id, &account_id),
+					Error::<T>::DelegatorBlocked
+				);
+			}
+
+			// If allow - every delegator must be explicitly blocked.
+			ensure!(
+				!BlockedDelegators::<T>::contains_key(&operator_id, &account_id),
+				Error::<T>::DelegatorBlocked
+			);
+
+			// Create the delegation
+			ManagedDelegations::<T>::insert(&account_id, &operator_id);
+
+			Self::deposit_event(Event::DelegationCreated {
+				delegator: account_id,
+				operator: operator_id,
+			});
+
 			Ok(())
 		}
 
@@ -866,69 +918,122 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn undelegate(origin: OriginFor<T>, operator_id: T::AccountId) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
-			ManagedDelegations::<T>::remove(account_id);
+
+			ensure!(
+				ManagedDelegations::<T>::get(&account_id) == Some(operator_id.clone()),
+				Error::<T>::NotDelegatingToOperator
+			);
+
+			ManagedDelegations::<T>::remove(&account_id);
+
+			Self::deposit_event(Event::DelegationRemoved {
+				delegator: account_id,
+				operator: operator_id,
+			});
+
 			Ok(())
 		}
 
 		#[pallet::call_index(12)]
 		#[pallet::weight(0)]
 		pub fn add_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
+			let operator_id = ensure_signed(origin)?;
 			// TODO: For now a validator can just be added. In the future we need a sig-up and
 			// sig-off process where the validator actively accepts during the sig-up process.
 			ensure!(
-				!ManagedValidators::<T>::contains_key(&account_id),
+				!ManagedValidators::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyDelegating
 			);
-			ManagedValidators::<T>::insert(account_id, validator_id);
+			ManagedValidators::<T>::insert(validator_id, operator_id);
 			Ok(())
 		}
 
 		#[pallet::call_index(13)]
 		#[pallet::weight(0)]
-		pub fn remove_validator(
-			origin: OriginFor<T>,
-			validator_id: T::AccountId,
-		) -> DispatchResult {
-			// Can be called by the operator or by the validator.
+		pub fn remove_validator(origin: OriginFor<T>, validator: T::AccountId) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
-			ManagedValidators::<T>::remove(account_id);
+
+			let operator =
+				ManagedValidators::<T>::get(&validator).ok_or(Error::<T>::ValidatorDoesNotExist)?;
+
+			ensure!(account_id == operator || account_id == validator, Error::<T>::NotAuthorized);
+
+			ManagedValidators::<T>::remove(validator);
+
 			Ok(())
 		}
 
 		#[pallet::call_index(14)]
 		#[pallet::weight(0)]
-		pub fn set_operator_parameters(
-			origin: OriginFor<T>,
-			operator_id: T::AccountId,
-			parameters: OperatorParameters,
-		) -> DispatchResult {
-			Ok(())
-		}
-
-		#[pallet::call_index(15)]
-		#[pallet::weight(0)]
-		pub fn set_delegation_fee(origin: OriginFor<T>, fee: Percent) -> DispatchResult {
-			Ok(())
-		}
-
-		#[pallet::call_index(16)]
-		#[pallet::weight(0)]
 		pub fn set_delegation_preferences(
 			origin: OriginFor<T>,
-			operator_id: T::AccountId,
-			acceptance: DelegationAcceptance,
+			parameters: DelegationPreferences,
 		) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+			// TODO: Check role operator.
+			OperatorParameters::<T>::insert(account_id, parameters);
 			Ok(())
 		}
 
 		#[pallet::call_index(17)]
 		#[pallet::weight(0)]
-		pub fn block_delegator(
+		pub fn block_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
+			let operator_id = ensure_signed(origin)?;
+			BlockedDelegators::<T>::insert(&operator_id, &delegator_id, ());
+
+			Self::deposit_event(Event::DelegatorBlocked {
+				operator: operator_id,
+				delegator: delegator_id,
+			});
+
+			Ok(())
+		}
+
+		#[pallet::call_index(18)]
+		#[pallet::weight(0)]
+		pub fn unblock_delegator(
 			origin: OriginFor<T>,
-			operator_id: T::AccountId,
 			delegator_id: T::AccountId,
 		) -> DispatchResult {
+			let operator_id = ensure_signed(origin)?;
+			BlockedDelegators::<T>::remove(&operator_id, &delegator_id);
+
+			Self::deposit_event(Event::DelegatorUnblocked {
+				operator: operator_id,
+				delegator: delegator_id,
+			});
+
+			Ok(())
+		}
+
+		#[pallet::call_index(19)]
+		#[pallet::weight(0)]
+		pub fn allow_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
+			let operator_id = ensure_signed(origin)?;
+			AllowedDelegators::<T>::insert(&operator_id, &delegator_id, ());
+
+			Self::deposit_event(Event::DelegatorAllowed {
+				operator: operator_id,
+				delegator: delegator_id,
+			});
+
+			Ok(())
+		}
+
+		#[pallet::call_index(20)]
+		#[pallet::weight(0)]
+		pub fn disallow_delegator(
+			origin: OriginFor<T>,
+			delegator_id: T::AccountId,
+		) -> DispatchResult {
+			let operator_id = ensure_signed(origin)?;
+			AllowedDelegators::<T>::remove(&operator_id, &delegator_id);
+
+			Self::deposit_event(Event::DelegatorDisallowed {
+				operator: operator_id,
+				delegator: delegator_id,
+			});
+
 			Ok(())
 		}
 	}
