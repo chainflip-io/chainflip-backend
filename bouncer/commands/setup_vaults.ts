@@ -24,7 +24,7 @@ import {
   initializeSolanaPrograms,
   initializeAssethubChain,
 } from 'shared/initialize_new_chains';
-import { globalLogger, loggerChild, Logger } from 'shared/utils/logger';
+import { globalLogger, loggerChild } from 'shared/utils/logger';
 import {
   getPolkadotApi,
   getAssethubApi,
@@ -33,7 +33,7 @@ import {
 } from 'shared/utils/substrate';
 import { brokerApiEndpoint, lpApiEndpoint } from 'shared/json_rpc';
 
-async function createPolkadotVault(logger: Logger, api: DisposableApiPromise) {
+export async function createPolkadotVault(api: DisposableApiPromise) {
   const { promise, resolve } = deferredPromise<{
     vaultAddress: AddressOrPair;
     vaultExtrinsicIndex: number;
@@ -48,7 +48,6 @@ async function createPolkadotVault(logger: Logger, api: DisposableApiPromise) {
         handleSubstrateError(api)(result);
       }
       if (result.isInBlock) {
-        logger.info('Polkadot Vault created');
         // TODO: figure out type inference so we don't have to coerce using `any`
         const pureCreated = result.findRecord('proxy', 'PureCreated')!;
         resolve({
@@ -118,17 +117,13 @@ async function main(): Promise<void> {
   logger.info('Performing initial Vault setup');
 
   // Step 1
-  await initializeArbitrumChain(logger);
-  await initializeSolanaChain(logger);
-  await initializeAssethubChain(logger);
+  await Promise.all([
+    initializeArbitrumChain(logger),
+    initializeSolanaChain(logger),
+    initializeAssethubChain(logger),
+  ]);
 
   // Step 2
-  logger.info('Forcing rotation');
-  await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
-
-  // Step 3
-  logger.info('Waiting for new keys');
-
   const dotActivationRequest = observeEvent(
     logger,
     'polkadotVault:AwaitingGovernanceActivation',
@@ -149,6 +144,11 @@ async function main(): Promise<void> {
     logger,
     'assethubVault:AwaitingGovernanceActivation',
   ).event;
+  logger.info('Forcing rotation');
+  await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
+
+  // Step 3
+  logger.info('Waiting for new keys');
 
   const dotKey = (await dotActivationRequest).data.newPublicKey;
   const btcKey = (await btcActivationRequest).data.newPublicKey;
@@ -158,14 +158,22 @@ async function main(): Promise<void> {
 
   // Step 4
   logger.info('Requesting Polkadot Vault creation');
-  const { vaultAddress: dotVaultAddress } = await createPolkadotVault(logger, polkadot);
-  const dotProxyAdded = observeEvent(logger, 'proxy:ProxyAdded', { chain: 'polkadot' }).event;
+  const { vaultAddress: dotVaultAddress } = await createPolkadotVault(polkadot);
+  logger.info(`Polkadot vault created, address: ${dotVaultAddress}`);
 
   logger.info('Requesting Assethub Vault creation');
-  const { vaultAddress: hubVaultAddress } = await createPolkadotVault(logger, assethub);
-  const hubProxyAdded = observeEvent(logger, 'proxy:ProxyAdded', { chain: 'assethub' }).event;
+  const { vaultAddress: hubVaultAddress } = await createPolkadotVault(assethub);
+  logger.info(`AssetHub vault created, address: ${hubVaultAddress}`);
 
   // Step 5
+  const dotProxyAdded = observeEvent(logger, 'proxy:ProxyAdded', {
+    chain: 'polkadot',
+    timeoutSeconds: 120,
+  }).event;
+  const hubProxyAdded = observeEvent(logger, 'proxy:ProxyAdded', {
+    chain: 'assethub',
+    timeoutSeconds: 120,
+  }).event;
   logger.info('Rotating Proxy and Funding Accounts on Polkadot and Assethub');
   const [, , dotVaultEvent, hubVaultEvent] = await Promise.all([
     rotateAndFund(polkadot, dotVaultAddress, dotKey),

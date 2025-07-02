@@ -1,5 +1,6 @@
 import { fineAmountToAmount, assetDecimals, HubAsset, getHubAssetId } from 'shared/utils';
 import { getAssethubApi } from 'shared/utils/substrate';
+import { globalLogger } from './utils/logger';
 
 export async function getHubDotBalance(address: string): Promise<string> {
   await using assethub = await getAssethubApi();
@@ -15,6 +16,9 @@ export async function getHubAssetBalance(asset: HubAsset, address: string): Prom
   const reply = await assethub.query.assets.account(getHubAssetId(asset), address);
 
   if (reply.isEmpty) {
+    globalLogger.warn(
+      `Empty reply from assetHub account query for asset ${asset}, address ${address}`,
+    );
     return '0';
   }
 

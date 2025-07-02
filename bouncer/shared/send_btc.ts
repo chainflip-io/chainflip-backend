@@ -59,19 +59,23 @@ export async function waitForBtcTransaction(logger: Logger, txid: string, confir
   logger.trace(
     `Waiting for Btc transaction to be confirmed, txid: ${txid}, required confirmations: ${confirmations}`,
   );
-  for (let i = 0; i < 50; i++) {
+  // Localnet btc blocktime is 5sec
+  const timeoutSeconds = 10 + 5 * confirmations;
+  for (let i = 0; i < timeoutSeconds; i++) {
     const transactionDetails = await btcClient.getTransaction(txid);
 
     if (transactionDetails.confirmations < confirmations) {
       await sleep(1000);
     } else {
-      logger.trace(`Btc transaction confirmed, txid: ${txid}`);
+      logger.trace(`Btc transaction confirmed, txid: ${txid} in ${i} seconds`);
       return;
     }
   }
   throwError(
     logger,
-    new Error(`Timeout waiting for Btc transaction to be confirmed, txid: ${txid}`),
+    new Error(
+      `Timeout (${timeoutSeconds}s) waiting for Btc transaction to be confirmed, txid: ${txid}`,
+    ),
   );
 }
 
@@ -82,15 +86,31 @@ export async function sendBtc(
   confirmations = 1,
 ): Promise<string> {
   // Btc client has a limit on the number of concurrent requests
-  const txid = (await btcClientMutex.runExclusive(async () =>
-    btcClient.sendToAddress(address, amount, '', '', false, true, null, 'unset', null, 1),
-  )) as string;
+  let txid: string;
+  let attempts = 0;
+  const maxAttempts = 3;
 
-  if (confirmations > 0) {
-    await waitForBtcTransaction(logger, txid, confirmations);
+  while (attempts < maxAttempts) {
+    try {
+      txid = (await btcClientMutex.runExclusive(async () =>
+        btcClient.sendToAddress(address, amount, '', '', false, true, null, 'unset', null, 1),
+      )) as string;
+
+      if (confirmations > 0) {
+        await waitForBtcTransaction(logger, txid, confirmations);
+      }
+      return txid;
+    } catch (error) {
+      attempts++;
+      logger.warn(`Error sending BTC transaction (attempt ${attempts}): ${error}`);
+      if (attempts >= maxAttempts) {
+        throw error;
+      }
+      await sleep(1000);
+    }
   }
 
-  return txid;
+  return '';
 }
 
 /**

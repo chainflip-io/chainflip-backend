@@ -84,9 +84,9 @@ export async function depositLiquidity(
     timeoutSeconds: 90,
   }).event;
 
-  await runWithTimeout(
+  const txHash = await runWithTimeout(
     send(logger, ccy, ingressAddress, String(amount)),
-    30,
+    130,
     logger,
     `sending liquidity ${amount} ${ccy}.`,
   );
@@ -94,4 +94,5 @@ export async function depositLiquidity(
   await eventHandle;
 
   logger.debug(`Liquidity deposited to ${ingressAddress}`);
+  return txHash;
 }

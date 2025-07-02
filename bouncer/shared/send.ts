@@ -16,7 +16,6 @@ import { approveErc20 } from 'shared/approve_erc20';
 import { getCFTesterAbi } from 'shared/contract_interfaces';
 import { sendSol } from 'shared/send_sol';
 import { sendSolUsdc } from 'shared/send_solusdc';
-import { sendHubDot } from 'shared/send_hubdot';
 import { sendHubAsset } from 'shared/send_hubasset';
 import { Logger } from 'shared/utils/logger';
 
@@ -26,49 +25,36 @@ export async function send(
   logger: Logger,
   asset: Asset,
   address: string,
-  amount?: string,
+  amount: string = defaultAssetAmounts(asset),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   switch (asset) {
     case 'Btc':
-      return sendBtc(logger, address, amount ?? defaultAssetAmounts(asset));
+      return sendBtc(logger, address, amount);
     case 'Eth':
-      return sendEvmNative(logger, 'Ethereum', address, amount ?? defaultAssetAmounts(asset));
+      return sendEvmNative(logger, 'Ethereum', address, amount);
     case 'ArbEth':
-      return sendEvmNative(logger, 'Arbitrum', address, amount ?? defaultAssetAmounts(asset));
+      return sendEvmNative(logger, 'Arbitrum', address, amount);
     case 'Dot':
-      return sendDot(address, amount ?? defaultAssetAmounts(asset));
+      return sendDot(address, amount);
     case 'Sol':
-      return sendSol(logger, address, amount ?? defaultAssetAmounts(asset));
+      return sendSol(logger, address, amount);
     case 'Usdc':
     case 'Usdt':
     case 'Flip': {
       const contractAddress = getContractAddress('Ethereum', asset);
-      return sendErc20(
-        logger,
-        'Ethereum',
-        address,
-        contractAddress,
-        amount ?? defaultAssetAmounts(asset),
-      );
+      return sendErc20(logger, 'Ethereum', address, contractAddress, amount);
     }
     case 'ArbUsdc': {
       const contractAddress = getContractAddress('Arbitrum', asset);
-      return sendErc20(
-        logger,
-        'Arbitrum',
-        address,
-        contractAddress,
-        amount ?? defaultAssetAmounts(asset),
-      );
+      return sendErc20(logger, 'Arbitrum', address, contractAddress, amount);
     }
     case 'SolUsdc':
-      return sendSolUsdc(logger, address, amount ?? defaultAssetAmounts(asset));
+      return sendSolUsdc(logger, address, amount);
     case 'HubDot':
-      return sendHubDot(address, amount ?? defaultAssetAmounts(asset));
     case 'HubUsdc':
     case 'HubUsdt':
-      return sendHubAsset(asset, address, amount ?? defaultAssetAmounts(asset));
+      return sendHubAsset(logger, asset, address, amount);
     default:
       throw new Error(`Unsupported asset type: ${asset}`);
   }
@@ -78,7 +64,7 @@ export async function sendViaCfTester(
   logger: Logger,
   asset: Asset,
   toAddress: string,
-  amount?: string,
+  amount: string = defaultAssetAmounts(asset),
 ) {
   const chain = chainFromAsset(asset);
 
@@ -93,16 +79,16 @@ export async function sendViaCfTester(
   switch (asset) {
     case 'Eth':
       txData = cfTesterContract.methods.transferEth(toAddress).encodeABI();
-      value = amountToFineAmount(amount ?? defaultAssetAmounts(asset), assetDecimals(asset));
+      value = amountToFineAmount(amount, assetDecimals(asset));
       break;
     case 'Usdc':
     case 'Flip': {
-      await approveErc20(logger, asset, cfTesterAddress, amount ?? defaultAssetAmounts(asset));
+      await approveErc20(logger, asset, cfTesterAddress, amount);
       txData = cfTesterContract.methods
         .transferToken(
           toAddress,
           getContractAddress(chain, asset),
-          amountToFineAmount(amount ?? defaultAssetAmounts(asset), assetDecimals(asset)),
+          amountToFineAmount(amount, assetDecimals(asset)),
         )
         .encodeABI();
       break;
