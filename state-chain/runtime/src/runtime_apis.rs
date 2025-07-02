@@ -28,7 +28,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
-	DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount, NetworkEnvironment, SemVer,
+	DcaParameters, DelegationPreferences, EpochIndex, FlipBalance, ForeignChain, GasAmount,
+	NetworkEnvironment, SemVer,
 };
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};

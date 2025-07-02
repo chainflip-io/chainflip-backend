@@ -22,7 +22,7 @@ use pallet_cf_funding::Config as FundingConfig;
 use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_session::Config as SessionConfig;
 
-use cf_primitives::AccountRole;
+use cf_primitives::{AccountRole, DelegationPreferences};
 use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter, SafeMode, SetSafeMode};
 use cf_utilities::assert_matches;
 use frame_benchmarking::v2::*;
@@ -35,6 +35,8 @@ use frame_support::{
 use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 use sp_application_crypto::RuntimeAppPublic;
 use sp_std::vec;
+
+use delegation::{DelegationAcceptance, OperatorSettings};
 
 mod p2p_crypto {
 	use sp_application_crypto::{app_crypto, ed25519, KeyTypeId};
@@ -524,5 +526,48 @@ mod benchmarks {
 			RawOrigin::Signed(operator).into()
 		)
 		.is_err());
+	}
+
+	#[benchmark]
+	fn delegate() {
+		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+
+		assert_ok!(Pallet::<T>::set_delegation_preferences(
+			RawOrigin::Signed(operator.clone()).into(),
+			OperatorSettings { fee_bps: 100, delegation_acceptance: DelegationAcceptance::Allow }
+		));
+
+		let delegator: T::AccountId = account::<T::AccountId>("whitelisted_caller", 0, 1);
+		frame_system::Pallet::<T>::inc_providers(&delegator);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&delegator);
+
+		ManagedDelegations::<T>::remove(&delegator);
+
+		#[extrinsic_call]
+		delegate(RawOrigin::Signed(delegator.clone()), operator.clone());
+
+		assert_eq!(ManagedDelegations::<T>::get(delegator), Some(operator));
+	}
+
+	#[benchmark]
+	fn undelegate() {
+		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+
+		let delegator: T::AccountId = whitelisted_caller();
+		frame_system::Pallet::<T>::inc_providers(&delegator);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&delegator);
+
+		ManagedDelegations::<T>::insert(&delegator, operator);
+
+		#[extrinsic_call]
+		undelegate(RawOrigin::Signed(delegator.clone()));
+
+		assert!(ManagedDelegations::<T>::get(delegator).is_none());
 	}
 }
