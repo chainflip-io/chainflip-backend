@@ -96,14 +96,14 @@ where
 		.context("Failed to get Vault contract address from SC")?;
 
 	let address_checker_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumScUtilsAddress<state_chain_runtime::Runtime>>(
+		.storage_value::<pallet_cf_environment::EthereumAddressCheckerAddress<state_chain_runtime::Runtime>>(
 			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
 		.expect("Failed to get Address Checker contract address from SC");
 
 	let sc_utils_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumAddressCheckerAddress<state_chain_runtime::Runtime>>(
+		.storage_value::<pallet_cf_environment::EthereumScUtilsAddress<state_chain_runtime::Runtime>>(
 			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
@@ -248,7 +248,7 @@ where
 		.continuous("Vault".to_string(), db.clone())
 		.logging("Vault")
 		.spawn(scope);
-	
+
 	eth_safe_vault_source
 		.sc_utils_witnessing(process_call, eth_client.clone(), sc_utils_address)
 		.continuous("ScUtils".to_string(), db)
