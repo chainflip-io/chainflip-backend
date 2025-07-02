@@ -11,6 +11,7 @@ import {
   newAddress,
   createStateChainKeypair,
   chainFromAsset,
+  runWithTimeout,
 } from 'shared/utils';
 import { send } from 'shared/send';
 import { depositLiquidity } from 'shared/deposit_liquidity';
@@ -150,29 +151,62 @@ async function testBoostingForAsset(
     }
     return event;
   });
-  const observeSwapBoosted = observeEvent(
-    logger,
-    `${chainFromAsset(asset).toLowerCase()}IngressEgress:DepositBoosted`,
-    {
-      test: (event) => event.data.channelId === swapRequest.channelId.toString(),
-    },
-  ).event.then((event) => {
-    logger.trace('DepositBoosted event:', JSON.stringify(event));
-    if (first) {
-      first = false;
-    }
-    return event;
-  });
+  function observeBoostEvent(eventName: string) {
+    return observeEvent(
+      logger,
+      `${chainFromAsset(asset).toLowerCase()}IngressEgress:${eventName}`,
+      {
+        test: (event) => event.data.channelId === swapRequest.channelId.toString(),
+      },
+    ).event.then((event) => {
+      logger.trace(`${eventName} event:`, JSON.stringify(event));
+      if (first) {
+        first = false;
+      }
+      return event;
+    });
+  }
+
+  // Boost can fail if there is not enough liquidity in the boost pool, in which case it will emit an
+  // InsufficientBoostLiquidity event.
+  const observeBoostEvents = Promise.race([
+    observeBoostEvent('DepositBoosted'),
+    observeBoostEvent('InsufficientBoostLiquidity'),
+  ])
+    .then((event) => {
+      if (event.name.method === 'InsufficientBoostLiquidity') {
+        throwError(
+          logger,
+          new Error(`Insufficient boost liquidity for swap: ${event.data.channelId}`),
+        );
+      }
+      return event;
+    })
+    .catch((error) => {
+      logger.error('Error while waiting for boost events:', error);
+      throw error;
+    });
 
   await send(logger, asset, swapRequest.depositAddress, amount.toString());
   logger.debug(`Sent ${amount} ${asset} to ${swapRequest.depositAddress}`);
 
   // Check that the swap was boosted
-  const depositEvent = await Promise.race([observeSwapBoosted, observeDepositFinalised]);
+  const boostEvent = await Promise.race([observeBoostEvents, observeDepositFinalised]);
+  assert.strictEqual(
+    boostEvent.name.method,
+    'DepositBoosted',
+    'Expected DepositBoosted event, but got ' + boostEvent.name.method,
+  );
+  const depositEvent = await runWithTimeout(
+    observeDepositFinalised,
+    60,
+    logger,
+    'Waiting for DepositFinalised event after boosting swap',
+  );
   assert.strictEqual(
     depositEvent.name.method,
-    'DepositBoosted',
-    'Expected DepositBoosted event, but got ' + depositEvent.name.method,
+    'DepositFinalised',
+    'Expected DepositFinalised event, but got ' + depositEvent.name.method,
   );
 
   // Stop boosting
