@@ -33,7 +33,8 @@ use cf_node_client::events_decoder;
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
-	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
+	DcaParameters, DelegationPreferences, EpochIndex, ForeignChain, NetworkEnvironment, SemVer,
+	SwapId, SwapRequestId,
 };
 use cf_rpc_apis::{
 	broker::{
@@ -79,9 +80,9 @@ use state_chain_runtime::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
 		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
-		OpenedDepositChannels, RuntimeApiPenalty, SimulatedSwapInformation, TradingStrategyInfo,
-		TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-		VaultSwapDetails,
+		OpenedDepositChannels, OperatorInfo, RuntimeApiPenalty, SimulatedSwapInformation,
+		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
+		VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash,
@@ -235,6 +236,12 @@ pub enum RpcAccountInfo {
 		restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
 		estimated_redeemable_balance: NumberOrHex,
 	},
+	Operator {
+		managed_validators: Vec<AccountId32>,
+		delegation_preferences: DelegationPreferences,
+		blocked_delegators: Vec<AccountId32>,
+		allowed_delegators: Vec<AccountId32>,
+	},
 }
 
 impl RpcAccountInfo {
@@ -304,6 +311,15 @@ impl RpcAccountInfo {
 				.map(|(address, balance)| (address, balance.into()))
 				.collect(),
 			estimated_redeemable_balance: info.estimated_redeemable_balance.into(),
+		}
+	}
+
+	fn operator(info: OperatorInfo) -> Self {
+		Self::Operator {
+			managed_validators: info.managed_validators,
+			delegation_preferences: info.delegation_preferences,
+			blocked_delegators: info.blocked_delegators,
+			allowed_delegators: info.allowed_delegators,
 		}
 	}
 }
@@ -1434,6 +1450,11 @@ where
 						let info = api.cf_validator_info(hash, &account_id)?;
 
 						RpcAccountInfo::validator(info)
+					},
+					AccountRole::Operator => {
+						let info = api.cf_operator_info(hash, &account_id)?;
+
+						RpcAccountInfo::operator(info)
 					},
 				},
 			)
