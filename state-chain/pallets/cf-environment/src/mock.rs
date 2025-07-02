@@ -300,8 +300,7 @@ impl pallet_cf_environment::Config for Test {
 pub const STATE_CHAIN_GATEWAY_ADDRESS: eth::Address = H160([0u8; 20]);
 pub const ETH_KEY_MANAGER_ADDRESS: eth::Address = H160([1u8; 20]);
 pub const ETH_VAULT_ADDRESS: eth::Address = H160([2u8; 20]);
-pub const ETH_ADDRESS_CHECKER_ADDRESS: eth::Address = H160([8u8; 20]);
-pub const ETH_SC_UTILS_ADDRESS: eth::Address = H160([4u8; 20]);
+pub const ETH_ADDRESS_CHECKER_ADDRESS: eth::Address = H160([3u8; 20]);
 pub const ETH_CHAIN_ID: u64 = 1;
 
 pub const ARB_KEY_MANAGER_ADDRESS: eth::Address = H160([4u8; 20]);
@@ -309,6 +308,8 @@ pub const ARB_VAULT_ADDRESS: eth::Address = H160([5u8; 20]);
 pub const ARB_USDC_TOKEN_ADDRESS: eth::Address = H160([6u8; 20]);
 pub const ARB_ADDRESS_CHECKER_ADDRESS: eth::Address = H160([7u8; 20]);
 pub const ARB_CHAIN_ID: u64 = 2;
+
+pub const ETH_SC_UTILS_ADDRESS: eth::Address = H160([8u8; 20]);
 
 cf_test_utilities::impl_test_helpers! {
 	Test,
