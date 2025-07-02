@@ -28,6 +28,45 @@ pub struct ChpLoan<T: Config> {
 }
 
 impl<T: Config> ChpLoan<T> {
+	#[cfg(feature = "runtime-benchmarks")]
+	pub(crate) fn new(
+		loan_id: ChpLoanId,
+		asset: Asset,
+		created_at_block: BlockNumberFor<T>,
+		expiry_block: BlockNumberFor<T>,
+		borrower_id: T::AccountId,
+		usdc_collateral: AssetAmount,
+		fees_collected_usdc: AssetAmount,
+		pool_contributions: Vec<ChpPoolContribution>,
+		interest_rate: Perbill,
+		asset_price_at_creation: Price,
+		status: LoanStatus,
+	) -> Self {
+		Self {
+			loan_id,
+			asset,
+			created_at_block,
+			expiry_block,
+			borrower_id,
+			usdc_collateral,
+			fees_collected_usdc,
+			pool_contributions,
+			interest_rate,
+			asset_price_at_creation,
+			status,
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn usdc_collateral(&self) -> AssetAmount {
+		self.usdc_collateral
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn fees_collected_usdc(&self) -> AssetAmount {
+		self.fees_collected_usdc
+	}
+
 	fn total_principal_amount(&self) -> AssetAmount {
 		self.pool_contributions.iter().map(|c| c.principal).sum()
 	}
@@ -134,13 +173,15 @@ fn initiate_loan_fees_swap<T: Config>(loan: &mut ChpLoan<T>) {
 	}
 }
 
-fn initiate_soft_liquidation<T: Config>(loan: &mut ChpLoan<T>) {
+pub(crate) fn initiate_soft_liquidation<T: Config>(loan: &mut ChpLoan<T>) -> Weight {
 	if loan.status == LoanStatus::Active {
 		loan.status = LoanStatus::SoftLiquidation { usdc_collateral: loan.usdc_collateral };
 
 		swap_for_chp::<T>(COLLATERAL_ASSET, loan.usdc_collateral, loan.asset, loan.loan_id);
 
 		loan.usdc_collateral = 0;
+
+		T::WeightInfo::initiate_soft_liquidation()
 	} else {
 		unreachable!()
 	}
@@ -168,9 +209,10 @@ pub fn process_interest_for_loan<T: Config>(
 			loan.usdc_collateral.saturating_reduce(usdc_interest_amount);
 			loan.fees_collected_usdc.saturating_accrue(usdc_interest_amount);
 		}
+		T::WeightInfo::charge_interest_for_loan(loan.pool_contributions.len() as u32)
+	} else {
+		Weight::zero()
 	}
-
-	Weight::zero()
 }
 
 // Sweeping but it is a no-op if it fails for whatever reason
@@ -212,25 +254,31 @@ pub fn process_collateral_topup<T: Config>(
 				log_or_panic!("Unable to debit after checking balance");
 			}
 		}
+		T::WeightInfo::top_up_collateral()
+	} else {
+		Weight::zero()
 	}
-
-	Weight::zero()
 }
 
 pub fn chp_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 	let config = ChpConfig::<T>::get();
 
+	// For weight calculation
+	let mut count_baseline = 0u32;
+	let mut weight_consumed: Weight = Default::default();
+
 	for (asset, loan_id) in ChpLoans::<T>::iter_keys() {
-		let _ = ChpLoans::<T>::try_mutate(asset, loan_id, |loan| {
+		let _ = ChpLoans::<T>::mutate(asset, loan_id, |loan| {
 			let loan = loan.as_mut().expect("keys read directly from storage just above");
+			count_baseline += 1;
 
 			if loan.status == LoanStatus::Active {
-				process_interest_for_loan::<T>(current_block, loan);
-				process_collateral_topup::<T>(loan, &config);
+				weight_consumed += process_interest_for_loan::<T>(current_block, loan);
+				weight_consumed += process_collateral_topup::<T>(loan, &config);
 
 				// Checking expiry
 				if loan.expiry_block <= current_block {
-					initiate_soft_liquidation::<T>(loan);
+					weight_consumed += initiate_soft_liquidation::<T>(loan);
 					return Ok::<_, ()>(());
 				}
 			}
@@ -245,14 +293,14 @@ pub fn chp_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 					} else if overcollateralisation_ratio <
 						config.overcollateralisation_soft_threshold
 					{
-						initiate_soft_liquidation::<T>(loan);
+						weight_consumed += initiate_soft_liquidation::<T>(loan);
 					}
 				},
 				LoanStatus::SoftLiquidation { .. } => {
 					let overcollateralisation_ratio = loan.overcollateralisation_ratio();
 
 					if overcollateralisation_ratio < config.overcollateralisation_hard_threshold {
-						// TODO: cancel soft liquidation swap and initiate a hard liquidaiton one
+						// TODO: cancel soft liquidation swap and initiate a hard liquidation one
 						unimplemented!();
 					}
 				},
@@ -265,7 +313,8 @@ pub fn chp_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 		});
 	}
 
-	Weight::zero() // TODO: benchmark
+	// Calculate final weight
+	weight_consumed + T::WeightInfo::upkeep_baseline(count_baseline)
 }
 
 impl<T: Config> ChpLendingApi for Pallet<T> {
