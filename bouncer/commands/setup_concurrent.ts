@@ -6,13 +6,18 @@
 // For example: ./commands/setup_concurrent.ts
 // Setup_vaults.ts must be ran first.
 import { setupBoostPools } from 'shared/setup_boost_pools';
+import { setupElections } from 'shared/setup_elections';
 import { setupSwaps } from 'shared/setup_swaps';
 import { runWithTimeoutAndExit } from 'shared/utils';
 import { globalLogger } from 'shared/utils/logger';
 
 async function main(): Promise<void> {
   globalLogger.info('Setup concurrent');
-  await Promise.all([setupSwaps(globalLogger), setupBoostPools(globalLogger)]);
+  await Promise.all([
+    setupSwaps(globalLogger),
+    setupBoostPools(globalLogger),
+    setupElections(globalLogger),
+  ]);
   globalLogger.info('Setup concurrent complete');
 }
 
