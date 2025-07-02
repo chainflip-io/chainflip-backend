@@ -79,9 +79,9 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					info!("Handling event: {event}");
 					let _call: state_chain_runtime::RuntimeCall = match event.event_parameters {
 						ScUtilsEvents::DepositToScGatewayAndScCallFilter(DepositToScGatewayAndScCallFilter {
-							sender,
-                            signer,
-                            amount,
+							sender, // eth_address to attribute the FLIP to
+                            signer, // eth_address that signed the call. Not to be used for now
+                            amount, // amount of FLIP deposited
                             sc_call
 						}) => {
                             match ScCall::decode(&mut &sc_call[..]) {
