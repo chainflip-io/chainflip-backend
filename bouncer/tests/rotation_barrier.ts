@@ -1,7 +1,7 @@
-import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { TestContext } from '../shared/utils/test_context';
-import { testVaultSwap } from '../shared/swapping';
-import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { TestContext } from 'shared/utils/test_context';
+import { testVaultSwap } from 'shared/swapping';
+import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
 
 // Testing broadcast through vault rotations
 export async function testRotateAndSwap(testContext: TestContext) {

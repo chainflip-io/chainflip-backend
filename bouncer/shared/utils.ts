@@ -21,20 +21,20 @@ import { Vector, bool, Struct, Enum, Bytes as TsBytes } from 'scale-ts';
 import BigNumber from 'bignumber.js';
 import { EventParser, BorshCoder } from '@coral-xyz/anchor';
 import { ISubmittableResult } from '@polkadot/types/types';
-import { base58Decode, base58Encode } from '../polkadot/util-crypto';
-import { newDotAddress } from './new_dot_address';
-import { BtcAddressType, newBtcAddress } from './new_btc_address';
-import { getBalance } from './get_balance';
-import { newEvmAddress } from './new_evm_address';
-import { CcmDepositMetadata } from './new_swap';
-import { getCFTesterAbi, getCfTesterIdl } from './contract_interfaces';
-import { SwapParams } from './perform_swap';
-import { newSolAddress } from './new_sol_address';
-import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
-import { execWithLog } from './utils/exec_with_log';
-import { send } from './send';
-import { TestContext } from './utils/test_context';
-import { Logger, throwError } from './utils/logger';
+import { base58Decode, base58Encode } from 'polkadot/util-crypto';
+import { newDotAddress } from 'shared/new_dot_address';
+import { BtcAddressType, newBtcAddress } from 'shared/new_btc_address';
+import { getBalance } from 'shared/get_balance';
+import { newEvmAddress } from 'shared/new_evm_address';
+import { CcmDepositMetadata } from 'shared/new_swap';
+import { getCFTesterAbi, getCfTesterIdl } from 'shared/contract_interfaces';
+import { SwapParams } from 'shared/perform_swap';
+import { newSolAddress } from 'shared/new_sol_address';
+import { getChainflipApi, observeBadEvent, observeEvent } from 'shared/utils/substrate';
+import { execWithLog } from 'shared/utils/exec_with_log';
+import { send } from 'shared/send';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger, loggerError, throwError } from 'shared/utils/logger';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -294,15 +294,27 @@ export function stateChainAssetFromAsset(asset: Asset): string {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
-export const runWithTimeout = async <T>(promise: Promise<T>, seconds: number): Promise<T> =>
-  Promise.race([
+export async function runWithTimeout<T>(
+  promise: Promise<T>,
+  seconds: number,
+  logger?: Logger,
+  taskDescription?: string,
+): Promise<T> {
+  // Add the task description to the error message if provided
+  let error = new Error(
+    `Timed out after ${seconds}s.` + (taskDescription ? ` Waiting on: ${taskDescription}` : ''),
+  );
+  if (logger) {
+    // Add the logger info to the error message if a logger is provided
+    error = loggerError(logger, error);
+  }
+  return Promise.race([
     promise,
-    sleep(seconds * 1000, new Error(`Timed out after ${seconds}s.`), { ref: false }).then(
-      (error) => {
-        throw error;
-      },
-    ),
+    sleep(seconds * 1000, error, { ref: false }).then((e) => {
+      throw e;
+    }),
   ]);
+}
 
 /// Runs the given promise with a timeout and handles exiting the process. Used for running commands.
 export async function runWithTimeoutAndExit<T>(

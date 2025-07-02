@@ -14,12 +14,12 @@ import {
   newAddress,
   decodeDotAddressForContract,
   getEvmEndpoint,
-} from './utils';
-import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap';
-import { getChainflipApi } from './utils/substrate';
-import { ChannelRefundParameters } from './sol_vault_swap';
-import { Logger } from './utils/logger';
-import { getErc20abi } from './contract_interfaces';
+} from 'shared/utils';
+import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
+import { getChainflipApi } from 'shared/utils/substrate';
+import { ChannelRefundParameters } from 'shared/sol_vault_swap';
+import { Logger } from 'shared/utils/logger';
+import { getErc20abi } from 'shared/contract_interfaces';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 

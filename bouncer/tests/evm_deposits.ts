@@ -1,7 +1,7 @@
 import Web3 from 'web3';
 import { InternalAsset as Asset } from '@chainflip/cli';
-import { doPerformSwap, requestNewSwap } from '../shared/perform_swap';
-import { prepareSwap, testSwap } from '../shared/swapping';
+import { doPerformSwap, requestNewSwap } from 'shared/perform_swap';
+import { prepareSwap, testSwap } from 'shared/swapping';
 import {
   observeFetch,
   sleep,
@@ -17,14 +17,14 @@ import {
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
-} from '../shared/utils';
-import { signAndSendTxEvm } from '../shared/send_evm';
-import { getCFTesterAbi } from '../shared/contract_interfaces';
-import { send } from '../shared/send';
+} from 'shared/utils';
+import { signAndSendTxEvm } from 'shared/send_evm';
+import { getCFTesterAbi } from 'shared/contract_interfaces';
+import { send } from 'shared/send';
 
-import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger, throwError } from '../shared/utils/logger';
+import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger, throwError } from 'shared/utils/logger';
 
 const cfTesterAbi = await getCFTesterAbi();
 

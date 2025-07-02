@@ -10,9 +10,9 @@ import {
   getContractAddress,
   getEncodedSolAddress,
   getSolWhaleKeyPair,
-} from './utils';
-import { signAndSendTxSol } from './send_sol';
-import { Logger } from './utils/logger';
+} from 'shared/utils';
+import { signAndSendTxSol } from 'shared/send_sol';
+import { Logger } from 'shared/utils/logger';
 
 export async function sendSolUsdc(logger: Logger, solAddress: string, usdcAmount: string) {
   const usdcMintPubKey = new PublicKey(getContractAddress('Solana', 'SolUsdc'));

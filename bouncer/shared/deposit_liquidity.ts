@@ -11,22 +11,26 @@ import {
   decodeSolAddress,
   assetDecimals,
   createStateChainKeypair,
-} from '../shared/utils';
-import { send } from '../shared/send';
-import { getChainflipApi, observeEvent } from './utils/substrate';
-import { Logger } from './utils/logger';
+  runWithTimeout,
+} from 'shared/utils';
+import { send } from 'shared/send';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { Logger } from 'shared/utils/logger';
 
 export async function depositLiquidity(
-  logger: Logger,
+  parentLogger: Logger,
   ccy: Asset,
   amount: number,
   waitForFinalization = false,
-  lpKey?: string,
+  optionLpUri?: string,
 ) {
+  const lpUri = optionLpUri ?? (process.env.LP_URI || '//LP_1');
+  const logger = parentLogger.child({ ccy, amount, lpUri });
+
   await using chainflip = await getChainflipApi();
   const chain = shortChainFromAsset(ccy);
 
-  const lp = createStateChainKeypair(lpKey ?? (process.env.LP_URI || '//LP_1'));
+  const lp = createStateChainKeypair(lpUri);
 
   // If no liquidity refund address is registered, then do that now
   if (
@@ -44,7 +48,7 @@ export async function depositLiquidity(
         : refundAddress;
     refundAddress = chain === 'Sol' ? decodeSolAddress(refundAddress) : refundAddress;
 
-    logger.debug('Registering Liquidity Refund Address for ' + ccy + ': ' + refundAddress);
+    logger.debug(`Registering Liquidity Refund Address for ${refundAddress}`);
     await lpMutex.runExclusive(async () => {
       const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
       await chainflip.tx.liquidityProvider
@@ -67,8 +71,7 @@ export async function depositLiquidity(
 
   const ingressAddress = (await eventHandle).data.depositAddress[chain];
 
-  logger.trace(`Received ${ccy} deposit address: ${ingressAddress}`);
-  logger.trace(`Initiating transfer of ${amount} ${ccy} to ${ingressAddress}`);
+  logger.trace(`Initiating transfer to ${ingressAddress}`);
   eventHandle = observeEvent(logger, 'assetBalances:AccountCredited', {
     test: (event) =>
       event.data.asset === ccy &&
@@ -78,10 +81,18 @@ export async function depositLiquidity(
         BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
       ),
     finalized: waitForFinalization,
+    timeoutSeconds: 90,
   }).event;
 
-  await send(logger, ccy, ingressAddress, String(amount));
+  const txHash = await runWithTimeout(
+    send(logger, ccy, ingressAddress, String(amount)),
+    130,
+    logger,
+    `sending liquidity ${amount} ${ccy}.`,
+  );
 
   await eventHandle;
-  logger.debug(`Liquidity deposited: ${amount} ${ccy} to ${ingressAddress}`);
+
+  logger.debug(`Liquidity deposited to ${ingressAddress}`);
+  return txHash;
 }

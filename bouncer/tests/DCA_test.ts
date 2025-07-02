@@ -7,14 +7,14 @@ import {
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
-} from '../shared/utils';
-import { send } from '../shared/send';
-import { observeEvent, observeEvents } from '../shared/utils/substrate';
-import { getBalance } from '../shared/get_balance';
-import { executeVaultSwap, requestNewSwap } from '../shared/perform_swap';
-import { DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger } from '../shared/utils/logger';
+} from 'shared/utils';
+import { send } from 'shared/send';
+import { observeEvent, observeEvents } from 'shared/utils/substrate';
+import { getBalance } from 'shared/get_balance';
+import { executeVaultSwap, requestNewSwap } from 'shared/perform_swap';
+import { DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger } from 'shared/utils/logger';
 
 // Requested number of blocks between each chunk
 const CHUNK_INTERVAL = 2;

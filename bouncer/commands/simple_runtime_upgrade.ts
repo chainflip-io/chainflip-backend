@@ -8,9 +8,9 @@
 // NB: It *must* be run from the bouncer directory.
 
 import path from 'path';
-import { simpleRuntimeUpgrade } from '../shared/simple_runtime_upgrade';
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { globalLogger } from '../shared/utils/logger';
+import { simpleRuntimeUpgrade } from 'shared/simple_runtime_upgrade';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { globalLogger } from 'shared/utils/logger';
 
 async function main(): Promise<void> {
   await simpleRuntimeUpgrade(globalLogger, path.dirname(process.cwd()));

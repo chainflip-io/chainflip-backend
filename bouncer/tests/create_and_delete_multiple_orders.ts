@@ -1,12 +1,12 @@
 import assert from 'assert';
-import { createStateChainKeypair, handleSubstrateError, lpMutex } from '../shared/utils';
-import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
-import { limitOrder } from '../shared/limit_order';
-import { rangeOrder } from '../shared/range_order';
-import { depositLiquidity } from '../shared/deposit_liquidity';
-import { deposits } from '../shared/setup_swaps';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger } from '../shared/utils/logger';
+import { createStateChainKeypair, handleSubstrateError, lpMutex } from 'shared/utils';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { limitOrder } from 'shared/limit_order';
+import { rangeOrder } from 'shared/range_order';
+import { depositLiquidity } from 'shared/deposit_liquidity';
+import { deposits } from 'shared/setup_swaps';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger } from 'shared/utils/logger';
 
 const DEFAULT_LP: string = '//LP_3';
 

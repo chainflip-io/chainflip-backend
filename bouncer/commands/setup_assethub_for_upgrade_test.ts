@@ -1,44 +1,16 @@
 #!/usr/bin/env -S pnpm tsx
 
 import { AddressOrPair } from '@polkadot/api/types';
-import { initializeAssethubChain } from '../shared/initialize_new_chains';
-import { DisposableApiPromise, getAssethubApi, observeEvent } from '../shared/utils/substrate';
-import { globalLogger, loggerChild, Logger } from '../shared/utils/logger';
-import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { createLpPool } from '../shared/create_lp_pool';
-import { depositLiquidity } from '../shared/deposit_liquidity';
-import { rangeOrder } from '../shared/range_order';
-import { deferredPromise, handleSubstrateError, runWithTimeoutAndExit } from '../shared/utils';
-import { aliceKeyringPair } from '../shared/polkadot_keyring';
-
-export async function createAssethubVault(logger: Logger, api: DisposableApiPromise) {
-  const { promise, resolve } = deferredPromise<{
-    vaultAddress: AddressOrPair;
-    vaultExtrinsicIndex: number;
-  }>();
-
-  const alice = await aliceKeyringPair();
-  const nonce = await api.rpc.system.accountNextIndex(alice.address);
-  const unsubscribe = await api.tx.proxy
-    .createPure(api.createType('ProxyType', 'Any'), 0, 0)
-    .signAndSend(alice, { nonce }, (result) => {
-      if (result.isError) {
-        handleSubstrateError(api)(result);
-      }
-      if (result.isInBlock) {
-        logger.info('Assethub Vault created');
-        // TODO: figure out type inference so we don't have to coerce using `any`
-        const pureCreated = result.findRecord('proxy', 'PureCreated')!;
-        resolve({
-          vaultAddress: pureCreated.event.data[0] as AddressOrPair,
-          vaultExtrinsicIndex: result.txIndex!,
-        });
-        unsubscribe();
-      }
-    });
-
-  return promise;
-}
+import { initializeAssethubChain } from 'shared/initialize_new_chains';
+import { DisposableApiPromise, getAssethubApi, observeEvent } from 'shared/utils/substrate';
+import { globalLogger, loggerChild } from 'shared/utils/logger';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { createLpPool } from 'shared/create_lp_pool';
+import { depositLiquidity } from 'shared/deposit_liquidity';
+import { rangeOrder } from 'shared/range_order';
+import { deferredPromise, handleSubstrateError, runWithTimeoutAndExit } from 'shared/utils';
+import { aliceKeyringPair } from 'shared/polkadot_keyring';
+import { createPolkadotVault } from './setup_vaults';
 
 export async function rotateAndFund(
   api: DisposableApiPromise,
@@ -96,7 +68,7 @@ async function main(): Promise<void> {
     'assethubVault:AwaitingGovernanceActivation',
   ).event;
   const hubKey = (await hubActivationRequest).data.newPublicKey;
-  const { vaultAddress: hubVaultAddress } = await createAssethubVault(logger, assethub);
+  const { vaultAddress: hubVaultAddress } = await createPolkadotVault(assethub);
   const hubProxyAdded = observeEvent(logger, 'proxy:ProxyAdded', { chain: 'assethub' }).event;
   const [, hubVaultEvent] = await Promise.all([
     rotateAndFund(assethub, hubVaultAddress, hubKey),

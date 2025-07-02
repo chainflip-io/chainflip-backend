@@ -1,8 +1,8 @@
 #!/usr/bin/env -S pnpm tsx
 
 import { PublicKey } from '@solana/web3.js';
-import { decodeSolAddress, runWithTimeoutAndExit } from '../shared/utils';
-import { submitGovernanceExtrinsic } from '../shared/cf_governance';
+import { decodeSolAddress, runWithTimeoutAndExit } from 'shared/utils';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 
 async function forceRecoverSolNonce(nonceAddress: string, nonceValue: string) {
   await submitGovernanceExtrinsic(async (chainflip) =>

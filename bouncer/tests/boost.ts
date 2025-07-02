@@ -12,15 +12,15 @@ import {
   amountToFineAmountBigInt,
   newAddress,
   createStateChainKeypair,
-} from '../shared/utils';
-import { send } from '../shared/send';
-import { depositLiquidity } from '../shared/deposit_liquidity';
-import { requestNewSwap } from '../shared/perform_swap';
-import { createBoostPools } from '../shared/setup_boost_pools';
-import { jsonRpc } from '../shared/json_rpc';
-import { observeEvent, Event, getChainflipApi } from '../shared/utils/substrate';
-import { TestContext } from '../shared/utils/test_context';
-import { Logger, throwError } from '../shared/utils/logger';
+} from 'shared/utils';
+import { send } from 'shared/send';
+import { depositLiquidity } from 'shared/deposit_liquidity';
+import { requestNewSwap } from 'shared/perform_swap';
+import { createBoostPools } from 'shared/setup_boost_pools';
+import { jsonRpc } from 'shared/json_rpc';
+import { observeEvent, Event, getChainflipApi } from 'shared/utils/substrate';
+import { TestContext } from 'shared/utils/test_context';
+import { Logger, throwError } from 'shared/utils/logger';
 
 /// Stops boosting for the given boost pool tier and returns the StoppedBoosting event.
 /* eslint-disable @typescript-eslint/no-explicit-any */

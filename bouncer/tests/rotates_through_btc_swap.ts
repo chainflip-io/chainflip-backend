@@ -1,8 +1,8 @@
-import { requestNewSwap, doPerformSwap } from '../shared/perform_swap';
-import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { observeEvent } from '../shared/utils/substrate';
-import { prepareSwap, testSwap } from '../shared/swapping';
-import { TestContext } from '../shared/utils/test_context';
+import { requestNewSwap, doPerformSwap } from 'shared/perform_swap';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { observeEvent } from 'shared/utils/substrate';
+import { prepareSwap, testSwap } from 'shared/swapping';
+import { TestContext } from 'shared/utils/test_context';
 
 async function rotatesThroughBtcSwap(testContext: TestContext) {
   const sourceAsset = 'Btc';
