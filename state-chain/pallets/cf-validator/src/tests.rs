@@ -1712,3 +1712,92 @@ mod operator {
 		});
 	}
 }
+
+#[cfg(test)]
+mod delegation {
+	use super::*;
+
+	#[test]
+	fn can_delegate() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(BOB)));
+			assert_ok!(ValidatorPallet::set_delegation_preferences(
+				OriginTrait::signed(BOB),
+				OperatorSettings {
+					fee_bps: 100,
+					delegation_acceptance: DelegationAcceptance::Allow,
+				},
+			));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(ALICE), BOB));
+			assert_eq!(ManagedDelegations::<Test>::get(ALICE), Some(BOB));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::OperatorSettingsUpdated {
+					operator: BOB,
+					preferences: OperatorSettings {
+						fee_bps: 100,
+						delegation_acceptance: DelegationAcceptance::Allow
+					},
+				}),
+				RuntimeEvent::ValidatorPallet(Event::Delegated {
+					account_id: ALICE,
+					operator_id: BOB
+				}),
+			);
+		});
+	}
+
+	#[test]
+	fn can_undelegate() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(
+				ValidatorPallet::undelegate(OriginTrait::signed(ALICE)),
+				Error::<Test>::AccountIsNotDelegating
+			);
+			ManagedDelegations::<Test>::insert(ALICE, BOB);
+			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(ALICE)));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+					account_id: ALICE,
+					operator_id: BOB
+				}),
+			);
+		});
+	}
+
+	#[test]
+	fn can_not_delegate_if_account_is_blocked() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
+			assert_ok!(ValidatorPallet::set_delegation_preferences(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: 100,
+					delegation_acceptance: DelegationAcceptance::Allow,
+				},
+			));
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
+			assert_noop!(
+				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
+				Error::<Test>::DelegatorBlocked
+			);
+		});
+	}
+
+	#[test]
+	fn can_not_delegate_if_account_is_not_whitelisted() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
+			assert_ok!(ValidatorPallet::set_delegation_preferences(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: 100,
+					delegation_acceptance: DelegationAcceptance::Allow,
+				},
+			));
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+		});
+	}
+}

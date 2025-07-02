@@ -373,6 +373,11 @@ pub mod pallet {
 	pub type OperatorSettingsLookup<T: Config> =
 		StorageMap<_, Identity, T::AccountId, OperatorSettings, OptionQuery>;
 
+	/// Maps an delegator to an associated operator account.
+	#[pallet::storage]
+	pub type ManagedDelegations<T: Config> =
+		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -411,6 +416,10 @@ pub mod pallet {
 		ValidatorRemovedFromOperator { validator: T::AccountId, operator: T::AccountId },
 		/// Operator settings have been updated.
 		OperatorSettingsUpdated { operator: T::AccountId, preferences: OperatorSettings },
+		/// An account has undelegated from an operator.
+		UnDelegated { account_id: T::AccountId, operator_id: T::AccountId },
+		/// An account has delegated to an operator.
+		Delegated { account_id: T::AccountId, operator_id: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -463,6 +472,24 @@ pub mod pallet {
 		NotClaimedByOperator,
 		/// The provided account id has not the role validator.
 		NotValidator,
+		/// Validator is already associated with an operator.
+		AlreadyAssociatedWithOperator,
+		/// Operator is still delegating to delegators.
+		StillAssociatedWithDelegators,
+		/// The validator is not claimed by any operator.
+		NotClaimed,
+		/// The operator provided is not the operator that claimed the validator.
+		OperatorDoesNotMatch,
+		/// The account is already delegating to an operator.
+		AlreadyDelegating,
+		/// The account is not delegating.
+		AccountIsNotDelegating,
+		/// Delegation is only available to accounts with no role assigned.
+		DelegationNotAllowed,
+		/// Can not delegate to none operator.
+		NotOperator,
+		/// A delegator is expliztly blocked.
+		DelegatorBlocked,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -1008,6 +1035,61 @@ pub mod pallet {
 			AllowedDelegators::<T>::remove(&account_id);
 			BlockedDelegators::<T>::remove(&account_id);
 			OperatorSettingsLookup::<T>::remove(&account_id);
+
+			Ok(())
+		}
+
+		#[pallet::call_index(18)]
+		#[pallet::weight(T::ValidatorWeightInfo::delegate())]
+		pub fn delegate(origin: OriginFor<T>, operator_id: T::AccountId) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+
+			ensure!(
+				!ManagedDelegations::<T>::contains_key(&account_id),
+				Error::<T>::AlreadyDelegating
+			);
+
+			ensure!(
+				T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Unregistered),
+				Error::<T>::DelegationNotAllowed
+			);
+
+			ensure!(
+				T::AccountRoleRegistry::has_account_role(&operator_id, AccountRole::Operator),
+				Error::<T>::NotOperator
+			);
+
+			// TODO: We should somehow ensure the operator has set his preferences...
+			match OperatorSettingsLookup::<T>::get(&operator_id)
+				.expect("an operator to have configured his parameters")
+				.delegation_acceptance
+			{
+				DelegationAcceptance::Allow => ensure!(
+					!BlockedDelegators::<T>::get(&operator_id).contains(&account_id),
+					Error::<T>::DelegatorBlocked
+				),
+				DelegationAcceptance::Deny => ensure!(
+					AllowedDelegators::<T>::get(&operator_id).contains(&account_id),
+					Error::<T>::DelegatorBlocked
+				),
+			}
+
+			ManagedDelegations::<T>::insert(&account_id, &operator_id);
+
+			Self::deposit_event(Event::Delegated { account_id, operator_id });
+
+			Ok(())
+		}
+
+		#[pallet::call_index(19)]
+		#[pallet::weight(T::ValidatorWeightInfo::undelegate())]
+		pub fn undelegate(origin: OriginFor<T>) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+
+			let operator_id = ManagedDelegations::<T>::take(&account_id)
+				.ok_or(Error::<T>::AccountIsNotDelegating)?;
+
+			Self::deposit_event(Event::UnDelegated { account_id, operator_id });
 
 			Ok(())
 		}
