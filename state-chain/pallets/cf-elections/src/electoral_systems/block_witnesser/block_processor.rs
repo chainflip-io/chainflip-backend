@@ -46,30 +46,36 @@ use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec::Vec};
 ///     - `Rules`: A hook to process block data and generate events.
 ///     - `Execute`: A hook to dedup and execute generated events.
 /// 	- `DebugEventHook`: A hook to log events, used for testing
-#[derive_where(Debug, Clone, PartialEq, Eq;)]
-#[derive(Encode, Decode, Serialize, Deserialize, GenericTypeInfo)]
-#[expand_name_with(T::Chain::NAME)]
-pub struct BlockProcessor<T: BWProcessorTypes> {
-	/// A mapping from block numbers to their corresponding BlockInfo (block data, the next age to
-	/// be processed and the safety margin). The "age" represents the block height difference
-	/// between head of the chain and block that we are processing, and it's used to know what
-	/// rules have already been processed for such block
-	pub blocks_data: BTreeMap<ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>>,
-	/// A mapping from event to their corresponding expiration block_number (which is defined as
-	/// block_number + SAFETY_BUFFER)
-	pub processed_events: BTreeMap<T::Event, ChainBlockNumberOf<T::Chain>>,
-	pub rules: T::Rules,
-	pub execute: T::Execute,
-	pub debug_events: T::DebugEventHook,
+
+def_derive! {
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
+	pub struct BlockProcessor<T: BWProcessorTypes> {
+		/// A mapping from block numbers to their corresponding BlockInfo (block data, the next age to
+		/// be processed and the safety margin). The "age" represents the block height difference
+		/// between head of the chain and block that we are processing, and it's used to know what
+		/// rules have already been processed for such block
+		pub blocks_data: BTreeMap<ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T>>,
+		/// A mapping from event to their corresponding expiration block_number (which is defined as
+		/// block_number + SAFETY_BUFFER)
+		pub processed_events: BTreeMap<T::Event, ChainBlockNumberOf<T::Chain>>,
+		pub rules: T::Rules,
+		pub execute: T::Execute,
+		pub debug_events: T::DebugEventHook,
+	}
 }
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub struct BlockProcessingInfo<BlockData> {
-	block_data: BlockData,
-	next_age_to_process: u32,
-	safety_margin: u32,
+
+def_derive! {
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
+	pub struct BlockProcessingInfo<T: BWProcessorTypes> {
+		block_data: T::BlockData,
+		next_age_to_process: u32,
+		safety_margin: u32,
+	}
 }
-impl<BlockData> BlockProcessingInfo<BlockData> {
-	fn new(block_data: BlockData, safety_margin: u32) -> Self {
+impl<T: BWProcessorTypes> BlockProcessingInfo<T> {
+	fn new(block_data: T::BlockData, safety_margin: u32) -> Self {
 		BlockProcessingInfo { block_data, next_age_to_process: Default::default(), safety_margin }
 	}
 }
@@ -87,7 +93,7 @@ def_derive! {
 		},
 		#[allow(clippy::type_complexity)]
 		DeleteData {
-			blocks: Vec<(ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>)>,
+			blocks: Vec<(ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T>)>,
 			events: Vec<T::Event>,
 		},
 		StoreReorgedEvents {
@@ -344,6 +350,8 @@ pub(crate) mod tests {
 		type Rules = TypesFor<(N, H, Vec<D>)>;
 		type Execute = MockHook<HookTypeFor<Self, ExecuteHook>>;
 		type DebugEventHook = MockHook<HookTypeFor<Self, DebugEventHook>>;
+
+		const BWNAME: &'static str = "GenericBW";
 	}
 
 	type Types = TypesFor<(u8, Vec<u8>, Vec<u8>)>;
