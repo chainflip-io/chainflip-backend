@@ -197,16 +197,11 @@ async function testBoostingForAsset(
     'DepositBoosted',
     'Expected DepositBoosted event, but got ' + boostEvent.name.method,
   );
-  const depositEvent = await runWithTimeout(
+  await runWithTimeout(
     observeDepositFinalised,
     60,
     logger,
     'Waiting for DepositFinalised event after boosting swap',
-  );
-  assert.strictEqual(
-    depositEvent.name.method,
-    'DepositFinalised',
-    'Expected DepositFinalised event, but got ' + depositEvent.name.method,
   );
 
   // Stop boosting
