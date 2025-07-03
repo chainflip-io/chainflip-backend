@@ -84,7 +84,7 @@ impl Hooks<OraclePriceES> for GenericElectionHooks {
 impl pallet_cf_elections::GovernanceElectionHook for GenericElectionHooks {
 	type Properties = ();
 
-	fn start(properties: Self::Properties) {}
+	fn start(_properties: Self::Properties) {}
 }
 
 pub type GenericElectoralSystemRunner = CompositeRunner<

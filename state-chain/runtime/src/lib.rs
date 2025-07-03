@@ -1162,6 +1162,7 @@ impl pallet_cf_elections::Config for Runtime {
 	type ElectoralSystemRunner = chainflip::generic_elections::GenericElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 	type CreateGovernanceElectionHook = chainflip::generic_elections::GenericElectionHooks;
+	type ElectoralEvents = ();
 }
 
 impl pallet_cf_trading_strategy::Config for Runtime {

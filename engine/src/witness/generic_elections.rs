@@ -16,6 +16,7 @@
 
 use cf_primitives::EpochIndex;
 use futures_core::Future;
+use cf_chains::sol::SolAddress;
 
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
@@ -63,14 +64,9 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 	) -> Result<Option<VoteOf<OraclePriceES>>, anyhow::Error> {
 		tracing::info!("Voting for oracle price, properties: {properties:?}");
 
-		let oracle_program_id: cf_chains::sol::SolAddress =
-			const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny");
-		let oracle_feeds = vec![
-			const_address("6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe"),
-			const_address("669U43LNHx7LsVj95uYksnhXUfWKDsdzVqev3V4Jpw3P"),
-		];
-		let oracle_query_helper: cf_chains::sol::SolAddress =
-			const_address("HaAGuDMxS56xgoy9vzm1NtESKftoqpiHCysvXRULk7K7");
+        let oracle_program_id: SolAddress = const_address("DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X");
+		let oracle_feeds = vec![const_address("HDSV2wFxmsrmCwwY34QzaVkvmJpG7VF8S9fX2iThynjG")];
+		let oracle_query_helper: SolAddress = const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z");
 
 		let (price_feeds, query_timestamp, query_slot) = get_price_feeds(
 			&self.sol_client,

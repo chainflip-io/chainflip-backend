@@ -33,7 +33,7 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 			let mut consensus: SupermajorityConsensus<_> = Default::default();
 
 			for vote in &self.votes {
-				for header in &vote.headers {
+				for header in &vote.get_headers() {
 					consensus.insert_vote(header.clone());
 				}
 			}
