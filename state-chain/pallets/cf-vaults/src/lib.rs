@@ -185,7 +185,7 @@ pub mod pallet {
 		#[pallet::call_index(5)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::initialize_chain())]
 		pub fn initialize_chain(origin: OriginFor<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
