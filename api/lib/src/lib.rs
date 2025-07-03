@@ -16,7 +16,6 @@
 
 use std::sync::Arc;
 
-use crate::primitives::DelegationPreferences;
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::address::AddressString;
