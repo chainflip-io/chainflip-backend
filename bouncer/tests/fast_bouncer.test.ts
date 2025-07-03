@@ -27,21 +27,21 @@ describe('ConcurrentTests', () => {
   const givenNumberOfNodes = match ? parseInt(match[0]) : null;
   const numberOfNodes = givenNumberOfNodes ?? 1;
 
-  concurrentTest('SwapLessThanED', swapLessThanED, 400);
+  concurrentTest('SwapLessThanED', swapLessThanED, 180);
   testAllSwaps(numberOfNodes === 1 ? 180 : 240); // TODO: find out what the 3-node timeout should be
   concurrentTest('EvmDeposits', testEvmDeposits, 250);
   concurrentTest('FundRedeem', testFundRedeem, 1000);
   concurrentTest('MultipleMembersGovernance', testMultipleMembersGovernance, 120);
-  concurrentTest('LpApi', testLpApi, 200);
+  concurrentTest('LpApi', testLpApi, 240);
   concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200);
   concurrentTest('BoostingForAsset', testBoostingSwap, 200);
-  concurrentTest('FillOrKill', testFillOrKill, 800);
+  concurrentTest('FillOrKill', testFillOrKill, 300);
   concurrentTest('DCASwaps', testDCASwaps, 300);
-  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 240);
-  concurrentTest('DepositChannelCreation', depositChannelCreation, 360);
-  concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 800);
-  concurrentTest('VaultSwaps', testVaultSwap, 800);
-  concurrentTest('AssethubXCM', testAssethubXcm, 360);
+  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 120);
+  concurrentTest('DepositChannelCreation', depositChannelCreation, 30);
+  concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 600);
+  concurrentTest('VaultSwaps', testVaultSwap, 600);
+  concurrentTest('AssethubXCM', testAssethubXcm, 200);
 
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
