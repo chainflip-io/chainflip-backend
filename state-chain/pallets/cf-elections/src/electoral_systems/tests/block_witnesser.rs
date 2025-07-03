@@ -85,6 +85,8 @@ impl BWProcessorTypes for Types {
 	type Rules = MockHook<HookTypeFor<Self, RulesHook>, "rules", Self>;
 	type Execute = MockHook<HookTypeFor<Self, ExecuteHook>, "execute">;
 	type DebugEventHook = MockHook<HookTypeFor<Self, DebugEventHook>, "debug">;
+
+	const BWNAME: &'static str = "GenericBW";
 }
 
 /// Associating BW types to the struct
@@ -95,8 +97,6 @@ impl BWTypes for Types {
 	type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>, "safe_mode">;
 	type ProcessedUpToHook = MockHook<HookTypeFor<Self, ProcessedUpToHook>, "processed_up_to">;
 	type ElectionTrackerDebugEventHook = MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;
-
-	const BWNAME: &'static str = "GenericBW";
 }
 
 /// Associating the state machine and consensus mechanism to the struct

@@ -10,44 +10,42 @@ use crate::electoral_systems::{
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
-use derive_where::derive_where;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use generic_typeinfo_derive::GenericTypeInfo;
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec::Vec};
 
-///
-/// BlockProcessor
-/// ===================================
-///
-/// This processor is responsible for handling block data from a blockchain while
-/// managing reorganization events (reorgs) within a safety buffer. It maintains an internal state
-/// of block data and already processed events, applies chain-specific processing rules (such as
-/// pre-witness and witness event generation), deduplicates events to avoid processing the same
-/// deposit twice, and finally executes those events.
-///
-/// Each block processor can provide its own definitions for:
-/// - The block number type.
-/// - The block data type.
-/// - The event type produced during block processing.
-/// - The rules to generate events (for example, pre-witness and full witness rules).
-/// - The logic for executing and deduplicating events.
-///
-/// These are defined via the [`BWProcessorTypes`] trait, which is a generic parameter for this
-/// processor.
-///
-/// # Type Parameters
-///
-/// * `T`: A type that implements [`BWProcessorTypes`]. This defines:
-///     - `ChainBlockNumber`: The type representing block numbers.
-///     - `BlockData`: The type of data associated with a block.
-/// 	- `SAFETY_BUFFER`: The number of blocks to use as safety against reorgs and double processing
-///    events
-///     - `Event`: The type of event generated from processing blocks.
-///     - `Rules`: A hook to process block data and generate events.
-///     - `Execute`: A hook to dedup and execute generated events.
-/// 	- `DebugEventHook`: A hook to log events, used for testing
-
 def_derive! {
+	///
+	/// BlockProcessor
+	/// ===================================
+	///
+	/// This processor is responsible for handling block data from a blockchain while
+	/// managing reorganization events (reorgs) within a safety buffer. It maintains an internal state
+	/// of block data and already processed events, applies chain-specific processing rules (such as
+	/// pre-witness and witness event generation), deduplicates events to avoid processing the same
+	/// deposit twice, and finally executes those events.
+	///
+	/// Each block processor can provide its own definitions for:
+	/// - The block number type.
+	/// - The block data type.
+	/// - The event type produced during block processing.
+	/// - The rules to generate events (for example, pre-witness and full witness rules).
+	/// - The logic for executing and deduplicating events.
+	///
+	/// These are defined via the [`BWProcessorTypes`] trait, which is a generic parameter for this
+	/// processor.
+	///
+	/// # Type Parameters
+	///
+	/// * `T`: A type that implements [`BWProcessorTypes`]. This defines:
+	///     - `ChainBlockNumber`: The type representing block numbers.
+	///     - `BlockData`: The type of data associated with a block.
+	/// 	- `SAFETY_BUFFER`: The number of blocks to use as safety against reorgs and double processing
+	///    events
+	///     - `Event`: The type of event generated from processing blocks.
+	///     - `Rules`: A hook to process block data and generate events.
+	///     - `Execute`: A hook to dedup and execute generated events.
+	/// 	- `DebugEventHook`: A hook to log events, used for testing
 	#[derive(GenericTypeInfo)]
 	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
 	pub struct BlockProcessor<T: BWProcessorTypes> {
