@@ -448,6 +448,10 @@ pub mod pallet {
 		ValidatorDoesNotExist,
 		/// Not authorized to perform this action.
 		NotAuthorized,
+		/// Operator is still delegating to validators.
+		StillAssociatedWithValidators,
+		/// Operator is still delegating to delegators.
+		StillAssociatedWithDelegators,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -961,7 +965,22 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn deregister_as_operator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+
+			ensure!(
+				Self::get_all_validators_by_operator(&account_id).is_empty(),
+				Error::<T>::StillAssociatedWithValidators
+			);
+			ensure!(
+				Self::get_all_delegators_by_operator(&account_id).is_empty(),
+				Error::<T>::StillAssociatedWithDelegators
+			);
+
 			T::AccountRoleRegistry::deregister_as_operator(&account_id)?;
+
+			AllowedDelegators::<T>::remove(&account_id);
+			BlockedDelegators::<T>::remove(&account_id);
+			OperatorParameters::<T>::remove(&account_id);
+
 			Ok(())
 		}
 	}
