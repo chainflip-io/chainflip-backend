@@ -175,9 +175,9 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 						);
 						SwapRequestState::UserSwap {
 							refund_params: refund_params.map(|params| {
-								cf_chains::RefundParametersCheckedGeneric {
+								cf_chains::ChannelRefundParametersChecked {
 									retry_duration: params.retry_duration,
-									refund_destination: params.refund_destination,
+									refund_address: params.refund_destination,
 									min_price: params.min_price,
 									refund_ccm_metadata: None,
 								}

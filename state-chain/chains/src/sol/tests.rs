@@ -550,7 +550,7 @@ fn create_ccm_native_transfer() {
 	let to_pubkey = TRANSFER_TO_ACCOUNT.into();
 	let extra_accounts = ccm_accounts();
 
-	let ccm_parameter = ccm_parameter();
+	let ccm_parameter = ccm_parameter_v0();
 
 	let instructions = [
 		SystemProgramInstruction::advance_nonce_account(&NONCE_ACCOUNTS[0].into(), &agg_key_pubkey),
@@ -595,7 +595,7 @@ fn create_ccm_token_transfer() {
 	let amount = TRANSFER_AMOUNT;
 	let token_mint_pubkey = USDC_TOKEN_MINT_PUB_KEY;
 	let extra_accounts = ccm_accounts();
-	let ccm_parameter = ccm_parameter();
+	let ccm_parameter = ccm_parameter_v0();
 
 	let to_pubkey = TRANSFER_TO_ACCOUNT;
 	let to_pubkey_ata = derive_associated_token_account(to_pubkey, token_mint_pubkey).unwrap();

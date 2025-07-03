@@ -121,7 +121,7 @@ impl SolanaInstructionBuilder {
 mod test {
 	use super::*;
 	use crate::{
-		cf_parameters::build_cf_parameters,
+		cf_parameters::build_and_encode_cf_parameters,
 		sol::{
 			signing_key::SolSigningKey,
 			sol_tx_core::{
@@ -208,14 +208,14 @@ mod test {
 	}
 
 	fn cf_parameter(with_ccm: bool) -> Vec<u8> {
-		build_cf_parameters::<Solana>(
+		build_and_encode_cf_parameters(
 			channel_refund_parameters(),
 			Some(dca_parameters()),
 			BOOST_FEE,
 			broker_id(),
 			BROKER_COMMISSION,
 			affiliate_and_fees(),
-			with_ccm.then_some(&ccm_parameter().channel_metadata),
+			with_ccm.then_some(&ccm_parameter_v0().channel_metadata),
 		)
 	}
 
@@ -300,7 +300,7 @@ mod test {
 				vault_swap_account(VAULT_SWAP_SEED),
 				INPUT_AMOUNT,
 				cf_parameter(true),
-				Some(ccm_parameter().channel_metadata),
+				Some(ccm_parameter_v0().channel_metadata),
 			),
 			FROM.into(),
 			&[chainflip_alt()],
@@ -382,7 +382,7 @@ mod test {
 				TOKEN_SUPPORTED_ACCOUNT.into(),
 				INPUT_AMOUNT,
 				cf_parameter(true),
-				Some(ccm_parameter().channel_metadata),
+				Some(ccm_parameter_v0().channel_metadata),
 			),
 			FROM.into(),
 			&[chainflip_alt()],
@@ -432,7 +432,7 @@ mod test {
 				TOKEN_SUPPORTED_ACCOUNT.into(),
 				INPUT_AMOUNT,
 				cf_parameter(true),
-				Some(ccm_parameter().channel_metadata)
+				Some(ccm_parameter_v0().channel_metadata)
 			)
 			.accounts
 			.len(),
@@ -477,7 +477,7 @@ mod test {
 			TOKEN_SUPPORTED_ACCOUNT.into(),
 			INPUT_AMOUNT,
 			cf_parameter(true),
-			Some(ccm_parameter().channel_metadata),
+			Some(ccm_parameter_v0().channel_metadata),
 		)
 		.accounts;
 		assert_eq!(

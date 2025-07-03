@@ -38,11 +38,10 @@ use cf_chains::{
 	instances::PalletInstanceAlias,
 	AccountOrAddress, AllBatch, AllBatchError, CcmChannelMetadataChecked, CcmDepositMetadata,
 	CcmDepositMetadataChecked, CcmDepositMetadataUnchecked, CcmMessage, Chain, ChainCrypto,
-	ChannelLifecycleHooks, ChannelRefundParametersForChain, ConsolidateCall, DepositChannel,
-	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall,
-	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
-	IntoTransactionInIdForAnyChain, RefundParametersChecked, RejectCall, SwapOrigin,
-	TransferAssetParams,
+	ChannelLifecycleHooks, ChannelRefundParametersCheckedInternal, ChannelRefundParametersForChain,
+	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, DepositOriginType,
+	ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
+	IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary,
@@ -570,7 +569,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: Option<CcmChannelMetadataChecked>,
-			refund_params: RefundParametersChecked<AccountId>,
+			refund_params: ChannelRefundParametersCheckedInternal<AccountId>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
@@ -2441,12 +2440,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		let checked_refund_params =
-			match RefundParametersChecked::try_from_refund_parameters_for_chain::<T::TargetChain>(
-				refund_params,
+			match refund_params.map_refund_address_to_foreign_chain_address().into_checked(
 				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
 				asset.into(),
 			) {
-				Ok(checked_refund_params) => checked_refund_params,
+				Ok(checked_refund_params) =>
+					checked_refund_params.map_address(AccountOrAddress::ExternalAddress),
 				Err(_) => return,
 			};
 
@@ -2555,7 +2554,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							ChannelAction::Swap { refund_params, .. } =>
 							// Refund address for a deposit must be external address
 								if let AccountOrAddress::ExternalAddress(refund_addr) =
-									refund_params.refund_destination.clone()
+									refund_params.refund_address.clone()
 								{
 									Ok((
 										refund_addr,
@@ -2810,12 +2809,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let refund_address = refund_params.refund_address.clone();
 		let checked_refund_params =
-			match RefundParametersChecked::try_from_refund_parameters_for_chain::<T::TargetChain>(
-				refund_params,
+			match refund_params.map_refund_address_to_foreign_chain_address().into_checked(
 				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
 				source_asset.into(),
 			) {
-				Ok(checked_refund_params) => checked_refund_params,
+				Ok(checked_refund_params) =>
+					checked_refund_params.map_address(AccountOrAddress::ExternalAddress),
 				Err(_) => return,
 			};
 
@@ -3347,10 +3346,6 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	> {
 		T::SwapParameterValidation::validate_refund_params(refund_params.retry_duration)?;
 
-		let checked_refund_param = RefundParametersChecked::try_from_refund_parameters_for_chain::<
-			T::TargetChain,
-		>(refund_params, None, source_asset.into())?;
-
 		if let Some(params) = &dca_params {
 			T::SwapParameterValidation::validate_dca_params(params)?;
 		}
@@ -3363,7 +3358,10 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 				destination_address,
 				broker_fees,
 				channel_metadata,
-				refund_params: checked_refund_param,
+				refund_params: refund_params
+					.map_refund_address_to_foreign_chain_address()
+					.into_checked(None, source_asset.into())?
+					.map_address(AccountOrAddress::ExternalAddress),
 				dca_params,
 			},
 			boost_fee,

@@ -69,16 +69,16 @@ use cf_chains::{
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
-	cf_parameters::build_cf_parameters,
+	cf_parameters::build_and_encode_cf_parameters,
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	hub,
 	instances::ChainInstanceAlias,
 	sol::{SolAddress, SolanaCrypto},
-	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked, ChannelRefundParameters,
-	DefaultRetryPolicy, EvmVaultSwapExtraParameters, ForeignChain, Polkadot,
-	RefundParametersChecked, Solana, TransactionBuilder, VaultSwapExtraParameters,
+	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked,
+	ChannelRefundParametersUncheckedEncoded, DefaultRetryPolicy, EvmVaultSwapExtraParameters,
+	ForeignChain, Polkadot, Solana, TransactionBuilder, VaultSwapExtraParameters,
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
@@ -2329,15 +2329,15 @@ impl_runtime_apis! {
 					*retry_duration
 				}
 				VaultSwapExtraParametersEncoded::Ethereum(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
-					RefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
+					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
 					refund_parameters.retry_duration
 				}
 				VaultSwapExtraParametersEncoded::Arbitrum(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
-					RefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
+					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
 					refund_parameters.retry_duration
 				}
 				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => {
-					RefundParametersChecked::<AccountId>::try_from_refund_parameters::<ChainAddressConverter>(refund_parameters.clone(), None, source_asset)?;
+					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
 					refund_parameters.retry_duration
 				}
 			};
@@ -2485,7 +2485,7 @@ impl_runtime_apis! {
 			source_asset: Asset,
 			destination_address: EncodedAddress,
 			destination_asset: Asset,
-			refund_parameters: ChannelRefundParameters,
+			refund_parameters: ChannelRefundParametersUncheckedEncoded,
 			dca_parameters: Option<DcaParameters>,
 			boost_fee: BasisPoints,
 			broker_commission: BasisPoints,
@@ -2514,9 +2514,9 @@ impl_runtime_apis! {
 				.try_into()
 				.map_err(|_| "Too many affiliates.")?;
 
-			macro_rules! build_cf_parameters_for_chain {
+			macro_rules! build_and_encode_cf_parameters_for_chain {
 				($chain:ty) => {
-					build_cf_parameters::<$chain>(
+					build_and_encode_cf_parameters::<<$chain as cf_chains::Chain>::ChainAccount>(
 						refund_parameters.try_map_address(|addr| {
 							Ok::<_, DispatchErrorWithMessage>(
 								ChainAddressConverter::try_from_encoded_address(addr)
@@ -2535,9 +2535,9 @@ impl_runtime_apis! {
 			}
 
 			Ok(match ForeignChain::from(source_asset) {
-				ForeignChain::Ethereum => build_cf_parameters_for_chain!(Ethereum),
-				ForeignChain::Arbitrum => build_cf_parameters_for_chain!(Arbitrum),
-				ForeignChain::Solana => build_cf_parameters_for_chain!(Solana),
+				ForeignChain::Ethereum => build_and_encode_cf_parameters_for_chain!(Ethereum),
+				ForeignChain::Arbitrum => build_and_encode_cf_parameters_for_chain!(Arbitrum),
+				ForeignChain::Solana => build_and_encode_cf_parameters_for_chain!(Solana),
 				_ => Err(DispatchErrorWithMessage::from("Unsupported source chain for encoding cf_parameters"))?,
 			})
 		}

@@ -24,11 +24,10 @@ pub mod x_swap_token;
 pub mod test_utils {
 	use crate::{
 		cf_parameters::*, eth::Address as EthAddress, CcmChannelMetadataChecked,
-		ChannelRefundParametersForChain,
+		ChannelRefundParameters,
 	};
 	use cf_primitives::{
-		chains::Ethereum, AccountId, AffiliateAndFee, AffiliateShortId, Beneficiary, DcaParameters,
-		MAX_AFFILIATES,
+		AccountId, AffiliateAndFee, AffiliateShortId, Beneficiary, DcaParameters, MAX_AFFILIATES,
 	};
 	use frame_support::pallet_prelude::ConstU32;
 	use sp_runtime::BoundedVec;
@@ -58,8 +57,8 @@ pub mod test_utils {
 	pub const BROKER_FEE: u8 = 150u8;
 
 	pub fn dummy_cf_parameter(with_ccm: bool) -> Vec<u8> {
-		build_cf_parameters::<Ethereum>(
-			ChannelRefundParametersForChain::<Ethereum> {
+		build_and_encode_cf_parameters(
+			ChannelRefundParameters {
 				retry_duration: 1u32,
 				refund_address: refund_address(),
 				min_price: Default::default(),
