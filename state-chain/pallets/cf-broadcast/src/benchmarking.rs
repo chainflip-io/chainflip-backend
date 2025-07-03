@@ -250,6 +250,8 @@ mod benchmarks {
 		{
 			assert_ok!(call.dispatch_bypass_filter(origin,));
 		}
+
+		assert!(AbortedBroadcasts::<T, I>::get().is_empty());
 	}
 
 	#[cfg(test)]

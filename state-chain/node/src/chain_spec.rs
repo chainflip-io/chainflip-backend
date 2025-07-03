@@ -109,6 +109,7 @@ pub struct StateChainEnvironment {
 	eth_address_checker_address: [u8; 20],
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
+	sol_init_agg_key: Option<SolAddress>,
 	arb_key_manager_address: [u8; 20],
 	arb_vault_address: [u8; 20],
 	arb_usdc_token_address: [u8; 20],
@@ -241,6 +242,13 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		Err(_) => defaults.sol_address_lookup_table_account,
 	};
 
+	let sol_init_agg_key = match env::var("SOL_INIT_AGG_KEY") {
+		Ok(_) => unimplemented!(
+			"Solana initial agg key should not be supplied via environment variables"
+		),
+		Err(_) => defaults.sol_init_agg_key,
+	};
+
 	StateChainEnvironment {
 		flip_token_address,
 		eth_usdc_address,
@@ -256,6 +264,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		ethereum_chain_id,
 		arbitrum_chain_id,
 		eth_init_agg_key,
+		sol_init_agg_key,
 		ethereum_deployment_block,
 		genesis_funding_amount,
 		min_funding,
@@ -336,6 +345,7 @@ pub fn inner_cf_development_config(
 		ethereum_chain_id,
 		arbitrum_chain_id,
 		eth_init_agg_key,
+		sol_init_agg_key,
 		ethereum_deployment_block,
 		genesis_funding_amount,
 		min_funding,
@@ -412,6 +422,7 @@ pub fn inner_cf_development_config(
 				..Default::default()
 			},
 			eth_init_agg_key,
+			sol_init_agg_key,
 			ethereum_deployment_block,
 			devnet::TOTAL_ISSUANCE,
 			common::DAILY_SLASHING_RATE,
@@ -485,6 +496,7 @@ macro_rules! network_spec {
 					ethereum_chain_id,
 					arbitrum_chain_id,
 					eth_init_agg_key,
+					sol_init_agg_key,
 					ethereum_deployment_block,
 					genesis_funding_amount,
 					min_funding,
@@ -593,6 +605,7 @@ macro_rules! network_spec {
 							..Default::default()
 						},
 						eth_init_agg_key,
+						sol_init_agg_key,
 						ethereum_deployment_block,
 						TOTAL_ISSUANCE,
 						DAILY_SLASHING_RATE,
@@ -654,6 +667,7 @@ fn testnet_genesis(
 	max_authority_set_contraction_percentage: Percent,
 	environment_genesis_config: state_chain_runtime::EnvironmentConfig,
 	eth_init_agg_key: [u8; 33],
+	sol_init_agg_key: Option<SolAddress>,
 	ethereum_deployment_block: u64,
 	total_issuance: FlipBalance,
 	daily_slashing_rate: Permill,
@@ -871,6 +885,7 @@ fn testnet_genesis(
 			..Default::default()
 		},
 		solana_threshold_signer: state_chain_runtime::SolanaThresholdSignerConfig {
+			key: sol_init_agg_key,
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 			amount_to_slash: FLIPPERINOS_PER_FLIP,

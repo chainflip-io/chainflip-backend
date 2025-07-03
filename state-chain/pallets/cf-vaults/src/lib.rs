@@ -251,6 +251,14 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 
 		Ok(())
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	/// Setup states for a successful key activation - used for benchmarking only.
+	fn setup_key_activation() {
+		PendingVaultActivation::<T, I>::put(VaultActivationStatus::<T, I>::AwaitingActivation {
+			new_public_key: cf_chains::benchmarking_value::BenchmarkValue::benchmark_value(),
+		});
+	}
 }
 
 impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
