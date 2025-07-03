@@ -39,7 +39,6 @@ use anyhow::Result;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub enum ScCall {
-	// TODO: What type should the `sc_account` be?
 	DelegateTo { sc_account: AccountId },
 }
 

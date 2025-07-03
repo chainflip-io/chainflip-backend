@@ -1,15 +1,23 @@
 import Web3 from 'web3';
+import { randomBytes } from 'crypto';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import {
   amountToFineAmountBigInt,
+  decodeFlipAddressForContract,
   defaultAssetAmounts,
   getContractAddress,
   getEvmEndpoint,
+  hexPubkeyToFlipAddress,
 } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
 import { getEthScUtilsAbi } from 'shared/contract_interfaces';
 import { approveErc20 } from 'shared/approve_erc20';
+import { newStatechainAddress } from 'shared/new_statechain_address';
+import { observeEvent } from 'shared/utils/substrate';
+import { newCcmMetadata, testSwap } from 'shared/swapping';
+import { performSwap, requestNewSwap } from 'shared/perform_swap';
+import { send } from 'shared/send';
 
 const cfScUtilsAbi = await getEthScUtilsAbi();
 
@@ -33,8 +41,35 @@ async function testDelegate(parentLogger: Logger) {
 
   const receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
   logger.info('Delegate flip transaction sent ' + receipt.transactionHash);
+
+  // TODO: Check the correct behavior in the SC once the logic is implemented.
+}
+
+async function testCcmSwapFundAccount(logger: Logger) {
+  const web3 = new Web3(getEvmEndpoint('Ethereum'));
+  const scUtilsAddress = getContractAddress('Ethereum', 'SC_UTILS');
+  const scAddress = await newStatechainAddress(randomBytes(32).toString('hex'));
+
+  let pubkey = decodeFlipAddressForContract(scAddress);
+  if (pubkey.substr(0, 2) !== '0x') {
+    pubkey = '0x' + pubkey;
+  }
+  const fundEvent = observeEvent(logger, 'funding:Funded', {
+    test: (event) => hexPubkeyToFlipAddress(pubkey) === event.data.accountId,
+  }).event;
+
+  const ccmMessage = web3.eth.abi.encodeParameters(['address', 'bytes'], [scUtilsAddress, pubkey]);
+  const ccmMetadata = await newCcmMetadata('Flip', ccmMessage);
+  // Override gas budget for this particular use case
+  ccmMetadata.gasBudget = '1000000';
+
+  const swapParams = await requestNewSwap(logger, 'Btc', 'Flip', scUtilsAddress, ccmMetadata);
+
+  await send(logger, 'Btc', swapParams.depositAddress);
+  await fundEvent;
+  logger.info('Funding event witnessed succsefully!');
 }
 
 export async function testDelegateFlip(testContext: TestContext) {
-  await Promise.all([testDelegate(testContext.logger)]);
+  await Promise.all([testDelegate(testContext.logger), testCcmSwapFundAccount(testContext.logger)]);
 }
