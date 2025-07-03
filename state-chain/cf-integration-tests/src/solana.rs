@@ -34,9 +34,10 @@ use cf_chains::{
 		SolPubkey, SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmDepositMetadata, CcmDepositMetadataChecked,
-	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersUncheckedEncoded, ChannelRefundParametersForChain,
-	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
-	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
+	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain,
+	ChannelRefundParametersUncheckedEncoded, ExecutexSwapAndCallError, ForeignChainAddress,
+	RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError, Solana, SwapOrigin,
+	TransactionBuilder,
 };
 use cf_primitives::{AccountRole, AuthorityCount, Beneficiary, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
@@ -88,12 +89,13 @@ const BOB: AccountId = AccountId::new([0x44; 32]);
 
 const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
 const FALLBACK_ADDRESS: SolAddress = SolAddress([0xf0; 32]);
-const REFUND_PARAMS: ChannelRefundParametersUncheckedEncoded = ChannelRefundParametersUncheckedEncoded {
-	retry_duration: 0,
-	refund_address: EncodedAddress::Sol(FALLBACK_ADDRESS.0),
-	min_price: sp_core::U256::zero(),
-	refund_ccm_metadata: None,
-};
+const REFUND_PARAMS: ChannelRefundParametersUncheckedEncoded =
+	ChannelRefundParametersUncheckedEncoded {
+		retry_duration: 0,
+		refund_address: EncodedAddress::Sol(FALLBACK_ADDRESS.0),
+		min_price: sp_core::U256::zero(),
+		refund_ccm_metadata: None,
+	};
 
 type SolanaElectionVote = BoundedBTreeMap<
 	ElectionIdentifierOf<

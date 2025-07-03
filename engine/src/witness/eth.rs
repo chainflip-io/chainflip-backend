@@ -257,7 +257,9 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
 		tx_id: H256,
-		vault_swap_parameters: VaultSwapParametersV1<<Self::Chain as cf_chains::Chain>::ChainAccount>,
+		vault_swap_parameters: VaultSwapParametersV1<
+			<Self::Chain as cf_chains::Chain>::ChainAccount,
+		>,
 	) -> state_chain_runtime::RuntimeCall {
 		let deposit = vault_deposit_witness!(
 			source_asset,
