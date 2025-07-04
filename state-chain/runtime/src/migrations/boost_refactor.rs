@@ -218,22 +218,6 @@ impl UncheckedOnRuntimeUpgrade for BoostRefactorMigration {
 			},
 		);
 
-		pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, BitcoinInstance>::translate_values(
-			|old_details : old::DepositChannelDetails<Runtime, BitcoinInstance>| {
-
-				Some(pallet_cf_ingress_egress::DepositChannelDetails {
-					owner: old_details.owner,
-					deposit_channel: old_details.deposit_channel,
-					opened_at: old_details.opened_at,
-					expires_at: old_details.expires_at,
-					action: old_details.action,
-					boost_fee: old_details.boost_fee,
-					boost_status: migrate_boost_status(old_details.boost_status),
-				})
-
-			},
-		);
-
 		old::NetworkFeeDeductionFromBoostPercent::<Runtime, EthereumInstance>::kill();
 		old::NetworkFeeDeductionFromBoostPercent::<Runtime, PolkadotInstance>::kill();
 		old::NetworkFeeDeductionFromBoostPercent::<Runtime, BitcoinInstance>::kill();

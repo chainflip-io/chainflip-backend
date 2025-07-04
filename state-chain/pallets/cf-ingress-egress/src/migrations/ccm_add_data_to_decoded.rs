@@ -51,6 +51,22 @@ pub mod old {
 		ValueQuery,
 	>;
 
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+	pub enum BoostStatus<ChainAmount, BlockNumber> {
+		Boosted {
+			prewitnessed_deposit_id: PrewitnessedDepositId,
+			// This is to be removed:
+			pools: Vec<BoostPoolTier>,
+			amount: ChainAmount,
+		},
+		#[default]
+		NotBoosted,
+		BoostPending {
+			amount: ChainAmount,
+			process_at_block: BlockNumber,
+		},
+	}
+
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct DepositChannelDetails<T: Config<I>, I: 'static> {
 		pub owner: T::AccountId,
@@ -59,7 +75,7 @@ pub mod old {
 		pub expires_at: TargetChainBlockNumber<T, I>,
 		pub action: ChannelAction<T::AccountId, T::TargetChain>,
 		pub boost_fee: BasisPoints,
-		pub boost_status: BoostStatus<TargetChainAmount<T, I>, BlockNumberFor<T>>,
+		pub boost_status: old::BoostStatus<TargetChainAmount<T, I>, BlockNumberFor<T>>,
 	}
 
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
@@ -90,6 +106,18 @@ pub mod old {
 		DepositChannelDetails<T, I>,
 		OptionQuery,
 	>;
+}
+
+fn migrate_boost_status<AccountId, BlockNumber>(
+	status: old::BoostStatus<AccountId, BlockNumber>,
+) -> BoostStatus<AccountId, BlockNumber> {
+	match status {
+		old::BoostStatus::NotBoosted => BoostStatus::NotBoosted,
+		old::BoostStatus::BoostPending { amount, process_at_block } =>
+			BoostStatus::BoostPending { amount, process_at_block },
+		old::BoostStatus::Boosted { prewitnessed_deposit_id, pools: _, amount } =>
+			BoostStatus::Boosted { prewitnessed_deposit_id, amount },
+	}
 }
 
 pub struct CcmAdditionalDataToCheckedMigration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
@@ -190,7 +218,7 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade
 							ChannelAction::Refund { reason, refund_address },
 					},
 					boost_fee: old.boost_fee,
-					boost_status: old.boost_status,
+					boost_status: migrate_boost_status(old.boost_status),
 				})
 				.ok()
 			},
