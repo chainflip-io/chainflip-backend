@@ -163,6 +163,8 @@ impls! {
 		type Rules = Self;
 		type Execute = Self;
 		type DebugEventHook = EmptyHook;
+
+		const BWNAME: &'static str = "DepositChannel";
 	}
 
 	/// Associating BW types to the struct
@@ -172,8 +174,6 @@ impls! {
 		type SafeModeEnabledHook = Self;
 		type ProcessedUpToHook = Self;
 		type ElectionTrackerDebugEventHook = EmptyHook;
-
-		const BWNAME: &'static str = "DepositChannel";
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
@@ -303,6 +303,8 @@ impls! {
 		type Execute = Self;
 
 		type DebugEventHook = EmptyHook;
+
+		const BWNAME: &'static str = "VaultDeposit";
 	}
 
 	/// Associating BW types to the struct
@@ -312,8 +314,6 @@ impls! {
 		type SafeModeEnabledHook = Self;
 		type ProcessedUpToHook = EmptyHook;
 		type ElectionTrackerDebugEventHook = EmptyHook;
-
-		const BWNAME: &'static str = "VaultDeposit";
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
@@ -388,6 +388,8 @@ impls! {
 		type Execute = Self;
 
 		type DebugEventHook = EmptyHook;
+
+		const BWNAME: &'static str = "Egress";
 	}
 
 	/// Associating BW types to the struct
@@ -397,8 +399,6 @@ impls! {
 		type SafeModeEnabledHook = Self;
 		type ProcessedUpToHook = EmptyHook;
 		type ElectionTrackerDebugEventHook = EmptyHook;
-
-		const BWNAME: &'static str = "Egress";
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct
