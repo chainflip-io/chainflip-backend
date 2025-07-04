@@ -55,6 +55,11 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_init_agg_key: hex_literal::hex!(
 		"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6"
 	),
+	#[cfg(feature = "runtime-benchmarks")]
+	// Set initial agg key for benchmarking API call building
+	sol_init_agg_key: Some(const_address("7x7wY9yfXjRmusDEfPPCreU4bP49kmH4mqjYUXNAXJoM")),
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	sol_init_agg_key: None,
 	ethereum_deployment_block: 0u64,
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,

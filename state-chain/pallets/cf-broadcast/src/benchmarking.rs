@@ -220,6 +220,40 @@ mod benchmarks {
 		assert!(TransactionMetadata::<T, I>::get(broadcast_id).is_none());
 	}
 
+	#[benchmark]
+	fn stress_test(n: Linear<1, 50>) {
+		let call = Call::<T, I>::stress_test { how_many: n };
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin,));
+		}
+	}
+
+	#[benchmark]
+	fn re_sign_aborted_broadcasts(n: Linear<1, 50>) {
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+
+		AbortedBroadcasts::<T, I>::set((0..n).collect::<BTreeSet<_>>());
+
+		(0..n).for_each(|n| {
+			crate::PendingApiCalls::<T, I>::insert(n, <T as Config<I>>::ApiCall::benchmark_value())
+		});
+
+		let call = Call::<T, I>::re_sign_aborted_broadcasts {
+			broadcast_ids: (0..n).collect::<Vec<_>>(),
+			request_broadcast: true,
+			refresh_replay_protection: true,
+		};
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
+		}
+
+		assert!(AbortedBroadcasts::<T, I>::get().is_empty());
+	}
+
 	#[cfg(test)]
 	use crate::mock::*;
 
@@ -239,6 +273,12 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_transaction_succeeded::<Test, Instance1>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_stress_test::<Test, Instance1>(10, true);
+		});
+		new_test_ext().execute_with(|| {
+			_re_sign_aborted_broadcasts::<Test, Instance1>(10, true);
 		});
 	}
 }
