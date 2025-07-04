@@ -62,7 +62,7 @@ async fn should_ignore_rts_for_unknown_key() {
 
 	// Check that the signing request fails immediately with an "unknown key" error
 	let (_, failure_reason) = assert_err!(assert_future_can_complete(signing_request_fut));
-	assert_eq!(failure_reason, SigningFailureReason::UnknownKey);
+	assert_eq!(failure_reason, SigningFailureReason::MissingKey);
 	assert_matches!(
 		assert_ok!(assert_future_can_complete(ceremony_request_receiver.recv())),
 		CeremonyRequest { ceremony_id: DEFAULT_SIGNING_CEREMONY_ID, details: None }
