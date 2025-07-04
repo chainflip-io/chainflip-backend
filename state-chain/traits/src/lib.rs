@@ -812,6 +812,10 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 		Self::register_account_role(account_id, AccountRole::Validator)
 	}
 
+	fn register_as_operator(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::Operator)
+	}
+
 	fn deregister_as_broker(account_id: &T::AccountId) -> DispatchResult {
 		Self::deregister_account_role(account_id, AccountRole::Broker)
 	}
@@ -822,6 +826,10 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 
 	fn deregister_as_validator(account_id: &T::AccountId) -> DispatchResult {
 		Self::deregister_account_role(account_id, AccountRole::Validator)
+	}
+
+	fn deregister_as_operator(account_id: &T::AccountId) -> DispatchResult {
+		Self::deregister_account_role(account_id, AccountRole::Operator)
 	}
 
 	fn ensure_account_role(
@@ -839,6 +847,10 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 
 	fn ensure_validator(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::Validator)
+	}
+
+	fn ensure_operator(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::Operator)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
