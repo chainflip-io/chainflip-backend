@@ -31,30 +31,32 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 
 	fn check_consensus(&self, (threshold, query): &Self::Settings) -> Option<Self::Result> {
 		if self.votes.len() > threshold.success_threshold as usize {
+			let block = compute_median(
+				self.votes
+					.iter()
+					.map(|vote| vote.block.clone())
+					.filter(|block| block.chain() == query.chain)
+					.collect(),
+			)?;
+
+			let timestamp = T::Aggregation::compute(
+				&self.votes.iter().map(|vote| vote.timestamp.clone()).collect::<Vec<_>>(),
+			)?;
+
 			Some(ExternalChainState {
-				block: compute_median(
-					self.votes
-						.iter()
-						.map(|vote| vote.block.clone())
-						.filter(|block| block.chain() == query.chain)
-						.collect(),
-				),
-				timestamp: T::Aggregation::compute(
-					&self.votes.iter().map(|vote| vote.timestamp.clone()).collect::<Vec<_>>(),
-				),
+				block,
+				timestamp,
 				price: all::<T::Asset>()
-					.map(|asset| {
-						(
-							asset.clone(),
-							T::Aggregation::compute(
-								&self
-									.votes
-									.iter()
-									.filter_map(|vote| vote.price.get(&asset))
-									.cloned()
-									.collect::<Vec<_>>(),
-							),
+					.filter_map(|asset| {
+						T::Aggregation::compute(
+							&self
+								.votes
+								.iter()
+								.filter_map(|vote| vote.price.get(&asset))
+								.cloned()
+								.collect::<Vec<_>>(),
 						)
+						.map(|aggregate| (asset.clone(), aggregate))
 					})
 					.collect(),
 			})
@@ -67,10 +69,10 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 		let ExternalChainStateVote { block, timestamp, price } = vote;
 		ExternalChainState {
 			block: block.clone(),
-			timestamp: T::Aggregation::compute(&[timestamp.clone()]),
+			timestamp: T::Aggregation::single(timestamp),
 			price: price
 				.into_iter()
-				.map(|(asset, price)| (asset.clone(), T::Aggregation::compute(&[price.clone()])))
+				.map(|(asset, price)| (asset.clone(), T::Aggregation::single(price)))
 				.collect(),
 		}
 	}

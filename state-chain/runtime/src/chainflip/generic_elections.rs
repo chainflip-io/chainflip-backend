@@ -1,4 +1,3 @@
-use cf_primitives::Asset;
 use cf_traits::Chainflip;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
@@ -6,30 +5,37 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		block_witnesser::state_machine::HookTypeFor,
 		composite::{
-			tags::A,
 			tuple_1_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
 		},
 		oracle_price::{
 			consensus::OraclePriceConsensus,
-			primitives::{Aggregated, AggregatedF, ChainlinkAssetPair, Seconds, UnixTime},
-			state_machine::{
-				BasisPoints, ExternalChainBlockQueried, ExternalChainSettings, ExternalChainState,
-				ExternalChainStateVote, ExternalChainStates, GetTimeHook, OPTypes,
-				OraclePriceSettings, OraclePriceTracker,
-			},
+			primitives::*,
+			state_machine::*,
 		},
 		state_machine::{
-			core::Hook,
+			common_imports::*,
+			core::{Hook, def_derive},
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 	},
 	vote_storage, CorruptStorageError, ElectionIdentifierOf, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };
+use cf_chains::sol::SolAddress;
+use sol_prim::consts::const_address;
 
 use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
 use sp_std::vec::Vec;
+
+def_derive!{
+	#[derive(TypeInfo)]
+	pub struct ChainlinkOraclePriceSettings {
+		pub sol_oracle_program_id: SolAddress,
+		pub sol_oracle_feeds: Vec<SolAddress>,
+		pub sol_oracle_query_helper: SolAddress,
+	}
+}
 
 pub struct Chainlink;
 
@@ -57,6 +63,7 @@ impls! {
 		type Statemachine = OraclePriceTracker<Self>;
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
 		type VoteStorage = vote_storage::bitmap::Bitmap<ExternalChainStateVote<Self>>;
+		type ElectoralSettings = ChainlinkOraclePriceSettings;
 	}
 
 }
@@ -126,7 +133,12 @@ pub fn initial_state() -> InitialStateOf<Runtime, ()> {
 				minimal_price_deviation: BasisPoints(10),
 			},
 		},),
-		settings: ((),),
+		// TODO change these to mainnet values, currently localnet
+		settings: (ChainlinkOraclePriceSettings {
+			sol_oracle_program_id: const_address("DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X"),
+			sol_oracle_feeds: vec![const_address("HDSV2wFxmsrmCwwY34QzaVkvmJpG7VF8S9fX2iThynjG")],
+			sol_oracle_query_helper: const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z"),
+		},),
 		shared_data_reference_lifetime: 8,
 	}
 }
