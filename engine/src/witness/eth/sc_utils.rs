@@ -37,10 +37,33 @@ abigen!(ScUtils, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IScUtils.js
 
 use anyhow::Result;
 
+// We could decode the ScCall bytes into a Vec<ScCall> to allow multiple actions into a single
+// transaction. The challenge with that is that we'd need to be very careful to make sure that none
+// of the possible combinations can be abused in any way.
+// Alternatively, the safer approach taken here is to limit explicitly the actions that can be taken
+// and allow for particular actions to be batched under the same enum. For example, having the
+// Undelegate and the UndelegateAndRedeem under the ScCallViaGateway enum.
+// TODO: To discuss if this is  the approach we want to take.
+
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub enum ScCall {
-	DelegateTo { sc_account: AccountId },
+pub enum ScCallViaGateway {
+	DelegateTo { operator: AccountId },
+	// Undelegate { current_operator: AccountId },
+	// UndelegateAndRedeem { current_operator: AccountId },
+	// TODO: We might just want to just use the Gateway for that, as
+	// funding from a different ETH account won't work here.
+	// NoOp {}, // basically just funding
 }
+
+// Can be used for `DepositToVaultAndScCall` event`. Could be used for both
+// lenders and borrowers if we wanted to.
+// #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+// pub enum ScCallViaVault {
+// 	AddLoanCollateral { loan_id: H256 },
+//  AddFunds {},
+//  StopLending {amount: Amount}
+// 	...
+// }
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn sc_utils_witnessing<
@@ -83,10 +106,10 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
                             amount, // amount of FLIP deposited
                             sc_call
 						}) => {
-                            match ScCall::decode(&mut &sc_call[..]) {
-                                Ok(ScCall::DelegateTo { sc_account }) => {
-									println!("Successfully Decoded ScCall! {:?}, amount: {amount}, sender: {sender}, signer: {signer}, epoch index {:?}", sc_account, epoch.index);
-                                    trace!("Successfully decoded ScCall::DelegateTo with sc_account: {sc_account}");
+                            match ScCallViaGateway::decode(&mut &sc_call[..]) {
+                                Ok(ScCallViaGateway::DelegateTo { operator }) => {
+									println!("Successfully Decoded ScCall! {:?}, deposited: {amount} FLIP, sender: {sender}, signer: {signer}, epoch index {:?}", operator, epoch.index);
+                                    trace!("Successfully decoded ScCall::DelegateTo with operator: {operator}");
                                 },
                                 Err(_e) => {
 									println!("Failed to decode ScCall");
@@ -116,7 +139,7 @@ mod tests {
 	#[test]
 	fn test_sc_call_encode() {
 		let sc_call_delegate =
-			ScCall::DelegateTo { sc_account: AccountId::new([0xF4; 32]) }.encode();
+			ScCallViaGateway::DelegateTo { operator: AccountId::new([0xF4; 32]) }.encode();
 		assert_eq!(
 			sc_call_delegate,
 			hex::decode("00f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4")
