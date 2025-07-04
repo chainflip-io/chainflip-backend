@@ -393,7 +393,7 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoSchem
 			// No key was found for the given key_id
 			self.update_latest_ceremony_id(ceremony_id);
 			let reported_parties = Default::default();
-			let failure_reason = SigningFailureReason::UnknownKey;
+			let failure_reason = SigningFailureReason::MissingKey;
 			failure_reason.log(&reported_parties);
 			futures::future::ready(Err((reported_parties, failure_reason))).boxed()
 		}
