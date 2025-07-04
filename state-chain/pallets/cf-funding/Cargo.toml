@@ -29,6 +29,8 @@ log = { workspace = true }
 codec = { workspace = true, features = ["derive"] }
 scale-info = { workspace = true, features = ["derive"] }
 
+sp-runtime = { workspace = true }
+
 frame-support = { workspace = true }
 frame-system = { workspace = true }
 frame-benchmarking = { workspace = true, optional = true }

@@ -630,7 +630,11 @@ impl pallet_cf_account_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type DeregistrationCheck = (Bonder<Self>, TradingStrategyDeregistrationCheck<Self>);
-	type WeightInfo = ();
+	type RuntimeCall = RuntimeCall;
+	type SpawnAccount = Funding;
+	#[cfg(feature = "runtime-benchmarks")]
+	type FeePayment = Flip;
+	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
