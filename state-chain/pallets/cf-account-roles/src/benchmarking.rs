@@ -25,7 +25,10 @@ use cf_traits::FeePayment;
 
 use cf_primitives::FLIPPERINOS_PER_FLIP;
 
-#[benchmarks]
+#[benchmarks(
+    where
+        <T as Config>::RuntimeCall: From<frame_system::Call<T>>
+)]
 mod benchmarks {
 	use super::*;
 

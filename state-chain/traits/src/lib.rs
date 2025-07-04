@@ -1271,6 +1271,4 @@ pub trait SpawnAccount {
 		account_id: Self::AccountId,
 		initial_balance: Option<Self::Amount>,
 	) -> Result<(), DispatchError>;
-
-	fn does_account_exist(account_id: &Self::AccountId) -> bool;
 }

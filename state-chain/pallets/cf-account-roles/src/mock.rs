@@ -59,10 +59,6 @@ impl SpawnAccount for MockSpawnAccount {
 	) -> Result<(), DispatchError> {
 		Ok(())
 	}
-
-	fn does_account_exist(_account_id: &Self::AccountId) -> bool {
-		true
-	}
 }
 
 impl Config for Test {

@@ -62,7 +62,7 @@ type VanityName = BoundedVec<u8, ConstU32<MAX_LENGTH_FOR_VANITY_NAME>>;
 pub mod pallet {
 	use super::*;
 	use cf_traits::DeregistrationCheck;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + cf_traits::Chainflip {
@@ -73,8 +73,6 @@ pub mod pallet {
 		>;
 		type RuntimeCall: Parameter
 			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
-			+ From<frame_system::Call<Self>>
-			+ From<Call<Self>>
 			+ GetDispatchInfo;
 		type SpawnAccount: SpawnAccount<
 			AccountId = <Self as frame_system::Config>::AccountId,
@@ -245,27 +243,23 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			sub_account_index: SubAccountIndex,
 			call: Box<<T as Config>::RuntimeCall>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let mut origin = origin;
 			let account_id = ensure_signed(origin.clone())?;
 			let sub_account_id =
 				Self::derive_sub_account_id(account_id.clone(), sub_account_index)?;
 			ensure!(
-				T::SpawnAccount::does_account_exist(&sub_account_id),
+				frame_system::Pallet::<T>::account_exists(&sub_account_id),
 				Error::<T>::UnknownAccount
 			);
 			origin.set_caller_from(frame_system::RawOrigin::Signed(sub_account_id.clone()));
-			match call.clone().dispatch(origin) {
-				Ok(_) => {
-					Self::deposit_event(Event::SubAccountCallExecuted {
-						account_id: account_id.clone(),
-						sub_account_id: sub_account_id.clone(),
-						sub_account_index,
-					});
-					Ok(())
-				},
-				Err(e) => Err(e.error),
-			}
+			call.dispatch(origin)?;
+			Self::deposit_event(Event::SubAccountCallExecuted {
+				account_id: account_id.clone(),
+				sub_account_id: sub_account_id.clone(),
+				sub_account_index,
+			});
+			Ok(().into())
 		}
 	}
 }
