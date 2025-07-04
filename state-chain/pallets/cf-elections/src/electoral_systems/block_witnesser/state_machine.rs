@@ -48,8 +48,6 @@ pub trait BWTypes: 'static + Sized + BWProcessorTypes {
 		+ CommonTraits
 		+ TestTraits
 		+ Default;
-
-	const BWNAME: &'static str;
 }
 
 // hook types
@@ -105,6 +103,8 @@ pub trait BWProcessorTypes: Sized + 'static + Debug + Clone + Eq {
 	type Execute: Hook<HookTypeFor<Self, ExecuteHook>> + Default + CommonTraits;
 
 	type DebugEventHook: Hook<HookTypeFor<Self, DebugEventHook>> + Default + CommonTraits;
+
+	const BWNAME: &'static str;
 }
 
 #[derive(
@@ -156,7 +156,7 @@ pub struct BlockWitnesserSettings {
 
 defx! {
 	#[derive(GenericTypeInfo)]
-	#[expand_name_with(T::Chain::NAME)]
+	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
 	#[derive(Default)]
 	pub struct BlockWitnesserState[T: BWTypes] {
 		pub elections: ElectionTracker<T>,
@@ -568,8 +568,6 @@ pub mod tests {
 		type ElectionTrackerDebugEventHook =
 			MockHook<HookTypeFor<Self, ElectionTrackerDebugEventHook>>;
 		type ProcessedUpToHook = MockHook<HookTypeFor<Self, ProcessedUpToHook>>;
-
-		const BWNAME: &'static str = "GenericBW";
 	}
 
 	#[test]
