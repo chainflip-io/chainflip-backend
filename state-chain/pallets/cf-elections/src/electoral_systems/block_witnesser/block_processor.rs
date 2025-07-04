@@ -10,66 +10,70 @@ use crate::electoral_systems::{
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
-use derive_where::derive_where;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use generic_typeinfo_derive::GenericTypeInfo;
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec::Vec};
 
-///
-/// BlockProcessor
-/// ===================================
-///
-/// This processor is responsible for handling block data from a blockchain while
-/// managing reorganization events (reorgs) within a safety buffer. It maintains an internal state
-/// of block data and already processed events, applies chain-specific processing rules (such as
-/// pre-witness and witness event generation), deduplicates events to avoid processing the same
-/// deposit twice, and finally executes those events.
-///
-/// Each block processor can provide its own definitions for:
-/// - The block number type.
-/// - The block data type.
-/// - The event type produced during block processing.
-/// - The rules to generate events (for example, pre-witness and full witness rules).
-/// - The logic for executing and deduplicating events.
-///
-/// These are defined via the [`BWProcessorTypes`] trait, which is a generic parameter for this
-/// processor.
-///
-/// # Type Parameters
-///
-/// * `T`: A type that implements [`BWProcessorTypes`]. This defines:
-///     - `ChainBlockNumber`: The type representing block numbers.
-///     - `BlockData`: The type of data associated with a block.
-/// 	- `SAFETY_BUFFER`: The number of blocks to use as safety against reorgs and double processing
-///    events
-///     - `Event`: The type of event generated from processing blocks.
-///     - `Rules`: A hook to process block data and generate events.
-///     - `Execute`: A hook to dedup and execute generated events.
-/// 	- `DebugEventHook`: A hook to log events, used for testing
-#[derive_where(Debug, Clone, PartialEq, Eq;)]
-#[derive(Encode, Decode, Serialize, Deserialize, GenericTypeInfo)]
-#[expand_name_with(T::Chain::NAME)]
-pub struct BlockProcessor<T: BWProcessorTypes> {
-	/// A mapping from block numbers to their corresponding BlockInfo (block data, the next age to
-	/// be processed and the safety margin). The "age" represents the block height difference
-	/// between head of the chain and block that we are processing, and it's used to know what
-	/// rules have already been processed for such block
-	pub blocks_data: BTreeMap<ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>>,
-	/// A mapping from event to their corresponding expiration block_number (which is defined as
-	/// block_number + SAFETY_BUFFER)
-	pub processed_events: BTreeMap<T::Event, ChainBlockNumberOf<T::Chain>>,
-	pub rules: T::Rules,
-	pub execute: T::Execute,
-	pub debug_events: T::DebugEventHook,
+def_derive! {
+	///
+	/// BlockProcessor
+	/// ===================================
+	///
+	/// This processor is responsible for handling block data from a blockchain while
+	/// managing reorganization events (reorgs) within a safety buffer. It maintains an internal state
+	/// of block data and already processed events, applies chain-specific processing rules (such as
+	/// pre-witness and witness event generation), deduplicates events to avoid processing the same
+	/// deposit twice, and finally executes those events.
+	///
+	/// Each block processor can provide its own definitions for:
+	/// - The block number type.
+	/// - The block data type.
+	/// - The event type produced during block processing.
+	/// - The rules to generate events (for example, pre-witness and full witness rules).
+	/// - The logic for executing and deduplicating events.
+	///
+	/// These are defined via the [`BWProcessorTypes`] trait, which is a generic parameter for this
+	/// processor.
+	///
+	/// # Type Parameters
+	///
+	/// * `T`: A type that implements [`BWProcessorTypes`]. This defines:
+	///     - `ChainBlockNumber`: The type representing block numbers.
+	///     - `BlockData`: The type of data associated with a block.
+	/// 	- `SAFETY_BUFFER`: The number of blocks to use as safety against reorgs and double processing
+	///    events
+	///     - `Event`: The type of event generated from processing blocks.
+	///     - `Rules`: A hook to process block data and generate events.
+	///     - `Execute`: A hook to dedup and execute generated events.
+	/// 	- `DebugEventHook`: A hook to log events, used for testing
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
+	pub struct BlockProcessor<T: BWProcessorTypes> {
+		/// A mapping from block numbers to their corresponding BlockInfo (block data, the next age to
+		/// be processed and the safety margin). The "age" represents the block height difference
+		/// between head of the chain and block that we are processing, and it's used to know what
+		/// rules have already been processed for such block
+		pub blocks_data: BTreeMap<ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T>>,
+		/// A mapping from event to their corresponding expiration block_number (which is defined as
+		/// block_number + SAFETY_BUFFER)
+		pub processed_events: BTreeMap<T::Event, ChainBlockNumberOf<T::Chain>>,
+		pub rules: T::Rules,
+		pub execute: T::Execute,
+		pub debug_events: T::DebugEventHook,
+	}
 }
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub struct BlockProcessingInfo<BlockData> {
-	block_data: BlockData,
-	next_age_to_process: u32,
-	safety_margin: u32,
+
+def_derive! {
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
+	pub struct BlockProcessingInfo<T: BWProcessorTypes> {
+		block_data: T::BlockData,
+		next_age_to_process: u32,
+		safety_margin: u32,
+	}
 }
-impl<BlockData> BlockProcessingInfo<BlockData> {
-	fn new(block_data: BlockData, safety_margin: u32) -> Self {
+impl<T: BWProcessorTypes> BlockProcessingInfo<T> {
+	fn new(block_data: T::BlockData, safety_margin: u32) -> Self {
 		BlockProcessingInfo { block_data, next_age_to_process: Default::default(), safety_margin }
 	}
 }
@@ -87,7 +91,7 @@ def_derive! {
 		},
 		#[allow(clippy::type_complexity)]
 		DeleteData {
-			blocks: Vec<(ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T::BlockData>)>,
+			blocks: Vec<(ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T>)>,
 			events: Vec<T::Event>,
 		},
 		StoreReorgedEvents {
@@ -344,6 +348,8 @@ pub(crate) mod tests {
 		type Rules = TypesFor<(N, H, Vec<D>)>;
 		type Execute = MockHook<HookTypeFor<Self, ExecuteHook>>;
 		type DebugEventHook = MockHook<HookTypeFor<Self, DebugEventHook>>;
+
+		const BWNAME: &'static str = "GenericBW";
 	}
 
 	type Types = TypesFor<(u8, Vec<u8>, Vec<u8>)>;
