@@ -582,8 +582,8 @@ export async function observeSwapRequested(
   id: TransactionOriginId,
   swapRequestType: SwapRequestType,
 ) {
-  // need to await this to prevent the chainflip api from being disposed prematurely
   return observeEvent(logger, 'swapping:SwapRequested', {
+    timeoutSeconds: 90,
     test: (event) => {
       const data = event.data;
 
@@ -716,18 +716,26 @@ export async function observeBalanceIncrease(
   dstCcy: Asset,
   address: string,
   oldBalance: string,
+  timeoutSeconds = 90,
 ): Promise<number> {
-  logger.debug(`Observing balance increase of ${dstCcy} at ${address}`);
-  for (let i = 0; i < 2400; i++) {
+  logger.trace(`Observing balance increase of ${dstCcy} at ${address}`);
+  for (let i = 0; i < Math.max(timeoutSeconds / 3, 1); i++) {
     const newBalance = Number(await getBalance(dstCcy, address));
     if (newBalance > Number(oldBalance)) {
+      logger.trace(
+        `Observed balance increase of ${newBalance - Number(oldBalance)}${dstCcy} in ${i * 3} seconds`,
+      );
       return newBalance;
     }
-
     await sleep(3000);
   }
 
-  return throwError(logger, new Error('Failed to observe balance increase'));
+  return throwError(
+    logger,
+    new Error(
+      `Failed to observe ${dstCcy} balance increase in ${timeoutSeconds} seconds for ${address}`,
+    ),
+  );
 }
 
 export async function observeFetch(asset: Asset, address: string): Promise<void> {
