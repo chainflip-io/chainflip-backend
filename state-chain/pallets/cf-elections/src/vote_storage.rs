@@ -23,7 +23,7 @@ use scale_info::TypeInfo;
 pub mod bitmap;
 pub mod change;
 pub mod composite;
-pub(crate) mod individual;
+pub mod individual;
 
 #[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, TypeInfo)]
 pub enum AuthorityVote<PartialVote, Vote> {

@@ -20,6 +20,7 @@ pub mod common;
 pub mod dot;
 pub mod eth;
 pub mod evm;
+pub mod generic_elections;
 pub mod hub;
 pub mod sol;
 pub mod start;

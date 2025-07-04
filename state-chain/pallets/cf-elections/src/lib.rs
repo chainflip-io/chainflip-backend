@@ -125,6 +125,7 @@
 #![feature(btree_extract_if)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(iter_intersperse)]
+#![feature(associated_type_defaults)]
 #![cfg_attr(test, feature(closure_track_caller))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
