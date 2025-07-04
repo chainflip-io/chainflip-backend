@@ -241,14 +241,14 @@ mod benchmarks {
 		});
 
 		let call = Call::<T, I>::re_sign_aborted_broadcasts {
-			broadcast_ids: vec![],
+			broadcast_ids: (0..n).collect::<Vec<_>>(),
 			request_broadcast: true,
 			refresh_replay_protection: true,
 		};
 
 		#[block]
 		{
-			assert_ok!(call.dispatch_bypass_filter(origin,));
+			assert_ok!(call.dispatch_bypass_filter(origin));
 		}
 
 		assert!(AbortedBroadcasts::<T, I>::get().is_empty());
