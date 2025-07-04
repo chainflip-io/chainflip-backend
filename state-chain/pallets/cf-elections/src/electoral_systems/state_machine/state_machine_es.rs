@@ -30,6 +30,8 @@ pub trait StatemachineElectoralSystemTypes: 'static + Sized {
 
 	type Statemachine: StatemachineForES<Self> + 'static;
 	type ConsensusMechanism: ConsensusMechanismForES<Self> + 'static;
+
+	type ElectoralSettings: Parameter + Member + MaybeSerializeDeserialize + Eq = ();
 }
 
 /// Convenience wrapper of the `Statemachine` trait. Given an electoral system `ES`,
@@ -37,7 +39,6 @@ pub trait StatemachineElectoralSystemTypes: 'static + Sized {
 /// to be possible to derive an electoral system.
 pub trait StatemachineForES<ES: StatemachineElectoralSystemTypes> = Statemachine<
 	Output = Result<ES::OnFinalizeReturnItem, &'static str>,
-	// Response = <ES::ConsensusMechanism as ConsensusMechanism>::Result,
 >;
 
 /// Convenience wrapper of the `ConsensusMechanism` trait. Given an electoral system `ES`,
@@ -97,7 +98,7 @@ where
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
 	type ElectoralUnsynchronisedSettings = <ES::Statemachine as Statemachine>::Settings;
-	type ElectoralSettings = ();
+	type ElectoralSettings = ES::ElectoralSettings;
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = <ES::Statemachine as AbstractApi>::Query;
 	type ElectionState = ();

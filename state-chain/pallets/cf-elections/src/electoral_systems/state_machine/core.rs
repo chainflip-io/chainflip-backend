@@ -128,6 +128,7 @@ macro_rules! derive_validation_statements {
 }
 pub(crate) use derive_validation_statements;
 
+#[macro_export]
 macro_rules! def_derive {
 	(#[no_serde] $($Definition:tt)*) => {
 		#[derive(
@@ -144,7 +145,7 @@ macro_rules! def_derive {
 		$($Definition)*
 	};
 }
-pub(crate) use def_derive;
+pub use def_derive;
 
 /// Syntax sugar for adding validation code to types with validity requirements
 macro_rules! defx {

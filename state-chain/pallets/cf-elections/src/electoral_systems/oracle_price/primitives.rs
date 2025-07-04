@@ -45,7 +45,8 @@ pub trait AggregationValue = Ord + CommonTraits + 'static;
 pub trait Aggregation {
 	type Of<X: AggregationValue>: CommonTraits;
 	fn canonical<X: AggregationValue>(price: &Self::Of<X>) -> X;
-	fn compute<X: AggregationValue>(value: &[X]) -> Self::Of<X>;
+	fn compute<X: AggregationValue>(value: &[X]) -> Option<Self::Of<X>>;
+	fn single<X: AggregationValue>(value: &X) -> Self::Of<X>;
 }
 pub type Apply<A: Aggregation, X> = A::Of<X>;
 
@@ -61,8 +62,12 @@ impl Aggregation for AggregatedF {
 		value.median.clone()
 	}
 
-	fn compute<X: AggregationValue>(value: &[X]) -> Self::Of<X> {
+	fn compute<X: AggregationValue>(value: &[X]) -> Option<Self::Of<X>> {
 		compute_aggregated(value.iter().cloned().collect())
+	}
+
+	fn single<X: AggregationValue>(value: &X) -> Self::Of<X> {
+		Aggregated::from_single_value(value.clone())
 	}
 }
 
@@ -80,13 +85,20 @@ impl<A: CommonTraits> Aggregated<A> {
 	}
 }
 
-pub fn compute_median<A: Ord + Clone>(mut values: Vec<A>) -> A {
+pub fn compute_median<A: Ord + Clone>(mut values: Vec<A>) -> Option<A> {
+	if values.is_empty() {
+		return None;
+	}
 	let half = (values.len() - 1) / 2;
 	let (_first_half, median, _second_half) = values.select_nth_unstable(half);
-	median.clone()
+	Some(median.clone())
 }
 
-pub fn compute_aggregated<A: AggregationValue>(mut values: Vec<A>) -> Aggregated<A> {
+pub fn compute_aggregated<A: AggregationValue>(mut values: Vec<A>) -> Option<Aggregated<A>> {
+	if values.is_empty() {
+		return None;
+	}
+
 	let quarter = values.len() / 4;
 	let half = (values.len() - 1) / 2;
 	let (first_half, median, second_half) = values.select_nth_unstable(half);
@@ -95,7 +107,10 @@ pub fn compute_aggregated<A: AggregationValue>(mut values: Vec<A>) -> Aggregated
 	let (_, first_quartile, _) = first_half.select_nth_unstable(quarter);
 	let (_, third_quartile, _) = second_half.select_nth_unstable(quarter);
 
-	Aggregated { median: median.clone(), iq_range: first_quartile.clone()..=third_quartile.clone() }
+	Some(Aggregated {
+		median: median.clone(),
+		iq_range: first_quartile.clone()..=third_quartile.clone(),
+	})
 }
 
 struct MeanPriceData<Asset, Price: AggregationValue> {
