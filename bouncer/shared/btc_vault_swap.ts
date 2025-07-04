@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { Chains } from '@chainflip/cli';
-import { waitForBtcTransaction, sendVaultTransaction } from 'shared/send_btc';
+import { sendVaultTransaction } from 'shared/send_btc';
 import {
   Asset,
   assetDecimals,
@@ -42,7 +42,6 @@ export async function buildAndSendBtcVaultSwap(
     account: string;
     bps: number;
   }[] = [],
-  confirmations: number = 1,
 ) {
   await using chainflip = await getChainflipApi();
 
@@ -78,9 +77,6 @@ export async function buildAndSendBtcVaultSwap(
     BtcVaultSwapDetails.deposit_address,
     refundAddress,
   );
-  if (confirmations > 0) {
-    await waitForBtcTransaction(logger, txid, confirmations);
-  }
 
   return txid;
 }
