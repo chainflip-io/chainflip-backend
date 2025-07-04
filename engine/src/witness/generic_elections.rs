@@ -14,9 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_chains::sol::SolAddress;
 use cf_primitives::EpochIndex;
 use futures_core::Future;
-use cf_chains::sol::SolAddress;
 
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
@@ -28,6 +28,13 @@ use pallet_cf_elections::{
 			ChainBlockHashOf, ChainTypes, HeightWitnesserProperties,
 		},
 		block_witnesser::state_machine::{BWElectionProperties, EngineElectionType},
+		oracle_price::{
+			primitives::UnixTime,
+			state_machine::{
+				ExternalChainBlockQueried, ExternalChainState, ExternalChainStateVote,
+				ExternalChainStates,
+			},
+		},
 	},
 	VoteOf,
 };
@@ -49,6 +56,18 @@ use crate::{
 	},
 };
 use anyhow::{bail, Result};
+use pallet_cf_elections::electoral_systems::oracle_price::primitives::ChainlinkAssetPair;
+
+/// IMPORTANT: These strings have to match with the price feed "description" as returned by
+/// chainlink.
+pub fn asset_pair_from_description(description: String) -> Option<ChainlinkAssetPair> {
+	use ChainlinkAssetPair::*;
+	match description.as_str() {
+		"BTC / USD" => Some(BtcUsd),
+		"ETH / USD" => Some(EthUsd),
+		_ => None,
+	}
+}
 
 #[derive(Clone)]
 struct OraclePriceVoter {
@@ -64,9 +83,11 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 	) -> Result<Option<VoteOf<OraclePriceES>>, anyhow::Error> {
 		tracing::info!("Voting for oracle price, properties: {properties:?}");
 
-        let oracle_program_id: SolAddress = const_address("DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X");
+		let oracle_program_id: SolAddress =
+			const_address("DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X");
 		let oracle_feeds = vec![const_address("HDSV2wFxmsrmCwwY34QzaVkvmJpG7VF8S9fX2iThynjG")];
-		let oracle_query_helper: SolAddress = const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z");
+		let oracle_query_helper: SolAddress =
+			const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z");
 
 		let (price_feeds, query_timestamp, query_slot) = get_price_feeds(
 			&self.sol_client,
@@ -77,9 +98,32 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 		)
 		.await?;
 
-		tracing::info!("Got the following price data: {price_feeds:?}, at time {query_timestamp:?} and slot {query_slot:?}");
+		let prices = price_feeds
+			.into_iter()
+			.filter_map(|price_data| {
+				if let Some(asset_pair) =
+					asset_pair_from_description(price_data.description.clone())
+				{
+					Some((asset_pair, price_data.answer))
+				} else {
+					tracing::info!(
+						"Got price data with unknown description: {:?}",
+						price_data.description
+					);
+					None
+				}
+			})
+			.collect();
 
-		Ok(None)
+		let result = ExternalChainStateVote {
+			block: ExternalChainBlockQueried::Solana(query_slot),
+			timestamp: UnixTime { seconds: query_timestamp as u64 },
+			price: prices,
+		};
+
+		tracing::info!("Got the following oracle result: {result:?}");
+
+		Ok(Some(result))
 	}
 }
 

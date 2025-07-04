@@ -1,5 +1,7 @@
 use core::time;
 
+use enum_iterator::all;
+
 use crate::electoral_systems::{
 	oracle_price::{
 		primitives::{compute_median, Aggregated, Aggregation, UnixTime},
@@ -40,7 +42,7 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 				timestamp: T::Aggregation::compute(
 					&self.votes.iter().map(|vote| vote.timestamp.clone()).collect::<Vec<_>>(),
 				),
-				price: T::all_assets()
+				price: all::<T::Asset>()
 					.map(|asset| {
 						(
 							asset.clone(),
