@@ -67,7 +67,7 @@ async function testCcmSwapFundAccount(logger: Logger) {
 
   await send(logger, 'Btc', swapParams.depositAddress);
   await fundEvent;
-  logger.info('Funding event witnessed succsefully!');
+  logger.info('Funding event witnessed succesfully!');
 }
 
 export async function testDelegateFlip(testContext: TestContext) {
