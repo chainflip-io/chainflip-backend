@@ -21,7 +21,7 @@ use cf_primitives::FlipBalance;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
 	mocks::{broadcaster::MockBroadcaster, time_source},
-	AccountRoleRegistry, RedemptionCheck, WaivedFees,
+	AccountRoleRegistry, ExecuteSCCall, RedemptionCheck, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{derive_impl, parameter_types};
@@ -155,6 +155,14 @@ impl_mock_runtime_safe_mode! { funding: PalletSafeMode }
 
 pub type MockFundingBroadcaster = MockBroadcaster<(MockRegisterRedemption, RuntimeCall)>;
 
+pub struct MockSCCallExecutor;
+impl ExecuteSCCall<AccountId, FlipBalance> for MockSCCallExecutor {
+	fn execute_whitelisted_sc_call(
+		_call: cf_chains::eth::WhitelistedCallsViaEthereum<AccountId, FlipBalance>,
+	) {
+	}
+}
+
 impl pallet_cf_funding::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = time_source::Mock;
@@ -164,6 +172,7 @@ impl pallet_cf_funding::Config for Test {
 	type Broadcaster = MockFundingBroadcaster;
 	type ThresholdCallable = RuntimeCall;
 	type EnsureThresholdSigned = FailOnNoneOrigin<Self>;
+	type SCCallExecutor = MockSCCallExecutor;
 	type RedemptionChecker = MockRedemptionChecker;
 	type SafeMode = MockRuntimeSafeMode;
 	type RegisterRedemption = MockRegisterRedemption;

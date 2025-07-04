@@ -34,7 +34,7 @@ pub mod bitcoin_elections;
 pub mod solana_elections;
 pub mod vault_swaps;
 
-use cf_chains::SetGovKeyWithAggKeyError;
+use cf_chains::{eth::WhitelistedCallsViaEthereum, SetGovKeyWithAggKeyError};
 
 use crate::{
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
@@ -98,7 +98,7 @@ use cf_primitives::{
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster,
-	DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, Heartbeat,
+	DepositApi, EgressApi, EpochInfo, ExecuteSCCall, FetchesTransfersLimitProvider, Heartbeat,
 	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode,
 	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
@@ -1190,6 +1190,18 @@ impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
 					))
 				});
 			},
+		}
+	}
+}
+
+pub struct SCCallExecutor;
+impl ExecuteSCCall<AccountId, FlipBalance> for SCCallExecutor {
+	fn execute_whitelisted_sc_call(call: WhitelistedCallsViaEthereum<AccountId, FlipBalance>) {
+		match call {
+			WhitelistedCallsViaEthereum::Delegate { delegator: _, amount: _, operator: _ } =>
+				todo!(),
+			WhitelistedCallsViaEthereum::Undelegate { delegator: _, amount: _, operator: _ } =>
+				todo!(),
 		}
 	}
 }

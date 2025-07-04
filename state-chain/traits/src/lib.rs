@@ -25,7 +25,7 @@ pub use safe_mode::*;
 pub mod lending;
 mod swapping;
 
-use cf_chains::SetGovKeyWithAggKeyError;
+use cf_chains::{eth::WhitelistedCallsViaEthereum, SetGovKeyWithAggKeyError};
 
 pub use swapping::{
 	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
@@ -1260,4 +1260,8 @@ pub trait PoolPriceProvider {
 
 pub trait CcmAdditionalDataHandler {
 	fn handle_ccm_additional_data(ccm_data: DecodedCcmAdditionalData);
+}
+
+pub trait ExecuteSCCall<AccountId, FlipBalance> {
+	fn execute_whitelisted_sc_call(call: WhitelistedCallsViaEthereum<AccountId, FlipBalance>);
 }
