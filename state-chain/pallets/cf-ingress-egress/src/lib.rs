@@ -1705,13 +1705,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			// Solana CCM refunds with ALT is not supported, since we don't want to witness ALTs
 			// here.
-			if let DecodedCcmAdditionalData::Solana(sol_add_data) =
-				&ccm_refund_metadata.channel_metadata.ccm_additional_data
+			if ccm_refund_metadata
+				.channel_metadata
+				.ccm_additional_data
+				.alt_addresses()
+				.map(|alts| !alts.is_empty())
+				.unwrap_or(false)
 			{
-				debug_assert!(
-					sol_add_data.alt_addresses().map(|alts| alts.is_empty()).unwrap_or(true),
-					"Solana refund CCM with ALTs is not supported"
-				);
+				debug_assert!(false, "Solana refund CCM with ALTs is not supported");
 				handle_ccm_failure();
 				return;
 			}

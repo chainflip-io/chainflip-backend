@@ -95,6 +95,14 @@ impl DecodedCcmAdditionalData {
 			_ => None,
 		}
 	}
+
+	pub fn alt_addresses(&self) -> Option<Vec<SolAddress>> {
+		match self {
+			DecodedCcmAdditionalData::NotRequired => None,
+			DecodedCcmAdditionalData::Solana(sol_additional_data) =>
+				sol_additional_data.alt_addresses(),
+		}
+	}
 }
 
 impl From<DecodedCcmAdditionalData> for CcmAdditionalData {
