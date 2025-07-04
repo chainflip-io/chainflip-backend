@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use state_chain_runtime::AccountId;
-use tracing::warn;
+use tracing::{error, warn};
 
 use std::collections::BTreeSet;
 
@@ -48,8 +48,8 @@ pub enum SigningFailureReason {
 	InvalidSigShare,
 	#[error("Not Enough Signers")]
 	NotEnoughSigners,
-	#[error("Unknown Key")]
-	UnknownKey,
+	#[error("Missing Threshold Key")]
+	MissingKey,
 	#[error("Invalid Number of Payloads")]
 	InvalidNumberOfPayloads,
 	#[error("Deserialization Error")]
@@ -121,8 +121,8 @@ impl CeremonyFailureReason for SigningFailureReason {
 			SigningFailureReason::DeveloperError(_) |
 			SigningFailureReason::InvalidParticipants |
 			SigningFailureReason::NotEnoughSigners |
-			SigningFailureReason::UnknownKey => {
-				warn!(tag = REQUEST_TO_SIGN_IGNORED, "{REQUEST_TO_SIGN_IGNORED_PREFIX}: {self}",);
+			SigningFailureReason::MissingKey => {
+				error!(tag = REQUEST_TO_SIGN_IGNORED, "{REQUEST_TO_SIGN_IGNORED_PREFIX}: {self}",);
 			},
 		}
 	}
