@@ -9,7 +9,8 @@ use sp_std::{fmt::Debug, vec::Vec};
 use crate::{
 	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem},
 	vote_storage::VoteStorage,
-	CorruptStorageError, ElectoralSystemTypes, PartialVoteOf, VoteOf, AuthorityVoteOf, VotePropertiesOf
+	AuthorityVoteOf, CorruptStorageError, ElectoralSystemTypes, PartialVoteOf, VoteOf,
+	VotePropertiesOf,
 };
 
 use super::{

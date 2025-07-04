@@ -12,13 +12,11 @@ use sp_std::ops::{Add, Index, IndexMut};
 pub trait OPTypes: 'static + Sized + CommonTraits {
 	type Price: CommonTraits + Ord;
 
-	type Asset: CommonTraits + Ord;
+	type Asset: CommonTraits + Ord + Sequence;
 
 	type Aggregation: CommonTraits + Aggregation;
 
 	type GetTime: Hook<HookTypeFor<Self, GetTimeHook>> + CommonTraits;
-
-	fn all_assets() -> impl Iterator<Item = Self::Asset>;
 }
 
 pub struct GetTimeHook;

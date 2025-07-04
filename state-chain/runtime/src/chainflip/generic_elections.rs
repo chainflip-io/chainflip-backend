@@ -12,7 +12,7 @@ use pallet_cf_elections::{
 		},
 		oracle_price::{
 			consensus::OraclePriceConsensus,
-			primitives::{Aggregated, AggregatedF, Seconds, UnixTime},
+			primitives::{Aggregated, AggregatedF, ChainlinkAssetPair, Seconds, UnixTime},
 			state_machine::{
 				BasisPoints, ExternalChainBlockQueried, ExternalChainSettings, ExternalChainState,
 				ExternalChainStateVote, ExternalChainStates, GetTimeHook, OPTypes,
@@ -37,15 +37,10 @@ impls! {
 	for TypesFor<Chainlink>:
 
 	OPTypes {
-		type Price = Vec<u16>;
+		type Price = i128;
 		type GetTime = Self;
-		type Asset = Asset;
+		type Asset = ChainlinkAssetPair;
 		type Aggregation = AggregatedF;
-
-		fn all_assets() -> impl Iterator<Item = Self::Asset> {
-			cf_chains::assets::any::Asset::all()
-		}
-
 	}
 
 	Hook<HookTypeFor<Self, GetTimeHook>> {

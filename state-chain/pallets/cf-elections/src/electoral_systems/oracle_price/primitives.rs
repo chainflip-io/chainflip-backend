@@ -3,9 +3,25 @@ use core::ops::{Range, RangeInclusive};
 use cf_primitives::Asset;
 use sp_std::ops::{Add, Index, IndexMut};
 
-use crate::electoral_systems::state_machine::common_imports::*;
+use crate::electoral_systems::{
+	oracle_price::state_machine::{ExternalChainBlockQueried, OPTypes},
+	state_machine::common_imports::*,
+};
+use enum_iterator::Sequence;
 
-use crate::electoral_systems::oracle_price::state_machine::{ExternalChainBlockQueried, OPTypes};
+def_derive! {
+	#[derive(TypeInfo, Sequence, PartialOrd, Ord)]
+	pub enum ChainlinkAssetPair {
+		BtcUsd,
+		EthUsd
+	}
+}
+
+def_derive! {
+	pub struct Price {
+		pub value: i128,
+	}
+}
 
 def_derive! {
 	#[derive(TypeInfo, PartialOrd, Ord)]
