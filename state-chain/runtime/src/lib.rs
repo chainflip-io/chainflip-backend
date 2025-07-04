@@ -236,7 +236,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 1_10_00,
+	spec_version: 1_11_00,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 13,
@@ -1431,8 +1431,7 @@ type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
-	MigrationsForV1_10,
-	migrations::btc_elections_migrations::Migration,
+	MigrationsForV1_11,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1522,24 +1521,7 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV1_10 = (
-	instanced_migrations!(
-		module: pallet_cf_ingress_egress,
-		migration: migrations::boost_refactor::BoostRefactorMigration,
-		from: 24,
-		to: 25,
-		include_instances: [BitcoinInstance],
-		// All work done in the BitcoinInstance but we still want to increment the version in other pallets:
-		exclude_instances: [EthereumInstance, PolkadotInstance, SolanaInstance, ArbitrumInstance, AssethubInstance],
-	),
-	VersionedMigration<
-		16,
-		17,
-		migrations::safe_mode::SafeModeMigration,
-		pallet_cf_environment::Pallet<Runtime>,
-		<Runtime as frame_system::Config>::DbWeight,
-	>,
-);
+type MigrationsForV1_11 = ();
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
