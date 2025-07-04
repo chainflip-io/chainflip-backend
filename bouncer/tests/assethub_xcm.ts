@@ -15,14 +15,14 @@ export async function testAssethubXcm(testContext: TestContext, _seed?: string) 
     '14iGgWDpriDToidv1GY28a8yGqF4DyR397euELCzQB87qbRM',
   );
   const oldDotBalance = await getBalance('Dot', '12QPwzxiXa1UAsgeoeNvvPnJqCFE8SwDb4FVXWauYWCwRiHt');
-  await performSwap(
-    testContext.logger,
-    'Btc',
-    'HubDot',
-    '14iGgWDpriDToidv1GY28a8yGqF4DyR397euELCzQB87qbRM',
-    metadata,
-  );
   await Promise.all([
+    performSwap(
+      testContext.logger,
+      'Btc',
+      'HubDot',
+      '14iGgWDpriDToidv1GY28a8yGqF4DyR397euELCzQB87qbRM',
+      metadata,
+    ),
     observeBalanceIncrease(
       testContext.logger,
       'HubDot',
