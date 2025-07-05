@@ -30,6 +30,7 @@ use codec::{Decode, Encode};
 pub mod old {
 	use super::*;
 	use cf_chains::CcmAdditionalData;
+	use cf_primitives::Price;
 
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct CrossChainMessage<C: Chain> {
@@ -62,7 +63,15 @@ pub mod old {
 		pub boost_status: BoostStatus<TargetChainAmount<T, I>, BlockNumberFor<T>>,
 	}
 
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	pub struct ChannelRefundParameters<A> {
+		pub retry_duration: cf_primitives::BlockNumber,
+		pub refund_address: A,
+		pub min_price: Price,
+	}
+
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+	#[allow(clippy::large_enum_variant)]
 	pub enum ChannelAction<AccountId, C: Chain> {
 		Swap {
 			destination_asset: Asset,
@@ -157,13 +166,34 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade
 						destination_asset,
 						destination_address,
 						channel_metadata,
+						refund_params,
 						..
-					} => channel_metadata
-						.map(|ccm| ccm.clone().to_checked(destination_asset, destination_address))
-						.transpose(),
-					_ => Ok(None),
+					} => {
+						// Convert ccm into checked ccm.
+						let checked_ccm = channel_metadata
+							.map(|ccm| {
+								ccm.clone().to_checked(destination_asset, destination_address)
+							})
+							.transpose();
+						// Convert Refund param into Checked version.
+						let checked_refund_params = ChannelRefundParametersCheckedInternal {
+							retry_duration: refund_params.retry_duration,
+							refund_address: AccountOrAddress::ExternalAddress(
+								refund_params.refund_address,
+							),
+							min_price: refund_params.min_price,
+							refund_ccm_metadata: None,
+						};
+						// Only succeed if both conversions work
+						if let Ok(checked_ccm) = checked_ccm {
+							Some((checked_ccm, checked_refund_params))
+						} else {
+							None
+						}
+					},
+					_ => None,
 				}
-				.map(|checked_ccm| DepositChannelDetails {
+				.map(|(checked_ccm, checked_refund_params)| DepositChannelDetails {
 					owner: old.owner,
 					deposit_channel: old.deposit_channel,
 					opened_at: old.opened_at,
@@ -174,25 +204,28 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade
 							destination_address,
 							broker_fees,
 							channel_metadata: _,
-							refund_params,
+							refund_params: _,
 							dca_params,
 						} => ChannelAction::Swap {
 							destination_asset,
 							destination_address: destination_address.clone(),
 							broker_fees,
 							channel_metadata: checked_ccm,
-							refund_params,
+							refund_params: checked_refund_params,
 							dca_params,
 						},
 						old::ChannelAction::LiquidityProvision { lp_account, refund_address } =>
 							ChannelAction::LiquidityProvision { lp_account, refund_address },
 						old::ChannelAction::Refund { reason, refund_address } =>
-							ChannelAction::Refund { reason, refund_address },
+							ChannelAction::Refund {
+								reason,
+								refund_address,
+								refund_ccm_metadata: None,
+							},
 					},
 					boost_fee: old.boost_fee,
 					boost_status: old.boost_status,
 				})
-				.ok()
 			},
 		);
 		log::info!("🍩 Migration for Ingress-Egress pallet complete.");

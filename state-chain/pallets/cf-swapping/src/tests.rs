@@ -92,7 +92,7 @@ struct TestSwapParams {
 	input_asset: Asset,
 	output_asset: Asset,
 	input_amount: AssetAmount,
-	refund_params: Option<RefundParametersExtended<u64>>,
+	refund_params: Option<ChannelRefundParametersCheckedInternal<u64>>,
 	dca_params: Option<DcaParameters>,
 	output_address: ForeignChainAddress,
 	is_ccm: bool,
@@ -125,18 +125,22 @@ struct TestRefundParams {
 }
 
 impl TestRefundParams {
-	fn into_extended_params(self, input_amount: AssetAmount) -> RefundParametersExtended<u64> {
+	fn into_extended_params(
+		self,
+		input_amount: AssetAmount,
+	) -> ChannelRefundParametersCheckedInternal<u64> {
 		use cf_amm::math::{bounded_sqrt_price, sqrt_price_to_price};
 
-		RefundParametersExtended {
+		ChannelRefundParametersCheckedInternal {
 			retry_duration: self.retry_duration,
-			refund_destination: AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(
+			refund_address: AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(
 				[10; 20].into(),
 			)),
 			min_price: sqrt_price_to_price(bounded_sqrt_price(
 				self.min_output.into(),
 				input_amount.into(),
 			)),
+			refund_ccm_metadata: None,
 		}
 	}
 }
@@ -265,11 +269,13 @@ fn generate_ccm_deposit() -> CcmDepositMetadataUnchecked<ForeignChainAddress> {
 	}
 }
 
-const REFUND_PARAMS: ChannelRefundParametersEncoded = ChannelRefundParametersEncoded {
-	retry_duration: 100,
-	refund_address: EncodedAddress::Eth([1; 20]),
-	min_price: U256::zero(),
-};
+const REFUND_PARAMS: ChannelRefundParametersUncheckedEncoded =
+	ChannelRefundParametersUncheckedEncoded {
+		retry_duration: 100,
+		refund_address: EncodedAddress::Eth([1; 20]),
+		min_price: U256::zero(),
+		refund_ccm_metadata: None,
+	};
 
 fn get_broker_balance<T: Config>(who: &T::AccountId, asset: Asset) -> AssetAmount {
 	T::BalanceApi::get_balance(who, asset)

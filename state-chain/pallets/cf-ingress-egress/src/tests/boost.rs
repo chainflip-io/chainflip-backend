@@ -601,13 +601,9 @@ fn taking_network_fee_from_boost_fee() {
 }
 
 mod vault_swaps {
-
-	use cf_chains::ChannelRefundParameters;
-	use cf_traits::SwapOutputAction;
-
-	use crate::BoostedVaultTransactions;
-
 	use super::*;
+	use crate::BoostedVaultTransactions;
+	use cf_traits::SwapOutputAction;
 
 	#[test]
 	fn vault_swap_boosting() {
@@ -649,10 +645,11 @@ mod vault_swaps {
 				tx_id,
 				broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
 				affiliate_fees: Default::default(),
-				refund_params: ChannelRefundParameters {
+				refund_params: ChannelRefundParametersForChain::<Ethereum> {
 					retry_duration: 2,
 					refund_address: [2; 20].into(),
 					min_price: Default::default(),
+					refund_ccm_metadata: Default::default(),
 				},
 				dca_params: None,
 				boost_fee: 5,
@@ -972,10 +969,11 @@ mod delayed_boosting {
 			tx_id: TX_ID,
 			broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
 			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParameters {
+			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 2,
 				refund_address: [2; 20].into(),
 				min_price: Default::default(),
+				refund_ccm_metadata: None,
 			},
 			dca_params: None,
 			boost_fee: 5,

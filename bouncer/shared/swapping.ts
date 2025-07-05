@@ -4,11 +4,10 @@ import { u8aToHex } from '@polkadot/util';
 import { randomAsHex } from 'polkadot/util-crypto';
 import { performSwap, performVaultSwap } from 'shared/perform_swap';
 import {
-  newAddress,
   chainFromAsset,
   getContractAddress,
-  ccmSupportedChains,
   solVersionedCcmAdditionalDataCodec,
+  newAssetAddress,
 } from 'shared/utils';
 import { BtcAddressType } from 'shared/new_btc_address';
 import { CcmDepositMetadata } from 'shared/new_swap';
@@ -243,29 +242,18 @@ export async function prepareSwap(
   tagSuffix?: string,
   swapContext?: SwapContext,
 ) {
-  // Seed needs to be unique per swap:
-  const seed = randomAsHex(32);
-
-  let destAddress;
-
   let tag = `[${(swapCount++).toString().concat(':').padEnd(4, ' ')} ${sourceAsset}->${destAsset}`;
   tag += messageMetadata ? ' CCM' : '';
   tag += tagSuffix ? ` ${tagSuffix}]` : ']';
   const logger = parentLogger.child({ tag });
 
-  // For swaps with a message force the address to be the CF Tester address.
-  if (
-    messageMetadata &&
-    ccmSupportedChains.includes(chainFromAsset(destAsset)) &&
-    // Solana CCM are egressed to a random destination address
-    chainFromAsset(destAsset) !== 'Solana'
-  ) {
-    destAddress = getContractAddress(chainFromAsset(destAsset), 'CFTESTER');
-    logger.trace(`Using CF Tester address: ${destAddress}`);
-  } else {
-    destAddress = await newAddress(destAsset, seed, addressType);
-    logger.trace(`Created new ${destAsset} address: ${destAddress}`);
-  }
+  const destAddress = await newAssetAddress(
+    destAsset,
+    undefined,
+    addressType,
+    messageMetadata !== undefined,
+  );
+  logger.trace(`${destAsset} address: ${destAddress}`);
 
   swapContext?.updateStatus(logger, SwapStatus.Initiated);
 

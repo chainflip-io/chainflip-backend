@@ -1,6 +1,6 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import {
-  newAddress,
+  newAssetAddress,
   decodeDotAddressForContract,
   handleSubstrateError,
   lpMutex,
@@ -41,7 +41,7 @@ export async function depositLiquidity(
       )
     ).toJSON() === null
   ) {
-    let refundAddress = await newAddress(ccy, 'LP_1');
+    let refundAddress = await newAssetAddress(ccy, 'LP_1');
     refundAddress =
       chain === 'Dot' || chain === 'Hub'
         ? decodeDotAddressForContract(refundAddress)

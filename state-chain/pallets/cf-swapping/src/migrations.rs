@@ -20,10 +20,9 @@ use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
 pub mod network_fee_migration;
-pub mod swap_request_migration;
+pub mod swap_request_ccm_refund_migration;
 
 pub type PalletMigration<T> = (
-	// network_fee_migration must go before swap_request_migration
 	VersionedMigration<
 		9,
 		10,
@@ -34,7 +33,7 @@ pub type PalletMigration<T> = (
 	VersionedMigration<
 		10,
 		11,
-		swap_request_migration::Migration<T>,
+		swap_request_ccm_refund_migration::Migration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,

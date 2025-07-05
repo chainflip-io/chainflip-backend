@@ -23,7 +23,7 @@ import {
   TransactionOriginId,
   TransactionOrigin,
   defaultAssetAmounts,
-  newAddress,
+  newAssetAddress,
   getContractAddress,
   isPolkadotAsset,
 } from 'shared/utils';
@@ -322,7 +322,7 @@ export async function executeVaultSwap(
       destAsset,
       destAddress,
       fillOrKillParams === undefined
-        ? await newAddress('Btc', 'BTC_VAULT_SWAP_REFUND')
+        ? await newAssetAddress('Btc', 'BTC_VAULT_SWAP_REFUND')
         : fillOrKillParams.refundAddress,
       brokerFeesValue,
       affiliateFees.map((f) => ({ account: f.accountAddress, bps: f.commissionBps })),

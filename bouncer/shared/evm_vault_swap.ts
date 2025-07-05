@@ -11,7 +11,7 @@ import {
   assetDecimals,
   stateChainAssetFromAsset,
   createEvmWalletAndFund,
-  newAddress,
+  newAssetAddress,
   decodeDotAddressForContract,
   getEvmEndpoint,
 } from 'shared/utils';
@@ -59,7 +59,7 @@ export async function executeEvmVaultSwap(
   const destChain = chainFromAsset(destAsset);
   const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
   const refundAddress =
-    optionalRefundAddress ?? (await newAddress(sourceAsset, randomBytes(32).toString('hex')));
+    optionalRefundAddress ?? (await newAssetAddress(sourceAsset, randomBytes(32).toString('hex')));
   const fokParams = fillOrKillParams ?? {
     retryDurationBlocks: 0,
     refundAddress,
@@ -84,6 +84,11 @@ export async function executeEvmVaultSwap(
     retry_duration: fokParams.retryDurationBlocks,
     refund_address: fokParams.refundAddress,
     min_price: '0x' + new BigNumber(fokParams.minPriceX128).toString(16),
+    refund_ccm_metadata: fillOrKillParams?.refundCcmMetadata && {
+      message: fillOrKillParams?.refundCcmMetadata.message as `0x${string}`,
+      gas_budget: fillOrKillParams?.refundCcmMetadata.gasBudget,
+      ccm_additional_data: fillOrKillParams?.refundCcmMetadata.ccmAdditionalData,
+    },
   };
 
   const extraParameters: EvmVaultSwapExtraParameters = {

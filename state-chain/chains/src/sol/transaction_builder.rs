@@ -869,7 +869,7 @@ pub mod test {
 
 	#[test]
 	fn can_create_ccm_native_transaction() {
-		let ccm_param = ccm_parameter();
+		let ccm_param = ccm_parameter_v0();
 		let transfer_param = TransferAssetParams::<Solana> {
 			asset: SOL,
 			amount: TRANSFER_AMOUNT,
@@ -903,7 +903,7 @@ pub mod test {
 	#[test]
 	fn can_create_ccm_usdc_token_transaction() {
 		let env = api_env();
-		let ccm_param = ccm_parameter();
+		let ccm_param = ccm_parameter_v0();
 		let to = TRANSFER_TO_ACCOUNT;
 		let to_ata = crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
 			to,
@@ -953,7 +953,7 @@ pub mod test {
 		let transaction = SolanaTransactionBuilder::ccm_transfer_native(
 			transfer_param.amount,
 			transfer_param.to,
-			ccm_parameter().source_chain,
+			ccm_parameter_v0().source_chain,
 			None,
 			vec![],
 			ccm_accounts,
@@ -990,7 +990,7 @@ pub mod test {
 			to_ata.address,
 			TRANSFER_AMOUNT,
 			to,
-			ccm_parameter().source_chain,
+			ccm_parameter_v0().source_chain,
 			None,
 			vec![],
 			ccm_accounts,

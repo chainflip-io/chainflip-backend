@@ -9,6 +9,7 @@ use cf_rpc_apis::{
 	},
 	OrderFilled, RefundParametersRpc, SwapChannelInfo,
 };
+use codec::Encode;
 use pallet_cf_lending_pools::OwedAmount;
 use pallet_cf_pools::{
 	IncreaseOrDecrease, LimitOrder, LimitOrderLiquidity, PoolOrder, RangeOrder,
@@ -20,9 +21,14 @@ use cf_chains::{
 	address::EncodedAddress,
 	assets::sol,
 	btc::ScriptPubkey,
+	ccm_checker::{DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData},
 	dot::PolkadotAccountId,
-	sol::{SolAddress, SolAddressLookupTableAccount, SolApiEnvironment, SolPubkey},
-	Arbitrum, Bitcoin, Ethereum, EvmVaultSwapExtraParameters, ForeignChainAddress,
+	sol::{
+		SolAddress, SolAddressLookupTableAccount, SolApiEnvironment, SolCcmAccounts, SolCcmAddress,
+		SolPubkey,
+	},
+	Arbitrum, Bitcoin, CcmAdditionalData, CcmChannelMetadataChecked, Ethereum,
+	EvmVaultSwapExtraParameters, ForeignChainAddress,
 };
 
 use cf_primitives::{
@@ -61,6 +67,45 @@ fn asset_map<T: Clone>(v: T) -> any::AssetMap<T> {
 		arb: arb::AssetMap { eth: v.clone(), usdc: v.clone() },
 		sol: sol::AssetMap { sol: v.clone(), usdc: v.clone() },
 		hub: hub::AssetMap { dot: v.clone(), usdc: v.clone(), usdt: v },
+	}
+}
+
+fn ccm_checked() -> CcmChannelMetadataChecked {
+	CcmChannelMetadataChecked {
+		message: vec![124u8, 29u8, 15u8, 7u8].try_into().unwrap(),
+		gas_budget: 0u128,
+		ccm_additional_data: DecodedCcmAdditionalData::Solana(
+			VersionedSolanaCcmAdditionalData::V0(SolCcmAccounts {
+				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x10; 32]), is_writable: true },
+				additional_accounts: vec![SolCcmAddress {
+					pubkey: SolPubkey([0x11; 32]),
+					is_writable: false,
+				}],
+				fallback_address: SolPubkey([0x12; 32]),
+			}),
+		),
+	}
+}
+
+fn ccm_unchecked() -> CcmChannelMetadataUnchecked {
+	CcmChannelMetadataUnchecked {
+		message: vec![124u8, 29u8, 15u8, 7u8].try_into().unwrap(),
+		gas_budget: 0u128,
+		ccm_additional_data: CcmAdditionalData::try_from(
+			VersionedSolanaCcmAdditionalData::V1 {
+				ccm_accounts: SolCcmAccounts {
+					cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x10; 32]), is_writable: true },
+					additional_accounts: vec![SolCcmAddress {
+						pubkey: SolPubkey([0x11; 32]),
+						is_writable: false,
+					}],
+					fallback_address: SolPubkey([0x12; 32]),
+				},
+				alts: vec![SolAddress([0x13; 32]), SolAddress([0x14; 32])],
+			}
+			.encode(),
+		)
+		.unwrap(),
 	}
 }
 
@@ -823,11 +868,7 @@ fn vault_swap_details_serialization() {
 			SolPubkey([0xf3; 32]),
 			1_000_000u64,
 			vec![0x00, 0x01, 0x02, 0x03, 0x04, 0x05],
-			Some(CcmChannelMetadataUnchecked {
-				message: vec![124u8, 29u8, 15u8, 7u8].try_into().unwrap(),
-				gas_budget: 0u128,
-				ccm_additional_data: vec![0x01, 0x02, 0x03, 0x04].try_into().unwrap(),
-			}),
+			Some(ccm_checked()),
 		)
 		.into(),
 	};
@@ -840,16 +881,13 @@ fn vault_swap_details_serialization() {
 
 #[test]
 fn vault_swap_input_serialization() {
-	let ccm = CcmChannelMetadataUnchecked {
-		message: vec![0x00, 0x01, 0x02, 0x03].try_into().unwrap(),
-		gas_budget: 100u128,
-		ccm_additional_data: vec![0x05, 0x06, 0x07, 0x08].try_into().unwrap(),
-	};
 	let refund_parameter = RefundParametersRpc {
 		retry_duration: 1000u32,
 		refund_address: "E2aBDC008BaEa1d4Dd2eeE4f0BEa61f6f91897cC".to_string().into(),
 		min_price: 1234.into(),
+		refund_ccm_metadata: Some(ccm_unchecked()),
 	};
+
 	let affiliate_fees: Affiliates<cf_primitives::AccountId> =
 		vec![Beneficiary { account: ID_1, bps: 100u16 }].try_into().unwrap();
 	let dca_parameter = Some(DcaParameters { number_of_chunks: 100u32, chunk_interval: 10u32 });
@@ -862,7 +900,7 @@ fn vault_swap_input_serialization() {
 			input_amount: NumberOrHex::Number(1_000_000u64),
 			refund_parameters: refund_parameter.clone(),
 		}),
-		channel_metadata: Some(ccm.clone()),
+		channel_metadata: Some(ccm_unchecked()),
 		boost_fee: 100u16,
 		affiliate_fees: affiliate_fees.clone(),
 		dca_parameters: dca_parameter.clone(),
@@ -877,7 +915,7 @@ fn vault_swap_input_serialization() {
 			input_amount: NumberOrHex::Number(1_000_000u64),
 			refund_parameters: refund_parameter.clone(),
 		}),
-		channel_metadata: Some(ccm.clone()),
+		channel_metadata: Some(ccm_unchecked()),
 		boost_fee: 100u16,
 		affiliate_fees: affiliate_fees.clone(),
 		dca_parameters: dca_parameter.clone(),
@@ -892,7 +930,7 @@ fn vault_swap_input_serialization() {
 			min_output_amount: NumberOrHex::Number(100_000_000u64),
 			retry_duration: 100u32,
 		},
-		channel_metadata: Some(ccm.clone()),
+		channel_metadata: Some(ccm_unchecked()),
 		boost_fee: 100u16,
 		affiliate_fees: affiliate_fees.clone(),
 		dca_parameters: dca_parameter.clone(),
@@ -912,7 +950,7 @@ fn vault_swap_input_serialization() {
 				"8RMUMRxniKbs9kMDVb81RtWoLNz2zesz3JQLRZXZc5kh".to_string().into(),
 			),
 		},
-		channel_metadata: Some(ccm.clone()),
+		channel_metadata: Some(ccm_unchecked()),
 		boost_fee: 100u16,
 		affiliate_fees: affiliate_fees.clone(),
 		dca_parameters: dca_parameter.clone(),
@@ -1042,6 +1080,7 @@ fn swap_deposit_address_serialization() {
 			retry_duration: 1000u32,
 			refund_address: "E2aBDC008BaEa1d4Dd2eeE4f0BEa61f6f91897cC".to_string().into(),
 			min_price: 1234.into(),
+			refund_ccm_metadata: Some(ccm_unchecked()),
 		},
 	};
 

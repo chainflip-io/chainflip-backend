@@ -66,16 +66,43 @@ impl Config for StateChainConfig {
 include!(concat!(env!("OUT_DIR"), "/cf_static_runtime.rs"));
 
 // Conversions from cf_static_runtime::runtime_types
-impl<T> From<cf_static_runtime::runtime_types::cf_chains::ChannelRefundParameters<T>>
-	for cf_chains::ChannelRefundParameters<T>
+impl<T>
+	From<
+		cf_static_runtime::runtime_types::cf_chains::refund_parameters::ChannelRefundParameters<
+			T,
+			Option<
+				cf_static_runtime::runtime_types::cf_chains::CcmChannelMetadata<
+					cf_static_runtime::runtime_types::cf_chains::CcmAdditionalData,
+				>,
+			>,
+		>,
+	> for cf_chains::ChannelRefundParametersUnchecked<T>
 {
 	fn from(
-		value: cf_static_runtime::runtime_types::cf_chains::ChannelRefundParameters<T>,
+		value: cf_static_runtime::runtime_types::cf_chains::refund_parameters::ChannelRefundParameters<
+			T,
+			Option<
+				cf_static_runtime::runtime_types::cf_chains::CcmChannelMetadata<
+					cf_static_runtime::runtime_types::cf_chains::CcmAdditionalData,
+				>,
+			>,
+		>,
 	) -> Self {
 		Self {
 			retry_duration: value.retry_duration,
 			refund_address: value.refund_address,
 			min_price: value.min_price.0,
+			refund_ccm_metadata: value.refund_ccm_metadata.map(|metadata| {
+				cf_chains::CcmChannelMetadata {
+					message: cf_chains::CcmMessage::try_from(metadata.message.0)
+						.expect("Runtime message exceeds 15,000 bytes"),
+					gas_budget: metadata.gas_budget,
+					ccm_additional_data: cf_chains::CcmAdditionalData::try_from(
+						metadata.ccm_additional_data.0 .0.to_vec(),
+					)
+					.expect("Runtime ccm_additional_data exceeds 3,000 bytes"),
+				}
+			}),
 		}
 	}
 }

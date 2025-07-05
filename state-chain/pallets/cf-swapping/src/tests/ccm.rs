@@ -108,10 +108,11 @@ fn can_process_ccms_via_swap_deposit_address() {
 				.to_checked(Asset::Eth, EVM_OUTPUT_ADDRESS.clone())
 				.unwrap();
 
-			let refund_params = ChannelRefundParametersEncoded {
+			let refund_params = ChannelRefundParametersUncheckedEncoded {
 				retry_duration: 100,
 				refund_address: EncodedAddress::Eth([1; 20]),
 				min_price: U256::from(0),
+				refund_ccm_metadata: Default::default(),
 			};
 
 			// Can process CCM via Swap deposit

@@ -59,9 +59,7 @@ fn both_fok_and_regular_swaps_succeed_first_try(is_ccm: bool) {
 				min_output: (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE,
 			};
 
-			let refund_parameters_encoded = REFUND_PARAMS
-				.into_extended_params(INPUT_AMOUNT)
-				.to_encoded::<MockAddressConverter>();
+			let refund_parameters_encoded = REFUND_PARAMS.into_extended_params(INPUT_AMOUNT);
 
 			insert_swaps(&vec![fok_swap(None, is_ccm), fok_swap(Some(REFUND_PARAMS), is_ccm)]);
 
