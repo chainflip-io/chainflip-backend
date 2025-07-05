@@ -135,6 +135,8 @@ struct PreUpgradeData {
 	boost_balances: BTreeMap<AccountId, ScaledAmount>,
 }
 
+// Migrating BoostStatus here because the migration collides with the
+// `CcmAdditionalDataToCheckedMigration` migration.
 fn migrate_boost_status<AccountId, BlockNumber>(
 	status: old::BoostStatus<AccountId, BlockNumber>,
 ) -> pallet_cf_ingress_egress::BoostStatus<AccountId, BlockNumber> {
@@ -215,22 +217,6 @@ impl UncheckedOnRuntimeUpgrade for BoostRefactorMigration {
 		pallet_cf_ingress_egress::BoostedVaultTransactions::<Runtime, BitcoinInstance>::translate_values(
 			|boost_status : old::BoostStatus<_,_>| {
 				Some(migrate_boost_status(boost_status))
-			},
-		);
-
-		pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, BitcoinInstance>::translate_values(
-			|old_details : old::DepositChannelDetails<Runtime, BitcoinInstance>| {
-
-				Some(pallet_cf_ingress_egress::DepositChannelDetails {
-					owner: old_details.owner,
-					deposit_channel: old_details.deposit_channel,
-					opened_at: old_details.opened_at,
-					expires_at: old_details.expires_at,
-					action: old_details.action,
-					boost_fee: old_details.boost_fee,
-					boost_status: migrate_boost_status(old_details.boost_status),
-				})
-
 			},
 		);
 
