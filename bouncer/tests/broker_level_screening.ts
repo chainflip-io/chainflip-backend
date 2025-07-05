@@ -27,7 +27,7 @@ import { Logger } from 'shared/utils/logger';
 import { getBalance } from 'shared/get_balance';
 import { send } from 'shared/send';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { buildAndSendBtcVaultSwap, openPrivateBtcChannel } from 'shared/btc_vault_swap';
+import { buildAndSendBtcVaultSwap, waitForPrivateBtcChannel } from 'shared/btc_vault_swap';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 
 const keyring = new Keyring({ type: 'sr25519' });
@@ -290,7 +290,7 @@ async function testEvm(
     logger.debug(`Initial deposit ${sourceAsset} received...`);
     // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
     // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
-    // succesfully to make sure the Deposit contract is deployed.
+    // successfully to make sure the Deposit contract is deployed.
     await waitForDepositContractDeployment(chain, swapParams.depositAddress);
   }
 
@@ -431,7 +431,7 @@ async function testEvmLiquidityDeposit(
     test: (event) => event.data.asset === sourceAsset && event.data.accountId === lp.address,
   }).event;
 
-  console.log('Requesting ' + sourceAsset + ' deposit address');
+  logger.debug(`Requesting ${sourceAsset} deposit address`);
   await lpMutex.runExclusive(async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
@@ -452,10 +452,11 @@ async function testEvmLiquidityDeposit(
   if (sourceAsset === chainGasAsset('Ethereum') || sourceAsset === chainGasAsset('Arbitrum')) {
     // The first tx cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
     // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
-    // succesfully to make sure the Deposit contract is deployed.
+    // successfully to make sure the Deposit contract is deployed.
 
     const amount = '3';
     const observeAccountCreditedEvent = observeEvent(logger, 'assetBalances:AccountCredited', {
+      timeoutSeconds: 90,
       test: (event) =>
         event.data.asset === sourceAsset &&
         isWithinOnePercent(
@@ -635,7 +636,7 @@ export async function testBrokerLevelScreening(
   //  - this requires the rejecting broker to be whitelisted
   //  - for bitcoin vault swaps a private channel has to be opened
   await setWhitelistedBroker(broker.addressRaw);
-  await openPrivateBtcChannel(testContext.logger, '//BROKER_1');
+  await waitForPrivateBtcChannel(testContext.logger, '//BROKER_1');
   await Promise.all([
     // --- LP deposits ---
     testEvmLiquidityDeposit(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),

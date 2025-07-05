@@ -10,6 +10,7 @@ import {
   decodeDotAddressForContract,
   fineAmountToAmount,
   handleSubstrateError,
+  sleep,
   stateChainAssetFromAsset,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -85,7 +86,7 @@ export async function buildAndSendBtcVaultSwap(
   return txid;
 }
 
-export async function openPrivateBtcChannel(logger: Logger, brokerUri: string): Promise<number> {
+async function openPrivateBtcChannel(logger: Logger, brokerUri: string): Promise<number> {
   // Check if the channel is already open
   const chainflip = await getChainflipApi();
   const broker = createStateChainKeypair(brokerUri);
@@ -117,6 +118,42 @@ export async function openPrivateBtcChannel(logger: Logger, brokerUri: string): 
       .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
   });
   return Number((await openedChannelEvent).data.channelId);
+}
+
+enum PrivateChannelStatus {
+  None,
+  Pending,
+  Open,
+}
+const privateChannelStatusMap: Map<string, PrivateChannelStatus> = new Map();
+
+/// Ensures a private BTC channel is open for the broker.
+/// Waits for the channel to be open if already pending.
+export async function waitForPrivateBtcChannel(logger: Logger, brokerUri: string): Promise<void> {
+  let shouldOpenChannel = false;
+
+  await brokerMutex.runExclusive(async () => {
+    const status = privateChannelStatusMap.get(brokerUri) ?? PrivateChannelStatus.None;
+
+    if (status === PrivateChannelStatus.Open) {
+      return;
+    }
+
+    if (status === PrivateChannelStatus.None) {
+      privateChannelStatusMap.set(brokerUri, PrivateChannelStatus.Pending);
+      shouldOpenChannel = true;
+    }
+  });
+
+  if (shouldOpenChannel) {
+    await openPrivateBtcChannel(logger, brokerUri);
+    privateChannelStatusMap.set(brokerUri, PrivateChannelStatus.Open);
+  } else {
+    // Wait for the status to become Open
+    while (privateChannelStatusMap.get(brokerUri) !== PrivateChannelStatus.Open) {
+      await sleep(1000);
+    }
+  }
 }
 
 export async function registerAffiliate(
