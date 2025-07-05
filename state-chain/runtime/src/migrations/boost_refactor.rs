@@ -135,6 +135,8 @@ struct PreUpgradeData {
 	boost_balances: BTreeMap<AccountId, ScaledAmount>,
 }
 
+// Migrating BoostStatus here because the migration collides with the
+// `CcmAdditionalDataToCheckedMigration` migration.
 fn migrate_boost_status<AccountId, BlockNumber>(
 	status: old::BoostStatus<AccountId, BlockNumber>,
 ) -> pallet_cf_ingress_egress::BoostStatus<AccountId, BlockNumber> {

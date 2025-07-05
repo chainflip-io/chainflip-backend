@@ -29,4 +29,5 @@ pub type PalletMigration<T, I> = (
 		<T as frame_system::Config>::DbWeight,
 	>,
 	PlaceholderMigration<24, Pallet<T, I>>,
+	/* a migration from 24 to 25 is in state-chain/runtime/src/migrations/boost_refactor.rs */
 );
