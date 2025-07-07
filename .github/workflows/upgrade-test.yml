@@ -190,7 +190,7 @@ jobs:
           ./commands/force_sol_nonces.ts
           ./commands/set_sol_alt.ts
 
-        # TODO: This is a temporary workaround to do the initial price feed setup. Remove after 1.10 is released.
+        # TODO: This is a temporary workaround to do the initial price feed setup. Remove after 1.11 is released.
       - name: Setup price feeds
         if: inputs.run-job
         run: |
