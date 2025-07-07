@@ -11,6 +11,7 @@ import {
   newAssetAddress,
   createStateChainKeypair,
   chainFromAsset,
+  runWithTimeout,
 } from 'shared/utils';
 import { send } from 'shared/send';
 import { depositLiquidity } from 'shared/deposit_liquidity';
@@ -109,7 +110,7 @@ async function testBoostingForAsset(
   );
 
   const boostPoolDetails = (
-    (await jsonRpc(logger, 'cf_boost_pool_details', [Assets.Btc.toUpperCase()])) as any
+    (await jsonRpc(logger, 'cf_boost_pool_details', [asset.toUpperCase()])) as any
   )[0];
   assert.strictEqual(boostPoolDetails.fee_tier, boostFee, 'Unexpected lowest fee tier');
   assert.strictEqual(
@@ -136,34 +137,72 @@ async function testBoostingForAsset(
     boostFee,
   );
 
+  let first = true;
   const observeDepositFinalised = observeEvent(
     logger,
     `${chainFromAsset(asset).toLowerCase()}IngressEgress:DepositFinalised`,
     {
       test: (event) => event.data.channelId === swapRequest.channelId.toString(),
     },
-  ).event;
-  const observeSwapBoosted = observeEvent(
-    logger,
-    `${chainFromAsset(asset).toLowerCase()}IngressEgress:DepositBoosted`,
-    {
-      test: (event) => event.data.channelId === swapRequest.channelId.toString(),
-    },
-  ).event;
+  ).event.then((event) => {
+    logger.trace('DepositFinalised event:', JSON.stringify(event));
+    if (first) {
+      throwError(logger, new Error('Received DepositFinalised event before DepositBoosted'));
+    }
+    return event;
+  });
+  function observeBoostEvent(eventName: string) {
+    return observeEvent(
+      logger,
+      `${chainFromAsset(asset).toLowerCase()}IngressEgress:${eventName}`,
+      {
+        test: (event) => event.data.channelId === swapRequest.channelId.toString(),
+      },
+    ).event.then((event) => {
+      logger.trace(`${eventName} event:`, JSON.stringify(event));
+      if (first) {
+        first = false;
+      }
+      return event;
+    });
+  }
+
+  // Boost can fail if there is not enough liquidity in the boost pool, in which case it will emit an
+  // InsufficientBoostLiquidity event.
+  const observeBoostEvents = Promise.race([
+    observeBoostEvent('DepositBoosted'),
+    observeBoostEvent('InsufficientBoostLiquidity'),
+  ])
+    .then((event) => {
+      if (event.name.method === 'InsufficientBoostLiquidity') {
+        throwError(
+          logger,
+          new Error(`Insufficient boost liquidity for swap: ${event.data.channelId}`),
+        );
+      }
+      return event;
+    })
+    .catch((error) => {
+      logger.error('Error while waiting for boost events:', error);
+      throw error;
+    });
 
   await send(logger, asset, swapRequest.depositAddress, amount.toString());
   logger.debug(`Sent ${amount} ${asset} to ${swapRequest.depositAddress}`);
 
   // Check that the swap was boosted
-  const depositEvent = await Promise.race([observeSwapBoosted, observeDepositFinalised]);
-  if (depositEvent.name.method === 'DepositFinalised') {
-    throwError(logger, new Error('Deposit was finalised without seeing the DepositBoosted event'));
-  } else if (depositEvent.name.method !== 'DepositBoosted') {
-    throwError(logger, new Error(`Unexpected event ${depositEvent.name.method}`));
-  }
-
-  const depositFinalisedEvent = await observeDepositFinalised;
-  logger.trace('DepositFinalised event:', JSON.stringify(depositFinalisedEvent));
+  const boostEvent = await Promise.race([observeBoostEvents, observeDepositFinalised]);
+  assert.strictEqual(
+    boostEvent.name.method,
+    'DepositBoosted',
+    'Expected DepositBoosted event, but got ' + boostEvent.name.method,
+  );
+  await runWithTimeout(
+    observeDepositFinalised,
+    60,
+    logger,
+    'Waiting for DepositFinalised event after boosting swap',
+  );
 
   // Stop boosting
   const stoppedBoostingEvent = await stopBoosting(logger, asset, boostFee, lpUri)!;

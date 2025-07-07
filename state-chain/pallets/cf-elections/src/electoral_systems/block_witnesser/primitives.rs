@@ -31,7 +31,7 @@ use super::state_machine::{BWElectionType, BWTypes, EngineElectionType};
 
 defx! {
 	#[derive(GenericTypeInfo)]
-	#[expand_name_with(T::Chain::NAME)]
+	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
 	pub struct ElectionTracker[T: BWTypes] {
 		/// The lowest block we haven't seen yet. I.e., we have seen blocks below.
 		pub seen_heights_below: ChainBlockNumberOf<T::Chain>,
@@ -533,7 +533,7 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 
 def_derive! {
 	#[derive(GenericTypeInfo)]
-	#[expand_name_with(T::Chain::NAME)]
+	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct OptimisticBlock<T: BWTypes> {
 		pub hash: <T::Chain as ChainTypes>::ChainBlockHash,
