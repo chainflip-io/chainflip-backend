@@ -362,6 +362,11 @@ pub mod pallet {
 	pub type ManagedValidators<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, T::AccountId, OptionQuery>;
 
+	/// Maps an validator to an operator.
+	#[pallet::storage]
+	pub type ClaimedValidators<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, T::AccountId, OptionQuery>;
+
 	/// Maps an operator account to it's parameters.
 	#[pallet::storage]
 	#[pallet::getter(fn operator_parameters)]
@@ -402,6 +407,8 @@ pub mod pallet {
 		DelegatorAllowed { delegator: T::AccountId, operator: T::AccountId },
 		/// A delegator has been disallowed from delegating to an operator.
 		DelegatorDisallowed { delegator: T::AccountId, operator: T::AccountId },
+		/// A validator has been claimed by an operator.
+		ValidatorClaimed { validator: T::AccountId, operator: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -452,6 +459,8 @@ pub mod pallet {
 		StillAssociatedWithValidators,
 		/// Operator is still delegating to delegators.
 		StillAssociatedWithDelegators,
+		NotClaimed,
+		OperatorDoesNotMatch,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -843,36 +852,45 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(12)]
+		#[pallet::call_index(10)]
 		#[pallet::weight(0)]
 		pub fn claim_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
-			// TODO: For now a validator can just be added. In the future we need a sig-up and
-			// sig-off process where the validator actively accepts during the sig-up process.
 			ensure!(
 				!ManagedValidators::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyAssociatedWithOperator
 			);
+			ClaimedValidators::<T>::insert(&validator_id, &operator_id);
+			Self::deposit_event(Event::ValidatorClaimed {
+				validator: validator_id,
+				operator: operator_id,
+			});
+			Ok(())
+		}
+
+		#[pallet::call_index(11)]
+		#[pallet::weight(0)]
+		pub fn accept_operator(origin: OriginFor<T>, operator_id: T::AccountId) -> DispatchResult {
+			let validator_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+			let expected_operator =
+				ClaimedValidators::<T>::take(&validator_id).ok_or(Error::<T>::NotClaimed)?;
+			ensure!(expected_operator == operator_id, Error::<T>::OperatorDoesNotMatch);
 			ManagedValidators::<T>::insert(validator_id, operator_id);
 			Ok(())
 		}
 
-		#[pallet::call_index(13)]
+		#[pallet::call_index(12)]
 		#[pallet::weight(0)]
 		pub fn remove_validator(origin: OriginFor<T>, validator: T::AccountId) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_operator(origin)?;
-
 			let operator =
 				ManagedValidators::<T>::get(&validator).ok_or(Error::<T>::ValidatorDoesNotExist)?;
-
 			ensure!(account_id == operator || account_id == validator, Error::<T>::NotAuthorized);
-
 			ManagedValidators::<T>::remove(validator);
-
 			Ok(())
 		}
 
-		#[pallet::call_index(14)]
+		#[pallet::call_index(13)]
 		#[pallet::weight(0)]
 		pub fn set_delegation_preferences(
 			origin: OriginFor<T>,
@@ -883,7 +901,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(17)]
+		#[pallet::call_index(14)]
 		#[pallet::weight(0)]
 		pub fn block_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
@@ -899,7 +917,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(18)]
+		#[pallet::call_index(15)]
 		#[pallet::weight(0)]
 		pub fn unblock_delegator(
 			origin: OriginFor<T>,
@@ -918,7 +936,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(19)]
+		#[pallet::call_index(16)]
 		#[pallet::weight(0)]
 		pub fn allow_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
@@ -934,7 +952,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(20)]
+		#[pallet::call_index(17)]
 		#[pallet::weight(0)]
 		pub fn disallow_delegator(
 			origin: OriginFor<T>,
@@ -953,7 +971,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(21)]
+		#[pallet::call_index(18)]
 		#[pallet::weight(0)]
 		pub fn register_as_operator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
@@ -961,7 +979,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(22)]
+		#[pallet::call_index(19)]
 		#[pallet::weight(0)]
 		pub fn deregister_as_operator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_operator(origin)?;
@@ -969,10 +987,6 @@ pub mod pallet {
 			ensure!(
 				Self::get_all_validators_by_operator(&account_id).is_empty(),
 				Error::<T>::StillAssociatedWithValidators
-			);
-			ensure!(
-				Self::get_all_delegators_by_operator(&account_id).is_empty(),
-				Error::<T>::StillAssociatedWithDelegators
 			);
 
 			T::AccountRoleRegistry::deregister_as_operator(&account_id)?;
