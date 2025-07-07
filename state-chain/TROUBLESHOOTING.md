@@ -13,7 +13,7 @@ As of yet there is no real structure - this isn't intended to be a document to r
 First, download and install the [`try-runtime-cli`](https://paritytech.github.io/try-runtime-cli/try_runtime/). This guide was written against try-runtime-cli v0.8.0:
 
 ```bash copy
-cargo +stable install --git https://github.com/paritytech/try-runtime-cli --tag v0.8.0
+cargo +stable install --git https://github.com/paritytech/try-runtime-cli --tag v0.8.0 --locked
 ```
 
 You need to build the runtime with `try-runtime` enabled.
@@ -37,7 +37,7 @@ For fatser executions, you can create a snapshot of a live node state:
 try-runtime create-snapshot --uri wss://archive.perseverance.chainflip.io:443 /tmp/perseverance_state.snap
 ```
 
-then run try-runtime against the sanpshot:
+then run try-runtime against the snapshot:
 
 ```bash copy
 try-runtime \
