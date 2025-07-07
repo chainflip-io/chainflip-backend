@@ -37,9 +37,8 @@ pub trait StatemachineElectoralSystemTypes: 'static + Sized {
 /// Convenience wrapper of the `Statemachine` trait. Given an electoral system `ES`,
 /// this trait defines the conditions on the state machine's associated types for it
 /// to be possible to derive an electoral system.
-pub trait StatemachineForES<ES: StatemachineElectoralSystemTypes> = Statemachine<
-	Output = Result<ES::OnFinalizeReturnItem, &'static str>,
->;
+pub trait StatemachineForES<ES: StatemachineElectoralSystemTypes> =
+	Statemachine<Output = Result<ES::OnFinalizeReturnItem, &'static str>>;
 
 /// Convenience wrapper of the `ConsensusMechanism` trait. Given an electoral system `ES`,
 /// this trait defines the conditions on the consensus mechanism's associated types for it

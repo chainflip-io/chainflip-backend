@@ -1,3 +1,4 @@
+use cf_chains::sol::SolAddress;
 use cf_traits::Chainflip;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
@@ -8,27 +9,22 @@ use pallet_cf_elections::{
 			tuple_1_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
 		},
-		oracle_price::{
-			consensus::OraclePriceConsensus,
-			primitives::*,
-			state_machine::*,
-		},
+		oracle_price::{consensus::OraclePriceConsensus, primitives::*, state_machine::*},
 		state_machine::{
 			common_imports::*,
-			core::{Hook, def_derive},
+			core::{def_derive, Hook},
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 	},
 	vote_storage, CorruptStorageError, ElectionIdentifierOf, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };
-use cf_chains::sol::SolAddress;
 use sol_prim::consts::const_address;
 
 use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
-use sp_std::vec::Vec;
+use sp_std::{vec, vec::Vec};
 
-def_derive!{
+def_derive! {
 	#[derive(TypeInfo)]
 	pub struct ChainlinkOraclePriceSettings {
 		pub sol_oracle_program_id: SolAddress,

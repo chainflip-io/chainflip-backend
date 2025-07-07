@@ -1,5 +1,5 @@
 // std
-pub use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec::Vec};
+pub use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, vec::Vec};
 
 // substrate
 pub use codec::{Decode, Encode};
