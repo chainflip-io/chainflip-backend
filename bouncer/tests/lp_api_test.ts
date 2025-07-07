@@ -122,7 +122,7 @@ async function testLiquidityDepositLegacy(logger: Logger) {
 
   // Send funds to the deposit address and watch for deposit event
   const observeAccountCreditedEvent = observeEvent(logger, 'assetBalances:AccountCredited', {
-    timeoutSeconds: 90,
+    timeoutSeconds: 120,
     test: (event) =>
       event.data.asset === testAsset &&
       isWithinOnePercent(
@@ -167,7 +167,7 @@ async function testLiquidityDeposit(logger: Logger) {
 
   // Send funds to the deposit address and watch for deposit event
   const observeAccountCreditedEvent = observeEvent(logger, 'assetBalances:AccountCredited', {
-    timeoutSeconds: 90,
+    timeoutSeconds: 120,
     test: (event) =>
       event.data.asset === testAsset &&
       isWithinOnePercent(

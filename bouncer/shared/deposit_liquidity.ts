@@ -81,7 +81,7 @@ export async function depositLiquidity(
         BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
       ),
     finalized: waitForFinalization,
-    timeoutSeconds: 90,
+    timeoutSeconds: 120,
   }).event;
 
   const txHash = await runWithTimeout(

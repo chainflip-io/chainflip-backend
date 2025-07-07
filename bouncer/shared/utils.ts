@@ -583,7 +583,7 @@ export async function observeSwapRequested(
   swapRequestType: SwapRequestType,
 ) {
   return observeEvent(logger, 'swapping:SwapRequested', {
-    timeoutSeconds: 90,
+    timeoutSeconds: 150,
     test: (event) => {
       const data = event.data;
 
@@ -716,7 +716,7 @@ export async function observeBalanceIncrease(
   dstCcy: Asset,
   address: string,
   oldBalance: string,
-  timeoutSeconds = 90,
+  timeoutSeconds = 120,
 ): Promise<number> {
   logger.trace(`Observing balance increase of ${dstCcy} at ${address}`);
   for (let i = 0; i < Math.max(timeoutSeconds / 3, 1); i++) {

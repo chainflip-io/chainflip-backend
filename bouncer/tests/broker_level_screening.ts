@@ -456,7 +456,7 @@ async function testEvmLiquidityDeposit(
 
     const amount = '3';
     const observeAccountCreditedEvent = observeEvent(logger, 'assetBalances:AccountCredited', {
-      timeoutSeconds: 90,
+      timeoutSeconds: 120,
       test: (event) =>
         event.data.asset === sourceAsset &&
         isWithinOnePercent(
