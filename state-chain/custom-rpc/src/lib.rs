@@ -237,7 +237,7 @@ pub enum RpcAccountInfo {
 		estimated_redeemable_balance: NumberOrHex,
 	},
 	Operator {
-		managed_validators: Vec<AccountId32>,
+		managed_validators: BTreeMap<AccountId32, NumberOrHex>,
 		delegation_preferences: DelegationPreferences,
 		blocked_delegators: Vec<AccountId32>,
 		allowed_delegators: Vec<AccountId32>,
@@ -316,7 +316,11 @@ impl RpcAccountInfo {
 
 	fn operator(info: OperatorInfo) -> Self {
 		Self::Operator {
-			managed_validators: info.managed_validators,
+			managed_validators: info
+				.managed_validators
+				.into_iter()
+				.map(|(account_id, amount)| (account_id, amount.into()))
+				.collect(),
 			delegation_preferences: info.delegation_preferences,
 			blocked_delegators: info.blocked_delegators,
 			allowed_delegators: info.allowed_delegators,

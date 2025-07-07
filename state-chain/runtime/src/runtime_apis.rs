@@ -150,7 +150,7 @@ pub struct ValidatorInfo {
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct OperatorInfo {
-	pub managed_validators: Vec<AccountId32>,
+	pub managed_validators: BTreeMap<AccountId32, AssetAmount>,
 	pub delegation_preferences: DelegationPreferences,
 	pub blocked_delegators: Vec<AccountId32>,
 	pub allowed_delegators: Vec<AccountId32>,

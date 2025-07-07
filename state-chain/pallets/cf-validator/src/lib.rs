@@ -1505,11 +1505,14 @@ impl<T: Config> Pallet<T> {
 			frame_system::Pallet::<T>::current_block_number()
 	}
 
-	pub fn get_all_validators_by_operator(operator: &T::AccountId) -> Vec<T::AccountId> {
-		let mut validators = Vec::new();
+	pub fn get_all_validators_by_operator(
+		operator: &T::AccountId,
+	) -> BTreeMap<T::AccountId, T::Amount> {
+		let mut validators: BTreeMap<T::AccountId, T::Amount> = BTreeMap::new();
 		for (validator, operator_id) in ManagedValidators::<T>::iter() {
 			if operator_id == *operator {
-				validators.push(validator);
+				let balance = T::FundingInfo::total_balance_of(&validator);
+				validators.insert(validator, balance);
 			}
 		}
 		validators
