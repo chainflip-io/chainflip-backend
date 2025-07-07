@@ -3,6 +3,7 @@ use crate::electoral_systems::{
 	oracle_price::primitives::{Aggregation, Apply, Seconds, UnixTime},
 	state_machine::common_imports::*,
 };
+use core::ops::RangeInclusive;
 use enum_iterator::{all, Sequence};
 use itertools::{Either, Itertools};
 
@@ -10,7 +11,9 @@ use crate::electoral_systems::state_machine::state_machine::{AbstractApi, Statem
 use sp_std::ops::{Add, Index, IndexMut};
 
 pub trait OPTypes: 'static + Sized + CommonTraits {
-	type Price: CommonTraits + Ord;
+	type Price: CommonTraits + Ord + Default;
+
+	fn price_range(price: &Self::Price, range: BasisPoints) -> RangeInclusive<Self::Price>;
 
 	type Asset: CommonTraits + Ord + Sequence;
 
@@ -64,8 +67,10 @@ def_derive! {
 	#[derive(TypeInfo)]
 	pub struct ExternalChainState<T: OPTypes> {
 		pub block: ExternalChainBlockQueried,
-		pub timestamp: Apply<T::Aggregation, UnixTime>,
-		pub price: BTreeMap<T::Asset, Apply<T::Aggregation, T::Price>>,
+		pub price: BTreeMap<T::Asset, (
+			Apply<T::Aggregation, UnixTime>,
+			Apply<T::Aggregation, T::Price>
+		)>,
 	}
 }
 
@@ -73,8 +78,28 @@ def_derive! {
 	#[derive(TypeInfo)]
 	pub struct ExternalChainStateVote<T: OPTypes> {
 		pub block: ExternalChainBlockQueried,
-		pub timestamp: UnixTime,
-		pub price: BTreeMap<T::Asset, T::Price>,
+		pub price: BTreeMap<T::Asset, (UnixTime, T::Price)>,
+	}
+}
+
+impl<T: OPTypes> ExternalChainStateVote<T> {
+	pub fn should_submit(&self, query: QueryType<T>) -> bool {
+		match query {
+			QueryType::LatestPrice => true,
+			QueryType::OnPriceDeviation { last_block, last_price, minimal_deviation } =>
+				self.block > last_block &&
+					self.price.iter().any(|(asset, (timestamp, price))| {
+						last_price
+							.get(asset)
+							.map(|(last_timestamp, last_price)| {
+								timestamp > last_timestamp &&
+									!T::price_range(last_price, minimal_deviation)
+										.contains(price)
+							})
+							.unwrap_or(true)
+					}),
+			QueryType::OnUpdate { last_block } => self.block > last_block,
+		}
 	}
 }
 
@@ -84,10 +109,16 @@ impl<T: OPTypes> ExternalChainState<T> {
 		current_time: &UnixTime,
 		settings: &ExternalChainSettings,
 	) -> PriceStatus {
-		use PriceStatus::*;
-		let up_to_date_until =
-			T::Aggregation::canonical(&self.timestamp) + settings.up_to_date_timeout;
+		let oldest_timestamp = self
+			.price
+			.iter()
+			.map(|(_, (timestamp, _))| T::Aggregation::canonical(timestamp))
+			.min()
+			.unwrap_or(Default::default());
+		let up_to_date_until = oldest_timestamp + settings.up_to_date_timeout;
 		let maybe_stale_until = up_to_date_until.clone() + settings.maybe_stale_timeout;
+
+		use PriceStatus::*;
 		if *current_time <= up_to_date_until {
 			UpToDate
 		} else if *current_time <= maybe_stale_until {
@@ -110,7 +141,15 @@ impl<T: OPTypes> ExternalChainState<T> {
 				last_price: self
 					.price
 					.iter()
-					.map(|(asset, price)| (asset.clone(), T::Aggregation::canonical(price)))
+					.map(|(asset, (timestamp, price))| {
+						(
+							asset.clone(),
+							(
+								T::Aggregation::canonical(timestamp),
+								T::Aggregation::canonical(price),
+							),
+						)
+					})
 					.collect(),
 				minimal_deviation: settings.minimal_price_deviation.clone(),
 			},
@@ -120,11 +159,16 @@ impl<T: OPTypes> ExternalChainState<T> {
 	}
 
 	pub fn update(&mut self, response: ExternalChainState<T>) {
-		if T::Aggregation::canonical(&response.timestamp) >
-			T::Aggregation::canonical(&self.timestamp) &&
-			response.block > self.block
-		{
-			*self = response;
+		if response.block > self.block {
+			for (asset, (new_timestamp, new_price)) in response.price {
+				let entry = self.price.entry(asset).or_insert((
+					T::Aggregation::single(&Default::default()),
+					T::Aggregation::single(&Default::default()),
+				));
+				if T::Aggregation::canonical(&new_timestamp) > T::Aggregation::canonical(&entry.0) {
+					*entry = (new_timestamp, new_price);
+				}
+			}
 		}
 	}
 }
@@ -191,7 +235,7 @@ def_derive! {
 		LatestPrice,
 		OnPriceDeviation {
 			last_block: ExternalChainBlockQueried,
-			last_price: BTreeMap<T::Asset, T::Price>,
+			last_price: BTreeMap<T::Asset, (UnixTime, T::Price)>,
 			minimal_deviation: BasisPoints
 		},
 		OnUpdate {
@@ -234,7 +278,7 @@ impl Index<ExternalPriceChain> for OraclePriceSettings {
 }
 
 def_derive! {
-	#[derive(TypeInfo)]
+	#[derive(TypeInfo, Copy)]
 	pub struct BasisPoints(pub u16);
 }
 

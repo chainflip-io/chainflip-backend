@@ -110,7 +110,7 @@ where
 
 	let start_eth = super::eth::start(
 		scope,
-		eth_client,
+		eth_client.clone(),
 		witness_call.clone(),
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
@@ -153,7 +153,7 @@ where
 	);
 
 	let start_generic_elections =
-		super::generic_elections::start(scope, sol_client, state_chain_client);
+		super::generic_elections::start(scope, sol_client, eth_client, state_chain_client);
 
 	try_join!(
 		start_eth,

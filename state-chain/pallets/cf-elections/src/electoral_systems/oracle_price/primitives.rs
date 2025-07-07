@@ -18,13 +18,14 @@ def_derive! {
 }
 
 def_derive! {
+	#[derive(Default)]
 	pub struct Price {
 		pub value: i128,
 	}
 }
 
 def_derive! {
-	#[derive(TypeInfo, PartialOrd, Ord)]
+	#[derive(TypeInfo, PartialOrd, Ord, Default)]
 	pub struct UnixTime{ pub seconds: u64 }
 }
 
