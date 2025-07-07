@@ -16,8 +16,6 @@ use crate::electoral_systems::{
 #[derive_where(Default; )]
 pub struct OraclePriceConsensus<T: OPTypes> {
 	votes: Vec<ExternalChainStateVote<T>>,
-	// blocks: Vec<ExternalChainBlockQueried>,
-	// timestamps: AggregatedConsensus<T::Aggregation, UnixTime, PriceQuery<T>>,
 }
 
 impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
@@ -30,7 +28,7 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 	}
 
 	fn check_consensus(&self, (threshold, query): &Self::Settings) -> Option<Self::Result> {
-		if self.votes.len() > threshold.success_threshold as usize {
+		if self.votes.len() >= threshold.success_threshold as usize {
 			let block = compute_median(
 				self.votes
 					.iter()
@@ -39,24 +37,33 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 					.collect(),
 			)?;
 
-			let timestamp = T::Aggregation::compute(
-				&self.votes.iter().map(|vote| vote.timestamp.clone()).collect::<Vec<_>>(),
-			)?;
-
 			Some(ExternalChainState {
 				block,
-				timestamp,
 				price: all::<T::Asset>()
 					.filter_map(|asset| {
-						T::Aggregation::compute(
-							&self
-								.votes
-								.iter()
-								.filter_map(|vote| vote.price.get(&asset))
-								.cloned()
-								.collect::<Vec<_>>(),
-						)
-						.map(|aggregate| (asset.clone(), aggregate))
+						Some((
+							asset.clone(),
+							(
+								T::Aggregation::compute(
+									&self
+										.votes
+										.iter()
+										.filter_map(|vote| vote.price.get(&asset))
+										.map(|(timestamp, _price)| timestamp)
+										.cloned()
+										.collect::<Vec<_>>(),
+								)?,
+								T::Aggregation::compute(
+									&self
+										.votes
+										.iter()
+										.filter_map(|vote| vote.price.get(&asset))
+										.map(|(_timestamp, price)| price)
+										.cloned()
+										.collect::<Vec<_>>(),
+								)?,
+							),
+						))
 					})
 					.collect(),
 			})
@@ -66,13 +73,17 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 	}
 
 	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result {
-		let ExternalChainStateVote { block, timestamp, price } = vote;
+		let ExternalChainStateVote { block, price } = vote;
 		ExternalChainState {
 			block: block.clone(),
-			timestamp: T::Aggregation::single(timestamp),
 			price: price
 				.into_iter()
-				.map(|(asset, price)| (asset.clone(), T::Aggregation::single(price)))
+				.map(|(asset, (timestamp, price))| {
+					(
+						asset.clone(),
+						(T::Aggregation::single(timestamp), T::Aggregation::single(price)),
+					)
+				})
 				.collect(),
 		}
 	}

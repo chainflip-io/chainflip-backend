@@ -1,3 +1,5 @@
+use core::ops::RangeInclusive;
+
 use cf_chains::sol::SolAddress;
 use cf_traits::Chainflip;
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -20,6 +22,7 @@ use pallet_cf_elections::{
 	RunnerStorageAccess,
 };
 use sol_prim::consts::const_address;
+use sp_core::H160;
 
 use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
 use sp_std::{vec, vec::Vec};
@@ -30,6 +33,8 @@ def_derive! {
 		pub sol_oracle_program_id: SolAddress,
 		pub sol_oracle_feeds: Vec<SolAddress>,
 		pub sol_oracle_query_helper: SolAddress,
+		pub eth_contract_address: H160,
+		pub eth_oracle_feeds: Vec<H160>
 	}
 }
 
@@ -43,6 +48,17 @@ impls! {
 		type GetTime = Self;
 		type Asset = ChainlinkAssetPair;
 		type Aggregation = AggregatedF;
+
+		fn price_range(price: &Self::Price, range: BasisPoints) -> RangeInclusive<Self::Price> {
+			// TODO: proper math
+			(
+			(*price as f64 / 100_000_000.0)*(1.0 - (range.0 as f64 / 10_000.0))
+			) as i128
+			..=
+			(
+			(*price as f64 / 100_000_000.0)*(1.0 + (range.0 as f64 / 10_000.0))
+			) as i128
+		}
 	}
 
 	Hook<HookTypeFor<Self, GetTimeHook>> {
@@ -99,18 +115,10 @@ pub fn initial_state() -> InitialStateOf<Runtime, ()> {
 			chain_states: ExternalChainStates {
 				solana: ExternalChainState {
 					block: ExternalChainBlockQueried::Solana(0),
-					timestamp: Aggregated {
-						median: UnixTime { seconds: 0 },
-						iq_range: UnixTime { seconds: 0 }..=UnixTime { seconds: 0 },
-					},
 					price: Default::default(),
 				},
 				ethereum: ExternalChainState {
 					block: ExternalChainBlockQueried::Ethereum(0),
-					timestamp: Aggregated {
-						median: UnixTime { seconds: 0 },
-						iq_range: UnixTime { seconds: 0 }..=UnixTime { seconds: 0 },
-					},
 					price: Default::default(),
 				},
 			},
@@ -134,6 +142,12 @@ pub fn initial_state() -> InitialStateOf<Runtime, ()> {
 			sol_oracle_program_id: const_address("DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X"),
 			sol_oracle_feeds: vec![const_address("HDSV2wFxmsrmCwwY34QzaVkvmJpG7VF8S9fX2iThynjG")],
 			sol_oracle_query_helper: const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z"),
+			eth_contract_address: H160(hex_literal::hex!(
+				"e7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+			)),
+			eth_oracle_feeds: vec![H160(hex_literal::hex!(
+				"322813Fd9A801c5507c9de605d63CEA4f2CE6c44"
+			))],
 		},),
 		shared_data_reference_lifetime: 8,
 	}

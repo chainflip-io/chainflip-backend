@@ -32,7 +32,7 @@ use pallet_cf_elections::{
 			primitives::UnixTime,
 			state_machine::{
 				ExternalChainBlockQueried, ExternalChainState, ExternalChainStateVote,
-				ExternalChainStates,
+				ExternalChainStates, ExternalPriceChain,
 			},
 		},
 	},
@@ -45,6 +45,10 @@ use state_chain_runtime::chainflip::generic_elections::*;
 use crate::{
 	btc::rpc::BlockHeader,
 	elections::voter_api::{CompositeVoter, VoterApi},
+	evm::{
+		retry_rpc::{address_checker::AddressCheckerRetryRpcApi, EvmRetryRpcClient},
+		rpc::{address_checker::PriceFeedData as EthPriceFeedData, EvmRpcSigningClient},
+	},
 	sol::retry_rpc::SolRetryRpcClient,
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
@@ -57,6 +61,7 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use pallet_cf_elections::electoral_systems::oracle_price::primitives::ChainlinkAssetPair;
+use sol_prim::program_instructions::PriceFeedData as SolPriceFeedData;
 
 /// IMPORTANT: These strings have to match with the price feed "description" as returned by
 /// chainlink.
@@ -72,6 +77,39 @@ pub fn asset_pair_from_description(description: String) -> Option<ChainlinkAsset
 #[derive(Clone)]
 struct OraclePriceVoter {
 	sol_client: SolRetryRpcClient,
+	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
+}
+
+struct PriceData {
+	pub description: String,
+	pub answer: i128,
+	pub timestamp: UnixTime,
+}
+
+impl From<SolPriceFeedData> for PriceData {
+	fn from(value: SolPriceFeedData) -> Self {
+		let SolPriceFeedData { round_id, slot, timestamp, answer, decimals, description } = value;
+		Self { description, answer, timestamp: UnixTime { seconds: timestamp as u64 } }
+	}
+}
+
+impl From<EthPriceFeedData> for PriceData {
+	fn from(value: EthPriceFeedData) -> Self {
+		let EthPriceFeedData {
+			round_id,
+			answer,
+			started_at,
+			updated_at,
+			answered_in_round,
+			decimals,
+			description,
+		} = value;
+		Self {
+			description,
+			answer: answer.try_into().unwrap(),
+			timestamp: UnixTime { seconds: updated_at.try_into().unwrap() },
+		}
+	}
 }
 
 #[async_trait::async_trait]
@@ -83,14 +121,35 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 	) -> Result<Option<VoteOf<OraclePriceES>>, anyhow::Error> {
 		tracing::info!("Voting for oracle price, properties: {properties:?}");
 
-		let (price_feeds, query_timestamp, query_slot) = get_price_feeds(
-			&self.sol_client,
-			settings.sol_oracle_query_helper.clone(),
-			settings.sol_oracle_program_id.clone(),
-			settings.sol_oracle_feeds.clone(),
-			None,
-		)
-		.await?;
+		let (price_feeds, block) = match properties.chain {
+			ExternalPriceChain::Solana => {
+				let (price_feeds, _, query_slot) = get_price_feeds(
+					&self.sol_client,
+					settings.sol_oracle_query_helper.clone(),
+					settings.sol_oracle_program_id.clone(),
+					settings.sol_oracle_feeds.clone(),
+					None,
+				)
+				.await?;
+				(
+					price_feeds.into_iter().map(Into::into).collect::<Vec<PriceData>>(),
+					ExternalChainBlockQueried::Solana(query_slot),
+				)
+			},
+			ExternalPriceChain::Ethereum => {
+				let (block, _, price_feeds) = self
+					.eth_client
+					.query_price_feeds(
+						settings.eth_contract_address.clone(),
+						settings.eth_oracle_feeds.clone(),
+					)
+					.await;
+				(
+					price_feeds.into_iter().map(Into::into).collect(),
+					ExternalChainBlockQueried::Ethereum(block.try_into().unwrap()),
+				)
+			},
+		};
 
 		let prices = price_feeds
 			.into_iter()
@@ -98,7 +157,7 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 				if let Some(asset_pair) =
 					asset_pair_from_description(price_data.description.clone())
 				{
-					Some((asset_pair, price_data.answer))
+					Some((asset_pair, (price_data.timestamp, price_data.answer)))
 				} else {
 					tracing::info!(
 						"Got price data with unknown description: {:?}",
@@ -109,15 +168,16 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 			})
 			.collect();
 
-		let result = ExternalChainStateVote {
-			block: ExternalChainBlockQueried::Solana(query_slot),
-			timestamp: UnixTime { seconds: query_timestamp as u64 },
-			price: prices,
-		};
+		let result = ExternalChainStateVote { block, price: prices };
 
-		tracing::info!("Got the following oracle result: {result:?}");
-
-		Ok(Some(result))
+		tracing::info!("For election properties: {properties:?}");
+		Ok(if result.should_submit(properties.query_type) {
+			tracing::info!("Submitting the following oracle result: {result:?}");
+			Some(result)
+		} else {
+			tracing::info!("Skipping the following oracle result: {result:?}");
+			None
+		})
 	}
 }
 
@@ -125,6 +185,7 @@ use std::sync::Arc;
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	sol_client: SolRetryRpcClient,
+	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
 ) -> Result<()>
 where
@@ -140,6 +201,7 @@ where
 					state_chain_client,
 					CompositeVoter::<GenericElectoralSystemRunner, _>::new((OraclePriceVoter {
 						sol_client: sol_client.clone(),
+						eth_client: eth_client.clone(),
 					},)),
 					None,
 					"GenericElections",
