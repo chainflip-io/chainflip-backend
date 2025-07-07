@@ -9,16 +9,15 @@ import {
   getContractAddress,
   decodeDotAddressForContract,
   defaultAssetAmounts,
-  amountToFineAmount,
   chainFromAsset,
   getEvmEndpoint,
-  assetDecimals,
   chainContractId,
   assetContractId,
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
   createEvmWalletAndFund,
+  amountToFineAmountBigInt,
 } from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { getCFTesterAbi } from 'shared/contract_interfaces';
@@ -105,9 +104,7 @@ async function testTxMultipleVaultSwaps(
   const cfTesterAddress = getContractAddress(chainFromAsset(sourceAsset), 'CFTESTER');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cfTesterContract = new web3.eth.Contract(cfTesterAbi as any, cfTesterAddress);
-  const amount = BigInt(
-    amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset)),
-  );
+  const amount = amountToFineAmountBigInt(defaultAssetAmounts(sourceAsset), sourceAsset);
 
   const numSwaps = 2;
   const txData = cfTesterContract.methods
@@ -181,7 +178,7 @@ async function testDoubleDeposit(parentLogger: Logger, sourceAsset: Asset, destA
       SwapRequestType.Regular,
     );
 
-    await send(logger, sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
+    await send(logger, sourceAsset, swapParams.depositAddress);
     await swapRequestedHandle;
   }
 
@@ -195,7 +192,7 @@ async function testDoubleDeposit(parentLogger: Logger, sourceAsset: Asset, destA
     SwapRequestType.Regular,
   );
 
-  await send(logger, sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
+  await send(logger, sourceAsset, swapParams.depositAddress);
   await swapRequestedHandle;
 }
 
@@ -261,7 +258,7 @@ async function testEvmLegacyCfParametersVaultSwap(parentLogger: Logger) {
       },
     ).event;
 
-    // The swap will be redunded because the mainnet broker doesn't match the testnet broker
+    // The swap will be refunded because the mainnet broker doesn't match the testnet broker
     // but the swap is observed correctly.
     const unknownBrokerEvent = vaultSwapDetails.broker
       ? observeEvent(

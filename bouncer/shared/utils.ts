@@ -658,7 +658,7 @@ export function chainFromAsset(asset: Asset): Chain {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
-// Returns an address that can hold an asset at can be used as a destination
+// Returns an address that can hold an asset and can be used as a destination
 // address of a swap or a refund address. If it's a CCM swap or refund, the
 // returned address is a valid CCM receiver.
 export async function newAssetAddress(
