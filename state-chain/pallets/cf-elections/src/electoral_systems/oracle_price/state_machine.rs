@@ -303,3 +303,9 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 		Ok(())
 	}
 }
+
+//-------------- partial voter implementation -----------
+//
+// The voter needs access to some RPC to query for data.
+//
+// What would actually be nice is if we could
