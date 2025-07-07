@@ -22,6 +22,8 @@ use ethers::types::Bloom;
 use super::super::common::chunked_chain_source::chunked_by_time::chain_tracking::GetTrackedData;
 use ethers::types::H256;
 
+const FEE_HISTORY_WINDOW: u64 = 5;
+
 #[async_trait::async_trait]
 impl<T: EvmRetryRpcApi + Send + Sync + Clone> GetTrackedData<cf_chains::Ethereum, H256, Bloom>
 	for T
@@ -34,9 +36,13 @@ impl<T: EvmRetryRpcApi + Send + Sync + Clone> GetTrackedData<cf_chains::Ethereum
 		// base fee. Then we take the lowest priority fee, which is not limited,
 		// to protect against upward spikes in the priority fee. We only take the last 2 blocks so
 		// we don't lag too much.
-		const PRIORITY_FEE_PERCENTILE: f64 = 70.0;
+		const PRIORITY_FEE_PERCENTILE: f64 = 50.0;
 		let fee_history = self
-			.fee_history(2u64.into(), header.index.into(), vec![PRIORITY_FEE_PERCENTILE])
+			.fee_history(
+				FEE_HISTORY_WINDOW.into(),
+				header.index.into(),
+				vec![PRIORITY_FEE_PERCENTILE],
+			)
 			.await;
 
 		Ok(EthereumTrackedData {
