@@ -347,13 +347,11 @@ pub mod pallet {
 
 	/// Maps an operator account to it's allowed delegators.
 	#[pallet::storage]
-	#[pallet::getter(fn allowed_delegators)]
 	pub type AllowedDelegators<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
 	/// Maps an operator account to it's blocked delegators.
 	#[pallet::storage]
-	#[pallet::getter(fn blocked_delegators)]
 	pub type BlockedDelegators<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
@@ -369,7 +367,6 @@ pub mod pallet {
 
 	/// Maps an operator account to it's parameters.
 	#[pallet::storage]
-	#[pallet::getter(fn operator_parameters)]
 	pub type OperatorParameters<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, DelegationPreferences, OptionQuery>;
 
