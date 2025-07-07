@@ -398,12 +398,8 @@ pub mod pallet {
 		PreviousRotationStillPending,
 		/// A delegator has been blocked from delegating to an operator.
 		DelegatorBlocked { delegator: T::AccountId, operator: T::AccountId },
-		/// A delegator has been unblocked from delegating to an operator.
-		DelegatorUnblocked { delegator: T::AccountId, operator: T::AccountId },
 		/// A delegator has been allowed to delegate to an operator.
 		DelegatorAllowed { delegator: T::AccountId, operator: T::AccountId },
-		/// A delegator has been disallowed from delegating to an operator.
-		DelegatorDisallowed { delegator: T::AccountId, operator: T::AccountId },
 		/// A validator has been claimed by an operator.
 		ValidatorClaimed { validator: T::AccountId, operator: T::AccountId },
 	}
@@ -849,6 +845,9 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Executed by a operator to claim a validator. By calling this extrinics the operator
+		/// signals his wish to manage the validator in his delegated staking pool. The validator
+		/// has to actively accept this invitation by calling the `accept_operator` extrinsic.
 		#[pallet::call_index(10)]
 		#[pallet::weight(0)]
 		pub fn claim_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResult {
@@ -865,21 +864,26 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Executed by a validator to accept an operator's invitation to manage it.
 		#[pallet::call_index(11)]
 		#[pallet::weight(0)]
 		pub fn accept_operator(origin: OriginFor<T>, operator_id: T::AccountId) -> DispatchResult {
 			let validator_id = T::AccountRoleRegistry::ensure_validator(origin)?;
-			let expected_operator =
-				ClaimedValidators::<T>::take(&validator_id).ok_or(Error::<T>::NotClaimed)?;
-			ensure!(expected_operator == operator_id, Error::<T>::OperatorDoesNotMatch);
+			ensure!(
+				ClaimedValidators::<T>::take(&validator_id).ok_or(Error::<T>::NotClaimed)? ==
+					operator_id,
+				Error::<T>::OperatorDoesNotMatch
+			);
 			ManagedValidators::<T>::insert(validator_id, operator_id);
 			Ok(())
 		}
 
+		/// Executed by an operator or an validator to remove itself from the operator's delegation
+		/// pool.
 		#[pallet::call_index(12)]
 		#[pallet::weight(0)]
 		pub fn remove_validator(origin: OriginFor<T>, validator: T::AccountId) -> DispatchResult {
-			let account_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+			let account_id = ensure_signed(origin)?;
 			let operator =
 				ManagedValidators::<T>::get(&validator).ok_or(Error::<T>::ValidatorDoesNotExist)?;
 			ensure!(account_id == operator || account_id == validator, Error::<T>::NotAuthorized);
@@ -887,6 +891,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Executed by an operator to set the delegation preferences for the operator.
 		#[pallet::call_index(13)]
 		#[pallet::weight(0)]
 		pub fn set_delegation_preferences(
@@ -898,10 +903,16 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Executed by an operator to block a delegator from delegating to the operator.
 		#[pallet::call_index(14)]
 		#[pallet::weight(0)]
 		pub fn block_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+
+			AllowedDelegators::<T>::mutate(&operator_id, |delegators| {
+				delegators.remove(&delegator_id);
+			});
+
 			BlockedDelegators::<T>::mutate(&operator_id, |delegators| {
 				delegators.insert(delegator_id.clone());
 			});
@@ -914,31 +925,18 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Executed by an operator to allow a delegator to delegate to the operator.
 		#[pallet::call_index(15)]
-		#[pallet::weight(0)]
-		pub fn unblock_delegator(
-			origin: OriginFor<T>,
-			delegator_id: T::AccountId,
-		) -> DispatchResult {
-			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
-			BlockedDelegators::<T>::mutate(&operator_id, |delegators| {
-				delegators.remove(&delegator_id);
-			});
-
-			Self::deposit_event(Event::DelegatorUnblocked {
-				operator: operator_id,
-				delegator: delegator_id,
-			});
-
-			Ok(())
-		}
-
-		#[pallet::call_index(16)]
 		#[pallet::weight(0)]
 		pub fn allow_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+
 			AllowedDelegators::<T>::mutate(&operator_id, |delegators| {
 				delegators.insert(delegator_id.clone());
+			});
+
+			BlockedDelegators::<T>::mutate(&operator_id, |delegators| {
+				delegators.remove(&delegator_id);
 			});
 
 			Self::deposit_event(Event::DelegatorAllowed {
@@ -949,26 +947,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(17)]
-		#[pallet::weight(0)]
-		pub fn disallow_delegator(
-			origin: OriginFor<T>,
-			delegator_id: T::AccountId,
-		) -> DispatchResult {
-			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
-			AllowedDelegators::<T>::mutate(&operator_id, |delegators| {
-				delegators.remove(&delegator_id.clone());
-			});
-
-			Self::deposit_event(Event::DelegatorDisallowed {
-				operator: operator_id,
-				delegator: delegator_id,
-			});
-
-			Ok(())
-		}
-
-		#[pallet::call_index(18)]
+		/// Executed by an account to register as an operator.
+		#[pallet::call_index(16)]
 		#[pallet::weight(0)]
 		pub fn register_as_operator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
@@ -976,7 +956,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(19)]
+		/// Executed by an operator to deregister as an operator.
+		#[pallet::call_index(17)]
 		#[pallet::weight(0)]
 		pub fn deregister_as_operator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_operator(origin)?;
