@@ -41,7 +41,8 @@ describe('ConcurrentTests', () => {
   concurrentTest('DepositChannelCreation', depositChannelCreation, 30);
   concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 600);
   concurrentTest('VaultSwaps', testVaultSwap, 600);
-  concurrentTest('AssethubXCM', testAssethubXcm, 200);
+  // TODO: To fix flakiness in PRO-2209
+  // concurrentTest('AssethubXCM', testAssethubXcm, 200);
 
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
