@@ -15,11 +15,29 @@ import { getEthScUtilsAbi } from 'shared/contract_interfaces';
 import { approveErc20 } from 'shared/approve_erc20';
 import { newStatechainAddress } from 'shared/new_statechain_address';
 import { observeEvent } from 'shared/utils/substrate';
-import { newCcmMetadata, testSwap } from 'shared/swapping';
-import { performSwap, requestNewSwap } from 'shared/perform_swap';
+import { newCcmMetadata } from 'shared/swapping';
+import { Struct, Enum, Bytes as TsBytes } from 'scale-ts';
+import { hexToU8a, u8aToHex } from '@polkadot/util';
+import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
 
 const cfScUtilsAbi = await getEthScUtilsAbi();
+
+export const ScCallsCodec = Enum({
+  DelegateTo: Struct({
+    operator: TsBytes(32),
+  }),
+  // TODO: add others
+});
+
+function encodeDelegateToScCall(operatorId: string) {
+  return u8aToHex(
+    ScCallsCodec.enc({
+      tag: 'DelegateTo',
+      value: { operator: hexToU8a(operatorId) },
+    }),
+  );
+}
 
 async function testDelegate(parentLogger: Logger) {
   const web3 = new Web3(getEvmEndpoint('Ethereum'));
@@ -34,7 +52,9 @@ async function testDelegate(parentLogger: Logger) {
   console.log('Approved FLIP');
 
   // Encoding dummy
-  const scCall = '0x00f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4';
+  const scCall = encodeDelegateToScCall(
+    '0xf4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4',
+  );
   const txData = cfScUtilsContract.methods
     .depositToScGateway(amount.toString(), scCall)
     .encodeABI();
