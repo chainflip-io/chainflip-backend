@@ -2496,6 +2496,7 @@ pub mod rebalancing {
 pub mod sub_accounts {
 	use super::{utils::*, *};
 	use crate::MinimumFunding;
+	use sp_runtime::traits::Zero;
 
 	#[test]
 	fn cannot_spawn_account_if_parent_account_is_bidding() {
@@ -2571,6 +2572,88 @@ pub mod sub_accounts {
 				BoundExecutorAddress::<Test>::get(&sub_account_id),
 				Some(RESTRICTED_ADDRESS_B)
 			);
+		});
+	}
+
+	#[test]
+	fn cannot_remove_parent_account_before_sub_accounts() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const SUB_ACCT_INDEX: u8 = 0;
+			assert_ok!(setup_test(
+				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None)],
+				vec![]
+			));
+
+			let sub_account_id =
+				Funding::spawn_sub_account(&ALICE, SUB_ACCT_INDEX, MinimumFunding::<Test>::get())
+					.unwrap();
+
+			// Try to redeem all funds from parent account, which should fail
+			// because the parent account has remaining consumers (sub-accounts)
+			assert_noop!(
+				Funding::redeem(
+					RuntimeOrigin::signed(ALICE),
+					RedemptionAmount::Max,
+					H160::from([1; 20]),
+					None
+				),
+				Error::<Test>::AccountHasRemainingConsumers
+			);
+
+			// Verify that parent account still exists and has the expected balance
+			assert!(!Flip::balance(&ALICE).is_zero());
+			assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
+			assert!(frame_system::Pallet::<Test>::account_exists(&sub_account_id));
+
+			// Move funds from the sub-account back to the parent account, removing the sub-account
+			// in the process.
+			assert_ok!(Funding::rebalance(
+				OriginTrait::signed(sub_account_id.clone()),
+				ALICE,
+				None,
+				RedemptionAmount::Max
+			));
+			assert!(!frame_system::Pallet::<Test>::account_exists(&sub_account_id));
+			assert_eq!(Flip::balance(&ALICE), AMOUNT);
+
+			// Now redeem all funds from the parent account, which should succeed.
+			assert_ok!(Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				RedemptionAmount::Max,
+				H160::from([1; 20]),
+				None
+			));
+		});
+	}
+
+	#[test]
+	fn cannot_spawn_sub_account_from_sub_account() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const SUB_ACCT_INDEX: u8 = 0;
+			assert_ok!(setup_test(
+				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None)],
+				vec![]
+			));
+
+			// First, spawn a sub-account from the parent account
+			let sub_account_id =
+				Funding::spawn_sub_account(&ALICE, SUB_ACCT_INDEX, MinimumFunding::<Test>::get())
+					.unwrap();
+
+			// Now try to spawn a sub-account from the sub-account, which should fail
+			assert_noop!(
+				Funding::spawn_sub_account(
+					&sub_account_id,
+					SUB_ACCT_INDEX,
+					MinimumFunding::<Test>::get()
+				),
+				Error::<Test>::CannotSpawnFromSubAccount
+			);
+
+			// Verify that the original sub-account still exists
+			assert!(frame_system::Pallet::<Test>::account_exists(&sub_account_id));
 		});
 	}
 }
