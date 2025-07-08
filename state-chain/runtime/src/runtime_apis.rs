@@ -593,20 +593,14 @@ decl_runtime_apis!(
 decl_runtime_apis!(
 	#[api_version(2)]
 	pub trait ElectoralRuntimeApi {
-		/// Old runtime api used when there were only solana elections. It's still included
-		/// as an alias for now in order to allow nodes on 1.10 to interact with a 1.9 runtime.
-		fn cf_electoral_data(account_id: AccountId32) -> Vec<u8>;
-
-		/// Old runtime api used when there were only solana elections. It's still included
-		/// as an alias for now in order to allow nodes on 1.10 to interact with a 1.9 runtime.
-		fn cf_filter_votes(account_id: AccountId32, proposed_votes: Vec<u8>) -> Vec<u8>;
-
 		/// Returns SCALE encoded `Option<ElectoralDataFor<state_chain_runtime::Runtime,
 		/// Instance>>`
+		#[renamed("cf_electoral_data", 2)]
 		fn cf_solana_electoral_data(account_id: AccountId32) -> Vec<u8>;
 
 		/// Returns SCALE encoded `BTreeSet<ElectionIdentifierOf<<state_chain_runtime::Runtime as
 		/// pallet_cf_elections::Config<Instance>>::ElectoralSystem>>`
+		#[renamed("cf_filter_votes", 2)]
 		fn cf_solana_filter_votes(account_id: AccountId32, proposed_votes: Vec<u8>) -> Vec<u8>;
 
 		fn cf_bitcoin_electoral_data(account_id: AccountId32) -> Vec<u8>;

@@ -1581,18 +1581,6 @@ mod benches {
 
 impl_runtime_apis! {
 	impl runtime_apis::ElectoralRuntimeApi<Block> for Runtime {
-		/// Old runtime api used when there were only solana elections. It's still included
-		/// as an alias for now in order to allow nodes on 1.10 to interact with a 1.9 runtime.
-		fn cf_electoral_data(account_id: AccountId) -> Vec<u8> {
-			Self::cf_solana_electoral_data(account_id)
-		}
-
-		/// Old runtime api used when there were only solana elections. It's still included
-		/// as an alias for now in order to allow nodes on 1.10 to interact with a 1.9 runtime.
-		fn cf_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
-			Self::cf_solana_filter_votes(account_id, proposed_votes)
-		}
-
 		fn cf_solana_electoral_data(account_id: AccountId) -> Vec<u8> {
 			SolanaElections::electoral_data(&account_id).encode()
 		}

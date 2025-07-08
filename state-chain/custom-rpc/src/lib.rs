@@ -1910,9 +1910,8 @@ where
 		validator: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
-		self.rpc_backend.with_runtime_api(at, |api, hash| {
-			api.cf_bitcoin_electoral_data(hash, validator).map_err(CfApiError::from)
-		})
+		self.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_bitcoin_electoral_data(hash, validator))
 	}
 
 	fn cf_bitcoin_filter_votes(
