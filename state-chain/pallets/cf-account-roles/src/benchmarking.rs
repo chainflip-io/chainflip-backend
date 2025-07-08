@@ -44,15 +44,19 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn derive_sub_account() {
+	fn spawn_sub_account() {
 		const SUB_ACCOUNT_INDEX: SubAccountIndex = 1;
-		const FLIP_BALANCE: u128 = 1000;
+		const FLIP_BALANCE: u128 = 1000 * FLIPPERINOS_PER_FLIP;
 		let caller: T::AccountId = whitelisted_caller();
 
-		T::FeePayment::mint_to_account(&caller, (FLIP_BALANCE * FLIPPERINOS_PER_FLIP).into());
+		T::FeePayment::mint_to_account(&caller, (FLIP_BALANCE * 2).into());
 
 		#[extrinsic_call]
-		derive_sub_account(RawOrigin::Signed(caller.clone()), SUB_ACCOUNT_INDEX, None);
+		spawn_sub_account(
+			RawOrigin::Signed(caller.clone()),
+			SUB_ACCOUNT_INDEX,
+			FLIP_BALANCE.into(),
+		);
 	}
 
 	#[benchmark]
@@ -62,12 +66,12 @@ mod benchmarks {
 		let caller: T::AccountId = whitelisted_caller();
 		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
 
-		T::FeePayment::mint_to_account(&caller, (FLIP_BALANCE * FLIPPERINOS_PER_FLIP).into());
+		T::FeePayment::mint_to_account(&caller, (FLIP_BALANCE * 2).into());
 
-		assert_ok!(Pallet::<T>::derive_sub_account(
+		assert_ok!(Pallet::<T>::spawn_sub_account(
 			RawOrigin::Signed(caller.clone()).into(),
 			SUB_ACCOUNT_INDEX,
-			None,
+			FLIP_BALANCE.into(),
 		));
 
 		#[extrinsic_call]

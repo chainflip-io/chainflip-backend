@@ -1835,14 +1835,13 @@ fn only_governance_can_update_settings() {
 	});
 }
 
-pub mod rebalancing_and_sub_accounting {
+mod utils {
+	use super::*;
 	use cf_primitives::AccountRole;
 	use sp_runtime::AccountId32;
 
-	use super::*;
-
 	#[derive(Debug, Clone)]
-	struct AccountSetup {
+	pub struct AccountSetup {
 		account: AccountId32,
 		initial_balance: u128,
 		funding_address: Option<EthereumAddress>,
@@ -1855,7 +1854,7 @@ pub mod rebalancing_and_sub_accounting {
 	}
 
 	impl AccountSetup {
-		fn new(account: AccountId32) -> Self {
+		pub fn new(account: AccountId32) -> Self {
 			Self {
 				account,
 				// default is not zero because an account with zero balance can't exist.
@@ -1870,11 +1869,11 @@ pub mod rebalancing_and_sub_accounting {
 			}
 		}
 
-		fn account(&self) -> AccountId32 {
+		pub fn account(&self) -> AccountId32 {
 			self.account.clone()
 		}
 
-		fn with_balance(
+		pub fn with_balance(
 			mut self,
 			initial_balance: u128,
 			funding_address: Option<EthereumAddress>,
@@ -1884,37 +1883,37 @@ pub mod rebalancing_and_sub_accounting {
 			self
 		}
 
-		fn with_bound_redeem_address(mut self, address: EthereumAddress) -> Self {
+		pub fn with_bound_redeem_address(mut self, address: EthereumAddress) -> Self {
 			self.bound_redeem_address = Some(address);
 			self
 		}
 
-		fn with_bound_executor_address(mut self, address: EthereumAddress) -> Self {
+		pub fn with_bound_executor_address(mut self, address: EthereumAddress) -> Self {
 			self.bound_executor_address = Some(address);
 			self
 		}
 
-		fn with_bond(mut self, bond: u128) -> Self {
+		pub fn with_bond(mut self, bond: u128) -> Self {
 			self.bond = Some(bond);
 			self
 		}
 
-		fn with_role(mut self, role: AccountRole) -> Self {
+		pub fn with_role(mut self, role: AccountRole) -> Self {
 			self.role = Some(role);
 			self
 		}
 
-		fn with_validator_role(self) -> Self {
+		pub fn with_validator_role(self) -> Self {
 			self.with_role(AccountRole::Validator)
 		}
 
-		fn with_can_redeem(mut self, can_redeem: bool) -> Self {
+		pub fn with_can_redeem(mut self, can_redeem: bool) -> Self {
 			self.can_redeem = can_redeem;
 			self
 		}
 	}
 
-	fn setup_test(
+	pub fn setup_test(
 		accounts: Vec<AccountSetup>,
 		restricted_addresses: Vec<EthereumAddress>,
 	) -> Result<(), sp_runtime::DispatchError> {
@@ -1968,6 +1967,10 @@ pub mod rebalancing_and_sub_accounting {
 
 		Ok(())
 	}
+}
+
+pub mod rebalancing {
+	use super::{utils::*, *};
 
 	#[test]
 	fn rebalance_unrestricted_funds() {
@@ -2488,49 +2491,53 @@ pub mod rebalancing_and_sub_accounting {
 			);
 		});
 	}
+}
+
+pub mod sub_accounts {
+	use super::{utils::*, *};
+	use crate::MinimumFunding;
 
 	#[test]
-	fn can_not_derive_sub_account_id_if_parent_account_is_bidding() {
+	fn cannot_spawn_account_if_parent_account_is_bidding() {
 		new_test_ext().execute_with(|| {
 			MockRedemptionChecker::set_can_redeem(ALICE, false);
 			assert_noop!(
-				Funding::spawn_sub_account(ALICE, BOB, None),
-				Error::<Test>::CanNotDeriveSubAccountIdIfParentAccountIsBidding,
+				Funding::spawn_sub_account(&ALICE, 0, MinimumFunding::<Test>::get()),
+				Error::<Test>::CannotSpawnDuringAuctionPhase,
 			);
 		});
 	}
 
 	#[test]
-	fn can_derive_sub_account_and_fund_it_via_rebalance() {
+	fn can_spawn_sub_account_and_fund_it_via_rebalance() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 100;
-			const MINIMUM_FUNDING: u128 = 10;
+			const INITIAL_BALANCE: u128 = 10;
 			assert_ok!(setup_test(
 				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None)],
 				vec![]
 			));
-			Funding::spawn_sub_account(ALICE, BOB, None).unwrap();
+			let sub_account_id = Funding::spawn_sub_account(&ALICE, 0, INITIAL_BALANCE).unwrap();
 
-			let balance_alice = Flip::total_balance_of(&ALICE);
-			let sub_account_balance = Flip::total_balance_of(&BOB);
-
-			assert_eq!(balance_alice, AMOUNT - MINIMUM_FUNDING);
-			assert_eq!(sub_account_balance, MINIMUM_FUNDING);
+			assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT - INITIAL_BALANCE);
+			assert_eq!(Flip::total_balance_of(&sub_account_id), INITIAL_BALANCE);
 		});
 	}
 
 	#[test]
-	fn can_not_derive_sub_account_twice() {
+	fn cannot_spawn_sub_account_twice() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 100;
+			const SUB_ACCT_INDEX: u8 = 0;
 			assert_ok!(setup_test(
 				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None)],
 				vec![]
 			));
-			Funding::spawn_sub_account(ALICE, BOB, None).unwrap();
+			Funding::spawn_sub_account(&ALICE, SUB_ACCT_INDEX, MinimumFunding::<Test>::get())
+				.unwrap();
 			assert_noop!(
-				Funding::spawn_sub_account(ALICE, BOB, None),
-				Error::<Test>::SubAccountAlreadyExists,
+				Funding::spawn_sub_account(&ALICE, SUB_ACCT_INDEX, MinimumFunding::<Test>::get()),
+				Error::<Test>::AccountAlreadyExists,
 			);
 		});
 	}
@@ -2539,6 +2546,7 @@ pub mod rebalancing_and_sub_accounting {
 	fn restrictions_are_getting_inherited_to_sub_accounts() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 100;
+			const SUB_ACCT_INDEX: u8 = 0;
 
 			const RESTRICTED_ADDRESS_A: EthereumAddress = H160([0x01; 20]);
 			const RESTRICTED_ADDRESS_B: EthereumAddress = H160([0x02; 20]);
@@ -2551,10 +2559,18 @@ pub mod rebalancing_and_sub_accounting {
 				vec![]
 			));
 
-			Funding::spawn_sub_account(ALICE, BOB, None).unwrap();
+			let sub_account_id =
+				Funding::spawn_sub_account(&ALICE, SUB_ACCT_INDEX, MinimumFunding::<Test>::get())
+					.unwrap();
 
-			assert_eq!(BoundRedeemAddress::<Test>::get(&BOB), Some(RESTRICTED_ADDRESS_A));
-			assert_eq!(BoundExecutorAddress::<Test>::get(&BOB), Some(RESTRICTED_ADDRESS_B));
+			assert_eq!(
+				BoundRedeemAddress::<Test>::get(&sub_account_id),
+				Some(RESTRICTED_ADDRESS_A)
+			);
+			assert_eq!(
+				BoundExecutorAddress::<Test>::get(&sub_account_id),
+				Some(RESTRICTED_ADDRESS_B)
+			);
 		});
 	}
 }

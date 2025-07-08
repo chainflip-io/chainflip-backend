@@ -1265,10 +1265,15 @@ pub trait CcmAdditionalDataHandler {
 pub trait SpawnAccount {
 	type AccountId;
 	type Amount;
+	type Index;
 
 	fn spawn_sub_account(
-		parent_account_id: Self::AccountId,
-		account_id: Self::AccountId,
-		initial_balance: Option<Self::Amount>,
-	) -> Result<(), DispatchError>;
+		parent_account_id: &Self::AccountId,
+		index: Self::Index,
+		initial_balance: Self::Amount,
+	) -> Result<Self::AccountId, DispatchError>;
+	fn derive_sub_account_id(
+		parent_account_id: &Self::AccountId,
+		index: Self::Index,
+	) -> Result<Self::AccountId, DispatchError>;
 }
