@@ -363,7 +363,7 @@ pub mod pallet {
 	/// Maps an validator to an operator.
 	#[pallet::storage]
 	pub type ClaimedValidators<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, T::AccountId, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, BTreeSet<T::AccountId>, OptionQuery>;
 
 	/// Maps an operator account to it's parameters.
 	#[pallet::storage]
@@ -856,7 +856,7 @@ pub mod pallet {
 				!ManagedValidators::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyAssociatedWithOperator
 			);
-			ClaimedValidators::<T>::insert(&validator_id, &operator_id);
+			ClaimedValidators::<T>::append(&validator_id, &operator_id);
 			Self::deposit_event(Event::ValidatorClaimed {
 				validator: validator_id,
 				operator: operator_id,
@@ -870,10 +870,15 @@ pub mod pallet {
 		pub fn accept_operator(origin: OriginFor<T>, operator_id: T::AccountId) -> DispatchResult {
 			let validator_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			ensure!(
-				ClaimedValidators::<T>::take(&validator_id).ok_or(Error::<T>::NotClaimed)? ==
-					operator_id,
-				Error::<T>::OperatorDoesNotMatch
+				ManagedValidators::<T>::get(&validator_id).is_none(),
+				Error::<T>::AlreadyAssociatedWithOperator
 			);
+
+			let claimed_by_operators =
+				ClaimedValidators::<T>::take(&validator_id).ok_or(Error::<T>::NotClaimed)?;
+
+			ensure!(claimed_by_operators.contains(&operator_id), Error::<T>::OperatorDoesNotMatch);
+
 			ManagedValidators::<T>::insert(validator_id, operator_id);
 			Ok(())
 		}
@@ -908,6 +913,8 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn block_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+
+			// TODO: Check of delegator is currently delegation to this operator and error if so.
 
 			AllowedDelegators::<T>::mutate(&operator_id, |delegators| {
 				delegators.remove(&delegator_id);
