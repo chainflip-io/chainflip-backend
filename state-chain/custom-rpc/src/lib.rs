@@ -1870,18 +1870,8 @@ where
 		validator: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
-		self.rpc_backend.with_runtime_api(at, |api, hash| {
-			let api_version = api
-				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)
-				.map_err(CfApiError::from)?
-				.unwrap_or_default();
-
-			if api_version < 2 {
-				api.cf_electoral_data(hash, validator).map_err(CfApiError::from)
-			} else {
-				api.cf_solana_electoral_data(hash, validator).map_err(CfApiError::from)
-			}
-		})
+		self.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_solana_electoral_data(hash, validator))
 	}
 
 	fn cf_solana_filter_votes(
@@ -1891,17 +1881,7 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
-			let api_version = api
-				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)
-				.map_err(CfApiError::from)?
-				.unwrap_or_default();
-
-			if api_version < 2 {
-				api.cf_filter_votes(hash, validator, proposed_votes).map_err(CfApiError::from)
-			} else {
-				api.cf_solana_filter_votes(hash, validator, proposed_votes)
-					.map_err(CfApiError::from)
-			}
+			api.cf_solana_filter_votes(hash, validator, proposed_votes)
 		})
 	}
 
