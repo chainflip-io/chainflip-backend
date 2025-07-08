@@ -99,11 +99,12 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				.await?
 				{
 					info!("Handling event: {event}");
+					// TODO: To decode the call in the SC instead.
 					let _call: state_chain_runtime::RuntimeCall = match event.event_parameters {
 						ScUtilsEvents::DepositToScGatewayAndScCallFilter(DepositToScGatewayAndScCallFilter {
 							sender, // eth_address to attribute the FLIP to
-                            signer, // eth_address that signed the call. Not to be used for now
-                            amount, // amount of FLIP deposited
+                            signer, // `tx.origin``. Not to be used for now
+                            amount, // FLIP amount deposited
                             sc_call
 						}) => {
                             match ScCallViaGateway::decode(&mut &sc_call[..]) {
