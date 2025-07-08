@@ -33,6 +33,8 @@ use sp_std::{
 	vec::Vec,
 };
 
+use frame_support::sp_runtime::Permill;
+
 pub mod chains;
 
 #[macro_export]
@@ -587,7 +589,7 @@ pub enum DelegationAcceptance {
 	Serialize,
 )]
 pub struct DelegationPreferences {
-	pub fee: Percent,
+	pub fee: Permill,
 	/// Default delegation acceptance preference for this validator
 	pub delegation_acceptance: DelegationAcceptance,
 }
