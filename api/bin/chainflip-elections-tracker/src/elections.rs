@@ -51,6 +51,8 @@ pub struct ElectionData<ES: ElectoralSystemTypes> {
 
 	pub validators_count: u32,
 
+	pub instance: String,
+
 	pub _phantom: std::marker::PhantomData<ES>,
 }
 
@@ -83,6 +85,7 @@ pub enum Key {
 	Category(String, Category),
 	Validator(u32),
 	State { summary: String },
+	Instance(String)
 }
 
 use Key::*;
@@ -96,6 +99,7 @@ impl Display for Key {
 			Validator(x) => write!(f, "Validator {x}"),
 			ElectoralSystem(name) => write!(f, "ES {name}"),
 			State { summary } => write!(f, "{summary}"),
+			Instance(instance) => write!(f, "{instance}"),
 		}
 	}
 }
@@ -171,12 +175,13 @@ where
 	let mut trace = StateTree::new();
 
 	let root_height = data.height - (data.height % BLOCKS_PER_TRACE);
+	let instance: Key = Instance(data.instance);
 	let key0 = RootBlockHeight(root_height);
-	trace.insert(vec![key0.clone()], end.with_attribute("height".into(), format!("{root_height}")));
+	trace.insert(vec![instance.clone(), key0.clone()], end.with_attribute("height".into(), format!("{root_height}")));
 
 	for name in data.electoral_system_names {
 		trace.insert(
-			vec![key0.clone(), ElectoralSystem(name.clone())],
+			vec![instance.clone(), key0.clone(), ElectoralSystem(name.clone())],
 			end.with_attribute("height".into(), format!("{root_height}")),
 		);
 	}
@@ -191,12 +196,12 @@ where
 		let key2 = Election(format!("{name} ({id})"));
 
 		// election id
-		trace.insert(cloned_vec([&key0, &key1, &key2]), end.clone());
+		trace.insert(cloned_vec([&instance, &key0, &key1, &key2]), end.clone());
 
 		// properties
 		let key3 = Category(extra.clone(), Properties);
 		trace.insert(
-			cloned_vec([&key0, &key1, &key2, &key3]),
+			cloned_vec([&instance, &key0, &key1, &key2, &key3]),
 			end.with_attribute("Properties".into(), format!("{properties:#?}")),
 		);
 
@@ -210,9 +215,9 @@ where
 				None => (Category(extra.clone(), NoVote), start.clone()),
 			};
 
-			trace.insert(cloned_vec([&key0, &key1, &key2, &key]), trace_init.clone());
+			trace.insert(cloned_vec([&instance, &key0, &key1, &key2, &key]), trace_init.clone());
 			trace.insert(
-				cloned_vec([&key0, &key1, &key2, &key3, &Validator(authority_id)]),
+				cloned_vec([&instance, &key0, &key1, &key2, &key3, &Validator(authority_id)]),
 				trace_init,
 			);
 		}
