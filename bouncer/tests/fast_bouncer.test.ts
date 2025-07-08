@@ -17,7 +17,7 @@ import { depositChannelCreation } from 'tests/request_swap_deposit_address_with_
 import { testBrokerLevelScreening } from 'tests/broker_level_screening';
 import { testFundRedeem } from 'tests/fund_redeem';
 import { concurrentTest, serialTest } from 'shared/utils/vitest';
-import { testAssethubXcm } from 'tests/assethub_xcm';
+// import { testAssethubXcm } from 'tests/assethub_xcm';
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {
