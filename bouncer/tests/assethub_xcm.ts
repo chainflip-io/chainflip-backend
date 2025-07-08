@@ -18,7 +18,7 @@ export async function testAssethubXcm(testContext: TestContext, _seed?: string) 
   await Promise.all([
     performSwap(
       testContext.logger,
-      'Btc',
+      'ArbEth',
       'HubDot',
       '14iGgWDpriDToidv1GY28a8yGqF4DyR397euELCzQB87qbRM',
       metadata,
