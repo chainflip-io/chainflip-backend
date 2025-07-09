@@ -17,8 +17,14 @@
 #![cfg(test)]
 
 use crate::{self as pallet_cf_account_roles, Config};
-use cf_traits::mocks::deregistration_check::MockDeregistrationCheck;
+use cf_traits::{
+	impl_mock_chainflip,
+	mocks::{deregistration_check::MockDeregistrationCheck, fee_payment::MockFeePayment},
+};
 use frame_support::derive_impl;
+use sp_runtime::DispatchError;
+
+use cf_traits::SpawnAccount;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -38,10 +44,35 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = MockAccountRoles;
 }
 
+impl_mock_chainflip!(Test);
+
+pub struct MockSpawnAccount;
+
+impl SpawnAccount for MockSpawnAccount {
+	type AccountId = u64;
+	type Amount = u128;
+
+	fn spawn_sub_account(
+		_parent_account_id: Self::AccountId,
+		_sub_account_id: Self::AccountId,
+		_amount: Option<Self::Amount>,
+	) -> Result<(), DispatchError> {
+		Ok(())
+	}
+
+	fn does_account_exist(_account_id: &Self::AccountId) -> bool {
+		true
+	}
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = frame_system::EnsureRoot<<Self as frame_system::Config>::AccountId>;
 	type DeregistrationCheck = MockDeregistrationCheck<Self::AccountId>;
+	type RuntimeCall = RuntimeCall;
+	type SpawnAccount = MockSpawnAccount;
+	#[cfg(feature = "runtime-benchmarks")]
+	type FeePayment = MockFeePayment<Self>;
 	type WeightInfo = ();
 }
 
