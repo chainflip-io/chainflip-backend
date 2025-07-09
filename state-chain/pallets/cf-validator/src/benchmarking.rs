@@ -420,4 +420,23 @@ mod benchmarks {
 
 		assert!(ClaimedValidators::<T>::get(validator).is_some());
 	}
+
+	#[benchmark]
+	fn accept_operator() {
+		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+		let validator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Validator,
+		)
+		.unwrap();
+
+		ClaimedValidators::<T>::insert(validator, operator);
+
+		#[extrinsic_call]
+		accept_operator(RawOrigin::Signed(validator), operator);
+
+		assert!(ManagedValidators::<T>::get(validator).is_some());
+	}
 }
