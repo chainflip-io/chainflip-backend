@@ -113,14 +113,8 @@ pub fn initial_state() -> InitialStateOf<Runtime, ()> {
 	InitialState {
 		unsynchronised_state: (OraclePriceTracker {
 			chain_states: ExternalChainStates {
-				solana: ExternalChainState {
-					block: ExternalChainBlockQueried::Solana(0),
-					price: Default::default(),
-				},
-				ethereum: ExternalChainState {
-					block: ExternalChainBlockQueried::Ethereum(0),
-					price: Default::default(),
-				},
+				solana: ExternalChainState { price: Default::default() },
+				ethereum: ExternalChainState { price: Default::default() },
 			},
 			get_time: Default::default(),
 			queries: Default::default(),
