@@ -8,7 +8,10 @@ use enum_iterator::{all, Sequence};
 use itertools::{Either, Itertools};
 
 use crate::electoral_systems::state_machine::state_machine::{AbstractApi, Statemachine};
-use sp_std::ops::{Add, Index, IndexMut};
+use sp_std::{
+	ops::{Add, Index, IndexMut},
+	vec,
+};
 
 pub trait OPTypes: 'static + Sized + CommonTraits {
 	type Price: CommonTraits + Ord + Default;
@@ -56,6 +59,7 @@ impl ExternalChainBlockQueried {
 }
 
 def_derive! {
+	#[derive(TypeInfo)]
 	pub enum PriceStatus {
 		UpToDate,
 		MaybeStale,
@@ -65,110 +69,152 @@ def_derive! {
 
 def_derive! {
 	#[derive(TypeInfo)]
+	pub struct AssetState<T: OPTypes> {
+		pub timestamp: Apply<T::Aggregation, UnixTime>,
+		pub price: Apply<T::Aggregation, T::Price>,
+		pub price_status: PriceStatus,
+	}
+}
+
+impl<T: OPTypes> AssetState<T> {
+	pub fn update(&mut self, response: AssetResponse<T>) {
+		if T::Aggregation::canonical(&response.timestamp) >
+			T::Aggregation::canonical(&self.timestamp)
+		{
+			self.timestamp = response.timestamp;
+			self.price = response.price;
+		}
+	}
+}
+
+def_derive! {
+	#[derive(TypeInfo)]
+	pub struct AssetResponse<T: OPTypes> {
+		pub timestamp: Apply<T::Aggregation, UnixTime>,
+		pub price: Apply<T::Aggregation, T::Price>,
+	}
+}
+
+def_derive! {
+	#[derive(TypeInfo)]
 	pub struct ExternalChainState<T: OPTypes> {
-		pub block: ExternalChainBlockQueried,
-		pub price: BTreeMap<T::Asset, (
-			Apply<T::Aggregation, UnixTime>,
-			Apply<T::Aggregation, T::Price>
-		)>,
+		pub price: BTreeMap<T::Asset, AssetState<T>>,
 	}
 }
 
 def_derive! {
 	#[derive(TypeInfo)]
 	pub struct ExternalChainStateVote<T: OPTypes> {
-		pub block: ExternalChainBlockQueried,
 		pub price: BTreeMap<T::Asset, (UnixTime, T::Price)>,
 	}
 }
 
-impl<T: OPTypes> ExternalChainStateVote<T> {
-	pub fn should_submit(&self, query: QueryType<T>) -> bool {
-		match query {
-			QueryType::LatestPrice => true,
-			QueryType::OnPriceDeviation { last_block, last_price, minimal_deviation } =>
-				self.block > last_block &&
-					self.price.iter().any(|(asset, (timestamp, price))| {
-						last_price
-							.get(asset)
-							.map(|(last_timestamp, last_price)| {
-								timestamp > last_timestamp &&
-									!T::price_range(last_price, minimal_deviation)
-										.contains(price)
-							})
-							.unwrap_or(true)
-					}),
-			QueryType::OnUpdate { last_block } => self.block > last_block,
-		}
+pub fn should_vote_for_asset<T: OPTypes>(
+	(time, price): &(UnixTime, T::Price),
+	conditions: &Vec<VotingCondition<T>>,
+) -> bool {
+	use VotingCondition::*;
+	conditions.iter().all(|condition| match condition {
+		PriceMoved { last_price, deviation } =>
+			!T::price_range(&last_price, *deviation).contains(&price),
+		NewTimestamp { last_timestamp } => time > last_timestamp,
+		Always => todo!(),
+	})
+}
+
+pub fn get_price_status(
+	price_timestamp: UnixTime,
+	current_time: UnixTime,
+	settings: &ExternalChainSettings,
+) -> PriceStatus {
+	let up_to_date_until = price_timestamp + settings.up_to_date_timeout;
+	let maybe_stale_until = up_to_date_until + settings.maybe_stale_timeout;
+
+	use PriceStatus::*;
+	if current_time <= up_to_date_until {
+		UpToDate
+	} else if current_time <= maybe_stale_until {
+		MaybeStale
+	} else {
+		Stale
+	}
+}
+
+def_derive! {
+	#[derive(TypeInfo)]
+	pub enum ChainPriceStatus {
+		AtLeastOnePriceStale,
+		AllUpToDate
 	}
 }
 
 impl<T: OPTypes> ExternalChainState<T> {
-	pub fn get_status(
-		&self,
+	pub fn is_stale(&self) -> bool {
+		all::<T::Asset>().any(|asset| {
+			self.price
+				.get(&asset)
+				.map(|asset_state| asset_state.price_status == PriceStatus::Stale)
+				.unwrap_or(true)
+		})
+	}
+
+	pub fn update_price_state(
+		&mut self,
 		current_time: &UnixTime,
 		settings: &ExternalChainSettings,
-	) -> PriceStatus {
-		let oldest_timestamp = self
-			.price
-			.iter()
-			.map(|(_, (timestamp, _))| T::Aggregation::canonical(timestamp))
-			.min()
-			.unwrap_or(Default::default());
-		let up_to_date_until = oldest_timestamp + settings.up_to_date_timeout;
-		let maybe_stale_until = up_to_date_until.clone() + settings.maybe_stale_timeout;
-
-		use PriceStatus::*;
-		if *current_time <= up_to_date_until {
-			UpToDate
-		} else if *current_time <= maybe_stale_until {
-			MaybeStale
-		} else {
-			Stale
-		}
+	) {
+		self.price.values_mut().for_each(|asset_state| {
+			asset_state.price_status = get_price_status(
+				T::Aggregation::canonical(&asset_state.timestamp),
+				*current_time,
+				settings,
+			)
+		});
 	}
 
 	pub fn get_query(
 		&self,
-		current_time: &UnixTime,
 		settings: &ExternalChainSettings,
-	) -> QueryType<T> {
+	) -> BTreeMap<T::Asset, Vec<VotingCondition<T>>> {
 		use PriceStatus::*;
-		use QueryType::*;
-		match self.get_status(current_time, settings) {
-			UpToDate => OnPriceDeviation {
-				last_block: self.block.clone(),
-				last_price: self
-					.price
-					.iter()
-					.map(|(asset, (timestamp, price))| {
-						(
-							asset.clone(),
-							(
-								T::Aggregation::canonical(timestamp),
-								T::Aggregation::canonical(price),
-							),
-						)
-					})
-					.collect(),
-				minimal_deviation: settings.minimal_price_deviation.clone(),
-			},
-			MaybeStale => LatestPrice,
-			Stale => OnUpdate { last_block: self.block.clone() },
-		}
+
+		all::<T::Asset>()
+			.map(|asset| {
+				(
+					asset.clone(),
+					self.price
+						.get(&asset)
+						.map(|asset_state| match asset_state.price_status {
+							UpToDate => vec![
+								VotingCondition::NewTimestamp {
+									last_timestamp: T::Aggregation::canonical(
+										&asset_state.timestamp,
+									),
+								},
+								VotingCondition::PriceMoved {
+									last_price: T::Aggregation::canonical(&asset_state.price),
+									deviation: settings.minimal_price_deviation,
+								},
+							],
+							Stale => vec![VotingCondition::NewTimestamp {
+								last_timestamp: T::Aggregation::canonical(&asset_state.timestamp),
+							}],
+							MaybeStale => vec![],
+						})
+						.unwrap_or(vec![]),
+				)
+			})
+			.collect()
 	}
 
-	pub fn update(&mut self, response: ExternalChainState<T>) {
-		if response.block > self.block {
-			for (asset, (new_timestamp, new_price)) in response.price {
-				let entry = self.price.entry(asset).or_insert((
-					T::Aggregation::single(&Default::default()),
-					T::Aggregation::single(&Default::default()),
-				));
-				if T::Aggregation::canonical(&new_timestamp) > T::Aggregation::canonical(&entry.0) {
-					*entry = (new_timestamp, new_price);
-				}
-			}
+	pub fn update(&mut self, response: BTreeMap<T::Asset, AssetResponse<T>>) {
+		for (asset, response) in response {
+			let entry = self.price.entry(asset).or_insert(AssetState {
+				timestamp: T::Aggregation::single(&Default::default()),
+				price: T::Aggregation::single(&Default::default()),
+				price_status: PriceStatus::Stale,
+			});
+			entry.update(response);
 		}
 	}
 }
@@ -210,19 +256,10 @@ impl<T: OPTypes> IndexMut<ExternalPriceChain> for ExternalChainStates<T> {
 }
 
 impl<T: OPTypes> ExternalChainStates<T> {
-	pub fn get_queries(
-		&self,
-		current_time: &UnixTime,
-		settings: &OraclePriceSettings,
-	) -> Vec<PriceQuery<T>> {
-		use QueryType::*;
-
+	pub fn get_queries(&self, settings: &OraclePriceSettings) -> Vec<PriceQuery<T>> {
 		all::<ExternalPriceChain>()
-			.map(|chain| PriceQuery {
-				chain,
-				query_type: self[chain].get_query(current_time, &settings[chain]),
-			})
-			.take_while_inclusive(|query| matches!(query.query_type, LatestPrice | OnUpdate { .. }))
+			.map(|chain| PriceQuery { chain, assets: self[chain].get_query(&settings[chain]) })
+			.take_while_inclusive(|query| self[query.chain].is_stale())
 			.collect()
 	}
 }
@@ -231,16 +268,15 @@ impl<T: OPTypes> ExternalChainStates<T> {
 
 def_derive! {
 	#[derive(TypeInfo)]
-	pub enum QueryType<T: OPTypes> {
-		LatestPrice,
-		OnPriceDeviation {
-			last_block: ExternalChainBlockQueried,
-			last_price: BTreeMap<T::Asset, (UnixTime, T::Price)>,
-			minimal_deviation: BasisPoints
+	pub enum VotingCondition<T: OPTypes> {
+		PriceMoved {
+			last_price: T::Price,
+			deviation: BasisPoints
 		},
-		OnUpdate {
-			last_block: ExternalChainBlockQueried,
-		}
+		NewTimestamp {
+			last_timestamp: UnixTime
+		},
+		Always
 	}
 }
 
@@ -248,7 +284,7 @@ def_derive! {
 	#[derive(TypeInfo)]
 	pub struct PriceQuery<T: OPTypes> {
 		pub chain: ExternalPriceChain,
-		pub query_type: QueryType<T>,
+		pub assets: BTreeMap<T::Asset, Vec<VotingCondition<T>>>
 	}
 }
 
@@ -310,7 +346,7 @@ impl<T: OPTypes> Validate for OraclePriceTracker<T> {
 
 impl<T: OPTypes> AbstractApi for OraclePriceTracker<T> {
 	type Query = PriceQuery<T>;
-	type Response = ExternalChainState<T>;
+	type Response = BTreeMap<T::Asset, AssetResponse<T>>;
 	type Error = PriceResponseError;
 
 	fn validate(query: &Self::Query, response: &Self::Response) -> Result<(), Self::Error> {
@@ -340,16 +376,14 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 			},
 		}
 
-		state.queries = state.chain_states.get_queries(&state.get_time.run(()), settings);
+		all::<ExternalPriceChain>().for_each(|chain| {
+			state.chain_states[chain].update_price_state(&state.get_time.run(()), &settings[chain])
+		});
+
+		state.queries = state.chain_states.get_queries(settings);
 
 		log::info!("Called step function for oracle at time {:?}", state.get_time.run(()));
 
 		Ok(())
 	}
 }
-
-//-------------- partial voter implementation -----------
-//
-// The voter needs access to some RPC to query for data.
-//
-// What would actually be nice is if we could

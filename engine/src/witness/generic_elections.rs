@@ -14,10 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_chains::sol::SolAddress;
-use cf_primitives::EpochIndex;
-use futures_core::Future;
-
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
@@ -31,8 +27,8 @@ use pallet_cf_elections::{
 		oracle_price::{
 			primitives::UnixTime,
 			state_machine::{
-				ExternalChainBlockQueried, ExternalChainState, ExternalChainStateVote,
-				ExternalChainStates, ExternalPriceChain,
+				should_vote_for_asset, ExternalChainBlockQueried, ExternalChainState,
+				ExternalChainStateVote, ExternalChainStates, ExternalPriceChain,
 			},
 		},
 	},
@@ -151,7 +147,7 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 			},
 		};
 
-		let prices = price_feeds
+		let prices: BTreeMap<_, _> = price_feeds
 			.into_iter()
 			.filter_map(|price_data| {
 				if let Some(asset_pair) =
@@ -168,20 +164,30 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 			})
 			.collect();
 
-		let result = ExternalChainStateVote { block, price: prices };
+		let should_vote = prices.iter().any(|(asset, result)| {
+			if let Some(conditions) = properties.assets.get(asset) {
+				should_vote_for_asset(result, conditions)
+			} else {
+				// if the asset isn't mentioned in the conditions we ignore it when checking
+				// whether we should submit a vote
+				false
+			}
+		});
+
+		// filter by whether we have to submit prices
 
 		tracing::info!("For election properties: {properties:?}");
-		Ok(if result.should_submit(properties.query_type) {
-			tracing::info!("Submitting the following oracle result: {result:?}");
-			Some(result)
+		Ok(if should_vote {
+			tracing::info!("Submitting the following oracle result: {prices:?}");
+			Some(ExternalChainStateVote { price: prices })
 		} else {
-			tracing::info!("Skipping the following oracle result: {result:?}");
+			tracing::info!("Skipping the following oracle result: {prices:?}");
 			None
 		})
 	}
 }
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	sol_client: SolRetryRpcClient,

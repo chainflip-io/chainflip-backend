@@ -6,8 +6,8 @@ use crate::electoral_systems::{
 	oracle_price::{
 		primitives::{compute_median, Aggregated, Aggregation, UnixTime},
 		state_machine::{
-			ExternalChainBlockQueried, ExternalChainState, ExternalChainStateVote, OPTypes,
-			PriceQuery,
+			AssetResponse, ExternalChainBlockQueried, ExternalChainState, ExternalChainStateVote,
+			OPTypes, PriceQuery,
 		},
 	},
 	state_machine::common_imports::*,
@@ -20,7 +20,7 @@ pub struct OraclePriceConsensus<T: OPTypes> {
 
 impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 	type Vote = ExternalChainStateVote<T>;
-	type Result = ExternalChainState<T>;
+	type Result = BTreeMap<T::Asset, AssetResponse<T>>;
 	type Settings = (SuccessThreshold, PriceQuery<T>);
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
@@ -29,17 +29,8 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 
 	fn check_consensus(&self, (threshold, query): &Self::Settings) -> Option<Self::Result> {
 		if self.votes.len() >= threshold.success_threshold as usize {
-			let block = compute_median(
-				self.votes
-					.iter()
-					.map(|vote| vote.block.clone())
-					.filter(|block| block.chain() == query.chain)
-					.collect(),
-			)?;
-
-			Some(ExternalChainState {
-				block,
-				price: all::<T::Asset>()
+			Some(
+				all::<T::Asset>()
 					.filter_map(|asset| {
 						Some((
 							asset.clone(),
@@ -65,26 +56,27 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 							),
 						))
 					})
+					.map(|(asset, (timestamp, price))| (asset, AssetResponse { timestamp, price }))
 					.collect(),
-			})
+			)
 		} else {
 			None
 		}
 	}
 
 	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result {
-		let ExternalChainStateVote { block, price } = vote;
-		ExternalChainState {
-			block: block.clone(),
-			price: price
-				.into_iter()
-				.map(|(asset, (timestamp, price))| {
-					(
-						asset.clone(),
-						(T::Aggregation::single(timestamp), T::Aggregation::single(price)),
-					)
-				})
-				.collect(),
-		}
+		let ExternalChainStateVote { price } = vote;
+		price
+			.into_iter()
+			.map(|(asset, (timestamp, price))| {
+				(
+					asset.clone(),
+					AssetResponse {
+						timestamp: T::Aggregation::single(timestamp),
+						price: T::Aggregation::single(price),
+					},
+				)
+			})
+			.collect()
 	}
 }

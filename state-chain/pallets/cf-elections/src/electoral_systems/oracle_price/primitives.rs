@@ -25,7 +25,7 @@ def_derive! {
 }
 
 def_derive! {
-	#[derive(TypeInfo, PartialOrd, Ord, Default)]
+	#[derive(TypeInfo, PartialOrd, Ord, Default, Copy)]
 	pub struct UnixTime{ pub seconds: u64 }
 }
 
@@ -105,17 +105,16 @@ pub fn compute_aggregated<A: AggregationValue>(mut values: Vec<A>) -> Option<Agg
 	let (first_half, median, second_half) = values.select_nth_unstable(half);
 
 	// TODO, these two might need to be double checked
-	let (_, first_quartile, _) = first_half.select_nth_unstable(quarter);
-	let (_, third_quartile, _) = second_half.select_nth_unstable(quarter);
+	let first_quartile = if first_half.is_empty() {
+		median.clone()
+	} else {
+		first_half.select_nth_unstable(quarter).1.clone()
+	};
+	let third_quartile = if second_half.is_empty() {
+		median.clone()
+	} else {
+		second_half.select_nth_unstable(quarter).1.clone()
+	};
 
-	Some(Aggregated {
-		median: median.clone(),
-		iq_range: first_quartile.clone()..=third_quartile.clone(),
-	})
-}
-
-struct MeanPriceData<Asset, Price: AggregationValue> {
-	timestamp: Aggregated<UnixTime>,
-	prices: BTreeMap<Asset, Aggregated<Price>>,
-	block: ExternalChainBlockQueried,
+	Some(Aggregated { median: median.clone(), iq_range: first_quartile..=third_quartile })
 }
