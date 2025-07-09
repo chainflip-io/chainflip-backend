@@ -298,9 +298,9 @@ impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::eth::Ethereum;
+	use cf_chains::eth::{Ethereum, WhitelistedCallsViaEthereum};
 	use cf_primitives::BroadcastId;
-	use cf_traits::RedemptionCheck;
+	use cf_traits::{ExecuteSCCall, RedemptionCheck};
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
 
@@ -356,6 +356,9 @@ pub mod pallet {
 
 		/// Provide information on current bidders
 		type RedemptionChecker: RedemptionCheck<ValidatorId = Self::AccountId>;
+
+		/// State Chain call executer
+		type SCCallExecutor: ExecuteSCCall<Self::AccountId, FlipBalance<Self>>;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
@@ -479,6 +482,10 @@ pub mod pallet {
 			source_account_id: AccountId<T>,
 			recipient_account_id: AccountId<T>,
 			amount: FlipBalance<T>,
+		},
+		SCCallExecuted {
+			sc_call: WhitelistedCallsViaEthereum<AccountId<T>, FlipBalance<T>>,
+			tx_hash: EthTransactionHash,
 		},
 	}
 
@@ -898,6 +905,23 @@ pub mod pallet {
 
 			Self::kill_account_if_zero_balance(&source_account_id);
 
+			Ok(())
+		}
+
+		#[pallet::call_index(12)]
+		#[allow(clippy::let_unit_value)]
+		#[pallet::weight(Weight::zero())]
+		pub fn execute_sc_call(
+			origin: OriginFor<T>,
+			sc_call: WhitelistedCallsViaEthereum<T::AccountId, FlipBalance<T>>,
+			// Required to ensure this call is unique per funding event.
+			tx_hash: EthTransactionHash,
+		) -> DispatchResult {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			T::SCCallExecutor::execute_whitelisted_sc_call(sc_call.clone());
+
+			Self::deposit_event(Event::SCCallExecuted { sc_call, tx_hash });
 			Ok(())
 		}
 	}
