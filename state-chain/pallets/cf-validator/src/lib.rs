@@ -363,7 +363,7 @@ pub mod pallet {
 	/// Maps an validator to an operator.
 	#[pallet::storage]
 	pub type ClaimedValidators<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, BTreeSet<T::AccountId>, OptionQuery>;
+		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, OptionQuery>;
 
 	/// Maps an operator account to it's parameters.
 	#[pallet::storage]
