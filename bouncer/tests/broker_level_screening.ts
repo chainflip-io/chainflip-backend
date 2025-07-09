@@ -430,7 +430,7 @@ async function testEvmLiquidityDeposit(
     test: (event) => event.data.asset === sourceAsset && event.data.accountId === lp.address,
   }).event;
 
-  console.log('Requesting ' + sourceAsset + ' deposit address');
+  logger.debug('Requesting ' + sourceAsset + ' deposit address');
   await lpMutex.runExclusive(async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
