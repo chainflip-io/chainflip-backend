@@ -452,8 +452,12 @@ pub mod pallet {
 		StillAssociatedWithValidators,
 		/// Operator is still delegating to delegators.
 		StillAssociatedWithDelegators,
+		/// The validator is not claimed by any operator.
 		NotClaimed,
+		/// The operator provided is not the operator that claimed the validator.
 		OperatorDoesNotMatch,
+		/// The provided account id has not the role validator.
+		NotValidator,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -852,9 +856,14 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn claim_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+			use cf_primitives::AccountRole;
 			ensure!(
 				!ManagedValidators::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyAssociatedWithOperator
+			);
+			ensure!(
+				T::AccountRoleRegistry::has_account_role(&validator_id, AccountRole::Validator),
+				Error::<T>::NotValidator
 			);
 			ClaimedValidators::<T>::append(&validator_id, &operator_id);
 			Self::deposit_event(Event::ValidatorClaimed {
