@@ -439,4 +439,19 @@ mod benchmarks {
 
 		assert!(ManagedValidators::<T>::get(validator).is_some());
 	}
+
+	#[benchmark]
+	fn remove_validator() {
+		let validator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Validator,
+		)
+		.unwrap();
+
+		ManagedValidators::<T>::insert(validator, operator);
+
+		#[extrinsic_call]
+		remove_validator(RawOrigin::Signed(validator), validator);
+
+		assert!(ManagedValidators::<T>::get(validator).is_none());
+	}
 }
