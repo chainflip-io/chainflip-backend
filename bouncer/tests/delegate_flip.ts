@@ -49,7 +49,7 @@ async function testDelegate(parentLogger: Logger) {
 
   logger.info('Approving Flip to SC Utils contract for deposit...');
   await approveErc20(logger, 'Flip', scUtilsAddress, amount.toString());
-  console.log('Approved FLIP');
+  logger.debug('Approved FLIP');
 
   // Encoding dummy
   const scCall = encodeDelegateToScCall(
