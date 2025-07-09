@@ -1586,6 +1586,17 @@ mod operator {
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
 			assert!(AllowedDelegators::<Test>::get(ALICE).contains(&BOB));
 			assert!(!BlockedDelegators::<Test>::get(ALICE).contains(&BOB));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::DelegatorAllowed {
+					operator: ALICE,
+					delegator: BOB,
+				}),
+				RuntimeEvent::ValidatorPallet(Event::DelegatorBlocked {
+					operator: ALICE,
+					delegator: BOB,
+				}),
+			);
 		});
 	}
 	#[test]
@@ -1601,6 +1612,13 @@ mod operator {
 				PREFERENCES
 			));
 			assert_eq!(OperatorParameters::<Test>::get(ALICE), Some(PREFERENCES));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::DelegationPreferencesSet {
+					operator: ALICE,
+					preferences: PREFERENCES,
+				}),
+			);
 		});
 	}
 	#[test]
@@ -1612,13 +1630,17 @@ mod operator {
 			assert!(ClaimedValidators::<Test>::contains_key(&BOB));
 			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(BOB), ALICE));
 			assert!(ManagedValidators::<Test>::get(BOB).is_some());
-			// assert_event_sequence!(
-			// 	Test,
-			// 	RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
-			// 		new_phase: RotationPhase::Idle
-			// 	}),
-			// 	RuntimeEvent::ValidatorPallet(Event::RotationAborted)
-			// );
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::ValidatorClaimed {
+					validator: BOB,
+					operator: ALICE,
+				}),
+				RuntimeEvent::ValidatorPallet(Event::AcceptedOperatorByValidator {
+					validator: BOB,
+					operator: ALICE,
+				}),
+			);
 		});
 	}
 	#[test]
@@ -1630,6 +1652,13 @@ mod operator {
 			ManagedValidators::<Test>::insert(BOB, ALICE);
 			// BOB can remove BOB
 			assert_ok!(ValidatorPallet::remove_validator(OriginTrait::signed(BOB), BOB));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::ValidatorHasBeenRemoved {
+					validator: BOB,
+					operator: ALICE,
+				}),
+			);
 		});
 	}
 	#[test]

@@ -33,8 +33,8 @@ mod rotation_state;
 
 pub use auction_resolver::*;
 use cf_primitives::{
-	AuthorityCount, CfeCompatibility, DelegationPreferences, Ed25519PublicKey, EpochIndex,
-	Ipv6Addr, SemVer, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
+	AccountRole, AuthorityCount, CfeCompatibility, DelegationPreferences, Ed25519PublicKey,
+	EpochIndex, Ipv6Addr, SemVer, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
 };
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AsyncResult,
@@ -402,6 +402,12 @@ pub mod pallet {
 		DelegatorAllowed { delegator: T::AccountId, operator: T::AccountId },
 		/// A validator has been claimed by an operator.
 		ValidatorClaimed { validator: T::AccountId, operator: T::AccountId },
+		/// A validator has accepted the claim of an operator.
+		AcceptedOperatorByValidator { validator: T::AccountId, operator: T::AccountId },
+		/// A validator has been removed.
+		ValidatorHasBeenRemoved { validator: T::AccountId, operator: T::AccountId },
+		/// The delegation preferences of a operator have been updated.
+		DelegationPreferencesSet { operator: T::AccountId, preferences: DelegationPreferences },
 	}
 
 	#[pallet::error]
@@ -856,7 +862,6 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn claim_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
-			use cf_primitives::AccountRole;
 			ensure!(
 				!ManagedValidators::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyAssociatedWithOperator
@@ -888,7 +893,13 @@ pub mod pallet {
 
 			ensure!(claimed_by_operators.contains(&operator_id), Error::<T>::OperatorDoesNotMatch);
 
-			ManagedValidators::<T>::insert(validator_id, operator_id);
+			ManagedValidators::<T>::insert(&validator_id, &operator_id);
+
+			Self::deposit_event(Event::AcceptedOperatorByValidator {
+				validator: validator_id,
+				operator: operator_id,
+			});
+
 			Ok(())
 		}
 
@@ -901,7 +912,10 @@ pub mod pallet {
 			let operator =
 				ManagedValidators::<T>::get(&validator).ok_or(Error::<T>::ValidatorDoesNotExist)?;
 			ensure!(account_id == operator || account_id == validator, Error::<T>::NotAuthorized);
-			ManagedValidators::<T>::remove(validator);
+			ManagedValidators::<T>::remove(&validator);
+
+			Self::deposit_event(Event::ValidatorHasBeenRemoved { validator, operator });
+
 			Ok(())
 		}
 
@@ -910,10 +924,14 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn set_delegation_preferences(
 			origin: OriginFor<T>,
-			parameters: DelegationPreferences,
+			preferences: DelegationPreferences,
 		) -> DispatchResult {
-			let account_id = T::AccountRoleRegistry::ensure_operator(origin)?;
-			OperatorParameters::<T>::insert(account_id, parameters);
+			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+			OperatorParameters::<T>::insert(&operator_id, preferences.clone());
+			Self::deposit_event(Event::DelegationPreferencesSet {
+				operator: operator_id,
+				preferences,
+			});
 			Ok(())
 		}
 
