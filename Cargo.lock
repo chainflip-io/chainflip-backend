@@ -8421,6 +8421,7 @@ dependencies = [
 name = "pallet-cf-lending-pools"
 version = "0.1.0"
 dependencies = [
+ "cf-amm-math",
  "cf-chains",
  "cf-primitives",
  "cf-runtime-utilities",

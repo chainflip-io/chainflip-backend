@@ -483,7 +483,8 @@ pub mod pallet {
 		SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{
-		AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider, ScheduledEgressDetails,
+		lending::ChpSystemApi, AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider,
+		ScheduledEgressDetails,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
@@ -528,6 +529,8 @@ pub mod pallet {
 
 		/// The balance API for interacting with the asset-balance pallet.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
+
+		type ChpSystemApi: ChpSystemApi;
 
 		type PoolPriceApi: PoolPriceProvider;
 
@@ -1820,6 +1823,9 @@ pub mod pallet {
 									*accumulated_output_amount,
 								);
 							},
+							SwapOutputAction::CreditLendingPool { loan_id } => {
+								log_or_panic!("Unexpected refund of a loan swap: {loan_id}");
+							},
 						}
 					}
 				},
@@ -1912,6 +1918,13 @@ pub mod pallet {
 
 								T::BalanceApi::credit_account(
 									account_id,
+									request.output_asset,
+									dca_state.accumulated_output_amount,
+								);
+							},
+							SwapOutputAction::CreditLendingPool { loan_id } => {
+								T::ChpSystemApi::process_loan_swap_outcome(
+									*loan_id,
 									request.output_asset,
 									dca_state.accumulated_output_amount,
 								);
@@ -2416,6 +2429,8 @@ pub mod pallet {
 						Pallet::<T>::get_network_fee_for_swap(
 							input_asset,
 							output_asset,
+							// TODO: see if we want to treat lending swaps as internal for the
+							// purposes of determining network fee?
 							matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
 						),
 					))];
