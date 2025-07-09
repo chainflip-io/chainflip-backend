@@ -85,7 +85,7 @@ pub enum Key {
 	Category(String, Category),
 	Validator(u32),
 	State { summary: String },
-	Instance(String)
+	Instance(String),
 }
 
 use Key::*;
@@ -177,7 +177,10 @@ where
 	let root_height = data.height - (data.height % BLOCKS_PER_TRACE);
 	let instance: Key = Instance(data.instance);
 	let key0 = RootBlockHeight(root_height);
-	trace.insert(vec![instance.clone(), key0.clone()], end.with_attribute("height".into(), format!("{root_height}")));
+	trace.insert(
+		vec![instance.clone(), key0.clone()],
+		end.with_attribute("height".into(), format!("{instance}{root_height}")),
+	);
 
 	for name in data.electoral_system_names {
 		trace.insert(

@@ -37,10 +37,18 @@ use opentelemetry_sdk::{
 	trace::{RandomIdGenerator, TracerProvider},
 };
 use pallet_cf_elections::{
-	electoral_systems::composite::tuple_7_impls::{self, *}, UniqueMonotonicIdentifier, electoral_systems::composite::tuple_6_impls::{self, *}
+	UniqueMonotonicIdentifier,
+	electoral_systems::composite::{
+		tuple_6_impls::{self, *},
+		tuple_7_impls::{self, *},
+	},
 };
 use state_chain_runtime::{
-	chainflip::{bitcoin_elections::BitcoinElectoralSystemRunner, solana_elections::SolanaElectoralSystemRunner}, BitcoinInstance, Runtime, SolanaInstance
+	BitcoinInstance, Runtime, SolanaInstance,
+	chainflip::{
+		bitcoin_elections::BitcoinElectoralSystemRunner,
+		solana_elections::SolanaElectoralSystemRunner,
+	},
 };
 use std::env;
 use trace::{NodeDiff, StateTree, diff, get_key_name, map_with_parent};
@@ -48,7 +56,7 @@ use trace::{NodeDiff, StateTree, diff, get_key_name, map_with_parent};
 #[tokio::main(flavor = "multi_thread", worker_threads = 3)]
 async fn main() {
 	// get env vars
-	let rpc_url = env::var("CF_RPC_NODE").unwrap_or("ws://localhost:9944".into());
+	let rpc_url = env::var("CF_RPC_NODE").unwrap_or("wss://archive.sisyphos.chainflip.io".into());
 	let opentelemetry_backend_url =
 		env::var("OTLP_BACKEND").unwrap_or("http://localhost:4317".into());
 
@@ -190,7 +198,7 @@ async fn observe_elections<T: Tracer + Send>(
 				.map(|(k,v)| (k, v.bitmaps))
 				.collect();
 
-			const BITCOIN_ELECTORAL_SYSTEM_NAMES : [&str; 6] = ["Blockheight", "DepositChannelBW", "VaultBW", "EgressBW", "FeeTracking", "Liveness"];
+			const BITCOIN_ELECTORAL_SYSTEM_NAMES : [&str; 6] = ["BHW", "DepositChannelBW", "VaultBW", "EgressBW", "FeeTracking", "Liveness"];
 
 			let bitcoin_elections = bitcoin_all_properties.iter()
 				.map(|(key, val)| {
