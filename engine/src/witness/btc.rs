@@ -173,17 +173,16 @@ where
 			Ok(Some((block.txdata, None)))
 		},
 		EngineElectionType::BlockHeight { submit_hash } => {
-			let block_hash = if submit_hash {
+			// check whether a block exists with the given height
+			if submit_hash {
 				let block_hash = client.best_block_hash().await?;
 				let best_block_header = client.block_header(block_hash).await?;
-				if best_block_header.height != block_height {
+				if best_block_header.height < block_height {
 					return Ok(None)
 				}
-				block_hash
-			} else {
-				client.block_hash(block_height).await?
-			};
+			}
 
+			let block_hash = client.block_hash(block_height).await?;
 			let block = client.block(block_hash).await?;
 			Ok(Some((
 				block.txdata,
