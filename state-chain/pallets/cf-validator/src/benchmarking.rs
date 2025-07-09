@@ -402,4 +402,22 @@ mod benchmarks {
 		assert!(Pallet::<T>::is_bidding(&caller));
 	}
 	// NOTE: Test suite not included due to missing Funding and Reputation pallet in `mock::Test`.
+
+	#[benchmark]
+	fn claim_validator() {
+		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+
+		let validator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Validator,
+		)
+		.unwrap();
+
+		#[extrinsic_call]
+		claim_validator(RawOrigin::Signed(operator.clone()), validator);
+
+		assert!(ClaimedValidators::<T>::get(validator).is_some());
+	}
 }
