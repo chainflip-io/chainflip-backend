@@ -107,6 +107,7 @@ pub struct StateChainEnvironment {
 	eth_key_manager_address: [u8; 20],
 	eth_vault_address: [u8; 20],
 	eth_address_checker_address: [u8; 20],
+	eth_sc_utils_address: [u8; 20],
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 	arb_key_manager_address: [u8; 20],
@@ -167,6 +168,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, ARB_VAULT_ADDRESS, arb_vault_address);
 	from_env_var!(clean_hex_address, ARB_USDC_TOKEN_ADDRESS, arb_usdc_token_address);
 	from_env_var!(clean_hex_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
+	from_env_var!(clean_hex_address, ETH_SC_UTILS_ADDRESS, eth_sc_utils_address);
 	from_env_var!(clean_hex_address, ARB_ADDRESS_CHECKER, arb_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
@@ -252,6 +254,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		arb_vault_address,
 		arb_usdc_token_address,
 		eth_address_checker_address,
+		eth_sc_utils_address,
 		arb_address_checker_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
@@ -332,6 +335,7 @@ pub fn inner_cf_development_config(
 		arb_vault_address,
 		arb_usdc_token_address,
 		eth_address_checker_address,
+		eth_sc_utils_address,
 		arb_address_checker_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
@@ -378,6 +382,7 @@ pub fn inner_cf_development_config(
 				eth_key_manager_address: eth_key_manager_address.into(),
 				eth_vault_address: eth_vault_address.into(),
 				eth_address_checker_address: eth_address_checker_address.into(),
+				eth_sc_utils_address: eth_sc_utils_address.into(),
 				arb_key_manager_address: arb_key_manager_address.into(),
 				arb_vault_address: arb_vault_address.into(),
 				arb_address_checker_address: arb_address_checker_address.into(),
@@ -484,6 +489,7 @@ macro_rules! network_spec {
 					arb_vault_address,
 					arb_usdc_token_address,
 					eth_address_checker_address,
+					eth_sc_utils_address,
 					arb_address_checker_address,
 					ethereum_chain_id,
 					arbitrum_chain_id,
@@ -560,6 +566,7 @@ macro_rules! network_spec {
 							eth_key_manager_address: eth_key_manager_address.into(),
 							eth_vault_address: eth_vault_address.into(),
 							eth_address_checker_address: eth_address_checker_address.into(),
+							eth_sc_utils_address: eth_sc_utils_address.into(),
 							arb_key_manager_address: arb_key_manager_address.into(),
 							arb_vault_address: arb_vault_address.into(),
 							arb_address_checker_address: arb_address_checker_address.into(),
