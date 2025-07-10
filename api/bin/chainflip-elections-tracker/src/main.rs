@@ -131,7 +131,7 @@ async fn observe_elections<T: Tracer + Send>(
 				.map(|(k,v)| (k, v.bitmaps))
 				.collect();
 
-			const SOLANA_ELECTORAL_SYSTEM_NAMES : [&str; 6] = ["Blockheight", "Ingress", "Nonce", "Egress", "Liveness", "Vaultswap"];
+			const SOLANA_ELECTORAL_SYSTEM_NAMES : [&str; 6] = ["SOL Blockheight", "SOL Ingress", "SOL Nonce", "SOL Egress", "SOL Liveness", "SOL Vaultswap"];
 
 			let solana_elections = solana_all_properties.iter()
 				.map(|(key, val)| {
@@ -198,7 +198,7 @@ async fn observe_elections<T: Tracer + Send>(
 				.map(|(k,v)| (k, v.bitmaps))
 				.collect();
 
-			const BITCOIN_ELECTORAL_SYSTEM_NAMES : [&str; 6] = ["BHW", "DepositChannelBW", "VaultBW", "EgressBW", "FeeTracking", "Liveness"];
+			const BITCOIN_ELECTORAL_SYSTEM_NAMES : [&str; 6] = ["BTC BHW", "BTC DepositChannelBW", "BTC VaultBW", "BTC EgressBW", "BTC FeeTracking", "BTC Liveness"];
 
 			let bitcoin_elections = bitcoin_all_properties.iter()
 				.map(|(key, val)| {
