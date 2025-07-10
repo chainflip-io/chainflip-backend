@@ -410,10 +410,11 @@ mod benchmarks {
 		)
 		.unwrap();
 
-		let validator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
-			AccountRole::Validator,
-		)
-		.unwrap();
+		let validator = frame_benchmarking::account::<T::AccountId>("whitelisted_caller", 1, 0);
+		frame_system::Pallet::<T>::inc_providers(&validator);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&validator);
+
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&validator));
 
 		#[extrinsic_call]
 		claim_validator(RawOrigin::Signed(operator.clone()), validator.clone());
@@ -504,7 +505,9 @@ mod benchmarks {
 
 	#[benchmark]
 	fn register_as_operator() {
-		let caller = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller();
+		frame_system::Pallet::<T>::inc_providers(&caller);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 
 		#[extrinsic_call]
 		register_as_operator(RawOrigin::Signed(caller));
