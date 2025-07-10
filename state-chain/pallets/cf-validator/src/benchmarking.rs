@@ -454,4 +454,17 @@ mod benchmarks {
 
 		assert!(ManagedValidators::<T>::get(validator).is_none());
 	}
+
+	#[benchmark]
+	fn set_delegation_preferences() {
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+
+		#[extrinsic_call]
+		set_delegation_preferences(RawOrigin::Signed(caller), DelegationPreferences::default());
+
+		assert_eq!(DelegationPreferences::<T>::get(caller), DelegationPreferences::default());
+	}
 }
