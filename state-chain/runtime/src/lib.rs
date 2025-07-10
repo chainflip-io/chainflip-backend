@@ -107,7 +107,6 @@ use pallet_cf_swapping::{
 };
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use runtime_apis::ChainAccounts;
-use sp_runtime::AccountId32;
 
 use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
 
@@ -1699,8 +1698,8 @@ impl_runtime_apis! {
 			OperatorInfo {
 				managed_validators: pallet_cf_validator::Pallet::<Runtime>::get_all_validators_by_operator(account_id),
 				delegation_preferences: pallet_cf_validator::OperatorParameters::<Runtime>::get(account_id).unwrap(),
-				blocked_delegators: pallet_cf_validator::BlockedDelegators::<Runtime>::get(account_id).iter().map(|k| k.clone()).collect(),
-				allowed_delegators: pallet_cf_validator::AllowedDelegators::<Runtime>::get(account_id).iter().map(|k| k.clone()).collect(),
+				blocked_delegators: pallet_cf_validator::BlockedDelegators::<Runtime>::get(account_id).iter().cloned().collect(),
+				allowed_delegators: pallet_cf_validator::AllowedDelegators::<Runtime>::get(account_id).iter().cloned().collect(),
 			}
 		}
 

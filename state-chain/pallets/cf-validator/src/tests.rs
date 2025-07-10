@@ -1627,7 +1627,7 @@ mod operator {
 			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
 			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(BOB),));
 			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(ALICE), BOB));
-			assert!(ClaimedValidators::<Test>::contains_key(&BOB));
+			assert!(ClaimedValidators::<Test>::contains_key(BOB));
 			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(BOB), ALICE));
 			assert!(ManagedValidators::<Test>::get(BOB).is_some());
 			assert_event_sequence!(
