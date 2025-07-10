@@ -34,7 +34,7 @@ import { getChainflipApi, observeBadEvent, observeEvent } from 'shared/utils/sub
 import { execWithLog } from 'shared/utils/exec_with_log';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
-import { Logger, loggerError, throwError } from 'shared/utils/logger';
+import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logger';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -344,7 +344,8 @@ export async function runWithTimeoutAndExit<T>(
   seconds: number,
 ): Promise<void> {
   const start = Date.now();
-  await runWithTimeout(promise, seconds).catch((error) => {
+  const taskDescription = process.argv[1].split('/').pop() || 'unknown task';
+  await runWithTimeout(promise, seconds, globalLogger, taskDescription).catch((error) => {
     console.error(error);
     process.exit(-1);
   });
