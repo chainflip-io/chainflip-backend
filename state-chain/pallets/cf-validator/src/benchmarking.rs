@@ -497,4 +497,28 @@ mod benchmarks {
 
 		assert!(DelegationPreferences::<T>::get(account_id).is_some());
 	}
+
+	#[benchmark]
+	fn register_as_operator() {
+		let caller = whitelisted_caller();
+
+		#[extrinsic_call]
+		register_as_operator(RawOrigin::Signed(caller));
+	}
+
+	#[benchmark]
+	fn deregister_as_operator() {
+		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+
+		#[extrinsic_call]
+		deregister_as_operator(RawOrigin::Signed(operator));
+
+		assert!(<T as Chainflip>::AccountRoleRegistry::ensure_operator(
+			RawOrigin::Signed(operator).into()
+		)
+		.is_err());
+	}
 }
