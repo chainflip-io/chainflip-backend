@@ -149,8 +149,8 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ChannelActionCcmRef
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let (pre_deposit_channels) =
-			<(BTreeSet<TargetChainAccount<T, I>>,)>::decode(&mut state.as_slice())
+		let pre_deposit_channels =
+			<BTreeSet<TargetChainAccount<T, I>>>::decode(&mut state.as_slice())
 				.map_err(|_| DispatchError::from("Failed to decode state"))?;
 
 		let post_deposit_channels =
