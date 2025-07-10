@@ -34,18 +34,10 @@ use frame_support::{
 use itertools::Itertools;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
-pub struct Liveness<
-	ChainBlockNumber,
-	ChainBlockHash,
-	BlockNumber,
-	Hook,
-	ValidatorId,
-	StateChainBlockNumber,
-> {
+pub struct Liveness<ChainBlockNumber, ChainBlockHash, Hook, ValidatorId, StateChainBlockNumber> {
 	_phantom: core::marker::PhantomData<(
 		ChainBlockNumber,
 		ChainBlockHash,
-		BlockNumber,
 		Hook,
 		ValidatorId,
 		StateChainBlockNumber,
@@ -59,25 +51,11 @@ pub trait OnCheckComplete<ValidatorId> {
 impl<
 		ChainBlockNumber: Member + Parameter + Eq + From<u64> + Into<u64> + Copy,
 		ChainBlockHash: Member + Parameter + Eq + Ord,
-		BlockNumber: Member
-			+ Parameter
-			+ Eq
-			+ MaybeSerializeDeserialize
-			+ frame_support::sp_runtime::Saturating
-			+ Ord
-			+ Copy,
 		Hook: OnCheckComplete<ValidatorId> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	> ElectoralSystemTypes
-	for Liveness<
-		ChainBlockNumber,
-		ChainBlockHash,
-		BlockNumber,
-		Hook,
-		ValidatorId,
-		StateChainBlockNumber,
-	>
+	for Liveness<ChainBlockNumber, ChainBlockHash, Hook, ValidatorId, StateChainBlockNumber>
 {
 	type ValidatorId = ValidatorId;
 	type StateChainBlockNumber = StateChainBlockNumber;
@@ -87,43 +65,35 @@ impl<
 
 	type ElectoralUnsynchronisedSettings = ();
 	// How many SC blocks to wait before we consider the election complete.
-	type ElectoralSettings = BlockNumber;
+	type ElectoralSettings = StateChainBlockNumber;
 	type ElectionIdentifierExtra = ();
 
 	// The external chain block number that the engines will get the hash for.
 	type ElectionProperties = ChainBlockNumber;
 
 	// The SC block number that we started the election at.
-	type ElectionState = BlockNumber;
+	type ElectionState = StateChainBlockNumber;
 	type VoteStorage = vote_storage::bitmap::Bitmap<ChainBlockHash>;
 	type Consensus = BTreeSet<Self::ValidatorId>;
 	// The current SC block number, and the current chain tracking height.
-	type OnFinalizeContext = (BlockNumber, ChainBlockNumber);
+	type OnFinalizeContext = (StateChainBlockNumber, ChainBlockNumber);
 	type OnFinalizeReturn = ();
 }
 
 impl<
 		ChainBlockNumber: Member + Parameter + Eq + From<u64> + Into<u64> + Copy,
 		ChainBlockHash: Member + Parameter + Eq + Ord,
-		BlockNumber: Member
-			+ Parameter
-			+ Eq
-			+ MaybeSerializeDeserialize
-			+ frame_support::sp_runtime::Saturating
-			+ Ord
-			+ Copy,
 		Hook: OnCheckComplete<ValidatorId> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+		StateChainBlockNumber: Member
+			+ Parameter
+			+ Ord
+			+ MaybeSerializeDeserialize
+			+ Into<u32>
+			+ frame_support::sp_runtime::Saturating
+			+ Copy,
 	> ElectoralSystem
-	for Liveness<
-		ChainBlockNumber,
-		ChainBlockHash,
-		BlockNumber,
-		Hook,
-		ValidatorId,
-		StateChainBlockNumber,
-	>
+	for Liveness<ChainBlockNumber, ChainBlockHash, Hook, ValidatorId, StateChainBlockNumber>
 {
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
@@ -146,6 +116,7 @@ impl<
 		(current_sc_block, current_chain_tracking_number): &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		fn block_number_to_check<ChainBlockNumber: Into<u64> + From<u64>>(
+			current_sc_block: u32,
 			current_chain_tracking_number: ChainBlockNumber,
 		) -> ChainBlockNumber {
 			use nanorand::{Rng, WyRand};
@@ -155,7 +126,7 @@ impl<
 			// have at least 100 blocks worth of state for any particular chain, while still
 			// providing enough variation.
 			const RANGE: u64 = 100;
-			WyRand::new_seed(height)
+			WyRand::new_seed(current_sc_block as u64)
 				.generate_range((height.saturating_sub(RANGE))..height)
 				.into()
 		}
@@ -180,14 +151,17 @@ impl<
 				election_access.delete();
 				ElectoralAccess::new_election(
 					(),
-					block_number_to_check(*current_chain_tracking_number),
+					block_number_to_check(
+						(*current_sc_block).into(),
+						*current_chain_tracking_number,
+					),
 					*current_sc_block,
 				)?;
 			}
 		} else {
 			ElectoralAccess::new_election(
 				(),
-				block_number_to_check(*current_chain_tracking_number),
+				block_number_to_check((*current_sc_block).into(), *current_chain_tracking_number),
 				*current_sc_block,
 			)?;
 		}
