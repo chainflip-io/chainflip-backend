@@ -27,6 +27,7 @@ use cf_traits::{
 use sp_core::H160;
 
 use crate::BoundRedeemAddress;
+use cf_traits::SpawnAccount;
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 use pallet_cf_flip::{Bonder, FlipSlasher};
 use sp_runtime::DispatchError;
@@ -1834,7 +1835,7 @@ fn only_governance_can_update_settings() {
 	});
 }
 
-pub mod rebalancing {
+pub mod rebalancing_and_sub_accounting {
 	use cf_primitives::AccountRole;
 	use sp_runtime::AccountId32;
 
@@ -2485,6 +2486,75 @@ pub mod rebalancing {
 				Funding::rebalance(OriginTrait::signed(ALICE), BOB, None, AMOUNT.into()),
 				Error::<Test>::BondViolation,
 			);
+		});
+	}
+
+	#[test]
+	fn can_not_derive_sub_account_id_if_parent_account_is_bidding() {
+		new_test_ext().execute_with(|| {
+			MockRedemptionChecker::set_can_redeem(ALICE, false);
+			assert_noop!(
+				Funding::spawn_sub_account(ALICE, BOB, None),
+				Error::<Test>::CanNotDeriveSubAccountIdIfParentAccountIsBidding,
+			);
+		});
+	}
+
+	#[test]
+	fn can_derive_sub_account_and_fund_it_via_rebalance() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			const MINIMUM_FUNDING: u128 = 10;
+			assert_ok!(setup_test(
+				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None)],
+				vec![]
+			));
+			Funding::spawn_sub_account(ALICE, BOB, None).unwrap();
+
+			let balance_alice = Flip::total_balance_of(&ALICE);
+			let sub_account_balance = Flip::total_balance_of(&BOB);
+
+			assert_eq!(balance_alice, AMOUNT - MINIMUM_FUNDING);
+			assert_eq!(sub_account_balance, MINIMUM_FUNDING);
+		});
+	}
+
+	#[test]
+	fn can_not_derive_sub_account_twice() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+			assert_ok!(setup_test(
+				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None)],
+				vec![]
+			));
+			Funding::spawn_sub_account(ALICE, BOB, None).unwrap();
+			assert_noop!(
+				Funding::spawn_sub_account(ALICE, BOB, None),
+				Error::<Test>::SubAccountAlreadyExists,
+			);
+		});
+	}
+
+	#[test]
+	fn restrictions_are_getting_inherited_to_sub_accounts() {
+		new_test_ext().execute_with(|| {
+			const AMOUNT: u128 = 100;
+
+			const RESTRICTED_ADDRESS_A: EthereumAddress = H160([0x01; 20]);
+			const RESTRICTED_ADDRESS_B: EthereumAddress = H160([0x02; 20]);
+
+			BoundRedeemAddress::<Test>::insert(ALICE, RESTRICTED_ADDRESS_A);
+			BoundExecutorAddress::<Test>::insert(ALICE, RESTRICTED_ADDRESS_B);
+
+			assert_ok!(setup_test(
+				vec![AccountSetup::new(ALICE).with_balance(AMOUNT, None)],
+				vec![]
+			));
+
+			Funding::spawn_sub_account(ALICE, BOB, None).unwrap();
+
+			assert_eq!(BoundRedeemAddress::<Test>::get(&BOB), Some(RESTRICTED_ADDRESS_A));
+			assert_eq!(BoundExecutorAddress::<Test>::get(&BOB), Some(RESTRICTED_ADDRESS_B));
 		});
 	}
 }

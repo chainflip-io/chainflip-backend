@@ -18,6 +18,12 @@
 
 use super::*;
 use frame_benchmarking::v2::*;
+use frame_support::assert_ok;
+use sp_std::vec;
+
+use cf_traits::FeePayment;
+
+use cf_primitives::FLIPPERINOS_PER_FLIP;
 
 #[benchmarks]
 mod benchmarks {
@@ -33,4 +39,37 @@ mod benchmarks {
 
 		assert_eq!(VanityNames::<T>::get().get(&caller), Some(&name));
 	}
+
+	#[benchmark]
+	fn derive_sub_account() {
+		const SUB_ACCOUNT_INDEX: SubAccountIndex = 1;
+		const FLIP_BALANCE: u128 = 1000;
+		let caller: T::AccountId = whitelisted_caller();
+
+		T::FeePayment::mint_to_account(&caller, (FLIP_BALANCE * FLIPPERINOS_PER_FLIP).into());
+
+		#[extrinsic_call]
+		derive_sub_account(RawOrigin::Signed(caller.clone()), SUB_ACCOUNT_INDEX, None);
+	}
+
+	#[benchmark]
+	fn as_sub_account() {
+		const SUB_ACCOUNT_INDEX: SubAccountIndex = 1;
+		const FLIP_BALANCE: u128 = 1000;
+		let caller: T::AccountId = whitelisted_caller();
+		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
+
+		T::FeePayment::mint_to_account(&caller, (FLIP_BALANCE * FLIPPERINOS_PER_FLIP).into());
+
+		assert_ok!(Pallet::<T>::derive_sub_account(
+			RawOrigin::Signed(caller.clone()).into(),
+			SUB_ACCOUNT_INDEX,
+			None,
+		));
+
+		#[extrinsic_call]
+		as_sub_account(RawOrigin::Signed(caller), SUB_ACCOUNT_INDEX, call);
+	}
+
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

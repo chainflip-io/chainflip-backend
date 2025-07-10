@@ -235,7 +235,6 @@ async function brokerLevelScreeningTestBtcVaultSwap(
       commissionBps: 0,
     },
     [],
-    0,
   );
   await reportFunction(txId);
 }

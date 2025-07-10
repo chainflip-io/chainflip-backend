@@ -1259,3 +1259,16 @@ pub trait PoolPriceProvider {
 pub trait CcmAdditionalDataHandler {
 	fn handle_ccm_additional_data(ccm_data: DecodedCcmAdditionalData);
 }
+
+pub trait SpawnAccount {
+	type AccountId;
+	type Amount;
+
+	fn spawn_sub_account(
+		parent_account_id: Self::AccountId,
+		account_id: Self::AccountId,
+		initial_balance: Option<Self::Amount>,
+	) -> Result<(), DispatchError>;
+
+	fn does_account_exist(account_id: &Self::AccountId) -> bool;
+}
