@@ -467,4 +467,19 @@ mod benchmarks {
 
 		assert_eq!(DelegationPreferences::<T>::get(caller), DelegationPreferences::default());
 	}
+
+	#[benchmark]
+	fn block_delegator() {
+		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+
+		let account_id = whitelisted_caller();
+
+		#[extrinsic_call]
+		block_delegator(RawOrigin::Signed(operator), account_id);
+
+		assert!(DelegationPreferences::<T>::get(account_id).is_none());
+	}
 }
