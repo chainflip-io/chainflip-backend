@@ -16,17 +16,5 @@
 
 use crate::Pallet;
 use cf_runtime_utilities::PlaceholderMigration;
-use frame_support::migrations::VersionedMigration;
 
-mod ccm_add_data_to_decoded;
-
-pub type PalletMigration<T, I> = (
-	VersionedMigration<
-		23,
-		24,
-		ccm_add_data_to_decoded::CcmAdditionalDataToCheckedMigration<T, I>,
-		Pallet<T, I>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	PlaceholderMigration<24, Pallet<T, I>>,
-);
+pub type PalletMigration<T, I> = (PlaceholderMigration<24, Pallet<T, I>>,);
