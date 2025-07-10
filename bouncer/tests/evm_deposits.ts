@@ -134,6 +134,7 @@ async function testTxMultipleVaultSwaps(
 
   let eventCounter = 0;
   const observingEvent = observeEvent(logger, 'swapping:SwapRequested', {
+    timeoutSeconds: 150,
     test: (event) => {
       if (
         typeof event.data.origin === 'object' &&

@@ -10,7 +10,7 @@ import {
   sleep,
 } from 'shared/utils';
 import { getEarnedBrokerFees } from 'tests/broker_fee_collection';
-import { openPrivateBtcChannel, registerAffiliate } from 'shared/btc_vault_swap';
+import { registerAffiliate, waitForPrivateBtcChannel } from 'shared/btc_vault_swap';
 import { setupBrokerAccount } from 'shared/setup_account';
 import { executeVaultSwap, performVaultSwap } from 'shared/perform_swap';
 import { prepareSwap } from 'shared/swapping';
@@ -114,7 +114,7 @@ async function testFeeCollection(
   const refundAddress = await newAddress('Eth', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
   await Promise.all([setupBrokerAccount(logger, brokerUri)]);
   if (inputAsset === Assets.Btc) {
-    await openPrivateBtcChannel(logger, brokerUri);
+    await waitForPrivateBtcChannel(logger, brokerUri);
   }
 
   logger.debug('Registering affiliate');
