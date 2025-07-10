@@ -340,6 +340,7 @@ pub struct RpcAuctionState {
 	current_epoch_started_at: u32,
 	redemption_period_as_percentage: u8,
 	min_funding: NumberOrHex,
+	min_bid: NumberOrHex,
 	auction_size_range: (u32, u32),
 	min_active_bid: Option<NumberOrHex>,
 }
@@ -351,6 +352,7 @@ impl From<AuctionState> for RpcAuctionState {
 			current_epoch_started_at: auction_state.current_epoch_started_at,
 			redemption_period_as_percentage: auction_state.redemption_period_as_percentage,
 			min_funding: auction_state.min_funding.into(),
+			min_bid: auction_state.min_bid.into(),
 			auction_size_range: auction_state.auction_size_range,
 			min_active_bid: auction_state.min_active_bid.map(|bond| bond.into()),
 		}
@@ -1309,7 +1311,6 @@ where
 		}],
 		cf_suspensions() -> RpcSuspensions,
 		cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash,
-		cf_auction_state() -> RpcAuctionState [map: Into::into],
 		cf_safe_mode_statuses() -> RuntimeSafeMode,
 		cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as Chain>::Transaction>,
 		cf_failed_call_arbitrum(broadcast_id: BroadcastId) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>,
@@ -1342,6 +1343,18 @@ where
 		#[allow(deprecated)]
 		self.rpc_backend
 			.with_runtime_api(None, |api, hash| api.cf_current_compatibility_version(hash))
+	}
+
+	fn cf_auction_state(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcAuctionState> {
+		self.rpc_backend
+			.with_versioned_runtime_api(at, |api, hash, version| match version {
+				Some(v) if v < 5 => api.cf_auction_state_before_version_5(hash).map(Into::into),
+				_ => api.cf_auction_state(hash),
+			})
+			.map(Into::into)
 	}
 
 	fn cf_max_swap_amount(&self, asset: Asset) -> RpcResult<Option<AssetAmount>> {
