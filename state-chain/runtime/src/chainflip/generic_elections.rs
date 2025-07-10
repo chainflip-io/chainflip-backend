@@ -117,7 +117,6 @@ pub fn initial_state() -> InitialStateOf<Runtime, ()> {
 				ethereum: ExternalChainState { price: Default::default() },
 			},
 			get_time: Default::default(),
-			queries: Default::default(),
 		},),
 		unsynchronised_settings: (OraclePriceSettings {
 			solana: ExternalChainSettings {

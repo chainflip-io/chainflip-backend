@@ -73,6 +73,7 @@ def_derive! {
 		pub timestamp: Apply<T::Aggregation, UnixTime>,
 		pub price: Apply<T::Aggregation, T::Price>,
 		pub price_status: PriceStatus,
+		pub minimal_price_deviation: BasisPoints
 	}
 }
 
@@ -172,10 +173,7 @@ impl<T: OPTypes> ExternalChainState<T> {
 		});
 	}
 
-	pub fn get_query(
-		&self,
-		settings: &ExternalChainSettings,
-	) -> BTreeMap<T::Asset, Vec<VotingCondition<T>>> {
+	pub fn get_query(&self) -> BTreeMap<T::Asset, Vec<VotingCondition<T>>> {
 		use PriceStatus::*;
 
 		all::<T::Asset>()
@@ -193,7 +191,7 @@ impl<T: OPTypes> ExternalChainState<T> {
 								},
 								VotingCondition::PriceMoved {
 									last_price: T::Aggregation::canonical(&asset_state.price),
-									deviation: settings.minimal_price_deviation,
+									deviation: asset_state.minimal_price_deviation,
 								},
 							],
 							Stale => vec![VotingCondition::NewTimestamp {
@@ -213,6 +211,7 @@ impl<T: OPTypes> ExternalChainState<T> {
 				timestamp: T::Aggregation::single(&Default::default()),
 				price: T::Aggregation::single(&Default::default()),
 				price_status: PriceStatus::Stale,
+				minimal_price_deviation: Default::default(),
 			});
 			entry.update(response);
 		}
@@ -256,9 +255,9 @@ impl<T: OPTypes> IndexMut<ExternalPriceChain> for ExternalChainStates<T> {
 }
 
 impl<T: OPTypes> ExternalChainStates<T> {
-	pub fn get_queries(&self, settings: &OraclePriceSettings) -> Vec<PriceQuery<T>> {
+	pub fn get_queries(&self) -> Vec<PriceQuery<T>> {
 		all::<ExternalPriceChain>()
-			.map(|chain| PriceQuery { chain, assets: self[chain].get_query(&settings[chain]) })
+			.map(|chain| PriceQuery { chain, assets: self[chain].get_query() })
 			.take_while_inclusive(|query| self[query.chain].is_stale())
 			.collect()
 	}
@@ -314,7 +313,7 @@ impl Index<ExternalPriceChain> for OraclePriceSettings {
 }
 
 def_derive! {
-	#[derive(TypeInfo, Copy)]
+	#[derive(TypeInfo, Copy, Default)]
 	pub struct BasisPoints(pub u16);
 }
 
@@ -332,7 +331,6 @@ def_derive! {
 	pub struct OraclePriceTracker<T: OPTypes> {
 		pub chain_states: ExternalChainStates<T>,
 		pub get_time: T::GetTime,
-		pub queries: Vec<PriceQuery<T>>,
 	}
 }
 
@@ -361,7 +359,7 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 	type State = OraclePriceTracker<T>;
 
 	fn get_queries(state: &mut Self::State) -> Vec<Self::Query> {
-		state.queries.clone()
+		state.chain_states.get_queries()
 	}
 
 	fn step(
@@ -379,8 +377,6 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 		all::<ExternalPriceChain>().for_each(|chain| {
 			state.chain_states[chain].update_price_state(&state.get_time.run(()), &settings[chain])
 		});
-
-		state.queries = state.chain_states.get_queries(settings);
 
 		log::info!("Called step function for oracle at time {:?}", state.get_time.run(()));
 
