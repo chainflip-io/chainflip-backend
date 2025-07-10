@@ -519,6 +519,7 @@ fn auction_state_serialization() {
 		current_epoch_started_at: 2u32,
 		redemption_period_as_percentage: 3u8,
 		min_funding: NumberOrHex::Number(4u64),
+		min_bid: NumberOrHex::Number(500u64),
 		auction_size_range: (5u32, 6u32),
 		min_active_bid: Some(NumberOrHex::Number(7u64)),
 	};

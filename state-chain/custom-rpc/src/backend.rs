@@ -82,6 +82,23 @@ where
 	{
 		Ok(f(&*self.client.runtime_api(), self.unwrap_or_best(at)).map_err(CfApiError::from)?)
 	}
+
+	pub fn with_versioned_runtime_api<E, R>(
+		&self,
+		at: Option<Hash>,
+		f: impl FnOnce(&C::Api, Hash, Option<u32>) -> Result<R, E>,
+	) -> Result<R, RpcApiError>
+	where
+		CfApiError: From<E>,
+	{
+		use sp_api::ApiExt;
+		self.with_runtime_api::<CfApiError, _>(at, |api, hash| {
+			let api_version =
+				api.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)?;
+
+			Ok(f(api, hash, api_version)?)
+		})
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
