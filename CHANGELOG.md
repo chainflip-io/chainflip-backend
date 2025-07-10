@@ -4,6 +4,10 @@ All notable changes included in each Chainflip release will be documented in thi
 
 ## [1.10.0] - 2025-07-07
 
+- Skip elections setup if pallet not found ([#5985](https://github.com/chainflip-io/chainflip-backend/issues/5985))
+- Increase the eth fee tracking window to 5 blocks ([#5984](https://github.com/chainflip-io/chainflip-backend/issues/5984))
+- Create aliases for runtime api methods that were renamed in 1.10.
+- Make voting for optimistic elections work independently of best_block_height.
 - Add option to wait for finality when opening deposit channel ([#5833](https://github.com/chainflip-io/chainflip-backend/issues/5833))
 - Decode vault swap rpc ([#5817](https://github.com/chainflip-io/chainflip-backend/issues/5817))
 - Add swap-after-disconnect test for assethub ([#5838](https://github.com/chainflip-io/chainflip-backend/issues/5838))
