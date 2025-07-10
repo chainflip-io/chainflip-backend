@@ -1,5 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
+assertion_line: 527
 expression: val
 ---
 {
@@ -7,6 +8,7 @@ expression: val
   "current_epoch_started_at": 2,
   "redemption_period_as_percentage": 3,
   "min_funding": 4,
+  "min_bid": 500,
   "auction_size_range": [
     5,
     6
