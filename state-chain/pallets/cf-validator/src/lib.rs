@@ -348,17 +348,17 @@ pub mod pallet {
 	/// Maps an operator account to it's allowed delegators.
 	#[pallet::storage]
 	pub type AllowedDelegators<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
+		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
 	/// Maps an operator account to it's blocked delegators.
 	#[pallet::storage]
 	pub type BlockedDelegators<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
+		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
 	/// Maps an validator to an operator.
 	#[pallet::storage]
 	pub type ManagedValidators<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, T::AccountId, OptionQuery>;
+		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
 
 	/// Maps an validator to an operator.
 	#[pallet::storage]
@@ -368,7 +368,7 @@ pub mod pallet {
 	/// Maps an operator account to it's parameters.
 	#[pallet::storage]
 	pub type OperatorParameters<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, DelegationPreferences, OptionQuery>;
+		StorageMap<_, Identity, T::AccountId, DelegationPreferences, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
