@@ -18,23 +18,15 @@ use crate::Pallet;
 use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
-mod ccm_add_data_to_decoded;
-mod transaction_rejection_details_ccm_migration;
+mod channel_action_ccm_refund;
 
 pub type PalletMigration<T, I> = (
 	VersionedMigration<
-		23,
-		24,
-		ccm_add_data_to_decoded::CcmAdditionalDataToCheckedMigration<T, I>,
+		26,
+		27,
+		channel_action_ccm_refund::ChannelActionCcmRefund<T, I>,
 		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	VersionedMigration<
-		24,
-		25,
-		transaction_rejection_details_ccm_migration::Migration<T, I>,
-		Pallet<T, I>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	PlaceholderMigration<25, Pallet<T, I>>,
+	PlaceholderMigration<27, Pallet<T, I>>,
 );

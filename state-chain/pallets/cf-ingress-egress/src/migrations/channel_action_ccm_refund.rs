@@ -1,4 +1,3 @@
-use cf_chains::{address::IntoForeignChainAddress, CcmChannelMetadataUnchecked};
 // Copyright 2025 Chainflip Labs GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,28 +28,7 @@ use codec::{Decode, Encode};
 
 pub mod old {
 	use super::*;
-	use cf_chains::CcmAdditionalData;
 	use cf_primitives::Price;
-
-	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-	pub struct CrossChainMessage<C: Chain> {
-		pub egress_id: EgressId,
-		pub asset: C::ChainAsset,
-		pub amount: C::ChainAmount,
-		pub destination_address: C::ChainAccount,
-		pub message: CcmMessage,
-		pub source_chain: ForeignChain,
-		pub source_address: Option<ForeignChainAddress>,
-		pub ccm_additional_data: CcmAdditionalData,
-		pub gas_budget: GasAmount,
-	}
-
-	#[frame_support::storage_alias]
-	pub type ScheduledEgressCcm<T: Config<I>, I: 'static> = StorageValue<
-		Pallet<T, I>,
-		Vec<CrossChainMessage<<T as Config<I>>::TargetChain>>,
-		ValueQuery,
-	>;
 
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct DepositChannelDetails<T: Config<I>, I: 'static> {
@@ -77,7 +55,7 @@ pub mod old {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
-			channel_metadata: Option<CcmChannelMetadataUnchecked>,
+			channel_metadata: Option<CcmChannelMetadataChecked>,
 			refund_params: ChannelRefundParameters<ForeignChainAddress>,
 			dca_params: Option<DcaParameters>,
 		},
@@ -101,99 +79,35 @@ pub mod old {
 	>;
 }
 
-pub struct CcmAdditionalDataToCheckedMigration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
+pub struct ChannelActionCcmRefund<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
-impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade
-	for CcmAdditionalDataToCheckedMigration<T, I>
-{
+impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ChannelActionCcmRefund<T, I> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let ccms = old::ScheduledEgressCcm::<T, I>::get()
-			.into_iter()
-			.map(|ccm| ccm.egress_id)
-			.collect::<BTreeSet<_>>();
-
 		let deposit_channels =
 			old::DepositChannelLookup::<T, I>::iter_keys().collect::<BTreeSet<_>>();
 
-		Ok((ccms, deposit_channels).encode())
+		Ok(deposit_channels.encode())
 	}
 
 	fn on_runtime_upgrade() -> Weight {
-		log::info!("🍩 Running migration for Ingress-Egress pallet: Updating CCM's additional data to decoded.");
-		let _ = crate::ScheduledEgressCcm::<T, I>::translate::<
-			Vec<old::CrossChainMessage<<T as Config<I>>::TargetChain>>,
-			_,
-		>(|maybe_old_ccms| {
-			maybe_old_ccms.map(|old_ccms| {
-				old_ccms
-					.into_iter()
-					.filter_map(|old_ccm| {
-						match (CcmChannelMetadataUnchecked {
-							message: old_ccm.message.clone(),
-							gas_budget: old_ccm.gas_budget,
-							ccm_additional_data: old_ccm.ccm_additional_data,
-						}
-						.to_checked(
-							old_ccm.asset.into(),
-							old_ccm.destination_address.clone().into_foreign_chain_address(),
-						)) {
-							Err(e) => {
-								log::error!("❌ Ccm To Checked Migration for Ingress-Egress pallet failed. Egress id: {:?}, err: {:?}", old_ccm.egress_id, e);
-								None
-							},
-							Ok(checked_ccm) => Some(CrossChainMessage {
-								egress_id: old_ccm.egress_id,
-								asset: old_ccm.asset,
-								amount: old_ccm.amount,
-								destination_address: old_ccm.destination_address.clone(),
-								message: old_ccm.message,
-								source_chain: old_ccm.source_chain,
-								source_address: old_ccm.source_address,
-								ccm_additional_data: checked_ccm.ccm_additional_data,
-								gas_budget: old_ccm.gas_budget,
-							})
-						}
-					})
-					.collect::<Vec<_>>()
-			})
-		});
-
+		log::info!("🍩 Running migration for Ingress-Egress pallet: Updating Refund Parameters.");
 		crate::DepositChannelLookup::<T, I>::translate_values::<old::DepositChannelDetails<T, I>, _>(
 			|old| {
 				match old.action.clone() {
-					old::ChannelAction::Swap {
-						destination_asset,
-						destination_address,
-						channel_metadata,
-						refund_params,
-						..
-					} => {
-						// Convert ccm into checked ccm.
-						let checked_ccm = channel_metadata
-							.map(|ccm| {
-								ccm.clone().to_checked(destination_asset, destination_address)
-							})
-							.transpose();
-						// Convert Refund param into Checked version.
-						let checked_refund_params = ChannelRefundParametersCheckedInternal {
+					old::ChannelAction::Swap { refund_params, .. } =>
+					// Convert Refund param into Checked version.
+						Some(ChannelRefundParametersCheckedInternal {
 							retry_duration: refund_params.retry_duration,
 							refund_address: AccountOrAddress::ExternalAddress(
 								refund_params.refund_address,
 							),
 							min_price: refund_params.min_price,
 							refund_ccm_metadata: None,
-						};
-						// Only succeed if both conversions work
-						if let Ok(checked_ccm) = checked_ccm {
-							Some((checked_ccm, checked_refund_params))
-						} else {
-							None
-						}
-					},
+						}),
 					_ => None,
 				}
-				.map(|(checked_ccm, checked_refund_params)| DepositChannelDetails {
+				.map(|checked_refund_params| DepositChannelDetails {
 					owner: old.owner,
 					deposit_channel: old.deposit_channel,
 					opened_at: old.opened_at,
@@ -203,14 +117,14 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade
 							destination_asset,
 							destination_address,
 							broker_fees,
-							channel_metadata: _,
+							channel_metadata,
 							refund_params: _,
 							dca_params,
 						} => ChannelAction::Swap {
 							destination_asset,
 							destination_address: destination_address.clone(),
 							broker_fees,
-							channel_metadata: checked_ccm,
+							channel_metadata,
 							refund_params: checked_refund_params,
 							dca_params,
 						},
@@ -235,17 +149,9 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let (pre_ccms, pre_deposit_channels) = <(
-			BTreeSet<EgressId>,
-			BTreeSet<TargetChainAccount<T, I>>,
-		)>::decode(&mut state.as_slice())
-		.map_err(|_| DispatchError::from("Failed to decode state"))?;
-
-		let post_ccms = ScheduledEgressCcm::<T, I>::get()
-			.into_iter()
-			.map(|ccm| ccm.egress_id)
-			.collect::<BTreeSet<_>>();
-		assert_eq!(pre_ccms, post_ccms);
+		let (pre_deposit_channels) =
+			<(BTreeSet<TargetChainAccount<T, I>>,)>::decode(&mut state.as_slice())
+				.map_err(|_| DispatchError::from("Failed to decode state"))?;
 
 		let post_deposit_channels =
 			DepositChannelLookup::<T, I>::iter_keys().collect::<BTreeSet<_>>();
