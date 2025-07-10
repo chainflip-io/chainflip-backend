@@ -181,6 +181,7 @@ jobs:
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
           cd bouncer
+          pnpm install --frozen-lockfile
           ./fast_bouncer.sh
           git reset --hard
 
