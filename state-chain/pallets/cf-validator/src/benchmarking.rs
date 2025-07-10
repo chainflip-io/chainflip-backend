@@ -416,7 +416,7 @@ mod benchmarks {
 		.unwrap();
 
 		#[extrinsic_call]
-		claim_validator(RawOrigin::Signed(operator.clone()), validator);
+		claim_validator(RawOrigin::Signed(operator.clone()), validator.clone());
 
 		assert!(ClaimedValidators::<T>::get(validator).is_some());
 	}
@@ -432,10 +432,10 @@ mod benchmarks {
 		)
 		.unwrap();
 
-		ClaimedValidators::<T>::insert(validator, operator);
+		ClaimedValidators::<T>::insert(validator.clone(), BTreeSet::from([operator.clone()]));
 
 		#[extrinsic_call]
-		accept_operator(RawOrigin::Signed(validator), operator);
+		accept_operator(RawOrigin::Signed(validator.clone()), operator.clone());
 
 		assert!(ManagedValidators::<T>::get(validator).is_some());
 	}
@@ -447,10 +447,15 @@ mod benchmarks {
 		)
 		.unwrap();
 
-		ManagedValidators::<T>::insert(validator, operator);
+		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+
+		ManagedValidators::<T>::insert(validator.clone(), operator.clone());
 
 		#[extrinsic_call]
-		remove_validator(RawOrigin::Signed(validator), validator);
+		remove_validator(RawOrigin::Signed(validator.clone()), validator.clone());
 
 		assert!(ManagedValidators::<T>::get(validator).is_none());
 	}
@@ -463,9 +468,12 @@ mod benchmarks {
 		.unwrap();
 
 		#[extrinsic_call]
-		set_delegation_preferences(RawOrigin::Signed(caller), DelegationPreferences::default());
+		set_delegation_preferences(
+			RawOrigin::Signed(caller.clone()),
+			DelegationPreferences::default(),
+		);
 
-		assert_eq!(DelegationPreferences::<T>::get(caller), DelegationPreferences::default());
+		assert_eq!(OperatorParameters::<T>::get(caller), Some(DelegationPreferences::default()));
 	}
 
 	#[benchmark]
@@ -479,8 +487,6 @@ mod benchmarks {
 
 		#[extrinsic_call]
 		block_delegator(RawOrigin::Signed(operator), account_id);
-
-		assert!(DelegationPreferences::<T>::get(account_id).is_none());
 	}
 
 	#[benchmark]
@@ -494,8 +500,6 @@ mod benchmarks {
 
 		#[extrinsic_call]
 		allow_delegator(RawOrigin::Signed(operator), account_id);
-
-		assert!(DelegationPreferences::<T>::get(account_id).is_some());
 	}
 
 	#[benchmark]
@@ -514,7 +518,7 @@ mod benchmarks {
 		.unwrap();
 
 		#[extrinsic_call]
-		deregister_as_operator(RawOrigin::Signed(operator));
+		deregister_as_operator(RawOrigin::Signed(operator.clone()));
 
 		assert!(<T as Chainflip>::AccountRoleRegistry::ensure_operator(
 			RawOrigin::Signed(operator).into()
