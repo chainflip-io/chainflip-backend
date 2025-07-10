@@ -52,4 +52,8 @@ where
 			}
 		})
 	}
+
+	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result {
+		vote.clone()
+	}
 }
