@@ -92,7 +92,7 @@ use cf_traits::{
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
+use frame_support::{derive_impl, instances::*};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
 use pallet_cf_governance::GovCallHash;

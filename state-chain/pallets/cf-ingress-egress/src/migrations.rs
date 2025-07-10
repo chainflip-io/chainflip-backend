@@ -16,6 +16,5 @@
 
 use crate::Pallet;
 use cf_runtime_utilities::PlaceholderMigration;
-use frame_support::migrations::VersionedMigration;
 
 pub type PalletMigration<T, I> = (PlaceholderMigration<24, Pallet<T, I>>,);
