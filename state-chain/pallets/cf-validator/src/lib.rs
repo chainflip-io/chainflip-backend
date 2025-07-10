@@ -859,7 +859,7 @@ pub mod pallet {
 		/// signals his wish to manage the validator in his delegated staking pool. The validator
 		/// has to actively accept this invitation by calling the `accept_operator` extrinsic.
 		#[pallet::call_index(10)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::ValidatorWeightInfo::claim_validator())]
 		pub fn claim_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 			ensure!(
@@ -880,7 +880,7 @@ pub mod pallet {
 
 		/// Executed by a validator to accept an operator's invitation to manage it.
 		#[pallet::call_index(11)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::ValidatorWeightInfo::accept_operator())]
 		pub fn accept_operator(origin: OriginFor<T>, operator_id: T::AccountId) -> DispatchResult {
 			let validator_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			ensure!(
@@ -906,7 +906,7 @@ pub mod pallet {
 		/// Executed by an operator or an validator to remove itself from the operator's delegation
 		/// pool.
 		#[pallet::call_index(12)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::ValidatorWeightInfo::remove_validator())]
 		pub fn remove_validator(origin: OriginFor<T>, validator: T::AccountId) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 			let operator =
@@ -921,7 +921,7 @@ pub mod pallet {
 
 		/// Executed by an operator to set the delegation preferences for the operator.
 		#[pallet::call_index(13)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::ValidatorWeightInfo::set_delegation_preferences())]
 		pub fn set_delegation_preferences(
 			origin: OriginFor<T>,
 			preferences: DelegationPreferences,
@@ -937,7 +937,7 @@ pub mod pallet {
 
 		/// Executed by an operator to block a delegator from delegating to the operator.
 		#[pallet::call_index(14)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::ValidatorWeightInfo::block_delegator())]
 		pub fn block_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 
@@ -961,7 +961,7 @@ pub mod pallet {
 
 		/// Executed by an operator to allow a delegator to delegate to the operator.
 		#[pallet::call_index(15)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::ValidatorWeightInfo::allow_delegator())]
 		pub fn allow_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 
@@ -983,7 +983,7 @@ pub mod pallet {
 
 		/// Executed by an account to register as an operator.
 		#[pallet::call_index(16)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::ValidatorWeightInfo::register_as_operator())]
 		pub fn register_as_operator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 			T::AccountRoleRegistry::register_as_operator(&account_id)?;
@@ -992,7 +992,7 @@ pub mod pallet {
 
 		/// Executed by an operator to deregister as an operator.
 		#[pallet::call_index(17)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::ValidatorWeightInfo::deregister_as_operator())]
 		pub fn deregister_as_operator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 
