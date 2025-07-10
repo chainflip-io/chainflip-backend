@@ -49,11 +49,15 @@ use core::marker::PhantomData;
 /// Weight functions needed for pallet_cf_vaults.
 pub trait WeightInfo {
 	fn vault_key_rotated_externally() -> Weight;
+	fn initialize_chain() -> Weight;
 }
 
 /// Weights for pallet_cf_vaults using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
+	fn initialize_chain() -> Weight {
+		Default::default()
+	}
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
 	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumVault::VaultStartBlockNumbers` (r:0 w:1)
@@ -87,5 +91,8 @@ impl WeightInfo for () {
 		Weight::from_parts(19_045_000, 1831)
 			.saturating_add(ParityDbWeight::get().reads(1_u64))
 			.saturating_add(ParityDbWeight::get().writes(2_u64))
+	}
+	fn initialize_chain() -> Weight {
+		Default::default()
 	}
 }

@@ -53,6 +53,19 @@ mod benchmarks {
 		));
 	}
 
+	#[benchmark]
+	fn initialize_chain() {
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		let call = Call::<T, I>::initialize_chain {};
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
+		}
+
+		assert!(ChainInitialized::<T, I>::get());
+	}
+
 	#[cfg(test)]
 	use crate::mock::*;
 
@@ -60,6 +73,9 @@ mod benchmarks {
 	fn benchmark_works() {
 		new_test_ext().execute_with(|| {
 			_vault_key_rotated_externally::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_initialize_chain::<Test, ()>(true);
 		});
 	}
 }

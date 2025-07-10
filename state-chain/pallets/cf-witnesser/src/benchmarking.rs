@@ -47,6 +47,21 @@ mod benchmarks {
 	}
 
 	#[benchmark]
+	fn force_witness() {
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		let call: <T as Config>::RuntimeCall = frame_system::Call::remark { remark: vec![] }.into();
+		let epoch = T::EpochInfo::last_expired_epoch() + 1;
+
+		let (_, call_hash) = Pallet::<T>::split_calldata(&mut call.clone());
+		Votes::<T>::insert(epoch, call_hash, vec![0x00, 0x01, 0x02]);
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::force_witness(origin, Box::new(call.clone()), epoch));
+		}
+	}
+
+	#[benchmark]
 	fn prewitness() {
 		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 		let call: Box<<T as Config>::RuntimeCall> =
