@@ -21,8 +21,8 @@
 use cf_chains::{eth::api::StateChainGatewayAddressProvider, UpdateFlipSupply};
 use cf_primitives::{AssetAmount, EgressId};
 use cf_traits::{
-	impl_pallet_safe_mode, BackupRewardsNotifier, BlockEmissions, Broadcaster, EgressApi,
-	FlipBurnInfo, Issuance, RewardsDistribution, ScheduledEgressDetails,
+	impl_pallet_safe_mode, BlockEmissions, Broadcaster, EgressApi, FlipBurnInfo, Issuance,
+	RewardsDistribution, ScheduledEgressDetails,
 };
 use codec::MaxEncodedLen;
 use frame_support::storage::transactional::with_storage_layer;
@@ -41,6 +41,7 @@ use frame_support::{
 	traits::{Get, Imbalance},
 };
 use sp_arithmetic::traits::UniqueSaturatedFrom;
+use sp_std::collections::btree_map::BTreeMap;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -162,7 +163,7 @@ pub mod pallet {
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::generate_deposit(pub fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Supply Update has been Broadcasted [block_number]
 		SupplyUpdateBroadcastRequested(BlockNumberFor<T>),
@@ -173,7 +174,12 @@ pub mod pallet {
 		/// SupplyUpdateInterval has been updated [block_number]
 		SupplyUpdateIntervalUpdated(BlockNumberFor<T>),
 		/// Rewards have been distributed to [account_id] \[amount\]
-		BackupRewardsDistributed { account_id: T::AccountId, amount: T::FlipBalance },
+		BackupRewardsDistributed {
+			total: T::FlipBalance,
+			validator_id: T::AccountId,
+			validator_fee: T::FlipBalance,
+			delegator_fees: BTreeMap<T::AccountId, T::FlipBalance>,
+		},
 		/// The Flip that was bought using the network fee has been burned.
 		NetworkFeeBurned { amount: AssetAmount, egress_id: EgressId },
 		/// The Flip burn was skipped.
@@ -330,18 +336,6 @@ impl<T: Config> Pallet<T> {
 				Self::deposit_event(Event::FlipBurnSkipped { reason: e });
 			},
 		}
-	}
-}
-
-impl<T: Config> BackupRewardsNotifier for Pallet<T> {
-	type Balance = T::FlipBalance;
-	type AccountId = T::AccountId;
-
-	fn emit_event(account_id: &Self::AccountId, amount: Self::Balance) {
-		Self::deposit_event(Event::BackupRewardsDistributed {
-			account_id: account_id.clone(),
-			amount,
-		});
 	}
 }
 

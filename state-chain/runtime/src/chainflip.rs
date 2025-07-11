@@ -16,12 +16,12 @@
 
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod address_derivation;
-pub mod backup_node_rewards;
 pub mod cons_key_rotator;
 pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 pub mod multi_vault_activator;
+pub mod node_rewards_and_slashing;
 mod offences;
 pub mod pending_rotation_broadcasts;
 mod signer_nomination;
@@ -34,16 +34,18 @@ pub mod bitcoin_elections;
 pub mod solana_elections;
 pub mod vault_swaps;
 
+use cf_chains::SetGovKeyWithAggKeyError;
+use sp_runtime::FixedPointNumber;
+
 use crate::{
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
 	ArbitrumIngressEgress, AssethubBroadcaster, AssethubChainTracking, AssethubIngressEgress,
-	Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber,
-	Emissions, Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
-	Flip, FlipBalance, Hash, PolkadotBroadcaster, PolkadotChainTracking, PolkadotIngressEgress,
+	BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber, Emissions,
+	Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress, Flip,
+	FlipBalance, Hash, PolkadotBroadcaster, PolkadotChainTracking, PolkadotIngressEgress,
 	PolkadotThresholdSigner, Runtime, RuntimeCall, SolanaBroadcaster, SolanaChainTrackingProvider,
 	SolanaIngressEgress, SolanaThresholdSigner, System, Validator, YEAR,
 };
-use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
 	address::{
 		decode_and_validate_address_for_asset, to_encoded_address, try_from_encoded_address,
@@ -94,22 +96,19 @@ use cf_primitives::{
 	DcaParameters,
 };
 use cf_traits::{
-	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
-	BroadcastAnyChainGovKey, Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster,
-	DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, Heartbeat,
-	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode,
-	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
+	AccountInfo, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster,
+	CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi, EpochInfo,
+	FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, KeyProvider, OnBroadcastReady,
+	OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
+use node_rewards_and_slashing::*;
 
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 	pallet_prelude::DispatchError,
-	sp_runtime::{
-		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
-		FixedPointNumber, FixedU64,
-	},
+	sp_runtime::{traits::One, FixedU64},
 	traits::{Defensive, Get},
 };
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -132,42 +131,6 @@ impl Chainflip for Runtime {
 	type EpochInfo = Validator;
 	type AccountRoleRegistry = AccountRoles;
 	type FundingInfo = Flip;
-}
-
-struct BackupNodeEmissions;
-
-impl RewardsDistribution for BackupNodeEmissions {
-	type Balance = FlipBalance;
-	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
-
-	fn distribute() {
-		if Emissions::backup_node_emission_per_block() == 0 {
-			return
-		}
-
-		let backup_nodes =
-			Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>();
-		if backup_nodes.is_empty() {
-			return
-		}
-
-		// Distribute rewards one by one
-		// N.B. This could be more optimal
-		for (validator_id, reward) in calculate_backup_rewards(
-			backup_nodes,
-			Validator::bond(),
-			<<Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval as Get<
-				BlockNumber,
-			>>::get()
-			.unique_saturated_into(),
-			Emissions::backup_node_emission_per_block(),
-			Emissions::current_authority_emission_per_block(),
-			Self::Balance::unique_saturated_from(Validator::current_authority_count()),
-		) {
-			Flip::settle(&validator_id, Self::Issuance::mint(reward).into());
-			<Emissions as BackupRewardsNotifier>::emit_event(&validator_id, reward);
-		}
-	}
 }
 
 pub struct ChainflipHeartbeat;
@@ -453,23 +416,6 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 	}
 }
 
-pub struct BlockAuthorRewardDistribution;
-
-impl RewardsDistribution for BlockAuthorRewardDistribution {
-	type Balance = FlipBalance;
-	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
-
-	fn distribute() {
-		let reward_amount = Emissions::current_authority_emission_per_block();
-		if reward_amount != 0 {
-			if let Some(current_block_author) = Authorship::author() {
-				Flip::settle(&current_block_author, Self::Issuance::mint(reward_amount).into());
-			} else {
-				log::warn!("No block author for block {}.", System::current_block_number());
-			}
-		}
-	}
-}
 pub struct RuntimeUpgradeManager;
 
 impl RuntimeUpgrade for RuntimeUpgradeManager {
@@ -1026,7 +972,7 @@ pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
 		}
 	}
 	.map(|reward_pa| {
-		// Convert Permill to Basis Point.
+		// Convert APY to Basis Point.
 		FixedU64::from_rational(reward_pa, Flip::balance(account_id))
 			.checked_mul_int(10_000u32)
 			.unwrap_or_default()

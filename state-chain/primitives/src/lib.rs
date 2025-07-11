@@ -19,6 +19,7 @@
 //! Chainflip Primitives
 //!
 //! Primitive types to be used across Chainflip's various crates.
+
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
@@ -26,7 +27,9 @@ use frame_support::sp_runtime::{
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_arithmetic::traits::{BaseArithmetic, Unsigned};
 use sp_core::{ConstU32, Get, H256, U256};
+use sp_runtime::{traits::AtLeast32BitUnsigned, DispatchError, Perbill};
 use sp_std::{
 	cmp::{Ord, PartialOrd},
 	collections::btree_map::BTreeMap,
@@ -547,4 +550,104 @@ impl<T> ApiWaitForResult<T> {
 			ApiWaitForResult::TxDetails { response, .. } => response,
 		}
 	}
+}
+
+/// A snapshot of active delegations to a validator for the current epoch
+#[derive(
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	RuntimeDebug,
+	Default,
+	PartialOrd,
+	Ord,
+)]
+pub struct Delegation<Account, Amount> {
+	/// Validators controlled by this operator and their bid amounts.
+	pub validator_bids: BTreeMap<Account, Amount>,
+	/// Accounts delegated to this operator with their bid amounts.
+	pub delegator_bids: BTreeMap<Account, Amount>,
+	/// Fee percentage applied to rewards
+	pub delegation_fee: Percent,
+}
+
+impl<
+		Account: Ord + PartialOrd + Clone,
+		Amount: Clone + Copy + AtLeast32BitUnsigned + From<u128> + Default + BaseArithmetic + Unsigned,
+	> Delegation<Account, Amount>
+{
+	/// Splits the total amount for the given operator. Can be used to distribute reward or
+	/// calculate slashing.
+	/// A proportion is given to the operator.
+	/// The rest is split proportionally to the amount staked by each delegator.
+	pub fn split_amount(
+		&self,
+		total: Amount,
+	) -> Result<(Amount, BTreeMap<Account, Amount>), DispatchError> {
+		if self.delegator_bids.is_empty() {
+			return Err("Empty delegator set".into())
+		}
+
+		let delegation_fee = self.delegation_fee * total;
+		let remaining = total - delegation_fee;
+
+		let total_staked = self
+			.delegator_bids
+			.iter()
+			.fold(Default::default(), |total_staked, (_, amount)| total_staked + *amount);
+
+		let delegator_cut = self
+			.delegator_bids
+			.iter()
+			.map(|(delegator, staked)| {
+				(delegator.clone(), Perbill::from_rational(*staked, total_staked) * remaining)
+			})
+			.collect::<BTreeMap<Account, _>>();
+
+		Ok((delegation_fee, delegator_cut))
+	}
+}
+
+#[test]
+fn operator_reward_split_works() {
+	let delegation = Delegation {
+		validator_bids: Default::default(),
+		delegator_bids: BTreeMap::from_iter([
+			(AccountId::from([0x01; 32]), 1_000_000u128),
+			(AccountId::from([0x02; 32]), 2_000_000u128),
+			(AccountId::from([0x03; 32]), 3_000_000u128),
+			(AccountId::from([0x04; 32]), 4_000_000u128),
+		]),
+		delegation_fee: Percent::from_percent(20),
+	};
+
+	assert_eq!(
+		delegation.split_amount(12_500_000_000),
+		Ok((
+			2_500_000_000u128,
+			BTreeMap::from_iter([
+				(AccountId::from([0x01; 32]), 1_000_000_000u128),
+				(AccountId::from([0x02; 32]), 2_000_000_000u128),
+				(AccountId::from([0x03; 32]), 3_000_000_000u128),
+				(AccountId::from([0x04; 32]), 4_000_000_000u128),
+			])
+		))
+	);
+
+	assert_eq!(
+		delegation.split_amount(0),
+		Ok((
+			0u128,
+			BTreeMap::from_iter([
+				(AccountId::from([0x01; 32]), 0u128),
+				(AccountId::from([0x02; 32]), 0u128),
+				(AccountId::from([0x03; 32]), 0u128),
+				(AccountId::from([0x04; 32]), 0u128),
+			])
+		))
+	);
 }

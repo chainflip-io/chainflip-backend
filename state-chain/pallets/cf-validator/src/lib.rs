@@ -36,7 +36,7 @@ pub use auction_resolver::*;
 pub use delegation::*;
 
 use cf_primitives::{
-	AccountRole, AuthorityCount, CfeCompatibility, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
+	AccountRole, AuthorityCount, CfeCompatibility, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer, Delegation,
 	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
 };
 use cf_traits::{
@@ -397,7 +397,7 @@ pub mod pallet {
 		/// A previously non-bidding account has started bidding.
 		StartedBidding { account_id: T::AccountId },
 		/// The rotation transaction(s) for the previous rotation are still pending to be
-		/// succesfully broadcast, therefore, cannot start a new epoch rotation.
+		/// successfully broadcast, therefore, cannot start a new epoch rotation.
 		PreviousRotationStillPending,
 		/// A delegator has been blocked from delegating to an operator.
 		DelegatorBlocked { delegator: T::AccountId, operator: T::AccountId },
@@ -1552,6 +1552,15 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 		validators
+}
+
+	pub fn get_operator_info_by_validator(
+		epoch: EpochIndex,
+		validator: &T::AccountId,
+	) -> Option<Delegation<T::AccountId, T::Amount>> {
+		let operator = ValidatorToOperator::<T>::get(epoch, validator)?;
+
+		OperatorInfo::<T>::get(epoch, operator)
 	}
 }
 
