@@ -179,7 +179,7 @@ class EventCache {
     const blockHeight = blockHeader.number.toNumber();
 
     // Check if there is a new finalised block
-    const latestFinalisedHash = (await api.rpc.chain.getFinalizedHead()) as Header;
+    const latestFinalisedHash = (await api.rpc.chain.getFinalizedHead()) as BlockHash;
     const latestFinalisedHeight = this.headers
       .get(latestFinalisedHash.toString())
       ?.number.toNumber();
@@ -246,7 +246,7 @@ class EventCache {
     return this.events.get(blockHash)!;
   }
 
-  async getHistoricalEvents(startHash: BlockHash, historicalCheckBlocks: number): Promise<Event[]> {
+  async getHistoricalEvents(startHash: string, historicalCheckBlocks: number): Promise<Event[]> {
     if (historicalCheckBlocks <= 0) {
       return [];
     }
@@ -271,7 +271,7 @@ class EventCache {
 
       events.push(...currentEvents);
 
-      currentHash = currentHeader.parentHash;
+      currentHash = currentHeader.parentHash.toString();
     }
 
     return events;
@@ -354,7 +354,7 @@ const subscribeHeads = getCachedDisposable(
     const api = stack.use(await apiMap[chain]());
 
     const subject = new Subject<{
-      blockHash: BlockHash;
+      blockHash: string;
       events: Event[];
     }>();
 
@@ -366,7 +366,7 @@ const subscribeHeads = getCachedDisposable(
     const unsubscribe = await subscribe(async (header: Header) => {
       const cache = eventCacheMap[chain];
       const events = await cache.eventsForHeader(header);
-      subject.next({ blockHash: header.hash, events });
+      subject.next({ blockHash: header.hash.toString(), events });
     });
 
     // automatic cleanup!
@@ -374,7 +374,7 @@ const subscribeHeads = getCachedDisposable(
     stack.defer(() => subject.complete());
 
     return {
-      observable: subject as Observable<{ blockHash: BlockHash; events: Event[] }>,
+      observable: subject as Observable<{ blockHash: string; events: Event[] }>,
       [Symbol.asyncDispose]() {
         return stack.disposeAsync();
       },
@@ -384,7 +384,7 @@ const subscribeHeads = getCachedDisposable(
 
 async function getPastEvents(
   chain: SubstrateChain,
-  bestBlockHash: BlockHash,
+  bestBlockHash: string,
   historicalCheckBlocks: number,
 ): Promise<Event[]> {
   if (historicalCheckBlocks <= 0) {
@@ -455,7 +455,7 @@ export function observeEvents<T = any>(
     const foundEvents: Event[] = [];
     await using subscription = await subscribeHeads({ chain, finalized });
 
-    const subscriptionIterator = observableToIterable<{ blockHash: BlockHash; events: Event[] }>(
+    const subscriptionIterator = observableToIterable<{ blockHash: string; events: Event[] }>(
       subscription.observable,
       controller?.signal,
     );
