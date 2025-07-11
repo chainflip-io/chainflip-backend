@@ -101,7 +101,7 @@ jobs:
           title: "[AUTOMATED] Benchmark results"
           commit-message: "[AUTOMATED] Benchmarking results."
           body: "This pull request was opened automatically. Close it if you think it was opened in error."
-          branch: auto/benchmark-results
+          branch: auto/benchmark-results/${{ inputs.commit_sha }}
           delete-branch: true
           token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
 
