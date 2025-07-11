@@ -59,7 +59,8 @@ impl SpawnAccount for MockSpawnAccount {
 	) -> Result<Self::AccountId, DispatchError> {
 		use frame_support::traits::HandleLifetime;
 		let sub_account_id = Self::derive_sub_account_id(parent_account_id, sub_account_id)?;
-		frame_system::Provider::<Test>::created(&sub_account_id).unwrap();
+		frame_system::Provider::<Test>::created(&sub_account_id)
+			.expect("Cannot fail (see implementation).");
 		Ok(sub_account_id)
 	}
 	fn derive_sub_account_id(
