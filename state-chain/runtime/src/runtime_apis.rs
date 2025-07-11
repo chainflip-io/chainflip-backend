@@ -181,12 +181,42 @@ pub struct RuntimeApiPenalty {
 	pub suspension_duration_blocks: u32,
 }
 
+mod old {
+	use super::*;
+
+	#[deprecated(note = "Use the new AuctionState struct instead. Remove this after 1.10 release.")]
+	#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+	pub struct AuctionState {
+		pub epoch_duration: u32,
+		pub current_epoch_started_at: u32,
+		pub redemption_period_as_percentage: u8,
+		pub min_funding: u128,
+		pub auction_size_range: (u32, u32),
+		pub min_active_bid: Option<u128>,
+	}
+}
+
+impl From<old::AuctionState> for AuctionState {
+	fn from(old: old::AuctionState) -> Self {
+		AuctionState {
+			epoch_duration: old.epoch_duration,
+			current_epoch_started_at: old.current_epoch_started_at,
+			redemption_period_as_percentage: old.redemption_period_as_percentage,
+			min_funding: old.min_funding,
+			min_bid: 0, // min_bid was added in version 5
+			auction_size_range: old.auction_size_range,
+			min_active_bid: old.min_active_bid,
+		}
+	}
+}
+
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct AuctionState {
 	pub epoch_duration: u32,
 	pub current_epoch_started_at: u32,
 	pub redemption_period_as_percentage: u8,
 	pub min_funding: u128,
+	pub min_bid: u128,
 	pub auction_size_range: (u32, u32),
 	pub min_active_bid: Option<u128>,
 }
@@ -407,7 +437,7 @@ pub struct NetworkFees {
 //  - Handle the dummy method gracefully in the custom rpc implementation using
 //    runtime_api().api_version().
 decl_runtime_apis!(
-	#[api_version(4)]
+	#[api_version(5)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -435,6 +465,8 @@ decl_runtime_apis!(
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
+		#[changed_in(5)]
+		fn cf_auction_state() -> old::AuctionState;
 		fn cf_auction_state() -> AuctionState;
 		fn cf_pool_price(from: Asset, to: Asset) -> Option<PoolPriceV1>;
 		fn cf_pool_price_v2(

@@ -338,7 +338,7 @@ pub mod pallet {
 
 	/// Minimum bid amount required to participate in auctions.
 	#[pallet::storage]
-	pub(super) type MinimumAuctionBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
+	pub type MinimumAuctionBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
 	/// Store the list of accounts that are active bidders.
 	#[pallet::storage]
