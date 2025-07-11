@@ -148,7 +148,9 @@ class EventCache {
   private chain: SubstrateChain;
 
   private bestBlockNumber: number | undefined;
+
   private bestBlockHash: string | undefined;
+
   private finalisedBlockNumber: number | undefined;
 
   private outputFile: string | undefined;
@@ -171,7 +173,7 @@ class EventCache {
   }
 
   async newHeader(blockHeader: Header): Promise<Event[]> {
-    let api = await apiMap[this.chain]();
+    const api = await apiMap[this.chain]();
 
     const blockHash = blockHeader.hash.toString();
     const blockHeight = blockHeader.number.toNumber();
@@ -204,8 +206,8 @@ class EventCache {
       this.logger?.debug('Updating event cache');
       this.headers.set(blockHash, blockHeader);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const historicalApi = await api.at(blockHash);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawEvents = (await historicalApi.query.system.events()) as unknown as any[];
       const events = mapEvents(rawEvents, blockHeight);
 
@@ -221,7 +223,6 @@ class EventCache {
       this.events.set(blockHash, events); // Remove old blocks to maintain cache size
       if (this.headers.size > this.cacheSizeBlocks) {
         this.logger?.debug('Reducing cache');
-        const blockHeight = blockHeader.number.toNumber();
         const oldHashes = this.headers.entries().filter(([_hash, header]) => {
           if (header.number.toNumber() < blockHeight - this.cacheSizeBlocks) {
             return true;
@@ -240,10 +241,9 @@ class EventCache {
       );
 
       return events;
-    } else {
-      this.logger?.debug(`Using cached events for block ${blockHeight} (${blockHash})`);
-      return this.events.get(blockHash)!;
     }
+    this.logger?.debug(`Using cached events for block ${blockHeight} (${blockHash})`);
+    return this.events.get(blockHash)!;
   }
 
   async getHistoricalEvents(historicalCheckBlocks: number): Promise<Event[]> {
@@ -388,7 +388,7 @@ async function getPastEvents(
   if (historicalCheckBlocks <= 0) {
     return [];
   }
-  return await eventCacheMap[chain].getHistoricalEvents(historicalCheckBlocks);
+  return eventCacheMap[chain].getHistoricalEvents(historicalCheckBlocks);
 }
 
 type EventTest<T> = (event: Event<T>) => boolean;
@@ -517,12 +517,11 @@ export function observeEvents<T = any>(
   if (!abortable) {
     // If not abortable, just return the events
     return { events } as Observer<T>;
-  } else {
-    return {
-      stop: () => controller!.abort(),
-      events,
-    } as AbortableObserver<T>;
   }
+  return {
+    stop: () => controller!.abort(),
+    events,
+  } as AbortableObserver<T>;
 }
 
 type SingleEventAbortableObserver<T> = {
