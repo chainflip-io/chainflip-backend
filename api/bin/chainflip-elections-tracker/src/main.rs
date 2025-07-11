@@ -42,6 +42,7 @@ use pallet_cf_elections::{
 		tuple_6_impls::{self, *},
 		tuple_7_impls::{self, *},
 	},
+	vote_storage::composite::tuple_7_impls::CompositeBitmapComponent,
 };
 use state_chain_runtime::{
 	BitcoinInstance, Runtime, SolanaInstance,
@@ -91,7 +92,8 @@ async fn observe_elections<T: Tracer + Send>(
 		let (_finalized_stream, unfinalized_stream, client) = StateChainClient::connect_without_account(scope, &rpc_url).await.unwrap();
 
 		unfinalized_stream.fold((client, (BTreeMap::new(), BTreeMap::new(), BTreeMap::new(), BTreeMap::new()), tracer), async |(client, (solana_overview_traces, solana_detailed_traces, bitcoin_overview_traces, bitcoin_detailed_traces), tracer), block| {
-
+			println!("");
+			println!("New Block received: {}", block.number);
 			let _results = tracer_provider.force_flush();
 
 			let block_hash = block.hash;
@@ -121,15 +123,39 @@ async fn observe_elections<T: Tracer + Send>(
 
 					if let Some((_, comp)) = client.storage_double_map_entry::<pallet_cf_elections::IndividualComponents::<Runtime, SolanaInstance>>(block_hash, key.unique_monotonic(), validator)
 					.await.expect("could not get storage") {
-						println!("got individual component for election {key:?} for vld {validator_index}: {comp:?}");
+						println!("SOLANA: got individual component for election {key:?} for vld {validator_index}: {comp:?}");
 						solana_individual_components.entry(*key.unique_monotonic()).or_insert(BTreeMap::new()).insert(validator_index, comp);
 					}
 				}
 			}
 
-			let solana_bitmaps = solana_bitmaps.into_iter()
+			let solana_bitmaps: BTreeMap<_,_> = solana_bitmaps.into_iter()
 				.map(|(k,v)| (k, v.bitmaps))
 				.collect();
+
+			for (key, bitmaps) in solana_bitmaps.iter() {
+				for (bitmap_component, _) in bitmaps {
+					println!("Election {key:?} Bitmap component: {:?}", bitmap_component);
+					match bitmap_component {
+						CompositeBitmapComponent::C(inner)| CompositeBitmapComponent::D(inner)|
+						CompositeBitmapComponent::EE(inner)| //CompositeBitmapComponent::FF(inner)|
+						CompositeBitmapComponent::G(inner) => {
+							match client.storage_map_entry::<pallet_cf_elections::SharedData<Runtime, SolanaInstance>>(block_hash, inner).await {
+								Ok(result)=> {
+									println!("SharedData: {bitmap_component:?} -> OriginalData: {result:?}");
+									if let Some(entry) = solana_individual_components.get(key) {
+										println!("Individual Components: {entry:?}");
+									}
+								},
+								Err(_) => {
+									println!("Error retrieving the SharedData");
+								}
+							}
+						},
+						_ => {},
+					}
+				}
+			}
 
 			const SOLANA_ELECTORAL_SYSTEM_NAMES : [&str; 6] = ["SOL Blockheight", "SOL Ingress", "SOL Nonce", "SOL Egress", "SOL Liveness", "SOL Vaultswap"];
 
@@ -159,7 +185,7 @@ async fn observe_elections<T: Tracer + Send>(
 				electoral_system_names: SOLANA_ELECTORAL_SYSTEM_NAMES.iter().map(|name| (*name).into()).collect(),
 			};
 
-			let solana_new_full_trace = make_traces(solana_election_data);
+			let solana_new_full_trace = make_traces(solana_election_data, &client);
 			let solana_new_overview_trace = solana_new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() <= 5).collect::<BTreeMap<_,_>>();
 			let solana_new_detailed_traces = solana_new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() >= 3).collect::<BTreeMap<_,_>>();
 
@@ -188,7 +214,7 @@ async fn observe_elections<T: Tracer + Send>(
 
 					if let Some((_, comp)) = client.storage_double_map_entry::<pallet_cf_elections::IndividualComponents::<Runtime, BitcoinInstance>>(block_hash, key.unique_monotonic(), validator)
 					.await.expect("could not get storage") {
-						println!("got individual component for election {key:?} for vld {validator_index}: {comp:?}");
+						println!("BITCOIN: got individual component for election {key:?} for vld {validator_index}: {comp:?}");
 						bitcoin_individual_components.entry(*key.unique_monotonic()).or_insert(BTreeMap::new()).insert(validator_index, comp);
 					}
 				}
@@ -225,7 +251,7 @@ async fn observe_elections<T: Tracer + Send>(
 				electoral_system_names: BITCOIN_ELECTORAL_SYSTEM_NAMES.iter().map(|name| (*name).into()).collect(),
 			};
 
-			let bitcoin_new_full_trace = make_traces(bitcoin_election_data);
+			let bitcoin_new_full_trace = make_traces(bitcoin_election_data, &client);
 			let bitcoin_new_overview_trace = bitcoin_new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() <= 5).collect::<BTreeMap<_,_>>();
 			let bitcoin_new_detailed_traces = bitcoin_new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() >= 3).collect::<BTreeMap<_,_>>();
 
@@ -253,7 +279,7 @@ where
 		diff(current, new),
 		|k, p: Option<&Option<Context>>, d: NodeDiff<Context, TraceInit>| match d {
 			trace::NodeDiff::Left(context) => {
-				println!("closing trace {k:?}");
+				// println!("closing trace {k:?}");
 				context.span().end();
 				None
 			},
@@ -267,7 +293,7 @@ where
 					}
 					let context = context.with_span(span);
 
-					println!("open trace {k:?}");
+					// println!("open trace {k:?}");
 
 					context
 				} else {
@@ -280,7 +306,7 @@ where
 						span.set_attribute(KeyValue::new(key, value));
 					}
 					let context = context.with_span(span);
-					println!("open trace {k:?} [NO PARENT]");
+					// println!("open trace {k:?} [NO PARENT]");
 					context
 				};
 				if end_immediately {

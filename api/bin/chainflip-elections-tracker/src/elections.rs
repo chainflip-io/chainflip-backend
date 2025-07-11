@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt::Display};
+use std::{collections::BTreeMap, fmt::Display, sync::Arc};
 
 use bitvec::prelude::*;
 use codec::{Decode, Encode};
@@ -22,6 +22,8 @@ use pallet_cf_elections::{
 	ElectionIdentifierOf, ElectoralSystemTypes, IndividualComponentOf, UniqueMonotonicIdentifier,
 	electoral_system::BitmapComponentOf,
 };
+use chainflip_engine::state_chain_observer::client::StateChainClient;
+use state_chain_runtime::{BitcoinInstance, Runtime};
 
 /// Since spans can only be submitted when they end, it is not possible to
 /// have an infinitely running root span to which we attach all child spans.
@@ -137,7 +139,7 @@ impl Display for AsHex {
 	}
 }
 
-pub fn make_traces<ES: ElectoralSystemTypes>(data: ElectionData<ES>) -> StateTree<Key, TraceInit>
+pub fn make_traces<ES: ElectoralSystemTypes>(data: ElectionData<ES>, client: &Arc<StateChainClient<()>>) -> StateTree<Key, TraceInit>
 where
 	IndividualComponentOf<ES>: Encode,
 {
@@ -146,6 +148,8 @@ where
 	for (identifier, (_name, _properties)) in &data.elections {
 		if let Some(bitmaps) = data.bitmaps.get(identifier.unique_monotonic()) {
 			for (component, bitmap) in bitmaps {
+				// println!("Election {identifier:?} Bitmap component: {:?}", component);
+				// let result = client.storage_value::<pallet_cf_elections::SharedData<Runtime, BitcoinInstance>>().await;
 				for (id, bit) in bitmap.iter().enumerate() {
 					if *bit {
 						votes.insert(

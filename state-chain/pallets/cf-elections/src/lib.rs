@@ -290,6 +290,10 @@ pub mod pallet {
 		pub fn of<Vote: frame_support::Hashable>(vote: &Vote) -> Self {
 			Self(vote.blake2_256().into())
 		}
+
+		pub fn inner(&self) -> &sp_core::H256 {
+			&self.0
+		}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
