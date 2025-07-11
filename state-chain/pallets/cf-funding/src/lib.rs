@@ -225,6 +225,10 @@ impl<T: Config> Redemption<T> {
 				T::AccountRoleRegistry::is_unregistered(account_id),
 				Error::<T>::AccountMustBeUnregistered
 			);
+			ensure!(
+				frame_system::Pallet::<T>::can_dec_provider(account_id),
+				Error::<T>::AccountHasRemainingConsumers
+			);
 		}
 
 		Ok(Redemption {
@@ -422,6 +426,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type RedemptionTax<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
+	/// Mapping of spawned accounts to their parent accounts.
+	#[pallet::storage]
+	pub type ParentAccount<T: Config> =
+		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -543,14 +552,20 @@ pub mod pallet {
 		/// The rebalance amount must be at least the minimum funding amount.
 		MinimumRebalanceAmount,
 
-		/// The sub-account already exists.
-		SubAccountAlreadyExists,
+		/// Cannot spawn an account that already exists.
+		AccountAlreadyExists,
 
-		/// Can not derive sub-account ID if the parent account is bidding in an auction.
-		CanNotDeriveSubAccountIdIfParentAccountIsBidding,
+		/// Cannot spawn a sub-account if the parent account is bidding in an auction.
+		CannotSpawnDuringAuctionPhase,
 
-		/// The sub-account does not exist.
-		SubAccountDoesNotExist,
+		/// Cannot spawn a sub-account from another sub-account.
+		CannotSpawnFromSubAccount,
+
+		/// The account has remaining consumers (eg. subaccounts), so it cannot be reaped.
+		AccountHasRemainingConsumers,
+
+		/// The sub-account ID derivation failed, should never happen.
+		SubAccountIdDerivationFailed,
 	}
 
 	#[pallet::call]
@@ -973,6 +988,16 @@ impl<T: Config> Pallet<T> {
 					e
 				);
 			});
+			if let Some(parent) = ParentAccount::<T>::get(account_id) {
+				frame_system::Consumer::<T>::killed(&parent).unwrap_or_else(|e| {
+					log::error!(
+						"Unexpected reference count error while reaping {:?}, a child account of {:?}: {:?}.",
+						account_id,
+						parent,
+						e
+					);
+				});
+			}
 		}
 	}
 }
@@ -984,33 +1009,48 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 		RestrictedBalances::<T>::remove(account_id);
 		BoundExecutorAddress::<T>::remove(account_id);
 		BoundRedeemAddress::<T>::remove(account_id);
+		ParentAccount::<T>::remove(account_id);
 	}
 }
 
 impl<T: Config> SpawnAccount for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Amount = T::Amount;
+	type Index = u8;
 
 	fn spawn_sub_account(
-		parent_account_id: T::AccountId,
-		sub_account_id: T::AccountId,
-		initial_balance: Option<T::Amount>,
-	) -> Result<(), DispatchError> {
-		if !T::RedemptionChecker::can_redeem(&parent_account_id) {
-			return Err(Error::<T>::CanNotDeriveSubAccountIdIfParentAccountIsBidding.into());
-		}
+		parent_account_id: &T::AccountId,
+		index: Self::Index,
+		initial_balance: T::Amount,
+	) -> Result<T::AccountId, DispatchError> {
+		ensure!(
+			!ParentAccount::<T>::contains_key(parent_account_id),
+			Error::<T>::CannotSpawnFromSubAccount
+		);
+		ensure!(
+			T::RedemptionChecker::can_redeem(parent_account_id),
+			Error::<T>::CannotSpawnDuringAuctionPhase
+		);
+
+		let sub_account_id = Self::derive_sub_account_id(parent_account_id, index)?;
 
 		ensure!(
 			!frame_system::Pallet::<T>::account_exists(&sub_account_id),
-			Error::<T>::SubAccountAlreadyExists
+			Error::<T>::AccountAlreadyExists
 		);
 
+		// FRAME reference counting:
+		// The sub-account needs a provider reference like any other account.
+		// The parent account needs a consumer reference to ensure that the sub-account is
+		// properly cleaned up before the parent account can be killed.
 		frame_system::Provider::<T>::created(&sub_account_id)?;
+		frame_system::Consumer::<T>::created(parent_account_id)?;
+		ParentAccount::<T>::insert(&sub_account_id, parent_account_id);
 
-		if let Some(executor_address) = BoundExecutorAddress::<T>::get(&parent_account_id) {
+		if let Some(executor_address) = BoundExecutorAddress::<T>::get(parent_account_id) {
 			BoundExecutorAddress::<T>::insert(&sub_account_id, executor_address);
 		}
-		if let Some(redeem_address) = BoundRedeemAddress::<T>::get(&parent_account_id) {
+		if let Some(redeem_address) = BoundRedeemAddress::<T>::get(parent_account_id) {
 			BoundRedeemAddress::<T>::insert(&sub_account_id, redeem_address);
 		}
 
@@ -1018,13 +1058,24 @@ impl<T: Config> SpawnAccount for Pallet<T> {
 			OriginFor::<T>::signed(parent_account_id.clone()),
 			sub_account_id.clone(),
 			None,
-			RedemptionAmount::Exact(initial_balance.unwrap_or(MinimumFunding::<T>::get())),
+			RedemptionAmount::Exact(initial_balance),
 		)?;
 
-		Ok(())
+		Ok(sub_account_id)
 	}
 
-	fn does_account_exist(account_id: &T::AccountId) -> bool {
-		frame_system::Pallet::<T>::account_exists(account_id)
+	fn derive_sub_account_id(
+		parent_account_id: &Self::AccountId,
+		index: Self::Index,
+	) -> Result<Self::AccountId, DispatchError> {
+		use frame_support::Hashable;
+		use sp_runtime::traits::TrailingZeroInput;
+
+		Ok(Decode::decode(&mut TrailingZeroInput::new(
+			(*b"chainflip/subaccount", parent_account_id.clone(), index)
+				.blake2_256()
+				.as_ref(),
+		))
+		.map_err(|_| Error::<T>::SubAccountIdDerivationFailed)?)
 	}
 }

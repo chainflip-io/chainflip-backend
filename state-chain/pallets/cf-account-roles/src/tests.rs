@@ -205,16 +205,17 @@ fn deregistration_checks() {
 }
 
 #[test]
-fn derive_sub_account() {
+fn spawn_sub_account() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(AccountRolesPallet::derive_sub_account(RuntimeOrigin::signed(ALICE), 0, None));
+		const SUB_ACCOUNT_INDEX: u8 = 0;
+		assert_ok!(AccountRolesPallet::spawn_sub_account(RuntimeOrigin::signed(ALICE), SUB_ACCOUNT_INDEX, 0));
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::MockAccountRoles(Event::SubAccountCreated {
 				account_id: ALICE,
-				sub_account_id: _,
-				sub_account_index: _,
-			})
+				sub_account_id,
+				sub_account_index: SUB_ACCOUNT_INDEX,
+			}) if *sub_account_id == MockSpawnAccount::derive_sub_account_id(&ALICE, SUB_ACCOUNT_INDEX).unwrap()
 		);
 	});
 }
@@ -224,14 +225,8 @@ fn execute_as_sub_account() {
 	new_test_ext().execute_with(|| {
 		const SUB_ACCOUNT_INDEX: u8 = 1;
 
-		let sub_account_id =
-			AccountRolesPallet::derive_sub_account_id(ALICE, SUB_ACCOUNT_INDEX).unwrap();
-
-		assert_ok!(AccountRolesPallet::derive_sub_account(
-			RuntimeOrigin::signed(ALICE),
-			SUB_ACCOUNT_INDEX,
-			None,
-		));
+		let sub_account_id = MockSpawnAccount::spawn_sub_account(&ALICE, SUB_ACCOUNT_INDEX, 0)
+			.expect("Sub-account ID derivation should not fail");
 		assert_ok!(AccountRolesPallet::as_sub_account(
 			RuntimeOrigin::signed(ALICE),
 			SUB_ACCOUNT_INDEX,

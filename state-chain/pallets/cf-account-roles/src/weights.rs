@@ -49,7 +49,7 @@ use core::marker::PhantomData;
 /// Weight functions needed for pallet_cf_account_roles.
 pub trait WeightInfo {
 	fn set_vanity_name() -> Weight;
-	fn derive_sub_account() -> Weight;
+	fn spawn_sub_account() -> Weight;
 	fn as_sub_account() -> Weight;
 }
 
@@ -68,7 +68,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 
-	fn derive_sub_account() -> Weight {
+	fn spawn_sub_account() -> Weight {
 		Weight::from_parts(0, 0)
 			.saturating_add(T::DbWeight::get().reads(0_u64))
 			.saturating_add(T::DbWeight::get().writes(0_u64))
@@ -95,7 +95,7 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 
-	fn derive_sub_account() -> Weight {
+	fn spawn_sub_account() -> Weight {
 		Weight::from_parts(0, 0)
 			.saturating_add(ParityDbWeight::get().reads(0_u64))
 			.saturating_add(ParityDbWeight::get().writes(0_u64))
