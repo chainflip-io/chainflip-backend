@@ -67,13 +67,13 @@ def_derive! {
 	#[derive(GenericTypeInfo)]
 	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
 	pub struct BlockProcessingInfo<T: BWProcessorTypes> {
-		block_data: T::BlockData,
-		next_age_to_process: u32,
-		safety_margin: u32,
+		pub block_data: T::BlockData,
+		pub next_age_to_process: u32,
+		pub safety_margin: u32,
 	}
 }
 impl<T: BWProcessorTypes> BlockProcessingInfo<T> {
-	fn new(block_data: T::BlockData, safety_margin: u32) -> Self {
+	pub fn new(block_data: T::BlockData, safety_margin: u32) -> Self {
 		BlockProcessingInfo { block_data, next_age_to_process: Default::default(), safety_margin }
 	}
 }

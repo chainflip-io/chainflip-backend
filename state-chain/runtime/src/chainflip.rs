@@ -27,7 +27,7 @@ pub mod pending_rotation_broadcasts;
 mod signer_nomination;
 
 // Election pallet implementations
-mod bitcoin_block_processor;
+pub mod bitcoin_block_processor;
 #[macro_use]
 pub mod elections;
 pub mod bitcoin_elections;

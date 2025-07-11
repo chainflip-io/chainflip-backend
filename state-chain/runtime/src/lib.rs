@@ -1435,6 +1435,7 @@ type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
+	migrations::bitcoin_elections::BitcoinElectionMigration,
 	MigrationsForV1_11,
 );
 
