@@ -29,7 +29,9 @@ use pallet_cf_funding::pallet::Error;
 use pallet_cf_validator::{Backups, CurrentRotationPhase};
 use sp_runtime::{FixedPointNumber, FixedU64};
 use state_chain_runtime::{
-	chainflip::{backup_node_rewards::calculate_backup_rewards, calculate_account_apy, Offence},
+	chainflip::{
+		calculate_account_apy, node_rewards_and_slashing::calculate_backup_rewards, Offence,
+	},
 	RuntimeEvent,
 };
 
@@ -327,8 +329,10 @@ fn backup_rewards_event_gets_emitted_on_heartbeat_interval() {
 				.into_iter()
 				.filter_map(|rec| match rec.event {
 					RuntimeEvent::Emissions(
-						pallet_cf_emissions::Event::BackupRewardsDistributed { account_id, .. },
-					) => Some(account_id),
+						pallet_cf_emissions::Event::BackupRewardsDistributed {
+							validator_id, ..
+						},
+					) => Some(validator_id),
 					_ => None,
 				})
 				.collect::<BTreeSet<_>>();
@@ -346,7 +350,7 @@ fn backup_rewards_event_gets_emitted_on_heartbeat_interval() {
 }
 
 #[test]
-fn min_aution_bid_qualification() {
+fn min_auction_bid_qualification() {
 	const GENESIS_BALANCE_IN_FLIP: u32 = (GENESIS_BALANCE / FLIPPERINOS_PER_FLIP) as u32;
 	super::genesis::with_test_defaults().build().execute_with(|| {
 		let _ = crate::authorities::fund_authorities_and_join_auction(0);

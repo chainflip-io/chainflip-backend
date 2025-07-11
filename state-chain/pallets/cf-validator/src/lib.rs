@@ -33,7 +33,7 @@ mod rotation_state;
 
 pub use auction_resolver::*;
 use cf_primitives::{
-	AuthorityCount, CfeCompatibility, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
+	AuthorityCount, CfeCompatibility, Delegation, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
 	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
 };
 use cf_traits::{
@@ -345,6 +345,29 @@ pub mod pallet {
 	#[pallet::getter(fn active_bidder)]
 	pub type ActiveBidder<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
+	/// Placeholder storage for Delegator - Operator info
+	#[pallet::storage]
+	pub type OperatorInfo<T: Config> = StorageDoubleMap<
+		_,
+		Identity,
+		EpochIndex,
+		Identity,
+		T::AccountId,
+		Delegation<T::AccountId, T::Amount>,
+	>;
+
+	/// Placeholder storage for validator -> operator lookup
+	#[pallet::storage]
+	pub type ValidatorToOperator<T: Config> = StorageDoubleMap<
+		_,
+		Identity,
+		EpochIndex,
+		Identity,
+		T::AccountId,
+		T::AccountId,
+		OptionQuery,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -369,7 +392,7 @@ pub mod pallet {
 		/// A previously non-bidding account has started bidding.
 		StartedBidding { account_id: T::AccountId },
 		/// The rotation transaction(s) for the previous rotation are still pending to be
-		/// succesfully broadcast, therefore, cannot start a new epoch rotation.
+		/// successfully broadcast, therefore, cannot start a new epoch rotation.
 		PreviousRotationStillPending,
 	}
 
@@ -1329,6 +1352,15 @@ impl<T: Config> Pallet<T> {
 		CurrentEpochStartedAt::<T>::get()
 			.saturating_add(RedemptionPeriodAsPercentage::<T>::get() * EpochDuration::<T>::get()) <=
 			frame_system::Pallet::<T>::current_block_number()
+	}
+
+	pub fn get_operator_info_by_validator(
+		epoch: EpochIndex,
+		validator: &T::AccountId,
+	) -> Option<Delegation<T::AccountId, T::Amount>> {
+		let operator = ValidatorToOperator::<T>::get(epoch, validator)?;
+
+		OperatorInfo::<T>::get(epoch, operator)
 	}
 }
 
