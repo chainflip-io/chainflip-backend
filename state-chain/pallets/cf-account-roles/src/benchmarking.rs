@@ -64,6 +64,7 @@ mod benchmarks {
 		const SUB_ACCOUNT_INDEX: SubAccountIndex = 1;
 		const FLIP_BALANCE: u128 = 1000;
 		let caller: T::AccountId = whitelisted_caller();
+		frame_system::Provider::<T>::created(&caller).expect("Cannot fail (see implementation).");
 		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
 
 		T::FeePayment::mint_to_account(&caller, (FLIP_BALANCE * 2).into());
