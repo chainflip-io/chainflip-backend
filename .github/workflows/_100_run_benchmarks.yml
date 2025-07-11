@@ -35,6 +35,14 @@ on:
         options:
           - production
           - release
+      binary_artefact_source:
+        description: "Which source should we use for the binary artefact?"
+        required: false
+        type: choice
+        options:
+          - main
+          - release
+        default: release
 
 env:
   FORCE_COLOR: 1
@@ -67,7 +75,7 @@ jobs:
       - name: Fetch chainflip-node with benchmarks from ${{ inputs.commit_sha }}
         uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
-          workflow: ci-benchmarks-release.yml
+          workflow: ci-benchmarks-${{ inputs.binary_artefact_source }}.yml
           workflow_conclusion: completed
           name: chainflip-node-ubuntu-benchmarks-${{ inputs.profile }}
           commit: ${{ inputs.commit_sha }}
