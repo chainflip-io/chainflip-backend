@@ -9,7 +9,7 @@ use itertools::{Either, Itertools};
 
 use crate::electoral_systems::state_machine::state_machine::{AbstractApi, Statemachine};
 use sp_std::{
-	ops::{Add, Index, IndexMut},
+	ops::{Index, IndexMut},
 	vec,
 };
 
@@ -38,23 +38,6 @@ def_derive! {
 	pub enum ExternalPriceChain {
 		Solana,
 		Ethereum
-	}
-}
-
-def_derive! {
-	#[derive(PartialOrd, Ord, TypeInfo)]
-	pub enum ExternalChainBlockQueried {
-		Solana(u64),
-		Ethereum(u32)
-	}
-}
-
-impl ExternalChainBlockQueried {
-	pub fn chain(&self) -> ExternalPriceChain {
-		match self {
-			ExternalChainBlockQueried::Solana(_) => ExternalPriceChain::Solana,
-			ExternalChainBlockQueried::Ethereum(_) => ExternalPriceChain::Ethereum,
-		}
 	}
 }
 
@@ -254,15 +237,6 @@ impl<T: OPTypes> IndexMut<ExternalPriceChain> for ExternalChainStates<T> {
 	}
 }
 
-impl<T: OPTypes> ExternalChainStates<T> {
-	pub fn get_queries(&self) -> Vec<PriceQuery<T>> {
-		all::<ExternalPriceChain>()
-			.map(|chain| PriceQuery { chain, assets: self[chain].get_query() })
-			.take_while_inclusive(|query| self[query.chain].is_stale())
-			.collect()
-	}
-}
-
 //---------------- the api ------------------
 
 def_derive! {
@@ -359,7 +333,10 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 	type State = OraclePriceTracker<T>;
 
 	fn get_queries(state: &mut Self::State) -> Vec<Self::Query> {
-		state.chain_states.get_queries()
+		all::<ExternalPriceChain>()
+			.take_while_inclusive(|chain| state.chain_states[*chain].is_stale())
+			.map(|chain| PriceQuery { chain, assets: state.chain_states[chain].get_query() })
+			.collect()
 	}
 
 	fn step(
@@ -377,8 +354,6 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 		all::<ExternalPriceChain>().for_each(|chain| {
 			state.chain_states[chain].update_price_state(&state.get_time.run(()), &settings[chain])
 		});
-
-		log::info!("Called step function for oracle at time {:?}", state.get_time.run(()));
 
 		Ok(())
 	}

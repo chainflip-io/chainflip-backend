@@ -1,12 +1,8 @@
 use core::ops::{Range, RangeInclusive};
 
-use cf_primitives::Asset;
 use sp_std::ops::{Add, Index, IndexMut};
 
-use crate::electoral_systems::{
-	oracle_price::state_machine::{ExternalChainBlockQueried, OPTypes},
-	state_machine::common_imports::*,
-};
+use crate::electoral_systems::state_machine::common_imports::*;
 use enum_iterator::Sequence;
 
 def_derive! {

@@ -1,14 +1,9 @@
-use core::time;
-
 use enum_iterator::all;
 
 use crate::electoral_systems::{
 	oracle_price::{
-		primitives::{compute_median, Aggregated, Aggregation, UnixTime},
-		state_machine::{
-			AssetResponse, ExternalChainBlockQueried, ExternalChainState, ExternalChainStateVote,
-			OPTypes, PriceQuery,
-		},
+		primitives::Aggregation,
+		state_machine::{AssetResponse, ExternalChainStateVote, OPTypes, PriceQuery},
 	},
 	state_machine::common_imports::*,
 };

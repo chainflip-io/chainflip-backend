@@ -19,16 +19,11 @@ use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystemTypes,
 	electoral_systems::{
-		block_height_witnesser::{
-			primitives::{Header, NonemptyContinuousHeaders},
-			ChainBlockHashOf, ChainTypes, HeightWitnesserProperties,
-		},
-		block_witnesser::state_machine::{BWElectionProperties, EngineElectionType},
 		oracle_price::{
 			primitives::UnixTime,
 			state_machine::{
-				should_vote_for_asset, ExternalChainBlockQueried, ExternalChainState,
-				ExternalChainStateVote, ExternalChainStates, ExternalPriceChain,
+				should_vote_for_asset,
+				ExternalChainStateVote, ExternalPriceChain,
 			},
 		},
 	},
@@ -117,7 +112,7 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 	) -> Result<Option<VoteOf<OraclePriceES>>, anyhow::Error> {
 		tracing::info!("Voting for oracle price, properties: {properties:?}");
 
-		let (price_feeds, block) = match properties.chain {
+		let price_feeds = match properties.chain {
 			ExternalPriceChain::Solana => {
 				let (price_feeds, _, query_slot) = get_price_feeds(
 					&self.sol_client,
@@ -127,10 +122,8 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 					None,
 				)
 				.await?;
-				(
-					price_feeds.into_iter().map(Into::into).collect::<Vec<PriceData>>(),
-					ExternalChainBlockQueried::Solana(query_slot),
-				)
+				price_feeds.into_iter().map(Into::into).collect::<Vec<PriceData>>()
+				
 			},
 			ExternalPriceChain::Ethereum => {
 				let (block, _, price_feeds) = self
@@ -140,10 +133,7 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 						settings.eth_oracle_feeds.clone(),
 					)
 					.await;
-				(
-					price_feeds.into_iter().map(Into::into).collect(),
-					ExternalChainBlockQueried::Ethereum(block.try_into().unwrap()),
-				)
+				price_feeds.into_iter().map(Into::into).collect::<Vec<PriceData>>()
 			},
 		};
 
