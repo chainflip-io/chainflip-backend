@@ -19,11 +19,11 @@
 use crate::{self as pallet_cf_account_roles, Config};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::mocks::fee_payment::MockFeePayment;
-use cf_traits::{impl_mock_chainflip, mocks::deregistration_check::MockDeregistrationCheck};
+use cf_traits::{
+	impl_mock_chainflip, mocks::deregistration_check::MockDeregistrationCheck, SpawnAccount,
+};
 use frame_support::derive_impl;
 use sp_runtime::DispatchError;
-
-use cf_traits::SpawnAccount;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
