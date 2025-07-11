@@ -27,12 +27,11 @@ mod imbalances;
 mod on_charge_transaction;
 
 pub mod weights;
-use cf_primitives::FlipBalance;
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
 use cf_traits::{
-	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, OnAccountFunded, Slashing,
+	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, OnAccountFunded,
 };
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::{CallIndexer, FeeScalingRateConfig, FlipTransactionPayment};
@@ -43,13 +42,13 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, Zero},
-		DispatchError, Permill, RuntimeDebug,
+		DispatchError, Permill, RuntimeDebug, SaturatedConversion,
 	},
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
 use frame_system::pallet_prelude::*;
 use on_charge_transaction::CallIndexFor;
-use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use pallet::*;
 
@@ -174,7 +173,7 @@ pub mod pallet {
 	pub type FeeScalingRate<T: Config> = StorageValue<_, FeeScalingRateConfig, ValueQuery>;
 
 	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::generate_deposit(pub fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Some imbalance could not be settled and the remainder will be reverted.
 		RemainingImbalance {
@@ -183,7 +182,9 @@ pub mod pallet {
 		},
 		SlashingPerformed {
 			who: T::AccountId,
-			amount: T::Balance,
+			total_slashed: T::Balance,
+			validator_slashed: T::Balance,
+			delegators_slashed: BTreeMap<T::AccountId, T::Balance>,
 		},
 		AccountReaped {
 			who: T::AccountId,
@@ -493,6 +494,26 @@ impl<T: Config> Pallet<T> {
 		}?;
 		Ok(())
 	}
+
+	/// Slashes the given amount from an account. If associated Delegators should be slashed as
+	/// well, use the FlipSlash in the Runtime crate.
+	///
+	/// This should only be called directly, only via the FlipSlasher.
+	pub fn slash(account_id: &T::AccountId, slash_amount: T::Balance) {
+		if !slash_amount.is_zero() && Account::<T>::get(account_id).can_be_slashed(slash_amount) {
+			Pallet::<T>::settle(account_id, Pallet::<T>::burn(slash_amount).into());
+		}
+	}
+
+	pub fn calculate_slash_amount(
+		account_id: &T::AccountId,
+		blocks: BlockNumberFor<T>,
+	) -> T::Balance {
+		let account = Account::<T>::get(account_id);
+		(SlashingRate::<T>::get() * account.bond /
+			T::BlocksPerDay::get().into().saturated_into::<u128>().into())
+		.saturating_mul(blocks.into().saturated_into::<u128>().into())
+	}
 }
 
 impl<T: Config> FundingInfo for Pallet<T> {
@@ -672,52 +693,5 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 			who: account_id.clone(),
 			dust_burned: dust,
 		});
-	}
-}
-
-pub struct FlipSlasher<T: Config>(PhantomData<T>);
-
-impl<T: Config> FlipSlasher<T> {
-	fn attempt_slash(
-		account_id: &T::AccountId,
-		account: FlipAccount<T::Balance>,
-		slash_amount: T::Balance,
-	) {
-		if !slash_amount.is_zero() && account.can_be_slashed(slash_amount) {
-			Pallet::<T>::settle(account_id, Pallet::<T>::burn(slash_amount).into());
-			Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed {
-				who: account_id.clone(),
-				amount: slash_amount,
-			});
-		}
-	}
-}
-
-impl<T: Config> Slashing for FlipSlasher<T>
-where
-	BlockNumberFor<T>: Into<T::Balance>,
-{
-	type AccountId = T::AccountId;
-	type BlockNumber = BlockNumberFor<T>;
-	type Balance = T::Balance;
-
-	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
-		let account = Account::<T>::get(account_id);
-		let slash_amount = Self::calculate_slash_amount(account_id, blocks);
-		Self::attempt_slash(account_id, account, slash_amount);
-	}
-
-	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance) {
-		let account = Account::<T>::get(account_id);
-		Self::attempt_slash(account_id, account, slash_amount.into());
-	}
-
-	fn calculate_slash_amount(
-		account_id: &Self::AccountId,
-		blocks: Self::BlockNumber,
-	) -> Self::Balance {
-		let account = Account::<T>::get(account_id);
-		(SlashingRate::<T>::get() * account.bond / T::BlocksPerDay::get().into())
-			.saturating_mul(blocks.into())
 	}
 }

@@ -18,7 +18,7 @@
 
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
 use cf_primitives::FlipBalance;
-use cf_traits::{impl_mock_chainflip, impl_mock_waived_fees, Funding, WaivedFees};
+use cf_traits::{impl_mock_chainflip, impl_mock_waived_fees, Funding, Slashing, WaivedFees};
 use frame_support::{
 	derive_impl, parameter_types,
 	traits::{ConstU128, ConstU8, HandleLifetime},
@@ -60,6 +60,33 @@ parameter_types! {
 
 // Implement mock for WaivedFees
 impl_mock_waived_fees!(AccountId, RuntimeCall);
+
+pub struct MockFlipSlasher;
+impl Slashing for MockFlipSlasher {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumberFor<Test>;
+
+	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
+		let slash_amount = Flip::calculate_slash_amount(account_id, blocks);
+		Flip::slash(account_id, slash_amount);
+		Flip::deposit_event(crate::Event::<Test>::SlashingPerformed {
+			who: *account_id,
+			total_slashed: slash_amount,
+			validator_slashed: slash_amount,
+			delegators_slashed: Default::default(),
+		});
+	}
+
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance) {
+		Flip::slash(account_id, slash_amount);
+		Flip::deposit_event(crate::Event::<Test>::SlashingPerformed {
+			who: *account_id,
+			total_slashed: slash_amount,
+			validator_slashed: slash_amount,
+			delegators_slashed: Default::default(),
+		});
+	}
+}
 
 impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
