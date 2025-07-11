@@ -516,7 +516,18 @@ export function observeEvents<T = any>(
     // Wait for the subscription to emit the first batch of events, which
     // will update the best block number in the event cache: required for
     // gap-free historical query.
-    const { blockHash } = (await subscriptionIterator.next()).value!;
+    const firstResult = await subscriptionIterator.next();
+    if (!firstResult.value) {
+      if (controller?.signal?.aborted) {
+        logger.debug('Abort signal received before any events were emitted.');
+      } else {
+        logger.warn(
+          'Subscription completed before any events were emitted. This may indicate a problem with the subscription.',
+        );
+      }
+      return [];
+    }
+    const { blockHash } = firstResult.value;
 
     const historicalEvents = await getPastEvents(chain, blockHash, historicalCheckBlocks);
 
