@@ -4,7 +4,7 @@ import { Observable, Subject } from 'rxjs';
 import { deferredPromise, runWithTimeout } from 'shared/utils';
 import { globalLogger, Logger } from 'shared/utils/logger';
 import { appendFileSync } from 'node:fs';
-import { BlockHash, Header } from '@polkadot/types/interfaces';
+import { Header } from '@polkadot/types/interfaces';
 
 // Set the STATE_CHAIN_EVENT_LOG_FILE env var to log all state chain events to a file. Used for debugging.
 export const stateChainEventLogFile = process.env.STATE_CHAIN_EVENT_LOG_FILE; // ?? '/tmp/chainflip/state_chain_events.log';
@@ -157,6 +157,12 @@ class EventCache {
 
   private logger: Logger | undefined;
 
+  private newHeadsSubject: Subject<{ blockHash: string; events: Event[] }> | undefined;
+
+  private finalisedHeadsSubject: Subject<{ blockHash: string; events: Event[] }> | undefined;
+
+  private subscriptionDisposer: (() => Promise<void>) | undefined;
+
   constructor(
     cacheSizeBlocks: number,
     chain: SubstrateChain,
@@ -170,24 +176,20 @@ class EventCache {
     this.finalisedBlockNumber = undefined;
     this.outputFile = outputFile;
     this.logger = logger;
+    this.newHeadsSubject = undefined;
+    this.finalisedHeadsSubject = undefined;
+    this.subscriptionDisposer = undefined;
   }
 
-  async eventsForHeader(blockHeader: Header): Promise<Event[]> {
+  async eventsForHeader(blockHeader: Header, finalized: boolean = false): Promise<Event[]> {
     const api = await apiMap[this.chain]();
 
     const blockHash = blockHeader.hash.toString();
     const blockHeight = blockHeader.number.toNumber();
 
-    // Check if there is a new finalised block
-    const latestFinalisedHash = (await api.rpc.chain.getFinalizedHead()) as BlockHash;
-    const latestFinalisedHeight = this.headers
-      .get(latestFinalisedHash.toString())
-      ?.number.toNumber();
-    if (
-      latestFinalisedHeight !== undefined &&
-      latestFinalisedHeight > (this.finalisedBlockNumber ?? 0)
-    ) {
-      this.finalisedBlockNumber = latestFinalisedHeight;
+    // Update finalization info based on the stream type
+    if (finalized) {
+      this.finalisedBlockNumber = blockHeight;
     }
 
     // Not necessarily 100% correct: ideally we would trace the block headers back to the latest finalised block.
@@ -198,7 +200,7 @@ class EventCache {
     }
 
     this.logger?.debug(
-      `New block ${blockHeight} (${blockHash}) on chain ${this.chain} with finalised block number ${this.finalisedBlockNumber}`,
+      `${finalized ? 'Finalized' : 'New'} block ${blockHeight} (${blockHash}) on chain ${this.chain} with finalised block number ${this.finalisedBlockNumber}`,
     );
 
     // Update the caches.
@@ -263,7 +265,7 @@ class EventCache {
     while (depth < historicalCheckBlocks) {
       depth++;
       const currentHeader = (await api.rpc.chain.getHeader(currentHash)) as Header;
-      const currentEvents = await this.eventsForHeader(currentHeader);
+      const currentEvents = await this.eventsForHeader(currentHeader, false);
 
       this.logger?.debug(
         `Found ${currentEvents.length} events at depth ${depth} for block ${currentHeader.number.toNumber()} (${currentHeader.hash.toString()})`,
@@ -275,6 +277,79 @@ class EventCache {
     }
 
     return events;
+  }
+
+  private async startBackgroundSubscription(): Promise<void> {
+    if (this.subscriptionDisposer) {
+      return; // Already running
+    }
+
+    const stack = new AsyncDisposableStack();
+    const api = stack.use(await apiMap[this.chain]());
+
+    this.newHeadsSubject = new Subject<{ blockHash: string; events: Event[] }>();
+    this.finalisedHeadsSubject = new Subject<{ blockHash: string; events: Event[] }>();
+
+    // Subscribe to all heads
+    const unsubscribeAllHeads = await api.rpc.chain.subscribeAllHeads(async (header: Header) => {
+      try {
+        const events = await this.eventsForHeader(header, false);
+        this.newHeadsSubject?.next({ blockHash: header.hash.toString(), events });
+      } catch (error) {
+        this.logger?.error('Error processing new head:', error);
+        this.newHeadsSubject?.error(error);
+      }
+    });
+
+    // Subscribe to finalised heads
+    const unsubscribeFinalizedHeads = await api.rpc.chain.subscribeFinalizedHeads(
+      async (header: Header) => {
+        try {
+          const events = await this.eventsForHeader(header, true);
+          this.finalisedHeadsSubject?.next({ blockHash: header.hash.toString(), events });
+        } catch (error) {
+          this.logger?.error('Error processing finalised head:', error);
+          this.finalisedHeadsSubject?.error(error);
+        }
+      },
+    );
+
+    stack.defer(unsubscribeAllHeads);
+    stack.defer(unsubscribeFinalizedHeads);
+    stack.defer(() => {
+      this.newHeadsSubject?.complete();
+      this.finalisedHeadsSubject?.complete();
+      this.newHeadsSubject = undefined;
+      this.finalisedHeadsSubject = undefined;
+    });
+
+    this.subscriptionDisposer = () => {
+      this.subscriptionDisposer = undefined;
+      return stack.disposeAsync();
+    };
+  }
+
+  async getObservable(
+    finalized: boolean = false,
+  ): Promise<Observable<{ blockHash: string; events: Event[] }>> {
+    await this.startBackgroundSubscription();
+
+    if (finalized) {
+      if (!this.finalisedHeadsSubject) {
+        throw new Error('Finalised heads subscription not initialized');
+      }
+      return this.finalisedHeadsSubject.asObservable();
+    }
+    if (!this.newHeadsSubject) {
+      throw new Error('New heads subscription not initialized');
+    }
+    return this.newHeadsSubject.asObservable();
+  }
+
+  async dispose(): Promise<void> {
+    if (this.subscriptionDisposer) {
+      await this.subscriptionDisposer();
+    }
   }
 }
 
@@ -348,35 +423,13 @@ async function* observableToIterable<T>(observer: Observable<T>, signal?: AbortS
 
 const subscribeHeads = getCachedDisposable(
   async ({ chain, finalized = false }: { chain: SubstrateChain; finalized?: boolean }) => {
-    // prepare a stack for cleanup
-    const stack = new AsyncDisposableStack();
-    // Take the correct substrate API
-    const api = stack.use(await apiMap[chain]());
-
-    const subject = new Subject<{
-      blockHash: string;
-      events: Event[];
-    }>();
-
-    // subscribe to the correct head based on the finalized flag
-    const subscribe = finalized
-      ? api.rpc.chain.subscribeFinalizedHeads
-      : api.rpc.chain.subscribeAllHeads;
-
-    const unsubscribe = await subscribe(async (header: Header) => {
-      const cache = eventCacheMap[chain];
-      const events = await cache.eventsForHeader(header);
-      subject.next({ blockHash: header.hash.toString(), events });
-    });
-
-    // automatic cleanup!
-    stack.defer(unsubscribe);
-    stack.defer(() => subject.complete());
+    const cache = eventCacheMap[chain];
+    const observable = await cache.getObservable(finalized);
 
     return {
-      observable: subject as Observable<{ blockHash: string; events: Event[] }>,
+      observable,
       [Symbol.asyncDispose]() {
-        return stack.disposeAsync();
+        return Promise.resolve();
       },
     };
   },
