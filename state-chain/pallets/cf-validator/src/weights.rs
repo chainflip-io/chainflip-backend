@@ -62,6 +62,14 @@ pub trait WeightInfo {
 	fn deregister_as_validator() -> Weight;
 	fn stop_bidding() -> Weight;
 	fn start_bidding() -> Weight;
+	fn claim_validator() -> Weight;
+	fn accept_operator() -> Weight;
+	fn remove_validator() -> Weight;
+	fn set_delegation_preferences() -> Weight;
+	fn block_delegator() -> Weight;
+	fn allow_delegator() -> Weight;
+	fn register_as_operator() -> Weight;
+	fn deregister_as_operator() -> Weight;
 }
 
 /// Weights for pallet_cf_validator using the Substrate node and recommended hardware.
@@ -422,6 +430,30 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	fn claim_validator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn accept_operator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn remove_validator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn set_delegation_preferences() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn block_delegator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn allow_delegator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn register_as_operator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn deregister_as_operator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
 }
 
 // For backwards compatibility and tests
@@ -780,5 +812,32 @@ impl WeightInfo for () {
 		Weight::from_parts(26_706_000, 4846)
 			.saturating_add(ParityDbWeight::get().reads(3_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
+	}
+
+	fn claim_validator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn accept_operator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn remove_validator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+
+	fn set_delegation_preferences() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn block_delegator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn allow_delegator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+
+	fn register_as_operator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn deregister_as_operator() -> Weight {
+		Weight::from_parts(0, 0)
 	}
 }

@@ -1564,3 +1564,114 @@ fn should_expire_all_previous_epochs() {
 		assert_eq!(HistoricalActiveEpochs::<Test>::get(ID), vec![third_epoch]);
 	});
 }
+
+#[cfg(test)]
+mod operator {
+	use super::*;
+
+	use cf_primitives::DelegationAcceptance;
+
+	#[test]
+	fn can_allow_and_block_delegator() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
+			// Allow BOB
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
+			assert!(AllowedDelegators::<Test>::get(ALICE).contains(&BOB));
+			// Explicit block BOB
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
+			assert!(!AllowedDelegators::<Test>::get(ALICE).contains(&BOB));
+			assert!(BlockedDelegators::<Test>::get(ALICE).contains(&BOB));
+			// Explicit allow BOB again
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
+			assert!(AllowedDelegators::<Test>::get(ALICE).contains(&BOB));
+			assert!(!BlockedDelegators::<Test>::get(ALICE).contains(&BOB));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::DelegatorAllowed {
+					operator: ALICE,
+					delegator: BOB,
+				}),
+				RuntimeEvent::ValidatorPallet(Event::DelegatorBlocked {
+					operator: ALICE,
+					delegator: BOB,
+				}),
+			);
+		});
+	}
+	#[test]
+	fn can_set_delegation_preferences() {
+		new_test_ext().execute_with(|| {
+			const PREFERENCES: DelegationPreferences = DelegationPreferences {
+				fee: Permill::one(),
+				delegation_acceptance: DelegationAcceptance::Allow,
+			};
+			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
+			assert_ok!(ValidatorPallet::set_delegation_preferences(
+				OriginTrait::signed(ALICE),
+				PREFERENCES
+			));
+			assert_eq!(OperatorParameters::<Test>::get(ALICE), Some(PREFERENCES));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::DelegationPreferencesSet {
+					operator: ALICE,
+					preferences: PREFERENCES,
+				}),
+			);
+		});
+	}
+	#[test]
+	fn can_claim_by_operator_and_accept_by_validator() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
+			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(BOB),));
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(ALICE), BOB));
+			assert!(ClaimedValidators::<Test>::contains_key(BOB));
+			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(BOB), ALICE));
+			assert!(ManagedValidators::<Test>::get(BOB).is_some());
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::ValidatorClaimed {
+					validator: BOB,
+					operator: ALICE,
+				}),
+				RuntimeEvent::ValidatorPallet(Event::AcceptedOperatorByValidator {
+					validator: BOB,
+					operator: ALICE,
+				}),
+			);
+		});
+	}
+	#[test]
+	fn validator_and_operator_can_remove_validator() {
+		new_test_ext().execute_with(|| {
+			ManagedValidators::<Test>::insert(BOB, ALICE);
+			// ALICE can remove BOB
+			assert_ok!(ValidatorPallet::remove_validator(OriginTrait::signed(ALICE), BOB));
+			ManagedValidators::<Test>::insert(BOB, ALICE);
+			// BOB can remove BOB
+			assert_ok!(ValidatorPallet::remove_validator(OriginTrait::signed(BOB), BOB));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::ValidatorHasBeenRemoved {
+					validator: BOB,
+					operator: ALICE,
+				}),
+			);
+		});
+	}
+	#[test]
+	fn can_not_deregister_if_their_are_still_validators_associated() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
+			ManagedValidators::<Test>::insert(BOB, ALICE);
+			assert_noop!(
+				ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)),
+				Error::<Test>::StillAssociatedWithValidators
+			);
+			assert_ok!(ValidatorPallet::remove_validator(OriginTrait::signed(ALICE), BOB));
+			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)));
+		});
+	}
+}

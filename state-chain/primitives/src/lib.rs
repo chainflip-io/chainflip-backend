@@ -33,6 +33,8 @@ use sp_std::{
 	vec::Vec,
 };
 
+use frame_support::sp_runtime::Permill;
+
 pub mod chains;
 
 #[macro_export]
@@ -306,6 +308,9 @@ pub enum AccountRole {
 	LiquidityProvider,
 	/// Brokers submit swap deposit requests on behalf of users.
 	Broker,
+	/// Operators are responsible for managing delegated stake and validators signed up to their
+	/// account.
+	Operator,
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
@@ -544,4 +549,47 @@ impl<T> ApiWaitForResult<T> {
 			ApiWaitForResult::TxDetails { response, .. } => response,
 		}
 	}
+}
+
+/// Represents a validator's default stance on accepting delegations
+#[derive(
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	Debug,
+	Default,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Deserialize,
+	Serialize,
+)]
+pub enum DelegationAcceptance {
+	/// Allow all delegators by default, except those explicitly blocked
+	Allow,
+	/// Deny all delegators by default, except those explicitly allowed
+	#[default] // Default to denying delegations
+	Deny,
+}
+
+/// Parameters for validator delegation preferences
+#[derive(
+	Default,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Clone,
+	PartialEq,
+	Eq,
+	Debug,
+	Deserialize,
+	Serialize,
+)]
+pub struct DelegationPreferences {
+	pub fee: Permill,
+	/// Default delegation acceptance preference for this validator
+	pub delegation_acceptance: DelegationAcceptance,
 }
