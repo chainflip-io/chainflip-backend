@@ -149,7 +149,7 @@ class EventCache {
 
   private bestBlockNumber: number | undefined;
 
-  private bestBlockHash: string | undefined;
+  public bestBlockHash: string | undefined;
 
   private finalisedBlockNumber: number | undefined;
 
@@ -246,7 +246,7 @@ class EventCache {
     return this.events.get(blockHash)!;
   }
 
-  async getHistoricalEvents(historicalCheckBlocks: number): Promise<Event[]> {
+  async getHistoricalEvents(startHash: string, historicalCheckBlocks: number): Promise<Event[]> {
     if (historicalCheckBlocks <= 0) {
       return [];
     }
@@ -259,12 +259,10 @@ class EventCache {
     );
 
     let depth = 0;
-    let currentHash = this.bestBlockHash;
+    let currentHash = startHash;
     while (depth < historicalCheckBlocks) {
       depth++;
-      const currentHeader = currentHash
-        ? await api.rpc.chain.getHeader(currentHash)
-        : await api.rpc.chain.getHeader();
+      const currentHeader = await api.rpc.chain.getHeader(currentHash);
       const currentEvents = await this.newHeader(currentHeader);
 
       this.logger?.debug(
@@ -383,12 +381,13 @@ const subscribeHeads = getCachedDisposable(
 
 async function getPastEvents(
   chain: SubstrateChain,
+  bestBlockHash: string,
   historicalCheckBlocks: number,
 ): Promise<Event[]> {
   if (historicalCheckBlocks <= 0) {
     return [];
   }
-  return eventCacheMap[chain].getHistoricalEvents(historicalCheckBlocks);
+  return eventCacheMap[chain].getHistoricalEvents(bestBlockHash, historicalCheckBlocks);
 }
 
 type EventTest<T> = (event: Event<T>) => boolean;
@@ -461,8 +460,11 @@ export function observeEvents<T = any>(
     // will update the best block number in the event cache: required for
     // gap-free historical query.
     await subscriptionIterator.next();
+    const bestBlockHash = eventCacheMap[chain].bestBlockHash;
 
-    const historicalEvents = await getPastEvents(chain, historicalCheckBlocks);
+    const historicalEvents = bestBlockHash
+      ? await getPastEvents(chain, bestBlockHash, historicalCheckBlocks)
+      : [];
 
     const checkEvents = (events: Event[], log: string) => {
       if (events.length === 0) {
