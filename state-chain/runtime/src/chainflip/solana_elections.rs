@@ -162,7 +162,6 @@ pub type SolanaEgressWitnessing = electoral_systems::exact_value::ExactValue<
 pub type SolanaLiveness = Liveness<
 	<Solana as Chain>::ChainBlockNumber,
 	SolHash,
-	cf_primitives::BlockNumber,
 	ReportFailedLivenessCheck<Solana>,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
