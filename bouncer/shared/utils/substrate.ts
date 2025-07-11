@@ -4,7 +4,7 @@ import { Observable, Subject } from 'rxjs';
 import { deferredPromise, runWithTimeout } from 'shared/utils';
 import { globalLogger, Logger } from 'shared/utils/logger';
 import { appendFileSync } from 'node:fs';
-import { Header } from '@polkadot/types/interfaces';
+import { BlockHash, Header } from '@polkadot/types/interfaces';
 
 // Set the STATE_CHAIN_EVENT_LOG_FILE env var to log all state chain events to a file. Used for debugging.
 export const stateChainEventLogFile = process.env.STATE_CHAIN_EVENT_LOG_FILE; // ?? '/tmp/chainflip/state_chain_events.log';
@@ -172,14 +172,14 @@ class EventCache {
     this.logger = logger;
   }
 
-  async newHeader(blockHeader: Header): Promise<Event[]> {
+  async eventsForHeader(blockHeader: Header): Promise<Event[]> {
     const api = await apiMap[this.chain]();
 
     const blockHash = blockHeader.hash.toString();
     const blockHeight = blockHeader.number.toNumber();
 
     // Check if there is a new finalised block
-    const latestFinalisedHash = await api.rpc.chain.getFinalizedHead();
+    const latestFinalisedHash = (await api.rpc.chain.getFinalizedHead()) as Header;
     const latestFinalisedHeight = this.headers
       .get(latestFinalisedHash.toString())
       ?.number.toNumber();
@@ -246,7 +246,7 @@ class EventCache {
     return this.events.get(blockHash)!;
   }
 
-  async getHistoricalEvents(startHash: string, historicalCheckBlocks: number): Promise<Event[]> {
+  async getHistoricalEvents(startHash: BlockHash, historicalCheckBlocks: number): Promise<Event[]> {
     if (historicalCheckBlocks <= 0) {
       return [];
     }
@@ -262,8 +262,8 @@ class EventCache {
     let currentHash = startHash;
     while (depth < historicalCheckBlocks) {
       depth++;
-      const currentHeader = await api.rpc.chain.getHeader(currentHash);
-      const currentEvents = await this.newHeader(currentHeader);
+      const currentHeader = (await api.rpc.chain.getHeader(currentHash)) as Header;
+      const currentEvents = await this.eventsForHeader(currentHeader);
 
       this.logger?.debug(
         `Found ${currentEvents.length} events at depth ${depth} for block ${currentHeader.number.toNumber()} (${currentHeader.hash.toString()})`,
@@ -271,7 +271,7 @@ class EventCache {
 
       events.push(...currentEvents);
 
-      currentHash = currentHeader.parentHash.toString();
+      currentHash = currentHeader.parentHash;
     }
 
     return events;
@@ -353,7 +353,10 @@ const subscribeHeads = getCachedDisposable(
     // Take the correct substrate API
     const api = stack.use(await apiMap[chain]());
 
-    const subject = new Subject<Event[]>();
+    const subject = new Subject<{
+      blockHash: BlockHash;
+      events: Event[];
+    }>();
 
     // subscribe to the correct head based on the finalized flag
     const subscribe = finalized
@@ -362,8 +365,8 @@ const subscribeHeads = getCachedDisposable(
 
     const unsubscribe = await subscribe(async (header: Header) => {
       const cache = eventCacheMap[chain];
-      const events = await cache.newHeader(header);
-      subject.next(events);
+      const events = await cache.eventsForHeader(header);
+      subject.next({ blockHash: header.hash, events });
     });
 
     // automatic cleanup!
@@ -371,7 +374,7 @@ const subscribeHeads = getCachedDisposable(
     stack.defer(() => subject.complete());
 
     return {
-      observable: subject as Observable<Event[]>,
+      observable: subject as Observable<{ blockHash: BlockHash; events: Event[] }>,
       [Symbol.asyncDispose]() {
         return stack.disposeAsync();
       },
@@ -381,7 +384,7 @@ const subscribeHeads = getCachedDisposable(
 
 async function getPastEvents(
   chain: SubstrateChain,
-  bestBlockHash: string,
+  bestBlockHash: BlockHash,
   historicalCheckBlocks: number,
 ): Promise<Event[]> {
   if (historicalCheckBlocks <= 0) {
@@ -452,19 +455,17 @@ export function observeEvents<T = any>(
     const foundEvents: Event[] = [];
     await using subscription = await subscribeHeads({ chain, finalized });
 
-    const subscriptionIterator = observableToIterable<Event[]>(
+    const subscriptionIterator = observableToIterable<{ blockHash: BlockHash; events: Event[] }>(
       subscription.observable,
       controller?.signal,
     );
+
     // Wait for the subscription to emit the first batch of events, which
     // will update the best block number in the event cache: required for
     // gap-free historical query.
-    await subscriptionIterator.next();
-    const bestBlockHash = eventCacheMap[chain].bestBlockHash;
+    const { blockHash } = (await subscriptionIterator.next()).value!;
 
-    const historicalEvents = bestBlockHash
-      ? await getPastEvents(chain, bestBlockHash, historicalCheckBlocks)
-      : [];
+    const historicalEvents = await getPastEvents(chain, blockHash, historicalCheckBlocks);
 
     const checkEvents = (events: Event[], log: string) => {
       if (events.length === 0) {
@@ -491,7 +492,7 @@ export function observeEvents<T = any>(
     // Check historical events first
     if (!checkEvents(historicalEvents, 'historical')) {
       logger.debug(`No ${eventName} events found in historical query.`);
-      for await (const events of subscriptionIterator) {
+      for await (const { events } of subscriptionIterator) {
         if (checkEvents(events, 'subscription')) {
           break;
         } else {
