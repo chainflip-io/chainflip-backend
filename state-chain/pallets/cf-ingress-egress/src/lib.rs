@@ -36,13 +36,12 @@ use cf_chains::{
 	},
 	ccm_checker::DecodedCcmAdditionalData,
 	instances::PalletInstanceAlias,
-	AllBatch, AllBatchError, CcmChannelMetadataChecked, CcmDepositMetadata,
+	AccountOrAddress, AllBatch, AllBatchError, CcmChannelMetadataChecked, CcmDepositMetadata,
 	CcmDepositMetadataChecked, CcmDepositMetadataUnchecked, CcmMessage, Chain, ChainCrypto,
-	ChannelLifecycleHooks, ChannelRefundParameters, ChannelRefundParametersDecoded,
+	ChannelLifecycleHooks, ChannelRefundParametersCheckedInternal, ChannelRefundParametersForChain,
 	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, DepositOriginType,
 	ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
-	IntoTransactionInIdForAnyChain, RefundParametersExtended, RejectCall, SwapOrigin,
-	TransferAssetParams,
+	IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary,
@@ -288,9 +287,7 @@ mod deposit_origin {
 					broker_id,
 				} => SwapOrigin::DepositChannel {
 					deposit_address: T::AddressConverter::to_encoded_address(
-						<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
-							deposit_address.clone(),
-						),
+						deposit_address.clone().into_foreign_chain_address(),
 					),
 					channel_id,
 					deposit_block_height,
@@ -313,6 +310,7 @@ pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
 	pub asset: TargetChainAsset<T, I>,
 	pub amount: TargetChainAmount<T, I>,
 	pub deposit_details: <T::TargetChain as Chain>::DepositDetails,
+	pub refund_ccm_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
 }
 
 /// Cross-chain messaging requests.
@@ -335,7 +333,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(25);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(27);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -501,7 +499,7 @@ pub mod pallet {
 		pub broker_fee: Option<Beneficiary<T::AccountId>>,
 		#[skip_name_expansion]
 		pub affiliate_fees: Affiliates<AffiliateShortId>,
-		pub refund_params: ChannelRefundParameters<TargetChainAccount<T, I>>,
+		pub refund_params: ChannelRefundParametersForChain<T::TargetChain>,
 		#[skip_name_expansion]
 		pub dca_params: Option<DcaParameters>,
 		#[skip_name_expansion]
@@ -560,8 +558,8 @@ pub mod pallet {
 		pub fees_withheld: TargetChainAmount<T, I>,
 	}
 
-	/// Determines the action to take when a deposit is made to a
-	/// channel.
+	/// Determines the action to take when a deposit is made to a channel.
+	#[allow(clippy::large_enum_variant)]
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(C))]
 	#[allow(clippy::large_enum_variant)]
@@ -571,7 +569,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: Option<CcmChannelMetadataChecked>,
-			refund_params: ChannelRefundParameters<ForeignChainAddress>,
+			refund_params: ChannelRefundParametersCheckedInternal<AccountId>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
@@ -581,6 +579,7 @@ pub mod pallet {
 		Refund {
 			reason: RefundReason,
 			refund_address: C::ChainAccount,
+			refund_ccm_metadata: Option<CcmChannelMetadataChecked>,
 		},
 	}
 
@@ -862,12 +861,12 @@ pub mod pallet {
 
 	/// Stores the details of transactions that are scheduled for rejecting.
 	#[pallet::storage]
-	pub(crate) type ScheduledTransactionsForRejection<T: Config<I>, I: 'static = ()> =
+	pub type ScheduledTransactionsForRejection<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<TransactionRejectionDetails<T, I>>, ValueQuery>;
 
 	/// Stores the details of transactions that failed to be rejected.
 	#[pallet::storage]
-	pub(crate) type FailedRejections<T: Config<I>, I: 'static = ()> =
+	pub type FailedRejections<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<TransactionRejectionDetails<T, I>>, ValueQuery>;
 
 	/// Stores the whitelisted brokers.
@@ -1622,6 +1621,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	// This function is not doing the maybe_transfers_limit and maybe_fetches_limit checks that
+	// the `do_egress_scheduled_*` are doing. That is not problematic for BTC and EVM BLS because
+	// BTC doesn't use it and EVM is only to limit max batching. However, that could be problematic
+	// if we were to use Solana BLS since that checks nonce availability. A nonce not being
+	// available would cause the rejection to fail. Actually it might be worse, it could consume
+	// the last available nonce and make a Solana rotation API construction tx to fail (or have to
+	// be retried).
 	fn try_broadcast_rejection_refund_or_store_tx_details(
 		tx: TransactionRejectionDetails<T, I>,
 		refund_address: <T::TargetChain as Chain>::ChainAccount,
@@ -1641,33 +1647,106 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 		let AmountAndFeesWithheld { amount_after_fees: amount_to_refund, fees_withheld: _ } =
 			Self::withhold_ingress_or_egress_fee(
-				IngressOrEgress::Egress,
+				match tx.refund_ccm_metadata {
+					Some(ref refund_ccm) => IngressOrEgress::EgressCcm {
+						gas_budget: refund_ccm.channel_metadata.gas_budget,
+						message_length: refund_ccm.channel_metadata.message.len(),
+					},
+					None => IngressOrEgress::Egress,
+				},
 				tx.asset,
 				amount_after_ingress_fees,
 			);
-		if let Ok(api_call) = <T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
+
+		// By building the ccm call, we will know if a separate "fetch" is required as part of the
+		// refund.
+		let no_ccm_refund = tx.refund_ccm_metadata.is_none();
+		match <T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
 			tx.deposit_details.clone(),
-			refund_address,
-			amount_to_refund,
+			refund_address.clone(),
+			no_ccm_refund.then_some(amount_to_refund),
 			tx.asset,
 			deposit_fetch_id,
 		) {
-			let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
-				api_call,
-				tx.deposit_address.map(|deposit_address| {
-					Call::finalise_ingress { addresses: vec![deposit_address] }.into()
-				}),
-				|_| None,
-			);
-			Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
-				broadcast_id,
-				tx_id: tx.deposit_details.clone(),
-			});
-		} else {
-			FailedRejections::<T, I>::append(tx.clone());
-			Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
-				tx_id: tx.deposit_details.clone(),
-			});
+			Ok(api_call) => {
+				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+					api_call,
+					tx.deposit_address.clone().map(|deposit_address| {
+						Call::finalise_ingress { addresses: vec![deposit_address] }.into()
+					}),
+					|_| None,
+				);
+				// Only emit TransactionRejectedByBroker for the actual egress (refund) transaction
+				if no_ccm_refund {
+					Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
+						broadcast_id,
+						tx_id: tx.deposit_details.clone(),
+					});
+				}
+			},
+			Err(cf_chains::RejectError::NotRequired) => (),
+			Err(_) =>
+			// Only consider it failed if we are not doing a ccm refund
+				if no_ccm_refund {
+					FailedRejections::<T, I>::append(tx.clone());
+					Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
+						tx_id: tx.deposit_details.clone(),
+					});
+				},
+		};
+
+		if let Some(ref ccm_refund_metadata) = tx.refund_ccm_metadata {
+			let handle_ccm_failure = || {
+				FailedRejections::<T, I>::append(tx.clone());
+				Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
+					tx_id: tx.deposit_details.clone(),
+				});
+			};
+
+			// Solana CCM refunds with ALT is not supported, since we don't want to witness ALTs
+			// here.
+			if ccm_refund_metadata
+				.channel_metadata
+				.ccm_additional_data
+				.alt_addresses()
+				.map(|alts| !alts.is_empty())
+				.unwrap_or(false)
+			{
+				debug_assert!(false, "Solana refund CCM with ALTs is not supported");
+				handle_ccm_failure();
+				return;
+			}
+
+			if let Ok(api_call) =
+				<T::ChainApiCall as ExecutexSwapAndCall<T::TargetChain>>::new_unsigned(
+					TransferAssetParams {
+						asset: tx.asset,
+						amount: amount_to_refund,
+						to: refund_address,
+					},
+					ccm_refund_metadata.source_chain,
+					ccm_refund_metadata.source_address.clone(),
+					ccm_refund_metadata.channel_metadata.gas_budget,
+					ccm_refund_metadata.channel_metadata.message.to_vec(),
+					ccm_refund_metadata.channel_metadata.ccm_additional_data.clone(),
+				) {
+				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+					api_call,
+					tx.deposit_address.clone().map(|deposit_address| {
+						Call::finalise_ingress { addresses: vec![deposit_address] }.into()
+					}),
+					|_| None,
+				);
+				Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
+					broadcast_id,
+					tx_id: tx.deposit_details.clone(),
+				});
+			} else {
+				// NOTE: This could be appending a rejection that might have an already successful
+				// fetch (RejectCall) but not the CCM refund. We must ensure that
+				// FailedRejections are not being retried.
+				handle_ccm_failure();
+			}
 		}
 	}
 
@@ -2005,27 +2084,29 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						},
 					},
 					broker_fees,
-					Some(RefundParametersExtended {
-						retry_duration: refund_params.retry_duration,
-						refund_destination: cf_chains::AccountOrAddress::ExternalAddress(
-							refund_params.refund_address,
-						),
-						min_price: refund_params.min_price,
-					}),
+					Some(refund_params),
 					dca_params.clone(),
 					origin.into(),
 				);
 				DepositAction::Swap { swap_request_id }
 			},
-			ChannelAction::Refund { refund_address, reason } => {
-				let egress_id =
-					match Self::schedule_egress(asset, amount_after_fees, refund_address, None) {
-						Ok(egress_details) => Some(egress_details.egress_id),
-						Err(e) => {
-							log::warn!("Failed to schedule egress for vault swap refund: {:?}", e);
-							None
-						},
-					};
+			ChannelAction::Refund { refund_address, reason, refund_ccm_metadata } => {
+				let egress_id = match Self::schedule_egress(
+					asset,
+					amount_after_fees,
+					refund_address,
+					refund_ccm_metadata.as_ref().map(|metadata| CcmDepositMetadata {
+						channel_metadata: metadata.clone(),
+						source_chain: asset.into(),
+						source_address,
+					}),
+				) {
+					Ok(egress_details) => Some(egress_details.egress_id),
+					Err(e) => {
+						log::warn!("Failed to schedule egress for vault swap refund: {:?}", e);
+						None
+					},
+				};
 				DepositAction::Refund { egress_id, amount: amount_after_fees, reason }
 			},
 		}
@@ -2348,9 +2429,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			output_asset,
 			tx_id,
 			broker_fee,
-			refund_params,
 			dca_params,
 			boost_fee,
+			refund_params,
 			..
 		} = vault_deposit_witness.clone();
 
@@ -2358,6 +2439,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			tx_id.clone(),
 			broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
 		);
+
+		let checked_refund_params =
+			match refund_params.map_refund_address_to_foreign_chain_address().into_checked(
+				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
+				asset.into(),
+			) {
+				Ok(checked_refund_params) =>
+					checked_refund_params.map_address(AccountOrAddress::ExternalAddress),
+				Err(_) => return,
+			};
 
 		if let Ok(ValidatedVaultSwapParams {
 			broker_fees,
@@ -2370,8 +2461,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_asset: output_asset,
 				destination_address,
 				broker_fees,
-				refund_params: refund_params
-					.map_address(|address| address.into_foreign_chain_address()),
+				refund_params: checked_refund_params,
 				dca_params,
 				channel_metadata,
 			};
@@ -2461,13 +2551,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						.is_empty();
 
 					if is_marked_by_broker_or_screening_id {
-						let refund_address = match &action {
+						let (refund_address, refund_ccm_metadata) = match &action {
 							ChannelAction::Swap { refund_params, .. } =>
-								refund_params.refund_address.clone(),
+							// Refund address for a deposit must be external address
+								if let AccountOrAddress::ExternalAddress(refund_addr) =
+									refund_params.refund_address.clone()
+								{
+									Ok((
+										refund_addr,
+										refund_params
+											.refund_ccm_metadata
+											.clone()
+											.map(|refund| refund.channel_metadata),
+									))
+								} else {
+									Err(DepositFailedReason::DepositWitnessRejected(
+										"Invalid Refund address".into(),
+									))
+								}?,
 							ChannelAction::LiquidityProvision { refund_address, .. } =>
-								refund_address.clone(),
-							ChannelAction::Refund { refund_address, .. } =>
+								(refund_address.clone(), None),
+							ChannelAction::Refund {
+								refund_address, refund_ccm_metadata, ..
+							} => (
 								refund_address.clone().into_foreign_chain_address(),
+								refund_ccm_metadata.clone(),
+							),
 						};
 
 						ScheduledTransactionsForRejection::<T, I>::append(
@@ -2477,6 +2586,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								amount: deposit_amount,
 								asset,
 								deposit_details: deposit_details.clone(),
+								refund_ccm_metadata: refund_ccm_metadata.map(|metadata| {
+									CcmDepositMetadata {
+										channel_metadata: metadata,
+										source_chain: asset.into(),
+										source_address,
+									}
+								}),
 							},
 						);
 
@@ -2656,11 +2772,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			(None, None)
 		};
 
-		if let Err(_err) =
-			T::SwapParameterValidation::validate_refund_params(refund_params.retry_duration)
-		{
-			return Err(RefundReason::InvalidRefundParameters);
-		}
+		T::SwapParameterValidation::validate_refund_params(refund_params.retry_duration)
+			.map_err(|_| RefundReason::InvalidRefundParameters)?;
 
 		if let Some(params) = &dca_params {
 			if T::SwapParameterValidation::validate_dca_params(params).is_err() {
@@ -2695,6 +2808,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			..
 		} = vault_deposit_witness.clone();
 
+		let refund_address = refund_params.refund_address.clone();
+		let checked_refund_params =
+			match refund_params.map_refund_address_to_foreign_chain_address().into_checked(
+				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
+				source_asset.into(),
+			) {
+				Ok(checked_refund_params) =>
+					checked_refund_params.map_address(AccountOrAddress::ExternalAddress),
+				Err(_) => return,
+			};
+
 		let (action, source_address) =
 			match Self::try_validate_vault_swap(vault_deposit_witness.clone()) {
 				Ok(ValidatedVaultSwapParams {
@@ -2708,8 +2832,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						destination_address,
 						broker_fees: broker_fees.clone(),
 						channel_metadata: channel_metadata.clone(),
-						refund_params: refund_params
-							.map_address(|address| address.into_foreign_chain_address()),
+						refund_params: checked_refund_params,
 						dca_params: dca_params.clone(),
 					},
 					source_address,
@@ -2717,7 +2840,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Err(reason) => (
 					ChannelAction::Refund {
 						reason: reason.clone(),
-						refund_address: refund_params.refund_address,
+						refund_address,
+						refund_ccm_metadata: checked_refund_params
+							.refund_ccm_metadata
+							.map(|refund| refund.channel_metadata),
 					},
 					None,
 				),
@@ -3004,8 +3130,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		broadcast_id: BroadcastId,
 		fallback: TransferAssetParams<T::TargetChain>,
 	) {
-		// let destination_address = fallback.to.clone();
-
 		match Self::schedule_egress(
 			fallback.asset,
 			fallback.amount,
@@ -3200,9 +3324,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 
 		Ok((
 			deposit_channel.channel_id,
-			<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
-				deposit_channel.address,
-			),
+			deposit_channel.address.into_foreign_chain_address(),
 			expiry_block,
 			channel_opening_fee,
 		))
@@ -3217,13 +3339,14 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadataChecked>,
 		boost_fee: BasisPoints,
-		refund_params: ChannelRefundParametersDecoded,
+		refund_params: ChannelRefundParametersForChain<T::TargetChain>,
 		dca_params: Option<DcaParameters>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
 		T::SwapParameterValidation::validate_refund_params(refund_params.retry_duration)?;
+
 		if let Some(params) = &dca_params {
 			T::SwapParameterValidation::validate_dca_params(params)?;
 		}
@@ -3236,7 +3359,10 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 				destination_address,
 				broker_fees,
 				channel_metadata,
-				refund_params,
+				refund_params: refund_params
+					.map_refund_address_to_foreign_chain_address()
+					.into_checked(None, source_asset.into())?
+					.map_address(AccountOrAddress::ExternalAddress),
 				dca_params,
 			},
 			boost_fee,
@@ -3244,9 +3370,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 
 		Ok((
 			deposit_channel.channel_id,
-			<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
-				deposit_channel.address,
-			),
+			deposit_channel.address.into_foreign_chain_address(),
 			expiry_height,
 			channel_opening_fee,
 		))

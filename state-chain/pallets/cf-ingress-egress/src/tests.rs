@@ -36,9 +36,9 @@ use cf_chains::{
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
 	CcmChannelMetadata, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked, CcmDepositMetadata,
-	CcmDepositMetadataUnchecked, Chain, ChannelRefundParameters, DepositChannel, DepositOriginType,
-	Ethereum, ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin, TransactionInIdForAnyChain,
-	TransferAssetParams,
+	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain, DepositChannel,
+	DepositOriginType, Ethereum, ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin,
+	TransactionInIdForAnyChain, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries,
@@ -88,11 +88,13 @@ const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
 const ETH_ETH: EthAsset = EthAsset::Eth;
 const ETH_FLIP: EthAsset = EthAsset::Flip;
 const DEFAULT_DEPOSIT_AMOUNT: u128 = 1_000;
-const ETH_REFUND_PARAMS: ChannelRefundParameters<H160> = ChannelRefundParameters {
-	retry_duration: 0,
-	refund_address: ALICE_ETH_ADDRESS,
-	min_price: sp_core::U256::zero(),
-};
+const ETH_REFUND_PARAMS: ChannelRefundParametersForChain<Ethereum> =
+	ChannelRefundParametersForChain::<Ethereum> {
+		retry_duration: 0,
+		refund_address: ALICE_ETH_ADDRESS,
+		min_price: sp_core::U256::zero(),
+		refund_ccm_metadata: None,
+	};
 
 #[track_caller]
 fn expect_size_of_address_pool(size: usize) {
@@ -2258,7 +2260,7 @@ fn submit_vault_swap_request(
 	deposit_details: DepositDetails,
 	broker_fee: Beneficiary<u64>,
 	affiliate_fees: Affiliates<AffiliateShortId>,
-	refund_params: ChannelRefundParameters<H160>,
+	refund_params: ChannelRefundParametersForChain<Ethereum>,
 	dca_params: Option<DcaParameters>,
 	boost_fee: BasisPoints,
 ) -> DispatchResult {
@@ -3567,10 +3569,11 @@ fn test_various_refund_reasons() {
 			tx_id: H256::default(),
 			broker_fee: None,
 			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParameters {
+			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 0,
 				min_price: U256::from(0),
 				refund_address: H160::default(),
+				refund_ccm_metadata: None,
 			},
 			dca_params: None,
 			boost_fee: 0,
@@ -3592,10 +3595,11 @@ fn test_various_refund_reasons() {
 			tx_id: H256::default(),
 			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
 			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParameters {
+			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 700,
 				min_price: U256::from(0),
 				refund_address: H160::default(),
+				refund_ccm_metadata: None,
 			},
 			dca_params: None,
 			boost_fee: 0,
@@ -3617,10 +3621,11 @@ fn test_various_refund_reasons() {
 			tx_id: H256::default(),
 			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
 			affiliate_fees: Default::default(),
-			refund_params: ChannelRefundParameters {
+			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 0,
 				min_price: U256::from(0),
 				refund_address: H160::default(),
+				refund_ccm_metadata: None,
 			},
 			dca_params: Some(DcaParameters { number_of_chunks: 0, chunk_interval: 100 }),
 			boost_fee: 0,

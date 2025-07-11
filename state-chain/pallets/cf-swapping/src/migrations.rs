@@ -17,5 +17,17 @@
 use crate::Pallet;
 
 use cf_runtime_utilities::PlaceholderMigration;
+use frame_support::migrations::VersionedMigration;
 
-pub type PalletMigration<T> = (PlaceholderMigration<11, Pallet<T>>,);
+pub mod swap_request_ccm_refund;
+
+pub type PalletMigration<T> = (
+	VersionedMigration<
+		11,
+		12,
+		swap_request_ccm_refund::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<12, Pallet<T>>,
+);

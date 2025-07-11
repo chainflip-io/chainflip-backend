@@ -56,10 +56,11 @@ mod benchmarks {
 			broker_commission: 10,
 			boost_fee: 0,
 			channel_metadata: None,
-			refund_parameters: ChannelRefundParametersEncoded {
+			refund_parameters: ChannelRefundParametersUncheckedEncoded {
 				retry_duration: 100,
 				refund_address: EncodedAddress::benchmark_value(),
 				min_price: U256::from(0),
+				refund_ccm_metadata: None,
 			},
 		};
 
@@ -100,10 +101,11 @@ mod benchmarks {
 			broker_commission: 10,
 			boost_fee: 0,
 			channel_metadata: None,
-			refund_parameters: ChannelRefundParametersEncoded {
+			refund_parameters: ChannelRefundParametersUncheckedEncoded {
 				retry_duration: 100,
 				refund_address: EncodedAddress::benchmark_value(),
 				min_price: U256::from(0),
+				refund_ccm_metadata: None,
 			},
 			affiliate_fees,
 			dca_parameters: None,

@@ -61,6 +61,13 @@ export type ChannelRefundParameters = {
   retry_duration: number;
   refund_address: string;
   min_price: string;
+  refund_ccm_metadata:
+    | {
+        message: string;
+        gas_budget: string;
+        ccm_additional_data: string | undefined;
+      }
+    | undefined;
 };
 
 export async function executeSolVaultSwap(
@@ -106,6 +113,11 @@ export async function executeSolVaultSwap(
       fillOrKillParams?.refundAddress ?? whaleKeypair.publicKey.toBase58(),
     ),
     min_price: fillOrKillParams?.minPriceX128 ?? '0x0',
+    refund_ccm_metadata: fillOrKillParams?.refundCcmMetadata && {
+      message: fillOrKillParams?.refundCcmMetadata.message as `0x${string}`,
+      gas_budget: fillOrKillParams?.refundCcmMetadata.gasBudget,
+      ccm_additional_data: fillOrKillParams?.refundCcmMetadata.ccmAdditionalData,
+    },
   };
   const extraParameters: SolanaVaultSwapExtraParameters = {
     chain: 'Solana',

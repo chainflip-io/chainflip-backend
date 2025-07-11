@@ -832,7 +832,7 @@ fn extract_swap_deposit_address(
 			channel_id: *channel_id,
 			source_chain_expiry_block: (*source_chain_expiry_block).into(),
 			channel_opening_fee: (*channel_opening_fee).into(),
-			refund_parameters: refund_parameters
+			refund_parameters: refund_parameters.clone()
 				.map_address(|refund_address| {
 					AddressString::from_encoded_address(&refund_address)
 				}),
