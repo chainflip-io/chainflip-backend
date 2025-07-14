@@ -160,9 +160,9 @@ class EventCache {
 
   private logger: Logger | undefined;
 
-  private newHeadsSubject: Subject<{ blockHash: string; events: Event[] }> | undefined;
+  private newHeadsSubject: Subject<{ header: Header; events: Event[] }> | undefined;
 
-  private finalisedHeadsSubject: Subject<{ blockHash: string; events: Event[] }> | undefined;
+  private finalisedHeadsSubject: Subject<{ header: Header; events: Event[] }> | undefined;
 
   private subscriptionDisposer: (() => Promise<void>) | undefined;
 
@@ -249,7 +249,7 @@ class EventCache {
     return this.events.get(blockHash)!;
   }
 
-  async getHistoricalEvents(startHash: string, historicalCheckBlocks: number): Promise<Event[]> {
+  async getHistoricalEvents(bestHeader: Header, historicalCheckBlocks: number): Promise<Event[]> {
     if (historicalCheckBlocks <= 0) {
       return [];
     }
@@ -268,7 +268,7 @@ class EventCache {
     );
 
     let depth = 0;
-    let currentHash = startHash;
+    let currentHash = bestHeader.parentHash.toString();
     while (depth < depthLimit) {
       depth++;
       const currentHeader = (await api.rpc.chain.getHeader(currentHash)) as Header;
@@ -299,14 +299,14 @@ class EventCache {
     const stack = new AsyncDisposableStack();
     const api = stack.use(await apiMap[this.chain]());
 
-    this.newHeadsSubject = new Subject<{ blockHash: string; events: Event[] }>();
-    this.finalisedHeadsSubject = new Subject<{ blockHash: string; events: Event[] }>();
+    this.newHeadsSubject = new Subject<{ header: Header; events: Event[] }>();
+    this.finalisedHeadsSubject = new Subject<{ header: Header; events: Event[] }>();
 
     // Subscribe to all heads
     const unsubscribeAllHeads = await api.rpc.chain.subscribeAllHeads(async (header: Header) => {
       try {
         const events = await this.eventsForHeader(header, false);
-        this.newHeadsSubject?.next({ blockHash: header.hash.toString(), events });
+        this.newHeadsSubject?.next({ header, events });
       } catch (error) {
         this.logger?.error('Error processing new head:', error);
         this.newHeadsSubject?.error(error);
@@ -318,7 +318,7 @@ class EventCache {
       async (header: Header) => {
         try {
           const events = await this.eventsForHeader(header, true);
-          this.finalisedHeadsSubject?.next({ blockHash: header.hash.toString(), events });
+          this.finalisedHeadsSubject?.next({ header, events });
         } catch (error) {
           this.logger?.error('Error processing finalised head:', error);
           this.finalisedHeadsSubject?.error(error);
@@ -343,7 +343,7 @@ class EventCache {
 
   async getObservable(
     finalized: boolean = false,
-  ): Promise<Observable<{ blockHash: string; events: Event[] }>> {
+  ): Promise<Observable<{ header: Header; events: Event[] }>> {
     await this.startBackgroundSubscription();
 
     if (finalized) {
@@ -449,13 +449,13 @@ const subscribeHeads = getCachedDisposable(
 
 async function getPastEvents(
   chain: SubstrateChain,
-  bestBlockHash: string,
+  bestHeader: Header,
   historicalCheckBlocks: number,
 ): Promise<Event[]> {
   if (historicalCheckBlocks <= 0) {
     return [];
   }
-  return eventCacheMap[chain].getHistoricalEvents(bestBlockHash, historicalCheckBlocks);
+  return eventCacheMap[chain].getHistoricalEvents(bestHeader, historicalCheckBlocks);
 }
 
 type EventTest<T> = (event: Event<T>) => boolean;
@@ -522,7 +522,7 @@ export function observeEvents<T = any>(
     const foundEvents: Event[] = [];
     await using subscription = await subscribeHeads({ chain, finalized });
 
-    const subscriptionIterator = observableToIterable<{ blockHash: string; events: Event[] }>(
+    const subscriptionIterator = observableToIterable<{ header: Header; events: Event[] }>(
       subscription.observable,
       controller?.signal,
     );
@@ -585,7 +585,7 @@ export function observeEvents<T = any>(
 
     const historicalEvents = await getPastEvents(
       chain,
-      firstResult.value.blockHash,
+      firstResult.value.header,
       historicalCheckBlocks,
     );
 
