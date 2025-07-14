@@ -127,17 +127,6 @@ export type Event<T = any> = {
   eventIndex: number;
 };
 
-// Iterate over all the events, reshaping them for the consumer
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapEvents(events: any[], blockNumber: number): Event[] {
-  return events.map(({ event }, index) => ({
-    name: { section: event.section, method: event.method },
-    data: event.toHuman().data,
-    block: blockNumber,
-    eventIndex: index,
-  }));
-}
-
 class EventCache {
   private events: Map<string, Event[]>;
 
@@ -181,8 +170,6 @@ class EventCache {
   }
 
   async eventsForHeader(blockHeader: Header, finalized: boolean = false): Promise<Event[]> {
-    const api = await apiMap[this.chain]();
-
     const blockHash = blockHeader.hash.toString();
     const blockHeight = blockHeader.number.toNumber();
 
@@ -198,19 +185,23 @@ class EventCache {
       this.bestBlockHash = blockHash;
     }
 
-    this.logger?.debug(
-      `${finalized ? 'Finalized' : 'New'} block ${blockHeight} (${blockHash}) on chain ${this.chain} with finalised block number ${this.finalisedBlockNumber}`,
-    );
-
     // Update the caches.
     if (!this.events.has(blockHash)) {
-      this.logger?.debug('Updating event cache');
+      this.logger?.debug(
+        `Caching new ${finalized ? 'finalized' : ''} block ${blockHeight} (${blockHash}) on chain ${this.chain} with finalised block number ${this.finalisedBlockNumber}`,
+      );
+
       this.headers.set(blockHash, blockHeader);
 
-      const historicalApi = await api.at(blockHash);
+      const api = await (await apiMap[this.chain]()).at(blockHash);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawEvents = (await historicalApi.query.system.events()) as unknown as any[];
-      const events = mapEvents(rawEvents, blockHeight);
+      const rawEvents = (await api.query.system.events()) as unknown as any[];
+      const events = rawEvents.map(({ event }, index) => ({
+        name: { section: event.section, method: event.method },
+        data: event.toHuman().data,
+        block: blockHeader.number.toNumber(),
+        eventIndex: index,
+      }));
 
       // Log the events
       if (this.outputFile) {
@@ -221,7 +212,7 @@ class EventCache {
       }
 
       // Update the cache.
-      this.events.set(blockHash, events); // Remove old blocks to maintain cache size
+      this.events.set(blockHash, events);
 
       // If the cache size exceeds the size limit, remove old blocks up to the cacheAgeLimit.
       if (this.headers.size > this.cacheSizeLimit) {
@@ -466,7 +457,7 @@ interface BaseOptions<T> {
   finalized?: boolean;
   historicalCheckBlocks?: number;
   timeoutSeconds?: number;
-  stopAfter?: number | ((event: Event<T>) => boolean);
+  stopAfter?: number | EventTest<T>;
 }
 
 interface Options<T> extends BaseOptions<T> {
@@ -547,10 +538,12 @@ export function observeEvents<T = any>(
             );
             foundEvents.push(event);
           }
-          stop =
-            stop || typeof stopAfter === 'function'
-              ? (stopAfter as (event: Event) => boolean)(event)
-              : foundEvents.length >= stopAfter;
+
+          if (typeof stopAfter === 'function') {
+            stop = stop || stopAfter(event);
+          } else {
+            stop = stop || foundEvents.length >= stopAfter;
+          }
         }
       }
       if (stop) {
