@@ -551,16 +551,13 @@ export function observeEvents<T = any>(
             stop || typeof stopAfter === 'function'
               ? (stopAfter as (event: Event) => boolean)(event)
               : foundEvents.length >= stopAfter;
-          if (stop) {
-            if (typeof stopAfter === 'function') {
-              logger.debug(
-                `Stopping after matching event: ${event.name.section}:${event.name.method}`,
-              );
-            } else {
-              logger.debug(`Stopping after finding ${stopAfter} events`);
-            }
-            break;
-          }
+        }
+      }
+      if (stop) {
+        if (typeof stopAfter === 'function') {
+          logger.debug(`Stopping after finding matching 'stopAfter' event.`);
+        } else {
+          logger.debug(`Stopping after finding ${stopAfter} events`);
         }
       }
       return stop;
