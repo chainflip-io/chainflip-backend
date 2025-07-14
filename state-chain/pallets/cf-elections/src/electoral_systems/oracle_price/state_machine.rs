@@ -93,6 +93,8 @@ def_derive! {
 	}
 }
 
+// This is defined here for the context, but it's used by the engines
+// to decide whether they should vote with a given oracle result.
 pub fn should_vote_for_asset<T: OPTypes>(
 	(time, price): &(UnixTime, T::Price),
 	conditions: &Vec<VotingCondition<T>>,
@@ -102,7 +104,6 @@ pub fn should_vote_for_asset<T: OPTypes>(
 		PriceMoved { last_price, deviation } =>
 			!T::price_range(&last_price, *deviation).contains(&price),
 		NewTimestamp { last_timestamp } => time > last_timestamp,
-		Always => todo!(),
 	})
 }
 
@@ -125,7 +126,7 @@ pub fn get_price_status(
 }
 
 impl<T: OPTypes> ExternalChainState<T> {
-	pub fn is_stale(&self) -> bool {
+	pub fn is_any_asset_price_stale(&self) -> bool {
 		all::<T::Asset>().any(|asset| {
 			self.price
 				.get(&asset)
@@ -325,7 +326,7 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 
 	fn get_queries(state: &mut Self::State) -> Vec<Self::Query> {
 		all::<ExternalPriceChain>()
-			.take_while_inclusive(|chain| state.chain_states[*chain].is_stale())
+			.take_while_inclusive(|chain| state.chain_states[*chain].is_any_asset_price_stale())
 			.map(|chain| PriceQuery { chain, assets: state.chain_states[chain].get_query() })
 			.collect()
 	}
