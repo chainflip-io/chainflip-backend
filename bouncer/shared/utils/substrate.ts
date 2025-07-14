@@ -507,7 +507,7 @@ export function observeEvents<T = any>(
     chain = 'chainflip',
     test = () => true,
     finalized = false,
-    historicalCheckBlocks = 1,
+    historicalCheckBlocks = 2,
     timeoutSeconds = 0,
     abortable = false,
     stopAfter = test,
