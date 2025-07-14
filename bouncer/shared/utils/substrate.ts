@@ -466,6 +466,7 @@ interface BaseOptions<T> {
   finalized?: boolean;
   historicalCheckBlocks?: number;
   timeoutSeconds?: number;
+  stopAfter?: number | ((event: Event<T>) => boolean);
 }
 
 interface Options<T> extends BaseOptions<T> {
@@ -506,9 +507,10 @@ export function observeEvents<T = any>(
     chain = 'chainflip',
     test = () => true,
     finalized = false,
-    historicalCheckBlocks = 2,
+    historicalCheckBlocks = 1,
     timeoutSeconds = 0,
     abortable = false,
+    stopAfter = test,
   }: Options<T> | AbortableOptions<T> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
@@ -525,6 +527,43 @@ export function observeEvents<T = any>(
       controller?.signal,
     );
 
+    const checkEvents = (events: Event[], log: string) => {
+      if (events.length === 0) {
+        return false;
+      }
+      logger.debug(`Checking ${events.length} ${log} events for ${eventName}`);
+      let stop = false;
+      for (const event of events) {
+        logger.trace(
+          `Checking event ${event.name.section}:${event.name.method} from block ${event.block}`,
+        );
+        if (
+          event.name.section.includes(expectedSection) &&
+          event.name.method.includes(expectedMethod)
+        ) {
+          if (test(event)) {
+            logger.debug(
+              `Found matching event ${event.name.section}:${event.name.method} in block ${event.block}`,
+            );
+            foundEvents.push(event);
+          }
+          stop =
+            stop || typeof stopAfter === 'function'
+              ? (stopAfter as (event: Event) => boolean)(event)
+              : foundEvents.length >= stopAfter;
+          if (stop) {
+            typeof stopAfter === 'function'
+              ? logger.debug(
+                  `Stopping after matching event: ${event.name.section}:${event.name.method}`,
+                )
+              : logger.debug(`Stopping after finding ${stopAfter} events`);
+            break;
+          }
+        }
+      }
+      return stop;
+    };
+
     // Wait for the subscription to emit the first batch of events, which
     // will update the best block number in the event cache: required for
     // gap-free historical query.
@@ -539,31 +578,14 @@ export function observeEvents<T = any>(
       }
       return [];
     }
-    const { blockHash } = firstResult.value;
+    const { blockHash, events } = firstResult.value;
+
+    if (checkEvents(events, 'current')) {
+      logger.debug(`Found ${foundEvents.length} ${eventName} events in the first batch.`);
+      return foundEvents;
+    }
 
     const historicalEvents = await getPastEvents(chain, blockHash, historicalCheckBlocks);
-
-    const checkEvents = (events: Event[], log: string) => {
-      if (events.length === 0) {
-        return false;
-      }
-      logger.debug(`Checking ${events.length} ${log} events for ${eventName}`);
-      let found = false;
-      for (const event of events) {
-        logger.trace(
-          `Checking event ${event.name.section}:${event.name.method} from block ${event.block}`,
-        );
-        if (
-          event.name.section.includes(expectedSection) &&
-          event.name.method.includes(expectedMethod) &&
-          test(event)
-        ) {
-          foundEvents.push(event);
-          found = true;
-        }
-      }
-      return found;
-    };
 
     // Check historical events first
     if (!checkEvents(historicalEvents, 'historical')) {
@@ -631,7 +653,7 @@ export function observeEvent<T = any>(
     chain = 'chainflip',
     test = () => true,
     finalized = false,
-    historicalCheckBlocks = 2,
+    historicalCheckBlocks,
     timeoutSeconds = 0,
     abortable = false,
   }: Options<T> | AbortableOptions<T> = {},
