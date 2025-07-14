@@ -50,11 +50,12 @@ async function submitWithMultipleGovernanceMembers(logger: Logger) {
   const proposalId = Number((await observeEvent(logger, 'governance:Proposed').event).data);
 
   // Note that with two members, we need to approve with the other account:
-  const nonce = await chainflip.rpc.system.accountNextIndex(alice.address);
+  const nonce = (await chainflip.rpc.system.accountNextIndex(alice.address)) as number;
   await chainflip.tx.governance.approve(proposalId).signAndSend(alice, { nonce });
 
-  const executedProposalId = Number((await observeEvent(logger, 'governance:Executed').event).data);
-  assert(proposalId === executedProposalId, 'Proposal Ids should match');
+  await observeEvent(logger, 'governance:Executed', {
+    test: (event) => event.data.proposalId === proposalId,
+  });
 
   assert(
     (await getGovernanceMembers()).length === 1,
