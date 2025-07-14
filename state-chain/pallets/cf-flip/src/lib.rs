@@ -514,6 +514,11 @@ impl<T: Config> FeePayment for Pallet<T> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(account_id: &Self::AccountId, amount: Self::Amount) {
+		use frame_support::traits::HandleLifetime;
+		if !frame_system::Pallet::<T>::account_exists(account_id) {
+			frame_system::Provider::<T>::created(account_id)
+				.expect("Cannot fail (see implementation).");
+		}
 		Pallet::<T>::settle(account_id, Pallet::<T>::mint(amount).into());
 	}
 
