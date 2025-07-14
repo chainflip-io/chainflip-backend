@@ -181,6 +181,7 @@ pub fn try_extract_vault_swap_witness(
 			min_price,
 			// Bitcoin should never have a ccm refund
 			refund_ccm_metadata: None,
+			max_oracle_price_slippage: Some(data.parameters.max_oracle_price_slippage.into()),
 		},
 		dca_params: Some(DcaParameters {
 			number_of_chunks: data.parameters.number_of_chunks.into(),

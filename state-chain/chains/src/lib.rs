@@ -1405,6 +1405,7 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 	Bitcoin {
 		min_output_amount: Amount,
 		retry_duration: BlockNumber,
+		max_oracle_price_slippage: Option<u8>,
 	},
 	Ethereum(EvmVaultSwapExtraParameters<Address, Amount>),
 	Arbitrum(EvmVaultSwapExtraParameters<Address, Amount>),
@@ -1426,8 +1427,15 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 		f: impl Fn(Address) -> Result<AddressOther, E>,
 	) -> Result<VaultSwapExtraParameters<AddressOther, Amount>, E> {
 		Ok(match self {
-			VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration } =>
-				VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration },
+			VaultSwapExtraParameters::Bitcoin {
+				min_output_amount,
+				retry_duration,
+				max_oracle_price_slippage,
+			} => VaultSwapExtraParameters::Bitcoin {
+				min_output_amount,
+				retry_duration,
+				max_oracle_price_slippage,
+			},
 			VaultSwapExtraParameters::Ethereum(extra_parameter) =>
 				VaultSwapExtraParameters::Ethereum(extra_parameter.try_map_address(f)?),
 			VaultSwapExtraParameters::Arbitrum(extra_parameter) =>
@@ -1455,11 +1463,15 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 		f: impl Fn(Amount) -> Result<NumberOther, E>,
 	) -> Result<VaultSwapExtraParameters<Address, NumberOther>, E> {
 		Ok(match self {
-			VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration } =>
-				VaultSwapExtraParameters::Bitcoin {
-					min_output_amount: f(min_output_amount)?,
-					retry_duration,
-				},
+			VaultSwapExtraParameters::Bitcoin {
+				min_output_amount,
+				retry_duration,
+				max_oracle_price_slippage,
+			} => VaultSwapExtraParameters::Bitcoin {
+				min_output_amount: f(min_output_amount)?,
+				retry_duration,
+				max_oracle_price_slippage,
+			},
 			VaultSwapExtraParameters::Ethereum(extra_parameter) =>
 				VaultSwapExtraParameters::Ethereum(extra_parameter.try_map_amounts(f)?),
 			VaultSwapExtraParameters::Arbitrum(extra_parameter) =>
@@ -1495,6 +1507,7 @@ pub struct VaultSwapInput<Address, Amount> {
 	pub boost_fee: BasisPoints,
 	pub affiliate_fees: Affiliates<cf_primitives::AccountId>,
 	pub dca_parameters: Option<DcaParameters>,
+	pub max_oracle_price_slippage: u8,
 }
 
 /// Type used internally within the State chain.

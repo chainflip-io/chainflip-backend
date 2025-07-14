@@ -1272,3 +1272,9 @@ pub trait SpawnAccount {
 
 	fn does_account_exist(account_id: &Self::AccountId) -> bool;
 }
+
+// NOTE: this is just a placeholder and is likely to change
+pub trait OraclePriceApi {
+	// Price of `asset` in USDC
+	fn get_price(asset: Asset) -> Price;
+}

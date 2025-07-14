@@ -19,6 +19,8 @@
 use codec::{Decode, Encode, EncodeLike};
 use frame_support::{storage, StorageHasher, Twox64Concat};
 
+use crate::OraclePriceApi;
+
 pub mod account_role_registry;
 pub mod address_converter;
 pub mod affiliate_registry;
@@ -171,5 +173,28 @@ impl<T: MockPallet> MockPalletStorage for T {
 			&<Twox64Concat as StorageHasher>::hash,
 			&storage_key(Self::PREFIX, store, k),
 		)
+	}
+}
+
+pub struct MockOraclePriceApi {}
+
+impl MockOraclePriceApi {}
+
+impl MockPallet for MockOraclePriceApi {
+	const PREFIX: &'static [u8] = b"MockOraclePriceApi";
+}
+
+const ORACLE_PRICE: &[u8] = b"ORACLE_PRICE";
+
+impl MockOraclePriceApi {
+	pub fn set_price(asset: cf_primitives::Asset, price: cf_primitives::Price) {
+		Self::put_storage(ORACLE_PRICE, asset, price);
+	}
+}
+
+impl OraclePriceApi for MockOraclePriceApi {
+	fn get_price(asset: cf_primitives::Asset) -> cf_primitives::Price {
+		Self::get_storage(ORACLE_PRICE, asset)
+			.unwrap_or_else(|| cf_chains::evm::U256::one() << cf_primitives::PRICE_FRACTIONAL_BITS)
 	}
 }

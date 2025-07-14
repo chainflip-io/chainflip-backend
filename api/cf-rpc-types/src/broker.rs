@@ -146,6 +146,7 @@ pub fn vault_swap_input_encoded_to_rpc(value: VaultSwapInputEncoded) -> VaultSwa
 		boost_fee: value.boost_fee,
 		affiliate_fees: value.affiliate_fees,
 		dca_parameters: value.dca_parameters,
+		max_oracle_price_slippage: value.max_oracle_price_slippage,
 	}
 }
 

@@ -26,9 +26,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
-	BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
-	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
-	STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceLimits, SwapId, SwapLeg,
+	SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
+	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -106,7 +106,7 @@ pub struct AffiliateDetails {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct SwapRefundParameters {
 	pub refund_block: cf_primitives::BlockNumber,
-	pub min_output: cf_primitives::AssetAmount,
+	pub price_limits: PriceLimits,
 }
 
 #[derive(CloneNoBound, DebugNoBound)]
@@ -478,19 +478,20 @@ where
 
 #[frame_support::pallet]
 pub mod pallet {
-	use core::cmp::max;
+	use core::{cell::Ref, cmp::max};
 
 	use cf_amm::math::output_amount_ceil;
 	use cf_chains::{
-		address::EncodedAddress, AnyChain, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
-		Chain, ChannelRefundParametersCheckedInternal,
+		address::EncodedAddress, refund_parameters, AnyChain, CcmChannelMetadataChecked,
+		CcmChannelMetadataUnchecked, Chain, ChannelRefundParametersCheckedInternal,
 	};
 	use cf_primitives::{
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
-		SwapId, SwapOutput, SwapRequestId,
+		PriceLimits, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{
-		AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider, ScheduledEgressDetails,
+		AccountRoleRegistry, Chainflip, EgressApi, OraclePriceApi, PoolPriceProvider,
+		ScheduledEgressDetails,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
@@ -537,6 +538,8 @@ pub mod pallet {
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type PoolPriceApi: PoolPriceProvider;
+
+		type OraclePriceApi: OraclePriceApi;
 
 		type ChannelIdAllocator: ChannelIdAllocator;
 
@@ -996,7 +999,11 @@ pub mod pallet {
 			boost_fee: BasisPoints,
 			refund_parameters: ChannelRefundParametersUncheckedEncoded,
 		) -> DispatchResult {
-			Self::request_swap_deposit_address_with_affiliates(
+			// log::warn!(
+			// 	"Requesting swap deposit address (legacy), refund params: {:?}",
+			// 	refund_parameters
+			// );
+			Self::request_swap_deposit_address_v2(
 				origin,
 				source_asset,
 				destination_asset,
@@ -1005,7 +1012,7 @@ pub mod pallet {
 				channel_metadata,
 				boost_fee,
 				Default::default(),
-				refund_parameters,
+				refund_parameters.into(),
 				None,
 			)
 		}
@@ -1433,6 +1440,96 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Request a swap deposit address.
+		#[pallet::call_index(18)]
+		#[pallet::weight(T::WeightInfo::request_swap_deposit_address_with_affiliates())]
+		pub fn request_swap_deposit_address_v2(
+			origin: OriginFor<T>,
+			source_asset: Asset,
+			destination_asset: Asset,
+			destination_address: EncodedAddress,
+			broker_commission: BasisPoints,
+			channel_metadata: Option<CcmChannelMetadataUnchecked>,
+			boost_fee: BasisPoints,
+			affiliate_fees: Affiliates<T::AccountId>,
+			refund_parameters: ChannelRefundParametersUncheckedEncoded,
+			dca_parameters: Option<DcaParameters>,
+		) -> DispatchResult {
+			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			let beneficiaries = Pallet::<T>::assemble_and_validate_broker_fees(
+				broker.clone(),
+				broker_commission,
+				affiliate_fees.clone(),
+			)?;
+
+			let destination_address_internal =
+				T::AddressConverter::decode_and_validate_address_for_asset(
+					destination_address.clone(),
+					destination_asset,
+				)
+				.map_err(address_error_to_pallet_error::<T>)?;
+
+			// Convert the refund parameter from `EncodedAddress` into `ForeignChainAddress` type.
+			let refund_params_internal = refund_parameters.clone().try_map_address(|addr| {
+				T::AddressConverter::try_from_encoded_address(addr)
+					.map_err(|_| Error::<T>::InvalidRefundAddress)
+			})?;
+
+			let channel_metadata = channel_metadata
+				.map(|ccm| {
+					let destination_chain: ForeignChain = destination_asset.into();
+					ensure!(
+						destination_chain.ccm_support(),
+						Error::<T>::CcmUnsupportedForTargetChain
+					);
+
+					ccm.to_checked(destination_asset, destination_address_internal.clone()).map_err(
+						|e| {
+							log::warn!(
+							"Failed to open channel due to invalid CCM. Broker: {:?}, Error: {:?}",
+							broker,
+							e
+						);
+							Error::<T>::InvalidCcm
+						},
+					)
+				})
+				.transpose()?;
+
+			let (channel_id, deposit_address, expiry_height, channel_opening_fee) =
+				T::DepositHandler::request_swap_deposit_address(
+					source_asset,
+					destination_asset,
+					destination_address_internal,
+					beneficiaries.clone(),
+					broker.clone(),
+					channel_metadata.clone(),
+					boost_fee,
+					refund_params_internal,
+					dca_parameters.clone(),
+				)?;
+
+			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
+				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
+				destination_address,
+				source_asset,
+				destination_asset,
+				channel_id,
+				broker_id: broker,
+				broker_commission_rate: broker_commission,
+				channel_metadata,
+				source_chain_expiry_block: expiry_height,
+				boost_fee,
+				channel_opening_fee,
+				affiliate_fees,
+				refund_parameters,
+				dca_parameters,
+			});
+
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -1649,10 +1746,36 @@ pub mod pallet {
 			// Now checking for FoK violations:
 			let (non_violating, violating): (Vec<_>, Vec<_>) =
 				swaps.into_iter().partition(|swap| {
-					let final_output = swap.final_output.unwrap();
-					swap.refund_params()
-						.as_ref()
-						.is_none_or(|params| final_output >= params.min_output)
+					swap.refund_params().as_ref().is_none_or(|params| {
+						let min_price_from_oracle =
+							params.price_limits.max_oracle_price_slippage.map(|slippage_bps| {
+								let price1 = T::OraclePriceApi::get_price(swap.input_asset());
+								let price2 = T::OraclePriceApi::get_price(swap.output_asset());
+
+								let oracle_price = cf_amm::math::relative_price(price1, price2);
+
+								// reduce the price by slippage_bps:
+								cf_amm::math::mul_div_floor(
+									oracle_price,
+									(MAX_BASIS_POINTS - slippage_bps).into(),
+									MAX_BASIS_POINTS,
+								)
+							});
+
+						let min_price = params.price_limits.min_price;
+
+						// Use the larger of the two prices
+						let min_price =
+							core::cmp::max(min_price_from_oracle.unwrap_or_default(), min_price);
+
+						let min_output =
+							output_amount_ceil(swap.swap.input_amount.into(), min_price)
+								.unique_saturated_into();
+
+						// dbg!(swap.final_output.unwrap(), &min_output);
+
+						swap.final_output.unwrap() >= min_output
+					})
 				});
 
 			if violating.is_empty() {
@@ -2071,12 +2194,17 @@ pub mod pallet {
 			let execute_at = frame_system::Pallet::<T>::block_number() + delay_blocks;
 
 			let refund_params = refund_params.map(|params| {
-				utilities::calculate_swap_refund_parameters(
-					params,
-					// In practice block number always fits in u32:
-					execute_at.unique_saturated_into(),
-					input_amount,
-				)
+				use sp_runtime::traits::UniqueSaturatedInto;
+
+				let execute_at: cf_primitives::BlockNumber = execute_at.unique_saturated_into();
+
+				SwapRefundParameters {
+					refund_block: execute_at.saturating_add(params.retry_duration),
+					price_limits: PriceLimits {
+						min_price: params.min_price,
+						max_oracle_price_slippage: params.max_oracle_price_slippage.map(Into::into),
+					},
+				}
 			});
 
 			SwapQueue::<T>::append(
@@ -2652,17 +2780,6 @@ pub(crate) mod utilities {
 			Asset::HubDot => DOT_ESTIMATION_CAP,
 			Asset::HubUsdc => USD_ESTIMATION_CAP,
 			Asset::HubUsdt => USD_ESTIMATION_CAP,
-		}
-	}
-
-	pub(super) fn calculate_swap_refund_parameters<AccountId>(
-		params: &ChannelRefundParametersCheckedInternal<AccountId>,
-		execute_at_block: u32,
-		input_amount: AssetAmount,
-	) -> SwapRefundParameters {
-		SwapRefundParameters {
-			refund_block: execute_at_block.saturating_add(params.retry_duration),
-			min_output: params.min_output_amount(input_amount),
 		}
 	}
 

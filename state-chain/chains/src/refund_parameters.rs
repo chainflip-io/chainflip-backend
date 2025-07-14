@@ -23,7 +23,7 @@ use crate::{
 	CcmChannelMetadataUnchecked, CcmDepositMetadataChecked, CcmDepositMetadataUnchecked, Chain,
 };
 use cf_amm_math::Price;
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{Asset, AssetAmount, BasisPoints};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
@@ -72,22 +72,26 @@ pub enum AccountOrAddress<AccountId, Address> {
 	PartialOrd,
 	Ord,
 )]
-pub struct ChannelRefundParameters<A, CcmRefundDetails> {
+pub struct ChannelRefundParameters<A, CcmRefundDetails, OracleSlippage> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: A,
 	pub min_price: Price,
 	pub refund_ccm_metadata: CcmRefundDetails,
+	pub max_oracle_price_slippage: OracleSlippage,
 }
 
 /// Refund parameters with CCM metadata that has not yet been checked for validity.
 ///
 /// Most incoming refund parameters will be of this type.
 pub type ChannelRefundParametersUnchecked<A> =
-	ChannelRefundParameters<A, Option<CcmChannelMetadataUnchecked>>;
+	ChannelRefundParameters<A, Option<CcmChannelMetadataUnchecked>, Option<BasisPoints>>;
 
 /// Refund parameters with CCM metadata that *has* been checked for validity.
-pub type ChannelRefundParametersChecked<A> =
-	ChannelRefundParameters<A, Option<CcmDepositMetadataChecked<ForeignChainAddress>>>;
+pub type ChannelRefundParametersChecked<A> = ChannelRefundParameters<
+	A,
+	Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
+	Option<BasisPoints>,
+>;
 
 /// Convenience alias for unchecked refund parameters with encoded addresses. This is most commonly
 /// used in State Chain events and extrinsics.
@@ -108,7 +112,7 @@ pub type RpcChannelRefundParameters =
 pub type ChannelRefundParametersForChain<C> =
 	ChannelRefundParametersUnchecked<<C as Chain>::ChainAccount>;
 
-impl<A, D> ChannelRefundParameters<A, D> {
+impl<A, D, O> ChannelRefundParameters<A, D, O> {
 	pub fn min_output_amount(&self, input_amount: AssetAmount) -> AssetAmount {
 		use sp_runtime::traits::UniqueSaturatedInto;
 		cf_amm_math::output_amount_ceil(input_amount.into(), self.min_price).unique_saturated_into()
@@ -126,28 +130,31 @@ impl RpcChannelRefundParameters {
 			refund_address: self.refund_address.try_parse_to_encoded_address(chain)?,
 			min_price: self.min_price,
 			refund_ccm_metadata: self.refund_ccm_metadata.clone(),
+			max_oracle_price_slippage: self.max_oracle_price_slippage,
 		})
 	}
 }
 
-impl<A, D> ChannelRefundParameters<A, D> {
-	pub fn map_address<B, F: FnOnce(A) -> B>(self, f: F) -> ChannelRefundParameters<B, D> {
+impl<A, D, O> ChannelRefundParameters<A, D, O> {
+	pub fn map_address<B, F: FnOnce(A) -> B>(self, f: F) -> ChannelRefundParameters<B, D, O> {
 		ChannelRefundParameters {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address),
 			min_price: self.min_price,
 			refund_ccm_metadata: self.refund_ccm_metadata,
+			max_oracle_price_slippage: self.max_oracle_price_slippage,
 		}
 	}
 	pub fn try_map_address<B, E, F: FnOnce(A) -> Result<B, E>>(
 		self,
 		f: F,
-	) -> Result<ChannelRefundParameters<B, D>, E> {
+	) -> Result<ChannelRefundParameters<B, D, O>, E> {
 		Ok(ChannelRefundParameters {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address)?,
 			min_price: self.min_price,
 			refund_ccm_metadata: self.refund_ccm_metadata,
+			max_oracle_price_slippage: self.max_oracle_price_slippage,
 		})
 	}
 }
@@ -217,6 +224,7 @@ impl ChannelRefundParametersUnchecked<ForeignChainAddress> {
 				retry_duration: self.retry_duration,
 				refund_address: self.refund_address.clone(),
 				min_price: self.min_price,
+				max_oracle_price_slippage: self.max_oracle_price_slippage,
 				refund_ccm_metadata: self
 					.refund_ccm_metadata
 					.map(|channel_metadata| {

@@ -14,6 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use core::u8;
+
 use crate::{
 	ccm_checker::DecodedCcmAdditionalData, CcmAdditionalData, CcmChannelMetadataChecked,
 	ChannelRefundParameters, ChannelRefundParametersUnchecked,
@@ -59,7 +61,7 @@ pub struct VaultSwapParameters<R> {
 /// Original version of `VaultSwapParameters` that does not include
 /// and refund CCM metadata.
 pub type VaultSwapParametersV0<RefundAddress> =
-	VaultSwapParameters<ChannelRefundParameters<RefundAddress, ()>>;
+	VaultSwapParameters<ChannelRefundParameters<RefundAddress, (), ()>>;
 
 /// New version of `VaultSwapParameters` that includes refund CCM metadata.
 pub type VaultSwapParametersV1<RefundAddress> =
@@ -75,6 +77,7 @@ impl<RefundAddress> From<VaultSwapParametersV0<RefundAddress>>
 				refund_address: value.refund_params.refund_address,
 				min_price: value.refund_params.min_price,
 				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
 			},
 			dca_params: value.dca_params,
 			boost_fee: value.boost_fee,
@@ -144,8 +147,23 @@ pub fn decode_cf_parameters<RefundAddress: Decode, CcmData: Default + Decode>(
 			VersionedCfParameters::V0(CfParametersV0 {
 				ccm_additional_data,
 				vault_swap_parameters,
-			}) => (vault_swap_parameters.into(), ccm_additional_data),
-			VersionedCfParameters::V1(CfParametersV1 {
+			}) => (
+				VaultSwapParameters {
+					refund_params: ChannelRefundParameters {
+						retry_duration: vault_swap_parameters.refund_params.retry_duration,
+						refund_address: vault_swap_parameters.refund_params.refund_address,
+						min_price: vault_swap_parameters.refund_params.min_price,
+						max_oracle_price_slippage: None,
+						refund_ccm_metadata: None,
+					},
+					dca_params: vault_swap_parameters.dca_params,
+					boost_fee: vault_swap_parameters.boost_fee,
+					broker_fee: vault_swap_parameters.broker_fee,
+					affiliate_fees: vault_swap_parameters.affiliate_fees,
+				},
+				ccm_additional_data,
+			),
+			VersionedCfParameters::V1(CfParameters {
 				ccm_additional_data,
 				vault_swap_parameters,
 			}) => (vault_swap_parameters, ccm_additional_data),

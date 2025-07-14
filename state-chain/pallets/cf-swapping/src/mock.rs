@@ -27,6 +27,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter, balance_api::MockBalance, bonding::MockBonderFor,
 		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler, pool_price_api::MockPoolPriceApi,
+		MockOraclePriceApi,
 	},
 	AccountRoleRegistry, ChannelIdAllocator, SwappingApi,
 };
@@ -199,6 +200,7 @@ impl pallet_cf_swapping::Config for Test {
 	type ChannelIdAllocator = MockChannelIdAllocator;
 	type Bonder = MockBonderFor<Self>;
 	type PoolPriceApi = MockPoolPriceApi;
+	type OraclePriceApi = MockOraclePriceApi;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

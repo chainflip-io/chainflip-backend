@@ -39,6 +39,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
+	PriceLimits,
 };
 use cf_test_utilities::{assert_event_sequence, assert_has_matching_event};
 use cf_traits::{
@@ -140,6 +141,7 @@ impl TestRefundParams {
 				self.min_output.into(),
 				input_amount.into(),
 			)),
+			max_oracle_price_slippage: None,
 			refund_ccm_metadata: None,
 		}
 	}
@@ -274,6 +276,7 @@ const REFUND_PARAMS: ChannelRefundParametersUncheckedEncoded =
 		retry_duration: 100,
 		refund_address: EncodedAddress::Eth([1; 20]),
 		min_price: U256::zero(),
+		max_oracle_price_slippage: None,
 		refund_ccm_metadata: None,
 	};
 
@@ -1568,7 +1571,7 @@ mod internal_swaps {
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,
 					0,
-					min_price,
+					PriceLimits { min_price, max_oracle_price_slippage: None },
 					None,
 					LP_ACCOUNT,
 				);
@@ -1651,7 +1654,7 @@ mod internal_swaps {
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,
 					0,
-					min_price,
+					PriceLimits { min_price, max_oracle_price_slippage: None },
 					Some(DcaParameters { number_of_chunks: 2, chunk_interval: 2 }),
 					LP_ACCOUNT,
 				);
@@ -2013,6 +2016,100 @@ mod affiliates {
 				!frame_system::Account::<Test>::contains_key(affiliate_account_id),
 				"Account not deleted"
 			);
+		});
+	}
+}
+mod oracle_swaps {
+
+	use cf_traits::mocks::MockOraclePriceApi;
+
+	use super::*;
+
+	#[test]
+	fn basic_oracle_swap() {
+		const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const CHUNK_2_RETRY_BLOCK: u64 = CHUNK_2_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64;
+
+		const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / 2;
+
+		const SWAP_RATE: u128 = 3;
+		const NEW_SWAP_RATE: u128 = 2;
+
+		new_test_ext()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), INIT_BLOCK);
+
+				// Input asset is 2.5 times more expensive than the input asset
+				MockOraclePriceApi::set_price(INPUT_ASSET, U256::from(5) << PRICE_FRACTIONAL_BITS);
+				MockOraclePriceApi::set_price(OUTPUT_ASSET, U256::from(2) << PRICE_FRACTIONAL_BITS);
+
+				// Execution price is better, so the first chunk should go through
+				SwapRate::set(SWAP_RATE as f64);
+
+				Swapping::init_internal_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					10,
+					PriceLimits { min_price: 0.into(), max_oracle_price_slippage: Some(100) },
+					Some(DcaParameters { number_of_chunks: 2, chunk_interval: 2 }),
+					LP_ACCOUNT,
+				);
+			})
+			.then_process_blocks_until_block(CHUNK_1_BLOCK)
+			.then_execute_with(|_| {
+				// RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
+				//
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted {
+						input_amount: CHUNK_AMOUNT,
+						output_amount,
+						..
+					}) if *output_amount == CHUNK_AMOUNT * SWAP_RATE
+				);
+
+				SwapRate::set(NEW_SWAP_RATE as f64);
+
+				// TODO NEXT: change swap rate -> second chunk should fail and be rescheduled
+			})
+			.then_process_blocks_until_block(CHUNK_2_BLOCK)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRescheduled { .. })
+				);
+
+				// Chunk 2's output was below the price limit, so it will be retried.
+				// Next time the oracle price for input asset will drop (the execution price will
+				// remain the same), so the swap should now succeed.
+
+				MockOraclePriceApi::set_price(INPUT_ASSET, U256::from(4) << PRICE_FRACTIONAL_BITS);
+			})
+			.then_process_blocks_until_block(CHUNK_2_RETRY_BLOCK)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted {
+						input_amount: CHUNK_AMOUNT,
+						output_amount,
+						..
+					}) if *output_amount == CHUNK_AMOUNT * NEW_SWAP_RATE
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. })
+				);
+			});
+	}
+
+	#[test]
+	fn oracle_swap_via_deposit_channel() {
+		new_test_ext().execute_with(|| {
+			//
 		});
 	}
 }

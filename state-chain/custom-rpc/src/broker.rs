@@ -212,22 +212,20 @@ where
 		let mut status_stream = self
 			.signed_pool_client
 			.submit_watch(
-				RuntimeCall::from(
-					pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
-						source_asset,
-						destination_asset,
-						destination_address: destination_address
-							.try_parse_to_encoded_address(destination_asset.into())?,
-						broker_commission,
-						channel_metadata,
-						boost_fee: boost_fee.unwrap_or_default(),
-						affiliate_fees: affiliate_fees.unwrap_or_default(),
-						refund_parameters: refund_parameters.try_map_address(|addr| {
-							addr.try_parse_to_encoded_address(source_asset.into())
-						})?,
-						dca_parameters,
-					},
-				),
+				RuntimeCall::from(pallet_cf_swapping::Call::request_swap_deposit_address_v2 {
+					source_asset,
+					destination_asset,
+					destination_address: destination_address
+						.try_parse_to_encoded_address(destination_asset.into())?,
+					broker_commission,
+					channel_metadata,
+					boost_fee: boost_fee.unwrap_or_default(),
+					affiliate_fees: affiliate_fees.unwrap_or_default(),
+					refund_parameters: refund_parameters.try_map_address(|addr| {
+						addr.try_parse_to_encoded_address(source_asset.into())
+					})?,
+					dca_parameters,
+				}),
 				true,
 			)
 			.await

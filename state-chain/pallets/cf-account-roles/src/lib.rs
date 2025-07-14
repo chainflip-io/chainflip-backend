@@ -29,8 +29,6 @@ use sp_std::boxed::Box;
 use cf_traits::Chainflip;
 
 #[cfg(not(feature = "runtime-benchmarks"))]
-use cf_traits::FeePayment;
-
 use sp_runtime::{codec::Decode, DispatchError};
 
 use cf_primitives::AccountRole;
