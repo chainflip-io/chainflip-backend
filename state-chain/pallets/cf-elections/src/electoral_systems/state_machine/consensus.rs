@@ -1,4 +1,4 @@
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::collections::btree_map::BTreeMap;
 
 /// Abstract consensus mechanism.
 ///

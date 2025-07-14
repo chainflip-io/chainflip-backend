@@ -124,14 +124,6 @@ pub fn get_price_status(
 	}
 }
 
-def_derive! {
-	#[derive(TypeInfo)]
-	pub enum ChainPriceStatus {
-		AtLeastOnePriceStale,
-		AllUpToDate
-	}
-}
-
 impl<T: OPTypes> ExternalChainState<T> {
 	pub fn is_stale(&self) -> bool {
 		all::<T::Asset>().any(|asset| {

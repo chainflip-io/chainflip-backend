@@ -1,6 +1,6 @@
-use core::ops::{Range, RangeInclusive};
+use core::ops::RangeInclusive;
 
-use sp_std::ops::{Add, Index, IndexMut};
+use sp_std::ops::{Add, Index};
 
 use crate::electoral_systems::state_machine::common_imports::*;
 use enum_iterator::Sequence;

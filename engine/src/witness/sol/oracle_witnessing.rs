@@ -50,8 +50,9 @@ where
 	)
 	.map_err(|e| anyhow::anyhow!("Failed to build and serialize the query transaction: {:?}", e))?;
 
-	let simulation_result =
-		sol_client.simulate_transaction(serialized_transaction, min_context_slot).await;
+	let simulation_result = sol_client
+		.simulate_transaction(serialized_transaction, min_context_slot)
+		.await?;
 
 	let query_slot = simulation_result.context.slot;
 
@@ -172,7 +173,7 @@ mod tests {
 				)?;
 
 				let simulation_result =
-					client.simulate_transaction(serialized_transaction, None).await;
+					client.simulate_transaction(serialized_transaction, None).await?;
 				let return_data = simulation_result
 					.value
 					.return_data

@@ -18,23 +18,15 @@ use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystemTypes,
-	electoral_systems::{
-		oracle_price::{
-			primitives::UnixTime,
-			state_machine::{
-				should_vote_for_asset,
-				ExternalChainStateVote, ExternalPriceChain,
-			},
-		},
+	electoral_systems::oracle_price::{
+		primitives::UnixTime,
+		state_machine::{should_vote_for_asset, ExternalChainStateVote, ExternalPriceChain},
 	},
 	VoteOf,
 };
-use sol_prim::{consts::const_address, Address};
-use sp_core::bounded::alloc::collections::VecDeque;
 use state_chain_runtime::chainflip::generic_elections::*;
 
 use crate::{
-	btc::rpc::BlockHeader,
 	elections::voter_api::{CompositeVoter, VoterApi},
 	evm::{
 		retry_rpc::{address_checker::AddressCheckerRetryRpcApi, EvmRetryRpcClient},
@@ -45,12 +37,9 @@ use crate::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 	},
-	witness::{
-		btc::deposits::{deposit_witnesses, map_script_addresses},
-		sol::oracle_witnessing::get_price_feeds,
-	},
+	witness::sol::oracle_witnessing::get_price_feeds,
 };
-use anyhow::{bail, Result};
+use anyhow::Result;
 use pallet_cf_elections::electoral_systems::oracle_price::primitives::ChainlinkAssetPair;
 use sol_prim::program_instructions::PriceFeedData as SolPriceFeedData;
 
@@ -123,7 +112,6 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 				)
 				.await?;
 				price_feeds.into_iter().map(Into::into).collect::<Vec<PriceData>>()
-				
 			},
 			ExternalPriceChain::Ethereum => {
 				let (block, _, price_feeds) = self
@@ -132,7 +120,7 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 						settings.eth_contract_address.clone(),
 						settings.eth_oracle_feeds.clone(),
 					)
-					.await;
+					.await?;
 				price_feeds.into_iter().map(Into::into).collect::<Vec<PriceData>>()
 			},
 		};
