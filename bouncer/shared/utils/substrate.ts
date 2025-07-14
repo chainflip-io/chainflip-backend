@@ -261,7 +261,7 @@ class EventCache {
     const depthLimit = Math.min(historicalCheckBlocks, this.cacheAgeLimit);
 
     const api = await apiMap[this.chain]();
-    const events: Event[] = [];
+    const events: Event[][] = [];
 
     this.logger?.debug(
       `Checking historical events for chain ${this.chain} over the last ${depthLimit} blocks`,
@@ -278,7 +278,7 @@ class EventCache {
         `Found ${currentEvents.length} events at depth ${depth} for block ${currentHeader.number.toNumber()} (${currentHeader.hash.toString()})`,
       );
 
-      events.push(...currentEvents);
+      events.push(currentEvents);
 
       if (currentHeader.number.toNumber() === 0) {
         this.logger?.debug('Reached genesis block, stopping historical event retrieval');
@@ -288,7 +288,7 @@ class EventCache {
       currentHash = currentHeader.parentHash.toString();
     }
 
-    return events;
+    return events.reverse().flat();
   }
 
   private async startBackgroundSubscription(): Promise<void> {
