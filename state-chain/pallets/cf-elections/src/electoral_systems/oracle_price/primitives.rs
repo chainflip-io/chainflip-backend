@@ -1,6 +1,6 @@
 use core::ops::RangeInclusive;
 
-use sp_std::ops::{Add, Index};
+use sp_std::ops::Add;
 
 use crate::electoral_systems::state_machine::common_imports::*;
 use enum_iterator::Sequence;
@@ -45,7 +45,7 @@ pub trait Aggregation {
 	fn compute<X: AggregationValue>(value: &[X]) -> Option<Self::Of<X>>;
 	fn single<X: AggregationValue>(value: &X) -> Self::Of<X>;
 }
-pub type Apply<A: Aggregation, X> = A::Of<X>;
+pub type Apply<A, X> = <A as Aggregation>::Of<X>;
 
 def_derive! {
 	#[derive(TypeInfo)]

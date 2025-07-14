@@ -22,7 +22,7 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 		self.votes.push(vote);
 	}
 
-	fn check_consensus(&self, (threshold, query): &Self::Settings) -> Option<Self::Result> {
+	fn check_consensus(&self, (threshold, _query): &Self::Settings) -> Option<Self::Result> {
 		if self.votes.len() >= threshold.success_threshold as usize {
 			Some(
 				all::<T::Asset>()

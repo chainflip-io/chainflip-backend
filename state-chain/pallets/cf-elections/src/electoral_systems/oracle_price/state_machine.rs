@@ -241,7 +241,6 @@ def_derive! {
 		NewTimestamp {
 			last_timestamp: UnixTime
 		},
-		Always
 	}
 }
 
@@ -313,7 +312,7 @@ impl<T: OPTypes> AbstractApi for OraclePriceTracker<T> {
 	type Response = BTreeMap<T::Asset, AssetResponse<T>>;
 	type Error = PriceResponseError;
 
-	fn validate(query: &Self::Query, response: &Self::Response) -> Result<(), Self::Error> {
+	fn validate(_query: &Self::Query, _response: &Self::Response) -> Result<(), Self::Error> {
 		Ok(())
 	}
 }

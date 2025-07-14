@@ -63,30 +63,32 @@ struct OraclePriceVoter {
 struct PriceData {
 	pub description: String,
 	pub answer: i128,
+	pub decimals: u8,
 	pub timestamp: UnixTime,
 }
 
 impl From<SolPriceFeedData> for PriceData {
 	fn from(value: SolPriceFeedData) -> Self {
-		let SolPriceFeedData { round_id, slot, timestamp, answer, decimals, description } = value;
-		Self { description, answer, timestamp: UnixTime { seconds: timestamp as u64 } }
+		let SolPriceFeedData { round_id: _, slot: _, timestamp, answer, decimals, description } = value;
+		Self { description, answer, decimals, timestamp: UnixTime { seconds: timestamp as u64 } }
 	}
 }
 
 impl From<EthPriceFeedData> for PriceData {
 	fn from(value: EthPriceFeedData) -> Self {
 		let EthPriceFeedData {
-			round_id,
+			round_id: _,
 			answer,
-			started_at,
+			started_at: _,
 			updated_at,
-			answered_in_round,
+			answered_in_round: _,
 			decimals,
 			description,
 		} = value;
 		Self {
 			description,
 			answer: answer.try_into().unwrap(),
+    		decimals,
 			timestamp: UnixTime { seconds: updated_at.try_into().unwrap() },
 		}
 	}
@@ -99,11 +101,10 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 		settings: <OraclePriceES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <OraclePriceES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<OraclePriceES>>, anyhow::Error> {
-		tracing::info!("Voting for oracle price, properties: {properties:?}");
 
 		let price_feeds = match properties.chain {
 			ExternalPriceChain::Solana => {
-				let (price_feeds, _, query_slot) = get_price_feeds(
+				let (price_feeds, _, _) = get_price_feeds(
 					&self.sol_client,
 					settings.sol_oracle_query_helper.clone(),
 					settings.sol_oracle_program_id.clone(),
@@ -114,7 +115,7 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 				price_feeds.into_iter().map(Into::into).collect::<Vec<PriceData>>()
 			},
 			ExternalPriceChain::Ethereum => {
-				let (block, _, price_feeds) = self
+				let (_, _, price_feeds) = self
 					.eth_client
 					.query_price_feeds(
 						settings.eth_contract_address.clone(),
@@ -152,14 +153,11 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 			}
 		});
 
-		// filter by whether we have to submit prices
-
-		tracing::info!("For election properties: {properties:?}");
 		Ok(if should_vote {
-			tracing::info!("Submitting the following oracle result: {prices:?}");
+			tracing::debug!("Submitting oracle result for election properties: {properties:?}, result: {prices:?}");
 			Some(ExternalChainStateVote { price: prices })
 		} else {
-			tracing::info!("Skipping the following oracle result: {prices:?}");
+			tracing::debug!("Skipping oracle result for election properties: {properties:?}, result: {prices:?}");
 			None
 		})
 	}
