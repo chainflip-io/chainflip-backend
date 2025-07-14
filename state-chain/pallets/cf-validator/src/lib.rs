@@ -360,7 +360,7 @@ pub mod pallet {
 	pub type ManagedValidators<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
 
-	/// Maps an validator to an operator.
+	/// Maps a validator to the operators currently claiming it.
 	#[pallet::storage]
 	pub type ClaimedValidators<T: Config> =
 		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, OptionQuery>;
