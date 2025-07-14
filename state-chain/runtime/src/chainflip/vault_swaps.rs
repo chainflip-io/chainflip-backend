@@ -104,6 +104,7 @@ pub fn bitcoin_vault_swap(
 	boost_fee: u8,
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
+	max_oracle_price_slippage: u8,
 ) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
 	let private_channel_id =
 		pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&broker_id)
@@ -135,6 +136,7 @@ pub fn bitcoin_vault_swap(
 			affiliates: to_affiliate_and_fees(&broker_id, affiliate_fees)?
 				.try_into()
 				.map_err(|_| "Too many affiliates.")?,
+			max_oracle_price_slippage,
 		},
 	};
 
@@ -393,6 +395,7 @@ pub fn decode_bitcoin_vault_swap(
 				boost_fee,
 				broker_fee,
 				affiliates,
+				max_oracle_price_slippage,
 			},
 	} = UtxoEncodedData::decode(&mut &nulldata_payload[..])
 		.map_err(|_| "Failed to decode Bitcoin Null data Payload")?;
@@ -405,6 +408,7 @@ pub fn decode_bitcoin_vault_swap(
 		extra_parameters: VaultSwapExtraParameters::Bitcoin {
 			min_output_amount,
 			retry_duration: retry_duration.into(),
+			max_oracle_price_slippage,
 		},
 		channel_metadata: None,
 		boost_fee: boost_fee.into(),

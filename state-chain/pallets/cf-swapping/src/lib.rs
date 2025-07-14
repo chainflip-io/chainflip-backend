@@ -26,9 +26,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
-	BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
-	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
-	STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceLimits, SwapId, SwapLeg,
+	SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
+	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -110,7 +110,7 @@ pub struct AffiliateDetails {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct SwapRefundParameters {
 	pub refund_block: cf_primitives::BlockNumber,
-	pub min_output: cf_primitives::AssetAmount,
+	pub price_limits: PriceLimits,
 }
 
 #[derive(CloneNoBound, DebugNoBound)]
@@ -481,10 +481,11 @@ pub mod pallet {
 	};
 	use cf_primitives::{
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
-		SwapId, SwapOutput, SwapRequestId,
+		Price, PriceLimits, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{
-		AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider, ScheduledEgressDetails,
+		AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider, PriceFeedApi,
+		ScheduledEgressDetails,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
@@ -531,6 +532,8 @@ pub mod pallet {
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type PoolPriceApi: PoolPriceProvider;
+
+		type PriceFeedApi: PriceFeedApi;
 
 		type ChannelIdAllocator: ChannelIdAllocator;
 
@@ -1012,7 +1015,10 @@ pub mod pallet {
 				broker_commission,
 				channel_metadata,
 				boost_fee,
+				// No affiliate fees on this version of the extrinsic
 				Default::default(),
+				// No ccm refund or oracle price parameters on the original extrinsic, but it will
+				// decode fine because they are optional
 				refund_parameters,
 				None,
 			)
@@ -1234,6 +1240,12 @@ pub mod pallet {
 				)
 				.map_err(address_error_to_pallet_error::<T>)?;
 
+			// Convert the refund parameter from `EncodedAddress` into `ForeignChainAddress` type.
+			let refund_params_internal = refund_parameters.clone().try_map_address(|addr| {
+				T::AddressConverter::try_from_encoded_address(addr)
+					.map_err(|_| Error::<T>::InvalidRefundAddress)
+			})?;
+
 			let channel_metadata = channel_metadata
 				.map(|ccm| {
 					let destination_chain: ForeignChain = destination_asset.into();
@@ -1264,9 +1276,7 @@ pub mod pallet {
 					broker.clone(),
 					channel_metadata.clone(),
 					boost_fee,
-					refund_parameters
-						.clone()
-						.try_map_refund_address_to_foreign_chain_address::<T::AddressConverter>()?,
+					refund_params_internal,
 					dca_parameters.clone(),
 				)?;
 
@@ -1668,10 +1678,47 @@ pub mod pallet {
 			// Now checking for FoK violations:
 			let (non_violating, violating): (Vec<_>, Vec<_>) =
 				swaps.into_iter().partition(|swap| {
-					let final_output = swap.final_output.unwrap();
-					swap.refund_params()
-						.as_ref()
-						.is_none_or(|params| final_output >= params.min_output)
+					swap.refund_params().as_ref().is_none_or(|params| {
+						// Live price protection, aka oracle price protection
+						let min_price_from_oracle =
+							params.price_limits.max_oracle_price_slippage.map(|slippage_bps| {
+								match (
+									T::PriceFeedApi::get_price(swap.input_asset()),
+									T::PriceFeedApi::get_price(swap.output_asset()),
+								) {
+									// If the oracle price is stale or unavailable, use a max value
+									// to force a price violation so the swap will be rescheduled.
+									(Some(oracle1), Some(oracle2))
+										if oracle1.stale || oracle2.stale =>
+										Price::MAX,
+									(None, _) | (_, None) => Price::MAX,
+									(Some(oracle1), Some(oracle2)) => {
+										let relative_price = cf_amm::math::relative_price(
+											oracle1.price,
+											oracle2.price,
+										);
+										// Reduce the price by slippage_bps:
+										cf_amm::math::mul_div_floor(
+											relative_price,
+											(MAX_BASIS_POINTS - slippage_bps).into(),
+											MAX_BASIS_POINTS,
+										)
+									},
+								}
+							});
+
+						// Use the larger of the two prices
+						let min_price = core::cmp::max(
+							min_price_from_oracle.unwrap_or_default(),
+							params.price_limits.min_price,
+						);
+
+						let min_output =
+							output_amount_ceil(swap.swap.input_amount.into(), min_price)
+								.unique_saturated_into();
+
+						swap.final_output.unwrap() >= min_output
+					})
 				});
 
 			if violating.is_empty() {
@@ -2121,12 +2168,17 @@ pub mod pallet {
 			let execute_at = frame_system::Pallet::<T>::block_number() + delay_blocks;
 
 			let refund_params = refund_params.map(|params| {
-				utilities::calculate_swap_refund_parameters(
-					params,
-					// In practice block number always fits in u32:
-					execute_at.unique_saturated_into(),
-					input_amount,
-				)
+				use sp_runtime::traits::UniqueSaturatedInto;
+
+				let execute_at: cf_primitives::BlockNumber = execute_at.unique_saturated_into();
+
+				SwapRefundParameters {
+					refund_block: execute_at.saturating_add(params.retry_duration),
+					price_limits: PriceLimits {
+						min_price: params.min_price,
+						max_oracle_price_slippage: params.max_oracle_price_slippage,
+					},
+				}
 			});
 
 			ScheduledSwaps::<T>::mutate(|swaps| {
@@ -2766,17 +2818,6 @@ pub(crate) mod utilities {
 			Asset::HubDot => DOT_ESTIMATION_CAP,
 			Asset::HubUsdc => USD_ESTIMATION_CAP,
 			Asset::HubUsdt => USD_ESTIMATION_CAP,
-		}
-	}
-
-	pub(super) fn calculate_swap_refund_parameters<AccountId>(
-		params: &ChannelRefundParametersCheckedInternal<AccountId>,
-		execute_at_block: u32,
-		input_amount: AssetAmount,
-	) -> SwapRefundParameters {
-		SwapRefundParameters {
-			refund_block: execute_at_block.saturating_add(params.retry_duration),
-			min_output: params.min_output_amount(input_amount),
 		}
 	}
 

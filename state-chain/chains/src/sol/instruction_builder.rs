@@ -191,6 +191,7 @@ mod test {
 			refund_address: DESTINATION_ADDRESS_SOL,
 			retry_duration: 10u32,
 			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
 		}
 	}
 

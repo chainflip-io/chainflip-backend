@@ -1291,3 +1291,16 @@ pub trait SpawnAccount {
 		index: Self::Index,
 	) -> Result<Self::AccountId, DispatchError>;
 }
+
+pub struct OraclePrice {
+	/// Statechain encoded price, fixed-point value with 128 bits for fractional part, ie.
+	/// denominator is 2^128.
+	pub price: Price,
+
+	/// Whether the price is stale according to the oracle price ES settings.
+	pub stale: bool,
+}
+
+pub trait PriceFeedApi {
+	fn get_price(asset: cf_chains::assets::any::Asset) -> Option<OraclePrice>;
+}

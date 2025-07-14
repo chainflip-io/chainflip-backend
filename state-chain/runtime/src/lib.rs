@@ -178,8 +178,8 @@ pub use pallet_cf_validator::SetSizeParameters;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, multi_vault_activator::MultiVaultActivator,
 	BroadcastReadyProvider, BtcEnvironment, CfCcmAdditionalDataHandler, ChainAddressConverter,
-	ChainflipHeartbeat, DotEnvironment, EvmEnvironment, HubEnvironment, MinimumDepositProvider,
-	SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
+	ChainflipHeartbeat, ChainlinkOracle, DotEnvironment, EvmEnvironment, HubEnvironment,
+	MinimumDepositProvider, SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -346,6 +346,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type PoolPriceApi = LiquidityPools;
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
+	type PriceFeedApi = ChainlinkOracle;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -2410,6 +2411,7 @@ impl_runtime_apis! {
 					VaultSwapExtraParameters::Bitcoin {
 						min_output_amount,
 						retry_duration,
+						max_oracle_price_slippage,
 					}
 				) => {
 					crate::chainflip::vault_swaps::bitcoin_vault_swap(
@@ -2422,6 +2424,7 @@ impl_runtime_apis! {
 						boost_fee,
 						affiliate_fees,
 						dca_parameters,
+						max_oracle_price_slippage,
 					)
 				},
 				(

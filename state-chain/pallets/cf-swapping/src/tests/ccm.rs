@@ -113,6 +113,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 				refund_address: EncodedAddress::Eth([1; 20]),
 				min_price: U256::from(0),
 				refund_ccm_metadata: Default::default(),
+				max_oracle_price_slippage: None,
 			};
 
 			// Can process CCM via Swap deposit

@@ -89,6 +89,12 @@ pub fn bounded_sqrt_price(quote: Amount, base: Amount) -> SqrtPriceQ64F96 {
 	}
 }
 
+// Given prices of asset 1 and asset 2 (in terms of the same asset)
+// compute the price of asset 1 in terms of asset 2
+pub fn relative_price(price_1: Price, price_2: Price) -> Price {
+	mul_div_floor(price_1, U256::one() << PRICE_FRACTIONAL_BITS, price_2)
+}
+
 pub fn output_amount_floor(input: Amount, price: Price) -> Amount {
 	mul_div_floor(input, price, U256::one() << PRICE_FRACTIONAL_BITS)
 }

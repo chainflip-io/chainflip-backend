@@ -547,3 +547,184 @@ fn test_zero_refund_amount_remaining() {
 			);
 		});
 }
+
+mod oracle_swaps {
+
+	use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
+
+	use super::*;
+
+	#[test]
+	fn basic_oracle_swap() {
+		const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const CHUNK_2_RETRY_BLOCK: u64 = CHUNK_2_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64;
+
+		// Must set the retry duration to a non-zero value for the test
+		const RETRY_DURATION: u32 = 10;
+
+		const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / 2;
+
+		const SWAP_RATE: u128 = 2;
+		const ORACLE_PRICE_SLIPPAGE: BasisPoints = 100; // 1% slippage
+		const NEW_SWAP_RATE: f64 = 1.97; // Reduced by more than 1%
+
+		// Set the price to match the swap rate at first
+		const OUTPUT_ASSET_PRICE: u128 = 2;
+		const INPUT_ASSET_PRICE: u128 = OUTPUT_ASSET_PRICE * SWAP_RATE;
+
+		new_test_ext()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), INIT_BLOCK);
+
+				MockPriceFeedApi::set_price(
+					INPUT_ASSET,
+					Some(U256::from(INPUT_ASSET_PRICE) << PRICE_FRACTIONAL_BITS),
+				);
+				MockPriceFeedApi::set_price(
+					OUTPUT_ASSET,
+					Some(U256::from(OUTPUT_ASSET_PRICE) << PRICE_FRACTIONAL_BITS),
+				);
+
+				// Execution price is exactly the same as the oracle price,
+				// so the first chunk should go through
+				SwapRate::set(SWAP_RATE as f64);
+
+				Swapping::init_internal_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					RETRY_DURATION,
+					PriceLimits {
+						// Make sure we turn of the old min price check
+						min_price: 0.into(),
+						// Set the maximum oracle price slippage to any value
+						max_oracle_price_slippage: Some(ORACLE_PRICE_SLIPPAGE),
+					},
+					Some(DcaParameters { number_of_chunks: 2, chunk_interval: 2 }),
+					LP_ACCOUNT,
+				);
+			})
+			.then_process_blocks_until_block(CHUNK_1_BLOCK)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted {
+						input_amount: CHUNK_AMOUNT,
+						output_amount,
+						..
+					}) if *output_amount == CHUNK_AMOUNT * SWAP_RATE
+				);
+
+				// Turn the swap rate down to trigger the oracle slippage protection
+				SwapRate::set(NEW_SWAP_RATE);
+			})
+			.then_process_blocks_until_block(CHUNK_2_BLOCK)
+			.then_execute_with(|_| {
+				// Chunk 2's output was below the price limit, so it will be retried.
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRescheduled { .. })
+				);
+
+				// Now drop the oracle price for input asset. It will once again match the swap
+				// rate, so the swap should succeed.
+				MockPriceFeedApi::set_price(
+					INPUT_ASSET,
+					Some(U256::from(OUTPUT_ASSET_PRICE) << PRICE_FRACTIONAL_BITS),
+				);
+			})
+			.then_process_blocks_until_block(CHUNK_2_RETRY_BLOCK)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted {
+						input_amount: CHUNK_AMOUNT,
+						output_amount,
+						..
+					}) if *output_amount == (CHUNK_AMOUNT as f64 * NEW_SWAP_RATE) as u128
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. })
+				);
+			});
+	}
+
+	#[test]
+	fn oracle_swap_reschedules_if_price_unavailable() {
+		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+
+		// Must set the retry duration high enough to allow for a few reschedules
+		const RETRY_DURATION: u32 = 10;
+
+		new_test_ext()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), INIT_BLOCK);
+
+				// Set the price of one of the assets to None to simulate unavailability
+				MockPriceFeedApi::set_price(INPUT_ASSET, None);
+				MockPriceFeedApi::set_price(
+					OUTPUT_ASSET,
+					Some(U256::from(DEFAULT_SWAP_RATE) << PRICE_FRACTIONAL_BITS),
+				);
+
+				Swapping::init_internal_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					RETRY_DURATION,
+					// Set the oracle price slippage to a non-zero value
+					PriceLimits { min_price: 0.into(), max_oracle_price_slippage: Some(100) },
+					None,
+					LP_ACCOUNT,
+				);
+			})
+			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_execute_with(|_| {
+				// Check that the swap was rescheduled due to the price being unavailable
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRescheduled { .. })
+				);
+				// Now test the other asset price being unavailable
+				MockPriceFeedApi::set_price(OUTPUT_ASSET, None);
+				MockPriceFeedApi::set_price(
+					INPUT_ASSET,
+					Some(U256::from(DEFAULT_SWAP_RATE) << PRICE_FRACTIONAL_BITS),
+				);
+			})
+			.then_process_blocks_until_block(SWAP_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64)
+			.then_execute_with(|_| {
+				// Check that the swap was rescheduled again due to the price being unavailable
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRescheduled { .. })
+				);
+				// Now set both prices so the swap can be executed
+				MockPriceFeedApi::set_price(
+					INPUT_ASSET,
+					Some(U256::from(DEFAULT_SWAP_RATE) << PRICE_FRACTIONAL_BITS),
+				);
+				MockPriceFeedApi::set_price(
+					OUTPUT_ASSET,
+					Some(U256::from(DEFAULT_SWAP_RATE) << PRICE_FRACTIONAL_BITS),
+				);
+			})
+			.then_process_blocks_until_block(
+				SWAP_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64) * 2,
+			)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted { .. })
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. })
+				);
+			});
+	}
+}

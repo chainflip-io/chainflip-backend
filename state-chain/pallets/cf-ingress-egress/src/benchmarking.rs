@@ -258,6 +258,7 @@ mod benchmarks {
 					refund_address: BenchmarkValue::benchmark_value(),
 					min_price: Default::default(),
 					refund_ccm_metadata: Default::default(),
+					max_oracle_price_slippage: Default::default(),
 				},
 				dca_params: None,
 				boost_fee: 0,
