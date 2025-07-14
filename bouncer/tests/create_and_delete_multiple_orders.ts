@@ -54,26 +54,26 @@ export async function createAndDeleteMultipleOrders(
 
   // create a series of limit_order and save their info to delete them later on
   const promises = [];
-  const orderToDelete: {
+  const ordersToDelete: {
     Limit?: { base_asset: string; quote_asset: string; side: string; id: number };
     Range?: { base_asset: string; quote_asset: string; id: number };
   }[] = [];
 
-  for (let i = 0; i < numberOfLimitOrders; i++) {
+  for (let i = 1; i <= numberOfLimitOrders; i++) {
     promises.push(limitOrder(logger, 'Btc', 0.00000001, i, i, lpUri));
-    orderToDelete.push({ Limit: { base_asset: 'BTC', quote_asset: 'USDC', side: 'sell', id: i } });
+    ordersToDelete.push({ Limit: { base_asset: 'BTC', quote_asset: 'USDC', side: 'sell', id: i } });
   }
-  for (let i = 0; i < numberOfLimitOrders; i++) {
+  for (let i = 1; i <= numberOfLimitOrders; i++) {
     promises.push(limitOrder(logger, 'Eth', 0.000000000000000001, i, i, lpUri));
-    orderToDelete.push({ Limit: { base_asset: 'ETH', quote_asset: 'USDC', side: 'sell', id: i } });
+    ordersToDelete.push({ Limit: { base_asset: 'ETH', quote_asset: 'USDC', side: 'sell', id: i } });
   }
 
   promises.push(rangeOrder(logger, 'Btc', 0.1, lpUri, 0));
-  orderToDelete.push({
+  ordersToDelete.push({
     Range: { base_asset: 'BTC', quote_asset: 'USDC', id: 0 },
   });
   promises.push(rangeOrder(logger, 'Eth', 0.01, lpUri, 0));
-  orderToDelete.push({
+  ordersToDelete.push({
     Range: { base_asset: 'ETH', quote_asset: 'USDC', id: 0 },
   });
 
@@ -86,23 +86,49 @@ export async function createAndDeleteMultipleOrders(
   logger.debug(`Number of open orders: ${openOrders}`);
 
   logger.debug('Deleting opened orders...');
-  const orderDeleteEvent = observeEvent(logger, 'liquidityPools:RangeOrderUpdated', {
-    test: (event) => event.data.lp === lp.address && event.data.baseAsset === 'Btc',
-  }).event;
+  const orderDeletionPromises = ordersToDelete.map((order) => {
+    if (order.Limit) {
+      return observeEvent(logger, 'liquidityPools:LimitOrderUpdated', {
+        historicalCheckBlocks: 2,
+        test: (event) =>
+          event.data.lp === lp.address &&
+          event.data.id === order.Limit!.id.toString() &&
+          event.data.base_asset === order.Limit!.base_asset &&
+          event.data.quote_asset === order.Limit!.quote_asset &&
+          event.data.side === order.Limit!.side &&
+          event.data.sell_amount_change.Decrease,
+      }).event;
+    } else if (order.Range) {
+      return observeEvent(logger, 'liquidityPools:RangeOrderUpdated', {
+        historicalCheckBlocks: 2,
+        test: (event) =>
+          event.data.lp === lp.address &&
+          event.data.id === order.Range!.id.toString() &&
+          event.data.base_asset === order.Range!.base_asset &&
+          event.data.quote_asset === order.Range!.quote_asset &&
+          event.data.size_change.Decrease,
+      }).event;
+    } else {
+      throw new Error('Order type not recognized');
+    }
+  });
+
   await lpMutex.runExclusive(async () => {
-    const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
+    const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as number;
     await chainflip.tx.liquidityPools
-      .cancelOrdersBatch(orderToDelete)
+      .cancelOrdersBatch(ordersToDelete)
       .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
   });
-  await orderDeleteEvent;
+  await Promise.all(orderDeletionPromises);
   logger.debug('All orders successfully deleted');
 
   openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
   openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
   logger.debug(`Number of open orders: ${openOrders}`);
 
-  assert.strictEqual(openOrders, 0, 'Number of open orders should be 0');
+  assert.strictEqual(openOrders, 0, `Number of open orders should be 0 but is ${openOrders}`);
+
+  logger.info('All orders successfully deleted');
 }
 
 export async function testCancelOrdersBatch(testContext: TestContext) {
