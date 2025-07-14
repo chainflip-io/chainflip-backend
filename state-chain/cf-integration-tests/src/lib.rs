@@ -24,6 +24,7 @@ mod threshold_signing;
 
 mod account;
 mod authorities;
+mod delegation;
 mod fee_scaling;
 mod funding;
 mod genesis;

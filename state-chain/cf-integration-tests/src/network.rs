@@ -863,6 +863,8 @@ pub fn fund_authorities_and_join_auction(
 		network::Cli::start_bidding(node);
 	}
 
+	testnet.submit_heartbeat_all_engines(true);
+
 	(testnet, genesis_authorities, init_backup_nodes)
 }
 
