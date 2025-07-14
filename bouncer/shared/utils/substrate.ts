@@ -143,7 +143,10 @@ class EventCache {
 
   private headers: Map<string, Header>;
 
-  private cacheSizeBlocks: number;
+  // Determines the cache size limit, beyond which we cull old blocks down to the cacheAgeLimit.
+  private cacheSizeLimit: number;
+
+  private cacheAgeLimit: number;
 
   private chain: SubstrateChain;
 
@@ -163,15 +166,11 @@ class EventCache {
 
   private subscriptionDisposer: (() => Promise<void>) | undefined;
 
-  constructor(
-    cacheSizeBlocks: number,
-    chain: SubstrateChain,
-    outputFile?: string,
-    logger?: Logger,
-  ) {
+  constructor(cacheAgeLimit: number, chain: SubstrateChain, outputFile?: string, logger?: Logger) {
     this.events = new Map();
     this.headers = new Map();
-    this.cacheSizeBlocks = cacheSizeBlocks;
+    this.cacheAgeLimit = cacheAgeLimit;
+    this.cacheSizeLimit = cacheAgeLimit * 2;
     this.chain = chain;
     this.finalisedBlockNumber = undefined;
     this.outputFile = outputFile;
@@ -223,10 +222,12 @@ class EventCache {
 
       // Update the cache.
       this.events.set(blockHash, events); // Remove old blocks to maintain cache size
-      if (this.headers.size > this.cacheSizeBlocks) {
+
+      // If the cache size exceeds the size limit, remove old blocks up to the cacheAgeLimit.
+      if (this.headers.size > this.cacheSizeLimit) {
         this.logger?.debug('Reducing cache');
-        const oldHashes = this.headers.entries().filter(([_hash, header]) => {
-          if (header.number.toNumber() < blockHeight - this.cacheSizeBlocks) {
+        const oldHashes = Array.from(this.headers.entries()).filter(([_hash, header]) => {
+          if (header.number.toNumber() < blockHeight - this.cacheAgeLimit) {
             return true;
           }
           return false;
@@ -252,17 +253,23 @@ class EventCache {
     if (historicalCheckBlocks <= 0) {
       return [];
     }
+    if (historicalCheckBlocks > this.cacheAgeLimit) {
+      this.logger?.warn(
+        `Historical check blocks (${historicalCheckBlocks}) exceeds cache size (${this.cacheAgeLimit}). Using cache size instead.`,
+      );
+    }
+    const depthLimit = Math.min(historicalCheckBlocks, this.cacheAgeLimit);
 
     const api = await apiMap[this.chain]();
     const events: Event[] = [];
 
     this.logger?.debug(
-      `Checking historical events for chain ${this.chain} over the last ${historicalCheckBlocks} blocks`,
+      `Checking historical events for chain ${this.chain} over the last ${depthLimit} blocks`,
     );
 
     let depth = 0;
     let currentHash = startHash;
-    while (depth < historicalCheckBlocks) {
+    while (depth < depthLimit) {
       depth++;
       const currentHeader = (await api.rpc.chain.getHeader(currentHash)) as Header;
       const currentEvents = await this.eventsForHeader(currentHeader, false);
@@ -272,6 +279,11 @@ class EventCache {
       );
 
       events.push(...currentEvents);
+
+      if (currentHeader.number.toNumber() === 0) {
+        this.logger?.debug('Reached genesis block, stopping historical event retrieval');
+        break;
+      }
 
       currentHash = currentHeader.parentHash.toString();
     }
