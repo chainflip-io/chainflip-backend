@@ -98,7 +98,8 @@ export async function createAndDeleteMultipleOrders(
           event.data.side === order.Limit!.side &&
           event.data.sell_amount_change.Decrease,
       }).event;
-    } else if (order.Range) {
+    }
+    if (order.Range) {
       return observeEvent(logger, 'liquidityPools:RangeOrderUpdated', {
         historicalCheckBlocks: 2,
         test: (event) =>
@@ -108,13 +109,12 @@ export async function createAndDeleteMultipleOrders(
           event.data.quote_asset === order.Range!.quote_asset &&
           event.data.size_change.Decrease,
       }).event;
-    } else {
-      throw new Error('Order type not recognized');
     }
+    throw new Error('Order type not recognized');
   });
 
   await lpMutex.runExclusive(async () => {
-    const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as number;
+    const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as unknown as number;
     await chainflip.tx.liquidityPools
       .cancelOrdersBatch(ordersToDelete)
       .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));

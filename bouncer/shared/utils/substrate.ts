@@ -552,11 +552,13 @@ export function observeEvents<T = any>(
               ? (stopAfter as (event: Event) => boolean)(event)
               : foundEvents.length >= stopAfter;
           if (stop) {
-            typeof stopAfter === 'function'
-              ? logger.debug(
-                  `Stopping after matching event: ${event.name.section}:${event.name.method}`,
-                )
-              : logger.debug(`Stopping after finding ${stopAfter} events`);
+            if (typeof stopAfter === 'function') {
+              logger.debug(
+                `Stopping after matching event: ${event.name.section}:${event.name.method}`,
+              );
+            } else {
+              logger.debug(`Stopping after finding ${stopAfter} events`);
+            }
             break;
           }
         }
@@ -578,14 +580,17 @@ export function observeEvents<T = any>(
       }
       return [];
     }
-    const { blockHash, events } = firstResult.value;
 
-    if (checkEvents(events, 'current')) {
+    if (checkEvents(firstResult.value.events, 'current')) {
       logger.debug(`Found ${foundEvents.length} ${eventName} events in the first batch.`);
       return foundEvents;
     }
 
-    const historicalEvents = await getPastEvents(chain, blockHash, historicalCheckBlocks);
+    const historicalEvents = await getPastEvents(
+      chain,
+      firstResult.value.blockHash,
+      historicalCheckBlocks,
+    );
 
     // Check historical events first
     if (!checkEvents(historicalEvents, 'historical')) {
