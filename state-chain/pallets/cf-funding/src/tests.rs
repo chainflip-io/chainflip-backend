@@ -21,8 +21,8 @@ use crate::{
 use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
-	mocks::{account_role_registry::MockAccountRoleRegistry, flip_slasher::MockFlipSlasher},
-	AccountInfo, AccountRoleRegistry, Bonding, Chainflip, SetSafeMode, Slashing,
+	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
+	Bonding, Chainflip, SetSafeMode, Slashing,
 };
 use sp_core::H160;
 
@@ -1684,7 +1684,7 @@ fn can_redeem_if_balance_lower_than_restricted_funds() {
 		));
 
 		// we want to have a balance < sum of restricted balances
-		MockFlipSlasher::<Test>::slash_balance(&ALICE, DEBIT_AMOUNT);
+		Flip::slash(&ALICE, DEBIT_AMOUNT);
 
 		// redemption towards a non restricted address fails
 		assert_noop!(
@@ -1750,7 +1750,7 @@ fn cannot_redeem_to_non_restricted_address_with_balance_lower_than_restricted_fu
 		));
 
 		// we want to have a balance < sum of restricted balances
-		MockFlipSlasher::<Test>::slash_balance(&ALICE, DEBIT_AMOUNT);
+		Flip::slash(&ALICE, DEBIT_AMOUNT);
 
 		assert_noop!(
 			Funding::redeem(
