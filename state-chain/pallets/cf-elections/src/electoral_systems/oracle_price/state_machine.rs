@@ -13,14 +13,17 @@ use sp_std::{
 	vec,
 };
 
+#[cfg(test)]
+use proptest_derive::Arbitrary;
+
 pub trait OPTypes: 'static + Sized + CommonTraits {
-	type Price: CommonTraits + Ord + Default;
+	type Price: CommonTraits + Ord + Default + MaybeArbitrary;
 
 	fn price_range(price: &Self::Price, range: BasisPoints) -> RangeInclusive<Self::Price>;
 
-	type Asset: CommonTraits + Ord + Sequence;
+	type Asset: CommonTraits + Ord + Sequence + MaybeArbitrary;
 
-	type Aggregation: CommonTraits + Aggregation;
+	type Aggregation: CommonTraits + Aggregation + MaybeArbitrary;
 
 	type GetTime: Hook<HookTypeFor<Self, GetTimeHook>> + CommonTraits;
 }
@@ -35,6 +38,7 @@ impl<T: OPTypes> HookType for HookTypeFor<T, GetTimeHook> {
 
 def_derive! {
 	#[derive(Copy, Sequence, PartialOrd, Ord, TypeInfo)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub enum ExternalPriceChain {
 		Solana,
 		Ethereum
@@ -43,6 +47,7 @@ def_derive! {
 
 def_derive! {
 	#[derive(TypeInfo)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub enum PriceStatus {
 		UpToDate,
 		MaybeStale,
@@ -52,6 +57,7 @@ def_derive! {
 
 def_derive! {
 	#[derive(TypeInfo)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct AssetState<T: OPTypes> {
 		pub timestamp: Apply<T::Aggregation, UnixTime>,
 		pub price: Apply<T::Aggregation, T::Price>,
@@ -73,6 +79,7 @@ impl<T: OPTypes> AssetState<T> {
 
 def_derive! {
 	#[derive(TypeInfo)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct AssetResponse<T: OPTypes> {
 		pub timestamp: Apply<T::Aggregation, UnixTime>,
 		pub price: Apply<T::Aggregation, T::Price>,
@@ -81,6 +88,7 @@ def_derive! {
 
 def_derive! {
 	#[derive(TypeInfo)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct ExternalChainState<T: OPTypes> {
 		pub price: BTreeMap<T::Asset, AssetState<T>>,
 	}
@@ -88,6 +96,7 @@ def_derive! {
 
 def_derive! {
 	#[derive(TypeInfo)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct ExternalChainStateVote<T: OPTypes> {
 		pub price: BTreeMap<T::Asset, (UnixTime, T::Price)>,
 	}
@@ -196,6 +205,7 @@ impl<T: OPTypes> ExternalChainState<T> {
 
 def_derive! {
 	#[derive(TypeInfo)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct ExternalChainStates<T: OPTypes> {
 		pub solana: ExternalChainState<T>,
 		pub ethereum: ExternalChainState<T>,
@@ -234,6 +244,7 @@ impl<T: OPTypes> IndexMut<ExternalPriceChain> for ExternalChainStates<T> {
 
 def_derive! {
 	#[derive(TypeInfo)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub enum VotingCondition<T: OPTypes> {
 		PriceMoved {
 			last_price: T::Price,
@@ -247,20 +258,16 @@ def_derive! {
 
 def_derive! {
 	#[derive(TypeInfo)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct PriceQuery<T: OPTypes> {
 		pub chain: ExternalPriceChain,
 		pub assets: BTreeMap<T::Asset, Vec<VotingCondition<T>>>
 	}
 }
 
-pub enum PriceResponseError {
-	SubmittedBlockTooOld,
-	SubmittedTimestampTooOld,
-	PriceWithinMinimalDeviation,
-}
-
 def_derive! {
 	#[derive(TypeInfo)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct OraclePriceSettings {
 		pub solana: ExternalChainSettings,
 		pub ethereum: ExternalChainSettings,
@@ -280,11 +287,13 @@ impl Index<ExternalPriceChain> for OraclePriceSettings {
 
 def_derive! {
 	#[derive(TypeInfo, Copy, Default)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct BasisPoints(pub u16);
 }
 
 def_derive! {
 	#[derive(TypeInfo)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct ExternalChainSettings {
 		pub up_to_date_timeout: Seconds,
 		pub maybe_stale_timeout: Seconds,
@@ -294,6 +303,7 @@ def_derive! {
 
 def_derive! {
 	#[derive(TypeInfo)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct OraclePriceTracker<T: OPTypes> {
 		pub chain_states: ExternalChainStates<T>,
 		pub get_time: T::GetTime,
@@ -311,7 +321,7 @@ impl<T: OPTypes> Validate for OraclePriceTracker<T> {
 impl<T: OPTypes> AbstractApi for OraclePriceTracker<T> {
 	type Query = PriceQuery<T>;
 	type Response = BTreeMap<T::Asset, AssetResponse<T>>;
-	type Error = PriceResponseError;
+	type Error = ();
 
 	fn validate(_query: &Self::Query, _response: &Self::Response) -> Result<(), Self::Error> {
 		Ok(())
@@ -348,5 +358,42 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 		});
 
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use proptest::prelude::{any, Just, Strategy};
+
+	use super::*;
+	use crate::electoral_systems::{
+		oracle_price::primitives::*,
+		state_machine::core::{hook_test_utils::MockHook, *},
+	};
+
+	struct Mock;
+	type MockTypes = TypesFor<Mock>;
+
+	impl OPTypes for MockTypes {
+		type Price = u128;
+
+		fn price_range(price: &Self::Price, range: BasisPoints) -> RangeInclusive<Self::Price> {
+			todo!()
+		}
+
+		type Asset = ChainlinkAssetPair;
+		type Aggregation = AggregatedF;
+		type GetTime = MockHook<HookTypeFor<Self, GetTimeHook>>;
+	}
+
+	#[test]
+	fn test_price_oracle_statemachine() {
+		OraclePriceTracker::<MockTypes>::test(
+			file!(),
+			any::<OraclePriceTracker<MockTypes>>(),
+			any::<OraclePriceSettings>(),
+			|_| any::<BTreeMap<ChainlinkAssetPair, AssetResponse<MockTypes>>>().boxed(),
+			|_| Just(()).boxed(),
+		)
 	}
 }

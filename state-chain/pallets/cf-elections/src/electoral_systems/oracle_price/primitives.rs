@@ -5,8 +5,12 @@ use sp_std::ops::Add;
 use crate::electoral_systems::state_machine::common_imports::*;
 use enum_iterator::Sequence;
 
+#[cfg(test)]
+use proptest_derive::Arbitrary;
+
 def_derive! {
 	#[derive(TypeInfo, Sequence, PartialOrd, Ord)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub enum ChainlinkAssetPair {
 		BtcUsd,
 		EthUsd
@@ -15,12 +19,14 @@ def_derive! {
 
 def_derive! {
 	#[derive(Default)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct Price {
 		pub value: i128,
 	}
 }
 
 def_derive! {
+	#[cfg_attr(test, derive(Arbitrary))]
 	#[derive(TypeInfo, PartialOrd, Ord, Default, Copy)]
 	pub struct UnixTime{ pub seconds: u64 }
 }
@@ -34,13 +40,14 @@ impl Add<Seconds> for UnixTime {
 }
 
 def_derive! {
+	#[cfg_attr(test, derive(Arbitrary))]
 	#[derive(TypeInfo, Copy)]
 	pub struct Seconds(pub u64);
 }
 
-pub trait AggregationValue = Ord + CommonTraits + 'static;
+pub trait AggregationValue = Ord + CommonTraits + MaybeArbitrary + 'static;
 pub trait Aggregation {
-	type Of<X: AggregationValue>: CommonTraits;
+	type Of<X: AggregationValue>: CommonTraits + MaybeArbitrary;
 	fn canonical<X: AggregationValue>(price: &Self::Of<X>) -> X;
 	fn compute<X: AggregationValue>(value: &[X]) -> Option<Self::Of<X>>;
 	fn single<X: AggregationValue>(value: &X) -> Self::Of<X>;
@@ -48,6 +55,7 @@ pub trait Aggregation {
 pub type Apply<A, X> = <A as Aggregation>::Of<X>;
 
 def_derive! {
+	#[cfg_attr(test, derive(Arbitrary))]
 	#[derive(TypeInfo)]
 	pub struct AggregatedF;
 }
@@ -69,14 +77,15 @@ impl Aggregation for AggregatedF {
 }
 
 def_derive! {
+	#[cfg_attr(test, derive(Arbitrary))]
 	#[derive(TypeInfo)]
-	pub struct Aggregated<A: CommonTraits> {
+	pub struct Aggregated<A: CommonTraits + MaybeArbitrary + PartialOrd> {
 		pub median: A,
 		pub iq_range: RangeInclusive<A>,
 	}
 }
 
-impl<A: CommonTraits> Aggregated<A> {
+impl<A: CommonTraits + MaybeArbitrary + PartialOrd> Aggregated<A> {
 	pub fn from_single_value(value: A) -> Self {
 		Self { median: value.clone(), iq_range: value.clone()..=value }
 	}

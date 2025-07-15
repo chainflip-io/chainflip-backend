@@ -251,6 +251,8 @@ pub trait Hook<T: HookType>: Validate {
 pub mod hook_test_utils {
 	use super::*;
 	use codec::MaxEncodedLen;
+	#[cfg(test)]
+	use proptest_derive::Arbitrary;
 
 	#[derive(
 		Clone,
@@ -266,6 +268,7 @@ pub mod hook_test_utils {
 		Serialize,
 		Deserialize,
 	)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	#[serde(bound = "T::Input: Serde, WrappedHook: Serde")]
 	pub struct MockHook<
 		T: HookType,
@@ -337,6 +340,7 @@ pub mod hook_test_utils {
 		Serialize,
 		Deserialize,
 	)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	#[serde(bound = "T::Input: Serde, T::Output: Serde")]
 	pub struct ConstantHook<T: HookType> {
 		pub state: T::Output,

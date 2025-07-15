@@ -69,7 +69,8 @@ struct PriceData {
 
 impl From<SolPriceFeedData> for PriceData {
 	fn from(value: SolPriceFeedData) -> Self {
-		let SolPriceFeedData { round_id: _, slot: _, timestamp, answer, decimals, description } = value;
+		let SolPriceFeedData { round_id: _, slot: _, timestamp, answer, decimals, description } =
+			value;
 		Self { description, answer, decimals, timestamp: UnixTime { seconds: timestamp as u64 } }
 	}
 }
@@ -88,7 +89,7 @@ impl From<EthPriceFeedData> for PriceData {
 		Self {
 			description,
 			answer: answer.try_into().unwrap(),
-    		decimals,
+			decimals,
 			timestamp: UnixTime { seconds: updated_at.try_into().unwrap() },
 		}
 	}
@@ -101,7 +102,6 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 		settings: <OraclePriceES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <OraclePriceES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<OraclePriceES>>, anyhow::Error> {
-
 		let price_feeds = match properties.chain {
 			ExternalPriceChain::Solana => {
 				let (price_feeds, _, _) = get_price_feeds(
