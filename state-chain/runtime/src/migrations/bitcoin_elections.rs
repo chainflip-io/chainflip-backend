@@ -62,8 +62,7 @@ mod old {
 		},
 		Config,
 	};
-	use scale_info::TypeInfo;
-	use serde::{Deserialize, Serialize};
+
 	use sp_std::collections::btree_map::BTreeMap;
 
 	#[derive(codec::Encode, codec::Decode, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -159,7 +158,6 @@ mod old {
 impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-		use pallet_cf_elections::ElectoralUnsynchronisedState;
 		let old_vault_state = old::ElectoralUnsynchronisedState::<Runtime, BitcoinInstance>::get()
 			.expect("Should contain something")
 			.2;
