@@ -1435,6 +1435,7 @@ type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
+	migrations::bitcoin_elections::Migration,
 	MigrationsForV1_11,
 );
 
@@ -1482,6 +1483,7 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 	pallet_cf_trading_strategy::migrations::PalletMigration<Runtime>,
 	pallet_cf_lending_pools::migrations::PalletMigration<Runtime>,
+	pallet_cf_elections::migrations::PalletMigration<Runtime, SolanaInstance>,
 );
 
 pub struct NoopMigration;
