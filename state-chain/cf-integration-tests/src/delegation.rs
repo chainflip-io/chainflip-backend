@@ -25,8 +25,7 @@ use cf_primitives::{AccountRole, Delegation};
 use cf_traits::AccountInfo;
 use sp_runtime::{traits::Zero, Percent, Permill};
 use state_chain_runtime::{
-	constants::common::HEARTBEAT_BLOCK_INTERVAL, Balance, Flip, Reputation, Runtime, System,
-	Validator,
+	constants::common::HEARTBEAT_BLOCK_INTERVAL, Balance, Flip, Runtime, System, Validator,
 };
 
 struct Delegator {
@@ -53,12 +52,15 @@ fn block_author_rewards_are_distributed_among_delegators() {
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
-			let (mut testnet, genesis_authorities, _) =
-				network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
 			testnet.move_to_the_next_epoch();
 
 			let epoch = Validator::current_epoch();
+			let auth = pallet_cf_validator::CurrentAuthorities::<Runtime>::get()
+				.into_iter()
+				.next()
+				.unwrap();
 
 			// Setup delegator/operator
 			// TODO: update this with proper extrinsic calls after delegation API is integrated
@@ -82,10 +84,7 @@ fn block_author_rewards_are_distributed_among_delegators() {
 				epoch,
 				operator.clone(),
 				Delegation {
-					validator_bids: BTreeMap::from_iter([(
-						genesis_authorities[0].clone(),
-						1_000_000_000u128,
-					)]),
+					validator_bids: BTreeMap::from_iter([(auth.clone(), 1_000_000_000u128)]),
 					delegator_bids: BTreeMap::from_iter([
 						(delegators[0].account.clone(), 100_000_000u128), // 5% of cut
 						(delegators[1].account.clone(), 400_000_000u128), // 20% of cut
@@ -96,18 +95,18 @@ fn block_author_rewards_are_distributed_among_delegators() {
 			);
 			pallet_cf_validator::ValidatorToOperator::<Runtime>::insert(
 				epoch,
-				genesis_authorities[0].clone(),
+				auth.clone(),
 				operator.clone(),
 			);
 
-			let auth_pre_balance = Flip::balance(&genesis_authorities[0]);
+			let auth_pre_balance = Flip::balance(&auth);
 
-			// Let some blocks pass so block rewards are distributed
-			testnet.move_to_the_end_of_epoch();
+			// Let few blocks to pass so some rewards are distributed for authoring blocks.
+			testnet.move_forward_blocks(30);
 
 			delegators.iter_mut().for_each(|d| d.post_balance = Flip::balance(&d.account));
 
-			let auth_post_balance = Flip::balance(&genesis_authorities[0]);
+			let auth_post_balance = Flip::balance(&auth);
 			let auth_cut = auth_post_balance - auth_pre_balance;
 
 			let total_auth_reward =
@@ -115,7 +114,7 @@ fn block_author_rewards_are_distributed_among_delegators() {
 
 			assert!(total_auth_reward > 0u128);
 
-			// Verify that rewards are distributed accordingly
+			// Verify that rewards are distributed accordingly.
 			assert_eq!(Permill::from_percent(50) * total_auth_reward, auth_cut);
 			assert_eq!(Permill::from_percent(5) * total_auth_reward, delegators[0].diff());
 			assert_eq!(Permill::from_percent(20) * total_auth_reward, delegators[1].diff());
