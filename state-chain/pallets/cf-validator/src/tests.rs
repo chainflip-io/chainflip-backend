@@ -1623,24 +1623,60 @@ mod operator {
 	}
 	#[test]
 	fn can_claim_by_operator_and_accept_by_validator() {
+		const OP_1: u64 = 1001;
+		const OP_2: u64 = 1002;
+		const V_1: u64 = 2001;
+		const V_2: u64 = 2002;
+
 		new_test_ext().execute_with(|| {
-			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
-			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(BOB),));
-			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(ALICE), BOB));
-			assert!(ClaimedValidators::<Test>::contains_key(BOB));
-			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(BOB), ALICE));
-			assert!(ManagedValidators::<Test>::get(BOB).is_some());
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::ValidatorPallet(Event::ValidatorClaimed {
-					validator: BOB,
-					operator: ALICE,
-				}),
-				RuntimeEvent::ValidatorPallet(Event::AcceptedOperatorByValidator {
-					validator: BOB,
-					operator: ALICE,
-				}),
+			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(OP_1)));
+			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(OP_2)));
+			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(V_1),));
+			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(V_2),));
+
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_1), V_1));
+			assert_eq!(ClaimedValidators::<Test>::get(V_1), [OP_1].into_iter().collect());
+
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_1), V_2));
+			assert_eq!(ClaimedValidators::<Test>::get(V_1), [OP_1].into_iter().collect());
+			assert_eq!(ClaimedValidators::<Test>::get(V_2), [OP_1].into_iter().collect());
+
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_2), V_1));
+			assert_eq!(ClaimedValidators::<Test>::get(V_1), [OP_1, OP_2].into_iter().collect());
+			assert_eq!(ClaimedValidators::<Test>::get(V_2), [OP_1].into_iter().collect());
+
+			// Can't accept operator if validator is not claimed by it.
+			assert_noop!(
+				ValidatorPallet::accept_operator(OriginTrait::signed(V_2), OP_2),
+				Error::<Test>::NotClaimedByOperator
 			);
+
+			// Accept operator.
+			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(V_2), OP_1));
+			assert!(ClaimedValidators::<Test>::get(V_2).is_empty());
+			assert_eq!(ClaimedValidators::<Test>::get(V_1), [OP_1, OP_2].into_iter().collect());
+
+			// Can't accept operator if validator is already managed by another operator.
+			assert_noop!(
+				ValidatorPallet::accept_operator(OriginTrait::signed(V_2), OP_2),
+				Error::<Test>::AlreadyManagedByOperator
+			);
+			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(V_1), OP_2));
+			assert_noop!(
+				ValidatorPallet::accept_operator(OriginTrait::signed(V_1), OP_1),
+				Error::<Test>::AlreadyManagedByOperator
+			);
+
+			// Expected end state:
+			assert_eq!(ManagedValidators::<Test>::get(V_1), Some(OP_2));
+			assert_eq!(ManagedValidators::<Test>::get(V_2), Some(OP_1));
+
+			assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
+				Event::OperatorAcceptedByValidator { validator: V_1, operator: OP_2 },
+			));
+			assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
+				Event::OperatorAcceptedByValidator { validator: V_2, operator: OP_1 },
+			));
 		});
 	}
 	#[test]

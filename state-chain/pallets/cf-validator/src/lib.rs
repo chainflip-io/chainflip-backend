@@ -363,7 +363,7 @@ pub mod pallet {
 	/// Maps a validator to the operators currently claiming it.
 	#[pallet::storage]
 	pub type ClaimedValidators<T: Config> =
-		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, OptionQuery>;
+		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
 	/// Maps an operator account to it's parameters.
 	#[pallet::storage]
@@ -403,7 +403,7 @@ pub mod pallet {
 		/// A validator has been claimed by an operator.
 		ValidatorClaimed { validator: T::AccountId, operator: T::AccountId },
 		/// A validator has accepted the claim of an operator.
-		AcceptedOperatorByValidator { validator: T::AccountId, operator: T::AccountId },
+		OperatorAcceptedByValidator { validator: T::AccountId, operator: T::AccountId },
 		/// A validator has been removed.
 		ValidatorHasBeenRemoved { validator: T::AccountId, operator: T::AccountId },
 		/// The delegation preferences of a operator have been updated.
@@ -449,7 +449,7 @@ pub mod pallet {
 		/// We are in the auction phase
 		AuctionPhase,
 		/// Validator is already associated with an operator.
-		AlreadyAssociatedWithOperator,
+		AlreadyManagedByOperator,
 		/// Validator does not exist.
 		ValidatorDoesNotExist,
 		/// Not authorized to perform this action.
@@ -459,9 +459,7 @@ pub mod pallet {
 		/// Operator is still delegating to delegators.
 		StillAssociatedWithDelegators,
 		/// The validator is not claimed by any operator.
-		NotClaimed,
-		/// The operator provided is not the operator that claimed the validator.
-		OperatorDoesNotMatch,
+		NotClaimedByOperator,
 		/// The provided account id has not the role validator.
 		NotValidator,
 	}
@@ -855,7 +853,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Executed by a operator to claim a validator. By calling this extrinics the operator
+		/// Executed by a operator to claim a validator. By calling this, the operator
 		/// signals his wish to manage the validator in his delegated staking pool. The validator
 		/// has to actively accept this invitation by calling the `accept_operator` extrinsic.
 		#[pallet::call_index(10)]
@@ -864,7 +862,7 @@ pub mod pallet {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 			ensure!(
 				!ManagedValidators::<T>::contains_key(&validator_id),
-				Error::<T>::AlreadyAssociatedWithOperator
+				Error::<T>::AlreadyManagedByOperator
 			);
 			ensure!(
 				T::AccountRoleRegistry::has_account_role(&validator_id, AccountRole::Validator),
@@ -884,18 +882,21 @@ pub mod pallet {
 		pub fn accept_operator(origin: OriginFor<T>, operator_id: T::AccountId) -> DispatchResult {
 			let validator_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			ensure!(
-				ManagedValidators::<T>::get(&validator_id).is_none(),
-				Error::<T>::AlreadyAssociatedWithOperator
+				!ManagedValidators::<T>::contains_key(&validator_id),
+				Error::<T>::AlreadyManagedByOperator
 			);
 
-			let claimed_by_operators =
-				ClaimedValidators::<T>::take(&validator_id).ok_or(Error::<T>::NotClaimed)?;
-
-			ensure!(claimed_by_operators.contains(&operator_id), Error::<T>::OperatorDoesNotMatch);
+			ClaimedValidators::<T>::try_mutate(&validator_id, |claimed_by| {
+				if claimed_by.remove(&operator_id) {
+					Ok(())
+				} else {
+					Err(Error::<T>::NotClaimedByOperator)
+				}
+			})?;
 
 			ManagedValidators::<T>::insert(&validator_id, &operator_id);
 
-			Self::deposit_event(Event::AcceptedOperatorByValidator {
+			Self::deposit_event(Event::OperatorAcceptedByValidator {
 				validator: validator_id,
 				operator: operator_id,
 			});
