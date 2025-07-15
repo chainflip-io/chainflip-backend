@@ -22,7 +22,7 @@ use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
-	Bonding, Chainflip, SetSafeMode, Slashing,
+	Bonding, Chainflip, SetSafeMode,
 };
 use sp_core::H160;
 
