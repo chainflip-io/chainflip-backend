@@ -654,6 +654,8 @@ pub fn get_boost_pool_details<T: Config>(
 
 					let BoostPoolContribution { boosted_amount, network_fee, .. } = contribution;
 
+					let total_owed_amount = boosted_amount.saturating_sub(network_fee);
+
 					let boosters_fee = utils::fee_from_boosted_amount(boosted_amount, tier)
 						.saturating_sub(network_fee);
 
@@ -664,7 +666,7 @@ pub fn get_boost_pool_details<T: Config>(
 							(
 								acc_id.clone(),
 								OwedAmount {
-									total: *share * boosted_amount,
+									total: *share * total_owed_amount,
 									fee: *share * boosters_fee,
 								},
 							)
