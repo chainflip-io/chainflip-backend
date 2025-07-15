@@ -613,8 +613,9 @@ fn boost_pool_details() {
 				pending_boosts: BTreeMap::from_iter([(
 					DEPOSIT_ID,
 					BTreeMap::from_iter([
-						(BOOSTER_1, OwedAmount { total: 20_000, fee: 10 }),
-						(BOOSTER_2, OwedAmount { total: 10_000, fee: 5 })
+						// Note the network fee deduction:
+						(BOOSTER_1, OwedAmount { total: 20_000 - 10, fee: 10 }),
+						(BOOSTER_2, OwedAmount { total: 10_000 - 5, fee: 5 })
 					])
 				)]),
 				pending_withdrawals: BTreeMap::from_iter([(
