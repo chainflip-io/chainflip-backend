@@ -2,7 +2,7 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [1.10.0] - 2025-07-07
+## [1.10.1] - 2025-07-16
 
 - Boost details rpc incorporates network fee deduction ([#6002](https://github.com/chainflip-io/chainflip-backend/issues/6002))
 
