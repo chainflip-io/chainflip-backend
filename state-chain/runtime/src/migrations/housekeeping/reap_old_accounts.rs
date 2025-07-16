@@ -79,6 +79,11 @@ impl OnRuntimeUpgrade for Migration {
 									OriginTrait::signed(account_id.clone()),
 								)
 							},
+							AccountRole::Operator => {
+								pallet_cf_validator::Pallet::<Runtime>::deregister_as_operator(
+									OriginTrait::signed(account_id.clone()),
+								)
+							},
 						}
 						.inspect_err(|e| {
 							log::error!(

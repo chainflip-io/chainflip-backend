@@ -301,6 +301,8 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			AccountRole::LiquidityProvider =>
 				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
 			AccountRole::Unregistered => bail!("Cannot register account role {:?}", role),
+			AccountRole::Operator =>
+				RuntimeCall::from(pallet_cf_validator::Call::register_as_operator {}),
 		};
 
 		Ok(self
