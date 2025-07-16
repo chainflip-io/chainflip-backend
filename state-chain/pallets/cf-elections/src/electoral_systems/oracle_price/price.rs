@@ -1,3 +1,5 @@
+use core::ops::{Add, Mul, Sub};
+
 use cf_amm_math::{mul_div_floor, PRICE_FRACTIONAL_BITS};
 use cf_primitives::{Asset, Price};
 use scale_info::prelude::marker::ConstParamTy;
@@ -13,15 +15,23 @@ def_derive! {
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub enum ChainlinkAssetPair {
 		BtcUsd,
-		EthUsd
+		EthUsd,
+		SolUsd,
+		UsdcUsd,
+		UsdtUsd
 	}
 }
 
 impl ChainlinkAssetPair {
 	pub fn base_asset(&self) -> PriceAsset {
+		use ChainlinkAssetPair::*;
+		use PriceAsset::*;
 		match self {
-			ChainlinkAssetPair::BtcUsd => PriceAsset::Btc,
-			ChainlinkAssetPair::EthUsd => PriceAsset::Eth,
+			BtcUsd => Btc,
+			EthUsd => Eth,
+			SolUsd => Sol,
+			UsdcUsd => Usdc,
+			UsdtUsd => Usdt,
 		}
 	}
 }
@@ -49,15 +59,20 @@ impl PriceUnit {
 pub enum PriceAsset {
 	Btc,
 	Eth,
+	Sol,
 	Usdc,
+	Usdt,
 }
 
 impl PriceAsset {
 	pub fn decimals(&self) -> u8 {
+		use PriceAsset::*;
 		match self {
-			PriceAsset::Btc => 8,
-			PriceAsset::Eth => 12,
-			PriceAsset::Usdc => 6,
+			Btc => 8,
+			Eth => 12,
+			Sol => 9,
+			Usdc => 6,
+			Usdt => 6,
 		}
 	}
 }
@@ -72,28 +87,99 @@ pub fn denom(d: Denom) -> U256 {
 def_derive! {
 	/// Note that this can handle denominators of up to u128::MAX + 1
 	#[derive(Default, PartialOrd, Ord, TypeInfo)]
-	pub struct FractPrice<const U: Denom>(U256);
+	pub struct FractionImpl<const U: Denom>(pub U256);
 }
 
-impl<const U: Denom> FractPrice<U> {
-	pub fn convert<const V: Denom>(self) -> FractPrice<V> {
-		FractPrice(mul_div_floor(self.0, denom(V), denom(U)))
+// pub type Fraction<const U: Denom> = FractionImpl<{U - 1}>;
+
+impl<const U: Denom> FractionImpl<U> {
+	pub fn from_raw(raw: U256) -> Self {
+		FractionImpl(raw)
+	}
+
+	pub fn one() -> Self {
+		FractionImpl(denom(U))
+	}
+
+	pub fn denominator() -> U256 {
+		denom(U)
+	}
+
+	/// This fails if the denominator isn't a multiple of `denom(U)`
+	pub fn try_from_denominator_exact(numerator: u128, denominator: u128) -> Option<Self> {
+		if denom(U) % denominator == 0.into() {
+			Some(FractionImpl(mul_div_floor(numerator.into(), denom(U), denominator)))
+		} else {
+			None
+		}
+	}
+
+	pub fn convert<const V: Denom>(self) -> FractionImpl<V> {
+		FractionImpl(mul_div_floor(self.0, denom(V), denom(U)))
 	}
 
 	pub fn apply_exponent(&self, exp: Base10Exponent) -> Self {
 		let exp = exp.0;
 		if exp < 0 {
-			FractPrice(mul_div_floor(self.0, 1.into(), 10u128.pow((exp * -1) as u32)))
+			FractionImpl(mul_div_floor(self.0, 1.into(), 10u128.pow((exp * -1) as u32)))
 		} else {
-			FractPrice(mul_div_floor(self.0, 10u128.pow(exp as u32).into(), 1))
+			FractionImpl(mul_div_floor(self.0, 10u128.pow(exp as u32).into(), 1))
 		}
 	}
 }
 
-type StatechainPrice = FractPrice<{ u128::MAX }>;
+impl<const U: Denom> Add<FractionImpl<U>> for FractionImpl<U> {
+	type Output = FractionImpl<U>;
+
+	fn add(self, rhs: FractionImpl<U>) -> Self::Output {
+		FractionImpl(self.0 + rhs.0)
+	}
+}
+
+impl<const U: Denom> Add<FractionImpl<U>> for &FractionImpl<U> {
+	type Output = FractionImpl<U>;
+
+	fn add(self, rhs: FractionImpl<U>) -> Self::Output {
+		FractionImpl(self.0 + rhs.0)
+	}
+}
+
+impl<const U: Denom> Sub<FractionImpl<U>> for FractionImpl<U> {
+	type Output = FractionImpl<U>;
+
+	fn sub(self, rhs: FractionImpl<U>) -> Self::Output {
+		FractionImpl(self.0 - rhs.0)
+	}
+}
+
+impl<const U: Denom> Sub<FractionImpl<U>> for &FractionImpl<U> {
+	type Output = FractionImpl<U>;
+
+	fn sub(self, rhs: FractionImpl<U>) -> Self::Output {
+		FractionImpl(self.0 - rhs.0)
+	}
+}
+
+impl<const U: Denom, const V: Denom> Mul<FractionImpl<V>> for FractionImpl<U> {
+	type Output = FractionImpl<U>;
+
+	fn mul(self, rhs: FractionImpl<V>) -> Self::Output {
+		FractionImpl(mul_div_floor(self.0, rhs.0, denom(V)))
+	}
+}
+
+impl<const U: Denom, const V: Denom> Mul<FractionImpl<V>> for &FractionImpl<U> {
+	type Output = FractionImpl<U>;
+
+	fn mul(self, rhs: FractionImpl<V>) -> Self::Output {
+		FractionImpl(mul_div_floor(self.0, rhs.0, denom(V)))
+	}
+}
+
+type StatechainPrice = FractionImpl<{ u128::MAX }>;
 
 /// WARNING, this assumes PRICE_FRACTIONAL_BITS = 128!
-impl Into<Price> for FractPrice<{ u128::MAX }> {
+impl Into<Price> for FractionImpl<{ u128::MAX }> {
 	fn into(self) -> Price {
 		debug_assert_eq!(PRICE_FRACTIONAL_BITS, 128);
 		self.0
@@ -101,7 +187,7 @@ impl Into<Price> for FractPrice<{ u128::MAX }> {
 }
 
 pub fn price_with_unit_to_statechain_price<const U: u128>(
-	price: FractPrice<U>,
+	price: FractionImpl<U>,
 	unit: PriceUnit,
 ) -> StatechainPrice {
 	price

@@ -2,7 +2,9 @@ use core::ops::RangeInclusive;
 
 use sp_std::ops::Add;
 
-use crate::electoral_systems::state_machine::common_imports::*;
+use crate::electoral_systems::{
+	oracle_price::price::FractionImpl, state_machine::common_imports::*,
+};
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
@@ -25,6 +27,18 @@ def_derive! {
 	#[cfg_attr(test, derive(Arbitrary))]
 	#[derive(TypeInfo, Copy)]
 	pub struct Seconds(pub u64);
+}
+
+def_derive! {
+	#[derive(TypeInfo, Copy, Default)]
+	#[cfg_attr(test, derive(Arbitrary))]
+	pub struct BasisPoints(pub u16);
+}
+
+impl BasisPoints {
+	pub fn to_fraction(self) -> FractionImpl<9999> {
+		FractionImpl(self.0.into())
+	}
 }
 
 pub trait AggregationValue = Ord + CommonTraits + MaybeArbitrary + 'static;

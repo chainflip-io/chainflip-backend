@@ -40,8 +40,9 @@ use crate::{
 	witness::sol::oracle_witnessing::get_price_feeds,
 };
 use anyhow::Result;
-use pallet_cf_elections::electoral_systems::oracle_price::primitives::ChainlinkAssetPair;
+use pallet_cf_elections::electoral_systems::oracle_price::price::ChainlinkAssetPair;
 use sol_prim::program_instructions::PriceFeedData as SolPriceFeedData;
+use sp_core::U256;
 
 /// IMPORTANT: These strings have to match with the price feed "description" as returned by
 /// chainlink.
@@ -50,6 +51,9 @@ pub fn asset_pair_from_description(description: String) -> Option<ChainlinkAsset
 	match description.as_str() {
 		"BTC / USD" => Some(BtcUsd),
 		"ETH / USD" => Some(EthUsd),
+		"SOL / USD" => Some(EthUsd),
+		"USDT / USD" => Some(EthUsd),
+		"USDC / USD" => Some(EthUsd),
 		_ => None,
 	}
 }
@@ -129,17 +133,27 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 		let prices: BTreeMap<_, _> = price_feeds
 			.into_iter()
 			.filter_map(|price_data| {
-				if let Some(asset_pair) =
-					asset_pair_from_description(price_data.description.clone())
-				{
-					Some((asset_pair, (price_data.timestamp, price_data.answer)))
-				} else {
-					tracing::info!(
+				let Some(asset_pair) = asset_pair_from_description(price_data.description.clone())
+				else {
+					tracing::debug!(
 						"Got price data with unknown description: {:?}",
 						price_data.description
 					);
-					None
+					return None;
+				};
+
+				let Ok(positive_price) = price_data.answer.try_into() else {
+					tracing::debug!("Got negative price data: {}", price_data.answer);
+					return None;
+				};
+
+				if ChainlinkPrice::denominator() != 10u32.pow(price_data.decimals as u32).into() {
+					tracing::debug!("Got wrong number of decimals: {}", price_data.decimals);
+					return None;
 				}
+
+				let price = ChainlinkPrice::from_raw(positive_price);
+				Some((asset_pair, (price_data.timestamp, price)))
 			})
 			.collect();
 

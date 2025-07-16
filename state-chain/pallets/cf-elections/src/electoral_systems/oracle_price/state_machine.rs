@@ -2,7 +2,7 @@ use crate::electoral_systems::{
 	block_witnesser::state_machine::HookTypeFor,
 	oracle_price::{
 		price,
-		primitives::{Aggregation, Apply, Seconds, UnixTime},
+		primitives::{Aggregation, Apply, BasisPoints, Seconds, UnixTime},
 	},
 	state_machine::common_imports::*,
 };
@@ -307,12 +307,6 @@ impl Index<ExternalPriceChain> for OraclePriceSettings {
 			ExternalPriceChain::Ethereum => &self.ethereum,
 		}
 	}
-}
-
-def_derive! {
-	#[derive(TypeInfo, Copy, Default)]
-	#[cfg_attr(test, derive(Arbitrary))]
-	pub struct BasisPoints(pub u16);
 }
 
 def_derive! {

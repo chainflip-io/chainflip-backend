@@ -15,7 +15,7 @@ use pallet_cf_elections::{
 		oracle_price::{
 			consensus::OraclePriceConsensus,
 			price::{
-				price_with_unit_to_statechain_price, ChainlinkAssetPair, FractPrice, PriceAsset,
+				price_with_unit_to_statechain_price, ChainlinkAssetPair, FractionImpl, PriceAsset,
 				PriceUnit,
 			},
 			primitives::*,
@@ -75,26 +75,22 @@ def_derive! {
 	}
 }
 
+pub type ChainlinkPrice = FractionImpl<9_999_999_999>;
+
 pub struct Chainlink;
 
 impls! {
 	for TypesFor<Chainlink>:
 
 	OPTypes {
-		type Price = FractPrice<10_000_000_000>;
+		type Price = ChainlinkPrice;
 		type GetTime = Self;
 		type Asset = ChainlinkAssetPair;
 		type Aggregation = AggregatedF;
 
 		fn price_range(price: &Self::Price, range: BasisPoints) -> RangeInclusive<Self::Price> {
-			// TODO: proper math
-			(
-			(*price as f64 / 100_000_000.0)*(1.0 - (range.0 as f64 / 10_000.0))
-			) as i128
-			..=
-			(
-			(*price as f64 / 100_000_000.0)*(1.0 + (range.0 as f64 / 10_000.0))
-			) as i128
+			let delta = price * range.to_fraction();
+			price + delta.clone() ..= price - delta
 		}
 	}
 
