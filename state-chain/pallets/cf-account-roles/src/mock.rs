@@ -69,8 +69,8 @@ impl SpawnAccount for MockSpawnAccount {
 		sub_account_index: Self::Index,
 	) -> Result<Self::AccountId, DispatchError> {
 		use codec::Decode;
-		let bytes = (*parent_account_id, sub_account_index)
-			.using_encoded(|bytes| frame_support::Twox128::hash(bytes));
+		let bytes =
+			(*parent_account_id, sub_account_index).using_encoded(frame_support::Twox128::hash);
 		Ok(u64::decode(&mut &bytes[..]).expect("u64::decode should not fail; the input is valid"))
 	}
 }
