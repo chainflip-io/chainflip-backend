@@ -6,7 +6,7 @@ import {
   createStateChainKeypair,
   defaultAssetAmounts,
   handleSubstrateError,
-  newAddress,
+  newAssetAddress,
   sleep,
 } from 'shared/utils';
 import { getEarnedBrokerFees } from 'tests/broker_fee_collection';
@@ -29,8 +29,8 @@ async function testRefundVaultSwap(logger: Logger) {
   const destAsset = Assets.Usdc;
   const balanceObserveTimeout = 60;
   const depositAmount = defaultAssetAmounts(inputAsset);
-  const destAddress = await newAddress('Usdc', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
-  const refundAddress = await newAddress('Btc', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
+  const destAddress = await newAssetAddress('Usdc');
+  const refundAddress = await newAssetAddress('Btc');
   const foKParams = {
     retryDurationBlocks: 100,
     refundAddress,
@@ -111,7 +111,7 @@ async function testFeeCollection(
   // Setup broker accounts. Different for each asset and specific to this test.
   const brokerUri = `//BROKER_VAULT_FEE_COLLECTION_${inputAsset}`;
   const broker = createStateChainKeypair(brokerUri);
-  const refundAddress = await newAddress('Eth', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
+  const refundAddress = await newAssetAddress('Eth', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
   await Promise.all([setupBrokerAccount(logger, brokerUri)]);
   if (inputAsset === Assets.Btc) {
     await openPrivateBtcChannel(logger, brokerUri);

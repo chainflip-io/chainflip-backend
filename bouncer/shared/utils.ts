@@ -21,7 +21,7 @@ import { Vector, bool, Struct, Enum, Bytes as TsBytes } from 'scale-ts';
 import BigNumber from 'bignumber.js';
 import { EventParser, BorshCoder } from '@coral-xyz/anchor';
 import { ISubmittableResult } from '@polkadot/types/types';
-import { base58Decode, base58Encode } from 'polkadot/util-crypto';
+import { base58Decode, base58Encode, randomAsHex } from 'polkadot/util-crypto';
 import { newDotAddress } from 'shared/new_dot_address';
 import { BtcAddressType, newBtcAddress } from 'shared/new_btc_address';
 import { getBalance } from 'shared/get_balance';
@@ -659,6 +659,27 @@ export function chainFromAsset(asset: Asset): Chain {
   if (isSDKAsset(asset)) return assetConstants[asset].chain;
   if (asset === 'Sol' || asset === 'SolUsdc') return 'Solana';
   throw new Error(`Unsupported asset: ${asset}`);
+}
+
+// Returns an address that can hold an asset and can be used as a destination
+// address of a swap or a refund address. If it's a CCM swap or refund, the
+// returned address is a valid CCM receiver.
+export async function newAssetAddress(
+  asset: Asset,
+  seed?: string,
+  type?: BtcAddressType,
+  isCcm = false,
+): Promise<string> {
+  const chain = chainFromAsset(asset);
+  // For CCM swaps the destination address should be the CF Tester.
+  // Solana CCM are egressed to a random destination address
+  if (isCcm && chain !== 'Solana') {
+    if (!ccmSupportedChains.includes(chain)) {
+      throw new Error(`Unsupported chain for CCM: ${chain}`);
+    }
+    return getContractAddress(chain, 'CFTESTER');
+  }
+  return newAddress(asset, seed ?? randomAsHex(32), type);
 }
 
 export function getEvmEndpoint(chain: Chain): string {

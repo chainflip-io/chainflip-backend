@@ -23,7 +23,7 @@ use cf_amm::{
 use cf_chains::{
 	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
 	sol::SolInstructionRpc, CcmChannelMetadataUnchecked, Chain, ChainCrypto,
-	ChannelRefundParametersEncoded, ForeignChainAddress, VaultSwapExtraParametersEncoded,
+	ChannelRefundParametersUncheckedEncoded, ForeignChainAddress, VaultSwapExtraParametersEncoded,
 	VaultSwapInputEncoded,
 };
 use cf_primitives::{
@@ -595,7 +595,7 @@ decl_runtime_apis!(
 			source_asset: Asset,
 			destination_address: EncodedAddress,
 			destination_asset: Asset,
-			refund_parameters: ChannelRefundParametersEncoded,
+			refund_parameters: ChannelRefundParametersUncheckedEncoded,
 			dca_parameters: Option<DcaParameters>,
 			boost_fee: BasisPoints,
 			broker_commission: BasisPoints,

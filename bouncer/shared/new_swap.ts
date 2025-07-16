@@ -4,7 +4,7 @@ import {
   chainFromAsset,
   stateChainAssetFromAsset,
   isPolkadotAsset,
-  newAddress,
+  newAssetAddress,
 } from 'shared/utils';
 import { Logger } from 'shared/utils/logger';
 import { brokerApiEndpoint } from 'shared/json_rpc';
@@ -14,6 +14,7 @@ const defaultCommissionBps = 100; // 1%
 type RequestDepositChannelParams = Parameters<(typeof broker)['requestSwapDepositAddress']>[0];
 
 export type CcmDepositMetadata = NonNullable<RequestDepositChannelParams['ccmParams']>;
+
 export type FillOrKillParamsX128 = NonNullable<RequestDepositChannelParams['fillOrKillParams']>;
 export type DcaParams = NonNullable<RequestDepositChannelParams['dcaParams']>;
 
@@ -31,12 +32,13 @@ export async function newSwap(
   const destinationAddress = isPolkadotAsset(destAsset)
     ? decodeDotAddressForContract(destAddress)
     : destAddress;
-  const defaultRefundAddress = await newAddress(sourceAsset, 'DEFAULT_REFUND');
+  const defaultRefundAddress = await newAssetAddress(sourceAsset, 'DEFAULT_REFUND');
 
   const defaultFillOrKillParams: FillOrKillParamsX128 = {
     retryDurationBlocks: 0,
     refundAddress: defaultRefundAddress,
     minPriceX128: '0',
+    refundCcmMetadata: undefined,
   };
 
   // If the dry_run of the extrinsic fails on the broker-api then it won't retry. So we retry here to

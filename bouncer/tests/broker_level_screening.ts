@@ -1,10 +1,9 @@
 import axios from 'axios';
-import { randomBytes } from 'crypto';
 import { Chain, InternalAsset } from '@chainflip/cli';
 import Web3 from 'web3';
 import { sendBtc, sendBtcTransactionWithParent } from 'shared/send_btc';
 import {
-  newAddress,
+  newAssetAddress,
   sleep,
   handleSubstrateError,
   chainGasAsset,
@@ -16,6 +15,9 @@ import {
   chainContractId,
   chainFromAsset,
   ingressEgressPalletForChain,
+  observeBalanceIncrease,
+  observeCcmReceived,
+  observeFetch,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import Keyring from 'polkadot/keyring';
@@ -29,6 +31,7 @@ import { send } from 'shared/send';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { buildAndSendBtcVaultSwap, openPrivateBtcChannel } from 'shared/btc_vault_swap';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
+import { newCcmMetadata } from 'shared/swapping';
 
 const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_1');
@@ -51,17 +54,6 @@ async function observeBtcAddressBalanceChange(address: string): Promise<boolean>
   }
   console.error(`BTC balance for ${address} did not change after ${MAX_RETRIES} seconds.`);
   return Promise.resolve(false);
-}
-
-/**
- * Generates a new address for an asset.
- *
- * @param asset - The asset to generate an address for.
- * @param seed - The seed to generate the address with. If no seed is provided, a random one is generated.
- * @returns - The new address.
- */
-async function newAssetAddress(asset: InternalAsset, seed = null): Promise<string> {
-  return Promise.resolve(newAddress(asset, seed || randomBytes(32).toString('hex')));
 }
 
 /**
@@ -251,24 +243,28 @@ async function testEvm(
   testContext: TestContext,
   sourceAsset: InternalAsset,
   reportFunction: (txId: string) => Promise<void>,
+  ccmRefund = false,
 ) {
   const logger = testContext.logger;
   logger.info(`Testing broker level screening for Evm ${sourceAsset}...`);
 
   const chain = chainFromAsset(sourceAsset);
   const ingressEgressPallet = ingressEgressPalletForChain(chain);
-  const MAX_RETRIES = 120;
 
   const destinationAddressForBtc = await newAssetAddress('Btc');
 
   logger.debug(`BTC destination address: ${destinationAddressForBtc}`);
 
-  const ethereumRefundAddress = await newAssetAddress('Eth');
+  const ethereumRefundAddress = await newAssetAddress('Eth', undefined, undefined, ccmRefund);
+  const initialRefundAddressBalance = await getBalance(sourceAsset, ethereumRefundAddress);
+
+  const refundCcmMetadata = ccmRefund ? await newCcmMetadata(sourceAsset) : undefined;
 
   const refundParameters: FillOrKillParamsX128 = {
     retryDurationBlocks: 0,
     refundAddress: ethereumRefundAddress,
     minPriceX128: '0',
+    refundCcmMetadata,
   };
 
   const swapParams = await requestNewSwap(
@@ -289,7 +285,7 @@ async function testEvm(
     logger.debug(`Initial deposit ${sourceAsset} received...`);
     // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
     // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
-    // succesfully to make sure the Deposit contract is deployed.
+    // successfully to make sure the Deposit contract is deployed.
     await waitForDepositContractDeployment(chain, swapParams.depositAddress);
   }
 
@@ -303,23 +299,20 @@ async function testEvm(
 
   await observeEvent(logger, `${ingressEgressPallet}:TransactionRejectedByBroker`).event;
 
-  let receivedRefund = false;
+  const ccmEventEmitted = refundParameters.refundCcmMetadata
+    ? observeCcmReceived(
+        sourceAsset,
+        sourceAsset,
+        refundParameters.refundAddress,
+        refundParameters.refundCcmMetadata,
+      )
+    : Promise.resolve();
 
-  for (let i = 0; i < MAX_RETRIES; i++) {
-    const refundBalance = await getBalance(sourceAsset, ethereumRefundAddress);
-    const depositAddressBalance = await getBalance(sourceAsset, swapParams.depositAddress);
-    if (refundBalance !== '0' && depositAddressBalance === '0') {
-      receivedRefund = true;
-      break;
-    }
-    await sleep(6000);
-  }
-
-  if (!receivedRefund) {
-    throw new Error(
-      `Didn't receive refund of ${sourceAsset} to address ${ethereumRefundAddress} within timeout!`,
-    );
-  }
+  await Promise.all([
+    observeBalanceIncrease(logger, sourceAsset, ethereumRefundAddress, initialRefundAddressBalance),
+    ccmEventEmitted,
+    observeFetch(sourceAsset, swapParams.depositAddress),
+  ]);
 
   logger.info(`Marked ${sourceAsset} transaction was rejected and refunded 👍.`);
 }
@@ -382,7 +375,6 @@ async function testEvmVaultSwap(
       `Didn't receive funds refund to address ${ethereumRefundAddress} within timeout!`,
     );
   }
-
   logger.info(`Marked ${sourceAsset} vault swap was rejected and refunded 👍.`);
 }
 

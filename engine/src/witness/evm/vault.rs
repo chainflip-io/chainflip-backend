@@ -32,7 +32,7 @@ use super::{
 
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
-	cf_parameters::VaultSwapParameters,
+	cf_parameters::VaultSwapParametersV1,
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain,
@@ -47,7 +47,7 @@ abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json")
 pub fn decode_cf_parameters<RefundAddress, CcmData>(
 	cf_parameters: &[u8],
 	block_height: u64,
-) -> Result<(VaultSwapParameters<RefundAddress>, CcmData)>
+) -> Result<(VaultSwapParametersV1<RefundAddress>, CcmData)>
 where
 	RefundAddress: Decode,
 	CcmData: Default + Decode,
@@ -58,7 +58,7 @@ where
 				"Failed to decode cf_parameters: {cf_parameters:?} at block {block_height}"
 			)
 		})
-		.map_err(|e| anyhow::anyhow!(e))
+		.map_err(|e| anyhow!(e))
 }
 
 pub fn call_from_event<
@@ -282,7 +282,9 @@ pub trait IngressCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
 		tx_hash: H256,
-		vault_swap_parameters: VaultSwapParameters<<Self::Chain as cf_chains::Chain>::ChainAccount>,
+		vault_swap_parameters: VaultSwapParametersV1<
+			<Self::Chain as cf_chains::Chain>::ChainAccount,
+		>,
 	) -> state_chain_runtime::RuntimeCall;
 
 	fn vault_transfer_failed(

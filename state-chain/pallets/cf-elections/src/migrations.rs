@@ -14,20 +14,27 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::Pallet;
+use core::marker::PhantomData;
 
 use cf_runtime_utilities::PlaceholderMigration;
-use frame_support::migrations::VersionedMigration;
+use frame_support::{migrations::VersionedMigration, traits::UncheckedOnRuntimeUpgrade};
 
-pub mod swap_request_ccm_refund;
+use crate::{Config, Pallet};
 
-pub type PalletMigration<T> = (
+pub type PalletMigration<T, I> = (
 	VersionedMigration<
-		11,
-		12,
-		swap_request_ccm_refund::Migration<T>,
-		Pallet<T>,
+		6,
+		7,
+		EmptyMigration<T, I>,
+		Pallet<T, I>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<12, Pallet<T>>,
+	PlaceholderMigration<7, Pallet<T, I>>,
 );
+pub struct EmptyMigration<T: Config<I>, I: 'static = ()>(PhantomData<(T, I)>);
+
+impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for EmptyMigration<T, I> {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		frame_support::weights::Weight::zero()
+	}
+}

@@ -36,8 +36,10 @@ use sp_std::vec;
 use crate::{
 	address::{EncodedAddress, ForeignChainAddress},
 	btc::{Utxo, UtxoId},
+	ccm_checker::{DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData},
 	dot::PolkadotTransactionId,
 	evm::{DepositDetails, EvmFetchId, EvmTransactionMetadata},
+	sol::{SolAddress, SolCcmAccounts, SolCcmAddress, SolPubkey},
 };
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
@@ -376,3 +378,20 @@ impl_tuple_benchmark_value!(A, B, C, D);
 impl_tuple_benchmark_value!(A, B, C, D, EE);
 impl_tuple_benchmark_value!(A, B, C, D, EE, F);
 impl_tuple_benchmark_value!(A, B, C, D, EE, F, G);
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for DecodedCcmAdditionalData {
+	fn benchmark_value() -> Self {
+		DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V1 {
+			ccm_accounts: SolCcmAccounts {
+				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x02; 32]), is_writable: true },
+				additional_accounts: vec![
+					SolCcmAddress { pubkey: SolPubkey([0x03; 32]), is_writable: false },
+					SolCcmAddress { pubkey: SolPubkey([0x04; 32]), is_writable: true },
+				],
+				fallback_address: SolPubkey([0x01; 32]),
+			},
+			alts: vec![SolAddress([0xf0; 32]), SolAddress([0xf1; 32])],
+		})
+	}
+}

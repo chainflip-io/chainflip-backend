@@ -24,8 +24,8 @@ use cf_chains::{
 	evm::{SchnorrVerificationComponents, H256},
 	instances::ChainInstanceFor,
 	AnyChain, Arbitrum, Assethub, Bitcoin, CcmDepositMetadataUnchecked, Chain, ChainCrypto,
-	ChannelRefundParameters, Ethereum, ForeignChainAddress, IntoTransactionInIdForAnyChain,
-	Polkadot, TransactionInIdForAnyChain,
+	ChannelRefundParametersUnchecked, Ethereum, ForeignChainAddress,
+	IntoTransactionInIdForAnyChain, Polkadot, TransactionInIdForAnyChain,
 };
 use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
 use chainflip_api::primitives::{
@@ -151,7 +151,7 @@ enum WitnessInformation {
 		deposit_details: Option<DepositDetails>,
 		broker_fee: Option<Beneficiary<AccountId32>>,
 		affiliate_fees: Affiliates<AccountId32>,
-		refund_params: Option<ChannelRefundParameters<TrackerAddress>>,
+		refund_params: Option<ChannelRefundParametersUnchecked<TrackerAddress>>,
 		dca_params: Option<DcaParameters>,
 		max_boost_fee: BasisPoints,
 	},
@@ -731,7 +731,7 @@ mod tests {
 		dot::PolkadotAccountId,
 		evm::{EvmTransactionMetadata, TransactionFee},
 		instances::ChainInstanceFor,
-		CcmChannelMetadata, Chain, ForeignChainAddress,
+		CcmChannelMetadata, Chain, ChannelRefundParametersForChain, ForeignChainAddress,
 	};
 	use cf_utilities::assert_ok;
 	use chainflip_api::primitives::AffiliateShortId;
@@ -1018,10 +1018,11 @@ mod tests {
 						bps: 10
 					}])
 					.unwrap(),
-					refund_params: ChannelRefundParameters {
+					refund_params: ChannelRefundParametersForChain::<Ethereum> {
 						refund_address: eth_address,
 						retry_duration: Default::default(),
 						min_price: Default::default(),
+						refund_ccm_metadata: Default::default(),
 					},
 					dca_params: Some(DcaParameters { number_of_chunks: 5, chunk_interval: 100 }),
 					boost_fee: 5,

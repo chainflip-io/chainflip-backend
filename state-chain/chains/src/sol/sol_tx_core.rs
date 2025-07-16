@@ -150,7 +150,7 @@ fn ccm_extra_accounts_encoding() {
 #[cfg(any(test, feature = "runtime-integration-tests"))]
 pub mod sol_test_values {
 	use crate::{
-		ccm_checker::VersionedSolanaCcmAdditionalData,
+		ccm_checker::{DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData},
 		sol::{
 			api::{DurableNonceAndAccount, VaultSwapAccountAndSender},
 			signing_key::SolSigningKey,
@@ -158,9 +158,10 @@ pub mod sol_test_values {
 			SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolAsset,
 			SolCcmAccounts, SolCcmAddress, SolComputeLimit, SolHash, SolVersionedTransaction,
 		},
-		CcmChannelMetadataUnchecked, CcmDepositMetadataUnchecked, ForeignChain,
-		ForeignChainAddress,
+		CcmChannelMetadataChecked, CcmChannelMetadataUnchecked, CcmDepositMetadataChecked,
+		ForeignChain, ForeignChainAddress,
 	};
+	use codec::Encode;
 	use itertools::Itertools;
 	use sol_prim::consts::{const_address, const_hash, MAX_TRANSACTION_LENGTH};
 	use sp_std::vec;
@@ -311,32 +312,55 @@ pub mod sol_test_values {
 		}
 	}
 
-	pub fn ccm_parameter() -> CcmDepositMetadataUnchecked<ForeignChainAddress> {
-		CcmDepositMetadataUnchecked {
+	pub fn ccm_parameter_v0() -> CcmDepositMetadataChecked<ForeignChainAddress> {
+		CcmDepositMetadataChecked {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xff; 20].into())),
-			channel_metadata: CcmChannelMetadataUnchecked {
-				message: vec![124u8, 29u8, 15u8, 7u8].try_into().unwrap(), // CCM message
-				gas_budget: 0u128,                                         // unused
-				ccm_additional_data: codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V0(
-					ccm_accounts(),
-				))
-				.try_into()
-				.expect("Test data cannot be too long"), // Extra addresses
+			channel_metadata: CcmChannelMetadataChecked {
+				message: vec![124u8, 29u8, 15u8, 7u8].try_into().unwrap(),
+				gas_budget: 0u128,
+				ccm_additional_data: DecodedCcmAdditionalData::Solana(
+					VersionedSolanaCcmAdditionalData::V0(ccm_accounts()),
+				),
 			},
 		}
 	}
 
-	pub fn ccm_parameter_v1() -> CcmDepositMetadataUnchecked<ForeignChainAddress> {
-		let mut ccm = ccm_parameter();
+	pub fn ccm_parameter_v1() -> CcmDepositMetadataChecked<ForeignChainAddress> {
+		let mut ccm = ccm_parameter_v0();
 		ccm.channel_metadata.ccm_additional_data =
-			codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V1 {
+			DecodedCcmAdditionalData::Solana(VersionedSolanaCcmAdditionalData::V1 {
 				ccm_accounts: ccm_accounts(),
 				alts: vec![user_alt().key.into()],
-			})
-			.try_into()
-			.unwrap();
+			});
 		ccm
+	}
+
+	pub fn ccm_metadata_v0_unchecked() -> CcmChannelMetadataUnchecked {
+		let ccm_metadata = ccm_parameter_v0().channel_metadata;
+		CcmChannelMetadataUnchecked {
+			message: ccm_metadata.message.clone(),
+			gas_budget: ccm_metadata.gas_budget,
+			ccm_additional_data: VersionedSolanaCcmAdditionalData::V0(ccm_accounts())
+				.encode()
+				.try_into()
+				.unwrap(),
+		}
+	}
+
+	pub fn ccm_metadata_v1_unchecked() -> CcmChannelMetadataUnchecked {
+		let ccm_metadata = ccm_parameter_v0().channel_metadata;
+		CcmChannelMetadataUnchecked {
+			message: ccm_metadata.message.clone(),
+			gas_budget: ccm_metadata.gas_budget,
+			ccm_additional_data: VersionedSolanaCcmAdditionalData::V1 {
+				ccm_accounts: ccm_accounts(),
+				alts: vec![user_alt().key.into()],
+			}
+			.encode()
+			.try_into()
+			.unwrap(),
+		}
 	}
 
 	pub fn agg_key() -> SolAddress {

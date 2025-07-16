@@ -29,15 +29,16 @@ use cf_chains::{
 		encode_swap_params_in_nulldata_payload, BtcCfParameters, UtxoEncodedData,
 	},
 	ccm_checker::{check_ccm_for_blacklisted_accounts, DecodedCcmAdditionalData},
-	cf_parameters::build_cf_parameters,
+	cf_parameters::build_and_encode_cf_parameters,
 	evm::api::{EvmCall, EvmEnvironmentProvider},
 	sol::{
 		api::SolanaEnvironment, instruction_builder::SolanaInstructionBuilder,
 		sol_tx_core::address_derivation::derive_associated_token_account, DecodedXSwapParams,
 		SolAmount, SolInstruction, SolPubkey,
 	},
-	Arbitrum, CcmChannelMetadataUnchecked, ChannelRefundParametersEncoded, Ethereum, ForeignChain,
-	Solana, VaultSwapExtraParameters, VaultSwapInputEncoded,
+	Arbitrum, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
+	ChannelRefundParametersUncheckedEncoded, Ethereum, ForeignChain, VaultSwapExtraParameters,
+	VaultSwapInputEncoded,
 };
 use cf_primitives::{
 	AffiliateAndFee, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiary, DcaParameters,
@@ -150,36 +151,32 @@ pub fn evm_vault_swap<A>(
 	destination_asset: Asset,
 	destination_address: EncodedAddress,
 	broker_commission: BasisPoints,
-	refund_params: ChannelRefundParametersEncoded,
+	refund_params: ChannelRefundParametersUncheckedEncoded,
 	boost_fee: u8,
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
-	channel_metadata: Option<cf_chains::CcmChannelMetadataUnchecked>,
+	channel_metadata: Option<CcmChannelMetadataChecked>,
 ) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
-	let refund_params = refund_params.try_map_address(|addr| {
-		Ok::<_, DispatchErrorWithMessage>(
-			ChainAddressConverter::try_from_encoded_address(addr)
-				.and_then(|addr| addr.try_into().map_err(|_| ()))
-				.map_err(|_| "Invalid refund address")?,
-		)
+	let refund_params = refund_params.try_map_address(|addr| match addr {
+		EncodedAddress::Eth(inner) | EncodedAddress::Arb(inner) => Ok(inner),
+		_ => Err(DispatchErrorWithMessage::from("Refund address must be an EVM address")),
 	})?;
 	let processed_affiliate_fees = to_affiliate_and_fees(&broker_id, affiliate_fees)?
 		.try_into()
 		.map_err(|_| "Too many affiliates.")?;
 
 	let cf_parameters = match ForeignChain::from(source_asset) {
-		ForeignChain::Ethereum => build_cf_parameters::<Ethereum>,
-		ForeignChain::Arbitrum => build_cf_parameters::<Arbitrum>,
+		ForeignChain::Ethereum | ForeignChain::Arbitrum => build_and_encode_cf_parameters(
+			refund_params,
+			dca_parameters,
+			boost_fee,
+			broker_id,
+			broker_commission,
+			processed_affiliate_fees,
+			channel_metadata.as_ref(),
+		),
 		_ => Err(DispatchErrorWithMessage::from("Unsupported source chain for EVM vault swap"))?,
-	}(
-		refund_params,
-		dca_parameters,
-		boost_fee,
-		broker_id,
-		broker_commission,
-		processed_affiliate_fees,
-		channel_metadata.as_ref(),
-	);
+	};
 
 	let mut source_token_address = None;
 	let calldata = match source_asset {
@@ -275,8 +272,8 @@ pub fn solana_vault_swap<A>(
 	destination_asset: Asset,
 	destination_address: EncodedAddress,
 	broker_commission: BasisPoints,
-	refund_parameters: ChannelRefundParametersEncoded,
-	channel_metadata: Option<CcmChannelMetadataUnchecked>,
+	refund_parameters: ChannelRefundParametersUncheckedEncoded,
+	channel_metadata: Option<CcmChannelMetadataChecked>,
 	boost_fee: u8,
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
@@ -300,12 +297,9 @@ pub fn solana_vault_swap<A>(
 		.map_err(|_| "Too many affiliates")?;
 
 	let from = SolPubkey::try_from(from).map_err(|_| "Invalid Solana Address: from")?;
-	let refund_parameters = refund_parameters.try_map_address(|addr| {
-		Ok::<_, DispatchErrorWithMessage>(
-			ChainAddressConverter::try_from_encoded_address(addr)
-				.and_then(|addr| addr.try_into().map_err(|_| ()))
-				.map_err(|_| "Invalid refund address")?,
-		)
+	let refund_parameters = refund_parameters.try_map_address(|addr| match addr {
+		EncodedAddress::Sol(inner) => Ok(inner.into()),
+		_ => Err(DispatchErrorWithMessage::from("Invalid refund address.")),
 	})?;
 	let event_data_account =
 		cf_chains::sol::sol_tx_core::address_derivation::derive_vault_swap_account(
@@ -318,7 +312,7 @@ pub fn solana_vault_swap<A>(
 		.into();
 	let input_amount =
 		SolAmount::try_from(input_amount).map_err(|_| "Input amount exceeded MAX")?;
-	let cf_parameters = build_cf_parameters::<Solana>(
+	let cf_parameters = build_and_encode_cf_parameters::<sol_prim::Address>(
 		refund_parameters,
 		dca_parameters,
 		boost_fee,
@@ -472,7 +466,7 @@ pub fn validate_parameters(
 	affiliate_fees: &Affiliates<AccountId>,
 	retry_duration: BlockNumber,
 	channel_metadata: &Option<CcmChannelMetadataUnchecked>,
-) -> Result<(), DispatchErrorWithMessage> {
+) -> Result<Option<CcmChannelMetadataChecked>, DispatchErrorWithMessage> {
 	let destination_chain = destination_address.chain();
 
 	// Validate DCA parameters.
@@ -500,8 +494,20 @@ pub fn validate_parameters(
 	// Validate refund duration.
 	pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
 
-	// Validate CCM.
-	if let Some(ccm) = channel_metadata.as_ref() {
+	// Ensure CCM message is valid
+	let checked_ccm = channel_metadata
+		.clone()
+		.map(|ccm| {
+			ChainAddressConverter::try_from_encoded_address(destination_address.clone())
+				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress.into())
+				.and_then(|dest_address| {
+					ccm.to_checked(destination_asset, dest_address)
+						.map_err(|_| DispatchErrorWithMessage::from("Invalid CCM"))
+				})
+		})
+		.transpose()?;
+
+	if let Some(ccm) = checked_ccm.as_ref() {
 		if source_chain == ForeignChain::Bitcoin {
 			return Err(DispatchErrorWithMessage::from(
 				"Vault swaps with CCM are not supported for the Bitcoin Chain",
@@ -511,43 +517,30 @@ pub fn validate_parameters(
 			return Err(DispatchErrorWithMessage::from("Destination chain does not support CCM"));
 		}
 
-		// Ensure CCM message is valid
-		match ccm
-			.clone()
-			.to_checked(
-				destination_asset,
-				ChainAddressConverter::try_from_encoded_address(destination_address.clone())
-					.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?,
+		// Do some additional checking for Solana ccms.
+		if let DecodedCcmAdditionalData::Solana(decoded) = ccm.ccm_additional_data.clone() {
+			let ccm_accounts = decoded.ccm_accounts();
+
+			// Ensure the CCM parameters do not contain blacklisted accounts.
+			// Load up environment variables.
+			let api_environment = SolEnvironment::api_environment()
+				.map_err(|_| "Failed to load Solana API environment")?;
+
+			let agg_key: SolPubkey = SolEnvironment::current_agg_key()
+				.map_err(|_| "Failed to load Solana Agg key")?
+				.into();
+
+			let on_chain_key: SolPubkey = SolEnvironment::current_on_chain_key()
+				.map(|key| key.into())
+				.unwrap_or_else(|_| agg_key);
+
+			check_ccm_for_blacklisted_accounts(
+				&ccm_accounts,
+				vec![api_environment.token_vault_pda_account.into(), agg_key, on_chain_key],
 			)
-			.map(|checked| checked.ccm_additional_data)
-		{
-			Ok(DecodedCcmAdditionalData::Solana(decoded)) => {
-				let ccm_accounts = decoded.ccm_accounts();
-
-				// Ensure the CCM parameters do not contain blacklisted accounts.
-				// Load up environment variables.
-				let api_environment = SolEnvironment::api_environment()
-					.map_err(|_| "Failed to load Solana API environment")?;
-
-				let agg_key: SolPubkey = SolEnvironment::current_agg_key()
-					.map_err(|_| "Failed to load Solana Agg key")?
-					.into();
-
-				let on_chain_key: SolPubkey = SolEnvironment::current_on_chain_key()
-					.map(|key| key.into())
-					.unwrap_or_else(|_| agg_key);
-
-				check_ccm_for_blacklisted_accounts(
-					&ccm_accounts,
-					vec![api_environment.token_vault_pda_account.into(), agg_key, on_chain_key],
-				)
-				.map_err(DispatchError::from)?;
-			},
-			Ok(DecodedCcmAdditionalData::NotRequired) => {},
-			Err(_) =>
-				return Err(DispatchErrorWithMessage::from("Solana Ccm additional data is invalid")),
-		};
+			.map_err(DispatchError::from)?;
+		}
 	}
 
-	Ok(())
+	Ok(checked_ccm)
 }

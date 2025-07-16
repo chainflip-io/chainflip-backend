@@ -384,7 +384,7 @@ impl<T: Config> Pallet<T> {
 		origin: OriginFor<T>,
 		amount: AssetAmount,
 		asset: Asset,
-		destination: AccountOrAddress<EncodedAddress, T::AccountId>,
+		destination: AccountOrAddress<T::AccountId, EncodedAddress>,
 	) -> DispatchResult {
 		ensure!(T::SafeMode::get().withdrawal_enabled, Error::<T>::WithdrawalsDisabled);
 		let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;

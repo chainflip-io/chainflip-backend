@@ -13,7 +13,7 @@ import {
   Chain,
   handleSubstrateError,
   shortChainFromAsset,
-  newAddress,
+  newAssetAddress,
   createStateChainKeypair,
 } from 'shared/utils';
 import { lpApiRpc } from 'shared/json_rpc';
@@ -215,7 +215,7 @@ async function testTransferAsset(logger: Logger) {
 
   // Destination account needs a refund address too.
   const chain = shortChainFromAsset(testAsset);
-  const refundAddress = await newAddress(testAsset, '//LP_2');
+  const refundAddress = await newAssetAddress(testAsset, '//LP_2');
   const nonce = await chainflip.rpc.system.accountNextIndex(destinationLpAccount.address);
   await chainflip.tx.liquidityProvider
     .registerLiquidityRefundAddress({ [chain]: refundAddress })

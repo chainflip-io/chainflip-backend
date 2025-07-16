@@ -26,7 +26,7 @@ use sp_std::{vec, vec::Vec};
 use crate::{
 	address::{self, EncodedAddress},
 	assets,
-	cf_parameters::VaultSwapParameters,
+	cf_parameters::VaultSwapParametersV1,
 	sol::sol_tx_core::{
 		instructions::program_instructions::swap_endpoints::{
 			SwapNativeParams, SwapTokenParams, XSwapNative, XSwapToken,
@@ -34,8 +34,8 @@ use crate::{
 		AccountBump, SlotNumber,
 	},
 	AnyChainAsset, CcmAdditionalData, CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmParams,
-	ChannelRefundParameters, DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi,
-	FeeRefundCalculator, TypeInfo,
+	ChannelRefundParametersUncheckedEncoded, DepositChannel, DepositDetailsToTransactionInId,
+	FeeEstimationApi, FeeRefundCalculator, TypeInfo,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -539,7 +539,7 @@ pub struct DecodedXSwapParams {
 	pub from_token_account: Option<SolAddress>,
 	pub dst_address: crate::address::EncodedAddress,
 	pub dst_token: AnyChainAsset,
-	pub refund_parameters: ChannelRefundParameters<EncodedAddress>,
+	pub refund_parameters: ChannelRefundParametersUncheckedEncoded,
 	pub dca_parameters: Option<DcaParameters>,
 	pub boost_fee: u8,
 	pub broker_id: cf_primitives::AccountId,
@@ -640,7 +640,7 @@ pub fn decode_sol_instruction_data(
 	let chain = ForeignChain::try_from(dst_chain).map_err(|_| "ForeignChain is invalid")?;
 
 	let (
-		VaultSwapParameters {
+		VaultSwapParametersV1 {
 			refund_params,
 			dca_params,
 			boost_fee,
@@ -681,7 +681,7 @@ pub fn decode_sol_instruction_data(
 		from_token_account: src_token_from_account,
 		dst_address: EncodedAddress::from_chain_bytes(chain, dst_address)?,
 		dst_token: AnyChainAsset::try_from(dst_token).map_err(|_| "Invalid dst_token")?,
-		refund_parameters: refund_params.map_address(|addr| addr.into()),
+		refund_parameters: refund_params.map_address(Into::into),
 		dca_parameters: dca_params,
 		boost_fee,
 		broker_id: account,
@@ -696,7 +696,7 @@ pub fn decode_sol_instruction_data(
 mod test {
 	use super::*;
 	use crate::{
-		cf_parameters::build_cf_parameters,
+		cf_parameters::build_and_encode_cf_parameters,
 		sol::{
 			compute_units_costs::*,
 			instruction_builder::SolanaInstructionBuilder,
@@ -707,7 +707,7 @@ mod test {
 				sol_test_values,
 			},
 		},
-		ChannelLifecycleHooks,
+		ChannelLifecycleHooks, ChannelRefundParametersForChain,
 	};
 	use cf_primitives::{chains::assets::any::Asset, AffiliateShortId};
 	use sp_runtime::AccountId32;
@@ -772,10 +772,11 @@ mod test {
 				.unwrap()
 				.address;
 		let input_amount = 1_000_000_000u64;
-		let refund_parameters = ChannelRefundParameters {
+		let refund_parameters = ChannelRefundParametersForChain::<Solana> {
 			retry_duration: 15u32,
 			refund_address: SolAddress([0xF3; 32]),
 			min_price: 0.into(),
+			refund_ccm_metadata: None,
 		};
 		let dca_parameters = DcaParameters { number_of_chunks: 10u32, chunk_interval: 10u32 };
 		let boost_fee = 10u8;
@@ -793,7 +794,7 @@ mod test {
 			seed.to_vec().try_into().unwrap(),
 			event_data_account.into(),
 			input_amount,
-			build_cf_parameters::<Solana>(
+			build_and_encode_cf_parameters(
 				refund_parameters.clone(),
 				Some(dca_parameters.clone()),
 				boost_fee,
@@ -820,7 +821,7 @@ mod test {
 				broker_id,
 				broker_commission,
 				affiliate_fees,
-				ccm: Some(channel_metadata),
+				ccm: Some(sol_test_values::ccm_metadata_v1_unchecked()),
 				seed: seed.to_vec().try_into().unwrap(),
 			})
 		);
@@ -839,10 +840,11 @@ mod test {
 				.address;
 		let token_supported_account = SolPubkey([0xF5; 32]);
 		let input_amount = 1_000_000_000u64;
-		let refund_parameters = ChannelRefundParameters {
+		let refund_parameters = ChannelRefundParametersForChain::<Solana> {
 			retry_duration: 15u32,
 			refund_address: SolAddress([0xF3; 32]),
 			min_price: 0.into(),
+			refund_ccm_metadata: None,
 		};
 		let dca_parameters = DcaParameters { number_of_chunks: 10u32, chunk_interval: 10u32 };
 		let boost_fee = 10u8;
@@ -861,7 +863,7 @@ mod test {
 			event_data_account.into(),
 			token_supported_account,
 			input_amount,
-			build_cf_parameters::<Solana>(
+			build_and_encode_cf_parameters(
 				refund_parameters.clone(),
 				Some(dca_parameters.clone()),
 				boost_fee,
@@ -888,7 +890,7 @@ mod test {
 				broker_id,
 				broker_commission,
 				affiliate_fees,
-				ccm: Some(channel_metadata),
+				ccm: Some(sol_test_values::ccm_metadata_v1_unchecked()),
 				seed: seed.to_vec().try_into().unwrap(),
 			})
 		);

@@ -43,7 +43,6 @@ use address::{
 	AddressConverter, AddressDerivationApi, AddressDerivationError, EncodedAddress,
 	IntoForeignChainAddress, ToHumanreadableAddress,
 };
-use cf_amm_math::Price;
 use cf_primitives::{
 	Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
 	DcaParameters, EgressId, EthAmount, GasAmount, TxId,
@@ -73,6 +72,7 @@ use sp_std::{
 
 pub use cf_primitives::chains::*;
 pub use frame_support::traits::Get;
+pub use refund_parameters::*;
 
 pub mod benchmarking_value;
 
@@ -94,6 +94,7 @@ use strum::IntoEnumIterator;
 pub mod ccm_checker;
 pub mod cf_parameters;
 pub mod instances;
+pub mod refund_parameters;
 
 pub mod mocks;
 
@@ -842,6 +843,7 @@ pub enum ConsolidationError {
 #[derive(Debug)]
 pub enum RejectError {
 	NotSupportedForAsset,
+	NotRequired,
 	Other,
 }
 
@@ -849,11 +851,11 @@ impl From<AllBatchError> for RejectError {
 	fn from(e: AllBatchError) -> Self {
 		match e {
 			AllBatchError::UnsupportedToken => RejectError::NotSupportedForAsset,
+			AllBatchError::NotRequired => RejectError::NotRequired,
 			_ => RejectError::Other,
 		}
 	}
 }
-
 pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn consolidate_utxos() -> Result<Self, ConsolidationError>;
 }
@@ -862,7 +864,7 @@ pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		_deposit_details: C::DepositDetails,
 		_refund_address: C::ChainAccount,
-		_refund_amount: C::ChainAmount,
+		_refund_amount: Option<C::ChainAmount>,
 		_asset: C::ChainAsset,
 		_deposit_fetch_id: Option<C::DepositFetchId>,
 	) -> Result<Self, RejectError> {
@@ -1088,6 +1090,7 @@ pub type CcmMessage = BoundedVec<u8, ConstU32<MAX_CCM_MSG_LENGTH>>;
 	Eq,
 	Encode,
 	Decode,
+	MaxEncodedLen,
 	TypeInfo,
 	Serialize,
 	Deserialize,
@@ -1215,7 +1218,18 @@ impl<T> From<CcmChannelMetadata<T>> for CcmParams {
 }
 
 #[derive(
-	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord, Serialize, Deserialize,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
+	MaxEncodedLen,
 )]
 pub struct CcmDepositMetadata<Address, AdditionalData> {
 	pub channel_metadata: CcmChannelMetadata<AdditionalData>,
@@ -1342,112 +1356,6 @@ impl RetryPolicy for DefaultRetryPolicy {
 	}
 }
 
-/// Refund parameter used within the swapping pallet.
-#[derive(
-	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
-)]
-pub struct SwapRefundParameters {
-	pub refund_block: cf_primitives::BlockNumber,
-	pub min_output: cf_primitives::AssetAmount,
-}
-
-#[derive(
-	Clone,
-	Debug,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-	PartialOrd,
-	Ord,
-)]
-pub struct ChannelRefundParameters<A> {
-	pub retry_duration: cf_primitives::BlockNumber,
-	pub refund_address: A,
-	pub min_price: Price,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
-pub struct RefundParametersExtendedGeneric<Address, AccountId> {
-	pub retry_duration: cf_primitives::BlockNumber,
-	pub refund_destination: AccountOrAddress<Address, AccountId>,
-	pub min_price: Price,
-}
-
-pub type RefundParametersExtended<AccountId> =
-	RefundParametersExtendedGeneric<ForeignChainAddress, AccountId>;
-pub type RefundParametersExtendedEncoded<AccountId> =
-	RefundParametersExtendedGeneric<EncodedAddress, AccountId>;
-
-impl<AccountId> RefundParametersExtended<AccountId> {
-	pub fn to_encoded<Converter: AddressConverter>(
-		self,
-	) -> RefundParametersExtendedEncoded<AccountId> {
-		RefundParametersExtendedEncoded {
-			retry_duration: self.retry_duration,
-			refund_destination: match self.refund_destination {
-				AccountOrAddress::ExternalAddress(address) =>
-					AccountOrAddress::ExternalAddress(Converter::to_encoded_address(address)),
-				AccountOrAddress::InternalAccount(account_id) =>
-					AccountOrAddress::InternalAccount(account_id),
-			},
-			min_price: self.min_price,
-		}
-	}
-
-	pub fn min_output_amount(&self, input_amount: AssetAmount) -> AssetAmount {
-		use sp_runtime::traits::UniqueSaturatedInto;
-		cf_amm_math::output_amount_ceil(input_amount.into(), self.min_price).unique_saturated_into()
-	}
-}
-
-/// AccountOrAddress is a enum that can represent an internal account or an external address.
-/// This is used to represent the destination address for an egress or an internal account
-/// to move funds internally.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
-pub enum AccountOrAddress<Address, AccountId> {
-	InternalAccount(AccountId),
-	ExternalAddress(Address),
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParameters<A> {
-	fn benchmark_value() -> Self {
-		Self {
-			retry_duration: BenchmarkValue::benchmark_value(),
-			refund_address: BenchmarkValue::benchmark_value(),
-			min_price: BenchmarkValue::benchmark_value(),
-		}
-	}
-}
-
-pub type ChannelRefundParametersDecoded = ChannelRefundParameters<ForeignChainAddress>;
-pub type ChannelRefundParametersEncoded = ChannelRefundParameters<EncodedAddress>;
-
-impl<A: Clone> ChannelRefundParameters<A> {
-	pub fn map_address<B, F: FnOnce(A) -> B>(&self, f: F) -> ChannelRefundParameters<B> {
-		ChannelRefundParameters {
-			retry_duration: self.retry_duration,
-			refund_address: f(self.refund_address.clone()),
-			min_price: self.min_price,
-		}
-	}
-	pub fn try_map_address<B, E, F: FnOnce(A) -> Result<B, E>>(
-		&self,
-		f: F,
-	) -> Result<ChannelRefundParameters<B>, E> {
-		Ok(ChannelRefundParameters {
-			retry_duration: self.retry_duration,
-			refund_address: f(self.refund_address.clone())?,
-			min_price: self.min_price,
-		})
-	}
-}
-
 pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
 	True(Option<Api>),
 	False,
@@ -1465,7 +1373,7 @@ pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
 )]
 pub struct EvmVaultSwapExtraParameters<Address, Amount> {
 	pub input_amount: Amount,
-	pub refund_parameters: ChannelRefundParameters<Address>,
+	pub refund_parameters: ChannelRefundParametersUnchecked<Address>,
 }
 impl<Address: Clone, Amount> EvmVaultSwapExtraParameters<Address, Amount> {
 	pub fn try_map_address<AddressOther, E>(
@@ -1505,7 +1413,7 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 		#[cfg_attr(feature = "std", serde(with = "bounded_hex"))]
 		seed: SolSeed,
 		input_amount: Amount,
-		refund_parameters: ChannelRefundParameters<Address>,
+		refund_parameters: ChannelRefundParametersUnchecked<Address>,
 		from_token_account: Option<Address>,
 	},
 }

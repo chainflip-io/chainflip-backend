@@ -1,7 +1,7 @@
 import { getDotBalance } from 'shared/get_dot_balance';
 import { performAndTrackSwap } from 'shared/perform_swap';
 import { TestContext } from 'shared/utils/test_context';
-import { getSwapRate, newAddress } from 'shared/utils';
+import { getSwapRate, newAssetAddress } from 'shared/utils';
 
 const DOT_EXISTENTIAL_DEPOSIT = 1;
 
@@ -24,7 +24,7 @@ export async function swapLessThanED(textContext: TestContext) {
     logger.debug(`Approximate expected output amount: ${outputAmount} Dot`);
 
     // we want to be sure to have an address with 0 balance, hence we create a new one every time
-    const address = await newAddress(
+    const address = await newAssetAddress(
       'Dot',
       '!testing less than ED output for dot swaps!' + inputAmount + outputAmount,
     );

@@ -18,8 +18,7 @@ use anyhow::bail;
 
 use crate::{RefundParametersRpc, H256, U256};
 use cf_chains::{
-	Chain, ChainCrypto, ChannelRefundParameters, ChannelRefundParametersEncoded, ForeignChain,
-	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
+	Chain, ChainCrypto, ForeignChain, VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::AffiliateShortId;
 use cf_utilities::rpc::NumberOrHex;
@@ -33,8 +32,6 @@ pub use state_chain_runtime::runtime_apis::{
 	ChainAccounts, ChannelActionType, CustomRuntimeApi, TransactionScreeningEvents, VaultAddresses,
 	VaultSwapDetails,
 };
-
-pub type RefundParameters = ChannelRefundParameters<AddressString>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SwapDepositAddress {
@@ -150,18 +147,6 @@ pub fn vault_swap_input_encoded_to_rpc(value: VaultSwapInputEncoded) -> VaultSwa
 		affiliate_fees: value.affiliate_fees,
 		dca_parameters: value.dca_parameters,
 	}
-}
-
-pub type ChannelRefundParametersRpc = ChannelRefundParameters<AddressString>;
-pub fn try_into_refund_parameters_encoded(
-	param: RefundParametersRpc,
-	chain: ForeignChain,
-) -> anyhow::Result<ChannelRefundParametersEncoded> {
-	Ok(ChannelRefundParameters {
-		retry_duration: param.retry_duration,
-		refund_address: param.refund_address.try_parse_to_encoded_address(chain)?,
-		min_price: param.min_price,
-	})
 }
 
 #[derive(Serialize, Deserialize, Clone)]

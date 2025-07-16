@@ -28,15 +28,16 @@ use cf_chains::{
 			AltWitnessingConsensusResult, SolanaApi, SolanaEnvironment,
 			SolanaTransactionBuildingError, SolanaTransactionType,
 		},
-		sol_tx_core::sol_test_values::{self, user_alt},
+		sol_tx_core::sol_test_values,
 		transaction_builder::SolanaTransactionBuilder,
 		SolAddress, SolAddressLookupTableAccount, SolCcmAccounts, SolCcmAddress, SolHash,
 		SolPubkey, SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmDepositMetadata, CcmDepositMetadataChecked,
-	CcmDepositMetadataUnchecked, Chain, ChannelRefundParameters, ExecutexSwapAndCallError,
-	ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError,
-	Solana, SwapOrigin, TransactionBuilder,
+	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain,
+	ChannelRefundParametersUncheckedEncoded, ExecutexSwapAndCallError, ForeignChainAddress,
+	RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError, Solana, SwapOrigin,
+	TransactionBuilder,
 };
 use cf_primitives::{AccountRole, AuthorityCount, Beneficiary, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
@@ -88,11 +89,13 @@ const BOB: AccountId = AccountId::new([0x44; 32]);
 
 const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
 const FALLBACK_ADDRESS: SolAddress = SolAddress([0xf0; 32]);
-const REFUND_PARAMS: ChannelRefundParameters<EncodedAddress> = ChannelRefundParameters {
-	retry_duration: 0,
-	refund_address: EncodedAddress::Sol(FALLBACK_ADDRESS.0),
-	min_price: sp_core::U256::zero(),
-};
+const REFUND_PARAMS: ChannelRefundParametersUncheckedEncoded =
+	ChannelRefundParametersUncheckedEncoded {
+		retry_duration: 0,
+		refund_address: EncodedAddress::Sol(FALLBACK_ADDRESS.0),
+		min_price: sp_core::U256::zero(),
+		refund_ccm_metadata: None,
+	};
 
 type SolanaElectionVote = BoundedBTreeMap<
 	ElectionIdentifierOf<
@@ -218,10 +221,11 @@ fn vault_swap_deposit_witness(
 		deposit_details: (),
 		broker_fee: Some(Beneficiary { account: broker, bps: 100u16 }),
 		affiliate_fees: Default::default(),
-		refund_params: ChannelRefundParameters {
+		refund_params: ChannelRefundParametersForChain::<Solana> {
 			retry_duration: REFUND_PARAMS.retry_duration,
 			refund_address: FALLBACK_ADDRESS,
 			min_price: REFUND_PARAMS.min_price,
+			refund_ccm_metadata: None,
 		},
 		dca_params: None,
 		boost_fee: 0,
@@ -398,7 +402,7 @@ fn can_send_solana_ccm() {
 					ALICE,
 					Asset::Sol,
 					Asset::SolUsdc,
-					Some(sol_test_values::ccm_parameter().channel_metadata)
+					Some(sol_test_values::ccm_metadata_v0_unchecked())
 				),
 				1.into()
 			);
@@ -407,7 +411,7 @@ fn can_send_solana_ccm() {
 					BOB,
 					Asset::SolUsdc,
 					Asset::Sol,
-					Some(sol_test_values::ccm_parameter().channel_metadata)
+					Some(sol_test_values::ccm_metadata_v0_unchecked())
 				),
 				3.into()
 			);
@@ -477,7 +481,7 @@ fn can_send_solana_ccm_v1() {
 					ALICE,
 					Asset::Sol,
 					Asset::SolUsdc,
-					Some(sol_test_values::ccm_parameter_v1().channel_metadata)
+					Some(sol_test_values::ccm_metadata_v1_unchecked())
 				),
 				1.into()
 			);
@@ -486,7 +490,7 @@ fn can_send_solana_ccm_v1() {
 					BOB,
 					Asset::SolUsdc,
 					Asset::Sol,
-					Some(sol_test_values::ccm_parameter_v1().channel_metadata)
+					Some(sol_test_values::ccm_metadata_v1_unchecked())
 				),
 				3.into()
 			);
@@ -497,14 +501,14 @@ fn can_send_solana_ccm_v1() {
 			vote_for_alt_election(
 				29,
 				AltWitnessingConsensusResult::Valid(vec![SolAddressLookupTableAccount {
-					key: user_alt().key,
+					key: sol_test_values::user_alt().key,
 					addresses: vec![Default::default()],
 				}]),
 			);
 			vote_for_alt_election(
 				30,
 				AltWitnessingConsensusResult::Valid(vec![SolAddressLookupTableAccount {
-					key: user_alt().key,
+					key: sol_test_values::user_alt().key,
 					addresses: vec![Default::default()],
 				}]),
 			);
@@ -560,7 +564,7 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 			// Register CCMs with overlapping ALTs
 			let user_alts =
 				[SolAddress([0xF0; 32]), SolAddress([0xF1; 32]), SolAddress([0xF2; 32])];
-			let mut ccm_0 = sol_test_values::ccm_parameter().channel_metadata;
+			let mut ccm_0 = sol_test_values::ccm_metadata_v1_unchecked();
 			ccm_0.ccm_additional_data =
 				codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V1 {
 					ccm_accounts: sol_test_values::ccm_accounts(),
@@ -568,7 +572,7 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 				})
 				.try_into()
 				.unwrap();
-			let mut ccm_1 = sol_test_values::ccm_parameter().channel_metadata;
+			let mut ccm_1 = sol_test_values::ccm_metadata_v1_unchecked();
 			ccm_1.ccm_additional_data =
 				codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V1 {
 					ccm_accounts: sol_test_values::ccm_accounts(),
@@ -577,7 +581,7 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 				.try_into()
 				.unwrap();
 
-			let mut ccm_2 = sol_test_values::ccm_parameter().channel_metadata;
+			let mut ccm_2 = sol_test_values::ccm_metadata_v1_unchecked();
 			ccm_2.ccm_additional_data =
 				codec::Encode::encode(&VersionedSolanaCcmAdditionalData::V1 {
 					ccm_accounts: sol_test_values::ccm_accounts(),
