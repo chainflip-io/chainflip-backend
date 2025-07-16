@@ -60,6 +60,7 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{AffiliateDetails, SwapLegInfo};
+use pallet_cf_validator::OperatorSettings;
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
 	HeaderBackend, StorageProvider,
@@ -79,9 +80,9 @@ use state_chain_runtime::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
 		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
-		OpenedDepositChannels, RuntimeApiPenalty, SimulatedSwapInformation, TradingStrategyInfo,
-		TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-		VaultSwapDetails,
+		OpenedDepositChannels, OperatorInfo, RuntimeApiPenalty, SimulatedSwapInformation,
+		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
+		VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash,
@@ -235,6 +236,13 @@ pub enum RpcAccountInfo {
 		restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
 		estimated_redeemable_balance: NumberOrHex,
 	},
+	Operator {
+		managed_validators: BTreeMap<AccountId32, NumberOrHex>,
+		#[serde(flatten)]
+		settings: OperatorSettings,
+		blocked_delegators: Vec<AccountId32>,
+		allowed_delegators: Vec<AccountId32>,
+	},
 }
 
 impl RpcAccountInfo {
@@ -304,6 +312,19 @@ impl RpcAccountInfo {
 				.map(|(address, balance)| (address, balance.into()))
 				.collect(),
 			estimated_redeemable_balance: info.estimated_redeemable_balance.into(),
+		}
+	}
+
+	fn operator(info: OperatorInfo) -> Self {
+		Self::Operator {
+			managed_validators: info
+				.managed_validators
+				.into_iter()
+				.map(|(account_id, amount)| (account_id, amount.into()))
+				.collect(),
+			settings: info.settings,
+			blocked_delegators: info.blocked_delegators,
+			allowed_delegators: info.allowed_delegators,
 		}
 	}
 }
@@ -1447,6 +1468,11 @@ where
 						let info = api.cf_validator_info(hash, &account_id)?;
 
 						RpcAccountInfo::validator(info)
+					},
+					AccountRole::Operator => {
+						let info = api.cf_operator_info(hash, &account_id)?;
+
+						RpcAccountInfo::operator(info)
 					},
 				},
 			)

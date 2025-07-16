@@ -2794,6 +2794,7 @@ dependencies = [
  "pallet-cf-pools",
  "pallet-cf-swapping",
  "pallet-cf-trading-strategy",
+ "pallet-cf-validator",
  "pallet-cf-witnesser",
  "parity-scale-codec",
  "sc-client-api",

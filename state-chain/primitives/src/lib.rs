@@ -306,6 +306,9 @@ pub enum AccountRole {
 	LiquidityProvider,
 	/// Brokers submit swap deposit requests on behalf of users.
 	Broker,
+	/// Operators are responsible for managing delegated stake and validators signed up to their
+	/// account.
+	Operator,
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;

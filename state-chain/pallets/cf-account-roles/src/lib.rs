@@ -354,6 +354,7 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 			AccountRole::Validator => ensure_validator::<T>(origin),
 			AccountRole::LiquidityProvider => ensure_liquidity_provider::<T>(origin),
 			AccountRole::Broker => ensure_broker::<T>(origin),
+			AccountRole::Operator => ensure_operator::<T>(origin),
 		}
 	}
 }
@@ -415,3 +416,5 @@ define_ensure_origin!(
 	EnsureLiquidityProvider,
 	AccountRole::LiquidityProvider
 );
+
+define_ensure_origin!(ensure_operator, EnsureOperator, AccountRole::Operator);

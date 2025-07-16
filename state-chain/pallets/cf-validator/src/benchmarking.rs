@@ -402,4 +402,127 @@ mod benchmarks {
 		assert!(Pallet::<T>::is_bidding(&caller));
 	}
 	// NOTE: Test suite not included due to missing Funding and Reputation pallet in `mock::Test`.
+
+	#[benchmark]
+	fn claim_validator() {
+		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+
+		let validator = frame_benchmarking::account::<T::AccountId>("whitelisted_caller", 1, 0);
+		frame_system::Pallet::<T>::inc_providers(&validator);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&validator);
+
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&validator));
+
+		#[extrinsic_call]
+		claim_validator(RawOrigin::Signed(operator.clone()), validator.clone());
+
+		assert!(!ClaimedValidators::<T>::get(validator).is_empty());
+	}
+
+	#[benchmark]
+	fn accept_operator() {
+		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+		let validator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Validator,
+		)
+		.unwrap();
+
+		ClaimedValidators::<T>::insert(validator.clone(), BTreeSet::from([operator.clone()]));
+
+		#[extrinsic_call]
+		accept_operator(RawOrigin::Signed(validator.clone()), operator.clone());
+
+		assert!(ManagedValidators::<T>::get(validator).is_some());
+	}
+
+	#[benchmark]
+	fn remove_validator() {
+		let validator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Validator,
+		)
+		.unwrap();
+
+		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+
+		ManagedValidators::<T>::insert(validator.clone(), operator.clone());
+
+		#[extrinsic_call]
+		remove_validator(RawOrigin::Signed(validator.clone()), validator.clone());
+
+		assert!(ManagedValidators::<T>::get(validator).is_none());
+	}
+
+	#[benchmark]
+	fn set_delegation_preferences() {
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+
+		#[extrinsic_call]
+		set_delegation_preferences(RawOrigin::Signed(caller.clone()), OperatorSettings::default());
+
+		assert_eq!(OperatorSettingsLookup::<T>::get(caller), Some(OperatorSettings::default()));
+	}
+
+	#[benchmark]
+	fn block_delegator() {
+		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+
+		let account_id = whitelisted_caller();
+
+		#[extrinsic_call]
+		block_delegator(RawOrigin::Signed(operator), account_id);
+	}
+
+	#[benchmark]
+	fn allow_delegator() {
+		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+
+		let account_id = whitelisted_caller();
+
+		#[extrinsic_call]
+		allow_delegator(RawOrigin::Signed(operator), account_id);
+	}
+
+	#[benchmark]
+	fn register_as_operator() {
+		let caller: T::AccountId = whitelisted_caller();
+		frame_system::Pallet::<T>::inc_providers(&caller);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+
+		#[extrinsic_call]
+		register_as_operator(RawOrigin::Signed(caller));
+	}
+
+	#[benchmark]
+	fn deregister_as_operator() {
+		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Operator,
+		)
+		.unwrap();
+
+		#[extrinsic_call]
+		deregister_as_operator(RawOrigin::Signed(operator.clone()));
+
+		assert!(<T as Chainflip>::AccountRoleRegistry::ensure_operator(
+			RawOrigin::Signed(operator).into()
+		)
+		.is_err());
+	}
 }
