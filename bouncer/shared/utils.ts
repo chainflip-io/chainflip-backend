@@ -136,6 +136,10 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f';
         case 'PRICE_FEED_SOL':
           return '0x4A679253410272dd5232B3Ff7cF5dbB88f295319';
+        case 'PRICE_FEED_USDC':
+          return '0x09635F643e140090A9A8Dcd712eD6285858ceBef';
+        case 'PRICE_FEED_USDT':
+          return '0xc5a5C42992dECbae36851359345FE25997F5C42d';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -192,6 +196,10 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '8U3c4SqXaXKPQiarNH3xHXiVoBLYbkqkzusthyJJjGrE';
         case 'PRICE_FEED_SOL':
           return 'CrjmdLxTkmd5bxTQjE82FNgiuxeoY3G4EzzhDJ4RH9Wx';
+        case 'PRICE_FEED_USDC':
+          return '7BH1paBwjVDrHTb8YkHcyt7ZfxsCbnBMeByGBH6L8PFk';
+        case 'PRICE_FEED_USDT':
+          return '7qdy4DhvG5GDkiGNrsmrMcCyiVNPtmrUmGo3UntcrLwk';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
