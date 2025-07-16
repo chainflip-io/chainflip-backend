@@ -8,7 +8,7 @@ license = "Apache-2.0"
 name = "chainflip-node"
 publish = false
 repository = "https://github.com/chainflip-io/chainflip-backend"
-version = "1.10.0"
+version = "1.10.1"
 
 [[bin]]
 name = "chainflip-node"
@@ -131,14 +131,14 @@ maintainer-scripts = "package/test"
 maintainer-scripts = "package/sisyphos"
 assets = [
 	[
-	"chainspecs/sisyphos.chainspec.raw.json",
-	"etc/chainflip/sisyphos.chainspec.json",
-	"644",
+		"chainspecs/sisyphos.chainspec.raw.json",
+		"etc/chainflip/sisyphos.chainspec.json",
+		"644",
 	],
 	[
-	"target/release/chainflip-node",
-	"usr/bin/",
-	"755",
+		"target/release/chainflip-node",
+		"usr/bin/",
+		"755",
 	],
 ]
 
@@ -146,14 +146,14 @@ assets = [
 maintainer-scripts = "package/perseverance"
 assets = [
 	[
-	"chainspecs/perseverance.chainspec.raw.json",
-	"etc/chainflip/perseverance.chainspec.json",
-	"644",
+		"chainspecs/perseverance.chainspec.raw.json",
+		"etc/chainflip/perseverance.chainspec.json",
+		"644",
 	],
 	[
-	"target/release/chainflip-node",
-	"usr/bin/",
-	"755",
+		"target/release/chainflip-node",
+		"usr/bin/",
+		"755",
 	],
 ]
 
@@ -161,13 +161,13 @@ assets = [
 maintainer-scripts = "package/berghain"
 assets = [
 	[
-	"chainspecs/berghain.chainspec.raw.json",
-	"etc/chainflip/berghain.chainspec.json",
-	"644",
+		"chainspecs/berghain.chainspec.raw.json",
+		"etc/chainflip/berghain.chainspec.json",
+		"644",
 	],
 	[
-	"target/release/chainflip-node",
-	"usr/bin/",
-	"755",
+		"target/release/chainflip-node",
+		"usr/bin/",
+		"755",
 	],
 ]

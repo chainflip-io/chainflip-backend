@@ -4,6 +4,10 @@ All notable changes included in each Chainflip release will be documented in thi
 
 ## [1.10.0] - 2025-07-07
 
+- Boost details rpc incorporates network fee deduction ([#6002](https://github.com/chainflip-io/chainflip-backend/issues/6002))
+
+## [1.10.0] - 2025-07-07
+
 - Skip elections setup if pallet not found ([#5985](https://github.com/chainflip-io/chainflip-backend/issues/5985))
 - Increase the eth fee tracking window to 5 blocks ([#5984](https://github.com/chainflip-io/chainflip-backend/issues/5984))
 - Create aliases for runtime api methods that were renamed in 1.10.
