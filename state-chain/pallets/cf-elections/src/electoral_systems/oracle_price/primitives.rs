@@ -8,14 +8,6 @@ use crate::electoral_systems::state_machine::common_imports::*;
 use proptest_derive::Arbitrary;
 
 def_derive! {
-	#[derive(Default)]
-	#[cfg_attr(test, derive(Arbitrary))]
-	pub struct Price {
-		pub value: i128,
-	}
-}
-
-def_derive! {
 	#[cfg_attr(test, derive(Arbitrary))]
 	#[derive(TypeInfo, PartialOrd, Ord, Default, Copy)]
 	pub struct UnixTime{ pub seconds: u64 }

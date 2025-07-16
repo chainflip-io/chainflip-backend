@@ -1,6 +1,7 @@
 use core::ops::RangeInclusive;
 
 use cf_chains::sol::SolAddress;
+use cf_primitives::Price;
 use cf_traits::Chainflip;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
@@ -12,7 +13,12 @@ use pallet_cf_elections::{
 			CompositeRunner,
 		},
 		oracle_price::{
-			consensus::OraclePriceConsensus, price::ChainlinkAssetPair, primitives::*,
+			consensus::OraclePriceConsensus,
+			price::{
+				price_with_unit_to_statechain_price, ChainlinkAssetPair, FractPrice, PriceAsset,
+				PriceUnit,
+			},
+			primitives::*,
 			state_machine::*,
 		},
 		state_machine::{
@@ -29,6 +35,34 @@ use sp_core::H160;
 
 use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
 use sp_std::{vec, vec::Vec};
+
+pub fn get_current_chainlink_prices(
+	state: &OraclePriceTracker<TypesFor<Chainlink>>,
+) -> BTreeMap<PriceAsset, (Price, PriceStatus)> {
+	//
+	// WARNING: We are currently assuming that USD == USDC!
+	//
+
+	state
+		.chain_states
+		.get_latest_prices()
+		.into_iter()
+		.map(|(chainlink_assetpair, (price, status))| {
+			let base_asset = chainlink_assetpair.base_asset();
+			(
+				base_asset,
+				(
+					price_with_unit_to_statechain_price(
+						price,
+						PriceUnit { base_asset, quote_asset: PriceAsset::Usdc },
+					)
+					.into(),
+					status,
+				),
+			)
+		})
+		.collect()
+}
 
 def_derive! {
 	#[derive(TypeInfo)]
@@ -47,7 +81,7 @@ impls! {
 	for TypesFor<Chainlink>:
 
 	OPTypes {
-		type Price = i128;
+		type Price = FractPrice<10_000_000_000>;
 		type GetTime = Self;
 		type Asset = ChainlinkAssetPair;
 		type Aggregation = AggregatedF;
@@ -80,7 +114,6 @@ impls! {
 		type VoteStorage = vote_storage::bitmap::Bitmap<ExternalChainStateVote<Self>>;
 		type ElectoralSettings = ChainlinkOraclePriceSettings;
 	}
-
 }
 
 pub type OraclePriceES = StatemachineElectoralSystem<TypesFor<Chainlink>>;

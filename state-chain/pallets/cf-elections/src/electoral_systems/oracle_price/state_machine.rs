@@ -1,6 +1,9 @@
 use crate::electoral_systems::{
 	block_witnesser::state_machine::HookTypeFor,
-	oracle_price::primitives::{Aggregation, Apply, Seconds, UnixTime},
+	oracle_price::{
+		price,
+		primitives::{Aggregation, Apply, Seconds, UnixTime},
+	},
 	state_machine::common_imports::*,
 };
 use core::ops::RangeInclusive;
@@ -46,7 +49,7 @@ def_derive! {
 }
 
 def_derive! {
-	#[derive(TypeInfo)]
+	#[derive(TypeInfo, Copy)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub enum PriceStatus {
 		UpToDate,
@@ -209,6 +212,27 @@ def_derive! {
 	pub struct ExternalChainStates<T: OPTypes> {
 		pub solana: ExternalChainState<T>,
 		pub ethereum: ExternalChainState<T>,
+	}
+}
+
+impl<T: OPTypes> ExternalChainStates<T> {
+	pub fn get_latest_prices(&self) -> BTreeMap<T::Asset, (T::Price, PriceStatus)> {
+		all::<T::Asset>()
+			.filter_map(|asset| {
+				all::<ExternalPriceChain>()
+					.filter_map(|chain| self[chain].price.get(&asset))
+					.max_by_key(|price_state| T::Aggregation::canonical(&price_state.timestamp))
+					.map(|price_state| {
+						(
+							asset,
+							(
+								T::Aggregation::canonical(&price_state.price),
+								price_state.price_status,
+							),
+						)
+					})
+			})
+			.collect()
 	}
 }
 

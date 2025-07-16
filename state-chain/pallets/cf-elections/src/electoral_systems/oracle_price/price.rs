@@ -8,7 +8,6 @@ use crate::electoral_systems::state_machine::common_imports::*;
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 
-
 def_derive! {
 	#[derive(TypeInfo, Sequence, PartialOrd, Ord)]
 	#[cfg_attr(test, derive(Arbitrary))]
@@ -18,16 +17,18 @@ def_derive! {
 	}
 }
 
-def_derive! {
-	pub enum BaseUnit {
-		FineBtc,
-		FineEth,
+impl ChainlinkAssetPair {
+	pub fn base_asset(&self) -> PriceAsset {
+		match self {
+			ChainlinkAssetPair::BtcUsd => PriceAsset::Btc,
+			ChainlinkAssetPair::EthUsd => PriceAsset::Eth,
+		}
 	}
 }
 
 pub struct PriceUnit {
-	quote: PriceAsset,
-	base: PriceAsset,
+	pub base_asset: PriceAsset,
+	pub quote_asset: PriceAsset,
 }
 
 pub struct Base10Exponent(i16);
@@ -40,7 +41,7 @@ impl Base10Exponent {
 
 impl PriceUnit {
 	pub fn get_exponent(&self) -> Base10Exponent {
-		Base10Exponent(self.quote.decimals() as i16 - self.base.decimals() as i16)
+		Base10Exponent(self.base_asset.decimals() as i16 - self.quote_asset.decimals() as i16)
 	}
 }
 
@@ -61,15 +62,22 @@ impl PriceAsset {
 	}
 }
 
-pub struct FractPrice<const U: u128>(U256);
+pub type U256Base = [u64; 4];
+type Denom = u128;
 
-pub fn convert<const U: u128, const V: u128>(price: FractPrice<U>) -> FractPrice<V> {
-	FractPrice(mul_div_floor(price.0, V.into(), U))
+pub fn denom(d: Denom) -> U256 {
+	U256::from(d) + 1
 }
 
-impl<const U: u128> FractPrice<U> {
-	pub fn convert<const V: u128>(self) -> FractPrice<V> {
-		FractPrice(mul_div_floor(self.0, V.into(), U))
+def_derive! {
+	/// Note that this can handle denominators of up to u128::MAX + 1
+	#[derive(Default, PartialOrd, Ord, TypeInfo)]
+	pub struct FractPrice<const U: Denom>(U256);
+}
+
+impl<const U: Denom> FractPrice<U> {
+	pub fn convert<const V: Denom>(self) -> FractPrice<V> {
+		FractPrice(mul_div_floor(self.0, denom(V), denom(U)))
 	}
 
 	pub fn apply_exponent(&self, exp: Base10Exponent) -> Self {
@@ -82,17 +90,23 @@ impl<const U: u128> FractPrice<U> {
 	}
 }
 
-type SCPrice = FractPrice<{ PRICE_FRACTIONAL_BITS as u128 }>;
+type StatechainPrice = FractPrice<{ u128::MAX }>;
 
-pub fn convert_asset_prices<const U: u128>(
-	prices: BTreeMap<PriceAsset, FractPrice<U>>,
-) -> BTreeMap<PriceAsset, SCPrice> {
-	prices
-		.into_iter()
-		.map(|(asset, price)| {
-			let e = PriceUnit { quote: asset, base: PriceAsset::Usdc }.get_exponent();
-			(asset, price.apply_exponent(e.inv()).convert())
-		})
-		.collect()
+/// WARNING, this assumes PRICE_FRACTIONAL_BITS = 128!
+impl Into<Price> for FractPrice<{ u128::MAX }> {
+	fn into(self) -> Price {
+		debug_assert_eq!(PRICE_FRACTIONAL_BITS, 128);
+		self.0
+	}
 }
 
+pub fn price_with_unit_to_statechain_price<const U: u128>(
+	price: FractPrice<U>,
+	unit: PriceUnit,
+) -> StatechainPrice {
+	price
+		.apply_exponent(Base10Exponent(
+			unit.quote_asset.decimals() as i16 - unit.base_asset.decimals() as i16,
+		))
+		.convert()
+}
