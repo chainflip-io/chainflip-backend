@@ -932,6 +932,10 @@ pub trait EgressApi<C: Chain> {
 
 pub trait VaultKeyWitnessedHandler<C: Chain> {
 	fn on_first_key_activated(block_number: C::ChainBlockNumber) -> DispatchResult;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	/// Setup states for a successful key activation - used for benchmarking only.
+	fn setup_key_activation() {}
 }
 
 pub trait BroadcastAnyChainGovKey {

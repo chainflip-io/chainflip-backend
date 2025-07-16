@@ -640,7 +640,7 @@ pub mod pallet {
 			Self::egress_success(origin, tx_out_id, signer_id, tx_fee, tx_metadata, transaction_ref)
 		}
 
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::stress_test(*how_many))]
 		#[pallet::call_index(3)]
 		pub fn stress_test(origin: OriginFor<T>, how_many: u32) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
@@ -675,7 +675,7 @@ pub mod pallet {
 		///
 		/// Requires governance origin.
 		#[pallet::call_index(5)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::re_sign_aborted_broadcasts(broadcast_ids.len() as u32))]
 		pub fn re_sign_aborted_broadcasts(
 			origin: OriginFor<T>,
 			broadcast_ids: Vec<BroadcastId>,

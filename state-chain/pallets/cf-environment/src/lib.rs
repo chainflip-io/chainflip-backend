@@ -343,7 +343,7 @@ pub mod pallet {
 		#[pallet::call_index(1)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::witness_polkadot_vault_creation())]
 		pub fn witness_polkadot_vault_creation(
 			origin: OriginFor<T>,
 			dot_pure_proxy_vault_key: PolkadotAccountId,
@@ -369,7 +369,7 @@ pub mod pallet {
 		#[pallet::call_index(2)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::witness_current_bitcoin_block_number_for_key())]
 		pub fn witness_current_bitcoin_block_number_for_key(
 			origin: OriginFor<T>,
 			block_number: cf_chains::btc::BlockNumber,
@@ -430,7 +430,7 @@ pub mod pallet {
 		#[pallet::call_index(5)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::witness_initialize_arbitrum_vault())]
 		pub fn witness_initialize_arbitrum_vault(
 			origin: OriginFor<T>,
 			block_number: u64,
@@ -450,7 +450,7 @@ pub mod pallet {
 		#[pallet::call_index(6)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::witness_initialize_solana_vault())]
 		pub fn witness_initialize_solana_vault(
 			origin: OriginFor<T>,
 			block_number: u64,
@@ -521,7 +521,7 @@ pub mod pallet {
 		/// it's a high priority action. Therefore, **DO NOT** execute this governance function
 		/// around a rotation as it could consume the nonce saved for rotations.
 		#[pallet::call_index(8)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::dispatch_solana_gov_call())]
 		pub fn dispatch_solana_gov_call(
 			origin: OriginFor<T>,
 			gov_call: SolanaGovCall,
@@ -552,7 +552,7 @@ pub mod pallet {
 		#[pallet::call_index(9)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::witness_assethub_vault_creation())]
 		pub fn witness_assethub_vault_creation(
 			origin: OriginFor<T>,
 			hub_pure_proxy_vault_key: PolkadotAccountId,

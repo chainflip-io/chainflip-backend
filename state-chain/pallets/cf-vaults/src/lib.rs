@@ -185,7 +185,7 @@ pub mod pallet {
 		#[pallet::call_index(5)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::initialize_chain())]
 		pub fn initialize_chain(origin: OriginFor<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -250,6 +250,14 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 		Self::activate_new_key_for_chain(block_number);
 
 		Ok(())
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	/// Setup states for a successful key activation - used for benchmarking only.
+	fn setup_key_activation() {
+		PendingVaultActivation::<T, I>::put(VaultActivationStatus::<T, I>::AwaitingActivation {
+			new_public_key: cf_chains::benchmarking_value::BenchmarkValue::benchmark_value(),
+		});
 	}
 }
 
