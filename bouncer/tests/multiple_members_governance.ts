@@ -4,12 +4,13 @@ import { snowWhite, submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
+import { Codec } from '@polkadot/types/types';
 
 async function getGovernanceMembers(): Promise<string[]> {
   await using chainflip = await getChainflipApi();
 
-  const res = (await chainflip.query.governance.members()).toJSON();
-  return res as string[];
+  const members = (await chainflip.query.governance.members()) as Codec;
+  return members.toPrimitive() as string[];
 }
 
 async function setGovernanceMembers(members: string[]) {
@@ -18,14 +19,8 @@ async function setGovernanceMembers(members: string[]) {
 
 const alice = createStateChainKeypair('//Alice');
 
-async function addAliceToGovernance(logger: Logger) {
-  const initMembers = await getGovernanceMembers();
-  if (initMembers.includes(alice.address)) {
-    logger.warn('Alice is already in governance!');
-    return;
-  }
-
-  assert(initMembers.length === 1, 'Governance should only have 1 member');
+async function addAliceToGovernance(logger: Logger, initMembers: string[] = []) {
+  logger.debug(`Adding Alice to governance: ${alice.address}`);
 
   const newMembers = [...initMembers, alice.address];
 
@@ -33,32 +28,58 @@ async function addAliceToGovernance(logger: Logger) {
 
   await observeEvent(logger, 'governance:Executed').event;
 
-  await tryUntilSuccess(async () => (await getGovernanceMembers()).length === 2, 3000, 10);
+  await tryUntilSuccess(
+    async () => {
+      const members = await getGovernanceMembers();
+      return members.length === newMembers.length;
+    },
+    6000,
+    4,
+  );
 
   logger.debug('Added Alice to governance!');
 }
 
 async function submitWithMultipleGovernanceMembers(logger: Logger) {
-  // Killing 2 birds with 1 stone: testing governance execution with multiple
-  // members *and* restoring governance to its original state
-  await submitGovernanceExtrinsic((chainflip) =>
-    chainflip.tx.governance.newMembershipSet([snowWhite.address]),
+  // Ensure Alice is in governance before submitting the proposal
+  const initMembers = await getGovernanceMembers();
+
+  if (!initMembers.includes(alice.address)) {
+    await addAliceToGovernance(logger, initMembers);
+  }
+
+  const members = await getGovernanceMembers();
+
+  logger.debug(`Current governance members: ${members}`);
+
+  assert.strictEqual(
+    members.length,
+    2,
+    `Governance should have 2 members (Snow White and Alice), but found ${members}`,
   );
 
-  await using chainflip = await getChainflipApi();
+  // Killing 2 birds with 1 stone: testing governance execution with multiple
+  // members *and* restoring governance to its original state
+  const proposalId = await submitGovernanceExtrinsic(
+    (chainflip) => chainflip.tx.governance.newMembershipSet([snowWhite.address]),
+    logger,
+  );
 
-  const proposalId = Number((await observeEvent(logger, 'governance:Proposed').event).data);
+  logger.info(`Submitted governance proposal with ID: ${proposalId}`);
+
+  await using chainflip = await getChainflipApi();
 
   // Note that with two members, we need to approve with the other account:
   const nonce = (await chainflip.rpc.system.accountNextIndex(alice.address)) as unknown as number;
   await chainflip.tx.governance.approve(proposalId).signAndSend(alice, { nonce });
-
+  logger.info(`Approved governance proposal with ID: ${proposalId}`);
   await observeEvent(logger, 'governance:Executed', {
-    test: (event) => event.data.proposalId === proposalId,
-  });
+    test: (event) => Number(event.data[0]) === proposalId,
+  }).event;
 
-  assert(
-    (await getGovernanceMembers()).length === 1,
+  assert.strictEqual(
+    (await getGovernanceMembers()).length,
+    1,
     'Governance should have been restored to 1 member',
   );
 
@@ -66,6 +87,5 @@ async function submitWithMultipleGovernanceMembers(logger: Logger) {
 }
 
 export async function testMultipleMembersGovernance(testContext: TestContext) {
-  await addAliceToGovernance(testContext.logger);
   await submitWithMultipleGovernanceMembers(testContext.logger);
 }

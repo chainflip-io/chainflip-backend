@@ -1,6 +1,6 @@
 import assert from 'assert';
-import { createStateChainKeypair, handleSubstrateError, lpMutex } from 'shared/utils';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { createStateChainKeypair, lpMutex, waitForExt } from 'shared/utils';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { limitOrder } from 'shared/limit_order';
 import { rangeOrder } from 'shared/range_order';
 import { depositLiquidity } from 'shared/deposit_liquidity';
@@ -38,6 +38,8 @@ export async function createAndDeleteMultipleOrders(
   const lpUri = lpKey || DEFAULT_LP;
   const lp = createStateChainKeypair(lpUri);
 
+  logger.info(`Depositing liquidity to ${lpUri}`);
+
   await Promise.all([
     // provide liquidity to LP_3
     depositLiquidity(logger, 'Usdc', 10000, false, lpUri),
@@ -51,6 +53,8 @@ export async function createAndDeleteMultipleOrders(
     depositLiquidity(logger, 'Sol', deposits.get('Sol')!, false, lpUri),
     depositLiquidity(logger, 'SolUsdc', deposits.get('SolUsdc')!, false, lpUri),
   ]);
+
+  logger.info(`Liquidity successfully deposited to ${lpUri}`);
 
   // create a series of limit_order and save their info to delete them later on
   const promises = [];
@@ -77,54 +81,30 @@ export async function createAndDeleteMultipleOrders(
     Range: { base_asset: 'ETH', quote_asset: 'USDC', id: 0 },
   });
 
-  logger.debug('Submitting orders');
+  logger.info('Submitting orders');
   await Promise.all(promises);
-  logger.debug('Orders successfully submitted');
+  logger.info('Orders successfully submitted');
 
   let openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
   openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
-  logger.debug(`Number of open orders: ${openOrders}`);
+  logger.info(`Number of open orders: ${openOrders}`);
 
-  logger.debug('Deleting opened orders...');
-  const orderDeletionPromises = ordersToDelete.map((order) => {
-    if (order.Limit) {
-      return observeEvent(logger, 'liquidityPools:LimitOrderUpdated', {
-        historicalCheckBlocks: 2,
-        test: (event) =>
-          event.data.lp === lp.address &&
-          event.data.id === order.Limit!.id.toString() &&
-          event.data.base_asset === order.Limit!.base_asset &&
-          event.data.quote_asset === order.Limit!.quote_asset &&
-          event.data.side === order.Limit!.side &&
-          event.data.sell_amount_change.Decrease,
-      }).event;
-    }
-    if (order.Range) {
-      return observeEvent(logger, 'liquidityPools:RangeOrderUpdated', {
-        historicalCheckBlocks: 2,
-        test: (event) =>
-          event.data.lp === lp.address &&
-          event.data.id === order.Range!.id.toString() &&
-          event.data.base_asset === order.Range!.base_asset &&
-          event.data.quote_asset === order.Range!.quote_asset &&
-          event.data.size_change.Decrease,
-      }).event;
-    }
-    throw new Error('Order type not recognized');
-  });
+  logger.info('Deleting opened orders...');
 
-  await lpMutex.runExclusive(async () => {
-    const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as unknown as number;
-    await chainflip.tx.liquidityPools
-      .cancelOrdersBatch(ordersToDelete)
-      .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
-  });
-  await Promise.all(orderDeletionPromises);
-  logger.debug('All orders successfully deleted');
+  const release = await lpMutex.acquire();
+  const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
+  const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as unknown as number;
+  await chainflip.tx.liquidityPools
+    .cancelOrdersBatch(ordersToDelete)
+    .signAndSend(lp, { nonce }, waiter);
+
+  await promise;
+
+  logger.info('All orders successfully deleted');
 
   openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
   openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
-  logger.debug(`Number of open orders: ${openOrders}`);
+  logger.info(`Number of open orders: ${openOrders}`);
 
   assert.strictEqual(openOrders, 0, `Number of open orders should be 0 but is ${openOrders}`);
 
