@@ -1,6 +1,6 @@
 [package]
 name = "state-chain-runtime"
-version = "1.10.0"
+version = "1.10.1"
 authors = ["Chainflip Team <https://github.com/chainflip-io>"]
 edition = "2021"
 homepage = "https://chainflip.io"
@@ -107,7 +107,7 @@ cf-test-utilities = { workspace = true, optional = true }
 
 [dev-dependencies]
 sp-io = { workspace = true, default-features = true }
-proptest = { version = "1.6"}
+proptest = { version = "1.6" }
 proptest-derive = { version = "0.5.1" }
 
 [features]
