@@ -4,7 +4,7 @@ import { Observable, Subject } from 'rxjs';
 import { deferredPromise, runWithTimeout } from 'shared/utils';
 import { globalLogger, Logger } from 'shared/utils/logger';
 import { appendFileSync } from 'node:fs';
-import { Header } from '@polkadot/types/interfaces';
+import { EventRecord, Header } from '@polkadot/types/interfaces';
 
 // Set the STATE_CHAIN_EVENT_LOG_FILE env var to log all state chain events to a file. Used for debugging.
 export const stateChainEventLogFile = process.env.STATE_CHAIN_EVENT_LOG_FILE; // ?? '/tmp/chainflip/state_chain_events.log';
@@ -194,13 +194,12 @@ class EventCache {
       this.headers.set(blockHash, blockHeader);
 
       const api = await (await apiMap[this.chain]()).at(blockHash);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawEvents = (await api.query.system.events()) as unknown as any[];
-      const events = rawEvents.map(({ event }, index) => ({
+      const rawEvents = (await api.query.system.events()) as unknown as EventRecord[];
+      const events = rawEvents.map(({ event }) => ({
         name: { section: event.section, method: event.method },
-        data: event.toHuman().data,
+        data: event.data.toHuman(),
         block: blockHeader.number.toNumber(),
-        eventIndex: index,
+        eventIndex: event.index as unknown as number,
       }));
 
       // Log the events

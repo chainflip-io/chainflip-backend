@@ -1,12 +1,12 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import {
-  handleSubstrateError,
+  waitForExt,
   amountToFineAmount,
   lpMutex,
   assetDecimals,
   createStateChainKeypair,
 } from 'shared/utils';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { Logger } from 'shared/utils/logger';
 
 export async function limitOrder(
@@ -22,16 +22,14 @@ export async function limitOrder(
 
   const lp = createStateChainKeypair(lpKey ?? (process.env.LP_URI || '//LP_1'));
 
-  logger.debug('Setting up ' + ccy + ' limit order');
-  const orderCreatedEvent = observeEvent(logger, 'liquidityPools:LimitOrderUpdated', {
-    test: (event) =>
-      event.data.lp === lp.address && event.data.baseAsset === ccy && event.data.id === String(0),
-  }).event;
-  await lpMutex.runExclusive(async () => {
-    const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
-    await chainflip.tx.liquidityPools
-      .setLimitOrder(ccy.toLowerCase(), 'usdc', 'sell', orderId, tick, fineAmount, null, null)
-      .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
-  });
-  await orderCreatedEvent;
+  logger.info('Setting up ' + ccy + ' limit order');
+  const release = await lpMutex.acquire();
+  const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
+  const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as unknown as number;
+  const unsub = await chainflip.tx.liquidityPools
+    .setLimitOrder(ccy.toLowerCase(), 'usdc', 'sell', orderId, tick, fineAmount, null, null)
+    .signAndSend(lp, { nonce }, waiter);
+  await promise;
+  unsub();
+  logger.info(`Limit order for ${ccy} with ID ${orderId} set successfully`);
 }
