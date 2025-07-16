@@ -22,7 +22,8 @@ use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
 	impl_mock_chainflip, mocks::deregistration_check::MockDeregistrationCheck, SpawnAccount,
 };
-use frame_support::derive_impl;
+use codec::Encode;
+use frame_support::{derive_impl, StorageHasher};
 use sp_runtime::DispatchError;
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -67,8 +68,10 @@ impl SpawnAccount for MockSpawnAccount {
 		parent_account_id: &Self::AccountId,
 		sub_account_index: Self::Index,
 	) -> Result<Self::AccountId, DispatchError> {
-		// Shift the sub-account index to minimise chance of collisions.
-		Ok(*parent_account_id + sub_account_index as u64 + u64::MAX / 2)
+		use codec::Decode;
+		let bytes = (*parent_account_id, sub_account_index)
+			.using_encoded(|bytes| frame_support::Twox128::hash(bytes));
+		Ok(u64::decode(&mut &bytes[..]).expect("u64::decode should not fail; the input is valid"))
 	}
 }
 
