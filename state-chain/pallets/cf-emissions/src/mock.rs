@@ -29,11 +29,11 @@ use cf_traits::{
 		broadcaster::MockBroadcaster, egress_handler::MockEgressHandler,
 		flip_burn_info::MockFlipBurnInfo,
 	},
-	Issuance, RewardsDistribution, WaivedFees,
+	Issuance, RewardsDistribution, Slashing, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{derive_impl, parameter_types, traits::Imbalance};
-use frame_system as system;
+use frame_system::{self as system, pallet_prelude::BlockNumberFor};
 use scale_info::TypeInfo;
 use sp_arithmetic::Permill;
 
@@ -73,6 +73,22 @@ parameter_types! {
 
 // Implement mock for RestrictionHandler
 impl_mock_waived_fees!(AccountId, RuntimeCall);
+
+pub struct MockFlipSlasher;
+
+impl Slashing for MockFlipSlasher {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumberFor<Test>;
+
+	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
+		let slash_amount = Flip::calculate_slash_amount(account_id, blocks);
+		Flip::slash(account_id, slash_amount);
+	}
+
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance) {
+		Flip::slash(account_id, slash_amount);
+	}
+}
 
 impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;

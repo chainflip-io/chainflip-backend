@@ -405,19 +405,19 @@ impl<ValidatorId> NetworkState<ValidatorId> {
 pub trait Slashing {
 	type AccountId;
 	type BlockNumber;
-	type Balance;
 
 	/// Slashes a validator for the equivalent of some number of blocks offline.
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 
 	/// Slashes a validator by some fixed amount.
 	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance);
+}
 
-	/// Calculate the amount of FLIP to slash
-	fn calculate_slash_amount(
-		account_id: &Self::AccountId,
-		blocks: Self::BlockNumber,
-	) -> Self::Balance;
+pub trait SlashAmongDelegators {
+	type AccountId;
+
+	/// Slashes a validator along with its associated delegators.
+	fn slash(validator_id: &Self::AccountId, amount: FlipBalance);
 }
 
 /// Nominate a single account for transaction broadcasting.
@@ -610,13 +610,6 @@ pub trait BlockEmissions {
 	fn update_backup_node_block_emission(emission: Self::Balance);
 	/// Calculate the emissions per block
 	fn calculate_block_emissions();
-}
-
-/// Emits an event when backup rewards are distributed that lives inside the Emissions pallet.
-pub trait BackupRewardsNotifier {
-	type Balance;
-	type AccountId;
-	fn emit_event(account_id: &Self::AccountId, amount: Self::Balance);
 }
 
 /// Checks if the caller can execute free transactions

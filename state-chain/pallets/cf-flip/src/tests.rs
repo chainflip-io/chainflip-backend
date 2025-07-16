@@ -18,8 +18,8 @@
 
 use super::*;
 use crate::{
-	mock::*, Account, Bonder, Error, FlipIssuance, FlipSlasher, OffchainFunds, Reserve,
-	SlashingRate, TotalIssuance,
+	mock::*, Account, Bonder, Error, FlipIssuance, OffchainFunds, Reserve, SlashingRate,
+	TotalIssuance,
 };
 use cf_primitives::FlipBalance;
 use cf_traits::{AccountInfo, Bonding, Funding, Issuance, Slashing};
@@ -302,8 +302,7 @@ impl FlipOperation {
 
 				SlashingRate::<Test>::set(*slashing_rate);
 
-				let attempted_slash: u128 =
-					FlipSlasher::<Test>::calculate_slash_amount(account_id, *blocks);
+				let attempted_slash: u128 = Flip::calculate_slash_amount(account_id, *blocks);
 				let expected_slash =
 					if Account::<Test>::get(account_id).can_be_slashed(attempted_slash) {
 						attempted_slash
@@ -311,7 +310,7 @@ impl FlipOperation {
 						0
 					};
 
-				FlipSlasher::<Test>::slash(account_id, *blocks);
+				MockFlipSlasher::slash(account_id, *blocks);
 				let balance_after = Flip::total_balance_of(account_id);
 				// Check if the diff between the balances is the expected slash
 				if initial_balance.saturating_sub(expected_slash) != balance_after {
@@ -320,7 +319,9 @@ impl FlipOperation {
 				if expected_slash > 0 {
 					System::assert_last_event(RuntimeEvent::Flip(Event::SlashingPerformed {
 						who: *account_id,
-						amount: expected_slash,
+						total_slashed: expected_slash,
+						validator_slashed: expected_slash,
+						delegators_slashed: Default::default(),
 					}));
 				}
 			},
@@ -688,7 +689,7 @@ mod transfer {
 	use super::*;
 
 	#[test]
-	fn try_transfer_funds_and_dont_violate_the_total_issuance() {
+	fn try_transfer_funds_and_do_not_violate_the_total_issuance() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 10;
 			assert_eq!(Flip::total_balance_of(&ALICE), 100);

@@ -14,16 +14,152 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_traits::Bid;
-use frame_support::sp_runtime::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
-use sp_std::{cmp::min, prelude::*};
+use crate::{AccountId, Authorship, BlockNumber, Emissions, Flip, Runtime, System, Validator};
+use cf_primitives::{AssetAmount, FlipBalance};
+use cf_traits::{Bid, EpochInfo, Issuance, RewardsDistribution, Slashing};
+use frame_support::{
+	pallet_prelude::Get,
+	sp_runtime::{
+		helpers_128bit::multiply_by_rational_with_rounding,
+		traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto},
+		Rounding,
+	},
+};
+use sp_std::{cmp::min, collections::btree_map::BTreeMap, prelude::*};
 
-// TODO: The u128 is not big enough for some calculations (for example this one) which involve
-// intermediate steps of the calculation create values that saturate the u128. In this and in
-// similar cases we might have to convert the values to BigInt for calculation and then convert it
-// back to u128 after calculation. In this case, the saturation problem can lead to upto 0.03 - 0.05
-// Flip error in calculation.
+pub struct BackupNodeEmissions;
 
+impl RewardsDistribution for BackupNodeEmissions {
+	type Balance = FlipBalance;
+	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
+
+	fn distribute() {
+		if Emissions::backup_node_emission_per_block() == 0 {
+			return
+		}
+
+		let backup_nodes =
+			Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>();
+		if backup_nodes.is_empty() {
+			return
+		}
+
+		// Distribute rewards one by one
+		// N.B. This could be more optimal
+		for (validator_id, reward) in calculate_backup_rewards(
+			backup_nodes,
+			Validator::bond(),
+			<<Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval as Get<
+				BlockNumber,
+			>>::get()
+			.unique_saturated_into(),
+			Emissions::backup_node_emission_per_block(),
+			Emissions::current_authority_emission_per_block(),
+			Self::Balance::unique_saturated_from(Validator::current_authority_count()),
+		) {
+			let (validator_fee, delegator_fees) =
+				distribute_among_delegators(&validator_id, reward, |account, reward| {
+					Flip::settle(account, Self::Issuance::mint(reward).into());
+				});
+			Emissions::deposit_event(
+				pallet_cf_emissions::Event::<Runtime>::BackupRewardsDistributed {
+					total: reward,
+					validator_id,
+					validator_fee,
+					delegator_fees,
+				},
+			);
+		}
+	}
+}
+
+pub struct BlockAuthorRewardDistribution;
+
+impl RewardsDistribution for BlockAuthorRewardDistribution {
+	type Balance = FlipBalance;
+	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
+
+	fn distribute() {
+		let reward_amount = Emissions::current_authority_emission_per_block();
+		if reward_amount != 0 {
+			if let Some(current_block_author) = Authorship::author() {
+				let _ = distribute_among_delegators(
+					&current_block_author,
+					reward_amount,
+					|account, reward| {
+						Flip::settle(account, Self::Issuance::mint(reward).into());
+					},
+				);
+			} else {
+				log::warn!("No block author for block {}.", System::current_block_number());
+			}
+		}
+	}
+}
+
+pub struct FlipSlasher;
+impl FlipSlasher {
+	fn slash_among_delegators(account_id: &AccountId, slash_amount: FlipBalance) {
+		let (validator_slashed, delegators_slashed) =
+			distribute_among_delegators(account_id, slash_amount, |account, slash| {
+				Flip::slash(account, slash);
+			});
+
+		Flip::deposit_event(pallet_cf_flip::Event::<Runtime>::SlashingPerformed {
+			who: account_id.clone(),
+			total_slashed: slash_amount,
+			validator_slashed,
+			delegators_slashed,
+		});
+	}
+}
+
+impl Slashing for FlipSlasher {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
+
+	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
+		let slash_amount = Flip::calculate_slash_amount(account_id, blocks);
+		Self::slash_among_delegators(account_id, slash_amount);
+	}
+
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance) {
+		Self::slash_among_delegators(account_id, slash_amount);
+	}
+}
+
+/// Distribute a settlement to a given validator for the current Epoch.
+/// The total amount is shared among all delegators associated with the operator controlling this
+/// validator.
+fn distribute_among_delegators(
+	validator: &AccountId,
+	total: AssetAmount,
+	settle: impl Fn(&AccountId, AssetAmount),
+) -> (AssetAmount, BTreeMap<AccountId, AssetAmount>) {
+	// Calculate delegator reward for the current epoch.
+	let current_epoch = Validator::current_epoch();
+	let (operator_fee, delegator_fees) =
+		Validator::get_operator_info_by_validator(current_epoch, validator)
+			.and_then(|operator_info| operator_info.split_amount(total).ok())
+			.unwrap_or(
+				// In the case of `None` or invalid delegator info, settle 100% of the
+				// reward to the authoring validator
+				(total, Default::default()),
+			);
+
+	settle(validator, operator_fee);
+	for (delegator, fees) in delegator_fees.iter() {
+		settle(delegator, *fees);
+	}
+
+	(operator_fee, delegator_fees)
+}
+
+/// TODO: The u128 is not big enough for some calculations (for example this one) which involve
+/// intermediate steps of the calculation create values that saturate the u128. In this and in
+/// similar cases we might have to convert the values to BigInt for calculation and then convert it
+/// back to u128 after calculation. In this case, the saturation problem can lead to up to 0.03 -
+/// 0.05 Flip error in calculation.
 pub fn calculate_backup_rewards<Id, Amount>(
 	backup_nodes: Vec<Bid<Id, u128>>,
 	current_epoch_bond: u128,
@@ -261,15 +397,15 @@ fn test_example_calculations() {
 	];
 
 	const BOND: u128 = 110_000 * FLIPPERINOS_PER_FLIP;
-	const BLOCKSPERYEAR: u128 = 14_400 * 365;
-	const BACKUP_EMISSIONS_CAP_PER_BLOCK: u128 = 900_000 * FLIPPERINOS_PER_FLIP / BLOCKSPERYEAR;
-	const AUTHORITY_EMISSIONS_PER_BLOCK: u128 = 9_000_000 * FLIPPERINOS_PER_FLIP / BLOCKSPERYEAR;
+	const BLOCKS_PER_YEAR: u128 = 14_400 * 365;
+	const BACKUP_EMISSIONS_CAP_PER_BLOCK: u128 = 900_000 * FLIPPERINOS_PER_FLIP / BLOCKS_PER_YEAR;
+	const AUTHORITY_EMISSIONS_PER_BLOCK: u128 = 9_000_000 * FLIPPERINOS_PER_FLIP / BLOCKS_PER_YEAR;
 	const AUTHORITY_COUNT: u128 = 150;
 
 	let calculated_rewards: Vec<(_, u128)> = calculate_backup_rewards(
 		test_backup_nodes,
 		BOND,
-		BLOCKSPERYEAR,
+		BLOCKS_PER_YEAR,
 		BACKUP_EMISSIONS_CAP_PER_BLOCK,
 		AUTHORITY_EMISSIONS_PER_BLOCK,
 		AUTHORITY_COUNT,

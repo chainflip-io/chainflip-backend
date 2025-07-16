@@ -22,14 +22,14 @@ use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
-	Bonding, Chainflip, SetSafeMode, Slashing,
+	Bonding, Chainflip, SetSafeMode,
 };
 use sp_core::H160;
 
 use crate::BoundRedeemAddress;
 use cf_traits::SpawnAccount;
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
-use pallet_cf_flip::{Bonder, FlipSlasher};
+use pallet_cf_flip::Bonder;
 use sp_runtime::DispatchError;
 
 const ETH_DUMMY_ADDR: EthereumAddress = H160([42u8; 20]);
@@ -1011,7 +1011,7 @@ fn redeem_funds_to_restricted_address_overrides_bound_and_executor_restrictions(
 			),
 			Error::<Test>::ExecutorBindingRestrictionViolated
 		);
-		// Redeem using correct redeem and executor should complete succesfully
+		// Redeem using correct redeem and executor should complete successfully
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			(AMOUNT).into(),
@@ -1684,7 +1684,7 @@ fn can_redeem_if_balance_lower_than_restricted_funds() {
 		));
 
 		// we want to have a balance < sum of restricted balances
-		FlipSlasher::<Test>::slash_balance(&ALICE, DEBIT_AMOUNT);
+		Flip::slash(&ALICE, DEBIT_AMOUNT);
 
 		// redemption towards a non restricted address fails
 		assert_noop!(
@@ -1750,7 +1750,7 @@ fn cannot_redeem_to_non_restricted_address_with_balance_lower_than_restricted_fu
 		));
 
 		// we want to have a balance < sum of restricted balances
-		FlipSlasher::<Test>::slash_balance(&ALICE, DEBIT_AMOUNT);
+		Flip::slash(&ALICE, DEBIT_AMOUNT);
 
 		assert_noop!(
 			Funding::redeem(
@@ -2150,7 +2150,7 @@ pub mod rebalancing_and_sub_accounting {
 	}
 
 	#[test]
-	fn fund_rebalance_and_redeem_dosent_allow_unauthorized_redemptions() {
+	fn fund_rebalance_and_redeem_does_not_allow_unauthorized_redemptions() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 100;
 			const REBALANCE_AMOUNT: u128 = 50;
@@ -2284,7 +2284,7 @@ pub mod rebalancing_and_sub_accounting {
 	}
 
 	#[test]
-	fn rebalance_during_redemption_doesnt_lead_to_double_spending() {
+	fn rebalance_during_redemption_does_not_lead_to_double_spending() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 100;
 			const AMOUNT_TO_REDEEM: u128 = 50;

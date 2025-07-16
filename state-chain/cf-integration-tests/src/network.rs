@@ -695,6 +695,10 @@ impl Network {
 		self.engines.get_mut(node_id).expect("valid node_id").live = active;
 	}
 
+	pub fn set_auto_heartbeat(&mut self, node_id: &NodeId, active: bool) {
+		self.engines.get_mut(node_id).expect("valid node_id").auto_submit_heartbeat = active;
+	}
+
 	pub fn create_engine(&mut self) -> NodeId {
 		let node_id = NodeId::from([self.engines.len() as u8; 32]);
 		self.add_engine(&node_id);
@@ -862,6 +866,8 @@ pub fn fund_authorities_and_join_auction(
 		network::setup_account_and_peer_mapping(node);
 		network::Cli::start_bidding(node);
 	}
+
+	testnet.submit_heartbeat_all_engines(true);
 
 	(testnet, genesis_authorities, init_backup_nodes)
 }
