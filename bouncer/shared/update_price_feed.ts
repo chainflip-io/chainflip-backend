@@ -114,7 +114,7 @@ async function updateEvmPriceFeed(logger: Logger, chain: Chain, asset: Asset, pr
 }
 
 export async function updatePriceFeed(logger: Logger, chain: Chain, asset: Asset, price: string) {
-  if (asset !== 'BTC' && asset !== 'ETH' && asset !== 'SOL') {
+  if (!new Set(['BTC', 'ETH', 'SOL', 'USDC', 'USDT']).has(asset)) {
     throw new Error(`Unsupported price feed asset: ${asset}`);
   }
 
