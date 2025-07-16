@@ -1567,9 +1567,10 @@ fn should_expire_all_previous_epochs() {
 
 #[cfg(test)]
 mod operator {
-	use super::*;
+	use cf_test_utilities::assert_has_event;
 
-	use cf_primitives::DelegationAcceptance;
+	use super::*;
+	use crate::DelegationAcceptance;
 
 	#[test]
 	fn can_allow_and_block_delegator() {
@@ -1602,8 +1603,8 @@ mod operator {
 	#[test]
 	fn can_set_delegation_preferences() {
 		new_test_ext().execute_with(|| {
-			const PREFERENCES: DelegationPreferences = DelegationPreferences {
-				fee: Permill::one(),
+			const PREFERENCES: OperatorSettings = OperatorSettings {
+				fee_bps: 100,
 				delegation_acceptance: DelegationAcceptance::Allow,
 			};
 			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
@@ -1611,10 +1612,10 @@ mod operator {
 				OriginTrait::signed(ALICE),
 				PREFERENCES
 			));
-			assert_eq!(OperatorParameters::<Test>::get(ALICE), Some(PREFERENCES));
+			assert_eq!(OperatorSettingsLookup::<Test>::get(ALICE), Some(PREFERENCES));
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::ValidatorPallet(Event::DelegationPreferencesSet {
+				RuntimeEvent::ValidatorPallet(Event::OperatorSettingsUpdated {
 					operator: ALICE,
 					preferences: PREFERENCES,
 				}),
@@ -1690,7 +1691,7 @@ mod operator {
 			assert_ok!(ValidatorPallet::remove_validator(OriginTrait::signed(BOB), BOB));
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::ValidatorPallet(Event::ValidatorHasBeenRemoved {
+				RuntimeEvent::ValidatorPallet(Event::ValidatorRemovedFromOperator {
 					validator: BOB,
 					operator: ALICE,
 				}),

@@ -28,8 +28,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
-	DcaParameters, DelegationPreferences, EpochIndex, FlipBalance, ForeignChain, GasAmount,
-	NetworkEnvironment, SemVer,
+	DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount, NetworkEnvironment, SemVer,
 };
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
@@ -44,6 +43,7 @@ use pallet_cf_pools::{
 };
 use pallet_cf_swapping::{AffiliateDetails, FeeRateAndMinimum, SwapLegInfo};
 use pallet_cf_trading_strategy::TradingStrategy;
+use pallet_cf_validator::OperatorSettings;
 use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
@@ -151,7 +151,7 @@ pub struct ValidatorInfo {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct OperatorInfo {
 	pub managed_validators: BTreeMap<AccountId32, AssetAmount>,
-	pub delegation_preferences: DelegationPreferences,
+	pub settings: OperatorSettings,
 	pub blocked_delegators: Vec<AccountId32>,
 	pub allowed_delegators: Vec<AccountId32>,
 }

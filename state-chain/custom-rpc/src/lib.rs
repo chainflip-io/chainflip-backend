@@ -33,8 +33,7 @@ use cf_node_client::events_decoder;
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
-	DcaParameters, DelegationPreferences, EpochIndex, ForeignChain, NetworkEnvironment, SemVer,
-	SwapId, SwapRequestId,
+	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
 use cf_rpc_apis::{
 	broker::{
@@ -61,6 +60,7 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{AffiliateDetails, SwapLegInfo};
+use pallet_cf_validator::OperatorSettings;
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
 	HeaderBackend, StorageProvider,
@@ -238,7 +238,8 @@ pub enum RpcAccountInfo {
 	},
 	Operator {
 		managed_validators: BTreeMap<AccountId32, NumberOrHex>,
-		delegation_preferences: DelegationPreferences,
+		#[serde(flatten)]
+		settings: OperatorSettings,
 		blocked_delegators: Vec<AccountId32>,
 		allowed_delegators: Vec<AccountId32>,
 	},
@@ -321,7 +322,7 @@ impl RpcAccountInfo {
 				.into_iter()
 				.map(|(account_id, amount)| (account_id, amount.into()))
 				.collect(),
-			delegation_preferences: info.delegation_preferences,
+			settings: info.settings,
 			blocked_delegators: info.blocked_delegators,
 			allowed_delegators: info.allowed_delegators,
 		}

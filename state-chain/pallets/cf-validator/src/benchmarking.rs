@@ -419,7 +419,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		claim_validator(RawOrigin::Signed(operator.clone()), validator.clone());
 
-		assert!(ClaimedValidators::<T>::get(validator).is_some());
+		assert!(!ClaimedValidators::<T>::get(validator).is_empty());
 	}
 
 	#[benchmark]
@@ -469,12 +469,9 @@ mod benchmarks {
 		.unwrap();
 
 		#[extrinsic_call]
-		set_delegation_preferences(
-			RawOrigin::Signed(caller.clone()),
-			DelegationPreferences::default(),
-		);
+		set_delegation_preferences(RawOrigin::Signed(caller.clone()), OperatorSettings::default());
 
-		assert_eq!(OperatorParameters::<T>::get(caller), Some(DelegationPreferences::default()));
+		assert_eq!(OperatorSettingsLookup::<T>::get(caller), Some(OperatorSettings::default()));
 	}
 
 	#[benchmark]

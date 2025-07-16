@@ -1697,7 +1697,7 @@ impl_runtime_apis! {
 		fn cf_operator_info(account_id: &AccountId) -> OperatorInfo {
 			OperatorInfo {
 				managed_validators: pallet_cf_validator::Pallet::<Runtime>::get_all_validators_by_operator(account_id),
-				delegation_preferences: pallet_cf_validator::OperatorParameters::<Runtime>::get(account_id).unwrap(),
+				settings: pallet_cf_validator::OperatorSettingsLookup::<Runtime>::get(account_id).unwrap(),
 				blocked_delegators: pallet_cf_validator::BlockedDelegators::<Runtime>::get(account_id).iter().cloned().collect(),
 				allowed_delegators: pallet_cf_validator::AllowedDelegators::<Runtime>::get(account_id).iter().cloned().collect(),
 			}

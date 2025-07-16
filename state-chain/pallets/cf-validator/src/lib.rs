@@ -29,12 +29,15 @@ pub mod migrations;
 
 mod auction_resolver;
 mod benchmarking;
+mod delegation;
 mod rotation_state;
 
 pub use auction_resolver::*;
+pub use delegation::*;
+
 use cf_primitives::{
-	AccountRole, AuthorityCount, CfeCompatibility, DelegationPreferences, Ed25519PublicKey,
-	EpochIndex, Ipv6Addr, SemVer, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
+	AccountRole, AuthorityCount, CfeCompatibility, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
+	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
 };
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AsyncResult,
@@ -355,7 +358,7 @@ pub mod pallet {
 	pub type BlockedDelegators<T: Config> =
 		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
-	/// Maps an validator to an operator.
+	/// Maps a managed validator to its operator.
 	#[pallet::storage]
 	pub type ManagedValidators<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
@@ -365,10 +368,10 @@ pub mod pallet {
 	pub type ClaimedValidators<T: Config> =
 		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
-	/// Maps an operator account to it's parameters.
+	/// Maps an operator account to its configured settings.
 	#[pallet::storage]
-	pub type OperatorParameters<T: Config> =
-		StorageMap<_, Identity, T::AccountId, DelegationPreferences, OptionQuery>;
+	pub type OperatorSettingsLookup<T: Config> =
+		StorageMap<_, Identity, T::AccountId, OperatorSettings, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -404,10 +407,10 @@ pub mod pallet {
 		ValidatorClaimed { validator: T::AccountId, operator: T::AccountId },
 		/// A validator has accepted the claim of an operator.
 		OperatorAcceptedByValidator { validator: T::AccountId, operator: T::AccountId },
-		/// A validator has been removed.
-		ValidatorHasBeenRemoved { validator: T::AccountId, operator: T::AccountId },
-		/// The delegation preferences of a operator have been updated.
-		DelegationPreferencesSet { operator: T::AccountId, preferences: DelegationPreferences },
+		/// A validator has been removed from an operator's managed pool.
+		ValidatorRemovedFromOperator { validator: T::AccountId, operator: T::AccountId },
+		/// Operator settings have been updated.
+		OperatorSettingsUpdated { operator: T::AccountId, preferences: OperatorSettings },
 	}
 
 	#[pallet::error]
@@ -456,8 +459,6 @@ pub mod pallet {
 		NotAuthorized,
 		/// Operator is still delegating to validators.
 		StillAssociatedWithValidators,
-		/// Operator is still delegating to delegators.
-		StillAssociatedWithDelegators,
 		/// The validator is not claimed by any operator.
 		NotClaimedByOperator,
 		/// The provided account id has not the role validator.
@@ -904,8 +905,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Executed by an operator or an validator to remove itself from the operator's delegation
-		/// pool.
+		/// Executed by an operator or a validator to remove the validator from the operator's
+		/// delegation pool.
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::ValidatorWeightInfo::remove_validator())]
 		pub fn remove_validator(origin: OriginFor<T>, validator: T::AccountId) -> DispatchResult {
@@ -915,21 +916,21 @@ pub mod pallet {
 			ensure!(account_id == operator || account_id == validator, Error::<T>::NotAuthorized);
 			ManagedValidators::<T>::remove(&validator);
 
-			Self::deposit_event(Event::ValidatorHasBeenRemoved { validator, operator });
+			Self::deposit_event(Event::ValidatorRemovedFromOperator { validator, operator });
 
 			Ok(())
 		}
 
-		/// Executed by an operator to set the delegation preferences for the operator.
+		/// Executed by an operator to set its delegation preferences.
 		#[pallet::call_index(13)]
 		#[pallet::weight(T::ValidatorWeightInfo::set_delegation_preferences())]
 		pub fn set_delegation_preferences(
 			origin: OriginFor<T>,
-			preferences: DelegationPreferences,
+			preferences: OperatorSettings,
 		) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
-			OperatorParameters::<T>::insert(&operator_id, preferences.clone());
-			Self::deposit_event(Event::DelegationPreferencesSet {
+			OperatorSettingsLookup::<T>::insert(&operator_id, preferences.clone());
+			Self::deposit_event(Event::OperatorSettingsUpdated {
 				operator: operator_id,
 				preferences,
 			});
@@ -1006,7 +1007,7 @@ pub mod pallet {
 
 			AllowedDelegators::<T>::remove(&account_id);
 			BlockedDelegators::<T>::remove(&account_id);
-			OperatorParameters::<T>::remove(&account_id);
+			OperatorSettingsLookup::<T>::remove(&account_id);
 
 			Ok(())
 		}
