@@ -8274,6 +8274,7 @@ name = "pallet-cf-elections"
 version = "0.1.0"
 dependencies = [
  "bitvec",
+ "cf-amm-math",
  "cf-chains",
  "cf-primitives",
  "cf-runtime-utilities",

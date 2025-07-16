@@ -11,7 +11,10 @@ use pallet_cf_elections::{
 			tuple_1_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
 		},
-		oracle_price::{consensus::OraclePriceConsensus, primitives::*, state_machine::*},
+		oracle_price::{
+			consensus::OraclePriceConsensus, price::ChainlinkAssetPair, primitives::*,
+			state_machine::*,
+		},
 		state_machine::{
 			common_imports::*,
 			core::{def_derive, Hook},

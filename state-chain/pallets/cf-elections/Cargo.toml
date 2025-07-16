@@ -18,6 +18,7 @@ workspace = true
 [dependencies]
 
 # Internal deps
+cf-amm-math = { workspace = true }
 cf-chains = { workspace = true }
 cf-traits = { workspace = true }
 cf-primitives = { workspace = true }

@@ -3,19 +3,9 @@ use core::ops::RangeInclusive;
 use sp_std::ops::Add;
 
 use crate::electoral_systems::state_machine::common_imports::*;
-use enum_iterator::Sequence;
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
-
-def_derive! {
-	#[derive(TypeInfo, Sequence, PartialOrd, Ord)]
-	#[cfg_attr(test, derive(Arbitrary))]
-	pub enum ChainlinkAssetPair {
-		BtcUsd,
-		EthUsd
-	}
-}
 
 def_derive! {
 	#[derive(Default)]

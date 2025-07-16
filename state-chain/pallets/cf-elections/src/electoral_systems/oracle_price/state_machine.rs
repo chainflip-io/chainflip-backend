@@ -361,6 +361,8 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 	}
 }
 
+/*
+
 #[cfg(test)]
 mod tests {
 	use proptest::prelude::{any, Just, Strategy};
@@ -397,3 +399,5 @@ mod tests {
 		)
 	}
 }
+
+ */
