@@ -369,11 +369,23 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		],
 	),
 	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings {
-		sol_oracle_program_id: todo!(),
-		sol_oracle_feeds: todo!(),
-		sol_oracle_query_helper: todo!(),
-		eth_contract_address: todo!(),
-		eth_oracle_feeds: todo!(),
+		sol_oracle_program_id: const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny"),
+		sol_oracle_feeds: vec![
+			const_address("Cv4T27XbjVoKUYwP72NQQanvZeA7W4YF9L4EnYT9kx5o"),
+			const_address("716hFAECqotxcXcj8Hs8nr7AG6q9dBw2oX3k3M8V7uGq"),
+			const_address("CH31Xns5z3M1cTAbKW34jcxPPciazARpijcHj9rxtemt"),
+			const_address("GzGuoKXE8Unn7Vcg1DtomwD27tL4bVUpSK2M1yk6Xfz5"),
+			const_address("8vAuuqC5wVZ9Z9oQUGGDSjYgudTfjmyqGU5VucQxTk5U"),
+		],
+		sol_oracle_query_helper: const_address("5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX"),
+		eth_contract_address: hex_literal::hex!("1562Ad6bb0e68980A3111F24531c964c7e155611"),
+		eth_oracle_feeds: vec![
+			hex_literal::hex!("F4030086522a5bEEa4988F8cA5B36dbC97BeE88c"),
+			hex_literal::hex!("5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"),
+			hex_literal::hex!("4ffC43a60e009B551865A93d232E33Fce9f01507"),
+			hex_literal::hex!("8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6"),
+			hex_literal::hex!("3E7d1eAB13ad0104d2750B8863b489D65364e32D"),
+		],
 	},
 };
 
