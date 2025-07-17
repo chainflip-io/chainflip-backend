@@ -41,7 +41,11 @@ use sp_core::{
 	Pair, Public,
 };
 use state_chain_runtime::{
-	chainflip::{bitcoin_elections, generic_elections, solana_elections, Offence},
+	chainflip::{
+		bitcoin_elections,
+		generic_elections::{self, ChainlinkOraclePriceSettings},
+		solana_elections, Offence,
+	},
 	constants::common::{
 		BLOCKS_PER_MINUTE_ARBITRUM, BLOCKS_PER_MINUTE_ASSETHUB, BLOCKS_PER_MINUTE_ETHEREUM,
 		BLOCKS_PER_MINUTE_POLKADOT, BLOCKS_PER_MINUTE_SOLANA,
@@ -139,6 +143,7 @@ pub struct StateChainEnvironment {
 	sol_alt_manager_program: SolAddress,
 	// Initialized with 65 accounts (50 of them nonces)
 	sol_address_lookup_table_account: (SolAddress, [SolAddress; 65]),
+	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings,
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -249,6 +254,13 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		Err(_) => defaults.sol_init_agg_key,
 	};
 
+	let chainlink_oracle_price_settings = match env::var("CHAINLINK_ORACLE_PRICE_SETTINGS") {
+		Ok(_) => unimplemented!(
+			"Oracle price election settings should not be supplied via environment variables"
+		),
+		Err(_) => defaults.chainlink_oracle_price_settings,
+	};
+
 	StateChainEnvironment {
 		flip_token_address,
 		eth_usdc_address,
@@ -291,6 +303,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		sol_swap_endpoint_program_data_account,
 		sol_alt_manager_program,
 		sol_address_lookup_table_account,
+		chainlink_oracle_price_settings,
 	}
 }
 
@@ -366,6 +379,7 @@ pub fn inner_cf_development_config(
 		sol_swap_endpoint_program_data_account,
 		sol_alt_manager_program,
 		sol_address_lookup_table_account,
+		chainlink_oracle_price_settings,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::builder(wasm_binary, Default::default())
 		.with_name("CF Develop")
@@ -466,7 +480,9 @@ pub fn inner_cf_development_config(
 				option_initial_state: Some(bitcoin_elections::initial_state()),
 			},
 			GenericElectionsConfig {
-				option_initial_state: Some(generic_elections::initial_state()),
+				option_initial_state: Some(generic_elections::initial_state(
+					chainlink_oracle_price_settings,
+				)),
 			},
 		))
 		.build())
@@ -523,6 +539,7 @@ macro_rules! network_spec {
 					sol_swap_endpoint_program_data_account,
 					sol_alt_manager_program,
 					sol_address_lookup_table_account,
+					chainlink_oracle_price_settings,
 				} = env_override.unwrap_or(ENV);
 				let protocol_id = format!(
 					"{}-{}",
@@ -654,7 +671,9 @@ macro_rules! network_spec {
 							option_initial_state: Some(bitcoin_elections::initial_state()),
 						},
 						GenericElectionsConfig {
-							option_initial_state: Some(generic_elections::initial_state()),
+							option_initial_state: Some(generic_elections::initial_state(
+								chainlink_oracle_price_settings,
+							)),
 						},
 					))
 					.build())

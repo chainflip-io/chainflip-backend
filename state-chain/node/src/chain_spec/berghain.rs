@@ -25,7 +25,9 @@ use cf_utilities::bs58_array;
 use sc_service::ChainType;
 use sol_prim::consts::{const_address, const_hash};
 use sp_core::H256;
-use state_chain_runtime::SetSizeParameters;
+use state_chain_runtime::{
+	chainflip::generic_elections::ChainlinkOraclePriceSettings, SetSizeParameters,
+};
 
 pub struct Config;
 
@@ -366,6 +368,13 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 			const_address("CeTTyF33ZDijNs9MCCMZVtoUFi5WBFVmZVrEkhoWhiHc"),
 		],
 	),
+	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings {
+		sol_oracle_program_id: todo!(),
+		sol_oracle_feeds: todo!(),
+		sol_oracle_query_helper: todo!(),
+		eth_contract_address: todo!(),
+		eth_oracle_feeds: todo!(),
+	},
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;

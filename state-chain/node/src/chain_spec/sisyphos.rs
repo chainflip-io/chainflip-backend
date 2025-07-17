@@ -32,6 +32,7 @@ use sc_service::ChainType;
 use sp_core::H256;
 
 use sol_prim::consts::{const_address, const_hash};
+use state_chain_runtime::chainflip::generic_elections::ChainlinkOraclePriceSettings;
 
 pub struct Config;
 
@@ -366,6 +367,13 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 			const_address("2zMqwgU9xm4foAaHGnYKiWANePwb4bhfYREyU9HSK6Eb"),
 		],
 	),
+	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings {
+		sol_oracle_program_id: todo!(),
+		sol_oracle_feeds: todo!(),
+		sol_oracle_query_helper: todo!(),
+		eth_contract_address: todo!(),
+		eth_oracle_feeds: todo!(),
+	},
 };
 
 pub const BASHFUL_ACCOUNT_ID: &str = "cFLbasoV5juCGacy9LvvwSgkupFiFmwt8RmAuA3xcaY5YmkBe";

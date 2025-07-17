@@ -1449,6 +1449,7 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	migrations::bitcoin_elections::Migration,
+	migrations::generic_elections::Migration,
 	MigrationsForV1_11,
 );
 

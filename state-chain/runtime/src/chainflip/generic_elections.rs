@@ -141,7 +141,7 @@ pub type GenericElectoralSystemRunner = CompositeRunner<
 	GenericElectionHooks,
 >;
 
-pub fn initial_state() -> InitialStateOf<Runtime, ()> {
+pub fn initial_state(settings: ChainlinkOraclePriceSettings) -> InitialStateOf<Runtime, ()> {
 	InitialState {
 		unsynchronised_state: (OraclePriceTracker {
 			chain_states: ExternalChainStates {
