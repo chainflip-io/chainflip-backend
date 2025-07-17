@@ -445,7 +445,6 @@ pub type BitcoinEgressWitnessingES = StatemachineElectoralSystem<TypesFor<Bitcoi
 pub type BitcoinLiveness = Liveness<
 	BlockNumber,
 	Hash,
-	cf_primitives::BlockNumber,
 	ReportFailedLivenessCheck<Bitcoin>,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,

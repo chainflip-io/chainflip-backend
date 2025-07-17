@@ -46,8 +46,7 @@ impl MockHook {
 	}
 }
 
-type SimpleLiveness =
-	Liveness<ChainBlockHash, ChainBlockNumber, BlockNumber, MockHook, ValidatorId, u32>;
+type SimpleLiveness = Liveness<ChainBlockHash, ChainBlockNumber, MockHook, ValidatorId, u32>;
 
 register_checks! {
 	SimpleLiveness {
