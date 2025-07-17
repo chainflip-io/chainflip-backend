@@ -367,13 +367,25 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 			const_address("EFbUq18Mcdi2gGauRzmbNeD5ixaB7EYVk5JZgAF34LoS"),
 		],
 	),
-    chainlink_oracle_price_settings: ChainlinkOraclePriceSettings {
-        sol_oracle_program_id: todo!(),
-        sol_oracle_feeds: todo!(),
-        sol_oracle_query_helper: todo!(),
-        eth_contract_address: todo!(),
-        eth_oracle_feeds: todo!(),
-    },
+	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings {
+		sol_oracle_program_id: const_address("DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X"),
+		sol_oracle_feeds: vec![
+			const_address("HDSV2wFxmsrmCwwY34QzaVkvmJpG7VF8S9fX2iThynjG"),
+			const_address("8U3c4SqXaXKPQiarNH3xHXiVoBLYbkqkzusthyJJjGrE"),
+			const_address("CrjmdLxTkmd5bxTQjE82FNgiuxeoY3G4EzzhDJ4RH9Wx"),
+			const_address("7BH1paBwjVDrHTb8YkHcyt7ZfxsCbnBMeByGBH6L8PFk"),
+			const_address("7qdy4DhvG5GDkiGNrsmrMcCyiVNPtmrUmGo3UntcrLwk"),
+		],
+		sol_oracle_query_helper: const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z"),
+		eth_contract_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
+		eth_oracle_feeds: vec![
+			hex_literal::hex!("322813Fd9A801c5507c9de605d63CEA4f2CE6c44"),
+			hex_literal::hex!("a85233C63b9Ee964Add6F2cffe00Fd84eb32338f"),
+			hex_literal::hex!("4A679253410272dd5232B3Ff7cF5dbB88f295319"),
+			hex_literal::hex!("09635F643e140090A9A8Dcd712eD6285858ceBef"),
+			hex_literal::hex!("c5a5C42992dECbae36851359345FE25997F5C42d"),
+		],
+	},
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;
