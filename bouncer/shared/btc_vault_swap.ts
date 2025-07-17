@@ -11,6 +11,7 @@ import {
   fineAmountToAmount,
   handleSubstrateError,
   stateChainAssetFromAsset,
+  waitForExt,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
@@ -30,20 +31,37 @@ interface BtcVaultSwapExtraParameters {
 
 export async function buildAndSendBtcVaultSwap(
   logger: Logger,
+  brokerUri: string,
   depositAmountBtc: number,
   destinationAsset: Asset,
   destinationAddress: string,
   refundAddress: string,
-  brokerFees: {
-    account: string;
-    commissionBps: number;
-  },
+  brokerFee: number,
   affiliateFees: {
     account: string;
     bps: number;
   }[] = [],
 ) {
   await using chainflip = await getChainflipApi();
+
+  const broker = createStateChainKeypair(brokerUri);
+
+  const existingPrivateChannel =
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await chainflip.query.swapping.brokerPrivateBtcChannels(broker.address)) as any;
+  if (!existingPrivateChannel) {
+    const release = await brokerMutex.acquire();
+    const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
+    const unsub = await chainflip.tx.swapping
+      .openPrivateBtcChannel()
+      .signAndSend(
+        broker,
+        { nonce: await chainflip.rpc.system.accountNextIndex(broker.address) },
+        waiter,
+      );
+    await promise;
+    unsub();
+  }
 
   const extraParameters: BtcVaultSwapExtraParameters = {
     chain: 'Bitcoin',
@@ -54,13 +72,13 @@ export async function buildAndSendBtcVaultSwap(
   logger.trace('Requesting vault swap parameter encoding');
   const BtcVaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
-    brokerFees.account,
+    broker.address,
     { chain: 'Bitcoin', asset: stateChainAssetFromAsset('Btc') },
     { chain: chainFromAsset(destinationAsset), asset: stateChainAssetFromAsset(destinationAsset) },
     chainFromAsset(destinationAsset) === Chains.Polkadot
       ? decodeDotAddressForContract(destinationAddress)
       : destinationAddress,
-    brokerFees.commissionBps,
+    brokerFee,
     extraParameters,
     null, // channel_metadata
     0, // boost_fee
@@ -102,17 +120,23 @@ export async function openPrivateBtcChannel(logger: Logger, brokerUri: string): 
   await fundFlip(logger, broker.address, fundAmount);
 
   // Open the private channel
-  const openedChannelEvent = observeEvent(logger, 'swapping:PrivateBrokerChannelOpened', {
-    test: (event) => event.data.brokerId === broker.address,
-  }).event;
   logger.trace('Opening private BTC channel');
-  await brokerMutex.runExclusive(async () => {
-    const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    await chainflip.tx.swapping
-      .openPrivateBtcChannel()
-      .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
-  });
-  return Number((await openedChannelEvent).data.channelId);
+  const release = await brokerMutex.acquire();
+  const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
+  const nonce = (await chainflip.rpc.system.accountNextIndex(broker.address)) as unknown as number;
+  const unsub = await chainflip.tx.swapping
+    .openPrivateBtcChannel()
+    .signAndSend(broker, { nonce }, waiter);
+  const events = await promise;
+  unsub();
+
+  const { channelId } = events
+    .find(
+      ({ event }) =>
+        event.section === 'swapping' && event.method === 'swapping:PrivateBrokerChannelOpened',
+    )!
+    .event.toHuman() as unknown as { channelId: string };
+  return Number(channelId);
 }
 
 export async function registerAffiliate(

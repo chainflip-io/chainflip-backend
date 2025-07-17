@@ -41,6 +41,7 @@ async function testRefundVaultSwap(logger: Logger) {
 
   await executeVaultSwap(
     logger,
+    '//BROKER_1',
     inputAsset,
     destAsset,
     destAddress,
@@ -149,6 +150,7 @@ async function testFeeCollection(
   // Do the vault swap
   await performVaultSwap(
     logger,
+    brokerUri,
     inputAsset,
     destAsset,
     destAddress,
@@ -158,7 +160,7 @@ async function testFeeCollection(
     0, // boostFeeBps
     undefined, // fillOrKillParams
     undefined, // dcaParams
-    { account: broker.address, commissionBps },
+    commissionBps,
     [{ accountAddress: affiliateId, commissionBps }],
   );
 
