@@ -31,6 +31,7 @@ use crate::evm::retry_rpc::EvmRetryRpcApi;
 use cf_primitives::EpochIndex;
 use codec::{Decode, Encode, MaxEncodedLen};
 use futures_core::Future;
+use pallet_cf_funding::DepositAndSCCallViaEthereum;
 use scale_info::TypeInfo;
 
 abigen!(ScUtils, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IScUtils.json");
@@ -88,7 +89,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		self.then::<Result<Bloom>, _, _>(move |epoch, header| {
 			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
 
-			let _process_call = process_call.clone();
+			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();
 			async move {
 				for event in events_at_block::<Inner::Chain, ScUtilsEvents, _>(
@@ -99,32 +100,35 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				.await?
 				{
 					info!("Handling event: {event}");
-					// TODO: To decode the call in the SC instead.
-					let _call: state_chain_runtime::RuntimeCall = match event.event_parameters {
-						ScUtilsEvents::DepositToScGatewayAndScCallFilter(DepositToScGatewayAndScCallFilter {
-							sender, // eth_address to attribute the FLIP to
-                            signer, // `tx.origin``. Not to be used for now
-                            amount, // FLIP amount deposited
-                            sc_call
-						}) => {
-                            match ScCallViaGateway::decode(&mut &sc_call[..]) {
-                                Ok(ScCallViaGateway::DelegateTo { operator }) => {
-									println!("Successfully Decoded ScCall! {:?}, deposited: {amount} FLIP, sender: {sender}, signer: {signer}, epoch index {:?}", operator, epoch.index);
-                                    trace!("Successfully decoded ScCall::DelegateTo with operator: {operator}");
-                                },
-                                Err(_e) => {
-									println!("Failed to decode ScCall");
-                                }
-                            }
-                            continue
-                        },
+					let call: state_chain_runtime::RuntimeCall = match event.event_parameters {
+						ScUtilsEvents::DepositToScGatewayAndScCallFilter(
+							DepositToScGatewayAndScCallFilter {
+								sender,    // eth_address to attribute the FLIP to
+								signer: _, // `tx.origin``. Not to be used for now
+								amount,    // FLIP amount deposited
+								sc_call,
+							},
+						) => {
+							pallet_cf_funding::Call::execute_sc_call {
+								sc_call: sc_call.to_vec(),
+								deposit_and_call:
+									DepositAndSCCallViaEthereum::FlipToSCGatewayAndCall {
+										amount: amount.try_into().unwrap(),
+										call: None, /* This will be filled on the SC after SC
+										             * decodes
+										             * the call from the sc_call bytes above */
+									},
+								caller: sender,
+								tx_hash: event.tx_hash.to_fixed_bytes(),
+							}
+							.into()
+						},
 						_ => {
 							trace!("Ignoring unused event: {event}");
 							continue
 						},
 					};
-                    // TODO: To add once we have something to call
-					// process_call(call, epoch.index).await;
+					process_call(call, epoch.index).await;
 				}
 
 				Result::Ok(header.data)

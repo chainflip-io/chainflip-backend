@@ -25,8 +25,9 @@ pub use safe_mode::*;
 pub mod lending;
 mod swapping;
 
-use cf_chains::{eth::WhitelistedCallsViaEthereum, SetGovKeyWithAggKeyError};
+use cf_chains::SetGovKeyWithAggKeyError;
 
+use frame_support::sp_runtime::AccountId32;
 pub use swapping::{
 	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
 	SwapRequestTypeEncoded, SwapType,
@@ -74,7 +75,7 @@ use sp_std::{
 };
 
 /// Common base config for Chainflip pallets.
-pub trait Chainflip: frame_system::Config {
+pub trait Chainflip: frame_system::Config<AccountId = AccountId32> {
 	/// The type used for Flip balances and auction bids.
 	type Amount: Member
 		+ Parameter
@@ -1262,6 +1263,8 @@ pub trait CcmAdditionalDataHandler {
 	fn handle_ccm_additional_data(ccm_data: DecodedCcmAdditionalData);
 }
 
-pub trait ExecuteSCCall<AccountId, FlipBalance> {
-	fn execute_whitelisted_sc_call(call: WhitelistedCallsViaEthereum<AccountId, FlipBalance>);
-}
+// pub trait ExecuteSCCall {
+// 	fn execute_sc_call_via_gateway(call: AllowedCallsViaSCGateway);
+// 	fn execute_sc_call_via_vault(call: AllowedCallsViaSCGateway);
+// 	fn execute_sc_call_via_transfer(call: AllowedCallsViaSCGateway);
+// }

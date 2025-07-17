@@ -256,32 +256,6 @@ impl From<&DepositChannel<Ethereum>> for EvmFetchId {
 	}
 }
 
-#[derive(
-	Copy,
-	Clone,
-	RuntimeDebug,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	MaxEncodedLen,
-	TypeInfo,
-	Serialize,
-	Deserialize,
-)]
-pub enum WhitelistedCallsViaEthereum<AccountId, FlipBalance> {
-	Delegate {
-		delegator: evm::Address, // Ethereum Address of the delegator
-		amount: FlipBalance,     //Flip amount to be delegator
-		operator: AccountId,     // Operator the amount to delegate to
-	},
-	Undelegate {
-		delegator: evm::Address, // Ethereum Address of the delegator
-		amount: FlipBalance,     // Flip amount to undelegate
-		operator: AccountId,     // Operator the amount was delegated to
-	},
-}
-
 #[cfg(any(test, feature = "runtime-benchmarks"))]
 pub mod sig_constants {
 	/*

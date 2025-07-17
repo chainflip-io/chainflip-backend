@@ -25,12 +25,15 @@ mod benchmarking;
 pub mod migrations;
 
 pub mod weights;
+use core::marker::PhantomData;
+
 pub use weights::WeightInfo;
 
 #[cfg(test)]
 mod tests;
 
 use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthAmount};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
 	Funding,
@@ -39,11 +42,16 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResult,
 	ensure,
+	pallet_prelude::DispatchError,
 	sp_runtime::{
 		traits::{CheckedSub, One, UniqueSaturatedInto, Zero},
 		Saturating,
 	},
-	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, StorageVersion, UnixTime},
+	traits::{
+		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OriginTrait, StorageVersion,
+		UnfilteredDispatchable, UnixTime,
+	},
+	DebugNoBound,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -53,6 +61,7 @@ use sp_std::{
 	collections::btree_map::BTreeMap,
 	prelude::*,
 };
+
 #[derive(Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub enum Pending {
 	Pending,
@@ -298,16 +307,20 @@ impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::eth::{Ethereum, WhitelistedCallsViaEthereum};
+	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
-	use cf_traits::{ExecuteSCCall, RedemptionCheck};
+	use cf_traits::RedemptionCheck;
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
+
+	use frame_support::sp_runtime::AccountId32;
 
 	#[allow(unused_imports)]
 	use sp_std::time::Duration;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
+
+	pub type RuntimeOrigin<T> = <T as frame_system::Config>::RuntimeOrigin;
 
 	pub type FundingAttempt<Amount> = (EthereumAddress, Amount);
 
@@ -356,9 +369,6 @@ pub mod pallet {
 
 		/// Provide information on current bidders
 		type RedemptionChecker: RedemptionCheck<ValidatorId = Self::AccountId>;
-
-		/// State Chain call executer
-		type SCCallExecutor: ExecuteSCCall<Self::AccountId, FlipBalance<Self>>;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
@@ -447,13 +457,19 @@ pub mod pallet {
 		RedemptionSettled(AccountId<T>, FlipBalance<T>),
 
 		/// A redemption has expired without being executed.
-		RedemptionExpired { account_id: AccountId<T> },
+		RedemptionExpired {
+			account_id: AccountId<T>,
+		},
 
 		/// A new restricted address has been added
-		AddedRestrictedAddress { address: EthereumAddress },
+		AddedRestrictedAddress {
+			address: EthereumAddress,
+		},
 
 		/// A restricted address has been removed
-		RemovedRestrictedAddress { address: EthereumAddress },
+		RemovedRestrictedAddress {
+			address: EthereumAddress,
+		},
 
 		/// A funding attempt has failed.
 		FailedFundingAttempt {
@@ -463,19 +479,31 @@ pub mod pallet {
 		},
 
 		/// The minimum funding amount has been updated.
-		MinimumFundingUpdated { new_minimum: T::Amount },
+		MinimumFundingUpdated {
+			new_minimum: T::Amount,
+		},
 
 		/// The Withdrawal Tax has been updated.
-		RedemptionTaxAmountUpdated { amount: T::Amount },
+		RedemptionTaxAmountUpdated {
+			amount: T::Amount,
+		},
 
 		/// The redemption amount was zero, so no redemption was made. The tax was still levied.
-		RedemptionAmountZero { account_id: AccountId<T> },
+		RedemptionAmountZero {
+			account_id: AccountId<T>,
+		},
 
 		/// An account has been bound to an address.
-		BoundRedeemAddress { account_id: AccountId<T>, address: EthereumAddress },
+		BoundRedeemAddress {
+			account_id: AccountId<T>,
+			address: EthereumAddress,
+		},
 
 		/// An account has been bound to an executor address.
-		BoundExecutorAddress { account_id: AccountId<T>, address: EthereumAddress },
+		BoundExecutorAddress {
+			account_id: AccountId<T>,
+			address: EthereumAddress,
+		},
 
 		/// A rebalance between two accounts has been executed.
 		Rebalance {
@@ -484,7 +512,7 @@ pub mod pallet {
 			amount: FlipBalance<T>,
 		},
 		SCCallExecuted {
-			sc_call: WhitelistedCallsViaEthereum<AccountId<T>, FlipBalance<T>>,
+			sc_call: DepositAndSCCallViaEthereum<T>,
 			tx_hash: EthTransactionHash,
 		},
 	}
@@ -565,21 +593,7 @@ pub mod pallet {
 			tx_hash: EthTransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			let total_balance = Self::add_funds_to_account(&account_id, amount);
-
-			if RestrictedAddresses::<T>::contains_key(funder) {
-				RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
-					map.entry(funder).and_modify(|balance| *balance += amount).or_insert(amount);
-				});
-			}
-
-			Self::deposit_event(Event::Funded {
-				account_id,
-				tx_hash,
-				funds_added: amount,
-				total_balance,
-			});
+			Self::fund_sc_account(account_id, funder, amount, tx_hash);
 			Ok(())
 		}
 
@@ -913,15 +927,52 @@ pub mod pallet {
 		#[pallet::weight(Weight::zero())]
 		pub fn execute_sc_call(
 			origin: OriginFor<T>,
-			sc_call: WhitelistedCallsViaEthereum<T::AccountId, FlipBalance<T>>,
+			sc_call: Vec<u8>,
+			mut deposit_and_call: DepositAndSCCallViaEthereum<T>,
+			caller: EthereumAddress,
 			// Required to ensure this call is unique per funding event.
 			tx_hash: EthTransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			T::SCCallExecutor::execute_whitelisted_sc_call(sc_call.clone());
+			// use 0 padded ethereum address as account_id which the flip funds are
+			// associated with on SC
+			let caller_account_id = AccountId32::new(
+				[[0u8; 12].as_slice(), caller.0.as_slice()].concat().try_into().unwrap(),
+			);
 
-			Self::deposit_event(Event::SCCallExecuted { sc_call, tx_hash });
+			match deposit_and_call {
+				DepositAndSCCallViaEthereum::FlipToSCGatewayAndCall { amount, ref mut call } => {
+					Self::fund_sc_account(
+						caller_account_id.clone(),
+						caller,
+						amount.into(),
+						tx_hash,
+					);
+
+					*call = AllowedCallsViaSCGateway::decode(&mut &sc_call[..]).map_or_else(
+						|e| {
+							log::warn!("SC call couldn't be decoded: {:?}", e);
+							None
+						},
+						Some,
+					);
+				},
+				// Deposit and calls via vault or transfers will be handled here in the future
+				_ => {},
+			}
+
+			// If the call fails to execute, we still succeed this extrinsic since we need to
+			// successfully process the deposit above. In this case, the deposit will be processed
+			// and no call will be executed.
+			if let Err(e) = deposit_and_call
+				.clone()
+				.dispatch_bypass_filter(RuntimeOrigin::<T>::signed(caller_account_id))
+			{
+				log::warn!("SC call couldn't be executed. It returned an error: {:?}", e);
+			}
+
+			Self::deposit_event(Event::SCCallExecuted { sc_call: deposit_and_call, tx_hash });
 			Ok(())
 		}
 	}
@@ -986,6 +1037,28 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 	}
+
+	fn fund_sc_account(
+		account_id: AccountId<T>,
+		funder: EthereumAddress,
+		amount: FlipBalance<T>,
+		tx_hash: EthTransactionHash,
+	) {
+		let total_balance = Self::add_funds_to_account(&account_id, amount);
+
+		if RestrictedAddresses::<T>::contains_key(funder) {
+			RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
+				map.entry(funder).and_modify(|balance| *balance += amount).or_insert(amount);
+			});
+		}
+
+		Self::deposit_event(Event::Funded {
+			account_id,
+			tx_hash,
+			funds_added: amount,
+			total_balance,
+		});
+	}
 }
 
 /// Ensure we clean up account specific items that definitely won't be required once the account
@@ -995,5 +1068,69 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 		RestrictedBalances::<T>::remove(account_id);
 		BoundExecutorAddress::<T>::remove(account_id);
 		BoundRedeemAddress::<T>::remove(account_id);
+	}
+}
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+#[scale_info(skip_type_params(T))]
+pub enum AllowedCallsViaSCGateway<T: Config> {
+	Delegate {
+		delegator: EthereumAddress, // Ethereum Address of the delegator
+		operator: T::AccountId,     // Operator the amount to delegate to
+	},
+	Undelegate {
+		delegator: EthereumAddress, // Ethereum Address of the delegator
+		operator: T::AccountId,     // Operator the amount was delegated to
+	},
+}
+
+// calls via vault and transfers for future use
+#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+pub enum AllowedCallsViaVault {}
+#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+pub enum AllowedCallsViaTransfer {}
+#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+pub enum AllowedCallsOnlyCalls {}
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+#[scale_info(skip_type_params(T))]
+pub enum DepositAndSCCallViaEthereum<T: Config> {
+	FlipToSCGatewayAndCall {
+		amount: EthAmount,
+		call: Option<AllowedCallsViaSCGateway<T>>,
+	},
+	ViaVault {
+		asset: EthAsset,
+		amount: EthAmount,
+		call: Option<AllowedCallsViaVault>,
+	},
+	TransferAndCall {
+		asset: EthAsset,
+		amount: EthAmount,
+		destination: EthereumAddress,
+		call: Option<AllowedCallsViaTransfer>,
+	},
+	NoDepositOnlyCall {
+		call: Option<AllowedCallsOnlyCalls>,
+	},
+	_Marker(PhantomData<T>),
+}
+
+impl<T: Config> UnfilteredDispatchable for DepositAndSCCallViaEthereum<T> {
+	type RuntimeOrigin = T::RuntimeOrigin;
+	fn dispatch_bypass_filter(
+		self,
+		_origin: Self::RuntimeOrigin,
+	) -> frame_support::dispatch::DispatchResultWithPostInfo {
+		match self {
+			DepositAndSCCallViaEthereum::FlipToSCGatewayAndCall { amount: _, call } => match call {
+				Some(AllowedCallsViaSCGateway::Delegate { delegator: _, operator: _ }) => todo!(),
+				Some(AllowedCallsViaSCGateway::Undelegate { delegator: _, operator: _ }) => todo!(),
+				None => Err(DispatchError::Other("Call does not exist or failed to decode").into()),
+			},
+
+			// Calls via vault and transfer will be supported in the future
+			_ => Ok(().into()),
+		}
 	}
 }
