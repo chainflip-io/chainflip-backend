@@ -75,7 +75,7 @@ def_derive! {
 	}
 }
 
-pub type ChainlinkPrice = FractionImpl<9_999_999_999>;
+pub type ChainlinkPrice = FractionImpl<99_999_999>;
 
 pub struct Chainlink;
 

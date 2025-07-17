@@ -379,15 +379,13 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 	}
 }
 
-/*
-
 #[cfg(test)]
 mod tests {
 	use proptest::prelude::{any, Just, Strategy};
 
 	use super::*;
 	use crate::electoral_systems::{
-		oracle_price::primitives::*,
+		oracle_price::{price::ChainlinkAssetPair, primitives::*},
 		state_machine::core::{hook_test_utils::MockHook, *},
 	};
 
@@ -417,5 +415,3 @@ mod tests {
 		)
 	}
 }
-
- */

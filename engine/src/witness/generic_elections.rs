@@ -64,6 +64,7 @@ struct OraclePriceVoter {
 	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 }
 
+#[derive(Debug, Clone)]
 struct PriceData {
 	pub description: String,
 	pub answer: i128,
@@ -130,25 +131,39 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 			},
 		};
 
+		tracing::debug!(
+			"Price feed results when querying {:?}: {:?}",
+			properties.chain,
+			price_feeds
+		);
+
 		let prices: BTreeMap<_, _> = price_feeds
 			.into_iter()
 			.filter_map(|price_data| {
 				let Some(asset_pair) = asset_pair_from_description(price_data.description.clone())
 				else {
 					tracing::debug!(
-						"Got price data with unknown description: {:?}",
+						"Ignoring price data with unknown description: {:?}",
 						price_data.description
 					);
 					return None;
 				};
 
 				let Ok(positive_price) = price_data.answer.try_into() else {
-					tracing::debug!("Got negative price data: {}", price_data.answer);
+					tracing::debug!(
+						"Ignoring negative price data for {:?}: {}",
+						asset_pair,
+						price_data.answer
+					);
 					return None;
 				};
 
 				if ChainlinkPrice::denominator() != 10u32.pow(price_data.decimals as u32).into() {
-					tracing::debug!("Got wrong number of decimals: {}", price_data.decimals);
+					tracing::debug!(
+						"Ignoring price for {:?} with wrong number of decimals ({})",
+						asset_pair,
+						price_data.decimals
+					);
 					return None;
 				}
 
