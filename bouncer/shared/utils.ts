@@ -137,7 +137,7 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'PRICE_FEED_SOL':
           return '0x4A679253410272dd5232B3Ff7cF5dbB88f295319';
         case 'SC_UTILS':
-          return '0x7a2088a1bFc9d81c55368AE168C2C02570cB814F';
+          return '0xc5a5C42992dECbae36851359345FE25997F5C42d';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
