@@ -39,8 +39,8 @@ use opentelemetry_sdk::{
 use pallet_cf_elections::{
 	UniqueMonotonicIdentifier,
 	electoral_systems::composite::{
-		tuple_6_impls::{self, *},
-		tuple_7_impls::{self, *},
+		tuple_6_impls::{self},
+		tuple_7_impls::{self},
 	},
 };
 use state_chain_runtime::{
@@ -56,7 +56,7 @@ use trace::{NodeDiff, StateTree, diff, get_key_name, map_with_parent};
 #[tokio::main(flavor = "multi_thread", worker_threads = 3)]
 async fn main() {
 	// get env vars
-	let rpc_url = env::var("CF_RPC_NODE").unwrap_or("wss://archive.sisyphos.chainflip.io".into());
+	let rpc_url = env::var("CF_RPC_NODE").unwrap_or("ws://localhost:9944".into());
 	let opentelemetry_backend_url =
 		env::var("OTLP_BACKEND").unwrap_or("http://localhost:4317".into());
 
@@ -121,7 +121,7 @@ async fn observe_elections<T: Tracer + Send>(
 
 					if let Some((_, comp)) = client.storage_double_map_entry::<pallet_cf_elections::IndividualComponents::<Runtime, SolanaInstance>>(block_hash, key.unique_monotonic(), validator)
 					.await.expect("could not get storage") {
-						println!("got individual component for election {key:?} for vld {validator_index}: {comp:?}");
+						println!("SOLANA: got individual component for election {key:?} for vld {validator_index}: {comp:?}");
 						solana_individual_components.entry(*key.unique_monotonic()).or_insert(BTreeMap::new()).insert(validator_index, comp);
 					}
 				}
@@ -188,7 +188,7 @@ async fn observe_elections<T: Tracer + Send>(
 
 					if let Some((_, comp)) = client.storage_double_map_entry::<pallet_cf_elections::IndividualComponents::<Runtime, BitcoinInstance>>(block_hash, key.unique_monotonic(), validator)
 					.await.expect("could not get storage") {
-						println!("got individual component for election {key:?} for vld {validator_index}: {comp:?}");
+						println!("Bitcoin got individual component for election {key:?} for vld {validator_index}: {comp:?}");
 						bitcoin_individual_components.entry(*key.unique_monotonic()).or_insert(BTreeMap::new()).insert(validator_index, comp);
 					}
 				}

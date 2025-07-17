@@ -199,7 +199,10 @@ where
 		let key2 = Election(format!("{name} ({id})"));
 
 		// election id
-		trace.insert(cloned_vec([&instance, &key0, &key1, &key2]), start.clone().with_attribute("height".into(), format!("{}",data.height)));
+		trace.insert(
+			cloned_vec([&instance, &key0, &key1, &key2]),
+			start.clone().with_attribute("height".into(), format!("{}", data.height)),
+		);
 
 		// properties
 		let key3 = Category(extra.clone(), Properties);
