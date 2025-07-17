@@ -160,8 +160,8 @@ async fn observe_elections<T: Tracer + Send>(
 			};
 
 			let solana_new_full_trace = make_traces(solana_election_data);
-			let solana_new_overview_trace = solana_new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() <= 5).collect::<BTreeMap<_,_>>();
-			let solana_new_detailed_traces = solana_new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() >= 3).collect::<BTreeMap<_,_>>();
+			let solana_new_overview_trace = solana_new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() <= 4).collect::<BTreeMap<_,_>>();
+			let solana_new_detailed_traces = solana_new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() >= 2).collect::<BTreeMap<_,_>>();
 
 			let solana_overview_traces = push_traces(&tracer, solana_overview_traces, solana_new_overview_trace);
 			let solana_detailed_traces = push_traces(&tracer, solana_detailed_traces, solana_new_detailed_traces);
@@ -226,8 +226,8 @@ async fn observe_elections<T: Tracer + Send>(
 			};
 
 			let bitcoin_new_full_trace = make_traces(bitcoin_election_data);
-			let bitcoin_new_overview_trace = bitcoin_new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() <= 5).collect::<BTreeMap<_,_>>();
-			let bitcoin_new_detailed_traces = bitcoin_new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() >= 3).collect::<BTreeMap<_,_>>();
+			let bitcoin_new_overview_trace = bitcoin_new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() <= 4).collect::<BTreeMap<_,_>>();
+			let bitcoin_new_detailed_traces = bitcoin_new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() >= 2).collect::<BTreeMap<_,_>>();
 
 			let bitcoin_overview_traces = push_traces(&tracer, bitcoin_overview_traces, bitcoin_new_overview_trace);
 			let bitcoin_detailed_traces = push_traces(&tracer, bitcoin_detailed_traces, bitcoin_new_detailed_traces);
