@@ -34,7 +34,8 @@ import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { newCcmMetadata } from 'shared/swapping';
 
 const keyring = new Keyring({ type: 'sr25519' });
-const broker = keyring.createFromUri('//BROKER_1');
+const brokerUri = '//BROKER_1';
+const broker = keyring.createFromUri(brokerUri);
 
 /**
  * Observes the balance of a BTC address and returns true if the balance changes. Times out after 100 seconds and returns false if the balance does not change.
@@ -226,14 +227,12 @@ async function brokerLevelScreeningTestBtcVaultSwap(
   const destinationAddressForUsdc = await newAssetAddress('Usdc');
   const txId = await buildAndSendBtcVaultSwap(
     logger,
+    brokerUri,
     parseFloat(amount),
     'Usdc',
     destinationAddressForUsdc,
     refundAddress,
-    {
-      account: broker.address,
-      commissionBps: 0,
-    },
+    0,
     [],
   );
   await reportFunction(txId);
