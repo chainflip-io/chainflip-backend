@@ -38,7 +38,7 @@ use sp_std::{vec, vec::Vec};
 
 pub fn get_current_chainlink_prices(
 	state: &OraclePriceTracker<TypesFor<Chainlink>>,
-) -> BTreeMap<PriceAsset, (Price, PriceStatus)> {
+) -> BTreeMap<PriceAsset, (Price, PriceStaleness)> {
 	//
 	// WARNING: We are currently assuming that USD == USDC!
 	//
