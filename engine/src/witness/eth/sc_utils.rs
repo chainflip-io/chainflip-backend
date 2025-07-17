@@ -46,26 +46,6 @@ use anyhow::Result;
 // Undelegate and the UndelegateAndRedeem under the ScCallViaGateway enum.
 // TODO: To discuss if this is  the approach we want to take.
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub enum ScCallViaGateway {
-	DelegateTo { operator: AccountId },
-	// Undelegate { current_operator: AccountId },
-	// UndelegateAndRedeem { current_operator: AccountId },
-	// TODO: We might just want to just use the Gateway for that, as
-	// funding from a different ETH account won't work here.
-	// NoOp {}, // basically just funding
-}
-
-// Can be used for `DepositToVaultAndScCall` event`. Could be used for both
-// lenders and borrowers if we wanted to.
-// #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-// pub enum ScCallViaVault {
-// 	AddLoanCollateral { loan_id: H256 },
-//  AddFunds {},
-//  StopLending {amount: Amount}
-// 	...
-// }
-
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn sc_utils_witnessing<
 		EvmRpcClient: EvmRetryRpcApi + ChainClient + Clone,

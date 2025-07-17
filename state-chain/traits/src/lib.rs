@@ -1262,9 +1262,3 @@ pub trait PoolPriceProvider {
 pub trait CcmAdditionalDataHandler {
 	fn handle_ccm_additional_data(ccm_data: DecodedCcmAdditionalData);
 }
-
-// pub trait ExecuteSCCall {
-// 	fn execute_sc_call_via_gateway(call: AllowedCallsViaSCGateway);
-// 	fn execute_sc_call_via_vault(call: AllowedCallsViaSCGateway);
-// 	fn execute_sc_call_via_transfer(call: AllowedCallsViaSCGateway);
-// }
