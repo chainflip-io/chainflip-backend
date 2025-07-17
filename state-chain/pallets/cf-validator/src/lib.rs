@@ -1045,11 +1045,6 @@ pub mod pallet {
 			let account_id = ensure_signed(origin)?;
 
 			ensure!(
-				!ManagedDelegations::<T>::contains_key(&account_id),
-				Error::<T>::AlreadyDelegating
-			);
-
-			ensure!(
 				!T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Validator),
 				Error::<T>::DelegationNotAllowed
 			);
@@ -1074,9 +1069,19 @@ pub mod pallet {
 				),
 			}
 
-			ManagedDelegations::<T>::insert(&account_id, &operator_id);
+			ManagedDelegations::<T>::mutate(account_id.clone(), |maybe_operator| {
+				if let Some(operator) = maybe_operator {
+					Self::deposit_event(Event::UnDelegated {
+						account_id: account_id.clone(),
+						operator_id: operator.clone(),
+					});
+					*operator = operator_id.clone();
+				} else {
+					*maybe_operator = Some(operator_id.clone());
+				}
 
-			Self::deposit_event(Event::Delegated { account_id, operator_id });
+				Self::deposit_event(Event::Delegated { account_id, operator_id });
+			});
 
 			Ok(())
 		}
