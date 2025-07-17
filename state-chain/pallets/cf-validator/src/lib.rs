@@ -484,7 +484,7 @@ pub mod pallet {
 		AlreadyDelegating,
 		/// The account is not delegating.
 		AccountIsNotDelegating,
-		/// Delegation is only available to accounts with no role assigned.
+		/// Delegation is only available to none validators.
 		DelegationNotAllowed,
 		/// Can not delegate to none operator.
 		NotOperator,
@@ -1050,7 +1050,7 @@ pub mod pallet {
 			);
 
 			ensure!(
-				T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Unregistered),
+				!T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Validator),
 				Error::<T>::DelegationNotAllowed
 			);
 
