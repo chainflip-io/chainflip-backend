@@ -79,13 +79,12 @@ impl Display for Category {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Key {
-	RootBlockHeight(u32),
+	RootBlockHeight { start_block: u32, elections_pallet_instance: String },
 	ElectoralSystem(String),
 	Election(String),
 	Category(String, Category),
 	Validator(u32),
 	State { summary: String },
-	Instance(String),
 }
 
 use Key::*;
@@ -93,13 +92,16 @@ use Key::*;
 impl Display for Key {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			RootBlockHeight(h) => write!(f, "blocks {h}-{}", h + BLOCKS_PER_TRACE - 1),
+			RootBlockHeight { start_block, elections_pallet_instance } => write!(
+				f,
+				"{elections_pallet_instance} blocks {start_block}-{}",
+				start_block + BLOCKS_PER_TRACE - 1
+			),
 			Election(e) => write!(f, "{e}"),
 			Key::Category(extra, category) => write!(f, "[{extra}] {category}"),
 			Validator(x) => write!(f, "Validator {x}"),
 			ElectoralSystem(name) => write!(f, "ES {name}"),
 			State { summary } => write!(f, "{summary}"),
-			Instance(instance) => write!(f, "{instance}"),
 		}
 	}
 }
@@ -175,16 +177,17 @@ where
 	let mut trace = StateTree::new();
 
 	let root_height = data.height - (data.height % BLOCKS_PER_TRACE);
-	let instance: Key = Instance(data.instance);
-	let key0 = RootBlockHeight(root_height);
+	let instance: String = data.instance.clone();
+	let key0 =
+		RootBlockHeight { start_block: root_height, elections_pallet_instance: data.instance };
 	trace.insert(
-		vec![instance.clone(), key0.clone()],
+		vec![key0.clone()],
 		end.with_attribute("height".into(), format!("{instance}{root_height}")),
 	);
 
 	for name in data.electoral_system_names {
 		trace.insert(
-			vec![instance.clone(), key0.clone(), ElectoralSystem(name.clone())],
+			vec![key0.clone(), ElectoralSystem(name.clone())],
 			end.with_attribute("height".into(), format!("{root_height}")),
 		);
 	}
@@ -200,14 +203,14 @@ where
 
 		// election id
 		trace.insert(
-			cloned_vec([&instance, &key0, &key1, &key2]),
-			start.clone().with_attribute("height".into(), format!("{}", data.height)),
+			cloned_vec([&key0, &key1, &key2]),
+			end.clone().with_attribute("height".into(), format!("{}", data.height)),
 		);
 
 		// properties
 		let key3 = Category(extra.clone(), Properties);
 		trace.insert(
-			cloned_vec([&instance, &key0, &key1, &key2, &key3]),
+			cloned_vec([&key0, &key1, &key2, &key3]),
 			end.with_attribute("Properties".into(), format!("{properties:#?}")),
 		);
 
@@ -221,9 +224,9 @@ where
 				None => (Category(extra.clone(), NoVote), start.clone()),
 			};
 
-			trace.insert(cloned_vec([&instance, &key0, &key1, &key2, &key]), trace_init.clone());
+			trace.insert(cloned_vec([&key0, &key1, &key2, &key]), trace_init.clone());
 			trace.insert(
-				cloned_vec([&instance, &key0, &key1, &key2, &key3, &Validator(authority_id)]),
+				cloned_vec([&key0, &key1, &key2, &key3, &Validator(authority_id)]),
 				trace_init,
 			);
 		}
