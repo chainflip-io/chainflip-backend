@@ -970,7 +970,7 @@ pub mod pallet {
 		pub fn block_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 
-			// TODO: Check of delegator is currently delegation to this operator and error if so.
+			ManagedDelegations::<T>::remove(delegator_id.clone());
 
 			AllowedDelegators::<T>::mutate(&operator_id, |delegators| {
 				delegators.remove(&delegator_id);
