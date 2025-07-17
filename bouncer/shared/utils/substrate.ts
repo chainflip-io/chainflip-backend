@@ -97,7 +97,7 @@ const getCachedSubstrateApi = (endpoint: string) =>
   });
 
 export const getChainflipApi = getCachedSubstrateApi(
-  process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944',
+  process.env.CF_NODE_ENDPOINT ?? 'wss://archive.perseverance.chainflip.io', // 'ws://127.0.0.1:9944' //'wss://archive.perseverance.chainflip.io', //'wss://archive.sisyphos.chainflip.io',
 );
 
 export const CHAINFLIP_HTTP_ENDPOINT = process.env.CF_NODE_HTTP_ENDPOINT ?? 'http://127.0.0.1:9944';
