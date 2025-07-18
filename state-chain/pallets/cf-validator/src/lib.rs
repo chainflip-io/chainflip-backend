@@ -466,7 +466,7 @@ pub mod pallet {
 		ValidatorDoesNotExist,
 		/// Not authorized to perform this action.
 		NotAuthorized,
-		/// Operator is still delegating to validators.
+		/// Operator is still associated with validators.
 		StillAssociatedWithValidators,
 		/// The validator is not claimed by any operator.
 		NotClaimedByOperator,
@@ -1032,6 +1032,15 @@ pub mod pallet {
 				)
 				.is_empty(),
 				Error::<T>::StillAssociatedWithValidators
+			);
+
+			ensure!(
+				Self::get_all_associations_by_operator(
+					&account_id,
+					AssociationToOperator::Delegator
+				)
+				.is_empty(),
+				Error::<T>::StillAssociatedWithDelegators
 			);
 
 			T::AccountRoleRegistry::deregister_as_operator(&account_id)?;
