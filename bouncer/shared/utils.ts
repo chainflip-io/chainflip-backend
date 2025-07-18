@@ -34,7 +34,8 @@ import { getChainflipApi, observeBadEvent, observeEvent } from 'shared/utils/sub
 import { execWithLog } from 'shared/utils/exec_with_log';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
-import { Logger, loggerError, throwError } from 'shared/utils/logger';
+import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logger';
+import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -342,7 +343,8 @@ export async function runWithTimeoutAndExit<T>(
   seconds: number,
 ): Promise<void> {
   const start = Date.now();
-  await runWithTimeout(promise, seconds).catch((error) => {
+  const taskDescription = process.argv[1].split('/').pop() || 'unknown task';
+  await runWithTimeout(promise, seconds, globalLogger, taskDescription).catch((error) => {
     console.error(error);
     process.exit(-1);
   });
@@ -437,18 +439,19 @@ export async function observeSwapEvents(
   let broadcastId;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const unsubscribe: any = await subscribeMethod(async (header) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const events: any[] = await api.query.system.events.at(header.hash);
+  const unsubscribe: any = await subscribeMethod(async (header: Header) => {
+    const events = (await (
+      await api.at(header.hash)
+    ).query.system.events()) as unknown as EventRecord[];
 
-    for (const record of events) {
-      const { event } = record;
+    for (const { event } of events) {
       if (broadcastEventFound || !event.method.includes(expectedEvent)) {
         // eslint-disable-next-line no-continue
         continue;
       }
 
-      const data = event.toHuman().data;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = event.data.toHuman() as any;
 
       switch (expectedEvent) {
         case swapRequestedEvent: {
@@ -1026,9 +1029,8 @@ export function getEncodedSolAddress(address: string): string {
   return /^0x[a-fA-F0-9]+$/.test(address) ? encodeSolAddress(address) : address;
 }
 
-export function handleSubstrateError(api: ApiPromise, exit = true) {
-  return (arg: ISubmittableResult) => {
-    const { dispatchError } = arg;
+export function handleDispatchError(api: ApiPromise, exit = true) {
+  return ({ dispatchError }: { dispatchError: DispatchError | undefined }) => {
     if (dispatchError) {
       let error;
       if (dispatchError.isModule) {
@@ -1044,6 +1046,53 @@ export function handleSubstrateError(api: ApiPromise, exit = true) {
         throw new Error('Dispatch error: ' + error);
       }
     }
+  };
+}
+
+export function handleSubstrateError(api: ApiPromise, exit = true) {
+  return ({ dispatchError }: ISubmittableResult) => {
+    handleDispatchError(api, exit)({ dispatchError });
+  };
+}
+
+/**
+ * Returns a promise that resolves with the events of the extrinsic.
+ *
+ * @param api - The ApiPromise instance.
+ * @param logger - The logger instance.
+ * @param waitForStatus - The status to wait for, either 'InBlock' or 'Finalized'.
+ * @param mutexRelease - Optional function to release a mutex after the extrinsic is processed.
+ * @returns An object containing a promise that resolves with the events and a waiter function
+ *          that should be passed during extrinsic submission.
+ */
+export function waitForExt(
+  api: ApiPromise,
+  logger: Logger,
+  waitForStatus: 'InBlock' | 'Finalized',
+  mutexRelease?: () => void,
+): {
+  promise: Promise<EventRecord[]>;
+  waiter: (result: ISubmittableResult) => void;
+} {
+  const { promise, resolve } = deferredPromise<EventRecord[]>();
+  let release = !!mutexRelease;
+  return {
+    promise,
+    waiter: ({ events, status, dispatchError }) => {
+      if (release) {
+        mutexRelease!();
+        release = false;
+      }
+      logger.debug(`Extrinsic status: ${status.toString()}`);
+      if (dispatchError) {
+        logger.warn(`Extrinsic error: ${dispatchError.toString()}`);
+        handleDispatchError(api)({ dispatchError });
+      } else if (waitForStatus === 'InBlock' && status.isInBlock === true) {
+        resolve(events);
+      } else if (waitForStatus === 'Finalized' && status.isFinalized === true) {
+        resolve(events);
+      }
+    },
   };
 }
 

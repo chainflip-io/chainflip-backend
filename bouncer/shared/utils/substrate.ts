@@ -1,9 +1,10 @@
 import 'disposablestack/auto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Observable, Subject } from 'rxjs';
-import { deferredPromise, runWithTimeout, sleep } from 'shared/utils';
-import { Logger } from 'shared/utils/logger';
+import { deferredPromise, runWithTimeout } from 'shared/utils';
+import { globalLogger, Logger } from 'shared/utils/logger';
 import { appendFileSync } from 'node:fs';
+import { EventRecord, Header } from '@polkadot/types/interfaces';
 
 // Set the STATE_CHAIN_EVENT_LOG_FILE env var to log all state chain events to a file. Used for debugging.
 export const stateChainEventLogFile = process.env.STATE_CHAIN_EVENT_LOG_FILE; // ?? '/tmp/chainflip/state_chain_events.log';
@@ -126,123 +127,235 @@ export type Event<T = any> = {
   eventIndex: number;
 };
 
-// Iterate over all the events, reshaping them for the consumer
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapEvents(events: any[], blockNumber: number): Event[] {
-  return events.map(({ event }, index) => ({
-    name: { section: event.section, method: event.method },
-    data: event.toHuman().data,
-    block: blockNumber,
-    eventIndex: index,
-  }));
-}
-
 class EventCache {
-  private cache: Map<string, Event[]>;
+  private events: Map<string, Event[]>;
 
-  private blockNumberToHash: Map<number, string>;
+  private headers: Map<string, Header>;
 
-  private cacheSizeBlocks: number;
+  // Determines the cache size limit, beyond which we cull old blocks down to the cacheAgeLimit.
+  private cacheSizeLimit: number;
+
+  private cacheAgeLimit: number;
 
   private chain: SubstrateChain;
 
-  private finalisedBlockNumber: number | undefined;
+  private bestBlockNumber: number | undefined;
 
-  private pendingRequests: number[];
+  public bestBlockHash: string | undefined;
+
+  private finalisedBlockNumber: number | undefined;
 
   private outputFile: string | undefined;
 
-  constructor(cacheSizeBlocks: number, chain: SubstrateChain, outputFile?: string) {
-    this.cache = new Map();
-    this.blockNumberToHash = new Map();
-    this.cacheSizeBlocks = cacheSizeBlocks;
+  private logger: Logger | undefined;
+
+  private newHeadsSubject: Subject<{ header: Header; events: Event[] }> | undefined;
+
+  private finalisedHeadsSubject: Subject<{ header: Header; events: Event[] }> | undefined;
+
+  private subscriptionDisposer: (() => Promise<void>) | undefined;
+
+  constructor(cacheAgeLimit: number, chain: SubstrateChain, outputFile?: string, logger?: Logger) {
+    this.events = new Map();
+    this.headers = new Map();
+    this.cacheAgeLimit = cacheAgeLimit;
+    this.cacheSizeLimit = cacheAgeLimit * 2;
     this.chain = chain;
     this.finalisedBlockNumber = undefined;
     this.outputFile = outputFile;
-    this.pendingRequests = [];
+    this.logger = logger;
+    this.newHeadsSubject = undefined;
+    this.finalisedHeadsSubject = undefined;
+    this.subscriptionDisposer = undefined;
   }
 
-  addEvents(blockHash: string, events: Event[], isFinalised = false) {
-    if (this.cache.has(blockHash)) {
-      return; // Event already in cache
-    }
-    // Removed old block with different hash
-    const blockNumber = events[0].block;
-    if (this.blockNumberToHash.has(blockNumber)) {
-      this.cache.delete(this.blockNumberToHash.get(blockNumber)!);
-      this.blockNumberToHash.delete(blockNumber);
+  async eventsForHeader(blockHeader: Header, finalized: boolean = false): Promise<Event[]> {
+    const blockHash = blockHeader.hash.toString();
+    const blockHeight = blockHeader.number.toNumber();
+
+    // Update finalization info based on the stream type
+    if (finalized) {
+      this.finalisedBlockNumber = blockHeight;
     }
 
-    // Add new block to cache
-    this.cache.set(blockHash, events);
-    this.blockNumberToHash.set(blockNumber, blockHash);
-    if (isFinalised) {
-      this.finalisedBlockNumber = blockNumber;
-    }
-    // Log the events
-    if (this.outputFile) {
-      appendFileSync(this.outputFile, `Block ${blockNumber}: ` + JSON.stringify(events) + '\n');
+    // Not necessarily 100% correct: ideally we would trace the block headers back to the latest finalised block.
+    // Should be good enough for most use cases.
+    if (this.bestBlockNumber === undefined || blockHeight > this.bestBlockNumber) {
+      this.bestBlockNumber = blockHeight;
+      this.bestBlockHash = blockHash;
     }
 
-    // Remove old blocks to maintain cache size
-    if (this.cache.size > this.cacheSizeBlocks) {
-      const oldestBlockNumber = Array.from(this.blockNumberToHash.keys()).reduce(
-        (oldest, current) => (current < oldest! ? current : oldest),
+    // Update the caches.
+    if (!this.events.has(blockHash)) {
+      this.logger?.debug(
+        `Caching new ${finalized ? 'finalized' : ''} block ${blockHeight} (${blockHash}) on chain ${this.chain} with finalised block number ${this.finalisedBlockNumber}`,
       );
-      this.cache.delete(this.blockNumberToHash.get(oldestBlockNumber)!);
-      this.blockNumberToHash.delete(oldestBlockNumber);
+
+      this.headers.set(blockHash, blockHeader);
+
+      const api = await (await apiMap[this.chain]()).at(blockHash);
+      const rawEvents = (await api.query.system.events()) as unknown as EventRecord[];
+      const events = rawEvents.map(({ event }) => ({
+        name: { section: event.section, method: event.method },
+        data: event.data.toHuman(),
+        block: blockHeader.number.toNumber(),
+        eventIndex: event.index as unknown as number,
+      }));
+
+      // Log the events
+      if (this.outputFile) {
+        appendFileSync(
+          this.outputFile,
+          `Block ${blockHeight}:${blockHash}: ` + JSON.stringify(events) + '\n',
+        );
+      }
+
+      // Update the cache.
+      this.events.set(blockHash, events);
+
+      // If the cache size exceeds the size limit, remove old blocks up to the cacheAgeLimit.
+      if (this.headers.size > this.cacheSizeLimit) {
+        this.logger?.debug('Reducing cache');
+        const oldHashes = Array.from(this.headers.entries()).filter(([_hash, header]) => {
+          if (header.number.toNumber() < blockHeight - this.cacheAgeLimit) {
+            return true;
+          }
+          return false;
+        });
+        oldHashes.forEach(([hash, header]) => {
+          this.logger?.debug(`Removing old block ${header.number}:${hash} from cache`);
+          this.headers.delete(hash);
+          this.events.delete(hash);
+        });
+      }
+
+      this.logger?.debug(
+        `Cached ${events.length} events for block ${blockHeight} (${blockHash}) on chain ${this.chain}`,
+      );
+
+      return events;
     }
+    this.logger?.debug(`Using cached events for block ${blockHeight} (${blockHash})`);
+    return this.events.get(blockHash)!;
   }
 
-  async getEvents(fromBlock: number, toBlock: number): Promise<Event[]> {
+  async getHistoricalEvents(bestHeader: Header, historicalCheckBlocks: number): Promise<Event[]> {
+    if (historicalCheckBlocks <= 0) {
+      return [];
+    }
+    if (historicalCheckBlocks > this.cacheAgeLimit) {
+      this.logger?.warn(
+        `Historical check blocks (${historicalCheckBlocks}) exceeds cache size (${this.cacheAgeLimit}). Using cache size instead.`,
+      );
+    }
+    const depthLimit = Math.min(historicalCheckBlocks, this.cacheAgeLimit);
+
     const api = await apiMap[this.chain]();
-    const events: Event[] = [];
+    const events: Event[][] = [];
 
-    // Update the finalised block number if needed
-    if (this.finalisedBlockNumber === undefined || this.finalisedBlockNumber! < toBlock) {
-      const newFinalisedHash = await api.rpc.chain.getFinalizedHead();
-      this.finalisedBlockNumber = (
-        await api.rpc.chain.getHeader(newFinalisedHash)
-      ).number.toNumber();
+    this.logger?.debug(
+      `Checking historical events for chain ${this.chain} over the last ${depthLimit} blocks`,
+    );
+
+    let depth = 0;
+    let currentHash = bestHeader.parentHash.toString();
+    while (depth < depthLimit) {
+      depth++;
+      const currentHeader = (await api.rpc.chain.getHeader(currentHash)) as Header;
+      const currentEvents = await this.eventsForHeader(currentHeader, false);
+
+      this.logger?.debug(
+        `Found ${currentEvents.length} events at depth ${depth} for block ${currentHeader.number.toNumber()} (${currentHeader.hash.toString()})`,
+      );
+
+      events.push(currentEvents);
+
+      if (currentHeader.number.toNumber() === 0) {
+        this.logger?.debug('Reached genesis block, stopping historical event retrieval');
+        break;
+      }
+
+      currentHash = currentHeader.parentHash.toString();
     }
 
-    // Get events from cache or fetch them from the node
-    for (let i = fromBlock; i <= toBlock; i++) {
-      let blockHash = this.blockNumberToHash.get(i);
-      // No need to fetch the hash if it is already finalised and in the cache
-      if (
-        blockHash === undefined ||
-        this.finalisedBlockNumber === undefined ||
-        i > this.finalisedBlockNumber!
-      ) {
-        blockHash = (await api.rpc.chain.getBlockHash(i)).toString();
+    return events.reverse().flat();
+  }
+
+  private async startBackgroundSubscription(): Promise<void> {
+    if (this.subscriptionDisposer) {
+      return; // Already running
+    }
+
+    const stack = new AsyncDisposableStack();
+    const api = stack.use(await apiMap[this.chain]());
+
+    this.newHeadsSubject = new Subject<{ header: Header; events: Event[] }>();
+    this.finalisedHeadsSubject = new Subject<{ header: Header; events: Event[] }>();
+
+    // Subscribe to all heads
+    const unsubscribeAllHeads = await api.rpc.chain.subscribeAllHeads(async (header: Header) => {
+      try {
+        const events = await this.eventsForHeader(header, false);
+        this.newHeadsSubject?.next({ header, events });
+      } catch (error) {
+        this.logger?.error('Error processing new head:', error);
+        this.newHeadsSubject?.error(error);
       }
-      // Wait for the block to be fetched if someone else already requested it
-      let timeout = 0;
-      while (this.pendingRequests.includes(i)) {
-        if (timeout++ > 50) {
-          break;
+    });
+
+    // Subscribe to finalised heads
+    const unsubscribeFinalizedHeads = await api.rpc.chain.subscribeFinalizedHeads(
+      async (header: Header) => {
+        try {
+          const events = await this.eventsForHeader(header, true);
+          this.finalisedHeadsSubject?.next({ header, events });
+        } catch (error) {
+          this.logger?.error('Error processing finalised head:', error);
+          this.finalisedHeadsSubject?.error(error);
         }
-        await sleep(100);
+      },
+    );
+
+    stack.defer(unsubscribeAllHeads);
+    stack.defer(unsubscribeFinalizedHeads);
+    stack.defer(() => {
+      this.newHeadsSubject?.complete();
+      this.finalisedHeadsSubject?.complete();
+      this.newHeadsSubject = undefined;
+      this.finalisedHeadsSubject = undefined;
+    });
+
+    this.subscriptionDisposer = () => {
+      this.subscriptionDisposer = undefined;
+      return stack.disposeAsync();
+    };
+  }
+
+  async getObservable(
+    finalized: boolean = false,
+  ): Promise<Observable<{ header: Header; events: Event[] }>> {
+    await this.startBackgroundSubscription();
+
+    if (finalized) {
+      if (!this.finalisedHeadsSubject) {
+        throw new Error('Finalised heads subscription not initialized');
       }
-      if (this.cache.has(blockHash)) {
-        events.push(...this.cache.get(blockHash)!);
-      } else {
-        this.pendingRequests.push(i);
-        const historicApi = await api.at(blockHash);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
-        const mappedEvents = mapEvents(rawEvents, i);
-        this.addEvents(blockHash, mappedEvents);
-        this.pendingRequests = this.pendingRequests.filter((block) => block !== i);
-        events.push(...mappedEvents);
-      }
+      return this.finalisedHeadsSubject.asObservable();
     }
-    return events;
+    if (!this.newHeadsSubject) {
+      throw new Error('New heads subscription not initialized');
+    }
+    return this.newHeadsSubject.asObservable();
+  }
+
+  async dispose(): Promise<void> {
+    if (this.subscriptionDisposer) {
+      await this.subscriptionDisposer();
+    }
   }
 }
 
-const chainflipEventCache = new EventCache(100, 'chainflip', stateChainEventLogFile);
+const chainflipEventCache = new EventCache(100, 'chainflip', stateChainEventLogFile, globalLogger);
 const polkadotEventCache = new EventCache(100, 'polkadot');
 const assethubEventCache = new EventCache(100, 'assethub');
 const eventCacheMap = {
@@ -312,36 +425,13 @@ async function* observableToIterable<T>(observer: Observable<T>, signal?: AbortS
 
 const subscribeHeads = getCachedDisposable(
   async ({ chain, finalized = false }: { chain: SubstrateChain; finalized?: boolean }) => {
-    // prepare a stack for cleanup
-    const stack = new AsyncDisposableStack();
-    // Take the correct substrate API
-    const api = stack.use(await apiMap[chain]());
-
-    const subject = new Subject<Event[]>();
-
-    // subscribe to the correct head based on the finalized flag
-    const subscribe = finalized
-      ? api.rpc.chain.subscribeFinalizedHeads
-      : api.rpc.chain.subscribeNewHeads;
-
-    const unsubscribe = await subscribe(async (header) => {
-      const historicApi = await api.at(header.hash);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
-      const mappedEvents = mapEvents(rawEvents, header.number.toNumber());
-      const cache = eventCacheMap[chain];
-      cache.addEvents(header.hash.toString(), mappedEvents, finalized);
-      subject.next(mappedEvents);
-    });
-
-    // automatic cleanup!
-    stack.defer(unsubscribe);
-    stack.defer(() => subject.complete());
+    const cache = eventCacheMap[chain];
+    const observable = await cache.getObservable(finalized);
 
     return {
-      observable: subject as Observable<Event[]>,
+      observable,
       [Symbol.asyncDispose]() {
-        return stack.disposeAsync();
+        return Promise.resolve();
       },
     };
   },
@@ -349,17 +439,13 @@ const subscribeHeads = getCachedDisposable(
 
 async function getPastEvents(
   chain: SubstrateChain,
+  bestHeader: Header,
   historicalCheckBlocks: number,
 ): Promise<Event[]> {
   if (historicalCheckBlocks <= 0) {
-    throw new Error('Invalid Historical Check Blocks');
+    return [];
   }
-  const api = await apiMap[chain]();
-  const latestHeader = await api.rpc.chain.getHeader();
-  const latestBlockNumber = latestHeader.number.toNumber();
-  const startAtBlock = Math.max(latestBlockNumber - historicalCheckBlocks, 0);
-  const cache = eventCacheMap[chain];
-  return cache.getEvents(startAtBlock, latestBlockNumber);
+  return eventCacheMap[chain].getHistoricalEvents(bestHeader, historicalCheckBlocks);
 }
 
 type EventTest<T> = (event: Event<T>) => boolean;
@@ -370,6 +456,7 @@ interface BaseOptions<T> {
   finalized?: boolean;
   historicalCheckBlocks?: number;
   timeoutSeconds?: number;
+  stopAfter?: number | EventTest<T>;
 }
 
 interface Options<T> extends BaseOptions<T> {
@@ -410,9 +497,10 @@ export function observeEvents<T = any>(
     chain = 'chainflip',
     test = () => true,
     finalized = false,
-    historicalCheckBlocks = 0,
+    historicalCheckBlocks = 2,
     timeoutSeconds = 0,
     abortable = false,
+    stopAfter = test,
   }: Options<T> | AbortableOptions<T> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
@@ -422,70 +510,113 @@ export function observeEvents<T = any>(
 
   const findEvent = async () => {
     const foundEvents: Event[] = [];
+    await using subscription = await subscribeHeads({ chain, finalized });
 
-    // Check historic events first
-    if (historicalCheckBlocks > 0) {
-      const historicEvents = await getPastEvents(chain, historicalCheckBlocks);
-      for (const event of historicEvents) {
+    const subscriptionIterator = observableToIterable<{ header: Header; events: Event[] }>(
+      subscription.observable,
+      controller?.signal,
+    );
+
+    const checkEvents = (events: Event[], log: string) => {
+      if (events.length === 0) {
+        return false;
+      }
+      logger.debug(`Checking ${events.length} ${log} events for ${eventName}`);
+      let stop = false;
+      for (const event of events) {
+        logger.trace(
+          `Checking event ${event.name.section}:${event.name.method} from block ${event.block}`,
+        );
         if (
           event.name.section.includes(expectedSection) &&
-          event.name.method.includes(expectedMethod) &&
-          test(event)
+          event.name.method.includes(expectedMethod)
         ) {
-          foundEvents.push(event);
+          if (test(event)) {
+            logger.debug(
+              `Found matching event ${event.name.section}:${event.name.method} in block ${event.block}`,
+            );
+            foundEvents.push(event);
+          }
+
+          if (typeof stopAfter === 'function') {
+            stop = stop || stopAfter(event);
+          } else {
+            stop = stop || foundEvents.length >= stopAfter;
+          }
         }
       }
+      if (stop) {
+        if (typeof stopAfter === 'function') {
+          logger.debug(`Stopping after finding matching 'stopAfter' event.`);
+        } else {
+          logger.debug(`Stopping after finding ${stopAfter} events`);
+        }
+      }
+      return stop;
+    };
+
+    // Wait for the subscription to emit the first batch of events, which
+    // will update the best block number in the event cache: required for
+    // gap-free historical query.
+    const firstResult = await subscriptionIterator.next();
+    if (!firstResult.value) {
+      if (controller?.signal?.aborted) {
+        logger.debug('Abort signal received before any events were emitted.');
+      } else {
+        logger.warn(
+          'Subscription completed before any events were emitted. This may indicate a problem with the subscription.',
+        );
+      }
+      return [];
     }
-    if (foundEvents.length > 0) {
-      logger.trace(
-        `Found event ${foundEvents.length} ${eventName} events in block ${foundEvents[0].block}`,
-      );
-      // No need to continue if we found event(s) in the past
+
+    if (checkEvents(firstResult.value.events, 'current')) {
+      logger.debug(`Found ${foundEvents.length} ${eventName} events in the first batch.`);
       return foundEvents;
     }
 
-    const findEventSubscription = async () => {
-      // Subscribe to new events and wait for the first match
-      await using subscription = await subscribeHeads({ chain, finalized });
-      const subscriptionIterator = observableToIterable(
-        subscription.observable,
-        controller?.signal,
-      );
-      for await (const events of subscriptionIterator) {
-        for (const event of events) {
-          if (
-            event.name.section.includes(expectedSection) &&
-            event.name.method.includes(expectedMethod) &&
-            test(event)
-          ) {
-            foundEvents.push(event);
-          }
-        }
-        if (foundEvents.length > 0) {
-          logger.trace(
-            `Found event ${foundEvents.length} ${eventName} events in block ${foundEvents[0].block}`,
-          );
-          return foundEvents;
+    const historicalEvents = await getPastEvents(
+      chain,
+      firstResult.value.header,
+      historicalCheckBlocks,
+    );
+
+    // Check historical events first
+    if (!checkEvents(historicalEvents, 'historical')) {
+      logger.debug(`No ${eventName} events found in historical query.`);
+      for await (const { events } of subscriptionIterator) {
+        if (checkEvents(events, 'subscription')) {
+          break;
+        } else {
+          logger.debug(`No ${eventName} events found in subscription.`);
         }
       }
-
-      return null;
-    };
-
-    if (timeoutSeconds > 0) {
-      return runWithTimeout(
-        findEventSubscription(),
-        timeoutSeconds,
-        logger,
-        `observing event ${eventName}`,
-      );
     }
-    return findEventSubscription();
+    logger.debug(`Found ${foundEvents.length} ${eventName} events.`);
+
+    return foundEvents;
   };
 
-  if (!controller) return { events: findEvent() } as Observer<T>;
+  let events: Promise<Event<T>[]>;
+  if (timeoutSeconds > 0) {
+    events = runWithTimeout(
+      findEvent(),
+      timeoutSeconds,
+      logger,
+      `Timeout while waiting for event ${eventName}`,
+    );
+  } else {
+    events = findEvent();
+  }
 
-  return { stop: () => controller.abort(), events: findEvent() } as AbortableObserver<T>;
+  if (!abortable) {
+    // If not abortable, just return the events
+    return { events } as Observer<T>;
+  }
+  return {
+    stop: () => controller!.abort(),
+    events,
+  } as AbortableObserver<T>;
 }
 
 type SingleEventAbortableObserver<T> = {
@@ -516,7 +647,7 @@ export function observeEvent<T = any>(
     chain = 'chainflip',
     test = () => true,
     finalized = false,
-    historicalCheckBlocks = 0,
+    historicalCheckBlocks,
     timeoutSeconds = 0,
     abortable = false,
   }: Options<T> | AbortableOptions<T> = {},
