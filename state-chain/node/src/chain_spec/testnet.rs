@@ -383,8 +383,8 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 			H160(hex_literal::hex!("322813Fd9A801c5507c9de605d63CEA4f2CE6c44")),
 			H160(hex_literal::hex!("a85233C63b9Ee964Add6F2cffe00Fd84eb32338f")),
 			H160(hex_literal::hex!("4A679253410272dd5232B3Ff7cF5dbB88f295319")),
+			H160(hex_literal::hex!("7a2088a1bFc9d81c55368AE168C2C02570cB814F")),
 			H160(hex_literal::hex!("09635F643e140090A9A8Dcd712eD6285858ceBef")),
-			H160(hex_literal::hex!("c5a5C42992dECbae36851359345FE25997F5C42d")),
 		]},
 	},
 };
