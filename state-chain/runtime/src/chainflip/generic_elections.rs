@@ -164,7 +164,9 @@ pub type GenericElectoralSystemRunner = CompositeRunner<
 	GenericElectionHooks,
 >;
 
-pub fn initial_state(settings: ChainlinkOraclePriceSettings) -> InitialStateOf<Runtime, ()> {
+pub fn initial_state(
+	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings,
+) -> InitialStateOf<Runtime, ()> {
 	InitialState {
 		unsynchronised_state: (OraclePriceTracker {
 			chain_states: ExternalChainStates {
@@ -185,18 +187,7 @@ pub fn initial_state(settings: ChainlinkOraclePriceSettings) -> InitialStateOf<R
 				minimal_price_deviation: BasisPoints(10),
 			},
 		},),
-		// TODO change these to mainnet values, currently localnet
-		settings: (ChainlinkOraclePriceSettings {
-			sol_oracle_program_id: const_address("DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X"),
-			sol_oracle_feeds: vec![const_address("HDSV2wFxmsrmCwwY34QzaVkvmJpG7VF8S9fX2iThynjG")],
-			sol_oracle_query_helper: const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z"),
-			eth_contract_address: H160(hex_literal::hex!(
-				"e7f1725E7734CE288F8367e1Bb143E90bb3F0512"
-			)),
-			eth_oracle_feeds: vec![H160(hex_literal::hex!(
-				"322813Fd9A801c5507c9de605d63CEA4f2CE6c44"
-			))],
-		},),
+		settings: (chainlink_oracle_price_settings,),
 		shared_data_reference_lifetime: 8,
 	}
 }
