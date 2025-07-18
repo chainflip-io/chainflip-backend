@@ -313,8 +313,6 @@ pub mod pallet {
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
 
-	use frame_support::sp_runtime::AccountId32;
-
 	#[allow(unused_imports)]
 	use sp_std::time::Duration;
 
@@ -930,16 +928,11 @@ pub mod pallet {
 			sc_call: Vec<u8>,
 			mut deposit_and_call: DepositAndSCCallViaEthereum<T>,
 			caller: EthereumAddress,
+			caller_account_id: AccountId<T>,
 			// Required to ensure this call is unique per funding event.
 			tx_hash: EthTransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			// use 0 padded ethereum address as account_id which the flip funds are
-			// associated with on SC
-			let caller_account_id = AccountId32::new(
-				[[0u8; 12].as_slice(), caller.0.as_slice()].concat().try_into().unwrap(),
-			);
 
 			match deposit_and_call {
 				DepositAndSCCallViaEthereum::FlipToSCGatewayAndCall { amount, ref mut call } => {

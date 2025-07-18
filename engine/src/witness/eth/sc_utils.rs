@@ -28,6 +28,7 @@ use super::super::{
 	evm::contract_common::events_at_block,
 };
 use crate::evm::retry_rpc::EvmRetryRpcApi;
+use cf_chains::evm::ToAccountId32;
 use cf_primitives::EpochIndex;
 use codec::{Decode, Encode, MaxEncodedLen};
 use futures_core::Future;
@@ -99,6 +100,9 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 										             * the call from the sc_call bytes above */
 									},
 								caller: sender,
+								// use 0 padded ethereum address as account_id which the flip funds
+								// are associated with on SC
+								caller_account_id: sender.into_account_id_32(),
 								tx_hash: event.tx_hash.to_fixed_bytes(),
 							}
 							.into()

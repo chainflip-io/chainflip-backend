@@ -29,7 +29,7 @@ pub use ethabi::{
 use evm::tokenizable::Tokenizable;
 use frame_support::sp_runtime::{
 	traits::{Hash, Keccak256},
-	RuntimeDebug,
+	AccountId32, RuntimeDebug,
 };
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
@@ -698,6 +698,16 @@ pub struct TransactionFee {
 impl DepositDetailsToTransactionInId<EvmCrypto> for DepositDetails {
 	fn deposit_ids(&self) -> Option<Vec<H256>> {
 		self.tx_hashes.clone()
+	}
+}
+
+pub trait ToAccountId32 {
+	fn into_account_id_32(&self) -> AccountId32;
+}
+
+impl ToAccountId32 for Address {
+	fn into_account_id_32(&self) -> AccountId32 {
+		AccountId32::new([[0u8; 12].as_slice(), self.0.as_slice()].concat().try_into().unwrap())
 	}
 }
 

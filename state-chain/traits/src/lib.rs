@@ -75,7 +75,7 @@ use sp_std::{
 };
 
 /// Common base config for Chainflip pallets.
-pub trait Chainflip: frame_system::Config<AccountId = AccountId32> {
+pub trait Chainflip: frame_system::Config {
 	/// The type used for Flip balances and auction bids.
 	type Amount: Member
 		+ Parameter
