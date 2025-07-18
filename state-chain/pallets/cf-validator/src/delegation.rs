@@ -2,6 +2,11 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 
+pub enum AssociationToOperator {
+	Validator,
+	Delegator,
+}
+
 /// Represents a validator's default stance on accepting delegations
 #[derive(
 	Copy,
