@@ -108,6 +108,8 @@ use pallet_cf_swapping::{
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use runtime_apis::ChainAccounts;
 
+use pallet_cf_validator::AssociationToOperator;
+
 use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
 
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
@@ -1698,7 +1700,7 @@ impl_runtime_apis! {
 
 		fn cf_operator_info(account_id: &AccountId) -> OperatorInfo {
 			OperatorInfo {
-				managed_validators: pallet_cf_validator::Pallet::<Runtime>::get_all_validators_by_operator(account_id),
+				managed_validators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(account_id, AssociationToOperator::Validator),
 				settings: pallet_cf_validator::OperatorSettingsLookup::<Runtime>::get(account_id).unwrap(),
 				blocked_delegators: pallet_cf_validator::BlockedDelegators::<Runtime>::get(account_id).iter().cloned().collect(),
 				allowed_delegators: pallet_cf_validator::AllowedDelegators::<Runtime>::get(account_id).iter().cloned().collect(),

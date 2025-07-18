@@ -1026,7 +1026,11 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 
 			ensure!(
-				Self::get_all_validators_by_operator(&account_id).is_empty(),
+				Self::get_all_associations_by_operator(
+					&account_id,
+					AssociationToOperator::Validator
+				)
+				.is_empty(),
 				Error::<T>::StillAssociatedWithValidators
 			);
 
@@ -1628,11 +1632,15 @@ impl<T: Config> Pallet<T> {
 			frame_system::Pallet::<T>::current_block_number()
 	}
 
-	pub fn get_all_validators_by_operator(
+	pub fn get_all_associations_by_operator(
 		operator: &T::AccountId,
+		association: AssociationToOperator,
 	) -> BTreeMap<T::AccountId, T::Amount> {
 		let mut validators: BTreeMap<T::AccountId, T::Amount> = BTreeMap::new();
-		for (validator, operator_id) in ManagedValidators::<T>::iter() {
+		for (validator, operator_id) in match association {
+			AssociationToOperator::Validator => ManagedValidators::<T>::iter(),
+			AssociationToOperator::Delegator => Delegations::<T>::iter(),
+		} {
 			if operator_id == *operator {
 				let balance = T::FundingInfo::total_balance_of(&validator);
 				validators.insert(validator, balance);
