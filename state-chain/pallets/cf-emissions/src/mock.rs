@@ -34,6 +34,7 @@ use cf_traits::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{derive_impl, parameter_types, traits::Imbalance};
 use frame_system::{self as system, pallet_prelude::BlockNumberFor};
+use pallet_cf_flip::FlipSlasher;
 use scale_info::TypeInfo;
 use sp_arithmetic::Permill;
 
@@ -82,11 +83,11 @@ impl Slashing for MockFlipSlasher {
 
 	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
 		let slash_amount = Flip::calculate_slash_amount(account_id, blocks);
-		Flip::slash(account_id, slash_amount);
+		FlipSlasher::<Test>::slash_balance(account_id, slash_amount);
 	}
 
 	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance) {
-		Flip::slash(account_id, slash_amount);
+		FlipSlasher::<Test>::slash_balance(account_id, slash_amount);
 	}
 }
 
