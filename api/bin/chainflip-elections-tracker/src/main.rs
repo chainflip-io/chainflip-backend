@@ -23,7 +23,7 @@ pub mod trace;
 use std::collections::BTreeMap;
 
 use cf_utilities::task_scope::{self};
-use chainflip_engine::state_chain_observer::client::{StateChainClient, storage_api::StorageApi};
+use chainflip_engine::state_chain_observer::client::{base_rpc_api::BaseRpcApi, chain_api::ChainApi, storage_api::StorageApi, StateChainClient};
 use elections::{ElectionData, Key, TraceInit, make_traces};
 use futures::StreamExt;
 use futures_util::FutureExt;
@@ -37,17 +37,22 @@ use opentelemetry_sdk::{
 	trace::{RandomIdGenerator, TracerProvider},
 };
 use pallet_cf_elections::{
-	UniqueMonotonicIdentifier, electoral_systems::composite::tuple_7_impls::*,
+	electoral_systems::composite::tuple_7_impls::*, vote_storage::{composite::tuple_6_impls::CompositeVote, VoteStorage}, ElectoralSystemTypes, SharedDataHash, UniqueMonotonicIdentifier
 };
 use state_chain_runtime::{
-	Runtime, SolanaInstance, chainflip::solana_elections::SolanaElectoralSystemRunner,
+	chainflip::{bitcoin_elections::BitcoinElectoralSystemRunner, solana_elections::SolanaElectoralSystemRunner}, Runtime, SolanaInstance
 };
 use std::env;
 use trace::{NodeDiff, StateTree, diff, get_key_name, map_with_parent};
 
+type VoteStorageTuple = <BitcoinElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage;
+type CompositeVoteType = <VoteStorageTuple as VoteStorage>::Vote;
+
 #[tokio::main(flavor = "multi_thread", worker_threads = 3)]
 async fn main() {
 	// get env vars
+	// wss://archive.sisyphos.chainflip.io
+	// wss://archive.perseverance.chainflip.io
 	let rpc_url = env::var("CF_RPC_NODE").unwrap_or("http://localhost:9944".into());
 	let opentelemetry_backend_url =
 		env::var("OTLP_BACKEND").unwrap_or("http://localhost:4317".into());
@@ -82,79 +87,144 @@ async fn observe_elections<T: Tracer + Send>(
 
 		let (_finalized_stream, unfinalized_stream, client) = StateChainClient::connect_without_account(scope, &rpc_url).await.unwrap();
 
-		unfinalized_stream.fold((client, (BTreeMap::new(), BTreeMap::new()), tracer), async |(client, (overview_trace, detailed_traces), tracer), block| {
+		unfinalized_stream.fold((client, (BTreeMap::<u32,u32>::new(), BTreeMap::<u32,u32>::new()), tracer), async |(client, (overview_trace, detailed_traces), tracer), block| {
 
-			let _results = tracer_provider.force_flush();
+			let signed_block = client.base_rpc_client.block(block.hash).await.unwrap();
+			if let Some(block) = signed_block {
+				let extrinsics = block.block.extrinsics;
+				for ex in extrinsics {
 
-			let block_hash = block.hash;
-
-			let bitmaps : BTreeMap<UniqueMonotonicIdentifier,
-				_
-				> = client
-				.storage_map::<pallet_cf_elections::BitmapComponents::<Runtime, SolanaInstance>, BTreeMap<_,_>>(block_hash)
-				.await
-				.expect("could not get storage")
-			;
-
-			let all_properties : BTreeMap<_,_> = client
-				.storage_map::<pallet_cf_elections::ElectionProperties::<Runtime, SolanaInstance>, BTreeMap<_,_>>(block_hash)
-				.await
-				.expect("could not get storage");
-
-			let validators : Vec<_> = client
-				.storage_value::<pallet_cf_validator::CurrentAuthorities::<Runtime>>(block_hash)
-				.await
-				.expect("could not get storage");
-
-			let mut individual_components = BTreeMap::new();
-			for key in all_properties.keys() {
-				for (validator_index, validator) in validators.iter().enumerate() {
-
-					if let Some((_, comp)) = client.storage_double_map_entry::<pallet_cf_elections::IndividualComponents::<Runtime, SolanaInstance>>(block_hash, key.unique_monotonic(), validator)
-					.await.expect("could not get storage") {
-						println!("got individual component for election {key:?} for vld {validator_index}: {comp:?}");
-						individual_components.entry(*key.unique_monotonic()).or_insert(BTreeMap::new()).insert(validator_index, comp);
-					}
+					match ex.function {
+							state_chain_runtime::RuntimeCall::SolanaElections(call) => {
+								println!("");
+								println!("");
+								println!("Solana");
+								match call {
+									pallet_cf_elections::Call::vote { authority_votes } => {
+										for vote in *authority_votes {
+											println!("{:?}", vote);
+										}
+									},
+									_ => {},
+								}
+							},
+							state_chain_runtime::RuntimeCall::BitcoinElections(call) => {
+								println!("");
+								println!("");
+								println!("Bitcoin");
+								match call {
+									pallet_cf_elections::Call::vote { authority_votes } => {
+										for (election_id, vote) in *authority_votes {
+											println!("Election {:?}", election_id);
+											match vote {
+												pallet_cf_elections::vote_storage::AuthorityVote::PartialVote(partial) => {},
+												pallet_cf_elections::vote_storage::AuthorityVote::Vote(full_vote) => {
+													let partial = <VoteStorageTuple as VoteStorage>::vote_into_partial_vote(&full_vote, |shared_data| SharedDataHash::of(&shared_data));
+													println!("PartialVote: {:?}", partial);
+													match full_vote {
+														pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositeVote::A(v) => {
+															println!("{:?}",v);
+														},
+														pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositeVote::B(v) => {
+															println!("{:?}",v);
+														},
+														pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositeVote::C(v) => {
+															println!("{:?}",v);
+														},
+														pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositeVote::D(v) => {
+															println!("{:?}",v);
+														},
+														pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositeVote::EE(v) =>{
+															println!("{:?}",v);
+														},
+														pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositeVote::FF(v) =>{
+															println!("{:?}",v);
+														},
+													}
+													println!("");
+												},
+											}
+										}
+									},
+									_ => {},
+								}
+							},
+							_ => {},
+						}
 				}
 			}
 
-			let bitmaps = bitmaps.into_iter()
-				.map(|(k,v)| (k, v.bitmaps))
-				.collect();
+			// let _results = tracer_provider.force_flush();
 
-			const ELECTORAL_SYSTEM_NAMES : [&str; 6] = ["Blockheight", "Ingress", "Nonce", "Egress", "Liveness", "Vaultswap"];
+			// let block_hash = block.hash;
 
-			let elections = all_properties.iter()
-				.map(|(key, val)| {
-					let index = match val {
-							CompositeElectionProperties::A(_)  => 0,
-							CompositeElectionProperties::B(_)  => 1,
-							CompositeElectionProperties::C(_)  => 2,
-							CompositeElectionProperties::D(_)  => 3,
-							CompositeElectionProperties::EE(_) => 4,
-							CompositeElectionProperties::FF(_) => 5,
-							CompositeElectionProperties::G(_) => 6,
-						};
-					(*key, (ELECTORAL_SYSTEM_NAMES[index].into(), val.clone()))
-				})
-				.collect();
+			// let bitmaps : BTreeMap<UniqueMonotonicIdentifier,
+			// 	_
+			// 	> = client
+			// 	.storage_map::<pallet_cf_elections::BitmapComponents::<Runtime, SolanaInstance>, BTreeMap<_,_>>(block_hash)
+			// 	.await
+			// 	.expect("could not get storage")
+			// ;
 
-			let result : ElectionData<SolanaElectoralSystemRunner> = ElectionData {
-				height: block.number,
-				bitmaps,
-				elections,
-				individual_components,
-				validators_count: validators.len() as u32,
-				_phantom: Default::default(),
-				electoral_system_names: ELECTORAL_SYSTEM_NAMES.iter().map(|name| (*name).into()).collect(),
-			};
+			// let all_properties : BTreeMap<_,_> = client
+			// 	.storage_map::<pallet_cf_elections::ElectionProperties::<Runtime, SolanaInstance>, BTreeMap<_,_>>(block_hash)
+			// 	.await
+			// 	.expect("could not get storage");
 
-			let new_full_trace = make_traces(result);
-			let new_overview_trace = new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() <= 4).collect::<BTreeMap<_,_>>();
-			let new_detailed_traces = new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() >= 2).collect::<BTreeMap<_,_>>();
+			// let validators : Vec<_> = client
+			// 	.storage_value::<pallet_cf_validator::CurrentAuthorities::<Runtime>>(block_hash)
+			// 	.await
+			// 	.expect("could not get storage");
 
-			let overview_trace = push_traces(&tracer, overview_trace, new_overview_trace);
-			let detailed_traces = push_traces(&tracer, detailed_traces, new_detailed_traces);
+			// let mut individual_components = BTreeMap::new();
+			// for key in all_properties.keys() {
+			// 	for (validator_index, validator) in validators.iter().enumerate() {
+
+			// 		if let Some((_, comp)) = client.storage_double_map_entry::<pallet_cf_elections::IndividualComponents::<Runtime, SolanaInstance>>(block_hash, key.unique_monotonic(), validator)
+			// 		.await.expect("could not get storage") {
+			// 			println!("got individual component for election {key:?} for vld {validator_index}: {comp:?}");
+			// 			individual_components.entry(*key.unique_monotonic()).or_insert(BTreeMap::new()).insert(validator_index, comp);
+			// 		}
+			// 	}
+			// }
+
+			// let bitmaps = bitmaps.into_iter()
+			// 	.map(|(k,v)| (k, v.bitmaps))
+			// 	.collect();
+
+			// const ELECTORAL_SYSTEM_NAMES : [&str; 6] = ["Blockheight", "Ingress", "Nonce", "Egress", "Liveness", "Vaultswap"];
+
+			// let elections = all_properties.iter()
+			// 	.map(|(key, val)| {
+			// 		let index = match val {
+			// 				CompositeElectionProperties::A(_)  => 0,
+			// 				CompositeElectionProperties::B(_)  => 1,
+			// 				CompositeElectionProperties::C(_)  => 2,
+			// 				CompositeElectionProperties::D(_)  => 3,
+			// 				CompositeElectionProperties::EE(_) => 4,
+			// 				CompositeElectionProperties::FF(_) => 5,
+			// 				CompositeElectionProperties::G(_) => 6,
+			// 			};
+			// 		(*key, (ELECTORAL_SYSTEM_NAMES[index].into(), val.clone()))
+			// 	})
+			// 	.collect();
+
+			// let result : ElectionData<SolanaElectoralSystemRunner> = ElectionData {
+			// 	height: block.number,
+			// 	bitmaps,
+			// 	elections,
+			// 	individual_components,
+			// 	validators_count: validators.len() as u32,
+			// 	_phantom: Default::default(),
+			// 	electoral_system_names: ELECTORAL_SYSTEM_NAMES.iter().map(|name| (*name).into()).collect(),
+			// };
+
+			// let new_full_trace = make_traces(result);
+			// let new_overview_trace = new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() <= 4).collect::<BTreeMap<_,_>>();
+			// let new_detailed_traces = new_full_trace.iter().map(|(k,v)| (k.clone(), v.clone())).filter(|(key, _)| key.len() >= 2).collect::<BTreeMap<_,_>>();
+
+			// let overview_trace = push_traces(&tracer, overview_trace, new_overview_trace);
+			// let detailed_traces = push_traces(&tracer, detailed_traces, new_detailed_traces);
 
 			(client, (overview_trace, detailed_traces), tracer)
 
