@@ -15,7 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_chains::{Chain, Ethereum};
-use cf_primitives::AccountId;
 use ethers::{prelude::abigen, types::Bloom};
 use sp_core::{H160, H256};
 use tracing::{info, trace};
@@ -30,10 +29,8 @@ use super::super::{
 use crate::evm::retry_rpc::EvmRetryRpcApi;
 use cf_chains::evm::ToAccountId32;
 use cf_primitives::EpochIndex;
-use codec::{Decode, Encode, MaxEncodedLen};
 use futures_core::Future;
 use pallet_cf_funding::DepositAndSCCallViaEthereum;
-use scale_info::TypeInfo;
 
 abigen!(ScUtils, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IScUtils.json");
 
@@ -123,15 +120,21 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use codec::Encode;
+	use frame_support::sp_runtime::AccountId32;
+	use pallet_cf_funding::AllowedCallsViaSCGateway;
+	use state_chain_runtime::Runtime;
 
 	#[test]
 	fn test_sc_call_encode() {
-		let sc_call_delegate =
-			ScCallViaGateway::DelegateTo { operator: AccountId::new([0xF4; 32]) }.encode();
+		let sc_call_delegate = AllowedCallsViaSCGateway::<Runtime>::Delegate {
+			delegator: [0xf5; 20].into(),
+			operator: AccountId32::new([0xF4; 32]),
+		}
+		.encode();
 		assert_eq!(
 			sc_call_delegate,
-			hex::decode("00f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4")
+			hex::decode("00f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4")
 				.unwrap()
 		);
 	}

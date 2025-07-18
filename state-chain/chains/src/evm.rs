@@ -702,11 +702,11 @@ impl DepositDetailsToTransactionInId<EvmCrypto> for DepositDetails {
 }
 
 pub trait ToAccountId32 {
-	fn into_account_id_32(&self) -> AccountId32;
+	fn into_account_id_32(self) -> AccountId32;
 }
 
 impl ToAccountId32 for Address {
-	fn into_account_id_32(&self) -> AccountId32 {
+	fn into_account_id_32(self) -> AccountId32 {
 		AccountId32::new([[0u8; 12].as_slice(), self.0.as_slice()].concat().try_into().unwrap())
 	}
 }

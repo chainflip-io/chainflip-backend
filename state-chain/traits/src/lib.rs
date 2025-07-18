@@ -27,7 +27,6 @@ mod swapping;
 
 use cf_chains::SetGovKeyWithAggKeyError;
 
-use frame_support::sp_runtime::AccountId32;
 pub use swapping::{
 	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
 	SwapRequestTypeEncoded, SwapType,
