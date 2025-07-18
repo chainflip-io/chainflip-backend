@@ -9,11 +9,10 @@ import {
   createStateChainKeypair,
   decodeDotAddressForContract,
   fineAmountToAmount,
-  handleSubstrateError,
   stateChainAssetFromAsset,
   waitForExt,
 } from 'shared/utils';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
 import { Logger } from 'shared/utils/logger';
 
@@ -132,8 +131,7 @@ export async function openPrivateBtcChannel(logger: Logger, brokerUri: string): 
 
   const { channelId } = events
     .find(
-      ({ event }) =>
-        event.section === 'swapping' && event.method === 'swapping:PrivateBrokerChannelOpened',
+      ({ event }) => event.section === 'swapping' && event.method === 'PrivateBrokerChannelOpened',
     )!
     .event.toHuman() as unknown as { channelId: string };
   return Number(channelId);
@@ -147,17 +145,21 @@ export async function registerAffiliate(
   const chainflip = await getChainflipApi();
   const broker = createStateChainKeypair(brokerUri);
 
-  const registeredEvent = observeEvent(logger, 'swapping:AffiliateRegistration', {
-    test: (event) => event.data.brokerId === broker.address,
-  }).event;
-
   logger.trace('Registering affiliate');
-  await brokerMutex.runExclusive(async () => {
-    const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    await chainflip.tx.swapping
-      .registerAffiliate(withdrawalAddress)
-      .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
-  });
+  const release = await brokerMutex.acquire();
+  const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
+  const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
+  const unsub = await chainflip.tx.swapping
+    .registerAffiliate(withdrawalAddress)
+    .signAndSend(broker, { nonce }, waiter);
 
-  return registeredEvent;
+  const events = await promise;
+  unsub();
+
+  return events
+    .find(({ event }) => event.section === 'swapping' && event.method === 'AffiliateRegistration')!
+    .event.data.toHuman() as {
+    shortId: number;
+    affiliateId: string;
+  };
 }

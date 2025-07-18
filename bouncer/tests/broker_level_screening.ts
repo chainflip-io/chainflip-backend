@@ -336,7 +336,7 @@ async function testEvmVaultSwap(
   logger.debug(`Sending ${sourceAsset} (vault swap) tx to reject...`);
   const txHash = await executeEvmVaultSwap(
     logger,
-    broker.address,
+    brokerUri,
     sourceAsset,
     'Btc',
     destinationAddressForBtc,
