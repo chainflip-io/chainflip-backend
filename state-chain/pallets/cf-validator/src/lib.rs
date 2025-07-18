@@ -373,6 +373,11 @@ pub mod pallet {
 	pub type OperatorSettingsLookup<T: Config> =
 		StorageMap<_, Identity, T::AccountId, OperatorSettings, OptionQuery>;
 
+	/// Maps an delegator to an associated operator account.
+	#[pallet::storage]
+	pub type DelegationChoice<T: Config> =
+		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -411,6 +416,10 @@ pub mod pallet {
 		ValidatorRemovedFromOperator { validator: T::AccountId, operator: T::AccountId },
 		/// Operator settings have been updated.
 		OperatorSettingsUpdated { operator: T::AccountId, preferences: OperatorSettings },
+		/// An account has undelegated from an operator.
+		UnDelegated { account_id: T::AccountId, operator_id: T::AccountId },
+		/// An account has delegated to an operator.
+		Delegated { account_id: T::AccountId, operator_id: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -457,12 +466,30 @@ pub mod pallet {
 		ValidatorDoesNotExist,
 		/// Not authorized to perform this action.
 		NotAuthorized,
-		/// Operator is still delegating to validators.
+		/// Operator is still associated with validators.
 		StillAssociatedWithValidators,
 		/// The validator is not claimed by any operator.
 		NotClaimedByOperator,
 		/// The provided account id has not the role validator.
 		NotValidator,
+		/// Validator is already associated with an operator.
+		AlreadyAssociatedWithOperator,
+		/// Operator is still delegating to delegators.
+		StillAssociatedWithDelegators,
+		/// The validator is not claimed by any operator.
+		NotClaimed,
+		/// The operator provided is not the operator that claimed the validator.
+		OperatorDoesNotMatch,
+		/// The account is already delegating to an operator.
+		AlreadyDelegating,
+		/// The account is not delegating.
+		AccountIsNotDelegating,
+		/// Delegation is only available to none validators.
+		DelegationNotAllowed,
+		/// Can not delegate to none operator.
+		NotOperator,
+		/// A delegator is expliztly blocked.
+		DelegatorBlocked,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -943,7 +970,7 @@ pub mod pallet {
 		pub fn block_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 
-			// TODO: Check of delegator is currently delegation to this operator and error if so.
+			DelegationChoice::<T>::remove(delegator_id.clone());
 
 			AllowedDelegators::<T>::mutate(&operator_id, |delegators| {
 				delegators.remove(&delegator_id);
@@ -999,8 +1026,21 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 
 			ensure!(
-				Self::get_all_validators_by_operator(&account_id).is_empty(),
+				Self::get_all_associations_by_operator(
+					&account_id,
+					AssociationToOperator::Validator
+				)
+				.is_empty(),
 				Error::<T>::StillAssociatedWithValidators
+			);
+
+			ensure!(
+				Self::get_all_associations_by_operator(
+					&account_id,
+					AssociationToOperator::Delegator
+				)
+				.is_empty(),
+				Error::<T>::StillAssociatedWithDelegators
 			);
 
 			T::AccountRoleRegistry::deregister_as_operator(&account_id)?;
@@ -1008,6 +1048,66 @@ pub mod pallet {
 			AllowedDelegators::<T>::remove(&account_id);
 			BlockedDelegators::<T>::remove(&account_id);
 			OperatorSettingsLookup::<T>::remove(&account_id);
+
+			Ok(())
+		}
+
+		#[pallet::call_index(18)]
+		#[pallet::weight(T::ValidatorWeightInfo::delegate())]
+		pub fn delegate(origin: OriginFor<T>, operator_id: T::AccountId) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+
+			ensure!(
+				!T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Validator),
+				Error::<T>::DelegationNotAllowed
+			);
+
+			ensure!(
+				T::AccountRoleRegistry::has_account_role(&operator_id, AccountRole::Operator),
+				Error::<T>::NotOperator
+			);
+
+			// TODO: We should somehow ensure the operator has set his preferences...
+			match OperatorSettingsLookup::<T>::get(&operator_id)
+				.expect("an operator to have configured his parameters")
+				.delegation_acceptance
+			{
+				DelegationAcceptance::Allow => ensure!(
+					!BlockedDelegators::<T>::get(&operator_id).contains(&account_id),
+					Error::<T>::DelegatorBlocked
+				),
+				DelegationAcceptance::Deny => ensure!(
+					AllowedDelegators::<T>::get(&operator_id).contains(&account_id),
+					Error::<T>::DelegatorBlocked
+				),
+			}
+
+			DelegationChoice::<T>::mutate(account_id.clone(), |maybe_operator| {
+				if let Some(operator) = maybe_operator {
+					Self::deposit_event(Event::UnDelegated {
+						account_id: account_id.clone(),
+						operator_id: operator.clone(),
+					});
+					*operator = operator_id.clone();
+				} else {
+					*maybe_operator = Some(operator_id.clone());
+				}
+
+				Self::deposit_event(Event::Delegated { account_id, operator_id });
+			});
+
+			Ok(())
+		}
+
+		#[pallet::call_index(19)]
+		#[pallet::weight(T::ValidatorWeightInfo::undelegate())]
+		pub fn undelegate(origin: OriginFor<T>) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+
+			let operator_id = DelegationChoice::<T>::take(&account_id)
+				.ok_or(Error::<T>::AccountIsNotDelegating)?;
+
+			Self::deposit_event(Event::UnDelegated { account_id, operator_id });
 
 			Ok(())
 		}
@@ -1541,11 +1641,15 @@ impl<T: Config> Pallet<T> {
 			frame_system::Pallet::<T>::current_block_number()
 	}
 
-	pub fn get_all_validators_by_operator(
+	pub fn get_all_associations_by_operator(
 		operator: &T::AccountId,
+		association: AssociationToOperator,
 	) -> BTreeMap<T::AccountId, T::Amount> {
 		let mut validators: BTreeMap<T::AccountId, T::Amount> = BTreeMap::new();
-		for (validator, operator_id) in ManagedValidators::<T>::iter() {
+		for (validator, operator_id) in match association {
+			AssociationToOperator::Validator => ManagedValidators::<T>::iter(),
+			AssociationToOperator::Delegator => DelegationChoice::<T>::iter(),
+		} {
 			if operator_id == *operator {
 				let balance = T::FundingInfo::total_balance_of(&validator);
 				validators.insert(validator, balance);
