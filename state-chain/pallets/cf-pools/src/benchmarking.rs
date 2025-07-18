@@ -340,5 +340,31 @@ mod benchmarks {
 		);
 	}
 
+	#[benchmark]
+	fn cancel_all_pool_orders() {
+		let caller = new_lp_account::<T>();
+		assert_ok!(Pallet::<T>::new_pool(
+			T::EnsureGovernance::try_successful_origin().unwrap(),
+			Asset::Dot,
+			Asset::Usdc,
+			0,
+			price_at_tick(0).unwrap()
+		));
+		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
+		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
+
+		create_some_orders::<T>(caller.clone());
+
+		let call =
+			Call::<T>::cancel_all_pool_orders { base_asset: Asset::Eth, quote_asset: Asset::Usdc };
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }
