@@ -375,7 +375,7 @@ pub mod pallet {
 
 	/// Maps an delegator to an associated operator account.
 	#[pallet::storage]
-	pub type ManagedDelegations<T: Config> =
+	pub type Delegations<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
 
 	#[pallet::event]
@@ -970,7 +970,7 @@ pub mod pallet {
 		pub fn block_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 
-			ManagedDelegations::<T>::remove(delegator_id.clone());
+			Delegations::<T>::remove(delegator_id.clone());
 
 			AllowedDelegators::<T>::mutate(&operator_id, |delegators| {
 				delegators.remove(&delegator_id);
@@ -1069,7 +1069,7 @@ pub mod pallet {
 				),
 			}
 
-			ManagedDelegations::<T>::mutate(account_id.clone(), |maybe_operator| {
+			Delegations::<T>::mutate(account_id.clone(), |maybe_operator| {
 				if let Some(operator) = maybe_operator {
 					Self::deposit_event(Event::UnDelegated {
 						account_id: account_id.clone(),
@@ -1091,8 +1091,8 @@ pub mod pallet {
 		pub fn undelegate(origin: OriginFor<T>) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 
-			let operator_id = ManagedDelegations::<T>::take(&account_id)
-				.ok_or(Error::<T>::AccountIsNotDelegating)?;
+			let operator_id =
+				Delegations::<T>::take(&account_id).ok_or(Error::<T>::AccountIsNotDelegating)?;
 
 			Self::deposit_event(Event::UnDelegated { account_id, operator_id });
 

@@ -544,12 +544,12 @@ mod benchmarks {
 		frame_system::Pallet::<T>::inc_providers(&delegator);
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&delegator);
 
-		ManagedDelegations::<T>::remove(&delegator);
+		Delegations::<T>::remove(&delegator);
 
 		#[extrinsic_call]
 		delegate(RawOrigin::Signed(delegator.clone()), operator.clone());
 
-		assert_eq!(ManagedDelegations::<T>::get(delegator), Some(operator));
+		assert_eq!(Delegations::<T>::get(delegator), Some(operator));
 	}
 
 	#[benchmark]
@@ -563,11 +563,11 @@ mod benchmarks {
 		frame_system::Pallet::<T>::inc_providers(&delegator);
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&delegator);
 
-		ManagedDelegations::<T>::insert(&delegator, operator);
+		Delegations::<T>::insert(&delegator, operator);
 
 		#[extrinsic_call]
 		undelegate(RawOrigin::Signed(delegator.clone()));
 
-		assert!(ManagedDelegations::<T>::get(delegator).is_none());
+		assert!(Delegations::<T>::get(delegator).is_none());
 	}
 }
