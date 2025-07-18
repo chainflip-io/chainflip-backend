@@ -341,19 +341,47 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn cancel_all_pool_orders() {
+	fn cancel_all_pool_orders(n: Linear<1, 100>) {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(
 			T::EnsureGovernance::try_successful_origin().unwrap(),
-			Asset::Dot,
+			Asset::Eth,
 			Asset::Usdc,
 			0,
 			price_at_tick(0).unwrap()
 		));
-		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
-		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
+		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000_000);
+		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000_000);
 
-		create_some_orders::<T>(caller.clone());
+		let num_limit_orders = (n * 7 / 10) as i32;
+		let num_range_orders = (n * 3 / 10) as i32;
+
+		for i in 1..=num_range_orders {
+			assert_ok!(Pallet::<T>::set_range_order(
+				RawOrigin::Signed(caller.clone()).into(),
+				Asset::Eth,
+				Asset::Usdc,
+				i as u64,
+				Some(-i..i),
+				RangeOrderSize::AssetAmounts {
+					maximum: AssetAmounts { base: 1_000_000, quote: 1_000_000 },
+					minimum: AssetAmounts { base: 500_000, quote: 500_000 },
+				},
+			));
+		}
+		for i in 1..=num_limit_orders {
+			assert_ok!(Pallet::<T>::set_limit_order(
+				RawOrigin::Signed(caller.clone()).into(),
+				Asset::Eth,
+				Asset::Usdc,
+				Side::Buy,
+				i as u64,
+				Some(0),
+				1_000,
+				None,
+				None,
+			));
+		}
 
 		let call =
 			Call::<T>::cancel_all_pool_orders { base_asset: Asset::Eth, quote_asset: Asset::Usdc };

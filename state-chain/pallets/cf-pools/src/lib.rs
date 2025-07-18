@@ -1096,7 +1096,7 @@ pub mod pallet {
 		///
 		/// Requires Governance.
 		#[pallet::call_index(12)]
-		#[pallet::weight(T::WeightInfo::set_pool_fees())]
+		#[pallet::weight(T::WeightInfo::cancel_all_pool_orders(50u32))]
 		pub fn cancel_all_pool_orders(
 			origin: OriginFor<T>,
 			base_asset: Asset,
