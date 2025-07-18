@@ -51,6 +51,8 @@ pub struct ElectionData<ES: ElectoralSystemTypes> {
 
 	pub validators_count: u32,
 
+	pub instance: String,
+
 	pub _phantom: std::marker::PhantomData<ES>,
 }
 
@@ -77,7 +79,7 @@ impl Display for Category {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Key {
-	RootBlockHeight(u32),
+	RootBlockHeight { start_block: u32, elections_pallet_instance: String },
 	ElectoralSystem(String),
 	Election(String),
 	Category(String, Category),
@@ -90,7 +92,11 @@ use Key::*;
 impl Display for Key {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			RootBlockHeight(h) => write!(f, "blocks {h}-{}", h + BLOCKS_PER_TRACE - 1),
+			RootBlockHeight { start_block, elections_pallet_instance } => write!(
+				f,
+				"{elections_pallet_instance} blocks {start_block}-{}",
+				start_block + BLOCKS_PER_TRACE - 1
+			),
 			Election(e) => write!(f, "{e}"),
 			Key::Category(extra, category) => write!(f, "[{extra}] {category}"),
 			Validator(x) => write!(f, "Validator {x}"),
@@ -171,8 +177,13 @@ where
 	let mut trace = StateTree::new();
 
 	let root_height = data.height - (data.height % BLOCKS_PER_TRACE);
-	let key0 = RootBlockHeight(root_height);
-	trace.insert(vec![key0.clone()], end.with_attribute("height".into(), format!("{root_height}")));
+	let instance: String = data.instance.clone();
+	let key0 =
+		RootBlockHeight { start_block: root_height, elections_pallet_instance: data.instance };
+	trace.insert(
+		vec![key0.clone()],
+		end.with_attribute("height".into(), format!("{instance}{root_height}")),
+	);
 
 	for name in data.electoral_system_names {
 		trace.insert(
@@ -191,7 +202,10 @@ where
 		let key2 = Election(format!("{name} ({id})"));
 
 		// election id
-		trace.insert(cloned_vec([&key0, &key1, &key2]), end.clone());
+		trace.insert(
+			cloned_vec([&key0, &key1, &key2]),
+			end.clone().with_attribute("height".into(), format!("{}", data.height)),
+		);
 
 		// properties
 		let key3 = Category(extra.clone(), Properties);
