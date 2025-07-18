@@ -319,9 +319,7 @@ impl FlipOperation {
 				if expected_slash > 0 {
 					System::assert_last_event(RuntimeEvent::Flip(Event::SlashingPerformed {
 						who: *account_id,
-						total_slashed: expected_slash,
-						validator_slashed: expected_slash,
-						delegators_slashed: Default::default(),
+						amount: expected_slash,
 					}));
 				}
 			},

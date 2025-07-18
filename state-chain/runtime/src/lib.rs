@@ -175,7 +175,7 @@ pub use pallet_cf_validator::SetSizeParameters;
 
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, multi_vault_activator::MultiVaultActivator,
-	node_rewards_and_slashing::FlipSlasher, BroadcastReadyProvider, BtcEnvironment,
+	node_rewards_and_slashing::DelegatorSlasher, BroadcastReadyProvider, BtcEnvironment,
 	CfCcmAdditionalDataHandler, ChainAddressConverter, ChainflipHeartbeat, DotEnvironment,
 	EvmEnvironment, HubEnvironment, MinimumDepositProvider, SolEnvironment, SolanaLimit,
 	TokenholderGovernanceBroadcaster,
@@ -873,7 +873,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Heartbeat = ChainflipHeartbeat;
 	type HeartbeatBlockInterval = ConstU32<HEARTBEAT_BLOCK_INTERVAL>;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
-	type Slasher = FlipSlasher;
+	type Slasher = DelegatorSlasher;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type MaximumAccruableReputation = MaximumAccruableReputation;
 	type SafeMode = RuntimeSafeMode;
@@ -890,7 +890,7 @@ impl pallet_cf_threshold_signature::Config<Instance16> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
-	type Slasher = FlipSlasher;
+	type Slasher = DelegatorSlasher;
 	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -906,7 +906,7 @@ impl pallet_cf_threshold_signature::Config<Instance15> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
-	type Slasher = FlipSlasher;
+	type Slasher = DelegatorSlasher;
 	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -922,7 +922,7 @@ impl pallet_cf_threshold_signature::Config<Instance3> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
-	type Slasher = FlipSlasher;
+	type Slasher = DelegatorSlasher;
 	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -938,7 +938,7 @@ impl pallet_cf_threshold_signature::Config<Instance5> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
-	type Slasher = FlipSlasher;
+	type Slasher = DelegatorSlasher;
 	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }

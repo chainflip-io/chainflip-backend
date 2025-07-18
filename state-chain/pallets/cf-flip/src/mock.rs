@@ -16,7 +16,7 @@
 
 #![cfg(test)]
 
-use crate::{self as pallet_cf_flip, BurnFlipAccount};
+use crate::{self as pallet_cf_flip, BurnFlipAccount, FlipSlasher};
 use cf_primitives::FlipBalance;
 use cf_traits::{impl_mock_chainflip, impl_mock_waived_fees, Funding, Slashing, WaivedFees};
 use frame_support::{
@@ -68,23 +68,11 @@ impl Slashing for MockFlipSlasher {
 
 	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
 		let slash_amount = Flip::calculate_slash_amount(account_id, blocks);
-		Flip::slash(account_id, slash_amount);
-		Flip::deposit_event(crate::Event::<Test>::SlashingPerformed {
-			who: *account_id,
-			total_slashed: slash_amount,
-			validator_slashed: slash_amount,
-			delegators_slashed: Default::default(),
-		});
+		Self::slash_balance(account_id, slash_amount);
 	}
 
 	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance) {
-		Flip::slash(account_id, slash_amount);
-		Flip::deposit_event(crate::Event::<Test>::SlashingPerformed {
-			who: *account_id,
-			total_slashed: slash_amount,
-			validator_slashed: slash_amount,
-			delegators_slashed: Default::default(),
-		});
+		FlipSlasher::<Test>::slash_balance(account_id, slash_amount);
 	}
 }
 
