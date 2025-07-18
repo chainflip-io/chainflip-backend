@@ -17,14 +17,14 @@
 #![cfg(test)]
 
 use crate::{self as pallet_cf_account_roles, Config};
+#[cfg(feature = "runtime-benchmarks")]
+use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
-	impl_mock_chainflip,
-	mocks::{deregistration_check::MockDeregistrationCheck, fee_payment::MockFeePayment},
+	impl_mock_chainflip, mocks::deregistration_check::MockDeregistrationCheck, SpawnAccount,
 };
-use frame_support::derive_impl;
+use codec::Encode;
+use frame_support::{derive_impl, StorageHasher};
 use sp_runtime::DispatchError;
-
-use cf_traits::SpawnAccount;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -51,17 +51,27 @@ pub struct MockSpawnAccount;
 impl SpawnAccount for MockSpawnAccount {
 	type AccountId = u64;
 	type Amount = u128;
+	type Index = u8;
 
 	fn spawn_sub_account(
-		_parent_account_id: Self::AccountId,
-		_sub_account_id: Self::AccountId,
-		_amount: Option<Self::Amount>,
-	) -> Result<(), DispatchError> {
-		Ok(())
+		parent_account_id: &Self::AccountId,
+		sub_account_id: Self::Index,
+		_amount: Self::Amount,
+	) -> Result<Self::AccountId, DispatchError> {
+		use frame_support::traits::HandleLifetime;
+		let sub_account_id = Self::derive_sub_account_id(parent_account_id, sub_account_id)?;
+		frame_system::Provider::<Test>::created(&sub_account_id)
+			.expect("Cannot fail (see implementation).");
+		Ok(sub_account_id)
 	}
-
-	fn does_account_exist(_account_id: &Self::AccountId) -> bool {
-		true
+	fn derive_sub_account_id(
+		parent_account_id: &Self::AccountId,
+		sub_account_index: Self::Index,
+	) -> Result<Self::AccountId, DispatchError> {
+		use codec::Decode;
+		let bytes =
+			(*parent_account_id, sub_account_index).using_encoded(frame_support::Twox128::hash);
+		Ok(u64::decode(&mut &bytes[..]).expect("u64::decode should not fail; the input is valid"))
 	}
 }
 
