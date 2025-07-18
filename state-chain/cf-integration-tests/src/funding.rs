@@ -329,10 +329,8 @@ fn backup_rewards_event_gets_emitted_on_heartbeat_interval() {
 				.into_iter()
 				.filter_map(|rec| match rec.event {
 					RuntimeEvent::Emissions(
-						pallet_cf_emissions::Event::BackupRewardsDistributed {
-							validator_id, ..
-						},
-					) => Some(validator_id),
+						pallet_cf_emissions::Event::BackupRewardsDistributed { who, .. },
+					) => Some(who),
 					_ => None,
 				})
 				.collect::<BTreeSet<_>>();
