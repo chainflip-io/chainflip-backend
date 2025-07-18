@@ -25,7 +25,7 @@ impl Add<Seconds> for UnixTime {
 
 def_derive! {
 	#[cfg_attr(test, derive(Arbitrary))]
-	#[derive(TypeInfo, Copy)]
+	#[derive(TypeInfo, Copy, Default)]
 	pub struct Seconds(pub u64);
 }
 

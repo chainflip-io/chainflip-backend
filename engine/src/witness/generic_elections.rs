@@ -51,9 +51,9 @@ pub fn asset_pair_from_description(description: String) -> Option<ChainlinkAsset
 	match description.as_str() {
 		"BTC / USD" => Some(BtcUsd),
 		"ETH / USD" => Some(EthUsd),
-		"SOL / USD" => Some(EthUsd),
-		"USDT / USD" => Some(EthUsd),
-		"USDC / USD" => Some(EthUsd),
+		"SOL / USD" => Some(SolUsd),
+		"USDT / USD" => Some(UsdtUsd),
+		"USDC / USD" => Some(UsdcUsd),
 		_ => None,
 	}
 }

@@ -21,7 +21,7 @@ use crate::{
 		ConsensusStatus, ConsensusVotes, ElectionIdentifierOf, ElectoralReadAccess,
 		ElectoralSystem, ElectoralWriteAccess,
 	},
-	UniqueMonotonicIdentifier,
+	ElectionProperties, UniqueMonotonicIdentifier,
 };
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 
@@ -339,6 +339,19 @@ where
 	pub fn identifiers() -> Vec<ElectionIdentifierOf<ES>> {
 		MockStorageAccess::election_identifiers::<ES>()
 	}
+
+	/// Applies the given function to mutate the unsynchronized state. This is useful for testing
+	/// statemachine based electoral systems because they can contain hook state that can be
+	/// updated.
+	pub fn mutate_unsynchronized_state(
+		self,
+		f: impl Fn(&mut ES::ElectoralUnsynchronisedState),
+	) -> Self {
+		let mut state = MockStorageAccess::unsynchronised_state::<ES>();
+		f(&mut state);
+		MockStorageAccess::set_unsynchronised_state::<ES>(state);
+		self
+	}
 }
 
 type CheckFnParam<ES, Param> =
@@ -514,6 +527,7 @@ pub struct ElectoralSystemState<ES: ElectoralSystem> {
 	pub unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
 	pub election_identifiers: Vec<ElectionIdentifierOf<ES>>,
 	pub election_state: BTreeMap<UniqueMonotonicIdentifier, ES::ElectionState>,
+	pub election_properties: BTreeMap<ElectionIdentifierOf<ES>, ES::ElectionProperties>,
 	pub next_umi: UniqueMonotonicIdentifier,
 }
 
@@ -529,6 +543,12 @@ where
 			election_identifiers: MockStorageAccess::election_identifiers::<ES>(),
 			election_state: MockStorageAccess::election_state_all::<ES>(),
 			next_umi: MockStorageAccess::next_umi(),
+			election_properties: MockStorageAccess::election_identifiers::<ES>()
+				.into_iter()
+				.map(|identifier| {
+					(identifier.clone(), MockStorageAccess::election_properties::<ES>(identifier))
+				})
+				.collect(),
 		}
 	}
 }

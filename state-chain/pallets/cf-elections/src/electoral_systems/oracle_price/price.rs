@@ -1,7 +1,12 @@
+#[cfg(test)]
+use core::ops::Div;
 use core::ops::{Add, Mul, Sub};
 
+use crate::generic_tools::*;
 use cf_amm_math::{mul_div_floor, PRICE_FRACTIONAL_BITS};
 use cf_primitives::{Asset, Price};
+#[cfg(test)]
+use proptest::prelude::Strategy;
 use scale_info::prelude::marker::ConstParamTy;
 use sp_core::U256;
 
@@ -97,6 +102,10 @@ impl<const U: Denom> FractionImpl<U> {
 		FractionImpl(raw)
 	}
 
+	pub fn integer<Int: Into<U256>>(int: Int) -> Self {
+		FractionImpl(int.into() * denom(U))
+	}
+
 	pub fn one() -> Self {
 		FractionImpl(denom(U))
 	}
@@ -173,6 +182,27 @@ impl<const U: Denom, const V: Denom> Mul<FractionImpl<V>> for &FractionImpl<U> {
 
 	fn mul(self, rhs: FractionImpl<V>) -> Self::Output {
 		FractionImpl(mul_div_floor(self.0, rhs.0, denom(V)))
+	}
+}
+
+#[cfg(test)]
+impl<const N: u128> Arbitrary for FractionImpl<N> {
+	type Parameters = ();
+
+	fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+		use proptest::prelude::*;
+		any::<[u64; 4]>().prop_map(U256).prop_map(FractionImpl)
+	}
+
+	type Strategy = impl Strategy<Value = FractionImpl<N>> + Clone + Send;
+}
+
+#[cfg(test)]
+impl<const U: Denom> Div<u32> for FractionImpl<U> {
+	type Output = FractionImpl<U>;
+
+	fn div(self, rhs: u32) -> Self::Output {
+		FractionImpl(mul_div_floor(self.0, 1u128.into(), rhs))
 	}
 }
 

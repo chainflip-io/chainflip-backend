@@ -94,6 +94,7 @@ def_derive! {
 }
 
 def_derive! {
+	#[derive_where(Default;)]
 	#[derive(TypeInfo)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct ExternalChainState<T: OPTypes> {
@@ -212,7 +213,7 @@ impl<T: OPTypes> ExternalChainState<T> {
 }
 
 def_derive! {
-	#[derive(TypeInfo)]
+	#[derive(TypeInfo, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct ExternalChainStates<T: OPTypes> {
 		pub solana: ExternalChainState<T>,
@@ -295,7 +296,7 @@ def_derive! {
 }
 
 def_derive! {
-	#[derive(TypeInfo)]
+	#[derive(TypeInfo, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct OraclePriceSettings {
 		pub solana: ExternalChainSettings,
@@ -315,7 +316,7 @@ impl Index<ExternalPriceChain> for OraclePriceSettings {
 }
 
 def_derive! {
-	#[derive(TypeInfo)]
+	#[derive(TypeInfo, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct ExternalChainSettings {
 		pub up_to_date_timeout: Seconds,
@@ -325,7 +326,7 @@ def_derive! {
 }
 
 def_derive! {
-	#[derive(TypeInfo)]
+	#[derive(TypeInfo, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct OraclePriceTracker<T: OPTypes> {
 		pub chain_states: ExternalChainStates<T>,
@@ -384,23 +385,69 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 
 		Ok(())
 	}
+
+	#[cfg(test)]
+	fn step_specification(
+		before: &mut Self::State,
+		input: &crate::electoral_systems::state_machine::state_machine::InputOf<Self>,
+		_output: &Self::Output,
+		_settings: &Self::Settings,
+		after: &Self::State,
+	) {
+		match input {
+			Either::Left(()) => {
+				// prices do not change if we don't have consensus
+				for chain in all::<ExternalPriceChain>() {
+					for asset in all::<T::Asset>() {
+						assert_eq!(
+							before.chain_states[chain].price.get(&asset).map(|asset| &asset.price),
+							after.chain_states[chain].price.get(&asset).map(|asset| &asset.price)
+						);
+					}
+				}
+			},
+			Either::Right((query, consensus)) => {
+				for asset in all::<T::Asset>() {
+					// prices are updated if they are newer
+					if let Some(consensus_asset_state) = consensus.get(&asset) {
+						if T::Aggregation::canonical(&consensus_asset_state.timestamp) >
+							before.chain_states[query.chain]
+								.price
+								.get(&asset)
+								.map(|asset| T::Aggregation::canonical(&asset.timestamp))
+								.unwrap_or_default()
+						{
+							assert_eq!(
+								after.chain_states[query.chain].price.get(&asset).unwrap().price,
+								consensus_asset_state.price
+							);
+						}
+					}
+				}
+			},
+		}
+	}
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 	use proptest::prelude::{any, Just, Strategy};
 
 	use super::*;
 	use crate::electoral_systems::{
-		oracle_price::{price::ChainlinkAssetPair, primitives::*},
+		oracle_price::{
+			price::{ChainlinkAssetPair, FractionImpl},
+			primitives::*,
+		},
 		state_machine::core::{hook_test_utils::MockHook, *},
 	};
 
-	struct Mock;
-	type MockTypes = TypesFor<Mock>;
+	pub struct Mock;
+	pub type MockTypes = TypesFor<Mock>;
+	pub type MockPrice = FractionImpl<99>;
 
 	impl OPTypes for MockTypes {
-		type Price = u128;
+		type Price = MockPrice;
 
 		fn price_range(price: &Self::Price, range: BasisPoints) -> RangeInclusive<Self::Price> {
 			todo!()
