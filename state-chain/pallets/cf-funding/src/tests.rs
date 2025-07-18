@@ -22,13 +22,13 @@ use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
-	Bonding, Chainflip, SetSafeMode,
+	Bonding, Chainflip, SetSafeMode, Slashing,
 };
 use sp_core::H160;
 
 use crate::BoundRedeemAddress;
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
-use pallet_cf_flip::Bonder;
+use pallet_cf_flip::{Bonder, FlipSlasher};
 use sp_runtime::DispatchError;
 
 const ETH_DUMMY_ADDR: EthereumAddress = H160([42u8; 20]);
@@ -1683,7 +1683,7 @@ fn can_redeem_if_balance_lower_than_restricted_funds() {
 		));
 
 		// we want to have a balance < sum of restricted balances
-		Flip::slash(&ALICE, DEBIT_AMOUNT);
+		FlipSlasher::<Test>::slash_balance(&ALICE, DEBIT_AMOUNT);
 
 		// redemption towards a non restricted address fails
 		assert_noop!(
@@ -1749,7 +1749,7 @@ fn cannot_redeem_to_non_restricted_address_with_balance_lower_than_restricted_fu
 		));
 
 		// we want to have a balance < sum of restricted balances
-		Flip::slash(&ALICE, DEBIT_AMOUNT);
+		FlipSlasher::<Test>::slash_balance(&ALICE, DEBIT_AMOUNT);
 
 		assert_noop!(
 			Funding::redeem(

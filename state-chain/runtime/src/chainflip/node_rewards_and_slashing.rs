@@ -25,7 +25,8 @@ use frame_support::{
 		Rounding,
 	},
 };
-use sp_std::{cmp::min, collections::btree_map::BTreeMap, prelude::*};
+use pallet_cf_flip::FlipSlasher;
+use sp_std::{cmp::min, prelude::*};
 
 pub struct BackupNodeEmissions;
 
@@ -57,18 +58,15 @@ impl RewardsDistribution for BackupNodeEmissions {
 			Emissions::current_authority_emission_per_block(),
 			Self::Balance::unique_saturated_from(Validator::current_authority_count()),
 		) {
-			let (validator_fee, delegator_fees) =
-				distribute_among_delegators(&validator_id, reward, |account, reward| {
-					Flip::settle(account, Self::Issuance::mint(reward).into());
-				});
-			Emissions::deposit_event(
-				pallet_cf_emissions::Event::<Runtime>::BackupRewardsDistributed {
-					total: reward,
-					validator_id,
-					validator_fee,
-					delegator_fees,
-				},
-			);
+			distribute_among_delegators(&validator_id, reward, |account, reward| {
+				Flip::settle(account, Self::Issuance::mint(reward).into());
+				Emissions::deposit_event(
+					pallet_cf_emissions::Event::<Runtime>::BackupRewardsDistributed {
+						who: account.clone(),
+						amount: reward,
+					},
+				);
+			});
 		}
 	}
 }
@@ -83,7 +81,7 @@ impl RewardsDistribution for BlockAuthorRewardDistribution {
 		let reward_amount = Emissions::current_authority_emission_per_block();
 		if reward_amount != 0 {
 			if let Some(current_block_author) = Authorship::author() {
-				let _ = distribute_among_delegators(
+				distribute_among_delegators(
 					&current_block_author,
 					reward_amount,
 					|account, reward| {
@@ -97,34 +95,20 @@ impl RewardsDistribution for BlockAuthorRewardDistribution {
 	}
 }
 
-pub struct FlipSlasher;
-impl FlipSlasher {
-	fn slash_among_delegators(account_id: &AccountId, slash_amount: FlipBalance) {
-		let (validator_slashed, delegators_slashed) =
-			distribute_among_delegators(account_id, slash_amount, |account, slash| {
-				Flip::slash(account, slash);
-			});
-
-		Flip::deposit_event(pallet_cf_flip::Event::<Runtime>::SlashingPerformed {
-			who: account_id.clone(),
-			total_slashed: slash_amount,
-			validator_slashed,
-			delegators_slashed,
-		});
-	}
-}
-
-impl Slashing for FlipSlasher {
+pub struct DelegatorSlasher;
+impl Slashing for DelegatorSlasher {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
 
 	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
 		let slash_amount = Flip::calculate_slash_amount(account_id, blocks);
-		Self::slash_among_delegators(account_id, slash_amount);
+		Self::slash_balance(account_id, slash_amount);
 	}
 
 	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance) {
-		Self::slash_among_delegators(account_id, slash_amount);
+		distribute_among_delegators(account_id, slash_amount, |account, slash| {
+			FlipSlasher::<Runtime>::slash_balance(account, slash);
+		});
 	}
 }
 
@@ -135,7 +119,7 @@ fn distribute_among_delegators(
 	validator: &AccountId,
 	total: AssetAmount,
 	settle: impl Fn(&AccountId, AssetAmount),
-) -> (AssetAmount, BTreeMap<AccountId, AssetAmount>) {
+) {
 	// Calculate delegator reward for the current epoch.
 	let current_epoch = Validator::current_epoch();
 	let (operator_fee, delegator_fees) =
@@ -151,8 +135,6 @@ fn distribute_among_delegators(
 	for (delegator, fees) in delegator_fees.iter() {
 		settle(delegator, *fees);
 	}
-
-	(operator_fee, delegator_fees)
 }
 
 /// TODO: The u128 is not big enough for some calculations (for example this one) which involve
