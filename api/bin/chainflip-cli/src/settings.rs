@@ -133,6 +133,13 @@ pub enum ValidatorSubcommands {
 	StartBidding,
 	/// Stop bidding, thereby stopping participation in auctions.
 	StopBidding,
+	/// Accept an operator's claim to manage this validator.
+	AcceptOperator {
+		/// The operator account ID to accept
+		operator_id: String,
+	},
+	/// Remove the operator from managing this validator.
+	RemoveOperator,
 }
 
 #[derive(Parser, Clone, Debug)]
