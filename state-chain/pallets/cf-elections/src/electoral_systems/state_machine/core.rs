@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use sp_std::{fmt::Debug, vec::Vec};
 
+use crate::generic_tools::common_traits::*;
+
 /// Syntax sugar for implementing multiple traits for a single type.
 ///
 /// Example use:
@@ -128,6 +130,7 @@ macro_rules! derive_validation_statements {
 }
 pub(crate) use derive_validation_statements;
 
+#[macro_export]
 macro_rules! def_derive {
 	(#[no_serde] $($Definition:tt)*) => {
 		#[derive(
@@ -144,7 +147,7 @@ macro_rules! def_derive {
 		$($Definition)*
 	};
 }
-pub(crate) use def_derive;
+pub use def_derive;
 
 /// Syntax sugar for adding validation code to types with validity requirements
 macro_rules! defx {
@@ -250,6 +253,8 @@ pub trait Hook<T: HookType>: Validate {
 pub mod hook_test_utils {
 	use super::*;
 	use codec::MaxEncodedLen;
+	#[cfg(test)]
+	use proptest_derive::Arbitrary;
 
 	#[derive(
 		Clone,
@@ -265,6 +270,7 @@ pub mod hook_test_utils {
 		Serialize,
 		Deserialize,
 	)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	#[serde(bound = "T::Input: Serde, WrappedHook: Serde")]
 	pub struct MockHook<
 		T: HookType,
@@ -336,6 +342,7 @@ pub mod hook_test_utils {
 		Serialize,
 		Deserialize,
 	)]
+	#[cfg_attr(test, derive(Arbitrary))]
 	#[serde(bound = "T::Input: Serde, T::Output: Serde")]
 	pub struct ConstantHook<T: HookType> {
 		pub state: T::Output,
@@ -417,7 +424,7 @@ pub trait Validate {
 	fn is_valid(&self) -> Result<(), Self::Error>;
 }
 
-#[duplicate::duplicate_item(Type; [ () ]; [ bool ]; [ char ]; [ u8 ]; [ u16 ]; [ u32 ]; [ u64 ]; [ usize ] ; [ H256 ])]
+#[duplicate::duplicate_item(Type; [ () ]; [ bool ]; [ char ]; [ u8 ]; [ u16 ]; [ u32 ]; [ u64 ]; [ usize ] ; [ H256 ] ; [ sp_std::time::Duration ])]
 impl Validate for Type {
 	type Error = ();
 
@@ -515,6 +522,3 @@ impl<C: ChainWitnessConfig> Validate for BlockWitnessRange<C> {
 		self.check_is_valid()
 	}
 }
-
-/// Encapsulating usual constraints on types meant to be serialized
-pub trait Serde = Serialize + for<'a> Deserialize<'a>;

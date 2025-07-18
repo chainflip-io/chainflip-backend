@@ -48,6 +48,8 @@ const MAX_BROADCAST_RETRIES: Attempt = 5;
 const GET_STATUS_BROADCAST_DELAY: u64 = 500u64;
 const GET_STATUS_BROADCAST_RETRIES: u64 = 10;
 
+const MAX_SIMULATE_TRANSACTION_RETRIES: Attempt = 2;
+
 impl SolRetryRpcClient {
 	pub async fn new(
 		scope: &Scope<'_, anyhow::Error>,
@@ -109,7 +111,7 @@ pub trait SolRetryRpcApi: Clone {
 		&self,
 		serialized_transaction: Vec<u8>,
 		min_context_slot: Option<u64>,
-	) -> Response<RpcSimulateTransactionResult>;
+	) -> Result<Response<RpcSimulateTransactionResult>, anyhow::Error>;
 }
 
 #[async_trait::async_trait]
@@ -273,7 +275,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 		&self,
 		serialized_transaction: Vec<u8>,
 		min_context_slot: Option<u64>,
-	) -> Response<RpcSimulateTransactionResult> {
+	) -> Result<Response<RpcSimulateTransactionResult>, anyhow::Error> {
 		let encoded_transaction = BASE64_STANDARD.encode(&serialized_transaction);
 		let config = RpcSimulateTransactionConfig {
 			sig_verify: false,
@@ -286,7 +288,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 		};
 
 		self.rpc_retry_client
-			.request(
+			.request_with_limit(
 				RequestLog::new(
 					"simulateTransaction".to_string(),
 					Some(format!("0x{}, {:?}", hex::encode(&serialized_transaction), config)),
@@ -299,6 +301,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 						client.simulate_transaction(encoded_transaction, config).await
 					})
 				}),
+				MAX_SIMULATE_TRANSACTION_RETRIES,
 			)
 			.await
 	}
@@ -378,7 +381,7 @@ pub mod mocks {
 				&self,
 				serialized_transaction: Vec<u8>,
 				min_context_slot: Option<u64>,
-			) -> Response<RpcSimulateTransactionResult>;
+			) -> Result<Response<RpcSimulateTransactionResult>, anyhow::Error>;
 		}
 	}
 }
@@ -552,7 +555,7 @@ mod tests {
 				let serialized_transaction: Vec<u8> = hex::decode("010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080010002033f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7f14bf65ad56bd2ba715e45742c231f27d63621cf5b778f37c1a248951d175602502b9d5731648a1c61dcf689240e2d2c799393430d9f1d584e368ec4e5243c5f13dcef863a734d75a53ceea4596b64111f9577af432cf6c0c2aed5cb527a733f010101020927fb829f2e88a4a90400").expect("Decoding failed");
 
 				let simulation_result = retry_client
-				.simulate_transaction(serialized_transaction, None).await;
+				.simulate_transaction(serialized_transaction, None).await.unwrap();
 
 				let price_feed_result = simulation_result.value.return_data.unwrap();
 

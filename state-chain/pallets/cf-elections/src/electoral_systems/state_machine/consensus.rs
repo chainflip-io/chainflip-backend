@@ -1,4 +1,4 @@
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::collections::btree_map::BTreeMap;
 
 /// Abstract consensus mechanism.
 ///
@@ -15,6 +15,8 @@ pub trait ConsensusMechanism: Default {
 	/// additional information required to check consensus
 	type Settings;
 
+	/// Every vote should be representable as consensus.
+	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result;
 	fn insert_vote(&mut self, vote: Self::Vote);
 	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result>;
 }
@@ -55,6 +57,10 @@ impl<Vote: Ord + PartialEq + Clone> ConsensusMechanism for SupermajorityConsensu
 				None
 			}
 		})
+	}
+
+	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result {
+		vote.clone()
 	}
 }
 
@@ -118,54 +124,16 @@ impl<Stage: ConsensusMechanism, Priority: Ord + Copy> ConsensusMechanism
 
 		None
 	}
-}
 
-//------ multiple votes -----------
-/// This is a consensus modifier which allows multiple votes to be cast.
-///
-/// Note that there aren't any safeguards ensuring any kind of validity
-/// requirements. E.g. a 100 times repeated same vote would be accepted.
-/// Use this ONLY in contexts where validity is guaranteed by some other
-/// mechanism.
-pub struct MultipleVotes<Base: ConsensusMechanism> {
-	pub multi_votes: Vec<Vec<Base::Vote>>,
-}
-
-impl<Base: ConsensusMechanism> Default for MultipleVotes<Base> {
-	fn default() -> Self {
-		Self { multi_votes: Default::default() }
-	}
-}
-
-impl<Base: ConsensusMechanism> ConsensusMechanism for MultipleVotes<Base>
-where
-	Base::Vote: Clone,
-{
-	type Vote = Vec<Base::Vote>;
-	type Result = Base::Result;
-	type Settings = Base::Settings;
-
-	fn insert_vote(&mut self, votes: Self::Vote) {
-		self.multi_votes.push(votes);
-	}
-
-	fn check_consensus(&self, settings: &Self::Settings) -> Option<Self::Result> {
-		let mut base: Base = Default::default();
-		for votes in &self.multi_votes {
-			for vote in votes {
-				base.insert_vote(vote.clone());
-			}
-		}
-
-		base.check_consensus(settings)
+	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result {
+		Stage::vote_as_consensus(&vote.vote)
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use crate::electoral_systems::state_machine::consensus::{
-		ConsensusMechanism, MultipleVotes, StagedConsensus, SuccessThreshold,
-		SupermajorityConsensus,
+		ConsensusMechanism, StagedConsensus, SuccessThreshold, SupermajorityConsensus,
 	};
 
 	#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
@@ -220,19 +188,5 @@ mod tests {
 		staged.insert_vote((4, MockVote(6)).into());
 		let consensus = staged.check_consensus(&SuccessThreshold { success_threshold: 3 });
 		assert_eq!(consensus, Some(MockVote(6)));
-	}
-
-	#[test]
-	fn test_multiple_votes_consensus() {
-		let mut multiple = MultipleVotes::<SupermajorityConsensus<MockVote>>::default();
-		multiple.insert_vote(vec![MockVote(1), MockVote(2)]);
-		multiple.insert_vote(vec![MockVote(1), MockVote(2)]);
-		multiple.insert_vote(vec![MockVote(3), MockVote(4)]);
-		let consensus = multiple.check_consensus(&SuccessThreshold { success_threshold: 3 });
-		assert_eq!(consensus, None);
-
-		multiple.insert_vote(vec![MockVote(2), MockVote(4)]);
-		let consensus = multiple.check_consensus(&SuccessThreshold { success_threshold: 3 });
-		assert_eq!(consensus, Some(MockVote(2)));
 	}
 }

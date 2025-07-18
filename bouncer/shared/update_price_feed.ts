@@ -15,14 +15,21 @@ async function updateSolanaPriceFeed(logger: Logger, asset: Asset, price: string
   const priceFeedMockAddress = getContractAddress('Solana', `PRICE_FEED_MOCK`);
   const priceFeedAddress = new PublicKey(getContractAddress('Solana', `PRICE_FEED_${asset}`));
 
-  const updatePriceDiscriminator = Buffer.from([61, 34, 117, 155, 75, 34, 123, 208]);
+  const submitDiscriminator = Buffer.from([88, 166, 102, 181, 162, 127, 170, 48]);
 
   const priceBN = new BN(finePrice);
-  const priceBuffer = priceBN.toBuffer('le', 16);
+  const priceBuffer = priceBN.toBuffer('le', 16); // answer (i128)
+
+  // Use current system time as timestamp (Unix seconds)
+  const timestamp = Math.floor(Date.now() / 1000); // u64
+  const timestampBN = new BN(timestamp);
+  const timestampBuffer = timestampBN.toBuffer('le', 8); // u64
+
+  const newTransmissionBuffer = Buffer.concat([timestampBuffer, priceBuffer]);
 
   const tx = new Transaction().add(
     new TransactionInstruction({
-      data: Buffer.concat([Buffer.from(updatePriceDiscriminator), priceBuffer]),
+      data: Buffer.concat([Buffer.from(submitDiscriminator), newTransmissionBuffer]),
       keys: [{ pubkey: priceFeedAddress, isSigner: false, isWritable: true }],
       programId: new PublicKey(priceFeedMockAddress),
     }),

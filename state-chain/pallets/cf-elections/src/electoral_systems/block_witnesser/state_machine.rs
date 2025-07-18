@@ -22,6 +22,8 @@ use core::ops::Range;
 use derive_where::derive_where;
 use generic_typeinfo_derive::GenericTypeInfo;
 use itertools::Either;
+#[cfg(test)]
+use proptest::prelude::{Arbitrary, Strategy};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
@@ -36,6 +38,18 @@ use sp_std::{fmt::Debug, vec::Vec};
 #[scale_info(skip_type_params(Tag1, Tag2))]
 pub struct HookTypeFor<Tag1, Tag2> {
 	_phantom: sp_std::marker::PhantomData<(Tag1, Tag2)>,
+}
+
+#[cfg(test)]
+impl<Tag1: Send, Tag2: Send> Arbitrary for HookTypeFor<Tag1, Tag2> {
+	type Parameters = ();
+
+	fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+		use proptest::prelude::Just;
+		Just(HookTypeFor { _phantom: Default::default() })
+	}
+
+	type Strategy = impl Strategy<Value = Self> + Clone + Send;
 }
 
 pub trait BWTypes: 'static + Sized + BWProcessorTypes {

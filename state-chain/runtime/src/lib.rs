@@ -1160,6 +1160,15 @@ impl pallet_cf_elections::Config<Instance3> for Runtime {
 	type ElectoralEvents = BitcoinElectoralEvents;
 }
 
+impl pallet_cf_elections::Config for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = "GenericElections";
+	type RuntimeEvent = RuntimeEvent;
+	type ElectoralSystemRunner = chainflip::generic_elections::GenericElectoralSystemRunner;
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+	type CreateGovernanceElectionHook = chainflip::generic_elections::GenericElectionHooks;
+	type ElectoralEvents = ();
+}
+
 impl pallet_cf_trading_strategy::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;
@@ -1312,6 +1321,9 @@ mod runtime {
 
 	#[runtime::pallet_index(54)]
 	pub type BitcoinElections = pallet_cf_elections<Instance3>;
+
+	#[runtime::pallet_index(55)]
+	pub type GenericElections = pallet_cf_elections;
 }
 
 /// The address format for describing accounts.
@@ -1382,6 +1394,7 @@ pub type PalletExecutionOrder = (
 	// Elections
 	SolanaElections,
 	BitcoinElections,
+	GenericElections,
 	// Vaults
 	EthereumVault,
 	PolkadotVault,
@@ -1436,6 +1449,7 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	migrations::bitcoin_elections::Migration,
+	migrations::generic_elections::Migration,
 	MigrationsForV1_11,
 );
 
@@ -1583,6 +1597,14 @@ impl_runtime_apis! {
 
 		fn cf_bitcoin_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
 			BitcoinElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+		}
+
+		fn cf_generic_electoral_data(account_id: AccountId) -> Vec<u8> {
+			GenericElections::electoral_data(&account_id).encode()
+		}
+
+		fn cf_generic_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+			GenericElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
 		}
 	}
 
