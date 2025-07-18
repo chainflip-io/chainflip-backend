@@ -42,7 +42,7 @@ macro_rules! generate_vote_storage_tuple_impls {
             pub enum CompositeVote<$($t,)*> {
                 $($t($t),)*
             }
-            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Ord, PartialOrd)]
             pub enum CompositePartialVote<$($t,)*> {
                 $($t($t),)*
             }
