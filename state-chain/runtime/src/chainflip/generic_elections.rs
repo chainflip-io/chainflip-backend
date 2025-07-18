@@ -1,9 +1,14 @@
 use core::ops::RangeInclusive;
 
+use frame_system::pallet_prelude::BlockNumberFor;
+use sol_prim::consts::const_address;
+use sp_core::H160;
+use sp_std::{vec, vec::Vec};
+
+use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
 use cf_chains::sol::SolAddress;
 use cf_primitives::Price;
 use cf_traits::Chainflip;
-use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
@@ -27,14 +32,10 @@ use pallet_cf_elections::{
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 	},
+	generic_tools::*,
 	vote_storage, CorruptStorageError, ElectionIdentifierOf, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };
-use sol_prim::consts::const_address;
-use sp_core::H160;
-
-use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
-use sp_std::{vec, vec::Vec};
 
 pub fn get_current_chainlink_prices(
 	state: &OraclePriceTracker<TypesFor<Chainlink>>,
@@ -66,12 +67,34 @@ pub fn get_current_chainlink_prices(
 
 def_derive! {
 	#[derive(TypeInfo)]
-	pub struct ChainlinkOraclePriceSettings {
+	pub struct ChainlinkOraclePriceSettings<Container: Functor = VectorContainer> {
 		pub sol_oracle_program_id: SolAddress,
-		pub sol_oracle_feeds: Vec<SolAddress>,
+		pub sol_oracle_feeds: Container::Of<SolAddress>,
 		pub sol_oracle_query_helper: SolAddress,
 		pub eth_contract_address: H160,
-		pub eth_oracle_feeds: Vec<H160>
+		pub eth_oracle_feeds: Container::Of<H160>
+	}
+}
+
+impl<F: Functor> ChainlinkOraclePriceSettings<F> {
+	pub fn convert<G: Functor>(
+		self,
+		t: impl Transformation<F, G>,
+	) -> ChainlinkOraclePriceSettings<G> {
+		let ChainlinkOraclePriceSettings {
+			sol_oracle_program_id,
+			sol_oracle_feeds,
+			sol_oracle_query_helper,
+			eth_contract_address,
+			eth_oracle_feeds,
+		} = self;
+		ChainlinkOraclePriceSettings {
+			sol_oracle_program_id,
+			sol_oracle_feeds: t.at(sol_oracle_feeds),
+			sol_oracle_query_helper,
+			eth_contract_address,
+			eth_oracle_feeds: t.at(eth_oracle_feeds),
+		}
 	}
 }
 

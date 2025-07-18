@@ -1,9 +1,9 @@
 use core::ops::RangeInclusive;
-
 use sp_std::ops::Add;
 
-use crate::electoral_systems::{
-	oracle_price::price::FractionImpl, state_machine::common_imports::*,
+use crate::{
+	electoral_systems::{oracle_price::price::FractionImpl, state_machine::common_imports::*},
+	generic_tools::*,
 };
 
 #[cfg(test)]

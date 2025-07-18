@@ -32,6 +32,12 @@ use cf_primitives::{
 	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 };
 use common::{FLIPPERINOS_PER_FLIP, SHARED_DATA_REFERENCE_LIFETIME};
+use pallet_cf_elections::{
+	generic_tools::{
+		ArrayContainer, ArrayToVector, CommonTraits, Functor, Transformation, VectorContainer,
+	},
+	transform,
+};
 pub use sc_service::{ChainType, Properties};
 use sc_telemetry::serde_json::json;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -143,7 +149,7 @@ pub struct StateChainEnvironment {
 	sol_alt_manager_program: SolAddress,
 	// Initialized with 65 accounts (50 of them nonces)
 	sol_address_lookup_table_account: (SolAddress, [SolAddress; 65]),
-	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings,
+	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings<ArrayContainer<5>>,
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -481,7 +487,7 @@ pub fn inner_cf_development_config(
 			},
 			GenericElectionsConfig {
 				option_initial_state: Some(generic_elections::initial_state(
-					chainlink_oracle_price_settings,
+					chainlink_oracle_price_settings.convert(ArrayToVector),
 				)),
 			},
 		))
@@ -672,7 +678,7 @@ macro_rules! network_spec {
 						},
 						GenericElectionsConfig {
 							option_initial_state: Some(generic_elections::initial_state(
-								chainlink_oracle_price_settings,
+								chainlink_oracle_price_settings.convert(ArrayToVector),
 							)),
 						},
 					))

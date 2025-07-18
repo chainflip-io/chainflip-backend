@@ -1,10 +1,13 @@
-use crate::electoral_systems::{
-	block_witnesser::state_machine::HookTypeFor,
-	oracle_price::{
-		price,
-		primitives::{Aggregation, Apply, BasisPoints, Seconds, UnixTime},
+use crate::{
+	electoral_systems::{
+		block_witnesser::state_machine::HookTypeFor,
+		oracle_price::{
+			price,
+			primitives::{Aggregation, Apply, BasisPoints, Seconds, UnixTime},
+		},
+		state_machine::common_imports::*,
 	},
-	state_machine::common_imports::*,
+	generic_tools::*,
 };
 use core::ops::RangeInclusive;
 use enum_iterator::{all, Sequence};
@@ -200,6 +203,7 @@ impl<T: OPTypes> ExternalChainState<T> {
 				timestamp: T::Aggregation::single(&Default::default()),
 				price: T::Aggregation::single(&Default::default()),
 				price_staleness: PriceStaleness::Stale,
+				price_spiked: false,
 				minimal_price_deviation: Default::default(),
 			});
 			entry.update(response);
@@ -355,7 +359,9 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 
 	fn get_queries(state: &mut Self::State) -> Vec<Self::Query> {
 		all::<ExternalPriceChain>()
-			.take_while_inclusive(|chain| state.chain_states[*chain].is_any_asset_price_not_up_to_date())
+			.take_while_inclusive(|chain| {
+				state.chain_states[*chain].is_any_asset_price_not_up_to_date()
+			})
 			.map(|chain| PriceQuery { chain, assets: state.chain_states[chain].get_query() })
 			.collect()
 	}

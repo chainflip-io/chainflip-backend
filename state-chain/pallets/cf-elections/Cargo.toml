@@ -37,6 +37,7 @@ nanorand = { workspace = true, features = ["wyrand"] }
 derive-where = { workspace = true }
 duplicate = "2.0.0"
 enum-iterator = { workspace = true }
+serde_arrays = "0.2.0"
 
 # Parity deps
 codec = { workspace = true, features = ["derive", "bit-vec"] }

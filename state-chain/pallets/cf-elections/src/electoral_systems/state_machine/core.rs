@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use sp_std::{fmt::Debug, vec::Vec};
 
+use crate::generic_tools::common_traits::*;
+
 /// Syntax sugar for implementing multiple traits for a single type.
 ///
 /// Example use:
@@ -520,19 +522,3 @@ impl<C: ChainWitnessConfig> Validate for BlockWitnessRange<C> {
 		self.check_is_valid()
 	}
 }
-
-/// Encapsulating usual constraints on types meant to be serialized
-pub trait Serde = Serialize + for<'a> Deserialize<'a>;
-
-#[cfg(test)]
-pub trait TestTraits = Send + Sync;
-#[cfg(not(test))]
-pub trait TestTraits = core::any::Any;
-
-#[cfg(test)]
-pub trait MaybeArbitrary = proptest::prelude::Arbitrary + Send + Sync
-where <Self as Arbitrary>::Strategy: Clone + Sync + Send;
-#[cfg(not(test))]
-pub trait MaybeArbitrary = core::any::Any;
-
-pub trait CommonTraits = Debug + Clone + Encode + Decode + Serde + Eq + TypeInfo;
