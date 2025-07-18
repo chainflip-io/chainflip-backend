@@ -22,7 +22,7 @@ use pallet_cf_funding::Config as FundingConfig;
 use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_session::Config as SessionConfig;
 
-use cf_primitives::{AccountRole, DelegationPreferences};
+use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter, SafeMode, SetSafeMode};
 use cf_utilities::assert_matches;
 use frame_benchmarking::v2::*;
