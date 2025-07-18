@@ -1729,7 +1729,7 @@ mod delegation {
 				},
 			));
 			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(ALICE), BOB));
-			assert_eq!(Delegations::<Test>::get(ALICE), Some(BOB));
+			assert_eq!(DelegationChoice::<Test>::get(ALICE), Some(BOB));
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::ValidatorPallet(Event::OperatorSettingsUpdated {
@@ -1754,7 +1754,7 @@ mod delegation {
 				ValidatorPallet::undelegate(OriginTrait::signed(ALICE)),
 				Error::<Test>::AccountIsNotDelegating
 			);
-			Delegations::<Test>::insert(ALICE, BOB);
+			DelegationChoice::<Test>::insert(ALICE, BOB);
 			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(ALICE)));
 			assert_event_sequence!(
 				Test,
