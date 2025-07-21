@@ -458,7 +458,7 @@ mod benchmarks {
 		ManagedValidators::<T>::insert(validator.clone(), operator.clone());
 
 		#[extrinsic_call]
-		remove_delegator_from_exceptions(RawOrigin::Signed(validator.clone()), validator.clone());
+		remove_validator(RawOrigin::Signed(validator.clone()), validator.clone());
 
 		assert!(ManagedValidators::<T>::get(validator).is_none());
 	}
