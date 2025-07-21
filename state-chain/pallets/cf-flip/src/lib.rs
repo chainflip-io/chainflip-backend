@@ -30,7 +30,6 @@ pub mod weights;
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
-use cf_primitives::FlipBalance;
 use cf_traits::{
 	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, OnAccountFunded, Slashing,
 };
@@ -697,19 +696,17 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 
 pub struct FlipSlasher<T: Config>(PhantomData<T>);
 
-impl<T: Config> Slashing for FlipSlasher<T>
-where
-	BlockNumberFor<T>: Into<T::Balance>,
-{
+impl<T: Config> Slashing for FlipSlasher<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
+	type Balance = T::Balance;
 
 	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
 		let slash_amount = Pallet::<T>::calculate_slash_amount(account_id, blocks);
 		Pallet::<T>::slash(account_id, slash_amount);
 	}
 
-	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance) {
-		Pallet::<T>::slash(account_id, slash_amount.into());
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: Self::Balance) {
+		Pallet::<T>::slash(account_id, slash_amount);
 	}
 }

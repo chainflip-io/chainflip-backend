@@ -36,7 +36,7 @@ pub use auction_resolver::*;
 pub use delegation::*;
 
 use cf_primitives::{
-	AccountRole, AuthorityCount, CfeCompatibility, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer, Delegation,
+	AccountRole, AuthorityCount, CfeCompatibility, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
 	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
 };
 use cf_traits::{
@@ -372,6 +372,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type OperatorSettingsLookup<T: Config> =
 		StorageMap<_, Identity, T::AccountId, OperatorSettings, OptionQuery>;
+
+	/// Maps an operator to all of its managed delegators.
+	#[pallet::storage]
+	pub type ManagedDelegators<T: Config> =
+		StorageMap<_, Identity, T::AccountId, BTreeMap<T::AccountId, T::Amount>, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -1552,15 +1557,19 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 		validators
-}
+	}
 
 	pub fn get_operator_info_by_validator(
-		epoch: EpochIndex,
 		validator: &T::AccountId,
-	) -> Option<Delegation<T::AccountId, T::Amount>> {
-		let operator = ValidatorToOperator::<T>::get(epoch, validator)?;
-
-		OperatorInfo::<T>::get(epoch, operator)
+	) -> Option<DelegationInfo<T::AccountId, T::Amount>> {
+		let operator = ManagedValidators::<T>::get(validator)?;
+		Some(DelegationInfo {
+			delegator_bids: ManagedDelegators::<T>::get(&operator)?,
+			delegation_fee: Percent::from_rational(
+				OperatorSettingsLookup::<T>::get(&operator)?.fee_bps,
+				10_000u32,
+			),
+		})
 	}
 }
 

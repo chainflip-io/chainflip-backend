@@ -21,7 +21,7 @@ pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 pub mod multi_vault_activator;
-pub mod node_rewards_and_slashing;
+pub mod node_rewards;
 mod offences;
 pub mod pending_rotation_broadcasts;
 mod signer_nomination;
@@ -34,7 +34,6 @@ pub mod bitcoin_elections;
 pub mod solana_elections;
 pub mod vault_swaps;
 
-use cf_chains::SetGovKeyWithAggKeyError;
 use sp_runtime::FixedPointNumber;
 
 use crate::{
@@ -97,18 +96,17 @@ use cf_primitives::{
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster,
-	CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi, EpochInfo,
+	CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
 	FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, KeyProvider, OnBroadcastReady,
-	OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
+	OnDeposit, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
 };
-use node_rewards_and_slashing::*;
 
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 	pallet_prelude::DispatchError,
-	sp_runtime::{traits::One, FixedU64},
+	sp_runtime::FixedU64,
 	traits::{Defensive, Get},
 };
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -141,7 +139,6 @@ impl Heartbeat for ChainflipHeartbeat {
 
 	fn on_heartbeat_interval() {
 		<Emissions as BlockEmissions>::calculate_block_emissions();
-		BackupNodeEmissions::distribute();
 	}
 }
 
@@ -943,40 +940,18 @@ impl QualifyNode<<Runtime as Chainflip>::ValidatorId> for ValidatorRoleQualifica
 // Returns Some(APY) if the account is a Validator/backup validator.
 // Otherwise returns None.
 pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
-	if pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id) {
-		// Authority: reward is earned by authoring a block.
-		Some(
-			Emissions::current_authority_emission_per_block() * YEAR as u128 /
+	pallet_cf_validator::CurrentAuthorities::<Runtime>::get()
+		.contains(account_id)
+		.then(|| {
+			// Authority: reward is earned by authoring a block.
+			let reward_pa = Emissions::current_authority_emission_per_block() * YEAR as u128 /
 				pallet_cf_validator::CurrentAuthorities::<Runtime>::decode_non_dedup_len()
-					.expect("Current authorities must exists and non-empty.") as u128,
-		)
-	} else {
-		let backups_earning_rewards =
-			Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>();
-		if backups_earning_rewards.iter().any(|bid| bid.bidder_id == *account_id) {
-			// Calculate backup validator reward for the current block, then scaled linearly into
-			// YEAR.
-			calculate_backup_rewards::<AccountId, FlipBalance>(
-				backups_earning_rewards,
-				Validator::bond(),
-				One::one(),
-				Emissions::backup_node_emission_per_block(),
-				Emissions::current_authority_emission_per_block(),
-				u128::from(Validator::current_authority_count()),
-			)
-			.into_iter()
-			.find(|(id, _reward)| *id == *account_id)
-			.map(|(_id, reward)| reward * YEAR as u128)
-		} else {
-			None
-		}
-	}
-	.map(|reward_pa| {
-		// Convert APY to Basis Point.
-		FixedU64::from_rational(reward_pa, Flip::balance(account_id))
-			.checked_mul_int(10_000u32)
-			.unwrap_or_default()
-	})
+					.expect("Current authorities must exists and non-empty.") as u128;
+
+			FixedU64::from_rational(reward_pa, Flip::balance(account_id))
+				.checked_mul_int(10_000u32)
+				.unwrap_or_default()
+		})
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Encode, Decode)]

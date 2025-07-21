@@ -1,6 +1,14 @@
+use crate::{Config, Pallet};
+
+use cf_primitives::FlipBalance;
+use cf_traits::Slashing;
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_system::pallet_prelude::BlockNumberFor;
+use pallet_cf_flip::FlipSlasher;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_runtime::{traits::AtLeast32BitUnsigned, DispatchError, Perbill, Percent};
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
 /// Represents a validator's default stance on accepting delegations
 #[derive(
@@ -43,4 +51,93 @@ pub struct OperatorSettings {
 	pub fee_bps: u32,
 	/// Default delegation acceptance preference for this validator
 	pub delegation_acceptance: DelegationAcceptance,
+}
+
+pub struct DelegatorFlipSlasher<T>(PhantomData<T>);
+impl<T: Config + pallet_cf_flip::Config> Slashing for DelegatorFlipSlasher<T>
+where
+	T::Balance: Into<FlipBalance>,
+{
+	type AccountId = T::AccountId;
+	type BlockNumber = BlockNumberFor<T>;
+	type Balance = T::Balance;
+
+	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
+		let slash_amount = pallet_cf_flip::Pallet::<T>::calculate_slash_amount(account_id, blocks);
+		Self::slash_balance(account_id, slash_amount);
+	}
+
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: Self::Balance) {
+		distribute_among_delegators::<T>(account_id, slash_amount, |account, slash| {
+			FlipSlasher::<T>::slash_balance(account, slash);
+		});
+	}
+}
+
+/// Distribute a settlement to a given validator for the current Epoch.
+/// The total amount is shared among all delegators associated with the operator controlling this
+/// validator.
+pub fn distribute_among_delegators<T: Config + pallet_cf_flip::Config>(
+	validator: &T::AccountId,
+	total: T::Balance,
+	settle: impl Fn(&T::AccountId, T::Balance),
+) {
+	let (operator_fee, delegator_fees) = Pallet::<T>::get_operator_info_by_validator(validator)
+		.and_then(|operator_info| operator_info.split_amount(total).ok())
+		.unwrap_or(
+			// In the case of `None` or invalid delegator info, settle 100% of the
+			// reward to the authoring validator
+			(total, Default::default()),
+		);
+
+	settle(validator, operator_fee);
+	for (delegator, fees) in delegator_fees.iter() {
+		settle(delegator, *fees);
+	}
+}
+
+/// A snapshot of active delegations to a validator for the current epoch
+#[derive(
+	PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, Default, PartialOrd, Ord,
+)]
+pub struct DelegationInfo<AccountId, Balance> {
+	/// Accounts delegated to this operator with their bid amounts.
+	pub delegator_bids: BTreeMap<AccountId, Balance>,
+	/// Fee percentage applied to rewards
+	pub delegation_fee: Percent,
+}
+
+impl<AccountId: Clone + Ord, Balance: Default + Copy + Clone + AtLeast32BitUnsigned>
+	DelegationInfo<AccountId, Balance>
+{
+	/// Splits the total amount for the given operator. Can be used to distribute reward or
+	/// calculate slashing.
+	/// A proportion is given to the operator.
+	/// The rest is split proportionally to the amount staked by each delegator.
+	pub fn split_amount(
+		&self,
+		total: Balance,
+	) -> Result<(Balance, BTreeMap<AccountId, Balance>), DispatchError> {
+		if self.delegator_bids.is_empty() {
+			return Err("Empty delegator set".into())
+		}
+
+		let delegation_fee = self.delegation_fee * total;
+		let remaining = total - delegation_fee;
+
+		let total_staked = self
+			.delegator_bids
+			.iter()
+			.fold(Default::default(), |total_staked, (_, amount)| total_staked + *amount);
+
+		let delegator_cut = self
+			.delegator_bids
+			.iter()
+			.map(|(delegator, staked)| {
+				(delegator.clone(), Perbill::from_rational(*staked, total_staked) * remaining)
+			})
+			.collect::<BTreeMap<AccountId, _>>();
+
+		Ok((delegation_fee, delegator_cut))
+	}
 }
