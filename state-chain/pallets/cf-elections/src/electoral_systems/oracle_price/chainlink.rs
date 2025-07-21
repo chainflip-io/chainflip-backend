@@ -37,7 +37,7 @@ impl AssetPairTrait for ChainlinkAssetPair {
 	}
 }
 
-pub type ChainlinkPrice = FractionImpl<99_999_999>;
+pub type ChainlinkPrice = Fraction<99_999_999>;
 
 pub fn get_current_chainlink_prices<T>(
 	state: &OraclePriceTracker<T>,

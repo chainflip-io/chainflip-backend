@@ -443,7 +443,7 @@ pub mod tests {
 	use crate::electoral_systems::{
 		oracle_price::{
 			chainlink::{get_current_chainlink_prices, ChainlinkAssetPair, ChainlinkPrice},
-			price::FractionImpl,
+			price::Fraction,
 			primitives::*,
 		},
 		state_machine::core::{hook_test_utils::MockHook, *},

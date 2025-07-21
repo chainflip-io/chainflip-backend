@@ -31,7 +31,7 @@ use pallet_cf_elections::{
 		},
 		oracle_price::{
 			consensus::OraclePriceConsensus,
-			price::{price_with_unit_to_statechain_price, FractionImpl, PriceUnit},
+			price::{price_with_unit_to_statechain_price, Fraction, PriceUnit},
 			primitives::*,
 			state_machine::*,
 		},

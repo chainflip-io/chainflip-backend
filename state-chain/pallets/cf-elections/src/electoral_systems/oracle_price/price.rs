@@ -71,22 +71,22 @@ pub fn denom(d: Denom) -> U256 {
 def_derive! {
 	/// Note that this can handle denominators of up to u128::MAX + 1
 	#[derive(Default, PartialOrd, Ord, TypeInfo)]
-	pub struct FractionImpl<const U: Denom>(pub U256);
+	pub struct Fraction<const U: Denom>(pub U256);
 }
 
 // pub type Fraction<const U: Denom> = FractionImpl<{U - 1}>;
 
-impl<const U: Denom> FractionImpl<U> {
+impl<const U: Denom> Fraction<U> {
 	pub fn from_raw(raw: U256) -> Self {
-		FractionImpl(raw)
+		Fraction(raw)
 	}
 
 	pub fn integer<Int: Into<U256>>(int: Int) -> Self {
-		FractionImpl(int.into() * denom(U))
+		Fraction(int.into() * denom(U))
 	}
 
 	pub fn one() -> Self {
-		FractionImpl(denom(U))
+		Fraction(denom(U))
 	}
 
 	pub fn denominator() -> U256 {
@@ -96,99 +96,99 @@ impl<const U: Denom> FractionImpl<U> {
 	/// This fails if the denominator isn't a multiple of `denom(U)`
 	pub fn try_from_denominator_exact(numerator: u128, denominator: u128) -> Option<Self> {
 		if denom(U) % denominator == 0.into() {
-			Some(FractionImpl(mul_div_floor(numerator.into(), denom(U), denominator)))
+			Some(Fraction(mul_div_floor(numerator.into(), denom(U), denominator)))
 		} else {
 			None
 		}
 	}
 
-	pub fn convert<const V: Denom>(self) -> FractionImpl<V> {
-		FractionImpl(mul_div_floor(self.0, denom(V), denom(U)))
+	pub fn convert<const V: Denom>(self) -> Fraction<V> {
+		Fraction(mul_div_floor(self.0, denom(V), denom(U)))
 	}
 
 	pub fn apply_exponent(&self, exp: Base10Exponent) -> Self {
 		let exp = exp.0;
 		if exp < 0 {
-			FractionImpl(mul_div_floor(self.0, 1.into(), 10u128.pow((exp * -1) as u32)))
+			Fraction(mul_div_floor(self.0, 1.into(), 10u128.pow((exp * -1) as u32)))
 		} else {
-			FractionImpl(mul_div_floor(self.0, 10u128.pow(exp as u32).into(), 1))
+			Fraction(mul_div_floor(self.0, 10u128.pow(exp as u32).into(), 1))
 		}
 	}
 }
 
-impl<const U: Denom> Add<FractionImpl<U>> for FractionImpl<U> {
-	type Output = FractionImpl<U>;
+impl<const U: Denom> Add<Fraction<U>> for Fraction<U> {
+	type Output = Fraction<U>;
 
-	fn add(self, rhs: FractionImpl<U>) -> Self::Output {
-		FractionImpl(self.0 + rhs.0)
+	fn add(self, rhs: Fraction<U>) -> Self::Output {
+		Fraction(self.0 + rhs.0)
 	}
 }
 
-impl<const U: Denom> Add<FractionImpl<U>> for &FractionImpl<U> {
-	type Output = FractionImpl<U>;
+impl<const U: Denom> Add<Fraction<U>> for &Fraction<U> {
+	type Output = Fraction<U>;
 
-	fn add(self, rhs: FractionImpl<U>) -> Self::Output {
-		FractionImpl(self.0 + rhs.0)
+	fn add(self, rhs: Fraction<U>) -> Self::Output {
+		Fraction(self.0 + rhs.0)
 	}
 }
 
-impl<const U: Denom> Sub<FractionImpl<U>> for FractionImpl<U> {
-	type Output = FractionImpl<U>;
+impl<const U: Denom> Sub<Fraction<U>> for Fraction<U> {
+	type Output = Fraction<U>;
 
-	fn sub(self, rhs: FractionImpl<U>) -> Self::Output {
-		FractionImpl(self.0 - rhs.0)
+	fn sub(self, rhs: Fraction<U>) -> Self::Output {
+		Fraction(self.0 - rhs.0)
 	}
 }
 
-impl<const U: Denom> Sub<FractionImpl<U>> for &FractionImpl<U> {
-	type Output = FractionImpl<U>;
+impl<const U: Denom> Sub<Fraction<U>> for &Fraction<U> {
+	type Output = Fraction<U>;
 
-	fn sub(self, rhs: FractionImpl<U>) -> Self::Output {
-		FractionImpl(self.0 - rhs.0)
+	fn sub(self, rhs: Fraction<U>) -> Self::Output {
+		Fraction(self.0 - rhs.0)
 	}
 }
 
-impl<const U: Denom, const V: Denom> Mul<FractionImpl<V>> for FractionImpl<U> {
-	type Output = FractionImpl<U>;
+impl<const U: Denom, const V: Denom> Mul<Fraction<V>> for Fraction<U> {
+	type Output = Fraction<U>;
 
-	fn mul(self, rhs: FractionImpl<V>) -> Self::Output {
-		FractionImpl(mul_div_floor(self.0, rhs.0, denom(V)))
+	fn mul(self, rhs: Fraction<V>) -> Self::Output {
+		Fraction(mul_div_floor(self.0, rhs.0, denom(V)))
 	}
 }
 
-impl<const U: Denom, const V: Denom> Mul<FractionImpl<V>> for &FractionImpl<U> {
-	type Output = FractionImpl<U>;
+impl<const U: Denom, const V: Denom> Mul<Fraction<V>> for &Fraction<U> {
+	type Output = Fraction<U>;
 
-	fn mul(self, rhs: FractionImpl<V>) -> Self::Output {
-		FractionImpl(mul_div_floor(self.0, rhs.0, denom(V)))
+	fn mul(self, rhs: Fraction<V>) -> Self::Output {
+		Fraction(mul_div_floor(self.0, rhs.0, denom(V)))
 	}
 }
 
 #[cfg(test)]
-impl<const N: u128> Arbitrary for FractionImpl<N> {
+impl<const N: u128> Arbitrary for Fraction<N> {
 	type Parameters = ();
 
 	fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
 		use proptest::prelude::*;
-		any::<[u64; 4]>().prop_map(U256).prop_map(FractionImpl)
+		any::<[u64; 4]>().prop_map(U256).prop_map(Fraction)
 	}
 
-	type Strategy = impl Strategy<Value = FractionImpl<N>> + Clone + Send;
+	type Strategy = impl Strategy<Value = Fraction<N>> + Clone + Send;
 }
 
 #[cfg(test)]
-impl<const U: Denom> Div<u32> for FractionImpl<U> {
-	type Output = FractionImpl<U>;
+impl<const U: Denom> Div<u32> for Fraction<U> {
+	type Output = Fraction<U>;
 
 	fn div(self, rhs: u32) -> Self::Output {
-		FractionImpl(mul_div_floor(self.0, 1u128.into(), rhs))
+		Fraction(mul_div_floor(self.0, 1u128.into(), rhs))
 	}
 }
 
-pub type StatechainPrice = FractionImpl<{ u128::MAX }>;
+pub type StatechainPrice = Fraction<{ u128::MAX }>;
 
 /// WARNING, this assumes PRICE_FRACTIONAL_BITS = 128!
-impl Into<Price> for FractionImpl<{ u128::MAX }> {
+impl Into<Price> for Fraction<{ u128::MAX }> {
 	fn into(self) -> Price {
 		debug_assert_eq!(PRICE_FRACTIONAL_BITS, 128);
 		self.0
@@ -196,7 +196,7 @@ impl Into<Price> for FractionImpl<{ u128::MAX }> {
 }
 
 pub fn price_with_unit_to_statechain_price<const U: u128>(
-	price: FractionImpl<U>,
+	price: Fraction<U>,
 	unit: PriceUnit,
 ) -> StatechainPrice {
 	price
@@ -206,7 +206,7 @@ pub fn price_with_unit_to_statechain_price<const U: u128>(
 		.convert()
 }
 
-impl<const U: Denom> PriceTrait for FractionImpl<U> {
+impl<const U: Denom> PriceTrait for Fraction<U> {
 	fn to_price_range(&self, range: BasisPoints) -> RangeInclusive<Self> {
 		let delta = self * range.to_fraction();
 		self + delta.clone()..=self - delta

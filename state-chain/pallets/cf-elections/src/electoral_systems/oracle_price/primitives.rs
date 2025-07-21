@@ -2,7 +2,7 @@ use core::ops::RangeInclusive;
 use sp_std::ops::Add;
 
 use crate::{
-	electoral_systems::{oracle_price::price::FractionImpl, state_machine::common_imports::*},
+	electoral_systems::{oracle_price::price::Fraction, state_machine::common_imports::*},
 	generic_tools::*,
 };
 
@@ -36,8 +36,8 @@ def_derive! {
 }
 
 impl BasisPoints {
-	pub fn to_fraction(self) -> FractionImpl<9999> {
-		FractionImpl(self.0.into())
+	pub fn to_fraction(self) -> Fraction<9999> {
+		Fraction(self.0.into())
 	}
 }
 
