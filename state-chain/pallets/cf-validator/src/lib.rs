@@ -490,6 +490,8 @@ pub mod pallet {
 		NotOperator,
 		/// A delegator is expliztly blocked.
 		DelegatorBlocked,
+		/// The provided Operator fee is too low.
+		OperatorFeeToLow,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -1016,9 +1018,14 @@ pub mod pallet {
 		/// Executed by an account to register as an operator.
 		#[pallet::call_index(16)]
 		#[pallet::weight(T::ValidatorWeightInfo::register_as_operator())]
-		pub fn register_as_operator(origin: OriginFor<T>) -> DispatchResult {
+		pub fn register_as_operator(
+			origin: OriginFor<T>,
+			settings: OperatorSettings,
+		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
+			ensure!(settings.fee_bps >= MIN_OPERATOR_FEE, Error::<T>::OperatorFeeToLow);
 			T::AccountRoleRegistry::register_as_operator(&account_id)?;
+			OperatorSettingsLookup::<T>::insert(&account_id, settings);
 			Ok(())
 		}
 

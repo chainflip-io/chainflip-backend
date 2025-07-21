@@ -2,6 +2,9 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 
+/// The minimum operator fee we charge.
+pub const MIN_OPERATOR_FEE: u32 = 10;
+
 pub enum AssociationToOperator {
 	Validator,
 	Delegator,
