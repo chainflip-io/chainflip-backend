@@ -23,7 +23,9 @@ use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{
 	assert_events_eq, assert_events_match, assert_matching_event_count, last_event,
 };
-use cf_traits::{mocks::balance_api::MockBalance, BalanceApi, PoolApi, SwappingApi};
+use cf_traits::{
+	mocks::balance_api::MockBalance, BalanceApi, PoolApi, PoolOrdersManager, SwappingApi,
+};
 use frame_support::{assert_noop, assert_ok};
 use sp_core::bounded_vec;
 use sp_runtime::BoundedVec;
@@ -1684,11 +1686,7 @@ fn cancel_all_pool_positions() {
 		assert_eq!(count_orders(BASE_ASSET, ALICE), (2, 2, 2));
 		assert_eq!(count_orders(BASE_ASSET, BOB), (8, 0, 8));
 
-		assert_ok!(LiquidityPools::cancel_all_pool_orders(
-			RuntimeOrigin::root(),
-			BASE_ASSET,
-			STABLE_ASSET
-		));
+		assert_ok!(LiquidityPools::cancel_all_pool_orders(BASE_ASSET, STABLE_ASSET));
 
 		// All orders in the pool should be closed
 		assert_eq!(count_orders(BASE_ASSET, ALICE), (0, 0, 0));
