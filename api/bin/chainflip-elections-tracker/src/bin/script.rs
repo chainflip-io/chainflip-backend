@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 
 use cf_utilities::task_scope::{self};
 use chainflip_engine::state_chain_observer::client::{
-	BlockInfo, StateChainClient, base_rpc_api::BaseRpcApi, storage_api::StorageApi,
+	StateChainClient, base_rpc_api::BaseRpcApi, storage_api::StorageApi,
 };
 use futures::StreamExt;
 use futures_util::FutureExt;
@@ -84,7 +84,7 @@ async fn observe_elections(rpc_url: String) {
 											match vote {
 												pallet_cf_elections::vote_storage::AuthorityVote::PartialVote(partial) => {
 													if let Some(votes) = solana_map.get_mut(&election_id) {
-														votes.entry(partial.clone()).and_modify(|entry| *entry = *entry + 1).or_insert(1);
+														votes.entry(partial.clone()).and_modify(|entry| *entry += 1).or_insert(1);
 													} else {
 														let mut vote_map = BTreeMap::new();
 														vote_map.insert(partial.clone(), 1);
@@ -95,7 +95,7 @@ async fn observe_elections(rpc_url: String) {
 													let partial = <SolanaVoteStorageTuple as VoteStorage>::vote_into_partial_vote(&full_vote, |shared_data| SharedDataHash::of(&shared_data));
 													sol_partial_to_vote.insert(partial.clone(), full_vote.clone());
 													if let Some(votes) = solana_map.get_mut(&election_id) {
-														votes.entry(partial.clone()).and_modify(|entry| *entry = *entry + 1).or_insert(1);
+														votes.entry(partial.clone()).and_modify(|entry| *entry += 1).or_insert(1);
 													} else {
 														let mut vote_map = BTreeMap::new();
 														vote_map.insert(partial.clone(), 1);
@@ -119,7 +119,7 @@ async fn observe_elections(rpc_url: String) {
 											match vote {
 												pallet_cf_elections::vote_storage::AuthorityVote::PartialVote(partial) => {
 													if let Some(votes) = bitcoin_map.get_mut(&election_id) {
-														votes.entry(partial.clone()).and_modify(|entry| *entry = *entry + 1).or_insert(1);
+														votes.entry(partial.clone()).and_modify(|entry| *entry += 1).or_insert(1);
 													} else {
 														let mut vote_map = BTreeMap::new();
 														vote_map.insert(partial.clone(), 1);
@@ -130,7 +130,7 @@ async fn observe_elections(rpc_url: String) {
 													let partial = <BitcoinVoteStorageTuple as VoteStorage>::vote_into_partial_vote(&full_vote, |shared_data| SharedDataHash::of(&shared_data));
 													btc_partial_to_vote.insert(partial.clone(), full_vote.clone());
 													if let Some(votes) = bitcoin_map.get_mut(&election_id) {
-														votes.entry(partial.clone()).and_modify(|entry| *entry = *entry + 1).or_insert(1);
+														votes.entry(partial.clone()).and_modify(|entry| *entry += 1).or_insert(1);
 													} else {
 														let mut vote_map = BTreeMap::new();
 														vote_map.insert(partial.clone(), 1);
@@ -197,7 +197,7 @@ async fn observe_elections(rpc_url: String) {
 							}
 						}
 					}
-					println!("");
+					println!();
 				}
 			}
 		}).await;
