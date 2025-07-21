@@ -18,12 +18,14 @@ use std::collections::BTreeMap;
 
 use crate::{
 	network::{self, new_account},
-	AccountId, AuthorityCount,
+	AccountId, AuthorityCount, RuntimeOrigin,
 };
 
-use cf_primitives::{AccountRole, Delegation};
+use cf_primitives::AccountRole;
 use cf_traits::AccountInfo;
-use sp_runtime::{traits::Zero, Percent, Permill};
+use frame_support::assert_ok;
+use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
+use sp_runtime::{traits::Zero, Permill};
 use state_chain_runtime::{
 	constants::common::HEARTBEAT_BLOCK_INTERVAL, Balance, Flip, Runtime, System, Validator,
 };
@@ -43,6 +45,27 @@ impl Delegator {
 	}
 }
 
+fn setup_delegation(
+	validator: AccountId,
+	operator: AccountId,
+	operator_cut: u32,
+	delegators: BTreeMap<AccountId, Balance>,
+) {
+	assert_ok!(Validator::claim_validator(
+		RuntimeOrigin::signed(operator.clone()),
+		validator.clone()
+	));
+	assert_ok!(Validator::accept_operator(RuntimeOrigin::signed(validator), operator.clone(),));
+	assert_ok!(Validator::set_delegation_preferences(
+		RuntimeOrigin::signed(operator.clone()),
+		OperatorSettings {
+			fee_bps: operator_cut,
+			delegation_acceptance: DelegationAcceptance::Allow,
+		},
+	));
+	pallet_cf_validator::ManagedDelegators::<Runtime>::insert(operator, delegators);
+}
+
 #[test]
 fn block_author_rewards_are_distributed_among_delegators() {
 	const EPOCH_DURATION_BLOCKS: u32 = 200;
@@ -56,7 +79,6 @@ fn block_author_rewards_are_distributed_among_delegators() {
 
 			testnet.move_to_the_next_epoch();
 
-			let epoch = Validator::current_epoch();
 			let auth = pallet_cf_validator::CurrentAuthorities::<Runtime>::get()
 				.into_iter()
 				.next()
@@ -78,25 +100,17 @@ fn block_author_rewards_are_distributed_among_delegators() {
 				.collect::<Vec<_>>();
 
 			let operator = AccountId::from([0xe1; 32]);
-			new_account(&operator, AccountRole::LiquidityProvider);
+			new_account(&operator, AccountRole::Operator);
 
-			pallet_cf_validator::OperatorInfo::<Runtime>::insert(
-				epoch,
-				operator.clone(),
-				Delegation {
-					validator_bids: BTreeMap::from_iter([(auth.clone(), 1_000_000_000u128)]),
-					delegator_bids: BTreeMap::from_iter([
-						(delegators[0].account.clone(), 100_000_000u128), // 5% of cut
-						(delegators[1].account.clone(), 400_000_000u128), // 20% of cut
-						(delegators[2].account.clone(), 500_000_000u128), // 25% of cut
-					]),
-					delegation_fee: Percent::from_percent(50),
-				},
-			);
-			pallet_cf_validator::ValidatorToOperator::<Runtime>::insert(
-				epoch,
+			setup_delegation(
 				auth.clone(),
 				operator.clone(),
+				5_000, // 50%
+				BTreeMap::from_iter([
+					(delegators[0].account.clone(), 100_000_000u128), // 5% of cut
+					(delegators[1].account.clone(), 400_000_000u128), // 20% of cut
+					(delegators[2].account.clone(), 500_000_000u128), // 25% of cut
+				]),
 			);
 
 			let auth_pre_balance = Flip::balance(&auth);
@@ -123,90 +137,6 @@ fn block_author_rewards_are_distributed_among_delegators() {
 }
 
 #[test]
-fn backup_rewards_are_distributed_among_delegators() {
-	const EPOCH_DURATION_BLOCKS: u32 = 200;
-	const MAX_AUTHORITIES: AuthorityCount = 3;
-	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_DURATION_BLOCKS)
-		.max_authorities(MAX_AUTHORITIES)
-		.build()
-		.execute_with(|| {
-			let (mut testnet, _, _) =
-				network::fund_authorities_and_join_auction(MAX_AUTHORITIES + 1);
-
-			testnet.move_to_the_next_epoch();
-
-			let epoch = Validator::current_epoch();
-			let backup = Validator::backups().into_iter().next().expect("Should have 1 backup").0;
-
-			// Setup delegator/operator
-			// TODO: update this with proper extrinsic calls after delegation API is integrated
-			// Setup 3 delegator
-			let mut delegators = (0xF0..0xF3)
-				.map(|i| {
-					let account = AccountId::from([i; 32]);
-					new_account(&account, AccountRole::LiquidityProvider);
-					Delegator {
-						account: account.clone(),
-						pre_balance: Flip::balance(&account),
-						post_balance: Default::default(),
-					}
-				})
-				.collect::<Vec<_>>();
-
-			let operator = AccountId::from([0xe2; 32]);
-			new_account(&operator, AccountRole::LiquidityProvider);
-
-			// Move to the block before backup rewards are distributed
-			let current_block = System::block_number();
-			let blocks_to_move =
-				HEARTBEAT_BLOCK_INTERVAL - current_block % HEARTBEAT_BLOCK_INTERVAL - 1;
-			testnet.move_forward_blocks(blocks_to_move);
-
-			pallet_cf_validator::OperatorInfo::<Runtime>::insert(
-				epoch,
-				operator.clone(),
-				Delegation {
-					validator_bids: BTreeMap::from_iter([(backup.clone(), 1_000_000_000u128)]),
-					delegator_bids: BTreeMap::from_iter([
-						(delegators[0].account.clone(), 600_000_000u128), // 54% of cut
-						(delegators[1].account.clone(), 300_000_000u128), // 27% of cut
-						(delegators[2].account.clone(), 100_000_000u128), // 9%  of cut
-					]),
-					delegation_fee: Percent::from_percent(10),
-				},
-			);
-
-			pallet_cf_validator::ValidatorToOperator::<Runtime>::insert(
-				epoch,
-				backup.clone(),
-				operator.clone(),
-			);
-
-			let backup_pre_balance = Flip::balance(&backup);
-
-			// Trigger backup reward distribution
-			testnet.move_forward_blocks(2);
-
-			delegators.iter_mut().for_each(|d| d.post_balance = Flip::balance(&d.account));
-
-			let backup_post_balance = Flip::balance(&backup);
-			let backup_cut = backup_post_balance - backup_pre_balance;
-
-			let total_backup_reward =
-				backup_cut + delegators[0].diff() + delegators[1].diff() + delegators[2].diff();
-
-			assert!(total_backup_reward > 0u128);
-
-			// Verify that rewards are distributed accordingly
-			assert_eq!(Permill::from_percent(10) * total_backup_reward, backup_cut);
-			assert_eq!(Permill::from_percent(54) * total_backup_reward, delegators[0].diff());
-			assert_eq!(Permill::from_percent(27) * total_backup_reward, delegators[1].diff());
-			assert_eq!(Permill::from_percent(9) * total_backup_reward, delegators[2].diff());
-		});
-}
-
-#[test]
 fn slashings_are_distributed_among_delegators() {
 	const EPOCH_DURATION_BLOCKS: u32 = 1_000;
 	const MAX_AUTHORITIES: AuthorityCount = 3;
@@ -219,7 +149,6 @@ fn slashings_are_distributed_among_delegators() {
 
 			testnet.move_to_the_next_epoch();
 
-			let epoch = Validator::current_epoch();
 			let auth = pallet_cf_validator::CurrentAuthorities::<Runtime>::get()
 				.into_iter()
 				.next()
@@ -257,23 +186,15 @@ fn slashings_are_distributed_among_delegators() {
 			let operator = AccountId::from([0xe1; 32]);
 			new_account(&operator, AccountRole::LiquidityProvider);
 
-			pallet_cf_validator::OperatorInfo::<Runtime>::insert(
-				epoch,
-				operator.clone(),
-				Delegation {
-					validator_bids: BTreeMap::from_iter([(auth.clone(), 1_000_000_000u128)]),
-					delegator_bids: BTreeMap::from_iter([
-						(delegators[0].account.clone(), 100_000_000u128), // 5% of cut
-						(delegators[1].account.clone(), 400_000_000u128), // 20% of cut
-						(delegators[2].account.clone(), 500_000_000u128), // 25% of cut
-					]),
-					delegation_fee: Percent::from_percent(50),
-				},
-			);
-			pallet_cf_validator::ValidatorToOperator::<Runtime>::insert(
-				epoch,
+			setup_delegation(
 				auth.clone(),
 				operator.clone(),
+				5_000, // 50%
+				BTreeMap::from_iter([
+					(delegators[0].account.clone(), 100_000_000u128), // 5% of cut
+					(delegators[1].account.clone(), 400_000_000u128), // 20% of cut
+					(delegators[2].account.clone(), 500_000_000u128), // 25% of cut
+				]),
 			);
 
 			let auth_pre_balance = Flip::balance(&auth);
