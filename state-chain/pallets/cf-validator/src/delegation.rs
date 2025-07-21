@@ -90,17 +90,16 @@ pub fn distribute_among_delegators<T: Config + pallet_cf_flip::Config>(
 	total: T::Balance,
 	settle: impl Fn(&T::AccountId, T::Balance),
 ) {
-	let (operator_fee, delegator_fees) = Pallet::<T>::get_operator_info_by_validator(validator)
-		.and_then(|operator_info| operator_info.split_amount(total).ok())
-		.unwrap_or(
-			// In the case of `None` or invalid delegator info, settle 100% of the
-			// reward to the authoring validator
-			(total, Default::default()),
-		);
-
-	settle(validator, operator_fee);
-	for (delegator, fees) in delegator_fees.iter() {
-		settle(delegator, *fees);
+	if let Some((operator_fee, delegator_fees)) =
+		Pallet::<T>::get_operator_info_by_validator(validator)
+			.and_then(|operator_info| operator_info.split_amount(total).ok())
+	{
+		settle(validator, operator_fee);
+		for (delegator, fees) in delegator_fees.iter() {
+			settle(delegator, *fees);
+		}
+	} else {
+		settle(validator, total);
 	}
 }
 
