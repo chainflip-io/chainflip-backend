@@ -15,7 +15,7 @@ pub struct OraclePriceConsensus<T: OPTypes> {
 
 impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 	type Vote = ExternalChainStateVote<T>;
-	type Result = BTreeMap<T::Asset, AssetResponse<T>>;
+	type Result = BTreeMap<T::AssetPair, AssetResponse<T>>;
 	type Settings = (SuccessThreshold, PriceQuery<T>);
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
@@ -25,7 +25,7 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 	fn check_consensus(&self, (threshold, _query): &Self::Settings) -> Option<Self::Result> {
 		if self.votes.len() >= threshold.success_threshold as usize {
 			Some(
-				all::<T::Asset>()
+				all::<T::AssetPair>()
 					.filter_map(|asset| {
 						Some((
 							asset.clone(),

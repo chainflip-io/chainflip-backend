@@ -19,6 +19,7 @@ use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystemTypes,
 	electoral_systems::oracle_price::{
+		chainlink::{ChainlinkAssetPair, ChainlinkPrice},
 		primitives::UnixTime,
 		state_machine::{should_vote_for_asset, ExternalChainStateVote, ExternalPriceChain},
 	},
@@ -40,7 +41,6 @@ use crate::{
 	witness::sol::oracle_witnessing::get_price_feeds,
 };
 use anyhow::Result;
-use pallet_cf_elections::electoral_systems::oracle_price::price::ChainlinkAssetPair;
 use sol_prim::program_instructions::PriceFeedData as SolPriceFeedData;
 use sp_core::U256;
 

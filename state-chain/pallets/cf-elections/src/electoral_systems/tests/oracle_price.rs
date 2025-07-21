@@ -1,4 +1,4 @@
-use core::{cmp::min, ops::RangeInclusive};
+use core::{cmp::min, default, iter::repeat, ops::RangeInclusive};
 use std::collections::{BTreeMap, BTreeSet};
 
 use enum_iterator::all;
@@ -8,14 +8,11 @@ use crate::{
 	electoral_systems::{
 		mocks::{Check, TestSetup},
 		oracle_price::{
+			chainlink::*,
 			consensus::OraclePriceConsensus,
-			price::{ChainlinkAssetPair, FractionImpl},
-			primitives::{Aggregated, BasisPoints, Seconds, UnixTime},
-			state_machine::{
-				tests::{MockPrice, MockTypes},
-				AssetResponse, ExternalChainSettings, ExternalChainStateVote, ExternalPriceChain,
-				OPTypes, OraclePriceSettings, OraclePriceTracker, PriceStaleness,
-			},
+			price::*,
+			primitives::*,
+			state_machine::{tests::MockTypes, *},
 		},
 		state_machine::{
 			core::TypesFor,
@@ -59,6 +56,9 @@ const START_TIME: UnixTime = UnixTime { seconds: 1000 };
 register_checks! {
 	OraclePriceES {
 		election_for_chain_ongoing_with_asset_status(pre, post, arg: (ExternalPriceChain, Option<BTreeMap<ChainlinkAssetPair, PriceStaleness>>)) {
+
+			println!("state is now {:?}", post.unsynchronised_state);
+
 			let (chain, asset_statuses) = arg;
 			assert_eq!(
 				asset_statuses,
@@ -70,14 +70,18 @@ register_checks! {
 						// if that's changed this code here has to be updated to account for it most likely.
 						let price_status = match voting_conditions.len() {
 							0 => PriceStaleness::MaybeStale,
-							1 => PriceStaleness::UpToDate,
-							2 => PriceStaleness::Stale,
+							1 => PriceStaleness::Stale,
+							2 => PriceStaleness::UpToDate,
 							_ => panic!("unexpected number of voting conditions!")
 						};
 						(asset.clone(), price_status)
 					})
 					.collect()
 			))
+		},
+
+		electoral_price_api_returns(pre, post, arg: BTreeMap<PriceAsset, Option<StatechainPrice>>) {
+			todo!()
 		}
 	}
 }
@@ -86,6 +90,15 @@ use ChainlinkAssetPair::*;
 
 #[test]
 fn es_creates_elections_based_on_staleness() {
+	let default_prices: [(ChainlinkAssetPair, ChainlinkPrice); _] = [
+		(BtcUsd, ChainlinkPrice::integer(120_000)),
+		(EthUsd, ChainlinkPrice::integer(3_500)),
+		(SolUsd, ChainlinkPrice::integer(170)),
+		(UsdcUsd, ChainlinkPrice::integer(1)),
+		(UsdtUsd, ChainlinkPrice::integer(1)),
+	];
+
+	use PriceStaleness::*;
 	TestSetup::<OraclePriceES>::default()
 		.with_unsynchronised_settings(SETTINGS)
 		.build()
@@ -98,41 +111,128 @@ fn es_creates_elections_based_on_staleness() {
 			vec![
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 					ExternalPriceChain::Solana,
-					Some(
-						all::<ChainlinkAssetPair>()
-							.map(|asset| (asset, PriceStaleness::MaybeStale))
-							.collect(),
-					),
+					Some(all::<ChainlinkAssetPair>().zip(repeat(MaybeStale)).collect()),
 				)),
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 					ExternalPriceChain::Ethereum,
-					Some(
-						all::<ChainlinkAssetPair>()
-							.map(|asset| (asset, PriceStaleness::MaybeStale))
-							.collect(),
-					),
+					Some(all::<ChainlinkAssetPair>().zip(repeat(MaybeStale)).collect()),
 				)),
 			],
 		)
-		.expect_consensus_multi(vec![(
-			generate_votes(
-				(0..20).collect(),
-				Default::default(),
-				[(BtcUsd, MockPrice::integer(120000))].into(),
-				Default::default(),
-				START_TIME,
+		//  - For solana: no consensus
+		//  - For ethereum: consensus where all 20 voters vote for the exact same prices +
+		//    timestamps
+		.expect_consensus_multi(vec![
+			// Data for the Solana election, no votes
+			(
+				generate_votes(
+					Default::default(),
+					(0..20).collect(),
+					default_prices.clone().into(),
+					Default::default(),
+					START_TIME,
+				),
+				None,
 			),
-			Some(
-				[(
-					BtcUsd,
-					AssetResponse {
-						timestamp: Aggregated::from_single_value(START_TIME),
-						price: Aggregated::from_single_value(MockPrice::integer(120000)),
-					},
-				)]
-				.into(),
+			// Data for the Ethereum election, all 20 voters vote for the default price
+			(
+				generate_votes(
+					(0..20).collect(),
+					Default::default(),
+					default_prices.clone().into(),
+					Default::default(),
+					START_TIME,
+				),
+				Some(
+					default_prices
+						.iter()
+						.cloned()
+						.map(|(asset, price)| {
+							(
+								asset,
+								AssetResponse {
+									timestamp: Aggregated::from_single_value(START_TIME),
+									price: Aggregated::from_single_value(price),
+								},
+							)
+						})
+						.collect(),
+				),
 			),
-		)]);
+		])
+		// since we got prices for the secondary chain (Ethereum), the elections are:
+		//  - Solana: MaybeStale (since we didn't get Solana prices yet)
+		//  - Ethereum: UpToDate
+		.test_on_finalize(
+			&vec![()],
+			|_| {},
+			vec![
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					ExternalPriceChain::Solana,
+					Some(all::<ChainlinkAssetPair>().zip(repeat(MaybeStale)).collect()),
+				)),
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					ExternalPriceChain::Ethereum,
+					Some(all::<ChainlinkAssetPair>().zip(repeat(UpToDate)).collect()),
+				)),
+			],
+		)
+		// We get consensus:
+		// - Solana: newest prices
+		.expect_consensus_multi(vec![
+			// Data for the Solana election, no votes
+			(
+				generate_votes(
+					Default::default(),
+					(0..20).collect(),
+					default_prices.clone().into(),
+					Default::default(),
+					START_TIME,
+				),
+				None,
+			),
+			// Data for the Ethereum election, all 20 voters vote for the default price
+			(
+				generate_votes(
+					(0..20).collect(),
+					Default::default(),
+					default_prices.clone().into(),
+					Default::default(),
+					START_TIME,
+				),
+				Some(
+					default_prices
+						.iter()
+						.cloned()
+						.map(|(asset, price)| {
+							(
+								asset,
+								AssetResponse {
+									timestamp: Aggregated::from_single_value(START_TIME),
+									price: Aggregated::from_single_value(price),
+								},
+							)
+						})
+						.collect(),
+				),
+			),
+		]);
+
+	// since we got prices for the secondary chain (Ethereum), the election
+	// .test_on_finalize(
+	// 	&vec![()],
+	// 	|_| {},
+	// 	vec![
+	// 		Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+	// 			ExternalPriceChain::Solana,
+	// 			Some(all::<ChainlinkAssetPair>().zip(repeat(UpToDate)).collect()),
+	// 		)),
+	// 		Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+	// 			ExternalPriceChain::Ethereum,
+	// 			None,
+	// 		)),
+	// 	],
+	// );
 	// .expect_consensus(
 	// 	generate_votes(
 	// 		(0..20).collect(),
@@ -148,8 +248,8 @@ fn es_creates_elections_based_on_staleness() {
 fn generate_votes(
 	voters: BTreeSet<ValidatorId>,
 	did_not_vote: BTreeSet<ValidatorId>,
-	prices: BTreeMap<ChainlinkAssetPair, MockPrice>,
-	price_ranges: BTreeMap<ChainlinkAssetPair, RangeInclusive<MockPrice>>,
+	prices: BTreeMap<ChainlinkAssetPair, ChainlinkPrice>,
+	price_ranges: BTreeMap<ChainlinkAssetPair, RangeInclusive<ChainlinkPrice>>,
 	current_time: UnixTime,
 ) -> ConsensusVotes<OraclePriceES> {
 	println!("Generate votes called");
@@ -159,7 +259,7 @@ fn generate_votes(
 
 	// we want to generate a distribution of prices such that we will get exactly the median price +
 	// iqr that we input we distribute the votes linearly below and above the given price
-	let votes: BTreeMap<ChainlinkAssetPair, BTreeMap<ValidatorId, MockPrice>> = prices
+	let votes: BTreeMap<ChainlinkAssetPair, BTreeMap<ValidatorId, ChainlinkPrice>> = prices
 		.into_iter()
 		.map(|(asset, price)| {
 			let (step_below, step_above) = price_ranges
@@ -177,9 +277,9 @@ fn generate_votes(
 				.enumerate()
 				.map(|(index, voter)| {
 					let vote = if index < half {
-						&price - (&step_below * MockPrice::integer(half - index))
+						&price - (&step_below * ChainlinkPrice::integer(half - index))
 					} else {
-						&price + (&step_above * MockPrice::integer(index - half))
+						&price + (&step_above * ChainlinkPrice::integer(index - half))
 					};
 					(voter.clone(), vote)
 				})
@@ -189,8 +289,10 @@ fn generate_votes(
 		})
 		.collect();
 
-	let mut by_voter: BTreeMap<ValidatorId, BTreeMap<ChainlinkAssetPair, (UnixTime, MockPrice)>> =
-		Default::default();
+	let mut by_voter: BTreeMap<
+		ValidatorId,
+		BTreeMap<ChainlinkAssetPair, (UnixTime, ChainlinkPrice)>,
+	> = Default::default();
 	for (validator, (asset, data)) in votes.into_iter().flat_map(|(asset, prices)| {
 		prices
 			.into_iter()

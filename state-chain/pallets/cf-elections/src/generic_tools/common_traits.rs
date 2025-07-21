@@ -1,4 +1,5 @@
 pub use codec::{Decode, Encode};
+pub use enum_iterator::Sequence;
 pub use scale_info::TypeInfo;
 pub use serde::{Deserialize, Serialize};
 pub use sp_std::fmt::Debug;
@@ -21,3 +22,7 @@ where <Self as Arbitrary>::Strategy: Clone + Sync + Send;
 pub trait MaybeArbitrary = core::any::Any;
 
 pub trait CommonTraits = Debug + Clone + Encode + Decode + Serde + Eq + TypeInfo + 'static;
+
+//-------- derive macros ----------
+#[cfg(test)]
+pub use proptest_derive::Arbitrary;

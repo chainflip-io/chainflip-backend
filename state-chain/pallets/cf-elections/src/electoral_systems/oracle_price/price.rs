@@ -1,8 +1,11 @@
 #[cfg(test)]
 use core::ops::Div;
-use core::ops::{Add, Mul, Sub};
+use core::ops::{Add, Mul, RangeInclusive, Sub};
 
-use crate::generic_tools::*;
+use crate::{
+	electoral_systems::oracle_price::{primitives::BasisPoints, state_machine::PriceTrait},
+	generic_tools::*,
+};
 use cf_amm_math::{mul_div_floor, PRICE_FRACTIONAL_BITS};
 use cf_primitives::{Asset, Price};
 #[cfg(test)]
@@ -14,32 +17,6 @@ use crate::electoral_systems::state_machine::common_imports::*;
 
 #[cfg(test)]
 use proptest_derive::Arbitrary;
-
-def_derive! {
-	#[derive(TypeInfo, Sequence, PartialOrd, Ord)]
-	#[cfg_attr(test, derive(Arbitrary))]
-	pub enum ChainlinkAssetPair {
-		BtcUsd,
-		EthUsd,
-		SolUsd,
-		UsdcUsd,
-		UsdtUsd
-	}
-}
-
-impl ChainlinkAssetPair {
-	pub fn base_asset(&self) -> PriceAsset {
-		use ChainlinkAssetPair::*;
-		use PriceAsset::*;
-		match self {
-			BtcUsd => Btc,
-			EthUsd => Eth,
-			SolUsd => Sol,
-			UsdcUsd => Usdc,
-			UsdtUsd => Usdt,
-		}
-	}
-}
 
 pub struct PriceUnit {
 	pub base_asset: PriceAsset,
@@ -67,6 +44,7 @@ pub enum PriceAsset {
 	Sol,
 	Usdc,
 	Usdt,
+	Usd,
 }
 
 impl PriceAsset {
@@ -78,6 +56,7 @@ impl PriceAsset {
 			Sol => 9,
 			Usdc => 6,
 			Usdt => 6,
+			Usd => 6,
 		}
 	}
 }
@@ -206,7 +185,7 @@ impl<const U: Denom> Div<u32> for FractionImpl<U> {
 	}
 }
 
-type StatechainPrice = FractionImpl<{ u128::MAX }>;
+pub type StatechainPrice = FractionImpl<{ u128::MAX }>;
 
 /// WARNING, this assumes PRICE_FRACTIONAL_BITS = 128!
 impl Into<Price> for FractionImpl<{ u128::MAX }> {
@@ -225,4 +204,11 @@ pub fn price_with_unit_to_statechain_price<const U: u128>(
 			unit.quote_asset.decimals() as i16 - unit.base_asset.decimals() as i16,
 		))
 		.convert()
+}
+
+impl<const U: Denom> PriceTrait for FractionImpl<U> {
+	fn to_price_range(&self, range: BasisPoints) -> RangeInclusive<Self> {
+		let delta = self * range.to_fraction();
+		self + delta.clone()..=self - delta
+	}
 }

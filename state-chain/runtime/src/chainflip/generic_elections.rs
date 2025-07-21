@@ -5,6 +5,18 @@ use sol_prim::consts::const_address;
 use sp_core::H160;
 use sp_std::{vec, vec::Vec};
 
+use pallet_cf_elections::{
+	electoral_systems::{
+		oracle_price::{
+			chainlink::{ChainlinkAssetPair, ChainlinkPrice},
+			price::PriceAsset,
+			state_machine::OPTypes,
+		},
+		state_machine::core::*,
+	},
+	generic_tools::*,
+};
+
 use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
 use cf_chains::sol::SolAddress;
 use cf_primitives::Price;
@@ -19,10 +31,7 @@ use pallet_cf_elections::{
 		},
 		oracle_price::{
 			consensus::OraclePriceConsensus,
-			price::{
-				price_with_unit_to_statechain_price, ChainlinkAssetPair, FractionImpl, PriceAsset,
-				PriceUnit,
-			},
+			price::{price_with_unit_to_statechain_price, FractionImpl, PriceUnit},
 			primitives::*,
 			state_machine::*,
 		},
@@ -36,34 +45,6 @@ use pallet_cf_elections::{
 	vote_storage, CorruptStorageError, ElectionIdentifierOf, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };
-
-pub fn get_current_chainlink_prices(
-	state: &OraclePriceTracker<TypesFor<Chainlink>>,
-) -> BTreeMap<PriceAsset, (Price, PriceStaleness)> {
-	//
-	// WARNING: We are currently assuming that USD == USDC!
-	//
-
-	state
-		.chain_states
-		.get_latest_prices()
-		.into_iter()
-		.map(|(chainlink_assetpair, (price, status))| {
-			let base_asset = chainlink_assetpair.base_asset();
-			(
-				base_asset,
-				(
-					price_with_unit_to_statechain_price(
-						price,
-						PriceUnit { base_asset, quote_asset: PriceAsset::Usdc },
-					)
-					.into(),
-					status,
-				),
-			)
-		})
-		.collect()
-}
 
 def_derive! {
 	#[derive(TypeInfo)]
@@ -98,8 +79,6 @@ impl<F: Functor> ChainlinkOraclePriceSettings<F> {
 	}
 }
 
-pub type ChainlinkPrice = FractionImpl<99_999_999>;
-
 pub struct Chainlink;
 
 impls! {
@@ -108,13 +87,9 @@ impls! {
 	OPTypes {
 		type Price = ChainlinkPrice;
 		type GetTime = Self;
-		type Asset = ChainlinkAssetPair;
+		type AssetPair = ChainlinkAssetPair;
 		type Aggregation = AggregatedF;
 
-		fn price_range(price: &Self::Price, range: BasisPoints) -> RangeInclusive<Self::Price> {
-			let delta = price * range.to_fraction();
-			price + delta.clone() ..= price - delta
-		}
 	}
 
 	Hook<HookTypeFor<Self, GetTimeHook>> {

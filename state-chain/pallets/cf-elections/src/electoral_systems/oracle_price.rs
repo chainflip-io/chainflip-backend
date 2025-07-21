@@ -1,3 +1,4 @@
+pub mod chainlink;
 pub mod consensus;
 pub mod price;
 pub mod primitives;

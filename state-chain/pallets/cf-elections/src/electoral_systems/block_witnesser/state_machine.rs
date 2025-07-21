@@ -593,6 +593,7 @@ pub mod tests {
 			generate_settings(),
 			generate_input::<Types1>,
 			generate_context::<Types1>,
+			|_| {},
 		);
 	}
 }

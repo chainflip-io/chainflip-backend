@@ -188,6 +188,7 @@ pub trait Statemachine: AbstractApi + 'static {
 		settings: impl Strategy<Value = Self::Settings>,
 		inputs: impl Fn(Self::Query) -> BoxedStrategy<Self::Response>,
 		context: impl Fn(&Self::State) -> BoxedStrategy<Self::Context>,
+		additional_verification: impl Fn(&Self::State),
 	) where
 		Self::Query: sp_std::fmt::Debug + Clone + Send + PartialEq,
 		Self::Response: sp_std::fmt::Debug + Clone + Send,
@@ -245,6 +246,9 @@ pub trait Statemachine: AbstractApi + 'static {
 
 					// run step and verify all other properties
 					let _output = Self::step_and_validate(&mut state, input, &settings);
+
+					// verify additional properties
+					additional_verification(&state);
 
 					Ok(())
 				},
