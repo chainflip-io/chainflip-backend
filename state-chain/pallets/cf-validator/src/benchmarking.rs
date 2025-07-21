@@ -458,7 +458,7 @@ mod benchmarks {
 		ManagedValidators::<T>::insert(validator.clone(), operator.clone());
 
 		#[extrinsic_call]
-		remove_validator(RawOrigin::Signed(validator.clone()), validator.clone());
+		remove_delegator_from_exceptions(RawOrigin::Signed(validator.clone()), validator.clone());
 
 		assert!(ManagedValidators::<T>::get(validator).is_none());
 	}
@@ -477,7 +477,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn block_delegator() {
+	fn remove_delegator_from_exceptions() {
 		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
 			AccountRole::Operator,
 		)
@@ -486,11 +486,11 @@ mod benchmarks {
 		let account_id = whitelisted_caller();
 
 		#[extrinsic_call]
-		block_delegator(RawOrigin::Signed(operator), account_id);
+		remove_delegator_from_exceptions(RawOrigin::Signed(operator), account_id);
 	}
 
 	#[benchmark]
-	fn allow_delegator() {
+	fn add_delegator_to_exceptions() {
 		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
 			AccountRole::Operator,
 		)
@@ -499,7 +499,7 @@ mod benchmarks {
 		let account_id = whitelisted_caller();
 
 		#[extrinsic_call]
-		allow_delegator(RawOrigin::Signed(operator), account_id);
+		add_delegator_to_exceptions(RawOrigin::Signed(operator), account_id);
 	}
 
 	#[benchmark]

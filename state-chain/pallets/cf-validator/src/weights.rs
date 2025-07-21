@@ -66,8 +66,8 @@ pub trait WeightInfo {
 	fn accept_operator() -> Weight;
 	fn remove_validator() -> Weight;
 	fn set_delegation_preferences() -> Weight;
-	fn block_delegator() -> Weight;
-	fn allow_delegator() -> Weight;
+	fn remove_delegator_from_exceptions() -> Weight;
+	fn add_delegator_to_exceptions() -> Weight;
 	fn register_as_operator() -> Weight;
 	fn deregister_as_operator() -> Weight;
 	fn delegate() -> Weight;
@@ -444,10 +444,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	fn set_delegation_preferences() -> Weight {
 		Weight::from_parts(0, 0)
 	}
-	fn block_delegator() -> Weight {
+	fn remove_delegator_from_exceptions() -> Weight {
 		Weight::from_parts(0, 0)
 	}
-	fn allow_delegator() -> Weight {
+	fn add_delegator_to_exceptions() -> Weight {
 		Weight::from_parts(0, 0)
 	}
 	fn register_as_operator() -> Weight {
@@ -835,10 +835,10 @@ impl WeightInfo for () {
 	fn set_delegation_preferences() -> Weight {
 		Weight::from_parts(0, 0)
 	}
-	fn block_delegator() -> Weight {
+	fn remove_delegator_from_exceptions() -> Weight {
 		Weight::from_parts(0, 0)
 	}
-	fn allow_delegator() -> Weight {
+	fn add_delegator_to_exceptions() -> Weight {
 		Weight::from_parts(0, 0)
 	}
 

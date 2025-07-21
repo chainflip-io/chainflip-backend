@@ -348,9 +348,9 @@ pub mod pallet {
 	#[pallet::getter(fn active_bidder)]
 	pub type ActiveBidder<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
-	/// Maps an operator account to it's allowed delegators.
+	/// Maps an operator account to it's exception rules.
 	#[pallet::storage]
-	pub type AllowedDelegators<T: Config> =
+	pub type Exceptions<T: Config> =
 		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
 	/// Maps an operator account to it's blocked delegators.
@@ -956,7 +956,12 @@ pub mod pallet {
 			preferences: OperatorSettings,
 		) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+
 			OperatorSettingsLookup::<T>::insert(&operator_id, preferences.clone());
+
+			// Exceptions are reset when the operator settings are updated.
+			Exceptions::<T>::remove(&operator_id);
+
 			Self::deposit_event(Event::OperatorSettingsUpdated {
 				operator: operator_id,
 				preferences,
@@ -964,20 +969,19 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Executed by an operator to block a delegator from delegating to the operator.
+		/// Executed by an operator to remove a delegator from the exception list.
 		#[pallet::call_index(14)]
-		#[pallet::weight(T::ValidatorWeightInfo::block_delegator())]
-		pub fn block_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
+		#[pallet::weight(T::ValidatorWeightInfo::remove_delegator_from_exceptions())]
+		pub fn remove_delegator_from_exceptions(
+			origin: OriginFor<T>,
+			delegator_id: T::AccountId,
+		) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 
 			DelegationChoice::<T>::remove(delegator_id.clone());
 
-			AllowedDelegators::<T>::mutate(&operator_id, |delegators| {
+			Exceptions::<T>::mutate(&operator_id, |delegators| {
 				delegators.remove(&delegator_id);
-			});
-
-			BlockedDelegators::<T>::mutate(&operator_id, |delegators| {
-				delegators.insert(delegator_id.clone());
 			});
 
 			Self::deposit_event(Event::DelegatorBlocked {
@@ -988,18 +992,17 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Executed by an operator to allow a delegator to delegate to the operator.
+		/// Executed by an operator to add the delegator to the exception list.
 		#[pallet::call_index(15)]
-		#[pallet::weight(T::ValidatorWeightInfo::allow_delegator())]
-		pub fn allow_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
+		#[pallet::weight(T::ValidatorWeightInfo::add_delegator_to_exceptions())]
+		pub fn add_delegator_to_exceptions(
+			origin: OriginFor<T>,
+			delegator_id: T::AccountId,
+		) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 
-			AllowedDelegators::<T>::mutate(&operator_id, |delegators| {
+			Exceptions::<T>::mutate(&operator_id, |delegators| {
 				delegators.insert(delegator_id.clone());
-			});
-
-			BlockedDelegators::<T>::mutate(&operator_id, |delegators| {
-				delegators.remove(&delegator_id);
 			});
 
 			Self::deposit_event(Event::DelegatorAllowed {
@@ -1045,8 +1048,7 @@ pub mod pallet {
 
 			T::AccountRoleRegistry::deregister_as_operator(&account_id)?;
 
-			AllowedDelegators::<T>::remove(&account_id);
-			BlockedDelegators::<T>::remove(&account_id);
+			Exceptions::<T>::remove(&account_id);
 			OperatorSettingsLookup::<T>::remove(&account_id);
 
 			Ok(())
@@ -1073,11 +1075,11 @@ pub mod pallet {
 				.delegation_acceptance
 			{
 				DelegationAcceptance::Allow => ensure!(
-					!BlockedDelegators::<T>::get(&operator_id).contains(&account_id),
+					!Exceptions::<T>::get(&operator_id).contains(&account_id),
 					Error::<T>::DelegatorBlocked
 				),
 				DelegationAcceptance::Deny => ensure!(
-					AllowedDelegators::<T>::get(&operator_id).contains(&account_id),
+					Exceptions::<T>::get(&operator_id).contains(&account_id),
 					Error::<T>::DelegatorBlocked
 				),
 			}

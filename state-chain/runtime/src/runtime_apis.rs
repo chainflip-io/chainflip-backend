@@ -152,8 +152,7 @@ pub struct ValidatorInfo {
 pub struct OperatorInfo {
 	pub managed_validators: BTreeMap<AccountId32, AssetAmount>,
 	pub settings: OperatorSettings,
-	pub blocked_delegators: Vec<AccountId32>,
-	pub allowed_delegators: Vec<AccountId32>,
+	pub exceptions: Vec<AccountId32>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]

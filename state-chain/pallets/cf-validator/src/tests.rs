@@ -1577,16 +1577,23 @@ mod operator {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
 			// Allow BOB
-			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
-			assert!(AllowedDelegators::<Test>::get(ALICE).contains(&BOB));
+			assert_ok!(ValidatorPallet::add_delegator_to_exceptions(
+				OriginTrait::signed(ALICE),
+				BOB
+			));
+			assert!(Exceptions::<Test>::get(ALICE).contains(&BOB));
 			// Explicit block BOB
-			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
-			assert!(!AllowedDelegators::<Test>::get(ALICE).contains(&BOB));
-			assert!(BlockedDelegators::<Test>::get(ALICE).contains(&BOB));
+			assert_ok!(ValidatorPallet::remove_delegator_from_exceptions(
+				OriginTrait::signed(ALICE),
+				BOB
+			));
+			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
 			// Explicit allow BOB again
-			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
-			assert!(AllowedDelegators::<Test>::get(ALICE).contains(&BOB));
-			assert!(!BlockedDelegators::<Test>::get(ALICE).contains(&BOB));
+			assert_ok!(ValidatorPallet::add_delegator_to_exceptions(
+				OriginTrait::signed(ALICE),
+				BOB
+			));
+			assert!(Exceptions::<Test>::get(ALICE).contains(&BOB));
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::ValidatorPallet(Event::DelegatorAllowed {
@@ -1777,7 +1784,10 @@ mod delegation {
 					delegation_acceptance: DelegationAcceptance::Allow,
 				},
 			));
-			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
+			assert_ok!(ValidatorPallet::add_delegator_to_exceptions(
+				OriginTrait::signed(ALICE),
+				BOB
+			));
 			assert_noop!(
 				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
 				Error::<Test>::DelegatorBlocked
@@ -1796,7 +1806,10 @@ mod delegation {
 					delegation_acceptance: DelegationAcceptance::Allow,
 				},
 			));
-			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
+			assert_ok!(ValidatorPallet::remove_delegator_from_exceptions(
+				OriginTrait::signed(ALICE),
+				BOB
+			));
 			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
 		});
 	}

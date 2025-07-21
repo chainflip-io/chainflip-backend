@@ -240,8 +240,7 @@ pub enum RpcAccountInfo {
 		managed_validators: BTreeMap<AccountId32, NumberOrHex>,
 		#[serde(flatten)]
 		settings: OperatorSettings,
-		blocked_delegators: Vec<AccountId32>,
-		allowed_delegators: Vec<AccountId32>,
+		exceptions: Vec<AccountId32>,
 	},
 }
 
@@ -323,8 +322,7 @@ impl RpcAccountInfo {
 				.map(|(account_id, amount)| (account_id, amount.into()))
 				.collect(),
 			settings: info.settings,
-			blocked_delegators: info.blocked_delegators,
-			allowed_delegators: info.allowed_delegators,
+			exceptions: info.exceptions,
 		}
 	}
 }
