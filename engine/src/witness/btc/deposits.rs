@@ -105,6 +105,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					})
 				};
 
+				let mut process_calls = vec![];
 				for (broker_id, channel_id, vault_address) in vault_addresses {
 					for tx in &txs {
 						if let Some(deposit) = super::vault_swaps::try_extract_vault_swap_witness(
@@ -113,18 +114,19 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							channel_id,
 							&broker_id,
 						) {
-							process_call(
+							process_calls.push(process_call(
 								BtcIngressEgressCall::vault_swap_request {
 									block_height: header.index,
 									deposit: Box::new(deposit),
 								}
 								.into(),
 								epoch.index,
-							)
-							.await;
+							));
 						}
 					}
 				}
+
+				futures::future::join_all(process_calls).await;
 
 				let deposit_addresses = map_script_addresses(
 					deposit_channels
