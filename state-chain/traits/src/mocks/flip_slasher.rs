@@ -15,7 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{Chainflip, Slashing};
-use cf_primitives::FlipBalance;
 use frame_support::sp_runtime::Saturating;
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_std::marker::PhantomData;
@@ -38,6 +37,7 @@ impl<T: Chainflip> MockFlipSlasher<T> {
 impl<T: Chainflip> Slashing for MockFlipSlasher<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
+	type Balance = T::Amount;
 
 	fn slash(validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {
 		<Self as MockPalletStorage>::mutate_storage(
@@ -49,7 +49,7 @@ impl<T: Chainflip> Slashing for MockFlipSlasher<T> {
 		);
 	}
 
-	fn slash_balance(account_id: &Self::AccountId, _amount: FlipBalance) {
+	fn slash_balance(account_id: &Self::AccountId, _amount: Self::Balance) {
 		<Self as MockPalletStorage>::mutate_storage(
 			SLASHES,
 			account_id,

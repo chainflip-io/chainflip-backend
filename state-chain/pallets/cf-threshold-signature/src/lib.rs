@@ -420,7 +420,11 @@ pub mod pallet {
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
 
-		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = BlockNumberFor<Self>>;
+		type Slasher: Slashing<
+			AccountId = Self::ValidatorId,
+			BlockNumber = BlockNumberFor<Self>,
+			Balance = FlipBalance,
+		>;
 
 		/// For reporting bad actors.
 		type OffenceReporter: OffenceReporter<

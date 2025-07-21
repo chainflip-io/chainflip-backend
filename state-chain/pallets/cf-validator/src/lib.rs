@@ -38,7 +38,7 @@ pub use auction_resolver::*;
 pub use delegation::*;
 
 use cf_primitives::{
-	AccountRole, AuthorityCount, CfeCompatibility, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer, Delegation,
+	AccountRole, AuthorityCount, CfeCompatibility, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
 	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
 };
 

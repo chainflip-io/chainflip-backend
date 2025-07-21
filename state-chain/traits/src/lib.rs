@@ -48,7 +48,7 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
-	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
+	EpochIndex, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -403,19 +403,13 @@ impl<ValidatorId> NetworkState<ValidatorId> {
 pub trait Slashing {
 	type AccountId;
 	type BlockNumber;
+	type Balance;
 
 	/// Slashes a validator for the equivalent of some number of blocks offline.
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 
 	/// Slashes a validator by some fixed amount.
-	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance);
-}
-
-pub trait SlashAmongDelegators {
-	type AccountId;
-
-	/// Slashes a validator along with its associated delegators.
-	fn slash(validator_id: &Self::AccountId, amount: FlipBalance);
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: Self::Balance);
 }
 
 /// Nominate a single account for transaction broadcasting.

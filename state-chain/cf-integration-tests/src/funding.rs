@@ -29,9 +29,7 @@ use pallet_cf_funding::pallet::Error;
 use pallet_cf_validator::{Backups, CurrentRotationPhase};
 use sp_runtime::{FixedPointNumber, FixedU64};
 use state_chain_runtime::{
-	chainflip::{
-		calculate_account_apy, node_rewards_and_slashing::calculate_backup_rewards, Offence,
-	},
+	chainflip::{calculate_account_apy, Offence},
 	RuntimeEvent,
 };
 
@@ -158,51 +156,6 @@ fn funded_node_is_added_to_backups() {
 			let backups_map = Backups::<Runtime>::get();
 			assert_eq!(backups_map.len(), 1);
 			assert_eq!(backups_map.get(&new_backup).unwrap(), &NEW_FUNDING_AMOUNT);
-		});
-}
-
-#[test]
-fn backup_reward_is_calculated_linearly() {
-	const EPOCH_BLOCKS: u32 = 1_000;
-	const MAX_AUTHORITIES: u32 = 10;
-	const NUM_BACKUPS: u32 = 20;
-	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
-		.max_authorities(MAX_AUTHORITIES)
-		.build()
-		.execute_with(|| {
-			let (mut network, _, _) =
-				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
-			network.move_to_the_next_epoch();
-
-			// 3 backup will split the backup reward.
-			assert_eq!(Validator::highest_funded_qualified_backup_node_bids().count(), 3);
-			const N: u128 = 100;
-
-			let rewards_per_heartbeat = &calculate_backup_rewards::<AccountId, FlipBalance>(
-				Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>(),
-				Validator::bond(),
-				HEARTBEAT_BLOCK_INTERVAL as u128,
-				Emissions::backup_node_emission_per_block(),
-				Emissions::current_authority_emission_per_block(),
-				Validator::current_authority_count() as u128,
-			);
-
-			let rewards_per_n_heartbeats = &calculate_backup_rewards::<AccountId, FlipBalance>(
-				Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>(),
-				Validator::bond(),
-				HEARTBEAT_BLOCK_INTERVAL as u128 * N,
-				Emissions::backup_node_emission_per_block(),
-				Emissions::current_authority_emission_per_block(),
-				Validator::current_authority_count() as u128,
-			);
-
-			for i in 0..rewards_per_heartbeat.len() {
-				// Validator account should match
-				assert_eq!(rewards_per_heartbeat[i].0, rewards_per_heartbeat[i].0);
-				// Reward per heartbeat should be scaled linearly.
-				assert_eq!(rewards_per_n_heartbeats[i].1, rewards_per_heartbeat[i].1 * N);
-			}
 		});
 }
 
