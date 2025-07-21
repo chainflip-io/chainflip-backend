@@ -37,7 +37,7 @@ pub trait AssetPairTrait {
 }
 
 pub trait PriceTrait: Sized {
-	fn to_price_range(&self, range: BasisPoints) -> RangeInclusive<Self>;
+	fn to_price_range(&self, range: BasisPoints) -> Option<RangeInclusive<Self>>;
 }
 
 pub struct GetTimeHook;
@@ -125,7 +125,12 @@ pub fn should_vote_for_asset<T: OPTypes>(
 	use VotingCondition::*;
 	conditions.iter().all(|condition| match condition {
 		PriceMoved { last_price, deviation } =>
-			!last_price.to_price_range(*deviation).contains(&price),
+		// Note, the `to_price_range` conversion might fail in extreme numeric situations,
+		// in that case we treat this conditions as true
+			last_price
+				.to_price_range(*deviation)
+				.map(|range| !range.contains(&price))
+				.unwrap_or(true),
 		NewTimestamp { last_timestamp } => time > last_timestamp,
 	})
 }

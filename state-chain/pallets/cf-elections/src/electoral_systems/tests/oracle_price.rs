@@ -80,8 +80,11 @@ register_checks! {
 			))
 		},
 
-		electoral_price_api_returns(pre, post, arg: BTreeMap<PriceAsset, Option<StatechainPrice>>) {
-			todo!()
+		electoral_price_api_returns(pre, post, prices: BTreeMap<PriceAsset, (StatechainPrice, PriceStaleness)>) {
+			// assert_eq!(
+			// 	get_current_chainlink_prices(&post.unsynchronised_state),
+			// 	prices.
+			// )
 		}
 	}
 }
@@ -277,9 +280,9 @@ fn generate_votes(
 				.enumerate()
 				.map(|(index, voter)| {
 					let vote = if index < half {
-						&price - (&step_below * ChainlinkPrice::integer(half - index))
+						&price - (&step_below * ChainlinkPrice::integer(half - index)).unwrap()
 					} else {
-						&price + (&step_above * ChainlinkPrice::integer(index - half))
+						&price + (&step_above * ChainlinkPrice::integer(index - half)).unwrap()
 					};
 					(voter.clone(), vote)
 				})

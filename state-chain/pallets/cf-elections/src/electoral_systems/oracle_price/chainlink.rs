@@ -52,12 +52,12 @@ where
 		.chain_states
 		.get_latest_prices()
 		.into_iter()
-		.map(|(chainlink_assetpair, (price, status))| {
+		.filter_map(|(chainlink_assetpair, (price, status))| {
 			let price_unit = chainlink_assetpair.to_price_unit();
-			(
+			Some((
 				price_unit.base_asset,
-				(price_with_unit_to_statechain_price(price, price_unit).into(), status),
-			)
+				(price_with_unit_to_statechain_price(price, price_unit)?.into(), status),
+			))
 		})
 		.collect()
 }

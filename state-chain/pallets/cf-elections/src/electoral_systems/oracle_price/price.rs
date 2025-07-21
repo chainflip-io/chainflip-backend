@@ -6,7 +6,7 @@ use crate::{
 	electoral_systems::oracle_price::{primitives::BasisPoints, state_machine::PriceTrait},
 	generic_tools::*,
 };
-use cf_amm_math::{mul_div_floor, PRICE_FRACTIONAL_BITS};
+use cf_amm_math::{mul_div_floor_checked, PRICE_FRACTIONAL_BITS};
 use cf_primitives::{Asset, Price};
 #[cfg(test)]
 use proptest::prelude::Strategy;
@@ -37,7 +37,7 @@ impl PriceUnit {
 	}
 }
 
-#[derive(ConstParamTy, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
+#[derive(ConstParamTy, PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Debug)]
 pub enum PriceAsset {
 	Btc,
 	Eth,
@@ -94,24 +94,24 @@ impl<const U: Denom> Fraction<U> {
 	}
 
 	/// This fails if the denominator isn't a multiple of `denom(U)`
-	pub fn try_from_denominator_exact(numerator: u128, denominator: u128) -> Option<Self> {
-		if denom(U) % denominator == 0.into() {
-			Some(Fraction(mul_div_floor(numerator.into(), denom(U), denominator)))
-		} else {
-			None
-		}
+	// pub fn try_from_denominator_exact(numerator: u128, denominator: u128) -> Option<Self> {
+	// 	if denom(U) % denominator == 0.into() {
+	// 		Some(Fraction(mul_div_floor(numerator.into(), denom(U), denominator)))
+	// 	} else {
+	// 		None
+	// 	}
+	// }
+
+	pub fn convert<const V: Denom>(self) -> Option<Fraction<V>> {
+		Some(Fraction(mul_div_floor_checked(self.0, denom(V), denom(U))?))
 	}
 
-	pub fn convert<const V: Denom>(self) -> Fraction<V> {
-		Fraction(mul_div_floor(self.0, denom(V), denom(U)))
-	}
-
-	pub fn apply_exponent(&self, exp: Base10Exponent) -> Self {
+	pub fn apply_exponent(&self, exp: Base10Exponent) -> Option<Self> {
 		let exp = exp.0;
 		if exp < 0 {
-			Fraction(mul_div_floor(self.0, 1.into(), 10u128.pow((exp * -1) as u32)))
+			Some(Fraction(mul_div_floor_checked(self.0, 1.into(), 10u128.pow((exp * -1) as u32))?))
 		} else {
-			Fraction(mul_div_floor(self.0, 10u128.pow(exp as u32).into(), 1))
+			Some(Fraction(mul_div_floor_checked(self.0, 10u128.pow(exp as u32).into(), 1)?))
 		}
 	}
 }
@@ -149,18 +149,18 @@ impl<const U: Denom> Sub<Fraction<U>> for &Fraction<U> {
 }
 
 impl<const U: Denom, const V: Denom> Mul<Fraction<V>> for Fraction<U> {
-	type Output = Fraction<U>;
+	type Output = Option<Fraction<U>>;
 
 	fn mul(self, rhs: Fraction<V>) -> Self::Output {
-		Fraction(mul_div_floor(self.0, rhs.0, denom(V)))
+		Some(Fraction(mul_div_floor_checked(self.0, rhs.0, denom(V))?))
 	}
 }
 
 impl<const U: Denom, const V: Denom> Mul<Fraction<V>> for &Fraction<U> {
-	type Output = Fraction<U>;
+	type Output = Option<Fraction<U>>;
 
 	fn mul(self, rhs: Fraction<V>) -> Self::Output {
-		Fraction(mul_div_floor(self.0, rhs.0, denom(V)))
+		Some(Fraction(mul_div_floor_checked(self.0, rhs.0, denom(V))?))
 	}
 }
 
@@ -181,7 +181,8 @@ impl<const U: Denom> Div<u32> for Fraction<U> {
 	type Output = Fraction<U>;
 
 	fn div(self, rhs: u32) -> Self::Output {
-		Fraction(mul_div_floor(self.0, 1u128.into(), rhs))
+		// WARNING: we have unwrap here only because this code is compiled only for test
+		Fraction(mul_div_floor_checked(self.0, 1u128.into(), rhs).unwrap())
 	}
 }
 
@@ -198,17 +199,17 @@ impl Into<Price> for Fraction<{ u128::MAX }> {
 pub fn price_with_unit_to_statechain_price<const U: u128>(
 	price: Fraction<U>,
 	unit: PriceUnit,
-) -> StatechainPrice {
+) -> Option<StatechainPrice> {
 	price
 		.apply_exponent(Base10Exponent(
 			unit.quote_asset.decimals() as i16 - unit.base_asset.decimals() as i16,
-		))
+		))?
 		.convert()
 }
 
 impl<const U: Denom> PriceTrait for Fraction<U> {
-	fn to_price_range(&self, range: BasisPoints) -> RangeInclusive<Self> {
-		let delta = self * range.to_fraction();
-		self + delta.clone()..=self - delta
+	fn to_price_range(&self, range: BasisPoints) -> Option<RangeInclusive<Self>> {
+		let delta = (self * range.to_fraction())?;
+		Some(self + delta.clone()..=self - delta)
 	}
 }
