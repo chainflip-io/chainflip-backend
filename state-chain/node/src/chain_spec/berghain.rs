@@ -381,7 +381,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 			],
 		},
 		sol_oracle_query_helper: const_address("5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX"),
-		eth_contract_address: H160(hex_literal::hex!("1562Ad6bb0e68980A3111F24531c964c7e155611")),
+		eth_address_checker: H160(hex_literal::hex!("1562Ad6bb0e68980A3111F24531c964c7e155611")),
 		eth_oracle_feeds: Array {
 			array: [
 				H160(hex_literal::hex!("F4030086522a5bEEa4988F8cA5B36dbC97BeE88c")),

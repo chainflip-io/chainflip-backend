@@ -52,7 +52,7 @@ def_derive! {
 		pub sol_oracle_program_id: SolAddress,
 		pub sol_oracle_feeds: Container::Of<SolAddress>,
 		pub sol_oracle_query_helper: SolAddress,
-		pub eth_contract_address: H160,
+		pub eth_address_checker: H160,
 		pub eth_oracle_feeds: Container::Of<H160>
 	}
 }
@@ -66,14 +66,14 @@ impl<F: Functor> ChainlinkOraclePriceSettings<F> {
 			sol_oracle_program_id,
 			sol_oracle_feeds,
 			sol_oracle_query_helper,
-			eth_contract_address,
+			eth_address_checker,
 			eth_oracle_feeds,
 		} = self;
 		ChainlinkOraclePriceSettings {
 			sol_oracle_program_id,
 			sol_oracle_feeds: t.at(sol_oracle_feeds),
 			sol_oracle_query_helper,
-			eth_contract_address,
+			eth_address_checker,
 			eth_oracle_feeds: t.at(eth_oracle_feeds),
 		}
 	}

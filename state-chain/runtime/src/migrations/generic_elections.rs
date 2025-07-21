@@ -31,7 +31,7 @@ impl OnRuntimeUpgrade for Migration {
 					sol_oracle_query_helper: const_address(
 						"5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX",
 					),
-					eth_contract_address: hex_literal::hex!(
+					eth_address_checker: hex_literal::hex!(
 						"1562Ad6bb0e68980A3111F24531c964c7e155611"
 					)
 					.into(),
@@ -58,7 +58,7 @@ impl OnRuntimeUpgrade for Migration {
 					sol_oracle_query_helper: const_address(
 						"5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX",
 					),
-					eth_contract_address: hex_literal::hex!(
+					eth_address_checker: hex_literal::hex!(
 						"26061f315570bddf11d9055411a3d811c5ff0148"
 					)
 					.into(),
@@ -87,7 +87,7 @@ impl OnRuntimeUpgrade for Migration {
 					sol_oracle_query_helper: const_address(
 						"GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z",
 					),
-					eth_contract_address: hex_literal::hex!(
+					eth_address_checker: hex_literal::hex!(
 						"e7f1725E7734CE288F8367e1Bb143E90bb3F0512"
 					)
 					.into(),

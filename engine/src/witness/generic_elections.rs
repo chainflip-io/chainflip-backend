@@ -123,7 +123,7 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 				let (_, _, price_feeds) = self
 					.eth_client
 					.query_price_feeds(
-						settings.eth_contract_address.clone(),
+						settings.eth_address_checker.clone(),
 						settings.eth_oracle_feeds.clone(),
 					)
 					.await?;
