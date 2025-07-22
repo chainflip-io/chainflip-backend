@@ -1573,7 +1573,6 @@ mod operator {
 	use cf_test_utilities::assert_has_event;
 
 	use super::*;
-	use crate::DelegationAcceptance;
 
 	#[test]
 	fn can_allow_and_block_delegator() {
