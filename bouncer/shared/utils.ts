@@ -755,18 +755,26 @@ export async function observeBalanceIncrease(
   dstCcy: Asset,
   address: string,
   oldBalance: string,
+  timeoutSeconds: number = 480,
 ): Promise<number> {
-  logger.debug(`Observing balance increase of ${dstCcy} at ${address}`);
-  for (let i = 0; i < 2400; i++) {
+  logger.debug(`Observing balance increase of ${dstCcy} at ${address}. Old balance: ${oldBalance}`);
+  const attempts = Math.ceil(timeoutSeconds / 3);
+  for (let i = 0; i < attempts; i++) {
     const newBalance = Number(await getBalance(dstCcy, address));
     if (newBalance > Number(oldBalance)) {
+      logger.debug(`Balance increased from ${oldBalance} to ${newBalance}`);
       return newBalance;
     }
 
     await sleep(3000);
   }
 
-  return throwError(logger, new Error('Failed to observe balance increase'));
+  return throwError(
+    logger,
+    new Error(
+      `Failed to observe balance increase of ${dstCcy} at ${address}. Old balance: ${oldBalance}.`,
+    ),
+  );
 }
 
 export async function observeFetch(asset: Asset, address: string): Promise<void> {
