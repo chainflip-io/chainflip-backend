@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use chainflip_api::{
-	primitives::{state_chain_runtime, AccountRole, Asset, EpochIndex, ForeignChain},
+	primitives::{state_chain_runtime, Asset, EpochIndex, ForeignChain},
 	AddressString, BasisPoints,
 };
 pub use chainflip_engine::settings::StateChain;
@@ -251,19 +251,6 @@ pub enum CliCommand {
 		#[clap(help = "The epoch to check, default to the current one")]
 		epoch_index: Option<EpochIndex>,
 	},
-}
-
-fn account_role_parser(s: &str) -> Result<AccountRole, String> {
-	let lower_str = s.to_lowercase();
-	if lower_str == "v" || lower_str == "validator" {
-		Ok(AccountRole::Validator)
-	} else if lower_str == "lp" || lower_str == "liquidity provider" {
-		Ok(AccountRole::LiquidityProvider)
-	} else if lower_str == "b" || lower_str == "broker" {
-		Ok(AccountRole::Broker)
-	} else {
-		Err(format!("{s} is not a valid role. The valid roles (with their shorthand input) are: 'Validator' (v), 'Liquidity Provider' (lp), 'Broker' (b)"))
-	}
 }
 
 #[derive(Deserialize, Debug, Default)]

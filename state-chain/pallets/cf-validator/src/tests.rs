@@ -42,6 +42,9 @@ const ALICE: u64 = 100;
 const BOB: u64 = 101;
 const GENESIS_EPOCH: u32 = 1;
 
+const OPERATOR_SETTINGS: OperatorSettings =
+	OperatorSettings { fee_bps: 100, delegation_acceptance: DelegationAcceptance::Allow };
+
 fn assert_epoch_index(n: EpochIndex) {
 	assert_eq!(
 		ValidatorPallet::epoch_index(),
@@ -1575,7 +1578,13 @@ mod operator {
 	#[test]
 	fn can_allow_and_block_delegator() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: 100,
+					delegation_acceptance: DelegationAcceptance::Allow,
+				}
+			));
 			// Allow BOB
 			assert_ok!(ValidatorPallet::add_delegator_to_exceptions(
 				OriginTrait::signed(ALICE),
@@ -1614,7 +1623,10 @@ mod operator {
 				fee_bps: 100,
 				delegation_acceptance: DelegationAcceptance::Allow,
 			};
-			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				PREFERENCES
+			));
 			assert_ok!(ValidatorPallet::set_delegation_preferences(
 				OriginTrait::signed(ALICE),
 				PREFERENCES
@@ -1637,8 +1649,14 @@ mod operator {
 		const V_2: u64 = 2002;
 
 		new_test_ext().execute_with(|| {
-			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(OP_1)));
-			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(OP_2)));
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(OP_1),
+				OPERATOR_SETTINGS,
+			));
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(OP_2),
+				OPERATOR_SETTINGS,
+			));
 			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(V_1),));
 			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(V_2),));
 
@@ -1708,7 +1726,10 @@ mod operator {
 	#[test]
 	fn can_not_deregister_if_their_are_still_validators_associated() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS
+			));
 			ManagedValidators::<Test>::insert(BOB, ALICE);
 			assert_noop!(
 				ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)),
@@ -1724,10 +1745,16 @@ mod operator {
 mod delegation {
 	use super::*;
 
+	const OPERATOR_SETTINGS: OperatorSettings =
+		OperatorSettings { fee_bps: 100, delegation_acceptance: DelegationAcceptance::Allow };
+
 	#[test]
 	fn can_delegate() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(BOB)));
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
 			assert_ok!(ValidatorPallet::set_delegation_preferences(
 				OriginTrait::signed(BOB),
 				OperatorSettings {
@@ -1776,7 +1803,10 @@ mod delegation {
 	#[test]
 	fn can_not_delegate_if_account_is_blocked() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS,
+			));
 			assert_ok!(ValidatorPallet::set_delegation_preferences(
 				OriginTrait::signed(ALICE),
 				OperatorSettings {
@@ -1798,13 +1828,13 @@ mod delegation {
 	#[test]
 	fn can_not_delegate_if_account_is_not_whitelisted() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS,
+			));
 			assert_ok!(ValidatorPallet::set_delegation_preferences(
 				OriginTrait::signed(ALICE),
-				OperatorSettings {
-					fee_bps: 100,
-					delegation_acceptance: DelegationAcceptance::Allow,
-				},
+				OPERATOR_SETTINGS,
 			));
 			assert_ok!(ValidatorPallet::remove_delegator_from_exceptions(
 				OriginTrait::signed(ALICE),

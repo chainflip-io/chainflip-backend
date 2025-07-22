@@ -120,6 +120,9 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 	assert_matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..));
 }
 
+const OPERATOR_SETTINGS: OperatorSettings =
+	OperatorSettings { fee_bps: 100, delegation_acceptance: DelegationAcceptance::Allow };
+
 #[allow(clippy::multiple_bound_locations)]
 #[benchmarks(where T: RuntimeConfig)]
 mod benchmarks {
@@ -509,7 +512,7 @@ mod benchmarks {
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 
 		#[extrinsic_call]
-		register_as_operator(RawOrigin::Signed(caller));
+		register_as_operator(RawOrigin::Signed(caller), OPERATOR_SETTINGS);
 	}
 
 	#[benchmark]
