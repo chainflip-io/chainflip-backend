@@ -153,7 +153,13 @@ jobs:
           http://localhost:9944 \
           | jq -r '.result.number' \
           | xargs printf "%d\n")
-          ./commands/explorer.ts 0 $BLOCK_HEIGHT > /tmp/chainflip/explorer.txt
+          ./commands/explorer.ts 0 $BLOCK_HEIGHT > /tmp/chainflip/statechain_explorer.txt
+          BLOCK_HEIGHT=$(curl -s -H "Content-Type: application/json" \
+          -d '{"jsonrpc":"2.0","method":"chain_getHeader","params":[],"id":1}' \
+          http://localhost:9955 \
+          | jq -r '.result.number' \
+          | xargs printf "%d\n")
+          CF_NODE_ENDPOINT=ws://localhost:9955 ./commands/explorer.ts 0 $BLOCK_HEIGHT > /tmp/chainflip/assethub_explorer.txt
 
       - name: Upload chain explorer 📤
         if: failure()
@@ -161,7 +167,7 @@ jobs:
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
           name: chain-explorer${{ inputs.log-postfix }}
-          path: /tmp/chainflip/explorer.txt
+          path: /tmp/chainflip/*_explorer.txt
 
       - name: Print chainflip-engine logs 🚗
         if: always()
