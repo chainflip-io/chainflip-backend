@@ -1575,7 +1575,7 @@ mod operator {
 	use super::*;
 
 	#[test]
-	fn can_allow_and_block_delegator() {
+	fn can_add_and_remove_delegator_from_exceptions_list() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
@@ -1729,6 +1729,23 @@ mod operator {
 			);
 			assert_ok!(ValidatorPallet::remove_validator(OriginTrait::signed(ALICE), BOB));
 			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)));
+		});
+	}
+
+	#[test]
+	fn exceptions_list_is_reset_when_operator_settings_are_updated() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS
+			));
+
+			Exceptions::<Test>::insert(ALICE, vec![BOB].into_iter().collect::<BTreeSet<_>>());
+			assert_ok!(ValidatorPallet::set_delegation_preferences(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS
+			));
+			assert!(Exceptions::<Test>::get(ALICE).is_empty());
 		});
 	}
 }
