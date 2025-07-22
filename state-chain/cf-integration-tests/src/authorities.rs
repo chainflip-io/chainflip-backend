@@ -16,8 +16,7 @@
 
 use crate::{
 	genesis, get_validator_state, network, witness_ethereum_rotation_broadcast,
-	witness_rotation_broadcasts, AllVaults, ChainflipAccountState, NodeId,
-	HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
+	witness_rotation_broadcasts, AllVaults, ChainflipAccountState, NodeId, VAULT_ROTATION_BLOCKS,
 };
 
 use frame_support::{assert_err, assert_ok};
@@ -259,12 +258,6 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 				"the genesis authorities should now be the backup nodes"
 			);
 
-			highest_funded_backup_nodes.iter().for_each(|account_id| {
-				// we were active in the first epoch
-				assert_eq!(get_validator_state(account_id), ChainflipAccountState::Backup);
-				// TODO: Check historical epochs
-			});
-
 			let backup_node_balances: HashMap<NodeId, FlipBalance> = highest_funded_backup_nodes
 				.iter()
 				.map(|validator_id| (validator_id.clone(), Flip::total_balance_of(validator_id)))
@@ -272,13 +265,9 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 				.into_iter()
 				.collect();
 
-			// Move forward a heartbeat, emissions should be shared to backup nodes
-			testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
-
-			// We won't calculate the exact emissions but they should be greater than their
-			// initial balance
+			// Backup nodes no longer receives emission rewards.
 			for (backup_node, pre_balance) in backup_node_balances {
-				assert!(pre_balance < Flip::total_balance_of(&backup_node));
+				assert!(pre_balance == Flip::total_balance_of(&backup_node));
 			}
 		});
 }

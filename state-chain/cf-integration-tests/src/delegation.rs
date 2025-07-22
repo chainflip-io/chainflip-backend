@@ -26,9 +26,7 @@ use cf_traits::AccountInfo;
 use frame_support::assert_ok;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
 use sp_runtime::{traits::Zero, Permill};
-use state_chain_runtime::{
-	constants::common::HEARTBEAT_BLOCK_INTERVAL, Balance, Flip, Runtime, System, Validator,
-};
+use state_chain_runtime::{Balance, Flip, Runtime, Validator};
 
 struct Delegator {
 	pub account: AccountId,
@@ -163,10 +161,7 @@ fn slashings_are_distributed_among_delegators() {
 			testnet.set_auto_heartbeat(&auth, false);
 
 			// Move to the block before backup rewards are distributed
-			let current_block = System::block_number();
-			let blocks_to_move =
-				HEARTBEAT_BLOCK_INTERVAL - current_block % HEARTBEAT_BLOCK_INTERVAL - 1;
-			testnet.move_forward_blocks(blocks_to_move + HEARTBEAT_BLOCK_INTERVAL);
+			testnet.move_to_next_heartbeat_block(Some(-1));
 
 			// Setup delegator/operator
 			// TODO: update this with proper extrinsic calls after delegation API is integrated
@@ -184,7 +179,7 @@ fn slashings_are_distributed_among_delegators() {
 				.collect::<Vec<_>>();
 
 			let operator = AccountId::from([0xe1; 32]);
-			new_account(&operator, AccountRole::LiquidityProvider);
+			new_account(&operator, AccountRole::Operator);
 
 			setup_delegation(
 				auth.clone(),
