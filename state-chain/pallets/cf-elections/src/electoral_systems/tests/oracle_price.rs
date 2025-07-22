@@ -82,7 +82,16 @@ register_checks! {
 		)
 		},
 
-		electoral_price_api_returns(_pre, post, prices: BTreeMap<PriceAsset, (ChainlinkPrice, PriceStaleness)>) {
+		electoral_price_api_returns(_pre, post, prices: BTreeMap<ChainlinkAssetPair, (ChainlinkPrice, PriceStaleness)>) {
+
+			let prices : BTreeMap<_,_> = prices
+				.clone()
+				.into_iter()
+				.map(|(asset, (price, staleness))| {
+					(asset.to_price_unit().base_asset, (price, staleness))
+				})
+				.collect();
+
 			let valid_assets = get_current_chainlink_prices(&post.unsynchronised_state)
 				.into_iter()
 				.filter_map(|(asset, (price, status))| {
@@ -122,6 +131,8 @@ fn es_creates_elections_based_on_staleness() {
 		(UsdcUsd, ChainlinkPrice::integer(1)),
 		(UsdtUsd, ChainlinkPrice::integer(1)),
 	];
+	let prices1: BTreeMap<ChainlinkAssetPair, ChainlinkPrice> =
+		default_prices.iter().cloned().collect();
 	let prices2: BTreeMap<ChainlinkAssetPair, ChainlinkPrice> = default_prices
 		.iter()
 		.cloned()
@@ -133,6 +144,23 @@ fn es_creates_elections_based_on_staleness() {
 		.map(|(asset, price)| (asset, (price * BasisPoints(8500).to_fraction()).unwrap()))
 		.collect();
 
+	let election_for_chain_with_all_assets = |chain, status: Option<_>| {
+		Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+			chain,
+			status.map(|status| all::<ChainlinkAssetPair>().zip(repeat(status)).collect()),
+		))
+	};
+	let current_prices_are = |prices: &BTreeMap<_, _>, staleness| {
+		Check::<OraclePriceES>::electoral_price_api_returns(
+			prices
+				.clone()
+				.into_iter()
+				.map(|(asset, price)| (asset, (price, staleness)))
+				.collect(),
+		)
+	};
+
+	use ExternalPriceChain::*;
 	use PriceStaleness::*;
 	TestSetup::<OraclePriceES>::default()
 		.with_unsynchronised_settings(SETTINGS)
@@ -144,14 +172,8 @@ fn es_creates_elections_based_on_staleness() {
 			&vec![()],
 			|_| {},
 			vec![
-				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					ExternalPriceChain::Solana,
-					Some(all::<ChainlinkAssetPair>().zip(repeat(MaybeStale)).collect()),
-				)),
-				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					ExternalPriceChain::Ethereum,
-					Some(all::<ChainlinkAssetPair>().zip(repeat(MaybeStale)).collect()),
-				)),
+				election_for_chain_with_all_assets(Solana, Some(MaybeStale)),
+				election_for_chain_with_all_assets(Ethereum, Some(MaybeStale)),
 			],
 		)
 		//  - For solana: no consensus
@@ -202,23 +224,9 @@ fn es_creates_elections_based_on_staleness() {
 			&vec![()],
 			|_| {},
 			vec![
-				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					ExternalPriceChain::Solana,
-					Some(all::<ChainlinkAssetPair>().zip(repeat(MaybeStale)).collect()),
-				)),
-				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					ExternalPriceChain::Ethereum,
-					Some(all::<ChainlinkAssetPair>().zip(repeat(UpToDate)).collect()),
-				)),
-				Check::<OraclePriceES>::electoral_price_api_returns(
-					default_prices
-						.clone()
-						.into_iter()
-						.map(|(asset, price)| {
-							(asset.to_price_unit().base_asset, (price, PriceStaleness::UpToDate))
-						})
-						.collect(),
-				),
+				election_for_chain_with_all_assets(Solana, Some(MaybeStale)),
+				election_for_chain_with_all_assets(Ethereum, Some(UpToDate)),
+				current_prices_are(&prices1, UpToDate),
 			],
 		)
 		.mutate_unsynchronized_state(|state| {
@@ -274,23 +282,9 @@ fn es_creates_elections_based_on_staleness() {
 			&vec![()],
 			|_| {},
 			vec![
-				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					ExternalPriceChain::Solana,
-					Some(all::<ChainlinkAssetPair>().zip(repeat(UpToDate)).collect()),
-				)),
-				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					ExternalPriceChain::Ethereum,
-					None,
-				)),
-				Check::<OraclePriceES>::electoral_price_api_returns(
-					prices2
-						.clone()
-						.into_iter()
-						.map(|(asset, price)| {
-							(asset.to_price_unit().base_asset, (price, PriceStaleness::UpToDate))
-						})
-						.collect(),
-				),
+				election_for_chain_with_all_assets(Solana, Some(UpToDate)),
+				election_for_chain_with_all_assets(Ethereum, None),
+				current_prices_are(&prices2, UpToDate),
 			],
 		)
 		.mutate_unsynchronized_state(|state| {
@@ -303,23 +297,9 @@ fn es_creates_elections_based_on_staleness() {
 			&vec![()],
 			|_| {},
 			vec![
-				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					ExternalPriceChain::Solana,
-					Some(all::<ChainlinkAssetPair>().zip(repeat(UpToDate)).collect()),
-				)),
-				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					ExternalPriceChain::Ethereum,
-					None,
-				)),
-				Check::<OraclePriceES>::electoral_price_api_returns(
-					prices2
-						.clone()
-						.into_iter()
-						.map(|(asset, price)| {
-							(asset.to_price_unit().base_asset, (price, PriceStaleness::UpToDate))
-						})
-						.collect(),
-				),
+				election_for_chain_with_all_assets(Solana, Some(UpToDate)),
+				election_for_chain_with_all_assets(Ethereum, None),
+				current_prices_are(&prices2, UpToDate),
 			],
 		)
 		.mutate_unsynchronized_state(|state| {
@@ -333,23 +313,9 @@ fn es_creates_elections_based_on_staleness() {
 			&vec![()],
 			|_| {},
 			vec![
-				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					ExternalPriceChain::Solana,
-					Some(all::<ChainlinkAssetPair>().zip(repeat(MaybeStale)).collect()),
-				)),
-				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					ExternalPriceChain::Ethereum,
-					Some(all::<ChainlinkAssetPair>().zip(repeat(Stale)).collect()),
-				)),
-				Check::<OraclePriceES>::electoral_price_api_returns(
-					prices2
-						.clone()
-						.into_iter()
-						.map(|(asset, price)| {
-							(asset.to_price_unit().base_asset, (price, PriceStaleness::MaybeStale))
-						})
-						.collect(),
-				),
+				election_for_chain_with_all_assets(Solana, Some(MaybeStale)),
+				election_for_chain_with_all_assets(Ethereum, Some(Stale)),
+				current_prices_are(&prices2, MaybeStale),
 			],
 		)
 		.mutate_unsynchronized_state(|state| {
@@ -362,23 +328,9 @@ fn es_creates_elections_based_on_staleness() {
 			&vec![()],
 			|_| {},
 			vec![
-				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					ExternalPriceChain::Solana,
-					Some(all::<ChainlinkAssetPair>().zip(repeat(Stale)).collect()),
-				)),
-				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					ExternalPriceChain::Ethereum,
-					Some(all::<ChainlinkAssetPair>().zip(repeat(Stale)).collect()),
-				)),
-				Check::<OraclePriceES>::electoral_price_api_returns(
-					prices2
-						.clone()
-						.into_iter()
-						.map(|(asset, price)| {
-							(asset.to_price_unit().base_asset, (price, PriceStaleness::Stale))
-						})
-						.collect(),
-				),
+				election_for_chain_with_all_assets(Solana, Some(Stale)),
+				election_for_chain_with_all_assets(Ethereum, Some(Stale)),
+				current_prices_are(&prices2, Stale),
 			],
 		)
 		.mutate_unsynchronized_state(|state| {
@@ -433,23 +385,9 @@ fn es_creates_elections_based_on_staleness() {
 			&vec![()],
 			|_| {},
 			vec![
-				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					ExternalPriceChain::Solana,
-					Some(all::<ChainlinkAssetPair>().zip(repeat(UpToDate)).collect()),
-				)),
-				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					ExternalPriceChain::Ethereum,
-					None,
-				)),
-				Check::<OraclePriceES>::electoral_price_api_returns(
-					prices3
-						.clone()
-						.into_iter()
-						.map(|(asset, price)| {
-							(asset.to_price_unit().base_asset, (price, PriceStaleness::UpToDate))
-						})
-						.collect(),
-				),
+				election_for_chain_with_all_assets(Solana, Some(UpToDate)),
+				election_for_chain_with_all_assets(Ethereum, None),
+				current_prices_are(&prices3, UpToDate),
 			],
 		);
 }
