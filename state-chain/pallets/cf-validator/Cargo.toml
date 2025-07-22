@@ -24,7 +24,7 @@ cf-utilities = { workspace = true }
 # Used for benchmarking
 pallet-cf-funding = { workspace = true, optional = true }
 pallet-cf-reputation = { workspace = true, optional = true }
-pallet-cf-flip = { workspace = true, optional = true }
+pallet-cf-flip = { workspace = true }
 
 log = { workspace = true }
 nanorand = { workspace = true, features = ["wyrand"] }

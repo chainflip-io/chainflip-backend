@@ -736,11 +736,18 @@ impl Network {
 		}
 	}
 
-	/// Move to the next heartbeat interval block.
-	pub fn move_to_next_heartbeat_block(&mut self) {
-		self.move_forward_blocks(
-			HEARTBEAT_BLOCK_INTERVAL - System::block_number() % HEARTBEAT_BLOCK_INTERVAL,
-		);
+	/// Move to the next heartbeat interval block, with the option to offset the target block.
+	pub fn move_to_next_heartbeat_block(&mut self, offset: Option<i32>) {
+		let heart_beat_block =
+			HEARTBEAT_BLOCK_INTERVAL - System::block_number() % HEARTBEAT_BLOCK_INTERVAL;
+		let os = offset.unwrap_or_default();
+		let target_block = if os >= 0 {
+			heart_beat_block + os.unsigned_abs()
+		} else {
+			heart_beat_block - os.unsigned_abs()
+		};
+
+		self.move_forward_blocks(target_block);
 	}
 
 	// Submits heartbeat for keep alive.
