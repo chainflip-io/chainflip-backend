@@ -1074,9 +1074,8 @@ pub mod pallet {
 				Error::<T>::NotOperator
 			);
 
-			// TODO: We should somehow ensure the operator has set his preferences...
 			match OperatorSettingsLookup::<T>::get(&operator_id)
-				.expect("an operator to have configured his parameters")
+				.expect("operator is forced to set valid preferences during account registration")
 				.delegation_acceptance
 			{
 				DelegationAcceptance::Allow => ensure!(
