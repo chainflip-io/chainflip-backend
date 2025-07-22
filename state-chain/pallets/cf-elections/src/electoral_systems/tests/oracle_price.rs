@@ -144,6 +144,22 @@ fn es_creates_elections_based_on_staleness() {
 		.map(|(asset, price)| (asset, (price * BasisPoints(8500).to_fraction()).unwrap()))
 		.collect();
 
+	let generate_asset_response = |time, prices: &BTreeMap<ChainlinkAssetPair, ChainlinkPrice>| {
+		prices
+			.clone()
+			.into_iter()
+			.map(|(asset, price)| {
+				(
+					asset,
+					AssetResponse::<MockTypes> {
+						timestamp: Aggregated::from_single_value(time),
+						price: Aggregated::from_single_value(price),
+					},
+				)
+			})
+			.collect::<BTreeMap<_, _>>()
+	};
+
 	let election_for_chain_with_all_assets = |chain, status: Option<_>| {
 		Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 			chain,
@@ -181,16 +197,7 @@ fn es_creates_elections_based_on_staleness() {
 		//    timestamps
 		.expect_consensus_multi(vec![
 			// Data for the Solana election, no votes
-			(
-				generate_votes(
-					Default::default(),
-					(0..20).collect(),
-					default_prices.clone().into(),
-					Default::default(),
-					START_TIME,
-				),
-				None,
-			),
+			(no_votes(20), None),
 			// Data for the Ethereum election, all 20 voters vote for the default price
 			(
 				generate_votes(
@@ -200,21 +207,7 @@ fn es_creates_elections_based_on_staleness() {
 					Default::default(),
 					START_TIME,
 				),
-				Some(
-					default_prices
-						.iter()
-						.cloned()
-						.map(|(asset, price)| {
-							(
-								asset,
-								AssetResponse {
-									timestamp: Aggregated::from_single_value(START_TIME),
-									price: Aggregated::from_single_value(price),
-								},
-							)
-						})
-						.collect(),
-				),
+				Some(generate_asset_response(START_TIME, &prices1)),
 			),
 		])
 		// since we got prices for the secondary chain (Ethereum), the elections are:
@@ -245,34 +238,10 @@ fn es_creates_elections_based_on_staleness() {
 					Default::default(),
 					START_TIME + TIME_STEP + TIME_STEP,
 				),
-				Some(
-					prices2
-						.iter()
-						.map(|(asset, price)| {
-							(
-								asset.clone(),
-								AssetResponse {
-									timestamp: Aggregated::from_single_value(
-										START_TIME + TIME_STEP + TIME_STEP,
-									),
-									price: Aggregated::from_single_value(price.clone()),
-								},
-							)
-						})
-						.collect(),
-				),
+				Some(generate_asset_response(START_TIME + TIME_STEP * 2, &prices2)),
 			),
 			// Data for the Ethereum election, no votes
-			(
-				generate_votes(
-					Default::default(),
-					(0..20).collect(),
-					default_prices.clone().into(),
-					Default::default(),
-					START_TIME,
-				),
-				None,
-			),
+			(no_votes(20), None),
 		])
 		// since we now got prices for the primary chain (Solana):
 		//  - there should be no ethereum election
@@ -341,16 +310,7 @@ fn es_creates_elections_based_on_staleness() {
 		// - Solana: newest prices
 		.expect_consensus_multi(vec![
 			// Data for the Ethereum election, no votes
-			(
-				generate_votes(
-					Default::default(),
-					(0..20).collect(),
-					default_prices.clone().into(),
-					Default::default(),
-					START_TIME,
-				),
-				None,
-			),
+			(no_votes(20), None),
 			// Data for the Solana election, all 20 voters vote for price3
 			(
 				generate_votes(
@@ -360,22 +320,7 @@ fn es_creates_elections_based_on_staleness() {
 					Default::default(),
 					START_TIME + TIME_STEP * 100,
 				),
-				Some(
-					prices3
-						.iter()
-						.map(|(asset, price)| {
-							(
-								asset.clone(),
-								AssetResponse {
-									timestamp: Aggregated::from_single_value(
-										START_TIME + TIME_STEP * 100,
-									),
-									price: Aggregated::from_single_value(price.clone()),
-								},
-							)
-						})
-						.collect(),
-				),
+				Some(generate_asset_response(START_TIME + TIME_STEP * 100, &prices3)),
 			),
 		])
 		// - the prices in the api should be updated to the newest value (prices3)
@@ -393,6 +338,14 @@ fn es_creates_elections_based_on_staleness() {
 }
 
 //----------------------- utilities ------------------------
+fn no_votes(authorities: u16) -> ConsensusVotes<OraclePriceES> {
+	ConsensusVotes {
+		votes: (0..authorities)
+			.map(|id| ConsensusVote { vote: None, validator_id: id })
+			.collect(),
+	}
+}
+
 fn generate_votes(
 	voters: BTreeSet<ValidatorId>,
 	did_not_vote: BTreeSet<ValidatorId>,
