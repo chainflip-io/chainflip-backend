@@ -43,7 +43,7 @@ const BOB: u64 = 101;
 const GENESIS_EPOCH: u32 = 1;
 
 const OPERATOR_SETTINGS: OperatorSettings =
-	OperatorSettings { fee_bps: 100, delegation_acceptance: DelegationAcceptance::Allow };
+	OperatorSettings { fee_bps: 250, delegation_acceptance: DelegationAcceptance::Allow };
 
 fn assert_epoch_index(n: EpochIndex) {
 	assert_eq!(
@@ -1580,10 +1580,7 @@ mod operator {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
-				OperatorSettings {
-					fee_bps: 100,
-					delegation_acceptance: DelegationAcceptance::Allow,
-				}
+				OPERATOR_SETTINGS,
 			));
 			// Allow BOB
 			assert_ok!(ValidatorPallet::add_delegator_to_exceptions(
@@ -1605,11 +1602,11 @@ mod operator {
 			assert!(Exceptions::<Test>::get(ALICE).contains(&BOB));
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::ValidatorPallet(Event::DelegatorAllowed {
+				RuntimeEvent::ValidatorPallet(Event::DelegatorAddedToExceptions {
 					operator: ALICE,
 					delegator: BOB,
 				}),
-				RuntimeEvent::ValidatorPallet(Event::DelegatorBlocked {
+				RuntimeEvent::ValidatorPallet(Event::DelegatorRemovedFromExceptions {
 					operator: ALICE,
 					delegator: BOB,
 				}),
@@ -1619,24 +1616,20 @@ mod operator {
 	#[test]
 	fn can_set_delegation_preferences() {
 		new_test_ext().execute_with(|| {
-			const PREFERENCES: OperatorSettings = OperatorSettings {
-				fee_bps: 100,
-				delegation_acceptance: DelegationAcceptance::Allow,
-			};
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
-				PREFERENCES
+				OPERATOR_SETTINGS
 			));
 			assert_ok!(ValidatorPallet::set_delegation_preferences(
 				OriginTrait::signed(ALICE),
-				PREFERENCES
+				OPERATOR_SETTINGS
 			));
-			assert_eq!(OperatorSettingsLookup::<Test>::get(ALICE), Some(PREFERENCES));
+			assert_eq!(OperatorSettingsLookup::<Test>::get(ALICE), Some(OPERATOR_SETTINGS));
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::ValidatorPallet(Event::OperatorSettingsUpdated {
 					operator: ALICE,
-					preferences: PREFERENCES,
+					preferences: OPERATOR_SETTINGS,
 				}),
 			);
 		});
@@ -1745,9 +1738,6 @@ mod operator {
 mod delegation {
 	use super::*;
 
-	const OPERATOR_SETTINGS: OperatorSettings =
-		OperatorSettings { fee_bps: 100, delegation_acceptance: DelegationAcceptance::Allow };
-
 	#[test]
 	fn can_delegate() {
 		new_test_ext().execute_with(|| {
@@ -1757,10 +1747,7 @@ mod delegation {
 			));
 			assert_ok!(ValidatorPallet::set_delegation_preferences(
 				OriginTrait::signed(BOB),
-				OperatorSettings {
-					fee_bps: 100,
-					delegation_acceptance: DelegationAcceptance::Allow,
-				},
+				OPERATOR_SETTINGS,
 			));
 			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(ALICE), BOB));
 			assert_eq!(DelegationChoice::<Test>::get(ALICE), Some(BOB));
@@ -1768,10 +1755,7 @@ mod delegation {
 				Test,
 				RuntimeEvent::ValidatorPallet(Event::OperatorSettingsUpdated {
 					operator: BOB,
-					preferences: OperatorSettings {
-						fee_bps: 100,
-						delegation_acceptance: DelegationAcceptance::Allow
-					},
+					preferences: OPERATOR_SETTINGS,
 				}),
 				RuntimeEvent::ValidatorPallet(Event::Delegated {
 					account_id: ALICE,
@@ -1809,10 +1793,7 @@ mod delegation {
 			));
 			assert_ok!(ValidatorPallet::set_delegation_preferences(
 				OriginTrait::signed(ALICE),
-				OperatorSettings {
-					fee_bps: 100,
-					delegation_acceptance: DelegationAcceptance::Allow,
-				},
+				OPERATOR_SETTINGS,
 			));
 			assert_ok!(ValidatorPallet::add_delegator_to_exceptions(
 				OriginTrait::signed(ALICE),
@@ -1820,7 +1801,7 @@ mod delegation {
 			));
 			assert_noop!(
 				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
-				Error::<Test>::DelegatorBlocked
+				Error::<Test>::DelegatorRemovedFromExceptions
 			);
 		});
 	}

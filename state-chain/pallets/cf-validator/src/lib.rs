@@ -348,14 +348,12 @@ pub mod pallet {
 	#[pallet::getter(fn active_bidder)]
 	pub type ActiveBidder<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
-	/// Maps an operator account to it's exception rules.
+	/// Maps an operator account to it's exceptions. An exception is a delegator that is excluded
+	/// from the operator's delegation acceptance configuration. If it's set to allow it means the
+	/// delegator is not allowed to delegate if it's in the list of exceptions and vis versa for
+	/// deny.
 	#[pallet::storage]
 	pub type Exceptions<T: Config> =
-		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
-
-	/// Maps an operator account to it's blocked delegators.
-	#[pallet::storage]
-	pub type BlockedDelegators<T: Config> =
 		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
 	/// Maps a managed validator to its operator.
@@ -405,9 +403,9 @@ pub mod pallet {
 		/// succesfully broadcast, therefore, cannot start a new epoch rotation.
 		PreviousRotationStillPending,
 		/// A delegator has been blocked from delegating to an operator.
-		DelegatorBlocked { delegator: T::AccountId, operator: T::AccountId },
+		DelegatorRemovedFromExceptions { delegator: T::AccountId, operator: T::AccountId },
 		/// A delegator has been allowed to delegate to an operator.
-		DelegatorAllowed { delegator: T::AccountId, operator: T::AccountId },
+		DelegatorAddedToExceptions { delegator: T::AccountId, operator: T::AccountId },
 		/// A validator has been claimed by an operator.
 		ValidatorClaimed { validator: T::AccountId, operator: T::AccountId },
 		/// A validator has accepted the claim of an operator.
@@ -488,8 +486,8 @@ pub mod pallet {
 		DelegationNotAllowed,
 		/// Can not delegate to none operator.
 		NotOperator,
-		/// A delegator is expliztly blocked.
-		DelegatorBlocked,
+		/// A delegator is removed from the exceptions list.
+		DelegatorRemovedFromExceptions,
 		/// The provided Operator fee is too low.
 		OperatorFeeToLow,
 	}
@@ -935,7 +933,7 @@ pub mod pallet {
 		}
 
 		/// Executed by an operator or a validator to remove the validator from the operator's
-		/// delegation pool.
+		/// delegation association.
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::ValidatorWeightInfo::remove_validator())]
 		pub fn remove_validator(origin: OriginFor<T>, validator: T::AccountId) -> DispatchResult {
@@ -986,7 +984,7 @@ pub mod pallet {
 				delegators.remove(&delegator_id);
 			});
 
-			Self::deposit_event(Event::DelegatorBlocked {
+			Self::deposit_event(Event::DelegatorRemovedFromExceptions {
 				operator: operator_id,
 				delegator: delegator_id,
 			});
@@ -1007,7 +1005,7 @@ pub mod pallet {
 				delegators.insert(delegator_id.clone());
 			});
 
-			Self::deposit_event(Event::DelegatorAllowed {
+			Self::deposit_event(Event::DelegatorAddedToExceptions {
 				operator: operator_id,
 				delegator: delegator_id,
 			});
@@ -1083,11 +1081,11 @@ pub mod pallet {
 			{
 				DelegationAcceptance::Allow => ensure!(
 					!Exceptions::<T>::get(&operator_id).contains(&account_id),
-					Error::<T>::DelegatorBlocked
+					Error::<T>::DelegatorRemovedFromExceptions
 				),
 				DelegationAcceptance::Deny => ensure!(
 					Exceptions::<T>::get(&operator_id).contains(&account_id),
-					Error::<T>::DelegatorBlocked
+					Error::<T>::DelegatorRemovedFromExceptions
 				),
 			}
 
