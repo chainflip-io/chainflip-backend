@@ -45,6 +45,7 @@ pub enum PriceAsset {
 	Usdc,
 	Usdt,
 	Usd,
+	Fine,
 }
 
 impl PriceAsset {
@@ -57,6 +58,7 @@ impl PriceAsset {
 			Usdc => 6,
 			Usdt => 6,
 			Usd => 6,
+			Fine => 0,
 		}
 	}
 }
@@ -194,6 +196,17 @@ impl Into<Price> for Fraction<{ u128::MAX }> {
 		debug_assert_eq!(PRICE_FRACTIONAL_BITS, 128);
 		self.0
 	}
+}
+
+pub fn convert_unit<const U: Denom>(
+	price: Fraction<U>,
+	from: PriceUnit,
+	to: PriceUnit,
+) -> Option<Fraction<U>> {
+	price.apply_exponent(Base10Exponent(
+		(from.quote_asset.decimals() as i16 - from.base_asset.decimals() as i16) -
+			(to.quote_asset.decimals() as i16 - to.base_asset.decimals() as i16),
+	))
 }
 
 pub fn price_with_unit_to_statechain_price<const U: u128>(

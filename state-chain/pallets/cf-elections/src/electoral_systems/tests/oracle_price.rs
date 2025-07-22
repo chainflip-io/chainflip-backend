@@ -1,6 +1,7 @@
 use core::{cmp::min, default, iter::repeat, ops::RangeInclusive};
 use std::collections::{BTreeMap, BTreeSet};
 
+use cf_amm_math::Price;
 use enum_iterator::all;
 use frame_system::BlockHash;
 
@@ -52,12 +53,11 @@ const SETTINGS: OraclePriceSettings = OraclePriceSettings {
 	},
 };
 const START_TIME: UnixTime = UnixTime { seconds: 1000 };
+const TIME_STEP: Seconds = Seconds(15);
 
 register_checks! {
 	OraclePriceES {
 		election_for_chain_ongoing_with_asset_status(pre, post, arg: (ExternalPriceChain, Option<BTreeMap<ChainlinkAssetPair, PriceStaleness>>)) {
-
-			println!("state is now {:?}", post.unsynchronised_state);
 
 			let (chain, asset_statuses) = arg;
 			assert_eq!(
@@ -77,14 +77,36 @@ register_checks! {
 						(asset.clone(), price_status)
 					})
 					.collect()
-			))
+			),
+			"Wrong asset statuses: expected: {asset_statuses:?}, post state: {:?}", post.unsynchronised_state
+		)
 		},
 
-		electoral_price_api_returns(pre, post, prices: BTreeMap<PriceAsset, (StatechainPrice, PriceStaleness)>) {
-			// assert_eq!(
-			// 	get_current_chainlink_prices(&post.unsynchronised_state),
-			// 	prices.
-			// )
+		electoral_price_api_returns(_pre, post, prices: BTreeMap<PriceAsset, (ChainlinkPrice, PriceStaleness)>) {
+			let valid_assets = get_current_chainlink_prices(&post.unsynchronised_state)
+				.into_iter()
+				.filter_map(|(asset, (price, status))| {
+					let price: StatechainPrice = Fraction::from_raw(price);
+					let converted_price = convert_unit(
+						price,
+						PriceUnit { base_asset: PriceAsset::Fine, quote_asset: PriceAsset::Fine },
+						PriceUnit { base_asset: asset, quote_asset: PriceAsset::Usdc }
+					)?.convert()?;
+
+					let required_price = &prices.get(&asset)?.0;
+					let required_status = &prices.get(&asset)?.1;
+
+					// we allow the round-tripped price to differ by the smallest unit
+					assert!(
+						required_price - converted_price.clone() <= Fraction(1u32.into()),
+						"asset: {asset:?}, price actual: {converted_price:?}, expected: {required_price:?}"
+					);
+					assert_eq!(status, *required_status);
+					Some(asset)
+				})
+				.collect::<BTreeSet<_>>();
+
+			assert_eq!(valid_assets, prices.into_keys().collect::<BTreeSet<_>>());
 		}
 	}
 }
@@ -100,6 +122,16 @@ fn es_creates_elections_based_on_staleness() {
 		(UsdcUsd, ChainlinkPrice::integer(1)),
 		(UsdtUsd, ChainlinkPrice::integer(1)),
 	];
+	let prices2: BTreeMap<ChainlinkAssetPair, ChainlinkPrice> = default_prices
+		.iter()
+		.cloned()
+		.map(|(asset, price)| (asset, (price * BasisPoints(10005).to_fraction()).unwrap()))
+		.collect();
+	let prices3: BTreeMap<ChainlinkAssetPair, ChainlinkPrice> = default_prices
+		.iter()
+		.cloned()
+		.map(|(asset, price)| (asset, (price * BasisPoints(8500).to_fraction()).unwrap()))
+		.collect();
 
 	use PriceStaleness::*;
 	TestSetup::<OraclePriceES>::default()
@@ -178,12 +210,51 @@ fn es_creates_elections_based_on_staleness() {
 					ExternalPriceChain::Ethereum,
 					Some(all::<ChainlinkAssetPair>().zip(repeat(UpToDate)).collect()),
 				)),
+				Check::<OraclePriceES>::electoral_price_api_returns(
+					default_prices
+						.clone()
+						.into_iter()
+						.map(|(asset, price)| {
+							(asset.to_price_unit().base_asset, (price, PriceStaleness::UpToDate))
+						})
+						.collect(),
+				),
 			],
 		)
+		.mutate_unsynchronized_state(|state| {
+			println!("stepping two timestep (30 seconds) forward");
+			state.get_time.state.state.seconds += 2 * TIME_STEP.0;
+		})
 		// We get consensus:
 		// - Solana: newest prices
 		.expect_consensus_multi(vec![
-			// Data for the Solana election, no votes
+			// Data for the Solana election, all 20 voters vote for the default price
+			(
+				generate_votes(
+					(0..20).collect(),
+					Default::default(),
+					prices2.clone(),
+					Default::default(),
+					START_TIME + TIME_STEP + TIME_STEP,
+				),
+				Some(
+					prices2
+						.iter()
+						.map(|(asset, price)| {
+							(
+								asset.clone(),
+								AssetResponse {
+									timestamp: Aggregated::from_single_value(
+										START_TIME + TIME_STEP + TIME_STEP,
+									),
+									price: Aggregated::from_single_value(price.clone()),
+								},
+							)
+						})
+						.collect(),
+				),
+			),
+			// Data for the Ethereum election, no votes
 			(
 				generate_votes(
 					Default::default(),
@@ -194,57 +265,193 @@ fn es_creates_elections_based_on_staleness() {
 				),
 				None,
 			),
-			// Data for the Ethereum election, all 20 voters vote for the default price
+		])
+		// since we now got prices for the primary chain (Solana):
+		//  - there should be no ethereum election
+		//  - the Solana election should have all price statuses be `UpToDate`
+		//  - the stored prices should reflect the newer `prices2` values
+		.test_on_finalize(
+			&vec![()],
+			|_| {},
+			vec![
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					ExternalPriceChain::Solana,
+					Some(all::<ChainlinkAssetPair>().zip(repeat(UpToDate)).collect()),
+				)),
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					ExternalPriceChain::Ethereum,
+					None,
+				)),
+				Check::<OraclePriceES>::electoral_price_api_returns(
+					prices2
+						.clone()
+						.into_iter()
+						.map(|(asset, price)| {
+							(asset.to_price_unit().base_asset, (price, PriceStaleness::UpToDate))
+						})
+						.collect(),
+				),
+			],
+		)
+		.mutate_unsynchronized_state(|state| {
+			println!("stepping 3 timesteps (45 seconds) forward");
+			state.get_time.state.state.seconds += 3 * TIME_STEP.0;
+		})
+		// The prices on eth should now be MaybeStale, but since the ones on Solana are up to date,
+		// we don't have Eth elections. Also the prices returned by the api are still up to date
+		.test_on_finalize(
+			&vec![()],
+			|_| {},
+			vec![
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					ExternalPriceChain::Solana,
+					Some(all::<ChainlinkAssetPair>().zip(repeat(UpToDate)).collect()),
+				)),
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					ExternalPriceChain::Ethereum,
+					None,
+				)),
+				Check::<OraclePriceES>::electoral_price_api_returns(
+					prices2
+						.clone()
+						.into_iter()
+						.map(|(asset, price)| {
+							(asset.to_price_unit().base_asset, (price, PriceStaleness::UpToDate))
+						})
+						.collect(),
+				),
+			],
+		)
+		.mutate_unsynchronized_state(|state| {
+			println!("stepping 2 timesteps (30 seconds) forward");
+			state.get_time.state.state.seconds += 2 * TIME_STEP.0;
+		})
+		// - the prices on solana are now maybe stale (sol elections going on)
+		// - the prices on Eth are fully stale (eth elections going on)
+		// - the prices returned by the API are still the same and maybe stale
+		.test_on_finalize(
+			&vec![()],
+			|_| {},
+			vec![
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					ExternalPriceChain::Solana,
+					Some(all::<ChainlinkAssetPair>().zip(repeat(MaybeStale)).collect()),
+				)),
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					ExternalPriceChain::Ethereum,
+					Some(all::<ChainlinkAssetPair>().zip(repeat(Stale)).collect()),
+				)),
+				Check::<OraclePriceES>::electoral_price_api_returns(
+					prices2
+						.clone()
+						.into_iter()
+						.map(|(asset, price)| {
+							(asset.to_price_unit().base_asset, (price, PriceStaleness::MaybeStale))
+						})
+						.collect(),
+				),
+			],
+		)
+		.mutate_unsynchronized_state(|state| {
+			println!("stepping 2 timesteps (30 seconds) forward");
+			state.get_time.state.state.seconds += 2 * TIME_STEP.0;
+		})
+		// - the prices on both chains are now stale
+		// - the prices returned by the API are stale
+		.test_on_finalize(
+			&vec![()],
+			|_| {},
+			vec![
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					ExternalPriceChain::Solana,
+					Some(all::<ChainlinkAssetPair>().zip(repeat(Stale)).collect()),
+				)),
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					ExternalPriceChain::Ethereum,
+					Some(all::<ChainlinkAssetPair>().zip(repeat(Stale)).collect()),
+				)),
+				Check::<OraclePriceES>::electoral_price_api_returns(
+					prices2
+						.clone()
+						.into_iter()
+						.map(|(asset, price)| {
+							(asset.to_price_unit().base_asset, (price, PriceStaleness::Stale))
+						})
+						.collect(),
+				),
+			],
+		)
+		.mutate_unsynchronized_state(|state| {
+			println!("setting time to 100 timesteps after start");
+			state.get_time.state.state.seconds = START_TIME.seconds + 100 * TIME_STEP.0;
+		})
+		// We get consensus:
+		// - Solana: newest prices
+		.expect_consensus_multi(vec![
+			// Data for the Ethereum election, no votes
 			(
 				generate_votes(
-					(0..20).collect(),
 					Default::default(),
+					(0..20).collect(),
 					default_prices.clone().into(),
 					Default::default(),
 					START_TIME,
 				),
+				None,
+			),
+			// Data for the Solana election, all 20 voters vote for price3
+			(
+				generate_votes(
+					(0..20).collect(),
+					Default::default(),
+					prices3.clone(),
+					Default::default(),
+					START_TIME + TIME_STEP * 100,
+				),
 				Some(
-					default_prices
+					prices3
 						.iter()
-						.cloned()
 						.map(|(asset, price)| {
 							(
-								asset,
+								asset.clone(),
 								AssetResponse {
-									timestamp: Aggregated::from_single_value(START_TIME),
-									price: Aggregated::from_single_value(price),
+									timestamp: Aggregated::from_single_value(
+										START_TIME + TIME_STEP * 100,
+									),
+									price: Aggregated::from_single_value(price.clone()),
 								},
 							)
 						})
 						.collect(),
 				),
 			),
-		]);
-
-	// since we got prices for the secondary chain (Ethereum), the election
-	// .test_on_finalize(
-	// 	&vec![()],
-	// 	|_| {},
-	// 	vec![
-	// 		Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-	// 			ExternalPriceChain::Solana,
-	// 			Some(all::<ChainlinkAssetPair>().zip(repeat(UpToDate)).collect()),
-	// 		)),
-	// 		Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-	// 			ExternalPriceChain::Ethereum,
-	// 			None,
-	// 		)),
-	// 	],
-	// );
-	// .expect_consensus(
-	// 	generate_votes(
-	// 		(0..20).collect(),
-	// 		Default::default(),
-	// 		Default::default(),
-	// 		None,
-	// 	),
-	// 	Some((vec![TX_RECEIVED], None)),
-	// );
+		])
+		// - the prices in the api should be updated to the newest value (prices3)
+		// - there should be a Solana (UpToDate) election going on
+		// - there should be no Ethereum election
+		.test_on_finalize(
+			&vec![()],
+			|_| {},
+			vec![
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					ExternalPriceChain::Solana,
+					Some(all::<ChainlinkAssetPair>().zip(repeat(UpToDate)).collect()),
+				)),
+				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
+					ExternalPriceChain::Ethereum,
+					None,
+				)),
+				Check::<OraclePriceES>::electoral_price_api_returns(
+					prices3
+						.clone()
+						.into_iter()
+						.map(|(asset, price)| {
+							(asset.to_price_unit().base_asset, (price, PriceStaleness::UpToDate))
+						})
+						.collect(),
+				),
+			],
+		);
 }
 
 //----------------------- utilities ------------------------

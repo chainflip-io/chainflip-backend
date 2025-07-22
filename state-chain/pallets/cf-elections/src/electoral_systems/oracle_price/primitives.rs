@@ -1,4 +1,4 @@
-use core::ops::RangeInclusive;
+use core::ops::{Mul, RangeInclusive};
 use sp_std::ops::Add;
 
 use crate::{
@@ -27,6 +27,14 @@ def_derive! {
 	#[cfg_attr(test, derive(Arbitrary))]
 	#[derive(TypeInfo, Copy, Default)]
 	pub struct Seconds(pub u64);
+}
+
+impl Mul<u64> for Seconds {
+	type Output = Seconds;
+
+	fn mul(self, rhs: u64) -> Self::Output {
+		Seconds(self.0 * rhs)
+	}
 }
 
 def_derive! {
