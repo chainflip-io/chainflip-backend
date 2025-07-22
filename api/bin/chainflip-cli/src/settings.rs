@@ -202,11 +202,6 @@ pub enum CliCommand {
 	GetBoundRedeemAddress,
 	#[clap(about = "Shows the executor address your account is bound to")]
 	GetBoundExecutorAddress,
-	#[clap(about = "Set your account role to the Validator, Broker, Liquidity Provider")]
-	RegisterAccountRole {
-		#[clap(help = "Validator (v), Liquidity Provider (lp), Broker (b)", value_parser = account_role_parser)]
-		role: AccountRole,
-	},
 	#[clap(about = "Rotate your session keys")]
 	Rotate {},
 	#[clap(
