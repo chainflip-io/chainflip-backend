@@ -1,18 +1,15 @@
 use core::{
-	cmp::{max, min},
-	default,
+	cmp::max,
 	iter::{self, repeat},
 	ops::RangeInclusive,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-use cf_amm_math::Price;
 use enum_iterator::all;
-use frame_system::BlockHash;
 
 use crate::{
 	electoral_systems::{
-		mocks::{Check, Checkable, TestSetup},
+		mocks::{Check, TestSetup},
 		oracle_price::{
 			chainlink::*,
 			consensus::OraclePriceConsensus,
@@ -20,9 +17,8 @@ use crate::{
 			primitives::*,
 			state_machine::{tests::MockTypes, *},
 		},
-		state_machine::{
-			core::TypesFor,
-			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
+		state_machine::state_machine_es::{
+			StatemachineElectoralSystem, StatemachineElectoralSystemTypes,
 		},
 	},
 	register_checks, vote_storage, ConsensusVote, ConsensusVotes,
@@ -62,7 +58,7 @@ const TIME_STEP: Seconds = Seconds(15);
 
 register_checks! {
 	OraclePriceES {
-		election_for_chain_ongoing_with_asset_status(pre, post, arg: (ExternalPriceChain, Option<BTreeMap<ChainlinkAssetPair, PriceStaleness>>)) {
+		election_for_chain_ongoing_with_asset_status(_pre, post, arg: (ExternalPriceChain, Option<BTreeMap<ChainlinkAssetPair, PriceStaleness>>)) {
 
 			let (chain, asset_statuses) = arg;
 			assert_eq!(
@@ -573,8 +569,6 @@ fn generate_votes(
 	let lower_quartile = (half / 2) as u32;
 	let upper_quartile = (voters.len() - half + 1) as u32 / 2;
 
-	println!("lower: {lower_quartile}, upper: {upper_quartile}");
-
 	// we want to generate a distribution of prices such that we will get exactly the median price +
 	// iqr that we input we distribute the votes linearly below and above the given price
 	let votes: BTreeMap<ChainlinkAssetPair, BTreeMap<ValidatorId, ChainlinkPrice>> = prices
@@ -589,8 +583,6 @@ fn generate_votes(
 					)
 				})
 				.unwrap_or(Default::default());
-
-			println!("computed step sizes: {:?}, {:?}", step_below, step_above);
 
 			let votes = voters
 				.iter()

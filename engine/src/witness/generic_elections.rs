@@ -25,6 +25,7 @@ use pallet_cf_elections::{
 	},
 	VoteOf,
 };
+use sp_core::U256;
 use state_chain_runtime::chainflip::generic_elections::*;
 
 use crate::{
@@ -42,7 +43,6 @@ use crate::{
 };
 use anyhow::Result;
 use sol_prim::program_instructions::PriceFeedData as SolPriceFeedData;
-use sp_core::U256;
 
 /// IMPORTANT: These strings have to match with the price feed "description" as returned by
 /// chainlink.
@@ -149,13 +149,15 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 					return None;
 				};
 
-				let Ok(positive_price) = price_data.answer.try_into() else {
+				let positive_price: U256 = if price_data.answer < 0 {
 					tracing::debug!(
 						"Ignoring negative price data for {:?}: {}",
 						asset_pair,
 						price_data.answer
 					);
 					return None;
+				} else {
+					(price_data.answer as u128).into()
 				};
 
 				if ChainlinkPrice::denominator() != 10u32.pow(price_data.decimals as u32).into() {

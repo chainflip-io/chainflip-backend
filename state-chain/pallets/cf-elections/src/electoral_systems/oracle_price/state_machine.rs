@@ -2,7 +2,7 @@ use crate::{
 	electoral_systems::{
 		block_witnesser::state_machine::HookTypeFor,
 		oracle_price::{
-			price::{self, PriceUnit},
+			price::PriceUnit,
 			primitives::{Aggregation, Apply, BasisPoints, Seconds, UnixTime},
 		},
 		state_machine::common_imports::*,
@@ -448,10 +448,9 @@ pub mod tests {
 	use crate::electoral_systems::{
 		oracle_price::{
 			chainlink::{get_current_chainlink_prices, ChainlinkAssetPair, ChainlinkPrice},
-			price::Fraction,
 			primitives::*,
 		},
-		state_machine::core::{hook_test_utils::MockHook, *},
+		state_machine::core::hook_test_utils::MockHook,
 	};
 
 	pub struct Mock;

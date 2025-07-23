@@ -21,7 +21,7 @@ use crate::{
 		ConsensusStatus, ConsensusVotes, ElectionIdentifierOf, ElectoralReadAccess,
 		ElectoralSystem, ElectoralWriteAccess,
 	},
-	ElectionProperties, UniqueMonotonicIdentifier,
+	UniqueMonotonicIdentifier,
 };
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 

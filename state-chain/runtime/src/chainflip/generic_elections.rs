@@ -1,25 +1,17 @@
-use core::ops::RangeInclusive;
-
 use frame_system::pallet_prelude::BlockNumberFor;
-use sol_prim::consts::const_address;
 use sp_core::H160;
-use sp_std::{vec, vec::Vec};
+use sp_std::vec::Vec;
 
 use pallet_cf_elections::{
-	electoral_systems::{
-		oracle_price::{
-			chainlink::{ChainlinkAssetPair, ChainlinkPrice},
-			price::PriceAsset,
-			state_machine::OPTypes,
-		},
-		state_machine::core::*,
+	electoral_systems::oracle_price::{
+		chainlink::{ChainlinkAssetPair, ChainlinkPrice},
+		state_machine::OPTypes,
 	},
 	generic_tools::*,
 };
 
 use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
 use cf_chains::sol::SolAddress;
-use cf_primitives::Price;
 use cf_traits::Chainflip;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
@@ -29,19 +21,12 @@ use pallet_cf_elections::{
 			tuple_1_impls::{DerivedElectoralAccess, Hooks},
 			CompositeRunner,
 		},
-		oracle_price::{
-			consensus::OraclePriceConsensus,
-			price::{price_with_unit_to_statechain_price, Fraction, PriceUnit},
-			primitives::*,
-			state_machine::*,
-		},
+		oracle_price::{consensus::OraclePriceConsensus, primitives::*, state_machine::*},
 		state_machine::{
-			common_imports::*,
 			core::{def_derive, Hook},
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 	},
-	generic_tools::*,
 	vote_storage, CorruptStorageError, ElectionIdentifierOf, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };

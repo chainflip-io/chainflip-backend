@@ -7,16 +7,13 @@ use crate::{
 	generic_tools::*,
 };
 use cf_amm_math::{mul_div_floor_checked, PRICE_FRACTIONAL_BITS};
-use cf_primitives::{Asset, Price};
+use cf_primitives::Price;
 #[cfg(test)]
 use proptest::prelude::Strategy;
 use scale_info::prelude::marker::ConstParamTy;
 use sp_core::U256;
 
 use crate::electoral_systems::state_machine::common_imports::*;
-
-#[cfg(test)]
-use proptest_derive::Arbitrary;
 
 pub struct PriceUnit {
 	pub base_asset: PriceAsset,

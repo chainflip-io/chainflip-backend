@@ -2,12 +2,9 @@
 
 use cf_amm_math::Price;
 
-use crate::{
-	electoral_systems::{
-		oracle_price::{price::*, state_machine::*},
-		state_machine::{common_imports::*, core::*},
-	},
-	generic_tools::*,
+use crate::electoral_systems::{
+	oracle_price::{price::*, state_machine::*},
+	state_machine::common_imports::*,
 };
 
 def_derive! {
