@@ -515,7 +515,6 @@ export function observeEvents<T = any>(
 
   let blocksChecked = 0;
   const findEvent = async () => {
-    const foundEvents: Event[] = [];
     await using subscription = await subscribeHeads({ chain, finalized });
 
     const subscriptionIterator = observableToIterable<{ header: Header; events: Event[] }>(
@@ -524,12 +523,10 @@ export function observeEvents<T = any>(
     );
 
     const checkEvents = (events: Event[], log: string) => {
-      if (events.length === 0) {
-        return false;
-      }
       blocksChecked += 1;
       logger.debug(`Checking ${events.length} ${log} events for ${eventName}`);
       let stop = false;
+      const foundEvents: Event[] = [];
       for (const event of events) {
         if (
           event.name.section.includes(expectedSection) &&
@@ -546,19 +543,13 @@ export function observeEvents<T = any>(
             stop = stop || stopAfter.test(event);
           } else if ('events' in stopAfter) {
             stop = stop || foundEvents.length >= stopAfter.events;
-          } else if ('blocks' in stopAfter) {
-            stop = stop || blocksChecked >= stopAfter.blocks;
           }
         }
       }
-      if (stop) {
-        if (typeof stop === 'function') {
-          logger.debug(`Stopping after finding matching 'stop' event.`);
-        } else {
-          logger.debug(`Stopping after finding ${stop} events`);
-        }
+      if ('blocks' in stopAfter) {
+        stop = stop || blocksChecked >= stopAfter.blocks;
       }
-      return stop;
+      return { stop, foundEvents };
     };
 
     const latestResult = await subscriptionIterator.next();
@@ -573,7 +564,8 @@ export function observeEvents<T = any>(
       return [];
     }
 
-    if (checkEvents(latestResult.value.events, 'current')) {
+    let { stop, foundEvents } = checkEvents(latestResult.value.events, 'current');
+    if (stop) {
       logger.debug(`Found ${foundEvents.length} ${eventName} events in the first batch.`);
       return foundEvents;
     } else {
@@ -581,13 +573,13 @@ export function observeEvents<T = any>(
     }
 
     if (historicalCheckBlocks > 0) {
-      const historicalEvents = await getPastEvents(
-        chain,
-        latestResult.value.header,
-        historicalCheckBlocks,
+      const { stop, foundEvents: historicalEvents } = checkEvents(
+        await getPastEvents(chain, latestResult.value.header, historicalCheckBlocks),
+        'historical',
       );
-      if (checkEvents(historicalEvents, 'historical')) {
-        logger.debug(`Found ${foundEvents.length} ${eventName} events in historical query.`);
+      foundEvents = [...historicalEvents, ...foundEvents];
+      if (stop) {
+        logger.debug(`Found ${historicalEvents.length} ${eventName} events in historical query.`);
         return foundEvents;
       } else {
         logger.trace(`No historical ${eventName} events found.`);
@@ -595,9 +587,11 @@ export function observeEvents<T = any>(
     }
 
     for await (const { events } of subscriptionIterator) {
-      if (checkEvents(events, 'subscription')) {
+      const { stop, foundEvents: nextEvents } = checkEvents(events, 'subscription');
+      foundEvents = [...foundEvents, ...nextEvents];
+      if (stop) {
         logger.debug(`Found ${foundEvents.length} ${eventName} events.`);
-        return foundEvents;
+        break;
       } else {
         logger.trace(`No ${eventName} events found in subscription.`);
       }
