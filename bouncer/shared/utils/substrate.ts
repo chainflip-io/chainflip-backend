@@ -396,8 +396,8 @@ class EventCache {
 }
 
 const chainflipEventCache = new EventCache(100, 'chainflip', stateChainEventLogFile, globalLogger);
-const polkadotEventCache = new EventCache(100, 'polkadot');
-const assethubEventCache = new EventCache(100, 'assethub');
+const polkadotEventCache = new EventCache(100, 'polkadot', undefined, globalLogger);
+const assethubEventCache = new EventCache(100, 'assethub', undefined, globalLogger);
 const eventCacheMap = {
   chainflip: chainflipEventCache,
   polkadot: polkadotEventCache,
@@ -509,7 +509,7 @@ export function observeEvents<T = any>(
   }: Options<T> | AbortableOptions<T> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
-  logger.trace(`Observing event ${eventName}`);
+  logger.debug(`Observing event ${eventName}`);
 
   const controller = abortable ? new AbortController() : undefined;
 
@@ -529,9 +529,6 @@ export function observeEvents<T = any>(
       logger.debug(`Checking ${events.length} ${log} events for ${eventName}`);
       let stop = false;
       for (const event of events) {
-        logger.trace(
-          `Checking event ${event.name.section}:${event.name.method} from block ${event.block}`,
-        );
         if (
           event.name.section.includes(expectedSection) &&
           event.name.method.includes(expectedMethod)
@@ -560,11 +557,8 @@ export function observeEvents<T = any>(
       return stop;
     };
 
-    // Wait for the subscription to emit the first batch of events, which
-    // will update the best block number in the event cache: required for
-    // gap-free historical query.
-    const firstResult = await subscriptionIterator.next();
-    if (!firstResult.value) {
+    const latestResult = await subscriptionIterator.next();
+    if (!latestResult.value) {
       if (controller?.signal?.aborted) {
         logger.debug('Abort signal received before any events were emitted.');
       } else {
@@ -575,33 +569,35 @@ export function observeEvents<T = any>(
       return [];
     }
 
-    if (checkEvents(firstResult.value.events, 'current')) {
+    if (checkEvents(latestResult.value.events, 'current')) {
       logger.debug(`Found ${foundEvents.length} ${eventName} events in the first batch.`);
       return foundEvents;
+    } else {
+      logger.trace(`No ${eventName} events found in the first batch.`);
     }
 
-    const historicalEvents = await getPastEvents(
-      chain,
-      firstResult.value.header,
-      historicalCheckBlocks,
-    );
-
-    // Check historical events first
-    if (!checkEvents(historicalEvents, 'historical')) {
-      if (historicalCheckBlocks > 0) {
-        logger.debug(`No ${eventName} events found in historical query.`);
-      }
-      for await (const { events } of subscriptionIterator) {
-        if (checkEvents(events, 'subscription')) {
-          break;
-        } else {
-          logger.debug(`No ${eventName} events found in subscription.`);
-        }
+    if (historicalCheckBlocks > 0) {
+      const historicalEvents = await getPastEvents(
+        chain,
+        latestResult.value.header,
+        historicalCheckBlocks,
+      );
+      if (checkEvents(historicalEvents, 'historical')) {
+        logger.debug(`Found ${foundEvents.length} ${eventName} events in historical query.`);
+        return foundEvents;
+      } else {
+        logger.trace(`No historical ${eventName} events found.`);
       }
     }
-    logger.debug(`Found ${foundEvents.length} ${eventName} events.`);
 
-    return foundEvents;
+    for await (const { events } of subscriptionIterator) {
+      if (checkEvents(events, 'subscription')) {
+        logger.debug(`Found ${foundEvents.length} ${eventName} events.`);
+        return foundEvents;
+      } else {
+        logger.trace(`No ${eventName} events found in subscription.`);
+      }
+    }
   };
 
   let events: Promise<Event<T>[]>;
