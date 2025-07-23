@@ -461,7 +461,7 @@ interface BaseOptions<T> {
   finalized?: boolean;
   historicalCheckBlocks?: number;
   timeoutSeconds?: number;
-  stopAfter?: number | EventTest<T>;
+  stopAfter?: { blocks: number } | { test: EventTest<T> } | { events: number };
 }
 
 interface Options<T> extends BaseOptions<T> {
@@ -505,7 +505,7 @@ export function observeEvents<T = any>(
     historicalCheckBlocks = 0,
     timeoutSeconds = 0,
     abortable = false,
-    stopAfter = test,
+    stopAfter = { test },
   }: Options<T> | AbortableOptions<T> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
@@ -513,6 +513,7 @@ export function observeEvents<T = any>(
 
   const controller = abortable ? new AbortController() : undefined;
 
+  let blocksChecked = 0;
   const findEvent = async () => {
     const foundEvents: Event[] = [];
     await using subscription = await subscribeHeads({ chain, finalized });
@@ -526,6 +527,7 @@ export function observeEvents<T = any>(
       if (events.length === 0) {
         return false;
       }
+      blocksChecked += 1;
       logger.debug(`Checking ${events.length} ${log} events for ${eventName}`);
       let stop = false;
       for (const event of events) {
@@ -540,18 +542,20 @@ export function observeEvents<T = any>(
             foundEvents.push(event);
           }
 
-          if (typeof stopAfter === 'function') {
-            stop = stop || stopAfter(event);
-          } else {
-            stop = stop || foundEvents.length >= stopAfter;
+          if ('test' in stopAfter) {
+            stop = stop || stopAfter.test(event);
+          } else if ('events' in stopAfter) {
+            stop = stop || foundEvents.length >= stopAfter.events;
+          } else if ('blocks' in stopAfter) {
+            stop = stop || blocksChecked >= stopAfter.blocks;
           }
         }
       }
       if (stop) {
-        if (typeof stopAfter === 'function') {
-          logger.debug(`Stopping after finding matching 'stopAfter' event.`);
+        if (typeof stop === 'function') {
+          logger.debug(`Stopping after finding matching 'stop' event.`);
         } else {
-          logger.debug(`Stopping after finding ${stopAfter} events`);
+          logger.debug(`Stopping after finding ${stop} events`);
         }
       }
       return stop;
@@ -598,6 +602,8 @@ export function observeEvents<T = any>(
         logger.trace(`No ${eventName} events found in subscription.`);
       }
     }
+
+    return foundEvents;
   };
 
   let events: Promise<Event<T>[]>;
