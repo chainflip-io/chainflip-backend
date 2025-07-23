@@ -934,7 +934,7 @@ pub mod pallet {
 
 			// process the deposit
 			match deposit_and_call.deposit {
-				EthereumDeposit::FlipToSCGatewayAndCall { amount } =>
+				EthereumDeposit::FlipToSCGateway { amount } =>
 					Self::fund_sc_account(caller_account_id.clone(), caller, amount.into(), tx_hash),
 
 				// Deposit via vault or transfers will be handled here in the future
@@ -1086,10 +1086,10 @@ pub struct EthereumDepositAndSCCall {
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
 pub enum EthereumDeposit {
-	FlipToSCGatewayAndCall { amount: EthAmount },
-	ViaVault { asset: EthAsset, amount: EthAmount },
-	TransferAndCall { asset: EthAsset, amount: EthAmount, destination: EthereumAddress },
-	NoDepositOnlyCall,
+	FlipToSCGateway { amount: EthAmount },
+	Vault { asset: EthAsset, amount: EthAmount },
+	Transfer { asset: EthAsset, amount: EthAmount, destination: EthereumAddress },
+	NoDeposit,
 }
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]

@@ -85,7 +85,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								},
 							) => pallet_cf_funding::Call::execute_sc_call {
 								deposit_and_call: EthereumDepositAndSCCall {
-									deposit: EthereumDeposit::FlipToSCGatewayAndCall {
+									deposit: EthereumDeposit::FlipToSCGateway {
 										amount: amount.try_into().unwrap(),
 									},
 									call: sc_call.to_vec(),
@@ -108,7 +108,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								if let Some(asset) = supported_assets.get(&token) {
 									pallet_cf_funding::Call::execute_sc_call {
 										deposit_and_call: EthereumDepositAndSCCall {
-											deposit: EthereumDeposit::ViaVault {
+											deposit: EthereumDeposit::Vault {
 												asset: (*asset).try_into().unwrap(),
 												amount: amount.try_into().unwrap(),
 											},
@@ -137,7 +137,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								if let Some(asset) = supported_assets.get(&token) {
 									pallet_cf_funding::Call::execute_sc_call {
 										deposit_and_call: EthereumDepositAndSCCall {
-											deposit: EthereumDeposit::TransferAndCall {
+											deposit: EthereumDeposit::Transfer {
 												asset: (*asset).try_into().unwrap(),
 												amount: amount.try_into().unwrap(),
 												destination: to,
@@ -162,7 +162,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								sc_call,
 							}) => pallet_cf_funding::Call::execute_sc_call {
 								deposit_and_call: EthereumDepositAndSCCall {
-									deposit: EthereumDeposit::NoDepositOnlyCall,
+									deposit: EthereumDeposit::NoDeposit,
 									call: sc_call.to_vec(),
 								},
 								caller: sender,
