@@ -13,7 +13,7 @@ There are two configurable environment variables:
 
 
 
-# Script
-In the bin folder there is a script.rs which can be run separately, this script subscribe to the stream of new heads, and for every block:
+# Script log_votes_summary
+In the bin folder there is a script which can be run separately, this script subscribe to the stream of new heads, and for every block:
     - It does a summary of the `vote` extrinsics in the block, providing an overview of the current voted on elections
     - For each election it prints a summary of the votes and the count of them 
