@@ -1,5 +1,5 @@
 use core::{
-	cmp::min,
+	cmp::{max, min},
 	default,
 	iter::{self, repeat},
 	ops::RangeInclusive,
@@ -330,8 +330,6 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 	use ExternalPriceChain::*;
 	use PriceStaleness::*;
 
-	// check that we do the correct thing in a subset of assets has different timestamps than the
-	// others
 	let prices4assets = [
 		(BtcUsd, ChainlinkPrice::integer(120_000)),
 		(SolUsd, ChainlinkPrice::integer(170)),
@@ -351,7 +349,7 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 		.expect_consensus_multi(vec![
 			(
 				generate_votes(
-					(0..20).collect(),
+					(0..22).collect(),
 					Default::default(),
 					prices4assets.clone().into(),
 					Default::default(),
@@ -475,7 +473,61 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 
 #[test]
 fn consensus_computes_correct_median_and_iqr() {
-	// check that we get the correct consensus values
+	let prices = [
+		(
+			BtcUsd,
+			AssetResponse {
+				timestamp: Aggregated { median: START_TIME, iq_range: START_TIME..=START_TIME },
+				price: Aggregated {
+					median: Fraction::integer(120000),
+					iq_range: Fraction::integer(110000)..=Fraction::integer(150000),
+				},
+			},
+		),
+		(
+			EthUsd,
+			AssetResponse {
+				timestamp: Aggregated { median: START_TIME, iq_range: START_TIME..=START_TIME },
+				price: Aggregated {
+					median: Fraction::integer(3500),
+					iq_range: Fraction::integer(2100)..=Fraction::integer(3800),
+				},
+			},
+		),
+	];
+
+	TestSetup::<OraclePriceES>::default()
+		.with_unsynchronised_settings(SETTINGS)
+		.build()
+		.mutate_unsynchronized_state(|state| state.get_time.state.state = START_TIME)
+		.test_on_finalize(&vec![()], |_| {}, vec![])
+		.expect_consensus_multi(vec![
+			(
+				generate_votes(
+					(0..21).collect(),
+					Default::default(),
+					prices
+						.iter()
+						.map(
+							|(asset, response): &(ChainlinkAssetPair, AssetResponse<MockTypes>)| {
+								(asset.clone(), response.price.median.clone())
+							},
+						)
+						.collect(),
+					prices
+						.iter()
+						.map(
+							|(asset, response): &(ChainlinkAssetPair, AssetResponse<MockTypes>)| {
+								(asset.clone(), response.price.iq_range.clone())
+							},
+						)
+						.collect(),
+					START_TIME,
+				),
+				Some(prices.into()),
+			),
+			(no_votes(20), None),
+		]);
 }
 
 //----------------------- utilities ------------------------
@@ -516,8 +568,12 @@ fn generate_votes(
 ) -> ConsensusVotes<OraclePriceES> {
 	println!("Generate votes called");
 
-	let quartile = min(1, voters.len() / 4) as u32;
-	let half = min(1, voters.len() / 2);
+	let half = max(1, voters.len() / 2);
+
+	let lower_quartile = (half / 2) as u32;
+	let upper_quartile = (voters.len() - half + 1) as u32 / 2;
+
+	println!("lower: {lower_quartile}, upper: {upper_quartile}");
 
 	// we want to generate a distribution of prices such that we will get exactly the median price +
 	// iqr that we input we distribute the votes linearly below and above the given price
@@ -528,11 +584,13 @@ fn generate_votes(
 				.get(&asset)
 				.map(|price_range| {
 					(
-						(&price - price_range.start().clone()) / quartile,
-						(price_range.end() - price.clone()) / quartile,
+						(&price - price_range.start().clone()) / lower_quartile,
+						(price_range.end() - price.clone()) / upper_quartile,
 					)
 				})
 				.unwrap_or(Default::default());
+
+			println!("computed step sizes: {:?}, {:?}", step_below, step_above);
 
 			let votes = voters
 				.iter()
@@ -550,6 +608,8 @@ fn generate_votes(
 			(asset, votes)
 		})
 		.collect();
+
+	println!("generated votes: {votes:?}");
 
 	let mut by_voter: BTreeMap<
 		ValidatorId,

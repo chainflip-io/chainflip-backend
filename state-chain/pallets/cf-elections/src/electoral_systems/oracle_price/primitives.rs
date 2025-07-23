@@ -1,4 +1,4 @@
-use core::ops::{Mul, RangeInclusive};
+use core::ops::{Mul, RangeInclusive, Sub};
 use sp_std::ops::Add;
 
 use crate::{
@@ -20,6 +20,14 @@ impl Add<Seconds> for UnixTime {
 
 	fn add(self, rhs: Seconds) -> Self::Output {
 		UnixTime { seconds: self.seconds.saturating_add(rhs.0) }
+	}
+}
+
+impl Sub<Seconds> for UnixTime {
+	type Output = UnixTime;
+
+	fn sub(self, rhs: Seconds) -> Self::Output {
+		UnixTime { seconds: self.seconds.saturating_sub(rhs.0) }
 	}
 }
 
