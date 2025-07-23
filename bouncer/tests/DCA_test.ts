@@ -99,20 +99,22 @@ async function testDCASwap(
     );
   }
 
-  const swapRequestId = Number((await swapRequestedHandle).data.swapRequestId.replaceAll(',', ''));
+  const swapRequestId = (await swapRequestedHandle).data.swapRequestId;
   logger.debug(
     `${inputAsset} swap ${swapViaVault ? 'via vault' : ''}, swapRequestId: ${swapRequestId}`,
   );
 
   // Wait for the swap to complete
   await observeEvent(logger, `swapping:SwapRequestCompleted`, {
-    test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
+    test: (event) => event.data.swapRequestId === swapRequestId,
   }).event;
 
   // Find the `SwapExecuted` events for this swap.
+  const historicalCheckBlocks = numberOfChunks * chunkIntervalBlocks + 10;
   const observeSwapExecutedEvents = await observeEvents(logger, `swapping:SwapExecuted`, {
-    test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-    historicalCheckBlocks: numberOfChunks * chunkIntervalBlocks + 10,
+    test: (event) => event.data.swapRequestId === swapRequestId,
+    historicalCheckBlocks,
+    stopAfter: { blocks: historicalCheckBlocks },
   }).events;
 
   // Check that there were the correct number of SwapExecuted events, one for each chunk.

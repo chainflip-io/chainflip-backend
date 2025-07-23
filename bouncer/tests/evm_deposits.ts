@@ -149,7 +149,8 @@ async function testTxMultipleVaultSwaps(
       return false;
     },
     abortable: true,
-    stopAfter: () => false,
+    // Don't stop when the event is found.
+    stopAfter: { test: () => false },
   });
 
   while (eventCounter === 0) {
