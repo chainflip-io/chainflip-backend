@@ -80,7 +80,7 @@ impl Aggregation for AggregatedF {
 	}
 
 	fn compute<X: AggregationValue>(value: &[X]) -> Option<Self::Of<X>> {
-		compute_aggregated(value.iter().cloned().collect())
+		compute_aggregated(value.to_vec())
 	}
 
 	fn single<X: AggregationValue>(value: &X) -> Self::Of<X> {

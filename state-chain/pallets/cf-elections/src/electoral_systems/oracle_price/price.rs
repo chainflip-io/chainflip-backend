@@ -92,15 +92,6 @@ impl<const U: Denom> Fraction<U> {
 		denom(U)
 	}
 
-	/// This fails if the denominator isn't a multiple of `denom(U)`
-	// pub fn try_from_denominator_exact(numerator: u128, denominator: u128) -> Option<Self> {
-	// 	if denom(U) % denominator == 0.into() {
-	// 		Some(Fraction(mul_div_floor(numerator.into(), denom(U), denominator)))
-	// 	} else {
-	// 		None
-	// 	}
-	// }
-
 	pub fn convert<const V: Denom>(self) -> Option<Fraction<V>> {
 		Some(Fraction(mul_div_floor_checked(self.0, denom(V), denom(U))?))
 	}
@@ -108,7 +99,7 @@ impl<const U: Denom> Fraction<U> {
 	pub fn apply_exponent(&self, exp: Base10Exponent) -> Option<Self> {
 		let exp = exp.0;
 		if exp < 0 {
-			Some(Fraction(mul_div_floor_checked(self.0, 1.into(), 10u128.pow((exp * -1) as u32))?))
+			Some(Fraction(mul_div_floor_checked(self.0, 1.into(), 10u128.pow((-exp) as u32))?))
 		} else {
 			Some(Fraction(mul_div_floor_checked(self.0, 10u128.pow(exp as u32).into(), 1)?))
 		}
@@ -188,10 +179,10 @@ impl<const U: Denom> Div<u32> for Fraction<U> {
 pub type StatechainPrice = Fraction<{ u128::MAX }>;
 
 /// WARNING, this assumes PRICE_FRACTIONAL_BITS = 128!
-impl Into<Price> for Fraction<{ u128::MAX }> {
-	fn into(self) -> Price {
+impl From<Fraction<{ u128::MAX }>> for Price {
+	fn from(fraction: Fraction<{ u128::MAX }>) -> Price {
 		debug_assert_eq!(PRICE_FRACTIONAL_BITS, 128);
-		self.0
+		fraction.0
 	}
 }
 

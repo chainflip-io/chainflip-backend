@@ -12,6 +12,11 @@ pub use enum_iterator::Sequence;
 pub use itertools::Either;
 pub use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
+pub use proptest::prelude::Arbitrary;
+#[cfg(test)]
+pub use proptest_derive::Arbitrary;
+
 // local
 pub use super::{
 	consensus::*,

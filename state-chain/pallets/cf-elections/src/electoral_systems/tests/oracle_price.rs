@@ -582,7 +582,7 @@ fn generate_votes(
 						(price_range.end() - price.clone()) / upper_quartile,
 					)
 				})
-				.unwrap_or(Default::default());
+				.unwrap_or_default();
 
 			let votes = voters
 				.iter()
@@ -593,7 +593,7 @@ fn generate_votes(
 					} else {
 						&price + (&step_above * ChainlinkPrice::integer(index - half)).unwrap()
 					};
-					(voter.clone(), vote)
+					(*voter, vote)
 				})
 				.collect();
 

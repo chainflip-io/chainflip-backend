@@ -111,8 +111,8 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 			ExternalPriceChain::Solana => {
 				let (price_feeds, _, _) = get_price_feeds(
 					&self.sol_client,
-					settings.sol_oracle_query_helper.clone(),
-					settings.sol_oracle_program_id.clone(),
+					settings.sol_oracle_query_helper,
+					settings.sol_oracle_program_id,
 					settings.sol_oracle_feeds.clone(),
 					None,
 				)
@@ -123,7 +123,7 @@ impl VoterApi<OraclePriceES> for OraclePriceVoter {
 				let (_, _, price_feeds) = self
 					.eth_client
 					.query_price_feeds(
-						settings.eth_address_checker.clone(),
+						settings.eth_address_checker,
 						settings.eth_oracle_feeds.clone(),
 					)
 					.await?;

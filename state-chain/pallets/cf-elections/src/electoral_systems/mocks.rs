@@ -546,7 +546,7 @@ where
 			election_properties: MockStorageAccess::election_identifiers::<ES>()
 				.into_iter()
 				.map(|identifier| {
-					(identifier.clone(), MockStorageAccess::election_properties::<ES>(identifier))
+					(identifier, MockStorageAccess::election_properties::<ES>(identifier))
 				})
 				.collect(),
 		}

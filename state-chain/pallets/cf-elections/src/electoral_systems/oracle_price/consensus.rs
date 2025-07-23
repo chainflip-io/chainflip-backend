@@ -62,7 +62,7 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result {
 		let ExternalChainStateVote { price } = vote;
 		price
-			.into_iter()
+			.iter()
 			.map(|(asset, (timestamp, price))| {
 				(
 					asset.clone(),

@@ -120,7 +120,7 @@ def_derive! {
 // to decide whether they should vote with a given oracle result.
 pub fn should_vote_for_asset<T: OPTypes>(
 	(time, price): &(UnixTime, T::Price),
-	conditions: &Vec<VotingCondition<T>>,
+	conditions: &[VotingCondition<T>],
 ) -> bool {
 	use VotingCondition::*;
 	conditions.iter().all(|condition| match condition {
@@ -129,7 +129,7 @@ pub fn should_vote_for_asset<T: OPTypes>(
 		// in that case we treat this conditions as true
 			last_price
 				.to_price_range(*deviation)
-				.map(|range| !range.contains(&price))
+				.map(|range| !range.contains(price))
 				.unwrap_or(true),
 		NewTimestamp { last_timestamp } => time > last_timestamp,
 	})
@@ -203,7 +203,7 @@ impl<T: OPTypes> ExternalChainState<T> {
 							}],
 							MaybeStale => vec![],
 						})
-						.unwrap_or(vec![]),
+						.unwrap_or_default(),
 				)
 			})
 			.collect()
