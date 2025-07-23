@@ -1,8 +1,9 @@
 import 'disposablestack/auto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Observable, Subject } from 'rxjs';
-import { deferredPromise, runWithTimeout } from 'shared/utils';
+import { runWithTimeout } from 'shared/utils';
 import { globalLogger, Logger } from 'shared/utils/logger';
+import { AsyncQueue } from 'shared/utils/async_queue';
 import { appendFileSync } from 'node:fs';
 import { EventRecord, Header } from '@polkadot/types/interfaces';
 
@@ -145,6 +146,8 @@ class EventCache {
 
   private finalisedBlockNumber: number | undefined;
 
+  private finalisedBlockHash: string | undefined;
+
   private outputFile: string | undefined;
 
   private logger: Logger | undefined;
@@ -176,6 +179,7 @@ class EventCache {
     // Update finalization info based on the stream type
     if (finalized) {
       this.finalisedBlockNumber = blockHeight;
+      this.finalisedBlockHash = blockHash;
     }
 
     // Not necessarily 100% correct: ideally we would trace the block headers back to the latest finalised block.
@@ -340,12 +344,48 @@ class EventCache {
       if (!this.finalisedHeadsSubject) {
         throw new Error('Finalised heads subscription not initialized');
       }
-      return this.finalisedHeadsSubject.asObservable();
+      return new Observable((subscriber) => {
+        if (
+          this.finalisedBlockHash &&
+          this.headers.has(this.finalisedBlockHash) &&
+          this.events.has(this.finalisedBlockHash)
+        ) {
+          subscriber.next({
+            header: this.headers.get(this.finalisedBlockHash)!,
+            events: this.events.get(this.finalisedBlockHash)!,
+          });
+        }
+        const subscription = this.finalisedHeadsSubject!.subscribe({
+          next: (value) => subscriber.next(value),
+          error: (error) => subscriber.error(error),
+          complete: () => subscriber.complete(),
+        });
+
+        return () => subscription.unsubscribe();
+      });
     }
     if (!this.newHeadsSubject) {
       throw new Error('New heads subscription not initialized');
     }
-    return this.newHeadsSubject.asObservable();
+    return new Observable((subscriber) => {
+      if (
+        this.bestBlockHash &&
+        this.headers.has(this.bestBlockHash) &&
+        this.events.has(this.bestBlockHash)
+      ) {
+        subscriber.next({
+          header: this.headers.get(this.bestBlockHash)!,
+          events: this.events.get(this.bestBlockHash)!,
+        });
+      }
+      const subscription = this.newHeadsSubject!.subscribe({
+        next: (value) => subscriber.next(value),
+        error: (error) => subscriber.error(error),
+        complete: () => subscriber.complete(),
+      });
+
+      return () => subscription.unsubscribe();
+    });
   }
 
   async dispose(): Promise<void> {
@@ -365,62 +405,27 @@ const eventCacheMap = {
 } as const;
 
 async function* observableToIterable<T>(observer: Observable<T>, signal?: AbortSignal) {
-  // async generator is pull-based, but the observable is push-based
-  // if the consumer takes too long, we need to buffer the events
-  const buffer: T[] = [];
+  const queue = new AsyncQueue<T>();
 
-  // yield the first batch of events via a promise because it is asynchronous
-  let promise: Promise<T | null> | undefined;
-  let resolve: ((value: T | null) => void) | undefined;
-  let reject: ((error: Error) => void) | undefined;
-  ({ resolve, promise, reject } = deferredPromise<T | null>());
-  let done = false;
-
-  const complete = () => {
-    done = true;
-    resolve?.(null);
-  };
-
-  signal?.addEventListener('abort', complete, { once: true });
-
-  const sub = observer.subscribe({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    error: (error: any) => {
-      reject?.(error);
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    next: (value: any) => {
-      // if we haven't consumed the promise yet, resolve it and prepare the for
-      // the next batch, otherwise begin buffering the events
-      if (resolve) {
-        resolve(value);
-        promise = undefined;
-        resolve = undefined;
-        reject = undefined;
-      } else {
-        buffer.push(value);
-      }
-    },
-    complete,
-  });
-
-  while (!done) {
-    const next = await promise.catch(() => null);
-
-    // yield the first batch
-    if (next === null) break;
-    yield next;
-
-    // if the consume took too long, yield the buffered events
-    while (buffer.length !== 0) {
-      yield buffer.shift()!;
-    }
-
-    // reset for the next batch
-    ({ resolve, promise, reject } = deferredPromise<T | null>());
+  if (signal) {
+    signal.addEventListener('abort', () => queue.end(), { once: true });
   }
 
-  sub.unsubscribe();
+  const sub = observer.subscribe({
+    next: (value: T) => queue.push(value),
+    error: () => {
+      queue.end();
+    },
+    complete: () => queue.end(),
+  });
+
+  try {
+    for await (const value of queue) {
+      yield value;
+    }
+  } finally {
+    sub.unsubscribe();
+  }
 }
 
 const subscribeHeads = getCachedDisposable(
@@ -497,7 +502,7 @@ export function observeEvents<T = any>(
     chain = 'chainflip',
     test = () => true,
     finalized = false,
-    historicalCheckBlocks = 2,
+    historicalCheckBlocks = 0,
     timeoutSeconds = 0,
     abortable = false,
     stopAfter = test,
@@ -583,7 +588,9 @@ export function observeEvents<T = any>(
 
     // Check historical events first
     if (!checkEvents(historicalEvents, 'historical')) {
-      logger.debug(`No ${eventName} events found in historical query.`);
+      if (historicalCheckBlocks > 0) {
+        logger.debug(`No ${eventName} events found in historical query.`);
+      }
       for await (const { events } of subscriptionIterator) {
         if (checkEvents(events, 'subscription')) {
           break;
