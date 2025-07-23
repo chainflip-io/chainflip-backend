@@ -62,7 +62,7 @@ def_derive! {
 def_derive! {
 	#[derive(TypeInfo, Copy)]
 	#[cfg_attr(test, derive(Arbitrary))]
-	pub enum PriceStaleness {
+	pub enum PriceStatus {
 		UpToDate,
 		MaybeStale,
 		Stale
@@ -75,7 +75,7 @@ def_derive! {
 	pub struct AssetState<T: OPTypes> {
 		pub timestamp: Apply<T::Aggregation, UnixTime>,
 		pub price: Apply<T::Aggregation, T::Price>,
-		pub price_staleness: PriceStaleness,
+		pub price_status: PriceStatus,
 		pub price_spiked: bool,
 		pub minimal_price_deviation: BasisPoints
 	}
@@ -131,7 +131,7 @@ pub fn should_vote_for_asset<T: OPTypes>(
 		// in that case we treat this conditions as true
 			last_price
 				.to_price_range(*deviation)
-				.map(|range| !range.contains(price))
+				.map(|ignored_range| !ignored_range.contains(price))
 				.unwrap_or(true),
 		NewTimestamp { last_timestamp } => time > last_timestamp,
 	})
@@ -143,13 +143,13 @@ impl<T: OPTypes> ExternalChainState<T> {
 		current_time: &UnixTime,
 		settings: &ExternalChainSettings,
 	) {
-		use PriceStaleness::*;
+		use PriceStatus::*;
 		self.price.values_mut().for_each(|asset_state| {
 			let up_to_date_until =
 				T::Aggregation::canonical(&asset_state.timestamp) + settings.up_to_date_timeout;
 			let maybe_stale_until = up_to_date_until + settings.maybe_stale_timeout;
 
-			asset_state.price_staleness = if *current_time <= up_to_date_until {
+			asset_state.price_status = if *current_time <= up_to_date_until {
 				UpToDate
 			} else if *current_time <= maybe_stale_until {
 				MaybeStale
@@ -160,7 +160,7 @@ impl<T: OPTypes> ExternalChainState<T> {
 	}
 
 	pub fn get_query(&self) -> BTreeMap<T::AssetPair, Vec<VotingCondition<T>>> {
-		use PriceStaleness::*;
+		use PriceStatus::*;
 
 		all::<T::AssetPair>()
 			.map(|asset| {
@@ -168,7 +168,7 @@ impl<T: OPTypes> ExternalChainState<T> {
 					asset.clone(),
 					self.price
 						.get(&asset)
-						.map(|asset_state| match asset_state.price_staleness {
+						.map(|asset_state| match asset_state.price_status {
 							UpToDate => vec![
 								VotingCondition::NewTimestamp {
 									last_timestamp: T::Aggregation::canonical(
@@ -196,7 +196,7 @@ impl<T: OPTypes> ExternalChainState<T> {
 			let entry = self.price.entry(asset).or_insert(AssetState {
 				timestamp: T::Aggregation::single(&Default::default()),
 				price: T::Aggregation::single(&Default::default()),
-				price_staleness: PriceStaleness::Stale,
+				price_status: PriceStatus::Stale,
 				price_spiked: false,
 				minimal_price_deviation: Default::default(),
 			});
@@ -215,12 +215,12 @@ def_derive! {
 }
 
 impl<T: OPTypes> ExternalChainStates<T> {
-	pub fn get_latest_price(&self, asset: T::AssetPair) -> Option<(T::Price, PriceStaleness)> {
+	pub fn get_latest_price(&self, asset: T::AssetPair) -> Option<(T::Price, PriceStatus)> {
 		all::<ExternalPriceChain>()
 			.filter_map(|chain| self[chain].price.get(&asset))
 			.max_by_key(|price_state| T::Aggregation::canonical(&price_state.timestamp))
 			.map(|price_state| {
-				(T::Aggregation::canonical(&price_state.price), price_state.price_staleness)
+				(T::Aggregation::canonical(&price_state.price), price_state.price_status)
 			})
 	}
 }
@@ -349,7 +349,7 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 					state.chain_states[*chain]
 						.price
 						.get(&asset)
-						.map(|asset_state| asset_state.price_staleness != PriceStaleness::UpToDate)
+						.map(|asset_state| asset_state.price_status != PriceStatus::UpToDate)
 						.unwrap_or(true)
 				})
 			})

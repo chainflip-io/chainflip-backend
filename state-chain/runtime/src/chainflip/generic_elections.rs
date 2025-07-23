@@ -50,7 +50,7 @@ pub struct OraclePrice {
 pub fn decode_and_get_latest_oracle_price<T: OPTypes>(
 	asset: ChainlinkAssetpair,
 ) -> Option<OraclePrice> {
-	use PriceStaleness::*;
+	use PriceStatus::*;
 
 	let state = DerivedElectoralAccess::<
 			_,

@@ -58,7 +58,7 @@ const TIME_STEP: Seconds = Seconds(15);
 
 register_checks! {
 	OraclePriceES {
-		election_for_chain_ongoing_with_asset_status(_pre, post, arg: (ExternalPriceChain, Option<BTreeMap<ChainlinkAssetpair, PriceStaleness>>)) {
+		election_for_chain_ongoing_with_asset_status(_pre, post, arg: (ExternalPriceChain, Option<BTreeMap<ChainlinkAssetpair, PriceStatus>>)) {
 
 			let (chain, asset_statuses) = arg;
 			assert_eq!(
@@ -70,9 +70,9 @@ register_checks! {
 						// Note, this is very specific to how the voting conditions are set up currently,
 						// if that's changed this code here has to be updated to account for it most likely.
 						let price_status = match voting_conditions.len() {
-							0 => PriceStaleness::MaybeStale,
-							1 => PriceStaleness::Stale,
-							2 => PriceStaleness::UpToDate,
+							0 => PriceStatus::MaybeStale,
+							1 => PriceStatus::Stale,
+							2 => PriceStatus::UpToDate,
 							_ => panic!("unexpected number of voting conditions!")
 						};
 						(*asset, price_status)
@@ -83,7 +83,7 @@ register_checks! {
 		)
 		},
 
-		electoral_price_api_returns(_pre, post, prices: BTreeMap<ChainlinkAssetpair, (ChainlinkPrice, PriceStaleness)>) {
+		electoral_price_api_returns(_pre, post, prices: BTreeMap<ChainlinkAssetpair, (ChainlinkPrice, PriceStatus)>) {
 
 			let prices : BTreeMap<_,_> = prices
 				.clone()
@@ -161,7 +161,7 @@ fn election_lifecycle() {
 	};
 
 	use ExternalPriceChain::*;
-	use PriceStaleness::*;
+	use PriceStatus::*;
 	TestSetup::<OraclePriceES>::default()
 		.with_unsynchronised_settings(SETTINGS)
 		.build()
@@ -324,7 +324,7 @@ fn election_lifecycle() {
 #[test]
 fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 	use ExternalPriceChain::*;
-	use PriceStaleness::*;
+	use PriceStatus::*;
 
 	let prices4assets = [
 		(BtcUsd, ChainlinkPrice::integer(120_000)),

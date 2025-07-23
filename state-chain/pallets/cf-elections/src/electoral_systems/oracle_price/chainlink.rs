@@ -38,7 +38,7 @@ pub type ChainlinkPrice = Fraction<99_999_999>;
 
 pub fn get_all_latest_prices_with_statechain_encoding<T>(
 	state: &OraclePriceTracker<T>,
-) -> BTreeMap<PriceAsset, (Price, PriceStaleness)>
+) -> BTreeMap<PriceAsset, (Price, PriceStatus)>
 where
 	T: OPTypes<AssetPair = ChainlinkAssetpair, Price = ChainlinkPrice>,
 {
@@ -53,7 +53,7 @@ where
 pub fn get_latest_price_with_statechain_encoding<T>(
 	state: &OraclePriceTracker<T>,
 	chainlink_assetpair: ChainlinkAssetpair,
-) -> Option<(Price, PriceStaleness)>
+) -> Option<(Price, PriceStatus)>
 where
 	T: OPTypes<AssetPair = ChainlinkAssetpair, Price = ChainlinkPrice>,
 {
