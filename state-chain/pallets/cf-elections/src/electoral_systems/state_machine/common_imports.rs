@@ -8,7 +8,7 @@ pub use scale_info::TypeInfo;
 
 // external dependencies
 pub use derive_where::derive_where;
-pub use enum_iterator::Sequence;
+pub use enum_iterator::{all, Sequence};
 pub use itertools::Either;
 pub use serde::{Deserialize, Serialize};
 

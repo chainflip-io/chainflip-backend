@@ -713,13 +713,9 @@ pub(crate) fn initiate_solana_alt_election(alts: BTreeSet<SolAddress>) {
 	}
 
 	pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(|| {
-		SolanaAltWitnessing::witness_exact_value::<
-			DerivedElectoralAccess<
-				_,
-				SolanaAltWitnessing,
-				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>,
-		>(SolanaAltWitnessingIdentifier(alts))
+		SolanaAltWitnessing::witness_exact_value::<SolanaAltWitnessingElectoralAccess>(
+			SolanaAltWitnessingIdentifier(alts),
+		)
 	})
 	.unwrap_or_else(|e| {
 		//The error should not happen as long as the election identifiers don't overflow

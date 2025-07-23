@@ -58,7 +58,7 @@ const TIME_STEP: Seconds = Seconds(15);
 
 register_checks! {
 	OraclePriceES {
-		election_for_chain_ongoing_with_asset_status(_pre, post, arg: (ExternalPriceChain, Option<BTreeMap<ChainlinkAssetPair, PriceStaleness>>)) {
+		election_for_chain_ongoing_with_asset_status(_pre, post, arg: (ExternalPriceChain, Option<BTreeMap<ChainlinkAssetpair, PriceStaleness>>)) {
 
 			let (chain, asset_statuses) = arg;
 			assert_eq!(
@@ -75,7 +75,7 @@ register_checks! {
 							2 => PriceStaleness::UpToDate,
 							_ => panic!("unexpected number of voting conditions!")
 						};
-						(asset.clone(), price_status)
+						(*asset, price_status)
 					})
 					.collect()
 			),
@@ -83,7 +83,7 @@ register_checks! {
 		)
 		},
 
-		electoral_price_api_returns(_pre, post, prices: BTreeMap<ChainlinkAssetPair, (ChainlinkPrice, PriceStaleness)>) {
+		electoral_price_api_returns(_pre, post, prices: BTreeMap<ChainlinkAssetpair, (ChainlinkPrice, PriceStaleness)>) {
 
 			let prices : BTreeMap<_,_> = prices
 				.clone()
@@ -93,7 +93,7 @@ register_checks! {
 				})
 				.collect();
 
-			let valid_assets = get_current_chainlink_prices(&post.unsynchronised_state)
+			let valid_assets = get_all_latest_prices_with_statechain_encoding(&post.unsynchronised_state)
 				.into_iter()
 				.filter_map(|(asset, (price, status))| {
 					let price: StatechainPrice = Fraction::from_raw(price);
@@ -121,24 +121,24 @@ register_checks! {
 	}
 }
 
-use ChainlinkAssetPair::*;
+use ChainlinkAssetpair::*;
 
 #[test]
 fn election_lifecycle() {
-	let default_prices: [(ChainlinkAssetPair, ChainlinkPrice); _] = [
+	let default_prices: [(ChainlinkAssetpair, ChainlinkPrice); _] = [
 		(BtcUsd, ChainlinkPrice::integer(120_000)),
 		(EthUsd, ChainlinkPrice::integer(3_500)),
 		(SolUsd, ChainlinkPrice::integer(170)),
 		(UsdcUsd, ChainlinkPrice::integer(1)),
 		(UsdtUsd, ChainlinkPrice::integer(1)),
 	];
-	let prices1: BTreeMap<ChainlinkAssetPair, ChainlinkPrice> = default_prices.clone().into();
-	let prices2: BTreeMap<ChainlinkAssetPair, ChainlinkPrice> = default_prices
+	let prices1: BTreeMap<ChainlinkAssetpair, ChainlinkPrice> = default_prices.clone().into();
+	let prices2: BTreeMap<ChainlinkAssetpair, ChainlinkPrice> = default_prices
 		.iter()
 		.cloned()
 		.map(|(asset, price)| (asset, (price * BasisPoints(10005).to_fraction()).unwrap()))
 		.collect();
-	let prices3: BTreeMap<ChainlinkAssetPair, ChainlinkPrice> = default_prices
+	let prices3: BTreeMap<ChainlinkAssetpair, ChainlinkPrice> = default_prices
 		.iter()
 		.cloned()
 		.map(|(asset, price)| (asset, (price * BasisPoints(8500).to_fraction()).unwrap()))
@@ -147,7 +147,7 @@ fn election_lifecycle() {
 	let election_for_chain_with_all_assets = |chain, status: Option<_>| {
 		Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 			chain,
-			status.map(|status| all::<ChainlinkAssetPair>().zip(repeat(status)).collect()),
+			status.map(|status| all::<ChainlinkAssetpair>().zip(repeat(status)).collect()),
 		))
 	};
 	let current_prices_are = |prices: &BTreeMap<_, _>, staleness| {
@@ -363,7 +363,7 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 					Solana,
 					Some(
-						all::<ChainlinkAssetPair>()
+						all::<ChainlinkAssetpair>()
 							.zip(repeat(UpToDate))
 							.chain(iter::once((EthUsd, MaybeStale)))
 							.collect(),
@@ -371,7 +371,7 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 				)),
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 					Ethereum,
-					Some(all::<ChainlinkAssetPair>().zip(repeat(MaybeStale)).collect()),
+					Some(all::<ChainlinkAssetpair>().zip(repeat(MaybeStale)).collect()),
 				)),
 				Check::<OraclePriceES>::electoral_price_api_returns(
 					prices4assets
@@ -410,7 +410,7 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 			vec![
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 					Solana,
-					Some(all::<ChainlinkAssetPair>().zip(repeat(UpToDate)).collect()),
+					Some(all::<ChainlinkAssetpair>().zip(repeat(UpToDate)).collect()),
 				)),
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 					Ethereum, None,
@@ -440,7 +440,7 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 					Solana,
 					Some(
-						all::<ChainlinkAssetPair>()
+						all::<ChainlinkAssetpair>()
 							.zip(repeat(MaybeStale))
 							.chain([(EthUsd, UpToDate), (SolUsd, UpToDate)])
 							.collect(),
@@ -448,7 +448,7 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 				)),
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
 					Ethereum,
-					Some(all::<ChainlinkAssetPair>().zip(repeat(MaybeStale)).collect()),
+					Some(all::<ChainlinkAssetpair>().zip(repeat(MaybeStale)).collect()),
 				)),
 				Check::<OraclePriceES>::electoral_price_api_returns(
 					prices4assets
@@ -505,16 +505,16 @@ fn consensus_computes_correct_median_and_iqr() {
 					prices
 						.iter()
 						.map(
-							|(asset, response): &(ChainlinkAssetPair, AssetResponse<MockTypes>)| {
-								(asset.clone(), response.price.median.clone())
+							|(asset, response): &(ChainlinkAssetpair, AssetResponse<MockTypes>)| {
+								(*asset, response.price.median.clone())
 							},
 						)
 						.collect(),
 					prices
 						.iter()
 						.map(
-							|(asset, response): &(ChainlinkAssetPair, AssetResponse<MockTypes>)| {
-								(asset.clone(), response.price.iq_range.clone())
+							|(asset, response): &(ChainlinkAssetpair, AssetResponse<MockTypes>)| {
+								(*asset, response.price.iq_range.clone())
 							},
 						)
 						.collect(),
@@ -530,8 +530,8 @@ fn consensus_computes_correct_median_and_iqr() {
 
 fn generate_asset_response(
 	time: UnixTime,
-	prices: &BTreeMap<ChainlinkAssetPair, ChainlinkPrice>,
-) -> BTreeMap<ChainlinkAssetPair, AssetResponse<MockTypes>> {
+	prices: &BTreeMap<ChainlinkAssetpair, ChainlinkPrice>,
+) -> BTreeMap<ChainlinkAssetpair, AssetResponse<MockTypes>> {
 	prices
 		.clone()
 		.into_iter()
@@ -558,8 +558,8 @@ fn no_votes(authorities: u16) -> ConsensusVotes<OraclePriceES> {
 fn generate_votes(
 	voters: BTreeSet<ValidatorId>,
 	did_not_vote: BTreeSet<ValidatorId>,
-	prices: BTreeMap<ChainlinkAssetPair, ChainlinkPrice>,
-	price_ranges: BTreeMap<ChainlinkAssetPair, RangeInclusive<ChainlinkPrice>>,
+	prices: BTreeMap<ChainlinkAssetpair, ChainlinkPrice>,
+	price_ranges: BTreeMap<ChainlinkAssetpair, RangeInclusive<ChainlinkPrice>>,
 	current_time: UnixTime,
 ) -> ConsensusVotes<OraclePriceES> {
 	println!("Generate votes called");
@@ -571,7 +571,7 @@ fn generate_votes(
 
 	// we want to generate a distribution of prices such that we will get exactly the median price +
 	// iqr that we input we distribute the votes linearly below and above the given price
-	let votes: BTreeMap<ChainlinkAssetPair, BTreeMap<ValidatorId, ChainlinkPrice>> = prices
+	let votes: BTreeMap<ChainlinkAssetpair, BTreeMap<ValidatorId, ChainlinkPrice>> = prices
 		.into_iter()
 		.map(|(asset, price)| {
 			let (step_below, step_above) = price_ranges
@@ -605,12 +605,12 @@ fn generate_votes(
 
 	let mut by_voter: BTreeMap<
 		ValidatorId,
-		BTreeMap<ChainlinkAssetPair, (UnixTime, ChainlinkPrice)>,
+		BTreeMap<ChainlinkAssetpair, (UnixTime, ChainlinkPrice)>,
 	> = Default::default();
 	for (validator, (asset, data)) in votes.into_iter().flat_map(|(asset, prices)| {
 		prices
 			.into_iter()
-			.map(move |(validator, price)| (validator, (asset.clone(), (current_time, price))))
+			.map(move |(validator, price)| (validator, (asset, (current_time, price))))
 	}) {
 		by_voter.entry(validator).or_default().insert(asset, data);
 	}

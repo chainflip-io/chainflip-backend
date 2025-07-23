@@ -19,7 +19,7 @@ use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystemTypes,
 	electoral_systems::oracle_price::{
-		chainlink::{ChainlinkAssetPair, ChainlinkPrice},
+		chainlink::{ChainlinkAssetpair, ChainlinkPrice},
 		primitives::UnixTime,
 		state_machine::{should_vote_for_asset, ExternalChainStateVote, ExternalPriceChain},
 	},
@@ -46,8 +46,8 @@ use sol_prim::program_instructions::PriceFeedData as SolPriceFeedData;
 
 /// IMPORTANT: These strings have to match with the price feed "description" as returned by
 /// chainlink.
-pub fn asset_pair_from_description(description: String) -> Option<ChainlinkAssetPair> {
-	use ChainlinkAssetPair::*;
+pub fn asset_pair_from_description(description: String) -> Option<ChainlinkAssetpair> {
+	use ChainlinkAssetpair::*;
 	match description.as_str() {
 		"BTC / USD" => Some(BtcUsd),
 		"ETH / USD" => Some(EthUsd),
@@ -101,12 +101,12 @@ impl From<EthPriceFeedData> for PriceData {
 }
 
 #[async_trait::async_trait]
-impl VoterApi<OraclePriceES> for OraclePriceVoter {
+impl VoterApi<ChainlinkOraclePriceES> for OraclePriceVoter {
 	async fn vote(
 		&self,
-		settings: <OraclePriceES as ElectoralSystemTypes>::ElectoralSettings,
-		properties: <OraclePriceES as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<Option<VoteOf<OraclePriceES>>, anyhow::Error> {
+		settings: <ChainlinkOraclePriceES as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <ChainlinkOraclePriceES as ElectoralSystemTypes>::ElectionProperties,
+	) -> Result<Option<VoteOf<ChainlinkOraclePriceES>>, anyhow::Error> {
 		let price_feeds = match properties.chain {
 			ExternalPriceChain::Solana => {
 				let (price_feeds, _, _) = get_price_feeds(

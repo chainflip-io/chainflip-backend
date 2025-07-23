@@ -36,6 +36,10 @@ pub mod solana_elections;
 pub mod vault_swaps;
 
 use crate::{
+	chainflip::{
+		elections::TypesFor,
+		generic_elections::{decode_and_get_latest_oracle_price, Chainlink, OraclePrice},
+	},
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
 	ArbitrumIngressEgress, AssethubBroadcaster, AssethubChainTracking, AssethubIngressEgress,
 	Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber,
@@ -115,6 +119,7 @@ use frame_support::{
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
+use pallet_cf_elections::electoral_systems::oracle_price::chainlink::ChainlinkAssetpair;
 use pallet_cf_flip::CallIndexer;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -1190,5 +1195,15 @@ impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
 				});
 			},
 		}
+	}
+}
+
+// TODO: is this how we will provide the prices to other pallets?
+#[allow(dead_code)]
+struct GenericElectionsEnvironment;
+
+impl ChainEnvironment<ChainlinkAssetpair, OraclePrice> for GenericElectionsEnvironment {
+	fn lookup(asset: ChainlinkAssetpair) -> Option<OraclePrice> {
+		decode_and_get_latest_oracle_price::<TypesFor<Chainlink>>(asset)
 	}
 }

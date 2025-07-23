@@ -22,6 +22,8 @@ use sp_std::{
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 
+//--------------- configuration trait -----------------
+
 pub trait OPTypes: 'static + Sized + CommonTraits {
 	type Price: PriceTrait + CommonTraits + Ord + Default + MaybeArbitrary;
 
@@ -233,23 +235,13 @@ def_derive! {
 }
 
 impl<T: OPTypes> ExternalChainStates<T> {
-	pub fn get_latest_prices(&self) -> BTreeMap<T::AssetPair, (T::Price, PriceStaleness)> {
-		all::<T::AssetPair>()
-			.filter_map(|asset| {
-				all::<ExternalPriceChain>()
-					.filter_map(|chain| self[chain].price.get(&asset))
-					.max_by_key(|price_state| T::Aggregation::canonical(&price_state.timestamp))
-					.map(|price_state| {
-						(
-							asset,
-							(
-								T::Aggregation::canonical(&price_state.price),
-								price_state.price_staleness,
-							),
-						)
-					})
+	pub fn get_latest_price(&self, asset: T::AssetPair) -> Option<(T::Price, PriceStaleness)> {
+		all::<ExternalPriceChain>()
+			.filter_map(|chain| self[chain].price.get(&asset))
+			.max_by_key(|price_state| T::Aggregation::canonical(&price_state.timestamp))
+			.map(|price_state| {
+				(T::Aggregation::canonical(&price_state.price), price_state.price_staleness)
 			})
-			.collect()
 	}
 }
 
@@ -447,7 +439,9 @@ pub mod tests {
 	use super::*;
 	use crate::electoral_systems::{
 		oracle_price::{
-			chainlink::{get_current_chainlink_prices, ChainlinkAssetPair, ChainlinkPrice},
+			chainlink::{
+				get_all_latest_prices_with_statechain_encoding, ChainlinkAssetpair, ChainlinkPrice,
+			},
 			primitives::*,
 		},
 		state_machine::core::hook_test_utils::MockHook,
@@ -458,7 +452,7 @@ pub mod tests {
 
 	impl OPTypes for MockTypes {
 		type Price = ChainlinkPrice;
-		type AssetPair = ChainlinkAssetPair;
+		type AssetPair = ChainlinkAssetpair;
 		type Aggregation = AggregatedF;
 		type GetTime = MockHook<HookTypeFor<Self, GetTimeHook>>;
 	}
@@ -469,11 +463,11 @@ pub mod tests {
 			file!(),
 			any::<OraclePriceTracker<MockTypes>>(),
 			any::<OraclePriceSettings>(),
-			|_| any::<BTreeMap<ChainlinkAssetPair, AssetResponse<MockTypes>>>().boxed(),
+			|_| any::<BTreeMap<ChainlinkAssetpair, AssetResponse<MockTypes>>>().boxed(),
 			|_| Just(()).boxed(),
 			|state| {
 				// verify that getting the prices doesn't panic
-				let _ = get_current_chainlink_prices(state);
+				let _ = get_all_latest_prices_with_statechain_encoding(state);
 			},
 		)
 	}

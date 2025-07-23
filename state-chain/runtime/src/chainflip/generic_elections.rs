@@ -1,10 +1,15 @@
+use cf_primitives::Price;
+use cf_runtime_utilities::log_or_panic;
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::H160;
 use sp_std::vec::Vec;
 
 use pallet_cf_elections::{
+	electoral_system::ElectoralReadAccess,
 	electoral_systems::oracle_price::{
-		chainlink::{ChainlinkAssetPair, ChainlinkPrice},
+		chainlink::{
+			get_latest_price_with_statechain_encoding, ChainlinkAssetpair, ChainlinkPrice,
+		},
 		state_machine::OPTypes,
 	},
 	generic_tools::*,
@@ -30,6 +35,41 @@ use pallet_cf_elections::{
 	vote_storage, CorruptStorageError, ElectionIdentifierOf, InitialState, InitialStateOf,
 	RunnerStorageAccess,
 };
+
+//--------------- api provided to other pallets -------------
+
+pub struct OraclePrice {
+	/// Statechain encoded price, fixed-point value with 128 bits for fractional part, ie.
+	/// denominator is 2^128.
+	pub price: Price,
+
+	/// Whether the price is stale according to the oracle price ES settings.
+	pub stale: bool,
+}
+
+pub fn decode_and_get_latest_oracle_price<T: OPTypes>(
+	asset: ChainlinkAssetpair,
+) -> Option<OraclePrice> {
+	use PriceStaleness::*;
+
+	let state = DerivedElectoralAccess::<
+			_,
+			ChainlinkOraclePriceES,
+			RunnerStorageAccess<Runtime, ()>,
+		>::unsynchronised_state()
+		.inspect_err(|_| log_or_panic!("Failed to get election state for the ChainlinkOraclePrice ES due to corrupted storage")).ok()?;
+
+	get_latest_price_with_statechain_encoding(&state, asset).map(|(price, staleness)| OraclePrice {
+		price,
+		stale: match staleness {
+			UpToDate => false,
+			MaybeStale => false,
+			Stale => true,
+		},
+	})
+}
+
+//--------------- voter settings -------------
 
 def_derive! {
 	#[derive(TypeInfo)]
@@ -64,6 +104,8 @@ impl<F: Functor> ChainlinkOraclePriceSettings<F> {
 	}
 }
 
+//--------------- instantiation of Chainlink ES -------------
+
 pub struct Chainlink;
 
 impls! {
@@ -72,7 +114,7 @@ impls! {
 	OPTypes {
 		type Price = ChainlinkPrice;
 		type GetTime = Self;
-		type AssetPair = ChainlinkAssetPair;
+		type AssetPair = ChainlinkAssetpair;
 		type Aggregation = AggregatedF;
 
 	}
@@ -95,16 +137,18 @@ impls! {
 	}
 }
 
-pub type OraclePriceES = StatemachineElectoralSystem<TypesFor<Chainlink>>;
+pub type ChainlinkOraclePriceES = StatemachineElectoralSystem<TypesFor<Chainlink>>;
+
+//--------------- all generic ESs -------------
 
 pub struct GenericElectionHooks;
 
-impl Hooks<OraclePriceES> for GenericElectionHooks {
+impl Hooks<ChainlinkOraclePriceES> for GenericElectionHooks {
 	fn on_finalize(
-		(oracle_price_election_identifiers,): (Vec<ElectionIdentifierOf<OraclePriceES>>,),
+		(oracle_price_election_identifiers,): (Vec<ElectionIdentifierOf<ChainlinkOraclePriceES>>,),
 	) -> Result<(), CorruptStorageError> {
-		OraclePriceES::on_finalize::<
-			DerivedElectoralAccess<_, OraclePriceES, RunnerStorageAccess<Runtime, ()>>,
+		ChainlinkOraclePriceES::on_finalize::<
+			DerivedElectoralAccess<_, ChainlinkOraclePriceES, RunnerStorageAccess<Runtime, ()>>,
 		>(oracle_price_election_identifiers, &Vec::from([()]))?;
 		Ok(())
 	}
@@ -117,7 +161,7 @@ impl pallet_cf_elections::GovernanceElectionHook for GenericElectionHooks {
 }
 
 pub type GenericElectoralSystemRunner = CompositeRunner<
-	(OraclePriceES,),
+	(ChainlinkOraclePriceES,),
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
 	RunnerStorageAccess<Runtime, ()>,

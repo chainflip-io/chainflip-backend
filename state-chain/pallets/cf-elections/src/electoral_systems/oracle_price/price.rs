@@ -10,7 +10,6 @@ use cf_amm_math::{mul_div_floor_checked, PRICE_FRACTIONAL_BITS};
 use cf_primitives::Price;
 #[cfg(test)]
 use proptest::prelude::Strategy;
-use scale_info::prelude::marker::ConstParamTy;
 use sp_core::U256;
 
 use crate::electoral_systems::state_machine::common_imports::*;
@@ -34,15 +33,17 @@ impl PriceUnit {
 	}
 }
 
-#[derive(ConstParamTy, PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Debug)]
-pub enum PriceAsset {
-	Btc,
-	Eth,
-	Sol,
-	Usdc,
-	Usdt,
-	Usd,
-	Fine,
+def_derive! {
+	#[derive(Copy, PartialOrd, Ord, TypeInfo)]
+	pub enum PriceAsset {
+		Btc,
+		Eth,
+		Sol,
+		Usdc,
+		Usdt,
+		Usd,
+		Fine,
+	}
 }
 
 impl PriceAsset {
