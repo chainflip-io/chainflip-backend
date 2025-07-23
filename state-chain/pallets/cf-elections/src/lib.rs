@@ -128,8 +128,6 @@
 #![feature(associated_type_defaults)]
 #![feature(generic_const_items)]
 #![feature(adt_const_params)]
-#![feature(generic_const_exprs)]
-#![feature(type_changing_struct_update)]
 #![feature(generic_arg_infer)]
 #![cfg_attr(test, feature(closure_track_caller))]
 #![cfg_attr(not(feature = "std"), no_std)]
