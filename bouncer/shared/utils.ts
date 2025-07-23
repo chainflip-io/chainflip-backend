@@ -612,8 +612,8 @@ export async function observeSwapRequested(
       return false;
     },
     // We assume that a swaprequest is uniquely identifiable by the `id: TransactionOriginId`.
-    // To reduce potential race conditions we always check the last 30 blocks.
-    historicalCheckBlocks: 30,
+    // To reduce potential race conditions we always check the last 5 blocks.
+    historicalCheckBlocks: 5,
   }).event;
 }
 
