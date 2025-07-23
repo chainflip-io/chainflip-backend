@@ -42,7 +42,6 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResult,
 	ensure,
-	pallet_prelude::DispatchError,
 	sp_runtime::{
 		traits::{CheckedSub, One, UniqueSaturatedInto, Zero},
 		Saturating,
@@ -510,7 +509,7 @@ pub mod pallet {
 			amount: FlipBalance<T>,
 		},
 		SCCallExecuted {
-			sc_call: DepositAndSCCallViaEthereum<T>,
+			sc_call: EthereumSCApi<T>,
 			tx_hash: EthTransactionHash,
 		},
 	}
@@ -925,8 +924,7 @@ pub mod pallet {
 		#[pallet::weight(Weight::zero())]
 		pub fn execute_sc_call(
 			origin: OriginFor<T>,
-			sc_call: Vec<u8>,
-			mut deposit_and_call: DepositAndSCCallViaEthereum<T>,
+			deposit_and_call: EthereumDepositAndSCCall,
 			caller: EthereumAddress,
 			caller_account_id: AccountId<T>,
 			// Required to ensure this call is unique per funding event.
@@ -934,38 +932,40 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			match deposit_and_call {
-				DepositAndSCCallViaEthereum::FlipToSCGatewayAndCall { amount, ref mut call } => {
-					Self::fund_sc_account(
-						caller_account_id.clone(),
-						caller,
-						amount.into(),
-						tx_hash,
-					);
+			// process the deposit
+			match deposit_and_call.deposit {
+				EthereumDeposit::FlipToSCGatewayAndCall { amount } =>
+					Self::fund_sc_account(caller_account_id.clone(), caller, amount.into(), tx_hash),
 
-					*call = AllowedCallsViaSCGateway::decode(&mut &sc_call[..]).map_or_else(
-						|e| {
-							log::warn!("SC call couldn't be decoded: {:?}", e);
-							None
-						},
-						Some,
-					);
-				},
-				// Deposit and calls via vault or transfers will be handled here in the future
+				// Deposit via vault or transfers will be handled here in the future
 				_ => {},
 			}
 
-			// If the call fails to execute, we still succeed this extrinsic since we need to
-			// successfully process the deposit above. In this case, the deposit will be processed
-			// and no call will be executed.
-			if let Err(e) = deposit_and_call
-				.clone()
-				.dispatch_bypass_filter(RuntimeOrigin::<T>::signed(caller_account_id))
-			{
-				log::warn!("SC call couldn't be executed. It returned an error: {:?}", e);
+			match EthereumSCApi::decode(&mut &deposit_and_call.call[..]) {
+				Ok(call) => {
+					// If the call fails to execute, we still succeed this extrinsic since we need
+					// to successfully process the deposit above. In this case, the deposit
+					// will be processed and no call will be executed.
+					match call
+						.clone()
+						.dispatch_bypass_filter(RuntimeOrigin::<T>::signed(caller_account_id))
+					{
+						Ok(_) => {
+							Self::deposit_event(Event::SCCallExecuted { sc_call: call, tx_hash });
+						},
+						Err(e) => {
+							log::warn!(
+								"SC call couldn't be executed. It returned an error: {:?}",
+								e
+							);
+						},
+					}
+				},
+				Err(e) => {
+					log::warn!("SC call couldn't be decoded: {:?}", e);
+				},
 			}
 
-			Self::deposit_event(Event::SCCallExecuted { sc_call: deposit_and_call, tx_hash });
 			Ok(())
 		}
 	}
@@ -1066,7 +1066,7 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
 #[scale_info(skip_type_params(T))]
-pub enum AllowedCallsViaSCGateway<T: Config> {
+pub enum DelegationApi<T: Config> {
 	Delegate {
 		delegator: EthereumAddress, // Ethereum Address of the delegator
 		operator: T::AccountId,     // Operator the amount to delegate to
@@ -1077,53 +1077,41 @@ pub enum AllowedCallsViaSCGateway<T: Config> {
 	},
 }
 
-// calls via vault and transfers for future use
-#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
-pub enum AllowedCallsViaVault {}
-#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
-pub enum AllowedCallsViaTransfer {}
-#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
-pub enum AllowedCallsOnlyCalls {}
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+#[scale_info(skip_type_params(T))]
+pub struct EthereumDepositAndSCCall {
+	pub deposit: EthereumDeposit,
+	pub call: Vec<u8>,
+}
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+pub enum EthereumDeposit {
+	FlipToSCGatewayAndCall { amount: EthAmount },
+	ViaVault { asset: EthAsset, amount: EthAmount },
+	TransferAndCall { asset: EthAsset, amount: EthAmount, destination: EthereumAddress },
+	NoDepositOnlyCall,
+	//_Marker(PhantomData<T>),
+}
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
 #[scale_info(skip_type_params(T))]
-pub enum DepositAndSCCallViaEthereum<T: Config> {
-	FlipToSCGatewayAndCall {
-		amount: EthAmount,
-		call: Option<AllowedCallsViaSCGateway<T>>,
-	},
-	ViaVault {
-		asset: EthAsset,
-		amount: EthAmount,
-		call: Option<AllowedCallsViaVault>,
-	},
-	TransferAndCall {
-		asset: EthAsset,
-		amount: EthAmount,
-		destination: EthereumAddress,
-		call: Option<AllowedCallsViaTransfer>,
-	},
-	NoDepositOnlyCall {
-		call: Option<AllowedCallsOnlyCalls>,
-	},
-	_Marker(PhantomData<T>),
+pub enum EthereumSCApi<T: Config> {
+	Delegation(DelegationApi<T>),
+	// reserved for future Apis for example Loan(LoanApi)...
+	// This allows us to update the API without breaking the encoding.
 }
 
-impl<T: Config> UnfilteredDispatchable for DepositAndSCCallViaEthereum<T> {
+impl<T: Config> UnfilteredDispatchable for EthereumSCApi<T> {
 	type RuntimeOrigin = T::RuntimeOrigin;
 	fn dispatch_bypass_filter(
 		self,
 		_origin: Self::RuntimeOrigin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		match self {
-			DepositAndSCCallViaEthereum::FlipToSCGatewayAndCall { amount: _, call } => match call {
-				Some(AllowedCallsViaSCGateway::Delegate { delegator: _, operator: _ }) => todo!(),
-				Some(AllowedCallsViaSCGateway::Undelegate { delegator: _, operator: _ }) => todo!(),
-				None => Err(DispatchError::Other("Call does not exist or failed to decode").into()),
+			EthereumSCApi::Delegation(delegation_api) => match delegation_api {
+				DelegationApi::Delegate { delegator: _, operator: _ } => todo!(),
+				DelegationApi::Undelegate { delegator: _, operator: _ } => todo!(),
 			},
-
-			// Calls via vault and transfer will be supported in the future
-			_ => Ok(().into()),
 		}
 	}
 }

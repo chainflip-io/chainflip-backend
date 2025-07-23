@@ -30,19 +30,11 @@ use crate::evm::retry_rpc::EvmRetryRpcApi;
 use cf_chains::evm::ToAccountId32;
 use cf_primitives::EpochIndex;
 use futures_core::Future;
-use pallet_cf_funding::DepositAndSCCallViaEthereum;
+use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall};
 
 abigen!(ScUtils, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IScUtils.json");
 
 use anyhow::Result;
-
-// We could decode the ScCall bytes into a Vec<ScCall> to allow multiple actions into a single
-// transaction. The challenge with that is that we'd need to be very careful to make sure that none
-// of the possible combinations can be abused in any way.
-// Alternatively, the safer approach taken here is to limit explicitly the actions that can be taken
-// and allow for particular actions to be batched under the same enum. For example, having the
-// Undelegate and the UndelegateAndRedeem under the ScCallViaGateway enum.
-// TODO: To discuss if this is  the approach we want to take.
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn sc_utils_witnessing<
@@ -78,38 +70,38 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				.await?
 				{
 					info!("Handling event: {event}");
-					let call: state_chain_runtime::RuntimeCall = match event.event_parameters {
-						ScUtilsEvents::DepositToScGatewayAndScCallFilter(
-							DepositToScGatewayAndScCallFilter {
-								sender,    // eth_address to attribute the FLIP to
-								signer: _, // `tx.origin``. Not to be used for now
-								amount,    // FLIP amount deposited
-								sc_call,
-							},
-						) => {
-							pallet_cf_funding::Call::execute_sc_call {
-								sc_call: sc_call.to_vec(),
-								deposit_and_call:
-									DepositAndSCCallViaEthereum::FlipToSCGatewayAndCall {
+					process_call(
+						match event.event_parameters {
+							ScUtilsEvents::DepositToScGatewayAndScCallFilter(
+								DepositToScGatewayAndScCallFilter {
+									sender,    // eth_address to attribute the FLIP to
+									signer: _, // `tx.origin``. Not to be used for now
+									amount,    // FLIP amount deposited
+									sc_call,
+								},
+							) => pallet_cf_funding::Call::execute_sc_call {
+								deposit_and_call: EthereumDepositAndSCCall {
+									deposit: EthereumDeposit::FlipToSCGatewayAndCall {
 										amount: amount.try_into().unwrap(),
-										call: None, /* This will be filled on the SC after SC
-										             * decodes
-										             * the call from the sc_call bytes above */
 									},
+									call: sc_call.to_vec(),
+								},
 								caller: sender,
 								// use 0 padded ethereum address as account_id which the flip funds
 								// are associated with on SC
 								caller_account_id: sender.into_account_id_32(),
 								tx_hash: event.tx_hash.to_fixed_bytes(),
-							}
-							.into()
-						},
-						_ => {
-							trace!("Ignoring unused event: {event}");
-							continue
-						},
-					};
-					process_call(call, epoch.index).await;
+							},
+
+							_ => {
+								trace!("Ignoring unused event: {event}");
+								continue
+							},
+						}
+						.into(),
+						epoch.index,
+					)
+					.await;
 				}
 
 				Result::Ok(header.data)
@@ -122,19 +114,19 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 mod tests {
 	use codec::Encode;
 	use frame_support::sp_runtime::AccountId32;
-	use pallet_cf_funding::AllowedCallsViaSCGateway;
+	use pallet_cf_funding::{DelegationApi, EthereumSCApi};
 	use state_chain_runtime::Runtime;
 
 	#[test]
 	fn test_sc_call_encode() {
-		let sc_call_delegate = AllowedCallsViaSCGateway::<Runtime>::Delegate {
+		let sc_call_delegate = EthereumSCApi::Delegation(DelegationApi::<Runtime>::Delegate {
 			delegator: [0xf5; 20].into(),
 			operator: AccountId32::new([0xF4; 32]),
-		}
+		})
 		.encode();
 		assert_eq!(
 			sc_call_delegate,
-			hex::decode("00f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4")
+			hex::decode("0000f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4")
 				.unwrap()
 		);
 	}
