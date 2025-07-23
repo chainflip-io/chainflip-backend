@@ -73,17 +73,17 @@ pub fn decode_and_get_latest_oracle_price<T: OPTypes>(
 
 def_derive! {
 	#[derive(TypeInfo)]
-	pub struct ChainlinkOraclePriceSettings<Container: Functor = VectorContainer> {
+	pub struct ChainlinkOraclePriceSettings<C: Container = VectorContainer> {
 		pub sol_oracle_program_id: SolAddress,
-		pub sol_oracle_feeds: Container::Of<SolAddress>,
+		pub sol_oracle_feeds: C::Of<SolAddress>,
 		pub sol_oracle_query_helper: SolAddress,
 		pub eth_address_checker: H160,
-		pub eth_oracle_feeds: Container::Of<H160>
+		pub eth_oracle_feeds: C::Of<H160>
 	}
 }
 
-impl<F: Functor> ChainlinkOraclePriceSettings<F> {
-	pub fn convert<G: Functor>(
+impl<F: Container> ChainlinkOraclePriceSettings<F> {
+	pub fn convert<G: Container>(
 		self,
 		t: impl Transformation<F, G>,
 	) -> ChainlinkOraclePriceSettings<G> {

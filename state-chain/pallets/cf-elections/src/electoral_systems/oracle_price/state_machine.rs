@@ -137,45 +137,25 @@ pub fn should_vote_for_asset<T: OPTypes>(
 	})
 }
 
-pub fn get_price_status(
-	price_timestamp: UnixTime,
-	current_time: UnixTime,
-	settings: &ExternalChainSettings,
-) -> PriceStaleness {
-	let up_to_date_until = price_timestamp + settings.up_to_date_timeout;
-	let maybe_stale_until = up_to_date_until + settings.maybe_stale_timeout;
-
-	use PriceStaleness::*;
-	if current_time <= up_to_date_until {
-		UpToDate
-	} else if current_time <= maybe_stale_until {
-		MaybeStale
-	} else {
-		Stale
-	}
-}
-
 impl<T: OPTypes> ExternalChainState<T> {
-	pub fn is_any_asset_price_not_up_to_date(&self) -> bool {
-		all::<T::AssetPair>().any(|asset| {
-			self.price
-				.get(&asset)
-				.map(|asset_state| asset_state.price_staleness != PriceStaleness::UpToDate)
-				.unwrap_or(true)
-		})
-	}
-
 	pub fn update_price_state(
 		&mut self,
 		current_time: &UnixTime,
 		settings: &ExternalChainSettings,
 	) {
+		use PriceStaleness::*;
 		self.price.values_mut().for_each(|asset_state| {
-			asset_state.price_staleness = get_price_status(
-				T::Aggregation::canonical(&asset_state.timestamp),
-				*current_time,
-				settings,
-			)
+			let up_to_date_until =
+				T::Aggregation::canonical(&asset_state.timestamp) + settings.up_to_date_timeout;
+			let maybe_stale_until = up_to_date_until + settings.maybe_stale_timeout;
+
+			asset_state.price_staleness = if *current_time <= up_to_date_until {
+				UpToDate
+			} else if *current_time <= maybe_stale_until {
+				MaybeStale
+			} else {
+				Stale
+			};
 		});
 	}
 
@@ -364,7 +344,14 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 	fn get_queries(state: &mut Self::State) -> Vec<Self::Query> {
 		all::<ExternalPriceChain>()
 			.take_while_inclusive(|chain| {
-				state.chain_states[*chain].is_any_asset_price_not_up_to_date()
+				// return true if at least one asset does not exist OR is not `UpToDate`
+				all::<T::AssetPair>().any(|asset| {
+					state.chain_states[*chain]
+						.price
+						.get(&asset)
+						.map(|asset_state| asset_state.price_staleness != PriceStaleness::UpToDate)
+						.unwrap_or(true)
+				})
 			})
 			.map(|chain| PriceQuery { chain, assets: state.chain_states[chain].get_query() })
 			.collect()

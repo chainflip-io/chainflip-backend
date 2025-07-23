@@ -3,31 +3,13 @@ use crate::def_derive;
 
 use sp_std::vec::Vec;
 
-pub trait Functor {
+pub trait Container {
 	type Of<A: CommonTraits>: CommonTraits;
 }
 
-pub trait Transformation<F: Functor, G: Functor> {
+pub trait Transformation<F: Container, G: Container> {
 	fn at<A: CommonTraits>(&self, input: F::Of<A>) -> G::Of<A>;
 }
-
-#[macro_export]
-macro_rules! transform {
-	(for $A:ident |$var:ident: $F:ty| -> $G:ty {
-		$($expr:tt)*
-	}) => {
-		{
-			struct LocalTransformation;
-			impl Transformation<$F, $G> for LocalTransformation {
-				fn at<$A: CommonTraits>(&self, $var: <$F as Functor>::Of<$A>) -> <$G as Functor>::Of<$A> {
-					$($expr)*
-				}
-			}
-			LocalTransformation
-		}
-	};
-}
-pub use transform;
 
 // ----- vector -----
 def_derive! {
@@ -35,7 +17,7 @@ def_derive! {
 	pub struct VectorContainer;
 }
 
-impl Functor for VectorContainer {
+impl Container for VectorContainer {
 	type Of<A: CommonTraits> = Vec<A>;
 }
 
@@ -52,7 +34,7 @@ def_derive! {
 	pub struct ArrayContainer<const N: usize>;
 }
 
-impl<const N: usize> Functor for ArrayContainer<N> {
+impl<const N: usize> Container for ArrayContainer<N> {
 	type Of<A: CommonTraits> = Array<N, A>;
 }
 
@@ -61,8 +43,8 @@ pub struct ArrayToVector;
 impl<const N: usize> Transformation<ArrayContainer<N>, VectorContainer> for ArrayToVector {
 	fn at<A: CommonTraits>(
 		&self,
-		input: <ArrayContainer<N> as Functor>::Of<A>,
-	) -> <VectorContainer as Functor>::Of<A> {
+		input: <ArrayContainer<N> as Container>::Of<A>,
+	) -> <VectorContainer as Container>::Of<A> {
 		input.array.into()
 	}
 }
