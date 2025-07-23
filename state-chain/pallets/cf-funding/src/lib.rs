@@ -1090,7 +1090,6 @@ pub enum EthereumDeposit {
 	ViaVault { asset: EthAsset, amount: EthAmount },
 	TransferAndCall { asset: EthAsset, amount: EthAmount, destination: EthereumAddress },
 	NoDepositOnlyCall,
-	//_Marker(PhantomData<T>),
 }
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]

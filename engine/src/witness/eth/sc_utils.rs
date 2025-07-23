@@ -14,10 +14,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
+
 use cf_chains::{Chain, Ethereum};
 use ethers::{prelude::abigen, types::Bloom};
 use sp_core::{H160, H256};
-use tracing::{info, trace};
+use tracing::{info, warn};
 
 use super::super::{
 	common::{
@@ -28,7 +30,7 @@ use super::super::{
 };
 use crate::evm::retry_rpc::EvmRetryRpcApi;
 use cf_chains::evm::ToAccountId32;
-use cf_primitives::EpochIndex;
+use cf_primitives::{Asset, EpochIndex};
 use futures_core::Future;
 use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall};
 
@@ -46,6 +48,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		process_call: ProcessCall,
 		eth_rpc: EvmRpcClient,
 		contract_address: H160,
+		supported_assets: HashMap<H160, Asset>,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom, Chain = Ethereum>,
@@ -61,6 +64,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();
+			let supported_assets = supported_assets.clone();
 			async move {
 				for event in events_at_block::<Inner::Chain, ScUtilsEvents, _>(
 					header,
@@ -92,10 +96,80 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								caller_account_id: sender.into_account_id_32(),
 								tx_hash: event.tx_hash.to_fixed_bytes(),
 							},
+							ScUtilsEvents::DepositToVaultAndScCallFilter(
+								DepositToVaultAndScCallFilter {
+									sender,
+									signer: _,
+									amount,
+									token,
+									sc_call,
+								},
+							) => {
+								if let Some(asset) = supported_assets.get(&token) {
+									pallet_cf_funding::Call::execute_sc_call {
+										deposit_and_call: EthereumDepositAndSCCall {
+											deposit: EthereumDeposit::ViaVault {
+												asset: (*asset).try_into().unwrap(),
+												amount: amount.try_into().unwrap(),
+											},
+											call: sc_call.to_vec(),
+										},
+										caller: sender,
+										// use 0 padded ethereum address as account_id which the
+										// flip funds are associated with on SC
+										caller_account_id: sender.into_account_id_32(),
+										tx_hash: event.tx_hash.to_fixed_bytes(),
+									}
+								} else {
+									warn!("unsupported asset deposited: {token}. Ignoring deposit");
+									continue;
+								}
+							},
 
-							_ => {
-								trace!("Ignoring unused event: {event}");
-								continue
+							ScUtilsEvents::DepositAndScCallFilter(DepositAndScCallFilter {
+								sender,
+								signer: _,
+								amount,
+								token,
+								to,
+								sc_call,
+							}) => {
+								if let Some(asset) = supported_assets.get(&token) {
+									pallet_cf_funding::Call::execute_sc_call {
+										deposit_and_call: EthereumDepositAndSCCall {
+											deposit: EthereumDeposit::TransferAndCall {
+												asset: (*asset).try_into().unwrap(),
+												amount: amount.try_into().unwrap(),
+												destination: to,
+											},
+											call: sc_call.to_vec(),
+										},
+										caller: sender,
+										// use 0 padded ethereum address as account_id which the
+										// flip funds are associated with on SC
+										caller_account_id: sender.into_account_id_32(),
+										tx_hash: event.tx_hash.to_fixed_bytes(),
+									}
+								} else {
+									warn!("unsupported asset deposited: {token}. Ignoring deposit");
+									continue;
+								}
+							},
+
+							ScUtilsEvents::CallScFilter(CallScFilter {
+								sender,
+								signer: _,
+								sc_call,
+							}) => pallet_cf_funding::Call::execute_sc_call {
+								deposit_and_call: EthereumDepositAndSCCall {
+									deposit: EthereumDeposit::NoDepositOnlyCall,
+									call: sc_call.to_vec(),
+								},
+								caller: sender,
+								// use 0 padded ethereum address as account_id which the
+								// flip funds are associated with on SC
+								caller_account_id: sender.into_account_id_32(),
+								tx_hash: event.tx_hash.to_fixed_bytes(),
 							},
 						}
 						.into(),
