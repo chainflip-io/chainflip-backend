@@ -166,15 +166,37 @@ export async function doPerformSwap(
     ? send(logger, sourceAsset, depositAddress, amount)
     : sendViaCfTester(logger, sourceAsset, depositAddress));
 
-  logger.trace(`Funded the address`);
+  logger.debug(`Funded the address`);
 
   swapContext?.updateStatus(logger, SwapStatus.Funded);
 
-  await swapRequestedHandle;
+  const swapRequestId = (await swapRequestedHandle).data.swapRequestId;
 
   swapContext?.updateStatus(logger, SwapStatus.SwapScheduled);
 
-  logger.trace(`Waiting for balance to update`);
+  logger.debug(`Swap requested with ID: ${swapRequestId}`);
+
+  await observeEvent(logger, 'swapping:SwapRequestCompleted', {
+    test: (event) => event.data.swapRequestId === swapRequestId,
+    historicalCheckBlocks: 4,
+  }).event;
+
+  swapContext?.updateStatus(logger, SwapStatus.SwapCompleted);
+
+  logger.debug(`Swap Request Completed. Waiting for egress.`);
+
+  const { egressId, amount: egressAmount } = (
+    await observeEvent(logger, 'swapping:SwapEgressScheduled', {
+      test: (event) => event.data.swapRequestId === swapRequestId,
+      historicalCheckBlocks: 4,
+    }).event
+  ).data;
+
+  swapContext?.updateStatus(logger, SwapStatus.EgressScheduled);
+
+  logger.debug(
+    `Egress ID: ${egressId}, Egress amount: ${egressAmount}. Waiting for balance to increase.`,
+  );
 
   try {
     const [newBalance] = await Promise.all([
@@ -184,11 +206,11 @@ export async function doPerformSwap(
 
     const chain = chainFromAsset(sourceAsset);
     if (chain !== 'Bitcoin' && chain !== 'Polkadot' && chain !== 'Assethub') {
-      logger.trace(`Waiting deposit fetch ${depositAddress}`);
+      logger.debug(`Waiting deposit fetch ${depositAddress}`);
       await observeFetch(sourceAsset, depositAddress);
     }
 
-    logger.trace(`Swap success! New balance: ${newBalance}!`);
+    logger.debug(`Swap success! New balance: ${newBalance}!`);
     swapContext?.updateStatus(logger, SwapStatus.Success);
   } catch (err) {
     swapContext?.updateStatus(logger, SwapStatus.Failure);

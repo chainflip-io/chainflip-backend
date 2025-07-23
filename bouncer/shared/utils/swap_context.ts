@@ -7,6 +7,8 @@ export enum SwapStatus {
   VaultSwapInitiated,
   VaultSwapScheduled,
   SwapScheduled,
+  SwapCompleted,
+  EgressScheduled,
   Success,
   Failure,
 }
@@ -29,66 +31,70 @@ export class SwapContext {
     }
     const currentStatus = this.allSwaps.get(tag);
 
+    const errorMessage = (from: SwapStatus | undefined, to: SwapStatus) => {
+      return new Error(
+        `Unexpected status transition from ${from !== undefined ? SwapStatus[from] : 'undefined'} to ${SwapStatus[to]}`,
+      );
+    };
+
     // State transition checks:
     switch (status) {
       case SwapStatus.Initiated: {
         assert(
           currentStatus === undefined,
-          loggerError(
-            logger,
-            new Error(`Unexpected status transition from ${currentStatus} to ${status}`),
-          ),
+          loggerError(logger, errorMessage(currentStatus, status)),
         );
         break;
       }
       case SwapStatus.Funded: {
         assert(
           currentStatus === SwapStatus.Initiated,
-          loggerError(
-            logger,
-            new Error(`Unexpected status transition from ${currentStatus} to ${status}`),
-          ),
+          loggerError(logger, errorMessage(currentStatus, status)),
         );
         break;
       }
       case SwapStatus.VaultSwapInitiated: {
         assert(
           currentStatus === SwapStatus.Initiated,
-          loggerError(
-            logger,
-            new Error(`Unexpected status transition from ${currentStatus} to ${status}`),
-          ),
+          loggerError(logger, errorMessage(currentStatus, status)),
         );
         break;
       }
       case SwapStatus.VaultSwapScheduled: {
         assert(
           currentStatus === SwapStatus.VaultSwapInitiated,
-          loggerError(
-            logger,
-            new Error(`Unexpected status transition from ${currentStatus} to ${status}`),
-          ),
+          loggerError(logger, errorMessage(currentStatus, status)),
         );
         break;
       }
       case SwapStatus.SwapScheduled: {
         assert(
           currentStatus === SwapStatus.Funded,
-          loggerError(
-            logger,
-            new Error(`Unexpected status transition from ${currentStatus} to ${status}`),
-          ),
+          loggerError(logger, errorMessage(currentStatus, status)),
+        );
+        break;
+      }
+      case SwapStatus.SwapCompleted: {
+        assert(
+          currentStatus === SwapStatus.SwapScheduled ||
+            currentStatus === SwapStatus.VaultSwapScheduled,
+          loggerError(logger, errorMessage(currentStatus, status)),
+        );
+        break;
+      }
+      case SwapStatus.EgressScheduled: {
+        assert(
+          currentStatus === SwapStatus.SwapCompleted ||
+            currentStatus === SwapStatus.VaultSwapScheduled,
+          loggerError(logger, errorMessage(currentStatus, status)),
         );
         break;
       }
       case SwapStatus.Success: {
         assert(
-          currentStatus === SwapStatus.SwapScheduled ||
+          currentStatus === SwapStatus.EgressScheduled ||
             currentStatus === SwapStatus.VaultSwapScheduled,
-          loggerError(
-            logger,
-            new Error(`Unexpected status transition from ${currentStatus} to ${status}`),
-          ),
+          loggerError(logger, errorMessage(currentStatus, status)),
         );
         break;
       }
