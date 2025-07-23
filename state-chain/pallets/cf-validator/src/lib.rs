@@ -27,6 +27,8 @@ pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
 
+use frame_support::sp_runtime::traits::CheckedDiv;
+
 mod auction_resolver;
 mod benchmarking;
 mod delegation;
@@ -144,6 +146,14 @@ type BackupMap<T> = BTreeMap<ValidatorIdOf<T>, <T as Chainflip>::Amount>;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	MissedAuthorshipSlot,
+}
+
+#[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
+#[scale_info(skip_type_params(T))]
+pub struct DelegationSnapshot<T: Config> {
+	pub avg_delegator_balance: T::Amount,
+	pub delegators: BTreeMap<T::AccountId, T::Amount>,
+	pub validators: BTreeMap<T::AccountId, T::Amount>,
 }
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding_enabled, stop_bidding_enabled);
@@ -1464,13 +1474,29 @@ impl<T: Config> Pallet<T> {
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 
+		let delegation_snapshot = Self::build_delegation_snapshot();
+
+		let get_avg_balance_by_validator_id = |validator_id: T::AccountId| -> Option<T::Amount> {
+			let operator_id = ManagedValidators::<T>::get(validator_id)?;
+			let snap = delegation_snapshot.get(&operator_id)?;
+			Some(snap.avg_delegator_balance)
+		};
+
 		match SetSizeMaximisingAuctionResolver::try_new(
 			T::EpochInfo::current_authority_count(),
 			AuctionParameters::<T>::get(),
 		)
 		.and_then(|resolver| {
 			resolver.resolve_auction(
-				Self::get_qualified_bidders::<T::KeygenQualification>(),
+				Self::get_qualified_bidders::<T::KeygenQualification>()
+					.into_iter()
+					.map(|bid| Bid {
+						bidder_id: bid.bidder_id.clone(),
+						amount: bid.amount +
+							get_avg_balance_by_validator_id(bid.bidder_id.into())
+								.unwrap_or_default(),
+					})
+					.collect(),
 				AuctionBidCutoffPercentage::<T>::get(),
 			)
 		}) {
@@ -1707,6 +1733,37 @@ impl<T: Config> Pallet<T> {
 			}
 		})
 		.collect()
+	}
+
+	pub fn get_operator_registry() -> BTreeSet<T::AccountId> {
+		OperatorSettingsLookup::<T>::iter_keys().collect()
+	}
+
+	pub fn build_delegation_snapshot() -> BTreeMap<T::AccountId, DelegationSnapshot<T>> {
+		let mut snapshot: BTreeMap<T::AccountId, DelegationSnapshot<T>> = BTreeMap::new();
+		for operator in OperatorSettingsLookup::<T>::iter_keys() {
+			let delegators =
+				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Delegator);
+			let validators =
+				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator);
+			let sum_of_balances = delegators.values().copied().sum::<T::Amount>();
+			let number_of_delegators_as_amount: T::Amount =
+				T::Amount::from(delegators.len() as u128);
+			if let Some(avg_balance) = sum_of_balances.checked_div(&number_of_delegators_as_amount)
+			{
+				snapshot.insert(
+					operator.clone(),
+					DelegationSnapshot {
+						avg_delegator_balance: avg_balance,
+						delegators,
+						validators,
+					},
+				);
+			} else {
+				log::error!("Calculating snapshot for operator {operator:?} failed.");
+			}
+		}
+		snapshot
 	}
 }
 
