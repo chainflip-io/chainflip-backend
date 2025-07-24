@@ -1088,16 +1088,16 @@ pub mod pallet {
 				Error::<T>::DelegatorBlocked
 			);
 
-			DelegationChoice::<T>::mutate(account_id.clone(), |maybe_operator| {
+			DelegationChoice::<T>::mutate(&account_id, |maybe_operator| {
 				if let Some(previous_operator) = maybe_operator.replace(operator_id.clone()) {
 					Self::deposit_event(Event::UnDelegated {
 						account_id: account_id.clone(),
 						operator_id: previous_operator,
 					});
 				}
-
-				Self::deposit_event(Event::Delegated { account_id, operator_id });
 			});
+
+			Self::deposit_event(Event::Delegated { account_id, operator_id });
 
 			Ok(())
 		}
