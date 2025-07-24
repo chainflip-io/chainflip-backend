@@ -1073,19 +1073,20 @@ pub mod pallet {
 				Error::<T>::NotOperator
 			);
 
-			match OperatorSettingsLookup::<T>::get(&operator_id)
-				.expect("operator is forced to set valid preferences during account registration")
-				.delegation_acceptance
-			{
-				DelegationAcceptance::Allow => ensure!(
-					!Exceptions::<T>::get(&operator_id).contains(&account_id),
-					Error::<T>::DelegatorBlocked
-				),
-				DelegationAcceptance::Deny => ensure!(
-					Exceptions::<T>::get(&operator_id).contains(&account_id),
-					Error::<T>::DelegatorBlocked
-				),
-			}
+			ensure!(
+				match OperatorSettingsLookup::<T>::get(&operator_id)
+					.expect(
+						"operator is forced to set valid preferences during account registration"
+					)
+					.delegation_acceptance
+				{
+					DelegationAcceptance::Allow =>
+						!Exceptions::<T>::get(&operator_id).contains(&account_id),
+					DelegationAcceptance::Deny =>
+						Exceptions::<T>::get(&operator_id).contains(&account_id),
+				},
+				Error::<T>::DelegatorBlocked
+			);
 
 			DelegationChoice::<T>::mutate(account_id.clone(), |maybe_operator| {
 				if let Some(previous_operator) = maybe_operator.replace(operator_id.clone()) {
