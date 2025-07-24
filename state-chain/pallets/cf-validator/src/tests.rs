@@ -1734,7 +1734,10 @@ mod operator {
 			Exceptions::<Test>::insert(ALICE, vec![BOB].into_iter().collect::<BTreeSet<_>>());
 			assert_ok!(ValidatorPallet::set_delegation_preferences(
 				OriginTrait::signed(ALICE),
-				OPERATOR_SETTINGS
+				OperatorSettings {
+					fee_bps: 300,
+					delegation_acceptance: DelegationAcceptance::Deny,
+				}
 			));
 			assert!(Exceptions::<Test>::get(ALICE).is_empty());
 		});

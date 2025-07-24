@@ -957,10 +957,15 @@ pub mod pallet {
 		) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 
-			OperatorSettingsLookup::<T>::insert(&operator_id, preferences.clone());
+			ensure!(preferences.fee_bps >= MIN_OPERATOR_FEE, Error::<T>::OperatorFeeToLow);
 
-			// Exceptions are reset when the operator settings are updated.
-			Exceptions::<T>::remove(&operator_id);
+			if let Some(current_preferences) = OperatorSettingsLookup::<T>::get(&operator_id) {
+				if current_preferences.delegation_acceptance != preferences.delegation_acceptance {
+					Exceptions::<T>::remove(&operator_id);
+				}
+			}
+
+			OperatorSettingsLookup::<T>::insert(&operator_id, preferences.clone());
 
 			Self::deposit_event(Event::OperatorSettingsUpdated {
 				operator: operator_id,
