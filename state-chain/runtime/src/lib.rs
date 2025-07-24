@@ -38,7 +38,7 @@ use crate::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
 			SolanaNonceTrackingTrigger,
 		},
-		Offence,
+		EvmLimit, Offence,
 	},
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
@@ -51,8 +51,8 @@ use crate::{
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
 		NetworkFeeDetails, NetworkFees, OpenedDepositChannels, OperatorInfo, RuntimeApiPenalty,
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-		TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-		VaultSwapDetails,
+		TradingStrategyLimits, TransactionScreeningEvent, TransactionScreeningEvents,
+		ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -101,21 +101,17 @@ use pallet_cf_pools::{
 	AskBidMap, HistoricalEarnedFees, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
+use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 use pallet_cf_swapping::{
 	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, NetworkFeeTracker,
-	Swap,
+	Swap, SwapLegInfo,
 };
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
-use runtime_apis::ChainAccounts;
-
-use pallet_cf_validator::AssociationToOperator;
-
-use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
-
-use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
-use pallet_cf_swapping::SwapLegInfo;
-use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
+use pallet_cf_validator::{
+	AssociationToOperator, DelegationAcceptance, SetSizeMaximisingAuctionResolver,
+};
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
+use runtime_apis::ChainAccounts;
 use scale_info::prelude::string::String;
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
@@ -1698,11 +1694,18 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_operator_info(account_id: &AccountId) -> OperatorInfo {
+		fn cf_operator_info(account_id: &AccountId) -> OperatorInfo<FlipBalance> {
+			let settings= pallet_cf_validator::OperatorSettingsLookup::<Runtime>::get(account_id).unwrap_or_default();
+			let exceptions = pallet_cf_validator::Exceptions::<Runtime>::get(account_id).into_iter().collect();
+			let (allowed, blocked) = match &settings.delegation_acceptance {
+				DelegationAcceptance::Allow => (Default::default(), exceptions),
+				DelegationAcceptance::Deny => (exceptions, Default::default()),
+			};
 			OperatorInfo {
 				managed_validators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(account_id, AssociationToOperator::Validator),
-				settings: pallet_cf_validator::OperatorSettingsLookup::<Runtime>::get(account_id).unwrap(),
-				exceptions: pallet_cf_validator::Exceptions::<Runtime>::get(account_id).iter().cloned().collect(),
+				settings,
+				allowed,
+				blocked,
 				delegators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(account_id, AssociationToOperator::Delegator),
 			}
 		}

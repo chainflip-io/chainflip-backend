@@ -149,11 +149,33 @@ pub struct ValidatorInfo {
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct OperatorInfo {
-	pub managed_validators: BTreeMap<AccountId32, AssetAmount>,
+pub struct OperatorInfo<Amount> {
+	pub managed_validators: BTreeMap<AccountId32, Amount>,
 	pub settings: OperatorSettings,
-	pub exceptions: Vec<AccountId32>,
-	pub delegators: BTreeMap<AccountId32, AssetAmount>,
+	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Vec::is_empty"))]
+	pub allowed: Vec<AccountId32>,
+	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Vec::is_empty"))]
+	pub blocked: Vec<AccountId32>,
+	pub delegators: BTreeMap<AccountId32, Amount>,
+}
+
+impl<A> OperatorInfo<A> {
+	pub fn map_amounts<F, B>(self, f: F) -> OperatorInfo<B>
+	where
+		F: Fn(A) -> B,
+	{
+		OperatorInfo {
+			managed_validators: self
+				.managed_validators
+				.into_iter()
+				.map(|(k, v)| (k, f(v)))
+				.collect(),
+			settings: self.settings,
+			allowed: self.allowed,
+			blocked: self.blocked,
+			delegators: self.delegators.into_iter().map(|(k, v)| (k, f(v))).collect(),
+		}
+	}
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
@@ -472,7 +494,7 @@ decl_runtime_apis!(
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
 		fn cf_account_flip_balance(account_id: &AccountId32) -> u128;
 		fn cf_validator_info(account_id: &AccountId32) -> ValidatorInfo;
-		fn cf_operator_info(account_id: &AccountId32) -> OperatorInfo;
+		fn cf_operator_info(account_id: &AccountId32) -> OperatorInfo<FlipBalance>;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
