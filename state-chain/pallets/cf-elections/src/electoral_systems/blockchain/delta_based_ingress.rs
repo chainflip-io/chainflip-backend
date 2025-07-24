@@ -49,7 +49,9 @@ pub const MAXIMUM_CHANNELS_PER_ELECTION: u32 = 50;
 
 /// Represents the total ingressed amount over all time of a given asset at a particular
 /// `block_number`.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone, Copy, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, Ord, PartialOrd,
+)]
 pub struct ChannelTotalIngressed<BlockNumber, Amount> {
 	pub block_number: BlockNumber,
 	pub amount: Amount,
