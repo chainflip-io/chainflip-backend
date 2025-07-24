@@ -1083,14 +1083,11 @@ pub mod pallet {
 			}
 
 			DelegationChoice::<T>::mutate(account_id.clone(), |maybe_operator| {
-				if let Some(operator) = maybe_operator {
+				if let Some(previous_operator) = maybe_operator.replace(operator_id.clone()) {
 					Self::deposit_event(Event::UnDelegated {
 						account_id: account_id.clone(),
-						operator_id: operator.clone(),
+						operator_id: previous_operator,
 					});
-					*operator = operator_id.clone();
-				} else {
-					*maybe_operator = Some(operator_id.clone());
 				}
 
 				Self::deposit_event(Event::Delegated { account_id, operator_id });
