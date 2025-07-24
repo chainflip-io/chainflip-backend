@@ -1,3 +1,19 @@
+// Copyright 2025 Chainflip Labs GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 //! Chainlink specific types
 
 use cf_amm_math::Price;
@@ -8,6 +24,7 @@ use crate::electoral_systems::{
 };
 
 def_derive! {
+	/// Representation of the asset pairs as returned in the `description` field of chainlink responses.
 	#[derive(TypeInfo, Sequence, PartialOrd, Ord, Copy)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub enum ChainlinkAssetpair {
@@ -34,8 +51,12 @@ impl AssetPairTrait for ChainlinkAssetpair {
 	}
 }
 
+/// Encoding of price mirroring the encoding we get from chainlink:
+/// Integer with fractional part consisting of 8 decimals.
 pub type ChainlinkPrice = Fraction<99_999_999>;
 
+// Used by tests.
+#[cfg(test)]
 pub fn get_all_latest_prices_with_statechain_encoding<T>(
 	state: &OraclePriceTracker<T>,
 ) -> BTreeMap<PriceAsset, (Price, PriceStatus)>
@@ -50,6 +71,7 @@ where
 		.collect()
 }
 
+// Used for the price API exposed to other pallets.
 pub fn get_latest_price_with_statechain_encoding<T>(
 	state: &OraclePriceTracker<T>,
 	chainlink_assetpair: ChainlinkAssetpair,
