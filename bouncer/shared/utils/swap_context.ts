@@ -31,7 +31,8 @@ export class SwapContext {
     }
     const currentStatus = this.allSwaps.get(tag);
 
-    const errorMessage = (from: SwapStatus | undefined, to: SwapStatus) => new Error(
+    const errorMessage = (from: SwapStatus | undefined, to: SwapStatus) =>
+      new Error(
         `Unexpected status transition from ${from !== undefined ? SwapStatus[from] : 'undefined'} to ${SwapStatus[to]}`,
       );
 
