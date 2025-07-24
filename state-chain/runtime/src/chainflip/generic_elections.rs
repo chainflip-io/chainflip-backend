@@ -195,13 +195,13 @@ pub fn initial_state(
 		},),
 		unsynchronised_settings: (OraclePriceSettings {
 			solana: ExternalChainSettings {
-				up_to_date_timeout: Seconds(10),
-				maybe_stale_timeout: Seconds(10),
+				up_to_date_timeout: Seconds(60),
+				maybe_stale_timeout: Seconds(30),
 				minimal_price_deviation: BasisPoints(10),
 			},
 			ethereum: ExternalChainSettings {
-				up_to_date_timeout: Seconds(10),
-				maybe_stale_timeout: Seconds(10),
+				up_to_date_timeout: Seconds(60),
+				maybe_stale_timeout: Seconds(30),
 				minimal_price_deviation: BasisPoints(10),
 			},
 		},),

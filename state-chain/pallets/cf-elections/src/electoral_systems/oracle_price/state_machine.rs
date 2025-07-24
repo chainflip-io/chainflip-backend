@@ -162,6 +162,10 @@ impl<T: OPTypes> ExternalChainState<T> {
 	) {
 		use PriceStatus::*;
 		self.price.values_mut().for_each(|asset_state| {
+			// update price deviation setting
+			asset_state.minimal_price_deviation = settings.minimal_price_deviation;
+
+			// update price status
 			let up_to_date_until = asset_state.timestamp.median + settings.up_to_date_timeout;
 			let maybe_stale_until = up_to_date_until + settings.maybe_stale_timeout;
 
