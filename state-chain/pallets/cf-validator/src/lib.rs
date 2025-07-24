@@ -1059,6 +1059,10 @@ pub mod pallet {
 				!T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Validator),
 				Error::<T>::DelegationNotAllowed
 			);
+			ensure!(
+				!T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Operator),
+				Error::<T>::DelegationNotAllowed
+			);
 
 			ensure!(
 				T::AccountRoleRegistry::has_account_role(&operator_id, AccountRole::Operator),
