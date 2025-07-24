@@ -736,10 +736,19 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 		)?);
 		let signer = signer::PairSigner::<sp_core::sr25519::Pair>::new(pair.clone());
 
+		// Pre-check to verify if the correct chain is connected.
+		if base_rpc_client
+			.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(
+				finalized_block_stream.cache().hash,
+			)
+			.await? == Default::default()
+		{
+			bail!("Failed to retrieve compatible CFE version from Chainflip node. \nPlease ensure the Port you use points to a valid Chainflip Node");
+		}
+
 		let account_nonce = {
 			loop {
 				let block_hash = finalized_block_stream.cache().hash;
-
 				match base_rpc_client
 					.storage_map_entry::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
 						block_hash,
