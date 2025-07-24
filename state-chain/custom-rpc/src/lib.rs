@@ -980,6 +980,21 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>>;
 
+	#[method(name = "ethereum_electoral_data")]
+	fn cf_ethereum_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
+	#[method(name = "ethereum_filter_votes")]
+	fn cf_ethereum_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
 	#[method(name = "validate_dca_params")]
 	fn cf_validate_dca_params(
 		&self,
@@ -1941,6 +1956,26 @@ where
 	) -> RpcResult<Vec<u8>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			api.cf_bitcoin_filter_votes(hash, validator, proposed_votes)
+		})
+	}
+
+	fn cf_ethereum_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_ethereum_electoral_data(hash, validator))
+	}
+
+	fn cf_ethereum_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			api.cf_ethereum_filter_votes(hash, validator, proposed_votes)
 		})
 	}
 
