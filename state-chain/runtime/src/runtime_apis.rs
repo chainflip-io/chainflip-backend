@@ -153,6 +153,7 @@ pub struct OperatorInfo {
 	pub managed_validators: BTreeMap<AccountId32, AssetAmount>,
 	pub settings: OperatorSettings,
 	pub exceptions: Vec<AccountId32>,
+	pub delegators: BTreeMap<AccountId32, AssetAmount>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
