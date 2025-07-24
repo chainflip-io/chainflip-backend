@@ -564,15 +564,16 @@ export function observeEvents<T = any>(
       return [];
     }
 
+    // eslint-disable-next-line prefer-const
     let { stop, foundEvents } = checkEvents(latestResult.value.events, 'current');
     if (stop) {
       logger.debug(`Found ${foundEvents.length} ${eventName} events in the first batch.`);
       return foundEvents;
-    } else {
-      logger.trace(`No ${eventName} events found in the first batch.`);
     }
+    logger.trace(`No ${eventName} events found in the first batch.`);
 
     if (historicalCheckBlocks > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-shadow
       const { stop, foundEvents: historicalEvents } = checkEvents(
         await getPastEvents(chain, latestResult.value.header, historicalCheckBlocks),
         'historical',
@@ -581,12 +582,12 @@ export function observeEvents<T = any>(
       if (stop) {
         logger.debug(`Found ${historicalEvents.length} ${eventName} events in historical query.`);
         return foundEvents;
-      } else {
-        logger.trace(`No historical ${eventName} events found.`);
       }
+      logger.trace(`No historical ${eventName} events found.`);
     }
 
     for await (const { events } of subscriptionIterator) {
+      // eslint-disable-next-line @typescript-eslint/no-shadow
       const { stop, foundEvents: nextEvents } = checkEvents(events, 'subscription');
       foundEvents = [...foundEvents, ...nextEvents];
       if (stop) {
