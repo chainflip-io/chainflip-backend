@@ -386,7 +386,18 @@ impl Tokenizable for AggKey {
 }
 
 #[derive(
-	Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq, Serialize, Deserialize,
+	Encode,
+	Decode,
+	TypeInfo,
+	Copy,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+	Ord,
+	PartialOrd,
 )]
 pub struct SchnorrVerificationComponents {
 	/// Scalar component
@@ -416,7 +427,18 @@ pub struct Transaction {
 }
 
 #[derive(
-	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
+	Encode,
+	Decode,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+	Ord,
+	PartialOrd,
 )]
 pub struct EvmTransactionMetadata {
 	pub max_fee_per_gas: Option<Uint>,
@@ -574,7 +596,9 @@ impl From<H256> for TransactionHash {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug, Default)]
+#[derive(
+	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug, Default, Serialize, Deserialize,
+)]
 pub enum DeploymentStatus {
 	#[default]
 	Undeployed,
@@ -688,6 +712,8 @@ impl From<CheckedTransactionParameter> for TransactionVerificationError {
 	Copy,
 	Serialize,
 	Deserialize,
+	PartialOrd,
+	Ord,
 )]
 pub struct TransactionFee {
 	// priority + base

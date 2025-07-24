@@ -34,6 +34,7 @@ use crate::{
 		},
 		bitcoin_elections::BitcoinElectoralEvents,
 		calculate_account_apy,
+		ethereum_elections::EthereumElectoralEvents,
 		solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
 			SolanaNonceTrackingTrigger,
@@ -1160,6 +1161,16 @@ impl pallet_cf_elections::Config<Instance3> for Runtime {
 	type ElectoralEvents = BitcoinElectoralEvents;
 }
 
+impl pallet_cf_elections::Config<Instance1> for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = <Ethereum as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
+	type RuntimeEvent = RuntimeEvent;
+	type ElectoralSystemRunner = chainflip::ethereum_elections::EthereumElectoralSystemRunner;
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+	type CreateGovernanceElectionHook =
+		chainflip::ethereum_elections::EthereumGovernanceElectionHook;
+	type ElectoralEvents = EthereumElectoralEvents;
+}
+
 impl pallet_cf_trading_strategy::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;
@@ -1312,6 +1323,9 @@ mod runtime {
 
 	#[runtime::pallet_index(54)]
 	pub type BitcoinElections = pallet_cf_elections<Instance3>;
+
+	#[runtime::pallet_index(55)]
+	pub type EthereumElections = pallet_cf_elections<Instance1>;
 }
 
 /// The address format for describing accounts.
@@ -1382,6 +1396,7 @@ pub type PalletExecutionOrder = (
 	// Elections
 	SolanaElections,
 	BitcoinElections,
+	EthereumElections,
 	// Vaults
 	EthereumVault,
 	PolkadotVault,

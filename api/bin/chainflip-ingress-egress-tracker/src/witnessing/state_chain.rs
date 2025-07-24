@@ -715,6 +715,7 @@ where
 		LiquidityPools(_) |
 		SolanaElections(_) |
 		BitcoinElections(_) |
+		EthereumElections(_) |
 		TradingStrategy(_) => {},
 		LendingPools(_) => {},
 	};

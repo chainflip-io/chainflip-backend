@@ -54,7 +54,7 @@ use pallet_cf_elections::{
 };
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo, VaultDepositWitness};
 use scale_info::TypeInfo;
-use sp_core::{Decode, Encode, Get, MaxEncodedLen};
+use sp_core::{Decode, Encode, Get};
 use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
 
@@ -74,12 +74,6 @@ pub type BitcoinElectoralSystemRunner = CompositeRunner<
 	RunnerStorageAccess<Runtime, BitcoinInstance>,
 	BitcoinElectionHooks,
 >;
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct OpenChannelDetails<ChainBlockNumber> {
-	pub open_block: ChainBlockNumber,
-	pub close_block: ChainBlockNumber,
-}
 
 pub struct BitcoinChainTag;
 pub type BitcoinChain = TypesFor<BitcoinChainTag>;
