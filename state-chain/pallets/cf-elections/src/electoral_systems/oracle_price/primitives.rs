@@ -89,26 +89,42 @@ pub fn compute_median<A: Ord + Clone>(mut values: Vec<A>) -> Option<A> {
 	Some(median.clone())
 }
 
-pub fn compute_aggregated<A: AggregationValue>(mut values: Vec<A>) -> Option<Aggregated<A>> {
-	if values.is_empty() {
+/// A safe version of `select_nth_unstable` that doesn't panic but returns None in case of failure.
+pub fn select_nth_unstable_checked<A: Ord>(
+	values: &mut [A],
+	index: usize,
+) -> Option<(&mut [A], &mut A, &mut [A])> {
+	// `select_nth_unstable` panics if the index doesn't exist
+	if index >= values.len() {
 		return None;
 	}
+	Some(values.select_nth_unstable(index))
+}
 
-	let quarter = values.len() / 4;
-	let half = (values.len() - 1) / 2;
-	let (first_half, median, second_half) = values.select_nth_unstable(half);
+pub fn compute_aggregated<A: AggregationValue>(mut values: Vec<A>) -> Option<Aggregated<A>> {
+	let quarter = values.len().saturating_sub(1) / 4;
+	let half = (values.len().saturating_sub(1)) / 2;
+	let (first_half, median, second_half) = select_nth_unstable_checked(&mut values, half)?;
 
-	// TODO, these two might need to be double checked
-	let first_quartile = if first_half.is_empty() {
-		median.clone()
-	} else {
-		first_half.select_nth_unstable(quarter).1.clone()
-	};
-	let third_quartile = if second_half.is_empty() {
-		median.clone()
-	} else {
-		second_half.select_nth_unstable(quarter).1.clone()
-	};
+	let first_quartile = select_nth_unstable_checked(first_half, quarter)
+		.map(|res| res.1.clone())
+		.unwrap_or(median.clone());
+	let third_quartile = select_nth_unstable_checked(second_half, quarter)
+		.map(|res| res.1.clone())
+		.unwrap_or(median.clone());
 
 	Some(Aggregated { median: median.clone(), iq_range: first_quartile..=third_quartile })
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use proptest::collection::vec;
+
+	proptest! {
+		#[test]
+		fn fuzzy_compute_aggregated(votes in vec(any::<u16>(), 0..30)) {
+			let _ = compute_aggregated(votes);
+		}
+	}
 }

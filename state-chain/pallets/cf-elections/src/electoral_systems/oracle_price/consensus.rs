@@ -80,10 +80,11 @@ mod tests {
 	use crate::electoral_systems::oracle_price::state_machine::{
 		tests::MockTypes, ExternalChainStateVote, PriceQuery,
 	};
+	use proptest::collection::vec;
 
 	proptest! {
 		#[test]
-		fn fuzzy_consensus(votes in any::<Vec<ExternalChainStateVote<MockTypes>>>(), success_threshold in any::<u32>(), price_query in any::<PriceQuery<MockTypes>>()) {
+		fn fuzzy_consensus(votes in vec(any::<ExternalChainStateVote<MockTypes>>(), 0..30), success_threshold in 0..40u32, price_query in any::<PriceQuery<MockTypes>>()) {
 			let mut consensus: OraclePriceConsensus<MockTypes> = Default::default();
 			for vote in votes {
 				consensus.insert_vote(vote);

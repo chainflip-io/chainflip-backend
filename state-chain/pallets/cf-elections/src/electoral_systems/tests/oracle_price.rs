@@ -469,6 +469,9 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 
 #[test]
 fn consensus_computes_correct_median_and_iqr() {
+	// Note, this test is a bit brittle: the generation of a distribution of votes such that the
+	// given iq_range is the consensus is sometimes off by one voter. These values were
+	// experimentally chosen to make the computed and expected iq_range match up exactly.
 	let prices = [
 		(
 			BtcUsd,
