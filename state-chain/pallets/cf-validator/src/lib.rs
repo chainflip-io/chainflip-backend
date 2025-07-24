@@ -979,7 +979,11 @@ pub mod pallet {
 			let _ =
 				DelegationChoice::<T>::try_mutate_exists(&delegator, |maybe_assigned_operator| {
 					if let Some(assigned_operator) = maybe_assigned_operator.take() {
-						if &assigned_operator == &operator {
+						if assigned_operator == operator {
+							Self::deposit_event(Event::UnDelegated {
+								delegator: delegator.clone(),
+								operator: operator.clone(),
+							});
 							Ok(())
 						} else {
 							Err(())
@@ -987,12 +991,6 @@ pub mod pallet {
 					} else {
 						Err(())
 					}
-				})
-				.map(|_| {
-					Self::deposit_event(Event::UnDelegated {
-						delegator: delegator.clone(),
-						operator: operator.clone(),
-					});
 				});
 
 			match OperatorSettingsLookup::<T>::get(&operator)
