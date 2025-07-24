@@ -662,7 +662,7 @@ impl
 				EthereumDepositChannelWitnessingES,
 				RunnerStorageAccess<Runtime, EthereumInstance>,
 			>,
-		>(deposit_channel_witnessing_identifiers.clone(), &chain_progress.clone())?;
+		>(deposit_channel_witnessing_identifiers, &chain_progress.clone())?;
 
 		EthereumVaultDepositWitnessingES::on_finalize::<
 			DerivedElectoralAccess<
@@ -678,7 +678,7 @@ impl
 				EthereumStateChainGatewayWitnessingES,
 				RunnerStorageAccess<Runtime, EthereumInstance>,
 			>,
-		>(state_chain_gateway_identifiers.clone(), &chain_progress.clone())?;
+		>(state_chain_gateway_identifiers, &chain_progress.clone())?;
 
 		EthereumKeyManagerWitnessingES::on_finalize::<
 			DerivedElectoralAccess<
@@ -686,7 +686,7 @@ impl
 				EthereumKeyManagerWitnessingES,
 				RunnerStorageAccess<Runtime, EthereumInstance>,
 			>,
-		>(key_manager_identifiers.clone(), &chain_progress.clone())?;
+		>(key_manager_identifiers, &chain_progress.clone())?;
 
 		EthereumEgressWitnessingES::on_finalize::<
 			DerivedElectoralAccess<
