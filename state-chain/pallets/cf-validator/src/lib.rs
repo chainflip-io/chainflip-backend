@@ -415,9 +415,9 @@ pub mod pallet {
 		/// Operator settings have been updated.
 		OperatorSettingsUpdated { operator: T::AccountId, preferences: OperatorSettings },
 		/// An account has undelegated from an operator.
-		UnDelegated { account_id: T::AccountId, operator_id: T::AccountId },
+		UnDelegated { delegator: T::AccountId, operator: T::AccountId },
 		/// An account has delegated to an operator.
-		Delegated { account_id: T::AccountId, operator_id: T::AccountId },
+		Delegated { delegator: T::AccountId, operator: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -879,7 +879,7 @@ pub mod pallet {
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::ValidatorWeightInfo::claim_validator())]
 		pub fn claim_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResult {
-			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 			ensure!(
 				!ManagedValidators::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyManagedByOperator
@@ -888,18 +888,15 @@ pub mod pallet {
 				T::AccountRoleRegistry::has_account_role(&validator_id, AccountRole::Validator),
 				Error::<T>::NotValidator
 			);
-			ClaimedValidators::<T>::append(&validator_id, &operator_id);
-			Self::deposit_event(Event::ValidatorClaimed {
-				validator: validator_id,
-				operator: operator_id,
-			});
+			ClaimedValidators::<T>::append(&validator_id, &operator);
+			Self::deposit_event(Event::ValidatorClaimed { validator: validator_id, operator });
 			Ok(())
 		}
 
 		/// Executed by a validator to accept an operator's invitation to manage it.
 		#[pallet::call_index(11)]
 		#[pallet::weight(T::ValidatorWeightInfo::accept_operator())]
-		pub fn accept_operator(origin: OriginFor<T>, operator_id: T::AccountId) -> DispatchResult {
+		pub fn accept_operator(origin: OriginFor<T>, operator: T::AccountId) -> DispatchResult {
 			let validator_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			ensure!(
 				!ManagedValidators::<T>::contains_key(&validator_id),
@@ -907,18 +904,18 @@ pub mod pallet {
 			);
 
 			ClaimedValidators::<T>::try_mutate(&validator_id, |claimed_by| {
-				if claimed_by.remove(&operator_id) {
+				if claimed_by.remove(&operator) {
 					Ok(())
 				} else {
 					Err(Error::<T>::NotClaimedByOperator)
 				}
 			})?;
 
-			ManagedValidators::<T>::insert(&validator_id, &operator_id);
+			ManagedValidators::<T>::insert(&validator_id, &operator);
 
 			Self::deposit_event(Event::OperatorAcceptedByValidator {
 				validator: validator_id,
-				operator: operator_id,
+				operator,
 			});
 
 			Ok(())
@@ -940,66 +937,121 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Executed by an operator to set its delegation preferences.
+		/// Executed by an operator to update its operator settings.
 		#[pallet::call_index(13)]
-		#[pallet::weight(T::ValidatorWeightInfo::set_delegation_preferences())]
-		pub fn set_delegation_preferences(
+		#[pallet::weight(T::ValidatorWeightInfo::update_operator_settings())]
+		pub fn update_operator_settings(
 			origin: OriginFor<T>,
 			preferences: OperatorSettings,
 		) -> DispatchResult {
-			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 
 			ensure!(preferences.fee_bps >= MIN_OPERATOR_FEE, Error::<T>::OperatorFeeTooLow);
 
-			if let Some(current_preferences) = OperatorSettingsLookup::<T>::get(&operator_id) {
+			if let Some(current_preferences) = OperatorSettingsLookup::<T>::get(&operator) {
 				if current_preferences.delegation_acceptance != preferences.delegation_acceptance {
-					Exceptions::<T>::remove(&operator_id);
+					Exceptions::<T>::remove(&operator);
 				}
 			}
 
-			OperatorSettingsLookup::<T>::insert(&operator_id, preferences.clone());
+			OperatorSettingsLookup::<T>::insert(&operator, preferences.clone());
 
-			Self::deposit_event(Event::OperatorSettingsUpdated {
-				operator: operator_id,
-				preferences,
-			});
+			Self::deposit_event(Event::OperatorSettingsUpdated { operator, preferences });
 			Ok(())
 		}
 
-		/// Executed by an operator to remove a delegator from the exception list.
+		/// Block a delegator.
+		///
+		/// If the operator is set to allow, the delegator will be added to the
+		/// exceptions list, meaning they are not allowed to delegate to the operator.
+		/// If the operator is set to deny, the delegator will be removed from the
+		/// exceptions list, meaning they are allowed to delegate to the operator.
+		///
+		/// Additionally, if the delegator was previously delegating to the operator,
+		/// it will be undelegated.
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::ValidatorWeightInfo::block_delegator())]
-		pub fn block_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
-			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+		pub fn block_delegator(origin: OriginFor<T>, delegator: T::AccountId) -> DispatchResult {
+			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 
-			DelegationChoice::<T>::remove(delegator_id.clone());
+			// If the delegator is currently delegating to this operator, we need to
+			// undelegate them first.
+			let _ =
+				DelegationChoice::<T>::try_mutate_exists(&delegator, |maybe_assigned_operator| {
+					if let Some(assigned_operator) = maybe_assigned_operator.take() {
+						if &assigned_operator == &operator {
+							Ok(())
+						} else {
+							Err(())
+						}
+					} else {
+						Err(())
+					}
+				})
+				.map(|_| {
+					Self::deposit_event(Event::UnDelegated {
+						delegator: delegator.clone(),
+						operator: operator.clone(),
+					});
+				});
 
-			Exceptions::<T>::mutate(&operator_id, |delegators| {
-				delegators.remove(&delegator_id);
-			});
+			match OperatorSettingsLookup::<T>::get(&operator)
+				.unwrap_or_default()
+				.delegation_acceptance
+			{
+				DelegationAcceptance::Deny => {
+					// If the operator is set to deny, exceptions are the delegators that are
+					// allowed.
+					Exceptions::<T>::mutate(&operator, |allowed| {
+						allowed.remove(&delegator);
+					});
+				},
+				DelegationAcceptance::Allow => {
+					// If the operator is set to allow, exceptions are the delegators that are
+					// blocked.
+					Exceptions::<T>::mutate(&operator, |blocked| {
+						blocked.insert(delegator.clone());
+					});
+				},
+			}
 
-			Self::deposit_event(Event::DelegatorBlocked {
-				operator: operator_id,
-				delegator: delegator_id,
-			});
+			Self::deposit_event(Event::DelegatorBlocked { operator, delegator });
 
 			Ok(())
 		}
 
-		/// Executed by an operator to add the delegator to the exception list.
+		/// Allow a delegator.
+		///
+		/// If the operator is set to deny, the delegator will be added to the
+		/// exceptions list, meaning they are allowed to delegate to the operator.
+		/// If the operator is set to allow, the delegator will be removed from the
+		/// exceptions list, meaning they are not allowed to delegate to the operator.
 		#[pallet::call_index(15)]
 		#[pallet::weight(T::ValidatorWeightInfo::allow_delegator())]
-		pub fn allow_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
-			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+		pub fn allow_delegator(origin: OriginFor<T>, delegator: T::AccountId) -> DispatchResult {
+			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 
-			Exceptions::<T>::mutate(&operator_id, |delegators| {
-				delegators.insert(delegator_id.clone());
-			});
+			match OperatorSettingsLookup::<T>::get(&operator)
+				.unwrap_or_default()
+				.delegation_acceptance
+			{
+				DelegationAcceptance::Deny => {
+					// If the operator is set to deny, exceptions are the delegators that are
+					// allowed.
+					Exceptions::<T>::mutate(&operator, |allowed| {
+						allowed.insert(delegator.clone());
+					});
+				},
+				DelegationAcceptance::Allow => {
+					// If the operator is set to allow, exceptions are the delegators that are
+					// blocked.
+					Exceptions::<T>::mutate(&operator, |blocked| {
+						blocked.remove(&delegator);
+					});
+				},
+			}
 
-			Self::deposit_event(Event::DelegatorAllowed {
-				operator: operator_id,
-				delegator: delegator_id,
-			});
+			Self::deposit_event(Event::DelegatorAllowed { operator, delegator });
 
 			Ok(())
 		}
@@ -1052,48 +1104,48 @@ pub mod pallet {
 
 		#[pallet::call_index(18)]
 		#[pallet::weight(T::ValidatorWeightInfo::delegate())]
-		pub fn delegate(origin: OriginFor<T>, operator_id: T::AccountId) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
+		pub fn delegate(origin: OriginFor<T>, operator: T::AccountId) -> DispatchResult {
+			let delegator = ensure_signed(origin)?;
 
 			ensure!(
-				!T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Validator),
+				!T::AccountRoleRegistry::has_account_role(&delegator, AccountRole::Validator),
 				Error::<T>::DelegationNotAllowed
 			);
 			ensure!(
-				!T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Operator),
+				!T::AccountRoleRegistry::has_account_role(&delegator, AccountRole::Operator),
 				Error::<T>::DelegationNotAllowed
 			);
 
 			ensure!(
-				T::AccountRoleRegistry::has_account_role(&operator_id, AccountRole::Operator),
+				T::AccountRoleRegistry::has_account_role(&operator, AccountRole::Operator),
 				Error::<T>::NotOperator
 			);
 
 			ensure!(
-				match OperatorSettingsLookup::<T>::get(&operator_id)
+				match OperatorSettingsLookup::<T>::get(&operator)
 					.expect(
 						"operator is forced to set valid preferences during account registration"
 					)
 					.delegation_acceptance
 				{
 					DelegationAcceptance::Allow =>
-						!Exceptions::<T>::get(&operator_id).contains(&account_id),
+						!Exceptions::<T>::get(&operator).contains(&delegator),
 					DelegationAcceptance::Deny =>
-						Exceptions::<T>::get(&operator_id).contains(&account_id),
+						Exceptions::<T>::get(&operator).contains(&delegator),
 				},
 				Error::<T>::DelegatorBlocked
 			);
 
-			DelegationChoice::<T>::mutate(&account_id, |maybe_operator| {
-				if let Some(previous_operator) = maybe_operator.replace(operator_id.clone()) {
+			DelegationChoice::<T>::mutate(&delegator, |maybe_operator| {
+				if let Some(previous_operator) = maybe_operator.replace(operator.clone()) {
 					Self::deposit_event(Event::UnDelegated {
-						account_id: account_id.clone(),
-						operator_id: previous_operator,
+						delegator: delegator.clone(),
+						operator: previous_operator,
 					});
 				}
 			});
 
-			Self::deposit_event(Event::Delegated { account_id, operator_id });
+			Self::deposit_event(Event::Delegated { delegator, operator });
 
 			Ok(())
 		}
@@ -1101,12 +1153,12 @@ pub mod pallet {
 		#[pallet::call_index(19)]
 		#[pallet::weight(T::ValidatorWeightInfo::undelegate())]
 		pub fn undelegate(origin: OriginFor<T>) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
+			let delegator = ensure_signed(origin)?;
 
-			let operator_id = DelegationChoice::<T>::take(&account_id)
+			let operator = DelegationChoice::<T>::take(&delegator)
 				.ok_or(Error::<T>::AccountIsNotDelegating)?;
 
-			Self::deposit_event(Event::UnDelegated { account_id, operator_id });
+			Self::deposit_event(Event::UnDelegated { delegator, operator });
 
 			Ok(())
 		}
@@ -1644,17 +1696,19 @@ impl<T: Config> Pallet<T> {
 		operator: &T::AccountId,
 		association: AssociationToOperator,
 	) -> BTreeMap<T::AccountId, T::Amount> {
-		let mut validators: BTreeMap<T::AccountId, T::Amount> = BTreeMap::new();
-		for (validator, operator_id) in match association {
+		match association {
 			AssociationToOperator::Validator => ManagedValidators::<T>::iter(),
 			AssociationToOperator::Delegator => DelegationChoice::<T>::iter(),
-		} {
-			if operator_id == *operator {
-				let balance = T::FundingInfo::total_balance_of(&validator);
-				validators.insert(validator, balance);
-			}
 		}
-		validators
+		.filter_map(|(account_id, managing_operator)| {
+			if managing_operator == *operator {
+				let balance = T::FundingInfo::balance(&account_id);
+				Some((account_id, balance))
+			} else {
+				None
+			}
+		})
+		.collect()
 	}
 }
 

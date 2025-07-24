@@ -467,14 +467,14 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn set_delegation_preferences() {
+	fn update_operator_settings() {
 		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
 			AccountRole::Operator,
 		)
 		.unwrap();
 
 		#[extrinsic_call]
-		set_delegation_preferences(RawOrigin::Signed(caller.clone()), OperatorSettings::default());
+		update_operator_settings(RawOrigin::Signed(caller.clone()), OperatorSettings::default());
 
 		assert_eq!(OperatorSettingsLookup::<T>::get(caller), Some(OperatorSettings::default()));
 	}
@@ -538,7 +538,7 @@ mod benchmarks {
 		)
 		.unwrap();
 
-		assert_ok!(Pallet::<T>::set_delegation_preferences(
+		assert_ok!(Pallet::<T>::update_operator_settings(
 			RawOrigin::Signed(operator.clone()).into(),
 			OperatorSettings { fee_bps: 250, delegation_acceptance: DelegationAcceptance::Allow }
 		));

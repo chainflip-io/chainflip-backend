@@ -1579,20 +1579,30 @@ mod operator {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
-				OPERATOR_SETTINGS,
+				OPERATOR_SETTINGS, // Allow by default
 			));
-			// Allow BOB
+			// Allow BOB (*not* an exception since allow is the default)
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
-			assert!(Exceptions::<Test>::get(ALICE).contains(&BOB));
-			// Explicit block BOB
-			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
 			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
-			// Explicit allow BOB again
-			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+			assert_eq!(DelegationChoice::<Test>::get(BOB), Some(ALICE));
+
+			// Block BOB
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
 			assert!(Exceptions::<Test>::get(ALICE).contains(&BOB));
+			assert!(DelegationChoice::<Test>::get(BOB).is_none());
+
+			// Allow BOB again
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
+			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::ValidatorPallet(Event::DelegatorAllowed {
+					operator: ALICE,
+					delegator: BOB,
+				}),
+				RuntimeEvent::ValidatorPallet(Event::Delegated { operator: ALICE, delegator: BOB }),
+				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
 					operator: ALICE,
 					delegator: BOB,
 				}),
@@ -1600,17 +1610,22 @@ mod operator {
 					operator: ALICE,
 					delegator: BOB,
 				}),
+				RuntimeEvent::ValidatorPallet(Event::DelegatorAllowed {
+					operator: ALICE,
+					delegator: BOB,
+				}),
 			);
 		});
 	}
+
 	#[test]
-	fn can_set_delegation_preferences() {
+	fn can_update_operator_settings() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OPERATOR_SETTINGS
 			));
-			assert_ok!(ValidatorPallet::set_delegation_preferences(
+			assert_ok!(ValidatorPallet::update_operator_settings(
 				OriginTrait::signed(ALICE),
 				OPERATOR_SETTINGS
 			));
@@ -1732,7 +1747,7 @@ mod operator {
 			));
 
 			Exceptions::<Test>::insert(ALICE, vec![BOB].into_iter().collect::<BTreeSet<_>>());
-			assert_ok!(ValidatorPallet::set_delegation_preferences(
+			assert_ok!(ValidatorPallet::update_operator_settings(
 				OriginTrait::signed(ALICE),
 				OperatorSettings {
 					fee_bps: 300,
@@ -1755,7 +1770,7 @@ mod delegation {
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
 			));
-			assert_ok!(ValidatorPallet::set_delegation_preferences(
+			assert_ok!(ValidatorPallet::update_operator_settings(
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
 			));
@@ -1767,10 +1782,7 @@ mod delegation {
 					operator: BOB,
 					preferences: OPERATOR_SETTINGS,
 				}),
-				RuntimeEvent::ValidatorPallet(Event::Delegated {
-					account_id: ALICE,
-					operator_id: BOB
-				}),
+				RuntimeEvent::ValidatorPallet(Event::Delegated { delegator: ALICE, operator: BOB }),
 			);
 		});
 	}
@@ -1787,8 +1799,8 @@ mod delegation {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
-					account_id: ALICE,
-					operator_id: BOB
+					delegator: ALICE,
+					operator: BOB
 				}),
 			);
 		});
@@ -1799,17 +1811,17 @@ mod delegation {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
-				OPERATOR_SETTINGS,
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Deny
+				},
 			));
-			assert_ok!(ValidatorPallet::set_delegation_preferences(
-				OriginTrait::signed(ALICE),
-				OPERATOR_SETTINGS,
-			));
-			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
 			assert_noop!(
 				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
 				Error::<Test>::DelegatorBlocked
 			);
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),);
 		});
 	}
 
@@ -1818,14 +1830,18 @@ mod delegation {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
-				OPERATOR_SETTINGS,
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Allow
+				},
 			));
-			assert_ok!(ValidatorPallet::set_delegation_preferences(
-				OriginTrait::signed(ALICE),
-				OPERATOR_SETTINGS,
-			));
-			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
 			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(BOB)));
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
+			assert_noop!(
+				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
+				Error::<Test>::DelegatorBlocked
+			);
 		});
 	}
 }

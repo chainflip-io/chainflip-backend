@@ -65,7 +65,7 @@ pub trait WeightInfo {
 	fn claim_validator() -> Weight;
 	fn accept_operator() -> Weight;
 	fn remove_validator() -> Weight;
-	fn set_delegation_preferences() -> Weight;
+	fn update_operator_settings() -> Weight;
 	fn block_delegator() -> Weight;
 	fn allow_delegator() -> Weight;
 	fn register_as_operator() -> Weight;
@@ -441,7 +441,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	fn remove_validator() -> Weight {
 		Weight::from_parts(0, 0)
 	}
-	fn set_delegation_preferences() -> Weight {
+	fn update_operator_settings() -> Weight {
 		Weight::from_parts(0, 0)
 	}
 	fn block_delegator() -> Weight {
@@ -832,7 +832,7 @@ impl WeightInfo for () {
 		Weight::from_parts(0, 0)
 	}
 
-	fn set_delegation_preferences() -> Weight {
+	fn update_operator_settings() -> Weight {
 		Weight::from_parts(0, 0)
 	}
 	fn block_delegator() -> Weight {

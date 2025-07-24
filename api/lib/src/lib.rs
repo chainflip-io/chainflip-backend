@@ -238,10 +238,10 @@ pub trait ValidatorApi: SimpleSubmissionApi {
 		self.simple_submission_with_dry_run(pallet_cf_validator::Call::start_bidding {})
 			.await
 	}
-	async fn accept_operator(&self, operator_id: AccountId32) -> Result<Vec<RuntimeEvent>> {
+	async fn accept_operator(&self, operator: AccountId32) -> Result<Vec<RuntimeEvent>> {
 		let extrinsic_data = self
 			.submit_signed_extrinsic_with_dry_run(pallet_cf_validator::Call::accept_operator {
-				operator_id,
+				operator,
 			})
 			.await?
 			.until_finalized()
