@@ -2,7 +2,7 @@ use enum_iterator::all;
 
 use crate::electoral_systems::{
 	oracle_price::{
-		primitives::Aggregation,
+		primitives::{compute_aggregated, Aggregated},
 		state_machine::{AssetResponse, ExternalChainStateVote, OPTypes, PriceQuery},
 	},
 	state_machine::common_imports::*,
@@ -30,18 +30,16 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 						Some((
 							asset.clone(),
 							(
-								T::Aggregation::compute(
-									&self
-										.votes
+								compute_aggregated(
+									self.votes
 										.iter()
 										.filter_map(|vote| vote.price.get(&asset))
 										.map(|(timestamp, _price)| timestamp)
 										.cloned()
 										.collect::<Vec<_>>(),
 								)?,
-								T::Aggregation::compute(
-									&self
-										.votes
+								compute_aggregated(
+									self.votes
 										.iter()
 										.filter_map(|vote| vote.price.get(&asset))
 										.map(|(_timestamp, price)| price)
@@ -67,11 +65,32 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 				(
 					asset.clone(),
 					AssetResponse {
-						timestamp: T::Aggregation::single(timestamp),
-						price: T::Aggregation::single(price),
+						timestamp: Aggregated::from_single_value(*timestamp),
+						price: Aggregated::from_single_value(price.clone()),
 					},
 				)
 			})
 			.collect()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::electoral_systems::oracle_price::state_machine::{
+		tests::MockTypes, ExternalChainStateVote, PriceQuery,
+	};
+
+	proptest! {
+		#[test]
+		fn fuzzy_consensus(votes in any::<Vec<ExternalChainStateVote<MockTypes>>>(), success_threshold in any::<u32>(), price_query in any::<PriceQuery<MockTypes>>()) {
+			let mut consensus: OraclePriceConsensus<MockTypes> = Default::default();
+			for vote in votes {
+				consensus.insert_vote(vote);
+			}
+			let _ = consensus.check_consensus(&
+				(SuccessThreshold { success_threshold }, price_query)
+			);
+		}
 	}
 }

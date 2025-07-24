@@ -15,6 +15,8 @@ pub use serde::{Deserialize, Serialize};
 #[cfg(test)]
 pub use proptest::prelude::Arbitrary;
 #[cfg(test)]
+pub use proptest::prelude::*;
+#[cfg(test)]
 pub use proptest_derive::Arbitrary;
 
 // local

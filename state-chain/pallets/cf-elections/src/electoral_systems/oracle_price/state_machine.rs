@@ -3,7 +3,7 @@ use crate::{
 		block_witnesser::state_machine::HookTypeFor,
 		oracle_price::{
 			price::PriceUnit,
-			primitives::{Aggregation, Apply, BasisPoints, Seconds, UnixTime},
+			primitives::{BasisPoints, Seconds, UnixTime},
 		},
 		state_machine::common_imports::*,
 	},
@@ -13,7 +13,10 @@ use core::ops::RangeInclusive;
 use enum_iterator::{all, Sequence};
 use itertools::{Either, Itertools};
 
-use crate::electoral_systems::state_machine::state_machine::{AbstractApi, Statemachine};
+use crate::electoral_systems::{
+	oracle_price::primitives::Aggregated,
+	state_machine::state_machine::{AbstractApi, Statemachine},
+};
 use sp_std::{
 	ops::{Index, IndexMut},
 	vec,
@@ -28,8 +31,6 @@ pub trait OPTypes: 'static + Sized + CommonTraits {
 	type Price: PriceTrait + CommonTraits + Ord + Default + MaybeArbitrary;
 
 	type AssetPair: AssetPairTrait + CommonTraits + Ord + Sequence + MaybeArbitrary;
-
-	type Aggregation: Aggregation + CommonTraits + MaybeArbitrary;
 
 	type GetTime: Hook<HookTypeFor<Self, GetTimeHook>> + CommonTraits;
 }
@@ -60,21 +61,23 @@ def_derive! {
 }
 
 def_derive! {
-	#[derive(TypeInfo, Copy)]
+	#[derive(TypeInfo, Copy, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub enum PriceStatus {
 		UpToDate,
 		MaybeStale,
+		#[default]
 		Stale
 	}
 }
 
 def_derive! {
+	#[derive_where(Default;)]
 	#[derive(TypeInfo)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct AssetState<T: OPTypes> {
-		pub timestamp: Apply<T::Aggregation, UnixTime>,
-		pub price: Apply<T::Aggregation, T::Price>,
+		pub timestamp: Aggregated<UnixTime>,
+		pub price: Aggregated<T::Price>,
 		pub price_status: PriceStatus,
 		pub price_spiked: bool,
 		pub minimal_price_deviation: BasisPoints
@@ -83,9 +86,7 @@ def_derive! {
 
 impl<T: OPTypes> AssetState<T> {
 	pub fn update(&mut self, response: AssetResponse<T>) {
-		if T::Aggregation::canonical(&response.timestamp) >
-			T::Aggregation::canonical(&self.timestamp)
-		{
+		if response.timestamp.median > self.timestamp.median {
 			self.timestamp = response.timestamp;
 			self.price = response.price;
 		}
@@ -96,8 +97,8 @@ def_derive! {
 	#[derive(TypeInfo)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct AssetResponse<T: OPTypes> {
-		pub timestamp: Apply<T::Aggregation, UnixTime>,
-		pub price: Apply<T::Aggregation, T::Price>,
+		pub timestamp: Aggregated<UnixTime>,
+		pub price: Aggregated<T::Price>,
 	}
 }
 
@@ -145,8 +146,7 @@ impl<T: OPTypes> ExternalChainState<T> {
 	) {
 		use PriceStatus::*;
 		self.price.values_mut().for_each(|asset_state| {
-			let up_to_date_until =
-				T::Aggregation::canonical(&asset_state.timestamp) + settings.up_to_date_timeout;
+			let up_to_date_until = asset_state.timestamp.median + settings.up_to_date_timeout;
 			let maybe_stale_until = up_to_date_until + settings.maybe_stale_timeout;
 
 			asset_state.price_status = if *current_time <= up_to_date_until {
@@ -171,17 +171,15 @@ impl<T: OPTypes> ExternalChainState<T> {
 						.map(|asset_state| match asset_state.price_status {
 							UpToDate => vec![
 								VotingCondition::NewTimestamp {
-									last_timestamp: T::Aggregation::canonical(
-										&asset_state.timestamp,
-									),
+									last_timestamp: asset_state.timestamp.median,
 								},
 								VotingCondition::PriceMoved {
-									last_price: T::Aggregation::canonical(&asset_state.price),
+									last_price: asset_state.price.median.clone(),
 									deviation: asset_state.minimal_price_deviation,
 								},
 							],
 							Stale => vec![VotingCondition::NewTimestamp {
-								last_timestamp: T::Aggregation::canonical(&asset_state.timestamp),
+								last_timestamp: asset_state.timestamp.median,
 							}],
 							MaybeStale => vec![],
 						})
@@ -193,13 +191,7 @@ impl<T: OPTypes> ExternalChainState<T> {
 
 	pub fn update(&mut self, response: BTreeMap<T::AssetPair, AssetResponse<T>>) {
 		for (asset, response) in response {
-			let entry = self.price.entry(asset).or_insert(AssetState {
-				timestamp: T::Aggregation::single(&Default::default()),
-				price: T::Aggregation::single(&Default::default()),
-				price_status: PriceStatus::Stale,
-				price_spiked: false,
-				minimal_price_deviation: Default::default(),
-			});
+			let entry = self.price.entry(asset).or_default();
 			entry.update(response);
 		}
 	}
@@ -218,10 +210,8 @@ impl<T: OPTypes> ExternalChainStates<T> {
 	pub fn get_latest_price(&self, asset: T::AssetPair) -> Option<(T::Price, PriceStatus)> {
 		all::<ExternalPriceChain>()
 			.filter_map(|chain| self[chain].price.get(&asset))
-			.max_by_key(|price_state| T::Aggregation::canonical(&price_state.timestamp))
-			.map(|price_state| {
-				(T::Aggregation::canonical(&price_state.price), price_state.price_status)
-			})
+			.max_by_key(|price_state| price_state.timestamp.median)
+			.map(|price_state| (price_state.price.median.clone(), price_state.price_status))
 	}
 }
 
@@ -400,11 +390,11 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 				for asset in all::<T::AssetPair>() {
 					// prices are updated if they are newer
 					if let Some(consensus_asset_state) = consensus.get(&asset) {
-						if T::Aggregation::canonical(&consensus_asset_state.timestamp) >
+						if consensus_asset_state.timestamp.median >
 							before.chain_states[query.chain]
 								.price
 								.get(&asset)
-								.map(|asset| T::Aggregation::canonical(&asset.timestamp))
+								.map(|asset| asset.timestamp.median)
 								.unwrap_or_default()
 						{
 							assert_eq!(
@@ -425,11 +415,8 @@ pub mod tests {
 
 	use super::*;
 	use crate::electoral_systems::{
-		oracle_price::{
-			chainlink::{
-				get_all_latest_prices_with_statechain_encoding, ChainlinkAssetpair, ChainlinkPrice,
-			},
-			primitives::*,
+		oracle_price::chainlink::{
+			get_all_latest_prices_with_statechain_encoding, ChainlinkAssetpair, ChainlinkPrice,
 		},
 		state_machine::core::hook_test_utils::MockHook,
 	};
@@ -440,7 +427,6 @@ pub mod tests {
 	impl OPTypes for MockTypes {
 		type Price = ChainlinkPrice;
 		type AssetPair = ChainlinkAssetpair;
-		type Aggregation = AggregatedF;
 		type GetTime = MockHook<HookTypeFor<Self, GetTimeHook>>;
 	}
 

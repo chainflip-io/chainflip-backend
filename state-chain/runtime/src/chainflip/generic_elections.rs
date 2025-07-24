@@ -115,8 +115,6 @@ impls! {
 		type Price = ChainlinkPrice;
 		type GetTime = Self;
 		type AssetPair = ChainlinkAssetpair;
-		type Aggregation = AggregatedF;
-
 	}
 
 	Hook<HookTypeFor<Self, GetTimeHook>> {

@@ -58,46 +58,23 @@ impl BasisPoints {
 }
 
 pub trait AggregationValue = Ord + CommonTraits + MaybeArbitrary + 'static;
-pub trait Aggregation {
-	type Of<X: AggregationValue>: CommonTraits + MaybeArbitrary;
-	fn canonical<X: AggregationValue>(price: &Self::Of<X>) -> X;
-	fn compute<X: AggregationValue>(value: &[X]) -> Option<Self::Of<X>>;
-	fn single<X: AggregationValue>(value: &X) -> Self::Of<X>;
-}
-pub type Apply<A, X> = <A as Aggregation>::Of<X>;
 
 def_derive! {
 	#[cfg_attr(test, derive(Arbitrary))]
 	#[derive(TypeInfo)]
-	pub struct AggregatedF;
-}
-
-impl Aggregation for AggregatedF {
-	type Of<X: AggregationValue> = Aggregated<X>;
-
-	fn canonical<X: AggregationValue>(value: &Self::Of<X>) -> X {
-		value.median.clone()
-	}
-
-	fn compute<X: AggregationValue>(value: &[X]) -> Option<Self::Of<X>> {
-		compute_aggregated(value.to_vec())
-	}
-
-	fn single<X: AggregationValue>(value: &X) -> Self::Of<X> {
-		Aggregated::from_single_value(value.clone())
-	}
-}
-
-def_derive! {
-	#[cfg_attr(test, derive(Arbitrary))]
-	#[derive(TypeInfo)]
-	pub struct Aggregated<A: CommonTraits + MaybeArbitrary + PartialOrd> {
+	pub struct Aggregated<A: AggregationValue> {
 		pub median: A,
 		pub iq_range: RangeInclusive<A>,
 	}
 }
 
-impl<A: CommonTraits + MaybeArbitrary + PartialOrd> Aggregated<A> {
+impl<A: AggregationValue + Default> Default for Aggregated<A> {
+	fn default() -> Self {
+		Self { median: Default::default(), iq_range: Default::default()..=Default::default() }
+	}
+}
+
+impl<A: AggregationValue> Aggregated<A> {
 	pub fn from_single_value(value: A) -> Self {
 		Self { median: value.clone(), iq_range: value.clone()..=value }
 	}
