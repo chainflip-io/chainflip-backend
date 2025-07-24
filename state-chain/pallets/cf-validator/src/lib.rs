@@ -470,26 +470,18 @@ pub mod pallet {
 		NotClaimedByOperator,
 		/// The provided account id has not the role validator.
 		NotValidator,
-		/// Validator is already associated with an operator.
-		AlreadyAssociatedWithOperator,
-		/// Operator is still delegating to delegators.
+		/// Operator is still being delegated to.
 		StillAssociatedWithDelegators,
-		/// The validator is not claimed by any operator.
-		NotClaimed,
-		/// The operator provided is not the operator that claimed the validator.
-		OperatorDoesNotMatch,
-		/// The account is already delegating to an operator.
-		AlreadyDelegating,
 		/// The account is not delegating.
 		AccountIsNotDelegating,
-		/// Delegation is only available to none validators.
+		/// Delegation is not available to validators or operators.
 		DelegationNotAllowed,
-		/// Can not delegate to none operator.
+		/// Can only delegate to accounts that are registered as operators.
 		NotOperator,
-		/// A delegator is removed from the exceptions list.
+		/// A delegator is either blocked or not explicitly allowed by the operator.
 		DelegatorBlocked,
 		/// The provided Operator fee is too low.
-		OperatorFeeToLow,
+		OperatorFeeTooLow,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -957,7 +949,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 
-			ensure!(preferences.fee_bps >= MIN_OPERATOR_FEE, Error::<T>::OperatorFeeToLow);
+			ensure!(preferences.fee_bps >= MIN_OPERATOR_FEE, Error::<T>::OperatorFeeTooLow);
 
 			if let Some(current_preferences) = OperatorSettingsLookup::<T>::get(&operator_id) {
 				if current_preferences.delegation_acceptance != preferences.delegation_acceptance {
@@ -1020,7 +1012,7 @@ pub mod pallet {
 			settings: OperatorSettings,
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
-			ensure!(settings.fee_bps >= MIN_OPERATOR_FEE, Error::<T>::OperatorFeeToLow);
+			ensure!(settings.fee_bps >= MIN_OPERATOR_FEE, Error::<T>::OperatorFeeTooLow);
 			T::AccountRoleRegistry::register_as_operator(&account_id)?;
 			OperatorSettingsLookup::<T>::insert(&account_id, settings);
 			Ok(())
