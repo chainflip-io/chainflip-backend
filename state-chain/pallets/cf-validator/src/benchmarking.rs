@@ -540,7 +540,7 @@ mod benchmarks {
 
 		assert_ok!(Pallet::<T>::set_delegation_preferences(
 			RawOrigin::Signed(operator.clone()).into(),
-			OperatorSettings { fee_bps: 100, delegation_acceptance: DelegationAcceptance::Allow }
+			OperatorSettings { fee_bps: 250, delegation_acceptance: DelegationAcceptance::Allow }
 		));
 
 		let delegator: T::AccountId = account::<T::AccountId>("whitelisted_caller", 0, 1);
