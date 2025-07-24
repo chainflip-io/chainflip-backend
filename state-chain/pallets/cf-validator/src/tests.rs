@@ -1575,37 +1575,28 @@ mod operator {
 	use super::*;
 
 	#[test]
-	fn can_add_and_remove_delegator_from_exceptions_list() {
+	fn can_add_and_block_delegator_list() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OPERATOR_SETTINGS,
 			));
 			// Allow BOB
-			assert_ok!(ValidatorPallet::add_delegator_to_exceptions(
-				OriginTrait::signed(ALICE),
-				BOB
-			));
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
 			assert!(Exceptions::<Test>::get(ALICE).contains(&BOB));
 			// Explicit block BOB
-			assert_ok!(ValidatorPallet::remove_delegator_from_exceptions(
-				OriginTrait::signed(ALICE),
-				BOB
-			));
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
 			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
 			// Explicit allow BOB again
-			assert_ok!(ValidatorPallet::add_delegator_to_exceptions(
-				OriginTrait::signed(ALICE),
-				BOB
-			));
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
 			assert!(Exceptions::<Test>::get(ALICE).contains(&BOB));
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::ValidatorPallet(Event::DelegatorAddedToExceptions {
+				RuntimeEvent::ValidatorPallet(Event::DelegatorAllowed {
 					operator: ALICE,
 					delegator: BOB,
 				}),
-				RuntimeEvent::ValidatorPallet(Event::DelegatorRemovedFromExceptions {
+				RuntimeEvent::ValidatorPallet(Event::DelegatorBlocked {
 					operator: ALICE,
 					delegator: BOB,
 				}),
@@ -1811,13 +1802,10 @@ mod delegation {
 				OriginTrait::signed(ALICE),
 				OPERATOR_SETTINGS,
 			));
-			assert_ok!(ValidatorPallet::add_delegator_to_exceptions(
-				OriginTrait::signed(ALICE),
-				BOB
-			));
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
 			assert_noop!(
 				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
-				Error::<Test>::DelegatorRemovedFromExceptions
+				Error::<Test>::DelegatorBlocked
 			);
 		});
 	}
@@ -1833,10 +1821,7 @@ mod delegation {
 				OriginTrait::signed(ALICE),
 				OPERATOR_SETTINGS,
 			));
-			assert_ok!(ValidatorPallet::remove_delegator_from_exceptions(
-				OriginTrait::signed(ALICE),
-				BOB
-			));
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
 			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
 		});
 	}

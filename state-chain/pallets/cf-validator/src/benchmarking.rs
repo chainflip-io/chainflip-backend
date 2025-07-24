@@ -480,7 +480,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn remove_delegator_from_exceptions() {
+	fn block_delegator() {
 		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
 			AccountRole::Operator,
 		)
@@ -489,11 +489,11 @@ mod benchmarks {
 		let account_id = whitelisted_caller();
 
 		#[extrinsic_call]
-		remove_delegator_from_exceptions(RawOrigin::Signed(operator), account_id);
+		block_delegator(RawOrigin::Signed(operator), account_id);
 	}
 
 	#[benchmark]
-	fn add_delegator_to_exceptions() {
+	fn allow_delegator() {
 		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
 			AccountRole::Operator,
 		)
@@ -502,7 +502,7 @@ mod benchmarks {
 		let account_id = whitelisted_caller();
 
 		#[extrinsic_call]
-		add_delegator_to_exceptions(RawOrigin::Signed(operator), account_id);
+		allow_delegator(RawOrigin::Signed(operator), account_id);
 	}
 
 	#[benchmark]
