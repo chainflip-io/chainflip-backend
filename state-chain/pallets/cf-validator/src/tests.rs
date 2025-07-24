@@ -1575,11 +1575,14 @@ mod operator {
 	use super::*;
 
 	#[test]
-	fn can_add_and_block_delegator_list() {
+	fn can_add_and_block_delegator_list_with_allow_default() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
-				OPERATOR_SETTINGS, // Allow by default
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Allow,
+				},
 			));
 			// Allow BOB (*not* an exception since allow is the default)
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
@@ -1611,6 +1614,55 @@ mod operator {
 					delegator: BOB,
 				}),
 				RuntimeEvent::ValidatorPallet(Event::DelegatorAllowed {
+					operator: ALICE,
+					delegator: BOB,
+				}),
+			);
+		});
+	}
+
+	#[test]
+	fn can_allow_and_block_delegator_list_with_deny_default() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Deny,
+				},
+			));
+
+			// BOB cannot delegate by default (not in exceptions list, deny is default)
+			assert_noop!(
+				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
+				Error::<Test>::DelegatorBlocked
+			);
+			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
+			assert!(DelegationChoice::<Test>::get(BOB).is_none());
+
+			// Allow BOB (add to exceptions list to override deny default)
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
+			assert!(Exceptions::<Test>::get(ALICE).contains(&BOB));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+			assert_eq!(DelegationChoice::<Test>::get(BOB), Some(ALICE));
+
+			// Block BOB again (remove from exceptions list, back to deny default)
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
+			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
+			assert!(DelegationChoice::<Test>::get(BOB).is_none());
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::DelegatorAllowed {
+					operator: ALICE,
+					delegator: BOB,
+				}),
+				RuntimeEvent::ValidatorPallet(Event::Delegated { operator: ALICE, delegator: BOB }),
+				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+					operator: ALICE,
+					delegator: BOB,
+				}),
+				RuntimeEvent::ValidatorPallet(Event::DelegatorBlocked {
 					operator: ALICE,
 					delegator: BOB,
 				}),
