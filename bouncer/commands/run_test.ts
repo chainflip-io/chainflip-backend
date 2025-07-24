@@ -77,5 +77,5 @@ if (!matchingTestName) {
   console.error('No matching test function found');
   process.exit(1);
 } else {
-  execSync(`pnpm vitest --maxConcurrency=500 run -t "${matchingTestName}"`, { stdio: 'inherit' });
+  execSync(`pnpm vitest --maxConcurrency=100 run -t "${matchingTestName}"`, { stdio: 'inherit' });
 }
