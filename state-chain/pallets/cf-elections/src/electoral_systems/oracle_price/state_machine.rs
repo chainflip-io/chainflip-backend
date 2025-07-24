@@ -468,6 +468,7 @@ pub mod tests {
 		)
 	}
 
+	#[allow(clippy::bool_assert_comparison)]
 	#[test]
 	fn should_vote_sanity_check() {
 		// the computation of voting conditions uses the `to_price_range()` method
