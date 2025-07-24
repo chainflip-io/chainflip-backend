@@ -83,7 +83,10 @@ where
 		.chain_states
 		.get_latest_price(chainlink_assetpair)
 		.and_then(|(price, status)| {
-			let price_unit = chainlink_assetpair.to_price_unit();
-			Some((price_with_unit_to_statechain_price(price, price_unit)?.into(), status))
+			let from_unit = chainlink_assetpair.to_price_unit();
+			let to_unit = PriceUnit { base_asset: PriceAsset::Fine, quote_asset: PriceAsset::Fine };
+			let price: ChainlinkPrice = convert_unit(price, from_unit, to_unit)?;
+			let price: StatechainPrice = price.convert()?;
+			Some((price.into(), status))
 		})
 }

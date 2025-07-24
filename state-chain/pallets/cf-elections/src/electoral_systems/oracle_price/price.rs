@@ -35,17 +35,9 @@ pub struct PriceUnit {
 	pub quote_asset: PriceAsset,
 }
 
-pub struct Base10Exponent(i16);
-
-impl Base10Exponent {
-	pub fn inv(&self) -> Self {
-		Base10Exponent(-self.0)
-	}
-}
-
 impl PriceUnit {
-	pub fn get_exponent(&self) -> Base10Exponent {
-		Base10Exponent(self.base_asset.decimals() as i16 - self.quote_asset.decimals() as i16)
+	pub fn get_base10_exponent(&self) -> i16 {
+		self.base_asset.decimals() as i16 - self.quote_asset.decimals() as i16
 	}
 }
 
@@ -85,12 +77,24 @@ pub fn denom(d: Denom) -> U256 {
 }
 
 def_derive! {
-	/// Note that this can handle denominators of up to u128::MAX + 1
+	/// Fixed-point fraction type with strongly typed denominator. The internal representation
+	/// of the value is a U256, the const parameter `U: u128` defines the how the integer should
+	/// be interpreted: as the numerator of a fraction with a denominator of `U + 1`.
+	///
+	/// This means:
+	///  - `Fraction(1) : Fraction<3>` represents the fraction 1/4
+	///  - `Fraction(1) : Fraction<99>` represents the fraction 1/100
+	///  - `Fraction(15) : Fraction<99>` represents the fraction 15/100
+	///  - `Fraction(3500) : Fraction<u128::MAX>` represents the fraction 3500/2^128
+	///
+	/// Note, `Fraction<U>` represents a denominator of `U + 1`, this has two advantages:
+	///  - a denominator of `0` is automatically impossible
+	///  - we can use `u128` as type of `U` and still represent a denominator of 2^128 = u128::MAX + 1,
+	///    necessary to mimic the representation of the cf_amm_math::Price type.
+	///
 	#[derive(Default, PartialOrd, Ord, TypeInfo)]
 	pub struct Fraction<const U: Denom>(pub U256);
 }
-
-// pub type Fraction<const U: Denom> = FractionImpl<{U - 1}>;
 
 impl<const U: Denom> Fraction<U> {
 	pub fn from_raw(raw: U256) -> Self {
@@ -98,7 +102,7 @@ impl<const U: Denom> Fraction<U> {
 	}
 
 	pub fn integer<Int: Into<U256>>(int: Int) -> Self {
-		Fraction(int.into() * denom(U))
+		Fraction(int.into().saturating_mul(denom(U)))
 	}
 
 	pub fn one() -> Self {
@@ -112,22 +116,13 @@ impl<const U: Denom> Fraction<U> {
 	pub fn convert<const V: Denom>(self) -> Option<Fraction<V>> {
 		Some(Fraction(mul_div_floor_checked(self.0, denom(V), denom(U))?))
 	}
-
-	pub fn apply_exponent(&self, exp: Base10Exponent) -> Option<Self> {
-		let exp = exp.0;
-		if exp < 0 {
-			Some(Fraction(mul_div_floor_checked(self.0, 1.into(), 10u128.pow((-exp) as u32))?))
-		} else {
-			Some(Fraction(mul_div_floor_checked(self.0, 10u128.pow(exp as u32).into(), 1)?))
-		}
-	}
 }
 
 impl<const U: Denom> Add<Fraction<U>> for Fraction<U> {
 	type Output = Fraction<U>;
 
 	fn add(self, rhs: Fraction<U>) -> Self::Output {
-		Fraction(self.0 + rhs.0)
+		Fraction(self.0.saturating_add(rhs.0))
 	}
 }
 
@@ -135,7 +130,7 @@ impl<const U: Denom> Add<Fraction<U>> for &Fraction<U> {
 	type Output = Fraction<U>;
 
 	fn add(self, rhs: Fraction<U>) -> Self::Output {
-		Fraction(self.0 + rhs.0)
+		Fraction(self.0.saturating_add(rhs.0))
 	}
 }
 
@@ -143,7 +138,7 @@ impl<const U: Denom> Sub<Fraction<U>> for Fraction<U> {
 	type Output = Fraction<U>;
 
 	fn sub(self, rhs: Fraction<U>) -> Self::Output {
-		Fraction(self.0 - rhs.0)
+		Fraction(self.0.saturating_sub(rhs.0))
 	}
 }
 
@@ -151,7 +146,7 @@ impl<const U: Denom> Sub<Fraction<U>> for &Fraction<U> {
 	type Output = Fraction<U>;
 
 	fn sub(self, rhs: Fraction<U>) -> Self::Output {
-		Fraction(self.0 - rhs.0)
+		Fraction(self.0.saturating_sub(rhs.0))
 	}
 }
 
@@ -193,6 +188,7 @@ impl<const U: Denom> Div<u32> for Fraction<U> {
 	}
 }
 
+/// This price type has the same encoding as the `cf_amm_math::Price` type we use internally.
 pub type StatechainPrice = Fraction<{ u128::MAX }>;
 
 /// WARNING, this assumes PRICE_FRACTIONAL_BITS = 128!
@@ -208,21 +204,17 @@ pub fn convert_unit<const U: Denom>(
 	from: PriceUnit,
 	to: PriceUnit,
 ) -> Option<Fraction<U>> {
-	price.apply_exponent(Base10Exponent(
-		(from.quote_asset.decimals() as i16 - from.base_asset.decimals() as i16) -
-			(to.quote_asset.decimals() as i16 - to.base_asset.decimals() as i16),
-	))
-}
+	let exponent_delta = to.get_base10_exponent() - from.get_base10_exponent();
 
-pub fn price_with_unit_to_statechain_price<const U: u128>(
-	price: Fraction<U>,
-	unit: PriceUnit,
-) -> Option<StatechainPrice> {
-	price
-		.apply_exponent(Base10Exponent(
-			unit.quote_asset.decimals() as i16 - unit.base_asset.decimals() as i16,
-		))?
-		.convert()
+	if exponent_delta < 0 {
+		Some(Fraction(mul_div_floor_checked(
+			price.0,
+			1.into(),
+			10u128.pow((-exponent_delta) as u32),
+		)?))
+	} else {
+		Some(Fraction(mul_div_floor_checked(price.0, 10u128.pow(exponent_delta as u32).into(), 1)?))
+	}
 }
 
 impl<const U: Denom> PriceTrait for Fraction<U> {

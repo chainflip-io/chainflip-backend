@@ -57,7 +57,7 @@ impl Mul<u64> for Seconds {
 	type Output = Seconds;
 
 	fn mul(self, rhs: u64) -> Self::Output {
-		Seconds(self.0 * rhs)
+		Seconds(self.0.saturating_mul(rhs))
 	}
 }
 
@@ -94,15 +94,6 @@ impl<A: AggregationValue> Aggregated<A> {
 	pub fn from_single_value(value: A) -> Self {
 		Self { median: value.clone(), iq_range: value.clone()..=value }
 	}
-}
-
-pub fn compute_median<A: Ord + Clone>(mut values: Vec<A>) -> Option<A> {
-	if values.is_empty() {
-		return None;
-	}
-	let half = (values.len() - 1) / 2;
-	let (_first_half, median, _second_half) = values.select_nth_unstable(half);
-	Some(median.clone())
 }
 
 /// A safe version of `select_nth_unstable` that doesn't panic but returns None in case of failure.
