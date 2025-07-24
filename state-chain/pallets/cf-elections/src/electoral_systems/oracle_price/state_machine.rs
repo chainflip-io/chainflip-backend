@@ -435,8 +435,11 @@ pub mod tests {
 
 	use super::*;
 	use crate::electoral_systems::{
-		oracle_price::chainlink::{
-			get_all_latest_prices_with_statechain_encoding, ChainlinkAssetpair, ChainlinkPrice,
+		oracle_price::{
+			chainlink::{
+				get_all_latest_prices_with_statechain_encoding, ChainlinkAssetpair, ChainlinkPrice,
+			},
+			price::Fraction,
 		},
 		state_machine::core::hook_test_utils::MockHook,
 	};
@@ -463,5 +466,61 @@ pub mod tests {
 				let _ = get_all_latest_prices_with_statechain_encoding(state);
 			},
 		)
+	}
+
+	#[test]
+	fn should_vote_sanity_check() {
+		// the computation of voting conditions uses the `to_price_range()` method
+		let price: ChainlinkPrice = Fraction::integer(100);
+		let range = price.to_price_range(BasisPoints(1500)).unwrap();
+		assert_eq!(range, Fraction::integer(85)..=Fraction::integer(115));
+
+		// empty voting conditions mean that should vote is always true
+		assert_eq!(
+			should_vote_for_asset::<MockTypes>(&(UnixTime::default(), Fraction::integer(100)), &[]),
+			true
+		);
+
+		// A newer timestamps means we should vote
+		assert_eq!(
+			should_vote_for_asset::<MockTypes>(
+				&(UnixTime { seconds: 10 }, Fraction::integer(100)),
+				&[VotingCondition::NewTimestamp { last_timestamp: UnixTime { seconds: 9 } }]
+			),
+			true
+		);
+
+		// The same timestamp means we shouldn't vote
+		assert_eq!(
+			should_vote_for_asset::<MockTypes>(
+				&(UnixTime { seconds: 10 }, Fraction::integer(100)),
+				&[VotingCondition::NewTimestamp { last_timestamp: UnixTime { seconds: 10 } }]
+			),
+			false
+		);
+
+		// Price changed, but less than the `deviation` parameter, so we shouldn't vote
+		assert_eq!(
+			should_vote_for_asset::<MockTypes>(
+				&(UnixTime::default(), Fraction::integer(120)),
+				&[VotingCondition::PriceMoved {
+					last_price: Fraction::integer(100),
+					deviation: BasisPoints(2300)
+				}]
+			),
+			false
+		);
+
+		// Price changed more than deviation parameter, so we should vote
+		assert_eq!(
+			should_vote_for_asset::<MockTypes>(
+				&(UnixTime::default(), Fraction::integer(125)),
+				&[VotingCondition::PriceMoved {
+					last_price: Fraction::integer(100),
+					deviation: BasisPoints(2300)
+				}]
+			),
+			true
+		);
 	}
 }

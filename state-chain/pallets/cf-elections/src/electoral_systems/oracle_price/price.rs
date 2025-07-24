@@ -220,6 +220,6 @@ pub fn convert_unit<const U: Denom>(
 impl<const U: Denom> PriceTrait for Fraction<U> {
 	fn to_price_range(&self, range: BasisPoints) -> Option<RangeInclusive<Self>> {
 		let delta = (self * range.to_fraction())?;
-		Some(self + delta.clone()..=self - delta)
+		Some(self - delta.clone()..=self + delta)
 	}
 }
