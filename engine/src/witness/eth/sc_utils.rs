@@ -86,7 +86,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							) => pallet_cf_funding::Call::execute_sc_call {
 								deposit_and_call: EthereumDepositAndSCCall {
 									deposit: EthereumDeposit::FlipToSCGateway {
-										amount: amount.try_into().unwrap(),
+										amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
 									},
 									call: sc_call.to_vec(),
 								},
@@ -109,8 +109,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 									pallet_cf_funding::Call::execute_sc_call {
 										deposit_and_call: EthereumDepositAndSCCall {
 											deposit: EthereumDeposit::Vault {
-												asset: (*asset).try_into().unwrap(),
-												amount: amount.try_into().unwrap(),
+												asset: (*asset).try_into().expect("we expect the asset to be an Eth Asset"),
+												amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
 											},
 											call: sc_call.to_vec(),
 										},
@@ -138,8 +138,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 									pallet_cf_funding::Call::execute_sc_call {
 										deposit_and_call: EthereumDepositAndSCCall {
 											deposit: EthereumDeposit::Transfer {
-												asset: (*asset).try_into().unwrap(),
-												amount: amount.try_into().unwrap(),
+												asset: (*asset).try_into().expect("we expect the asset to be an Eth Asset"),
+												amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
 												destination: to,
 											},
 											call: sc_call.to_vec(),

@@ -598,7 +598,7 @@ pub mod pallet {
 			tx_hash: EthTransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			Self::fund_sc_account(account_id, funder, amount, tx_hash);
+			Self::fund_account(account_id, funder, amount, tx_hash);
 			Ok(())
 		}
 
@@ -944,12 +944,15 @@ pub mod pallet {
 
 			// process the deposit
 			match deposit_and_call.deposit {
-				EthereumDeposit::FlipToSCGateway { amount } => Self::fund_sc_account(
+				EthereumDeposit::FlipToSCGateway { amount } => Self::fund_account(
 					caller_account_id.clone(),
 					caller,
 					amount.into(),
 					eth_tx_hash,
 				),
+
+				// nothing to do
+				EthereumDeposit::NoDeposit => {},
 
 				// Deposit via vault or transfers will be handled here in the future
 				_ => {},
@@ -1056,7 +1059,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn fund_sc_account(
+	fn fund_account(
 		account_id: AccountId<T>,
 		funder: EthereumAddress,
 		amount: FlipBalance<T>,
@@ -1103,7 +1106,6 @@ pub enum DelegationApi<T: Config> {
 }
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
-#[scale_info(skip_type_params(T))]
 pub struct EthereumDepositAndSCCall {
 	pub deposit: EthereumDeposit,
 	pub call: Vec<u8>,
