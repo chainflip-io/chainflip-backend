@@ -243,14 +243,19 @@ where
 			vault_address,
 			cf_primitives::Asset::Eth,
 			cf_primitives::ForeignChain::Ethereum,
-			supported_erc20_tokens,
+			supported_erc20_tokens.clone(),
 		)
 		.continuous("Vault".to_string(), db.clone())
 		.logging("Vault")
 		.spawn(scope);
 
 	eth_safe_vault_source
-		.sc_utils_witnessing(process_call, eth_client.clone(), sc_utils_address)
+		.sc_utils_witnessing(
+			process_call,
+			eth_client.clone(),
+			sc_utils_address,
+			supported_erc20_tokens,
+		)
 		.continuous("ScUtils".to_string(), db)
 		.logging("ScUtils")
 		.spawn(scope);
