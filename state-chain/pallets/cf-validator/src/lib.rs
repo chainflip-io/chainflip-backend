@@ -386,6 +386,15 @@ pub mod pallet {
 	pub type DelegationChoice<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
 
+	/// Holds meta information about the current delegation of delegator.
+	#[pallet::storage]
+	pub type DelegationInfos<T: Config> =
+		StorageMap<_, Identity, T::AccountId, DelegationStatus, ValueQuery>;
+
+	#[pallet::storage]
+	pub type DelegationsPerEpoch<T: Config> =
+		StorageMap<_, Identity, EpochIndex, BTreeSet<T::AccountId>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -1163,8 +1172,10 @@ pub mod pallet {
 		pub fn undelegate(origin: OriginFor<T>) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
-			let operator = DelegationChoice::<T>::take(&delegator)
-				.ok_or(Error::<T>::AccountIsNotDelegating)?;
+			let operator =
+				DelegationChoice::<T>::get(&delegator).ok_or(Error::<T>::AccountIsNotDelegating)?;
+
+			DelegationInfos::<T>::insert(&delegator, DelegationStatus::UnDelegating);
 
 			Self::deposit_event(Event::UnDelegated { delegator, operator });
 
@@ -1382,6 +1393,18 @@ impl<T: Config> Pallet<T> {
 		for validator in validators {
 			AuthorityIndex::<T>::remove(epoch, validator);
 		}
+
+		for delegator in DelegationsPerEpoch::<T>::take(epoch) {
+			// If the signal to stop delegating we can unbound them for their epoch.
+			if DelegationInfos::<T>::get(&delegator) == DelegationStatus::UnDelegating {
+				match DelegationChoice::<T>::take(&delegator) {
+					Some(_) =>
+						T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128)),
+					None => log::error!("Broken!"),
+				}
+			}
+		}
+
 		HistoricalBonds::<T>::remove(epoch);
 	}
 
@@ -1440,12 +1463,14 @@ impl<T: Config> Pallet<T> {
 			.flat_map(|(_, value)| value.delegators.keys().cloned().collect::<Vec<_>>())
 			.collect();
 
-		for delegator in unique_delegators {
+		for delegator in &unique_delegators {
 			T::Bonder::update_bond(
 				&delegator.clone().into(),
 				T::FundingInfo::total_balance_of(&delegator),
 			);
 		}
+
+		DelegationsPerEpoch::<T>::insert(new_epoch, unique_delegators);
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 

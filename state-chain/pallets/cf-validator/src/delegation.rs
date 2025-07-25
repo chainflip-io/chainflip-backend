@@ -1,3 +1,4 @@
+use crate::Config;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -52,3 +53,41 @@ pub struct OperatorSettings {
 	/// Default delegation acceptance preference for this validator
 	pub delegation_acceptance: DelegationAcceptance,
 }
+
+#[derive(
+	Default,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Clone,
+	PartialEq,
+	Eq,
+	Debug,
+	Deserialize,
+	Serialize,
+)]
+pub enum DelegationStatus {
+	#[default]
+	Delegating,
+	UnDelegating,
+}
+
+// #[derive(
+// 	Default,
+// 	Encode,
+// 	Decode,
+// 	TypeInfo,
+// 	MaxEncodedLen,
+// 	Clone,
+// 	PartialEq,
+// 	Eq,
+// 	Debug,
+// 	Deserialize,
+// 	Serialize,
+// )]
+// #[scale_info(skip_type_params(T))]
+// pub struct DelegationInfo<T: Config> {
+// 	pub status: DelegationStatus,
+// 	pub max_bid: Option<T::Amount>,
+// }
