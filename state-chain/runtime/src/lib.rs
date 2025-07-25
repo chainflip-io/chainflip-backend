@@ -32,7 +32,6 @@ use crate::{
 		address_derivation::btc::{
 			derive_btc_vault_deposit_addresses, BitcoinPrivateBrokerDepositAddresses,
 		},
-		bitcoin_elections::BitcoinElectoralEvents,
 		calculate_account_apy,
 		solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
@@ -1147,8 +1146,9 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner = chainflip::solana_elections::SolanaElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
-	type CreateGovernanceElectionHook = chainflip::solana_elections::SolanaGovernanceElectionHook;
-	type ElectoralEvents = ();
+	type ElectoralSystemConfiguration =
+		chainflip::solana_elections::SolanaElectoralSystemConfiguration;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_elections::Config<Instance3> for Runtime {
@@ -1156,8 +1156,9 @@ impl pallet_cf_elections::Config<Instance3> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner = chainflip::bitcoin_elections::BitcoinElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
-	type CreateGovernanceElectionHook = chainflip::bitcoin_elections::BitcoinGovernanceElectionHook;
-	type ElectoralEvents = BitcoinElectoralEvents;
+	type ElectoralSystemConfiguration =
+		chainflip::bitcoin_elections::BitcoinElectoralSystemConfiguration;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_elections::Config for Runtime {
@@ -1165,8 +1166,8 @@ impl pallet_cf_elections::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner = chainflip::generic_elections::GenericElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
-	type CreateGovernanceElectionHook = chainflip::generic_elections::GenericElectionHooks;
-	type ElectoralEvents = ();
+	type ElectoralSystemConfiguration = chainflip::generic_elections::GenericElectionHooks;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_trading_strategy::Config for Runtime {

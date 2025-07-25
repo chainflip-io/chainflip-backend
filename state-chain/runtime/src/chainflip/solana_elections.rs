@@ -723,10 +723,14 @@ pub(crate) fn initiate_solana_alt_election(alts: BTreeSet<SolAddress>) {
 	})
 }
 
-pub struct SolanaGovernanceElectionHook;
+pub struct SolanaElectoralSystemConfiguration;
 
-impl pallet_cf_elections::GovernanceElectionHook for SolanaGovernanceElectionHook {
+impl pallet_cf_elections::ElectoralSystemConfiguration for SolanaElectoralSystemConfiguration {
 	type Properties = ();
 
 	fn start(_properties: Self::Properties) {}
+
+	type ElectoralEvents = ();
+
+	type SafeMode = ();
 }

@@ -17,23 +17,26 @@
 use cf_primitives::Price;
 use cf_runtime_utilities::log_or_panic;
 use frame_system::pallet_prelude::BlockNumberFor;
-use sp_core::H160;
+use sp_core::{Get, H160};
 use sp_std::vec::Vec;
 
 use pallet_cf_elections::{
 	electoral_system::ElectoralReadAccess,
-	electoral_systems::oracle_price::{
-		chainlink::{
-			get_latest_price_with_statechain_encoding, ChainlinkAssetpair, ChainlinkPrice,
+	electoral_systems::{
+		block_witnesser::primitives::SafeModeStatus,
+		oracle_price::{
+			chainlink::{
+				get_latest_price_with_statechain_encoding, ChainlinkAssetpair, ChainlinkPrice,
+			},
+			state_machine::OPTypes,
 		},
-		state_machine::OPTypes,
 	},
 	generic_tools::*,
 };
 
 use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
 use cf_chains::sol::SolAddress;
-use cf_traits::Chainflip;
+use cf_traits::{impl_pallet_safe_mode, Chainflip};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
@@ -131,12 +134,25 @@ impls! {
 		type Price = ChainlinkPrice;
 		type GetTime = Self;
 		type AssetPair = ChainlinkAssetpair;
+		type SafeModeEnabledHook = Self;
 	}
 
 	Hook<HookTypeFor<Self, GetTimeHook>> {
 		fn run(&mut self, _: ()) -> UnixTime {
 			// in our configuration the timestamp pallet measures time in millis since the unix epoch
 			UnixTime { seconds: Timestamp::get() / 1000 }
+		}
+	}
+
+	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
+		fn run(&mut self, _input: ()) -> SafeModeStatus {
+			if <<Runtime as pallet_cf_elections::Config>::SafeMode as Get<GenericElectionsSafeMode>>::get()
+			.oracle_price_elections
+			{
+				SafeModeStatus::Disabled
+			} else {
+				SafeModeStatus::Enabled
+			}
 		}
 	}
 
@@ -155,6 +171,11 @@ pub type ChainlinkOraclePriceES = StatemachineElectoralSystem<TypesFor<Chainlink
 
 //--------------- all generic ESs -------------
 
+impl_pallet_safe_mode! {
+	GenericElectionsSafeMode;
+	oracle_price_elections
+}
+
 pub struct GenericElectionHooks;
 
 impl Hooks<ChainlinkOraclePriceES> for GenericElectionHooks {
@@ -168,7 +189,11 @@ impl Hooks<ChainlinkOraclePriceES> for GenericElectionHooks {
 	}
 }
 
-impl pallet_cf_elections::GovernanceElectionHook for GenericElectionHooks {
+impl pallet_cf_elections::ElectoralSystemConfiguration for GenericElectionHooks {
+	type ElectoralEvents = ();
+
+	type SafeMode = GenericElectionsSafeMode;
+
 	type Properties = ();
 
 	fn start(_properties: Self::Properties) {}
@@ -192,6 +217,7 @@ pub fn initial_state(
 				ethereum: ExternalChainState { price: Default::default() },
 			},
 			get_time: Default::default(),
+			safe_mode_enabled: Default::default(),
 		},),
 		unsynchronised_settings: (OraclePriceSettings {
 			solana: ExternalChainSettings {

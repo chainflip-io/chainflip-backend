@@ -626,7 +626,7 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 	}
 }
 
-pub struct BitcoinGovernanceElectionHook;
+pub struct BitcoinElectoralSystemConfiguration;
 
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
 pub enum ElectionTypes {
@@ -635,7 +635,11 @@ pub enum ElectionTypes {
 	Egresses(ElectionPropertiesEgressWitnessing),
 }
 
-impl pallet_cf_elections::GovernanceElectionHook for BitcoinGovernanceElectionHook {
+impl pallet_cf_elections::ElectoralSystemConfiguration for BitcoinElectoralSystemConfiguration {
+	type SafeMode = ();
+
+	type ElectoralEvents = BitcoinElectoralEvents;
+
 	type Properties = (<BitcoinChain as ChainTypes>::ChainBlockNumber, ElectionTypes);
 
 	fn start(properties: Self::Properties) {

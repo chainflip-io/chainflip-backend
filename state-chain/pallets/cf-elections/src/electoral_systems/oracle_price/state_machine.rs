@@ -16,7 +16,7 @@
 
 use crate::{
 	electoral_systems::{
-		block_witnesser::state_machine::HookTypeFor,
+		block_witnesser::{primitives::SafeModeStatus, state_machine::HookTypeFor},
 		oracle_price::{
 			price::PriceUnit,
 			primitives::{BasisPoints, Seconds, UnixTime},
@@ -49,6 +49,8 @@ pub trait OPTypes: 'static + Sized + CommonTraits {
 	type AssetPair: AssetPairTrait + CommonTraits + Ord + Sequence + MaybeArbitrary;
 
 	type GetTime: Hook<HookTypeFor<Self, GetTimeHook>> + CommonTraits;
+
+	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>> + CommonTraits;
 }
 
 pub trait AssetPairTrait {
@@ -63,6 +65,12 @@ pub struct GetTimeHook;
 impl<T: OPTypes> HookType for HookTypeFor<T, GetTimeHook> {
 	type Input = ();
 	type Output = UnixTime;
+}
+
+pub struct SafeModeEnabledHook;
+impl<T: OPTypes> HookType for HookTypeFor<T, SafeModeEnabledHook> {
+	type Input = ();
+	type Output = SafeModeStatus;
 }
 
 //---------------- the primitives ------------------
@@ -324,6 +332,7 @@ def_derive! {
 	pub struct OraclePriceTracker<T: OPTypes> {
 		pub chain_states: ExternalChainStates<T>,
 		pub get_time: T::GetTime,
+		pub safe_mode_enabled: T::SafeModeEnabledHook,
 	}
 }
 
@@ -352,19 +361,23 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 	type State = OraclePriceTracker<T>;
 
 	fn get_queries(state: &mut Self::State) -> Vec<Self::Query> {
-		all::<ExternalPriceChain>()
-			.take_while_inclusive(|chain| {
-				// return true if at least one asset does not exist OR is not `UpToDate`
-				all::<T::AssetPair>().any(|asset| {
-					state.chain_states[*chain]
-						.price
-						.get(&asset)
-						.map(|asset_state| asset_state.price_status != PriceStatus::UpToDate)
-						.unwrap_or(true)
+		if state.safe_mode_enabled.run(()) == SafeModeStatus::Disabled {
+			all::<ExternalPriceChain>()
+				.take_while_inclusive(|chain| {
+					// return true if at least one asset does not exist OR is not `UpToDate`
+					all::<T::AssetPair>().any(|asset| {
+						state.chain_states[*chain]
+							.price
+							.get(&asset)
+							.map(|asset_state| asset_state.price_status != PriceStatus::UpToDate)
+							.unwrap_or(true)
+					})
 				})
-			})
-			.map(|chain| PriceQuery { chain, assets: state.chain_states[chain].get_query() })
-			.collect()
+				.map(|chain| PriceQuery { chain, assets: state.chain_states[chain].get_query() })
+				.collect()
+		} else {
+			vec![]
+		}
 	}
 
 	fn step(
@@ -451,6 +464,7 @@ pub mod tests {
 		type Price = ChainlinkPrice;
 		type AssetPair = ChainlinkAssetpair;
 		type GetTime = MockHook<HookTypeFor<Self, GetTimeHook>>;
+		type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>>;
 	}
 
 	#[test]
