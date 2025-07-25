@@ -1198,12 +1198,14 @@ impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
 	}
 }
 
-// TODO: is this how we will provide the prices to other pallets?
-#[allow(dead_code)]
-struct GenericElectionsEnvironment;
+pub trait PriceFeedApi {
+	fn get_price(asset: ChainlinkAssetpair) -> Option<OraclePrice>;
+}
 
-impl ChainEnvironment<ChainlinkAssetpair, OraclePrice> for GenericElectionsEnvironment {
-	fn lookup(asset: ChainlinkAssetpair) -> Option<OraclePrice> {
+#[warn(dead_code)]
+struct ChainlinkOracle;
+impl PriceFeedApi for ChainlinkOracle {
+	fn get_price(asset: ChainlinkAssetpair) -> Option<OraclePrice> {
 		decode_and_get_latest_oracle_price::<TypesFor<Chainlink>>(asset)
 	}
 }
