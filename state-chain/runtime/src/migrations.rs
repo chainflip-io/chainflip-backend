@@ -18,3 +18,4 @@
 
 pub mod bitcoin_elections;
 pub mod housekeeping;
+pub mod polkadot_deprecation;

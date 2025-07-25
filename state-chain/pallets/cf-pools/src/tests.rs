@@ -23,7 +23,9 @@ use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{
 	assert_events_eq, assert_events_match, assert_matching_event_count, last_event,
 };
-use cf_traits::{mocks::balance_api::MockBalance, BalanceApi, PoolApi, SwappingApi};
+use cf_traits::{
+	mocks::balance_api::MockBalance, BalanceApi, PoolApi, PoolOrdersManager, SwappingApi,
+};
 use frame_support::{assert_noop, assert_ok};
 use sp_core::bounded_vec;
 use sp_runtime::BoundedVec;
@@ -1616,4 +1618,78 @@ fn test_limit_order_auto_close() {
 				0
 			);
 		});
+}
+
+#[test]
+fn cancel_all_pool_positions() {
+	const BASE_ASSET: Asset = Asset::Dot;
+	const ORDER_ID: u64 = 1;
+
+	new_test_ext().execute_with(|| {
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			BASE_ASSET,
+			STABLE_ASSET,
+			0,
+			price_at_tick(0).unwrap(),
+		));
+
+		for (lp, side, n) in [(ALICE, Side::Sell, 2), (ALICE, Side::Buy, 2), (BOB, Side::Sell, 8)] {
+			const AMOUNT: AssetAmount = 1_000_000;
+			MockBalance::credit_account(&lp, BASE_ASSET, AMOUNT);
+			MockBalance::credit_account(&lp, STABLE_ASSET, AMOUNT);
+
+			// Create multiple orders for each LP
+			for i in 0..n {
+				assert_ok!(LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(lp),
+					BASE_ASSET,
+					STABLE_ASSET,
+					side,
+					ORDER_ID + i as u64,
+					Some(100),
+					5_000,
+					None,
+					None,
+				));
+			}
+
+			// Create a range order for each LP
+			for i in 0..n {
+				assert_ok!(LiquidityPools::set_range_order(
+					RuntimeOrigin::signed(lp),
+					BASE_ASSET,
+					STABLE_ASSET,
+					ORDER_ID + i as u64,
+					Some(-10000..10000),
+					RangeOrderSize::Liquidity { liquidity: 1_000 },
+				));
+			}
+		}
+
+		let count_orders = |base_asset, lp| {
+			let limit_orders =
+				LiquidityPools::pool_orders(base_asset, STABLE_ASSET, Some(lp), false)
+					.unwrap()
+					.limit_orders;
+
+			let range_orders =
+				LiquidityPools::pool_orders(base_asset, STABLE_ASSET, Some(lp), false)
+					.unwrap()
+					.range_orders;
+
+			(limit_orders.asks.len(), limit_orders.bids.len(), range_orders.len())
+		};
+
+		// Alice has 2 limit orders in each direction and 2 range orders.
+		// Bob has 8 sell limit orders, 8 range orders.
+		assert_eq!(count_orders(BASE_ASSET, ALICE), (2, 2, 2));
+		assert_eq!(count_orders(BASE_ASSET, BOB), (8, 0, 8));
+
+		assert_ok!(LiquidityPools::cancel_all_pool_orders(BASE_ASSET, STABLE_ASSET));
+
+		// All orders in the pool should be closed
+		assert_eq!(count_orders(BASE_ASSET, ALICE), (0, 0, 0));
+		assert_eq!(count_orders(BASE_ASSET, BOB), (0, 0, 0));
+	});
 }
