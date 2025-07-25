@@ -46,6 +46,7 @@ use frame_support::{
 		traits::{CheckedSub, One, UniqueSaturatedInto, Zero},
 		Saturating,
 	},
+	storage::TransactionOutcome,
 	traits::{
 		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OriginTrait, StorageVersion,
 		UnfilteredDispatchable, UnixTime,
@@ -309,7 +310,7 @@ pub mod pallet {
 	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
 	use cf_traits::RedemptionCheck;
-	use frame_support::{pallet_prelude::*, Parameter};
+	use frame_support::{pallet_prelude::*, storage::with_transaction, Parameter};
 	use frame_system::pallet_prelude::*;
 
 	#[allow(unused_imports)]
@@ -960,20 +961,26 @@ pub mod pallet {
 
 			match EthereumSCApi::decode(&mut &deposit_and_call.call[..]) {
 				Ok(call) => {
-					// If the call fails to execute, we still succeed this extrinsic since we need
-					// to successfully process the deposit above. In this case, the deposit
-					// will be processed and no call will be executed.
-					match call
-						.clone()
-						.dispatch_bypass_filter(RuntimeOrigin::<T>::signed(caller_account_id))
-					{
+					// If the call fails to execute, we need to rollback the changes in the tx but
+					// we still succeed this extrinsic since we need to successfully process
+					// the deposit above. In this case, the deposit will be processed and no
+					// call will be executed.
+					match with_transaction(|| {
+						match call
+							.clone()
+							.dispatch_bypass_filter(RuntimeOrigin::<T>::signed(caller_account_id))
+						{
+							r @ Ok(_) => TransactionOutcome::Commit(r),
+							r @ Err(_) => TransactionOutcome::Rollback(r),
+						}
+					}) {
 						Ok(_) => {
 							Self::deposit_event(Event::SCCallExecuted {
 								sc_call: call,
 								eth_tx_hash,
 							});
 						},
-						Err(e) => {
+						Err(_) => {
 							Self::deposit_event(Event::SCCallCannotBeExecuted {
 								sc_call: call,
 								eth_tx_hash,
@@ -981,7 +988,7 @@ pub mod pallet {
 						},
 					}
 				},
-				Err(e) => {
+				Err(_) => {
 					Self::deposit_event(Event::SCCallCannotBeDecoded {
 						sc_call_bytes: deposit_and_call.call,
 						eth_tx_hash,
