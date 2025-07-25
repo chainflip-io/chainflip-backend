@@ -22,6 +22,6 @@ describe('SerialTests2', () => {
   serialTest('SolanaVaultSettingsGovernance', testSolanaVaultSettingsGovernance, 120);
 
   if (process.env.LOCALNET) {
-    serialTest('SwapAfterDisconnection', testSwapAfterDisconnection, 1300);
+    serialTest('SwapAfterDisconnection', testSwapAfterDisconnection, 250);
   }
 });

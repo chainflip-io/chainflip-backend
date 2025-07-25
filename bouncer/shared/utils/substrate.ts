@@ -416,6 +416,7 @@ export function observeEvents<T = any>(
   }: Options<T> | AbortableOptions<T> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
+  const startTime = Date.now();
   logger.trace(`Observing event ${eventName}`);
 
   const controller = abortable ? new AbortController() : undefined;
@@ -438,7 +439,9 @@ export function observeEvents<T = any>(
     }
     if (foundEvents.length > 0) {
       logger.trace(
-        `Found event ${foundEvents.length} ${eventName} events in block ${foundEvents[0].block}`,
+        `Found ${foundEvents.length} ${eventName} events in block ${foundEvents[0].block}, took ${Math.round(
+          (Date.now() - startTime) / 1000,
+        )} seconds`,
       );
       // No need to continue if we found event(s) in the past
       return foundEvents;
@@ -463,7 +466,9 @@ export function observeEvents<T = any>(
         }
         if (foundEvents.length > 0) {
           logger.trace(
-            `Found event ${foundEvents.length} ${eventName} events in block ${foundEvents[0].block}`,
+            `Found ${foundEvents.length} ${eventName} events in block ${foundEvents[0].block}, took ${Math.round(
+              (Date.now() - startTime) / 1000,
+            )} seconds`,
           );
           return foundEvents;
         }
