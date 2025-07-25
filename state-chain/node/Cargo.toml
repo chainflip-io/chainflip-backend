@@ -31,6 +31,7 @@ custom-rpc = { workspace = true }
 cf-rpc-apis = { workspace = true }
 cf-utilities = { workspace = true, default-features = true }
 sol-prim = { workspace = true, default-features = true }
+pallet-cf-elections = { workspace = true, default-features = true } # Todo: Either we have to add this, or move what we need to the cf-utilities crate
 
 # Added by Chainflip
 hex = { workspace = true, default-features = true }

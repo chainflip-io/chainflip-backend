@@ -23,7 +23,9 @@ use crate::evm::rpc::{
 
 use super::EvmRetryRpcClient;
 
-use crate::evm::retry_rpc::RequestLog;
+use crate::evm::retry_rpc::{Attempt, RequestLog};
+
+const MAX_QUERY_PRICE_FEED_RETRIES: Attempt = 2;
 
 #[async_trait::async_trait]
 pub trait AddressCheckerRetryRpcApi {
@@ -45,7 +47,7 @@ pub trait AddressCheckerRetryRpcApi {
 		&self,
 		contract_address: H160,
 		aggregator_addresses: Vec<H160>,
-	) -> (U256, U256, Vec<PriceFeedData>);
+	) -> Result<(U256, U256, Vec<PriceFeedData>), anyhow::Error>;
 }
 
 #[async_trait::async_trait]
@@ -100,9 +102,9 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 		&self,
 		contract_address: H160,
 		aggregator_addresses: Vec<H160>,
-	) -> (U256, U256, Vec<PriceFeedData>) {
+	) -> Result<(U256, U256, Vec<PriceFeedData>), anyhow::Error> {
 		self.rpc_retry_client
-			.request(
+			.request_with_limit(
 				RequestLog::new(
 					"query_price_feeds".to_string(),
 					Some(format!("{contract_address:?}, {aggregator_addresses:?}")),
@@ -114,6 +116,7 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 						client.query_price_feeds(contract_address, aggregator_addresses).await
 					})
 				}),
+				MAX_QUERY_PRICE_FEED_RETRIES,
 			)
 			.await
 	}
