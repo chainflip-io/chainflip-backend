@@ -97,6 +97,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();
+			let mut process_calls = vec![];
 			async move {
 				for event in events_at_block::<Inner::Chain, KeyManagerEvents, _>(
 					header,
@@ -180,8 +181,9 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							continue
 						},
 					};
-					process_call(call, epoch.index).await;
+					process_calls.push(process_call(call, epoch.index));
 				}
+				futures::future::join_all(process_calls).await;
 
 				Result::Ok(header.data)
 			}
