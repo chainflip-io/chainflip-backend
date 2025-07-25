@@ -48,7 +48,7 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
-	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
+	EpochIndex, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -409,13 +409,7 @@ pub trait Slashing {
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 
 	/// Slashes a validator by some fixed amount.
-	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance);
-
-	/// Calculate the amount of FLIP to slash
-	fn calculate_slash_amount(
-		account_id: &Self::AccountId,
-		blocks: Self::BlockNumber,
-	) -> Self::Balance;
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: Self::Balance);
 }
 
 /// Nominate a single account for transaction broadcasting.
@@ -608,13 +602,6 @@ pub trait BlockEmissions {
 	fn update_backup_node_block_emission(emission: Self::Balance);
 	/// Calculate the emissions per block
 	fn calculate_block_emissions();
-}
-
-/// Emits an event when backup rewards are distributed that lives inside the Emissions pallet.
-pub trait BackupRewardsNotifier {
-	type Balance;
-	type AccountId;
-	fn emit_event(account_id: &Self::AccountId, amount: Self::Balance);
 }
 
 /// Checks if the caller can execute free transactions

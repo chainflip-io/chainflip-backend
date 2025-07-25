@@ -373,6 +373,11 @@ pub mod pallet {
 	pub type OperatorSettingsLookup<T: Config> =
 		StorageMap<_, Identity, T::AccountId, OperatorSettings, OptionQuery>;
 
+	/// Maps an operator to all of its managed delegators.
+	#[pallet::storage]
+	pub type ManagedDelegators<T: Config> =
+		StorageMap<_, Identity, T::AccountId, BTreeMap<T::AccountId, T::Amount>, OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -397,7 +402,7 @@ pub mod pallet {
 		/// A previously non-bidding account has started bidding.
 		StartedBidding { account_id: T::AccountId },
 		/// The rotation transaction(s) for the previous rotation are still pending to be
-		/// succesfully broadcast, therefore, cannot start a new epoch rotation.
+		/// successfully broadcast, therefore, cannot start a new epoch rotation.
 		PreviousRotationStillPending,
 		/// A delegator has been blocked from delegating to an operator.
 		DelegatorBlocked { delegator: T::AccountId, operator: T::AccountId },
@@ -1552,6 +1557,19 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 		validators
+	}
+
+	pub fn get_operator_info_by_validator(
+		validator: &T::AccountId,
+	) -> Option<DelegationInfo<T::AccountId, T::Amount>> {
+		let operator = ManagedValidators::<T>::get(validator)?;
+		Some(DelegationInfo {
+			delegator_bids: ManagedDelegators::<T>::get(&operator)?,
+			delegation_fee: Percent::from_rational(
+				OperatorSettingsLookup::<T>::get(&operator)?.fee_bps,
+				10_000u32,
+			),
+		})
 	}
 }
 
