@@ -474,9 +474,9 @@ mod benchmarks {
 		.unwrap();
 
 		#[extrinsic_call]
-		update_operator_settings(RawOrigin::Signed(caller.clone()), OperatorSettings::default());
+		update_operator_settings(RawOrigin::Signed(caller.clone()), OPERATOR_SETTINGS);
 
-		assert_eq!(OperatorSettingsLookup::<T>::get(caller), Some(OperatorSettings::default()));
+		assert_eq!(OperatorSettingsLookup::<T>::get(caller), Some(OPERATOR_SETTINGS));
 	}
 
 	#[benchmark]
