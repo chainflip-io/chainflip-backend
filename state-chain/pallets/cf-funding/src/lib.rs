@@ -974,10 +974,6 @@ pub mod pallet {
 							});
 						},
 						Err(e) => {
-							log::warn!(
-								"SC call couldn't be executed. It returned an error: {:?}",
-								e
-							);
 							Self::deposit_event(Event::SCCallCannotBeExecuted {
 								sc_call: call,
 								eth_tx_hash,
@@ -986,7 +982,6 @@ pub mod pallet {
 					}
 				},
 				Err(e) => {
-					log::warn!("SC call couldn't be decoded: {:?}", e);
 					Self::deposit_event(Event::SCCallCannotBeDecoded {
 						sc_call_bytes: deposit_and_call.call,
 						eth_tx_hash,
