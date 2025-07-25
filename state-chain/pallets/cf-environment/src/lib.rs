@@ -36,12 +36,12 @@ use cf_chains::{
 	Chain,
 };
 use cf_primitives::{
-	chains::assets::{any::Asset, arb::Asset as ArbAsset, eth::Asset as EthAsset},
+	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
 	BroadcastId, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
 	Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider,
-	PoolOrdersManager, SafeMode, SolanaNonceWatch,
+	SafeMode, SolanaNonceWatch,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -132,8 +132,6 @@ pub mod pallet {
 
 		/// Weight information
 		type WeightInfo: WeightInfo;
-
-		type PoolOrdersManager: PoolOrdersManager;
 	}
 
 	#[pallet::error]
@@ -576,25 +574,6 @@ pub mod pallet {
 
 			// Witness the agg_key rotation manually in the vaults pallet for assethub
 			T::AssethubVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)
-		}
-
-		/// Allows Governance to deprecate Polkadot.
-		/// This will trigger multiple extrinsics:
-		///    1. Cancels all Polkadot orders in the Dot/USDC pool
-		///    2. Converts all Polkadot balances to Assethub balances
-		///
-		/// Note that this call should be run after disabling Dot ingress using safemode and waiting
-		/// for all deposit channels to be expired
-		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::dispatch_solana_gov_call())]
-		pub fn deprecate_polkadot(origin: OriginFor<T>) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			T::PoolOrdersManager::cancel_all_pool_orders(Asset::Dot, Asset::Usdc)?;
-
-			Self::deposit_event(Event::<T>::PolkadotOrdersCancelled);
-
-			Ok(())
 		}
 	}
 

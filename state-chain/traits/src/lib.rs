@@ -45,10 +45,10 @@ use cf_chains::{
 	ChannelRefundParametersForChain, Ethereum, SetGovKeyWithAggKeyError,
 };
 use cf_primitives::{
-	AccountId, AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints,
-	Beneficiaries, BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey,
-	EgressCounter, EgressId, EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr,
-	NetworkEnvironment, Price, SemVer, ThresholdSignatureRequestId,
+	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
+	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
+	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
+	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -1293,8 +1293,4 @@ pub trait SpawnAccount {
 
 pub trait PoolOrdersManager {
 	fn cancel_all_pool_orders(base_asset: Asset, quote_asset: Asset) -> DispatchResult;
-}
-
-pub trait BalancesManager {
-	fn free_balances(asset: Asset) -> Result<BTreeMap<AccountId, AssetAmount>, DispatchError>;
 }

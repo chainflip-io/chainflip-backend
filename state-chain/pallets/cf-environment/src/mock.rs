@@ -33,15 +33,14 @@ use cf_chains::{
 	},
 	ApiCall, Arbitrum, Assethub, Bitcoin, Chain, ChainCrypto, ChainEnvironment, Polkadot, Solana,
 };
-use cf_primitives::{Asset, BroadcastId, SemVer, ThresholdSignatureRequestId};
+use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	mocks::key_provider::MockKeyProvider, Broadcaster, GetBitcoinFeeInfo, PoolOrdersManager,
-	VaultKeyWitnessedHandler,
+	mocks::key_provider::MockKeyProvider, Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
 use frame_support::{derive_impl, parameter_types};
 use sp_core::{H160, H256};
-use sp_runtime::{DispatchError, DispatchResult};
+use sp_runtime::DispatchError;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -276,13 +275,6 @@ impl Broadcaster<Solana> for MockSolanaBroadcaster {
 	}
 }
 
-pub struct MockPoolOrdersManager;
-impl PoolOrdersManager for MockPoolOrdersManager {
-	fn cancel_all_pool_orders(_base_asset: Asset, _quote_asset: Asset) -> DispatchResult {
-		Ok(())
-	}
-}
-
 impl_pallet_safe_mode!(MockPalletSafeMode; flag1, flag2);
 impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 
@@ -303,7 +295,6 @@ impl pallet_cf_environment::Config for Test {
 	type SolEnvironment = MockSolEnvironment;
 	type SolanaBroadcaster = MockSolanaBroadcaster;
 	type WeightInfo = ();
-	type PoolOrdersManager = MockPoolOrdersManager;
 }
 
 pub const STATE_CHAIN_GATEWAY_ADDRESS: eth::Address = H160([0u8; 20]);
