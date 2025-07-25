@@ -41,7 +41,7 @@ use crate::{
 	},
 	witness::sol::oracle_witnessing::get_price_feeds,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use sol_prim::program_instructions::PriceFeedData as SolPriceFeedData;
 
 /// IMPORTANT: These strings have to match with the price feed "description" as returned by
@@ -80,8 +80,9 @@ impl From<SolPriceFeedData> for PriceData {
 	}
 }
 
-impl From<EthPriceFeedData> for PriceData {
-	fn from(value: EthPriceFeedData) -> Self {
+impl TryFrom<EthPriceFeedData> for PriceData {
+	type Error = anyhow::Error;
+	fn try_from(value: EthPriceFeedData) -> anyhow::Result<Self> {
 		let EthPriceFeedData {
 			round_id: _,
 			answer,
@@ -91,12 +92,18 @@ impl From<EthPriceFeedData> for PriceData {
 			decimals,
 			description,
 		} = value;
-		Self {
+		Ok(Self {
 			description,
-			answer: answer.try_into().unwrap(),
+			answer: answer.try_into().map_err(anyhow::Error::new)?,
 			decimals,
-			timestamp: UnixTime { seconds: updated_at.try_into().unwrap() },
-		}
+			timestamp: UnixTime {
+				seconds: updated_at.try_into().map_err(|_| {
+					anyhow!(
+						"Unexpected timestamp when querying chainlink on ethereum (updated_at:?)"
+					)
+				})?,
+			},
+		})
 	}
 }
 
@@ -127,7 +134,12 @@ impl VoterApi<ChainlinkOraclePriceES> for OraclePriceVoter {
 						settings.eth_oracle_feeds.clone(),
 					)
 					.await?;
-				price_feeds.into_iter().map(Into::into).collect::<Vec<PriceData>>()
+				price_feeds
+					.into_iter()
+					.filter_map(|data| {
+						data.try_into().inspect_err(|err| tracing::warn!("{err}")).ok()
+					})
+					.collect::<Vec<PriceData>>()
 			},
 		};
 
