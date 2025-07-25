@@ -94,7 +94,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								// use 0 padded ethereum address as account_id which the flip funds
 								// are associated with on SC
 								caller_account_id: sender.into_account_id_32(),
-								tx_hash: event.tx_hash.to_fixed_bytes(),
+								eth_tx_hash: event.tx_hash.to_fixed_bytes(),
 							},
 							ScUtilsEvents::DepositToVaultAndScCallFilter(
 								DepositToVaultAndScCallFilter {
@@ -118,7 +118,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 										// use 0 padded ethereum address as account_id which the
 										// flip funds are associated with on SC
 										caller_account_id: sender.into_account_id_32(),
-										tx_hash: event.tx_hash.to_fixed_bytes(),
+										eth_tx_hash: event.tx_hash.to_fixed_bytes(),
 									}
 								} else {
 									warn!("unsupported asset deposited: {token}. Ignoring deposit");
@@ -148,7 +148,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 										// use 0 padded ethereum address as account_id which the
 										// flip funds are associated with on SC
 										caller_account_id: sender.into_account_id_32(),
-										tx_hash: event.tx_hash.to_fixed_bytes(),
+										eth_tx_hash: event.tx_hash.to_fixed_bytes(),
 									}
 								} else {
 									warn!("unsupported asset deposited: {token}. Ignoring deposit");
@@ -169,7 +169,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								// use 0 padded ethereum address as account_id which the
 								// flip funds are associated with on SC
 								caller_account_id: sender.into_account_id_32(),
-								tx_hash: event.tx_hash.to_fixed_bytes(),
+								eth_tx_hash: event.tx_hash.to_fixed_bytes(),
 							},
 						}
 						.into(),

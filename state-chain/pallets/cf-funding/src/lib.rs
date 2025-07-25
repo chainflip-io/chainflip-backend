@@ -510,7 +510,15 @@ pub mod pallet {
 		},
 		SCCallExecuted {
 			sc_call: EthereumSCApi<T>,
-			tx_hash: EthTransactionHash,
+			eth_tx_hash: EthTransactionHash,
+		},
+		SCCallCannotBeExecuted {
+			sc_call: EthereumSCApi<T>,
+			eth_tx_hash: EthTransactionHash,
+		},
+		SCCallCannotBeDecoded {
+			sc_call_bytes: Vec<u8>,
+			eth_tx_hash: EthTransactionHash,
 		},
 	}
 
@@ -919,6 +927,8 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Processes the deposit and sc call via ethereum. If the call cannot be decoded, we still
+		/// process the deposit since those two are independant actions.
 		#[pallet::call_index(12)]
 		#[allow(clippy::let_unit_value)]
 		#[pallet::weight(Weight::zero())]
@@ -928,14 +938,18 @@ pub mod pallet {
 			caller: EthereumAddress,
 			caller_account_id: AccountId<T>,
 			// Required to ensure this call is unique per funding event.
-			tx_hash: EthTransactionHash,
+			eth_tx_hash: EthTransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// process the deposit
 			match deposit_and_call.deposit {
-				EthereumDeposit::FlipToSCGateway { amount } =>
-					Self::fund_sc_account(caller_account_id.clone(), caller, amount.into(), tx_hash),
+				EthereumDeposit::FlipToSCGateway { amount } => Self::fund_sc_account(
+					caller_account_id.clone(),
+					caller,
+					amount.into(),
+					eth_tx_hash,
+				),
 
 				// Deposit via vault or transfers will be handled here in the future
 				_ => {},
@@ -951,18 +965,29 @@ pub mod pallet {
 						.dispatch_bypass_filter(RuntimeOrigin::<T>::signed(caller_account_id))
 					{
 						Ok(_) => {
-							Self::deposit_event(Event::SCCallExecuted { sc_call: call, tx_hash });
+							Self::deposit_event(Event::SCCallExecuted {
+								sc_call: call,
+								eth_tx_hash,
+							});
 						},
 						Err(e) => {
 							log::warn!(
 								"SC call couldn't be executed. It returned an error: {:?}",
 								e
 							);
+							Self::deposit_event(Event::SCCallCannotBeExecuted {
+								sc_call: call,
+								eth_tx_hash,
+							});
 						},
 					}
 				},
 				Err(e) => {
 					log::warn!("SC call couldn't be decoded: {:?}", e);
+					Self::deposit_event(Event::SCCallCannotBeDecoded {
+						sc_call_bytes: deposit_and_call.call,
+						eth_tx_hash,
+					});
 				},
 			}
 
