@@ -1435,6 +1435,18 @@ impl<T: Config> Pallet<T> {
 			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 		});
 
+		let unique_delegators: BTreeSet<T::AccountId> = Self::build_delegation_snapshot()
+			.into_iter()
+			.flat_map(|(_, value)| value.delegators.keys().cloned().collect::<Vec<_>>())
+			.collect();
+
+		for delegator in unique_delegators {
+			T::Bonder::update_bond(
+				&delegator.clone().into(),
+				T::FundingInfo::total_balance_of(&delegator),
+			);
+		}
+
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 
 		// We've got new authorities, which means the backups may have changed.
