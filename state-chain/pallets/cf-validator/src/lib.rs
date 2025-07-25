@@ -151,7 +151,7 @@ pub enum PalletOffence {
 #[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
 pub struct DelegationSnapshot<T: Config> {
-	pub avg_delegator_balance: T::Amount,
+	pub avg_bid: T::Amount,
 	pub delegators: BTreeMap<T::AccountId, T::Amount>,
 	pub validators: BTreeMap<T::AccountId, T::Amount>,
 }
@@ -1476,11 +1476,12 @@ impl<T: Config> Pallet<T> {
 
 		let delegation_snapshot = Self::build_delegation_snapshot();
 
-		let get_avg_balance_by_validator_id = |validator_id: T::AccountId| -> Option<T::Amount> {
-			let operator_id = ManagedValidators::<T>::get(validator_id)?;
-			let snap = delegation_snapshot.get(&operator_id)?;
-			Some(snap.avg_delegator_balance)
-		};
+		let get_avg_bid_for_validator_if_managed =
+			|validator_id: T::AccountId| -> Option<T::Amount> {
+				let operator_id = ManagedValidators::<T>::get(validator_id)?;
+				let snap = delegation_snapshot.get(&operator_id)?;
+				Some(snap.avg_bid)
+			};
 
 		match SetSizeMaximisingAuctionResolver::try_new(
 			T::EpochInfo::current_authority_count(),
@@ -1492,9 +1493,8 @@ impl<T: Config> Pallet<T> {
 					.into_iter()
 					.map(|bid| Bid {
 						bidder_id: bid.bidder_id.clone(),
-						amount: bid.amount +
-							get_avg_balance_by_validator_id(bid.bidder_id.into())
-								.unwrap_or_default(),
+						amount: get_avg_bid_for_validator_if_managed(bid.bidder_id.into())
+							.unwrap_or(bid.amount),
 					})
 					.collect(),
 				AuctionBidCutoffPercentage::<T>::get(),
@@ -1746,18 +1746,15 @@ impl<T: Config> Pallet<T> {
 				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Delegator);
 			let validators =
 				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator);
-			let sum_of_balances = delegators.values().copied().sum::<T::Amount>();
-			let number_of_delegators_as_amount: T::Amount =
-				T::Amount::from(delegators.len() as u128);
-			if let Some(avg_balance) = sum_of_balances.checked_div(&number_of_delegators_as_amount)
-			{
+			let sum_of_balances_delegators = delegators.values().copied().sum::<T::Amount>();
+			let sum_of_balances_validators = validators.values().copied().sum::<T::Amount>();
+			let divider: T::Amount =
+				T::Amount::from(delegators.len().saturating_add(validators.len()) as u128);
+			let total = sum_of_balances_delegators.saturating_add(sum_of_balances_validators);
+			if let Some(avg_bid) = total.checked_div(&divider) {
 				snapshot.insert(
 					operator.clone(),
-					DelegationSnapshot {
-						avg_delegator_balance: avg_balance,
-						delegators,
-						validators,
-					},
+					DelegationSnapshot { avg_bid, delegators, validators },
 				);
 			} else {
 				log::error!("Calculating snapshot for operator {operator:?} failed.");
