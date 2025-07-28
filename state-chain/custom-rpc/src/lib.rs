@@ -73,7 +73,7 @@ use sp_runtime::{
 };
 use sp_state_machine::InspectState;
 use state_chain_runtime::{
-	chainflip::{BlockUpdate, Offence},
+	chainflip::{get_header_timestamp, BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
@@ -784,14 +784,14 @@ pub trait CustomApi {
 		quote_asset: Asset,
 		orders: u32,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<pallet_cf_pools::PoolOrderbook>;
+	) -> RpcResult<BlockUpdate<pallet_cf_pools::PoolOrderbook>>;
 	#[method(name = "pool_info")]
 	fn cf_pool_info(
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PoolInfo>;
+	) -> RpcResult<BlockUpdate<PoolInfo>>;
 	#[method(name = "pool_depth")]
 	fn cf_pool_depth(
 		&self,
@@ -799,14 +799,14 @@ pub trait CustomApi {
 		quote_asset: Asset,
 		tick_range: Range<cf_amm::math::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<AskBidMap<UnidirectionalPoolDepth>>;
+	) -> RpcResult<BlockUpdate<AskBidMap<UnidirectionalPoolDepth>>>;
 	#[method(name = "pool_liquidity")]
 	fn cf_pool_liquidity(
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PoolLiquidity>;
+	) -> RpcResult<BlockUpdate<PoolLiquidity>>;
 	#[method(name = "pool_orders")]
 	fn cf_pool_orders(
 		&self,
@@ -815,7 +815,7 @@ pub trait CustomApi {
 		lp: Option<state_chain_runtime::AccountId>,
 		filled_orders: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::Runtime>>;
+	) -> RpcResult<BlockUpdate<PoolOrders<state_chain_runtime::Runtime>>>;
 	#[method(name = "pool_range_order_liquidity_value")]
 	fn cf_pool_range_order_liquidity_value(
 		&self,
@@ -824,7 +824,7 @@ pub trait CustomApi {
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PoolPairsMap<AmmAmount>>;
+	) -> RpcResult<BlockUpdate<PoolPairsMap<AmmAmount>>>;
 	#[method(name = "funding_environment")]
 	fn cf_funding_environment(
 		&self,
@@ -1076,7 +1076,7 @@ pub struct CustomRpc<C, B, BE> {
 
 impl<C, B, BE> CustomRpc<C, B, BE>
 where
-	B: BlockT<Hash = state_chain_runtime::Hash>,
+	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
 	C: Send + Sync + 'static + HeaderBackend<B>,
 {
 	pub fn new(
@@ -1085,6 +1085,35 @@ where
 		executor: Arc<dyn sp_core::traits::SpawnNamed>,
 	) -> Self {
 		Self { rpc_backend: CustomRpcBackend::new(client, backend, executor) }
+	}
+
+	pub fn into_block_update<Data>(
+		&self,
+		data: RpcResult<Data>,
+		at: Option<Hash>,
+	) -> RpcResult<BlockUpdate<Data>> {
+		let block_hash = self.rpc_backend.unwrap_or_best(at);
+		let block_number = self
+			.rpc_backend
+			.client
+			.number(block_hash)
+			.map_err(|e| call_error(e, CfErrorCode::OtherError))?
+			.ok_or(internal_error(format!("Could not fetch block number for block {:?}", at)))?;
+		let header = self
+			.rpc_backend
+			.client
+			.header(block_hash)
+			.map_err(|e| call_error(e, CfErrorCode::OtherError))?
+			.ok_or_else(|| {
+				internal_error(format!("Could not fetch block header for block {:?}", at))
+			})?;
+
+		data.map(|data| BlockUpdate {
+			block_hash,
+			block_number,
+			timestamp: get_header_timestamp(&header).unwrap_or_default(),
+			data,
+		})
 	}
 }
 
@@ -1247,6 +1276,20 @@ macro_rules! pass_through_and_flatten {
 	};
 }
 
+#[macro_export]
+macro_rules! into_block_updates_and_flatten {
+	($( $name:ident ( $( $arg:ident: $argt:ty ),* $(,)? ) -> $result_type:ty $([map: $mapping:expr])? ),+ $(,)?) => {
+		$(
+			fn $name(&self, $( $arg: $argt, )* at: Option<state_chain_runtime::Hash>,) -> RpcResult<BlockUpdate<$result_type>> {
+				self.into_block_update(flatten_into_error(
+					self.rpc_backend.with_runtime_api(at, |api, hash| api.$name(hash, $($arg),* ))
+						$(.map($mapping))?
+				), at)
+			}
+		)+
+	};
+}
+
 fn flatten_into_error<R, E1, E2>(res: Result<Result<R, E1>, E2>) -> Result<R, E2>
 where
 	CfApiError: From<E1>,
@@ -1331,8 +1374,17 @@ where
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
 	}
 
+	// Return data from the Runtime Api call as is, flatten the Result.
 	pass_through_and_flatten! {
 		cf_required_asset_ratio_for_range_order(base_asset: Asset, quote_asset: Asset, tick_range: Range<Tick>) -> PoolPairsMap<AmmAmount>,
+		cf_validate_dca_params(number_of_chunks: u32, chunk_interval: u32) -> (),
+		cf_validate_refund_params(retry_duration: BlockNumber) -> (),
+	}
+
+	// Return BlockUpdate (with block info) wrapped data from the Runtime Api Call. Flatten the
+	// result.
+	into_block_updates_and_flatten! {
+		cf_pool_orders(base_asset: Asset, quote_asset: Asset, lp: Option<state_chain_runtime::AccountId>, filled_orders: Option<bool>) -> PoolOrders<state_chain_runtime::Runtime>,
 		cf_pool_orderbook(base_asset: Asset, quote_asset: Asset, orders: u32) -> PoolOrderbook,
 		cf_pool_info(base_asset: Asset, quote_asset: Asset) -> PoolInfo,
 		cf_pool_depth(base_asset: Asset, quote_asset: Asset, tick_range: Range<Tick>) -> AskBidMap<UnidirectionalPoolDepth>,
@@ -1343,8 +1395,6 @@ where
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
 		) -> PoolPairsMap<AmmAmount>,
-		cf_validate_dca_params(number_of_chunks: u32, chunk_interval: u32) -> (),
-		cf_validate_refund_params(retry_duration: BlockNumber) -> (),
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
@@ -1389,18 +1439,6 @@ where
 		})
 	}
 
-	fn cf_pool_orders(
-		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
-		lp: Option<state_chain_runtime::AccountId>,
-		filled_orders: Option<bool>,
-		at: Option<Hash>,
-	) -> RpcResult<PoolOrders<state_chain_runtime::Runtime>> {
-		flatten_into_error(self.rpc_backend.with_runtime_api(at, |api, hash| {
-			api.cf_pool_orders(hash, base_asset, quote_asset, lp, filled_orders.unwrap_or_default())
-		}))
-	}
 	fn cf_pool_price_v2(
 		&self,
 		base_asset: Asset,
@@ -1685,7 +1723,7 @@ where
 						map[asset_pair.base] = self
 							.cf_pool_info(asset_pair.base, asset_pair.quote, at)
 							.ok()
-							.map(Into::into);
+							.map(|update| update.data.into());
 					}
 					map
 				},

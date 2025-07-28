@@ -617,7 +617,7 @@ where
 				pool.base,
 				pool.quote,
 				Some(self.signed_pool_client.account_id()),
-				false,
+				Some(false),
 			) {
 				Ok(Ok(r)) => Ok(r),
 				Ok(Err(e)) => Err(CfApiError::DispatchError(e)),

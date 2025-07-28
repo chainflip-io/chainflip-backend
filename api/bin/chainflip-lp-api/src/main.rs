@@ -359,7 +359,8 @@ impl LpRpcApiServer for RpcServerImpl {
 					None,
 					None,
 				)
-				.await?;
+				.await?
+				.data;
 			for order in orders.range_orders {
 				orders_to_delete.push(CloseOrder::Range {
 					base_asset: pool.base,
