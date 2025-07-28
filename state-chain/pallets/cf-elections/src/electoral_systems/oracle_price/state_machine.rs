@@ -44,11 +44,15 @@ use proptest_derive::Arbitrary;
 //--------------- configuration trait -----------------
 
 pub trait OPTypes: 'static + Sized + CommonTraits {
+	type StateChainBlockNumber: CommonTraits + Default + MaybeArbitrary;
+
 	type Price: PriceTrait + CommonTraits + Ord + Default + MaybeArbitrary;
 
 	type AssetPair: AssetPairTrait + CommonTraits + Ord + Sequence + MaybeArbitrary;
 
 	type GetTime: Hook<HookTypeFor<Self, GetTimeHook>> + CommonTraits;
+
+	type GetStateChainBlockHeight: Hook<HookTypeFor<Self, GetStateChainBlockHeight>> + CommonTraits;
 
 	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>> + CommonTraits;
 }
@@ -65,6 +69,12 @@ pub struct GetTimeHook;
 impl<T: OPTypes> HookType for HookTypeFor<T, GetTimeHook> {
 	type Input = ();
 	type Output = UnixTime;
+}
+
+pub struct GetStateChainBlockHeight;
+impl<T: OPTypes> HookType for HookTypeFor<T, GetStateChainBlockHeight> {
+	type Input = ();
+	type Output = T::StateChainBlockNumber;
 }
 
 pub struct SafeModeEnabledHook;
@@ -103,16 +113,21 @@ def_derive! {
 		pub timestamp: Aggregated<UnixTime>,
 		pub price: Aggregated<T::Price>,
 		pub price_status: PriceStatus,
-		pub price_spiked: bool,
+		pub updated_at_statechain_block: T::StateChainBlockNumber,
 		pub minimal_price_deviation: BasisPoints
 	}
 }
 
 impl<T: OPTypes> AssetState<T> {
-	pub fn update(&mut self, response: AssetResponse<T>) {
+	pub fn update(
+		&mut self,
+		response: AssetResponse<T>,
+		current_statechain_block: T::StateChainBlockNumber,
+	) {
 		if response.timestamp.median > self.timestamp.median {
 			self.timestamp = response.timestamp;
 			self.price = response.price;
+			self.updated_at_statechain_block = current_statechain_block;
 		}
 	}
 }
@@ -217,10 +232,14 @@ impl<T: OPTypes> ExternalChainState<T> {
 			.collect()
 	}
 
-	pub fn update(&mut self, response: BTreeMap<T::AssetPair, AssetResponse<T>>) {
+	pub fn update(
+		&mut self,
+		response: BTreeMap<T::AssetPair, AssetResponse<T>>,
+		current_statechain_block: T::StateChainBlockNumber,
+	) {
 		for (asset, response) in response {
 			let entry = self.price.entry(asset).or_default();
-			entry.update(response);
+			entry.update(response, current_statechain_block.clone());
 		}
 	}
 }
@@ -332,6 +351,7 @@ def_derive! {
 	pub struct OraclePriceTracker<T: OPTypes> {
 		pub chain_states: ExternalChainStates<T>,
 		pub get_time: T::GetTime,
+		pub get_statechain_block_height: T::GetStateChainBlockHeight,
 		pub safe_mode_enabled: T::SafeModeEnabledHook,
 	}
 }
@@ -388,7 +408,14 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 		match input {
 			Either::Left(()) => {},
 			Either::Right((query, response)) => {
-				state.chain_states[query.chain].update(response);
+				let current_statechain_block = state.get_statechain_block_height.run(());
+				for (asset, response) in response {
+					state.chain_states[query.chain]
+						.price
+						.entry(asset)
+						.or_default()
+						.update(response, current_statechain_block.clone());
+				}
 			},
 		}
 
@@ -461,9 +488,11 @@ pub mod tests {
 	pub(crate) type MockTypes = TypesFor<Mock>;
 
 	impl OPTypes for MockTypes {
+		type StateChainBlockNumber = u32;
 		type Price = ChainlinkPrice;
 		type AssetPair = ChainlinkAssetpair;
 		type GetTime = MockHook<HookTypeFor<Self, GetTimeHook>>;
+		type GetStateChainBlockHeight = MockHook<HookTypeFor<Self, GetStateChainBlockHeight>>;
 		type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>>;
 	}
 

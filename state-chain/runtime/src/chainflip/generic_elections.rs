@@ -131,8 +131,10 @@ impls! {
 	for TypesFor<Chainlink>:
 
 	OPTypes {
+		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 		type Price = ChainlinkPrice;
 		type GetTime = Self;
+		type GetStateChainBlockHeight = Self;
 		type AssetPair = ChainlinkAssetpair;
 		type SafeModeEnabledHook = Self;
 	}
@@ -141,6 +143,12 @@ impls! {
 		fn run(&mut self, _: ()) -> UnixTime {
 			// in our configuration the timestamp pallet measures time in millis since the unix epoch
 			UnixTime { seconds: Timestamp::get() / 1000 }
+		}
+	}
+
+	Hook<HookTypeFor<Self, GetStateChainBlockHeight>> {
+		fn run(&mut self, _: ()) -> BlockNumberFor<Runtime> {
+			crate::System::block_number()
 		}
 	}
 
@@ -218,6 +226,7 @@ pub fn initial_state(
 			},
 			get_time: Default::default(),
 			safe_mode_enabled: Default::default(),
+			get_statechain_block_height: Default::default(),
 		},),
 		unsynchronised_settings: (OraclePriceSettings {
 			solana: ExternalChainSettings {
