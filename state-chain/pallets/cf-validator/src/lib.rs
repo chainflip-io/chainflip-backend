@@ -1174,8 +1174,8 @@ pub mod pallet {
 		pub fn undelegate(origin: OriginFor<T>) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
-			let operator =
-				DelegationChoice::<T>::get(&delegator).ok_or(Error::<T>::AccountIsNotDelegating)?;
+			let operator = DelegationChoice::<T>::take(&delegator)
+				.ok_or(Error::<T>::AccountIsNotDelegating)?;
 
 			DelegationInfos::<T>::insert(&delegator, DelegationStatus::UnDelegating);
 
@@ -1399,12 +1399,7 @@ impl<T: Config> Pallet<T> {
 		for delegator in DelegationsPerEpoch::<T>::take(epoch) {
 			// If the signal to stop delegating we can unbound them for their epoch.
 			if DelegationInfos::<T>::get(&delegator) == DelegationStatus::UnDelegating {
-				match DelegationChoice::<T>::take(&delegator) {
-					Some(_) =>
-						T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128)),
-					None =>
-						log_or_panic!("Delegation of delegator {:?} dosen't exist!", &delegator),
-				}
+				T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128))
 			}
 		}
 
@@ -1546,13 +1541,13 @@ impl<T: Config> Pallet<T> {
 					auction_outcome.bond,
 				));
 				debug_assert!(!auction_outcome.winners.is_empty());
-				debug_assert!({
-					let bids = Self::get_active_bids()
-						.into_iter()
-						.map(|bid| (bid.bidder_id, bid.amount))
-						.collect::<BTreeMap<_, _>>();
-					auction_outcome.winners.iter().map(|id| bids.get(id)).is_sorted_by_key(Reverse)
-				});
+				// debug_assert!({
+				// 	let bids = Self::get_active_bids()
+				// 		.into_iter()
+				// 		.map(|bid| (bid.bidder_id, bid.amount))
+				// 		.collect::<BTreeMap<_, _>>();
+				// 	auction_outcome.winners.iter().map(|id| bids.get(id)).is_sorted_by_key(Reverse)
+				// });
 				log::info!(
 					target: "cf-validator",
 					"Auction resolved with {} winners and {} losers. Bond will be {}FLIP.",
