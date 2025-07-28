@@ -1202,7 +1202,7 @@ pub trait PriceFeedApi {
 	fn get_price(asset: ChainlinkAssetpair) -> Option<OraclePrice>;
 }
 
-#[warn(dead_code)]
+#[allow(dead_code)]
 struct ChainlinkOracle;
 impl PriceFeedApi for ChainlinkOracle {
 	fn get_price(asset: ChainlinkAssetpair) -> Option<OraclePrice> {

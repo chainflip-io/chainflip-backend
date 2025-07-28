@@ -91,7 +91,7 @@ use cf_traits::{
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use frame_support::{derive_impl, instances::*};
+use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
 use pallet_cf_governance::GovCallHash;
@@ -1542,7 +1542,15 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV1_11 = ();
+type MigrationsForV1_11 = (
+	VersionedMigration<
+		17,
+		18,
+		migrations::safe_mode::SafeModeMigration,
+		pallet_cf_environment::Pallet<Runtime>,
+		<Runtime as frame_system::Config>::DbWeight,
+	>,
+);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]

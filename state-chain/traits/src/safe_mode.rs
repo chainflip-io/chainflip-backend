@@ -80,9 +80,7 @@ macro_rules! impl_runtime_safe_mode {
 			}
 
 			impl Get<()> for $runtime_safe_mode {
-				fn get() -> () {
-					()
-				}
+				fn get() -> () {}
 			}
 
 			impl Default for $runtime_safe_mode {

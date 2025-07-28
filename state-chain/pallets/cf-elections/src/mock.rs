@@ -56,6 +56,8 @@ impl pallet_cf_elections::Config<Instance1> for Test {
 
 	type WeightInfo = ();
 
+	type SafeMode = ();
+
 	type ElectoralSystemConfiguration = MockGovernanceHook;
 }
 

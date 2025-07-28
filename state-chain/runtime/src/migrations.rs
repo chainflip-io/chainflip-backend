@@ -19,3 +19,4 @@
 pub mod bitcoin_elections;
 pub mod generic_elections;
 pub mod housekeeping;
+pub mod safe_mode;
