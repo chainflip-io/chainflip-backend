@@ -266,7 +266,33 @@ impl DotRpcApi for DotHttpRpcClient {
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
-		Ok(self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await?)
+		// TEMP submit and watch for completion!
+		let mut result = self.rpc_methods.author_submit_and_watch_extrinsic(&encoded_bytes).await?;
+
+		while let Some(event) = result.next().await {
+			let event = event?;
+			match event {
+				subxt_rpcs::methods::legacy::TransactionStatus::Finalized(hash) => {
+					tracing::info!("dot extrinsic was finalized with hash ({hash:?}), for extrinsic {encoded_bytes:?}");
+					return Ok(hash)
+				},
+				// subxt_rpcs::methods::legacy::TransactionStatus::Future => todo!(),
+				// subxt_rpcs::methods::legacy::TransactionStatus::Ready => todo!(),
+				// subxt_rpcs::methods::legacy::TransactionStatus::Broadcast(items) => todo!(),
+				// subxt_rpcs::methods::legacy::TransactionStatus::InBlock(_) => todo!(),
+				subxt_rpcs::methods::legacy::TransactionStatus::Retracted(_) |
+				subxt_rpcs::methods::legacy::TransactionStatus::FinalityTimeout(_) |
+				subxt_rpcs::methods::legacy::TransactionStatus::Usurped(_) |
+				subxt_rpcs::methods::legacy::TransactionStatus::Dropped |
+				subxt_rpcs::methods::legacy::TransactionStatus::Invalid => {
+					tracing::error!("error for dot extrinsic ({event:?}), for extrinsic {encoded_bytes:?}");
+					return Err(anyhow!("error for dot extrinsic ({event:?}), for extrinsic {encoded_bytes:?}"));
+				},
+				state => tracing::info!("submission of dot extrinsic reached state {state:?}, for extrinsic {encoded_bytes:?}")
+			}
+		}
+
+		// Ok(self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await?)
 	}
 }
 
