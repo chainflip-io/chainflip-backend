@@ -1967,7 +1967,7 @@ mod delegation {
 					if delegator % 2 == 0 {
 						assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(*delegator)));
 						assert_eq!(
-							DelegationInfos::<Test>::get(&delegator),
+							DelegationInfos::<Test>::get(delegator),
 							DelegationStatus::UnDelegating
 						);
 					}
@@ -2003,10 +2003,10 @@ mod delegation {
 				assert!(DelegationsPerEpoch::<Test>::get(CurrentEpoch::<Test>::get()).len() == 2);
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {
-						assert_eq!(MockBonderFor::<Test>::get_bond(&delegator), 0);
+						assert_eq!(MockBonderFor::<Test>::get_bond(delegator), 0);
 					} else {
 						assert_eq!(
-							MockBonderFor::<Test>::get_bond(&delegator),
+							MockBonderFor::<Test>::get_bond(delegator),
 							AVAILABLE_BALANCE_OF_DELEGATOR
 						);
 					}
