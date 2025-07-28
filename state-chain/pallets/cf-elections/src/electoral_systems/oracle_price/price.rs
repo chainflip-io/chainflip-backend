@@ -223,3 +223,51 @@ impl<const U: Denom> PriceTrait for Fraction<U> {
 		Some(self - delta.clone()..=self + delta)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use crate::electoral_systems::oracle_price::{price::Fraction, primitives::BasisPoints};
+	use sp_core::U256;
+
+	#[test]
+	fn test_fraction_examples() {
+		{
+			fn check(input: &Fraction<99>, expected: u128) {
+				assert_eq!(input.0, U256::from(expected))
+			}
+
+			// testing fractions with fractional part 100:
+			let a: Fraction<99> = Fraction::integer(5);
+			check(&a, 500);
+			check(&(&a * a.clone()).unwrap(), 2500);
+
+			let b: Fraction<99> = (&a * BasisPoints(1000).to_fraction()).unwrap();
+			check(&b, 50);
+			check(&(&b * b.clone()).unwrap(), 25);
+			check(&(&b + b.clone()), 100);
+			check(&(&b * Fraction::<99>::integer(4)).unwrap(), 200);
+			check(&(&b * Fraction::<12345>::integer(4)).unwrap(), 200);
+			check(&(&b - BasisPoints(1000).to_fraction().convert().unwrap()), 40);
+		}
+
+		{
+			fn check(input: &Fraction<255>, expected: u128) {
+				assert_eq!(input.0, U256::from(expected))
+			}
+
+			// testing fractions with fractional part 256 = 2^8:
+			let a: Fraction<255> = Fraction::integer(5);
+			check(&a, 5 << 8);
+			check(&(&a * a.clone()).unwrap(), 25 << 8);
+
+			// b = a / 4
+			let b: Fraction<255> = (&a * Fraction::<255>((1u128 << 6).into())).unwrap();
+			check(&b, 5 << 6);
+			check(&(&b * b.clone()).unwrap(), 25 << 4);
+			check(&(&b + b.clone()), 10 << 6);
+			check(&(&b * Fraction::<255>::integer(4)).unwrap(), 20 << 6);
+			check(&(&b * Fraction::<12345>::integer(4)).unwrap(), 20 << 6);
+			check(&(&b - Fraction::<255>(1u128.into())), (5 << 6) - 1);
+		}
+	}
+}
