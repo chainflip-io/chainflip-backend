@@ -292,6 +292,8 @@ impl DotRpcApi for DotHttpRpcClient {
 			}
 		}
 
+		Err(anyhow!("rpc subscription for submission of extrinsic {encoded_bytes:?} terminatd unexpectedly!"))
+
 		// Ok(self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await?)
 	}
 }
