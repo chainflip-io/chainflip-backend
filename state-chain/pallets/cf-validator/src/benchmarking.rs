@@ -571,6 +571,6 @@ mod benchmarks {
 		#[extrinsic_call]
 		undelegate(RawOrigin::Signed(delegator.clone()));
 
-		assert!(DelegationChoice::<T>::get(delegator).is_none());
+		assert_eq!(DelegationInfos::<T>::get(delegator), DelegationStatus::UnDelegating);
 	}
 }
