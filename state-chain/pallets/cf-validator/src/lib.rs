@@ -41,6 +41,7 @@ use cf_primitives::{
 	AccountRole, AuthorityCount, CfeCompatibility, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
 	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
 };
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AsyncResult,
 	AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
@@ -391,6 +392,7 @@ pub mod pallet {
 	pub type DelegationInfos<T: Config> =
 		StorageMap<_, Identity, T::AccountId, DelegationStatus, ValueQuery>;
 
+	/// Collects all delegation of an epoch.
 	#[pallet::storage]
 	pub type DelegationsPerEpoch<T: Config> =
 		StorageMap<_, Identity, EpochIndex, BTreeSet<T::AccountId>, ValueQuery>;
@@ -1400,7 +1402,8 @@ impl<T: Config> Pallet<T> {
 				match DelegationChoice::<T>::take(&delegator) {
 					Some(_) =>
 						T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128)),
-					None => log::error!("Broken!"),
+					None =>
+						log_or_panic!("Delegation of delegator {:?} dosen't exist!", &delegator),
 				}
 			}
 		}
