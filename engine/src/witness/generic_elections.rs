@@ -99,7 +99,7 @@ impl TryFrom<EthPriceFeedData> for PriceData {
 			timestamp: UnixTime {
 				seconds: updated_at.try_into().map_err(|_| {
 					anyhow!(
-						"Unexpected timestamp when querying chainlink on ethereum (updated_at:?)"
+						"Unexpected timestamp when querying chainlink on ethereum {updated_at:?}"
 					)
 				})?,
 			},

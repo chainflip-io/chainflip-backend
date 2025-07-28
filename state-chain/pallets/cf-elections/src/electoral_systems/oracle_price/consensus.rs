@@ -43,25 +43,23 @@ impl<T: OPTypes> ConsensusMechanism for OraclePriceConsensus<T> {
 			Some(
 				all::<T::AssetPair>()
 					.filter_map(|asset| {
+						let single_asset_votes: (Vec<_>, Vec<_>) = self
+							.votes
+							.iter()
+							.filter_map(|vote| vote.price.get(&asset))
+							.cloned()
+							.unzip();
+						if single_asset_votes.0.len() < threshold.success_threshold as usize ||
+							single_asset_votes.1.len() < threshold.success_threshold as usize
+						{
+							return None;
+						}
+
 						Some((
 							asset.clone(),
 							(
-								compute_aggregated(
-									self.votes
-										.iter()
-										.filter_map(|vote| vote.price.get(&asset))
-										.map(|(timestamp, _price)| timestamp)
-										.cloned()
-										.collect::<Vec<_>>(),
-								)?,
-								compute_aggregated(
-									self.votes
-										.iter()
-										.filter_map(|vote| vote.price.get(&asset))
-										.map(|(_timestamp, price)| price)
-										.cloned()
-										.collect::<Vec<_>>(),
-								)?,
+								compute_aggregated(single_asset_votes.0)?,
+								compute_aggregated(single_asset_votes.1)?,
 							),
 						))
 					})
