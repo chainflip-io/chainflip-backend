@@ -17,8 +17,8 @@
 use cf_primitives::Price;
 use cf_runtime_utilities::log_or_panic;
 use frame_system::pallet_prelude::BlockNumberFor;
-use sp_core::{Get, H160};
-use sp_std::vec::Vec;
+use sp_core::{Get, RuntimeDebug, H160};
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use pallet_cf_elections::{
 	electoral_system::ElectoralReadAccess,
@@ -137,6 +137,7 @@ impls! {
 		type GetStateChainBlockHeight = Self;
 		type AssetPair = ChainlinkAssetpair;
 		type SafeModeEnabledHook = Self;
+		type EmitPricesUpdatedEventHook = Self;
 	}
 
 	Hook<HookTypeFor<Self, GetTimeHook>> {
@@ -149,6 +150,14 @@ impls! {
 	Hook<HookTypeFor<Self, GetStateChainBlockHeight>> {
 		fn run(&mut self, _: ()) -> BlockNumberFor<Runtime> {
 			crate::System::block_number()
+		}
+	}
+
+	Hook<HookTypeFor<Self, EmitPricesUpdatedEvent>> {
+		fn run(&mut self, prices: BTreeMap<ChainlinkAssetpair, ChainlinkPrice>) {
+			pallet_cf_elections::Pallet::<Runtime>::deposit_event(
+				pallet_cf_elections::Event::ElectoralEvent(GenericElectoralEvents::OraclePricesUpdated { prices })
+			);
 		}
 	}
 
@@ -179,6 +188,11 @@ pub type ChainlinkOraclePriceES = StatemachineElectoralSystem<TypesFor<Chainlink
 
 //--------------- all generic ESs -------------
 
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub enum GenericElectoralEvents {
+	OraclePricesUpdated { prices: BTreeMap<ChainlinkAssetpair, ChainlinkPrice> },
+}
+
 impl_pallet_safe_mode! {
 	GenericElectionsSafeMode;
 	oracle_price_elections
@@ -198,7 +212,7 @@ impl Hooks<ChainlinkOraclePriceES> for GenericElectionHooks {
 }
 
 impl pallet_cf_elections::ElectoralSystemConfiguration for GenericElectionHooks {
-	type ElectoralEvents = ();
+	type ElectoralEvents = GenericElectoralEvents;
 
 	type SafeMode = GenericElectionsSafeMode;
 
@@ -227,6 +241,7 @@ pub fn initial_state(
 			get_time: Default::default(),
 			safe_mode_enabled: Default::default(),
 			get_statechain_block_height: Default::default(),
+			emit_oracle_price_event: Default::default(),
 		},),
 		unsynchronised_settings: (OraclePriceSettings {
 			solana: ExternalChainSettings {

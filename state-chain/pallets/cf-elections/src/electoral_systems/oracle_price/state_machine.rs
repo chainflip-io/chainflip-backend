@@ -55,6 +55,8 @@ pub trait OPTypes: 'static + Sized + CommonTraits {
 	type GetStateChainBlockHeight: Hook<HookTypeFor<Self, GetStateChainBlockHeight>> + CommonTraits;
 
 	type SafeModeEnabledHook: Hook<HookTypeFor<Self, SafeModeEnabledHook>> + CommonTraits;
+
+	type EmitPricesUpdatedEventHook: Hook<HookTypeFor<Self, EmitPricesUpdatedEvent>> + CommonTraits;
 }
 
 pub trait AssetPairTrait {
@@ -81,6 +83,12 @@ pub struct SafeModeEnabledHook;
 impl<T: OPTypes> HookType for HookTypeFor<T, SafeModeEnabledHook> {
 	type Input = ();
 	type Output = SafeModeStatus;
+}
+
+pub struct EmitPricesUpdatedEvent;
+impl<T: OPTypes> HookType for HookTypeFor<T, EmitPricesUpdatedEvent> {
+	type Input = BTreeMap<T::AssetPair, T::Price>;
+	type Output = ();
 }
 
 //---------------- the primitives ------------------
@@ -123,11 +131,14 @@ impl<T: OPTypes> AssetState<T> {
 		&mut self,
 		response: AssetResponse<T>,
 		current_statechain_block: T::StateChainBlockNumber,
-	) {
+	) -> bool {
 		if response.timestamp.median > self.timestamp.median {
 			self.timestamp = response.timestamp;
 			self.price = response.price;
 			self.updated_at_statechain_block = current_statechain_block;
+			true
+		} else {
+			false
 		}
 	}
 }
@@ -230,17 +241,6 @@ impl<T: OPTypes> ExternalChainState<T> {
 				)
 			})
 			.collect()
-	}
-
-	pub fn update(
-		&mut self,
-		response: BTreeMap<T::AssetPair, AssetResponse<T>>,
-		current_statechain_block: T::StateChainBlockNumber,
-	) {
-		for (asset, response) in response {
-			let entry = self.price.entry(asset).or_default();
-			entry.update(response, current_statechain_block.clone());
-		}
 	}
 }
 
@@ -353,6 +353,7 @@ def_derive! {
 		pub get_time: T::GetTime,
 		pub get_statechain_block_height: T::GetStateChainBlockHeight,
 		pub safe_mode_enabled: T::SafeModeEnabledHook,
+		pub emit_oracle_price_event: T::EmitPricesUpdatedEventHook,
 	}
 }
 
@@ -409,13 +410,16 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 			Either::Left(()) => {},
 			Either::Right((query, response)) => {
 				let current_statechain_block = state.get_statechain_block_height.run(());
-				for (asset, response) in response {
+
+				// try to write new prices into the chain state (only if they are newer)
+				// and if any of the asset prices was updated, emit the PricesUpdated event.
+				if response.into_iter().any(|(asset, response)| {
 					state.chain_states[query.chain]
 						.price
 						.entry(asset)
 						.or_default()
-						.update(response, current_statechain_block.clone());
-				}
+						.update(response, current_statechain_block.clone())
+				}) {}
 			},
 		}
 
@@ -494,6 +498,7 @@ pub mod tests {
 		type GetTime = MockHook<HookTypeFor<Self, GetTimeHook>>;
 		type GetStateChainBlockHeight = MockHook<HookTypeFor<Self, GetStateChainBlockHeight>>;
 		type SafeModeEnabledHook = MockHook<HookTypeFor<Self, SafeModeEnabledHook>>;
+		type EmitPricesUpdatedEventHook = MockHook<HookTypeFor<Self, EmitPricesUpdatedEvent>>;
 	}
 
 	#[test]
