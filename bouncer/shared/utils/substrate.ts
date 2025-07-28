@@ -339,7 +339,7 @@ const subscribeHeads = getCachedDisposable(
       cache.addEvents(header.hash.toString(), mappedEvents, finalized);
       subject.next({
         blockHash: header.hash.toString(),
-        blockNumber: header.number,
+        blockNumber: header.number.toNumber(),
         events: mappedEvents,
       });
     });
