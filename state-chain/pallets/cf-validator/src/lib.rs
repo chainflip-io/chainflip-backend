@@ -1469,7 +1469,7 @@ impl<T: Config> Pallet<T> {
 		for delegator in &unique_delegators {
 			T::Bonder::update_bond(
 				&delegator.clone().into(),
-				T::FundingInfo::total_balance_of(&delegator),
+				T::FundingInfo::total_balance_of(delegator),
 			);
 		}
 
