@@ -129,12 +129,12 @@ def_derive! {
 impl<T: OPTypes> AssetState<T> {
 	pub fn update(
 		&mut self,
-		response: AssetResponse<T>,
+		response: &AssetResponse<T>,
 		current_statechain_block: T::StateChainBlockNumber,
 	) -> bool {
 		if response.timestamp.median > self.timestamp.median {
-			self.timestamp = response.timestamp;
-			self.price = response.price;
+			self.timestamp = response.timestamp.clone();
+			self.price = response.price.clone();
 			self.updated_at_statechain_block = current_statechain_block;
 			true
 		} else {
@@ -413,13 +413,22 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 
 				// try to write new prices into the chain state (only if they are newer)
 				// and if any of the asset prices was updated, emit the PricesUpdated event.
-				if response.into_iter().any(|(asset, response)| {
-					state.chain_states[query.chain]
+				let mut updated = false;
+				for (asset, response) in &response {
+					updated |= state.chain_states[query.chain]
 						.price
-						.entry(asset)
+						.entry(asset.clone())
 						.or_default()
-						.update(response, current_statechain_block.clone())
-				}) {}
+						.update(response, current_statechain_block.clone());
+				}
+				if updated {
+					state.emit_oracle_price_event.run(
+						response
+							.into_iter()
+							.map(|(asset, response)| (asset, response.price.median))
+							.collect(),
+					)
+				}
 			},
 		}
 
