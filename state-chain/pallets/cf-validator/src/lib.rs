@@ -503,6 +503,9 @@ pub mod pallet {
 		DelegatorBlocked,
 		/// The provided Operator fee is too low.
 		OperatorFeeTooLow,
+		/// Delegator already submitted to undelegate. The delegator has to wait until this process
+		/// has been finalized.
+		UnDelegationAlreadyInitiated,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -1127,6 +1130,11 @@ pub mod pallet {
 			let delegator = ensure_signed(origin)?;
 
 			ensure!(
+				DelegationInfos::<T>::get(&delegator) != DelegationStatus::UnDelegating,
+				Error::<T>::UnDelegationAlreadyInitiated
+			);
+
+			ensure!(
 				!T::AccountRoleRegistry::has_account_role(&delegator, AccountRole::Validator),
 				Error::<T>::DelegationNotAllowed
 			);
@@ -1398,7 +1406,7 @@ impl<T: Config> Pallet<T> {
 
 		for delegator in DelegationsPerEpoch::<T>::take(epoch) {
 			// If the signal to stop delegating we can unbound them for their epoch.
-			if DelegationInfos::<T>::get(&delegator) == DelegationStatus::UnDelegating {
+			if DelegationInfos::<T>::take(&delegator) == DelegationStatus::UnDelegating {
 				T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128))
 			}
 		}
