@@ -30,6 +30,7 @@ use sp_core::U256;
 
 use crate::electoral_systems::state_machine::common_imports::*;
 
+#[derive(Clone)]
 pub struct PriceUnit {
 	pub base_asset: PriceAsset,
 	pub quote_asset: PriceAsset,

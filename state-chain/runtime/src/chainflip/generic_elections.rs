@@ -18,7 +18,7 @@ use cf_primitives::Price;
 use cf_runtime_utilities::log_or_panic;
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::{Get, RuntimeDebug, H160};
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::vec::Vec;
 
 use pallet_cf_elections::{
 	electoral_system::ElectoralReadAccess,
@@ -28,6 +28,7 @@ use pallet_cf_elections::{
 			chainlink::{
 				get_latest_price_with_statechain_encoding, ChainlinkAssetpair, ChainlinkPrice,
 			},
+			price::{convert_unit, PriceAsset, PriceUnit, StatechainPrice},
 			state_machine::OPTypes,
 		},
 	},
@@ -154,9 +155,23 @@ impls! {
 	}
 
 	Hook<HookTypeFor<Self, EmitPricesUpdatedEvent>> {
-		fn run(&mut self, prices: BTreeMap<ChainlinkAssetpair, ChainlinkPrice>) {
+		fn run(&mut self, prices: Vec<(ChainlinkAssetpair, UnixTime, ChainlinkPrice)>) {
 			pallet_cf_elections::Pallet::<Runtime>::deposit_event(
-				pallet_cf_elections::Event::ElectoralEvent(GenericElectoralEvents::OraclePricesUpdated { prices })
+				pallet_cf_elections::Event::ElectoralEvent(GenericElectoralEvents::OraclePricesUpdated {
+					prices: prices.into_iter()
+						.filter_map(|(asset, timestamp, price)| {
+							let price_unit = asset.to_price_unit();
+							let internal_price: StatechainPrice = convert_unit(price, price_unit.clone(), PriceUnit { base_asset: PriceAsset::Fine, quote_asset: PriceAsset::Fine })?.convert()?;
+							Some(OraclePriceUpdate {
+								price: internal_price.into(),
+								base_asset: price_unit.base_asset,
+								quote_asset: price_unit.quote_asset,
+								updated_at_oracle_timestamp: timestamp.seconds
+							})
+						}
+						)
+					.collect()
+				})
 			);
 		}
 	}
@@ -186,11 +201,27 @@ impls! {
 
 pub type ChainlinkOraclePriceES = StatemachineElectoralSystem<TypesFor<Chainlink>>;
 
+/// data for events
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct OraclePriceUpdate {
+	/// internal price with 128 bits fractional part
+	price: Price,
+
+	/// base asset, here interpreted as "fine" asset
+	base_asset: PriceAsset,
+
+	/// quote asset, here interpreted as "fine" asset
+	quote_asset: PriceAsset,
+
+	/// seconds since Unix epoch
+	updated_at_oracle_timestamp: u64,
+}
+
 //--------------- all generic ESs -------------
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum GenericElectoralEvents {
-	OraclePricesUpdated { prices: BTreeMap<ChainlinkAssetpair, ChainlinkPrice> },
+	OraclePricesUpdated { prices: Vec<OraclePriceUpdate> },
 }
 
 impl_pallet_safe_mode! {

@@ -87,7 +87,7 @@ impl<T: OPTypes> HookType for HookTypeFor<T, SafeModeEnabledHook> {
 
 pub struct EmitPricesUpdatedEvent;
 impl<T: OPTypes> HookType for HookTypeFor<T, EmitPricesUpdatedEvent> {
-	type Input = BTreeMap<T::AssetPair, T::Price>;
+	type Input = Vec<(T::AssetPair, UnixTime, T::Price)>;
 	type Output = ();
 }
 
@@ -123,23 +123,6 @@ def_derive! {
 		pub price_status: PriceStatus,
 		pub updated_at_statechain_block: T::StateChainBlockNumber,
 		pub minimal_price_deviation: BasisPoints
-	}
-}
-
-impl<T: OPTypes> AssetState<T> {
-	pub fn update(
-		&mut self,
-		response: &AssetResponse<T>,
-		current_statechain_block: T::StateChainBlockNumber,
-	) -> bool {
-		if response.timestamp.median > self.timestamp.median {
-			self.timestamp = response.timestamp.clone();
-			self.price = response.price.clone();
-			self.updated_at_statechain_block = current_statechain_block;
-			true
-		} else {
-			false
-		}
 	}
 }
 
@@ -254,11 +237,20 @@ def_derive! {
 }
 
 impl<T: OPTypes> ExternalChainStates<T> {
-	pub fn get_latest_price(&self, asset: T::AssetPair) -> Option<(T::Price, PriceStatus)> {
+	pub fn get_latest_price(
+		&self,
+		asset: T::AssetPair,
+	) -> Option<(UnixTime, T::Price, PriceStatus)> {
 		all::<ExternalPriceChain>()
 			.filter_map(|chain| self[chain].price.get(&asset))
 			.max_by_key(|price_state| price_state.timestamp.median)
-			.map(|price_state| (price_state.price.median.clone(), price_state.price_status))
+			.map(|price_state| {
+				(
+					price_state.timestamp.median,
+					price_state.price.median.clone(),
+					price_state.price_status,
+				)
+			})
 	}
 }
 
@@ -412,22 +404,40 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 				let current_statechain_block = state.get_statechain_block_height.run(());
 
 				// try to write new prices into the chain state (only if they are newer)
-				// and if any of the asset prices was updated, emit the PricesUpdated event.
-				let mut updated = false;
+				// and emit `OraclePricesUpdated` for the ones that have been updated
+				let mut updated_prices = Vec::new();
 				for (asset, response) in &response {
-					updated |= state.chain_states[query.chain]
-						.price
-						.entry(asset.clone())
-						.or_default()
-						.update(response, current_statechain_block.clone());
+					// if the response timestamp is newer than the previously best timestamp for
+					// this asset, we will emit this price as part of the `OraclePricesUpdated`
+					// event.
+					let previous_best_timestamp = state
+						.chain_states
+						.get_latest_price(asset.clone())
+						.map(|state| state.0)
+						.unwrap_or_default();
+					if response.timestamp.median > previous_best_timestamp {
+						updated_prices.push((
+							asset.clone(),
+							response.timestamp.median,
+							response.price.median.clone(),
+						));
+					}
+
+					// get the previous price state, or create a default one if none is available
+					let entry =
+						state.chain_states[query.chain].price.entry(asset.clone()).or_default();
+
+					// update the price state if the response contains newer data
+					if response.timestamp.median > entry.timestamp.median {
+						entry.timestamp = response.timestamp.clone();
+						entry.price = response.price.clone();
+						entry.updated_at_statechain_block = current_statechain_block.clone();
+					}
 				}
-				if updated {
-					state.emit_oracle_price_event.run(
-						response
-							.into_iter()
-							.map(|(asset, response)| (asset, response.price.median))
-							.collect(),
-					)
+
+				// emit event with all updated prices
+				if !updated_prices.is_empty() {
+					state.emit_oracle_price_event.run(updated_prices);
 				}
 			},
 		}
