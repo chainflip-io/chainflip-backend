@@ -26,9 +26,7 @@ impl OnRuntimeUpgrade for PolkadotDeprecationMigration {
 		let dot_usdc_pair = AssetPair::try_new::<Runtime>(Asset::Dot, Asset::Usdc)
 			.expect("Failed to create Dot/USDC AssetPair");
 
-		let dot_pool = pallet_cf_pools::pallet::Pools::<Runtime>::get(dot_usdc_pair);
-
-		if dot_pool.is_some() {
+		if pallet_cf_pools::pallet::Pools::<Runtime>::get(dot_usdc_pair).is_some() {
 			log::info!("🍩 Cancelling all Polkadot orders");
 
 			weight += <Runtime as frame_system::Config>::DbWeight::get().reads(1);
