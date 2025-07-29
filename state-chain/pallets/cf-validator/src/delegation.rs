@@ -71,22 +71,3 @@ pub enum DelegationStatus {
 	Delegating,
 	UnDelegating,
 }
-
-// #[derive(
-// 	Default,
-// 	Encode,
-// 	Decode,
-// 	TypeInfo,
-// 	MaxEncodedLen,
-// 	Clone,
-// 	PartialEq,
-// 	Eq,
-// 	Debug,
-// 	Deserialize,
-// 	Serialize,
-// )]
-// #[scale_info(skip_type_params(T))]
-// pub struct DelegationInfo<T: Config> {
-// 	pub status: DelegationStatus,
-// 	pub max_bid: Option<T::Amount>,
-// }

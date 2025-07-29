@@ -397,6 +397,10 @@ pub mod pallet {
 	pub type DelegationsPerEpoch<T: Config> =
 		StorageMap<_, Identity, EpochIndex, BTreeSet<T::AccountId>, ValueQuery>;
 
+	/// The set of delegators in the next epoch.
+	#[pallet::storage]
+	pub type NextDelegators<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -439,6 +443,8 @@ pub mod pallet {
 		UnDelegated { delegator: T::AccountId, operator: T::AccountId },
 		/// An account has delegated to an operator.
 		Delegated { delegator: T::AccountId, operator: T::AccountId },
+		/// The undelegation process of an delegator has been finalized.
+		UnDelegationFinalized { delegator: T::AccountId, epoch: EpochIndex },
 	}
 
 	#[pallet::error]
@@ -1406,7 +1412,13 @@ impl<T: Config> Pallet<T> {
 
 		for delegator in DelegationsPerEpoch::<T>::take(epoch) {
 			if DelegationInfos::<T>::take(&delegator) == DelegationStatus::UnDelegating {
-				T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128))
+				// TODO: We have to investigate if this assumptions is safe. Since validators are
+				// still bonded for historical epochs we also have to ensure that the capital
+				// of delegators is still available when the validator is powered by delegations.
+				// In the worst case that would mean that we have wait for 2 epoch until we safely
+				// allow the delegator to undelegate.
+				T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
+				Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch });
 			}
 		}
 
@@ -1463,19 +1475,16 @@ impl<T: Config> Pallet<T> {
 			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 		});
 
-		let unique_delegators: BTreeSet<T::AccountId> = Self::build_delegation_snapshot()
-			.into_iter()
-			.flat_map(|(_, value)| value.delegators.keys().cloned().collect::<Vec<_>>())
-			.collect();
+		let delegators = NextDelegators::<T>::take();
 
-		for delegator in &unique_delegators {
+		for delegator in &delegators {
 			T::Bonder::update_bond(
 				&delegator.clone().into(),
 				T::FundingInfo::total_balance_of(delegator),
 			);
 		}
 
-		DelegationsPerEpoch::<T>::insert(new_epoch, unique_delegators);
+		DelegationsPerEpoch::<T>::insert(new_epoch, delegators);
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 
@@ -1568,6 +1577,22 @@ impl<T: Config> Pallet<T> {
 				// Use the winners and losers as an approximation.
 				let weight = T::ValidatorWeightInfo::start_authority_rotation(
 					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
+				);
+
+				// TODO: We have to ensure that all validators of an operator make it into the set.
+				// Only then our assumptions around the capital distribution hold! Worst case for
+				// now would be that we bind more capital than necessary. We should address this
+				// during the auction optimization for delegation.
+				NextDelegators::<T>::put(
+					auction_outcome
+						.winners
+						.iter()
+						.filter_map(|winner| {
+							ManagedValidators::<T>::get(&winner.clone().into())
+								.and_then(|operator| delegation_snapshot.get(&operator))
+						})
+						.flat_map(|snapshot| snapshot.delegators.keys().cloned())
+						.collect::<BTreeSet<T::AccountId>>(),
 				);
 
 				Self::try_start_keygen(RotationState::from_auction_outcome::<T>(auction_outcome));
@@ -1777,10 +1802,6 @@ impl<T: Config> Pallet<T> {
 		.collect()
 	}
 
-	pub fn get_operator_registry() -> BTreeSet<T::AccountId> {
-		OperatorSettingsLookup::<T>::iter_keys().collect()
-	}
-
 	pub fn build_delegation_snapshot() -> BTreeMap<T::AccountId, DelegationSnapshot<T>> {
 		let mut snapshot: BTreeMap<T::AccountId, DelegationSnapshot<T>> = BTreeMap::new();
 
@@ -1790,19 +1811,12 @@ impl<T: Config> Pallet<T> {
 			let validators =
 				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator);
 
-			let num_validators = validators.len();
-
 			let total_delegator_balance = delegators.values().copied().sum::<T::Amount>();
 			let total_validator_balance = validators.values().copied().sum::<T::Amount>();
+
 			let total_balance = total_delegator_balance.saturating_add(total_validator_balance);
 
-			// let avg_bid = T::Amount::from(total_entities as u128)
-			// 	.checked_div(&T::Amount::from(1u8)) // avoid zero divider conversion
-			// 	.and_then(|divider| total_balance.checked_div(&divider));
-
-			let avg_bid = total_balance.checked_div(&T::Amount::from(num_validators as u128));
-
-			match avg_bid {
+			match total_balance.checked_div(&T::Amount::from(validators.len() as u128)) {
 				Some(avg_bid) => {
 					snapshot.insert(
 						operator.clone(),
