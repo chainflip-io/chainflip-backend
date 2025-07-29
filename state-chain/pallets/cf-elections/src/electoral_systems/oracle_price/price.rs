@@ -60,7 +60,7 @@ impl PriceAsset {
 		use PriceAsset::*;
 		match self {
 			Btc => 8,
-			Eth => 12,
+			Eth => 18,
 			Sol => 9,
 			Usdc => 6,
 			Usdt => 6,
