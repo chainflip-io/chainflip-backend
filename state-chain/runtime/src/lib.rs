@@ -1922,6 +1922,7 @@ impl_runtime_apis! {
 						amount_per_chunk,
 						None,
 						fees_vec,
+						Default::default(), // Execution block
 					)
 				],
 			).map_err(|e| match e {
@@ -2208,23 +2209,7 @@ impl_runtime_apis! {
 
 		fn cf_scheduled_swaps(base_asset: Asset, quote_asset: Asset) -> Vec<(SwapLegInfo, BlockNumber)> {
 			assert_eq!(quote_asset, STABLE_ASSET, "Only USDC is supported as quote asset");
-
-			let current_block = System::block_number();
-
-			pallet_cf_swapping::SwapQueue::<Runtime>::iter().flat_map(|(block, swaps_for_block)| {
-				// In case `block` has already passed, the swaps will be re-tried at the next block:
-				let execute_at = core::cmp::max(block, current_block.saturating_add(1));
-
-				let swaps: Vec<_> = swaps_for_block
-					.iter()
-					.filter(|swap| swap.from == base_asset || swap.to == base_asset)
-					.cloned()
-					.collect();
-
-				Swapping::get_scheduled_swap_legs(swaps, base_asset)
-					.into_iter()
-					.map(move |swap| (swap, execute_at))
-			}).collect()
+			Swapping::get_scheduled_swap_legs(base_asset)
 		}
 
 		fn cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
@@ -2908,8 +2893,7 @@ impl_runtime_apis! {
 			}
 		}
 		fn cf_pending_swaps_count() -> u32 {
-			let swaps: Vec<_> = pallet_cf_swapping::SwapQueue::<Runtime>::iter().collect();
-			swaps.iter().fold(0u32, |acc, elem| acc + elem.1.len() as u32)
+			pallet_cf_swapping::ScheduledSwaps::<Runtime>::get().len() as u32
 		}
 		fn cf_open_deposit_channels_count() -> OpenDepositChannels {
 			fn open_channels<BlockHeight, I: 'static>() -> u32

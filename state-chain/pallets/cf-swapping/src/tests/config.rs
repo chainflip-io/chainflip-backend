@@ -179,12 +179,35 @@ fn max_swap_amount_can_be_removed() {
 		let execute_at = System::block_number() + u64::from(SWAP_DELAY_BLOCKS);
 
 		assert_eq!(
-			SwapQueue::<Test>::get(execute_at),
-			vec![
-				Swap::new(1.into(), 1.into(), from, to, max_swap, None, vec![ZERO_NETWORK_FEES],),
-				// New swap takes the full amount.
-				Swap::new(2.into(), 2.into(), from, to, amount, None, vec![ZERO_NETWORK_FEES],),
-			]
+			ScheduledSwaps::<Test>::get(),
+			BTreeMap::from([
+				(
+					1.into(),
+					Swap::new(
+						1.into(),
+						1.into(),
+						from,
+						to,
+						max_swap,
+						None,
+						vec![ZERO_NETWORK_FEES],
+						execute_at
+					),
+				),
+				(
+					2.into(),
+					Swap::new(
+						2.into(),
+						2.into(),
+						from,
+						to,
+						amount,
+						None,
+						vec![ZERO_NETWORK_FEES],
+						execute_at
+					),
+				),
+			])
 		);
 		// No no funds are confiscated.
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
@@ -250,8 +273,20 @@ fn can_swap_below_max_amount() {
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0u128);
 
 		assert_eq!(
-			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS)),
-			vec![Swap::new(1.into(), 1.into(), from, to, amount, None, vec![ZERO_NETWORK_FEES],),]
+			ScheduledSwaps::<Test>::get(),
+			BTreeMap::from([(
+				1.into(),
+				Swap::new(
+					1.into(),
+					1.into(),
+					from,
+					to,
+					amount,
+					None,
+					vec![ZERO_NETWORK_FEES],
+					System::block_number() + u64::from(SWAP_DELAY_BLOCKS)
+				)
+			)])
 		);
 	});
 }
@@ -304,7 +339,7 @@ fn cannot_swap_in_safe_mode() {
 
 		insert_swaps(&generate_test_swaps());
 
-		assert_eq!(SwapQueue::<Test>::decode_len(swaps_scheduled_at), Some(4));
+		assert_eq!(ScheduledSwaps::<Test>::get().len(), 4);
 
 		// Activate code red
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
@@ -313,13 +348,13 @@ fn cannot_swap_in_safe_mode() {
 		Swapping::on_finalize(swaps_scheduled_at);
 
 		let retry_at_block = swaps_scheduled_at + SwapRetryDelay::<Test>::get();
-		assert_eq!(SwapQueue::<Test>::decode_len(retry_at_block), Some(4));
+		assert_eq!(ScheduledSwaps::<Test>::get().len(), 4);
 
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 
 		// Swaps are processed
 		Swapping::on_finalize(retry_at_block);
-		assert_eq!(SwapQueue::<Test>::decode_len(retry_at_block), None);
+		assert_swaps_queue_is_empty();
 	});
 }
 

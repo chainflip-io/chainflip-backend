@@ -180,7 +180,7 @@ fn price_limit_is_respected_in_fok_swap(is_ccm: bool) {
 				}),
 			);
 
-			assert_eq!(SwapQueue::<Test>::get(SWAP_RETRIED_AT_BLOCK).len(), 1);
+			assert_eq!(ScheduledSwaps::<Test>::get().len(), 1);
 		})
 		.then_execute_at_block(SWAP_RETRIED_AT_BLOCK, |_| {
 			// Changing the swap rate to allow the FoK swap to be executed
@@ -199,7 +199,7 @@ fn price_limit_is_respected_in_fok_swap(is_ccm: bool) {
 				}),
 			);
 
-			assert_eq!(SwapQueue::<Test>::get(SWAP_RETRIED_AT_BLOCK).len(), 0);
+			assert_swaps_queue_is_empty();
 		});
 }
 
@@ -419,6 +419,8 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection(is_ccm: bool) {
 				Test,
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
+				// Non-fok swap will continue to be retried:
+				RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: REGULAR_SWAP_ID, .. }),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: FOK_SWAP_REQUEST_ID,
 					..
@@ -426,8 +428,6 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 					swap_request_id: FOK_SWAP_REQUEST_ID
 				}),
-				// Non-fok swap will continue to be retried:
-				RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: REGULAR_SWAP_ID, .. }),
 			);
 		});
 }
