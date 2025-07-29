@@ -63,13 +63,15 @@ impl OnRuntimeUpgrade for PolkadotDeprecationMigration {
 
 		log::info!("🍩 Transferring all Dot balances to HubDot balances");
 		for (account_id, asset, amount) in FreeBalances::<Runtime>::iter() {
-			if asset == Asset::Dot && amount > AssetAmount::zero() {
-				FreeBalances::<Runtime>::mutate(account_id.clone(), Asset::HubDot, |balance| {
-					*balance = balance.saturating_add(amount);
-				});
-				weight += <Runtime as frame_system::Config>::DbWeight::get().reads_writes(1, 1);
+			if asset == Asset::Dot {
+				if amount > AssetAmount::zero() {
+					FreeBalances::<Runtime>::mutate(account_id.clone(), Asset::HubDot, |balance| {
+						*balance = balance.saturating_add(amount);
+					});
+					weight += <Runtime as frame_system::Config>::DbWeight::get().reads_writes(1, 1);
+				}
 
-				FreeBalances::<Runtime>::mutate_exists(account_id, asset, |balance| {
+				FreeBalances::<Runtime>::mutate_exists(account_id, Asset::Dot, |balance| {
 					*balance = None;
 				});
 				weight += <Runtime as frame_system::Config>::DbWeight::get().reads_writes(1, 1);
