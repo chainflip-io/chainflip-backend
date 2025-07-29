@@ -1405,7 +1405,6 @@ impl<T: Config> Pallet<T> {
 		}
 
 		for delegator in DelegationsPerEpoch::<T>::take(epoch) {
-			// If the signal to stop delegating we can unbound them for their epoch.
 			if DelegationInfos::<T>::take(&delegator) == DelegationStatus::UnDelegating {
 				T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128))
 			}
@@ -1784,25 +1783,38 @@ impl<T: Config> Pallet<T> {
 
 	pub fn build_delegation_snapshot() -> BTreeMap<T::AccountId, DelegationSnapshot<T>> {
 		let mut snapshot: BTreeMap<T::AccountId, DelegationSnapshot<T>> = BTreeMap::new();
+
 		for operator in OperatorSettingsLookup::<T>::iter_keys() {
 			let delegators =
 				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Delegator);
 			let validators =
 				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator);
-			let sum_of_balances_delegators = delegators.values().copied().sum::<T::Amount>();
-			let sum_of_balances_validators = validators.values().copied().sum::<T::Amount>();
-			let divider: T::Amount =
-				T::Amount::from(delegators.len().saturating_add(validators.len()) as u128);
-			let total = sum_of_balances_delegators.saturating_add(sum_of_balances_validators);
-			if let Some(avg_bid) = total.checked_div(&divider) {
-				snapshot.insert(
-					operator.clone(),
-					DelegationSnapshot { avg_bid, delegators, validators },
-				);
-			} else {
-				log::error!("Calculating snapshot for operator {operator:?} failed.");
+
+			let num_validators = validators.len();
+
+			let total_delegator_balance = delegators.values().copied().sum::<T::Amount>();
+			let total_validator_balance = validators.values().copied().sum::<T::Amount>();
+			let total_balance = total_delegator_balance.saturating_add(total_validator_balance);
+
+			// let avg_bid = T::Amount::from(total_entities as u128)
+			// 	.checked_div(&T::Amount::from(1u8)) // avoid zero divider conversion
+			// 	.and_then(|divider| total_balance.checked_div(&divider));
+
+			let avg_bid = total_balance.checked_div(&T::Amount::from(num_validators as u128));
+
+			match avg_bid {
+				Some(avg_bid) => {
+					snapshot.insert(
+						operator.clone(),
+						DelegationSnapshot { avg_bid, delegators, validators },
+					);
+				},
+				None => {
+					log::error!("Failed to calculate snapshot for operator {:?}", operator);
+				},
 			}
 		}
+
 		snapshot
 	}
 }

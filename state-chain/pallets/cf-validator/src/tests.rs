@@ -1960,6 +1960,11 @@ mod delegation {
 						AVAILABLE_BALANCE_OF_DELEGATOR
 					);
 				}
+				println!(
+					"Current bond of Epoch {:?} is {:?}",
+					CurrentEpoch::<Test>::get(),
+					Bond::<Test>::get()
+				);
 			})
 			.then_execute_at_next_block(|_| {
 				// Signal undelegating for 50% of delegators
@@ -1993,6 +1998,11 @@ mod delegation {
 			})
 			.then_execute_at_next_block(|_| {
 				assert_rotation_phase_matches!(RotationPhase::Idle);
+				println!(
+					"Current bond of Epoch {:?} is {:?}",
+					CurrentEpoch::<Test>::get(),
+					Bond::<Test>::get()
+				);
 				ValidatorPallet::expire_epochs_up_to(
 					ValidatorPallet::current_epoch() - 1,
 					Weight::from_all(u64::MAX),
