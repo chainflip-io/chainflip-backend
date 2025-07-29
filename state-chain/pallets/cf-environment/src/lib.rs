@@ -327,10 +327,6 @@ pub mod pallet {
 		SolanaGovCallDispatched { gov_call: SolanaGovCall, broadcast_id: BroadcastId },
 		/// Assethub Vault Account is successfully set
 		AssethubVaultAccountSet { assethub_vault_account_id: PolkadotAccountId },
-		/// All Polkadot orders have been canceled.
-		PolkadotOrdersCancelled,
-		/// Polkadot balances converted to assethub balances.
-		PolkadotBalancesConvertedToAssethub,
 	}
 
 	#[pallet::call]
