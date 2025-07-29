@@ -1888,8 +1888,8 @@ mod delegation {
 				},
 			));
 			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
-			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(BOB)));
 			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
+
 			assert_noop!(
 				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
 				Error::<Test>::DelegatorBlocked
