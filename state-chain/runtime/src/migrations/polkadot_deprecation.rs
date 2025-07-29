@@ -23,10 +23,10 @@ impl OnRuntimeUpgrade for PolkadotDeprecationMigration {
 	fn on_runtime_upgrade() -> Weight {
 		let mut weight: Weight = Weight::zero();
 
-		let dot_pool = pallet_cf_pools::pallet::Pools::<Runtime>::get(
-			AssetPair::try_new::<Runtime>(Asset::Dot, Asset::Usdc)
-				.expect("Failed to create Dot/USDC AssetPair"),
-		);
+		let dot_usdc_pair = AssetPair::try_new::<Runtime>(Asset::Dot, Asset::Usdc)
+			.expect("Failed to create Dot/USDC AssetPair");
+
+		let dot_pool = pallet_cf_pools::pallet::Pools::<Runtime>::get(dot_usdc_pair);
 
 		if dot_pool.is_some() {
 			log::info!("🍩 Cancelling all Polkadot orders");
@@ -59,6 +59,9 @@ impl OnRuntimeUpgrade for PolkadotDeprecationMigration {
 					log::info!("🍩 Successfully canceled {} Polkadot orders", dot_orders_count);
 				},
 			};
+
+			log::info!("🍩 Deleting the DOT/USDC pool");
+			pallet_cf_pools::pallet::Pools::<Runtime>::remove(dot_usdc_pair)
 		}
 
 		log::info!("🍩 Transferring all Dot balances to HubDot balances");
@@ -130,6 +133,15 @@ impl OnRuntimeUpgrade for PolkadotDeprecationMigration {
 			ensure!(
 				FreeBalances::<Runtime>::get(account_id, Asset::HubDot) == old_hubdot_balance.saturating_add(*old_dot_balance),
 				"Expected all HubDot balances to be increased by the old Dot balance after migration"
+			);
+
+			ensure!(
+				pallet_cf_pools::pallet::Pools::<Runtime>::get(AssetPair::try_new::<Runtime>(
+					Asset::Dot,
+					Asset::Usdc
+				)?)
+				.is_none(),
+				"Expected the Dot/USDC pool to be deleted after migration"
 			);
 		}
 
