@@ -797,6 +797,7 @@ impl pallet_cf_funding::Config for Runtime {
 	type RegisterRedemption = EthereumApi<EvmEnvironment>;
 	type TimeSource = Timestamp;
 	type RedemptionChecker = Validator;
+	type EthereumSCApi = crate::chainflip::ethereum_sc_calls::EthereumSCApi;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_funding::weights::PalletWeight<Runtime>;
 }
