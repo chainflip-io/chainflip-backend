@@ -80,7 +80,7 @@ mod old {
 impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-		Ok(vec![])
+		Ok(Vec::new())
 	}
 
 	fn on_runtime_upgrade() -> Weight {
