@@ -95,7 +95,8 @@ use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
 use pallet_cf_elections::electoral_systems::oracle_price::{
-	chainlink::{get_latest_oracle_prices, ChainlinkAssetpair, OraclePrice},
+	chainlink::{get_latest_oracle_prices, OraclePrice},
+	price::PriceAsset,
 };
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::IngressOrEgress;
@@ -2799,11 +2800,12 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_oracle_prices(base_and_quote_asset: Option<ChainlinkAssetpair>,) -> Vec<OraclePrice> {
-			type GenericUnsynchronizedState = <crate::chainflip::generic_elections::GenericElectoralSystemRunner as pallet_cf_elections::ElectoralSystemTypes>::ElectoralUnsynchronisedState;
-			let state: GenericUnsynchronizedState = pallet_cf_elections::ElectoralUnsynchronisedState::<Runtime, ()>::get().unwrap();
-			let oracle_prices_state = state.0;
-			get_latest_oracle_prices(&oracle_prices_state, base_and_quote_asset)
+		fn cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,) -> Vec<OraclePrice> {
+			if let Some(state) = pallet_cf_elections::ElectoralUnsynchronisedState::<Runtime, ()>::get() {
+				get_latest_oracle_prices(&state.0, base_and_quote_asset)
+			} else {
+				vec![]
+			}
 		}
 	}
 

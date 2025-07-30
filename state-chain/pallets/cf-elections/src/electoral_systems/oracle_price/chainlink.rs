@@ -36,6 +36,22 @@ def_derive! {
 	}
 }
 
+impl ChainlinkAssetpair {
+	fn from_price_assets(
+		base_asset: PriceAsset,
+		quote_asset: PriceAsset,
+	) -> Option<ChainlinkAssetpair> {
+		match (base_asset, quote_asset) {
+			(PriceAsset::Btc, PriceAsset::Usd) => Some(ChainlinkAssetpair::BtcUsd),
+			(PriceAsset::Eth, PriceAsset::Usd) => Some(ChainlinkAssetpair::EthUsd),
+			(PriceAsset::Sol, PriceAsset::Usd) => Some(ChainlinkAssetpair::SolUsd),
+			(PriceAsset::Usdc, PriceAsset::Usd) => Some(ChainlinkAssetpair::UsdcUsd),
+			(PriceAsset::Usdt, PriceAsset::Usd) => Some(ChainlinkAssetpair::UsdtUsd),
+			_ => None,
+		}
+	}
+}
+
 impl AssetPairTrait for ChainlinkAssetpair {
 	fn to_price_unit(&self) -> PriceUnit {
 		use ChainlinkAssetpair::*;
@@ -120,30 +136,38 @@ pub struct OraclePrice {
 // Used by the RPC
 pub fn get_latest_oracle_prices<T>(
 	state: &OraclePriceTracker<T>,
-	base_and_quote_asset: Option<ChainlinkAssetpair>,
+	base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 ) -> Vec<OraclePrice>
 where
 	T: OPTypes<AssetPair = ChainlinkAssetpair, Price = ChainlinkPrice, StateChainBlockNumber = u32>,
 {
-	let pairs_iter = match base_and_quote_asset {
-		Some(assetpair) => Either::Left(iter::once(assetpair)),
+	match base_and_quote_asset {
+		Some(base_and_quote_asset) => {
+			if let Some(assetpair) = ChainlinkAssetpair::from_price_assets(
+				base_and_quote_asset.0,
+				base_and_quote_asset.1,
+			) {
+				Either::Left(iter::once(assetpair))
+			} else {
+				return Vec::new();
+			}
+		},
 		None => Either::Right(all::<ChainlinkAssetpair>()),
-	};
-	pairs_iter
-		.filter_map(|assetpair: ChainlinkAssetpair| {
-			state.chain_states.get_latest_asset_state(assetpair).and_then(|asset_state| {
-				let from_unit = assetpair.to_price_unit();
+	}
+	.filter_map(|assetpair: ChainlinkAssetpair| {
+		state.chain_states.get_latest_asset_state(assetpair).and_then(|asset_state| {
+			let from_unit = assetpair.to_price_unit();
 
-				let price: StatechainPrice =
-					chainlink_price_to_statechain_price(&asset_state.price.median, assetpair)?;
-				Some(OraclePrice {
-					price: price.into(),
-					updated_at_oracle_timestamp: asset_state.timestamp.median.seconds,
-					updated_at_statechain_block: asset_state.updated_at_statechain_block,
-					base_asset: from_unit.base_asset,
-					quote_asset: from_unit.quote_asset,
-				})
+			let price: StatechainPrice =
+				chainlink_price_to_statechain_price(&asset_state.price.median, assetpair)?;
+			Some(OraclePrice {
+				price: price.into(),
+				updated_at_oracle_timestamp: asset_state.timestamp.median.seconds,
+				updated_at_statechain_block: asset_state.updated_at_statechain_block,
+				base_asset: from_unit.base_asset,
+				quote_asset: from_unit.quote_asset,
 			})
 		})
-		.collect()
+	})
+	.collect()
 }
