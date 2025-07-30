@@ -94,6 +94,10 @@ use core::ops::Range;
 use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
+use pallet_cf_elections::electoral_systems::oracle_price::{
+	chainlink::{get_latest_oracle_prices, OraclePrice},
+	price::PriceAsset,
+};
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::IngressOrEgress;
 use pallet_cf_pools::{
@@ -2793,6 +2797,14 @@ impl_runtime_apis! {
 					}),
 					standard_rate_and_minimum: internal_swap_network_fee,
 				},
+			}
+		}
+
+		fn cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,) -> Vec<OraclePrice> {
+			if let Some(state) = pallet_cf_elections::ElectoralUnsynchronisedState::<Runtime, ()>::get() {
+				get_latest_oracle_prices(&state.0, base_and_quote_asset)
+			} else {
+				vec![]
 			}
 		}
 	}

@@ -16,12 +16,12 @@
 
 //! Chainlink specific types
 
-use cf_amm_math::Price;
-
 use crate::electoral_systems::{
 	oracle_price::{price::*, state_machine::*},
 	state_machine::common_imports::*,
 };
+use cf_amm_math::Price;
+use sp_std::iter;
 
 def_derive! {
 	/// Representation of the asset pairs as returned in the `description` field of chainlink responses.
@@ -33,6 +33,22 @@ def_derive! {
 		SolUsd,
 		UsdcUsd,
 		UsdtUsd
+	}
+}
+
+impl ChainlinkAssetpair {
+	fn from_price_assets(
+		base_asset: PriceAsset,
+		quote_asset: PriceAsset,
+	) -> Option<ChainlinkAssetpair> {
+		match (base_asset, quote_asset) {
+			(PriceAsset::Btc, PriceAsset::Usd) => Some(ChainlinkAssetpair::BtcUsd),
+			(PriceAsset::Eth, PriceAsset::Usd) => Some(ChainlinkAssetpair::EthUsd),
+			(PriceAsset::Sol, PriceAsset::Usd) => Some(ChainlinkAssetpair::SolUsd),
+			(PriceAsset::Usdc, PriceAsset::Usd) => Some(ChainlinkAssetpair::UsdcUsd),
+			(PriceAsset::Usdt, PriceAsset::Usd) => Some(ChainlinkAssetpair::UsdtUsd),
+			_ => None,
+		}
 	}
 }
 
@@ -81,14 +97,21 @@ where
 {
 	state
 		.chain_states
-		.get_latest_price(chainlink_assetpair)
-		.and_then(|(_, price, status)| {
-			Some((chainlink_price_to_statechain_price(price, chainlink_assetpair)?.into(), status))
+		.get_latest_asset_state(chainlink_assetpair)
+		.and_then(|asset_state| {
+			Some((
+				chainlink_price_to_statechain_price(
+					&asset_state.price.median,
+					chainlink_assetpair,
+				)?
+				.into(),
+				asset_state.price_status,
+			))
 		})
 }
 
 pub fn chainlink_price_to_statechain_price(
-	price: ChainlinkPrice,
+	price: &ChainlinkPrice,
 	assetpair: ChainlinkAssetpair,
 ) -> Option<StatechainPrice> {
 	let from_unit = assetpair.to_price_unit();
@@ -97,7 +120,54 @@ pub fn chainlink_price_to_statechain_price(
 	// and then do the unit conversion, because in the chainlink representation there aren't
 	// enough decimals to represent "FineEth / FineUsd" prices
 	// (1 Usd per Eth translates to 10^-12 FineUsd per FineEth)
-	let price: StatechainPrice = price.convert()?;
+	let price: StatechainPrice = price.clone().convert()?;
 	let price: StatechainPrice = convert_unit(price, from_unit, to_unit)?;
 	Some(price)
+}
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct OraclePrice {
+	pub price: Price,
+	pub updated_at_oracle_timestamp: u64,
+	pub updated_at_statechain_block: u32,
+	pub base_asset: PriceAsset,
+	pub quote_asset: PriceAsset,
+}
+
+// Used by the RPC
+pub fn get_latest_oracle_prices<T>(
+	state: &OraclePriceTracker<T>,
+	base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
+) -> Vec<OraclePrice>
+where
+	T: OPTypes<AssetPair = ChainlinkAssetpair, Price = ChainlinkPrice, StateChainBlockNumber = u32>,
+{
+	match base_and_quote_asset {
+		Some(base_and_quote_asset) => {
+			if let Some(assetpair) = ChainlinkAssetpair::from_price_assets(
+				base_and_quote_asset.0,
+				base_and_quote_asset.1,
+			) {
+				Either::Left(iter::once(assetpair))
+			} else {
+				return Vec::new();
+			}
+		},
+		None => Either::Right(all::<ChainlinkAssetpair>()),
+	}
+	.filter_map(|assetpair: ChainlinkAssetpair| {
+		state.chain_states.get_latest_asset_state(assetpair).and_then(|asset_state| {
+			let from_unit = assetpair.to_price_unit();
+
+			let price: StatechainPrice =
+				chainlink_price_to_statechain_price(&asset_state.price.median, assetpair)?;
+			Some(OraclePrice {
+				price: price.into(),
+				updated_at_oracle_timestamp: asset_state.timestamp.median.seconds,
+				updated_at_statechain_block: asset_state.updated_at_statechain_block,
+				base_asset: from_unit.base_asset,
+				quote_asset: from_unit.quote_asset,
+			})
+		})
+	})
+	.collect()
 }

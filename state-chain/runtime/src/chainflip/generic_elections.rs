@@ -163,7 +163,7 @@ impls! {
 						.filter_map(|(assetpair, timestamp, price)| {
 							let price_unit = assetpair.to_price_unit();
 							Some(OraclePriceUpdate {
-								price: chainlink_price_to_statechain_price(price, assetpair)?.into(),
+								price: chainlink_price_to_statechain_price(&price, assetpair)?.into(),
 								base_asset: price_unit.base_asset,
 								quote_asset: price_unit.quote_asset,
 								updated_at_oracle_timestamp: timestamp.seconds

@@ -37,6 +37,7 @@ pallet-cf-funding = { workspace = true, default-features = true }
 pallet-cf-environment = { workspace = true, default-features = true }
 pallet-cf-lending-pools = { workspace = true, default-features = true }
 pallet-cf-validator = { workspace = true, default-features = true }
+pallet-cf-elections = { workspace = true, default-features = true }
 
 sp-api = { workspace = true, default-features = true }
 sp-core = { workspace = true, default-features = true }

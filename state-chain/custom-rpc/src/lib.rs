@@ -54,6 +54,9 @@ use jsonrpsee::{
 	},
 	PendingSubscriptionSink,
 };
+use pallet_cf_elections::electoral_systems::oracle_price::{
+	chainlink::OraclePrice, price::PriceAsset,
+};
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
@@ -1095,6 +1098,13 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<TradingStrategyLimits>;
+
+	#[method(name = "oracle_prices")]
+	fn cf_oracle_prices(
+		&self,
+		base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<OraclePrice>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1357,6 +1367,7 @@ where
 		cf_vault_addresses() -> VaultAddresses,
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
+		cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>) -> Vec<OraclePrice>,
 	}
 
 	pass_through_and_flatten! {
