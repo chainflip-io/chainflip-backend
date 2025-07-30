@@ -1,5 +1,8 @@
 use crate::{chainflip::TypeInfo, Decode, Encode, EthereumAddress, Runtime};
-use frame_support::traits::UnfilteredDispatchable;
+use frame_support::{
+	dispatch::{DispatchInfo, GetDispatchInfo},
+	traits::UnfilteredDispatchable,
+};
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
 pub enum DelegationApi {
@@ -32,5 +35,11 @@ impl UnfilteredDispatchable for EthereumSCApi {
 				DelegationApi::Undelegate { delegator: _, operator: _ } => todo!(),
 			},
 		}
+	}
+}
+
+impl GetDispatchInfo for EthereumSCApi {
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		todo!()
 	}
 }

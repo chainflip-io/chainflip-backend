@@ -40,7 +40,7 @@ use cf_traits::{
 };
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::DispatchResult,
+	dispatch::{DispatchResult, GetDispatchInfo},
 	ensure,
 	sp_runtime::{
 		traits::{CheckedSub, One, UniqueSaturatedInto, Zero},
@@ -375,7 +375,8 @@ pub mod pallet {
 			+ Clone
 			+ Ord
 			+ PartialOrd
-			+ Debug;
+			+ Debug
+			+ GetDispatchInfo;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
@@ -940,8 +941,10 @@ pub mod pallet {
 		/// Processes the deposit and sc call via ethereum. If the call cannot be decoded, we still
 		/// process the deposit since those two are independant actions.
 		#[pallet::call_index(12)]
-		#[allow(clippy::let_unit_value)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::execute_sc_call().saturating_add(
+			T::EthereumSCApi::decode(&mut &deposit_and_call.call[..])
+			.map( |c| c.get_dispatch_info().weight)
+			.unwrap_or(Weight::zero())))]
 		pub fn execute_sc_call(
 			origin: OriginFor<T>,
 			deposit_and_call: EthereumDepositAndSCCall,

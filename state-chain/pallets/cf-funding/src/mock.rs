@@ -24,9 +24,17 @@ use cf_traits::{
 	AccountRoleRegistry, RedemptionCheck, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
+use frame_support::{
+	derive_impl,
+	dispatch::{DispatchInfo, GetDispatchInfo},
+	parameter_types,
+	traits::UnfilteredDispatchable,
+};
 use scale_info::TypeInfo;
-use sp_runtime::{traits::IdentityLookup, AccountId32, DispatchError, DispatchResult, Permill};
+use sp_runtime::{
+	traits::{IdentityLookup, Zero},
+	AccountId32, DispatchError, DispatchResult, Permill,
+};
 use std::{collections::HashMap, time::Duration};
 
 // Use a realistic account id for compatibility with `RegisterRedemption`.
@@ -167,6 +175,12 @@ impl UnfilteredDispatchable for EmptyCall {
 		_origin: Self::RuntimeOrigin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		Ok(().into())
+	}
+}
+
+impl GetDispatchInfo for EmptyCall {
+	fn get_dispatch_info(&self) -> frame_support::dispatch::DispatchInfo {
+		DispatchInfo { weight: Zero::zero(), ..Default::default() }
 	}
 }
 
