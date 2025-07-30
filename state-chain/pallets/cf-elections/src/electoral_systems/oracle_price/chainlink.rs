@@ -171,3 +171,102 @@ where
 	})
 	.collect()
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use cf_amm_math::mul_div_floor_checked;
+	use sp_core::U256;
+
+	#[test]
+	#[allow(clippy::inconsistent_digit_grouping)]
+	#[allow(clippy::identity_op)]
+	fn test_price_conversion() {
+		// chainlink prices have 8 decimals
+		assert_eq!(ChainlinkPrice::denominator(), U256::from(100_000_000u128));
+
+		// the denominator of statechain prices is 2^128
+		let internal_denom = U256::from(u128::MAX) + U256::one();
+
+		// ------ btc --------
+
+		// the price is 123456.7
+		let price: ChainlinkPrice = Fraction::from_raw(U256::from(123456_70_000_000u128));
+
+		// let's say the price is for Btc, convert it to our internal price
+		let internal_price: StatechainPrice =
+			chainlink_price_to_statechain_price(&price, ChainlinkAssetpair::BtcUsd).unwrap();
+
+		// now let's check whether we got the right result:
+		//
+		// the internal price is in FineUsd/FineBtc = 10^2 Usd/Btc, so translating from
+		// Usd/Btc to FineUsd/FineBtc we have to divide by 10^2.
+		//
+		// fine_price = 1234.567 FineUsd/FineBtc
+		//
+		// In the internal representation, the upper 128 bits are the integral part,
+		// the lower 128 bits are the fractional part.
+		assert_eq!(
+			internal_price.0,
+			mul_div_floor_checked(U256::from(1234567), internal_denom, 10u128.pow(1 + 2)).unwrap()
+		);
+
+		// ------ eth --------
+
+		let price: ChainlinkPrice = Fraction::from_raw(U256::from(3014_56_000_000u128));
+		let internal_price =
+			chainlink_price_to_statechain_price(&price, ChainlinkAssetpair::EthUsd).unwrap();
+
+		// eth has 18 decimals, so these are 12 more than usd. Thus the conversion factor to convert
+		// the price to a "fine price" is diving by 10^12 (and furthermore dividing by 10^2 due to
+		// the 2 input decimals).
+		assert_eq!(
+			internal_price.0,
+			mul_div_floor_checked(U256::from(3014_56u128), internal_denom, 10u128.pow(2 + 12))
+				.unwrap()
+		);
+
+		// ------ sol --------
+
+		let price: ChainlinkPrice = Fraction::from_raw(U256::from(235_89_000_000u128));
+		let internal_price =
+			chainlink_price_to_statechain_price(&price, ChainlinkAssetpair::SolUsd).unwrap();
+
+		// sol has 9 decimals, so these are 3 more than usd. Thus the conversion factor to convert
+		// the price to a "fine price" is diving by 10^3 (and furthermore dividing by 10^2 due to
+		// the 2 input decimals).
+		assert_eq!(
+			internal_price.0,
+			mul_div_floor_checked(U256::from(235_89u128), internal_denom, 10u128.pow(2 + 3))
+				.unwrap()
+		);
+
+		// ------ usdc --------
+
+		let price: ChainlinkPrice = Fraction::from_raw(U256::from(1_11_111_000u128));
+		let internal_price =
+			chainlink_price_to_statechain_price(&price, ChainlinkAssetpair::UsdcUsd).unwrap();
+
+		// usdc has 6 decimals, this is the same as usd, so there's no conversion required.
+		// the given price is 1.11111 (with 5 decimals), so we'll have to divide by 10^5
+		assert_eq!(
+			internal_price.0,
+			mul_div_floor_checked(U256::from(1_11111u128), internal_denom, 10u128.pow(0 + 5))
+				.unwrap()
+		);
+
+		// ------ usdt --------
+
+		let price: ChainlinkPrice = Fraction::from_raw(U256::from(2_55_550_000u128));
+		let internal_price =
+			chainlink_price_to_statechain_price(&price, ChainlinkAssetpair::UsdcUsd).unwrap();
+
+		// usdt has 6 decimals, this is the same as usd, so there's no conversion required.
+		// the given price is 2.555 (with 4 decimals), so we'll have to divide by 10^4
+		assert_eq!(
+			internal_price.0,
+			mul_div_floor_checked(U256::from(2_5555u128), internal_denom, 10u128.pow(0 + 4))
+				.unwrap()
+		);
+	}
+}
