@@ -188,12 +188,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 mod tests {
 	use codec::Encode;
 	use frame_support::sp_runtime::AccountId32;
-	use pallet_cf_funding::{DelegationApi, EthereumSCApi};
-	use state_chain_runtime::Runtime;
+	use state_chain_runtime::chainflip::ethereum_sc_calls::{DelegationApi, EthereumSCApi};
 
 	#[test]
 	fn test_sc_call_encode() {
-		let sc_call_delegate = EthereumSCApi::Delegation(DelegationApi::<Runtime>::Delegate {
+		let sc_call_delegate = EthereumSCApi::Delegation(DelegationApi::Delegate {
 			delegator: [0xf5; 20].into(),
 			operator: AccountId32::new([0xF4; 32]),
 		})

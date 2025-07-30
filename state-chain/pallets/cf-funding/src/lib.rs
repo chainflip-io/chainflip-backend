@@ -59,6 +59,7 @@ use scale_info::TypeInfo;
 use sp_std::{
 	cmp::{max, min},
 	collections::btree_map::BTreeMap,
+	fmt::Debug,
 	prelude::*,
 };
 
@@ -368,6 +369,14 @@ pub mod pallet {
 		/// Provide information on current bidders
 		type RedemptionChecker: RedemptionCheck<ValidatorId = Self::AccountId>;
 
+		/// Calls that are dispatchable via ethereum contract
+		type EthereumSCApi: UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
+			+ Decode
+			+ Clone
+			+ Ord
+			+ PartialOrd
+			+ Debug;
+
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
 
@@ -510,11 +519,11 @@ pub mod pallet {
 			amount: FlipBalance<T>,
 		},
 		SCCallExecuted {
-			sc_call: EthereumSCApi<T>,
+			sc_call: T::EthereumSCApi,
 			eth_tx_hash: EthTransactionHash,
 		},
 		SCCallCannotBeExecuted {
-			sc_call: EthereumSCApi<T>,
+			sc_call: T::EthereumSCApi,
 			eth_tx_hash: EthTransactionHash,
 		},
 		SCCallCannotBeDecoded {
@@ -959,7 +968,7 @@ pub mod pallet {
 				_ => {},
 			}
 
-			match EthereumSCApi::decode(&mut &deposit_and_call.call[..]) {
+			match T::EthereumSCApi::decode(&mut &deposit_and_call.call[..]) {
 				Ok(call) => {
 					// If the call fails to execute, we need to rollback the changes in the tx but
 					// we still succeed this extrinsic since we need to successfully process
@@ -1095,19 +1104,6 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 }
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
-#[scale_info(skip_type_params(T))]
-pub enum DelegationApi<T: Config> {
-	Delegate {
-		delegator: EthereumAddress, // Ethereum Address of the delegator
-		operator: T::AccountId,     // Operator the amount to delegate to
-	},
-	Undelegate {
-		delegator: EthereumAddress, // Ethereum Address of the delegator
-		operator: T::AccountId,     // Operator the amount was delegated to
-	},
-}
-
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
 pub struct EthereumDepositAndSCCall {
 	pub deposit: EthereumDeposit,
 	pub call: Vec<u8>,
@@ -1119,27 +1115,4 @@ pub enum EthereumDeposit {
 	Vault { asset: EthAsset, amount: EthAmount },
 	Transfer { asset: EthAsset, amount: EthAmount, destination: EthereumAddress },
 	NoDeposit,
-}
-
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
-#[scale_info(skip_type_params(T))]
-pub enum EthereumSCApi<T: Config> {
-	Delegation(DelegationApi<T>),
-	// reserved for future Apis for example Loan(LoanApi)...
-	// This allows us to update the API without breaking the encoding.
-}
-
-impl<T: Config> UnfilteredDispatchable for EthereumSCApi<T> {
-	type RuntimeOrigin = T::RuntimeOrigin;
-	fn dispatch_bypass_filter(
-		self,
-		_origin: Self::RuntimeOrigin,
-	) -> frame_support::dispatch::DispatchResultWithPostInfo {
-		match self {
-			EthereumSCApi::Delegation(delegation_api) => match delegation_api {
-				DelegationApi::Delegate { delegator: _, operator: _ } => todo!(),
-				DelegationApi::Undelegate { delegator: _, operator: _ } => todo!(),
-			},
-		}
-	}
 }
