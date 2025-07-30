@@ -79,6 +79,10 @@ macro_rules! impl_runtime_safe_mode {
 				}
 			}
 
+			impl Get<()> for $runtime_safe_mode {
+				fn get() -> () {}
+			}
+
 			impl Default for $runtime_safe_mode {
 				fn default() -> Self {
 					<Self as SafeMode>::CODE_GREEN

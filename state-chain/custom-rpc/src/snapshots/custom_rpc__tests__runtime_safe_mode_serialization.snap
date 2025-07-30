@@ -115,5 +115,8 @@ expression: val
     "deposit_channel_creation_enabled": true,
     "deposit_channel_witnessing_enabled": true,
     "vault_deposit_witnessing_enabled": true
+  },
+  "elections_generic": {
+    "oracle_price_elections": true
   }
 }

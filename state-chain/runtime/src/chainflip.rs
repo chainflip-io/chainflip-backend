@@ -31,10 +31,15 @@ pub mod bitcoin_block_processor;
 #[macro_use]
 pub mod elections;
 pub mod bitcoin_elections;
+pub mod generic_elections;
 pub mod solana_elections;
 pub mod vault_swaps;
 
 use crate::{
+	chainflip::{
+		elections::TypesFor,
+		generic_elections::{decode_and_get_latest_oracle_price, Chainlink, OraclePrice},
+	},
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
 	ArbitrumIngressEgress, AssethubBroadcaster, AssethubChainTracking, AssethubIngressEgress,
 	Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber,
@@ -114,6 +119,7 @@ use frame_support::{
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
+use pallet_cf_elections::electoral_systems::oracle_price::chainlink::ChainlinkAssetpair;
 use pallet_cf_flip::CallIndexer;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -1189,5 +1195,17 @@ impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
 				});
 			},
 		}
+	}
+}
+
+pub trait PriceFeedApi {
+	fn get_price(asset: ChainlinkAssetpair) -> Option<OraclePrice>;
+}
+
+#[allow(dead_code)]
+struct ChainlinkOracle;
+impl PriceFeedApi for ChainlinkOracle {
+	fn get_price(asset: ChainlinkAssetpair) -> Option<OraclePrice> {
+		decode_and_get_latest_oracle_price::<TypesFor<Chainlink>>(asset)
 	}
 }

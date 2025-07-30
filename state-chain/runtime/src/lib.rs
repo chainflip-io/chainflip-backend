@@ -32,7 +32,6 @@ use crate::{
 		address_derivation::btc::{
 			derive_btc_vault_deposit_addresses, BitcoinPrivateBrokerDepositAddresses,
 		},
-		bitcoin_elections::BitcoinElectoralEvents,
 		calculate_account_apy,
 		solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
@@ -92,9 +91,13 @@ use cf_traits::{
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use frame_support::{derive_impl, instances::*};
+use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
+use pallet_cf_elections::electoral_systems::oracle_price::{
+	chainlink::{get_latest_oracle_prices, OraclePrice},
+	price::PriceAsset,
+};
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::IngressOrEgress;
 use pallet_cf_pools::{
@@ -1145,8 +1148,9 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner = chainflip::solana_elections::SolanaElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
-	type CreateGovernanceElectionHook = chainflip::solana_elections::SolanaGovernanceElectionHook;
-	type ElectoralEvents = ();
+	type ElectoralSystemConfiguration =
+		chainflip::solana_elections::SolanaElectoralSystemConfiguration;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_elections::Config<Instance3> for Runtime {
@@ -1154,8 +1158,18 @@ impl pallet_cf_elections::Config<Instance3> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner = chainflip::bitcoin_elections::BitcoinElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
-	type CreateGovernanceElectionHook = chainflip::bitcoin_elections::BitcoinGovernanceElectionHook;
-	type ElectoralEvents = BitcoinElectoralEvents;
+	type ElectoralSystemConfiguration =
+		chainflip::bitcoin_elections::BitcoinElectoralSystemConfiguration;
+	type SafeMode = RuntimeSafeMode;
+}
+
+impl pallet_cf_elections::Config for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = "GenericElections";
+	type RuntimeEvent = RuntimeEvent;
+	type ElectoralSystemRunner = chainflip::generic_elections::GenericElectoralSystemRunner;
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+	type ElectoralSystemConfiguration = chainflip::generic_elections::GenericElectionHooks;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_trading_strategy::Config for Runtime {
@@ -1310,6 +1324,9 @@ mod runtime {
 
 	#[runtime::pallet_index(54)]
 	pub type BitcoinElections = pallet_cf_elections<Instance3>;
+
+	#[runtime::pallet_index(55)]
+	pub type GenericElections = pallet_cf_elections;
 }
 
 /// The address format for describing accounts.
@@ -1380,6 +1397,7 @@ pub type PalletExecutionOrder = (
 	// Elections
 	SolanaElections,
 	BitcoinElections,
+	GenericElections,
 	// Vaults
 	EthereumVault,
 	PolkadotVault,
@@ -1434,6 +1452,7 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	migrations::bitcoin_elections::Migration,
+	migrations::generic_elections::Migration,
 	MigrationsForV1_11,
 );
 
@@ -1525,7 +1544,15 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV1_11 = ();
+type MigrationsForV1_11 = (
+	VersionedMigration<
+		17,
+		18,
+		migrations::safe_mode::SafeModeMigration,
+		pallet_cf_environment::Pallet<Runtime>,
+		<Runtime as frame_system::Config>::DbWeight,
+	>,
+);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
@@ -1581,6 +1608,14 @@ impl_runtime_apis! {
 
 		fn cf_bitcoin_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
 			BitcoinElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+		}
+
+		fn cf_generic_electoral_data(account_id: AccountId) -> Vec<u8> {
+			GenericElections::electoral_data(&account_id).encode()
+		}
+
+		fn cf_generic_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+			GenericElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
 		}
 	}
 
@@ -2767,6 +2802,14 @@ impl_runtime_apis! {
 					}),
 					standard_rate_and_minimum: internal_swap_network_fee,
 				},
+			}
+		}
+
+		fn cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,) -> Vec<OraclePrice> {
+			if let Some(state) = pallet_cf_elections::ElectoralUnsynchronisedState::<Runtime, ()>::get() {
+				get_latest_oracle_prices(&state.0, base_and_quote_asset)
+			} else {
+				vec![]
 			}
 		}
 	}

@@ -62,6 +62,7 @@ where
 		+ SignedExtrinsicApi
 		+ ElectoralApi<SolanaInstance>
 		+ ElectoralApi<BitcoinInstance>
+		+ ElectoralApi<()>
 		+ 'static
 		+ Send
 		+ Sync,
@@ -109,7 +110,7 @@ where
 
 	let start_eth = super::eth::start(
 		scope,
-		eth_client,
+		eth_client.clone(),
 		witness_call.clone(),
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
@@ -137,7 +138,7 @@ where
 		db.clone(),
 	);
 
-	let start_sol = super::sol::start(scope, sol_client, state_chain_client.clone());
+	let start_sol = super::sol::start(scope, sol_client.clone(), state_chain_client.clone());
 
 	let start_btc = super::btc::start(scope, btc_client, state_chain_client.clone());
 
@@ -145,13 +146,24 @@ where
 		scope,
 		hub_client,
 		witness_call.clone(),
-		state_chain_client,
+		state_chain_client.clone(),
 		state_chain_stream,
 		epoch_source,
 		db,
 	);
 
-	try_join!(start_eth, start_dot, start_arb, start_sol, start_btc, start_hub)?;
+	let start_generic_elections =
+		super::generic_elections::start(scope, sol_client, eth_client, state_chain_client);
+
+	try_join!(
+		start_eth,
+		start_dot,
+		start_arb,
+		start_sol,
+		start_btc,
+		start_hub,
+		start_generic_elections
+	)?;
 
 	Ok(())
 }

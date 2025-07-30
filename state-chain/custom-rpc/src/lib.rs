@@ -54,6 +54,9 @@ use jsonrpsee::{
 	},
 	PendingSubscriptionSink,
 };
+use pallet_cf_elections::electoral_systems::oracle_price::{
+	chainlink::OraclePrice, price::PriceAsset,
+};
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
@@ -967,6 +970,21 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>>;
 
+	#[method(name = "generic_electoral_data")]
+	fn cf_generic_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
+	#[method(name = "generic_filter_votes")]
+	fn cf_generic_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
 	#[method(name = "validate_dca_params")]
 	fn cf_validate_dca_params(
 		&self,
@@ -1067,6 +1085,13 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<TradingStrategyLimits>;
+
+	#[method(name = "oracle_prices")]
+	fn cf_oracle_prices(
+		&self,
+		base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<OraclePrice>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1329,6 +1354,7 @@ where
 		cf_vault_addresses() -> VaultAddresses,
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
+		cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>) -> Vec<OraclePrice>,
 	}
 
 	pass_through_and_flatten! {
@@ -1928,6 +1954,26 @@ where
 	) -> RpcResult<Vec<u8>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			api.cf_bitcoin_filter_votes(hash, validator, proposed_votes)
+		})
+	}
+
+	fn cf_generic_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_generic_electoral_data(hash, validator))
+	}
+
+	fn cf_generic_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			api.cf_generic_filter_votes(hash, validator, proposed_votes)
 		})
 	}
 

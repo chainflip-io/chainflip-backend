@@ -2075,6 +2075,7 @@ dependencies = [
  "hex-literal",
  "jsonrpsee 0.23.2",
  "log",
+ "pallet-cf-elections",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
@@ -2785,6 +2786,7 @@ dependencies = [
  "jsonrpsee 0.23.2",
  "log",
  "lru 0.13.0",
+ "pallet-cf-elections",
  "pallet-cf-environment",
  "pallet-cf-funding",
  "pallet-cf-governance",
@@ -3483,6 +3485,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1e6a265c649f3f5979b601d26f1d05ada116434c87741c9493cb56218f76cbc"
 dependencies = [
  "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
+]
+
+[[package]]
+name = "enum-iterator"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c280b9e6b3ae19e152d8e31cf47f18389781e119d4013a2a2bb0180e5facc635"
+dependencies = [
+ "enum-iterator-derive",
+]
+
+[[package]]
+name = "enum-iterator-derive"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1ab991c1362ac86c61ab6f556cff143daa22e5a15e4e189df818b2fd19fe65b"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.96",
@@ -8253,6 +8275,7 @@ name = "pallet-cf-elections"
 version = "0.1.0"
 dependencies = [
  "bitvec",
+ "cf-amm-math",
  "cf-chains",
  "cf-primitives",
  "cf-runtime-utilities",
@@ -8260,6 +8283,7 @@ dependencies = [
  "cf-traits",
  "derive-where",
  "duplicate",
+ "enum-iterator",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -8273,6 +8297,7 @@ dependencies = [
  "rand 0.8.5",
  "scale-info",
  "serde",
+ "serde_arrays",
  "sp-core 34.0.0",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B4)",
  "utilities",
@@ -12221,6 +12246,15 @@ name = "serde-big-array"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "serde_arrays"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94a16b99c5ea4fe3daccd14853ad260ec00ea043b2708d1fd1da3106dcd8d9df"
 dependencies = [
  "serde",
 ]
