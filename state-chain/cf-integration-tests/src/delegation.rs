@@ -21,12 +21,14 @@ use crate::{
 	AccountId, AuthorityCount, RuntimeOrigin,
 };
 
-use cf_primitives::AccountRole;
+use cf_primitives::{AccountRole, FLIPPERINOS_PER_FLIP};
 use cf_traits::AccountInfo;
-use frame_support::assert_ok;
+use frame_support::{assert_ok, traits::OnNewAccount};
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
 use sp_runtime::{traits::Zero, Permill};
-use state_chain_runtime::{Balance, Flip, Runtime, Validator};
+use state_chain_runtime::{
+	AccountRoles, Balance, Flip, Funding, LiquidityProvider, Runtime, Validator,
+};
 
 struct Delegator {
 	pub account: AccountId,
@@ -48,20 +50,54 @@ fn setup_delegation(
 	operator: AccountId,
 	operator_cut: u32,
 	delegators: BTreeMap<AccountId, Balance>,
-) {
+) -> Vec<Delegator> {
+	new_account(&operator, AccountRole::Operator);
+
 	assert_ok!(Validator::claim_validator(
 		RuntimeOrigin::signed(operator.clone()),
 		validator.clone()
 	));
-	assert_ok!(Validator::accept_operator(RuntimeOrigin::signed(validator), operator.clone(),));
-	assert_ok!(Validator::set_delegation_preferences(
+	assert_ok!(Validator::accept_operator(
+		RuntimeOrigin::signed(validator.clone()),
+		operator.clone(),
+	));
+	assert_ok!(Validator::update_operator_settings(
 		RuntimeOrigin::signed(operator.clone()),
 		OperatorSettings {
 			fee_bps: operator_cut,
 			delegation_acceptance: DelegationAcceptance::Allow,
 		},
 	));
-	pallet_cf_validator::ManagedDelegators::<Runtime>::insert(operator, delegators);
+
+	assert_eq!(
+		pallet_cf_validator::ManagedValidators::<Runtime>::get(validator),
+		Some(operator.clone())
+	);
+	assert!(pallet_cf_validator::OperatorSettingsLookup::<Runtime>::get(operator.clone()).is_some());
+
+	delegators
+		.into_iter()
+		.map(|(d, stake)| {
+			assert_ok!(Funding::funded(
+				pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
+				d.clone(),
+				stake * FLIPPERINOS_PER_FLIP,
+				Default::default(),
+				Default::default(),
+			));
+			AccountRoles::on_new_account(&d);
+			assert_ok!(LiquidityProvider::register_lp_account(RuntimeOrigin::signed(d.clone())));
+			crate::network::register_refund_addresses(&d);
+
+			assert_ok!(Validator::delegate(RuntimeOrigin::signed(d.clone()), operator.clone()));
+
+			Delegator {
+				account: d.clone(),
+				pre_balance: Flip::balance(&d),
+				post_balance: Default::default(),
+			}
+		})
+		.collect()
 }
 
 #[test]
@@ -82,32 +118,15 @@ fn block_author_rewards_are_distributed_among_delegators() {
 				.next()
 				.unwrap();
 
-			// Setup delegator/operator
-			// TODO: update this with proper extrinsic calls after delegation API is integrated
-			// Setup 3 delegator
-			let mut delegators = (0xF0..0xF3)
-				.map(|i| {
-					let account = AccountId::from([i; 32]);
-					new_account(&account, AccountRole::LiquidityProvider);
-					Delegator {
-						account: account.clone(),
-						pre_balance: Flip::balance(&account),
-						post_balance: Default::default(),
-					}
-				})
-				.collect::<Vec<_>>();
-
-			let operator = AccountId::from([0xe1; 32]);
-			new_account(&operator, AccountRole::Operator);
-
-			setup_delegation(
+			// Setup 3 delegator, operator and association with validator.
+			let mut delegators = setup_delegation(
 				auth.clone(),
-				operator.clone(),
+				AccountId::from([0xe1; 32]),
 				5_000, // 50%
 				BTreeMap::from_iter([
-					(delegators[0].account.clone(), 100_000_000u128), // 5% of cut
-					(delegators[1].account.clone(), 400_000_000u128), // 20% of cut
-					(delegators[2].account.clone(), 500_000_000u128), // 25% of cut
+					(AccountId::from([0xA0; 32]), 100_000_000u128), // 5% of cut
+					(AccountId::from([0xA1; 32]), 400_000_000u128), // 20% of cut
+					(AccountId::from([0xA2; 32]), 500_000_000u128), // 25% of cut
 				]),
 			);
 
@@ -163,32 +182,15 @@ fn slashings_are_distributed_among_delegators() {
 			// Move to the block before backup rewards are distributed
 			testnet.move_to_next_heartbeat_block(Some(-1));
 
-			// Setup delegator/operator
-			// TODO: update this with proper extrinsic calls after delegation API is integrated
-			// Setup 3 delegator
-			let mut delegators = (0xF0..0xF3)
-				.map(|i| {
-					let account = AccountId::from([i; 32]);
-					new_account(&account, AccountRole::LiquidityProvider);
-					Delegator {
-						account: account.clone(),
-						pre_balance: Flip::balance(&account),
-						post_balance: Default::default(),
-					}
-				})
-				.collect::<Vec<_>>();
-
-			let operator = AccountId::from([0xe1; 32]);
-			new_account(&operator, AccountRole::Operator);
-
-			setup_delegation(
+			// Setup 3 delegator, operator and association with validator.
+			let mut delegators = setup_delegation(
 				auth.clone(),
-				operator.clone(),
+				AccountId::from([0xe1; 32]),
 				5_000, // 50%
 				BTreeMap::from_iter([
-					(delegators[0].account.clone(), 100_000_000u128), // 5% of cut
-					(delegators[1].account.clone(), 400_000_000u128), // 20% of cut
-					(delegators[2].account.clone(), 500_000_000u128), // 25% of cut
+					(AccountId::from([0xA0; 32]), 100_000_000u128), // 5% of cut
+					(AccountId::from([0xA1; 32]), 400_000_000u128), // 20% of cut
+					(AccountId::from([0xA2; 32]), 500_000_000u128), // 25% of cut
 				]),
 			);
 

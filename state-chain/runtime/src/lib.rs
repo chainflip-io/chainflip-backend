@@ -183,6 +183,7 @@ use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
 use constants::common::*;
 use pallet_cf_flip::Bonder;
+use pallet_cf_validator::DelegatorFlipSlasher;
 pub use pallet_transaction_payment::ChargeTransactionPayment;
 
 // Make the WASM binary available.
