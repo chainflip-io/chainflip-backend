@@ -2079,18 +2079,17 @@ mod delegation {
 
 #[test]
 fn operator_reward_split_works() {
-	let delegation = DelegationInfo {
-		delegator_bids: BTreeMap::from_iter([
-			(1, 1_000_000u128),
-			(2, 2_000_000u128),
-			(3, 3_000_000u128),
-			(4, 4_000_000u128),
-		]),
-		delegation_fee: Percent::from_percent(20),
-	};
-
 	assert_eq!(
-		delegation.split_amount(12_500_000_000),
+		split_amount(
+			12_500_000_000,
+			BTreeMap::from_iter([
+				(1, 1_000_000u128),
+				(2, 2_000_000u128),
+				(3, 3_000_000u128),
+				(4, 4_000_000u128),
+			]),
+			2000
+		),
 		Ok((
 			2_500_000_000u128,
 			BTreeMap::from_iter([
@@ -2103,7 +2102,16 @@ fn operator_reward_split_works() {
 	);
 
 	assert_eq!(
-		delegation.split_amount(0),
-		Ok((0u128, BTreeMap::from_iter([(1, 0u128), (2, 0u128), (3, 0u128), (4, 0u128),])))
+		split_amount(
+			0,
+			BTreeMap::from_iter([
+				(1, 1_000_000u128),
+				(2, 2_000_000u128),
+				(3, 3_000_000u128),
+				(4, 4_000_000u128),
+			]),
+			0
+		),
+		Ok((0u128, BTreeMap::from_iter([(1, 0u128), (2, 0u128), (3, 0u128), (4, 0u128),]),))
 	);
 }
