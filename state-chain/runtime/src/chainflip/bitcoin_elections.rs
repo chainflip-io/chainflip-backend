@@ -463,7 +463,6 @@ impl UpdateFeeHook<BtcAmount> for BitcoinFeeUpdateHook {
 }
 pub type BitcoinFeeTracking = UnsafeMedian<
 	<Bitcoin as Chain>::ChainAmount,
-	BtcAmount,
 	(),
 	BitcoinFeeUpdateHook,
 	<Runtime as Chainflip>::ValidatorId,
@@ -516,6 +515,8 @@ impl
 			>,
 		),
 	) -> Result<(), CorruptStorageError> {
+		let current_sc_block_number = crate::System::block_number();
+
 		let chain_progress = BitcoinBlockHeightWitnesserES::on_finalize::<
 			DerivedElectoralAccess<
 				_,
@@ -554,7 +555,7 @@ impl
 				BitcoinFeeTracking,
 				RunnerStorageAccess<Runtime, BitcoinInstance>,
 			>,
-		>(fee_identifiers, &())?;
+		>(fee_identifiers, &current_sc_block_number)?;
 
 		BitcoinLiveness::on_finalize::<
 			DerivedElectoralAccess<
@@ -611,7 +612,7 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 				safety_margin: 0,
 				safety_buffer: BITCOIN_MAINNET_SAFETY_BUFFER,
 			},
-			Default::default(),
+			2, // wait 2 SC blocks until reopening fee election
 			(),
 		),
 		settings: (

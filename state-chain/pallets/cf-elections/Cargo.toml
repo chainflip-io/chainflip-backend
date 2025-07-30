@@ -44,6 +44,7 @@ frame-system = { workspace = true }
 scale-info = { workspace = true, features = ["derive", "bit-vec"] }
 sp-core = { workspace = true }
 sp-std = { workspace = true }
+sp-runtime = { workspace = true }
 
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }
