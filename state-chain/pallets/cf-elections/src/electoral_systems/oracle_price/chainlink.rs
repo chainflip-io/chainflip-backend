@@ -81,14 +81,21 @@ where
 {
 	state
 		.chain_states
-		.get_latest_price(chainlink_assetpair)
-		.and_then(|(_, price, status)| {
-			Some((chainlink_price_to_statechain_price(price, chainlink_assetpair)?.into(), status))
+		.get_latest_asset_state(chainlink_assetpair)
+		.and_then(|asset_state| {
+			Some((
+				chainlink_price_to_statechain_price(
+					&asset_state.price.median,
+					chainlink_assetpair,
+				)?
+				.into(),
+				asset_state.price_status,
+			))
 		})
 }
 
 pub fn chainlink_price_to_statechain_price(
-	price: ChainlinkPrice,
+	price: &ChainlinkPrice,
 	assetpair: ChainlinkAssetpair,
 ) -> Option<StatechainPrice> {
 	let from_unit = assetpair.to_price_unit();
@@ -97,7 +104,7 @@ pub fn chainlink_price_to_statechain_price(
 	// and then do the unit conversion, because in the chainlink representation there aren't
 	// enough decimals to represent "FineEth / FineUsd" prices
 	// (1 Usd per Eth translates to 10^-12 FineUsd per FineEth)
-	let price: StatechainPrice = price.convert()?;
+	let price: StatechainPrice = price.clone().convert()?;
 	let price: StatechainPrice = convert_unit(price, from_unit, to_unit)?;
 	Some(price)
 }
@@ -127,7 +134,8 @@ where
 			state.chain_states.get_latest_asset_state(assetpair).and_then(|asset_state| {
 				let from_unit = assetpair.to_price_unit();
 
-				let price: StatechainPrice = chainlink_price_to_statechain_price(asset_state.price.median, assetpair)?;
+				let price: StatechainPrice =
+					chainlink_price_to_statechain_price(&asset_state.price.median, assetpair)?;
 				Some(OraclePrice {
 					price: price.into(),
 					updated_at_oracle_timestamp: asset_state.timestamp.median.seconds,

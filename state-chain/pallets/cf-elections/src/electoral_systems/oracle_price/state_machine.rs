@@ -237,27 +237,10 @@ def_derive! {
 }
 
 impl<T: OPTypes> ExternalChainStates<T> {
-	pub fn get_latest_price(
-		&self,
-		asset: T::AssetPair,
-	) -> Option<(UnixTime, T::Price, PriceStatus)> {
+	pub fn get_latest_asset_state(&self, asset: T::AssetPair) -> Option<&AssetState<T>> {
 		all::<ExternalPriceChain>()
 			.filter_map(|chain| self[chain].price.get(&asset))
 			.max_by_key(|price_state| price_state.timestamp.median)
-			.map(|price_state| {
-				(
-					price_state.timestamp.median,
-					price_state.price.median.clone(),
-					price_state.price_status,
-				)
-			})
-	}
-
-	pub fn get_latest_asset_state(&self, asset: T::AssetPair) -> Option<AssetState<T>> {
-		all::<ExternalPriceChain>()
-			.filter_map(|chain| self[chain].price.get(&asset))
-			.max_by_key(|price_state| price_state.timestamp.median)
-			.cloned()
 	}
 }
 
@@ -419,8 +402,8 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 					// event.
 					let previous_best_timestamp = state
 						.chain_states
-						.get_latest_price(asset.clone())
-						.map(|state| state.0)
+						.get_latest_asset_state(asset.clone())
+						.map(|state| state.timestamp.median)
 						.unwrap_or_default();
 					if response.timestamp.median > previous_best_timestamp {
 						updated_prices.push((
