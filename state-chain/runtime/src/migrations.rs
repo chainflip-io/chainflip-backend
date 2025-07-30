@@ -16,7 +16,7 @@
 
 //! Chainflip runtime storage migrations.
 
-pub mod btc_elections_migrations;
+pub mod bitcoin_elections;
 pub mod housekeeping;
 
 pub mod boost_refactor;
