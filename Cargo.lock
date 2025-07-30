@@ -2059,7 +2059,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-node"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "cf-chains",
  "cf-primitives",
@@ -13854,7 +13854,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "state-chain-runtime"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "bitvec",
  "cf-amm",
