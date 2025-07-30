@@ -392,6 +392,10 @@ pub mod pallet {
 	pub type DelegationInfos<T: Config> =
 		StorageMap<_, Identity, T::AccountId, DelegationStatus, ValueQuery>;
 
+	#[pallet::storage]
+	pub type MaxDelegationBid<T: Config> =
+		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
+
 	/// Collects all delegation of an epoch.
 	#[pallet::storage]
 	pub type DelegationsPerEpoch<T: Config> =
@@ -445,6 +449,9 @@ pub mod pallet {
 		Delegated { delegator: T::AccountId, operator: T::AccountId },
 		/// The undelegation process of an delegator has been finalized.
 		UnDelegationFinalized { delegator: T::AccountId, epoch: EpochIndex },
+		/// The maximum bit of an delegator was updated. If the value is None it means that the
+		/// max_bid has been removed entirly.
+		MaxBidUpdated { delegator: T::AccountId, max_bid: Option<T::Amount> },
 	}
 
 	#[pallet::error]
@@ -512,6 +519,8 @@ pub mod pallet {
 		/// Delegator already submitted to undelegate. The delegator has to wait until this process
 		/// has been finalized.
 		UnDelegationAlreadyInitiated,
+		/// Max bid is higher then the account balance.
+		MaxBidIsTooHigh,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -1197,6 +1206,30 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Sets the max bid of an operator. If the argument is None any active max bis getting
+		/// removed. If no max bid is set, we take the entire account balance as
+		/// delegator bond. The max bid is not allowed to be higher than the current account
+		/// balance.
+		#[pallet::call_index(20)]
+		#[pallet::weight(T::ValidatorWeightInfo::set_max_bid())]
+		pub fn set_max_bid(origin: OriginFor<T>, max_bid: Option<T::Amount>) -> DispatchResult {
+			let delegator = ensure_signed(origin)?;
+
+			if let Some(max_bid) = max_bid {
+				ensure!(
+					T::FundingInfo::balance(&delegator) >= max_bid,
+					Error::<T>::MaxBidIsTooHigh
+				);
+				MaxDelegationBid::<T>::insert(&delegator, max_bid);
+			} else {
+				MaxDelegationBid::<T>::remove(&delegator);
+			}
+
+			Self::deposit_event(Event::<T>::MaxBidUpdated { delegator, max_bid });
+
+			Ok(())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -1557,6 +1590,8 @@ impl<T: Config> Pallet<T> {
 					auction_outcome.bond,
 				));
 				debug_assert!(!auction_outcome.winners.is_empty());
+				// TODO: This assumption is outdated now - we should think about a replacement or
+				// just remove it.
 				// debug_assert!({
 				// 	let bids = Self::get_active_bids()
 				// 		.into_iter()
@@ -1811,7 +1846,16 @@ impl<T: Config> Pallet<T> {
 			let validators =
 				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator);
 
-			let total_delegator_balance = delegators.values().copied().sum::<T::Amount>();
+			let total_delegator_balance = delegators
+				.clone()
+				.into_iter()
+				.map(|(account_id, balance)| {
+					MaxDelegationBid::<T>::get(account_id)
+						.map(|max_bid| max_bid.min(balance))
+						.unwrap_or(balance)
+				})
+				.sum::<T::Amount>();
+
 			let total_validator_balance = validators.values().copied().sum::<T::Amount>();
 
 			let total_balance = total_delegator_balance.saturating_add(total_validator_balance);
