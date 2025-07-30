@@ -400,7 +400,7 @@ pub mod pallet {
 		/// A previously non-bidding account has started bidding.
 		StartedBidding { account_id: T::AccountId },
 		/// The rotation transaction(s) for the previous rotation are still pending to be
-		/// succesfully broadcast, therefore, cannot start a new epoch rotation.
+		/// successfully broadcast, therefore, cannot start a new epoch rotation.
 		PreviousRotationStillPending,
 		/// A delegator has been blocked from delegating to an operator.
 		DelegatorBlocked { delegator: T::AccountId, operator: T::AccountId },

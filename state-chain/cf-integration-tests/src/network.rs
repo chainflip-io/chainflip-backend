@@ -695,6 +695,10 @@ impl Network {
 		self.engines.get_mut(node_id).expect("valid node_id").live = active;
 	}
 
+	pub fn set_auto_heartbeat(&mut self, node_id: &NodeId, active: bool) {
+		self.engines.get_mut(node_id).expect("valid node_id").auto_submit_heartbeat = active;
+	}
+
 	pub fn create_engine(&mut self) -> NodeId {
 		let node_id = NodeId::from([self.engines.len() as u8; 32]);
 		self.add_engine(&node_id);
@@ -732,11 +736,18 @@ impl Network {
 		}
 	}
 
-	/// Move to the next heartbeat interval block.
-	pub fn move_to_next_heartbeat_block(&mut self) {
-		self.move_forward_blocks(
-			HEARTBEAT_BLOCK_INTERVAL - System::block_number() % HEARTBEAT_BLOCK_INTERVAL,
-		);
+	/// Move to the next heartbeat interval block, with the option to offset the target block.
+	pub fn move_to_next_heartbeat_block(&mut self, offset: Option<i32>) {
+		let heart_beat_block =
+			HEARTBEAT_BLOCK_INTERVAL - System::block_number() % HEARTBEAT_BLOCK_INTERVAL;
+		let os = offset.unwrap_or_default();
+		let target_block = if os >= 0 {
+			heart_beat_block + os.unsigned_abs()
+		} else {
+			heart_beat_block - os.unsigned_abs()
+		};
+
+		self.move_forward_blocks(target_block);
 	}
 
 	// Submits heartbeat for keep alive.
@@ -862,6 +873,8 @@ pub fn fund_authorities_and_join_auction(
 		network::setup_account_and_peer_mapping(node);
 		network::Cli::start_bidding(node);
 	}
+
+	testnet.submit_heartbeat_all_engines(true);
 
 	(testnet, genesis_authorities, init_backup_nodes)
 }
