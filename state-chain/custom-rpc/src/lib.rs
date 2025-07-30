@@ -630,113 +630,92 @@ type BoostPoolFeesResponse = Vec<boost_pool_rpc::BoostPoolFeesRpc>;
 pub trait CustomApi {
 	/// Returns true if the current phase is the auction phase.
 	#[method(name = "is_auction_phase")]
-	fn cf_is_auction_phase(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<bool>;
+	fn cf_is_auction_phase(&self, at: Option<Hash>) -> RpcResult<bool>;
 	#[method(name = "eth_key_manager_address")]
-	fn cf_eth_key_manager_address(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<String>;
+	fn cf_eth_key_manager_address(&self, at: Option<Hash>) -> RpcResult<String>;
 	#[method(name = "eth_state_chain_gateway_address")]
-	fn cf_eth_state_chain_gateway_address(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<String>;
+	fn cf_eth_state_chain_gateway_address(&self, at: Option<Hash>) -> RpcResult<String>;
 	#[method(name = "eth_flip_token_address")]
-	fn cf_eth_flip_token_address(&self, at: Option<state_chain_runtime::Hash>)
-		-> RpcResult<String>;
+	fn cf_eth_flip_token_address(&self, at: Option<Hash>) -> RpcResult<String>;
 	#[method(name = "eth_chain_id")]
-	fn cf_eth_chain_id(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u64>;
+	fn cf_eth_chain_id(&self, at: Option<Hash>) -> RpcResult<u64>;
 	/// Returns the eth vault in the form [agg_key, active_from_eth_block]
 	#[method(name = "eth_vault")]
-	fn cf_eth_vault(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<(String, u32)>;
+	fn cf_eth_vault(&self, at: Option<Hash>) -> RpcResult<(String, u32)>;
 	#[method(name = "tx_fee_multiplier")]
-	fn cf_tx_fee_multiplier(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u64>;
+	fn cf_tx_fee_multiplier(&self, at: Option<Hash>) -> RpcResult<u64>;
 	// Returns the Auction params in the form [min_set_size, max_set_size]
 	#[method(name = "auction_parameters")]
-	fn cf_auction_parameters(&self, at: Option<state_chain_runtime::Hash>)
-		-> RpcResult<(u32, u32)>;
+	fn cf_auction_parameters(&self, at: Option<Hash>) -> RpcResult<(u32, u32)>;
 	#[method(name = "min_funding")]
-	fn cf_min_funding(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<NumberOrHex>;
+	fn cf_min_funding(&self, at: Option<Hash>) -> RpcResult<NumberOrHex>;
 	#[method(name = "current_epoch")]
-	fn cf_current_epoch(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u32>;
+	fn cf_current_epoch(&self, at: Option<Hash>) -> RpcResult<u32>;
 	#[method(name = "epoch_duration")]
-	fn cf_epoch_duration(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u32>;
+	fn cf_epoch_duration(&self, at: Option<Hash>) -> RpcResult<u32>;
 	#[method(name = "current_epoch_started_at")]
-	fn cf_current_epoch_started_at(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u32>;
+	fn cf_current_epoch_started_at(&self, at: Option<Hash>) -> RpcResult<u32>;
 	#[method(name = "authority_emission_per_block")]
-	fn cf_authority_emission_per_block(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<NumberOrHex>;
+	fn cf_authority_emission_per_block(&self, at: Option<Hash>) -> RpcResult<NumberOrHex>;
 	#[method(name = "backup_emission_per_block")]
-	fn cf_backup_emission_per_block(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<NumberOrHex>;
+	fn cf_backup_emission_per_block(&self, at: Option<Hash>) -> RpcResult<NumberOrHex>;
 	#[method(name = "flip_supply")]
-	fn cf_flip_supply(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<(NumberOrHex, NumberOrHex)>;
+	fn cf_flip_supply(&self, at: Option<Hash>) -> RpcResult<(NumberOrHex, NumberOrHex)>;
 	#[method(name = "accounts")]
 	fn cf_accounts(
 		&self,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<(state_chain_runtime::AccountId, String)>>;
 	#[method(name = "account_info")]
 	fn cf_account_info(
 		&self,
 		account_id: state_chain_runtime::AccountId,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<RpcAccountInfo>;
 	#[deprecated(note = "Please use `cf_account_info` instead.")]
 	#[method(name = "account_info_v2")]
 	fn cf_account_info_v2(
 		&self,
 		account_id: state_chain_runtime::AccountId,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<RpcAccountInfoV2>;
 	#[method(name = "free_balances", aliases = ["cf_asset_balances"])]
 	fn cf_free_balances(
 		&self,
 		account_id: state_chain_runtime::AccountId,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<any::AssetMap<U256>>;
 	#[method(name = "lp_total_balances", aliases = ["lp_total_balances"])]
 	fn cf_lp_total_balances(
 		&self,
 		account_id: state_chain_runtime::AccountId,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<any::AssetMap<U256>>;
 	#[method(name = "penalties")]
-	fn cf_penalties(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<(Offence, RpcPenalty)>>;
+	fn cf_penalties(&self, at: Option<Hash>) -> RpcResult<Vec<(Offence, RpcPenalty)>>;
 	#[method(name = "suspensions")]
-	fn cf_suspensions(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcSuspensions>;
+	fn cf_suspensions(&self, at: Option<Hash>) -> RpcResult<RpcSuspensions>;
 	#[method(name = "generate_gov_key_call_hash")]
 	fn cf_generate_gov_key_call_hash(
 		&self,
 		call: Vec<u8>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<GovCallHash>;
 	#[method(name = "auction_state")]
-	fn cf_auction_state(&self, at: Option<state_chain_runtime::Hash>)
-		-> RpcResult<RpcAuctionState>;
+	fn cf_auction_state(&self, at: Option<Hash>) -> RpcResult<RpcAuctionState>;
 	#[method(name = "pool_price")]
 	fn cf_pool_price(
 		&self,
 		from_asset: Asset,
 		to_asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Option<PoolPriceV1>>;
 	#[method(name = "pool_price_v2")]
 	fn cf_pool_price_v2(
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<PoolPriceV2>;
 	#[method(name = "swap_rate")]
 	fn cf_pool_swap_rate(
@@ -744,7 +723,7 @@ pub trait CustomApi {
 		from_asset: Asset,
 		to_asset: Asset,
 		amount: NumberOrHex,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<RpcSwapOutputV1>;
 	#[method(name = "swap_rate_v2")]
 	fn cf_pool_swap_rate_v2(
@@ -753,7 +732,7 @@ pub trait CustomApi {
 		to_asset: Asset,
 		amount: U256,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<RpcSwapOutputV2>;
 	#[method(name = "swap_rate_v3")]
 	fn cf_pool_swap_rate_v3(
@@ -767,7 +746,7 @@ pub trait CustomApi {
 		exclude_fees: Option<BTreeSet<FeeTypes>>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		is_internal: Option<bool>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<RpcSwapOutputV2>;
 	#[method(name = "required_asset_ratio_for_range_order")]
 	fn cf_required_asset_ratio_for_range_order(
@@ -775,7 +754,7 @@ pub trait CustomApi {
 		base_asset: Asset,
 		quote_asset: Asset,
 		tick_range: Range<cf_amm::math::Tick>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<PoolPairsMap<AmmAmount>>;
 	#[method(name = "pool_orderbook")]
 	fn cf_pool_orderbook(
@@ -783,14 +762,14 @@ pub trait CustomApi {
 		base_asset: Asset,
 		quote_asset: Asset,
 		orders: u32,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<pallet_cf_pools::PoolOrderbook>;
 	#[method(name = "pool_info")]
 	fn cf_pool_info(
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<PoolInfo>;
 	#[method(name = "pool_depth")]
 	fn cf_pool_depth(
@@ -798,14 +777,14 @@ pub trait CustomApi {
 		base_asset: Asset,
 		quote_asset: Asset,
 		tick_range: Range<cf_amm::math::Tick>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<AskBidMap<UnidirectionalPoolDepth>>;
 	#[method(name = "pool_liquidity")]
 	fn cf_pool_liquidity(
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<PoolLiquidity>;
 	#[method(name = "pool_orders")]
 	fn cf_pool_orders(
@@ -814,7 +793,7 @@ pub trait CustomApi {
 		quote_asset: Asset,
 		lp: Option<state_chain_runtime::AccountId>,
 		filled_orders: Option<bool>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::Runtime>>;
 	#[method(name = "pool_range_order_liquidity_value")]
 	fn cf_pool_range_order_liquidity_value(
@@ -823,41 +802,29 @@ pub trait CustomApi {
 		quote_asset: Asset,
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<PoolPairsMap<AmmAmount>>;
 	#[method(name = "funding_environment")]
-	fn cf_funding_environment(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<FundingEnvironment>;
+	fn cf_funding_environment(&self, at: Option<Hash>) -> RpcResult<FundingEnvironment>;
 	#[method(name = "swapping_environment")]
-	fn cf_swapping_environment(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SwappingEnvironment>;
+	fn cf_swapping_environment(&self, at: Option<Hash>) -> RpcResult<SwappingEnvironment>;
 	#[method(name = "ingress_egress_environment")]
 	fn cf_ingress_egress_environment(
 		&self,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<IngressEgressEnvironment>;
 	#[method(name = "pools_environment", aliases = ["cf_pool_environment"])]
-	fn cf_pools_environment(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PoolsEnvironment>;
+	fn cf_pools_environment(&self, at: Option<Hash>) -> RpcResult<PoolsEnvironment>;
 	#[method(name = "available_pools")]
-	fn cf_available_pools(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<PoolPairsMap<Asset>>>;
+	fn cf_available_pools(&self, at: Option<Hash>) -> RpcResult<Vec<PoolPairsMap<Asset>>>;
 	#[method(name = "environment")]
-	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
+	fn cf_environment(&self, at: Option<Hash>) -> RpcResult<RpcEnvironment>;
 	#[deprecated(note = "Use direct storage access of `CurrentReleaseVersion` instead.")]
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 
 	#[method(name = "max_swap_amount")]
-	fn cf_max_swap_amount(&self, asset: Asset) -> RpcResult<Option<AssetAmount>>;
+	fn cf_max_swap_amount(&self, asset: Asset, at: Option<Hash>) -> RpcResult<Option<AssetAmount>>;
 	#[subscription(name = "subscribe_pool_price", item = BlockUpdate<PoolPriceV1>)]
 	async fn cf_subscribe_pool_price(&self, from_asset: Asset, to_asset: Asset);
 	#[subscription(name = "subscribe_pool_price_v2", item = BlockUpdate<PoolPriceV2>)]
@@ -883,65 +850,59 @@ pub trait CustomApi {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<ScheduledSwap>>;
 
 	#[method(name = "supported_assets")]
-	fn cf_supported_assets(&self) -> RpcResult<Vec<Asset>>;
+	fn cf_supported_assets(&self, at: Option<Hash>) -> RpcResult<Vec<Asset>>;
 
 	#[method(name = "failed_call_ethereum")]
 	fn cf_failed_call_ethereum(
 		&self,
 		broadcast_id: BroadcastId,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>>;
 
 	#[method(name = "failed_call_arbitrum")]
 	fn cf_failed_call_arbitrum(
 		&self,
 		broadcast_id: BroadcastId,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Option<<cf_chains::Arbitrum as Chain>::Transaction>>;
 
 	#[method(name = "witness_count")]
 	fn cf_witness_count(
 		&self,
-		hash: state_chain_runtime::Hash,
+		hash: Hash,
 		epoch_index: Option<EpochIndex>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Option<FailingWitnessValidators>>;
 
 	#[method(name = "boost_pools_depth")]
-	fn cf_boost_pools_depth(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<BoostPoolDepthResponse>;
+	fn cf_boost_pools_depth(&self, at: Option<Hash>) -> RpcResult<BoostPoolDepthResponse>;
 
 	#[method(name = "boost_pool_details")]
 	fn cf_boost_pool_details(
 		&self,
 		asset: Option<Asset>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<BoostPoolDetailsResponse>;
 
 	#[method(name = "boost_pool_pending_fees")]
 	fn cf_boost_pool_pending_fees(
 		&self,
 		asset: Option<Asset>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<BoostPoolFeesResponse>;
 
 	#[method(name = "safe_mode_statuses")]
-	fn cf_safe_mode_statuses(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RuntimeSafeMode>;
+	fn cf_safe_mode_statuses(&self, at: Option<Hash>) -> RpcResult<RuntimeSafeMode>;
 
 	#[method(name = "solana_electoral_data")]
 	fn cf_solana_electoral_data(
 		&self,
 		validator: state_chain_runtime::AccountId,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<u8>>;
 
 	#[method(name = "solana_filter_votes")]
@@ -949,14 +910,14 @@ pub trait CustomApi {
 		&self,
 		validator: state_chain_runtime::AccountId,
 		proposed_votes: Vec<u8>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<u8>>;
 
 	#[method(name = "bitcoin_electoral_data")]
 	fn cf_bitcoin_electoral_data(
 		&self,
 		validator: state_chain_runtime::AccountId,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<u8>>;
 
 	#[method(name = "bitcoin_filter_votes")]
@@ -964,7 +925,7 @@ pub trait CustomApi {
 		&self,
 		validator: state_chain_runtime::AccountId,
 		proposed_votes: Vec<u8>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<u8>>;
 
 	#[method(name = "validate_dca_params")]
@@ -972,14 +933,14 @@ pub trait CustomApi {
 		&self,
 		number_of_chunks: u32,
 		chunk_interval: u32,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<()>;
 
 	#[method(name = "validate_refund_params")]
 	fn cf_validate_refund_params(
 		&self,
 		retry_duration: BlockNumber,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<()>;
 
 	#[method(name = "request_swap_parameter_encoding")]
@@ -995,7 +956,7 @@ pub trait CustomApi {
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<VaultSwapDetails<AddressString>>;
 
 	#[method(name = "decode_vault_swap_parameter")]
@@ -1003,7 +964,7 @@ pub trait CustomApi {
 		&self,
 		broker: state_chain_runtime::AccountId,
 		vault_swap: VaultSwapDetails<AddressString>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<VaultSwapInputRpc>;
 
 	#[method(name = "encode_cf_parameters")]
@@ -1019,20 +980,20 @@ pub trait CustomApi {
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<RpcBytes>;
 
 	#[method(name = "get_open_deposit_channels")]
 	fn cf_get_open_deposit_channels(
 		&self,
 		broker: Option<state_chain_runtime::AccountId>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<ChainAccounts>;
 
 	#[method(name = "get_transaction_screening_events")]
 	fn cf_get_transaction_screening_events(
 		&self,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<TransactionScreeningEvents>;
 
 	#[method(name = "get_affiliates")]
@@ -1040,33 +1001,27 @@ pub trait CustomApi {
 		&self,
 		broker: state_chain_runtime::AccountId,
 		affiliate: Option<state_chain_runtime::AccountId>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<(state_chain_runtime::AccountId, AffiliateDetails)>>;
 
 	#[method(name = "get_vault_addresses")]
-	fn cf_vault_addresses(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<VaultAddresses>;
+	fn cf_vault_addresses(&self, at: Option<Hash>) -> RpcResult<VaultAddresses>;
 
 	#[method(name = "all_open_deposit_channels")]
 	fn cf_all_open_deposit_channels(
 		&self,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<OpenedDepositChannels>>;
 
 	#[method(name = "get_trading_strategies")]
 	fn cf_get_trading_strategies(
 		&self,
 		lp: Option<state_chain_runtime::AccountId>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<TradingStrategyInfoHexAmounts>>;
 
 	#[method(name = "get_trading_strategy_limits")]
-	fn cf_trading_strategy_limits(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<TradingStrategyLimits>;
+	fn cf_trading_strategy_limits(&self, at: Option<Hash>) -> RpcResult<TradingStrategyLimits>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1076,7 +1031,7 @@ pub struct CustomRpc<C, B, BE> {
 
 impl<C, B, BE> CustomRpc<C, B, BE>
 where
-	B: BlockT<Hash = state_chain_runtime::Hash>,
+	B: BlockT<Hash = Hash>,
 	C: Send + Sync + 'static + HeaderBackend<B>,
 {
 	pub fn new(
@@ -1092,7 +1047,7 @@ pub struct StorageQueryApi<'a, C, B>(&'a C, PhantomData<B>);
 
 impl<'a, C, B> StorageQueryApi<'a, C, B>
 where
-	B: BlockT<Hash = state_chain_runtime::Hash>,
+	B: BlockT<Hash = Hash>,
 	C: Send + Sync + 'static + CallApiAt<B>,
 {
 	pub fn new(client: &'a C) -> Self {
@@ -1237,7 +1192,7 @@ macro_rules! pass_through {
 macro_rules! pass_through_and_flatten {
 	($( $name:ident ( $( $arg:ident: $argt:ty ),* $(,)? ) -> $result_type:ty $([map: $mapping:expr])? ),+ $(,)?) => {
 		$(
-			fn $name(&self, $( $arg: $argt, )* at: Option<state_chain_runtime::Hash>,) -> RpcResult<$result_type> {
+			fn $name(&self, $( $arg: $argt, )* at: Option<Hash>,) -> RpcResult<$result_type> {
 				flatten_into_error(
 					self.rpc_backend.with_runtime_api(at, |api, hash| api.$name(hash, $($arg),* ))
 						$(.map($mapping))?
@@ -1262,7 +1217,7 @@ where
 #[async_trait]
 impl<C, B, BE> CustomApiServer for CustomRpc<C, B, BE>
 where
-	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
+	B: BlockT<Hash = Hash, Header = state_chain_runtime::Header>,
 	B::Header: Unpin,
 	BE: Backend<B> + Send + Sync + 'static,
 	C: sp_api::ProvideRuntimeApi<B>
@@ -1353,10 +1308,7 @@ where
 			.with_runtime_api(None, |api, hash| api.cf_current_compatibility_version(hash))
 	}
 
-	fn cf_auction_state(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcAuctionState> {
+	fn cf_auction_state(&self, at: Option<Hash>) -> RpcResult<RpcAuctionState> {
 		self.rpc_backend
 			.with_versioned_runtime_api(at, |api, hash, version| match version {
 				Some(v) if v < 5 => api.cf_auction_state_before_version_5(hash).map(Into::into),
@@ -1365,9 +1317,9 @@ where
 			.map(Into::into)
 	}
 
-	fn cf_max_swap_amount(&self, asset: Asset) -> RpcResult<Option<AssetAmount>> {
+	fn cf_max_swap_amount(&self, asset: Asset, at: Option<Hash>) -> RpcResult<Option<AssetAmount>> {
 		self.rpc_backend
-			.with_runtime_api(None, |api, hash| api.cf_max_swap_amount(hash, asset))
+			.with_runtime_api(at, |api, hash| api.cf_max_swap_amount(hash, asset))
 	}
 
 	fn cf_tx_fee_multiplier(&self, _at: Option<Hash>) -> RpcResult<u64> {
@@ -1405,7 +1357,7 @@ where
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<PoolPriceV2> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(PoolPriceV2 {
@@ -1419,7 +1371,7 @@ where
 	fn cf_account_info(
 		&self,
 		account_id: state_chain_runtime::AccountId,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<RpcAccountInfo> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			let balance = api.cf_account_flip_balance(hash, &account_id)?;
@@ -1498,7 +1450,7 @@ where
 		from_asset: Asset,
 		to_asset: Asset,
 		amount: NumberOrHex,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<RpcSwapOutputV1> {
 		self.cf_pool_swap_rate_v2(from_asset, to_asset, amount.into(), None, at)
 			.map(Into::into)
@@ -1510,7 +1462,7 @@ where
 		to_asset: Asset,
 		amount: U256,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
 		self.cf_pool_swap_rate_v3(
 			from_asset,
@@ -1537,7 +1489,7 @@ where
 		exclude_fees: Option<BTreeSet<FeeTypes>>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		is_internal: Option<bool>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
 		let amount = amount
 			.try_into()
@@ -1605,7 +1557,7 @@ where
 
 	fn cf_ingress_egress_environment(
 		&self,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<IngressEgressEnvironment> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			let mut witness_safety_margins = HashMap::new();
@@ -1635,10 +1587,7 @@ where
 		})
 	}
 
-	fn cf_swapping_environment(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SwappingEnvironment> {
+	fn cf_swapping_environment(&self, at: Option<Hash>) -> RpcResult<SwappingEnvironment> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			let swap_limits = api.cf_swap_limits(hash)?;
 			Ok::<_, CfApiError>(SwappingEnvironment {
@@ -1661,10 +1610,7 @@ where
 		})
 	}
 
-	fn cf_funding_environment(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<FundingEnvironment> {
+	fn cf_funding_environment(&self, at: Option<Hash>) -> RpcResult<FundingEnvironment> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(FundingEnvironment {
 				redemption_tax: api.cf_redemption_tax(hash)?.into(),
@@ -1673,10 +1619,7 @@ where
 		})
 	}
 
-	fn cf_pools_environment(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PoolsEnvironment> {
+	fn cf_pools_environment(&self, at: Option<Hash>) -> RpcResult<PoolsEnvironment> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(PoolsEnvironment {
 				fees: {
@@ -1693,7 +1636,7 @@ where
 		})
 	}
 
-	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment> {
+	fn cf_environment(&self, at: Option<Hash>) -> RpcResult<RpcEnvironment> {
 		Ok(RpcEnvironment {
 			ingress_egress: self.cf_ingress_egress_environment(at)?,
 			swapping: self.cf_swapping_environment(at)?,
@@ -1810,7 +1753,7 @@ where
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<ScheduledSwap>> {
 		// Check that the requested pool exists:
 		let _ = (*self.rpc_backend.client.runtime_api())
@@ -1839,24 +1782,21 @@ where
 			.await
 	}
 
-	fn cf_lp_get_order_fills(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<BlockUpdate<OrderFills>> {
+	fn cf_lp_get_order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>> {
 		order_fills::order_fills_for_block(
 			self.rpc_backend.client.as_ref(),
 			at.unwrap_or_else(|| self.rpc_backend.client.info().finalized_hash),
 		)
 	}
 
-	fn cf_supported_assets(&self) -> RpcResult<Vec<Asset>> {
+	fn cf_supported_assets(&self, _at: Option<Hash>) -> RpcResult<Vec<Asset>> {
 		Ok(Asset::all().collect())
 	}
 
 	fn cf_boost_pool_details(
 		&self,
 		asset: Option<Asset>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<BoostPoolDetailsResponse> {
 		execute_for_all_or_one_asset(asset, |asset| {
 			self.rpc_backend.with_runtime_api(at, |api, hash| {
@@ -1873,7 +1813,7 @@ where
 	fn cf_boost_pool_pending_fees(
 		&self,
 		asset: Option<Asset>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<BoostPoolFeesResponse> {
 		execute_for_all_or_one_asset(asset, |asset| {
 			self.rpc_backend.with_runtime_api(at, |api, hash| {
@@ -1894,7 +1834,7 @@ where
 	fn cf_solana_electoral_data(
 		&self,
 		validator: state_chain_runtime::AccountId,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<u8>> {
 		self.rpc_backend
 			.with_runtime_api(at, |api, hash| api.cf_solana_electoral_data(hash, validator))
@@ -1904,7 +1844,7 @@ where
 		&self,
 		validator: state_chain_runtime::AccountId,
 		proposed_votes: Vec<u8>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<u8>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			api.cf_solana_filter_votes(hash, validator, proposed_votes)
@@ -1914,7 +1854,7 @@ where
 	fn cf_bitcoin_electoral_data(
 		&self,
 		validator: state_chain_runtime::AccountId,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<u8>> {
 		self.rpc_backend
 			.with_runtime_api(at, |api, hash| api.cf_bitcoin_electoral_data(hash, validator))
@@ -1924,7 +1864,7 @@ where
 		&self,
 		validator: state_chain_runtime::AccountId,
 		proposed_votes: Vec<u8>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<u8>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			api.cf_bitcoin_filter_votes(hash, validator, proposed_votes)
@@ -1943,7 +1883,7 @@ where
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<VaultSwapDetails<AddressString>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(
@@ -1969,7 +1909,7 @@ where
 		&self,
 		broker: AccountId32,
 		vault_swap: VaultSwapDetails<AddressString>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<VaultSwapInputRpc> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(vault_swap_input_encoded_to_rpc(
@@ -1994,7 +1934,7 @@ where
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<RpcBytes> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(
@@ -2018,7 +1958,7 @@ where
 
 	fn cf_get_transaction_screening_events(
 		&self,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<TransactionScreeningEvents> {
 		self.rpc_backend
 			.with_runtime_api(at, |api, hash| api.cf_transaction_screening_events(hash))
@@ -2027,7 +1967,7 @@ where
 	fn cf_get_trading_strategies(
 		&self,
 		lp: Option<state_chain_runtime::AccountId>,
-		at: Option<state_chain_runtime::Hash>,
+		at: Option<Hash>,
 	) -> RpcResult<Vec<TradingStrategyInfo<NumberOrHex>>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			let api_version = api
@@ -2085,7 +2025,7 @@ fn get_preallocated_channels<C, B, BE>(
 	chain: ForeignChain,
 ) -> RpcResult<Vec<ChannelId>>
 where
-	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
+	B: BlockT<Hash = Hash, Header = state_chain_runtime::Header>,
 	BE: Backend<B> + Send + Sync + 'static,
 	C: sp_api::ProvideRuntimeApi<B> + HeaderBackend<B> + Send + Sync + 'static,
 	C::Api: CustomRuntimeApi<B>,
