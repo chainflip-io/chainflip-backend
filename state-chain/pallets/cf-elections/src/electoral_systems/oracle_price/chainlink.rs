@@ -16,12 +16,12 @@
 
 //! Chainlink specific types
 
-use cf_amm_math::Price;
-
 use crate::electoral_systems::{
 	oracle_price::{price::*, state_machine::*},
 	state_machine::common_imports::*,
 };
+use cf_amm_math::Price;
+use sp_std::iter;
 
 def_derive! {
 	/// Representation of the asset pairs as returned in the `description` field of chainlink responses.
@@ -100,4 +100,42 @@ pub fn chainlink_price_to_statechain_price(
 	let price: StatechainPrice = price.convert()?;
 	let price: StatechainPrice = convert_unit(price, from_unit, to_unit)?;
 	Some(price)
+}
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct OraclePrice {
+	pub price: Price,
+	pub updated_at_oracle_timestamp: u64,
+	pub updated_at_statechain_block: u32,
+	pub base_asset: PriceAsset,
+	pub quote_asset: PriceAsset,
+}
+
+// Used by the RPC
+pub fn get_latest_oracle_prices<T>(
+	state: &OraclePriceTracker<T>,
+	base_and_quote_asset: Option<ChainlinkAssetpair>,
+) -> Vec<OraclePrice>
+where
+	T: OPTypes<AssetPair = ChainlinkAssetpair, Price = ChainlinkPrice, StateChainBlockNumber = u32>,
+{
+	let pairs_iter = match base_and_quote_asset {
+		Some(assetpair) => Either::Left(iter::once(assetpair)),
+		None => Either::Right(all::<ChainlinkAssetpair>()),
+	};
+	pairs_iter
+		.filter_map(|assetpair: ChainlinkAssetpair| {
+			state.chain_states.get_latest_asset_state(assetpair).and_then(|asset_state| {
+				let from_unit = assetpair.to_price_unit();
+
+				let price: StatechainPrice = chainlink_price_to_statechain_price(asset_state.price.median, assetpair)?;
+				Some(OraclePrice {
+					price: price.into(),
+					updated_at_oracle_timestamp: asset_state.timestamp.median.seconds,
+					updated_at_statechain_block: asset_state.updated_at_statechain_block,
+					base_asset: from_unit.base_asset,
+					quote_asset: from_unit.quote_asset,
+				})
+			})
+		})
+		.collect()
 }

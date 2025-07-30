@@ -15,6 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{chainflip::Offence, Runtime, RuntimeSafeMode};
+use pallet_cf_elections::electoral_systems::oracle_price::{
+	chainlink::OraclePrice,
+};
+
 use cf_amm::{
 	common::{PoolPairsMap, Side},
 	math::{Amount, Tick},
@@ -630,6 +634,11 @@ decl_runtime_apis!(
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
 		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
 		fn cf_network_fees() -> NetworkFees;
+		fn cf_oracle_prices(
+			base_and_quote_asset: Option<
+				pallet_cf_elections::electoral_systems::oracle_price::chainlink::ChainlinkAssetpair,
+			>,
+		) -> Vec<OraclePrice>;
 	}
 );
 

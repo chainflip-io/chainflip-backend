@@ -252,6 +252,13 @@ impl<T: OPTypes> ExternalChainStates<T> {
 				)
 			})
 	}
+
+	pub fn get_latest_asset_state(&self, asset: T::AssetPair) -> Option<AssetState<T>> {
+		all::<ExternalPriceChain>()
+			.filter_map(|chain| self[chain].price.get(&asset))
+			.max_by_key(|price_state| price_state.timestamp.median)
+			.cloned()
+	}
 }
 
 impl<T: OPTypes> Validate for ExternalChainStates<T> {
