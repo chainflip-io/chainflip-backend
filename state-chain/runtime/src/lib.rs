@@ -1525,7 +1525,7 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV1_11 = ();
+type MigrationsForV1_11 = (migrations::polkadot_deprecation::PolkadotDeprecationMigration,);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
