@@ -14,11 +14,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
+
 use cf_chains::{Chain, Ethereum};
-use cf_primitives::AccountId;
 use ethers::{prelude::abigen, types::Bloom};
 use sp_core::{H160, H256};
-use tracing::{info, trace};
+use tracing::{info, warn};
 
 use super::super::{
 	common::{
@@ -28,42 +29,14 @@ use super::super::{
 	evm::contract_common::events_at_block,
 };
 use crate::evm::retry_rpc::EvmRetryRpcApi;
-use cf_primitives::EpochIndex;
-use codec::{Decode, Encode, MaxEncodedLen};
+use cf_chains::evm::ToAccountId32;
+use cf_primitives::{Asset, EpochIndex};
 use futures_core::Future;
-use scale_info::TypeInfo;
+use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall};
 
 abigen!(ScUtils, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IScUtils.json");
 
 use anyhow::Result;
-
-// We could decode the ScCall bytes into a Vec<ScCall> to allow multiple actions into a single
-// transaction. The challenge with that is that we'd need to be very careful to make sure that none
-// of the possible combinations can be abused in any way.
-// Alternatively, the safer approach taken here is to limit explicitly the actions that can be taken
-// and allow for particular actions to be batched under the same enum. For example, having the
-// Undelegate and the UndelegateAndRedeem under the ScCallViaGateway enum.
-// TODO: To discuss if this is  the approach we want to take.
-
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub enum ScCallViaGateway {
-	DelegateTo { operator: AccountId },
-	// Undelegate { current_operator: AccountId },
-	// UndelegateAndRedeem { current_operator: AccountId },
-	// TODO: We might just want to just use the Gateway for that, as
-	// funding from a different ETH account won't work here.
-	// NoOp {}, // basically just funding
-}
-
-// Can be used for `DepositToVaultAndScCall` event`. Could be used for both
-// lenders and borrowers if we wanted to.
-// #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-// pub enum ScCallViaVault {
-// 	AddLoanCollateral { loan_id: H256 },
-//  AddFunds {},
-//  StopLending {amount: Amount}
-// 	...
-// }
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn sc_utils_witnessing<
@@ -75,6 +48,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		process_call: ProcessCall,
 		eth_rpc: EvmRpcClient,
 		contract_address: H160,
+		supported_assets: HashMap<H160, Asset>,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom, Chain = Ethereum>,
@@ -88,8 +62,9 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		self.then::<Result<Bloom>, _, _>(move |epoch, header| {
 			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
 
-			let _process_call = process_call.clone();
+			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();
+			let supported_assets = supported_assets.clone();
 			async move {
 				for event in events_at_block::<Inner::Chain, ScUtilsEvents, _>(
 					header,
@@ -99,32 +74,108 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				.await?
 				{
 					info!("Handling event: {event}");
-					// TODO: To decode the call in the SC instead.
-					let _call: state_chain_runtime::RuntimeCall = match event.event_parameters {
-						ScUtilsEvents::DepositToScGatewayAndScCallFilter(DepositToScGatewayAndScCallFilter {
-							sender, // eth_address to attribute the FLIP to
-                            signer, // `tx.origin``. Not to be used for now
-                            amount, // FLIP amount deposited
-                            sc_call
-						}) => {
-                            match ScCallViaGateway::decode(&mut &sc_call[..]) {
-                                Ok(ScCallViaGateway::DelegateTo { operator }) => {
-									println!("Successfully Decoded ScCall! {:?}, deposited: {amount} FLIP, sender: {sender}, signer: {signer}, epoch index {:?}", operator, epoch.index);
-                                    trace!("Successfully decoded ScCall::DelegateTo with operator: {operator}");
-                                },
-                                Err(_e) => {
-									println!("Failed to decode ScCall");
-                                }
-                            }
-                            continue
-                        },
-						_ => {
-							trace!("Ignoring unused event: {event}");
-							continue
-						},
-					};
-                    // TODO: To add once we have something to call
-					// process_call(call, epoch.index).await;
+					process_call(
+						match event.event_parameters {
+							ScUtilsEvents::DepositToScGatewayAndScCallFilter(
+								DepositToScGatewayAndScCallFilter {
+									sender,    // eth_address to attribute the FLIP to
+									signer: _, // `tx.origin``. Not to be used for now
+									amount,    // FLIP amount deposited
+									sc_call,
+								},
+							) => pallet_cf_funding::Call::execute_sc_call {
+								deposit_and_call: EthereumDepositAndSCCall {
+									deposit: EthereumDeposit::FlipToSCGateway {
+										amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
+									},
+									call: sc_call.to_vec(),
+								},
+								caller: sender,
+								// use 0 padded ethereum address as account_id which the flip funds
+								// are associated with on SC
+								caller_account_id: sender.into_account_id_32(),
+								eth_tx_hash: event.tx_hash.to_fixed_bytes(),
+							},
+							ScUtilsEvents::DepositToVaultAndScCallFilter(
+								DepositToVaultAndScCallFilter {
+									sender,
+									signer: _,
+									amount,
+									token,
+									sc_call,
+								},
+							) => {
+								if let Some(asset) = supported_assets.get(&token) {
+									pallet_cf_funding::Call::execute_sc_call {
+										deposit_and_call: EthereumDepositAndSCCall {
+											deposit: EthereumDeposit::Vault {
+												asset: (*asset).try_into().expect("we expect the asset to be an Eth Asset"),
+												amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
+											},
+											call: sc_call.to_vec(),
+										},
+										caller: sender,
+										// use 0 padded ethereum address as account_id which the
+										// flip funds are associated with on SC
+										caller_account_id: sender.into_account_id_32(),
+										eth_tx_hash: event.tx_hash.to_fixed_bytes(),
+									}
+								} else {
+									warn!("unsupported asset deposited: {token}. Ignoring deposit");
+									continue;
+								}
+							},
+
+							ScUtilsEvents::DepositAndScCallFilter(DepositAndScCallFilter {
+								sender,
+								signer: _,
+								amount,
+								token,
+								to,
+								sc_call,
+							}) => {
+								if let Some(asset) = supported_assets.get(&token) {
+									pallet_cf_funding::Call::execute_sc_call {
+										deposit_and_call: EthereumDepositAndSCCall {
+											deposit: EthereumDeposit::Transfer {
+												asset: (*asset).try_into().expect("we expect the asset to be an Eth Asset"),
+												amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
+												destination: to,
+											},
+											call: sc_call.to_vec(),
+										},
+										caller: sender,
+										// use 0 padded ethereum address as account_id which the
+										// flip funds are associated with on SC
+										caller_account_id: sender.into_account_id_32(),
+										eth_tx_hash: event.tx_hash.to_fixed_bytes(),
+									}
+								} else {
+									warn!("unsupported asset deposited: {token}. Ignoring deposit");
+									continue;
+								}
+							},
+
+							ScUtilsEvents::CallScFilter(CallScFilter {
+								sender,
+								signer: _,
+								sc_call,
+							}) => pallet_cf_funding::Call::execute_sc_call {
+								deposit_and_call: EthereumDepositAndSCCall {
+									deposit: EthereumDeposit::NoDeposit,
+									call: sc_call.to_vec(),
+								},
+								caller: sender,
+								// use 0 padded ethereum address as account_id which the
+								// flip funds are associated with on SC
+								caller_account_id: sender.into_account_id_32(),
+								eth_tx_hash: event.tx_hash.to_fixed_bytes(),
+							},
+						}
+						.into(),
+						epoch.index,
+					)
+					.await;
 				}
 
 				Result::Ok(header.data)
@@ -135,15 +186,20 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use codec::Encode;
+	use frame_support::sp_runtime::AccountId32;
+	use state_chain_runtime::chainflip::ethereum_sc_calls::{DelegationApi, EthereumSCApi};
 
 	#[test]
 	fn test_sc_call_encode() {
-		let sc_call_delegate =
-			ScCallViaGateway::DelegateTo { operator: AccountId::new([0xF4; 32]) }.encode();
+		let sc_call_delegate = EthereumSCApi::Delegation(DelegationApi::Delegate {
+			delegator: [0xf5; 20].into(),
+			operator: AccountId32::new([0xF4; 32]),
+		})
+		.encode();
 		assert_eq!(
 			sc_call_delegate,
-			hex::decode("00f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4")
+			hex::decode("0000f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4")
 				.unwrap()
 		);
 	}
