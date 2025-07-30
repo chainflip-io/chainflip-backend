@@ -1588,7 +1588,7 @@ impl<T: Config> Pallet<T> {
 						.winners
 						.iter()
 						.filter_map(|winner| {
-							ManagedValidators::<T>::get(&winner.clone().into())
+							ManagedValidators::<T>::get(winner.clone().into())
 								.and_then(|operator| delegation_snapshot.get(&operator))
 						})
 						.flat_map(|snapshot| snapshot.delegators.keys().cloned())
