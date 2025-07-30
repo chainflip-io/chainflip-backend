@@ -125,7 +125,9 @@ register_checks! {
 					// we allow the round-tripped price to differ by the smallest unit
 					assert!(
 						required_price - converted_price.clone() <= Fraction(1u32.into()),
-						"asset: {asset:?}, price actual: {converted_price:?}, expected: {required_price:?}"
+						"asset: {asset:?}, price actual: {converted_price:?}, expected: {required_price:?}, latest prices are {:?}, post state is: {:?}",
+						get_all_latest_prices_with_statechain_encoding(&post.unsynchronised_state),
+						post.unsynchronised_state
 					);
 					assert_eq!(status, *required_status);
 					Some(asset)
