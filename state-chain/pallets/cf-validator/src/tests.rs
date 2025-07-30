@@ -1898,7 +1898,7 @@ mod delegation {
 	}
 
 	#[test]
-	fn run_auction_with_delegations_and_undelegate() {
+	fn run_auction_with_delegations_and_undelegations() {
 		const OPERATOR: u64 = 123;
 		const AVAILABLE_BALANCE_OF_DELEGATOR: u128 = 10;
 		const DELEGATORS: [u64; 4] = [21, 22, 23, 24];
@@ -1936,25 +1936,30 @@ mod delegation {
 				assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 			})
 			.then_execute_at_next_block(|_| {
+				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
 				MockKeyRotatorA::keygen_success();
 			})
 			.then_execute_at_next_block(|_| {
+				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
 				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
 				MockKeyRotatorA::key_handover_success();
 			})
 			.then_execute_at_next_block(|_| {
+				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
 				assert_rotation_phase_matches!(RotationPhase::<Test>::ActivatingKeys(..));
 				MockKeyRotatorA::keys_activated();
 			})
 			.then_execute_at_next_block(|_| {
+				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
 				assert_rotation_phase_matches!(RotationPhase::SessionRotating(..));
 			})
 			.then_execute_at_next_block(|_| {
+				assert!(NextDelegators::<Test>::get().is_empty());
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				let bonded_delegators =
+				let active_delegators =
 					DelegationsPerEpoch::<Test>::get(CurrentEpoch::<Test>::get());
-				assert_eq!(BTreeSet::from_iter(DELEGATORS), bonded_delegators);
-				for delegator in bonded_delegators {
+				assert_eq!(BTreeSet::from_iter(DELEGATORS), active_delegators);
+				for delegator in active_delegators {
 					assert_eq!(
 						MockBonderFor::<Test>::get_bond(&delegator),
 						AVAILABLE_BALANCE_OF_DELEGATOR
@@ -2022,5 +2027,24 @@ mod delegation {
 					}
 				}
 			});
+	}
+
+	#[test]
+	fn can_not_re_delegate_once_undelegation_has_started() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Allow
+				},
+			));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(BOB)));
+			assert_noop!(
+				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
+				Error::<Test>::UnDelegationAlreadyInitiated
+			);
+		});
 	}
 }
