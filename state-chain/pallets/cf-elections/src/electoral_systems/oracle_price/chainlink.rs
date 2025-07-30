@@ -83,14 +83,21 @@ where
 		.chain_states
 		.get_latest_price(chainlink_assetpair)
 		.and_then(|(_, price, status)| {
-			let from_unit = chainlink_assetpair.to_price_unit();
-			let to_unit = PriceUnit { base_asset: PriceAsset::Fine, quote_asset: PriceAsset::Fine };
-			// WARNING: It is important that we first convert to the statechain representation,
-			// and then do the unit conversion, because in the chainlink representation there aren't
-			// enough decimals to represent "FineEth / FineUsd" prices
-			// (1 Usd per Eth translates to 10^-12 FineUsd per FineEth)
-			let price: StatechainPrice = price.convert()?;
-			let price: StatechainPrice = convert_unit(price, from_unit, to_unit)?;
-			Some((price.into(), status))
+			Some((chainlink_price_to_statechain_price(price, chainlink_assetpair)?.into(), status))
 		})
+}
+
+pub fn chainlink_price_to_statechain_price(
+	price: ChainlinkPrice,
+	assetpair: ChainlinkAssetpair,
+) -> Option<StatechainPrice> {
+	let from_unit = assetpair.to_price_unit();
+	let to_unit = PriceUnit { base_asset: PriceAsset::Fine, quote_asset: PriceAsset::Fine };
+	// WARNING: It is important that we first convert to the statechain representation,
+	// and then do the unit conversion, because in the chainlink representation there aren't
+	// enough decimals to represent "FineEth / FineUsd" prices
+	// (1 Usd per Eth translates to 10^-12 FineUsd per FineEth)
+	let price: StatechainPrice = price.convert()?;
+	let price: StatechainPrice = convert_unit(price, from_unit, to_unit)?;
+	Some(price)
 }

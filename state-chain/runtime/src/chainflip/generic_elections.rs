@@ -26,9 +26,10 @@ use pallet_cf_elections::{
 		block_witnesser::primitives::SafeModeStatus,
 		oracle_price::{
 			chainlink::{
-				get_latest_price_with_statechain_encoding, ChainlinkAssetpair, ChainlinkPrice,
+				chainlink_price_to_statechain_price, get_latest_price_with_statechain_encoding,
+				ChainlinkAssetpair, ChainlinkPrice,
 			},
-			price::{convert_unit, PriceAsset, PriceUnit, StatechainPrice},
+			price::PriceAsset,
 			state_machine::OPTypes,
 		},
 	},
@@ -159,11 +160,10 @@ impls! {
 			pallet_cf_elections::Pallet::<Runtime>::deposit_event(
 				pallet_cf_elections::Event::ElectoralEvent(GenericElectoralEvents::OraclePricesUpdated {
 					prices: prices.into_iter()
-						.filter_map(|(asset, timestamp, price)| {
-							let price_unit = asset.to_price_unit();
-							let internal_price: StatechainPrice = convert_unit(price, price_unit.clone(), PriceUnit { base_asset: PriceAsset::Fine, quote_asset: PriceAsset::Fine })?.convert()?;
+						.filter_map(|(assetpair, timestamp, price)| {
+							let price_unit = assetpair.to_price_unit();
 							Some(OraclePriceUpdate {
-								price: internal_price.into(),
+								price: chainlink_price_to_statechain_price(price, assetpair)?.into(),
 								base_asset: price_unit.base_asset,
 								quote_asset: price_unit.quote_asset,
 								updated_at_oracle_timestamp: timestamp.seconds
