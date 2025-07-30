@@ -18,6 +18,7 @@
 
 use super::*;
 
+use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::AccountRole;
 use cf_traits::Chainflip;
 use frame_benchmarking::v2::*;
@@ -48,6 +49,7 @@ fn request_max_redemption<T: Config>(account_id: &T::AccountId) {
 
 #[benchmarks]
 mod benchmarks {
+
 	use super::*;
 
 	#[benchmark]
@@ -209,6 +211,33 @@ mod benchmarks {
 
 		#[extrinsic_call]
 		rebalance(RawOrigin::Signed(sender), recipient, Default::default(), RedemptionAmount::Max);
+	}
+
+	#[benchmark]
+	fn execute_sc_call() {
+		let caller: EthereumAddress = [0xa4; 20].into();
+		// In reality we derive this from the caller but here we cant convert to the concrete type
+		// AccountId32 since the AccountId type is generic so we create a caller_account_id
+		// separately
+		let caller_account_id: T::AccountId = account("caller", 0, 0);
+		let _operator: T::AccountId = account("operator", 0, 1);
+
+		let call = Call::<T>::execute_sc_call {
+			deposit_and_call: EthereumDepositAndSCCall {
+				deposit: EthereumDeposit::FlipToSCGateway { amount: EthAmount::benchmark_value() },
+				call: vec![0], //will correctly decode to EmptyCall
+			},
+			caller,
+			caller_account_id,
+			eth_tx_hash: Default::default(),
+		};
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
