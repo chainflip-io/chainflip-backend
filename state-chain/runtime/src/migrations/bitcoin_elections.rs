@@ -23,7 +23,9 @@ use crate::{
 };
 use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::{
-	migrations::VersionedMigration, traits::UncheckedOnRuntimeUpgrade, weights::Weight,
+	migrations::VersionedMigration,
+	traits::{OnRuntimeUpgrade, UncheckedOnRuntimeUpgrade},
+	weights::Weight,
 };
 use pallet_cf_elections::{ElectoralSystemTypes, Pallet};
 #[cfg(feature = "try-runtime")]
@@ -140,5 +142,14 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 		assert_eq!(current_settings, 10);
 
 		Ok(())
+	}
+}
+
+pub struct MyDebugMigration;
+impl OnRuntimeUpgrade for MyDebugMigration {
+	fn on_runtime_upgrade() -> Weight {
+		panic!("let's try to see if this can fail?");
+		log::info!("$$$ Running debug migration $$$$");
+		Weight::zero()
 	}
 }

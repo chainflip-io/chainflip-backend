@@ -182,6 +182,7 @@ use chainflip::{
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
+use crate::migrations::bitcoin_elections::MyDebugMigration;
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 pub use pallet_transaction_payment::ChargeTransactionPayment;
@@ -1423,6 +1424,8 @@ pub type PalletExecutionOrder = (
 ///   remove them when they are no longer needed.
 /// - Release-specific migrations: remove these if they are no longer needed.
 type AllMigrations = (
+	// MyDebugMigration,
+
 	// This ClearEvents should only be run at the start of all migrations. This is in case another
 	// migration needs to trigger an event like a Broadcast for example.
 	pallet_cf_cfe_interface::migrations::ClearEvents<Runtime>,
@@ -1434,6 +1437,14 @@ type AllMigrations = (
 	MigrationsForV1_10,
 	// migrations::btc_elections_migrations::Migration, no longer needed, since 1.10 is released
 	migrations::bitcoin_elections::Migration, // migration from 1.10.1 to 1.10.2
+	// migrating the solana elections pallet
+	VersionedMigration<
+		6,
+		7,
+		NoopMigration,
+		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
+	>,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
