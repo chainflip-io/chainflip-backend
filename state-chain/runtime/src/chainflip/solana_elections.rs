@@ -56,7 +56,8 @@ use pallet_cf_elections::{
 		monotonic_median::MedianChangeHook,
 		solana_vault_swap_accounts::{FromSolOrNot, SolanaVaultSwapAccountsHook},
 	},
-	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
+	vote_storage, CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
+	RunnerStorageAccess,
 };
 use pallet_cf_ingress_egress::VaultDepositWitness;
 use scale_info::TypeInfo;
@@ -157,6 +158,7 @@ pub type SolanaEgressWitnessing = electoral_systems::exact_value::ExactValue<
 	SolanaEgressWitnessingHook,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
+	vote_storage::bitmap_numerical::BitmapNoHash<TransactionSuccessDetails>,
 >;
 
 pub type SolanaLiveness = Liveness<
@@ -201,6 +203,7 @@ pub type SolanaAltWitnessing = electoral_systems::exact_value::ExactValue<
 	SolanaAltWitnessingHook,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
+	vote_storage::bitmap::Bitmap<AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>>,
 >;
 
 pub fn solana_alt_result(

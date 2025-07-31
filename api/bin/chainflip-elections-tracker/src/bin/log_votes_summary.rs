@@ -43,7 +43,7 @@ type SolanaVoteStorageTuple = <SolanaElectoralSystemRunner as ElectoralSystemTyp
 #[tokio::main(flavor = "multi_thread", worker_threads = 3)]
 async fn main() {
 	// http://localhost:9944
-	let rpc_url = env::var("CF_RPC_NODE").unwrap_or("wss://mainnet-archive.chainflip.io".into());
+	let rpc_url = env::var("CF_RPC_NODE").unwrap_or("ws://localhost:9944".into());
 
 	observe_elections(rpc_url).await;
 }
@@ -158,16 +158,23 @@ async fn observe_elections(rpc_url: String) {
 							if let Some(full_vote) = btc_partial_to_vote.get(&partial){
 								println!("	{:?}: {}", full_vote, count);
 							} else {
-								let hash = match partial {
+								match partial {
 									pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::A(inner) |
 									pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::B(inner) |
 									pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::C(inner) |
-									pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::D(inner) |
-									pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::EE(inner) |
-									pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::FF(inner) => inner
+									pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::D(inner) => {
+										let result = bitcoin_shared_data_map.get(&inner);
+										println!("	{:?}({:?}): {}", result, partial, count);
+									},
+									// Partial vote == Full vote
+									pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::EE(inner) => {
+										println!("	{:?}: {}", inner, count);
+									},
+									// Partial vote == Full vote
+									pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::FF(inner) => {
+										println!("	{:?}: {}", inner, count);
+									},
 								};
-								let result = bitcoin_shared_data_map.get(&hash);
-								println!("	{:?}({:?}): {}", result, partial, count);
 							}
 						}
 					}
@@ -178,6 +185,11 @@ async fn observe_elections(rpc_url: String) {
 								println!("	{:?}: {}", full_vote, count);
 							} else {
 								match partial {
+									// Partial vote == Full vote
+									pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::A(inner) => {
+										println!("	{:?}: {}", inner, count);
+									},
+									// Partial vote == Full vote
 									pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::B(inner) => {
 										println!("	{:?}: {}", inner, count);
 									},
@@ -185,14 +197,20 @@ async fn observe_elections(rpc_url: String) {
 										let result = solana_shared_data_map.get(&inner.value);
 										println!("	{:?} Slot {:?}: {}", result , inner.block, count);
 									},
-									pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::A(inner) |
-									pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::D(inner) |
-									pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::EE(inner) |
+									// Partial vote == Full vote
+									pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::D(inner) => {
+										println!("	{:?}: {}", inner, count);
+									}
+									// Partial vote == Full vote
+									pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::EE(inner) => {
+										println!("	{:?}: {}", inner, count);
+									},
 									pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::FF(inner) |
 									pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::G(inner) => {
 										let result = solana_shared_data_map.get(&inner);
 										println!("	{:?}({:?}): {}", result, partial, count);
-									}
+									},
+
 								}
 							}
 						}
