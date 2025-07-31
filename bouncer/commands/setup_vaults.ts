@@ -244,12 +244,14 @@ async function main(): Promise<void> {
 
   // Step 8
   logger.info('Setting up price feeds');
-  await updatePriceFeed(logger, 'Ethereum', 'BTC', price.get('Btc')!.toString());
-  await updatePriceFeed(logger, 'Ethereum', 'ETH', price.get('Eth')!.toString());
-  await updatePriceFeed(logger, 'Ethereum', 'SOL', price.get('Sol')!.toString());
-  await updatePriceFeed(logger, 'Solana', 'BTC', price.get('Btc')!.toString());
-  await updatePriceFeed(logger, 'Solana', 'ETH', price.get('Eth')!.toString());
-  await updatePriceFeed(logger, 'Solana', 'SOL', price.get('Sol')!.toString());
+  await Promise.all([
+    updatePriceFeed(logger, 'Ethereum', 'BTC', price.get('Btc')!.toString()),
+    updatePriceFeed(logger, 'Ethereum', 'ETH', price.get('Eth')!.toString()),
+    updatePriceFeed(logger, 'Ethereum', 'SOL', price.get('Sol')!.toString()),
+    updatePriceFeed(logger, 'Solana', 'BTC', price.get('Btc')!.toString()),
+    updatePriceFeed(logger, 'Solana', 'ETH', price.get('Eth')!.toString()),
+    updatePriceFeed(logger, 'Solana', 'SOL', price.get('Sol')!.toString()),
+  ]);
 
   // Confirmation
   logger.info('Waiting for new epoch...');
