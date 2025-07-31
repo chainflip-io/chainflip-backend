@@ -63,6 +63,7 @@ use multisig::{
 	eth::EvmCryptoScheme, polkadot::PolkadotCryptoScheme, ChainSigning, CryptoScheme, KeyId,
 	SignatureToThresholdSignature,
 };
+use crate::dot::retry_rpc::DotRetrySubscribeApi;
 
 use super::client::chain_api::ChainApi;
 
@@ -262,7 +263,7 @@ pub async fn start<
 where
 	BlockStream: StreamApi<FINALIZED>,
 	EvmRpc: EvmRetrySigningRpcApi + Send + Sync + 'static,
-	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
+	DotRpc: DotRetrySubscribeApi + Clone + Send + Sync + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + Clone + 'static,
 	SolRpc: SolRetryRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
