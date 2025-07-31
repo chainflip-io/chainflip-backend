@@ -132,7 +132,7 @@ pub type Price = U256;
 /// in units of asset One.
 pub type Tick = i32;
 
-define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize);
+define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
 
 define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
 
