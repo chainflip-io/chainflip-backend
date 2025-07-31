@@ -36,6 +36,7 @@ use subxt::{
 	ext::subxt_rpcs,
 	OnlineClient, PolkadotConfig,
 };
+use tokio::task;
 use url::Url;
 
 use anyhow::{anyhow, Result};
@@ -266,33 +267,42 @@ impl DotRpcApi for DotHttpRpcClient {
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
+		let hash: PolkadotHash = sp_core::blake2_256(&encoded_bytes).into();
+
+		let encoded_bytes_c = encoded_bytes.clone();
+
 		// TEMP submit and watch for completion!
-		let mut result = self.rpc_methods.author_submit_and_watch_extrinsic(&encoded_bytes).await?;
+		let mut result =
+			self.rpc_methods.author_submit_and_watch_extrinsic(&encoded_bytes_c).await?;
 
-		while let Some(event) = result.next().await {
-			let event = event?;
-			match event {
-				subxt_rpcs::methods::legacy::TransactionStatus::Finalized(hash) => {
-					tracing::info!("dot extrinsic was finalized with hash ({hash:?}), for extrinsic {encoded_bytes:?}");
-					return Ok(hash)
-				},
-				// subxt_rpcs::methods::legacy::TransactionStatus::Future => todo!(),
-				// subxt_rpcs::methods::legacy::TransactionStatus::Ready => todo!(),
-				// subxt_rpcs::methods::legacy::TransactionStatus::Broadcast(items) => todo!(),
-				// subxt_rpcs::methods::legacy::TransactionStatus::InBlock(_) => todo!(),
-				subxt_rpcs::methods::legacy::TransactionStatus::Retracted(_) |
-				subxt_rpcs::methods::legacy::TransactionStatus::FinalityTimeout(_) |
-				subxt_rpcs::methods::legacy::TransactionStatus::Usurped(_) |
-				subxt_rpcs::methods::legacy::TransactionStatus::Dropped |
-				subxt_rpcs::methods::legacy::TransactionStatus::Invalid => {
-					tracing::error!("error for dot extrinsic ({event:?}), for extrinsic {encoded_bytes:?}");
-					return Err(anyhow!("error for dot extrinsic ({event:?}), for extrinsic {encoded_bytes:?}"));
-				},
-				state => tracing::info!("submission of dot extrinsic reached state {state:?}, for extrinsic {encoded_bytes:?}")
+		task::spawn(async move {
+			while let Some(event) = result.next().await {
+				let event = event?;
+				match event {
+					subxt_rpcs::methods::legacy::TransactionStatus::Finalized(hash) => {
+						tracing::info!("dot extrinsic was finalized with hash ({hash:?}), for extrinsic {encoded_bytes:?}");
+						return Ok(hash)
+					},
+					// subxt_rpcs::methods::legacy::TransactionStatus::Future => todo!(),
+					// subxt_rpcs::methods::legacy::TransactionStatus::Ready => todo!(),
+					// subxt_rpcs::methods::legacy::TransactionStatus::Broadcast(items) => todo!(),
+					// subxt_rpcs::methods::legacy::TransactionStatus::InBlock(_) => todo!(),
+					subxt_rpcs::methods::legacy::TransactionStatus::Retracted(_) |
+					subxt_rpcs::methods::legacy::TransactionStatus::FinalityTimeout(_) |
+					subxt_rpcs::methods::legacy::TransactionStatus::Usurped(_) |
+					subxt_rpcs::methods::legacy::TransactionStatus::Dropped |
+					subxt_rpcs::methods::legacy::TransactionStatus::Invalid => {
+						tracing::error!("error for dot extrinsic ({event:?}), for extrinsic {encoded_bytes:?}");
+						return Err(anyhow!("error for dot extrinsic ({event:?}), for extrinsic {encoded_bytes:?}"));
+					},
+					state => tracing::info!("submission of dot extrinsic reached state {state:?}, for extrinsic {encoded_bytes:?}")
+				}
 			}
-		}
 
-		Err(anyhow!("rpc subscription for submission of extrinsic {encoded_bytes:?} terminatd unexpectedly!"))
+			Err(anyhow!("rpc subscription for submission of extrinsic {encoded_bytes:?} terminatd unexpectedly!"))
+		});
+
+		Ok(hash)
 
 		// Ok(self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await?)
 	}
