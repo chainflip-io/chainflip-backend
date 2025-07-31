@@ -1483,7 +1483,7 @@ dependencies = [
 
 [[package]]
 name = "cf-engine-dylib"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "chainflip-engine",
  "engine-proc-macros",
@@ -1783,7 +1783,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-api"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1832,7 +1832,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-broker-api"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "anyhow",
  "cf-chains",
@@ -1852,7 +1852,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-cli"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "anyhow",
  "bigdecimal",
@@ -1898,7 +1898,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-engine"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "anyhow",
  "async-broadcast",
@@ -2037,7 +2037,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-lp-api"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "anyhow",
  "cf-primitives",
@@ -3415,7 +3415,7 @@ dependencies = [
 
 [[package]]
 name = "engine-proc-macros"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "engine-upgrade-utils",
  "proc-macro2",
@@ -3425,7 +3425,7 @@ dependencies = [
 
 [[package]]
 name = "engine-runner"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
