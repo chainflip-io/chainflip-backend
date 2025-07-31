@@ -266,7 +266,7 @@ impl DotRpcApi for DotHttpRpcClient {
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
-		// TEMP submit and watch for completion in a background task!
+		// TEMP submit and watch for completion in a background task
 		let tx_hash = self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await?;
 
 		let online_client = self.online_client.clone();
