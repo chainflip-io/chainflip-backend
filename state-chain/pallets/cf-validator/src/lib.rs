@@ -1866,7 +1866,14 @@ impl<T: Config> Pallet<T> {
 					);
 				},
 				None => {
-					log::error!("Failed to calculate snapshot for operator {:?}", operator);
+					snapshot.insert(
+						operator.clone(),
+						DelegationSnapshot {
+							avg_bid: T::Amount::from(0_u128),
+							delegators,
+							validators,
+						},
+					);
 				},
 			}
 		}
