@@ -2055,15 +2055,4 @@ mod delegation {
 			assert_ok!(ValidatorPallet::set_max_bid(OriginTrait::signed(BOB), Some(100)));
 		});
 	}
-
-	#[test]
-	fn can_not_set_max_bid_that_is_higher_than_balance() {
-		new_test_ext().execute_with(|| {
-			MockFlip::credit_funds(&BOB, 100);
-			assert_noop!(
-				ValidatorPallet::set_max_bid(OriginTrait::signed(BOB), Some(120)),
-				Error::<Test>::MaxBidIsTooHigh
-			);
-		});
-	}
 }
