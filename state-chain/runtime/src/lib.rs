@@ -1424,8 +1424,6 @@ pub type PalletExecutionOrder = (
 ///   remove them when they are no longer needed.
 /// - Release-specific migrations: remove these if they are no longer needed.
 type AllMigrations = (
-	// MyDebugMigration,
-
 	// This ClearEvents should only be run at the start of all migrations. This is in case another
 	// migration needs to trigger an event like a Broadcast for example.
 	pallet_cf_cfe_interface::migrations::ClearEvents<Runtime>,
@@ -1435,9 +1433,8 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	MigrationsForV1_10,
-	// migrations::btc_elections_migrations::Migration, no longer needed, since 1.10 is released
 	migrations::bitcoin_elections::Migration, // migration from 1.10.1 to 1.10.2
-	// migrating the solana elections pallet
+	// no-op migration for the solana instance of elections pallet
 	VersionedMigration<
 		6,
 		7,

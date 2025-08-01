@@ -144,12 +144,3 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 		Ok(())
 	}
 }
-
-pub struct MyDebugMigration;
-impl OnRuntimeUpgrade for MyDebugMigration {
-	fn on_runtime_upgrade() -> Weight {
-		panic!("let's try to see if this can fail?");
-		log::info!("$$$ Running debug migration $$$$");
-		Weight::zero()
-	}
-}
