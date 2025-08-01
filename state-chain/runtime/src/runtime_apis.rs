@@ -298,7 +298,7 @@ pub enum FeeTypes {
 }
 
 /// Struct that represents the estimated output of a Swap.
-#[derive(Encode, Decode, TypeInfo)]
+#[derive(Encode, Decode, TypeInfo, Debug)]
 pub struct SimulatedSwapInformation {
 	pub intermediary: Option<AssetAmount>,
 	pub output: AssetAmount,
