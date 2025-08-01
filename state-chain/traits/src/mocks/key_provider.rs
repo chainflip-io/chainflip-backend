@@ -18,7 +18,7 @@ use cf_chains::ChainCrypto;
 
 use super::{MockPallet, MockPalletStorage};
 use crate::EpochKey;
-use std::marker::PhantomData;
+use sp_std::marker::PhantomData;
 
 #[derive(Default)]
 pub struct MockKeyProvider<C: ChainCrypto>(PhantomData<C>);

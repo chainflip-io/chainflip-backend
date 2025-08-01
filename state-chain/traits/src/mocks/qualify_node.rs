@@ -16,7 +16,7 @@
 
 use crate::QualifyNode;
 use codec::{Decode, Encode};
-use sp_std::marker::PhantomData;
+use sp_std::{marker::PhantomData, vec::Vec};
 
 use super::{MockPallet, MockPalletStorage};
 

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use cf_amm::{
 	common::{PoolPairsMap, Side},
@@ -49,16 +49,27 @@ impl MockPoolApi {
 		Self::get_value::<LimitOrderStorage>(LIMIT_ORDERS)
 			.unwrap_or_default()
 			.into_iter()
-			.map(|((base_asset, account_id, side, order_id), TickAndAmount { tick, amount })| {
-				MockLimitOrder { base_asset, account_id, side, order_id, tick, amount }
-			})
+			.map(
+				|(
+					MockLimitOrderStorageKey { base_asset, account_id, side, order_id },
+					TickAndAmount { tick, amount },
+				)| { MockLimitOrder { base_asset, account_id, side, order_id, tick, amount } },
+			)
 			.collect()
 	}
 }
 
 type AccountId = u64;
 
-type LimitOrderStorage = BTreeMap<(Asset, AccountId, Side, OrderId), TickAndAmount>;
+#[derive(Clone, Debug, Encode, Decode, PartialOrd, Ord, PartialEq, Eq)]
+pub struct MockLimitOrderStorageKey {
+	pub base_asset: Asset,
+	pub account_id: AccountId,
+	pub side: Side,
+	pub order_id: OrderId,
+}
+
+type LimitOrderStorage = BTreeMap<MockLimitOrderStorageKey, TickAndAmount>;
 
 impl PoolApi for MockPoolApi {
 	type AccountId = AccountId;
@@ -74,7 +85,7 @@ impl PoolApi for MockPoolApi {
 		let limit_orders = Self::get_value::<LimitOrderStorage>(LIMIT_ORDERS).unwrap_or_default();
 		let count = limit_orders
 			.keys()
-			.filter(|(base_asset, account_id, _, _)| {
+			.filter(|MockLimitOrderStorageKey { base_asset, account_id, .. }| {
 				account_id == who && asset_pair.base == *base_asset
 			})
 			.count() as u32;
@@ -87,7 +98,10 @@ impl PoolApi for MockPoolApi {
 				.unwrap_or_default()
 				.into_iter()
 				.filter_map(
-					|((base_asset, account_id, side, _), TickAndAmount { tick: _, amount })| {
+					|(
+						MockLimitOrderStorageKey { base_asset, account_id, side, .. },
+						TickAndAmount { tick: _, amount },
+					)| {
 						if account_id == *who &&
 							((asset == base_asset && side == Side::Sell) ||
 								(asset == STABLE_ASSET && side == Side::Buy))
@@ -117,17 +131,19 @@ impl PoolApi for MockPoolApi {
 	fn cancel_all_limit_orders(who: &Self::AccountId) -> frame_support::dispatch::DispatchResult {
 		Self::mutate_value(LIMIT_ORDERS, |limit_orders: &mut Option<LimitOrderStorage>| {
 			if let Some(limit_orders) = limit_orders {
-				limit_orders.retain(|(asset, account, side, _), tick_amount| {
-					if account == who {
-						MockBalance::credit_account(
-							account,
-							if *side == Side::Sell { *asset } else { STABLE_ASSET },
-							tick_amount.amount,
-						);
-						return false;
-					}
-					true
-				});
+				limit_orders.retain(
+					|MockLimitOrderStorageKey { base_asset, account_id, side, .. }, tick_amount| {
+						if account_id == who {
+							MockBalance::credit_account(
+								account_id,
+								if *side == Side::Sell { *base_asset } else { STABLE_ASSET },
+								tick_amount.amount,
+							);
+							return false;
+						}
+						true
+					},
+				);
 			}
 
 			Ok(())
@@ -148,7 +164,8 @@ impl PoolApi for MockPoolApi {
 		Self::mutate_value(LIMIT_ORDERS, |limit_orders: &mut Option<LimitOrderStorage>| {
 			let limit_orders = limit_orders.get_or_insert_default();
 
-			let key = (base_asset, *account, side, id);
+			let key =
+				MockLimitOrderStorageKey { base_asset, account_id: *account, side, order_id: id };
 			let amount_change = match amount_change {
 				IncreaseOrDecrease::Increase(_) => amount_change,
 				// Support for cancel order decreasing by u128::MAX

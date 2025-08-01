@@ -47,6 +47,7 @@ cf-test-utilities = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
 sp-io = { workspace = true, default-features = true }
 lazy_static = { workspace = true }
+cf-traits = { workspace = true, features = ["mocks"] }
 
 [features]
 default = ["std"]

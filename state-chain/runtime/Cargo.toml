@@ -107,8 +107,10 @@ cf-test-utilities = { workspace = true, optional = true }
 
 [dev-dependencies]
 sp-io = { workspace = true, default-features = true }
-proptest = { version = "1.6"}
+proptest = { version = "1.6" }
 proptest-derive = { version = "0.5.1" }
+cf-chains = { workspace = true, features = ["mocks"] }
+cf-traits = { workspace = true, features = ["mocks"] }
 
 [features]
 default = ["std"]
@@ -213,9 +215,10 @@ std = [
 	"sp-std/std",
 	"sp-transaction-pool/std",
 	"sp-version/std",
-	"dep:cf-test-utilities",
 	"dep:substrate-wasm-builder",
 	"frame-metadata-hash-extension/std",
+	"dep:cf-test-utilities",
+	"cf-test-utilities?/std",
 ]
 try-runtime = [
 	"cf-runtime-utilities/try-runtime",
@@ -255,3 +258,4 @@ try-runtime = [
 	"sp-runtime/try-runtime",
 ]
 metadata-hash = ["substrate-wasm-builder/metadata-hash"]
+mocks = ["cf-chains/mocks", "cf-traits/mocks"]

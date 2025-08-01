@@ -17,13 +17,13 @@
 use cf_chains::{ApiCall, Chain, ChainCrypto};
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use codec::MaxEncodedLen;
-use core::marker::PhantomData;
 use frame_support::{
 	sp_runtime::{traits::Member, DispatchError},
 	traits::{OriginTrait, UnfilteredDispatchable},
 	CloneNoBound, DebugNoBound, DefaultNoBound, EqNoBound, Parameter, PartialEqNoBound,
 };
 use scale_info::TypeInfo;
+use sp_std::{marker::PhantomData, vec::Vec};
 
 use crate::Broadcaster;
 

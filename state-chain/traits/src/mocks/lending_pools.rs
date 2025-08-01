@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use sp_std::collections::btree_map::BTreeMap;
 
 use crate::lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome};
 

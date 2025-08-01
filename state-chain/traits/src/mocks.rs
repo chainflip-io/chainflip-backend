@@ -14,10 +14,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(feature = "std")]
+#![cfg(feature = "mocks")]
 
 use codec::{Decode, Encode, EncodeLike};
 use frame_support::{storage, StorageHasher, Twox64Concat};
+use sp_std::vec::Vec;
 
 pub mod account_role_registry;
 pub mod address_converter;

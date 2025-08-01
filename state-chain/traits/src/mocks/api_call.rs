@@ -14,8 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use core::marker::PhantomData;
-
 use cf_chains::{
 	btc::BitcoinCrypto, ccm_checker::DecodedCcmAdditionalData, evm::EvmCrypto, AllBatch,
 	AllBatchError, ApiCall, Bitcoin, Chain, ChainCrypto, ChainEnvironment, ConsolidationError,
@@ -24,8 +22,11 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets, EgressId, ForeignChain, GasAmount};
 use codec::{Decode, Encode};
-use frame_support::{sp_runtime::DispatchError, CloneNoBound, DebugNoBound, PartialEqNoBound};
+use frame_support::{
+	parameter_types, sp_runtime::DispatchError, CloneNoBound, DebugNoBound, PartialEqNoBound,
+};
 use scale_info::TypeInfo;
+use sp_std::{marker::PhantomData, vec, vec::Vec};
 
 pub const ETHEREUM_ETH_ADDRESS: [u8; 20] = [0xee; 20];
 pub const ETHEREUM_FLIP_ADDRESS: [u8; 20] = [0xcf; 20];
@@ -105,13 +106,13 @@ pub struct MockEthAllBatch<MockEvmEnvironment> {
 
 impl MockEthAllBatch<MockEvmEnvironment> {
 	pub fn set_success(success: bool) {
-		ALL_BATCH_SUCCESS.with(|cell| *cell.borrow_mut() = success);
+		AllBatchSuccess::set(&success);
 	}
 }
 
-thread_local! {
-	static ALL_BATCH_SUCCESS: std::cell::RefCell<bool> = const { std::cell::RefCell::new(true) };
-	pub static SHOULD_CONSOLIDATE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+parameter_types! {
+	storage AllBatchSuccess: bool = true;
+	pub storage ShouldConsolidate: bool = false;
 }
 
 impl AllBatch<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
@@ -120,7 +121,7 @@ impl AllBatch<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		transfer_params: Vec<(TransferAssetParams<Ethereum>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
 		let (transfer_params, egress_ids) = transfer_params.into_iter().unzip();
-		if ALL_BATCH_SUCCESS.with(|cell| *cell.borrow()) {
+		if AllBatchSuccess::get() {
 			Ok(vec![(
 				Self::AllBatch(MockEthAllBatch {
 					nonce: Default::default(),
@@ -141,7 +142,7 @@ impl cf_chains::ConsolidateCall<Ethereum> for MockEthereumApiCall<MockEvmEnviron
 		// Consolidation isn't necessary for Ethereum, but this implementation
 		// helps in testing some generic behaviour
 
-		if SHOULD_CONSOLIDATE.with(|cell| cell.get()) {
+		if ShouldConsolidate::get() {
 			Ok(Self::AllBatch(MockEthAllBatch {
 				nonce: Default::default(),
 				fetch_params: Default::default(),
@@ -268,7 +269,7 @@ impl ApiCall<BitcoinCrypto> for MockBitcoinApiCall<MockBtcEnvironment> {
 
 impl cf_chains::ConsolidateCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 	fn consolidate_utxos() -> Result<Self, cf_chains::ConsolidationError> {
-		if SHOULD_CONSOLIDATE.with(|cell| cell.get()) {
+		if ShouldConsolidate::get() {
 			Ok(Self::AllBatch(MockBtcAllBatch {
 				fetch_params: Default::default(),
 				transfer_params: Default::default(),
@@ -335,7 +336,7 @@ pub struct MockBtcAllBatch<MockBtcEnvironment> {
 
 impl MockBtcAllBatch<MockBtcEnvironment> {
 	pub fn set_success(success: bool) {
-		ALL_BATCH_SUCCESS.with(|cell| *cell.borrow_mut() = success);
+		AllBatchSuccess::set(&success);
 	}
 }
 
@@ -345,7 +346,7 @@ impl AllBatch<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		transfer_params: Vec<(TransferAssetParams<Bitcoin>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
 		let (transfer_params, egress_ids) = transfer_params.into_iter().unzip();
-		if ALL_BATCH_SUCCESS.with(|cell| *cell.borrow()) {
+		if AllBatchSuccess::get() {
 			Ok(vec![(
 				Self::AllBatch(MockBtcAllBatch {
 					fetch_params,
