@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 /// The minimum delegation fee that can be charged, in basis points.
 pub const MIN_OPERATOR_FEE: u32 = 200;
 
+/// The maximum of exceptions a operator can have.
+pub const EXCEPTIONS_LIMIT: usize = 100;
+
 pub enum AssociationToOperator {
 	Validator,
 	Delegator,
