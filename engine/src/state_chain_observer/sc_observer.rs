@@ -43,6 +43,7 @@ use std::{
 };
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
+use super::client::chain_api::ChainApi;
 use crate::{
 	btc::rpc::BtcRpcApi,
 	dot::retry_rpc::DotRetryRpcApi,
@@ -63,9 +64,6 @@ use multisig::{
 	eth::EvmCryptoScheme, polkadot::PolkadotCryptoScheme, ChainSigning, CryptoScheme, KeyId,
 	SignatureToThresholdSignature,
 };
-use crate::dot::retry_rpc::DotRetrySubscribeApi;
-
-use super::client::chain_api::ChainApi;
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
@@ -263,7 +261,7 @@ pub async fn start<
 where
 	BlockStream: StreamApi<FINALIZED>,
 	EvmRpc: EvmRetrySigningRpcApi + Send + Sync + 'static,
-	DotRpc: DotRetrySubscribeApi + Clone + Send + Sync + 'static,
+	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + Clone + 'static,
 	SolRpc: SolRetryRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,

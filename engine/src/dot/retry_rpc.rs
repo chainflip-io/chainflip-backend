@@ -66,7 +66,7 @@ impl DotRetryRpcClient {
 	) -> Result<Self> {
 		let f_create_clients = |endpoints: WsHttpEndpoints| {
 			Result::<_, anyhow::Error>::Ok((
-				DotHttpRpcClient::new(endpoints.http_endpoint, expected_genesis_hash)?,
+				DotHttpRpcClient::new(endpoints.ws_endpoint.clone(), expected_genesis_hash)?,
 				DotSubClient::new(endpoints.ws_endpoint, expected_genesis_hash),
 			))
 		};
@@ -210,11 +210,6 @@ pub trait DotRetrySubscribeApi {
 	async fn subscribe_finalized_heads(
 		&self,
 	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>>;
-
-	async fn submit_raw_encoded_extrinsic(
-		&self,
-		encoded_bytes: Vec<u8>,
-	) -> anyhow::Result<PolkadotHash>;
 }
 
 use crate::dot::rpc::DotSubscribeApi;
@@ -248,26 +243,6 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 			)
 			.await
 	}
-
-	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> anyhow::Result<PolkadotHash> {
-		self.sub_retry_client
-			.request_with_limit(
-				RequestLog::new(
-					"submit_raw_encoded_extrinsic".to_string(),
-					Some(format!("0x{}", hex::encode(&encoded_bytes[..]))),
-				),
-				Box::pin(move |client| {
-					let encoded_bytes = encoded_bytes.clone();
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(
-						async move { client.submit_raw_encoded_extrinsic(encoded_bytes).await },
-					)
-				}),
-				MAX_BROADCAST_RETRIES,
-			)
-			.await
-	}
-
 }
 
 #[async_trait::async_trait]
