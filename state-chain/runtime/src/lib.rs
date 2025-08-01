@@ -1925,15 +1925,19 @@ impl_runtime_apis! {
 
 			let mut fees_vec = vec![];
 
-			if include_fee(FeeTypes::Network) {
-				fees_vec.push(FeeType::NetworkFee(NetworkFeeTracker::new(
-					pallet_cf_swapping::Pallet::<Runtime>::get_network_fee_for_swap(
+			let network_fee_rate = if include_fee(FeeTypes::Network) {
+				let rate_and_min = pallet_cf_swapping::Pallet::<Runtime>::get_network_fee_for_swap(
 						input_asset,
 						output_asset,
 						is_internal.unwrap_or(false),
-					),
+					);
+				fees_vec.push(FeeType::NetworkFee(NetworkFeeTracker::new(
+					rate_and_min.clone(),
 				)));
-			}
+				rate_and_min.rate
+			} else {
+				Permill::zero()
+			};
 
 			if broker_commission > 0 {
 				fees_vec.push(FeeType::BrokerFee(
@@ -1965,20 +1969,13 @@ impl_runtime_apis! {
 				BatchExecutionError::DispatchError { error } => error,
 			})?;
 
-			let (
-				network_fee,
-				broker_fee,
-				intermediary,
-				output,
-			) = {
-				(
-					swap_output_per_chunk[0].network_fee_taken.unwrap_or_default() * number_of_chunks,
-					swap_output_per_chunk[0].broker_fee_taken.unwrap_or_default() * number_of_chunks,
-					swap_output_per_chunk[0].stable_amount.map(|amount| amount * number_of_chunks)
-						.filter(|_| ![input_asset, output_asset].contains(&STABLE_ASSET)),
-					swap_output_per_chunk[0].final_output.unwrap_or_default() * number_of_chunks,
-				)
-			};
+			// Calculate the network fee manually instead of using the swap output because
+			// the network fee minimum may of be enforced on the first chunk.
+			let network_fee = network_fee_rate * amount_to_swap;
+			let broker_fee = swap_output_per_chunk[0].broker_fee_taken.unwrap_or_default() * number_of_chunks;
+			let intermediary = swap_output_per_chunk[0].stable_amount.map(|amount| amount * number_of_chunks)
+				.filter(|_| ![input_asset, output_asset].contains(&STABLE_ASSET));
+			let output = swap_output_per_chunk[0].final_output.unwrap_or_default() * number_of_chunks;
 
 			let (output, egress_fee) = if include_fee(FeeTypes::Egress) {
 				let egress = match ccm_data {
