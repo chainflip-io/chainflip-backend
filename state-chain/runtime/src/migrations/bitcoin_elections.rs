@@ -23,9 +23,7 @@ use crate::{
 };
 use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::{
-	migrations::VersionedMigration,
-	traits::{OnRuntimeUpgrade, UncheckedOnRuntimeUpgrade},
-	weights::Weight,
+	migrations::VersionedMigration, traits::UncheckedOnRuntimeUpgrade, weights::Weight,
 };
 use pallet_cf_elections::{ElectoralSystemTypes, Pallet};
 #[cfg(feature = "try-runtime")]
