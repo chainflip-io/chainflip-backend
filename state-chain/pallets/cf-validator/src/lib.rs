@@ -1217,10 +1217,6 @@ pub mod pallet {
 			let delegator = ensure_signed(origin)?;
 
 			if let Some(max_bid) = max_bid {
-				ensure!(
-					T::FundingInfo::balance(&delegator) >= max_bid,
-					Error::<T>::MaxBidIsTooHigh
-				);
 				MaxDelegationBid::<T>::insert(&delegator, max_bid);
 			} else {
 				MaxDelegationBid::<T>::remove(&delegator);
@@ -1513,7 +1509,9 @@ impl<T: Config> Pallet<T> {
 		for delegator in &delegators {
 			T::Bonder::update_bond(
 				&delegator.clone().into(),
-				T::FundingInfo::total_balance_of(delegator),
+				MaxDelegationBid::<T>::get(delegator)
+					.map(|max_bid| max_bid.min(T::FundingInfo::total_balance_of(delegator)))
+					.unwrap_or(T::FundingInfo::total_balance_of(delegator)),
 			);
 		}
 
