@@ -78,9 +78,11 @@ pub async fn get_finalized_fee_and_success_status(
 			);
 			Ok(None)
 		},
-		// TODO: Consider distinguishing this case as `Ok(None)` to indicate that the
-		// request returned a response, but the tx is not available yet.
-		None => Err(anyhow::anyhow!("Unknown Transaction.")),
+		None => {
+			// The request returned a response, but the the tx is not available yet.
+			tracing::debug!("Unknown Transaction ({signature:?})");
+			Ok(None)
+		},
 	}
 }
 
