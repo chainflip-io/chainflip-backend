@@ -25,7 +25,7 @@ use crate::{
 		},
 		elections::TypesFor,
 	},
-	BitcoinInstance, Runtime,
+	BitcoinInstance, NoopMigration, Runtime,
 };
 use cf_chains::{refund_parameters::ChannelRefundParameters, Chain};
 use cf_runtime_utilities::PlaceholderMigration;
@@ -38,6 +38,14 @@ use sp_runtime::TryRuntimeError;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub type Migration = (
+	// We need a noop migration from 6 to 7 as long as 1.10.2 isn't released
+	VersionedMigration<
+		6,
+		7,
+		NoopMigration,
+		pallet_cf_elections::Pallet<Runtime, BitcoinInstance>,
+		<Runtime as frame_system::Config>::DbWeight,
+	>,
 	VersionedMigration<
 		7,
 		8,
