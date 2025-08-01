@@ -1,6 +1,7 @@
 use super::MockPallet;
 use crate::{mocks::MockPalletStorage, CcmAdditionalDataHandler};
 use cf_chains::ccm_checker::DecodedCcmAdditionalData;
+use sp_std::vec::Vec;
 
 pub struct MockCcmAdditionalDataHandler;
 

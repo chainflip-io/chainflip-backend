@@ -96,6 +96,7 @@ pub mod cf_parameters;
 pub mod instances;
 pub mod refund_parameters;
 
+#[cfg(feature = "mocks")]
 pub mod mocks;
 
 pub mod witness_period {
@@ -1013,7 +1014,7 @@ pub enum TransactionInIdForAnyChain {
 	Polkadot(TxId),
 	Solana(SolanaTransactionInId),
 	None,
-	#[cfg(feature = "std")]
+	#[cfg(feature = "mocks")]
 	MockEthereum([u8; 4]),
 }
 
@@ -1025,6 +1026,7 @@ impl std::fmt::Display for TransactionInIdForAnyChain {
 			Self::Polkadot(transaction_id) =>
 				write!(f, "{}-{}", transaction_id.block_number, transaction_id.extrinsic_index),
 			Self::Solana((address, id)) => write!(f, "{address}-{id}",),
+			#[cfg(feature = "mocks")]
 			Self::MockEthereum(id) => write!(f, "{:?}", id),
 			Self::None => write!(f, "None"),
 		}

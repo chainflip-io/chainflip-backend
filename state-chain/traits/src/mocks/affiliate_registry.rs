@@ -14,10 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::AffiliateRegistry;
 use cf_primitives::AffiliateShortId;
 use frame_support::{parameter_types, sp_runtime::BoundedBTreeMap, traits::ConstU32};
-
-use crate::AffiliateRegistry;
+use sp_std::collections::btree_map::BTreeMap;
 
 parameter_types! {
 	pub storage AffiliateMapping: BoundedBTreeMap<(u64, AffiliateShortId), u64, ConstU32<100>> = Default::default();
@@ -63,9 +63,7 @@ impl AffiliateRegistry for MockAffiliateRegistry {
 		None
 	}
 
-	fn reverse_mapping(
-		broker_id: &Self::AccountId,
-	) -> std::collections::BTreeMap<Self::AccountId, AffiliateShortId> {
+	fn reverse_mapping(broker_id: &Self::AccountId) -> BTreeMap<Self::AccountId, AffiliateShortId> {
 		AffiliateMapping::get()
 			.into_iter()
 			.filter_map(|((map_broker_id, short_id), account_id)| {

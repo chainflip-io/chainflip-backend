@@ -85,15 +85,9 @@ impl BalanceApi for MockBalance {
 			|amount| {
 				let amount = amount.get_or_insert_with(|| 0);
 
-				*amount = amount.checked_sub(&amount_to_debit).ok_or_else(|| {
-					DispatchError::Other(Box::leak(
-						format!(
-							"Insufficient balance: have {}, tried to debit {}",
-							amount, amount_to_debit
-						)
-						.into_boxed_str(),
-					))
-				})?;
+				*amount = amount
+					.checked_sub(&amount_to_debit)
+					.ok_or(DispatchError::Other("Insufficient balance"))?;
 				Ok(())
 			},
 		)
