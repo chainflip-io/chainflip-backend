@@ -612,7 +612,7 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 				safety_margin: 0,
 				safety_buffer: BITCOIN_MAINNET_SAFETY_BUFFER,
 			},
-			2, // wait 2 SC blocks until reopening fee election
+			10, // wait 10 SC blocks until reopening fee election
 			(),
 		),
 		settings: (

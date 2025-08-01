@@ -182,7 +182,6 @@ use chainflip::{
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
-use crate::migrations::bitcoin_elections::MyDebugMigration;
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 pub use pallet_transaction_payment::ChargeTransactionPayment;
