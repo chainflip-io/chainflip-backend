@@ -1199,13 +1199,13 @@ impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
 }
 
 pub trait PriceFeedApi {
-	fn get_price(asset: ChainlinkAssetpair) -> Option<OraclePrice>;
+	fn get_price(asset: assets::any::Asset) -> Option<OraclePrice>;
 }
 
 #[allow(dead_code)]
 struct ChainlinkOracle;
 impl PriceFeedApi for ChainlinkOracle {
-	fn get_price(asset: ChainlinkAssetpair) -> Option<OraclePrice> {
+	fn get_price(asset: assets::any::Asset) -> Option<OraclePrice> {
 		decode_and_get_latest_oracle_price::<TypesFor<Chainlink>>(asset)
 	}
 }
