@@ -39,13 +39,13 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub type Migration = (
 	VersionedMigration<
-		6,
 		7,
+		8,
 		BitcoinElectionMigration,
 		pallet_cf_elections::Pallet<Runtime, BitcoinInstance>,
 		<Runtime as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<7, Pallet<Runtime, BitcoinInstance>>,
+	PlaceholderMigration<8, Pallet<Runtime, BitcoinInstance>>,
 );
 
 pub struct BitcoinElectionMigration;

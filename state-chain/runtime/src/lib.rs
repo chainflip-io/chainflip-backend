@@ -1453,6 +1453,13 @@ type AllMigrations = (
 	migrations::housekeeping::Migration,
 	migrations::bitcoin_elections::Migration,
 	migrations::generic_elections::Migration,
+	VersionedMigration<
+		7,
+		8,
+		NoopMigration,
+		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
+	>,
 	MigrationsForV1_11,
 );
 
