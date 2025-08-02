@@ -119,7 +119,6 @@ use frame_support::{
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
-use pallet_cf_elections::electoral_systems::oracle_price::chainlink::ChainlinkAssetpair;
 use pallet_cf_flip::CallIndexer;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -1199,13 +1198,13 @@ impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
 }
 
 pub trait PriceFeedApi {
-	fn get_price(asset: ChainlinkAssetpair) -> Option<OraclePrice>;
+	fn get_price(asset: assets::any::Asset) -> Option<OraclePrice>;
 }
 
 #[allow(dead_code)]
 struct ChainlinkOracle;
 impl PriceFeedApi for ChainlinkOracle {
-	fn get_price(asset: ChainlinkAssetpair) -> Option<OraclePrice> {
+	fn get_price(asset: assets::any::Asset) -> Option<OraclePrice> {
 		decode_and_get_latest_oracle_price::<TypesFor<Chainlink>>(asset)
 	}
 }
