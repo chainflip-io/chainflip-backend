@@ -372,7 +372,7 @@ impl DcaState {
 	}
 
 	/// Called directly after a chunk has been scheduled. Records the new swap in the DCA state.
-	fn next_chunk_scheduled(
+	fn record_scheduled_chunk(
 		&mut self,
 		scheduled_chunk_swap_id: SwapId,
 		scheduled_chunk_amount: AssetAmount,
@@ -381,13 +381,12 @@ impl DcaState {
 		self.scheduled_chunks.insert(scheduled_chunk_swap_id);
 
 		// Update the remaining values
-		self.remaining_chunks = self.remaining_chunks.saturating_sub(1);
-		self.remaining_input_amount =
-			self.remaining_input_amount.saturating_sub(scheduled_chunk_amount);
+		self.remaining_chunks.saturating_reduce(1);
+		self.remaining_input_amount.saturating_reduce(scheduled_chunk_amount);
 	}
 
 	/// Remove the completed chunk from the DCA state and accumulate the output amount.
-	fn completed_chunk(
+	fn record_chunk_completion(
 		&mut self,
 		completed_chunk_swap_id: SwapId,
 		completed_chunk_output_amount: AssetAmount,
@@ -550,6 +549,8 @@ pub mod pallet {
 	pub(super) type SwapRequests<T: Config> =
 		StorageMap<_, Twox64Concat, SwapRequestId, SwapRequest<T>>;
 
+	/// AKA swap queue.
+	/// Storing as a StorageValue because we expect to read all swaps most of the time.
 	#[pallet::storage]
 	pub type ScheduledSwaps<T: Config> = StorageValue<_, BTreeMap<SwapId, Swap<T>>, ValueQuery>;
 
@@ -822,10 +823,7 @@ pub mod pallet {
 			minimum_fee_bps: BasisPoints,
 		},
 		SwapCanceled {
-			swap_request_id: SwapRequestId,
 			swap_id: SwapId,
-			asset: Asset,
-			amount: AssetAmount,
 		},
 	}
 	#[pallet::error]
@@ -1775,7 +1773,7 @@ pub mod pallet {
 						.iter()
 						.filter(|swap_id| *swap_id != &swap.swap_id)
 						.fold(0, |acc: u128, swap_id| {
-							acc.saturating_add(Self::cancel_swap(*swap_id).unwrap_or_default())
+							acc.saturating_add(Self::cancel_swap(*swap_id))
 						});
 
 					let total_input_remaining = swap.input_amount +
@@ -1875,21 +1873,16 @@ pub mod pallet {
 
 		// Removes the swap from the scheduled swaps and returns the input amount of the canceled
 		// swap.
-		fn cancel_swap(swap_id: SwapId) -> Option<AssetAmount> {
+		fn cancel_swap(swap_id: SwapId) -> AssetAmount {
 			ScheduledSwaps::<T>::mutate(|swaps| {
 				let amount = swaps.remove(&swap_id).map(|swap| {
-					Self::deposit_event(Event::<T>::SwapCanceled {
-						swap_request_id: swap.swap_request_id,
-						swap_id: swap.swap_id,
-						asset: swap.from,
-						amount: swap.input_amount,
-					});
+					Self::deposit_event(Event::<T>::SwapCanceled { swap_id: swap.swap_id });
 					swap.input_amount
 				});
 				if amount.is_none() {
 					log_or_panic!("Attempted to cancel swap {swap_id}, but it was not found in ScheduledSwaps");
 				}
-				amount
+				amount.unwrap_or_default()
 			})
 		}
 
@@ -1945,14 +1938,14 @@ pub mod pallet {
 								.into(),
 						);
 
-						dca_state.next_chunk_scheduled(swap_id, chunk_input_amount);
-						dca_state.completed_chunk(swap.swap_id(), output_amount);
+						dca_state.record_scheduled_chunk(swap_id, chunk_input_amount);
+						dca_state.record_chunk_completion(swap.swap_id(), output_amount);
 
 						false
 					} else {
 						debug_assert!(dca_state.remaining_input_amount == 0);
 
-						dca_state.completed_chunk(swap.swap_id(), output_amount);
+						dca_state.record_chunk_completion(swap.swap_id(), output_amount);
 
 						if dca_state.scheduled_chunks.is_empty() {
 							match output_action {
@@ -2184,19 +2177,16 @@ pub mod pallet {
 								swap_id: main_swap_id,
 								execute_at,
 							});
-							for swap_id in dca_state.scheduled_chunks.iter().cloned() {
+							for swap_id in dca_state.scheduled_chunks.iter().copied() {
 								if swap_id != main_swap_id {
 									// All other scheduled swaps for this request need to also be
 									// rescheduled.
-									if swaps.contains_key(&swap_id) {
-										swaps.entry(swap_id).and_modify(|s| {
-											let execute_at =
-												s.execute_at.saturating_add(retry_delay);
-											s.execute_at = execute_at;
-											Self::deposit_event(Event::<T>::SwapRescheduled {
-												swap_id,
-												execute_at,
-											});
+									if let Some(s) = swaps.get_mut(&swap_id) {
+										let execute_at = s.execute_at.saturating_add(retry_delay);
+										s.execute_at = execute_at;
+										Self::deposit_event(Event::<T>::SwapRescheduled {
+											swap_id,
+											execute_at,
 										});
 									} else {
 										log_or_panic!(
@@ -2541,7 +2531,7 @@ pub mod pallet {
 						SWAP_DELAY_BLOCKS.into(),
 					);
 
-					dca_state.next_chunk_scheduled(swap_id, chunk_input_amount);
+					dca_state.record_scheduled_chunk(swap_id, chunk_input_amount);
 
 					if let Some(DcaParameters { chunk_interval, .. }) = dca_params {
 						// This assumes that the swap delay is 2, so we will only even schedule max
@@ -2562,7 +2552,7 @@ pub mod pallet {
 									request_id,
 									SWAP_DELAY_BLOCKS.saturating_add(chunk_interval).into(),
 								);
-								dca_state.next_chunk_scheduled(swap_id, chunk_input_amount);
+								dca_state.record_scheduled_chunk(swap_id, chunk_input_amount);
 							}
 						}
 					}

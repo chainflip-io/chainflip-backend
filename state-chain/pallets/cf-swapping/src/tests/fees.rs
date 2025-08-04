@@ -119,7 +119,7 @@ fn test_buy_back_flip() {
 				NETWORK_FEE_AMOUNT,
 				None,
 				[],
-				System::block_number() + u64::from(SWAP_DELAY_BLOCKS)
+				System::block_number() + SWAP_DELAY_BLOCKS as u64
 			)
 		);
 	});

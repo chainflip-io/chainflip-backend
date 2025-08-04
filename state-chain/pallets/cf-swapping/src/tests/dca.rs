@@ -1043,12 +1043,7 @@ fn dca_with_one_block_interval_fok() {
 			// Make sure that chunk 2 failing cancels chunk 3 that was already scheduled
 			assert_has_matching_event!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapCanceled {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: SwapId(3),
-					asset: INPUT_ASSET,
-					amount: CHUNK_AMOUNT,
-				})
+				RuntimeEvent::Swapping(Event::SwapCanceled { swap_id: SwapId(3) })
 			);
 			assert_swaps_queue_is_empty();
 
@@ -1059,6 +1054,15 @@ fn dca_with_one_block_interval_fok() {
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: SWAP_REQUEST_ID,
 					amount: REFUND_AMOUNT,
+					..
+				})
+			);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+					swap_request_id: SWAP_REQUEST_ID,
+					asset: OUTPUT_ASSET,
+					amount: CHUNK_OUTPUT,
 					..
 				})
 			);

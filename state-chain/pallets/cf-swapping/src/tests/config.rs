@@ -176,7 +176,7 @@ fn max_swap_amount_can_be_removed() {
 
 		initiate_swap();
 
-		let execute_at = System::block_number() + u64::from(SWAP_DELAY_BLOCKS);
+		let execute_at = System::block_number() + SWAP_DELAY_BLOCKS as u64;
 
 		assert_eq!(
 			ScheduledSwaps::<Test>::get(),
@@ -284,7 +284,7 @@ fn can_swap_below_max_amount() {
 					amount,
 					None,
 					vec![ZERO_NETWORK_FEES],
-					System::block_number() + u64::from(SWAP_DELAY_BLOCKS)
+					System::block_number() + SWAP_DELAY_BLOCKS as u64
 				)
 			)])
 		);

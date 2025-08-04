@@ -154,7 +154,7 @@ fn create_test_swap(
 	execute_at: u64,
 ) -> Swap<Test> {
 	let mut dca_state = DcaState::new(amount, dca_params);
-	dca_state.next_chunk_scheduled(id.into(), amount);
+	dca_state.record_scheduled_chunk(id.into(), amount);
 
 	SwapRequests::<Test>::insert(
 		SwapRequestId::from(id),
@@ -876,7 +876,7 @@ fn swap_excess_are_confiscated() {
 					MAX_SWAP,
 					None,
 					vec![ZERO_NETWORK_FEES],
-					System::block_number() + u64::from(SWAP_DELAY_BLOCKS)
+					System::block_number() + SWAP_DELAY_BLOCKS as u64
 				)
 			)])
 		);
