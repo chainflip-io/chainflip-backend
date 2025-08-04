@@ -1621,8 +1621,17 @@ impl<T: Config> Pallet<T> {
 						.winners
 						.iter()
 						.filter_map(|winner| {
-							ManagedValidators::<T>::get(winner.clone().into())
-								.and_then(|operator| delegation_snapshot.get(&operator))
+							ManagedValidators::<T>::get(winner.clone().into()).and_then(
+								|operator| {
+									let snapshot = delegation_snapshot.get(&operator);
+									if snapshot.is_none() {
+										log::warn!(
+											"Expected delegation snapshot for operator {:?} - didn't found one.", operator
+										);
+									}
+									snapshot
+								},
+							)
 						})
 						.flat_map(|snapshot| snapshot.delegators.keys().cloned())
 						.collect::<BTreeSet<T::AccountId>>(),
