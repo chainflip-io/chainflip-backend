@@ -1556,7 +1556,11 @@ impl<T: Config> Pallet<T> {
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 
-		let delegation_snapshot = Self::build_delegation_snapshot();
+		let qualified_bidders = Self::get_qualified_bidders::<T::KeygenQualification>();
+
+		let delegation_snapshot = Self::build_delegation_snapshot(Some(
+			qualified_bidders.clone().into_iter().map(|bid| bid.bidder_id.into()).collect(),
+		));
 
 		let get_avg_bid_for_validator_if_managed =
 			|validator_id: T::AccountId| -> Option<T::Amount> {
@@ -1571,7 +1575,7 @@ impl<T: Config> Pallet<T> {
 		)
 		.and_then(|resolver| {
 			resolver.resolve_auction(
-				Self::get_qualified_bidders::<T::KeygenQualification>()
+				qualified_bidders
 					.into_iter()
 					.map(|bid| Bid {
 						bidder_id: bid.bidder_id.clone(),
@@ -1844,14 +1848,23 @@ impl<T: Config> Pallet<T> {
 		.collect()
 	}
 
-	pub fn build_delegation_snapshot() -> BTreeMap<T::AccountId, DelegationSnapshot<T>> {
+	pub fn build_delegation_snapshot(
+		maybe_qualified_bidder: Option<Vec<T::AccountId>>,
+	) -> BTreeMap<T::AccountId, DelegationSnapshot<T>> {
 		let mut snapshot: BTreeMap<T::AccountId, DelegationSnapshot<T>> = BTreeMap::new();
 
 		for operator in OperatorSettingsLookup::<T>::iter_keys() {
 			let delegators =
 				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Delegator);
-			let validators =
-				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator);
+
+			let validators = if let Some(ref qualified) = maybe_qualified_bidder {
+				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator)
+					.into_iter()
+					.filter(|(account_id, _)| qualified.contains(account_id))
+					.collect()
+			} else {
+				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator)
+			};
 
 			let total_delegator_balance = delegators
 				.clone()
