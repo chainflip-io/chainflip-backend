@@ -118,25 +118,31 @@ pub fn try_extract_vault_swap_witness(
 	// Second output must be a nulldata UTXO (with 0 amount):
 	if nulldata_utxo.value.to_sat() != 0 {
 		tracing::warn!(
-			"Observed a tx into our vault's change address, but the value of the second UTXO is non-zero (tx_hash: {})",
-			tx.hash
+			"Observed a tx into our vault's change address, but the value of the second UTXO is non-zero (tx_id: {})",
+			tx.txid
 		);
 		return None;
 	}
 
-	let mut data = try_extract_utxo_encoded_data(&nulldata_utxo.script_pubkey)?;
+	let Some(mut data) = try_extract_utxo_encoded_data(&nulldata_utxo.script_pubkey) else {
+		tracing::warn!(
+			"Could not extract UTXO encoded data targeting our vault (tx_id: {})",
+			tx.txid
+		);
+		return None;
+	};
 
 	let Ok(data) = UtxoEncodedData::decode(&mut data) else {
 		tracing::warn!(
-			"Failed to decode UTXO encoded data targeting our vault (tx_hash: {})",
-			tx.hash
+			"Failed to decode UTXO encoded data targeting our vault (tx_id: {})",
+			tx.txid
 		);
 		return None;
 	};
 
 	// Third output must be a "change utxo" whose address we assume to also be the refund address:
 	let Some(refund_address) = script_buf_to_script_pubkey(&change_utxo.script_pubkey) else {
-		tracing::error!("Failed to extract refund address (tx_hash: {})", tx.hash);
+		tracing::error!("Failed to extract refund address (tx_id: {})", tx.txid);
 		return None;
 	};
 
