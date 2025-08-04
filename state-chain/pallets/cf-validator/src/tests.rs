@@ -1897,10 +1897,20 @@ mod delegation {
 		});
 	}
 
+	// This is a general verification that should test the overall happy path of the auction
+	// resolution and the rotation to the next epoch. This test accounts the following things:
+	//
+	// - The right calculation of the bond
+	// - The respect of the MAX_BID if set
+	// - The undelegation and unbond of a delegator that wants to leave
+	// - The increase of the MAB through delegated capital
+	//
+	// In this test we run in total 2 auctions and 2 rotations.
 	#[test]
-	fn run_auction_with_delegations_and_undelegations() {
+	fn delegations_are_getting_used_in_auction_to_increase_mab() {
 		const OPERATOR: u64 = 123;
-		const AVAILABLE_BALANCE_OF_DELEGATOR: u128 = 10;
+		const AVAILABLE_BALANCE_OF_DELEGATOR: u128 = 20;
+		const MAX_BID_OF_DELEGATOR: u128 = 10;
 		const DELEGATORS: [u64; 4] = [21, 22, 23, 24];
 
 		new_test_ext()
@@ -1916,6 +1926,12 @@ mod delegation {
 				for delegator in DELEGATORS {
 					assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(delegator), OPERATOR));
 					MockFlip::credit_funds(&delegator, AVAILABLE_BALANCE_OF_DELEGATOR);
+					if delegator % 2 == 0 {
+						assert_ok!(ValidatorPallet::set_max_bid(
+							OriginTrait::signed(delegator),
+							Some(MAX_BID_OF_DELEGATOR),
+						));
+					}
 				}
 
 				for bid in WINNING_BIDS {
@@ -1960,15 +1976,32 @@ mod delegation {
 					DelegationsPerEpoch::<Test>::get(CurrentEpoch::<Test>::get());
 				assert_eq!(BTreeSet::from_iter(DELEGATORS), active_delegators);
 				for delegator in active_delegators {
-					assert_eq!(
-						MockBonderFor::<Test>::get_bond(&delegator),
-						AVAILABLE_BALANCE_OF_DELEGATOR
-					);
+					if delegator % 2 == 0 {
+						assert_eq!(
+							MockBonderFor::<Test>::get_bond(&delegator),
+							MAX_BID_OF_DELEGATOR
+						);
+					} else {
+						assert_eq!(
+							MockBonderFor::<Test>::get_bond(&delegator),
+							AVAILABLE_BALANCE_OF_DELEGATOR
+						);
+					}
 				}
-				println!(
-					"Current bond of Epoch {:?} is {:?}",
-					CurrentEpoch::<Test>::get(),
-					Bond::<Test>::get()
+				assert_eq!(
+					Bond::<Test>::get(),
+					(WINNING_BIDS.iter().map(|bid| bid.amount).sum::<u128>() +
+						DELEGATORS
+							.iter()
+							.map(|delegator| {
+								// 50% of validators have set a max bid
+								if delegator % 2 == 0 {
+									MAX_BID_OF_DELEGATOR
+								} else {
+									AVAILABLE_BALANCE_OF_DELEGATOR
+								}
+							})
+							.sum::<u128>()) / WINNING_BIDS.len() as u128
 				);
 			})
 			.then_execute_at_next_block(|_| {
@@ -2003,10 +2036,20 @@ mod delegation {
 			})
 			.then_execute_at_next_block(|_| {
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				println!(
-					"Current bond of Epoch {:?} is {:?}",
-					CurrentEpoch::<Test>::get(),
-					Bond::<Test>::get()
+				assert_eq!(
+					Bond::<Test>::get(),
+					(WINNING_BIDS.iter().map(|bid| bid.amount).sum::<u128>() +
+						DELEGATORS
+							.iter()
+							.map(|delegator| {
+								// 50% has undelegated and are out
+								if delegator % 2 == 0 {
+									0
+								} else {
+									AVAILABLE_BALANCE_OF_DELEGATOR
+								}
+							})
+							.sum::<u128>()) / WINNING_BIDS.len() as u128
 				);
 				ValidatorPallet::expire_epochs_up_to(
 					ValidatorPallet::current_epoch() - 1,
