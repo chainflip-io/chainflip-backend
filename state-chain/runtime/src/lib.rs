@@ -1736,14 +1736,13 @@ impl_runtime_apis! {
 				DelegationAcceptance::Allow => (Default::default(), exceptions),
 				DelegationAcceptance::Deny => (exceptions, Default::default()),
 			};
-			let account_balance = pallet_cf_flip::Account::<Runtime>::get(account_id).total();
 			OperatorInfo {
 				managed_validators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(account_id, AssociationToOperator::Validator),
 				settings,
 				allowed,
 				blocked,
 				delegators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(account_id, AssociationToOperator::Delegator),
-				account_balance,
+				account_balance: pallet_cf_flip::Account::<Runtime>::get(account_id).total(),
 			}
 		}
 
