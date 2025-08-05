@@ -57,7 +57,7 @@ use cf_traits::{
 	AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
 	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
-	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapOutputAction,
+	NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails, SwapOutputAction,
 	SwapParameterValidation, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
@@ -457,24 +457,7 @@ pub mod pallet {
 		PartialOrdNoBound,
 		GenericTypeInfo,
 	)]
-	#[serde(bound(
-		serialize = "
-		TargetChainAsset<T, I>: Serialize,
-		Option<TargetChainAccount<T, I>>: Serialize,
-		<T::TargetChain as Chain>::ChainAmount: Serialize,
-		<T::TargetChain as Chain>::DepositDetails: Serialize,
-		TransactionInIdFor<T, I>: Serialize,
-		Option<Beneficiary<T::AccountId>>: Serialize,
-	",
-		deserialize = "
-		TargetChainAsset<T, I>: Deserialize<'de>,
-		Option<TargetChainAccount<T, I>>: Deserialize<'de>,
-		<T::TargetChain as Chain>::ChainAmount: Deserialize<'de>,
-		<T::TargetChain as Chain>::DepositDetails: Deserialize<'de>,
-		TransactionInIdFor<T, I>: Deserialize<'de>,
-		Option<Beneficiary<T::AccountId>>: Deserialize<'de>,
-	"
-	))]
+	#[serde(bound(serialize = "", deserialize = ""))]
 	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct VaultDepositWitness<T: Config<I>, I: 'static> {
 		pub input_asset: TargetChainAsset<T, I>,
@@ -679,8 +662,6 @@ pub mod pallet {
 		type AddressConverter: AddressConverter;
 
 		type Balance: BalanceApi<AccountId = Self::AccountId>;
-
-		type PoolApi: PoolApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// The type of the chain-native transaction.
 		type ChainApiCall: AllBatch<Self::TargetChain>
