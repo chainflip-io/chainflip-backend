@@ -1742,6 +1742,7 @@ impl_runtime_apis! {
 				allowed,
 				blocked,
 				delegators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(account_id, AssociationToOperator::Delegator),
+				flip_balance: pallet_cf_flip::Account::<Runtime>::get(account_id).total(),
 			}
 		}
 
