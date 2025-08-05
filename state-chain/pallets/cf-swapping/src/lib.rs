@@ -181,7 +181,7 @@ impl<T: Config> SwapState<T> {
 		}
 	}
 
-	fn intermediate_amount(&self) -> Option<AssetAmount> {
+	pub fn intermediate_amount(&self) -> Option<AssetAmount> {
 		if self.input_asset() == STABLE_ASSET || self.output_asset() == STABLE_ASSET {
 			None
 		} else {
@@ -1636,7 +1636,7 @@ pub mod pallet {
 		}
 
 		#[transactional]
-		pub fn try_execute_without_violations(
+		fn try_execute_without_violations(
 			swaps: Vec<Swap<T>>,
 		) -> Result<Vec<SwapState<T>>, BatchExecutionError<T>> {
 			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
@@ -1663,6 +1663,14 @@ pub mod pallet {
 					non_violating_swaps: non_violating.into_iter().map(|ctx| ctx.swap).collect(),
 				})
 			}
+		}
+
+		pub fn simulate_swaps(
+			swaps: Vec<Swap<T>>,
+		) -> Result<Vec<SwapState<T>>, BatchExecutionError<T>> {
+			with_transaction_unchecked(|| {
+				TransactionOutcome::Rollback(Self::try_execute_without_violations(swaps))
+			})
 		}
 
 		/// Attempts to find (and execute) a batch of swaps that wouldn't result in hitting the

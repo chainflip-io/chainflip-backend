@@ -1920,62 +1920,94 @@ impl_runtime_apis! {
 
 			// Estimate swap result for a chunk, then extrapolate the result.
 			// If no DCA parameter is given, swap the entire amount with 1 chunk.
-			let number_of_chunks: u128 = dca_parameters.map(|dca|dca.number_of_chunks).unwrap_or(1u32).into();
+			let number_of_chunks: u128 = dca_parameters.map(|dca| sp_std::cmp::max(dca.number_of_chunks, 1u32)).unwrap_or(1u32).into();
 			let amount_per_chunk = amount_to_swap / number_of_chunks;
 
 			let mut fees_vec = vec![];
+			let mut fees_vec_without_minimum = vec![];
 
-			let network_fee_rate = if include_fee(FeeTypes::Network) {
-				let rate_and_min = pallet_cf_swapping::Pallet::<Runtime>::get_network_fee_for_swap(
+			if include_fee(FeeTypes::Network) {
+				let rate_and_min =
+					pallet_cf_swapping::Pallet::<Runtime>::get_network_fee_for_swap(
 						input_asset,
 						output_asset,
 						is_internal.unwrap_or(false),
 					);
-				fees_vec.push(FeeType::NetworkFee(NetworkFeeTracker::new(
-					rate_and_min.clone(),
-				)));
-				rate_and_min.rate
-			} else {
-				Permill::zero()
-			};
+
+				fees_vec.push(FeeType::NetworkFee(NetworkFeeTracker::new(rate_and_min.clone())));
+				fees_vec_without_minimum.push(
+					FeeType::NetworkFee(NetworkFeeTracker::new(pallet_cf_swapping::FeeRateAndMinimum {
+						rate: rate_and_min.rate,
+						minimum: 0,
+					})),
+				);
+			}
 
 			if broker_commission > 0 {
-				fees_vec.push(FeeType::BrokerFee(
+				let fee= FeeType::BrokerFee(
 					vec![Beneficiary {
 						account: AccountId::new([0xbb; 32]),
 						bps: broker_commission,
 					}]
 					.try_into()
 					.expect("Beneficiary with a length of 1 must be within length bound.")
-				));
+				);
+				fees_vec.push(fee.clone());
+				fees_vec_without_minimum.push(fee);
 			}
 
-			// Simulate the swap
-			let swap_output_per_chunk = Swapping::try_execute_without_violations(
-				vec![
+			// Using the swap with a minimum as the first chunk, and the swap without a minimum as the rest of the chunks.
+			// This is because the first chunk may be smaller than expected due to the minimum network fee.
+			let first_chunk_output = &Swapping::simulate_swaps(vec![Swap::new(
+					Default::default(), // Swap id
+					Default::default(), // Swap request id
+					input_asset,
+					output_asset,
+					amount_per_chunk,
+					None, // Refund params
+					fees_vec,
+				)]).map_err(|e| match e {
+				BatchExecutionError::SwapLegFailed { .. } => DispatchError::Other("Swap leg failed."),
+				BatchExecutionError::PriceViolation { .. } => DispatchError::Other("Price Violation: Some swaps failed due to Price Impact Limitations."),
+				BatchExecutionError::DispatchError { error } => error,
+			})?;
+			let first_chunk =
+				&first_chunk_output[0];
+
+			let additional_chunks = number_of_chunks - 1;
+			let other_chunk_output = if additional_chunks > 0 {
+				Some(Swapping::simulate_swaps(vec![
 					Swap::new(
 						Default::default(), // Swap id
 						Default::default(), // Swap request id
 						input_asset,
 						output_asset,
 						amount_per_chunk,
-						None,
-						fees_vec,
-					)
-				],
-			).map_err(|e| match e {
-				BatchExecutionError::SwapLegFailed { .. } => DispatchError::Other("Swap leg failed."),
-				BatchExecutionError::PriceViolation { .. } => DispatchError::Other("Price Violation: Some swaps failed due to Price Impact Limitations."),
-				BatchExecutionError::DispatchError { error } => error,
-			})?;
+						None, // Refund params
+						fees_vec_without_minimum,
+					)]).map_err(|e| match e {
+					BatchExecutionError::SwapLegFailed { .. } => DispatchError::Other("Swap leg failed."),
+					BatchExecutionError::PriceViolation { .. } => DispatchError::Other("Price Violation: Some swaps failed due to Price Impact Limitations."),
+					BatchExecutionError::DispatchError { error } => error,
+				})?)
+			} else {
+				None
+			};
 
-			// Calculate the network fee manually instead of using the swap output because
-			// the network fee minimum may of be enforced on the first chunk.
-			let network_fee = network_fee_rate * amount_to_swap;
-			let broker_fee = swap_output_per_chunk[0].broker_fee_taken.unwrap_or_default() * number_of_chunks;
-			let intermediary = swap_output_per_chunk[0].stable_amount.map(|amount| amount * number_of_chunks)
-				.filter(|_| ![input_asset, output_asset].contains(&STABLE_ASSET));
-			let output = swap_output_per_chunk[0].final_output.unwrap_or_default() * number_of_chunks;
+			// Add the result of the fist chunk with the result of the other chunks times the number of additional chunks.
+			let network_fee = first_chunk.network_fee_taken.unwrap_or_default()
+				+ other_chunk_output.as_ref().map(|chunk| chunk[0].network_fee_taken.unwrap_or_default() * additional_chunks).unwrap_or_default();
+
+			let intermediary = first_chunk
+				.intermediate_amount()
+				.map(|amount| amount + other_chunk_output.as_ref().map(|chunk|
+					chunk[0].intermediate_amount()
+					.map(|amount| amount * additional_chunks).unwrap_or_default()).unwrap_or_default());
+
+			let output = first_chunk.final_output.unwrap_or_default()
+				+ other_chunk_output.map(|chunk| chunk[0].final_output.unwrap_or_default() * additional_chunks).unwrap_or_default();
+
+			let broker_fee = first_chunk.broker_fee_taken.unwrap_or_default() * number_of_chunks;
 
 			let (output, egress_fee) = if include_fee(FeeTypes::Egress) {
 				let egress = match ccm_data {
