@@ -1441,11 +1441,6 @@ impl<T: Config> Pallet<T> {
 
 		for delegator in DelegationsPerEpoch::<T>::take(epoch) {
 			if OutgoingDelegators::<T>::take(&delegator) == DelegationStatus::UnDelegating {
-				// TODO: We have to investigate if this assumptions is safe. Since validators are
-				// still bonded for historical epochs we also have to ensure that the capital
-				// of delegators is still available when the validator is powered by delegations.
-				// In the worst case that would mean that we have wait for 2 epoch until we safely
-				// allow the delegator to undelegate.
 				T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
 				Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch });
 			}
@@ -1592,15 +1587,6 @@ impl<T: Config> Pallet<T> {
 					auction_outcome.bond,
 				));
 				debug_assert!(!auction_outcome.winners.is_empty());
-				// TODO: This assumption is outdated now - we should think about a replacement or
-				// just remove it.
-				// debug_assert!({
-				// 	let bids = Self::get_active_bids()
-				// 		.into_iter()
-				// 		.map(|bid| (bid.bidder_id, bid.amount))
-				// 		.collect::<BTreeMap<_, _>>();
-				// 	auction_outcome.winners.iter().map(|id| bids.get(id)).is_sorted_by_key(Reverse)
-				// });
 				log::info!(
 					target: "cf-validator",
 					"Auction resolved with {} winners and {} losers. Bond will be {}FLIP.",
@@ -1616,10 +1602,6 @@ impl<T: Config> Pallet<T> {
 					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
 				);
 
-				// TODO: We have to ensure that all validators of an operator make it into the set.
-				// Only then our assumptions around the capital distribution hold! Worst case for
-				// now would be that we bind more capital than necessary. We should address this
-				// during the auction optimization for delegation.
 				NextDelegators::<T>::put(
 					auction_outcome
 						.winners
