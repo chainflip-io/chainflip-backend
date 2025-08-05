@@ -1402,6 +1402,13 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
+		for delegator in DelegationsPerEpoch::<T>::take(old_epoch) {
+			if OutgoingDelegators::<T>::take(&delegator) == DelegationStatus::UnDelegating {
+				T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
+				Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch: old_epoch });
+			}
+		}
+
 		Self::initialise_new_epoch(
 			new_epoch,
 			&new_authorities,
@@ -1435,13 +1442,6 @@ impl<T: Config> Pallet<T> {
 		let validators = HistoricalAuthorities::<T>::take(epoch);
 		for validator in validators {
 			AuthorityIndex::<T>::remove(epoch, validator);
-		}
-
-		for delegator in DelegationsPerEpoch::<T>::take(epoch) {
-			if OutgoingDelegators::<T>::take(&delegator) == DelegationStatus::UnDelegating {
-				T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
-				Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch });
-			}
 		}
 
 		HistoricalBonds::<T>::remove(epoch);

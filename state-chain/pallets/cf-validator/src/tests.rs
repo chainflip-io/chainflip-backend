@@ -2051,10 +2051,6 @@ mod delegation {
 							})
 							.sum::<u128>()) / WINNING_BIDS.len() as u128
 				);
-				ValidatorPallet::expire_epochs_up_to(
-					ValidatorPallet::current_epoch() - 1,
-					Weight::from_all(u64::MAX),
-				);
 			})
 			.then_execute_at_next_block(|_| {
 				assert_rotation_phase_matches!(RotationPhase::Idle);
