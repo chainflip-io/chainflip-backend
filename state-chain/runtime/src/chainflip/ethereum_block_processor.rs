@@ -131,14 +131,17 @@ impl Hook<HookTypeFor<TypesStateChainGatewayWitnessing, ExecuteHook>>
 						StateChainGatewayEvent::RedemptionExecuted {
 							account_id,
 							redeemed_amount,
-							tx_hash,
+							tx_hash: _,
 						} => {
 							let _ = pallet_cf_funding::Pallet::<Runtime>::inner_redeemed(
 								account_id,
 								redeemed_amount,
 							);
 						},
-						StateChainGatewayEvent::RedemptionExpired { account_id, block_number } => {
+						StateChainGatewayEvent::RedemptionExpired {
+							account_id,
+							block_number: _,
+						} => {
 							let _ = pallet_cf_funding::Pallet::<Runtime>::inner_redemption_expired(
 								account_id,
 							);
@@ -159,7 +162,7 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 						KeyManagerEvent::AggKeySetByGovKey {
 							new_public_key,
 							block_number,
-							tx_id,
+							tx_id: _,
 						} => {
 							pallet_cf_vaults::Pallet::<Runtime, EthereumInstance>::inner_vault_key_rotated_externally(new_public_key, block_number);
 						},
@@ -269,12 +272,7 @@ impl Hook<HookTypeFor<TypesStateChainGatewayWitnessing, RulesHook>>
 	) -> Vec<EthEvent<StateChainGatewayEvent>> {
 		let mut results: Vec<EthEvent<StateChainGatewayEvent>> = vec![];
 		if age.contains(&safety_margin) {
-			results.extend(
-				block_data
-					.into_iter()
-					.map(|vault_deposit| EthEvent::Witness(vault_deposit))
-					.collect::<Vec<_>>(),
-			)
+			results.extend(block_data.into_iter().map(EthEvent::Witness).collect::<Vec<_>>())
 		}
 		results
 	}
@@ -287,12 +285,7 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, RulesHook>> for TypesKeyManager
 	) -> Vec<EthEvent<KeyManagerEvent>> {
 		let mut results: Vec<EthEvent<KeyManagerEvent>> = vec![];
 		if age.contains(&safety_margin) {
-			results.extend(
-				block_data
-					.into_iter()
-					.map(|vault_deposit| EthEvent::Witness(vault_deposit))
-					.collect::<Vec<_>>(),
-			)
+			results.extend(block_data.into_iter().map(EthEvent::Witness).collect::<Vec<_>>())
 		}
 		results
 	}
