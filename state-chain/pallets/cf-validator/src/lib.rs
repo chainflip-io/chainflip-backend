@@ -389,7 +389,7 @@ pub mod pallet {
 
 	/// Holds meta information about the current delegation of delegator.
 	#[pallet::storage]
-	pub type DelegationInfos<T: Config> =
+	pub type OutgoingDelegators<T: Config> =
 		StorageMap<_, Identity, T::AccountId, DelegationStatus, ValueQuery>;
 
 	#[pallet::storage]
@@ -1145,7 +1145,7 @@ pub mod pallet {
 			let delegator = ensure_signed(origin)?;
 
 			ensure!(
-				DelegationInfos::<T>::get(&delegator) != DelegationStatus::UnDelegating,
+				OutgoingDelegators::<T>::get(&delegator) != DelegationStatus::UnDelegating,
 				Error::<T>::UnDelegationAlreadyInitiated
 			);
 
@@ -1200,7 +1200,7 @@ pub mod pallet {
 			let operator = DelegationChoice::<T>::take(&delegator)
 				.ok_or(Error::<T>::AccountIsNotDelegating)?;
 
-			DelegationInfos::<T>::insert(&delegator, DelegationStatus::UnDelegating);
+			OutgoingDelegators::<T>::insert(&delegator, DelegationStatus::UnDelegating);
 
 			Self::deposit_event(Event::UnDelegated { delegator, operator });
 
@@ -1440,7 +1440,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		for delegator in DelegationsPerEpoch::<T>::take(epoch) {
-			if DelegationInfos::<T>::take(&delegator) == DelegationStatus::UnDelegating {
+			if OutgoingDelegators::<T>::take(&delegator) == DelegationStatus::UnDelegating {
 				// TODO: We have to investigate if this assumptions is safe. Since validators are
 				// still bonded for historical epochs we also have to ensure that the capital
 				// of delegators is still available when the validator is powered by delegations.

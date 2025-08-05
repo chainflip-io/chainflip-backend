@@ -2010,7 +2010,7 @@ mod delegation {
 					if delegator % 2 == 0 {
 						assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(*delegator)));
 						assert_eq!(
-							DelegationInfos::<Test>::get(delegator),
+							OutgoingDelegators::<Test>::get(delegator),
 							DelegationStatus::UnDelegating
 						);
 					}
