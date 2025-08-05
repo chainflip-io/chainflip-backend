@@ -562,7 +562,7 @@ pub mod pallet {
 		Refund {
 			reason: RefundReason,
 			refund_address: C::ChainAccount,
-			refund_ccm_metadata: Option<CcmChannelMetadataChecked>,
+			refund_ccm_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
 		},
 	}
 
@@ -2076,11 +2076,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					asset,
 					amount_after_fees,
 					refund_address,
-					refund_ccm_metadata.as_ref().map(|metadata| CcmDepositMetadata {
-						channel_metadata: metadata.clone(),
-						source_chain: asset.into(),
-						source_address,
-					}),
+					refund_ccm_metadata,
 				) {
 					Ok(egress_details) => Some(egress_details.egress_id),
 					Err(e) => {
@@ -2538,13 +2534,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								if let AccountOrAddress::ExternalAddress(refund_addr) =
 									refund_params.refund_address.clone()
 								{
-									Ok((
-										refund_addr,
-										refund_params
-											.refund_ccm_metadata
-											.clone()
-											.map(|refund| refund.channel_metadata),
-									))
+									Ok((refund_addr, refund_params.refund_ccm_metadata.clone()))
 								} else {
 									Err(DepositFailedReason::DepositWitnessRejected(
 										"Invalid Refund address".into(),
@@ -2567,13 +2557,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								amount: deposit_amount,
 								asset,
 								deposit_details: deposit_details.clone(),
-								refund_ccm_metadata: refund_ccm_metadata.map(|metadata| {
-									CcmDepositMetadata {
-										channel_metadata: metadata,
-										source_chain: asset.into(),
-										source_address,
-									}
-								}),
+								refund_ccm_metadata,
 							},
 						);
 
@@ -2822,9 +2806,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ChannelAction::Refund {
 						reason: reason.clone(),
 						refund_address,
-						refund_ccm_metadata: checked_refund_params
-							.refund_ccm_metadata
-							.map(|refund| refund.channel_metadata),
+						refund_ccm_metadata: checked_refund_params.refund_ccm_metadata.map(
+							|mut refund_ccm_metadata| {
+								// TODO: Check: is this intentional? setting the source_address to
+								// None is what implicitly happened in the refund flow until now
+								refund_ccm_metadata.source_address = None;
+								refund_ccm_metadata
+							},
+						),
 					},
 					None,
 				),
