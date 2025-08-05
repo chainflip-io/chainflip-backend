@@ -1849,7 +1849,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn build_delegation_snapshot(
-		maybe_qualified_bidder: Vec<T::AccountId>,
+		qualified_bidder: Vec<T::AccountId>,
 	) -> BTreeMap<T::AccountId, DelegationSnapshot<T>> {
 		let mut snapshot: BTreeMap<T::AccountId, DelegationSnapshot<T>> = BTreeMap::new();
 
@@ -1857,14 +1857,11 @@ impl<T: Config> Pallet<T> {
 			let delegators =
 				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Delegator);
 
-			let validators = if let Some(ref qualified) = maybe_qualified_bidder {
+			let validators: BTreeMap<T::AccountId, T::Amount> =
 				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator)
 					.into_iter()
-					.filter(|(account_id, _)| qualified.contains(account_id))
-					.collect()
-			} else {
-				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator)
-			};
+					.filter(|(account_id, _)| qualified_bidder.contains(account_id))
+					.collect();
 
 			let total_delegator_balance = delegators
 				.clone()
