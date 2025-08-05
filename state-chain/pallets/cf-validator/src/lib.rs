@@ -1558,9 +1558,9 @@ impl<T: Config> Pallet<T> {
 
 		let qualified_bidders = Self::get_qualified_bidders::<T::KeygenQualification>();
 
-		let delegation_snapshot = Self::build_delegation_snapshot(Some(
+		let delegation_snapshot = Self::build_delegation_snapshot(
 			qualified_bidders.clone().into_iter().map(|bid| bid.bidder_id.into()).collect(),
-		));
+		);
 
 		let get_avg_bid_for_validator_if_managed =
 			|validator_id: T::AccountId| -> Option<T::Amount> {
@@ -1849,7 +1849,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn build_delegation_snapshot(
-		maybe_qualified_bidder: Option<Vec<T::AccountId>>,
+		maybe_qualified_bidder: Vec<T::AccountId>,
 	) -> BTreeMap<T::AccountId, DelegationSnapshot<T>> {
 		let mut snapshot: BTreeMap<T::AccountId, DelegationSnapshot<T>> = BTreeMap::new();
 
