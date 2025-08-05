@@ -942,23 +942,16 @@ pub mod pallet {
 		fn on_finalize(current_block: BlockNumberFor<T>) {
 			// Take all swaps that are scheduled to be executed at this block.
 			let swaps_to_execute = ScheduledSwaps::<T>::mutate(|swaps| {
-				let swap_ids_to_execute: BTreeSet<_> = swaps
-					.iter()
-					.filter_map(|(swap_id, swap)| {
-						if swap.execute_at <= current_block {
-							Some(*swap_id)
-						} else {
-							None
-						}
-					})
-					.collect();
-				swap_ids_to_execute
-					.iter()
-					.map(|swap_id| {
-						swaps.remove(swap_id).expect("Must be in map due to collect above")
-					})
-					.collect::<Vec<Swap<T>>>()
+				let (swaps_to_execute, remaining_swap_ids) =
+					core::mem::take(swaps).into_iter().partition::<BTreeMap<_, _>, _>(
+						|(_, swap)| swap.execute_at <= current_block,
+					);
+
+				*swaps = remaining_swap_ids;
+
+				swaps_to_execute.into_values().collect::<Vec<_>>()
 			});
+
 			let retry_delay = max(SwapRetryDelay::<T>::get(), 1u32.into());
 
 			if !T::SafeMode::get().swaps_enabled {
@@ -2182,11 +2175,10 @@ pub mod pallet {
 									// All other scheduled swaps for this request need to also be
 									// rescheduled.
 									if let Some(s) = swaps.get_mut(&swap_id) {
-										let execute_at = s.execute_at.saturating_add(retry_delay);
-										s.execute_at = execute_at;
+										s.execute_at.saturating_accrue(retry_delay);
 										Self::deposit_event(Event::<T>::SwapRescheduled {
 											swap_id,
-											execute_at,
+											execute_at: s.execute_at,
 										});
 									} else {
 										log_or_panic!(
