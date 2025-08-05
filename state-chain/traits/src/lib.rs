@@ -1291,3 +1291,8 @@ pub trait SpawnAccount {
 		index: Self::Index,
 	) -> Result<Self::AccountId, DispatchError>;
 }
+// NOTE: this is just a placeholder and is likely to change
+pub trait OraclePriceApi {
+	// Price of `asset` in USDC
+	fn get_price(asset: Asset) -> Price;
+}

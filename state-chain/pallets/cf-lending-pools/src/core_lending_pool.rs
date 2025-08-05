@@ -278,7 +278,7 @@ where
 
 		self.pending_loans
 			.try_insert(loan_id, PendingLoan { shares, usage })
-			.map_err(|_| "Pending boost id already exists")?;
+			.map_err(|_| "Pending loan id already exists")?;
 
 		Ok(loan_id)
 	}
