@@ -160,7 +160,7 @@ pub struct OperatorInfo<Amount> {
 	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Vec::is_empty"))]
 	pub blocked: Vec<AccountId32>,
 	pub delegators: BTreeMap<AccountId32, Amount>,
-	pub account_balance: Amount,
+	pub flip_balance: Amount,
 }
 
 impl<A> OperatorInfo<A> {
@@ -178,7 +178,7 @@ impl<A> OperatorInfo<A> {
 			allowed: self.allowed,
 			blocked: self.blocked,
 			delegators: self.delegators.into_iter().map(|(k, v)| (k, f(v))).collect(),
-			account_balance: f(self.account_balance),
+			flip_balance: f(self.flip_balance),
 		}
 	}
 }
