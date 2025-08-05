@@ -519,8 +519,6 @@ pub mod pallet {
 		/// Delegator already submitted to undelegate. The delegator has to wait until this process
 		/// has been finalized.
 		UnDelegationAlreadyInitiated,
-		/// Max bid is higher then the account balance.
-		MaxBidIsTooHigh,
 	}
 
 	/// Pallet implements [`Hooks`] trait
