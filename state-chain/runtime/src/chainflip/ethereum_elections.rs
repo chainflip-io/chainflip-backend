@@ -402,6 +402,7 @@ type ElectionPropertiesKeyManager = <Ethereum as Chain>::ChainAccount;
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
+#[allow(clippy::large_enum_variant)]
 pub enum KeyManagerEvent {
 	AggKeySetByGovKey {
 		new_public_key: AggKeyFor<Runtime, EthereumInstance>,
@@ -792,7 +793,7 @@ pub struct EthereumGovernanceElectionHook;
 impl pallet_cf_elections::GovernanceElectionHook for EthereumGovernanceElectionHook {
 	type Properties = ();
 
-	fn start(properties: Self::Properties) {
+	fn start(_properties: Self::Properties) {
 		todo!()
 	}
 }
