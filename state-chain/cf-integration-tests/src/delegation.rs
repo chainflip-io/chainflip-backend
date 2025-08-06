@@ -14,10 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use sp_std::collections::btree_set::BTreeSet;
 
 use crate::{
-	network::{self, new_account},
+	network::{self, new_account, Network},
 	AccountId, AuthorityCount, RuntimeOrigin,
 };
 
@@ -25,7 +25,7 @@ use cf_primitives::{AccountRole, FLIPPERINOS_PER_FLIP};
 use cf_traits::AccountInfo;
 use frame_support::{assert_ok, traits::OnNewAccount};
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
-use sp_runtime::{traits::Zero, Permill};
+use sp_runtime::{traits::Zero, PerThing, Permill, Rounding};
 use state_chain_runtime::{
 	AccountRoles, Balance, Flip, Funding, LiquidityProvider, Runtime, Validator,
 };
@@ -46,10 +46,11 @@ impl Delegator {
 }
 
 fn setup_delegation(
+	testnet: &mut Network,
 	validator: AccountId,
 	operator: AccountId,
 	operator_cut: u32,
-	delegators: BTreeMap<AccountId, Balance>,
+	delegators: BTreeSet<(AccountId, Balance)>,
 ) -> Vec<Delegator> {
 	new_account(&operator, AccountRole::Operator);
 
@@ -75,7 +76,7 @@ fn setup_delegation(
 	);
 	assert!(pallet_cf_validator::OperatorSettingsLookup::<Runtime>::get(operator.clone()).is_some());
 
-	delegators
+	let delegators = delegators
 		.into_iter()
 		.map(|(d, stake)| {
 			assert_ok!(Funding::funded(
@@ -90,12 +91,22 @@ fn setup_delegation(
 			crate::network::register_refund_addresses(&d);
 
 			assert_ok!(Validator::delegate(RuntimeOrigin::signed(d.clone()), operator.clone()));
+			(d, stake * FLIPPERINOS_PER_FLIP)
+		})
+		.collect();
 
-			Delegator {
-				account: d.clone(),
-				pre_balance: Flip::balance(&d),
-				post_balance: Default::default(),
-			}
+	// Move to the next for delegation to take affect
+	testnet.move_to_the_next_epoch();
+
+	let actual_delegator_set = Validator::get_bonded_delegators(&operator);
+	assert_eq!(actual_delegator_set, delegators);
+
+	delegators
+		.into_iter()
+		.map(|(d, _amount)| Delegator {
+			account: d.clone(),
+			pre_balance: Flip::balance(&d),
+			post_balance: Default::default(),
 		})
 		.collect()
 }
@@ -120,10 +131,11 @@ fn block_author_rewards_are_distributed_among_delegators() {
 
 			// Setup 3 delegator, operator and association with validator.
 			let mut delegators = setup_delegation(
+				&mut testnet,
 				auth.clone(),
 				AccountId::from([0xe1; 32]),
 				5_000, // 50%
-				BTreeMap::from_iter([
+				BTreeSet::from_iter([
 					(AccountId::from([0xA0; 32]), 100_000_000u128), // 5% of cut
 					(AccountId::from([0xA1; 32]), 400_000_000u128), // 20% of cut
 					(AccountId::from([0xA2; 32]), 500_000_000u128), // 25% of cut
@@ -146,10 +158,42 @@ fn block_author_rewards_are_distributed_among_delegators() {
 			assert!(total_auth_reward > 0u128);
 
 			// Verify that rewards are distributed accordingly.
-			assert_eq!(Permill::from_percent(50) * total_auth_reward, auth_cut);
-			assert_eq!(Permill::from_percent(5) * total_auth_reward, delegators[0].diff());
-			assert_eq!(Permill::from_percent(20) * total_auth_reward, delegators[1].diff());
-			assert_eq!(Permill::from_percent(25) * total_auth_reward, delegators[2].diff(),);
+			assert_eq!(
+				Permill::from_rational_with_rounding(
+					auth_cut,
+					total_auth_reward,
+					Rounding::NearestPrefUp
+				)
+				.unwrap(),
+				Permill::from_percent(50)
+			);
+			assert_eq!(
+				Permill::from_rational_with_rounding(
+					delegators[0].diff(),
+					total_auth_reward,
+					Rounding::NearestPrefUp
+				)
+				.unwrap(),
+				Permill::from_percent(5)
+			);
+			assert_eq!(
+				Permill::from_rational_with_rounding(
+					delegators[1].diff(),
+					total_auth_reward,
+					Rounding::NearestPrefUp
+				)
+				.unwrap(),
+				Permill::from_percent(20)
+			);
+			assert_eq!(
+				Permill::from_rational_with_rounding(
+					delegators[2].diff(),
+					total_auth_reward,
+					Rounding::NearestPrefUp
+				)
+				.unwrap(),
+				Permill::from_percent(25)
+			);
 		});
 }
 
@@ -171,6 +215,19 @@ fn slashings_are_distributed_among_delegators() {
 				.next()
 				.unwrap();
 
+			// Setup 3 delegator, operator and association with validator.
+			let mut delegators = setup_delegation(
+				&mut testnet,
+				auth.clone(),
+				AccountId::from([0xe1; 32]),
+				5_000, // 50%
+				BTreeSet::from_iter([
+					(AccountId::from([0xA0; 32]), 100_000_000u128), // 5% of cut
+					(AccountId::from([0xA1; 32]), 400_000_000u128), // 20% of cut
+					(AccountId::from([0xA2; 32]), 500_000_000u128), // 25% of cut
+				]),
+			);
+
 			// Set Validator as "offline" and reduce reputation
 			pallet_cf_reputation::Reputations::<Runtime>::mutate(&auth, |rep| {
 				rep.online_blocks = Zero::zero();
@@ -182,19 +239,9 @@ fn slashings_are_distributed_among_delegators() {
 			// Move to the block before backup rewards are distributed
 			testnet.move_to_next_heartbeat_block(Some(-1));
 
-			// Setup 3 delegator, operator and association with validator.
-			let mut delegators = setup_delegation(
-				auth.clone(),
-				AccountId::from([0xe1; 32]),
-				5_000, // 50%
-				BTreeMap::from_iter([
-					(AccountId::from([0xA0; 32]), 100_000_000u128), // 5% of cut
-					(AccountId::from([0xA1; 32]), 400_000_000u128), // 20% of cut
-					(AccountId::from([0xA2; 32]), 500_000_000u128), // 25% of cut
-				]),
-			);
-
+			// Update pre-balance
 			let auth_pre_balance = Flip::balance(&auth);
+			delegators.iter_mut().for_each(|d| d.pre_balance = Flip::balance(&d.account));
 
 			// Move forward 1 block so that the inactive validator is slashed
 			testnet.move_forward_blocks(1);
@@ -209,10 +256,22 @@ fn slashings_are_distributed_among_delegators() {
 
 			assert!(auth_slashed > 0u128);
 
-			// Verify that rewards are distributed accordingly
-			assert_eq!(Permill::from_percent(50) * total_slashing, auth_slashed);
-			assert_eq!(Permill::from_percent(5) * total_slashing, delegators[0].diff());
-			assert_eq!(Permill::from_percent(20) * total_slashing, delegators[1].diff());
-			assert_eq!(Permill::from_percent(25) * total_slashing, delegators[2].diff(),);
+			// Verify that slashings are distributed accordingly
+			assert_eq!(
+				Permill::from_rational(auth_slashed, total_slashing),
+				Permill::from_percent(50)
+			);
+			assert_eq!(
+				Permill::from_rational(delegators[0].diff(), total_slashing),
+				Permill::from_percent(5)
+			);
+			assert_eq!(
+				Permill::from_rational(delegators[1].diff(), total_slashing),
+				Permill::from_percent(20)
+			);
+			assert_eq!(
+				Permill::from_rational(delegators[2].diff(), total_slashing),
+				Permill::from_percent(25)
+			);
 		});
 }

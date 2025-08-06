@@ -8,7 +8,7 @@ use pallet_cf_flip::FlipSlasher;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{traits::AtLeast32BitUnsigned, DispatchError, Perbill};
-use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
+use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData};
 
 /// The minimum delegation fee that can be charged, in basis points.
 pub const MIN_OPERATOR_FEE: u32 = 200;
@@ -114,10 +114,7 @@ pub fn distribute_among_delegators<T: Config + pallet_cf_flip::Config>(
 			crate::OperatorSettingsLookup::<T>::get(&operator).map(|settings| (operator, settings))
 		})
 		.and_then(|(operator, setting)| {
-			let delegators = Pallet::<T>::get_all_associations_by_operator(
-				&operator,
-				AssociationToOperator::Delegator,
-			);
+			let delegators = Pallet::<T>::get_bonded_delegators(&operator);
 			split_amount(total, delegators, setting.fee_bps).ok()
 		}) {
 		settle(validator, operator_fee);
@@ -138,9 +135,9 @@ pub fn split_amount<
 	Balance: Default + Copy + Clone + AtLeast32BitUnsigned,
 >(
 	total: Balance,
-	delegator_bids: BTreeMap<AccountId, Balance>,
+	delegator_bids: BTreeSet<(AccountId, Balance)>,
 	fee_bps: u32,
-) -> Result<(Balance, BTreeMap<AccountId, Balance>), DispatchError> {
+) -> Result<(Balance, BTreeSet<(AccountId, Balance)>), DispatchError> {
 	if delegator_bids.is_empty() {
 		return Err("Empty delegator set".into())
 	}
@@ -157,7 +154,7 @@ pub fn split_amount<
 		.map(|(delegator, staked)| {
 			(delegator.clone(), Perbill::from_rational(*staked, total_staked) * remaining)
 		})
-		.collect::<BTreeMap<AccountId, _>>();
+		.collect::<BTreeSet<_>>();
 
 	Ok((delegation_fee, delegator_cut))
 }
