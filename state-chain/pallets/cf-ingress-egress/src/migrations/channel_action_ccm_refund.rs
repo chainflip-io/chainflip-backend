@@ -95,19 +95,26 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ChannelActionCcmRef
 		crate::DepositChannelLookup::<T, I>::translate_values::<old::DepositChannelDetails<T, I>, _>(
 			|old| {
 				match old.action.clone() {
-					old::ChannelAction::Swap { refund_params, .. } =>
+					old::ChannelAction::Swap { refund_params, channel_metadata, .. } =>
 					// Convert Refund param into Checked version.
-						Some(ChannelRefundParametersCheckedInternal {
-							retry_duration: refund_params.retry_duration,
-							refund_address: AccountOrAddress::ExternalAddress(
-								refund_params.refund_address,
-							),
-							min_price: refund_params.min_price,
-							refund_ccm_metadata: None,
-						}),
+						Some((
+							ChannelRefundParametersCheckedInternal {
+								retry_duration: refund_params.retry_duration,
+								refund_address: AccountOrAddress::ExternalAddress(
+									refund_params.refund_address,
+								),
+								min_price: refund_params.min_price,
+								refund_ccm_metadata: None,
+							},
+							channel_metadata.clone().map(|metadata| CcmDepositMetadataChecked {
+								channel_metadata: metadata,
+								source_chain: old.deposit_channel.asset.into(),
+								source_address: None,
+							}),
+						)),
 					_ => None,
 				}
-				.map(|checked_refund_params| DepositChannelDetails {
+				.map(|(checked_refund_params, egress_metadata)| DepositChannelDetails {
 					owner: old.owner,
 					deposit_channel: old.deposit_channel,
 					opened_at: old.opened_at,
@@ -117,14 +124,14 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ChannelActionCcmRef
 							destination_asset,
 							destination_address,
 							broker_fees,
-							channel_metadata,
+							channel_metadata: _,
 							refund_params: _,
 							dca_params,
 						} => ChannelAction::Swap {
 							destination_asset,
 							destination_address: destination_address.clone(),
 							broker_fees,
-							channel_metadata,
+							egress_metadata,
 							refund_params: checked_refund_params,
 							dca_params,
 						},

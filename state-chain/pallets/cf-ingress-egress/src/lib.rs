@@ -213,7 +213,7 @@ enum FullWitnessDepositOutcome {
 #[derive(RuntimeDebug, Clone)]
 pub struct ValidatedVaultSwapParams<AccountId> {
 	pub broker_fees: BoundedVec<Beneficiary<AccountId>, ConstU32<6>>,
-	pub channel_metadata: Option<CcmChannelMetadataChecked>,
+	pub egress_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
 	pub source_address: Option<ForeignChainAddress>,
 	pub destination_address: ForeignChainAddress,
 }
@@ -551,7 +551,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
-			channel_metadata: Option<CcmChannelMetadataChecked>,
+			egress_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
 			refund_params: ChannelRefundParametersCheckedInternal<AccountId>,
 			dca_params: Option<DcaParameters>,
 		},
@@ -2043,24 +2043,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_asset,
 				destination_address,
 				broker_fees,
-				channel_metadata,
+				egress_metadata,
 				refund_params,
 				dca_params,
 			} => {
-				let deposit_metadata =
-					channel_metadata.clone().map(|metadata| CcmDepositMetadataChecked {
-						channel_metadata: metadata,
-						source_chain: asset.into(),
-						source_address,
-					});
-
 				let swap_request_id = T::SwapRequestHandler::init_swap_request(
 					asset.into(),
 					amount_after_fees.into(),
 					destination_asset,
 					SwapRequestType::Regular {
 						output_action: SwapOutputAction::Egress {
-							ccm_deposit_metadata: deposit_metadata,
+							ccm_deposit_metadata: egress_metadata,
 							output_address: destination_address,
 						},
 					},
@@ -2429,7 +2422,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if let Ok(ValidatedVaultSwapParams {
 			broker_fees,
-			channel_metadata,
+			egress_metadata,
 			source_address,
 			destination_address,
 		}) = Self::try_validate_vault_swap(vault_deposit_witness.clone())
@@ -2440,7 +2433,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broker_fees,
 				refund_params: checked_refund_params,
 				dca_params,
-				channel_metadata,
+				egress_metadata,
 			};
 
 			let boost_status_lookup = BoostStatusLookup::Vault { tx_id: tx_id.clone() };
@@ -2693,6 +2686,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		vault_deposit_witness: VaultDepositWitness<T, I>,
 	) -> Result<ValidatedVaultSwapParams<T::AccountId>, RefundReason> {
 		let VaultDepositWitness {
+			input_asset: source_asset,
 			output_asset: destination_asset,
 			destination_address,
 			deposit_metadata,
@@ -2723,7 +2717,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			};
 
-		let (channel_metadata, source_address) = if let Some(metadata) = deposit_metadata.clone() {
+		let (egress_metadata, source_address) = if let Some(metadata) = deposit_metadata.clone() {
 			let destination_chain: ForeignChain = (destination_asset).into();
 			if !destination_chain.ccm_support() {
 				return Err(RefundReason::CcmUnsupportedForTargetChain);
@@ -2732,7 +2726,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			metadata
 				.to_checked(destination_asset, destination_address_internal.clone())
 				.map_err(|_| RefundReason::CcmInvalidMetadata)
-				.map(|decoded| (Some(decoded.channel_metadata), decoded.source_address))?
+				.map(|decoded| {
+					(
+						Some(CcmDepositMetadataChecked {
+							channel_metadata: decoded.channel_metadata,
+							source_chain: source_asset.into(),
+							source_address: decoded.source_address.clone(),
+						}),
+						decoded.source_address,
+					)
+				})?
 		} else {
 			(None, None)
 		};
@@ -2748,7 +2751,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Ok(ValidatedVaultSwapParams {
 			broker_fees,
-			channel_metadata,
+			egress_metadata,
 			source_address,
 			destination_address: destination_address_internal,
 		})
@@ -2788,7 +2791,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			match Self::try_validate_vault_swap(vault_deposit_witness.clone()) {
 				Ok(ValidatedVaultSwapParams {
 					broker_fees,
-					channel_metadata,
+					egress_metadata,
 					source_address,
 					destination_address,
 				}) => (
@@ -2796,7 +2799,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						destination_asset,
 						destination_address,
 						broker_fees: broker_fees.clone(),
-						channel_metadata: channel_metadata.clone(),
+						egress_metadata: egress_metadata.clone(),
 						refund_params: checked_refund_params,
 						dca_params: dca_params.clone(),
 					},
@@ -2808,8 +2811,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						refund_address,
 						refund_ccm_metadata: checked_refund_params.refund_ccm_metadata.map(
 							|mut refund_ccm_metadata| {
-								// TODO: Check: is this intentional? setting the source_address to
-								// None is what implicitly happened in the refund flow until now
+								// TODO: Check: @Albert is this intentional? setting the
+								// source_address to None is what implicitly happened in the
+								// refund flow until now
 								refund_ccm_metadata.source_address = None;
 								refund_ccm_metadata
 							},
@@ -3328,7 +3332,13 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 				destination_asset,
 				destination_address,
 				broker_fees,
-				channel_metadata,
+				egress_metadata: channel_metadata.clone().map(|metadata| {
+					CcmDepositMetadataChecked {
+						channel_metadata: metadata,
+						source_chain: source_asset.into(),
+						source_address: None,
+					}
+				}),
 				refund_params: refund_params
 					.map_refund_address_to_foreign_chain_address()
 					.into_checked(None, source_asset.into())?
