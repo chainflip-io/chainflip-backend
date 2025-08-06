@@ -560,6 +560,7 @@ pub mod pallet {
 			refund_address: C::ChainAccount,
 			refund_ccm_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
 		},
+		Unrefundable,
 	}
 
 	/// Contains identifying information about the particular actions that have occurred for a
@@ -2073,6 +2074,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				};
 				DepositAction::Refund { egress_id, amount: amount_after_fees, reason }
 			},
+			ChannelAction::Unrefundable => {
+				todo!()
+			},
 		}
 	}
 
@@ -2387,12 +2391,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			channel_id,
 			deposit_amount: amount,
 			deposit_details,
-			output_asset,
 			tx_id,
 			broker_fee,
-			dca_params,
 			boost_fee,
-			refund_params,
 			..
 		} = vault_deposit_witness.clone();
 
@@ -2401,65 +2402,50 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			broker_fee.as_ref().map(|Beneficiary { account, .. }| account.clone()),
 		);
 
-		let checked_refund_params =
-			match refund_params.map_refund_address_to_foreign_chain_address().into_checked(
-				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
-				asset.into(),
-			) {
-				Ok(checked_refund_params) =>
-					checked_refund_params.map_address(AccountOrAddress::ExternalAddress),
-				Err(_) => return,
-			};
-
-		if let Ok(ValidatedVaultSwapParams { broker_fees, egress_metadata, destination_address }) =
-			Self::try_validate_vault_swap(vault_deposit_witness.clone())
+		match Self::derive_channel_action_from_vault_deposit_witness(vault_deposit_witness.clone())
 		{
-			let action = ChannelAction::Swap {
-				destination_asset: output_asset,
-				destination_address,
-				broker_fees,
-				refund_params: checked_refund_params,
-				dca_params,
-				egress_metadata,
-			};
+			action @ ChannelAction::Swap { .. } => {
+				let boost_status_lookup = BoostStatusLookup::Vault { tx_id: tx_id.clone() };
+				let boost_status = boost_status_lookup.resolve();
+				if boost_status == BoostStatus::NotBoosted {
+					let deposit = PendingPrewitnessedDeposit {
+						block_height,
+						amount,
+						asset,
+						deposit_details,
+						deposit_address,
+						action,
+						boost_fee,
+						channel_id,
+						origin,
+					};
 
-			let boost_status_lookup = BoostStatusLookup::Vault { tx_id: tx_id.clone() };
-			let boost_status = boost_status_lookup.resolve();
-			if boost_status == BoostStatus::NotBoosted {
-				let deposit = PendingPrewitnessedDeposit {
-					block_height,
-					amount,
-					asset,
-					deposit_details,
-					deposit_address,
-					action,
-					boost_fee,
-					channel_id,
-					origin,
-				};
+					let delay = BoostDelayBlocks::<T, I>::get();
 
-				let delay = BoostDelayBlocks::<T, I>::get();
+					let new_boost_status = if delay > 0u32.into() {
+						let process_at_block = frame_system::Pallet::<T>::block_number() + delay;
 
-				let new_boost_status = if delay > 0u32.into() {
-					let process_at_block = frame_system::Pallet::<T>::block_number() + delay;
+						PendingPrewitnessedDeposits::<T, I>::append(
+							process_at_block,
+							PendingPrewitnessedDepositEntry {
+								boost_status_lookup: boost_status_lookup.clone(),
+								deposit,
+							},
+						);
+						BoostStatus::BoostPending { amount, process_at_block }
+					} else {
+						// Process immediately
+						Self::process_prewitness_deposit_inner(deposit)
+					};
 
-					PendingPrewitnessedDeposits::<T, I>::append(
-						process_at_block,
-						PendingPrewitnessedDepositEntry {
-							boost_status_lookup: boost_status_lookup.clone(),
-							deposit,
-						},
-					);
-					BoostStatus::BoostPending { amount, process_at_block }
-				} else {
-					// Process immediately
-					Self::process_prewitness_deposit_inner(deposit)
-				};
-
-				if boost_status != new_boost_status {
-					boost_status_lookup.set(new_boost_status);
+					if boost_status != new_boost_status {
+						boost_status_lookup.set(new_boost_status);
+					}
 				}
-			}
+			},
+			_ => {
+				// we don't process refunds on prewitness
+			},
 		}
 	}
 
@@ -2526,6 +2512,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								refund_address.clone().into_foreign_chain_address(),
 								refund_ccm_metadata.clone(),
 							),
+							ChannelAction::Unrefundable => {
+								// TODO: choose error to return in this case.
+								todo!()
+							},
 						};
 
 						ScheduledTransactionsForRejection::<T, I>::append(
@@ -2666,11 +2656,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn try_validate_vault_swap(
+	fn derive_channel_action_from_vault_deposit_witness(
 		vault_deposit_witness: VaultDepositWitness<T, I>,
-	) -> Result<ValidatedVaultSwapParams<T::AccountId>, RefundReason> {
+	) -> ChannelAction<T::AccountId, T::TargetChain> {
 		let VaultDepositWitness {
 			input_asset: source_asset,
+			deposit_address,
 			output_asset: destination_asset,
 			destination_address,
 			deposit_metadata,
@@ -2681,15 +2672,44 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			..
 		} = vault_deposit_witness.clone();
 
+		// ------ refund parameters -----
+
+		let refund_address = refund_params.refund_address.clone();
+		let checked_refund_params =
+			match refund_params.map_refund_address_to_foreign_chain_address().into_checked(
+				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
+				source_asset.into(),
+			) {
+				Ok(checked_refund_params) =>
+					checked_refund_params.map_address(AccountOrAddress::ExternalAddress),
+				Err(_) => return ChannelAction::Unrefundable,
+			};
+
+		let refund_action = |reason| ChannelAction::Refund {
+			reason,
+			refund_address,
+			refund_ccm_metadata: checked_refund_params.refund_ccm_metadata.clone().map(
+				|mut refund_ccm_metadata| {
+					// TODO: Check: @Albert is this intentional? setting the
+					// source_address to None is what implicitly happened in the
+					// refund flow until now
+					refund_ccm_metadata.source_address = None;
+					refund_ccm_metadata
+				},
+			),
+		};
+
+		// ------ fees -----
 		let Some(broker_fees) = Self::assemble_broker_fees(broker_fee, affiliate_fees.clone())
 		else {
-			return Err(RefundReason::InvalidBrokerFees);
+			return refund_action(RefundReason::InvalidBrokerFees);
 		};
 
 		if T::SwapParameterValidation::validate_broker_fees(&broker_fees).is_err() {
-			return Err(RefundReason::InvalidBrokerFees);
+			return refund_action(RefundReason::InvalidBrokerFees);
 		}
 
+		// ------ egress ccm metadata -----
 		let destination_address_internal =
 			match T::AddressConverter::decode_and_validate_address_for_asset(
 				destination_address.clone(),
@@ -2697,44 +2717,48 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			) {
 				Ok(address) => address,
 				Err(_) => {
-					return Err(RefundReason::InvalidDestinationAddress);
+					return refund_action(RefundReason::InvalidDestinationAddress);
 				},
 			};
 
 		let egress_metadata = if let Some(metadata) = deposit_metadata.clone() {
 			let destination_chain: ForeignChain = (destination_asset).into();
 			if !destination_chain.ccm_support() {
-				return Err(RefundReason::CcmUnsupportedForTargetChain);
+				return refund_action(RefundReason::CcmUnsupportedForTargetChain);
 			}
 
-			metadata
-				.to_checked(destination_asset, destination_address_internal.clone())
-				.map_err(|_| RefundReason::CcmInvalidMetadata)
-				.map(|decoded| {
-					Some(CcmDepositMetadataChecked {
-						channel_metadata: decoded.channel_metadata,
-						source_chain: source_asset.into(),
-						source_address: decoded.source_address.clone(),
-					})
-				})?
+			match metadata.to_checked(destination_asset, destination_address_internal.clone()) {
+				Ok(decoded) => Some(CcmDepositMetadataChecked {
+					channel_metadata: decoded.channel_metadata,
+					source_chain: source_asset.into(),
+					source_address: decoded.source_address.clone(),
+				}),
+				Err(_) => return refund_action(RefundReason::CcmInvalidMetadata),
+			}
 		} else {
 			None
 		};
 
-		T::SwapParameterValidation::validate_refund_params(refund_params.retry_duration)
-			.map_err(|_| RefundReason::InvalidRefundParameters)?;
+		if T::SwapParameterValidation::validate_refund_params(checked_refund_params.retry_duration)
+			.is_err()
+		{
+			return refund_action(RefundReason::InvalidRefundParameters)
+		}
 
 		if let Some(params) = &dca_params {
 			if T::SwapParameterValidation::validate_dca_params(params).is_err() {
-				return Err(RefundReason::InvalidDcaParameters);
+				return refund_action(RefundReason::InvalidDcaParameters);
 			}
 		}
 
-		Ok(ValidatedVaultSwapParams {
+		ChannelAction::Swap {
+			destination_asset,
+			destination_address: destination_address_internal,
 			broker_fees,
 			egress_metadata,
-			destination_address: destination_address_internal,
-		})
+			refund_params: checked_refund_params,
+			dca_params,
+		}
 	}
 
 	pub fn process_vault_swap_request_full_witness(
@@ -2747,50 +2771,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			channel_id,
 			deposit_amount,
 			deposit_details,
-			output_asset: destination_asset,
 			tx_id,
 			broker_fee,
-			refund_params,
-			dca_params,
 			boost_fee,
 			..
 		} = vault_deposit_witness.clone();
 
-		let refund_address = refund_params.refund_address.clone();
-		let checked_refund_params =
-			match refund_params.map_refund_address_to_foreign_chain_address().into_checked(
-				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
-				source_asset.into(),
-			) {
-				Ok(checked_refund_params) =>
-					checked_refund_params.map_address(AccountOrAddress::ExternalAddress),
-				Err(_) => return,
-			};
-
-		let action = match Self::try_validate_vault_swap(vault_deposit_witness.clone()) {
-			Ok(ValidatedVaultSwapParams { broker_fees, egress_metadata, destination_address }) =>
-				ChannelAction::Swap {
-					destination_asset,
-					destination_address,
-					broker_fees: broker_fees.clone(),
-					egress_metadata: egress_metadata.clone(),
-					refund_params: checked_refund_params,
-					dca_params: dca_params.clone(),
-				},
-			Err(reason) => ChannelAction::Refund {
-				reason: reason.clone(),
-				refund_address,
-				refund_ccm_metadata: checked_refund_params.refund_ccm_metadata.map(
-					|mut refund_ccm_metadata| {
-						// TODO: Check: @Albert is this intentional? setting the
-						// source_address to None is what implicitly happened in the
-						// refund flow until now
-						refund_ccm_metadata.source_address = None;
-						refund_ccm_metadata
-					},
-				),
-			},
-		};
+		let action =
+			Self::derive_channel_action_from_vault_deposit_witness(vault_deposit_witness.clone());
 
 		match Self::process_full_witness_deposit_inner(
 			deposit_address.clone(),
