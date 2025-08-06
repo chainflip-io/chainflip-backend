@@ -427,6 +427,7 @@ pub enum ChannelActionType {
 	Swap,
 	LiquidityProvision,
 	Refund,
+	Unrefundable,
 }
 
 impl<AccountId, C: Chain> From<ChannelAction<AccountId, C>> for ChannelActionType {
@@ -435,6 +436,7 @@ impl<AccountId, C: Chain> From<ChannelAction<AccountId, C>> for ChannelActionTyp
 			ChannelAction::Swap { .. } => ChannelActionType::Swap,
 			ChannelAction::LiquidityProvision { .. } => ChannelActionType::LiquidityProvision,
 			ChannelAction::Refund { .. } => ChannelActionType::Refund,
+			ChannelAction::Unrefundable => ChannelActionType::Unrefundable,
 		}
 	}
 }
