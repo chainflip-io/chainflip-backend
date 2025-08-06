@@ -516,9 +516,6 @@ pub mod pallet {
 		DelegatorBlocked,
 		/// The provided Operator fee is too low.
 		OperatorFeeTooLow,
-		/// Delegator already submitted to undelegate. The delegator has to wait until this process
-		/// has been finalized.
-		UnDelegationAlreadyInitiated,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -1143,11 +1140,6 @@ pub mod pallet {
 			let delegator = ensure_signed(origin)?;
 
 			ensure!(
-				OutgoingDelegators::<T>::get(&delegator) != DelegationStatus::UnDelegating,
-				Error::<T>::UnDelegationAlreadyInitiated
-			);
-
-			ensure!(
 				!T::AccountRoleRegistry::has_account_role(&delegator, AccountRole::Validator),
 				Error::<T>::DelegationNotAllowed
 			);
@@ -1184,6 +1176,8 @@ pub mod pallet {
 					});
 				}
 			});
+
+			OutgoingDelegators::<T>::take(&delegator);
 
 			Self::deposit_event(Event::Delegated { delegator, operator });
 

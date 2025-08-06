@@ -2069,25 +2069,6 @@ mod delegation {
 	}
 
 	#[test]
-	fn can_not_re_delegate_once_undelegation_has_started() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(ValidatorPallet::register_as_operator(
-				OriginTrait::signed(ALICE),
-				OperatorSettings {
-					fee_bps: MIN_OPERATOR_FEE,
-					delegation_acceptance: DelegationAcceptance::Allow
-				},
-			));
-			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
-			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(BOB)));
-			assert_noop!(
-				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
-				Error::<Test>::UnDelegationAlreadyInitiated
-			);
-		});
-	}
-
-	#[test]
 	fn can_update_max_bid() {
 		new_test_ext().execute_with(|| {
 			MockFlip::credit_funds(&BOB, 200);
