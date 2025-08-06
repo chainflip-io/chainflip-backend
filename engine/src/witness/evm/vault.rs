@@ -330,6 +330,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();
 			let supported_assets = supported_assets.clone();
+			let mut process_calls = vec![];
 			async move {
 				for event in events_at_block::<Inner::Chain, VaultEvents, _>(
 					header,
@@ -347,13 +348,14 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					) {
 						Ok(option_call) =>
 							if let Some(call) = option_call {
-								process_call(call, epoch.index).await;
+								process_calls.push(process_call(call, epoch.index));
 							},
 						Err(message) => {
 							tracing::warn!("Ignoring vault contract event: {message}");
 						},
 					}
 				}
+				futures::future::join_all(process_calls).await;
 
 				Result::Ok(header.data)
 			}
