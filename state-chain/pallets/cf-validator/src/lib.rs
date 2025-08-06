@@ -1404,11 +1404,16 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
-		for delegator in DelegationsPerEpoch::<T>::take(old_epoch) {
-			if OutgoingDelegators::<T>::take(&delegator) == DelegationStatus::UnDelegating {
-				T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
-				Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch: old_epoch });
-			}
+		for (_epoch, _operator, delegators) in DelegationsPerEpoch::<T>::drain() {
+			delegators.into_iter().for_each(|(delegator, _stake)| {
+				if OutgoingDelegators::<T>::take(&delegator) == DelegationStatus::UnDelegating {
+					T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
+					Self::deposit_event(Event::UnDelegationFinalized {
+						delegator,
+						epoch: old_epoch,
+					});
+				}
+			})
 		}
 
 		Self::initialise_new_epoch(
@@ -1503,15 +1508,11 @@ impl<T: Config> Pallet<T> {
 			let delegators_with_bond = delegators
 				.into_iter()
 				.map(|delegator| {
-					T::Bonder::update_bond(
-						&delegator.clone().into(),
-						MaxDelegationBid::<T>::get(&delegator)
-							.map(|max_bid| {
-								max_bid.min(T::FundingInfo::total_balance_of(&delegator))
-							})
-							.unwrap_or(T::FundingInfo::total_balance_of(&delegator)),
-					);
-					(delegator.clone(), T::FundingInfo::bond(&delegator))
+					let bond = MaxDelegationBid::<T>::get(&delegator)
+						.map(|max_bid| max_bid.min(T::FundingInfo::total_balance_of(&delegator)))
+						.unwrap_or(T::FundingInfo::total_balance_of(&delegator));
+					T::Bonder::update_bond(&delegator.clone().into(), bond);
+					(delegator.clone(), bond)
 				})
 				.collect::<BTreeSet<_>>();
 			DelegationsPerEpoch::<T>::insert(new_epoch, operator, delegators_with_bond);

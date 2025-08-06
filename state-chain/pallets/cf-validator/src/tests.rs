@@ -1913,7 +1913,19 @@ mod delegation {
 		const MAX_BID_OF_DELEGATOR: u128 = 10;
 		const DELEGATORS: [u64; 4] = [21, 22, 23, 24];
 		fn delegation() -> BTreeSet<(ValidatorId, Amount)> {
-			DELEGATORS.into_iter().map(|d| (d, AVAILABLE_BALANCE_OF_DELEGATOR)).collect()
+			DELEGATORS
+				.into_iter()
+				.map(|d| {
+					(
+						d,
+						if d % 2 == 0 {
+							MAX_BID_OF_DELEGATOR
+						} else {
+							AVAILABLE_BALANCE_OF_DELEGATOR
+						},
+					)
+				})
+				.collect()
 		}
 
 		new_test_ext()
@@ -1976,20 +1988,10 @@ mod delegation {
 				assert!(NextDelegators::<Test>::get(OPERATOR).is_empty());
 				assert_rotation_phase_matches!(RotationPhase::Idle);
 				let active_delegators =
-					DelegationsPerEpoch::<Test>::get(CurrentEpoch::<Test>::get());
-				assert_eq!(BTreeSet::from_iter(DELEGATORS), active_delegators);
-				for delegator in active_delegators {
-					if delegator % 2 == 0 {
-						assert_eq!(
-							MockBonderFor::<Test>::get_bond(&delegator),
-							MAX_BID_OF_DELEGATOR
-						);
-					} else {
-						assert_eq!(
-							MockBonderFor::<Test>::get_bond(&delegator),
-							AVAILABLE_BALANCE_OF_DELEGATOR
-						);
-					}
+					DelegationsPerEpoch::<Test>::get(CurrentEpoch::<Test>::get(), OPERATOR);
+				assert_eq!(delegation(), active_delegators);
+				for (delegator, bonded) in active_delegators {
+					assert_eq!(MockBonderFor::<Test>::get_bond(&delegator), bonded);
 				}
 				assert_eq!(
 					Bond::<Test>::get(),

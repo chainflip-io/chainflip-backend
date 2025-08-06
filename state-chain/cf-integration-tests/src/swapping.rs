@@ -21,7 +21,7 @@ use std::{collections::BTreeMap, vec};
 use crate::{
 	genesis,
 	network::{
-		self, fund_authorities_and_join_auction, new_account, register_refund_addresses,
+		fund_authorities_and_join_auction, new_account, register_refund_addresses,
 		setup_account_and_peer_mapping, Cli, Network,
 	},
 	witness_call, BROKER,
@@ -841,8 +841,9 @@ fn can_resign_failed_ccm() {
 				vec![FailedForeignChainCall { broadcast_id: 2, original_epoch: 2 }]
 			);
 
+			// Re-enable broadcast witness so we can move to the next epoch.
+			// But do not re-witness existing broadcasts.
 			testnet.set_auto_witness_broadcasts(true);
-			network::witness_all_outstanding_broadcasts();
 
 			// No storage change within the same epoch
 			testnet.move_to_the_end_of_epoch();
