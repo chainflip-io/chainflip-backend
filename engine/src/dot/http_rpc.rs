@@ -18,22 +18,16 @@ use cf_chains::dot::RuntimeVersion;
 use cf_primitives::PolkadotBlockNumber;
 use futures_core::Future;
 use http::uri::Uri;
-use jsonrpsee::{
-	core::{client::ClientT, traits::ToRpcParams},
-	http_client::{HttpClient, HttpClientBuilder},
-};
-use serde_json::value::RawValue;
 use subxt::{
 	backend::{
 		legacy::{
 			rpc_methods::{BlockDetails, Bytes},
 			LegacyRpcMethods,
 		},
-		rpc::{RawRpcFuture, RawRpcSubscription, RpcClient, RpcClientT},
+		rpc::RpcClient,
 	},
 	error::BlockError,
 	events::{Events, EventsClient},
-	ext::subxt_rpcs,
 	OnlineClient, PolkadotConfig,
 };
 use url::Url;
@@ -41,6 +35,7 @@ use url::Url;
 use anyhow::{anyhow, Result};
 use cf_utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
 use codec::Decode;
+use subxt::ext::subxt_rpcs;
 use tracing::{error, warn};
 
 use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
@@ -48,48 +43,6 @@ use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
 use super::rpc::DotRpcApi;
 
 use crate::dot::PolkadotHash;
-
-pub struct PolkadotHttpClient(HttpClient);
-
-impl PolkadotHttpClient {
-	pub fn new(url: &SecretUrl) -> Result<Self> {
-		Ok(Self(HttpClientBuilder::default().build(url)?))
-	}
-}
-
-struct Params(Option<Box<RawValue>>);
-
-impl ToRpcParams for Params {
-	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
-		Ok(self.0)
-	}
-}
-
-impl RpcClientT for PolkadotHttpClient {
-	fn request_raw<'a>(
-		&'a self,
-		method: &'a str,
-		params: Option<Box<RawValue>>,
-	) -> RawRpcFuture<'a, Box<RawValue>> {
-		Box::pin(async move {
-			let res = self
-				.0
-				.request(method, Params(params))
-				.await
-				.map_err(|e| subxt_rpcs::Error::Client(Box::new(e)))?;
-			Ok(res)
-		})
-	}
-
-	fn subscribe_raw<'a>(
-		&'a self,
-		_sub: &'a str,
-		_params: Option<Box<RawValue>>,
-		_unsub: &'a str,
-	) -> RawRpcFuture<'a, RawRpcSubscription> {
-		unimplemented!("HTTP Client does not support subscription");
-	}
-}
 
 /// Adds a default port to the url based on the scheme (http, https, ws, wss),
 /// if none exists. Otherwise preservers existing port.
@@ -144,9 +97,10 @@ impl DotHttpRpcClient {
 		// adding the default port if none is present.
 		let url = ensure_port(raw_url)?;
 
-		let rpc_client = RpcClient::new(PolkadotHttpClient::new(&url)?);
-
 		Ok(async move {
+			let rpc_client =
+				RpcClient::from_url(url.clone()).await.expect("Failed to create RPC client");
+
 			// We don't want to return an error here. Returning an error means that we'll exit the
 			// CFE. So on client creation we wait until we can be successfully connected to the
 			// Polkadot node. So the other chains are unaffected
@@ -266,7 +220,36 @@ impl DotRpcApi for DotHttpRpcClient {
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
-		Ok(self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await?)
+		let mut tx_progress =
+			self.rpc_methods.author_submit_and_watch_extrinsic(&encoded_bytes).await?;
+
+		while let Some(tx_status) = tx_progress.next().await {
+			let status = tx_status?;
+			match status {
+				subxt_rpcs::methods::legacy::TransactionStatus::Finalized(hash) => {
+					tracing::info!("dot extrinsic was finalized with hash ({hash:?}), for extrinsic {encoded_bytes:?}");
+					return Ok(hash)
+				},
+				// subxt_rpcs::methods::legacy::TransactionStatus::Future |
+				// subxt_rpcs::methods::legacy::TransactionStatus::Ready |
+				// subxt_rpcs::methods::legacy::TransactionStatus::Broadcast(_) => todo!(),
+				// subxt_rpcs::methods::legacy::TransactionStatus::InBlock(hash) => {
+				// 	tracing::info!("submission of dot extrinsic is InBlock {hash:?}, for extrinsic {encoded_bytes:?}")
+				// },
+				subxt_rpcs::methods::legacy::TransactionStatus::Retracted(_) |
+				subxt_rpcs::methods::legacy::TransactionStatus::FinalityTimeout(_) |
+				subxt_rpcs::methods::legacy::TransactionStatus::Usurped(_) |
+				subxt_rpcs::methods::legacy::TransactionStatus::Dropped |
+				subxt_rpcs::methods::legacy::TransactionStatus::Invalid => {
+					tracing::error!("error for dot extrinsic ({status:?}), for extrinsic {encoded_bytes:?}");
+					return Err(anyhow!("error for dot extrinsic ({status:?}), for extrinsic {encoded_bytes:?}"));
+				},
+				state => tracing::info!("submission of dot extrinsic reached state {state:?}, for extrinsic {encoded_bytes:?}")
+
+			}
+		}
+
+		Err(anyhow!("rpc subscription for submission of extrinsic {encoded_bytes:?} terminated unexpectedly!"))
 	}
 }
 
@@ -280,6 +263,14 @@ mod tests {
 	async fn test_http_rpc() {
 		let dot_http_rpc =
 			DotHttpRpcClient::new("http://localhost:9945".into(), None).unwrap().await;
+		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
+		println!("block_hash: {:?}", block_hash);
+	}
+
+	#[ignore = "requires local node"]
+	#[tokio::test]
+	async fn test_ws_rpc() {
+		let dot_http_rpc = DotHttpRpcClient::new("ws://localhost:9945".into(), None).unwrap().await;
 		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
 		println!("block_hash: {:?}", block_hash);
 	}

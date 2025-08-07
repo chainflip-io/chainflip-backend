@@ -66,7 +66,7 @@ impl DotRetryRpcClient {
 	) -> Result<Self> {
 		let f_create_clients = |endpoints: WsHttpEndpoints| {
 			Result::<_, anyhow::Error>::Ok((
-				DotHttpRpcClient::new(endpoints.http_endpoint, expected_genesis_hash)?,
+				DotHttpRpcClient::new(endpoints.ws_endpoint.clone(), expected_genesis_hash)?,
 				DotSubClient::new(endpoints.ws_endpoint, expected_genesis_hash),
 			))
 		};
