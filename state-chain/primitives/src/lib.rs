@@ -463,6 +463,7 @@ pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_BENEFICIAR
 	PartialOrd,
 	Ord,
 )]
+#[n_functor::derive_n_functor]
 pub struct Beneficiary<Id> {
 	pub account: Id,
 	pub bps: BasisPoints,

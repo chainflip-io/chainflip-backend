@@ -38,9 +38,10 @@ use cf_chains::{
 	instances::PalletInstanceAlias,
 	AccountOrAddress, AllBatch, AllBatchError, CcmChannelMetadataChecked, CcmDepositMetadata,
 	CcmDepositMetadataChecked, CcmDepositMetadataUnchecked, CcmMessage, Chain, ChainCrypto,
-	ChannelLifecycleHooks, ChannelRefundParametersCheckedInternal, ChannelRefundParametersForChain,
-	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, DepositOriginType,
-	ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
+	ChannelLifecycleHooks, ChannelRefundParameters, ChannelRefundParametersCheckedInternal,
+	ChannelRefundParametersForChain, ConsolidateCall, DepositChannel,
+	DepositDetailsToTransactionInId, DepositOriginType, ExecutexSwapAndCall,
+	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
 	IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
@@ -142,7 +143,7 @@ struct PendingPrewitnessedDeposit<T: Config<I>, I: 'static> {
 	asset: TargetChainAsset<T, I>,
 	deposit_details: <T::TargetChain as Chain>::DepositDetails,
 	deposit_address: Option<TargetChainAccount<T, I>>,
-	action: ChannelAction<T::AccountId, T::TargetChain>,
+	action: ChannelActionForDeposit<T::AccountId, <T::TargetChain as Chain>::ChainAccount>,
 	boost_fee: u16,
 	channel_id: Option<u64>,
 	origin: DepositOrigin<T, I>,
@@ -190,6 +191,7 @@ pub enum DepositFailedReason {
 	NotEnoughToPayFees,
 	TransactionRejectedByBroker,
 	DepositWitnessRejected(DispatchError),
+	Unrefundable,
 }
 
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
@@ -397,6 +399,7 @@ pub mod pallet {
 	use cf_chains::{address::EncodedAddress, ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
 	use cf_traits::{OnDeposit, SwapParameterValidation};
+	use cf_utilities::bounded_vec::map_bounded_vec;
 	use core::marker::PhantomData;
 	use frame_support::traits::{ConstU128, EnsureOrigin, IsType};
 	use frame_system::WeightInfo as SystemWeightInfo;
@@ -517,7 +520,7 @@ pub mod pallet {
 		pub expires_at: TargetChainBlockNumber<T, I>,
 		/// The action to be taken when the DepositChannel is deposited to.
 		#[skip_name_expansion]
-		pub action: ChannelAction<T::AccountId, T::TargetChain>,
+		pub action: ChannelAction<T::AccountId, <T::TargetChain as Chain>::ChainAccount>,
 		/// The boost fee
 		#[skip_name_expansion]
 		pub boost_fee: BasisPoints,
@@ -540,15 +543,21 @@ pub mod pallet {
 	/// Determines the action to take when a deposit is made to a channel.
 	#[allow(clippy::large_enum_variant)]
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[n_functor::derive_n_functor(CcmMetadata = ccm_metadata)]
 	#[scale_info(skip_type_params(C))]
 	#[allow(clippy::large_enum_variant)]
-	pub enum ChannelAction<AccountId, C: Chain> {
+	pub enum ChannelAction<AccountId, ChainAccount, CcmMetadata = CcmChannelMetadataChecked> {
 		Swap {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
+			#[map_with(|arg, f| map_bounded_vec(arg, |x: Beneficiary<_>| x.map(f)))]
 			broker_fees: Beneficiaries<AccountId>,
-			egress_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
-			refund_params: ChannelRefundParametersCheckedInternal<AccountId>,
+			egress_metadata: Option<CcmMetadata>,
+			#[map_with(|arg: ChannelRefundParameters<_,_>, f0, f1| arg.map(|x: AccountOrAddress<_,_>| x.map(f0, |a| a), |z: Option<_>| z.map(f1)))]
+			refund_params: ChannelRefundParameters<
+				AccountOrAddress<AccountId, ForeignChainAddress>,
+				Option<CcmMetadata>,
+			>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
@@ -557,11 +566,14 @@ pub mod pallet {
 		},
 		Refund {
 			reason: RefundReason,
-			refund_address: C::ChainAccount,
-			refund_ccm_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
+			refund_address: ChainAccount,
+			refund_ccm_metadata: Option<CcmMetadata>,
 		},
 		Unrefundable,
 	}
+
+	pub type ChannelActionForDeposit<AccountId, ChainAccount> =
+		ChannelAction<AccountId, ChainAccount, CcmDepositMetadataChecked<ForeignChainAddress>>;
 
 	/// Contains identifying information about the particular actions that have occurred for a
 	/// particular deposit.
@@ -588,6 +600,7 @@ pub mod pallet {
 			reason: RefundReason,
 			amount: TargetChainAmount<T, I>,
 		},
+		Unrefundable,
 	}
 
 	#[pallet::genesis_config]
@@ -1988,7 +2001,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				asset,
 				deposit_details,
 				deposit_address: Some(deposit_address.clone()),
-				action,
+				action: action.map(
+					|x| x,
+					|y| y,
+					|channel_metadata| CcmDepositMetadataChecked {
+						channel_metadata,
+						source_chain: asset.into(),
+						source_address: None, // TODO: Are we sure this is correct?
+					},
+				),
 				boost_fee,
 				channel_id: Some(deposit_channel.channel_id),
 				origin: DepositOrigin::deposit_channel(
@@ -2024,7 +2045,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn perform_channel_action(
-		action: ChannelAction<T::AccountId, T::TargetChain>,
+		action: ChannelActionForDeposit<T::AccountId, <T::TargetChain as Chain>::ChainAccount>,
 		asset: TargetChainAsset<T, I>,
 		amount_after_fees: TargetChainAmount<T, I>,
 		origin: DepositOrigin<T, I>,
@@ -2074,9 +2095,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				};
 				DepositAction::Refund { egress_id, amount: amount_after_fees, reason }
 			},
-			ChannelAction::Unrefundable => {
-				todo!()
-			},
+			ChannelAction::Unrefundable => DepositAction::Unrefundable,
 		}
 	}
 
@@ -2138,7 +2157,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_channel_details.boost_status,
 			deposit_channel_details.boost_fee,
 			Some(channel_id),
-			deposit_channel_details.action,
+			deposit_channel_details.action.map(
+				|x| x,
+				|y| y,
+				|channel_metadata| CcmDepositMetadataChecked {
+					channel_metadata,
+					source_chain: (*asset).into(),
+					source_address: None, // TODO: Are we sure this is correct?
+				},
+			),
 			block_height,
 			deposit_origin,
 		) {
@@ -2457,7 +2484,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		boost_status: BoostStatus<TargetChainAmount<T, I>, BlockNumberFor<T>>,
 		max_boost_fee_bps: BasisPoints,
 		channel_id: Option<u64>,
-		action: ChannelAction<T::AccountId, T::TargetChain>,
+		action: ChannelActionForDeposit<T::AccountId, <T::TargetChain as Chain>::ChainAccount>,
 		block_height: TargetChainBlockNumber<T, I>,
 		origin: DepositOrigin<T, I>,
 	) -> Result<FullWitnessDepositOutcome, DepositFailedReason> {
@@ -2512,10 +2539,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								refund_address.clone().into_foreign_chain_address(),
 								refund_ccm_metadata.clone(),
 							),
-							ChannelAction::Unrefundable => {
-								// TODO: choose error to return in this case.
-								todo!()
-							},
+							ChannelAction::Unrefundable =>
+								return Err(DepositFailedReason::Unrefundable),
 						};
 
 						ScheduledTransactionsForRejection::<T, I>::append(
@@ -2658,7 +2683,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn derive_channel_action_from_vault_deposit_witness(
 		vault_deposit_witness: VaultDepositWitness<T, I>,
-	) -> ChannelAction<T::AccountId, T::TargetChain> {
+	) -> ChannelActionForDeposit<T::AccountId, <T::TargetChain as Chain>::ChainAccount> {
 		let VaultDepositWitness {
 			input_asset: source_asset,
 			deposit_address,
@@ -2895,7 +2920,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn open_channel(
 		requester: &T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
-		action: ChannelAction<T::AccountId, T::TargetChain>,
+		action: ChannelAction<T::AccountId, <T::TargetChain as Chain>::ChainAccount>,
 		boost_fee: BasisPoints,
 	) -> Result<
 		(DepositChannel<T::TargetChain>, TargetChainBlockNumber<T, I>, T::Amount),
@@ -3288,17 +3313,14 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 				destination_asset,
 				destination_address,
 				broker_fees,
-				egress_metadata: channel_metadata.clone().map(|metadata| {
-					CcmDepositMetadataChecked {
-						channel_metadata: metadata,
-						source_chain: source_asset.into(),
-						source_address: None,
-					}
-				}),
+				egress_metadata: channel_metadata,
 				refund_params: refund_params
 					.map_refund_address_to_foreign_chain_address()
 					.into_checked(None, source_asset.into())?
-					.map_address(AccountOrAddress::ExternalAddress),
+					.map_address(AccountOrAddress::ExternalAddress)
+					// we map the CcmDepositMetadata to a CcmChannelMetadata, forgetting the other
+					// fields:
+					.map(|x| x, |y| y.map(|y| y.channel_metadata)),
 				dca_params,
 			},
 			boost_fee,
