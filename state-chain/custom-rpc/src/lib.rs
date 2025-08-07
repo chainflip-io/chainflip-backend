@@ -237,6 +237,7 @@ pub enum RpcAccountInfo {
 		apy_bp: Option<u32>,
 		restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
 		estimated_redeemable_balance: NumberOrHex,
+		#[serde(skip_serializing_if = "Option::is_none")]
 		operator: Option<AccountId32>,
 	},
 	Operator {
