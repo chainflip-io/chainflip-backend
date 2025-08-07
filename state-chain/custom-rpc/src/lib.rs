@@ -237,6 +237,7 @@ pub enum RpcAccountInfo {
 		apy_bp: Option<u32>,
 		restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
 		estimated_redeemable_balance: NumberOrHex,
+		operator: Option<AccountId32>,
 	},
 	Operator {
 		#[serde(flatten)]
@@ -311,6 +312,7 @@ impl RpcAccountInfo {
 				.map(|(address, balance)| (address, balance.into()))
 				.collect(),
 			estimated_redeemable_balance: info.estimated_redeemable_balance.into(),
+			operator: info.operator,
 		}
 	}
 

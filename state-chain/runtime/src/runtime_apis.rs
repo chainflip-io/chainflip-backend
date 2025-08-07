@@ -148,6 +148,7 @@ pub struct ValidatorInfo {
 	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
 	pub restricted_balances: BTreeMap<EthereumAddress, AssetAmount>,
 	pub estimated_redeemable_balance: AssetAmount,
+	pub operator: Option<AccountId32>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
