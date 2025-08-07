@@ -430,7 +430,7 @@ pub enum ChannelActionType {
 	Unrefundable,
 }
 
-impl<AccountId, C: Chain> From<ChannelAction<AccountId, C>> for ChannelActionType {
+impl<AccountId, C> From<ChannelAction<AccountId, C>> for ChannelActionType {
 	fn from(action: ChannelAction<AccountId, C>) -> Self {
 		match action {
 			ChannelAction::Swap { .. } => ChannelActionType::Swap,
