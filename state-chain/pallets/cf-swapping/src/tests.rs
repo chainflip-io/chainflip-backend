@@ -38,6 +38,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
+	PriceLimits,
 };
 use cf_test_utilities::{assert_event_sequence, assert_has_matching_event};
 use cf_traits::{
@@ -139,6 +140,7 @@ impl TestRefundParams {
 				self.min_output.into(),
 				input_amount.into(),
 			)),
+			max_oracle_price_slippage: None,
 			refund_ccm_metadata: None,
 		}
 	}
@@ -277,6 +279,7 @@ const REFUND_PARAMS: ChannelRefundParametersUncheckedEncoded =
 		retry_duration: 100,
 		refund_address: EncodedAddress::Eth([1; 20]),
 		min_price: U256::zero(),
+		max_oracle_price_slippage: None,
 		refund_ccm_metadata: None,
 	};
 
@@ -1641,7 +1644,7 @@ mod internal_swaps {
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,
 					0,
-					min_price,
+					PriceLimits { min_price, max_oracle_price_slippage: None },
 					None,
 					LP_ACCOUNT,
 				);
@@ -1724,7 +1727,7 @@ mod internal_swaps {
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,
 					0,
-					min_price,
+					PriceLimits { min_price, max_oracle_price_slippage: None },
 					Some(DcaParameters { number_of_chunks: 2, chunk_interval: 2 }),
 					LP_ACCOUNT,
 				);

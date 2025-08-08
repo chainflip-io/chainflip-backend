@@ -75,6 +75,7 @@ impl<T>
 					cf_static_runtime::runtime_types::cf_chains::CcmAdditionalData,
 				>,
 			>,
+			Option<u16>,
 		>,
 	> for cf_chains::ChannelRefundParametersUnchecked<T>
 {
@@ -86,6 +87,7 @@ impl<T>
 					cf_static_runtime::runtime_types::cf_chains::CcmAdditionalData,
 				>,
 			>,
+			Option<u16>
 		>,
 	) -> Self {
 		Self {
@@ -103,6 +105,7 @@ impl<T>
 					.expect("Runtime ccm_additional_data exceeds 3,000 bytes"),
 				}
 			}),
+			max_oracle_price_slippage: value.max_oracle_price_slippage,
 		}
 	}
 }

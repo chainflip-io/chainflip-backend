@@ -39,6 +39,7 @@ export async function newSwap(
     refundAddress: defaultRefundAddress,
     minPriceX128: '0',
     refundCcmMetadata: undefined,
+    maxOraclePriceSlippage: undefined,
   };
 
   // If the dry_run of the extrinsic fails on the broker-api then it won't retry. So we retry here to

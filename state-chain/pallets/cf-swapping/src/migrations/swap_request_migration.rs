@@ -123,6 +123,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 								refund_address: params.refund_destination,
 								min_price: params.min_price,
 								refund_ccm_metadata: None,
+								max_oracle_price_slippage: None,
 							}
 						}),
 						output_action,

@@ -93,6 +93,7 @@ mod helpers {
 				refund_address: ScriptPubkey::Taproot([0x01; 32]),
 				min_price: U256::from(0),
 				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
 			},
 			None,
 		)
@@ -531,6 +532,7 @@ fn gets_rejected_if_vault_transaction_was_aborted_and_rejected() {
 				min_price: U256::from(0),
 				refund_address: ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS),
 				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
 			},
 			dca_params: None,
 			boost_fee: 0,

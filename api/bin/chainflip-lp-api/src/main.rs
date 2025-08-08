@@ -17,7 +17,7 @@
 use anyhow::anyhow;
 use cf_primitives::{
 	chains::{Arbitrum, Solana},
-	ApiWaitForResult, BasisPoints, BlockNumber, DcaParameters, EgressId, Price, WaitFor,
+	ApiWaitForResult, BasisPoints, BlockNumber, DcaParameters, EgressId, PriceLimits, WaitFor,
 };
 use cf_rpc_apis::{lp::LpRpcApiServer, ExtrinsicResponse, RpcApiError, RpcResult};
 use cf_utilities::{
@@ -432,7 +432,7 @@ impl LpRpcApiServer for RpcServerImpl {
 		input_asset: Asset,
 		output_asset: Asset,
 		retry_duration: BlockNumber,
-		min_price: Price,
+		price_limits: PriceLimits,
 		dca_params: Option<DcaParameters>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>> {
@@ -444,7 +444,7 @@ impl LpRpcApiServer for RpcServerImpl {
 				input_asset,
 				output_asset,
 				retry_duration,
-				min_price,
+				price_limits,
 				dca_params,
 				wait_for.unwrap_or_default(),
 			)

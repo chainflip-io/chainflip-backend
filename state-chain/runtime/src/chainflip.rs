@@ -38,7 +38,7 @@ pub mod vault_swaps;
 use crate::{
 	chainflip::{
 		elections::TypesFor,
-		generic_elections::{decode_and_get_latest_oracle_price, Chainlink, OraclePrice},
+		generic_elections::{decode_and_get_latest_oracle_price, Chainlink},
 	},
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
 	ArbitrumIngressEgress, AssethubBroadcaster, AssethubChainTracking, AssethubIngressEgress,
@@ -102,8 +102,8 @@ use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster,
 	DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, Heartbeat,
-	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode,
-	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
+	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, OraclePrice,
+	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
 
 use codec::{Decode, Encode};
@@ -1197,13 +1197,8 @@ impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
 	}
 }
 
-pub trait PriceFeedApi {
-	fn get_price(asset: assets::any::Asset) -> Option<OraclePrice>;
-}
-
-#[allow(dead_code)]
-struct ChainlinkOracle;
-impl PriceFeedApi for ChainlinkOracle {
+pub struct ChainlinkOracle;
+impl cf_traits::PriceFeedApi for ChainlinkOracle {
 	fn get_price(asset: assets::any::Asset) -> Option<OraclePrice> {
 		decode_and_get_latest_oracle_price::<TypesFor<Chainlink>>(asset)
 	}

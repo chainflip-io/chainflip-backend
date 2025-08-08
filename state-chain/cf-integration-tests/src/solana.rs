@@ -95,6 +95,7 @@ const REFUND_PARAMS: ChannelRefundParametersUncheckedEncoded =
 		refund_address: EncodedAddress::Sol(FALLBACK_ADDRESS.0),
 		min_price: sp_core::U256::zero(),
 		refund_ccm_metadata: None,
+		max_oracle_price_slippage: None,
 	};
 
 type SolanaElectionVote = BoundedBTreeMap<
@@ -226,6 +227,7 @@ fn vault_swap_deposit_witness(
 			refund_address: FALLBACK_ADDRESS,
 			min_price: REFUND_PARAMS.min_price,
 			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
 		},
 		dca_params: None,
 		boost_fee: 0,

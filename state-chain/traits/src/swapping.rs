@@ -21,7 +21,7 @@ use cf_chains::{
 	ForeignChainAddress, SwapOrigin,
 };
 use cf_primitives::{
-	Asset, AssetAmount, Beneficiaries, BlockNumber, DcaParameters, Price, SwapRequestId,
+	Asset, AssetAmount, Beneficiaries, BlockNumber, DcaParameters, PriceLimits, SwapRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -129,7 +129,7 @@ pub trait SwapRequestHandler {
 		input_amount: AssetAmount,
 		output_asset: Asset,
 		retry_duration: BlockNumber,
-		min_price: Price,
+		price_limits: PriceLimits,
 		dca_params: Option<DcaParameters>,
 		account_id: Self::AccountId,
 	) -> SwapRequestId {
@@ -144,8 +144,9 @@ pub trait SwapRequestHandler {
 			Some(ChannelRefundParametersCheckedInternal {
 				retry_duration,
 				refund_address: AccountOrAddress::InternalAccount(account_id.clone()),
-				min_price,
+				min_price: price_limits.min_price,
 				refund_ccm_metadata: None,
+				max_oracle_price_slippage: price_limits.max_oracle_price_slippage,
 			}),
 			dca_params,
 			SwapOrigin::OnChainAccount(account_id),

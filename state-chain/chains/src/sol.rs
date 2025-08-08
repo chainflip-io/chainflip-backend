@@ -777,6 +777,7 @@ mod test {
 			refund_address: SolAddress([0xF3; 32]),
 			min_price: 0.into(),
 			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
 		};
 		let dca_parameters = DcaParameters { number_of_chunks: 10u32, chunk_interval: 10u32 };
 		let boost_fee = 10u8;
@@ -845,6 +846,7 @@ mod test {
 			refund_address: SolAddress([0xF3; 32]),
 			min_price: 0.into(),
 			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
 		};
 		let dca_parameters = DcaParameters { number_of_chunks: 10u32, chunk_interval: 10u32 };
 		let boost_fee = 10u8;

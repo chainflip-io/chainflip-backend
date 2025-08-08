@@ -888,6 +888,7 @@ fn vault_swap_input_serialization() {
 		refund_address: "E2aBDC008BaEa1d4Dd2eeE4f0BEa61f6f91897cC".to_string().into(),
 		min_price: 1234.into(),
 		refund_ccm_metadata: Some(ccm_unchecked()),
+		max_oracle_price_slippage: Some(200u16),
 	};
 
 	let affiliate_fees: Affiliates<cf_primitives::AccountId> =
@@ -931,6 +932,7 @@ fn vault_swap_input_serialization() {
 		extra_parameters: VaultSwapExtraParametersRpc::Bitcoin {
 			min_output_amount: NumberOrHex::Number(100_000_000u64),
 			retry_duration: 100u32,
+			max_oracle_price_slippage: Some(200u8),
 		},
 		channel_metadata: Some(ccm_unchecked()),
 		boost_fee: 100u16,
@@ -1083,6 +1085,7 @@ fn swap_deposit_address_serialization() {
 			refund_address: "E2aBDC008BaEa1d4Dd2eeE4f0BEa61f6f91897cC".to_string().into(),
 			min_price: 1234.into(),
 			refund_ccm_metadata: Some(ccm_unchecked()),
+			max_oracle_price_slippage: Some(200u16),
 		},
 	};
 

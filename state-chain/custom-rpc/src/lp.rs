@@ -37,7 +37,7 @@ use cf_node_client::{
 use cf_primitives::{
 	chains::{assets::any::AssetMap, Arbitrum, Bitcoin, Ethereum, Polkadot, Solana},
 	ApiWaitForResult, Asset, BasisPoints, BlockNumber, ChannelId, DcaParameters, EgressId,
-	ForeignChain, Price, WaitFor,
+	ForeignChain, PriceLimits, WaitFor,
 };
 use cf_rpc_apis::{
 	lp::{
@@ -689,7 +689,7 @@ where
 		input_asset: Asset,
 		output_asset: Asset,
 		retry_duration: BlockNumber,
-		min_price: Price,
+		price_limits: PriceLimits,
 		dca_params: Option<DcaParameters>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>> {
@@ -702,7 +702,7 @@ where
 						input_asset,
 						output_asset,
 						retry_duration,
-						min_price,
+						price_limits,
 						dca_params,
 					}),
 					wait_for.unwrap_or_default(),

@@ -68,6 +68,7 @@ export type ChannelRefundParameters = {
         ccm_additional_data: string | undefined;
       }
     | undefined;
+  max_oracle_price_slippage: number | undefined;
 };
 
 export async function executeSolVaultSwap(
@@ -118,6 +119,7 @@ export async function executeSolVaultSwap(
       gas_budget: fillOrKillParams?.refundCcmMetadata.gasBudget,
       ccm_additional_data: fillOrKillParams?.refundCcmMetadata.ccmAdditionalData,
     },
+    max_oracle_price_slippage: fillOrKillParams?.maxOraclePriceSlippage,
   };
   const extraParameters: SolanaVaultSwapExtraParameters = {
     chain: 'Solana',

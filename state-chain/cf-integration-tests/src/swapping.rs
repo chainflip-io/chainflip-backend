@@ -42,7 +42,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, EgressId,
-	SwapId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	PriceLimits, SwapId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{
@@ -81,6 +81,7 @@ const ETH_REFUND_PARAMS: ChannelRefundParametersForChain<Ethereum> =
 		refund_address: H160([100u8; 20]),
 		min_price: sp_core::U256::zero(),
 		refund_ccm_metadata: None,
+		max_oracle_price_slippage: None,
 	};
 
 pub fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price) {
@@ -1024,7 +1025,10 @@ fn order_fills_subscription() {
 				5_000 * DECIMALS,
 				Asset::Usdc,
 				0,
-				price_at_tick(-100).unwrap(),
+				PriceLimits {
+					min_price: price_at_tick(-100).unwrap(),
+					max_oracle_price_slippage: None,
+				},
 				None,
 				DORIS.clone(),
 			);
@@ -1033,7 +1037,10 @@ fn order_fills_subscription() {
 				2_000 * DECIMALS,
 				Asset::Eth,
 				0,
-				price_at_tick(-100).unwrap(),
+				PriceLimits {
+					min_price: price_at_tick(-100).unwrap(),
+					max_oracle_price_slippage: None,
+				},
 				None,
 				DORIS.clone(),
 			);
@@ -1043,7 +1050,10 @@ fn order_fills_subscription() {
 				500_000 * DECIMALS,
 				Asset::Flip,
 				0,
-				price_at_tick(-100).unwrap(),
+				PriceLimits {
+					min_price: price_at_tick(-100).unwrap(),
+					max_oracle_price_slippage: None,
+				},
 				None,
 				DORIS.clone(),
 			);

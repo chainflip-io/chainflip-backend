@@ -471,7 +471,8 @@ async function testInternalSwap(logger: Logger) {
       testRpcAsset,
       'USDC',
       0, // retry duration
-      '0x0', // minimum price
+      { min_price: '0x0', max_oracle_price_slippage: null },
+      undefined, // DCA params
     ])
   ).tx_details.response.swap_request_id;
   logger.debug(`On chain swap request id: ${swapRequestId}`);

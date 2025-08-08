@@ -16,7 +16,8 @@ expression: btc
   "extra_parameters": {
     "chain": "Bitcoin",
     "min_output_amount": 100000000,
-    "retry_duration": 100
+    "retry_duration": 100,
+    "max_oracle_price_slippage": 200
   },
   "channel_metadata": {
     "message": "7c1d0f07",

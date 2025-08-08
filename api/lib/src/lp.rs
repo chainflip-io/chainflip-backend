@@ -28,7 +28,7 @@ use cf_chains::{address::AddressString, ForeignChain};
 use cf_node_client::WaitForResult;
 use cf_primitives::{
 	AccountId, ApiWaitForResult, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters,
-	EgressId, Price, SwapRequestId, WaitFor,
+	EgressId, PriceLimits, SwapRequestId, WaitFor,
 };
 pub use cf_rpc_types::lp::{
 	CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails,
@@ -466,7 +466,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		input_asset: Asset,
 		output_asset: Asset,
 		retry_duration: BlockNumber,
-		min_price: Price,
+		price_limits: PriceLimits,
 		dca_params: Option<DcaParameters>,
 		wait_for: WaitFor,
 	) -> Result<ApiWaitForResult<SwapRequestId>> {
@@ -477,7 +477,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 					input_asset,
 					output_asset,
 					retry_duration,
-					min_price,
+					price_limits,
 					dca_params,
 				},
 				wait_for,

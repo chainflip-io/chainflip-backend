@@ -1,5 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
+assertion_line: 1091
 expression: val
 ---
 {
