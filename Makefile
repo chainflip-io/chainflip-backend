@@ -1,3 +1,9 @@
+.PHONY: build-chainspec-backspin
+build-chainspec-backspin:
+	cargo build --release
+	./target/release/chainflip-node build-spec --chain dev --disable-default-bootnode > state-chain/node/chainspecs/backspin.chainspec.json
+	./target/release/chainflip-node build-spec --chain state-chain/node/chainspecs/backspin.chainspec.json --disable-default-bootnode --raw > state-chain/node/chainspecs/backspin.chainspec.raw.json
+
 .PHONY: build-chainspec-sisyphos
 build-chainspec-sisyphos:
 	cargo build --release
