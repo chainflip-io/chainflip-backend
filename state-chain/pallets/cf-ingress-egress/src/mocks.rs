@@ -44,7 +44,6 @@ use cf_traits::{
 		fee_payment::MockFeePayment,
 		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
 		lending_pools::MockBoostApi,
-		pool_api::MockPoolApi,
 		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::MockSwapRequestHandler,
 	},
@@ -126,7 +125,6 @@ impl Config<Instance1> for Test {
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
 	type Balance = MockBalance;
-	type PoolApi = MockPoolApi;
 	type ChainApiCall = MockEthereumApiCall<MockEvmEnvironment>;
 	type Broadcaster = MockEgressBroadcasterEth;
 	type DepositHandler = MockDepositHandler;
@@ -157,7 +155,6 @@ impl Config<Instance2> for Test {
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
 	type Balance = MockBalance;
-	type PoolApi = MockPoolApi;
 	type ChainApiCall = MockBitcoinApiCall<MockBtcEnvironment>;
 	type Broadcaster = MockEgressBroadcasterBtc;
 	type DepositHandler = MockDepositHandler;

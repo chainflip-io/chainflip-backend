@@ -384,14 +384,16 @@ pub enum ChannelActionType {
 	Swap,
 	LiquidityProvision,
 	Refund,
+	Unrefundable,
 }
 
-impl<AccountId, C: Chain> From<ChannelAction<AccountId, C>> for ChannelActionType {
+impl<AccountId, C> From<ChannelAction<AccountId, C>> for ChannelActionType {
 	fn from(action: ChannelAction<AccountId, C>) -> Self {
 		match action {
 			ChannelAction::Swap { .. } => ChannelActionType::Swap,
 			ChannelAction::LiquidityProvision { .. } => ChannelActionType::LiquidityProvision,
 			ChannelAction::Refund { .. } => ChannelActionType::Refund,
+			ChannelAction::Unrefundable => ChannelActionType::Unrefundable,
 		}
 	}
 }

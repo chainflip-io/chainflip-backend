@@ -426,7 +426,6 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
-	type PoolApi = LiquidityPools;
 	type ChainApiCall = eth::api::EthereumApi<EvmEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type DepositHandler = chainflip::DepositHandler;
@@ -457,7 +456,6 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
-	type PoolApi = LiquidityPools;
 	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
@@ -488,7 +486,6 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
-	type PoolApi = LiquidityPools;
 	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
@@ -519,7 +516,6 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
-	type PoolApi = LiquidityPools;
 	type ChainApiCall = ArbitrumApi<EvmEnvironment>;
 	type Broadcaster = ArbitrumBroadcaster;
 	type DepositHandler = chainflip::DepositHandler;
@@ -550,7 +546,6 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
-	type PoolApi = LiquidityPools;
 	type ChainApiCall = cf_chains::sol::api::SolanaApi<SolEnvironment>;
 	type Broadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
@@ -581,7 +576,6 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
-	type PoolApi = LiquidityPools;
 	type ChainApiCall = hub::api::AssethubApi<chainflip::HubEnvironment>;
 	type Broadcaster = AssethubBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;

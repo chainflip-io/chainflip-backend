@@ -213,9 +213,9 @@ fn vault_swap_deposit_witness(
 ) -> VaultDepositWitness<Runtime, SolanaInstance> {
 	VaultDepositWitness {
 		input_asset: SolAsset::Sol,
-		output_asset: Asset::SolUsdc,
+		output_asset: Some(Asset::SolUsdc),
 		deposit_amount: 1_000_000_000_000u64,
-		destination_address: EncodedAddress::Sol([1u8; 32]),
+		destination_address: Some(EncodedAddress::Sol([1u8; 32])),
 		deposit_metadata,
 		tx_id: Default::default(),
 		deposit_details: (),

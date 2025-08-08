@@ -34,6 +34,7 @@ use sp_std::{cmp::Ord, convert::Into, fmt::Debug, prelude::*};
 /// This is used to represent the destination address for an egress or an internal account
 /// to move funds internally.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
+#[n_functor::derive_n_functor]
 pub enum AccountOrAddress<AccountId, Address> {
 	InternalAccount(AccountId),
 	ExternalAddress(Address),
@@ -72,6 +73,7 @@ pub enum AccountOrAddress<AccountId, Address> {
 	PartialOrd,
 	Ord,
 )]
+#[n_functor::derive_n_functor(impl_map_res = true)]
 pub struct ChannelRefundParameters<A, CcmRefundDetails> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: A,
@@ -131,24 +133,14 @@ impl RpcChannelRefundParameters {
 }
 
 impl<A, D> ChannelRefundParameters<A, D> {
-	pub fn map_address<B, F: FnOnce(A) -> B>(self, f: F) -> ChannelRefundParameters<B, D> {
-		ChannelRefundParameters {
-			retry_duration: self.retry_duration,
-			refund_address: f(self.refund_address),
-			min_price: self.min_price,
-			refund_ccm_metadata: self.refund_ccm_metadata,
-		}
+	pub fn map_address<B, F: Fn(A) -> B>(self, f: F) -> ChannelRefundParameters<B, D> {
+		self.map(f, |refund_metadata| refund_metadata)
 	}
-	pub fn try_map_address<B, E, F: FnOnce(A) -> Result<B, E>>(
+	pub fn try_map_address<B, E, F: Fn(A) -> Result<B, E>>(
 		self,
 		f: F,
 	) -> Result<ChannelRefundParameters<B, D>, E> {
-		Ok(ChannelRefundParameters {
-			retry_duration: self.retry_duration,
-			refund_address: f(self.refund_address)?,
-			min_price: self.min_price,
-			refund_ccm_metadata: self.refund_ccm_metadata,
-		})
+		self.map_res(f, Result::Ok)
 	}
 }
 
