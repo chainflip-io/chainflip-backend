@@ -752,7 +752,7 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 fn broadcast_barrier_for_polkadot() {
 	new_test_ext()
 		.execute_with(|| {
-			MockBroadcastBarriers::set(ChainChoice::Polkadot);
+			MockBroadcastBarriers::set(&ChainChoice::Polkadot);
 
 			// create and sign 3 txs that are then ready for broadcast
 			let broadcast_id_1 =
@@ -811,7 +811,7 @@ fn broadcast_barrier_for_polkadot() {
 #[test]
 fn broadcast_barrier_for_bitcoin() {
 	new_test_ext().execute_with(|| {
-		MockBroadcastBarriers::set(ChainChoice::Bitcoin);
+		MockBroadcastBarriers::set(&ChainChoice::Bitcoin);
 
 		// create and sign 3 txs that are then ready for broadcast
 		let broadcast_id_1 = initiate_and_sign_broadcast(&mock_api_call(), SIG1, TxType::Normal);
@@ -841,7 +841,7 @@ fn broadcast_barrier_for_bitcoin() {
 fn broadcast_barrier_for_ethereum() {
 	new_test_ext()
 		.execute_with(|| {
-			MockBroadcastBarriers::set(ChainChoice::Ethereum);
+			MockBroadcastBarriers::set(&ChainChoice::Ethereum);
 
 			let broadcast_id_1 =
 				initiate_and_sign_broadcast(&mock_api_call(), SIG1, TxType::Normal);

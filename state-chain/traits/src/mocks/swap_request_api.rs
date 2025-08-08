@@ -22,6 +22,7 @@ use cf_chains::{Chain, ChannelRefundParametersCheckedInternal, SwapOrigin};
 use cf_primitives::{Asset, AssetAmount, Beneficiaries, DcaParameters, SwapRequestId};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
+use sp_std::{vec, vec::Vec};
 
 use crate::mocks::MockPalletStorage;
 

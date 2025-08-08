@@ -27,7 +27,7 @@ use frame_support::sp_runtime::{
 	DispatchError,
 };
 use scale_info::TypeInfo;
-use sp_std::marker::PhantomData;
+use sp_std::{marker::PhantomData, vec, vec::Vec};
 
 pub struct MockEgressHandler<C>(PhantomData<C>);
 

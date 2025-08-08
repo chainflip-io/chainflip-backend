@@ -16,7 +16,7 @@ workspace = true
 
 [dev-dependencies]
 log = { workspace = true }
-state-chain-runtime = { workspace = true }
+state-chain-runtime = { workspace = true, features = ["mocks"] }
 libsecp256k1 = { workspace = true, default-features = true, features = [
 	"static-context",
 ] }

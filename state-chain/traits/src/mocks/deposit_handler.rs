@@ -24,7 +24,7 @@ use cf_primitives::{chains::assets::any, BasisPoints, Beneficiaries, ChannelId, 
 use codec::{Decode, Encode};
 use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
-use sp_std::marker::PhantomData;
+use sp_std::{marker::PhantomData, vec, vec::Vec};
 
 pub struct MockDepositHandler<C, T>(PhantomData<(C, T)>);
 
