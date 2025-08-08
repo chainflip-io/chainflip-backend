@@ -931,7 +931,7 @@ fn vault_swap_input_serialization() {
 		extra_parameters: VaultSwapExtraParametersRpc::Bitcoin {
 			min_output_amount: NumberOrHex::Number(100_000_000u64),
 			retry_duration: 100u32,
-			max_oracle_price_slippage: 200u8,
+			max_oracle_price_slippage: Some(200u8),
 		},
 		channel_metadata: Some(ccm_unchecked()),
 		boost_fee: 100u16,

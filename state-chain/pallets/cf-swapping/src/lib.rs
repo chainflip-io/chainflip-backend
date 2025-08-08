@@ -1686,18 +1686,24 @@ pub mod pallet {
 									T::PriceFeedApi::get_price(swap.input_asset()),
 									T::PriceFeedApi::get_price(swap.output_asset()),
 								) {
-									// If the oracle price is stale or unavailable, use a max value
-									// to force a price violation so the swap will be rescheduled.
 									(Some(oracle1), Some(oracle2))
 										if oracle1.stale || oracle2.stale =>
-										Price::MAX,
-									(None, _) | (_, None) => Price::MAX,
+									{
+										// If a oracle price is stale use a max value to force a
+										// price violation so the swap will be rescheduled.
+										Price::MAX
+									},
+									(None, _) | (_, None) => {
+										// Ignore the oracle price check if not supported/available
+										// for one of the assets.
+										Price::zero()
+									},
 									(Some(oracle1), Some(oracle2)) => {
 										let relative_price = cf_amm::math::relative_price(
 											oracle1.price,
 											oracle2.price,
 										);
-										// Reduce the price by slippage_bps:
+										// Reduce the relative price by slippage_bps:
 										cf_amm::math::mul_div_floor(
 											relative_price,
 											(MAX_BASIS_POINTS - slippage_bps).into(),

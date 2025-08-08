@@ -22,6 +22,7 @@ impl MockPriceFeedApi {
 
 impl PriceFeedApi for MockPriceFeedApi {
 	fn get_price(asset: Asset) -> Option<OraclePrice> {
-		Self::get_storage(ORACLE_PRICE, asset).map(|price| OraclePrice { price, stale: false })
+		Self::get_storage::<_, Option<Price>>(ORACLE_PRICE, asset)
+			.and_then(|price| price.map(|price| OraclePrice { price, stale: false }))
 	}
 }

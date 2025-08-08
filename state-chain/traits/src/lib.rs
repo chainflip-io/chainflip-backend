@@ -1302,5 +1302,5 @@ pub struct OraclePrice {
 }
 
 pub trait PriceFeedApi {
-	fn get_price(asset: cf_chains::assets::any::Asset) -> Option<OraclePrice>;
+	fn get_price(asset: Asset) -> Option<OraclePrice>;
 }

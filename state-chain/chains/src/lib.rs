@@ -1426,7 +1426,7 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 	Bitcoin {
 		min_output_amount: Amount,
 		retry_duration: BlockNumber,
-		max_oracle_price_slippage: u8,
+		max_oracle_price_slippage: Option<u8>,
 	},
 	Ethereum(EvmVaultSwapExtraParameters<Address, Amount>),
 	Arbitrum(EvmVaultSwapExtraParameters<Address, Amount>),

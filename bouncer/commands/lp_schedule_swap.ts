@@ -58,9 +58,9 @@ await lpMutex.runExclusive(async () => {
       amountToFineAmount(amount.toString(), assetDecimals(inputAsset)),
       inputAsset,
       outputAsset,
-      0,
-      0,
-      undefined,
+      0, // Retry duration
+      { min_price: '0x0', max_oracle_price_slippage: null },
+      undefined, // DCA params
     )
     .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
 });
