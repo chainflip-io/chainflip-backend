@@ -29,6 +29,7 @@ use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
 use sp_core::H256;
+use sp_runtime::BoundedVec;
 use state_chain_runtime::BitcoinInstance;
 
 use crate::btc::rpc::VerboseTransaction;
@@ -115,6 +116,16 @@ pub fn try_extract_vault_swap_witness(
 		return None;
 	}
 
+	// Third output must be a "change utxo" whose address we assume to also be the refund address:
+	let Some(refund_address) = script_buf_to_script_pubkey(&change_utxo.script_pubkey) else {
+		tracing::error!("Failed to extract refund address (tx_id: {})", tx.txid);
+		return None;
+	};
+
+	let deposit_amount = utxo_to_vault.value.to_sat();
+
+	let tx_id: [u8; 32] = tx.txid.to_byte_array();
+
 	// Second output must be a nulldata UTXO (with 0 amount):
 	if nulldata_utxo.value.to_sat() != 0 {
 		tracing::warn!(
@@ -124,29 +135,45 @@ pub fn try_extract_vault_swap_witness(
 		return None;
 	}
 
-	let Some(mut data) = try_extract_utxo_encoded_data(&nulldata_utxo.script_pubkey) else {
+	let Some(data) = try_extract_utxo_encoded_data(&nulldata_utxo.script_pubkey)
+		.and_then(|mut data| UtxoEncodedData::decode(&mut data).ok())
+	else {
 		tracing::warn!(
-			"Could not extract UTXO encoded data targeting our vault (tx_id: {})",
+			"Could not extract or decode UTXO encoded data targeting our vault (tx_id: {}). Attempting to refund.",
 			tx.txid
 		);
-		return None;
-	};
 
-	let Ok(data) = UtxoEncodedData::decode(&mut data) else {
-		tracing::warn!(
-			"Failed to decode UTXO encoded data targeting our vault (tx_id: {})",
-			tx.txid
-		);
-		return None;
+		// Create a vault deposit witness with destination_{address,asset} = None. This will trigger
+		// a refund to the refund address.
+		return Some(VaultDepositWitness {
+			input_asset: NATIVE_ASSET,
+			output_asset: None,
+			destination_address: None,
+			deposit_amount,
+			tx_id: H256::from(tx_id),
+			deposit_details: Utxo {
+				// we require the deposit to be the first UTXO
+				id: UtxoId { tx_id: tx_id.into(), vout: 0 },
+				amount: deposit_amount,
+				deposit_address: vault_address.clone(),
+			},
+			deposit_metadata: None, // No ccm for BTC (yet?)
+			broker_fee: None,
+			affiliate_fees: BoundedVec::new(),
+			refund_params: ChannelRefundParametersForChain::<Bitcoin> {
+				retry_duration: Default::default(),
+				refund_address,
+				min_price: Default::default(),
+				// Bitcoin should never have a ccm refund
+				refund_ccm_metadata: None,
+			},
+			dca_params: None,
+			// This is only to be checked in the pre-witnessed version
+			boost_fee: Default::default(),
+			channel_id: Some(channel_id),
+			deposit_address: Some(vault_address.script_pubkey()),
+		})
 	};
-
-	// Third output must be a "change utxo" whose address we assume to also be the refund address:
-	let Some(refund_address) = script_buf_to_script_pubkey(&change_utxo.script_pubkey) else {
-		tracing::error!("Failed to extract refund address (tx_id: {})", tx.txid);
-		return None;
-	};
-
-	let deposit_amount = utxo_to_vault.value.to_sat();
 
 	// Derive min price (encoded as min output amount to save space):
 	let min_price = sqrt_price_to_price(bounded_sqrt_price(
@@ -154,13 +181,11 @@ pub fn try_extract_vault_swap_witness(
 		deposit_amount.into(),
 	));
 
-	let tx_id: [u8; 32] = tx.txid.to_byte_array();
-
 	Some(VaultDepositWitness {
 		input_asset: NATIVE_ASSET,
-		output_asset: data.output_asset,
+		output_asset: Some(data.output_asset),
 		deposit_amount,
-		destination_address: data.output_address,
+		destination_address: Some(data.output_address),
 		tx_id: H256::from(tx_id),
 		deposit_details: Utxo {
 			// we require the deposit to be the first UTXO
@@ -335,9 +360,9 @@ mod tests {
 			try_extract_vault_swap_witness(&tx, &vault_deposit_address, CHANNEL_ID, &BROKER),
 			Some(VaultDepositWitness {
 				input_asset: NATIVE_ASSET,
-				output_asset: MOCK_SWAP_PARAMS.output_asset,
+				output_asset: Some(MOCK_SWAP_PARAMS.output_asset),
 				deposit_amount: DEPOSIT_AMOUNT,
-				destination_address: MOCK_SWAP_PARAMS.output_address.clone(),
+				destination_address: Some(MOCK_SWAP_PARAMS.output_address.clone()),
 				tx_id: tx.txid.to_byte_array().into(),
 				deposit_details: Utxo {
 					id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout: 0 },

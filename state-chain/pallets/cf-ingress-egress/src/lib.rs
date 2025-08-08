@@ -202,6 +202,7 @@ pub enum RefundReason {
 	CcmUnsupportedForTargetChain,
 	CcmInvalidMetadata,
 	InvalidDestinationAddress,
+	DestinationAddressOrAssetNotSpecified,
 }
 
 enum FullWitnessDepositOutcome {
@@ -209,13 +210,6 @@ enum FullWitnessDepositOutcome {
 	/// and should no longer be scheduled for processing
 	BoostConsumed,
 	BoostNotConsumed,
-}
-
-#[derive(RuntimeDebug, Clone)]
-pub struct ValidatedVaultSwapParams<AccountId> {
-	pub broker_fees: BoundedVec<Beneficiary<AccountId>, ConstU32<6>>,
-	pub egress_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
-	pub destination_address: ForeignChainAddress,
 }
 
 mod deposit_origin {
@@ -465,13 +459,15 @@ pub mod pallet {
 		pub channel_id: Option<ChannelId>,
 		pub deposit_amount: <T::TargetChain as Chain>::ChainAmount,
 		pub deposit_details: <T::TargetChain as Chain>::DepositDetails,
+		// Note, if this field is not provided, the swap cannot be processed and will be refunded.
 		#[skip_name_expansion]
-		pub output_asset: Asset,
+		pub output_asset: Option<Asset>,
 		// Note we use EncodedAddress here rather than eg. ForeignChainAddress because this
 		// value can be populated by the submitter of the vault deposit and is not verified
 		// in the engine, so we need to verify on-chain.
+		// Note, if this field is not provided, the swap cannot be processed and will be refunded.
 		#[skip_name_expansion]
-		pub destination_address: EncodedAddress,
+		pub destination_address: Option<EncodedAddress>,
 		// Here, the `source_address` within the CCM Metadata is populated by the engines, so we
 		// can use ForeignChainAddress here.
 		#[skip_name_expansion]
@@ -2722,6 +2718,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					refund_ccm_metadata
 				},
 			),
+		};
+
+		// ------ existence of destination -----
+		let (Some(destination_asset), Some(destination_address)) =
+			(destination_asset, destination_address)
+		else {
+			return refund_action(RefundReason::DestinationAddressOrAssetNotSpecified);
 		};
 
 		// ------ fees -----
