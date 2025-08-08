@@ -58,7 +58,7 @@ members = [
 	"state-chain/traits",
 	"utilities",
 	"utilities/scale-json",
-	"utilities/scale-json-event-logger",
+	"utilities/scale-json-event-logger", "generate-migrations",
 ]
 
 [workspace.lints.clippy]
