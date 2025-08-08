@@ -4685,6 +4685,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "generate-migrations"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "frame-metadata 16.0.0",
+ "parity-scale-codec",
+ "scale-info",
+ "state-chain-runtime",
+ "subxt",
+ "tokio",
+ "walkdir",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

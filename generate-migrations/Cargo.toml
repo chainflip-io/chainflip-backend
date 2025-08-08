@@ -1,0 +1,19 @@
+[package]
+name = "generate-migrations"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+walkdir = "2.5.0"
+anyhow = { workspace = true }
+frame-metadata = { workspace = true, features = ["current"]}
+state-chain-runtime ={ workspace = true }
+subxt = { workspace = true }
+tokio = {workspace = true }
+codec ={ workspace = true }
+scale-info = { workspace = true }
+
+
+
+[lints]
+workspace = true
