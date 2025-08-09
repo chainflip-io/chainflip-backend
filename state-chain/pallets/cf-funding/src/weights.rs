@@ -58,6 +58,7 @@ pub trait WeightInfo {
 	fn update_restricted_addresses(a: u32, b: u32, c: u32, ) -> Weight;
 	fn bind_executor_address() -> Weight;
 	fn rebalance() -> Weight;
+	fn execute_sc_call() -> Weight;
 }
 
 /// Weights for pallet_cf_funding using the Substrate node and recommended hardware.
@@ -303,6 +304,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	fn rebalance() -> Weight {
 		Weight::from_parts(0, 0)
 	}
+	fn execute_sc_call() -> Weight {
+		Weight::from_parts(0, 0)
+	}
 }
 
 // For backwards compatibility and tests
@@ -546,5 +550,8 @@ impl WeightInfo for () {
 	}
 	fn rebalance() -> Weight {
 		Weight::from_parts(0, 0)
+	}
+	fn execute_sc_call() -> Weight {
+		Weight::from_parts(0, 0)	
 	}
 }
