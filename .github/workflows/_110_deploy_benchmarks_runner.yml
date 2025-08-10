@@ -47,6 +47,7 @@ jobs:
           instance_spec=${{ inputs.benchmark_machine_spec }}
           runner_custom_labels=${{ inputs.benchmark_machine_spec }}
 
+          echo "::add-mask::$runner_registration_token"
           echo "TF_VAR_runner_registration_token=$runner_registration_token" >> $GITHUB_ENV
           echo "TF_VAR_instance_spec=$instance_spec" >> $GITHUB_ENV
           echo "TF_VAR_runner_custom_labels=$runner_custom_labels" >> $GITHUB_ENV
