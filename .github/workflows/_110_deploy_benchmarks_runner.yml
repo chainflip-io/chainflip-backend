@@ -16,7 +16,6 @@ permissions:
 
 env:
   FORCE_COLOR: 1
-  CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
 
 jobs:
   terraform-benchmarks-runner:
@@ -44,7 +43,7 @@ jobs:
       - name: Generate Terraform Variables 🧙‍♂️
         id: tfvars
         run: |
-          runner_registration_token=$(curl -sX POST -H "Authorization: token ${{ env.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output)
+          runner_registration_token=$(curl -sX POST -H "Authorization: token ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output)
           instance_spec=${{ inputs.benchmark_machine_spec }}
           runner_custom_labels=${{ inputs.benchmark_machine_spec }}
 
@@ -110,7 +109,7 @@ jobs:
         if: inputs.command == 'destroy'
         run: |
           echo Removing instance: ${{ steps.get-ec2-id.outputs.instance_id }}
-          ID=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ env.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}" https://api.github.com/orgs/chainflip-io/actions/runners | jq -r --arg instance_id "${{ steps.get-ec2-id.outputs.instance_id }}" '.runners[] | select(.name==$instance_id).id')
+          ID=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}" https://api.github.com/orgs/chainflip-io/actions/runners | jq -r --arg instance_id "${{ steps.get-ec2-id.outputs.instance_id }}" '.runners[] | select(.name==$instance_id).id')
           echo GitHub Runner ID: $ID
-          curl -X DELETE -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ env.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}" https://api.github.com/orgs/chainflip-io/actions/runners/$ID
+          curl -X DELETE -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}" https://api.github.com/orgs/chainflip-io/actions/runners/$ID
         working-directory: ./aws/Workloads/benchmarks-github-runner
