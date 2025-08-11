@@ -1,18 +1,21 @@
-use crate::{chainflip::TypeInfo, Decode, Encode, EthereumAddress, Runtime};
+use crate::{chainflip::TypeInfo, Decode, Encode, Runtime, RuntimeCall};
 use frame_support::{
 	dispatch::{DispatchInfo, GetDispatchInfo},
 	traits::UnfilteredDispatchable,
 };
+use pallet_cf_validator::Call;
+use sp_runtime::traits::Dispatchable;
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
 pub enum DelegationApi {
+	// todo: impl partial delegate/undelegate after the auction PR.
 	Delegate {
-		delegator: EthereumAddress, // Ethereum Address of the delegator
-		operator: <Runtime as frame_system::Config>::AccountId, // Operator the amount to delegate to
+		operator: <Runtime as frame_system::Config>::AccountId, /* Operator the amount to
+		                                                         * delegate to */
 	},
-	Undelegate {
-		delegator: EthereumAddress, // Ethereum Address of the delegator
-		operator: <Runtime as frame_system::Config>::AccountId, // Operator the amount was delegated to
+	Undelegate {},
+	SetMaxBid {
+		maybe_max_bid: Option<<Runtime as cf_traits::Chainflip>::Amount>,
 	},
 }
 
@@ -27,12 +30,16 @@ impl UnfilteredDispatchable for EthereumSCApi {
 	type RuntimeOrigin = <Runtime as frame_system::Config>::RuntimeOrigin;
 	fn dispatch_bypass_filter(
 		self,
-		_origin: Self::RuntimeOrigin,
+		origin: Self::RuntimeOrigin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		match self {
 			EthereumSCApi::Delegation(delegation_api) => match delegation_api {
-				DelegationApi::Delegate { delegator: _, operator: _ } => todo!(),
-				DelegationApi::Undelegate { delegator: _, operator: _ } => todo!(),
+				DelegationApi::Delegate { operator } =>
+					RuntimeCall::Validator(Call::<Runtime>::delegate { operator }).dispatch(origin),
+				DelegationApi::Undelegate {} =>
+					RuntimeCall::Validator(Call::<Runtime>::undelegate {}).dispatch(origin),
+				DelegationApi::SetMaxBid { maybe_max_bid: _ } => todo!(), /* TODO: add this after
+				                                                           * the auction PR */
 			},
 		}
 	}
@@ -40,6 +47,16 @@ impl UnfilteredDispatchable for EthereumSCApi {
 
 impl GetDispatchInfo for EthereumSCApi {
 	fn get_dispatch_info(&self) -> DispatchInfo {
-		todo!()
+		match self {
+			EthereumSCApi::Delegation(delegation_api) => match delegation_api {
+				DelegationApi::Delegate { operator } =>
+					RuntimeCall::Validator(Call::<Runtime>::delegate { operator: operator.clone() })
+						.get_dispatch_info(),
+				DelegationApi::Undelegate {} =>
+					RuntimeCall::Validator(Call::<Runtime>::undelegate {}).get_dispatch_info(),
+				DelegationApi::SetMaxBid { maybe_max_bid: _ } => todo!(), /* TODO: add this after
+				                                                           * the auction PR */
+			},
+		}
 	}
 }

@@ -193,13 +193,12 @@ mod tests {
 	#[test]
 	fn test_sc_call_encode() {
 		let sc_call_delegate = EthereumSCApi::Delegation(DelegationApi::Delegate {
-			delegator: [0xf5; 20].into(),
 			operator: AccountId32::new([0xF4; 32]),
 		})
 		.encode();
 		assert_eq!(
 			sc_call_delegate,
-			hex::decode("0000f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4")
+			hex::decode("0000f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4")
 				.unwrap()
 		);
 	}
