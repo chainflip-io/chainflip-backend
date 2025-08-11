@@ -119,7 +119,7 @@ export async function executeSolVaultSwap(
       gas_budget: fillOrKillParams?.refundCcmMetadata.gasBudget,
       ccm_additional_data: fillOrKillParams?.refundCcmMetadata.ccmAdditionalData,
     },
-    max_oracle_price_slippage: fillOrKillParams?.maxOraclePriceSlippage,
+    max_oracle_price_slippage: undefined, // TODO: update FillOrKillParamsX128 with max_oracle_price_slippage
   };
   const extraParameters: SolanaVaultSwapExtraParameters = {
     chain: 'Solana',
