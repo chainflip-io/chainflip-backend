@@ -260,7 +260,7 @@ impl GetIdentity for EnumVariant<Morphism> {
 
 	fn try_get_identity(&self) -> Option<Self::Point> {
 		Some(EnumVariant {
-			name: self.name.clone(),
+			typename: self.typename.clone(),
 			fields: self
 				.fields
 				.iter()
@@ -304,47 +304,80 @@ struct StructField<X: CellType> {
 
 #[derive_where(Clone, PartialEq, Debug;)]
 struct EnumVariant<X: CellType> {
-	name: String,
+	typename: MaybeRenaming,
 	fields: Vec<X::Of<StructField<Point>, StructField<Morphism>>>,
+}
+
+type TypeName = String;
+
+#[derive(Debug, PartialEq, Clone)]
+enum MaybeRenaming {
+	Same(TypeName),
+	Rename { old: TypeName, new: TypeName },
+}
+
+impl MaybeRenaming {
+	pub fn from_strings(old: String, new: String) -> Self {
+		if old == new { MaybeRenaming::Same(old) } else { MaybeRenaming::Rename { old, new } }
+	}
+	// pub fn old(&self) -> TypeName {
+	// 	match self {
+	// 		MaybeRenaming::Same(a) => a.clone(),
+	// 		MaybeRenaming::Rename { old, new } => old.clone(),
+	// 	}
+	// }
+	// pub fn new(&self) -> TypeName {
+	// 	match self {
+	// 		MaybeRenaming::Same(a) => a.clone(),
+	// 		MaybeRenaming::Rename { old, new } => new.clone(),
+	// 	}
+	// }
 }
 
 #[derive_where(Clone, Debug, PartialEq;)]
 enum TypeRepr<X: CellType> {
-	Struct { fields: Vec<X::Of<StructField<Point>, StructField<Morphism>>> },
-	Enum { variants: Vec<X::Of<EnumVariant<Point>, EnumVariant<Morphism>>> },
+	Struct {
+		typename: MaybeRenaming,
+		fields: Vec<X::Of<StructField<Point>, StructField<Morphism>>>,
+	},
+	Enum {
+		typename: MaybeRenaming,
+		variants: Vec<X::Of<EnumVariant<Point>, EnumVariant<Morphism>>>,
+	},
 	NotImplemented,
 	Primitive(X::Of<TypeDefPrimitive, !>),
-	TypeByName,
+	TypeByName(MaybeRenaming),
 }
 
 #[derive(Debug, PartialEq, Clone)]
 struct Migration {
-	type_from: String,
-	type_to: String,
+	typename: MaybeRenaming,
 	edits: Vec<String>,
-	inner_migrations: BTreeMap<String,Migration>
+	inner_migrations: BTreeMap<String, Migration>,
 }
 
 impl Migration {
-	pub fn from_updates(updates: Vec<Update>) -> Option<Migration> {
-		let edits = updates.iter().filter_map(|update| 
-			match update {
+	pub fn from_updates(typename: &MaybeRenaming, updates: Vec<Update>) -> Option<Migration> {
+		let edits = updates
+			.iter()
+			.filter_map(|update| match update {
 				Update::Item(a) => Some(a.clone()),
 				Update::Inner(migrations) => None,
 				Update::None => None,
-			}
-		).collect::<Vec<_>>();
+			})
+			.collect::<Vec<_>>();
 
-		let inner_migrations = updates.iter().filter_map(|update|
-			match update {
+		let inner_migrations = updates
+			.iter()
+			.filter_map(|update| match update {
 				Update::Item(_) => None,
 				Update::Inner(migration) => Some(("".to_string(), migration.clone())),
 				Update::None => None,
-			}
-		).collect::<BTreeMap<_,_>>();
+			})
+			.collect::<BTreeMap<_, _>>();
 
 		if edits.len() > 0 || inner_migrations.len() > 0 {
-			Some(Migration { type_from: "".to_string(), type_to: "".to_string(), edits, inner_migrations })	
+			Some(Migration { typename: typename.clone(), edits, inner_migrations })
 		} else {
 			None
 		}
@@ -355,36 +388,19 @@ impl Migration {
 enum Update {
 	Item(String),
 	Inner(Migration),
-	None
+	None,
 }
 
 impl Update {
-	pub fn from_updates(updates: Vec<Update>) -> Update {
-		match Migration::from_updates(updates) {
+	pub fn from_updates(typename: &MaybeRenaming, updates: Vec<Update>) -> Update {
+		match Migration::from_updates(typename, updates) {
 			Some(migration) => Update::Inner(migration),
 			None => Update::None,
 		}
 	}
 }
 
-// enum Migration {
-// 	Inner {
-// 		field: String,
-// 		migration: 
-// 	}
-// }
-
-// impl Migration {
-// 	pub fn in_path(self, path_component: String) -> BTreeMap<String,Migration> {
-// 		self.inner_migrations.into_iter()
-// 			.map(|(key, value)|
-// 				(format!("{path_component}::{key}"), value)
-// 			)
-// 			.chain(self.edits)
-// 	}
-// }
-
-impl<P: Debug, M: GetUpdated> GetUpdated for CompactDiff<P,M> {
+impl<P: Debug, M: GetUpdated> GetUpdated for CompactDiff<P, M> {
 	fn get_updated(&self) -> Update {
 		match self {
 			CompactDiff::Removed(b) => Update::Item(format!("- {b:?}")),
@@ -404,22 +420,27 @@ impl GetUpdated for StructField<Morphism> {
 
 impl GetUpdated for EnumVariant<Morphism> {
 	fn get_updated(&self) -> Update {
-		Update::from_updates(self.fields.iter().map(|f| f.get_updated()).collect())
+		Update::from_updates(&self.typename, self.fields.iter().map(|f| f.get_updated()).collect())
 	}
 }
 
 impl GetUpdated for TypeRepr<Morphism> {
 	fn get_updated(&self) -> Update {
 		match self {
-			TypeRepr::Struct { fields } => Update::from_updates(fields.iter().map(|field| field.get_updated()).collect()),
-			TypeRepr::Enum { variants } => Update::from_updates(variants.iter().map(|field| field.get_updated()).collect()),
+			TypeRepr::Struct { typename, fields } => Update::from_updates(
+				&typename,
+				fields.iter().map(|field| field.get_updated()).collect(),
+			),
+			TypeRepr::Enum { typename, variants } => Update::from_updates(
+				&typename,
+				variants.iter().map(|field| field.get_updated()).collect(),
+			),
 			TypeRepr::NotImplemented => Update::None,
 			TypeRepr::Primitive(x) => Update::None,
-			TypeRepr::TypeByName => Update::None,
+			TypeRepr::TypeByName(_) => Update::None,
 		}
 	}
 }
-
 
 trait GetUpdated {
 	fn get_updated(&self) -> Update;
@@ -436,31 +457,31 @@ impl GetIdentity for TypeRepr<Morphism> {
 			// TypeRepr::Enum { variants } => Some(TypeRepr::Enum {
 			// 		variants: variants.iter().map(|variant|
 			// variant.try_get_identity()).collect::<Option<Vec<_>>>()?, 	}),
-			TypeRepr::Struct { fields } =>
+			TypeRepr::Struct { typename, fields } =>
 				if fields
 					.iter()
 					.map(|field| field.try_get_identity())
 					.collect::<Option<Vec<_>>>()
 					.is_some()
 				{
-					Some(TypeRepr::TypeByName)
+					Some(TypeRepr::TypeByName(typename.clone()))
 				} else {
 					None
 				},
-			TypeRepr::Enum { variants } =>
+			TypeRepr::Enum { typename, variants } =>
 				if variants
 					.iter()
 					.map(|field| field.try_get_identity())
 					.collect::<Option<Vec<_>>>()
 					.is_some()
 				{
-					Some(TypeRepr::TypeByName)
+					Some(TypeRepr::TypeByName(typename.clone()))
 				} else {
 					None
 				},
 			TypeRepr::NotImplemented => None,
 			TypeRepr::Primitive(type_def_primitive) => None,
-			TypeRepr::TypeByName => None,
+			TypeRepr::TypeByName(_) => None,
 		}
 	}
 }
@@ -520,16 +541,18 @@ pub fn compare_types(
 	};
 
 	match (ty1.type_def, ty2.type_def) {
-		(Composite(ty1), Composite(ty2)) => CompactDiff::compact_inherited(TypeRepr::Struct {
-			fields: diff_fields(&ty1.fields, &ty2.fields),
-		}),
-		(Variant(ty1), Variant(ty2)) => {
-			let variants1: BTreeMap<_, _> = ty1
+		(Composite(ty1content), Composite(ty2content)) =>
+			CompactDiff::compact_inherited(TypeRepr::Struct {
+				fields: diff_fields(&ty1content.fields, &ty2content.fields),
+				typename: MaybeRenaming::from_strings(ty1.path.to_string(), ty2.path.to_string()),
+			}),
+		(Variant(ty1content), Variant(ty2content)) => {
+			let variants1: BTreeMap<_, _> = ty1content
 				.variants
 				.iter()
 				.map(|variant| (variant.name.clone(), (variant.index, variant.fields.clone())))
 				.collect();
-			let variants2: BTreeMap<_, _> = ty2
+			let variants2: BTreeMap<_, _> = ty2content
 				.variants
 				.iter()
 				.map(|variant| (variant.name.clone(), (variant.index, variant.fields.clone())))
@@ -537,16 +560,21 @@ pub fn compare_types(
 
 			let diff = diff(variants1, variants2);
 			CompactDiff::compact_inherited(TypeRepr::Enum {
+				typename: MaybeRenaming::from_strings(ty1.path.to_string(), ty2.path.to_string()),
 				variants: diff
 					.into_iter()
 					.map(|(name, d)| match d {
-						NodeDiff::Left((pos, fields)) =>
-							CompactDiff::Removed(EnumVariant { name, fields: vec![] }),
-						NodeDiff::Right((pos, fields)) =>
-							CompactDiff::Unchanged(EnumVariant { name, fields: vec![] }),
+						NodeDiff::Left((pos, fields)) => CompactDiff::Removed(EnumVariant {
+							typename: MaybeRenaming::Same(name.clone()),
+							fields: vec![],
+						}),
+						NodeDiff::Right((pos, fields)) => CompactDiff::Unchanged(EnumVariant {
+							typename: MaybeRenaming::Same(name.clone()),
+							fields: vec![],
+						}),
 						NodeDiff::Both((pos1, fields1), (pos2, fields2)) =>
 							CompactDiff::compact_inherited(EnumVariant {
-								name,
+								typename: MaybeRenaming::Same(name.clone()),
 								fields: diff_fields(&fields1, &fields2),
 							}),
 					})
@@ -620,7 +648,6 @@ async fn main() {
 					// (Plain(hash_set), Map(hash_set, hash_set1)) => todo!(),
 					// (Map(hash_set, hash_set1), Plain(hash_set)) => todo!(),
 					(Map(hash_set, old_ty), Map(hash_set2, new_ty)) => {
-
 						let diff = compare_types(&old_metadata, old_ty, &new_metadata, new_ty);
 
 						let updated = diff.get_updated();
@@ -628,7 +655,6 @@ async fn main() {
 						if updated != Update::None {
 							println!("MODIFIED Types: {updated:#?}");
 						}
-
 					},
 
 					(Plain(old_ty), Plain(new_ty)) => {
@@ -638,7 +664,6 @@ async fn main() {
 						if updated != Update::None {
 							println!("MODIFIED Types: {updated:#?}");
 						}
-
 					},
 
 					_ => println!("MODIFIED: other"),
