@@ -235,7 +235,7 @@ mod benchmarks {
 		#[block]
 		{
 			assert_ok!(
-				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+				call.dispatch_bypass_filter(T::EnsureWitnessed::try_successful_origin().unwrap())
 			);
 		}
 	}
