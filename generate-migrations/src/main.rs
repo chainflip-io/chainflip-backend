@@ -397,11 +397,12 @@ impl Migration {
 
 	pub fn get_abstract_migrations(self) -> BTreeMap<AbstractMigration, Vec<TypePath2>> {
 		let mut result = BTreeMap::<AbstractMigration, Vec<TypePath2>>::new();
-		for (abstract_migration, mut paths) in self
-			.inner_migrations
-			.into_iter()
-			.flat_map(|(field, migration)| migration.get_abstract_migrations().into_iter())
-		{
+		for (abstract_migration, mut paths) in
+			self.inner_migrations.into_iter().flat_map(|(field, migration)| {
+				migration.get_abstract_migrations().into_iter().map(move |(migration, paths)| {
+					(migration, paths.into_iter().map(|path| format!("{field}::{path}")).collect())
+				})
+			}) {
 			result.entry(abstract_migration).or_default().append(&mut paths);
 		}
 
@@ -425,7 +426,6 @@ enum Update {
 	Item(String),
 	Inner(Migration),
 }
-
 
 impl Update {
 	pub fn from_updates(typename: &MaybeRenaming, updates: Vec<Option<Update>>) -> Option<Update> {
@@ -454,13 +454,47 @@ impl<P: Debug, M: GetUpdated> GetUpdated for CompactDiff<P, M> {
 
 impl GetUpdated for StructField<Morphism> {
 	fn get_updated(&self) -> Option<Update> {
-		self.ty.get_updated()
+		self.ty.get_updated().map(|update| match update {
+			Update::Item(x) => Update::Item(x),
+			Update::Inner(mut migration) => {
+				migration.inner_migrations = migration
+					.inner_migrations
+					.into_iter()
+					.map(|(mut key, value)| {
+						key = format!("{}::{key}", self.name);
+						(key, value)
+					})
+					.collect();
+				Update::Inner(migration)
+			},
+		})
 	}
 }
 
 impl GetUpdated for EnumVariant<Morphism> {
 	fn get_updated(&self) -> Option<Update> {
-		Update::from_updates(&self.typename, self.fields.iter().map(|f| f.get_updated()).collect())
+		Update::from_updates(
+			&self.typename,
+			self.fields
+				.iter()
+				.map(|f| {
+					f.get_updated().map(|update| match update {
+						Update::Item(x) => Update::Item(x),
+						Update::Inner(mut migration) => {
+							migration.inner_migrations = migration
+								.inner_migrations
+								.into_iter()
+								.map(|(mut key, value)| {
+									key = format!("{:?}::{key}", self.typename);
+									(key, value)
+								})
+								.collect();
+							Update::Inner(migration)
+						},
+					})
+				})
+				.collect(),
+		)
 	}
 }
 
@@ -692,11 +726,21 @@ async fn main() {
 					(Map(hash_set, old_ty), Map(hash_set2, new_ty)) => {
 						let diff = compare_types(&old_metadata, old_ty, &new_metadata, new_ty);
 
-						let updated = diff.get_updated().map(Update::get_abstract_migrations).unwrap_or_default();
+						let updated = diff
+							.get_updated()
+							.map(Update::get_abstract_migrations)
+							.unwrap_or_default();
 
 						if updated.len() > 0 {
 							for (m, mut paths) in updated {
-								abstract_migrations.entry(m).or_default().append(&mut paths);
+								abstract_migrations.entry(m).or_default().extend(
+									paths.into_iter().map(|path| {
+										format!(
+											"{}::{}::{path}",
+											location.pallet, location.storage_name
+										)
+									}),
+								);
 							}
 							// println!("MODIFIED Types: {updated:#?}");
 						}
@@ -704,11 +748,21 @@ async fn main() {
 
 					(Plain(old_ty), Plain(new_ty)) => {
 						let diff = compare_types(&old_metadata, old_ty, &new_metadata, new_ty);
-						let updated = diff.get_updated().map(Update::get_abstract_migrations).unwrap_or_default();
+						let updated = diff
+							.get_updated()
+							.map(Update::get_abstract_migrations)
+							.unwrap_or_default();
 
 						if updated.len() > 0 {
-							for (m, mut paths) in updated {
-								abstract_migrations.entry(m).or_default().append(&mut paths);
+							for (m, paths) in updated {
+								abstract_migrations.entry(m).or_default().extend(
+									paths.into_iter().map(|path| {
+										format!(
+											"{}::{}::{path}",
+											location.pallet, location.storage_name
+										)
+									}),
+								);
 							}
 							// println!("MODIFIED Types: {updated:#?}");
 						}
