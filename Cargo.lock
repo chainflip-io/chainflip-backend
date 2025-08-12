@@ -3062,9 +3062,9 @@ dependencies = [
 
 [[package]]
 name = "derive-where"
-version = "1.2.7"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62d671cc41a825ebabc75757b62d3d168c577f9149b2d49ece1dad1f72119d25"
+checksum = "ef941ded77d15ca19b40374869ac6000af1c9f2a4c0f3d4c70926287e6364a8f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4689,12 +4689,14 @@ name = "generate-migrations"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "derive-where",
  "frame-metadata 16.0.0",
  "parity-scale-codec",
  "scale-info",
  "state-chain-runtime",
  "subxt",
  "tokio",
+ "utilities",
  "walkdir",
 ]
 

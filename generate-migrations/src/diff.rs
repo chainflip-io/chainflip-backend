@@ -10,6 +10,15 @@ pub enum NodeDiff<V, W> {
 	Right(W),
 	Both(V, W),
 }
+impl<A> NodeDiff<A, A> {
+	pub fn map<B>(self, f: impl Fn(A) -> B) -> NodeDiff<B, B> {
+		match self {
+			Left(a) => Left(f(a)),
+			Right(b) => Right(f(b)),
+			Both(a, b) => Both(f(a), f(b)),
+		}
+	}
+}
 
 use NodeDiff::*;
 

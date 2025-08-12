@@ -12,6 +12,8 @@ subxt = { workspace = true }
 tokio = {workspace = true }
 codec ={ workspace = true }
 scale-info = { workspace = true }
+cf-utilities = { workspace = true }
+derive-where = "1.6.0"
 
 
 
