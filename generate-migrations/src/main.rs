@@ -13,6 +13,7 @@ use codec::{Decode, Encode};
 use derive_where::derive_where;
 use frame_metadata::{RuntimeMetadata, v14::RuntimeMetadataV14};
 use scale_info::{Field, MetaType, TypeDefPrimitive, form::PortableForm};
+use state_chain_runtime::monitoring_apis::MonitoringDataV2;
 use std::{
 	collections::{BTreeMap, BTreeSet, HashSet},
 	env::{self, var},
@@ -22,7 +23,7 @@ use std::{
 	process,
 	str::FromStr,
 };
-use subxt::metadata::types::StorageEntryType;
+use subxt::{ext::scale_decode::visitor::types::Tuple, metadata::types::StorageEntryType};
 use walkdir::WalkDir;
 
 fn generate_type_packages(root_path: PathBuf, target_path: PathBuf) -> anyhow::Result<()> {
@@ -118,7 +119,7 @@ pub fn get_all_storage_entries(
 ) -> BTreeMap<StorageLocation, PortableStorageEntryType<u32>> {
 	metadata
 		.pallets()
-		.filter(|pallet| pallet.name().contains("Ingress"))
+		.filter(|pallet| pallet.name().contains("Ingress") || pallet.name().contains("Elections"))
 		.flat_map(|pallet| {
 			pallet.storage().unwrap().entries().iter().cloned().map(move |entry| {
 				(
@@ -243,6 +244,15 @@ impl<Point: PartialEq + Clone, Morphism: GetIdentity<Point = Point>> GetIdentity
 	}
 }
 
+impl GetIdentity for TupleEntry<Morphism> {
+	type Point = TupleEntry<Point>;
+
+	fn try_get_identity(&self) -> Option<TupleEntry<Point>> {
+		let TupleEntry { position, ty } = self;
+		Some(TupleEntry { position: position.clone(), ty: ty.try_get_identity()? })
+	}
+}
+
 impl GetIdentity for StructField<Morphism> {
 	type Point = StructField<Point>;
 
@@ -304,6 +314,12 @@ struct StructField<X: CellType> {
 }
 
 #[derive_where(Clone, PartialEq, Debug;)]
+struct TupleEntry<X: CellType> {
+	position: usize,
+	ty: X::Of<TypeRepr<Point>, TypeRepr<Morphism>>,
+}
+
+#[derive_where(Clone, PartialEq, Debug;)]
 struct EnumVariant<X: CellType> {
 	typename: MaybeRenaming,
 	fields: Vec<X::Of<StructField<Point>, StructField<Morphism>>>,
@@ -333,14 +349,31 @@ enum TypeRepr<X: CellType> {
 		typename: MaybeRenaming,
 		variants: Vec<X::Of<EnumVariant<Point>, EnumVariant<Morphism>>>,
 	},
+	Tuple {
+		typename: MaybeRenaming,
+		fields: Vec<X::Of<TupleEntry<Point>, TupleEntry<Morphism>>>,
+	},
+	Sequence {
+		typename: MaybeRenaming,
+		inner: Box<X::Of<TypeRepr<Point>, TypeRepr<Morphism>>>,
+	},
 	NotImplemented,
 	Primitive(X::Of<TypeDefPrimitive, !>),
 	TypeByName(MaybeRenaming),
 }
 
 #[derive(Debug, PartialEq, Clone)]
+enum NodeKind {
+	Struct,
+	Enum,
+	Sequence,
+	Tuple,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 struct Migration {
 	typename: MaybeRenaming,
+	node_kind: NodeKind,
 	edits: Vec<String>,
 	inner_migrations: BTreeMap<String, Migration>,
 }
@@ -355,6 +388,7 @@ impl Migration {
 				.into_iter()
 				.map(|(path, m)| (format!("{prefix}::{path}"), m))
 				.collect(),
+			node_kind: self.node_kind,
 		}
 	}
 }
@@ -370,6 +404,7 @@ type TypePath2 = String;
 
 impl Migration {
 	pub fn from_updates(
+		node_kind: NodeKind,
 		typename: &MaybeRenaming,
 		updates: Vec<Option<PathUpdate>>,
 	) -> Option<Migration> {
@@ -392,7 +427,7 @@ impl Migration {
 			.collect::<BTreeMap<_, _>>();
 
 		if edits.len() > 0 || inner_migrations.len() > 0 {
-			Some(Migration { typename: typename.clone(), edits, inner_migrations })
+			Some(Migration { node_kind, typename: typename.clone(), edits, inner_migrations })
 		} else {
 			None
 		}
@@ -432,10 +467,11 @@ enum Update {
 
 impl Update {
 	pub fn from_updates(
+		node_kind: NodeKind,
 		typename: &MaybeRenaming,
 		updates: Vec<Option<PathUpdate>>,
 	) -> Option<Update> {
-		Migration::from_updates(typename, updates).map(Update::Inner)
+		Migration::from_updates(node_kind, typename, updates).map(Update::Inner)
 	}
 
 	pub fn get_abstract_migrations(self) -> BTreeMap<AbstractMigration, Vec<TypePath2>> {
@@ -474,10 +510,20 @@ impl GetUpdate for StructField<Morphism> {
 	}
 }
 
+impl GetUpdate for TupleEntry<Morphism> {
+	type Item = PathUpdate;
+	fn get_update(&self) -> Option<PathUpdate> {
+		self.ty
+			.get_update()
+			.map(|(path, update)| (format!("{}", self.position), update))
+	}
+}
+
 impl GetUpdate for EnumVariant<Morphism> {
 	type Item = PathUpdate;
 	fn get_update(&self) -> Option<PathUpdate> {
 		Update::from_updates(
+			NodeKind::Struct,
 			&self.typename,
 			self.fields
 				.iter()
@@ -500,16 +546,25 @@ impl GetMigration for TypeRepr<Morphism> {
 	fn get_migration(&self) -> Option<Migration> {
 		match self {
 			TypeRepr::Struct { typename, fields } => Migration::from_updates(
+				NodeKind::Struct,
 				&typename,
 				fields.iter().map(|field| field.get_update()).collect(),
 			),
 			TypeRepr::Enum { typename, variants } => Migration::from_updates(
+				NodeKind::Enum,
 				&typename,
 				variants.iter().map(|field| field.get_update()).collect(),
 			),
 			TypeRepr::NotImplemented => None,
 			TypeRepr::Primitive(x) => None,
 			TypeRepr::TypeByName(_) => None,
+			TypeRepr::Tuple { typename, fields } => Migration::from_updates(
+				NodeKind::Tuple,
+				&typename,
+				fields.iter().map(|field| field.get_update()).collect(),
+			),
+			TypeRepr::Sequence { typename, inner } =>
+				Migration::from_updates(NodeKind::Sequence, &typename, vec![inner.get_update()]),
 		}
 	}
 }
@@ -573,6 +628,23 @@ impl GetIdentity for TypeRepr<Morphism> {
 			TypeRepr::NotImplemented => None,
 			TypeRepr::Primitive(type_def_primitive) => None,
 			TypeRepr::TypeByName(_) => None,
+			TypeRepr::Tuple { typename, fields } =>
+				if fields
+					.iter()
+					.map(|field| field.try_get_identity())
+					.collect::<Option<Vec<_>>>()
+					.is_some()
+				{
+					Some(TypeRepr::TypeByName(typename.clone()))
+				} else {
+					None
+				},
+			TypeRepr::Sequence { typename, inner } =>
+				if inner.try_get_identity().is_some() {
+					Some(TypeRepr::TypeByName(typename.clone()))
+				} else {
+					None
+				},
 		}
 	}
 }
@@ -615,7 +687,7 @@ pub fn compare_types(
 					NodeDiff::Right((pos, ty)) => CompactDiff::Added(StructField {
 						name,
 						ty: TypeRepr::TypeByName(MaybeRenaming::Same(type_to_string(
-							metadata1, ty,
+							metadata2, ty,
 						))),
 						position: pos,
 					}),
@@ -676,9 +748,68 @@ pub fn compare_types(
 					.collect(),
 			})
 		},
-		(Sequence(ty1), Sequence(ty2)) => CompactDiff::Unchanged(TypeRepr::NotImplemented),
+		(Sequence(ty1), Sequence(ty2)) => {
+			let type_diff =
+				compare_types(metadata1, ty1.type_param.id, metadata2, ty2.type_param.id);
+			let typename = MaybeRenaming::from_strings(
+				format!("Sequence<{}>", type_to_string(metadata1, ty1.type_param.id)),
+				format!("Sequence<{}>", type_to_string(metadata2, ty2.type_param.id)),
+			);
+			CompactDiff::compact_inherited(TypeRepr::Sequence {
+				inner: Box::new(type_diff),
+				typename,
+			})
+		},
 		(Array(ty1), Array(ty2)) => CompactDiff::Unchanged(TypeRepr::NotImplemented),
-		(Tuple(ty1), Tuple(ty2)) => CompactDiff::Unchanged(TypeRepr::NotImplemented),
+		(Tuple(entries1), Tuple(entries2)) => {
+			let fields1: BTreeMap<_, _> =
+				entries1.fields.iter().enumerate().map(|(pos, ty)| (pos, ty.id)).collect();
+			let fields2: BTreeMap<_, _> =
+				entries2.fields.iter().enumerate().map(|(pos, ty)| (pos, ty.id)).collect();
+
+			let diff = diff(fields1, fields2);
+			let fields = diff
+				.into_iter()
+				.map(|(pos, d)| match d {
+					NodeDiff::Left(ty) => CompactDiff::Removed(TupleEntry {
+						ty: TypeRepr::TypeByName(MaybeRenaming::Same(type_to_string(
+							metadata1, ty,
+						))),
+						position: pos,
+					}),
+					NodeDiff::Right(ty) => CompactDiff::Added(TupleEntry {
+						ty: TypeRepr::TypeByName(MaybeRenaming::Same(type_to_string(
+							metadata2, ty,
+						))),
+						position: pos,
+					}),
+					NodeDiff::Both(ty1, ty2) => {
+						let type_diff = compare_types(metadata1, ty1, metadata2, ty2);
+
+						CompactDiff::Inherited(TupleEntry { position: pos, ty: type_diff })
+					},
+				})
+				.collect::<Vec<_>>();
+
+			let typename = MaybeRenaming::from_strings(
+				entries1
+					.fields
+					.iter()
+					.map(|ty| type_to_string(metadata1, ty.id))
+					.intersperse(", ".to_string())
+					.collect::<Vec<_>>()
+					.concat(),
+				entries2
+					.fields
+					.iter()
+					.map(|ty| type_to_string(metadata2, ty.id))
+					.intersperse(", ".to_string())
+					.collect::<Vec<_>>()
+					.concat(),
+			);
+
+			CompactDiff::compact_inherited(TypeRepr::Tuple { typename, fields })
+		},
 		(Primitive(ty1), Primitive(ty2)) =>
 			if ty1 == ty2 {
 				CompactDiff::Unchanged(TypeRepr::Primitive(ty1))
