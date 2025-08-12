@@ -1972,8 +1972,7 @@ mod delegation {
 			.then_execute_at_next_block(|_| {
 				assert!(NextDelegators::<Test>::get().is_empty());
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				let active_delegators =
-					DelegationsPerEpoch::<Test>::get(CurrentEpoch::<Test>::get());
+				let active_delegators = CurrentEpochDelegations::<Test>::get();
 				assert_eq!(BTreeSet::from_iter(DELEGATORS), active_delegators);
 				for delegator in active_delegators {
 					if delegator % 2 == 0 {
@@ -2009,10 +2008,7 @@ mod delegation {
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {
 						assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(*delegator)));
-						assert_eq!(
-							OutgoingDelegators::<Test>::get(delegator),
-							DelegationStatus::UnDelegating
-						);
+						assert!(OutgoingDelegators::<Test>::get().contains(delegator));
 					}
 				}
 			})
@@ -2054,7 +2050,7 @@ mod delegation {
 			})
 			.then_execute_at_next_block(|_| {
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				assert!(DelegationsPerEpoch::<Test>::get(CurrentEpoch::<Test>::get()).len() == 2);
+				assert!(CurrentEpochDelegations::<Test>::get().len() == 2);
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {
 						assert_eq!(MockBonderFor::<Test>::get_bond(delegator), 0);
