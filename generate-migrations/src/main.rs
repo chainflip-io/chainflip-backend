@@ -2,6 +2,7 @@
 #![feature(trait_alias)]
 #![feature(btree_extract_if)]
 #![feature(never_type)]
+#![feature(iter_intersperse)]
 
 mod diff;
 mod write_migration;
@@ -320,18 +321,6 @@ impl MaybeRenaming {
 	pub fn from_strings(old: String, new: String) -> Self {
 		if old == new { MaybeRenaming::Same(old) } else { MaybeRenaming::Rename { old, new } }
 	}
-	// pub fn old(&self) -> TypeName {
-	// 	match self {
-	// 		MaybeRenaming::Same(a) => a.clone(),
-	// 		MaybeRenaming::Rename { old, new } => old.clone(),
-	// 	}
-	// }
-	// pub fn new(&self) -> TypeName {
-	// 	match self {
-	// 		MaybeRenaming::Same(a) => a.clone(),
-	// 		MaybeRenaming::Rename { old, new } => new.clone(),
-	// 	}
-	// }
 }
 
 #[derive_where(Clone, Debug, PartialEq;)]
@@ -536,17 +525,29 @@ trait GetMigration {
 	fn get_migration(&self) -> Option<Migration>;
 }
 
+fn type_to_string(metadata: &subxt::Metadata, ty: u32) -> String {
+	let ty = metadata.types().resolve(ty).unwrap();
+	format!(
+		"{}<{}>",
+		ty.path.to_string(),
+		ty.type_params
+			.clone()
+			.into_iter()
+			.map(|param| param
+				.ty
+				.map(|ty| type_to_string(metadata, ty.id))
+				.unwrap_or("?".to_string()))
+			.intersperse(", ".to_string())
+			.collect::<Vec<_>>()
+			.concat()
+	)
+}
+
 impl GetIdentity for TypeRepr<Morphism> {
 	type Point = TypeRepr<Point>;
 
 	fn try_get_identity(&self) -> Option<Self::Point> {
 		match self {
-			// TypeRepr::Struct { fields } => Some(TypeRepr::Struct {
-			// 		fields: fields.iter().map(|field|
-			// field.try_get_identity()).collect::<Option<Vec<_>>>()?, 	}),
-			// TypeRepr::Enum { variants } => Some(TypeRepr::Enum {
-			// 		variants: variants.iter().map(|variant|
-			// variant.try_get_identity()).collect::<Option<Vec<_>>>()?, 	}),
 			TypeRepr::Struct { typename, fields } =>
 				if fields
 					.iter()
@@ -606,12 +607,16 @@ pub fn compare_types(
 				match d {
 					NodeDiff::Left((pos, ty)) => CompactDiff::Removed(StructField {
 						name,
-						ty: TypeRepr::NotImplemented,
+						ty: TypeRepr::TypeByName(MaybeRenaming::Same(type_to_string(
+							metadata1, ty,
+						))),
 						position: pos,
 					}),
 					NodeDiff::Right((pos, ty)) => CompactDiff::Added(StructField {
 						name,
-						ty: TypeRepr::NotImplemented,
+						ty: TypeRepr::TypeByName(MaybeRenaming::Same(type_to_string(
+							metadata1, ty,
+						))),
 						position: pos,
 					}),
 					NodeDiff::Both((pos1, ty1), (pos2, ty2)) => {
