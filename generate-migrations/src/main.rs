@@ -356,6 +356,20 @@ struct Migration {
 	inner_migrations: BTreeMap<String, Migration>,
 }
 
+impl Migration {
+	pub fn prepend_path(self, prefix: String) -> Self {
+		Migration {
+			typename: self.typename,
+			edits: self.edits,
+			inner_migrations: self
+				.inner_migrations
+				.into_iter()
+				.map(|(path, m)| (format!("{prefix}::{path}"), m))
+				.collect(),
+		}
+	}
+}
+
 #[derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)]
 struct AbstractMigration {
 	typename: MaybeRenaming,
@@ -368,13 +382,13 @@ type TypePath2 = String;
 impl Migration {
 	pub fn from_updates(
 		typename: &MaybeRenaming,
-		updates: Vec<Option<Update>>,
+		updates: Vec<Option<PathUpdate>>,
 	) -> Option<Migration> {
 		let edits = updates
 			.iter()
 			.filter_map(|update| match update {
-				Some(Update::Item(a)) => Some(a.clone()),
-				Some(Update::Inner(migrations)) => None,
+				Some((path, Update::Item(a))) => Some(a.clone()),
+				Some((path, Update::Inner(migrations))) => None,
 				None => None,
 			})
 			.collect::<Vec<_>>();
@@ -382,8 +396,8 @@ impl Migration {
 		let inner_migrations = updates
 			.iter()
 			.filter_map(|update| match update {
-				Some(Update::Item(_)) => None,
-				Some(Update::Inner(migration)) => Some(("".to_string(), migration.clone())),
+				Some((path, Update::Item(_))) => None,
+				Some((path, Update::Inner(migration))) => Some((path.clone(), migration.clone())),
 				None => None,
 			})
 			.collect::<BTreeMap<_, _>>();
@@ -428,7 +442,10 @@ enum Update {
 }
 
 impl Update {
-	pub fn from_updates(typename: &MaybeRenaming, updates: Vec<Option<Update>>) -> Option<Update> {
+	pub fn from_updates(
+		typename: &MaybeRenaming,
+		updates: Vec<Option<PathUpdate>>,
+	) -> Option<Update> {
 		Migration::from_updates(typename, updates).map(Update::Inner)
 	}
 
@@ -440,74 +457,61 @@ impl Update {
 	}
 }
 
-impl<P: Debug, M: GetUpdated> GetUpdated for CompactDiff<P, M> {
-	fn get_updated(&self) -> Option<Update> {
+impl<P: Debug, M: GetUpdate<Item = PathUpdate>> GetUpdate for CompactDiff<P, M> {
+	type Item = PathUpdate;
+	fn get_update(&self) -> Option<PathUpdate> {
 		match self {
-			CompactDiff::Removed(b) => Some(Update::Item(format!("- {b:?}"))),
-			CompactDiff::Added(a) => Some(Update::Item(format!("+ {a:?}"))),
-			CompactDiff::Change(a, b) => Some(Update::Item(format!("C {a:?} => {b:?}"))),
-			CompactDiff::Inherited(f) => f.get_updated(),
+			CompactDiff::Removed(b) => Some(("".to_string(), Update::Item(format!("- {b:?}")))),
+			CompactDiff::Added(a) => Some(("".to_string(), Update::Item(format!("+ {a:?}")))),
+			CompactDiff::Change(a, b) =>
+				Some(("".to_string(), Update::Item(format!("C {a:?} => {b:?}")))),
+			CompactDiff::Inherited(f) => f.get_update(),
 			CompactDiff::Unchanged(_) => None,
 		}
 	}
 }
 
-impl GetUpdated for StructField<Morphism> {
-	fn get_updated(&self) -> Option<Update> {
-		self.ty.get_updated().map(|update| match update {
-			Update::Item(x) => Update::Item(x),
-			Update::Inner(mut migration) => {
-				migration.inner_migrations = migration
-					.inner_migrations
-					.into_iter()
-					.map(|(mut key, value)| {
-						key = format!("{}::{key}", self.name);
-						(key, value)
-					})
-					.collect();
-				Update::Inner(migration)
-			},
-		})
+impl GetUpdate for StructField<Morphism> {
+	type Item = PathUpdate;
+	fn get_update(&self) -> Option<PathUpdate> {
+		self.ty
+			.get_update()
+			.map(|(path, update)| (format!("{}::{path}", self.name), update))
 	}
 }
 
-impl GetUpdated for EnumVariant<Morphism> {
-	fn get_updated(&self) -> Option<Update> {
+impl GetUpdate for EnumVariant<Morphism> {
+	type Item = PathUpdate;
+	fn get_update(&self) -> Option<PathUpdate> {
 		Update::from_updates(
 			&self.typename,
 			self.fields
 				.iter()
-				.map(|f| {
-					f.get_updated().map(|update| match update {
-						Update::Item(x) => Update::Item(x),
-						Update::Inner(mut migration) => {
-							migration.inner_migrations = migration
-								.inner_migrations
-								.into_iter()
-								.map(|(mut key, value)| {
-									key = format!("{:?}::{key}", self.typename);
-									(key, value)
-								})
-								.collect();
-							Update::Inner(migration)
-						},
-					})
-				})
+				.map(|f| f.get_update().map(|(path, update)| (path, update)))
 				.collect(),
 		)
+		.map(|update| (format!("{:?}", self.typename), update))
 	}
 }
 
-impl GetUpdated for TypeRepr<Morphism> {
-	fn get_updated(&self) -> Option<Update> {
+impl GetUpdate for TypeRepr<Morphism> {
+	type Item = PathUpdate;
+
+	fn get_update(&self) -> Option<Self::Item> {
+		self.get_migration().map(|m| ("".to_string(), Update::Inner(m)))
+	}
+}
+
+impl GetMigration for TypeRepr<Morphism> {
+	fn get_migration(&self) -> Option<Migration> {
 		match self {
-			TypeRepr::Struct { typename, fields } => Update::from_updates(
+			TypeRepr::Struct { typename, fields } => Migration::from_updates(
 				&typename,
-				fields.iter().map(|field| field.get_updated()).collect(),
+				fields.iter().map(|field| field.get_update()).collect(),
 			),
-			TypeRepr::Enum { typename, variants } => Update::from_updates(
+			TypeRepr::Enum { typename, variants } => Migration::from_updates(
 				&typename,
-				variants.iter().map(|field| field.get_updated()).collect(),
+				variants.iter().map(|field| field.get_update()).collect(),
 			),
 			TypeRepr::NotImplemented => None,
 			TypeRepr::Primitive(x) => None,
@@ -516,8 +520,15 @@ impl GetUpdated for TypeRepr<Morphism> {
 	}
 }
 
-trait GetUpdated {
-	fn get_updated(&self) -> Option<Update>;
+trait GetUpdate {
+	type Item;
+	fn get_update(&self) -> Option<Self::Item>;
+}
+
+type PathUpdate = (String, Update);
+
+trait GetMigration {
+	fn get_migration(&self) -> Option<Migration>;
 }
 
 impl GetIdentity for TypeRepr<Morphism> {
@@ -727,8 +738,8 @@ async fn main() {
 						let diff = compare_types(&old_metadata, old_ty, &new_metadata, new_ty);
 
 						let updated = diff
-							.get_updated()
-							.map(Update::get_abstract_migrations)
+							.get_update()
+							.map(|(path, m)| Update::get_abstract_migrations(m))
 							.unwrap_or_default();
 
 						if updated.len() > 0 {
@@ -749,8 +760,8 @@ async fn main() {
 					(Plain(old_ty), Plain(new_ty)) => {
 						let diff = compare_types(&old_metadata, old_ty, &new_metadata, new_ty);
 						let updated = diff
-							.get_updated()
-							.map(Update::get_abstract_migrations)
+							.get_update()
+							.map(|(path, m)| Update::get_abstract_migrations(m))
 							.unwrap_or_default();
 
 						if updated.len() > 0 {
