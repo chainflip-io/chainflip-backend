@@ -455,6 +455,13 @@ impl Update {
 			Update::Inner(migration) => migration.get_abstract_migrations(),
 		}
 	}
+
+	pub fn with_prefix(self, prefix: String) -> Update {
+		match self {
+			Update::Item(x) => Update::Item(x),
+			Update::Inner(migration) => Update::Inner(migration.prepend_path(prefix)),
+		}
+	}
 }
 
 impl<P: Debug, M: GetUpdate<Item = PathUpdate>> GetUpdate for CompactDiff<P, M> {
@@ -474,9 +481,7 @@ impl<P: Debug, M: GetUpdate<Item = PathUpdate>> GetUpdate for CompactDiff<P, M> 
 impl GetUpdate for StructField<Morphism> {
 	type Item = PathUpdate;
 	fn get_update(&self) -> Option<PathUpdate> {
-		self.ty
-			.get_update()
-			.map(|(path, update)| (format!("{}::{path}", self.name), update))
+		self.ty.get_update().map(|(path, update)| (format!("{}", self.name), update))
 	}
 }
 
