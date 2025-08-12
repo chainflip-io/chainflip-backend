@@ -4,6 +4,7 @@
 #![feature(never_type)]
 
 mod diff;
+mod write_migration;
 // mod container;
 
 use crate::diff::{NodeDiff, diff};
@@ -316,6 +317,114 @@ enum TypeRepr<X: CellType> {
 	TypeByName,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+struct Migration {
+	type_from: String,
+	type_to: String,
+	edits: Vec<String>,
+	inner_migrations: BTreeMap<String,Migration>
+}
+
+impl Migration {
+	pub fn from_updates(updates: Vec<Update>) -> Option<Migration> {
+		let edits = updates.iter().filter_map(|update| 
+			match update {
+				Update::Item(a) => Some(a.clone()),
+				Update::Inner(migrations) => None,
+				Update::None => None,
+			}
+		).collect::<Vec<_>>();
+
+		let inner_migrations = updates.iter().filter_map(|update|
+			match update {
+				Update::Item(_) => None,
+				Update::Inner(migration) => Some(("".to_string(), migration.clone())),
+				Update::None => None,
+			}
+		).collect::<BTreeMap<_,_>>();
+
+		if edits.len() > 0 || inner_migrations.len() > 0 {
+			Some(Migration { type_from: "".to_string(), type_to: "".to_string(), edits, inner_migrations })	
+		} else {
+			None
+		}
+	}
+}
+
+#[derive(Debug, PartialEq, Clone)]
+enum Update {
+	Item(String),
+	Inner(Migration),
+	None
+}
+
+impl Update {
+	pub fn from_updates(updates: Vec<Update>) -> Update {
+		match Migration::from_updates(updates) {
+			Some(migration) => Update::Inner(migration),
+			None => Update::None,
+		}
+	}
+}
+
+// enum Migration {
+// 	Inner {
+// 		field: String,
+// 		migration: 
+// 	}
+// }
+
+// impl Migration {
+// 	pub fn in_path(self, path_component: String) -> BTreeMap<String,Migration> {
+// 		self.inner_migrations.into_iter()
+// 			.map(|(key, value)|
+// 				(format!("{path_component}::{key}"), value)
+// 			)
+// 			.chain(self.edits)
+// 	}
+// }
+
+impl<P: Debug, M: GetUpdated> GetUpdated for CompactDiff<P,M> {
+	fn get_updated(&self) -> Update {
+		match self {
+			CompactDiff::Removed(b) => Update::Item(format!("- {b:?}")),
+			CompactDiff::Added(a) => Update::Item(format!("+ {a:?}")),
+			CompactDiff::Change(a, b) => Update::Item(format!("C {a:?} => {b:?}")),
+			CompactDiff::Inherited(f) => f.get_updated(),
+			CompactDiff::Unchanged(_) => Update::None,
+		}
+	}
+}
+
+impl GetUpdated for StructField<Morphism> {
+	fn get_updated(&self) -> Update {
+		self.ty.get_updated()
+	}
+}
+
+impl GetUpdated for EnumVariant<Morphism> {
+	fn get_updated(&self) -> Update {
+		Update::from_updates(self.fields.iter().map(|f| f.get_updated()).collect())
+	}
+}
+
+impl GetUpdated for TypeRepr<Morphism> {
+	fn get_updated(&self) -> Update {
+		match self {
+			TypeRepr::Struct { fields } => Update::from_updates(fields.iter().map(|field| field.get_updated()).collect()),
+			TypeRepr::Enum { variants } => Update::from_updates(variants.iter().map(|field| field.get_updated()).collect()),
+			TypeRepr::NotImplemented => Update::None,
+			TypeRepr::Primitive(x) => Update::None,
+			TypeRepr::TypeByName => Update::None,
+		}
+	}
+}
+
+
+trait GetUpdated {
+	fn get_updated(&self) -> Update;
+}
+
 impl GetIdentity for TypeRepr<Morphism> {
 	type Point = TypeRepr<Point>;
 
@@ -511,15 +620,27 @@ async fn main() {
 					// (Plain(hash_set), Map(hash_set, hash_set1)) => todo!(),
 					// (Map(hash_set, hash_set1), Plain(hash_set)) => todo!(),
 					(Map(hash_set, old_ty), Map(hash_set2, new_ty)) => {
-						// println!("MODIFIED Keys: ?");
 
 						let diff = compare_types(&old_metadata, old_ty, &new_metadata, new_ty);
 
-						// let new_paths = (new_paths.into_iter().collect::<BTreeSet<_>>());
-						// let old_paths = (old_paths.into_iter().collect::<BTreeSet<_>>());
-						// let created_paths = new_paths.difference(&old_paths).collect::<Vec<_>>();
-						println!("MODIFIED Values: typediff: {diff:?}");
+						let updated = diff.get_updated();
+
+						if updated != Update::None {
+							println!("MODIFIED Types: {updated:#?}");
+						}
+
 					},
+
+					(Plain(old_ty), Plain(new_ty)) => {
+						let diff = compare_types(&old_metadata, old_ty, &new_metadata, new_ty);
+						let updated = diff.get_updated();
+
+						if updated != Update::None {
+							println!("MODIFIED Types: {updated:#?}");
+						}
+
+					},
+
 					_ => println!("MODIFIED: other"),
 				}
 			},
