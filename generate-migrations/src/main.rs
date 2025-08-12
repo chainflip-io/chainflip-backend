@@ -310,7 +310,7 @@ struct EnumVariant<X: CellType> {
 
 type TypeName = String;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)]
 enum MaybeRenaming {
 	Same(TypeName),
 	Rename { old: TypeName, new: TypeName },
@@ -356,6 +356,15 @@ struct Migration {
 	inner_migrations: BTreeMap<String, Migration>,
 }
 
+#[derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)]
+struct AbstractMigration {
+	typename: MaybeRenaming,
+	edits: Vec<String>,
+	inner_migrations: BTreeMap<String, MaybeRenaming>,
+}
+
+type TypePath2 = String;
+
 impl Migration {
 	pub fn from_updates(
 		typename: &MaybeRenaming,
@@ -385,6 +394,30 @@ impl Migration {
 			None
 		}
 	}
+
+	pub fn get_abstract_migrations(self) -> BTreeMap<AbstractMigration, Vec<TypePath2>> {
+		let mut result = BTreeMap::<AbstractMigration, Vec<TypePath2>>::new();
+		for (abstract_migration, mut paths) in self
+			.inner_migrations
+			.into_iter()
+			.flat_map(|(field, migration)| migration.get_abstract_migrations().into_iter())
+		{
+			result.entry(abstract_migration).or_default().append(&mut paths);
+		}
+
+		if self.edits.len() > 0 {
+			result.insert(
+				AbstractMigration {
+					typename: self.typename,
+					edits: self.edits,
+					inner_migrations: Default::default(),
+				},
+				vec!["".to_string()],
+			);
+		}
+
+		result
+	}
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -393,9 +426,17 @@ enum Update {
 	Inner(Migration),
 }
 
+
 impl Update {
 	pub fn from_updates(typename: &MaybeRenaming, updates: Vec<Option<Update>>) -> Option<Update> {
 		Migration::from_updates(typename, updates).map(Update::Inner)
+	}
+
+	pub fn get_abstract_migrations(self) -> BTreeMap<AbstractMigration, Vec<TypePath2>> {
+		match self {
+			Update::Item(_) => Default::default(),
+			Update::Inner(migration) => migration.get_abstract_migrations(),
+		}
 	}
 }
 
@@ -635,6 +676,8 @@ async fn main() {
 	// 	_ => true,
 	// });
 
+	let mut abstract_migrations = BTreeMap::<AbstractMigration, Vec<TypePath2>>::new();
+
 	for (location, entry) in diff {
 		print!("{}::{}: ", location.pallet, location.storage_name);
 		match entry {
@@ -649,19 +692,25 @@ async fn main() {
 					(Map(hash_set, old_ty), Map(hash_set2, new_ty)) => {
 						let diff = compare_types(&old_metadata, old_ty, &new_metadata, new_ty);
 
-						let updated = diff.get_updated();
+						let updated = diff.get_updated().map(Update::get_abstract_migrations).unwrap_or_default();
 
-						if updated.is_some() {
-							println!("MODIFIED Types: {updated:#?}");
+						if updated.len() > 0 {
+							for (m, mut paths) in updated {
+								abstract_migrations.entry(m).or_default().append(&mut paths);
+							}
+							// println!("MODIFIED Types: {updated:#?}");
 						}
 					},
 
 					(Plain(old_ty), Plain(new_ty)) => {
 						let diff = compare_types(&old_metadata, old_ty, &new_metadata, new_ty);
-						let updated = diff.get_updated();
+						let updated = diff.get_updated().map(Update::get_abstract_migrations).unwrap_or_default();
 
-						if updated.is_some() {
-							println!("MODIFIED Types: {updated:#?}");
+						if updated.len() > 0 {
+							for (m, mut paths) in updated {
+								abstract_migrations.entry(m).or_default().append(&mut paths);
+							}
+							// println!("MODIFIED Types: {updated:#?}");
 						}
 					},
 
@@ -670,4 +719,6 @@ async fn main() {
 			},
 		}
 	}
+
+	println!("Migrations: \n {abstract_migrations:#?}");
 }
