@@ -1,0 +1,2 @@
+// struct
+// pub fn write()

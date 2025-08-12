@@ -357,22 +357,25 @@ struct Migration {
 }
 
 impl Migration {
-	pub fn from_updates(typename: &MaybeRenaming, updates: Vec<Update>) -> Option<Migration> {
+	pub fn from_updates(
+		typename: &MaybeRenaming,
+		updates: Vec<Option<Update>>,
+	) -> Option<Migration> {
 		let edits = updates
 			.iter()
 			.filter_map(|update| match update {
-				Update::Item(a) => Some(a.clone()),
-				Update::Inner(migrations) => None,
-				Update::None => None,
+				Some(Update::Item(a)) => Some(a.clone()),
+				Some(Update::Inner(migrations)) => None,
+				None => None,
 			})
 			.collect::<Vec<_>>();
 
 		let inner_migrations = updates
 			.iter()
 			.filter_map(|update| match update {
-				Update::Item(_) => None,
-				Update::Inner(migration) => Some(("".to_string(), migration.clone())),
-				Update::None => None,
+				Some(Update::Item(_)) => None,
+				Some(Update::Inner(migration)) => Some(("".to_string(), migration.clone())),
+				None => None,
 			})
 			.collect::<BTreeMap<_, _>>();
 
@@ -388,44 +391,40 @@ impl Migration {
 enum Update {
 	Item(String),
 	Inner(Migration),
-	None,
 }
 
 impl Update {
-	pub fn from_updates(typename: &MaybeRenaming, updates: Vec<Update>) -> Update {
-		match Migration::from_updates(typename, updates) {
-			Some(migration) => Update::Inner(migration),
-			None => Update::None,
-		}
+	pub fn from_updates(typename: &MaybeRenaming, updates: Vec<Option<Update>>) -> Option<Update> {
+		Migration::from_updates(typename, updates).map(Update::Inner)
 	}
 }
 
 impl<P: Debug, M: GetUpdated> GetUpdated for CompactDiff<P, M> {
-	fn get_updated(&self) -> Update {
+	fn get_updated(&self) -> Option<Update> {
 		match self {
-			CompactDiff::Removed(b) => Update::Item(format!("- {b:?}")),
-			CompactDiff::Added(a) => Update::Item(format!("+ {a:?}")),
-			CompactDiff::Change(a, b) => Update::Item(format!("C {a:?} => {b:?}")),
+			CompactDiff::Removed(b) => Some(Update::Item(format!("- {b:?}"))),
+			CompactDiff::Added(a) => Some(Update::Item(format!("+ {a:?}"))),
+			CompactDiff::Change(a, b) => Some(Update::Item(format!("C {a:?} => {b:?}"))),
 			CompactDiff::Inherited(f) => f.get_updated(),
-			CompactDiff::Unchanged(_) => Update::None,
+			CompactDiff::Unchanged(_) => None,
 		}
 	}
 }
 
 impl GetUpdated for StructField<Morphism> {
-	fn get_updated(&self) -> Update {
+	fn get_updated(&self) -> Option<Update> {
 		self.ty.get_updated()
 	}
 }
 
 impl GetUpdated for EnumVariant<Morphism> {
-	fn get_updated(&self) -> Update {
+	fn get_updated(&self) -> Option<Update> {
 		Update::from_updates(&self.typename, self.fields.iter().map(|f| f.get_updated()).collect())
 	}
 }
 
 impl GetUpdated for TypeRepr<Morphism> {
-	fn get_updated(&self) -> Update {
+	fn get_updated(&self) -> Option<Update> {
 		match self {
 			TypeRepr::Struct { typename, fields } => Update::from_updates(
 				&typename,
@@ -435,15 +434,15 @@ impl GetUpdated for TypeRepr<Morphism> {
 				&typename,
 				variants.iter().map(|field| field.get_updated()).collect(),
 			),
-			TypeRepr::NotImplemented => Update::None,
-			TypeRepr::Primitive(x) => Update::None,
-			TypeRepr::TypeByName(_) => Update::None,
+			TypeRepr::NotImplemented => None,
+			TypeRepr::Primitive(x) => None,
+			TypeRepr::TypeByName(_) => None,
 		}
 	}
 }
 
 trait GetUpdated {
-	fn get_updated(&self) -> Update;
+	fn get_updated(&self) -> Option<Update>;
 }
 
 impl GetIdentity for TypeRepr<Morphism> {
@@ -652,7 +651,7 @@ async fn main() {
 
 						let updated = diff.get_updated();
 
-						if updated != Update::None {
+						if updated.is_some() {
 							println!("MODIFIED Types: {updated:#?}");
 						}
 					},
@@ -661,7 +660,7 @@ async fn main() {
 						let diff = compare_types(&old_metadata, old_ty, &new_metadata, new_ty);
 						let updated = diff.get_updated();
 
-						if updated != Update::None {
+						if updated.is_some() {
 							println!("MODIFIED Types: {updated:#?}");
 						}
 					},
