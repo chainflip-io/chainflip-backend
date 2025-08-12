@@ -624,7 +624,7 @@ mod test {
 			relative_price(2.into(), 3.into()),
 			(U256::one() << PRICE_FRACTIONAL_BITS) * 2 / 3
 		);
-		// Manually calculated value using online calculator
+		// Manually calculated value
 		assert_eq!(
 			relative_price(
 				U256::from_dec_str("1234512345123451234512345123451234512345").unwrap(),
