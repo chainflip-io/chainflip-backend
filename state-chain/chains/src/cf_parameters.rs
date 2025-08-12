@@ -16,7 +16,7 @@
 
 use crate::{
 	ccm_checker::DecodedCcmAdditionalData, CcmAdditionalData, CcmChannelMetadataChecked,
-	ChannelRefundParameters, ChannelRefundParametersUnchecked,
+	ChannelRefundParameters, ChannelRefundParametersUnchecked, ChannelRefundParametersV0,
 };
 use cf_primitives::{
 	AccountId, AffiliateAndFee, BasisPoints, Beneficiary, DcaParameters, MAX_AFFILIATES,
@@ -59,7 +59,7 @@ pub struct VaultSwapParameters<R> {
 /// Original version of `VaultSwapParameters` that does not include
 /// and refund CCM metadata.
 pub type VaultSwapParametersV0<RefundAddress> =
-	VaultSwapParameters<ChannelRefundParameters<RefundAddress, (), ()>>;
+	VaultSwapParameters<ChannelRefundParametersV0<RefundAddress>>;
 
 /// New version of `VaultSwapParameters` that includes refund CCM metadata.
 pub type VaultSwapParametersV1<RefundAddress> =
@@ -191,12 +191,10 @@ mod tests {
 
 	fn vault_swap_parameters_v0() -> VaultSwapParametersV0<ForeignChainAddress> {
 		VaultSwapParametersV0 {
-			refund_params: ChannelRefundParameters {
+			refund_params: ChannelRefundParametersV0 {
 				retry_duration: 1,
 				refund_address: ForeignChainAddress::Eth(sp_core::H160::from([2; 20])),
 				min_price: Default::default(),
-				refund_ccm_metadata: (),
-				max_oracle_price_slippage: (),
 			},
 			dca_params: Some(DcaParameters { number_of_chunks: 1u32, chunk_interval: 3u32 }),
 			boost_fee: 100u8,

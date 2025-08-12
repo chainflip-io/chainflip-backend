@@ -72,26 +72,43 @@ pub enum AccountOrAddress<AccountId, Address> {
 	PartialOrd,
 	Ord,
 )]
-pub struct ChannelRefundParameters<A, CcmRefundDetails, OracleSlippage> {
+pub struct ChannelRefundParameters<A, CcmRefundDetails> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: A,
 	pub min_price: Price,
 	pub refund_ccm_metadata: CcmRefundDetails,
-	pub max_oracle_price_slippage: OracleSlippage,
+	pub max_oracle_price_slippage: Option<BasisPoints>,
+}
+
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
+)]
+pub struct ChannelRefundParametersV0<A> {
+	pub retry_duration: cf_primitives::BlockNumber,
+	pub refund_address: A,
+	pub min_price: Price,
 }
 
 /// Refund parameters with CCM metadata that has not yet been checked for validity.
 ///
 /// Most incoming refund parameters will be of this type.
 pub type ChannelRefundParametersUnchecked<A> =
-	ChannelRefundParameters<A, Option<CcmChannelMetadataUnchecked>, Option<BasisPoints>>;
+	ChannelRefundParameters<A, Option<CcmChannelMetadataUnchecked>>;
 
 /// Refund parameters with CCM metadata that *has* been checked for validity.
-pub type ChannelRefundParametersChecked<A> = ChannelRefundParameters<
-	A,
-	Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
-	Option<BasisPoints>,
->;
+pub type ChannelRefundParametersChecked<A> =
+	ChannelRefundParameters<A, Option<CcmDepositMetadataChecked<ForeignChainAddress>>>;
 
 /// Convenience alias for unchecked refund parameters with encoded addresses. This is most commonly
 /// used in State Chain events and extrinsics.
@@ -112,7 +129,7 @@ pub type RpcChannelRefundParameters =
 pub type ChannelRefundParametersForChain<C> =
 	ChannelRefundParametersUnchecked<<C as Chain>::ChainAccount>;
 
-impl<A, D, O> ChannelRefundParameters<A, D, O> {
+impl<A, D> ChannelRefundParameters<A, D> {
 	pub fn min_output_amount(&self, input_amount: AssetAmount) -> AssetAmount {
 		use sp_runtime::traits::UniqueSaturatedInto;
 		cf_amm_math::output_amount_ceil(input_amount.into(), self.min_price).unique_saturated_into()
@@ -135,8 +152,8 @@ impl RpcChannelRefundParameters {
 	}
 }
 
-impl<A, D, O> ChannelRefundParameters<A, D, O> {
-	pub fn map_address<B, F: FnOnce(A) -> B>(self, f: F) -> ChannelRefundParameters<B, D, O> {
+impl<A, D> ChannelRefundParameters<A, D> {
+	pub fn map_address<B, F: FnOnce(A) -> B>(self, f: F) -> ChannelRefundParameters<B, D> {
 		ChannelRefundParameters {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address),
@@ -148,7 +165,7 @@ impl<A, D, O> ChannelRefundParameters<A, D, O> {
 	pub fn try_map_address<B, E, F: FnOnce(A) -> Result<B, E>>(
 		self,
 		f: F,
-	) -> Result<ChannelRefundParameters<B, D, O>, E> {
+	) -> Result<ChannelRefundParameters<B, D>, E> {
 		Ok(ChannelRefundParameters {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address)?,
@@ -243,7 +260,7 @@ impl ChannelRefundParametersUnchecked<ForeignChainAddress> {
 
 #[cfg(feature = "runtime-benchmarks")]
 impl<A: BenchmarkValue, D: BenchmarkValue> BenchmarkValue
-	for ChannelRefundParameters<A, Option<D>, Option<BasisPoints>>
+	for ChannelRefundParameters<A, Option<D>>
 {
 	fn benchmark_value() -> Self {
 		Self {

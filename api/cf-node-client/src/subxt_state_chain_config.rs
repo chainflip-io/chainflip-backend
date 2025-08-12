@@ -75,7 +75,6 @@ impl<T>
 					cf_static_runtime::runtime_types::cf_chains::CcmAdditionalData,
 				>,
 			>,
-			Option<u16>,
 		>,
 	> for cf_chains::ChannelRefundParametersUnchecked<T>
 {
@@ -87,7 +86,6 @@ impl<T>
 					cf_static_runtime::runtime_types::cf_chains::CcmAdditionalData,
 				>,
 			>,
-			Option<u16>
 		>,
 	) -> Self {
 		Self {
