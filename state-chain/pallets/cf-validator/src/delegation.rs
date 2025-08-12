@@ -52,22 +52,3 @@ pub struct OperatorSettings {
 	/// Default delegation acceptance preference for this validator
 	pub delegation_acceptance: DelegationAcceptance,
 }
-
-#[derive(
-	Default,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Clone,
-	PartialEq,
-	Eq,
-	Debug,
-	Deserialize,
-	Serialize,
-)]
-pub enum DelegationStatus {
-	#[default]
-	Delegating,
-	UnDelegating,
-}

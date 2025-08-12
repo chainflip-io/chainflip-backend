@@ -387,19 +387,19 @@ pub mod pallet {
 	pub type DelegationChoice<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
 
-	/// Holds meta information about the current delegation of delegator.
+	///  Holds the list of all delegators that have initiated undelegation and will successfully
+	/// undelegate at the end of the current epoch
 	#[pallet::storage]
-	pub type OutgoingDelegators<T: Config> =
-		StorageMap<_, Identity, T::AccountId, DelegationStatus, ValueQuery>;
+	pub type OutgoingDelegators<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type MaxDelegationBid<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
 
-	/// Collects all delegation of an epoch.
+	/// Collects all delegation of the current epoch.
 	#[pallet::storage]
-	pub type DelegationsPerEpoch<T: Config> =
-		StorageMap<_, Identity, EpochIndex, BTreeSet<T::AccountId>, ValueQuery>;
+	pub type CurrentEpochDelegations<T: Config> =
+		StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
 	/// The set of delegators in the next epoch.
 	#[pallet::storage]
@@ -1177,7 +1177,9 @@ pub mod pallet {
 				}
 			});
 
-			OutgoingDelegators::<T>::take(&delegator);
+			OutgoingDelegators::<T>::mutate(|outgoing_delegators| {
+				outgoing_delegators.remove(&delegator)
+			});
 
 			Self::deposit_event(Event::Delegated { delegator, operator });
 
@@ -1192,7 +1194,7 @@ pub mod pallet {
 			let operator = DelegationChoice::<T>::take(&delegator)
 				.ok_or(Error::<T>::AccountIsNotDelegating)?;
 
-			OutgoingDelegators::<T>::insert(&delegator, DelegationStatus::UnDelegating);
+			OutgoingDelegators::<T>::append(&delegator);
 
 			Self::deposit_event(Event::UnDelegated { delegator, operator });
 
@@ -1396,11 +1398,9 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
-		for delegator in DelegationsPerEpoch::<T>::take(old_epoch) {
-			if OutgoingDelegators::<T>::take(&delegator) == DelegationStatus::UnDelegating {
-				T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
-				Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch: old_epoch });
-			}
+		for delegator in OutgoingDelegators::<T>::take() {
+			T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
+			Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch: old_epoch });
 		}
 
 		Self::initialise_new_epoch(
@@ -1502,7 +1502,7 @@ impl<T: Config> Pallet<T> {
 			);
 		}
 
-		DelegationsPerEpoch::<T>::insert(new_epoch, delegators);
+		CurrentEpochDelegations::<T>::set(delegators);
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 
