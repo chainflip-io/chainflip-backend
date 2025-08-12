@@ -125,15 +125,9 @@ pub fn get_all_storage_entries(
 						storage_name: entry.name().to_string(),
 					},
 					match entry.entry_type() {
-						StorageEntryType::Plain(ty) => PortableStorageEntryType::Plain(
-							*ty, // type_into_path_components(metadata, *ty)
-						),
+						StorageEntryType::Plain(ty) => PortableStorageEntryType::Plain(*ty),
 						StorageEntryType::Map { hashers, key_ty, value_ty } =>
-							PortableStorageEntryType::Map(
-								*key_ty, *value_ty
-								// type_into_path_components(metadata, *key_ty),
-								// type_into_path_components(metadata, *value_ty),
-							),
+							PortableStorageEntryType::Map(*key_ty, *value_ty),
 					},
 				)
 			})
@@ -214,35 +208,17 @@ enum CompactDiff<Point, Morphism> {
 	Unchanged(Point),
 }
 
-
 impl<Point: PartialEq + Clone, Morphism: GetIdentity<Point = Point>> CompactDiff<Point, Morphism> {
 	fn compact_inherited(m: Morphism) -> Self {
-		m.try_get_identity().map(CompactDiff::Unchanged)
-		.unwrap_or(CompactDiff::Inherited(m))
+		m.try_get_identity()
+			.map(CompactDiff::Unchanged)
+			.unwrap_or(CompactDiff::Inherited(m))
 	}
-
 }
 
 trait GetIdentity {
 	type Point;
 	fn try_get_identity(&self) -> Option<Self::Point>;
-}
-
-impl<Point: PartialEq, Morphism: IsIdentity> IsIdentity for CompactDiff<Point, Morphism> {
-	fn is_identity(&self) -> bool {
-		match self {
-			CompactDiff::Removed(_) => false,
-			CompactDiff::Added(_) => false,
-			CompactDiff::Change(a, b) =>
-				if a == b {
-					true
-				} else {
-					false
-				},
-			CompactDiff::Inherited(x) => x.is_identity(),
-			CompactDiff::Unchanged(a) => true,
-		}
-	}
 }
 
 impl<Point: PartialEq + Clone, Morphism: GetIdentity<Point = Point>> GetIdentity
@@ -265,12 +241,6 @@ impl<Point: PartialEq + Clone, Morphism: GetIdentity<Point = Point>> GetIdentity
 	}
 }
 
-impl IsIdentity for StructField<Morphism> {
-	fn is_identity(&self) -> bool {
-		self.ty.is_identity()
-	}
-}
-
 impl GetIdentity for StructField<Morphism> {
 	type Point = StructField<Point>;
 
@@ -286,39 +256,18 @@ impl GetIdentity for StructField<Morphism> {
 
 impl GetIdentity for EnumVariant<Morphism> {
 	type Point = EnumVariant<Point>;
-	
+
 	fn try_get_identity(&self) -> Option<Self::Point> {
-		Some(
-			EnumVariant { name: self.name.clone(), 
-				fields:  self.fields.iter().map(GetIdentity::try_get_identity).collect::<Option<Vec<_>>>()?
-			}
-		)
+		Some(EnumVariant {
+			name: self.name.clone(),
+			fields: self
+				.fields
+				.iter()
+				.map(GetIdentity::try_get_identity)
+				.collect::<Option<Vec<_>>>()?,
+		})
 	}
 }
-
-// impl<A> CompactDiff<A> {
-// 	pub fn map<B>(self, f: impl Fn(A) -> B) -> CompactDiff<B> {
-// 		use CompactDiff::*;
-// 		match self {
-// 			Removed(a) => Removed(f(a)),
-// 			Added(b) => Added(f(b)),
-// 			Changed(a, b) => Changed(f(a), f(b)),
-// 			Compact(a) => Compact(f(a))
-// 		}
-// 	}
-// }
-
-// pub fn node_diff_to_diff<A: PartialEq>(d: NodeDiff<A,A>) -> CompactDiff<A> {
-// 	match d {
-// 		NodeDiff::Left(a) => CompactDiff::Removed(a),
-// 		NodeDiff::Right(b) => CompactDiff::Added(b),
-// 		NodeDiff::Both(a, b) => if a == b {
-// 			CompactDiff::Unchanged()
-// 		} else {
-// 			CompactDiff::Changed(a,b)
-// 		},
-// 	}
-// }
 
 // What we want to do is:
 //
@@ -332,8 +281,6 @@ trait CommonBounds = Debug + Clone + PartialEq;
 trait CellType {
 	type Of<Point: CommonBounds, Morphism: CommonBounds>: CommonBounds;
 }
-
-// type Cell<X, A> = <<X as CellType>::Get as Container>::Of<A>;
 
 #[derive(Debug)]
 struct Point;
@@ -360,29 +307,13 @@ struct EnumVariant<X: CellType> {
 	fields: Vec<X::Of<StructField<Point>, StructField<Morphism>>>,
 }
 
-trait IsIdentity {
-	fn is_identity(&self) -> bool;
-}
-
 #[derive_where(Clone, Debug, PartialEq;)]
 enum TypeRepr<X: CellType> {
 	Struct { fields: Vec<X::Of<StructField<Point>, StructField<Morphism>>> },
 	Enum { variants: Vec<X::Of<EnumVariant<Point>, EnumVariant<Morphism>>> },
 	NotImplemented,
 	Primitive(X::Of<TypeDefPrimitive, !>),
-	TypeByName
-}
-
-impl IsIdentity for TypeRepr<Morphism> {
-	fn is_identity(&self) -> bool {
-		match self {
-			TypeRepr::Struct { fields } => fields.iter().all(|field| field.is_identity()),
-			TypeRepr::Enum { variants } => false,
-			TypeRepr::NotImplemented => false,
-			TypeRepr::Primitive(type_def_primitive) => type_def_primitive.is_identity(),
-			TypeRepr::TypeByName => false,
-		}
-	}
+	TypeByName,
 }
 
 impl GetIdentity for TypeRepr<Morphism> {
@@ -391,58 +322,39 @@ impl GetIdentity for TypeRepr<Morphism> {
 	fn try_get_identity(&self) -> Option<Self::Point> {
 		match self {
 			// TypeRepr::Struct { fields } => Some(TypeRepr::Struct {
-			// 		fields: fields.iter().map(|field| field.try_get_identity()).collect::<Option<Vec<_>>>()?,
-			// 	}),
-			// TypeRepr::Enum { variants } => Some(TypeRepr::Enum { 
-			// 		variants: variants.iter().map(|variant| variant.try_get_identity()).collect::<Option<Vec<_>>>()?,
-			// 	}),
-			TypeRepr::Struct { fields } => 
-					if fields.iter().map(|field| field.try_get_identity()).collect::<Option<Vec<_>>>().is_some() {
-						Some(TypeRepr::TypeByName)
-					} else {
-						None
-					}
-				,
-			TypeRepr::Enum { variants } => 
-					if variants.iter().map(|field| field.try_get_identity()).collect::<Option<Vec<_>>>().is_some() {
-						Some(TypeRepr::TypeByName)
-					} else {
-						None
-					},
+			// 		fields: fields.iter().map(|field|
+			// field.try_get_identity()).collect::<Option<Vec<_>>>()?, 	}),
+			// TypeRepr::Enum { variants } => Some(TypeRepr::Enum {
+			// 		variants: variants.iter().map(|variant|
+			// variant.try_get_identity()).collect::<Option<Vec<_>>>()?, 	}),
+			TypeRepr::Struct { fields } =>
+				if fields
+					.iter()
+					.map(|field| field.try_get_identity())
+					.collect::<Option<Vec<_>>>()
+					.is_some()
+				{
+					Some(TypeRepr::TypeByName)
+				} else {
+					None
+				},
+			TypeRepr::Enum { variants } =>
+				if variants
+					.iter()
+					.map(|field| field.try_get_identity())
+					.collect::<Option<Vec<_>>>()
+					.is_some()
+				{
+					Some(TypeRepr::TypeByName)
+				} else {
+					None
+				},
 			TypeRepr::NotImplemented => None,
 			TypeRepr::Primitive(type_def_primitive) => None,
 			TypeRepr::TypeByName => None,
-			}
+		}
 	}
 }
-
-impl IsIdentity for ! {
-	fn is_identity(&self) -> bool {
-		true
-	}
-}
-
-// impl<A: PartialEq + IsIdentity> IsIdentity for NodeDiff<A,A> {
-// 	fn is_identity(&self) -> bool {
-// 		match self {
-// 			NodeDiff::Left(_) => false,
-// 			NodeDiff::Right(_) => false,
-// 			NodeDiff::Both(a, b) => a == b,
-// 		}
-// 	}
-// }
-
-// #[derive(Debug)]
-// enum TypeDiff {
-// 	NoChange,
-
-// 	SameKind(TypeRepr),
-
-// 	// TODO:
-// 	DifferentKinds(),
-
-// 	NotImplemented(),
-// }
 
 pub fn compare_types(
 	metadata1: &subxt::Metadata,
