@@ -4689,6 +4689,7 @@ name = "generate-migrations"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "derive-where",
  "frame-metadata 16.0.0",
  "n-functor",

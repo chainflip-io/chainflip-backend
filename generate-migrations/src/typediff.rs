@@ -106,11 +106,12 @@ enum PortableStorageEntryType<Ty> {
 }
 
 pub fn get_all_storage_entries(
+	config: &MetadataConfig,
 	metadata: &subxt::Metadata,
 ) -> BTreeMap<StorageLocation, PortableStorageEntryType<u32>> {
 	metadata
 		.pallets()
-		.filter(|pallet| pallet.name().contains("Ingress") || pallet.name().contains("Elections"))
+		.filter(|pallet| config.include.iter().any(|string| pallet.name().contains(string)))
 		.flat_map(|pallet| {
 			pallet.storage().unwrap().entries().iter().cloned().map(move |entry| {
 				(
@@ -194,7 +195,7 @@ pub fn type_into_path_components(metadata: &subxt::Metadata, ty: u32) -> FlatTyp
 type Diff<A> = NodeDiff<A, A>;
 
 #[derive(Clone, PartialEq, Debug)]
-enum CompactDiff<Point, Morphism> {
+pub enum CompactDiff<Point, Morphism> {
 	Removed(Point),
 	Added(Point),
 	Change(Point, Point),
@@ -279,45 +280,45 @@ impl GetIdentity for EnumVariant<Morphism> {
 // So we have a type structure that in its fields contains either a single value or a morphism.
 //
 // Then there are two types
-trait CommonBounds = Debug + Clone + PartialEq;
+pub trait CommonBounds = Debug + Clone + PartialEq;
 
-trait CellType {
+pub trait CellType {
 	type Of<Point: CommonBounds, Morphism: CommonBounds>: CommonBounds;
 }
 
 #[derive(Debug)]
-struct Point;
+pub struct Point;
 impl CellType for Point {
 	type Of<Point: CommonBounds, Morphism: CommonBounds> = Point;
 }
 
 #[derive(Debug)]
-struct Morphism;
+pub struct Morphism;
 impl CellType for Morphism {
 	type Of<Point: CommonBounds, Morphism: CommonBounds> = CompactDiff<Point, Morphism>;
 }
 
 #[derive_where(Clone, PartialEq, Debug;)]
-struct StructField<X: CellType> {
+pub struct StructField<X: CellType> {
 	name: String,
 	position: usize,
 	ty: X::Of<TypeRepr<Point>, TypeRepr<Morphism>>,
 }
 
 #[derive_where(Clone, PartialEq, Debug;)]
-struct TupleEntry<X: CellType> {
+pub struct TupleEntry<X: CellType> {
 	position: usize,
 	ty: X::Of<TypeRepr<Point>, TypeRepr<Morphism>>,
 }
 
 #[derive_where(Clone, PartialEq, Debug;)]
-struct EnumVariant<X: CellType> {
+pub struct EnumVariant<X: CellType> {
 	typename: MaybeRenaming,
 	fields: Vec<X::Of<StructField<Point>, StructField<Morphism>>>,
 }
 
 #[derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)]
-enum TypeName {
+pub enum TypeName {
 	Ordinary { path: String, chain: ChainInstance, params: Vec<TypeName> },
 	VariantType { enum_type: Box<TypeName>, variant: String },
 	Unknown,
@@ -338,7 +339,7 @@ impl TypeName {
 
 #[derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)]
 #[n_functor::derive_n_functor]
-enum DiscreteMorphism<A> {
+pub enum DiscreteMorphism<A> {
 	Same(A),
 	Rename { old: A, new: A },
 }
@@ -348,6 +349,13 @@ type MaybeRenaming = DiscreteMorphism<TypeName>;
 impl<A: PartialEq> DiscreteMorphism<A> {
 	pub fn from_points(old: A, new: A) -> Self {
 		if old == new { DiscreteMorphism::Same(old) } else { DiscreteMorphism::Rename { old, new } }
+	}
+
+	pub fn get_old(self) -> A {
+		match self {
+			DiscreteMorphism::Same(a) => a,
+			DiscreteMorphism::Rename { old, new } => old,
+		}
 	}
 }
 impl<A, B> DiscreteMorphism<(A, B)> {
@@ -362,7 +370,7 @@ impl<A, B> DiscreteMorphism<(A, B)> {
 }
 
 #[derive_where(Clone, Debug, PartialEq;)]
-enum TypeRepr<X: CellType> {
+pub enum TypeRepr<X: CellType> {
 	Struct {
 		typename: MaybeRenaming,
 		fields: Vec<X::Of<StructField<Point>, StructField<Morphism>>>,
@@ -906,7 +914,113 @@ pub fn compare_types(
 	}
 }
 
-pub async fn compare_metadata() {
+#[derive(clap::Args, Clone)]
+pub struct MetadataConfig {
+	#[arg(short, long, value_name = "INCLUDE")]
+	include: Vec<String>,
+}
+
+pub fn extract_old_typename(n: MaybeRenaming) -> MaybeRenaming {
+	match n {
+		DiscreteMorphism::Same(a) => DiscreteMorphism::Same(a),
+		DiscreteMorphism::Rename { old, new } => DiscreteMorphism::Same(old),
+	}
+}
+
+pub fn extract_old_struct_field(f: StructField<Morphism>) -> StructField<Point> {
+	StructField {
+		name: f.name,
+		position: f.position,
+		ty: extract_old_diff(f.ty, extract_old_type).unwrap(),
+	}
+}
+
+pub fn extract_old_enum_variant(v: EnumVariant<Morphism>) -> EnumVariant<Point> {
+	EnumVariant {
+		typename: extract_old_typename(v.typename),
+		fields: v
+			.fields
+			.into_iter()
+			.filter_map(|x| extract_old_diff(x, extract_old_struct_field))
+			.collect(),
+	}
+}
+
+pub fn extract_old_tuple_entry(f: TupleEntry<Morphism>) -> TupleEntry<Point> {
+	TupleEntry { position: f.position, ty: extract_old_diff(f.ty, extract_old_type).unwrap() }
+}
+
+pub fn extract_old_diff_maybe<A, B>(d: CompactDiff<A, B>, f: impl Fn(B) -> Option<A>) -> Option<A> {
+	match d {
+		CompactDiff::Removed(a) => Some(a),
+		CompactDiff::Added(_) => None,
+		CompactDiff::Change(a, _) => Some(a),
+		CompactDiff::Inherited(x) => f(x),
+		CompactDiff::Unchanged(a) => Some(a),
+	}
+}
+
+pub fn extract_old_diff<A, B>(d: CompactDiff<A, B>, f: impl Fn(B) -> A) -> Option<A> {
+	match d {
+		CompactDiff::Removed(a) => Some(a),
+		CompactDiff::Added(_) => None,
+		CompactDiff::Change(a, _) => Some(a),
+		CompactDiff::Inherited(x) => Some(f(x)),
+		CompactDiff::Unchanged(a) => Some(a),
+	}
+}
+
+pub fn extract_old_type(ty: TypeRepr<Morphism>) -> TypeRepr<Point> {
+	match ty {
+		TypeRepr::Struct { typename, fields } => TypeRepr::Struct {
+			typename: extract_old_typename(typename),
+			fields: fields
+				.into_iter()
+				.filter_map(|d| extract_old_diff(d, extract_old_struct_field))
+				.collect(),
+		},
+		TypeRepr::Enum { typename, variants } => TypeRepr::Enum {
+			typename: extract_old_typename(typename),
+			variants: variants
+				.into_iter()
+				.filter_map(|d| extract_old_diff(d, extract_old_enum_variant))
+				.collect(),
+		},
+		TypeRepr::Tuple { typename, fields } => TypeRepr::Tuple {
+			typename: extract_old_typename(typename),
+			fields: fields
+				.into_iter()
+				.filter_map(|d| extract_old_diff(d, extract_old_tuple_entry))
+				.collect(),
+		},
+		TypeRepr::Sequence { typename, inner } => TypeRepr::Sequence {
+			typename: extract_old_typename(typename),
+			inner: Box::new(extract_old_diff(*(inner.clone()), extract_old_type).unwrap()),
+		},
+		TypeRepr::NotImplemented => TypeRepr::NotImplemented,
+		TypeRepr::Primitive(a) =>
+			TypeRepr::Primitive(extract_old_diff(a, |_| TypeDefPrimitive::Bool).unwrap()),
+		TypeRepr::TypeByName(n) => TypeRepr::TypeByName(extract_old_typename(n)),
+	}
+}
+
+pub fn extract_old_if_changed(
+	diff: &CompactDiff<TypeRepr<Point>, TypeRepr<Morphism>>,
+) -> Option<TypeRepr<Point>> {
+	match diff {
+		CompactDiff::Removed(a) => Some(a.clone()),
+		CompactDiff::Added(_) => None,
+		CompactDiff::Change(a, _) => Some(a.clone()),
+		CompactDiff::Inherited(f) => Some(extract_old_type(f.clone())),
+		CompactDiff::Unchanged(_) => None,
+	}
+}
+
+pub struct MetadataResult {
+	pub old_definitions: BTreeMap<String, Vec<TypeRepr<Point>>>,
+}
+
+pub async fn compare_metadata(config: &MetadataConfig) -> MetadataResult {
 	let metadata = state_chain_runtime::Runtime::metadata().1;
 	let pallets: Vec<_> = match metadata {
 		RuntimeMetadata::V14(runtime_metadata_v14) =>
@@ -936,12 +1050,14 @@ pub async fn compare_metadata() {
 	println!("local  pallets: {:?}", get_pallet_names(new_metadata.clone()));
 
 	// compute storage objects that differ
-	let old_storage = get_all_storage_entries(&old_metadata);
-	let new_storage = get_all_storage_entries(&new_metadata);
-	let mut diff = crate::diff::diff(old_storage, new_storage);
+	let old_storage = get_all_storage_entries(config, &old_metadata);
+	let new_storage = get_all_storage_entries(config, &new_metadata);
+	let diff = crate::diff::diff(old_storage, new_storage);
 
 	let mut abstract_migrations =
 		BTreeMap::<AbstractMigration, Vec<AbstractMigrationInstance>>::new();
+
+	let mut old_definitions = BTreeMap::<String, Vec<TypeRepr<Point>>>::new();
 
 	for (location, entry) in diff {
 		print!("{}::{}: ", location.pallet, location.storage_name);
@@ -957,6 +1073,12 @@ pub async fn compare_metadata() {
 					(Map(hash_set, old_ty), Map(hash_set2, new_ty)) => {
 						let diff = compare_types(&old_metadata, old_ty, &new_metadata, new_ty);
 
+						// --- old defs ---
+						if let Some(old) = extract_old_if_changed(&diff) {
+							old_definitions.entry(location.pallet.clone()).or_default().push(old);
+						}
+
+						// --- migrations ---
 						let updated = diff
 							.get_update()
 							.map(|(path, m)| Update::get_abstract_migrations(m, location))
@@ -966,12 +1088,18 @@ pub async fn compare_metadata() {
 							for (m, mut paths) in updated {
 								abstract_migrations.entry(m).or_default().extend(paths.into_iter());
 							}
-							// println!("MODIFIED Types: {updated:#?}");
 						}
 					},
 
 					(Plain(old_ty), Plain(new_ty)) => {
 						let diff = compare_types(&old_metadata, old_ty, &new_metadata, new_ty);
+
+						// --- old defs ---
+						if let Some(old) = extract_old_if_changed(&diff) {
+							old_definitions.entry(location.pallet.clone()).or_default().push(old);
+						}
+
+						// --- migrations ---
 						let updated = diff
 							.get_update()
 							.map(|(path, m)| Update::get_abstract_migrations(m, location))
@@ -981,7 +1109,6 @@ pub async fn compare_metadata() {
 							for (m, paths) in updated {
 								abstract_migrations.entry(m).or_default().extend(paths.into_iter());
 							}
-							// println!("MODIFIED Types: {updated:#?}");
 						}
 					},
 
@@ -991,5 +1118,7 @@ pub async fn compare_metadata() {
 		}
 	}
 
-	println!("Migrations: \n {abstract_migrations:#?}");
+	// println!("Migrations: \n {abstract_migrations:#?}");
+
+	MetadataResult { old_definitions }
 }
