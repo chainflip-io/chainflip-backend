@@ -329,7 +329,7 @@ struct EnumVariant<X: CellType> {
 #[derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)]
 enum TypeName {
 	Ordinary { path: String, chain: ChainInstance, params: Vec<TypeName> },
-	VariantType(String),
+	VariantType { enum_type: Box<TypeName>, variant: String },
 	Unknown,
 }
 
@@ -340,7 +340,7 @@ impl TypeName {
 		match self {
 			TypeName::Ordinary { path, chain, params } =>
 				(TypeName::Ordinary { path, chain: None, params }, chain),
-			a @ TypeName::VariantType(_) => (a, None),
+			a @ TypeName::VariantType { .. } => (a, None),
 			a @ TypeName::Unknown => (a, None),
 		}
 	}
@@ -817,16 +817,28 @@ pub fn compare_types(
 					.into_iter()
 					.map(|(name, d)| match d {
 						NodeDiff::Left((pos, fields)) => CompactDiff::Removed(EnumVariant {
-							typename: MaybeRenaming::Same(TypeName::VariantType(name.clone())),
+							typename: toplevel_typename.clone().map(|n| TypeName::VariantType {
+								enum_type: Box::new(n),
+								variant: name.clone(),
+							}),
 							fields: vec![],
 						}),
 						NodeDiff::Right((pos, fields)) => CompactDiff::Added(EnumVariant {
-							typename: MaybeRenaming::Same(TypeName::VariantType(name.clone())),
+							typename: toplevel_typename.clone().map(|n| TypeName::VariantType {
+								enum_type: Box::new(n),
+								variant: name.clone(),
+							}),
 							fields: vec![],
 						}),
 						NodeDiff::Both((pos1, fields1), (pos2, fields2)) =>
+						// TODO check that variant positions are the same!!!!
 							CompactDiff::compact_inherited(EnumVariant {
-								typename: MaybeRenaming::Same(TypeName::VariantType(name.clone())),
+								typename: toplevel_typename.clone().map(|n| {
+									TypeName::VariantType {
+										enum_type: Box::new(n),
+										variant: name.clone(),
+									}
+								}),
 								fields: diff_fields(&fields1, &fields2),
 							}),
 					})
@@ -837,10 +849,6 @@ pub fn compare_types(
 		(Sequence(ty1), Sequence(ty2)) => {
 			let type_diff =
 				compare_types(metadata1, ty1.type_param.id, metadata2, ty2.type_param.id);
-			// let typename = MaybeRenaming::from_strings(
-			// 	format!("Sequence<{}>", type_to_string(metadata1, ty1.type_param.id)),
-			// 	format!("Sequence<{}>", type_to_string(metadata2, ty2.type_param.id)),
-			// );
 			CompactDiff::compact_inherited(TypeRepr::Sequence {
 				inner: Box::new(type_diff),
 				typename: toplevel_typename,
