@@ -405,6 +405,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type NextDelegators<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
+	/// Operator -> Vec<Validators> temprary for an epoch.
+	#[pallet::storage]
+	pub type ValidatorDelegation<T: Config> =
+		StorageMap<_, Identity, T::AccountId, Vec<T::AccountId>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -1545,34 +1550,14 @@ impl<T: Config> Pallet<T> {
 
 		let qualified_bidders = Self::get_qualified_bidders::<T::KeygenQualification>();
 
-		let delegation_snapshot = Self::build_delegation_snapshot(
-			qualified_bidders.clone().into_iter().map(|bid| bid.bidder_id.into()).collect(),
-		);
-
-		let get_avg_bid_for_validator_if_managed =
-			|validator_id: T::AccountId| -> Option<T::Amount> {
-				let operator_id = ManagedValidators::<T>::get(validator_id)?;
-				let snap = delegation_snapshot.get(&operator_id)?;
-				Some(snap.avg_bid)
-			};
+		let _ = ValidatorDelegation::<T>::clear(u32::MAX, None);
 
 		match SetSizeMaximisingAuctionResolver::try_new(
 			T::EpochInfo::current_authority_count(),
 			AuctionParameters::<T>::get(),
 		)
-		.and_then(|resolver| {
-			resolver.resolve_auction(
-				qualified_bidders
-					.into_iter()
-					.map(|bid| Bid {
-						bidder_id: bid.bidder_id.clone(),
-						amount: get_avg_bid_for_validator_if_managed(bid.bidder_id.into())
-							.unwrap_or(bid.amount),
-					})
-					.collect(),
-				AuctionBidCutoffPercentage::<T>::get(),
-			)
-		}) {
+		.and_then(|resolver| Self::run_and_optimize_auction(resolver, qualified_bidders.clone(), 1))
+		{
 			Ok(auction_outcome) => {
 				Self::deposit_event(Event::AuctionCompleted(
 					auction_outcome.winners.clone(),
@@ -1592,6 +1577,10 @@ impl<T: Config> Pallet<T> {
 				// Use the winners and losers as an approximation.
 				let weight = T::ValidatorWeightInfo::start_authority_rotation(
 					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
+				);
+
+				let delegation_snapshot = Self::build_delegation_snapshot(
+					qualified_bidders.clone().into_iter().map(|bid| bid.bidder_id.into()).collect(),
 				);
 
 				NextDelegators::<T>::put(
@@ -1828,14 +1817,26 @@ impl<T: Config> Pallet<T> {
 		let mut snapshot: BTreeMap<T::AccountId, DelegationSnapshot<T>> = BTreeMap::new();
 
 		for operator in OperatorSettingsLookup::<T>::iter_keys() {
-			let delegators =
+			let validator_delegations = ValidatorDelegation::<T>::get(&operator);
+
+			let mut delegators =
 				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Delegator);
 
 			let validators: BTreeMap<T::AccountId, T::Amount> =
 				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator)
 					.into_iter()
-					.filter(|(account_id, _)| qualified_bidder.contains(account_id))
+					.filter(|(account_id, _)| {
+						qualified_bidder.contains(account_id) ||
+							validator_delegations.contains(account_id)
+					})
 					.collect();
+
+			delegators.extend(
+				validator_delegations
+					.into_iter()
+					.map(|account_id| (account_id.clone(), T::FundingInfo::balance(&account_id)))
+					.collect::<Vec<_>>(),
+			);
 
 			let total_delegator_balance = delegators
 				.clone()
@@ -1872,6 +1873,62 @@ impl<T: Config> Pallet<T> {
 		}
 
 		snapshot
+	}
+
+	pub fn run_and_optimize_auction(
+		resolver: SetSizeMaximisingAuctionResolver,
+		qualified_bidders: Vec<Bid<<T as Chainflip>::ValidatorId, T::Amount>>,
+		mut optimization_round: usize,
+	) -> Result<AuctionOutcome<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>, AuctionError>
+	{
+		let delegation_snapshot = Self::build_delegation_snapshot(
+			qualified_bidders.clone().into_iter().map(|bid| bid.bidder_id.into()).collect(),
+		);
+		let get_avg_bid_for_validator_if_managed =
+			|validator_id: T::AccountId| -> Option<T::Amount> {
+				let operator_id = ManagedValidators::<T>::get(validator_id)?;
+				let snap = delegation_snapshot.get(&operator_id)?;
+				Some(snap.avg_bid)
+			};
+
+		let auction_outcome = resolver.resolve_auction(
+			qualified_bidders
+				.clone()
+				.into_iter()
+				.map(|bid| Bid {
+					bidder_id: bid.bidder_id.clone(),
+					amount: get_avg_bid_for_validator_if_managed(bid.bidder_id.into())
+						.unwrap_or(bid.amount),
+				})
+				.collect(),
+			AuctionBidCutoffPercentage::<T>::get(),
+		);
+
+		if auction_outcome.is_err() {
+			return auction_outcome;
+		}
+
+		let operator_to_optimize: Vec<_> = delegation_snapshot
+			.clone()
+			.into_iter()
+			.filter(|snapshot| snapshot.1.avg_bid < auction_outcome.clone().unwrap().bond)
+			.collect();
+
+		if operator_to_optimize.len() == 0 || optimization_round >= MAX_OPTIMIZATION_ROUNDS {
+			return auction_outcome;
+		}
+
+		for (operator, snapshot) in operator_to_optimize {
+			if let Some(lowest) =
+				snapshot.validators.iter().min_by_key(|(k, &v)| (v, *k)).map(|(k, _)| k.clone())
+			{
+				ValidatorDelegation::<T>::mutate(operator, |v| v.push(lowest));
+			}
+		}
+
+		optimization_round += 1;
+
+		Self::run_and_optimize_auction(resolver, qualified_bidders, optimization_round)
 	}
 }
 

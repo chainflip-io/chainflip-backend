@@ -20,6 +20,8 @@ use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
 use crate::*;
 use serde::{Deserialize, Serialize};
 
+pub const MAX_OPTIMIZATION_ROUNDS: usize = 10;
+
 #[derive(
 	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen,
 )]
