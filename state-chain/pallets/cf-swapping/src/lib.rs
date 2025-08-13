@@ -822,7 +822,7 @@ pub mod pallet {
 			broker_id: T::AccountId,
 			minimum_fee_bps: BasisPoints,
 		},
-		SwapCanceled {
+		SwapAborted {
 			swap_id: SwapId,
 		},
 	}
@@ -1747,6 +1747,8 @@ pub mod pallet {
 		fn refund_failed_swap(swap: Swap<T>) {
 			let swap_request_id = swap.swap_request_id;
 
+			Self::deposit_event(Event::<T>::SwapAborted { swap_id: swap.swap_id });
+
 			let Some(mut request) = SwapRequests::<T>::take(swap_request_id) else {
 				log_or_panic!("Swap request {swap_request_id} not found");
 				return;
@@ -1869,7 +1871,7 @@ pub mod pallet {
 		fn cancel_swap(swap_id: SwapId) -> AssetAmount {
 			ScheduledSwaps::<T>::mutate(|swaps| {
 				let amount = swaps.remove(&swap_id).map(|swap| {
-					Self::deposit_event(Event::<T>::SwapCanceled { swap_id: swap.swap_id });
+					Self::deposit_event(Event::<T>::SwapAborted { swap_id: swap.swap_id });
 					swap.input_amount
 				});
 				if amount.is_none() {
