@@ -4691,6 +4691,7 @@ dependencies = [
  "anyhow",
  "derive-where",
  "frame-metadata 16.0.0",
+ "n-functor",
  "parity-scale-codec",
  "scale-info",
  "state-chain-runtime",

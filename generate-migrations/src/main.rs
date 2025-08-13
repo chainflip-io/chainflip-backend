@@ -15,6 +15,7 @@ use frame_metadata::{RuntimeMetadata, v14::RuntimeMetadataV14};
 use scale_info::{Field, MetaType, TypeDefPrimitive, form::PortableForm};
 use state_chain_runtime::monitoring_apis::MonitoringDataV2;
 use std::{
+	any::Any,
 	collections::{BTreeMap, BTreeSet, HashSet},
 	env::{self, var},
 	fmt::Debug,
@@ -325,17 +326,48 @@ struct EnumVariant<X: CellType> {
 	fields: Vec<X::Of<StructField<Point>, StructField<Morphism>>>,
 }
 
-type TypeName = String;
-
 #[derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)]
-enum MaybeRenaming {
-	Same(TypeName),
-	Rename { old: TypeName, new: TypeName },
+enum TypeName {
+	Ordinary { path: String, chain: ChainInstance, params: Vec<TypeName> },
+	VariantType(String),
+	Unknown,
 }
 
-impl MaybeRenaming {
-	pub fn from_strings(old: String, new: String) -> Self {
-		if old == new { MaybeRenaming::Same(old) } else { MaybeRenaming::Rename { old, new } }
+type ChainInstance = Option<String>;
+
+impl TypeName {
+	fn split_chain_instance(self) -> (Self, ChainInstance) {
+		match self {
+			TypeName::Ordinary { path, chain, params } =>
+				(TypeName::Ordinary { path, chain: None, params }, chain),
+			a @ TypeName::VariantType(_) => (a, None),
+			a @ TypeName::Unknown => (a, None),
+		}
+	}
+}
+
+#[derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)]
+#[n_functor::derive_n_functor]
+enum DiscreteMorphism<A> {
+	Same(A),
+	Rename { old: A, new: A },
+}
+
+type MaybeRenaming = DiscreteMorphism<TypeName>;
+
+impl<A: PartialEq> DiscreteMorphism<A> {
+	pub fn from_points(old: A, new: A) -> Self {
+		if old == new { DiscreteMorphism::Same(old) } else { DiscreteMorphism::Rename { old, new } }
+	}
+}
+impl<A, B> DiscreteMorphism<(A, B)> {
+	pub fn split_tuple(self) -> (DiscreteMorphism<A>, DiscreteMorphism<B>) {
+		use DiscreteMorphism::*;
+		match self {
+			Same((a, b)) => (Same(a), Same(b)),
+			Rename { old: (olda, oldb), new: (newa, newb) } =>
+				(Rename { old: olda, new: newa }, Rename { old: oldb, new: newb }),
+		}
 	}
 }
 
@@ -400,6 +432,23 @@ struct AbstractMigration {
 	inner_migrations: BTreeMap<String, MaybeRenaming>,
 }
 
+#[derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)]
+struct AbstractMigrationInstance {
+	storage: StorageLocation,
+	type_path: TypePath2,
+	type_chain_instance: DiscreteMorphism<Option<String>>,
+}
+
+impl AbstractMigrationInstance {
+	fn prepend_path(self, prefix: String) -> Self {
+		AbstractMigrationInstance {
+			storage: self.storage,
+			type_path: format!("{prefix}::{}", self.type_path),
+			type_chain_instance: self.type_chain_instance,
+		}
+	}
+}
+
 type TypePath2 = String;
 
 impl Migration {
@@ -433,25 +482,43 @@ impl Migration {
 		}
 	}
 
-	pub fn get_abstract_migrations(self) -> BTreeMap<AbstractMigration, Vec<TypePath2>> {
-		let mut result = BTreeMap::<AbstractMigration, Vec<TypePath2>>::new();
+	pub fn get_abstract_migrations(
+		self,
+		storage: StorageLocation,
+	) -> BTreeMap<AbstractMigration, Vec<AbstractMigrationInstance>> {
+		let mut result = BTreeMap::<AbstractMigration, Vec<AbstractMigrationInstance>>::new();
 		for (abstract_migration, mut paths) in
 			self.inner_migrations.into_iter().flat_map(|(field, migration)| {
-				migration.get_abstract_migrations().into_iter().map(move |(migration, paths)| {
-					(migration, paths.into_iter().map(|path| format!("{field}::{path}")).collect())
-				})
+				migration.get_abstract_migrations(storage.clone()).into_iter().map(
+					move |(migration, instances)| {
+						(
+							migration,
+							instances
+								.into_iter()
+								.map(|instance| instance.prepend_path(field.clone()))
+								.collect(),
+						)
+					},
+				)
 			}) {
 			result.entry(abstract_migration).or_default().append(&mut paths);
 		}
 
+		let (typename, chaininstance) =
+			self.typename.map(|name| name.split_chain_instance()).split_tuple();
+
 		if self.edits.len() > 0 {
 			result.insert(
 				AbstractMigration {
-					typename: self.typename,
+					typename,
 					edits: self.edits,
 					inner_migrations: Default::default(),
 				},
-				vec!["".to_string()],
+				vec![AbstractMigrationInstance {
+					storage,
+					type_path: "".to_string(),
+					type_chain_instance: chaininstance,
+				}],
 			);
 		}
 
@@ -474,10 +541,13 @@ impl Update {
 		Migration::from_updates(node_kind, typename, updates).map(Update::Inner)
 	}
 
-	pub fn get_abstract_migrations(self) -> BTreeMap<AbstractMigration, Vec<TypePath2>> {
+	pub fn get_abstract_migrations(
+		self,
+		location: StorageLocation,
+	) -> BTreeMap<AbstractMigration, Vec<AbstractMigrationInstance>> {
 		match self {
 			Update::Item(_) => Default::default(),
-			Update::Inner(migration) => migration.get_abstract_migrations(),
+			Update::Inner(migration) => migration.get_abstract_migrations(location),
 		}
 	}
 
@@ -580,22 +650,33 @@ trait GetMigration {
 	fn get_migration(&self) -> Option<Migration>;
 }
 
-fn type_to_string(metadata: &subxt::Metadata, ty: u32) -> String {
+fn type_to_string(metadata: &subxt::Metadata, ty: u32) -> TypeName {
 	let ty = metadata.types().resolve(ty).unwrap();
-	format!(
-		"{}<{}>",
-		ty.path.to_string(),
-		ty.type_params
+	let mut path = ty.path.to_string();
+
+	let chains = ["Bitcoin", "Ethereum", "Arbitrum", "Solana", "Polkadot", "Assethub"];
+
+	let mut chain_instance = None;
+	for chain in chains {
+		if let Some(stripped) = path.strip_suffix(chain) {
+			path = stripped.to_string();
+			chain_instance = Some(chain.to_string());
+			break;
+		}
+	}
+
+	TypeName::Ordinary {
+		path,
+		chain: chain_instance,
+		params: ty
+			.type_params
 			.clone()
 			.into_iter()
-			.map(|param| param
-				.ty
-				.map(|ty| type_to_string(metadata, ty.id))
-				.unwrap_or("?".to_string()))
-			.intersperse(", ".to_string())
-			.collect::<Vec<_>>()
-			.concat()
-	)
+			.map(|param| {
+				param.ty.map(|ty| type_to_string(metadata, ty.id)).unwrap_or(TypeName::Unknown)
+			})
+			.collect(),
+	}
 }
 
 impl GetIdentity for TypeRepr<Morphism> {
@@ -657,6 +738,11 @@ pub fn compare_types(
 ) -> CompactDiff<TypeRepr<Point>, TypeRepr<Morphism>> {
 	use scale_info::TypeDef::*;
 
+	let toplevel_typename = DiscreteMorphism::from_points(
+		type_to_string(metadata1, ty1),
+		type_to_string(metadata2, ty2),
+	);
+
 	let ty1 = metadata1.types().resolve(ty1).unwrap().clone();
 	let ty2 = metadata2.types().resolve(ty2).unwrap().clone();
 
@@ -711,7 +797,7 @@ pub fn compare_types(
 		(Composite(ty1content), Composite(ty2content)) =>
 			CompactDiff::compact_inherited(TypeRepr::Struct {
 				fields: diff_fields(&ty1content.fields, &ty2content.fields),
-				typename: MaybeRenaming::from_strings(ty1.path.to_string(), ty2.path.to_string()),
+				typename: toplevel_typename,
 			}),
 		(Variant(ty1content), Variant(ty2content)) => {
 			let variants1: BTreeMap<_, _> = ty1content
@@ -727,37 +813,37 @@ pub fn compare_types(
 
 			let diff = diff(variants1, variants2);
 			CompactDiff::compact_inherited(TypeRepr::Enum {
-				typename: MaybeRenaming::from_strings(ty1.path.to_string(), ty2.path.to_string()),
 				variants: diff
 					.into_iter()
 					.map(|(name, d)| match d {
 						NodeDiff::Left((pos, fields)) => CompactDiff::Removed(EnumVariant {
-							typename: MaybeRenaming::Same(name.clone()),
+							typename: MaybeRenaming::Same(TypeName::VariantType(name.clone())),
 							fields: vec![],
 						}),
-						NodeDiff::Right((pos, fields)) => CompactDiff::Unchanged(EnumVariant {
-							typename: MaybeRenaming::Same(name.clone()),
+						NodeDiff::Right((pos, fields)) => CompactDiff::Added(EnumVariant {
+							typename: MaybeRenaming::Same(TypeName::VariantType(name.clone())),
 							fields: vec![],
 						}),
 						NodeDiff::Both((pos1, fields1), (pos2, fields2)) =>
 							CompactDiff::compact_inherited(EnumVariant {
-								typename: MaybeRenaming::Same(name.clone()),
+								typename: MaybeRenaming::Same(TypeName::VariantType(name.clone())),
 								fields: diff_fields(&fields1, &fields2),
 							}),
 					})
 					.collect(),
+				typename: toplevel_typename,
 			})
 		},
 		(Sequence(ty1), Sequence(ty2)) => {
 			let type_diff =
 				compare_types(metadata1, ty1.type_param.id, metadata2, ty2.type_param.id);
-			let typename = MaybeRenaming::from_strings(
-				format!("Sequence<{}>", type_to_string(metadata1, ty1.type_param.id)),
-				format!("Sequence<{}>", type_to_string(metadata2, ty2.type_param.id)),
-			);
+			// let typename = MaybeRenaming::from_strings(
+			// 	format!("Sequence<{}>", type_to_string(metadata1, ty1.type_param.id)),
+			// 	format!("Sequence<{}>", type_to_string(metadata2, ty2.type_param.id)),
+			// );
 			CompactDiff::compact_inherited(TypeRepr::Sequence {
 				inner: Box::new(type_diff),
-				typename,
+				typename: toplevel_typename,
 			})
 		},
 		(Array(ty1), Array(ty2)) => CompactDiff::Unchanged(TypeRepr::NotImplemented),
@@ -791,24 +877,24 @@ pub fn compare_types(
 				})
 				.collect::<Vec<_>>();
 
-			let typename = MaybeRenaming::from_strings(
-				entries1
-					.fields
-					.iter()
-					.map(|ty| type_to_string(metadata1, ty.id))
-					.intersperse(", ".to_string())
-					.collect::<Vec<_>>()
-					.concat(),
-				entries2
-					.fields
-					.iter()
-					.map(|ty| type_to_string(metadata2, ty.id))
-					.intersperse(", ".to_string())
-					.collect::<Vec<_>>()
-					.concat(),
-			);
+			// let typename = MaybeRenaming::from_strings(
+			// 	entries1
+			// 		.fields
+			// 		.iter()
+			// 		.map(|ty| type_to_string(metadata1, ty.id))
+			// 		.intersperse(", ".to_string())
+			// 		.collect::<Vec<_>>()
+			// 		.concat(),
+			// 	entries2
+			// 		.fields
+			// 		.iter()
+			// 		.map(|ty| type_to_string(metadata2, ty.id))
+			// 		.intersperse(", ".to_string())
+			// 		.collect::<Vec<_>>()
+			// 		.concat(),
+			// );
 
-			CompactDiff::compact_inherited(TypeRepr::Tuple { typename, fields })
+			CompactDiff::compact_inherited(TypeRepr::Tuple { typename: toplevel_typename, fields })
 		},
 		(Primitive(ty1), Primitive(ty2)) =>
 			if ty1 == ty2 {
@@ -862,7 +948,8 @@ async fn main() {
 	// 	_ => true,
 	// });
 
-	let mut abstract_migrations = BTreeMap::<AbstractMigration, Vec<TypePath2>>::new();
+	let mut abstract_migrations =
+		BTreeMap::<AbstractMigration, Vec<AbstractMigrationInstance>>::new();
 
 	for (location, entry) in diff {
 		print!("{}::{}: ", location.pallet, location.storage_name);
@@ -880,19 +967,12 @@ async fn main() {
 
 						let updated = diff
 							.get_update()
-							.map(|(path, m)| Update::get_abstract_migrations(m))
+							.map(|(path, m)| Update::get_abstract_migrations(m, location))
 							.unwrap_or_default();
 
 						if updated.len() > 0 {
 							for (m, mut paths) in updated {
-								abstract_migrations.entry(m).or_default().extend(
-									paths.into_iter().map(|path| {
-										format!(
-											"{}::{}::{path}",
-											location.pallet, location.storage_name
-										)
-									}),
-								);
+								abstract_migrations.entry(m).or_default().extend(paths.into_iter());
 							}
 							// println!("MODIFIED Types: {updated:#?}");
 						}
@@ -902,19 +982,12 @@ async fn main() {
 						let diff = compare_types(&old_metadata, old_ty, &new_metadata, new_ty);
 						let updated = diff
 							.get_update()
-							.map(|(path, m)| Update::get_abstract_migrations(m))
+							.map(|(path, m)| Update::get_abstract_migrations(m, location))
 							.unwrap_or_default();
 
 						if updated.len() > 0 {
 							for (m, paths) in updated {
-								abstract_migrations.entry(m).or_default().extend(
-									paths.into_iter().map(|path| {
-										format!(
-											"{}::{}::{path}",
-											location.pallet, location.storage_name
-										)
-									}),
-								);
+								abstract_migrations.entry(m).or_default().extend(paths.into_iter());
 							}
 							// println!("MODIFIED Types: {updated:#?}");
 						}
