@@ -271,6 +271,7 @@ fn fok_swap_gets_refunded_due_to_price_limit(is_ccm: bool) {
 			// to reaching expiry block
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(1) }),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: FOK_SWAP_REQUEST_ID,
 					..
@@ -421,6 +422,7 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
 				// Non-fok swap will continue to be retried:
 				RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: REGULAR_SWAP_ID, .. }),
+				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(1) }),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: FOK_SWAP_REQUEST_ID,
 					..
@@ -464,6 +466,7 @@ fn fok_test_zero_refund_duration(is_ccm: bool) {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
+				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(1) }),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: SwapRequestId(1),
 					..
@@ -521,6 +524,7 @@ fn test_zero_refund_amount_remaining() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
+				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(1) }),
 				RuntimeEvent::Swapping(Event::SwapRequested {
 					swap_request_id: SwapRequestId(2),
 					input_asset: Asset::Usdc,

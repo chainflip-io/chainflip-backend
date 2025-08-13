@@ -303,6 +303,7 @@ fn dca_with_fok_full_refund(is_ccm: bool) {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(1) }),
 				RuntimeEvent::Swapping(Event::SwapRequested {
 					input_asset: INPUT_ASSET,
 					input_amount: REFUND_FEE,
@@ -412,6 +413,7 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(2) }),
 				RuntimeEvent::Swapping(Event::SwapRequested {
 					input_asset: INPUT_ASSET,
 					input_amount: REFUND_FEE,
@@ -712,10 +714,6 @@ fn test_minimum_chunk_size() {
 		expected_number_of_chunks: u32,
 		minimum_chunk_size: AssetAmount,
 	) {
-		println!(
-			"Testing with asset_amount: {}, number_of_chunks: {}, expected_number_of_chunks: {}, minimum_chunk_size: {}",
-			asset_amount, number_of_chunks, expected_number_of_chunks, minimum_chunk_size
-		);
 		// Update the minimum chunk size
 		assert_ok!(Swapping::update_pallet_config(
 			OriginTrait::root(),
@@ -1043,7 +1041,11 @@ fn dca_with_one_block_interval_fok() {
 			// Make sure that chunk 2 failing cancels chunk 3 that was already scheduled
 			assert_has_matching_event!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapCanceled { swap_id: SwapId(3) })
+				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(2) })
+			);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(3) })
 			);
 			assert_swaps_queue_is_empty();
 
