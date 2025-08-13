@@ -535,6 +535,7 @@ pub mod pallet {
 		},
 		SCCallCannotBeExecuted {
 			sc_call: T::EthereumSCApi,
+			call_error: frame_support::dispatch::DispatchErrorWithPostInfo,
 			eth_tx_hash: EthTransactionHash,
 		},
 		SCCallCannotBeDecoded {
@@ -1017,9 +1018,10 @@ pub mod pallet {
 								eth_tx_hash,
 							});
 						},
-						Err(_) => {
+						Err(e) => {
 							Self::deposit_event(Event::SCCallCannotBeExecuted {
 								sc_call: call,
+								call_error: e,
 								eth_tx_hash,
 							});
 						},
