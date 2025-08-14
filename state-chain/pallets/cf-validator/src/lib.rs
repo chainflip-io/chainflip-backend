@@ -1556,7 +1556,7 @@ impl<T: Config> Pallet<T> {
 			T::EpochInfo::current_authority_count(),
 			AuctionParameters::<T>::get(),
 		)
-		.and_then(|resolver| Self::run_and_optimize_auction(resolver, qualified_bidders.clone(), 1))
+		.and_then(|resolver| Self::run_and_optimize_auction(resolver, qualified_bidders.clone(), 0))
 		{
 			Ok(auction_outcome) => {
 				Self::deposit_event(Event::AuctionCompleted(
@@ -1579,6 +1579,7 @@ impl<T: Config> Pallet<T> {
 					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
 				);
 
+				// TODO: Refactor this here so we don't have to build the delegation snapshot again.
 				let delegation_snapshot = Self::build_delegation_snapshot(
 					qualified_bidders.clone().into_iter().map(|bid| bid.bidder_id.into()).collect(),
 				);
@@ -1884,6 +1885,7 @@ impl<T: Config> Pallet<T> {
 		let delegation_snapshot = Self::build_delegation_snapshot(
 			qualified_bidders.clone().into_iter().map(|bid| bid.bidder_id.into()).collect(),
 		);
+
 		let get_avg_bid_for_validator_if_managed =
 			|validator_id: T::AccountId| -> Option<T::Amount> {
 				let operator_id = ManagedValidators::<T>::get(validator_id)?;
@@ -1904,31 +1906,31 @@ impl<T: Config> Pallet<T> {
 			AuctionBidCutoffPercentage::<T>::get(),
 		);
 
-		if auction_outcome.is_err() {
-			return auction_outcome;
-		}
+		if let Some(successfull_auction_outcome) = auction_outcome {
+			let operator_to_optimize: Vec<_> = delegation_snapshot
+				.clone()
+				.into_iter()
+				.filter(|snapshot| snapshot.1.avg_bid < successfull_auction_outcome.clone().bond)
+				.collect();
 
-		let operator_to_optimize: Vec<_> = delegation_snapshot
-			.clone()
-			.into_iter()
-			.filter(|snapshot| snapshot.1.avg_bid < auction_outcome.clone().unwrap().bond)
-			.collect();
-
-		if operator_to_optimize.len() == 0 || optimization_round >= MAX_OPTIMIZATION_ROUNDS {
-			return auction_outcome;
-		}
-
-		for (operator, snapshot) in operator_to_optimize {
-			if let Some(lowest) =
-				snapshot.validators.iter().min_by_key(|(k, &v)| (v, *k)).map(|(k, _)| k.clone())
-			{
-				ValidatorDelegation::<T>::mutate(operator, |v| v.push(lowest));
+			if operator_to_optimize.len() == 0 || optimization_round >= MAX_OPTIMIZATION_ROUNDS {
+				return auction_outcome;
 			}
+
+			for (operator, snapshot) in operator_to_optimize {
+				if let Some(lowest_staked_node) =
+					snapshot.validators.iter().min_by_key(|(k, &v)| (v, *k)).map(|(k, _)| k.clone())
+				{
+					ValidatorDelegation::<T>::mutate(operator, |v| v.push(lowest_staked_node));
+				}
+			}
+
+			optimization_round += 1;
+
+			Self::run_and_optimize_auction(resolver, qualified_bidders, optimization_round)
+		} else {
+			return auction_outcome;
 		}
-
-		optimization_round += 1;
-
-		Self::run_and_optimize_auction(resolver, qualified_bidders, optimization_round)
 	}
 }
 
