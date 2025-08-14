@@ -136,6 +136,49 @@ pub fn build_and_encode_cf_parameters<RefundAddress: Encode>(
 	}
 }
 
+#[cfg(test)]
+pub fn build_and_encode_v0_cf_parameters<RefundAddress: Encode>(
+	refund_parameters: crate::ChannelRefundParametersV0<RefundAddress>, /* crate::ChannelRefundParametersUncheckedV0<RefundAddress>, */
+	dca_parameters: Option<DcaParameters>,
+	boost_fee: u8,
+	broker_id: AccountId,
+	broker_commission: BasisPoints,
+	affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
+	ccm: Option<&CcmChannelMetadataChecked>,
+) -> Vec<u8> {
+	let vault_swap_parameters = VaultSwapParametersV0 {
+		refund_params: refund_parameters,
+		dca_params: dca_parameters,
+		boost_fee,
+		broker_fee: Beneficiary { account: broker_id, bps: broker_commission },
+		affiliate_fees,
+	};
+
+	match ccm.map(|ccm| ccm.ccm_additional_data.clone()) {
+		Some(DecodedCcmAdditionalData::Solana(sol_ccm)) =>
+			VersionedCfParameters::V0(CfParametersV0 {
+				ccm_additional_data: CcmAdditionalData(
+					sol_ccm
+						.encode()
+						.try_into()
+						.expect("Checked CCM additional data is guaranteed to be valid."),
+				),
+				vault_swap_parameters,
+			})
+			.encode(),
+		Some(DecodedCcmAdditionalData::NotRequired) => VersionedCfParameters::V0(CfParametersV0 {
+			ccm_additional_data: CcmAdditionalData::default(),
+			vault_swap_parameters,
+		})
+		.encode(),
+		None => VersionedCfParameters::V0(CfParametersV0 {
+			ccm_additional_data: (),
+			vault_swap_parameters,
+		})
+		.encode(),
+	}
+}
+
 pub fn decode_cf_parameters<RefundAddress: Decode, CcmData: Default + Decode>(
 	data: &[u8],
 ) -> Result<(VaultSwapParametersV1<RefundAddress>, CcmData), &'static str> {
