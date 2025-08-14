@@ -73,17 +73,18 @@ async function testDelegate(parentLogger: Logger) {
     operatorPubkey = '0x' + operatorPubkey;
   }
 
+  logger.info('Registering operator ' + operator.address + '...');
   await setupOperatorAccount(logger, uri);
 
-  logger.debug('Approving Flip to SC Utils contract for deposit...');
+  logger.info('Approving Flip to SC Utils contract for delegation...');
   await approveErc20(logger, 'Flip', scUtilsAddress, amount.toString());
-  logger.debug('Approved FLIP');
 
+  logger.info(`Delegating ${amount} Flip to operator ${operator.address}...`);
   let scCall = encodeDelegateToScCall(operatorPubkey);
   let txData = cfScUtilsContract.methods.depositToScGateway(amount.toString(), scCall).encodeABI();
 
   let receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
-  logger.debug('Delegate flip transaction sent ' + receipt.transactionHash);
+  logger.info('Delegate flip transaction sent ' + receipt.transactionHash);
 
   const { pubkey: whalePubkey } = getEvmWhaleKeypair('Ethereum');
   const fundEvent = observeEvent(logger, 'funding:Funded', {
@@ -110,10 +111,11 @@ async function testDelegate(parentLogger: Logger) {
   }).event;
   await Promise.all([fundEvent, scCallExecutedEvent, delegatedEvent]);
 
+  logger.info('Undelegating Flip from operator ' + operator.address + '...');
   scCall = encodeUndelegateToScCall();
   txData = cfScUtilsContract.methods.depositToScGateway(amount.toString(), scCall).encodeABI();
-
   receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
+  logger.info('Undelegate flip transaction sent ' + receipt.transactionHash);
 
   scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
     test: (event) => event.data.ethTxHash === receipt.transactionHash,
@@ -126,7 +128,7 @@ async function testDelegate(parentLogger: Logger) {
     },
   }).event;
   await Promise.all([scCallExecutedEvent, undelegatedEvent]);
-  logger.info('Delegation and undelegation tests completed successfully!');
+  logger.info('Delegation and undelegation test completed successfully!');
 }
 
 async function testCcmSwapFundAccount(logger: Logger) {
