@@ -1906,7 +1906,7 @@ impl<T: Config> Pallet<T> {
 			AuctionBidCutoffPercentage::<T>::get(),
 		);
 
-		if let Some(successfull_auction_outcome) = auction_outcome {
+		if let Ok(ref successfull_auction_outcome) = auction_outcome {
 			let operator_to_optimize: Vec<_> = delegation_snapshot
 				.clone()
 				.into_iter()
