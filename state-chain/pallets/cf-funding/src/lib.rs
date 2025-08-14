@@ -475,19 +475,13 @@ pub mod pallet {
 		RedemptionSettled(AccountId<T>, FlipBalance<T>),
 
 		/// A redemption has expired without being executed.
-		RedemptionExpired {
-			account_id: AccountId<T>,
-		},
+		RedemptionExpired { account_id: AccountId<T> },
 
 		/// A new restricted address has been added
-		AddedRestrictedAddress {
-			address: EthereumAddress,
-		},
+		AddedRestrictedAddress { address: EthereumAddress },
 
 		/// A restricted address has been removed
-		RemovedRestrictedAddress {
-			address: EthereumAddress,
-		},
+		RemovedRestrictedAddress { address: EthereumAddress },
 
 		/// A funding attempt has failed.
 		FailedFundingAttempt {
@@ -497,31 +491,19 @@ pub mod pallet {
 		},
 
 		/// The minimum funding amount has been updated.
-		MinimumFundingUpdated {
-			new_minimum: T::Amount,
-		},
+		MinimumFundingUpdated { new_minimum: T::Amount },
 
 		/// The Withdrawal Tax has been updated.
-		RedemptionTaxAmountUpdated {
-			amount: T::Amount,
-		},
+		RedemptionTaxAmountUpdated { amount: T::Amount },
 
 		/// The redemption amount was zero, so no redemption was made. The tax was still levied.
-		RedemptionAmountZero {
-			account_id: AccountId<T>,
-		},
+		RedemptionAmountZero { account_id: AccountId<T> },
 
 		/// An account has been bound to an address.
-		BoundRedeemAddress {
-			account_id: AccountId<T>,
-			address: EthereumAddress,
-		},
+		BoundRedeemAddress { account_id: AccountId<T>, address: EthereumAddress },
 
 		/// An account has been bound to an executor address.
-		BoundExecutorAddress {
-			account_id: AccountId<T>,
-			address: EthereumAddress,
-		},
+		BoundExecutorAddress { account_id: AccountId<T>, address: EthereumAddress },
 
 		/// A rebalance between two accounts has been executed.
 		Rebalance {
@@ -530,15 +512,18 @@ pub mod pallet {
 			amount: FlipBalance<T>,
 		},
 		SCCallExecuted {
+			caller: AccountId<T>,
 			sc_call: T::EthereumSCApi,
 			eth_tx_hash: EthTransactionHash,
 		},
 		SCCallCannotBeExecuted {
+			caller: AccountId<T>,
 			sc_call: T::EthereumSCApi,
 			call_error: frame_support::dispatch::DispatchErrorWithPostInfo,
 			eth_tx_hash: EthTransactionHash,
 		},
 		SCCallCannotBeDecoded {
+			caller: AccountId<T>,
 			sc_call_bytes: Vec<u8>,
 			eth_tx_hash: EthTransactionHash,
 		},
@@ -1004,22 +989,23 @@ pub mod pallet {
 					// the deposit above. In this case, the deposit will be processed and no
 					// call will be executed.
 					match with_transaction(|| {
-						match call
-							.clone()
-							.dispatch_bypass_filter(RuntimeOrigin::<T>::signed(caller_account_id))
-						{
+						match call.clone().dispatch_bypass_filter(RuntimeOrigin::<T>::signed(
+							caller_account_id.clone(),
+						)) {
 							r @ Ok(_) => TransactionOutcome::Commit(r),
 							r @ Err(_) => TransactionOutcome::Rollback(r),
 						}
 					}) {
 						Ok(_) => {
 							Self::deposit_event(Event::SCCallExecuted {
+								caller: caller_account_id,
 								sc_call: call,
 								eth_tx_hash,
 							});
 						},
 						Err(e) => {
 							Self::deposit_event(Event::SCCallCannotBeExecuted {
+								caller: caller_account_id,
 								sc_call: call,
 								call_error: e,
 								eth_tx_hash,
@@ -1029,6 +1015,7 @@ pub mod pallet {
 				},
 				Err(_) => {
 					Self::deposit_event(Event::SCCallCannotBeDecoded {
+						caller: caller_account_id,
 						sc_call_bytes: deposit_and_call.call,
 						eth_tx_hash,
 					});

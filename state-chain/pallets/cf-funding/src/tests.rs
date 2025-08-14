@@ -1866,7 +1866,11 @@ pub mod ethereum_sc_calls {
 					funds_added: FUND_AMOUNT,
 					total_balance: FUND_AMOUNT,
 				}),
-				RuntimeEvent::Funding(Event::SCCallExecuted { sc_call: _, eth_tx_hash: TX_HASH })
+				RuntimeEvent::Funding(Event::SCCallExecuted {
+					caller: CALLER_32,
+					sc_call: _,
+					eth_tx_hash: TX_HASH
+				})
 			);
 		});
 	}
@@ -1894,6 +1898,7 @@ pub mod ethereum_sc_calls {
 					total_balance: FUND_AMOUNT,
 				}),
 				RuntimeEvent::Funding(Event::SCCallCannotBeDecoded {
+					caller: CALLER_32,
 					sc_call_bytes: _,
 					eth_tx_hash: TX_HASH
 				})
@@ -1916,7 +1921,11 @@ pub mod ethereum_sc_calls {
 			));
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::Funding(Event::SCCallExecuted { sc_call: _, eth_tx_hash: TX_HASH })
+				RuntimeEvent::Funding(Event::SCCallExecuted {
+					caller: CALLER_32,
+					sc_call: _,
+					eth_tx_hash: TX_HASH
+				})
 			);
 		});
 	}
