@@ -263,7 +263,7 @@ impl GetIdentity for EnumVariant<Morphism> {
 
 	fn try_get_identity(&self) -> Option<Self::Point> {
 		Some(EnumVariant {
-			typename: self.typename.clone(),
+            variant: self.variant.try_get_identity()?,
 			fields: self
 				.fields
 				.iter()
@@ -284,37 +284,40 @@ pub trait CommonBounds = Debug + Clone + PartialEq;
 
 pub trait CellType {
 	type Of<Point: CommonBounds, Morphism: CommonBounds>: CommonBounds;
+	type Discrete<Point: CommonBounds>: CommonBounds;
 }
 
 #[derive(Debug)]
 pub struct Point;
 impl CellType for Point {
 	type Of<Point: CommonBounds, Morphism: CommonBounds> = Point;
+	type Discrete<Point: CommonBounds> = Point;
 }
 
 #[derive(Debug)]
 pub struct Morphism;
 impl CellType for Morphism {
 	type Of<Point: CommonBounds, Morphism: CommonBounds> = CompactDiff<Point, Morphism>;
+	type Discrete<Point: CommonBounds> = DiscreteMorphism<Point>;
 }
 
 #[derive_where(Clone, PartialEq, Debug;)]
 pub struct StructField<X: CellType> {
-	name: String,
-	position: usize,
-	ty: X::Of<TypeRepr<Point>, TypeRepr<Morphism>>,
+	pub name: String,
+	pub position: usize,
+	pub ty: X::Of<TypeRepr<Point>, TypeRepr<Morphism>>,
 }
 
 #[derive_where(Clone, PartialEq, Debug;)]
 pub struct TupleEntry<X: CellType> {
-	position: usize,
-	ty: X::Of<TypeRepr<Point>, TypeRepr<Morphism>>,
+	pub position: usize,
+	pub ty: X::Of<TypeRepr<Point>, TypeRepr<Morphism>>,
 }
 
 #[derive_where(Clone, PartialEq, Debug;)]
 pub struct EnumVariant<X: CellType> {
-	typename: MaybeRenaming,
-	fields: Vec<X::Of<StructField<Point>, StructField<Morphism>>>,
+	pub variant: X::Discrete<String>,
+	pub fields: Vec<X::Of<StructField<Point>, StructField<Morphism>>>,
 }
 
 #[derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)]
@@ -372,24 +375,24 @@ impl<A, B> DiscreteMorphism<(A, B)> {
 #[derive_where(Clone, Debug, PartialEq;)]
 pub enum TypeRepr<X: CellType> {
 	Struct {
-		typename: MaybeRenaming,
+		typename: X::Discrete<TypeName>,
 		fields: Vec<X::Of<StructField<Point>, StructField<Morphism>>>,
 	},
 	Enum {
-		typename: MaybeRenaming,
+		typename: X::Discrete<TypeName>,
 		variants: Vec<X::Of<EnumVariant<Point>, EnumVariant<Morphism>>>,
 	},
 	Tuple {
-		typename: MaybeRenaming,
+		typename: X::Discrete<TypeName>,
 		fields: Vec<X::Of<TupleEntry<Point>, TupleEntry<Morphism>>>,
 	},
 	Sequence {
-		typename: MaybeRenaming,
+		typename: X::Discrete<TypeName>,
 		inner: Box<X::Of<TypeRepr<Point>, TypeRepr<Morphism>>>,
 	},
 	NotImplemented,
 	Primitive(X::Of<TypeDefPrimitive, !>),
-	TypeByName(MaybeRenaming),
+	TypeByName(X::Discrete<TypeName>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -590,15 +593,16 @@ impl GetUpdate for TupleEntry<Morphism> {
 impl GetUpdate for EnumVariant<Morphism> {
 	type Item = PathUpdate;
 	fn get_update(&self) -> Option<PathUpdate> {
+        // TODO, instead of doing this, we don't want to create migrations for single variants.
 		Update::from_updates(
 			NodeKind::Struct,
-			&self.typename,
+			&self.variant.clone().map(|name| TypeName::Ordinary { path: name, chain: None, params: vec![] }),
 			self.fields
 				.iter()
 				.map(|f| f.get_update().map(|(path, update)| (path, update)))
 				.collect(),
 		)
-		.map(|update| (format!("{:?}", self.typename), update))
+		.map(|update| (format!("{:?}", self.variant), update))
 	}
 }
 
@@ -677,6 +681,17 @@ fn type_to_string(metadata: &subxt::Metadata, ty: u32) -> TypeName {
 	}
 }
 
+impl<A: Clone> GetIdentity for DiscreteMorphism<A> {
+    type Point = A;
+    
+    fn try_get_identity(&self) -> Option<Self::Point> {
+        match self {
+            DiscreteMorphism::Same(a) => Some(a.clone()),
+            DiscreteMorphism::Rename { old, new } => None,
+        }
+    }
+}
+
 impl GetIdentity for TypeRepr<Morphism> {
 	type Point = TypeRepr<Point>;
 
@@ -689,7 +704,7 @@ impl GetIdentity for TypeRepr<Morphism> {
 					.collect::<Option<Vec<_>>>()
 					.is_some()
 				{
-					Some(TypeRepr::TypeByName(typename.clone()))
+                    typename.try_get_identity().map(TypeRepr::TypeByName)
 				} else {
 					None
 				},
@@ -700,7 +715,7 @@ impl GetIdentity for TypeRepr<Morphism> {
 					.collect::<Option<Vec<_>>>()
 					.is_some()
 				{
-					Some(TypeRepr::TypeByName(typename.clone()))
+                    typename.try_get_identity().map(TypeRepr::TypeByName)
 				} else {
 					None
 				},
@@ -714,13 +729,13 @@ impl GetIdentity for TypeRepr<Morphism> {
 					.collect::<Option<Vec<_>>>()
 					.is_some()
 				{
-					Some(TypeRepr::TypeByName(typename.clone()))
+                    typename.try_get_identity().map(TypeRepr::TypeByName)
 				} else {
 					None
 				},
 			TypeRepr::Sequence { typename, inner } =>
 				if inner.try_get_identity().is_some() {
-					Some(TypeRepr::TypeByName(typename.clone()))
+                    typename.try_get_identity().map(TypeRepr::TypeByName)
 				} else {
 					None
 				},
@@ -763,16 +778,16 @@ pub fn compare_types(
 				match d {
 					NodeDiff::Left((pos, ty)) => CompactDiff::Removed(StructField {
 						name,
-						ty: TypeRepr::TypeByName(MaybeRenaming::Same(type_to_string(
+						ty: TypeRepr::TypeByName(type_to_string(
 							metadata1, ty,
-						))),
+						)),
 						position: pos,
 					}),
 					NodeDiff::Right((pos, ty)) => CompactDiff::Added(StructField {
 						name,
-						ty: TypeRepr::TypeByName(MaybeRenaming::Same(type_to_string(
+						ty: TypeRepr::TypeByName(type_to_string(
 							metadata2, ty,
-						))),
+						)),
 						position: pos,
 					}),
 					NodeDiff::Both((pos1, ty1), (pos2, ty2)) => {
@@ -815,28 +830,31 @@ pub fn compare_types(
 					.into_iter()
 					.map(|(name, d)| match d {
 						NodeDiff::Left((pos, fields)) => CompactDiff::Removed(EnumVariant {
-							typename: toplevel_typename.clone().map(|n| TypeName::VariantType {
-								enum_type: Box::new(n),
-								variant: name.clone(),
-							}),
+                            variant: name.clone(),
+							// typename: toplevel_typename.clone().map(|n| TypeName::VariantType {
+							// 	enum_type: Box::new(n),
+							// 	variant: name.clone(),
+							// }),
 							fields: vec![],
 						}),
 						NodeDiff::Right((pos, fields)) => CompactDiff::Added(EnumVariant {
-							typename: toplevel_typename.clone().map(|n| TypeName::VariantType {
-								enum_type: Box::new(n),
-								variant: name.clone(),
-							}),
+                            variant: name.clone(),
+							// typename: toplevel_typename.clone().map(|n| TypeName::VariantType {
+							// 	enum_type: Box::new(n),
+							// 	variant: name.clone(),
+							// }),
 							fields: vec![],
 						}),
 						NodeDiff::Both((pos1, fields1), (pos2, fields2)) =>
 						// TODO check that variant positions are the same!!!!
 							CompactDiff::compact_inherited(EnumVariant {
-								typename: toplevel_typename.clone().map(|n| {
-									TypeName::VariantType {
-										enum_type: Box::new(n),
-										variant: name.clone(),
-									}
-								}),
+                                variant: DiscreteMorphism::Same(name.clone()),
+								// typename: toplevel_typename.clone().map(|n| {
+								// 	TypeName::VariantType {
+								// 		enum_type: Box::new(n),
+								// 		variant: name.clone(),
+								// 	}
+								// }),
 								fields: diff_fields(&fields1, &fields2),
 							}),
 					})
@@ -864,15 +882,15 @@ pub fn compare_types(
 				.into_iter()
 				.map(|(pos, d)| match d {
 					NodeDiff::Left(ty) => CompactDiff::Removed(TupleEntry {
-						ty: TypeRepr::TypeByName(MaybeRenaming::Same(type_to_string(
+						ty: TypeRepr::TypeByName(type_to_string(
 							metadata1, ty,
-						))),
+						)),
 						position: pos,
 					}),
 					NodeDiff::Right(ty) => CompactDiff::Added(TupleEntry {
-						ty: TypeRepr::TypeByName(MaybeRenaming::Same(type_to_string(
+						ty: TypeRepr::TypeByName(type_to_string(
 							metadata2, ty,
-						))),
+						)),
 						position: pos,
 					}),
 					NodeDiff::Both(ty1, ty2) => {
@@ -920,10 +938,10 @@ pub struct MetadataConfig {
 	include: Vec<String>,
 }
 
-pub fn extract_old_typename(n: MaybeRenaming) -> MaybeRenaming {
+pub fn extract_old_typename<A>(n: DiscreteMorphism<A>) -> A {
 	match n {
-		DiscreteMorphism::Same(a) => DiscreteMorphism::Same(a),
-		DiscreteMorphism::Rename { old, new } => DiscreteMorphism::Same(old),
+		DiscreteMorphism::Same(a) => a,
+		DiscreteMorphism::Rename { old, new } => old,
 	}
 }
 
@@ -937,7 +955,8 @@ pub fn extract_old_struct_field(f: StructField<Morphism>) -> StructField<Point> 
 
 pub fn extract_old_enum_variant(v: EnumVariant<Morphism>) -> EnumVariant<Point> {
 	EnumVariant {
-		typename: extract_old_typename(v.typename),
+        variant: extract_old_typename(v.variant),
+		// typename: extract_old_typename(v.typename),
 		fields: v
 			.fields
 			.into_iter()

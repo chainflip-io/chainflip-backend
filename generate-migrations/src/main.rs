@@ -81,7 +81,7 @@ async fn main() {
 		let path = env::current_dir().unwrap().join("gentemp").join(pallet);
 
 		pallet_migrations.push(PalletMigration {
-			old_definitions: old_defs.into_iter().take(2).collect(),
+			old_definitions: old_defs.into_iter().collect(),
 			crate_location: path,
 		});
 	}
