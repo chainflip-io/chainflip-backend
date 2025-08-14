@@ -3,6 +3,7 @@
 #![feature(btree_extract_if)]
 #![feature(never_type)]
 #![feature(iter_intersperse)]
+#![feature(path_add_extension)]
 
 mod diff;
 mod typediff;
@@ -10,12 +11,11 @@ mod virtual_file;
 mod write_migration;
 
 use crate::{
-	typediff::{MetadataConfig, compare_metadata},
-	write_migration::{FullMigration, PalletMigration},
+	typediff::{compare_metadata, MetadataConfig, PalletRef}, virtual_file::{Module, VirtualFile}, write_migration::{FullMigration, PalletMigration}
 };
 
 use clap::{Parser, Subcommand};
-use std::{env, path::PathBuf};
+use std::{collections::BTreeMap, env, path::PathBuf};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -75,20 +75,26 @@ async fn main() {
 
 	let result = compare_metadata(&cli.config).await;
 
-	let mut pallet_migrations = Vec::new();
+	let mut pallet_migrations = BTreeMap::<PalletRef, PalletMigration>::new();
 	for (pallet, old_defs) in result.old_definitions {
 		// derive file for pallet
-		let path = env::current_dir().unwrap().join("gentemp").join(pallet);
+		let path = env::current_dir().unwrap().join("gentemp").join(pallet.name.clone());
 
-		pallet_migrations.push(PalletMigration {
-			old_definitions: old_defs.into_iter().collect(),
-			crate_location: path,
-		});
+		pallet_migrations
+			.entry(pallet.name)
+			.or_insert(PalletMigration {
+				old_definitions: Default::default(),
+				crate_location: path,
+			})
+			.old_definitions
+			.insert(pallet.chain_instance, old_defs);
 	}
 
-	let migration = FullMigration { pallet_migrations };
+	let migration = FullMigration { pallet_migrations: pallet_migrations.into_values().collect() };
 
-	let virtual_files = migration.apply();
+	let modules = migration.apply();
+
+	let virtual_files: Vec<VirtualFile> = modules.iter().flat_map(|m| m.apply().into_iter()).collect();
 
 	for file in virtual_files {
 		file.apply();

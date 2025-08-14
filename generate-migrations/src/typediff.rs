@@ -6,7 +6,7 @@ use scale_info::{Field, MetaType, TypeDefPrimitive, form::PortableForm};
 use state_chain_runtime::monitoring_apis::MonitoringDataV2;
 use std::{
 	any::Any,
-	collections::{BTreeMap, BTreeSet, HashSet},
+	collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
 	env::{self, var},
 	fmt::Debug,
 	fs,
@@ -93,7 +93,7 @@ pub fn diff_metadata(metadata: RuntimeMetadataV14) {}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
 struct StorageLocation {
-	pallet: String,
+	pallet: PalletInstanceRef,
 	storage_name: String,
 }
 
@@ -116,7 +116,7 @@ pub fn get_all_storage_entries(
 			pallet.storage().unwrap().entries().iter().cloned().map(move |entry| {
 				(
 					StorageLocation {
-						pallet: pallet.name().to_string(),
+						pallet: PalletInstanceRef::from_string(pallet.name().to_string()),
 						storage_name: entry.name().to_string(),
 					},
 					match entry.entry_type() {
@@ -263,7 +263,7 @@ impl GetIdentity for EnumVariant<Morphism> {
 
 	fn try_get_identity(&self) -> Option<Self::Point> {
 		Some(EnumVariant {
-            variant: self.variant.try_get_identity()?,
+			variant: self.variant.try_get_identity()?,
 			fields: self
 				.fields
 				.iter()
@@ -322,8 +322,9 @@ pub struct EnumVariant<X: CellType> {
 
 #[derive(Debug, PartialEq, Clone, PartialOrd, Ord, Eq)]
 pub enum TypeName {
-	Ordinary { path: String, chain: ChainInstance, params: Vec<TypeName> },
+	Ordinary { path: Vec<String>, name: String, chain: ChainInstance, params: Vec<TypeName> },
 	VariantType { enum_type: Box<TypeName>, variant: String },
+	Parameter { variable_name: String, value: Option<Box<TypeName>> },
 	Unknown,
 }
 
@@ -332,10 +333,24 @@ type ChainInstance = Option<String>;
 impl TypeName {
 	fn split_chain_instance(self) -> (Self, ChainInstance) {
 		match self {
-			TypeName::Ordinary { path, chain, params } =>
-				(TypeName::Ordinary { path, chain: None, params }, chain),
+			TypeName::Ordinary { path, name, chain, params } =>
+				(TypeName::Ordinary { path, name, chain: None, params }, chain),
 			a @ TypeName::VariantType { .. } => (a, None),
 			a @ TypeName::Unknown => (a, None),
+			a @ TypeName::Parameter { .. } => (a, None),
+		}
+	}
+
+	pub fn split_module(self) -> Option<(String, TypeName)> {
+		match self {
+			TypeName::Ordinary { path, name, chain, params } => {
+				if let Some((module, rest)) = path.split_first() {
+					Some((module.to_string(), TypeName::Ordinary { path: rest.to_vec(), name, chain, params }))
+				} else {
+					None
+				}
+			},
+			a => None,
 		}
 	}
 }
@@ -393,6 +408,20 @@ pub enum TypeRepr<X: CellType> {
 	NotImplemented,
 	Primitive(X::Of<TypeDefPrimitive, !>),
 	TypeByName(X::Discrete<TypeName>),
+}
+
+impl<X: CellType> TypeRepr<X> {
+	pub fn map_definition_typename(self, f: impl Fn(X::Discrete<TypeName>) -> X::Discrete<TypeName>) -> Self {
+		match self {
+			TypeRepr::Struct { typename, fields } => TypeRepr::Struct { typename: f(typename), fields },
+			TypeRepr::Enum { typename, variants } => TypeRepr::Enum { typename: f(typename), variants },
+			TypeRepr::Tuple { typename, fields } => TypeRepr::Tuple { typename, fields },
+			TypeRepr::Sequence { typename, inner } => TypeRepr::Sequence { typename, inner },
+			TypeRepr::NotImplemented => TypeRepr::NotImplemented,
+			TypeRepr::Primitive(a) => TypeRepr::Primitive(a),
+			TypeRepr::TypeByName(a) => TypeRepr::TypeByName(a),
+		}
+	}
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -593,10 +622,15 @@ impl GetUpdate for TupleEntry<Morphism> {
 impl GetUpdate for EnumVariant<Morphism> {
 	type Item = PathUpdate;
 	fn get_update(&self) -> Option<PathUpdate> {
-        // TODO, instead of doing this, we don't want to create migrations for single variants.
+		// TODO, instead of doing this, we don't want to create migrations for single variants.
 		Update::from_updates(
 			NodeKind::Struct,
-			&self.variant.clone().map(|name| TypeName::Ordinary { path: name, chain: None, params: vec![] }),
+			&self.variant.clone().map(|name| TypeName::Ordinary {
+				path: Default::default(),
+				name: name,
+				chain: None,
+				params: vec![],
+			}),
 			self.fields
 				.iter()
 				.map(|f| f.get_update().map(|(path, update)| (path, update)))
@@ -654,42 +688,43 @@ trait GetMigration {
 
 fn type_to_string(metadata: &subxt::Metadata, ty: u32) -> TypeName {
 	let ty = metadata.types().resolve(ty).unwrap();
-	let mut path = ty.path.to_string();
-
-	let chains = ["Bitcoin", "Ethereum", "Arbitrum", "Solana", "Polkadot", "Assethub"];
+	let path = ty.path.namespace();
+	let mut name = ty.path.ident().unwrap_or_default();
 
 	let mut chain_instance = None;
-	for chain in chains {
-		if let Some(stripped) = path.strip_suffix(chain) {
-			path = stripped.to_string();
+	for chain in CHAINS {
+		if let Some(stripped) = name.strip_suffix(chain) {
+			name = stripped.to_string();
 			chain_instance = Some(chain.to_string());
 			break;
 		}
 	}
 
 	TypeName::Ordinary {
-		path,
+		path: path.to_vec(),
+		name,
 		chain: chain_instance,
 		params: ty
 			.type_params
 			.clone()
 			.into_iter()
-			.map(|param| {
-				param.ty.map(|ty| type_to_string(metadata, ty.id)).unwrap_or(TypeName::Unknown)
+			.map(|param| TypeName::Parameter {
+				variable_name: param.name,
+				value: param.ty.map(|ty| Box::new(type_to_string(metadata, ty.id))),
 			})
 			.collect(),
 	}
 }
 
 impl<A: Clone> GetIdentity for DiscreteMorphism<A> {
-    type Point = A;
-    
-    fn try_get_identity(&self) -> Option<Self::Point> {
-        match self {
-            DiscreteMorphism::Same(a) => Some(a.clone()),
-            DiscreteMorphism::Rename { old, new } => None,
-        }
-    }
+	type Point = A;
+
+	fn try_get_identity(&self) -> Option<Self::Point> {
+		match self {
+			DiscreteMorphism::Same(a) => Some(a.clone()),
+			DiscreteMorphism::Rename { old, new } => None,
+		}
+	}
 }
 
 impl GetIdentity for TypeRepr<Morphism> {
@@ -704,7 +739,7 @@ impl GetIdentity for TypeRepr<Morphism> {
 					.collect::<Option<Vec<_>>>()
 					.is_some()
 				{
-                    typename.try_get_identity().map(TypeRepr::TypeByName)
+					typename.try_get_identity().map(TypeRepr::TypeByName)
 				} else {
 					None
 				},
@@ -715,7 +750,7 @@ impl GetIdentity for TypeRepr<Morphism> {
 					.collect::<Option<Vec<_>>>()
 					.is_some()
 				{
-                    typename.try_get_identity().map(TypeRepr::TypeByName)
+					typename.try_get_identity().map(TypeRepr::TypeByName)
 				} else {
 					None
 				},
@@ -729,13 +764,13 @@ impl GetIdentity for TypeRepr<Morphism> {
 					.collect::<Option<Vec<_>>>()
 					.is_some()
 				{
-                    typename.try_get_identity().map(TypeRepr::TypeByName)
+					typename.try_get_identity().map(TypeRepr::TypeByName)
 				} else {
 					None
 				},
 			TypeRepr::Sequence { typename, inner } =>
 				if inner.try_get_identity().is_some() {
-                    typename.try_get_identity().map(TypeRepr::TypeByName)
+					typename.try_get_identity().map(TypeRepr::TypeByName)
 				} else {
 					None
 				},
@@ -778,16 +813,12 @@ pub fn compare_types(
 				match d {
 					NodeDiff::Left((pos, ty)) => CompactDiff::Removed(StructField {
 						name,
-						ty: TypeRepr::TypeByName(type_to_string(
-							metadata1, ty,
-						)),
+						ty: TypeRepr::TypeByName(type_to_string(metadata1, ty)),
 						position: pos,
 					}),
 					NodeDiff::Right((pos, ty)) => CompactDiff::Added(StructField {
 						name,
-						ty: TypeRepr::TypeByName(type_to_string(
-							metadata2, ty,
-						)),
+						ty: TypeRepr::TypeByName(type_to_string(metadata2, ty)),
 						position: pos,
 					}),
 					NodeDiff::Both((pos1, ty1), (pos2, ty2)) => {
@@ -830,7 +861,7 @@ pub fn compare_types(
 					.into_iter()
 					.map(|(name, d)| match d {
 						NodeDiff::Left((pos, fields)) => CompactDiff::Removed(EnumVariant {
-                            variant: name.clone(),
+							variant: name.clone(),
 							// typename: toplevel_typename.clone().map(|n| TypeName::VariantType {
 							// 	enum_type: Box::new(n),
 							// 	variant: name.clone(),
@@ -838,7 +869,7 @@ pub fn compare_types(
 							fields: vec![],
 						}),
 						NodeDiff::Right((pos, fields)) => CompactDiff::Added(EnumVariant {
-                            variant: name.clone(),
+							variant: name.clone(),
 							// typename: toplevel_typename.clone().map(|n| TypeName::VariantType {
 							// 	enum_type: Box::new(n),
 							// 	variant: name.clone(),
@@ -848,7 +879,7 @@ pub fn compare_types(
 						NodeDiff::Both((pos1, fields1), (pos2, fields2)) =>
 						// TODO check that variant positions are the same!!!!
 							CompactDiff::compact_inherited(EnumVariant {
-                                variant: DiscreteMorphism::Same(name.clone()),
+								variant: DiscreteMorphism::Same(name.clone()),
 								// typename: toplevel_typename.clone().map(|n| {
 								// 	TypeName::VariantType {
 								// 		enum_type: Box::new(n),
@@ -882,15 +913,11 @@ pub fn compare_types(
 				.into_iter()
 				.map(|(pos, d)| match d {
 					NodeDiff::Left(ty) => CompactDiff::Removed(TupleEntry {
-						ty: TypeRepr::TypeByName(type_to_string(
-							metadata1, ty,
-						)),
+						ty: TypeRepr::TypeByName(type_to_string(metadata1, ty)),
 						position: pos,
 					}),
 					NodeDiff::Right(ty) => CompactDiff::Added(TupleEntry {
-						ty: TypeRepr::TypeByName(type_to_string(
-							metadata2, ty,
-						)),
+						ty: TypeRepr::TypeByName(type_to_string(metadata2, ty)),
 						position: pos,
 					}),
 					NodeDiff::Both(ty1, ty2) => {
@@ -955,7 +982,7 @@ pub fn extract_old_struct_field(f: StructField<Morphism>) -> StructField<Point> 
 
 pub fn extract_old_enum_variant(v: EnumVariant<Morphism>) -> EnumVariant<Point> {
 	EnumVariant {
-        variant: extract_old_typename(v.variant),
+		variant: extract_old_typename(v.variant),
 		// typename: extract_old_typename(v.typename),
 		fields: v
 			.fields
@@ -1035,8 +1062,32 @@ pub fn extract_old_if_changed(
 	}
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
+pub struct PalletInstanceRef {
+	pub name: String,
+	pub chain_instance: Option<String>,
+}
+
+impl PalletInstanceRef {
+	pub fn from_string(mut name: String) -> Self {
+		let mut chain_instance = None;
+		for chain in CHAINS {
+			if let Some(stripped) = name.strip_prefix(chain) {
+				name = stripped.to_string();
+				chain_instance = Some(chain.to_string());
+				break;
+			}
+		}
+
+		PalletInstanceRef { name, chain_instance }
+	}
+}
+
+pub type PalletRef = String;
+pub type PalletInstanceContent = Vec<TypeRepr<Point>>;
+
 pub struct MetadataResult {
-	pub old_definitions: BTreeMap<String, Vec<TypeRepr<Point>>>,
+	pub old_definitions: BTreeMap<PalletInstanceRef, PalletInstanceContent>,
 }
 
 pub async fn compare_metadata(config: &MetadataConfig) -> MetadataResult {
@@ -1065,8 +1116,8 @@ pub async fn compare_metadata(config: &MetadataConfig) -> MetadataResult {
 	.unwrap();
 	let old_metadata = subxt_client.metadata();
 
-	println!("online pallets: {:?}", get_pallet_names(old_metadata.clone()));
-	println!("local  pallets: {:?}", get_pallet_names(new_metadata.clone()));
+	// println!("online pallets: {:?}", get_pallet_names(old_metadata.clone()));
+	// println!("local  pallets: {:?}", get_pallet_names(new_metadata.clone()));
 
 	// compute storage objects that differ
 	let old_storage = get_all_storage_entries(config, &old_metadata);
@@ -1076,10 +1127,10 @@ pub async fn compare_metadata(config: &MetadataConfig) -> MetadataResult {
 	let mut abstract_migrations =
 		BTreeMap::<AbstractMigration, Vec<AbstractMigrationInstance>>::new();
 
-	let mut old_definitions = BTreeMap::<String, Vec<TypeRepr<Point>>>::new();
+	let mut old_definitions = BTreeMap::<PalletInstanceRef, Vec<TypeRepr<Point>>>::new();
 
 	for (location, entry) in diff {
-		print!("{}::{}: ", location.pallet, location.storage_name);
+		// print!("{}::{}: ", location.pallet, location.storage_name);
 		match entry {
 			NodeDiff::Left(_) => println!("DELETED"),
 			NodeDiff::Right(paths) => println!("CREATED {paths:?}"),
@@ -1141,3 +1192,6 @@ pub async fn compare_metadata(config: &MetadataConfig) -> MetadataResult {
 
 	MetadataResult { old_definitions }
 }
+
+const CHAINS: [&'static str; 6] =
+	["Bitcoin", "Ethereum", "Arbitrum", "Solana", "Polkadot", "Assethub"];
