@@ -1827,8 +1827,8 @@ impl<T: Config> Pallet<T> {
 				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator)
 					.into_iter()
 					.filter(|(account_id, _)| {
-						qualified_bidder.contains(account_id) ||
-							validator_delegations.contains(account_id)
+						qualified_bidder.contains(account_id) &&
+							!validator_delegations.contains(account_id)
 					})
 					.collect();
 
@@ -1907,10 +1907,11 @@ impl<T: Config> Pallet<T> {
 		);
 
 		if let Ok(ref successfull_auction_outcome) = auction_outcome {
+			let bond = successfull_auction_outcome.clone().bond;
 			let operator_to_optimize: Vec<_> = delegation_snapshot
 				.clone()
 				.into_iter()
-				.filter(|snapshot| snapshot.1.avg_bid < successfull_auction_outcome.clone().bond)
+				.filter(|snapshot| snapshot.1.avg_bid < bond)
 				.collect();
 
 			if operator_to_optimize.len() == 0 || optimization_round >= MAX_OPTIMIZATION_ROUNDS {
@@ -1918,10 +1919,15 @@ impl<T: Config> Pallet<T> {
 			}
 
 			for (operator, snapshot) in operator_to_optimize {
-				if let Some(lowest_staked_node) =
-					snapshot.validators.iter().min_by_key(|(k, &v)| (v, *k)).map(|(k, _)| k.clone())
-				{
-					ValidatorDelegation::<T>::mutate(operator, |v| v.push(lowest_staked_node));
+				if snapshot.validators.len() > 1 {
+					if let Some(lowest_staked_node) = snapshot
+						.validators
+						.iter()
+						.min_by_key(|(k, &v)| (v, *k))
+						.map(|(k, _)| k.clone())
+					{
+						ValidatorDelegation::<T>::mutate(operator, |v| v.push(lowest_staked_node));
+					}
 				}
 			}
 

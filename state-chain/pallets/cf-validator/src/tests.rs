@@ -2071,4 +2071,77 @@ mod delegation {
 			assert_ok!(ValidatorPallet::set_max_bid(OriginTrait::signed(BOB), Some(100)));
 		});
 	}
+
+	// THIS IS JUST SOME WORK IN PROGRESS!
+	// At the moment we reslove the auction on the first attempt. Needs some fine tuning
+	// To create the case we wanna see.
+	#[test]
+	fn auction_optimization() {
+		new_test_ext().execute_with(|| {
+			const SET_SIZE: u32 = 4;
+
+			const OPERATOR_1: u64 = 123;
+			const OPERATOR_2: u64 = 456;
+
+			const DELEGATORS: [u64; 4] = [21, 22, 23, 24];
+
+			let set_size_parameter =
+				SetSizeParameters { min_size: SET_SIZE, max_size: SET_SIZE, max_expansion: 0 };
+			let auction_resolver =
+				SetSizeMaximisingAuctionResolver::try_new(SET_SIZE, set_size_parameter)
+					.expect("to have an auction resolver");
+
+			set_default_test_bids();
+
+			let qualified = WINNING_BIDS.into_iter().chain(LOSING_BIDS).collect::<Vec<_>>();
+
+			OperatorSettingsLookup::<Test>::insert(
+				OPERATOR_1,
+				OperatorSettings {
+					fee_bps: 20,
+					delegation_acceptance: DelegationAcceptance::Allow,
+				},
+			);
+
+			OperatorSettingsLookup::<Test>::insert(
+				OPERATOR_2,
+				OperatorSettings {
+					fee_bps: 20,
+					delegation_acceptance: DelegationAcceptance::Allow,
+				},
+			);
+
+			for (index, bid) in qualified.iter().enumerate() {
+				if index % 2 == 0 {
+					ManagedValidators::<Test>::insert(bid.bidder_id, OPERATOR_1);
+				} else {
+					ManagedValidators::<Test>::insert(bid.bidder_id, OPERATOR_2);
+				}
+			}
+
+			for delegator in DELEGATORS {
+				MockFlip::credit_funds(&delegator, 50);
+				if delegator % 2 == 0 {
+					DelegationChoice::<Test>::insert(delegator, OPERATOR_1);
+				} else {
+					DelegationChoice::<Test>::insert(delegator, OPERATOR_2);
+				}
+			}
+
+			let maybe_outcome =
+				ValidatorPallet::run_and_optimize_auction(auction_resolver, qualified.clone(), 0);
+
+			assert_ok!(maybe_outcome.clone());
+
+			let delegation_snapshot = ValidatorPallet::build_delegation_snapshot(
+				qualified.iter().map(|bid| bid.bidder_id).collect::<Vec<_>>(),
+			);
+
+			let auction = maybe_outcome.unwrap();
+
+			println!("Snapshot {:?}", delegation_snapshot);
+			println!("Bond {:?}", auction.bond);
+			println!("Winners {:?}, Losers: {:?}", auction.winners, auction.losers);
+		});
+	}
 }
