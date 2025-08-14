@@ -58,7 +58,7 @@ members = [
 	"state-chain/traits",
 	"utilities",
 	"utilities/scale-json",
-	"utilities/scale-json-event-logger",
+	"utilities/scale-json-event-logger", "generate-migrations",
 ]
 
 [workspace.lints.clippy]
@@ -173,6 +173,7 @@ web3 = { version = "0.19" }
 x25519-dalek = { version = "2.0" }
 zeroize = { version = "1.7.0" }
 zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0.9.2+1" }
+n-functor = "0.2.1"
 
 # subxt dependency (at the moment points to the commit hash of the PR fixing subxt macro wasm loading).
 # TODO: remove the commit hash when subxt is released > 0.41.0

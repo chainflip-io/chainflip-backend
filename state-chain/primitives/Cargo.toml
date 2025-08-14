@@ -10,6 +10,7 @@ license = "Apache-2.0"
 workspace = true
 
 [dependencies]
+n-functor = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 hex = { workspace = true, optional = true }
 strum = { workspace = true }

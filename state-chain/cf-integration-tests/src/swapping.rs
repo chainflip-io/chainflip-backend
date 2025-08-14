@@ -605,9 +605,9 @@ fn vault_swap_deposit_witness(
 ) -> VaultDepositWitness<Runtime, EthereumInstance> {
 	VaultDepositWitness {
 		input_asset: EthAsset::Eth,
-		output_asset,
+		output_asset: Some(output_asset),
 		deposit_amount,
-		destination_address: EncodedAddress::Eth([0x02; 20]),
+		destination_address: Some(EncodedAddress::Eth([0x02; 20])),
 		deposit_metadata: Some(ccm_deposit_metadata_mock()),
 		tx_id: Default::default(),
 		deposit_details: DepositDetails { tx_hashes: None },

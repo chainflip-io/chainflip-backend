@@ -1,0 +1,23 @@
+[package]
+name = "generate-migrations"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+walkdir = "2.5.0"
+anyhow = { workspace = true }
+frame-metadata = { workspace = true, features = ["current"]}
+state-chain-runtime ={ workspace = true }
+subxt = { workspace = true }
+tokio = {workspace = true }
+codec ={ workspace = true }
+scale-info = { workspace = true }
+cf-utilities = { workspace = true }
+derive-where = "1.6.0"
+n-functor = { workspace = true }
+clap ={ workspace = true, features = ["derive"]}
+
+
+
+[lints]
+workspace = true

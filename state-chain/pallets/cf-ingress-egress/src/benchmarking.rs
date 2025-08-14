@@ -76,7 +76,7 @@ mod benchmarks {
 						source_asset,
 					)
 					.unwrap(),
-				action: ChannelAction::<T::AccountId, T::TargetChain>::LiquidityProvision {
+				action: ChannelAction::<T::AccountId, <T::TargetChain as Chain>::ChainAccount>::LiquidityProvision {
 					lp_account: account("doogle", 0, 0),
 					refund_address: ForeignChainAddress::benchmark_value(),
 				},
@@ -119,7 +119,7 @@ mod benchmarks {
 						<T as Config<I>>::AddressDerivation,
 					>(1, source_asset)
 					.unwrap(),
-					action: ChannelAction::<T::AccountId, T::TargetChain>::LiquidityProvision {
+					action: ChannelAction::<T::AccountId, <T::TargetChain as Chain>::ChainAccount>::LiquidityProvision {
 						lp_account: account("doogle", 0, 0),
 						refund_address: ForeignChainAddress::benchmark_value(),
 					},
@@ -245,9 +245,9 @@ mod benchmarks {
 			block_height: 0u32.into(),
 			deposit: Box::new(VaultDepositWitness {
 				input_asset: BenchmarkValue::benchmark_value(),
-				output_asset: Asset::Eth,
+				output_asset: Some(Asset::Eth),
 				deposit_amount: 1_000u32.into(),
-				destination_address: BenchmarkValue::benchmark_value(),
+				destination_address: Some(BenchmarkValue::benchmark_value()),
 				deposit_metadata: Some(deposit_metadata),
 				tx_id: TransactionInIdFor::<T, I>::benchmark_value(),
 				deposit_details: BenchmarkValue::benchmark_value(),

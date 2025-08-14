@@ -637,10 +637,10 @@ mod vault_swaps {
 				channel_id: Some(CHANNEL_ID),
 				deposit_amount: DEPOSIT_AMOUNT,
 				deposit_details: Default::default(),
-				output_asset: OUTPUT_ASSET,
-				destination_address: MockAddressConverter::to_encoded_address(
+				output_asset: Some(OUTPUT_ASSET),
+				destination_address: Some(MockAddressConverter::to_encoded_address(
 					output_address.clone(),
-				),
+				)),
 				deposit_metadata: None,
 				tx_id,
 				broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),
@@ -961,10 +961,10 @@ mod delayed_boosting {
 			channel_id: Some(CHANNEL_ID),
 			deposit_amount: DEPOSIT_AMOUNT,
 			deposit_details: Default::default(),
-			output_asset: OUTPUT_ASSET.into(),
-			destination_address: MockAddressConverter::to_encoded_address(
+			output_asset: Some(OUTPUT_ASSET.into()),
+			destination_address: Some(MockAddressConverter::to_encoded_address(
 				ForeignChainAddress::Eth([1; 20].into()),
-			),
+			)),
 			deposit_metadata: None,
 			tx_id: TX_ID,
 			broker_fee: Some(Beneficiary { account: BROKER, bps: 5 }),

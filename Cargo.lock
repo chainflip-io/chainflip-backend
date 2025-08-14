@@ -1458,6 +1458,7 @@ dependencies = [
  "itertools 0.13.0",
  "libsecp256k1",
  "log",
+ "n-functor",
  "parity-scale-codec",
  "proptest 1.6.0",
  "rand 0.8.5",
@@ -1592,6 +1593,7 @@ version = "0.1.0"
 dependencies = [
  "frame-support",
  "hex",
+ "n-functor",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -3060,9 +3062,9 @@ dependencies = [
 
 [[package]]
 name = "derive-where"
-version = "1.2.7"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62d671cc41a825ebabc75757b62d3d168c577f9149b2d49ece1dad1f72119d25"
+checksum = "ef941ded77d15ca19b40374869ac6000af1c9f2a4c0f3d4c70926287e6364a8f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4680,6 +4682,24 @@ dependencies = [
  "serde_json",
  "state-chain-runtime",
  "tempfile",
+]
+
+[[package]]
+name = "generate-migrations"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "derive-where",
+ "frame-metadata 16.0.0",
+ "n-functor",
+ "parity-scale-codec",
+ "scale-info",
+ "state-chain-runtime",
+ "subxt",
+ "tokio",
+ "utilities",
+ "walkdir",
 ]
 
 [[package]]
@@ -7598,6 +7618,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "n-functor"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e279584350f406d0be657b1f66ed3450c2da43cfa154f8320470984e81b28b9d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
+]
+
+[[package]]
 name = "nalgebra"
 version = "0.33.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8430,6 +8461,7 @@ dependencies = [
  "generic-typeinfo-derive",
  "hex-literal",
  "log",
+ "n-functor",
  "pallet-cf-governance",
  "parity-scale-codec",
  "scale-info",
