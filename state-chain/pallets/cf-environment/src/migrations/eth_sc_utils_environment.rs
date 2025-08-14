@@ -17,7 +17,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for EthScUtilsEnvironment
 					hex_literal::hex!("C191c202fdc308F54fF815fb3309eCd052E75D73").into(),
 				cf_runtime_utilities::genesis_hashes::SISYPHOS =>
 					hex_literal::hex!("7c08ea651dA70239DA8cb87A5913c3579Ba9F6fE").into(),
-				_ => hex_literal::hex!("7a2088a1bFc9d81c55368AE168C2C02570cB814F").into(),
+				_ => hex_literal::hex!("c5a5C42992dECbae36851359345FE25997F5C42d").into(),
 			};
 		EthereumScUtilsAddress::<T>::put(eth_sc_utils_address);
 
@@ -50,7 +50,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for EthScUtilsEnvironment
 			_ => {
 				assert_eq!(
 					EthereumScUtilsAddress::<T>::get(),
-					hex_literal::hex!("7a2088a1bFc9d81c55368AE168C2C02570cB814F").into()
+					hex_literal::hex!("c5a5C42992dECbae36851359345FE25997F5C42d").into()
 				);
 			},
 		};
