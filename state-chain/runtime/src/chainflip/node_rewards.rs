@@ -29,7 +29,7 @@ impl RewardsDistribution for BlockAuthorRewardDistribution {
 		let reward_amount = Emissions::current_authority_emission_per_block();
 		if reward_amount != 0 {
 			if let Some(current_block_author) = Authorship::author() {
-				pallet_cf_validator::distribute_among_delegators::<Runtime>(
+				pallet_cf_validator::distribute::<Runtime>(
 					&current_block_author,
 					reward_amount,
 					|account, reward| {

@@ -76,16 +76,16 @@ where
 	}
 
 	fn slash_balance(account_id: &Self::AccountId, slash_amount: Self::Balance) {
-		distribute_among_delegators::<T>(account_id, slash_amount, |account, slash| {
+		distribute::<T>(account_id, slash_amount, |account, slash| {
 			FlipSlasher::<T>::slash_balance(account, slash);
 		});
 	}
 }
 
 /// Distribute a settlement to a given validator for the current Epoch.
-/// The total amount is shared among all delegators associated with the operator controlling this
-/// validator.
-pub fn distribute_among_delegators<T: Config + pallet_cf_flip::Config>(
+/// The total amount is shared among all delegators and validators associated with the operator
+/// controlling this validator.
+pub fn distribute<T: Config + pallet_cf_flip::Config>(
 	validator: &T::AccountId,
 	total: T::Balance,
 	settle: impl Fn(&T::AccountId, T::Balance),
@@ -114,7 +114,8 @@ pub fn distribute_among_delegators<T: Config + pallet_cf_flip::Config>(
 /// Splits the total amount for the given operator. Can be used to distribute reward or
 /// calculate slashing.
 /// A proportion is given to the operator.
-/// The rest is split proportionally to the amount staked by each delegator.
+/// The rest is split proportionally to the amount staked by each delegator minus the fees (which
+/// are given to the operator).
 pub fn split_amount<
 	AccountId: Clone + Ord,
 	Balance: Default + Copy + Clone + AtLeast32BitUnsigned,
