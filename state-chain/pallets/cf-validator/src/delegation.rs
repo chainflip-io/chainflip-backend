@@ -109,7 +109,7 @@ pub fn distribute_among_delegators<T: Config + pallet_cf_flip::Config>(
 	total: T::Balance,
 	settle: impl Fn(&T::AccountId, T::Balance),
 ) {
-	if let Some((operator_fee, delegator_fees)) = crate::ManagedValidators::<T>::get(validator)
+	if let Some((operator_cut, delegator_cut)) = crate::ManagedValidators::<T>::get(validator)
 		.and_then(|operator| {
 			crate::OperatorSettingsLookup::<T>::get(&operator).map(|settings| (operator, settings))
 		})
@@ -117,8 +117,8 @@ pub fn distribute_among_delegators<T: Config + pallet_cf_flip::Config>(
 			let delegators = Pallet::<T>::get_bonded_delegators(&operator);
 			split_amount(total, delegators, setting.fee_bps).ok()
 		}) {
-		settle(validator, operator_fee);
-		for (delegator, fees) in delegator_fees.iter() {
+		settle(validator, operator_cut);
+		for (delegator, fees) in delegator_cut.iter() {
 			settle(delegator, *fees);
 		}
 	} else {

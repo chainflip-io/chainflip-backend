@@ -172,8 +172,6 @@ pub mod pallet {
 		BackupNodeInflationEmissionsUpdated(u32),
 		/// SupplyUpdateInterval has been updated [block_number]
 		SupplyUpdateIntervalUpdated(BlockNumberFor<T>),
-		/// Rewards have been distributed to [account_id] \[amount\]
-		BackupRewardsDistributed { who: T::AccountId, amount: T::FlipBalance },
 		/// The Flip that was bought using the network fee has been burned.
 		NetworkFeeBurned { amount: AssetAmount, egress_id: EgressId },
 		/// The Flip burn was skipped.
