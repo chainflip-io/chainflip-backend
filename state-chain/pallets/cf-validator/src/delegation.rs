@@ -61,25 +61,6 @@ pub struct OperatorSettings {
 	pub delegation_acceptance: DelegationAcceptance,
 }
 
-#[derive(
-	Default,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	Clone,
-	PartialEq,
-	Eq,
-	Debug,
-	Deserialize,
-	Serialize,
-)]
-pub enum DelegationStatus {
-	#[default]
-	Delegating,
-	UnDelegating,
-}
-
 pub struct DelegatorFlipSlasher<T>(PhantomData<T>);
 impl<T: Config + pallet_cf_flip::Config> Slashing for DelegatorFlipSlasher<T>
 where
