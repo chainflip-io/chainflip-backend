@@ -92,6 +92,7 @@ async function testDelegate(parentLogger: Logger) {
       const txMatch = event.data.txHash === receipt.transactionHash;
       const amountMatch = event.data.fundsAdded.replace(/,/g, '') === amount.toString();
       const accountIdMatch = evmToScAddress(whalePubkey) === event.data.accountId;
+      logger.info("Fund event", event.data, "txMatch: " + txMatch + ", amountMatch: " + amountMatch + ", accountIdMatch: " + accountIdMatch);
       return txMatch && amountMatch && accountIdMatch;
     },
   }).event;
@@ -99,6 +100,7 @@ async function testDelegate(parentLogger: Logger) {
     test: (event) => {
       const txMatch = event.data.ethTxHash === receipt.transactionHash;
       const operatorMatch = event.data.scCall.Delegation.Delegate.operator === operator.address;
+      logger.info("SCCallExecuted event", event.data, "txMatch: " + txMatch + ", operatorMatch: " + operatorMatch);
       return txMatch && operatorMatch;
     },
   }).event;
@@ -106,6 +108,7 @@ async function testDelegate(parentLogger: Logger) {
     test: (event) => {
       const delegatorMatch = event.data.delegator === evmToScAddress(whalePubkey);
       const operatorMatch = event.data.operator === operator.address;
+      logger.info("Delegated event", event.data, "delegatorMatch: " + delegatorMatch + ", operatorMatch: " + operatorMatch);
       return delegatorMatch && operatorMatch;
     },
   }).event;
