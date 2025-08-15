@@ -89,6 +89,7 @@ export async function executeEvmVaultSwap(
       gas_budget: fillOrKillParams?.refundCcmMetadata.gasBudget,
       ccm_additional_data: fillOrKillParams?.refundCcmMetadata.ccmAdditionalData,
     },
+    max_oracle_price_slippage: undefined,
   };
 
   const extraParameters: EvmVaultSwapExtraParameters = {

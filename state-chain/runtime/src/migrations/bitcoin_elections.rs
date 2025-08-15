@@ -205,6 +205,7 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 									refund_address: old_refund.refund_address,
 									min_price: old_refund.min_price,
 									refund_ccm_metadata: None,
+									max_oracle_price_slippage: None,
 								};
 								pallet_cf_ingress_egress::VaultDepositWitness {
 									input_asset: old_witness.input_asset,
@@ -249,6 +250,7 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 								refund_address: old_refund.refund_address,
 								min_price: old_refund.min_price,
 								refund_ccm_metadata: None,
+								max_oracle_price_slippage: None,
 							};
 							(
 								chainflip::bitcoin_block_processor::BtcEvent::Witness(
@@ -282,6 +284,7 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 								refund_address: old_refund.refund_address,
 								min_price: old_refund.min_price,
 								refund_ccm_metadata: None,
+								max_oracle_price_slippage: None,
 							};
 							(
 								chainflip::bitcoin_block_processor::BtcEvent::PreWitness(
@@ -340,6 +343,7 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 										refund_address: old_refund.refund_address,
 										min_price: old_refund.min_price,
 										refund_ccm_metadata: None,
+										max_oracle_price_slippage: None,
 									};
 									pallet_cf_ingress_egress::VaultDepositWitness {
 										input_asset: old_witness.input_asset,

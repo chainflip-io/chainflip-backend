@@ -38,7 +38,7 @@ use pallet_cf_elections::{
 
 use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
 use cf_chains::sol::SolAddress;
-use cf_traits::{impl_pallet_safe_mode, Chainflip};
+use cf_traits::{impl_pallet_safe_mode, Chainflip, OraclePrice};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
@@ -58,15 +58,6 @@ use pallet_cf_elections::{
 };
 
 //--------------- api provided to other pallets -------------
-
-pub struct OraclePrice {
-	/// Statechain encoded price, fixed-point value with 128 bits for fractional part, ie.
-	/// denominator is 2^128.
-	pub price: Price,
-
-	/// Whether the price is stale according to the oracle price ES settings.
-	pub stale: bool,
-}
 
 pub fn decode_and_get_latest_oracle_price<T: OPTypes>(asset: any::Asset) -> Option<OraclePrice> {
 	use ChainlinkAssetpair::*;

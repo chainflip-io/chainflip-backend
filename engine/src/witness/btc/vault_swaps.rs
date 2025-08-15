@@ -181,6 +181,11 @@ pub fn try_extract_vault_swap_witness(
 			min_price,
 			// Bitcoin should never have a ccm refund
 			refund_ccm_metadata: None,
+			max_oracle_price_slippage: if data.parameters.max_oracle_price_slippage == u8::MAX {
+				None
+			} else {
+				Some(data.parameters.max_oracle_price_slippage.into())
+			},
 		},
 		dca_params: Some(DcaParameters {
 			number_of_chunks: data.parameters.number_of_chunks.into(),
@@ -221,9 +226,10 @@ mod tests {
 	static MOCK_SWAP_PARAMS: LazyLock<UtxoEncodedData> = LazyLock::new(|| UtxoEncodedData {
 		output_asset: cf_primitives::Asset::Dot,
 		output_address: EncodedAddress::Dot(MOCK_DOT_ADDRESS),
-		parameters: BtcCfParameters {
+		parameters: BtcCfParametersV1 {
 			retry_duration: 5,
 			min_output_amount: u128::MAX,
+			max_oracle_price_slippage: u8::MAX,
 			number_of_chunks: 0x0ffff,
 			chunk_interval: 2,
 			boost_fee: 5,
@@ -352,6 +358,7 @@ mod tests {
 						DEPOSIT_AMOUNT.into(),
 					)),
 					refund_ccm_metadata: None,
+					max_oracle_price_slippage: None,
 				},
 				dca_params: Some(DcaParameters {
 					number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks.into(),
