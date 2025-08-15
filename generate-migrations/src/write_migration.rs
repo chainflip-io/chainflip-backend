@@ -42,20 +42,17 @@ pub struct FullMigration {
 
 impl FullMigration {
 	pub fn apply(&self) -> Vec<Module> {
-
 		// create module for old type defs
 		let path = env::current_dir().unwrap().join("gentemp").join("old");
 		let mut module = Module::new(path);
 
-		for defs in self.pallet_migrations
-			.clone()
-			.into_iter()
-			.map(|pallet| pallet.old_definitions) {
-				for (_chain, defs) in defs {
-					for def in defs {
-						module.write(def);
-					}
+		for defs in self.pallet_migrations.clone().into_iter().map(|pallet| pallet.old_definitions)
+		{
+			for (_chain, defs) in defs {
+				for def in defs {
+					module.write(def);
 				}
+			}
 		}
 
 		vec![module]

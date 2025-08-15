@@ -14,7 +14,10 @@ use std::{
 	process,
 	str::FromStr,
 };
-use subxt::{ext::scale_decode::visitor::types::Tuple, metadata::types::StorageEntryType};
+use subxt::{
+	ext::{scale_bits::scale, scale_decode::visitor::types::Tuple},
+	metadata::types::StorageEntryType,
+};
 use walkdir::WalkDir;
 
 fn generate_type_packages(root_path: PathBuf, target_path: PathBuf) -> anyhow::Result<()> {
@@ -325,6 +328,7 @@ pub enum TypeName {
 	Ordinary { path: Vec<String>, name: String, chain: ChainInstance, params: Vec<TypeName> },
 	VariantType { enum_type: Box<TypeName>, variant: String },
 	Parameter { variable_name: String, value: Option<Box<TypeName>> },
+	Tuple(Vec<TypeName>),
 	Unknown,
 }
 
@@ -338,6 +342,8 @@ impl TypeName {
 			a @ TypeName::VariantType { .. } => (a, None),
 			a @ TypeName::Unknown => (a, None),
 			a @ TypeName::Parameter { .. } => (a, None),
+			// TODO! this probably has to split inside!
+			a @ TypeName::Tuple(_) => (a, None),
 		}
 	}
 
@@ -345,12 +351,25 @@ impl TypeName {
 		match self {
 			TypeName::Ordinary { path, name, chain, params } => {
 				if let Some((module, rest)) = path.split_first() {
-					Some((module.to_string(), TypeName::Ordinary { path: rest.to_vec(), name, chain, params }))
+					Some((module.to_string(), TypeName::Ordinary {
+						path: rest.to_vec(),
+						name,
+						chain,
+						params,
+					}))
 				} else {
 					None
 				}
 			},
 			a => None,
+		}
+	}
+
+	pub fn map_path(self, f: impl Fn(Vec<String>) -> Vec<String>) -> Self {
+		match self {
+			TypeName::Ordinary { path, name, chain, params } =>
+				TypeName::Ordinary { path: f(path), name, chain, params },
+			a => a,
 		}
 	}
 }
@@ -405,21 +424,34 @@ pub enum TypeRepr<X: CellType> {
 		typename: X::Discrete<TypeName>,
 		inner: Box<X::Of<TypeRepr<Point>, TypeRepr<Morphism>>>,
 	},
+	// MapLike {
+	// 	typename: X::Discrete<TypeName>,
+	// 	key_repr: Box<X::Of<TypeRepr<Point>, TypeRepr<Morphism>>>,
+	// 	val_repr: Box<X::Of<TypeRepr<Point>, TypeRepr<Morphism>>>,
+
+	// },
 	NotImplemented,
 	Primitive(X::Of<TypeDefPrimitive, !>),
 	TypeByName(X::Discrete<TypeName>),
 }
 
 impl<X: CellType> TypeRepr<X> {
-	pub fn map_definition_typename(self, f: impl Fn(X::Discrete<TypeName>) -> X::Discrete<TypeName>) -> Self {
+	pub fn map_definition_typename(
+		self,
+		f: impl Fn(X::Discrete<TypeName>) -> X::Discrete<TypeName>,
+	) -> Self {
 		match self {
-			TypeRepr::Struct { typename, fields } => TypeRepr::Struct { typename: f(typename), fields },
-			TypeRepr::Enum { typename, variants } => TypeRepr::Enum { typename: f(typename), variants },
+			TypeRepr::Struct { typename, fields } =>
+				TypeRepr::Struct { typename: f(typename), fields },
+			TypeRepr::Enum { typename, variants } =>
+				TypeRepr::Enum { typename: f(typename), variants },
 			TypeRepr::Tuple { typename, fields } => TypeRepr::Tuple { typename, fields },
 			TypeRepr::Sequence { typename, inner } => TypeRepr::Sequence { typename, inner },
 			TypeRepr::NotImplemented => TypeRepr::NotImplemented,
 			TypeRepr::Primitive(a) => TypeRepr::Primitive(a),
 			TypeRepr::TypeByName(a) => TypeRepr::TypeByName(a),
+			// TypeRepr::MapLike { typename, key_repr, val_repr } => TypeRepr::MapLike { typename,
+			// key_repr, val_repr },
 		}
 	}
 }
@@ -429,6 +461,7 @@ enum NodeKind {
 	Struct,
 	Enum,
 	Sequence,
+	MapLike,
 	Tuple,
 }
 
@@ -627,7 +660,7 @@ impl GetUpdate for EnumVariant<Morphism> {
 			NodeKind::Struct,
 			&self.variant.clone().map(|name| TypeName::Ordinary {
 				path: Default::default(),
-				name: name,
+				name,
 				chain: None,
 				params: vec![],
 			}),
@@ -671,6 +704,8 @@ impl GetMigration for TypeRepr<Morphism> {
 			),
 			TypeRepr::Sequence { typename, inner } =>
 				Migration::from_updates(NodeKind::Sequence, &typename, vec![inner.get_update()]),
+			// TypeRepr::MapLike { key_repr, val_repr } =>
+			// 		Migration::from_updates(NodeKind::MapLike, &typename, vec![inner.get_update()]),
 		}
 	}
 }
@@ -686,10 +721,117 @@ trait GetMigration {
 	fn get_migration(&self) -> Option<Migration>;
 }
 
-fn type_to_string(metadata: &subxt::Metadata, ty: u32) -> TypeName {
-	let ty = metadata.types().resolve(ty).unwrap();
+pub fn primitive_to_string(p: &TypeDefPrimitive) -> &'static str {
+	match p {
+		scale_info::TypeDefPrimitive::Bool => "bool",
+		scale_info::TypeDefPrimitive::Char => "char",
+		scale_info::TypeDefPrimitive::Str => "String",
+		scale_info::TypeDefPrimitive::U8 => "u8",
+		scale_info::TypeDefPrimitive::U16 => "u16",
+		scale_info::TypeDefPrimitive::U32 => "u32",
+		scale_info::TypeDefPrimitive::U64 => "u64",
+		scale_info::TypeDefPrimitive::U128 => "u128",
+		scale_info::TypeDefPrimitive::U256 => "u256",
+		scale_info::TypeDefPrimitive::I8 => "i8",
+		scale_info::TypeDefPrimitive::I16 => "i16",
+		scale_info::TypeDefPrimitive::I32 => "i32",
+		scale_info::TypeDefPrimitive::I64 => "i64",
+		scale_info::TypeDefPrimitive::I128 => "i128",
+		scale_info::TypeDefPrimitive::I256 => "i256",
+	}
+}
+
+// pub fn builtin_to_string(metadata: &subxt::Metadata, p: &scale_info::TypeDef<PortableForm>) ->
+// TypeName { 	match p {
+// 		scale_info::TypeDef::Primitive(type_def_primitive) =>
+// 			TypeName::Ordinary {
+// 				path: vec![],
+// 				name: primitive_to_string(type_def_primitive).to_string(),
+// 				chain: None,
+// 				params: vec![]
+// 			},
+// 		scale_info::TypeDef::Composite(type_def_composite) => panic!(""),
+// 		scale_info::TypeDef::Variant(type_def_variant) => panic!(""),
+// 		scale_info::TypeDef::Sequence(type_def_sequence) => TypeName::Ordinary { path: vec![], name:
+// "Vec".to_string(), chain: None, params: vec![ 			type_to_string(metadata,
+// type_def_sequence.type_param.id) 		] },
+// 		scale_info::TypeDef::Array(type_def_array) => todo!(),
+// 		scale_info::TypeDef::Tuple(type_def_tuple) => TypeNa,
+// 		scale_info::TypeDef::Compact(type_def_compact) => todo!(),
+// 		scale_info::TypeDef::BitSequence(type_def_bit_sequence) => todo!(),
+// 	}
+// }
+
+pub fn type_repr_to_name(ty: TypeRepr<Point>) -> TypeName {
+	match ty {
+		TypeRepr::Struct { typename, fields } => {
+			if matches!(typename.clone(), TypeName::Ordinary { path, name, chain: None, params } if path.is_empty() && &name == "BTreeMap" && params.len() == 2)
+			{
+				assert_eq!(fields.len(), 1);
+				match fields[0].ty.clone() {
+					TypeRepr::Sequence { typename, inner } => match *inner {
+						TypeRepr::Tuple { typename, fields } => TypeName::Ordinary {
+							path: vec![],
+							name: "BTreeMap".to_string(),
+							chain: None,
+							params: vec![
+								type_repr_to_name(fields[0].ty.clone()),
+								type_repr_to_name(fields[1].ty.clone()),
+							],
+						},
+						_ => panic!(""),
+					},
+
+					TypeRepr::TypeByName(TypeName::Ordinary { path, name, chain, params }) => {
+						assert_eq!(name, "Vec");
+						assert_eq!(params.len(), 1);
+
+						match params[0].clone() {
+							TypeName::Tuple(type_names) => {
+								assert_eq!(type_names.len(), 2);
+
+								println!("Found hidden BTreeMap!");
+
+								TypeName::Ordinary {
+									path: vec![],
+									name: "BTreeMap".to_string(),
+									chain: None,
+									params: vec![type_names[0].clone(), type_names[1].clone()],
+								}
+							},
+							_ => panic!(),
+						}
+					},
+					_ => panic!("got BTreeMap, but fields were: {fields:?}"),
+				}
+			} else {
+				typename
+			}
+		},
+		TypeRepr::Enum { typename, variants } => typename,
+		TypeRepr::Tuple { typename, fields } =>
+			TypeName::Tuple(fields.into_iter().map(|f| type_repr_to_name(f.ty)).collect()),
+		TypeRepr::Sequence { typename, inner } => TypeName::Ordinary {
+			path: vec![],
+			name: "Vec".to_string(),
+			chain: None,
+			params: vec![type_repr_to_name(*inner)],
+		},
+		TypeRepr::NotImplemented => TypeName::Unknown,
+		TypeRepr::Primitive(a) => TypeName::Ordinary {
+			path: vec![],
+			name: primitive_to_string(&a).to_string(),
+			chain: None,
+			params: vec![],
+		},
+		TypeRepr::TypeByName(a) => a,
+	}
+}
+
+fn type_to_string(metadata: &subxt::Metadata, ty_id: u32) -> TypeName {
+	let ty = metadata.types().resolve(ty_id).unwrap();
 	let path = ty.path.namespace();
-	let mut name = ty.path.ident().unwrap_or_default();
+	let mut name = ty.path.ident().unwrap_or("BUILTIN".to_string());
 
 	let mut chain_instance = None;
 	for chain in CHAINS {
@@ -700,20 +842,21 @@ fn type_to_string(metadata: &subxt::Metadata, ty: u32) -> TypeName {
 		}
 	}
 
-	TypeName::Ordinary {
-		path: path.to_vec(),
-		name,
-		chain: chain_instance,
-		params: ty
-			.type_params
-			.clone()
-			.into_iter()
-			.map(|param| TypeName::Parameter {
-				variable_name: param.name,
-				value: param.ty.map(|ty| Box::new(type_to_string(metadata, ty.id))),
-			})
-			.collect(),
-	}
+	let params = ty
+		.type_params
+		.clone()
+		.into_iter()
+		.map(|param| TypeName::Parameter {
+			variable_name: param.name,
+			value: param.ty.map(|ty| Box::new(type_to_string(metadata, ty.id))),
+		})
+		.collect();
+
+	// if &name == "BTreeMap" {
+	// 	println!("BTreeMap: {ty_id}, params: {params:?}");
+	// }
+
+	TypeName::Ordinary { path: path.to_vec(), name, chain: chain_instance, params }
 }
 
 impl<A: Clone> GetIdentity for DiscreteMorphism<A> {
@@ -731,7 +874,7 @@ impl GetIdentity for TypeRepr<Morphism> {
 	type Point = TypeRepr<Point>;
 
 	fn try_get_identity(&self) -> Option<Self::Point> {
-		match self {
+		match &self.clone() {
 			TypeRepr::Struct { typename, fields } =>
 				if fields
 					.iter()
@@ -739,7 +882,13 @@ impl GetIdentity for TypeRepr<Morphism> {
 					.collect::<Option<Vec<_>>>()
 					.is_some()
 				{
-					typename.try_get_identity().map(TypeRepr::TypeByName)
+					if matches!(typename, DiscreteMorphism::Same(_)) {
+						Some(TypeRepr::TypeByName(type_repr_to_name(extract_old_type(
+							self.clone(),
+						))))
+					} else {
+						None
+					}
 				} else {
 					None
 				},
@@ -750,7 +899,13 @@ impl GetIdentity for TypeRepr<Morphism> {
 					.collect::<Option<Vec<_>>>()
 					.is_some()
 				{
-					typename.try_get_identity().map(TypeRepr::TypeByName)
+					if matches!(typename, DiscreteMorphism::Same(_)) {
+						Some(TypeRepr::TypeByName(type_repr_to_name(extract_old_type(
+							self.clone(),
+						))))
+					} else {
+						None
+					}
 				} else {
 					None
 				},
@@ -764,13 +919,25 @@ impl GetIdentity for TypeRepr<Morphism> {
 					.collect::<Option<Vec<_>>>()
 					.is_some()
 				{
-					typename.try_get_identity().map(TypeRepr::TypeByName)
+					if matches!(typename, DiscreteMorphism::Same(_)) {
+						Some(TypeRepr::TypeByName(type_repr_to_name(extract_old_type(
+							self.clone(),
+						))))
+					} else {
+						None
+					}
 				} else {
 					None
 				},
 			TypeRepr::Sequence { typename, inner } =>
 				if inner.try_get_identity().is_some() {
-					typename.try_get_identity().map(TypeRepr::TypeByName)
+					if matches!(typename, DiscreteMorphism::Same(_)) {
+						Some(TypeRepr::TypeByName(type_repr_to_name(extract_old_type(
+							self.clone(),
+						))))
+					} else {
+						None
+					}
 				} else {
 					None
 				},
@@ -780,19 +947,19 @@ impl GetIdentity for TypeRepr<Morphism> {
 
 pub fn compare_types(
 	metadata1: &subxt::Metadata,
-	ty1: u32,
+	ty1_id: u32,
 	metadata2: &subxt::Metadata,
-	ty2: u32,
+	ty2_id: u32,
 ) -> CompactDiff<TypeRepr<Point>, TypeRepr<Morphism>> {
 	use scale_info::TypeDef::*;
 
 	let toplevel_typename = DiscreteMorphism::from_points(
-		type_to_string(metadata1, ty1),
-		type_to_string(metadata2, ty2),
+		type_to_string(metadata1, ty1_id),
+		type_to_string(metadata2, ty2_id),
 	);
 
-	let ty1 = metadata1.types().resolve(ty1).unwrap().clone();
-	let ty2 = metadata2.types().resolve(ty2).unwrap().clone();
+	let ty1 = metadata1.types().resolve(ty1_id).unwrap().clone();
+	let ty2 = metadata2.types().resolve(ty2_id).unwrap().clone();
 
 	let diff_fields = |fields1: &Vec<Field<PortableForm>>, fields2: &Vec<Field<PortableForm>>| {
 		let fields1: BTreeMap<_, _> = fields1
@@ -838,11 +1005,20 @@ pub fn compare_types(
 	};
 
 	match (ty1.type_def, ty2.type_def) {
-		(Composite(ty1content), Composite(ty2content)) =>
-			CompactDiff::compact_inherited(TypeRepr::Struct {
+		(Composite(ty1content), Composite(ty2content)) => {
+			let result = CompactDiff::compact_inherited(TypeRepr::Struct {
 				fields: diff_fields(&ty1content.fields, &ty2content.fields),
 				typename: toplevel_typename,
-			}),
+			});
+
+			// if ty1_id == 626 {
+			// 	println!("626: result: {result:?}");
+			// 	println!("ty1content: {ty1content:?}");
+			// 	println!("ty2content: {ty2content:?}");
+			// }
+
+			result
+		},
 		(Variant(ty1content), Variant(ty2content)) => {
 			let variants1: BTreeMap<_, _> = ty1content
 				.variants

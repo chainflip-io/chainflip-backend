@@ -4,20 +4,21 @@ use tokio::fs::write;
 
 use crate::typediff::{
 	DiscreteMorphism, EnumVariant, Point, StructField, TupleEntry, TypeName, TypeRepr,
+	primitive_to_string, type_repr_to_name,
 };
 use std::fs;
 
 pub struct VirtualFile {
-    path: PathBuf,
-    contents: String
+	path: PathBuf,
+	contents: String,
 }
 
 impl VirtualFile {
 	pub fn apply(&self) {
-        let mut path = self.path.clone();
-        path.add_extension("rs");
+		let mut path = self.path.clone();
+		path.add_extension("rs");
 
-        println!("writing file {}", path.display());
+		println!("writing file {}", path.display());
 
 		// create directories
 		fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -25,7 +26,7 @@ impl VirtualFile {
 		// create file
 		let mut file = fs::File::create(path.clone()).unwrap();
 
-        writeln!(file, "{}", self.contents).unwrap();
+		writeln!(file, "{}", self.contents).unwrap();
 	}
 }
 
@@ -68,25 +69,46 @@ impl Module {
 			}
 		}
 
-        // clear path of typename
-		self.definitions.insert(name, ty.map_definition_typename(|name| {
-            match name {
-                TypeName::Ordinary { path, name, chain, params } => TypeName::Ordinary { path: vec![], name, chain, params },
-                a => a
-            }
-        }));
+		// clear path of typename
+		self.definitions.insert(
+			name,
+			ty.map_definition_typename(|name| match name {
+				TypeName::Ordinary { path, name, chain, params } =>
+					TypeName::Ordinary { path: vec![], name, chain, params },
+				a => a,
+			}),
+		);
 	}
 
 	/// Resolves submodule path of name
 	fn add_definition(&mut self, name: TypeName, ty: TypeRepr<Point>) {
 		if let Some((module, name)) = name.clone().split_module() {
-            self.sub_modules.entry(module.clone()).or_insert(Module::new(self.path.join(module.clone()))).add_definition(name, ty);
-        } else {
-            self.add_definition_this_module(name, ty);
-        }
+			self.sub_modules
+				.entry(module.clone())
+				.or_insert(Module::new(self.path.join(module.clone())))
+				.add_definition(name, ty);
+		} else {
+			self.add_definition_this_module(name, ty);
+		}
 	}
 
 	pub fn write(&mut self, def: TypeRepr<Point>) -> TypeRepr<Point> {
+		let add_old_path = |n: TypeName| {
+			n.map_path(|path| {
+				if path.is_empty() {
+					// we don't add anything if the typename has no path (this probably means that
+					// it's a builtin, like BTreeMap)
+					path
+				} else {
+					["crate", "generated", "old"]
+						.into_iter()
+						.map(|a| a.to_string())
+						.chain(path.into_iter())
+						.collect()
+				}
+			})
+		};
+
 		use TypeRepr::*;
 		// Struct { typename, .. } |
 		// Enum { typename, .. } |
@@ -101,14 +123,15 @@ impl Module {
 			a @ Primitive(_) => a.clone(),
 			a @ TypeByName(discrete_morphism) => a.clone(),
 			a @ NotImplemented => todo!(),
-			Struct { typename, fields } => {
+			ref a @ Struct { typename, fields } => {
 				let fields = fields
 					.into_iter()
 					.map(|field| self.write_struct_field(field.clone()))
 					.collect();
 				let result = TypeRepr::Struct { typename: typename.clone(), fields };
 				self.add_definition(typename.clone(), result.clone());
-				TypeRepr::TypeByName(typename.clone())
+				// TypeRepr::TypeByName(add_old_path(typename.clone()))
+				TypeRepr::TypeByName(add_old_path(type_repr_to_name(result)))
 			},
 			Enum { typename, variants } => {
 				let variants = variants
@@ -117,7 +140,8 @@ impl Module {
 					.collect();
 				let result = TypeRepr::Enum { typename: typename.clone(), variants };
 				self.add_definition(typename.clone(), result.clone());
-				TypeRepr::TypeByName(typename.clone())
+				// TypeRepr::TypeByName(add_old_path(typename.clone()))
+				TypeRepr::TypeByName(add_old_path(type_repr_to_name(result)))
 			},
 			Tuple { typename, fields } => {
 				let fields =
@@ -135,22 +159,38 @@ impl Module {
 	}
 
 	pub fn apply(&self) -> Vec<VirtualFile> {
-        let mut contents = String::new();
-        let mut files = Vec::new();
+		let mut contents = String::new();
+		let mut files = Vec::new();
 
-        for (name, module) in &self.sub_modules {
-            files.append(&mut module.apply());
-            contents.push_str(&format!("pub mod {name};\n"));
-        }
-        contents.push_str("\n");
+		for (name, module) in &self.sub_modules {
+			files.append(&mut module.apply());
+			contents.push_str(&format!("pub mod {name};\n"));
+		}
+		contents.push_str("\n");
 
-        contents.push_str(&self.definitions.clone().into_values().map(|def| def.to_string()).intersperse("\n".to_string()).collect::<Vec<_>>().concat());
+		for (typename, def) in self.definitions.clone() {
+			let prefix;
+			let postfix;
+			if let TypeName::Ordinary { path, name, chain: Some(chain), params } = typename {
+				prefix = format!("mod {chain} {{\n");
+				postfix = "}\n".to_string();
+			} else {
+				prefix = String::new();
+				postfix = String::new();
+			}
 
-        files.push(
-            VirtualFile { path: self.path.clone(), contents }
-        );
+			contents.push_str(&prefix);
+			contents.push_str(&def.to_string());
+			contents.push_str("\n");
+			contents.push_str(&postfix);
+		}
 
-        files
+		// contents.push_str(&self.definitions.clone().into_values().map(|def|
+		// def.to_string()).intersperse("\n".to_string()).collect::<Vec<_>>().concat());
+
+		files.push(VirtualFile { path: self.path.clone(), contents });
+
+		files
 	}
 }
 
@@ -158,7 +198,17 @@ impl Display for TypeName {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			TypeName::Ordinary { path, name, chain, params } => {
-                write!(f, "{}", path.clone().into_iter().intersperse("::".to_string()).collect::<Vec<_>>().concat())?;
+				if path.len() > 0 {
+					write!(
+						f,
+						"{}::",
+						path.clone()
+							.into_iter()
+							.intersperse("::".to_string())
+							.collect::<Vec<_>>()
+							.concat()
+					)?;
+				}
 
 				write!(f, "{}", name)?;
 				if params.len() > 0 {
@@ -175,13 +225,20 @@ impl Display for TypeName {
 			TypeName::VariantType { enum_type, variant } => todo!(),
 			TypeName::Unknown => write!(f, "?"),
 			TypeName::Parameter { variable_name: name, value } => {
-				write!(f, "\"{name}\"=")?;
+				// write!(f, "\"{name}\"=")?;
 				if let Some(value) = value {
 					write!(f, "{value}")?;
 				} else {
 					write!(f, "?")?;
 				}
 				Ok(())
+			},
+			TypeName::Tuple(type_names) => {
+				write!(f, "(")?;
+				for ty in type_names {
+					write!(f, "{ty}, ")?;
+				}
+				write!(f, ")")
 			},
 		}
 	}
@@ -195,9 +252,9 @@ impl Display for StructField<Point> {
 
 impl Display for EnumVariant<Point> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{} {{", self.variant)?;
+		writeln!(f, "{} {{", self.variant)?;
 		for field in &self.fields {
-			write!(f, "{}", field)?;
+			writeln!(f, "{}", field)?;
 		}
 		write!(f, "}}")
 	}
@@ -224,23 +281,7 @@ impl Display for TypeRepr<Point> {
 			TypeRepr::Sequence { typename, inner } => (),
 			TypeRepr::NotImplemented => (),
 			TypeRepr::Primitive(a) => {
-				let name = match a {
-					scale_info::TypeDefPrimitive::Bool => "bool",
-					scale_info::TypeDefPrimitive::Char => "char",
-					scale_info::TypeDefPrimitive::Str => "String",
-					scale_info::TypeDefPrimitive::U8 => "u8",
-					scale_info::TypeDefPrimitive::U16 => "u16",
-					scale_info::TypeDefPrimitive::U32 => "u32",
-					scale_info::TypeDefPrimitive::U64 => "u64",
-					scale_info::TypeDefPrimitive::U128 => "u128",
-					scale_info::TypeDefPrimitive::U256 => "u256",
-					scale_info::TypeDefPrimitive::I8 => "i8",
-					scale_info::TypeDefPrimitive::I16 => "i16",
-					scale_info::TypeDefPrimitive::I32 => "i32",
-					scale_info::TypeDefPrimitive::I64 => "i64",
-					scale_info::TypeDefPrimitive::I128 => "i128",
-					scale_info::TypeDefPrimitive::I256 => "i256",
-				};
+				let name = primitive_to_string(a);
 				write!(f, "{name}")?
 			},
 			TypeRepr::TypeByName(discrete_morphism) => write!(f, "{}", discrete_morphism)?,

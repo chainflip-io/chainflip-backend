@@ -11,7 +11,9 @@ mod virtual_file;
 mod write_migration;
 
 use crate::{
-	typediff::{compare_metadata, MetadataConfig, PalletRef}, virtual_file::{Module, VirtualFile}, write_migration::{FullMigration, PalletMigration}
+	typediff::{MetadataConfig, PalletRef, compare_metadata},
+	virtual_file::{Module, VirtualFile},
+	write_migration::{FullMigration, PalletMigration},
 };
 
 use clap::{Parser, Subcommand};
@@ -94,7 +96,8 @@ async fn main() {
 
 	let modules = migration.apply();
 
-	let virtual_files: Vec<VirtualFile> = modules.iter().flat_map(|m| m.apply().into_iter()).collect();
+	let virtual_files: Vec<VirtualFile> =
+		modules.iter().flat_map(|m| m.apply().into_iter()).collect();
 
 	for file in virtual_files {
 		file.apply();
