@@ -98,7 +98,7 @@ fn setup_delegation(
 	// Move to the next for delegation to take affect
 	testnet.move_to_the_next_epoch();
 
-	let actual_delegator_set = Validator::get_bonded_delegators(&operator);
+	let actual_delegator_set = Validator::get_bonded_delegators_for_operator(&operator);
 	assert_eq!(actual_delegator_set, delegators);
 
 	delegators

@@ -109,16 +109,20 @@ pub fn distribute_among_delegators<T: Config + pallet_cf_flip::Config>(
 	total: T::Balance,
 	settle: impl Fn(&T::AccountId, T::Balance),
 ) {
-	if let Some((operator_cut, delegator_cut)) = crate::ManagedValidators::<T>::get(validator)
+	if let Some((operator_cut, delegator_cuts)) = crate::ManagedValidators::<T>::get(validator)
 		.and_then(|operator| {
 			crate::OperatorSettingsLookup::<T>::get(&operator).map(|settings| (operator, settings))
 		})
 		.and_then(|(operator, setting)| {
-			let delegators = Pallet::<T>::get_bonded_delegators(&operator);
-			split_amount(total, delegators, setting.fee_bps).ok()
+			let delegators = Pallet::<T>::get_bonded_delegators_for_operator(&operator);
+			let total_validator_balance =
+				Pallet::<T>::get_total_validator_balance_for_operator(&operator);
+			split_amount(total, delegators, setting.fee_bps, total_validator_balance).ok()
 		}) {
+		// we credit the operator cut to the validator relevant of current reward/slash instead of
+		// the operator.
 		settle(validator, operator_cut);
-		for (delegator, fees) in delegator_cut.iter() {
+		for (delegator, fees) in delegator_cuts.iter() {
 			settle(delegator, *fees);
 		}
 	} else {
@@ -137,24 +141,29 @@ pub fn split_amount<
 	total: Balance,
 	delegator_bids: BTreeSet<(AccountId, Balance)>,
 	fee_bps: u32,
+	total_validator_balance: Balance,
 ) -> Result<(Balance, BTreeSet<(AccountId, Balance)>), DispatchError> {
 	if delegator_bids.is_empty() {
 		return Err("Empty delegator set".into())
 	}
 
-	let delegation_fee = Perbill::from_rational(fee_bps, 10_000) * total;
-	let remaining = total - delegation_fee;
-
 	let total_staked = delegator_bids
 		.iter()
 		.fold(Default::default(), |total_staked, (_, amount)| total_staked + *amount);
 
-	let delegator_cut = delegator_bids
+	let validators_cut =
+		Perbill::from_rational(total_validator_balance, total_validator_balance + total_staked) *
+			total;
+
+	let delegation_fee = Perbill::from_rational(fee_bps, 10_000) * (total - validators_cut);
+	let remaining = total - validators_cut - delegation_fee;
+
+	let delegator_cuts = delegator_bids
 		.iter()
 		.map(|(delegator, staked)| {
 			(delegator.clone(), Perbill::from_rational(*staked, total_staked) * remaining)
 		})
 		.collect::<BTreeSet<_>>();
 
-	Ok((delegation_fee, delegator_cut))
+	Ok((delegation_fee + validators_cut, delegator_cuts))
 }

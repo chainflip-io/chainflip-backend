@@ -1878,8 +1878,15 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Gets all delegator bonded to a given operator, and the amount bonded.
-	pub fn get_bonded_delegators(operator: &T::AccountId) -> BTreeSet<(T::AccountId, T::Amount)> {
+	pub fn get_bonded_delegators_for_operator(
+		operator: &T::AccountId,
+	) -> BTreeSet<(T::AccountId, T::Amount)> {
 		CurrentEpochDelegations::<T>::get(operator)
+	}
+
+	/// Gets all the validators and their balances belonging to a given operator
+	pub fn get_total_validator_balance_for_operator(_operator: &T::AccountId) -> T::Amount {
+		todo!()
 	}
 }
 
