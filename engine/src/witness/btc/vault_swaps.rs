@@ -226,7 +226,7 @@ mod tests {
 	static MOCK_SWAP_PARAMS: LazyLock<UtxoEncodedData> = LazyLock::new(|| UtxoEncodedData {
 		output_asset: cf_primitives::Asset::Dot,
 		output_address: EncodedAddress::Dot(MOCK_DOT_ADDRESS),
-		parameters: BtcCfParameters {
+		parameters: BtcCfParametersV1 {
 			retry_duration: 5,
 			min_output_amount: u128::MAX,
 			max_oracle_price_slippage: u8::MAX,

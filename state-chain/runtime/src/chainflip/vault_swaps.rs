@@ -26,7 +26,7 @@ use crate::{
 use cf_chains::{
 	address::EncodedAddress,
 	btc::vault_swap_encoding::{
-		encode_swap_params_in_nulldata_payload, BtcCfParameters, UtxoEncodedData,
+		encode_swap_params_in_nulldata_payload, BtcCfParametersV1, UtxoEncodedData,
 	},
 	ccm_checker::{check_ccm_for_blacklisted_accounts, DecodedCcmAdditionalData},
 	cf_parameters::build_and_encode_cf_parameters,
@@ -112,7 +112,7 @@ pub fn bitcoin_vault_swap(
 	let params = UtxoEncodedData {
 		output_asset: destination_asset,
 		output_address: destination_address,
-		parameters: BtcCfParameters {
+		parameters: BtcCfParametersV1 {
 			retry_duration: retry_duration
 				.try_into()
 				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong)?,
@@ -387,7 +387,7 @@ pub fn decode_bitcoin_vault_swap(
 		output_asset,
 		output_address,
 		parameters:
-			BtcCfParameters {
+			BtcCfParametersV1 {
 				retry_duration,
 				min_output_amount,
 				number_of_chunks,

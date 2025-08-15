@@ -61,7 +61,7 @@ pub struct VaultSwapParameters<R> {
 pub type VaultSwapParametersV0<RefundAddress> =
 	VaultSwapParameters<ChannelRefundParametersV0<RefundAddress>>;
 
-/// New version of `VaultSwapParameters` that includes refund CCM metadata.
+/// New version of `VaultSwapParameters` includes refund CCM and oracle price slippage.
 pub type VaultSwapParametersV1<RefundAddress> =
 	VaultSwapParameters<ChannelRefundParametersUnchecked<RefundAddress>>;
 
@@ -138,7 +138,7 @@ pub fn build_and_encode_cf_parameters<RefundAddress: Encode>(
 
 #[cfg(test)]
 pub fn build_and_encode_v0_cf_parameters<RefundAddress: Encode>(
-	refund_parameters: crate::ChannelRefundParametersV0<RefundAddress>, /* crate::ChannelRefundParametersUncheckedV0<RefundAddress>, */
+	refund_parameters: crate::ChannelRefundParametersV0<RefundAddress>,
 	dca_parameters: Option<DcaParameters>,
 	boost_fee: u8,
 	broker_id: AccountId,

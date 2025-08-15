@@ -38,7 +38,7 @@ const CURRENT_VERSION: u8 = SupportedVersions::V1 as u8;
 pub struct UtxoEncodedData {
 	pub output_asset: Asset,
 	pub output_address: EncodedAddress,
-	pub parameters: BtcCfParameters,
+	pub parameters: BtcCfParametersV1,
 }
 
 impl Encode for UtxoEncodedData {
@@ -93,9 +93,9 @@ impl Decode for UtxoEncodedData {
 		let parameters = match version {
 			SupportedVersions::V0 => {
 				let parameters_v0 = old::BtcCfParametersV0::decode(input)?;
-				BtcCfParameters::from(parameters_v0)
+				BtcCfParametersV1::from(parameters_v0)
 			},
-			SupportedVersions::V1 => BtcCfParameters::decode(input)?,
+			SupportedVersions::V1 => BtcCfParametersV1::decode(input)?,
 		};
 
 		Ok(UtxoEncodedData { output_asset, output_address, parameters })
@@ -108,7 +108,7 @@ const MAX_AFFILIATES: u32 = 2;
 
 // The encoding of these parameters is the same across chains
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct BtcCfParameters {
+pub struct BtcCfParametersV1 {
 	// --- FoK fields (refund address is stored externally) ---
 	pub retry_duration: u16,
 	pub min_output_amount: AssetAmount,
@@ -144,7 +144,7 @@ mod old {
 		pub affiliates: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
 	}
 
-	impl From<BtcCfParametersV0> for BtcCfParameters {
+	impl From<BtcCfParametersV0> for BtcCfParametersV1 {
 		fn from(params: BtcCfParametersV0) -> Self {
 			Self {
 				retry_duration: params.retry_duration,
@@ -177,7 +177,7 @@ mod tests {
 		UtxoEncodedData {
 			output_asset: Asset::Dot,
 			output_address: EncodedAddress::Dot(MOCK_DOT_ADDRESS),
-			parameters: BtcCfParameters {
+			parameters: BtcCfParametersV1 {
 				retry_duration: 5,
 				min_output_amount: u128::MAX,
 				number_of_chunks: 0x0ffff,
