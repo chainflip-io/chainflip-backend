@@ -309,6 +309,8 @@ pub const ARB_USDC_TOKEN_ADDRESS: eth::Address = H160([6u8; 20]);
 pub const ARB_ADDRESS_CHECKER_ADDRESS: eth::Address = H160([7u8; 20]);
 pub const ARB_CHAIN_ID: u64 = 2;
 
+pub const ETH_SC_UTILS_ADDRESS: eth::Address = H160([8u8; 20]);
+
 cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
@@ -319,6 +321,7 @@ cf_test_utilities::impl_test_helpers! {
 			ethereum_chain_id: ETH_CHAIN_ID,
 			eth_vault_address: ETH_VAULT_ADDRESS,
 			eth_address_checker_address: ETH_ADDRESS_CHECKER_ADDRESS,
+			eth_sc_utils_address: ETH_SC_UTILS_ADDRESS,
 			arb_key_manager_address: ARB_KEY_MANAGER_ADDRESS,
 			arb_vault_address: ARB_VAULT_ADDRESS,
 			arb_address_checker_address: ARB_ADDRESS_CHECKER_ADDRESS,

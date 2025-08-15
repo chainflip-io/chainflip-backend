@@ -62,3 +62,35 @@ export async function setupBrokerAccount(logger: Logger, uri: string) {
     );
   }
 }
+
+export async function setupOperatorAccount(logger: Logger, uri: string) {
+  const operator = createStateChainKeypair(uri);
+
+  logger.debug(`Registering ${operator.address} as an Operator...`);
+
+  await using chainflip = await getChainflipApi();
+
+  const role = JSON.stringify(
+    await chainflip.query.accountRoles.accountRoles(operator.address),
+  ).replace(/"/g, '');
+
+  if (role === 'null' || role === 'Unregistered') {
+    await fundFlip(logger, operator.address, '1000');
+
+    const eventHandle = observeEvent(logger, 'accountRoles:AccountRoleRegistered', {
+      test: (event) => event.data.accountId === operator.address && event.data.role === 'Operator',
+    }).event;
+
+    await lpMutex.runExclusive(async () => {
+      const nonce = await chainflip.rpc.system.accountNextIndex(operator.address);
+      await chainflip.tx.validator
+        .registerAsOperator({
+          feeBps: 200,
+          delegationAcceptance: 'Allow',
+        })
+        .signAndSend(operator, { nonce }, handleSubstrateError(chainflip));
+    });
+    await eventHandle;
+  }
+  logger.debug(`${operator.address} successfully registered as an Operator`);
+}

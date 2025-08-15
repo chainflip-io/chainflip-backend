@@ -1201,7 +1201,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the max bid of an operator. If the argument is None any active max bis getting
+		/// Sets the max bid of an operator. If the argument is None any active max bid is
 		/// removed. If no max bid is set, we take the entire account balance as
 		/// delegator bond. The max bid is not allowed to be higher than the current account
 		/// balance.
