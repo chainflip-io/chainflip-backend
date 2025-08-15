@@ -15,6 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{chainflip::Offence, Runtime, RuntimeSafeMode};
+use pallet_cf_elections::electoral_systems::oracle_price::chainlink::OraclePrice;
+
 use cf_amm::{
 	common::{PoolPairsMap, Side},
 	math::{Amount, Tick},
@@ -34,6 +36,7 @@ use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
 use core::{ops::Range, str};
 use frame_support::sp_runtime::AccountId32;
+use pallet_cf_elections::electoral_systems::oracle_price::price::PriceAsset;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::BoostPoolDetails;
@@ -145,6 +148,7 @@ pub struct ValidatorInfo {
 	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
 	pub restricted_balances: BTreeMap<EthereumAddress, AssetAmount>,
 	pub estimated_redeemable_balance: AssetAmount,
+	pub operator: Option<AccountId32>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
@@ -157,6 +161,7 @@ pub struct OperatorInfo<Amount> {
 	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Vec::is_empty"))]
 	pub blocked: Vec<AccountId32>,
 	pub delegators: BTreeMap<AccountId32, Amount>,
+	pub flip_balance: Amount,
 }
 
 impl<A> OperatorInfo<A> {
@@ -174,6 +179,7 @@ impl<A> OperatorInfo<A> {
 			allowed: self.allowed,
 			blocked: self.blocked,
 			delegators: self.delegators.into_iter().map(|(k, v)| (k, f(v))).collect(),
+			flip_balance: f(self.flip_balance),
 		}
 	}
 }
@@ -652,6 +658,9 @@ decl_runtime_apis!(
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
 		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
 		fn cf_network_fees() -> NetworkFees;
+		fn cf_oracle_prices(
+			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
+		) -> Vec<OraclePrice>;
 	}
 );
 
@@ -676,5 +685,9 @@ decl_runtime_apis!(
 		fn cf_bitcoin_electoral_data(account_id: AccountId32) -> Vec<u8>;
 
 		fn cf_bitcoin_filter_votes(account_id: AccountId32, proposed_votes: Vec<u8>) -> Vec<u8>;
+
+		fn cf_generic_electoral_data(account_id: AccountId32) -> Vec<u8>;
+
+		fn cf_generic_filter_votes(account_id: AccountId32, proposed_votes: Vec<u8>) -> Vec<u8>;
 	}
 );

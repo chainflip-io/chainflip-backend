@@ -177,3 +177,70 @@ impl<
 		}
 	}
 }
+
+impl<
+		RawRpcClient: RawRpcApi + Send + Sync + 'static,
+		SignedExtrinsicClient: SignedExtrinsicApi + Send + Sync + 'static,
+	> ElectoralApi<()> for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
+{
+	fn electoral_data(
+		&self,
+		block: BlockInfo,
+	) -> impl std::future::Future<Output = Option<ElectoralDataFor<state_chain_runtime::Runtime, ()>>>
+	       + Send
+	       + 'static {
+		let base_rpc_client = self.base_rpc_client.clone();
+		let account_id = self.signed_extrinsic_client.account_id();
+		async move {
+			base_rpc_client
+				.raw_rpc_client
+				.cf_generic_electoral_data(account_id, Some(block.hash))
+				.await
+				.map_err(anyhow::Error::from)
+				.and_then(|electoral_data| {
+					<Option<ElectoralDataFor<state_chain_runtime::Runtime, ()>> as Decode>::decode(
+						&mut &electoral_data[..],
+					)
+					.map_err(Into::into)
+				})
+				.inspect_err(|error| {
+					error!("Failure in electoral_data rpc: '{}'", error);
+				})
+				.ok()
+				.flatten()
+		}
+	}
+
+	fn filter_votes(
+		&self,
+		proposed_votes: BTreeMap<
+			ElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<()>>::ElectoralSystemRunner>,
+			VoteOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<()>>::ElectoralSystemRunner>,
+			>
+	) -> impl std::future::Future<Output =
+	BTreeSet<ElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<()>>::ElectoralSystemRunner>>> + Send + 'static{
+		let base_rpc_client = self.base_rpc_client.clone();
+		let account_id = self.signed_extrinsic_client.account_id();
+		async move {
+			base_rpc_client
+				.raw_rpc_client
+				.cf_generic_filter_votes(account_id, proposed_votes.encode(), None)
+				.await
+				.map_err(anyhow::Error::from)
+				.and_then(|electoral_data| {
+					<BTreeSet<
+						ElectionIdentifierOf<
+							<state_chain_runtime::Runtime as pallet_cf_elections::Config<
+								(),
+							>>::ElectoralSystemRunner,
+						>,
+					> as Decode>::decode(&mut &electoral_data[..])
+					.map_err(Into::into)
+				})
+				.inspect_err(|error| {
+					error!("Failure in filter_votes rpc: '{}'", error);
+				})
+				.unwrap_or_default()
+		}
+	}
+}

@@ -63,6 +63,9 @@ impl SubstrateCli for Cli {
 			"sisyphos" => Box::new(chain_spec::ChainSpec::from_json_bytes(
 				include_bytes!("../chainspecs/sisyphos.chainspec.raw.json").as_slice(),
 			)?),
+			"backspin" => Box::new(chain_spec::ChainSpec::from_json_bytes(
+				include_bytes!("../chainspecs/backspin.chainspec.raw.json").as_slice(),
+			)?),
 			path =>
 				Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path))?),
 		})

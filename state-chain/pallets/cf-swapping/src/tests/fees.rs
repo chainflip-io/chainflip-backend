@@ -108,10 +108,19 @@ fn test_buy_back_flip() {
 
 		// Note that the network fee will not be charged in this case:
 		assert_eq!(
-			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS))
-				.first()
+			ScheduledSwaps::<Test>::get()
+				.get(&1.into())
 				.expect("Should have scheduled a swap usdc -> flip"),
-			&Swap::new(1.into(), 1.into(), STABLE_ASSET, Asset::Flip, NETWORK_FEE_AMOUNT, None, [],)
+			&Swap::new(
+				1.into(),
+				1.into(),
+				STABLE_ASSET,
+				Asset::Flip,
+				NETWORK_FEE_AMOUNT,
+				None,
+				[],
+				System::block_number() + SWAP_DELAY_BLOCKS as u64
+			)
 		);
 	});
 }

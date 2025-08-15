@@ -387,28 +387,21 @@ pub mod pallet {
 	pub type DelegationChoice<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
 
-	/// Holds meta information about the current delegation of delegator.
+	///  Holds the list of all delegators that have initiated undelegation and will successfully
+	/// undelegate at the end of the current epoch
 	#[pallet::storage]
-	pub type OutgoingDelegators<T: Config> =
-		StorageMap<_, Identity, T::AccountId, DelegationStatus, ValueQuery>;
+	pub type OutgoingDelegators<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type MaxDelegationBid<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
 
-	/// Collects all delegation of an epoch.
+	/// Collects all delegation of the current epoch. Maps a Operator to all delegators.
 	#[pallet::storage]
-	pub type DelegationsPerEpoch<T: Config> = StorageDoubleMap<
-		_,
-		Identity,
-		EpochIndex,
-		Identity,
-		T::AccountId,
-		BTreeSet<(T::AccountId, T::Amount)>,
-		ValueQuery,
-	>;
+	pub type CurrentEpochDelegations<T: Config> =
+		StorageMap<_, Identity, T::AccountId, BTreeSet<(T::AccountId, T::Amount)>, ValueQuery>;
 
-	/// The snapshot of operator <-> delegators in the next epoch.
+	/// The set of delegators in the next epoch.
 	#[pallet::storage]
 	pub type NextDelegators<T: Config> =
 		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
@@ -1185,7 +1178,9 @@ pub mod pallet {
 				}
 			});
 
-			OutgoingDelegators::<T>::take(&delegator);
+			OutgoingDelegators::<T>::mutate(|outgoing_delegators| {
+				outgoing_delegators.remove(&delegator)
+			});
 
 			Self::deposit_event(Event::Delegated { delegator, operator });
 
@@ -1200,7 +1195,7 @@ pub mod pallet {
 			let operator = DelegationChoice::<T>::take(&delegator)
 				.ok_or(Error::<T>::AccountIsNotDelegating)?;
 
-			OutgoingDelegators::<T>::insert(&delegator, DelegationStatus::UnDelegating);
+			OutgoingDelegators::<T>::append(&delegator);
 
 			Self::deposit_event(Event::UnDelegated { delegator, operator });
 
@@ -1404,16 +1399,10 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
-		for (_epoch, _operator, delegators) in DelegationsPerEpoch::<T>::drain() {
-			delegators.into_iter().for_each(|(delegator, _stake)| {
-				if OutgoingDelegators::<T>::take(&delegator) == DelegationStatus::UnDelegating {
-					T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
-					Self::deposit_event(Event::UnDelegationFinalized {
-						delegator,
-						epoch: old_epoch,
-					});
-				}
-			})
+		let _ = CurrentEpochDelegations::<T>::clear(u32::MAX, None);
+		for delegator in OutgoingDelegators::<T>::take() {
+			T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
+			Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch: old_epoch });
 		}
 
 		Self::initialise_new_epoch(
@@ -1515,7 +1504,7 @@ impl<T: Config> Pallet<T> {
 					(delegator.clone(), bond)
 				})
 				.collect::<BTreeSet<_>>();
-			DelegationsPerEpoch::<T>::insert(new_epoch, operator, delegators_with_bond);
+			CurrentEpochDelegations::<T>::insert(operator, delegators_with_bond);
 		});
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
@@ -1890,7 +1879,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Gets all delegator bonded to a given operator, and the amount bonded.
 	pub fn get_bonded_delegators(operator: &T::AccountId) -> BTreeSet<(T::AccountId, T::Amount)> {
-		DelegationsPerEpoch::<T>::get(CurrentEpoch::<T>::get(), operator)
+		CurrentEpochDelegations::<T>::get(operator)
 	}
 }
 

@@ -222,6 +222,7 @@ fn test_validator_serialization() {
 		apy_bp: Some(100u32),
 		restricted_balances: BTreeMap::from_iter(vec![(H160::from([1; 20]), FLIPPERINOS_PER_FLIP)]),
 		estimated_redeemable_balance: 0,
+		operator: Some(AccountId32::new([42; 32])),
 	});
 
 	insta::assert_snapshot!(serde_json::to_value(validator).unwrap());
