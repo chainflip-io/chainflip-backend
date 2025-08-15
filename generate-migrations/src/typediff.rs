@@ -207,7 +207,7 @@ pub enum CompactDiff<Point, Morphism> {
 }
 
 impl<Point: PartialEq + Clone, Morphism: GetIdentity<Point = Point>> CompactDiff<Point, Morphism> {
-	fn compact_inherited(m: Morphism) -> Self {
+	fn compact_inherited(mut m: Morphism) -> Self {
 		m.try_get_identity()
 			.map(CompactDiff::Unchanged)
 			.unwrap_or(CompactDiff::Inherited(m))
@@ -216,14 +216,14 @@ impl<Point: PartialEq + Clone, Morphism: GetIdentity<Point = Point>> CompactDiff
 
 trait GetIdentity {
 	type Point;
-	fn try_get_identity(&self) -> Option<Self::Point>;
+	fn try_get_identity(&mut self) -> Option<Self::Point>;
 }
 
 impl<Point: PartialEq + Clone, Morphism: GetIdentity<Point = Point>> GetIdentity
 	for CompactDiff<Point, Morphism>
 {
 	type Point = Point;
-	fn try_get_identity(&self) -> Option<Point> {
+	fn try_get_identity(&mut self) -> Option<Point> {
 		match self {
 			CompactDiff::Removed(_) => None,
 			CompactDiff::Added(_) => None,
@@ -242,7 +242,7 @@ impl<Point: PartialEq + Clone, Morphism: GetIdentity<Point = Point>> GetIdentity
 impl GetIdentity for TupleEntry<Morphism> {
 	type Point = TupleEntry<Point>;
 
-	fn try_get_identity(&self) -> Option<TupleEntry<Point>> {
+	fn try_get_identity(&mut self) -> Option<TupleEntry<Point>> {
 		let TupleEntry { position, ty } = self;
 		Some(TupleEntry { position: position.clone(), ty: ty.try_get_identity()? })
 	}
@@ -251,7 +251,7 @@ impl GetIdentity for TupleEntry<Morphism> {
 impl GetIdentity for StructField<Morphism> {
 	type Point = StructField<Point>;
 
-	fn try_get_identity(&self) -> Option<StructField<Point>> {
+	fn try_get_identity(&mut self) -> Option<StructField<Point>> {
 		let StructField { name, position, ty } = self;
 		Some(StructField {
 			name: name.clone(),
@@ -264,14 +264,14 @@ impl GetIdentity for StructField<Morphism> {
 impl GetIdentity for EnumVariant<Morphism> {
 	type Point = EnumVariant<Point>;
 
-	fn try_get_identity(&self) -> Option<Self::Point> {
+	fn try_get_identity(&mut self) -> Option<Self::Point> {
 		Some(EnumVariant {
-			variant: self.variant.try_get_identity()?,
 			fields: self
 				.fields
-				.iter()
+				.iter_mut()
 				.map(GetIdentity::try_get_identity)
 				.collect::<Option<Vec<_>>>()?,
+			variant: self.variant.try_get_identity()?,
 		})
 	}
 }
@@ -416,10 +416,12 @@ impl<A, B> DiscreteMorphism<(A, B)> {
 #[derive_where(Clone, Debug, PartialEq;)]
 pub enum TypeRepr<X: CellType> {
 	Struct {
+		comments: Vec<String>,
 		typename: X::Discrete<TypeName>,
 		fields: Vec<X::Of<StructField<Point>, StructField<Morphism>>>,
 	},
 	Enum {
+		comments: Vec<String>,
 		typename: X::Discrete<TypeName>,
 		variants: Vec<X::Of<EnumVariant<Point>, EnumVariant<Morphism>>>,
 	},
@@ -448,10 +450,10 @@ impl<X: CellType> TypeRepr<X> {
 		f: impl Fn(X::Discrete<TypeName>) -> X::Discrete<TypeName>,
 	) -> Self {
 		match self {
-			TypeRepr::Struct { typename, fields } =>
-				TypeRepr::Struct { typename: f(typename), fields },
-			TypeRepr::Enum { typename, variants } =>
-				TypeRepr::Enum { typename: f(typename), variants },
+			TypeRepr::Struct { comments: comment, typename, fields } =>
+				TypeRepr::Struct { comments: comment, typename: f(typename), fields },
+			TypeRepr::Enum { comments: comment, typename, variants } =>
+				TypeRepr::Enum { comments: comment, typename: f(typename), variants },
 			TypeRepr::Tuple { typename, fields } => TypeRepr::Tuple { typename, fields },
 			TypeRepr::Sequence { typename, inner } => TypeRepr::Sequence { typename, inner },
 			TypeRepr::NotImplemented => TypeRepr::NotImplemented,
@@ -691,12 +693,12 @@ impl GetUpdate for TypeRepr<Morphism> {
 impl GetMigration for TypeRepr<Morphism> {
 	fn get_migration(&self) -> Option<Migration> {
 		match self {
-			TypeRepr::Struct { typename, fields } => Migration::from_updates(
+			TypeRepr::Struct { comments: comment, typename, fields } => Migration::from_updates(
 				NodeKind::Struct,
 				&typename,
 				fields.iter().map(|field| field.get_update()).collect(),
 			),
-			TypeRepr::Enum { typename, variants } => Migration::from_updates(
+			TypeRepr::Enum { comments: comment, typename, variants } => Migration::from_updates(
 				NodeKind::Enum,
 				&typename,
 				variants.iter().map(|field| field.get_update()).collect(),
@@ -771,7 +773,7 @@ pub fn primitive_to_string(p: &TypeDefPrimitive) -> &'static str {
 
 pub fn type_repr_to_name(ty: TypeRepr<Point>) -> TypeName {
 	match ty {
-		TypeRepr::Struct { typename, fields } => {
+		TypeRepr::Struct { comments: comment, typename, fields } => {
 			if matches!(typename.clone(), TypeName::Ordinary { path, name, chain: None, params } if path.is_empty() && &name == "BTreeMap" && params.len() == 2)
 			{
 				assert_eq!(fields.len(), 1);
@@ -815,7 +817,7 @@ pub fn type_repr_to_name(ty: TypeRepr<Point>) -> TypeName {
 				typename
 			}
 		},
-		TypeRepr::Enum { typename, variants } => typename,
+		TypeRepr::Enum { comments: comment, typename, variants } => typename,
 		TypeRepr::Tuple { typename, fields } =>
 			TypeName::Tuple(fields.into_iter().map(|f| type_repr_to_name(f.ty)).collect()),
 		TypeRepr::Sequence { typename, inner } => TypeName::Ordinary {
@@ -869,7 +871,7 @@ fn type_to_string(metadata: &subxt::Metadata, ty_id: u32) -> TypeName {
 impl<A: Clone> GetIdentity for DiscreteMorphism<A> {
 	type Point = A;
 
-	fn try_get_identity(&self) -> Option<Self::Point> {
+	fn try_get_identity(&mut self) -> Option<Self::Point> {
 		match self {
 			DiscreteMorphism::Same(a) => Some(a.clone()),
 			DiscreteMorphism::Rename { old, new } => None,
@@ -880,35 +882,60 @@ impl<A: Clone> GetIdentity for DiscreteMorphism<A> {
 impl GetIdentity for TypeRepr<Morphism> {
 	type Point = TypeRepr<Point>;
 
-	fn try_get_identity(&self) -> Option<Self::Point> {
-		match &self.clone() {
-			TypeRepr::Struct { typename, fields } =>
+	fn try_get_identity(&mut self) -> Option<Self::Point> {
+		let self_clone = self.clone();
+		match self {
+			TypeRepr::Struct { comments, typename, fields } =>
 				if fields
-					.iter()
+					.iter_mut()
 					.map(|field| field.try_get_identity())
 					.collect::<Option<Vec<_>>>()
 					.is_some()
-					&& typename.clone().map(|n| n.get_params().is_empty()) == DiscreteMorphism::Same(false)
 				{
 					if matches!(typename, DiscreteMorphism::Same(_)) {
+
+					 	if typename.clone().map(|n| n.get_params().is_empty()) != DiscreteMorphism::Same(false) {
+							comments.push("This type did not change.".to_string());
+							comments.push("It contains type parameters, so unfortunately it has to be (re-)defined here anyways.".to_string());
+							return None;
+						}
+
 						Some(TypeRepr::TypeByName(type_repr_to_name(extract_old_type(
 							self.clone(),
 						))))
 					} else {
+						comments.push("Typename changed ({typename:?})".to_string());
 						None
 					}
 				} else {
+					if let Some(migration) = self_clone.get_migration() {
+						comments.push(format!("Type definition changed: ({migration:?})"));
+						for change in migration.edits {
+							comments.push(format!(" - {change}"));
+						}
+						for (path, change) in migration.inner_migrations {
+							comments.push(format!(" - migration inside field `{path}`"));
+						}
+					} else {
+						comments.push("No migration, but also not fields are identity. This is not expected.".to_string());
+					}
 					None
 				},
-			TypeRepr::Enum { typename, variants } =>
+			TypeRepr::Enum { comments, typename, variants } =>
 				if variants
-					.iter()
+					.iter_mut()
 					.map(|field| field.try_get_identity())
 					.collect::<Option<Vec<_>>>()
 					.is_some()
-					&& typename.clone().map(|n| n.get_params().is_empty()) == DiscreteMorphism::Same(false)
 				{
 					if matches!(typename, DiscreteMorphism::Same(_)) {
+
+					 	if typename.clone().map(|n| n.get_params().is_empty()) != DiscreteMorphism::Same(false) {
+							comments.push("This type did not change.".to_string());
+							comments.push("It contains type parameters, so unfortunately it has to be (re-)defined here anyways.".to_string());
+							return None;
+						}
+
 						Some(TypeRepr::TypeByName(type_repr_to_name(extract_old_type(
 							self.clone(),
 						))))
@@ -923,7 +950,7 @@ impl GetIdentity for TypeRepr<Morphism> {
 			TypeRepr::TypeByName(_) => None,
 			TypeRepr::Tuple { typename, fields } =>
 				if fields
-					.iter()
+					.iter_mut()
 					.map(|field| field.try_get_identity())
 					.collect::<Option<Vec<_>>>()
 					.is_some()
@@ -1000,7 +1027,7 @@ pub fn compare_types(
 					NodeDiff::Both((pos1, ty1), (pos2, ty2)) => {
 						let type_diff = compare_types(metadata1, ty1, metadata2, ty2);
 
-						CompactDiff::Inherited(StructField { name, position: pos1, ty: type_diff })
+						CompactDiff::compact_inherited(StructField { name, position: pos1, ty: type_diff })
 						// if a == b {
 						// 	CompactDiff::Unchanged(StructField { name: name, ty:
 						// TypeRepr::NotImplemented }) } else {
@@ -1016,6 +1043,7 @@ pub fn compare_types(
 	match (ty1.type_def, ty2.type_def) {
 		(Composite(ty1content), Composite(ty2content)) => {
 			let result = CompactDiff::compact_inherited(TypeRepr::Struct {
+				comments: vec![],
 				fields: diff_fields(&ty1content.fields, &ty2content.fields),
 				typename: toplevel_typename,
 			});
@@ -1042,6 +1070,7 @@ pub fn compare_types(
 
 			let diff = diff(variants1, variants2);
 			CompactDiff::compact_inherited(TypeRepr::Enum {
+				comments: vec![],
 				variants: diff
 					.into_iter()
 					.map(|(name, d)| match d {
@@ -1203,14 +1232,16 @@ pub fn extract_old_diff<A, B>(d: CompactDiff<A, B>, f: impl Fn(B) -> A) -> Optio
 
 pub fn extract_old_type(ty: TypeRepr<Morphism>) -> TypeRepr<Point> {
 	match ty {
-		TypeRepr::Struct { typename, fields } => TypeRepr::Struct {
+		TypeRepr::Struct { comments, typename, fields } => TypeRepr::Struct {
+			comments,
 			typename: extract_old_typename(typename),
 			fields: fields
 				.into_iter()
 				.filter_map(|d| extract_old_diff(d, extract_old_struct_field))
 				.collect(),
 		},
-		TypeRepr::Enum { typename, variants } => TypeRepr::Enum {
+		TypeRepr::Enum { typename, variants, comments } => TypeRepr::Enum {
+    		comments,
 			typename: extract_old_typename(typename),
 			variants: variants
 				.into_iter()

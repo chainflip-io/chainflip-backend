@@ -117,23 +117,23 @@ impl Module {
 				println!("WARNING, writing notimplemented typerepr");
 				a.clone()
 			},
-			ref a @ Struct { typename, fields } => {
+			ref a @ Struct { typename, fields, comments } => {
 				let fields = fields
 					.into_iter()
 					.map(|field| self.write_struct_field(field.clone()))
 					.collect();
 
-				let result = TypeRepr::Struct { typename: typename.clone(), fields };
+				let result = TypeRepr::Struct { comments: comments.clone(), typename: typename.clone(), fields };
 				self.add_definition(typename.clone(), result.clone());
 				// TypeRepr::TypeByName(add_old_path(typename.clone()))
 				TypeRepr::TypeByName(add_old_path(type_repr_to_name(result)))
 			},
-			Enum { typename, variants } => {
+			Enum { typename, variants, comments } => {
 				let variants = variants
 					.into_iter()
 					.map(|field| self.write_enum_variant(field.clone()))
 					.collect();
-				let result = TypeRepr::Enum { typename: typename.clone(), variants };
+				let result = TypeRepr::Enum { typename: typename.clone(), variants, comments: comments.clone() };
 				self.add_definition(typename.clone(), result.clone());
 				// TypeRepr::TypeByName(add_old_path(typename.clone()))
 				TypeRepr::TypeByName(add_old_path(type_repr_to_name(result)))
@@ -264,14 +264,22 @@ impl Display for TupleEntry<Point> {
 impl Display for TypeRepr<Point> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			TypeRepr::Struct { typename, fields } => {
+			TypeRepr::Struct { comments, typename, fields } => {
+				for comment in comments {
+					writeln!(f, "// {comment}")?;
+				}
+
 				writeln!(f, "pub struct {typename} {{ ")?;
 				for field in fields {
 					writeln!(f, "{}", field)?;
 				}
 				writeln!(f, "}}")?;
 			},
-			TypeRepr::Enum { typename, variants } => {
+			TypeRepr::Enum { typename, variants, comments } => {
+				for comment in comments {
+					writeln!(f, "// {comment}")?;
+				}
+
 				writeln!(f, "pub enum {typename} {{ ")?;
 				for variant in variants {
 					writeln!(f, "{}", variant)?;

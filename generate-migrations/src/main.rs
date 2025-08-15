@@ -9,6 +9,8 @@ mod diff;
 mod typediff;
 mod virtual_file;
 mod write_migration;
+// mod types;
+mod types2;
 
 use crate::{
 	typediff::{MetadataConfig, PalletRef, compare_metadata},
