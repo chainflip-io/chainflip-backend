@@ -1548,8 +1548,8 @@ macro_rules! instanced_migrations {
 
 type MigrationsForV1_11 = (
 	VersionedMigration<
-		17,
 		18,
+		19,
 		migrations::safe_mode::SafeModeMigration,
 		pallet_cf_environment::Pallet<Runtime>,
 		<Runtime as frame_system::Config>::DbWeight,
