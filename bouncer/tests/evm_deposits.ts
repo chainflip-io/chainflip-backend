@@ -292,6 +292,7 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
     refund_address: newEvmAddress('refund_eth'),
     min_price: '0x0',
     refund_ccm_metadata: undefined,
+    max_oracle_price_slippage: undefined,
   };
 
   const cfParameters = (await chainflip.rpc(
