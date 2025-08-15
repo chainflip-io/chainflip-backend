@@ -125,6 +125,8 @@ struct TestRefundParams {
 }
 
 impl TestRefundParams {
+	/// Due to rounding errors, you may have to set the `min_output` to a value one unit higher than
+	/// expected.
 	fn into_extended_params(
 		self,
 		input_amount: AssetAmount,

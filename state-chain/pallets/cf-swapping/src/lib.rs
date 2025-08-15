@@ -474,7 +474,7 @@ where
 pub mod pallet {
 	use core::cmp::max;
 
-	use cf_amm::math::output_amount_ceil;
+	use cf_amm::math::{output_amount_ceil, output_amount_floor};
 	use cf_chains::{
 		address::EncodedAddress, AnyChain, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
 		Chain, ChannelRefundParametersCheckedInternal,
@@ -1720,7 +1720,7 @@ pub mod pallet {
 						);
 
 						let min_output =
-							output_amount_ceil(swap.swap.input_amount.into(), min_price)
+							output_amount_floor(swap.swap.input_amount.into(), min_price)
 								.unique_saturated_into();
 
 						swap.final_output.unwrap() >= min_output

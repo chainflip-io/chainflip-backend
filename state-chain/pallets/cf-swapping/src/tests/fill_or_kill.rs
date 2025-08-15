@@ -119,7 +119,7 @@ fn price_limit_is_respected_in_fok_swap(is_ccm: bool) {
 	const BROKER_FEE: AssetAmount = INPUT_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
 
 	const EXPECTED_OUTPUT: AssetAmount = (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE;
-	const HIGH_OUTPUT: AssetAmount = EXPECTED_OUTPUT + 1;
+	const HIGH_OUTPUT: AssetAmount = EXPECTED_OUTPUT + 2; // 2 higher because of rounding errors
 
 	const REGULAR_SWAP_ID: SwapId = SwapId(1);
 	const FOK_SWAP_1_ID: SwapId = SwapId(2);
@@ -227,7 +227,7 @@ fn fok_swap_gets_refunded_due_to_price_limit(is_ccm: bool) {
 	new_test_ext()
 		.then_execute_at_block(INIT_BLOCK, |_| {
 			// Min output for swap 1 is too high to be executed:
-			const MIN_OUTPUT: AssetAmount = (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE + 1;
+			const MIN_OUTPUT: AssetAmount = (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE + 2; // 2 higher because of rounding errors
 			insert_swaps(&[fok_swap(
 				Some(TestRefundParams {
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
