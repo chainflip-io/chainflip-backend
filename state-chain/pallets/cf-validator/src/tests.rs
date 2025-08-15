@@ -1912,6 +1912,18 @@ mod delegation {
 		const AVAILABLE_BALANCE_OF_DELEGATOR: u128 = 20;
 		const MAX_BID_OF_DELEGATOR: u128 = 10;
 		const DELEGATORS: [u64; 4] = [21, 22, 23, 24];
+		let delegations = || {
+			DELEGATORS
+				.into_iter()
+				.map(|delegator| {
+					if delegator % 2 == 0 {
+						(delegator, MAX_BID_OF_DELEGATOR)
+					} else {
+						(delegator, AVAILABLE_BALANCE_OF_DELEGATOR)
+					}
+				})
+				.collect::<BTreeSet<_>>()
+		};
 
 		new_test_ext()
 			.then_execute_with_checks(|| {
@@ -1952,41 +1964,28 @@ mod delegation {
 				assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				assert_eq!(NextDelegators::<Test>::get(OPERATOR), BTreeSet::from(DELEGATORS));
 				MockKeyRotatorA::keygen_success();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				assert_eq!(NextDelegators::<Test>::get(OPERATOR), BTreeSet::from(DELEGATORS));
 				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
 				MockKeyRotatorA::key_handover_success();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				assert_eq!(NextDelegators::<Test>::get(OPERATOR), BTreeSet::from(DELEGATORS));
 				assert_rotation_phase_matches!(RotationPhase::<Test>::ActivatingKeys(..));
 				MockKeyRotatorA::keys_activated();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				assert_eq!(NextDelegators::<Test>::get(OPERATOR), BTreeSet::from(DELEGATORS));
 				assert_rotation_phase_matches!(RotationPhase::SessionRotating(..));
 			})
 			.then_execute_at_next_block(|_| {
-				assert!(NextDelegators::<Test>::get().is_empty());
+				assert!(NextDelegators::<Test>::get(OPERATOR).is_empty());
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				let active_delegators = CurrentEpochDelegations::<Test>::get();
-				assert_eq!(BTreeSet::from_iter(DELEGATORS), active_delegators);
-				for delegator in active_delegators {
-					if delegator % 2 == 0 {
-						assert_eq!(
-							MockBonderFor::<Test>::get_bond(&delegator),
-							MAX_BID_OF_DELEGATOR
-						);
-					} else {
-						assert_eq!(
-							MockBonderFor::<Test>::get_bond(&delegator),
-							AVAILABLE_BALANCE_OF_DELEGATOR
-						);
-					}
-				}
+				let active_delegators = CurrentEpochDelegations::<Test>::get(OPERATOR);
+				assert_eq!(active_delegators, delegations());
 				assert_eq!(
 					Bond::<Test>::get(),
 					(WINNING_BIDS.iter().map(|bid| bid.amount).sum::<u128>() +
@@ -2050,7 +2049,7 @@ mod delegation {
 			})
 			.then_execute_at_next_block(|_| {
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				assert!(CurrentEpochDelegations::<Test>::get().len() == 2);
+				assert!(CurrentEpochDelegations::<Test>::get(OPERATOR).len() == 2);
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {
 						assert_eq!(MockBonderFor::<Test>::get_bond(delegator), 0);

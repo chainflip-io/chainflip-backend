@@ -29,22 +29,23 @@ use cf_traits::{
 		broadcaster::MockBroadcaster, egress_handler::MockEgressHandler,
 		flip_burn_info::MockFlipBurnInfo,
 	},
-	Issuance, RewardsDistribution, WaivedFees,
+	Issuance, RewardsDistribution, Slashing, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{derive_impl, parameter_types, traits::Imbalance};
-use frame_system as system;
+use frame_system::{self as system, pallet_prelude::BlockNumberFor};
+use pallet_cf_flip::FlipSlasher;
 use scale_info::TypeInfo;
 use sp_arithmetic::Permill;
 
 pub type AccountId = u64;
 
-pub const FLIP_TO_BURN: u128 = 10_000;
+pub const FLIP_TO_BURN: FlipBalance = 10_000;
 pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
-pub const TOTAL_ISSUANCE: u128 = 1_000_000_000;
+pub const TOTAL_ISSUANCE: FlipBalance = 1_000_000_000;
 pub const DAILY_SLASHING_RATE: Permill = Permill::from_perthousand(1);
 
-cf_traits::impl_mock_on_account_funded!(AccountId, u128);
+cf_traits::impl_mock_on_account_funded!(AccountId, FlipBalance);
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
@@ -74,9 +75,26 @@ parameter_types! {
 // Implement mock for RestrictionHandler
 impl_mock_waived_fees!(AccountId, RuntimeCall);
 
+pub struct MockFlipSlasher;
+
+impl Slashing for MockFlipSlasher {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumberFor<Test>;
+	type Balance = FlipBalance;
+
+	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
+		let slash_amount = Flip::calculate_slash_amount(account_id, blocks);
+		FlipSlasher::<Test>::slash_balance(account_id, slash_amount);
+	}
+
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance) {
+		FlipSlasher::<Test>::slash_balance(account_id, slash_amount);
+	}
+}
+
 impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Balance = u128;
+	type Balance = FlipBalance;
 	type BlocksPerDay = BlocksPerDay;
 	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
@@ -84,11 +102,11 @@ impl pallet_cf_flip::Config for Test {
 	type CallIndexer = ();
 }
 
-pub const EMISSION_RATE: u128 = 10;
+pub const EMISSION_RATE: FlipBalance = 10;
 pub struct MockRewardsDistribution;
 
 impl RewardsDistribution for MockRewardsDistribution {
-	type Balance = u128;
+	type Balance = FlipBalance;
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 
 	fn distribute() {
@@ -101,12 +119,12 @@ impl RewardsDistribution for MockRewardsDistribution {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockUpdateFlipSupply {
-	pub new_total_supply: u128,
+	pub new_total_supply: FlipBalance,
 	pub block_number: u64,
 }
 
 impl UpdateFlipSupply<MockEthereumChainCrypto> for MockUpdateFlipSupply {
-	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self {
+	fn new_unsigned(new_total_supply: FlipBalance, block_number: u64) -> Self {
 		Self { new_total_supply, block_number }
 	}
 }
