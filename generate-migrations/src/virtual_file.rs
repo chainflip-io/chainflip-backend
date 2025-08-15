@@ -69,12 +69,12 @@ impl Module {
 			}
 		}
 
-		// clear path of typename
+		// clear path of typename & generic params
 		self.definitions.insert(
 			name,
 			ty.map_definition_typename(|name| match name {
 				TypeName::Ordinary { path, name, chain, params } =>
-					TypeName::Ordinary { path: vec![], name, chain, params },
+					TypeName::Ordinary { path: vec![], name, chain, params: vec![] },
 				a => a,
 			}),
 		);
@@ -110,24 +110,19 @@ impl Module {
 		};
 
 		use TypeRepr::*;
-		// Struct { typename, .. } |
-		// Enum { typename, .. } |
-		// Tuple { typename, .. } |
-		// Sequence { typename, .. } => {
-		// 	if !self.definitions.contains_key(&typename) {
-		// 		self.definitions.insert(typename.clone(), a.clone());
-		// 	}
-		// 	return TypeRepr::TypeByName(typename.clone())
-		// },
 		match &def {
 			a @ Primitive(_) => a.clone(),
 			a @ TypeByName(discrete_morphism) => a.clone(),
-			a @ NotImplemented => todo!(),
+			a @ NotImplemented => {
+				println!("WARNING, writing notimplemented typerepr");
+				a.clone()
+			},
 			ref a @ Struct { typename, fields } => {
 				let fields = fields
 					.into_iter()
 					.map(|field| self.write_struct_field(field.clone()))
 					.collect();
+
 				let result = TypeRepr::Struct { typename: typename.clone(), fields };
 				self.add_definition(typename.clone(), result.clone());
 				// TypeRepr::TypeByName(add_old_path(typename.clone()))
@@ -260,6 +255,12 @@ impl Display for EnumVariant<Point> {
 	}
 }
 
+impl Display for TupleEntry<Point> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.ty)
+	}
+}
+
 impl Display for TypeRepr<Point> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -277,8 +278,16 @@ impl Display for TypeRepr<Point> {
 				}
 				writeln!(f, "}}")?;
 			},
-			TypeRepr::Tuple { typename, fields } => (),
-			TypeRepr::Sequence { typename, inner } => (),
+			TypeRepr::Tuple { typename, fields } => {
+				write!(f, "(")?;
+				for field in fields {
+					write!(f, "{field}, ")?;
+				}
+				write!(f, ")")?;
+			},
+			TypeRepr::Sequence { typename, inner } => {
+				write!(f, "Vec<{inner}>")?;
+			},
 			TypeRepr::NotImplemented => (),
 			TypeRepr::Primitive(a) => {
 				let name = primitive_to_string(a);

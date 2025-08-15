@@ -335,6 +335,13 @@ pub enum TypeName {
 type ChainInstance = Option<String>;
 
 impl TypeName {
+	pub fn get_params(&self) -> Vec<TypeName> {
+		match self {
+			TypeName::Ordinary { path, name, chain, params } => params.clone(),
+			_ => vec![],
+		}
+	}
+
 	fn split_chain_instance(self) -> (Self, ChainInstance) {
 		match self {
 			TypeName::Ordinary { path, name, chain, params } =>
@@ -881,6 +888,7 @@ impl GetIdentity for TypeRepr<Morphism> {
 					.map(|field| field.try_get_identity())
 					.collect::<Option<Vec<_>>>()
 					.is_some()
+					&& typename.clone().map(|n| n.get_params().is_empty()) == DiscreteMorphism::Same(false)
 				{
 					if matches!(typename, DiscreteMorphism::Same(_)) {
 						Some(TypeRepr::TypeByName(type_repr_to_name(extract_old_type(
@@ -898,6 +906,7 @@ impl GetIdentity for TypeRepr<Morphism> {
 					.map(|field| field.try_get_identity())
 					.collect::<Option<Vec<_>>>()
 					.is_some()
+					&& typename.clone().map(|n| n.get_params().is_empty()) == DiscreteMorphism::Same(false)
 				{
 					if matches!(typename, DiscreteMorphism::Same(_)) {
 						Some(TypeRepr::TypeByName(type_repr_to_name(extract_old_type(
