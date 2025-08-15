@@ -18,7 +18,7 @@ import { approveErc20 } from 'shared/approve_erc20';
 import { newStatechainAddress } from 'shared/new_statechain_address';
 import { observeEvent } from 'shared/utils/substrate';
 import { newCcmMetadata } from 'shared/swapping';
-import { Struct, Enum, Bytes as TsBytes } from 'scale-ts';
+import { Struct, Enum, Option, u128, Bytes as TsBytes } from 'scale-ts';
 import { hexToU8a, u8aToHex } from '@polkadot/util';
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
@@ -33,26 +33,45 @@ export const ScCallsCodec = Enum({
       operator: TsBytes(32),
     }),
     Undelegate: Struct({}),
+    SetMaxBid: Struct({
+      maybeMaxBid: Option(u128),
+    }),
   }),
 });
 
-function encodeDelegateToScCall(operatorId: string) {
-  return u8aToHex(
-    ScCallsCodec.enc({
-      tag: 'Delegation',
-      value: { tag: 'Delegate', value: { operator: hexToU8a(operatorId) } },
-    }),
-  );
+type ScCallPayload =
+  | { type: 'Delegate'; operatorId: string }
+  | { type: 'Undelegate' }
+  | { type: 'SetMaxBid'; maxBid?: bigint };
+
+function encodeToScCall(payload: ScCallPayload): string {
+  switch (payload.type) {
+    case 'Delegate':
+      return u8aToHex(
+        ScCallsCodec.enc({
+          tag: 'Delegation',
+          value: { tag: 'Delegate', value: { operator: hexToU8a(payload.operatorId) } },
+        }),
+      );
+    case 'Undelegate':
+      return u8aToHex(
+        ScCallsCodec.enc({
+          tag: 'Delegation',
+          value: { tag: 'Undelegate', value: {} },
+        }),
+      );
+    case 'SetMaxBid':
+      return u8aToHex(
+        ScCallsCodec.enc({
+          tag: 'Delegation',
+          value: { tag: 'SetMaxBid', value: { maybeMaxBid: payload.maxBid } },
+        }),
+      );
+    default:
+      throw new Error('Invalid payload type');
+  }
 }
 
-function encodeUndelegateToScCall() {
-  return u8aToHex(
-    ScCallsCodec.enc({
-      tag: 'Delegation',
-      value: { tag: 'Undelegate', value: {} },
-    }),
-  );
-}
 // Left pad the EVM address to convert it to a Statechain address.
 function evmToScAddress(evmAddress: string) {
   return hexPubkeyToFlipAddress('0x' + evmAddress.slice(2).padStart(64, '0'));
@@ -80,7 +99,10 @@ async function testDelegate(parentLogger: Logger) {
   await approveErc20(logger, 'Flip', scUtilsAddress, amount.toString());
 
   logger.info(`Delegating ${amount} Flip to operator ${operator.address}...`);
-  let scCall = encodeDelegateToScCall(operatorPubkey);
+  let scCall = encodeToScCall({
+    type: 'Delegate',
+    operatorId: operatorPubkey,
+  });
   let txData = cfScUtilsContract.methods.depositToScGateway(amount.toString(), scCall).encodeABI();
 
   let receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
@@ -112,7 +134,9 @@ async function testDelegate(parentLogger: Logger) {
   await Promise.all([fundEvent, scCallExecutedEvent, delegatedEvent]);
 
   logger.info('Undelegating Flip from operator ' + operator.address + '...');
-  scCall = encodeUndelegateToScCall();
+  scCall = encodeToScCall({
+    type: 'Undelegate',
+  });
   txData = cfScUtilsContract.methods.depositToScGateway(amount.toString(), scCall).encodeABI();
   receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
   logger.info('Undelegate flip transaction sent ' + receipt.transactionHash);
@@ -128,6 +152,29 @@ async function testDelegate(parentLogger: Logger) {
     },
   }).event;
   await Promise.all([scCallExecutedEvent, undelegatedEvent]);
+
+  logger.info('Setting new max bid');
+  const maxBid = amount;
+  scCall = encodeToScCall({
+    type: 'SetMaxBid',
+    maxBid: BigInt(maxBid),
+  });
+  txData = cfScUtilsContract.methods.depositToScGateway(amount.toString(), scCall).encodeABI();
+  receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
+  logger.info('Set Max Bid transaction sent ' + receipt.transactionHash);
+
+  scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
+    test: (event) => event.data.ethTxHash === receipt.transactionHash,
+  }).event;
+  const maxBidEvent = observeEvent(logger, 'validator:MaxBidUpdated', {
+    test: (event) => {
+      const delegatorMatch = event.data.delegator === evmToScAddress(whalePubkey);
+      const amountMatch = event.data.maxBid.replace(/,/g, '') === maxBid.toString();
+      return delegatorMatch && amountMatch;
+    },
+  }).event;
+  await Promise.all([scCallExecutedEvent, maxBidEvent]);
+
   logger.info('Delegation and undelegation test completed successfully!');
 }
 
