@@ -1773,6 +1773,7 @@ mod internal_swaps {
 
 				assert_event_sequence!(
 					Test,
+					RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(2) }),
 					RuntimeEvent::Swapping(Event::SwapRequested {
 						request_type: SwapRequestTypeEncoded::NetworkFee,
 						input_amount: REFUND_FEE,
