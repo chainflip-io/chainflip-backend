@@ -38,6 +38,7 @@ frame-benchmarking = { workspace = true, optional = true }
 
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }
+cf-traits = { workspace = true, features = ["mocks"] }
 
 [features]
 default = ["std"]

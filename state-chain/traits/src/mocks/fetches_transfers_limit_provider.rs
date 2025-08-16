@@ -15,17 +15,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::FetchesTransfersLimitProvider;
-use sp_std::cell::RefCell;
+use frame_support::parameter_types;
 
-thread_local! {
-	pub static USE_LIMITS: RefCell<bool> = RefCell::new(false);
+parameter_types! {
+	pub storage UseLimits: bool = false;
 }
 
 pub struct MockFetchesTransfersLimitProvider;
 
 impl FetchesTransfersLimitProvider for MockFetchesTransfersLimitProvider {
 	fn maybe_transfers_limit() -> Option<usize> {
-		if USE_LIMITS.with(|v| *v.borrow()) {
+		if UseLimits::get() {
 			Some(20)
 		} else {
 			None
@@ -33,7 +33,7 @@ impl FetchesTransfersLimitProvider for MockFetchesTransfersLimitProvider {
 	}
 
 	fn maybe_ccm_limit() -> Option<usize> {
-		if USE_LIMITS.with(|v| *v.borrow()) {
+		if UseLimits::get() {
 			Some(5)
 		} else {
 			None
@@ -41,7 +41,7 @@ impl FetchesTransfersLimitProvider for MockFetchesTransfersLimitProvider {
 	}
 
 	fn maybe_fetches_limit() -> Option<usize> {
-		if USE_LIMITS.with(|v| *v.borrow()) {
+		if UseLimits::get() {
 			Some(20)
 		} else {
 			None
@@ -51,6 +51,6 @@ impl FetchesTransfersLimitProvider for MockFetchesTransfersLimitProvider {
 
 impl MockFetchesTransfersLimitProvider {
 	pub fn enable_limits() {
-		USE_LIMITS.with(|v| *v.borrow_mut() = true);
+		UseLimits::set(&true);
 	}
 }

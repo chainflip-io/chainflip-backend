@@ -411,6 +411,7 @@ pub mod sol_test_values {
 	}
 
 	#[track_caller]
+	#[cfg(any(test, feature = "runtime-integration-tests"))]
 	pub fn sign_and_serialize(mut transaction: SolVersionedTransaction) -> Vec<u8> {
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let durable_nonce = durable_nonce().1.into();
@@ -425,6 +426,7 @@ pub mod sol_test_values {
 	}
 
 	#[track_caller]
+	#[cfg(any(test, feature = "runtime-integration-tests"))]
 	pub fn test_constructed_transaction_with_signer<S: Signer>(
 		mut transaction: SolVersionedTransaction,
 		expected_serialized_tx: Vec<u8>,
@@ -451,6 +453,7 @@ pub mod sol_test_values {
 	}
 
 	#[track_caller]
+	#[cfg(any(test, feature = "runtime-integration-tests"))]
 	pub fn test_constructed_transaction(
 		transaction: SolVersionedTransaction,
 		expected_serialized_tx: Vec<u8>,

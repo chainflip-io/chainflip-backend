@@ -50,7 +50,7 @@ sp-std = { workspace = true }
 
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }
-cf-chains = { workspace = true, features = ["test"] }
+cf-chains = { workspace = true, features = ["test", "mocks"] }
 rand = { workspace = true, features = ["std"] }
 proptest = { version = "1.6" }
 proptest-derive = { version = "0.5.1" }

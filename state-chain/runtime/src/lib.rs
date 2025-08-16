@@ -24,7 +24,7 @@ pub mod migrations;
 pub mod monitoring_apis;
 pub mod runtime_apis;
 pub mod safe_mode;
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", feature = "mocks"))]
 pub mod test_runner;
 mod weights;
 use crate::{
