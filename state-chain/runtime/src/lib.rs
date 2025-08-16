@@ -1832,6 +1832,14 @@ impl_runtime_apis! {
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 			is_internal: Option<bool>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
+			let is_internal = is_internal.unwrap_or_default();
+			let mut exclude_fees = exclude_fees;
+			if is_internal {
+				exclude_fees.insert(FeeTypes::IngressDepositChannel);
+				exclude_fees.insert(FeeTypes::Egress);
+				exclude_fees.insert(FeeTypes::IngressVaultSwap);
+			}
+
 			if let Some(additional_orders) = additional_orders {
 				for (index, additional_order) in additional_orders.into_iter().enumerate() {
 					match additional_order {
@@ -1934,7 +1942,7 @@ impl_runtime_apis! {
 					pallet_cf_swapping::Pallet::<Runtime>::get_network_fee_for_swap(
 						input_asset,
 						output_asset,
-						is_internal.unwrap_or(false),
+						is_internal,
 					),
 				)));
 			}
