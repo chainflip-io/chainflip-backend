@@ -23,9 +23,9 @@ use cf_utilities::redact_endpoint_secret::SecretUrl;
 use futures::{Stream, StreamExt, TryStreamExt};
 use std::sync::Arc;
 use subxt::{
-	backend::legacy::rpc_methods::{BlockDetails, Bytes},
+	backend::{legacy::rpc_methods::{BlockDetails, Bytes}, rpc::RpcClient},
 	events::Events,
-	ext::subxt_rpcs,
+	ext::subxt_rpcs::{self, LegacyRpcMethods},
 	OnlineClient, PolkadotConfig,
 };
 use tokio::sync::RwLock;
@@ -92,6 +92,8 @@ pub trait DotSubscribeApi: Send + Sync {
 	async fn subscribe_finalized_heads(
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
+
+	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash>;
 }
 
 /// The trait that defines the stateless / non-subscription requests to Polkadot.
@@ -196,6 +198,50 @@ impl DotSubscribeApi for DotSubClient {
 				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
 		))
 	}
+
+	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
+		let rpc_methods = LegacyRpcMethods::<PolkadotConfig>::new(RpcClient::from_url(self.ws_endpoint.clone()).await?);
+
+		{
+			let hash: PolkadotHash = sp_core::blake2_256(&encoded_bytes).into();
+
+			let encoded_bytes_c = encoded_bytes.clone();
+
+			// TEMP submit and watch for completion!
+			let mut result =
+				rpc_methods.author_submit_and_watch_extrinsic(&encoded_bytes_c).await?;
+
+
+			tokio::task::spawn(async move {
+				while let Some(event) = result.next().await {
+					let event = event?;
+					match event {
+						subxt_rpcs::methods::legacy::TransactionStatus::Finalized(hash) => {
+							tracing::info!("dot extrinsic was finalized with hash ({hash:?}), for extrinsic {encoded_bytes:?}");
+							return Ok(hash)
+						},
+						// subxt_rpcs::methods::legacy::TransactionStatus::Future => todo!(),
+						// subxt_rpcs::methods::legacy::TransactionStatus::Ready => todo!(),
+						// subxt_rpcs::methods::legacy::TransactionStatus::Broadcast(items) => todo!(),
+						// subxt_rpcs::methods::legacy::TransactionStatus::InBlock(_) => todo!(),
+						subxt_rpcs::methods::legacy::TransactionStatus::Retracted(_) |
+						subxt_rpcs::methods::legacy::TransactionStatus::FinalityTimeout(_) |
+						subxt_rpcs::methods::legacy::TransactionStatus::Usurped(_) |
+						subxt_rpcs::methods::legacy::TransactionStatus::Dropped |
+						subxt_rpcs::methods::legacy::TransactionStatus::Invalid => {
+							tracing::error!("error for dot extrinsic ({event:?}), for extrinsic {encoded_bytes:?}");
+							return Err(anyhow!("error for dot extrinsic ({event:?}), for extrinsic {encoded_bytes:?}"));
+						},
+						state => tracing::info!("submission of dot extrinsic reached state {state:?}, for extrinsic {encoded_bytes:?}")
+					}
+				}
+
+				Err(anyhow!("rpc subscription for submission of extrinsic {encoded_bytes:?} terminatd unexpectedly!"))
+			});
+
+			Ok(hash)
+		}
+	}
 }
 
 /// Creates an OnlineClient from the given websocket endpoint and checks the genesis hash if
@@ -222,25 +268,25 @@ async fn create_online_client(
 	Ok(client)
 }
 
-#[async_trait]
-impl DotSubscribeApi for DotRpcClient {
-	async fn subscribe_best_heads(
-		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
-		Ok(Box::pin(
-			refresh_connection_on_error!(self, blocks, subscribe_best)?
-				.map(|block| block.map(|block| block.header().clone()))
-				.map_err(|e| anyhow!("Error in best head stream: {e}")),
-		))
-	}
+// #[async_trait]
+// impl DotSubscribeApi for DotRpcClient {
+// 	async fn subscribe_best_heads(
+// 		&self,
+// 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
+// 		Ok(Box::pin(
+// 			refresh_connection_on_error!(self, blocks, subscribe_best)?
+// 				.map(|block| block.map(|block| block.header().clone()))
+// 				.map_err(|e| anyhow!("Error in best head stream: {e}")),
+// 		))
+// 	}
 
-	async fn subscribe_finalized_heads(
-		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
-		Ok(Box::pin(
-			refresh_connection_on_error!(self, blocks, subscribe_finalized)?
-				.map(|block| block.map(|block| block.header().clone()))
-				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
-		))
-	}
-}
+// 	async fn subscribe_finalized_heads(
+// 		&self,
+// 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
+// 		Ok(Box::pin(
+// 			refresh_connection_on_error!(self, blocks, subscribe_finalized)?
+// 				.map(|block| block.map(|block| block.header().clone()))
+// 				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
+// 		))
+// 	}
+// }

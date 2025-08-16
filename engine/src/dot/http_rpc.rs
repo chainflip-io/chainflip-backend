@@ -47,7 +47,7 @@ use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
 
 use super::rpc::DotRpcApi;
 
-use crate::dot::PolkadotHash;
+use crate::{dot::PolkadotHash, witness::dot::polkadot};
 
 pub struct PolkadotHttpClient(HttpClient);
 
@@ -266,7 +266,88 @@ impl DotRpcApi for DotHttpRpcClient {
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
-		Ok(self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await?)
+		// TEMP submit and watch for completion in a background task
+		let tx_hash = self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await?;
+
+		let online_client = self.online_client.clone();
+		tokio::spawn(async move {
+			const TX_WATCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
+			let watch_fut = async {
+				let mut sub = match online_client.blocks().subscribe_finalized().await {
+					Ok(sub) => sub,
+					Err(e) => {
+						tracing::error!(
+							"Failed to subscribe to finalized blocks for tx {tx_hash:?}: {e:?}"
+						);
+						return;
+					},
+				};
+
+				while let Some(Ok(block)) = sub.next().await {
+					let tx_index_in_block = match block.extrinsics().await {
+						Ok(extrinsics) => {
+							match extrinsics.iter().find(|ext| ext.hash() == tx_hash) {
+								Some(ext) => ext.index(),
+								None => continue,
+							}
+						},
+						Err(e) => {
+							tracing::error!(
+								"Failed to get extrinsics for block {:?}: {e:?}",
+								block.hash()
+							);
+							continue;
+						},
+					};
+
+					match block.events().await {
+						Ok(events) =>
+							for ev in events.iter() {
+								match ev {
+									Ok(event) => {
+										if event.phase() ==
+											subxt::events::Phase::ApplyExtrinsic(
+												tx_index_in_block,
+											) && event.pallet_name() == "System" &&
+											event.variant_name() == "ExtrinsicFailed"
+										{
+											let dispatch_error = event
+												.as_event::<polkadot::system::events::ExtrinsicFailed>(
+												)
+												.expect("Event should decode to ExtrinsicFailed")
+												.unwrap()
+												.dispatch_error;
+
+											tracing::error!("--- Extrinsic {tx_hash:?} failed to be included in a finalized block {dispatch_error:?}");
+											return;
+										}
+									},
+									Err(e) => {
+										tracing::error!(
+											"Failed to decode event in block {:?}: {e:?}",
+											block.hash()
+										);
+									},
+								}
+							},
+						Err(e) => {
+							tracing::error!(
+								"Failed to get events for block {:?}: {e:?}",
+								block.hash()
+							);
+						},
+					}
+				}
+			};
+
+			if tokio::time::timeout(TX_WATCH_TIMEOUT, watch_fut).await.is_err() {
+				tracing::error!("Timeout watching for extrinsic {tx_hash:?} to be included in a finalized block.",);
+			}
+		});
+
+		Ok(tx_hash)
+
+		// Ok(self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await?)
 	}
 }
 
