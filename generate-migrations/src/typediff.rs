@@ -893,8 +893,9 @@ impl GetIdentity for TypeRepr<Morphism> {
 					.is_some()
 				{
 					if matches!(typename, DiscreteMorphism::Same(_)) {
-
-					 	if typename.clone().map(|n| n.get_params().is_empty()) != DiscreteMorphism::Same(false) {
+						if typename.clone().map(|n| n.get_params().is_empty()) !=
+							DiscreteMorphism::Same(false)
+						{
 							comments.push("This type did not change.".to_string());
 							comments.push("It contains type parameters, so unfortunately it has to be (re-)defined here anyways.".to_string());
 							return None;
@@ -917,7 +918,10 @@ impl GetIdentity for TypeRepr<Morphism> {
 							comments.push(format!(" - migration inside field `{path}`"));
 						}
 					} else {
-						comments.push("No migration, but also not fields are identity. This is not expected.".to_string());
+						comments.push(
+							"No migration, but also not fields are identity. This is not expected."
+								.to_string(),
+						);
 					}
 					None
 				},
@@ -929,8 +933,9 @@ impl GetIdentity for TypeRepr<Morphism> {
 					.is_some()
 				{
 					if matches!(typename, DiscreteMorphism::Same(_)) {
-
-					 	if typename.clone().map(|n| n.get_params().is_empty()) != DiscreteMorphism::Same(false) {
+						if typename.clone().map(|n| n.get_params().is_empty()) !=
+							DiscreteMorphism::Same(false)
+						{
 							comments.push("This type did not change.".to_string());
 							comments.push("It contains type parameters, so unfortunately it has to be (re-)defined here anyways.".to_string());
 							return None;
@@ -1027,7 +1032,11 @@ pub fn compare_types(
 					NodeDiff::Both((pos1, ty1), (pos2, ty2)) => {
 						let type_diff = compare_types(metadata1, ty1, metadata2, ty2);
 
-						CompactDiff::compact_inherited(StructField { name, position: pos1, ty: type_diff })
+						CompactDiff::compact_inherited(StructField {
+							name,
+							position: pos1,
+							ty: type_diff,
+						})
 						// if a == b {
 						// 	CompactDiff::Unchanged(StructField { name: name, ty:
 						// TypeRepr::NotImplemented }) } else {
@@ -1241,7 +1250,7 @@ pub fn extract_old_type(ty: TypeRepr<Morphism>) -> TypeRepr<Point> {
 				.collect(),
 		},
 		TypeRepr::Enum { typename, variants, comments } => TypeRepr::Enum {
-    		comments,
+			comments,
 			typename: extract_old_typename(typename),
 			variants: variants
 				.into_iter()

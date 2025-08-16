@@ -123,7 +123,11 @@ impl Module {
 					.map(|field| self.write_struct_field(field.clone()))
 					.collect();
 
-				let result = TypeRepr::Struct { comments: comments.clone(), typename: typename.clone(), fields };
+				let result = TypeRepr::Struct {
+					comments: comments.clone(),
+					typename: typename.clone(),
+					fields,
+				};
 				self.add_definition(typename.clone(), result.clone());
 				// TypeRepr::TypeByName(add_old_path(typename.clone()))
 				TypeRepr::TypeByName(add_old_path(type_repr_to_name(result)))
@@ -133,7 +137,11 @@ impl Module {
 					.into_iter()
 					.map(|field| self.write_enum_variant(field.clone()))
 					.collect();
-				let result = TypeRepr::Enum { typename: typename.clone(), variants, comments: comments.clone() };
+				let result = TypeRepr::Enum {
+					typename: typename.clone(),
+					variants,
+					comments: comments.clone(),
+				};
 				self.add_definition(typename.clone(), result.clone());
 				// TypeRepr::TypeByName(add_old_path(typename.clone()))
 				TypeRepr::TypeByName(add_old_path(type_repr_to_name(result)))

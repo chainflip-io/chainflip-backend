@@ -10,6 +10,8 @@ mod typediff;
 mod virtual_file;
 mod write_migration;
 // mod types;
+mod from_metadata;
+mod registry;
 mod types2;
 
 use crate::{
