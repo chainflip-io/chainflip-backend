@@ -1,20 +1,24 @@
-use scale_info::{Type, TypeDefPrimitive};
+use derive_where::derive_where;
+use scale_info::TypeDefPrimitive;
+use std::fmt::Debug;
 
-trait Shape {
-	type Next;
+trait CommonTraits = Clone + Debug + Eq + Ord;
+
+trait Shape: CommonTraits {
+	type Next: CommonTraits;
 }
 
 trait Shaper {
 	type Next: Shaper;
-	type Strl<S: Shape>;
-	type Item<S: Shape>;
-	type Disc<A>;
+	type Strl<S: Shape>: CommonTraits;
+	type Item<S: Shape>: CommonTraits;
+	type Disc<A: CommonTraits>: CommonTraits;
 }
 
 trait ShaperHom<U: Shaper, V: Shaper> {
 	fn apply_strl<Sh: Shaped>(&self, x: U::Strl<Sh::Result<U>>) -> V::Strl<Sh::Result<V>>;
 	fn apply_item<Sh: Shaped>(&self, x: U::Item<Sh::Result<U>>) -> Option<V::Item<Sh::Result<V>>>;
-	fn apply_disc<A>(&self, x: U::Disc<A>) -> V::Disc<A>;
+	fn apply_disc<A: CommonTraits>(&self, x: U::Disc<A>) -> V::Disc<A>;
 }
 
 trait Shaped {
@@ -25,13 +29,14 @@ trait Shaped {
 //--------------------------------------------
 // various diff methods
 
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum StructuralDiff<S: Shape> {
 	Unchanged(S::Next),
 	Change(S::Next, S::Next),
 	Inherited(S),
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum ItemDiff<S: Shape> {
 	Removed(S::Next),
 	Added(S::Next),
@@ -40,6 +45,7 @@ pub enum ItemDiff<S: Shape> {
 	Unchanged(S::Next),
 }
 
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum DiscDiff<A> {
 	Same(A),
 	Changed(A, A),
@@ -51,6 +57,7 @@ type TypeName = String;
 
 // -- struct field
 
+#[derive_where(Debug, Clone, PartialEq, Eq, PartialOrd, Ord; )]
 pub struct StructField<S: Shaper> {
 	pub pos: usize,
 	pub name: S::Disc<Option<TypeName>>,
@@ -73,10 +80,11 @@ impl Shaped for ShapedStructField {
 
 // -- enum variant
 
+#[derive_where(Clone, PartialEq, Eq, PartialOrd, Ord, Debug;)]
 pub struct EnumVariant<S: Shaper> {
 	pub pos: usize,
 	pub name: S::Disc<TypeName>,
-	pub content: S::Strl<StructField<S>>,
+	pub fields: Vec<S::Item<StructField<S>>>,
 }
 
 impl<S: Shaper> Shape for EnumVariant<S> {
@@ -91,16 +99,21 @@ impl Shaped for ShapedEnumVariant {
 		EnumVariant {
 			pos: x.pos,
 			name: f.apply_disc(x.name),
-			content: f.apply_strl::<ShapedStructField>(x.content),
+			fields: x
+				.fields
+				.into_iter()
+				.filter_map(|field| f.apply_item::<ShapedStructField>(field))
+				.collect(),
 		}
 	}
 }
 
 // -- typeexpr
+#[derive_where(Debug, Clone, PartialEq, Eq, PartialOrd, Ord; )]
 pub enum TypeExpr<S: Shaper> {
 	Struct { fields: Vec<S::Item<StructField<S>>> },
 	Enum { variants: Vec<S::Item<EnumVariant<S>>> },
-	Sequence { inner: Box<S::Strl<TypeExpr<S>>> },
+	VecLike { inner: Box<S::Strl<TypeExpr<S>>> },
 	MapLike { key: Box<S::Strl<TypeExpr<S>>>, val: Box<S::Strl<TypeExpr<S>>> },
 	Tuple { entries: Vec<S::Item<TypeExpr<S>>> },
 	Primitive { prim: TypeDefPrimitive },
@@ -117,34 +130,45 @@ impl Shaped for ShapedTypeExpr {
 
 	fn map<X: Shaper, Y: Shaper>(f: impl ShaperHom<X, Y>, x: Self::Result<X>) -> Self::Result<Y> {
 		match x {
-			TypeExpr::Sequence { inner } =>
-				TypeExpr::Sequence { inner: Box::new(f.apply_strl::<Self>(*inner)) },
+			TypeExpr::VecLike { inner } =>
+				TypeExpr::VecLike { inner: Box::new(f.apply_strl::<ShapedTypeExpr>(*inner)) },
 			TypeExpr::Struct { fields } => TypeExpr::Struct {
 				fields: fields
 					.into_iter()
 					.filter_map(|field| f.apply_item::<ShapedStructField>(field))
 					.collect(),
 			},
-			TypeExpr::Enum { variants } => todo!(),
-			TypeExpr::MapLike { key, val } => todo!(),
-			TypeExpr::Tuple { entries } => todo!(),
-			TypeExpr::Primitive { prim } => todo!(),
-			TypeExpr::NotImplemented => todo!(),
+			TypeExpr::Enum { variants } => TypeExpr::Enum {
+				variants: variants
+					.into_iter()
+					.filter_map(|variant| f.apply_item::<ShapedEnumVariant>(variant))
+					.collect(),
+			},
+			TypeExpr::MapLike { key, val } => TypeExpr::MapLike {
+				key: Box::new(f.apply_strl::<ShapedTypeExpr>(*key)),
+				val: Box::new(f.apply_strl::<ShapedTypeExpr>(*val)),
+			},
+			TypeExpr::Tuple { entries } => TypeExpr::Tuple {
+				entries: entries
+					.into_iter()
+					.filter_map(|entry| f.apply_item::<ShapedTypeExpr>(entry))
+					.collect(),
+			},
+			TypeExpr::Primitive { prim } => TypeExpr::Primitive { prim },
+			TypeExpr::NotImplemented => TypeExpr::NotImplemented,
 		}
 	}
 }
 
-// -- storage
-
 //--------------------------------------------
-// definition of shapers
+// shaper instances
 
 pub struct Point;
 impl Shaper for Point {
 	type Next = Point;
 	type Strl<S: Shape> = S;
 	type Item<S: Shape> = S;
-	type Disc<A> = A;
+	type Disc<A: CommonTraits> = A;
 }
 
 pub struct Morphism;
@@ -152,7 +176,7 @@ impl Shaper for Morphism {
 	type Next = Point;
 	type Strl<S: Shape> = StructuralDiff<S>;
 	type Item<S: Shape> = ItemDiff<S>;
-	type Disc<A> = DiscDiff<A>;
+	type Disc<A: CommonTraits> = DiscDiff<A>;
 }
 
 // ---- proj to old ----
@@ -185,7 +209,10 @@ impl ShaperHom<Morphism, Point> for ProjOld {
 		}
 	}
 
-	fn apply_disc<A>(&self, x: <Morphism as Shaper>::Disc<A>) -> <Point as Shaper>::Disc<A> {
+	fn apply_disc<A: CommonTraits>(
+		&self,
+		x: <Morphism as Shaper>::Disc<A>,
+	) -> <Point as Shaper>::Disc<A> {
 		match x {
 			DiscDiff::Same(a) => a,
 			DiscDiff::Changed(a, _) => a,
@@ -193,23 +220,7 @@ impl ShaperHom<Morphism, Point> for ProjOld {
 	}
 }
 
-// ----- normalizing -----
-
-pub fn normalize<X: Shaper>(x: TypeExpr<X>) -> TypeExpr<X> {
-	todo!()
-	// match x {
-	//     TypeExpr::Struct { fields } => todo!(),
-	//     TypeExpr::Sequence { inner } => todo!(),
-	// }
-}
-
 // pub fn get_tuple2<X: Shaper>(x: TypeExpr<X>) -> Option<(TypeExpr<X>, TypeExpr<X>)> {
 // }
 
 // ---- diffing types ----
-
-pub fn diff_typeexpr(x: TypeExpr<Point>, y: TypeExpr<Point>) -> TypeExpr<Morphism> {
-	// match (x, y) {
-	// }
-	todo!()
-}

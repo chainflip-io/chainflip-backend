@@ -6,16 +6,17 @@
 #![feature(path_add_extension)]
 
 mod diff;
+mod metadata;
+mod registry;
 mod typediff;
+mod types;
 mod virtual_file;
 mod write_migration;
-// mod types;
-mod from_metadata;
-mod registry;
-mod types2;
 
 use crate::{
+	metadata::get_local_metadata,
 	typediff::{MetadataConfig, PalletRef, compare_metadata},
+	types::from_metadata::extract_type,
 	virtual_file::{Module, VirtualFile},
 	write_migration::{FullMigration, PalletMigration},
 };
@@ -79,6 +80,22 @@ async fn main() {
 		},
 	}
 
+	let current_metadata = get_local_metadata();
+	let pallet = current_metadata.pallet_by_name("BitcoinElections").unwrap();
+
+	for item in pallet.storage().unwrap().entries() {
+		use subxt::metadata::types::StorageEntryType;
+		match item.entry_type() {
+			StorageEntryType::Plain(_) => (),
+			StorageEntryType::Map { hashers, key_ty, value_ty } => {
+				let ty = extract_type(&current_metadata, *value_ty);
+				println!("type of val of {} is: {:?}", item.name().to_string(), ty);
+			},
+		}
+	}
+
+	/*
+
 	let result = compare_metadata(&cli.config).await;
 
 	let mut pallet_migrations = BTreeMap::<PalletRef, PalletMigration>::new();
@@ -106,4 +123,5 @@ async fn main() {
 	for file in virtual_files {
 		file.apply();
 	}
+	*/
 }
