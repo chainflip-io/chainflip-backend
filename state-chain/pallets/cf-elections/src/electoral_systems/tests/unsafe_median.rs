@@ -26,10 +26,10 @@ pub struct FeeHook;
 impl UpdateFeeHook<u64> for FeeHook {
 	fn update_fee(_fee: u64) {}
 }
-type SimpleUnsafeMedian = UnsafeMedian<u64, (), (), FeeHook, (), u32>;
+type SimpleUnsafeMedian = UnsafeMedian<u64, (), FeeHook, (), u32>;
 
-const INIT_UNSYNCHRONISED_STATE: u64 = 22;
-const NEW_UNSYNCHRONISED_STATE: u64 = 33;
+const INIT_UNSYNCHRONISED_STATE: (u64, u32) = (22, 0);
+const NEW_UNSYNCHRONISED_STATE: (u64, u32) = (33, 123);
 
 fn with_default_setup() -> TestSetup<SimpleUnsafeMedian> {
 	TestSetup::<_>::default().with_unsynchronised_state(INIT_UNSYNCHRONISED_STATE)
@@ -70,10 +70,10 @@ fn if_consensus_update_unsynchronised_state() {
 	with_default_context()
 		.force_consensus_update(ConsensusStatus::Gained {
 			most_recent: None,
-			new: NEW_UNSYNCHRONISED_STATE,
+			new: NEW_UNSYNCHRONISED_STATE.0,
 		})
 		.test_on_finalize(
-			&(),
+			&NEW_UNSYNCHRONISED_STATE.1,
 			|_| {},
 			vec![
 				Check::started_at_initial_state(),
@@ -89,7 +89,7 @@ fn if_no_consensus_do_not_update_unsynchronised_state() {
 	with_default_context()
 		.force_consensus_update(ConsensusStatus::None)
 		.test_on_finalize(
-			&(),
+			&0,
 			|_| {},
 			vec![
 				Check::started_at_initial_state(),
