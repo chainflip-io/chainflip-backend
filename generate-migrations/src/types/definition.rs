@@ -1,14 +1,15 @@
 use derive_where::derive_where;
 use scale_info::TypeDefPrimitive;
-use std::fmt::Debug;
+use std::{collections::BTreeMap, fmt::Debug};
 
-trait CommonTraits = Clone + Debug + Eq + Ord;
+pub trait CommonTraits = Clone + Debug + Eq + Ord;
 
-trait Shape: CommonTraits {
+pub trait Shape: CommonTraits {
 	type Next: CommonTraits;
+	fn try_get_next(&self) -> Option<Self::Next>;
 }
 
-trait Shaper {
+pub trait Shaper {
 	type Next: Shaper;
 	type Strl<S: Shape>: CommonTraits;
 	type Item<S: Shape>: CommonTraits;
@@ -66,6 +67,10 @@ pub struct StructField<S: Shaper> {
 
 impl<S: Shaper> Shape for StructField<S> {
 	type Next = StructField<S::Next>;
+	
+	fn try_get_next(&self) -> Option<Self::Next> {
+		todo!()
+	}
 }
 
 struct ShapedStructField;
@@ -89,6 +94,10 @@ pub struct EnumVariant<S: Shaper> {
 
 impl<S: Shaper> Shape for EnumVariant<S> {
 	type Next = EnumVariant<S::Next>;
+	
+	fn try_get_next(&self) -> Option<Self::Next> {
+			todo!()
+		}
 }
 
 struct ShapedEnumVariant;
@@ -122,6 +131,10 @@ pub enum TypeExpr<S: Shaper> {
 
 impl<S: Shaper> Shape for TypeExpr<S> {
 	type Next = TypeExpr<S::Next>;
+	
+	fn try_get_next(&self) -> Option<Self::Next> {
+		todo!()
+	}
 }
 
 struct ShapedTypeExpr;
@@ -159,6 +172,63 @@ impl Shaped for ShapedTypeExpr {
 		}
 	}
 }
+
+// -- storage entry
+#[derive_where(Debug, Clone, PartialEq, Eq, PartialOrd, Ord; )]
+pub enum StorageEntry<S: Shaper> {
+	Value(Box<S::Strl<TypeExpr<S>>>),
+	Map(Box<S::Strl<TypeExpr<S>>>, Box<S::Strl<TypeExpr<S>>>)
+}
+
+impl<S: Shaper> Shape for StorageEntry<S> {
+	type Next = StorageEntry<S::Next>;
+
+	fn try_get_next(&self) -> Option<Self::Next> {
+		todo!()
+	}
+}
+
+struct ShapedStorageEntry;
+impl Shaped for ShapedStorageEntry {
+	type Result<X: Shaper> = StorageEntry<X>;
+
+	fn map<X: Shaper, Y: Shaper>(f: impl ShaperHom<X, Y>, x: Self::Result<X>) -> Self::Result<Y> {
+		match x {
+			StorageEntry::Value(v) => StorageEntry::Value(Box::new(f.apply_strl::<ShapedTypeExpr>(*v))),
+			StorageEntry::Map(k, v) => StorageEntry::Map(
+				Box::new(f.apply_strl::<ShapedTypeExpr>(*k)),
+				Box::new(f.apply_strl::<ShapedTypeExpr>(*v))
+			),
+		}
+	}
+}
+
+// -- pallet 
+
+#[derive_where(Debug, Clone, PartialEq, Eq, PartialOrd, Ord; )]
+pub struct PalletStorage<S: Shaper> {
+	pub entries: BTreeMap<Name, S::Item<StorageEntry<S>>>
+}
+
+impl<S: Shaper> Shape for PalletStorage<S> {
+	type Next = PalletStorage<S::Next>;
+
+	fn try_get_next(&self) -> Option<Self::Next> {
+		todo!()
+	}
+}
+
+struct ShapedPalletStorage;
+impl Shaped for ShapedPalletStorage {
+	type Result<X: Shaper> = PalletStorage<X>;
+
+	fn map<X: Shaper, Y: Shaper>(f: impl ShaperHom<X, Y>, x: Self::Result<X>) -> Self::Result<Y> {
+		PalletStorage {
+			entries: x.entries.into_iter().filter_map(|entry| f.apply_item::<ShapedStorageEntry>(entry)).collect(),
+		}
+	}
+}
+
 
 //--------------------------------------------
 // shaper instances
