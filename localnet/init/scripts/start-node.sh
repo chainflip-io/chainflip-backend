@@ -6,10 +6,6 @@ PORT=$3
 RPC_PORT=$4
 NODE_COUNT=$5
 
-CHAIN="dev"
-if [ $NODE_COUNT == "3-node" ]; then
-    CHAIN="dev-3"
-fi
 DATETIME=$(date '+%Y-%m-%d_%H-%M-%S')
 source $LOCALNET_INIT_DIR/env/eth.env
 source $LOCALNET_INIT_DIR/env/arb.env
