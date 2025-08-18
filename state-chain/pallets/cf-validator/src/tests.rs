@@ -1948,12 +1948,21 @@ mod delegation {
 			.then_execute_at_next_block(|_| {
 				// After authority rotation starts, delegation snapshots should be stored
 				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				let snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+
+				assert!(!snapshot.validators.contains_key(&OPERATOR));
+				assert!(!snapshot.delegators.contains_key(&OPERATOR));
+
+				// Verify all delegators are in the snapshot
 				for &delegator in &DELEGATORS {
-					let snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR);
-					assert!(snapshot.is_some());
-					let snapshot = snapshot.unwrap();
 					assert!(snapshot.delegators.contains_key(&delegator));
+					assert!(!snapshot.validators.contains_key(&delegator));
 				}
+
+				// Verify operator fee is correctly captured in snapshot
+				assert_eq!(snapshot.delegation_fee_bps, 200); // MIN_OPERATOR_FEE
 				MockKeyRotatorA::keygen_success();
 			})
 			.then_execute_at_next_block(|_| {
@@ -1983,7 +1992,8 @@ mod delegation {
 				let snapshot = DelegationSnapshots::<Test>::get(current_epoch, OPERATOR);
 				assert!(snapshot.is_some());
 				let snapshot = snapshot.unwrap();
-				let active_delegators: BTreeSet<u64> = snapshot.delegators.keys().cloned().collect();
+				let active_delegators: BTreeSet<u64> =
+					snapshot.delegators.keys().cloned().collect();
 				assert_eq!(BTreeSet::from_iter(DELEGATORS), active_delegators);
 				for delegator in active_delegators {
 					if delegator % 2 == 0 {
