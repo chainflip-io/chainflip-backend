@@ -321,6 +321,9 @@ impl pallet_cf_environment::Config for Runtime {
 	type SolEnvironment = SolEnvironment;
 	type SolanaBroadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
+	type DotEnvironment = DotEnvironment;
+	type PolkadotBroadcaster = PolkadotBroadcaster;
+	type HubEnvironment = HubEnvironment;
 }
 
 parameter_types! {
