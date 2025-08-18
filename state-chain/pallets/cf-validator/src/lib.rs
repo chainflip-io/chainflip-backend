@@ -143,13 +143,6 @@ pub enum PalletOffence {
 	MissedAuthorshipSlot,
 }
 
-#[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
-#[scale_info(skip_type_params(T))]
-pub struct DelegationSnapshot<T: Config> {
-	pub avg_bid: T::Amount,
-	pub delegators: BTreeMap<T::AccountId, T::Amount>,
-	pub validators: BTreeMap<T::AccountId, T::Amount>,
-}
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding_enabled, stop_bidding_enabled);
 
