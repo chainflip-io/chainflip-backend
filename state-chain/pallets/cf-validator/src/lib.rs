@@ -46,8 +46,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AsyncResult,
 	AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
 	EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch, KeyRotator,
-	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, RedemptionCheck, ReputationResetter,
-	SetSafeMode,
+	MissedAuthorshipSlots, QualifyNode, RedemptionCheck, ReputationResetter, SetSafeMode,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -86,9 +85,6 @@ pub enum PalletConfigUpdate {
 	RedemptionPeriodAsPercentage {
 		percentage: Percent,
 	},
-	BackupRewardNodePercentage {
-		percentage: Percent,
-	},
 	EpochDuration {
 		blocks: u32,
 	},
@@ -113,7 +109,7 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
 
 // Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
@@ -141,8 +137,6 @@ impl<T: pallet::Config> RotationPhase<T> {
 	}
 }
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
-
-type BackupMap<T> = BTreeMap<ValidatorIdOf<T>, <T as Chainflip>::Amount>;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
@@ -303,17 +297,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type HistoricalActiveEpochs<T: Config> =
 		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
-
-	/// Backups, validator nodes who are not in the authority set.
-	#[pallet::storage]
-	#[pallet::getter(fn backups)]
-	pub type Backups<T: Config> = StorageValue<_, BackupMap<T>, ValueQuery>;
-
-	/// Determines the number of backup nodes who receive rewards as a percentage
-	/// of the authority count.
-	#[pallet::storage]
-	#[pallet::getter(fn backup_reward_node_percentage)]
-	pub type BackupRewardNodePercentage<T> = StorageValue<_, Percent, ValueQuery>;
 
 	/// The absolute minimum number of authority nodes for the next epoch.
 	#[pallet::storage]
@@ -677,9 +660,6 @@ pub mod pallet {
 					);
 
 					AuthoritySetMinSize::<T>::put(min_size);
-				},
-				PalletConfigUpdate::BackupRewardNodePercentage { percentage } => {
-					<BackupRewardNodePercentage<T>>::put(percentage);
 				},
 				PalletConfigUpdate::EpochDuration { blocks } => {
 					ensure!(blocks > 0, Error::<T>::InvalidEpochDuration);
@@ -1225,11 +1205,9 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_authorities: BTreeSet<ValidatorIdOf<T>>,
-		pub genesis_backups: BackupMap<T>,
 		pub epoch_duration: BlockNumberFor<T>,
 		pub bond: T::Amount,
 		pub redemption_period_as_percentage: Percent,
-		pub backup_reward_node_percentage: Percent,
 		pub authority_set_min_size: AuthorityCount,
 		pub auction_parameters: SetSizeParameters,
 		pub auction_bid_cutoff_percentage: Percent,
@@ -1240,11 +1218,9 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				genesis_authorities: Default::default(),
-				genesis_backups: Default::default(),
 				epoch_duration: Zero::zero(),
 				bond: Default::default(),
 				redemption_period_as_percentage: Zero::zero(),
-				backup_reward_node_percentage: Zero::zero(),
 				authority_set_min_size: Zero::zero(),
 				auction_parameters: SetSizeParameters {
 					min_size: 3,
@@ -1265,7 +1241,6 @@ pub mod pallet {
 			EpochDuration::<T>::set(self.epoch_duration);
 			CurrentRotationPhase::<T>::set(RotationPhase::Idle);
 			RedemptionPeriodAsPercentage::<T>::set(self.redemption_period_as_percentage);
-			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 			MaxAuthoritySetContractionPercentage::<T>::set(
 				self.max_authority_set_contraction_percentage,
@@ -1282,16 +1257,11 @@ pub mod pallet {
 				Pallet::<T>::activate_bidding(ValidatorIdOf::<T>::into_ref(v))
 					.expect("The account was just created so this can't fail.")
 			});
-			self.genesis_backups.keys().for_each(|v| {
-				Pallet::<T>::activate_bidding(ValidatorIdOf::<T>::into_ref(v))
-					.expect("The account was just created so this can't fail.")
-			});
 
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
 				&self.genesis_authorities.iter().cloned().collect(),
 				self.bond,
-				self.genesis_backups.clone(),
 			);
 		}
 	}
@@ -1403,21 +1373,7 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch: old_epoch });
 		}
 
-		Self::initialise_new_epoch(
-			new_epoch,
-			&new_authorities,
-			bond,
-			Self::get_active_bids()
-				.into_iter()
-				.filter_map(|Bid { bidder_id, amount }| {
-					if !new_authorities.contains(&bidder_id) {
-						Some((bidder_id, amount))
-					} else {
-						None
-					}
-				})
-				.collect(),
-		);
+		Self::initialise_new_epoch(new_epoch, &new_authorities, bond);
 
 		Self::deposit_event(Event::NewEpoch(new_epoch));
 		T::EpochTransitionHandler::on_new_epoch(new_epoch);
@@ -1476,7 +1432,6 @@ impl<T: Config> Pallet<T> {
 		new_epoch: EpochIndex,
 		new_authorities: &Vec<ValidatorIdOf<T>>,
 		new_bond: T::Amount,
-		backup_map: BackupMap<T>,
 	) {
 		CurrentAuthorities::<T>::put(new_authorities);
 		HistoricalAuthorities::<T>::insert(new_epoch, new_authorities);
@@ -1505,9 +1460,6 @@ impl<T: Config> Pallet<T> {
 		CurrentEpochDelegations::<T>::set(delegators);
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
-
-		// We've got new authorities, which means the backups may have changed.
-		Backups::<T>::put(backup_map);
 	}
 
 	fn set_rotation_phase(new_phase: RotationPhase<T>) {
@@ -1625,7 +1577,7 @@ impl<T: Config> Pallet<T> {
 
 				// Use an approximation again - see comment above.
 				T::ValidatorWeightInfo::start_authority_rotation({
-					Self::current_authority_count() + Self::backup_reward_nodes_limit() as u32
+					Self::current_authority_count()
 				})
 			},
 		}
@@ -1694,36 +1646,6 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::abort_rotation();
 		}
-	}
-
-	/// Returns the number of backup nodes eligible for rewards
-	pub fn backup_reward_nodes_limit() -> usize {
-		BackupRewardNodePercentage::<T>::get() * Self::current_authority_count() as usize
-	}
-
-	/// Returns the bids of the highest funded backup nodes, who are eligible for the backup rewards
-	/// sorted by bids highest to lowest.
-	pub fn highest_funded_qualified_backup_node_bids(
-	) -> impl Iterator<Item = Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> {
-		let mut backups = T::KeygenQualification::filter_qualified_by_key(
-			Backups::<T>::get().into_iter().collect(),
-			|(bidder_id, _bid)| bidder_id,
-		);
-
-		let limit = Self::backup_reward_nodes_limit();
-		if limit < backups.len() {
-			backups.select_nth_unstable_by_key(limit, |(_, amount)| Reverse(*amount));
-			backups.truncate(limit);
-		}
-
-		backups.into_iter().map(|(bidder_id, amount)| Bid { bidder_id, amount })
-	}
-
-	/// Returns ids as BTreeSet for fast lookups
-	pub fn highest_funded_qualified_backup_nodes_lookup() -> BTreeSet<ValidatorIdOf<T>> {
-		Self::highest_funded_qualified_backup_node_bids()
-			.map(|Bid { bidder_id, .. }| bidder_id)
-			.collect()
 	}
 
 	fn punish_missed_authorship_slots() -> Weight {
@@ -2011,32 +1933,6 @@ pub struct NotDuringRotation<T: Config>(PhantomData<T>);
 impl<T: Config> ExecutionCondition for NotDuringRotation<T> {
 	fn is_satisfied() -> bool {
 		CurrentRotationPhase::<T>::get() == RotationPhase::Idle
-	}
-}
-
-pub struct UpdateBackupMapping<T>(PhantomData<T>);
-
-impl<T: Config> OnAccountFunded for UpdateBackupMapping<T> {
-	type ValidatorId = ValidatorIdOf<T>;
-	type Amount = T::Amount;
-
-	fn on_account_funded(validator_id: &Self::ValidatorId, amount: Self::Amount) {
-		if <Pallet<T> as EpochInfo>::current_authorities().contains(validator_id) {
-			return
-		}
-
-		Backups::<T>::mutate(|backups| {
-			if amount.is_zero() {
-				if backups.remove(validator_id).is_none() {
-					#[cfg(not(test))]
-					log::warn!("Tried to remove non-existent ValidatorId {validator_id:?}..");
-					#[cfg(test)]
-					panic!("Tried to remove non-existent ValidatorId {validator_id:?}..");
-				}
-			} else {
-				backups.insert(validator_id.clone(), amount);
-			}
-		});
 	}
 }
 

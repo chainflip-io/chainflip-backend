@@ -99,7 +99,6 @@ fn should_calculate_block_emissions() {
 	new_test_ext().execute_with(|| {
 		// Block emissions are calculated at genesis.
 		assert!(Emissions::current_authority_emission_per_block() > 0);
-		assert!(Emissions::backup_node_emission_per_block() > 0);
 	});
 }
 
@@ -266,10 +265,6 @@ fn ensure_governance_origin_checks() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Emissions::update_current_authority_emission_inflation(non_gov_origin.clone(), 0),
-			sp_runtime::traits::BadOrigin,
-		);
-		assert_noop!(
-			Emissions::update_backup_node_emission_inflation(non_gov_origin.clone(), 0),
 			sp_runtime::traits::BadOrigin,
 		);
 		assert_noop!(

@@ -188,11 +188,9 @@ cf_test_utilities::impl_test_helpers! {
 		},
 		validator_pallet: ValidatorPalletConfig {
 			genesis_authorities: BTreeSet::from(GENESIS_AUTHORITIES),
-			genesis_backups: Default::default(),
 			epoch_duration: EPOCH_DURATION,
 			bond: GENESIS_BOND,
 			redemption_period_as_percentage: REDEMPTION_PERCENTAGE_AT_GENESIS,
-			backup_reward_node_percentage: Percent::from_percent(34),
 			authority_set_min_size: MIN_AUTHORITY_SIZE,
 			auction_parameters: SetSizeParameters {
 				min_size: MIN_AUTHORITY_SIZE,
@@ -220,14 +218,6 @@ macro_rules! assert_invariants {
 			"Authorities out of sync at block {:?}. RotationPhase: {:?}",
 			System::block_number(),
 			ValidatorPallet::current_rotation_phase(),
-		);
-
-		assert!(
-			ValidatorPallet::current_authorities()
-				.into_iter()
-				.collect::<BTreeSet<_>>()
-				.is_disjoint(&ValidatorPallet::highest_funded_qualified_backup_nodes_lookup()),
-			"Backup nodes and validators should not overlap",
 		);
 	};
 }

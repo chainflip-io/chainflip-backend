@@ -44,7 +44,6 @@ pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
 pub const TOTAL_ISSUANCE: u128 = 1_000_000_000;
 pub const DAILY_SLASHING_RATE: Permill = Permill::from_perthousand(1);
 
-cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
@@ -78,7 +77,6 @@ impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u128;
 	type BlocksPerDay = BlocksPerDay;
-	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
 	type CallIndexer = ();
@@ -182,7 +180,6 @@ cf_test_utilities::impl_test_helpers! {
 		emissions: {
 			EmissionsConfig {
 				current_authority_emission_inflation: 2720,
-				backup_node_emission_inflation: 284,
 				supply_update_interval: SUPPLY_UPDATE_INTERVAL,
 				..Default::default()
 			}

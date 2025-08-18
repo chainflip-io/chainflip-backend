@@ -119,19 +119,6 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
-pub enum BackupOrPassive {
-	Backup,
-	Passive,
-}
-
-// TEMP: so frontend doesn't break after removal of passive from backend
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
-pub enum ChainflipAccountStateWithPassive {
-	CurrentAuthority,
-	BackupOrPassive(BackupOrPassive),
-}
-
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct ValidatorInfo {
 	pub balance: AssetAmount,
@@ -140,6 +127,7 @@ pub struct ValidatorInfo {
 	pub reputation_points: i32,
 	pub keyholder_epochs: Vec<EpochIndex>,
 	pub is_current_authority: bool,
+	#[deprecated]
 	pub is_current_backup: bool,
 	pub is_qualified: bool,
 	pub is_online: bool,
@@ -494,6 +482,7 @@ decl_runtime_apis!(
 		fn cf_epoch_duration() -> u32;
 		fn cf_current_epoch_started_at() -> u32;
 		fn cf_authority_emission_per_block() -> u128;
+		#[deprecated(note = "The notion of backup nodes is no longer used.")]
 		fn cf_backup_emission_per_block() -> u128;
 		/// Returns the flip supply in the form [total_issuance, offchain_funds]
 		fn cf_flip_supply() -> (u128, u128);

@@ -21,8 +21,8 @@
 use cf_chains::{eth::api::StateChainGatewayAddressProvider, UpdateFlipSupply};
 use cf_primitives::{AssetAmount, EgressId};
 use cf_traits::{
-	impl_pallet_safe_mode, BackupRewardsNotifier, BlockEmissions, Broadcaster, EgressApi,
-	FlipBurnInfo, Issuance, RewardsDistribution, ScheduledEgressDetails,
+	impl_pallet_safe_mode, BlockEmissions, Broadcaster, EgressApi, FlipBurnInfo, Issuance,
+	RewardsDistribution, ScheduledEgressDetails,
 };
 use codec::MaxEncodedLen;
 use frame_support::storage::transactional::with_storage_layer;
@@ -30,6 +30,7 @@ use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
 
 mod benchmarking;
+pub mod migrations;
 mod mock;
 mod tests;
 
@@ -53,6 +54,7 @@ impl_pallet_safe_mode!(PalletSafeMode; emissions_sync_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
+	pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 	use super::*;
 	use cf_chains::{eth::api::StateChainGatewayAddressProvider, Chain, Ethereum};
@@ -127,6 +129,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::storage]
@@ -141,19 +144,9 @@ pub mod pallet {
 		StorageValue<_, T::FlipBalance, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn backup_node_emission_per_block)]
-	/// The amount of Flip we mint to backup nodes per block.
-	pub type BackupNodeEmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn current_authority_emission_inflation)]
 	/// Inflation per `COMPOUNDING_INTERVAL` set aside for current authorities in parts per billion.
 	pub(super) type CurrentAuthorityEmissionInflation<T: Config> = StorageValue<_, u32, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn backup_node_emission_inflation)]
-	/// Inflation per `COMPOUNDING_INTERVAL` set aside for *backup* nodes, in parts per billion.
-	pub(super) type BackupNodeEmissionInflation<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn supply_update_interval)]
@@ -168,12 +161,8 @@ pub mod pallet {
 		SupplyUpdateBroadcastRequested(BlockNumberFor<T>),
 		/// Current authority inflation emission has been updated \[new\]
 		CurrentAuthorityInflationEmissionsUpdated(u32),
-		/// Backup node inflation emission has been updated \[new\]
-		BackupNodeInflationEmissionsUpdated(u32),
 		/// SupplyUpdateInterval has been updated [block_number]
 		SupplyUpdateIntervalUpdated(BlockNumberFor<T>),
-		/// Rewards have been distributed to [account_id] \[amount\]
-		BackupRewardsDistributed { account_id: T::AccountId, amount: T::FlipBalance },
 		/// The Flip that was bought using the network fee has been burned.
 		NetworkFeeBurned { amount: AssetAmount, egress_id: EgressId },
 		/// The Flip burn was skipped.
@@ -230,19 +219,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Updates the emission rate to Backup nodes.
-		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::update_backup_node_emission_inflation())]
-		pub fn update_backup_node_emission_inflation(
-			origin: OriginFor<T>,
-			inflation: u32,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			BackupNodeEmissionInflation::<T>::set(inflation);
-			Self::deposit_event(Event::<T>::BackupNodeInflationEmissionsUpdated(inflation));
-			Ok(())
-		}
-
 		/// Updates the Supply Update interval.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::update_supply_update_interval())]
@@ -261,17 +237,15 @@ pub mod pallet {
 	#[derive(DefaultNoBound)]
 	pub struct GenesisConfig<T> {
 		pub current_authority_emission_inflation: u32,
-		pub backup_node_emission_inflation: u32,
 		pub supply_update_interval: u32,
 		pub _phantom: PhantomData<T>,
 	}
 
-	/// At genesis we need to set the inflation rates for active and backup validators.
+	/// At genesis we need to set the inflation rates for active validators.
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			CurrentAuthorityEmissionInflation::<T>::put(self.current_authority_emission_inflation);
-			BackupNodeEmissionInflation::<T>::put(self.backup_node_emission_inflation);
 			SupplyUpdateInterval::<T>::put(BlockNumberFor::<T>::from(self.supply_update_interval));
 			<Pallet<T> as BlockEmissions>::calculate_block_emissions();
 		}
@@ -333,27 +307,11 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> BackupRewardsNotifier for Pallet<T> {
-	type Balance = T::FlipBalance;
-	type AccountId = T::AccountId;
-
-	fn emit_event(account_id: &Self::AccountId, amount: Self::Balance) {
-		Self::deposit_event(Event::BackupRewardsDistributed {
-			account_id: account_id.clone(),
-			amount,
-		});
-	}
-}
-
 impl<T: Config> BlockEmissions for Pallet<T> {
 	type Balance = T::FlipBalance;
 
 	fn update_authority_block_emission(emission: Self::Balance) {
 		CurrentAuthorityEmissionPerBlock::<T>::put(emission);
-	}
-
-	fn update_backup_node_block_emission(emission: Self::Balance) {
-		BackupNodeEmissionPerBlock::<T>::put(emission);
 	}
 
 	fn calculate_block_emissions() {
@@ -367,10 +325,6 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 
 		Self::update_authority_block_emission(inflation_to_block_reward::<T>(
 			CurrentAuthorityEmissionInflation::<T>::get(),
-		));
-
-		Self::update_backup_node_block_emission(inflation_to_block_reward::<T>(
-			BackupNodeEmissionInflation::<T>::get(),
 		));
 	}
 }

@@ -251,8 +251,7 @@ impl FlipOperation {
 				let new_offchain_funds = OffchainFunds::<Test>::get();
 				if new_offchain_funds != previous_offchain_funds.saturating_sub(*amount) ||
 					new_balance !=
-						(previous_balance + (previous_offchain_funds - new_offchain_funds)) ||
-					!MockOnAccountFunded::has_account_been_funded(account_id)
+						(previous_balance + (previous_offchain_funds - new_offchain_funds))
 				{
 					return false
 				}
@@ -290,9 +289,6 @@ impl FlipOperation {
 				);
 				<Flip as Funding>::finalize_redemption(account_id)
 					.expect("Pending Redemption should exist");
-				if !MockOnAccountFunded::has_account_been_funded(account_id) {
-					return false
-				}
 			},
 			FlipOperation::SlashAccount(account_id, slashing_rate, bond, mint, blocks) => {
 				// Mint some Flip for testing - 100 is not enough and unrealistic for this use case

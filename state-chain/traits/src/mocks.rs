@@ -49,7 +49,6 @@ pub mod key_rotator;
 pub mod lending_pools;
 pub mod liability_tracker;
 pub mod offence_reporting;
-pub mod on_account_funded;
 pub mod pool_api;
 pub mod pool_price_api;
 pub mod price_feed_api;

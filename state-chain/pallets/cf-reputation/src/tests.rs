@@ -18,7 +18,7 @@ use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 
 use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, offence_reporting::*,
-	AccountRoleRegistry, EpochInfo, QualifyNode, SafeMode, SetSafeMode,
+	AccountRoleRegistry, EpochInfo, QualifyNode, SetSafeMode,
 };
 
 use crate::{mock::*, *};
@@ -323,21 +323,6 @@ fn dont_report_in_safe_mode() {
 		});
 		ReputationPallet::report(AllOffences::NotLockingYourComputer, marcello);
 		assert!(ReputationPallet::reputation(marcello).reputation_points < 0);
-	});
-}
-
-#[test]
-fn heartbeats_emitted_in_safe_mode() {
-	new_test_ext().execute_with(|| {
-		assert_eq!(MockHeartbeat::heartbeats(), 0);
-
-		// enable safe mode (disable reporting)
-		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
-			reputation: crate::PalletSafeMode::CODE_RED,
-		});
-		advance_by_heartbeat_intervals(1);
-
-		assert_eq!(MockHeartbeat::heartbeats(), 1);
 	});
 }
 
