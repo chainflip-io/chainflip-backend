@@ -1423,16 +1423,26 @@ impl<T: Config> Pallet<T> {
 			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 		});
 
-		// TODO: Handle delegator bonding through snapshots
-		let delegators: BTreeSet<T::AccountId> = BTreeSet::new();
+		// Bond delegators based on the snapshots
+		let outgoing_delegators = DelegationSnapshots::<T>::iter_prefix(new_epoch - 1)
+			.flat_map(|(_, snapshot)| snapshot.delegators.keys().cloned().collect::<Vec<_>>())
+			.collect::<BTreeSet<_>>();
+		let new_delegator_bids = DelegationSnapshots::<T>::iter_prefix(new_epoch)
+			.flat_map(|(_, snapshot)| snapshot.delegators)
+			.collect::<BTreeMap<_, _>>();
 
-		for delegator in &delegators {
-			T::Bonder::update_bond(
-				&delegator.clone().into(),
-				MaxDelegationBid::<T>::get(delegator)
-					.map(|max_bid| max_bid.min(T::FundingInfo::total_balance_of(delegator)))
-					.unwrap_or(T::FundingInfo::total_balance_of(delegator)),
-			);
+		for outgoing_delegator in outgoing_delegators {
+			if !new_delegator_bids.contains_key(&outgoing_delegator) {
+				T::Bonder::update_bond(&outgoing_delegator.clone().into(), T::Amount::from(0_u128));
+				Self::deposit_event(Event::UnDelegationFinalized {
+					delegator: outgoing_delegator.clone(),
+					epoch: new_epoch,
+				});
+			}
+		}
+
+		for (delegator, bid) in new_delegator_bids {
+			T::Bonder::update_bond(&delegator.clone().into(), bid);
 		}
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());

@@ -1946,27 +1946,44 @@ mod delegation {
 				assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// After authority rotation starts, delegation snapshots should be stored
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				for &delegator in &DELEGATORS {
+					let snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR);
+					assert!(snapshot.is_some());
+					let snapshot = snapshot.unwrap();
+					assert!(snapshot.delegators.contains_key(&delegator));
+				}
 				MockKeyRotatorA::keygen_success();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// During key handover, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
 				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
 				MockKeyRotatorA::key_handover_success();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// During key activation, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
 				assert_rotation_phase_matches!(RotationPhase::<Test>::ActivatingKeys(..));
 				MockKeyRotatorA::keys_activated();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// During session rotation, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
 				assert_rotation_phase_matches!(RotationPhase::SessionRotating(..));
 			})
 			.then_execute_at_next_block(|_| {
-				assert!(NextDelegators::<Test>::get().is_empty());
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				let active_delegators = CurrentEpochDelegations::<Test>::get();
+				// After rotation is complete, check snapshots are stored for current epoch
+				let current_epoch = ValidatorPallet::epoch_index();
+				let snapshot = DelegationSnapshots::<Test>::get(current_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+				let active_delegators: BTreeSet<u64> = snapshot.delegators.keys().cloned().collect();
 				assert_eq!(BTreeSet::from_iter(DELEGATORS), active_delegators);
 				for delegator in active_delegators {
 					if delegator % 2 == 0 {
@@ -2002,7 +2019,8 @@ mod delegation {
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {
 						assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(*delegator)));
-						assert!(OutgoingDelegators::<Test>::get().contains(delegator));
+						// Delegation choice should be removed after undelegation
+						assert!(DelegationChoice::<Test>::get(delegator).is_none());
 					}
 				}
 			})
@@ -2044,7 +2062,12 @@ mod delegation {
 			})
 			.then_execute_at_next_block(|_| {
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				assert!(CurrentEpochDelegations::<Test>::get().len() == 2);
+				// Only 2 delegators should remain (those that didn't undelegate)
+				let current_epoch = ValidatorPallet::epoch_index();
+				let snapshot = DelegationSnapshots::<Test>::get(current_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+				assert!(snapshot.delegators.len() == 2);
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {
 						assert_eq!(MockBonderFor::<Test>::get_bond(delegator), 0);
