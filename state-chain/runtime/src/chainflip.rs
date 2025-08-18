@@ -31,10 +31,16 @@ pub mod bitcoin_block_processor;
 #[macro_use]
 pub mod elections;
 pub mod bitcoin_elections;
+pub mod ethereum_sc_calls;
+pub mod generic_elections;
 pub mod solana_elections;
 pub mod vault_swaps;
 
 use crate::{
+	chainflip::{
+		elections::TypesFor,
+		generic_elections::{decode_and_get_latest_oracle_price, Chainlink},
+	},
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
 	ArbitrumIngressEgress, AssethubBroadcaster, AssethubChainTracking, AssethubIngressEgress,
 	Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber,
@@ -97,8 +103,8 @@ use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster,
 	DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, Heartbeat,
-	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode,
-	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
+	IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, OraclePrice,
+	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
 
 use codec::{Decode, Encode};
@@ -1189,5 +1195,12 @@ impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
 				});
 			},
 		}
+	}
+}
+
+pub struct ChainlinkOracle;
+impl cf_traits::PriceFeedApi for ChainlinkOracle {
+	fn get_price(asset: assets::any::Asset) -> Option<OraclePrice> {
+		decode_and_get_latest_oracle_price::<TypesFor<Chainlink>>(asset)
 	}
 }

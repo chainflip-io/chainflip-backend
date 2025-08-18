@@ -29,7 +29,7 @@ use itertools::Itertools;
 pub async fn get_finalized_fee_and_success_status(
 	sol_client: &SolRetryRpcClient,
 	signature: SolSignature,
-) -> Result<(u64, bool)> {
+) -> Result<Option<(u64, bool)>> {
 	match sol_client
 		.get_signature_statuses(&[signature])
 		.await
@@ -61,22 +61,28 @@ pub async fn get_finalized_fee_and_success_status(
 				.meta;
 
 			Ok(match transaction_meta {
-				Some(meta) => (meta.fee, meta.err.is_none()),
+				Some(meta) => Some((meta.fee, meta.err.is_none())),
 				// This shouldn't happen. We want to avoid Erroring.
 				// Therefore we return default value (5000, true) so we don't submit
 				// transaction_succeeded and retry again later. Also avoids potentially getting
 				// stuck not witness something because no meta is returned.
-				None => (LAMPORTS_PER_SIGNATURE, true),
+				None => Some((LAMPORTS_PER_SIGNATURE, true)),
 			})
 		},
-		Some(TransactionStatus { confirmation_status: other_status, .. }) => Err(anyhow::anyhow!(
-			"Transaction status is {:?}, waiting for {:?}.",
-			other_status,
-			TransactionConfirmationStatus::Finalized
-		)),
-		// TODO: Consider distinguishing this case as `Ok(None)` to indicate that the
-		// request returned a response, but the tx is not available yet.
-		None => Err(anyhow::anyhow!("Unknown Transaction.")),
+		Some(TransactionStatus { confirmation_status: other_status, .. }) => {
+			tracing::debug!(
+				"Transaction({:?}) status is {:?}, waiting for {:?}.",
+				signature,
+				other_status,
+				TransactionConfirmationStatus::Finalized
+			);
+			Ok(None)
+		},
+		None => {
+			// The request returned a response, but the the tx is not available yet.
+			tracing::debug!("Unknown Transaction ({signature:?})");
+			Ok(None)
+		},
 	}
 }
 
@@ -117,7 +123,7 @@ mod tests {
 					SolSignature::from_str(
 						"4udChXyRXrqBxUTr9F3nbTcPyvteLJtFQ3wM35J53NdP4GWwUp2wBwdTJEYs2aiNz7DyCqitok6ci7qqHPkRByb2").unwrap();
 
-				let (fee, tx_successful) = get_finalized_fee_and_success_status(&client, monitored_tx_signature).await.unwrap();
+				let (fee, tx_successful) = get_finalized_fee_and_success_status(&client, monitored_tx_signature).await.unwrap().unwrap();
 
 				println!("{:?}", (fee, tx_successful));
 				assert_eq!(fee, LAMPORTS_PER_SIGNATURE);

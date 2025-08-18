@@ -6,6 +6,7 @@ import {
   chainFromAsset,
   EgressId,
   getEvmEndpoint,
+  getEvmWhaleKeypair,
   getSolConnection,
   observeCcmReceived,
   observeSwapRequested,
@@ -15,7 +16,7 @@ import {
 } from 'shared/utils';
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
-import { estimateCcmCfTesterGas, spamEvm } from 'shared/send_evm';
+import { estimateCcmCfTesterGas, signAndSendTxEvm } from 'shared/send_evm';
 import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
 import { CcmDepositMetadata } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
@@ -84,6 +85,17 @@ async function getChainFees(logger: Logger, chain: Chain) {
       throw new Error(`Chain ${chain} is not supported for CCM`);
   }
   return { baseFee, priorityFee };
+}
+
+async function spamEvm(logger: Logger, chain: Chain, periodMilliSec: number, spam?: () => boolean) {
+  const continueSpam = spam ?? (() => true);
+  const { pubkey: whalePubkey } = getEvmWhaleKeypair('Ethereum');
+
+  while (continueSpam()) {
+    /* eslint-disable @typescript-eslint/no-floating-promises */
+    signAndSendTxEvm(logger, chain, whalePubkey, '1', undefined, undefined);
+    await sleep(periodMilliSec);
+  }
 }
 
 async function executeAndTrackCcmSwap(

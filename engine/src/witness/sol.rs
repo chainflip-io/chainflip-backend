@@ -17,7 +17,7 @@
 mod egress_witnessing;
 mod lookup_table_witnessing;
 mod nonce_witnessing;
-mod oracle_witnessing;
+pub mod oracle_witnessing;
 mod sol_deposits;
 mod vault_swaps_witnessing;
 use crate::{
@@ -144,11 +144,12 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 	) -> Result<Option<VoteOf<SolanaEgressWitnessing>>, anyhow::Error> {
 		egress_witnessing::get_finalized_fee_and_success_status(&self.client, signature)
 			.await
-			.map(|(tx_fee, transaction_successful)| TransactionSuccessDetails {
-				tx_fee,
-				transaction_successful,
+			.map(|opt| {
+				opt.map(|(tx_fee, transaction_successful)| TransactionSuccessDetails {
+					tx_fee,
+					transaction_successful,
+				})
 			})
-			.map(Option::Some)
 	}
 }
 

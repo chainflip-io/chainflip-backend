@@ -26,7 +26,7 @@ use crate::{
 use cf_chains::{
 	address::EncodedAddress,
 	btc::vault_swap_encoding::{
-		encode_swap_params_in_nulldata_payload, BtcCfParameters, UtxoEncodedData,
+		encode_swap_params_in_nulldata_payload, BtcCfParametersV1, UtxoEncodedData,
 	},
 	ccm_checker::{check_ccm_for_blacklisted_accounts, DecodedCcmAdditionalData},
 	cf_parameters::build_and_encode_cf_parameters,
@@ -104,6 +104,7 @@ pub fn bitcoin_vault_swap(
 	boost_fee: u8,
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
+	max_oracle_price_slippage: Option<u8>,
 ) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
 	let private_channel_id =
 		pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&broker_id)
@@ -111,7 +112,7 @@ pub fn bitcoin_vault_swap(
 	let params = UtxoEncodedData {
 		output_asset: destination_asset,
 		output_address: destination_address,
-		parameters: BtcCfParameters {
+		parameters: BtcCfParametersV1 {
 			retry_duration: retry_duration
 				.try_into()
 				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong)?,
@@ -135,6 +136,7 @@ pub fn bitcoin_vault_swap(
 			affiliates: to_affiliate_and_fees(&broker_id, affiliate_fees)?
 				.try_into()
 				.map_err(|_| "Too many affiliates.")?,
+			max_oracle_price_slippage: max_oracle_price_slippage.unwrap_or(u8::MAX),
 		},
 	};
 
@@ -385,7 +387,7 @@ pub fn decode_bitcoin_vault_swap(
 		output_asset,
 		output_address,
 		parameters:
-			BtcCfParameters {
+			BtcCfParametersV1 {
 				retry_duration,
 				min_output_amount,
 				number_of_chunks,
@@ -393,6 +395,7 @@ pub fn decode_bitcoin_vault_swap(
 				boost_fee,
 				broker_fee,
 				affiliates,
+				max_oracle_price_slippage,
 			},
 	} = UtxoEncodedData::decode(&mut &nulldata_payload[..])
 		.map_err(|_| "Failed to decode Bitcoin Null data Payload")?;
@@ -405,6 +408,7 @@ pub fn decode_bitcoin_vault_swap(
 		extra_parameters: VaultSwapExtraParameters::Bitcoin {
 			min_output_amount,
 			retry_duration: retry_duration.into(),
+			max_oracle_price_slippage: Some(max_oracle_price_slippage),
 		},
 		channel_metadata: None,
 		boost_fee: boost_fee.into(),

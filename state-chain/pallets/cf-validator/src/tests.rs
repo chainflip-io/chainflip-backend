@@ -42,6 +42,9 @@ const ALICE: u64 = 100;
 const BOB: u64 = 101;
 const GENESIS_EPOCH: u32 = 1;
 
+const OPERATOR_SETTINGS: OperatorSettings =
+	OperatorSettings { fee_bps: 250, delegation_acceptance: DelegationAcceptance::Allow };
+
 fn assert_epoch_index(n: EpochIndex) {
 	assert_eq!(
 		ValidatorPallet::epoch_index(),
@@ -1570,26 +1573,92 @@ mod operator {
 	use cf_test_utilities::assert_has_event;
 
 	use super::*;
-	use crate::DelegationAcceptance;
 
 	#[test]
-	fn can_allow_and_block_delegator() {
+	fn can_add_and_block_delegator_list_with_allow_default() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
-			// Allow BOB
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Allow,
+				},
+			));
+			// Allow BOB (*not* an exception since allow is the default)
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
-			assert!(AllowedDelegators::<Test>::get(ALICE).contains(&BOB));
-			// Explicit block BOB
+			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+			assert_eq!(DelegationChoice::<Test>::get(BOB), Some(ALICE));
+
+			// Block BOB
 			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
-			assert!(!AllowedDelegators::<Test>::get(ALICE).contains(&BOB));
-			assert!(BlockedDelegators::<Test>::get(ALICE).contains(&BOB));
-			// Explicit allow BOB again
+			assert!(Exceptions::<Test>::get(ALICE).contains(&BOB));
+			assert!(DelegationChoice::<Test>::get(BOB).is_none());
+
+			// Allow BOB again
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
-			assert!(AllowedDelegators::<Test>::get(ALICE).contains(&BOB));
-			assert!(!BlockedDelegators::<Test>::get(ALICE).contains(&BOB));
+			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::ValidatorPallet(Event::DelegatorAllowed {
+					operator: ALICE,
+					delegator: BOB,
+				}),
+				RuntimeEvent::ValidatorPallet(Event::Delegated { operator: ALICE, delegator: BOB }),
+				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+					operator: ALICE,
+					delegator: BOB,
+				}),
+				RuntimeEvent::ValidatorPallet(Event::DelegatorBlocked {
+					operator: ALICE,
+					delegator: BOB,
+				}),
+				RuntimeEvent::ValidatorPallet(Event::DelegatorAllowed {
+					operator: ALICE,
+					delegator: BOB,
+				}),
+			);
+		});
+	}
+
+	#[test]
+	fn can_allow_and_block_delegator_list_with_deny_default() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Deny,
+				},
+			));
+
+			// BOB cannot delegate by default (not in exceptions list, deny is default)
+			assert_noop!(
+				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
+				Error::<Test>::DelegatorBlocked
+			);
+			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
+			assert!(DelegationChoice::<Test>::get(BOB).is_none());
+
+			// Allow BOB (add to exceptions list to override deny default)
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
+			assert!(Exceptions::<Test>::get(ALICE).contains(&BOB));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+			assert_eq!(DelegationChoice::<Test>::get(BOB), Some(ALICE));
+
+			// Block BOB again (remove from exceptions list, back to deny default)
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
+			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
+			assert!(DelegationChoice::<Test>::get(BOB).is_none());
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::DelegatorAllowed {
+					operator: ALICE,
+					delegator: BOB,
+				}),
+				RuntimeEvent::ValidatorPallet(Event::Delegated { operator: ALICE, delegator: BOB }),
+				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
 					operator: ALICE,
 					delegator: BOB,
 				}),
@@ -1600,24 +1669,24 @@ mod operator {
 			);
 		});
 	}
+
 	#[test]
-	fn can_set_delegation_preferences() {
+	fn can_update_operator_settings() {
 		new_test_ext().execute_with(|| {
-			const PREFERENCES: OperatorSettings = OperatorSettings {
-				fee_bps: 100,
-				delegation_acceptance: DelegationAcceptance::Allow,
-			};
-			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
-			assert_ok!(ValidatorPallet::set_delegation_preferences(
+			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
-				PREFERENCES
+				OPERATOR_SETTINGS
 			));
-			assert_eq!(OperatorSettingsLookup::<Test>::get(ALICE), Some(PREFERENCES));
+			assert_ok!(ValidatorPallet::update_operator_settings(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS
+			));
+			assert_eq!(OperatorSettingsLookup::<Test>::get(ALICE), Some(OPERATOR_SETTINGS));
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::ValidatorPallet(Event::OperatorSettingsUpdated {
 					operator: ALICE,
-					preferences: PREFERENCES,
+					preferences: OPERATOR_SETTINGS,
 				}),
 			);
 		});
@@ -1630,8 +1699,14 @@ mod operator {
 		const V_2: u64 = 2002;
 
 		new_test_ext().execute_with(|| {
-			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(OP_1)));
-			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(OP_2)));
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(OP_1),
+				OPERATOR_SETTINGS,
+			));
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(OP_2),
+				OPERATOR_SETTINGS,
+			));
 			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(V_1),));
 			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(V_2),));
 
@@ -1701,7 +1776,10 @@ mod operator {
 	#[test]
 	fn can_not_deregister_if_their_are_still_validators_associated() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(ValidatorPallet::register_as_operator(OriginTrait::signed(ALICE)));
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS
+			));
 			ManagedValidators::<Test>::insert(BOB, ALICE);
 			assert_noop!(
 				ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)),
@@ -1709,6 +1787,288 @@ mod operator {
 			);
 			assert_ok!(ValidatorPallet::remove_validator(OriginTrait::signed(ALICE), BOB));
 			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)));
+		});
+	}
+
+	#[test]
+	fn exceptions_list_is_reset_when_operator_settings_are_updated() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS
+			));
+
+			Exceptions::<Test>::insert(ALICE, vec![BOB].into_iter().collect::<BTreeSet<_>>());
+			assert_ok!(ValidatorPallet::update_operator_settings(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: 300,
+					delegation_acceptance: DelegationAcceptance::Deny,
+				}
+			));
+			assert!(Exceptions::<Test>::get(ALICE).is_empty());
+		});
+	}
+}
+
+#[cfg(test)]
+mod delegation {
+	use super::*;
+
+	#[test]
+	fn can_delegate() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+			assert_ok!(ValidatorPallet::update_operator_settings(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(ALICE), BOB));
+			assert_eq!(DelegationChoice::<Test>::get(ALICE), Some(BOB));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::OperatorSettingsUpdated {
+					operator: BOB,
+					preferences: OPERATOR_SETTINGS,
+				}),
+				RuntimeEvent::ValidatorPallet(Event::Delegated { delegator: ALICE, operator: BOB }),
+			);
+		});
+	}
+
+	#[test]
+	fn can_undelegate() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(
+				ValidatorPallet::undelegate(OriginTrait::signed(ALICE)),
+				Error::<Test>::AccountIsNotDelegating
+			);
+			DelegationChoice::<Test>::insert(ALICE, BOB);
+			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(ALICE)));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+					delegator: ALICE,
+					operator: BOB
+				}),
+			);
+		});
+	}
+
+	#[test]
+	fn can_not_delegate_if_account_is_blocked() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Deny
+				},
+			));
+			assert_noop!(
+				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
+				Error::<Test>::DelegatorBlocked
+			);
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),);
+		});
+	}
+
+	#[test]
+	fn can_not_delegate_if_account_is_not_whitelisted() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Allow
+				},
+			));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
+
+			assert_noop!(
+				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
+				Error::<Test>::DelegatorBlocked
+			);
+		});
+	}
+
+	// This is a general verification that should test the overall happy path of the auction
+	// resolution and the rotation to the next epoch. This test accounts the following things:
+	//
+	// - The right calculation of the bond
+	// - The respect of the MAX_BID if set
+	// - The undelegation and unbond of a delegator that wants to leave
+	// - The increase of the MAB through delegated capital
+	//
+	// In this test we run in total 2 auctions and 2 rotations.
+	#[test]
+	fn delegations_are_getting_used_in_auction_to_increase_mab() {
+		const OPERATOR: u64 = 123;
+		const AVAILABLE_BALANCE_OF_DELEGATOR: u128 = 20;
+		const MAX_BID_OF_DELEGATOR: u128 = 10;
+		const DELEGATORS: [u64; 4] = [21, 22, 23, 24];
+
+		new_test_ext()
+			.then_execute_with_checks(|| {
+				assert_ok!(ValidatorPallet::register_as_operator(
+					OriginTrait::signed(OPERATOR),
+					OperatorSettings {
+						fee_bps: MIN_OPERATOR_FEE,
+						delegation_acceptance: DelegationAcceptance::Allow
+					},
+				));
+
+				for delegator in DELEGATORS {
+					assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(delegator), OPERATOR));
+					MockFlip::credit_funds(&delegator, AVAILABLE_BALANCE_OF_DELEGATOR);
+					if delegator % 2 == 0 {
+						assert_ok!(ValidatorPallet::set_max_bid(
+							OriginTrait::signed(delegator),
+							Some(MAX_BID_OF_DELEGATOR),
+						));
+					}
+				}
+
+				for bid in WINNING_BIDS {
+					assert_ok!(ValidatorPallet::claim_validator(
+						OriginTrait::signed(OPERATOR),
+						bid.bidder_id
+					));
+					assert_ok!(ValidatorPallet::accept_operator(
+						OriginTrait::signed(bid.bidder_id),
+						OPERATOR
+					));
+					assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+				}
+
+				set_default_test_bids();
+
+				ValidatorPallet::start_authority_rotation();
+				assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+			})
+			.then_execute_at_next_block(|_| {
+				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				MockKeyRotatorA::keygen_success();
+			})
+			.then_execute_at_next_block(|_| {
+				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
+				MockKeyRotatorA::key_handover_success();
+			})
+			.then_execute_at_next_block(|_| {
+				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				assert_rotation_phase_matches!(RotationPhase::<Test>::ActivatingKeys(..));
+				MockKeyRotatorA::keys_activated();
+			})
+			.then_execute_at_next_block(|_| {
+				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				assert_rotation_phase_matches!(RotationPhase::SessionRotating(..));
+			})
+			.then_execute_at_next_block(|_| {
+				assert!(NextDelegators::<Test>::get().is_empty());
+				assert_rotation_phase_matches!(RotationPhase::Idle);
+				let active_delegators = CurrentEpochDelegations::<Test>::get();
+				assert_eq!(BTreeSet::from_iter(DELEGATORS), active_delegators);
+				for delegator in active_delegators {
+					if delegator % 2 == 0 {
+						assert_eq!(
+							MockBonderFor::<Test>::get_bond(&delegator),
+							MAX_BID_OF_DELEGATOR
+						);
+					} else {
+						assert_eq!(
+							MockBonderFor::<Test>::get_bond(&delegator),
+							AVAILABLE_BALANCE_OF_DELEGATOR
+						);
+					}
+				}
+				assert_eq!(
+					Bond::<Test>::get(),
+					(WINNING_BIDS.iter().map(|bid| bid.amount).sum::<u128>() +
+						DELEGATORS
+							.iter()
+							.map(|delegator| {
+								// 50% of validators have set a max bid
+								if delegator % 2 == 0 {
+									MAX_BID_OF_DELEGATOR
+								} else {
+									AVAILABLE_BALANCE_OF_DELEGATOR
+								}
+							})
+							.sum::<u128>()) / WINNING_BIDS.len() as u128
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				// Signal undelegating for 50% of delegators
+				for delegator in &DELEGATORS {
+					if delegator % 2 == 0 {
+						assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(*delegator)));
+						assert!(OutgoingDelegators::<Test>::get().contains(delegator));
+					}
+				}
+			})
+			.then_execute_at_next_block(|_| {
+				ValidatorPallet::start_authority_rotation();
+				assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+			})
+			.then_execute_at_next_block(|_| {
+				MockKeyRotatorA::keygen_success();
+			})
+			.then_execute_at_next_block(|_| {
+				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
+				MockKeyRotatorA::key_handover_success();
+			})
+			.then_execute_at_next_block(|_| {
+				assert_rotation_phase_matches!(RotationPhase::<Test>::ActivatingKeys(..));
+				MockKeyRotatorA::keys_activated();
+			})
+			.then_execute_at_next_block(|_| {
+				assert_rotation_phase_matches!(RotationPhase::SessionRotating(..));
+			})
+			.then_execute_at_next_block(|_| {
+				assert_rotation_phase_matches!(RotationPhase::Idle);
+				assert_eq!(
+					Bond::<Test>::get(),
+					(WINNING_BIDS.iter().map(|bid| bid.amount).sum::<u128>() +
+						DELEGATORS
+							.iter()
+							.map(|delegator| {
+								// 50% has undelegated and are out
+								if delegator % 2 == 0 {
+									0
+								} else {
+									AVAILABLE_BALANCE_OF_DELEGATOR
+								}
+							})
+							.sum::<u128>()) / WINNING_BIDS.len() as u128
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				assert_rotation_phase_matches!(RotationPhase::Idle);
+				assert!(CurrentEpochDelegations::<Test>::get().len() == 2);
+				for delegator in &DELEGATORS {
+					if delegator % 2 == 0 {
+						assert_eq!(MockBonderFor::<Test>::get_bond(delegator), 0);
+					} else {
+						assert_eq!(
+							MockBonderFor::<Test>::get_bond(delegator),
+							AVAILABLE_BALANCE_OF_DELEGATOR
+						);
+					}
+				}
+			});
+	}
+
+	#[test]
+	fn can_update_max_bid() {
+		new_test_ext().execute_with(|| {
+			MockFlip::credit_funds(&BOB, 200);
+			assert_ok!(ValidatorPallet::set_max_bid(OriginTrait::signed(BOB), Some(100)));
 		});
 	}
 }

@@ -65,11 +65,14 @@ pub trait WeightInfo {
 	fn claim_validator() -> Weight;
 	fn accept_operator() -> Weight;
 	fn remove_validator() -> Weight;
-	fn set_delegation_preferences() -> Weight;
+	fn update_operator_settings() -> Weight;
 	fn block_delegator() -> Weight;
 	fn allow_delegator() -> Weight;
 	fn register_as_operator() -> Weight;
 	fn deregister_as_operator() -> Weight;
+	fn delegate() -> Weight;
+	fn undelegate() -> Weight;
+	fn set_max_bid() -> Weight;
 }
 
 /// Weights for pallet_cf_validator using the Substrate node and recommended hardware.
@@ -439,7 +442,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	fn remove_validator() -> Weight {
 		Weight::from_parts(0, 0)
 	}
-	fn set_delegation_preferences() -> Weight {
+	fn update_operator_settings() -> Weight {
 		Weight::from_parts(0, 0)
 	}
 	fn block_delegator() -> Weight {
@@ -452,6 +455,15 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(0, 0)
 	}
 	fn deregister_as_operator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn delegate() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn undelegate() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn set_max_bid() -> Weight {
 		Weight::from_parts(0, 0)
 	}
 }
@@ -824,7 +836,7 @@ impl WeightInfo for () {
 		Weight::from_parts(0, 0)
 	}
 
-	fn set_delegation_preferences() -> Weight {
+	fn update_operator_settings() -> Weight {
 		Weight::from_parts(0, 0)
 	}
 	fn block_delegator() -> Weight {
@@ -838,6 +850,15 @@ impl WeightInfo for () {
 		Weight::from_parts(0, 0)
 	}
 	fn deregister_as_operator() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn delegate() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn undelegate() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+	fn set_max_bid() -> Weight {
 		Weight::from_parts(0, 0)
 	}
 }

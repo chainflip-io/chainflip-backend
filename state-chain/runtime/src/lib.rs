@@ -32,13 +32,12 @@ use crate::{
 		address_derivation::btc::{
 			derive_btc_vault_deposit_addresses, BitcoinPrivateBrokerDepositAddresses,
 		},
-		bitcoin_elections::BitcoinElectoralEvents,
 		calculate_account_apy,
 		solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
 			SolanaNonceTrackingTrigger,
 		},
-		Offence,
+		EvmLimit, Offence,
 	},
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
@@ -51,8 +50,8 @@ use crate::{
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
 		NetworkFeeDetails, NetworkFees, OpenedDepositChannels, OperatorInfo, RuntimeApiPenalty,
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-		TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-		VaultSwapDetails,
+		TradingStrategyLimits, TransactionScreeningEvent, TransactionScreeningEvents,
+		ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -92,28 +91,30 @@ use cf_traits::{
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use frame_support::{derive_impl, instances::*};
+use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
+use pallet_cf_elections::electoral_systems::oracle_price::{
+	chainlink::{get_latest_oracle_prices, OraclePrice},
+	price::PriceAsset,
+};
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::IngressOrEgress;
 use pallet_cf_pools::{
 	AskBidMap, HistoricalEarnedFees, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
+use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 use pallet_cf_swapping::{
 	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, NetworkFeeTracker,
-	Swap,
+	Swap, SwapLegInfo,
 };
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
-use runtime_apis::ChainAccounts;
-
-use crate::{chainflip::EvmLimit, runtime_apis::TransactionScreeningEvent};
-
-use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
-use pallet_cf_swapping::SwapLegInfo;
-use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
+use pallet_cf_validator::{
+	AssociationToOperator, DelegationAcceptance, SetSizeMaximisingAuctionResolver,
+};
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
+use runtime_apis::ChainAccounts;
 use scale_info::prelude::string::String;
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
@@ -177,8 +178,8 @@ pub use pallet_cf_validator::SetSizeParameters;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, multi_vault_activator::MultiVaultActivator,
 	BroadcastReadyProvider, BtcEnvironment, CfCcmAdditionalDataHandler, ChainAddressConverter,
-	ChainflipHeartbeat, DotEnvironment, EvmEnvironment, HubEnvironment, MinimumDepositProvider,
-	SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
+	ChainflipHeartbeat, ChainlinkOracle, DotEnvironment, EvmEnvironment, HubEnvironment,
+	MinimumDepositProvider, SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -348,6 +349,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type PoolPriceApi = LiquidityPools;
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
+	type PriceFeedApi = ChainlinkOracle;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -804,6 +806,7 @@ impl pallet_cf_funding::Config for Runtime {
 	type RegisterRedemption = EthereumApi<EvmEnvironment>;
 	type TimeSource = Timestamp;
 	type RedemptionChecker = Validator;
+	type EthereumSCApi = crate::chainflip::ethereum_sc_calls::EthereumSCApi;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_funding::weights::PalletWeight<Runtime>;
 }
@@ -1150,8 +1153,9 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner = chainflip::solana_elections::SolanaElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
-	type CreateGovernanceElectionHook = chainflip::solana_elections::SolanaGovernanceElectionHook;
-	type ElectoralEvents = ();
+	type ElectoralSystemConfiguration =
+		chainflip::solana_elections::SolanaElectoralSystemConfiguration;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_elections::Config<Instance3> for Runtime {
@@ -1159,8 +1163,18 @@ impl pallet_cf_elections::Config<Instance3> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner = chainflip::bitcoin_elections::BitcoinElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
-	type CreateGovernanceElectionHook = chainflip::bitcoin_elections::BitcoinGovernanceElectionHook;
-	type ElectoralEvents = BitcoinElectoralEvents;
+	type ElectoralSystemConfiguration =
+		chainflip::bitcoin_elections::BitcoinElectoralSystemConfiguration;
+	type SafeMode = RuntimeSafeMode;
+}
+
+impl pallet_cf_elections::Config for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = "GenericElections";
+	type RuntimeEvent = RuntimeEvent;
+	type ElectoralSystemRunner = chainflip::generic_elections::GenericElectoralSystemRunner;
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+	type ElectoralSystemConfiguration = chainflip::generic_elections::GenericElectionHooks;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_trading_strategy::Config for Runtime {
@@ -1315,6 +1329,9 @@ mod runtime {
 
 	#[runtime::pallet_index(54)]
 	pub type BitcoinElections = pallet_cf_elections<Instance3>;
+
+	#[runtime::pallet_index(55)]
+	pub type GenericElections = pallet_cf_elections;
 }
 
 /// The address format for describing accounts.
@@ -1385,6 +1402,7 @@ pub type PalletExecutionOrder = (
 	// Elections
 	SolanaElections,
 	BitcoinElections,
+	GenericElections,
 	// Vaults
 	EthereumVault,
 	PolkadotVault,
@@ -1439,6 +1457,7 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	migrations::bitcoin_elections::Migration,
+	migrations::generic_elections::Migration,
 	MigrationsForV1_11,
 );
 
@@ -1530,7 +1549,16 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV1_11 = (migrations::polkadot_deprecation::PolkadotDeprecationMigration,);
+type MigrationsForV1_11 = (
+  migrations::polkadot_deprecation::PolkadotDeprecationMigration,
+	VersionedMigration<
+		18,
+		19,
+		migrations::safe_mode::SafeModeMigration,
+		pallet_cf_environment::Pallet<Runtime>,
+		<Runtime as frame_system::Config>::DbWeight,
+	>,
+);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
@@ -1586,6 +1614,14 @@ impl_runtime_apis! {
 
 		fn cf_bitcoin_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
 			BitcoinElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+		}
+
+		fn cf_generic_electoral_data(account_id: AccountId) -> Vec<u8> {
+			GenericElections::electoral_data(&account_id).encode()
+		}
+
+		fn cf_generic_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+			GenericElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
 		}
 	}
 
@@ -1696,15 +1732,24 @@ impl_runtime_apis! {
 				apy_bp,
 				restricted_balances,
 				estimated_redeemable_balance,
+				operator: pallet_cf_validator::ManagedValidators::<Runtime>::get(account_id),
 			}
 		}
 
-		fn cf_operator_info(account_id: &AccountId) -> OperatorInfo {
+		fn cf_operator_info(account_id: &AccountId) -> OperatorInfo<FlipBalance> {
+			let settings= pallet_cf_validator::OperatorSettingsLookup::<Runtime>::get(account_id).unwrap_or_default();
+			let exceptions = pallet_cf_validator::Exceptions::<Runtime>::get(account_id).into_iter().collect();
+			let (allowed, blocked) = match &settings.delegation_acceptance {
+				DelegationAcceptance::Allow => (Default::default(), exceptions),
+				DelegationAcceptance::Deny => (exceptions, Default::default()),
+			};
 			OperatorInfo {
-				managed_validators: pallet_cf_validator::Pallet::<Runtime>::get_all_validators_by_operator(account_id),
-				settings: pallet_cf_validator::OperatorSettingsLookup::<Runtime>::get(account_id).unwrap(),
-				blocked_delegators: pallet_cf_validator::BlockedDelegators::<Runtime>::get(account_id).iter().cloned().collect(),
-				allowed_delegators: pallet_cf_validator::AllowedDelegators::<Runtime>::get(account_id).iter().cloned().collect(),
+				managed_validators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(account_id, AssociationToOperator::Validator),
+				settings,
+				allowed,
+				blocked,
+				delegators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(account_id, AssociationToOperator::Delegator),
+				flip_balance: pallet_cf_flip::Account::<Runtime>::get(account_id).total(),
 			}
 		}
 
@@ -1920,6 +1965,7 @@ impl_runtime_apis! {
 						amount_per_chunk,
 						None,
 						fees_vec,
+						Default::default(), // Execution block
 					)
 				],
 			).map_err(|e| match e {
@@ -2206,23 +2252,7 @@ impl_runtime_apis! {
 
 		fn cf_scheduled_swaps(base_asset: Asset, quote_asset: Asset) -> Vec<(SwapLegInfo, BlockNumber)> {
 			assert_eq!(quote_asset, STABLE_ASSET, "Only USDC is supported as quote asset");
-
-			let current_block = System::block_number();
-
-			pallet_cf_swapping::SwapQueue::<Runtime>::iter().flat_map(|(block, swaps_for_block)| {
-				// In case `block` has already passed, the swaps will be re-tried at the next block:
-				let execute_at = core::cmp::max(block, current_block.saturating_add(1));
-
-				let swaps: Vec<_> = swaps_for_block
-					.iter()
-					.filter(|swap| swap.from == base_asset || swap.to == base_asset)
-					.cloned()
-					.collect();
-
-				Swapping::get_scheduled_swap_legs(swaps, base_asset)
-					.into_iter()
-					.map(move |swap| (swap, execute_at))
-			}).collect()
+			Swapping::get_scheduled_swap_legs(base_asset)
 		}
 
 		fn cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
@@ -2387,6 +2417,7 @@ impl_runtime_apis! {
 					VaultSwapExtraParameters::Bitcoin {
 						min_output_amount,
 						retry_duration,
+						max_oracle_price_slippage,
 					}
 				) => {
 					crate::chainflip::vault_swaps::bitcoin_vault_swap(
@@ -2399,6 +2430,7 @@ impl_runtime_apis! {
 						boost_fee,
 						affiliate_fees,
 						dca_parameters,
+						max_oracle_price_slippage,
 					)
 				},
 				(
@@ -2767,6 +2799,14 @@ impl_runtime_apis! {
 				},
 			}
 		}
+
+		fn cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,) -> Vec<OraclePrice> {
+			if let Some(state) = pallet_cf_elections::ElectoralUnsynchronisedState::<Runtime, ()>::get() {
+				get_latest_oracle_prices(&state.0, base_and_quote_asset)
+			} else {
+				vec![]
+			}
+		}
 	}
 
 
@@ -2906,8 +2946,7 @@ impl_runtime_apis! {
 			}
 		}
 		fn cf_pending_swaps_count() -> u32 {
-			let swaps: Vec<_> = pallet_cf_swapping::SwapQueue::<Runtime>::iter().collect();
-			swaps.iter().fold(0u32, |acc, elem| acc + elem.1.len() as u32)
+			pallet_cf_swapping::ScheduledSwaps::<Runtime>::get().len() as u32
 		}
 		fn cf_open_deposit_channels_count() -> OpenDepositChannels {
 			fn open_channels<BlockHeight, I: 'static>() -> u32

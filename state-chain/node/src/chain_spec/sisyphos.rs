@@ -28,10 +28,12 @@ use cf_chains::{
 };
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use cf_utilities::bs58_array;
+use pallet_cf_elections::generic_tools::Array;
 use sc_service::ChainType;
-use sp_core::H256;
+use sp_core::{H160, H256};
 
 use sol_prim::consts::{const_address, const_hash};
+use state_chain_runtime::chainflip::generic_elections::ChainlinkOraclePriceSettings;
 
 pub struct Config;
 
@@ -50,6 +52,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_key_manager_address: hex_literal::hex!("22f5562e6859924Db082b8B248ea0C974f148a17"),
 	eth_vault_address: hex_literal::hex!("a94d6b1853F3cb611Ed3cCb701b4fdA5a9DACe85"),
 	eth_address_checker_address: hex_literal::hex!("26061f315570bddF11D9055411a3d811c5FF0148"),
+	eth_sc_utils_address: hex_literal::hex!("7c08ea651dA70239DA8cb87A5913c3579Ba9F6fE"),
 	arb_key_manager_address: hex_literal::hex!("7EA74208E2954a7294097C731434caD29c5094D8"),
 	arb_vault_address: hex_literal::hex!("8155BdD48CD011e1118b51A1C82be020A3E5c2f2"),
 	arb_usdc_token_address: hex_literal::hex!("75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"),
@@ -366,6 +369,31 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 			const_address("2zMqwgU9xm4foAaHGnYKiWANePwb4bhfYREyU9HSK6Eb"),
 		],
 	),
+	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings {
+		sol_oracle_program_id: const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny"),
+		sol_oracle_feeds: Array {
+			array: [
+				const_address("6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe"),
+				const_address("669U43LNHx7LsVj95uYksnhXUfWKDsdzVqev3V4Jpw3P"),
+				const_address("99B2bTijsU6f1GCT73HmdR7HCFFjGMBcPZY6jZ96ynrR"),
+				const_address("2EmfL3MqL3YHABudGNmajjCpR13NNEn9Y4LWxbDm6SwR"),
+				const_address("8QQSUPtdRTboa4bKyMftVNRfGFsB4Vp9d7r39hGKi53e"),
+			],
+		},
+		sol_oracle_query_helper: const_address("5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX"),
+		eth_address_checker: H160(hex_literal::hex!("26061f315570bddf11d9055411a3d811c5ff0148")),
+		eth_oracle_feeds: Array {
+			array: [
+				H160(hex_literal::hex!("1b44F3514812d835EB1BDB0acB33d3fA3351Ee43")),
+				H160(hex_literal::hex!("694AA1769357215DE4FAC081bf1f309aDC325306")),
+				// There is no SOL price feed in testnet - using ETH instead
+				H160(hex_literal::hex!("694AA1769357215DE4FAC081bf1f309aDC325306")),
+				H160(hex_literal::hex!("A2F78ab2355fe2f984D808B5CeE7FD0A93D5270E")),
+				// There is no USDT price feed in testnet - using USDC instead
+				H160(hex_literal::hex!("A2F78ab2355fe2f984D808B5CeE7FD0A93D5270E")),
+			],
+		},
+	},
 };
 
 pub const BASHFUL_ACCOUNT_ID: &str = "cFLbasoV5juCGacy9LvvwSgkupFiFmwt8RmAuA3xcaY5YmkBe";

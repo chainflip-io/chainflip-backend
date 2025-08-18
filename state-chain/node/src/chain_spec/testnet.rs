@@ -19,9 +19,11 @@ use super::{get_account_id_from_seed, StateChainEnvironment};
 use cf_chains::{dot::RuntimeVersion, sol::SolAddress};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use cf_utilities::bs58_array;
+use pallet_cf_elections::generic_tools::Array;
 use sc_service::ChainType;
 use sol_prim::consts::{const_address, const_hash};
-use sp_core::{sr25519, H256};
+use sp_core::{sr25519, H160, H256};
+use state_chain_runtime::chainflip::generic_elections::ChainlinkOraclePriceSettings;
 
 pub struct Config;
 
@@ -49,6 +51,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arb_vault_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
 	arb_usdc_token_address: hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"),
 	eth_address_checker_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
+	eth_sc_utils_address: hex_literal::hex!("c5a5C42992dECbae36851359345FE25997F5C42d"),
 	arb_address_checker_address: hex_literal::hex!("9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"),
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,
@@ -64,12 +67,12 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
-		"b6584dcb6147e477bd5cc4220677655bb9c9a75e9e84c9007a471c9a60e6507d"
+		"570085b3449b7d267277c3055b6197d59bfdf9c0ce74d31f2286e0f685c31872"
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
 	hub_genesis_hash: H256(hex_literal::hex!(
-		"867145988de37a36dd791716ae7c4757e95aa0ef8f767cc7b4214ffc9cacf58d"
+		"fb173ab171945afba89bc3f964560ce7d870c99ff385c1678622907b523db172"
 	)),
 	hub_vault_account_id: None,
 	hub_runtime_version: RuntimeVersion { spec_version: 1003004, transaction_version: 15 },
@@ -366,6 +369,25 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 			const_address("EFbUq18Mcdi2gGauRzmbNeD5ixaB7EYVk5JZgAF34LoS"),
 		],
 	),
+	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings {
+		sol_oracle_program_id: const_address("DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X"),
+		sol_oracle_feeds: Array {array: [
+			const_address("HDSV2wFxmsrmCwwY34QzaVkvmJpG7VF8S9fX2iThynjG"),
+			const_address("8U3c4SqXaXKPQiarNH3xHXiVoBLYbkqkzusthyJJjGrE"),
+			const_address("CrjmdLxTkmd5bxTQjE82FNgiuxeoY3G4EzzhDJ4RH9Wx"),
+			const_address("7BH1paBwjVDrHTb8YkHcyt7ZfxsCbnBMeByGBH6L8PFk"),
+			const_address("7qdy4DhvG5GDkiGNrsmrMcCyiVNPtmrUmGo3UntcrLwk"),
+		]},
+		sol_oracle_query_helper: const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z"),
+		eth_address_checker: H160(hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512")),
+		eth_oracle_feeds: Array{ array:[
+			H160(hex_literal::hex!("322813Fd9A801c5507c9de605d63CEA4f2CE6c44")),
+			H160(hex_literal::hex!("a85233C63b9Ee964Add6F2cffe00Fd84eb32338f")),
+			H160(hex_literal::hex!("4A679253410272dd5232B3Ff7cF5dbB88f295319")),
+			H160(hex_literal::hex!("7a2088a1bFc9d81c55368AE168C2C02570cB814F")),
+			H160(hex_literal::hex!("09635F643e140090A9A8Dcd712eD6285858ceBef")),
+		]},
+	},
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;

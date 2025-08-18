@@ -26,6 +26,7 @@ pub mod exact_value;
 pub mod liveness;
 pub mod monotonic_change;
 pub mod monotonic_median;
+mod oracle_price;
 pub mod solana_vault_swap_accounts;
 pub mod statemachine_witnessing_pipeline;
 pub mod unsafe_median;

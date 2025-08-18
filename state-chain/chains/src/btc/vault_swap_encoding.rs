@@ -24,13 +24,21 @@ use sp_std::vec::Vec;
 
 // The maximum length of data that can be encoded in a nulldata utxo
 const MAX_NULLDATA_LENGTH: usize = 80;
-const CURRENT_VERSION: u8 = 0;
+
+#[repr(u8)]
+#[derive(Decode)]
+enum SupportedVersions {
+	V0 = 0,
+	V1 = 1,
+}
+
+const CURRENT_VERSION: u8 = SupportedVersions::V1 as u8;
 
 #[derive(Clone, PartialEq, Debug, TypeInfo)]
 pub struct UtxoEncodedData {
 	pub output_asset: Asset,
 	pub output_address: EncodedAddress,
-	pub parameters: BtcCfParameters,
+	pub parameters: BtcCfParametersV1,
 }
 
 impl Encode for UtxoEncodedData {
@@ -62,12 +70,14 @@ impl Decode for UtxoEncodedData {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let version = u8::decode(input)?;
 
-		if version != CURRENT_VERSION {
-			log::warn!(
-				"Unexpected version of utxo encoding: {version} (expected: {CURRENT_VERSION})"
-			);
-			return Err("unexpected version".into());
-		}
+		let version = match version {
+			0 => SupportedVersions::V0,
+			1 => SupportedVersions::V1,
+			invalid_version => {
+				log::warn!("Unexpected version of utxo encoding: {invalid_version}");
+				return Err("unexpected version".into());
+			},
+		};
 
 		let output_asset = Asset::decode(input)?;
 
@@ -80,7 +90,13 @@ impl Decode for UtxoEncodedData {
 			ForeignChain::Assethub => EncodedAddress::Hub(Decode::decode(input)?),
 		};
 
-		let parameters = BtcCfParameters::decode(input)?;
+		let parameters = match version {
+			SupportedVersions::V0 => {
+				let parameters_v0 = old::BtcCfParametersV0::decode(input)?;
+				BtcCfParametersV1::from(parameters_v0)
+			},
+			SupportedVersions::V1 => BtcCfParametersV1::decode(input)?,
+		};
 
 		Ok(UtxoEncodedData { output_asset, output_address, parameters })
 	}
@@ -92,10 +108,11 @@ const MAX_AFFILIATES: u32 = 2;
 
 // The encoding of these parameters is the same across chains
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct BtcCfParameters {
+pub struct BtcCfParametersV1 {
 	// --- FoK fields (refund address is stored externally) ---
 	pub retry_duration: u16,
 	pub min_output_amount: AssetAmount,
+	pub max_oracle_price_slippage: u8,
 	// --- DCA field ---
 	pub number_of_chunks: u16,
 	pub chunk_interval: u16,
@@ -105,6 +122,43 @@ pub struct BtcCfParameters {
 	// Primary's broker fee:
 	pub broker_fee: u8,
 	pub affiliates: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
+}
+
+mod old {
+
+	use super::*;
+
+	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+	pub struct BtcCfParametersV0 {
+		// --- FoK fields (refund address is stored externally) ---
+		pub retry_duration: u16,
+		pub min_output_amount: AssetAmount,
+		// --- DCA field ---
+		pub number_of_chunks: u16,
+		pub chunk_interval: u16,
+		// --- Boost fields ---
+		pub boost_fee: u8,
+		// --- Broker fields ---
+		// Primary's broker fee:
+		pub broker_fee: u8,
+		pub affiliates: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
+	}
+
+	impl From<BtcCfParametersV0> for BtcCfParametersV1 {
+		fn from(params: BtcCfParametersV0) -> Self {
+			Self {
+				retry_duration: params.retry_duration,
+				min_output_amount: params.min_output_amount,
+				number_of_chunks: params.number_of_chunks,
+				chunk_interval: params.chunk_interval,
+				boost_fee: params.boost_fee,
+				broker_fee: params.broker_fee,
+				affiliates: params.affiliates,
+				// u8::MAX is interpreted as no oracle slippage limit
+				max_oracle_price_slippage: u8::MAX,
+			}
+		}
+	}
 }
 
 pub fn encode_swap_params_in_nulldata_payload(params: UtxoEncodedData) -> Vec<u8> {
@@ -119,12 +173,11 @@ mod tests {
 
 	const MOCK_DOT_ADDRESS: [u8; 32] = [9u8; 32];
 
-	#[test]
-	fn check_utxo_encoding() {
-		let mock_swap_params = UtxoEncodedData {
+	fn mock_swap_params() -> UtxoEncodedData {
+		UtxoEncodedData {
 			output_asset: Asset::Dot,
 			output_address: EncodedAddress::Dot(MOCK_DOT_ADDRESS),
-			parameters: BtcCfParameters {
+			parameters: BtcCfParametersV1 {
 				retry_duration: 5,
 				min_output_amount: u128::MAX,
 				number_of_chunks: 0x0ffff,
@@ -135,12 +188,44 @@ mod tests {
 					AffiliateAndFee { affiliate: 6.into(), fee: 7 },
 					AffiliateAndFee { affiliate: 8.into(), fee: 9 }
 				],
+				max_oracle_price_slippage: 45,
 			},
-		};
+		}
+	}
+
+	#[test]
+	fn check_utxo_encoding() {
+		let mock_swap_params = mock_swap_params();
 		// The following encoding is expected for MOCK_SWAP_PARAMS:
 		// (not using "insta" because we want to be precise about how the data
 		// is encoded exactly, rather than simply that the encoding doesn't change)
 		let expected_encoding: Vec<u8> = []
+			.into_iter()
+			.chain([0x01]) // Version
+			.chain([0x04]) // Asset
+			.chain(MOCK_DOT_ADDRESS) // Polkadot address
+			.chain([0x05, 0x00]) // Retry duration
+			.chain([
+				0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+				0xff, 0xff,
+			]) // min output amount
+			.chain([0x2d]) // Oracle price slippage (45 bps)
+			.chain([0xff, 0xff]) // Number of chunks
+			.chain([0x02, 0x00]) // Chunk interval
+			.chain([0x5]) // Boost fee
+			.chain([0xa]) // Broker fee
+			.chain([0x8, 0x6, 0x7, 0x8, 0x9]) // Affiliate fees (1 byte length + 2 bytes per affiliate)
+			.collect();
+
+		assert_eq!(mock_swap_params.encode(), expected_encoding);
+		assert_eq!(expected_encoding.len(), 64);
+
+		assert_eq!(UtxoEncodedData::decode(&mut expected_encoding.as_ref()), Ok(mock_swap_params));
+	}
+
+	#[test]
+	fn can_decode_v0() {
+		let v0_encoded_data: Vec<u8> = []
 			.into_iter()
 			.chain([0x00]) // Version
 			.chain([0x04]) // Asset
@@ -157,9 +242,11 @@ mod tests {
 			.chain([0x8, 0x6, 0x7, 0x8, 0x9]) // Affiliate fees (1 byte length + 2 bytes per affiliate)
 			.collect();
 
-		assert_eq!(mock_swap_params.encode(), expected_encoding);
-		assert_eq!(expected_encoding.len(), 63);
+		let mut swap_param = mock_swap_params();
 
-		assert_eq!(UtxoEncodedData::decode(&mut expected_encoding.as_ref()), Ok(mock_swap_params));
+		// should fall back to using u8::MAX for oracle price slippage:
+		swap_param.parameters.max_oracle_price_slippage = u8::MAX;
+
+		assert_eq!(UtxoEncodedData::decode(&mut v0_encoded_data.as_ref()), Ok(swap_param));
 	}
 }

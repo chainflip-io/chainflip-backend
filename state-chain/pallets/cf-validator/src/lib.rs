@@ -27,6 +27,8 @@ pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
 
+use frame_support::sp_runtime::traits::CheckedDiv;
+
 mod auction_resolver;
 mod benchmarking;
 mod delegation;
@@ -39,6 +41,7 @@ use cf_primitives::{
 	AccountRole, AuthorityCount, CfeCompatibility, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
 	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
 };
+
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AsyncResult,
 	AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
@@ -144,6 +147,14 @@ type BackupMap<T> = BTreeMap<ValidatorIdOf<T>, <T as Chainflip>::Amount>;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	MissedAuthorshipSlot,
+}
+
+#[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
+#[scale_info(skip_type_params(T))]
+pub struct DelegationSnapshot<T: Config> {
+	pub avg_bid: T::Amount,
+	pub delegators: BTreeMap<T::AccountId, T::Amount>,
+	pub validators: BTreeMap<T::AccountId, T::Amount>,
 }
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding_enabled, stop_bidding_enabled);
@@ -348,14 +359,12 @@ pub mod pallet {
 	#[pallet::getter(fn active_bidder)]
 	pub type ActiveBidder<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
-	/// Maps an operator account to it's allowed delegators.
+	/// Maps an operator account to it's exceptions. An exception is a delegator that is excluded
+	/// from the operator's delegation acceptance configuration. If it's set to allow it means the
+	/// delegator is not allowed to delegate if it's in the list of exceptions and vis versa for
+	/// deny.
 	#[pallet::storage]
-	pub type AllowedDelegators<T: Config> =
-		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
-
-	/// Maps an operator account to it's blocked delegators.
-	#[pallet::storage]
-	pub type BlockedDelegators<T: Config> =
+	pub type Exceptions<T: Config> =
 		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
 	/// Maps a managed validator to its operator.
@@ -372,6 +381,29 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type OperatorSettingsLookup<T: Config> =
 		StorageMap<_, Identity, T::AccountId, OperatorSettings, OptionQuery>;
+
+	/// Maps an delegator to an associated operator account.
+	#[pallet::storage]
+	pub type DelegationChoice<T: Config> =
+		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
+
+	///  Holds the list of all delegators that have initiated undelegation and will successfully
+	/// undelegate at the end of the current epoch
+	#[pallet::storage]
+	pub type OutgoingDelegators<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
+
+	#[pallet::storage]
+	pub type MaxDelegationBid<T: Config> =
+		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
+
+	/// Collects all delegation of the current epoch.
+	#[pallet::storage]
+	pub type CurrentEpochDelegations<T: Config> =
+		StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
+
+	/// The set of delegators in the next epoch.
+	#[pallet::storage]
+	pub type NextDelegators<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -411,6 +443,15 @@ pub mod pallet {
 		ValidatorRemovedFromOperator { validator: T::AccountId, operator: T::AccountId },
 		/// Operator settings have been updated.
 		OperatorSettingsUpdated { operator: T::AccountId, preferences: OperatorSettings },
+		/// An account has undelegated from an operator.
+		UnDelegated { delegator: T::AccountId, operator: T::AccountId },
+		/// An account has delegated to an operator.
+		Delegated { delegator: T::AccountId, operator: T::AccountId },
+		/// The undelegation process of an delegator has been finalized.
+		UnDelegationFinalized { delegator: T::AccountId, epoch: EpochIndex },
+		/// The maximum bit of an delegator was updated. If the value is None it means that the
+		/// max_bid has been removed entirly.
+		MaxBidUpdated { delegator: T::AccountId, max_bid: Option<T::Amount> },
 	}
 
 	#[pallet::error]
@@ -457,12 +498,24 @@ pub mod pallet {
 		ValidatorDoesNotExist,
 		/// Not authorized to perform this action.
 		NotAuthorized,
-		/// Operator is still delegating to validators.
+		/// Operator is still associated with validators.
 		StillAssociatedWithValidators,
 		/// The validator is not claimed by any operator.
 		NotClaimedByOperator,
 		/// The provided account id has not the role validator.
 		NotValidator,
+		/// Operator is still being delegated to.
+		StillAssociatedWithDelegators,
+		/// The account is not delegating.
+		AccountIsNotDelegating,
+		/// Delegation is not available to validators or operators.
+		DelegationNotAllowed,
+		/// Can only delegate to accounts that are registered as operators.
+		NotOperator,
+		/// A delegator is either blocked or not explicitly allowed by the operator.
+		DelegatorBlocked,
+		/// The provided Operator fee is too low.
+		OperatorFeeTooLow,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -860,7 +913,7 @@ pub mod pallet {
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::ValidatorWeightInfo::claim_validator())]
 		pub fn claim_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResult {
-			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 			ensure!(
 				!ManagedValidators::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyManagedByOperator
@@ -869,18 +922,15 @@ pub mod pallet {
 				T::AccountRoleRegistry::has_account_role(&validator_id, AccountRole::Validator),
 				Error::<T>::NotValidator
 			);
-			ClaimedValidators::<T>::append(&validator_id, &operator_id);
-			Self::deposit_event(Event::ValidatorClaimed {
-				validator: validator_id,
-				operator: operator_id,
-			});
+			ClaimedValidators::<T>::append(&validator_id, &operator);
+			Self::deposit_event(Event::ValidatorClaimed { validator: validator_id, operator });
 			Ok(())
 		}
 
 		/// Executed by a validator to accept an operator's invitation to manage it.
 		#[pallet::call_index(11)]
 		#[pallet::weight(T::ValidatorWeightInfo::accept_operator())]
-		pub fn accept_operator(origin: OriginFor<T>, operator_id: T::AccountId) -> DispatchResult {
+		pub fn accept_operator(origin: OriginFor<T>, operator: T::AccountId) -> DispatchResult {
 			let validator_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			ensure!(
 				!ManagedValidators::<T>::contains_key(&validator_id),
@@ -888,25 +938,25 @@ pub mod pallet {
 			);
 
 			ClaimedValidators::<T>::try_mutate(&validator_id, |claimed_by| {
-				if claimed_by.remove(&operator_id) {
+				if claimed_by.remove(&operator) {
 					Ok(())
 				} else {
 					Err(Error::<T>::NotClaimedByOperator)
 				}
 			})?;
 
-			ManagedValidators::<T>::insert(&validator_id, &operator_id);
+			ManagedValidators::<T>::insert(&validator_id, &operator);
 
 			Self::deposit_event(Event::OperatorAcceptedByValidator {
 				validator: validator_id,
-				operator: operator_id,
+				operator,
 			});
 
 			Ok(())
 		}
 
 		/// Executed by an operator or a validator to remove the validator from the operator's
-		/// delegation pool.
+		/// delegation association.
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::ValidatorWeightInfo::remove_validator())]
 		pub fn remove_validator(origin: OriginFor<T>, validator: T::AccountId) -> DispatchResult {
@@ -921,64 +971,119 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Executed by an operator to set its delegation preferences.
+		/// Executed by an operator to update its operator settings.
 		#[pallet::call_index(13)]
-		#[pallet::weight(T::ValidatorWeightInfo::set_delegation_preferences())]
-		pub fn set_delegation_preferences(
+		#[pallet::weight(T::ValidatorWeightInfo::update_operator_settings())]
+		pub fn update_operator_settings(
 			origin: OriginFor<T>,
 			preferences: OperatorSettings,
 		) -> DispatchResult {
-			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
-			OperatorSettingsLookup::<T>::insert(&operator_id, preferences.clone());
-			Self::deposit_event(Event::OperatorSettingsUpdated {
-				operator: operator_id,
-				preferences,
-			});
+			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
+
+			ensure!(preferences.fee_bps >= MIN_OPERATOR_FEE, Error::<T>::OperatorFeeTooLow);
+
+			if let Some(current_preferences) = OperatorSettingsLookup::<T>::get(&operator) {
+				if current_preferences.delegation_acceptance != preferences.delegation_acceptance {
+					Exceptions::<T>::remove(&operator);
+				}
+			}
+
+			OperatorSettingsLookup::<T>::insert(&operator, preferences.clone());
+
+			Self::deposit_event(Event::OperatorSettingsUpdated { operator, preferences });
 			Ok(())
 		}
 
-		/// Executed by an operator to block a delegator from delegating to the operator.
+		/// Block a delegator.
+		///
+		/// If the operator is set to allow, the delegator will be added to the
+		/// exceptions list, meaning they are not allowed to delegate to the operator.
+		/// If the operator is set to deny, the delegator will be removed from the
+		/// exceptions list, meaning they are allowed to delegate to the operator.
+		///
+		/// Additionally, if the delegator was previously delegating to the operator,
+		/// it will be undelegated.
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::ValidatorWeightInfo::block_delegator())]
-		pub fn block_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
-			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+		pub fn block_delegator(origin: OriginFor<T>, delegator: T::AccountId) -> DispatchResult {
+			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 
-			// TODO: Check of delegator is currently delegation to this operator and error if so.
+			// If the delegator is currently delegating to this operator, we need to
+			// undelegate them first.
+			let _ =
+				DelegationChoice::<T>::try_mutate_exists(&delegator, |maybe_assigned_operator| {
+					if let Some(assigned_operator) = maybe_assigned_operator.take() {
+						if assigned_operator == operator {
+							Self::deposit_event(Event::UnDelegated {
+								delegator: delegator.clone(),
+								operator: operator.clone(),
+							});
+							Ok(())
+						} else {
+							Err(())
+						}
+					} else {
+						Err(())
+					}
+				});
 
-			AllowedDelegators::<T>::mutate(&operator_id, |delegators| {
-				delegators.remove(&delegator_id);
-			});
+			match OperatorSettingsLookup::<T>::get(&operator)
+				.unwrap_or_default()
+				.delegation_acceptance
+			{
+				DelegationAcceptance::Deny => {
+					// If the operator is set to deny, exceptions are the delegators that are
+					// allowed.
+					Exceptions::<T>::mutate(&operator, |allowed| {
+						allowed.remove(&delegator);
+					});
+				},
+				DelegationAcceptance::Allow => {
+					// If the operator is set to allow, exceptions are the delegators that are
+					// blocked.
+					Exceptions::<T>::mutate(&operator, |blocked| {
+						blocked.insert(delegator.clone());
+					});
+				},
+			}
 
-			BlockedDelegators::<T>::mutate(&operator_id, |delegators| {
-				delegators.insert(delegator_id.clone());
-			});
-
-			Self::deposit_event(Event::DelegatorBlocked {
-				operator: operator_id,
-				delegator: delegator_id,
-			});
+			Self::deposit_event(Event::DelegatorBlocked { operator, delegator });
 
 			Ok(())
 		}
 
-		/// Executed by an operator to allow a delegator to delegate to the operator.
+		/// Allow a delegator.
+		///
+		/// If the operator is set to deny, the delegator will be added to the
+		/// exceptions list, meaning they are allowed to delegate to the operator.
+		/// If the operator is set to allow, the delegator will be removed from the
+		/// exceptions list, meaning they are not allowed to delegate to the operator.
 		#[pallet::call_index(15)]
 		#[pallet::weight(T::ValidatorWeightInfo::allow_delegator())]
-		pub fn allow_delegator(origin: OriginFor<T>, delegator_id: T::AccountId) -> DispatchResult {
-			let operator_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+		pub fn allow_delegator(origin: OriginFor<T>, delegator: T::AccountId) -> DispatchResult {
+			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 
-			AllowedDelegators::<T>::mutate(&operator_id, |delegators| {
-				delegators.insert(delegator_id.clone());
-			});
+			match OperatorSettingsLookup::<T>::get(&operator)
+				.unwrap_or_default()
+				.delegation_acceptance
+			{
+				DelegationAcceptance::Deny => {
+					// If the operator is set to deny, exceptions are the delegators that are
+					// allowed.
+					Exceptions::<T>::mutate(&operator, |allowed| {
+						allowed.insert(delegator.clone());
+					});
+				},
+				DelegationAcceptance::Allow => {
+					// If the operator is set to allow, exceptions are the delegators that are
+					// blocked.
+					Exceptions::<T>::mutate(&operator, |blocked| {
+						blocked.remove(&delegator);
+					});
+				},
+			}
 
-			BlockedDelegators::<T>::mutate(&operator_id, |delegators| {
-				delegators.remove(&delegator_id);
-			});
-
-			Self::deposit_event(Event::DelegatorAllowed {
-				operator: operator_id,
-				delegator: delegator_id,
-			});
+			Self::deposit_event(Event::DelegatorAllowed { operator, delegator });
 
 			Ok(())
 		}
@@ -986,9 +1091,14 @@ pub mod pallet {
 		/// Executed by an account to register as an operator.
 		#[pallet::call_index(16)]
 		#[pallet::weight(T::ValidatorWeightInfo::register_as_operator())]
-		pub fn register_as_operator(origin: OriginFor<T>) -> DispatchResult {
+		pub fn register_as_operator(
+			origin: OriginFor<T>,
+			settings: OperatorSettings,
+		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
+			ensure!(settings.fee_bps >= MIN_OPERATOR_FEE, Error::<T>::OperatorFeeTooLow);
 			T::AccountRoleRegistry::register_as_operator(&account_id)?;
+			OperatorSettingsLookup::<T>::insert(&account_id, settings);
 			Ok(())
 		}
 
@@ -999,15 +1109,114 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_operator(origin)?;
 
 			ensure!(
-				Self::get_all_validators_by_operator(&account_id).is_empty(),
+				Self::get_all_associations_by_operator(
+					&account_id,
+					AssociationToOperator::Validator
+				)
+				.is_empty(),
 				Error::<T>::StillAssociatedWithValidators
+			);
+
+			ensure!(
+				Self::get_all_associations_by_operator(
+					&account_id,
+					AssociationToOperator::Delegator
+				)
+				.is_empty(),
+				Error::<T>::StillAssociatedWithDelegators
 			);
 
 			T::AccountRoleRegistry::deregister_as_operator(&account_id)?;
 
-			AllowedDelegators::<T>::remove(&account_id);
-			BlockedDelegators::<T>::remove(&account_id);
+			Exceptions::<T>::remove(&account_id);
 			OperatorSettingsLookup::<T>::remove(&account_id);
+
+			Ok(())
+		}
+
+		#[pallet::call_index(18)]
+		#[pallet::weight(T::ValidatorWeightInfo::delegate())]
+		pub fn delegate(origin: OriginFor<T>, operator: T::AccountId) -> DispatchResult {
+			let delegator = ensure_signed(origin)?;
+
+			ensure!(
+				!T::AccountRoleRegistry::has_account_role(&delegator, AccountRole::Validator),
+				Error::<T>::DelegationNotAllowed
+			);
+			ensure!(
+				!T::AccountRoleRegistry::has_account_role(&delegator, AccountRole::Operator),
+				Error::<T>::DelegationNotAllowed
+			);
+
+			ensure!(
+				T::AccountRoleRegistry::has_account_role(&operator, AccountRole::Operator),
+				Error::<T>::NotOperator
+			);
+
+			ensure!(
+				match OperatorSettingsLookup::<T>::get(&operator)
+					.expect(
+						"operator is forced to set valid preferences during account registration"
+					)
+					.delegation_acceptance
+				{
+					DelegationAcceptance::Allow =>
+						!Exceptions::<T>::get(&operator).contains(&delegator),
+					DelegationAcceptance::Deny =>
+						Exceptions::<T>::get(&operator).contains(&delegator),
+				},
+				Error::<T>::DelegatorBlocked
+			);
+
+			DelegationChoice::<T>::mutate(&delegator, |maybe_operator| {
+				if let Some(previous_operator) = maybe_operator.replace(operator.clone()) {
+					Self::deposit_event(Event::UnDelegated {
+						delegator: delegator.clone(),
+						operator: previous_operator,
+					});
+				}
+			});
+
+			OutgoingDelegators::<T>::mutate(|outgoing_delegators| {
+				outgoing_delegators.remove(&delegator)
+			});
+
+			Self::deposit_event(Event::Delegated { delegator, operator });
+
+			Ok(())
+		}
+
+		#[pallet::call_index(19)]
+		#[pallet::weight(T::ValidatorWeightInfo::undelegate())]
+		pub fn undelegate(origin: OriginFor<T>) -> DispatchResult {
+			let delegator = ensure_signed(origin)?;
+
+			let operator = DelegationChoice::<T>::take(&delegator)
+				.ok_or(Error::<T>::AccountIsNotDelegating)?;
+
+			OutgoingDelegators::<T>::append(&delegator);
+
+			Self::deposit_event(Event::UnDelegated { delegator, operator });
+
+			Ok(())
+		}
+
+		/// Sets the max bid of an operator. If the argument is None any active max bid is
+		/// removed. If no max bid is set, we take the entire account balance as
+		/// delegator bond. The max bid is not allowed to be higher than the current account
+		/// balance.
+		#[pallet::call_index(20)]
+		#[pallet::weight(T::ValidatorWeightInfo::set_max_bid())]
+		pub fn set_max_bid(origin: OriginFor<T>, max_bid: Option<T::Amount>) -> DispatchResult {
+			let delegator = ensure_signed(origin)?;
+
+			if let Some(max_bid) = max_bid {
+				MaxDelegationBid::<T>::insert(&delegator, max_bid);
+			} else {
+				MaxDelegationBid::<T>::remove(&delegator);
+			}
+
+			Self::deposit_event(Event::<T>::MaxBidUpdated { delegator, max_bid });
 
 			Ok(())
 		}
@@ -1189,6 +1398,11 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
+		for delegator in OutgoingDelegators::<T>::take() {
+			T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
+			Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch: old_epoch });
+		}
+
 		Self::initialise_new_epoch(
 			new_epoch,
 			&new_authorities,
@@ -1223,6 +1437,7 @@ impl<T: Config> Pallet<T> {
 		for validator in validators {
 			AuthorityIndex::<T>::remove(epoch, validator);
 		}
+
 		HistoricalBonds::<T>::remove(epoch);
 	}
 
@@ -1276,6 +1491,19 @@ impl<T: Config> Pallet<T> {
 			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 		});
 
+		let delegators = NextDelegators::<T>::take();
+
+		for delegator in &delegators {
+			T::Bonder::update_bond(
+				&delegator.clone().into(),
+				MaxDelegationBid::<T>::get(delegator)
+					.map(|max_bid| max_bid.min(T::FundingInfo::total_balance_of(delegator)))
+					.unwrap_or(T::FundingInfo::total_balance_of(delegator)),
+			);
+		}
+
+		CurrentEpochDelegations::<T>::set(delegators);
+
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 
 		// We've got new authorities, which means the backups may have changed.
@@ -1315,13 +1543,33 @@ impl<T: Config> Pallet<T> {
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 
+		let qualified_bidders = Self::get_qualified_bidders::<T::KeygenQualification>();
+
+		let delegation_snapshot = Self::build_delegation_snapshot(
+			qualified_bidders.clone().into_iter().map(|bid| bid.bidder_id.into()).collect(),
+		);
+
+		let get_avg_bid_for_validator_if_managed =
+			|validator_id: T::AccountId| -> Option<T::Amount> {
+				let operator_id = ManagedValidators::<T>::get(validator_id)?;
+				let snap = delegation_snapshot.get(&operator_id)?;
+				Some(snap.avg_bid)
+			};
+
 		match SetSizeMaximisingAuctionResolver::try_new(
 			T::EpochInfo::current_authority_count(),
 			AuctionParameters::<T>::get(),
 		)
 		.and_then(|resolver| {
 			resolver.resolve_auction(
-				Self::get_qualified_bidders::<T::KeygenQualification>(),
+				qualified_bidders
+					.into_iter()
+					.map(|bid| Bid {
+						bidder_id: bid.bidder_id.clone(),
+						amount: get_avg_bid_for_validator_if_managed(bid.bidder_id.into())
+							.unwrap_or(bid.amount),
+					})
+					.collect(),
 				AuctionBidCutoffPercentage::<T>::get(),
 			)
 		}) {
@@ -1331,13 +1579,6 @@ impl<T: Config> Pallet<T> {
 					auction_outcome.bond,
 				));
 				debug_assert!(!auction_outcome.winners.is_empty());
-				debug_assert!({
-					let bids = Self::get_active_bids()
-						.into_iter()
-						.map(|bid| (bid.bidder_id, bid.amount))
-						.collect::<BTreeMap<_, _>>();
-					auction_outcome.winners.iter().map(|id| bids.get(id)).is_sorted_by_key(Reverse)
-				});
 				log::info!(
 					target: "cf-validator",
 					"Auction resolved with {} winners and {} losers. Bond will be {}FLIP.",
@@ -1351,6 +1592,27 @@ impl<T: Config> Pallet<T> {
 				// Use the winners and losers as an approximation.
 				let weight = T::ValidatorWeightInfo::start_authority_rotation(
 					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
+				);
+
+				NextDelegators::<T>::put(
+					auction_outcome
+						.winners
+						.iter()
+						.filter_map(|winner| {
+							ManagedValidators::<T>::get(winner.clone().into()).and_then(
+								|operator| {
+									let snapshot = delegation_snapshot.get(&operator);
+									if snapshot.is_none() {
+										log::warn!(
+											"Expected delegation snapshot for operator {:?} - didn't found one.", operator
+										);
+									}
+									snapshot
+								},
+							)
+						})
+						.flat_map(|snapshot| snapshot.delegators.keys().cloned())
+						.collect::<BTreeSet<T::AccountId>>(),
 				);
 
 				Self::try_start_keygen(RotationState::from_auction_outcome::<T>(auction_outcome));
@@ -1541,17 +1803,75 @@ impl<T: Config> Pallet<T> {
 			frame_system::Pallet::<T>::current_block_number()
 	}
 
-	pub fn get_all_validators_by_operator(
+	pub fn get_all_associations_by_operator(
 		operator: &T::AccountId,
+		association: AssociationToOperator,
 	) -> BTreeMap<T::AccountId, T::Amount> {
-		let mut validators: BTreeMap<T::AccountId, T::Amount> = BTreeMap::new();
-		for (validator, operator_id) in ManagedValidators::<T>::iter() {
-			if operator_id == *operator {
-				let balance = T::FundingInfo::total_balance_of(&validator);
-				validators.insert(validator, balance);
+		match association {
+			AssociationToOperator::Validator => ManagedValidators::<T>::iter(),
+			AssociationToOperator::Delegator => DelegationChoice::<T>::iter(),
+		}
+		.filter_map(|(account_id, managing_operator)| {
+			if managing_operator == *operator {
+				let balance = T::FundingInfo::balance(&account_id);
+				Some((account_id, balance))
+			} else {
+				None
+			}
+		})
+		.collect()
+	}
+
+	pub fn build_delegation_snapshot(
+		qualified_bidder: Vec<T::AccountId>,
+	) -> BTreeMap<T::AccountId, DelegationSnapshot<T>> {
+		let mut snapshot: BTreeMap<T::AccountId, DelegationSnapshot<T>> = BTreeMap::new();
+
+		for operator in OperatorSettingsLookup::<T>::iter_keys() {
+			let delegators =
+				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Delegator);
+
+			let validators: BTreeMap<T::AccountId, T::Amount> =
+				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator)
+					.into_iter()
+					.filter(|(account_id, _)| qualified_bidder.contains(account_id))
+					.collect();
+
+			let total_delegator_balance = delegators
+				.clone()
+				.into_iter()
+				.map(|(account_id, balance)| {
+					MaxDelegationBid::<T>::get(account_id)
+						.map(|max_bid| max_bid.min(balance))
+						.unwrap_or(balance)
+				})
+				.sum::<T::Amount>();
+
+			let total_validator_balance = validators.values().copied().sum::<T::Amount>();
+
+			let total_balance = total_delegator_balance.saturating_add(total_validator_balance);
+
+			match total_balance.checked_div(&T::Amount::from(validators.len() as u128)) {
+				Some(avg_bid) => {
+					snapshot.insert(
+						operator.clone(),
+						DelegationSnapshot { avg_bid, delegators, validators },
+					);
+				},
+				None => {
+					snapshot.insert(
+						operator.clone(),
+						DelegationSnapshot {
+							avg_bid: T::Amount::from(0_u128),
+							delegators,
+							validators,
+						},
+					);
+				},
 			}
 		}
-		validators
+
+		snapshot
 	}
 }
 

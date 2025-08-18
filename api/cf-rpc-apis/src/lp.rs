@@ -19,7 +19,7 @@ use crate::RpcResult;
 use cf_chains::{address::AddressString, evm::U256};
 use cf_primitives::{
 	chains::assets::any::AssetMap, ApiWaitForResult, Asset, BasisPoints, BlockNumber,
-	DcaParameters, EgressId, ForeignChain, Price, WaitFor,
+	DcaParameters, EgressId, ForeignChain, PriceLimits, WaitFor,
 };
 use cf_rpc_types::{
 	AccountId32, BlockUpdate, BoundedVec, ConstU32, EthereumAddress, ExtrinsicResponse, Hash,
@@ -164,7 +164,7 @@ pub trait LpRpcApi {
 		input_asset: Asset,
 		output_asset: Asset,
 		retry_duration: BlockNumber,
-		min_price: Price,
+		price_limits: PriceLimits,
 		dca_params: Option<DcaParameters>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>>;

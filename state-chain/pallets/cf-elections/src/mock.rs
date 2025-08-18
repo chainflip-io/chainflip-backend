@@ -17,7 +17,7 @@
 #![cfg(test)]
 
 pub use crate::{self as pallet_cf_elections};
-use crate::{GovernanceElectionHook, InitialStateOf, Pallet, UniqueMonotonicIdentifier};
+use crate::{ElectoralSystemConfiguration, InitialStateOf, Pallet, UniqueMonotonicIdentifier};
 
 use cf_traits::{impl_mock_chainflip, AccountRoleRegistry};
 use frame_support::{assert_ok, derive_impl, instances::Instance1, traits::OriginTrait};
@@ -38,11 +38,15 @@ impl frame_system::Config for Test {
 
 pub struct MockGovernanceHook;
 
-impl GovernanceElectionHook for MockGovernanceHook {
+impl ElectoralSystemConfiguration for MockGovernanceHook {
+	type SafeMode = ();
+	type ElectoralEvents = ();
+
 	type Properties = ();
 
 	fn start(_: ()) {}
 }
+
 impl pallet_cf_elections::Config<Instance1> for Test {
 	const TYPE_INFO_SUFFIX: &'static str = "Test";
 	type RuntimeEvent = RuntimeEvent;
@@ -52,9 +56,9 @@ impl pallet_cf_elections::Config<Instance1> for Test {
 
 	type WeightInfo = ();
 
-	type CreateGovernanceElectionHook = MockGovernanceHook;
+	type SafeMode = ();
 
-	type ElectoralEvents = ();
+	type ElectoralSystemConfiguration = MockGovernanceHook;
 }
 
 impl_mock_chainflip!(Test);

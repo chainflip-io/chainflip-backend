@@ -2,8 +2,7 @@ use sp_std::vec::Vec;
 
 use super::{primitives::NonemptyContinuousHeaders, BHWTypes, HeightWitnesserProperties};
 use crate::electoral_systems::state_machine::consensus::{
-	ConsensusMechanism, MultipleVotes, StagedConsensus, StagedVote, SuccessThreshold,
-	SupermajorityConsensus,
+	ConsensusMechanism, StagedConsensus, StagedVote, SuccessThreshold, SupermajorityConsensus,
 };
 
 pub struct BlockHeightWitnesserConsensus<T: BHWTypes> {
@@ -31,10 +30,12 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 		if properties.witness_from_index == Default::default() {
 			// This is the case for finding an appropriate block number to start witnessing from
 
-			let mut consensus: MultipleVotes<SupermajorityConsensus<_>> = Default::default();
+			let mut consensus: SupermajorityConsensus<_> = Default::default();
 
 			for vote in &self.votes {
-				consensus.insert_vote(vote.get_headers().into_iter().collect())
+				for header in &vote.get_headers() {
+					consensus.insert_vote(header.clone());
+				}
 			}
 
 			consensus.check_consensus(threshold).map(NonemptyContinuousHeaders::new)
@@ -63,5 +64,9 @@ impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 				);
 			})
 		}
+	}
+
+	fn vote_as_consensus(vote: &Self::Vote) -> Self::Result {
+		vote.clone()
 	}
 }

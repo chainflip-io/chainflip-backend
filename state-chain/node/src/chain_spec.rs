@@ -32,6 +32,7 @@ use cf_primitives::{
 	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 };
 use common::{FLIPPERINOS_PER_FLIP, SHARED_DATA_REFERENCE_LIFETIME};
+use pallet_cf_elections::generic_tools::{ArrayContainer, ArrayToVector, CommonTraits};
 pub use sc_service::{ChainType, Properties};
 use sc_telemetry::serde_json::json;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -41,14 +42,18 @@ use sp_core::{
 	Pair, Public,
 };
 use state_chain_runtime::{
-	chainflip::{bitcoin_elections, solana_elections, Offence},
+	chainflip::{
+		bitcoin_elections,
+		generic_elections::{self, ChainlinkOraclePriceSettings},
+		solana_elections, Offence,
+	},
 	constants::common::{
 		BLOCKS_PER_MINUTE_ARBITRUM, BLOCKS_PER_MINUTE_ASSETHUB, BLOCKS_PER_MINUTE_ETHEREUM,
 		BLOCKS_PER_MINUTE_POLKADOT, BLOCKS_PER_MINUTE_SOLANA,
 	},
 	opaque::SessionKeys,
-	AccountId, BitcoinElectionsConfig, BlockNumber, FlipBalance, SetSizeParameters, Signature,
-	SolanaElectionsConfig, WASM_BINARY,
+	AccountId, BitcoinElectionsConfig, BlockNumber, FlipBalance, GenericElectionsConfig,
+	SetSizeParameters, Signature, SolanaElectionsConfig, WASM_BINARY,
 };
 
 use cf_utilities::clean_hex_address;
@@ -107,6 +112,7 @@ pub struct StateChainEnvironment {
 	eth_key_manager_address: [u8; 20],
 	eth_vault_address: [u8; 20],
 	eth_address_checker_address: [u8; 20],
+	eth_sc_utils_address: [u8; 20],
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 	sol_init_agg_key: Option<SolAddress>,
@@ -139,6 +145,7 @@ pub struct StateChainEnvironment {
 	sol_alt_manager_program: SolAddress,
 	// Initialized with 65 accounts (50 of them nonces)
 	sol_address_lookup_table_account: (SolAddress, [SolAddress; 65]),
+	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings<ArrayContainer<5>>,
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -168,6 +175,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, ARB_VAULT_ADDRESS, arb_vault_address);
 	from_env_var!(clean_hex_address, ARB_USDC_TOKEN_ADDRESS, arb_usdc_token_address);
 	from_env_var!(clean_hex_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
+	from_env_var!(clean_hex_address, ETH_SC_UTILS_ADDRESS, eth_sc_utils_address);
 	from_env_var!(clean_hex_address, ARB_ADDRESS_CHECKER, arb_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
@@ -249,6 +257,13 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		Err(_) => defaults.sol_init_agg_key,
 	};
 
+	let chainlink_oracle_price_settings = match env::var("CHAINLINK_ORACLE_PRICE_SETTINGS") {
+		Ok(_) => unimplemented!(
+			"Oracle price election settings should not be supplied via environment variables"
+		),
+		Err(_) => defaults.chainlink_oracle_price_settings,
+	};
+
 	StateChainEnvironment {
 		flip_token_address,
 		eth_usdc_address,
@@ -260,6 +275,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		arb_vault_address,
 		arb_usdc_token_address,
 		eth_address_checker_address,
+		eth_sc_utils_address,
 		arb_address_checker_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
@@ -291,6 +307,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		sol_swap_endpoint_program_data_account,
 		sol_alt_manager_program,
 		sol_address_lookup_table_account,
+		chainlink_oracle_price_settings,
 	}
 }
 
@@ -341,6 +358,7 @@ pub fn inner_cf_development_config(
 		arb_vault_address,
 		arb_usdc_token_address,
 		eth_address_checker_address,
+		eth_sc_utils_address,
 		arb_address_checker_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
@@ -366,6 +384,7 @@ pub fn inner_cf_development_config(
 		sol_swap_endpoint_program_data_account,
 		sol_alt_manager_program,
 		sol_address_lookup_table_account,
+		chainlink_oracle_price_settings,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::builder(wasm_binary, Default::default())
 		.with_name("CF Develop")
@@ -388,6 +407,7 @@ pub fn inner_cf_development_config(
 				eth_key_manager_address: eth_key_manager_address.into(),
 				eth_vault_address: eth_vault_address.into(),
 				eth_address_checker_address: eth_address_checker_address.into(),
+				eth_sc_utils_address: eth_sc_utils_address.into(),
 				arb_key_manager_address: arb_key_manager_address.into(),
 				arb_vault_address: arb_vault_address.into(),
 				arb_address_checker_address: arb_address_checker_address.into(),
@@ -465,6 +485,11 @@ pub fn inner_cf_development_config(
 			BitcoinElectionsConfig {
 				option_initial_state: Some(bitcoin_elections::initial_state()),
 			},
+			GenericElectionsConfig {
+				option_initial_state: Some(generic_elections::initial_state(
+					chainlink_oracle_price_settings.convert(ArrayToVector),
+				)),
+			},
 		))
 		.build())
 }
@@ -495,6 +520,7 @@ macro_rules! network_spec {
 					arb_vault_address,
 					arb_usdc_token_address,
 					eth_address_checker_address,
+					eth_sc_utils_address,
 					arb_address_checker_address,
 					ethereum_chain_id,
 					arbitrum_chain_id,
@@ -520,6 +546,7 @@ macro_rules! network_spec {
 					sol_swap_endpoint_program_data_account,
 					sol_alt_manager_program,
 					sol_address_lookup_table_account,
+					chainlink_oracle_price_settings,
 				} = env_override.unwrap_or(ENV);
 				let protocol_id = format!(
 					"{}-{}",
@@ -572,6 +599,7 @@ macro_rules! network_spec {
 							eth_key_manager_address: eth_key_manager_address.into(),
 							eth_vault_address: eth_vault_address.into(),
 							eth_address_checker_address: eth_address_checker_address.into(),
+							eth_sc_utils_address: eth_sc_utils_address.into(),
 							arb_key_manager_address: arb_key_manager_address.into(),
 							arb_vault_address: arb_vault_address.into(),
 							arb_address_checker_address: arb_address_checker_address.into(),
@@ -650,6 +678,11 @@ macro_rules! network_spec {
 						BitcoinElectionsConfig {
 							option_initial_state: Some(bitcoin_elections::initial_state()),
 						},
+						GenericElectionsConfig {
+							option_initial_state: Some(generic_elections::initial_state(
+								chainlink_oracle_price_settings.convert(ArrayToVector),
+							)),
+						},
 					))
 					.build())
 			}
@@ -706,6 +739,7 @@ fn testnet_genesis(
 	auction_bid_cutoff_percentage: Percent,
 	solana_elections: state_chain_runtime::SolanaElectionsConfig,
 	bitcoin_elections: state_chain_runtime::BitcoinElectionsConfig,
+	generic_elections: state_chain_runtime::GenericElectionsConfig,
 ) -> serde_json::Value {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
@@ -986,6 +1020,9 @@ fn testnet_genesis(
 
 		// TODO: Set correct initial state
 		bitcoin_elections,
+
+		generic_elections,
+
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
 		// value for the whole struct, not just the fields that are missing.

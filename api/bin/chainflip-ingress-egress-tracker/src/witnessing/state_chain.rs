@@ -715,6 +715,7 @@ where
 		LiquidityPools(_) |
 		SolanaElections(_) |
 		BitcoinElections(_) |
+		GenericElections(_) |
 		TradingStrategy(_) => {},
 		LendingPools(_) => {},
 	};
@@ -1023,6 +1024,7 @@ mod tests {
 						retry_duration: Default::default(),
 						min_price: Default::default(),
 						refund_ccm_metadata: Default::default(),
+						max_oracle_price_slippage: Default::default(),
 					},
 					dca_params: Some(DcaParameters { number_of_chunks: 5, chunk_interval: 100 }),
 					boost_fee: 5,

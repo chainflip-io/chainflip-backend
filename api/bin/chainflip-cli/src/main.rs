@@ -38,7 +38,7 @@ use chainflip_api::{
 use clap::Parser;
 use futures::FutureExt;
 use serde::Serialize;
-use std::{io::Write, path::PathBuf, sync::Arc};
+use std::{io::Write, path::PathBuf, str::FromStr, sync::Arc};
 
 mod settings;
 
@@ -140,6 +140,17 @@ async fn run_cli() -> Result<()> {
 						let tx_hash = api.validator_api().start_bidding().await?;
 						println!("Account started bidding at tx {tx_hash:#x}.");
 					},
+					ValidatorSubcommands::AcceptOperator { operator_id } => {
+						let operator_account = AccountId32::from_str(&operator_id)
+							.map_err(|err| anyhow::anyhow!("Failed to parse AccountId: {}", err))
+							.context("Invalid account ID provided")?;
+						let events = api.validator_api().accept_operator(operator_account).await?;
+						println!("Operator accepted. Events: {:#?}", events);
+					},
+					ValidatorSubcommands::RemoveOperator => {
+						let events = api.validator_api().remove_operator().await?;
+						println!("Operator removed. Events: {:#?}", events);
+					},
 				},
 				Redeem { amount, eth_address, executor_address } => {
 					request_rebalance_or_redemption(
@@ -166,14 +177,6 @@ async fn run_cli() -> Result<()> {
 				},
 				GetBoundExecutorAddress {} => {
 					get_bound_executor_address(api.query_api()).await?;
-				},
-				RegisterAccountRole { role } => {
-					println!("Submitting `register-account-role` with role: {role:?}.",);
-					if !confirm_submit() {
-						return Ok(())
-					}
-					let tx_hash = api.operator_api().register_account_role(role).await?;
-					println!("Account role set at tx {tx_hash:#x}.");
 				},
 				Rotate {} => {
 					let tx_hash = api.operator_api().rotate_session_keys().await?;

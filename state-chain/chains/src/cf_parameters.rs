@@ -16,7 +16,7 @@
 
 use crate::{
 	ccm_checker::DecodedCcmAdditionalData, CcmAdditionalData, CcmChannelMetadataChecked,
-	ChannelRefundParameters, ChannelRefundParametersUnchecked,
+	ChannelRefundParameters, ChannelRefundParametersUnchecked, ChannelRefundParametersV0,
 };
 use cf_primitives::{
 	AccountId, AffiliateAndFee, BasisPoints, Beneficiary, DcaParameters, MAX_AFFILIATES,
@@ -59,9 +59,9 @@ pub struct VaultSwapParameters<R> {
 /// Original version of `VaultSwapParameters` that does not include
 /// and refund CCM metadata.
 pub type VaultSwapParametersV0<RefundAddress> =
-	VaultSwapParameters<ChannelRefundParameters<RefundAddress, ()>>;
+	VaultSwapParameters<ChannelRefundParametersV0<RefundAddress>>;
 
-/// New version of `VaultSwapParameters` that includes refund CCM metadata.
+/// New version of `VaultSwapParameters` includes refund CCM and oracle price slippage.
 pub type VaultSwapParametersV1<RefundAddress> =
 	VaultSwapParameters<ChannelRefundParametersUnchecked<RefundAddress>>;
 
@@ -75,6 +75,7 @@ impl<RefundAddress> From<VaultSwapParametersV0<RefundAddress>>
 				refund_address: value.refund_params.refund_address,
 				min_price: value.refund_params.min_price,
 				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
 			},
 			dca_params: value.dca_params,
 			boost_fee: value.boost_fee,
@@ -135,6 +136,49 @@ pub fn build_and_encode_cf_parameters<RefundAddress: Encode>(
 	}
 }
 
+#[cfg(test)]
+pub fn build_and_encode_v0_cf_parameters<RefundAddress: Encode>(
+	refund_parameters: crate::ChannelRefundParametersV0<RefundAddress>,
+	dca_parameters: Option<DcaParameters>,
+	boost_fee: u8,
+	broker_id: AccountId,
+	broker_commission: BasisPoints,
+	affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
+	ccm: Option<&CcmChannelMetadataChecked>,
+) -> Vec<u8> {
+	let vault_swap_parameters = VaultSwapParametersV0 {
+		refund_params: refund_parameters,
+		dca_params: dca_parameters,
+		boost_fee,
+		broker_fee: Beneficiary { account: broker_id, bps: broker_commission },
+		affiliate_fees,
+	};
+
+	match ccm.map(|ccm| ccm.ccm_additional_data.clone()) {
+		Some(DecodedCcmAdditionalData::Solana(sol_ccm)) =>
+			VersionedCfParameters::V0(CfParametersV0 {
+				ccm_additional_data: CcmAdditionalData(
+					sol_ccm
+						.encode()
+						.try_into()
+						.expect("Checked CCM additional data is guaranteed to be valid."),
+				),
+				vault_swap_parameters,
+			})
+			.encode(),
+		Some(DecodedCcmAdditionalData::NotRequired) => VersionedCfParameters::V0(CfParametersV0 {
+			ccm_additional_data: CcmAdditionalData::default(),
+			vault_swap_parameters,
+		})
+		.encode(),
+		None => VersionedCfParameters::V0(CfParametersV0 {
+			ccm_additional_data: (),
+			vault_swap_parameters,
+		})
+		.encode(),
+	}
+}
+
 pub fn decode_cf_parameters<RefundAddress: Decode, CcmData: Default + Decode>(
 	data: &[u8],
 ) -> Result<(VaultSwapParametersV1<RefundAddress>, CcmData), &'static str> {
@@ -144,8 +188,23 @@ pub fn decode_cf_parameters<RefundAddress: Decode, CcmData: Default + Decode>(
 			VersionedCfParameters::V0(CfParametersV0 {
 				ccm_additional_data,
 				vault_swap_parameters,
-			}) => (vault_swap_parameters.into(), ccm_additional_data),
-			VersionedCfParameters::V1(CfParametersV1 {
+			}) => (
+				VaultSwapParameters {
+					refund_params: ChannelRefundParameters {
+						retry_duration: vault_swap_parameters.refund_params.retry_duration,
+						refund_address: vault_swap_parameters.refund_params.refund_address,
+						min_price: vault_swap_parameters.refund_params.min_price,
+						max_oracle_price_slippage: None,
+						refund_ccm_metadata: None,
+					},
+					dca_params: vault_swap_parameters.dca_params,
+					boost_fee: vault_swap_parameters.boost_fee,
+					broker_fee: vault_swap_parameters.broker_fee,
+					affiliate_fees: vault_swap_parameters.affiliate_fees,
+				},
+				ccm_additional_data,
+			),
+			VersionedCfParameters::V1(CfParameters {
 				ccm_additional_data,
 				vault_swap_parameters,
 			}) => (vault_swap_parameters, ccm_additional_data),
@@ -175,11 +234,10 @@ mod tests {
 
 	fn vault_swap_parameters_v0() -> VaultSwapParametersV0<ForeignChainAddress> {
 		VaultSwapParametersV0 {
-			refund_params: ChannelRefundParameters {
+			refund_params: ChannelRefundParametersV0 {
 				retry_duration: 1,
 				refund_address: ForeignChainAddress::Eth(sp_core::H160::from([2; 20])),
 				min_price: Default::default(),
-				refund_ccm_metadata: (),
 			},
 			dca_params: Some(DcaParameters { number_of_chunks: 1u32, chunk_interval: 3u32 }),
 			boost_fee: 100u8,
@@ -215,6 +273,7 @@ mod tests {
 					.try_into()
 					.unwrap(),
 				}),
+				max_oracle_price_slippage: None,
 			},
 			dca_params: Some(DcaParameters { number_of_chunks: 1u32, chunk_interval: 3u32 }),
 			boost_fee: 100u8,

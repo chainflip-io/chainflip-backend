@@ -15,6 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{chainflip::Offence, Runtime, RuntimeSafeMode};
+use pallet_cf_elections::electoral_systems::oracle_price::chainlink::OraclePrice;
+
 use cf_amm::{
 	common::{PoolPairsMap, Side},
 	math::{Amount, Tick},
@@ -34,6 +36,7 @@ use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
 use core::{ops::Range, str};
 use frame_support::sp_runtime::AccountId32;
+use pallet_cf_elections::electoral_systems::oracle_price::price::PriceAsset;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::BoostPoolDetails;
@@ -145,15 +148,40 @@ pub struct ValidatorInfo {
 	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
 	pub restricted_balances: BTreeMap<EthereumAddress, AssetAmount>,
 	pub estimated_redeemable_balance: AssetAmount,
+	pub operator: Option<AccountId32>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct OperatorInfo {
-	pub managed_validators: BTreeMap<AccountId32, AssetAmount>,
+pub struct OperatorInfo<Amount> {
+	pub managed_validators: BTreeMap<AccountId32, Amount>,
 	pub settings: OperatorSettings,
-	pub blocked_delegators: Vec<AccountId32>,
-	pub allowed_delegators: Vec<AccountId32>,
+	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Vec::is_empty"))]
+	pub allowed: Vec<AccountId32>,
+	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Vec::is_empty"))]
+	pub blocked: Vec<AccountId32>,
+	pub delegators: BTreeMap<AccountId32, Amount>,
+	pub flip_balance: Amount,
+}
+
+impl<A> OperatorInfo<A> {
+	pub fn map_amounts<F, B>(self, f: F) -> OperatorInfo<B>
+	where
+		F: Fn(A) -> B,
+	{
+		OperatorInfo {
+			managed_validators: self
+				.managed_validators
+				.into_iter()
+				.map(|(k, v)| (k, f(v)))
+				.collect(),
+			settings: self.settings,
+			allowed: self.allowed,
+			blocked: self.blocked,
+			delegators: self.delegators.into_iter().map(|(k, v)| (k, f(v))).collect(),
+			flip_balance: f(self.flip_balance),
+		}
+	}
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
@@ -472,7 +500,7 @@ decl_runtime_apis!(
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
 		fn cf_account_flip_balance(account_id: &AccountId32) -> u128;
 		fn cf_validator_info(account_id: &AccountId32) -> ValidatorInfo;
-		fn cf_operator_info(account_id: &AccountId32) -> OperatorInfo;
+		fn cf_operator_info(account_id: &AccountId32) -> OperatorInfo<FlipBalance>;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
@@ -630,6 +658,9 @@ decl_runtime_apis!(
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
 		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
 		fn cf_network_fees() -> NetworkFees;
+		fn cf_oracle_prices(
+			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
+		) -> Vec<OraclePrice>;
 	}
 );
 
@@ -654,5 +685,9 @@ decl_runtime_apis!(
 		fn cf_bitcoin_electoral_data(account_id: AccountId32) -> Vec<u8>;
 
 		fn cf_bitcoin_filter_votes(account_id: AccountId32, proposed_votes: Vec<u8>) -> Vec<u8>;
+
+		fn cf_generic_electoral_data(account_id: AccountId32) -> Vec<u8>;
+
+		fn cf_generic_filter_votes(account_id: AccountId32, proposed_votes: Vec<u8>) -> Vec<u8>;
 	}
 );

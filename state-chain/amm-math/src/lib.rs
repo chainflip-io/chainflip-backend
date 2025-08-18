@@ -18,7 +18,7 @@
 
 pub mod test_utilities;
 
-pub use cf_primitives::{Price, Tick};
+pub use cf_primitives::{Price, Tick, PRICE_FRACTIONAL_BITS};
 use sp_core::{U256, U512};
 
 /// Represents an amount of an asset, in its smallest unit i.e. Ethereum has 10^-18 precision, and
@@ -89,6 +89,12 @@ pub fn bounded_sqrt_price(quote: Amount, base: Amount) -> SqrtPriceQ64F96 {
 	}
 }
 
+// Given prices of asset 1 and asset 2 (in terms of the same asset)
+// compute the price of asset 1 in terms of asset 2
+pub fn relative_price(price_1: Price, price_2: Price) -> Price {
+	mul_div_floor(price_1, U256::one() << PRICE_FRACTIONAL_BITS, price_2)
+}
+
 pub fn output_amount_floor(input: Amount, price: Price) -> Amount {
 	mul_div_floor(input, price, U256::one() << PRICE_FRACTIONAL_BITS)
 }
@@ -96,8 +102,6 @@ pub fn output_amount_floor(input: Amount, price: Price) -> Amount {
 pub fn output_amount_ceil(input: Amount, price: Price) -> Amount {
 	mul_div_ceil(input, price, U256::one() << PRICE_FRACTIONAL_BITS)
 }
-
-pub const PRICE_FRACTIONAL_BITS: u32 = 128;
 
 /// Converts from a [SqrtPriceQ64F96] to a [Price].
 ///
@@ -608,5 +612,25 @@ mod test {
 		);
 		assert_eq!(tick_at_sqrt_price(MAX_SQRT_PRICE - 1), MAX_TICK - 1);
 		assert_eq!(tick_at_sqrt_price(MAX_SQRT_PRICE), MAX_TICK);
+	}
+
+	#[test]
+	fn test_relative_price() {
+		assert_eq!(relative_price(1.into(), 1.into()), U256::one() << PRICE_FRACTIONAL_BITS);
+		assert_eq!(relative_price(2.into(), 1.into()), (U256::one() << PRICE_FRACTIONAL_BITS) * 2);
+		assert_eq!(relative_price(1.into(), 2.into()), (U256::one() << PRICE_FRACTIONAL_BITS) / 2);
+		assert_eq!(relative_price(1.into(), 3.into()), (U256::one() << PRICE_FRACTIONAL_BITS) / 3);
+		assert_eq!(
+			relative_price(2.into(), 3.into()),
+			(U256::one() << PRICE_FRACTIONAL_BITS) * 2 / 3
+		);
+		// Manually calculated value
+		assert_eq!(
+			relative_price(
+				U256::from_dec_str("1234512345123451234512345123451234512345").unwrap(),
+				U256::from_dec_str("4567845678456784567845678456784567845678").unwrap()
+			),
+			U256::from_dec_str("91965187171920516035188920897262983721").unwrap()
+		);
 	}
 }

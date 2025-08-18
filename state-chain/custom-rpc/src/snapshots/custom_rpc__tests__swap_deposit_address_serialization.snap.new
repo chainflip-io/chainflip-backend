@@ -1,0 +1,23 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+assertion_line: 1091
+expression: val
+---
+{
+  "address": "8RMUMRxniKbs9kMDVb81RtWoLNz2zesz3JQLRZXZc5kh",
+  "issued_block": 100,
+  "channel_id": 200,
+  "source_chain_expiry_block": 100,
+  "channel_opening_fee": "0x1e240",
+  "refund_parameters": {
+    "retry_duration": 1000,
+    "refund_address": "E2aBDC008BaEa1d4Dd2eeE4f0BEa61f6f91897cC",
+    "min_price": "0x4d2",
+    "refund_ccm_metadata": {
+      "message": "7c1d0f07",
+      "gas_budget": "0x0",
+      "ccm_additional_data": "011010101010101010101010101010101010101010101010101010101010101010010411111111111111111111111111111111111111111111111111111111111111110012121212121212121212121212121212121212121212121212121212121212120813131313131313131313131313131313131313131313131313131313131313131414141414141414141414141414141414141414141414141414141414141414"
+    },
+    "max_oracle_price_slippage": 200
+  }
+}

@@ -54,13 +54,15 @@ use jsonrpsee::{
 	},
 	PendingSubscriptionSink,
 };
+use pallet_cf_elections::electoral_systems::oracle_price::{
+	chainlink::OraclePrice, price::PriceAsset,
+};
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{AffiliateDetails, SwapLegInfo};
-use pallet_cf_validator::OperatorSettings;
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
 	HeaderBackend, StorageProvider,
@@ -85,7 +87,7 @@ use state_chain_runtime::{
 		VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
-	Hash,
+	FlipBalance, Hash,
 };
 use std::{
 	collections::{BTreeMap, BTreeSet, HashMap},
@@ -235,13 +237,12 @@ pub enum RpcAccountInfo {
 		apy_bp: Option<u32>,
 		restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
 		estimated_redeemable_balance: NumberOrHex,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		operator: Option<AccountId32>,
 	},
 	Operator {
-		managed_validators: BTreeMap<AccountId32, NumberOrHex>,
 		#[serde(flatten)]
-		settings: OperatorSettings,
-		blocked_delegators: Vec<AccountId32>,
-		allowed_delegators: Vec<AccountId32>,
+		info: OperatorInfo<NumberOrHex>,
 	},
 }
 
@@ -312,20 +313,12 @@ impl RpcAccountInfo {
 				.map(|(address, balance)| (address, balance.into()))
 				.collect(),
 			estimated_redeemable_balance: info.estimated_redeemable_balance.into(),
+			operator: info.operator,
 		}
 	}
 
-	fn operator(info: OperatorInfo) -> Self {
-		Self::Operator {
-			managed_validators: info
-				.managed_validators
-				.into_iter()
-				.map(|(account_id, amount)| (account_id, amount.into()))
-				.collect(),
-			settings: info.settings,
-			blocked_delegators: info.blocked_delegators,
-			allowed_delegators: info.allowed_delegators,
-		}
+	fn operator(info: OperatorInfo<FlipBalance>) -> Self {
+		Self::Operator { info: info.map_amounts(Into::into) }
 	}
 }
 
@@ -980,6 +973,21 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>>;
 
+	#[method(name = "generic_electoral_data")]
+	fn cf_generic_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
+	#[method(name = "generic_filter_votes")]
+	fn cf_generic_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
 	#[method(name = "validate_dca_params")]
 	fn cf_validate_dca_params(
 		&self,
@@ -1080,6 +1088,13 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<TradingStrategyLimits>;
+
+	#[method(name = "oracle_prices")]
+	fn cf_oracle_prices(
+		&self,
+		base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<OraclePrice>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1342,6 +1357,7 @@ where
 		cf_vault_addresses() -> VaultAddresses,
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
+		cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>) -> Vec<OraclePrice>,
 	}
 
 	pass_through_and_flatten! {
@@ -1941,6 +1957,26 @@ where
 	) -> RpcResult<Vec<u8>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			api.cf_bitcoin_filter_votes(hash, validator, proposed_votes)
+		})
+	}
+
+	fn cf_generic_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_generic_electoral_data(hash, validator))
+	}
+
+	fn cf_generic_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			api.cf_generic_filter_votes(hash, validator, proposed_votes)
 		})
 	}
 

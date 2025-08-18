@@ -22,10 +22,13 @@ use cf_chains::{
 };
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use cf_utilities::bs58_array;
+use pallet_cf_elections::generic_tools::Array;
 use sc_service::ChainType;
 use sol_prim::consts::{const_address, const_hash};
-use sp_core::H256;
-use state_chain_runtime::SetSizeParameters;
+use sp_core::{H160, H256};
+use state_chain_runtime::{
+	chainflip::generic_elections::ChainlinkOraclePriceSettings, SetSizeParameters,
+};
 
 pub struct Config;
 
@@ -50,6 +53,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_key_manager_address: hex_literal::hex!("cd351d3626Dc244730796A3168D315168eBf08Be"),
 	eth_vault_address: hex_literal::hex!("F5e10380213880111522dd0efD3dbb45b9f62Bcc"),
 	eth_address_checker_address: hex_literal::hex!("1562Ad6bb0e68980A3111F24531c964c7e155611"),
+	eth_sc_utils_address: hex_literal::hex!("13Ad793E7B75eaaCee34b69792552f086b301380"),
 	arb_key_manager_address: hex_literal::hex!("BFe612c77C2807Ac5a6A41F84436287578000275"),
 	arb_vault_address: hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920"),
 	arb_usdc_token_address: hex_literal::hex!("af88d065e77c8cC2239327C5EDb3A432268e5831"),
@@ -366,6 +370,29 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 			const_address("CeTTyF33ZDijNs9MCCMZVtoUFi5WBFVmZVrEkhoWhiHc"),
 		],
 	),
+	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings {
+		sol_oracle_program_id: const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny"),
+		sol_oracle_feeds: Array {
+			array: [
+				const_address("Cv4T27XbjVoKUYwP72NQQanvZeA7W4YF9L4EnYT9kx5o"),
+				const_address("716hFAECqotxcXcj8Hs8nr7AG6q9dBw2oX3k3M8V7uGq"),
+				const_address("CH31Xns5z3M1cTAbKW34jcxPPciazARpijcHj9rxtemt"),
+				const_address("GzGuoKXE8Unn7Vcg1DtomwD27tL4bVUpSK2M1yk6Xfz5"),
+				const_address("8vAuuqC5wVZ9Z9oQUGGDSjYgudTfjmyqGU5VucQxTk5U"),
+			],
+		},
+		sol_oracle_query_helper: const_address("5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX"),
+		eth_address_checker: H160(hex_literal::hex!("1562Ad6bb0e68980A3111F24531c964c7e155611")),
+		eth_oracle_feeds: Array {
+			array: [
+				H160(hex_literal::hex!("F4030086522a5bEEa4988F8cA5B36dbC97BeE88c")),
+				H160(hex_literal::hex!("5f4eC3Df9cbd43714FE2740f5E3616155c5b8419")),
+				H160(hex_literal::hex!("4ffC43a60e009B551865A93d232E33Fce9f01507")),
+				H160(hex_literal::hex!("8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6")),
+				H160(hex_literal::hex!("3E7d1eAB13ad0104d2750B8863b489D65364e32D")),
+			],
+		},
+	},
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;
