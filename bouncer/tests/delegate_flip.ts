@@ -159,7 +159,7 @@ async function testDelegate(parentLogger: Logger) {
     type: 'SetMaxBid',
     maxBid: BigInt(maxBid),
   });
-  txData = cfScUtilsContract.methods.depositToScGateway(amount.toString(), scCall).encodeABI();
+  txData = cfScUtilsContract.methods.callSc(scCall).encodeABI();
   receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
   logger.info('Set Max Bid transaction sent ' + receipt.transactionHash);
 
@@ -169,8 +169,8 @@ async function testDelegate(parentLogger: Logger) {
   const maxBidEvent = observeEvent(logger, 'validator:MaxBidUpdated', {
     test: (event) => {
       const delegatorMatch = event.data.delegator === evmToScAddress(whalePubkey);
-      const amountMatch = event.data.maxBid.replace(/,/g, '') === maxBid.toString();
-      return delegatorMatch && amountMatch;
+      const maxBidMatch = event.data.maxBid.replace(/,/g, '') === maxBid.toString();
+      return delegatorMatch && maxBidMatch;
     },
   }).event;
   await Promise.all([scCallExecutedEvent, maxBidEvent]);
