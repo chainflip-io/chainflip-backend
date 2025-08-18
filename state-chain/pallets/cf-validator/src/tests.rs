@@ -523,14 +523,25 @@ fn historical_epochs() {
 #[test]
 fn expired_epoch_data_is_removed() {
 	new_test_ext().then_execute_with_checks(|| {
+		let delegator = 123u64;
+		let operator = 456u64;
+		let test_snapshot = DelegationSnapshot {
+			delegators: [(delegator, 50u128)].into_iter().collect(),
+			validators: [(ALICE, 150u128)].into_iter().collect(),
+			delegation_fee_bps: 250,
+		};
+
 		// Epoch 1
 		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
 		HistoricalAuthorities::<Test>::insert(1, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(1, 10);
+		DelegationSnapshots::<Test>::insert(1, operator, test_snapshot.clone());
+		
 		// Epoch 2
 		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
 		HistoricalAuthorities::<Test>::insert(2, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(2, 30);
+		DelegationSnapshots::<Test>::insert(2, operator, test_snapshot.clone());
 		let authority_index = AuthorityIndex::<Test>::get(2, ALICE);
 
 		// Expire
@@ -540,16 +551,22 @@ fn expired_epoch_data_is_removed() {
 		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
 		HistoricalAuthorities::<Test>::insert(3, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(3, 20);
+		DelegationSnapshots::<Test>::insert(3, operator, test_snapshot.clone());
 
 		// Expect epoch 1's data to be deleted
 		assert!(AuthorityIndex::<Test>::try_get(1, ALICE).is_err());
 		assert!(HistoricalAuthorities::<Test>::try_get(1).is_err());
 		assert!(HistoricalBonds::<Test>::try_get(1).is_err());
+		assert!(DelegationSnapshots::<Test>::get(1, operator).is_none());
 
-		// Expect epoch 2's data to be exist
+		// Expect epoch 2's data to exist
 		assert_eq!(AuthorityIndex::<Test>::get(2, ALICE), authority_index);
 		assert_eq!(HistoricalAuthorities::<Test>::get(2), vec![ALICE]);
 		assert_eq!(HistoricalBonds::<Test>::get(2), 30);
+		assert!(DelegationSnapshots::<Test>::get(2, operator).is_some());
+
+		// Expect epoch 3's data to exist
+		assert!(DelegationSnapshots::<Test>::get(3, operator).is_some());
 	});
 }
 

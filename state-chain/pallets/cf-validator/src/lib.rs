@@ -1372,6 +1372,9 @@ impl<T: Config> Pallet<T> {
 		}
 
 		HistoricalBonds::<T>::remove(epoch);
+
+		// Clean up delegation snapshots for the expired epoch
+		let _ = DelegationSnapshots::<T>::clear_prefix(epoch, u32::MAX, None);
 	}
 
 	fn expire_epochs_up_to(latest_epoch_to_expire: EpochIndex, remaining_weight: Weight) -> Weight {
