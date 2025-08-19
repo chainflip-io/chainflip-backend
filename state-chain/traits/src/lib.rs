@@ -577,15 +577,6 @@ pub trait Broadcaster<C: Chain> {
 	fn expire_broadcast(broadcast_id: BroadcastId);
 }
 
-/// Updating and calculating emissions per block for authorities and backup nodes
-pub trait BlockEmissions {
-	type Balance;
-	/// Update the emissions per block for an authority
-	fn update_authority_block_emission(emission: Self::Balance);
-	/// Calculate the emissions per block
-	fn calculate_block_emissions();
-}
-
 /// Emits an event when backup rewards are distributed that lives inside the Emissions pallet.
 pub trait BackupRewardsNotifier {
 	type Balance;

@@ -16,7 +16,7 @@
 
 #![cfg(test)]
 
-use crate::{mock::*, BlockEmissions, Event, LastSupplyUpdateBlock, Pallet, BURN_FEE_MULTIPLE};
+use crate::{mock::*, Event, LastSupplyUpdateBlock, Pallet, BURN_FEE_MULTIPLE};
 use cf_primitives::SECONDS_PER_BLOCK;
 use cf_test_utilities::{assert_has_event, assert_has_matching_event};
 use cf_traits::{

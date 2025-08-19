@@ -108,7 +108,6 @@ pub mod pallet {
 		/// Transaction broadcaster for the host chain.
 		type Broadcaster: Broadcaster<Self::HostChain, ApiCall = Self::ApiCall>;
 
-		/// The number of blocks for the time frame we would test liveliness within
 		#[pallet::constant]
 		type CompoundingInterval: Get<BlockNumberFor<Self>>;
 
@@ -183,6 +182,13 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
+			if current_block % T::CompoundingInterval::get() == Zero::zero() {
+				CurrentAuthorityEmissionPerBlock::<T>::put(calculate_inflation_to_block_reward(
+					T::Issuance::total_issuance(),
+					CurrentAuthorityEmissionInflation::<T>::get().into(),
+					T::FlipBalance::unique_saturated_from(T::CompoundingInterval::get()),
+				));
+			}
 			T::RewardsDistribution::distribute();
 			if Self::should_update_supply_at(current_block) {
 				if T::SafeMode::get().emissions_sync_enabled {
@@ -307,32 +313,10 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> BlockEmissions for Pallet<T> {
-	type Balance = T::FlipBalance;
-
-	fn update_authority_block_emission(emission: Self::Balance) {
-		CurrentAuthorityEmissionPerBlock::<T>::put(emission);
-	}
-
-	fn calculate_block_emissions() {
-		fn inflation_to_block_reward<T: Config>(inflation_per_bill: u32) -> T::FlipBalance {
-			calculate_inflation_to_block_reward(
-				T::Issuance::total_issuance(),
-				inflation_per_bill.into(),
-				T::FlipBalance::unique_saturated_from(T::CompoundingInterval::get()),
-			)
-		}
-
-		Self::update_authority_block_emission(inflation_to_block_reward::<T>(
-			CurrentAuthorityEmissionInflation::<T>::get(),
-		));
-	}
-}
-
 fn calculate_inflation_to_block_reward<T>(
 	issuance: T,
 	inflation_per_bill: T,
-	heartbeat_interval: T,
+	compounding_interval: T,
 ) -> T
 where
 	T: Into<u128> + From<u128>,
@@ -349,9 +333,9 @@ where
 		log::error!("Error calculating block rewards, Either Issuance or inflation value too big",);
 		0_u128
 	})
-	.checked_div(heartbeat_interval.into())
+	.checked_div(compounding_interval.into())
 	.unwrap_or_else(|| {
-		log::error!("Heartbeat Interval should be greater than zero");
+		log::error!("Compounding Interval should be greater than zero");
 		Zero::zero()
 	})
 	.into()
