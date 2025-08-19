@@ -97,9 +97,6 @@ impl<T: Config> DelegationSnapshot<T> {
 			return Default::default();
 		}
 		let avg_bid = self.total_available_bid() / T::Amount::from(self.validators.len() as u32);
-		self.validators
-			.iter()
-			.map(|(validator, _)| (validator.clone(), avg_bid))
-			.collect()
+		self.validators.keys().map(|validator| (validator.clone(), avg_bid)).collect()
 	}
 }
