@@ -10,6 +10,7 @@ import {
   getEvmEndpoint,
   getEvmWhaleKeypair,
   hexPubkeyToFlipAddress,
+  newAddress,
 } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
@@ -27,6 +28,10 @@ import { setupOperatorAccount } from 'shared/setup_account';
 const cfScUtilsAbi = await getEthScUtilsAbi();
 
 // TODO: Update this with the rpc encoding once the logic is implemented in PRO-2439.
+const RedemptionAmountCodec = Enum({
+  Max: Struct({}), // No associated data
+  Exact: u128, // Holds a u128 value
+});
 export const ScCallsCodec = Enum({
   Delegation: Enum({
     Delegate: Struct({
@@ -36,13 +41,24 @@ export const ScCallsCodec = Enum({
     SetMaxBid: Struct({
       maybeMaxBid: Option(u128),
     }),
+    Redeem: Struct({
+      amount: RedemptionAmountCodec,
+      address: TsBytes(20),
+      executor: Option(TsBytes(20)),
+    }),
   }),
 });
 
 type ScCallPayload =
   | { type: 'Delegate'; operatorId: string }
   | { type: 'Undelegate' }
-  | { type: 'SetMaxBid'; maxBid?: bigint };
+  | { type: 'SetMaxBid'; maxBid?: bigint }
+  | {
+      type: 'Redeem';
+      amount: { Max: true } | { Exact: bigint };
+      address: string;
+      executor?: string;
+    };
 
 function encodeToScCall(payload: ScCallPayload): string {
   switch (payload.type) {
@@ -65,6 +81,23 @@ function encodeToScCall(payload: ScCallPayload): string {
         ScCallsCodec.enc({
           tag: 'Delegation',
           value: { tag: 'SetMaxBid', value: { maybeMaxBid: payload.maxBid } },
+        }),
+      );
+    case 'Redeem':
+      return u8aToHex(
+        ScCallsCodec.enc({
+          tag: 'Delegation',
+          value: {
+            tag: 'Redeem',
+            value: {
+              amount:
+                'Max' in payload.amount
+                  ? { tag: 'Max', value: {} }
+                  : { tag: 'Exact', value: payload.amount.Exact },
+              address: hexToU8a(payload.address),
+              executor: payload.executor ? hexToU8a(payload.executor) : undefined,
+            },
+          },
         }),
       );
     default:
@@ -175,7 +208,33 @@ async function testDelegate(parentLogger: Logger) {
   }).event;
   await Promise.all([scCallExecutedEvent, maxBidEvent]);
 
-  logger.info('Delegation and undelegation test completed successfully!');
+  logger.info('Redeeming funds');
+
+  const redeemAddress = await newAddress('Flip', randomBytes(32).toString('hex'));
+
+  scCall = encodeToScCall({
+    type: 'Redeem',
+    amount: { Exact: amount },
+    address: redeemAddress,
+    executor: undefined,
+  });
+  txData = cfScUtilsContract.methods.callSc(scCall).encodeABI();
+  receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
+  logger.info('Redeem request transaction sent ' + receipt.transactionHash);
+
+  scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
+    test: (event) => event.data.ethTxHash === receipt.transactionHash,
+  }).event;
+  const redeemEvent = observeEvent(logger, 'funding:RedemptionRequested', {
+    test: (event) => {
+      const accountMatch = event.data.accountId === evmToScAddress(whalePubkey);
+      const amountMatch = event.data.amount.replace(/,/g, '') === amount.toString();
+      return accountMatch && amountMatch;
+    },
+  }).event;
+  await Promise.all([scCallExecutedEvent, redeemEvent]);
+
+  logger.info('Delegation test completed successfully!');
 }
 
 async function testCcmSwapFundAccount(logger: Logger) {
