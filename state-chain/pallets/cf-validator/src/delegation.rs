@@ -1,9 +1,18 @@
-use crate::{Config, OperatorSettingsLookup, ValidatorIdOf};
+use crate::{
+	Config, DelegationSnapshots, ManagedValidators, OperatorSettingsLookup, ValidatorIdOf,
+};
+use cf_traits::{EpochInfo, Issuance, RewardsDistribution, Slashing};
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::RuntimeDebugNoBound;
+use core::iter::Sum;
+use frame_support::{
+	sp_runtime::{traits::AtLeast32BitUnsigned, Perquintill},
+	traits::IsType,
+	Parameter, RuntimeDebugNoBound,
+};
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
 /// The minimum delegation fee that can be charged, in basis points.
 pub const MIN_OPERATOR_FEE: u32 = 200;
@@ -61,6 +70,7 @@ pub struct OperatorSettings {
 #[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
 pub struct DelegationSnapshot<T: Config> {
+	pub operator: T::AccountId,
 	/// Map of validator accounts to their bid amounts.
 	pub validators: BTreeMap<ValidatorIdOf<T>, T::Amount>,
 	/// Map of delegator accounts to their bid amounts.
@@ -72,6 +82,7 @@ pub struct DelegationSnapshot<T: Config> {
 impl<T: Config> DelegationSnapshot<T> {
 	pub fn init(operator: &T::AccountId) -> Self {
 		Self {
+			operator: operator.clone(),
 			delegators: Default::default(),
 			validators: Default::default(),
 			delegation_fee_bps: OperatorSettingsLookup::<T>::get(operator)
@@ -98,5 +109,101 @@ impl<T: Config> DelegationSnapshot<T> {
 		}
 		let avg_bid = self.total_available_bid() / T::Amount::from(self.validators.len() as u32);
 		self.validators.keys().map(|validator| (validator.clone(), avg_bid)).collect()
+	}
+
+	pub fn distribute<Amount>(&self, total: Amount) -> impl Iterator<Item = (&T::AccountId, Amount)>
+	where
+		Amount: From<T::Amount>
+			+ AtLeast32BitUnsigned
+			+ Copy
+			+ Clone
+			+ Default
+			+ Sum
+			+ From<u64>
+			+ Parameter,
+	{
+		let total_delegator_stake: Amount = self.total_delegator_bid().into();
+		let total_validator_stake: Amount = self.total_validator_bid().into();
+		let total_stake = total_delegator_stake + total_validator_stake;
+
+		let validators_cut = Perquintill::from_rational(total_validator_stake, total_stake) * total;
+		let delegators_cut = total - validators_cut;
+		let operator_cut =
+			Perquintill::from_rational(self.delegation_fee_bps as u64, 10_000u64) * delegators_cut;
+		let delegators_cut = delegators_cut - operator_cut;
+
+		debug_assert_eq!(validators_cut + operator_cut + delegators_cut, total);
+
+		let validator_cuts = self.validators.iter().map(move |(validator, individual_stake)| {
+			let share =
+				Perquintill::from_rational((*individual_stake).into(), total_validator_stake);
+			(validator.into_ref(), share * validators_cut)
+		});
+		let delegator_cuts = self.delegators.iter().map(move |(delegator, individual_stake)| {
+			let share =
+				Perquintill::from_rational((*individual_stake).into(), total_delegator_stake);
+			(delegator, share * delegators_cut)
+		});
+
+		core::iter::once((&self.operator, operator_cut))
+			.chain(validator_cuts)
+			.chain(delegator_cuts)
+			.map(|(account, amount)| (account, Amount::from(amount)))
+	}
+}
+
+pub struct DelegatedRewardsDistribution<T, I>(PhantomData<(T, I)>);
+
+impl<T, I> RewardsDistribution for DelegatedRewardsDistribution<T, I>
+where
+	T: Config,
+	I: Issuance<AccountId = T::AccountId, Balance = T::Amount>,
+{
+	type Balance = I::Balance;
+	type AccountId = I::AccountId;
+
+	fn distribute(reward_amount: Self::Balance, beneficiary: &Self::AccountId) {
+		distribute::<T>(beneficiary, reward_amount, I::mint);
+	}
+}
+
+pub struct DelegationSlasher<T, S>(PhantomData<(T, S)>);
+
+impl<T, FlipSlasher> Slashing for DelegationSlasher<T, FlipSlasher>
+where
+	T: Config,
+	FlipSlasher:
+		Slashing<Balance = T::Amount, AccountId = T::AccountId, BlockNumber = BlockNumberFor<T>>,
+{
+	type AccountId = FlipSlasher::AccountId;
+	type BlockNumber = FlipSlasher::BlockNumber;
+	type Balance = FlipSlasher::Balance;
+
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: Self::Balance) {
+		distribute::<T>(account_id, slash_amount, FlipSlasher::slash_balance);
+	}
+
+	fn calculate_slash_amount(
+		account_id: &Self::AccountId,
+		blocks_offline: Self::BlockNumber,
+	) -> Self::Balance {
+		FlipSlasher::calculate_slash_amount(account_id, blocks_offline)
+	}
+}
+
+/// Distribute a settlement to a given validator for the current Epoch.
+/// The total amount is shared among all delegators and validators associated with the operator
+/// controlling this validator.
+pub fn distribute<T: Config>(
+	validator: &T::AccountId,
+	total: T::Amount,
+	settle: impl Fn(&T::AccountId, T::Amount),
+) {
+	if let Some(operator) = ManagedValidators::<T>::get(validator) {
+		DelegationSnapshots::<T>::get(T::EpochInfo::epoch_index(), operator).map(|snapshot| {
+			snapshot.distribute(total).for_each(|(account, amount)| settle(account, amount))
+		});
+	} else {
+		settle(validator, total);
 	}
 }

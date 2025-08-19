@@ -56,6 +56,7 @@ pub mod pool_price_api;
 pub mod price_feed_api;
 pub mod qualify_node;
 pub mod reputation_resetter;
+pub mod rewards_distribution;
 pub mod safe_mode;
 pub mod signer_nomination;
 pub mod swap_parameter_validation;

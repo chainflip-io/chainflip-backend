@@ -92,7 +92,7 @@ pub mod pallet {
 		/// An implementation of `RewardsDistribution` defining how to distribute the emissions.
 		type RewardsDistribution: RewardsDistribution<
 			Balance = Self::FlipBalance,
-			Issuance = Self::Issuance,
+			AccountId = Self::AccountId,
 		>;
 
 		/// An outgoing api call that supports UpdateFlipSupply.
@@ -147,7 +147,7 @@ pub mod pallet {
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::generate_deposit(pub fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Supply Update has been Broadcasted [block_number]
 		SupplyUpdateBroadcastRequested(BlockNumberFor<T>),
@@ -178,7 +178,6 @@ pub mod pallet {
 			if current_block % T::CompoundingInterval::get() == Zero::zero() {
 				Self::update_block_emissions();
 			}
-			T::RewardsDistribution::distribute();
 			if Self::should_update_supply_at(current_block) {
 				if T::SafeMode::get().emissions_sync_enabled {
 					Self::burn_flip_network_fee();
@@ -336,4 +335,13 @@ where
 		Zero::zero()
 	})
 	.into()
+}
+
+impl<T: Config> pallet_authorship::EventHandler<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
+	fn note_author(author: T::AccountId) {
+		let reward_amount = CurrentAuthorityEmissionPerBlock::<T>::get();
+		if reward_amount != Zero::zero() {
+			T::RewardsDistribution::distribute(reward_amount, &author);
+		}
+	}
 }

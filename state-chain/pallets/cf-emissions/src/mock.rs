@@ -32,16 +32,16 @@ use cf_traits::{
 	Issuance, RewardsDistribution, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{derive_impl, parameter_types, traits::Imbalance};
-use frame_system as system;
+use frame_support::{derive_impl, parameter_types};
+use frame_system::{self as system};
 use scale_info::TypeInfo;
 use sp_arithmetic::Permill;
 
 pub type AccountId = u64;
 
-pub const FLIP_TO_BURN: u128 = 10_000;
+pub const FLIP_TO_BURN: FlipBalance = 10_000;
 pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
-pub const TOTAL_ISSUANCE: u128 = 1_000_000_000;
+pub const TOTAL_ISSUANCE: FlipBalance = 1_000_000_000;
 pub const DAILY_SLASHING_RATE: Permill = Permill::from_perthousand(1);
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -75,35 +75,23 @@ impl_mock_waived_fees!(AccountId, RuntimeCall);
 
 impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Balance = u128;
+	type Balance = FlipBalance;
 	type BlocksPerDay = BlocksPerDay;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
 	type CallIndexer = ();
 }
 
-pub struct MockRewardsDistribution;
-
-impl RewardsDistribution for MockRewardsDistribution {
-	type Balance = u128;
-	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
-
-	fn distribute() {
-		let deposit =
-			Flip::deposit_reserves(*b"RSVR", Emissions::current_authority_emission_per_block());
-		let amount = deposit.peek();
-		let _result = deposit.offset(Self::Issuance::mint(amount));
-	}
-}
+pub const EMISSION_RATE: FlipBalance = 10;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockUpdateFlipSupply {
-	pub new_total_supply: u128,
+	pub new_total_supply: FlipBalance,
 	pub block_number: u64,
 }
 
 impl UpdateFlipSupply<MockEthereumChainCrypto> for MockUpdateFlipSupply {
-	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self {
+	fn new_unsigned(new_total_supply: FlipBalance, block_number: u64) -> Self {
 		Self { new_total_supply, block_number }
 	}
 }
@@ -154,16 +142,26 @@ impl_mock_runtime_safe_mode! { emissions: PalletSafeMode }
 
 pub type MockEmissionsBroadcaster = MockBroadcaster<(MockUpdateFlipSupply, RuntimeCall)>;
 
+// The Emissions pallet has access to the Flip pallet, so we don't need to mock it.
+pub struct FlipDistribution;
+impl RewardsDistribution for FlipDistribution {
+	type Balance = FlipBalance;
+	type AccountId = AccountId;
+
+	fn distribute(reward_amount: Self::Balance, beneficiary: &Self::AccountId) {
+		pallet_cf_flip::FlipIssuance::<Test>::mint(beneficiary, reward_amount);
+	}
+}
+
 impl pallet_cf_emissions::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type HostChain = MockEthereum;
 	type FlipBalance = FlipBalance;
 	type ApiCall = MockUpdateFlipSupply;
-	type Surplus = pallet_cf_flip::Surplus<Test>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
-	type RewardsDistribution = MockRewardsDistribution;
 	type CompoundingInterval = HeartbeatBlockInterval;
 	type EthEnvironment = MockStateChainGatewayProvider;
+	type RewardsDistribution = FlipDistribution;
 	type Broadcaster = MockEmissionsBroadcaster;
 	type FlipToBurn = MockFlipBurnInfo;
 	type SafeMode = MockRuntimeSafeMode;

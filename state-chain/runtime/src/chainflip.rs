@@ -42,9 +42,9 @@ use crate::{
 	},
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
 	ArbitrumIngressEgress, AssethubBroadcaster, AssethubChainTracking, AssethubIngressEgress,
-	Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber,
-	Emissions, Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
-	Flip, FlipBalance, Hash, PolkadotBroadcaster, PolkadotChainTracking, PolkadotIngressEgress,
+	BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber, Emissions,
+	Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress, Flip,
+	FlipBalance, Hash, PolkadotBroadcaster, PolkadotChainTracking, PolkadotIngressEgress,
 	PolkadotThresholdSigner, Runtime, RuntimeCall, SolanaBroadcaster, SolanaChainTrackingProvider,
 	SolanaIngressEgress, SolanaThresholdSigner, System, Validator, YEAR,
 };
@@ -406,23 +406,6 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 	}
 }
 
-pub struct BlockAuthorRewardDistribution;
-
-impl RewardsDistribution for BlockAuthorRewardDistribution {
-	type Balance = FlipBalance;
-	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
-
-	fn distribute() {
-		let reward_amount = Emissions::current_authority_emission_per_block();
-		if reward_amount != 0 {
-			if let Some(current_block_author) = Authorship::author() {
-				Flip::settle(&current_block_author, Self::Issuance::mint(reward_amount).into());
-			} else {
-				log::warn!("No block author for block {}.", System::current_block_number());
-			}
-		}
-	}
-}
 pub struct RuntimeUpgradeManager;
 
 impl RuntimeUpgrade for RuntimeUpgradeManager {
@@ -960,7 +943,7 @@ pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
 		None
 	}
 	.map(|reward_pa| {
-		// Convert Permill to Basis Point.
+		// Convert APY to Basis Point.
 		FixedU64::from_rational(reward_pa, Flip::balance(account_id))
 			.checked_mul_int(10_000u32)
 			.unwrap_or_default()
