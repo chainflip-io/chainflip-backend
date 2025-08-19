@@ -148,7 +148,6 @@ impl<T: Config> DelegationSnapshot<T> {
 		core::iter::once((&self.operator, operator_cut))
 			.chain(validator_cuts)
 			.chain(delegator_cuts)
-			.map(|(account, amount)| (account, Amount::from(amount)))
 	}
 }
 
@@ -200,9 +199,10 @@ pub fn distribute<T: Config>(
 	settle: impl Fn(&T::AccountId, T::Amount),
 ) {
 	if let Some(operator) = ManagedValidators::<T>::get(validator) {
-		DelegationSnapshots::<T>::get(T::EpochInfo::epoch_index(), operator).map(|snapshot| {
-			snapshot.distribute(total).for_each(|(account, amount)| settle(account, amount))
-		});
+		if let Some(snapshot) = DelegationSnapshots::<T>::get(T::EpochInfo::epoch_index(), operator)
+		{
+			snapshot.distribute(total).for_each(|(account, amount)| settle(account, amount));
+		}
 	} else {
 		settle(validator, total);
 	}

@@ -14,6 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
+use chainflip_node::chain_spec::devnet::HEARTBEAT_BLOCK_INTERVAL;
 use sp_std::collections::btree_set::BTreeSet;
 
 use crate::{
@@ -23,12 +26,10 @@ use crate::{
 
 use cf_primitives::{AccountRole, FLIPPERINOS_PER_FLIP};
 use cf_traits::AccountInfo;
-use frame_support::{assert_ok, traits::OnNewAccount};
+use frame_support::assert_ok;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
 use sp_runtime::{traits::Zero, PerU16};
-use state_chain_runtime::{
-	AccountRoles, Balance, Flip, Funding, LiquidityProvider, Runtime, Validator,
-};
+use state_chain_runtime::{Balance, Flip, Funding, Runtime, System, Validator};
 
 struct Delegator {
 	pub account: AccountId,
@@ -50,7 +51,7 @@ fn setup_delegation(
 	validator: AccountId,
 	operator: AccountId,
 	operator_cut: u32,
-	delegators: BTreeSet<(AccountId, Balance)>,
+	delegators: BTreeMap<AccountId, Balance>,
 ) -> Vec<Delegator> {
 	new_account(&operator, AccountRole::Operator);
 
@@ -76,7 +77,7 @@ fn setup_delegation(
 	);
 	assert!(pallet_cf_validator::OperatorSettingsLookup::<Runtime>::get(operator.clone()).is_some());
 
-	let delegators = delegators
+	let delegators: BTreeMap<_, _> = delegators
 		.into_iter()
 		.map(|(d, stake)| {
 			assert_ok!(Funding::funded(
@@ -86,10 +87,6 @@ fn setup_delegation(
 				Default::default(),
 				Default::default(),
 			));
-			AccountRoles::on_new_account(&d);
-			assert_ok!(LiquidityProvider::register_lp_account(RuntimeOrigin::signed(d.clone())));
-			crate::network::register_refund_addresses(&d);
-
 			assert_ok!(Validator::delegate(RuntimeOrigin::signed(d.clone()), operator.clone()));
 			(d, stake * FLIPPERINOS_PER_FLIP)
 		})
@@ -98,14 +95,16 @@ fn setup_delegation(
 	// Move to the next for delegation to take affect
 	testnet.move_to_the_next_epoch();
 
-	let actual_delegator_set = Validator::get_bonded_delegators_for_operator(&operator);
-	assert_eq!(actual_delegator_set, delegators);
+	let actual_delegator_set = pallet_cf_validator::DelegationChoice::<Runtime>::iter()
+		.map(|(d, _)| d)
+		.collect::<BTreeSet<_>>();
+	assert_eq!(actual_delegator_set, delegators.keys().cloned().collect());
 
 	delegators
-		.into_iter()
-		.map(|(d, _amount)| Delegator {
+		.keys()
+		.map(|d| Delegator {
 			account: d.clone(),
-			pre_balance: Flip::balance(&d),
+			pre_balance: Flip::balance(d),
 			post_balance: Default::default(),
 		})
 		.collect()
@@ -137,7 +136,7 @@ fn block_author_rewards_are_distributed_among_delegators() {
 				auth.clone(),
 				operator.clone(),
 				500, // 5%
-				BTreeSet::from_iter([
+				BTreeMap::from_iter([
 					(AccountId::from([0xA0; 32]), 10_000_000u128),
 					(AccountId::from([0xA1; 32]), 40_000_000u128),
 					(AccountId::from([0xA2; 32]), 50_000_000u128),
@@ -218,7 +217,7 @@ fn slashings_are_distributed_among_delegators() {
 				auth.clone(),
 				operator.clone(),
 				500, // 5%
-				BTreeSet::from_iter([
+				BTreeMap::from_iter([
 					(AccountId::from([0xA0; 32]), 10_000_000u128),
 					(AccountId::from([0xA1; 32]), 40_000_000u128),
 					(AccountId::from([0xA2; 32]), 50_000_000u128),
@@ -234,7 +233,9 @@ fn slashings_are_distributed_among_delegators() {
 			testnet.set_auto_heartbeat(&auth, false);
 
 			// Move to the block before backup rewards are distributed
-			testnet.move_to_next_heartbeat_block(Some(-1));
+			testnet.move_forward_blocks(
+				HEARTBEAT_BLOCK_INTERVAL - System::block_number() % HEARTBEAT_BLOCK_INTERVAL - 1,
+			);
 
 			// Update pre-balance
 			let auth_pre_balance = Flip::balance(&auth);

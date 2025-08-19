@@ -82,8 +82,6 @@ impl pallet_cf_flip::Config for Test {
 	type CallIndexer = ();
 }
 
-pub const EMISSION_RATE: FlipBalance = 10;
-
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockUpdateFlipSupply {
 	pub new_total_supply: FlipBalance,
