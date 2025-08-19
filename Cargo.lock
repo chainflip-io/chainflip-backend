@@ -8318,6 +8318,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
+ "pallet-authorship",
  "pallet-cf-flip",
  "parity-scale-codec",
  "scale-info",

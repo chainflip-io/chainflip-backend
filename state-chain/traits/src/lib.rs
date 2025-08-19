@@ -86,6 +86,7 @@ pub trait Chainflip: frame_system::Config {
 		+ MaybeSerializeDeserialize
 		+ Bounded
 		+ From<u128>
+		+ From<u64>
 		+ Sum<Self::Amount>;
 
 	/// An identity for a node
@@ -340,12 +341,12 @@ pub trait Issuance {
 /// Distribute rewards somehow.
 pub trait RewardsDistribution {
 	type Balance;
-	/// An implementation of the issuance trait.
-	type Issuance: Issuance;
+	type AccountId;
 
 	/// Distribute some rewards.
-	fn distribute();
+	fn distribute(amount: Self::Balance, beneficiary: &Self::AccountId);
 }
+
 /// Allow triggering of emissions.
 pub trait EmissionsTrigger {
 	/// Trigger emissions.
@@ -571,13 +572,6 @@ pub trait Broadcaster<C: Chain> {
 
 	/// Removes all data associated with a broadcast.
 	fn expire_broadcast(broadcast_id: BroadcastId);
-}
-
-/// Emits an event when backup rewards are distributed that lives inside the Emissions pallet.
-pub trait BackupRewardsNotifier {
-	type Balance;
-	type AccountId;
-	fn emit_event(account_id: &Self::AccountId, amount: Self::Balance);
 }
 
 /// Checks if the caller can execute free transactions

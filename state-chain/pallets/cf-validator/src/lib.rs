@@ -384,9 +384,10 @@ pub mod pallet {
 	pub type CurrentEpochDelegations<T: Config> =
 		StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
-	/// The set of delegators in the next epoch.
+	/// The snapshot of operator <-> delegators in the next epoch.
 	#[pallet::storage]
-	pub type NextDelegators<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
+	pub type NextDelegators<T: Config> =
+		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -412,7 +413,7 @@ pub mod pallet {
 		/// A previously non-bidding account has started bidding.
 		StartedBidding { account_id: T::AccountId },
 		/// The rotation transaction(s) for the previous rotation are still pending to be
-		/// succesfully broadcast, therefore, cannot start a new epoch rotation.
+		/// successfully broadcast, therefore, cannot start a new epoch rotation.
 		PreviousRotationStillPending,
 		/// A delegator has been blocked from delegating to an operator.
 		DelegatorBlocked { delegator: T::AccountId, operator: T::AccountId },
@@ -1368,9 +1369,16 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
-		for delegator in OutgoingDelegators::<T>::take() {
-			T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
-			Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch: old_epoch });
+		for (_epoch, _operator, delegators) in DelegationsPerEpoch::<T>::drain() {
+			delegators.into_iter().for_each(|(delegator, _stake)| {
+				if OutgoingDelegators::<T>::take(&delegator) == DelegationStatus::UnDelegating {
+					T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
+					Self::deposit_event(Event::UnDelegationFinalized {
+						delegator,
+						epoch: old_epoch,
+					});
+				}
+			})
 		}
 
 		Self::initialise_new_epoch(new_epoch, &new_authorities, bond);
@@ -1446,18 +1454,19 @@ impl<T: Config> Pallet<T> {
 			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 		});
 
-		let delegators = NextDelegators::<T>::take();
-
-		for delegator in &delegators {
-			T::Bonder::update_bond(
-				&delegator.clone().into(),
-				MaxDelegationBid::<T>::get(delegator)
-					.map(|max_bid| max_bid.min(T::FundingInfo::total_balance_of(delegator)))
-					.unwrap_or(T::FundingInfo::total_balance_of(delegator)),
-			);
-		}
-
-		CurrentEpochDelegations::<T>::set(delegators);
+		NextDelegators::<T>::drain().for_each(|(operator, delegators)| {
+			let delegators_with_bond = delegators
+				.into_iter()
+				.map(|delegator| {
+					let bond = MaxDelegationBid::<T>::get(&delegator)
+						.map(|max_bid| max_bid.min(T::FundingInfo::total_balance_of(&delegator)))
+						.unwrap_or(T::FundingInfo::total_balance_of(&delegator));
+					T::Bonder::update_bond(&delegator.clone().into(), bond);
+					(delegator.clone(), bond)
+				})
+				.collect::<BTreeSet<_>>();
+			DelegationsPerEpoch::<T>::insert(new_epoch, operator, delegators_with_bond);
+		});
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 	}
@@ -1546,26 +1555,26 @@ impl<T: Config> Pallet<T> {
 					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
 				);
 
-				NextDelegators::<T>::put(
-					auction_outcome
-						.winners
-						.iter()
-						.filter_map(|winner| {
-							ManagedValidators::<T>::get(winner.clone().into()).and_then(
-								|operator| {
-									let snapshot = delegation_snapshot.get(&operator);
-									if snapshot.is_none() {
-										log::warn!(
-											"Expected delegation snapshot for operator {:?} - didn't found one.", operator
-										);
-									}
+				auction_outcome
+					.winners
+					.iter()
+					.filter_map(|winner| {
+						ManagedValidators::<T>::get(winner.clone().into()).and_then(|operator| {
+							delegation_snapshot.get(&operator).map(|snapshot| {
+								(
+									operator,
 									snapshot
-								},
-							)
+										.delegators
+										.clone()
+										.into_keys()
+										.collect::<BTreeSet<_>>(),
+								)
+							})
 						})
-						.flat_map(|snapshot| snapshot.delegators.keys().cloned())
-						.collect::<BTreeSet<T::AccountId>>(),
-				);
+					})
+					.for_each(|(operator, delegators)| {
+						NextDelegators::<T>::insert(operator, delegators)
+					});
 
 				Self::try_start_keygen(RotationState::from_auction_outcome::<T>(auction_outcome));
 
@@ -1794,6 +1803,21 @@ impl<T: Config> Pallet<T> {
 		}
 
 		snapshot
+	}
+
+	/// Gets all delegator bonded to a given operator, and the amount bonded.
+	pub fn get_bonded_delegators_for_operator(
+		operator: &T::AccountId,
+	) -> BTreeSet<(T::AccountId, T::Amount)> {
+		DelegationsPerEpoch::<T>::get(CurrentEpoch::<T>::get(), operator)
+	}
+
+	/// Gets all the validators and their balances belonging to a given operator
+	pub fn get_total_validator_balance_for_operator(operator: &T::AccountId) -> T::Amount {
+		// todo: this is not exactly correct as we need to filter the inactive validators who are not bidding. We handle this in the auction optimization PR https://github.com/chainflip-io/chainflip-backend/pull/6046
+		Self::get_all_associations_by_operator(operator, AssociationToOperator::Validator)
+			.into_values()
+			.sum()
 	}
 }
 
