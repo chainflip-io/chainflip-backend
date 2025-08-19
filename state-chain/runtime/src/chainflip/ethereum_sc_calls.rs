@@ -1,9 +1,10 @@
-use crate::{chainflip::TypeInfo, Decode, Encode, Runtime, RuntimeCall};
+use crate::{chainflip::TypeInfo, Decode, Encode, EthereumAddress, Runtime, RuntimeCall};
 use frame_support::{
 	dispatch::{DispatchInfo, GetDispatchInfo},
 	traits::UnfilteredDispatchable,
 };
-use pallet_cf_validator::Call;
+use pallet_cf_funding::{Call as FundingCall, RedemptionAmount};
+use pallet_cf_validator::Call as ValidatorCall;
 use sp_runtime::traits::Dispatchable;
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
@@ -13,9 +14,14 @@ pub enum DelegationApi {
 		operator: <Runtime as frame_system::Config>::AccountId, /* Operator the amount to
 		                                                         * delegate to */
 	},
-	Undelegate {},
+	Undelegate,
 	SetMaxBid {
 		maybe_max_bid: Option<<Runtime as cf_traits::Chainflip>::Amount>,
+	},
+	Redeem {
+		amount: RedemptionAmount<<Runtime as cf_traits::Chainflip>::Amount>,
+		address: EthereumAddress,
+		executor: Option<EthereumAddress>,
 	},
 }
 
@@ -35,12 +41,22 @@ impl UnfilteredDispatchable for EthereumSCApi {
 		match self {
 			EthereumSCApi::Delegation(delegation_api) => match delegation_api {
 				DelegationApi::Delegate { operator } =>
-					RuntimeCall::Validator(Call::<Runtime>::delegate { operator }).dispatch(origin),
-				DelegationApi::Undelegate {} =>
-					RuntimeCall::Validator(Call::<Runtime>::undelegate {}).dispatch(origin),
-				DelegationApi::SetMaxBid { maybe_max_bid } =>
-					RuntimeCall::Validator(Call::<Runtime>::set_max_bid { max_bid: maybe_max_bid })
+					RuntimeCall::Validator(ValidatorCall::<Runtime>::delegate { operator })
 						.dispatch(origin),
+				DelegationApi::Undelegate =>
+					RuntimeCall::Validator(ValidatorCall::<Runtime>::undelegate {}).dispatch(origin),
+				DelegationApi::SetMaxBid { maybe_max_bid } =>
+					RuntimeCall::Validator(ValidatorCall::<Runtime>::set_max_bid {
+						max_bid: maybe_max_bid,
+					})
+					.dispatch(origin),
+				DelegationApi::Redeem { amount, address, executor } =>
+					RuntimeCall::Funding(FundingCall::<Runtime>::redeem {
+						amount,
+						address,
+						executor,
+					})
+					.dispatch(origin),
 			},
 		}
 	}
@@ -51,13 +67,25 @@ impl GetDispatchInfo for EthereumSCApi {
 		match self {
 			EthereumSCApi::Delegation(delegation_api) => match delegation_api {
 				DelegationApi::Delegate { operator } =>
-					RuntimeCall::Validator(Call::<Runtime>::delegate { operator: operator.clone() })
-						.get_dispatch_info(),
+					RuntimeCall::Validator(ValidatorCall::<Runtime>::delegate {
+						operator: operator.clone(),
+					})
+					.get_dispatch_info(),
 				DelegationApi::Undelegate {} =>
-					RuntimeCall::Validator(Call::<Runtime>::undelegate {}).get_dispatch_info(),
-				DelegationApi::SetMaxBid { maybe_max_bid } =>
-					RuntimeCall::Validator(Call::<Runtime>::set_max_bid { max_bid: *maybe_max_bid })
+					RuntimeCall::Validator(ValidatorCall::<Runtime>::undelegate {})
 						.get_dispatch_info(),
+				DelegationApi::SetMaxBid { maybe_max_bid } =>
+					RuntimeCall::Validator(ValidatorCall::<Runtime>::set_max_bid {
+						max_bid: *maybe_max_bid,
+					})
+					.get_dispatch_info(),
+				DelegationApi::Redeem { amount, address, executor } =>
+					RuntimeCall::Funding(FundingCall::<Runtime>::redeem {
+						amount: *amount,
+						address: *address,
+						executor: *executor,
+					})
+					.get_dispatch_info(),
 			},
 		}
 	}
