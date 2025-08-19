@@ -540,7 +540,7 @@ pub enum PolkadotRuntimeCall {
 	#[codec(index = 29u8)] // INDEX FOR WESTEND: 22, FOR POLKADOT: 29
 	Proxy(ProxyCall),
 	#[codec(index = 99u8)] // INDEX FOR WESTEND: ?, FOR POLKADOT: 99
-	Xcm(XcmCall),
+	Xcm(Box<XcmCall>),
 }
 
 /// Only used for the migration to Assethub

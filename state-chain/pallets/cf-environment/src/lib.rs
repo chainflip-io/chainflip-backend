@@ -133,12 +133,13 @@ pub mod pallet {
 			Callback = RuntimeCallFor<Self>,
 		>;
 
+		/// Only required for 1.11 (deprecation of polkadot and migration to assethub).
 		type DotEnvironment: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>;
 
+		/// Only required for 1.11 (deprecation of polkadot and migration to assethub).
 		type HubEnvironment: AssethubEnvironment;
 
-		/// Polkadot broadcaster. Only required for 1.11 (deprecation of polkadot and migration to
-		/// assethub).
+		/// Only required for 1.11 (deprecation of polkadot and migration to assethub).
 		type PolkadotBroadcaster: Broadcaster<
 			Polkadot,
 			ApiCall = PolkadotApi<Self::DotEnvironment>,
@@ -593,9 +594,10 @@ pub mod pallet {
 		}
 
 		/// Sign polkadot extrinsic to teleport vault polkadot balance to assethub
+		/// Only required during the upgrade to 1.11, delete afterwards.
 		#[pallet::call_index(10)]
 		#[pallet::weight(Weight::zero())]
-		pub fn request_polkadot_vault_migration_signature(
+		pub fn dispatch_polkadot_vault_migration_to_assethub(
 			origin: OriginFor<T>,
 			amount: cf_chains::dot::PolkadotBalance,
 		) -> DispatchResult {

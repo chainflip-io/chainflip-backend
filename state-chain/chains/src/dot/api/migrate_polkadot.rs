@@ -36,7 +36,7 @@ pub fn extrinsic_builder(
 		PolkadotRuntimeCall::Proxy(ProxyCall::proxy {
 			real: PolkadotAccountIdLookup::from(from_polkadot_vault_account),
 			force_proxy_type: Some(PolkadotProxyType::Any),
-			call: Box::new(PolkadotRuntimeCall::Xcm(
+			call: Box::new(PolkadotRuntimeCall::Xcm(Box::new(
 				crate::dot::XcmCall::limited_teleport_assets {
 					dest: VersionedLocation::V4(
                         hub_runtime_types::staging_xcm::v4::location::Location {
@@ -76,7 +76,7 @@ pub fn extrinsic_builder(
 					fee_asset_itme: 0,
 					weight_limit: hub_runtime_types::xcm::v3::WeightLimit::Unlimited,
 				},
-			)),
+			))),
 		}),
 	)
 }
