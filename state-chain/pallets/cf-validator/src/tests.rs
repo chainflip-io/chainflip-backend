@@ -1924,21 +1924,6 @@ mod delegation {
 		const AVAILABLE_BALANCE_OF_DELEGATOR: u128 = 20;
 		const MAX_BID_OF_DELEGATOR: u128 = 10;
 		const DELEGATORS: [u64; 4] = [21, 22, 23, 24];
-		fn delegation() -> BTreeSet<(ValidatorId, Amount)> {
-			DELEGATORS
-				.into_iter()
-				.map(|d| {
-					(
-						d,
-						if d % 2 == 0 {
-							MAX_BID_OF_DELEGATOR
-						} else {
-							AVAILABLE_BALANCE_OF_DELEGATOR
-						},
-					)
-				})
-				.collect()
-		}
 
 		new_test_ext()
 			.then_execute_with_checks(|| {

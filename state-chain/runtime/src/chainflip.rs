@@ -100,9 +100,8 @@ use cf_primitives::{
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BroadcastAnyChainGovKey, Broadcaster,
 	CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	FetchesTransfersLimitProvider, IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady,
-	OnDeposit, OraclePrice, QualifyNode, RewardsDistribution, RuntimeUpgrade,
-	ScheduledEgressDetails,
+	FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider, OnBroadcastReady, OnDeposit,
+	OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
 };
 
 use codec::{Decode, Encode};
@@ -110,7 +109,7 @@ use eth::Address as EvmAddress;
 use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 	pallet_prelude::DispatchError,
-	sp_runtime::{traits::BlockNumberProvider, FixedPointNumber, FixedU64},
+	sp_runtime::{FixedPointNumber, FixedU64},
 	traits::{Defensive, Get},
 };
 pub use missed_authorship_slots::MissedAuraSlots;

@@ -14,10 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-	genesis, network, witness_ethereum_rotation_broadcast, witness_rotation_broadcasts, AllVaults,
-	NodeId, VAULT_ROTATION_BLOCKS,
-};
+use crate::{genesis, network, AllVaults, NodeId, VAULT_ROTATION_BLOCKS};
 
 use frame_support::{assert_err, assert_ok};
 use pallet_cf_vaults::{PendingVaultActivation, VaultActivationStatus};

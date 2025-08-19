@@ -56,8 +56,6 @@ fn distribute_block_rewards() {
 
 #[cfg(test)]
 mod test_block_rewards {
-	use cf_traits::RewardsDistribution;
-
 	use crate::CurrentAuthorityEmissionPerBlock;
 
 	use super::*;
