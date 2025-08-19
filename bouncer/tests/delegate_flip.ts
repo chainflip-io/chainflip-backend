@@ -17,7 +17,7 @@ import { Logger } from 'shared/utils/logger';
 import { getEthScUtilsAbi } from 'shared/contract_interfaces';
 import { approveErc20 } from 'shared/approve_erc20';
 import { newStatechainAddress } from 'shared/new_statechain_address';
-import { observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { newCcmMetadata } from 'shared/swapping';
 import { Struct, Enum, Option, u128, Bytes as TsBytes } from 'scale-ts';
 import { hexToU8a, u8aToHex } from '@polkadot/util';
@@ -29,8 +29,8 @@ const cfScUtilsAbi = await getEthScUtilsAbi();
 
 // TODO: Update this with the rpc encoding once the logic is implemented in PRO-2439.
 const RedemptionAmountCodec = Enum({
-  Max: Struct({}), // No associated data
-  Exact: u128, // Holds a u128 value
+  Max: Struct({}),
+  Exact: u128,
 });
 export const ScCallsCodec = Enum({
   Delegation: Enum({
@@ -208,31 +208,40 @@ async function testDelegate(parentLogger: Logger) {
   }).event;
   await Promise.all([scCallExecutedEvent, maxBidEvent]);
 
-  logger.info('Redeeming funds');
+  await using chainflip = await getChainflipApi();
+  const pendingRedemption = await chainflip.query.flip.pendingRedemptionsReserve(
+    evmToScAddress(whalePubkey),
+  );
 
-  const redeemAddress = await newAddress('Flip', randomBytes(32).toString('hex'));
+  // Redeem only if there are no other redemptions to prevent queuing issues when
+  // running this test multiple times.
+  if (pendingRedemption.toString().length === 0) {
+    logger.info('Redeeming funds');
 
-  scCall = encodeToScCall({
-    type: 'Redeem',
-    amount: { Exact: amount },
-    address: redeemAddress,
-    executor: undefined,
-  });
-  txData = cfScUtilsContract.methods.callSc(scCall).encodeABI();
-  receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
-  logger.info('Redeem request transaction sent ' + receipt.transactionHash);
+    const redeemAddress = await newAddress('Flip', randomBytes(32).toString('hex'));
 
-  scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
-    test: (event) => event.data.ethTxHash === receipt.transactionHash,
-  }).event;
-  const redeemEvent = observeEvent(logger, 'funding:RedemptionRequested', {
-    test: (event) => {
-      const accountMatch = event.data.accountId === evmToScAddress(whalePubkey);
-      const amountMatch = event.data.amount.replace(/,/g, '') === amount.toString();
-      return accountMatch && amountMatch;
-    },
-  }).event;
-  await Promise.all([scCallExecutedEvent, redeemEvent]);
+    scCall = encodeToScCall({
+      type: 'Redeem',
+      amount: { Exact: amount },
+      address: redeemAddress,
+      executor: undefined,
+    });
+    txData = cfScUtilsContract.methods.callSc(scCall).encodeABI();
+    receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
+    logger.info('Redeem request transaction sent ' + receipt.transactionHash);
+
+    scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
+      test: (event) => event.data.ethTxHash === receipt.transactionHash,
+    }).event;
+    const redeemEvent = observeEvent(logger, 'funding:RedemptionRequested', {
+      test: (event) => {
+        const accountMatch = event.data.accountId === evmToScAddress(whalePubkey);
+        const amountMatch = event.data.amount.replace(/,/g, '') === amount.toString();
+        return accountMatch && amountMatch;
+      },
+    }).event;
+    await Promise.all([scCallExecutedEvent, redeemEvent]);
+  }
 
   logger.info('Delegation test completed successfully!');
 }
