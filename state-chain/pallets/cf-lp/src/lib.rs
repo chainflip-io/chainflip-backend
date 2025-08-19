@@ -50,7 +50,7 @@ impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled, inte
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_chains::{AccountOrAddress, Chain};
-	use cf_primitives::{BlockNumber, ChannelId, EgressId, Price};
+	use cf_primitives::{BlockNumber, ChannelId, EgressId, PriceLimits};
 	use cf_traits::MinimumDeposit;
 
 	use super::*;
@@ -345,7 +345,7 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 			retry_duration: BlockNumber,
-			min_price: Price,
+			price_limits: PriceLimits,
 			dca_params: Option<DcaParameters>,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().internal_swaps_enabled, Error::<T>::InternalSwapsDisabled);
@@ -369,7 +369,7 @@ pub mod pallet {
 				amount,
 				output_asset,
 				retry_duration,
-				min_price,
+				price_limits,
 				dca_params,
 				account_id,
 			);

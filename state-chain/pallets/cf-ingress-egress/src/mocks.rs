@@ -383,6 +383,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 							refund_address: refund_address.clone(),
 							min_price: U256::zero(),
 							refund_ccm_metadata: None,
+							max_oracle_price_slippage: None,
 						},
 						None,
 					)

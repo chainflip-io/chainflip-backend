@@ -56,7 +56,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(18);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(19);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
@@ -177,6 +177,11 @@ pub mod pallet {
 	#[pallet::getter(fn eth_address_checker_address)]
 	/// The address of the Address Checker contract on ETH
 	pub type EthereumAddressCheckerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn eth_sc_utils_address)]
+	/// The address of the Sc Utils contract on ETH
+	pub type EthereumScUtilsAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn ethereum_chain_id)]
@@ -583,6 +588,7 @@ pub mod pallet {
 		pub eth_key_manager_address: EvmAddress,
 		pub eth_vault_address: EvmAddress,
 		pub eth_address_checker_address: EvmAddress,
+		pub eth_sc_utils_address: EvmAddress,
 		pub ethereum_chain_id: u64,
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
@@ -608,6 +614,7 @@ pub mod pallet {
 			EthereumKeyManagerAddress::<T>::set(self.eth_key_manager_address);
 			EthereumVaultAddress::<T>::set(self.eth_vault_address);
 			EthereumAddressCheckerAddress::<T>::set(self.eth_address_checker_address);
+			EthereumScUtilsAddress::<T>::set(self.eth_sc_utils_address);
 
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			EthereumSupportedAssets::<T>::insert(EthAsset::Flip, self.flip_token_address);

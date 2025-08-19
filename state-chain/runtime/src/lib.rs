@@ -178,8 +178,8 @@ pub use pallet_cf_validator::SetSizeParameters;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, multi_vault_activator::MultiVaultActivator,
 	BroadcastReadyProvider, BtcEnvironment, CfCcmAdditionalDataHandler, ChainAddressConverter,
-	ChainflipHeartbeat, DotEnvironment, EvmEnvironment, HubEnvironment, MinimumDepositProvider,
-	SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
+	ChainflipHeartbeat, ChainlinkOracle, DotEnvironment, EvmEnvironment, HubEnvironment,
+	MinimumDepositProvider, SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -346,6 +346,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type PoolPriceApi = LiquidityPools;
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
+	type PriceFeedApi = ChainlinkOracle;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -796,6 +797,7 @@ impl pallet_cf_funding::Config for Runtime {
 	type RegisterRedemption = EthereumApi<EvmEnvironment>;
 	type TimeSource = Timestamp;
 	type RedemptionChecker = Validator;
+	type EthereumSCApi = crate::chainflip::ethereum_sc_calls::EthereumSCApi;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_funding::weights::PalletWeight<Runtime>;
 }
@@ -1540,8 +1542,8 @@ macro_rules! instanced_migrations {
 
 type MigrationsForV1_11 = (
 	VersionedMigration<
-		17,
 		18,
+		19,
 		migrations::safe_mode::SafeModeMigration,
 		pallet_cf_environment::Pallet<Runtime>,
 		<Runtime as frame_system::Config>::DbWeight,
@@ -1720,6 +1722,7 @@ impl_runtime_apis! {
 				apy_bp,
 				restricted_balances,
 				estimated_redeemable_balance,
+				operator: pallet_cf_validator::ManagedValidators::<Runtime>::get(account_id),
 			}
 		}
 
@@ -1736,6 +1739,7 @@ impl_runtime_apis! {
 				allowed,
 				blocked,
 				delegators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(account_id, AssociationToOperator::Delegator),
+				flip_balance: pallet_cf_flip::Account::<Runtime>::get(account_id).total(),
 			}
 		}
 
@@ -1951,6 +1955,7 @@ impl_runtime_apis! {
 						amount_per_chunk,
 						None,
 						fees_vec,
+						Default::default(), // Execution block
 					)
 				],
 			).map_err(|e| match e {
@@ -2237,23 +2242,7 @@ impl_runtime_apis! {
 
 		fn cf_scheduled_swaps(base_asset: Asset, quote_asset: Asset) -> Vec<(SwapLegInfo, BlockNumber)> {
 			assert_eq!(quote_asset, STABLE_ASSET, "Only USDC is supported as quote asset");
-
-			let current_block = System::block_number();
-
-			pallet_cf_swapping::SwapQueue::<Runtime>::iter().flat_map(|(block, swaps_for_block)| {
-				// In case `block` has already passed, the swaps will be re-tried at the next block:
-				let execute_at = core::cmp::max(block, current_block.saturating_add(1));
-
-				let swaps: Vec<_> = swaps_for_block
-					.iter()
-					.filter(|swap| swap.from == base_asset || swap.to == base_asset)
-					.cloned()
-					.collect();
-
-				Swapping::get_scheduled_swap_legs(swaps, base_asset)
-					.into_iter()
-					.map(move |swap| (swap, execute_at))
-			}).collect()
+			Swapping::get_scheduled_swap_legs(base_asset)
 		}
 
 		fn cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
@@ -2418,6 +2407,7 @@ impl_runtime_apis! {
 					VaultSwapExtraParameters::Bitcoin {
 						min_output_amount,
 						retry_duration,
+						max_oracle_price_slippage,
 					}
 				) => {
 					crate::chainflip::vault_swaps::bitcoin_vault_swap(
@@ -2430,6 +2420,7 @@ impl_runtime_apis! {
 						boost_fee,
 						affiliate_fees,
 						dca_parameters,
+						max_oracle_price_slippage,
 					)
 				},
 				(
@@ -2945,8 +2936,7 @@ impl_runtime_apis! {
 			}
 		}
 		fn cf_pending_swaps_count() -> u32 {
-			let swaps: Vec<_> = pallet_cf_swapping::SwapQueue::<Runtime>::iter().collect();
-			swaps.iter().fold(0u32, |acc, elem| acc + elem.1.len() as u32)
+			pallet_cf_swapping::ScheduledSwaps::<Runtime>::get().len() as u32
 		}
 		fn cf_open_deposit_channels_count() -> OpenDepositChannels {
 			fn open_channels<BlockHeight, I: 'static>() -> u32

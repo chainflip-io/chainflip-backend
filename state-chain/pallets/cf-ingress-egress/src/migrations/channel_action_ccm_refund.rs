@@ -105,6 +105,7 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ChannelActionCcmRef
 								),
 								min_price: refund_params.min_price,
 								refund_ccm_metadata: None,
+								max_oracle_price_slippage: None,
 							}
 							.map(|x| x, |y| y.map(|y| y.channel_metadata)),
 						),

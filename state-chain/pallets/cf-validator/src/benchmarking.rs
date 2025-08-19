@@ -571,6 +571,18 @@ mod benchmarks {
 		#[extrinsic_call]
 		undelegate(RawOrigin::Signed(delegator.clone()));
 
-		assert!(DelegationChoice::<T>::get(delegator).is_none());
+		assert!(OutgoingDelegators::<T>::get().contains(&delegator));
+	}
+
+	#[benchmark]
+	fn set_max_bid() {
+		let caller: T::AccountId = whitelisted_caller();
+		frame_system::Pallet::<T>::inc_providers(&caller);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+
+		#[extrinsic_call]
+		set_max_bid(RawOrigin::Signed(caller.clone()), Some(T::Amount::from(0u128)));
+
+		assert!(MaxDelegationBid::<T>::get(caller).is_some());
 	}
 }

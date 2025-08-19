@@ -758,6 +758,82 @@ mod test {
 	}
 
 	#[test]
+	fn can_decode_v0_refund_params() {
+		let swap_endpoint_native_vault =
+			derive_swap_endpoint_native_vault_account(sol_test_values::SWAP_ENDPOINT_PROGRAM)
+				.unwrap()
+				.address;
+		let destination_asset = Asset::Sol;
+		let destination_address = EncodedAddress::Sol([0xF0; 32]);
+		let from = SolPubkey([0xF1; 32]);
+		let seed: &[u8] = &[0xF2; 32];
+		let event_data_account =
+			derive_vault_swap_account(sol_test_values::SWAP_ENDPOINT_PROGRAM, from.into(), seed)
+				.unwrap()
+				.address;
+		let input_amount = 1_000_000_000u64;
+		let refund_parameters = crate::ChannelRefundParametersV0::<<Solana as Chain>::ChainAccount> {
+			retry_duration: 15u32,
+			refund_address: SolAddress([0xF3; 32]),
+			min_price: 0.into(),
+		};
+		let refund_params_v1 = ChannelRefundParametersForChain::<Solana> {
+			retry_duration: refund_parameters.retry_duration,
+			refund_address: refund_parameters.refund_address,
+			min_price: refund_parameters.min_price,
+			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
+		};
+		let dca_parameters = DcaParameters { number_of_chunks: 10u32, chunk_interval: 10u32 };
+		let boost_fee = 10u8;
+		let broker_id = AccountId32::new([0xF4; 32]);
+		let broker_commission = 11;
+		let affiliate_fees = vec![AffiliateAndFee { affiliate: AffiliateShortId(0u8), fee: 12u8 }];
+		let channel_metadata = sol_test_values::ccm_parameter_v1().channel_metadata;
+
+		let instruction = SolanaInstructionBuilder::x_swap_native(
+			sol_test_values::api_env(),
+			swap_endpoint_native_vault.into(),
+			destination_asset,
+			destination_address.clone(),
+			from,
+			seed.to_vec().try_into().unwrap(),
+			event_data_account.into(),
+			input_amount,
+			crate::cf_parameters::build_and_encode_v0_cf_parameters(
+				refund_parameters.clone(),
+				Some(dca_parameters.clone()),
+				boost_fee,
+				broker_id.clone(),
+				broker_commission,
+				affiliate_fees.clone().try_into().unwrap(),
+				Some(&channel_metadata),
+			),
+			Some(channel_metadata.clone()),
+		);
+
+		assert_eq!(
+			decode_sol_instruction_data(&instruction),
+			Ok(DecodedXSwapParams {
+				amount: input_amount.into(),
+				src_asset: Asset::Sol,
+				src_address: from.into(),
+				from_token_account: None,
+				dst_address: destination_address,
+				dst_token: destination_asset,
+				refund_parameters: refund_params_v1.map_address(Into::into),
+				dca_parameters: Some(dca_parameters),
+				boost_fee,
+				broker_id,
+				broker_commission,
+				affiliate_fees,
+				ccm: Some(sol_test_values::ccm_metadata_v1_unchecked()),
+				seed: seed.to_vec().try_into().unwrap(),
+			})
+		);
+	}
+
+	#[test]
 	fn can_decode_x_swap_native_sol_instruction() {
 		let swap_endpoint_native_vault =
 			derive_swap_endpoint_native_vault_account(sol_test_values::SWAP_ENDPOINT_PROGRAM)
@@ -777,6 +853,7 @@ mod test {
 			refund_address: SolAddress([0xF3; 32]),
 			min_price: 0.into(),
 			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
 		};
 		let dca_parameters = DcaParameters { number_of_chunks: 10u32, chunk_interval: 10u32 };
 		let boost_fee = 10u8;
@@ -845,6 +922,7 @@ mod test {
 			refund_address: SolAddress([0xF3; 32]),
 			min_price: 0.into(),
 			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
 		};
 		let dca_parameters = DcaParameters { number_of_chunks: 10u32, chunk_interval: 10u32 };
 		let boost_fee = 10u8;

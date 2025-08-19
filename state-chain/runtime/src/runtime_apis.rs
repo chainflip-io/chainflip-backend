@@ -148,6 +148,7 @@ pub struct ValidatorInfo {
 	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
 	pub restricted_balances: BTreeMap<EthereumAddress, AssetAmount>,
 	pub estimated_redeemable_balance: AssetAmount,
+	pub operator: Option<AccountId32>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
@@ -160,6 +161,7 @@ pub struct OperatorInfo<Amount> {
 	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Vec::is_empty"))]
 	pub blocked: Vec<AccountId32>,
 	pub delegators: BTreeMap<AccountId32, Amount>,
+	pub flip_balance: Amount,
 }
 
 impl<A> OperatorInfo<A> {
@@ -177,6 +179,7 @@ impl<A> OperatorInfo<A> {
 			allowed: self.allowed,
 			blocked: self.blocked,
 			delegators: self.delegators.into_iter().map(|(k, v)| (k, f(v))).collect(),
+			flip_balance: f(self.flip_balance),
 		}
 	}
 }

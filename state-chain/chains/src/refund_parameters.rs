@@ -23,7 +23,7 @@ use crate::{
 	CcmChannelMetadataUnchecked, CcmDepositMetadataChecked, CcmDepositMetadataUnchecked, Chain,
 };
 use cf_amm_math::Price;
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{Asset, AssetAmount, BasisPoints};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
@@ -79,6 +79,27 @@ pub struct ChannelRefundParameters<A, CcmRefundDetails> {
 	pub refund_address: A,
 	pub min_price: Price,
 	pub refund_ccm_metadata: CcmRefundDetails,
+	pub max_oracle_price_slippage: Option<BasisPoints>,
+}
+
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
+)]
+pub struct ChannelRefundParametersV0<A> {
+	pub retry_duration: cf_primitives::BlockNumber,
+	pub refund_address: A,
+	pub min_price: Price,
 }
 
 /// Refund parameters with CCM metadata that has not yet been checked for validity.
@@ -128,6 +149,7 @@ impl RpcChannelRefundParameters {
 			refund_address: self.refund_address.try_parse_to_encoded_address(chain)?,
 			min_price: self.min_price,
 			refund_ccm_metadata: self.refund_ccm_metadata.clone(),
+			max_oracle_price_slippage: self.max_oracle_price_slippage,
 		})
 	}
 }
@@ -209,6 +231,7 @@ impl ChannelRefundParametersUnchecked<ForeignChainAddress> {
 				retry_duration: self.retry_duration,
 				refund_address: self.refund_address.clone(),
 				min_price: self.min_price,
+				max_oracle_price_slippage: self.max_oracle_price_slippage,
 				refund_ccm_metadata: self
 					.refund_ccm_metadata
 					.map(|channel_metadata| {
@@ -235,6 +258,7 @@ impl<A: BenchmarkValue, D: BenchmarkValue> BenchmarkValue
 			refund_address: BenchmarkValue::benchmark_value(),
 			min_price: BenchmarkValue::benchmark_value(),
 			refund_ccm_metadata: Some(BenchmarkValue::benchmark_value()),
+			max_oracle_price_slippage: Some(BenchmarkValue::benchmark_value()),
 		}
 	}
 }

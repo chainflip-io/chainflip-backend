@@ -38,7 +38,7 @@ CCM messages can be entered on-chain in the following ways:
 
 #### Processing
 
-Each Ccm can trigger up to 2 swap operations: one for the Principal amount and another for the Gas. The gas budget is defined in the Ccm message metadata, and the remaining deposited funds are used as Principal (Deposit amount must be >= GasBudget defined in the metadata). Each swap is batched with other swaps in the SwapQueue to avoid frontrunning. After all swaps are completed, the CCM message is egressed to the destination chain.
+Each Ccm can trigger up to 2 swap operations: one for the Principal amount and another for the Gas. The gas budget is defined in the Ccm message metadata, and the remaining deposited funds are used as Principal (Deposit amount must be >= GasBudget defined in the metadata). Each swap is batched with other swaps in the ScheduledSwaps to avoid frontrunning. After all swaps are completed, the CCM message is egressed to the destination chain.
 
 #### Egress
 

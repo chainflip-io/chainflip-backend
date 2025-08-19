@@ -25,28 +25,33 @@ mod benchmarking;
 pub mod migrations;
 
 pub mod weights;
+use core::marker::PhantomData;
+
 pub use weights::WeightInfo;
 
 #[cfg(test)]
 mod tests;
 
 use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthAmount};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
 	Funding, RedemptionCheck, SpawnAccount,
 };
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::DispatchResult,
+	dispatch::{DispatchResult, GetDispatchInfo},
 	ensure,
 	sp_runtime::{
 		traits::{CheckedSub, One, UniqueSaturatedInto, Zero},
 		Saturating,
 	},
+	storage::TransactionOutcome,
 	traits::{
 		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OriginTrait, StorageVersion,
-		UnixTime,
+		UnfilteredDispatchable, UnixTime,
 	},
+	DebugNoBound,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -55,8 +60,10 @@ use sp_runtime::DispatchError;
 use sp_std::{
 	cmp::{max, min},
 	collections::btree_map::BTreeMap,
+	fmt::Debug,
 	prelude::*,
 };
+
 #[derive(Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub enum Pending {
 	Pending,
@@ -309,13 +316,15 @@ pub mod pallet {
 	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
 	use cf_traits::RedemptionCheck;
-	use frame_support::{pallet_prelude::*, Parameter};
+	use frame_support::{pallet_prelude::*, storage::with_transaction, Parameter};
 	use frame_system::pallet_prelude::*;
 
 	#[allow(unused_imports)]
 	use sp_std::time::Duration;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
+
+	pub type RuntimeOrigin<T> = <T as frame_system::Config>::RuntimeOrigin;
 
 	pub type FundingAttempt<Amount> = (EthereumAddress, Amount);
 
@@ -364,6 +373,15 @@ pub mod pallet {
 
 		/// Provide information on current bidders
 		type RedemptionChecker: RedemptionCheck<ValidatorId = Self::AccountId>;
+
+		/// Calls that are dispatchable via ethereum contract
+		type EthereumSCApi: UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
+			+ Decode
+			+ Clone
+			+ Ord
+			+ PartialOrd
+			+ Debug
+			+ GetDispatchInfo;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
@@ -493,6 +511,22 @@ pub mod pallet {
 			recipient_account_id: AccountId<T>,
 			amount: FlipBalance<T>,
 		},
+		SCCallExecuted {
+			caller: AccountId<T>,
+			sc_call: T::EthereumSCApi,
+			eth_tx_hash: EthTransactionHash,
+		},
+		SCCallCannotBeExecuted {
+			caller: AccountId<T>,
+			sc_call: T::EthereumSCApi,
+			call_error: frame_support::dispatch::DispatchErrorWithPostInfo,
+			eth_tx_hash: EthTransactionHash,
+		},
+		SCCallCannotBeDecoded {
+			caller: AccountId<T>,
+			sc_call_bytes: Vec<u8>,
+			eth_tx_hash: EthTransactionHash,
+		},
 	}
 
 	#[pallet::error]
@@ -586,21 +620,7 @@ pub mod pallet {
 			tx_hash: EthTransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			let total_balance = Self::add_funds_to_account(&account_id, amount);
-
-			if RestrictedAddresses::<T>::contains_key(funder) {
-				RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
-					map.entry(funder).and_modify(|balance| *balance += amount).or_insert(amount);
-				});
-			}
-
-			Self::deposit_event(Event::Funded {
-				account_id,
-				tx_hash,
-				funds_added: amount,
-				total_balance,
-			});
+			Self::fund_account(account_id, funder, amount, tx_hash);
 			Ok(())
 		}
 
@@ -928,6 +948,82 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Processes the deposit and sc call via ethereum. If the call cannot be decoded, we still
+		/// process the deposit since those two are independant actions.
+		#[pallet::call_index(12)]
+		#[pallet::weight(T::WeightInfo::execute_sc_call().saturating_add(
+			T::EthereumSCApi::decode(&mut &deposit_and_call.call[..])
+			.map( |c| c.get_dispatch_info().weight)
+			.unwrap_or(Weight::zero())))]
+		pub fn execute_sc_call(
+			origin: OriginFor<T>,
+			deposit_and_call: EthereumDepositAndSCCall,
+			caller: EthereumAddress,
+			caller_account_id: AccountId<T>,
+			// Required to ensure this call is unique per funding event.
+			eth_tx_hash: EthTransactionHash,
+		) -> DispatchResult {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			// process the deposit
+			match deposit_and_call.deposit {
+				EthereumDeposit::FlipToSCGateway { amount } => Self::fund_account(
+					caller_account_id.clone(),
+					caller,
+					amount.into(),
+					eth_tx_hash,
+				),
+
+				// nothing to do
+				EthereumDeposit::NoDeposit => {},
+
+				// Deposit via vault or transfers will be handled here in the future
+				_ => {},
+			}
+
+			match T::EthereumSCApi::decode(&mut &deposit_and_call.call[..]) {
+				Ok(call) => {
+					// If the call fails to execute, we need to rollback the changes in the tx but
+					// we still succeed this extrinsic since we need to successfully process
+					// the deposit above. In this case, the deposit will be processed and no
+					// call will be executed.
+					match with_transaction(|| {
+						match call.clone().dispatch_bypass_filter(RuntimeOrigin::<T>::signed(
+							caller_account_id.clone(),
+						)) {
+							r @ Ok(_) => TransactionOutcome::Commit(r),
+							r @ Err(_) => TransactionOutcome::Rollback(r),
+						}
+					}) {
+						Ok(_) => {
+							Self::deposit_event(Event::SCCallExecuted {
+								caller: caller_account_id,
+								sc_call: call,
+								eth_tx_hash,
+							});
+						},
+						Err(e) => {
+							Self::deposit_event(Event::SCCallCannotBeExecuted {
+								caller: caller_account_id,
+								sc_call: call,
+								call_error: e,
+								eth_tx_hash,
+							});
+						},
+					}
+				},
+				Err(_) => {
+					Self::deposit_event(Event::SCCallCannotBeDecoded {
+						caller: caller_account_id,
+						sc_call_bytes: deposit_and_call.call,
+						eth_tx_hash,
+					});
+				},
+			}
+
+			Ok(())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -999,6 +1095,28 @@ impl<T: Config> Pallet<T> {
 				});
 			}
 		}
+	}
+
+	fn fund_account(
+		account_id: AccountId<T>,
+		funder: EthereumAddress,
+		amount: FlipBalance<T>,
+		tx_hash: EthTransactionHash,
+	) {
+		let total_balance = Self::add_funds_to_account(&account_id, amount);
+
+		if RestrictedAddresses::<T>::contains_key(funder) {
+			RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
+				map.entry(funder).and_modify(|balance| *balance += amount).or_insert(amount);
+			});
+		}
+
+		Self::deposit_event(Event::Funded {
+			account_id,
+			tx_hash,
+			funds_added: amount,
+			total_balance,
+		});
 	}
 }
 
@@ -1078,4 +1196,18 @@ impl<T: Config> SpawnAccount for Pallet<T> {
 		))
 		.map_err(|_| Error::<T>::SubAccountIdDerivationFailed)?)
 	}
+}
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+pub struct EthereumDepositAndSCCall {
+	pub deposit: EthereumDeposit,
+	pub call: Vec<u8>,
+}
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+pub enum EthereumDeposit {
+	FlipToSCGateway { amount: EthAmount },
+	Vault { asset: EthAsset, amount: EthAmount },
+	Transfer { asset: EthAsset, amount: EthAmount, destination: EthereumAddress },
+	NoDeposit,
 }

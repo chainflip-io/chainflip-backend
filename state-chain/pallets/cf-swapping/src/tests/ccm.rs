@@ -113,6 +113,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 				refund_address: EncodedAddress::Eth([1; 20]),
 				min_price: U256::from(0),
 				refund_ccm_metadata: Default::default(),
+				max_oracle_price_slippage: None,
 			};
 
 			// Can process CCM via Swap deposit
@@ -150,16 +151,20 @@ fn can_process_ccms_via_swap_deposit_address() {
 
 			// Principal swap is scheduled first
 			assert_eq!(
-				SwapQueue::<Test>::get(PRINCIPAL_SWAP_BLOCK),
-				vec![Swap::new(
+				ScheduledSwaps::<Test>::get(),
+				BTreeMap::from_iter([(
 					1.into(),
-					1.into(),
-					Asset::Dot,
-					Asset::Eth,
-					DEPOSIT_AMOUNT,
-					None,
-					vec![ZERO_NETWORK_FEES],
-				),]
+					Swap::new(
+						1.into(),
+						1.into(),
+						Asset::Dot,
+						Asset::Eth,
+						DEPOSIT_AMOUNT,
+						None,
+						vec![ZERO_NETWORK_FEES],
+						PRINCIPAL_SWAP_BLOCK
+					)
+				)])
 			);
 		})
 		.then_process_blocks_until_block(PRINCIPAL_SWAP_BLOCK)
@@ -194,16 +199,20 @@ fn ccm_principal_swap_only() {
 
 			// Principal swap should be immediately scheduled
 			assert_eq!(
-				SwapQueue::<Test>::get(PRINCIPAL_SWAP_BLOCK),
-				vec![Swap::new(
+				ScheduledSwaps::<Test>::get(),
+				BTreeMap::from_iter([(
 					1.into(),
-					SWAP_REQUEST_ID,
-					INPUT_ASSET,
-					OUTPUT_ASSET,
-					SWAP_AMOUNT,
-					None,
-					vec![ZERO_NETWORK_FEES],
-				),]
+					Swap::new(
+						1.into(),
+						SWAP_REQUEST_ID,
+						INPUT_ASSET,
+						OUTPUT_ASSET,
+						SWAP_AMOUNT,
+						None,
+						vec![ZERO_NETWORK_FEES],
+						PRINCIPAL_SWAP_BLOCK
+					)
+				)])
 			);
 		})
 		.then_process_blocks_until_block(PRINCIPAL_SWAP_BLOCK)
