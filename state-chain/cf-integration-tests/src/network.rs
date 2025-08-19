@@ -653,7 +653,7 @@ impl Network {
 
 	// Create a network which includes the authorities in genesis of number of nodes
 	// and return a network and sorted list of nodes within
-	pub fn create(number_of_backup_nodes: u8, existing_nodes: &Vec<NodeId>) -> (Self, Vec<NodeId>) {
+	pub fn create(num_extra_nodes: u8, existing_nodes: &Vec<NodeId>) -> (Self, Vec<NodeId>) {
 		let mut network: Network = Default::default();
 
 		// Include any nodes already *created* to the test network
@@ -664,13 +664,13 @@ impl Network {
 		}
 
 		// Create the backup nodes
-		let mut backup_nodes = Vec::new();
-		for _ in 0..number_of_backup_nodes {
+		let mut extra_nodes = Vec::new();
+		for _ in 0..num_extra_nodes {
 			let node_id = network.create_engine();
-			backup_nodes.push(node_id.clone());
+			extra_nodes.push(node_id.clone());
 		}
 
-		(network, backup_nodes)
+		(network, extra_nodes)
 	}
 
 	pub fn set_active(&mut self, node_id: &NodeId, active: bool) {

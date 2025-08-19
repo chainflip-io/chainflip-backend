@@ -38,14 +38,14 @@ use state_chain_runtime::{
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
 pub fn fund_authorities_and_join_auction(
-	num_backups: AuthorityCount,
+	num_extra_nodes: AuthorityCount,
 ) -> (network::Network, Vec<NodeId>, Vec<NodeId>) {
 	// Create MAX_AUTHORITIES backup nodes and fund them above our genesis
 	// authorities The result will be our newly created nodes will be authorities
 	// and the genesis authorities will become backup nodes
 	let genesis_authorities: Vec<AccountId32> = Validator::current_authorities();
 	let (mut testnet, init_backup_nodes) =
-		network::Network::create(num_backups as u8, &genesis_authorities);
+		network::Network::create(num_extra_nodes as u8, &genesis_authorities);
 
 	// An initial balance which is greater than the genesis balances
 	// We intend for these initially backup nodes to win the auction
