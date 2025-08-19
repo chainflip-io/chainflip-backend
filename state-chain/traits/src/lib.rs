@@ -48,7 +48,7 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
-	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
+	EpochIndex, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -59,7 +59,7 @@ use frame_support::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
-	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
+	traits::{EnsureOrigin, Get, IsType, UnfilteredDispatchable},
 	weights::Weight,
 	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
 };
@@ -324,14 +324,9 @@ pub trait AccountInfo {
 pub trait Issuance {
 	type AccountId;
 	type Balance;
-	/// An imbalance representing freshly minted, unallocated funds.
-	type Surplus: Imbalance<Self::Balance>;
 
 	/// Mint new funds.
-	fn mint(amount: Self::Balance) -> Self::Surplus;
-
-	/// Burn funds from somewhere.
-	fn burn(amount: Self::Balance) -> <Self::Surplus as Imbalance<Self::Balance>>::Opposite;
+	fn mint(beneficiary: &Self::AccountId, amount: Self::Balance);
 
 	/// Returns the total issuance.
 	fn total_issuance() -> Self::Balance;
@@ -392,15 +387,16 @@ pub trait Slashing {
 	type Balance;
 
 	/// Slashes a validator for the equivalent of some number of blocks offline.
-	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
+	fn slash(account_id: &Self::AccountId, blocks_offline: Self::BlockNumber) {
+		Self::slash_balance(account_id, Self::calculate_slash_amount(account_id, blocks_offline));
+	}
 
 	/// Slashes a validator by some fixed amount.
-	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance);
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: Self::Balance);
 
-	/// Calculate the amount of FLIP to slash
 	fn calculate_slash_amount(
 		account_id: &Self::AccountId,
-		blocks: Self::BlockNumber,
+		blocks_offline: Self::BlockNumber,
 	) -> Self::Balance;
 }
 
