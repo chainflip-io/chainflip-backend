@@ -28,7 +28,7 @@ engine-proc-macros/ @nmammeri @dandanlen
 engine-runner-bin/ @nmammeri @dandanlen
 engine-upgrade-utils/ @nmammeri @dandanlen
 
-/foreign-chains/ @albert-llimos @syan095
+/foreign-chains/ @albert-llimos
 
 /localnet/ @chainflip-io/platform
 
@@ -45,8 +45,8 @@ engine-upgrade-utils/ @nmammeri @dandanlen
 /state-chain/chains/evm.rs @albert-llimos @dandanlen @ramizhasan111
 /state-chain/chains/evm/ @albert-llimos @dandanlen @ramizhasan111
 /state-chain/chains/hub/ @martin-chainflip @dandanlen
-/state-chain/chains/sol.rs @albert-llimos @syan095 @ramizhasan111
-/state-chain/chains/sol/ @albert-llimos @syan095 @ramizhasan111
+/state-chain/chains/sol.rs @albert-llimos @ramizhasan111
+/state-chain/chains/sol/ @albert-llimos @ramizhasan111
 
 /state-chain/custom-rpc/ @chainflip-io/web @nmammeri
 
@@ -55,9 +55,9 @@ engine-upgrade-utils/ @nmammeri @dandanlen
 /state-chain/pallets/cf-threshold-signing/ @ramizhasan111 @dandanlen
 /state-chain/pallets/cf-vaults/ @ramizhasan111 @dandanlen
 /state-chain/pallets/cf-elections/ @MxmUrw @marcellorigotti
-/state-chain/pallets/cf-funding/ @Janislav @dandanlen
+/state-chain/pallets/cf-funding/ @dandanlen
 /state-chain/pallets/cf-lending-pools/ @martin-chainflip @dandanlen @msgmaxim
 /state-chain/pallets/cf-pools/ @martin-chainflip @dandanlen @msgmaxim
 /state-chain/pallets/cf-swapping/ @msgmaxim @j4m1ef0rd
-/state-chain/pallets/cf-tokenholder-governance/ @Janislav @dandanlen
+/state-chain/pallets/cf-tokenholder-governance/ @dandanlen
 /state-chain/pallets/cf-trading-strategy/ @msgmaxim @j4m1ef0rd
