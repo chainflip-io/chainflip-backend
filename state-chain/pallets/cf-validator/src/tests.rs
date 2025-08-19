@@ -526,6 +526,7 @@ fn expired_epoch_data_is_removed() {
 		let delegator = 123u64;
 		let operator = 456u64;
 		let test_snapshot = DelegationSnapshot {
+			operator,
 			delegators: [(delegator, 50u128)].into_iter().collect(),
 			validators: [(ALICE, 150u128)].into_iter().collect(),
 			delegation_fee_bps: 250,
@@ -1923,6 +1924,21 @@ mod delegation {
 		const AVAILABLE_BALANCE_OF_DELEGATOR: u128 = 20;
 		const MAX_BID_OF_DELEGATOR: u128 = 10;
 		const DELEGATORS: [u64; 4] = [21, 22, 23, 24];
+		fn delegation() -> BTreeSet<(ValidatorId, Amount)> {
+			DELEGATORS
+				.into_iter()
+				.map(|d| {
+					(
+						d,
+						if d % 2 == 0 {
+							MAX_BID_OF_DELEGATOR
+						} else {
+							AVAILABLE_BALANCE_OF_DELEGATOR
+						},
+					)
+				})
+				.collect()
+		}
 
 		new_test_ext()
 			.then_execute_with_checks(|| {
@@ -2114,5 +2130,77 @@ mod delegation {
 			MockFlip::credit_funds(&BOB, 200);
 			assert_ok!(ValidatorPallet::set_max_bid(OriginTrait::signed(BOB), Some(100)));
 		});
+	}
+}
+
+#[cfg(test)]
+mod delegation_splitting {
+	use super::*;
+	use crate::delegation::DelegationSnapshot;
+
+	/*
+	 * Test conventions:
+	 * - Operator has id 0
+	 * - Validator has id 1
+	 * - Delegators have ids 2, 3, ...
+	 */
+
+	const BID: u128 = 1_000_000_000;
+	const REWARD: u128 = 100_000_000;
+
+	fn split_amount(
+		total: u128,
+		delegator_bids: Vec<u128>,
+		delegation_fee_bps: u32,
+	) -> BTreeMap<u64, u128> {
+		DelegationSnapshot::<Test> {
+			operator: 0,
+			validators: BTreeMap::from_iter([(1, BID)]),
+			delegators: delegator_bids
+				.into_iter()
+				.enumerate()
+				.map(|(i, b)| ((i + 2) as u64, b))
+				.collect(),
+			delegation_fee_bps,
+		}
+		.distribute(total)
+		.map(|(k, v)| (*k, v))
+		.collect()
+	}
+
+	#[test]
+	fn no_operator_fee() {
+		assert_eq!(
+			split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 0),
+			BTreeMap::from_iter([
+				(0, 0),
+				(1, REWARD),
+				(2, REWARD),
+				(3, 2 * REWARD),
+				(4, 3 * REWARD),
+			])
+		);
+	}
+
+	#[test]
+	fn with_operator_fee() {
+		// 20% operator fee
+		assert_eq!(
+			split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 2000),
+			BTreeMap::from_iter(
+				[
+					// Operator gets 20 % of delegator total
+					(0, (REWARD * 6 / 5)),
+					(1, REWARD),
+					(2, REWARD),
+					(3, 2 * REWARD),
+					(4, 3 * REWARD),
+				]
+				.into_iter()
+				// Delegator reward is reduced by 20%.
+				.map(|(k, v)| if k > 1 { (k, v * 4 / 5) } else { (k, v) })
+				.collect::<BTreeMap<_, _>>()
+			)
+		);
 	}
 }

@@ -679,6 +679,7 @@ impl From<CheckedTransactionParameter> for TransactionVerificationError {
 #[derive(
 	Clone,
 	Debug,
+	Default,
 	PartialEq,
 	Eq,
 	Encode,

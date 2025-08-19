@@ -111,7 +111,8 @@ use pallet_cf_swapping::{
 };
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use pallet_cf_validator::{
-	AssociationToOperator, DelegationAcceptance, SetSizeMaximisingAuctionResolver,
+	AssociationToOperator, DelegatedRewardsDistribution, DelegationAcceptance, DelegationSlasher,
+	SetSizeMaximisingAuctionResolver,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use runtime_apis::ChainAccounts;
@@ -184,7 +185,7 @@ use chainflip::{
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
 use constants::common::*;
-use pallet_cf_flip::{Bonder, FlipSlasher};
+use pallet_cf_flip::{Bonder, FlipIssuance, FlipSlasher};
 pub use pallet_transaction_payment::ChargeTransactionPayment;
 
 // Make the WASM binary available.
@@ -767,7 +768,7 @@ impl pallet_timestamp::Config for Runtime {
 
 impl pallet_authorship::Config for Runtime {
 	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Aura>;
-	type EventHandler = ();
+	type EventHandler = Emissions;
 }
 
 impl pallet_cf_flip::Config for Runtime {
@@ -836,9 +837,8 @@ impl pallet_cf_emissions::Config for Runtime {
 	type FlipBalance = FlipBalance;
 	type ApiCall = eth::api::EthereumApi<EvmEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
-	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
-	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
+	type RewardsDistribution = DelegatedRewardsDistribution<Runtime, FlipIssuance<Runtime>>;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type EthEnvironment = EvmEnvironment;
 	type FlipToBurn = Swapping;
@@ -874,7 +874,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Offence = chainflip::Offence;
 	type HeartbeatBlockInterval = ConstU32<HEARTBEAT_BLOCK_INTERVAL>;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
-	type Slasher = FlipSlasher<Self>;
+	type Slasher = DelegationSlasher<Runtime, FlipSlasher<Runtime>>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type MaximumAccruableReputation = MaximumAccruableReputation;
 	type SafeMode = RuntimeSafeMode;
@@ -891,7 +891,7 @@ impl pallet_cf_threshold_signature::Config<Instance16> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
-	type Slasher = FlipSlasher<Self>;
+	type Slasher = DelegationSlasher<Runtime, FlipSlasher<Runtime>>;
 	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -907,7 +907,7 @@ impl pallet_cf_threshold_signature::Config<Instance15> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
-	type Slasher = FlipSlasher<Self>;
+	type Slasher = DelegationSlasher<Runtime, FlipSlasher<Runtime>>;
 	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -923,7 +923,7 @@ impl pallet_cf_threshold_signature::Config<Instance3> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
-	type Slasher = FlipSlasher<Self>;
+	type Slasher = DelegationSlasher<Runtime, FlipSlasher<Runtime>>;
 	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -939,7 +939,7 @@ impl pallet_cf_threshold_signature::Config<Instance5> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
-	type Slasher = FlipSlasher<Self>;
+	type Slasher = DelegationSlasher<Runtime, FlipSlasher<Runtime>>;
 	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
