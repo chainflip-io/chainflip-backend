@@ -1059,7 +1059,8 @@ fn swaps_get_retried_after_failure() {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: SwapId(1),
-					execute_at: RETRY_AT_BLOCK
+					execute_at: RETRY_AT_BLOCK,
+					reason: SwapFailureReason::PriceImpactLimit,
 				})
 			);
 
@@ -1067,7 +1068,8 @@ fn swaps_get_retried_after_failure() {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: SwapId(2),
-					execute_at: RETRY_AT_BLOCK
+					execute_at: RETRY_AT_BLOCK,
+					reason: SwapFailureReason::PriceImpactLimit,
 				})
 			);
 
@@ -1546,7 +1548,8 @@ mod swap_batching {
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 					RuntimeEvent::Swapping(Event::SwapRescheduled {
 						swap_id: SwapId(1),
-						execute_at: SWAP_RESCHEDULED_BLOCK
+						execute_at: SWAP_RESCHEDULED_BLOCK,
+						reason: SwapFailureReason::PriceImpactLimit,
 					}),
 				);
 
@@ -1773,7 +1776,10 @@ mod internal_swaps {
 
 				assert_event_sequence!(
 					Test,
-					RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(2) }),
+					RuntimeEvent::Swapping(Event::SwapAborted {
+						swap_id: SwapId(2),
+						reason: SwapFailureReason::MinPriceViolation
+					}),
 					RuntimeEvent::Swapping(Event::SwapRequested {
 						request_type: SwapRequestTypeEncoded::NetworkFee,
 						input_amount: REFUND_FEE,

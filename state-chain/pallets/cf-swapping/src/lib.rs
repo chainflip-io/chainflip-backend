@@ -306,6 +306,22 @@ impl<T: Config> Swap<T> {
 	}
 }
 
+#[derive(Debug, Decode, TypeInfo, Clone, PartialEq, Eq, Encode)]
+pub enum SwapFailureReason {
+	// Batch swap failed due to price impact limit,
+	PriceImpactLimit,
+	// The minimum price limit was exceeded,
+	MinPriceViolation,
+	// The oracle price slippage limit was exceeded,
+	OraclePriceSlippageExceeded,
+	// Unable to use oracle slippage parameter because the oracle price is stale,
+	OraclePriceStale,
+	// An earlier chunk for the same swap request was aborted or rescheduled
+	PredecessorSwapFailure,
+	// Swapping is disabled due to safe mode
+	SafeModeActive,
+}
+
 pub enum BatchExecutionError<T: Config> {
 	SwapLegFailed {
 		asset: Asset,
@@ -314,7 +330,7 @@ pub enum BatchExecutionError<T: Config> {
 		failed_swap_group: Vec<SwapState<T>>,
 	},
 	PriceViolation {
-		violating_swaps: Vec<Swap<T>>,
+		violating_swaps: Vec<(Swap<T>, SwapFailureReason)>,
 		non_violating_swaps: Vec<Swap<T>>,
 	},
 	DispatchError {
@@ -325,7 +341,7 @@ pub enum BatchExecutionError<T: Config> {
 #[derive(DebugNoBound)]
 struct BatchExecutionOutcomes<T: Config> {
 	successful_swaps: Vec<SwapState<T>>,
-	failed_swaps: Vec<Swap<T>>,
+	failed_swaps: Vec<(Swap<T>, SwapFailureReason)>,
 }
 
 /// This impl is never used. This is purely used to satisfy trait requirement
@@ -481,7 +497,7 @@ pub mod pallet {
 	};
 	use cf_primitives::{
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
-		Price, PriceLimits, SwapId, SwapOutput, SwapRequestId,
+		PriceLimits, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{
 		AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider, PriceFeedApi,
@@ -725,6 +741,7 @@ pub mod pallet {
 		SwapRescheduled {
 			swap_id: SwapId,
 			execute_at: BlockNumberFor<T>,
+			reason: SwapFailureReason,
 		},
 		/// A swap has been executed.
 		SwapExecuted {
@@ -827,6 +844,7 @@ pub mod pallet {
 		},
 		SwapAborted {
 			swap_id: SwapId,
+			reason: SwapFailureReason,
 		},
 	}
 	#[pallet::error]
@@ -960,7 +978,7 @@ pub mod pallet {
 			if !T::SafeMode::get().swaps_enabled {
 				// Since we won't be executing swaps at this block, we need to reschedule them:
 				for swap in swaps_to_execute {
-					Self::reschedule_swap(swap, retry_delay);
+					Self::reschedule_swap(swap, retry_delay, SwapFailureReason::SafeModeActive);
 				}
 
 				return
@@ -973,19 +991,19 @@ pub mod pallet {
 				Self::process_swap_outcome(swap);
 			}
 
-			for swap in failed_swaps {
+			for (swap, reason) in failed_swaps {
 				match swap.refund_params {
 					Some(ref params)
 						if BlockNumberFor::<T>::from(params.refund_block) <
 							current_block + retry_delay =>
 					{
 						// Reached refund block, process refund:
-						Self::refund_failed_swap(swap);
+						Self::refund_failed_swap(swap, reason);
 					},
 					_ => {
 						// Either refund parameters not set, or refund block not
 						// reached:
-						Self::reschedule_swap(swap, retry_delay);
+						Self::reschedule_swap(swap, retry_delay, reason);
 					},
 				}
 			}
@@ -1664,6 +1682,58 @@ pub mod pallet {
 			Ok(())
 		}
 
+		fn check_swap_price_violation(swap: &SwapState<T>) -> Result<(), SwapFailureReason> {
+			if let Some(params) = swap.refund_params() {
+				// Live price protection, aka oracle price protection
+				if let Some(slippage_bps) = params.price_limits.max_oracle_price_slippage {
+					match (
+						T::PriceFeedApi::get_price(swap.input_asset()),
+						T::PriceFeedApi::get_price(swap.output_asset()),
+					) {
+						(Some(oracle1), Some(oracle2)) if oracle1.stale || oracle2.stale =>
+							return Err(SwapFailureReason::OraclePriceStale),
+						(None, _) | (_, None) => {
+							// Ignore the oracle price check if not supported/available
+							// for one of the assets.
+						},
+						(Some(oracle1), Some(oracle2)) => {
+							let relative_price =
+								cf_amm::math::relative_price(oracle1.price, oracle2.price);
+							// Reduce the relative price by slippage_bps:
+							let min_oracle_price = cf_amm::math::mul_div_floor(
+								relative_price,
+								(MAX_BASIS_POINTS - slippage_bps).into(),
+								MAX_BASIS_POINTS,
+							);
+							// Use the oracle price to calculate the minimum output needed
+							let output_amount = output_amount_floor(
+								swap.swap.input_amount.into(),
+								min_oracle_price,
+							)
+							.unique_saturated_into();
+							if swap.final_output.unwrap() < output_amount {
+								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
+							}
+						},
+					}
+				};
+
+				// Minimum price protection, aka FoK price protection
+				let min_price_output = output_amount_floor(
+					swap.swap.input_amount.into(),
+					params.price_limits.min_price,
+				)
+				.unique_saturated_into();
+				if swap.final_output.unwrap() < min_price_output {
+					return Err(SwapFailureReason::MinPriceViolation);
+				}
+
+				Ok(())
+			} else {
+				Ok(())
+			}
+		}
+
 		#[transactional]
 		pub fn try_execute_without_violations(
 			swaps: Vec<Swap<T>>,
@@ -1676,63 +1746,28 @@ pub mod pallet {
 
 			// Successfully executed without hitting price impact limit.
 			// Now checking for FoK violations:
-			let (non_violating, violating): (Vec<_>, Vec<_>) =
-				swaps.into_iter().partition(|swap| {
-					swap.refund_params().as_ref().is_none_or(|params| {
-						// Live price protection, aka oracle price protection
-						let min_price_from_oracle =
-							params.price_limits.max_oracle_price_slippage.map(|slippage_bps| {
-								match (
-									T::PriceFeedApi::get_price(swap.input_asset()),
-									T::PriceFeedApi::get_price(swap.output_asset()),
-								) {
-									(Some(oracle1), Some(oracle2))
-										if oracle1.stale || oracle2.stale =>
-									{
-										// If a oracle price is stale use a max value to force a
-										// price violation so the swap will be rescheduled.
-										Price::MAX
-									},
-									(None, _) | (_, None) => {
-										// Ignore the oracle price check if not supported/available
-										// for one of the assets.
-										Price::zero()
-									},
-									(Some(oracle1), Some(oracle2)) => {
-										let relative_price = cf_amm::math::relative_price(
-											oracle1.price,
-											oracle2.price,
-										);
-										// Reduce the relative price by slippage_bps:
-										cf_amm::math::mul_div_floor(
-											relative_price,
-											(MAX_BASIS_POINTS - slippage_bps).into(),
-											MAX_BASIS_POINTS,
-										)
-									},
-								}
-							});
-
-						// Use the larger of the two prices
-						let min_price = core::cmp::max(
-							min_price_from_oracle.unwrap_or_default(),
-							params.price_limits.min_price,
-						);
-
-						let min_output =
-							output_amount_floor(swap.swap.input_amount.into(), min_price)
-								.unique_saturated_into();
-
-						swap.final_output.unwrap() >= min_output
-					})
+			let mut non_violating_swaps = vec![];
+			let mut violating_swaps = vec![];
+			swaps
+				.into_iter()
+				.for_each(|swap| match Self::check_swap_price_violation(&swap) {
+					Ok(()) => {
+						non_violating_swaps.push(swap);
+					},
+					Err(reason) => {
+						violating_swaps.push((swap.swap, reason));
+					},
 				});
 
-			if violating.is_empty() {
-				Ok(non_violating)
+			if violating_swaps.is_empty() {
+				Ok(non_violating_swaps)
 			} else {
 				Err(BatchExecutionError::PriceViolation {
-					violating_swaps: violating.into_iter().map(|ctx| ctx.swap).collect(),
-					non_violating_swaps: non_violating.into_iter().map(|ctx| ctx.swap).collect(),
+					violating_swaps,
+					non_violating_swaps: non_violating_swaps
+						.into_iter()
+						.map(|ctx| ctx.swap)
+						.collect(),
 				})
 			}
 		}
@@ -1771,7 +1806,7 @@ pub mod pallet {
 							&failed_swap_group,
 							direction,
 						) {
-							failed_swaps.push(removed_swap);
+							failed_swaps.push((removed_swap, SwapFailureReason::PriceImpactLimit));
 						} else {
 							break;
 						}
@@ -1793,14 +1828,18 @@ pub mod pallet {
 			}
 
 			// If we are here, consider all swaps as failed:
-			failed_swaps.extend(swaps_to_execute);
+			failed_swaps.extend(
+				swaps_to_execute
+					.into_iter()
+					.map(|swap| (swap, SwapFailureReason::PriceImpactLimit)),
+			);
 			BatchExecutionOutcomes { successful_swaps: vec![], failed_swaps }
 		}
 
-		fn refund_failed_swap(swap: Swap<T>) {
+		fn refund_failed_swap(swap: Swap<T>, reason: SwapFailureReason) {
 			let swap_request_id = swap.swap_request_id;
 
-			Self::deposit_event(Event::<T>::SwapAborted { swap_id: swap.swap_id });
+			Self::deposit_event(Event::<T>::SwapAborted { swap_id: swap.swap_id, reason });
 
 			let Some(mut request) = SwapRequests::<T>::take(swap_request_id) else {
 				log_or_panic!("Swap request {swap_request_id} not found");
@@ -1821,7 +1860,10 @@ pub mod pallet {
 						.iter()
 						.filter(|swap_id| *swap_id != &swap.swap_id)
 						.fold(0, |acc: u128, swap_id| {
-							acc.saturating_add(Self::cancel_swap(*swap_id))
+							acc.saturating_add(Self::cancel_swap(
+								*swap_id,
+								SwapFailureReason::PredecessorSwapFailure,
+							))
 						});
 
 					let total_input_remaining = swap.input_amount +
@@ -1921,10 +1963,10 @@ pub mod pallet {
 
 		// Removes the swap from the scheduled swaps and returns the input amount of the canceled
 		// swap.
-		fn cancel_swap(swap_id: SwapId) -> AssetAmount {
+		fn cancel_swap(swap_id: SwapId, reason: SwapFailureReason) -> AssetAmount {
 			ScheduledSwaps::<T>::mutate(|swaps| {
 				let amount = swaps.remove(&swap_id).map(|swap| {
-					Self::deposit_event(Event::<T>::SwapAborted { swap_id: swap.swap_id });
+					Self::deposit_event(Event::<T>::SwapAborted { swap_id: swap.swap_id, reason });
 					swap.input_amount
 				});
 				if amount.is_none() {
@@ -2216,7 +2258,11 @@ pub mod pallet {
 			swap_id
 		}
 
-		fn reschedule_swap(mut swap: Swap<T>, retry_delay: BlockNumberFor<T>) {
+		fn reschedule_swap(
+			mut swap: Swap<T>,
+			retry_delay: BlockNumberFor<T>,
+			reason: SwapFailureReason,
+		) {
 			SwapRequests::<T>::mutate(swap.swap_request_id, |request| {
 				if let Some(request) = request {
 					if let SwapRequestState::UserSwap { dca_state, .. } = &mut request.state {
@@ -2229,6 +2275,7 @@ pub mod pallet {
 							Self::deposit_event(Event::<T>::SwapRescheduled {
 								swap_id: main_swap_id,
 								execute_at,
+								reason,
 							});
 							for swap_id in dca_state.scheduled_chunks.iter().copied() {
 								if swap_id != main_swap_id {
@@ -2239,6 +2286,7 @@ pub mod pallet {
 										Self::deposit_event(Event::<T>::SwapRescheduled {
 											swap_id,
 											execute_at: s.execute_at,
+											reason: SwapFailureReason::PredecessorSwapFailure,
 										});
 									} else {
 										log_or_panic!(

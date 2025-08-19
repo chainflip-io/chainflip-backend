@@ -279,7 +279,8 @@ fn dca_with_fok_full_refund(is_ccm: bool) {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: SwapId(1),
-					execute_at: REFUND_BLOCK
+					execute_at: REFUND_BLOCK,
+					reason: SwapFailureReason::MinPriceViolation,
 				})
 			);
 
@@ -303,7 +304,10 @@ fn dca_with_fok_full_refund(is_ccm: bool) {
 
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(1) }),
+				RuntimeEvent::Swapping(Event::SwapAborted {
+					swap_id: SwapId(1),
+					reason: SwapFailureReason::MinPriceViolation
+				}),
 				RuntimeEvent::Swapping(Event::SwapRequested {
 					input_asset: INPUT_ASSET,
 					input_amount: REFUND_FEE,
@@ -377,7 +381,8 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: SwapId(2),
-					execute_at: CHUNK_2_RESCHEDULED_AT_BLOCK
+					execute_at: CHUNK_2_RESCHEDULED_AT_BLOCK,
+					reason: SwapFailureReason::MinPriceViolation,
 				})
 			);
 
@@ -413,7 +418,10 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(2) }),
+				RuntimeEvent::Swapping(Event::SwapAborted {
+					swap_id: SwapId(2),
+					reason: SwapFailureReason::MinPriceViolation
+				}),
 				RuntimeEvent::Swapping(Event::SwapRequested {
 					input_asset: INPUT_ASSET,
 					input_amount: REFUND_FEE,
@@ -486,6 +494,7 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: SwapId(1),
 					execute_at: CHUNK_1_RETRY_BLOCK,
+					reason: SwapFailureReason::MinPriceViolation,
 				})
 			);
 
@@ -1020,7 +1029,8 @@ fn dca_with_one_block_interval_fok() {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: SwapId(2),
-					execute_at: CHUNK_2_RESCHEDULED_AT_BLOCK
+					execute_at: CHUNK_2_RESCHEDULED_AT_BLOCK,
+					reason: SwapFailureReason::MinPriceViolation,
 				})
 			);
 			// The 3rd chunk should be rescheduled as well
@@ -1028,7 +1038,8 @@ fn dca_with_one_block_interval_fok() {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: SwapId(3),
-					execute_at: CHUNK_3_RESCHEDULED_AT_BLOCK
+					execute_at: CHUNK_3_RESCHEDULED_AT_BLOCK,
+					reason: SwapFailureReason::PredecessorSwapFailure,
 				})
 			);
 
@@ -1041,11 +1052,17 @@ fn dca_with_one_block_interval_fok() {
 			// Make sure that chunk 2 failing cancels chunk 3 that was already scheduled
 			assert_has_matching_event!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(2) })
+				RuntimeEvent::Swapping(Event::SwapAborted {
+					swap_id: SwapId(2),
+					reason: SwapFailureReason::MinPriceViolation
+				})
 			);
 			assert_has_matching_event!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(3) })
+				RuntimeEvent::Swapping(Event::SwapAborted {
+					swap_id: SwapId(3),
+					reason: SwapFailureReason::PredecessorSwapFailure,
+				})
 			);
 			assert_swaps_queue_is_empty();
 
