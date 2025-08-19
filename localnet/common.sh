@@ -129,11 +129,11 @@ build-localnet() {
       echo "Starting 1-node"
       if [ $BACKSPIN == "true" ]; then
           echo "Using backspin chainspec"
-          CHAIN="$CHAINSPEC_DIR/backspin.chainspec.raw.json"
+          export CHAIN="$CHAINSPEC_DIR/backspin.chainspec.raw.json"
           echo "CHAIN: $CHAIN"
       else
           echo "Using dev chainspec for 1-node"
-          CHAIN="dev"
+          export CHAIN="dev"
           echo "CHAIN: $CHAIN"
       fi
   elif [ $NODE_COUNT == "3-node" ]; then
@@ -142,7 +142,7 @@ build-localnet() {
           exit 1
       else
           echo "Using dev chainspec for 3-node"
-          CHAIN="dev-3"
+          export CHAIN="dev-3"
           echo "CHAIN: $CHAIN"
       fi
   else
