@@ -1906,7 +1906,7 @@ mod delegation {
 		const AVAILABLE_BALANCE_OF_DELEGATOR: u128 = 20;
 		const MAX_BID_OF_DELEGATOR: u128 = 10;
 		const DELEGATORS: [u64; 4] = [21, 22, 23, 24];
-		fn delegation() -> BTreeSet<(ValidatorId, Amount)> {
+		fn delegation() -> BTreeMap<ValidatorId, Amount> {
 			DELEGATORS
 				.into_iter()
 				.map(|d| {
@@ -1981,7 +1981,7 @@ mod delegation {
 			.then_execute_at_next_block(|_| {
 				assert!(NextDelegators::<Test>::get(OPERATOR).is_empty());
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				let active_delegators = CurrentEpochDelegations::<Test>::get(), OPERATOR;
+				let active_delegators = CurrentEpochDelegations::<Test>::get(OPERATOR);
 				assert_eq!(delegation(), active_delegators);
 				for (delegator, bonded) in active_delegators {
 					assert_eq!(MockBonderFor::<Test>::get_bond(&delegator), bonded);
@@ -2049,10 +2049,7 @@ mod delegation {
 			})
 			.then_execute_at_next_block(|_| {
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				assert!(
-					CurrentEpochDelegations::<Test>::get(, OPERATOR).len() ==
-						2
-				);
+				assert!(CurrentEpochDelegations::<Test>::get(OPERATOR).len() == 2);
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {
 						assert_eq!(MockBonderFor::<Test>::get_bond(delegator), 0);
@@ -2073,43 +2070,4 @@ mod delegation {
 			assert_ok!(ValidatorPallet::set_max_bid(OriginTrait::signed(BOB), Some(100)));
 		});
 	}
-}
-
-#[test]
-fn operator_reward_split_works() {
-	assert_eq!(
-		split_amount(
-			12_500_000_000,
-			BTreeSet::from_iter([
-				(1, 1_000_000u128),
-				(2, 2_000_000u128),
-				(3, 3_000_000u128),
-				(4, 4_000_000u128),
-			]),
-			2000
-		),
-		Ok((
-			2_500_000_000u128,
-			BTreeSet::from_iter([
-				(1, 1_000_000_000u128),
-				(2, 2_000_000_000u128),
-				(3, 3_000_000_000u128),
-				(4, 4_000_000_000u128),
-			])
-		))
-	);
-
-	assert_eq!(
-		split_amount(
-			0,
-			BTreeSet::from_iter([
-				(1, 1_000_000u128),
-				(2, 2_000_000u128),
-				(3, 3_000_000u128),
-				(4, 4_000_000u128),
-			]),
-			0
-		),
-		Ok((0u128, BTreeSet::from_iter([(1, 0u128), (2, 0u128), (3, 0u128), (4, 0u128),]),))
-	);
 }

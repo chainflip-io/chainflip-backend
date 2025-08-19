@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use chainflip_node::chain_spec::devnet::HEARTBEAT_BLOCK_INTERVAL;
 use sp_std::collections::btree_set::BTreeSet;
 
 use crate::{
@@ -27,7 +28,7 @@ use frame_support::{assert_ok, traits::OnNewAccount};
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
 use sp_runtime::{traits::Zero, PerU16};
 use state_chain_runtime::{
-	AccountRoles, Balance, Flip, Funding, LiquidityProvider, Runtime, Validator,
+	AccountRoles, Balance, Flip, Funding, LiquidityProvider, Runtime, System, Validator,
 };
 
 struct Delegator {
@@ -102,8 +103,8 @@ fn setup_delegation(
 	assert_eq!(actual_delegator_set, delegators);
 
 	delegators
-		.into_iter()
-		.map(|(d, _amount)| Delegator {
+		.into_keys()
+		.map(|d| Delegator {
 			account: d.clone(),
 			pre_balance: Flip::balance(&d),
 			post_balance: Default::default(),
@@ -234,7 +235,9 @@ fn slashings_are_distributed_among_delegators() {
 			testnet.set_auto_heartbeat(&auth, false);
 
 			// Move to the block before backup rewards are distributed
-			testnet.move_to_next_heartbeat_block(Some(-1));
+			testnet.move_forward_blocks(
+				HEARTBEAT_BLOCK_INTERVAL - System::block_number() % HEARTBEAT_BLOCK_INTERVAL - 1,
+			);
 
 			// Update pre-balance
 			let auth_pre_balance = Flip::balance(&auth);

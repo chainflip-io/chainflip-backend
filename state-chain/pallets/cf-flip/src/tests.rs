@@ -298,7 +298,8 @@ impl FlipOperation {
 
 				SlashingRate::<Test>::set(*slashing_rate);
 
-				let attempted_slash: u128 = Flip::calculate_slash_amount(account_id, *blocks);
+				let attempted_slash: u128 =
+					FlipSlasher::<Test>::calculate_slash_amount(account_id, *blocks);
 				let expected_slash =
 					if Account::<Test>::get(account_id).can_be_slashed(attempted_slash) {
 						attempted_slash

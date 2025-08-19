@@ -3,10 +3,10 @@ use crate::{Config, Pallet};
 use cf_traits::{Issuance, RewardsDistribution, Slashing};
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::iter::Sum;
+use frame_support::sp_runtime::{traits::AtLeast32BitUnsigned, DispatchError, Perquintill};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_runtime::{traits::AtLeast32BitUnsigned, DispatchError, Perquintill};
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
 /// The minimum delegation fee that can be charged, in basis points.

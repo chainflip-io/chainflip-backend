@@ -382,7 +382,7 @@ pub mod pallet {
 	/// Collects all delegation of the current epoch.
 	#[pallet::storage]
 	pub type CurrentEpochDelegations<T: Config> =
-		StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
+		StorageMap<_, Identity, T::AccountId, BTreeMap<T::AccountId, T::Amount>, ValueQuery>;
 
 	/// The snapshot of operator <-> delegators in the next epoch.
 	#[pallet::storage]
@@ -1369,16 +1369,9 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
-		for (_epoch, _operator, delegators) in DelegationsPerEpoch::<T>::drain() {
-			delegators.into_iter().for_each(|(delegator, _stake)| {
-				if OutgoingDelegators::<T>::take(&delegator) == DelegationStatus::UnDelegating {
-					T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
-					Self::deposit_event(Event::UnDelegationFinalized {
-						delegator,
-						epoch: old_epoch,
-					});
-				}
-			})
+		for delegator in OutgoingDelegators::<T>::take() {
+			T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
+			Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch: old_epoch });
 		}
 
 		Self::initialise_new_epoch(new_epoch, &new_authorities, bond);
@@ -1464,8 +1457,8 @@ impl<T: Config> Pallet<T> {
 					T::Bonder::update_bond(&delegator.clone().into(), bond);
 					(delegator.clone(), bond)
 				})
-				.collect::<BTreeSet<_>>();
-			DelegationsPerEpoch::<T>::insert(new_epoch, operator, delegators_with_bond);
+				.collect::<BTreeMap<_, _>>();
+			CurrentEpochDelegations::<T>::insert(operator, delegators_with_bond);
 		});
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
@@ -1808,8 +1801,8 @@ impl<T: Config> Pallet<T> {
 	/// Gets all delegator bonded to a given operator, and the amount bonded.
 	pub fn get_bonded_delegators_for_operator(
 		operator: &T::AccountId,
-	) -> BTreeSet<(T::AccountId, T::Amount)> {
-		DelegationsPerEpoch::<T>::get(CurrentEpoch::<T>::get(), operator)
+	) -> BTreeMap<T::AccountId, T::Amount> {
+		CurrentEpochDelegations::<T>::get(operator)
 	}
 
 	/// Gets all the validators and their balances belonging to a given operator
