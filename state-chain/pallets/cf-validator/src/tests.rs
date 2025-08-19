@@ -536,7 +536,7 @@ fn expired_epoch_data_is_removed() {
 		HistoricalAuthorities::<Test>::insert(1, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(1, 10);
 		DelegationSnapshots::<Test>::insert(1, operator, test_snapshot.clone());
-		
+
 		// Epoch 2
 		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
 		HistoricalAuthorities::<Test>::insert(2, Vec::from([ALICE]));
