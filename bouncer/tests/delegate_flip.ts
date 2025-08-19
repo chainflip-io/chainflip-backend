@@ -137,7 +137,7 @@ async function testDelegate(parentLogger: Logger) {
   scCall = encodeToScCall({
     type: 'Undelegate',
   });
-  txData = cfScUtilsContract.methods.depositToScGateway(amount.toString(), scCall).encodeABI();
+  txData = cfScUtilsContract.methods.callSc(scCall).encodeABI();
   receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
   logger.info('Undelegate flip transaction sent ' + receipt.transactionHash);
 
