@@ -5,6 +5,13 @@ echo "🚧 Starting chainflip-node(s) ..."
 
 echo "start-all-nodes INIT_RPC_PORT: $INIT_RPC_PORT"
 
+echo "start-all-nodes CHAIN: $CHAIN"
+echo "start-all-nodes KEYS_DIR: $KEYS_DIR"
+echo "start-all-nodes LOCALNET_INIT_DIR: $LOCALNET_INIT_DIR"
+echo "start-all-nodes NODE_COUNT: $NODE_COUNT"
+echo "start-all-nodes SELECTED_NODES: $SELECTED_NODES"
+echo "start-all-nodes INIT_RPC_PORT: $INIT_RPC_PORT"
+
 P2P_PORT=30333
 RPC_PORT=$INIT_RPC_PORT
 for NODE in $SELECTED_NODES; do

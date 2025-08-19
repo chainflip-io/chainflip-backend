@@ -24,6 +24,9 @@ on:
       log-postfix:
         type: string
         default: "-post-check"
+      chain:
+        type: string
+        default: "dev"
 
 env:
   FORCE_COLOR: 1
@@ -31,7 +34,7 @@ env:
   NODE_COUNT: "${{ inputs.node-count }}-node"
   BROKER_ENDPOINT: "${{ inputs.broker-endpoint }}"
   LP_ENDPOINT: "${{ inputs.lp-endpoint }}"
-
+  CHAIN: "${{ inputs.chain }}"
 permissions:
   packages: read
   contents: read
