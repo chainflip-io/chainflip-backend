@@ -360,11 +360,6 @@ pub mod pallet {
 	pub type DelegationChoice<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
 
-	///  Holds the list of all delegators that have initiated undelegation and will successfully
-	/// undelegate at the end of the current epoch
-	#[pallet::storage]
-	pub type OutgoingDelegators<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
-
 	#[pallet::storage]
 	pub type MaxDelegationBid<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
@@ -380,10 +375,6 @@ pub mod pallet {
 		DelegationSnapshot<T>,
 		OptionQuery,
 	>;
-
-	/// The set of delegators in the next epoch.
-	#[pallet::storage]
-	pub type NextDelegators<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -1154,10 +1145,6 @@ pub mod pallet {
 				}
 			});
 
-			OutgoingDelegators::<T>::mutate(|outgoing_delegators| {
-				outgoing_delegators.remove(&delegator)
-			});
-
 			Self::deposit_event(Event::Delegated { delegator, operator });
 
 			Ok(())
@@ -1170,8 +1157,6 @@ pub mod pallet {
 
 			let operator = DelegationChoice::<T>::take(&delegator)
 				.ok_or(Error::<T>::AccountIsNotDelegating)?;
-
-			OutgoingDelegators::<T>::append(&delegator);
 
 			Self::deposit_event(Event::UnDelegated { delegator, operator });
 
@@ -1365,11 +1350,6 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
-		for delegator in OutgoingDelegators::<T>::take() {
-			T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
-			Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch: old_epoch });
-		}
-
 		Self::initialise_new_epoch(new_epoch, &new_authorities, bond);
 
 		Self::deposit_event(Event::NewEpoch(new_epoch));
@@ -1443,7 +1423,8 @@ impl<T: Config> Pallet<T> {
 			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 		});
 
-		let delegators = NextDelegators::<T>::take();
+		// TODO: Handle delegator bonding through snapshots
+		let delegators: BTreeSet<T::AccountId> = BTreeSet::new();
 
 		for delegator in &delegators {
 			T::Bonder::update_bond(
