@@ -21,8 +21,8 @@
 use cf_chains::{eth::api::StateChainGatewayAddressProvider, UpdateFlipSupply};
 use cf_primitives::{AssetAmount, EgressId};
 use cf_traits::{
-	impl_pallet_safe_mode, BlockEmissions, Broadcaster, EgressApi, FlipBurnInfo, Issuance,
-	RewardsDistribution, ScheduledEgressDetails,
+	impl_pallet_safe_mode, Broadcaster, EgressApi, FlipBurnInfo, Issuance, RewardsDistribution,
+	ScheduledEgressDetails,
 };
 use codec::MaxEncodedLen;
 use frame_support::storage::transactional::with_storage_layer;
@@ -183,11 +183,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			if current_block % T::CompoundingInterval::get() == Zero::zero() {
-				CurrentAuthorityEmissionPerBlock::<T>::put(calculate_inflation_to_block_reward(
-					T::Issuance::total_issuance(),
-					CurrentAuthorityEmissionInflation::<T>::get().into(),
-					T::FlipBalance::unique_saturated_from(T::CompoundingInterval::get()),
-				));
+				Self::update_block_emissions();
 			}
 			T::RewardsDistribution::distribute();
 			if Self::should_update_supply_at(current_block) {
@@ -253,7 +249,7 @@ pub mod pallet {
 		fn build(&self) {
 			CurrentAuthorityEmissionInflation::<T>::put(self.current_authority_emission_inflation);
 			SupplyUpdateInterval::<T>::put(BlockNumberFor::<T>::from(self.supply_update_interval));
-			<Pallet<T> as BlockEmissions>::calculate_block_emissions();
+			Pallet::<T>::update_block_emissions();
 		}
 	}
 }
@@ -310,6 +306,14 @@ impl<T: Config> Pallet<T> {
 				Self::deposit_event(Event::FlipBurnSkipped { reason: e });
 			},
 		}
+	}
+
+	fn update_block_emissions() {
+		CurrentAuthorityEmissionPerBlock::<T>::put(calculate_inflation_to_block_reward(
+			T::Issuance::total_issuance(),
+			CurrentAuthorityEmissionInflation::<T>::get().into(),
+			T::FlipBalance::unique_saturated_from(T::CompoundingInterval::get()),
+		));
 	}
 }
 

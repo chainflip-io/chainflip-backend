@@ -51,11 +51,13 @@ fn test_should_mint_at() {
 mod test_block_rewards {
 	use cf_traits::RewardsDistribution;
 
+	use crate::CurrentAuthorityEmissionPerBlock;
+
 	use super::*;
 
 	fn test_with(emissions_per_block: u128) {
 		new_test_ext().execute_with(|| {
-			Emissions::update_authority_block_emission(emissions_per_block);
+			CurrentAuthorityEmissionPerBlock::<Test>::put(emissions_per_block);
 
 			let before = Flip::<Test>::total_issuance();
 			MockRewardsDistribution::distribute();
@@ -72,26 +74,6 @@ mod test_block_rewards {
 		test_with(TOTAL_ISSUANCE / 100_000_000);
 		test_with(TOTAL_ISSUANCE / 100_000);
 	}
-}
-
-#[test]
-fn test_duplicate_emission_should_be_noop() {
-	new_test_ext().execute_with(|| {
-		Emissions::update_authority_block_emission(EMISSION_RATE);
-
-		let before = Flip::<Test>::total_issuance();
-		MockRewardsDistribution::distribute();
-		let after = Flip::<Test>::total_issuance();
-
-		assert_eq!(before + EMISSION_RATE, after);
-
-		// Minting again at the same block should have no effect.
-		let before = after;
-		MockRewardsDistribution::distribute();
-		let after = Flip::<Test>::total_issuance();
-
-		assert_eq!(before + EMISSION_RATE, after);
-	});
 }
 
 #[test]

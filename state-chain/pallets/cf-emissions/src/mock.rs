@@ -82,7 +82,6 @@ impl pallet_cf_flip::Config for Test {
 	type CallIndexer = ();
 }
 
-pub const EMISSION_RATE: u128 = 10;
 pub struct MockRewardsDistribution;
 
 impl RewardsDistribution for MockRewardsDistribution {
