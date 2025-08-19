@@ -18,8 +18,8 @@
 
 use super::*;
 use crate::{
-	mock::*, Account, Bonder, Error, FlipIssuance, FlipSlasher, OffchainFunds, Reserve,
-	SlashingRate, TotalIssuance,
+	mock::*, Account, Bonder, Error, FlipIssuance, OffchainFunds, Reserve, SlashingRate,
+	TotalIssuance,
 };
 use cf_primitives::FlipBalance;
 use cf_traits::{AccountInfo, Bonding, Funding, Issuance, Slashing};
@@ -135,7 +135,7 @@ impl FlipOperation {
 				let previous_issuance = TotalIssuance::<Test>::get();
 				let previous_reserve = Reserve::<Test>::try_get(TEST_RESERVE).unwrap_or(0);
 
-				let mint = FlipIssuance::<Test>::mint(*amount);
+				let mint = Flip::mint(*amount);
 				let deposit = Flip::deposit_reserves(TEST_RESERVE, *amount);
 				mem::drop(mint.offset(deposit));
 
@@ -156,7 +156,7 @@ impl FlipOperation {
 				let previous_issuance = TotalIssuance::<Test>::get();
 				let previous_reserve = Reserve::<Test>::try_get(TEST_RESERVE).unwrap_or(0);
 
-				let burn = FlipIssuance::<Test>::burn(*amount);
+				let burn = Flip::burn(*amount);
 				let withdrawal = Flip::withdraw_reserves(TEST_RESERVE, *amount);
 				let _result = burn.offset(withdrawal);
 
@@ -298,8 +298,7 @@ impl FlipOperation {
 
 				SlashingRate::<Test>::set(*slashing_rate);
 
-				let attempted_slash: u128 =
-					FlipSlasher::<Test>::calculate_slash_amount(account_id, *blocks);
+				let attempted_slash: u128 = Flip::calculate_slash_amount(account_id, *blocks);
 				let expected_slash =
 					if Account::<Test>::get(account_id).can_be_slashed(attempted_slash) {
 						attempted_slash
@@ -684,7 +683,7 @@ mod transfer {
 	use super::*;
 
 	#[test]
-	fn try_transfer_funds_and_dont_violate_the_total_issuance() {
+	fn try_transfer_funds_and_do_not_violate_the_total_issuance() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 10;
 			assert_eq!(Flip::total_balance_of(&ALICE), 100);

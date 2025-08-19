@@ -182,8 +182,8 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 								}
 							},
 							_ => unreachable!(
-									"Unreachable because we are in the branch for the AwaitingActivationSignatures variant."
-									),
+								"Unreachable because we are in the branch for the AwaitingActivationSignatures variant."
+							),
 						}
 					});
 

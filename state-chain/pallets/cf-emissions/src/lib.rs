@@ -39,7 +39,7 @@ use frame_support::{
 		traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
 		Rounding, SaturatedConversion,
 	},
-	traits::{Get, Imbalance},
+	traits::Get,
 };
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 
@@ -86,15 +86,8 @@ pub mod pallet {
 			+ Into<u128>
 			+ From<u128>;
 
-		/// An imbalance type representing freshly minted, unallocated funds.
-		type Surplus: Imbalance<Self::FlipBalance>;
-
 		/// An implementation of the [Issuance] trait.
-		type Issuance: Issuance<
-			Balance = Self::FlipBalance,
-			AccountId = Self::AccountId,
-			Surplus = Self::Surplus,
-		>;
+		type Issuance: Issuance<Balance = Self::FlipBalance, AccountId = Self::AccountId>;
 
 		/// An implementation of `RewardsDistribution` defining how to distribute the emissions.
 		type RewardsDistribution: RewardsDistribution<
