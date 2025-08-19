@@ -379,10 +379,10 @@ fn run_simulation(blocks: ForkedFilledChain) {
 pub fn test_all() {
 	let mut runner = TestRunner::new(Config {
 		source_file: Some(file!()),
-		// TODO: we had previously a much higher number (256 * 256 * 4),
-		// but currently it takes a *very* long to test with this many iterations.
-		// Appearently due to having increased the empty block buffer on the main chain.
-		cases: 256 * 60,
+		// Default is: 256
+		// Value useful for development is: 256 * 60
+		// Value for quick CI: 100
+		cases: 100,
 		failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
 			"proptest-regressions-full-pipeline",
 		))),
