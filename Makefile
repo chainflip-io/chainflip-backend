@@ -1,5 +1,11 @@
 .PHONY: build-chainspec-backspin
 build-chainspec-backspin:
+	. localnet/init/env/dot.env && \
+	. localnet/init/env/eth.env && \
+	. localnet/init/env/arb.env && \
+	. localnet/init/env/cfe.env && \
+	. localnet/init/env/node.env && \
+	. localnet/init/env/secrets.env && \
 	cargo build --release
 	./target/release/chainflip-node build-spec --chain dev --disable-default-bootnode > state-chain/node/chainspecs/backspin.chainspec.json
 	./target/release/chainflip-node build-spec --chain state-chain/node/chainspecs/backspin.chainspec.json --disable-default-bootnode --raw > state-chain/node/chainspecs/backspin.chainspec.raw.json
