@@ -71,7 +71,7 @@ use cf_chains::{
 	cf_parameters::build_and_encode_cf_parameters,
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
-	evm::EvmCrypto,
+	evm::{api::EvmCall, EvmCrypto},
 	hub,
 	instances::ChainInstanceAlias,
 	sol::{SolAddress, SolanaCrypto},
@@ -115,10 +115,17 @@ use pallet_cf_validator::{
 	SetSizeMaximisingAuctionResolver,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-use runtime_apis::ChainAccounts;
+use runtime_apis::{ChainAccounts, EvmCallDetails};
 use scale_info::prelude::string::String;
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
+use crate::chainflip::ethereum_sc_calls::EthereumSCApi;
+use cf_chains::evm::{
+	api::sc_utils::{
+		deposit_flip_to_sc_gateway_and_call::DepositToSCGatewayAndCall, sc_call::SCCall,
+	},
+	U256,
+};
 pub use frame_support::{
 	debug, parameter_types,
 	traits::{
@@ -135,7 +142,7 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::{offchain::SendTransactionTypes, pallet_prelude::BlockNumberFor};
-use pallet_cf_funding::MinimumFunding;
+use pallet_cf_funding::{EthereumDeposit, MinimumFunding};
 use pallet_cf_pools::{PoolInfo, PoolOrders};
 use pallet_grandpa::AuthorityId as GrandpaId;
 use pallet_session::historical as session_historical;
@@ -2841,6 +2848,40 @@ impl_runtime_apis! {
 				get_latest_oracle_prices(&state.0, base_and_quote_asset)
 			} else {
 				vec![]
+			}
+		}
+
+		fn cf_sc_call_tx(
+			call: EthereumSCApi,
+			maybe_deposit: EthereumDeposit,
+		) -> Result<EvmCallDetails, DispatchErrorWithMessage> {
+			match maybe_deposit {
+				EthereumDeposit::FlipToSCGateway { amount } => Ok(EvmCallDetails {
+					calldata: DepositToSCGatewayAndCall::new(amount, call.encode()).abi_encoded_payload(),
+					value: U256::zero(),
+					to: Environment::eth_sc_utils_address(),
+					source_token_address: Some(
+						Environment::supported_eth_assets(cf_primitives::chains::assets::eth::Asset::Flip)
+							.ok_or(DispatchErrorWithMessage::from(
+								"flip token address not found on the state chain: {e}",
+							))?,
+					),
+				}),
+				EthereumDeposit::NoDeposit => Ok(EvmCallDetails {
+					calldata: SCCall::new(call.encode()).abi_encoded_payload(),
+					value: U256::zero(),
+					to: Environment::eth_sc_utils_address(),
+					source_token_address: Some(
+						Environment::supported_eth_assets(cf_primitives::chains::assets::eth::Asset::Flip)
+							.ok_or(DispatchErrorWithMessage::from(
+								"flip token address not found on the state chain: {e}",
+							))?,
+					),
+				}),
+				EthereumDeposit::Vault { asset: _, amount: _ } =>
+					Err(DispatchErrorWithMessage::from("Ethereum deposit type not supported yet")),
+				EthereumDeposit::Transfer { asset: _, amount: _, destination: _ } =>
+					Err(DispatchErrorWithMessage::from("Ethereum deposit type not supported yet")),
 			}
 		}
 	}

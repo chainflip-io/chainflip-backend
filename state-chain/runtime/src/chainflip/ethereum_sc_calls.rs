@@ -3,6 +3,7 @@ use codec::MaxEncodedLen;
 use frame_support::{
 	dispatch::{DispatchInfo, GetDispatchInfo},
 	traits::UnfilteredDispatchable,
+	Deserialize, Serialize,
 };
 use pallet_cf_funding::{Call as FundingCall, RedemptionAmount};
 use pallet_cf_validator::Call as ValidatorCall;
@@ -10,7 +11,11 @@ use sp_runtime::traits::Dispatchable;
 
 pub use pallet_cf_validator::DelegationAmount;
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug)]
+pub use pallet_cf_validator::DelegationAmount;
+
+#[derive(
+	Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug, Serialize, Deserialize,
+)]
 pub enum DelegationApi {
 	Delegate {
 		operator: <Runtime as frame_system::Config>::AccountId,
@@ -26,7 +31,9 @@ pub enum DelegationApi {
 	},
 }
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug)]
+#[derive(
+	Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug, Serialize, Deserialize,
+)]
 pub enum EthereumSCApi {
 	Delegation(DelegationApi),
 	// reserved for future Apis for example Loan(LoanApi)...

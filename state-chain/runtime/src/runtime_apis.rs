@@ -69,11 +69,11 @@ pub enum VaultSwapDetails<BtcAddress> {
 	},
 	Ethereum {
 		#[serde(flatten)]
-		details: EvmVaultSwapDetails,
+		details: EvmCallDetails,
 	},
 	Arbitrum {
 		#[serde(flatten)]
-		details: EvmVaultSwapDetails,
+		details: EvmCallDetails,
 	},
 	Solana {
 		#[serde(flatten)]
@@ -82,7 +82,7 @@ pub enum VaultSwapDetails<BtcAddress> {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-pub struct EvmVaultSwapDetails {
+pub struct EvmCallDetails {
 	/// The encoded calldata payload including function selector.
 	#[serde(with = "sp_core::bytes")]
 	pub calldata: Vec<u8>,
@@ -97,11 +97,11 @@ pub struct EvmVaultSwapDetails {
 }
 
 impl<BtcAddress> VaultSwapDetails<BtcAddress> {
-	pub fn ethereum(details: EvmVaultSwapDetails) -> Self {
+	pub fn ethereum(details: EvmCallDetails) -> Self {
 		VaultSwapDetails::Ethereum { details }
 	}
 
-	pub fn arbitrum(details: EvmVaultSwapDetails) -> Self {
+	pub fn arbitrum(details: EvmCallDetails) -> Self {
 		VaultSwapDetails::Arbitrum { details }
 	}
 
@@ -463,7 +463,7 @@ pub struct NetworkFees {
 //  - Handle the dummy method gracefully in the custom rpc implementation using
 //    runtime_api().api_version().
 decl_runtime_apis!(
-	#[api_version(5)]
+	#[api_version(6)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -653,6 +653,12 @@ decl_runtime_apis!(
 		fn cf_oracle_prices(
 			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		) -> Vec<OraclePrice>;
+		fn cf_sc_call_tx(
+			call: crate::chainflip::ethereum_sc_calls::EthereumSCApi,
+			maybe_deposit: pallet_cf_funding::EthereumDeposit,
+		) -> Result<EvmCallDetails, DispatchErrorWithMessage>;
+		#[changed_in(6)]
+		fn cf_sc_call_tx();
 	}
 );
 

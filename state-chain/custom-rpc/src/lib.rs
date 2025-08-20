@@ -80,11 +80,11 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
-		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
-		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
-		OpenedDepositChannels, OperatorInfo, RuntimeApiPenalty, SimulatedSwapInformation,
-		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
-		VaultAddresses, VaultSwapDetails,
+		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, EvmCallDetails,
+		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
+		NetworkFees, OpenedDepositChannels, OperatorInfo, RuntimeApiPenalty,
+		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
+		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	FlipBalance, Hash,
@@ -1098,6 +1098,13 @@ pub trait CustomApi {
 		base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<OraclePrice>>;
+	#[method(name = "sc_call_tx")]
+	fn cf_sc_call_tx(
+		&self,
+		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi,
+		maybe_deposit: pallet_cf_funding::EthereumDeposit,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<EvmCallDetails>;
 }
 
 /// An RPC extension for the state chain node.
@@ -2113,6 +2120,32 @@ where
 			};
 
 			Ok::<_, CfApiError>(strategies)
+		})
+	}
+
+	fn cf_sc_call_tx(
+		&self,
+		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi,
+		maybe_deposit: pallet_cf_funding::EthereumDeposit,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<EvmCallDetails> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			let api_version = api
+				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)
+				.map_err(CfApiError::from)?
+				.unwrap_or_default();
+
+			if api_version < 6 {
+				// sc calls via ethereum didn't exist before version 6
+				Err(CfApiError::ErrorObject(call_error(
+					"sc calls via ethereum are not supported for the current runtime api version",
+					CfErrorCode::RuntimeApiError,
+				)))
+			} else {
+				api.cf_sc_call_tx(hash, call, maybe_deposit)
+					.map_err(CfApiError::from)?
+					.map_err(CfApiError::from)
+			}
 		})
 	}
 }

@@ -27,6 +27,7 @@ pub mod migrations;
 pub mod weights;
 use core::marker::PhantomData;
 
+use frame_support::{Deserialize, Serialize};
 pub use weights::WeightInfo;
 
 #[cfg(test)]
@@ -1203,7 +1204,7 @@ pub struct EthereumDepositAndSCCall {
 	pub call: Vec<u8>,
 }
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound, Serialize, Deserialize)]
 pub enum EthereumDeposit {
 	FlipToSCGateway { amount: EthAmount },
 	Vault { asset: EthAsset, amount: EthAmount },
