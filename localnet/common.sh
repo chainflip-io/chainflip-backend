@@ -9,6 +9,7 @@ export ARB_CONTAINERS="sequencer staker-unsafe poster"
 export SOLANA_BASE_PATH="/tmp/solana"
 export CHAINFLIP_BASE_PATH="/tmp/chainflip"
 export DEBUG_OUTPUT_DESTINATION=${DEBUG_OUTPUT_DESTINATION:-"$CHAINFLIP_BASE_PATH/debug.log"}
+export BACKSPIN=${BACKSPIN:-"false"}
 
 source ./localnet/helper.sh
 
@@ -122,6 +123,32 @@ build-localnet() {
   export DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2}
 
   KEYS_DIR=./$LOCALNET_INIT_DIR/keys
+  CHAINSPEC_DIR=./state-chain/node/chainspecs
+
+  if [ $NODE_COUNT == "1-node" ]; then
+      echo "Starting 1-node"
+      if [ $BACKSPIN == "true" ]; then
+          echo "Using backspin chainspec"
+          export CHAIN="$CHAINSPEC_DIR/backspin.chainspec.raw.json"
+          echo "CHAIN: $CHAIN"
+      else
+          echo "Using dev chainspec for 1-node"
+          export CHAIN="dev"
+          echo "CHAIN: $CHAIN"
+      fi
+  elif [ $NODE_COUNT == "3-node" ]; then
+      if [ $BACKSPIN == "true" ]; then
+          echo "Error: Backspin chainspec is not supported for 3-node"
+          exit 1
+      else
+          echo "Using dev chainspec for 3-node"
+          export CHAIN="dev-3"
+          echo "CHAIN: $CHAIN"
+      fi
+  else
+      echo "Error: Invalid node count ($NODE_COUNT)"
+      exit 1
+  fi
 
   BINARY_ROOT_PATH=$BINARY_ROOT_PATH \
   SELECTED_NODES=${SELECTED_NODES[@]} \
@@ -129,6 +156,8 @@ build-localnet() {
   INIT_RPC_PORT=$INIT_RPC_PORT \
   LOCALNET_INIT_DIR=$LOCALNET_INIT_DIR \
   KEYS_DIR=$KEYS_DIR \
+  CHAINSPEC_DIR=$CHAINSPEC_DIR \
+  CHAIN=$CHAIN \
   ./$LOCALNET_INIT_DIR/scripts/start-all-nodes.sh
 
   echo "🚧 Checking health ..."

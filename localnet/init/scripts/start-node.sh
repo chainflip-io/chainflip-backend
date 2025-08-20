@@ -6,10 +6,14 @@ PORT=$3
 RPC_PORT=$4
 NODE_COUNT=$5
 
-CHAIN="dev"
-if [ $NODE_COUNT == "3-node" ]; then
-    CHAIN="dev-3"
-fi
+echo "start-node CHAIN: $CHAIN"
+echo "start-node KEYS_DIR: $KEYS_DIR"
+echo "start-node LOCALNET_INIT_DIR: $LOCALNET_INIT_DIR"
+echo "start-node NODE_NAME: $NODE_NAME"
+echo "start-node PORT: $PORT"
+echo "start-node RPC_PORT: $RPC_PORT"
+echo "start-node NODE_COUNT: $NODE_COUNT"
+
 DATETIME=$(date '+%Y-%m-%d_%H-%M-%S')
 source $LOCALNET_INIT_DIR/env/eth.env
 source $LOCALNET_INIT_DIR/env/arb.env
