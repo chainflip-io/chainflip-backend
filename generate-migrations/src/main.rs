@@ -14,9 +14,12 @@ mod virtual_file;
 mod write_migration;
 
 use crate::{
-	metadata::get_local_metadata,
+	metadata::{get_local_metadata, get_mainnet_metadata},
 	typediff::{MetadataConfig, PalletRef, compare_metadata},
-	types::from_metadata::extract_type,
+	types::{
+		compare::diff_pallet_storage,
+		from_metadata::{extract_pallet, extract_type},
+	},
 	virtual_file::{Module, VirtualFile},
 	write_migration::{FullMigration, PalletMigration},
 };
@@ -81,18 +84,16 @@ async fn main() {
 	}
 
 	let current_metadata = get_local_metadata();
-	let pallet = current_metadata.pallet_by_name("BitcoinElections").unwrap();
+	let online_metadata = get_mainnet_metadata().await;
+	let current_pallet = current_metadata.pallet_by_name("BitcoinElections").unwrap();
+	let online_pallet = online_metadata.pallet_by_name("BitcoinElections").unwrap();
 
-	for item in pallet.storage().unwrap().entries() {
-		use subxt::metadata::types::StorageEntryType;
-		match item.entry_type() {
-			StorageEntryType::Plain(_) => (),
-			StorageEntryType::Map { hashers, key_ty, value_ty } => {
-				let ty = extract_type(&current_metadata, *value_ty);
-				println!("type of val of {} is: {:?}", item.name().to_string(), ty);
-			},
-		}
-	}
+	let current = extract_pallet(&current_metadata, &current_pallet);
+	let online = extract_pallet(&online_metadata, &online_pallet);
+
+	let diff = diff_pallet_storage(&online, &current);
+
+	println!("result:\n{diff:#?}");
 
 	/*
 

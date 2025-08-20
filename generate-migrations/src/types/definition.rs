@@ -41,9 +41,7 @@ pub enum StructuralDiff<S: Shape> {
 pub enum ItemDiff<S: Shape> {
 	Removed(S::Next),
 	Added(S::Next),
-	Change(S::Next, S::Next),
-	Inherited(S),
-	Unchanged(S::Next),
+	Structural(StructuralDiff<S>),
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -52,7 +50,16 @@ pub enum DiscDiff<A> {
 	Changed(A, A),
 }
 
-type TypeName = String;
+//--------------------------------------------
+// definition of type names
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TypeName {
+	pub path: Vec<String>,
+	pub name: String,
+	pub has_params: bool,
+}
+
 //--------------------------------------------
 // definition of types
 
@@ -60,14 +67,14 @@ type TypeName = String;
 
 #[derive_where(Debug, Clone, PartialEq, Eq, PartialOrd, Ord; )]
 pub struct StructField<S: Shaper> {
-	pub pos: usize,
-	pub name: S::Disc<Option<TypeName>>,
+	pub pos: S::Disc<usize>,
+	pub name: S::Disc<Option<String>>,
 	pub ty: S::Strl<TypeExpr<S>>,
 }
 
 impl<S: Shaper> Shape for StructField<S> {
 	type Next = StructField<S::Next>;
-	
+
 	fn try_get_next(&self) -> Option<Self::Next> {
 		todo!()
 	}
@@ -79,7 +86,11 @@ impl Shaped for ShapedStructField {
 
 	fn map<X: Shaper, Y: Shaper>(f: impl ShaperHom<X, Y>, x: Self::Result<X>) -> Self::Result<Y> {
 		let StructField { pos, name, ty } = x;
-		StructField { pos, name: f.apply_disc(name), ty: f.apply_strl::<ShapedTypeExpr>(ty) }
+		StructField {
+			pos: f.apply_disc(pos),
+			name: f.apply_disc(name),
+			ty: f.apply_strl::<ShapedTypeExpr>(ty),
+		}
 	}
 }
 
@@ -87,17 +98,17 @@ impl Shaped for ShapedStructField {
 
 #[derive_where(Clone, PartialEq, Eq, PartialOrd, Ord, Debug;)]
 pub struct EnumVariant<S: Shaper> {
-	pub pos: usize,
-	pub name: S::Disc<TypeName>,
+	pub pos: S::Disc<usize>,
+	pub name: S::Disc<String>,
 	pub fields: Vec<S::Item<StructField<S>>>,
 }
 
 impl<S: Shaper> Shape for EnumVariant<S> {
 	type Next = EnumVariant<S::Next>;
-	
+
 	fn try_get_next(&self) -> Option<Self::Next> {
-			todo!()
-		}
+		todo!()
+	}
 }
 
 struct ShapedEnumVariant;
@@ -106,7 +117,7 @@ impl Shaped for ShapedEnumVariant {
 
 	fn map<X: Shaper, Y: Shaper>(f: impl ShaperHom<X, Y>, x: Self::Result<X>) -> Self::Result<Y> {
 		EnumVariant {
-			pos: x.pos,
+			pos: f.apply_disc(x.pos),
 			name: f.apply_disc(x.name),
 			fields: x
 				.fields
@@ -120,18 +131,19 @@ impl Shaped for ShapedEnumVariant {
 // -- typeexpr
 #[derive_where(Debug, Clone, PartialEq, Eq, PartialOrd, Ord; )]
 pub enum TypeExpr<S: Shaper> {
-	Struct { fields: Vec<S::Item<StructField<S>>> },
-	Enum { variants: Vec<S::Item<EnumVariant<S>>> },
+	Struct { name: S::Disc<TypeName>, fields: Vec<S::Item<StructField<S>>> },
+	Enum { name: S::Disc<TypeName>, variants: Vec<S::Item<EnumVariant<S>>> },
 	VecLike { inner: Box<S::Strl<TypeExpr<S>>> },
 	MapLike { key: Box<S::Strl<TypeExpr<S>>>, val: Box<S::Strl<TypeExpr<S>>> },
 	Tuple { entries: Vec<S::Item<TypeExpr<S>>> },
 	Primitive { prim: TypeDefPrimitive },
+	ByName(TypeName),
 	NotImplemented,
 }
 
 impl<S: Shaper> Shape for TypeExpr<S> {
 	type Next = TypeExpr<S::Next>;
-	
+
 	fn try_get_next(&self) -> Option<Self::Next> {
 		todo!()
 	}
@@ -143,20 +155,22 @@ impl Shaped for ShapedTypeExpr {
 
 	fn map<X: Shaper, Y: Shaper>(f: impl ShaperHom<X, Y>, x: Self::Result<X>) -> Self::Result<Y> {
 		match x {
-			TypeExpr::VecLike { inner } =>
-				TypeExpr::VecLike { inner: Box::new(f.apply_strl::<ShapedTypeExpr>(*inner)) },
-			TypeExpr::Struct { fields } => TypeExpr::Struct {
+			TypeExpr::Struct { name, fields } => TypeExpr::Struct {
+				name: f.apply_disc(name),
 				fields: fields
 					.into_iter()
 					.filter_map(|field| f.apply_item::<ShapedStructField>(field))
 					.collect(),
 			},
-			TypeExpr::Enum { variants } => TypeExpr::Enum {
+			TypeExpr::Enum { name, variants } => TypeExpr::Enum {
+				name: f.apply_disc(name),
 				variants: variants
 					.into_iter()
 					.filter_map(|variant| f.apply_item::<ShapedEnumVariant>(variant))
 					.collect(),
 			},
+			TypeExpr::VecLike { inner } =>
+				TypeExpr::VecLike { inner: Box::new(f.apply_strl::<ShapedTypeExpr>(*inner)) },
 			TypeExpr::MapLike { key, val } => TypeExpr::MapLike {
 				key: Box::new(f.apply_strl::<ShapedTypeExpr>(*key)),
 				val: Box::new(f.apply_strl::<ShapedTypeExpr>(*val)),
@@ -168,6 +182,7 @@ impl Shaped for ShapedTypeExpr {
 					.collect(),
 			},
 			TypeExpr::Primitive { prim } => TypeExpr::Primitive { prim },
+			TypeExpr::ByName(name) => TypeExpr::ByName(name),
 			TypeExpr::NotImplemented => TypeExpr::NotImplemented,
 		}
 	}
@@ -176,8 +191,8 @@ impl Shaped for ShapedTypeExpr {
 // -- storage entry
 #[derive_where(Debug, Clone, PartialEq, Eq, PartialOrd, Ord; )]
 pub enum StorageEntry<S: Shaper> {
-	Value(Box<S::Strl<TypeExpr<S>>>),
-	Map(Box<S::Strl<TypeExpr<S>>>, Box<S::Strl<TypeExpr<S>>>)
+	Value(S::Strl<TypeExpr<S>>),
+	Map(S::Strl<TypeExpr<S>>, S::Strl<TypeExpr<S>>),
 }
 
 impl<S: Shaper> Shape for StorageEntry<S> {
@@ -194,20 +209,20 @@ impl Shaped for ShapedStorageEntry {
 
 	fn map<X: Shaper, Y: Shaper>(f: impl ShaperHom<X, Y>, x: Self::Result<X>) -> Self::Result<Y> {
 		match x {
-			StorageEntry::Value(v) => StorageEntry::Value(Box::new(f.apply_strl::<ShapedTypeExpr>(*v))),
+			StorageEntry::Value(v) => StorageEntry::Value(f.apply_strl::<ShapedTypeExpr>(v)),
 			StorageEntry::Map(k, v) => StorageEntry::Map(
-				Box::new(f.apply_strl::<ShapedTypeExpr>(*k)),
-				Box::new(f.apply_strl::<ShapedTypeExpr>(*v))
+				(f.apply_strl::<ShapedTypeExpr>(k)),
+				(f.apply_strl::<ShapedTypeExpr>(v)),
 			),
 		}
 	}
 }
 
-// -- pallet 
+// -- pallet
 
 #[derive_where(Debug, Clone, PartialEq, Eq, PartialOrd, Ord; )]
 pub struct PalletStorage<S: Shaper> {
-	pub entries: BTreeMap<Name, S::Item<StorageEntry<S>>>
+	pub entries: BTreeMap<String, S::Item<StorageEntry<S>>>,
 }
 
 impl<S: Shaper> Shape for PalletStorage<S> {
@@ -224,11 +239,16 @@ impl Shaped for ShapedPalletStorage {
 
 	fn map<X: Shaper, Y: Shaper>(f: impl ShaperHom<X, Y>, x: Self::Result<X>) -> Self::Result<Y> {
 		PalletStorage {
-			entries: x.entries.into_iter().filter_map(|entry| f.apply_item::<ShapedStorageEntry>(entry)).collect(),
+			entries: x
+				.entries
+				.into_iter()
+				.filter_map(|(name, entry)| {
+					f.apply_item::<ShapedStorageEntry>(entry).map(move |x| (name, x))
+				})
+				.collect(),
 		}
 	}
 }
-
 
 //--------------------------------------------
 // shaper instances
@@ -273,9 +293,9 @@ impl ShaperHom<Morphism, Point> for ProjOld {
 		match x {
 			ItemDiff::Removed(a) => Some(a),
 			ItemDiff::Added(_) => None,
-			ItemDiff::Change(a, _) => Some(a),
-			ItemDiff::Inherited(a) => Some(Sh::map(self.clone(), a)),
-			ItemDiff::Unchanged(a) => Some(a),
+			ItemDiff::Structural(StructuralDiff::Change(a, _)) => Some(a),
+			ItemDiff::Structural(StructuralDiff::Inherited(a)) => Some(Sh::map(self.clone(), a)),
+			ItemDiff::Structural(StructuralDiff::Unchanged(a)) => Some(a),
 		}
 	}
 
