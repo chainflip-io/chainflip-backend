@@ -219,10 +219,11 @@ async function testDelegate(parentLogger: Logger) {
     logger.info('Redeeming funds');
 
     const redeemAddress = await newAddress('Flip', randomBytes(32).toString('hex'));
+    const redemAmount = amount / 2n; // Leave anough to pay fees
 
     scCall = encodeToScCall({
       type: 'Redeem',
-      amount: { Exact: amount },
+      amount: { Exact: redemAmount },
       address: redeemAddress,
       executor: undefined,
     });
@@ -236,7 +237,7 @@ async function testDelegate(parentLogger: Logger) {
     const redeemEvent = observeEvent(logger, 'funding:RedemptionRequested', {
       test: (event) => {
         const accountMatch = event.data.accountId === evmToScAddress(whalePubkey);
-        const amountMatch = event.data.amount.replace(/,/g, '') === amount.toString();
+        const amountMatch = event.data.amount.replace(/,/g, '') === redemAmount.toString();
         return accountMatch && amountMatch;
       },
     }).event;
