@@ -17,8 +17,8 @@
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	ccm_checker::DecodedCcmAdditionalData,
-	AccountOrAddress, CcmDepositMetadata, CcmDepositMetadataChecked, Chain, ForeignChainAddress,
-	SwapOrigin,
+	AccountOrAddress, CcmDepositMetadata, CcmDepositMetadataChecked, Chain,
+	ChannelRefundParametersCheckedInternal, ForeignChainAddress, SwapOrigin,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, DcaParameters, Price, PriceLimits,
@@ -97,6 +97,22 @@ pub struct PriceLimitsAndExpiry<AccountId> {
 	pub expiry_behaviour: ExpiryBehaviour<AccountId>,
 	pub min_price: Price,
 	pub max_oracle_price_slippage: Option<BasisPoints>,
+}
+
+impl<AccountId> From<ChannelRefundParametersCheckedInternal<AccountId>>
+	for PriceLimitsAndExpiry<AccountId>
+{
+	fn from(params: ChannelRefundParametersCheckedInternal<AccountId>) -> Self {
+		Self {
+			expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+				retry_duration: params.retry_duration,
+				refund_address: params.refund_address,
+				refund_ccm_metadata: params.refund_ccm_metadata,
+			},
+			min_price: params.min_price,
+			max_oracle_price_slippage: params.max_oracle_price_slippage,
+		}
+	}
 }
 
 pub trait SwapRequestHandler {
