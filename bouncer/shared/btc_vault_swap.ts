@@ -29,6 +29,7 @@ interface BtcVaultSwapExtraParameters {
 }
 
 async function openPrivateBtcChannel(logger: Logger, brokerUri: string): Promise<number> {
+  const release = await brokerMutex.acquire();
   // Check if the channel is already open
   const chainflip = await getChainflipApi();
   const broker = createStateChainKeypair(brokerUri);
@@ -37,6 +38,7 @@ async function openPrivateBtcChannel(logger: Logger, brokerUri: string): Promise
     (await chainflip.query.swapping.brokerPrivateBtcChannels(broker.address)) as any,
   );
   if (existingPrivateChannel) {
+    release();
     return existingPrivateChannel;
   }
 
@@ -50,14 +52,14 @@ async function openPrivateBtcChannel(logger: Logger, brokerUri: string): Promise
 
   // Open the private channel
   logger.trace('Opening private BTC channel');
-  const release = await brokerMutex.acquire();
-  const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
+  const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock');
   const nonce = (await chainflip.rpc.system.accountNextIndex(broker.address)) as unknown as number;
   const unsub = await chainflip.tx.swapping
     .openPrivateBtcChannel()
     .signAndSend(broker, { nonce }, waiter);
   const events = await promise;
   unsub();
+  release();
 
   const { channelId } = events
     .find(
