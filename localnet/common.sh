@@ -272,7 +272,7 @@ yeet() {
 
 logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine broker lp polkadot1 polkadot2 assethub geth bitcoin solana poster sequencer staker debug redis all ingress-egress-tracker; do
+  select SERVICE in node engine broker lp polkadot1 polkadot2 assethub geth bitcoin solana poster sequencer staker debug redis all ingress-egress-tracker deposit-monitor; do
     if [[ $SERVICE == "all" ]]; then
       $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f $CHAINFLIP_BASE_PATH/*/chainflip-*.log
@@ -303,6 +303,9 @@ logs() {
     fi
     if [[ $SERVICE == "staker" ]]; then
       $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow staker-unsafe
+    fi
+    if [[ $SERVICE == "deposit-monitor" ]]; then
+      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow deposit-monitor
     fi
     if [[ $SERVICE == "node" ]] || [[ $SERVICE == "engine" ]]; then
       select NODE in bashful doc dopey; do
