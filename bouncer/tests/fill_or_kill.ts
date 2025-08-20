@@ -27,7 +27,7 @@ async function testMinPriceRefund(
   amount: number,
   swapViaVault = false,
   ccmRefund = false,
-  maxOraclePriceSlippage?: number,
+  oracleSwap = false,
 ) {
   const logger = parentLogger.child({ tag: `FoK_${sourceAsset}_${amount}` });
   const destAsset = sourceAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
@@ -53,13 +53,11 @@ async function testMinPriceRefund(
       sourceAsset === Assets.Dot ? decodeDotAddressForContract(refundAddress) : refundAddress,
     // Unrealistic min price
     minPriceX128: amountToFineAmount(
-      maxOraclePriceSlippage === undefined
-        ? '99999999999999999999999999999999999999999999999999999'
-        : '0',
+      !oracleSwap ? '99999999999999999999999999999999999999999999999999999' : '0',
       assetDecimals(sourceAsset),
     ),
     refundCcmMetadata,
-    maxOraclePriceSlippage,
+    maxOraclePriceSlippage: oracleSwap ? 0 : undefined,
   };
 
   let swapRequestedHandle;
@@ -162,7 +160,7 @@ export async function testFillOrKill(testContext: TestContext) {
     testMinPriceRefund(testContext.logger, Assets.Sol, 10, true, true),
     testMinPriceRefund(testContext.logger, Assets.Usdc, 10, true, true),
     // Large oracle swaps with small oracle slippage will be refunded
-    testMinPriceRefund(testContext.logger, Assets.Eth, 50, false, false, 0),
-    testMinPriceRefund(testContext.logger, Assets.Btc, 2, false, false, 0),
+    testMinPriceRefund(testContext.logger, Assets.Eth, 50, false, false, true),
+    testMinPriceRefund(testContext.logger, Assets.Btc, 2, false, false, true),
   ]);
 }
