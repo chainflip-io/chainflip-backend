@@ -1,7 +1,9 @@
 .PHONY: build-chainspec-backspin
 build-chainspec-backspin:
-	. localnet/init/env/dot.env && \
+	. localnet/init/env/arb.env && \
 	. localnet/init/env/eth.env && \
+	. localnet/init/env/1-node/eth-aggkey.env && \
+	. localnet/init/env/1-node/dot-aggkey.env && \
 	. localnet/init/env/arb.env && \
 	. localnet/init/env/cfe.env && \
 	. localnet/init/env/node.env && \
