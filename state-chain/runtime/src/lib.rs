@@ -1453,20 +1453,12 @@ type AllMigrations = (
 	migrations::housekeeping::Migration,
 	migrations::bitcoin_elections::Migration,
 	migrations::generic_elections::Migration,
-	// We need a noop migration from 6 to 7 as long as 1.10.2 isn't released
 	VersionedMigration<
 		6,
 		7,
 		NoopMigration,
 		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
 		<Runtime as frame_system::Config>::DbWeight,
-	>,
-	VersionedMigration<
-		7,
-		8,
-		NoopMigration,
-		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
-		DbWeight,
 	>,
 	MigrationsForV1_11,
 );

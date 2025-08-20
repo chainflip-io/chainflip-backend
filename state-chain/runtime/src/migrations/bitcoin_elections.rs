@@ -20,12 +20,12 @@ use crate::{
 		bitcoin_block_processor::BtcEvent,
 		bitcoin_elections::{
 			BitcoinBlockHeightWitnesserES, BitcoinDepositChannelWitnessingES,
-			BitcoinEgressWitnessingES, BitcoinFeeTracking, BitcoinLiveness,
-			BitcoinVaultDepositWitnessing, BitcoinVaultDepositWitnessingES,
+			BitcoinEgressWitnessingES, BitcoinLiveness, BitcoinVaultDepositWitnessing,
+			BitcoinVaultDepositWitnessingES,
 		},
 		elections::TypesFor,
 	},
-	BitcoinInstance, NoopMigration, Runtime,
+	BitcoinInstance, Runtime,
 };
 use cf_chains::{btc::BtcAmount, refund_parameters::ChannelRefundParameters, Chain};
 use cf_runtime_utilities::PlaceholderMigration;
