@@ -160,7 +160,7 @@ export async function testFillOrKill(testContext: TestContext) {
     testMinPriceRefund(testContext.logger, Assets.Sol, 10, true, true),
     testMinPriceRefund(testContext.logger, Assets.Usdc, 10, true, true),
     // Large oracle swaps with small oracle slippage will be refunded
-    testMinPriceRefund(testContext.logger, Assets.Eth, 50, false, false, true),
-    testMinPriceRefund(testContext.logger, Assets.Btc, 2, false, false, true),
+    testMinPriceRefund(testContext.logger, Assets.Eth, 100, false, false, true),
+    testMinPriceRefund(testContext.logger, Assets.Btc, 10, false, false, true),
   ]);
 }
