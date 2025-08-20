@@ -21,13 +21,13 @@ use crate::{
 		bitcoin_elections::{
 			BitcoinBlockHeightWitnesserES, BitcoinDepositChannelWitnessingES,
 			BitcoinEgressWitnessingES, BitcoinFeeTracking, BitcoinLiveness,
-			BitcoinVaultDepositWitnessing,
+			BitcoinVaultDepositWitnessing, BitcoinVaultDepositWitnessingES,
 		},
 		elections::TypesFor,
 	},
 	BitcoinInstance, NoopMigration, Runtime,
 };
-use cf_chains::{refund_parameters::ChannelRefundParameters, Chain};
+use cf_chains::{btc::BtcAmount, refund_parameters::ChannelRefundParameters, Chain};
 use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::{
 	migrations::VersionedMigration, traits::UncheckedOnRuntimeUpgrade, weights::Weight,
@@ -38,22 +38,14 @@ use sp_runtime::TryRuntimeError;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub type Migration = (
-	// We need a noop migration from 6 to 7 as long as 1.10.2 isn't released
 	VersionedMigration<
 		6,
 		7,
-		NoopMigration,
-		pallet_cf_elections::Pallet<Runtime, BitcoinInstance>,
-		<Runtime as frame_system::Config>::DbWeight,
-	>,
-	VersionedMigration<
-		7,
-		8,
 		BitcoinElectionMigration,
 		pallet_cf_elections::Pallet<Runtime, BitcoinInstance>,
 		<Runtime as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<8, Pallet<Runtime, BitcoinInstance>>,
+	PlaceholderMigration<7, Pallet<Runtime, BitcoinInstance>>,
 );
 
 pub struct BitcoinElectionMigration;
@@ -154,13 +146,26 @@ mod old {
 		<BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
 		BlockWitnesserState,
 		<BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
-		<BitcoinFeeTracking as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
+		BtcAmount,
 		<BitcoinLiveness as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
+	);
+
+	pub type CompositeElectoralUnsynchronisedSettings = (
+		<BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
+		<BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
+		<BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
+		<BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
+		BtcAmount,
+		<BitcoinLiveness as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
 	);
 
 	#[frame_support::storage_alias]
 	pub type ElectoralUnsynchronisedState<T: Config<I>, I: 'static> =
 		StorageValue<Pallet<T, I>, CompositeElectoralUnsynchronisedState, OptionQuery>;
+
+	#[frame_support::storage_alias]
+	pub type ElectoralUnsynchronisedSettings<T: Config<I>, I: 'static> =
+		StorageValue<Pallet<T, I>, CompositeElectoralUnsynchronisedSettings, OptionQuery>;
 }
 
 impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
@@ -194,7 +199,8 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 	fn on_runtime_upgrade() -> Weight {
 		log::info!("🍩 Migration for BTC Election started");
 		let optional_storage = old::ElectoralUnsynchronisedState::<Runtime, BitcoinInstance>::get();
-		let (a, b, old_vault_state, d, e, f) = optional_storage.expect("Should contain something");
+		let (a, b, old_vault_state, d, current_btc_fee, f) =
+			optional_storage.expect("Should contain something");
 
 		let new_block_processor = {
 			let old_blocks_data = old_vault_state.block_processor.blocks_data;
@@ -396,9 +402,24 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 			b,
 			new_vault_state,
 			d,
-			e,
+			(current_btc_fee, 0), // last election concluded at block 0
 			f,
 		));
+
+		// migrating unsynchronised settings
+		{
+			let optional_storage =
+				old::ElectoralUnsynchronisedSettings::<Runtime, BitcoinInstance>::get();
+			let (a, b, c, d, _old_settings_amount, f) =
+				optional_storage.expect("Should contain something");
+
+			pallet_cf_elections::ElectoralUnsynchronisedSettings::<Runtime, BitcoinInstance>::put(
+				(
+					a, b, c, d, 10u32, // fee witnessing should happen every 10 SC blocks
+					f,
+				),
+			);
+		}
 
 		log::info!("🍩 Migration for BTC Election completed");
 
@@ -445,6 +466,22 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 					.map(|opti_block| { opti_block.data.len() as u64 })
 					.sum::<u64>()
 		);
+
+		// -----------------
+		// checks for fee election migration
+		let current_state =
+			pallet_cf_elections::ElectoralUnsynchronisedState::<Runtime, BitcoinInstance>::get()
+				.unwrap()
+				.4;
+
+		assert_eq!(current_state.1, 0);
+
+		let current_settings =
+			pallet_cf_elections::ElectoralUnsynchronisedSettings::<Runtime, BitcoinInstance>::get()
+				.unwrap()
+				.4;
+
+		assert_eq!(current_settings, 10);
 
 		Ok(())
 	}
