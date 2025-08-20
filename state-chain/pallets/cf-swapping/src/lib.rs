@@ -21,8 +21,8 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
-	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersCheckedInternal,
-	ChannelRefundParametersUncheckedEncoded, SwapOrigin,
+	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersUncheckedEncoded,
+	SwapOrigin,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
@@ -33,9 +33,9 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChannelIdAllocator, DepositApi, FundingInfo, IngressEgressFeeApi, SwapOutputAction,
-	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
-	SwappingApi,
+	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, IngressEgressFeeApi,
+	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -406,7 +406,7 @@ impl DcaState {
 #[scale_info(skip_type_params(T))]
 enum SwapRequestState<T: Config> {
 	UserSwap {
-		refund_params: Option<ChannelRefundParametersCheckedInternal<T::AccountId>>,
+		price_limits_and_expiry: Option<PriceLimitsAndExpiry<T::AccountId>>,
 		output_action: SwapOutputAction<T::AccountId>,
 		dca_state: DcaState,
 	},
@@ -477,7 +477,7 @@ pub mod pallet {
 	use cf_amm::math::{output_amount_ceil, output_amount_floor};
 	use cf_chains::{
 		address::EncodedAddress, AnyChain, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
-		Chain, ChannelRefundParametersCheckedInternal,
+		Chain,
 	};
 	use cf_primitives::{
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
@@ -690,7 +690,7 @@ pub mod pallet {
 			origin: SwapOrigin<T::AccountId>,
 			request_type: SwapRequestTypeEncoded<T::AccountId>,
 			broker_fees: Beneficiaries<T::AccountId>,
-			refund_parameters: Option<ChannelRefundParametersCheckedInternal<T::AccountId>>,
+			price_limits_and_expiry: Option<PriceLimitsAndExpiry<T::AccountId>>,
 			dca_parameters: Option<DcaParameters>,
 		},
 		SwapRequestCompleted {
@@ -1806,8 +1806,17 @@ pub mod pallet {
 			};
 
 			match &mut request.state {
-				SwapRequestState::UserSwap { output_action, refund_params, dca_state } => {
-					let Some(refund_params) = &refund_params else {
+				SwapRequestState::UserSwap {
+					output_action,
+					price_limits_and_expiry,
+					dca_state,
+				} => {
+					let Some(ExpiryBehaviour::RefundIfExpires {
+						refund_address,
+						refund_ccm_metadata,
+						..
+					}) = price_limits_and_expiry.as_ref().map(|p| &p.expiry_behaviour)
+					else {
 						log_or_panic!("Trying to refund swap request {swap_request_id}, but missing refund parameters");
 						return;
 					};
@@ -1841,14 +1850,14 @@ pub mod pallet {
 						};
 
 					if amount_to_refund > 0 {
-						match &refund_params.refund_address {
+						match refund_address {
 							AccountOrAddress::ExternalAddress(address) => {
 								Self::egress_for_swap(
 									request.id,
 									amount_to_refund,
 									request.input_asset,
 									address.clone(),
-									refund_params.refund_ccm_metadata.clone(),
+									refund_ccm_metadata.clone(),
 									EgressType::Refund { refund_fee },
 								);
 							},
@@ -1968,13 +1977,18 @@ pub mod pallet {
 			});
 
 			let request_completed = match &mut request.state {
-				SwapRequestState::UserSwap { output_action, dca_state, refund_params, .. } =>
+				SwapRequestState::UserSwap {
+					output_action,
+					dca_state,
+					price_limits_and_expiry,
+					..
+				} =>
 					if let Some(chunk_input_amount) = dca_state.calculate_next_chunk() {
 						let swap_id = Self::schedule_swap(
 							request.input_asset,
 							request.output_asset,
 							chunk_input_amount,
-							refund_params.as_ref(),
+							price_limits_and_expiry.as_ref(),
 							SwapType::Swap,
 							swap.swap.fees.clone(),
 							request.id,
@@ -2160,7 +2174,7 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 			input_amount: AssetAmount,
-			refund_params: Option<&ChannelRefundParametersCheckedInternal<T::AccountId>>,
+			price_limits_and_expiry: Option<&PriceLimitsAndExpiry<T::AccountId>>,
 			swap_type: SwapType,
 			fees: Vec<FeeType<T>>,
 			swap_request_id: SwapRequestId,
@@ -2173,13 +2187,20 @@ pub mod pallet {
 
 			let execute_at = frame_system::Pallet::<T>::block_number() + delay_blocks;
 
-			let refund_params = refund_params.map(|params| {
+			let refund_params = price_limits_and_expiry.map(|params| {
 				use sp_runtime::traits::UniqueSaturatedInto;
 
 				let execute_at: cf_primitives::BlockNumber = execute_at.unique_saturated_into();
 
 				SwapRefundParameters {
-					refund_block: execute_at.saturating_add(params.retry_duration),
+					refund_block: if let ExpiryBehaviour::RefundIfExpires {
+						retry_duration, ..
+					} = &params.expiry_behaviour
+					{
+						execute_at.saturating_add(*retry_duration)
+					} else {
+						u32::MAX
+					},
 					price_limits: PriceLimits {
 						min_price: params.min_price,
 						max_oracle_price_slippage: params.max_oracle_price_slippage,
@@ -2439,7 +2460,7 @@ pub mod pallet {
 			output_asset: Asset,
 			request_type: SwapRequestType<Self::AccountId>,
 			broker_fees: Beneficiaries<Self::AccountId>,
-			refund_params: Option<ChannelRefundParametersCheckedInternal<Self::AccountId>>,
+			price_limits_and_expiry: Option<PriceLimitsAndExpiry<Self::AccountId>>,
 			dca_params: Option<DcaParameters>,
 			origin: SwapOrigin<Self::AccountId>,
 		) -> SwapRequestId {
@@ -2495,7 +2516,7 @@ pub mod pallet {
 				request_type: request_type.clone().into_encoded::<T::AddressConverter>(),
 				origin: origin.clone(),
 				broker_fees: broker_fees.clone(),
-				refund_parameters: refund_params.clone(),
+				price_limits_and_expiry: price_limits_and_expiry.clone(),
 				dca_parameters: dca_params.clone(),
 			});
 
@@ -2574,7 +2595,7 @@ pub mod pallet {
 						input_asset,
 						output_asset,
 						chunk_input_amount,
-						refund_params.as_ref(),
+						price_limits_and_expiry.as_ref(),
 						SwapType::Swap,
 						fees.clone(),
 						request_id,
@@ -2596,7 +2617,7 @@ pub mod pallet {
 									input_asset,
 									output_asset,
 									chunk_input_amount,
-									refund_params.as_ref(),
+									price_limits_and_expiry.as_ref(),
 									SwapType::Swap,
 									fees,
 									request_id,
@@ -2615,7 +2636,7 @@ pub mod pallet {
 							output_asset,
 							state: SwapRequestState::UserSwap {
 								output_action,
-								refund_params,
+								price_limits_and_expiry,
 								dca_state,
 							},
 						},

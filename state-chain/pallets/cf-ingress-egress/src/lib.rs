@@ -55,10 +55,10 @@ use cf_traits::{
 	lending::{BoostApi, BoostOutcome},
 	AccountRoleRegistry, AdjustedFeeEstimationApi, AffiliateRegistry, AssetConverter,
 	AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
-	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
+	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, ExpiryBehaviour, FeePayment,
 	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
-	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapOutputAction,
-	SwapParameterValidation, SwapRequestHandler, SwapRequestType,
+	NetworkEnvironmentProvider, OnDeposit, PoolApi, PriceLimitsAndExpiry, ScheduledEgressDetails,
+	SwapOutputAction, SwapParameterValidation, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -2084,7 +2084,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						},
 					},
 					broker_fees,
-					Some(refund_params),
+					Some(PriceLimitsAndExpiry {
+						expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+							retry_duration: refund_params.retry_duration,
+							refund_address: refund_params.refund_address,
+							refund_ccm_metadata: refund_params.refund_ccm_metadata,
+						},
+						min_price: refund_params.min_price,
+						max_oracle_price_slippage: refund_params.max_oracle_price_slippage,
+					}),
 					dca_params.clone(),
 					origin.into(),
 				);

@@ -67,9 +67,9 @@ fn both_fok_and_regular_swaps_succeed_first_try(is_ccm: bool) {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRequested {
 					swap_request_id: FOK_REQUEST_ID,
-					refund_parameters,
+					price_limits_and_expiry,
 					..
-				}) if refund_parameters.as_ref() == Some(&refund_parameters_encoded),
+				}) if price_limits_and_expiry.as_ref() == Some(&refund_parameters_encoded),
 			);
 
 			assert_swaps_scheduled_for_block(
