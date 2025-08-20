@@ -334,7 +334,19 @@ pub mod pallet {
 	pub type EthTransactionHash = [u8; 32];
 
 	#[derive(
-		Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Ord, PartialOrd,
+		Copy,
+		Clone,
+		Debug,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Ord,
+		PartialOrd,
+		Serialize,
+		Deserialize,
 	)]
 	pub enum RedemptionAmount<T: Parameter> {
 		Max,
