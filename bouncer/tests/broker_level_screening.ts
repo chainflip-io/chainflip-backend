@@ -29,7 +29,7 @@ import { Logger } from 'shared/utils/logger';
 import { getBalance } from 'shared/get_balance';
 import { send } from 'shared/send';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { buildAndSendBtcVaultSwap, openPrivateBtcChannel } from 'shared/btc_vault_swap';
+import { buildAndSendBtcVaultSwap, waitForPrivateBtcChannel } from 'shared/btc_vault_swap';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { newCcmMetadata } from 'shared/swapping';
 
@@ -452,6 +452,7 @@ async function testEvmLiquidityDeposit(
           BigInt(event.data.amountCredited.replace(/,/g, '')),
           BigInt(amountToFineAmountBigInt(amount, sourceAsset)),
         ),
+      timeoutSeconds: 120,
     }).event;
 
     await send(logger, sourceAsset, depositAddress, amount);
@@ -625,7 +626,7 @@ export async function testBrokerLevelScreening(
   //  - this requires the rejecting broker to be whitelisted
   //  - for bitcoin vault swaps a private channel has to be opened
   await setWhitelistedBroker(broker.addressRaw);
-  await openPrivateBtcChannel(testContext.logger, '//BROKER_1');
+  await waitForPrivateBtcChannel(testContext.logger, '//BROKER_1');
   await Promise.all([
     // --- LP deposits ---
     testEvmLiquidityDeposit(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),

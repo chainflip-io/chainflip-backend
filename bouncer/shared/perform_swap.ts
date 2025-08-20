@@ -31,7 +31,7 @@ import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { executeSolVaultSwap } from 'shared/sol_vault_swap';
-import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
+import { buildAndSendBtcVaultSwap, waitForPrivateBtcChannel } from 'shared/btc_vault_swap';
 import { Logger, throwError } from 'shared/utils/logger';
 
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
@@ -120,8 +120,9 @@ export async function requestNewSwap(
   const channelDestAddress = res.destinationAddress[shortChainFromAsset(destAsset)];
   const channelId = Number(res.channelId.replaceAll(',', ''));
 
-  logger.debug(`$Deposit address: ${depositAddress}`);
-  logger.debug(`Destination address is: ${channelDestAddress} Channel ID is: ${channelId}`);
+  logger.debug(
+    `Deposit address: ${depositAddress}, Destination address: ${channelDestAddress}, Channel ID: ${channelId}`,
+  );
 
   return {
     sourceAsset,
@@ -330,6 +331,9 @@ export async function executeVaultSwap(
     transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash };
     sourceAddress = wallet.address.toLowerCase();
   } else if (srcChain === 'Bitcoin') {
+    if (brokerUri) {
+      await waitForPrivateBtcChannel(logger, brokerUri);
+    }
     logger.trace('Executing BTC vault swap');
     const txId = await buildAndSendBtcVaultSwap(
       logger,

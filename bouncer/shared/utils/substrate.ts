@@ -509,6 +509,7 @@ export function observeEvents<T = any>(
   }: Options<T> | AbortableOptions<T> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
+  const startTime = Date.now();
   logger.debug(`Observing event ${eventName}`);
 
   const controller = abortable ? new AbortController() : undefined;
@@ -591,7 +592,11 @@ export function observeEvents<T = any>(
       const { stop, foundEvents: nextEvents } = checkEvents(events, 'subscription');
       foundEvents = [...foundEvents, ...nextEvents];
       if (stop) {
-        logger.debug(`Found ${foundEvents.length} ${eventName} events.`);
+        logger.debug(
+          `Found ${foundEvents.length} ${eventName} events, took ${Math.round(
+            (Date.now() - startTime) / 1000,
+          )} seconds`,
+        );
         break;
       } else {
         logger.trace(`No ${eventName} events found in subscription.`);

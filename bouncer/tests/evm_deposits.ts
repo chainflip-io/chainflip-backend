@@ -151,6 +151,7 @@ async function testTxMultipleVaultSwaps(
     abortable: true,
     // Don't stop when the event is found.
     stopAfter: { test: () => false },
+    timeoutSeconds: 150,
   });
 
   while (eventCounter === 0) {

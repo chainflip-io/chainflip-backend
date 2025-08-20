@@ -114,7 +114,7 @@ export async function depositChannelCreation(testContext: TestContext) {
           gas_budget: `0x${BigInt(params.ccmParams.gasBudget).toString(16)}`,
           ccm_additional_data: params.ccmParams.ccmAdditionalData,
         },
-        getInternalAsset(params.srcAsset) === 'Btc' ? (params.maxBoostFeeBps ?? 0) : 0,
+        getInternalAsset(params.srcAsset) === 'Btc' ? params.maxBoostFeeBps ?? 0 : 0,
         (params.affiliates ?? []).map(({ account, commissionBps }) => ({
           account: isHex(account) ? account : bytesToHex(ss58.decode(account).data),
           bps: commissionBps,
