@@ -17,6 +17,7 @@
 use cf_chains::mocks::{MockEthereum, MockEthereumChainCrypto};
 use codec::{Decode, Encode};
 use frame_support::{storage, StorageHasher, Twox64Concat};
+use sp_std::vec::Vec;
 
 use crate::{CfeBroadcastRequest, CfeMultisigRequest, CfePeerRegistration, Chainflip};
 

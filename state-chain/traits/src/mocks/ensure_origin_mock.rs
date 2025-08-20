@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::marker::PhantomData;
+use sp_std::marker::PhantomData;
 
 /// Used by default on most mocks for any non-governance origin checks.
 pub struct FailOnNoneOrigin<T>(PhantomData<T>);

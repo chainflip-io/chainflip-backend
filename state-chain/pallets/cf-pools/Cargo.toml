@@ -43,6 +43,7 @@ sp-runtime = { workspace = true }
 [dev-dependencies]
 sp-io = { workspace = true, default-features = true }
 cf-test-utilities = { workspace = true, default-features = true }
+cf-traits = { workspace = true, features = ["mocks"] }
 
 [features]
 default = ["std"]

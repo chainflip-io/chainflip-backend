@@ -32,7 +32,7 @@ use serde::{
 use sp_std::fmt;
 use v0::VersionedMessageV0;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "runtime-integration-tests")]
 use crate::signer::{Signer, TestSigners};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -324,7 +324,7 @@ impl VersionedTransaction {
 		}
 	}
 
-	#[cfg(feature = "std")]
+	#[cfg(feature = "runtime-integration-tests")]
 	pub fn test_only_sign<S: Signer>(&mut self, signers: TestSigners<S>, recent_blockhash: Hash) {
 		let positions = self.get_signing_keypair_positions(signers.pubkeys());
 
@@ -344,7 +344,7 @@ impl VersionedTransaction {
 		}
 	}
 
-	#[cfg(feature = "std")]
+	#[cfg(feature = "runtime-integration-tests")]
 	fn get_signing_keypair_positions(&self, pubkeys: Vec<Pubkey>) -> Vec<usize> {
 		let account_keys = self.message.static_account_keys();
 		let required_sigs = self.message.header().num_required_signatures as usize;

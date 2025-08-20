@@ -17,7 +17,7 @@
 use super::{MockPallet, MockPalletStorage};
 use crate::{Bonding, Chainflip};
 use codec::{Decode, Encode};
-use core::marker::PhantomData;
+use sp_std::marker::PhantomData;
 
 pub struct MockBonder<Id, Amount>(PhantomData<(Id, Amount)>);
 pub type MockBonderFor<T> =

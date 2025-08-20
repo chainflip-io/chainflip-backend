@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use core::marker::PhantomData;
+use sp_std::marker::PhantomData;
 
 use cf_chains::{Chain, FeeEstimationApi};
 
