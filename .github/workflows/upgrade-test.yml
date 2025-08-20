@@ -198,11 +198,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          ./commands/update_price_feeds.ts BTC 10000
-          ./commands/update_price_feeds.ts ETH 1000
-          ./commands/update_price_feeds.ts SOL 100
-          ./commands/update_price_feeds.ts USDC 1
-          ./commands/update_price_feeds.ts USDT 1
+          ./commands/update_price_feeds.ts ALL
 
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job

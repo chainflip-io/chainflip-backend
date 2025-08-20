@@ -6,6 +6,7 @@ import { signAndSendTxEvm } from '../shared/send_evm';
 import { amountToFineAmount, getContractAddress, getEvmEndpoint } from '../shared/utils';
 import { Logger } from '../shared/utils/logger';
 import { signAndSendTxSol } from './send_sol';
+import { price as defaultPrice } from './setup_swaps';
 
 // All price feeds are using 8 decimals
 const PRICE_FEED_DECIMALS = 8;
@@ -135,4 +136,24 @@ export async function updatePriceFeed(logger: Logger, chain: Chain, asset: Asset
     default:
       throw new Error(`Unsupported chain for price feed update: ${chain}`);
   }
+}
+
+export async function updateDefaultPriceFeeds(logger: Logger) {
+  const ethereumUpdates = async () => {
+    await updatePriceFeed(logger, 'Ethereum', 'BTC', defaultPrice.get('Btc')!.toString());
+    await updatePriceFeed(logger, 'Ethereum', 'ETH', defaultPrice.get('Eth')!.toString());
+    await updatePriceFeed(logger, 'Ethereum', 'SOL', defaultPrice.get('Sol')!.toString());
+    await updatePriceFeed(logger, 'Ethereum', 'USDC', defaultPrice.get('Usdc')!.toString());
+    await updatePriceFeed(logger, 'Ethereum', 'USDT', defaultPrice.get('Usdt')!.toString());
+  };
+
+  const solanaUpdates = async () => {
+    await updatePriceFeed(logger, 'Solana', 'BTC', defaultPrice.get('Btc')!.toString());
+    await updatePriceFeed(logger, 'Solana', 'ETH', defaultPrice.get('Eth')!.toString());
+    await updatePriceFeed(logger, 'Solana', 'SOL', defaultPrice.get('Sol')!.toString());
+    await updatePriceFeed(logger, 'Solana', 'USDC', defaultPrice.get('Usdc')!.toString());
+    await updatePriceFeed(logger, 'Solana', 'USDT', defaultPrice.get('Usdt')!.toString());
+  };
+
+  await Promise.all([ethereumUpdates(), solanaUpdates()]);
 }
