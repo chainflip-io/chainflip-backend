@@ -1,6 +1,6 @@
 .PHONY: build-chainspec-backspin
 build-chainspec-backspin:
-	cargo build
+	cargo build --release
 	. localnet/init/env/arb.env && \
 	. localnet/init/env/eth.env && \
 	. localnet/init/env/1-node/eth-aggkey.env && \
