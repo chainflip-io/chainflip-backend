@@ -1,63 +1,60 @@
 use std::collections::BTreeMap;
 
+use scale_info::{Type, form::PortableForm};
 use subxt::metadata::types::PalletMetadata;
-use scale_info::Type;
-use scale_info::form::PortableForm;
 
 use crate::types::definition::{
 	EnumVariant, PalletStorage, Point, StorageEntry, StructField, TypeExpr, TypeName,
 };
 
 pub fn extract_typename(ty: &Type<PortableForm>) -> TypeName {
-	TypeName { 
-		path: ty.path.namespace().to_vec(), 
-		name: ty.path.ident().unwrap_or("BUILTIN".to_string()), 
-		has_params: !ty.type_params.is_empty()
-	 }
+	TypeName {
+		path: ty.path.namespace().to_vec(),
+		name: ty.path.ident().unwrap_or("BUILTIN".to_string()),
+		has_params: !ty.type_params.is_empty(),
+	}
 }
 
 pub fn extract_type(metadata: &subxt::Metadata, ty_id: u32) -> TypeExpr<Point> {
 	let ty = metadata.types().resolve(ty_id).unwrap();
 	use scale_info::TypeDef::*;
 	match &ty.type_def {
-		Composite(type_def_composite) => 
-			TypeExpr::Struct {
-				name: extract_typename(ty),
-				fields: type_def_composite
-					.fields
-					.clone()
-					.into_iter()
-					.enumerate()
-					.map(|(pos, field)| StructField {
-						pos,
-						name: field.name,
-						ty: extract_type(metadata, field.ty.id),
-					})
-					.collect(),
-			},
-		Variant(type_def_variant) => 
-			TypeExpr::Enum {
-				name: extract_typename(ty),
-				variants: type_def_variant
-					.variants
-					.clone()
-					.into_iter()
-					.map(|variant| EnumVariant {
-						pos: variant.index as usize,
-						name: variant.name,
-						fields: variant
-							.fields
-							.into_iter()
-							.enumerate()
-							.map(|(pos, field)| StructField {
-								pos,
-								name: field.name,
-								ty: extract_type(metadata, field.ty.id),
-							})
-							.collect(),
-					})
-					.collect(),
-			},
+		Composite(type_def_composite) => TypeExpr::Struct {
+			name: extract_typename(ty),
+			fields: type_def_composite
+				.fields
+				.clone()
+				.into_iter()
+				.enumerate()
+				.map(|(pos, field)| StructField {
+					pos,
+					name: field.name,
+					ty: extract_type(metadata, field.ty.id),
+				})
+				.collect(),
+		},
+		Variant(type_def_variant) => TypeExpr::Enum {
+			name: extract_typename(ty),
+			variants: type_def_variant
+				.variants
+				.clone()
+				.into_iter()
+				.map(|variant| EnumVariant {
+					pos: variant.index as usize,
+					name: variant.name,
+					fields: variant
+						.fields
+						.into_iter()
+						.enumerate()
+						.map(|(pos, field)| StructField {
+							pos,
+							name: field.name,
+							ty: extract_type(metadata, field.ty.id),
+						})
+						.collect(),
+				})
+				.collect(),
+		},
 		Sequence(type_def_sequence) => TypeExpr::VecLike {
 			inner: Box::new(extract_type(metadata, type_def_sequence.type_param.id)),
 		},

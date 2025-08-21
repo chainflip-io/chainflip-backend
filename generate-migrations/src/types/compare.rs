@@ -49,39 +49,37 @@ pub fn diff_typeexpr(
 			TypeExpr::Struct { name: name1, fields: fields1 },
 			TypeExpr::Struct { name: name2, fields: fields2 },
 		) => {
-            let name = diff_disc(name1, name2);
-            match name {
-                DiscDiff::Same(name) if !name.has_params && fields1 == fields2 =>
-                    StructuralDiff::Unchanged(TypeExpr::ByName(name)),
-                _ => {
-                    let fields1 = fields1.clone().into_iter().map(|f| (f.name.clone(), f));
-                    let fields2 = fields2.clone().into_iter().map(|f| (f.name.clone(), f));
-                    StructuralDiff::Inherited(TypeExpr::Struct {
-                        name,
-                        fields: diff_item(fields1, fields2, diff_struct_field),
-                    })
-                }
-            }
-
+			let name = diff_disc(name1, name2);
+			match name {
+				DiscDiff::Same(name) if !name.has_params && fields1 == fields2 =>
+					StructuralDiff::Unchanged(TypeExpr::ByName(name)),
+				_ => {
+					let fields1 = fields1.clone().into_iter().map(|f| (f.name.clone(), f));
+					let fields2 = fields2.clone().into_iter().map(|f| (f.name.clone(), f));
+					StructuralDiff::Inherited(TypeExpr::Struct {
+						name,
+						fields: diff_item(fields1, fields2, diff_struct_field),
+					})
+				},
+			}
 		},
 		(
 			TypeExpr::Enum { name: name1, variants: v1 },
 			TypeExpr::Enum { name: name2, variants: v2 },
 		) => {
-            let name = diff_disc(name1, name2);
-            match name {
-                DiscDiff::Same(name) if !name.has_params && v1 == v2 =>
-                    StructuralDiff::Unchanged(TypeExpr::ByName(name)),
-                _ => {
-                    let v1 = v1.clone().into_iter().map(|f| (f.name.clone(), f));
-                    let v2 = v2.clone().into_iter().map(|f| (f.name.clone(), f));
-                    StructuralDiff::Inherited(TypeExpr::Enum {
-                        name,
-                        variants: diff_item(v1, v2, diff_enum_variant),
-                    })
-
-                }
-            }
+			let name = diff_disc(name1, name2);
+			match name {
+				DiscDiff::Same(name) if !name.has_params && v1 == v2 =>
+					StructuralDiff::Unchanged(TypeExpr::ByName(name)),
+				_ => {
+					let v1 = v1.clone().into_iter().map(|f| (f.name.clone(), f));
+					let v2 = v2.clone().into_iter().map(|f| (f.name.clone(), f));
+					StructuralDiff::Inherited(TypeExpr::Enum {
+						name,
+						variants: diff_item(v1, v2, diff_enum_variant),
+					})
+				},
+			}
 		},
 		(TypeExpr::VecLike { inner: i1 }, TypeExpr::VecLike { inner: i2 }) =>
 			StructuralDiff::Inherited(TypeExpr::VecLike { inner: Box::new(diff_typeexpr(i1, i2)) }),

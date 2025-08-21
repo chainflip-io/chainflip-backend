@@ -14,6 +14,8 @@ pub trait Shaper {
 	type Strl<S: Shape>: CommonTraits;
 	type Item<S: Shape>: CommonTraits;
 	type Disc<A: CommonTraits>: CommonTraits;
+
+	fn map_item<S: Shape, T: Shape>(f: impl Fn(S) -> T, x: Self::Strl<S>) -> Self::Strl<T>;
 }
 
 trait ShaperHom<U: Shaper, V: Shaper> {
@@ -259,6 +261,10 @@ impl Shaper for Point {
 	type Strl<S: Shape> = S;
 	type Item<S: Shape> = S;
 	type Disc<A: CommonTraits> = A;
+
+	fn map_item<S: Shape, T: Shape>(f: impl Fn(S) -> T, x: Self::Strl<S>) -> Self::Strl<T> {
+		f(x)
+	}
 }
 
 pub struct Morphism;
@@ -267,6 +273,14 @@ impl Shaper for Morphism {
 	type Strl<S: Shape> = StructuralDiff<S>;
 	type Item<S: Shape> = ItemDiff<S>;
 	type Disc<A: CommonTraits> = DiscDiff<A>;
+
+	fn map_item<S: Shape, T: Shape>(f: impl Fn(S) -> T, x: Self::Strl<S>) -> Self::Strl<T> {
+		match x {
+			StructuralDiff::Unchanged(_) => todo!(),
+			StructuralDiff::Change(_, _) => todo!(),
+			StructuralDiff::Inherited(_) => todo!(),
+		}
+	}
 }
 
 // ---- proj to old ----
