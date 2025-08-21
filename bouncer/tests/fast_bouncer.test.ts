@@ -42,7 +42,10 @@ describe('ConcurrentTests', () => {
   concurrentTest('DepositChannelCreation', depositChannelCreation, 30);
   concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 600);
   concurrentTest('VaultSwaps', testVaultSwap, 600);
-  concurrentTest('AssethubXCM', testAssethubXcm, 200);
+  // This test times out far too often.
+  // TODO: figure out how to make it less flaky.
+  // WHEN CHANGING ANYTHING RELATED TO ASSETHUB OR XCM, run this test locally.
+  // concurrentTest('AssethubXCM', testAssethubXcm, 200);
   concurrentTest('DelegateFlip', testDelegateFlip, 360);
 
   // Tests that only work if there is more than one node
