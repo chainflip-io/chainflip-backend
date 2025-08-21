@@ -10,6 +10,7 @@ import {
 } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
 import { manuallyAddTestToList, concurrentTest } from 'shared/utils/vitest';
+import { describe } from 'vitest';
 
 export async function initiateSwap(
   testContext: TestContext,
@@ -46,6 +47,8 @@ export async function initiateSwap(
     testContext.swapContext,
   );
 }
+
+manuallyAddTestToList('AllSwaps', 'testAllSwaps');
 
 export function testAllSwaps(timeoutPerSwap: number) {
   const allSwaps: { name: string; test: (context: TestContext) => Promise<void> }[] = [];
@@ -111,8 +114,9 @@ export function testAllSwaps(timeoutPerSwap: number) {
   appendSwap('ArbEth', 'HubUsdc', testVaultSwap);
   appendSwap('ArbEth', 'HubUsdt', testVaultSwap);
 
-  manuallyAddTestToList('AllSwaps', 'testAllSwaps');
-  for (const swap of allSwaps) {
-    concurrentTest(swap.name, swap.test, timeoutPerSwap, true);
-  }
+  describe('AllSwaps', () => {
+    for (const swap of allSwaps) {
+      concurrentTest(swap.name, swap.test, timeoutPerSwap, true);
+    }
+  });
 }

@@ -59,7 +59,3 @@ describe('ConcurrentTests', () => {
 describe('BrokerLevelScreeningTest', () => {
   concurrentTest('BrokerLevelScreening', (context) => testBrokerLevelScreening(context, true), 600);
 });
-
-describe('AllSwaps', () => {
-  testAllSwaps(240);
-});
