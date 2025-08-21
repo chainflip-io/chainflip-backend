@@ -97,15 +97,18 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ChannelActionCcmRef
 				match old.action.clone() {
 					old::ChannelAction::Swap { refund_params, .. } =>
 					// Convert Refund param into Checked version.
-						Some(ChannelRefundParametersCheckedInternal {
-							retry_duration: refund_params.retry_duration,
-							refund_address: AccountOrAddress::ExternalAddress(
-								refund_params.refund_address,
-							),
-							min_price: refund_params.min_price,
-							refund_ccm_metadata: None,
-							max_oracle_price_slippage: None,
-						}),
+						Some(
+							ChannelRefundParametersCheckedInternal {
+								retry_duration: refund_params.retry_duration,
+								refund_address: AccountOrAddress::ExternalAddress(
+									refund_params.refund_address,
+								),
+								min_price: refund_params.min_price,
+								refund_ccm_metadata: None,
+								max_oracle_price_slippage: None,
+							}
+							.map(|x| x, |y| y.map(|y| y.channel_metadata)),
+						),
 					_ => None,
 				}
 				.map(|checked_refund_params| DepositChannelDetails {
@@ -125,7 +128,7 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ChannelActionCcmRef
 							destination_asset,
 							destination_address: destination_address.clone(),
 							broker_fees,
-							channel_metadata,
+							egress_metadata: channel_metadata,
 							refund_params: checked_refund_params,
 							dca_params,
 						},

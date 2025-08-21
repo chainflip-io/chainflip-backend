@@ -215,8 +215,8 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		let deposit = vault_deposit_witness!(
 			source_asset,
 			deposit_amount,
-			destination_asset,
-			destination_address,
+			Some(destination_asset),
+			Some(destination_address),
 			deposit_metadata,
 			tx_id,
 			vault_swap_parameters
