@@ -38,7 +38,7 @@ export async function createAndDeleteMultipleOrders(
   const lpUri = lpKey || DEFAULT_LP;
   const lp = createStateChainKeypair(lpUri);
 
-  logger.info(`Depositing liquidity to ${lpUri}`);
+  logger.debug(`Depositing liquidity to ${lpUri}`);
 
   await Promise.all([
     // provide liquidity to LP_3
@@ -54,7 +54,7 @@ export async function createAndDeleteMultipleOrders(
     depositLiquidity(logger, 'SolUsdc', deposits.get('SolUsdc')!, false, lpUri),
   ]);
 
-  logger.info(`Liquidity successfully deposited to ${lpUri}`);
+  logger.debug(`Liquidity successfully deposited to ${lpUri}`);
 
   // create a series of limit_order and save their info to delete them later on
   const promises = [];
@@ -81,15 +81,15 @@ export async function createAndDeleteMultipleOrders(
     Range: { base_asset: 'ETH', quote_asset: 'USDC', id: 0 },
   });
 
-  logger.info('Submitting orders');
+  logger.debug('Submitting orders');
   await Promise.all(promises);
-  logger.info('Orders successfully submitted');
+  logger.debug('Orders successfully submitted');
 
   let openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
   openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
-  logger.info(`Number of open orders: ${openOrders}`);
+  logger.debug(`Number of open orders: ${openOrders}`);
 
-  logger.info('Deleting opened orders...');
+  logger.debug('Deleting opened orders...');
 
   const release = await lpMutex.acquire();
   const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
@@ -100,15 +100,15 @@ export async function createAndDeleteMultipleOrders(
 
   await promise;
 
-  logger.info('All orders successfully deleted');
+  logger.debug('All orders successfully deleted');
 
   openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
   openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
-  logger.info(`Number of open orders: ${openOrders}`);
+  logger.debug(`Number of open orders: ${openOrders}`);
 
   assert.strictEqual(openOrders, 0, `Number of open orders should be 0 but is ${openOrders}`);
 
-  logger.info('All orders successfully deleted');
+  logger.debug('All orders successfully deleted');
 }
 
 export async function testCancelOrdersBatch(testContext: TestContext) {

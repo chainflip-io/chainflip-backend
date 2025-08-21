@@ -40,5 +40,5 @@ export async function rangeOrder(
     .signAndSend(lp, { nonce }, waiter);
   await promise;
   unsub();
-  logger.info(`Range order for ${ccy} with amount ${amount} successfully set up`); // eslint
+  logger.info(`Range order for ${ccy} with amount ${amount} successfully set up`);
 }
