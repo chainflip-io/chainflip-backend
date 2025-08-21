@@ -308,17 +308,17 @@ impl<T: Config> Swap<T> {
 
 #[derive(Debug, Decode, TypeInfo, Clone, PartialEq, Eq, Encode)]
 pub enum SwapFailureReason {
-	// Batch swap failed due to price impact limit,
+	/// Batch swap failed due to price impact limit
 	PriceImpactLimit,
-	// The minimum price limit was exceeded,
+	/// The minimum price limit was exceeded
 	MinPriceViolation,
-	// The oracle price slippage limit was exceeded,
+	/// The oracle price slippage limit was exceeded
 	OraclePriceSlippageExceeded,
-	// Unable to use oracle slippage parameter because the oracle price is stale,
+	/// Unable to use oracle slippage parameter because the oracle price is stale
 	OraclePriceStale,
-	// An earlier chunk for the same swap request was aborted or rescheduled
+	/// An earlier chunk for the same swap request was aborted or rescheduled
 	PredecessorSwapFailure,
-	// Swapping is disabled due to safe mode
+	/// Swapping is disabled due to safe mode
 	SafeModeActive,
 }
 
@@ -1706,12 +1706,12 @@ pub mod pallet {
 								MAX_BASIS_POINTS,
 							);
 							// Use the oracle price to calculate the minimum output needed
-							let output_amount = output_amount_floor(
+							let min_output_amount = output_amount_floor(
 								swap.swap.input_amount.into(),
 								min_oracle_price,
 							)
 							.unique_saturated_into();
-							if swap.final_output.unwrap() < output_amount {
+							if swap.final_output.unwrap() < min_output_amount {
 								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
 							}
 						},
