@@ -69,23 +69,13 @@ pub const BROKER: [u8; 32] = [0xf4; 32];
 // Liquidity Provider
 pub const LIQUIDITY_PROVIDER: [u8; 32] = [0xf5; 32];
 
-pub fn get_validator_state(account_id: &AccountId) -> ChainflipAccountState {
-	if Validator::current_authorities().contains(account_id) {
-		ChainflipAccountState::CurrentAuthority
-	} else {
-		ChainflipAccountState::Backup
-	}
+pub fn is_current_authority(account_id: &AccountId) -> bool {
+	Validator::current_authorities().contains(account_id)
 }
 
 // The minimum number of blocks a vault rotation should last
 // 4 (keygen + key verification) + 4(key handover) + 2(activating_key) + 2(session rotating)
 const VAULT_ROTATION_BLOCKS: BlockNumber = 12;
-
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum ChainflipAccountState {
-	CurrentAuthority,
-	Backup,
-}
 
 pub type AllVaults = <Runtime as pallet_cf_validator::Config>::KeyRotator;
 

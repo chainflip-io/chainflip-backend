@@ -31,9 +31,7 @@ use cf_primitives::FlipBalance;
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
-use cf_traits::{
-	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, OnAccountFunded, Slashing,
-};
+use cf_traits::{AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, Slashing};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::{CallIndexer, FeeScalingRateConfig, FlipTransactionPayment};
 
@@ -90,7 +88,7 @@ impl<T: Config> MaxEncodedLen for OpaqueCallIndex<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{Chainflip, OnAccountFunded, WaivedFees};
+	use cf_traits::{Chainflip, WaivedFees};
 
 	/// A 4-byte identifier for different reserves.
 	pub type ReserveId = [u8; 4];
@@ -115,9 +113,6 @@ pub mod pallet {
 		/// Blocks per day.
 		#[pallet::constant]
 		type BlocksPerDay: Get<BlockNumberFor<Self>>;
-
-		/// Providing updates on funding activity
-		type OnAccountFunded: OnAccountFunded<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -606,12 +601,10 @@ impl<T: Config> AccountInfo for Pallet<T> {
 impl<T: Config> cf_traits::Funding for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
-	type Handler = T::OnAccountFunded;
 
 	fn credit_funds(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance {
 		let incoming = Self::bridge_in(amount);
 		Self::settle(account_id, SignedImbalance::Positive(incoming));
-		T::OnAccountFunded::on_account_funded(account_id, Self::balance(account_id));
 		Self::total_balance_of(account_id)
 	}
 
@@ -621,7 +614,6 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 	) -> Result<(), DispatchError> {
 		ensure!(amount <= Self::liquid_funds(account_id), Error::<T>::InsufficientLiquidity);
 		Self::settle(account_id, Self::deposit_pending_redemption(account_id, amount).into());
-		T::OnAccountFunded::on_account_funded(account_id, Self::balance(account_id));
 
 		Ok(())
 	}
@@ -642,7 +634,6 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 		// redemption reverts automatically when dropped
 		let imbalance = Self::try_withdraw_pending_redemption(account_id)?;
 		Self::settle(account_id, imbalance.into());
-		T::OnAccountFunded::on_account_funded(account_id, Self::balance(account_id));
 		Ok(())
 	}
 
@@ -653,8 +644,6 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 	) -> Result<(), DispatchError> {
 		ensure!(from != to, Error::<T>::CanNotTransferToSelf);
 		Pallet::<T>::transfer(from, to, amount)?;
-		T::OnAccountFunded::on_account_funded(from, Self::balance(from));
-		T::OnAccountFunded::on_account_funded(to, Self::balance(to));
 		Ok(())
 	}
 }

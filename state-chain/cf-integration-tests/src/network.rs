@@ -73,24 +73,6 @@ macro_rules! on_events {
 	}
 }
 
-pub const NEW_FUNDING_AMOUNT: FlipBalance = mock_runtime::MIN_FUNDING + 1;
-
-pub fn create_testnet_with_new_funder() -> (Network, AccountId32) {
-	let (mut testnet, backup_nodes) = Network::create(1, &Validator::current_authorities());
-
-	let new_backup = backup_nodes.first().unwrap().clone();
-
-	testnet.state_chain_gateway_contract.fund_account(
-		new_backup.clone(),
-		NEW_FUNDING_AMOUNT,
-		GENESIS_EPOCH,
-	);
-	// register the funds
-	testnet.move_forward_blocks(2);
-
-	(testnet, new_backup)
-}
-
 // An SC Gateway contract
 #[derive(Default)]
 pub struct ScGatewayContract {
@@ -218,13 +200,13 @@ impl Engine {
 		}
 	}
 
-	fn state(&self) -> ChainflipAccountState {
-		get_validator_state(&self.node_id)
+	fn is_current_authority(&self) -> bool {
+		super::is_current_authority(&self.node_id)
 	}
 
 	// Handle events from contract
 	fn on_contract_event(&self, event: &ContractEvent) {
-		if self.state() == ChainflipAccountState::CurrentAuthority && self.live {
+		if self.is_current_authority() && self.live {
 			match event {
 				ContractEvent::Funded { node_id: validator_id, amount, epoch, .. } => {
 					queue_dispatch_extrinsic(
@@ -268,7 +250,7 @@ impl Engine {
 	fn handle_state_chain_events(&mut self, events: &[RuntimeEvent], cfe_events: &[CfeEvent]) {
 		if self.live {
 			// Being a CurrentAuthority we would respond to certain events
-			if self.state() == ChainflipAccountState::CurrentAuthority {
+			if self.is_current_authority() {
 				// Note: these aren't events that the engine normally responds to, but
 				// we process them here due to the way integration tests are set up
 				on_events! {
@@ -671,7 +653,7 @@ impl Network {
 
 	// Create a network which includes the authorities in genesis of number of nodes
 	// and return a network and sorted list of nodes within
-	pub fn create(number_of_backup_nodes: u8, existing_nodes: &Vec<NodeId>) -> (Self, Vec<NodeId>) {
+	pub fn create(num_extra_nodes: u8, existing_nodes: &Vec<NodeId>) -> (Self, Vec<NodeId>) {
 		let mut network: Network = Default::default();
 
 		// Include any nodes already *created* to the test network
@@ -682,13 +664,13 @@ impl Network {
 		}
 
 		// Create the backup nodes
-		let mut backup_nodes = Vec::new();
-		for _ in 0..number_of_backup_nodes {
+		let mut extra_nodes = Vec::new();
+		for _ in 0..num_extra_nodes {
 			let node_id = network.create_engine();
-			backup_nodes.push(node_id.clone());
+			extra_nodes.push(node_id.clone());
 		}
 
-		(network, backup_nodes)
+		(network, extra_nodes)
 	}
 
 	pub fn set_active(&mut self, node_id: &NodeId, active: bool) {
@@ -730,13 +712,6 @@ impl Network {
 		if target > current_block {
 			self.move_forward_blocks(target - current_block - 1)
 		}
-	}
-
-	/// Move to the next heartbeat interval block.
-	pub fn move_to_next_heartbeat_block(&mut self) {
-		self.move_forward_blocks(
-			HEARTBEAT_BLOCK_INTERVAL - System::block_number() % HEARTBEAT_BLOCK_INTERVAL,
-		);
 	}
 
 	// Submits heartbeat for keep alive.

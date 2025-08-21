@@ -1459,7 +1459,6 @@ fn can_update_all_config_items() {
 		const NEW_REDEMPTION_PERIOD_AS_PERCENTAGE: Percent = Percent::from_percent(10);
 		const NEW_REGISTRATION_BOND_PERCENTAGE: Percent = Percent::from_percent(10);
 		const NEW_AUTHORITY_SET_MIN_SIZE: u32 = 0;
-		const NEW_BACKUP_REWARD_NODE_PERCENTAGE: Percent = Percent::from_percent(10);
 		const NEW_EPOCH_DURATION: u32 = 1;
 		const NEW_AUCTION_PARAMETERS: SetSizeParameters =
 			SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 };
@@ -1474,7 +1473,6 @@ fn can_update_all_config_items() {
 		);
 		assert_ne!(RegistrationBondPercentage::<Test>::get(), NEW_REGISTRATION_BOND_PERCENTAGE);
 		assert_ne!(AuthoritySetMinSize::<Test>::get(), NEW_AUTHORITY_SET_MIN_SIZE);
-		assert_ne!(BackupRewardNodePercentage::<Test>::get(), NEW_BACKUP_REWARD_NODE_PERCENTAGE);
 		assert_ne!(EpochDuration::<Test>::get(), NEW_EPOCH_DURATION as u64);
 		assert_ne!(AuctionParameters::<Test>::get(), NEW_AUCTION_PARAMETERS);
 		assert_ne!(MinimumReportedCfeVersion::<Test>::get(), NEW_MINIMUM_REPORTED_CFE_VERSION);
@@ -1495,9 +1493,6 @@ fn can_update_all_config_items() {
 				percentage: NEW_REGISTRATION_BOND_PERCENTAGE,
 			},
 			PalletConfigUpdate::AuthoritySetMinSize { min_size: NEW_AUTHORITY_SET_MIN_SIZE },
-			PalletConfigUpdate::BackupRewardNodePercentage {
-				percentage: NEW_BACKUP_REWARD_NODE_PERCENTAGE,
-			},
 			PalletConfigUpdate::EpochDuration { blocks: NEW_EPOCH_DURATION },
 			PalletConfigUpdate::AuctionParameters { parameters: NEW_AUCTION_PARAMETERS },
 			PalletConfigUpdate::MinimumReportedCfeVersion {
@@ -1523,7 +1518,6 @@ fn can_update_all_config_items() {
 		);
 		assert_eq!(RegistrationBondPercentage::<Test>::get(), NEW_REGISTRATION_BOND_PERCENTAGE);
 		assert_eq!(AuthoritySetMinSize::<Test>::get(), NEW_AUTHORITY_SET_MIN_SIZE);
-		assert_eq!(BackupRewardNodePercentage::<Test>::get(), NEW_BACKUP_REWARD_NODE_PERCENTAGE);
 		assert_eq!(EpochDuration::<Test>::get(), NEW_EPOCH_DURATION as u64);
 		assert_eq!(AuctionParameters::<Test>::get(), NEW_AUCTION_PARAMETERS);
 		assert_eq!(MinimumReportedCfeVersion::<Test>::get(), NEW_MINIMUM_REPORTED_CFE_VERSION);

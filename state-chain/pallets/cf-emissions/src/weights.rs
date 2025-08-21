@@ -48,7 +48,6 @@ use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_emissions.
 pub trait WeightInfo {
-	fn update_backup_node_emission_inflation() -> Weight;
 	fn update_current_authority_emission_inflation() -> Weight;
 	fn rewards_minted() -> Weight;
 	fn rewards_not_minted() -> Weight;
@@ -58,16 +57,6 @@ pub trait WeightInfo {
 /// Weights for pallet_cf_emissions using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	/// Storage: `Emissions::BackupNodeEmissionInflation` (r:0 w:1)
-	/// Proof: `Emissions::BackupNodeEmissionInflation` (`max_values`: Some(1), `max_size`: Some(4), added: 499, mode: `MaxEncodedLen`)
-	fn update_backup_node_emission_inflation() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 6_483_000 picoseconds.
-		Weight::from_parts(6_839_000, 0)
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
 	/// Storage: `Emissions::CurrentAuthorityEmissionInflation` (r:0 w:1)
 	/// Proof: `Emissions::CurrentAuthorityEmissionInflation` (`max_values`: Some(1), `max_size`: Some(4), added: 499, mode: `MaxEncodedLen`)
 	fn update_current_authority_emission_inflation() -> Weight {
@@ -188,16 +177,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	/// Storage: `Emissions::BackupNodeEmissionInflation` (r:0 w:1)
-	/// Proof: `Emissions::BackupNodeEmissionInflation` (`max_values`: Some(1), `max_size`: Some(4), added: 499, mode: `MaxEncodedLen`)
-	fn update_backup_node_emission_inflation() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 6_483_000 picoseconds.
-		Weight::from_parts(6_839_000, 0)
-			.saturating_add(ParityDbWeight::get().writes(1_u64))
-	}
 	/// Storage: `Emissions::CurrentAuthorityEmissionInflation` (r:0 w:1)
 	/// Proof: `Emissions::CurrentAuthorityEmissionInflation` (`max_values`: Some(1), `max_size`: Some(4), added: 499, mode: `MaxEncodedLen`)
 	fn update_current_authority_emission_inflation() -> Weight {

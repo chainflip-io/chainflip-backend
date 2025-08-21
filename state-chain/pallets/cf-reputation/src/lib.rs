@@ -32,8 +32,8 @@ use sp_std::{
 };
 
 use cf_traits::{
-	impl_pallet_safe_mode, offence_reporting::*, Chainflip, EpochInfo, Heartbeat, NetworkState,
-	QualifyNode, ReputationResetter, Slashing,
+	impl_pallet_safe_mode, offence_reporting::*, Chainflip, EpochInfo, NetworkState, QualifyNode,
+	ReputationResetter, Slashing,
 };
 pub use pallet::*;
 pub use reporting_adapter::*;
@@ -130,12 +130,6 @@ pub mod pallet {
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 
-		/// Handle to allow us to trigger across any pallet on a heartbeat interval
-		type Heartbeat: Heartbeat<
-			ValidatorId = Self::ValidatorId,
-			BlockNumber = BlockNumberFor<Self>,
-		>;
-
 		/// The number of blocks for the time frame we would test liveliness within
 		#[pallet::constant]
 		type HeartbeatBlockInterval: Get<BlockNumberFor<Self>>;
@@ -155,16 +149,16 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
-				T::Heartbeat::on_heartbeat_interval();
-				if T::SafeMode::get().reporting_enabled {
-					// Reputation depends on heartbeats
-					let offline_authorities = Self::current_network_state().offline;
-					let num_offline_authorities = offline_authorities.len() as u32;
-					Self::penalise_offline_authorities(offline_authorities);
-					return T::WeightInfo::submit_network_state(num_offline_authorities)
-				}
+			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() &&
+				T::SafeMode::get().reporting_enabled
+			{
+				// Reputation depends on heartbeats
+				let offline_authorities = Self::current_network_state().offline;
+				let num_offline_authorities = offline_authorities.len() as u32;
+				Self::penalise_offline_authorities(offline_authorities);
+				return T::WeightInfo::submit_network_state(num_offline_authorities)
 			}
+
 			T::WeightInfo::on_initialize_no_action()
 		}
 	}

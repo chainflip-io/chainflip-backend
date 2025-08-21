@@ -50,19 +50,6 @@ mod benchmarks {
 	use super::*;
 
 	#[benchmark]
-	fn update_backup_node_emission_inflation() {
-		let call = Call::<T>::update_backup_node_emission_inflation { inflation: INFLATION_RATE };
-		#[block]
-		{
-			assert_ok!(
-				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
-			);
-		}
-
-		assert_eq!(BackupNodeEmissionInflation::<T>::get(), INFLATION_RATE);
-	}
-
-	#[benchmark]
 	fn update_current_authority_emission_inflation() {
 		let call =
 			Call::<T>::update_current_authority_emission_inflation { inflation: INFLATION_RATE };

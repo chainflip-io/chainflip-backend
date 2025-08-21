@@ -70,13 +70,10 @@ impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
 	type BlocksPerDay = BlocksPerDay;
-	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
 	type CallIndexer = ();
 }
-
-cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockRegisterRedemption {

@@ -15,15 +15,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	genesis, get_validator_state, network, witness_ethereum_rotation_broadcast,
-	witness_rotation_broadcasts, AllVaults, ChainflipAccountState, NodeId,
-	HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
+	genesis, network, witness_ethereum_rotation_broadcast, witness_rotation_broadcasts, AllVaults,
+	NodeId, VAULT_ROTATION_BLOCKS,
 };
 
 use frame_support::{assert_err, assert_ok};
 use pallet_cf_vaults::{PendingVaultActivation, VaultActivationStatus};
 use sp_runtime::AccountId32;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 
 use cf_primitives::{AuthorityCount, FlipBalance, GENESIS_EPOCH};
 use cf_traits::{AsyncResult, EpochInfo, KeyRotationStatusOuter, KeyRotator};
@@ -39,14 +38,14 @@ use state_chain_runtime::{
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
 pub fn fund_authorities_and_join_auction(
-	num_backups: AuthorityCount,
+	num_extra_nodes: AuthorityCount,
 ) -> (network::Network, Vec<NodeId>, Vec<NodeId>) {
 	// Create MAX_AUTHORITIES backup nodes and fund them above our genesis
 	// authorities The result will be our newly created nodes will be authorities
 	// and the genesis authorities will become backup nodes
 	let genesis_authorities: Vec<AccountId32> = Validator::current_authorities();
 	let (mut testnet, init_backup_nodes) =
-		network::Network::create(num_backups as u8, &genesis_authorities);
+		network::Network::create(num_extra_nodes as u8, &genesis_authorities);
 
 	// An initial balance which is greater than the genesis balances
 	// We intend for these initially backup nodes to win the auction
@@ -210,76 +209,6 @@ fn authorities_earn_rewards_for_authoring_blocks() {
 					assert!(amount_before < amount_after)
 				},
 			);
-		});
-}
-
-#[test]
-fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
-	// We want to have at least one heartbeat within our reduced epoch
-	const EPOCH_BLOCKS: u32 = 1000;
-	// Reduce our validating set and hence the number of nodes we need to have a backup
-	// set
-	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
-		.max_authorities(MAX_AUTHORITIES)
-		.build()
-		.execute_with(|| {
-			let (mut testnet, genesis_authorities, init_backup_nodes) =
-				fund_authorities_and_join_auction(MAX_AUTHORITIES);
-
-			// Start an auction
-			testnet.move_to_the_next_epoch();
-			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
-
-			// assert list of authorities as being the new nodes
-			let current_authorities = Validator::current_authorities();
-
-			assert_eq!(
-				init_backup_nodes.into_iter().collect::<BTreeSet<AccountId32>>(),
-				current_authorities.clone().into_iter().collect::<BTreeSet<AccountId32>>(),
-				"our new initial backup nodes should be the new authorities"
-			);
-
-			current_authorities.iter().for_each(|account_id| {
-				assert_eq!(
-					get_validator_state(account_id),
-					ChainflipAccountState::CurrentAuthority
-				);
-				// TODO: Check historical epochs
-			});
-
-			// assert list of backup validators as being the genesis authorities
-			let highest_funded_backup_nodes =
-				Validator::highest_funded_qualified_backup_nodes_lookup();
-
-			assert_eq!(
-				genesis_authorities.into_iter().collect::<BTreeSet<AccountId32>>(),
-				highest_funded_backup_nodes,
-				"the genesis authorities should now be the backup nodes"
-			);
-
-			highest_funded_backup_nodes.iter().for_each(|account_id| {
-				// we were active in the first epoch
-				assert_eq!(get_validator_state(account_id), ChainflipAccountState::Backup);
-				// TODO: Check historical epochs
-			});
-
-			let backup_node_balances: HashMap<NodeId, FlipBalance> = highest_funded_backup_nodes
-				.iter()
-				.map(|validator_id| (validator_id.clone(), Flip::total_balance_of(validator_id)))
-				.collect::<Vec<(NodeId, FlipBalance)>>()
-				.into_iter()
-				.collect();
-
-			// Move forward a heartbeat, emissions should be shared to backup nodes
-			testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
-
-			// We won't calculate the exact emissions but they should be greater than their
-			// initial balance
-			for (backup_node, pre_balance) in backup_node_balances {
-				assert!(pre_balance < Flip::total_balance_of(&backup_node));
-			}
 		});
 }
 

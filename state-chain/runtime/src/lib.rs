@@ -178,8 +178,8 @@ pub use pallet_cf_validator::SetSizeParameters;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, multi_vault_activator::MultiVaultActivator,
 	BroadcastReadyProvider, BtcEnvironment, CfCcmAdditionalDataHandler, ChainAddressConverter,
-	ChainflipHeartbeat, ChainlinkOracle, DotEnvironment, EvmEnvironment, HubEnvironment,
-	MinimumDepositProvider, SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
+	ChainlinkOracle, DotEnvironment, EvmEnvironment, HubEnvironment, MinimumDepositProvider,
+	SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -774,7 +774,6 @@ impl pallet_cf_flip::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
 	type BlocksPerDay = ConstU32<DAYS>;
-	type OnAccountFunded = pallet_cf_validator::UpdateBackupMapping<Self>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
 	type CallIndexer = chainflip::LpOrderCallIndexer;
@@ -873,7 +872,6 @@ impl pallet_cf_cfe_interface::Config for Runtime {
 impl pallet_cf_reputation::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
-	type Heartbeat = ChainflipHeartbeat;
 	type HeartbeatBlockInterval = ConstU32<HEARTBEAT_BLOCK_INTERVAL>;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
@@ -1473,6 +1471,7 @@ type PalletMigrations = (
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	pallet_cf_account_roles::migrations::PalletMigration<Runtime>,
 	pallet_cf_validator::migrations::PalletMigration<Runtime>,
+	pallet_cf_emissions::migrations::PalletMigration<Runtime>,
 	pallet_cf_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, EthereumInstance>,
@@ -1674,7 +1673,7 @@ impl_runtime_apis! {
 			Emissions::current_authority_emission_per_block()
 		}
 		fn cf_backup_emission_per_block() -> u128 {
-			Emissions::backup_node_emission_per_block()
+			0 // Backups don't exist any more.
 		}
 		fn cf_flip_supply() -> (u128, u128) {
 			(Flip::total_issuance(), Flip::offchain_funds())
@@ -1707,7 +1706,6 @@ impl_runtime_apis! {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
 		}
 		fn cf_validator_info(account_id: &AccountId) -> ValidatorInfo {
-			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(account_id);
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
@@ -1727,7 +1725,7 @@ impl_runtime_apis! {
 				reputation_points: reputation_info.reputation_points,
 				keyholder_epochs: key_holder_epochs,
 				is_current_authority,
-				is_current_backup,
+				is_current_backup: false,
 				is_qualified: is_bidding && is_qualified,
 				is_online: HeartbeatQualification::<Runtime>::is_qualified(account_id),
 				is_bidding,
@@ -2825,17 +2823,14 @@ impl_runtime_apis! {
 
 		fn cf_authorities() -> AuthoritiesInfo {
 			let mut authorities = pallet_cf_validator::CurrentAuthorities::<Runtime>::get();
-			let mut backups = pallet_cf_validator::Backups::<Runtime>::get();
 			let mut result = AuthoritiesInfo {
 				authorities: authorities.len() as u32,
 				online_authorities: 0,
-				backups: backups.len() as u32,
+				backups: 0,
 				online_backups: 0,
 			};
 			authorities.retain(HeartbeatQualification::<Runtime>::is_qualified);
-			backups.retain(|id, _| HeartbeatQualification::<Runtime>::is_qualified(id));
 			result.online_authorities = authorities.len() as u32;
-			result.online_backups = backups.len() as u32;
 			result
 		}
 
