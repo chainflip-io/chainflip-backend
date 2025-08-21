@@ -77,6 +77,10 @@ async function testMinPriceRefund(
     maxOraclePriceSlippage: oracleSwap ? 0 : undefined,
   };
 
+  logger.info(
+    `Fok swap started from ${sourceAsset} to ${destAsset} with unrealistic min price${swapViaVault ? ' swapViaVault' : ''}${ccmRefund ? ' ccmRefund' : ''}${oracleSwap ? ' oracleSwap' : ''}`,
+  );
+
   let swapRequestedHandle;
 
   if (!swapViaVault) {
@@ -151,6 +155,10 @@ async function testMinPriceRefund(
     observeBalanceIncrease(logger, sourceAsset, refundAddress, refundBalanceBefore),
     ccmEventEmitted,
   ]);
+
+  logger.info(
+    `Fok swap complete from ${sourceAsset} to ${destAsset} with unrealistic min price${swapViaVault ? ' swapViaVault' : ''}${ccmRefund ? ' ccmRefund' : ''}${oracleSwap ? ' oracleSwap' : ''}`,
+  );
 }
 
 export async function testFillOrKill(testContext: TestContext) {
