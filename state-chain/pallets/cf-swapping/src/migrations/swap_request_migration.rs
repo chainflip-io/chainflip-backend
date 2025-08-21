@@ -23,6 +23,7 @@ use frame_support::pallet_prelude::Weight;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 
+use cf_traits::ExpiryBehaviour;
 use codec::{Decode, Encode};
 
 pub mod old {
@@ -117,14 +118,14 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 						output_action,
 						dca_state: old_dca_state,
 					} => SwapRequestState::UserSwap {
-						refund_params: refund_params.map(|params| {
-							cf_chains::ChannelRefundParametersChecked {
+						price_limits_and_expiry: refund_params.map(|params| PriceLimitsAndExpiry {
+							expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
 								retry_duration: params.retry_duration,
 								refund_address: params.refund_destination,
-								min_price: params.min_price,
 								refund_ccm_metadata: None,
-								max_oracle_price_slippage: None,
-							}
+							},
+							min_price: params.min_price,
+							max_oracle_price_slippage: None,
 						}),
 						output_action,
 						dca_state: DcaState {

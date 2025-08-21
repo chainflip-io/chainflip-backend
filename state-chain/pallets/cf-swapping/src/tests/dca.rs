@@ -598,7 +598,7 @@ fn can_handle_dca_chunk_size_of_zero(is_ccm: bool) {
 				input_asset: INPUT_ASSET,
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
-				refund_params: None,
+				price_limits_and_expiry: None,
 				dca_params: Some(dca_params.clone()),
 				output_address: (*EVM_OUTPUT_ADDRESS).clone(),
 				is_ccm,
@@ -836,7 +836,7 @@ fn dca_with_one_block_interval() {
 
 	assert_eq!(
 		SWAP_DELAY_BLOCKS, 2,
-		"Tests and code in init_swap_request assumes the swap delay is 2 blocks, 
+		"Tests and code in init_swap_request assumes the swap delay is 2 blocks,
 			so only a max of 2 chunks can be scheduled at a time."
 	);
 
