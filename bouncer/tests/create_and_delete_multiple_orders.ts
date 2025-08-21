@@ -91,7 +91,7 @@ export async function createAndDeleteMultipleOrders(
 
   logger.debug('Deleting opened orders...');
 
-  const release = await lpMutex.acquire();
+  const release = await lpMutex.acquire(lpUri);
   const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
   const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as unknown as number;
   await chainflip.tx.liquidityPools

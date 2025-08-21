@@ -20,10 +20,11 @@ export async function limitOrder(
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
   await using chainflip = await getChainflipApi();
 
-  const lp = createStateChainKeypair(lpKey ?? (process.env.LP_URI || '//LP_1'));
+  const lpUri = lpKey ?? (process.env.LP_URI || '//LP_1');
+  const lp = createStateChainKeypair(lpUri);
 
   logger.info('Setting up ' + ccy + ' limit order');
-  const release = await lpMutex.acquire();
+  const release = await lpMutex.acquire(lpUri);
   const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
   const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as unknown as number;
   const unsub = await chainflip.tx.liquidityPools

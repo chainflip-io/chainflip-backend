@@ -19,7 +19,8 @@ export async function rangeOrder(
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
   await using chainflip = await getChainflipApi();
 
-  const lp = createStateChainKeypair(lpKey ?? (process.env.LP_URI || '//LP_1'));
+  const lpUri = lpKey ?? (process.env.LP_URI || '//LP_1');
+  const lp = createStateChainKeypair(lpUri);
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const currentPools = (
@@ -30,7 +31,7 @@ export async function rangeOrder(
   const currentSqrtPrice = currentPools!.poolState.rangeOrders.currentSqrtPrice;
   const liquidity = BigInt(Math.round((currentSqrtPrice / 2 ** 96) * Number(fineAmount)));
   logger.info('Setting up ' + ccy + ' range order');
-  const release = await lpMutex.acquire();
+  const release = await lpMutex.acquire(lpUri);
   const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
   const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as unknown as number;
   const unsub = await chainflip.tx.liquidityPools

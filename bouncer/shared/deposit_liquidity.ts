@@ -49,7 +49,7 @@ export async function depositLiquidity(
     refundAddress = chain === 'Sol' ? decodeSolAddress(refundAddress) : refundAddress;
 
     logger.debug(`Registering Liquidity Refund Address for ${refundAddress}`);
-    await lpMutex.runExclusive(async () => {
+    await lpMutex.runExclusive(lpUri, async () => {
       const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
       await chainflip.tx.liquidityProvider
         .registerLiquidityRefundAddress({ [chain]: refundAddress })
@@ -62,7 +62,7 @@ export async function depositLiquidity(
   }).event;
 
   logger.debug(`Requesting ${ccy} deposit address`);
-  await lpMutex.runExclusive(async () => {
+  await lpMutex.runExclusive(lpUri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
       .requestLiquidityDepositAddress(ccy, null)

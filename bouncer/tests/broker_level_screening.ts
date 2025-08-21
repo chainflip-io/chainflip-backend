@@ -392,7 +392,8 @@ async function testEvmLiquidityDeposit(
 
   // setup access to chainflip api and lp
   await using chainflip = await getChainflipApi();
-  const lp = createStateChainKeypair(process.env.LP_URI || '//LP_1');
+  const lpUri = process.env.LP_URI || '//LP_1';
+  const lp = createStateChainKeypair(lpUri);
 
   // Get existing LP refund address of //LP_1 for `sourceAsset`
   /* eslint-disable  @typescript-eslint/no-explicit-any */
@@ -422,7 +423,7 @@ async function testEvmLiquidityDeposit(
   }).event;
 
   logger.debug('Requesting ' + sourceAsset + ' deposit address');
-  await lpMutex.runExclusive(async () => {
+  await lpMutex.runExclusive(lpUri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
       .requestLiquidityDepositAddress(sourceAsset, null)

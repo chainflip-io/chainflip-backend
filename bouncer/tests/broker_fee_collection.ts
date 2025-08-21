@@ -25,7 +25,8 @@ import { Logger } from 'shared/utils/logger';
 
 const commissionBps = 1000; // 10%
 
-const broker = new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_FEE_TEST');
+const brokerUri = '//BROKER_FEE_TEST';
+const broker = new Keyring({ type: 'sr25519' }).createFromUri(brokerUri);
 
 export async function submitBrokerWithdrawal(
   asset: Asset,
@@ -33,7 +34,7 @@ export async function submitBrokerWithdrawal(
 ) {
   await using chainflip = await getChainflipApi();
   // Only allow one withdrawal at a time to stop nonce issues
-  return brokerMutex.runExclusive(async () => {
+  return brokerMutex.runExclusive(brokerUri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     return chainflip.tx.swapping
       .withdraw(asset, addressObject)
@@ -106,7 +107,7 @@ async function testBrokerFees(logger: Logger, inputAsset: Asset, seed?: string):
     retryDuration: 0,
   };
 
-  await brokerMutex.runExclusive(async () => {
+  await brokerMutex.runExclusive(brokerUri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     await chainflip.tx.swapping
       .requestSwapDepositAddress(
