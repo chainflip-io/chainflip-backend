@@ -20,8 +20,10 @@ export async function updatePriceFeeds(asset: string, price?: string) {
     if (price === undefined) {
       throw new Error('Price argument is required to set the price feed of a specific asset.');
     }
-    await updatePriceFeed(globalLogger, 'Ethereum', asset as Asset, price);
-    await updatePriceFeed(globalLogger, 'Solana', asset as Asset, price);
+    await Promise.all([
+      updatePriceFeed(globalLogger, 'Ethereum', asset as Asset, price),
+      updatePriceFeed(globalLogger, 'Solana', asset as Asset, price),
+    ]);
   }
 }
 

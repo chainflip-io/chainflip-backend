@@ -1,4 +1,4 @@
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAsset, InternalAssets as Assets, Asset } from '@chainflip/cli';
 import { randomBytes } from 'crypto';
 import {
   amountToFineAmount,
@@ -19,28 +19,12 @@ import { CcmDepositMetadata, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
 import { newCcmMetadata, newVaultSwapCcmMetadata } from 'shared/swapping';
-
-async function checkAllPriceStatusesUpToDate(): Promise<void> {
-  const chainflip = await getChainflipApi();
-  const response = JSON.parse(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (await chainflip.query.genericElections.electoralUnsynchronisedState()) as any,
-  );
-  const chains = ['solana', 'ethereum'] as const;
-  for (const chain of chains) {
-    const chainState = response.chainStates[chain].price;
-    for (const [asset, feed] of Object.entries(chainState) as [string, { priceStatus: string }][]) {
-      if (feed.priceStatus !== 'UpToDate') {
-        throw new Error(`Price status for ${chain}.${asset} is not UpToDate: ${feed.priceStatus}`);
-      }
-    }
-  }
-}
+import { updatePriceFeed } from 'shared/update_price_feed';
 
 /// Do a swap with unrealistic minimum price so it gets refunded.
 async function testMinPriceRefund(
   parentLogger: Logger,
-  sourceAsset: Asset,
+  sourceAsset: InternalAsset,
   amount: number,
   swapViaVault = false,
   ccmRefund = false,
@@ -161,6 +145,48 @@ async function testMinPriceRefund(
   );
 }
 
+async function checkPriceFeedStatuses(): Promise<void> {
+  const chainflip = await getChainflipApi();
+  const response = JSON.parse(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await chainflip.query.genericElections.electoralUnsynchronisedState()) as any,
+  );
+  const chains = ['solana', 'ethereum'] as const;
+  for (const chain of chains) {
+    const chainState = response.chainStates[chain].price;
+    for (const [asset, feed] of Object.entries(chainState) as [string, { priceStatus: string }][]) {
+      if (feed.priceStatus !== 'UpToDate') {
+        throw new Error(`Price status for ${chain}.${asset} is not UpToDate: ${feed.priceStatus}`);
+      }
+    }
+  }
+}
+
+async function testOracleSwapsFoK(parentLogger: Logger): Promise<void> {
+  const logger = parentLogger.child({ tag: `FoK_OracleSwaps` });
+
+  const sourceAssets = ['ETH', 'BTC'];
+
+  logger.info('Setting up unrealistic prices for oracle swaps to test fill-or-kill');
+
+  for (const asset of sourceAssets) {
+    await Promise.all([
+      updatePriceFeed(logger, 'Ethereum', asset as Asset, '100000'),
+      updatePriceFeed(logger, 'Solana', asset as Asset, '1000000'),
+    ]);
+  }
+  // Check that all prices are up to date to ensure that oracle swaps
+  // are not being refunded due to stale prices.
+  await checkPriceFeedStatuses();
+
+  logger.info(`Testing Oracle Swaps fill-or-kill for ${sourceAssets.join(', ')}`);
+
+  await Promise.all([
+    testMinPriceRefund(logger, Assets.Eth, 10, false, false, true),
+    testMinPriceRefund(logger, Assets.Btc, 1, false, false, true),
+  ]);
+}
+
 export async function testFillOrKill(testContext: TestContext) {
   await Promise.all([
     testMinPriceRefund(testContext.logger, Assets.Flip, 500),
@@ -181,11 +207,6 @@ export async function testFillOrKill(testContext: TestContext) {
     testMinPriceRefund(testContext.logger, Assets.ArbEth, 5, true, true),
     testMinPriceRefund(testContext.logger, Assets.Sol, 10, true, true),
     testMinPriceRefund(testContext.logger, Assets.Usdc, 10, true, true),
-    // Large oracle swaps with small oracle slippage will be refunded.
-    // Check that all prices are up to date to ensure that oracle swaps
-    // are not being refunded due to stale prices.
-    checkAllPriceStatusesUpToDate(),
-    testMinPriceRefund(testContext.logger, Assets.Eth, 100, false, false, true),
-    testMinPriceRefund(testContext.logger, Assets.Btc, 10, false, false, true),
+    testOracleSwapsFoK(testContext.logger),
   ]);
 }
