@@ -14,11 +14,28 @@ import {
 import { executeVaultSwap, requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
 import { getBalance } from 'shared/get_balance';
-import { observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { CcmDepositMetadata, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
 import { newCcmMetadata, newVaultSwapCcmMetadata } from 'shared/swapping';
+
+async function checkAllPriceStatusesUpToDate(): Promise<void> {
+  const chainflip = await getChainflipApi();
+  const response = JSON.parse(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await chainflip.query.genericElections.electoralUnsynchronisedState()) as any,
+  );
+  const chains = ['solana', 'ethereum'] as const;
+  for (const chain of chains) {
+    const chainState = response.chainStates[chain].price;
+    for (const [asset, feed] of Object.entries(chainState) as [string, { priceStatus: string }][]) {
+      if (feed.priceStatus !== 'UpToDate') {
+        throw new Error(`Price status for ${chain}.${asset} is not UpToDate: ${feed.priceStatus}`);
+      }
+    }
+  }
+}
 
 /// Do a swap with unrealistic minimum price so it gets refunded.
 async function testMinPriceRefund(
@@ -99,9 +116,6 @@ async function testMinPriceRefund(
       amount.toString(),
       undefined, // boostFeeBps
       refundParameters,
-      undefined, // dcaParams
-      undefined, // brokerFees
-      undefined, // affiliateFees
     );
 
     swapRequestedHandle = observeSwapRequested(
@@ -159,7 +173,10 @@ export async function testFillOrKill(testContext: TestContext) {
     testMinPriceRefund(testContext.logger, Assets.ArbEth, 5, true, true),
     testMinPriceRefund(testContext.logger, Assets.Sol, 10, true, true),
     testMinPriceRefund(testContext.logger, Assets.Usdc, 10, true, true),
-    // Large oracle swaps with small oracle slippage will be refunded
+    // Large oracle swaps with small oracle slippage will be refunded.
+    // Check that all prices are up to date to ensure that oracle swaps
+    // are not being refunded due to stale prices.
+    checkAllPriceStatusesUpToDate(),
     testMinPriceRefund(testContext.logger, Assets.Eth, 100, false, false, true),
     testMinPriceRefund(testContext.logger, Assets.Btc, 10, false, false, true),
   ]);
