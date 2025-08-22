@@ -14,13 +14,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_primitives::UnixTime;
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystemTypes,
 	electoral_systems::oracle_price::{
 		chainlink::{ChainlinkAssetpair, ChainlinkPrice},
-		primitives::UnixTime,
 		state_machine::{should_vote_for_asset, ExternalChainStateVote, ExternalPriceChain},
 	},
 	VoteOf,

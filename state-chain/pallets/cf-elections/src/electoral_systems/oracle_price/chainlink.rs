@@ -21,9 +21,10 @@ use crate::electoral_systems::{
 	state_machine::common_imports::*,
 };
 use cf_amm_math::Price;
+use cf_utilities::macros::*;
 use sp_std::iter;
 
-def_derive! {
+derive_common_traits! {
 	/// Representation of the asset pairs as returned in the `description` field of chainlink responses.
 	#[derive(TypeInfo, Sequence, PartialOrd, Ord, Copy)]
 	#[cfg_attr(test, derive(Arbitrary))]

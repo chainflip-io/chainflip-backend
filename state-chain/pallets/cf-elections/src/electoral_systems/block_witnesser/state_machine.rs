@@ -5,16 +5,19 @@ use super::{
 };
 #[cfg(test)]
 use crate::electoral_systems::state_machine::state_machine::InputOf;
-use crate::electoral_systems::{
-	block_height_witnesser::{
-		ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes, CommonTraits,
-		MaybeArbitrary, TestTraits,
+use crate::{
+	electoral_systems::{
+		block_height_witnesser::{
+			ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes, CommonTraits,
+			MaybeArbitrary, TestTraits,
+		},
+		block_witnesser::block_processor::BlockProcessor,
+		state_machine::{
+			core::Validate,
+			state_machine::{AbstractApi, Statemachine},
+		},
 	},
-	block_witnesser::block_processor::BlockProcessor,
-	state_machine::{
-		core::Validate,
-		state_machine::{AbstractApi, Statemachine},
-	},
+	generic_tools::*,
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
@@ -182,7 +185,7 @@ defx! {
 	validate _this (else BlockWitnesserError) {}
 }
 
-def_derive!(
+derive_common_traits!(
 	#[derive(GenericTypeInfo)]
 	#[expand_name_with(C::NAME)]
 	pub enum EngineElectionType<C: ChainTypes> {
@@ -190,8 +193,7 @@ def_derive!(
 		BlockHeight { submit_hash: bool },
 	}
 );
-def_derive! {
-	#[no_serde]
+derive_common_traits! {
 	#[derive(GenericTypeInfo)]
 	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
 	pub struct BWElectionProperties<T: BWTypes> {

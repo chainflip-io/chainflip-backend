@@ -19,6 +19,7 @@
 //! Chainflip Primitives
 //!
 //! Primitive types to be used across Chainflip's various crates.
+use cf_utilities::macros::derive_common_traits;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
@@ -569,5 +570,41 @@ impl<T> ApiWaitForResult<T> {
 			ApiWaitForResult::TxHash(_) => panic!("unwrap_details called on TransactionHash"),
 			ApiWaitForResult::TxDetails { response, .. } => response,
 		}
+	}
+}
+
+derive_common_traits! {
+	#[cfg_attr(feature = "test", derive(proptest_derive::Arbitrary))]
+	#[derive(TypeInfo, PartialOrd, Ord, Default, Copy)]
+	pub struct UnixTime{ pub seconds: u64 }
+}
+
+impl sp_std::ops::Add<Seconds> for UnixTime {
+	type Output = UnixTime;
+
+	fn add(self, rhs: Seconds) -> Self::Output {
+		UnixTime { seconds: self.seconds.saturating_add(rhs.0) }
+	}
+}
+
+impl sp_std::ops::Sub<Seconds> for UnixTime {
+	type Output = UnixTime;
+
+	fn sub(self, rhs: Seconds) -> Self::Output {
+		UnixTime { seconds: self.seconds.saturating_sub(rhs.0) }
+	}
+}
+
+derive_common_traits! {
+	#[cfg_attr(feature = "test", derive(proptest_derive::Arbitrary))]
+	#[derive(TypeInfo, Copy, Default)]
+	pub struct Seconds(pub u64);
+}
+
+impl sp_std::ops::Mul<u64> for Seconds {
+	type Output = Seconds;
+
+	fn mul(self, rhs: u64) -> Self::Output {
+		Seconds(self.0.saturating_mul(rhs))
 	}
 }

@@ -130,25 +130,6 @@ macro_rules! derive_validation_statements {
 }
 pub(crate) use derive_validation_statements;
 
-#[macro_export]
-macro_rules! def_derive {
-	(#[no_serde] $($Definition:tt)*) => {
-		#[derive(
-			Debug, Clone, PartialEq, Eq, Encode, Decode,
-		)]
-		$($Definition)*
-	};
-	($($Definition:tt)*) => {
-		#[derive(
-			Debug, Clone, PartialEq, Eq, Encode, Decode,
-		)]
-		#[derive(Deserialize, Serialize)]
-		#[serde(bound(deserialize = "", serialize = ""))]
-		$($Definition)*
-	};
-}
-pub use def_derive;
-
 /// Syntax sugar for adding validation code to types with validity requirements
 macro_rules! defx {
 	(
@@ -173,7 +154,7 @@ macro_rules! defx {
 		crate::electoral_systems::state_machine::core::derive_error_enum!{$Error [ $($ParamName: $($ParamType)?),* ], $def { $($Definition)* } { $($prop_name),* } }
 
 
-		crate::electoral_systems::state_machine::core::def_derive!{
+		cf_utilities::macros::derive_common_traits!{
 			$(
 				#[$($Attributes)*]
 			)*
