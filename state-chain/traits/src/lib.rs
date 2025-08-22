@@ -961,17 +961,7 @@ pub trait AuthoritiesCfeVersions {
 }
 
 pub trait AdjustedFeeEstimationApi<C: Chain> {
-	fn estimate_ingress_fee(asset: C::ChainAsset) -> C::ChainAmount;
-
-	fn estimate_ingress_fee_vault_swap() -> Option<C::ChainAmount>;
-
-	fn estimate_egress_fee(asset: C::ChainAsset) -> C::ChainAmount;
-
-	fn estimate_ccm_fee(
-		asset: C::ChainAsset,
-		gas_budget: GasAmount,
-		message_length: usize,
-	) -> Option<C::ChainAmount>;
+	fn estimate_fee(asset: C::ChainAsset, ingress_or_egress: IngressOrEgress) -> C::ChainAmount;
 }
 
 pub trait CallDispatchFilter<RuntimeCall> {
