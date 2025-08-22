@@ -14,24 +14,24 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use core::ops::{Mul, RangeInclusive, Sub};
-use sp_std::ops::Add;
+use core::ops::RangeInclusive;
+
+use codec::MaxEncodedLen;
+#[cfg(test)]
+use proptest_derive::Arbitrary;
 
 use crate::{
 	electoral_systems::{oracle_price::price::Fraction, state_machine::common_imports::*},
 	generic_tools::*,
 };
 
-#[cfg(test)]
-use proptest_derive::Arbitrary;
-
-def_derive! {
-	#[cfg_attr(test, derive(Arbitrary))]
-	#[derive(TypeInfo, PartialOrd, Ord, Default, Copy)]
+derive_common_traits! {
+	#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
+	#[derive(TypeInfo, PartialOrd, Ord, Default, Copy, MaxEncodedLen)]
 	pub struct UnixTime{ pub seconds: u64 }
 }
 
-impl Add<Seconds> for UnixTime {
+impl sp_std::ops::Add<Seconds> for UnixTime {
 	type Output = UnixTime;
 
 	fn add(self, rhs: Seconds) -> Self::Output {
@@ -39,7 +39,7 @@ impl Add<Seconds> for UnixTime {
 	}
 }
 
-impl Sub<Seconds> for UnixTime {
+impl sp_std::ops::Sub<Seconds> for UnixTime {
 	type Output = UnixTime;
 
 	fn sub(self, rhs: Seconds) -> Self::Output {
@@ -47,13 +47,13 @@ impl Sub<Seconds> for UnixTime {
 	}
 }
 
-def_derive! {
-	#[cfg_attr(test, derive(Arbitrary))]
+derive_common_traits! {
+	#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 	#[derive(TypeInfo, Copy, Default)]
 	pub struct Seconds(pub u64);
 }
 
-impl Mul<u64> for Seconds {
+impl sp_std::ops::Mul<u64> for Seconds {
 	type Output = Seconds;
 
 	fn mul(self, rhs: u64) -> Self::Output {
@@ -61,7 +61,7 @@ impl Mul<u64> for Seconds {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo, Copy, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct BasisPoints(pub u16);
@@ -75,7 +75,7 @@ impl BasisPoints {
 
 pub trait AggregationValue = Ord + CommonTraits + MaybeArbitrary + 'static;
 
-def_derive! {
+derive_common_traits! {
 	#[cfg_attr(test, derive(Arbitrary))]
 	#[derive(TypeInfo)]
 	pub struct Aggregated<A: AggregationValue> {

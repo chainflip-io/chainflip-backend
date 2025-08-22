@@ -48,7 +48,7 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
-	EpochIndex, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
+	EpochIndex, ForeignChain, IngressOrEgress, Ipv6Addr, NetworkEnvironment, Price, SemVer,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
