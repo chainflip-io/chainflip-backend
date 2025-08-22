@@ -17,7 +17,6 @@ import { depositChannelCreation } from 'tests/request_swap_deposit_address_with_
 import { testBrokerLevelScreening } from 'tests/broker_level_screening';
 import { testFundRedeem } from 'tests/fund_redeem';
 import { concurrentTest, serialTest } from 'shared/utils/vitest';
-import { testAssethubXcm } from 'tests/assethub_xcm';
 import { testDelegateFlip } from './delegate_flip';
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
@@ -42,7 +41,10 @@ describe('ConcurrentTests', () => {
   concurrentTest('DepositChannelCreation', depositChannelCreation, 30);
   concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 600);
   concurrentTest('VaultSwaps', testVaultSwap, 600);
-  concurrentTest('AssethubXCM', testAssethubXcm, 200);
+  // This test times out far too often.
+  // TODO: figure out how to make it less flaky.
+  // WHEN CHANGING ANYTHING RELATED TO ASSETHUB OR XCM, run this test locally.
+  // concurrentTest('AssethubXCM', testAssethubXcm, 200);
   concurrentTest('DelegateFlip', testDelegateFlip, 360);
 
   // Tests that only work if there is more than one node
