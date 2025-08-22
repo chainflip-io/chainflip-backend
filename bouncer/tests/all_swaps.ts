@@ -10,7 +10,6 @@ import {
 } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
 import { manuallyAddTestToList, concurrentTest } from 'shared/utils/vitest';
-import { describe } from 'vitest';
 
 export async function initiateSwap(
   testContext: TestContext,
@@ -114,9 +113,7 @@ export function testAllSwaps(timeoutPerSwap: number) {
   appendSwap('ArbEth', 'HubUsdc', testVaultSwap);
   appendSwap('ArbEth', 'HubUsdt', testVaultSwap);
 
-  describe('AllSwaps', () => {
-    for (const swap of allSwaps) {
-      concurrentTest(swap.name, swap.test, timeoutPerSwap, true);
-    }
-  });
+  for (const swap of allSwaps) {
+    concurrentTest(`AllSwaps > ${swap.name}`, swap.test, timeoutPerSwap, true);
+  }
 }
