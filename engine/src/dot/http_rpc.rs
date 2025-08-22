@@ -35,7 +35,6 @@ use url::Url;
 use anyhow::{anyhow, Result};
 use cf_utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
 use codec::Decode;
-use subxt::ext::subxt_rpcs;
 use tracing::{error, warn};
 
 use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
@@ -98,22 +97,29 @@ impl DotHttpRpcClient {
 		let url = ensure_port(raw_url)?;
 
 		Ok(async move {
-			let rpc_client =
-				RpcClient::from_url(url.clone()).await.expect("Failed to create RPC client");
-
 			// We don't want to return an error here. Returning an error means that we'll exit the
 			// CFE. So on client creation we wait until we can be successfully connected to the
 			// Polkadot node. So the other chains are unaffected
 			let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
-			let online_client = loop {
+			let (rpc_client, online_client) = loop {
 				poll_interval.tick().await;
 
-				match OnlineClient::<PolkadotConfig>::from_rpc_client(rpc_client.clone()).await {
-					Ok(online_client) => {
+				let maybe_online_client: anyhow::Result<_> =
+					match RpcClient::from_url(url.clone()).await {
+						Ok(rpc_client) =>
+							OnlineClient::<PolkadotConfig>::from_rpc_client(rpc_client.clone())
+								.await
+								.map(move |a| (rpc_client, a))
+								.map_err(|e| e.into()),
+						Err(e) => Err(e.into()),
+					};
+
+				match maybe_online_client {
+					Ok((rpc_client, online_client)) => {
 						if let Some(expected_genesis_hash) = expected_genesis_hash {
 							let genesis_hash = online_client.genesis_hash();
 							if genesis_hash == expected_genesis_hash {
-								break online_client
+								break (rpc_client, online_client)
 							} else {
 								error!(
 									"Connected to Polkadot node at {url} but the genesis hash {genesis_hash} does not match the expected genesis hash {expected_genesis_hash}. Please check your CFE configuration file."
@@ -121,7 +127,7 @@ impl DotHttpRpcClient {
 							}
 						} else {
 							warn!("Skipping Polkadot genesis hash check");
-							break online_client
+							break (rpc_client, online_client)
 						}
 					},
 					Err(e) => {
@@ -220,36 +226,16 @@ impl DotRpcApi for DotHttpRpcClient {
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
-		let mut tx_progress =
-			self.rpc_methods.author_submit_and_watch_extrinsic(&encoded_bytes).await?;
+		let success = subxt::tx::SubmittableTransaction::<PolkadotConfig, _>::from_bytes(
+			self.online_client.clone(),
+			encoded_bytes,
+		)
+		.submit_and_watch()
+		.await?
+		.wait_for_finalized_success()
+		.await?;
 
-		while let Some(tx_status) = tx_progress.next().await {
-			let status = tx_status?;
-			match status {
-				subxt_rpcs::methods::legacy::TransactionStatus::Finalized(hash) => {
-					tracing::info!("dot extrinsic was finalized with hash ({hash:?}), for extrinsic {encoded_bytes:?}");
-					return Ok(hash)
-				},
-				// subxt_rpcs::methods::legacy::TransactionStatus::Future |
-				// subxt_rpcs::methods::legacy::TransactionStatus::Ready |
-				// subxt_rpcs::methods::legacy::TransactionStatus::Broadcast(_) => todo!(),
-				// subxt_rpcs::methods::legacy::TransactionStatus::InBlock(hash) => {
-				// 	tracing::info!("submission of dot extrinsic is InBlock {hash:?}, for extrinsic {encoded_bytes:?}")
-				// },
-				subxt_rpcs::methods::legacy::TransactionStatus::Retracted(_) |
-				subxt_rpcs::methods::legacy::TransactionStatus::FinalityTimeout(_) |
-				subxt_rpcs::methods::legacy::TransactionStatus::Usurped(_) |
-				subxt_rpcs::methods::legacy::TransactionStatus::Dropped |
-				subxt_rpcs::methods::legacy::TransactionStatus::Invalid => {
-					tracing::error!("error for dot extrinsic ({status:?}), for extrinsic {encoded_bytes:?}");
-					return Err(anyhow!("error for dot extrinsic ({status:?}), for extrinsic {encoded_bytes:?}"));
-				},
-				state => tracing::info!("submission of dot extrinsic reached state {state:?}, for extrinsic {encoded_bytes:?}")
-
-			}
-		}
-
-		Err(anyhow!("rpc subscription for submission of extrinsic {encoded_bytes:?} terminated unexpectedly!"))
+		Ok(success.extrinsic_hash())
 	}
 }
 
