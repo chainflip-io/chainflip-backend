@@ -28,7 +28,6 @@ describe('ConcurrentTests', () => {
   const givenNumberOfNodes = match ? parseInt(match[0]) : null;
   const numberOfNodes = givenNumberOfNodes ?? 1;
 
-  concurrentTest('SwapLessThanED', swapLessThanED, 180);
   testAllSwaps(numberOfNodes === 1 ? 180 : 240); // TODO: find out what the 3-node timeout should be
   concurrentTest('EvmDeposits', testEvmDeposits, 250);
   concurrentTest('FundRedeem', testFundRedeem, 1000);
@@ -44,6 +43,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('VaultSwaps', testVaultSwap, 600);
   concurrentTest('AssethubXCM', testAssethubXcm, 200);
   concurrentTest('DelegateFlip', testDelegateFlip, 360);
+  concurrentTest('SwapLessThanED', swapLessThanED, 180);
 
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
