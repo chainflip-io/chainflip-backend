@@ -4,7 +4,7 @@ use super::{
 	block_witnesser::state_machine::HookTypeFor,
 	state_machine::core::{defx, Hook, HookType, Validate},
 };
-use crate::{electoral_systems::state_machine::core::def_derive, generic_tools::*};
+use crate::generic_tools::*;
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use derive_where::derive_where;
@@ -86,7 +86,7 @@ defx! {
 	validate _this (else HeightWitnesserPropertiesError) {}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo)]
 	pub struct BlockHeightWitnesserSettings {
 		/// IMPORTANT: This value should always be greater than any reorg depth we expect to happen.

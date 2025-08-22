@@ -6,15 +6,16 @@ use core::{
 use crate::electoral_systems::{
 	block_height_witnesser::{ChainBlockNumberOf, ChainTypes},
 	block_witnesser::state_machine::BWProcessorTypes,
-	state_machine::core::{def_derive, Hook, Validate},
+	state_machine::core::{Hook, Validate},
 };
 use cf_chains::witness_period::SaturatingStep;
+use cf_utilities::macros::*;
 use codec::{Decode, Encode};
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use generic_typeinfo_derive::GenericTypeInfo;
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec::Vec};
 
-def_derive! {
+derive_common_traits! {
 	///
 	/// BlockProcessor
 	/// ===================================
@@ -63,7 +64,7 @@ def_derive! {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(GenericTypeInfo)]
 	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
 	pub struct BlockProcessingInfo<T: BWProcessorTypes> {
@@ -78,7 +79,7 @@ impl<T: BWProcessorTypes> BlockProcessingInfo<T> {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo)]
 	pub enum BlockProcessorEvent<T: BWProcessorTypes> {
 		NewBlock {
