@@ -575,7 +575,7 @@ impl<T> ApiWaitForResult<T> {
 
 derive_common_traits! {
 	#[cfg_attr(feature = "test", derive(proptest_derive::Arbitrary))]
-	#[derive(TypeInfo, PartialOrd, Ord, Default, Copy)]
+	#[derive(TypeInfo, PartialOrd, Ord, Default, Copy, MaxEncodedLen)]
 	pub struct UnixTime{ pub seconds: u64 }
 }
 
@@ -607,4 +607,12 @@ impl sp_std::ops::Mul<u64> for Seconds {
 	fn mul(self, rhs: u64) -> Self::Output {
 		Seconds(self.0.saturating_mul(rhs))
 	}
+}
+
+/// Used in cf_ingress_egress and in cf_chains.
+pub enum IngressOrEgress {
+	IngressDepositChannel,
+	IngressVaultSwap,
+	Egress,
+	EgressCcm { gas_budget: GasAmount, message_length: usize },
 }
