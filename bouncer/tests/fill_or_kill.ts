@@ -1,4 +1,4 @@
-import { InternalAsset, InternalAssets as Assets, Asset } from '@chainflip/cli';
+import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import { randomBytes } from 'crypto';
 import {
   amountToFineAmount,
@@ -24,7 +24,7 @@ import { updatePriceFeed } from 'shared/update_price_feed';
 /// Do a swap with unrealistic minimum price so it gets refunded.
 async function testMinPriceRefund(
   parentLogger: Logger,
-  sourceAsset: InternalAsset,
+  sourceAsset: Asset,
   amount: number,
   swapViaVault = false,
   ccmRefund = false,
@@ -145,41 +145,32 @@ async function testMinPriceRefund(
   );
 }
 
-async function checkPriceFeedStatuses(): Promise<void> {
+async function testOracleSwapsFoK(parentLogger: Logger): Promise<void> {
+  const logger = parentLogger.child({ tag: `FoK_OracleSwaps` });
+
+  logger.info('Setting up unrealistic prices for oracle swaps to test fill-or-kill');
+
+  // Only need to update the prices in Solana as that's the main feed
+  await Promise.all([
+    updatePriceFeed(logger, 'Solana', 'BTC', '1000000'),
+    updatePriceFeed(logger, 'Solana', 'ETH', '100000'),
+  ]);
+
+  // Check that all Solana prices are up to date to ensure that oracle swaps
+  // are not being refunded due to stale prices.
   const chainflip = await getChainflipApi();
   const response = JSON.parse(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (await chainflip.query.genericElections.electoralUnsynchronisedState()) as any,
   );
-  const chains = ['solana', 'ethereum'] as const;
-  for (const chain of chains) {
-    const chainState = response.chainStates[chain].price;
-    for (const [asset, feed] of Object.entries(chainState) as [string, { priceStatus: string }][]) {
-      if (feed.priceStatus !== 'UpToDate') {
-        throw new Error(`Price status for ${chain}.${asset} is not UpToDate: ${feed.priceStatus}`);
-      }
+  const chainState = response.chainStates.solana.price;
+  for (const [asset, feed] of Object.entries(chainState) as [string, { priceStatus: string }][]) {
+    if (feed.priceStatus !== 'UpToDate') {
+      throw new Error(`Price status for solana.${asset} is not UpToDate: ${feed.priceStatus}`);
     }
   }
-}
 
-async function testOracleSwapsFoK(parentLogger: Logger): Promise<void> {
-  const logger = parentLogger.child({ tag: `FoK_OracleSwaps` });
-
-  const sourceAssets = ['ETH', 'BTC'];
-
-  logger.info('Setting up unrealistic prices for oracle swaps to test fill-or-kill');
-
-  for (const asset of sourceAssets) {
-    await Promise.all([
-      updatePriceFeed(logger, 'Ethereum', asset as Asset, '100000'),
-      updatePriceFeed(logger, 'Solana', asset as Asset, '1000000'),
-    ]);
-  }
-  // Check that all prices are up to date to ensure that oracle swaps
-  // are not being refunded due to stale prices.
-  await checkPriceFeedStatuses();
-
-  logger.info(`Testing Oracle Swaps fill-or-kill for ${sourceAssets.join(', ')}`);
+  logger.info('Oracle prices set');
 
   await Promise.all([
     testMinPriceRefund(logger, Assets.Eth, 10, false, false, true),

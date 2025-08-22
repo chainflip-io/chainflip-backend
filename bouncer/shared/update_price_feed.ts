@@ -139,21 +139,16 @@ export async function updatePriceFeed(logger: Logger, chain: Chain, asset: Asset
 }
 
 export async function updateDefaultPriceFeeds(logger: Logger) {
-  const ethereumUpdates = async () => {
-    await updatePriceFeed(logger, 'Ethereum', 'BTC', defaultPrice.get('Btc')!.toString());
-    await updatePriceFeed(logger, 'Ethereum', 'ETH', defaultPrice.get('Eth')!.toString());
-    await updatePriceFeed(logger, 'Ethereum', 'SOL', defaultPrice.get('Sol')!.toString());
-    await updatePriceFeed(logger, 'Ethereum', 'USDC', defaultPrice.get('Usdc')!.toString());
-    await updatePriceFeed(logger, 'Ethereum', 'USDT', defaultPrice.get('Usdt')!.toString());
-  };
-
-  const solanaUpdates = async () => {
-    await updatePriceFeed(logger, 'Solana', 'BTC', defaultPrice.get('Btc')!.toString());
-    await updatePriceFeed(logger, 'Solana', 'ETH', defaultPrice.get('Eth')!.toString());
-    await updatePriceFeed(logger, 'Solana', 'SOL', defaultPrice.get('Sol')!.toString());
-    await updatePriceFeed(logger, 'Solana', 'USDC', defaultPrice.get('Usdc')!.toString());
-    await updatePriceFeed(logger, 'Solana', 'USDT', defaultPrice.get('Usdt')!.toString());
-  };
-
-  await Promise.all([ethereumUpdates(), solanaUpdates()]);
+  await Promise.all([
+    updatePriceFeed(logger, 'Ethereum', 'BTC', defaultPrice.get('Btc')!.toString()),
+    updatePriceFeed(logger, 'Ethereum', 'ETH', defaultPrice.get('Eth')!.toString()),
+    updatePriceFeed(logger, 'Ethereum', 'SOL', defaultPrice.get('Sol')!.toString()),
+    updatePriceFeed(logger, 'Ethereum', 'USDC', defaultPrice.get('Usdc')!.toString()),
+    updatePriceFeed(logger, 'Ethereum', 'USDT', defaultPrice.get('Usdt')!.toString()),
+    updatePriceFeed(logger, 'Solana', 'BTC', defaultPrice.get('Btc')!.toString()),
+    updatePriceFeed(logger, 'Solana', 'ETH', defaultPrice.get('Eth')!.toString()),
+    updatePriceFeed(logger, 'Solana', 'SOL', defaultPrice.get('Sol')!.toString()),
+    updatePriceFeed(logger, 'Solana', 'USDC', defaultPrice.get('Usdc')!.toString()),
+    updatePriceFeed(logger, 'Solana', 'USDT', defaultPrice.get('Usdt')!.toString()),
+  ]);
 }
