@@ -26,8 +26,9 @@ pub mod lending;
 mod swapping;
 
 pub use swapping::{
-	ExpiryBehaviour, PriceLimitsAndExpiry, SwapOutputAction, SwapOutputActionEncoded,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry, SwapExecutionProgress,
+	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
+	SwapRequestTypeEncoded, SwapType,
 };
 
 pub mod mocks;

@@ -14,15 +14,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use sp_std::collections::btree_map::BTreeMap;
+
 use crate::{
-	swapping::{PriceLimitsAndExpiry, SwapOutputAction, SwapRequestType},
+	swapping::{PriceLimitsAndExpiry, SwapExecutionProgress, SwapOutputAction, SwapRequestType},
 	EgressApi, SwapRequestHandler,
 };
 use cf_chains::{Chain, SwapOrigin};
 use cf_primitives::{Asset, AssetAmount, Beneficiaries, DcaParameters, SwapRequestId};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sp_std::{vec, vec::Vec};
 
 use crate::mocks::MockPalletStorage;
 
@@ -36,6 +37,8 @@ pub struct MockSwapRequest {
 	pub input_asset: Asset,
 	pub output_asset: Asset,
 	pub input_amount: AssetAmount,
+	pub remaining_input_amount: AssetAmount,
+	pub accumulated_output_amount: AssetAmount,
 	pub swap_type: SwapRequestType<u64>,
 	pub broker_fees: Beneficiaries<u64>,
 	pub origin: SwapOrigin<u64>,
@@ -46,10 +49,35 @@ impl<T> MockPallet for MockSwapRequestHandler<T> {
 }
 
 const SWAP_REQUESTS: &[u8] = b"SWAP_REQUESTS";
+const NEXT_REQ_ID: &[u8] = b"NEXT_REQ_ID";
+
+type SwapRequestsStorageType = BTreeMap<SwapRequestId, MockSwapRequest>;
 
 impl<T> MockSwapRequestHandler<T> {
-	pub fn get_swap_requests() -> Vec<MockSwapRequest> {
-		Self::get_value(SWAP_REQUESTS).unwrap_or_default()
+	pub fn get_swap_requests() -> SwapRequestsStorageType {
+		Self::get_value::<SwapRequestsStorageType>(SWAP_REQUESTS).unwrap_or_default()
+	}
+
+	pub fn set_swap_request_progress(
+		swap_request_id: SwapRequestId,
+		progress: SwapExecutionProgress,
+	) {
+		Self::mutate_value(SWAP_REQUESTS, |swaps: &mut Option<SwapRequestsStorageType>| {
+			let swaps = swaps.as_mut().expect("must have swap requests");
+
+			let swap = swaps.get_mut(&swap_request_id).expect("must contain requested swap");
+			swap.remaining_input_amount = progress.remaining_input_amount;
+			swap.accumulated_output_amount = progress.accumulated_output_amount;
+		});
+	}
+
+	fn get_next_swap_request_id() -> SwapRequestId {
+		Self::mutate_value(NEXT_REQ_ID, |maybe_id: &mut Option<SwapRequestId>| {
+			let stored_id = maybe_id.get_or_insert_default();
+			let to_return = *stored_id;
+			*stored_id = (stored_id.0 + 1).into();
+			to_return
+		})
 	}
 }
 
@@ -69,19 +97,25 @@ where
 		_dca_params: Option<DcaParameters>,
 		origin: SwapOrigin<Self::AccountId>,
 	) -> SwapRequestId {
-		let id = Self::mutate_value(SWAP_REQUESTS, |swaps: &mut Option<Vec<MockSwapRequest>>| {
-			let swaps = swaps.get_or_insert(vec![]);
-			let id = swaps.len();
-			swaps.push(MockSwapRequest {
-				input_asset,
-				output_asset,
-				input_amount,
-				swap_type: swap_type.clone(),
-				broker_fees,
-				origin,
+		let swap_request_id =
+			Self::mutate_value(SWAP_REQUESTS, |swaps: &mut Option<SwapRequestsStorageType>| {
+				let swaps = swaps.get_or_insert_default();
+				let id = Self::get_next_swap_request_id();
+				swaps.insert(
+					id,
+					MockSwapRequest {
+						input_asset,
+						output_asset,
+						input_amount,
+						swap_type: swap_type.clone(),
+						broker_fees,
+						origin,
+						remaining_input_amount: input_amount,
+						accumulated_output_amount: 0,
+					},
+				);
+				id
 			});
-			id
-		});
 
 		match swap_type {
 			SwapRequestType::Regular { output_action } => match output_action {
@@ -89,22 +123,42 @@ where
 					let _ = E::schedule_egress(
 						output_asset.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
 						input_amount.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
-						output_address.try_into().unwrap_or_else(|_| {
-							panic!(
-								"Unable to
-						convert"
-							)
-						}),
+						output_address.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
 						ccm_deposit_metadata,
 					);
 				},
 				SwapOutputAction::CreditOnChain { .. } => {
 					// do nothing: this behaviour is tested by the swapping pallet's tests
 				},
+				SwapOutputAction::CreditLendingPool { .. } => {
+					// do nothing: for now it is the test's responsibility to manually call
+					// process_loan_swap_outcome where required
+				},
 			},
 			_ => { /* do nothing */ },
 		};
 
-		(id as u64).into()
+		swap_request_id
+	}
+
+	fn inspect_swap_request(swap_request_id: SwapRequestId) -> Option<SwapExecutionProgress> {
+		let swap_requests: SwapRequestsStorageType =
+			Self::get_value(SWAP_REQUESTS).unwrap_or_default();
+
+		swap_requests.get(&swap_request_id).map(|swap| SwapExecutionProgress {
+			remaining_input_amount: swap.remaining_input_amount,
+			accumulated_output_amount: swap.accumulated_output_amount,
+		})
+	}
+
+	fn abort_swap_request(swap_request_id: SwapRequestId) -> Option<SwapExecutionProgress> {
+		Self::mutate_value(SWAP_REQUESTS, |swaps: &mut Option<SwapRequestsStorageType>| {
+			let swaps = swaps.as_mut().expect("must have swap requests");
+
+			swaps.remove(&swap_request_id).map(|swap| SwapExecutionProgress {
+				remaining_input_amount: swap.remaining_input_amount,
+				accumulated_output_amount: swap.accumulated_output_amount,
+			})
+		})
 	}
 }

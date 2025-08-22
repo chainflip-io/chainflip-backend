@@ -25,8 +25,8 @@ const LENDER_1: AccountId = 1;
 const LENDER_2: AccountId = 2;
 const LENDER_3: AccountId = 3;
 
-const LOAN_1: LoanId = LoanId(0);
-const LOAN_2: LoanId = LoanId(1);
+const LOAN_1: CoreLoanId = CoreLoanId(0);
+const LOAN_2: CoreLoanId = CoreLoanId(1);
 
 // The exact value in unimportant in tests
 const USAGE: LoanUsage = LoanUsage::Boost(PrewitnessedDepositId(0));
@@ -63,7 +63,7 @@ pub fn check_pool(pool: &CorePool, amounts: impl IntoIterator<Item = (AccountId,
 #[track_caller]
 fn check_pending_withdrawals(
 	pool: &CorePool,
-	withdrawals: impl IntoIterator<Item = (AccountId, Vec<LoanId>)>,
+	withdrawals: impl IntoIterator<Item = (AccountId, Vec<CoreLoanId>)>,
 ) {
 	let expected_withdrawals: BTreeMap<_, BTreeSet<_>> = withdrawals
 		.into_iter()
@@ -76,7 +76,7 @@ fn check_pending_withdrawals(
 #[track_caller]
 fn check_pending_loans(
 	pool: &CorePool,
-	loans: impl IntoIterator<Item = (LoanId, Vec<(AccountId, u16 /* percents */)>)>,
+	loans: impl IntoIterator<Item = (CoreLoanId, Vec<(AccountId, u16 /* percents */)>)>,
 ) {
 	let expected_loans: BTreeMap<_, _> = loans.into_iter().collect();
 
@@ -334,9 +334,9 @@ fn small_rewards_accumulate() {
 
 	const LOAN_1: u64 = 0;
 
-	assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(LoanId(LOAN_1)));
+	assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(CoreLoanId(LOAN_1)));
 
-	pool.make_repayment(LoanId(LOAN_1), SMALL_DEPOSIT + FEE);
+	pool.make_repayment(CoreLoanId(LOAN_1), SMALL_DEPOSIT + FEE);
 
 	// LENDER_2 earns ~0.25 (it is rounded down when converted to AssetAmount,
 	// but the fractional part isn't lost)
@@ -344,8 +344,8 @@ fn small_rewards_accumulate() {
 
 	// 4 more loans like that and LENDER_2 should have withdrawable fees:
 	for loan_id in (LOAN_1 + 1)..=(LOAN_1 + 4) {
-		assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(LoanId(loan_id)));
-		pool.make_repayment(LoanId(loan_id), SMALL_DEPOSIT + FEE);
+		assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(CoreLoanId(loan_id)));
+		pool.make_repayment(CoreLoanId(loan_id), SMALL_DEPOSIT + FEE);
 	}
 
 	// Note the increase in LENDER_2's balance:

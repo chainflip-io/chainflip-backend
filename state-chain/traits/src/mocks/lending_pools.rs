@@ -16,9 +16,12 @@
 
 use sp_std::collections::btree_map::BTreeMap;
 
-use crate::lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome};
+use crate::{
+	lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome, ChpSystemApi},
+	LendingSwapType,
+};
 
-use cf_primitives::{Asset, AssetAmount, BasisPoints, PrewitnessedDepositId};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, PrewitnessedDepositId, SwapRequestId};
 use frame_support::{pallet_prelude::*, sp_runtime::Percent};
 
 use super::{MockPallet, MockPalletStorage};
@@ -134,5 +137,43 @@ impl BoostApi for MockBoostApi {
 
 	fn process_deposit_as_lost(deposit_id: PrewitnessedDepositId, _asset: Asset) {
 		let _deposit_amount = Self::remove_boosted_deposit(deposit_id);
+	}
+}
+
+pub struct MockChpSystemApi {}
+
+impl MockPallet for MockChpSystemApi {
+	const PREFIX: &'static [u8] = b"MockChpSystemApi";
+}
+
+const SWAPPED_FEES: &[u8] = b"SWAPPED_FEES";
+
+impl MockChpSystemApi {
+	pub fn set_swapped_fees(asset: Asset, amount: AssetAmount) {
+		Self::put_storage(SWAPPED_FEES, asset, amount);
+	}
+
+	pub fn get_swapped_fees(asset: Asset) -> Option<AssetAmount> {
+		Self::get_storage(SWAPPED_FEES, asset)
+	}
+}
+
+impl ChpSystemApi for MockChpSystemApi {
+	type AccountId = u64;
+
+	fn process_loan_swap_outcome(
+		_swap_request_id: SwapRequestId,
+		swap_type: LendingSwapType<Self::AccountId>,
+		output_amount: AssetAmount,
+	) {
+		match swap_type {
+			LendingSwapType::Liquidation { .. } => {
+				// TODO: implement if needed by some test
+			},
+			LendingSwapType::FeeSwap { pool_asset } => {
+				let current_fees = Self::get_swapped_fees(pool_asset).unwrap_or_default();
+				Self::set_swapped_fees(pool_asset, current_fees + output_amount);
+			},
+		}
 	}
 }

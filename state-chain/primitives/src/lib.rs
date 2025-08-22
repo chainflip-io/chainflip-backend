@@ -45,9 +45,9 @@ macro_rules! define_wrapper_type {
 			frame_support::sp_runtime::RuntimeDebug,
 			PartialEq,
 			Eq,
-			Encode,
-			Decode,
-			TypeInfo,
+			codec::Encode,
+			codec::Decode,
+			scale_info::TypeInfo,
 			frame_support::pallet_prelude::MaxEncodedLen,
 			Default,
 			$($( $extra_derive ),*)?
