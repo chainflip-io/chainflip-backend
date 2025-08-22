@@ -17,6 +17,7 @@
 use super::MockPallet;
 use crate::mocks::MockPalletStorage;
 use cf_chains::Chain;
+use cf_primitives::IngressOrEgress;
 
 use crate::{AdjustedFeeEstimationApi, GetBlockHeight};
 
@@ -45,23 +46,7 @@ impl<C: Chain> GetBlockHeight<C> for ChainTracker<C> {
 }
 
 impl<C: Chain> AdjustedFeeEstimationApi<C> for ChainTracker<C> {
-	fn estimate_ingress_fee(_asset: C::ChainAsset) -> C::ChainAmount {
+	fn estimate_fee(_asset: C::ChainAsset, _ingress_or_egress: IngressOrEgress) -> C::ChainAmount {
 		Self::get_value(TRACKED_FEE_KEY).unwrap_or_default()
-	}
-
-	fn estimate_ingress_fee_vault_swap() -> Option<C::ChainAmount> {
-		Self::get_value(TRACKED_FEE_KEY)
-	}
-
-	fn estimate_egress_fee(_asset: C::ChainAsset) -> C::ChainAmount {
-		Self::get_value(TRACKED_FEE_KEY).unwrap_or_default()
-	}
-
-	fn estimate_ccm_fee(
-		_asset: C::ChainAsset,
-		_gas_budget: cf_primitives::GasAmount,
-		_message_length: usize,
-	) -> Option<C::ChainAmount> {
-		Self::get_value(TRACKED_FEE_KEY)
 	}
 }
