@@ -8449,6 +8449,7 @@ dependencies = [
 name = "pallet-cf-lending-pools"
 version = "0.1.0"
 dependencies = [
+ "cf-amm-math",
  "cf-chains",
  "cf-primitives",
  "cf-runtime-utilities",
@@ -8459,10 +8460,12 @@ dependencies = [
  "frame-system",
  "log",
  "nanorand",
+ "num-traits",
  "parity-scale-codec",
  "scale-info",
  "serde",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B4)",
+ "utilities",
 ]
 
 [[package]]
