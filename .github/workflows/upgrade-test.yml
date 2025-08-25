@@ -198,6 +198,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
+          ./commands/setup_elections.ts
           ./commands/update_price_feeds.ts ALL
 
       - name: Run bouncer on upgrade-from version 🙅‍♂️
