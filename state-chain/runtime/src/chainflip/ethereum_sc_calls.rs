@@ -2,12 +2,15 @@ use crate::{chainflip::TypeInfo, Decode, Encode, EthereumAddress, Runtime, Runti
 use frame_support::{
 	dispatch::{DispatchInfo, GetDispatchInfo},
 	traits::UnfilteredDispatchable,
+	Deserialize, Serialize,
 };
 use pallet_cf_funding::{Call as FundingCall, RedemptionAmount};
 use pallet_cf_validator::Call as ValidatorCall;
 use sp_runtime::traits::Dispatchable;
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
+#[derive(
+	Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub enum DelegationApi {
 	// todo: impl partial delegate/undelegate after the auction PR.
 	Delegate {
@@ -25,7 +28,9 @@ pub enum DelegationApi {
 	},
 }
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
+#[derive(
+	Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub enum EthereumSCApi {
 	Delegation(DelegationApi),
 	// reserved for future Apis for example Loan(LoanApi)...
