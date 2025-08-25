@@ -190,17 +190,6 @@ jobs:
           ./commands/force_sol_nonces.ts
           ./commands/set_sol_alt.ts
 
-      # TODO: This is a temporary workaround to do the initial price feed setup. Remove after 1.11 is released.
-      - name: Setup price feeds
-        if: inputs.run-job
-        run: |
-          git checkout ${{ github.sha }}
-          git rev-parse HEAD
-          cd bouncer
-          pnpm install --frozen-lockfile
-          ./commands/setup_elections.ts
-          ./commands/update_price_feeds.ts ALL
-
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
         id: pre-upgrade-bouncer
@@ -229,6 +218,17 @@ jobs:
             --bins ./../upgrade-to-bins \
             --localnet_init ./../localnet/init \
             --oldVersion "${{ env.OLD_BIN_VERSION }}"
+
+      # TODO: This is a temporary workaround to do the initial price feed setup. Remove after 1.11 is released.
+      - name: Setup price feeds
+        if: inputs.run-job
+        run: |
+          git checkout ${{ github.sha }}
+          git rev-parse HEAD
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./commands/setup_elections.ts
+          ./commands/update_price_feeds.ts ALL
 
       - name: Run bouncer after upgrade 🙅‍♂️
         if: inputs.run-job
