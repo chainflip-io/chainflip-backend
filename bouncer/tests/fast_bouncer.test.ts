@@ -18,6 +18,7 @@ import { testBrokerLevelScreening } from 'tests/broker_level_screening';
 import { testFundRedeem } from 'tests/fund_redeem';
 import { concurrentTest, serialTest } from 'shared/utils/vitest';
 import { testDelegateFlip } from './delegate_flip';
+import { testSpecialBitcoinSwaps } from './special_btc_swaps';
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {
@@ -45,6 +46,7 @@ describe('ConcurrentTests', () => {
   // TODO: figure out how to make it less flaky.
   // WHEN CHANGING ANYTHING RELATED TO ASSETHUB OR XCM, run this test locally.
   // concurrentTest('AssethubXCM', testAssethubXcm, 200);
+  concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 60);
   concurrentTest('DelegateFlip', testDelegateFlip, 360);
 
   // Tests that only work if there is more than one node
