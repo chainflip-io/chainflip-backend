@@ -198,13 +198,21 @@ pub fn deposit_witnesses(
 				.sorted_by_key(|deposit_witness| deposit_witness.deposit_address.clone())
 				.chunk_by(|deposit_witness| deposit_witness.deposit_address.clone())
 				.into_iter()
-				.map(|(_deposit_address, deposit_witnesses)| {
-					// We only take the largest output of a tx as a deposit witness. This is to
+				.flat_map(|(_deposit_address, deposit_witnesses)| {
+					// We only take the 10 largest outputs of a tx as a deposit witness. This is to
 					// avoid attackers spamming us with many small outputs in a tx. Inputs are more
 					// expensive than outputs - thus, the attacker could send many outputs (cheap
 					// for them) which results in us needing to sign many *inputs*, expensive for
-					// us. sort by descending by amount
-					deposit_witnesses.max_by_key(|deposit_witness| deposit_witness.amount).unwrap()
+					// us.
+
+					// collect all witnesses as we cannot sort iterators
+					let mut witnesses = deposit_witnesses.collect::<Vec<_>>();
+
+					// sort by *ascending* amounts
+					witnesses.sort_by_key(|deposit_witness| deposit_witness.amount);
+
+					// reverse iterator and take the 10 highest deposits
+					witnesses.into_iter().rev().take(10)
 				})
 				.collect::<Vec<_>>()
 		})
