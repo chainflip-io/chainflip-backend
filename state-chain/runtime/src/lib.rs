@@ -347,6 +347,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
 	type PriceFeedApi = ChainlinkOracle;
+	type ChpSystemApi = LendingPools;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -1189,6 +1190,7 @@ impl pallet_cf_lending_pools::Config for Runtime {
 	type SwapRequestHandler = Swapping;
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
+	type PriceApi = ChainlinkOracle;
 }
 
 #[frame_support::runtime]
