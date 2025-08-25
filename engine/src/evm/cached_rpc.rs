@@ -35,6 +35,8 @@ pub trait EvmRetryRpcApiWithResult: Clone {
 
 	async fn block(&self, block_number: U64) -> anyhow::Result<Block<H256>>;
 
+	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>>;
+
 	async fn block_with_txs(&self, block_number: U64) -> anyhow::Result<Block<Transaction>>;
 
 	async fn fee_history(
@@ -45,6 +47,8 @@ pub trait EvmRetryRpcApiWithResult: Clone {
 	) -> anyhow::Result<FeeHistory>;
 
 	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<Transaction>;
+
+	async fn get_block_number(&self) -> anyhow::Result<U64>;
 }
 
 /// Tmp trait defined to allow having a finite retry impl (2 retries, one with main endpoint and
@@ -79,6 +83,7 @@ pub struct EvmCachingClient<Rpc: EvmRpcApi> {
 	chain_id: CachingRequest<(), U256, EvmRetryRpcClient<Rpc>>,
 	transaction_receipt: CachingRequest<H256, TransactionReceipt, EvmRetryRpcClient<Rpc>>,
 	block: CachingRequest<U64, Block<H256>, EvmRetryRpcClient<Rpc>>,
+	block_by_hash: CachingRequest<H256, Block<H256>, EvmRetryRpcClient<Rpc>>,
 	block_with_txs: CachingRequest<U64, Block<Transaction>, EvmRetryRpcClient<Rpc>>,
 	fee_history: CachingRequest<(U256, BlockNumber), FeeHistory, EvmRetryRpcClient<Rpc>>,
 	get_transaction: CachingRequest<H256, Transaction, EvmRetryRpcClient<Rpc>>,
@@ -88,6 +93,7 @@ pub struct EvmCachingClient<Rpc: EvmRpcApi> {
 	balances: CachingRequest<(H256, H160, Vec<H160>), Vec<U256>, EvmRetryRpcClient<Rpc>>,
 	query_price_feeds:
 		CachingRequest<(H160, Vec<H160>), (U256, U256, Vec<PriceFeedData>), EvmRetryRpcClient<Rpc>>,
+	get_block_number: CachingRequest<(), U64, EvmRetryRpcClient<Rpc>>,
 
 	pub cache_invalidation_senders: Vec<mpsc::Sender<()>>,
 }
@@ -108,6 +114,8 @@ impl<Rpc: EvmRpcApi> EvmCachingClient<Rpc> {
 		>::new(scope, client.clone());
 		let (block, block_cache) =
 			CachingRequest::<U64, Block<H256>, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
+		let (block_by_hash, block_by_hash_cache) =
+			CachingRequest::<H256, Block<H256>, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
 		let (block_with_txs, block_with_txs_cache) = CachingRequest::<
 			U64,
 			Block<Transaction>,
@@ -139,12 +147,15 @@ impl<Rpc: EvmRpcApi> EvmCachingClient<Rpc> {
 			(H160, Vec<H160>),
 			(U256, U256, Vec<PriceFeedData>),
 			EvmRetryRpcClient<Rpc>,
-		>::new(scope, client);
+		>::new(scope, client.clone());
+		let (get_block_number, get_block_number_cache) =
+			CachingRequest::<(), U64, EvmRetryRpcClient<Rpc>>::new(scope, client);
 		EvmCachingClient {
 			get_logs,
 			chain_id,
 			transaction_receipt,
 			block,
+			block_by_hash,
 			block_with_txs,
 			fee_history,
 			get_transaction,
@@ -152,11 +163,13 @@ impl<Rpc: EvmRpcApi> EvmCachingClient<Rpc> {
 			address_states,
 			balances,
 			query_price_feeds,
+			get_block_number,
 			cache_invalidation_senders: vec![
 				get_logs_cache,
 				chain_id_cache,
 				transaction_receipt_cache,
 				block_cache,
+				block_by_hash_cache,
 				block_with_txs_cache,
 				fee_history_cache,
 				get_transaction_cache,
@@ -164,6 +177,7 @@ impl<Rpc: EvmRpcApi> EvmCachingClient<Rpc> {
 				address_states_cache,
 				balances_cache,
 				query_price_feeds_cache,
+				get_block_number_cache,
 			],
 		}
 	}
@@ -218,6 +232,18 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 					Box::pin(async move { client.block(block_number).await })
 				}),
 				block_number,
+			)
+			.await
+	}
+
+	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>> {
+		self.block_by_hash
+			.get_or_fetch(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.block_by_hash(block_hash).await })
+				}),
+				block_hash,
 			)
 			.await
 	}
@@ -280,6 +306,17 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 					Box::pin(async move { client.get_logs_range(range, contract_address).await })
 				}),
 				(rangee, contract_address),
+			)
+			.await
+	}
+	async fn get_block_number(&self) -> anyhow::Result<U64> {
+		self.get_block_number
+			.get_or_fetch(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.get_block_number().await })
+				}),
+				(),
 			)
 			.await
 	}
