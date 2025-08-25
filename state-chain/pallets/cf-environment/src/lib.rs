@@ -26,14 +26,14 @@ use cf_chains::{
 		utxo_selection::{self, select_utxos_for_consolidation, select_utxos_from_pool},
 		AggKey, Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
-	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
+	dot::{api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
 	hub::{Assethub, OutputAccountId},
 	sol::{
 		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall},
 		SolAddress, SolApiEnvironment, SolHash, Solana, NONCE_NUMBER_CRITICAL_NONCES,
 	},
-	Chain,
+	Chain, ReplayProtectionProvider,
 };
 use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
@@ -83,7 +83,10 @@ pub enum SafeModeUpdate<T: Config> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum};
+	use cf_chains::{
+		btc::Utxo, dot::api::PolkadotEnvironment, hub::api::AssethubEnvironment,
+		sol::api::DurableNonceAndAccount, Arbitrum,
+	};
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
 	use frame_support::DefaultNoBound;
@@ -127,6 +130,19 @@ pub mod pallet {
 		type SolanaBroadcaster: Broadcaster<
 			Solana,
 			ApiCall = SolanaApi<Self::SolEnvironment>,
+			Callback = RuntimeCallFor<Self>,
+		>;
+
+		/// Only required for 1.11 (deprecation of polkadot and migration to assethub).
+		type DotEnvironment: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>;
+
+		/// Only required for 1.11 (deprecation of polkadot and migration to assethub).
+		type HubEnvironment: AssethubEnvironment;
+
+		/// Only required for 1.11 (deprecation of polkadot and migration to assethub).
+		type PolkadotBroadcaster: Broadcaster<
+			Polkadot,
+			ApiCall = PolkadotApi<Self::DotEnvironment>,
 			Callback = RuntimeCallFor<Self>,
 		>;
 
@@ -575,6 +591,39 @@ pub mod pallet {
 
 			// Witness the agg_key rotation manually in the vaults pallet for assethub
 			T::AssethubVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)
+		}
+
+		/// Sign polkadot extrinsic to teleport vault polkadot balance to assethub
+		/// Only required during the upgrade to 1.11, delete afterwards.
+		#[pallet::call_index(10)]
+		#[pallet::weight(Weight::zero())]
+		pub fn dispatch_polkadot_vault_migration_to_assethub(
+			origin: OriginFor<T>,
+			amount: cf_chains::dot::PolkadotBalance,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			let polkadot_vault = T::DotEnvironment::try_vault_account()
+				.ok_or(DispatchError::Other("Could not get polkadot vault"))?;
+
+			let assethub_vault = T::HubEnvironment::try_vault_account()
+				.ok_or(DispatchError::Other("Could not get assethub vault"))?;
+
+			let replay_protection = T::DotEnvironment::replay_protection(false);
+
+			// create polkadot extrinsic for teleporting vault to our
+			let runtime_call = cf_chains::dot::api::migrate_polkadot::extrinsic_builder(
+				amount,
+				replay_protection,
+				polkadot_vault,
+				assethub_vault,
+			);
+
+			let (_broadcast_id, _) = T::PolkadotBroadcaster::threshold_sign_and_broadcast(
+				cf_chains::dot::api::PolkadotApi::MigrateToAssethub(runtime_call),
+			);
+
+			Ok(())
 		}
 	}
 
