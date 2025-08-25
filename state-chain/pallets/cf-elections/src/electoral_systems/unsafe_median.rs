@@ -69,8 +69,7 @@ impl<
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = ();
 	type ElectionState = ();
-	type VoteStorage =
-		vote_storage::individual::Individual<(), vote_storage::individual::shared::Shared<Value>>;
+	type VoteStorage = vote_storage::bitmap_numerical::BitmapNoHash<Value>;
 	type Consensus = Value;
 	type OnFinalizeContext = StateChainBlockNumber;
 	type OnFinalizeReturn = ();
