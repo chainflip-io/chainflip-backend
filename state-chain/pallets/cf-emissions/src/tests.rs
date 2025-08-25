@@ -21,7 +21,7 @@ use cf_primitives::SECONDS_PER_BLOCK;
 use cf_test_utilities::{assert_has_event, assert_has_matching_event};
 use cf_traits::{
 	mocks::{egress_handler::MockEgressHandler, flip_burn_info::MockFlipBurnInfo},
-	RewardsDistribution, SetSafeMode,
+	SetSafeMode,
 };
 use frame_support::{
 	assert_noop,
@@ -47,10 +47,15 @@ fn test_should_mint_at() {
 	});
 }
 
+fn distribute_block_rewards() {
+	use pallet_authorship::EventHandler;
+	const AUTHOR: AccountId = 123;
+
+	Pallet::<Test>::note_author(AUTHOR);
+}
+
 #[cfg(test)]
 mod test_block_rewards {
-	use cf_traits::RewardsDistribution;
-
 	use crate::CurrentAuthorityEmissionPerBlock;
 
 	use super::*;
@@ -60,7 +65,7 @@ mod test_block_rewards {
 			CurrentAuthorityEmissionPerBlock::<Test>::put(emissions_per_block);
 
 			let before = Flip::<Test>::total_issuance();
-			MockRewardsDistribution::distribute();
+			distribute_block_rewards();
 			let after = Flip::<Test>::total_issuance();
 
 			assert_eq!(before + emissions_per_block, after);
@@ -88,25 +93,30 @@ fn should_calculate_block_emissions() {
 fn should_mint_but_not_broadcast() {
 	new_test_ext().execute_with(|| {
 		let prev_supply_update_block = LastSupplyUpdateBlock::<Test>::get();
-		MockRewardsDistribution::distribute();
+		distribute_block_rewards();
 		assert_eq!(prev_supply_update_block, LastSupplyUpdateBlock::<Test>::get());
 	});
 }
 
 #[test]
-fn should_mint_and_initiate_broadcast() {
+fn should_burn_and_initiate_broadcast() {
 	new_test_ext().execute_with(|| {
 		let before = Flip::<Test>::total_issuance();
 		assert!(MockEmissionsBroadcaster::get_pending_api_calls().is_empty());
 		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
 		let after = Flip::<Test>::total_issuance();
-		assert!(after > before - FLIP_TO_BURN, "Expected {after:?} > {before:?}");
+		assert_eq!(
+			after,
+			before - FLIP_TO_BURN,
+			"Expected after ({after}) to be less than before({before}) by {FLIP_TO_BURN}"
+		);
 		assert_eq!(
 			MockEmissionsBroadcaster::get_pending_api_calls()
 				.first()
 				.unwrap()
 				.new_total_supply,
-			Flip::<Test>::total_issuance()
+			Flip::<Test>::total_issuance(),
+			"Expected emitted total supply to match the total issuance"
 		);
 	});
 }

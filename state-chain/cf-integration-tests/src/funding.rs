@@ -173,7 +173,6 @@ fn apy_can_be_above_100_percent() {
 			let (mut network, _, _) =
 				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
 			network.move_to_the_next_epoch();
-			witness_ethereum_rotation_broadcast(1);
 
 			let validator = Validator::current_authorities().into_iter().next().unwrap();
 
@@ -197,7 +196,7 @@ fn apy_can_be_above_100_percent() {
 }
 
 #[test]
-fn min_aution_bid_qualification() {
+fn min_auction_bid_qualification() {
 	const GENESIS_BALANCE_IN_FLIP: u32 = (GENESIS_BALANCE / FLIPPERINOS_PER_FLIP) as u32;
 	super::genesis::with_test_defaults().build().execute_with(|| {
 		let _ = crate::authorities::fund_authorities_and_join_auction(0);

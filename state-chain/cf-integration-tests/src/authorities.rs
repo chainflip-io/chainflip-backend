@@ -14,10 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-	genesis, network, witness_ethereum_rotation_broadcast, witness_rotation_broadcasts, AllVaults,
-	NodeId, VAULT_ROTATION_BLOCKS,
-};
+use crate::{genesis, network, AllVaults, NodeId, VAULT_ROTATION_BLOCKS};
 
 use frame_support::{assert_err, assert_ok};
 use pallet_cf_vaults::{PendingVaultActivation, VaultActivationStatus};
@@ -89,7 +86,6 @@ fn authority_rotates_with_correct_sequence() {
 			// Skip the first authority rotation, as key handover is guaranteed to succeed
 			// when rotating for the first time.
 			testnet.move_to_the_next_epoch();
-			witness_ethereum_rotation_broadcast(1);
 
 			assert_matches!(Validator::current_rotation_phase(), RotationPhase::Idle);
 			assert_eq!(
@@ -377,8 +373,6 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 			testnet.move_to_the_next_epoch();
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
 
-			witness_ethereum_rotation_broadcast(1);
-
 			// Begin the second rotation.
 			testnet.move_to_the_end_of_epoch();
 			testnet.move_forward_blocks(4);
@@ -443,7 +437,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 /// by going through the correct sequence in sync.
 #[test]
 fn can_move_through_multiple_epochs() {
-	const EPOCH_BLOCKS: u32 = 100;
+	const EPOCH_BLOCKS: u32 = 50;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
 		.epoch_duration(EPOCH_BLOCKS)
@@ -453,13 +447,11 @@ fn can_move_through_multiple_epochs() {
 			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
 			testnet.move_to_the_next_epoch();
-			witness_ethereum_rotation_broadcast(1);
 
-			for i in 1..21 {
-				testnet.move_to_the_next_epoch();
-				witness_rotation_broadcasts([i + 1, i, i, i, i, i]);
-			}
-			assert_eq!(GENESIS_EPOCH + 21, Validator::epoch_index());
+			let current_epoch = Validator::current_epoch();
+			let epochs_to_move = 20;
+			(0..epochs_to_move).for_each(|_| testnet.move_to_the_next_epoch());
+			assert_eq!(Validator::epoch_index(), current_epoch + epochs_to_move);
 		});
 }
 
@@ -475,7 +467,9 @@ fn cant_rotate_if_previous_rotation_is_pending() {
 			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
 			testnet.move_to_the_next_epoch();
-			witness_ethereum_rotation_broadcast(1);
+
+			// Disable witnessing of Rotation tx broadcast.
+			testnet.set_auto_witness_broadcasts(false);
 
 			testnet.move_to_the_next_epoch();
 			let epoch_index = Validator::epoch_index();
@@ -490,9 +484,9 @@ fn cant_rotate_if_previous_rotation_is_pending() {
 			// we are still in the older epoch
 			assert_eq!(epoch_index, Validator::epoch_index());
 
-			// we witness the rotation txs of the older epoch which then causes the rotation to
-			// start on the next block.
-			witness_rotation_broadcasts([2, 1, 1, 1, 1, 1]);
+			testnet.set_auto_witness_broadcasts(true);
+			crate::network::witness_all_outstanding_broadcasts();
+
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 			assert_eq!(epoch_index + 1, Validator::epoch_index());
 		});
@@ -510,7 +504,6 @@ fn waits_for_governance_when_apicall_fails() {
 			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
 			testnet.move_to_the_next_epoch();
-			witness_ethereum_rotation_broadcast(1);
 
 			let epoch_index = Validator::epoch_index();
 

@@ -31,6 +31,7 @@ use sp_std::{
 	prelude::*,
 };
 
+use cf_primitives::FlipBalance;
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::*, Chainflip, EpochInfo, NetworkState, QualifyNode,
 	ReputationResetter, Slashing,
@@ -125,7 +126,11 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize;
 
 		/// When we have to, we slash
-		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = BlockNumberFor<Self>>;
+		type Slasher: Slashing<
+			AccountId = Self::ValidatorId,
+			BlockNumber = BlockNumberFor<Self>,
+			Balance = FlipBalance,
+		>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
