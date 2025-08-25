@@ -26,8 +26,8 @@ pub mod lending;
 mod swapping;
 
 pub use swapping::{
-	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
-	SwapRequestTypeEncoded, SwapType,
+	ExpiryBehaviour, PriceLimitsAndExpiry, SwapOutputAction, SwapOutputActionEncoded,
+	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
 };
 
 pub mod mocks;
@@ -276,23 +276,9 @@ pub trait RedemptionCheck {
 	}
 }
 
-pub trait OnAccountFunded {
-	type ValidatorId;
-	type Amount;
-
-	/// A callback that is triggered after some validator's balance has changed significantly,
-	/// either by funding it with more Flip, or by initiating/reverting a redemption.
-	///
-	/// Note this does not trigger on small changes like transaction fees.
-	///
-	/// TODO: This should be triggered when funds are paid in tokenholder governance.
-	fn on_account_funded(validator_id: &Self::ValidatorId, new_total: Self::Amount);
-}
-
 pub trait Funding {
 	type AccountId;
 	type Balance;
-	type Handler: OnAccountFunded<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
 	/// Credit an account with funds from off-chain. Returns the total balance in the account after
 	/// the funds are credited.
@@ -589,25 +575,6 @@ pub trait Broadcaster<C: Chain> {
 
 	/// Removes all data associated with a broadcast.
 	fn expire_broadcast(broadcast_id: BroadcastId);
-}
-
-/// The heartbeat of the network
-pub trait Heartbeat {
-	type ValidatorId;
-	type BlockNumber;
-	/// Called on every heartbeat interval
-	fn on_heartbeat_interval();
-}
-
-/// Updating and calculating emissions per block for authorities and backup nodes
-pub trait BlockEmissions {
-	type Balance;
-	/// Update the emissions per block for an authority
-	fn update_authority_block_emission(emission: Self::Balance);
-	/// Update the emissions per block for a backup node
-	fn update_backup_node_block_emission(emission: Self::Balance);
-	/// Calculate the emissions per block
-	fn calculate_block_emissions();
 }
 
 /// Emits an event when backup rewards are distributed that lives inside the Emissions pallet.

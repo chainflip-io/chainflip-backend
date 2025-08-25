@@ -2084,7 +2084,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						},
 					},
 					broker_fees,
-					Some(refund_params),
+					Some(refund_params.into()),
 					dca_params.clone(),
 					origin.into(),
 				);

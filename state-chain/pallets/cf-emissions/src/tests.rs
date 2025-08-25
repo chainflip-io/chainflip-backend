@@ -16,7 +16,7 @@
 
 #![cfg(test)]
 
-use crate::{mock::*, BlockEmissions, Event, LastSupplyUpdateBlock, Pallet, BURN_FEE_MULTIPLE};
+use crate::{mock::*, Event, LastSupplyUpdateBlock, Pallet, BURN_FEE_MULTIPLE};
 use cf_primitives::SECONDS_PER_BLOCK;
 use cf_test_utilities::{assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -51,11 +51,13 @@ fn test_should_mint_at() {
 mod test_block_rewards {
 	use cf_traits::RewardsDistribution;
 
+	use crate::CurrentAuthorityEmissionPerBlock;
+
 	use super::*;
 
 	fn test_with(emissions_per_block: u128) {
 		new_test_ext().execute_with(|| {
-			Emissions::update_authority_block_emission(emissions_per_block);
+			CurrentAuthorityEmissionPerBlock::<Test>::put(emissions_per_block);
 
 			let before = Flip::<Test>::total_issuance();
 			MockRewardsDistribution::distribute();
@@ -75,31 +77,10 @@ mod test_block_rewards {
 }
 
 #[test]
-fn test_duplicate_emission_should_be_noop() {
-	new_test_ext().execute_with(|| {
-		Emissions::update_authority_block_emission(EMISSION_RATE);
-
-		let before = Flip::<Test>::total_issuance();
-		MockRewardsDistribution::distribute();
-		let after = Flip::<Test>::total_issuance();
-
-		assert_eq!(before + EMISSION_RATE, after);
-
-		// Minting again at the same block should have no effect.
-		let before = after;
-		MockRewardsDistribution::distribute();
-		let after = Flip::<Test>::total_issuance();
-
-		assert_eq!(before + EMISSION_RATE, after);
-	});
-}
-
-#[test]
 fn should_calculate_block_emissions() {
 	new_test_ext().execute_with(|| {
 		// Block emissions are calculated at genesis.
 		assert!(Emissions::current_authority_emission_per_block() > 0);
-		assert!(Emissions::backup_node_emission_per_block() > 0);
 	});
 }
 
@@ -266,10 +247,6 @@ fn ensure_governance_origin_checks() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Emissions::update_current_authority_emission_inflation(non_gov_origin.clone(), 0),
-			sp_runtime::traits::BadOrigin,
-		);
-		assert_noop!(
-			Emissions::update_backup_node_emission_inflation(non_gov_origin.clone(), 0),
 			sp_runtime::traits::BadOrigin,
 		);
 		assert_noop!(

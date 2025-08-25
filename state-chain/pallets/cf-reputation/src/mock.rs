@@ -105,24 +105,6 @@ impl Slashing for MockSlasher {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
-/// Counts the number of heartbeats.
-pub struct MockHeartbeat;
-
-impl MockHeartbeat {
-	pub fn heartbeats() -> u32 {
-		HEARTBEATS.with(|heartbeats| *heartbeats.borrow())
-	}
-}
-
-impl Heartbeat for MockHeartbeat {
-	type ValidatorId = ValidatorId;
-	type BlockNumber = u64;
-
-	fn on_heartbeat_interval() {
-		HEARTBEATS.with(|heartbeats| *heartbeats.borrow_mut() += 1);
-	}
-}
-
 #[derive(
 	Serialize,
 	Deserialize,
@@ -155,7 +137,6 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = AllOffences;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type Heartbeat = MockHeartbeat;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = MockSlasher;
 	type WeightInfo = ();

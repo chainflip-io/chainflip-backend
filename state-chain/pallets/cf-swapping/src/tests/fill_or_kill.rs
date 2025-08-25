@@ -67,9 +67,9 @@ fn both_fok_and_regular_swaps_succeed_first_try(is_ccm: bool) {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRequested {
 					swap_request_id: FOK_REQUEST_ID,
-					refund_parameters,
+					price_limits_and_expiry,
 					..
-				}) if refund_parameters.as_ref() == Some(&refund_parameters_encoded),
+				}) if price_limits_and_expiry.as_ref() == Some(&refund_parameters_encoded),
 			);
 
 			assert_swaps_scheduled_for_block(
@@ -176,7 +176,8 @@ fn price_limit_is_respected_in_fok_swap(is_ccm: bool) {
 				}),
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: FOK_SWAP_1_ID,
-					execute_at: SWAP_RETRIED_AT_BLOCK
+					execute_at: SWAP_RETRIED_AT_BLOCK,
+					reason: SwapFailureReason::MinPriceViolation,
 				}),
 			);
 
@@ -260,6 +261,7 @@ fn fok_swap_gets_refunded_due_to_price_limit(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: FOK_SWAP_ID,
 					execute_at: SWAP_RETRIED_AT_BLOCK,
+					reason: SwapFailureReason::MinPriceViolation,
 				}),
 			);
 		})
@@ -271,6 +273,10 @@ fn fok_swap_gets_refunded_due_to_price_limit(is_ccm: bool) {
 			// to reaching expiry block
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::SwapAborted {
+					swap_id: SwapId(1),
+					reason: SwapFailureReason::MinPriceViolation
+				}),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: FOK_SWAP_REQUEST_ID,
 					..
@@ -402,10 +408,12 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: REGULAR_SWAP_ID,
 					execute_at: SWAP_RETRIED_AT_BLOCK,
+					reason: SwapFailureReason::PriceImpactLimit,
 				}),
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: FOK_SWAP_ID,
 					execute_at: SWAP_RETRIED_AT_BLOCK,
+					reason: SwapFailureReason::PriceImpactLimit,
 				}),
 			);
 		})
@@ -421,6 +429,10 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
 				// Non-fok swap will continue to be retried:
 				RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: REGULAR_SWAP_ID, .. }),
+				RuntimeEvent::Swapping(Event::SwapAborted {
+					swap_id: SwapId(1),
+					reason: SwapFailureReason::PriceImpactLimit
+				}),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: FOK_SWAP_REQUEST_ID,
 					..
@@ -464,6 +476,10 @@ fn fok_test_zero_refund_duration(is_ccm: bool) {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
+				RuntimeEvent::Swapping(Event::SwapAborted {
+					swap_id: SwapId(1),
+					reason: SwapFailureReason::PriceImpactLimit
+				}),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: SwapRequestId(1),
 					..
@@ -521,6 +537,7 @@ fn test_zero_refund_amount_remaining() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
+				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(1), reason: SwapFailureReason::PriceImpactLimit }),
 				RuntimeEvent::Swapping(Event::SwapRequested {
 					swap_request_id: SwapRequestId(2),
 					input_asset: Asset::Usdc,
@@ -624,7 +641,10 @@ mod oracle_swaps {
 				// Chunk 2's output was below the price limit, so it will be retried.
 				assert_has_matching_event!(
 					Test,
-					RuntimeEvent::Swapping(Event::SwapRescheduled { .. })
+					RuntimeEvent::Swapping(Event::SwapRescheduled {
+						reason: SwapFailureReason::OraclePriceSlippageExceeded,
+						..
+					})
 				);
 
 				// Now drop the oracle price for input asset. It will once again match the swap
@@ -724,6 +744,71 @@ mod oracle_swaps {
 				assert_has_matching_event!(
 					Test,
 					RuntimeEvent::Swapping(Event::SwapExecuted { .. })
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. })
+				);
+			});
+	}
+
+	#[test]
+	fn oracle_swap_aborts_if_price_stale() {
+		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const SWAP_RETRIED_AT_BLOCK: u64 = SWAP_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
+
+		new_test_ext()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), INIT_BLOCK);
+
+				MockPriceFeedApi::set_price(
+					INPUT_ASSET,
+					Some(U256::from(2) << PRICE_FRACTIONAL_BITS),
+				);
+				MockPriceFeedApi::set_price(
+					OUTPUT_ASSET,
+					Some(U256::from(2) << PRICE_FRACTIONAL_BITS),
+				);
+
+				// Set one of the assets to stale
+				MockPriceFeedApi::set_stale(INPUT_ASSET, true);
+				MockPriceFeedApi::set_stale(OUTPUT_ASSET, false);
+
+				Swapping::init_internal_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
+					// Set the oracle price slippage to a non-zero value
+					PriceLimits { min_price: 0.into(), max_oracle_price_slippage: Some(10) },
+					None,
+					LP_ACCOUNT,
+				);
+			})
+			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRescheduled {
+						swap_id: SwapId(1),
+						execute_at: SWAP_RETRIED_AT_BLOCK,
+						reason: SwapFailureReason::OraclePriceStale,
+					})
+				);
+
+				// Change to the other asset being stale
+				MockPriceFeedApi::set_stale(INPUT_ASSET, false);
+				MockPriceFeedApi::set_stale(OUTPUT_ASSET, true);
+			})
+			.then_process_blocks_until_block(SWAP_RETRIED_AT_BLOCK)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapAborted {
+						swap_id: SwapId(1),
+						reason: SwapFailureReason::OraclePriceStale
+					})
 				);
 
 				assert_has_matching_event!(

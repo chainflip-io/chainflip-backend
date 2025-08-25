@@ -44,7 +44,7 @@ pub struct DotRetryRpcClient {
 	sub_retry_client: RetrierClient<DotSubClient>,
 }
 
-const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
+const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(28 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 20;
 
 const MAX_BROADCAST_RETRIES: Attempt = 2;
@@ -66,7 +66,7 @@ impl DotRetryRpcClient {
 	) -> Result<Self> {
 		let f_create_clients = |endpoints: WsHttpEndpoints| {
 			Result::<_, anyhow::Error>::Ok((
-				DotHttpRpcClient::new(endpoints.http_endpoint, expected_genesis_hash)?,
+				DotHttpRpcClient::new(endpoints.ws_endpoint.clone(), expected_genesis_hash)?,
 				DotSubClient::new(endpoints.ws_endpoint, expected_genesis_hash),
 			))
 		};

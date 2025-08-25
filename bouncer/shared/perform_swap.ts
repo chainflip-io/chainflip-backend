@@ -103,13 +103,22 @@ export async function requestNewSwap(
     dcaParams,
   );
 
-  // Set an aggressive timeout for the addressPromise. We expect an event within 3 blocks at most.
+  let timeout: number;
+  if (chainFromAsset(destAsset) === 'Assethub') {
+    // The blocktime on assethub is 12 seconds, so if the broadcast fails due to a reorg, we
+    // need some more time to retry.
+    timeout = 36000;
+  } else {
+    // Set an aggressive timeout for the addressPromise. We expect an event within 3 blocks at most.
+    timeout = 18000;
+  }
+
   const timeoutPromise = new Promise<never>((_, reject) => {
     setTimeout(() => {
       reject(
         new Error(`Timeout waiting for deposit address for ${sourceAsset} -> ${destAsset} swap.`),
       );
-    }, 18000);
+    }, timeout);
   });
 
   // Wait for the addressPromise or the timeoutPromise to resolve (race)

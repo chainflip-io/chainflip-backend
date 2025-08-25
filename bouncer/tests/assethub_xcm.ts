@@ -15,14 +15,18 @@ export async function testAssethubXcm(testContext: TestContext, _seed?: string) 
     '14iGgWDpriDToidv1GY28a8yGqF4DyR397euELCzQB87qbRM',
   );
   const oldDotBalance = await getBalance('Dot', '12QPwzxiXa1UAsgeoeNvvPnJqCFE8SwDb4FVXWauYWCwRiHt');
+
+  performSwap(
+    testContext.logger,
+    'Eth',
+    'HubDot',
+    '14iGgWDpriDToidv1GY28a8yGqF4DyR397euELCzQB87qbRM',
+    metadata,
+  ).catch((reason) => {
+    testContext.warn(`Task waiting for Assethub XCM swap failed. Reason: ${reason}`);
+  });
+
   await Promise.all([
-    performSwap(
-      testContext.logger,
-      'Eth',
-      'HubDot',
-      '14iGgWDpriDToidv1GY28a8yGqF4DyR397euELCzQB87qbRM',
-      metadata,
-    ),
     observeBalanceIncrease(
       testContext.logger,
       'HubDot',

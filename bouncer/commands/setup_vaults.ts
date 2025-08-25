@@ -32,8 +32,7 @@ import {
   DisposableApiPromise,
 } from 'shared/utils/substrate';
 import { brokerApiEndpoint, lpApiEndpoint } from 'shared/json_rpc';
-import { updatePriceFeed } from 'shared/update_price_feed';
-import { price } from 'shared/setup_swaps';
+import { updateDefaultPriceFeeds } from 'shared/update_price_feed';
 
 export async function createPolkadotVault(api: DisposableApiPromise) {
   const { promise, resolve } = deferredPromise<{
@@ -244,14 +243,7 @@ async function main(): Promise<void> {
 
   // Step 8
   logger.info('Setting up price feeds');
-  await Promise.all([
-    updatePriceFeed(logger, 'Ethereum', 'BTC', price.get('Btc')!.toString()),
-    updatePriceFeed(logger, 'Ethereum', 'ETH', price.get('Eth')!.toString()),
-    updatePriceFeed(logger, 'Ethereum', 'SOL', price.get('Sol')!.toString()),
-    updatePriceFeed(logger, 'Solana', 'BTC', price.get('Btc')!.toString()),
-    updatePriceFeed(logger, 'Solana', 'ETH', price.get('Eth')!.toString()),
-    updatePriceFeed(logger, 'Solana', 'SOL', price.get('Sol')!.toString()),
-  ]);
+  await updateDefaultPriceFeeds(logger);
 
   // Confirmation
   logger.info('Waiting for new epoch...');

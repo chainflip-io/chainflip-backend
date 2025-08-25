@@ -6,16 +6,21 @@ PORT=$3
 RPC_PORT=$4
 NODE_COUNT=$5
 
-CHAIN="dev"
-if [ $NODE_COUNT == "3-node" ]; then
-    CHAIN="dev-3"
-fi
+echo "start-node CHAIN: $CHAIN"
+echo "start-node KEYS_DIR: $KEYS_DIR"
+echo "start-node LOCALNET_INIT_DIR: $LOCALNET_INIT_DIR"
+echo "start-node NODE_NAME: $NODE_NAME"
+echo "start-node PORT: $PORT"
+echo "start-node RPC_PORT: $RPC_PORT"
+echo "start-node NODE_COUNT: $NODE_COUNT"
+
 DATETIME=$(date '+%Y-%m-%d_%H-%M-%S')
 source $LOCALNET_INIT_DIR/env/eth.env
 source $LOCALNET_INIT_DIR/env/arb.env
 source $LOCALNET_INIT_DIR/env/node.env
-export ETH_INIT_AGG_KEY=$(jq -r '.eth_agg_key' $LOCALNET_INIT_DIR/keyshare/$NODE_COUNT/agg_keys.json)
-export DOT_INIT_AGG_KEY=$(jq -r '.dot_agg_key' $LOCALNET_INIT_DIR/keyshare/$NODE_COUNT/agg_keys.json)
+source $LOCALNET_INIT_DIR/env/$NODE_COUNT/eth-aggkey.env
+source $LOCALNET_INIT_DIR/env/$NODE_COUNT/dot-aggkey.env
+
 $BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/LP_API) --key-type=lqpr --scheme=sr25519
 $BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/BROKER_1) --key-type=brok --scheme=sr25519
 $BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/$NODE_NAME/signing_key_file) --key-type=aura --scheme=sr25519
