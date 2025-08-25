@@ -287,6 +287,7 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
   const logger = parentLogger.child({ tag });
   await using chainflip = await getChainflipApi();
 
+  // This will be replaced in PRO-2228 when the SDK is used
   const refundParams: ChannelRefundParameters = {
     retry_duration: 10,
     refund_address: newEvmAddress('refund_eth'),

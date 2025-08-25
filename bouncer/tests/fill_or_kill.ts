@@ -14,11 +14,12 @@ import {
 import { executeVaultSwap, requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
 import { getBalance } from 'shared/get_balance';
-import { observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { CcmDepositMetadata, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
 import { newCcmMetadata, newVaultSwapCcmMetadata } from 'shared/swapping';
+import { updatePriceFeed } from 'shared/update_price_feed';
 
 /// Do a swap with unrealistic minimum price so it gets refunded.
 async function testMinPriceRefund(
@@ -27,6 +28,7 @@ async function testMinPriceRefund(
   amount: number,
   swapViaVault = false,
   ccmRefund = false,
+  oracleSwap = false,
 ) {
   const logger = parentLogger.child({ tag: `FoK_${sourceAsset}_${amount}` });
   const destAsset = sourceAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
@@ -52,11 +54,16 @@ async function testMinPriceRefund(
       sourceAsset === Assets.Dot ? decodeDotAddressForContract(refundAddress) : refundAddress,
     // Unrealistic min price
     minPriceX128: amountToFineAmount(
-      '99999999999999999999999999999999999999999999999999999',
+      !oracleSwap ? '99999999999999999999999999999999999999999999999999999' : '0',
       assetDecimals(sourceAsset),
     ),
     refundCcmMetadata,
+    maxOraclePriceSlippage: oracleSwap ? 0 : undefined,
   };
+
+  logger.info(
+    `Fok swap started from ${sourceAsset} to ${destAsset} with unrealistic min price${swapViaVault ? ' swapViaVault' : ''}${ccmRefund ? ' ccmRefund' : ''}${oracleSwap ? ' oracleSwap' : ''}`,
+  );
 
   let swapRequestedHandle;
 
@@ -97,9 +104,6 @@ async function testMinPriceRefund(
       amount.toString(),
       undefined, // boostFeeBps
       refundParameters,
-      undefined, // dcaParams
-      undefined, // brokerFees
-      undefined, // affiliateFees
     );
 
     swapRequestedHandle = observeSwapRequested(
@@ -135,6 +139,43 @@ async function testMinPriceRefund(
     observeBalanceIncrease(logger, sourceAsset, refundAddress, refundBalanceBefore),
     ccmEventEmitted,
   ]);
+
+  logger.info(
+    `Fok swap complete from ${sourceAsset} to ${destAsset} with unrealistic min price${swapViaVault ? ' swapViaVault' : ''}${ccmRefund ? ' ccmRefund' : ''}${oracleSwap ? ' oracleSwap' : ''}`,
+  );
+}
+
+async function testOracleSwapsFoK(parentLogger: Logger): Promise<void> {
+  const logger = parentLogger.child({ tag: `FoK_OracleSwaps` });
+
+  logger.info('Setting up unrealistic prices for oracle swaps to test fill-or-kill');
+
+  // Only need to update the prices in Solana as that's the main feed
+  await Promise.all([
+    updatePriceFeed(logger, 'Solana', 'BTC', '1000000'),
+    updatePriceFeed(logger, 'Solana', 'ETH', '100000'),
+  ]);
+
+  // Check that all Solana prices are up to date to ensure that oracle swaps
+  // are not being refunded due to stale prices.
+  const chainflip = await getChainflipApi();
+  const response = JSON.parse(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await chainflip.query.genericElections.electoralUnsynchronisedState()) as any,
+  );
+  const chainState = response.chainStates.solana.price;
+  for (const [asset, feed] of Object.entries(chainState) as [string, { priceStatus: string }][]) {
+    if (feed.priceStatus !== 'UpToDate') {
+      throw new Error(`Price status for solana.${asset} is not UpToDate: ${feed.priceStatus}`);
+    }
+  }
+
+  logger.info('Oracle prices set');
+
+  await Promise.all([
+    testMinPriceRefund(logger, Assets.Eth, 10, false, false, true),
+    testMinPriceRefund(logger, Assets.Btc, 1, false, false, true),
+  ]);
 }
 
 export async function testFillOrKill(testContext: TestContext) {
@@ -157,5 +198,6 @@ export async function testFillOrKill(testContext: TestContext) {
     testMinPriceRefund(testContext.logger, Assets.ArbEth, 5, true, true),
     testMinPriceRefund(testContext.logger, Assets.Sol, 10, true, true),
     testMinPriceRefund(testContext.logger, Assets.Usdc, 10, true, true),
+    testOracleSwapsFoK(testContext.logger),
   ]);
 }
