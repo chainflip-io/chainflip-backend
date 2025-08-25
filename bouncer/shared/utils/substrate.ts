@@ -191,7 +191,7 @@ class EventCache {
 
     // Update the caches.
     if (!this.events.has(blockHash)) {
-      this.logger?.debug(
+      this.logger?.trace(
         `Caching new ${finalized ? 'finalized' : ''} block ${blockHeight} (${blockHash}) on chain ${this.chain} with finalised block number ${this.finalisedBlockNumber}`,
       );
 
@@ -219,7 +219,7 @@ class EventCache {
 
       // If the cache size exceeds the size limit, remove old blocks up to the cacheAgeLimit.
       if (this.headers.size > this.cacheSizeLimit) {
-        this.logger?.debug('Reducing cache');
+        this.logger?.trace('Reducing cache');
         const oldHashes = Array.from(this.headers.entries()).filter(([_hash, header]) => {
           if (header.number.toNumber() < blockHeight - this.cacheAgeLimit) {
             return true;
@@ -227,19 +227,19 @@ class EventCache {
           return false;
         });
         oldHashes.forEach(([hash, header]) => {
-          this.logger?.debug(`Removing old block ${header.number}:${hash} from cache`);
+          this.logger?.trace(`Removing old block ${header.number}:${hash} from cache`);
           this.headers.delete(hash);
           this.events.delete(hash);
         });
       }
 
-      this.logger?.debug(
+      this.logger?.trace(
         `Cached ${events.length} events for block ${blockHeight} (${blockHash}) on chain ${this.chain}`,
       );
 
       return events;
     }
-    this.logger?.debug(`Using cached events for block ${blockHeight} (${blockHash})`);
+    this.logger?.trace(`Using cached events for block ${blockHeight} (${blockHash})`);
     return this.events.get(blockHash)!;
   }
 
@@ -257,7 +257,7 @@ class EventCache {
     const api = await apiMap[this.chain]();
     const events: Event[][] = [];
 
-    this.logger?.debug(
+    this.logger?.trace(
       `Checking historical events for chain ${this.chain} over the last ${depthLimit} blocks`,
     );
 
@@ -268,14 +268,14 @@ class EventCache {
       const currentHeader = (await api.rpc.chain.getHeader(currentHash)) as Header;
       const currentEvents = await this.eventsForHeader(currentHeader, false);
 
-      this.logger?.debug(
+      this.logger?.trace(
         `Found ${currentEvents.length} events at depth ${depth} for block ${currentHeader.number.toNumber()} (${currentHeader.hash.toString()})`,
       );
 
       events.push(currentEvents);
 
       if (currentHeader.number.toNumber() === 0) {
-        this.logger?.debug('Reached genesis block, stopping historical event retrieval');
+        this.logger?.trace('Reached genesis block, stopping historical event retrieval');
         break;
       }
 
@@ -525,7 +525,7 @@ export function observeEvents<T = any>(
 
     const checkEvents = (events: Event[], log: string) => {
       blocksChecked += 1;
-      logger.debug(`Checking ${events.length} ${log} events for ${eventName}`);
+      logger.trace(`Checking ${events.length} ${log} events for ${eventName}`);
       let stop = false;
       const foundEvents: Event[] = [];
       for (const event of events) {
