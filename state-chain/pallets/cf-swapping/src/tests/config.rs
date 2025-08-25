@@ -350,6 +350,15 @@ fn cannot_swap_in_safe_mode() {
 		let retry_at_block = swaps_scheduled_at + SwapRetryDelay::<Test>::get();
 		assert_eq!(ScheduledSwaps::<Test>::get().len(), 4);
 
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::Swapping(Event::SwapRescheduled {
+				swap_id: SwapId(1),
+				reason: SwapFailureReason::SafeModeActive,
+				..
+			})
+		);
+
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 
 		// Swaps are processed
