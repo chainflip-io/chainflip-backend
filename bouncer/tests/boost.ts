@@ -33,7 +33,7 @@ export async function stopBoosting<T = any>(
 ): Promise<Event<T> | undefined> {
   await using chainflip = await getChainflipApi();
   const lp = createStateChainKeypair(lpUri);
-  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex);
+  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex.for(lpUri));
 
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
@@ -66,7 +66,7 @@ export async function addBoostFunds(
 ): Promise<Event> {
   await using chainflip = await getChainflipApi();
   const lp = createStateChainKeypair(lpUri);
-  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex);
+  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex.for(lpUri));
 
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 

@@ -25,8 +25,8 @@ import { Logger } from 'shared/utils/logger';
 
 const commissionBps = 1000; // 10%
 
-const keyring = new Keyring({ type: 'sr25519' });
-const broker = keyring.createFromUri('//BROKER_FEE_TEST');
+const brokerUri = '//BROKER_FEE_TEST';
+const broker = new Keyring({ type: 'sr25519' }).createFromUri(brokerUri);
 
 export async function submitBrokerWithdrawal(
   asset: Asset,
@@ -34,7 +34,7 @@ export async function submitBrokerWithdrawal(
 ) {
   await using chainflip = await getChainflipApi();
   // Only allow one withdrawal at a time to stop nonce issues
-  return brokerMutex.runExclusive(async () => {
+  return brokerMutex.runExclusive(brokerUri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     return chainflip.tx.swapping
       .withdraw(asset, addressObject)
@@ -44,8 +44,9 @@ export async function submitBrokerWithdrawal(
 
 const feeAsset = Assets.Usdc;
 
-export async function getEarnedBrokerFees(address: string): Promise<bigint> {
+export async function getEarnedBrokerFees(logger: Logger, address: string): Promise<bigint> {
   await using chainflip = await getChainflipApi();
+  logger.debug(`Getting earned broker fees for address: ${address}`);
   // NOTE: All broker fees are collected in USDC now:
   const feeStr = (
     await chainflip.query.assetBalances.freeBalances(address, Assets.Usdc)
@@ -58,7 +59,7 @@ export async function getEarnedBrokerFees(address: string): Promise<bigint> {
 async function testBrokerFees(logger: Logger, inputAsset: Asset, seed?: string): Promise<void> {
   await using chainflip = await getChainflipApi();
   // Check the broker fees before the swap
-  const earnedBrokerFeesBefore = await getEarnedBrokerFees(broker.address);
+  const earnedBrokerFeesBefore = await getEarnedBrokerFees(logger, broker.address);
   logger.debug(`${inputAsset} earnedBrokerFeesBefore:`, earnedBrokerFeesBefore);
 
   // Run a swap
@@ -106,7 +107,7 @@ async function testBrokerFees(logger: Logger, inputAsset: Asset, seed?: string):
     retryDuration: 0,
   };
 
-  await brokerMutex.runExclusive(async () => {
+  await brokerMutex.runExclusive(brokerUri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     await chainflip.tx.swapping
       .requestSwapDepositAddress(
@@ -163,7 +164,7 @@ async function testBrokerFees(logger: Logger, inputAsset: Asset, seed?: string):
   );
 
   // Check that the detected increase in earned broker fees matches the swap event values and it is equal to the expected amount (after the deposit fee is accounted for)
-  const earnedBrokerFeesAfter = await getEarnedBrokerFees(broker.address);
+  const earnedBrokerFeesAfter = await getEarnedBrokerFees(logger, broker.address);
   logger.debug(`${inputAsset} earnedBrokerFeesAfter:`, earnedBrokerFeesAfter);
 
   assert(earnedBrokerFeesAfter > earnedBrokerFeesBefore, 'No increase in earned broker fees');
