@@ -197,30 +197,11 @@ impl BenchmarkValue for MockTrackedData {
 }
 
 impl FeeEstimationApi<MockEthereum> for MockTrackedData {
-	fn estimate_ingress_fee(
+	fn estimate_fee(
 		&self,
 		_asset: <MockEthereum as Chain>::ChainAsset,
+		_ingress_or_egress: IngressOrEgress,
 	) -> <MockEthereum as Chain>::ChainAmount {
-		unimplemented!("Unused for now.")
-	}
-
-	fn estimate_ingress_fee_vault_swap(&self) -> Option<<MockEthereum as Chain>::ChainAmount> {
-		unimplemented!("Unused for now.")
-	}
-
-	fn estimate_egress_fee(
-		&self,
-		_asset: <MockEthereum as Chain>::ChainAsset,
-	) -> <MockEthereum as Chain>::ChainAmount {
-		unimplemented!("Unused for now.")
-	}
-
-	fn estimate_ccm_fee(
-		&self,
-		_asset: <MockEthereum as Chain>::ChainAsset,
-		_gas_budget: GasAmount,
-		_message_length: usize,
-	) -> Option<<MockEthereum as Chain>::ChainAmount> {
 		unimplemented!("Unused for now.")
 	}
 }

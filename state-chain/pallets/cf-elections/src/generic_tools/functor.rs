@@ -1,5 +1,5 @@
 pub use super::common_traits::*;
-use crate::def_derive;
+use cf_utilities::macros::*;
 
 use sp_std::vec::Vec;
 
@@ -12,7 +12,7 @@ pub trait Transformation<F: Container, G: Container> {
 }
 
 // ----- vector -----
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo)]
 	pub struct VectorContainer;
 }
@@ -22,7 +22,7 @@ impl Container for VectorContainer {
 }
 
 // ----- array -----
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo)]
 	pub struct Array<const N: usize, A: CommonTraits> {
 		#[serde(with = "serde_arrays")]
@@ -30,7 +30,7 @@ def_derive! {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	pub struct ArrayContainer<const N: usize>;
 }
 

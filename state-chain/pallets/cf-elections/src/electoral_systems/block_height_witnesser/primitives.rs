@@ -1,4 +1,5 @@
 use cf_chains::witness_period::SaturatingStep;
+use cf_utilities::macros::*;
 use codec::{Decode, Encode};
 use core::iter;
 use generic_typeinfo_derive::GenericTypeInfo;
@@ -6,7 +7,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::vec_deque::VecDeque;
 
-use crate::electoral_systems::state_machine::core::{def_derive, defx};
+use crate::electoral_systems::state_machine::core::defx;
 
 use super::{super::state_machine::core::Validate, ChainTypes};
 
@@ -137,7 +138,7 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	/// Information returned if the `merge` function for `NonEmptyContinuousHeaders` was successful.
 	#[derive(Ord, PartialOrd,)]
 	pub struct MergeInfo<T: ChainTypes> {

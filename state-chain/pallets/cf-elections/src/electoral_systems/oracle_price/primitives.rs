@@ -14,54 +14,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use core::ops::{Mul, RangeInclusive, Sub};
-use sp_std::ops::Add;
+use core::ops::RangeInclusive;
+
+#[cfg(test)]
+use proptest_derive::Arbitrary;
 
 use crate::{
 	electoral_systems::{oracle_price::price::Fraction, state_machine::common_imports::*},
 	generic_tools::*,
 };
 
-#[cfg(test)]
-use proptest_derive::Arbitrary;
-
-def_derive! {
-	#[cfg_attr(test, derive(Arbitrary))]
-	#[derive(TypeInfo, PartialOrd, Ord, Default, Copy)]
-	pub struct UnixTime{ pub seconds: u64 }
-}
-
-impl Add<Seconds> for UnixTime {
-	type Output = UnixTime;
-
-	fn add(self, rhs: Seconds) -> Self::Output {
-		UnixTime { seconds: self.seconds.saturating_add(rhs.0) }
-	}
-}
-
-impl Sub<Seconds> for UnixTime {
-	type Output = UnixTime;
-
-	fn sub(self, rhs: Seconds) -> Self::Output {
-		UnixTime { seconds: self.seconds.saturating_sub(rhs.0) }
-	}
-}
-
-def_derive! {
-	#[cfg_attr(test, derive(Arbitrary))]
-	#[derive(TypeInfo, Copy, Default)]
-	pub struct Seconds(pub u64);
-}
-
-impl Mul<u64> for Seconds {
-	type Output = Seconds;
-
-	fn mul(self, rhs: u64) -> Self::Output {
-		Seconds(self.0.saturating_mul(rhs))
-	}
-}
-
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo, Copy, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct BasisPoints(pub u16);
@@ -75,7 +38,7 @@ impl BasisPoints {
 
 pub trait AggregationValue = Ord + CommonTraits + MaybeArbitrary + 'static;
 
-def_derive! {
+derive_common_traits! {
 	#[cfg_attr(test, derive(Arbitrary))]
 	#[derive(TypeInfo)]
 	pub struct Aggregated<A: AggregationValue> {
