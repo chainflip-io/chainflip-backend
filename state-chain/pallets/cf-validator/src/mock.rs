@@ -219,6 +219,38 @@ macro_rules! assert_invariants {
 			System::block_number(),
 			ValidatorPallet::current_rotation_phase(),
 		);
+
+		// Each authority should EITHER:
+		// own a delegation snapshot with no delegators.
+		// OR
+		// be a managed validator with a delegation snapshot that contains the authority as a
+		// validator.
+		let current_epoch = ValidatorPallet::current_epoch();
+		for authority in ValidatorPallet::current_authorities() {
+			if let Some(snapshot) = DelegationSnapshots::<Test>::get(current_epoch, authority) {
+				assert!(
+					snapshot.validators.contains_key(&authority) && snapshot.delegators.is_empty(),
+					"Invalid Validator snapshot {:?} for authority {:?} at block {:?}",
+					snapshot,
+					authority,
+					System::block_number()
+				);
+			}
+			if let Some(operator) = ManagedValidators::<Test>::get(authority) {
+				let snapshot = DelegationSnapshots::<Test>::get(current_epoch, &operator)
+					.expect("Operator should have a snapshot");
+
+				assert!(
+					snapshot.validators.contains_key(&authority) &&
+						!DelegationSnapshots::<Test>::contains_key(current_epoch, &authority),
+					"Invalid Operator snapshot {:?} for authority/operator {:?}/{:?} at block {:?}",
+					snapshot,
+					authority,
+					operator,
+					System::block_number()
+				);
+			}
+		}
 	};
 }
 
