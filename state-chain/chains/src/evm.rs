@@ -68,6 +68,8 @@ impl ChainCrypto for EvmCrypto {
 	type UtxoChain = ConstBool<false>;
 
 	type AggKey = evm::AggKey;
+	type Signer = Address;
+	type Signature = H256; // TODO: Put correct type
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
 	type TransactionInId = H256;
@@ -76,6 +78,14 @@ impl ChainCrypto for EvmCrypto {
 	type TransactionOutId = Self::ThresholdSignature;
 	type KeyHandoverIsRequired = ConstBool<false>;
 	type GovKey = Address;
+
+	fn verify_signature(
+		_signer: &Self::Signer,
+		_payload: &[u8],
+		_signature: &Self::Signature,
+	) -> bool {
+		true
+	}
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,

@@ -306,6 +306,8 @@ impl ChainCrypto for MockEthereumChainCrypto {
 	type UtxoChain = ConstBool<false>;
 
 	type AggKey = MockAggKey;
+	type Signer = MockAggKey;
+	type Signature = MockThresholdSignature<Self::AggKey, Self::Payload>;
 	type Payload = [u8; 4];
 	type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;
 	type TransactionInId = [u8; 4];
@@ -314,6 +316,14 @@ impl ChainCrypto for MockEthereumChainCrypto {
 	type TransactionOutId = Self::ThresholdSignature;
 	type KeyHandoverIsRequired = MockKeyHandoverIsRequired;
 	type GovKey = [u8; 32];
+
+	fn verify_signature(
+		_agg_key: &Self::Signer,
+		_payload: &[u8],
+		_signature: &Self::Signature,
+	) -> bool {
+		true
+	}
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,

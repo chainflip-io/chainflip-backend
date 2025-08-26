@@ -68,12 +68,22 @@ impl ChainCrypto for NoneChainCrypto {
 	const NAME: &'static str = "None";
 	type UtxoChain = ConstBool<false>;
 	type AggKey = ();
+	type Signer = ();
+	type Signature = ();
 	type Payload = ();
 	type ThresholdSignature = ();
 	type TransactionInId = ();
 	type TransactionOutId = ();
 	type KeyHandoverIsRequired = ConstBool<false>;
 	type GovKey = ();
+
+	fn verify_signature(
+		_signer: &Self::Signer,
+		_payload: &[u8],
+		_signature: &Self::Signature,
+	) -> bool {
+		unimplemented!()
+	}
 
 	fn verify_threshold_signature(
 		_agg_key: &Self::AggKey,

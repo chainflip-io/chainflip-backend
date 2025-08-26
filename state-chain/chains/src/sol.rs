@@ -164,12 +164,25 @@ impl ChainCrypto for SolanaCrypto {
 	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type AggKey = SolAddress;
+	type Signer = SolAddress;
+	type Signature = SolSignature;
 	type Payload = SolVersionedMessage;
 	type ThresholdSignature = SolSignature;
 	type TransactionInId = SolanaTransactionInId;
 	type TransactionOutId = Self::ThresholdSignature;
 
 	type GovKey = SolAddress;
+
+	fn verify_signature(
+		signer: &Self::Signer,
+		payload: &[u8],
+		signature: &Self::Signature,
+	) -> bool {
+		use sp_core::ed25519::{Public, Signature};
+		use sp_io::crypto::ed25519_verify;
+
+		ed25519_verify(&Signature::from_raw(signature.0), payload, &Public::from_raw(signer.0))
+	}
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -179,6 +192,7 @@ impl ChainCrypto for SolanaCrypto {
 		use sp_core::ed25519::{Public, Signature};
 		use sp_io::crypto::ed25519_verify;
 
+		// TODO: To use verify_signature instead?
 		ed25519_verify(
 			&Signature::from_raw(signature.0),
 			payload.serialize().as_slice(),

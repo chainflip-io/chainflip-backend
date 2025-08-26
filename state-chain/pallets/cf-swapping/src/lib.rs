@@ -21,6 +21,7 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
+	sol::{SolAddress, SolSignature},
 	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersCheckedInternal,
 	ChannelRefundParametersUncheckedEncoded, SwapOrigin,
 };
@@ -828,6 +829,13 @@ pub mod pallet {
 		SwapCanceled {
 			swap_id: SwapId,
 		},
+		UserSignedTransactionSubmitted {
+			broker_id: T::AccountId,
+			payload: Vec<u8>,
+			signature: SolSignature,
+			signer: SolAddress,
+			valid: bool,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -1447,6 +1455,37 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::VaultSwapMinimumBrokerFeeSet {
 				broker_id,
 				minimum_fee_bps,
+			});
+
+			Ok(())
+		}
+
+		#[pallet::call_index(18)]
+		#[pallet::weight(T::WeightInfo::submit_user_signed_payload())]
+		pub fn submit_user_signed_payload(
+			origin: OriginFor<T>,
+			// TODO: This might be the pure encoded SC Call or we might want to
+			// follow something like EIP-712.
+			payload: Vec<u8>,
+			// TODO: To generalize for all chains. We probably need a new type with
+			// signatures and addresses
+			signature: SolSignature,
+			signer: SolAddress,
+		) -> DispatchResult {
+			use cf_chains::{sol::SolanaCrypto, ChainCrypto};
+
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			let valid = SolanaCrypto::verify_signature(&signer, payload.as_slice(), &signature);
+
+			// TODO: Decode the payload and execute the intended action on behalf
+			// of the user, similar to the delegation Sc Api.
+			Self::deposit_event(Event::<T>::UserSignedTransactionSubmitted {
+				broker_id,
+				payload,
+				signature,
+				signer,
+				valid,
 			});
 
 			Ok(())
