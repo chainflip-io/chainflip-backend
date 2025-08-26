@@ -16,7 +16,7 @@ export async function setupLpAccount(logger: Logger, uri: string) {
     test: (event) => event.data.accountId === lp.address,
   }).event;
 
-  await lpMutex.runExclusive(async () => {
+  await lpMutex.runExclusive(uri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
       .registerLpAccount()
@@ -45,7 +45,7 @@ export async function setupBrokerAccount(logger: Logger, uri: string) {
       test: (event) => event.data.accountId === broker.address,
     }).event;
 
-    await lpMutex.runExclusive(async () => {
+    await lpMutex.runExclusive(uri, async () => {
       const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
       await chainflip.tx.swapping
         .registerAsBroker()

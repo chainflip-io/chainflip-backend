@@ -27,11 +27,12 @@ import { Logger } from 'shared/utils/logger';
 import { getBalance } from 'shared/get_balance';
 import { send } from 'shared/send';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { buildAndSendBtcVaultSwap, openPrivateBtcChannel } from 'shared/btc_vault_swap';
+import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 
 const keyring = new Keyring({ type: 'sr25519' });
-const broker = keyring.createFromUri('//BROKER_1');
+const brokerUri = '//BROKER_1';
+const broker = keyring.createFromUri(brokerUri);
 
 /**
  * Observes the balance of a BTC address and returns true if the balance changes. Times out after 100 seconds and returns false if the balance does not change.
@@ -234,14 +235,12 @@ async function brokerLevelScreeningTestBtcVaultSwap(
   const destinationAddressForUsdc = await newAssetAddress('Usdc');
   const txId = await buildAndSendBtcVaultSwap(
     logger,
+    brokerUri,
     parseFloat(amount),
     'Usdc',
     destinationAddressForUsdc,
     refundAddress,
-    {
-      account: broker.address,
-      commissionBps: 0,
-    },
+    0,
     [],
   );
   await reportFunction(txId);
@@ -344,7 +343,7 @@ async function testEvmVaultSwap(
   logger.debug(`Sending ${sourceAsset} (vault swap) tx to reject...`);
   const txHash = await executeEvmVaultSwap(
     logger,
-    broker.address,
+    brokerUri,
     sourceAsset,
     'Btc',
     destinationAddressForBtc,
@@ -401,7 +400,8 @@ async function testEvmLiquidityDeposit(
 
   // setup access to chainflip api and lp
   await using chainflip = await getChainflipApi();
-  const lp = createStateChainKeypair(process.env.LP_URI || '//LP_1');
+  const lpUri = process.env.LP_URI || '//LP_1';
+  const lp = createStateChainKeypair(lpUri);
 
   // Get existing LP refund address of //LP_1 for `sourceAsset`
   /* eslint-disable  @typescript-eslint/no-explicit-any */
@@ -431,7 +431,7 @@ async function testEvmLiquidityDeposit(
   }).event;
 
   console.log('Requesting ' + sourceAsset + ' deposit address');
-  await lpMutex.runExclusive(async () => {
+  await lpMutex.runExclusive(lpUri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
       .requestLiquidityDepositAddress(sourceAsset, null)
@@ -461,6 +461,7 @@ async function testEvmLiquidityDeposit(
           BigInt(event.data.amountCredited.replace(/,/g, '')),
           BigInt(amountToFineAmountBigInt(amount, sourceAsset)),
         ),
+      timeoutSeconds: 120,
     }).event;
 
     await send(logger, sourceAsset, depositAddress, amount);
@@ -635,7 +636,6 @@ export async function testBrokerLevelScreening(
   //  - this requires the rejecting broker to be whitelisted
   //  - for bitcoin vault swaps a private channel has to be opened
   await setWhitelistedBroker(broker.addressRaw);
-  await openPrivateBtcChannel(testContext.logger, '//BROKER_1');
   await Promise.all([
     // --- LP deposits ---
     testEvmLiquidityDeposit(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),

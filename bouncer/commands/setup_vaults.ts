@@ -49,7 +49,7 @@ export async function createPolkadotVault(api: DisposableApiPromise) {
       if (result.isError) {
         handleSubstrateError(api)(result);
       }
-      if (result.isInBlock) {
+      if (result.isFinalized) {
         // TODO: figure out type inference so we don't have to coerce using `any`
         const pureCreated = result.findRecord('proxy', 'PureCreated')!;
         resolve({
@@ -95,7 +95,7 @@ async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, ke
       if (result.isError) {
         handleSubstrateError(api)(result);
       }
-      if (result.isInBlock) {
+      if (result.isFinalized) {
         unsubscribe();
         resolve();
       }

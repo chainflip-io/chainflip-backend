@@ -325,6 +325,7 @@ export async function testVaultSwap(
 
   return performVaultSwap(
     logger.child({ tag }),
+    '//BROKER_1',
     sourceAsset,
     destAsset,
     destAddress,
