@@ -1484,11 +1484,13 @@ impl<T: Config> Pallet<T> {
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 
-		let delegation_snapshots = Self::build_delegation_snapshots::<T::KeygenQualification>();
+		let (delegation_snapshots, independent_bids) =
+			Self::build_delegation_snapshots::<T::KeygenQualification>();
 
 		let auction_bids = delegation_snapshots
 			.values()
 			.flat_map(|snapshot| snapshot.effective_validator_bids())
+			.chain(independent_bids)
 			.map(|(bidder_id, amount)| Bid { bidder_id, amount })
 			.collect::<Vec<_>>();
 
@@ -1703,19 +1705,28 @@ impl<T: Config> Pallet<T> {
 		.collect()
 	}
 
+	/// Builds the delegation snapshots for the next epoch.
+	///
+	/// Return a tuple of the delegation snapshots and the independent bidders (standalone
+	/// validators).
+	#[allow(clippy::type_complexity)]
 	pub fn build_delegation_snapshots<Q: QualifyNode<ValidatorIdOf<T>>>(
-	) -> BTreeMap<T::AccountId, DelegationSnapshot<T>> {
-		let mut snapshots: BTreeMap<T::AccountId, DelegationSnapshot<T>> = BTreeMap::new();
+	) -> (BTreeMap<T::AccountId, DelegationSnapshot<T>>, BTreeMap<ValidatorIdOf<T>, T::Amount>) {
+		let mut independent_bidders = BTreeMap::new();
+		let mut snapshots = BTreeMap::new();
+
 		for Bid { bidder_id, amount } in Self::get_qualified_bidders::<Q>() {
 			// `into_ref` is used to cast between AccountId and ValidatorId.
 			let bidder_ref = bidder_id.into_ref();
-			// If not managed, a validator is its own operator.
-			let operator = ManagedValidators::<T>::get(bidder_ref).unwrap_or(bidder_ref.clone());
-			snapshots
-				.entry(operator.clone())
-				.or_insert_with(|| DelegationSnapshot::<T>::init(&operator))
-				.validators
-				.insert(bidder_id, amount);
+			if let Some(operator) = ManagedValidators::<T>::get(bidder_ref) {
+				snapshots
+					.entry(operator.clone())
+					.or_insert_with(|| DelegationSnapshot::<T>::init(&operator))
+					.validators
+					.insert(bidder_id.clone(), amount);
+			} else {
+				let _ = independent_bidders.insert(bidder_id, amount);
+			}
 		}
 
 		for (delegator, operator) in DelegationChoice::<T>::iter() {
@@ -1732,7 +1743,7 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 
-		snapshots
+		(snapshots, independent_bidders)
 	}
 }
 
