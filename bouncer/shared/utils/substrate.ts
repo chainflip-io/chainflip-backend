@@ -454,11 +454,21 @@ async function getPastEvents(
   return eventCacheMap[chain].getHistoricalEvents(bestHeader, historicalCheckBlocks);
 }
 
-type EventTest<T> = (event: Event<T>) => boolean;
+const createEventSchema = <Z extends z.ZodTypeAny>(schema: Z) =>
+  z.object({
+    name: z.object({ section: z.string(), method: z.string() }),
+    data: schema ?? z.any(),
+    block: z.number(),
+    eventIndex: z.number(),
+  });
+
+type EventSchema<Z extends z.ZodTypeAny> = ReturnType<typeof createEventSchema<Z>>;
+
+type EventTest<Z extends z.ZodTypeAny> = (event: z.output<EventSchema<Z>>) => boolean;
 
 interface BaseOptions<Z extends z.ZodTypeAny> {
   chain?: SubstrateChain;
-  test?: EventTest<z.output<Z>>;
+  test?: EventTest<Z>;
   finalized?: boolean;
   historicalCheckBlocks?: number;
   timeoutSeconds?: number;
@@ -510,11 +520,14 @@ export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     timeoutSeconds = 0,
     abortable = false,
     stopAfter = { test },
+    schema,
   }: Options<Z> | AbortableOptions<Z> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
   const startTime = Date.now();
   logger.debug(`Observing event ${eventName}`);
+
+  const eventSchema = createEventSchema(schema ?? z.any()) as EventSchema<Z>;
 
   const controller = abortable ? new AbortController() : undefined;
 
@@ -537,7 +550,7 @@ export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
           event.name.section.includes(expectedSection) &&
           event.name.method.includes(expectedMethod)
         ) {
-          if (test(event)) {
+          if (test(eventSchema.parse(event))) {
             logger.debug(
               `Found matching event ${event.name.section}:${event.name.method} in block ${event.block}`,
             );
@@ -665,6 +678,7 @@ export function observeEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     historicalCheckBlocks,
     timeoutSeconds = 0,
     abortable = false,
+    schema,
   }: Options<Z> | AbortableOptions<Z> = {},
 ): SingleEventObserver<Z> | SingleEventAbortableObserver<Z> {
   if (abortable) {
@@ -675,6 +689,7 @@ export function observeEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
       historicalCheckBlocks,
       timeoutSeconds,
       abortable,
+      schema,
     });
 
     return {
@@ -698,13 +713,12 @@ export function observeEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
   } as SingleEventObserver<Z>;
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export function observeBadEvent<T = any>(
+export function observeBadEvent<Z extends z.ZodTypeAny>(
   logger: Logger,
   eventName: EventName,
-  { test }: { test?: EventTest<T> },
+  { test, schema }: { test?: EventTest<Z>; schema?: Z },
 ): { stop: () => Promise<void> } {
-  const observer = observeEvent(logger, eventName, { test, abortable: true });
+  const observer = observeEvent(logger, eventName, { test, abortable: true, schema });
 
   return {
     stop: async () => {
