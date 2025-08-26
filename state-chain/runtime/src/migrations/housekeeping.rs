@@ -72,7 +72,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	fn on_runtime_upgrade() -> Weight {
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN => {
-				if crate::VERSION.spec_version == 1_10_02 &&
+				if crate::VERSION.spec_version == 1_10_03 &&
 					!pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get()
 						.iter()
 						.any(|utxo| utxo.id == UTXO_ID)
@@ -147,7 +147,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 		use sp_runtime::AccountId32;
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN => {
-				if crate::VERSION.spec_version == 1_10_02 &&
+				if crate::VERSION.spec_version == 1_10_03 &&
 					!pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get()
 						.iter()
 						.any(|utxo| utxo.id == UTXO_ID)
