@@ -80,6 +80,8 @@ pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
 const DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS: u32 = 86_400 / SECONDS_PER_BLOCK as u32; // 24 hours
 
+type SignedBasisPoints = i16;
+
 pub struct DefaultSwapRetryDelay<T> {
 	_phantom: PhantomData<T>,
 }
@@ -120,6 +122,7 @@ pub struct SwapState<T: Config> {
 	pub broker_fee_taken: Option<AssetAmount>,
 	pub stable_amount: Option<AssetAmount>,
 	pub final_output: Option<AssetAmount>,
+	pub oracle_delta: Option<SignedBasisPoints>,
 }
 
 impl<T: Config> SwapState<T> {
@@ -130,6 +133,7 @@ impl<T: Config> SwapState<T> {
 			network_fee_taken: None,
 			broker_fee_taken: None,
 			swap,
+			oracle_delta: None,
 		}
 	}
 
@@ -755,6 +759,7 @@ pub mod pallet {
 			broker_fee: AssetAmount,
 			intermediate_amount: Option<AssetAmount>,
 			output_amount: AssetAmount,
+			oracle_delta: Option<SignedBasisPoints>,
 		},
 		/// A swap egress has been scheduled.
 		SwapEgressScheduled {
@@ -1682,14 +1687,48 @@ pub mod pallet {
 			Ok(())
 		}
 
-		fn check_swap_price_violation(swap: &SwapState<T>) -> Result<(), SwapFailureReason> {
+		fn check_swap_price_violation(
+			swap: &SwapState<T>,
+		) -> Result<Option<SignedBasisPoints>, SwapFailureReason> {
+			let input_oracle_price = T::PriceFeedApi::get_price(swap.input_asset());
+			let output_oracle_price = T::PriceFeedApi::get_price(swap.output_asset());
+
+			// Calculate executed price delta from the oracle price.
+			let oracle_delta = if let (Some(input_oracle), Some(output_oracle)) =
+				(&input_oracle_price, &output_oracle_price)
+			{
+				let oracle_price =
+					cf_amm::math::relative_price(input_oracle.price, output_oracle.price);
+
+				if let Some(executed_price) = cf_amm::math::price_from_input_output(
+					swap.swap.input_amount.into(),
+					swap.final_output.unwrap().into(),
+				) {
+					let (price_delta, sign) = if executed_price < oracle_price {
+						(oracle_price.saturating_sub(executed_price), -1)
+					} else {
+						(executed_price.saturating_sub(oracle_price), 1)
+					};
+
+					let delta_bps = cf_amm::math::mul_div_floor(
+						price_delta,
+						MAX_BASIS_POINTS.into(),
+						oracle_price,
+					);
+
+					Some(delta_bps.saturated_into::<SignedBasisPoints>() * sign)
+				} else {
+					None
+				}
+			} else {
+				None
+			};
+
+			// Enforce price protections
 			if let Some(params) = swap.refund_params() {
 				// Live price protection, aka oracle price protection
 				if let Some(slippage_bps) = params.price_limits.max_oracle_price_slippage {
-					match (
-						T::PriceFeedApi::get_price(swap.input_asset()),
-						T::PriceFeedApi::get_price(swap.output_asset()),
-					) {
+					match (input_oracle_price, output_oracle_price) {
 						(Some(oracle1), Some(oracle2)) if oracle1.stale || oracle2.stale =>
 							return Err(SwapFailureReason::OraclePriceStale),
 						(None, _) | (_, None) => {
@@ -1728,9 +1767,9 @@ pub mod pallet {
 					return Err(SwapFailureReason::MinPriceViolation);
 				}
 
-				Ok(())
+				Ok(oracle_delta)
 			} else {
-				Ok(())
+				Ok(oracle_delta)
 			}
 		}
 
@@ -1750,8 +1789,9 @@ pub mod pallet {
 			let mut violating_swaps = vec![];
 			swaps
 				.into_iter()
-				.for_each(|swap| match Self::check_swap_price_violation(&swap) {
-					Ok(()) => {
+				.for_each(|mut swap| match Self::check_swap_price_violation(&swap) {
+					Ok(oracle_delta) => {
+						swap.oracle_delta = oracle_delta;
 						non_violating_swaps.push(swap);
 					},
 					Err(reason) => {
@@ -2018,6 +2058,7 @@ pub mod pallet {
 				output_asset: swap.output_asset(),
 				output_amount,
 				intermediate_amount: swap.intermediate_amount(),
+				oracle_delta: swap.oracle_delta,
 			});
 
 			let request_completed = match &mut request.state {

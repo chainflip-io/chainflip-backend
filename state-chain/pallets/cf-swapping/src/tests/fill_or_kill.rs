@@ -568,6 +568,7 @@ fn test_zero_refund_amount_remaining() {
 mod oracle_swaps {
 
 	use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
+	use sp_runtime::SaturatedConversion;
 
 	use super::*;
 
@@ -814,6 +815,127 @@ mod oracle_swaps {
 				assert_has_matching_event!(
 					Test,
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. })
+				);
+			});
+	}
+
+	#[test]
+	fn test_negative_oracle_price_delta() {
+		const SWAP_RATE_BPS: u32 = 100;
+		const NETWORK_FEE_BPS: u32 = 100;
+		const BROKER_FEE_BPS: u16 = 100;
+
+		let network_fee = Permill::from_parts(NETWORK_FEE_BPS * 100);
+		let broker_fee = Permill::from_parts(BROKER_FEE_BPS as u32 * 100);
+		let swap_rate = Permill::from_parts(SWAP_RATE_BPS * 100);
+
+		// Calculate the expected oracle delta. Each deduction will effect the next in order.
+		let percent_broker_fee = (Permill::one() - network_fee) * broker_fee;
+		let percent_swap_rate = (Permill::one() - (network_fee + percent_broker_fee)) * swap_rate;
+		let expected_delta = Some(
+			-((network_fee + percent_broker_fee + percent_swap_rate) * MAX_BASIS_POINTS as u32)
+				.saturated_into::<i16>(),
+		);
+
+		new_test_ext()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), INIT_BLOCK);
+
+				// Set the fees, price and swap rate so we get the exact delta we want
+				NetworkFee::<Test>::set(FeeRateAndMinimum { rate: network_fee, minimum: 0 });
+				SwapRate::set(1.0 - (SWAP_RATE_BPS as f64 / 10000.0));
+				// We use a price of 1 for both assets to make the math easier
+				MockPriceFeedApi::set_price(
+					INPUT_ASSET,
+					Some(U256::from(1) << PRICE_FRACTIONAL_BITS),
+				);
+				MockPriceFeedApi::set_price(
+					OUTPUT_ASSET,
+					Some(U256::from(1) << PRICE_FRACTIONAL_BITS),
+				);
+
+				Swapping::init_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					SwapRequestType::Regular {
+						output_action: SwapOutputAction::Egress {
+							output_address: ForeignChainAddress::Eth([2; 20].into()),
+							ccm_deposit_metadata: None,
+						},
+					},
+					vec![Beneficiary { account: BROKER, bps: BROKER_FEE_BPS }].try_into().unwrap(),
+					// No oracle price slippage protection, but we should still get an oracle delta
+					// in the event
+					None,
+					None,
+					SwapOrigin::OnChainAccount(0_u64),
+				);
+			})
+			.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted {
+						oracle_delta,
+						..
+					}) if oracle_delta == &expected_delta
+				);
+			});
+	}
+
+	#[test]
+	fn can_handle_positive_oracle_price_delta() {
+		const SWAP_RATE_BPS: u32 = 100; // Will apply this as a positive rate
+		const NETWORK_FEE_BPS: u32 = 10;
+		const BROKER_FEE_BPS: u16 = 10;
+		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(79);
+
+		new_test_ext()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), INIT_BLOCK);
+
+				// Set the fees, price and swap rate so we get the exact delta we want
+				NetworkFee::<Test>::set(FeeRateAndMinimum {
+					rate: Permill::from_parts(NETWORK_FEE_BPS * 100),
+					minimum: 0,
+				});
+				// Using a positive swap rate
+				SwapRate::set(1.0 + (SWAP_RATE_BPS as f64 / 10000.0));
+				// We use a price of 1 for both assets to make the math easier
+				MockPriceFeedApi::set_price(
+					INPUT_ASSET,
+					Some(U256::from(1) << PRICE_FRACTIONAL_BITS),
+				);
+				MockPriceFeedApi::set_price(
+					OUTPUT_ASSET,
+					Some(U256::from(1) << PRICE_FRACTIONAL_BITS),
+				);
+
+				Swapping::init_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					SwapRequestType::Regular {
+						output_action: SwapOutputAction::Egress {
+							output_address: ForeignChainAddress::Eth([2; 20].into()),
+							ccm_deposit_metadata: None,
+						},
+					},
+					vec![Beneficiary { account: BROKER, bps: BROKER_FEE_BPS }].try_into().unwrap(),
+					None,
+					None,
+					SwapOrigin::OnChainAccount(0_u64),
+				);
+			})
+			.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted {
+						oracle_delta: EXPECTED_DELTA,
+						..
+					})
 				);
 			});
 	}

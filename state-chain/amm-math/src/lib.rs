@@ -89,14 +89,23 @@ pub fn bounded_sqrt_price(quote: Amount, base: Amount) -> SqrtPriceQ64F96 {
 	}
 }
 
-// Given prices of asset 1 and asset 2 (in terms of the same asset)
-// compute the price of asset 1 in terms of asset 2
+/// Given prices of asset 1 and asset 2 (in terms of the same asset)
+/// compute the price of asset 1 in terms of asset 2
 pub fn relative_price(price_1: Price, price_2: Price) -> Price {
 	mul_div_floor(price_1, U256::one() << PRICE_FRACTIONAL_BITS, price_2)
 }
 
 pub fn output_amount_floor(input: Amount, price: Price) -> Amount {
 	mul_div_floor(input, price, U256::one() << PRICE_FRACTIONAL_BITS)
+}
+
+/// Calculates the price of the input asset in terms of the output asset
+pub fn price_from_input_output(input: Amount, output: Amount) -> Option<Price> {
+	if input.is_zero() {
+		None
+	} else {
+		Some(mul_div_floor(output, U256::one() << PRICE_FRACTIONAL_BITS, input))
+	}
 }
 
 pub fn output_amount_ceil(input: Amount, price: Price) -> Amount {
@@ -631,6 +640,29 @@ mod test {
 				U256::from_dec_str("4567845678456784567845678456784567845678").unwrap()
 			),
 			U256::from_dec_str("91965187171920516035188920897262983721").unwrap()
+		);
+	}
+
+	#[test]
+	fn test_price_from_input_output() {
+		assert_eq!(
+			price_from_input_output(1.into(), 1.into()),
+			Some(U256::one() << PRICE_FRACTIONAL_BITS)
+		);
+		assert_eq!(
+			price_from_input_output(2.into(), 1.into()),
+			Some((U256::one() << PRICE_FRACTIONAL_BITS) / 2)
+		);
+		assert_eq!(
+			price_from_input_output(1.into(), 2.into()),
+			Some((U256::one() << PRICE_FRACTIONAL_BITS) * 2)
+		);
+		assert_eq!(
+			price_from_input_output(
+				1.into(),
+				output_amount_floor(1.into(), U256::from(2) << PRICE_FRACTIONAL_BITS)
+			),
+			Some((U256::one() << PRICE_FRACTIONAL_BITS) * 2)
 		);
 	}
 }
