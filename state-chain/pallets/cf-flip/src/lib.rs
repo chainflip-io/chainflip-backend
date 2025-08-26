@@ -40,8 +40,8 @@ use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	sp_runtime::{
-		traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, Zero},
-		DispatchError, Permill, RuntimeDebug, SaturatedConversion,
+		traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Zero},
+		DispatchError, Permill, RuntimeDebug,
 	},
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
@@ -685,9 +685,10 @@ impl<T: Config> Slashing for FlipSlasher<T> {
 		account_id: &Self::AccountId,
 		blocks_offline: Self::BlockNumber,
 	) -> Self::Balance {
-		let account = Account::<T>::get(account_id);
-		(SlashingRate::<T>::get() * account.bond /
-			T::BlocksPerDay::get().into().saturated_into::<u128>().into())
-		.saturating_mul(blocks_offline.into().saturated_into::<u128>().into())
+		// SlashingRate is for a full day, so need to scale it down to the number of blocks.
+		let scaled_slashing_rate = Permill::from_rational(blocks_offline, T::BlocksPerDay::get()) *
+			SlashingRate::<T>::get();
+
+		scaled_slashing_rate * Account::<T>::get(account_id).bond
 	}
 }
