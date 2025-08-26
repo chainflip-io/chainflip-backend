@@ -372,7 +372,7 @@ pub mod pallet {
 		EpochIndex,
 		Identity,
 		T::AccountId,
-		DelegationSnapshot<T>,
+		DelegationResolver<T>,
 		OptionQuery,
 	>;
 
@@ -1428,10 +1428,14 @@ impl<T: Config> Pallet<T> {
 
 		// Bond delegators based on the snapshots
 		let outgoing_delegators = DelegationSnapshots::<T>::iter_prefix(new_epoch - 1)
-			.flat_map(|(_, snapshot)| snapshot.delegators.keys().cloned().collect::<Vec<_>>())
+			.filter_map(|(_, snapshot)| {
+				snapshot.map(|s| s.delegators.keys().cloned().collect::<Vec<_>>())
+			})
+			.flatten()
 			.collect::<BTreeSet<_>>();
 		let new_delegator_bids = DelegationSnapshots::<T>::iter_prefix(new_epoch)
-			.flat_map(|(_, snapshot)| snapshot.delegators)
+			.filter_map(|(_, snapshot)| snapshot.map(|s| s.delegators.clone()))
+			.flatten()
 			.collect::<BTreeMap<_, _>>();
 
 		for outgoing_delegator in outgoing_delegators {
@@ -1524,8 +1528,8 @@ impl<T: Config> Pallet<T> {
 
 				// Register the delegation snapshots for the next epoch.
 				let next_epoch_index = CurrentEpoch::<T>::get() + 1;
-				for (operator, snapshot) in delegation_snapshots.iter() {
-					DelegationSnapshots::<T>::insert(next_epoch_index, operator, snapshot);
+				for snapshot in delegation_snapshots.into_values() {
+					DelegationResolver::<T>::register_snapshot(next_epoch_index, snapshot);
 				}
 
 				Self::try_start_keygen(RotationState::from_auction_outcome::<T>(auction_outcome));
