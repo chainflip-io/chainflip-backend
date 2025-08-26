@@ -239,8 +239,28 @@ pub type EthereumDepositChannelWitnessingES =
 /// The electoral system for vault deposit witnessing
 pub struct EthereumVaultDepositWitnessing;
 
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub enum VaultEvents {
+	SwapNativeFilter(VaultDepositWitness<Runtime, EthereumInstance>),
+	SwapTokenFilter(VaultDepositWitness<Runtime, EthereumInstance>),
+	XcallNativeFilter(VaultDepositWitness<Runtime, EthereumInstance>),
+	XcallTokenFilter(VaultDepositWitness<Runtime, EthereumInstance>),
+	TransferNativeFailedFilter {
+		asset: cf_chains::assets::eth::Asset,
+		amount: <Ethereum as Chain>::ChainAmount,
+		destination_address: <Ethereum as Chain>::ChainAccount,
+	},
+	TransferTokenFailedFilter {
+		asset: cf_chains::assets::eth::Asset,
+		amount: <Ethereum as Chain>::ChainAmount,
+		destination_address: <Ethereum as Chain>::ChainAccount,
+	},
+}
+
 type ElectionPropertiesVaultDeposit = <Ethereum as Chain>::ChainAccount;
-pub(crate) type BlockDataVaultDeposit = Vec<VaultDepositWitness<Runtime, EthereumInstance>>;
+pub(crate) type BlockDataVaultDeposit = Vec<VaultEvents>;
 
 impls! {
 	for TypesFor<EthereumVaultDepositWitnessing>:
@@ -251,7 +271,7 @@ impls! {
 
 		type BlockData = BlockDataVaultDeposit;
 
-		type Event = EthEvent<VaultDepositWitness<Runtime, EthereumInstance>>;
+		type Event = EthEvent<VaultEvents>;
 		type Rules = Self;
 		type Execute = Self;
 
@@ -582,6 +602,9 @@ impl UpdateFeeHook<EthereumTrackedData> for EthereumFeeUpdateHook {
 // it is -> EDIT: yes we can we just need to ensure that EthereumTrackedData impl Ord correctly such
 // that the fees are ordered as we want and we take the correct median
 /// TODO: MANUALLY IMPLEMENT ORD FOR EthereumTrackedData!!!
+///
+/// Possibly introduce some settings like FEE_HISTORY_WINDOW and PRIORITY_FEE_PERCENTILE which are
+/// now hardcoded in the engine
 pub type EthereumFeeTracking = UnsafeMedian<
 	EthereumTrackedData,
 	EthereumTrackedData,

@@ -455,6 +455,19 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 			.await
 	}
 
+	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("block_by_hash".to_string(), Some(format!("{block_hash}"))),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.block_by_hash(block_hash).await })
+				}),
+				2,
+			)
+			.await
+	}
+
 	async fn block_with_txs(&self, block_number: U64) -> anyhow::Result<Block<Transaction>> {
 		self.rpc_retry_client
 			.request_with_limit(
@@ -499,6 +512,19 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.get_transaction(tx_hash).await })
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn get_block_number(&self) -> Result<U64> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("get_block_number".to_string(), None),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.get_block_number().await })
 				}),
 				2,
 			)
