@@ -1,5 +1,4 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
-import { Keyring } from '@polkadot/api';
 import { encodeAddress } from 'polkadot/util-crypto';
 import { DcaParams, newSwap, FillOrKillParamsX128, CcmDepositMetadata } from 'shared/new_swap';
 import { send, sendViaCfTester } from 'shared/send';
@@ -26,6 +25,7 @@ import {
   newAddress,
   getContractAddress,
   isPolkadotAsset,
+  createStateChainKeypair,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -120,8 +120,9 @@ export async function requestNewSwap(
   const channelDestAddress = res.destinationAddress[shortChainFromAsset(destAsset)];
   const channelId = Number(res.channelId.replaceAll(',', ''));
 
-  logger.debug(`$Deposit address: ${depositAddress}`);
-  logger.debug(`Destination address is: ${channelDestAddress} Channel ID is: ${channelId}`);
+  logger.debug(
+    `Deposit address: ${depositAddress}, Destination address: ${channelDestAddress}, Channel ID: ${channelId}`,
+  );
 
   return {
     sourceAsset,
@@ -166,15 +167,37 @@ export async function doPerformSwap(
     ? send(logger, sourceAsset, depositAddress, amount)
     : sendViaCfTester(logger, sourceAsset, depositAddress));
 
-  logger.trace(`Funded the address`);
+  logger.debug(`Funded the address`);
 
   swapContext?.updateStatus(logger, SwapStatus.Funded);
 
-  await swapRequestedHandle;
+  const swapRequestId = (await swapRequestedHandle).data.swapRequestId;
 
   swapContext?.updateStatus(logger, SwapStatus.SwapScheduled);
 
-  logger.trace(`Waiting for balance to update`);
+  logger.debug(`Swap requested with ID: ${swapRequestId}`);
+
+  await observeEvent(logger, 'swapping:SwapRequestCompleted', {
+    test: (event) => event.data.swapRequestId === swapRequestId,
+    historicalCheckBlocks: 4,
+  }).event;
+
+  swapContext?.updateStatus(logger, SwapStatus.SwapCompleted);
+
+  logger.debug(`Swap Request Completed. Waiting for egress.`);
+
+  const { egressId, amount: egressAmount } = (
+    await observeEvent(logger, 'swapping:SwapEgressScheduled', {
+      test: (event) => event.data.swapRequestId === swapRequestId,
+      historicalCheckBlocks: 4,
+    }).event
+  ).data;
+
+  swapContext?.updateStatus(logger, SwapStatus.EgressScheduled);
+
+  logger.debug(
+    `Egress ID: ${egressId}, Egress amount: ${egressAmount}. Waiting for balance to increase.`,
+  );
 
   try {
     const [newBalance] = await Promise.all([
@@ -184,11 +207,11 @@ export async function doPerformSwap(
 
     const chain = chainFromAsset(sourceAsset);
     if (chain !== 'Bitcoin' && chain !== 'Polkadot' && chain !== 'Assethub') {
-      logger.trace(`Waiting deposit fetch ${depositAddress}`);
+      logger.debug(`Waiting deposit fetch ${depositAddress}`);
       await observeFetch(sourceAsset, depositAddress);
     }
 
-    logger.trace(`Swap success! New balance: ${newBalance}!`);
+    logger.debug(`Swap success! New balance: ${newBalance}!`);
     swapContext?.updateStatus(logger, SwapStatus.Success);
   } catch (err) {
     swapContext?.updateStatus(logger, SwapStatus.Failure);
@@ -260,6 +283,7 @@ export async function performAndTrackSwap(
 
 export async function executeVaultSwap(
   logger: Logger,
+  brokerUri: string,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -268,10 +292,7 @@ export async function executeVaultSwap(
   boostFeeBps?: number,
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
-  brokerFees?: {
-    account: string;
-    commissionBps: number;
-  },
+  brokerFee: number = 1,
   affiliateFees: {
     accountAddress: string;
     commissionBps: number;
@@ -281,11 +302,6 @@ export async function executeVaultSwap(
   let transactionId: TransactionOriginId;
 
   const srcChain = chainFromAsset(sourceAsset);
-
-  const brokerFeesValue = brokerFees ?? {
-    account: new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_1').address,
-    commissionBps: 1,
-  };
 
   if (evmChains.includes(srcChain)) {
     logger.trace('Executing EVM vault swap');
@@ -299,11 +315,11 @@ export async function executeVaultSwap(
     // There are still multiple blocks of safety margin inbetween before the event is emitted
     const txHash = await executeEvmVaultSwap(
       logger,
-      brokerFeesValue.account,
+      brokerUri,
       sourceAsset,
       destAsset,
       destAddress,
-      brokerFeesValue.commissionBps,
+      brokerFee,
       messageMetadata,
       amount,
       boostFeeBps,
@@ -318,13 +334,14 @@ export async function executeVaultSwap(
     logger.trace('Executing BTC vault swap');
     const txId = await buildAndSendBtcVaultSwap(
       logger,
+      brokerUri,
       Number(amount ?? defaultAssetAmounts(sourceAsset)),
       destAsset,
       destAddress,
       fillOrKillParams === undefined
         ? await newAddress('Btc', 'BTC_VAULT_SWAP_REFUND')
         : fillOrKillParams.refundAddress,
-      brokerFeesValue,
+      brokerFee,
       affiliateFees.map((f) => ({ account: f.accountAddress, bps: f.commissionBps })),
     );
     transactionId = { type: TransactionOrigin.VaultSwapBitcoin, txId };
@@ -337,7 +354,10 @@ export async function executeVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
-      brokerFeesValue,
+      {
+        account: createStateChainKeypair(brokerUri).address,
+        commissionBps: brokerFee,
+      },
       messageMetadata,
       undefined,
       boostFeeBps,
@@ -357,6 +377,7 @@ export async function executeVaultSwap(
 
 export async function performVaultSwap(
   logger: Logger,
+  brokerUri: string,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -366,10 +387,7 @@ export async function performVaultSwap(
   boostFeeBps?: number,
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
-  brokerFees?: {
-    account: string;
-    commissionBps: number;
-  },
+  brokerFee?: number,
   affiliateFees: {
     accountAddress: string;
     commissionBps: number;
@@ -385,6 +403,7 @@ export async function performVaultSwap(
   try {
     const { transactionId, sourceAddress } = await executeVaultSwap(
       logger,
+      brokerUri,
       sourceAsset,
       destAsset,
       destAddress,
@@ -393,7 +412,7 @@ export async function performVaultSwap(
       boostFeeBps,
       fillOrKillParams,
       dcaParams,
-      brokerFees,
+      brokerFee,
       affiliateFees,
     );
     swapContext?.updateStatus(logger, SwapStatus.VaultSwapInitiated);

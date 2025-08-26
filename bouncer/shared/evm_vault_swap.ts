@@ -14,6 +14,7 @@ import {
   newAddress,
   decodeDotAddressForContract,
   getEvmEndpoint,
+  createStateChainKeypair,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import { getChainflipApi } from 'shared/utils/substrate';
@@ -38,7 +39,7 @@ interface EvmVaultSwapExtraParameters {
 
 export async function executeEvmVaultSwap(
   logger: Logger,
-  brokerAddress: string,
+  brokerUri: string,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -95,7 +96,7 @@ export async function executeEvmVaultSwap(
   logger.trace('Requesting vault swap parameter encoding');
   const vaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
-    brokerAddress,
+    createStateChainKeypair(brokerUri).address,
     { chain: srcChain, asset: stateChainAssetFromAsset(sourceAsset) },
     { chain: destChain, asset: stateChainAssetFromAsset(destAsset) },
     destChain === Chains.Polkadot || destChain === Chains.Assethub

@@ -35,7 +35,7 @@ export async function submitAndGetEvent(
         done = true;
       }
       await handleDispatchError(result);
-      if (result.isInBlock) {
+      if (result.isFinalized) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         result.events.forEach((eventRecord: any) => {
           if (eventMatch.is(eventRecord.event)) {

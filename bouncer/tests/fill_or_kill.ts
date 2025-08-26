@@ -78,6 +78,7 @@ async function testMinPriceRefund(
 
     const { transactionId } = await executeVaultSwap(
       logger,
+      '//BROKER_1',
       inputAsset,
       destAsset,
       destAddress,

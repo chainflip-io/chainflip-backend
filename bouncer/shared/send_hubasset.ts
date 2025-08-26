@@ -67,7 +67,7 @@ export async function sendHubAsset(
               reject(new Error('Error: ' + result.dispatchError.toString()));
             }
           }
-          if (result.status.isInBlock || result.status.isFinalized) {
+          if (result.status.isFinalized) {
             unsubscribe();
             resolve(result.status.hash.toString());
           }

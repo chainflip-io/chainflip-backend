@@ -10,7 +10,7 @@ import {
   sleep,
 } from 'shared/utils';
 import { getEarnedBrokerFees } from 'tests/broker_fee_collection';
-import { openPrivateBtcChannel, registerAffiliate } from 'shared/btc_vault_swap';
+import { registerAffiliate } from 'shared/btc_vault_swap';
 import { setupBrokerAccount } from 'shared/setup_account';
 import { executeVaultSwap, performVaultSwap } from 'shared/perform_swap';
 import { prepareSwap } from 'shared/swapping';
@@ -41,6 +41,7 @@ async function testRefundVaultSwap(logger: Logger) {
 
   await executeVaultSwap(
     logger,
+    '//BROKER_1',
     inputAsset,
     destAsset,
     destAddress,
@@ -113,17 +114,12 @@ async function testFeeCollection(
   const broker = createStateChainKeypair(brokerUri);
   const refundAddress = await newAddress('Eth', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
   await Promise.all([setupBrokerAccount(logger, brokerUri)]);
-  if (inputAsset === Assets.Btc) {
-    await openPrivateBtcChannel(logger, brokerUri);
-  }
-
   logger.debug('Registering affiliate');
-  const event = await registerAffiliate(logger, brokerUri, refundAddress);
-
-  const affiliateId = event.data.affiliateId as string;
+  const { affiliateId, shortId } = await registerAffiliate(logger, brokerUri, refundAddress);
 
   logger.debug('Broker:', broker.address);
   logger.debug('Affiliate:', affiliateId);
+  logger.debug('Short ID:', shortId);
 
   // Setup
   const feeAsset = Assets.Usdc;
@@ -141,14 +137,15 @@ async function testFeeCollection(
   logger = logger.child({ tag });
 
   // Amounts before swap
-  const earnedBrokerFeesBefore = await getEarnedBrokerFees(broker.address);
-  const earnedAffiliateFeesBefore = await getEarnedBrokerFees(affiliateId);
+  const earnedBrokerFeesBefore = await getEarnedBrokerFees(logger, broker.address);
+  const earnedAffiliateFeesBefore = await getEarnedBrokerFees(logger, affiliateId);
   logger.debug('Earned broker fees before:', earnedBrokerFeesBefore);
   logger.debug('Earned affiliate fees before:', earnedAffiliateFeesBefore);
 
   // Do the vault swap
   await performVaultSwap(
     logger,
+    brokerUri,
     inputAsset,
     destAsset,
     destAddress,
@@ -158,13 +155,13 @@ async function testFeeCollection(
     0, // boostFeeBps
     undefined, // fillOrKillParams
     undefined, // dcaParams
-    { account: broker.address, commissionBps },
+    commissionBps,
     [{ accountAddress: affiliateId, commissionBps }],
   );
 
   // Check that both the broker and affiliate earned fees
-  const earnedBrokerFeesAfter = await getEarnedBrokerFees(broker.address);
-  const earnedAffiliateFeesAfter = await getEarnedBrokerFees(affiliateId);
+  const earnedBrokerFeesAfter = await getEarnedBrokerFees(logger, broker.address);
+  const earnedAffiliateFeesAfter = await getEarnedBrokerFees(logger, affiliateId);
   logger.debug('Earned broker fees after:', earnedBrokerFeesAfter);
   logger.debug('Earned affiliate fees after:', earnedAffiliateFeesAfter);
   assert(
