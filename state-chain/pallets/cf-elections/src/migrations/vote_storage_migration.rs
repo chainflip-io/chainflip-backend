@@ -13,14 +13,12 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use frame_support::traits::UncheckedOnRuntimeUpgrade;
-use crate::Config;
-use crate::*;
-use frame_support::pallet_prelude::Weight;
+use crate::{Config, *};
+use frame_support::{pallet_prelude::Weight, traits::OnRuntimeUpgrade};
 
 pub struct VoteStorageMigration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
-impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for VoteStorageMigration<T, I> {
+impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for VoteStorageMigration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
 		// We can simply delete all the current votes (for all elections),
 		// this will cause the validator to re-vote for the same elections again,
@@ -30,6 +28,7 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for VoteStorageMigratio
 		SharedData::<T, I>::drain();
 		BitmapComponents::<T, I>::drain();
 		IndividualComponents::<T, I>::drain();
+		ElectionConsensusHistory::<T, I>::drain();
 
 		Weight::zero()
 	}
