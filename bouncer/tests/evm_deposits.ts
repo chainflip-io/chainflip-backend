@@ -142,13 +142,16 @@ async function testTxMultipleVaultSwaps(
         'Vault' in event.data.origin &&
         event.data.origin.Vault.txId.Evm === receipt.transactionHash
       ) {
-        if (++eventCounter > 1) {
+        if (++eventCounter > numSwaps) {
           throwError(logger, new Error('Multiple swap scheduled events detected'));
         }
       }
       return false;
     },
     abortable: true,
+    // Don't stop when the event is found.
+    stopAfter: { test: () => false },
+    timeoutSeconds: 150,
   });
 
   while (eventCounter === 0) {

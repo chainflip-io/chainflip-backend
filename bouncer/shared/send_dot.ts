@@ -38,7 +38,7 @@ export async function sendDot(address: string, amount: string) {
             reject(new Error('Error: ' + dispatchError.toString()));
           }
         }
-        if (status.isInBlock || status.isFinalized) {
+        if (status.isFinalized) {
           resolve();
         }
       });

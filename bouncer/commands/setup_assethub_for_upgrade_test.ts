@@ -48,7 +48,7 @@ export async function rotateAndFund(
       if (result.isError) {
         handleSubstrateError(api)(result);
       }
-      if (result.isInBlock) {
+      if (result.isFinalized) {
         unsubscribe();
         resolve();
       }

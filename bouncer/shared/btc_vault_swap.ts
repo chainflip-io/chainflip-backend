@@ -9,10 +9,10 @@ import {
   createStateChainKeypair,
   decodeDotAddressForContract,
   fineAmountToAmount,
-  handleSubstrateError,
   stateChainAssetFromAsset,
+  waitForExt,
 } from 'shared/utils';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
 import { Logger } from 'shared/utils/logger';
 
@@ -28,22 +28,64 @@ interface BtcVaultSwapExtraParameters {
   retry_duration: number;
 }
 
+async function openPrivateBtcChannel(logger: Logger, brokerUri: string): Promise<number> {
+  const release = await brokerMutex.acquire(brokerUri);
+  // Check if the channel is already open
+  const chainflip = await getChainflipApi();
+  const broker = createStateChainKeypair(brokerUri);
+  const existingPrivateChannel = Number(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await chainflip.query.swapping.brokerPrivateBtcChannels(broker.address)) as any,
+  );
+  if (existingPrivateChannel) {
+    release();
+    return existingPrivateChannel;
+  }
+
+  // Fund the broker the required bond amount for opening a private channel
+  const fundAmount = fineAmountToAmount(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await chainflip.query.swapping.brokerBond()) as any as string,
+    assetDecimals('Flip'),
+  );
+  await fundFlip(logger, broker.address, fundAmount);
+
+  // Open the private channel
+  logger.trace('Opening private BTC channel');
+  const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock');
+  const nonce = (await chainflip.rpc.system.accountNextIndex(broker.address)) as unknown as number;
+  const unsub = await chainflip.tx.swapping
+    .openPrivateBtcChannel()
+    .signAndSend(broker, { nonce }, waiter);
+  const events = await promise;
+  unsub();
+  release();
+
+  const { channelId } = events
+    .find(
+      ({ event }) => event.section === 'swapping' && event.method === 'PrivateBrokerChannelOpened',
+    )!
+    .event.toHuman() as unknown as { channelId: string };
+  return Number(channelId);
+}
+
 export async function buildAndSendBtcVaultSwap(
   logger: Logger,
+  brokerUri: string,
   depositAmountBtc: number,
   destinationAsset: Asset,
   destinationAddress: string,
   refundAddress: string,
-  brokerFees: {
-    account: string;
-    commissionBps: number;
-  },
+  brokerFee: number,
   affiliateFees: {
     account: string;
     bps: number;
   }[] = [],
 ) {
   await using chainflip = await getChainflipApi();
+
+  await openPrivateBtcChannel(logger, brokerUri);
+  const broker = createStateChainKeypair(brokerUri);
 
   const extraParameters: BtcVaultSwapExtraParameters = {
     chain: 'Bitcoin',
@@ -54,13 +96,13 @@ export async function buildAndSendBtcVaultSwap(
   logger.trace('Requesting vault swap parameter encoding');
   const BtcVaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
-    brokerFees.account,
+    broker.address,
     { chain: 'Bitcoin', asset: stateChainAssetFromAsset('Btc') },
     { chain: chainFromAsset(destinationAsset), asset: stateChainAssetFromAsset(destinationAsset) },
     chainFromAsset(destinationAsset) === Chains.Polkadot
       ? decodeDotAddressForContract(destinationAddress)
       : destinationAddress,
-    brokerFees.commissionBps,
+    brokerFee,
     extraParameters,
     null, // channel_metadata
     0, // boost_fee
@@ -81,40 +123,6 @@ export async function buildAndSendBtcVaultSwap(
   return txid;
 }
 
-export async function openPrivateBtcChannel(logger: Logger, brokerUri: string): Promise<number> {
-  // Check if the channel is already open
-  const chainflip = await getChainflipApi();
-  const broker = createStateChainKeypair(brokerUri);
-  const existingPrivateChannel = Number(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (await chainflip.query.swapping.brokerPrivateBtcChannels(broker.address)) as any,
-  );
-  if (existingPrivateChannel) {
-    return existingPrivateChannel;
-  }
-
-  // Fund the broker the required bond amount for opening a private channel
-  const fundAmount = fineAmountToAmount(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (await chainflip.query.swapping.brokerBond()) as any as string,
-    assetDecimals('Flip'),
-  );
-  await fundFlip(logger, broker.address, fundAmount);
-
-  // Open the private channel
-  const openedChannelEvent = observeEvent(logger, 'swapping:PrivateBrokerChannelOpened', {
-    test: (event) => event.data.brokerId === broker.address,
-  }).event;
-  logger.trace('Opening private BTC channel');
-  await brokerMutex.runExclusive(async () => {
-    const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    await chainflip.tx.swapping
-      .openPrivateBtcChannel()
-      .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
-  });
-  return Number((await openedChannelEvent).data.channelId);
-}
-
 export async function registerAffiliate(
   logger: Logger,
   brokerUri: string,
@@ -123,17 +131,21 @@ export async function registerAffiliate(
   const chainflip = await getChainflipApi();
   const broker = createStateChainKeypair(brokerUri);
 
-  const registeredEvent = observeEvent(logger, 'swapping:AffiliateRegistration', {
-    test: (event) => event.data.brokerId === broker.address,
-  }).event;
-
   logger.trace('Registering affiliate');
-  await brokerMutex.runExclusive(async () => {
-    const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    await chainflip.tx.swapping
-      .registerAffiliate(withdrawalAddress)
-      .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
-  });
+  const release = await brokerMutex.acquire(brokerUri);
+  const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
+  const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
+  const unsub = await chainflip.tx.swapping
+    .registerAffiliate(withdrawalAddress)
+    .signAndSend(broker, { nonce }, waiter);
 
-  return registeredEvent;
+  const events = await promise;
+  unsub();
+
+  return events
+    .find(({ event }) => event.section === 'swapping' && event.method === 'AffiliateRegistration')!
+    .event.data.toHuman() as {
+    shortId: number;
+    affiliateId: string;
+  };
 }
