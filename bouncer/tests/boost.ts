@@ -22,6 +22,8 @@ import { jsonRpc } from 'shared/json_rpc';
 import { observeEvent, Event, getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger, throwError } from 'shared/utils/logger';
+import z from 'zod';
+import { numericString } from 'shared/utils/schemas';
 
 /// Stops boosting for the given boost pool tier and returns the StoppedBoosting event.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -157,7 +159,8 @@ async function testBoostingForAsset(
       logger,
       `${chainFromAsset(asset).toLowerCase()}IngressEgress:${eventName}`,
       {
-        test: (event) => event.data.channelId === swapRequest.channelId.toString(),
+        schema: z.object({ channelId: numericString }),
+        test: (event) => event.data.channelId === swapRequest.channelId,
       },
     ).event.then((event) => {
       logger.trace(`${eventName} event:`, JSON.stringify(event));

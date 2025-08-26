@@ -1,4 +1,5 @@
 import 'disposablestack/auto';
+import { z } from 'zod';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Observable, Subject } from 'rxjs';
 import { runWithTimeout } from 'shared/utils';
@@ -143,7 +144,7 @@ export type Event<T = any> = {
   name: { section: string; method: string };
   data: T;
   block: number;
-  eventIndex: number;
+  eventIndex: unknown;
 };
 
 class EventCache {
@@ -221,7 +222,7 @@ class EventCache {
         name: { section: event.section, method: event.method },
         data: event.data.toHuman(),
         block: blockHeader.number.toNumber(),
-        eventIndex: event.index as unknown as number,
+        eventIndex: event.index,
       }));
 
       // Log the events
@@ -471,49 +472,62 @@ async function getPastEvents(
   return eventCacheMap[chain].getHistoricalEvents(bestHeader, historicalCheckBlocks);
 }
 
-type EventTest<T> = (event: Event<T>) => boolean;
+const createEventSchema = <Z extends z.ZodTypeAny>(schema: Z) =>
+  z.object({
+    name: z.object({ section: z.string(), method: z.string() }),
+    data: schema ?? z.any(),
+    block: z.number(),
+    eventIndex: z.unknown(),
+  });
 
-interface BaseOptions<T> {
+type EventSchema<Z extends z.ZodTypeAny> = ReturnType<typeof createEventSchema<Z>>;
+
+type EventTest<Z extends z.ZodTypeAny> = (event: z.output<EventSchema<Z>>) => boolean;
+
+interface BaseOptions<Z extends z.ZodTypeAny> {
   chain?: SubstrateChain;
-  test?: EventTest<T>;
+  test?: EventTest<Z>;
   finalized?: boolean;
   historicalCheckBlocks?: number;
   timeoutSeconds?: number;
   stopAfter?: { blocks: number } | 'Never' | 'Any';
+  schema?: Z;
 }
 
-interface Options<T> extends BaseOptions<T> {
+interface Options<Z extends z.ZodTypeAny> extends BaseOptions<Z> {
   abortable?: false;
 }
 
-interface AbortableOptions<T> extends BaseOptions<T> {
+interface AbortableOptions<Z extends z.ZodTypeAny> extends BaseOptions<Z> {
   abortable: true;
 }
 
 type EventName = `${string}:${string}`;
 
-type Observer<T> = {
-  events: Promise<Event<T>[]>;
+type Observer<Z extends z.ZodTypeAny> = {
+  events: Promise<Event<z.output<Z>>[]>;
 };
 
-type AbortableObserver<T> = {
+type AbortableObserver<Z extends z.ZodTypeAny> = {
   stop: () => void;
-  events: Promise<Event<T>[] | null>;
+  events: Promise<Event<z.output<Z>>[] | null>;
 };
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export function observeEvents<T = any>(logger: Logger, eventName: EventName): Observer<T>;
-export function observeEvents<T = any>(
+export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
   logger: Logger,
   eventName: EventName,
-  opts: Options<T>,
-): Observer<T>;
-export function observeEvents<T = any>(
+): Observer<Z>;
+export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
   logger: Logger,
   eventName: EventName,
-  opts: AbortableOptions<T>,
-): AbortableObserver<T>;
-export function observeEvents<T = any>(
+  opts: Options<Z>,
+): Observer<Z>;
+export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
+  logger: Logger,
+  eventName: EventName,
+  opts: AbortableOptions<Z>,
+): AbortableObserver<Z>;
+export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
   logger: Logger,
   eventName: EventName,
   {
@@ -524,11 +538,14 @@ export function observeEvents<T = any>(
     timeoutSeconds = 0,
     abortable = false,
     stopAfter = 'Any',
-  }: Options<T> | AbortableOptions<T> = {},
+    schema
+  }: Options<Z> | AbortableOptions<Z> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
   const startTime = Date.now();
   logger.debug(`Observing event ${eventName}`);
+
+  const eventSchema = createEventSchema(schema ?? z.any()) as EventSchema<Z>;
 
   const controller = abortable ? new AbortController() : undefined;
 
@@ -556,7 +573,7 @@ export function observeEvents<T = any>(
           event.name.section.includes(expectedSection) &&
           event.name.method.includes(expectedMethod)
         ) {
-          if (test(event)) {
+          if (test(eventSchema.parse(event))) {
             logger.debug(
               `Found matching event ${event.name.section}:${event.name.method} in block ${event.block}`,
             );
@@ -627,7 +644,7 @@ export function observeEvents<T = any>(
     return foundEvents;
   };
 
-  let events: Promise<Event<T>[]>;
+  let events: Promise<Event<z.output<Z>>[]>;
   if (timeoutSeconds > 0) {
     events = runWithTimeout(
       findEvent(),
@@ -641,36 +658,38 @@ export function observeEvents<T = any>(
 
   if (!abortable) {
     // If not abortable, just return the events
-    return { events } as Observer<T>;
+    return { events } as Observer<z.output<Z>>;
   }
   return {
     stop: () => controller!.abort(),
     events,
-  } as AbortableObserver<T>;
+  } as AbortableObserver<z.output<Z>>;
 }
 
-type SingleEventAbortableObserver<T> = {
+type SingleEventAbortableObserver<Z extends z.ZodTypeAny> = {
   stop: () => void;
-  event: Promise<Event<T> | null>;
+  event: Promise<Event<z.output<Z>> | null>;
 };
 
-type SingleEventObserver<T> = {
-  event: Promise<Event<T>>;
+type SingleEventObserver<Z extends z.ZodTypeAny> = {
+  event: Promise<Event<z.output<Z>>>;
 };
 
-export function observeEvent<T = any>(logger: Logger, eventName: EventName): SingleEventObserver<T>;
-export function observeEvent<T = any>(
+export function observeEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
   logger: Logger,
   eventName: EventName,
-  opts: Options<T>,
-): SingleEventObserver<T>;
-export function observeEvent<T = any>(
+): SingleEventObserver<Z>;
+export function observeEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
   logger: Logger,
   eventName: EventName,
-  opts: AbortableOptions<T>,
-): SingleEventAbortableObserver<T>;
-
-export function observeEvent<T = any>(
+  opts: Options<Z>,
+): SingleEventObserver<Z>;
+export function observeEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
+  logger: Logger,
+  eventName: EventName,
+  opts: AbortableOptions<Z>,
+): SingleEventAbortableObserver<Z>;
+export function observeEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
   logger: Logger,
   eventName: EventName,
   {
@@ -680,8 +699,9 @@ export function observeEvent<T = any>(
     historicalCheckBlocks,
     timeoutSeconds = 0,
     abortable = false,
-  }: Options<T> | AbortableOptions<T> = {},
-): SingleEventObserver<T> | SingleEventAbortableObserver<T> {
+    schema,
+  }: Options<Z> | AbortableOptions<Z> = {},
+): SingleEventObserver<Z> | SingleEventAbortableObserver<Z> {
   if (abortable) {
     const observer = observeEvents(logger, eventName, {
       chain,
@@ -690,12 +710,13 @@ export function observeEvent<T = any>(
       historicalCheckBlocks,
       timeoutSeconds,
       abortable,
+      schema,
     });
 
     return {
       stop: () => observer.stop(),
       event: observer.events.then((events) => events?.[0]),
-    } as SingleEventAbortableObserver<T>;
+    } as SingleEventAbortableObserver<Z>;
   }
 
   const observer = observeEvents(logger, eventName, {
@@ -710,16 +731,15 @@ export function observeEvent<T = any>(
   return {
     // Just return the first matching event
     event: observer.events.then((events) => events[0]),
-  } as SingleEventObserver<T>;
+  } as SingleEventObserver<Z>;
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export function observeBadEvent<T = any>(
+export function observeBadEvent<Z extends z.ZodTypeAny>(
   logger: Logger,
   eventName: EventName,
-  { test }: { test?: EventTest<T> },
+  { test, schema }: { test?: EventTest<Z>; schema?: Z },
 ): { stop: () => Promise<void> } {
-  const observer = observeEvent(logger, eventName, { test, abortable: true });
+  const observer = observeEvent(logger, eventName, { test, abortable: true, schema });
 
   return {
     stop: async () => {
