@@ -29,7 +29,6 @@ describe('ConcurrentTests', () => {
   testAllSwaps(numberOfNodes === 1 ? 180 : 240); // TODO: find out what the 3-node timeout should be
   concurrentTest('EvmDeposits', testEvmDeposits, 300);
   concurrentTest('FundRedeem', testFundRedeem, 600);
-  concurrentTest('MultipleMembersGovernance', testMultipleMembersGovernance, 120);
   concurrentTest('LpApi', testLpApi, 240);
   concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200);
   concurrentTest('BoostingForAsset', testBoostingSwap, 200);
@@ -43,6 +42,9 @@ describe('ConcurrentTests', () => {
   // TODO: figure out how to make it less flaky.
   // WHEN CHANGING ANYTHING RELATED TO ASSETHUB OR XCM, run this test locally.
   // concurrentTest('AssethubXCM', testAssethubXcm, 200);
+
+  // Test this separately since some other tests rely on single member governance.
+  serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 120);
 
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
