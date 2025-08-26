@@ -609,6 +609,8 @@ export async function testBrokerLevelScreening(
   //           to being too late.
   //           Most of the functionality is covered by testing `Eth` and `ArbUsdc`.
   //           An alternative would be to increase the ArbEth safety margin on localnet.
+  // - ArbUsdc: we also don't test ArbUsdc rejections, they have caused tests to become flaky
+  //            as well (PRO-2488).
 
   // test rejection of swaps by the responsible broker
   await Promise.all(
@@ -616,7 +618,6 @@ export async function testBrokerLevelScreening(
       testEvm(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
       testEvm(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
       testEvm(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-      testEvm(testContext, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
     ]
       .concat(testBitcoin(testContext, false))
       .concat(testBoostedDeposits ? testBitcoin(testContext, true) : []),
@@ -632,13 +633,11 @@ export async function testBrokerLevelScreening(
     testEvmLiquidityDeposit(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmLiquidityDeposit(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmLiquidityDeposit(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    testEvmLiquidityDeposit(testContext, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
 
     // --- vault swaps ---
     testBitcoinVaultSwap(testContext),
     testEvmVaultSwap(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmVaultSwap(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    testEvmVaultSwap(testContext, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 
   await setMockmode(previousMockmode);
