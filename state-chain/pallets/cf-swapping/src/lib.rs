@@ -20,6 +20,7 @@
 use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
+	btc::Signature,
 	eth::Address as EthereumAddress,
 	sol::{SolAddress, SolSignature},
 	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersCheckedInternal,
@@ -327,6 +328,22 @@ pub enum BatchExecutionError<T: Config> {
 struct BatchExecutionOutcomes<T: Config> {
 	successful_swaps: Vec<SwapState<T>>,
 	failed_swaps: Vec<Swap<T>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum UserData {
+	Solana {
+		signature: SolSignature,
+		signer: SolAddress,
+	},
+	Bitcoin {
+		signature: Signature,
+		signer: [u8; 32],
+	},
+	Ethereum {
+		signature: [u8; 65],
+		signer: [u8; 33], // compressed pubkey
+	},
 }
 
 /// This impl is never used. This is purely used to satisfy trait requirement
@@ -832,8 +849,7 @@ pub mod pallet {
 		UserSignedTransactionSubmitted {
 			broker_id: T::AccountId,
 			payload: Vec<u8>,
-			signature: SolSignature,
-			signer: SolAddress,
+			user_data: UserData,
 			valid: bool,
 		},
 	}
@@ -1465,26 +1481,32 @@ pub mod pallet {
 		pub fn submit_user_signed_payload(
 			origin: OriginFor<T>,
 			// TODO: This might be the pure encoded SC Call or we might want to
-			// follow something like EIP-712.
+			// follow something like EIP-712. Use an enum?
 			payload: Vec<u8>,
-			// TODO: To generalize for all chains. We probably need a new type with
-			// signatures and addresses
-			signature: SolSignature,
-			signer: SolAddress,
+			user_data: UserData,
 		) -> DispatchResult {
-			use cf_chains::{sol::SolanaCrypto, ChainCrypto};
+			use cf_chains::{btc::BitcoinCrypto, evm::EvmCrypto, sol::SolanaCrypto, ChainCrypto};
 
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			let valid = SolanaCrypto::verify_signature(&signer, payload.as_slice(), &signature);
+			let valid = match user_data {
+				UserData::Solana { signature, signer } =>
+					SolanaCrypto::verify_signature(&signer, payload.as_slice(), &signature),
+				UserData::Bitcoin { signature, signer } =>
+					BitcoinCrypto::verify_signature(&signer, payload.as_slice(), &signature),
+				UserData::Ethereum { signature, signer } => EvmCrypto::verify_signature(
+					&signer.into(),
+					payload.as_slice(),
+					&signature.into(),
+				),
+			};
 
 			// TODO: Decode the payload and execute the intended action on behalf
 			// of the user, similar to the delegation Sc Api.
 			Self::deposit_event(Event::<T>::UserSignedTransactionSubmitted {
 				broker_id,
 				payload,
-				signature,
-				signer,
+				user_data,
 				valid,
 			});
 

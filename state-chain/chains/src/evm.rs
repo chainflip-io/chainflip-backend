@@ -68,8 +68,8 @@ impl ChainCrypto for EvmCrypto {
 	type UtxoChain = ConstBool<false>;
 
 	type AggKey = evm::AggKey;
-	type Signer = Address;
-	type Signature = H256; // TODO: Put correct type
+	type Signer = sp_core::ecdsa::Public;
+	type Signature = sp_core::ecdsa::Signature;
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
 	type TransactionInId = H256;
@@ -80,11 +80,18 @@ impl ChainCrypto for EvmCrypto {
 	type GovKey = Address;
 
 	fn verify_signature(
-		_signer: &Self::Signer,
-		_payload: &[u8],
-		_signature: &Self::Signature,
+		// TODO: Potentially pass the address instead but tbd
+		signer: &Self::Signer,
+		payload: &[u8],
+		signature: &Self::Signature,
 	) -> bool {
-		true
+		use sp_core::ecdsa::{Public, Signature};
+
+		let option_public = signature.recover(payload);
+		// let public = Public::from_full(signer.as_bytes()).expect("Valid public key");
+		// Match against signer
+		println!("Recovered pubkey: {:?}", option_public,);
+		option_public.map_or(false, |pubkey| pubkey == *signer)
 	}
 
 	fn verify_threshold_signature(
@@ -757,6 +764,23 @@ mod verification_tests {
 	use super::*;
 	use frame_support::{assert_err, assert_ok};
 	use libsecp256k1::{PublicKey, SecretKey};
+
+	#[test]
+	fn test_verify_signature() {
+		// Seems like the recover is what is already failing
+		let success = EvmCrypto::verify_signature(
+			// signer
+			&hex_literal::hex!("038318535b54105d4a7aae60c08fc45f9687181b4fdfc625bd1a753fa7397fed75").into(),
+			// payload
+			hex_literal::hex!("19457468657265756d205369676e6564204d6573736167653a0a33324578616d706c652060706572736f6e616c5f7369676e60206d6573736167652e").as_slice(),
+			// signature
+			// TODO!!!! Last byte needs to be replaced properly from Ethereum signature!!
+			// &hex_literal::hex!("c0f877901cd322c16c9f2ebe7dd67acd64da57b582bfb196cea1e30be246d38266be768ce58923128e8230a17f73ca7a1fa4b82a7b2f7661f6ce054613feecfe1b").into(),
+			&hex_literal::hex!("c0f877901cd322c16c9f2ebe7dd67acd64da57b582bfb196cea1e30be246d38266be768ce58923128e8230a17f73ca7a1fa4b82a7b2f7661f6ce054613feecfe00").into(),
+			);
+
+		println!("success: {}", success);
+	}
 
 	#[test]
 	#[cfg(feature = "runtime-integration-tests")]

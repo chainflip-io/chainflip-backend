@@ -298,7 +298,7 @@ impl ChainCrypto for BitcoinCrypto {
 	type UtxoChain = ConstBool<true>;
 
 	type AggKey = AggKey;
-	type Signer = AggKey;
+	type Signer = [u8; 32];
 	type Signature = Signature;
 
 	// A single transaction can sign over multiple UTXOs
@@ -314,11 +314,13 @@ impl ChainCrypto for BitcoinCrypto {
 	type GovKey = Self::AggKey;
 
 	fn verify_signature(
-		_signer: &Self::Signer,
-		_payload: &[u8],
-		_signature: &Self::Signature,
+		signer: &Self::Signer,
+		payload: &[u8],
+		signature: &Self::Signature,
 	) -> bool {
-		true
+		let payload_array: &[u8; 32] =
+			payload.as_ref().try_into().expect("Payload must be 32 bytes");
+		verify_single_threshold_signature(signer, payload_array, signature)
 	}
 
 	fn verify_threshold_signature(

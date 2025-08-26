@@ -2,9 +2,19 @@
 // INSTRUCTIONS
 //
 
-import { brokerMutex, createStateChainKeypair, getSolWhaleKeyPair, handleSubstrateError, runWithTimeoutAndExit } from 'shared/utils';
+import {
+  brokerMutex,
+  createStateChainKeypair,
+  getEvmEndpoint,
+  getEvmWhaleKeypair,
+  getSolWhaleKeyPair,
+  handleSubstrateError,
+  runWithTimeoutAndExit,
+} from 'shared/utils';
 import { getChainflipApi } from 'shared/utils/substrate';
-import { sign } from "@solana/web3.js/src/utils/ed25519";
+import { sign } from '@solana/web3.js/src/utils/ed25519';
+import { btcClient } from 'shared/send_btc';
+import { ethers, hashMessage, Wallet } from 'ethers';
 
 async function main() {
   await using chainflip = await getChainflipApi();
@@ -12,52 +22,119 @@ async function main() {
   const broker = createStateChainKeypair('//BROKER_1');
   const whaleKeypair = getSolWhaleKeyPair();
 
+  const payload = Buffer.from('Hello! This is an arbitrary message to sign.');
+  const hexPayload = Buffer.from(payload).toString('hex');
+  const signature = sign(payload, whaleKeypair.secretKey.slice(0, 32));
+  const hexSignature = Buffer.from(signature).toString('hex');
+  console.log('Payload (hex):', hexPayload);
+  console.log('Signed Message (hex):', hexSignature);
+  const hexSigner = whaleKeypair.publicKey.toBuffer().toString('hex');
+  console.log('Signer (hex):', hexSigner);
 
-// TODO: Try signing like this (or maybe solana web3 has some method)
-// This works but we need the "wallet"
-const payload = Buffer.from(
-  "Hello, Solana! This is an arbitrary message to sign."
-);
-const hexPayload = Buffer.from(payload).toString("hex");
-// Convert payload to hex for output
-// const signedMessage = await pg.wallet.signMessage(payload);
-const signature = sign(payload, whaleKeypair.secretKey.slice(0, 32));
-const hexSignature = Buffer.from(signature).toString("hex");
-console.log("Payload (hex):", hexPayload);
-console.log(
-  "Signed Message (hex):",
-  hexSignature
-);
-const hexSigner = whaleKeypair.publicKey.toBuffer().toString("hex");
-console.log("Signer (hex):", hexSigner);
-
-await brokerMutex.runExclusive(async () => {
+  await brokerMutex.runExclusive(async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     await chainflip.tx.swapping
-      .submitUserSignedPayload(
-        // Serialized data - this is an example of a Message of a transaction
-        "0x"+hexPayload,
-        // Signature over the payload
-        "0x"+hexSignature,
-        // signer
-        "0x"+hexSigner
-      )
+      .submitUserSignedPayload('0x' + hexPayload, {
+        Solana: {
+          signature: '0x' + hexSignature,
+          signer: '0x' + hexSigner,
+        },
+      })
       .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
   });
 
-// await brokerMutex.runExclusive(async () => {
-//     const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-//     await chainflip.tx.swapping
-//       .submitUserSignedPayload(
-//         // Serialized data - this is an example of a Message of a transaction
-//         "0x010000023f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab70000000000000000000000000000000000000000000000000000000000000000c949177e6404531fc14eab9b2b5aae0849da386d8f0c687f98ecfee4aea4d9cb01010200010c02000000ff970d0000000000",
-//         // Signature over the payload
-//         "0xbd5a83a3dd9e2a5c463ab47df52234971cc6725e2abe1cdd0d9b962554f465a61adce10d6ca3c7a327d8221b5b53008a70148288ebe2ca92780b43fcae3b6700",
-//         // signer
-//         "0x3f6c2b3023f64ac0c2a7775c2b0725d62d5c075513f122728488f04b73c92ab7"
-//       )
-//       .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
-//   });
+  console.log('Submitted user signed payload in SVM');
+
+  console.log('Trying with EVM');
+
+  // Original message
+  const exampleMessage = 'Example `personal_sign` message.';
+
+  // Create the Ethereum-prefixed message
+  // TODO: We should also add some kind of nonce to make sure messages can't be
+  // replayed. Will we need to store that in the SC in some way too.
+  const messageBytes = Buffer.from(exampleMessage, 'utf8'); // Raw message bytes
+  console.log("messageBytes:", messageBytes.toString('hex'));
+  const prefix = `\x19Ethereum Signed Message:\n${messageBytes.length}`; // Prefix
+  console.log("prefixBytes", Buffer.from(prefix, 'utf8'));
+  const prefixedMessage = Buffer.concat([Buffer.from(prefix, 'utf8'), messageBytes]); // Concatenate prefix + message
+  console.log("prefixedMessage:", prefixedMessage);
+  const messageHash = ethers.keccak256(prefixedMessage); // Keccak-256 hash
+  console.log('Message Hash:', messageHash);
+  // console.log('Message Hash Bytes Length:', messageHash.slice(2).length / 2); // Should be 32
+
+
+  const { privkey: whalePrivKey, pubkey } = getEvmWhaleKeypair('Ethereum');
+  const ethWallet = new Wallet(whalePrivKey).connect(
+    ethers.getDefaultProvider(getEvmEndpoint('Ethereum')),
+  );
+  const ethersHashMessage = hashMessage(messageBytes);
+  console.log('ethersHashMessage:', ethersHashMessage);
+  console.log("messagehash", messageHash);
+  console.log("equal", ethersHashMessage === messageHash);
+
+  // TODO: I think we need to convert the vs from 27/28 to 0/1?
+  const evmSignature = await ethWallet.signMessage(messageBytes);
+  console.log("evmSignature:", evmSignature);
+  console.log('prefixedMessage (hex):', prefixedMessage.toString('hex'));
+  console.log("compressed pubkey", ethWallet.signingKey.compressedPublicKey);
+
+  await brokerMutex.runExclusive(async () => {
+    const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
+    await chainflip.tx.swapping
+      .submitUserSignedPayload(messageHash, {
+        Ethereum: {
+          signature: evmSignature,
+          signer: ethWallet.signingKey.compressedPublicKey,
+        },
+      })
+      .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
+  });
+
+  // BTC not working due to pub/priv key types
+  // console.log('Trying with BTC');
+
+  // const btcHexPayload = "1122334455667788991011121314151611223344556677889910111213141516"
+  // const btcSigner = await btcClient.getNewAddress('', 'legacy');
+  // console.log('Using address:', btcSigner);
+  // const btcSignature = await btcClient.signMessage(btcSigner, btcHexPayload);
+  // console.log('Signature:', btcSignature);
+
+  // // Decode from Base64
+  // const sigBytes = Buffer.from(btcSignature, 'base64');
+
+  // // Check length
+  // if (sigBytes.length !== 65) {
+  //   throw new Error(`Unexpected signature length: ${sigBytes.length}`);
+  // }
+
+  // // Drop the first byte (recovery id)
+  // const sig64 = sigBytes.slice(1); // this is 64
+
+  // // Get public key for that address
+  // const info = await btcClient.getAddressInfo(btcSigner);
+  // if (!info.pubkey) throw new Error('Address has no pubkey in wallet');
+
+  // const pubkeyBytes = Buffer.from(info.pubkey, 'hex'); // 33 bytes
+  // if (pubkeyBytes.length !== 33) throw new Error('Expected compressed pubkey (33 bytes)');
+
+  // const xBytes = pubkeyBytes.slice(1); // 32 bytes
+  // const yParity = pubkeyBytes[0] === 0x02 ? 0 : 1;
+
+  // console.log('x (32 bytes):', xBytes.toString('hex'));
+  // console.log('y parity:', yParity);
+
+  // await brokerMutex.runExclusive(async () => {
+  //   const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
+  //   await chainflip.tx.swapping
+  //     .submitUserSignedPayload('0x' + btcHexPayload, {
+  //       Bitcoin: {
+  //         signature: '0x' + sig64.toString('hex'),
+  //         signer: '0x' + xBytes.toString('hex'), // 32-byte x-coordinate
+  //       },
+  //     })
+  //     .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
+  // });
 }
 
 await runWithTimeoutAndExit(main(), 20);
