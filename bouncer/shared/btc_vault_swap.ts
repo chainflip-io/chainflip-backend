@@ -15,8 +15,6 @@ import {
 import { getChainflipApi } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
 import { Logger } from 'shared/utils/logger';
-import z from 'zod';
-import { hexString, numericString } from './utils/schemas';
 
 interface BtcVaultSwapDetails {
   chain: string;
