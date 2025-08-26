@@ -2,8 +2,8 @@ import z from 'zod';
 
 export const numericString = z
   .string()
-  .regex(/^\d+$/)
-  .transform((n) => Number(n));
+  .regex(/^[\d,]+$/)
+  .transform((n) => Number(n.replaceAll(',', '')));
 
 export const hexString = z
   .string()
