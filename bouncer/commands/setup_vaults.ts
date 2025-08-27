@@ -252,7 +252,7 @@ async function main(): Promise<void> {
 // Run the main function in the context of a loggerAsyncStorage context
 // This ensures that all logs created in the context of this command
 // are tagged with the command name
-await loggerAsyncStorage
+loggerAsyncStorage
   .run(loggerChild(globalLogger, 'setup_vaults'), () => main())
   .catch((error) => {
     console.error(error);

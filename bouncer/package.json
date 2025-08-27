@@ -4,7 +4,8 @@
     "eslint:fix": "eslint --fix .",
     "prettier:check": "prettier --check .",
     "prettier:write": "prettier --write .",
-    "test": "vitest"
+    "test": "vitest",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@chainflip/cli": "1.9.0-assethub.0-ccm-refunds-oracle-swaps",
