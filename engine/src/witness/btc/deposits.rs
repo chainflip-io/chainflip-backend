@@ -198,13 +198,21 @@ pub fn deposit_witnesses(
 				.sorted_by_key(|deposit_witness| deposit_witness.deposit_address.clone())
 				.chunk_by(|deposit_witness| deposit_witness.deposit_address.clone())
 				.into_iter()
-				.map(|(_deposit_address, deposit_witnesses)| {
-					// We only take the largest output of a tx as a deposit witness. This is to
+				.flat_map(|(_deposit_address, deposit_witnesses)| {
+					// We only take the 10 largest outputs of a tx as a deposit witness. This is to
 					// avoid attackers spamming us with many small outputs in a tx. Inputs are more
 					// expensive than outputs - thus, the attacker could send many outputs (cheap
 					// for them) which results in us needing to sign many *inputs*, expensive for
-					// us. sort by descending by amount
-					deposit_witnesses.max_by_key(|deposit_witness| deposit_witness.amount).unwrap()
+					// us.
+
+					// collect all witnesses as we cannot sort iterators
+					let mut witnesses = deposit_witnesses.collect::<Vec<_>>();
+
+					// sort by *ascending* amounts
+					witnesses.sort_by_key(|deposit_witness| deposit_witness.amount);
+
+					// reverse iterator and take the 10 highest deposits
+					witnesses.into_iter().rev().take(10)
 				})
 				.collect::<Vec<_>>()
 		})
@@ -358,8 +366,8 @@ pub mod tests {
 	#[test]
 	fn deposit_witnesses_several_same_tx() {
 		const LARGEST_UTXO_TO_DEPOSIT: u64 = 2324;
-		const UTXO_TO_DEPOSIT_2: u64 = 1234;
-		const UTXO_TO_DEPOSIT_3: u64 = 2000;
+		const UTXO_TO_DEPOSIT_2: u64 = 2000;
+		const UTXO_TO_DEPOSIT_3: u64 = 1234;
 
 		let deposit_address = DepositAddress::new([0; 32], 9);
 
@@ -385,8 +393,10 @@ pub mod tests {
 					.collect(),
 			),
 		);
-		assert_eq!(deposit_witnesses.len(), 1);
+		assert_eq!(deposit_witnesses.len(), 3);
 		assert_eq!(deposit_witnesses[0].amount, LARGEST_UTXO_TO_DEPOSIT);
+		assert_eq!(deposit_witnesses[1].amount, UTXO_TO_DEPOSIT_2);
+		assert_eq!(deposit_witnesses[2].amount, UTXO_TO_DEPOSIT_3);
 	}
 
 	#[test]
@@ -425,12 +435,14 @@ pub mod tests {
 			),
 		);
 
-		// We should have one deposit per address.
-		assert_eq!(deposit_witnesses.len(), 2);
+		// We have two deposits address1 and one deposit for address2.
+		assert_eq!(deposit_witnesses.len(), 3);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_FOR_SECOND_DEPOSIT);
 		assert_eq!(deposit_witnesses[0].deposit_address, deposit_address_2.script_pubkey());
 		assert_eq!(deposit_witnesses[1].amount, LARGEST_UTXO_TO_DEPOSIT);
 		assert_eq!(deposit_witnesses[1].deposit_address, deposit_address_1.script_pubkey());
+		assert_eq!(deposit_witnesses[2].amount, UTXO_TO_DEPOSIT_2);
+		assert_eq!(deposit_witnesses[2].deposit_address, deposit_address_1.script_pubkey());
 	}
 
 	#[test]
@@ -541,8 +553,49 @@ pub mod tests {
 					.collect(),
 			),
 		);
-		assert_eq!(deposit_witnesses.len(), 2);
+		assert_eq!(deposit_witnesses.len(), 4);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
-		assert_eq!(deposit_witnesses[1].amount, UTXO_WITNESSED_2);
+		assert_eq!(deposit_witnesses[1].amount, UTXO_WITNESSED_1 - 1);
+		assert_eq!(deposit_witnesses[2].amount, UTXO_WITNESSED_2);
+		assert_eq!(deposit_witnesses[3].amount, UTXO_WITNESSED_2 - 10);
+	}
+
+	#[test]
+	fn deposit_witnesses_highest_10_utxos() {
+		let address = DepositAddress::new([0; 32], 9);
+
+		const UTXO_WITNESSED_1: u64 = 2324;
+
+		// create a list of 11 amounts, the 10 highest should be witnessed
+		let amounts = (UTXO_WITNESSED_1..).take(10).collect::<Vec<_>>();
+
+		// create a vector to contain the (amount, address) pairs.
+		let mut pairs = Vec::new();
+
+		// push address that we don't want to witness
+		let other_address = DepositAddress::new([0; 32], 11);
+		pairs.push((12223, &other_address));
+
+		// push the 11 txs that go to `address`
+		pairs.extend(amounts.iter().map(|amount| (*amount, &address)));
+
+		let txs = vec![fake_transaction(fake_verbose_vouts(pairs), None)];
+
+		let deposit_witnesses = deposit_witnesses(
+			&txs,
+			&map_script_addresses(
+				vec![fake_details(address.clone())]
+					.into_iter()
+					.map(|deposit_channel| deposit_channel.deposit_channel)
+					.collect(),
+			),
+		);
+
+		// we should witness 10 deposits with decreasing amounts starting from `UTXO_WITNESSED + 9`
+		assert_eq!(deposit_witnesses.len(), 10);
+		for (i, deposit_witness) in deposit_witnesses.iter().enumerate() {
+			assert_eq!(deposit_witness.amount, UTXO_WITNESSED_1 + 9 - (i as u64));
+			assert_eq!(deposit_witness.deposit_address, address.script_pubkey());
+		}
 	}
 }

@@ -1,4 +1,6 @@
 import Client from 'bitcoin-core';
+import * as bitcoinjs from 'bitcoinjs-lib';
+import * as ecc from 'tiny-secp256k1';
 import { sleep, btcClientMutex } from 'shared/utils';
 import { Logger, throwError } from 'shared/utils/logger';
 
@@ -192,4 +194,45 @@ export async function sendBtcTransactionWithParent(
   }
 
   return txids;
+}
+
+/**
+ * Creates a btc transactions with multiple UTXOs spending to the same address.
+ *
+ * @param logger - Logger to use
+ * @param address - Target address of the child tx
+ * @param fineAmounts - List of amounts to spend to address
+ * @returns - The txids of the parent and child tx
+ */
+export async function sendBtcTransactionWithMultipleUtxosToSameAddress(
+  address: string,
+  fineAmounts: number[],
+): Promise<{ txid: string }> {
+  return btcClientMutex.runExclusive(async () => {
+    // this is required for the `bitcoinjs` library to work.
+    bitcoinjs.initEccLib(ecc);
+
+    // construct a transaction with `bitcoinjs`. We can't use the usual bitcoin-cli,
+    // because it explicitly checks that there aren't multiple outputs to the same address.
+    const tx = new bitcoinjs.Transaction();
+    const scriptBuffer = bitcoinjs.address.toOutputScript(address, bitcoinjs.networks.regtest);
+    for (const fineAmount of fineAmounts) {
+      tx.addOutput(scriptBuffer, fineAmount);
+    }
+
+    // Once we have added the outputs, all other steps (funding, signing, sending) can be done as usual with bitcoin-cli.
+    const fundedTx = (await btcClient.fundRawTransaction(tx.toHex(), {
+      changeAddress: await btcClient.getNewAddress(),
+      feeRate: 0.00001,
+      lockUnspents: true,
+    })) as { hex: string };
+
+    // Sign the tx
+    const signedTx = await btcClient.signRawTransactionWithWallet(fundedTx.hex);
+
+    // Send the tx
+    const txid = (await btcClient.sendRawTransaction(signedTx.hex)) as string;
+
+    return { txid };
+  });
 }
