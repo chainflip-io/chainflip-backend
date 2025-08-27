@@ -14,7 +14,7 @@ import {
 import { getChainflipApi } from 'shared/utils/substrate';
 import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { btcClient } from 'shared/send_btc';
-import { ethers, hashMessage, Wallet } from 'ethers';
+import { ethers, Wallet } from 'ethers';
 
 async function main() {
   await using chainflip = await getChainflipApi();
@@ -54,38 +54,29 @@ async function main() {
   // TODO: We should also add some kind of nonce to make sure messages can't be
   // replayed. Will we need to store that in the SC in some way too.
   const messageBytes = Buffer.from(exampleMessage, 'utf8'); // Raw message bytes
-  console.log("messageBytes:", messageBytes.toString('hex'));
   const prefix = `\x19Ethereum Signed Message:\n${messageBytes.length}`; // Prefix
-  console.log("prefixBytes", Buffer.from(prefix, 'utf8'));
   const prefixedMessage = Buffer.concat([Buffer.from(prefix, 'utf8'), messageBytes]); // Concatenate prefix + message
-  console.log("prefixedMessage:", prefixedMessage);
-  const messageHash = ethers.keccak256(prefixedMessage); // Keccak-256 hash
-  console.log('Message Hash:', messageHash);
-  // console.log('Message Hash Bytes Length:', messageHash.slice(2).length / 2); // Should be 32
-
 
   const { privkey: whalePrivKey, pubkey } = getEvmWhaleKeypair('Ethereum');
   const ethWallet = new Wallet(whalePrivKey).connect(
     ethers.getDefaultProvider(getEvmEndpoint('Ethereum')),
   );
-  const ethersHashMessage = hashMessage(messageBytes);
-  console.log('ethersHashMessage:', ethersHashMessage);
-  console.log("messagehash", messageHash);
-  console.log("equal", ethersHashMessage === messageHash);
+  if (pubkey.toLowerCase() !== ethWallet.address.toLowerCase()) {
+    throw new Error('Address does not match expected pubkey');
+  }
 
-  // TODO: I think we need to convert the vs from 27/28 to 0/1?
   const evmSignature = await ethWallet.signMessage(messageBytes);
-  console.log("evmSignature:", evmSignature);
+  console.log('evmSignature:', evmSignature);
   console.log('prefixedMessage (hex):', prefixedMessage.toString('hex'));
-  console.log("compressed pubkey", ethWallet.signingKey.compressedPublicKey);
+  console.log('compressed pubkey', ethWallet.signingKey.compressedPublicKey);
 
   await brokerMutex.runExclusive(async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     await chainflip.tx.swapping
-      .submitUserSignedPayload(messageHash, {
+      .submitUserSignedPayload('0x' + prefixedMessage.toString('hex'), {
         Ethereum: {
           signature: evmSignature,
-          signer: ethWallet.signingKey.compressedPublicKey,
+          signer: pubkey,
         },
       })
       .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));

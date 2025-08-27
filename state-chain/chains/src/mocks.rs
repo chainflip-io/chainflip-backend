@@ -322,7 +322,7 @@ impl ChainCrypto for MockEthereumChainCrypto {
 		_payload: &[u8],
 		_signature: &Self::Signature,
 	) -> bool {
-		true
+		false
 	}
 
 	fn verify_threshold_signature(

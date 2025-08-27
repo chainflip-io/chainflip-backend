@@ -68,7 +68,7 @@ impl ChainCrypto for EvmCrypto {
 	type UtxoChain = ConstBool<false>;
 
 	type AggKey = evm::AggKey;
-	type Signer = sp_core::ecdsa::Public;
+	type Signer = Address;
 	type Signature = sp_core::ecdsa::Signature;
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
@@ -80,18 +80,34 @@ impl ChainCrypto for EvmCrypto {
 	type GovKey = Address;
 
 	fn verify_signature(
-		// TODO: Potentially pass the address instead but tbd
 		signer: &Self::Signer,
 		payload: &[u8],
 		signature: &Self::Signature,
 	) -> bool {
 		use sp_core::ecdsa::{Public, Signature};
 
-		let option_public = signature.recover(payload);
-		// let public = Public::from_full(signer.as_bytes()).expect("Valid public key");
-		// Match against signer
-		println!("Recovered pubkey: {:?}", option_public,);
-		option_public.map_or(false, |pubkey| pubkey == *signer)
+		// TODO: Add signature malleability fix?
+		// TODO: When using signMessage (eth_sign) it will always add the ethereum prefix.
+		// Depending on what we implement we might want to prefix it here. However, the
+		// EIP-712 doesn't prefix it, so tbd what we want to do but we need to know for
+		// later when we decode the data. Maybe the payload should be an enum.
+
+		let mut sig_bytes = signature.0;
+
+		// Normalize signature if needed
+		if sig_bytes[64] >= 27 {
+			sig_bytes[64] -= 27;
+		}
+		let norm_signature: Signature = sig_bytes.into();
+
+		let option_public =
+			norm_signature.recover_prehashed(Keccak256::hash(payload).as_fixed_bytes());
+
+		// TODO: Do we need a check that recovered public key, recovered_adddr and/or
+		// signer is not zeros like we do in Solidity?
+		option_public
+			.and_then(|pubkey| to_evm_address_from_compressed_pubkey(pubkey))
+			.map_or(false, |recovered_addr| recovered_addr == *signer)
 	}
 
 	fn verify_threshold_signature(
@@ -235,6 +251,10 @@ pub fn to_evm_address(pubkey: PublicKey) -> Address {
 	let [_, k_times_g @ ..] = pubkey.serialize();
 	let h = Keccak256::hash(&k_times_g[..]);
 	Address::from_slice(&h.0[12..])
+}
+
+pub fn to_evm_address_from_compressed_pubkey(pubkey: sp_core::ecdsa::Public) -> Option<Address> {
+	PublicKey::parse_compressed(&pubkey.0).ok().map(to_evm_address)
 }
 
 impl AggKey {
@@ -767,19 +787,28 @@ mod verification_tests {
 
 	#[test]
 	fn test_verify_signature() {
-		// Seems like the recover is what is already failing
 		let success = EvmCrypto::verify_signature(
 			// signer
-			&hex_literal::hex!("038318535b54105d4a7aae60c08fc45f9687181b4fdfc625bd1a753fa7397fed75").into(),
+			&hex_literal::hex!("f39fd6e51aad88f6f4ce6ab8827279cfffb92266").into(),
 			// payload
 			hex_literal::hex!("19457468657265756d205369676e6564204d6573736167653a0a33324578616d706c652060706572736f6e616c5f7369676e60206d6573736167652e").as_slice(),
 			// signature
-			// TODO!!!! Last byte needs to be replaced properly from Ethereum signature!!
-			// &hex_literal::hex!("c0f877901cd322c16c9f2ebe7dd67acd64da57b582bfb196cea1e30be246d38266be768ce58923128e8230a17f73ca7a1fa4b82a7b2f7661f6ce054613feecfe1b").into(),
-			&hex_literal::hex!("c0f877901cd322c16c9f2ebe7dd67acd64da57b582bfb196cea1e30be246d38266be768ce58923128e8230a17f73ca7a1fa4b82a7b2f7661f6ce054613feecfe00").into(),
+			&hex_literal::hex!("c0f877901cd322c16c9f2ebe7dd67acd64da57b582bfb196cea1e30be246d38266be768ce58923128e8230a17f73ca7a1fa4b82a7b2f7661f6ce054613feecfe1b").into(),
 			);
 
-		println!("success: {}", success);
+		assert!(success);
+	}
+
+	#[test]
+	fn test_convert_public_to_evm() {
+		let public_key_compressed: sp_core::ecdsa::Public =
+			hex_literal::hex!("038318535b54105d4a7aae60c08fc45f9687181b4fdfc625bd1a753fa7397fed75")
+				.into();
+		let evm_address = to_evm_address_from_compressed_pubkey(public_key_compressed);
+		assert_eq!(
+			evm_address,
+			Some(hex_literal::hex!("f39fd6e51aad88f6f4ce6ab8827279cfffb92266").into())
+		);
 	}
 
 	#[test]

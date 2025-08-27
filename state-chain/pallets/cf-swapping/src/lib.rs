@@ -332,18 +332,9 @@ struct BatchExecutionOutcomes<T: Config> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum UserData {
-	Solana {
-		signature: SolSignature,
-		signer: SolAddress,
-	},
-	Bitcoin {
-		signature: Signature,
-		signer: [u8; 32],
-	},
-	Ethereum {
-		signature: [u8; 65],
-		signer: [u8; 33], // compressed pubkey
-	},
+	Solana { signature: SolSignature, signer: SolAddress },
+	Bitcoin { signature: Signature, signer: [u8; 32] },
+	Ethereum { signature: [u8; 65], signer: EthereumAddress },
 }
 
 /// This impl is never used. This is purely used to satisfy trait requirement
@@ -1494,11 +1485,8 @@ pub mod pallet {
 					SolanaCrypto::verify_signature(&signer, payload.as_slice(), &signature),
 				UserData::Bitcoin { signature, signer } =>
 					BitcoinCrypto::verify_signature(&signer, payload.as_slice(), &signature),
-				UserData::Ethereum { signature, signer } => EvmCrypto::verify_signature(
-					&signer.into(),
-					payload.as_slice(),
-					&signature.into(),
-				),
+				UserData::Ethereum { signature, signer } =>
+					EvmCrypto::verify_signature(&signer, payload.as_slice(), &signature.into()),
 			};
 
 			// TODO: Decode the payload and execute the intended action on behalf
