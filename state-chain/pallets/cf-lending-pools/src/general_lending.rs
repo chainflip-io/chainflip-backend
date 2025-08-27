@@ -45,16 +45,18 @@ impl<T: Config> LoanAccount<T> {
 
 	/// Computes account's total collateral value in USD, including what's in liquidation swaps.
 	pub fn total_collateral_usd_value(&self) -> Result<AssetAmount, Error<T>> {
+		let collateral_in_account_usd_value = self
+			.collateral
+			.iter()
+			.map(|(asset, amount)| usd_value_of::<T>(*asset, *amount).ok())
+			.try_fold(0u128, |acc, x| acc.checked_add(x?))
+			.ok_or(Error::<T>::OraclePriceUnavailable)?;
+
 		match &self.liquidation_status {
-			LiquidationStatus::NoLiquidation => self
-				.collateral
-				.iter()
-				.map(|(asset, amount)| usd_value_of::<T>(*asset, *amount).ok())
-				.try_fold(0u128, |acc, x| acc.checked_add(x?))
-				.ok_or(Error::<T>::OraclePriceUnavailable),
+			LiquidationStatus::NoLiquidation => Ok(collateral_in_account_usd_value),
 			LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
 				let mut total_collateral_usd_value_in_swaps = 0;
-				// If we are liquidating loans, all of the collateral is in pending swaps
+				// If we are liquidating loans, some of the collateral will be in pending swaps
 				for (swap_request_id, LiquidationSwap { from_asset, .. }) in liquidation_swaps {
 					if let Some(swap_progress) =
 						T::SwapRequestHandler::inspect_swap_request(*swap_request_id)
@@ -68,7 +70,13 @@ impl<T: Config> LoanAccount<T> {
 					}
 				}
 
-				Ok(total_collateral_usd_value_in_swaps)
+				// Note that in order to keep things simple we don't guarantee that all of the
+				// all collateral is being liquidated (e.g. it is possible for the user to top
+				// up collateral during liquidation in which case we currently don't update the
+				// liquidation swaps), but we *do* include any collateral sitting in the account
+				// when determining account's collateralisation ratio.
+				Ok(total_collateral_usd_value_in_swaps
+					.saturating_add(collateral_in_account_usd_value))
 			},
 		}
 	}
