@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'async_hooks';
 import pino from 'pino';
 
 export type Logger = pino.Logger;
@@ -73,3 +74,12 @@ export function loggerError(parentLogger: Logger, error: Error): Error {
 export function throwError(parentLogger: Logger, error: Error): never {
   throw loggerError(parentLogger, error);
 }
+
+export const loggerAsyncStorage = new AsyncLocalStorage<Logger>();
+
+export const logger = new Proxy({} as Logger, {
+  get(target, p, receiver) {
+    // if we have a logger in the async storage, use that, otherwise use the global logger
+    return Reflect.get(loggerAsyncStorage.getStore() ?? globalLogger, p, receiver);
+  },
+});

@@ -17,32 +17,19 @@ import { sendSol, signAndSendTxSol } from 'shared/send_sol';
 import { getSolanaVaultIdl, getKeyManagerAbi } from 'shared/contract_interfaces';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { observeEvent } from 'shared/utils/substrate';
-import { Logger } from 'shared/utils/logger';
+import { logger } from 'shared/utils/logger';
+import { uncapitalize } from '@chainflip/utils/string';
+import { findEvent } from './utils/indexer';
 
-export async function initializeArbitrumChain(logger: Logger) {
-  logger.info('Initializing Arbitrum');
-  const arbInitializationRequest = observeEvent(logger, 'arbitrumVault:ChainInitialized').event;
-  await submitGovernanceExtrinsic((chainflip) => chainflip.tx.arbitrumVault.initializeChain());
-  await arbInitializationRequest;
-}
-
-export async function initializeSolanaChain(logger: Logger) {
-  logger.info('Initializing Solana');
-  const solInitializationRequest = observeEvent(logger, 'solanaVault:ChainInitialized').event;
-  await submitGovernanceExtrinsic((chainflip) => chainflip.tx.solanaVault.initializeChain());
-  await solInitializationRequest;
-}
-
-export async function initializeAssethubChain(logger: Logger) {
-  logger.info('Initializing Assethub');
-  const hubInitializationRequest = observeEvent(logger, 'assethubVault:ChainInitialized').event;
-  await submitGovernanceExtrinsic((chainflip) => chainflip.tx.assethubVault.initializeChain());
-  await hubInitializationRequest;
+export async function initializeChain(chain: 'Arbitrum' | 'Solana' | 'Assethub') {
+  logger.info(`Initializing ${chain}`);
+  await submitGovernanceExtrinsic((chainflip) =>
+    chainflip.tx[`${uncapitalize(chain)}Vault`].initializeChain(),
+  );
+  await findEvent(`${chain}Vault.ChainInitialized`);
 }
 
 export async function initializeArbitrumContracts(
-  logger: Logger,
   arbClient: Web3,
   arbKey: { pubKeyX: string; pubKeyYParity: string },
 ) {
@@ -80,7 +67,7 @@ function bigNumberToU64Buffer(number: bigint): Buffer {
   return buf;
 }
 
-export async function initializeSolanaPrograms(logger: Logger, solKey: string) {
+export async function initializeSolanaPrograms(solKey: string) {
   function createUpgradeAuthorityInstruction(
     programId: PublicKey,
     upgradeAuthority: PublicKey,
