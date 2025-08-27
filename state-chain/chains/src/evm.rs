@@ -84,8 +84,6 @@ impl ChainCrypto for EvmCrypto {
 		payload: &[u8],
 		signature: &Self::Signature,
 	) -> bool {
-		use sp_core::ecdsa::{Public, Signature};
-
 		// TODO: Add signature malleability fix?
 		// TODO: When using signMessage (eth_sign) it will always add the ethereum prefix.
 		// Depending on what we implement we might want to prefix it here. However, the
@@ -98,16 +96,17 @@ impl ChainCrypto for EvmCrypto {
 		if sig_bytes[64] >= 27 {
 			sig_bytes[64] -= 27;
 		}
-		let norm_signature: Signature = sig_bytes.into();
+		let norm_signature: sp_core::ecdsa::Signature = sig_bytes.into();
 
 		let option_public =
 			norm_signature.recover_prehashed(Keccak256::hash(payload).as_fixed_bytes());
 
 		// TODO: Do we need a check that recovered public key, recovered_adddr and/or
 		// signer is not zeros like we do in Solidity?
-		option_public
-			.and_then(|pubkey| to_evm_address_from_compressed_pubkey(pubkey))
-			.map_or(false, |recovered_addr| recovered_addr == *signer)
+		// option_public
+		// 	.and_then(to_evm_address_from_compressed_pubkey)
+		// 	.map_or(false, |recovered_addr| recovered_addr == *signer)
+		option_public.and_then(to_evm_address_from_compressed_pubkey) == Some(*signer)	
 	}
 
 	fn verify_threshold_signature(

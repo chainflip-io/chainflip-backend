@@ -314,13 +314,11 @@ impl ChainCrypto for BitcoinCrypto {
 	type GovKey = Self::AggKey;
 
 	fn verify_signature(
-		signer: &Self::Signer,
-		payload: &[u8],
-		signature: &Self::Signature,
+		_signer: &Self::Signer,
+		_payload: &[u8],
+		_signature: &Self::Signature,
 	) -> bool {
-		let payload_array: &[u8; 32] =
-			payload.as_ref().try_into().expect("Payload must be 32 bytes");
-		verify_single_threshold_signature(signer, payload_array, signature)
+		false
 	}
 
 	fn verify_threshold_signature(
