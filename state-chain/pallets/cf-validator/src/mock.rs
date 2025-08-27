@@ -206,6 +206,8 @@ cf_test_utilities::impl_test_helpers! {
 		{
 			<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&account_id).unwrap();
 		}
+		// Default to a high capacity factor for the tests.
+		DelegationCapacityFactor::<Test>::put(1000);
 	},
 }
 
