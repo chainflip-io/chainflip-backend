@@ -1,4 +1,6 @@
-use crate::{Config, DelegationSnapshots, OperatorSettingsLookup, ValidatorIdOf};
+use crate::{
+	Config, DelegationCapacityFactor, DelegationSnapshots, OperatorSettingsLookup, ValidatorIdOf,
+};
 use cf_primitives::EpochIndex;
 use cf_traits::{EpochInfo, Issuance, RewardsDistribution, Slashing};
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -98,8 +100,17 @@ impl<T: Config> DelegationSnapshot<T> {
 		self.delegators.values().copied().sum()
 	}
 
+	/// The total delegator bid, capped based on the delegation multiple and the total validator
+	/// bid.
+	pub fn total_delegator_bid_capped(&self) -> T::Amount {
+		core::cmp::min(
+			self.total_delegator_bid(),
+			self.total_validator_bid() * DelegationCapacityFactor::<T>::get().into(),
+		)
+	}
+
 	pub fn total_available_bid(&self) -> T::Amount {
-		self.total_validator_bid() + self.total_delegator_bid()
+		self.total_validator_bid() + self.total_delegator_bid_capped()
 	}
 
 	pub fn effective_validator_bids(&self) -> BTreeMap<ValidatorIdOf<T>, T::Amount> {
@@ -123,9 +134,17 @@ impl<T: Config> DelegationSnapshot<T> {
 	{
 		let total_delegator_stake: Amount = self.total_delegator_bid().into();
 		let total_validator_stake: Amount = self.total_validator_bid().into();
-		let total_stake = total_delegator_stake + total_validator_stake;
 
-		let validators_cut = Perquintill::from_rational(total_validator_stake, total_stake) * total;
+		// The validator's cut is based on the capped delegation amount.
+		let validators_cut = Perquintill::from_rational(
+			total_validator_stake,
+			total_validator_stake +
+				core::cmp::min(
+					total_delegator_stake,
+					total_validator_stake *
+						Amount::from(DelegationCapacityFactor::<T>::get() as u64),
+				),
+		) * total;
 		let delegators_cut = total - validators_cut;
 		let operator_cut =
 			Perquintill::from_rational(self.delegation_fee_bps as u64, 10_000u64) * delegators_cut;
@@ -139,6 +158,7 @@ impl<T: Config> DelegationSnapshot<T> {
 			(validator.into_ref(), share * validators_cut)
 		});
 		let delegator_cuts = self.delegators.iter().map(move |(delegator, individual_stake)| {
+			// Note we need to use the *uncapped* total delegator stake here to determine shares.
 			let share =
 				Perquintill::from_rational((*individual_stake).into(), total_delegator_stake);
 			(delegator, share * delegators_cut)
