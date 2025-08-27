@@ -1,7 +1,7 @@
 import { describe } from 'vitest';
 import { testBtcUtxoConsolidation } from 'tests/btc_utxo_consolidation';
 import { testRotatesThroughBtcSwap } from 'tests/rotates_through_btc_swap';
-import { testRotateAndSwap } from 'tests/rotation_barrier';
+import { testRotationBarrier } from 'tests/rotation_barrier';
 import { testSolanaVaultSettingsGovernance } from 'tests/solana_vault_settings_governance';
 import { serialTest } from 'shared/utils/vitest';
 import { testMinimumDeposit } from 'tests/minimum_deposit';
@@ -11,7 +11,7 @@ import { testSwapAfterDisconnection } from 'tests/swap_after_temp_disconnecting_
 describe('SerialTests2', () => {
   serialTest('RotatesThroughBtcSwap', testRotatesThroughBtcSwap, 360);
   serialTest('BtcUtxoConsolidation', testBtcUtxoConsolidation, 200);
-  serialTest('RotateAndSwap', testRotateAndSwap, 280);
+  serialTest('RotationBarrier', testRotationBarrier, 280);
   serialTest('MinimumDeposit', testMinimumDeposit, 150);
   serialTest('SolanaVaultSettingsGovernance', testSolanaVaultSettingsGovernance, 120);
 
