@@ -126,7 +126,7 @@ export type Event<T = any> = {
   name: { section: string; method: string };
   data: T;
   block: number;
-  eventIndex: number;
+  eventIndex: unknown;
 };
 
 class EventCache {
@@ -204,7 +204,7 @@ class EventCache {
         name: { section: event.section, method: event.method },
         data: event.data.toHuman(),
         block: blockHeader.number.toNumber(),
-        eventIndex: event.index as unknown as number,
+        eventIndex: event.index,
       }));
 
       // Log the events
@@ -459,7 +459,7 @@ const createEventSchema = <Z extends z.ZodTypeAny>(schema: Z) =>
     name: z.object({ section: z.string(), method: z.string() }),
     data: schema ?? z.any(),
     block: z.number(),
-    eventIndex: z.number(),
+    eventIndex: z.unknown(),
   });
 
 type EventSchema<Z extends z.ZodTypeAny> = ReturnType<typeof createEventSchema<Z>>;
