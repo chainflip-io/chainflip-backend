@@ -45,6 +45,237 @@ const GENESIS_EPOCH: u32 = 1;
 const OPERATOR_SETTINGS: OperatorSettings =
 	OperatorSettings { fee_bps: 250, delegation_acceptance: DelegationAcceptance::Allow };
 
+// === Delegation Test Helpers ===
+
+/// Centralized account ID management for delegation tests
+pub struct TestAccounts;
+
+impl TestAccounts {
+	// Standard ranges for different account types
+	pub const OPERATORS_START: u64 = 200;
+	pub const VALIDATORS_START: u64 = 1000;
+	pub const DELEGATORS_START: u64 = 300;
+
+	// Common individual accounts
+	pub const fn default_operator() -> u64 {
+		Self::OPERATORS_START
+	}
+	pub const fn default_validator() -> u64 {
+		Self::VALIDATORS_START + 1
+	}
+	pub const fn default_delegator() -> u64 {
+		Self::DELEGATORS_START
+	}
+
+	pub const fn operator(id: u8) -> u64 {
+		Self::OPERATORS_START + id as u64
+	}
+	pub const fn validator(id: u8) -> u64 {
+		Self::VALIDATORS_START + id as u64
+	}
+	pub const fn delegator(id: u8) -> u64 {
+		Self::DELEGATORS_START + id as u64
+	}
+}
+
+pub const TEST_ACCOUNTS: TestAccounts = TestAccounts;
+
+/// Common test constants used across delegation tests
+pub mod test_constants {
+	use super::*;
+
+	// Stake amounts
+	pub const STANDARD_STAKE: u128 = 1000;
+	pub const LARGE_STAKE: u128 = 5000;
+	pub const SMALL_STAKE: u128 = 500;
+
+	// Reward/slash amounts
+	pub const STANDARD_REWARD: u128 = 1000;
+	pub const LARGE_REWARD: u128 = 10000;
+
+	// Operator fees (in basis points)
+	pub const LOW_FEE: u32 = MIN_OPERATOR_FEE; // 200 = 2%
+	pub const MEDIUM_FEE: u32 = 500; // 5%
+	pub const HIGH_FEE: u32 = 1000; // 10%
+
+	// Capacity factors
+	pub const DEFAULT_CAPACITY_FACTOR: u32 = 2;
+	pub const HIGH_CAPACITY_FACTOR: u32 = 5;
+}
+
+/// Builder for setting up delegation tests with common configurations
+pub struct DelegationTestSetup {
+	operator: Option<u64>,
+	validators: BTreeMap<u64, u128>,
+	delegators: BTreeMap<u64, u128>,
+	operator_fee_bps: u32,
+	delegation_acceptance: DelegationAcceptance,
+	max_bids: BTreeMap<u64, u128>,
+	capacity_factor: Option<u32>,
+}
+
+impl DelegationTestSetup {
+	pub fn new() -> Self {
+		Self {
+			operator: None,
+			validators: BTreeMap::new(),
+			delegators: BTreeMap::new(),
+			operator_fee_bps: MIN_OPERATOR_FEE,
+			delegation_acceptance: DelegationAcceptance::Allow,
+			max_bids: BTreeMap::new(),
+			capacity_factor: None,
+		}
+	}
+
+	pub fn with_operator(mut self, operator: u64) -> Self {
+		self.operator = Some(operator);
+		self
+	}
+
+	pub fn with_validator(mut self, validator: u64, stake: u128) -> Self {
+		self.validators.insert(validator, stake);
+		self
+	}
+
+	pub fn with_delegator(mut self, delegator: u64, stake: u128) -> Self {
+		self.delegators.insert(delegator, stake);
+		self
+	}
+
+	pub fn with_operator_fee_bps(mut self, fee_bps: u32) -> Self {
+		self.operator_fee_bps = fee_bps;
+		self
+	}
+
+	pub fn with_delegation_acceptance(mut self, acceptance: DelegationAcceptance) -> Self {
+		self.delegation_acceptance = acceptance;
+		self
+	}
+
+	pub fn with_max_bid(mut self, account: u64, max_bid: u128) -> Self {
+		self.max_bids.insert(account, max_bid);
+		self
+	}
+
+	pub fn with_capacity_factor(mut self, factor: u32) -> Self {
+		self.capacity_factor = Some(factor);
+		self
+	}
+
+	/// Create a delegation snapshot for testing distribution (without setup)
+	pub fn create_snapshot(self) -> DelegationSnapshot<Test> {
+		let operator = self.operator.unwrap_or_else(|| TestAccounts::default_operator());
+
+		DelegationSnapshot::<Test> {
+			operator,
+			validators: self.validators,
+			delegators: self.delegators,
+			delegation_fee_bps: self.operator_fee_bps,
+		}
+	}
+}
+
+/// Helper functions for common delegation test operations
+pub struct DelegationTestHelpers;
+
+impl DelegationTestHelpers {
+	/// Test reward distribution accuracy
+	pub fn verify_distribution(
+		snapshot: &DelegationSnapshot<Test>,
+		total_amount: u128,
+		expected_distributions: &BTreeMap<u64, u128>,
+	) {
+		let actual_distributions: BTreeMap<u64, u128> =
+			snapshot.distribute(total_amount).map(|(k, v)| (*k, v)).collect();
+
+		// Verify total equals input
+		let total_distributed: u128 = actual_distributions.values().sum();
+		assert_eq!(total_distributed, total_amount, "Total distribution should equal input");
+
+		// Verify individual amounts
+		for (&account, &expected) in expected_distributions {
+			let actual = actual_distributions.get(&account).unwrap_or(&0);
+			assert_eq!(*actual, expected, "Distribution for account {} incorrect", account);
+		}
+	}
+
+	/// Get distributions as a BTreeMap for easy testing
+	pub fn get_distributions(
+		snapshot: &DelegationSnapshot<Test>,
+		total_amount: u128,
+	) -> BTreeMap<u64, u128> {
+		snapshot.distribute(total_amount).map(|(k, v)| (*k, v)).collect()
+	}
+}
+
+/// Extension trait for TestExternalities to provide delegation-specific test helpers
+pub trait DelegationTestExt {
+	/// Execute with a delegation test setup, providing helper structures
+	fn execute_with_delegation<R>(
+		self,
+		test: impl FnOnce(DelegationTestContext) -> R,
+	) -> TestRunner<R>;
+
+	/// Execute delegation test with snapshot creation and distribution verification
+	fn execute_delegation_distribution_test<R>(
+		self,
+		setup: DelegationTestSetup,
+		total_reward: u128,
+		expected: BTreeMap<u64, u128>,
+		test: impl FnOnce() -> R,
+	) -> TestRunner<R>;
+}
+
+/// Context provided to delegation tests for easy access to helpers
+pub struct DelegationTestContext {
+	pub accounts: TestAccounts,
+	pub constants: TestConstants,
+	pub helpers: DelegationTestHelpers,
+}
+
+pub struct TestConstants;
+
+impl TestConstants {
+	pub const STANDARD_STAKE: u128 = test_constants::STANDARD_STAKE;
+	pub const LARGE_STAKE: u128 = test_constants::LARGE_STAKE;
+	pub const SMALL_STAKE: u128 = test_constants::SMALL_STAKE;
+	pub const STANDARD_REWARD: u128 = test_constants::STANDARD_REWARD;
+	pub const LARGE_REWARD: u128 = test_constants::LARGE_REWARD;
+	pub const LOW_FEE: u32 = test_constants::LOW_FEE;
+	pub const MEDIUM_FEE: u32 = test_constants::MEDIUM_FEE;
+	pub const HIGH_FEE: u32 = test_constants::HIGH_FEE;
+}
+
+impl DelegationTestExt for TestRunner<()> {
+	fn execute_with_delegation<R>(
+		self,
+		test: impl FnOnce(DelegationTestContext) -> R,
+	) -> TestRunner<R> {
+		self.execute_with(|| {
+			let context = DelegationTestContext {
+				accounts: TestAccounts,
+				constants: TestConstants,
+				helpers: DelegationTestHelpers,
+			};
+			test(context)
+		})
+	}
+
+	fn execute_delegation_distribution_test<R>(
+		self,
+		setup: DelegationTestSetup,
+		total_reward: u128,
+		expected: BTreeMap<u64, u128>,
+		test: impl FnOnce() -> R,
+	) -> TestRunner<R> {
+		self.execute_with(|| {
+			let snapshot = setup.create_snapshot();
+			DelegationTestHelpers::verify_distribution(&snapshot, total_reward, &expected);
+			test()
+		})
+	}
+}
+
 fn assert_epoch_index(n: EpochIndex) {
 	assert_eq!(
 		ValidatorPallet::epoch_index(),
@@ -1934,112 +2165,67 @@ mod delegation_rewards_slashes {
 	#[test]
 	fn operator_fee_only_from_delegator_rewards() {
 		new_test_ext().execute_with(|| {
-			const OPERATOR: u64 = 200;
-			const VALIDATOR: u64 = 1001;
-			const DELEGATOR: u64 = 300;
-			const VALIDATOR_STAKE: u128 = 5000;
-			const DELEGATOR_STAKE: u128 = 3000;
-			const TOTAL_REWARD: u128 = 1000;
-			const OPERATOR_FEE_BPS: u32 = 1000; // 10%
+			use test_constants::*;
 
-			// Create a delegation snapshot manually to test distribution
-			let snapshot = DelegationSnapshot::<Test> {
-				operator: OPERATOR,
-				validators: BTreeMap::from_iter([(VALIDATOR, VALIDATOR_STAKE)]),
-				delegators: BTreeMap::from_iter([(DELEGATOR, DELEGATOR_STAKE)]),
-				delegation_fee_bps: OPERATOR_FEE_BPS,
-			};
+			// Setup test scenario using helper builder
+			let snapshot = DelegationTestSetup::new()
+				.with_operator(TestAccounts::default_operator())
+				.with_validator(TestAccounts::default_validator(), LARGE_STAKE)
+				.with_delegator(TestAccounts::default_delegator(), STANDARD_STAKE * 3)
+				.with_operator_fee_bps(HIGH_FEE) // 10%
+				.create_snapshot();
 
-			// Test the distribution calculation
-			let distributions: BTreeMap<u64, u128> =
-				snapshot.distribute(TOTAL_REWARD).map(|(k, v)| (*k, v)).collect();
+			// Test distribution and verify operator fees only from delegator rewards
+			let expected_distributions = BTreeMap::from_iter([
+				(TestAccounts::default_validator(), 6250), // Proportional validator share (5000/8000 * 10000)
+				(TestAccounts::default_delegator(), 3375), // Delegator share after 10% operator fee
+				(TestAccounts::default_operator(), 375),   // 10% of delegator portion
+			]);
 
-			// Verify operator only gets fee from delegator portion, not validator portion
-			let validator_reward = distributions.get(&VALIDATOR).unwrap();
-			let delegator_reward = distributions.get(&DELEGATOR).unwrap();
-			let operator_reward = distributions.get(&OPERATOR).unwrap();
-
-			// Total should equal input
-			assert_eq!(*validator_reward + *delegator_reward + *operator_reward, TOTAL_REWARD);
-
-			// Validator should get proportional share without any fee deduction
-			let expected_validator_share =
-				(VALIDATOR_STAKE * TOTAL_REWARD) / (VALIDATOR_STAKE + DELEGATOR_STAKE);
-			assert_eq!(*validator_reward, expected_validator_share);
-
-			// Operator fee should come only from delegator portion
-			let delegator_portion = TOTAL_REWARD - expected_validator_share;
-			let expected_operator_fee = (delegator_portion * OPERATOR_FEE_BPS as u128) / 10000;
-			assert_eq!(*operator_reward, expected_operator_fee);
-
-			// Delegator gets remainder after operator fee
-			let expected_delegator_reward = delegator_portion - expected_operator_fee;
-			assert_eq!(*delegator_reward, expected_delegator_reward);
+			DelegationTestHelpers::verify_distribution(
+				&snapshot,
+				LARGE_REWARD,
+				&expected_distributions,
+			);
 		});
 	}
 
 	#[test]
 	fn proportional_reward_distribution() {
 		new_test_ext().execute_with(|| {
-			const OPERATOR: u64 = 200;
-			const VALIDATOR_1: u64 = 1001;
-			const VALIDATOR_2: u64 = 1002;
-			const DELEGATOR_1: u64 = 300;
-			const DELEGATOR_2: u64 = 301;
-			const DELEGATOR_3: u64 = 302;
-			const TOTAL_REWARD: u128 = 10000;
-			const OPERATOR_FEE_BPS: u32 = 500; // 5%
+			use test_constants::*;
 
 			// Create snapshot with multiple validators and delegators
-			let snapshot = DelegationSnapshot::<Test> {
-				operator: OPERATOR,
-				validators: BTreeMap::from_iter([
-					(VALIDATOR_1, 2000), // 25% of validator stake
-					(VALIDATOR_2, 6000), // 75% of validator stake
-				]),
-				delegators: BTreeMap::from_iter([
-					(DELEGATOR_1, 1000), // 50% of delegator stake
-					(DELEGATOR_2, 500),  // 25% of delegator stake
-					(DELEGATOR_3, 500),  // 25% of delegator stake
-				]),
-				delegation_fee_bps: OPERATOR_FEE_BPS,
-			};
+			let snapshot = DelegationTestSetup::new()
+				.with_operator(TestAccounts::default_operator())
+				.with_validator(TestAccounts::validator(1), 2000) // 25% of validator stake
+				.with_validator(TestAccounts::validator(2), 6000) // 75% of validator stake
+				.with_delegator(TestAccounts::delegator(1), 1000) // 50% of delegator stake
+				.with_delegator(TestAccounts::delegator(2), 500) // 25% of delegator stake
+				.with_delegator(TestAccounts::delegator(3), 500) // 25% of delegator stake
+				.with_operator_fee_bps(MEDIUM_FEE) // 5%
+				.create_snapshot();
 
-			let distributions: BTreeMap<u64, u128> =
-				snapshot.distribute(TOTAL_REWARD).map(|(k, v)| (*k, v)).collect();
+			// Expected proportional distributions:
+			// Total stake: 8000 validators + 2000 delegators = 10000
+			// Validator portion: 8000/10000 * 10000 = 8000
+			// Delegator portion: 2000/10000 * 10000 = 2000
+			// Operator fee: 2000 * 5% = 100
+			// Remaining for delegators: 1900
+			let expected_distributions = BTreeMap::from_iter([
+				(TestAccounts::validator(1), 2000),      // (2000/8000) * 8000
+				(TestAccounts::validator(2), 6000),      // (6000/8000) * 8000
+				(TestAccounts::delegator(1), 950),       // (1000/2000) * 1900
+				(TestAccounts::delegator(2), 475),       // (500/2000) * 1900
+				(TestAccounts::delegator(3), 475),       // (500/2000) * 1900
+				(TestAccounts::default_operator(), 100), // 5% of delegator portion
+			]);
 
-			// Check proportional distribution
-			let total_validator_stake = 8000u128;
-			let total_delegator_stake = 2000u128;
-			let total_stake = total_validator_stake + total_delegator_stake;
-
-			// Validators should get proportional share
-			let validator_portion = (total_validator_stake * TOTAL_REWARD) / total_stake;
-			let v1_reward = distributions.get(&VALIDATOR_1).unwrap();
-			let v2_reward = distributions.get(&VALIDATOR_2).unwrap();
-			assert_eq!(*v1_reward + *v2_reward, validator_portion);
-
-			// Individual validator proportions
-			assert_eq!(*v1_reward, (2000 * validator_portion) / total_validator_stake);
-			assert_eq!(*v2_reward, (6000 * validator_portion) / total_validator_stake);
-
-			// Delegators + operator should get remaining portion
-			let delegator_portion = TOTAL_REWARD - validator_portion;
-			let operator_fee = (delegator_portion * OPERATOR_FEE_BPS as u128) / 10000;
-			let remaining_for_delegators = delegator_portion - operator_fee;
-
-			let d1_reward = distributions.get(&DELEGATOR_1).unwrap();
-			let d2_reward = distributions.get(&DELEGATOR_2).unwrap();
-			let d3_reward = distributions.get(&DELEGATOR_3).unwrap();
-			let op_reward = distributions.get(&OPERATOR).unwrap();
-
-			assert_eq!(*op_reward, operator_fee);
-			assert_eq!(*d1_reward + *d2_reward + *d3_reward, remaining_for_delegators);
-
-			// Individual delegator proportions
-			assert_eq!(*d1_reward, (1000 * remaining_for_delegators) / total_delegator_stake);
-			assert_eq!(*d2_reward, (500 * remaining_for_delegators) / total_delegator_stake);
-			assert_eq!(*d3_reward, (500 * remaining_for_delegators) / total_delegator_stake);
+			DelegationTestHelpers::verify_distribution(
+				&snapshot,
+				LARGE_REWARD, // 10000
+				&expected_distributions,
+			);
 		});
 	}
 
@@ -2103,6 +2289,35 @@ mod delegation_rewards_slashes {
 				*validator_reward + *delegator_1_reward + *delegator_2_reward + *operator_reward,
 				TOTAL_REWARD
 			);
+		});
+	}
+
+	/// Example test showing the refactored approach with helpers
+	#[test]
+	fn delegation_test_with_helpers_example() {
+		new_test_ext().execute_with(|| {
+			use test_constants::*;
+
+			// Concise setup using helper builder
+			let snapshot = DelegationTestSetup::new()
+				.with_operator(TestAccounts::default_operator())
+				.with_validator(TestAccounts::default_validator(), LARGE_STAKE)
+				.with_delegator(TestAccounts::default_delegator(), STANDARD_STAKE)
+				.with_operator_fee_bps(MEDIUM_FEE)
+				.create_snapshot();
+
+			// Expected results (5000 validator, 1000 delegator, 500 bps = 5% operator fee)
+			// Total stake: 6000, Validator portion: 5000/6000 * 10000 = 8333
+			// Delegator portion: 1000/6000 * 10000 = 1667
+			// Operator fee: 1667 * 5% = 83, Delegator remainder: 1584
+			let expected = BTreeMap::from_iter([
+				(TestAccounts::default_validator(), 8333),
+				(TestAccounts::default_delegator(), 1584),
+				(TestAccounts::default_operator(), 83),
+			]);
+
+			// Verify using helper function
+			DelegationTestHelpers::verify_distribution(&snapshot, LARGE_REWARD, &expected);
 		});
 	}
 
