@@ -1791,18 +1791,48 @@ mod operator {
 		});
 	}
 	#[test]
-	fn can_not_deregister_if_their_are_still_validators_associated() {
+	fn can_deregister_with_validators_associated_if_no_active_delegation() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OPERATOR_SETTINGS
 			));
 			ManagedValidators::<Test>::insert(BOB, ALICE);
+
+			// Should succeed - validators are automatically removed during deregistration
+			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)));
+
+			// Verify validator was removed from operator
+			assert!(!ManagedValidators::<Test>::contains_key(BOB));
+		});
+	}
+
+	#[test]
+	fn cannot_deregister_with_unexpired_delegation_snapshots() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS
+			));
+
+			// Create a delegation snapshot for the current epoch (unexpired)
+			let current_epoch = ValidatorPallet::epoch_index();
+			let test_snapshot = DelegationSnapshot {
+				operator: ALICE,
+				validators: Default::default(),
+				delegators: [(BOB, 100u128)].into_iter().collect(),
+				delegation_fee_bps: 250,
+			};
+			DelegationResolver::<Test>::register_snapshot(current_epoch, test_snapshot);
+
+			// Should fail - operator has unexpired delegation snapshots
 			assert_noop!(
 				ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)),
-				Error::<Test>::StillAssociatedWithValidators
+				Error::<Test>::OperatorStillActive
 			);
-			assert_ok!(ValidatorPallet::remove_validator(OriginTrait::signed(ALICE), BOB));
+
+			// After expiring the epoch, deregistration should succeed
+			ValidatorPallet::expire_epoch(current_epoch);
 			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)));
 		});
 	}
