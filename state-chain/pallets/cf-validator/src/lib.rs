@@ -102,6 +102,9 @@ pub enum PalletConfigUpdate {
 	MinimumAuctionBid {
 		minimum_flip_bid: u32,
 	},
+	DelegationCapacityFactor {
+		factor: u32,
+	},
 }
 
 type RuntimeRotationState<T> =
@@ -363,6 +366,14 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MaxDelegationBid<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
+
+	/// Determines the cap on the total delegation an operator can have relative to their managed
+	/// validators. For example, a factor of 5 means that the total delegation an operator can
+	/// have is capped at 5x the total stake of their managed validators.
+	///
+	/// Note that if this is unset, it defaults to zero, ie. delegation is ignored.
+	#[pallet::storage]
+	pub type DelegationCapacityFactor<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// Maps validators to their operators for each epoch.
 	#[pallet::storage]
@@ -680,6 +691,9 @@ pub mod pallet {
 					MinimumAuctionBid::<T>::set(
 						FLIPPERINOS_PER_FLIP.saturating_mul(minimum_flip_bid.into()).into(),
 					);
+				},
+				PalletConfigUpdate::DelegationCapacityFactor { factor } => {
+					DelegationCapacityFactor::<T>::set(factor);
 				},
 			}
 
