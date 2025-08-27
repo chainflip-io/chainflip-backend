@@ -1542,7 +1542,10 @@ impl<T: Config> Pallet<T> {
 
 				// Register the delegation snapshots for the next epoch.
 				let next_epoch_index = CurrentEpoch::<T>::get() + 1;
-				for snapshot in delegation_snapshots.into_values() {
+				for snapshot in delegation_snapshots
+					.into_values()
+					.filter(|s| s.validators.keys().any(|v| auction_outcome.winners.contains(v)))
+				{
 					DelegationResolver::<T>::register_snapshot(next_epoch_index, snapshot);
 				}
 
