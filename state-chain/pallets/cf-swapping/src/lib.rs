@@ -330,7 +330,14 @@ struct BatchExecutionOutcomes<T: Config> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum UserData {
+pub struct ReplayProtection {
+	nonce: u32, //TODO: Is this correct?
+	chain_id: u32, /*TODO: string? genesis_hash?
+	             * expiry? */
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum UserSignatureData {
 	Solana { signature: SolSignature, signer: SolAddress },
 	Ethereum { signature: [u8; 65], signer: EthereumAddress },
 }
@@ -839,8 +846,10 @@ pub mod pallet {
 			broker_id: T::AccountId,
 			signer_account_id: AccountId32,
 			payload: Vec<u8>,
-			user_data: UserData,
+			replay_protection: ReplayProtection,
+			user_signature_data: UserSignatureData,
 			valid: bool,
+			signed_payload: Vec<u8>,
 		},
 	}
 	#[pallet::error]
@@ -1470,12 +1479,9 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit_user_signed_payload())]
 		pub fn submit_user_signed_payload(
 			origin: OriginFor<T>,
-			// TODO: This might be the pure encoded SC Call or we might want to
-			// follow something like EIP-712. Use an enum?
-			// TODO: We should also add some kind of nonce to make sure messages can't be
-			// replayed. Will we need to store that in the SC in some way too.
 			payload: Vec<u8>,
-			user_data: UserData,
+			replay_protection: ReplayProtection,
+			user_signature_data: UserSignatureData,
 		) -> DispatchResult {
 			use cf_chains::{
 				evm::{EvmCrypto, ToAccountId32},
@@ -1485,16 +1491,25 @@ pub mod pallet {
 
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			let (valid, signer_account_id) = match user_data {
-				UserData::Solana { signature, signer } => (
-					SolanaCrypto::verify_signature(&signer, payload.as_slice(), &signature),
+			// Concatenating so if wallets add prefix bytes to the payload it is still
+			// easy to verify. Otherwise we can choose to add the prefix here in the
+			// corresponding enums but then we'll need to add a new variant if any wallet
+			// is different.
+			let signed_payload = [payload.clone(), replay_protection.encode()].concat();
+
+			let (valid, signer_account_id) = match user_signature_data {
+				UserSignatureData::Solana { signature, signer } => (
+					SolanaCrypto::verify_signature(&signer, &signed_payload, &signature),
 					AccountId32::new(signer.into()),
 				),
-				UserData::Ethereum { signature, signer } => (
-					EvmCrypto::verify_signature(&signer, payload.as_slice(), &signature.into()),
+				UserSignatureData::Ethereum { signature, signer } => (
+					EvmCrypto::verify_signature(&signer, &signed_payload, &signature.into()),
 					signer.into_account_id_32(),
 				),
 			};
+
+			// TODO: Add check of replay protection mechanism.
+			// Nonces, chain_id, TTL, etc.
 
 			// TODO: Decode the payload and execute the intended action on behalf
 			// of the user, similar to the delegation Sc Api.
@@ -1502,8 +1517,10 @@ pub mod pallet {
 				broker_id,
 				signer_account_id,
 				payload,
-				user_data,
+				replay_protection,
+				user_signature_data,
 				valid,
+				signed_payload,
 			});
 
 			Ok(())
