@@ -1928,6 +1928,257 @@ mod operator {
 }
 
 #[cfg(test)]
+mod delegation_rewards_slashes {
+	use super::*;
+
+	#[test]
+	fn operator_fee_only_from_delegator_rewards() {
+		new_test_ext().execute_with(|| {
+			const OPERATOR: u64 = 200;
+			const VALIDATOR: u64 = 1001;
+			const DELEGATOR: u64 = 300;
+			const VALIDATOR_STAKE: u128 = 5000;
+			const DELEGATOR_STAKE: u128 = 3000;
+			const TOTAL_REWARD: u128 = 1000;
+			const OPERATOR_FEE_BPS: u32 = 1000; // 10%
+
+			// Create a delegation snapshot manually to test distribution
+			let snapshot = DelegationSnapshot::<Test> {
+				operator: OPERATOR,
+				validators: BTreeMap::from_iter([(VALIDATOR, VALIDATOR_STAKE)]),
+				delegators: BTreeMap::from_iter([(DELEGATOR, DELEGATOR_STAKE)]),
+				delegation_fee_bps: OPERATOR_FEE_BPS,
+			};
+
+			// Test the distribution calculation
+			let distributions: BTreeMap<u64, u128> =
+				snapshot.distribute(TOTAL_REWARD).map(|(k, v)| (*k, v)).collect();
+
+			// Verify operator only gets fee from delegator portion, not validator portion
+			let validator_reward = distributions.get(&VALIDATOR).unwrap();
+			let delegator_reward = distributions.get(&DELEGATOR).unwrap();
+			let operator_reward = distributions.get(&OPERATOR).unwrap();
+
+			// Total should equal input
+			assert_eq!(*validator_reward + *delegator_reward + *operator_reward, TOTAL_REWARD);
+
+			// Validator should get proportional share without any fee deduction
+			let expected_validator_share =
+				(VALIDATOR_STAKE * TOTAL_REWARD) / (VALIDATOR_STAKE + DELEGATOR_STAKE);
+			assert_eq!(*validator_reward, expected_validator_share);
+
+			// Operator fee should come only from delegator portion
+			let delegator_portion = TOTAL_REWARD - expected_validator_share;
+			let expected_operator_fee = (delegator_portion * OPERATOR_FEE_BPS as u128) / 10000;
+			assert_eq!(*operator_reward, expected_operator_fee);
+
+			// Delegator gets remainder after operator fee
+			let expected_delegator_reward = delegator_portion - expected_operator_fee;
+			assert_eq!(*delegator_reward, expected_delegator_reward);
+		});
+	}
+
+	#[test]
+	fn proportional_reward_distribution() {
+		new_test_ext().execute_with(|| {
+			const OPERATOR: u64 = 200;
+			const VALIDATOR_1: u64 = 1001;
+			const VALIDATOR_2: u64 = 1002;
+			const DELEGATOR_1: u64 = 300;
+			const DELEGATOR_2: u64 = 301;
+			const DELEGATOR_3: u64 = 302;
+			const TOTAL_REWARD: u128 = 10000;
+			const OPERATOR_FEE_BPS: u32 = 500; // 5%
+
+			// Create snapshot with multiple validators and delegators
+			let snapshot = DelegationSnapshot::<Test> {
+				operator: OPERATOR,
+				validators: BTreeMap::from_iter([
+					(VALIDATOR_1, 2000), // 25% of validator stake
+					(VALIDATOR_2, 6000), // 75% of validator stake
+				]),
+				delegators: BTreeMap::from_iter([
+					(DELEGATOR_1, 1000), // 50% of delegator stake
+					(DELEGATOR_2, 500),  // 25% of delegator stake
+					(DELEGATOR_3, 500),  // 25% of delegator stake
+				]),
+				delegation_fee_bps: OPERATOR_FEE_BPS,
+			};
+
+			let distributions: BTreeMap<u64, u128> =
+				snapshot.distribute(TOTAL_REWARD).map(|(k, v)| (*k, v)).collect();
+
+			// Check proportional distribution
+			let total_validator_stake = 8000u128;
+			let total_delegator_stake = 2000u128;
+			let total_stake = total_validator_stake + total_delegator_stake;
+
+			// Validators should get proportional share
+			let validator_portion = (total_validator_stake * TOTAL_REWARD) / total_stake;
+			let v1_reward = distributions.get(&VALIDATOR_1).unwrap();
+			let v2_reward = distributions.get(&VALIDATOR_2).unwrap();
+			assert_eq!(*v1_reward + *v2_reward, validator_portion);
+
+			// Individual validator proportions
+			assert_eq!(*v1_reward, (2000 * validator_portion) / total_validator_stake);
+			assert_eq!(*v2_reward, (6000 * validator_portion) / total_validator_stake);
+
+			// Delegators + operator should get remaining portion
+			let delegator_portion = TOTAL_REWARD - validator_portion;
+			let operator_fee = (delegator_portion * OPERATOR_FEE_BPS as u128) / 10000;
+			let remaining_for_delegators = delegator_portion - operator_fee;
+
+			let d1_reward = distributions.get(&DELEGATOR_1).unwrap();
+			let d2_reward = distributions.get(&DELEGATOR_2).unwrap();
+			let d3_reward = distributions.get(&DELEGATOR_3).unwrap();
+			let op_reward = distributions.get(&OPERATOR).unwrap();
+
+			assert_eq!(*op_reward, operator_fee);
+			assert_eq!(*d1_reward + *d2_reward + *d3_reward, remaining_for_delegators);
+
+			// Individual delegator proportions
+			assert_eq!(*d1_reward, (1000 * remaining_for_delegators) / total_delegator_stake);
+			assert_eq!(*d2_reward, (500 * remaining_for_delegators) / total_delegator_stake);
+			assert_eq!(*d3_reward, (500 * remaining_for_delegators) / total_delegator_stake);
+		});
+	}
+
+	#[test]
+	fn delegation_capacity_factor_caps_delegator_rewards() {
+		new_test_ext().execute_with(|| {
+			const OPERATOR: u64 = 200;
+			const VALIDATOR: u64 = 1001;
+			const DELEGATOR_1: u64 = 300;
+			const DELEGATOR_2: u64 = 301;
+			const VALIDATOR_STAKE: u128 = 1000;
+			const DELEGATOR_1_STAKE: u128 = 2000; // 2x validator stake
+			const DELEGATOR_2_STAKE: u128 = 3000; // 3x validator stake
+			const TOTAL_REWARD: u128 = 6000;
+			const OPERATOR_FEE_BPS: u32 = 0; // No fee for simpler calculation
+
+			// Create snapshot with high delegation relative to validator stake
+			let snapshot = DelegationSnapshot::<Test> {
+				operator: OPERATOR,
+				validators: BTreeMap::from_iter([(VALIDATOR, VALIDATOR_STAKE)]),
+				delegators: BTreeMap::from_iter([
+					(DELEGATOR_1, DELEGATOR_1_STAKE),
+					(DELEGATOR_2, DELEGATOR_2_STAKE),
+				]),
+				delegation_fee_bps: OPERATOR_FEE_BPS,
+			};
+
+			// Set capacity factor to 2x (delegation capped at 2x validator stake)
+			DelegationCapacityFactor::<Test>::put(2);
+
+			let distributions: BTreeMap<u64, u128> =
+				snapshot.distribute(TOTAL_REWARD).map(|(k, v)| (*k, v)).collect();
+
+			// With factor 2, max delegation is 2 * 1000 = 2000
+			// Total available stake = validator stake + capped delegation = 1000 + 2000 = 3000
+			// Validator portion = 1000/3000 * 6000 = 2000
+			// Delegator portion = 2000/3000 * 6000 = 4000
+
+			let validator_reward = distributions.get(&VALIDATOR).unwrap();
+			let delegator_1_reward = distributions.get(&DELEGATOR_1).unwrap();
+			let delegator_2_reward = distributions.get(&DELEGATOR_2).unwrap();
+			let operator_reward = distributions.get(&OPERATOR).unwrap_or(&0);
+
+			assert_eq!(*validator_reward, 2000);
+			assert_eq!(*operator_reward, 0); // No fee
+
+			// Delegator rewards should be proportional to their uncapped stakes
+			// but total capped to the capacity factor
+			let total_delegator_uncapped = DELEGATOR_1_STAKE + DELEGATOR_2_STAKE; // 5000
+			let delegator_portion = 4000u128;
+
+			let expected_d1 = (DELEGATOR_1_STAKE * delegator_portion) / total_delegator_uncapped;
+			let expected_d2 = (DELEGATOR_2_STAKE * delegator_portion) / total_delegator_uncapped;
+
+			assert_eq!(*delegator_1_reward, expected_d1);
+			assert_eq!(*delegator_2_reward, expected_d2);
+			assert_eq!(*delegator_1_reward + *delegator_2_reward, delegator_portion);
+
+			// Total should equal input
+			assert_eq!(
+				*validator_reward + *delegator_1_reward + *delegator_2_reward + *operator_reward,
+				TOTAL_REWARD
+			);
+		});
+	}
+
+	#[test]
+	fn zero_reward_handling() {
+		new_test_ext().execute_with(|| {
+			const OPERATOR: u64 = 200;
+			const VALIDATOR: u64 = 1001;
+			const DELEGATOR: u64 = 300;
+
+			let snapshot = DelegationSnapshot::<Test> {
+				operator: OPERATOR,
+				validators: BTreeMap::from_iter([(VALIDATOR, 1000)]),
+				delegators: BTreeMap::from_iter([(DELEGATOR, 500)]),
+				delegation_fee_bps: 1000, // 10%
+			};
+
+			// Test zero reward distribution
+			let distributions: BTreeMap<u64, u128> =
+				snapshot.distribute(0).map(|(k, v)| (*k, v)).collect();
+
+			// All should get zero
+			assert_eq!(distributions.get(&VALIDATOR).unwrap_or(&0), &0);
+			assert_eq!(distributions.get(&DELEGATOR).unwrap_or(&0), &0);
+			assert_eq!(distributions.get(&OPERATOR).unwrap_or(&0), &0);
+		});
+	}
+
+	#[test]
+	fn slash_distribution_accuracy() {
+		new_test_ext().execute_with(|| {
+			const OPERATOR: u64 = 200;
+			const VALIDATOR: u64 = 1001;
+			const DELEGATOR: u64 = 300;
+			const VALIDATOR_STAKE: u128 = 3000;
+			const DELEGATOR_STAKE: u128 = 2000;
+			const TOTAL_SLASH: u128 = 1000;
+			const OPERATOR_FEE_BPS: u32 = 800; // 8%
+
+			// Create snapshot for slashing test
+			let snapshot = DelegationSnapshot::<Test> {
+				operator: OPERATOR,
+				validators: BTreeMap::from_iter([(VALIDATOR, VALIDATOR_STAKE)]),
+				delegators: BTreeMap::from_iter([(DELEGATOR, DELEGATOR_STAKE)]),
+				delegation_fee_bps: OPERATOR_FEE_BPS,
+			};
+
+			// Test slash distribution (same logic as rewards)
+			let distributions: BTreeMap<u64, u128> =
+				snapshot.distribute(TOTAL_SLASH).map(|(k, v)| (*k, v)).collect();
+
+			let validator_slash = distributions.get(&VALIDATOR).unwrap();
+			let delegator_slash = distributions.get(&DELEGATOR).unwrap();
+			let operator_slash = distributions.get(&OPERATOR).unwrap();
+
+			// Total should equal input
+			assert_eq!(*validator_slash + *delegator_slash + *operator_slash, TOTAL_SLASH);
+
+			// Validator gets proportional share based on stake
+			let total_stake = VALIDATOR_STAKE + DELEGATOR_STAKE;
+			let expected_validator_slash = (VALIDATOR_STAKE * TOTAL_SLASH) / total_stake;
+			assert_eq!(*validator_slash, expected_validator_slash);
+
+			// Operator "fee" comes from delegator portion (even in slashing)
+			let delegator_portion = TOTAL_SLASH - expected_validator_slash;
+			let expected_operator_slash = (delegator_portion * OPERATOR_FEE_BPS as u128) / 10000;
+			assert_eq!(*operator_slash, expected_operator_slash);
+
+			// Delegator gets remainder
+			let expected_delegator_slash = delegator_portion - expected_operator_slash;
+			assert_eq!(*delegator_slash, expected_delegator_slash);
+		});
+	}
+}
+
+#[cfg(test)]
 mod delegation {
 	use super::*;
 
