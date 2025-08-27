@@ -84,7 +84,6 @@ impl ChainCrypto for EvmCrypto {
 		payload: &[u8],
 		signature: &Self::Signature,
 	) -> bool {
-		// TODO: Add signature malleability fix?
 		// TODO: When using signMessage (eth_sign) it will always add the ethereum prefix.
 		// Depending on what we implement we might want to prefix it here. However, the
 		// EIP-712 doesn't prefix it, so tbd what we want to do but we need to know for
@@ -92,10 +91,24 @@ impl ChainCrypto for EvmCrypto {
 
 		let mut sig_bytes = signature.0;
 
-		// Normalize signature if needed
+		// Normalize signature's v if needed
 		if sig_bytes[64] >= 27 {
 			sig_bytes[64] -= 27;
 		}
+
+		// Prevent signature malleability - reject high-s signatures
+		// s < 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141 / 2
+		let s = U256::from_big_endian(&sig_bytes[32..64]);
+		let half_curve_order: [u8; 32] = [
+			0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+			0xFF, 0xFF, 0x5D, 0x57, 0x6E, 0x73, 0x57, 0xA4, 0x50, 0x1D, 0xDF, 0xE9, 0x2F, 0x46,
+			0x68, 0x1B, 0x20, 0xA0,
+		];
+		let half_curve_order_uint = U256::from_big_endian(&half_curve_order);
+		if s > half_curve_order_uint {
+			return false;
+		}
+
 		let norm_signature: sp_core::ecdsa::Signature = sig_bytes.into();
 
 		let option_public =
@@ -806,7 +819,8 @@ mod verification_tests {
 		.into();
 
 		// Verify original signature
-		let success = EvmCrypto::verify_signature(&signer.into(), &payload, &original_signature.into());
+		let success =
+			EvmCrypto::verify_signature(&signer.into(), &payload, &original_signature.into());
 		assert!(success, "Original signature should be valid");
 
 		// Construct malleable signature
@@ -814,9 +828,8 @@ mod verification_tests {
 		let s_bytes: [u8; 32] = original_signature[32..64].try_into().unwrap();
 
 		// Curve order n for secp256k1 as a 32-byte array
-		let n: [u8; 32] = hex_literal::hex!(
-			"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141"
-		);
+		let n: [u8; 32] =
+			hex_literal::hex!("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
 
 		// Compute n - s using byte subtraction with borrow
 		let mut malleable_s = [0u8; 32];
