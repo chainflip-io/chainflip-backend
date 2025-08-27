@@ -38,8 +38,14 @@ function createTestFunction(name: string, testFunction: (context: TestContext) =
     // Run the test with the test context
     await testFunction(context.testContext).catch((error) => {
       // We must catch the error here to be able to log it
+
+      // get local logs from `logStorage` attribute and append them to the error
+      const logStorage = context.testContext.logger.bindings().logStorage;
+      const logs = logStorage || '<No logs available>';
       context.testContext.error(error);
-      throw error;
+
+      // re-throw error
+      throw new Error(`${error}\n\nhistory:\n${logs}`);
     });
     context.testContext.logger.info(`✅ Finished test ${name}`);
   };

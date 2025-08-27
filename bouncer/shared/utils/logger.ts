@@ -1,3 +1,4 @@
+import { toUpperCase } from '@chainflip/utils/string';
 import pino from 'pino';
 
 export type Logger = pino.Logger;
@@ -14,17 +15,39 @@ const prettyConsoleTransport = pino.transport({
   options: {
     colorize: true,
     // Note: we are ignoring the common bindings to keep the cli log clean.
-    ignore: 'test,module,tag',
+    ignore: 'test,module,tag,logStorage',
   },
 });
 
 // Log the given value without having to include %s in the message. Just like console.log
-function logMethod(this: pino.Logger, args: Parameters<pino.LogFn>, method: pino.LogFn) {
+function logMethod(
+  this: pino.Logger,
+  args: Parameters<pino.LogFn>,
+  method: pino.LogFn,
+  level: number,
+) {
   const newArgs = args;
   if (args.length === 2 && !args[0].includes('%s')) {
     newArgs[0] = `${args[0]} %s`;
   }
   method.apply(this, newArgs);
+
+  // we use a custom attribute called `logStorage` to store logs in memory.
+  // In the `createTestFunction()` in `vitest.ts` we use this to extract
+  // only the logs of the logger whose test failed, and attach them to the
+  // error message.
+  let currentLogs = this.bindings().logStorage as string | undefined;
+  if (!currentLogs) {
+    currentLogs = '';
+  }
+
+  // Getting the time using the time function of pino, there might be a better way to do this.
+  const { time } = JSON.parse(`{"noop": "nothing"${pino.stdTimeFunctions.isoTime()}}`);
+
+  // We manually reconstruct the same format that the pino messages are in.
+  // There doesn't seem a way to use the `method: pino.LogFn` formatter.
+  currentLogs += `[${time}] ${toUpperCase(this.levels.labels[level])}: ${newArgs}\n`;
+  this.setBindings({ logStorage: currentLogs });
 }
 
 export const globalLogger: Logger = pino(
