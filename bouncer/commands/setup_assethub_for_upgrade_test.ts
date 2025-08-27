@@ -1,7 +1,7 @@
 #!/usr/bin/env -S pnpm tsx
 
 import { AddressOrPair } from '@polkadot/api/types';
-import { initializeAssethubChain } from 'shared/initialize_new_chains';
+import { initializeChain } from 'shared/initialize_new_chains';
 import { DisposableApiPromise, getAssethubApi, observeEvent } from 'shared/utils/substrate';
 import { globalLogger, loggerChild } from 'shared/utils/logger';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
@@ -61,7 +61,7 @@ async function main(): Promise<void> {
   await using assethub = await getAssethubApi();
   const logger = loggerChild(globalLogger, 'setup_vaults');
 
-  await initializeAssethubChain(logger);
+  await initializeChain('Assethub');
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
   const hubActivationRequest = observeEvent(
     logger,
