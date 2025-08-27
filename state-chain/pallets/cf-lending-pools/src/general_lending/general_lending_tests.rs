@@ -1046,6 +1046,12 @@ fn basic_liquidation() {
 				SWAPPED_PRINCIPAL_2,
 			);
 
+			// The should now be settled:
+			System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+				loan_id: LOAN_ID,
+				total_fees: Default::default(),
+			}));
+
 			// This remaining principal will be credited to the borrower's account
 			const REMAINING_PRINCIPAL: u128 = SWAPPED_PRINCIPAL_2 - (PRINCIPAL - SWAPPED_PRINCIPAL);
 

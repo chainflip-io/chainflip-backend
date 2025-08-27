@@ -343,6 +343,54 @@ impl<T: Config> LoanAccount<T> {
 
 		self.liquidation_status = LiquidationStatus::NoLiquidation;
 	}
+
+	fn settle_loan(&mut self, loan_id: LoanId) {
+		if let Some(_loan) = self.loans.remove(&loan_id) {
+			// TODO: record all collected fees/interest and provide the total here:
+			Pallet::<T>::deposit_event(Event::LoanSettled {
+				loan_id,
+				total_fees: Default::default(),
+			});
+		}
+	}
+
+	/// Repays (fully or partially) the loan with `provided_amount` (that was either debited from
+	/// the account or received during liquidation). Returns any unused amount. If the loan does not
+	/// exist, returns `None`.
+	fn repay_principal(
+		&mut self,
+		loan_id: LoanId,
+		provided_amount: AssetAmount,
+		liquidation_fees: Option<AssetAmount>,
+	) -> Option<AssetAmount> {
+		let Some(loan) = self.loans.get_mut(&loan_id) else {
+			// In rare cases it may be possible for the loan to no longer exist if
+			// e.g. the principal was fully covered by a prior liquidation swap.
+			return None;
+		};
+
+		// Making sure the user doesn't pay more than the total principal:
+		let repayment_amount = core::cmp::min(provided_amount, loan.owed_principal);
+
+		loan.pay_to_pool(repayment_amount, true /* is principal */);
+
+		let liquidation_fees = match liquidation_fees {
+			Some(fees) => BTreeMap::from([(loan.asset, fees)]),
+			None => Default::default(),
+		};
+
+		Pallet::<T>::deposit_event(Event::LoanRepaid {
+			loan_id,
+			amount: repayment_amount,
+			liquidation_fees,
+		});
+
+		if loan.owed_principal == 0 {
+			self.settle_loan(loan_id);
+		}
+
+		Some(provided_amount.saturating_sub(repayment_amount))
+	}
 }
 
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -774,29 +822,18 @@ impl<T: Config> LendingApi for Pallet<T> {
 		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanNotFound)?;
 
-			let loan = loan_account.loans.get_mut(&loan_id).ok_or(Error::<T>::LoanNotFound)?;
+			let loan_asset =
+				loan_account.loans.get_mut(&loan_id).ok_or(Error::<T>::LoanNotFound)?.asset;
 
-			// Making sure the user doesn't pay more than the total principal:
-			let repayment_amount = core::cmp::min(repayment_amount, loan.owed_principal);
+			let remaining_amount = loan_account
+				.repay_principal(loan_id, repayment_amount, None)
+				.ok_or(Error::<T>::LoanNotFound)?;
 
-			loan.pay_to_pool(repayment_amount, true);
-
-			T::Balance::try_debit_account(borrower_id, loan.asset, repayment_amount)?;
-
-			Self::deposit_event(Event::LoanRepaid {
-				loan_id,
-				amount: repayment_amount,
-				// TODO: this should be non-zero if repayment is make via a non-voluntary
-				// liquidation
-				liquidation_fees: Default::default(),
-			});
-
-			if loan.owed_principal == 0 {
-				loan_account.loans.remove(&loan_id);
-
-				// TODO: record all collected fees/interest and provide the total here:
-				Self::deposit_event(Event::LoanSettled { loan_id, total_fees: Default::default() });
-			}
+			T::Balance::try_debit_account(
+				borrower_id,
+				loan_asset,
+				repayment_amount.saturating_sub(remaining_amount),
+			)?;
 
 			Ok::<_, DispatchError>(())
 		})?;
@@ -909,22 +946,23 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 						return;
 					};
 
-					let Some(mut loan) = loan_account.loans.remove(&loan_id) else {
-						log_or_panic!("Loan ({loan_id}) does not exist for {borrower_id:?}",);
-						return;
+					// TODO: compute this
+					let liquidation_fee = 0;
+
+					let remaining_amount = match loan_account.repay_principal(
+						loan_id,
+						output_amount,
+						Some(liquidation_fee),
+					) {
+						Some(remaining_amount) => remaining_amount,
+						// Note: not being able to find the loan is not considered
+						// an error here because this can happen if one of the prior liquidations
+						// happened to repay it in full (in which case the funds should go to the
+						// borrower).
+						None => output_amount,
 					};
 
-					// Use swapped asset to repay the loan:
-					let amount_to_repay = core::cmp::min(output_amount, loan.owed_principal);
-					loan.pay_to_pool(amount_to_repay, true);
-
-					// Any amount left after repaying the loan should be returned to the
-					// borrower:
-					T::Balance::credit_account(
-						&borrower_id,
-						loan.asset,
-						output_amount.saturating_sub(amount_to_repay),
-					);
+					let mut should_settle_loan = false;
 
 					// Updating liquidation status:
 					match &mut loan_account.liquidation_status {
@@ -932,12 +970,34 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 							log_or_panic!("Unexpected liquidation (swap request id: {swap_request_id}, loan_id: {loan_id})");
 						},
 						LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
-							liquidation_swaps.remove(&swap_request_id);
+							if let Some(swap) = liquidation_swaps.remove(&swap_request_id) {
+								// Any amount left after repaying the loan should be returned to the
+								// borrower:
+								T::Balance::credit_account(
+									&borrower_id,
+									swap.to_asset,
+									remaining_amount,
+								);
+							}
+
+							// If there are no more liquidation swaps for the loan, we should
+							// "settle" it (even if it hasn't been repaid in full):
+							if liquidation_swaps
+								.values()
+								.filter(|swap| swap.loan_id == loan_id)
+								.count() == 0
+							{
+								should_settle_loan = true;
+							}
 
 							if liquidation_swaps.is_empty() {
 								loan_account.liquidation_status = LiquidationStatus::NoLiquidation;
 							}
 						},
+					};
+
+					if should_settle_loan {
+						loan_account.settle_loan(loan_id);
 					}
 				});
 			},
