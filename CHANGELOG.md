@@ -2,7 +2,7 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [1.10.2] - 2025-07-16
+## [1.10.3] - 2025-08-27
 
 - Bouncer improvements.
 
