@@ -49,13 +49,15 @@ function logMethod(
   }
   method.apply(this, newArgs);
 
-  // Append log line to file
-  const testLogFile = getTestLogFile(this);
-  if (!existsSync(dirname(testLogFile))) {
-    mkdirSync(dirname(testLogFile), { recursive: true });
+  // Append log line to file. We ignore log levels that are 'trace' or below.
+  if (level > this.levels.values.trace) {
+    const testLogFile = getTestLogFile(this);
+    if (!existsSync(dirname(testLogFile))) {
+      mkdirSync(dirname(testLogFile), { recursive: true });
+    }
+    const logLine = `[${getIsoTime()}] ${toUpperCase(this.levels.labels[level])}: ${newArgs}\n`;
+    appendFileSync(testLogFile, logLine);
   }
-  const logLine = `[${getIsoTime()}] ${toUpperCase(this.levels.labels[level])}: ${newArgs}\n`;
-  appendFileSync(testLogFile, logLine);
 }
 
 export const globalLogger: Logger = pino(
