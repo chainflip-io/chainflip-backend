@@ -1,7 +1,8 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, stat, unlinkSync, writeFileSync } from 'fs';
 import { afterEach, beforeEach, it } from 'vitest';
 import { TestContext } from 'shared/utils/test_context';
 import { testInfoFile } from 'shared/utils';
+import { getTestLogFile } from './logger';
 
 // Write the test name and function name to a file to be used by the `run_test.ts` command
 function writeTestInfoFile(name: string, functionName: string) {
@@ -34,15 +35,24 @@ function createTestFunction(name: string, testFunction: (context: TestContext) =
   return async (context: { testContext: TestContext }) => {
     // Attach the test name to the logger
     context.testContext.logger = context.testContext.logger.child({ test: name });
+
+    // The file where we will write test specific logs to
+    const testLogFileName = getTestLogFile(context.testContext.logger);
+
+    // Delete log file for this test if it already exists
+    stat(testLogFileName, (_err, _stats) => {
+      unlinkSync(testLogFileName);
+    });
+
     context.testContext.logger.info(`🧪 Starting test ${name}`);
+
     // Run the test with the test context
     await testFunction(context.testContext).catch((error) => {
       // We must catch the error here to be able to log it
-
-      // get local logs from `logStorage` attribute and append them to the error
-      const logStorage = context.testContext.logger.bindings().logStorage;
-      const logs = logStorage || '<No logs available>';
       context.testContext.error(error);
+
+      // get local logs from file and append them to the error
+      const logs = readFileSync(testLogFileName);
 
       // re-throw error
       throw new Error(`${error}\n\nhistory:\n${logs}`);

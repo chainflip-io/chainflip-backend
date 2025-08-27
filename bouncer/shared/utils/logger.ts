@@ -1,9 +1,19 @@
 import { toUpperCase } from '@chainflip/utils/string';
+import { appendFileSync, existsSync, mkdirSync } from 'fs';
+import { dirname } from 'path';
 import pino from 'pino';
 
 export type Logger = pino.Logger;
 
 const logFile = process.env.BOUNCER_LOG_PATH ?? '/tmp/chainflip/bouncer.log';
+const testLogDir = process.env.BOUNCER_TEST_LOGS_PATH ?? '/tmp/chainflip/bouncer/test';
+
+export function getTestLogFile(logger: Logger): string {
+  const testname = logger.bindings().test ?? 'UnknownTest';
+  const tag = logger.bindings().tag ?? '';
+  const suffix = tag === '' ? '' : `-${tag}`;
+  return `${testLogDir}/${testname}${suffix}.log`;
+}
 
 const logFileDestination = pino.destination({
   dest: logFile,
@@ -32,22 +42,16 @@ function logMethod(
   }
   method.apply(this, newArgs);
 
-  // we use a custom attribute called `logStorage` to store logs in memory.
-  // In the `createTestFunction()` in `vitest.ts` we use this to extract
-  // only the logs of the logger whose test failed, and attach them to the
-  // error message.
-  let currentLogs = this.bindings().logStorage as string | undefined;
-  if (!currentLogs) {
-    currentLogs = '';
-  }
-
   // Getting the time using the time function of pino, there might be a better way to do this.
   const { time } = JSON.parse(`{"noop": "nothing"${pino.stdTimeFunctions.isoTime()}}`);
 
-  // We manually reconstruct the same format that the pino messages are in.
-  // There doesn't seem a way to use the `method: pino.LogFn` formatter.
-  currentLogs += `[${time}] ${toUpperCase(this.levels.labels[level])}: ${newArgs}\n`;
-  this.setBindings({ logStorage: currentLogs });
+  // Append log line to file
+  const testLogFile = getTestLogFile(this);
+  if (!existsSync(dirname(testLogFile))) {
+    mkdirSync(dirname(testLogFile), { recursive: true });
+  }
+  const logLine = `[${time}] ${toUpperCase(this.levels.labels[level])}: ${newArgs}\n`;
+  appendFileSync(testLogFile, logLine);
 }
 
 export const globalLogger: Logger = pino(
