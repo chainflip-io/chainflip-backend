@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, stat, unlinkSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { afterEach, beforeEach, it } from 'vitest';
 import { TestContext } from 'shared/utils/test_context';
 import { testInfoFile } from 'shared/utils';
@@ -35,15 +35,6 @@ function createTestFunction(name: string, testFunction: (context: TestContext) =
   return async (context: { testContext: TestContext }) => {
     // Attach the test name to the logger
     context.testContext.logger = context.testContext.logger.child({ test: name });
-
-    // The file where we will write test specific logs to
-    const testLogFileName = getTestLogFile(context.testContext.logger);
-
-    // Delete log file for this test if it already exists
-    stat(testLogFileName, (_err, _stats) => {
-      unlinkSync(testLogFileName);
-    });
-
     context.testContext.logger.info(`🧪 Starting test ${name}`);
 
     // Run the test with the test context
@@ -52,9 +43,10 @@ function createTestFunction(name: string, testFunction: (context: TestContext) =
       context.testContext.error(error);
 
       // get local logs from file and append them to the error
+      const testLogFileName = getTestLogFile(context.testContext.logger);
       const logs = readFileSync(testLogFileName);
 
-      // re-throw error
+      // re-throw error with logs
       throw new Error(`${error}\n\nhistory:\n${logs}`);
     });
     context.testContext.logger.info(`✅ Finished test ${name}`);
