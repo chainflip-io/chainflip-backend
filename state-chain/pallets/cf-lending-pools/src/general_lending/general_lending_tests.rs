@@ -16,21 +16,18 @@ use frame_support::{assert_err, assert_noop, assert_ok};
 
 const INIT_BLOCK: u64 = 1;
 
-const ORIGINATION_FEE_BASE: Permill = Permill::from_parts(100);
-const ORIGINATION_FEE_UTILISATION_FACTOR: Permill = Permill::from_parts(100);
+const ORIGINATION_FEE: Permill = Permill::from_parts(100);
 
-const INTEREST_BASE: Perbill = Perbill::from_parts(1000);
-const INTEREST_UTILISATION_FACTOR: Perbill = Perbill::from_parts(1000);
+const INTEREST_BASE: Perbill = Perbill::from_percent(2);
+const INTEREST_UTILISATION_FACTOR: Perbill = Perbill::from_percent(10);
 
 const LENDER: u64 = BOOSTER_1;
 const BORROWER: u64 = LP;
 
 const LOAN_ASSET: Asset = Asset::Btc;
-const PRINCIPAL: AssetAmount = 1_000_000;
+const PRINCIPAL: AssetAmount = 1_000_000_000;
 // This much is required to create the loan
 const INIT_COLLATERAL: AssetAmount = (PRINCIPAL + PRINCIPAL / 5) * SWAP_RATE; // 20% overcollateralisation
-
-const INITIAL_INTEREST_PER_BLOCK: Perbill = Perbill::from_parts(1_500); // 50% utilisation expected
 
 const LOAN_ID: LoanId = LoanId(0);
 
@@ -45,8 +42,7 @@ const FEE_SWAP_THRESHOLD_USD: AssetAmount = 10_000_000; // 10 USD
 const FEE_SWAP_INTERVAL_BLOCKS: u32 = 10;
 
 const CONFIG: LendingConfiguration = LendingConfiguration {
-	origination_fee_base: ORIGINATION_FEE_BASE,
-	origination_fee_utilisation_factor: ORIGINATION_FEE_UTILISATION_FACTOR,
+	origination_fee: ORIGINATION_FEE,
 	interest_base: INTEREST_BASE,
 	interest_utilisation_factor: INTEREST_UTILISATION_FACTOR,
 	overcollateralisation_target: Permill::from_percent(20),
@@ -139,20 +135,20 @@ fn basic_chp_lending() {
 
 	const INIT_COLLATERAL: AssetAmount = (PRINCIPAL + PRINCIPAL / 4) * SWAP_RATE; // 25%
 
-	let origination_fee =
-		CONFIG.derive_origination_fee(Permill::from_percent(50)) * PRINCIPAL * SWAP_RATE;
+	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
 
 	let interest_charge_in_eth_1 = {
+		// 25% utilisation is expected:
 		let interest_charge_in_btc =
-			INITIAL_INTEREST_PER_BLOCK.int_mul(INTEREST_PAYMENT_INTERVAL) * PRINCIPAL;
+			CONFIG.derive_interest_rate_per_charge_interval(Permill::from_percent(50)) * PRINCIPAL;
 		interest_charge_in_btc * SWAP_RATE
 	};
 
 	let interest_charge_in_eth_2 = {
 		// 25% utilisation is expected:
-		let interest_per_block = INTEREST_BASE + Perbill::from_parts(250);
-		let interest_charge_in_btc =
-			interest_per_block.int_mul(INTEREST_PAYMENT_INTERVAL) * PRINCIPAL / 2;
+		let interest_charge_in_btc = CONFIG
+			.derive_interest_rate_per_charge_interval(Permill::from_percent(25)) *
+			PRINCIPAL / 2;
 		interest_charge_in_btc * SWAP_RATE
 	};
 
@@ -307,8 +303,7 @@ fn collateral_auto_topup() {
 	// The user deposits this much of collateral asset into their balance at a later point
 	const EXTRA_FUNDS: AssetAmount = INIT_COLLATERAL;
 
-	let origination_fee =
-		CONFIG.derive_origination_fee(Permill::from_percent(50)) * PRINCIPAL * SWAP_RATE;
+	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
 
 	fn get_cr() -> Permill {
 		LoanAccounts::<Test>::get(BORROWER)
@@ -377,7 +372,7 @@ fn collateral_auto_topup() {
 		})
 		.then_execute_at_next_block(|_| {
 			// This much happens to be the exact amount needed to bring CR back to target
-			const COLLATERAL_TOPUP_2: AssetAmount = 1143158;
+			const COLLATERAL_TOPUP_2: AssetAmount = 1143157895;
 
 			assert_eq!(get_cr(), Permill::from_parts(200_000)); // ~20%
 			assert_eq!(get_collateral(), INIT_COLLATERAL + COLLATERAL_TOPUP + COLLATERAL_TOPUP_2);
@@ -398,15 +393,12 @@ fn basic_loan_aggregation() {
 	const EXTRA_PRINCIPAL_2: AssetAmount = PRINCIPAL / 2;
 	const EXTRA_COLLATERAL: AssetAmount = INIT_COLLATERAL / 2;
 
-	let origination_fee =
-		CONFIG.derive_origination_fee(Permill::from_percent(50)) * PRINCIPAL * SWAP_RATE;
+	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
 
-	let origination_fee_2 =
-		CONFIG.derive_origination_fee(Permill::from_percent(50)) * EXTRA_PRINCIPAL_1 * SWAP_RATE;
+	let origination_fee_2 = CONFIG.origination_fee * EXTRA_PRINCIPAL_1 * SWAP_RATE;
 
 	// NOTE: expecting utilisation to go up as we keep borrowing more
-	let origination_fee_3 =
-		CONFIG.derive_origination_fee(Permill::from_percent(75)) * EXTRA_PRINCIPAL_2 * SWAP_RATE;
+	let origination_fee_3 = CONFIG.origination_fee * EXTRA_PRINCIPAL_2 * SWAP_RATE;
 
 	new_test_ext().execute_with(|| {
 		setup_chp_pool_with_funds();
@@ -574,12 +566,14 @@ fn interest_special_cases() {
 
 	let interest_charge = {
 		let interest_charge_in_loan_asset =
-			INITIAL_INTEREST_PER_BLOCK.int_mul(INTEREST_PAYMENT_INTERVAL) * PRINCIPAL;
+			dbg!(CONFIG.derive_interest_rate_per_charge_interval(Permill::from_percent(50))) *
+				PRINCIPAL;
 		interest_charge_in_loan_asset * SWAP_RATE
 	};
 
-	let origination_fee =
-		CONFIG.derive_origination_fee(Permill::from_percent(50)) * PRINCIPAL * SWAP_RATE;
+	dbg!(interest_charge);
+
+	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -757,8 +751,7 @@ fn adding_and_removing_collateral() {
 
 	const INIT_COLLATERAL_AMOUNT_2: AssetAmount = 1000;
 
-	let origination_fee =
-		CONFIG.derive_origination_fee(Permill::from_percent(50)) * PRINCIPAL * SWAP_RATE;
+	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
 
 	new_test_ext().execute_with(|| {
 		setup_chp_pool_with_funds();
@@ -834,8 +827,7 @@ fn basic_liquidation() {
 	const SWAP_RATE_2: u128 = 24;
 
 	const INIT_COLLATERAL: AssetAmount = (PRINCIPAL + PRINCIPAL / 5) * SWAP_RATE; // 20%
-	let origination_fee =
-		CONFIG.derive_origination_fee(Permill::from_percent(50)) * PRINCIPAL * SWAP_RATE;
+	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
 
 	// How much collateral will be swapped during liquidation:
 	const EXECUTED_COLLATERAL: AssetAmount = INIT_COLLATERAL / 4;
@@ -1088,8 +1080,7 @@ fn making_loan_repayment() {
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
 	const INIT_COLLATERAL: AssetAmount = (PRINCIPAL + PRINCIPAL / 5) * SWAP_RATE; // 20%
 
-	let origination_fee =
-		CONFIG.derive_origination_fee(Permill::from_percent(50)) * PRINCIPAL * SWAP_RATE;
+	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
 
 	let collateral = BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]);
 
@@ -1221,7 +1212,7 @@ fn safe_mode_for_creating_chp_loan() {
 			..PalletSafeMode::CODE_GREEN
 		});
 
-		MockBalance::credit_account(&LP, COLLATERAL_ASSET, INIT_COLLATERAL);
+		MockBalance::credit_account(&LP, COLLATERAL_ASSET, 2 * INIT_COLLATERAL);
 		assert_noop!(
 			LendingPools::new_loan(
 				LP,

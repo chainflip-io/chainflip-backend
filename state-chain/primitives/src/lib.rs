@@ -238,6 +238,11 @@ pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
 
 pub const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
 
+/// This considers a year to have 365.25 days on average
+pub const SECONDS_IN_YEAR: u32 = 60 * 60 * 24 * 365 + 60 * 60 * 24 / 4;
+
+pub const BLOCKS_IN_YEAR: u32 = SECONDS_IN_YEAR / SECONDS_PER_BLOCK as u32;
+
 pub const BASIS_POINTS_PER_MILLION: u32 = 100;
 
 pub const MAX_BASIS_POINTS: u16 = 10_000;

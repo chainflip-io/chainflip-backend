@@ -137,16 +137,16 @@ impl<T: Config> LoanAccount<T> {
 				INTEREST_PAYMENT_INTERVAL.into() ==
 				0u32.into()
 			{
-				let interest_rate = {
+				let interest_rate_per_payment_interval = {
 					let utilisation = GeneralLendingPools::<T>::get(loan.asset)
 						.map(|pool| pool.get_utilisation())
 						.unwrap_or_default();
 
-					LendingConfig::<T>::get().derive_interest_rate(utilisation)
+					LendingConfig::<T>::get().derive_interest_rate_per_charge_interval(utilisation)
 				};
 
 				let mut remaining_interest_amount_in_loan_asset =
-					(interest_rate.int_mul(INTEREST_PAYMENT_INTERVAL)) * loan.owed_principal;
+					interest_rate_per_payment_interval * loan.owed_principal;
 
 				// Interest is charged from the primary collateral asset first. If it fails to cover
 				// the interest, we use the remaining assets:
@@ -701,18 +701,18 @@ impl<T: Config> LendingApi for Pallet<T> {
 				fail!(Error::<T>::InsufficientCollateral);
 			}
 
-			let utilisation = GeneralLendingPools::<T>::try_mutate(asset, |pool| {
+			GeneralLendingPools::<T>::try_mutate(asset, |pool| {
 				let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
 				pool.borrow_funds(amount_to_borrow)?;
 
-				Ok::<_, DispatchError>(pool.get_utilisation())
+				Ok::<_, DispatchError>(())
 			})?;
 
 			let origination_fee_amount = equivalent_amount::<T>(
 				asset,
 				primary_collateral_asset,
-				chp_config.derive_origination_fee(utilisation) * amount_to_borrow,
+				chp_config.origination_fee * amount_to_borrow,
 			)?;
 
 			T::Balance::try_debit_account(
@@ -776,18 +776,18 @@ impl<T: Config> LendingApi for Pallet<T> {
 			let primary_collateral_asset = loan_account.primary_collateral_asset;
 			let loan_asset = loan.asset;
 
-			let utilisation = GeneralLendingPools::<T>::try_mutate(loan_asset, |pool| {
+			GeneralLendingPools::<T>::try_mutate(loan_asset, |pool| {
 				let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
 				pool.borrow_funds(extra_amount_to_borrow)?;
 
-				Ok::<_, DispatchError>(pool.get_utilisation())
+				Ok::<_, DispatchError>(())
 			})?;
 
 			let origination_fee_amount = equivalent_amount::<T>(
 				loan_asset,
 				primary_collateral_asset,
-				chp_config.derive_origination_fee(utilisation) * extra_amount_to_borrow,
+				chp_config.origination_fee * extra_amount_to_borrow,
 			)?;
 
 			T::Balance::try_debit_account(

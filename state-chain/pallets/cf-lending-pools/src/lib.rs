@@ -132,10 +132,7 @@ pub enum LoanUsage {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct LendingConfiguration {
-	/// Origination fee is computed as origination_fee_base + utilisation *
-	/// origination_fee_utilisation_factor
-	pub origination_fee_base: Permill,
-	pub origination_fee_utilisation_factor: Permill,
+	pub origination_fee: Permill,
 	/// Interest is computed as interest_base + utilisation *
 	/// interest_utilisation_factor
 	pub interest_base: Perbill,
@@ -167,14 +164,16 @@ pub struct LendingConfiguration {
 }
 
 impl LendingConfiguration {
-	fn derive_origination_fee(&self, utilisation: Permill) -> Permill {
-		self.origination_fee_base + utilisation * self.origination_fee_utilisation_factor
-	}
-
-	fn derive_interest_rate(&self, utilisation: Permill) -> Perbill {
-		self.interest_base +
+	fn derive_interest_rate_per_charge_interval(&self, utilisation: Permill) -> Perbill {
+		use cf_primitives::BLOCKS_IN_YEAR;
+		// Interest per year
+		let interest_rate = self.interest_base +
 			Perbill::from_parts(utilisation.deconstruct() * 1000) *
-				self.interest_utilisation_factor
+				self.interest_utilisation_factor;
+
+		Perbill::from_parts(
+			interest_rate.deconstruct() / (BLOCKS_IN_YEAR / INTEREST_PAYMENT_INTERVAL),
+		)
 	}
 }
 
@@ -288,6 +287,29 @@ mod utils {
 	}
 }
 
+pub struct LendingConfigDefault {}
+
+impl Get<LendingConfiguration> for LendingConfigDefault {
+	fn get() -> LendingConfiguration {
+		LendingConfiguration {
+			origination_fee: Permill::from_parts(100), // 1 bps
+			// origination_fee_utilisation_factor: Permill,
+			interest_base: Perbill::from_percent(2), // 2% per year
+			interest_utilisation_factor: Perbill::from_percent(10), // 2% per year
+
+			overcollateralisation_target: Permill::from_percent(20), // 120% CR
+			overcollateralisation_topup_threshold: Permill::from_percent(15), // 115% CR
+			overcollateralisation_soft_threshold: Permill::from_percent(10), // 110% CR
+			overcollateralisation_soft_liquidation_abort_threshold: Permill::from_percent(13), // 113% CR
+			overcollateralisation_hard_threshold: Permill::from_percent(5), // 105% CR
+			overcollateralisation_hard_liquidation_abort_threshold: Permill::from_percent(8), // 108% CR
+			// don't swap more often than every 10 blocks
+			fee_swap_interval_blocks: 10,
+			fee_swap_threshold_usd: 20_000_000, // don't swap fewer than 20 USD
+		}
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 
@@ -373,7 +395,8 @@ pub mod pallet {
 
 	/// Stores the configuration for lending (updatable by governance).
 	#[pallet::storage]
-	pub type LendingConfig<T: Config> = StorageValue<_, LendingConfiguration, ValueQuery>;
+	pub type LendingConfig<T: Config> =
+		StorageValue<_, LendingConfiguration, ValueQuery, LendingConfigDefault>;
 
 	/// Stores loan accounts for borrowers and their loans.
 	#[pallet::storage]
