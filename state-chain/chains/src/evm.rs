@@ -101,12 +101,7 @@ impl ChainCrypto for EvmCrypto {
 		let option_public =
 			norm_signature.recover_prehashed(Keccak256::hash(payload).as_fixed_bytes());
 
-		// TODO: Do we need a check that recovered public key, recovered_adddr and/or
-		// signer is not zeros like we do in Solidity?
-		// option_public
-		// 	.and_then(to_evm_address_from_compressed_pubkey)
-		// 	.map_or(false, |recovered_addr| recovered_addr == *signer)
-		option_public.and_then(to_evm_address_from_compressed_pubkey) == Some(*signer)	
+		option_public.and_then(to_evm_address_from_compressed_pubkey) == Some(*signer)
 	}
 
 	fn verify_threshold_signature(
@@ -796,6 +791,58 @@ mod verification_tests {
 			);
 
 		assert!(success);
+	}
+
+	#[test]
+	fn test_signature_malleability() {
+		// Original test data
+		let signer: [u8; 20] = hex_literal::hex!("f39fd6e51aad88f6f4ce6ab8827279cfffb92266").into();
+		let payload = hex_literal::hex!(
+			"19457468657265756d205369676e6564204d6573736167653a0a33324578616d706c652060706572736f6e616c5f7369676e60206d6573736167652e"
+		);
+		let original_signature: [u8; 65] = hex_literal::hex!(
+			"c0f877901cd322c16c9f2ebe7dd67acd64da57b582bfb196cea1e30be246d38266be768ce58923128e8230a17f73ca7a1fa4b82a7b2f7661f6ce054613feecfe1b"
+		)
+		.into();
+
+		// Verify original signature
+		let success = EvmCrypto::verify_signature(&signer.into(), &payload, &original_signature.into());
+		assert!(success, "Original signature should be valid");
+
+		// Construct malleable signature
+		let mut malleable_signature = original_signature;
+		let s_bytes: [u8; 32] = original_signature[32..64].try_into().unwrap();
+
+		// Curve order n for secp256k1 as a 32-byte array
+		let n: [u8; 32] = hex_literal::hex!(
+			"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141"
+		);
+
+		// Compute n - s using byte subtraction with borrow
+		let mut malleable_s = [0u8; 32];
+		let mut borrow = 0u8;
+		for i in (0..32).rev() {
+			let n_byte = n[i] as u16;
+			let s_byte = s_bytes[i] as u16;
+			let diff = n_byte.wrapping_sub(s_byte).wrapping_sub(borrow.into());
+			malleable_s[i] = (diff & 0xFF) as u8;
+			borrow = if diff < 0x100 { 0 } else { 1 };
+		}
+
+		// Update s in the signature
+		malleable_signature[32..64].copy_from_slice(&malleable_s);
+		// Toggle v (assuming v is 27 or 28 in Ethereum format)
+		malleable_signature[64] = if original_signature[64] == 27 { 28 } else { 27 };
+
+		// Assert that original and new signature are different
+		assert_ne!(original_signature, malleable_signature, "Signatures should differ");
+		// Verify malleable signature
+		let malleable_success =
+			EvmCrypto::verify_signature(&signer.into(), &payload, &malleable_signature.into());
+		assert!(
+			!malleable_success,
+			"Malleable signature should be invalid if normalization is enforced"
+		);
 	}
 
 	#[test]

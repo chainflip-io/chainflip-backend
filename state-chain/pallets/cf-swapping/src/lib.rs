@@ -42,7 +42,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{Get, Saturating},
-		DispatchError, Permill, TransactionOutcome,
+		AccountId32, DispatchError, Permill, TransactionOutcome,
 	},
 	storage::with_transaction_unchecked,
 	traits::{Defensive, HandleLifetime},
@@ -837,6 +837,7 @@ pub mod pallet {
 		},
 		UserSignedTransactionSubmitted {
 			broker_id: T::AccountId,
+			signer_account_id: AccountId32,
 			payload: Vec<u8>,
 			user_data: UserData,
 			valid: bool,
@@ -1472,25 +1473,34 @@ pub mod pallet {
 			// TODO: This might be the pure encoded SC Call or we might want to
 			// follow something like EIP-712. Use an enum?
 			// TODO: We should also add some kind of nonce to make sure messages can't be
-  			// replayed. Will we need to store that in the SC in some way too.
+			// replayed. Will we need to store that in the SC in some way too.
 			payload: Vec<u8>,
 			user_data: UserData,
 		) -> DispatchResult {
-			use cf_chains::{evm::EvmCrypto, sol::SolanaCrypto, ChainCrypto};
+			use cf_chains::{
+				evm::{EvmCrypto, ToAccountId32},
+				sol::SolanaCrypto,
+				ChainCrypto,
+			};
 
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			let valid = match user_data {
-				UserData::Solana { signature, signer } =>
+			let (valid, signer_account_id) = match user_data {
+				UserData::Solana { signature, signer } => (
 					SolanaCrypto::verify_signature(&signer, payload.as_slice(), &signature),
-				UserData::Ethereum { signature, signer } =>
+					AccountId32::new(signer.into()),
+				),
+				UserData::Ethereum { signature, signer } => (
 					EvmCrypto::verify_signature(&signer, payload.as_slice(), &signature.into()),
+					signer.into_account_id_32(),
+				),
 			};
 
 			// TODO: Decode the payload and execute the intended action on behalf
 			// of the user, similar to the delegation Sc Api.
 			Self::deposit_event(Event::<T>::UserSignedTransactionSubmitted {
 				broker_id,
+				signer_account_id,
 				payload,
 				user_data,
 				valid,
