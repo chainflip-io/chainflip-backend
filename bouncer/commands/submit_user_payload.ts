@@ -12,36 +12,39 @@ import {
   runWithTimeoutAndExit,
 } from 'shared/utils';
 import { u8aToHex } from '@polkadot/util';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
 import { Struct, u32, Enum } from 'scale-ts';
+import { globalLogger } from 'shared/utils/logger';
 
 // TODO: Update these with the rpc encoding once the logic is implemented.
 export const UserActionsCodec = Enum({
   Lending: Enum({
-    Borrow: Struct({}), // Nested Borrow variant
+    Borrow: Struct({}),
   }),
 });
 
 export const ReplayProtectionCoded = Struct({
   nonce: u32,
-  chainId: u32,
   expiryBlock: u32,
 });
 
 export function encodePayloadToSign(
   payload: Uint8Array,
   nonce: number,
-  chainId: number,
   expiryBlock: number,
+  genesisHash?: Uint8Array,
 ) {
   const replayProtection = ReplayProtectionCoded.enc({
     nonce,
-    chainId,
     expiryBlock,
   });
-  return new Uint8Array([...payload, ...replayProtection]);
+  // For now hardcoded in the SC to the Persa genesis hash
+  const hash =
+    genesisHash ??
+    Buffer.from('7a5d4db858ada1d20ed6ded4933c33313fc9673e5fffab560d0ca714782f2080', 'hex');
+  return new Uint8Array([...payload, ...hash, ...replayProtection]);
 }
 async function main() {
   await using chainflip = await getChainflipApi();
@@ -55,10 +58,9 @@ async function main() {
   });
   // Example values
   const nonce = 1;
-  const chainId = 2;
   const expiryBlock = 10000;
   const hexAction = u8aToHex(action);
-  const payload = encodePayloadToSign(action, nonce, chainId, expiryBlock);
+  const payload = encodePayloadToSign(action, nonce, expiryBlock);
   const hexPayload = u8aToHex(payload);
 
   const signature = sign(payload, whaleKeypair.secretKey.slice(0, 32));
@@ -76,7 +78,6 @@ async function main() {
         hexAction,
         {
           nonce,
-          chainId,
           expiryBlock,
         },
         {
@@ -89,9 +90,22 @@ async function main() {
       .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
   });
 
-  console.log('Submitted user signed payload in SVM');
+  await observeEvent(globalLogger, `swapping:UserSignedTransactionSubmitted`, {
+    test: (event) => {
+      const valid = event.data.valid === true && event.data.expired === false;
+      const matchDecodedAction = event.data.decodedAction.Lending === 'Borrow';
+      const matchSignedPayload = event.data.signedPayload === hexPayload;
+      const matchUserSignatureData =
+        event.data.userSignatureData?.Solana &&
+        event.data.userSignatureData.Solana.signature.toLowerCase() ===
+          hexSignature.toLowerCase() &&
+        event.data.userSignatureData.Solana.signer.toLowerCase() === hexSigner.toLowerCase();
+      return valid && matchDecodedAction && matchSignedPayload && matchUserSignatureData;
+    },
+    historicalCheckBlocks: 10,
+  }).event;
 
-  // TODO: Add event check
+  console.log('Submitted user signed payload in SVM');
 
   console.log('Trying with EVM');
 
@@ -101,11 +115,11 @@ async function main() {
   const hexPrefixedMessage = '0x' + prefixedMessage.toString('hex');
   console.log('Prefixed Message (hex):', hexPrefixedMessage);
 
-  const { privkey: whalePrivKey, pubkey } = getEvmWhaleKeypair('Ethereum');
+  const { privkey: whalePrivKey, pubkey: evmSigner } = getEvmWhaleKeypair('Ethereum');
   const ethWallet = new Wallet(whalePrivKey).connect(
     ethers.getDefaultProvider(getEvmEndpoint('Ethereum')),
   );
-  if (pubkey.toLowerCase() !== ethWallet.address.toLowerCase()) {
+  if (evmSigner.toLowerCase() !== ethWallet.address.toLowerCase()) {
     throw new Error('Address does not match expected pubkey');
   }
 
@@ -121,20 +135,32 @@ async function main() {
         hexAction,
         {
           nonce,
-          chainId,
           expiryBlock,
         },
         {
           Ethereum: {
             signature: evmSignature,
-            signer: pubkey,
+            signer: evmSigner,
           },
         },
       )
       .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
   });
 
-  // TODO: Add event check
+  await observeEvent(globalLogger, `swapping:UserSignedTransactionSubmitted`, {
+    test: (event) => {
+      const valid = event.data.valid === true && event.data.expired === false;
+      const matchDecodedAction = event.data.decodedAction.Lending === 'Borrow';
+      const matchSignedPayload = event.data.signedPayload === hexPayload;
+      const matchUserSignatureData =
+        event.data.userSignatureData?.Ethereum &&
+        event.data.userSignatureData.Ethereum.signature.toLowerCase() ===
+          evmSignature.toLowerCase() &&
+        event.data.userSignatureData.Ethereum.signer.toLowerCase() === evmSigner.toLowerCase();
+      return valid && matchDecodedAction && matchSignedPayload && matchUserSignatureData;
+    },
+    historicalCheckBlocks: 10,
+  }).event;
 }
 
 await runWithTimeoutAndExit(main(), 20);

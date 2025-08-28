@@ -34,7 +34,7 @@ use frame_support::sp_runtime::{
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::ConstBool;
+pub use sp_core::{ConstBool, ecdsa::Signature};
 use sp_std::{convert::TryFrom, str, vec};
 
 use crate::DepositDetailsToTransactionInId;
@@ -69,7 +69,7 @@ impl ChainCrypto for EvmCrypto {
 
 	type AggKey = evm::AggKey;
 	type Signer = Address;
-	type Signature = sp_core::ecdsa::Signature;
+	type Signature = Signature;
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
 	type TransactionInId = H256;
@@ -813,7 +813,7 @@ mod verification_tests {
 		let payload = hex_literal::hex!(
 			"19457468657265756d205369676e6564204d6573736167653a0a33324578616d706c652060706572736f6e616c5f7369676e60206d6573736167652e"
 		);
-		let original_signature: [u8; 65] = hex_literal::hex!(
+		let original_signature: Signature = hex_literal::hex!(
 			"c0f877901cd322c16c9f2ebe7dd67acd64da57b582bfb196cea1e30be246d38266be768ce58923128e8230a17f73ca7a1fa4b82a7b2f7661f6ce054613feecfe1b"
 		)
 		.into();
