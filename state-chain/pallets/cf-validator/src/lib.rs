@@ -27,8 +27,6 @@ pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
 
-use frame_support::sp_runtime::traits::CheckedDiv;
-
 mod auction_resolver;
 mod benchmarking;
 mod delegation;
@@ -141,14 +139,6 @@ type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	MissedAuthorshipSlot,
-}
-
-#[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
-#[scale_info(skip_type_params(T))]
-pub struct DelegationSnapshot<T: Config> {
-	pub avg_bid: T::Amount,
-	pub delegators: BTreeMap<T::AccountId, T::Amount>,
-	pub validators: BTreeMap<T::AccountId, T::Amount>,
 }
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding_enabled, stop_bidding_enabled);
@@ -370,23 +360,21 @@ pub mod pallet {
 	pub type DelegationChoice<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
 
-	///  Holds the list of all delegators that have initiated undelegation and will successfully
-	/// undelegate at the end of the current epoch
-	#[pallet::storage]
-	pub type OutgoingDelegators<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
-
 	#[pallet::storage]
 	pub type MaxDelegationBid<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
 
-	/// Collects all delegation of the current epoch.
+	/// Stores delegation snapshots per epoch and operator.
 	#[pallet::storage]
-	pub type CurrentEpochDelegations<T: Config> =
-		StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
-
-	/// The set of delegators in the next epoch.
-	#[pallet::storage]
-	pub type NextDelegators<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
+	pub type DelegationSnapshots<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		EpochIndex,
+		Identity,
+		T::AccountId,
+		DelegationSnapshot<T>,
+		OptionQuery,
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -1157,10 +1145,6 @@ pub mod pallet {
 				}
 			});
 
-			OutgoingDelegators::<T>::mutate(|outgoing_delegators| {
-				outgoing_delegators.remove(&delegator)
-			});
-
 			Self::deposit_event(Event::Delegated { delegator, operator });
 
 			Ok(())
@@ -1173,8 +1157,6 @@ pub mod pallet {
 
 			let operator = DelegationChoice::<T>::take(&delegator)
 				.ok_or(Error::<T>::AccountIsNotDelegating)?;
-
-			OutgoingDelegators::<T>::append(&delegator);
 
 			Self::deposit_event(Event::UnDelegated { delegator, operator });
 
@@ -1368,11 +1350,6 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
-		for delegator in OutgoingDelegators::<T>::take() {
-			T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
-			Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch: old_epoch });
-		}
-
 		Self::initialise_new_epoch(new_epoch, &new_authorities, bond);
 
 		Self::deposit_event(Event::NewEpoch(new_epoch));
@@ -1395,6 +1372,9 @@ impl<T: Config> Pallet<T> {
 		}
 
 		HistoricalBonds::<T>::remove(epoch);
+
+		// Clean up delegation snapshots for the expired epoch
+		let _ = DelegationSnapshots::<T>::clear_prefix(epoch, u32::MAX, None);
 	}
 
 	fn expire_epochs_up_to(latest_epoch_to_expire: EpochIndex, remaining_weight: Weight) -> Weight {
@@ -1446,18 +1426,27 @@ impl<T: Config> Pallet<T> {
 			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 		});
 
-		let delegators = NextDelegators::<T>::take();
+		// Bond delegators based on the snapshots
+		let outgoing_delegators = DelegationSnapshots::<T>::iter_prefix(new_epoch - 1)
+			.flat_map(|(_, snapshot)| snapshot.delegators.keys().cloned().collect::<Vec<_>>())
+			.collect::<BTreeSet<_>>();
+		let new_delegator_bids = DelegationSnapshots::<T>::iter_prefix(new_epoch)
+			.flat_map(|(_, snapshot)| snapshot.delegators)
+			.collect::<BTreeMap<_, _>>();
 
-		for delegator in &delegators {
-			T::Bonder::update_bond(
-				&delegator.clone().into(),
-				MaxDelegationBid::<T>::get(delegator)
-					.map(|max_bid| max_bid.min(T::FundingInfo::total_balance_of(delegator)))
-					.unwrap_or(T::FundingInfo::total_balance_of(delegator)),
-			);
+		for outgoing_delegator in outgoing_delegators {
+			if !new_delegator_bids.contains_key(&outgoing_delegator) {
+				T::Bonder::update_bond(&outgoing_delegator.clone().into(), T::Amount::from(0_u128));
+				Self::deposit_event(Event::UnDelegationFinalized {
+					delegator: outgoing_delegator.clone(),
+					epoch: new_epoch,
+				});
+			}
 		}
 
-		CurrentEpochDelegations::<T>::set(delegators);
+		for (delegator, bid) in new_delegator_bids {
+			T::Bonder::update_bond(&delegator.clone().into(), bid);
+		}
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 	}
@@ -1495,35 +1484,22 @@ impl<T: Config> Pallet<T> {
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 
-		let qualified_bidders = Self::get_qualified_bidders::<T::KeygenQualification>();
+		let (delegation_snapshots, independent_bids) =
+			Self::build_delegation_snapshots::<T::KeygenQualification>();
 
-		let delegation_snapshot = Self::build_delegation_snapshot(
-			qualified_bidders.clone().into_iter().map(|bid| bid.bidder_id.into()).collect(),
-		);
-
-		let get_avg_bid_for_validator_if_managed =
-			|validator_id: T::AccountId| -> Option<T::Amount> {
-				let operator_id = ManagedValidators::<T>::get(validator_id)?;
-				let snap = delegation_snapshot.get(&operator_id)?;
-				Some(snap.avg_bid)
-			};
+		let auction_bids = delegation_snapshots
+			.values()
+			.flat_map(|snapshot| snapshot.effective_validator_bids())
+			.chain(independent_bids)
+			.map(|(bidder_id, amount)| Bid { bidder_id, amount })
+			.collect::<Vec<_>>();
 
 		match SetSizeMaximisingAuctionResolver::try_new(
 			T::EpochInfo::current_authority_count(),
 			AuctionParameters::<T>::get(),
 		)
 		.and_then(|resolver| {
-			resolver.resolve_auction(
-				qualified_bidders
-					.into_iter()
-					.map(|bid| Bid {
-						bidder_id: bid.bidder_id.clone(),
-						amount: get_avg_bid_for_validator_if_managed(bid.bidder_id.into())
-							.unwrap_or(bid.amount),
-					})
-					.collect(),
-				AuctionBidCutoffPercentage::<T>::get(),
-			)
+			resolver.resolve_auction(auction_bids, AuctionBidCutoffPercentage::<T>::get())
 		}) {
 			Ok(auction_outcome) => {
 				Self::deposit_event(Event::AuctionCompleted(
@@ -1546,26 +1522,11 @@ impl<T: Config> Pallet<T> {
 					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
 				);
 
-				NextDelegators::<T>::put(
-					auction_outcome
-						.winners
-						.iter()
-						.filter_map(|winner| {
-							ManagedValidators::<T>::get(winner.clone().into()).and_then(
-								|operator| {
-									let snapshot = delegation_snapshot.get(&operator);
-									if snapshot.is_none() {
-										log::warn!(
-											"Expected delegation snapshot for operator {:?} - didn't found one.", operator
-										);
-									}
-									snapshot
-								},
-							)
-						})
-						.flat_map(|snapshot| snapshot.delegators.keys().cloned())
-						.collect::<BTreeSet<T::AccountId>>(),
-				);
+				// Register the delegation snapshots for the next epoch.
+				let next_epoch_index = CurrentEpoch::<T>::get() + 1;
+				for (operator, snapshot) in delegation_snapshots.iter() {
+					DelegationSnapshots::<T>::insert(next_epoch_index, operator, snapshot);
+				}
 
 				Self::try_start_keygen(RotationState::from_auction_outcome::<T>(auction_outcome));
 
@@ -1744,56 +1705,45 @@ impl<T: Config> Pallet<T> {
 		.collect()
 	}
 
-	pub fn build_delegation_snapshot(
-		qualified_bidder: Vec<T::AccountId>,
-	) -> BTreeMap<T::AccountId, DelegationSnapshot<T>> {
-		let mut snapshot: BTreeMap<T::AccountId, DelegationSnapshot<T>> = BTreeMap::new();
+	/// Builds the delegation snapshots for the next epoch.
+	///
+	/// Return a tuple of the delegation snapshots and the independent bidders (standalone
+	/// validators).
+	#[allow(clippy::type_complexity)]
+	pub fn build_delegation_snapshots<Q: QualifyNode<ValidatorIdOf<T>>>(
+	) -> (BTreeMap<T::AccountId, DelegationSnapshot<T>>, BTreeMap<ValidatorIdOf<T>, T::Amount>) {
+		let mut independent_bidders = BTreeMap::new();
+		let mut snapshots = BTreeMap::new();
 
-		for operator in OperatorSettingsLookup::<T>::iter_keys() {
-			let delegators =
-				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Delegator);
-
-			let validators: BTreeMap<T::AccountId, T::Amount> =
-				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator)
-					.into_iter()
-					.filter(|(account_id, _)| qualified_bidder.contains(account_id))
-					.collect();
-
-			let total_delegator_balance = delegators
-				.clone()
-				.into_iter()
-				.map(|(account_id, balance)| {
-					MaxDelegationBid::<T>::get(account_id)
-						.map(|max_bid| max_bid.min(balance))
-						.unwrap_or(balance)
-				})
-				.sum::<T::Amount>();
-
-			let total_validator_balance = validators.values().copied().sum::<T::Amount>();
-
-			let total_balance = total_delegator_balance.saturating_add(total_validator_balance);
-
-			match total_balance.checked_div(&T::Amount::from(validators.len() as u128)) {
-				Some(avg_bid) => {
-					snapshot.insert(
-						operator.clone(),
-						DelegationSnapshot { avg_bid, delegators, validators },
-					);
-				},
-				None => {
-					snapshot.insert(
-						operator.clone(),
-						DelegationSnapshot {
-							avg_bid: T::Amount::from(0_u128),
-							delegators,
-							validators,
-						},
-					);
-				},
+		for Bid { bidder_id, amount } in Self::get_qualified_bidders::<Q>() {
+			// `into_ref` is used to cast between AccountId and ValidatorId.
+			let bidder_ref = bidder_id.into_ref();
+			if let Some(operator) = ManagedValidators::<T>::get(bidder_ref) {
+				snapshots
+					.entry(operator.clone())
+					.or_insert_with(|| DelegationSnapshot::<T>::init(&operator))
+					.validators
+					.insert(bidder_id.clone(), amount);
+			} else {
+				let _ = independent_bidders.insert(bidder_id, amount);
 			}
 		}
 
-		snapshot
+		for (delegator, operator) in DelegationChoice::<T>::iter() {
+			if let Some(snapshot) = snapshots.get_mut(&operator) {
+				let delegator_balance = T::FundingInfo::balance(&delegator);
+				snapshot.delegators.insert(
+					delegator.clone(),
+					if let Some(max_bid) = MaxDelegationBid::<T>::get(delegator.clone()) {
+						core::cmp::min(max_bid, delegator_balance)
+					} else {
+						delegator_balance
+					},
+				);
+			}
+		}
+
+		(snapshots, independent_bidders)
 	}
 }
 

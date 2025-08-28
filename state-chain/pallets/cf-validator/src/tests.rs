@@ -523,14 +523,25 @@ fn historical_epochs() {
 #[test]
 fn expired_epoch_data_is_removed() {
 	new_test_ext().then_execute_with_checks(|| {
+		let delegator = 123u64;
+		let operator = 456u64;
+		let test_snapshot = DelegationSnapshot {
+			delegators: [(delegator, 50u128)].into_iter().collect(),
+			validators: [(ALICE, 150u128)].into_iter().collect(),
+			delegation_fee_bps: 250,
+		};
+
 		// Epoch 1
 		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
 		HistoricalAuthorities::<Test>::insert(1, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(1, 10);
+		DelegationSnapshots::<Test>::insert(1, operator, test_snapshot.clone());
+
 		// Epoch 2
 		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
 		HistoricalAuthorities::<Test>::insert(2, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(2, 30);
+		DelegationSnapshots::<Test>::insert(2, operator, test_snapshot.clone());
 		let authority_index = AuthorityIndex::<Test>::get(2, ALICE);
 
 		// Expire
@@ -540,16 +551,22 @@ fn expired_epoch_data_is_removed() {
 		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
 		HistoricalAuthorities::<Test>::insert(3, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(3, 20);
+		DelegationSnapshots::<Test>::insert(3, operator, test_snapshot.clone());
 
 		// Expect epoch 1's data to be deleted
 		assert!(AuthorityIndex::<Test>::try_get(1, ALICE).is_err());
 		assert!(HistoricalAuthorities::<Test>::try_get(1).is_err());
 		assert!(HistoricalBonds::<Test>::try_get(1).is_err());
+		assert!(DelegationSnapshots::<Test>::get(1, operator).is_none());
 
-		// Expect epoch 2's data to be exist
+		// Expect epoch 2's data to exist
 		assert_eq!(AuthorityIndex::<Test>::get(2, ALICE), authority_index);
 		assert_eq!(HistoricalAuthorities::<Test>::get(2), vec![ALICE]);
 		assert_eq!(HistoricalBonds::<Test>::get(2), 30);
+		assert!(DelegationSnapshots::<Test>::get(2, operator).is_some());
+
+		// Expect epoch 3's data to exist
+		assert!(DelegationSnapshots::<Test>::get(3, operator).is_some());
 	});
 }
 
@@ -1946,27 +1963,54 @@ mod delegation {
 				assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// After authority rotation starts, delegation snapshots should be stored
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				let snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+
+				assert!(!snapshot.validators.contains_key(&OPERATOR));
+				assert!(!snapshot.delegators.contains_key(&OPERATOR));
+
+				// Verify all delegators are in the snapshot
+				for &delegator in &DELEGATORS {
+					assert!(snapshot.delegators.contains_key(&delegator));
+					assert!(!snapshot.validators.contains_key(&delegator));
+				}
+
+				// Verify operator fee is correctly captured in snapshot
+				assert_eq!(snapshot.delegation_fee_bps, 200); // MIN_OPERATOR_FEE
 				MockKeyRotatorA::keygen_success();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// During key handover, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
 				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
 				MockKeyRotatorA::key_handover_success();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// During key activation, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
 				assert_rotation_phase_matches!(RotationPhase::<Test>::ActivatingKeys(..));
 				MockKeyRotatorA::keys_activated();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// During session rotation, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
 				assert_rotation_phase_matches!(RotationPhase::SessionRotating(..));
 			})
 			.then_execute_at_next_block(|_| {
-				assert!(NextDelegators::<Test>::get().is_empty());
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				let active_delegators = CurrentEpochDelegations::<Test>::get();
+				// After rotation is complete, check snapshots are stored for current epoch
+				let current_epoch = ValidatorPallet::epoch_index();
+				let snapshot = DelegationSnapshots::<Test>::get(current_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+				let active_delegators: BTreeSet<u64> =
+					snapshot.delegators.keys().cloned().collect();
 				assert_eq!(BTreeSet::from_iter(DELEGATORS), active_delegators);
 				for delegator in active_delegators {
 					if delegator % 2 == 0 {
@@ -2002,7 +2046,8 @@ mod delegation {
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {
 						assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(*delegator)));
-						assert!(OutgoingDelegators::<Test>::get().contains(delegator));
+						// Delegation choice should be removed after undelegation
+						assert!(DelegationChoice::<Test>::get(delegator).is_none());
 					}
 				}
 			})
@@ -2044,7 +2089,12 @@ mod delegation {
 			})
 			.then_execute_at_next_block(|_| {
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				assert!(CurrentEpochDelegations::<Test>::get().len() == 2);
+				// Only 2 delegators should remain (those that didn't undelegate)
+				let current_epoch = ValidatorPallet::epoch_index();
+				let snapshot = DelegationSnapshots::<Test>::get(current_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+				assert!(snapshot.delegators.len() == 2);
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {
 						assert_eq!(MockBonderFor::<Test>::get_bond(delegator), 0);
