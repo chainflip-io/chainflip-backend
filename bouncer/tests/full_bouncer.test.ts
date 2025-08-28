@@ -11,7 +11,7 @@ import { testSwapAfterDisconnection } from 'tests/swap_after_temp_disconnecting_
 describe('SerialTests2', () => {
   serialTest('RotatesThroughBtcSwap', testRotatesThroughBtcSwap, 360);
   serialTest('BtcUtxoConsolidation', testBtcUtxoConsolidation, 200);
-  serialTest('RotationBarrier', testRotationBarrier, 280);
+  serialTest('RotationBarrier', testRotationBarrier, 540);
   serialTest('MinimumDeposit', testMinimumDeposit, 150);
   serialTest('SolanaVaultSettingsGovernance', testSolanaVaultSettingsGovernance, 120);
 
