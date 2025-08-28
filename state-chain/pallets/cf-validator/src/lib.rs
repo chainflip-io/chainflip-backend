@@ -363,6 +363,11 @@ pub mod pallet {
 	pub type DelegationChoice<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
 
+	/// The max bid determines how much of the delegator's balance can be used
+	/// used by the operator when bidding for an authority slot.
+	///
+	/// `None` means no maximum bid, i.e. the entire account balance is used.
+	/// `Some` sets a specific maximum bid.
 	#[pallet::storage]
 	pub type MaxDelegationBid<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
@@ -1152,7 +1157,7 @@ pub mod pallet {
 		pub fn delegate(
 			origin: OriginFor<T>,
 			operator: T::AccountId,
-			max_bid: Option<T::Amount>,
+			increase: DelegationAmount<T::Amount>,
 		) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
@@ -1194,10 +1199,24 @@ pub mod pallet {
 				}
 			});
 
-			if max_bid != MaxDelegationBid::<T>::get(&delegator) {
-				MaxDelegationBid::<T>::set(&delegator, max_bid);
-				Self::deposit_event(Event::MaxBidUpdated { delegator: delegator.clone(), max_bid });
-			}
+			// Update the max delegation bid.
+			MaxDelegationBid::<T>::mutate(&delegator, |max_bid| {
+				let balance = T::FundingInfo::balance(&delegator);
+				match increase {
+					DelegationAmount::Max => {
+						max_bid.insert(balance);
+					},
+					DelegationAmount::Some(inc) => {
+						let new_bid =
+							core::cmp::min(max_bid.unwrap_or(balance).saturating_add(inc), balance);
+						max_bid.insert(new_bid);
+					},
+				}
+				Self::deposit_event(Event::MaxBidUpdated {
+					delegator: delegator.clone(),
+					max_bid: *max_bid,
+				});
+			});
 
 			Self::deposit_event(Event::Delegated { delegator, operator });
 
@@ -1206,13 +1225,21 @@ pub mod pallet {
 
 		#[pallet::call_index(19)]
 		#[pallet::weight(T::ValidatorWeightInfo::undelegate())]
-		pub fn undelegate(origin: OriginFor<T>, decrement: Option<T::Amount>) -> DispatchResult {
+		pub fn undelegate(
+			origin: OriginFor<T>,
+			decrease: DelegationAmount<T::Amount>,
+		) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
+
+			ensure!(
+				DelegationChoice::<T>::contains_key(&delegator),
+				Error::<T>::AccountIsNotDelegating
+			);
 
 			let unlink = MaxDelegationBid::<T>::mutate_exists(&delegator, |max_bid| {
 				use frame_support::sp_runtime::traits::Zero;
-				match (max_bid.clone(), decrement) {
-					(current, Some(decr)) => {
+				match (max_bid.clone(), decrease) {
+					(current, DelegationAmount::Some(decr)) => {
 						let new_max = current
 							.unwrap_or_else(|| T::FundingInfo::balance(&delegator))
 							.saturating_sub(decr);
@@ -1227,7 +1254,7 @@ pub mod pallet {
 						});
 						max_bid.is_none()
 					},
-					(current, None) => {
+					(current, DelegationAmount::Max) => {
 						if let Some(_) = current {
 							*max_bid = None;
 							Self::deposit_event(Event::MaxBidUpdated {
@@ -1242,34 +1269,10 @@ pub mod pallet {
 
 			if unlink {
 				let operator = DelegationChoice::<T>::take(&delegator)
-					.ok_or(Error::<T>::AccountIsNotDelegating)?;
+					.expect("DelegationChoice existence was checked above");
 
 				Self::deposit_event(Event::UnDelegated { delegator, operator });
 			}
-
-			Ok(())
-		}
-
-		/// Sets the maximum bid for a delegator.
-		///
-		/// The max bid determines how much of the delegator's balance can be used
-		/// used by the operator when bidding for an authority slot.
-		///
-		/// `None` means no maximum bid, i.e. the entire account balance is used.
-		/// `Some` sets a specific maximum bid.
-		#[pallet::call_index(20)]
-		#[pallet::weight(T::ValidatorWeightInfo::set_max_bid())]
-		pub fn set_max_bid(origin: OriginFor<T>, max_bid: Option<T::Amount>) -> DispatchResult {
-			let delegator = ensure_signed(origin)?;
-
-			ensure!(
-				DelegationChoice::<T>::contains_key(&delegator),
-				Error::<T>::AccountIsNotDelegating
-			);
-
-			MaxDelegationBid::<T>::set(&delegator, max_bid);
-
-			Self::deposit_event(Event::<T>::MaxBidUpdated { delegator, max_bid });
 
 			Ok(())
 		}

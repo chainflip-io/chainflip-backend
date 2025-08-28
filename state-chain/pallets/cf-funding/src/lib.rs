@@ -332,7 +332,9 @@ pub mod pallet {
 
 	pub type EthTransactionHash = [u8; 32];
 
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Ord, PartialOrd)]
+	#[derive(
+		Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Ord, PartialOrd,
+	)]
 	pub enum RedemptionAmount<T: Parameter> {
 		Max,
 		Exact(T),
@@ -376,11 +378,8 @@ pub mod pallet {
 
 		/// Calls that are dispatchable via ethereum contract
 		type EthereumSCApi: UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
-			+ Decode
-			+ Clone
-			+ Ord
-			+ PartialOrd
-			+ Debug
+			+ Member
+			+ Parameter
 			+ GetDispatchInfo;
 
 		/// Safe Mode access.
