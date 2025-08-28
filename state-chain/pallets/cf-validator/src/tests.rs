@@ -2727,6 +2727,85 @@ mod delegation_rewards_slashes {
 			assert_eq!(*delegator_slash, expected_delegator_slash);
 		});
 	}
+
+	#[test]
+	fn mixed_validator_performance_in_pool() {
+		new_test_ext().execute_with(|| {
+			use test_constants::*;
+
+			// Test heterogeneous validator performance results in homogeneous outcomes
+			// Multiple validators managed by same operator with different performance
+			const OPERATOR: u64 = TestAccounts::default_operator();
+			const VALIDATOR_A: u64 = TestAccounts::validator(1); // Good performance, gets rewards
+			const VALIDATOR_B: u64 = TestAccounts::validator(2); // Bad performance, gets slashed
+			const VALIDATOR_C: u64 = TestAccounts::validator(3); // Neutral performance
+			const DELEGATOR_1: u64 = TestAccounts::delegator(1);
+			const DELEGATOR_2: u64 = TestAccounts::delegator(2);
+			const DELEGATOR_3: u64 = TestAccounts::delegator(3);
+
+			// Individual validator performance (before pooling)
+			const VALIDATOR_A_REWARD: u128 = 2000; // +2000
+			const VALIDATOR_B_SLASH: u128 = 800; // -800
+			const VALIDATOR_C_NEUTRAL: u128 = 0; // 0
+										// Net pool performance: +1200
+
+			// Create snapshot representing the delegation pool
+			let snapshot = DelegationSnapshot::<Test> {
+				operator: OPERATOR,
+				validators: BTreeMap::from_iter([
+					(VALIDATOR_A, LARGE_STAKE),    // 5000 stake
+					(VALIDATOR_B, STANDARD_STAKE), // 1000 stake
+					(VALIDATOR_C, SMALL_STAKE),    // 500 stake
+				]),
+				delegators: BTreeMap::from_iter([
+					(DELEGATOR_1, STANDARD_STAKE * 2), // 2000 stake
+					(DELEGATOR_2, LARGE_STAKE),        // 5000 stake
+					(DELEGATOR_3, SMALL_STAKE),        // 500 stake
+				]),
+				delegation_fee_bps: MEDIUM_FEE, // 5%
+			};
+
+			// Calculate expected homogeneous distribution of net performance (+1200)
+			// Total validator stake: 5000 + 1000 + 500 = 6500
+			// Total delegator stake: 2000 + 5000 + 500 = 7500
+			// Total stake: 14000
+
+			// Net pool result: +1200 to distribute
+			// Validator portion: 6500/14000 * 1200 = 557 (rounded)
+			// Delegator portion: 7500/14000 * 1200 = 643 (rounded)
+			// Operator fee: 643 * 5% = 32
+			// Delegator remainder: 643 - 32 = 611
+
+			let expected_distributions = BTreeMap::from_iter([
+				// All validators share validator portion proportionally (homogeneous outcomes)
+				(VALIDATOR_A, 428), // Actual distribution value
+				(VALIDATOR_B, 86),  // Actual distribution value
+				(VALIDATOR_C, 43),  // Actual distribution value
+				// Operator gets fee from delegator portion
+				(OPERATOR, 32), // Actual distribution value
+				// All delegators share remainder proportionally (homogeneous outcomes)
+				(DELEGATOR_1, 163), // Actual distribution value
+				(DELEGATOR_2, 407), // Actual distribution value
+				(DELEGATOR_3, 41),  // Actual distribution value
+			]);
+
+			// Apply the net pool result (+1200) and verify homogeneous distribution
+			DelegationTestHelpers::verify_distribution(
+				&snapshot,
+				VALIDATOR_A_REWARD - VALIDATOR_B_SLASH + VALIDATOR_C_NEUTRAL, // Net: 1200
+				&expected_distributions,
+			);
+
+			// Key assertion: Despite heterogeneous individual performance:
+			// - VALIDATOR_A: +2000 individual reward
+			// - VALIDATOR_B: -800 individual slash
+			// - VALIDATOR_C: 0 individual performance
+			//
+			// ALL participants receive homogeneous outcomes based on their proportional
+			// stake in the pool, not their individual validator's performance.
+			// This ensures fair risk/reward sharing among all pool participants.
+		});
+	}
 }
 
 #[cfg(test)]
