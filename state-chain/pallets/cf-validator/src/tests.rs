@@ -2151,6 +2151,26 @@ mod delegation {
 			assert_ok!(ValidatorPallet::set_max_bid(OriginTrait::signed(BOB), Some(100)));
 		});
 	}
+
+	#[test]
+	fn set_max_bid_only_delegators() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+
+			// Not delegating -> should fail.
+			assert_noop!(
+				ValidatorPallet::set_max_bid(OriginTrait::signed(DELEGATOR), Some(100)),
+				Error::<Test>::AccountIsNotDelegating
+			);
+
+			// Simulate delegation to an operator (BOB).
+			DelegationChoice::<Test>::insert(DELEGATOR, BOB);
+
+			// Now it should succeed.
+			assert_ok!(ValidatorPallet::set_max_bid(OriginTrait::signed(DELEGATOR), Some(100)));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(100));
+		});
+	}
 }
 
 #[cfg(test)]
