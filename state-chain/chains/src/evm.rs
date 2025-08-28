@@ -34,7 +34,7 @@ use frame_support::sp_runtime::{
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-pub use sp_core::{ConstBool, ecdsa::Signature};
+pub use sp_core::{ecdsa::Signature, ConstBool};
 use sp_std::{convert::TryFrom, str, vec};
 
 use crate::DepositDetailsToTransactionInId;

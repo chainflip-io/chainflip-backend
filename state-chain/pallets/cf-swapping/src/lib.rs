@@ -21,8 +21,8 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
-	sol::{SolAddress, SolSignature},
 	evm::Signature as EthereumSignature,
+	sol::{SolAddress, SolSignature},
 	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersCheckedInternal,
 	ChannelRefundParametersUncheckedEncoded, SwapOrigin,
 };
@@ -332,7 +332,7 @@ struct BatchExecutionOutcomes<T: Config> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct ReplayProtection {
-	nonce: u32,    //TODO: Is this correct?
+	nonce: u32, //TODO: Is this correct?
 	expiry_block: BlockNumber,
 }
 
@@ -1508,7 +1508,8 @@ pub mod pallet {
 			// TODO: Get Statechain's genesis hash from runtime api instead.
 			let genesis_hash = cf_runtime_utilities::genesis_hashes::PERSEVERANCE;
 
-			let signed_payload = [payload.clone(), genesis_hash.to_vec(), replay_protection.encode()].concat();
+			let signed_payload =
+				[payload.clone(), genesis_hash.to_vec(), replay_protection.encode()].concat();
 
 			let (valid, signer_account_id, decoded_action) = match user_signature_data {
 				UserSignatureData::Solana { signature, signer } => (
@@ -1516,7 +1517,8 @@ pub mod pallet {
 					AccountId32::new(signer.into()),
 					UserActionsApi::decode(&mut &payload[..]).ok(),
 				),
-				// Add prefix here from eth personal_sign. TBD if this is how we want to approach it.
+				// Add prefix here from eth personal_sign. TBD if this is how we want to approach
+				// it.
 				UserSignatureData::Ethereum { signature, signer } => {
 					let prefix = scale_info::prelude::format!(
 						"\x19Ethereum Signed Message:\n{}",
@@ -1525,11 +1527,7 @@ pub mod pallet {
 					let prefix_bytes = prefix.as_bytes();
 					let prefixed_signed_payload = [prefix_bytes, &signed_payload].concat();
 					(
-						EvmCrypto::verify_signature(
-							&signer,
-							&prefixed_signed_payload,
-							&signature,
-						),
+						EvmCrypto::verify_signature(&signer, &prefixed_signed_payload, &signature),
 						signer.into_account_id_32(),
 						UserActionsApi::decode(&mut &payload[..]).ok(),
 					)

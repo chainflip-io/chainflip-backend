@@ -189,15 +189,7 @@ impl ChainCrypto for SolanaCrypto {
 		payload: &Self::Payload,
 		signature: &Self::ThresholdSignature,
 	) -> bool {
-		use sp_core::ed25519::{Public, Signature};
-		use sp_io::crypto::ed25519_verify;
-
-		// TODO: To use verify_signature instead?
-		ed25519_verify(
-			&Signature::from_raw(signature.0),
-			payload.serialize().as_slice(),
-			&Public::from_raw(agg_key.0),
-		)
+		Self::verify_signature(agg_key, payload.serialize().as_slice(), signature)
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
