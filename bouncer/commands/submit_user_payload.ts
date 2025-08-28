@@ -15,20 +15,32 @@ import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
-import { Struct, u32 } from 'scale-ts';
+import { Struct, u32, Enum } from 'scale-ts';
 
-// TODO: Update this with the rpc encoding once the logic is implemented.
+// TODO: Update these with the rpc encoding once the logic is implemented.
+export const UserActionsCodec = Enum({
+  Lending: Enum({
+    Borrow: Struct({}), // Nested Borrow variant
+  }),
+});
+
 export const ReplayProtectionCoded = Struct({
   nonce: u32,
   chainId: u32,
+  expiryBlock: u32,
 });
 
-export function encodePayloadToSign(payload: Uint8Array) {
+export function encodePayloadToSign(
+  payload: Uint8Array,
+  nonce: number,
+  chainId: number,
+  expiryBlock: number,
+) {
   const replayProtection = ReplayProtectionCoded.enc({
-    nonce: 0,
-    chainId: 1,
+    nonce,
+    chainId,
+    expiryBlock,
   });
-  // Concatenate payload
   return new Uint8Array([...payload, ...replayProtection]);
 }
 async function main() {
@@ -37,8 +49,16 @@ async function main() {
   const broker = createStateChainKeypair('//BROKER_1');
   const whaleKeypair = getSolWhaleKeyPair();
 
-  const arbitraryPayload = '0x1234';
-  const payload = encodePayloadToSign(Buffer.from(arbitraryPayload.slice(2), 'hex'));
+  const action = UserActionsCodec.enc({
+    tag: 'Lending',
+    value: { tag: 'Borrow', value: {} },
+  });
+  // Example values
+  const nonce = 1;
+  const chainId = 2;
+  const expiryBlock = 10000;
+  const hexAction = u8aToHex(action);
+  const payload = encodePayloadToSign(action, nonce, chainId, expiryBlock);
   const hexPayload = u8aToHex(payload);
 
   const signature = sign(payload, whaleKeypair.secretKey.slice(0, 32));
@@ -50,13 +70,14 @@ async function main() {
   console.log('Signer (hex):', hexSigner);
 
   await brokerMutex.runExclusive(async () => {
-    const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
+    const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     await chainflip.tx.swapping
       .submitUserSignedPayload(
-        arbitraryPayload,
+        hexAction,
         {
-          nonce: 0,
-          chainId: 1,
+          nonce,
+          chainId,
+          expiryBlock,
         },
         {
           Solana: {
@@ -65,7 +86,7 @@ async function main() {
           },
         },
       )
-      .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
+      .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
   });
 
   console.log('Submitted user signed payload in SVM');
@@ -76,11 +97,9 @@ async function main() {
 
   // Create the Ethereum-prefixed message
   const prefix = `\x19Ethereum Signed Message:\n${payload.length}`;
-  const prefixedMessage = Buffer.concat([
-    Buffer.from(prefix, 'utf8'),
-    Buffer.from(arbitraryPayload.slice(2), 'hex'),
-  ]);
+  const prefixedMessage = Buffer.concat([Buffer.from(prefix, 'utf8'), action]);
   const hexPrefixedMessage = '0x' + prefixedMessage.toString('hex');
+  console.log('Prefixed Message (hex):', hexPrefixedMessage);
 
   const { privkey: whalePrivKey, pubkey } = getEvmWhaleKeypair('Ethereum');
   const ethWallet = new Wallet(whalePrivKey).connect(
@@ -95,13 +114,15 @@ async function main() {
   console.log('compressed pubkey', ethWallet.signingKey.compressedPublicKey);
 
   await brokerMutex.runExclusive(async () => {
-    const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
+    const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     await chainflip.tx.swapping
       .submitUserSignedPayload(
-        hexPrefixedMessage,
+        // Ethereum prefix will be added in the SC previous to signature verification
+        hexAction,
         {
-          nonce: 0,
-          chainId: 1,
+          nonce,
+          chainId,
+          expiryBlock,
         },
         {
           Ethereum: {
@@ -110,7 +131,7 @@ async function main() {
           },
         },
       )
-      .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
+      .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
   });
 
   // TODO: Add event check

@@ -331,15 +331,27 @@ struct BatchExecutionOutcomes<T: Config> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct ReplayProtection {
-	nonce: u32, //TODO: Is this correct?
-	chain_id: u32, /*TODO: string? genesis_hash?
-	             * expiry? */
+	nonce: u32,    //TODO: Is this correct?
+	chain_id: u32, // TODO: string? genesis_hash?
+	expiry_block: BlockNumber,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum UserSignatureData {
 	Solana { signature: SolSignature, signer: SolAddress },
 	Ethereum { signature: [u8; 65], signer: EthereumAddress },
+}
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
+pub enum LendingApi {
+	Borrow {},
+}
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
+pub enum UserActionsApi {
+	Lending(LendingApi),
+	// reserved for future Apis for example Swap(SwapApi)...
+	// This allows us to update the API without breaking the encoding.
 }
 
 /// This impl is never used. This is purely used to satisfy trait requirement
@@ -849,7 +861,9 @@ pub mod pallet {
 			replay_protection: ReplayProtection,
 			user_signature_data: UserSignatureData,
 			valid: bool,
+			expired: bool,
 			signed_payload: Vec<u8>,
+			decoded_action: Option<UserActionsApi>,
 		},
 	}
 	#[pallet::error]
@@ -1491,28 +1505,43 @@ pub mod pallet {
 
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			// Concatenating so if wallets add prefix bytes to the payload it is still
-			// easy to verify. Otherwise we can choose to add the prefix here in the
-			// corresponding enums but then we'll need to add a new variant if any wallet
-			// is different.
 			let signed_payload = [payload.clone(), replay_protection.encode()].concat();
 
-			let (valid, signer_account_id) = match user_signature_data {
+			let (valid, signer_account_id, decoded_action) = match user_signature_data {
 				UserSignatureData::Solana { signature, signer } => (
 					SolanaCrypto::verify_signature(&signer, &signed_payload, &signature),
 					AccountId32::new(signer.into()),
+					UserActionsApi::decode(&mut &payload[..]).ok(),
 				),
-				UserSignatureData::Ethereum { signature, signer } => (
-					EvmCrypto::verify_signature(&signer, &signed_payload, &signature.into()),
-					signer.into_account_id_32(),
-				),
+				// Add prefix here from eth personal_sign. TBD if this is how
+				// we want to approach it.
+				UserSignatureData::Ethereum { signature, signer } => {
+					let prefix = scale_info::prelude::format!(
+						"\x19Ethereum Signed Message:\n{}",
+						signed_payload.len()
+					);
+					let prefix_bytes = prefix.as_bytes();
+					let prefixed_signed_payload = [prefix_bytes, &signed_payload].concat();
+					(
+						EvmCrypto::verify_signature(
+							&signer,
+							&prefixed_signed_payload,
+							&signature.into(),
+						),
+						signer.into_account_id_32(),
+						UserActionsApi::decode(&mut &payload[..]).ok(),
+					)
+				},
 			};
 
-			// TODO: Add check of replay protection mechanism.
-			// Nonces, chain_id, TTL, etc.
+			// TODO: Add check of replay protection mechanism (esp. nonce)
+			// Check expiry
+			let expired =
+				frame_system::Pallet::<T>::block_number() >= replay_protection.expiry_block.into();
 
 			// TODO: Decode the payload and execute the intended action on behalf
 			// of the user, similar to the delegation Sc Api.
+
 			Self::deposit_event(Event::<T>::UserSignedTransactionSubmitted {
 				broker_id,
 				signer_account_id,
@@ -1520,7 +1549,9 @@ pub mod pallet {
 				replay_protection,
 				user_signature_data,
 				valid,
+				expired,
 				signed_payload,
+				decoded_action,
 			});
 
 			Ok(())
