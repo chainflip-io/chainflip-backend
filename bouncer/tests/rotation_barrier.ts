@@ -44,13 +44,32 @@ export async function testRotationBarrier(testContext: TestContext) {
     })
     .signAndSend(lp, { nonce }, waiter);
 
-  await promise;
+  const events = await promise;
   unsub();
 
-  logger.info(`Withdrawal extrinsic included in a block`);
+  const egressId = events
+    .find(({ event }) => event.method.endsWith('WithdrawalEgressScheduled'))
+    ?.event.data[0].toHuman();
 
-  // Override the default 120s timeout to account for the key rotation.
-  await observeBalanceIncrease(logger, InternalAssets.Eth, withdrawalAddress, undefined, 240);
+  logger.info(
+    `Withdrawal extrinsic included in a block, scheduled egress ID ${JSON.stringify(egressId)}`,
+  );
+
+  const event = await observeEvent(logger, 'ethereumIngressEgress:BatchBroadcastRequested', {
+    test: (e) => JSON.stringify(e.data.egressIds).includes(JSON.stringify(egressId)),
+    historicalCheckBlocks: 10,
+  }).event;
+
+  const broadcastId = Number(event.data.broadcastId);
+
+  await observeEvent(logger, 'ethereumBroadcaster:TransactionBroadcastRequest', {
+    test: (e) => Number(e.data.broadcastId) === broadcastId,
+    historicalCheckBlocks: 10,
+  }).event;
+
+  logger.info(`Broadcast requested for egress ID ${egressId}. Waiting for balance increase...`);
+
+  await observeBalanceIncrease(logger, InternalAssets.Eth, withdrawalAddress);
 
   await broadcastAborted.stop();
 }
