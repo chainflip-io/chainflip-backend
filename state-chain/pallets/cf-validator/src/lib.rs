@@ -1580,22 +1580,56 @@ impl<T: Config> Pallet<T> {
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 
-		let (delegation_snapshots, independent_bids) =
+		let (mut delegation_snapshots, independent_bids) =
 			Self::build_delegation_snapshots::<T::KeygenQualification>();
 
-		let auction_bids = delegation_snapshots
-			.values()
-			.flat_map(|snapshot| snapshot.effective_validator_bids())
-			.chain(independent_bids)
-			.map(|(bidder_id, amount)| Bid { bidder_id, amount })
-			.collect::<Vec<_>>();
+		let auction_bids = |delegation_snapshots: &BTreeMap<
+			T::AccountId,
+			DelegationSnapshot<T>,
+		>|
+		 -> Vec<Bid<_, _>> {
+			delegation_snapshots
+				.values()
+				.flat_map(|snapshot| snapshot.effective_validator_bids())
+				.chain(independent_bids.clone())
+				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
+				.collect::<Vec<_>>()
+		};
 
 		match SetSizeMaximisingAuctionResolver::try_new(
 			T::EpochInfo::current_authority_count(),
 			AuctionParameters::<T>::get(),
 		)
 		.and_then(|resolver| {
-			resolver.resolve_auction(auction_bids, AuctionBidCutoffPercentage::<T>::get())
+			resolver
+				.resolve_auction(
+					auction_bids(&delegation_snapshots),
+					AuctionBidCutoffPercentage::<T>::get(),
+				)
+				.map(|outcome| (outcome, resolver))
+		})
+		.map(|(auction_outcome, resolver)| {
+			let mut current_outcome = auction_outcome;
+			loop {
+				for (_operator, snapshot) in delegation_snapshots.iter_mut() {
+					if snapshot.avg_bid() < current_outcome.bond {
+						snapshot.optimize_bid(current_outcome.bond);
+					}
+				}
+				if let Ok(new_outcome) = resolver.resolve_auction(
+					auction_bids(&delegation_snapshots),
+					AuctionBidCutoffPercentage::<T>::get(),
+				) {
+					if new_outcome == current_outcome {
+						break;
+					} else {
+						current_outcome = new_outcome;
+					}
+				} else {
+					break;
+				}
+			}
+			current_outcome
 		}) {
 			Ok(auction_outcome) => {
 				Self::deposit_event(Event::AuctionCompleted(
