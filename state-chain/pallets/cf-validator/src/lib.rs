@@ -1149,7 +1149,11 @@ pub mod pallet {
 
 		#[pallet::call_index(18)]
 		#[pallet::weight(T::ValidatorWeightInfo::delegate())]
-		pub fn delegate(origin: OriginFor<T>, operator: T::AccountId) -> DispatchResult {
+		pub fn delegate(
+			origin: OriginFor<T>,
+			operator: T::AccountId,
+			max_bid: Option<T::Amount>,
+		) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
 			ensure!(
@@ -1190,6 +1194,11 @@ pub mod pallet {
 				}
 			});
 
+			if max_bid != MaxDelegationBid::<T>::get(&delegator) {
+				MaxDelegationBid::<T>::set(&delegator, max_bid);
+				Self::deposit_event(Event::MaxBidUpdated { delegator: delegator.clone(), max_bid });
+			}
+
 			Self::deposit_event(Event::Delegated { delegator, operator });
 
 			Ok(())
@@ -1197,13 +1206,46 @@ pub mod pallet {
 
 		#[pallet::call_index(19)]
 		#[pallet::weight(T::ValidatorWeightInfo::undelegate())]
-		pub fn undelegate(origin: OriginFor<T>) -> DispatchResult {
+		pub fn undelegate(origin: OriginFor<T>, decrement: Option<T::Amount>) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
-			let operator = DelegationChoice::<T>::take(&delegator)
-				.ok_or(Error::<T>::AccountIsNotDelegating)?;
+			let unlink = MaxDelegationBid::<T>::mutate_exists(&delegator, |max_bid| {
+				use frame_support::sp_runtime::traits::Zero;
+				match (max_bid.clone(), decrement) {
+					(current, Some(decr)) => {
+						let new_max = current
+							.unwrap_or_else(|| T::FundingInfo::balance(&delegator))
+							.saturating_sub(decr);
+						if new_max.is_zero() {
+							*max_bid = None;
+						} else {
+							*max_bid = Some(new_max);
+						}
+						Self::deposit_event(Event::MaxBidUpdated {
+							delegator: delegator.clone(),
+							max_bid: *max_bid,
+						});
+						max_bid.is_none()
+					},
+					(current, None) => {
+						if let Some(_) = current {
+							*max_bid = None;
+							Self::deposit_event(Event::MaxBidUpdated {
+								delegator: delegator.clone(),
+								max_bid: None,
+							});
+						}
+						true
+					},
+				}
+			});
 
-			Self::deposit_event(Event::UnDelegated { delegator, operator });
+			if unlink {
+				let operator = DelegationChoice::<T>::take(&delegator)
+					.ok_or(Error::<T>::AccountIsNotDelegating)?;
+
+				Self::deposit_event(Event::UnDelegated { delegator, operator });
+			}
 
 			Ok(())
 		}
