@@ -37,6 +37,7 @@ async function testBitcoinMultipleUtxos(testContext: TestContext) {
         event.data.channelId === swapParams.channelId.toString() &&
         parsePdJsInt(event.data.amount) >= fineAmount * 0.99 &&
         parsePdJsInt(event.data.amount) <= fineAmount * 1.01,
+      historicalCheckBlocks: 10,
     }).event.then((e) => {
       testContext.logger.debug(
         `Deposit of ${e.data.amount} finalised for channel ${e.data.channelId}`,
