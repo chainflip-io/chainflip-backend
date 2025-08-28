@@ -41,10 +41,10 @@ impl UnfilteredDispatchable for EthereumSCApi {
 		match self {
 			EthereumSCApi::Delegation(delegation_api) => match delegation_api {
 				DelegationApi::Delegate { operator } =>
-					RuntimeCall::Validator(ValidatorCall::<Runtime>::delegate { operator })
+					RuntimeCall::Validator(ValidatorCall::<Runtime>::delegate { operator, max_bid: None })
 						.dispatch(origin),
 				DelegationApi::Undelegate =>
-					RuntimeCall::Validator(ValidatorCall::<Runtime>::undelegate {}).dispatch(origin),
+					RuntimeCall::Validator(ValidatorCall::<Runtime>::undelegate { decrement: None }).dispatch(origin),
 				DelegationApi::SetMaxBid { maybe_max_bid } =>
 					RuntimeCall::Validator(ValidatorCall::<Runtime>::set_max_bid {
 						max_bid: maybe_max_bid,
@@ -69,10 +69,11 @@ impl GetDispatchInfo for EthereumSCApi {
 				DelegationApi::Delegate { operator } =>
 					RuntimeCall::Validator(ValidatorCall::<Runtime>::delegate {
 						operator: operator.clone(),
+						max_bid: None,
 					})
 					.get_dispatch_info(),
 				DelegationApi::Undelegate {} =>
-					RuntimeCall::Validator(ValidatorCall::<Runtime>::undelegate {})
+					RuntimeCall::Validator(ValidatorCall::<Runtime>::undelegate { decrement: None })
 						.get_dispatch_info(),
 				DelegationApi::SetMaxBid { maybe_max_bid } =>
 					RuntimeCall::Validator(ValidatorCall::<Runtime>::set_max_bid {
