@@ -49,7 +49,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{BlockNumberProvider, Saturating, UniqueSaturatedInto, Zero},
-		Perbill, Percent, Permill, Perquintill,
+		FixedU64, Perbill, Percent, Permill, Perquintill,
 	},
 	transactional,
 };
@@ -137,24 +137,23 @@ pub struct LendingConfiguration {
 	/// interest_utilisation_factor
 	pub interest_base: Perbill,
 	pub interest_utilisation_factor: Perbill,
-
-	/// The % above 100% of the loan principal amount that must be covered
-	/// by collateral in order to create a loan.
-	pub overcollateralisation_target: Permill,
+	/// Borrowers aren't allowed to borrow more (or withdraw collateral) if their Loan-to-value
+	/// ratio (principal/collateral) would exceed this threshold.
+	pub ltv_target_threshold: FixedU64,
 	/// Reaching this threshold will trigger a top-up of the collateral
-	pub overcollateralisation_topup_threshold: Permill,
-	/// Reaching this threshold will trigger soft liquidation of the loan
-	pub overcollateralisation_soft_threshold: Permill,
+	pub ltv_topup_threshold: FixedU64,
+	/// Reaching this threshold will trigger soft liquidation account's loans
+	pub ltv_soft_threshold: FixedU64,
 	/// If a loan that's being liquidated reaches this threshold, it will be considered
 	/// "healthy" again and the liquidation will be aborted. This is meant to be slightly
-	/// higher than the soft threshold to avoid frequent oscillations between liquidating and
+	/// lower than the soft threshold to avoid frequent oscillations between liquidating and
 	/// not liquidating.
-	pub overcollateralisation_soft_liquidation_abort_threshold: Permill,
+	pub ltv_soft_liquidation_abort_threshold: FixedU64,
 	/// Reaching this threshold will trigger hard liquidation of the loan
-	pub overcollateralisation_hard_threshold: Permill,
+	pub ltv_hard_threshold: FixedU64,
 	/// Same as overcollateralisation_soft_liquidation_abort_threshold, but for
 	/// transitioning from hard to soft liquidation
-	pub overcollateralisation_hard_liquidation_abort_threshold: Permill,
+	pub ltv_hard_liquidation_abort_threshold: FixedU64,
 	/// This determines how frequently (in blocks) we check if fees should be swapped into the
 	/// pools asset
 	pub fee_swap_interval_blocks: u32,
@@ -289,24 +288,25 @@ mod utils {
 
 pub struct LendingConfigDefault {}
 
+const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
+	origination_fee: Permill::from_parts(100), // 1 bps
+	interest_base: Perbill::from_percent(2),   // 2% per year
+	interest_utilisation_factor: Perbill::from_percent(10), // 2% per year
+
+	ltv_target_threshold: FixedU64::from_rational(80, 100), // 80% LTV
+	ltv_topup_threshold: FixedU64::from_rational(85, 100),  // 85% LTV
+	ltv_soft_threshold: FixedU64::from_rational(90, 100),   // 90% LTV
+	ltv_soft_liquidation_abort_threshold: FixedU64::from_rational(88, 100), // 88% LTV
+	ltv_hard_threshold: FixedU64::from_rational(95, 100),   // 95% LTV
+	ltv_hard_liquidation_abort_threshold: FixedU64::from_rational(93, 100), // 93% LTV
+	// don't swap more often than every 10 blocks
+	fee_swap_interval_blocks: 10,
+	fee_swap_threshold_usd: 20_000_000, // don't swap fewer than 20 USD
+};
+
 impl Get<LendingConfiguration> for LendingConfigDefault {
 	fn get() -> LendingConfiguration {
-		LendingConfiguration {
-			origination_fee: Permill::from_parts(100), // 1 bps
-			// origination_fee_utilisation_factor: Permill,
-			interest_base: Perbill::from_percent(2), // 2% per year
-			interest_utilisation_factor: Perbill::from_percent(10), // 2% per year
-
-			overcollateralisation_target: Permill::from_percent(20), // 120% CR
-			overcollateralisation_topup_threshold: Permill::from_percent(15), // 115% CR
-			overcollateralisation_soft_threshold: Permill::from_percent(10), // 110% CR
-			overcollateralisation_soft_liquidation_abort_threshold: Permill::from_percent(13), // 113% CR
-			overcollateralisation_hard_threshold: Permill::from_percent(5), // 105% CR
-			overcollateralisation_hard_liquidation_abort_threshold: Permill::from_percent(8), // 108% CR
-			// don't swap more often than every 10 blocks
-			fee_swap_interval_blocks: 10,
-			fee_swap_threshold_usd: 20_000_000, // don't swap fewer than 20 USD
-		}
+		LENDING_DEFAULT_CONFIG
 	}
 }
 
@@ -459,7 +459,7 @@ pub mod pallet {
 		},
 		LoanUpdated {
 			loan_id: LoanId,
-			total_principal_amount: AssetAmount,
+			extra_principal_amount: AssetAmount,
 			origination_fee: AssetAmount,
 		},
 		LiquidationInitiated {

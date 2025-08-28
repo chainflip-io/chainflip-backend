@@ -1,7 +1,10 @@
 use cf_amm_math::{invert_price, relative_price, Price};
 use cf_primitives::SwapRequestId;
 use cf_traits::{ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry};
-use frame_support::fail;
+use frame_support::{
+	fail,
+	sp_runtime::{FixedPointNumber, FixedU64},
+};
 
 use super::*;
 
@@ -116,13 +119,17 @@ impl<T: Config> LoanAccount<T> {
 		Ok(total_owed.saturating_sub(swapped_from_collateral))
 	}
 
-	/// Computes account's overcollateralisation ratio (i.e. collateralisation ratio minus 100%),
-	/// taking liquidations into account.
-	pub fn overcollateralisation_ratio(&self) -> Result<Permill, Error<T>> {
+	/// Computes account's LTV (Loan-to-Value) ratio. Takes liquidations into account.
+	/// Returns error if oracle prices are not available, or if collateral is zero.
+	pub fn derive_ltv(&self) -> Result<FixedU64, Error<T>> {
 		let collateral = self.total_collateral_usd_value()?;
 		let principal = self.total_owed_usd_value()?;
 
-		Ok(Permill::from_rational(collateral.saturating_sub(principal), principal))
+		if collateral == 0 {
+			return Err(Error::<T>::InsufficientCollateral);
+		}
+
+		Ok(FixedU64::from_rational(principal, collateral))
 	}
 
 	pub fn charge_interest(&mut self) -> Result<(), Error<T>> {
@@ -208,14 +215,18 @@ impl<T: Config> LoanAccount<T> {
 		// Auto top up is currently only possible from the primary collateral asset
 		let config = LendingConfig::<T>::get();
 
-		if self.overcollateralisation_ratio()? >= config.overcollateralisation_topup_threshold {
+		if self.derive_ltv()? <= config.ltv_topup_threshold {
 			return Ok(())
 		}
 
 		let top_up_required_in_usd = {
 			let loan_value_in_usd = self.total_owed_usd_value()?;
-			let collateral_required_in_usd =
-				config.overcollateralisation_target * loan_value_in_usd + loan_value_in_usd;
+			let collateral_required_in_usd = config
+				.ltv_target_threshold
+				.reciprocal()
+				.map(|ltv_inverted| ltv_inverted.saturating_mul_int(loan_value_in_usd))
+				// This effectively disables auto top up if the ltv target erroneously set to 0:
+				.unwrap_or(0);
 
 			collateral_required_in_usd.saturating_sub(self.total_collateral_usd_value()?)
 		};
@@ -557,7 +568,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 			let _ = loan_account.charge_interest();
 			let _ = loan_account.process_auto_top_up(borrower_id);
 
-			let Ok(cr) = loan_account.overcollateralisation_ratio() else {
+			let Ok(ltv) = loan_account.derive_ltv() else {
 				// Don't change liquidation status if we can't determine the
 				// collateralisation ratio
 				return;
@@ -568,24 +579,23 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 			// collateral is returned into the loan account; if it is "Liquidating", the collateral
 			// is used in the new liquidation swaps.
 			match &loan_account.liquidation_status {
-				LiquidationStatus::NoLiquidation => {
-					if cr < config.overcollateralisation_hard_threshold {
+				LiquidationStatus::NoLiquidation =>
+					if ltv > config.ltv_hard_threshold {
 						if let Ok(collateral) = loan_account.prepare_collateral_for_liquidation() {
 							loan_account.init_liquidation_swaps(borrower_id, collateral, true);
 						}
-					} else if cr < config.overcollateralisation_soft_threshold {
+					} else if ltv > config.ltv_soft_threshold {
 						if let Ok(collateral) = loan_account.prepare_collateral_for_liquidation() {
 							loan_account.init_liquidation_swaps(borrower_id, collateral, false);
 						}
-					}
-				},
+					},
 				LiquidationStatus::Liquidating { liquidation_swaps, is_hard } if *is_hard => {
-					if cr > config.overcollateralisation_soft_liquidation_abort_threshold {
+					if ltv < config.ltv_soft_liquidation_abort_threshold {
 						// Transition from hard liquidation to active:
 						let collateral =
 							abort_liquidation_swaps(&mut loan_account.loans, liquidation_swaps);
 						loan_account.return_collateral(collateral);
-					} else if cr > config.overcollateralisation_hard_liquidation_abort_threshold {
+					} else if ltv < config.ltv_hard_liquidation_abort_threshold {
 						// Transition from hard liquidation to soft liquidation:
 						let collateral =
 							abort_liquidation_swaps(&mut loan_account.loans, liquidation_swaps);
@@ -593,12 +603,12 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 					}
 				},
 				LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
-					if cr < config.overcollateralisation_hard_threshold {
+					if ltv > config.ltv_hard_threshold {
 						// Transition from soft liquidation to hard liquidation:
 						let collateral =
 							abort_liquidation_swaps(&mut loan_account.loans, liquidation_swaps);
 						loan_account.init_liquidation_swaps(borrower_id, collateral, true);
-					} else if cr > config.overcollateralisation_soft_liquidation_abort_threshold {
+					} else if ltv < config.ltv_soft_liquidation_abort_threshold {
 						// Transition from soft liquidation to active:
 						let collateral =
 							abort_liquidation_swaps(&mut loan_account.loans, liquidation_swaps);
@@ -697,7 +707,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			account.loans.insert(loan_id, loan);
 
-			if account.overcollateralisation_ratio()? < chp_config.overcollateralisation_target {
+			if account.derive_ltv()? > chp_config.ltv_target_threshold {
 				fail!(Error::<T>::InsufficientCollateral);
 			}
 
@@ -765,8 +775,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				loan.owed_principal.saturating_accrue(extra_amount_to_borrow);
 			}
 
-			if loan_account.overcollateralisation_ratio()? < chp_config.overcollateralisation_target
-			{
+			if loan_account.derive_ltv()? > chp_config.ltv_target_threshold {
 				return Err(Error::<T>::InsufficientCollateral.into());
 			}
 
@@ -798,7 +807,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			Self::deposit_event(Event::LoanUpdated {
 				loan_id,
-				total_principal_amount: loan.owed_principal,
+				extra_principal_amount: extra_amount_to_borrow,
 				origination_fee: origination_fee_amount,
 			});
 
@@ -910,7 +919,9 @@ impl<T: Config> LendingApi for Pallet<T> {
 				T::Balance::credit_account(borrower_id, *asset, *amount);
 			}
 
-			if loan_account.overcollateralisation_ratio()? < chp_config.overcollateralisation_target
+			// Only check LTV if there are loans:
+			if !loan_account.loans.is_empty() &&
+				loan_account.derive_ltv()? > chp_config.ltv_target_threshold
 			{
 				fail!(Error::<T>::InsufficientCollateral);
 			}

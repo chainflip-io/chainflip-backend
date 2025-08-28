@@ -12,48 +12,24 @@ use cf_traits::{
 	SafeMode, SetSafeMode, SwapExecutionProgress,
 };
 
+use super::*;
 use frame_support::{assert_err, assert_noop, assert_ok};
 
 const INIT_BLOCK: u64 = 1;
-
-const ORIGINATION_FEE: Permill = Permill::from_parts(100);
-
-const INTEREST_BASE: Perbill = Perbill::from_percent(2);
-const INTEREST_UTILISATION_FACTOR: Perbill = Perbill::from_percent(10);
 
 const LENDER: u64 = BOOSTER_1;
 const BORROWER: u64 = LP;
 
 const LOAN_ASSET: Asset = Asset::Btc;
 const PRINCIPAL: AssetAmount = 1_000_000_000;
-// This much is required to create the loan
-const INIT_COLLATERAL: AssetAmount = (PRINCIPAL + PRINCIPAL / 5) * SWAP_RATE; // 20% overcollateralisation
 
 const LOAN_ID: LoanId = LoanId(0);
 
-// ASSET's price in USDC
 const SWAP_RATE: u128 = 20;
 
 const INIT_POOL_AMOUNT: AssetAmount = PRINCIPAL * 2;
 
-use super::*;
-
-const FEE_SWAP_THRESHOLD_USD: AssetAmount = 10_000_000; // 10 USD
-const FEE_SWAP_INTERVAL_BLOCKS: u32 = 10;
-
-const CONFIG: LendingConfiguration = LendingConfiguration {
-	origination_fee: ORIGINATION_FEE,
-	interest_base: INTEREST_BASE,
-	interest_utilisation_factor: INTEREST_UTILISATION_FACTOR,
-	overcollateralisation_target: Permill::from_percent(20),
-	overcollateralisation_topup_threshold: Permill::from_percent(15),
-	overcollateralisation_soft_threshold: Permill::from_percent(10),
-	overcollateralisation_soft_liquidation_abort_threshold: Permill::from_percent(11),
-	overcollateralisation_hard_threshold: Permill::from_percent(5),
-	overcollateralisation_hard_liquidation_abort_threshold: Permill::from_percent(6),
-	fee_swap_interval_blocks: FEE_SWAP_INTERVAL_BLOCKS,
-	fee_swap_threshold_usd: FEE_SWAP_THRESHOLD_USD,
-};
+use crate::LENDING_DEFAULT_CONFIG as CONFIG;
 
 fn setup_chp_pool_with_funds() {
 	LendingConfig::<Test>::set(CONFIG);
@@ -133,7 +109,7 @@ fn lender_basic_adding_and_removing_funds() {
 fn basic_chp_lending() {
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
 
-	const INIT_COLLATERAL: AssetAmount = (PRINCIPAL + PRINCIPAL / 4) * SWAP_RATE; // 25%
+	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 
 	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
 
@@ -297,19 +273,16 @@ fn basic_chp_lending() {
 fn collateral_auto_topup() {
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
 
-	const INIT_COLLATERAL: AssetAmount = (PRINCIPAL + PRINCIPAL / 5) * SWAP_RATE; // 20%
-	const COLLATERAL_TOPUP: AssetAmount = INIT_COLLATERAL / 200;
+	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
+	const COLLATERAL_TOPUP: AssetAmount = INIT_COLLATERAL / 100;
 
 	// The user deposits this much of collateral asset into their balance at a later point
 	const EXTRA_FUNDS: AssetAmount = INIT_COLLATERAL;
 
 	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
 
-	fn get_cr() -> Permill {
-		LoanAccounts::<Test>::get(BORROWER)
-			.unwrap()
-			.overcollateralisation_ratio()
-			.unwrap()
+	fn get_ltv() -> FixedU64 {
+		LoanAccounts::<Test>::get(BORROWER).unwrap().derive_ltv().unwrap()
 	}
 
 	fn get_collateral() -> AssetAmount {
@@ -344,27 +317,27 @@ fn collateral_auto_topup() {
 				Ok(LOAN_ID)
 			);
 
-			assert_eq!(get_cr(), Permill::from_parts(200_000)); // ~20%
+			assert_eq!(get_ltv(), FixedU64::from_rational(80, 100)); // ~80%
 
 			// The price drops 1%, but that shouldn't trigger a top-up
 			// at the next block
 			set_asset_price_in_usd(COLLATERAL_ASSET, 990_000);
 
-			assert_eq!(get_cr(), Permill::from_parts(188_000)); // ~19%
+			assert_eq!(get_ltv(), FixedU64::from_rational(808_080_808, 1_000_000_000)); // ~81%
 		})
 		.then_execute_at_next_block(|_| {
-			assert_eq!(get_cr(), Permill::from_parts(188_000)); // ~19%
-			assert_eq!(get_collateral(), INIT_COLLATERAL); // ~19%
+			// No change in collateral (no auto top up):
+			assert_eq!(get_collateral(), INIT_COLLATERAL);
 
 			// Drop the price further, this time auto-top up should be triggered
-			set_asset_price_in_usd(COLLATERAL_ASSET, 950_000);
+			set_asset_price_in_usd(COLLATERAL_ASSET, 920_000);
 
-			assert_eq!(get_cr(), Permill::from_parts(140_000)); // ~14%
+			assert_eq!(get_ltv(), FixedU64::from_rational(869_565_217, 1_000_000_000)); // ~87%
 		})
 		.then_execute_at_next_block(|_| {
 			// The user only had a small amount in their balance, all of it gets used:
 			assert_eq!(get_collateral(), INIT_COLLATERAL + COLLATERAL_TOPUP);
-			assert_eq!(get_cr(), Permill::from_parts(145_700)); // ~14.6%
+			assert_eq!(get_ltv(), FixedU64::from_rational(860_955_661, 1_000_000_000)); // ~86%
 			assert_eq!(MockBalance::get_balance(&LENDER, COLLATERAL_ASSET), 0);
 
 			// After we give the user more funds, auto-top up should bring CR back to target
@@ -372,9 +345,9 @@ fn collateral_auto_topup() {
 		})
 		.then_execute_at_next_block(|_| {
 			// This much happens to be the exact amount needed to bring CR back to target
-			const COLLATERAL_TOPUP_2: AssetAmount = 1143157895;
+			const COLLATERAL_TOPUP_2: AssetAmount = 1_923_913_044;
 
-			assert_eq!(get_cr(), Permill::from_parts(200_000)); // ~20%
+			assert_eq!(get_ltv(), FixedU64::from_rational(80, 100)); // ~80%
 			assert_eq!(get_collateral(), INIT_COLLATERAL + COLLATERAL_TOPUP + COLLATERAL_TOPUP_2);
 			assert_eq!(
 				MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET),
@@ -387,9 +360,11 @@ fn collateral_auto_topup() {
 fn basic_loan_aggregation() {
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
 
-	const INIT_COLLATERAL: AssetAmount = (PRINCIPAL + PRINCIPAL / 4) * SWAP_RATE; // 25%
+	const INIT_COLLATERAL: AssetAmount = (4 * PRINCIPAL / 3) * SWAP_RATE; // 75% LTV
 
+	// Should be able to borrow this amount without providing any extra collateral:
 	const EXTRA_PRINCIPAL_1: AssetAmount = PRINCIPAL / 100;
+	// This larger amount should require extra collateral:
 	const EXTRA_PRINCIPAL_2: AssetAmount = PRINCIPAL / 2;
 	const EXTRA_COLLATERAL: AssetAmount = INIT_COLLATERAL / 2;
 
@@ -434,7 +409,7 @@ fn basic_loan_aggregation() {
 
 			System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LoanUpdated {
 				loan_id: LOAN_ID,
-				total_principal_amount: PRINCIPAL + EXTRA_PRINCIPAL_1,
+				extra_principal_amount: EXTRA_PRINCIPAL_1,
 				origination_fee: origination_fee_2,
 			}));
 
@@ -556,7 +531,7 @@ fn interest_special_cases() {
 	const PRIMARY_COLLATERAL_ASSET: Asset = Asset::Eth;
 	const SECONDARY_COLLATERAL_ASSET: Asset = Asset::Usdc;
 
-	const TOTAL_COLLATERAL_REQUIRED: AssetAmount = (PRINCIPAL + PRINCIPAL / 5) * SWAP_RATE; // 20%
+	const TOTAL_COLLATERAL_REQUIRED: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 
 	// A small but non-zero amount is in the primary asset:
 	const INIT_COLLATERAL_AMOUNT_PRIMARY: AssetAmount = 100;
@@ -566,8 +541,7 @@ fn interest_special_cases() {
 
 	let interest_charge = {
 		let interest_charge_in_loan_asset =
-			dbg!(CONFIG.derive_interest_rate_per_charge_interval(Permill::from_percent(50))) *
-				PRINCIPAL;
+			CONFIG.derive_interest_rate_per_charge_interval(Permill::from_percent(50)) * PRINCIPAL;
 		interest_charge_in_loan_asset * SWAP_RATE
 	};
 
@@ -612,7 +586,10 @@ fn interest_special_cases() {
 			);
 		})
 		.then_execute_at_block(INIT_BLOCK + INTEREST_PAYMENT_INTERVAL as u64, |_| {
-			let secondary_interest_charge = interest_charge - INIT_COLLATERAL_AMOUNT_PRIMARY;
+			let secondary_interest_charge =
+				interest_charge.saturating_sub(INIT_COLLATERAL_AMOUNT_PRIMARY);
+
+			assert!(secondary_interest_charge > 0);
 
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().collected_fees,
@@ -658,7 +635,7 @@ fn swap_collected_fees() {
 	const INIT_FEE_ASSET_1: AssetAmount = 100;
 	const INIT_FEE_ASSET_2: AssetAmount = 1;
 
-	const FEE_SWAP_BLOCK: u64 = FEE_SWAP_INTERVAL_BLOCKS as u64;
+	const FEE_SWAP_BLOCK: u64 = CONFIG.fee_swap_interval_blocks as u64;
 
 	const FEE_SWAP_ID: SwapRequestId = SwapRequestId(0);
 
@@ -749,6 +726,7 @@ fn adding_and_removing_collateral() {
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
 	const COLLATERAL_ASSET_2: Asset = Asset::Btc;
 
+	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 	const INIT_COLLATERAL_AMOUNT_2: AssetAmount = 1000;
 
 	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
@@ -759,7 +737,6 @@ fn adding_and_removing_collateral() {
 		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
 		set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
 
-		// Add collateral and immediately remove it
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL + origination_fee);
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET_2, INIT_COLLATERAL_AMOUNT_2);
 
@@ -821,16 +798,16 @@ fn basic_liquidation() {
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
 
 	// This should trigger soft liquidation
-	const NEW_SWAP_RATE: u128 = 22;
+	const NEW_SWAP_RATE: u128 = 23;
 
-	// This should trigger second liquidation
-	const SWAP_RATE_2: u128 = 24;
+	// This should trigger second (hard) liquidation
+	const SWAP_RATE_2: u128 = 26;
 
-	const INIT_COLLATERAL: AssetAmount = (PRINCIPAL + PRINCIPAL / 5) * SWAP_RATE; // 20%
+	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
 
 	// How much collateral will be swapped during liquidation:
-	const EXECUTED_COLLATERAL: AssetAmount = INIT_COLLATERAL / 4;
+	const EXECUTED_COLLATERAL: AssetAmount = 2 * INIT_COLLATERAL / 5;
 	// How much of principal asset is bought during first liquidation:
 	const SWAPPED_PRINCIPAL: AssetAmount = EXECUTED_COLLATERAL / NEW_SWAP_RATE;
 	// How much of principal asset is bought during second liquidation:
@@ -1078,7 +1055,7 @@ fn basic_liquidation() {
 #[test]
 fn making_loan_repayment() {
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
-	const INIT_COLLATERAL: AssetAmount = (PRINCIPAL + PRINCIPAL / 5) * SWAP_RATE; // 20%
+	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 
 	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
 
