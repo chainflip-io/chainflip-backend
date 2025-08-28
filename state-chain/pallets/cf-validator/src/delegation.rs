@@ -1,6 +1,6 @@
 use crate::{Config, OperatorSettingsLookup, ValidatorIdOf};
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::RuntimeDebugNoBound;
+use frame_support::{traits::IsType, RuntimeDebugNoBound};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::btree_map::BTreeMap;
@@ -96,7 +96,22 @@ impl<T: Config> DelegationSnapshot<T> {
 		if self.validators.is_empty() {
 			return Default::default();
 		}
-		let avg_bid = self.total_available_bid() / T::Amount::from(self.validators.len() as u32);
+		let avg_bid = self.avg_bid();
 		self.validators.keys().map(|validator| (validator.clone(), avg_bid)).collect()
+	}
+
+	pub fn avg_bid(&self) -> T::Amount {
+		self.total_available_bid() / T::Amount::from(self.validators.len() as u32)
+	}
+
+	pub fn optimize_bid(&mut self, min_required_bid: T::Amount) {
+		while self.validators.len() > 1 && self.avg_bid() < min_required_bid {
+			if let Some((validator, amount)) =
+				self.validators.clone().into_iter().min_by_key(|(_, v)| *v)
+			{
+				self.validators.remove(&validator);
+				self.delegators.insert(validator.into_ref().clone(), amount);
+			}
+		}
 	}
 }
