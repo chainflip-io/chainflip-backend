@@ -68,13 +68,25 @@ impl TestAccounts {
 	}
 
 	pub const fn operator(id: u8) -> u64 {
-		Self::OPERATORS_START + id as u64
+		let account = Self::OPERATORS_START + id as u64;
+		// Ensure operator accounts don't encroach on delegator range
+		assert!(account < Self::DELEGATORS_START, "Operator account encroaches on delegator range");
+		account
 	}
 	pub const fn validator(id: u8) -> u64 {
-		Self::VALIDATORS_START + id as u64
+		let account = Self::VALIDATORS_START + id as u64;
+		// Validators have the highest range, just ensure reasonable bounds
+		assert!(account < Self::VALIDATORS_START + 1000, "Validator account ID too high");
+		account
 	}
 	pub const fn delegator(id: u8) -> u64 {
-		Self::DELEGATORS_START + id as u64
+		let account = Self::DELEGATORS_START + id as u64;
+		// Ensure delegator accounts don't encroach on validator range
+		assert!(
+			account < Self::VALIDATORS_START,
+			"Delegator account encroaches on validator range"
+		);
+		account
 	}
 }
 
@@ -2154,6 +2166,330 @@ mod operator {
 
 			// Exceptions list should be empty again
 			assert!(Exceptions::<Test>::get(ALICE).is_empty());
+		});
+	}
+
+	#[test]
+	fn cannot_deregister_with_active_delegations() {
+		new_test_ext().execute_with(|| {
+			use test_constants::*;
+
+			// Register operator with Allow policy
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(TestAccounts::default_operator()),
+				OperatorSettings {
+					fee_bps: MEDIUM_FEE,
+					delegation_acceptance: DelegationAcceptance::Allow,
+				},
+			));
+
+			// Create some delegations to the operator
+			let delegator_1 = TestAccounts::delegator(1);
+			let delegator_2 = TestAccounts::delegator(2);
+			let delegator_3 = TestAccounts::delegator(3);
+
+			// Delegators are regular accounts (not validators or operators)
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(delegator_1),
+				TestAccounts::default_operator()
+			));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(delegator_2),
+				TestAccounts::default_operator()
+			));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(delegator_3),
+				TestAccounts::default_operator()
+			));
+
+			// Verify delegations exist
+			assert_eq!(
+				DelegationChoice::<Test>::get(delegator_1),
+				Some(TestAccounts::default_operator())
+			);
+			assert_eq!(
+				DelegationChoice::<Test>::get(delegator_2),
+				Some(TestAccounts::default_operator())
+			);
+			assert_eq!(
+				DelegationChoice::<Test>::get(delegator_3),
+				Some(TestAccounts::default_operator())
+			);
+
+			// Attempt to deregister operator should fail with active delegations
+			assert_noop!(
+				ValidatorPallet::deregister_as_operator(OriginTrait::signed(
+					TestAccounts::default_operator()
+				)),
+				Error::<Test>::StillAssociatedWithDelegators
+			);
+
+			// Operator settings should still exist
+			assert!(OperatorSettingsLookup::<Test>::get(TestAccounts::default_operator()).is_some());
+
+			// Remove some delegations
+			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(delegator_1)));
+			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(delegator_2)));
+
+			// Should still fail with one remaining delegation
+			assert_noop!(
+				ValidatorPallet::deregister_as_operator(OriginTrait::signed(
+					TestAccounts::default_operator()
+				)),
+				Error::<Test>::StillAssociatedWithDelegators
+			);
+
+			// Remove final delegation
+			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(delegator_3)));
+
+			// Now deregistration should succeed
+			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(
+				TestAccounts::default_operator()
+			)));
+
+			// Operator settings should be removed
+			assert!(OperatorSettingsLookup::<Test>::get(TestAccounts::default_operator()).is_none());
+		});
+	}
+
+	#[test]
+	fn exception_list_management() {
+		new_test_ext().execute_with(|| {
+			use test_constants::*;
+
+			let operator = TestAccounts::default_operator();
+			let delegator_1 = TestAccounts::delegator(1);
+			let delegator_2 = TestAccounts::delegator(2);
+			let delegator_3 = TestAccounts::delegator(3);
+
+			// Test 1: Allow policy - exceptions are blocked delegators
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(operator),
+				OperatorSettings {
+					fee_bps: MEDIUM_FEE,
+					delegation_acceptance: DelegationAcceptance::Allow,
+				},
+			));
+
+			// Initially, all delegators can delegate (Allow policy)
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(delegator_1), operator));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(delegator_2), operator));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(delegator_3), operator));
+
+			// Block specific delegators (add to exceptions for Allow policy)
+			assert_ok!(ValidatorPallet::block_delegator(
+				OriginTrait::signed(operator),
+				delegator_1
+			));
+			assert_ok!(ValidatorPallet::block_delegator(
+				OriginTrait::signed(operator),
+				delegator_2
+			));
+
+			// Verify blocked delegators are undelegated and added to exceptions
+			assert!(DelegationChoice::<Test>::get(delegator_1).is_none());
+			assert!(DelegationChoice::<Test>::get(delegator_2).is_none());
+			assert_eq!(DelegationChoice::<Test>::get(delegator_3), Some(operator)); // Still delegated
+			assert!(Exceptions::<Test>::get(operator).contains(&delegator_1));
+			assert!(Exceptions::<Test>::get(operator).contains(&delegator_2));
+			assert!(!Exceptions::<Test>::get(operator).contains(&delegator_3));
+
+			// Blocked delegators cannot re-delegate
+			assert_noop!(
+				ValidatorPallet::delegate(OriginTrait::signed(delegator_1), operator),
+				Error::<Test>::DelegatorBlocked
+			);
+
+			// Allow a previously blocked delegator
+			assert_ok!(ValidatorPallet::allow_delegator(
+				OriginTrait::signed(operator),
+				delegator_1
+			));
+			assert!(!Exceptions::<Test>::get(operator).contains(&delegator_1));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(delegator_1), operator));
+
+			// Test 2: Switch to Deny policy - exceptions cleared but delegations remain
+			assert_ok!(ValidatorPallet::update_operator_settings(
+				OriginTrait::signed(operator),
+				OperatorSettings {
+					fee_bps: MEDIUM_FEE,
+					delegation_acceptance: DelegationAcceptance::Deny,
+				},
+			));
+
+			// Existing delegations remain, but exceptions list is cleared
+			assert_eq!(DelegationChoice::<Test>::get(delegator_1), Some(operator)); // Still delegated
+			assert_eq!(DelegationChoice::<Test>::get(delegator_3), Some(operator)); // Still delegated
+			assert!(Exceptions::<Test>::get(operator).is_empty());
+
+			// New delegations are blocked by default with Deny policy (unless already delegated)
+			assert_noop!(
+				ValidatorPallet::delegate(OriginTrait::signed(delegator_2), operator),
+				Error::<Test>::DelegatorBlocked
+			);
+
+			// Explicitly allow specific delegators (add to exceptions for Deny policy)
+			assert_ok!(ValidatorPallet::allow_delegator(
+				OriginTrait::signed(operator),
+				delegator_2
+			));
+
+			// Now previously blocked delegator can delegate
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(delegator_2), operator));
+
+			// Verify exceptions list with Deny policy - delegator_2 is in exceptions
+			// (delegator_1 and delegator_3 are still delegated but not in exceptions since they
+			// were grandfathered)
+			assert!(Exceptions::<Test>::get(operator).contains(&delegator_2));
+			assert!(!Exceptions::<Test>::get(operator).contains(&delegator_1)); // Not in exceptions
+			assert!(!Exceptions::<Test>::get(operator).contains(&delegator_3)); // Not in exceptions
+
+			// Block a grandfathered delegator
+			assert_ok!(ValidatorPallet::block_delegator(
+				OriginTrait::signed(operator),
+				delegator_1
+			));
+			assert!(DelegationChoice::<Test>::get(delegator_1).is_none()); // Should be undelegated
+
+			// Block explicitly allowed delegator (remove from exceptions)
+			assert_ok!(ValidatorPallet::block_delegator(
+				OriginTrait::signed(operator),
+				delegator_2
+			));
+			assert!(!Exceptions::<Test>::get(operator).contains(&delegator_2));
+			assert!(DelegationChoice::<Test>::get(delegator_2).is_none());
+		});
+	}
+
+	#[test]
+	fn max_bid_limits_delegation_amounts() {
+		new_test_ext().execute_with(|| {
+			use test_constants::*;
+
+			// Test max bid functionality with proper role separation:
+			// - Validator: has own stake, gets proportional validator rewards
+			// - Operator: manages delegations, gets fee from delegator rewards only
+			// - Delegators: delegate with max bid limits applied
+			const OPERATOR: u64 = TestAccounts::default_operator();
+			const VALIDATOR: u64 = TestAccounts::default_validator();
+			const DELEGATOR_1: u64 = TestAccounts::delegator(1);
+			const DELEGATOR_2: u64 = TestAccounts::delegator(2);
+			const DELEGATOR_3: u64 = TestAccounts::delegator(3);
+
+			// Register operator
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(OPERATOR),
+				OperatorSettings {
+					fee_bps: MEDIUM_FEE,
+					delegation_acceptance: DelegationAcceptance::Allow,
+				},
+			));
+
+			// Set up funding - validator has their own stake, delegators have balances
+			MockFlip::credit_funds(&VALIDATOR, LARGE_STAKE); // Validator stake: 5000
+			MockFlip::credit_funds(&OPERATOR, STANDARD_STAKE); // Operator operational funds
+			MockFlip::credit_funds(&DELEGATOR_1, STANDARD_STAKE * 2); // 2000 balance
+			MockFlip::credit_funds(&DELEGATOR_2, LARGE_STAKE * 2); // 10000 balance
+			MockFlip::credit_funds(&DELEGATOR_3, SMALL_STAKE * 4); // 2000 balance
+
+			// Set different max bids for delegators (lower than their balances)
+			assert_ok!(ValidatorPallet::set_max_bid(
+				OriginTrait::signed(DELEGATOR_1),
+				Some(STANDARD_STAKE) // Max bid 1000, but balance is 2000
+			));
+			assert_ok!(ValidatorPallet::set_max_bid(
+				OriginTrait::signed(DELEGATOR_2),
+				Some(LARGE_STAKE / 2) // Max bid 2500, but balance is 10000
+			));
+			// DELEGATOR_3 has no max bid set, so full balance should be used
+
+			// Verify max bids are set correctly
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR_1), Some(STANDARD_STAKE));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR_2), Some(LARGE_STAKE / 2));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR_3), None);
+
+			// All delegators delegate to the same operator
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(DELEGATOR_1), OPERATOR));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(DELEGATOR_2), OPERATOR));
+			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(DELEGATOR_3), OPERATOR));
+
+			// Verify delegations
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR_1), Some(OPERATOR));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR_2), Some(OPERATOR));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR_3), Some(OPERATOR));
+
+			// Create snapshot with proper role separation
+			// Validator: separate account with own stake (5000)
+			// Operator: manages delegations, takes fee from delegator rewards
+			// DELEGATOR_1: max_bid 1000 (limited), balance 2000
+			// DELEGATOR_2: max_bid 2500 (limited), balance 10000
+			// DELEGATOR_3: no max_bid, uses full balance 2000
+			let snapshot = DelegationSnapshot::<Test> {
+				operator: OPERATOR,
+				validators: BTreeMap::from_iter([
+					(VALIDATOR, LARGE_STAKE), // Separate validator with 5000 stake
+				]),
+				delegators: BTreeMap::from_iter([
+					(DELEGATOR_1, STANDARD_STAKE),  // Limited by max_bid: 1000
+					(DELEGATOR_2, LARGE_STAKE / 2), // Limited by max_bid: 2500
+					(DELEGATOR_3, SMALL_STAKE * 4), // No limit, uses full balance: 2000
+				]),
+				delegation_fee_bps: MEDIUM_FEE,
+			};
+
+			// Verify correct fee distribution with role separation:
+			// 1. Validators get their cut: 5000/(5000+5500) * 10000 = 4762
+			// 2. Operator takes fee from remainder: (10000-4762) * 5% = 262
+			// 3. Delegators get the rest: 5238 - 262 = 4976
+			// Total validator stake: 5000
+			// Total delegator stake: 1000 + 2500 + 2000 = 5500
+			// Total stake: 10500
+
+			let expected_distributions = BTreeMap::from_iter([
+				// Validator gets proportional share: 5000/10500 * 10000 = 4762
+				(VALIDATOR, 4762),
+				// Operator gets fee from delegator portion: 5238 * 5% = 262
+				(OPERATOR, 262),
+				// Delegators get proportional shares of remainder (actual values from
+				// distribution)
+				(DELEGATOR_1, 905),  // Actual distribution value
+				(DELEGATOR_2, 2262), // Actual distribution value
+				(DELEGATOR_3, 1809), // Actual distribution value
+			]);
+
+			DelegationTestHelpers::verify_distribution(
+				&snapshot,
+				LARGE_REWARD, // 10000
+				&expected_distributions,
+			);
+
+			// Test updating max bids after delegation
+			// DELEGATOR_2 increases their max bid
+			assert_ok!(ValidatorPallet::set_max_bid(
+				OriginTrait::signed(DELEGATOR_2),
+				Some(LARGE_STAKE) // Increase from 2500 to 5000
+			));
+
+			// DELEGATOR_1 removes their max bid (should use full balance)
+			assert_ok!(ValidatorPallet::set_max_bid(OriginTrait::signed(DELEGATOR_1), None));
+
+			// Verify max bid changes
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR_1), None);
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR_2), Some(LARGE_STAKE));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR_3), None);
+
+			// Test that operator can deregister with delegations
+			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(DELEGATOR_1)));
+			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(DELEGATOR_2)));
+			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(DELEGATOR_3)));
+			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(OPERATOR)));
+
+			// Operator settings should be removed
+			assert!(OperatorSettingsLookup::<Test>::get(OPERATOR).is_none());
+
+			// But max_bid settings remain (they're independent of operator registration)
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR_2), Some(LARGE_STAKE));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR_3), None);
 		});
 	}
 }
