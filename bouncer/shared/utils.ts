@@ -1292,6 +1292,7 @@ export async function startEngines(
   const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
   await execWithLog(
     `${localnetInitPath}/scripts/start-all-engines.sh`,
+    [],
     'start-all-engines-pre-upgrade',
     {
       INIT_RUN: 'false',
