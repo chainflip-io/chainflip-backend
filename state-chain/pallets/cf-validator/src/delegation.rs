@@ -24,6 +24,13 @@ pub enum AssociationToOperator {
 	Delegator,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum DelegationAmount<T> {
+	#[default]
+	Max,
+	Some(T),
+}
+
 /// Represents a validator's default stance on accepting delegations
 #[derive(
 	Copy,
