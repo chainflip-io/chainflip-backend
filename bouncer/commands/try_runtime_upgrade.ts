@@ -59,11 +59,11 @@ async function main(): Promise<void> {
       block,
       path.dirname(process.cwd()),
       endpoint,
-      args.lastN,
+      args['last-n'],
     );
   } else {
     console.log('Try runtime using runtime at ' + args.runtime);
-    await tryRuntimeUpgrade(block, endpoint, args.runtime, args.lastN);
+    await tryRuntimeUpgrade(block, endpoint, args.runtime, args['last-n']);
   }
 }
 
