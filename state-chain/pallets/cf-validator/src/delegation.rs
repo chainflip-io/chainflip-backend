@@ -24,7 +24,20 @@ pub enum AssociationToOperator {
 	Delegator,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Debug,
+	Default,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	Serialize,
+	Deserialize,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum DelegationAmount<T> {
 	#[default]
 	Max,
