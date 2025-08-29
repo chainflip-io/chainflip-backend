@@ -194,6 +194,7 @@ mod tests {
 	fn test_sc_call_encode() {
 		let sc_call_delegate = EthereumSCApi::Delegation(DelegationApi::Delegate {
 			operator: AccountId32::new([0xF4; 32]),
+			increase: pallet_cf_validator::DelegationAmount::Max,
 		})
 		.encode();
 		assert_eq!(

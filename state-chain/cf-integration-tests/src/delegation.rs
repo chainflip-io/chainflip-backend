@@ -24,27 +24,12 @@ use crate::{
 	AccountId, AuthorityCount, RuntimeOrigin,
 };
 
-use cf_primitives::{AccountRole, FLIPPERINOS_PER_FLIP};
-use cf_traits::AccountInfo;
+use cf_primitives::{AccountRole, FlipBalance, FLIPPERINOS_PER_FLIP};
+use cf_traits::{AccountInfo, EpochInfo};
 use frame_support::assert_ok;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
 use sp_runtime::{traits::Zero, PerU16};
 use state_chain_runtime::{Balance, Flip, Funding, Runtime, System, Validator};
-
-struct Delegator {
-	pub account: AccountId,
-	pub pre_balance: Balance,
-	pub post_balance: Balance,
-}
-impl Delegator {
-	pub fn diff(&self) -> Balance {
-		if self.post_balance >= self.pre_balance {
-			self.post_balance - self.pre_balance
-		} else {
-			self.pre_balance - self.post_balance
-		}
-	}
-}
 
 fn setup_delegation(
 	testnet: &mut Network,
@@ -52,7 +37,7 @@ fn setup_delegation(
 	operator: AccountId,
 	operator_cut: u32,
 	delegators: BTreeMap<AccountId, Balance>,
-) -> Vec<Delegator> {
+) {
 	new_account(&operator, AccountRole::Operator);
 
 	assert_ok!(Validator::claim_validator(
@@ -72,7 +57,7 @@ fn setup_delegation(
 	));
 
 	assert_eq!(
-		pallet_cf_validator::ManagedValidators::<Runtime>::get(validator),
+		pallet_cf_validator::ManagedValidators::<Runtime>::get(&validator),
 		Some(operator.clone())
 	);
 	assert!(pallet_cf_validator::OperatorSettingsLookup::<Runtime>::get(operator.clone()).is_some());
@@ -83,12 +68,16 @@ fn setup_delegation(
 			assert_ok!(Funding::funded(
 				pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
 				d.clone(),
-				stake * FLIPPERINOS_PER_FLIP,
+				stake,
 				Default::default(),
 				Default::default(),
 			));
-			assert_ok!(Validator::delegate(RuntimeOrigin::signed(d.clone()), operator.clone()));
-			(d, stake * FLIPPERINOS_PER_FLIP)
+			assert_ok!(Validator::delegate(
+				RuntimeOrigin::signed(d.clone()),
+				operator.clone(),
+				pallet_cf_validator::DelegationAmount::Max
+			));
+			(d, stake)
 		})
 		.collect();
 
@@ -100,14 +89,18 @@ fn setup_delegation(
 		.collect::<BTreeSet<_>>();
 	assert_eq!(actual_delegator_set, delegators.keys().cloned().collect());
 
-	delegators
-		.keys()
-		.map(|d| Delegator {
-			account: d.clone(),
-			pre_balance: Flip::balance(d),
-			post_balance: Default::default(),
-		})
-		.collect()
+	// Debug delegation setup
+	println!("Debug delegation setup:");
+	println!("  operator: {:?}", operator);
+	println!("  validator: {:?}", validator);
+	for (delegator, stake) in &delegators {
+		println!(
+			"  delegator: {:?}, stake: {}, max_bid: {:?}",
+			delegator,
+			stake,
+			pallet_cf_validator::MaxDelegationBid::<Runtime>::get(delegator)
+		);
+	}
 }
 
 #[test]
@@ -128,28 +121,53 @@ fn block_author_rewards_are_distributed_among_delegators() {
 				.next()
 				.unwrap();
 
+			println!("Selected authority for test: {:?}", auth);
+
 			let operator = AccountId::from([0xe1; 32]);
 
 			// Setup 3 delegator, operator and association with validator.
-			let mut delegators = setup_delegation(
+			let delegators = BTreeMap::from_iter([
+				(AccountId::from([0xA0; 32]), 100_000u128 * FLIPPERINOS_PER_FLIP),
+				(AccountId::from([0xA1; 32]), 400_000u128 * FLIPPERINOS_PER_FLIP),
+				(AccountId::from([0xA2; 32]), 500_000u128 * FLIPPERINOS_PER_FLIP),
+			]);
+			setup_delegation(
 				&mut testnet,
 				auth.clone(),
 				operator.clone(),
 				500, // 5%
-				BTreeMap::from_iter([
-					(AccountId::from([0xA0; 32]), 10_000_000u128),
-					(AccountId::from([0xA1; 32]), 40_000_000u128),
-					(AccountId::from([0xA2; 32]), 50_000_000u128),
-				]),
+				delegators.clone(),
+			);
+
+			testnet.move_to_the_next_epoch();
+
+			let epoch_index = pallet_cf_validator::Pallet::<Runtime>::epoch_index();
+			let snapshot =
+				pallet_cf_validator::DelegationSnapshots::<Runtime>::get(epoch_index, &operator)
+					.expect("Snapshot should be registered on new epoch");
+			assert!(
+				pallet_cf_validator::ValidatorToOperator::<Runtime>::get(epoch_index, &auth)
+					.expect("Validator should be mapped to operator") ==
+					operator
+			);
+			assert!(
+				snapshot.validators.len() == 1 &&
+					snapshot.validators.keys().any(|v| *v == auth) &&
+					snapshot.delegators == delegators,
+				"Bad snapshot: {:#?}",
+				snapshot,
 			);
 
 			let auth_pre_balance = Flip::balance(&auth);
 			let op_pre_balance = Flip::balance(&operator);
+			let total_delegators_pre_balance: FlipBalance =
+				delegators.keys().map(Flip::balance).sum();
 
-			// Let few blocks to pass so some rewards are distributed for authoring blocks.
-			testnet.move_forward_blocks(30);
-
-			delegators.iter_mut().for_each(|d| d.post_balance = Flip::balance(&d.account));
+			// Move forward through all authorities to ensure the reward is distributed once.
+			testnet.move_forward_blocks(
+				pallet_cf_validator::CurrentAuthorities::<Runtime>::decode_len()
+					.expect("at least one authority") as u32,
+			);
 
 			let auth_post_balance = Flip::balance(&auth);
 			let auth_cut = auth_post_balance - auth_pre_balance;
@@ -157,39 +175,26 @@ fn block_author_rewards_are_distributed_among_delegators() {
 			let op_post_balance = Flip::balance(&operator);
 			let op_cut = op_post_balance - op_pre_balance;
 
-			let total_auth_reward = auth_cut +
-				delegators[0].diff() +
-				delegators[1].diff() +
-				delegators[2].diff() +
-				op_cut;
+			let total_delegators_post_balance: FlipBalance =
+				delegators.keys().map(Flip::balance).sum();
+			let delegators_cut = total_delegators_post_balance - total_delegators_pre_balance;
+
+			let total_auth_reward =
+				pallet_cf_emissions::Pallet::<Runtime>::current_authority_emission_per_block();
 
 			assert!(total_auth_reward > 0u128);
+			assert!(auth_cut > 0u128);
+			assert!(delegators_cut > 0u128);
+			assert!(op_cut > 0u128);
+			assert!(FlipBalance::abs_diff(delegators_cut, op_cut * 19) < 10); // 5/95 split
 
 			let total_pre_balance =
-				auth_pre_balance + delegators.iter().map(|d| d.pre_balance).sum::<u128>();
+				auth_pre_balance + total_delegators_pre_balance + op_pre_balance;
 
 			// Verify that rewards are distributed accordingly.
 			assert_eq!(
 				PerU16::from_rational(auth_cut, total_auth_reward,),
 				PerU16::from_rational(auth_pre_balance, total_pre_balance)
-			);
-
-			for delegator in &delegators {
-				assert!(
-					u16::abs_diff(
-						PerU16::from_rational(delegator.diff(), total_auth_reward).deconstruct(),
-						(PerU16::from_rational(delegator.pre_balance, total_pre_balance) *
-							PerU16::from_percent(95))
-						.deconstruct()
-					) <= 10u16
-				);
-			}
-			assert_eq!(
-				PerU16::from_rational(op_cut, total_auth_reward),
-				PerU16::from_rational(
-					delegators.iter().map(|d| d.pre_balance).sum::<u128>(),
-					total_pre_balance
-				) * PerU16::from_percent(5)
 			);
 		});
 }
@@ -215,16 +220,17 @@ fn slashings_are_distributed_among_delegators() {
 			let operator: sp_runtime::AccountId32 = AccountId::from([0xe1; 32]);
 
 			// Setup 3 delegator, operator and association with validator.
-			let mut delegators = setup_delegation(
+			let delegators = BTreeMap::from_iter([
+				(AccountId::from([0xA0; 32]), 100_000u128 * FLIPPERINOS_PER_FLIP),
+				(AccountId::from([0xA1; 32]), 400_000u128 * FLIPPERINOS_PER_FLIP),
+				(AccountId::from([0xA2; 32]), 500_000u128 * FLIPPERINOS_PER_FLIP),
+			]);
+			setup_delegation(
 				&mut testnet,
 				auth.clone(),
 				operator.clone(),
 				500, // 5%
-				BTreeMap::from_iter([
-					(AccountId::from([0xA0; 32]), 10_000_000u128),
-					(AccountId::from([0xA1; 32]), 40_000_000u128),
-					(AccountId::from([0xA2; 32]), 50_000_000u128),
-				]),
+				delegators.clone(),
 			);
 
 			// Set Validator as "offline" and reduce reputation
@@ -235,7 +241,7 @@ fn slashings_are_distributed_among_delegators() {
 			testnet.set_active(&auth, false);
 			testnet.set_auto_heartbeat(&auth, false);
 
-			// Move to the block before backup rewards are distributed
+			// Move to the block before the heartbeat.
 			testnet.move_forward_blocks(
 				HEARTBEAT_BLOCK_INTERVAL - System::block_number() % HEARTBEAT_BLOCK_INTERVAL - 1,
 			);
@@ -243,14 +249,11 @@ fn slashings_are_distributed_among_delegators() {
 			// Update pre-balance
 			let auth_pre_balance = Flip::balance(&auth);
 			let op_pre_balance = Flip::balance(&operator);
-
-			// since the balances have been updated because of block rewards.
-			delegators.iter_mut().for_each(|d| d.pre_balance = Flip::balance(&d.account));
+			let total_delegators_pre_balance: FlipBalance =
+				delegators.keys().map(Flip::balance).sum();
 
 			// Move forward 1 block so that the inactive validator is slashed
 			testnet.move_forward_blocks(1);
-
-			delegators.iter_mut().for_each(|d| d.post_balance = Flip::balance(&d.account));
 
 			let auth_post_balance = Flip::balance(&auth);
 			let auth_slash = auth_pre_balance - auth_post_balance;
@@ -258,40 +261,22 @@ fn slashings_are_distributed_among_delegators() {
 			let op_post_balance = Flip::balance(&operator);
 			let op_slash = op_pre_balance - op_post_balance;
 
-			let total_slashing = auth_slash +
-				delegators[0].diff() +
-				delegators[1].diff() +
-				delegators[2].diff() +
-				op_slash;
+			let total_delegators_post_balance: FlipBalance =
+				delegators.keys().map(Flip::balance).sum();
+			let delegators_slash = total_delegators_pre_balance - total_delegators_post_balance;
 
 			assert!(auth_slash > 0u128);
+			assert!(delegators_slash > 0u128);
+			assert!(FlipBalance::abs_diff(op_slash * 19, delegators_slash) < 10); // 5/95 split
 
 			let total_pre_balance =
-				auth_pre_balance + delegators.iter().map(|d| d.pre_balance).sum::<u128>();
+				auth_pre_balance + total_delegators_pre_balance + op_pre_balance;
+			let total_slashing = auth_slash + delegators_slash + op_slash;
 
 			// Verify that slashings are distributed accordingly
 			assert_eq!(
 				PerU16::from_rational(auth_slash, total_slashing),
 				PerU16::from_rational(auth_pre_balance, total_pre_balance)
-			);
-
-			for delegator in &delegators {
-				assert!(
-					u16::abs_diff(
-						PerU16::from_rational(delegator.diff(), total_slashing).deconstruct(),
-						(PerU16::from_rational(delegator.pre_balance, total_pre_balance) *
-							PerU16::from_percent(95))
-						.deconstruct()
-					) <= 10u16
-				);
-			}
-
-			assert_eq!(
-				PerU16::from_rational(op_slash, total_slashing),
-				PerU16::from_rational(
-					delegators.iter().map(|d| d.pre_balance).sum::<u128>(),
-					total_pre_balance
-				) * PerU16::from_percent(5)
 			);
 		});
 }

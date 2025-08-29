@@ -5,8 +5,10 @@ use frame_support::{
 	traits::UnfilteredDispatchable,
 };
 use pallet_cf_funding::{Call as FundingCall, RedemptionAmount};
-use pallet_cf_validator::{Call as ValidatorCall, DelegationAmount};
+use pallet_cf_validator::Call as ValidatorCall;
 use sp_runtime::traits::Dispatchable;
+
+pub use pallet_cf_validator::DelegationAmount;
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug)]
 pub enum DelegationApi {
