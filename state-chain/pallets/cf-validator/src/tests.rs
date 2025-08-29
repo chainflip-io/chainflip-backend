@@ -37,6 +37,7 @@ use frame_support::{
 };
 use frame_system::RawOrigin;
 use sp_runtime::testing::UintAuthorityId;
+use sp_std::vec;
 
 const NOBODY: u64 = 999; // Non-existent account for testing
 const GENESIS_EPOCH: u32 = 1;
@@ -2541,6 +2542,73 @@ mod delegation {
 				delegator: DELEGATOR,
 				operator: BOB,
 			}));
+		});
+	}
+
+	#[test]
+	fn test_auction_optimization() {
+		const OP_1: u64 = 1001;
+		const OP_2: u64 = 1002;
+		new_test_ext().then_execute_with_checks(|| {
+			set_default_test_bids();
+			add_bids([&OPERATOR_1_BIDS[..], &OPERATOR_2_BIDS[..]].concat());
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(OP_1),
+				OPERATOR_SETTINGS,
+			));
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(OP_2),
+				OPERATOR_SETTINGS,
+			));
+
+			for bid in OPERATOR_1_BIDS {
+				assert_ok!(ValidatorPallet::claim_validator(
+					OriginTrait::signed(OP_1),
+					bid.bidder_id
+				));
+				assert_ok!(ValidatorPallet::accept_operator(
+					OriginTrait::signed(bid.bidder_id),
+					OP_1
+				));
+				assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+			}
+
+			for bid in OPERATOR_2_BIDS {
+				assert_ok!(ValidatorPallet::claim_validator(
+					OriginTrait::signed(OP_2),
+					bid.bidder_id
+				));
+				assert_ok!(ValidatorPallet::accept_operator(
+					OriginTrait::signed(bid.bidder_id),
+					OP_2
+				));
+				assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+			}
+
+			ValidatorPallet::start_authority_rotation();
+
+			assert_eq!(
+				last_event::<Test>(),
+				RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+					new_phase: RotationPhase::KeygensInProgress(RotationState {
+						primary_candidates: vec![10, 0, 1, 2],
+						secondary_candidates: vec![
+							3,
+							5,
+							11,
+							6,
+							7,
+							18446744073709551613,
+							18446744073709551614,
+							18446744073709551615
+						],
+						banned: BTreeSet::new(),
+						bond: 110,
+						new_epoch_index: 1,
+					})
+				})
+			);
 		});
 	}
 }

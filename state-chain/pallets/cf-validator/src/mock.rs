@@ -95,6 +95,13 @@ pub const LOSING_BIDS: [Bid<ValidatorId, FlipBalance>; 3] = [
 	Bid { bidder_id: 6, amount: 90 },
 	Bid { bidder_id: 7, amount: 74 },
 ];
+
+pub const OPERATOR_1_BIDS: [Bid<ValidatorId, FlipBalance>; 2] =
+	[Bid { bidder_id: 9, amount: 90 }, Bid { bidder_id: 10, amount: 95 }];
+
+pub const OPERATOR_2_BIDS: [Bid<ValidatorId, FlipBalance>; 2] =
+	[Bid { bidder_id: 11, amount: 50 }, Bid { bidder_id: 12, amount: 45 }];
+
 pub const UNQUALIFIED_BID: Bid<ValidatorId, FlipBalance> = Bid { bidder_id: 8, amount: 200 };
 
 pub const EXPECTED_BOND: Amount = WINNING_BIDS[WINNING_BIDS.len() - 1].amount;
