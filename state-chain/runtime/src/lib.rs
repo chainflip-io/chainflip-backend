@@ -33,6 +33,7 @@ use crate::{
 			derive_btc_vault_deposit_addresses, BitcoinPrivateBrokerDepositAddresses,
 		},
 		calculate_account_apy,
+		ethereum_sc_calls::EthereumAccount,
 		solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
 			SolanaNonceTrackingTrigger,
@@ -111,8 +112,8 @@ use pallet_cf_swapping::{
 };
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use pallet_cf_validator::{
-	AssociationToOperator, DelegatedRewardsDistribution, DelegationAcceptance, DelegationSlasher,
-	SetSizeMaximisingAuctionResolver,
+	AssociationToOperator, DelegatedRewardsDistribution, DelegationAcceptance, DelegationAmount,
+	DelegationSlasher, SetSizeMaximisingAuctionResolver,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use runtime_apis::{ChainAccounts, EvmCallDetails};
@@ -142,7 +143,7 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::{offchain::SendTransactionTypes, pallet_prelude::BlockNumberFor};
-use pallet_cf_funding::{EthereumDeposit, MinimumFunding};
+use pallet_cf_funding::MinimumFunding;
 use pallet_cf_pools::{PoolInfo, PoolOrders};
 use pallet_grandpa::AuthorityId as GrandpaId;
 use pallet_session::historical as session_historical;
@@ -2836,20 +2837,20 @@ impl_runtime_apis! {
 		fn cf_sc_call_tx(
 			caller: EthereumAddress,
 			call: EthereumSCApi,
-		) -> Result<EvmCaDetails, DispatchErrorWithMessage> {
+		) -> Result<EvmCallDetails, DispatchErrorWithMessage> {
 			use chainflip::ethereum_sc_calls::DelegationApi;
-			let caller_id = caller.into_account_id();
+			let caller_id = EthereumAccount(caller).into_account_id();
 			let required_deposit = match call {
-				EthereumSCApi::Delegation(DelegationApi::Delegate { operator, increase: Some(increase) }) => {
+				EthereumSCApi::Delegation(DelegationApi::Delegate { operator, increase: DelegationAmount::Some(increase) }) => {
 					pallet_cf_validator::MaxDelegationBid::<Runtime>::get(&caller_id).unwrap_or_default()
 						.saturating_add(increase)
-						.saturating_sub(pallet_cf_flip::Pallet::<Runtime>::balance(&caller_id).unwrap_or_default())
+						.saturating_sub(pallet_cf_flip::Pallet::<Runtime>::balance(&caller_id))
 				},
 				_ => 0,
 			};
 			Ok(EvmCallDetails {
 				calldata: if required_deposit > 0 {
-					DepositToSCGatewayAndCall::new(amount, call.encode()).abi_encoded_payload()
+					DepositToSCGatewayAndCall::new(required_deposit, call.encode()).abi_encoded_payload()
 				} else {
 					SCCall::new(call.encode()).abi_encoded_payload()
 				},

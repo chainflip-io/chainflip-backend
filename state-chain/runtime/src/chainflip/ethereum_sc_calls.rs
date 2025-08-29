@@ -7,7 +7,17 @@ use frame_support::{
 };
 use pallet_cf_funding::{Call as FundingCall, RedemptionAmount};
 use pallet_cf_validator::{Call as ValidatorCall, DelegationAmount};
-use sp_runtime::traits::Dispatchable;
+use sp_runtime::{traits::Dispatchable, AccountId32};
+
+pub struct EthereumAccount(pub EthereumAddress);
+
+impl EthereumAccount {
+	pub fn into_account_id(&self) -> <Runtime as frame_system::Config>::AccountId {
+		let mut data = [0u8; 32];
+		data[12..32].copy_from_slice(&self.0 .0);
+		AccountId32::new(data)
+	}
+}
 
 #[derive(
 	Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug, Serialize, Deserialize,
