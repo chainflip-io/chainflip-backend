@@ -27,6 +27,7 @@ pub mod migrations;
 pub mod weights;
 use core::marker::PhantomData;
 
+use frame_support::{Deserialize, Serialize};
 pub use weights::WeightInfo;
 
 #[cfg(test)]
@@ -333,7 +334,19 @@ pub mod pallet {
 	pub type EthTransactionHash = [u8; 32];
 
 	#[derive(
-		Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Ord, PartialOrd,
+		Copy,
+		Clone,
+		Debug,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Ord,
+		PartialOrd,
+		Serialize,
+		Deserialize,
 	)]
 	pub enum RedemptionAmount<T: Parameter> {
 		Max,
@@ -1203,7 +1216,7 @@ pub struct EthereumDepositAndSCCall {
 	pub call: Vec<u8>,
 }
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound, Serialize, Deserialize)]
 pub enum EthereumDeposit {
 	FlipToSCGateway { amount: EthAmount },
 	Vault { asset: EthAsset, amount: EthAmount },
