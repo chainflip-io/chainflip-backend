@@ -2834,37 +2834,34 @@ impl_runtime_apis! {
 		}
 
 		fn cf_sc_call_tx(
+			caller: EthereumAddress,
 			call: EthereumSCApi,
-			maybe_deposit: EthereumDeposit,
-		) -> Result<EvmCallDetails, DispatchErrorWithMessage> {
-			match maybe_deposit {
-				EthereumDeposit::FlipToSCGateway { amount } => Ok(EvmCallDetails {
-					calldata: DepositToSCGatewayAndCall::new(amount, call.encode()).abi_encoded_payload(),
-					value: U256::zero(),
-					to: Environment::eth_sc_utils_address(),
-					source_token_address: Some(
-						Environment::supported_eth_assets(cf_primitives::chains::assets::eth::Asset::Flip)
-							.ok_or(DispatchErrorWithMessage::from(
-								"flip token address not found on the state chain: {e}",
-							))?,
-					),
-				}),
-				EthereumDeposit::NoDeposit => Ok(EvmCallDetails {
-					calldata: SCCall::new(call.encode()).abi_encoded_payload(),
-					value: U256::zero(),
-					to: Environment::eth_sc_utils_address(),
-					source_token_address: Some(
-						Environment::supported_eth_assets(cf_primitives::chains::assets::eth::Asset::Flip)
-							.ok_or(DispatchErrorWithMessage::from(
-								"flip token address not found on the state chain: {e}",
-							))?,
-					),
-				}),
-				EthereumDeposit::Vault { asset: _, amount: _ } =>
-					Err(DispatchErrorWithMessage::from("Ethereum deposit type not supported yet")),
-				EthereumDeposit::Transfer { asset: _, amount: _, destination: _ } =>
-					Err(DispatchErrorWithMessage::from("Ethereum deposit type not supported yet")),
-			}
+		) -> Result<EvmCaDetails, DispatchErrorWithMessage> {
+			use chainflip::ethereum_sc_calls::DelegationApi;
+			let caller_id = caller.into_account_id();
+			let required_deposit = match call {
+				EthereumSCApi::Delegation(DelegationApi::Delegate { operator, increase: Some(increase) }) => {
+					pallet_cf_validator::MaxDelegationBid::<Runtime>::get(&caller_id).unwrap_or_default()
+						.saturating_add(increase)
+						.saturating_sub(pallet_cf_flip::Pallet::<Runtime>::balance(&caller_id).unwrap_or_default())
+				},
+				_ => 0,
+			};
+			Ok(EvmCallDetails {
+				calldata: if required_deposit > 0 {
+					DepositToSCGatewayAndCall::new(amount, call.encode()).abi_encoded_payload()
+				} else {
+					SCCall::new(call.encode()).abi_encoded_payload()
+				},
+				value: U256::zero(),
+				to: Environment::eth_sc_utils_address(),
+				source_token_address: Some(
+					Environment::supported_eth_assets(cf_primitives::chains::assets::eth::Asset::Flip)
+						.ok_or(DispatchErrorWithMessage::from(
+							"flip token address not found on the state chain: {e}",
+						))?,
+				),
+			})
 		}
 	}
 
