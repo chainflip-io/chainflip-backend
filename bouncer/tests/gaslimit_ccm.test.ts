@@ -6,6 +6,7 @@ import {
   chainFromAsset,
   EgressId,
   getEvmEndpoint,
+  getEvmWhaleKeypair,
   getSolConnection,
   observeCcmReceived,
   observeSwapRequested,
@@ -15,7 +16,7 @@ import {
 } from 'shared/utils';
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
-import { estimateCcmCfTesterGas, spamEvm } from 'shared/send_evm';
+import { estimateCcmCfTesterGas, signAndSendTxEvm } from 'shared/send_evm';
 import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
 import { CcmDepositMetadata } from 'shared/new_swap';
 import { globalLogger, Logger } from 'shared/utils/logger';
@@ -390,11 +391,11 @@ function spamEvmChain(logger: Logger, chain: Chain): () => void {
   }
 }
 
-let stopSpammingEth: () => void;
-let stopSpammingArb: () => void;
-let feeDeficitRefused: { stop: () => Promise<void> };
-
 describe('GasLimitCcmSwaps', () => {
+  let stopSpammingEth: () => void;
+  let stopSpammingArb: () => void;
+  let feeDeficitRefused: { stop: () => Promise<void> };
+
   const logger = globalLogger.child({ test: 'GasLimitCcmSwaps' });
   beforeAll(
     async () => {
