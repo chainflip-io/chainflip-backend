@@ -487,6 +487,8 @@ pub mod pallet {
 		DelegatorBlocked,
 		/// The provided Operator fee is too low.
 		OperatorFeeTooLow,
+		/// Exceptions limit is reached
+		ExceptionsLimitReached,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -1009,9 +1011,14 @@ pub mod pallet {
 				DelegationAcceptance::Allow => {
 					// If the operator is set to allow, exceptions are the delegators that are
 					// blocked.
-					Exceptions::<T>::mutate(&operator, |blocked| {
-						blocked.insert(delegator.clone());
-					});
+					Exceptions::<T>::try_mutate(&operator, |blocked| {
+						if blocked.len() <= EXCEPTIONS_LIMIT {
+							blocked.insert(delegator.clone());
+							Ok(())
+						} else {
+							Err(Error::<T>::ExceptionsLimitReached)
+						}
+					})?;
 				},
 			}
 
@@ -1038,9 +1045,14 @@ pub mod pallet {
 				DelegationAcceptance::Deny => {
 					// If the operator is set to deny, exceptions are the delegators that are
 					// allowed.
-					Exceptions::<T>::mutate(&operator, |allowed| {
-						allowed.insert(delegator.clone());
-					});
+					Exceptions::<T>::try_mutate(&operator, |allowed| {
+						if allowed.len() <= EXCEPTIONS_LIMIT {
+							allowed.insert(delegator.clone());
+							Ok(())
+						} else {
+							Err(Error::<T>::ExceptionsLimitReached)
+						}
+					})?;
 				},
 				DelegationAcceptance::Allow => {
 					// If the operator is set to allow, exceptions are the delegators that are
