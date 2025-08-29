@@ -1011,7 +1011,7 @@ fn redeem_funds_to_restricted_address_overrides_bound_and_executor_restrictions(
 			),
 			Error::<Test>::ExecutorBindingRestrictionViolated
 		);
-		// Redeem using correct redeem and executor should complete succesfully
+		// Redeem using correct redeem and executor should complete successfully
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			(AMOUNT).into(),
@@ -2247,7 +2247,7 @@ pub mod rebalancing {
 	}
 
 	#[test]
-	fn fund_rebalance_and_redeem_dosent_allow_unauthorized_redemptions() {
+	fn fund_rebalance_and_redeem_does_not_allow_unauthorized_redemptions() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 100;
 			const REBALANCE_AMOUNT: u128 = 50;
@@ -2381,7 +2381,7 @@ pub mod rebalancing {
 	}
 
 	#[test]
-	fn rebalance_during_redemption_doesnt_lead_to_double_spending() {
+	fn rebalance_during_redemption_does_not_lead_to_double_spending() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 100;
 			const AMOUNT_TO_REDEEM: u128 = 50;
