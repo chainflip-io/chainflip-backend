@@ -461,7 +461,7 @@ interface BaseOptions<T> {
   finalized?: boolean;
   historicalCheckBlocks?: number;
   timeoutSeconds?: number;
-  stopAfter?: { blocks: number } | { test: EventTest<T> } | { events: number };
+  stopAfter?: { blocks: number } | 'Never' | 'Any';
 }
 
 interface Options<T> extends BaseOptions<T> {
@@ -505,7 +505,7 @@ export function observeEvents<T = any>(
     historicalCheckBlocks = 0,
     timeoutSeconds = 0,
     abortable = false,
-    stopAfter = { test },
+    stopAfter = 'Any',
   }: Options<T> | AbortableOptions<T> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
@@ -538,16 +538,13 @@ export function observeEvents<T = any>(
               `Found matching event ${event.name.section}:${event.name.method} in block ${event.block}`,
             );
             foundEvents.push(event);
-          }
-
-          if ('test' in stopAfter) {
-            stop = stop || stopAfter.test(event);
-          } else if ('events' in stopAfter) {
-            stop = stop || foundEvents.length >= stopAfter.events;
+            if (stopAfter === 'Any') {
+              stop = true;
+            }
           }
         }
       }
-      if ('blocks' in stopAfter) {
+      if (typeof stopAfter === 'object' && 'blocks' in stopAfter) {
         stop = stop || blocksChecked >= stopAfter.blocks;
       }
       return { stop, foundEvents };
