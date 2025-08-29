@@ -35,7 +35,10 @@ expression: val
   },
   "lending_pools": {
     "add_boost_funds_enabled": true,
-    "stop_boosting_enabled": true
+    "stop_boosting_enabled": true,
+    "borrowing_enabled": true,
+    "adding_lender_funds_enabled": true,
+    "withdrawing_lender_funds_enabled": true
   },
   "reputation": {
     "reporting_enabled": true

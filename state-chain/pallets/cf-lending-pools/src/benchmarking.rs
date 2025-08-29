@@ -29,6 +29,7 @@ mod benchmarks {
 	use super::*;
 
 	const TIER_5_BPS: BoostPoolTier = 5;
+	const COLLATERAL_ASSET: Asset = Asset::Eth;
 
 	fn create_boost_pool<T: Config>() {
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
@@ -38,7 +39,7 @@ mod benchmarks {
 		));
 	}
 
-	fn setup_booster_account<T: Config>(asset: Asset, seed: u32) -> T::AccountId {
+	fn setup_lp_account<T: Config>(asset: Asset, seed: u32) -> T::AccountId {
 		use frame_support::traits::OnNewAccount;
 		let caller: T::AccountId = account("booster", 0, seed);
 
@@ -51,8 +52,27 @@ mod benchmarks {
 		T::Balance::credit_account(&caller, asset, 1_000_000);
 
 		T::Balance::credit_account(&caller, asset, 5_000_000_000_000_000_000u128);
+		T::Balance::credit_account(&caller, COLLATERAL_ASSET, 5_000_000_000_000_000_000u128);
 
 		caller
+	}
+
+	#[benchmark]
+	fn update_pallet_config(n: Linear<1, MAX_PALLET_CONFIG_UPDATE>) {
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		let updates = vec![
+			PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
+				deduction_percent: Percent::from_percent(10),
+			};
+			n as usize
+		]
+		.try_into()
+		.expect("Length is within the configured len");
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::update_pallet_config(origin, updates));
+		}
 	}
 
 	#[benchmark]
@@ -63,7 +83,7 @@ mod benchmarks {
 
 		let asset = Asset::Eth;
 
-		let lp_account = setup_booster_account::<T>(asset, 0);
+		let lp_account = setup_lp_account::<T>(asset, 0);
 
 		#[block]
 		{
@@ -92,7 +112,7 @@ mod benchmarks {
 		const ASSET: Asset = Asset::Eth;
 		const DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(0);
 
-		let boosters: Vec<_> = (0..n).map(|i| setup_booster_account::<T>(ASSET, i)).collect();
+		let boosters: Vec<_> = (0..n).map(|i| setup_lp_account::<T>(ASSET, i)).collect();
 
 		for booster_id in &boosters {
 			assert_ok!(Pallet::<T>::add_boost_funds(
@@ -127,7 +147,7 @@ mod benchmarks {
 
 		let asset = Asset::Eth;
 
-		let lp_account = setup_booster_account::<T>(asset, 0);
+		let lp_account = setup_lp_account::<T>(asset, 0);
 
 		assert_ok!(Pallet::<T>::add_boost_funds(
 			RawOrigin::Signed(lp_account.clone()).into(),
@@ -182,4 +202,6 @@ mod benchmarks {
 		}
 		assert_eq!(BoostPools::<T>::iter().count(), 1);
 	}
+
+	impl_benchmark_test_suite!(Pallet, crate::mocks::new_test_ext(), crate::mocks::Test,);
 }

@@ -320,6 +320,8 @@ pub enum SwapFailureReason {
 	PredecessorSwapFailure,
 	/// Swapping is disabled due to safe mode
 	SafeModeActive,
+	/// Aborted by the originator of the swap
+	AbortedFromOrigin,
 }
 
 pub enum BatchExecutionError<T: Config> {
@@ -500,8 +502,8 @@ pub mod pallet {
 		PriceLimits, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{
-		AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider, PriceFeedApi,
-		ScheduledEgressDetails,
+		lending::ChpSystemApi, AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider,
+		PriceFeedApi, ScheduledEgressDetails, SwapExecutionProgress,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
@@ -546,6 +548,8 @@ pub mod pallet {
 
 		/// The balance API for interacting with the asset-balance pallet.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
+
+		type ChpSystemApi: ChpSystemApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type PoolPriceApi: PoolPriceProvider;
 
@@ -1958,6 +1962,9 @@ pub mod pallet {
 									dca_state.accumulated_output_amount,
 								);
 							},
+							SwapOutputAction::CreditLendingPool { swap_type } => {
+								log_or_panic!("Unexpected refund of a loan swap: {swap_type:?}");
+							},
 						}
 					}
 				},
@@ -2077,6 +2084,13 @@ pub mod pallet {
 									T::BalanceApi::credit_account(
 										account_id,
 										request.output_asset,
+										dca_state.accumulated_output_amount,
+									);
+								},
+								SwapOutputAction::CreditLendingPool { swap_type } => {
+									T::ChpSystemApi::process_loan_swap_outcome(
+										swap_request_id,
+										swap_type.clone(),
 										dca_state.accumulated_output_amount,
 									);
 								},
@@ -2632,6 +2646,8 @@ pub mod pallet {
 						Pallet::<T>::get_network_fee_for_swap(
 							input_asset,
 							output_asset,
+							// TODO: see if we want to treat lending swaps as internal for the
+							// purposes of determining network fee?
 							matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
 						),
 					))];
@@ -2695,6 +2711,49 @@ pub mod pallet {
 			};
 
 			request_id
+		}
+
+		fn inspect_swap_request(swap_request_id: SwapRequestId) -> Option<SwapExecutionProgress> {
+			let swap_request = SwapRequests::<T>::get(swap_request_id)?;
+
+			let SwapRequestState::UserSwap { dca_state, .. } = swap_request.state else {
+				return None;
+			};
+
+			let scheduled_swaps = ScheduledSwaps::<T>::get();
+
+			let input_amount_in_scheduled_swaps: AssetAmount = dca_state
+				.scheduled_chunks
+				.iter()
+				.filter_map(|swap_id| scheduled_swaps.get(swap_id).map(|swap| swap.input_amount))
+				.sum();
+
+			Some(SwapExecutionProgress {
+				remaining_input_amount: dca_state.remaining_input_amount +
+					input_amount_in_scheduled_swaps,
+				accumulated_output_amount: dca_state.accumulated_output_amount,
+			})
+		}
+
+		fn abort_swap_request(swap_request_id: SwapRequestId) -> Option<SwapExecutionProgress> {
+			let swap_progress = Self::inspect_swap_request(swap_request_id)?;
+
+			// Cancel any scheduled swaps:
+			{
+				let swap_request = SwapRequests::<T>::get(swap_request_id)?;
+
+				let SwapRequestState::UserSwap { dca_state, .. } = swap_request.state else {
+					return None;
+				};
+
+				for swap_id in dca_state.scheduled_chunks {
+					Self::cancel_swap(swap_id, SwapFailureReason::AbortedFromOrigin);
+				}
+			}
+
+			SwapRequests::<T>::remove(swap_request_id);
+
+			Some(swap_progress)
 		}
 	}
 

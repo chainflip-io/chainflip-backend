@@ -140,13 +140,13 @@ mod scaled_amount {
 // NOTE: temporarily exposing this to help with migration
 pub use scaled_amount::ScaledAmount;
 
-define_wrapper_type!(LoanId, u64, extra_derives: Ord, PartialOrd);
+define_wrapper_type!(CoreLoanId, u64, extra_derives: Ord, PartialOrd);
 
-impl core::ops::Add<u64> for LoanId {
+impl core::ops::Add<u64> for CoreLoanId {
 	type Output = Self;
 
 	fn add(self, rhs: u64) -> Self::Output {
-		LoanId(self.0 + rhs)
+		CoreLoanId(self.0 + rhs)
 	}
 }
 
@@ -160,16 +160,16 @@ pub struct PendingLoan<AccountId> {
 
 #[derive(Clone, Debug, DefaultNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct CoreLendingPool<AccountId> {
-	pub next_loan_id: LoanId,
+	pub next_loan_id: CoreLoanId,
 	// Total available amount (not currently used in any loan)
 	pub available_amount: ScaledAmount,
 	// Mapping from LP to the available amount they own in `available_amount`
 	pub amounts: BTreeMap<AccountId, ScaledAmount>,
 	// Pending loans awaiting finalisation and how much of them is owed to which LP
-	pub pending_loans: BTreeMap<LoanId, PendingLoan<AccountId>>,
+	pub pending_loans: BTreeMap<CoreLoanId, PendingLoan<AccountId>>,
 	// Stores LPs who have opted to stop lending, along with any pending loans awaiting
 	// finalisation.
-	pub pending_withdrawals: BTreeMap<AccountId, BTreeSet<LoanId>>,
+	pub pending_withdrawals: BTreeMap<AccountId, BTreeSet<CoreLoanId>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -215,7 +215,7 @@ where
 		&mut self,
 		amount_to_borrow: AssetAmount,
 		usage: LoanUsage,
-	) -> Result<LoanId, &'static str> {
+	) -> Result<CoreLoanId, &'static str> {
 		let loan_id = self.next_loan_id;
 		self.next_loan_id.0 += 1;
 
@@ -278,14 +278,14 @@ where
 
 		self.pending_loans
 			.try_insert(loan_id, PendingLoan { shares, usage })
-			.map_err(|_| "Pending boost id already exists")?;
+			.map_err(|_| "Pending loan id already exists")?;
 
 		Ok(loan_id)
 	}
 
 	pub fn make_repayment(
 		&mut self,
-		loan_id: LoanId,
+		loan_id: CoreLoanId,
 		repayment_amount: AssetAmount,
 	) -> UnlockedFunds<AccountId> {
 		let Some(PendingLoan { shares, .. }) = self.pending_loans.get(&loan_id) else {
@@ -340,7 +340,7 @@ where
 		unlocked_funds
 	}
 
-	pub fn finalise_loan(&mut self, loan_id: LoanId) {
+	pub fn finalise_loan(&mut self, loan_id: CoreLoanId) {
 		let Some(PendingLoan { shares, .. }) = self.pending_loans.remove(&loan_id) else {
 			return Default::default();
 		};
@@ -371,7 +371,7 @@ where
 			.collect()
 	}
 
-	pub fn get_pending_loans(&self) -> &BTreeMap<LoanId, PendingLoan<AccountId>> {
+	pub fn get_pending_loans(&self) -> &BTreeMap<CoreLoanId, PendingLoan<AccountId>> {
 		&self.pending_loans
 	}
 
