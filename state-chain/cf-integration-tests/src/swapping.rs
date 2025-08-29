@@ -67,7 +67,7 @@ use sp_core::{H160, U256};
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation, ChainAddressConverter, EthTransactionBuilder,
-		EvmEnvironment,
+		EvmEnvironment, RuntimeAdjustedFeeApi,
 	},
 	AssetBalances, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
 	EthereumInstance, LiquidityPools, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
@@ -156,7 +156,7 @@ pub fn do_eth_swap(
 	let ingress_fee = sp_std::cmp::min(
 		Swapping::calculate_input_for_gas_output::<Ethereum>(
 			from_eth_asset,
-			EthereumChainTracking::estimate_fee(
+			RuntimeAdjustedFeeApi::<Runtime, EthereumInstance>::estimate_fee(
 				from_eth_asset,
 				IngressOrEgress::IngressDepositChannel,
 			),
@@ -492,7 +492,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 		let ingress_fee = sp_std::cmp::min(
 			Swapping::calculate_input_for_gas_output::<Ethereum>(
 				EthAsset::Flip,
-				EthereumChainTracking::estimate_fee(
+				RuntimeAdjustedFeeApi::<Runtime, EthereumInstance>::estimate_fee(
 					EthAsset::Flip,
 					IngressOrEgress::IngressDepositChannel,
 				),

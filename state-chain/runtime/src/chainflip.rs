@@ -90,16 +90,17 @@ use cf_chains::{
 	},
 	AnyChain, ApiCall, Arbitrum, Assethub, CcmChannelMetadataChecked, CcmDepositMetadataChecked,
 	Chain, ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersForChain,
-	ForeignChain, ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey,
-	SetGovKeyWithAggKey, SetGovKeyWithAggKeyError, Solana, TransactionBuilder,
+	FeeEstimationApi, ForeignChain, ReplayProtectionProvider, RequiresSignatureRefresh,
+	SetCommKeyWithAggKey, SetGovKeyWithAggKey, SetGovKeyWithAggKeyError, Solana,
+	TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
 	DcaParameters,
 };
 use cf_traits::{
-	AccountInfo, AccountRoleRegistry, BroadcastAnyChainGovKey, Broadcaster,
-	CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
+	AccountInfo, AccountRoleRegistry, AdjustedFeeEstimationApi, BroadcastAnyChainGovKey,
+	Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
 	FetchesTransfersLimitProvider, IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady,
 	OnDeposit, OraclePrice, QualifyNode, RewardsDistribution, RuntimeUpgrade,
 	ScheduledEgressDetails,
@@ -1130,5 +1131,31 @@ pub struct ChainlinkOracle;
 impl cf_traits::PriceFeedApi for ChainlinkOracle {
 	fn get_price(asset: assets::any::Asset) -> Option<OraclePrice> {
 		decode_and_get_latest_oracle_price::<TypesFor<Chainlink>>(asset)
+	}
+}
+
+pub struct RuntimeAdjustedFeeEstimationApiStruct<T, I: 'static, C: Chain>(
+	sp_std::marker::PhantomData<(T, I, C)>,
+);
+pub type RuntimeAdjustedFeeApi<T, I: 'static> = RuntimeAdjustedFeeEstimationApiStruct<
+	T,
+	I,
+	<T as pallet_cf_chain_tracking::Config<I>>::TargetChain,
+>;
+
+impl<T, I: 'static, C: Chain> AdjustedFeeEstimationApi<C>
+	for RuntimeAdjustedFeeEstimationApiStruct<T, I, C>
+where
+	T: pallet_cf_chain_tracking::Config<I, TargetChain = C>,
+	T: pallet_cf_broadcast::Config<I, TargetChain = C>,
+{
+	fn estimate_fee(
+		asset: C::ChainAsset,
+		ingress_or_egress: cf_primitives::IngressOrEgress,
+	) -> C::ChainAmount {
+		pallet_cf_chain_tracking::Pallet::<T, I>::get_fee_multiplier().saturating_mul_int(
+			pallet_cf_chain_tracking::Pallet::<T, I>::get_tracked_data()
+				.estimate_fee(asset, ingress_or_egress),
+		)
 	}
 }

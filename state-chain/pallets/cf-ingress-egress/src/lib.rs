@@ -681,8 +681,10 @@ pub mod pallet {
 			+ RejectCall<Self::TargetChain>;
 
 		/// Get the latest chain state of the target chain.
-		type ChainTracking: GetBlockHeight<Self::TargetChain>
-			+ AdjustedFeeEstimationApi<Self::TargetChain>;
+		type ChainTracking: GetBlockHeight<Self::TargetChain>;
+
+		///
+		type FeeEstimationApi: AdjustedFeeEstimationApi<Self::TargetChain>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<
@@ -3071,7 +3073,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
 	) -> AmountAndFeesWithheld<T, I> {
-		let fee_estimate = T::ChainTracking::estimate_fee(asset, ingress_or_egress);
+		let fee_estimate = T::FeeEstimationApi::estimate_fee(asset, ingress_or_egress);
 
 		let fees_withheld = if asset == <T::TargetChain as Chain>::GAS_ASSET {
 			// No need to schedule a swap for gas, it's already in the gas asset.

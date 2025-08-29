@@ -305,12 +305,7 @@ pub struct SolanaBlockHeightTrackingHook;
 
 impl MedianChangeHook<<Solana as Chain>::ChainBlockNumber> for SolanaBlockHeightTrackingHook {
 	fn on_change(block_height: <Solana as Chain>::ChainBlockNumber) {
-		if let Err(err) = SolanaChainTracking::inner_update_chain_state(cf_chains::ChainState {
-			block_height,
-			tracked_data: SolTrackedData {
-				priority_fee: SolanaChainTrackingProvider::priority_fee(),
-			},
-		}) {
+		if let Err(err) = SolanaChainTracking::inner_update_chain_height(block_height) {
 			log::error!("Failed to update chain state: {:?}", err);
 		}
 	}
@@ -467,24 +462,14 @@ impl SolanaChainTrackingProvider {
 	pub fn priority_fee() -> <Solana as Chain>::ChainAmount {
 		MIN_COMPUTE_PRICE
 	}
-
-	// TODO: Delete this.
-	fn with_tracked_data_then_apply_fee_multiplier<
-		F: FnOnce(SolTrackedData) -> <Solana as Chain>::ChainAmount,
-	>(
-		f: F,
-	) -> <Solana as Chain>::ChainAmount {
-		f(SolTrackedData { priority_fee: SolanaChainTrackingProvider::priority_fee() })
-	}
 }
+
 impl AdjustedFeeEstimationApi<Solana> for SolanaChainTrackingProvider {
 	fn estimate_fee(
 		asset: <Solana as Chain>::ChainAsset,
 		ingress_or_egress: IngressOrEgress,
 	) -> <Solana as Chain>::ChainAmount {
-		Self::with_tracked_data_then_apply_fee_multiplier(|tracked_data| {
-			tracked_data.estimate_fee(asset, ingress_or_egress)
-		})
+		SolTrackedData { priority_fee: MIN_COMPUTE_PRICE }.estimate_fee(asset, ingress_or_egress)
 	}
 }
 

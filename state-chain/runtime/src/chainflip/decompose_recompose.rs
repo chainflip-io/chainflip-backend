@@ -256,6 +256,7 @@ mod tests {
 						block_height: BLOCK_HEIGHT,
 						tracked_data: BitcoinTrackedData {
 							btc_fee_info: BitcoinFeeInfo::new(fee.into()),
+							block_witnessed_at: Default::default(),
 						},
 					},
 				}),

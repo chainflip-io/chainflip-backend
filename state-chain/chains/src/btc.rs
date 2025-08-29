@@ -31,7 +31,7 @@ use arrayref::array_ref;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
-	chains::assets, IngressOrEgress, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILOBYTE,
+	chains::assets, IngressOrEgress, NetworkEnvironment, UnixTime, DEFAULT_FEE_SATS_PER_KILOBYTE,
 	INPUT_UTXO_SIZE_IN_BYTES, MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 	VAULT_UTXO_SIZE_IN_BYTES,
 };
@@ -133,6 +133,7 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 #[codec(mel_bound())]
 pub struct BitcoinTrackedData {
 	pub btc_fee_info: BitcoinFeeInfo,
+	pub block_witnessed_at: UnixTime,
 }
 
 impl Default for BitcoinTrackedData {
@@ -142,6 +143,7 @@ impl Default for BitcoinTrackedData {
 
 		BitcoinTrackedData {
 			btc_fee_info: BitcoinFeeInfo { sats_per_kilobyte: Default::default() },
+			block_witnessed_at: Default::default(),
 		}
 	}
 }

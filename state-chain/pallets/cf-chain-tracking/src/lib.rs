@@ -35,7 +35,7 @@ pub use pallet::*;
 use sp_runtime::{FixedPointNumber, FixedU128};
 use sp_std::marker::PhantomData;
 
-const NO_CHAIN_STATE: &str = "Chain state should be set at genesis and never removed.";
+pub const NO_CHAIN_STATE: &str = "Chain state should be set at genesis and never removed.";
 
 pub struct GetOne;
 
@@ -219,24 +219,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Ok(())
 	}
+
+	pub fn get_tracked_data() -> <T::TargetChain as Chain>::TrackedData {
+		CurrentChainState::<T, I>::get().expect(NO_CHAIN_STATE).tracked_data
+	}
+
+	pub fn get_fee_multiplier() -> FixedU128 {
+		FeeMultiplier::<T, I>::get()
+	}
 }
 
 impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 	fn get_block_height() -> <T::TargetChain as Chain>::ChainBlockNumber {
 		CurrentChainState::<T, I>::get().expect(NO_CHAIN_STATE).block_height
-	}
-}
-
-impl<T: Config<I>, I: 'static> AdjustedFeeEstimationApi<T::TargetChain> for Pallet<T, I> {
-	fn estimate_fee(
-		asset: <T::TargetChain as Chain>::ChainAsset,
-		ingress_or_egress: IngressOrEgress,
-	) -> <T::TargetChain as Chain>::ChainAmount {
-		FeeMultiplier::<T, I>::get().saturating_mul_int(
-			CurrentChainState::<T, I>::get()
-				.expect(NO_CHAIN_STATE)
-				.tracked_data
-				.estimate_fee(asset, ingress_or_egress),
-		)
 	}
 }

@@ -131,6 +131,7 @@ impl Config<Instance1> for Test {
 	type Broadcaster = MockEgressBroadcasterEth;
 	type DepositHandler = MockDepositHandler;
 	type ChainTracking = ChainTracker<Ethereum>;
+	type FeeEstimationApi = ChainTracker<Ethereum>;
 	type WeightInfo = ();
 	type NetworkEnvironment = MockNetworkEnvironmentProvider;
 	type AssetConverter = MockAssetConverter;
@@ -162,6 +163,7 @@ impl Config<Instance2> for Test {
 	type Broadcaster = MockEgressBroadcasterBtc;
 	type DepositHandler = MockDepositHandler;
 	type ChainTracking = ChainTracker<Bitcoin>;
+	type FeeEstimationApi = ChainTracker<Bitcoin>;
 	type WeightInfo = ();
 	type NetworkEnvironment = MockNetworkEnvironmentProvider;
 	type AssetConverter = MockAssetConverter;
@@ -232,7 +234,7 @@ impl_test_helpers! {
 	},
 	|| {
 		cf_traits::mocks::tracked_data_provider::TrackedDataProvider::<Bitcoin>::set_tracked_data(
-			BitcoinTrackedData { btc_fee_info: Default::default() }
+			BitcoinTrackedData {btc_fee_info:Default::default(), block_witnessed_at: Default::default() }
 		);
 		cf_traits::mocks::tracked_data_provider::TrackedDataProvider::<Ethereum>::set_tracked_data(
 			EthereumTrackedData {
