@@ -2,7 +2,7 @@ import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli
 import { randomBytes } from 'crypto';
 import assert from 'assert';
 import {
-  newAddress,
+  newAssetAddress,
   observeBalanceIncrease,
   observeSwapRequested,
   SwapRequestType,
@@ -16,31 +16,32 @@ import { DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
 
-// Requested number of blocks between each chunk
-const CHUNK_INTERVAL = 2;
-
 async function testDCASwap(
-  logger: Logger,
+  parentLogger: Logger,
   inputAsset: Asset,
   amount: number,
   numberOfChunks: number,
+  chunkIntervalBlocks: number,
   swapViaVault = false,
 ) {
-  assert(numberOfChunks > 1, 'Number of chunks must be greater than 1');
+  assert(numberOfChunks > 0, 'Number of chunks must be greater than 0');
+  const logger = parentLogger.child({
+    tag: `DCA_test_${inputAsset}_${numberOfChunks}_chunks_at_${chunkIntervalBlocks}_interval`,
+  });
 
   const dcaParams: DcaParams = {
     numberOfChunks,
-    chunkIntervalBlocks: CHUNK_INTERVAL,
+    chunkIntervalBlocks,
   };
   const fillOrKillParams: FillOrKillParamsX128 = {
-    refundAddress: await newAddress(inputAsset, randomBytes(32).toString('hex')),
+    refundAddress: await newAssetAddress(inputAsset, randomBytes(32).toString('hex')),
     minPriceX128: '1',
     retryDurationBlocks: 100,
   };
 
   const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
 
-  const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
+  const destAddress = await newAssetAddress(destAsset, randomBytes(32).toString('hex'));
 
   const destBalanceBefore = await getBalance(destAsset, destAddress);
   logger.debug(`DCA destination address: ${destAddress}`);
@@ -49,7 +50,7 @@ async function testDCASwap(
 
   if (!swapViaVault) {
     const swapRequest = await requestNewSwap(
-      logger.child({ tag: `DCA_test_${inputAsset}` }),
+      logger,
       inputAsset,
       destAsset,
       destAddress,
@@ -128,21 +129,23 @@ async function testDCASwap(
     const interval = observeSwapExecutedEvents[i].block - observeSwapExecutedEvents[i - 1].block;
     assert.strictEqual(
       interval,
-      CHUNK_INTERVAL,
+      chunkIntervalBlocks,
       `Unexpected chunk interval between chunk ${i - 1} & ${i}`,
     );
   }
 
-  logger.debug(`Chunk interval of ${CHUNK_INTERVAL} verified for all ${numberOfChunks} chunks`);
+  logger.debug(
+    `Chunk interval of ${chunkIntervalBlocks} verified for all ${numberOfChunks} chunks`,
+  );
 
   await observeBalanceIncrease(logger, destAsset, destAddress, destBalanceBefore);
 }
 
 export async function testDCASwaps(testContext: TestContext) {
   await Promise.all([
-    testDCASwap(testContext.logger, Assets.Eth, 1, 2),
-    testDCASwap(testContext.logger, Assets.ArbEth, 1, 2),
-    testDCASwap(testContext.logger, Assets.Sol, 1, 2, true),
-    testDCASwap(testContext.logger, Assets.SolUsdc, 1, 2, true),
+    testDCASwap(testContext.logger, Assets.Eth, 1, 2, 2),
+    testDCASwap(testContext.logger, Assets.ArbEth, 1, 4, 2),
+    testDCASwap(testContext.logger, Assets.Sol, 1, 2, 3, true),
+    testDCASwap(testContext.logger, Assets.SolUsdc, 1, 2, 2, true),
   ]);
 }

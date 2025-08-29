@@ -1,10 +1,9 @@
 import axios from 'axios';
-import { randomBytes } from 'crypto';
 import { Chain, InternalAsset } from '@chainflip/cli';
 import Web3 from 'web3';
 import { sendBtc, sendBtcTransactionWithParent } from 'shared/send_btc';
 import {
-  newAddress,
+  newAssetAddress,
   sleep,
   handleSubstrateError,
   chainGasAsset,
@@ -16,6 +15,8 @@ import {
   chainContractId,
   chainFromAsset,
   ingressEgressPalletForChain,
+  observeBalanceIncrease,
+  observeFetch,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import Keyring from 'polkadot/keyring';
@@ -52,17 +53,6 @@ async function observeBtcAddressBalanceChange(address: string): Promise<boolean>
   }
   console.error(`BTC balance for ${address} did not change after ${MAX_RETRIES} seconds.`);
   return Promise.resolve(false);
-}
-
-/**
- * Generates a new address for an asset.
- *
- * @param asset - The asset to generate an address for.
- * @param seed - The seed to generate the address with. If no seed is provided, a random one is generated.
- * @returns - The new address.
- */
-async function newAssetAddress(asset: InternalAsset, seed = null): Promise<string> {
-  return Promise.resolve(newAddress(asset, seed || randomBytes(32).toString('hex')));
 }
 
 /**
@@ -256,13 +246,13 @@ async function testEvm(
 
   const chain = chainFromAsset(sourceAsset);
   const ingressEgressPallet = ingressEgressPalletForChain(chain);
-  const MAX_RETRIES = 120;
 
   const destinationAddressForBtc = await newAssetAddress('Btc');
 
   logger.debug(`BTC destination address: ${destinationAddressForBtc}`);
 
-  const ethereumRefundAddress = await newAssetAddress('Eth');
+  const ethereumRefundAddress = await newAssetAddress('Eth', undefined, undefined);
+  const initialRefundAddressBalance = await getBalance(sourceAsset, ethereumRefundAddress);
 
   const refundParameters: FillOrKillParamsX128 = {
     retryDurationBlocks: 0,
@@ -288,7 +278,7 @@ async function testEvm(
     logger.debug(`Initial deposit ${sourceAsset} received...`);
     // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
     // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
-    // succesfully to make sure the Deposit contract is deployed.
+    // successfully to make sure the Deposit contract is deployed.
     await waitForDepositContractDeployment(chain, swapParams.depositAddress);
   }
 
@@ -302,23 +292,10 @@ async function testEvm(
 
   await observeEvent(logger, `${ingressEgressPallet}:TransactionRejectedByBroker`).event;
 
-  let receivedRefund = false;
-
-  for (let i = 0; i < MAX_RETRIES; i++) {
-    const refundBalance = await getBalance(sourceAsset, ethereumRefundAddress);
-    const depositAddressBalance = await getBalance(sourceAsset, swapParams.depositAddress);
-    if (refundBalance !== '0' && depositAddressBalance === '0') {
-      receivedRefund = true;
-      break;
-    }
-    await sleep(6000);
-  }
-
-  if (!receivedRefund) {
-    throw new Error(
-      `Didn't receive refund of ${sourceAsset} to address ${ethereumRefundAddress} within timeout!`,
-    );
-  }
+  await Promise.all([
+    observeBalanceIncrease(logger, sourceAsset, ethereumRefundAddress, initialRefundAddressBalance),
+    observeFetch(sourceAsset, swapParams.depositAddress),
+  ]);
 
   logger.info(`Marked ${sourceAsset} transaction was rejected and refunded 👍.`);
 }
@@ -381,7 +358,6 @@ async function testEvmVaultSwap(
       `Didn't receive funds refund to address ${ethereumRefundAddress} within timeout!`,
     );
   }
-
   logger.info(`Marked ${sourceAsset} vault swap was rejected and refunded 👍.`);
 }
 
@@ -430,7 +406,7 @@ async function testEvmLiquidityDeposit(
     test: (event) => event.data.asset === sourceAsset && event.data.accountId === lp.address,
   }).event;
 
-  console.log('Requesting ' + sourceAsset + ' deposit address');
+  logger.debug('Requesting ' + sourceAsset + ' deposit address');
   await lpMutex.runExclusive(lpUri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
