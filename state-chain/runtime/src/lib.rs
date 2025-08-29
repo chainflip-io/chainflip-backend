@@ -37,7 +37,7 @@ use crate::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
 			SolanaNonceTrackingTrigger,
 		},
-		EvmLimit, Offence,
+		EvmLimit, Offence, RuntimeAdjustedFeeApi,
 	},
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
@@ -82,7 +82,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Affiliates, BasisPoints, Beneficiary, BroadcastId, ChannelId, DcaParameters, EpochIndex,
-	NetworkEnvironment, STABLE_ASSET,
+	IngressOrEgress, NetworkEnvironment, STABLE_ASSET,
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
@@ -99,7 +99,6 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 	price::PriceAsset,
 };
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_ingress_egress::IngressOrEgress;
 use pallet_cf_pools::{
 	AskBidMap, HistoricalEarnedFees, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -432,6 +431,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type Broadcaster = EthereumBroadcaster;
 	type DepositHandler = chainflip::DepositHandler;
 	type ChainTracking = EthereumChainTracking;
+	type FeeEstimationApi = RuntimeAdjustedFeeApi<Runtime, Instance1>;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = Swapping;
@@ -464,6 +464,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DepositHandler;
 	type ChainTracking = PolkadotChainTracking;
+	type FeeEstimationApi = RuntimeAdjustedFeeApi<Runtime, Instance2>;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
@@ -495,6 +496,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DepositHandler;
 	type ChainTracking = BitcoinChainTracking;
+	type FeeEstimationApi = RuntimeAdjustedFeeApi<Runtime, Instance3>;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
@@ -525,6 +527,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type Broadcaster = ArbitrumBroadcaster;
 	type DepositHandler = chainflip::DepositHandler;
 	type ChainTracking = ArbitrumChainTracking;
+	type FeeEstimationApi = RuntimeAdjustedFeeApi<Runtime, Instance4>;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = Swapping;
@@ -557,6 +560,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DepositHandler;
 	type ChainTracking = SolanaChainTrackingProvider;
+	type FeeEstimationApi = SolanaChainTrackingProvider;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
@@ -588,6 +592,7 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DepositHandler;
 	type ChainTracking = AssethubChainTracking;
+	type FeeEstimationApi = RuntimeAdjustedFeeApi<Runtime, Instance6>;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
@@ -2111,22 +2116,22 @@ impl_runtime_apis! {
 				ForeignChainAndAsset::Ethereum(asset) => {
 					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
 						asset,
-						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_ingress_fee(asset)
+						RuntimeAdjustedFeeApi::<Runtime, EthereumInstance>::estimate_fee(asset, IngressOrEgress::IngressDepositChannel)
 					))
 				},
-				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_ingress_fee(asset)),
-				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_ingress_fee(asset).into()),
+				ForeignChainAndAsset::Polkadot(asset) => Some(RuntimeAdjustedFeeApi::<Runtime, PolkadotInstance>::estimate_fee(asset, IngressOrEgress::IngressDepositChannel)),
+				ForeignChainAndAsset::Bitcoin(asset) => Some(RuntimeAdjustedFeeApi::<Runtime, BitcoinInstance>::estimate_fee(asset, IngressOrEgress::IngressDepositChannel).into()),
 				ForeignChainAndAsset::Arbitrum(asset) => {
 					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
 						asset,
-						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_ingress_fee(asset)
+						RuntimeAdjustedFeeApi::<Runtime, ArbitrumInstance>::estimate_fee(asset, IngressOrEgress::IngressDepositChannel)
 					))
 				},
-				ForeignChainAndAsset::Solana(asset) => Some(SolanaChainTrackingProvider::estimate_ingress_fee(asset).into()),
+				ForeignChainAndAsset::Solana(asset) => Some(SolanaChainTrackingProvider::estimate_fee(asset, IngressOrEgress::IngressDepositChannel).into()),
 				ForeignChainAndAsset::Assethub(asset) => {
 					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Assethub>(
 						asset,
-						pallet_cf_chain_tracking::Pallet::<Runtime, AssethubInstance>::estimate_ingress_fee(asset)
+						RuntimeAdjustedFeeApi::<Runtime, AssethubInstance>::estimate_fee(asset, IngressOrEgress::IngressDepositChannel)
 					))
 				},
 			}
@@ -2137,22 +2142,22 @@ impl_runtime_apis! {
 				ForeignChainAndAsset::Ethereum(asset) => {
 					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
 						asset,
-						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_egress_fee(asset)
+						RuntimeAdjustedFeeApi::<Runtime, EthereumInstance>::estimate_fee(asset, IngressOrEgress::Egress)
 					))
 				},
-				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_egress_fee(asset)),
-				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_egress_fee(asset).into()),
+				ForeignChainAndAsset::Polkadot(asset) => Some(RuntimeAdjustedFeeApi::<Runtime, PolkadotInstance>::estimate_fee(asset, IngressOrEgress::Egress)),
+				ForeignChainAndAsset::Bitcoin(asset) => Some(RuntimeAdjustedFeeApi::<Runtime, BitcoinInstance>::estimate_fee(asset, IngressOrEgress::Egress).into()),
 				ForeignChainAndAsset::Arbitrum(asset) => {
 					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
 						asset,
-						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_egress_fee(asset)
+						RuntimeAdjustedFeeApi::<Runtime, ArbitrumInstance>::estimate_fee(asset, IngressOrEgress::Egress)
 					))
 				},
-				ForeignChainAndAsset::Solana(asset) => Some(SolanaChainTrackingProvider::estimate_egress_fee(asset).into()),
+				ForeignChainAndAsset::Solana(asset) => Some(SolanaChainTrackingProvider::estimate_fee(asset, IngressOrEgress::Egress).into()),
 				ForeignChainAndAsset::Assethub(asset) => {
 					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Assethub>(
 						asset,
-						pallet_cf_chain_tracking::Pallet::<Runtime, AssethubInstance>::estimate_egress_fee(asset)
+						RuntimeAdjustedFeeApi::<Runtime, AssethubInstance>::estimate_fee(asset, IngressOrEgress::Egress)
 					))
 				},
 			}

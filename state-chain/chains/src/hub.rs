@@ -24,6 +24,7 @@ pub mod xcm_types;
 
 #[cfg(feature = "std")]
 pub use crate::dot::serializable_address::*;
+use cf_runtime_utilities::log_or_panic;
 use cf_utilities::SliceToArray;
 use dot::{
 	fee_constants, polkadot_sdk_types, EncodedPolkadotPayload, GenericUncheckedExtrinsic,
@@ -323,39 +324,33 @@ impl Default for AssethubTrackedData {
 }
 
 impl FeeEstimationApi<Assethub> for AssethubTrackedData {
-	fn estimate_ingress_fee(
+	fn estimate_fee(
 		&self,
 		_asset: <Assethub as Chain>::ChainAsset,
+		ingress_or_egress: IngressOrEgress,
 	) -> <Assethub as Chain>::ChainAmount {
-		use fee_constants::fetch::*;
-
-		self.median_tip + fetch::EXTRINSIC_FEE
-	}
-
-	fn estimate_egress_fee(
-		&self,
-		_asset: <Assethub as Chain>::ChainAsset,
-	) -> <Assethub as Chain>::ChainAmount {
-		use fee_constants::transfer::*;
-
-		self.median_tip + transfer::EXTRINSIC_FEE
-	}
-
-	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Assethub as Chain>::ChainAmount> {
-		None
-	}
-
-	fn estimate_ccm_fee(
-		&self,
-		_asset: <Assethub as Chain>::ChainAsset,
-		_gas_budget: GasAmount,
-		message_length: usize,
-	) -> Option<<Arbitrum as Chain>::ChainAmount> {
-		// Estimated on Assethub
-		const ESTIMATED_FEE_PER_BYTE: u128 = 200 * fee_constants::MICRO_DOT;
-		let payload_len_fee: u128 = ESTIMATED_FEE_PER_BYTE.saturating_mul(message_length as u128);
-		const CCM_CORE_FEE: u128 = 10 * fee_constants::MILLI_DOT;
-		Some(self.median_tip + CCM_CORE_FEE + payload_len_fee)
+		match ingress_or_egress {
+			IngressOrEgress::IngressDepositChannel => {
+				use fee_constants::fetch::*;
+				self.median_tip + fetch::EXTRINSIC_FEE
+			},
+			IngressOrEgress::IngressVaultSwap => {
+				log_or_panic!("Tried to get IngressVaultSwap fees for Assethub, but vault swaps are not supported.");
+				0
+			},
+			IngressOrEgress::Egress => {
+				use fee_constants::transfer::*;
+				self.median_tip + transfer::EXTRINSIC_FEE
+			},
+			IngressOrEgress::EgressCcm { gas_budget: _, message_length } => {
+				// Estimated on Assethub
+				const ESTIMATED_FEE_PER_BYTE: u128 = 200 * fee_constants::MICRO_DOT;
+				let payload_len_fee: u128 =
+					ESTIMATED_FEE_PER_BYTE.saturating_mul(message_length as u128);
+				const CCM_CORE_FEE: u128 = 10 * fee_constants::MILLI_DOT;
+				self.median_tip + CCM_CORE_FEE + payload_len_fee
+			},
+		}
 	}
 }
 

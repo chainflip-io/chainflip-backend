@@ -37,7 +37,7 @@ use cf_chains::{
 	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain, FeeEstimationApi,
 	FetchAndCloseSolanaVaultSwapAccounts, ForeignChainAddress, Solana,
 };
-use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters};
+use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters, IngressOrEgress};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	AdjustedFeeEstimationApi, Broadcaster, Chainflip, ElectionEgressWitnesser, GetBlockHeight,
@@ -305,12 +305,9 @@ pub struct SolanaBlockHeightTrackingHook;
 
 impl MedianChangeHook<<Solana as Chain>::ChainBlockNumber> for SolanaBlockHeightTrackingHook {
 	fn on_change(block_height: <Solana as Chain>::ChainBlockNumber) {
-		if let Err(err) = SolanaChainTracking::inner_update_chain_state(cf_chains::ChainState {
-			block_height,
-			tracked_data: SolTrackedData {
-				priority_fee: SolanaChainTrackingProvider::priority_fee(),
-			},
-		}) {
+		if let Err(err) =
+			SolanaChainTracking::inner_update_chain_state(|state| state.block_height = block_height)
+		{
 			log::error!("Failed to update chain state: {:?}", err);
 		}
 	}
@@ -467,58 +464,14 @@ impl SolanaChainTrackingProvider {
 	pub fn priority_fee() -> <Solana as Chain>::ChainAmount {
 		MIN_COMPUTE_PRICE
 	}
-
-	// TODO: Delete this.
-	fn with_tracked_data_then_apply_fee_multiplier<
-		F: FnOnce(SolTrackedData) -> <Solana as Chain>::ChainAmount,
-	>(
-		f: F,
-	) -> <Solana as Chain>::ChainAmount {
-		f(SolTrackedData { priority_fee: SolanaChainTrackingProvider::priority_fee() })
-	}
 }
+
 impl AdjustedFeeEstimationApi<Solana> for SolanaChainTrackingProvider {
-	fn estimate_ingress_fee(
+	fn estimate_fee(
 		asset: <Solana as Chain>::ChainAsset,
+		ingress_or_egress: IngressOrEgress,
 	) -> <Solana as Chain>::ChainAmount {
-		Self::with_tracked_data_then_apply_fee_multiplier(|tracked_data| {
-			tracked_data.estimate_ingress_fee(asset)
-		})
-	}
-
-	fn estimate_ingress_fee_vault_swap() -> Option<<Solana as Chain>::ChainAmount> {
-		Some(Self::with_tracked_data_then_apply_fee_multiplier(|tracked_data| {
-			// TODO: These should be untangled?
-			tracked_data.estimate_ingress_fee_vault_swap().unwrap_or_else(|| {
-				log_or_panic!(
-					"Obtained None when estimating Solana Ingress Vault Swap fee. This should not happen"
-				);
-				Default::default()
-			})
-		}))
-	}
-
-	fn estimate_egress_fee(asset: <Solana as Chain>::ChainAsset) -> <Solana as Chain>::ChainAmount {
-		Self::with_tracked_data_then_apply_fee_multiplier(|tracked_data| {
-			tracked_data.estimate_egress_fee(asset)
-		})
-	}
-
-	fn estimate_ccm_fee(
-		asset: <Solana as Chain>::ChainAsset,
-		gas_budget: cf_primitives::GasAmount,
-		message_length: usize,
-	) -> Option<<Solana as Chain>::ChainAmount> {
-		Some(Self::with_tracked_data_then_apply_fee_multiplier(|tracked_data| {
-			tracked_data
-				.estimate_ccm_fee(asset, gas_budget, message_length)
-				.unwrap_or_else(|| {
-					log_or_panic!(
-						"Obtained None when estimating Solana Ccm fee. This should not happen"
-					);
-					Default::default()
-				})
-		}))
+		SolTrackedData { priority_fee: MIN_COMPUTE_PRICE }.estimate_fee(asset, ingress_or_egress)
 	}
 }
 

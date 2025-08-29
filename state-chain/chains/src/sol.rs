@@ -18,6 +18,7 @@ pub use cf_primitives::chains::Solana;
 
 use cf_primitives::{
 	AffiliateAndFee, BasisPoints, Beneficiary, ChannelId, DcaParameters, ForeignChain,
+	IngressOrEgress,
 };
 use sol_prim::program_instructions::FunctionDiscriminator;
 use sp_core::ConstBool;
@@ -301,67 +302,54 @@ impl SolTrackedData {
 }
 
 impl FeeEstimationApi<Solana> for SolTrackedData {
-	fn estimate_egress_fee(
-		&self,
-		asset: <Solana as crate::Chain>::ChainAsset,
-	) -> <Solana as crate::Chain>::ChainAmount {
-		use compute_units_costs::*;
-
-		let compute_units_per_transfer = compute_limit_with_buffer(
-			BASE_COMPUTE_UNITS_PER_TX +
-				match asset {
-					assets::sol::Asset::Sol => COMPUTE_UNITS_PER_TRANSFER_NATIVE,
-					assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_TRANSFER_TOKEN,
-				},
-		);
-
-		let gas_fee = self.calculate_transaction_fee(compute_units_per_transfer);
-
-		match asset {
-			assets::sol::Asset::Sol => gas_fee,
-			assets::sol::Asset::SolUsdc => gas_fee.saturating_add(TOKEN_ACCOUNT_RENT),
-		}
-	}
-	fn estimate_ingress_fee(
-		&self,
-		asset: <Solana as crate::Chain>::ChainAsset,
-	) -> <Solana as crate::Chain>::ChainAmount {
-		use compute_units_costs::*;
-
-		let compute_units_per_fetch = compute_limit_with_buffer(
-			BASE_COMPUTE_UNITS_PER_TX +
-				match asset {
-					assets::sol::Asset::Sol => COMPUTE_UNITS_PER_FETCH_NATIVE,
-					assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_FETCH_TOKEN,
-				},
-		);
-
-		self.calculate_transaction_fee(compute_units_per_fetch)
-	}
-
-	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Solana as Chain>::ChainAmount> {
-		use compute_units_costs::*;
-
-		// Some of the fetches might be batches but we need to estimate pessimistically.
-		let compute_units_per_fetch_and_close = compute_limit_with_buffer(
-			COMPUTE_UNITS_PER_FETCH_AND_CLOSE_VAULT_SWAP_ACCOUNTS + COMPUTE_UNITS_PER_CLOSE_ACCOUNT,
-		);
-
-		Some(self.calculate_transaction_fee(compute_units_per_fetch_and_close))
-	}
-
-	fn estimate_ccm_fee(
+	fn estimate_fee(
 		&self,
 		asset: <Solana as Chain>::ChainAsset,
-		gas_budget: cf_primitives::GasAmount,
-		_message_length: usize,
-	) -> Option<<Solana as Chain>::ChainAmount> {
-		let gas_limit = SolTrackedData::calculate_ccm_compute_limit(gas_budget, asset);
-		let ccm_fee = self.calculate_transaction_fee(gas_limit);
-		Some(match asset {
-			assets::sol::Asset::Sol => ccm_fee,
-			assets::sol::Asset::SolUsdc => ccm_fee.saturating_add(TOKEN_ACCOUNT_RENT),
-		})
+		ingress_or_egress: IngressOrEgress,
+	) -> <Solana as Chain>::ChainAmount {
+		use compute_units_costs::*;
+		match ingress_or_egress {
+			IngressOrEgress::IngressDepositChannel => {
+				let compute_units_per_fetch = compute_limit_with_buffer(
+					BASE_COMPUTE_UNITS_PER_TX +
+						match asset {
+							assets::sol::Asset::Sol => COMPUTE_UNITS_PER_FETCH_NATIVE,
+							assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_FETCH_TOKEN,
+						},
+				);
+				self.calculate_transaction_fee(compute_units_per_fetch)
+			},
+			IngressOrEgress::IngressVaultSwap => {
+				// Some of the fetches might be batches but we need to estimate pessimistically.
+				let compute_units_per_fetch_and_close = compute_limit_with_buffer(
+					COMPUTE_UNITS_PER_FETCH_AND_CLOSE_VAULT_SWAP_ACCOUNTS +
+						COMPUTE_UNITS_PER_CLOSE_ACCOUNT,
+				);
+				self.calculate_transaction_fee(compute_units_per_fetch_and_close)
+			},
+			IngressOrEgress::Egress => {
+				let compute_units_per_transfer = compute_limit_with_buffer(
+					BASE_COMPUTE_UNITS_PER_TX +
+						match asset {
+							assets::sol::Asset::Sol => COMPUTE_UNITS_PER_TRANSFER_NATIVE,
+							assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_TRANSFER_TOKEN,
+						},
+				);
+				let gas_fee = self.calculate_transaction_fee(compute_units_per_transfer);
+				match asset {
+					assets::sol::Asset::Sol => gas_fee,
+					assets::sol::Asset::SolUsdc => gas_fee.saturating_add(TOKEN_ACCOUNT_RENT),
+				}
+			},
+			IngressOrEgress::EgressCcm { gas_budget, message_length: _ } => {
+				let gas_limit = SolTrackedData::calculate_ccm_compute_limit(gas_budget, asset);
+				let ccm_fee = self.calculate_transaction_fee(gas_limit);
+				match asset {
+					assets::sol::Asset::Sol => ccm_fee,
+					assets::sol::Asset::SolUsdc => ccm_fee.saturating_add(TOKEN_ACCOUNT_RENT),
+				}
+			},
+		}
 	}
 }
 

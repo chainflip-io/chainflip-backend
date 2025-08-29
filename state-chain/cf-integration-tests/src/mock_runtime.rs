@@ -278,7 +278,10 @@ impl ExtBuilder {
 			bitcoin_chain_tracking: BitcoinChainTrackingConfig {
 				init_chain_state: ChainState::<Bitcoin> {
 					block_height: 0,
-					tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(0) },
+					tracked_data: BitcoinTrackedData {
+						btc_fee_info: BitcoinFeeInfo::new(0),
+						block_witnessed_at: Default::default(),
+					},
 				},
 			},
 			arbitrum_chain_tracking: ArbitrumChainTrackingConfig {

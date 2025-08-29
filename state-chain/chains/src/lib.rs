@@ -45,7 +45,7 @@ use address::{
 };
 use cf_primitives::{
 	Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
-	DcaParameters, EgressId, EthAmount, GasAmount, TxId,
+	DcaParameters, EgressId, EthAmount, GasAmount, IngressOrEgress, TxId,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -1322,42 +1322,20 @@ pub struct ChainState<C: Chain> {
 }
 
 pub trait FeeEstimationApi<C: Chain> {
-	fn estimate_ingress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
-
-	fn estimate_ingress_fee_vault_swap(&self) -> Option<C::ChainAmount>;
-
-	fn estimate_egress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
-
-	fn estimate_ccm_fee(
+	fn estimate_fee(
 		&self,
-		_asset: C::ChainAsset,
-		_gas_budget: GasAmount,
-		_message_length: usize,
-	) -> Option<C::ChainAmount> {
-		None
-	}
+		asset: C::ChainAsset,
+		ingress_or_egress: IngressOrEgress,
+	) -> C::ChainAmount;
 }
 
 impl<C: Chain> FeeEstimationApi<C> for () {
-	fn estimate_ingress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
-		Default::default()
-	}
-
-	fn estimate_ingress_fee_vault_swap(&self) -> Option<C::ChainAmount> {
-		Default::default()
-	}
-
-	fn estimate_egress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
-		Default::default()
-	}
-
-	fn estimate_ccm_fee(
+	fn estimate_fee(
 		&self,
 		_asset: C::ChainAsset,
-		_gas_budget: GasAmount,
-		_message_length: usize,
-	) -> Option<C::ChainAmount> {
-		None
+		_ingress_or_egress: IngressOrEgress,
+	) -> C::ChainAmount {
+		Default::default()
 	}
 }
 

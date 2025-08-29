@@ -42,7 +42,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, EgressId,
-	PriceLimits, SwapId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	IngressOrEgress, PriceLimits, SwapId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{
@@ -66,7 +67,7 @@ use sp_core::{H160, U256};
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation, ChainAddressConverter, EthTransactionBuilder,
-		EvmEnvironment,
+		EvmEnvironment, RuntimeAdjustedFeeApi,
 	},
 	AssetBalances, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
 	EthereumInstance, LiquidityPools, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
@@ -155,7 +156,10 @@ pub fn do_eth_swap(
 	let ingress_fee = sp_std::cmp::min(
 		Swapping::calculate_input_for_gas_output::<Ethereum>(
 			from_eth_asset,
-			EthereumChainTracking::estimate_ingress_fee(from_eth_asset),
+			RuntimeAdjustedFeeApi::<Runtime, EthereumInstance>::estimate_fee(
+				from_eth_asset,
+				IngressOrEgress::IngressDepositChannel,
+			),
 		),
 		u128::MAX,
 	);
@@ -488,7 +492,10 @@ fn can_process_ccm_via_swap_deposit_address() {
 		let ingress_fee = sp_std::cmp::min(
 			Swapping::calculate_input_for_gas_output::<Ethereum>(
 				EthAsset::Flip,
-				EthereumChainTracking::estimate_ingress_fee(EthAsset::Flip),
+				RuntimeAdjustedFeeApi::<Runtime, EthereumInstance>::estimate_fee(
+					EthAsset::Flip,
+					IngressOrEgress::IngressDepositChannel,
+				),
 			),
 			u128::MAX,
 		);

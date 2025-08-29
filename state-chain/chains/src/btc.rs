@@ -31,9 +31,11 @@ use arrayref::array_ref;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
-	chains::assets, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILOBYTE, INPUT_UTXO_SIZE_IN_BYTES,
-	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES, VAULT_UTXO_SIZE_IN_BYTES,
+	chains::assets, IngressOrEgress, NetworkEnvironment, UnixTime, DEFAULT_FEE_SATS_PER_KILOBYTE,
+	INPUT_UTXO_SIZE_IN_BYTES, MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
+	VAULT_UTXO_SIZE_IN_BYTES,
 };
+use cf_runtime_utilities::log_or_panic;
 use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use core::{cmp::max, mem::size_of};
@@ -131,6 +133,7 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 #[codec(mel_bound())]
 pub struct BitcoinTrackedData {
 	pub btc_fee_info: BitcoinFeeInfo,
+	pub block_witnessed_at: UnixTime,
 }
 
 impl Default for BitcoinTrackedData {
@@ -140,6 +143,7 @@ impl Default for BitcoinTrackedData {
 
 		BitcoinTrackedData {
 			btc_fee_info: BitcoinFeeInfo { sats_per_kilobyte: Default::default() },
+			block_witnessed_at: Default::default(),
 		}
 	}
 }
@@ -147,32 +151,36 @@ impl Default for BitcoinTrackedData {
 // A Bitcoin transaction consists of some base data, a list of input UTXOs and a list of output
 // UTXOs
 impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
-	// When a user deposits some BTC, they create an input UTXO that we need to spend as part of a
-	// transaction some time in the future, so we charge them the costs of spending such an input
-	// UTXO
-	fn estimate_ingress_fee(
+	fn estimate_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
+		ingress_or_egress: IngressOrEgress,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		self.btc_fee_info.fee_per_input_utxo()
-	}
-
-	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Bitcoin as Chain>::ChainAmount> {
-		Some(self.btc_fee_info.fee_per_input_utxo())
-	}
-
-	// When a user wants to receive some BTC, we need to create a transaction which typically spends
-	// a UTXO from the vault and creates two output UTXOs: One going to the user and one sending the
-	// remaining BTC back into the vault.
-	fn estimate_egress_fee(
-		&self,
-		_asset: <Bitcoin as Chain>::ChainAsset,
-	) -> <Bitcoin as Chain>::ChainAmount {
-		self.btc_fee_info
-			.min_fee_required_per_tx()
-			.saturating_add(self.btc_fee_info.fee_per_vault_utxo())
-			.saturating_add(self.btc_fee_info.fee_per_output_utxo())
-			.saturating_add(self.btc_fee_info.fee_per_output_utxo())
+		match ingress_or_egress {
+			IngressOrEgress::IngressDepositChannel => {
+				// When a user deposits some BTC, they create an input UTXO that we need to spend as
+				// part of a transaction some time in the future, so we charge them the costs of
+				// spending such an input UTXO
+				self.btc_fee_info.fee_per_input_utxo()
+			},
+			IngressOrEgress::IngressVaultSwap => self.btc_fee_info.fee_per_input_utxo(),
+			IngressOrEgress::Egress => {
+				// When a user wants to receive some BTC, we need to create a transaction which
+				// typically spends a UTXO from the vault and creates two output UTXOs: One
+				// going to the user and one sending the remaining BTC back into the vault.
+				self.btc_fee_info
+					.min_fee_required_per_tx()
+					.saturating_add(self.btc_fee_info.fee_per_vault_utxo())
+					.saturating_add(self.btc_fee_info.fee_per_output_utxo())
+					.saturating_add(self.btc_fee_info.fee_per_output_utxo())
+			},
+			IngressOrEgress::EgressCcm { .. } => {
+				log_or_panic!(
+					"Tried to get EgressCcm fees for bitcoin, but egress ccm is not supported."
+				);
+				0
+			},
+		}
 	}
 }
 

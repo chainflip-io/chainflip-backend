@@ -46,8 +46,8 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary,
 	BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex,
-	ForeignChain, GasAmount, PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId,
-	SECONDS_PER_BLOCK,
+	ForeignChain, GasAmount, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
+	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -546,13 +546,6 @@ pub mod pallet {
 		pub boost_status: BoostStatus<TargetChainAmount<T, I>, BlockNumberFor<T>>,
 	}
 
-	pub enum IngressOrEgress {
-		IngressDepositChannel,
-		IngressVaultSwap,
-		Egress,
-		EgressCcm { gas_budget: GasAmount, message_length: usize },
-	}
-
 	pub struct AmountAndFeesWithheld<T: Config<I>, I: 'static> {
 		pub amount_after_fees: TargetChainAmount<T, I>,
 		pub fees_withheld: TargetChainAmount<T, I>,
@@ -688,8 +681,10 @@ pub mod pallet {
 			+ RejectCall<Self::TargetChain>;
 
 		/// Get the latest chain state of the target chain.
-		type ChainTracking: GetBlockHeight<Self::TargetChain>
-			+ AdjustedFeeEstimationApi<Self::TargetChain>;
+		type ChainTracking: GetBlockHeight<Self::TargetChain>;
+
+		///
+		type FeeEstimationApi: AdjustedFeeEstimationApi<Self::TargetChain>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<
@@ -3078,21 +3073,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
 	) -> AmountAndFeesWithheld<T, I> {
-		let fee_estimate = match ingress_or_egress {
-			IngressOrEgress::IngressDepositChannel => T::ChainTracking::estimate_ingress_fee(asset),
-			IngressOrEgress::IngressVaultSwap => T::ChainTracking::estimate_ingress_fee_vault_swap()
-			.unwrap_or_else(|| {
-				log::warn!("Unable to get the ingress fee for Vault swaps for ${asset:?}. Ignoring ingres fees.");
-				<T::TargetChain as Chain>::ChainAmount::zero()
-			}),
-			IngressOrEgress::Egress => T::ChainTracking::estimate_egress_fee(asset),
-			IngressOrEgress::EgressCcm { gas_budget, message_length } =>
-				T::ChainTracking::estimate_ccm_fee(asset, gas_budget, message_length)
-				.unwrap_or_else(|| {
-					log::warn!("Unable to get the ccm fee estimate for ${gas_budget:?} ${asset:?}. Ignoring ccm egress fees.");
-					<T::TargetChain as Chain>::ChainAmount::zero()
-				})
-		};
+		let fee_estimate = T::FeeEstimationApi::estimate_fee(asset, ingress_or_egress);
 
 		let fees_withheld = if asset == <T::TargetChain as Chain>::GAS_ASSET {
 			// No need to schedule a swap for gas, it's already in the gas asset.

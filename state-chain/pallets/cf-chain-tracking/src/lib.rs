@@ -27,6 +27,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_chains::{Chain, ChainState, FeeEstimationApi};
+use cf_primitives::IngressOrEgress;
 use cf_traits::{AdjustedFeeEstimationApi, Chainflip, GetBlockHeight};
 use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 use frame_system::pallet_prelude::*;
@@ -34,7 +35,7 @@ pub use pallet::*;
 use sp_runtime::{FixedPointNumber, FixedU128};
 use sp_std::marker::PhantomData;
 
-const NO_CHAIN_STATE: &str = "Chain state should be set at genesis and never removed.";
+pub const NO_CHAIN_STATE: &str = "Chain state should be set at genesis and never removed.";
 
 pub struct GetOne;
 
@@ -145,7 +146,7 @@ pub mod pallet {
 				Error::<T, I>::InvalidBlockHeight
 			);
 
-			Self::inner_update_chain_state(new_chain_state)
+			Self::inner_update_chain_state(|state| *state = new_chain_state)
 		}
 
 		/// Update the fee multiplier with the provided value
@@ -169,48 +170,33 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	//TODO: to be removed once all chains are converted to election based witnessing
-	pub fn inner_update_chain_state(new_chain_state: ChainState<T::TargetChain>) -> DispatchResult {
-		CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {
-			ensure!(
-				new_chain_state.block_height >
-					previous_chain_state.as_ref().expect(NO_CHAIN_STATE).block_height,
-				Error::<T, I>::StaleDataSubmitted
-			);
-			*previous_chain_state = Some(new_chain_state.clone());
+	pub fn inner_update_chain_state(
+		mutate: impl FnOnce(&mut ChainState<T::TargetChain>),
+	) -> DispatchResult {
+		let new_chain_state =
+			CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|chain_state| {
+				let previous_chain_state = chain_state.clone();
+				let mut chain_state = chain_state.as_mut().expect(NO_CHAIN_STATE);
+				mutate(chain_state);
+				ensure!(
+					chain_state.block_height >
+						previous_chain_state.as_ref().expect(NO_CHAIN_STATE).block_height,
+					Error::<T, I>::StaleDataSubmitted
+				);
 
-			Ok(())
-		})?;
+				Ok(chain_state.clone())
+			})?;
 
 		Self::deposit_event(Event::<T, I>::ChainStateUpdated { new_chain_state });
 
 		Ok(())
 	}
 
-	pub fn inner_update_chain_height(
-		new_height: <T::TargetChain as Chain>::ChainBlockNumber,
+	pub fn inner_update_tracked_data(
+		f: impl Fn(&mut <T::TargetChain as Chain>::TrackedData),
 	) -> DispatchResult {
-		CurrentChainState::<T, I>::try_mutate(|previous_chain_state| {
-			ensure!(
-				new_height > previous_chain_state.as_ref().expect(NO_CHAIN_STATE).block_height,
-				Error::<T, I>::StaleDataSubmitted
-			);
-			let chain_state = previous_chain_state.as_mut().expect(NO_CHAIN_STATE);
-			chain_state.block_height = new_height;
-
-			// emit event for current state since Product uses the `block_height` information
-			Self::deposit_event(Event::<T, I>::ChainStateUpdated {
-				new_chain_state: chain_state.clone(),
-			});
-
-			Ok::<(), DispatchError>(())
-		})?;
-
-		Ok(())
-	}
-
-	pub fn inner_update_fee(new_fee: <T::TargetChain as Chain>::TrackedData) -> DispatchResult {
 		CurrentChainState::<T, I>::mutate(|previous_chain_state| {
-			previous_chain_state.as_mut().expect(NO_CHAIN_STATE).tracked_data = new_fee;
+			f(&mut previous_chain_state.as_mut().expect(NO_CHAIN_STATE).tracked_data);
 		});
 
 		// We don't emit an event when just the fee is updated since Product doesn't use this
@@ -218,53 +204,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Ok(())
 	}
+
+	pub fn get_tracked_data() -> <T::TargetChain as Chain>::TrackedData {
+		CurrentChainState::<T, I>::get().expect(NO_CHAIN_STATE).tracked_data
+	}
+
+	pub fn get_fee_multiplier() -> FixedU128 {
+		FeeMultiplier::<T, I>::get()
+	}
 }
 
 impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 	fn get_block_height() -> <T::TargetChain as Chain>::ChainBlockNumber {
 		CurrentChainState::<T, I>::get().expect(NO_CHAIN_STATE).block_height
-	}
-}
-
-impl<T: Config<I>, I: 'static> AdjustedFeeEstimationApi<T::TargetChain> for Pallet<T, I> {
-	fn estimate_ingress_fee(
-		asset: <T::TargetChain as Chain>::ChainAsset,
-	) -> <T::TargetChain as Chain>::ChainAmount {
-		FeeMultiplier::<T, I>::get().saturating_mul_int(
-			CurrentChainState::<T, I>::get()
-				.expect(NO_CHAIN_STATE)
-				.tracked_data
-				.estimate_ingress_fee(asset),
-		)
-	}
-
-	fn estimate_ingress_fee_vault_swap() -> Option<<T::TargetChain as Chain>::ChainAmount> {
-		CurrentChainState::<T, I>::get()
-			.expect(NO_CHAIN_STATE)
-			.tracked_data
-			.estimate_ingress_fee_vault_swap()
-	}
-
-	fn estimate_egress_fee(
-		asset: <T::TargetChain as Chain>::ChainAsset,
-	) -> <T::TargetChain as Chain>::ChainAmount {
-		FeeMultiplier::<T, I>::get().saturating_mul_int(
-			CurrentChainState::<T, I>::get()
-				.expect(NO_CHAIN_STATE)
-				.tracked_data
-				.estimate_egress_fee(asset),
-		)
-	}
-
-	fn estimate_ccm_fee(
-		asset: <T::TargetChain as Chain>::ChainAsset,
-		gas_budget: cf_primitives::GasAmount,
-		message_length: usize,
-	) -> Option<<T::TargetChain as Chain>::ChainAmount> {
-		CurrentChainState::<T, I>::get()
-			.expect(NO_CHAIN_STATE)
-			.tracked_data
-			.estimate_ccm_fee(asset, gas_budget, message_length)
-			.map(|ccm_fee| FeeMultiplier::<T, I>::get().saturating_mul_int(ccm_fee))
 	}
 }
