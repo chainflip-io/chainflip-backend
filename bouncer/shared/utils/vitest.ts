@@ -1,7 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { afterEach, beforeEach, it } from 'vitest';
 import { TestContext } from 'shared/utils/test_context';
-import { testInfoFile } from 'shared/utils';
+import { runWithTimeout, testInfoFile } from 'shared/utils';
+import { getTestLogFile } from './logger';
 
 // Write the test name and function name to a file to be used by the `run_test.ts` command
 function writeTestInfoFile(name: string, functionName: string) {
@@ -30,16 +31,27 @@ afterEach<{ testContext: TestContext }>((context) => {
   context.testContext.printReport();
 });
 
-function createTestFunction(name: string, testFunction: (context: TestContext) => Promise<void>) {
+function createTestFunction(
+  name: string,
+  timeoutSeconds: number,
+  testFunction: (context: TestContext) => Promise<void>,
+) {
   return async (context: { testContext: TestContext }) => {
     // Attach the test name to the logger
     context.testContext.logger = context.testContext.logger.child({ test: name });
     context.testContext.logger.info(`🧪 Starting test ${name}`);
+
     // Run the test with the test context
-    await testFunction(context.testContext).catch((error) => {
+    await runWithTimeout(testFunction(context.testContext), timeoutSeconds).catch((error) => {
       // We must catch the error here to be able to log it
       context.testContext.error(error);
-      throw error;
+
+      // get local logs from file and append them to the error
+      const testLogFileName = getTestLogFile(context.testContext.logger);
+      const logs = readFileSync(testLogFileName);
+
+      // re-throw error with logs
+      throw new Error(`${error}\n\nhistory:\n${logs}`);
     });
     context.testContext.logger.info(`✅ Finished test ${name}`);
   };
@@ -53,8 +65,10 @@ export function concurrentTest(
 ) {
   it.concurrent<{ testContext: TestContext }>(
     name,
-    createTestFunction(name, testFunction),
-    timeoutSeconds * 1000,
+    createTestFunction(name, timeoutSeconds, testFunction),
+    // we catch the timeout manually inside `createTestFunction` so that we can print the test logs.
+    // the timeout here is a fallback and should never trigger:
+    (timeoutSeconds + 5) * 1000,
   );
 
   if (!excludeFromList) {
@@ -70,8 +84,10 @@ export function serialTest(
 ) {
   it.sequential<{ testContext: TestContext }>(
     name,
-    createTestFunction(name, testFunction),
-    timeoutSeconds * 1000,
+    createTestFunction(name, timeoutSeconds, testFunction),
+    // we catch the timeout manually inside `createTestFunction` so that we can print the test logs.
+    // the timeout here is a fallback and should never trigger:
+    (timeoutSeconds + 5) * 1000,
   );
 
   if (!excludeFromList) {

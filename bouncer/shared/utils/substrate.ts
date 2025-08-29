@@ -514,6 +514,7 @@ export function observeEvents<T = any>(
 
   const controller = abortable ? new AbortController() : undefined;
 
+  const logMessagePeriod: number = 5;
   let blocksChecked = 0;
   const findEvent = async () => {
     await using subscription = await subscribeHeads({ chain, finalized });
@@ -525,7 +526,11 @@ export function observeEvents<T = any>(
 
     const checkEvents = (events: Event[], log: string) => {
       blocksChecked += 1;
-      logger.trace(`Checking ${events.length} ${log} events for ${eventName}`);
+      if (blocksChecked % logMessagePeriod === 0) {
+        logger.trace(
+          `Checking ${events.length} ${log} events for ${eventName} (${blocksChecked}th block)`,
+        );
+      }
       let stop = false;
       const foundEvents: Event[] = [];
       for (const event of events) {
@@ -595,7 +600,7 @@ export function observeEvents<T = any>(
           )} seconds`,
         );
         break;
-      } else {
+      } else if (blocksChecked % logMessagePeriod === 0) {
         logger.trace(`No ${eventName} events found in subscription.`);
       }
     }
