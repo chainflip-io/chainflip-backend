@@ -1,9 +1,9 @@
 #!/usr/bin/env -S pnpm tsx
 
 import { AddressOrPair } from '@polkadot/api/types';
-import { initializeAssethubChain } from 'shared/initialize_new_chains';
+import { initializeChain } from 'shared/initialize_new_chains';
 import { DisposableApiPromise, getAssethubApi, observeEvent } from 'shared/utils/substrate';
-import { globalLogger, loggerChild } from 'shared/utils/logger';
+import { globalLogger, logger, loggerAsyncStorage, loggerChild } from 'shared/utils/logger';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { createLpPool } from 'shared/create_lp_pool';
 import { depositLiquidity } from 'shared/deposit_liquidity';
@@ -59,9 +59,8 @@ export async function rotateAndFund(
 
 async function main(): Promise<void> {
   await using assethub = await getAssethubApi();
-  const logger = loggerChild(globalLogger, 'setup_vaults');
 
-  await initializeAssethubChain(logger);
+  await initializeChain('Assethub');
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
   const hubActivationRequest = observeEvent(
     logger,
@@ -112,4 +111,8 @@ async function main(): Promise<void> {
   ]);
 }
 
-await runWithTimeoutAndExit(main(), 6000);
+await runWithTimeoutAndExit(
+  // should move this into runWithTimeoutAndExit if it becomes a pattern
+  loggerAsyncStorage.run(loggerChild(globalLogger, 'setup_vaults'), () => main()),
+  6000,
+);

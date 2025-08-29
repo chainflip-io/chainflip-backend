@@ -211,6 +211,9 @@ build-localnet() {
     KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
   fi
 
+  echo "📖 Starting indexer ..."
+  $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up postgres indexer -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
+
   print_success
 }
 
