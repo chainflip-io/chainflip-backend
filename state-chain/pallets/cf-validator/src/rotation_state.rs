@@ -20,8 +20,8 @@ use sp_std::collections::btree_set::BTreeSet;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 pub struct RotationState<Id, Amount> {
-	primary_candidates: Vec<Id>,
-	secondary_candidates: Vec<Id>,
+	pub primary_candidates: Vec<Id>,
+	pub secondary_candidates: Vec<Id>,
 	pub banned: BTreeSet<Id>,
 	pub bond: Amount,
 	pub new_epoch_index: EpochIndex,
