@@ -86,8 +86,8 @@ use cf_primitives::{
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
-	DummyIngressSource, EpochKey, FundingInfo, GetBlockHeight, KeyProvider, MinimumDeposit,
-	NoLimit, SwapLimits, SwapParameterValidation,
+	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, MinimumDeposit, NoLimit, SwapLimits,
+	SwapParameterValidation,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
@@ -708,6 +708,7 @@ impl frame_system::Config for Runtime {
 		Reputation,
 		pallet_cf_pools::DeleteHistoricalEarnedFees<Self>,
 		pallet_cf_asset_balances::DeleteAccount<Self>,
+		pallet_cf_validator::DelegatedAccountCleanup<Self>,
 	);
 	/// The data to be stored in an account.
 	type AccountData = ();
