@@ -1690,11 +1690,11 @@ pub mod pallet {
 		/// Calculate executed price delta from the oracle price and save the result to the swap
 		/// state
 		pub(super) fn calculate_oracle_delta(swap: &mut SwapState<T>) {
-			let input_oracle_price = T::PriceFeedApi::get_price(swap.input_asset());
-			let output_oracle_price = T::PriceFeedApi::get_price(swap.output_asset());
+			let input_oracle = T::PriceFeedApi::get_price(swap.input_asset());
+			let output_oracle = T::PriceFeedApi::get_price(swap.output_asset());
 
 			let oracle_delta = if let (Some(input_oracle), Some(output_oracle)) =
-				(&input_oracle_price, &output_oracle_price)
+				(&input_oracle, &output_oracle)
 			{
 				let oracle_price =
 					cf_amm::math::relative_price(input_oracle.price, output_oracle.price);
@@ -1733,21 +1733,24 @@ pub mod pallet {
 			swap: &SwapState<T>,
 		) -> Result<(), SwapFailureReason> {
 			if let Some(params) = swap.refund_params() {
-				let input_oracle_price = T::PriceFeedApi::get_price(swap.input_asset());
-				let output_oracle_price = T::PriceFeedApi::get_price(swap.output_asset());
+				let input_oracle = T::PriceFeedApi::get_price(swap.input_asset());
+				let output_oracle = T::PriceFeedApi::get_price(swap.output_asset());
 
 				// Live price protection, aka oracle price protection
 				if let Some(slippage_bps) = params.price_limits.max_oracle_price_slippage {
-					match (input_oracle_price, output_oracle_price) {
-						(Some(oracle1), Some(oracle2)) if oracle1.stale || oracle2.stale =>
+					match (input_oracle, output_oracle) {
+						(Some(input_oracle), Some(output_oracle))
+							if input_oracle.stale || output_oracle.stale =>
 							return Err(SwapFailureReason::OraclePriceStale),
 						(None, _) | (_, None) => {
 							// Ignore the oracle price check if not supported/available
 							// for one of the assets.
 						},
-						(Some(oracle1), Some(oracle2)) => {
-							let relative_price =
-								cf_amm::math::relative_price(oracle1.price, oracle2.price);
+						(Some(input_oracle), Some(output_oracle)) => {
+							let relative_price = cf_amm::math::relative_price(
+								input_oracle.price,
+								output_oracle.price,
+							);
 							// Reduce the relative price by slippage_bps:
 							let min_oracle_price = cf_amm::math::mul_div_floor(
 								relative_price,
