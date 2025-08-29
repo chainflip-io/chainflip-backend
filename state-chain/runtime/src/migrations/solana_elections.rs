@@ -14,11 +14,26 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{Runtime, SolanaInstance};
 use cf_runtime_utilities::PlaceholderMigration;
+use core::marker::PhantomData;
+use frame_support::{migrations::VersionedMigration, traits::UncheckedOnRuntimeUpgrade};
 
-use crate::Pallet;
+pub type Migration = (
+	VersionedMigration<
+		6,
+		7,
+		EmptyMigration,
+		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
+		<Runtime as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<7, pallet_cf_elections::Pallet<Runtime, SolanaInstance>>,
+);
 
-mod vote_storage_migration;
+pub struct EmptyMigration(PhantomData<()>);
 
-pub type PalletMigration<T, I> =
-	(vote_storage_migration::VoteStorageMigration<T, I>, PlaceholderMigration<6, Pallet<T, I>>);
+impl UncheckedOnRuntimeUpgrade for EmptyMigration {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		frame_support::weights::Weight::zero()
+	}
+}

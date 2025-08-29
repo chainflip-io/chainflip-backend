@@ -20,7 +20,8 @@ use crate::{
 		ElectionWriteAccess, ElectoralSystem, ElectoralSystemTypes, ElectoralWriteAccess,
 		PartialVoteOf, VotePropertiesOf,
 	},
-	vote_storage, CorruptStorageError,
+	vote_storage::VoteStorage,
+	CorruptStorageError,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_utilities::success_threshold_from_share_count;
@@ -33,7 +34,15 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 /// This electoral system detects if something occurred or not. Voters simply vote if something
 /// happened, and if they haven't seen it happen, they don't vote.
 #[allow(clippy::type_complexity)]
-pub struct ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber> {
+pub struct ExactValue<
+	Identifier,
+	Value,
+	Settings,
+	Hook,
+	ValidatorId,
+	StateChainBlockNumber,
+	VoteStorageType,
+> {
 	_phantom: core::marker::PhantomData<(
 		Identifier,
 		Value,
@@ -41,6 +50,7 @@ pub struct ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChain
 		Hook,
 		ValidatorId,
 		StateChainBlockNumber,
+		VoteStorageType,
 	)>,
 }
 
@@ -61,7 +71,9 @@ impl<
 		Hook: ExactValueHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
+		VoteStorageType: VoteStorage + 'static,
+	>
+	ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber, VoteStorageType>
 {
 	pub fn witness_exact_value<
 		ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static,
@@ -101,8 +113,17 @@ impl<
 		Hook: ExactValueHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+		VoteStorageType: VoteStorage + 'static,
 	> ElectoralSystemTypes
-	for ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
+	for ExactValue<
+		Identifier,
+		Value,
+		Settings,
+		Hook,
+		ValidatorId,
+		StateChainBlockNumber,
+		VoteStorageType,
+	>
 {
 	type ValidatorId = ValidatorId;
 	type StateChainBlockNumber = StateChainBlockNumber;
@@ -115,7 +136,7 @@ impl<
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = Identifier;
 	type ElectionState = ();
-	type VoteStorage = vote_storage::bitmap::Bitmap<Value>;
+	type VoteStorage = VoteStorageType;
 	type Consensus = Value;
 	type OnFinalizeContext = ();
 	type OnFinalizeReturn = ();
@@ -128,8 +149,17 @@ impl<
 		Hook: ExactValueHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+		VoteStorageType: VoteStorage<Properties = (), Vote = Value> + 'static,
 	> ElectoralSystem
-	for ExactValue<Identifier, Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
+	for ExactValue<
+		Identifier,
+		Value,
+		Settings,
+		Hook,
+		ValidatorId,
+		StateChainBlockNumber,
+		VoteStorageType,
+	>
 {
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
