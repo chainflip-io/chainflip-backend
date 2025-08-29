@@ -4,7 +4,7 @@ use crate::{
 		ReportFailedLivenessCheck,
 	},
 	constants::common::LIVENESS_CHECK_DURATION,
-	BitcoinChainTracking, BitcoinIngressEgress, Runtime,
+	BitcoinChainTracking, BitcoinIngressEgress, Runtime, Timestamp,
 };
 use cf_chains::{
 	btc::{
@@ -15,7 +15,7 @@ use cf_chains::{
 	witness_period::SaturatingStep,
 	Bitcoin, Chain, DepositChannel,
 };
-use cf_primitives::{AccountId, ChannelId};
+use cf_primitives::{AccountId, ChannelId, UnixTime};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::Chainflip;
 use core::ops::RangeInclusive;
@@ -122,7 +122,10 @@ impls! {
 
 	Hook<HookTypeFor<Self, BlockHeightChangeHook>> {
 		fn run(&mut self, block_height: btc::BlockNumber) {
-			if let Err(err) = BitcoinChainTracking::inner_update_chain_height(block_height) {
+			if let Err(err) = BitcoinChainTracking::inner_update_chain_state(|state| {
+				state.block_height = block_height;
+				state.tracked_data.block_witnessed_at = UnixTime { seconds: Timestamp::get() / 1000 };
+			}) {
 				log::error!("Failed to update BTC chain height to {block_height:?}: {:?}", err);
 			}
 		}
@@ -453,9 +456,8 @@ pub type BitcoinLiveness = Liveness<
 pub struct BitcoinFeeUpdateHook;
 impl UpdateFeeHook<BtcAmount> for BitcoinFeeUpdateHook {
 	fn update_fee(fee: BtcAmount) {
-		if let Err(err) = BitcoinChainTracking::inner_update_fee(BitcoinTrackedData {
-			btc_fee_info: BitcoinFeeInfo::new(fee),
-			block_witnessed_at: panic!(),
+		if let Err(err) = BitcoinChainTracking::inner_update_tracked_data(move |tracked_data| {
+			tracked_data.btc_fee_info = BitcoinFeeInfo::new(fee)
 		}) {
 			log::error!("Failed to update BTC fees to {fee:#?}: {err:?}");
 		}

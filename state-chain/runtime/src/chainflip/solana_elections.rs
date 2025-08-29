@@ -305,7 +305,9 @@ pub struct SolanaBlockHeightTrackingHook;
 
 impl MedianChangeHook<<Solana as Chain>::ChainBlockNumber> for SolanaBlockHeightTrackingHook {
 	fn on_change(block_height: <Solana as Chain>::ChainBlockNumber) {
-		if let Err(err) = SolanaChainTracking::inner_update_chain_height(block_height) {
+		if let Err(err) =
+			SolanaChainTracking::inner_update_chain_state(|state| state.block_height = block_height)
+		{
 			log::error!("Failed to update chain state: {:?}", err);
 		}
 	}
