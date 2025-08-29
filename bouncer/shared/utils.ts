@@ -746,15 +746,18 @@ export async function observeBalanceIncrease(
   logger: Logger,
   dstCcy: Asset,
   address: string,
-  oldBalance: string,
+  oldBalance?: string,
   timeoutSeconds = 120,
 ): Promise<number> {
   logger.trace(`Observing balance increase of ${dstCcy} at ${address}`);
+  const initialBalance = oldBalance
+    ? Number(oldBalance)
+    : Number(await getBalance(dstCcy, address));
   for (let i = 0; i < Math.max(timeoutSeconds / 3, 1); i++) {
     const newBalance = Number(await getBalance(dstCcy, address));
-    if (newBalance > Number(oldBalance)) {
+    if (newBalance > initialBalance) {
       logger.trace(
-        `Observed balance increase of ${newBalance - Number(oldBalance)}${dstCcy} in ${i * 3} seconds`,
+        `Observed balance increase of ${newBalance - initialBalance}${dstCcy} in ${i * 3} seconds`,
       );
       return newBalance;
     }
