@@ -654,8 +654,8 @@ decl_runtime_apis!(
 			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		) -> Vec<OraclePrice>;
 		fn cf_sc_call_tx(
+			caller: EthereumAddress,
 			call: crate::chainflip::ethereum_sc_calls::EthereumSCApi,
-			maybe_deposit: pallet_cf_funding::EthereumDeposit,
 		) -> Result<EvmCallDetails, DispatchErrorWithMessage>;
 		#[changed_in(6)]
 		fn cf_sc_call_tx();

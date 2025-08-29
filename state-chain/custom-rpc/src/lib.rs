@@ -1101,8 +1101,8 @@ pub trait CustomApi {
 	#[method(name = "sc_call_tx")]
 	fn cf_sc_call_tx(
 		&self,
+		caller: EthereumAddress,
 		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi,
-		maybe_deposit: pallet_cf_funding::EthereumDeposit,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<EvmCallDetails>;
 }
@@ -2125,8 +2125,8 @@ where
 
 	fn cf_sc_call_tx(
 		&self,
+		caller: EthereumAddress,
 		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi,
-		maybe_deposit: pallet_cf_funding::EthereumDeposit,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<EvmCallDetails> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
@@ -2142,7 +2142,7 @@ where
 					CfErrorCode::RuntimeApiError,
 				)))
 			} else {
-				api.cf_sc_call_tx(hash, call, maybe_deposit)
+				api.cf_sc_call_tx(hash, caller, call)
 					.map_err(CfApiError::from)?
 					.map_err(CfApiError::from)
 			}
