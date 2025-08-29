@@ -525,7 +525,7 @@ fn expired_epoch_data_is_removed() {
 	new_test_ext().then_execute_with_checks(|| {
 		let delegator = 123u64;
 		let operator = 456u64;
-		let test_snapshot = DelegationSnapshot {
+		let test_snapshot = DelegationSnapshot::<Test> {
 			operator,
 			delegators: [(delegator, 50u128)].into_iter().collect(),
 			validators: [(ALICE, 150u128)].into_iter().collect(),
@@ -536,13 +536,13 @@ fn expired_epoch_data_is_removed() {
 		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
 		HistoricalAuthorities::<Test>::insert(1, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(1, 10);
-		DelegationResolver::<Test>::register_snapshot(1, test_snapshot.clone());
+		test_snapshot.clone().register_for_epoch(1);
 
 		// Epoch 2
 		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
 		HistoricalAuthorities::<Test>::insert(2, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(2, 30);
-		DelegationResolver::<Test>::register_snapshot(2, test_snapshot.clone());
+		test_snapshot.clone().register_for_epoch(2);
 		let authority_index = AuthorityIndex::<Test>::get(2, ALICE);
 
 		// Expire
@@ -552,7 +552,7 @@ fn expired_epoch_data_is_removed() {
 		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
 		HistoricalAuthorities::<Test>::insert(3, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(3, 20);
-		DelegationResolver::<Test>::register_snapshot(3, test_snapshot.clone());
+		test_snapshot.clone().register_for_epoch(3);
 
 		// Expect epoch 1's data to be deleted
 		assert!(AuthorityIndex::<Test>::try_get(1, ALICE).is_err());
@@ -1968,7 +1968,7 @@ mod delegation {
 				let next_epoch = ValidatorPallet::epoch_index() + 1;
 				let snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR);
 				assert!(snapshot.is_some());
-				let snapshot = snapshot.unwrap().unwrap();
+				let snapshot = snapshot.unwrap();
 
 				assert!(!snapshot.validators.contains_key(&OPERATOR));
 				assert!(!snapshot.delegators.contains_key(&OPERATOR));
@@ -2009,7 +2009,7 @@ mod delegation {
 				let current_epoch = ValidatorPallet::epoch_index();
 				let snapshot = DelegationSnapshots::<Test>::get(current_epoch, OPERATOR);
 				assert!(snapshot.is_some());
-				let snapshot = snapshot.unwrap().unwrap();
+				let snapshot = snapshot.unwrap();
 				let active_delegators: BTreeSet<u64> =
 					snapshot.delegators.keys().cloned().collect();
 				assert_eq!(BTreeSet::from_iter(DELEGATORS), active_delegators);
@@ -2094,7 +2094,7 @@ mod delegation {
 				let current_epoch = ValidatorPallet::epoch_index();
 				let snapshot = DelegationSnapshots::<Test>::get(current_epoch, OPERATOR);
 				assert!(snapshot.is_some());
-				let snapshot = snapshot.unwrap().unwrap();
+				let snapshot = snapshot.unwrap();
 				assert!(snapshot.delegators.len() == 2);
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {

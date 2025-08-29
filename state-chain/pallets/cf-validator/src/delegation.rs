@@ -1,4 +1,6 @@
-use crate::{Config, DelegationSnapshots, OperatorSettingsLookup, ValidatorIdOf};
+use crate::{
+	Config, DelegationSnapshots, OperatorSettingsLookup, ValidatorIdOf, ValidatorToOperator,
+};
 use cf_primitives::EpochIndex;
 use cf_traits::{EpochInfo, Issuance, RewardsDistribution, Slashing};
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -96,6 +98,15 @@ impl<T: Config> DelegationSnapshot<T> {
 
 	pub fn total_delegator_bid(&self) -> T::Amount {
 		self.delegators.values().copied().sum()
+	}
+
+	/// Stores the validator mappings and snapshot information for the given epoch.
+	pub fn register_for_epoch(self, epoch_index: EpochIndex) {
+		let operator = self.operator.clone();
+		for validator in self.validators.keys() {
+			ValidatorToOperator::<T>::insert(epoch_index, validator.into_ref(), operator.clone());
+		}
+		DelegationSnapshots::<T>::insert(epoch_index, operator, self);
 	}
 
 	pub fn total_available_bid(&self) -> T::Amount {
@@ -197,69 +208,21 @@ pub fn distribute<T: Config>(
 	total: T::Amount,
 	settle: impl Fn(&T::AccountId, T::Amount),
 ) {
-	if let Some(snapshot) = DelegationResolver::<T>::resolve_for_account(validator) {
-		snapshot.distribute(total).for_each(|(account, amount)| settle(account, amount));
-	} else {
-		settle(validator, total);
-	}
-}
+	let epoch_index = T::EpochInfo::epoch_index();
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
-#[scale_info(skip_type_params(T))]
-pub enum DelegationResolver<T: Config> {
-	Own(DelegationSnapshot<T>),
-	Ref(T::AccountId),
-}
-
-impl<T: Config> From<DelegationSnapshot<T>> for DelegationResolver<T> {
-	fn from(snapshot: DelegationSnapshot<T>) -> Self {
-		Self::Own(snapshot)
-	}
-}
-
-impl<T: Config> DelegationResolver<T> {
-	pub fn register_snapshot(epoch_index: EpochIndex, snapshot: DelegationSnapshot<T>) {
-		for validator in snapshot.validators.keys() {
-			DelegationSnapshots::<T>::insert(
-				epoch_index,
-				validator.into_ref(),
-				Self::Ref(snapshot.operator.clone()),
+	if let Some(operator) = ValidatorToOperator::<T>::get(epoch_index, validator) {
+		if let Some(snapshot) = DelegationSnapshots::<T>::get(epoch_index, &operator) {
+			snapshot.distribute(total).for_each(|(account, amount)| settle(account, amount));
+		} else {
+			settle(validator, total);
+			cf_runtime_utilities::log_or_panic!(
+				"Validator {:?} is mapped to operator {:?} for epoch {}, but no delegation snapshot found. Settling directly with validator.",
+				validator,
+				operator,
+				epoch_index
 			);
 		}
-		DelegationSnapshots::<T>::insert(
-			epoch_index,
-			snapshot.operator.clone(),
-			Self::Own(snapshot),
-		);
-	}
-
-	#[cfg(test)]
-	pub fn unwrap(self) -> DelegationSnapshot<T> {
-		match self {
-			DelegationResolver::Own(snapshot) => snapshot,
-			DelegationResolver::Ref(_) => panic!("Tried to unwrap a DelegationResolver::Ref"),
-		}
-	}
-
-	pub fn resolve_for_account(account: &T::AccountId) -> Option<DelegationSnapshot<T>> {
-		DelegationSnapshots::<T>::get(T::EpochInfo::epoch_index(), account)
-			.and_then(Self::inner_resolve)
-	}
-
-	pub fn map<F, R>(&self, f: F) -> Option<R>
-	where
-		F: Fn(&DelegationSnapshot<T>) -> R,
-	{
-		match self {
-			DelegationResolver::Own(snapshot) => Some(f(snapshot)),
-			DelegationResolver::Ref(_) => None,
-		}
-	}
-
-	fn inner_resolve(self) -> Option<DelegationSnapshot<T>> {
-		match self {
-			DelegationResolver::Own(snapshot) => Some(snapshot),
-			DelegationResolver::Ref(operator) => Self::resolve_for_account(&operator),
-		}
+	} else {
+		settle(validator, total);
 	}
 }

@@ -227,11 +227,7 @@ macro_rules! assert_invariants {
 		// validator.
 		let all_managed_validators = DelegationSnapshots::<Test>::iter_prefix(
 			ValidatorPallet::epoch_index(),
-		).filter_map(|(_, resolver)| match resolver {
-			DelegationResolver::Own(snapshot) => Some(snapshot.validators.keys().cloned().collect::<Vec<_>>()),
-			DelegationResolver::Ref(_) => None,
-		})
-		.flatten()
+		).flat_map(|(_, snapshot)| snapshot.validators.keys().cloned().collect::<Vec<_>>())
 		.collect::<Vec<_>>();
 		// Ensure no duplicates in managed validators
 		let all_managed_validators_set: BTreeSet<ValidatorId> =
@@ -242,15 +238,22 @@ macro_rules! assert_invariants {
 			"Duplicate validators found in managed validators"
 		);
 		// Each validator in the snapshot should be resolvable to a snapshot that contains them as a validator.
+		let epoch_index = ValidatorPallet::epoch_index();
 		for managed_validator in all_managed_validators_set {
-			let snapshot = DelegationResolver::<Test>::resolve_for_account(&managed_validator);
-			assert!(
-				snapshot.is_some(),
-				"Managed validator {:?} has no delegation snapshot at block {:?}",
-				managed_validator,
-				System::block_number()
-			);
-			let snapshot = snapshot.unwrap();
+			// Find the operator for this validator
+			let operator = ValidatorToOperator::<Test>::get(epoch_index, &managed_validator)
+				.expect(&format!(
+					"Managed validator {:?} has no operator mapping at block {:?}",
+					managed_validator,
+					System::block_number()
+				));
+			let snapshot = DelegationSnapshots::<Test>::get(epoch_index, &operator)
+				.expect(&format!(
+					"Operator {:?} for validator {:?} has no delegation snapshot at block {:?}",
+					operator,
+					managed_validator,
+					System::block_number()
+				));
 			assert!(
 				snapshot.validators.contains_key(&managed_validator),
 				"Managed validator {:?} not found in their own delegation snapshot {:?} at block {:?}",
@@ -260,7 +263,15 @@ macro_rules! assert_invariants {
 			);
 		}
 		for authority in ValidatorPallet::current_authorities() {
-			if let Some(snapshot) = DelegationResolver::<Test>::resolve_for_account(&authority) {
+			// Check if authority is managed by an operator
+			if let Some(operator) = ValidatorToOperator::<Test>::get(epoch_index, &authority) {
+				let snapshot = DelegationSnapshots::<Test>::get(epoch_index, &operator)
+					.expect(&format!(
+						"Operator {:?} for authority {:?} has no delegation snapshot at block {:?}",
+						operator,
+						authority,
+						System::block_number()
+					));
 				assert!(
 					snapshot.validators.contains_key(&authority),
 					"Invalid snapshot {:?} for authority {:?} at block {:?}",
