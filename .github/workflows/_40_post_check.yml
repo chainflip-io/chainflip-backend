@@ -27,6 +27,9 @@ on:
       chain:
         type: string
         default: "dev"
+      runs-on:
+        type: string
+        default: "digitalocean"
 
 env:
   FORCE_COLOR: 1
@@ -41,7 +44,7 @@ permissions:
 
 jobs:
   bouncer:
-    runs-on: digitalocean
+    runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - name: Setup ngrok ✨

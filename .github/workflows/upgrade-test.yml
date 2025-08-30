@@ -10,6 +10,11 @@ on:
         description: "Run the upgrade test job"
         required: false
         default: true
+      runs-on:
+        type: string
+        description: "The runner to use for the upgrade test"
+        required: false
+        default: "digitalocean"
 
   workflow_call:
     inputs:
@@ -20,6 +25,11 @@ on:
         description: "Run the upgrade test job"
         required: false
         default: true
+      runs-on:
+        type: string
+        description: "The runner to use for the upgrade test"
+        required: false
+        default: "digitalocean"
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v2.1.13
@@ -34,7 +44,7 @@ permissions:
 
 jobs:
   upgrade_test:
-    runs-on: digitalocean
+    runs-on: ${{ inputs.runs-on }}
     # conservatively 1.5 hours. 2 bouncer runs need to occur.
     timeout-minutes: 90
     steps:
