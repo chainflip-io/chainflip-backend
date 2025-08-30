@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
 use frame_support::assert_err;
 
 use super::*;
@@ -494,17 +495,40 @@ fn fok_test_zero_refund_duration(is_ccm: bool) {
 
 #[test]
 fn test_refund_parameter_validation() {
-	use cf_traits::SwapParameterValidation;
-
 	new_test_ext().execute_with(|| {
 		let max_swap_retry_duration_blocks = MaxSwapRetryDurationBlocks::<Test>::get();
 
-		assert_ok!(Swapping::validate_refund_params(0));
-		assert_ok!(Swapping::validate_refund_params(max_swap_retry_duration_blocks));
+		assert_ok!(Swapping::validate_refund_params(INPUT_ASSET, OUTPUT_ASSET, 0, None));
+		assert_ok!(Swapping::validate_refund_params(
+			INPUT_ASSET,
+			OUTPUT_ASSET,
+			max_swap_retry_duration_blocks,
+			None
+		));
 		assert_err!(
-			Swapping::validate_refund_params(max_swap_retry_duration_blocks + 1),
+			Swapping::validate_refund_params(
+				INPUT_ASSET,
+				OUTPUT_ASSET,
+				max_swap_retry_duration_blocks + 1,
+				None
+			),
 			DispatchError::from(crate::Error::<Test>::RetryDurationTooHigh)
 		);
+
+		MockPriceFeedApi::set_price(INPUT_ASSET, None);
+		MockPriceFeedApi::set_price(OUTPUT_ASSET, Some(U256::from(1)));
+		assert_err!(
+			Swapping::validate_refund_params(INPUT_ASSET, OUTPUT_ASSET, 0, Some(100)),
+			DispatchError::from(crate::Error::<Test>::OraclePriceNotAvailable)
+		);
+		MockPriceFeedApi::set_price(INPUT_ASSET, Some(U256::from(1)));
+		MockPriceFeedApi::set_price(OUTPUT_ASSET, None);
+		assert_err!(
+			Swapping::validate_refund_params(INPUT_ASSET, OUTPUT_ASSET, 0, Some(100)),
+			DispatchError::from(crate::Error::<Test>::OraclePriceNotAvailable)
+		);
+		MockPriceFeedApi::set_price(OUTPUT_ASSET, Some(U256::from(1)));
+		assert_ok!(Swapping::validate_refund_params(INPUT_ASSET, OUTPUT_ASSET, 0, Some(100)));
 	});
 }
 

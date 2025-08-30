@@ -34,8 +34,8 @@ use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
 	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, IngressEgressFeeApi,
-	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
-	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
+	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -500,8 +500,7 @@ pub mod pallet {
 		PriceLimits, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{
-		AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider, PriceFeedApi,
-		ScheduledEgressDetails,
+		AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider, ScheduledEgressDetails,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
@@ -916,6 +915,8 @@ pub mod pallet {
 		NoRefundAmountRemaining,
 		/// CCM is not supported for the refund chain.
 		CcmUnsupportedForRefundChain,
+		/// Oracle price not available for one or more of the assets.
+		OraclePriceNotAvailable,
 	}
 
 	#[pallet::genesis_config]
@@ -2783,11 +2784,27 @@ impl<T: Config> SwapParameterValidation for Pallet<T> {
 		}
 	}
 
-	fn validate_refund_params(retry_duration: BlockNumber) -> Result<(), DispatchError> {
+	fn validate_refund_params(
+		input_asset: Asset,
+		output_asset: Asset,
+		retry_duration: BlockNumber,
+		max_oracle_price_slippage: Option<BasisPoints>,
+	) -> Result<(), DispatchError> {
+		// Check that the retry duration is within limits.
 		let max_swap_retry_duration_blocks = MaxSwapRetryDurationBlocks::<T>::get();
 		if retry_duration > max_swap_retry_duration_blocks {
 			return Err(DispatchError::from(Error::<T>::RetryDurationTooHigh));
 		}
+
+		// Check that the oracle price's are available for the assets.
+		if let Some(_max_oracle_price_slippage) = max_oracle_price_slippage {
+			if T::PriceFeedApi::get_price(input_asset).is_none() ||
+				T::PriceFeedApi::get_price(output_asset).is_none()
+			{
+				return Err(DispatchError::from(Error::<T>::OraclePriceNotAvailable));
+			}
+		}
+
 		Ok(())
 	}
 

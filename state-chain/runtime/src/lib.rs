@@ -2343,8 +2343,19 @@ impl_runtime_apis! {
 			pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(&DcaParameters{number_of_chunks, chunk_interval}).map_err(Into::into)
 		}
 
-		fn cf_validate_refund_params(retry_duration: BlockNumber) -> Result<(), DispatchErrorWithMessage> {
-			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration).map_err(Into::into)
+		fn cf_validate_refund_params(
+			input_asset: Asset,
+			output_asset: Asset,
+			retry_duration: BlockNumber,
+			max_oracle_price_slippage: Option<BasisPoints>,
+		) -> Result<(), DispatchErrorWithMessage> {
+			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(
+				input_asset,
+				output_asset,
+				retry_duration,
+				max_oracle_price_slippage,
+			)
+			.map_err(Into::into)
 		}
 
 		fn cf_request_swap_parameter_encoding(
@@ -2363,28 +2374,33 @@ impl_runtime_apis! {
 			let destination_chain = ForeignChain::from(destination_asset);
 
 
-			// Validate refund duration.
-			let retry_duration = match &extra_parameters {
-				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => {
-					*retry_duration
-				}
+			// Validate refund params
+			let (retry_duration, max_oracle_price_slippage) = match &extra_parameters {
+				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, max_oracle_price_slippage, .. } => {
+					let max_oracle_price_slippage = match max_oracle_price_slippage {
+						Some(slippage) if *slippage == u8::MAX => None,
+						Some(slippage) => Some((*slippage).into()),
+						None => None,
+					};
+					(*retry_duration, max_oracle_price_slippage)
+				},
 				VaultSwapExtraParametersEncoded::Ethereum(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
 					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
-					refund_parameters.retry_duration
-				}
+					(refund_parameters.retry_duration, refund_parameters.max_oracle_price_slippage)
+				},
 				VaultSwapExtraParametersEncoded::Arbitrum(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
 					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
-					refund_parameters.retry_duration
-				}
+					(refund_parameters.retry_duration, refund_parameters.max_oracle_price_slippage)
+				},
 				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => {
 					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
-					refund_parameters.retry_duration
-				}
+					(refund_parameters.retry_duration, refund_parameters.max_oracle_price_slippage)
+				},
 			};
 
 			let checked_ccm = crate::chainflip::vault_swaps::validate_parameters(
 				&broker,
-				source_chain,
+				source_asset,
 				&destination_address,
 				destination_asset,
 				&dca_parameters,
@@ -2393,6 +2409,7 @@ impl_runtime_apis! {
 				&affiliate_fees,
 				retry_duration,
 				&channel_metadata,
+				max_oracle_price_slippage,
 			)?;
 
 			// Conversion implicitly verifies address validity.
@@ -2537,7 +2554,7 @@ impl_runtime_apis! {
 			// Validate the parameters
 			let checked_ccm = crate::chainflip::vault_swaps::validate_parameters(
 				&broker,
-				source_asset.into(),
+				source_asset,
 				&destination_address,
 				destination_asset,
 				&dca_parameters,
@@ -2546,6 +2563,7 @@ impl_runtime_apis! {
 				&affiliate_fees,
 				refund_parameters.retry_duration,
 				&channel_metadata,
+				refund_parameters.max_oracle_price_slippage,
 			)?;
 
 			let boost_fee: u8 = boost_fee
