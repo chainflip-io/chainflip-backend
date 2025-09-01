@@ -1079,6 +1079,8 @@ pub mod pallet {
 		TransactionAlreadyPrewitnessed,
 		/// Assethub's Vault Account does not exist in storage.
 		MissingAssethubVault,
+		/// The Chain is deprecated, support is being phased out.
+		ChainDeprecated,
 	}
 
 	#[pallet::hooks]
@@ -2971,6 +2973,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(DepositChannel<T::TargetChain>, TargetChainBlockNumber<T, I>, T::Amount),
 		DispatchError,
 	> {
+		ensure!(!T::TargetChain::DEPRECATED, Error::<T, I>::ChainDeprecated);
 		ensure!(
 			T::SafeMode::get().deposit_channel_creation_enabled,
 			Error::<T, I>::DepositChannelCreationDisabled
