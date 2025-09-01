@@ -187,6 +187,7 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 		&self,
 		asset: <Arbitrum as Chain>::ChainAsset,
 		ingress_or_egress: IngressOrEgress,
+		_broadcaster_state: BroadcasterState,
 	) -> <Arbitrum as Chain>::ChainAmount {
 		use crate::arb::fees::*;
 

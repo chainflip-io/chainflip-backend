@@ -41,6 +41,7 @@ impl<C: Chain> FeeEstimationApi<C> for TrackedDataProvider<C> {
 		&self,
 		asset: C::ChainAsset,
 		ingress_or_egress: IngressOrEgress,
+		_broadcaster_state: BroadcasterState,
 	) -> C::ChainAmount {
 		Self::get_value::<C::TrackedData>(TRACKED_DATA_KEY)
 			.expect("TrackedData must be set explicitly in mocks")

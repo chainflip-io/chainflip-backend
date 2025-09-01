@@ -33,6 +33,7 @@ use crate::{
 	},
 };
 use ccm_checker::{CcmValidityChecker, CcmValidityError, DecodedCcmAdditionalData};
+use cf_utilities::derive_common_traits;
 use core::{fmt::Display, iter::Step};
 use frame_support::storage::transactional;
 use sol::api::VaultSwapAccountAndSender;
@@ -1321,11 +1322,19 @@ pub struct ChainState<C: Chain> {
 	pub tracked_data: C::TrackedData,
 }
 
+derive_common_traits! {
+	#[derive(TypeInfo)]
+	pub struct BroadcasterState {
+		pub pending_broadcasts: u32
+	}
+}
+
 pub trait FeeEstimationApi<C: Chain> {
 	fn estimate_fee(
 		&self,
 		asset: C::ChainAsset,
 		ingress_or_egress: IngressOrEgress,
+		broadcaster_state: BroadcasterState,
 	) -> C::ChainAmount;
 }
 
@@ -1334,6 +1343,7 @@ impl<C: Chain> FeeEstimationApi<C> for () {
 		&self,
 		_asset: C::ChainAsset,
 		_ingress_or_egress: IngressOrEgress,
+		_broadcaster_state: BroadcasterState,
 	) -> C::ChainAmount {
 		Default::default()
 	}

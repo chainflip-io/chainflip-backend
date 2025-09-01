@@ -201,6 +201,7 @@ impl FeeEstimationApi<MockEthereum> for MockTrackedData {
 		&self,
 		_asset: <MockEthereum as Chain>::ChainAsset,
 		_ingress_or_egress: IngressOrEgress,
+		_broadcaster_state: BroadcasterState,
 	) -> <MockEthereum as Chain>::ChainAmount {
 		unimplemented!("Unused for now.")
 	}

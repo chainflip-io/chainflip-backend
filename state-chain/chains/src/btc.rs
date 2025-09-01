@@ -155,6 +155,7 @@ impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 		ingress_or_egress: IngressOrEgress,
+		_broadcaster_state: BroadcasterState,
 	) -> <Bitcoin as Chain>::ChainAmount {
 		match ingress_or_egress {
 			IngressOrEgress::IngressDepositChannel => {

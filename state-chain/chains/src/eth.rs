@@ -168,6 +168,7 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 		&self,
 		asset: <Ethereum as Chain>::ChainAsset,
 		ingress_or_egress: IngressOrEgress,
+		_broadcaster_state: BroadcasterState,
 	) -> <Ethereum as Chain>::ChainAmount {
 		use crate::eth::fees::*;
 		match ingress_or_egress {

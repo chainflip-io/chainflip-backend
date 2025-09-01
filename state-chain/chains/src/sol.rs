@@ -306,6 +306,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 		&self,
 		asset: <Solana as Chain>::ChainAsset,
 		ingress_or_egress: IngressOrEgress,
+		_broadcaster_state: BroadcasterState,
 	) -> <Solana as Chain>::ChainAmount {
 		use compute_units_costs::*;
 		match ingress_or_egress {

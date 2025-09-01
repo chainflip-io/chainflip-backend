@@ -52,34 +52,24 @@ use cf_chains::{
 	address::{
 		decode_and_validate_address_for_asset, to_encoded_address, try_from_encoded_address,
 		AddressConverter, AddressError, EncodedAddress, ForeignChainAddress,
-	},
-	arb::api::ArbitrumApi,
-	assets::any::ForeignChainAndAsset,
-	btc::{
+	}, arb::api::ArbitrumApi, assets::any::ForeignChainAndAsset, btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, ScriptPubkey, Utxo, UtxoId,
-	},
-	ccm_checker::DecodedCcmAdditionalData,
-	dot::{
+	}, ccm_checker::DecodedCcmAdditionalData, dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotCrypto, PolkadotReplayProtection,
 		PolkadotTransactionData, ResetProxyAccountNonce, RuntimeVersion,
-	},
-	eth::{
+	}, eth::{
 		self,
 		api::{EthereumApi, StateChainGatewayAddressProvider},
 		deposit_address::ETHEREUM_ETH_ADDRESS,
 		Ethereum,
-	},
-	evm::{
+	}, evm::{
 		api::{EvmChainId, EvmEnvironmentProvider, EvmReplayProtection},
 		EvmCrypto, Transaction,
-	},
-	hub::{api::AssethubApi, OutputAccountId},
-	instances::{
+	}, hub::{api::AssethubApi, OutputAccountId}, instances::{
 		ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
 		SolanaInstance,
-	},
-	sol::{
+	}, sol::{
 		api::{
 			AllNonceAccounts, AltWitnessingConsensusResult, ApiEnvironment, ComputePrice,
 			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount,
@@ -87,12 +77,7 @@ use cf_chains::{
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
-	},
-	AnyChain, ApiCall, Arbitrum, Assethub, CcmChannelMetadataChecked, CcmDepositMetadataChecked,
-	Chain, ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersForChain,
-	FeeEstimationApi, ForeignChain, ReplayProtectionProvider, RequiresSignatureRefresh,
-	SetCommKeyWithAggKey, SetGovKeyWithAggKey, SetGovKeyWithAggKeyError, Solana,
-	TransactionBuilder,
+	}, AnyChain, ApiCall, Arbitrum, Assethub, BroadcasterState, CcmChannelMetadataChecked, CcmDepositMetadataChecked, Chain, ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersForChain, FeeEstimationApi, ForeignChain, ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey, SetGovKeyWithAggKeyError, Solana, TransactionBuilder
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
@@ -1137,7 +1122,7 @@ impl cf_traits::PriceFeedApi for ChainlinkOracle {
 pub struct RuntimeAdjustedFeeEstimationApiStruct<T, I: 'static, C: Chain>(
 	sp_std::marker::PhantomData<(T, I, C)>,
 );
-pub type RuntimeAdjustedFeeApi<T, I: 'static> = RuntimeAdjustedFeeEstimationApiStruct<
+pub type RuntimeAdjustedFeeApi<T, I> = RuntimeAdjustedFeeEstimationApiStruct<
 	T,
 	I,
 	<T as pallet_cf_chain_tracking::Config<I>>::TargetChain,
@@ -1153,9 +1138,12 @@ where
 		asset: C::ChainAsset,
 		ingress_or_egress: cf_primitives::IngressOrEgress,
 	) -> C::ChainAmount {
+		let broadcaster_state = BroadcasterState {
+			pending_broadcasts: pallet_cf_broadcast::PendingBroadcasts::get().map(BTreeMap::len).unwrap_or_default(),
+		};
 		pallet_cf_chain_tracking::Pallet::<T, I>::get_fee_multiplier().saturating_mul_int(
 			pallet_cf_chain_tracking::Pallet::<T, I>::get_tracked_data()
-				.estimate_fee(asset, ingress_or_egress),
+				.estimate_fee(asset, ingress_or_egress, broadcaster_state),
 		)
 	}
 }

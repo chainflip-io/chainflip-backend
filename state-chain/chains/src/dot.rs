@@ -311,6 +311,7 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 		&self,
 		_asset: <Polkadot as Chain>::ChainAsset,
 		ingress_or_egress: IngressOrEgress,
+		_broadcaster_state: BroadcasterState,
 	) -> <Polkadot as Chain>::ChainAmount {
 		match ingress_or_egress {
 			IngressOrEgress::IngressDepositChannel => {
