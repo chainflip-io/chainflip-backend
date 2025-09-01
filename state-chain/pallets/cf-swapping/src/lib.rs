@@ -2796,7 +2796,7 @@ impl<T: Config> SwapParameterValidation for Pallet<T> {
 			return Err(DispatchError::from(Error::<T>::RetryDurationTooHigh));
 		}
 
-		// Check that the oracle price's are available for the assets.
+		// Check that the oracle prices are available for the assets.
 		if let Some(_max_oracle_price_slippage) = max_oracle_price_slippage {
 			if T::PriceFeedApi::get_price(input_asset).is_none() ||
 				T::PriceFeedApi::get_price(output_asset).is_none()
