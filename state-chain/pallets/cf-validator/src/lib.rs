@@ -443,7 +443,7 @@ pub mod pallet {
 		/// Operator settings have been updated.
 		OperatorSettingsUpdated { operator: T::AccountId, preferences: OperatorSettings },
 		/// An account has undelegated from an operator.
-		UnDelegated { delegator: T::AccountId, operator: T::AccountId },
+		Undelegated { delegator: T::AccountId, operator: T::AccountId },
 		/// An account has delegated to an operator.
 		Delegated { delegator: T::AccountId, operator: T::AccountId },
 		/// The undelegation process of an delegator has been finalized.
@@ -1016,7 +1016,7 @@ pub mod pallet {
 				DelegationChoice::<T>::try_mutate_exists(&delegator, |maybe_assigned_operator| {
 					if let Some(assigned_operator) = maybe_assigned_operator.take() {
 						if assigned_operator == operator {
-							Self::deposit_event(Event::UnDelegated {
+							Self::deposit_event(Event::Undelegated {
 								delegator: delegator.clone(),
 								operator: operator.clone(),
 							});
@@ -1141,7 +1141,7 @@ pub mod pallet {
 				|_| (),
 			) {
 				DelegationChoice::<T>::remove(&delegator);
-				Self::deposit_event(Event::UnDelegated { delegator, operator: operator.clone() });
+				Self::deposit_event(Event::Undelegated { delegator, operator: operator.clone() });
 			}
 
 			Exceptions::<T>::remove(&operator);
@@ -1192,7 +1192,7 @@ pub mod pallet {
 
 			DelegationChoice::<T>::mutate(&delegator, |maybe_operator| {
 				if let Some(previous_operator) = maybe_operator.replace(operator.clone()) {
-					Self::deposit_event(Event::UnDelegated {
+					Self::deposit_event(Event::Undelegated {
 						delegator: delegator.clone(),
 						operator: previous_operator,
 					});
@@ -1272,7 +1272,7 @@ pub mod pallet {
 				let operator = DelegationChoice::<T>::take(&delegator)
 					.expect("DelegationChoice existence was checked above");
 
-				Self::deposit_event(Event::UnDelegated { delegator, operator });
+				Self::deposit_event(Event::Undelegated { delegator, operator });
 			}
 
 			Ok(())
@@ -2059,7 +2059,7 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DelegatedAccountCleanup<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
 		MaxDelegationBid::<T>::remove(account_id);
 		if let Some(operator) = DelegationChoice::<T>::take(account_id) {
-			Pallet::<T>::deposit_event(Event::UnDelegated {
+			Pallet::<T>::deposit_event(Event::Undelegated {
 				delegator: account_id.clone(),
 				operator,
 			});

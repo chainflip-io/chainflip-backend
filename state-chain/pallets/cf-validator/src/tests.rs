@@ -1629,7 +1629,7 @@ mod operator {
 					max_bid: Some(0),
 				}),
 				RuntimeEvent::ValidatorPallet(Event::Delegated { operator: ALICE, delegator: BOB }),
-				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+				RuntimeEvent::ValidatorPallet(Event::Undelegated {
 					operator: ALICE,
 					delegator: BOB,
 				}),
@@ -1690,7 +1690,7 @@ mod operator {
 					max_bid: Some(0),
 				}),
 				RuntimeEvent::ValidatorPallet(Event::Delegated { operator: ALICE, delegator: BOB }),
-				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+				RuntimeEvent::ValidatorPallet(Event::Undelegated {
 					operator: ALICE,
 					delegator: BOB,
 				}),
@@ -1925,7 +1925,7 @@ mod delegation {
 			assert_eq!(MaxDelegationBid::<Test>::get(ALICE), None);
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+				RuntimeEvent::ValidatorPallet(Event::Undelegated {
 					delegator: ALICE,
 					operator: BOB
 				}),
@@ -2363,7 +2363,7 @@ mod delegation {
 				None,
 				"MaxDelegationBid should be None after decrementing to zero"
 			);
-			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
 				delegator: DELEGATOR,
 				operator: BOB,
 			}));
@@ -2397,7 +2397,7 @@ mod delegation {
 			));
 			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), None);
 			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), None);
-			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
 				delegator: DELEGATOR,
 				operator: BOB,
 			}));
@@ -2518,7 +2518,7 @@ mod delegation {
 			// Check that delegation data is cleaned up
 			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), None);
 			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), None);
-			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
 				delegator: DELEGATOR,
 				operator: BOB,
 			}));

@@ -177,7 +177,7 @@ async function testDelegate(parentLogger: Logger) {
   scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
     test: (event) => event.data.ethTxHash === receipt.transactionHash,
   }).event;
-  const undelegatedEvent = observeEvent(logger, 'validator:UnDelegated', {
+  const undelegatedEvent = observeEvent(logger, 'validator:Undelegated', {
     test: (event) => {
       const delegatorMatch = event.data.delegator === evmToScAddress(whalePubkey);
       const operatorMatch = event.data.operator === operator.address;
