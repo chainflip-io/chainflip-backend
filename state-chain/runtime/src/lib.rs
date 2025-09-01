@@ -47,11 +47,11 @@ use crate::{
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DispatchErrorWithMessage,
-		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		NetworkFeeDetails, NetworkFees, OpenedDepositChannels, OperatorInfo, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-		TradingStrategyLimits, TransactionScreeningEvent, TransactionScreeningEvents,
-		ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		FailingWitnessValidators, FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo,
+		LiquidityProviderInfo, NetworkFeeDetails, NetworkFees, OpenedDepositChannels, OperatorInfo,
+		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
+		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvent,
+		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -2223,6 +2223,24 @@ impl_runtime_apis! {
 						})
 					}).collect()
 				}),
+				lending_positions: Asset::all().filter_map(|asset| {
+					pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::get(asset).and_then(|pool| {
+						pool.lender_shares.get(&account_id).map(|share| {
+							(*share * pool.total_amount, pool.available_amount)
+						})
+					}).map(|(total_amount, available_amount)| {
+						LendingPosition {
+							asset,
+							total_amount,
+							available_amount: core::cmp::min(total_amount, available_amount),
+						}
+					})
+
+				}).collect(),
+				collateral_balances:
+					pallet_cf_lending_pools::LoanAccounts::<Runtime>::get(&account_id).map(|loan_account| {
+						loan_account.get_collateral().iter().map(|(asset, amount)| (*asset, *amount)).collect()
+					}).unwrap_or_default(),
 			}
 		}
 

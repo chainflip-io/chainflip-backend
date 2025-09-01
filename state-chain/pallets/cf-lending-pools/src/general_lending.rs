@@ -46,6 +46,10 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
+	pub fn get_collateral(&self) -> &BTreeMap<Asset, AssetAmount> {
+		&self.collateral
+	}
+
 	/// Computes account's total collateral value in USD, including what's in liquidation swaps.
 	pub fn total_collateral_usd_value(&self) -> Result<AssetAmount, Error<T>> {
 		let collateral_in_account_usd_value = self

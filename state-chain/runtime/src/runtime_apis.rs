@@ -57,6 +57,16 @@ use sp_std::{
 	vec::Vec,
 };
 
+#[derive(PartialEq, Eq, Encode, Decode, Clone, TypeInfo, Serialize, Deserialize)]
+pub struct LendingPosition {
+	#[serde(flatten)]
+	pub asset: Asset,
+	// Total amount owed to the lender
+	pub total_amount: AssetAmount,
+	// Total amount available to the lender (equals total_amount if the pool has enough liquidity)
+	pub available_amount: AssetAmount,
+}
+
 type VanityName = Vec<u8>;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
@@ -262,6 +272,8 @@ pub struct LiquidityProviderInfo {
 	pub balances: Vec<(Asset, AssetAmount)>,
 	pub earned_fees: AssetMap<AssetAmount>,
 	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
+	pub lending_positions: Vec<LendingPosition>,
+	pub collateral_balances: Vec<(Asset, AssetAmount)>,
 }
 
 #[derive(Encode, Decode, TypeInfo, Default)]

@@ -82,8 +82,8 @@ use state_chain_runtime::{
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
-		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
-		OpenedDepositChannels, OperatorInfo, RpcLendingPool, RuntimeApiPenalty,
+		FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
+		NetworkFees, OpenedDepositChannels, OperatorInfo, RpcLendingPool, RuntimeApiPenalty,
 		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
 		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
@@ -198,6 +198,13 @@ impl From<(AccountId32, AffiliateDetails)> for RpcAffiliate {
 	}
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AssetAndAmount {
+	#[serde(flatten)]
+	asset: Asset,
+	amount: NumberOrHex,
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "role", rename_all = "snake_case")]
@@ -222,6 +229,8 @@ pub enum RpcAccountInfo {
 		flip_balance: NumberOrHex,
 		earned_fees: any::AssetMap<U256>,
 		boost_balances: any::AssetMap<Vec<RpcLiquidityProviderBoostPoolInfo>>,
+		lending_positions: Vec<LendingPosition>,
+		collateral_balances: Vec<AssetAndAmount>,
 	},
 	Validator {
 		flip_balance: NumberOrHex,
@@ -290,6 +299,12 @@ impl RpcAccountInfo {
 				.boost_balances
 				.iter()
 				.map(|(asset, infos)| (asset, infos.iter().map(|info| info.into()).collect()))
+				.collect(),
+			lending_positions: info.lending_positions,
+			collateral_balances: info
+				.collateral_balances
+				.into_iter()
+				.map(|(asset, amount)| AssetAndAmount { asset, amount: amount.into() })
 				.collect(),
 		}
 	}

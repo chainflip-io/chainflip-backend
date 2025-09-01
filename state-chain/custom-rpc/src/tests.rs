@@ -38,8 +38,8 @@ use cf_primitives::{
 
 use state_chain_runtime::{
 	runtime_apis::{
-		BrokerRejectionEventFor, ChannelActionType, EvmVaultSwapDetails, NetworkFeeDetails,
-		OpenedDepositChannels,
+		BrokerRejectionEventFor, ChannelActionType, EvmVaultSwapDetails, LendingPosition,
+		NetworkFeeDetails, OpenedDepositChannels,
 	},
 	Runtime,
 };
@@ -197,6 +197,12 @@ fn test_lp_serialization() {
 				},
 				..Default::default()
 			},
+			lending_positions: vec![LendingPosition {
+				asset: Asset::Usdc,
+				total_amount: 1_000_000,
+				available_amount: 500_000,
+			}],
+			collateral_balances: vec![(Asset::Btc, 100), (Asset::ArbEth, 500)],
 		},
 		cf_primitives::NetworkEnvironment::Mainnet,
 		0,
