@@ -28,7 +28,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, RotationBroadcastsPending,
 };
-use frame_support::{construct_runtime, derive_impl};
+use frame_support::{construct_runtime, derive_impl, traits::HandleLifetime};
 use sp_runtime::{impl_opaque_keys, testing::UintAuthorityId, traits::ConvertInto};
 use std::{cell::RefCell, collections::HashMap};
 
@@ -176,6 +176,9 @@ fn all_validators() -> Vec<ValidatorId> {
 	.to_vec()
 }
 
+pub const ALICE: u64 = 100;
+pub const BOB: u64 = 101;
+
 cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
@@ -206,8 +209,14 @@ cf_test_utilities::impl_test_helpers! {
 	||{
 		for account_id in all_validators()
 		{
+			frame_system::Provider::<Test>::created(&account_id).unwrap();
 			<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&account_id).unwrap();
 		}
+		frame_system::Provider::<Test>::created(&ALICE).unwrap();
+		frame_system::Provider::<Test>::created(&BOB).unwrap();
+		// Account creation is necessary but it emits events. We clear them so that
+		// they don't interfere with event-based tests.
+		frame_system::Pallet::<Test>::reset_events();
 	},
 }
 
