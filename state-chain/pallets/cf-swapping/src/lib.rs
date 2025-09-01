@@ -330,8 +330,8 @@ struct BatchExecutionOutcomes<T: Config> {
 	failed_swaps: Vec<Swap<T>>,
 }
 fn get_current_chain_id() -> u8 {
-	// TODO: Align on a standard or if we use genesis_hashes or names
-	// to differentiate our networks.
+	// TODO: Align on a standard or if we use genesis_hashes, names or
+	// some agreed upon number (chainId) to differentiate our networks.
 	1u8
 }
 
@@ -348,13 +348,13 @@ pub enum EthSigType {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SolSigType {
-	Domain, /* Using `b"\xffsolana offchain" as per Anza specifications
-	         * althought Phantom might not use that.
-	         * TODO: References
+	Domain, /* Using `b"\xffsolana offchain" as per Anza specifications,
+	         * even if we are not using the proposal. Phantom might use
+	         * a different standard though..
+	         * References
 	         * https://docs.anza.xyz/proposals/off-chain-message-signing
 	         * And/or phantom off-chain signing:
 	         * https://github.com/phantom/sign-in-with-solana */
-	Raw,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -1529,22 +1529,14 @@ pub mod pallet {
 			let (valid, signer_account_id, decoded_action, signed_payload) =
 				match user_signature_data.clone() {
 					UserSignatureData::Solana { signature, signer, sig_type } => {
-						// TODO: To only support domain. Raw is for testing now.
 						let signed_payload = match sig_type {
-							SolSigType::Raw => [
-								payload.clone(),
-								vec![get_current_chain_id()],
-								user_metadata.clone().encode(),
-							]
-							.concat(),
 							SolSigType::Domain => {
-								let concat_data = vec![
+								let concat_data = [
 									payload.clone(),
 									vec![get_current_chain_id()],
 									user_metadata.clone().encode(),
 								]
 								.concat();
-
 								let prefix_bytes = b"\xffsolana offchain";
 								[prefix_bytes.as_ref(), concat_data.as_slice()].concat()
 							},
@@ -1558,8 +1550,6 @@ pub mod pallet {
 					},
 					// Add prefix here from eth personal_sign. TBD if this is the same for EIP712
 					UserSignatureData::Ethereum { signature, signer, sig_type } => {
-						// TODO: Fix this! For some reason having an enum in sig_type makes it
-						// not work in the bouncer.
 						let signed_payload = match sig_type {
 							EthSigType::Domain => {
 								let concat_data = [
@@ -1590,7 +1580,7 @@ pub mod pallet {
 				};
 
 			// TODO: Add check of replay protection mechanism (esp. nonce). ChainId should be
-			// checked within the match statements above.
+			// checked within the signature verification above.
 			// Check expiry
 			let expired =
 				frame_system::Pallet::<T>::block_number() >= user_metadata.expiry_block.into();
