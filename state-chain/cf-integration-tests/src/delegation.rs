@@ -88,19 +88,6 @@ fn setup_delegation(
 		.map(|(d, _)| d)
 		.collect::<BTreeSet<_>>();
 	assert_eq!(actual_delegator_set, delegators.keys().cloned().collect());
-
-	// Debug delegation setup
-	println!("Debug delegation setup:");
-	println!("  operator: {:?}", operator);
-	println!("  validator: {:?}", validator);
-	for (delegator, stake) in &delegators {
-		println!(
-			"  delegator: {:?}, stake: {}, max_bid: {:?}",
-			delegator,
-			stake,
-			pallet_cf_validator::MaxDelegationBid::<Runtime>::get(delegator)
-		);
-	}
 }
 
 #[test]
@@ -120,8 +107,6 @@ fn block_author_rewards_are_distributed_among_delegators() {
 				.into_iter()
 				.next()
 				.unwrap();
-
-			println!("Selected authority for test: {:?}", auth);
 
 			let operator = AccountId::from([0xe1; 32]);
 
