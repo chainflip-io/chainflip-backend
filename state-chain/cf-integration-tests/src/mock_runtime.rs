@@ -37,6 +37,7 @@ use sp_core::H160;
 use sp_runtime::{Percent, Permill};
 use state_chain_runtime::{
 	chainflip::{
+		generic_elections::{initial_state, ChainlinkOraclePriceSettings},
 		solana_elections::{SolanaIngressSettings, SolanaVaultSwapsSettings},
 		Offence,
 	},
@@ -369,7 +370,15 @@ impl ExtBuilder {
 				}),
 			},
 			bitcoin_elections: BitcoinElectionsConfig { option_initial_state: None },
-			generic_elections: GenericElectionsConfig { option_initial_state: None },
+			generic_elections: GenericElectionsConfig {
+				option_initial_state: Some(initial_state(ChainlinkOraclePriceSettings {
+					sol_oracle_program_id: Default::default(),
+					sol_oracle_feeds: Default::default(),
+					sol_oracle_query_helper: Default::default(),
+					eth_address_checker: Default::default(),
+					eth_oracle_feeds: Default::default(),
+				})),
+			},
 			ethereum_broadcaster: state_chain_runtime::EthereumBroadcasterConfig {
 				broadcast_timeout: 5 * BLOCKS_PER_MINUTE_ETHEREUM,
 			},
