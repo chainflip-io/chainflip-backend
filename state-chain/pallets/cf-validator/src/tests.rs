@@ -530,6 +530,7 @@ fn expired_epoch_data_is_removed() {
 			delegators: [(delegator, 50u128)].into_iter().collect(),
 			validators: [(ALICE, 150u128)].into_iter().collect(),
 			delegation_fee_bps: 250,
+			capacity_factor: None,
 		};
 
 		// Epoch 1
@@ -1482,7 +1483,7 @@ fn can_update_all_config_items() {
 			SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 };
 		const NEW_MINIMUM_REPORTED_CFE_VERSION: SemVer = SemVer { major: 1, minor: 0, patch: 0 };
 		const NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE: Percent = Percent::from_percent(10);
-		const NEW_DELEGATION_CAPACITY_FACTOR: u32 = 5;
+		const NEW_DELEGATION_CAPACITY_FACTOR: Option<u32> = Some(5);
 
 		// Check that the default values are different from the new ones
 		assert_ne!(AuctionBidCutoffPercentage::<Test>::get(), NEW_AUCTION_BID_CUTOFF_PERCENTAGE);
@@ -2141,6 +2142,7 @@ mod delegation_splitting {
 		total: u128,
 		delegator_bids: Vec<u128>,
 		delegation_fee_bps: u32,
+		capacity_factor: Option<u32>,
 	) -> BTreeMap<u64, u128> {
 		DelegationSnapshot::<Test> {
 			operator: 0,
@@ -2151,6 +2153,7 @@ mod delegation_splitting {
 				.map(|(i, b)| ((i + 2) as u64, b))
 				.collect(),
 			delegation_fee_bps,
+			capacity_factor,
 		}
 		.distribute(total)
 		.map(|(k, v)| (*k, v))
@@ -2161,7 +2164,7 @@ mod delegation_splitting {
 	fn no_operator_fee() {
 		new_test_ext().execute_with(|| {
 			assert_eq!(
-				split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 0),
+				split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 0, None),
 				BTreeMap::from_iter([
 					(0, 0),
 					(1, REWARD),
@@ -2178,7 +2181,7 @@ mod delegation_splitting {
 		new_test_ext().execute_with(|| {
 			// 20% operator fee
 			assert_eq!(
-				split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 2000),
+				split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 2000, None),
 				BTreeMap::from_iter(
 					[
 						// Operator gets 20 % of delegator total
@@ -2201,9 +2204,8 @@ mod delegation_splitting {
 	fn with_delegation_limit_no_fee() {
 		new_test_ext().execute_with(|| {
 			const FACTOR: u128 = 3;
-			DelegationCapacityFactor::<Test>::set(FACTOR as u32);
 			assert_eq!(
-				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 0),
+				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 0, Some(FACTOR as u32)),
 				BTreeMap::from_iter(
 					[(0, 0), (1, REWARD), (2, REWARD), (3, 2 * REWARD), (4, 3 * REWARD),]
 						.into_iter()
