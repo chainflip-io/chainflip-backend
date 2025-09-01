@@ -2544,72 +2544,120 @@ mod delegation {
 			}));
 		});
 	}
+}
+
+pub mod auction_optimization {
+
+	use super::*;
+
+	const OP_1: u64 = 1001;
+	const OP_2: u64 = 1002;
+
+	fn setup_bids(
+		op_1_bids: Vec<Bid<ValidatorId, Amount>>,
+		op_2_bids: Vec<Bid<ValidatorId, Amount>>,
+	) {
+		set_default_test_bids();
+		add_bids(op_1_bids.iter().chain(op_2_bids.iter()).cloned().collect());
+
+		assert_ok!(ValidatorPallet::register_as_operator(
+			OriginTrait::signed(OP_1),
+			OPERATOR_SETTINGS,
+		));
+		assert_ok!(ValidatorPallet::register_as_operator(
+			OriginTrait::signed(OP_2),
+			OPERATOR_SETTINGS,
+		));
+
+		for bid in op_1_bids {
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_1), bid.bidder_id));
+			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(bid.bidder_id), OP_1));
+			assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+		}
+
+		for bid in op_2_bids {
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_2), bid.bidder_id));
+			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(bid.bidder_id), OP_2));
+			assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+		}
+	}
+
+	fn create_operator_bids_combinations<A>(
+		bid_combos: Vec<(Vec<A>, Vec<A>, Vec<ValidatorId>, A)>,
+	) -> Vec<(Vec<Bid<ValidatorId, A>>, Vec<Bid<ValidatorId, A>>, Vec<ValidatorId>, A)> {
+		bid_combos
+			.into_iter()
+			.map(|(op_1_bids, op_2_bids, expected_primary_candidates, expected_bond)| {
+				let mut validator_id_counter: ValidatorId = 99;
+				(
+					op_1_bids
+						.into_iter()
+						.map(|amount| {
+							validator_id_counter += 1;
+							Bid { bidder_id: validator_id_counter, amount }
+						})
+						.collect(),
+					op_2_bids
+						.into_iter()
+						.map(|amount| {
+							validator_id_counter += 1;
+							Bid { bidder_id: validator_id_counter, amount }
+						})
+						.collect(),
+					expected_primary_candidates,
+					expected_bond,
+				)
+			})
+			.collect()
+	}
 
 	#[test]
 	fn test_auction_optimization() {
-		const OP_1: u64 = 1001;
-		const OP_2: u64 = 1002;
-		new_test_ext().then_execute_with_checks(|| {
-			set_default_test_bids();
-			add_bids([&OPERATOR_1_BIDS[..], &OPERATOR_2_BIDS[..]].concat());
+		let operator_bids_combinations = create_operator_bids_combinations(vec![
+			(vec![150, 140], vec![130, 100], vec![100, 101, 102, 0], 120), /* both validators
+			                                                                * from op 1 make it,
+			                                                                * only one from op 2 */
+			(vec![80, 90], vec![60, 70], vec![101, 103, 0, 1], 120), /* both ops combine into 1
+			                                                          * val to make it */
+			(vec![90, 95], vec![50, 45], vec![101, 0, 1, 2], 110), /* op 1 converts bid to one
+			                                                        * val to make it, op 2 can't
+			                                                        * make it even if he
+			                                                        * combines into 1 */
+			(vec![90, 95], vec![50, 45, 30], vec![101, 102, 0, 1], 120), /* op 2 can now combine
+			                                                              * 3 vals into 1 to
+			                                                              * make it into the set */
+			(vec![90, 95], vec![80, 90, 95], vec![101, 103, 104, 0], 120), // op 2 combines into 2
+		]);
 
-			assert_ok!(ValidatorPallet::register_as_operator(
-				OriginTrait::signed(OP_1),
-				OPERATOR_SETTINGS,
-			));
-			assert_ok!(ValidatorPallet::register_as_operator(
-				OriginTrait::signed(OP_2),
-				OPERATOR_SETTINGS,
-			));
+		for (op_1_bids, op_2_bids, expected_primary_candidates, expected_bond) in
+			operator_bids_combinations
+		{
+			new_test_ext().then_execute_with_checks(|| {
+				setup_bids(op_1_bids, op_2_bids);
 
-			for bid in OPERATOR_1_BIDS {
-				assert_ok!(ValidatorPallet::claim_validator(
-					OriginTrait::signed(OP_1),
-					bid.bidder_id
-				));
-				assert_ok!(ValidatorPallet::accept_operator(
-					OriginTrait::signed(bid.bidder_id),
-					OP_1
-				));
-				assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
-			}
+				ValidatorPallet::start_authority_rotation();
 
-			for bid in OPERATOR_2_BIDS {
-				assert_ok!(ValidatorPallet::claim_validator(
-					OriginTrait::signed(OP_2),
-					bid.bidder_id
-				));
-				assert_ok!(ValidatorPallet::accept_operator(
-					OriginTrait::signed(bid.bidder_id),
-					OP_2
-				));
-				assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
-			}
-
-			ValidatorPallet::start_authority_rotation();
-
-			assert_eq!(
-				last_event::<Test>(),
-				RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
-					new_phase: RotationPhase::KeygensInProgress(RotationState {
-						primary_candidates: vec![10, 0, 1, 2],
-						secondary_candidates: vec![
-							3,
-							5,
-							11,
-							6,
-							7,
-							18446744073709551613,
-							18446744073709551614,
-							18446744073709551615
-						],
-						banned: BTreeSet::new(),
-						bond: 110,
-						new_epoch_index: 1,
-					})
-				})
-			);
-		});
+				if let RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+					new_phase:
+						RotationPhase::KeygensInProgress(RotationState {
+							primary_candidates,
+							secondary_candidates: _,
+							banned: _,
+							bond,
+							new_epoch_index: _,
+						}),
+				}) = last_event::<Test>()
+				{
+					assert_eq!(
+						primary_candidates.into_iter().collect::<BTreeSet<_>>(),
+						expected_primary_candidates.into_iter().collect::<BTreeSet<_>>()
+					);
+					assert_eq!(bond, expected_bond);
+				} else {
+					panic!("auction optimization test error: expected event not found ")
+				}
+			});
+		}
 	}
 }
 
