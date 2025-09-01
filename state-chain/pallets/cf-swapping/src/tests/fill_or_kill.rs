@@ -952,8 +952,8 @@ mod oracle_swaps {
 		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(-8);
 
 		fn set_prices() {
-			let eth_price = U256::from_dec_str(ETH_PRICE).unwrap(); // $4597.29
-			let btc_price = U256::from_dec_str(BTC_PRICE).unwrap(); // $111284.80
+			let eth_price = U256::from_dec_str(ETH_PRICE).unwrap();
+			let btc_price = U256::from_dec_str(BTC_PRICE).unwrap();
 
 			MockPriceFeedApi::set_price(Asset::Eth, Some(eth_price));
 			MockPriceFeedApi::set_price(Asset::Btc, Some(btc_price));
