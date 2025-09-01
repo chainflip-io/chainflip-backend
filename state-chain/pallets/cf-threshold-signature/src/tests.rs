@@ -31,6 +31,7 @@ use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{
 		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
+		flip_slasher::MockFlipSlasher,
 		signer_nomination::MockNominator,
 	},
 	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, EpochKey, KeyProvider,
@@ -1786,7 +1787,7 @@ mod key_rotation {
 }
 
 #[test]
-fn dont_slash_in_safe_mode() {
+fn do_not_slash_in_safe_mode() {
 	new_test_ext().execute_with(|| {
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			threshold_signature: crate::PalletSafeMode {
@@ -1795,8 +1796,8 @@ fn dont_slash_in_safe_mode() {
 			},
 		});
 		keygen_failure([BOB, CHARLIE]);
-		assert!(MockSlasher::slash_count(BOB) == 0);
-		assert!(MockSlasher::slash_count(CHARLIE) == 0);
+		assert!(MockFlipSlasher::<Test>::slash_count(&BOB) == 0);
+		assert!(MockFlipSlasher::<Test>::slash_count(&CHARLIE) == 0);
 
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			threshold_signature: crate::PalletSafeMode {
@@ -1805,8 +1806,8 @@ fn dont_slash_in_safe_mode() {
 			},
 		});
 		keygen_failure([BOB, CHARLIE]);
-		assert!(MockSlasher::slash_count(BOB) == 1);
-		assert!(MockSlasher::slash_count(CHARLIE) == 1);
+		assert!(MockFlipSlasher::<Test>::slash_count(&BOB) == 1);
+		assert!(MockFlipSlasher::<Test>::slash_count(&CHARLIE) == 1);
 	});
 }
 

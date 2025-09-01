@@ -364,6 +364,18 @@ pub mod pallet {
 	pub type MaxDelegationBid<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
 
+	/// Maps validators to their operators for each epoch.
+	#[pallet::storage]
+	pub type ValidatorToOperator<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		EpochIndex,
+		Identity,
+		T::AccountId,
+		T::AccountId,
+		OptionQuery,
+	>;
+
 	/// Stores delegation snapshots per epoch and operator.
 	#[pallet::storage]
 	pub type DelegationSnapshots<T: Config> = StorageDoubleMap<
@@ -400,7 +412,7 @@ pub mod pallet {
 		/// A previously non-bidding account has started bidding.
 		StartedBidding { account_id: T::AccountId },
 		/// The rotation transaction(s) for the previous rotation are still pending to be
-		/// succesfully broadcast, therefore, cannot start a new epoch rotation.
+		/// successfully broadcast, therefore, cannot start a new epoch rotation.
 		PreviousRotationStillPending,
 		/// A delegator has been blocked from delegating to an operator.
 		DelegatorBlocked { delegator: T::AccountId, operator: T::AccountId },
@@ -1373,8 +1385,9 @@ impl<T: Config> Pallet<T> {
 
 		HistoricalBonds::<T>::remove(epoch);
 
-		// Clean up delegation snapshots for the expired epoch
+		// Clean up delegation snapshots and validator mappings for the expired epoch
 		let _ = DelegationSnapshots::<T>::clear_prefix(epoch, u32::MAX, None);
+		let _ = ValidatorToOperator::<T>::clear_prefix(epoch, u32::MAX, None);
 	}
 
 	fn expire_epochs_up_to(latest_epoch_to_expire: EpochIndex, remaining_weight: Weight) -> Weight {
@@ -1431,7 +1444,7 @@ impl<T: Config> Pallet<T> {
 			.flat_map(|(_, snapshot)| snapshot.delegators.keys().cloned().collect::<Vec<_>>())
 			.collect::<BTreeSet<_>>();
 		let new_delegator_bids = DelegationSnapshots::<T>::iter_prefix(new_epoch)
-			.flat_map(|(_, snapshot)| snapshot.delegators)
+			.flat_map(|(_, snapshot)| snapshot.delegators.clone())
 			.collect::<BTreeMap<_, _>>();
 
 		for outgoing_delegator in outgoing_delegators {
@@ -1524,8 +1537,8 @@ impl<T: Config> Pallet<T> {
 
 				// Register the delegation snapshots for the next epoch.
 				let next_epoch_index = CurrentEpoch::<T>::get() + 1;
-				for (operator, snapshot) in delegation_snapshots.iter() {
-					DelegationSnapshots::<T>::insert(next_epoch_index, operator, snapshot);
+				for snapshot in delegation_snapshots.into_values() {
+					snapshot.register_for_epoch(next_epoch_index);
 				}
 
 				Self::try_start_keygen(RotationState::from_auction_outcome::<T>(auction_outcome));

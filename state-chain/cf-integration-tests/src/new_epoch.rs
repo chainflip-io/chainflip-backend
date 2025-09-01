@@ -264,7 +264,6 @@ fn can_consolidate_bitcoin_utxos() {
 				crate::network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
 			testnet.move_to_the_next_epoch();
-			witness_ethereum_rotation_broadcast(1);
 			testnet.move_to_the_next_epoch();
 			assert_eq!(Validator::current_epoch(), 3);
 

@@ -31,6 +31,8 @@ scale-info = { workspace = true, features = ["derive"] }
 
 frame-system = { workspace = true }
 frame-support = { workspace = true }
+pallet-authorship = { workspace = true }
+
 sp-arithmetic = { workspace = true }
 frame-benchmarking = { workspace = true, optional = true }
 sp-std = { workspace = true }
@@ -56,6 +58,7 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"log/std",
+	"pallet-authorship/std",
 	"scale-info/std",
 	"sp-arithmetic/std",
 	"sp-std/std",
