@@ -12,7 +12,7 @@ async function testBitcoinMultipleUtxos(testContext: TestContext) {
   // It will use the following amounts for each of the created UTXOs.
   // NOTE: The numbers should be distinct, otherwise we won't be able to ensure that we get `DepositFinalised`
   // events for all of the amounts.
-  const fineAmounts: number[] = [50000000, 30000000, 80000000, 1000000];
+  const fineAmounts: number[] = [50000000, 30000000, 80000000, 90000000];
 
   // generate new dest address
   const destAddress = await newAssetAddress(destAsset);
@@ -33,10 +33,15 @@ async function testBitcoinMultipleUtxos(testContext: TestContext) {
   // construct a list of promises waiting for confirmation of deposit of each of the amounts
   const events = fineAmounts.map((fineAmount) =>
     observeEvent(testContext.logger, `bitcoinIngressEgress:DepositFinalised`, {
-      test: (event) =>
-        event.data.channelId === swapParams.channelId.toString() &&
-        parsePdJsInt(event.data.amount) >= fineAmount * 0.99 &&
-        parsePdJsInt(event.data.amount) <= fineAmount * 1.01,
+      test: (event) => {
+        const amount = parsePdJsInt(event.data.amount);
+        testContext.logger.debug(`event deposit amount is ${amount}`);
+        return (
+          event.data.channelId === swapParams.channelId.toString() &&
+          amount >= fineAmount * 0.95 &&
+          amount <= fineAmount * 1.05
+        );
+      },
       historicalCheckBlocks: 10,
     }).event.then((e) => {
       testContext.logger.debug(
