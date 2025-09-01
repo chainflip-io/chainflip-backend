@@ -103,7 +103,7 @@ pub enum PalletConfigUpdate {
 		minimum_flip_bid: u32,
 	},
 	DelegationCapacityFactor {
-		factor: u32,
+		factor: Option<u32>,
 	},
 }
 
@@ -371,9 +371,9 @@ pub mod pallet {
 	/// validators. For example, a factor of 5 means that the total delegation an operator can
 	/// have is capped at 5x the total stake of their managed validators.
 	///
-	/// Note that if this is unset, it defaults to zero, ie. delegation is ignored.
+	/// Note that if this is unset, it is ignored.
 	#[pallet::storage]
-	pub type DelegationCapacityFactor<T> = StorageValue<_, u32, ValueQuery>;
+	pub type DelegationCapacityFactor<T> = StorageValue<_, u32, OptionQuery>;
 
 	/// Maps validators to their operators for each epoch.
 	#[pallet::storage]

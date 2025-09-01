@@ -79,6 +79,8 @@ pub struct DelegationSnapshot<T: Config> {
 	pub delegators: BTreeMap<T::AccountId, T::Amount>,
 	/// Operator fee at time of snapshot creation.
 	pub delegation_fee_bps: u32,
+	/// Capacity factor at time of snapshot creation.
+	pub capacity_factor: Option<u32>,
 }
 
 impl<T: Config> DelegationSnapshot<T> {
@@ -90,6 +92,7 @@ impl<T: Config> DelegationSnapshot<T> {
 			delegation_fee_bps: OperatorSettingsLookup::<T>::get(operator)
 				.map(|settings| settings.fee_bps)
 				.unwrap_or(0),
+			capacity_factor: DelegationCapacityFactor::<T>::get(),
 		}
 	}
 
@@ -104,10 +107,9 @@ impl<T: Config> DelegationSnapshot<T> {
 	/// The total delegator bid, capped based on the delegation multiple and the total validator
 	/// bid.
 	pub fn total_delegator_bid_capped(&self) -> T::Amount {
-		core::cmp::min(
-			self.total_delegator_bid(),
-			self.total_validator_bid() * DelegationCapacityFactor::<T>::get().into(),
-		)
+		let total = self.total_delegator_bid();
+		self.capacity_factor
+			.map_or(total, |f| core::cmp::min(total, self.total_validator_bid() * f.into()))
 	}
 
 	/// Stores the validator mappings and snapshot information for the given epoch.
@@ -148,12 +150,7 @@ impl<T: Config> DelegationSnapshot<T> {
 		// The validator's cut is based on the capped delegation amount.
 		let validators_cut = Perquintill::from_rational(
 			total_validator_stake,
-			total_validator_stake +
-				core::cmp::min(
-					total_delegator_stake,
-					total_validator_stake *
-						Amount::from(DelegationCapacityFactor::<T>::get() as u64),
-				),
+			total_validator_stake + self.total_delegator_bid_capped().into(),
 		) * total;
 		let delegators_cut = total - validators_cut;
 		let operator_cut =
