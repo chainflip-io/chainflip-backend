@@ -482,8 +482,10 @@ pub mod pallet {
 		DelegatorBlocked,
 		/// The provided Operator fee is too low.
 		OperatorFeeTooLow,
-		/// Exceptions limit is reached
+		/// Exceptions limit is reached.
 		ExceptionsLimitReached,
+		/// The account does not exist.
+		AccountDoesNotExist,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -986,13 +988,10 @@ pub mod pallet {
 								delegator: delegator.clone(),
 								operator: operator.clone(),
 							});
-							Ok(())
-						} else {
-							Err(())
+							return Ok(());
 						}
-					} else {
-						Err(())
 					}
+					Err(())
 				});
 
 			match OperatorSettingsLookup::<T>::get(&operator)
@@ -1009,14 +1008,14 @@ pub mod pallet {
 				DelegationAcceptance::Allow => {
 					// If the operator is set to allow, exceptions are the delegators that are
 					// blocked.
-					Exceptions::<T>::try_mutate(&operator, |blocked| {
-						if blocked.len() <= EXCEPTIONS_LIMIT {
-							blocked.insert(delegator.clone());
-							Ok(())
-						} else {
-							Err(Error::<T>::ExceptionsLimitReached)
-						}
-					})?;
+					ensure!(
+						frame_system::Pallet::<T>::account_exists(&delegator),
+						Error::<T>::AccountDoesNotExist
+					);
+
+					Exceptions::<T>::mutate(&operator, |blocked| {
+						blocked.insert(delegator.clone());
+					});
 				},
 			}
 
@@ -1043,14 +1042,13 @@ pub mod pallet {
 				DelegationAcceptance::Deny => {
 					// If the operator is set to deny, exceptions are the delegators that are
 					// allowed.
-					Exceptions::<T>::try_mutate(&operator, |allowed| {
-						if allowed.len() <= EXCEPTIONS_LIMIT {
-							allowed.insert(delegator.clone());
-							Ok(())
-						} else {
-							Err(Error::<T>::ExceptionsLimitReached)
-						}
-					})?;
+					ensure!(
+						frame_system::Pallet::<T>::account_exists(&delegator),
+						Error::<T>::AccountDoesNotExist
+					);
+					Exceptions::<T>::mutate(&operator, |allowed| {
+						allowed.insert(delegator.clone());
+					});
 				},
 				DelegationAcceptance::Allow => {
 					// If the operator is set to allow, exceptions are the delegators that are
