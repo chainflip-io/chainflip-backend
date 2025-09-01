@@ -1204,12 +1204,12 @@ pub mod pallet {
 				let balance = T::FundingInfo::balance(&delegator);
 				match increase {
 					DelegationAmount::Max => {
-						max_bid.insert(balance);
+						let _ = max_bid.insert(balance);
 					},
 					DelegationAmount::Some(inc) => {
 						let new_bid =
 							core::cmp::min(max_bid.unwrap_or(balance).saturating_add(inc), balance);
-						max_bid.insert(new_bid);
+						let _ = max_bid.insert(new_bid);
 					},
 				}
 				Self::deposit_event(Event::MaxBidUpdated {
@@ -1236,11 +1236,11 @@ pub mod pallet {
 				Error::<T>::AccountIsNotDelegating
 			);
 
-			let unlink = MaxDelegationBid::<T>::mutate_exists(&delegator, |max_bid| {
+			let undelegated = MaxDelegationBid::<T>::mutate_exists(&delegator, |max_bid| {
 				use frame_support::sp_runtime::traits::Zero;
-				match (max_bid.clone(), decrease) {
-					(current, DelegationAmount::Some(decr)) => {
-						let new_max = current
+				match decrease {
+					DelegationAmount::Some(decr) => {
+						let new_max = max_bid
 							.unwrap_or_else(|| T::FundingInfo::balance(&delegator))
 							.saturating_sub(decr);
 						if new_max.is_zero() {
@@ -1254,20 +1254,21 @@ pub mod pallet {
 						});
 						max_bid.is_none()
 					},
-					(current, DelegationAmount::Max) => {
-						if let Some(_) = current {
+					DelegationAmount::Max =>
+						if max_bid.is_some() {
 							*max_bid = None;
 							Self::deposit_event(Event::MaxBidUpdated {
 								delegator: delegator.clone(),
 								max_bid: None,
 							});
-						}
-						true
-					},
+							true
+						} else {
+							false
+						},
 				}
 			});
 
-			if unlink {
+			if undelegated {
 				let operator = DelegationChoice::<T>::take(&delegator)
 					.expect("DelegationChoice existence was checked above");
 
