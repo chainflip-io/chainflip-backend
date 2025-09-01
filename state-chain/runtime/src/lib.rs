@@ -911,7 +911,7 @@ impl pallet_cf_threshold_signature::Config<Instance15> for Runtime {
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = PolkadotCrypto;
-	type VaultActivator = MultiVaultActivator<PolkadotVault, AssethubVault>;
+	type VaultActivator = AssethubVault;
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
