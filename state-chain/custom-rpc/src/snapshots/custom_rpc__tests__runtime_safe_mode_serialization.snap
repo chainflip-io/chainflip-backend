@@ -38,7 +38,9 @@ expression: val
     "stop_boosting_enabled": true,
     "borrowing_enabled": true,
     "adding_lender_funds_enabled": true,
-    "withdrawing_lender_funds_enabled": true
+    "withdrawing_lender_funds_enabled": true,
+    "adding_collateral_enabled": true,
+    "removing_collateral_enabled": true
   },
   "reputation": {
     "reporting_enabled": true

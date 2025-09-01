@@ -114,7 +114,7 @@ use pallet_cf_validator::{
 	AssociationToOperator, DelegationAcceptance, SetSizeMaximisingAuctionResolver,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-use runtime_apis::ChainAccounts;
+use runtime_apis::{ChainAccounts, RpcLendingPool, RpcLoanAccount};
 use scale_info::prelude::string::String;
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
@@ -2818,6 +2818,17 @@ impl_runtime_apis! {
 				vec![]
 			}
 		}
+
+		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool> {
+			pallet_cf_lending_pools::get_lending_pools::<Runtime>(asset)
+		}
+
+		fn cf_loan_accounts(lender_id: Option<AccountId>) -> Vec<RpcLoanAccount<AccountId>> {
+			pallet_cf_lending_pools::get_loan_accounts::<Runtime>(lender_id)
+		}
+
+
+
 	}
 
 

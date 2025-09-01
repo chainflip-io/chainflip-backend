@@ -31,27 +31,26 @@ const INIT_POOL_AMOUNT: AssetAmount = PRINCIPAL * 2;
 
 use crate::LENDING_DEFAULT_CONFIG as CONFIG;
 
-fn setup_chp_pool_with_funds() {
+fn setup_chp_pool_with_funds(loan_asset: Asset, init_amount: AssetAmount) {
 	LendingConfig::<Test>::set(CONFIG);
 
-	assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
+	assert_ok!(LendingPools::new_lending_pool(loan_asset));
 
 	System::assert_last_event(RuntimeEvent::LendingPools(Event::<Test>::LendingPoolCreated {
-		asset: LOAN_ASSET,
+		asset: loan_asset,
 	}));
 
-	// Depositing double the loan amount to make utilisation after loan 50%:
-	MockBalance::credit_account(&LENDER, LOAN_ASSET, INIT_POOL_AMOUNT);
+	MockBalance::credit_account(&LENDER, loan_asset, init_amount);
 	assert_ok!(LendingPools::add_lender_funds(
 		RuntimeOrigin::signed(LENDER),
-		LOAN_ASSET,
-		INIT_POOL_AMOUNT
+		loan_asset,
+		init_amount
 	));
 
 	System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LendingFundsAdded {
 		lender_id: LENDER,
-		asset: LOAN_ASSET,
-		amount: INIT_POOL_AMOUNT,
+		asset: loan_asset,
+		amount: init_amount,
 	}));
 }
 
@@ -132,7 +131,7 @@ fn basic_chp_lending() {
 
 	new_test_ext()
 		.execute_with(|| {
-			setup_chp_pool_with_funds();
+			setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
@@ -183,7 +182,7 @@ fn basic_chp_lending() {
 					liquidation_status: LiquidationStatus::NoLiquidation,
 					loans: BTreeMap::from([(
 						LOAN_ID,
-						ChpLoan {
+						GeneralLoan {
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL
@@ -295,7 +294,7 @@ fn collateral_auto_topup() {
 
 	new_test_ext()
 		.execute_with(|| {
-			setup_chp_pool_with_funds();
+			setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE * 1_000_000);
 			set_asset_price_in_usd(COLLATERAL_ASSET, 1_000_000);
@@ -376,7 +375,7 @@ fn basic_loan_aggregation() {
 	let origination_fee_3 = CONFIG.origination_fee * EXTRA_PRINCIPAL_2 * SWAP_RATE;
 
 	new_test_ext().execute_with(|| {
-		setup_chp_pool_with_funds();
+		setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
@@ -433,7 +432,7 @@ fn basic_loan_aggregation() {
 					collateral: BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
 					loans: BTreeMap::from([(
 						LOAN_ID,
-						ChpLoan {
+						GeneralLoan {
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL + EXTRA_PRINCIPAL_1
@@ -505,7 +504,7 @@ fn basic_loan_aggregation() {
 					)]),
 					loans: BTreeMap::from([(
 						LOAN_ID,
-						ChpLoan {
+						GeneralLoan {
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							// Loan's owed principal has been increased:
@@ -551,7 +550,7 @@ fn interest_special_cases() {
 
 	new_test_ext()
 		.execute_with(|| {
-			setup_chp_pool_with_funds();
+			setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE * 1_000_000);
 
@@ -641,7 +640,7 @@ fn swap_collected_fees() {
 
 	new_test_ext()
 		.execute_with(|| {
-			setup_chp_pool_with_funds();
+			setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 			set_asset_price_in_usd(COLLATERAL_ASSET_1, 1_000_000);
 			set_asset_price_in_usd(COLLATERAL_ASSET_2, 5_000_000);
@@ -732,7 +731,7 @@ fn adding_and_removing_collateral() {
 	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
 
 	new_test_ext().execute_with(|| {
-		setup_chp_pool_with_funds();
+		setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
 		set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
@@ -819,7 +818,7 @@ fn basic_liquidation() {
 	new_test_ext()
 		.execute_with(|| {
 			// === CREATE A LOAN ===
-			setup_chp_pool_with_funds();
+			setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
 
@@ -929,7 +928,7 @@ fn basic_liquidation() {
 					)]),
 					loans: BTreeMap::from([(
 						LOAN_ID,
-						ChpLoan {
+						GeneralLoan {
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL - SWAPPED_PRINCIPAL
@@ -1064,7 +1063,7 @@ fn making_loan_repayment() {
 	const FIRST_REPAYMENT: AssetAmount = PRINCIPAL / 4;
 
 	new_test_ext().execute_with(|| {
-		setup_chp_pool_with_funds();
+		setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE * 1_000_000);
 		set_asset_price_in_usd(COLLATERAL_ASSET, 1_000_000);
@@ -1283,8 +1282,8 @@ fn init_liquidation_swaps_test() {
 		primary_collateral_asset: Asset::Eth,
 		collateral: BTreeMap::from([(Asset::Eth, 500), (Asset::Usdc, 1_000_000)]),
 		loans: BTreeMap::from([
-			(LOAN_1, ChpLoan { asset: Asset::Btc, created_at_block: 0, owed_principal: 20 }),
-			(LOAN_2, ChpLoan { asset: Asset::Sol, created_at_block: 0, owed_principal: 2000 }),
+			(LOAN_1, GeneralLoan { asset: Asset::Btc, created_at_block: 0, owed_principal: 20 }),
+			(LOAN_2, GeneralLoan { asset: Asset::Sol, created_at_block: 0, owed_principal: 2000 }),
 		]),
 		liquidation_status: LiquidationStatus::NoLiquidation,
 	};
@@ -1378,4 +1377,170 @@ fn init_liquidation_swaps_test() {
 			}
 		)
 	});
+}
+
+mod rpcs {
+
+	use rpc::{RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan};
+
+	use super::*;
+
+	#[test]
+	fn lending_pools_and_account() {
+		const COLLATERAL_ASSET: Asset = Asset::Eth;
+		const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
+
+		let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
+
+		const LOAN_ASSET_2: Asset = Asset::Usdc;
+		const PRINCIPAL_2: AssetAmount = PRINCIPAL * 2;
+		const COLLATERAL_ASSET_2: Asset = Asset::Sol;
+		const INIT_COLLATERAL_2: AssetAmount = INIT_COLLATERAL * 2;
+		const BORROWER_2: u64 = OTHER_LP;
+		const LOAN_ID_2: LoanId = LoanId(1);
+
+		let origination_fee_2 = CONFIG.origination_fee * PRINCIPAL_2 * SWAP_RATE;
+
+		new_test_ext()
+			.execute_with(|| {
+				setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
+				setup_chp_pool_with_funds(LOAN_ASSET_2, INIT_POOL_AMOUNT * 2);
+
+				set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+				set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+
+				set_asset_price_in_usd(LOAN_ASSET_2, SWAP_RATE);
+				set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+
+				MockBalance::credit_account(
+					&BORROWER,
+					COLLATERAL_ASSET,
+					INIT_COLLATERAL + origination_fee,
+				);
+
+				MockBalance::credit_account(
+					&BORROWER_2,
+					COLLATERAL_ASSET_2,
+					INIT_COLLATERAL_2 + origination_fee_2,
+				);
+
+				assert_eq!(
+					LendingPools::new_loan(
+						BORROWER,
+						LOAN_ASSET,
+						PRINCIPAL,
+						Some(COLLATERAL_ASSET),
+						BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
+					),
+					Ok(LOAN_ID)
+				);
+
+				assert_eq!(
+					LendingPools::new_loan(
+						BORROWER_2,
+						LOAN_ASSET_2,
+						PRINCIPAL_2,
+						Some(COLLATERAL_ASSET_2),
+						BTreeMap::from([(COLLATERAL_ASSET_2, INIT_COLLATERAL_2)])
+					),
+					Ok(LOAN_ID_2)
+				);
+
+				// Should get info only for the specified account:
+				assert_eq!(
+					super::rpc::get_loan_accounts::<Test>(Some(BORROWER)),
+					vec![RpcLoanAccount {
+						account: BORROWER,
+						primary_collateral_asset: COLLATERAL_ASSET,
+						ltv_ratio: Some(FixedU64::from_rational(8, 10)),
+						collateral: BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
+						loans: BTreeMap::from([(
+							LOAN_ID,
+							RpcLoan {
+								loan_id: LOAN_ID,
+								asset: LOAN_ASSET,
+								created_at: INIT_BLOCK as u32,
+								principal_amount: PRINCIPAL,
+								total_fees: Default::default()
+							}
+						)]),
+						liquidation_status: None
+					}]
+				);
+
+				// Trigger liquidation of one of the accounts:
+				set_asset_price_in_usd(LOAN_ASSET_2, 5 * SWAP_RATE / 4);
+			})
+			.then_process_blocks_until_block(INIT_BLOCK + INTEREST_PAYMENT_INTERVAL as u64)
+			.then_execute_with(|_| {
+				// Interest amount happens to be this much, the exact amount is not important
+				// in this particular test:
+				const INTEREST_AMOUNT: AssetAmount = 2660;
+
+				// Both accounts should be returned since we don't specify any:
+				assert_eq!(
+					super::rpc::get_loan_accounts::<Test>(None),
+					vec![
+						RpcLoanAccount {
+							account: BORROWER_2,
+							primary_collateral_asset: COLLATERAL_ASSET_2,
+							ltv_ratio: Some(FixedU64::from_rational(1, 1)),
+							// NOTE: all of the collateral is in liquidation swaps. Should we
+							// include that here too? If so, do we need to include the amount
+							// of loan asset recovered so far through liquidation swaps?
+							collateral: Default::default(),
+							loans: BTreeMap::from([(
+								LOAN_ID_2,
+								RpcLoan {
+									loan_id: LOAN_ID_2,
+									asset: LOAN_ASSET_2,
+									created_at: INIT_BLOCK as u32,
+									principal_amount: PRINCIPAL_2,
+									total_fees: Default::default()
+								}
+							)]),
+							liquidation_status: Some(RpcLiquidationStatus {
+								liquidation_swaps: vec![RpcLiquidationSwap {
+									swap_request_id: SwapRequestId(0),
+									loan_id: LOAN_ID_2,
+								}],
+								is_hard: true
+							})
+						},
+						RpcLoanAccount {
+							account: BORROWER,
+							primary_collateral_asset: COLLATERAL_ASSET,
+							// LTV slightly increased due to interest payment:
+							ltv_ratio: Some(FixedU64::from_rational(800_000_085, 1_000_000_000)),
+							collateral: BTreeMap::from([(
+								COLLATERAL_ASSET,
+								INIT_COLLATERAL - INTEREST_AMOUNT
+							)]),
+							loans: BTreeMap::from([(
+								LOAN_ID,
+								RpcLoan {
+									loan_id: LOAN_ID,
+									asset: LOAN_ASSET,
+									created_at: INIT_BLOCK as u32,
+									principal_amount: PRINCIPAL,
+									total_fees: Default::default()
+								}
+							)]),
+							liquidation_status: None
+						},
+					]
+				);
+
+				assert_eq!(
+					super::rpc::get_lending_pools::<Test>(Some(LOAN_ASSET)),
+					vec![RpcLendingPool {
+						asset: LOAN_ASSET,
+						total_amount: INIT_POOL_AMOUNT,
+						available_amount: INIT_POOL_AMOUNT - PRINCIPAL,
+						utilisation_rate: 5000, // 50%
+						interest_rate: 700      // 7%
+					}]
+				)
+			});
+	}
 }

@@ -32,7 +32,7 @@ pub enum LiquidationStatus {
 pub struct LoanAccount<T: Config> {
 	primary_collateral_asset: Asset,
 	collateral: BTreeMap<Asset, AssetAmount>,
-	loans: BTreeMap<LoanId, ChpLoan<T>>,
+	loans: BTreeMap<LoanId, GeneralLoan<T>>,
 	liquidation_status: LiquidationStatus,
 }
 
@@ -406,13 +406,13 @@ impl<T: Config> LoanAccount<T> {
 
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
-pub struct ChpLoan<T: Config> {
-	asset: Asset,
-	created_at_block: BlockNumberFor<T>,
-	owed_principal: AssetAmount,
+pub struct GeneralLoan<T: Config> {
+	pub asset: Asset,
+	pub created_at_block: BlockNumberFor<T>,
+	pub owed_principal: AssetAmount,
 }
 
-impl<T: Config> ChpLoan<T> {
+impl<T: Config> GeneralLoan<T> {
 	fn owed_principal_usd_value(&self) -> Result<AssetAmount, Error<T>> {
 		usd_value_of::<T>(self.asset, self.owed_principal)
 	}
@@ -520,7 +520,7 @@ struct AssetCollateralForLoan {
 // Abort all provided liquidation swaps, repays any already swapped principal assets and
 // returns remaining collateral assets alongside the corresponding loan information.
 fn abort_liquidation_swaps<T: Config>(
-	loans: &mut BTreeMap<LoanId, ChpLoan<T>>,
+	loans: &mut BTreeMap<LoanId, GeneralLoan<T>>,
 	liquidation_swaps: &BTreeMap<SwapRequestId, LiquidationSwap>,
 ) -> Vec<AssetCollateralForLoan> {
 	let mut collateral_collected = Vec::new();
@@ -689,7 +689,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				Error::<T>::InvalidLoanParameters
 			);
 
-			let loan = ChpLoan {
+			let loan = GeneralLoan {
 				asset,
 				created_at_block: frame_system::Pallet::<T>::current_block_number(),
 				owed_principal: amount_to_borrow,
@@ -1053,5 +1053,145 @@ impl<T: Config> Pallet<T> {
 		};
 
 		Ok(account)
+	}
+}
+
+pub use rpc::{RpcLendingPool, RpcLoanAccount};
+
+pub mod rpc {
+
+	use super::*;
+	use cf_primitives::SwapRequestId;
+	use cf_traits::lending::LoanId;
+	use serde::{Deserialize, Serialize};
+
+	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+	pub struct RpcLoan {
+		pub loan_id: LoanId,
+		pub asset: Asset,
+		pub created_at: u32,
+		pub principal_amount: AssetAmount,
+		pub total_fees: BTreeMap<Asset, AssetAmount>,
+	}
+
+	// TODO: see what other parameters are needed
+	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+	pub struct RpcLendingPool {
+		pub asset: Asset,
+		pub total_amount: AssetAmount,
+		pub available_amount: AssetAmount,
+		pub utilisation_rate: BasisPoints,
+		pub interest_rate: BasisPoints,
+	}
+
+	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+	pub struct RpcLiquidationSwap {
+		pub swap_request_id: SwapRequestId,
+		pub loan_id: LoanId,
+	}
+
+	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+	pub struct RpcLiquidationStatus {
+		pub liquidation_swaps: Vec<RpcLiquidationSwap>,
+		pub is_hard: bool,
+	}
+
+	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+	pub struct RpcLoanAccount<AccountId> {
+		pub account: AccountId,
+		pub primary_collateral_asset: Asset,
+		pub ltv_ratio: Option<FixedU64>,
+		pub collateral: BTreeMap<Asset, AssetAmount>,
+		pub loans: BTreeMap<LoanId, RpcLoan>,
+		pub liquidation_status: Option<RpcLiquidationStatus>,
+	}
+
+	fn build_rpc_loan_account<T: Config>(
+		lender_id: T::AccountId,
+		loan_account: LoanAccount<T>,
+	) -> RpcLoanAccount<T::AccountId> {
+		RpcLoanAccount {
+			account: lender_id,
+			primary_collateral_asset: loan_account.primary_collateral_asset,
+			ltv_ratio: loan_account.derive_ltv().ok(),
+			collateral: loan_account.collateral,
+			loans: loan_account
+				.loans
+				.into_iter()
+				.map(|(loan_id, loan)| {
+					(
+						loan_id,
+						RpcLoan {
+							loan_id,
+							asset: loan.asset,
+							created_at: loan.created_at_block.unique_saturated_into(),
+							principal_amount: loan.owed_principal,
+							// TODO: store historical fees on loans and expose them here
+							total_fees: Default::default(),
+						},
+					)
+				})
+				.collect(),
+			liquidation_status: match loan_account.liquidation_status {
+				LiquidationStatus::NoLiquidation => None,
+				LiquidationStatus::Liquidating { liquidation_swaps, is_hard } =>
+					Some(RpcLiquidationStatus {
+						liquidation_swaps: liquidation_swaps
+							.into_iter()
+							.map(|(swap_request_id, swap)| RpcLiquidationSwap {
+								swap_request_id,
+								loan_id: swap.loan_id,
+							})
+							.collect(),
+						is_hard,
+					}),
+			},
+		}
+	}
+
+	pub fn get_loan_accounts<T: Config>(
+		lender_id: Option<T::AccountId>,
+	) -> Vec<RpcLoanAccount<T::AccountId>> {
+		if let Some(lender_id) = lender_id {
+			LoanAccounts::<T>::get(&lender_id)
+				.into_iter()
+				.map(|loan_account| build_rpc_loan_account(lender_id.clone(), loan_account))
+				.collect()
+		} else {
+			LoanAccounts::<T>::iter()
+				.map(|(lender_id, loan_account)| {
+					build_rpc_loan_account(lender_id.clone(), loan_account)
+				})
+				.collect()
+		}
+	}
+
+	fn build_rpc_lending_pool<T: Config>(asset: Asset, pool: &LendingPool<T>) -> RpcLendingPool {
+		let config = LendingConfig::<T>::get();
+
+		let utilisation = pool.get_utilisation();
+
+		let interest_rate = config.derive_interest_rate_per_year(utilisation);
+
+		RpcLendingPool {
+			asset,
+			total_amount: pool.total_amount,
+			available_amount: pool.available_amount,
+			utilisation_rate: (utilisation.deconstruct() / 100) as u16,
+			interest_rate: (interest_rate.deconstruct() / 100_000) as u16,
+		}
+	}
+
+	pub fn get_lending_pools<T: Config>(asset: Option<Asset>) -> Vec<RpcLendingPool> {
+		if let Some(asset) = asset {
+			GeneralLendingPools::<T>::get(asset)
+				.iter()
+				.map(|pool| build_rpc_lending_pool(asset, pool))
+				.collect()
+		} else {
+			GeneralLendingPools::<T>::iter()
+				.map(|(asset, pool)| build_rpc_lending_pool(asset, &pool))
+				.collect()
+		}
 	}
 }

@@ -23,7 +23,11 @@ mod general_lending_pool;
 
 use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
-use general_lending_pool::LendingPool;
+pub use general_lending::{
+	rpc::{get_lending_pools, get_loan_accounts},
+	RpcLendingPool, RpcLoanAccount,
+};
+pub use general_lending_pool::LendingPool;
 // Temporarily exposing this for a migration
 pub use core_lending_pool::{PendingLoan, ScaledAmount};
 
@@ -163,12 +167,16 @@ pub struct LendingConfiguration {
 }
 
 impl LendingConfiguration {
+	pub fn derive_interest_rate_per_year(&self, utilisation: Permill) -> Perbill {
+		self.interest_base +
+			Perbill::from_parts(utilisation.deconstruct() * 1000) *
+				self.interest_utilisation_factor
+	}
+
 	fn derive_interest_rate_per_charge_interval(&self, utilisation: Permill) -> Perbill {
 		use cf_primitives::BLOCKS_IN_YEAR;
-		// Interest per year
-		let interest_rate = self.interest_base +
-			Perbill::from_parts(utilisation.deconstruct() * 1000) *
-				self.interest_utilisation_factor;
+
+		let interest_rate = self.derive_interest_rate_per_year(utilisation);
 
 		Perbill::from_parts(
 			interest_rate.deconstruct() / (BLOCKS_IN_YEAR / INTEREST_PAYMENT_INTERVAL),

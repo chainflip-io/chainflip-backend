@@ -58,6 +58,7 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::OraclePrice, price::PriceAsset,
 };
 use pallet_cf_governance::GovCallHash;
+use pallet_cf_lending_pools::RpcLoanAccount;
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
 	UnidirectionalPoolDepth,
@@ -82,9 +83,9 @@ use state_chain_runtime::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
 		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
-		OpenedDepositChannels, OperatorInfo, RuntimeApiPenalty, SimulatedSwapInformation,
-		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
-		VaultAddresses, VaultSwapDetails,
+		OpenedDepositChannels, OperatorInfo, RpcLendingPool, RuntimeApiPenalty,
+		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
+		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	FlipBalance, Hash,
@@ -1095,6 +1096,20 @@ pub trait CustomApi {
 		base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<OraclePrice>>;
+
+	#[method(name = "lending_pools")]
+	fn cf_lending_pools(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcLendingPool>>;
+
+	#[method(name = "loan_account")]
+	fn cf_loan_accounts(
+		&self,
+		lender_id: Option<state_chain_runtime::AccountId>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId>>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1358,6 +1373,8 @@ where
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
 		cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>) -> Vec<OraclePrice>,
+		cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool>,
+		cf_loan_accounts(lender_id: Option<state_chain_runtime::AccountId>) -> Vec<RpcLoanAccount<state_chain_runtime::AccountId>>,
 	}
 
 	pass_through_and_flatten! {
