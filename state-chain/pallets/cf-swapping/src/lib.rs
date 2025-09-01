@@ -329,17 +329,38 @@ struct BatchExecutionOutcomes<T: Config> {
 	successful_swaps: Vec<SwapState<T>>,
 	failed_swaps: Vec<Swap<T>>,
 }
+fn get_current_chain_id() -> u8 {
+	// TODO: Align on a standard or if we use genesis_hashes or names
+	// to differentiate our networks.
+	1u8
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct ReplayProtection {
-	nonce: u32, //TODO: Is this correct?
+pub struct UserMetadata {
+	nonce: u32,
 	expiry_block: BlockNumber,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum EthSigType {
+	Domain, // personal_sign
+	Eip712,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum SolSigType {
+	Domain, /* Using `b"\xffsolana offchain" as per Anza specifications
+	         * althought Phantom might not use that.
+	         * TODO: References
+	         * https://docs.anza.xyz/proposals/off-chain-message-signing
+	         * And/or phantom off-chain signing:
+	         * https://github.com/phantom/sign-in-with-solana */
+	Raw,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum UserSignatureData {
-	Solana { signature: SolSignature, signer: SolAddress },
-	Ethereum { signature: EthereumSignature, signer: EthereumAddress },
+	Solana { signature: SolSignature, signer: SolAddress, sig_type: SolSigType },
+	Ethereum { signature: EthereumSignature, signer: EthereumAddress, sig_type: EthSigType },
 }
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
@@ -858,7 +879,7 @@ pub mod pallet {
 			broker_id: T::AccountId,
 			signer_account_id: AccountId32,
 			payload: Vec<u8>,
-			replay_protection: ReplayProtection,
+			user_metadata: UserMetadata,
 			user_signature_data: UserSignatureData,
 			valid: bool,
 			expired: bool,
@@ -1494,7 +1515,7 @@ pub mod pallet {
 		pub fn submit_user_signed_payload(
 			origin: OriginFor<T>,
 			payload: Vec<u8>,
-			replay_protection: ReplayProtection,
+			user_metadata: UserMetadata,
 			user_signature_data: UserSignatureData,
 		) -> DispatchResult {
 			use cf_chains::{
@@ -1505,48 +1526,83 @@ pub mod pallet {
 
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			// TODO: Get Statechain's genesis hash from runtime api instead.
-			let genesis_hash = cf_runtime_utilities::genesis_hashes::PERSEVERANCE;
+			let (valid, signer_account_id, decoded_action, signed_payload) =
+				match user_signature_data.clone() {
+					UserSignatureData::Solana { signature, signer, sig_type } => {
+						// TODO: To only support domain. Raw is for testing now.
+						let signed_payload = match sig_type {
+							SolSigType::Raw => [
+								payload.clone(),
+								vec![get_current_chain_id()],
+								user_metadata.clone().encode(),
+							]
+							.concat(),
+							SolSigType::Domain => {
+								let concat_data = vec![
+									payload.clone(),
+									vec![get_current_chain_id()],
+									user_metadata.clone().encode(),
+								]
+								.concat();
 
-			let signed_payload =
-				[payload.clone(), genesis_hash.to_vec(), replay_protection.encode()].concat();
+								let prefix_bytes = b"\xffsolana offchain";
+								[prefix_bytes.as_ref(), concat_data.as_slice()].concat()
+							},
+						};
+						(
+							SolanaCrypto::verify_signature(&signer, &signed_payload, &signature),
+							AccountId32::new(signer.into()),
+							UserActionsApi::decode(&mut &payload[..]).ok(),
+							signed_payload,
+						)
+					},
+					// Add prefix here from eth personal_sign. TBD if this is the same for EIP712
+					UserSignatureData::Ethereum { signature, signer, sig_type } => {
+						// TODO: Fix this! For some reason having an enum in sig_type makes it
+						// not work in the bouncer.
+						let signed_payload = match sig_type {
+							EthSigType::Domain => {
+								let concat_data = [
+									payload.clone(),
+									vec![get_current_chain_id()],
+									user_metadata.clone().encode(),
+								]
+								.concat();
+								let prefix = scale_info::prelude::format!(
+									"\x19Ethereum Signed Message:\n{}",
+									concat_data.len()
+								);
+								let prefix_bytes = prefix.as_bytes();
+								[prefix_bytes, &concat_data].concat()
+							},
+							// TODO: To construct the signed payload for EIP712 with the payload,
+							// chain_id etc..
+							EthSigType::Eip712 => unimplemented!("EIP712 not supported yet"),
+						};
 
-			let (valid, signer_account_id, decoded_action) = match user_signature_data {
-				UserSignatureData::Solana { signature, signer } => (
-					SolanaCrypto::verify_signature(&signer, &signed_payload, &signature),
-					AccountId32::new(signer.into()),
-					UserActionsApi::decode(&mut &payload[..]).ok(),
-				),
-				// Add prefix here from eth personal_sign. TBD if this is how we want to approach
-				// it.
-				UserSignatureData::Ethereum { signature, signer } => {
-					let prefix = scale_info::prelude::format!(
-						"\x19Ethereum Signed Message:\n{}",
-						signed_payload.len()
-					);
-					let prefix_bytes = prefix.as_bytes();
-					let prefixed_signed_payload = [prefix_bytes, &signed_payload].concat();
-					(
-						EvmCrypto::verify_signature(&signer, &prefixed_signed_payload, &signature),
-						signer.into_account_id_32(),
-						UserActionsApi::decode(&mut &payload[..]).ok(),
-					)
-				},
-			};
+						(
+							EvmCrypto::verify_signature(&signer, &signed_payload, &signature),
+							signer.into_account_id_32(),
+							UserActionsApi::decode(&mut &payload[..]).ok(),
+							signed_payload,
+						)
+					},
+				};
 
-			// TODO: Add check of replay protection mechanism (esp. nonce)
+			// TODO: Add check of replay protection mechanism (esp. nonce). ChainId should be
+			// checked within the match statements above.
 			// Check expiry
 			let expired =
-				frame_system::Pallet::<T>::block_number() >= replay_protection.expiry_block.into();
+				frame_system::Pallet::<T>::block_number() >= user_metadata.expiry_block.into();
 
-			// TODO: Decode the payload and execute the intended action on behalf
-			// of the user, similar to the delegation Sc Api.
+			// TODO: Execute the intended action on behalf of the user, similar to the delegation Sc
+			// Api.
 
 			Self::deposit_event(Event::<T>::UserSignedTransactionSubmitted {
 				broker_id,
 				signer_account_id,
 				payload,
-				replay_protection,
+				user_metadata,
 				user_signature_data,
 				valid,
 				expired,

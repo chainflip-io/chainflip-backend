@@ -25,26 +25,20 @@ export const UserActionsCodec = Enum({
   }),
 });
 
-export const ReplayProtectionCoded = Struct({
+export const UserMetadataCodec = Struct({
   nonce: u32,
   expiryBlock: u32,
 });
 
-export function encodePayloadToSign(
-  payload: Uint8Array,
-  nonce: number,
-  expiryBlock: number,
-  genesisHash?: Uint8Array,
-) {
-  const replayProtection = ReplayProtectionCoded.enc({
+// For now hardcoded in the SC. It should be network dependent.
+const chainId = 1;
+
+export function encodePayloadToSign(payload: Uint8Array, nonce: number, expiryBlock: number) {
+  const userMetadata = UserMetadataCodec.enc({
     nonce,
     expiryBlock,
   });
-  // For now hardcoded in the SC to the Persa genesis hash
-  const hash =
-    genesisHash ??
-    Buffer.from('7a5d4db858ada1d20ed6ded4933c33313fc9673e5fffab560d0ca714782f2080', 'hex');
-  return new Uint8Array([...payload, ...hash, ...replayProtection]);
+  return new Uint8Array([...payload, ...new Uint8Array([chainId]), ...userMetadata]);
 }
 async function main() {
   await using chainflip = await getChainflipApi();
@@ -63,7 +57,12 @@ async function main() {
   const payload = encodePayloadToSign(action, nonce, expiryBlock);
   const hexPayload = u8aToHex(payload);
 
-  const signature = sign(payload, whaleKeypair.secretKey.slice(0, 32));
+  const prefixBytes = Buffer.from([0xff, ...Buffer.from('solana offchain', 'utf8')]);
+  const solPrefixedMessage = Buffer.concat([prefixBytes, payload]);
+  const solHexPrefixedMessage = '0x' + solPrefixedMessage.toString('hex');
+  console.log('SolPrefixed Message (hex):', solHexPrefixedMessage);
+
+  const signature = sign(solPrefixedMessage, whaleKeypair.secretKey.slice(0, 32));
   const hexSignature = '0x' + Buffer.from(signature).toString('hex');
   const hexSigner = '0x' + whaleKeypair.publicKey.toBuffer().toString('hex');
   console.log('Payload:', payload);
@@ -84,6 +83,9 @@ async function main() {
           Solana: {
             signature: hexSignature,
             signer: hexSigner,
+            // Passing the sigType is not working but it defaults to the first item,
+            // which is the SolSigType::Domain that we want
+            // sigType: {Domain: null},
           },
         },
       )
@@ -92,9 +94,10 @@ async function main() {
 
   await observeEvent(globalLogger, `swapping:UserSignedTransactionSubmitted`, {
     test: (event) => {
+      console.log('event.data', event.data);
       const valid = event.data.valid === true && event.data.expired === false;
       const matchDecodedAction = event.data.decodedAction.Lending === 'Borrow';
-      const matchSignedPayload = event.data.signedPayload === hexPayload;
+      const matchSignedPayload = event.data.signedPayload === solHexPrefixedMessage;
       const matchUserSignatureData =
         event.data.userSignatureData?.Solana &&
         event.data.userSignatureData.Solana.signature.toLowerCase() ===
@@ -102,7 +105,7 @@ async function main() {
         event.data.userSignatureData.Solana.signer.toLowerCase() === hexSigner.toLowerCase();
       return valid && matchDecodedAction && matchSignedPayload && matchUserSignatureData;
     },
-    historicalCheckBlocks: 10,
+    historicalCheckBlocks: 1,
   }).event;
 
   console.log('Submitted user signed payload in SVM');
@@ -111,7 +114,7 @@ async function main() {
 
   // Create the Ethereum-prefixed message
   const prefix = `\x19Ethereum Signed Message:\n${payload.length}`;
-  const prefixedMessage = Buffer.concat([Buffer.from(prefix, 'utf8'), action]);
+  const prefixedMessage = Buffer.concat([Buffer.from(prefix, 'utf8'), payload]);
   const hexPrefixedMessage = '0x' + prefixedMessage.toString('hex');
   console.log('Prefixed Message (hex):', hexPrefixedMessage);
 
@@ -141,6 +144,8 @@ async function main() {
           Ethereum: {
             signature: evmSignature,
             signer: evmSigner,
+            // Passing the sigType enum is not working but it defaults to the first item,
+            // which is the EthSigType::Domain that we want
           },
         },
       )
@@ -151,7 +156,7 @@ async function main() {
     test: (event) => {
       const valid = event.data.valid === true && event.data.expired === false;
       const matchDecodedAction = event.data.decodedAction.Lending === 'Borrow';
-      const matchSignedPayload = event.data.signedPayload === hexPayload;
+      const matchSignedPayload = event.data.signedPayload === hexPrefixedMessage;
       const matchUserSignatureData =
         event.data.userSignatureData?.Ethereum &&
         event.data.userSignatureData.Ethereum.signature.toLowerCase() ===
@@ -159,7 +164,7 @@ async function main() {
         event.data.userSignatureData.Ethereum.signer.toLowerCase() === evmSigner.toLowerCase();
       return valid && matchDecodedAction && matchSignedPayload && matchUserSignatureData;
     },
-    historicalCheckBlocks: 10,
+    historicalCheckBlocks: 1,
   }).event;
 }
 
