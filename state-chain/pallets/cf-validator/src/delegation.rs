@@ -171,6 +171,15 @@ impl<T: Config> DelegationSnapshot<T> {
 			(delegator, share * delegators_cut)
 		});
 
+		debug_assert_eq!(
+			total,
+			core::iter::once((&self.operator, operator_cut))
+				.chain(validator_cuts.clone())
+				.chain(delegator_cuts.clone())
+				.map(|(_, amount)| amount)
+				.sum::<Amount>(),
+		);
+
 		core::iter::once((&self.operator, operator_cut))
 			.chain(validator_cuts)
 			.chain(delegator_cuts)

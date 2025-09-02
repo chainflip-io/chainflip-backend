@@ -2217,6 +2217,32 @@ mod delegation_splitting {
 	}
 
 	#[test]
+	fn with_delegation_limit_and_fee() {
+		new_test_ext().execute_with(|| {
+			const FACTOR: u128 = 3;
+			// 20% operator fee
+			assert_eq!(
+				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 2000, Some(FACTOR as u32)),
+				BTreeMap::from_iter(
+					[
+						// Operator gets 20 % of *capped* delegator total
+						(0, (REWARD / (FACTOR - 1) * 6 / 5)),
+						(1, REWARD),
+						(2, REWARD),
+						(3, 2 * REWARD),
+						(4, 3 * REWARD),
+					]
+					.into_iter()
+					// Delegator reward is reduced by 50% because it's 2x over capacity.
+					// Delegator reward is further reduced by 20% because of operator fee.
+					.map(|(k, v)| if k > 1 { (k, v / (FACTOR - 1) * 4 / 5) } else { (k, v) })
+					.collect::<BTreeMap<_, _>>()
+				)
+			);
+		});
+	}
+
+	#[test]
 	fn block_delegator_requires_account_exists_with_allow_default() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
