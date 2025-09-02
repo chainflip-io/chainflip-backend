@@ -17,11 +17,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extract_if)]
 
-use alloy::{
-	dyn_abi::{DynSolType, DynSolValue},
-	hex,
-	primitives::{keccak256, Address, U256},
-};
+use alloy_dyn_abi::{DynSolType, DynSolValue};
+use alloy_primitives::{keccak256, B256, U256};
 use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
@@ -370,7 +367,7 @@ pub enum UserSignatureData {
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
 pub enum LendingApi {
-	Borrow {},
+	Borrow { amount: u128, collateral_asset: u128, borrow_asset: u128 },
 }
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
@@ -1556,6 +1553,7 @@ pub mod pallet {
 					},
 					// Add prefix here from eth personal_sign. TBD if this is the same for EIP712
 					UserSignatureData::Ethereum { signature, signer, sig_type } => {
+						let user_action = UserActionsApi::decode(&mut &payload[..]).ok();
 						let signed_payload = match sig_type {
 							EthSigType::Domain => {
 								let concat_data = [
@@ -1571,15 +1569,20 @@ pub mod pallet {
 								let prefix_bytes = prefix.as_bytes();
 								[prefix_bytes, &concat_data].concat()
 							},
-							// TODO: To construct the signed payload for EIP712 with the payload,
-							// chain_id etc..
-							EthSigType::Eip712 => unimplemented!("EIP712 not supported yet"),
+							EthSigType::Eip712 => {
+								match user_action.clone() {
+									// TODO: Fix this
+									None => payload.clone(),
+									// TODO: To pass user_metadata too
+									Some(action) => build_eip_712_hash(action),
+								}
+							},
 						};
 
 						(
 							EvmCrypto::verify_signature(&signer, &signed_payload, &signature),
 							signer.into_account_id_32(),
-							UserActionsApi::decode(&mut &payload[..]).ok(),
+							user_action,
 							signed_payload,
 						)
 					},
@@ -3020,100 +3023,111 @@ pub(crate) mod utilities {
 	}
 }
 
+pub fn build_eip_712_hash(user_action: UserActionsApi) -> Vec<u8> {
+	// -----------------
+	// Domain separator
+	// -----------------
+	let type_str = "EIP712Domain(string name,string version,uint256 chainId)";
+	let type_hash: B256 = keccak256(type_str.as_bytes());
+	let name_hash: B256 = keccak256("Chainflip".as_bytes());
+	let version_hash: B256 = keccak256("0".as_bytes());
+	let chain_id = U256::from(1);
+
+	let encoded = DynSolValue::Tuple(vec![
+		DynSolValue::FixedBytes(type_hash, 32),
+		DynSolValue::FixedBytes(name_hash, 32),
+		DynSolValue::FixedBytes(version_hash, 32),
+		DynSolValue::Uint(chain_id, 256),
+	])
+	.abi_encode();
+
+	let domain_separator = keccak256(encoded);
+
+	// -----------------
+	// Borrow struct
+	// -----------------
+	let borrow_type_str =
+		"Borrow(string from,uint256 amount,uint256 collateralAsset,uint256 borrowAsset)";
+	let borrow_type_hash: B256 = keccak256(borrow_type_str.as_bytes());
+
+	let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+	let from_hash: B256 = keccak256(from_str.as_bytes());
+
+	// Extract fields from UserActionsApi
+	let message_hash = match user_action {
+		UserActionsApi::Lending(LendingApi::Borrow { amount, collateral_asset, borrow_asset }) => {
+			let (amount, collateral_asset, borrow_asset) =
+				(U256::from(amount), U256::from(collateral_asset), U256::from(borrow_asset));
+			let encoded_message = DynSolValue::Tuple(vec![
+				DynSolValue::FixedBytes(borrow_type_hash, 32),
+				DynSolValue::FixedBytes(from_hash, 32),
+				DynSolValue::Uint(amount, 256),
+				DynSolValue::Uint(collateral_asset, 256),
+				DynSolValue::Uint(borrow_asset, 256),
+			])
+			.abi_encode();
+
+			let message_type = DynSolType::Tuple(vec![
+				DynSolType::FixedBytes(32), // type hash
+				DynSolType::FixedBytes(32), // from
+				DynSolType::Uint(256),      // amount
+				DynSolType::Uint(256),      // collateral asset
+				DynSolType::Uint(256),      // borrow asset
+			]);
+			let decoded_message = message_type.abi_decode(&encoded_message).unwrap();
+			// println!("Decoded message: {:?}", decoded_message);
+
+			let message_hash: B256 = keccak256(encoded_message);
+			// println!("Borrow struct hash: 0x{}", hex::encode(message_hash));
+			message_hash
+		},
+	};
+
+	// -----------------
+	// Final EIP-712 digest
+	// -----------------
+	let mut encoded_final = vec![0x19, 0x01];
+	encoded_final.extend_from_slice(domain_separator.as_slice());
+	encoded_final.extend_from_slice(message_hash.as_slice());
+
+	let eip712_hash: B256 = keccak256(&encoded_final);
+	// println!("EIP-712 final digest: 0x{}", hex::encode(eip712_hash));
+	encoded_final
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
-	use alloy_primitives::B256;
 	use sp_core::H160;
 	use std::str::FromStr;
 
 	#[test]
 	fn testing() {
-		// -----------------
-		// Domain separator
-		// -----------------
-		let type_str = "EIP712Domain(string name,string version,uint256 chainId)";
-		let type_hash: B256 = keccak256(type_str.as_bytes());
-		let name_hash: B256 = keccak256("Chainflip".as_bytes());
-		let version_hash: B256 = keccak256("0".as_bytes());
-		let chain_id = U256::from(1);
+		let encoded_final = build_eip_712_hash(UserActionsApi::Lending(LendingApi::Borrow {
+			amount: 1234,
+			collateral_asset: 5,
+			borrow_asset: 3,
+		}));
 
-		let encoded = DynSolValue::Tuple(vec![
-			DynSolValue::FixedBytes(type_hash, 32),
-			DynSolValue::FixedBytes(name_hash, 32),
-			DynSolValue::FixedBytes(version_hash, 32),
-			DynSolValue::Uint(chain_id, 256),
-		])
-		.abi_encode();
+		let expected_signed_payload: Vec<u8> = hex_literal::hex!("1901027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a2556b9b49724eb5ff27f2fd7f20e3069b9f21ebd4f4215557469a182f4ec211f719").into();
 
-		let domain_separator = keccak256(encoded);
-		println!("Domain separator: 0x{}", hex::encode(domain_separator));
+		assert_eq!(encoded_final, expected_signed_payload);
+		println!("Encoded final: {:?}", &encoded_final);
 
-		assert_eq!(
-			hex::encode(domain_separator),
-			"027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a255"
-		);
-
-		// -----------------
-		// Borrow struct
-		// -----------------
-		let borrow_type_str =
-			"Borrow(string from,uint256 amount,uint256 collateralAsset,uint256 borrowAsset)";
-		let borrow_type_hash: B256 = keccak256(borrow_type_str.as_bytes());
-
-		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-		let from_hash: B256 = keccak256(from_str.as_bytes());
-
-		let amount = U256::from(1234);
-		let collateral_asset = U256::from(5);
-		let borrow_asset = U256::from(3);
-
-		let encoded_message = DynSolValue::Tuple(vec![
-			DynSolValue::FixedBytes(borrow_type_hash, 32),
-			DynSolValue::FixedBytes(from_hash, 32),
-			DynSolValue::Uint(amount, 256),
-			DynSolValue::Uint(collateral_asset, 256),
-			DynSolValue::Uint(borrow_asset, 256),
-		])
-		.abi_encode();
-
-		let message_type = DynSolType::Tuple(vec![
-			DynSolType::FixedBytes(32), // type hash
-			DynSolType::FixedBytes(32), // from
-			DynSolType::Uint(256),      // amount
-			DynSolType::Uint(256),      // collateral asset
-			DynSolType::Uint(256),      // borrow asset
-		]);
-		let decoded_message = message_type.abi_decode(&encoded_message).unwrap();
-		println!("Decoded message: {:?}", decoded_message);
-
-		let message_hash: B256 = keccak256(encoded_message);
-		println!("Borrow struct hash: 0x{}", hex::encode(message_hash));
-		assert_eq!(
-			hex::encode(message_hash),
-			"6b9b49724eb5ff27f2fd7f20e3069b9f21ebd4f4215557469a182f4ec211f719"
-		);
-
-		// -----------------
-		// Final EIP-712 digest
-		// -----------------
-		let mut encoded_final = vec![0x19, 0x01];
-		encoded_final.extend_from_slice(domain_separator.as_slice());
-		encoded_final.extend_from_slice(message_hash.as_slice());
+		let expected_eip712_hash: B256 =
+			hex_literal::hex!("5d8bd0a0adb0fd1987425f1bac09f036c155c0e4ce8a9c3f4a101e4cad61863b")
+				.into();
 
 		let eip712_hash: B256 = keccak256(&encoded_final);
-		println!("EIP-712 final digest: 0x{}", hex::encode(eip712_hash));
-		assert_eq!(
-			hex::encode(eip712_hash),
-			"5d8bd0a0adb0fd1987425f1bac09f036c155c0e4ce8a9c3f4a101e4cad61863b"
-		);
+		println!("EIP-712 final digest: {}", &eip712_hash);
+		assert_eq!(eip712_hash, expected_eip712_hash);
 	}
 
 	#[test]
 	fn test_verify_eip_712() {
 		use cf_chains::{evm::EvmCrypto, ChainCrypto};
 		// Data before hashing
-		let signed_payload = hex::decode("0x1901027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a255d3cf70c7277187d769dc8701e55bbdfccf6300732bb6513f86614f6267a6f4db").unwrap();
+		let signed_payload =  hex_literal::hex!("1901027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a255d3cf70c7277187d769dc8701e55bbdfccf6300732bb6513f86614f6267a6f4db");
 		let signer: H160 = H160::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
 		let signature: EthereumSignature = hex_literal::hex!(
 			"4db2efcd4fe0dc3bde6c16745dc0d5420a9f3eee587e5cc271ac98fd975563081eaa2fe79e5b2453ca7d8c5675e4d683ac5c59d5d4d16d854ecdaaf35195d5551b"

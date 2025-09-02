@@ -15,14 +15,18 @@ import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
-import { Struct, u32, Enum } from 'scale-ts';
+import { Struct, u32, Enum, u128 } from 'scale-ts';
 import { globalLogger } from 'shared/utils/logger';
-import { C } from 'vitest/dist/chunks/reporters.Y8BYiXBN.js';
+import { bigint } from 'zod';
 
 // TODO: Update these with the rpc encoding once the logic is implemented.
 export const UserActionsCodec = Enum({
   Lending: Enum({
-    Borrow: Struct({}),
+    Borrow: Struct({
+      amount: u128,
+      collateralAsset: u128,
+      borrowAsset: u128,
+    }),
   }),
 });
 
@@ -47,13 +51,25 @@ async function main() {
   const broker = createStateChainKeypair('//BROKER_1');
   const whaleKeypair = getSolWhaleKeyPair();
 
-  const action = UserActionsCodec.enc({
-    tag: 'Lending',
-    value: { tag: 'Borrow', value: {} },
-  });
   // Example values
   const nonce = 1;
   const expiryBlock = 10000;
+  const amount = 1234;
+  const collateralAsset = 6
+  const borrowAsset = 3
+
+const action = UserActionsCodec.enc({
+  tag: 'Lending',
+  value: {
+    tag: 'Borrow',
+    value: {
+      amount: BigInt(amount),
+      collateralAsset: BigInt(collateralAsset),
+      borrowAsset: BigInt(borrowAsset)
+    },
+  },
+});
+
   const hexAction = u8aToHex(action);
   const payload = encodePayloadToSign(action, nonce, expiryBlock);
   const hexPayload = u8aToHex(payload);
@@ -188,9 +204,9 @@ async function main() {
   // The data to sign
   const message = {
     from: evmSigner,
-    amount: 1234,
-    collateralAsset: 5,
-    borrowAsset: 3,
+    amount,
+    collateralAsset,
+    borrowAsset,
   };
 
   const signatureEip712 = await ethWallet.signTypedData(domain, types, message);
