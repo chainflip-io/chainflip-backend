@@ -26,11 +26,11 @@ use cf_traits::{
 };
 use sp_core::H160;
 
-use crate::BoundRedeemAddress;
+use crate::{BoundRedeemAddress, EthereumDeposit, EthereumDepositAndSCCall};
 use cf_traits::SpawnAccount;
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 use pallet_cf_flip::{Bonder, FlipSlasher};
-use sp_runtime::DispatchError;
+use sp_runtime::{AccountId32, DispatchError};
 
 const ETH_DUMMY_ADDR: EthereumAddress = H160([42u8; 20]);
 const ETH_ZERO_ADDRESS: EthereumAddress = H160([0u8; 20]);
@@ -1011,7 +1011,7 @@ fn redeem_funds_to_restricted_address_overrides_bound_and_executor_restrictions(
 			),
 			Error::<Test>::ExecutorBindingRestrictionViolated
 		);
-		// Redeem using correct redeem and executor should complete succesfully
+		// Redeem using correct redeem and executor should complete successfully
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			(AMOUNT).into(),
@@ -1835,10 +1835,104 @@ fn only_governance_can_update_settings() {
 	});
 }
 
+pub mod ethereum_sc_calls {
+	use super::*;
+
+	const CALLER: EthereumAddress = H160([7u8; 20]);
+	const CALLER_32: AccountId32 = AccountId32::new([3u8; 32]);
+	const FUND_AMOUNT: u128 = 1000u128;
+	const VALID_CALL_BYTES: [u8; 1] = [0];
+	const INVALID_CALL_BYTES: [u8; 2] = [12, 3];
+
+	#[test]
+	fn execute_sc_call_successfully() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Funding::execute_sc_call(
+				RuntimeOrigin::root(),
+				EthereumDepositAndSCCall {
+					deposit: EthereumDeposit::FlipToSCGateway { amount: FUND_AMOUNT },
+					call: VALID_CALL_BYTES.to_vec()
+				},
+				CALLER,
+				CALLER_32,
+				TX_HASH
+			));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::System(frame_system::Event::NewAccount { account: CALLER_32 }),
+				RuntimeEvent::Funding(Event::Funded {
+					account_id: CALLER_32,
+					tx_hash: TX_HASH,
+					funds_added: FUND_AMOUNT,
+					total_balance: FUND_AMOUNT,
+				}),
+				RuntimeEvent::Funding(Event::SCCallExecuted {
+					caller: CALLER_32,
+					sc_call: _,
+					eth_tx_hash: TX_HASH
+				})
+			);
+		});
+	}
+
+	#[test]
+	fn cannot_decode_sc_call() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Funding::execute_sc_call(
+				RuntimeOrigin::root(),
+				EthereumDepositAndSCCall {
+					deposit: EthereumDeposit::FlipToSCGateway { amount: FUND_AMOUNT },
+					call: INVALID_CALL_BYTES.to_vec()
+				},
+				CALLER,
+				CALLER_32,
+				TX_HASH
+			));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::System(frame_system::Event::NewAccount { account: CALLER_32 }),
+				RuntimeEvent::Funding(Event::Funded {
+					account_id: CALLER_32,
+					tx_hash: TX_HASH,
+					funds_added: FUND_AMOUNT,
+					total_balance: FUND_AMOUNT,
+				}),
+				RuntimeEvent::Funding(Event::SCCallCannotBeDecoded {
+					caller: CALLER_32,
+					sc_call_bytes: _,
+					eth_tx_hash: TX_HASH
+				})
+			);
+		});
+	}
+
+	#[test]
+	fn no_deposit_only_call() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Funding::execute_sc_call(
+				RuntimeOrigin::root(),
+				EthereumDepositAndSCCall {
+					deposit: EthereumDeposit::NoDeposit,
+					call: VALID_CALL_BYTES.to_vec()
+				},
+				CALLER,
+				CALLER_32,
+				TX_HASH
+			));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Funding(Event::SCCallExecuted {
+					caller: CALLER_32,
+					sc_call: _,
+					eth_tx_hash: TX_HASH
+				})
+			);
+		});
+	}
+}
 mod utils {
 	use super::*;
 	use cf_primitives::AccountRole;
-	use sp_runtime::AccountId32;
 
 	#[derive(Debug, Clone)]
 	pub struct AccountSetup {
@@ -2153,7 +2247,7 @@ pub mod rebalancing {
 	}
 
 	#[test]
-	fn fund_rebalance_and_redeem_dosent_allow_unauthorized_redemptions() {
+	fn fund_rebalance_and_redeem_does_not_allow_unauthorized_redemptions() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 100;
 			const REBALANCE_AMOUNT: u128 = 50;
@@ -2287,7 +2381,7 @@ pub mod rebalancing {
 	}
 
 	#[test]
-	fn rebalance_during_redemption_doesnt_lead_to_double_spending() {
+	fn rebalance_during_redemption_does_not_lead_to_double_spending() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 100;
 			const AMOUNT_TO_REDEEM: u128 = 50;

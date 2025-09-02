@@ -20,11 +20,11 @@ use crate::threshold_signing::{
 	BtcThresholdSigner, DotThresholdSigner, EthThresholdSigner, SolThresholdSigner,
 };
 
-use cf_chains::address::EncodedAddress;
+use cf_chains::{address::EncodedAddress, evm::TransactionFee};
 use cf_primitives::{AccountRole, BlockNumber, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
 use cf_test_utilities::assert_events_eq;
 use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, KeyRotator};
-use cfe_events::{KeyHandoverRequest, ThresholdSignatureRequest};
+use cfe_events::{KeyHandoverRequest, ThresholdSignatureRequest, TxBroadcastRequest};
 use chainflip_node::test_account_from_seed;
 use codec::{Decode, Encode};
 use frame_support::{
@@ -41,8 +41,9 @@ use sp_std::collections::btree_set::BTreeSet;
 
 use state_chain_runtime::{
 	AccountRoles, AllPalletsWithSystem, ArbitrumInstance, AssethubInstance, AssethubVault,
-	BitcoinInstance, Funding, LiquidityProvider, PalletExecutionOrder, PolkadotInstance, Runtime,
-	RuntimeCall, RuntimeEvent, RuntimeOrigin, SolanaInstance, Validator, Weight,
+	BitcoinInstance, Environment, EthereumInstance, Funding, LiquidityProvider,
+	PalletExecutionOrder, PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin,
+	SolanaInstance, Validator, Weight,
 };
 use std::{
 	cell::RefCell,
@@ -62,6 +63,8 @@ pub enum ContractEvent {
 	Redeemed { node_id: NodeId, amount: FlipBalance, epoch: EpochIndex },
 }
 
+pub const EVM_FEE: TransactionFee = TransactionFee { effective_gas_price: 1000000, gas_used: 100 };
+
 macro_rules! on_events {
 	($events:expr, $($(#[$cfg_param:meta])? $p:pat => $b:block)+) => {
 		for event in $events {
@@ -73,22 +76,29 @@ macro_rules! on_events {
 	}
 }
 
-pub const NEW_FUNDING_AMOUNT: FlipBalance = mock_runtime::MIN_FUNDING + 1;
+macro_rules! witness_broadcast {
+	($chain_instance:ty, $broadcast_id:expr, $fee:expr$(,)?) => {{
+		witness_broadcast!($chain_instance, $broadcast_id, $fee, {})
+	}};
 
-pub fn create_testnet_with_new_funder() -> (Network, AccountId32) {
-	let (mut testnet, backup_nodes) = Network::create(1, &Validator::current_authorities());
+	($chain_instance:ty, $broadcast_id: expr, $fee:expr, $extra:block$(,)?) => {{
+		let broadcast_data =
+			pallet_cf_broadcast::AwaitingBroadcast::<Runtime, $chain_instance>::get($broadcast_id)
+				.expect("Broadcast data must exists");
 
-	let new_backup = backup_nodes.first().unwrap().clone();
-
-	testnet.state_chain_gateway_contract.fund_account(
-		new_backup.clone(),
-		NEW_FUNDING_AMOUNT,
-		GENESIS_EPOCH,
-	);
-	// register the funds
-	testnet.move_forward_blocks(2);
-
-	(testnet, new_backup)
+		// Witness broadcast success
+		witness_call(
+			pallet_cf_broadcast::Call::<Runtime, $chain_instance>::transaction_succeeded {
+				tx_out_id: broadcast_data.transaction_out_id,
+				signer_id: Default::default(),
+				tx_fee: $fee,
+				tx_metadata: Default::default(),
+				transaction_ref: Default::default(),
+			}
+			.into(),
+		);
+		$extra
+	}};
 }
 
 // An SC Gateway contract
@@ -218,13 +228,13 @@ impl Engine {
 		}
 	}
 
-	fn state(&self) -> ChainflipAccountState {
-		get_validator_state(&self.node_id)
+	fn is_current_authority(&self) -> bool {
+		super::is_current_authority(&self.node_id)
 	}
 
 	// Handle events from contract
 	fn on_contract_event(&self, event: &ContractEvent) {
-		if self.state() == ChainflipAccountState::CurrentAuthority && self.live {
+		if self.is_current_authority() && self.live {
 			match event {
 				ContractEvent::Funded { node_id: validator_id, amount, epoch, .. } => {
 					queue_dispatch_extrinsic(
@@ -268,7 +278,7 @@ impl Engine {
 	fn handle_state_chain_events(&mut self, events: &[RuntimeEvent], cfe_events: &[CfeEvent]) {
 		if self.live {
 			// Being a CurrentAuthority we would respond to certain events
-			if self.state() == ChainflipAccountState::CurrentAuthority {
+			if self.is_current_authority() {
 				// Note: these aren't events that the engine normally responds to, but
 				// we process them here due to the way integration tests are set up
 				on_events! {
@@ -573,6 +583,7 @@ pub(crate) fn setup_peer_mapping(node_id: &NodeId) {
 #[derive(Default)]
 pub struct Network {
 	engines: HashMap<NodeId, Engine>,
+	pub auto_witness_broadcasts: bool,
 	pub state_chain_gateway_contract: ScGatewayContract,
 
 	// Used to initialised the threshold signers of the engines added
@@ -669,10 +680,14 @@ impl Network {
 			.for_each(|(_, e)| e.auto_submit_heartbeat = auto_heartbeat);
 	}
 
+	pub fn set_auto_witness_broadcasts(&mut self, active: bool) {
+		self.auto_witness_broadcasts = active;
+	}
+
 	// Create a network which includes the authorities in genesis of number of nodes
 	// and return a network and sorted list of nodes within
-	pub fn create(number_of_backup_nodes: u8, existing_nodes: &Vec<NodeId>) -> (Self, Vec<NodeId>) {
-		let mut network: Network = Default::default();
+	pub fn create(num_extra_nodes: u8, existing_nodes: &Vec<NodeId>) -> (Self, Vec<NodeId>) {
+		let mut network: Network = Network { auto_witness_broadcasts: true, ..Default::default() };
 
 		// Include any nodes already *created* to the test network
 		for node in existing_nodes {
@@ -682,17 +697,21 @@ impl Network {
 		}
 
 		// Create the backup nodes
-		let mut backup_nodes = Vec::new();
-		for _ in 0..number_of_backup_nodes {
+		let mut extra_nodes = Vec::new();
+		for _ in 0..num_extra_nodes {
 			let node_id = network.create_engine();
-			backup_nodes.push(node_id.clone());
+			extra_nodes.push(node_id.clone());
 		}
 
-		(network, backup_nodes)
+		(network, extra_nodes)
 	}
 
 	pub fn set_active(&mut self, node_id: &NodeId, active: bool) {
 		self.engines.get_mut(node_id).expect("valid node_id").live = active;
+	}
+
+	pub fn set_auto_heartbeat(&mut self, node_id: &NodeId, active: bool) {
+		self.engines.get_mut(node_id).expect("valid node_id").auto_submit_heartbeat = active;
 	}
 
 	pub fn create_engine(&mut self) -> NodeId {
@@ -720,6 +739,7 @@ impl Network {
 		let epoch = Validator::epoch_index();
 		self.move_to_the_end_of_epoch();
 		self.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+
 		assert_eq!(epoch + 1, Validator::epoch_index());
 	}
 
@@ -730,13 +750,6 @@ impl Network {
 		if target > current_block {
 			self.move_forward_blocks(target - current_block - 1)
 		}
-	}
-
-	/// Move to the next heartbeat interval block.
-	pub fn move_to_next_heartbeat_block(&mut self) {
-		self.move_forward_blocks(
-			HEARTBEAT_BLOCK_INTERVAL - System::block_number() % HEARTBEAT_BLOCK_INTERVAL,
-		);
 	}
 
 	// Submits heartbeat for keep alive.
@@ -757,6 +770,34 @@ impl Network {
 				engine.last_heartbeat = current_block;
 			}
 		});
+	}
+
+	fn witnessing_broadcasts(&mut self, cfe_events: &[CfeEvent]) {
+		for event in cfe_events {
+			match event {
+				CfeEvent::EthTxBroadcastRequest(TxBroadcastRequest { broadcast_id, .. }) =>
+					witness_broadcast!(EthereumInstance, broadcast_id, EVM_FEE,),
+				CfeEvent::ArbTxBroadcastRequest(TxBroadcastRequest { broadcast_id, .. }) =>
+					witness_broadcast!(ArbitrumInstance, broadcast_id, EVM_FEE,),
+				CfeEvent::SolTxBroadcastRequest(TxBroadcastRequest { broadcast_id, .. }) =>
+					witness_broadcast!(SolanaInstance, broadcast_id, 1_000u64, {
+						// Manually recover the used Durable Nonces
+						if let Some((nonce, hash)) =
+							pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter()
+								.next()
+						{
+							Environment::update_sol_nonce(nonce, hash);
+						}
+					}),
+				CfeEvent::DotTxBroadcastRequest(TxBroadcastRequest { broadcast_id, .. }) =>
+					witness_broadcast!(PolkadotInstance, broadcast_id, 1_000u128,),
+				CfeEvent::HubTxBroadcastRequest(TxBroadcastRequest { broadcast_id, .. }) =>
+					witness_broadcast!(AssethubInstance, broadcast_id, 1_000u128,),
+				_ => {
+					// ignored
+				},
+			}
+		}
 	}
 
 	pub fn move_forward_blocks(&mut self, n: u32) {
@@ -825,6 +866,10 @@ impl Network {
 			for engine in self.engines.values_mut() {
 				engine.handle_state_chain_events(&events, &cfe_events);
 			}
+
+			if self.auto_witness_broadcasts {
+				self.witnessing_broadcasts(&cfe_events);
+			}
 		}
 	}
 }
@@ -862,6 +907,8 @@ pub fn fund_authorities_and_join_auction(
 		network::setup_account_and_peer_mapping(node);
 		network::Cli::start_bidding(node);
 	}
+
+	testnet.submit_heartbeat_all_engines(true);
 
 	(testnet, genesis_authorities, init_backup_nodes)
 }
@@ -901,4 +948,33 @@ pub fn register_refund_addresses(account_id: &AccountId) {
 			encoded_address
 		));
 	}
+}
+
+pub fn witness_all_outstanding_broadcasts() {
+	macro_rules! witness_all_broadcasts {
+		($chain_instance:ty, $fee:expr$(,)?) => {{
+			witness_all_broadcasts!($chain_instance, $fee, {})
+		}};
+
+		($chain_instance:ty, $fee:expr, $extra:block$(,)?$(,)?) => {{
+			for (id, _) in
+				pallet_cf_broadcast::AwaitingBroadcast::<Runtime, $chain_instance>::iter()
+			{
+				witness_broadcast!($chain_instance, id, $fee, $extra);
+			}
+		}};
+	}
+
+	witness_all_broadcasts!(EthereumInstance, EVM_FEE);
+	witness_all_broadcasts!(ArbitrumInstance, EVM_FEE);
+	witness_all_broadcasts!(SolanaInstance, 1_000u64, {
+		// Manually recover the used Durable Nonces
+		if let Some((nonce, hash)) =
+			pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter().next()
+		{
+			Environment::update_sol_nonce(nonce, hash);
+		}
+	});
+	witness_all_broadcasts!(PolkadotInstance, 1_000u128);
+	witness_all_broadcasts!(AssethubInstance, 1_000u128);
 }

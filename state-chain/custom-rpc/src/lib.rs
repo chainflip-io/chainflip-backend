@@ -237,6 +237,8 @@ pub enum RpcAccountInfo {
 		apy_bp: Option<u32>,
 		restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
 		estimated_redeemable_balance: NumberOrHex,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		operator: Option<AccountId32>,
 	},
 	Operator {
 		#[serde(flatten)]
@@ -311,6 +313,7 @@ impl RpcAccountInfo {
 				.map(|(address, balance)| (address, balance.into()))
 				.collect(),
 			estimated_redeemable_balance: info.estimated_redeemable_balance.into(),
+			operator: info.operator,
 		}
 	}
 
@@ -996,7 +999,10 @@ pub trait CustomApi {
 	#[method(name = "validate_refund_params")]
 	fn cf_validate_refund_params(
 		&self,
+		input_asset: Asset,
+		output_asset: Asset,
 		retry_duration: BlockNumber,
+		max_oracle_price_slippage: Option<BasisPoints>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<()>;
 
@@ -1370,7 +1376,12 @@ where
 			liquidity: Liquidity,
 		) -> PoolPairsMap<AmmAmount>,
 		cf_validate_dca_params(number_of_chunks: u32, chunk_interval: u32) -> (),
-		cf_validate_refund_params(retry_duration: BlockNumber) -> (),
+		cf_validate_refund_params(
+			input_asset: Asset,
+			output_asset: Asset,
+			retry_duration: BlockNumber,
+			max_oracle_price_slippage: Option<BasisPoints>,
+		) -> (),
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {

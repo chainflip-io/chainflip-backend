@@ -15,13 +15,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	swapping::{SwapOutputAction, SwapRequestType},
+	swapping::{PriceLimitsAndExpiry, SwapOutputAction, SwapRequestType},
 	EgressApi, SwapRequestHandler,
 };
-use cf_chains::{Chain, ChannelRefundParametersCheckedInternal, SwapOrigin};
+use cf_chains::{Chain, SwapOrigin};
 use cf_primitives::{Asset, AssetAmount, Beneficiaries, DcaParameters, SwapRequestId};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
+use sp_std::{vec, vec::Vec};
 
 use crate::mocks::MockPalletStorage;
 
@@ -64,7 +65,7 @@ where
 		output_asset: Asset,
 		swap_type: SwapRequestType<Self::AccountId>,
 		broker_fees: Beneficiaries<Self::AccountId>,
-		_refund_params: Option<ChannelRefundParametersCheckedInternal<Self::AccountId>>,
+		_price_limits_and_expiry: Option<PriceLimitsAndExpiry<Self::AccountId>>,
 		_dca_params: Option<DcaParameters>,
 		origin: SwapOrigin<Self::AccountId>,
 	) -> SwapRequestId {

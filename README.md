@@ -108,6 +108,32 @@ The following commands should be executed from the repo root directory.
   Requires cargo-audit(`cargo install cargo-audit`)):<br>
   `cargo cf-audit`
 
+### Building chainspec files
+
+To build chainspec files for different networks, use the `build-chainspec.sh` script:
+
+```bash
+# Build chainspec for backspin network (with environment variables)
+./build-chainspec.sh backspin
+
+# Build chainspec for sisyphos network
+./build-chainspec.sh sisyphos
+
+# Build chainspec for perseverance network
+./build-chainspec.sh perseverance
+
+# Use debug build instead of release
+./build-chainspec.sh --debug backspin
+
+# Skip cargo build step (use existing binary)
+./build-chainspec.sh --skip-build sisyphos
+
+# Show help and available options
+./build-chainspec.sh --help
+```
+
+The script will create both the regular and raw chainspec files in the `state-chain/node/chainspecs/` directory.
+
 ## Localnet
 
 You can run a local single-node testnet (Localnet), in Docker. This will allow you to quickly iterate on a particular

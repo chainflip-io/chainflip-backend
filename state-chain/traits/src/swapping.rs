@@ -17,11 +17,12 @@
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	ccm_checker::DecodedCcmAdditionalData,
-	AccountOrAddress, CcmDepositMetadata, Chain, ChannelRefundParametersCheckedInternal,
-	ForeignChainAddress, SwapOrigin,
+	AccountOrAddress, CcmDepositMetadata, CcmDepositMetadataChecked, Chain,
+	ChannelRefundParametersCheckedInternal, ForeignChainAddress, SwapOrigin,
 };
 use cf_primitives::{
-	Asset, AssetAmount, Beneficiaries, BlockNumber, DcaParameters, Price, SwapRequestId,
+	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, DcaParameters, Price, PriceLimits,
+	SwapRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -78,6 +79,42 @@ pub enum SwapRequestTypeGeneric<Address, AccountId> {
 pub type SwapRequestType<AccountId> = SwapRequestTypeGeneric<ForeignChainAddress, AccountId>;
 pub type SwapRequestTypeEncoded<AccountId> = SwapRequestTypeGeneric<EncodedAddress, AccountId>;
 
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[scale_info(skip_type_params(AccountId))]
+pub enum ExpiryBehaviour<AccountId> {
+	NoExpiry,
+	RefundIfExpires {
+		retry_duration: cf_primitives::BlockNumber,
+		refund_address: AccountOrAddress<AccountId, ForeignChainAddress>,
+		refund_ccm_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
+	},
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[scale_info(skip_type_params(AccountId))]
+pub struct PriceLimitsAndExpiry<AccountId> {
+	pub expiry_behaviour: ExpiryBehaviour<AccountId>,
+	pub min_price: Price,
+	pub max_oracle_price_slippage: Option<BasisPoints>,
+}
+
+impl<AccountId> From<ChannelRefundParametersCheckedInternal<AccountId>>
+	for PriceLimitsAndExpiry<AccountId>
+{
+	fn from(params: ChannelRefundParametersCheckedInternal<AccountId>) -> Self {
+		Self {
+			expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+				retry_duration: params.retry_duration,
+				refund_address: params.refund_address,
+				refund_ccm_metadata: params.refund_ccm_metadata,
+			},
+			min_price: params.min_price,
+			max_oracle_price_slippage: params.max_oracle_price_slippage,
+		}
+	}
+}
+
 pub trait SwapRequestHandler {
 	type AccountId: Clone;
 
@@ -87,7 +124,7 @@ pub trait SwapRequestHandler {
 		output_asset: Asset,
 		request_type: SwapRequestType<Self::AccountId>,
 		broker_fees: Beneficiaries<Self::AccountId>,
-		refund_params: Option<ChannelRefundParametersCheckedInternal<Self::AccountId>>,
+		price_limits_and_expiry: Option<PriceLimitsAndExpiry<Self::AccountId>>,
 		dca_params: Option<DcaParameters>,
 		origin: SwapOrigin<Self::AccountId>,
 	) -> SwapRequestId;
@@ -129,7 +166,7 @@ pub trait SwapRequestHandler {
 		input_amount: AssetAmount,
 		output_asset: Asset,
 		retry_duration: BlockNumber,
-		min_price: Price,
+		price_limits: PriceLimits,
 		dca_params: Option<DcaParameters>,
 		account_id: Self::AccountId,
 	) -> SwapRequestId {
@@ -141,11 +178,14 @@ pub trait SwapRequestHandler {
 				output_action: SwapOutputAction::CreditOnChain { account_id: account_id.clone() },
 			},
 			Default::default(), /* no broker fees */
-			Some(ChannelRefundParametersCheckedInternal {
-				retry_duration,
-				refund_address: AccountOrAddress::InternalAccount(account_id.clone()),
-				min_price,
-				refund_ccm_metadata: None,
+			Some(PriceLimitsAndExpiry {
+				expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+					retry_duration,
+					refund_address: AccountOrAddress::InternalAccount(account_id.clone()),
+					refund_ccm_metadata: None,
+				},
+				min_price: price_limits.min_price,
+				max_oracle_price_slippage: price_limits.max_oracle_price_slippage,
 			}),
 			dca_params,
 			SwapOrigin::OnChainAccount(account_id),

@@ -108,10 +108,19 @@ fn test_buy_back_flip() {
 
 		// Note that the network fee will not be charged in this case:
 		assert_eq!(
-			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS))
-				.first()
+			ScheduledSwaps::<Test>::get()
+				.get(&1.into())
 				.expect("Should have scheduled a swap usdc -> flip"),
-			&Swap::new(1.into(), 1.into(), STABLE_ASSET, Asset::Flip, NETWORK_FEE_AMOUNT, None, [],)
+			&Swap::new(
+				1.into(),
+				1.into(),
+				STABLE_ASSET,
+				Asset::Flip,
+				NETWORK_FEE_AMOUNT,
+				None,
+				[],
+				System::block_number() + SWAP_DELAY_BLOCKS as u64
+			)
 		);
 	});
 }
@@ -721,6 +730,7 @@ fn input_amount_excludes_network_fee() {
 				input_amount: expected_input_amount,
 				output_amount: expected_input_amount * DEFAULT_SWAP_RATE,
 				intermediate_amount: None,
+				oracle_delta: None,
 			}));
 		});
 }
@@ -811,6 +821,7 @@ fn expect_earned_fees_to_be_recorded() {
 				output_asset: Asset::Usdc,
 				output_amount: INTERMEDIATE_AMOUNT - NETWORK_FEE_1 - ALICE_FEE_1,
 				intermediate_amount: None,
+				oracle_delta: None,
 			}));
 
 			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Usdc), ALICE_FEE_1);
@@ -836,6 +847,7 @@ fn expect_earned_fees_to_be_recorded() {
 				output_asset: Asset::Flip,
 				output_amount: AMOUNT_AFTER_FEES * DEFAULT_SWAP_RATE,
 				intermediate_amount: None,
+				oracle_delta: None,
 			}));
 
 			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Usdc), ALICE_FEE_1 + ALICE_FEE_2);
@@ -867,6 +879,7 @@ fn expect_earned_fees_to_be_recorded() {
 				output_asset: Asset::Flip,
 				output_amount: INTERMEDIATE_AMOUNT_AFTER_FEES * DEFAULT_SWAP_RATE,
 				intermediate_amount: Some(INTERMEDIATE_AMOUNT_AFTER_FEES),
+				oracle_delta: None,
 			}));
 
 			assert_eq!(

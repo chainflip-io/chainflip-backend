@@ -61,6 +61,7 @@ mod benchmarks {
 				refund_address: EncodedAddress::benchmark_value(),
 				min_price: U256::from(0),
 				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
 			},
 		};
 
@@ -106,6 +107,7 @@ mod benchmarks {
 				refund_address: EncodedAddress::benchmark_value(),
 				min_price: U256::from(0),
 				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
 			},
 			affiliate_fees,
 			dca_parameters: None,

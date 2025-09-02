@@ -2084,7 +2084,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						},
 					},
 					broker_fees,
-					Some(refund_params),
+					Some(refund_params.into()),
 					dca_params.clone(),
 					origin.into(),
 				);
@@ -2728,6 +2728,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		vault_deposit_witness: VaultDepositWitness<T, I>,
 	) -> Result<ValidatedVaultSwapParams<T::AccountId>, RefundReason> {
 		let VaultDepositWitness {
+			input_asset: source_asset,
 			output_asset: destination_asset,
 			destination_address,
 			deposit_metadata,
@@ -2772,8 +2773,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			(None, None)
 		};
 
-		T::SwapParameterValidation::validate_refund_params(refund_params.retry_duration)
-			.map_err(|_| RefundReason::InvalidRefundParameters)?;
+		T::SwapParameterValidation::validate_refund_params(
+			source_asset.into(),
+			destination_asset,
+			refund_params.retry_duration,
+			refund_params.max_oracle_price_slippage,
+		)
+		.map_err(|_| RefundReason::InvalidRefundParameters)?;
 
 		if let Some(params) = &dca_params {
 			if T::SwapParameterValidation::validate_dca_params(params).is_err() {
@@ -3345,7 +3351,12 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		T::SwapParameterValidation::validate_refund_params(refund_params.retry_duration)?;
+		T::SwapParameterValidation::validate_refund_params(
+			source_asset.into(),
+			destination_asset,
+			refund_params.retry_duration,
+			refund_params.max_oracle_price_slippage,
+		)?;
 
 		if let Some(params) = &dca_params {
 			T::SwapParameterValidation::validate_dca_params(params)?;

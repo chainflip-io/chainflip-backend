@@ -110,7 +110,9 @@ impl<A> FeeImbalance<A> {
 pub struct AuthoritiesInfo {
 	pub authorities: u32,
 	pub online_authorities: u32,
+	#[deprecated]
 	pub backups: u32,
+	#[deprecated]
 	pub online_backups: u32,
 }
 

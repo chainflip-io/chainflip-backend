@@ -112,6 +112,7 @@ pub struct StateChainEnvironment {
 	eth_key_manager_address: [u8; 20],
 	eth_vault_address: [u8; 20],
 	eth_address_checker_address: [u8; 20],
+	eth_sc_utils_address: [u8; 20],
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 	sol_init_agg_key: Option<SolAddress>,
@@ -174,6 +175,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, ARB_VAULT_ADDRESS, arb_vault_address);
 	from_env_var!(clean_hex_address, ARB_USDC_TOKEN_ADDRESS, arb_usdc_token_address);
 	from_env_var!(clean_hex_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
+	from_env_var!(clean_hex_address, ETH_SC_UTILS_ADDRESS, eth_sc_utils_address);
 	from_env_var!(clean_hex_address, ARB_ADDRESS_CHECKER, arb_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
@@ -273,6 +275,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		arb_vault_address,
 		arb_usdc_token_address,
 		eth_address_checker_address,
+		eth_sc_utils_address,
 		arb_address_checker_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
@@ -355,6 +358,7 @@ pub fn inner_cf_development_config(
 		arb_vault_address,
 		arb_usdc_token_address,
 		eth_address_checker_address,
+		eth_sc_utils_address,
 		arb_address_checker_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
@@ -403,6 +407,7 @@ pub fn inner_cf_development_config(
 				eth_key_manager_address: eth_key_manager_address.into(),
 				eth_vault_address: eth_vault_address.into(),
 				eth_address_checker_address: eth_address_checker_address.into(),
+				eth_sc_utils_address: eth_sc_utils_address.into(),
 				arb_key_manager_address: arb_key_manager_address.into(),
 				arb_vault_address: arb_vault_address.into(),
 				arb_address_checker_address: arb_address_checker_address.into(),
@@ -447,7 +452,6 @@ pub fn inner_cf_development_config(
 			8 * devnet::HOURS,
 			devnet::REDEMPTION_TTL_SECS,
 			devnet::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
-			devnet::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 			devnet::EXPIRY_SPAN_IN_SECONDS,
 			devnet::ACCRUAL_RATIO,
 			Percent::from_percent(devnet::REDEMPTION_PERIOD_AS_PERCENTAGE),
@@ -515,6 +519,7 @@ macro_rules! network_spec {
 					arb_vault_address,
 					arb_usdc_token_address,
 					eth_address_checker_address,
+					eth_sc_utils_address,
 					arb_address_checker_address,
 					ethereum_chain_id,
 					arbitrum_chain_id,
@@ -593,6 +598,7 @@ macro_rules! network_spec {
 							eth_key_manager_address: eth_key_manager_address.into(),
 							eth_vault_address: eth_vault_address.into(),
 							eth_address_checker_address: eth_address_checker_address.into(),
+							eth_sc_utils_address: eth_sc_utils_address.into(),
 							arb_key_manager_address: arb_key_manager_address.into(),
 							arb_vault_address: arb_vault_address.into(),
 							arb_address_checker_address: arb_address_checker_address.into(),
@@ -639,7 +645,6 @@ macro_rules! network_spec {
 						EPOCH_DURATION_BLOCKS,
 						REDEMPTION_TTL_SECS,
 						CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
-						BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 						EXPIRY_SPAN_IN_SECONDS,
 						ACCRUAL_RATIO,
 						Percent::from_percent(REDEMPTION_PERIOD_AS_PERCENTAGE),
@@ -709,7 +714,6 @@ fn testnet_genesis(
 	epoch_duration: BlockNumber,
 	redemption_ttl_secs: u64,
 	current_authority_emission_inflation_perbill: u32,
-	backup_node_emission_inflation_perbill: u32,
 	expiry_span: u64,
 	accrual_ratio: (i32, u32),
 	redemption_period_as_percentage: Percent,
@@ -812,19 +816,8 @@ fn testnet_genesis(
 		},
 		validator: state_chain_runtime::ValidatorConfig {
 			genesis_authorities: authority_ids.clone(),
-			genesis_backups: extra_accounts
-				.iter()
-				.filter_map(|(id, role, amount)| {
-					if *role == AccountRole::Validator {
-						Some((id.clone(), *amount))
-					} else {
-						None
-					}
-				})
-				.collect::<_>(),
 			epoch_duration,
 			redemption_period_as_percentage,
-			backup_reward_node_percentage: Percent::from_percent(33),
 			bond: all_accounts
 				.iter()
 				.filter_map(|(id, _, funds)| authority_ids.contains(id).then_some(*funds))
@@ -927,7 +920,6 @@ fn testnet_genesis(
 		},
 		emissions: state_chain_runtime::EmissionsConfig {
 			current_authority_emission_inflation: current_authority_emission_inflation_perbill,
-			backup_node_emission_inflation: backup_node_emission_inflation_perbill,
 			supply_update_interval,
 			..Default::default()
 		},

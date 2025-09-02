@@ -27,14 +27,12 @@ mod imbalances;
 mod on_charge_transaction;
 
 pub mod weights;
-use cf_primitives::FlipBalance;
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
-use cf_traits::{
-	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, OnAccountFunded, Slashing,
-};
-pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
+use cf_traits::{AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, Slashing};
+use imbalances::{Deficit, ImbalanceSource, Surplus};
+
 pub use on_charge_transaction::{CallIndexer, FeeScalingRateConfig, FlipTransactionPayment};
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -42,7 +40,7 @@ use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	sp_runtime::{
-		traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, Zero},
+		traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Zero},
 		DispatchError, Permill, RuntimeDebug,
 	},
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
@@ -90,7 +88,7 @@ impl<T: Config> MaxEncodedLen for OpaqueCallIndex<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{Chainflip, OnAccountFunded, WaivedFees};
+	use cf_traits::{Chainflip, WaivedFees};
 
 	/// A 4-byte identifier for different reserves.
 	pub type ReserveId = [u8; 4];
@@ -110,14 +108,12 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ Debug
-			+ From<u128>;
+			+ From<u128>
+			+ From<u64>;
 
 		/// Blocks per day.
 		#[pallet::constant]
 		type BlocksPerDay: Get<BlockNumberFor<Self>>;
-
-		/// Providing updates on funding activity
-		type OnAccountFunded: OnAccountFunded<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -174,7 +170,7 @@ pub mod pallet {
 	pub type FeeScalingRate<T: Config> = StorageValue<_, FeeScalingRateConfig, ValueQuery>;
 
 	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::generate_deposit(pub fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Some imbalance could not be settled and the remainder will be reverted.
 		RemainingImbalance {
@@ -493,6 +489,16 @@ impl<T: Config> Pallet<T> {
 		}?;
 		Ok(())
 	}
+
+	fn slash(account_id: &T::AccountId, slash_amount: T::Balance) {
+		if !slash_amount.is_zero() && Account::<T>::get(account_id).can_be_slashed(slash_amount) {
+			Pallet::<T>::settle(account_id, Pallet::<T>::burn(slash_amount).into());
+			Self::deposit_event(Event::<T>::SlashingPerformed {
+				who: account_id.clone(),
+				amount: slash_amount,
+			})
+		}
+	}
 }
 
 impl<T: Config> FundingInfo for Pallet<T> {
@@ -568,14 +574,9 @@ pub struct FlipIssuance<T>(PhantomData<T>);
 impl<T: Config> cf_traits::Issuance for FlipIssuance<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
-	type Surplus = Surplus<T>;
 
-	fn mint(amount: Self::Balance) -> Surplus<T> {
-		Pallet::<T>::mint(amount)
-	}
-
-	fn burn(amount: Self::Balance) -> Deficit<T> {
-		Pallet::<T>::burn(amount)
+	fn mint(beneficiary: &Self::AccountId, amount: Self::Balance) {
+		Pallet::<T>::settle(beneficiary, Pallet::<T>::mint(amount).into());
 	}
 
 	fn total_issuance() -> Self::Balance {
@@ -606,12 +607,10 @@ impl<T: Config> AccountInfo for Pallet<T> {
 impl<T: Config> cf_traits::Funding for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
-	type Handler = T::OnAccountFunded;
 
 	fn credit_funds(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance {
 		let incoming = Self::bridge_in(amount);
 		Self::settle(account_id, SignedImbalance::Positive(incoming));
-		T::OnAccountFunded::on_account_funded(account_id, Self::balance(account_id));
 		Self::total_balance_of(account_id)
 	}
 
@@ -621,7 +620,6 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 	) -> Result<(), DispatchError> {
 		ensure!(amount <= Self::liquid_funds(account_id), Error::<T>::InsufficientLiquidity);
 		Self::settle(account_id, Self::deposit_pending_redemption(account_id, amount).into());
-		T::OnAccountFunded::on_account_funded(account_id, Self::balance(account_id));
 
 		Ok(())
 	}
@@ -642,7 +640,6 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 		// redemption reverts automatically when dropped
 		let imbalance = Self::try_withdraw_pending_redemption(account_id)?;
 		Self::settle(account_id, imbalance.into());
-		T::OnAccountFunded::on_account_funded(account_id, Self::balance(account_id));
 		Ok(())
 	}
 
@@ -653,8 +650,6 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 	) -> Result<(), DispatchError> {
 		ensure!(from != to, Error::<T>::CanNotTransferToSelf);
 		Pallet::<T>::transfer(from, to, amount)?;
-		T::OnAccountFunded::on_account_funded(from, Self::balance(from));
-		T::OnAccountFunded::on_account_funded(to, Self::balance(to));
 		Ok(())
 	}
 }
@@ -677,47 +672,23 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 
 pub struct FlipSlasher<T: Config>(PhantomData<T>);
 
-impl<T: Config> FlipSlasher<T> {
-	fn attempt_slash(
-		account_id: &T::AccountId,
-		account: FlipAccount<T::Balance>,
-		slash_amount: T::Balance,
-	) {
-		if !slash_amount.is_zero() && account.can_be_slashed(slash_amount) {
-			Pallet::<T>::settle(account_id, Pallet::<T>::burn(slash_amount).into());
-			Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed {
-				who: account_id.clone(),
-				amount: slash_amount,
-			});
-		}
-	}
-}
-
-impl<T: Config> Slashing for FlipSlasher<T>
-where
-	BlockNumberFor<T>: Into<T::Balance>,
-{
+impl<T: Config> Slashing for FlipSlasher<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
 	type Balance = T::Balance;
 
-	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
-		let account = Account::<T>::get(account_id);
-		let slash_amount = Self::calculate_slash_amount(account_id, blocks);
-		Self::attempt_slash(account_id, account, slash_amount);
-	}
-
-	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance) {
-		let account = Account::<T>::get(account_id);
-		Self::attempt_slash(account_id, account, slash_amount.into());
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: Self::Balance) {
+		Pallet::<T>::slash(account_id, slash_amount);
 	}
 
 	fn calculate_slash_amount(
 		account_id: &Self::AccountId,
-		blocks: Self::BlockNumber,
+		blocks_offline: Self::BlockNumber,
 	) -> Self::Balance {
-		let account = Account::<T>::get(account_id);
-		(SlashingRate::<T>::get() * account.bond / T::BlocksPerDay::get().into())
-			.saturating_mul(blocks.into())
+		// SlashingRate is for a full day, so need to scale it down to the number of blocks.
+		let scaled_slashing_rate = Permill::from_rational(blocks_offline, T::BlocksPerDay::get()) *
+			SlashingRate::<T>::get();
+
+		scaled_slashing_rate * Account::<T>::get(account_id).bond
 	}
 }

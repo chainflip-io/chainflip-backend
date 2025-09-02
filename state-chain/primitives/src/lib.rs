@@ -123,16 +123,39 @@ pub type BroadcastId = u32;
 /// This is the ratio of equivalently valued amounts of asset One and asset Zero.
 ///
 /// The price is always measured in amount of asset One per unit of asset Zero. Therefore as asset
-/// zero becomes more valuable relative to asset one the price's literal value goes up, and vice
+/// zero becomes more valuable relative to asset one the prices literal value goes up, and vice
 /// versa. This ratio is represented as a fixed point number with `PRICE_FRACTIONAL_BITS` fractional
 /// bits.
 pub type Price = U256;
+
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	MaxEncodedLen,
+	PartialOrd,
+	Ord,
+	Copy,
+	Default,
+)]
+pub struct PriceLimits {
+	pub min_price: Price,
+	pub max_oracle_price_slippage: Option<BasisPoints>,
+}
 
 /// The `log1.0001(price)` rounded to the nearest integer. Note [Price] is always
 /// in units of asset One.
 pub type Tick = i32;
 
-define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize);
+pub const PRICE_FRACTIONAL_BITS: u32 = 128;
+
+define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
 
 define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
 

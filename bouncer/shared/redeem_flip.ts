@@ -12,9 +12,9 @@ import {
   observeEVMEvent,
   chainFromAsset,
   getEvmEndpoint,
-  getWhaleKey,
   assetDecimals,
   createStateChainKeypair,
+  getEvmWhaleKeypair,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { Logger } from 'shared/utils/logger';
@@ -40,7 +40,8 @@ export async function redeemFlip(
   await using chainflip = await getChainflipApi();
   const flipWallet = createStateChainKeypair('//' + flipSeed);
   const accountIdHex: HexString = `0x${Buffer.from(flipWallet.publicKey).toString('hex')}`;
-  const ethWallet = new Wallet(getWhaleKey('Ethereum')).connect(
+  const { privkey: whalePrivKey } = getEvmWhaleKeypair('Ethereum');
+  const ethWallet = new Wallet(whalePrivKey).connect(
     ethers.getDefaultProvider(getEvmEndpoint('Ethereum')),
   );
   const networkOptions = {

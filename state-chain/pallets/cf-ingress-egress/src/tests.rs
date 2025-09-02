@@ -94,6 +94,7 @@ const ETH_REFUND_PARAMS: ChannelRefundParametersForChain<Ethereum> =
 		refund_address: ALICE_ETH_ADDRESS,
 		min_price: sp_core::U256::zero(),
 		refund_ccm_metadata: None,
+		max_oracle_price_slippage: None,
 	};
 
 #[track_caller]
@@ -1523,7 +1524,7 @@ fn on_finalize_handles_failed_calls() {
 fn consolidation_tx_gets_broadcasted_on_finalize() {
 	new_test_ext().execute_with(|| {
 		// "Enable" consolidation for this test only to reduce noise in other tests
-		cf_traits::mocks::api_call::SHOULD_CONSOLIDATE.with(|cell| cell.set(true));
+		cf_traits::mocks::api_call::ShouldConsolidate::set(&true);
 
 		EthereumIngressEgress::on_finalize(1);
 
@@ -3574,6 +3575,7 @@ fn test_various_refund_reasons() {
 				min_price: U256::from(0),
 				refund_address: H160::default(),
 				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
 			},
 			dca_params: None,
 			boost_fee: 0,
@@ -3600,6 +3602,7 @@ fn test_various_refund_reasons() {
 				min_price: U256::from(0),
 				refund_address: H160::default(),
 				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
 			},
 			dca_params: None,
 			boost_fee: 0,
@@ -3626,6 +3629,7 @@ fn test_various_refund_reasons() {
 				min_price: U256::from(0),
 				refund_address: H160::default(),
 				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
 			},
 			dca_params: Some(DcaParameters { number_of_chunks: 0, chunk_interval: 100 }),
 			boost_fee: 0,

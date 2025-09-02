@@ -21,21 +21,21 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
-	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersCheckedInternal,
-	ChannelRefundParametersUncheckedEncoded, SwapOrigin,
+	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersUncheckedEncoded,
+	SwapOrigin,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
-	BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
-	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
-	STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceLimits, SwapId, SwapLeg,
+	SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
+	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChannelIdAllocator, DepositApi, FundingInfo, IngressEgressFeeApi, SwapOutputAction,
-	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
-	SwappingApi,
+	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, IngressEgressFeeApi,
+	PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
+	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -56,7 +56,11 @@ use sp_arithmetic::{
 	Rounding,
 };
 use sp_runtime::traits::TrailingZeroInput;
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	vec,
+	vec::Vec,
+};
 
 #[cfg(test)]
 mod mock;
@@ -70,11 +74,13 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(12);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(13);
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
 const DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS: u32 = 86_400 / SECONDS_PER_BLOCK as u32; // 24 hours
+
+type SignedBasisPoints = i16;
 
 pub struct DefaultSwapRetryDelay<T> {
 	_phantom: PhantomData<T>,
@@ -106,7 +112,7 @@ pub struct AffiliateDetails {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct SwapRefundParameters {
 	pub refund_block: cf_primitives::BlockNumber,
-	pub min_output: cf_primitives::AssetAmount,
+	pub price_limits: PriceLimits,
 }
 
 #[derive(CloneNoBound, DebugNoBound)]
@@ -116,6 +122,7 @@ pub struct SwapState<T: Config> {
 	pub broker_fee_taken: Option<AssetAmount>,
 	pub stable_amount: Option<AssetAmount>,
 	pub final_output: Option<AssetAmount>,
+	pub oracle_delta: Option<SignedBasisPoints>,
 }
 
 impl<T: Config> SwapState<T> {
@@ -126,6 +133,7 @@ impl<T: Config> SwapState<T> {
 			network_fee_taken: None,
 			broker_fee_taken: None,
 			swap,
+			oracle_delta: None,
 		}
 	}
 
@@ -254,6 +262,7 @@ pub struct Swap<T: Config> {
 	input_amount: AssetAmount,
 	fees: Vec<FeeType<T>>,
 	refund_params: Option<SwapRefundParameters>,
+	execute_at: BlockNumberFor<T>,
 }
 
 pub struct DefaultBrokerBond<T>(PhantomData<T>);
@@ -286,6 +295,7 @@ impl<T: Config> Swap<T> {
 		input_amount: AssetAmount,
 		refund_params: Option<SwapRefundParameters>,
 		fees: impl IntoIterator<Item = FeeType<T>>,
+		execute_at: BlockNumberFor<T>,
 	) -> Self {
 		Self {
 			swap_id,
@@ -295,8 +305,25 @@ impl<T: Config> Swap<T> {
 			input_amount,
 			fees: fees.into_iter().collect(),
 			refund_params,
+			execute_at,
 		}
 	}
+}
+
+#[derive(Debug, Decode, TypeInfo, Clone, PartialEq, Eq, Encode)]
+pub enum SwapFailureReason {
+	/// Batch swap failed due to price impact limit
+	PriceImpactLimit,
+	/// The minimum price limit was exceeded
+	MinPriceViolation,
+	/// The oracle price slippage limit was exceeded
+	OraclePriceSlippageExceeded,
+	/// Unable to use oracle slippage parameter because the oracle price is stale
+	OraclePriceStale,
+	/// An earlier chunk for the same swap request was aborted or rescheduled
+	PredecessorSwapFailure,
+	/// Swapping is disabled due to safe mode
+	SafeModeActive,
 }
 
 pub enum BatchExecutionError<T: Config> {
@@ -307,7 +334,7 @@ pub enum BatchExecutionError<T: Config> {
 		failed_swap_group: Vec<SwapState<T>>,
 	},
 	PriceViolation {
-		violating_swaps: Vec<Swap<T>>,
+		violating_swaps: Vec<(Swap<T>, SwapFailureReason)>,
 		non_violating_swaps: Vec<Swap<T>>,
 	},
 	DispatchError {
@@ -318,7 +345,7 @@ pub enum BatchExecutionError<T: Config> {
 #[derive(DebugNoBound)]
 struct BatchExecutionOutcomes<T: Config> {
 	successful_swaps: Vec<SwapState<T>>,
-	failed_swaps: Vec<Swap<T>>,
+	failed_swaps: Vec<(Swap<T>, SwapFailureReason)>,
 }
 
 /// This impl is never used. This is purely used to satisfy trait requirement
@@ -328,17 +355,9 @@ impl<T: Config> From<DispatchError> for BatchExecutionError<T> {
 	}
 }
 
-#[derive(Clone, Debug, Copy, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum DcaStatus {
-	ChunkToBeScheduled,
-	ChunkScheduled(SwapId),
-	AwaitingRefund,
-	Completed,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct DcaState {
-	status: DcaStatus,
+	scheduled_chunks: BTreeSet<SwapId>,
 	remaining_input_amount: AssetAmount,
 	remaining_chunks: u32,
 	chunk_interval: u32,
@@ -346,63 +365,58 @@ pub struct DcaState {
 }
 
 impl DcaState {
-	// Create initial DCA state and prepares the first chunk for scheduling; if no dca parameters
-	// provided (for non-DCA swaps), this creates state equivalent to 1 chunk DCA
-	fn create_with_first_chunk(
-		input_amount: AssetAmount,
-		params: Option<DcaParameters>,
-	) -> (DcaState, AssetAmount) {
-		let mut state = DcaState {
-			status: DcaStatus::ChunkToBeScheduled,
+	fn new(input_amount: AssetAmount, params: Option<DcaParameters>) -> DcaState {
+		DcaState {
 			remaining_input_amount: input_amount,
 			remaining_chunks: params.as_ref().map(|p| p.number_of_chunks).unwrap_or(1),
 			// Chunk interval won't be used for non-DCA swaps but seems nicer to
 			// set a reasonable default than unwrap Option when it is needed:
 			chunk_interval: params.as_ref().map(|p| p.chunk_interval).unwrap_or(SWAP_DELAY_BLOCKS),
 			accumulated_output_amount: 0,
-		};
-
-		let first_chunk_amount = state.prepare_next_chunk(None).unwrap_or_else(|| {
-			log_or_panic!("Invariant violation: initial DCA state must have at least one chunk!");
-			0
-		});
-
-		(state, first_chunk_amount)
+			scheduled_chunks: BTreeSet::new(),
+		}
 	}
 
-	fn prepare_next_chunk(
-		&mut self,
-		prev_chunk_and_output: Option<(SwapId, AssetAmount)>,
-	) -> Option<AssetAmount> {
-		if let Some((prev_chunk_swap_id, prev_chunk_output_amount)) = prev_chunk_and_output {
-			if let DcaStatus::ChunkScheduled(scheduled_swap_id) = self.status {
-				if scheduled_swap_id != prev_chunk_swap_id {
-					log_or_panic!(
-						"Invariant violation: the recorded chunk id {scheduled_swap_id} does not match executed {prev_chunk_swap_id}"
-					);
-				}
-			} else {
-				log_or_panic!(
-					"Invariant violation: attempting to get next chunk when no previous chunk is recorded"
-				);
-			}
-
-			self.status = DcaStatus::ChunkToBeScheduled;
-			self.accumulated_output_amount += prev_chunk_output_amount;
-		}
-
-		let chunk_input_amount = self
-			.remaining_input_amount
-			.checked_div(self.remaining_chunks as u128)
-			.unwrap_or(0);
-
+	/// Calculate the amount of the next chunk to be scheduled.
+	fn calculate_next_chunk(&self) -> Option<AssetAmount> {
 		if self.remaining_chunks > 0 {
-			self.remaining_chunks = self.remaining_chunks.saturating_sub(1);
-			self.remaining_input_amount =
-				self.remaining_input_amount.saturating_sub(chunk_input_amount);
+			let chunk_input_amount = self
+				.remaining_input_amount
+				.checked_div(self.remaining_chunks as u128)
+				.unwrap_or(0);
+
 			Some(chunk_input_amount)
 		} else {
 			None
+		}
+	}
+
+	/// Called directly after a chunk has been scheduled. Records the new swap in the DCA state.
+	fn record_scheduled_chunk(
+		&mut self,
+		scheduled_chunk_swap_id: SwapId,
+		scheduled_chunk_amount: AssetAmount,
+	) {
+		// Add the new chunk to the scheduled swaps.
+		self.scheduled_chunks.insert(scheduled_chunk_swap_id);
+
+		// Update the remaining values
+		self.remaining_chunks.saturating_reduce(1);
+		self.remaining_input_amount.saturating_reduce(scheduled_chunk_amount);
+	}
+
+	/// Remove the completed chunk from the DCA state and accumulate the output amount.
+	fn record_chunk_completion(
+		&mut self,
+		completed_chunk_swap_id: SwapId,
+		completed_chunk_output_amount: AssetAmount,
+	) {
+		if self.scheduled_chunks.remove(&completed_chunk_swap_id) {
+			self.accumulated_output_amount += completed_chunk_output_amount;
+		} else {
+			log_or_panic!(
+					"Invariant violation: the completed swap id {completed_chunk_swap_id} does not match a scheduled chunk."
+				);
 		}
 	}
 }
@@ -412,7 +426,7 @@ impl DcaState {
 #[scale_info(skip_type_params(T))]
 enum SwapRequestState<T: Config> {
 	UserSwap {
-		refund_params: Option<ChannelRefundParametersCheckedInternal<T::AccountId>>,
+		price_limits_and_expiry: Option<PriceLimitsAndExpiry<T::AccountId>>,
 		output_action: SwapOutputAction<T::AccountId>,
 		dca_state: DcaState,
 	},
@@ -480,14 +494,14 @@ where
 pub mod pallet {
 	use core::cmp::max;
 
-	use cf_amm::math::output_amount_ceil;
+	use cf_amm::math::{output_amount_ceil, output_amount_floor};
 	use cf_chains::{
 		address::EncodedAddress, AnyChain, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
-		Chain, ChannelRefundParametersCheckedInternal,
+		Chain,
 	};
 	use cf_primitives::{
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
-		SwapId, SwapOutput, SwapRequestId,
+		PriceLimits, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{
 		AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider, ScheduledEgressDetails,
@@ -538,6 +552,8 @@ pub mod pallet {
 
 		type PoolPriceApi: PoolPriceProvider;
 
+		type PriceFeedApi: PriceFeedApi;
+
 		type ChannelIdAllocator: ChannelIdAllocator;
 
 		type Bonder: Bonding<
@@ -555,11 +571,10 @@ pub mod pallet {
 	pub(super) type SwapRequests<T: Config> =
 		StorageMap<_, Twox64Concat, SwapRequestId, SwapRequest<T>>;
 
-	/// Scheduled Swaps
+	/// AKA swap queue.
+	/// Storing as a StorageValue because we expect to read all swaps most of the time.
 	#[pallet::storage]
-	#[pallet::getter(fn swap_queue)]
-	pub type SwapQueue<T: Config> =
-		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<Swap<T>>, ValueQuery>;
+	pub type ScheduledSwaps<T: Config> = StorageValue<_, BTreeMap<SwapId, Swap<T>>, ValueQuery>;
 
 	/// SwapId Counter
 	#[pallet::storage]
@@ -694,7 +709,7 @@ pub mod pallet {
 			origin: SwapOrigin<T::AccountId>,
 			request_type: SwapRequestTypeEncoded<T::AccountId>,
 			broker_fees: Beneficiaries<T::AccountId>,
-			refund_parameters: Option<ChannelRefundParametersCheckedInternal<T::AccountId>>,
+			price_limits_and_expiry: Option<PriceLimitsAndExpiry<T::AccountId>>,
 			dca_parameters: Option<DcaParameters>,
 		},
 		SwapRequestCompleted {
@@ -729,6 +744,7 @@ pub mod pallet {
 		SwapRescheduled {
 			swap_id: SwapId,
 			execute_at: BlockNumberFor<T>,
+			reason: SwapFailureReason,
 		},
 		/// A swap has been executed.
 		SwapExecuted {
@@ -742,6 +758,7 @@ pub mod pallet {
 			broker_fee: AssetAmount,
 			intermediate_amount: Option<AssetAmount>,
 			output_amount: AssetAmount,
+			oracle_delta: Option<SignedBasisPoints>,
 		},
 		/// A swap egress has been scheduled.
 		SwapEgressScheduled {
@@ -829,6 +846,10 @@ pub mod pallet {
 			broker_id: T::AccountId,
 			minimum_fee_bps: BasisPoints,
 		},
+		SwapAborted {
+			swap_id: SwapId,
+			reason: SwapFailureReason,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -899,6 +920,8 @@ pub mod pallet {
 		NoRefundAmountRemaining,
 		/// CCM is not supported for the refund chain.
 		CcmUnsupportedForRefundChain,
+		/// Oracle price not available for one or more of the assets.
+		OraclePriceNotAvailable,
 	}
 
 	#[pallet::genesis_config]
@@ -942,15 +965,26 @@ pub mod pallet {
 			weight_used
 		}
 
-		/// Execute all swaps in the SwapQueue
+		/// Execute swaps in the ScheduledSwaps
 		fn on_finalize(current_block: BlockNumberFor<T>) {
-			let swaps_to_execute = SwapQueue::<T>::take(current_block);
-			let retry_block = current_block + max(SwapRetryDelay::<T>::get(), 1u32.into());
+			// Take all swaps that are scheduled to be executed at this block.
+			let swaps_to_execute = ScheduledSwaps::<T>::mutate(|swaps| {
+				let (swaps_to_execute, remaining_swap_ids) =
+					core::mem::take(swaps).into_iter().partition::<BTreeMap<_, _>, _>(
+						|(_, swap)| swap.execute_at <= current_block,
+					);
+
+				*swaps = remaining_swap_ids;
+
+				swaps_to_execute.into_values().collect::<Vec<_>>()
+			});
+
+			let retry_delay = max(SwapRetryDelay::<T>::get(), 1u32.into());
 
 			if !T::SafeMode::get().swaps_enabled {
 				// Since we won't be executing swaps at this block, we need to reschedule them:
 				for swap in swaps_to_execute {
-					Self::reschedule_swap(swap, retry_block);
+					Self::reschedule_swap(swap, retry_delay, SwapFailureReason::SafeModeActive);
 				}
 
 				return
@@ -963,18 +997,19 @@ pub mod pallet {
 				Self::process_swap_outcome(swap);
 			}
 
-			for swap in failed_swaps {
+			for (swap, reason) in failed_swaps {
 				match swap.refund_params {
 					Some(ref params)
-						if BlockNumberFor::<T>::from(params.refund_block) < retry_block =>
+						if BlockNumberFor::<T>::from(params.refund_block) <
+							current_block + retry_delay =>
 					{
 						// Reached refund block, process refund:
-						Self::refund_failed_swap(swap);
+						Self::refund_failed_swap(swap, reason);
 					},
 					_ => {
 						// Either refund parameters not set, or refund block not
 						// reached:
-						Self::reschedule_swap(swap, retry_block);
+						Self::reschedule_swap(swap, retry_delay, reason);
 					},
 				}
 			}
@@ -1004,7 +1039,10 @@ pub mod pallet {
 				broker_commission,
 				channel_metadata,
 				boost_fee,
+				// No affiliate fees on this version of the extrinsic
 				Default::default(),
+				// No ccm refund or oracle price parameters on the original extrinsic, but it will
+				// decode fine because they are optional
 				refund_parameters,
 				None,
 			)
@@ -1226,6 +1264,12 @@ pub mod pallet {
 				)
 				.map_err(address_error_to_pallet_error::<T>)?;
 
+			// Convert the refund parameter from `EncodedAddress` into `ForeignChainAddress` type.
+			let refund_params_internal = refund_parameters.clone().try_map_address(|addr| {
+				T::AddressConverter::try_from_encoded_address(addr)
+					.map_err(|_| Error::<T>::InvalidRefundAddress)
+			})?;
+
 			let channel_metadata = channel_metadata
 				.map(|ccm| {
 					let destination_chain: ForeignChain = destination_asset.into();
@@ -1256,9 +1300,7 @@ pub mod pallet {
 					broker.clone(),
 					channel_metadata.clone(),
 					boost_fee,
-					refund_parameters
-						.clone()
-						.try_map_refund_address_to_foreign_chain_address::<T::AddressConverter>()?,
+					refund_params_internal,
 					dca_parameters.clone(),
 				)?;
 
@@ -1437,8 +1479,13 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		#[allow(clippy::result_unit_err)]
-		pub fn get_scheduled_swap_legs(swaps: Vec<Swap<T>>, base_asset: Asset) -> Vec<SwapLegInfo> {
-			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
+		pub fn get_scheduled_swap_legs(base_asset: Asset) -> Vec<(SwapLegInfo, BlockNumberFor<T>)> {
+			let mut swaps: Vec<_> = ScheduledSwaps::<T>::get()
+				.values()
+				.filter(|swap| swap.from == base_asset || swap.to == base_asset)
+				.cloned()
+				.map(SwapState::new)
+				.collect();
 
 			// Can ignore the result here because we use pool price fallback below
 			let _res = Self::swap_into_stable_taking_fees(&mut swaps);
@@ -1458,19 +1505,22 @@ pub mod pallet {
 						dca_state.map(|dca| dca.chunk_interval).unwrap_or(SWAP_DELAY_BLOCKS);
 
 					if state.input_asset() == base_asset {
-						Some(SwapLegInfo {
-							swap_id: state.swap_id(),
-							swap_request_id: state.swap_request_id(),
-							base_asset,
-							// All swaps from `base_asset` have to go through the stable asset:
-							quote_asset: STABLE_ASSET,
-							side: Side::Sell,
-							amount: state.input_amount(),
-							source_asset: None,
-							source_amount: None,
-							remaining_chunks,
-							chunk_interval,
-						})
+						Some((
+							SwapLegInfo {
+								swap_id: state.swap_id(),
+								swap_request_id: state.swap_request_id(),
+								base_asset,
+								// All swaps from `base_asset` have to go through the stable asset:
+								quote_asset: STABLE_ASSET,
+								side: Side::Sell,
+								amount: state.input_amount(),
+								source_asset: None,
+								source_amount: None,
+								remaining_chunks,
+								chunk_interval,
+							},
+							state.swap.execute_at,
+						))
 					} else if state.output_asset() == base_asset {
 						// In case the swap is "simulated", the amount is just an estimate,
 						// so we additionally include `source_asset` and `source_amount`:
@@ -1501,19 +1551,22 @@ pub mod pallet {
 							)
 						})?;
 
-						Some(SwapLegInfo {
-							swap_id: state.swap_id(),
-							swap_request_id: state.swap_request_id(),
-							base_asset,
-							// All swaps to `base_asset` have to go through the stable asset:
-							quote_asset: STABLE_ASSET,
-							side: Side::Buy,
-							amount,
-							source_asset,
-							source_amount,
-							remaining_chunks,
-							chunk_interval,
-						})
+						Some((
+							SwapLegInfo {
+								swap_id: state.swap_id(),
+								swap_request_id: state.swap_request_id(),
+								base_asset,
+								// All swaps to `base_asset` have to go through the stable asset:
+								quote_asset: STABLE_ASSET,
+								side: Side::Buy,
+								amount,
+								source_asset,
+								source_amount,
+								remaining_chunks,
+								chunk_interval,
+							},
+							state.swap.execute_at,
+						))
 					} else {
 						None
 					}
@@ -1635,6 +1688,102 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Calculate executed price delta from the oracle price and save the result to the swap
+		/// state
+		pub(super) fn calculate_oracle_delta(swap: &mut SwapState<T>) {
+			let input_oracle = T::PriceFeedApi::get_price(swap.input_asset());
+			let output_oracle = T::PriceFeedApi::get_price(swap.output_asset());
+
+			let oracle_delta = if let (Some(input_oracle), Some(output_oracle)) =
+				(&input_oracle, &output_oracle)
+			{
+				let oracle_price =
+					cf_amm::math::relative_price(input_oracle.price, output_oracle.price);
+				let oracle_amount =
+					output_amount_floor(swap.swap.input_amount.into(), oracle_price);
+				if oracle_amount.is_zero() {
+					None
+				} else {
+					let output_bps = cf_amm::math::mul_div_ceil(
+						swap.final_output.unwrap().into(),
+						MAX_BASIS_POINTS.into(),
+						oracle_amount,
+					);
+
+					let (delta_bps, sign) = if output_bps < MAX_BASIS_POINTS.into() {
+						(MAX_BASIS_POINTS.saturating_sub(output_bps.saturated_into()), -1)
+					} else {
+						(
+							output_bps
+								.saturated_into::<BasisPoints>()
+								.saturating_sub(MAX_BASIS_POINTS),
+							1,
+						)
+					};
+					Some(delta_bps.saturated_into::<SignedBasisPoints>() * sign)
+				}
+			} else {
+				None
+			};
+
+			swap.oracle_delta = oracle_delta;
+		}
+
+		/// Enforce price protections
+		pub(super) fn check_swap_price_violation(
+			swap: &SwapState<T>,
+		) -> Result<(), SwapFailureReason> {
+			if let Some(params) = swap.refund_params() {
+				let input_oracle = T::PriceFeedApi::get_price(swap.input_asset());
+				let output_oracle = T::PriceFeedApi::get_price(swap.output_asset());
+
+				// Live price protection, aka oracle price protection
+				if let Some(slippage_bps) = params.price_limits.max_oracle_price_slippage {
+					match (input_oracle, output_oracle) {
+						(Some(input_oracle), Some(output_oracle))
+							if input_oracle.stale || output_oracle.stale =>
+							return Err(SwapFailureReason::OraclePriceStale),
+						(None, _) | (_, None) => {
+							// Ignore the oracle price check if not supported/available
+							// for one of the assets.
+						},
+						(Some(input_oracle), Some(output_oracle)) => {
+							let relative_price = cf_amm::math::relative_price(
+								input_oracle.price,
+								output_oracle.price,
+							);
+							// Reduce the relative price by slippage_bps:
+							let min_oracle_price = cf_amm::math::mul_div_floor(
+								relative_price,
+								(MAX_BASIS_POINTS - slippage_bps).into(),
+								MAX_BASIS_POINTS,
+							);
+							// Use the oracle price to calculate the minimum output needed
+							let min_output_amount = output_amount_floor(
+								swap.swap.input_amount.into(),
+								min_oracle_price,
+							)
+							.unique_saturated_into();
+							if swap.final_output.unwrap() < min_output_amount {
+								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
+							}
+						},
+					}
+				};
+
+				// Minimum price protection, aka FoK price protection
+				let min_price_output = output_amount_floor(
+					swap.swap.input_amount.into(),
+					params.price_limits.min_price,
+				)
+				.unique_saturated_into();
+				if swap.final_output.unwrap() < min_price_output {
+					return Err(SwapFailureReason::MinPriceViolation);
+				}
+			}
+			Ok(())
+		}
+
 		#[transactional]
 		pub fn try_execute_without_violations(
 			swaps: Vec<Swap<T>>,
@@ -1647,20 +1796,29 @@ pub mod pallet {
 
 			// Successfully executed without hitting price impact limit.
 			// Now checking for FoK violations:
-			let (non_violating, violating): (Vec<_>, Vec<_>) =
-				swaps.into_iter().partition(|swap| {
-					let final_output = swap.final_output.unwrap();
-					swap.refund_params()
-						.as_ref()
-						.is_none_or(|params| final_output >= params.min_output)
+			let mut non_violating_swaps = vec![];
+			let mut violating_swaps = vec![];
+			swaps
+				.into_iter()
+				.for_each(|mut swap| match Self::check_swap_price_violation(&swap) {
+					Ok(()) => {
+						Self::calculate_oracle_delta(&mut swap);
+						non_violating_swaps.push(swap);
+					},
+					Err(reason) => {
+						violating_swaps.push((swap.swap, reason));
+					},
 				});
 
-			if violating.is_empty() {
-				Ok(non_violating)
+			if violating_swaps.is_empty() {
+				Ok(non_violating_swaps)
 			} else {
 				Err(BatchExecutionError::PriceViolation {
-					violating_swaps: violating.into_iter().map(|ctx| ctx.swap).collect(),
-					non_violating_swaps: non_violating.into_iter().map(|ctx| ctx.swap).collect(),
+					violating_swaps,
+					non_violating_swaps: non_violating_swaps
+						.into_iter()
+						.map(|ctx| ctx.swap)
+						.collect(),
 				})
 			}
 		}
@@ -1699,7 +1857,7 @@ pub mod pallet {
 							&failed_swap_group,
 							direction,
 						) {
-							failed_swaps.push(removed_swap);
+							failed_swaps.push((removed_swap, SwapFailureReason::PriceImpactLimit));
 						} else {
 							break;
 						}
@@ -1721,12 +1879,18 @@ pub mod pallet {
 			}
 
 			// If we are here, consider all swaps as failed:
-			failed_swaps.extend(swaps_to_execute);
+			failed_swaps.extend(
+				swaps_to_execute
+					.into_iter()
+					.map(|swap| (swap, SwapFailureReason::PriceImpactLimit)),
+			);
 			BatchExecutionOutcomes { successful_swaps: vec![], failed_swaps }
 		}
 
-		fn refund_failed_swap(swap: Swap<T>) {
+		fn refund_failed_swap(swap: Swap<T>, reason: SwapFailureReason) {
 			let swap_request_id = swap.swap_request_id;
+
+			Self::deposit_event(Event::<T>::SwapAborted { swap_id: swap.swap_id, reason });
 
 			let Some(mut request) = SwapRequests::<T>::take(swap_request_id) else {
 				log_or_panic!("Swap request {swap_request_id} not found");
@@ -1736,16 +1900,35 @@ pub mod pallet {
 			match &mut request.state {
 				SwapRequestState::UserSwap {
 					output_action,
-					refund_params,
-					dca_state: DcaState { remaining_input_amount, accumulated_output_amount, .. },
-					..
+					price_limits_and_expiry,
+					dca_state,
 				} => {
-					let Some(refund_params) = &refund_params else {
+					let Some(ExpiryBehaviour::RefundIfExpires {
+						refund_address,
+						refund_ccm_metadata,
+						..
+					}) = price_limits_and_expiry.as_ref().map(|p| &p.expiry_behaviour)
+					else {
 						log_or_panic!("Trying to refund swap request {swap_request_id}, but missing refund parameters");
 						return;
 					};
 
-					let total_input_remaining = swap.input_amount + *remaining_input_amount;
+					// Cancel any other scheduled swaps for this swap request and add the amounts
+					// back to the input remaining.
+					let canceled_swaps_amount = dca_state
+						.scheduled_chunks
+						.iter()
+						.filter(|swap_id| *swap_id != &swap.swap_id)
+						.fold(0, |acc: u128, swap_id| {
+							acc.saturating_add(Self::cancel_swap(
+								*swap_id,
+								SwapFailureReason::PredecessorSwapFailure,
+							))
+						});
+
+					let total_input_remaining = swap.input_amount +
+						dca_state.remaining_input_amount +
+						canceled_swaps_amount;
 					let FeeTaken { remaining_amount: amount_to_refund, fee: refund_fee } =
 						match Self::take_refund_fee(
 							total_input_remaining,
@@ -1762,14 +1945,14 @@ pub mod pallet {
 						};
 
 					if amount_to_refund > 0 {
-						match &refund_params.refund_address {
+						match refund_address {
 							AccountOrAddress::ExternalAddress(address) => {
 								Self::egress_for_swap(
 									request.id,
 									amount_to_refund,
 									request.input_asset,
 									address.clone(),
-									refund_params.refund_ccm_metadata.clone(),
+									refund_ccm_metadata.clone(),
 									EgressType::Refund { refund_fee },
 								);
 							},
@@ -1800,12 +1983,12 @@ pub mod pallet {
 
 					// In case of DCA we may have partially swapped and now have some output
 					// asset to egress to the output address:
-					if *accumulated_output_amount > 0 {
+					if dca_state.accumulated_output_amount > 0 {
 						match output_action {
 							SwapOutputAction::Egress { ccm_deposit_metadata, output_address } => {
 								Self::egress_for_swap(
 									swap_request_id,
-									*accumulated_output_amount,
+									dca_state.accumulated_output_amount,
 									request.output_asset,
 									output_address.clone(),
 									ccm_deposit_metadata.clone(),
@@ -1817,13 +2000,13 @@ pub mod pallet {
 									swap_request_id,
 									account_id: account_id.clone(),
 									asset: request.output_asset,
-									amount: *accumulated_output_amount,
+									amount: dca_state.accumulated_output_amount,
 								});
 
 								T::BalanceApi::credit_account(
 									account_id,
 									request.output_asset,
-									*accumulated_output_amount,
+									dca_state.accumulated_output_amount,
 								);
 							},
 						}
@@ -1835,8 +2018,22 @@ pub mod pallet {
 					);
 				},
 			};
-
 			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id: request.id });
+		}
+
+		// Removes the swap from the scheduled swaps and returns the input amount of the canceled
+		// swap.
+		fn cancel_swap(swap_id: SwapId, reason: SwapFailureReason) -> AssetAmount {
+			ScheduledSwaps::<T>::mutate(|swaps| {
+				let amount = swaps.remove(&swap_id).map(|swap| {
+					Self::deposit_event(Event::<T>::SwapAborted { swap_id: swap.swap_id, reason });
+					swap.input_amount
+				});
+				if amount.is_none() {
+					log_or_panic!("Attempted to cancel swap {swap_id}, but it was not found in ScheduledSwaps");
+				}
+				amount.unwrap_or_default()
+			})
 		}
 
 		fn process_swap_outcome(swap: SwapState<T>) {
@@ -1872,58 +2069,74 @@ pub mod pallet {
 				output_asset: swap.output_asset(),
 				output_amount,
 				intermediate_amount: swap.intermediate_amount(),
+				oracle_delta: swap.oracle_delta,
 			});
 
 			let request_completed = match &mut request.state {
-				SwapRequestState::UserSwap { output_action, dca_state, refund_params, .. } =>
-					if let Some(chunk_input_amount) =
-						dca_state.prepare_next_chunk(Some((swap.swap_id(), output_amount)))
-					{
+				SwapRequestState::UserSwap {
+					output_action,
+					dca_state,
+					price_limits_and_expiry,
+					..
+				} =>
+					if let Some(chunk_input_amount) = dca_state.calculate_next_chunk() {
 						let swap_id = Self::schedule_swap(
 							request.input_asset,
 							request.output_asset,
 							chunk_input_amount,
-							refund_params.as_ref(),
+							price_limits_and_expiry.as_ref(),
 							SwapType::Swap,
 							swap.swap.fees.clone(),
 							request.id,
-							dca_state.chunk_interval.into(),
+							// Schedule the next chunk to be after any currently scheduled chunks
+							(dca_state.scheduled_chunks.len() as u32)
+								.saturating_mul(dca_state.chunk_interval)
+								.into(),
 						);
 
-						dca_state.status = DcaStatus::ChunkScheduled(swap_id);
+						dca_state.record_scheduled_chunk(swap_id, chunk_input_amount);
+						dca_state.record_chunk_completion(swap.swap_id(), output_amount);
 
 						false
 					} else {
 						debug_assert!(dca_state.remaining_input_amount == 0);
 
-						match output_action {
-							SwapOutputAction::Egress { ccm_deposit_metadata, output_address } => {
-								Self::egress_for_swap(
-									swap_request_id,
-									dca_state.accumulated_output_amount,
-									swap.output_asset(),
-									output_address.clone(),
-									ccm_deposit_metadata.clone(),
-									EgressType::Regular,
-								);
-							},
-							SwapOutputAction::CreditOnChain { account_id } => {
-								Self::deposit_event(Event::<T>::CreditedOnChain {
-									swap_request_id,
-									account_id: account_id.clone(),
-									asset: request.output_asset,
-									amount: dca_state.accumulated_output_amount,
-								});
+						dca_state.record_chunk_completion(swap.swap_id(), output_amount);
 
-								T::BalanceApi::credit_account(
-									account_id,
-									request.output_asset,
-									dca_state.accumulated_output_amount,
-								);
-							},
+						if dca_state.scheduled_chunks.is_empty() {
+							match output_action {
+								SwapOutputAction::Egress {
+									ccm_deposit_metadata,
+									output_address,
+								} => {
+									Self::egress_for_swap(
+										swap_request_id,
+										dca_state.accumulated_output_amount,
+										swap.output_asset(),
+										output_address.clone(),
+										ccm_deposit_metadata.clone(),
+										EgressType::Regular,
+									);
+								},
+								SwapOutputAction::CreditOnChain { account_id } => {
+									Self::deposit_event(Event::<T>::CreditedOnChain {
+										swap_request_id,
+										account_id: account_id.clone(),
+										asset: request.output_asset,
+										amount: dca_state.accumulated_output_amount,
+									});
+
+									T::BalanceApi::credit_account(
+										account_id,
+										request.output_asset,
+										dca_state.accumulated_output_amount,
+									);
+								},
+							}
+							true
+						} else {
+							false
 						}
-
-						true
 					},
 				SwapRequestState::NetworkFee => {
 					if swap.output_asset() == Asset::Flip {
@@ -2057,7 +2270,7 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 			input_amount: AssetAmount,
-			refund_params: Option<&ChannelRefundParametersCheckedInternal<T::AccountId>>,
+			price_limits_and_expiry: Option<&PriceLimitsAndExpiry<T::AccountId>>,
 			swap_type: SwapType,
 			fees: Vec<FeeType<T>>,
 			swap_request_id: SwapRequestId,
@@ -2070,27 +2283,42 @@ pub mod pallet {
 
 			let execute_at = frame_system::Pallet::<T>::block_number() + delay_blocks;
 
-			let refund_params = refund_params.map(|params| {
-				utilities::calculate_swap_refund_parameters(
-					params,
-					// In practice block number always fits in u32:
-					execute_at.unique_saturated_into(),
-					input_amount,
-				)
+			let refund_params = price_limits_and_expiry.map(|params| {
+				use sp_runtime::traits::UniqueSaturatedInto;
+
+				let execute_at: cf_primitives::BlockNumber = execute_at.unique_saturated_into();
+
+				SwapRefundParameters {
+					refund_block: if let ExpiryBehaviour::RefundIfExpires {
+						retry_duration, ..
+					} = &params.expiry_behaviour
+					{
+						execute_at.saturating_add(*retry_duration)
+					} else {
+						u32::MAX
+					},
+					price_limits: PriceLimits {
+						min_price: params.min_price,
+						max_oracle_price_slippage: params.max_oracle_price_slippage,
+					},
+				}
 			});
 
-			SwapQueue::<T>::append(
-				execute_at,
-				Swap::new(
+			ScheduledSwaps::<T>::mutate(|swaps| {
+				swaps.insert(
 					swap_id,
-					swap_request_id,
-					input_asset,
-					output_asset,
-					input_amount,
-					refund_params,
-					fees,
-				),
-			);
+					Swap::new(
+						swap_id,
+						swap_request_id,
+						input_asset,
+						output_asset,
+						input_amount,
+						refund_params,
+						fees,
+						execute_at,
+					),
+				)
+			});
 
 			Self::deposit_event(Event::<T>::SwapScheduled {
 				swap_request_id,
@@ -2103,9 +2331,52 @@ pub mod pallet {
 			swap_id
 		}
 
-		fn reschedule_swap(swap: Swap<T>, execute_at: BlockNumberFor<T>) {
-			Self::deposit_event(Event::<T>::SwapRescheduled { swap_id: swap.swap_id, execute_at });
-			SwapQueue::<T>::append(execute_at, swap);
+		fn reschedule_swap(
+			mut swap: Swap<T>,
+			retry_delay: BlockNumberFor<T>,
+			reason: SwapFailureReason,
+		) {
+			SwapRequests::<T>::mutate(swap.swap_request_id, |request| {
+				if let Some(request) = request {
+					if let SwapRequestState::UserSwap { dca_state, .. } = &mut request.state {
+						ScheduledSwaps::<T>::mutate(|swaps| {
+							// Reschedule the main swap that was taken from the storage.
+							let execute_at = swap.execute_at.saturating_add(retry_delay);
+							let main_swap_id = swap.swap_id;
+							swap.execute_at = execute_at;
+							swaps.insert(main_swap_id, swap);
+							Self::deposit_event(Event::<T>::SwapRescheduled {
+								swap_id: main_swap_id,
+								execute_at,
+								reason,
+							});
+							for swap_id in dca_state.scheduled_chunks.iter().copied() {
+								if swap_id != main_swap_id {
+									// All other scheduled swaps for this request need to also be
+									// rescheduled.
+									if let Some(s) = swaps.get_mut(&swap_id) {
+										s.execute_at.saturating_accrue(retry_delay);
+										Self::deposit_event(Event::<T>::SwapRescheduled {
+											swap_id,
+											execute_at: s.execute_at,
+											reason: SwapFailureReason::PredecessorSwapFailure,
+										});
+									} else {
+										log_or_panic!(
+											"Swap {swap_id} not found in ScheduledSwaps for rescheduling",
+										);
+									}
+								}
+							}
+						})
+					}
+				} else {
+					log_or_panic!(
+						"Swap request {} not found for rescheduling",
+						swap.swap_request_id
+					);
+				}
+			});
 		}
 
 		#[transactional]
@@ -2291,7 +2562,7 @@ pub mod pallet {
 			output_asset: Asset,
 			request_type: SwapRequestType<Self::AccountId>,
 			broker_fees: Beneficiaries<Self::AccountId>,
-			refund_params: Option<ChannelRefundParametersCheckedInternal<Self::AccountId>>,
+			price_limits_and_expiry: Option<PriceLimitsAndExpiry<Self::AccountId>>,
 			dca_params: Option<DcaParameters>,
 			origin: SwapOrigin<Self::AccountId>,
 		) -> SwapRequestId {
@@ -2347,7 +2618,7 @@ pub mod pallet {
 				request_type: request_type.clone().into_encoded::<T::AddressConverter>(),
 				origin: origin.clone(),
 				broker_fees: broker_fees.clone(),
-				refund_parameters: refund_params.clone(),
+				price_limits_and_expiry: price_limits_and_expiry.clone(),
 				dca_parameters: dca_params.clone(),
 			});
 
@@ -2405,8 +2676,8 @@ pub mod pallet {
 					);
 				},
 				SwapRequestType::Regular { output_action } => {
-					let (mut dca_state, chunk_input_amount) =
-						DcaState::create_with_first_chunk(net_amount, dca_params);
+					let mut dca_state = DcaState::new(net_amount, dca_params.clone());
+					let chunk_input_amount = dca_state.calculate_next_chunk().unwrap_or_default();
 
 					// Choose correct network fee for the swap
 					let mut fees = vec![FeeType::NetworkFee(NetworkFeeTracker::new(
@@ -2426,14 +2697,38 @@ pub mod pallet {
 						input_asset,
 						output_asset,
 						chunk_input_amount,
-						refund_params.as_ref(),
+						price_limits_and_expiry.as_ref(),
 						SwapType::Swap,
-						fees,
+						fees.clone(),
 						request_id,
 						SWAP_DELAY_BLOCKS.into(),
 					);
 
-					dca_state.status = DcaStatus::ChunkScheduled(swap_id);
+					dca_state.record_scheduled_chunk(swap_id, chunk_input_amount);
+
+					if let Some(DcaParameters { chunk_interval, .. }) = dca_params {
+						// This assumes that the swap delay is 2, so we will only even schedule max
+						// of 2 chunks at a time.
+						if chunk_interval == 1 {
+							// Also schedule a second swap so we can have an chunk interval that is
+							// smaller than the swap delay.
+							let chunk_input_amount =
+								dca_state.calculate_next_chunk().unwrap_or_default();
+							if chunk_input_amount > 0 {
+								let swap_id = Self::schedule_swap(
+									input_asset,
+									output_asset,
+									chunk_input_amount,
+									price_limits_and_expiry.as_ref(),
+									SwapType::Swap,
+									fees,
+									request_id,
+									SWAP_DELAY_BLOCKS.saturating_add(chunk_interval).into(),
+								);
+								dca_state.record_scheduled_chunk(swap_id, chunk_input_amount);
+							}
+						}
+					}
 
 					SwapRequests::<T>::insert(
 						request_id,
@@ -2443,7 +2738,7 @@ pub mod pallet {
 							output_asset,
 							state: SwapRequestState::UserSwap {
 								output_action,
-								refund_params,
+								price_limits_and_expiry,
 								dca_state,
 							},
 						},
@@ -2540,11 +2835,27 @@ impl<T: Config> SwapParameterValidation for Pallet<T> {
 		}
 	}
 
-	fn validate_refund_params(retry_duration: BlockNumber) -> Result<(), DispatchError> {
+	fn validate_refund_params(
+		input_asset: Asset,
+		output_asset: Asset,
+		retry_duration: BlockNumber,
+		max_oracle_price_slippage: Option<BasisPoints>,
+	) -> Result<(), DispatchError> {
+		// Check that the retry duration is within limits.
 		let max_swap_retry_duration_blocks = MaxSwapRetryDurationBlocks::<T>::get();
 		if retry_duration > max_swap_retry_duration_blocks {
 			return Err(DispatchError::from(Error::<T>::RetryDurationTooHigh));
 		}
+
+		// Check that the oracle prices are available for the assets.
+		if let Some(_max_oracle_price_slippage) = max_oracle_price_slippage {
+			if T::PriceFeedApi::get_price(input_asset).is_none() ||
+				T::PriceFeedApi::get_price(output_asset).is_none()
+			{
+				return Err(DispatchError::from(Error::<T>::OraclePriceNotAvailable));
+			}
+		}
+
 		Ok(())
 	}
 
@@ -2555,7 +2866,7 @@ impl<T: Config> SwapParameterValidation for Pallet<T> {
 			if params.number_of_chunks == 0 {
 				return Err(DispatchError::from(Error::<T>::ZeroNumberOfChunksNotAllowed));
 			}
-			if params.chunk_interval < SWAP_DELAY_BLOCKS {
+			if params.chunk_interval == 0 {
 				return Err(DispatchError::from(Error::<T>::ChunkIntervalTooLow));
 			}
 			if let Some(total_swap_request_duration) =
@@ -2652,17 +2963,6 @@ pub(crate) mod utilities {
 			Asset::HubDot => DOT_ESTIMATION_CAP,
 			Asset::HubUsdc => USD_ESTIMATION_CAP,
 			Asset::HubUsdt => USD_ESTIMATION_CAP,
-		}
-	}
-
-	pub(super) fn calculate_swap_refund_parameters<AccountId>(
-		params: &ChannelRefundParametersCheckedInternal<AccountId>,
-		execute_at_block: u32,
-		input_amount: AssetAmount,
-	) -> SwapRefundParameters {
-		SwapRefundParameters {
-			refund_block: execute_at_block.saturating_add(params.retry_duration),
-			min_output: params.min_output_amount(input_amount),
 		}
 	}
 

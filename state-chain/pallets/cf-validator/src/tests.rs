@@ -522,14 +522,26 @@ fn historical_epochs() {
 #[test]
 fn expired_epoch_data_is_removed() {
 	new_test_ext().then_execute_with_checks(|| {
+		let delegator = 123u64;
+		let operator = 456u64;
+		let test_snapshot = DelegationSnapshot::<Test> {
+			operator,
+			delegators: [(delegator, 50u128)].into_iter().collect(),
+			validators: [(ALICE, 150u128)].into_iter().collect(),
+			delegation_fee_bps: 250,
+		};
+
 		// Epoch 1
 		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
 		HistoricalAuthorities::<Test>::insert(1, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(1, 10);
+		test_snapshot.clone().register_for_epoch(1);
+
 		// Epoch 2
 		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
 		HistoricalAuthorities::<Test>::insert(2, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(2, 30);
+		test_snapshot.clone().register_for_epoch(2);
 		let authority_index = AuthorityIndex::<Test>::get(2, ALICE);
 
 		// Expire
@@ -539,16 +551,22 @@ fn expired_epoch_data_is_removed() {
 		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
 		HistoricalAuthorities::<Test>::insert(3, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(3, 20);
+		test_snapshot.clone().register_for_epoch(3);
 
 		// Expect epoch 1's data to be deleted
 		assert!(AuthorityIndex::<Test>::try_get(1, ALICE).is_err());
 		assert!(HistoricalAuthorities::<Test>::try_get(1).is_err());
 		assert!(HistoricalBonds::<Test>::try_get(1).is_err());
+		assert!(DelegationSnapshots::<Test>::get(1, operator).is_none());
 
-		// Expect epoch 2's data to be exist
+		// Expect epoch 2's data to exist
 		assert_eq!(AuthorityIndex::<Test>::get(2, ALICE), authority_index);
 		assert_eq!(HistoricalAuthorities::<Test>::get(2), vec![ALICE]);
 		assert_eq!(HistoricalBonds::<Test>::get(2), 30);
+		assert!(DelegationSnapshots::<Test>::get(2, operator).is_some());
+
+		// Expect epoch 3's data to exist
+		assert!(DelegationSnapshots::<Test>::get(3, operator).is_some());
 	});
 }
 
@@ -1458,7 +1476,6 @@ fn can_update_all_config_items() {
 		const NEW_REDEMPTION_PERIOD_AS_PERCENTAGE: Percent = Percent::from_percent(10);
 		const NEW_REGISTRATION_BOND_PERCENTAGE: Percent = Percent::from_percent(10);
 		const NEW_AUTHORITY_SET_MIN_SIZE: u32 = 0;
-		const NEW_BACKUP_REWARD_NODE_PERCENTAGE: Percent = Percent::from_percent(10);
 		const NEW_EPOCH_DURATION: u32 = 1;
 		const NEW_AUCTION_PARAMETERS: SetSizeParameters =
 			SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 };
@@ -1473,7 +1490,6 @@ fn can_update_all_config_items() {
 		);
 		assert_ne!(RegistrationBondPercentage::<Test>::get(), NEW_REGISTRATION_BOND_PERCENTAGE);
 		assert_ne!(AuthoritySetMinSize::<Test>::get(), NEW_AUTHORITY_SET_MIN_SIZE);
-		assert_ne!(BackupRewardNodePercentage::<Test>::get(), NEW_BACKUP_REWARD_NODE_PERCENTAGE);
 		assert_ne!(EpochDuration::<Test>::get(), NEW_EPOCH_DURATION as u64);
 		assert_ne!(AuctionParameters::<Test>::get(), NEW_AUCTION_PARAMETERS);
 		assert_ne!(MinimumReportedCfeVersion::<Test>::get(), NEW_MINIMUM_REPORTED_CFE_VERSION);
@@ -1494,9 +1510,6 @@ fn can_update_all_config_items() {
 				percentage: NEW_REGISTRATION_BOND_PERCENTAGE,
 			},
 			PalletConfigUpdate::AuthoritySetMinSize { min_size: NEW_AUTHORITY_SET_MIN_SIZE },
-			PalletConfigUpdate::BackupRewardNodePercentage {
-				percentage: NEW_BACKUP_REWARD_NODE_PERCENTAGE,
-			},
 			PalletConfigUpdate::EpochDuration { blocks: NEW_EPOCH_DURATION },
 			PalletConfigUpdate::AuctionParameters { parameters: NEW_AUCTION_PARAMETERS },
 			PalletConfigUpdate::MinimumReportedCfeVersion {
@@ -1522,7 +1535,6 @@ fn can_update_all_config_items() {
 		);
 		assert_eq!(RegistrationBondPercentage::<Test>::get(), NEW_REGISTRATION_BOND_PERCENTAGE);
 		assert_eq!(AuthoritySetMinSize::<Test>::get(), NEW_AUTHORITY_SET_MIN_SIZE);
-		assert_eq!(BackupRewardNodePercentage::<Test>::get(), NEW_BACKUP_REWARD_NODE_PERCENTAGE);
 		assert_eq!(EpochDuration::<Test>::get(), NEW_EPOCH_DURATION as u64);
 		assert_eq!(AuctionParameters::<Test>::get(), NEW_AUCTION_PARAMETERS);
 		assert_eq!(MinimumReportedCfeVersion::<Test>::get(), NEW_MINIMUM_REPORTED_CFE_VERSION);
@@ -1887,13 +1899,293 @@ mod delegation {
 				},
 			));
 			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
-			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(BOB)));
 			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
+
 			assert_noop!(
 				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
 				Error::<Test>::DelegatorBlocked
 			);
 		});
+	}
+
+	// This is a general verification that should test the overall happy path of the auction
+	// resolution and the rotation to the next epoch. This test accounts the following things:
+	//
+	// - The right calculation of the bond
+	// - The respect of the MAX_BID if set
+	// - The undelegation and unbond of a delegator that wants to leave
+	// - The increase of the MAB through delegated capital
+	//
+	// In this test we run in total 2 auctions and 2 rotations.
+	#[test]
+	fn delegations_are_getting_used_in_auction_to_increase_mab() {
+		const OPERATOR: u64 = 123;
+		const AVAILABLE_BALANCE_OF_DELEGATOR: u128 = 20;
+		const MAX_BID_OF_DELEGATOR: u128 = 10;
+		const DELEGATORS: [u64; 4] = [21, 22, 23, 24];
+
+		new_test_ext()
+			.then_execute_with_checks(|| {
+				assert_ok!(ValidatorPallet::register_as_operator(
+					OriginTrait::signed(OPERATOR),
+					OperatorSettings {
+						fee_bps: MIN_OPERATOR_FEE,
+						delegation_acceptance: DelegationAcceptance::Allow
+					},
+				));
+
+				for delegator in DELEGATORS {
+					assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(delegator), OPERATOR));
+					MockFlip::credit_funds(&delegator, AVAILABLE_BALANCE_OF_DELEGATOR);
+					if delegator % 2 == 0 {
+						assert_ok!(ValidatorPallet::set_max_bid(
+							OriginTrait::signed(delegator),
+							Some(MAX_BID_OF_DELEGATOR),
+						));
+					}
+				}
+
+				for bid in WINNING_BIDS {
+					assert_ok!(ValidatorPallet::claim_validator(
+						OriginTrait::signed(OPERATOR),
+						bid.bidder_id
+					));
+					assert_ok!(ValidatorPallet::accept_operator(
+						OriginTrait::signed(bid.bidder_id),
+						OPERATOR
+					));
+					assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+				}
+
+				set_default_test_bids();
+
+				ValidatorPallet::start_authority_rotation();
+				assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+			})
+			.then_execute_at_next_block(|_| {
+				// After authority rotation starts, delegation snapshots should be stored
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				let snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+
+				assert!(!snapshot.validators.contains_key(&OPERATOR));
+				assert!(!snapshot.delegators.contains_key(&OPERATOR));
+
+				// Verify all delegators are in the snapshot
+				for &delegator in &DELEGATORS {
+					assert!(snapshot.delegators.contains_key(&delegator));
+					assert!(!snapshot.validators.contains_key(&delegator));
+				}
+
+				// Verify operator fee is correctly captured in snapshot
+				assert_eq!(snapshot.delegation_fee_bps, 200); // MIN_OPERATOR_FEE
+				MockKeyRotatorA::keygen_success();
+			})
+			.then_execute_at_next_block(|_| {
+				// During key handover, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
+				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
+				MockKeyRotatorA::key_handover_success();
+			})
+			.then_execute_at_next_block(|_| {
+				// During key activation, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
+				assert_rotation_phase_matches!(RotationPhase::<Test>::ActivatingKeys(..));
+				MockKeyRotatorA::keys_activated();
+			})
+			.then_execute_at_next_block(|_| {
+				// During session rotation, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
+				assert_rotation_phase_matches!(RotationPhase::SessionRotating(..));
+			})
+			.then_execute_at_next_block(|_| {
+				assert_rotation_phase_matches!(RotationPhase::Idle);
+				// After rotation is complete, check snapshots are stored for current epoch
+				let current_epoch = ValidatorPallet::epoch_index();
+				let snapshot = DelegationSnapshots::<Test>::get(current_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+				let active_delegators: BTreeSet<u64> =
+					snapshot.delegators.keys().cloned().collect();
+				assert_eq!(BTreeSet::from_iter(DELEGATORS), active_delegators);
+				for delegator in active_delegators {
+					if delegator % 2 == 0 {
+						assert_eq!(
+							MockBonderFor::<Test>::get_bond(&delegator),
+							MAX_BID_OF_DELEGATOR
+						);
+					} else {
+						assert_eq!(
+							MockBonderFor::<Test>::get_bond(&delegator),
+							AVAILABLE_BALANCE_OF_DELEGATOR
+						);
+					}
+				}
+				assert_eq!(
+					Bond::<Test>::get(),
+					(WINNING_BIDS.iter().map(|bid| bid.amount).sum::<u128>() +
+						DELEGATORS
+							.iter()
+							.map(|delegator| {
+								// 50% of validators have set a max bid
+								if delegator % 2 == 0 {
+									MAX_BID_OF_DELEGATOR
+								} else {
+									AVAILABLE_BALANCE_OF_DELEGATOR
+								}
+							})
+							.sum::<u128>()) / WINNING_BIDS.len() as u128
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				// Signal undelegating for 50% of delegators
+				for delegator in &DELEGATORS {
+					if delegator % 2 == 0 {
+						assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(*delegator)));
+						// Delegation choice should be removed after undelegation
+						assert!(DelegationChoice::<Test>::get(delegator).is_none());
+					}
+				}
+			})
+			.then_execute_at_next_block(|_| {
+				ValidatorPallet::start_authority_rotation();
+				assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+			})
+			.then_execute_at_next_block(|_| {
+				MockKeyRotatorA::keygen_success();
+			})
+			.then_execute_at_next_block(|_| {
+				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
+				MockKeyRotatorA::key_handover_success();
+			})
+			.then_execute_at_next_block(|_| {
+				assert_rotation_phase_matches!(RotationPhase::<Test>::ActivatingKeys(..));
+				MockKeyRotatorA::keys_activated();
+			})
+			.then_execute_at_next_block(|_| {
+				assert_rotation_phase_matches!(RotationPhase::SessionRotating(..));
+			})
+			.then_execute_at_next_block(|_| {
+				assert_rotation_phase_matches!(RotationPhase::Idle);
+				assert_eq!(
+					Bond::<Test>::get(),
+					(WINNING_BIDS.iter().map(|bid| bid.amount).sum::<u128>() +
+						DELEGATORS
+							.iter()
+							.map(|delegator| {
+								// 50% has undelegated and are out
+								if delegator % 2 == 0 {
+									0
+								} else {
+									AVAILABLE_BALANCE_OF_DELEGATOR
+								}
+							})
+							.sum::<u128>()) / WINNING_BIDS.len() as u128
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				assert_rotation_phase_matches!(RotationPhase::Idle);
+				// Only 2 delegators should remain (those that didn't undelegate)
+				let current_epoch = ValidatorPallet::epoch_index();
+				let snapshot = DelegationSnapshots::<Test>::get(current_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+				assert!(snapshot.delegators.len() == 2);
+				for delegator in &DELEGATORS {
+					if delegator % 2 == 0 {
+						assert_eq!(MockBonderFor::<Test>::get_bond(delegator), 0);
+					} else {
+						assert_eq!(
+							MockBonderFor::<Test>::get_bond(delegator),
+							AVAILABLE_BALANCE_OF_DELEGATOR
+						);
+					}
+				}
+			});
+	}
+
+	#[test]
+	fn can_update_max_bid() {
+		new_test_ext().execute_with(|| {
+			MockFlip::credit_funds(&BOB, 200);
+			assert_ok!(ValidatorPallet::set_max_bid(OriginTrait::signed(BOB), Some(100)));
+		});
+	}
+}
+
+#[cfg(test)]
+mod delegation_splitting {
+	use super::*;
+	use crate::delegation::DelegationSnapshot;
+
+	/*
+	 * Test conventions:
+	 * - Operator has id 0
+	 * - Validator has id 1
+	 * - Delegators have ids 2, 3, ...
+	 */
+
+	const BID: u128 = 1_000_000_000;
+	const REWARD: u128 = 100_000_000;
+
+	fn split_amount(
+		total: u128,
+		delegator_bids: Vec<u128>,
+		delegation_fee_bps: u32,
+	) -> BTreeMap<u64, u128> {
+		DelegationSnapshot::<Test> {
+			operator: 0,
+			validators: BTreeMap::from_iter([(1, BID)]),
+			delegators: delegator_bids
+				.into_iter()
+				.enumerate()
+				.map(|(i, b)| ((i + 2) as u64, b))
+				.collect(),
+			delegation_fee_bps,
+		}
+		.distribute(total)
+		.map(|(k, v)| (*k, v))
+		.collect()
+	}
+
+	#[test]
+	fn no_operator_fee() {
+		assert_eq!(
+			split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 0),
+			BTreeMap::from_iter([
+				(0, 0),
+				(1, REWARD),
+				(2, REWARD),
+				(3, 2 * REWARD),
+				(4, 3 * REWARD),
+			])
+		);
+	}
+
+	#[test]
+	fn with_operator_fee() {
+		// 20% operator fee
+		assert_eq!(
+			split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 2000),
+			BTreeMap::from_iter(
+				[
+					// Operator gets 20 % of delegator total
+					(0, (REWARD * 6 / 5)),
+					(1, REWARD),
+					(2, REWARD),
+					(3, 2 * REWARD),
+					(4, 3 * REWARD),
+				]
+				.into_iter()
+				// Delegator reward is reduced by 20%.
+				.map(|(k, v)| if k > 1 { (k, v * 4 / 5) } else { (k, v) })
+				.collect::<BTreeMap<_, _>>()
+			)
+		);
 	}
 
 	#[test]

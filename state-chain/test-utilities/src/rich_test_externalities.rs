@@ -52,7 +52,7 @@ pub trait HasAllPallets: frame_system::Config {
 }
 
 /// Basic [sp_io::TestExternalities] wrapper that provides a richer API for testing pallets.
-struct RichExternalities<Runtime>(sp_io::TestExternalities, std::marker::PhantomData<Runtime>);
+struct RichExternalities<Runtime>(sp_io::TestExternalities, sp_std::marker::PhantomData<Runtime>);
 
 impl<Runtime: HasAllPallets> RichExternalities<Runtime> {
 	fn new(ext: sp_io::TestExternalities) -> Self {

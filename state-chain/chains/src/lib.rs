@@ -96,6 +96,7 @@ pub mod cf_parameters;
 pub mod instances;
 pub mod refund_parameters;
 
+#[cfg(feature = "mocks")]
 pub mod mocks;
 
 pub mod witness_period {
@@ -1013,7 +1014,7 @@ pub enum TransactionInIdForAnyChain {
 	Polkadot(TxId),
 	Solana(SolanaTransactionInId),
 	None,
-	#[cfg(feature = "std")]
+	#[cfg(feature = "mocks")]
 	MockEthereum([u8; 4]),
 }
 
@@ -1025,6 +1026,7 @@ impl std::fmt::Display for TransactionInIdForAnyChain {
 			Self::Polkadot(transaction_id) =>
 				write!(f, "{}-{}", transaction_id.block_number, transaction_id.extrinsic_index),
 			Self::Solana((address, id)) => write!(f, "{address}-{id}",),
+			#[cfg(feature = "mocks")]
 			Self::MockEthereum(id) => write!(f, "{:?}", id),
 			Self::None => write!(f, "None"),
 		}
@@ -1426,6 +1428,7 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 	Bitcoin {
 		min_output_amount: Amount,
 		retry_duration: BlockNumber,
+		max_oracle_price_slippage: Option<u8>,
 	},
 	Ethereum(EvmVaultSwapExtraParameters<Address, Amount>),
 	Arbitrum(EvmVaultSwapExtraParameters<Address, Amount>),
@@ -1447,8 +1450,15 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 		f: impl Fn(Address) -> Result<AddressOther, E>,
 	) -> Result<VaultSwapExtraParameters<AddressOther, Amount>, E> {
 		Ok(match self {
-			VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration } =>
-				VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration },
+			VaultSwapExtraParameters::Bitcoin {
+				min_output_amount,
+				retry_duration,
+				max_oracle_price_slippage,
+			} => VaultSwapExtraParameters::Bitcoin {
+				min_output_amount,
+				retry_duration,
+				max_oracle_price_slippage,
+			},
 			VaultSwapExtraParameters::Ethereum(extra_parameter) =>
 				VaultSwapExtraParameters::Ethereum(extra_parameter.try_map_address(f)?),
 			VaultSwapExtraParameters::Arbitrum(extra_parameter) =>
@@ -1476,11 +1486,15 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 		f: impl Fn(Amount) -> Result<NumberOther, E>,
 	) -> Result<VaultSwapExtraParameters<Address, NumberOther>, E> {
 		Ok(match self {
-			VaultSwapExtraParameters::Bitcoin { min_output_amount, retry_duration } =>
-				VaultSwapExtraParameters::Bitcoin {
-					min_output_amount: f(min_output_amount)?,
-					retry_duration,
-				},
+			VaultSwapExtraParameters::Bitcoin {
+				min_output_amount,
+				retry_duration,
+				max_oracle_price_slippage,
+			} => VaultSwapExtraParameters::Bitcoin {
+				min_output_amount: f(min_output_amount)?,
+				retry_duration,
+				max_oracle_price_slippage,
+			},
 			VaultSwapExtraParameters::Ethereum(extra_parameter) =>
 				VaultSwapExtraParameters::Ethereum(extra_parameter.try_map_amounts(f)?),
 			VaultSwapExtraParameters::Arbitrum(extra_parameter) =>

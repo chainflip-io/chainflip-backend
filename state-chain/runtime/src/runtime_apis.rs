@@ -119,19 +119,6 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
-pub enum BackupOrPassive {
-	Backup,
-	Passive,
-}
-
-// TEMP: so frontend doesn't break after removal of passive from backend
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
-pub enum ChainflipAccountStateWithPassive {
-	CurrentAuthority,
-	BackupOrPassive(BackupOrPassive),
-}
-
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct ValidatorInfo {
 	pub balance: AssetAmount,
@@ -140,6 +127,7 @@ pub struct ValidatorInfo {
 	pub reputation_points: i32,
 	pub keyholder_epochs: Vec<EpochIndex>,
 	pub is_current_authority: bool,
+	#[deprecated]
 	pub is_current_backup: bool,
 	pub is_qualified: bool,
 	pub is_online: bool,
@@ -148,6 +136,7 @@ pub struct ValidatorInfo {
 	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
 	pub restricted_balances: BTreeMap<EthereumAddress, AssetAmount>,
 	pub estimated_redeemable_balance: AssetAmount,
+	pub operator: Option<AccountId32>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
@@ -160,6 +149,7 @@ pub struct OperatorInfo<Amount> {
 	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Vec::is_empty"))]
 	pub blocked: Vec<AccountId32>,
 	pub delegators: BTreeMap<AccountId32, Amount>,
+	pub flip_balance: Amount,
 }
 
 impl<A> OperatorInfo<A> {
@@ -177,6 +167,7 @@ impl<A> OperatorInfo<A> {
 			allowed: self.allowed,
 			blocked: self.blocked,
 			delegators: self.delegators.into_iter().map(|(k, v)| (k, f(v))).collect(),
+			flip_balance: f(self.flip_balance),
 		}
 	}
 }
@@ -491,6 +482,7 @@ decl_runtime_apis!(
 		fn cf_epoch_duration() -> u32;
 		fn cf_current_epoch_started_at() -> u32;
 		fn cf_authority_emission_per_block() -> u128;
+		#[deprecated(note = "The notion of backup nodes is no longer used.")]
 		fn cf_backup_emission_per_block() -> u128;
 		/// Returns the flip supply in the form [total_issuance, offchain_funds]
 		fn cf_flip_supply() -> (u128, u128);
@@ -608,7 +600,10 @@ decl_runtime_apis!(
 			chunk_interval: u32,
 		) -> Result<(), DispatchErrorWithMessage>;
 		fn cf_validate_refund_params(
+			input_asset: Asset,
+			output_asset: Asset,
 			retry_duration: BlockNumber,
+			max_oracle_price_slippage: Option<BasisPoints>,
 		) -> Result<(), DispatchErrorWithMessage>;
 		fn cf_request_swap_parameter_encoding(
 			broker: AccountId32,

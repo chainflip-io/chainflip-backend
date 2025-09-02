@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_primitives::Price;
+use cf_primitives::{chains::assets::any, Price};
 use cf_runtime_utilities::log_or_panic;
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::{Get, RuntimeDebug, H160};
@@ -38,7 +38,7 @@ use pallet_cf_elections::{
 
 use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
 use cf_chains::sol::SolAddress;
-use cf_traits::{impl_pallet_safe_mode, Chainflip};
+use cf_traits::{impl_pallet_safe_mode, Chainflip, OraclePrice};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
@@ -59,18 +59,8 @@ use pallet_cf_elections::{
 
 //--------------- api provided to other pallets -------------
 
-pub struct OraclePrice {
-	/// Statechain encoded price, fixed-point value with 128 bits for fractional part, ie.
-	/// denominator is 2^128.
-	pub price: Price,
-
-	/// Whether the price is stale according to the oracle price ES settings.
-	pub stale: bool,
-}
-
-pub fn decode_and_get_latest_oracle_price<T: OPTypes>(
-	asset: ChainlinkAssetpair,
-) -> Option<OraclePrice> {
+pub fn decode_and_get_latest_oracle_price<T: OPTypes>(asset: any::Asset) -> Option<OraclePrice> {
+	use ChainlinkAssetpair::*;
 	use PriceStatus::*;
 
 	let state = DerivedElectoralAccess::<
@@ -79,6 +69,22 @@ pub fn decode_and_get_latest_oracle_price<T: OPTypes>(
 			RunnerStorageAccess<Runtime, ()>,
 		>::unsynchronised_state()
 		.inspect_err(|_| log_or_panic!("Failed to get election state for the ChainlinkOraclePrice ES due to corrupted storage")).ok()?;
+
+	let asset = match asset {
+		any::Asset::Eth => Some(EthUsd),
+		any::Asset::Flip => None,
+		any::Asset::Usdc => Some(UsdcUsd),
+		any::Asset::Usdt => Some(UsdtUsd),
+		any::Asset::Dot => None,
+		any::Asset::Btc => Some(BtcUsd),
+		any::Asset::ArbEth => Some(EthUsd),
+		any::Asset::ArbUsdc => Some(UsdcUsd),
+		any::Asset::Sol => Some(SolUsd),
+		any::Asset::SolUsdc => Some(UsdcUsd),
+		any::Asset::HubDot => None,
+		any::Asset::HubUsdt => Some(UsdtUsd),
+		any::Asset::HubUsdc => Some(UsdcUsd),
+	}?;
 
 	get_latest_price_with_statechain_encoding(&state, asset).map(|(price, staleness)| OraclePrice {
 		price,

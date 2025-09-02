@@ -26,8 +26,8 @@ pub mod lending;
 mod swapping;
 
 pub use swapping::{
-	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
-	SwapRequestTypeEncoded, SwapType,
+	ExpiryBehaviour, PriceLimitsAndExpiry, SwapOutputAction, SwapOutputActionEncoded,
+	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
 };
 
 pub mod mocks;
@@ -48,7 +48,7 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
-	EpochIndex, FlipBalance, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
+	EpochIndex, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -59,7 +59,7 @@ use frame_support::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
-	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
+	traits::{EnsureOrigin, Get, IsType, UnfilteredDispatchable},
 	weights::Weight,
 	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
 };
@@ -86,6 +86,7 @@ pub trait Chainflip: frame_system::Config {
 		+ MaybeSerializeDeserialize
 		+ Bounded
 		+ From<u128>
+		+ From<u64>
 		+ Sum<Self::Amount>;
 
 	/// An identity for a node
@@ -276,23 +277,9 @@ pub trait RedemptionCheck {
 	}
 }
 
-pub trait OnAccountFunded {
-	type ValidatorId;
-	type Amount;
-
-	/// A callback that is triggered after some validator's balance has changed significantly,
-	/// either by funding it with more Flip, or by initiating/reverting a redemption.
-	///
-	/// Note this does not trigger on small changes like transaction fees.
-	///
-	/// TODO: This should be triggered when funds are paid in tokenholder governance.
-	fn on_account_funded(validator_id: &Self::ValidatorId, new_total: Self::Amount);
-}
-
 pub trait Funding {
 	type AccountId;
 	type Balance;
-	type Handler: OnAccountFunded<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
 	/// Credit an account with funds from off-chain. Returns the total balance in the account after
 	/// the funds are credited.
@@ -338,14 +325,9 @@ pub trait AccountInfo {
 pub trait Issuance {
 	type AccountId;
 	type Balance;
-	/// An imbalance representing freshly minted, unallocated funds.
-	type Surplus: Imbalance<Self::Balance>;
 
 	/// Mint new funds.
-	fn mint(amount: Self::Balance) -> Self::Surplus;
-
-	/// Burn funds from somewhere.
-	fn burn(amount: Self::Balance) -> <Self::Surplus as Imbalance<Self::Balance>>::Opposite;
+	fn mint(beneficiary: &Self::AccountId, amount: Self::Balance);
 
 	/// Returns the total issuance.
 	fn total_issuance() -> Self::Balance;
@@ -359,12 +341,12 @@ pub trait Issuance {
 /// Distribute rewards somehow.
 pub trait RewardsDistribution {
 	type Balance;
-	/// An implementation of the issuance trait.
-	type Issuance: Issuance;
+	type AccountId;
 
 	/// Distribute some rewards.
-	fn distribute();
+	fn distribute(amount: Self::Balance, beneficiary: &Self::AccountId);
 }
+
 /// Allow triggering of emissions.
 pub trait EmissionsTrigger {
 	/// Trigger emissions.
@@ -406,15 +388,16 @@ pub trait Slashing {
 	type Balance;
 
 	/// Slashes a validator for the equivalent of some number of blocks offline.
-	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
+	fn slash(account_id: &Self::AccountId, blocks_offline: Self::BlockNumber) {
+		Self::slash_balance(account_id, Self::calculate_slash_amount(account_id, blocks_offline));
+	}
 
 	/// Slashes a validator by some fixed amount.
-	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance);
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: Self::Balance);
 
-	/// Calculate the amount of FLIP to slash
 	fn calculate_slash_amount(
 		account_id: &Self::AccountId,
-		blocks: Self::BlockNumber,
+		blocks_offline: Self::BlockNumber,
 	) -> Self::Balance;
 }
 
@@ -589,32 +572,6 @@ pub trait Broadcaster<C: Chain> {
 
 	/// Removes all data associated with a broadcast.
 	fn expire_broadcast(broadcast_id: BroadcastId);
-}
-
-/// The heartbeat of the network
-pub trait Heartbeat {
-	type ValidatorId;
-	type BlockNumber;
-	/// Called on every heartbeat interval
-	fn on_heartbeat_interval();
-}
-
-/// Updating and calculating emissions per block for authorities and backup nodes
-pub trait BlockEmissions {
-	type Balance;
-	/// Update the emissions per block for an authority
-	fn update_authority_block_emission(emission: Self::Balance);
-	/// Update the emissions per block for a backup node
-	fn update_backup_node_block_emission(emission: Self::Balance);
-	/// Calculate the emissions per block
-	fn calculate_block_emissions();
-}
-
-/// Emits an event when backup rewards are distributed that lives inside the Emissions pallet.
-pub trait BackupRewardsNotifier {
-	type Balance;
-	type AccountId;
-	fn emit_event(account_id: &Self::AccountId, amount: Self::Balance);
 }
 
 /// Checks if the caller can execute free transactions
@@ -1087,7 +1044,12 @@ pub trait SwapParameterValidation {
 
 	fn get_swap_limits() -> SwapLimits;
 	fn validate_dca_params(dca_params: &DcaParameters) -> Result<(), DispatchError>;
-	fn validate_refund_params(retry_duration: BlockNumber) -> Result<(), DispatchError>;
+	fn validate_refund_params(
+		input_asset: Asset,
+		output_asset: Asset,
+		retry_duration: BlockNumber,
+		max_oracle_price_slippage: Option<BasisPoints>,
+	) -> Result<(), DispatchError>;
 	fn validate_broker_fees(
 		broker_fees: &Beneficiaries<Self::AccountId>,
 	) -> Result<(), DispatchError>;
@@ -1290,4 +1252,17 @@ pub trait SpawnAccount {
 		parent_account_id: &Self::AccountId,
 		index: Self::Index,
 	) -> Result<Self::AccountId, DispatchError>;
+}
+
+pub struct OraclePrice {
+	/// Statechain encoded price, fixed-point value with 128 bits for fractional part, ie.
+	/// denominator is 2^128.
+	pub price: Price,
+
+	/// Whether the price is stale according to the oracle price ES settings.
+	pub stale: bool,
+}
+
+pub trait PriceFeedApi {
+	fn get_price(asset: Asset) -> Option<OraclePrice>;
 }

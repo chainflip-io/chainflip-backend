@@ -18,6 +18,7 @@ frame-system = { workspace = true, default-features = true }
 sp-io = { workspace = true, default-features = true }
 sp-core = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
+sp-std = { workspace = true, default-features = true }
 
 [dev-dependencies]
 scale-info = { workspace = true, default-features = true, features = [
@@ -25,4 +26,13 @@ scale-info = { workspace = true, default-features = true, features = [
 ] }
 
 [features]
-std = []
+default = ["std"]
+std = [
+	"sp-io/std",
+	"sp-core/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"frame-support/std",
+	"frame-system/std",
+	"codec/std",
+]

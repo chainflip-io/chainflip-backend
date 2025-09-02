@@ -29,7 +29,6 @@ use sp_runtime::Permill;
 
 pub type AccountId = u64;
 
-cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
@@ -65,7 +64,6 @@ impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
 	type BlocksPerDay = BlocksPerDay;
-	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
 	type CallIndexer = ();

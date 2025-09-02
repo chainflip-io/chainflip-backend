@@ -25,8 +25,7 @@ use std::sync::LazyLock;
 use super::*;
 use crate::{
 	mock::{RuntimeEvent, *},
-	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapQueue,
-	SwapType,
+	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapType,
 };
 use cf_amm::math::PRICE_FRACTIONAL_BITS;
 use cf_chains::{
@@ -39,6 +38,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
+	PriceLimits,
 };
 use cf_test_utilities::{assert_event_sequence, assert_has_matching_event};
 use cf_traits::{
@@ -92,7 +92,7 @@ struct TestSwapParams {
 	input_asset: Asset,
 	output_asset: Asset,
 	input_amount: AssetAmount,
-	refund_params: Option<ChannelRefundParametersCheckedInternal<u64>>,
+	price_limits_and_expiry: Option<PriceLimitsAndExpiry<u64>>,
 	dca_params: Option<DcaParameters>,
 	output_address: ForeignChainAddress,
 	is_ccm: bool,
@@ -108,7 +108,8 @@ impl TestSwapParams {
 			input_asset: INPUT_ASSET,
 			output_asset: OUTPUT_ASSET,
 			input_amount: INPUT_AMOUNT,
-			refund_params: refund_params.map(|params| params.into_extended_params(INPUT_AMOUNT)),
+			price_limits_and_expiry: refund_params
+				.map(|params| params.into_extended_params(INPUT_AMOUNT)),
 			dca_params,
 			output_address: (*EVM_OUTPUT_ADDRESS).clone(),
 			is_ccm,
@@ -125,22 +126,24 @@ struct TestRefundParams {
 }
 
 impl TestRefundParams {
-	fn into_extended_params(
-		self,
-		input_amount: AssetAmount,
-	) -> ChannelRefundParametersCheckedInternal<u64> {
+	/// Due to rounding errors, you may have to set the `min_output` to a value one unit higher than
+	/// expected.
+	fn into_extended_params(self, input_amount: AssetAmount) -> PriceLimitsAndExpiry<u64> {
 		use cf_amm::math::{bounded_sqrt_price, sqrt_price_to_price};
 
-		ChannelRefundParametersCheckedInternal {
-			retry_duration: self.retry_duration,
-			refund_address: AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(
-				[10; 20].into(),
-			)),
+		PriceLimitsAndExpiry {
+			expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+				retry_duration: self.retry_duration,
+				refund_address: AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(
+					[10; 20].into(),
+				)),
+				refund_ccm_metadata: None,
+			},
 			min_price: sqrt_price_to_price(bounded_sqrt_price(
 				self.min_output.into(),
 				input_amount.into(),
 			)),
-			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
 		}
 	}
 }
@@ -152,7 +155,11 @@ fn create_test_swap(
 	output_asset: Asset,
 	amount: AssetAmount,
 	dca_params: Option<DcaParameters>,
+	execute_at: u64,
 ) -> Swap<Test> {
+	let mut dca_state = DcaState::new(amount, dca_params);
+	dca_state.record_scheduled_chunk(id.into(), amount);
+
 	SwapRequests::<Test>::insert(
 		SwapRequestId::from(id),
 		SwapRequest {
@@ -160,17 +167,17 @@ fn create_test_swap(
 			input_asset,
 			output_asset,
 			state: SwapRequestState::UserSwap {
-				refund_params: None,
+				price_limits_and_expiry: None,
 				output_action: SwapOutputAction::Egress {
 					ccm_deposit_metadata: None,
 					output_address: ForeignChainAddress::Eth(H160::zero()),
 				},
-				dca_state: DcaState::create_with_first_chunk(amount, dca_params).0,
+				dca_state,
 			},
 		},
 	);
 
-	Swap::new(id.into(), id.into(), input_asset, output_asset, amount, None, vec![])
+	Swap::new(id.into(), id.into(), input_asset, output_asset, amount, None, vec![], execute_at)
 }
 
 // Returns some test data
@@ -181,7 +188,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			input_asset: Asset::Flip,
 			output_asset: Asset::Usdc,
 			input_amount: 100,
-			refund_params: None,
+			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([2; 20].into()),
 			is_ccm: false,
@@ -191,7 +198,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			input_asset: Asset::Eth,
 			output_asset: Asset::Usdc,
 			input_amount: 40,
-			refund_params: None,
+			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([9; 20].into()),
 			is_ccm: false,
@@ -201,7 +208,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			input_asset: Asset::Flip,
 			output_asset: Asset::Eth,
 			input_amount: 500,
-			refund_params: None,
+			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([2; 20].into()),
 			is_ccm: false,
@@ -211,7 +218,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			input_asset: Asset::Flip,
 			output_asset: Asset::Dot,
 			input_amount: 600,
-			refund_params: None,
+			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([4; 32])),
 			is_ccm: false,
@@ -244,7 +251,7 @@ fn insert_swaps(swaps: &[TestSwapParams]) {
 			swap.output_asset,
 			request_type,
 			bounded_vec![Beneficiary { account: broker_id as u64, bps: BROKER_FEE_BPS }],
-			swap.refund_params.clone(),
+			swap.price_limits_and_expiry.clone(),
 			swap.dca_params.clone(),
 			SwapOrigin::Vault {
 				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
@@ -274,6 +281,7 @@ const REFUND_PARAMS: ChannelRefundParametersUncheckedEncoded =
 		retry_duration: 100,
 		refund_address: EncodedAddress::Eth([1; 20]),
 		min_price: U256::zero(),
+		max_oracle_price_slippage: None,
 		refund_ccm_metadata: None,
 	};
 
@@ -283,7 +291,7 @@ fn get_broker_balance<T: Config>(who: &T::AccountId, asset: Asset) -> AssetAmoun
 
 #[track_caller]
 fn assert_swaps_queue_is_empty() {
-	assert_eq!(SwapQueue::<Test>::iter_keys().count(), 0);
+	assert!(ScheduledSwaps::<Test>::get().is_empty());
 }
 
 #[track_caller]
@@ -315,6 +323,11 @@ fn swap_with_custom_broker_fee(
 			broker_id: BROKER,
 		},
 	);
+}
+
+#[track_caller]
+fn get_scheduled_swap_block(swap_id: SwapId) -> Option<BlockNumberFor<Test>> {
+	ScheduledSwaps::<Test>::get().get(&swap_id).map(|swap| swap.execute_at)
 }
 
 #[test]
@@ -528,16 +541,20 @@ fn swap_by_deposit_happy_path() {
 
 			// Verify this swap is accepted and scheduled
 			assert_eq!(
-				SwapQueue::<Test>::get(SWAP_BLOCK),
-				vec![Swap::new(
+				ScheduledSwaps::<Test>::get(),
+				BTreeMap::from([(
 					1.into(),
-					1.into(),
-					INPUT_ASSET,
-					OUTPUT_ASSET,
-					AMOUNT,
-					None,
-					vec![ZERO_NETWORK_FEES],
-				)]
+					Swap::new(
+						1.into(),
+						1.into(),
+						INPUT_ASSET,
+						OUTPUT_ASSET,
+						AMOUNT,
+						None,
+						vec![ZERO_NETWORK_FEES],
+						SWAP_BLOCK
+					)
+				)])
 			);
 
 			assert!(SwapRequests::<Test>::get(SWAP_REQUEST_ID).is_some());
@@ -595,49 +612,65 @@ fn process_all_into_stable_swaps_first() {
 			});
 
 		assert_eq!(
-			SwapQueue::<Test>::get(SWAP_EXECUTION_BLOCK),
-			vec![
-				Swap::new(
+			ScheduledSwaps::<Test>::get(),
+			BTreeMap::from([
+				(
 					1.into(),
-					1.into(),
-					Asset::Flip,
-					Asset::Eth,
-					AMOUNT,
-					None,
-					vec![NETWORK_FEE_DETAILS],
+					Swap::new(
+						1.into(),
+						1.into(),
+						Asset::Flip,
+						Asset::Eth,
+						AMOUNT,
+						None,
+						vec![NETWORK_FEE_DETAILS],
+						SWAP_EXECUTION_BLOCK
+					),
 				),
-				Swap::new(
+				(
 					2.into(),
-					2.into(),
-					Asset::Btc,
-					Asset::Eth,
-					AMOUNT,
-					None,
-					vec![NETWORK_FEE_DETAILS],
+					Swap::new(
+						2.into(),
+						2.into(),
+						Asset::Btc,
+						Asset::Eth,
+						AMOUNT,
+						None,
+						vec![NETWORK_FEE_DETAILS],
+						SWAP_EXECUTION_BLOCK
+					)
 				),
-				Swap::new(
+				(
 					3.into(),
-					3.into(),
-					Asset::Dot,
-					Asset::Eth,
-					AMOUNT,
-					None,
-					vec![NETWORK_FEE_DETAILS],
+					Swap::new(
+						3.into(),
+						3.into(),
+						Asset::Dot,
+						Asset::Eth,
+						AMOUNT,
+						None,
+						vec![NETWORK_FEE_DETAILS],
+						SWAP_EXECUTION_BLOCK
+					),
 				),
-				Swap::new(
+				(
 					4.into(),
-					4.into(),
-					Asset::Usdc,
-					Asset::Eth,
-					AMOUNT,
-					None,
-					vec![NETWORK_FEE_DETAILS],
-				),
-			]
+					Swap::new(
+						4.into(),
+						4.into(),
+						Asset::Usdc,
+						Asset::Eth,
+						AMOUNT,
+						None,
+						vec![NETWORK_FEE_DETAILS],
+						SWAP_EXECUTION_BLOCK
+					)
+				)
+			])
 		);
 
 		System::reset_events();
-		// All swaps in the SwapQueue are executed.
+		// All of the swaps in the ScheduledSwaps queue are executed.
 		Swapping::on_finalize(SWAP_EXECUTION_BLOCK);
 		assert_swaps_queue_is_empty();
 
@@ -752,6 +785,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					output_asset: OUTPUT_ASSET,
 					output_amount: ZERO_AMOUNT,
 					intermediate_amount: None,
+					oracle_delta: None,
 				}),
 			);
 		})
@@ -837,8 +871,20 @@ fn swap_excess_are_confiscated() {
 		}));
 
 		assert_eq!(
-			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS)),
-			vec![Swap::new(1.into(), 1.into(), from, to, MAX_SWAP, None, vec![ZERO_NETWORK_FEES],)]
+			ScheduledSwaps::<Test>::get(),
+			BTreeMap::from([(
+				1.into(),
+				Swap::new(
+					1.into(),
+					1.into(),
+					from,
+					to,
+					MAX_SWAP,
+					None,
+					vec![ZERO_NETWORK_FEES],
+					System::block_number() + SWAP_DELAY_BLOCKS as u64
+				)
+			)])
 		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
 	});
@@ -1014,7 +1060,8 @@ fn swaps_get_retried_after_failure() {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: SwapId(1),
-					execute_at: RETRY_AT_BLOCK
+					execute_at: RETRY_AT_BLOCK,
+					reason: SwapFailureReason::PriceImpactLimit,
 				})
 			);
 
@@ -1022,11 +1069,13 @@ fn swaps_get_retried_after_failure() {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: SwapId(2),
-					execute_at: RETRY_AT_BLOCK
+					execute_at: RETRY_AT_BLOCK,
+					reason: SwapFailureReason::PriceImpactLimit,
 				})
 			);
 
-			assert_eq!(SwapQueue::<Test>::get(RETRY_AT_BLOCK).len(), 2);
+			assert_eq!(get_scheduled_swap_block(SwapId(1)), Some(RETRY_AT_BLOCK));
+			assert_eq!(get_scheduled_swap_block(SwapId(2)), Some(RETRY_AT_BLOCK));
 		})
 		.then_execute_at_next_block(|_| {
 			assert_eq!(System::block_number(), 4);
@@ -1061,14 +1110,6 @@ fn swaps_get_retried_after_failure() {
 			// now be successful):
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(2), .. }),
-				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
-					swap_request_id: SwapRequestId(2),
-					..
-				}),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(2)
-				}),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: SwapRequestId(1),
@@ -1076,6 +1117,14 @@ fn swaps_get_retried_after_failure() {
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 					swap_request_id: SwapRequestId(1)
+				}),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(2), .. }),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+					swap_request_id: SwapRequestId(2),
+					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: SwapRequestId(2)
 				}),
 			);
 		});
@@ -1117,14 +1166,17 @@ fn deposit_address_ready_event_contains_correct_parameters() {
 fn test_get_scheduled_swap_legs() {
 	new_test_ext().execute_with(|| {
 		const INIT_AMOUNT: AssetAmount = 1000;
+		const BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
-		let swaps = vec![
-			create_test_swap(1, Asset::Flip, Asset::Usdc, INIT_AMOUNT, None),
-			create_test_swap(2, Asset::Usdc, Asset::Flip, INIT_AMOUNT, None),
-			create_test_swap(3, Asset::Btc, Asset::Eth, INIT_AMOUNT, None),
-			create_test_swap(4, Asset::Flip, Asset::Btc, INIT_AMOUNT, None),
-			create_test_swap(5, Asset::Eth, Asset::Flip, INIT_AMOUNT, None),
-		];
+		ScheduledSwaps::<Test>::mutate(|swaps| {
+			swaps.extend(vec![
+				(1.into(), create_test_swap(1, Asset::Flip, Asset::Usdc, INIT_AMOUNT, None, BLOCK)),
+				(2.into(), create_test_swap(2, Asset::Usdc, Asset::Flip, INIT_AMOUNT, None, BLOCK)),
+				(3.into(), create_test_swap(3, Asset::Btc, Asset::Eth, INIT_AMOUNT, None, BLOCK)),
+				(4.into(), create_test_swap(4, Asset::Flip, Asset::Btc, INIT_AMOUNT, None, BLOCK)),
+				(5.into(), create_test_swap(5, Asset::Eth, Asset::Flip, INIT_AMOUNT, None, BLOCK)),
+			]);
+		});
 
 		SwapRate::set(2f64);
 		// The amount of USDC in the middle of swap (5):
@@ -1134,56 +1186,68 @@ fn test_get_scheduled_swap_legs() {
 		assert_ne!(INIT_AMOUNT, INTERMEDIATE_AMOUNT);
 
 		assert_eq!(
-			Swapping::get_scheduled_swap_legs(swaps, Asset::Flip),
+			Swapping::get_scheduled_swap_legs(Asset::Flip),
 			vec![
-				SwapLegInfo {
-					swap_id: SwapId(1),
-					swap_request_id: SwapRequestId(1),
-					base_asset: Asset::Flip,
-					quote_asset: Asset::Usdc,
-					side: Side::Sell,
-					amount: INIT_AMOUNT,
-					source_asset: None,
-					source_amount: None,
-					remaining_chunks: 0,
-					chunk_interval: SWAP_DELAY_BLOCKS,
-				},
-				SwapLegInfo {
-					swap_id: SwapId(2),
-					swap_request_id: SwapRequestId(2),
-					base_asset: Asset::Flip,
-					quote_asset: Asset::Usdc,
-					side: Side::Buy,
-					amount: INIT_AMOUNT,
-					source_asset: None,
-					source_amount: None,
-					remaining_chunks: 0,
-					chunk_interval: SWAP_DELAY_BLOCKS,
-				},
-				SwapLegInfo {
-					swap_id: SwapId(4),
-					swap_request_id: SwapRequestId(4),
-					base_asset: Asset::Flip,
-					quote_asset: Asset::Usdc,
-					side: Side::Sell,
-					amount: INIT_AMOUNT,
-					source_asset: None,
-					source_amount: None,
-					remaining_chunks: 0,
-					chunk_interval: SWAP_DELAY_BLOCKS,
-				},
-				SwapLegInfo {
-					swap_id: SwapId(5),
-					swap_request_id: SwapRequestId(5),
-					base_asset: Asset::Flip,
-					quote_asset: Asset::Usdc,
-					side: Side::Buy,
-					amount: INTERMEDIATE_AMOUNT,
-					source_asset: Some(Asset::Eth),
-					source_amount: Some(INIT_AMOUNT),
-					remaining_chunks: 0,
-					chunk_interval: SWAP_DELAY_BLOCKS,
-				},
+				(
+					SwapLegInfo {
+						swap_id: SwapId(1),
+						swap_request_id: SwapRequestId(1),
+						base_asset: Asset::Flip,
+						quote_asset: Asset::Usdc,
+						side: Side::Sell,
+						amount: INIT_AMOUNT,
+						source_asset: None,
+						source_amount: None,
+						remaining_chunks: 0,
+						chunk_interval: SWAP_DELAY_BLOCKS,
+					},
+					BLOCK
+				),
+				(
+					SwapLegInfo {
+						swap_id: SwapId(2),
+						swap_request_id: SwapRequestId(2),
+						base_asset: Asset::Flip,
+						quote_asset: Asset::Usdc,
+						side: Side::Buy,
+						amount: INIT_AMOUNT,
+						source_asset: None,
+						source_amount: None,
+						remaining_chunks: 0,
+						chunk_interval: SWAP_DELAY_BLOCKS,
+					},
+					BLOCK
+				),
+				(
+					SwapLegInfo {
+						swap_id: SwapId(4),
+						swap_request_id: SwapRequestId(4),
+						base_asset: Asset::Flip,
+						quote_asset: Asset::Usdc,
+						side: Side::Sell,
+						amount: INIT_AMOUNT,
+						source_asset: None,
+						source_amount: None,
+						remaining_chunks: 0,
+						chunk_interval: SWAP_DELAY_BLOCKS,
+					},
+					BLOCK
+				),
+				(
+					SwapLegInfo {
+						swap_id: SwapId(5),
+						swap_request_id: SwapRequestId(5),
+						base_asset: Asset::Flip,
+						quote_asset: Asset::Usdc,
+						side: Side::Buy,
+						amount: INTERMEDIATE_AMOUNT,
+						source_asset: Some(Asset::Eth),
+						source_amount: Some(INIT_AMOUNT),
+						remaining_chunks: 0,
+						chunk_interval: SWAP_DELAY_BLOCKS,
+					},
+					BLOCK
+				),
 			]
 		);
 	});
@@ -1194,11 +1258,14 @@ fn test_get_scheduled_swap_legs_fallback() {
 	new_test_ext().execute_with(|| {
 		const INIT_AMOUNT: AssetAmount = 1000000000000000000000;
 		const PRICE: u128 = 2;
+		const BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
-		let swaps = vec![
-			create_test_swap(1, Asset::Flip, Asset::Eth, INIT_AMOUNT, None),
-			create_test_swap(2, Asset::Eth, Asset::Usdc, INIT_AMOUNT, None),
-		];
+		ScheduledSwaps::<Test>::mutate(|swaps| {
+			swaps.extend(vec![
+				(1.into(), create_test_swap(1, Asset::Flip, Asset::Eth, INIT_AMOUNT, None, BLOCK)),
+				(2.into(), create_test_swap(2, Asset::Eth, Asset::Usdc, INIT_AMOUNT, None, BLOCK)),
+			]);
+		});
 
 		// Setting the swap rate to something different from the price so that if the fallback is
 		// not used, it will give a different result, avoiding a false positive.
@@ -1216,32 +1283,38 @@ fn test_get_scheduled_swap_legs_fallback() {
 		);
 
 		assert_eq!(
-			Swapping::get_scheduled_swap_legs(swaps, Asset::Eth),
+			Swapping::get_scheduled_swap_legs(Asset::Eth),
 			vec![
-				SwapLegInfo {
-					swap_id: SwapId(1),
-					swap_request_id: SwapRequestId(1),
-					base_asset: Asset::Eth,
-					quote_asset: Asset::Usdc,
-					side: Side::Buy,
-					amount: INIT_AMOUNT * PRICE,
-					source_asset: Some(Asset::Flip),
-					source_amount: Some(INIT_AMOUNT),
-					remaining_chunks: 0,
-					chunk_interval: SWAP_DELAY_BLOCKS,
-				},
-				SwapLegInfo {
-					swap_id: SwapId(2),
-					swap_request_id: SwapRequestId(2),
-					base_asset: Asset::Eth,
-					quote_asset: Asset::Usdc,
-					side: Side::Sell,
-					amount: INIT_AMOUNT,
-					source_asset: None,
-					source_amount: None,
-					remaining_chunks: 0,
-					chunk_interval: SWAP_DELAY_BLOCKS,
-				}
+				(
+					SwapLegInfo {
+						swap_id: SwapId(1),
+						swap_request_id: SwapRequestId(1),
+						base_asset: Asset::Eth,
+						quote_asset: Asset::Usdc,
+						side: Side::Buy,
+						amount: INIT_AMOUNT * PRICE,
+						source_asset: Some(Asset::Flip),
+						source_amount: Some(INIT_AMOUNT),
+						remaining_chunks: 0,
+						chunk_interval: SWAP_DELAY_BLOCKS,
+					},
+					BLOCK
+				),
+				(
+					SwapLegInfo {
+						swap_id: SwapId(2),
+						swap_request_id: SwapRequestId(2),
+						base_asset: Asset::Eth,
+						quote_asset: Asset::Usdc,
+						side: Side::Sell,
+						amount: INIT_AMOUNT,
+						source_asset: None,
+						source_amount: None,
+						remaining_chunks: 0,
+						chunk_interval: SWAP_DELAY_BLOCKS,
+					},
+					BLOCK
+				)
 			]
 		);
 	});
@@ -1253,29 +1326,37 @@ fn test_get_scheduled_swap_legs_for_dca() {
 		const INIT_AMOUNT: AssetAmount = 1000000000000000000000;
 		const NUMBER_OF_CHUNKS: u32 = 3;
 		const CHUNK_INTERVAL: u32 = 10;
+		const BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 		SwapRate::set(1_f64);
 
 		let dca_params =
 			DcaParameters { number_of_chunks: NUMBER_OF_CHUNKS, chunk_interval: CHUNK_INTERVAL };
 
-		let swaps =
-			vec![create_test_swap(1, Asset::Flip, Asset::Eth, INIT_AMOUNT, Some(dca_params))];
+		ScheduledSwaps::<Test>::mutate(|swaps| {
+			swaps.extend(vec![(
+				1.into(),
+				create_test_swap(1, Asset::Flip, Asset::Eth, INIT_AMOUNT, Some(dca_params), BLOCK),
+			)]);
+		});
 
 		assert_eq!(
-			Swapping::get_scheduled_swap_legs(swaps, Asset::Eth),
-			vec![SwapLegInfo {
-				swap_id: SwapId(1),
-				swap_request_id: SwapRequestId(1),
-				base_asset: Asset::Eth,
-				quote_asset: Asset::Usdc,
-				side: Side::Buy,
-				amount: INIT_AMOUNT,
-				source_asset: Some(Asset::Flip),
-				source_amount: Some(INIT_AMOUNT),
-				// This is the first chunk, so there are 2 remaining
-				remaining_chunks: NUMBER_OF_CHUNKS - 1,
-				chunk_interval: CHUNK_INTERVAL,
-			},]
+			Swapping::get_scheduled_swap_legs(Asset::Eth),
+			vec![(
+				SwapLegInfo {
+					swap_id: SwapId(1),
+					swap_request_id: SwapRequestId(1),
+					base_asset: Asset::Eth,
+					quote_asset: Asset::Usdc,
+					side: Side::Buy,
+					amount: INIT_AMOUNT,
+					source_asset: Some(Asset::Flip),
+					source_amount: Some(INIT_AMOUNT),
+					// This is the first chunk, so there are 2 remaining
+					remaining_chunks: NUMBER_OF_CHUNKS - 1,
+					chunk_interval: CHUNK_INTERVAL,
+				},
+				BLOCK
+			)]
 		);
 	});
 }
@@ -1353,13 +1434,14 @@ mod swap_batching {
 				broker_fee_taken: None,
 				stable_amount,
 				final_output: None,
+				oracle_delta: None,
 			}
 		}
 	}
 
 	#[test]
 	fn single_swap() {
-		let swap1 = Swap::new(0.into(), 0.into(), Asset::Btc, Asset::Usdc, 1000, None, []);
+		let swap1 = Swap::new(0.into(), 0.into(), Asset::Btc, Asset::Usdc, 1000, None, [], 1);
 		let mut swaps = vec![swap1.clone()];
 
 		let swap_states = vec![swap1.to_state(None)];
@@ -1377,9 +1459,9 @@ mod swap_batching {
 
 	#[test]
 	fn swaps_fail_into_stable() {
-		let swap1 = Swap::new(0.into(), 0.into(), Asset::Btc, Asset::Usdc, 500, None, []);
-		let swap2 = Swap::new(1.into(), 1.into(), Asset::Btc, Asset::Eth, 1000, None, []);
-		let swap3 = Swap::new(2.into(), 2.into(), Asset::Eth, Asset::Usdc, 1000, None, []);
+		let swap1 = Swap::new(0.into(), 0.into(), Asset::Btc, Asset::Usdc, 500, None, [], 1);
+		let swap2 = Swap::new(1.into(), 1.into(), Asset::Btc, Asset::Eth, 1000, None, [], 1);
+		let swap3 = Swap::new(2.into(), 2.into(), Asset::Eth, Asset::Usdc, 1000, None, [], 1);
 
 		let mut swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
 
@@ -1401,9 +1483,9 @@ mod swap_batching {
 	fn swaps_fail_from_stable() {
 		// BTC swap should be removed because it would result in a larger amount
 		// of USDC and thus will have higher impact on the Eth pool
-		let swap1 = Swap::new(1.into(), 1.into(), Asset::Btc, Asset::Eth, 1, None, []);
-		let swap2 = Swap::new(2.into(), 2.into(), Asset::Usdc, Asset::Eth, 1000, None, []);
-		let swap3 = Swap::new(3.into(), 3.into(), Asset::Eth, Asset::Usdc, 100, None, []);
+		let swap1 = Swap::new(1.into(), 1.into(), Asset::Btc, Asset::Eth, 1, None, [], 1);
+		let swap2 = Swap::new(2.into(), 2.into(), Asset::Usdc, Asset::Eth, 1000, None, [], 1);
+		let swap3 = Swap::new(3.into(), 3.into(), Asset::Eth, Asset::Usdc, 100, None, [], 1);
 
 		let mut swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
 
@@ -1442,7 +1524,7 @@ mod swap_batching {
 						input_asset,
 						output_asset,
 						input_amount,
-						refund_params: None,
+						price_limits_and_expiry: None,
 						dca_params: None,
 						output_address: ForeignChainAddress::Eth([2; 20].into()),
 						is_ccm: false,
@@ -1468,7 +1550,8 @@ mod swap_batching {
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 					RuntimeEvent::Swapping(Event::SwapRescheduled {
 						swap_id: SwapId(1),
-						execute_at: SWAP_RESCHEDULED_BLOCK
+						execute_at: SWAP_RESCHEDULED_BLOCK,
+						reason: SwapFailureReason::PriceImpactLimit,
 					}),
 				);
 
@@ -1510,7 +1593,7 @@ mod swap_batching {
 						input_asset,
 						output_asset,
 						input_amount,
-						refund_params: None,
+						price_limits_and_expiry: None,
 						dca_params: None,
 						output_address: ForeignChainAddress::Eth([2; 20].into()),
 						is_ccm: false,
@@ -1568,7 +1651,7 @@ mod internal_swaps {
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,
 					0,
-					min_price,
+					PriceLimits { min_price, max_oracle_price_slippage: None },
 					None,
 					LP_ACCOUNT,
 				);
@@ -1651,7 +1734,7 @@ mod internal_swaps {
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,
 					0,
-					min_price,
+					PriceLimits { min_price, max_oracle_price_slippage: None },
 					Some(DcaParameters { number_of_chunks: 2, chunk_interval: 2 }),
 					LP_ACCOUNT,
 				);
@@ -1695,6 +1778,10 @@ mod internal_swaps {
 
 				assert_event_sequence!(
 					Test,
+					RuntimeEvent::Swapping(Event::SwapAborted {
+						swap_id: SwapId(2),
+						reason: SwapFailureReason::MinPriceViolation
+					}),
 					RuntimeEvent::Swapping(Event::SwapRequested {
 						request_type: SwapRequestTypeEncoded::NetworkFee,
 						input_amount: REFUND_FEE,

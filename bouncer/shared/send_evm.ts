@@ -5,8 +5,7 @@ import {
   ethNonceMutex,
   arbNonceMutex,
   getEvmEndpoint,
-  getWhaleKey,
-  sleep,
+  getEvmWhaleKeypair,
   assetDecimals,
   getContractAddress,
 } from 'shared/utils';
@@ -33,8 +32,8 @@ export async function getNextEvmNonce(chain: Chain): Promise<number> {
   return mutex.runExclusive(async () => {
     if (nextEvmNonce[chain] === undefined) {
       const web3 = new Web3(getEvmEndpoint(chain));
-      const whaleKey = getWhaleKey(chain);
-      const address = web3.eth.accounts.privateKeyToAccount(whaleKey).address;
+      const { privkey: whalePrivKey } = getEvmWhaleKeypair('Ethereum');
+      const address = web3.eth.accounts.privateKeyToAccount(whalePrivKey).address;
       const txCount = await web3.eth.getTransactionCount(address);
       nextEvmNonce[chain] = txCount;
     }
@@ -52,12 +51,12 @@ export async function signAndSendTxEvm(
   gas = chain === 'Arbitrum' ? 5000000 : 200000,
 ) {
   const web3 = new Web3(getEvmEndpoint(chain));
-  const whaleKey = getWhaleKey(chain);
+  const { privkey: whalePrivKey } = getEvmWhaleKeypair('Ethereum');
 
   const nonce = await getNextEvmNonce(chain);
   const tx = { to, data, gas, nonce, value };
 
-  const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
+  const signedTx = await web3.eth.accounts.signTransaction(tx, whalePrivKey);
 
   let receipt;
   const numberRetries = 10;
@@ -98,28 +97,6 @@ export async function sendEvmNative(
 ) {
   const weiAmount = amountToFineAmount(ethAmount, assetDecimals('Eth'));
   return signAndSendTxEvm(logger, chain, evmAddress, weiAmount, undefined, undefined);
-}
-
-export async function spamEvm(
-  logger: Logger,
-  chain: Chain,
-  periodMilliSec: number,
-  spam?: () => boolean,
-) {
-  const continueSpam = spam ?? (() => true);
-
-  while (continueSpam()) {
-    /* eslint-disable @typescript-eslint/no-floating-promises */
-    signAndSendTxEvm(
-      logger,
-      chain,
-      '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
-      '1',
-      undefined,
-      undefined,
-    );
-    await sleep(periodMilliSec);
-  }
 }
 
 const EVM_BASE_GAS_LIMIT = 21000;

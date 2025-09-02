@@ -68,6 +68,7 @@ export type ChannelRefundParameters = {
         ccm_additional_data: string | undefined;
       }
     | undefined;
+  max_oracle_price_slippage: number | undefined;
 };
 
 export async function executeSolVaultSwap(
@@ -107,6 +108,7 @@ export async function executeSolVaultSwap(
 
   await using chainflip = await getChainflipApi();
 
+  // This will be replaced in PRO-2228 when the SDK is used
   const refundParams: ChannelRefundParameters = {
     retry_duration: fillOrKillParams?.retryDurationBlocks ?? 0,
     refund_address: decodeSolAddress(
@@ -118,6 +120,7 @@ export async function executeSolVaultSwap(
       gas_budget: fillOrKillParams?.refundCcmMetadata.gasBudget,
       ccm_additional_data: fillOrKillParams?.refundCcmMetadata.ccmAdditionalData,
     },
+    max_oracle_price_slippage: undefined,
   };
   const extraParameters: SolanaVaultSwapExtraParameters = {
     chain: 'Solana',

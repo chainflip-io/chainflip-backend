@@ -63,6 +63,7 @@ pub mod test_utils {
 				refund_address: refund_address(),
 				min_price: Default::default(),
 				refund_ccm_metadata: Default::default(),
+				max_oracle_price_slippage: Default::default(),
 			},
 			Some(dca_parameter()),
 			BOOST_FEE,

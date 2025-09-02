@@ -51,16 +51,16 @@ const swapEvent = observeEvent(logger, `swapping:CreditedOnChain`, {
 }).event;
 
 logger.info('Submitting on-chain swap extrinsic');
-await lpMutex.runExclusive(async () => {
+await lpMutex.runExclusive(lpUri, async () => {
   const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
   await chainflip.tx.liquidityProvider
     .scheduleSwap(
       amountToFineAmount(amount.toString(), assetDecimals(inputAsset)),
       inputAsset,
       outputAsset,
-      0,
-      0,
-      undefined,
+      0, // Retry duration
+      { min_price: '0x0', max_oracle_price_slippage: null },
+      undefined, // DCA params
     )
     .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
 });

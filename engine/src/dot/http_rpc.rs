@@ -18,22 +18,16 @@ use cf_chains::dot::RuntimeVersion;
 use cf_primitives::PolkadotBlockNumber;
 use futures_core::Future;
 use http::uri::Uri;
-use jsonrpsee::{
-	core::{client::ClientT, traits::ToRpcParams},
-	http_client::{HttpClient, HttpClientBuilder},
-};
-use serde_json::value::RawValue;
 use subxt::{
 	backend::{
 		legacy::{
 			rpc_methods::{BlockDetails, Bytes},
 			LegacyRpcMethods,
 		},
-		rpc::{RawRpcFuture, RawRpcSubscription, RpcClient, RpcClientT},
+		rpc::RpcClient,
 	},
 	error::BlockError,
 	events::{Events, EventsClient},
-	ext::subxt_rpcs,
 	OnlineClient, PolkadotConfig,
 };
 use url::Url;
@@ -48,48 +42,6 @@ use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
 use super::rpc::DotRpcApi;
 
 use crate::dot::PolkadotHash;
-
-pub struct PolkadotHttpClient(HttpClient);
-
-impl PolkadotHttpClient {
-	pub fn new(url: &SecretUrl) -> Result<Self> {
-		Ok(Self(HttpClientBuilder::default().build(url)?))
-	}
-}
-
-struct Params(Option<Box<RawValue>>);
-
-impl ToRpcParams for Params {
-	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
-		Ok(self.0)
-	}
-}
-
-impl RpcClientT for PolkadotHttpClient {
-	fn request_raw<'a>(
-		&'a self,
-		method: &'a str,
-		params: Option<Box<RawValue>>,
-	) -> RawRpcFuture<'a, Box<RawValue>> {
-		Box::pin(async move {
-			let res = self
-				.0
-				.request(method, Params(params))
-				.await
-				.map_err(|e| subxt_rpcs::Error::Client(Box::new(e)))?;
-			Ok(res)
-		})
-	}
-
-	fn subscribe_raw<'a>(
-		&'a self,
-		_sub: &'a str,
-		_params: Option<Box<RawValue>>,
-		_unsub: &'a str,
-	) -> RawRpcFuture<'a, RawRpcSubscription> {
-		unimplemented!("HTTP Client does not support subscription");
-	}
-}
 
 /// Adds a default port to the url based on the scheme (http, https, ws, wss),
 /// if none exists. Otherwise preservers existing port.
@@ -144,22 +96,30 @@ impl DotHttpRpcClient {
 		// adding the default port if none is present.
 		let url = ensure_port(raw_url)?;
 
-		let rpc_client = RpcClient::new(PolkadotHttpClient::new(&url)?);
-
 		Ok(async move {
 			// We don't want to return an error here. Returning an error means that we'll exit the
 			// CFE. So on client creation we wait until we can be successfully connected to the
 			// Polkadot node. So the other chains are unaffected
 			let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
-			let online_client = loop {
+			let (rpc_client, online_client) = loop {
 				poll_interval.tick().await;
 
-				match OnlineClient::<PolkadotConfig>::from_rpc_client(rpc_client.clone()).await {
-					Ok(online_client) => {
+				let maybe_online_client: anyhow::Result<_> =
+					match RpcClient::from_url(url.clone()).await {
+						Ok(rpc_client) =>
+							OnlineClient::<PolkadotConfig>::from_rpc_client(rpc_client.clone())
+								.await
+								.map(move |a| (rpc_client, a))
+								.map_err(|e| e.into()),
+						Err(e) => Err(e.into()),
+					};
+
+				match maybe_online_client {
+					Ok((rpc_client, online_client)) => {
 						if let Some(expected_genesis_hash) = expected_genesis_hash {
 							let genesis_hash = online_client.genesis_hash();
 							if genesis_hash == expected_genesis_hash {
-								break online_client
+								break (rpc_client, online_client)
 							} else {
 								error!(
 									"Connected to Polkadot node at {url} but the genesis hash {genesis_hash} does not match the expected genesis hash {expected_genesis_hash}. Please check your CFE configuration file."
@@ -167,7 +127,7 @@ impl DotHttpRpcClient {
 							}
 						} else {
 							warn!("Skipping Polkadot genesis hash check");
-							break online_client
+							break (rpc_client, online_client)
 						}
 					},
 					Err(e) => {
@@ -266,7 +226,16 @@ impl DotRpcApi for DotHttpRpcClient {
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
-		Ok(self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await?)
+		let success = subxt::tx::SubmittableTransaction::<PolkadotConfig, _>::from_bytes(
+			self.online_client.clone(),
+			encoded_bytes,
+		)
+		.submit_and_watch()
+		.await?
+		.wait_for_finalized_success()
+		.await?;
+
+		Ok(success.extrinsic_hash())
 	}
 }
 
@@ -280,6 +249,14 @@ mod tests {
 	async fn test_http_rpc() {
 		let dot_http_rpc =
 			DotHttpRpcClient::new("http://localhost:9945".into(), None).unwrap().await;
+		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
+		println!("block_hash: {:?}", block_hash);
+	}
+
+	#[ignore = "requires local node"]
+	#[tokio::test]
+	async fn test_ws_rpc() {
+		let dot_http_rpc = DotHttpRpcClient::new("ws://localhost:9945".into(), None).unwrap().await;
 		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
 		println!("block_hash: {:?}", block_hash);
 	}

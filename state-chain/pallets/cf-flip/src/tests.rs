@@ -18,8 +18,8 @@
 
 use super::*;
 use crate::{
-	mock::*, Account, Bonder, Error, FlipIssuance, FlipSlasher, OffchainFunds, Reserve,
-	SlashingRate, TotalIssuance,
+	mock::*, Account, Bonder, Error, FlipIssuance, OffchainFunds, Reserve, SlashingRate,
+	TotalIssuance,
 };
 use cf_primitives::FlipBalance;
 use cf_traits::{AccountInfo, Bonding, Funding, Issuance, Slashing};
@@ -135,7 +135,7 @@ impl FlipOperation {
 				let previous_issuance = TotalIssuance::<Test>::get();
 				let previous_reserve = Reserve::<Test>::try_get(TEST_RESERVE).unwrap_or(0);
 
-				let mint = FlipIssuance::<Test>::mint(*amount);
+				let mint = Flip::mint(*amount);
 				let deposit = Flip::deposit_reserves(TEST_RESERVE, *amount);
 				mem::drop(mint.offset(deposit));
 
@@ -156,7 +156,7 @@ impl FlipOperation {
 				let previous_issuance = TotalIssuance::<Test>::get();
 				let previous_reserve = Reserve::<Test>::try_get(TEST_RESERVE).unwrap_or(0);
 
-				let burn = FlipIssuance::<Test>::burn(*amount);
+				let burn = Flip::burn(*amount);
 				let withdrawal = Flip::withdraw_reserves(TEST_RESERVE, *amount);
 				let _result = burn.offset(withdrawal);
 
@@ -251,8 +251,7 @@ impl FlipOperation {
 				let new_offchain_funds = OffchainFunds::<Test>::get();
 				if new_offchain_funds != previous_offchain_funds.saturating_sub(*amount) ||
 					new_balance !=
-						(previous_balance + (previous_offchain_funds - new_offchain_funds)) ||
-					!MockOnAccountFunded::has_account_been_funded(account_id)
+						(previous_balance + (previous_offchain_funds - new_offchain_funds))
 				{
 					return false
 				}
@@ -290,9 +289,6 @@ impl FlipOperation {
 				);
 				<Flip as Funding>::finalize_redemption(account_id)
 					.expect("Pending Redemption should exist");
-				if !MockOnAccountFunded::has_account_been_funded(account_id) {
-					return false
-				}
 			},
 			FlipOperation::SlashAccount(account_id, slashing_rate, bond, mint, blocks) => {
 				// Mint some Flip for testing - 100 is not enough and unrealistic for this use case
@@ -688,7 +684,7 @@ mod transfer {
 	use super::*;
 
 	#[test]
-	fn try_transfer_funds_and_dont_violate_the_total_issuance() {
+	fn try_transfer_funds_and_do_not_violate_the_total_issuance() {
 		new_test_ext().execute_with(|| {
 			const AMOUNT: u128 = 10;
 			assert_eq!(Flip::total_balance_of(&ALICE), 100);
