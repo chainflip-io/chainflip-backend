@@ -2548,6 +2548,7 @@ mod delegation {
 	}
 }
 
+#[cfg(test)]
 pub mod auction_optimization {
 
 	use cf_primitives::FlipBalance;
@@ -2621,19 +2622,23 @@ pub mod auction_optimization {
 	#[test]
 	fn test_auction_optimization() {
 		let operator_bids_combinations = create_operator_bids_combinations(vec![
-			(vec![150, 140], vec![130, 100], vec![100, 101, 102, 0], 120), /* both validators
-			                                                                * from op 1 make it,
-			                                                                * only one from op 2 */
-			(vec![80, 90], vec![60, 70], vec![101, 103, 0, 1], 120), /* both ops combine into 1
-			                                                          * val to make it */
-			(vec![90, 95], vec![50, 45], vec![101, 0, 1, 2], 110), /* op 1 converts bid to one
-			                                                        * val to make it, op 2 can't
-			                                                        * make it even if he
-			                                                        * combines into 1 */
-			(vec![90, 95], vec![50, 45, 30], vec![101, 102, 0, 1], 120), /* op 2 can now combine
-			                                                              * 3 vals into 1 to
-			                                                              * make it into the set */
-			(vec![90, 95], vec![80, 90, 95], vec![101, 103, 104, 0], 120), // op 2 combines into 2
+			// both validators from op 1 make it, only one from op 2
+			(vec![150, 140], vec![130, 100], vec![100, 101, 102, 0], 120),
+			// both ops combine into 1 val to make it
+			(vec![80, 90], vec![60, 70], vec![101, 103, 0, 1], 120),
+			// op 1 converts bid to one val to make it, op 2 can't make it even if he combines into
+			// 1
+			(vec![90, 95], vec![50, 45], vec![101, 0, 1, 2], 110),
+			// both consolidate their vals when they have nodes at the boundary of cutoff such that
+			// some vaop 2 can now combine 3 vals into 1 to make it into the setls make it and some
+			// dont. We still consolidate the bids to increase the number of vals in the set
+			(vec![90, 95], vec![50, 45, 30], vec![101, 102, 0, 1], 120),
+			// op 2 combines into 2
+			(vec![90, 95], vec![80, 90, 95], vec![101, 103, 104, 0], 120),
+			// both consolidate their vals when they have nodes at the boundary of cutoff such that
+			// some vals make it and some dont. We still consolidate the bids to increase the
+			// number of vals in the set
+			(vec![220, 205, 200], vec![150, 140, 130], vec![100, 101, 103, 104], 210),
 		]);
 
 		for (op_1_bids, op_2_bids, expected_primary_candidates, expected_bond) in

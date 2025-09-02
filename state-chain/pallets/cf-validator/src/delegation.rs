@@ -1,6 +1,6 @@
 use crate::{
-	Config, DelegationCapacityFactor, DelegationSnapshots, OperatorSettingsLookup, ValidatorIdOf,
-	ValidatorToOperator,
+	AuctionOutcome, Config, DelegationCapacityFactor, DelegationSnapshots, OperatorSettingsLookup,
+	ValidatorIdOf, ValidatorToOperator,
 };
 use cf_primitives::EpochIndex;
 use cf_traits::{EpochInfo, Issuance, RewardsDistribution, Slashing};
@@ -14,7 +14,7 @@ use frame_support::{
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
 /// The minimum delegation fee that can be charged, in basis points.
 pub const MIN_OPERATOR_FEE: u32 = 200;
@@ -213,13 +213,36 @@ impl<T: Config> DelegationSnapshot<T> {
 		self.total_available_bid() / T::Amount::from(self.validators.len() as u32)
 	}
 
-	pub fn optimize_bid(&mut self, min_required_bid: T::Amount) {
-		while self.validators.len() > 1 && self.avg_bid() < min_required_bid {
-			if let Some((validator, amount)) =
-				self.validators.clone().into_iter().min_by_key(|(_, v)| *v)
-			{
-				self.validators.remove(&validator);
-				self.delegators.insert(validator.into_ref().clone(), amount);
+	fn move_lowest_validator_to_delegator(&mut self) {
+		if let Some((validator, amount)) =
+			self.validators.clone().into_iter().min_by_key(|(_, v)| *v)
+		{
+			self.validators.remove(&validator);
+			self.delegators.insert(validator.into_ref().clone(), amount);
+		}
+	}
+
+	pub fn maybe_optimize_bid(
+		&mut self,
+		auction_outcome: &AuctionOutcome<ValidatorIdOf<T>, T::Amount>,
+	) {
+		while self.validators.len() > 1 && self.avg_bid() <= auction_outcome.bond {
+			if self.avg_bid() == auction_outcome.bond {
+				let winning_vals = self
+					.validators
+					.iter()
+					.filter_map(|(val, _)| {
+						auction_outcome.winners.contains(val).then_some(val.clone())
+					})
+					.collect::<Vec<_>>();
+
+				if self.validators.len() - winning_vals.len() > 0 {
+					self.move_lowest_validator_to_delegator();
+				} else {
+					break;
+				}
+			} else {
+				self.move_lowest_validator_to_delegator();
 			}
 		}
 	}

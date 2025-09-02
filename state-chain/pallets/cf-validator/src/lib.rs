@@ -1642,9 +1642,7 @@ impl<T: Config> Pallet<T> {
 			let mut current_outcome = auction_outcome;
 			loop {
 				for (_operator, snapshot) in delegation_snapshots.iter_mut() {
-					if snapshot.avg_bid() < current_outcome.bond {
-						snapshot.optimize_bid(current_outcome.bond);
-					}
+					snapshot.maybe_optimize_bid(&current_outcome);
 				}
 				if let Ok(new_outcome) = resolver.resolve_auction(
 					auction_bids(&delegation_snapshots),
