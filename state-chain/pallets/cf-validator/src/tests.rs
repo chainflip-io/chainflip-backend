@@ -38,8 +38,7 @@ use frame_support::{
 use frame_system::RawOrigin;
 use sp_runtime::testing::UintAuthorityId;
 
-const ALICE: u64 = 100;
-const BOB: u64 = 101;
+const NOBODY: u64 = 999; // Non-existent account for testing
 const GENESIS_EPOCH: u32 = 1;
 
 const OPERATOR_SETTINGS: OperatorSettings =
@@ -2187,5 +2186,81 @@ mod delegation_splitting {
 				.collect::<BTreeMap<_, _>>()
 			)
 		);
+	}
+
+	#[test]
+	fn block_delegator_requires_account_exists_with_allow_default() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Allow
+				},
+			));
+
+			// Try to block a non-existent account (adds to exceptions list)
+			assert_noop!(
+				ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), NOBODY),
+				Error::<Test>::AccountDoesNotExist
+			);
+
+			// Verify that blocking an existing account still works
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
+		});
+	}
+
+	#[test]
+	fn allow_delegator_requires_account_exists_with_deny_default() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Deny
+				},
+			));
+
+			// Try to allow a non-existent account (adds to exceptions list)
+			assert_noop!(
+				ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), NOBODY),
+				Error::<Test>::AccountDoesNotExist
+			);
+
+			// Verify that allowing an existing account still works
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
+		});
+	}
+
+	#[test]
+	fn block_delegator_succeeds_for_nonexistent_account_with_deny_default() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Deny
+				},
+			));
+
+			// Blocking a non-existent account should succeed (removes from exceptions list - no-op)
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), NOBODY));
+		});
+	}
+
+	#[test]
+	fn allow_delegator_succeeds_for_nonexistent_account_with_allow_default() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Allow
+				},
+			));
+
+			// Allowing a non-existent account should succeed (removes from exceptions list - no-op)
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), NOBODY));
+		});
 	}
 }
