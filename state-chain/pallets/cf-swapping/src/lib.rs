@@ -21,7 +21,6 @@ use alloy::{
 	dyn_abi::{DynSolType, DynSolValue},
 	hex,
 	primitives::{keccak256, Address, U256},
-	signers::local::PrivateKeySigner,
 };
 use cf_amm::common::Side;
 use cf_chains::{
@@ -1520,6 +1519,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit_user_signed_payload())]
 		pub fn submit_user_signed_payload(
 			origin: OriginFor<T>,
+			// TODO: User UserActionsApi directly?
 			payload: Vec<u8>,
 			user_metadata: UserMetadata,
 			user_signature_data: UserSignatureData,
@@ -3027,9 +3027,11 @@ mod test {
 	use sp_core::H160;
 	use std::str::FromStr;
 
-	// THis works! from ChatGpT
 	#[test]
 	fn testing() {
+		// -----------------
+		// Domain separator
+		// -----------------
 		let type_str = "EIP712Domain(string name,string version,uint256 chainId)";
 		let type_hash: B256 = keccak256(type_str.as_bytes());
 		let name_hash: B256 = keccak256("Chainflip".as_bytes());
@@ -3046,44 +3048,64 @@ mod test {
 
 		let domain_separator = keccak256(encoded);
 		println!("Domain separator: 0x{}", hex::encode(domain_separator));
+
 		assert_eq!(
 			hex::encode(domain_separator),
 			"027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a255"
 		);
 
+		// -----------------
 		// Borrow struct
-		let borrow_type_str = "Borrow(string from,uint256 amount)";
+		// -----------------
+		let borrow_type_str =
+			"Borrow(string from,uint256 amount,uint256 collateralAsset,uint256 borrowAsset)";
 		let borrow_type_hash: B256 = keccak256(borrow_type_str.as_bytes());
 
-		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"; // replace with evmSigner string
+		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 		let from_hash: B256 = keccak256(from_str.as_bytes());
-		let amount = U256::from(1234);
 
-		let encoded_borrow = DynSolValue::Tuple(vec![
+		let amount = U256::from(1234);
+		let collateral_asset = U256::from(5);
+		let borrow_asset = U256::from(3);
+
+		let encoded_message = DynSolValue::Tuple(vec![
 			DynSolValue::FixedBytes(borrow_type_hash, 32),
 			DynSolValue::FixedBytes(from_hash, 32),
 			DynSolValue::Uint(amount, 256),
+			DynSolValue::Uint(collateral_asset, 256),
+			DynSolValue::Uint(borrow_asset, 256),
 		])
 		.abi_encode();
 
-		let message_hash: B256 = keccak256(encoded_borrow);
+		let message_type = DynSolType::Tuple(vec![
+			DynSolType::FixedBytes(32), // type hash
+			DynSolType::FixedBytes(32), // from
+			DynSolType::Uint(256),      // amount
+			DynSolType::Uint(256),      // collateral asset
+			DynSolType::Uint(256),      // borrow asset
+		]);
+		let decoded_message = message_type.abi_decode(&encoded_message).unwrap();
+		println!("Decoded message: {:?}", decoded_message);
+
+		let message_hash: B256 = keccak256(encoded_message);
 		println!("Borrow struct hash: 0x{}", hex::encode(message_hash));
 		assert_eq!(
 			hex::encode(message_hash),
-			"72dd76dac9af1f535a95bb477dade4c7eee10d6d610290bb13d556cb29615a35"
+			"6b9b49724eb5ff27f2fd7f20e3069b9f21ebd4f4215557469a182f4ec211f719"
 		);
 
-		// Final digest
+		// -----------------
+		// Final EIP-712 digest
+		// -----------------
 		let mut encoded_final = vec![0x19, 0x01];
 		encoded_final.extend_from_slice(domain_separator.as_slice());
 		encoded_final.extend_from_slice(message_hash.as_slice());
-		println!("Encoded final: 0x{}", hex::encode(&encoded_final));
 
 		let eip712_hash: B256 = keccak256(&encoded_final);
 		println!("EIP-712 final digest: 0x{}", hex::encode(eip712_hash));
 		assert_eq!(
 			hex::encode(eip712_hash),
-			"8627515b2df9645e41141f803c03cba0a2acdfdcad9ad6a2f3623132a57977e2"
+			"5d8bd0a0adb0fd1987425f1bac09f036c155c0e4ce8a9c3f4a101e4cad61863b"
 		);
 	}
 

@@ -177,24 +177,20 @@ async function main() {
   };
 
   const types = {
-    // Person: [
-    //   { name: 'name', type: 'string' },
-    //   { name: 'wallet', type: 'address' },
-    // ],
     Borrow: [
       { name: 'from', type: 'string' },
       { name: 'amount', type: 'uint256' },
+      { name: 'collateralAsset', type: 'uint256' },
+      { name: 'borrowAsset', type: 'uint256' },
     ],
   };
 
   // The data to sign
   const message = {
-    // from: {
-    //   name: 'Sender',
-    //   wallet: evmSigner,
-    // },
     from: evmSigner,
     amount: 1234,
+    collateralAsset: 5,
+    borrowAsset: 3,
   };
 
   const signatureEip712 = await ethWallet.signTypedData(domain, types, message);
