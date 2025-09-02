@@ -15,7 +15,7 @@ import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
-import { Struct, u32, Enum, u128 } from 'scale-ts';
+import { Struct, u32, Enum, u128, u256 } from 'scale-ts';
 import { globalLogger } from 'shared/utils/logger';
 
 // TODO: Update these with the rpc encoding once the logic is implemented.
@@ -33,29 +33,30 @@ export const UserMetadataCodec = Struct({
   nonce: u32,
   expiryBlock: u32,
 });
+export const ChainIdCodec = u256;
 
+// Example values
+const nonce = 1;
+const expiryBlock = 10000;
+const amount = 1234;
+const collateralAsset = 5;
+const borrowAsset = 3;
 // For now hardcoded in the SC. It should be network dependent.
-const chainId = 1;
+const chainId = 1n;
 
 export function encodePayloadToSign(payload: Uint8Array, nonce: number, expiryBlock: number) {
   const userMetadata = UserMetadataCodec.enc({
     nonce,
     expiryBlock,
   });
-  return new Uint8Array([...payload, ...new Uint8Array([chainId]), ...userMetadata]);
+  const chainIdBytes = ChainIdCodec.enc(chainId);
+  return new Uint8Array([...payload, ...chainIdBytes, ...userMetadata]);
 }
 async function main() {
   await using chainflip = await getChainflipApi();
 
   const broker = createStateChainKeypair('//BROKER_1');
   const whaleKeypair = getSolWhaleKeyPair();
-
-  // Example values
-  const nonce = 1;
-  const expiryBlock = 10000;
-  const amount = 1234;
-  const collateralAsset = 5;
-  const borrowAsset = 3;
 
   const action = UserActionsCodec.enc({
     tag: 'Lending',
@@ -182,19 +183,20 @@ async function main() {
   const domain = {
     name: 'Chainflip',
     version: '0',
-    chainId: 1,
+    chainId,
   };
 
   const types = {
+    Metadata: [
+      { name: 'nonce', type: 'uint256' },
+      { name: 'expiryBlock', type: 'uint256' },
+    ],
     Borrow: [
       { name: 'from', type: 'string' },
       { name: 'amount', type: 'uint256' },
       { name: 'collateralAsset', type: 'uint256' },
       { name: 'borrowAsset', type: 'uint256' },
-      // TODO: Consider having these as a separate type
-      // that all actions use/inherit (UserMetadata)
-      { name: 'nonce', type: 'uint256' },
-      { name: 'expiryBlock', type: 'uint256' },
+      { name: 'metadata', type: 'Metadata' },
     ],
   };
 
@@ -204,8 +206,10 @@ async function main() {
     amount,
     collateralAsset,
     borrowAsset,
-    nonce,
-    expiryBlock,
+    metadata: {
+      nonce,
+      expiryBlock,
+    },
   };
 
   const evmSignatureEip712 = await ethWallet.signTypedData(domain, types, message);

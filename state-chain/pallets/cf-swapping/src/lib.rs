@@ -21,7 +21,7 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
-	evm::Signature as EthereumSignature,
+	evm::{Signature as EthereumSignature, U256},
 	sol::{SolAddress, SolSignature},
 	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersCheckedInternal,
 	ChannelRefundParametersUncheckedEncoded, SwapOrigin,
@@ -329,10 +329,12 @@ struct BatchExecutionOutcomes<T: Config> {
 	successful_swaps: Vec<SwapState<T>>,
 	failed_swaps: Vec<Swap<T>>,
 }
-fn get_current_chain_id() -> u8 {
-	// TODO: Align on a standard or if we use genesis_hashes, names or
-	// some agreed upon number (chainId) to differentiate our networks.
-	1u8
+
+// TODO: Align on a standard or if we use genesis_hashes, names or
+// some agreed upon number (chainId) to differentiate our networks.
+// EIP712 uses uint256 so we probably want to use that.
+fn get_current_chain_id() -> U256 {
+	U256::from(1u64)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -1514,7 +1516,6 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit_user_signed_payload())]
 		pub fn submit_user_signed_payload(
 			origin: OriginFor<T>,
-			// TODO: User UserActionsApi directly?
 			payload: Vec<u8>,
 			user_metadata: UserMetadata,
 			user_signature_data: UserSignatureData,
@@ -1527,6 +1528,8 @@ pub mod pallet {
 
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
+			// We could directly have the action: UserActionsApi as parameter, but this
+			// is more flexible for now. TBD.
 			let decoded_action =
 				UserActionsApi::decode(&mut &payload[..]).expect("Payload should decode");
 
@@ -1536,7 +1539,7 @@ pub mod pallet {
 						SolSigType::Domain => {
 							let concat_data = [
 								payload.clone(),
-								vec![get_current_chain_id()],
+								get_current_chain_id().encode(),
 								user_metadata.clone().encode(),
 							]
 							.concat();
@@ -1556,7 +1559,7 @@ pub mod pallet {
 						EthSigType::Domain => {
 							let concat_data = [
 								payload.clone(),
-								vec![get_current_chain_id()],
+								get_current_chain_id().encode(),
 								user_metadata.clone().encode(),
 							]
 							.concat();
@@ -1567,7 +1570,6 @@ pub mod pallet {
 							let prefix_bytes = prefix.as_bytes();
 							[prefix_bytes, &concat_data].concat()
 						},
-						// TODO: To pass user_metadata too
 						EthSigType::Eip712 =>
 							build_eip_712_hash(decoded_action.clone(), user_metadata.clone()),
 					};
@@ -1579,8 +1581,8 @@ pub mod pallet {
 				},
 			};
 
-			// TODO: Add check of replay protection mechanism (esp. nonce). ChainId should be
-			// checked within the signature verification above.
+			// TODO: Add any checks for the metadata. To check nonce and increment.
+
 			// Check expiry
 			let expired =
 				frame_system::Pallet::<T>::block_number() >= user_metadata.expiry_block.into();
@@ -3014,7 +3016,7 @@ pub(crate) mod utilities {
 }
 
 pub fn build_eip_712_hash(user_action: UserActionsApi, user_metadata: UserMetadata) -> Vec<u8> {
-	use cf_chains::evm::{encode, Token, U256};
+	use cf_chains::evm::{encode, Token};
 	// -----------------
 	// Domain separator
 	// -----------------
@@ -3022,7 +3024,7 @@ pub fn build_eip_712_hash(user_action: UserActionsApi, user_metadata: UserMetada
 	let type_hash = Keccak256::hash(type_str.as_bytes());
 	let name_hash = Keccak256::hash("Chainflip".as_bytes());
 	let version_hash = Keccak256::hash("0".as_bytes());
-	let chain_id = U256::from(1);
+	let chain_id = get_current_chain_id();
 
 	// Create tokens
 	let tokens = vec![
@@ -3037,16 +3039,37 @@ pub fn build_eip_712_hash(user_action: UserActionsApi, user_metadata: UserMetada
 	let domain_separator = Keccak256::hash(&encoded);
 
 	// -----------------
+	// Metadata struct
+	// -----------------
+	let metadata_type_str = "Metadata(uint256 nonce,uint256 expiryBlock)";
+	let metadata_type_hash = Keccak256::hash(metadata_type_str.as_bytes());
+
+	let metadata_tokens = vec![
+		Token::FixedBytes(metadata_type_hash.as_bytes().to_vec()),
+		Token::Uint(U256::from(user_metadata.nonce)),
+		Token::Uint(U256::from(user_metadata.expiry_block)),
+	];
+	let encoded_metadata = encode(&metadata_tokens);
+	let metadata_hash = Keccak256::hash(&encoded_metadata);
+
+	// -----------------
 	// Borrow struct
 	// -----------------
-	let borrow_type_str =
-		"Borrow(string from,uint256 amount,uint256 collateralAsset,uint256 borrowAsset,uint256 nonce,uint256 expiryBlock)";
+	// NOTE: When there’s a nested struct, EIP-712 requires including
+	// the dependency in the type string.
+	//
+	// So Borrow type is actually:
+	// "Borrow(string from,uint256 amount,uint256 collateralAsset,uint256 borrowAsset,Metadata
+	// metadata)Metadata(uint256 nonce,uint256 expiryBlock)"
+	//
+	// i.e. we must append the full definition of Metadata.
+	let borrow_type_str = "Borrow(string from,uint256 amount,uint256 collateralAsset,uint256 borrowAsset,Metadata metadata)Metadata(uint256 nonce,uint256 expiryBlock)";
 	let borrow_type_hash = Keccak256::hash(borrow_type_str.as_bytes());
 
+	// For "from" field: hash string -> keccak256(bytes("..."))
 	let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 	let from_hash = Keccak256::hash(from_str.as_bytes());
 
-	// Extract fields from UserActionsApi
 	let message_hash = match user_action {
 		UserActionsApi::Lending(LendingApi::Borrow { amount, collateral_asset, borrow_asset }) => {
 			let (amount, collateral_asset, borrow_asset) =
@@ -3058,18 +3081,16 @@ pub fn build_eip_712_hash(user_action: UserActionsApi, user_metadata: UserMetada
 				Token::Uint(amount),
 				Token::Uint(collateral_asset),
 				Token::Uint(borrow_asset),
-				Token::Uint(U256::from(user_metadata.nonce)),
-				Token::Uint(U256::from(user_metadata.expiry_block)),
+				Token::FixedBytes(metadata_hash.as_bytes().to_vec()), // nested struct
 			];
 
 			let encoded_message = encode(&tokens);
-
 			Keccak256::hash(&encoded_message)
 		},
 	};
 
 	// -----------------
-	// Final EIP-712 digest
+	// Final digest
 	// -----------------
 	let mut encoded_final = vec![0x19, 0x01];
 	encoded_final.extend_from_slice(domain_separator.0.as_slice());
