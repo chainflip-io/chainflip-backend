@@ -1563,6 +1563,36 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::<T>::RotationAborted);
 	}
 
+	#[cfg(test)]
+	pub fn dry_run_auction() -> Result<AuctionOutcome<ValidatorIdOf<T>, T::Amount>, AuctionError> {
+		let (delegation_snapshots, independent_bids) =
+			Self::build_delegation_snapshots::<T::KeygenQualification>();
+
+		let auction_bids = |delegation_snapshots: &BTreeMap<
+			T::AccountId,
+			DelegationSnapshot<T>,
+		>|
+		 -> Vec<Bid<_, _>> {
+			delegation_snapshots
+				.values()
+				.flat_map(|snapshot| snapshot.effective_validator_bids())
+				.chain(independent_bids.clone())
+				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
+				.collect::<Vec<_>>()
+		};
+
+		SetSizeMaximisingAuctionResolver::try_new(
+			T::EpochInfo::current_authority_count(),
+			AuctionParameters::<T>::get(),
+		)
+		.and_then(|resolver| {
+			resolver.resolve_auction(
+				auction_bids(&delegation_snapshots),
+				AuctionBidCutoffPercentage::<T>::get(),
+			)
+		})
+	}
+
 	fn start_authority_rotation() -> Weight {
 		if !T::SafeMode::get().authority_rotation_enabled {
 			log::warn!(

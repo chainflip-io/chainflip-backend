@@ -36,6 +36,8 @@ use frame_support::{
 	traits::{HandleLifetime, OriginTrait},
 };
 use frame_system::RawOrigin;
+use quickcheck::TestResult;
+use quickcheck_macros::quickcheck;
 use sp_runtime::testing::UintAuthorityId;
 use sp_std::vec;
 
@@ -2548,10 +2550,14 @@ mod delegation {
 
 pub mod auction_optimization {
 
+	use cf_primitives::FlipBalance;
+
 	use super::*;
 
 	const OP_1: u64 = 1001;
 	const OP_2: u64 = 1002;
+
+	const FLIP_MAX_SUPPLY: FlipBalance = 90_000_000_000_000_000_000_000_000;
 
 	fn setup_bids(
 		op_1_bids: Vec<Bid<ValidatorId, Amount>>,
@@ -2582,6 +2588,7 @@ pub mod auction_optimization {
 		}
 	}
 
+	#[allow(clippy::type_complexity)]
 	fn create_operator_bids_combinations<A>(
 		bid_combos: Vec<(Vec<A>, Vec<A>, Vec<ValidatorId>, A)>,
 	) -> Vec<(Vec<Bid<ValidatorId, A>>, Vec<Bid<ValidatorId, A>>, Vec<ValidatorId>, A)> {
@@ -2657,6 +2664,57 @@ pub mod auction_optimization {
 					panic!("auction optimization test error: expected event not found ")
 				}
 			});
+		}
+	}
+
+	#[quickcheck]
+	fn test_auction_optimization_invariants(
+		bid_combos: Vec<(Vec<FlipBalance>, Vec<FlipBalance>)>,
+	) -> TestResult {
+		if create_operator_bids_combinations(
+			bid_combos
+				.into_iter()
+				.map(|(b1, b2)| {
+					(
+						b1.into_iter().map(|b| b % FLIP_MAX_SUPPLY).collect(),
+						b2.into_iter().map(|b| b % FLIP_MAX_SUPPLY).collect(),
+						Default::default(),
+						Default::default(),
+					)
+				})
+				.collect::<Vec<_>>(),
+		)
+		.into_iter()
+		.any(|(op_1_bids, op_2_bids, _, _)| {
+			new_test_ext()
+				.then_execute_with_checks(|| -> bool {
+					setup_bids(op_1_bids, op_2_bids);
+
+					let single_auction_outcome = ValidatorPallet::dry_run_auction().unwrap();
+
+					ValidatorPallet::start_authority_rotation();
+
+					if let RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+						new_phase:
+							RotationPhase::KeygensInProgress(RotationState {
+								primary_candidates: _,
+								secondary_candidates: _,
+								banned: _,
+								bond,
+								new_epoch_index: _,
+							}),
+					}) = last_event::<Test>()
+					{
+						bond < single_auction_outcome.bond
+					} else {
+						true
+					}
+				})
+				.into_context()
+		}) {
+			TestResult::failed()
+		} else {
+			TestResult::passed()
 		}
 	}
 }
