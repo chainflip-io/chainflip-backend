@@ -271,7 +271,7 @@ mod tests {
 
 			// Add validators
 			for (i, amount) in validator_amounts.iter().enumerate() {
-				snapshot.validators.insert((i as u64 + 100).into(), *amount);
+				snapshot.validators.insert(i as u64 + 100, *amount);
 			}
 
 			// Add delegators
@@ -284,9 +284,11 @@ mod tests {
 			let sum: u128 = distributions.iter().map(|(_, amount)| *amount).sum();
 
 			// Property: The sum of all distributed amounts equals the input total
-			assert_eq!(sum, total_to_distribute, 
-				"Sum of distributions ({}) does not equal total ({})", 
-				sum, total_to_distribute);
+			assert_eq!(
+				sum, total_to_distribute,
+				"Sum of distributions ({}) does not equal total ({})",
+				sum, total_to_distribute
+			);
 		}
 	}
 }
