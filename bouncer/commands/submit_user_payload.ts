@@ -17,6 +17,7 @@ import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
 import { Struct, u32, Enum } from 'scale-ts';
 import { globalLogger } from 'shared/utils/logger';
+import { C } from 'vitest/dist/chunks/reporters.Y8BYiXBN.js';
 
 // TODO: Update these with the rpc encoding once the logic is implemented.
 export const UserActionsCodec = Enum({
@@ -70,43 +71,43 @@ async function main() {
   console.log('Signed Message (hex):', hexSignature);
   console.log('Signer (hex):', hexSigner);
 
-  await brokerMutex.runExclusive(async () => {
-    const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    await chainflip.tx.swapping
-      .submitUserSignedPayload(
-        hexAction,
-        {
-          nonce,
-          expiryBlock,
-        },
-        {
-          Solana: {
-            signature: hexSignature,
-            signer: hexSigner,
-            // Passing the sigType is not working but it defaults to the first item,
-            // which is the SolSigType::Domain that we want
-            // sigType: {Domain: null},
-          },
-        },
-      )
-      .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
-  });
+  // await brokerMutex.runExclusive(async () => {
+  //   const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
+  //   await chainflip.tx.swapping
+  //     .submitUserSignedPayload(
+  //       // Solana prefix will be added in the SC previous to signature verification
+  //       hexAction,
+  //       {
+  //         nonce,
+  //         expiryBlock,
+  //       },
+  //       {
+  //         Solana: {
+  //           signature: hexSignature,
+  //           signer: hexSigner,
+  //           // Passing the sigType is not working but it defaults to the first item,
+  //           // which is the SolSigType::Domain that we want
+  //           // sigType: {Domain: null},
+  //         },
+  //       },
+  //     )
+  //     .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
+  // });
 
-  await observeEvent(globalLogger, `swapping:UserSignedTransactionSubmitted`, {
-    test: (event) => {
-      console.log('event.data', event.data);
-      const valid = event.data.valid === true && event.data.expired === false;
-      const matchDecodedAction = event.data.decodedAction.Lending === 'Borrow';
-      const matchSignedPayload = event.data.signedPayload === solHexPrefixedMessage;
-      const matchUserSignatureData =
-        event.data.userSignatureData?.Solana &&
-        event.data.userSignatureData.Solana.signature.toLowerCase() ===
-          hexSignature.toLowerCase() &&
-        event.data.userSignatureData.Solana.signer.toLowerCase() === hexSigner.toLowerCase();
-      return valid && matchDecodedAction && matchSignedPayload && matchUserSignatureData;
-    },
-    historicalCheckBlocks: 1,
-  }).event;
+  // await observeEvent(globalLogger, `swapping:UserSignedTransactionSubmitted`, {
+  //   test: (event) => {
+  //     const valid = event.data.valid === true && event.data.expired === false;
+  //     const matchDecodedAction = event.data.decodedAction.Lending === 'Borrow';
+  //     const matchSignedPayload = event.data.signedPayload === solHexPrefixedMessage;
+  //     const matchUserSignatureData =
+  //       event.data.userSignatureData?.Solana &&
+  //       event.data.userSignatureData.Solana.signature.toLowerCase() ===
+  //         hexSignature.toLowerCase() &&
+  //       event.data.userSignatureData.Solana.signer.toLowerCase() === hexSigner.toLowerCase();
+  //     return valid && matchDecodedAction && matchSignedPayload && matchUserSignatureData;
+  //   },
+  //   historicalCheckBlocks: 1,
+  // }).event;
 
   console.log('Submitted user signed payload in SVM');
 
@@ -130,42 +131,83 @@ async function main() {
   console.log('evmSignature:', evmSignature);
   console.log('compressed pubkey', ethWallet.signingKey.compressedPublicKey);
 
-  await brokerMutex.runExclusive(async () => {
-    const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    await chainflip.tx.swapping
-      .submitUserSignedPayload(
-        // Ethereum prefix will be added in the SC previous to signature verification
-        hexAction,
-        {
-          nonce,
-          expiryBlock,
-        },
-        {
-          Ethereum: {
-            signature: evmSignature,
-            signer: evmSigner,
-            // Passing the sigType enum is not working but it defaults to the first item,
-            // which is the EthSigType::Domain that we want
-          },
-        },
-      )
-      .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
-  });
+  // await brokerMutex.runExclusive(async () => {
+  //   const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
+  //   await chainflip.tx.swapping
+  //     .submitUserSignedPayload(
+  //       // Ethereum prefix will be added in the SC previous to signature verification
+  //       hexAction,
+  //       {
+  //         nonce,
+  //         expiryBlock,
+  //       },
+  //       {
+  //         Ethereum: {
+  //           signature: evmSignature,
+  //           signer: evmSigner,
+  //           // Passing the sigType enum is not working but it defaults to the first item,
+  //           // which is the EthSigType::Domain that we want
+  //         },
+  //       },
+  //     )
+  //     .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
+  // });
 
-  await observeEvent(globalLogger, `swapping:UserSignedTransactionSubmitted`, {
-    test: (event) => {
-      const valid = event.data.valid === true && event.data.expired === false;
-      const matchDecodedAction = event.data.decodedAction.Lending === 'Borrow';
-      const matchSignedPayload = event.data.signedPayload === hexPrefixedMessage;
-      const matchUserSignatureData =
-        event.data.userSignatureData?.Ethereum &&
-        event.data.userSignatureData.Ethereum.signature.toLowerCase() ===
-          evmSignature.toLowerCase() &&
-        event.data.userSignatureData.Ethereum.signer.toLowerCase() === evmSigner.toLowerCase();
-      return valid && matchDecodedAction && matchSignedPayload && matchUserSignatureData;
-    },
-    historicalCheckBlocks: 1,
-  }).event;
+  // await observeEvent(globalLogger, `swapping:UserSignedTransactionSubmitted`, {
+  //   test: (event) => {
+  //     const valid = event.data.valid === true && event.data.expired === false;
+  //     const matchDecodedAction = event.data.decodedAction.Lending === 'Borrow';
+  //     const matchSignedPayload = event.data.signedPayload === hexPrefixedMessage;
+  //     const matchUserSignatureData =
+  //       event.data.userSignatureData?.Ethereum &&
+  //       event.data.userSignatureData.Ethereum.signature.toLowerCase() ===
+  //         evmSignature.toLowerCase() &&
+  //       event.data.userSignatureData.Ethereum.signer.toLowerCase() === evmSigner.toLowerCase();
+  //     return valid && matchDecodedAction && matchSignedPayload && matchUserSignatureData;
+  //   },
+  //   historicalCheckBlocks: 1,
+  // }).event;
+
+  console.log('Trying EVM EIP712');
+
+  const domain = {
+    name: 'Chainflip',
+    version: '0',
+    chainId: 1,
+  };
+
+  const types = {
+    // Person: [
+    //   { name: 'name', type: 'string' },
+    //   { name: 'wallet', type: 'address' },
+    // ],
+    Borrow: [
+      { name: 'from', type: 'string' },
+      { name: 'amount', type: 'uint256' },
+    ],
+  };
+
+  // The data to sign
+  const message = {
+    // from: {
+    //   name: 'Sender',
+    //   wallet: evmSigner,
+    // },
+    from: evmSigner,
+    amount: 1234,
+  };
+
+  const signatureEip712 = await ethWallet.signTypedData(domain, types, message);
+  console.log('EIP712 Signature:', signatureEip712);
+
+  const encodedPayload = ethers.TypedDataEncoder.encode(domain, types, message);
+  console.log('EIP-712 Encoded Payload:', encodedPayload);
+  const hash = ethers.TypedDataEncoder.hash(domain, types, message);
+  console.log('EIP-712 Hash:', hash);
+  const hashDomain = ethers.TypedDataEncoder.hashDomain(domain);
+  console.log('EIP-712 Domain Hash:', hashDomain);
+  const messageHash = ethers.TypedDataEncoder.from(types).hash(message);
+  console.log('EIP-712 Message Hash:', messageHash);
 }
 
 await runWithTimeoutAndExit(main(), 20);

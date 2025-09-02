@@ -17,6 +17,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extract_if)]
 
+use alloy::{
+	dyn_abi::{DynSolType, DynSolValue},
+	hex,
+	primitives::{keccak256, Address, U256},
+	signers::local::PrivateKeySigner,
+};
 use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
@@ -3011,5 +3017,88 @@ pub(crate) mod utilities {
 		maybe_swap_id_to_remove.and_then(|swap_id_to_remove| {
 			swaps.extract_if(.., |swap| swap.swap_id == swap_id_to_remove).next()
 		})
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use alloy_primitives::B256;
+	use sp_core::H160;
+	use std::str::FromStr;
+
+	// THis works! from ChatGpT
+	#[test]
+	fn testing() {
+		let type_str = "EIP712Domain(string name,string version,uint256 chainId)";
+		let type_hash: B256 = keccak256(type_str.as_bytes());
+		let name_hash: B256 = keccak256("Chainflip".as_bytes());
+		let version_hash: B256 = keccak256("0".as_bytes());
+		let chain_id = U256::from(1);
+
+		let encoded = DynSolValue::Tuple(vec![
+			DynSolValue::FixedBytes(type_hash, 32),
+			DynSolValue::FixedBytes(name_hash, 32),
+			DynSolValue::FixedBytes(version_hash, 32),
+			DynSolValue::Uint(chain_id, 256),
+		])
+		.abi_encode();
+
+		let domain_separator = keccak256(encoded);
+		println!("Domain separator: 0x{}", hex::encode(domain_separator));
+		assert_eq!(
+			hex::encode(domain_separator),
+			"027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a255"
+		);
+
+		// Borrow struct
+		let borrow_type_str = "Borrow(string from,uint256 amount)";
+		let borrow_type_hash: B256 = keccak256(borrow_type_str.as_bytes());
+
+		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"; // replace with evmSigner string
+		let from_hash: B256 = keccak256(from_str.as_bytes());
+		let amount = U256::from(1234);
+
+		let encoded_borrow = DynSolValue::Tuple(vec![
+			DynSolValue::FixedBytes(borrow_type_hash, 32),
+			DynSolValue::FixedBytes(from_hash, 32),
+			DynSolValue::Uint(amount, 256),
+		])
+		.abi_encode();
+
+		let message_hash: B256 = keccak256(encoded_borrow);
+		println!("Borrow struct hash: 0x{}", hex::encode(message_hash));
+		assert_eq!(
+			hex::encode(message_hash),
+			"72dd76dac9af1f535a95bb477dade4c7eee10d6d610290bb13d556cb29615a35"
+		);
+
+		// Final digest
+		let mut encoded_final = vec![0x19, 0x01];
+		encoded_final.extend_from_slice(domain_separator.as_slice());
+		encoded_final.extend_from_slice(message_hash.as_slice());
+		println!("Encoded final: 0x{}", hex::encode(&encoded_final));
+
+		let eip712_hash: B256 = keccak256(&encoded_final);
+		println!("EIP-712 final digest: 0x{}", hex::encode(eip712_hash));
+		assert_eq!(
+			hex::encode(eip712_hash),
+			"8627515b2df9645e41141f803c03cba0a2acdfdcad9ad6a2f3623132a57977e2"
+		);
+	}
+
+	#[test]
+	fn test_verify_eip_712() {
+		use cf_chains::{evm::EvmCrypto, ChainCrypto};
+		// Data before hashing
+		let signed_payload = hex::decode("0x1901027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a255d3cf70c7277187d769dc8701e55bbdfccf6300732bb6513f86614f6267a6f4db").unwrap();
+		let signer: H160 = H160::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
+		let signature: EthereumSignature = hex_literal::hex!(
+			"4db2efcd4fe0dc3bde6c16745dc0d5420a9f3eee587e5cc271ac98fd975563081eaa2fe79e5b2453ca7d8c5675e4d683ac5c59d5d4d16d854ecdaaf35195d5551b"
+		)
+		.into();
+
+		let success = EvmCrypto::verify_signature(&signer, &signed_payload, &signature);
+		assert!(success, "Signature verification failed");
 	}
 }
