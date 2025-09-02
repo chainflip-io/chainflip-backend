@@ -152,12 +152,8 @@ impl<T: Config> DelegationSnapshot<T> {
 			total_validator_stake,
 			total_validator_stake + self.total_delegator_bid_capped().into(),
 		) * total;
-		let delegators_cut = total - validators_cut;
-		let operator_cut =
-			Perquintill::from_rational(self.delegation_fee_bps as u64, 10_000u64) * delegators_cut;
-		let delegators_cut = delegators_cut - operator_cut;
-
-		debug_assert_eq!(validators_cut + operator_cut + delegators_cut, total);
+		let operator_share = Perquintill::from_rational(self.delegation_fee_bps as u64, 10_000u64);
+		let delegators_cut = (Perquintill::one() - operator_share) * (total - validators_cut);
 
 		let validator_cuts = self.validators.iter().map(move |(validator, individual_stake)| {
 			let share =
@@ -171,14 +167,10 @@ impl<T: Config> DelegationSnapshot<T> {
 			(delegator, share * delegators_cut)
 		});
 
-		debug_assert_eq!(
-			total,
-			core::iter::once((&self.operator, operator_cut))
-				.chain(validator_cuts.clone())
-				.chain(delegator_cuts.clone())
-				.map(|(_, amount)| amount)
-				.sum::<Amount>(),
-		);
+		// Ensures that all cuts sum to the total amount.
+		let operator_cut = total
+			.saturating_sub(validator_cuts.clone().map(|(_, stake)| stake).sum::<Amount>())
+			.saturating_sub(delegator_cuts.clone().map(|(_, stake)| stake).sum::<Amount>());
 
 		core::iter::once((&self.operator, operator_cut))
 			.chain(validator_cuts)
