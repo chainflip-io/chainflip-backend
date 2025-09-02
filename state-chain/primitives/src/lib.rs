@@ -123,7 +123,7 @@ pub type BroadcastId = u32;
 /// This is the ratio of equivalently valued amounts of asset One and asset Zero.
 ///
 /// The price is always measured in amount of asset One per unit of asset Zero. Therefore as asset
-/// zero becomes more valuable relative to asset one the price's literal value goes up, and vice
+/// zero becomes more valuable relative to asset one the prices literal value goes up, and vice
 /// versa. This ratio is represented as a fixed point number with `PRICE_FRACTIONAL_BITS` fractional
 /// bits.
 pub type Price = U256;

@@ -16,7 +16,7 @@
 
 use sp_std::collections::btree_map::BTreeMap;
 
-use cf_primitives::{BasisPoints, BlockNumber};
+use cf_primitives::{Asset, BasisPoints, BlockNumber};
 use frame_support::sp_runtime::DispatchError;
 
 use crate::{SwapLimits, SwapParameterValidation};
@@ -54,11 +54,17 @@ impl SwapParameterValidation for MockSwapParameterValidation {
 		}
 	}
 
-	fn validate_refund_params(retry_duration: BlockNumber) -> Result<(), DispatchError> {
+	fn validate_refund_params(
+		_input_asset: Asset,
+		_output_asset: Asset,
+		retry_duration: BlockNumber,
+		_max_oracle_price_slippage: Option<BasisPoints>,
+	) -> Result<(), DispatchError> {
 		let limits = Self::get_swap_limits();
 		if retry_duration > limits.max_swap_retry_duration_blocks {
 			return Err(DispatchError::Other("Retry duration too high"));
 		}
+		// Note: ignoring oracle slippage validation for mock
 		Ok(())
 	}
 
