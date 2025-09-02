@@ -653,12 +653,12 @@ decl_runtime_apis!(
 		fn cf_oracle_prices(
 			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		) -> Vec<OraclePrice>;
-		fn cf_sc_call_tx(
+		fn cf_evm_calldata(
 			caller: EthereumAddress,
 			call: crate::chainflip::ethereum_sc_calls::EthereumSCApi,
 		) -> Result<EvmCallDetails, DispatchErrorWithMessage>;
 		#[changed_in(6)]
-		fn cf_sc_call_tx();
+		fn cf_evm_calldata();
 	}
 );
 

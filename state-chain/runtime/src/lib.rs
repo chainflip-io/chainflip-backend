@@ -2852,7 +2852,7 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_sc_call_tx(
+		fn cf_evm_calldata(
 			caller: EthereumAddress,
 			call: EthereumSCApi,
 		) -> Result<EvmCallDetails, DispatchErrorWithMessage> {

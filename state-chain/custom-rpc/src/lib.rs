@@ -1098,8 +1098,8 @@ pub trait CustomApi {
 		base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<OraclePrice>>;
-	#[method(name = "sc_call_tx")]
-	fn cf_sc_call_tx(
+	#[method(name = "evm_calldata")]
+	fn cf_evm_calldata(
 		&self,
 		caller: EthereumAddress,
 		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi,
@@ -2123,7 +2123,7 @@ where
 		})
 	}
 
-	fn cf_sc_call_tx(
+	fn cf_evm_calldata(
 		&self,
 		caller: EthereumAddress,
 		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi,
@@ -2142,7 +2142,7 @@ where
 					CfErrorCode::RuntimeApiError,
 				)))
 			} else {
-				api.cf_sc_call_tx(hash, caller, call)
+				api.cf_evm_calldata(hash, caller, call)
 					.map_err(CfApiError::from)?
 					.map_err(CfApiError::from)
 			}
