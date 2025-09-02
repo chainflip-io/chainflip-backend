@@ -191,6 +191,10 @@ async function main() {
       { name: 'amount', type: 'uint256' },
       { name: 'collateralAsset', type: 'uint256' },
       { name: 'borrowAsset', type: 'uint256' },
+      // TODO: Consider having these as a separate type
+      // that all actions use/inherit (UserMetadata)
+      { name: 'nonce', type: 'uint256' },
+      { name: 'expiryBlock', type: 'uint256' },
     ],
   };
 
@@ -200,6 +204,8 @@ async function main() {
     amount,
     collateralAsset,
     borrowAsset,
+    nonce,
+    expiryBlock,
   };
 
   const evmSignatureEip712 = await ethWallet.signTypedData(domain, types, message);

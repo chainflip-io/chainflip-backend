@@ -1568,7 +1568,8 @@ pub mod pallet {
 							[prefix_bytes, &concat_data].concat()
 						},
 						// TODO: To pass user_metadata too
-						EthSigType::Eip712 => build_eip_712_hash(decoded_action.clone()),
+						EthSigType::Eip712 =>
+							build_eip_712_hash(decoded_action.clone(), user_metadata.clone()),
 					};
 					(
 						EvmCrypto::verify_signature(&signer, &signed_payload, &signature),
@@ -3012,7 +3013,7 @@ pub(crate) mod utilities {
 	}
 }
 
-pub fn build_eip_712_hash(user_action: UserActionsApi) -> Vec<u8> {
+pub fn build_eip_712_hash(user_action: UserActionsApi, user_metadata: UserMetadata) -> Vec<u8> {
 	use cf_chains::evm::{encode, Token, U256};
 	// -----------------
 	// Domain separator
@@ -3039,7 +3040,7 @@ pub fn build_eip_712_hash(user_action: UserActionsApi) -> Vec<u8> {
 	// Borrow struct
 	// -----------------
 	let borrow_type_str =
-		"Borrow(string from,uint256 amount,uint256 collateralAsset,uint256 borrowAsset)";
+		"Borrow(string from,uint256 amount,uint256 collateralAsset,uint256 borrowAsset,uint256 nonce,uint256 expiryBlock)";
 	let borrow_type_hash = Keccak256::hash(borrow_type_str.as_bytes());
 
 	let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -3057,6 +3058,8 @@ pub fn build_eip_712_hash(user_action: UserActionsApi) -> Vec<u8> {
 				Token::Uint(amount),
 				Token::Uint(collateral_asset),
 				Token::Uint(borrow_asset),
+				Token::Uint(U256::from(user_metadata.nonce)),
+				Token::Uint(U256::from(user_metadata.expiry_block)),
 			];
 
 			let encoded_message = encode(&tokens);
