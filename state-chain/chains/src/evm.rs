@@ -85,11 +85,6 @@ impl ChainCrypto for EvmCrypto {
 		payload: &[u8],
 		signature: &Self::Signature,
 	) -> bool {
-		// TODO: When using signMessage (eth_sign) it will always add the ethereum prefix.
-		// Depending on what we implement we might want to prefix it here. However, the
-		// EIP-712 doesn't prefix it, so tbd what we want to do but we need to know for
-		// later when we decode the data. Maybe the payload should be an enum.
-
 		let mut sig_bytes = signature.0;
 
 		// Normalize signature's v if needed
