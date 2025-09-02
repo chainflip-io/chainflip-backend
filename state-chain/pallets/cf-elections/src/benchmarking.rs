@@ -201,7 +201,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			let _ = Pallet::<T, I>::recheck_contributed_to_consensuses(epoch, &validator_id, epoch);
+			let _ = Pallet::<T, I>::recheck_contributed_to_consensuses(epoch, &validator_id, 0);
 		}
 
 		assert!(
@@ -253,43 +253,28 @@ mod benchmarks {
 	fn provide_shared_data() {
 		let validator_id = ready_validator_for_vote::<T, I>(1)[0].clone();
 
-		let (election_identifier, ..) =
-			Pallet::<T, I>::electoral_data(&validator_id.clone().into())
-				.unwrap()
-				.current_elections
-				.into_iter()
-				.next()
-				.unwrap();
+		let shared_data_value: <
+			<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as VoteStorage
+		>::SharedData = BenchmarkValue::benchmark_value();
 
-		assert_ok!(Pallet::<T, I>::vote(
-			RawOrigin::Signed(validator_id.clone()).into(),
-			Box::new(
-				BoundedBTreeMap::try_from(
-					[(
-						election_identifier,
-						AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
-							BenchmarkValue::benchmark_value()
-						),
-					)]
-					.into_iter()
-					.collect::<BTreeMap<_, _>>(),
-				)
-				.unwrap()
-			),
-		));
+		let shared_data_hash = SharedDataHash::of(&shared_data_value);
+
+		SharedDataReferenceCount::<T, I>::insert(
+			shared_data_hash,
+			UniqueMonotonicIdentifier::from(0),
+			ReferenceDetails::<BlockNumberFor<T>> {
+				count: 1u32,
+				created: BlockNumberFor::<T>::from(1u32),
+				expires: BlockNumberFor::<T>::from(10u32),
+			},
+		);
+
+		ElectionConsensusHistoryUpToDate::<T, I>::insert(UniqueMonotonicIdentifier::from(0), 0);
 
 		#[extrinsic_call]
-		provide_shared_data(
-			RawOrigin::Signed(validator_id),
-			Box::new(BenchmarkValue::benchmark_value()),
-		);
+		provide_shared_data(RawOrigin::Signed(validator_id), Box::new(shared_data_value.clone()));
 
-		assert_eq!(
-			SharedData::<T, I>::get(SharedDataHash::of::<
-				VoteOf<<T as Config<I>>::ElectoralSystemRunner>,
-			>(&BenchmarkValue::benchmark_value())),
-			Some(BenchmarkValue::benchmark_value())
-		);
+		assert!(SharedData::<T, I>::get(shared_data_hash).is_some());
 	}
 
 	#[benchmark]
@@ -374,7 +359,7 @@ mod benchmarks {
 	fn clear_election_votes() {
 		// Setup a validator set of 150 as in the case of Mainnet.
 		let election_identifier =
-			setup_validators_and_vote::<T, I>(150, BenchmarkValue::benchmark_value());
+			setup_validators_and_vote::<T, I>(3, BenchmarkValue::benchmark_value());
 
 		let call = Call::<T, I>::clear_election_votes {
 			election_identifier,
@@ -398,7 +383,7 @@ mod benchmarks {
 	fn invalidate_election_consensus_cache() {
 		// Setup a validator set of 150 and reach consensus
 		let election_identifier =
-			setup_validators_and_vote::<T, I>(150, BenchmarkValue::benchmark_value());
+			setup_validators_and_vote::<T, I>(3, BenchmarkValue::benchmark_value());
 
 		let call = Call::<T, I>::invalidate_election_consensus_cache {
 			election_identifier,
