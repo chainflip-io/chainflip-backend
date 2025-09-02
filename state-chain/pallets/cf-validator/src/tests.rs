@@ -2621,6 +2621,8 @@ pub mod auction_optimization {
 
 	#[test]
 	fn test_auction_optimization() {
+		// the validator_ids start from 100 onwards
+
 		let operator_bids_combinations = create_operator_bids_combinations(vec![
 			// both validators from op 1 make it, only one from op 2
 			(vec![150, 140], vec![130, 100], vec![100, 101, 102, 0], 120),
@@ -2641,11 +2643,11 @@ pub mod auction_optimization {
 			(vec![220, 205, 200], vec![150, 140, 130], vec![100, 101, 103, 104], 210),
 		]);
 
-		for (op_1_bids, op_2_bids, expected_primary_candidates, expected_bond) in
+		for (mut op_1_bids, mut op_2_bids, expected_primary_candidates, expected_bond) in
 			operator_bids_combinations
 		{
 			new_test_ext().then_execute_with_checks(|| {
-				setup_bids(op_1_bids, op_2_bids);
+				setup_bids(op_1_bids.clone(), op_2_bids.clone());
 
 				ValidatorPallet::start_authority_rotation();
 
@@ -2662,9 +2664,56 @@ pub mod auction_optimization {
 				{
 					assert_eq!(
 						primary_candidates.into_iter().collect::<BTreeSet<_>>(),
-						expected_primary_candidates.into_iter().collect::<BTreeSet<_>>()
+						expected_primary_candidates.clone().into_iter().collect::<BTreeSet<_>>()
 					);
 					assert_eq!(bond, expected_bond);
+
+					let max_op1_bidder =
+						op_1_bids.iter().max_by_key(|b| b.amount).unwrap().bidder_id;
+					let max_op2_bidder =
+						op_2_bids.iter().max_by_key(|b| b.amount).unwrap().bidder_id;
+
+					assert_eq!(
+						DelegationSnapshots::<Test>::get(CurrentEpoch::<Test>::get() + 1, OP_1)
+							.unwrap(),
+						DelegationSnapshot {
+							operator: OP_1,
+							validators: op_1_bids
+								.extract_if(.., |Bid { bidder_id, amount: _ }| {
+									expected_primary_candidates.contains(&bidder_id) ||
+										*bidder_id == max_op1_bidder
+								})
+								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+								.collect(),
+							delegators: op_1_bids
+								.into_iter()
+								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+								.collect(),
+							delegation_fee_bps: OPERATOR_SETTINGS.fee_bps,
+							capacity_factor: None,
+						}
+					);
+
+					assert_eq!(
+						DelegationSnapshots::<Test>::get(CurrentEpoch::<Test>::get() + 1, OP_2)
+							.unwrap(),
+						DelegationSnapshot {
+							operator: OP_2,
+							validators: op_2_bids
+								.extract_if(.., |Bid { bidder_id, amount: _ }| {
+									expected_primary_candidates.contains(&bidder_id) ||
+										*bidder_id == max_op2_bidder
+								})
+								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+								.collect(),
+							delegators: op_2_bids
+								.into_iter()
+								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+								.collect(),
+							delegation_fee_bps: OPERATOR_SETTINGS.fee_bps,
+							capacity_factor: None,
+						}
+					);
 				} else {
 					panic!("auction optimization test error: expected event not found ")
 				}
