@@ -340,6 +340,17 @@ pub struct BlockHeader {
 	pub target: Option<String>,
 }
 
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MempoolInfo {
+	/// Current tx count
+	pub size: u32,
+
+	/// Sum of all virtual transaction sizes as defined in BIP 141. Differs from actual serialized
+	/// size because witness data is discounted
+	pub bytes: u32,
+}
+
 #[async_trait::async_trait]
 pub trait BtcRpcApi {
 	async fn block(&self, block_hash: BlockHash) -> anyhow::Result<VerboseBlock>;
@@ -361,6 +372,10 @@ pub trait BtcRpcApi {
 	async fn best_block_hash(&self) -> anyhow::Result<BlockHash>;
 
 	async fn block_header(&self, block_hash: BlockHash) -> anyhow::Result<BlockHeader>;
+
+	async fn mempool_info(&self) -> anyhow::Result<MempoolInfo>;
+
+	async fn raw_mempool(&self) -> anyhow::Result<Vec<Txid>>;
 }
 
 #[async_trait::async_trait]
@@ -473,6 +488,24 @@ impl BtcRpcApi for BtcRpcClient {
 			.into_iter()
 			.next()
 			.ok_or_else(|| anyhow!("Response missing block header"))?)
+	}
+
+	async fn mempool_info(&self) -> anyhow::Result<MempoolInfo> {
+		Ok(self
+			.call_rpc("getmempoolinfo", ReqParams::Empty)
+			.await?
+			.into_iter()
+			.next()
+			.ok_or_else(|| anyhow!("Response missing mempool info"))?)
+	}
+
+	async fn raw_mempool(&self) -> anyhow::Result<Vec<Txid>> {
+		Ok(self
+			.call_rpc("getrawmempool", ReqParams::Empty)
+			.await?
+			.into_iter()
+			.next()
+			.ok_or_else(|| anyhow!("Response missing raw mempool reply"))?)
 	}
 }
 

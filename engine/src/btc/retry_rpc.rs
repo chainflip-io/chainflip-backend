@@ -18,6 +18,7 @@ use bitcoin::{BlockHash, Txid};
 use cf_utilities::task_scope::Scope;
 
 use crate::{
+	btc::rpc::MempoolInfo,
 	retrier::{Attempt, RequestLog, RetrierClient},
 	settings::{HttpBasicAuthEndpoint, NodeContainer},
 	witness::common::chain_source::{ChainClient, Header},
@@ -171,6 +172,38 @@ impl BtcRpcApi for BtcRetryRpcClient {
 			)
 			.await
 	}
+
+	async fn mempool_info(&self) -> anyhow::Result<MempoolInfo> {
+		self.retry_client
+			.request_with_limit(
+				RequestLog::new("mempool_info".to_string(), None),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						let header = client.mempool_info().await?;
+						Ok(header)
+					})
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn raw_mempool(&self) -> anyhow::Result<Vec<Txid>> {
+		self.retry_client
+			.request_with_limit(
+				RequestLog::new("raw_mempool".to_string(), None),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						let header = client.raw_mempool().await?;
+						Ok(header)
+					})
+				}),
+				2,
+			)
+			.await
+	}
 }
 
 #[async_trait::async_trait]
@@ -237,6 +270,10 @@ pub mod mocks {
 			) -> anyhow::Result<BlockHeader>;
 
 			async fn best_block_hash(&self) -> anyhow::Result<BlockHash>;
+
+			async fn mempool_info(&self) -> anyhow::Result<MempoolInfo>;
+
+			async fn raw_mempool(&self) -> anyhow::Result<Vec<Txid>>;
 		}
 	}
 }

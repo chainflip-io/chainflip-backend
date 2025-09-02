@@ -1,7 +1,7 @@
 use crate::{
 	btc::{
 		retry_rpc::BtcRetryRpcClient,
-		rpc::{BlockHeader, BtcRpcApi, VerboseBlock},
+		rpc::{BlockHeader, BtcRpcApi, MempoolInfo, VerboseBlock},
 	},
 	caching_request::CachingRequest,
 };
@@ -19,6 +19,8 @@ pub struct BtcCachingClient {
 	avg_fee_rate: CachingRequest<BlockHash, BtcAmount, BtcRetryRpcClient>,
 	block_header: CachingRequest<BlockHash, BlockHeader, BtcRetryRpcClient>,
 	best_block_hash: CachingRequest<(), BlockHash, BtcRetryRpcClient>,
+	mempool_info: CachingRequest<(), MempoolInfo, BtcRetryRpcClient>,
+	raw_mempool: CachingRequest<(), Vec<Txid>, BtcRetryRpcClient>,
 
 	pub cache_invalidation_senders: Vec<mpsc::Sender<()>>,
 }
@@ -41,7 +43,11 @@ impl BtcCachingClient {
 		let (block_header, block_header_cache) =
 			CachingRequest::<BlockHash, BlockHeader, BtcRetryRpcClient>::new(scope, client.clone());
 		let (best_block_hash, best_block_hash_cache) =
-			CachingRequest::<(), BlockHash, BtcRetryRpcClient>::new(scope, client);
+			CachingRequest::<(), BlockHash, BtcRetryRpcClient>::new(scope, client.clone());
+		let (mempool_info, mempool_info_cache) =
+			CachingRequest::<(), MempoolInfo, BtcRetryRpcClient>::new(scope, client.clone());
+		let (raw_mempool, raw_mempool_cache) =
+			CachingRequest::<(), Vec<Txid>, BtcRetryRpcClient>::new(scope, client);
 		BtcCachingClient {
 			block,
 			block_hash,
@@ -50,6 +56,8 @@ impl BtcCachingClient {
 			avg_fee_rate,
 			block_header,
 			best_block_hash,
+			mempool_info,
+			raw_mempool,
 			cache_invalidation_senders: vec![
 				block_cache,
 				block_hash_cache,
@@ -58,6 +66,8 @@ impl BtcCachingClient {
 				avg_fee_rate_cache,
 				block_header_cache,
 				best_block_hash_cache,
+				mempool_info_cache,
+				raw_mempool_cache,
 			],
 		}
 	}
@@ -147,6 +157,30 @@ impl BtcRpcApi for BtcCachingClient {
 					Box::pin(async move { client.block_header(block_hash).await })
 				}),
 				block_hash,
+			)
+			.await
+	}
+
+	async fn mempool_info(&self) -> anyhow::Result<MempoolInfo> {
+		self.mempool_info
+			.get_or_fetch(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.mempool_info().await })
+				}),
+				(),
+			)
+			.await
+	}
+
+	async fn raw_mempool(&self) -> anyhow::Result<Vec<Txid>> {
+		self.raw_mempool
+			.get_or_fetch(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.raw_mempool().await })
+				}),
+				(),
 			)
 			.await
 	}
