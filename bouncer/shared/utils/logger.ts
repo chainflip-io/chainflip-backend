@@ -1,6 +1,7 @@
 import { toUpperCase } from '@chainflip/utils/string';
-import { appendFileSync, existsSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'fs';
+import { readdir } from 'fs/promises';
+import { dirname, parse } from 'path';
 import pino from 'pino';
 
 export type Logger = pino.Logger;
@@ -14,6 +15,36 @@ export function getTestLogFile(logger: Logger): string {
   const tag = logger.bindings().tag ?? '';
   const suffix = tag === '' ? '' : `-${tag}`;
   return `${testLogDir}/${startTime}/${testname}${suffix}.log`;
+}
+
+export async function getTestLogFilesForTaggedChildren(
+  logger: Logger,
+): Promise<{ tag: string; logs: string }[]> {
+  const startTime = logger.bindings().startTime ?? 'UnknownStartStime';
+  const testname = logger.bindings().test ?? 'UnknownTest';
+  const testDir = `${testLogDir}/${startTime}`;
+
+  const taggedLogs = [];
+
+  // get all files in test directory:
+  try {
+    const files = await readdir(testDir);
+    for (const file of files) {
+      const filename = parse(file).name;
+      if (filename !== testname && file.startsWith(testname)) {
+        taggedLogs.push({
+          tag: filename.slice(testname.length + 1), // since the filename is `{testname}-{tag}.log`, we extract the tag
+          logs: String(readFileSync(`${testDir}/${file}`)),
+        });
+      }
+    }
+    return taggedLogs;
+  } catch (err) {
+    logger.warn(
+      `Failed with ${err} when trying to get directory contents of test log directory (${testDir})`,
+    );
+    return [];
+  }
 }
 
 const logFileDestination = pino.destination({
