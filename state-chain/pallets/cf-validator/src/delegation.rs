@@ -243,3 +243,50 @@ pub fn distribute<T: Config>(
 		settle(validator, total);
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::mock::*;
+	use proptest::{prelude::*, proptest};
+
+	proptest! {
+		#[test]
+		fn distribute_always_sums_to_total(
+			validator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..10),
+			delegator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..100),
+			total_to_distribute in 1u128..10_000_000_000_000_000_000u128,
+			delegation_fee_bps in 2_000u32..10_000u32,
+			capacity_factor in prop::option::of(0u32..100u32),
+		) {
+			// Create a delegation snapshot
+			let operator_account = 1u64;
+			let mut snapshot = DelegationSnapshot::<Test> {
+				operator: operator_account,
+				validators: BTreeMap::new(),
+				delegators: BTreeMap::new(),
+				delegation_fee_bps,
+				capacity_factor,
+			};
+
+			// Add validators
+			for (i, amount) in validator_amounts.iter().enumerate() {
+				snapshot.validators.insert((i as u64 + 100).into(), *amount);
+			}
+
+			// Add delegators
+			for (i, amount) in delegator_amounts.iter().enumerate() {
+				snapshot.delegators.insert(i as u64 + 1000, *amount);
+			}
+
+			// Distribute the total amount
+			let distributions: Vec<_> = snapshot.distribute(total_to_distribute).collect();
+			let sum: u128 = distributions.iter().map(|(_, amount)| *amount).sum();
+
+			// Property: The sum of all distributed amounts equals the input total
+			assert_eq!(sum, total_to_distribute, 
+				"Sum of distributions ({}) does not equal total ({})", 
+				sum, total_to_distribute);
+		}
+	}
+}
