@@ -19,91 +19,54 @@ import { approveErc20 } from 'shared/approve_erc20';
 import { newStatechainAddress } from 'shared/new_statechain_address';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { newCcmMetadata } from 'shared/swapping';
-import { Struct, Enum, Option, u128, Bytes as TsBytes } from 'scale-ts';
-import { hexToU8a, u8aToHex } from '@polkadot/util';
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
 import { setupOperatorAccount } from 'shared/setup_account';
+import z from 'zod';
 
 const cfScUtilsAbi = await getEthScUtilsAbi();
 
-// TODO: Update this with the rpc encoding once the logic is implemented in PRO-2439.
-const RedemptionAmountCodec = Enum({
-  Max: Struct({}),
-  Exact: u128,
-});
-export const ScCallsCodec = Enum({
-  Delegation: Enum({
-    Delegate: Struct({
-      operator: TsBytes(32),
-    }),
-    Undelegate: Struct({}),
-    SetMaxBid: Struct({
-      maybeMaxBid: Option(u128),
-    }),
-    Redeem: Struct({
-      amount: RedemptionAmountCodec,
-      address: TsBytes(20),
-      executor: Option(TsBytes(20)),
-    }),
-  }),
+const evmCallDetails = z.object({
+  calldata: z.string(),
+  value: z.bigint(),
+  to: z.string(),
+  source_token_address: z.string().optional(),
 });
 
-type ScCallPayload =
-  | { type: 'Delegate'; operatorId: string }
-  | { type: 'Undelegate' }
-  | { type: 'SetMaxBid'; maxBid?: bigint }
-  | {
-      type: 'Redeem';
-      amount: { Max: true } | { Exact: bigint };
-      address: string;
-      executor?: string;
-    };
+async function encodeAndSendDelegationApiCall(
+  logger: Logger,
+  caller: string,
+  call: DelegationApi,
+): Promise<{ transactionHash: string }> {
+  await using chainflip = await getChainflipApi();
 
-function encodeToScCall(payload: ScCallPayload): string {
-  switch (payload.type) {
-    case 'Delegate':
-      return u8aToHex(
-        ScCallsCodec.enc({
-          tag: 'Delegation',
-          value: { tag: 'Delegate', value: { operator: hexToU8a(payload.operatorId) } },
-        }),
-      );
-    case 'Undelegate':
-      return u8aToHex(
-        ScCallsCodec.enc({
-          tag: 'Delegation',
-          value: { tag: 'Undelegate', value: {} },
-        }),
-      );
-    case 'SetMaxBid':
-      return u8aToHex(
-        ScCallsCodec.enc({
-          tag: 'Delegation',
-          value: { tag: 'SetMaxBid', value: { maybeMaxBid: payload.maxBid } },
-        }),
-      );
-    case 'Redeem':
-      return u8aToHex(
-        ScCallsCodec.enc({
-          tag: 'Delegation',
-          value: {
-            tag: 'Redeem',
-            value: {
-              amount:
-                'Max' in payload.amount
-                  ? { tag: 'Max', value: {} }
-                  : { tag: 'Exact', value: payload.amount.Exact },
-              address: hexToU8a(payload.address),
-              executor: payload.executor ? hexToU8a(payload.executor) : undefined,
-            },
-          },
-        }),
-      );
-    default:
-      throw new Error('Invalid payload type');
-  }
+  const payload = await chainflip.rpc.call('cf_evm_calldata', caller, { API: 'Delegation', call });
+
+  logger.info(`EVM Call payload for ${caller} ${call}: ${payload}`);
+
+  const { calldata, value, to } = evmCallDetails.parse(payload);
+
+  const { transactionHash } = await signAndSendTxEvm(
+    logger,
+    'Ethereum',
+    to,
+    value.toString(),
+    calldata,
+  );
+
+  return { transactionHash };
 }
+
+type DelegationApi =
+  | { delegate: { operatorId: string; increase: bigint | 'Max' } }
+  | { undelegate: { decrease: bigint | 'Max' } }
+  | {
+      redeem: {
+        amount: { Max: true } | { Exact: bigint };
+        address: string;
+        executor?: string;
+      };
+    };
 
 // Left pad the EVM address to convert it to a Statechain address.
 function evmToScAddress(evmAddress: string) {
@@ -116,6 +79,7 @@ async function testDelegate(parentLogger: Logger) {
   const scUtilsAddress = getContractAddress('Ethereum', 'SC_UTILS');
   const cfScUtilsContract = new web3.eth.Contract(cfScUtilsAbi, scUtilsAddress);
   const logger = parentLogger.child({ tag: 'DelegateFlip' });
+  const { pubkey: whalePubkey } = getEvmWhaleKeypair('Ethereum');
 
   const amount = amountToFineAmountBigInt(defaultAssetAmounts('Flip'), 'Flip');
 
@@ -132,19 +96,14 @@ async function testDelegate(parentLogger: Logger) {
   await approveErc20(logger, 'Flip', scUtilsAddress, amount.toString());
 
   logger.info(`Delegating ${amount} Flip to operator ${operator.address}...`);
-  let scCall = encodeToScCall({
-    type: 'Delegate',
-    operatorId: operatorPubkey,
+  const delegateTxHash = await encodeAndSendDelegationApiCall(logger, whalePubkey, {
+    delegate: { operatorId: operator.address, increase: amount },
   });
-  let txData = cfScUtilsContract.methods.depositToScGateway(amount.toString(), scCall).encodeABI();
+  logger.info('Delegate flip transaction sent ' + delegateTxHash);
 
-  let receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
-  logger.info('Delegate flip transaction sent ' + receipt.transactionHash);
-
-  const { pubkey: whalePubkey } = getEvmWhaleKeypair('Ethereum');
   const fundEvent = observeEvent(logger, 'funding:Funded', {
     test: (event) => {
-      const txMatch = event.data.txHash === receipt.transactionHash;
+      const txMatch = event.data.txHash === delegateTxHash;
       const amountMatch = event.data.fundsAdded.replace(/,/g, '') === amount.toString();
       const accountIdMatch = evmToScAddress(whalePubkey) === event.data.accountId;
       return txMatch && amountMatch && accountIdMatch;
@@ -152,7 +111,7 @@ async function testDelegate(parentLogger: Logger) {
   }).event;
   let scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
     test: (event) => {
-      const txMatch = event.data.ethTxHash === receipt.transactionHash;
+      const txMatch = event.data.ethTxHash === delegateTxHash;
       const operatorMatch = event.data.scCall.Delegation.Delegate.operator === operator.address;
       return txMatch && operatorMatch;
     },
@@ -167,15 +126,13 @@ async function testDelegate(parentLogger: Logger) {
   await Promise.all([fundEvent, scCallExecutedEvent, delegatedEvent]);
 
   logger.info('Undelegating Flip from operator ' + operator.address + '...');
-  scCall = encodeToScCall({
-    type: 'Undelegate',
+  const undelegateTxHash = await encodeAndSendDelegationApiCall(logger, whalePubkey, {
+    undelegate: { decrease: 'Max' },
   });
-  txData = cfScUtilsContract.methods.callSc(scCall).encodeABI();
-  receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
-  logger.info('Undelegate flip transaction sent ' + receipt.transactionHash);
+  logger.info('Undelegate flip transaction sent ' + undelegateTxHash);
 
   scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
-    test: (event) => event.data.ethTxHash === receipt.transactionHash,
+    test: (event) => event.data.ethTxHash === undelegateTxHash,
   }).event;
   const undelegatedEvent = observeEvent(logger, 'validator:Undelegated', {
     test: (event) => {
@@ -185,28 +142,6 @@ async function testDelegate(parentLogger: Logger) {
     },
   }).event;
   await Promise.all([scCallExecutedEvent, undelegatedEvent]);
-
-  logger.info('Setting new max bid');
-  const maxBid = amount;
-  scCall = encodeToScCall({
-    type: 'SetMaxBid',
-    maxBid: BigInt(maxBid),
-  });
-  txData = cfScUtilsContract.methods.callSc(scCall).encodeABI();
-  receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
-  logger.info('Set Max Bid transaction sent ' + receipt.transactionHash);
-
-  scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
-    test: (event) => event.data.ethTxHash === receipt.transactionHash,
-  }).event;
-  const maxBidEvent = observeEvent(logger, 'validator:MaxBidUpdated', {
-    test: (event) => {
-      const delegatorMatch = event.data.delegator === evmToScAddress(whalePubkey);
-      const maxBidMatch = event.data.maxBid.replace(/,/g, '') === maxBid.toString();
-      return delegatorMatch && maxBidMatch;
-    },
-  }).event;
-  await Promise.all([scCallExecutedEvent, maxBidEvent]);
 
   await using chainflip = await getChainflipApi();
   const pendingRedemption = await chainflip.query.flip.pendingRedemptionsReserve(
@@ -221,18 +156,13 @@ async function testDelegate(parentLogger: Logger) {
     const redeemAddress = await newAddress('Flip', randomBytes(32).toString('hex'));
     const redemAmount = amount / 2n; // Leave anough to pay fees
 
-    scCall = encodeToScCall({
-      type: 'Redeem',
-      amount: { Exact: redemAmount },
-      address: redeemAddress,
-      executor: undefined,
+    const redeemTxHash = await encodeAndSendDelegationApiCall(logger, whalePubkey, {
+      redeem: { amount: { Exact: redemAmount }, address: redeemAddress },
     });
-    txData = cfScUtilsContract.methods.callSc(scCall).encodeABI();
-    receipt = await signAndSendTxEvm(logger, 'Ethereum', scUtilsAddress, '0', txData);
-    logger.info('Redeem request transaction sent ' + receipt.transactionHash);
+    logger.info('Redeem request transaction sent ' + redeemTxHash);
 
     scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
-      test: (event) => event.data.ethTxHash === receipt.transactionHash,
+      test: (event) => event.data.ethTxHash === redeemTxHash,
     }).event;
     const redeemEvent = observeEvent(logger, 'funding:RedemptionRequested', {
       test: (event) => {

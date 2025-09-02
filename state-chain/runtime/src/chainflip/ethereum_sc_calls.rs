@@ -9,6 +9,7 @@ use pallet_cf_funding::{Call as FundingCall, RedemptionAmount};
 use pallet_cf_validator::Call as ValidatorCall;
 use sp_runtime::{traits::Dispatchable, AccountId32};
 
+// Re-export here because it's need to construct the DelegationApi enum.
 pub use pallet_cf_validator::DelegationAmount;
 
 pub struct EthereumAccount(pub EthereumAddress);
@@ -42,8 +43,9 @@ pub enum DelegationApi {
 #[derive(
 	Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug, Serialize, Deserialize,
 )]
+#[serde(tag = "API")]
 pub enum EthereumSCApi {
-	Delegation(DelegationApi),
+	Delegation { call: DelegationApi },
 	// reserved for future Apis for example Loan(LoanApi)...
 	// This allows us to update the API without breaking the encoding.
 }
@@ -55,7 +57,7 @@ impl UnfilteredDispatchable for EthereumSCApi {
 		origin: Self::RuntimeOrigin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		match self {
-			EthereumSCApi::Delegation(delegation_api) => match delegation_api {
+			EthereumSCApi::Delegation { call } => match call {
 				DelegationApi::Delegate { operator, increase } =>
 					RuntimeCall::Validator(ValidatorCall::<Runtime>::delegate {
 						operator,
@@ -80,7 +82,7 @@ impl UnfilteredDispatchable for EthereumSCApi {
 impl GetDispatchInfo for EthereumSCApi {
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		match self {
-			EthereumSCApi::Delegation(delegation_api) => match delegation_api {
+			EthereumSCApi::Delegation { call } => match call {
 				DelegationApi::Delegate { operator, increase } =>
 					RuntimeCall::Validator(ValidatorCall::<Runtime>::delegate {
 						operator: operator.clone(),

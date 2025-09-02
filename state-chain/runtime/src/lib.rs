@@ -2859,7 +2859,7 @@ impl_runtime_apis! {
 			use chainflip::ethereum_sc_calls::DelegationApi;
 			let caller_id = EthereumAccount(caller).into_account_id();
 			let required_deposit = match call {
-				EthereumSCApi::Delegation(DelegationApi::Delegate { operator, increase: DelegationAmount::Some(ref increase) }) => {
+				EthereumSCApi::Delegation { call: DelegationApi::Delegate { increase: DelegationAmount::Some(ref increase), .. } } => {
 					pallet_cf_validator::MaxDelegationBid::<Runtime>::get(&caller_id).unwrap_or_default()
 						.saturating_add(*increase)
 						.saturating_sub(pallet_cf_flip::Pallet::<Runtime>::balance(&caller_id))
@@ -2874,12 +2874,16 @@ impl_runtime_apis! {
 				},
 				value: U256::zero(),
 				to: Environment::eth_sc_utils_address(),
-				source_token_address: Some(
-					Environment::supported_eth_assets(cf_primitives::chains::assets::eth::Asset::Flip)
-						.ok_or(DispatchErrorWithMessage::from(
-							"flip token address not found on the state chain: {e}",
-						))?,
-				),
+				source_token_address: if required_deposit > 0 {
+					Some(
+						Environment::supported_eth_assets(cf_primitives::chains::assets::eth::Asset::Flip)
+							.ok_or(DispatchErrorWithMessage::from(
+								"flip token address not found on the state chain: {e}",
+							))?
+					)
+				} else {
+					None
+				},
 			})
 		}
 	}
