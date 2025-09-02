@@ -482,8 +482,6 @@ pub mod pallet {
 		DelegatorBlocked,
 		/// The provided Operator fee is too low.
 		OperatorFeeTooLow,
-		/// Exceptions limit is reached.
-		ExceptionsLimitReached,
 		/// The account does not exist.
 		AccountDoesNotExist,
 	}
