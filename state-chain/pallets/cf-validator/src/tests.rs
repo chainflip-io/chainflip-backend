@@ -2788,7 +2788,7 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		MockEpochInfo::set_epoch(EPOCH);
 
 		// Create a delegation snapshot
-		let snapshot = DelegationSnapshot::<Test> {
+		DelegationSnapshot::<Test> {
 			operator: OPERATOR,
 			validators: [(VALIDATOR, 1000000u128)].into_iter().collect(),
 			delegators: [(DELEGATOR1, 2000000u128), (DELEGATOR2, 3000000u128)]
@@ -2796,9 +2796,8 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 				.collect(),
 			delegation_fee_bps: 500, // 5% fee
 			capacity_factor: None,
-		};
-
-		snapshot.register_for_epoch(EPOCH);
+		}
+		.register_for_epoch(EPOCH);
 
 		// Distribute rewards to the validator.
 		DelegatedRewardsDistribution::<Test, MockIssuance>::distribute(REWARD_AMOUNT, &VALIDATOR);
