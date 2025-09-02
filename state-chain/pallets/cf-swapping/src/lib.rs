@@ -17,8 +17,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extract_if)]
 
-use alloy_dyn_abi::{DynSolType, DynSolValue};
-use alloy_primitives::{keccak256, B256, U256};
 use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
@@ -44,7 +42,7 @@ use cf_traits::{
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
-		traits::{Get, Saturating},
+		traits::{Get, Hash, Keccak256, Saturating},
 		AccountId32, DispatchError, Permill, TransactionOutcome,
 	},
 	storage::with_transaction_unchecked,
@@ -886,7 +884,7 @@ pub mod pallet {
 			valid: bool,
 			expired: bool,
 			signed_payload: Vec<u8>,
-			decoded_action: Option<UserActionsApi>,
+			decoded_action: UserActionsApi,
 		},
 	}
 	#[pallet::error]
@@ -1529,64 +1527,56 @@ pub mod pallet {
 
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			let (valid, signer_account_id, decoded_action, signed_payload) =
-				match user_signature_data.clone() {
-					UserSignatureData::Solana { signature, signer, sig_type } => {
-						let signed_payload = match sig_type {
-							SolSigType::Domain => {
-								let concat_data = [
-									payload.clone(),
-									vec![get_current_chain_id()],
-									user_metadata.clone().encode(),
-								]
-								.concat();
-								let prefix_bytes = b"\xffsolana offchain";
-								[prefix_bytes.as_ref(), concat_data.as_slice()].concat()
-							},
-						};
-						(
-							SolanaCrypto::verify_signature(&signer, &signed_payload, &signature),
-							AccountId32::new(signer.into()),
-							UserActionsApi::decode(&mut &payload[..]).ok(),
-							signed_payload,
-						)
-					},
-					// Add prefix here from eth personal_sign. TBD if this is the same for EIP712
-					UserSignatureData::Ethereum { signature, signer, sig_type } => {
-						let user_action = UserActionsApi::decode(&mut &payload[..]).ok();
-						let signed_payload = match sig_type {
-							EthSigType::Domain => {
-								let concat_data = [
-									payload.clone(),
-									vec![get_current_chain_id()],
-									user_metadata.clone().encode(),
-								]
-								.concat();
-								let prefix = scale_info::prelude::format!(
-									"\x19Ethereum Signed Message:\n{}",
-									concat_data.len()
-								);
-								let prefix_bytes = prefix.as_bytes();
-								[prefix_bytes, &concat_data].concat()
-							},
-							EthSigType::Eip712 => {
-								match user_action.clone() {
-									// TODO: Fix this
-									None => payload.clone(),
-									// TODO: To pass user_metadata too
-									Some(action) => build_eip_712_hash(action),
-								}
-							},
-						};
+			let decoded_action =
+				UserActionsApi::decode(&mut &payload[..]).expect("Payload should decode");
 
-						(
-							EvmCrypto::verify_signature(&signer, &signed_payload, &signature),
-							signer.into_account_id_32(),
-							user_action,
-							signed_payload,
-						)
-					},
-				};
+			let (valid, signer_account_id, signed_payload) = match user_signature_data.clone() {
+				UserSignatureData::Solana { signature, signer, sig_type } => {
+					let signed_payload = match sig_type {
+						SolSigType::Domain => {
+							let concat_data = [
+								payload.clone(),
+								vec![get_current_chain_id()],
+								user_metadata.clone().encode(),
+							]
+							.concat();
+							let prefix_bytes = b"\xffsolana offchain";
+							[prefix_bytes.as_ref(), concat_data.as_slice()].concat()
+						},
+					};
+					(
+						SolanaCrypto::verify_signature(&signer, &signed_payload, &signature),
+						AccountId32::new(signer.into()),
+						signed_payload,
+					)
+				},
+				// Add prefix here from eth personal_sign. TBD if this is the same for EIP712
+				UserSignatureData::Ethereum { signature, signer, sig_type } => {
+					let signed_payload = match sig_type {
+						EthSigType::Domain => {
+							let concat_data = [
+								payload.clone(),
+								vec![get_current_chain_id()],
+								user_metadata.clone().encode(),
+							]
+							.concat();
+							let prefix = scale_info::prelude::format!(
+								"\x19Ethereum Signed Message:\n{}",
+								concat_data.len()
+							);
+							let prefix_bytes = prefix.as_bytes();
+							[prefix_bytes, &concat_data].concat()
+						},
+						// TODO: To pass user_metadata too
+						EthSigType::Eip712 => build_eip_712_hash(decoded_action.clone()),
+					};
+					(
+						EvmCrypto::verify_signature(&signer, &signed_payload, &signature),
+						signer.into_account_id_32(),
+						signed_payload,
+					)
+				},
+			};
 
 			// TODO: Add check of replay protection mechanism (esp. nonce). ChainId should be
 			// checked within the signature verification above.
@@ -1594,8 +1584,7 @@ pub mod pallet {
 			let expired =
 				frame_system::Pallet::<T>::block_number() >= user_metadata.expiry_block.into();
 
-			// TODO: Execute the intended action on behalf of the user, similar to the delegation Sc
-			// Api.
+			// TODO: Execute the intended action user action similar to the delegation Sc Api.
 
 			Self::deposit_event(Event::<T>::UserSignedTransactionSubmitted {
 				broker_id,
@@ -3024,62 +3013,55 @@ pub(crate) mod utilities {
 }
 
 pub fn build_eip_712_hash(user_action: UserActionsApi) -> Vec<u8> {
+	use cf_chains::evm::{encode, Token, U256};
 	// -----------------
 	// Domain separator
 	// -----------------
 	let type_str = "EIP712Domain(string name,string version,uint256 chainId)";
-	let type_hash: B256 = keccak256(type_str.as_bytes());
-	let name_hash: B256 = keccak256("Chainflip".as_bytes());
-	let version_hash: B256 = keccak256("0".as_bytes());
+	let type_hash = Keccak256::hash(type_str.as_bytes());
+	let name_hash = Keccak256::hash("Chainflip".as_bytes());
+	let version_hash = Keccak256::hash("0".as_bytes());
 	let chain_id = U256::from(1);
 
-	let encoded = DynSolValue::Tuple(vec![
-		DynSolValue::FixedBytes(type_hash, 32),
-		DynSolValue::FixedBytes(name_hash, 32),
-		DynSolValue::FixedBytes(version_hash, 32),
-		DynSolValue::Uint(chain_id, 256),
-	])
-	.abi_encode();
+	// Create tokens
+	let tokens = vec![
+		Token::FixedBytes(type_hash.as_bytes().to_vec()),
+		Token::FixedBytes(name_hash.as_bytes().to_vec()),
+		Token::FixedBytes(version_hash.as_bytes().to_vec()),
+		Token::Uint(chain_id),
+	];
 
-	let domain_separator = keccak256(encoded);
+	// ABI encode
+	let encoded = encode(&tokens);
+	let domain_separator = Keccak256::hash(&encoded);
 
 	// -----------------
 	// Borrow struct
 	// -----------------
 	let borrow_type_str =
 		"Borrow(string from,uint256 amount,uint256 collateralAsset,uint256 borrowAsset)";
-	let borrow_type_hash: B256 = keccak256(borrow_type_str.as_bytes());
+	let borrow_type_hash = Keccak256::hash(borrow_type_str.as_bytes());
 
 	let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-	let from_hash: B256 = keccak256(from_str.as_bytes());
+	let from_hash = Keccak256::hash(from_str.as_bytes());
 
 	// Extract fields from UserActionsApi
 	let message_hash = match user_action {
 		UserActionsApi::Lending(LendingApi::Borrow { amount, collateral_asset, borrow_asset }) => {
 			let (amount, collateral_asset, borrow_asset) =
 				(U256::from(amount), U256::from(collateral_asset), U256::from(borrow_asset));
-			let encoded_message = DynSolValue::Tuple(vec![
-				DynSolValue::FixedBytes(borrow_type_hash, 32),
-				DynSolValue::FixedBytes(from_hash, 32),
-				DynSolValue::Uint(amount, 256),
-				DynSolValue::Uint(collateral_asset, 256),
-				DynSolValue::Uint(borrow_asset, 256),
-			])
-			.abi_encode();
 
-			let message_type = DynSolType::Tuple(vec![
-				DynSolType::FixedBytes(32), // type hash
-				DynSolType::FixedBytes(32), // from
-				DynSolType::Uint(256),      // amount
-				DynSolType::Uint(256),      // collateral asset
-				DynSolType::Uint(256),      // borrow asset
-			]);
-			let decoded_message = message_type.abi_decode(&encoded_message).unwrap();
-			// println!("Decoded message: {:?}", decoded_message);
+			let tokens = vec![
+				Token::FixedBytes(borrow_type_hash.as_bytes().to_vec()),
+				Token::FixedBytes(from_hash.as_bytes().to_vec()),
+				Token::Uint(amount),
+				Token::Uint(collateral_asset),
+				Token::Uint(borrow_asset),
+			];
 
-			let message_hash: B256 = keccak256(encoded_message);
-			// println!("Borrow struct hash: 0x{}", hex::encode(message_hash));
-			message_hash
+			let encoded_message = encode(&tokens);
+
+			Keccak256::hash(&encoded_message)
 		},
 	};
 
@@ -3087,11 +3069,8 @@ pub fn build_eip_712_hash(user_action: UserActionsApi) -> Vec<u8> {
 	// Final EIP-712 digest
 	// -----------------
 	let mut encoded_final = vec![0x19, 0x01];
-	encoded_final.extend_from_slice(domain_separator.as_slice());
-	encoded_final.extend_from_slice(message_hash.as_slice());
-
-	let eip712_hash: B256 = keccak256(&encoded_final);
-	// println!("EIP-712 final digest: 0x{}", hex::encode(eip712_hash));
+	encoded_final.extend_from_slice(domain_separator.0.as_slice());
+	encoded_final.extend_from_slice(message_hash.0.as_slice());
 	encoded_final
 }
 
@@ -3114,11 +3093,11 @@ mod test {
 		assert_eq!(encoded_final, expected_signed_payload);
 		println!("Encoded final: {:?}", &encoded_final);
 
-		let expected_eip712_hash: B256 =
+		let expected_eip712_hash =
 			hex_literal::hex!("5d8bd0a0adb0fd1987425f1bac09f036c155c0e4ce8a9c3f4a101e4cad61863b")
 				.into();
 
-		let eip712_hash: B256 = keccak256(&encoded_final);
+		let eip712_hash = Keccak256::hash(&encoded_final);
 		println!("EIP-712 final digest: {}", &eip712_hash);
 		assert_eq!(eip712_hash, expected_eip712_hash);
 	}

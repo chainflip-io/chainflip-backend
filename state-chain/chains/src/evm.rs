@@ -23,6 +23,7 @@ use cf_primitives::ChannelId;
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::ParamType;
 pub use ethabi::{
+	encode,
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint, Word,
 };
