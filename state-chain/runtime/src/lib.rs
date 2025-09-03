@@ -1745,11 +1745,19 @@ impl_runtime_apis! {
 				DelegationAcceptance::Deny => (exceptions, Default::default()),
 			};
 			OperatorInfo {
-				managed_validators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(account_id, AssociationToOperator::Validator),
+				managed_validators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(
+					account_id,
+					AssociationToOperator::Validator,
+					pallet_cf_flip::Pallet::<Runtime>::balance
+				),
 				settings,
 				allowed,
 				blocked,
-				delegators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(account_id, AssociationToOperator::Delegator),
+				delegators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(
+					account_id,
+					AssociationToOperator::Delegator,
+					pallet_cf_flip::Pallet::<Runtime>::balance
+				),
 				flip_balance: pallet_cf_flip::Account::<Runtime>::get(account_id).total(),
 			}
 		}

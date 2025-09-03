@@ -48,6 +48,8 @@ sp-runtime = { workspace = true, default-features = true }
 sp-io = { workspace = true, default-features = true }
 lazy_static = { workspace = true }
 cf-traits = { workspace = true, features = ["mocks"] }
+proptest = { version = "1.6" }
+proptest-derive = { version = "0.5.1" }
 
 [features]
 default = ["std"]

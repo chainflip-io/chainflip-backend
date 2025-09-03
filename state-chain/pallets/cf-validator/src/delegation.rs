@@ -1,5 +1,6 @@
 use crate::{
-	Config, DelegationSnapshots, OperatorSettingsLookup, ValidatorIdOf, ValidatorToOperator,
+	Config, DelegationCapacityFactor, DelegationSnapshots, OperatorSettingsLookup, ValidatorIdOf,
+	ValidatorToOperator,
 };
 use cf_primitives::EpochIndex;
 use cf_traits::{EpochInfo, Issuance, RewardsDistribution, Slashing};
@@ -78,6 +79,8 @@ pub struct DelegationSnapshot<T: Config> {
 	pub delegators: BTreeMap<T::AccountId, T::Amount>,
 	/// Operator fee at time of snapshot creation.
 	pub delegation_fee_bps: u32,
+	/// Capacity factor at time of snapshot creation.
+	pub capacity_factor: Option<u32>,
 }
 
 impl<T: Config> DelegationSnapshot<T> {
@@ -89,6 +92,7 @@ impl<T: Config> DelegationSnapshot<T> {
 			delegation_fee_bps: OperatorSettingsLookup::<T>::get(operator)
 				.map(|settings| settings.fee_bps)
 				.unwrap_or(0),
+			capacity_factor: DelegationCapacityFactor::<T>::get(),
 		}
 	}
 
@@ -98,6 +102,14 @@ impl<T: Config> DelegationSnapshot<T> {
 
 	pub fn total_delegator_bid(&self) -> T::Amount {
 		self.delegators.values().copied().sum()
+	}
+
+	/// The total delegator bid, capped based on the delegation multiple and the total validator
+	/// bid.
+	pub fn total_delegator_bid_capped(&self) -> T::Amount {
+		let total = self.total_delegator_bid();
+		self.capacity_factor
+			.map_or(total, |f| core::cmp::min(total, self.total_validator_bid() * f.into()))
 	}
 
 	/// Stores the validator mappings and snapshot information for the given epoch.
@@ -110,7 +122,7 @@ impl<T: Config> DelegationSnapshot<T> {
 	}
 
 	pub fn total_available_bid(&self) -> T::Amount {
-		self.total_validator_bid() + self.total_delegator_bid()
+		self.total_validator_bid() + self.total_delegator_bid_capped()
 	}
 
 	pub fn effective_validator_bids(&self) -> BTreeMap<ValidatorIdOf<T>, T::Amount> {
@@ -134,15 +146,14 @@ impl<T: Config> DelegationSnapshot<T> {
 	{
 		let total_delegator_stake: Amount = self.total_delegator_bid().into();
 		let total_validator_stake: Amount = self.total_validator_bid().into();
-		let total_stake = total_delegator_stake + total_validator_stake;
 
-		let validators_cut = Perquintill::from_rational(total_validator_stake, total_stake) * total;
-		let delegators_cut = total - validators_cut;
-		let operator_cut =
-			Perquintill::from_rational(self.delegation_fee_bps as u64, 10_000u64) * delegators_cut;
-		let delegators_cut = delegators_cut - operator_cut;
-
-		debug_assert_eq!(validators_cut + operator_cut + delegators_cut, total);
+		// The validator's cut is based on the capped delegation amount.
+		let validators_cut = Perquintill::from_rational(
+			total_validator_stake,
+			total_validator_stake + self.total_delegator_bid_capped().into(),
+		) * total;
+		let operator_share = Perquintill::from_rational(self.delegation_fee_bps as u64, 10_000u64);
+		let delegators_cut = (Perquintill::one() - operator_share) * (total - validators_cut);
 
 		let validator_cuts = self.validators.iter().map(move |(validator, individual_stake)| {
 			let share =
@@ -150,10 +161,16 @@ impl<T: Config> DelegationSnapshot<T> {
 			(validator.into_ref(), share * validators_cut)
 		});
 		let delegator_cuts = self.delegators.iter().map(move |(delegator, individual_stake)| {
+			// Note we need to use the *uncapped* total delegator stake here to determine shares.
 			let share =
 				Perquintill::from_rational((*individual_stake).into(), total_delegator_stake);
 			(delegator, share * delegators_cut)
 		});
+
+		// Ensures that all cuts sum to the total amount.
+		let operator_cut = total
+			.saturating_sub(validator_cuts.clone().map(|(_, stake)| stake).sum::<Amount>())
+			.saturating_sub(delegator_cuts.clone().map(|(_, stake)| stake).sum::<Amount>());
 
 		core::iter::once((&self.operator, operator_cut))
 			.chain(validator_cuts)
@@ -224,5 +241,54 @@ pub fn distribute<T: Config>(
 		}
 	} else {
 		settle(validator, total);
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::mock::*;
+	use proptest::{prelude::*, proptest};
+
+	proptest! {
+		#[test]
+		fn distribute_always_sums_to_total(
+			validator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..10),
+			delegator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..100),
+			total_to_distribute in 1u128..10_000_000_000_000_000_000u128,
+			delegation_fee_bps in 2_000u32..10_000u32,
+			capacity_factor in prop::option::of(0u32..100u32),
+		) {
+			// Create a delegation snapshot
+			let operator_account = 1u64;
+			let mut snapshot = DelegationSnapshot::<Test> {
+				operator: operator_account,
+				validators: BTreeMap::new(),
+				delegators: BTreeMap::new(),
+				delegation_fee_bps,
+				capacity_factor,
+			};
+
+			// Add validators
+			for (i, amount) in validator_amounts.iter().enumerate() {
+				snapshot.validators.insert(i as u64 + 100, *amount);
+			}
+
+			// Add delegators
+			for (i, amount) in delegator_amounts.iter().enumerate() {
+				snapshot.delegators.insert(i as u64 + 1000, *amount);
+			}
+
+			// Distribute the total amount
+			let distributions: Vec<_> = snapshot.distribute(total_to_distribute).collect();
+			let sum: u128 = distributions.iter().map(|(_, amount)| *amount).sum();
+
+			// Property: The sum of all distributed amounts equals the input total
+			assert_eq!(
+				sum, total_to_distribute,
+				"Sum of distributions ({}) does not equal total ({})",
+				sum, total_to_distribute
+			);
+		}
 	}
 }

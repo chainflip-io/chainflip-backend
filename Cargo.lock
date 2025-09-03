@@ -8577,6 +8577,8 @@ dependencies = [
  "pallet-cf-reputation",
  "pallet-session",
  "parity-scale-codec",
+ "proptest 1.6.0",
+ "proptest-derive",
  "scale-info",
  "serde",
  "sp-application-crypto 38.0.0",

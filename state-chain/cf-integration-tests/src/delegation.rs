@@ -175,10 +175,13 @@ fn block_author_rewards_are_distributed_among_delegators() {
 			);
 
 			for delegator in &delegators {
-				assert_eq!(
-					PerU16::from_rational(delegator.diff(), total_auth_reward),
-					PerU16::from_rational(delegator.pre_balance, total_pre_balance) *
-						PerU16::from_percent(95)
+				assert!(
+					u16::abs_diff(
+						PerU16::from_rational(delegator.diff(), total_auth_reward).deconstruct(),
+						(PerU16::from_rational(delegator.pre_balance, total_pre_balance) *
+							PerU16::from_percent(95))
+						.deconstruct()
+					) <= 10u16
 				);
 			}
 			assert_eq!(
@@ -273,10 +276,13 @@ fn slashings_are_distributed_among_delegators() {
 			);
 
 			for delegator in &delegators {
-				assert_eq!(
-					PerU16::from_rational(delegator.diff(), total_slashing),
-					PerU16::from_rational(delegator.pre_balance, total_pre_balance) *
-						PerU16::from_percent(95)
+				assert!(
+					u16::abs_diff(
+						PerU16::from_rational(delegator.diff(), total_slashing).deconstruct(),
+						(PerU16::from_rational(delegator.pre_balance, total_pre_balance) *
+							PerU16::from_percent(95))
+						.deconstruct()
+					) <= 10u16
 				);
 			}
 

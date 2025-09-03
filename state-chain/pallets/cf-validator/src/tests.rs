@@ -529,6 +529,7 @@ fn expired_epoch_data_is_removed() {
 			delegators: [(delegator, 50u128)].into_iter().collect(),
 			validators: [(ALICE, 150u128)].into_iter().collect(),
 			delegation_fee_bps: 250,
+			capacity_factor: None,
 		};
 
 		// Epoch 1
@@ -1481,6 +1482,7 @@ fn can_update_all_config_items() {
 			SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 };
 		const NEW_MINIMUM_REPORTED_CFE_VERSION: SemVer = SemVer { major: 1, minor: 0, patch: 0 };
 		const NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE: Percent = Percent::from_percent(10);
+		const NEW_DELEGATION_CAPACITY_FACTOR: Option<u32> = Some(5);
 
 		// Check that the default values are different from the new ones
 		assert_ne!(AuctionBidCutoffPercentage::<Test>::get(), NEW_AUCTION_BID_CUTOFF_PERCENTAGE);
@@ -1497,6 +1499,7 @@ fn can_update_all_config_items() {
 			MaxAuthoritySetContractionPercentage::<Test>::get(),
 			NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE
 		);
+		assert_ne!(DelegationCapacityFactor::<Test>::get(), NEW_DELEGATION_CAPACITY_FACTOR);
 
 		// Update all config items
 		let updates = vec![
@@ -1518,6 +1521,7 @@ fn can_update_all_config_items() {
 			PalletConfigUpdate::MaxAuthoritySetContractionPercentage {
 				percentage: NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE,
 			},
+			PalletConfigUpdate::DelegationCapacityFactor { factor: NEW_DELEGATION_CAPACITY_FACTOR },
 		];
 		for update in updates {
 			assert_ok!(ValidatorPallet::update_pallet_config(OriginTrait::root(), update.clone()));
@@ -1542,6 +1546,7 @@ fn can_update_all_config_items() {
 			MaxAuthoritySetContractionPercentage::<Test>::get(),
 			NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE
 		);
+		assert_eq!(DelegationCapacityFactor::<Test>::get(), NEW_DELEGATION_CAPACITY_FACTOR);
 
 		// Make sure that only governance can update the config
 		assert_noop!(
@@ -1785,18 +1790,49 @@ mod operator {
 		});
 	}
 	#[test]
-	fn can_not_deregister_if_their_are_still_validators_associated() {
+	fn can_deregister_with_validators_associated_if_no_active_delegation() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OPERATOR_SETTINGS
 			));
 			ManagedValidators::<Test>::insert(BOB, ALICE);
+
+			// Should succeed - validators are automatically removed during deregistration
+			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)));
+
+			// Verify validator was removed from operator
+			assert!(!ManagedValidators::<Test>::contains_key(BOB));
+		});
+	}
+
+	#[test]
+	fn cannot_deregister_with_unexpired_delegation_snapshots() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS
+			));
+
+			// Create a delegation snapshot for the current epoch (unexpired)
+			let current_epoch = ValidatorPallet::epoch_index();
+			DelegationSnapshot::<Test> {
+				operator: ALICE,
+				validators: Default::default(),
+				delegators: [(BOB, 100u128)].into_iter().collect(),
+				delegation_fee_bps: 250,
+				capacity_factor: None,
+			}
+			.register_for_epoch(current_epoch);
+
+			// Should fail - operator has unexpired delegation snapshots
 			assert_noop!(
 				ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)),
-				Error::<Test>::StillAssociatedWithValidators
+				Error::<Test>::OperatorStillActive
 			);
-			assert_ok!(ValidatorPallet::remove_validator(OriginTrait::signed(ALICE), BOB));
+
+			// After expiring the epoch, deregistration should succeed
+			ValidatorPallet::expire_epoch(current_epoch);
 			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)));
 		});
 	}
@@ -2136,6 +2172,7 @@ mod delegation_splitting {
 		total: u128,
 		delegator_bids: Vec<u128>,
 		delegation_fee_bps: u32,
+		capacity_factor: Option<u32>,
 	) -> BTreeMap<u64, u128> {
 		DelegationSnapshot::<Test> {
 			operator: 0,
@@ -2146,6 +2183,7 @@ mod delegation_splitting {
 				.map(|(i, b)| ((i + 2) as u64, b))
 				.collect(),
 			delegation_fee_bps,
+			capacity_factor,
 		}
 		.distribute(total)
 		.map(|(k, v)| (*k, v))
@@ -2154,38 +2192,85 @@ mod delegation_splitting {
 
 	#[test]
 	fn no_operator_fee() {
-		assert_eq!(
-			split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 0),
-			BTreeMap::from_iter([
-				(0, 0),
-				(1, REWARD),
-				(2, REWARD),
-				(3, 2 * REWARD),
-				(4, 3 * REWARD),
-			])
-		);
-	}
-
-	#[test]
-	fn with_operator_fee() {
-		// 20% operator fee
-		assert_eq!(
-			split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 2000),
-			BTreeMap::from_iter(
-				[
-					// Operator gets 20 % of delegator total
-					(0, (REWARD * 6 / 5)),
+		new_test_ext().execute_with(|| {
+			assert_eq!(
+				split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 0, None),
+				BTreeMap::from_iter([
+					(0, 0),
 					(1, REWARD),
 					(2, REWARD),
 					(3, 2 * REWARD),
 					(4, 3 * REWARD),
-				]
-				.into_iter()
-				// Delegator reward is reduced by 20%.
-				.map(|(k, v)| if k > 1 { (k, v * 4 / 5) } else { (k, v) })
-				.collect::<BTreeMap<_, _>>()
-			)
-		);
+				])
+			);
+		});
+	}
+
+	#[test]
+	fn with_operator_fee() {
+		new_test_ext().execute_with(|| {
+			// 20% operator fee
+			assert_eq!(
+				split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 2000, None),
+				BTreeMap::from_iter(
+					[
+						// Operator gets 20 % of delegator total
+						(0, (REWARD * 6 / 5)),
+						(1, REWARD),
+						(2, REWARD),
+						(3, 2 * REWARD),
+						(4, 3 * REWARD),
+					]
+					.into_iter()
+					// Delegator reward is reduced by 20%.
+					.map(|(k, v)| if k > 1 { (k, v * 4 / 5) } else { (k, v) })
+					.collect::<BTreeMap<_, _>>()
+				)
+			);
+		});
+	}
+
+	#[test]
+	fn with_delegation_limit_no_fee() {
+		new_test_ext().execute_with(|| {
+			const FACTOR: u128 = 3;
+			assert_eq!(
+				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 0, Some(FACTOR as u32)),
+				BTreeMap::from_iter(
+					[(0, 0), (1, REWARD), (2, REWARD), (3, 2 * REWARD), (4, 3 * REWARD),]
+						.into_iter()
+						// Delegator reward is reduced by 50% because it's 2x over capacity.
+						.map(|(k, v)| if k > 1 { (k, v / (FACTOR - 1)) } else { (k, v) })
+						.collect::<BTreeMap<_, _>>()
+				)
+			);
+		});
+	}
+
+	#[test]
+	fn with_delegation_limit_and_fee() {
+		new_test_ext().execute_with(|| {
+			const FACTOR: u128 = 3;
+			// 20% operator fee
+			assert_eq!(
+				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 2000, Some(FACTOR as u32)),
+				BTreeMap::from_iter(
+					[
+						// Operator gets 20 % of *capped* delegator total
+						(0, (REWARD / (FACTOR - 1) * 6 / 5)),
+						(1, REWARD),
+						(2, REWARD),
+						(3, 2 * REWARD),
+						(4, 3 * REWARD),
+					]
+					.into_iter()
+					// Delegator reward is reduced by 50% because it's 2x over capacity.
+					// Delegator reward is further reduced by 20% because of operator fee.
+					.map(|(k, v)| if k > 1 { (k, v / (FACTOR - 1) * 4 / 5) } else { (k, v) })
+					.collect::<BTreeMap<_, _>>()
+				)
+			);
+		});
 	}
 
 	#[test]
