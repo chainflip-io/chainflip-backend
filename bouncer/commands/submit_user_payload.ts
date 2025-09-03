@@ -18,6 +18,7 @@ import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
 import { Struct, u32, Enum, u128, u256, u8 } from 'scale-ts';
 import { globalLogger } from 'shared/utils/logger';
+import { InternalAsset } from '@chainflip/cli';
 
 // TODO: Update these with the rpc encoding once the logic is implemented.
 export const UserActionsCodec = Enum({
@@ -41,8 +42,8 @@ export const ChainIdCodec = u256;
 const nonce = 1;
 const expiryBlock = 10000;
 const amount = 1234;
-const collateralAsset = 'Btc';
-const borrowAsset = 'Usdc';
+const collateralAsset = { asset: 'Btc' as InternalAsset, scAsset: 'Bitcoin-BTC' };
+const borrowAsset = { asset: 'Usdc' as InternalAsset, scAsset: 'Ethereum-USDC' };
 // For now hardcoded in the SC. It should be network dependent.
 const chainId = 1n;
 
@@ -71,8 +72,8 @@ async function main() {
       tag: 'Borrow',
       value: {
         amount: BigInt(amount),
-        collateralAsset: assetContractId(collateralAsset),
-        borrowAsset: assetContractId(borrowAsset),
+        collateralAsset: assetContractId(collateralAsset.asset),
+        borrowAsset: assetContractId(borrowAsset.asset),
       },
     },
   });
@@ -84,6 +85,7 @@ async function main() {
   const prefixBytes = Buffer.from([0xff, ...Buffer.from('solana offchain', 'utf8')]);
   const solPrefixedMessage = Buffer.concat([prefixBytes, payload]);
   const solHexPrefixedMessage = '0x' + solPrefixedMessage.toString('hex');
+  console.log('solPrefixedMessage:', solPrefixedMessage);
   console.log('SolPrefixed Message (hex):', solHexPrefixedMessage);
 
   const signature = sign(solPrefixedMessage, whaleKeypair.secretKey.slice(0, 32));
@@ -207,11 +209,10 @@ async function main() {
     ],
   };
 
-  // The data to sign
   const message = {
     amount,
-    collateralAsset,
-    borrowAsset,
+    collateralAsset: collateralAsset.scAsset,
+    borrowAsset: borrowAsset.scAsset,
     metadata: {
       from: evmSigner,
       nonce,

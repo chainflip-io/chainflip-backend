@@ -3085,12 +3085,8 @@ pub fn build_eip_712_hash(
 			let tokens = vec![
 				Token::FixedBytes(borrow_type_hash.as_bytes().to_vec()),
 				Token::Uint(U256::from(amount)),
-				Token::FixedBytes(
-					Keccak256::hash(asset_to_str(collateral_asset).as_bytes()).0.to_vec(),
-				),
-				Token::FixedBytes(
-					Keccak256::hash(asset_to_str(borrow_asset).as_bytes()).0.to_vec(),
-				),
+				Token::FixedBytes(Keccak256::hash(collateral_asset.as_bytes()).0.to_vec()),
+				Token::FixedBytes(Keccak256::hash(borrow_asset.as_bytes()).0.to_vec()),
 				Token::FixedBytes(metadata_hash.as_bytes().to_vec()),
 			];
 
@@ -3106,24 +3102,6 @@ pub fn build_eip_712_hash(
 	encoded_final.extend_from_slice(domain_separator.0.as_slice());
 	encoded_final.extend_from_slice(message_hash.0.as_slice());
 	encoded_final
-}
-
-fn asset_to_str(asset: Asset) -> &'static str {
-	match asset {
-		Asset::Flip => "Flip",
-		Asset::Usdc => "Usdc",
-		Asset::Usdt => "Usdt",
-		Asset::ArbUsdc => "ArbUsdc",
-		Asset::SolUsdc => "SolUsdc",
-		Asset::Eth => "Eth",
-		Asset::Dot => "Dot",
-		Asset::ArbEth => "ArbEth",
-		Asset::Btc => "Btc",
-		Asset::Sol => "Sol",
-		Asset::HubDot => "HubDot",
-		Asset::HubUsdc => "HubUsdc",
-		Asset::HubUsdt => "HubUsdt",
-	}
 }
 
 #[cfg(test)]
@@ -3147,13 +3125,13 @@ mod test {
 			from,
 		);
 
-		let expected_signed_payload: Vec<u8> = hex_literal::hex!("1901027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a255e3bf0c1ac3d32cbc5706141c2a3f08ce0a04896a51b5aad08f14e1831f4aa487").into();
+		let expected_signed_payload: Vec<u8> = hex_literal::hex!("1901027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a2558110bb049d0b1bbf717cc5a166498426e490eb0b3e7caee14b72011e8fb182f3").into();
 
 		assert_eq!(encoded_final, expected_signed_payload);
 		println!("Encoded final: {:?}", &encoded_final);
 
 		let expected_eip712_hash =
-			hex_literal::hex!("183698bc0d88eda1812287580936a3ca60fb700c7cf361080b261ea879d2882c")
+			hex_literal::hex!("b0196e37f6ea8e81c207e6573c898ad72fbf3a36654f413e7710359f937149d3")
 				.into();
 
 		let eip712_hash = Keccak256::hash(&encoded_final);
