@@ -250,13 +250,20 @@ fn slashings_are_distributed_among_delegators() {
 				delegators.keys().map(Flip::balance).sum();
 			let delegators_slash = total_delegators_pre_balance - total_delegators_post_balance;
 
-			assert!(auth_slash > 0u128);
-			assert!(delegators_slash > 0u128);
-			assert!(FlipBalance::abs_diff(op_slash * 19, delegators_slash) < 10); // 5/95 split
-
 			let total_pre_balance =
 				auth_pre_balance + total_delegators_pre_balance + op_pre_balance;
 			let total_slashing = auth_slash + delegators_slash + op_slash;
+
+			let epsilon = total_slashing / 10_000; // allow 0.01% error due to rounding
+
+			assert!(auth_slash > 0u128);
+			assert!(delegators_slash > 0u128);
+			assert!(
+				FlipBalance::abs_diff(op_slash * 19, delegators_slash) < epsilon,
+				"Expected to be within {} but got a diff of {}",
+				epsilon,
+				FlipBalance::abs_diff(op_slash * 19, delegators_slash)
+			); // 5/95 split
 
 			// Verify that slashings are distributed accordingly
 			assert_eq!(

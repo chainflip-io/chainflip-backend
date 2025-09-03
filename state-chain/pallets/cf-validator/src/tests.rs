@@ -1915,16 +1915,33 @@ mod delegation {
 				ValidatorPallet::undelegate(OriginTrait::signed(ALICE), DelegationAmount::Max),
 				Error::<Test>::AccountIsNotDelegating
 			);
-			DelegationChoice::<Test>::insert(ALICE, BOB);
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(ALICE),
+				BOB,
+				DelegationAmount::Max,
+			));
 			// Undelegate with None (undelegate completely)
 			assert_ok!(ValidatorPallet::undelegate(
 				OriginTrait::signed(ALICE),
-				DelegationAmount::Max
+				DelegationAmount::Max,
 			));
 			assert_eq!(DelegationChoice::<Test>::get(ALICE), None);
 			assert_eq!(MaxDelegationBid::<Test>::get(ALICE), None);
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+					delegator: ALICE,
+					max_bid: Some(0),
+				}),
+				RuntimeEvent::ValidatorPallet(Event::Delegated { delegator: ALICE, operator: BOB }),
+				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+					delegator: ALICE,
+					max_bid: None,
+				}),
 				RuntimeEvent::ValidatorPallet(Event::Undelegated {
 					delegator: ALICE,
 					operator: BOB

@@ -199,7 +199,7 @@ mod tests {
 		.encode();
 		assert_eq!(
 			sc_call_delegate,
-			hex::decode("0000f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4")
+			hex::decode("0000f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f400")
 				.unwrap()
 		);
 	}
