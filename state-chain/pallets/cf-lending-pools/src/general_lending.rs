@@ -1060,30 +1060,30 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-pub use rpc::{RpcLendingPool, RpcLoanAccount};
+pub use rpc::{RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount};
 
 pub mod rpc {
 
 	use super::*;
-	use cf_primitives::SwapRequestId;
+	use cf_primitives::{AssetAndAmount, SwapRequestId};
 	use cf_traits::lending::LoanId;
 	use serde::{Deserialize, Serialize};
 
 	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-	pub struct RpcLoan {
+	pub struct RpcLoan<Amount> {
 		pub loan_id: LoanId,
 		pub asset: Asset,
 		pub created_at: u32,
-		pub principal_amount: AssetAmount,
-		pub total_fees: BTreeMap<Asset, AssetAmount>,
+		pub principal_amount: Amount,
+		pub total_fees: Vec<AssetAndAmount<Amount>>,
 	}
 
 	// TODO: see what other parameters are needed
 	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-	pub struct RpcLendingPool {
+	pub struct RpcLendingPool<Amount> {
 		pub asset: Asset,
-		pub total_amount: AssetAmount,
-		pub available_amount: AssetAmount,
+		pub total_amount: Amount,
+		pub available_amount: Amount,
 		pub utilisation_rate: BasisPoints,
 		pub interest_rate: BasisPoints,
 	}
@@ -1101,39 +1101,40 @@ pub mod rpc {
 	}
 
 	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-	pub struct RpcLoanAccount<AccountId> {
+	pub struct RpcLoanAccount<AccountId, Amount> {
 		pub account: AccountId,
 		pub primary_collateral_asset: Asset,
 		pub ltv_ratio: Option<FixedU64>,
-		pub collateral: BTreeMap<Asset, AssetAmount>,
-		pub loans: BTreeMap<LoanId, RpcLoan>,
+		pub collateral: Vec<AssetAndAmount<Amount>>,
+		pub loans: Vec<RpcLoan<Amount>>,
 		pub liquidation_status: Option<RpcLiquidationStatus>,
 	}
 
 	fn build_rpc_loan_account<T: Config>(
 		lender_id: T::AccountId,
 		loan_account: LoanAccount<T>,
-	) -> RpcLoanAccount<T::AccountId> {
+	) -> RpcLoanAccount<T::AccountId, AssetAmount> {
 		RpcLoanAccount {
 			account: lender_id,
 			primary_collateral_asset: loan_account.primary_collateral_asset,
 			ltv_ratio: loan_account.derive_ltv().ok(),
-			collateral: loan_account.collateral,
+			collateral: loan_account
+				.collateral
+				.into_iter()
+				.map(|(asset, amount)| AssetAndAmount { asset, amount })
+				.collect(),
 			loans: loan_account
 				.loans
 				.into_iter()
 				.map(|(loan_id, loan)| {
-					(
+					RpcLoan {
 						loan_id,
-						RpcLoan {
-							loan_id,
-							asset: loan.asset,
-							created_at: loan.created_at_block.unique_saturated_into(),
-							principal_amount: loan.owed_principal,
-							// TODO: store historical fees on loans and expose them here
-							total_fees: Default::default(),
-						},
-					)
+						asset: loan.asset,
+						created_at: loan.created_at_block.unique_saturated_into(),
+						principal_amount: loan.owed_principal,
+						// TODO: store historical fees on loans and expose them here
+						total_fees: Default::default(),
+					}
 				})
 				.collect(),
 			liquidation_status: match loan_account.liquidation_status {
@@ -1155,7 +1156,7 @@ pub mod rpc {
 
 	pub fn get_loan_accounts<T: Config>(
 		lender_id: Option<T::AccountId>,
-	) -> Vec<RpcLoanAccount<T::AccountId>> {
+	) -> Vec<RpcLoanAccount<T::AccountId, AssetAmount>> {
 		if let Some(lender_id) = lender_id {
 			LoanAccounts::<T>::get(&lender_id)
 				.into_iter()
@@ -1170,7 +1171,10 @@ pub mod rpc {
 		}
 	}
 
-	fn build_rpc_lending_pool<T: Config>(asset: Asset, pool: &LendingPool<T>) -> RpcLendingPool {
+	fn build_rpc_lending_pool<T: Config>(
+		asset: Asset,
+		pool: &LendingPool<T>,
+	) -> RpcLendingPool<AssetAmount> {
 		let config = LendingConfig::<T>::get();
 
 		let utilisation = pool.get_utilisation();
@@ -1186,7 +1190,7 @@ pub mod rpc {
 		}
 	}
 
-	pub fn get_lending_pools<T: Config>(asset: Option<Asset>) -> Vec<RpcLendingPool> {
+	pub fn get_lending_pools<T: Config>(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>> {
 		if let Some(asset) = asset {
 			GeneralLendingPools::<T>::get(asset)
 				.iter()

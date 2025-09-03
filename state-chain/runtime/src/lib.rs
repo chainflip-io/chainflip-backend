@@ -2837,11 +2837,11 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool> {
+		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>> {
 			pallet_cf_lending_pools::get_lending_pools::<Runtime>(asset)
 		}
 
-		fn cf_loan_accounts(lender_id: Option<AccountId>) -> Vec<RpcLoanAccount<AccountId>> {
+		fn cf_loan_accounts(lender_id: Option<AccountId>) -> Vec<RpcLoanAccount<AccountId, AssetAmount>> {
 			pallet_cf_lending_pools::get_loan_accounts::<Runtime>(lender_id)
 		}
 

@@ -32,8 +32,9 @@ use cf_chains::{
 use cf_node_client::events_decoder;
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
-	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
+	AccountRole, Affiliates, Asset, AssetAmount, AssetAndAmount, BasisPoints, BlockNumber,
+	BroadcastId, ChannelId, DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer,
+	SwapId, SwapRequestId,
 };
 use cf_rpc_apis::{
 	broker::{
@@ -58,7 +59,7 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::OraclePrice, price::PriceAsset,
 };
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_lending_pools::RpcLoanAccount;
+use pallet_cf_lending_pools::{RpcLoan, RpcLoanAccount};
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
 	UnidirectionalPoolDepth,
@@ -198,13 +199,6 @@ impl From<(AccountId32, AffiliateDetails)> for RpcAffiliate {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct AssetAndAmount {
-	#[serde(flatten)]
-	asset: Asset,
-	amount: NumberOrHex,
-}
-
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "role", rename_all = "snake_case")]
@@ -229,8 +223,8 @@ pub enum RpcAccountInfo {
 		flip_balance: NumberOrHex,
 		earned_fees: any::AssetMap<U256>,
 		boost_balances: any::AssetMap<Vec<RpcLiquidityProviderBoostPoolInfo>>,
-		lending_positions: Vec<LendingPosition>,
-		collateral_balances: Vec<AssetAndAmount>,
+		lending_positions: Vec<LendingPosition<U256>>,
+		collateral_balances: Vec<AssetAndAmount<U256>>,
 	},
 	Validator {
 		flip_balance: NumberOrHex,
@@ -300,7 +294,15 @@ impl RpcAccountInfo {
 				.iter()
 				.map(|(asset, infos)| (asset, infos.iter().map(|info| info.into()).collect()))
 				.collect(),
-			lending_positions: info.lending_positions,
+			lending_positions: info
+				.lending_positions
+				.into_iter()
+				.map(|pos| LendingPosition {
+					asset: pos.asset,
+					total_amount: pos.total_amount.into(),
+					available_amount: pos.available_amount.into(),
+				})
+				.collect(),
 			collateral_balances: info
 				.collateral_balances
 				.into_iter()
@@ -1117,14 +1119,14 @@ pub trait CustomApi {
 		&self,
 		asset: Option<Asset>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<RpcLendingPool>>;
+	) -> RpcResult<Vec<RpcLendingPool<U256>>>;
 
 	#[method(name = "loan_account")]
 	fn cf_loan_accounts(
 		&self,
 		lender_id: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId>>>;
+	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId, U256>>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1388,8 +1390,6 @@ where
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
 		cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>) -> Vec<OraclePrice>,
-		cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool>,
-		cf_loan_accounts(lender_id: Option<state_chain_runtime::AccountId>) -> Vec<RpcLoanAccount<state_chain_runtime::AccountId>>,
 	}
 
 	pass_through_and_flatten! {
@@ -1406,6 +1406,59 @@ where
 		) -> PoolPairsMap<AmmAmount>,
 		cf_validate_dca_params(number_of_chunks: u32, chunk_interval: u32) -> (),
 		cf_validate_refund_params(retry_duration: BlockNumber) -> (),
+	}
+
+	fn cf_lending_pools(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcLendingPool<U256>>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			api.cf_lending_pools(hash, asset).map(|lending_pools| {
+				lending_pools
+					.into_iter()
+					.map(|pool| RpcLendingPool::<U256> {
+						asset: pool.asset,
+						total_amount: pool.total_amount.into(),
+						available_amount: pool.available_amount.into(),
+						utilisation_rate: pool.utilisation_rate,
+						interest_rate: pool.interest_rate,
+					})
+					.collect()
+			})
+		})
+	}
+
+	fn cf_loan_accounts(
+		&self,
+		lender_id: Option<state_chain_runtime::AccountId>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId, U256>>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			api.cf_loan_accounts(hash, lender_id).map(|accounts| {
+				accounts
+					.into_iter()
+					.map(|acc| RpcLoanAccount::<_, U256> {
+						account: acc.account,
+						primary_collateral_asset: acc.primary_collateral_asset,
+						ltv_ratio: acc.ltv_ratio,
+						collateral: acc.collateral.into_iter().map(Into::into).collect(),
+						loans: acc
+							.loans
+							.into_iter()
+							.map(|loan| RpcLoan {
+								loan_id: loan.loan_id,
+								asset: loan.asset,
+								created_at: loan.created_at,
+								principal_amount: loan.principal_amount.into(),
+								total_fees: loan.total_fees.into_iter().map(Into::into).collect(),
+							})
+							.collect(),
+						liquidation_status: acc.liquidation_status,
+					})
+					.collect()
+			})
+		})
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {

@@ -576,3 +576,16 @@ impl<T> ApiWaitForResult<T> {
 		}
 	}
 }
+
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct AssetAndAmount<Amount> {
+	#[serde(flatten)]
+	pub asset: Asset,
+	pub amount: Amount,
+}
+
+impl From<AssetAndAmount<AssetAmount>> for AssetAndAmount<U256> {
+	fn from(other: AssetAndAmount<AssetAmount>) -> Self {
+		Self { asset: other.asset, amount: other.amount.into() }
+	}
+}

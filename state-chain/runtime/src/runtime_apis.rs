@@ -58,13 +58,13 @@ use sp_std::{
 };
 
 #[derive(PartialEq, Eq, Encode, Decode, Clone, TypeInfo, Serialize, Deserialize)]
-pub struct LendingPosition {
+pub struct LendingPosition<Amount> {
 	#[serde(flatten)]
 	pub asset: Asset,
 	// Total amount owed to the lender
-	pub total_amount: AssetAmount,
+	pub total_amount: Amount,
 	// Total amount available to the lender (equals total_amount if the pool has enough liquidity)
-	pub available_amount: AssetAmount,
+	pub available_amount: Amount,
 }
 
 type VanityName = Vec<u8>;
@@ -233,6 +233,7 @@ mod old {
 }
 
 impl From<old::AuctionState> for AuctionState {
+	#[allow(deprecated)]
 	fn from(old: old::AuctionState) -> Self {
 		AuctionState {
 			epoch_duration: old.epoch_duration,
@@ -272,7 +273,7 @@ pub struct LiquidityProviderInfo {
 	pub balances: Vec<(Asset, AssetAmount)>,
 	pub earned_fees: AssetMap<AssetAmount>,
 	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
-	pub lending_positions: Vec<LendingPosition>,
+	pub lending_positions: Vec<LendingPosition<AssetAmount>>,
 	pub collateral_balances: Vec<(Asset, AssetAmount)>,
 }
 
@@ -662,8 +663,10 @@ decl_runtime_apis!(
 		fn cf_oracle_prices(
 			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		) -> Vec<OraclePrice>;
-		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool>;
-		fn cf_loan_accounts(lender_id: Option<AccountId32>) -> Vec<RpcLoanAccount<AccountId32>>;
+		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>>;
+		fn cf_loan_accounts(
+			lender_id: Option<AccountId32>,
+		) -> Vec<RpcLoanAccount<AccountId32, AssetAmount>>;
 	}
 );
 

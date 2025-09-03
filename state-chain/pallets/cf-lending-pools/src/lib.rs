@@ -25,7 +25,7 @@ use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
-	RpcLendingPool, RpcLoanAccount,
+	RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 };
 pub use general_lending_pool::LendingPool;
 // Temporarily exposing this for a migration

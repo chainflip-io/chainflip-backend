@@ -1381,6 +1381,7 @@ fn init_liquidation_swaps_test() {
 
 mod rpcs {
 
+	use cf_primitives::AssetAndAmount;
 	use rpc::{RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan};
 
 	use super::*;
@@ -1453,17 +1454,17 @@ mod rpcs {
 						account: BORROWER,
 						primary_collateral_asset: COLLATERAL_ASSET,
 						ltv_ratio: Some(FixedU64::from_rational(8, 10)),
-						collateral: BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
-						loans: BTreeMap::from([(
-							LOAN_ID,
-							RpcLoan {
-								loan_id: LOAN_ID,
-								asset: LOAN_ASSET,
-								created_at: INIT_BLOCK as u32,
-								principal_amount: PRINCIPAL,
-								total_fees: Default::default()
-							}
-						)]),
+						collateral: vec![AssetAndAmount {
+							asset: COLLATERAL_ASSET,
+							amount: INIT_COLLATERAL
+						}],
+						loans: vec![RpcLoan {
+							loan_id: LOAN_ID,
+							asset: LOAN_ASSET,
+							created_at: INIT_BLOCK as u32,
+							principal_amount: PRINCIPAL,
+							total_fees: Default::default()
+						}],
 						liquidation_status: None
 					}]
 				);
@@ -1489,16 +1490,13 @@ mod rpcs {
 							// include that here too? If so, do we need to include the amount
 							// of loan asset recovered so far through liquidation swaps?
 							collateral: Default::default(),
-							loans: BTreeMap::from([(
-								LOAN_ID_2,
-								RpcLoan {
-									loan_id: LOAN_ID_2,
-									asset: LOAN_ASSET_2,
-									created_at: INIT_BLOCK as u32,
-									principal_amount: PRINCIPAL_2,
-									total_fees: Default::default()
-								}
-							)]),
+							loans: vec![RpcLoan {
+								loan_id: LOAN_ID_2,
+								asset: LOAN_ASSET_2,
+								created_at: INIT_BLOCK as u32,
+								principal_amount: PRINCIPAL_2,
+								total_fees: Default::default()
+							}],
 							liquidation_status: Some(RpcLiquidationStatus {
 								liquidation_swaps: vec![RpcLiquidationSwap {
 									swap_request_id: SwapRequestId(0),
@@ -1512,20 +1510,17 @@ mod rpcs {
 							primary_collateral_asset: COLLATERAL_ASSET,
 							// LTV slightly increased due to interest payment:
 							ltv_ratio: Some(FixedU64::from_rational(800_000_085, 1_000_000_000)),
-							collateral: BTreeMap::from([(
-								COLLATERAL_ASSET,
-								INIT_COLLATERAL - INTEREST_AMOUNT
-							)]),
-							loans: BTreeMap::from([(
-								LOAN_ID,
-								RpcLoan {
-									loan_id: LOAN_ID,
-									asset: LOAN_ASSET,
-									created_at: INIT_BLOCK as u32,
-									principal_amount: PRINCIPAL,
-									total_fees: Default::default()
-								}
-							)]),
+							collateral: vec![AssetAndAmount {
+								asset: COLLATERAL_ASSET,
+								amount: INIT_COLLATERAL - INTEREST_AMOUNT
+							}],
+							loans: vec![RpcLoan {
+								loan_id: LOAN_ID,
+								asset: LOAN_ASSET,
+								created_at: INIT_BLOCK as u32,
+								principal_amount: PRINCIPAL,
+								total_fees: Default::default()
+							}],
 							liquidation_status: None
 						},
 					]
