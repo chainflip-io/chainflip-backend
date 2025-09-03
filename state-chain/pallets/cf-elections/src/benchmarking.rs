@@ -79,7 +79,8 @@ mod benchmarks {
 		validator_counts: u32,
 		vote_value: VoteOf<<T as Config<I>>::ElectoralSystemRunner>,
 	) -> ElectionIdentifierOf<T::ElectoralSystemRunner> {
-		// Setup a validator set of 150 as in the case of Mainnet.
+		// Setup a validator set of validator_counts. 3 is the max, using a bigger value always
+		// result in an authority set of 3.
 		let validators = ready_validator_for_vote::<T, I>(validator_counts);
 		let caller = validators[0].clone();
 		let (election_identifier, ..) = Pallet::<T, I>::electoral_data(&caller.clone().into())
@@ -259,6 +260,8 @@ mod benchmarks {
 
 		let shared_data_hash = SharedDataHash::of(&shared_data_value);
 
+		// Since we now don't use SharedData we need to manually insert a reference cause vote()
+		// doesn't do that anymore but provide_shared_data always expect a reference to be present
 		SharedDataReferenceCount::<T, I>::insert(
 			shared_data_hash,
 			UniqueMonotonicIdentifier::from(0),
@@ -274,7 +277,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		provide_shared_data(RawOrigin::Signed(validator_id), Box::new(shared_data_value.clone()));
 
-		assert!(SharedData::<T, I>::get(shared_data_hash).is_some());
+		assert_eq!(SharedData::<T, I>::get(shared_data_hash), Some(shared_data_value));
 	}
 
 	#[benchmark]
@@ -357,7 +360,8 @@ mod benchmarks {
 
 	#[benchmark]
 	fn clear_election_votes() {
-		// Setup a validator set of 150 as in the case of Mainnet.
+		// Setup a validator set of 3. 150 breaks, authority set doesn't get correctly initialized
+		// to 150
 		let election_identifier =
 			setup_validators_and_vote::<T, I>(3, BenchmarkValue::benchmark_value());
 
@@ -381,7 +385,8 @@ mod benchmarks {
 
 	#[benchmark]
 	fn invalidate_election_consensus_cache() {
-		// Setup a validator set of 150 and reach consensus
+		// Setup a validator set of 3. 150 breaks, authority set doesn't get correctly initialized
+		// to 150
 		let election_identifier =
 			setup_validators_and_vote::<T, I>(3, BenchmarkValue::benchmark_value());
 

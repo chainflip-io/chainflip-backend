@@ -51,7 +51,7 @@ type SimpleEgressSuccess = ExactValue<
 	MockHook,
 	(),
 	u32,
-	crate::vote_storage::bitmap::Bitmap<EgressData>,
+	crate::vote_storage::bitmap_numerical::BitmapNoHash<EgressData>,
 >;
 
 register_checks! {

@@ -29,6 +29,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for VoteStorageMigration<T, I> {
 		BitmapComponents::<T, I>::drain();
 		IndividualComponents::<T, I>::drain();
 		ElectionConsensusHistory::<T, I>::drain();
+		ElectionConsensusHistoryUpToDate::<T, I>::drain();
 
 		Weight::zero()
 	}
