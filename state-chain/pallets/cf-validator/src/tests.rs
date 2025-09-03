@@ -2680,7 +2680,7 @@ pub mod auction_optimization {
 							operator: OP_1,
 							validators: op_1_bids
 								.extract_if(.., |Bid { bidder_id, amount: _ }| {
-									expected_primary_candidates.contains(&bidder_id) ||
+									expected_primary_candidates.contains(bidder_id) ||
 										*bidder_id == max_op1_bidder
 								})
 								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
@@ -2701,7 +2701,7 @@ pub mod auction_optimization {
 							operator: OP_2,
 							validators: op_2_bids
 								.extract_if(.., |Bid { bidder_id, amount: _ }| {
-									expected_primary_candidates.contains(&bidder_id) ||
+									expected_primary_candidates.contains(bidder_id) ||
 										*bidder_id == max_op2_bidder
 								})
 								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
