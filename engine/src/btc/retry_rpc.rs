@@ -29,7 +29,7 @@ use core::time::Duration;
 use anyhow::Result;
 use cf_chains::btc::{BlockNumber, BtcAmount};
 
-use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient, VerboseBlock};
+use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient, MempoolTransaction, VerboseBlock};
 
 #[derive(Clone)]
 pub struct BtcRetryRpcClient {
@@ -179,10 +179,7 @@ impl BtcRpcApi for BtcRetryRpcClient {
 				RequestLog::new("mempool_info".to_string(), None),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move {
-						let header = client.mempool_info().await?;
-						Ok(header)
-					})
+					Box::pin(async move { Ok(client.mempool_info().await?) })
 				}),
 				2,
 			)
@@ -195,10 +192,21 @@ impl BtcRpcApi for BtcRetryRpcClient {
 				RequestLog::new("raw_mempool".to_string(), None),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move {
-						let header = client.raw_mempool().await?;
-						Ok(header)
-					})
+					Box::pin(async move { Ok(client.raw_mempool().await?) })
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn mempool_entries(&self, txids: Vec<Txid>) -> anyhow::Result<Vec<MempoolTransaction>> {
+		self.retry_client
+			.request_with_limit(
+				RequestLog::new("raw_transaction".to_string(), Some(txids.len().to_string())),
+				Box::pin(move |client| {
+					let txids = txids.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { Ok(client.mempool_entries(txids).await?) })
 				}),
 				2,
 			)
@@ -274,6 +282,8 @@ pub mod mocks {
 			async fn mempool_info(&self) -> anyhow::Result<MempoolInfo>;
 
 			async fn raw_mempool(&self) -> anyhow::Result<Vec<Txid>>;
+
+			async fn mempool_entries(&self, txids: Vec<Txid>) -> anyhow::Result<Vec<MempoolTransaction>>;
 		}
 	}
 }

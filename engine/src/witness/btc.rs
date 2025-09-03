@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod deposits;
+pub mod fees;
 pub mod source;
 pub mod vault_swaps;
 

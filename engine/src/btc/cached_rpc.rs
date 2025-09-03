@@ -1,7 +1,7 @@
 use crate::{
 	btc::{
 		retry_rpc::BtcRetryRpcClient,
-		rpc::{BlockHeader, BtcRpcApi, MempoolInfo, VerboseBlock},
+		rpc::{BlockHeader, BtcRpcApi, MempoolInfo, MempoolTransaction, VerboseBlock},
 	},
 	caching_request::CachingRequest,
 };
@@ -21,6 +21,7 @@ pub struct BtcCachingClient {
 	best_block_hash: CachingRequest<(), BlockHash, BtcRetryRpcClient>,
 	mempool_info: CachingRequest<(), MempoolInfo, BtcRetryRpcClient>,
 	raw_mempool: CachingRequest<(), Vec<Txid>, BtcRetryRpcClient>,
+	mempool_entries: CachingRequest<Vec<Txid>, Vec<MempoolTransaction>, BtcRetryRpcClient>,
 
 	pub cache_invalidation_senders: Vec<mpsc::Sender<()>>,
 }
@@ -47,7 +48,11 @@ impl BtcCachingClient {
 		let (mempool_info, mempool_info_cache) =
 			CachingRequest::<(), MempoolInfo, BtcRetryRpcClient>::new(scope, client.clone());
 		let (raw_mempool, raw_mempool_cache) =
-			CachingRequest::<(), Vec<Txid>, BtcRetryRpcClient>::new(scope, client);
+			CachingRequest::<(), Vec<Txid>, BtcRetryRpcClient>::new(scope, client.clone());
+		let (mempool_entries, mempool_entries_cache) =
+			CachingRequest::<Vec<Txid>, Vec<MempoolTransaction>, BtcRetryRpcClient>::new(
+				scope, client,
+			);
 		BtcCachingClient {
 			block,
 			block_hash,
@@ -58,6 +63,7 @@ impl BtcCachingClient {
 			best_block_hash,
 			mempool_info,
 			raw_mempool,
+			mempool_entries,
 			cache_invalidation_senders: vec![
 				block_cache,
 				block_hash_cache,
@@ -68,6 +74,7 @@ impl BtcCachingClient {
 				best_block_hash_cache,
 				mempool_info_cache,
 				raw_mempool_cache,
+				mempool_entries_cache,
 			],
 		}
 	}
@@ -181,6 +188,20 @@ impl BtcRpcApi for BtcCachingClient {
 					Box::pin(async move { client.raw_mempool().await })
 				}),
 				(),
+			)
+			.await
+	}
+
+	async fn mempool_entries(&self, txids: Vec<Txid>) -> anyhow::Result<Vec<MempoolTransaction>> {
+		let txids_c = txids.clone();
+		self.mempool_entries
+			.get_or_fetch(
+				Box::pin(move |client| {
+					let txids_c = txids_c.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.mempool_entries(txids_c).await })
+				}),
+				txids,
 			)
 			.await
 	}
