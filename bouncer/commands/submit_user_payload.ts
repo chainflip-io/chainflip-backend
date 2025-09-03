@@ -3,6 +3,7 @@
 //
 
 import {
+  assetContractId,
   brokerMutex,
   createStateChainKeypair,
   getEvmEndpoint,
@@ -15,7 +16,7 @@ import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
-import { Struct, u32, Enum, u128, u256 } from 'scale-ts';
+import { Struct, u32, Enum, u128, u256, u8 } from 'scale-ts';
 import { globalLogger } from 'shared/utils/logger';
 
 // TODO: Update these with the rpc encoding once the logic is implemented.
@@ -23,8 +24,9 @@ export const UserActionsCodec = Enum({
   Lending: Enum({
     Borrow: Struct({
       amount: u128,
-      collateralAsset: u128,
-      borrowAsset: u128,
+      // Should be an Asset type but we simplify
+      collateralAsset: u8,
+      borrowAsset: u8,
     }),
   }),
 });
@@ -39,19 +41,20 @@ export const ChainIdCodec = u256;
 const nonce = 1;
 const expiryBlock = 10000;
 const amount = 1234;
-const collateralAsset = 5;
-const borrowAsset = 3;
+const collateralAsset = 'Btc';
+const borrowAsset = 'Usdc';
 // For now hardcoded in the SC. It should be network dependent.
 const chainId = 1n;
 
-export function encodePayloadToSign(payload: Uint8Array, nonce: number, expiryBlock: number) {
+export function encodePayloadToSign(payload: Uint8Array, userNonce: number, userExpiryBlock: number) {
   const userMetadata = UserMetadataCodec.enc({
-    nonce,
-    expiryBlock,
+    nonce: userNonce,
+    expiryBlock: userExpiryBlock,
   });
   const chainIdBytes = ChainIdCodec.enc(chainId);
   return new Uint8Array([...payload, ...chainIdBytes, ...userMetadata]);
 }
+
 async function main() {
   await using chainflip = await getChainflipApi();
 
@@ -64,8 +67,8 @@ async function main() {
       tag: 'Borrow',
       value: {
         amount: BigInt(amount),
-        collateralAsset: BigInt(collateralAsset),
-        borrowAsset: BigInt(borrowAsset),
+        collateralAsset: assetContractId(collateralAsset),
+        borrowAsset: assetContractId(borrowAsset),
       },
     },
   });
@@ -194,8 +197,8 @@ async function main() {
     ],
     Borrow: [
       { name: 'amount', type: 'uint256' },
-      { name: 'collateralAsset', type: 'uint256' },
-      { name: 'borrowAsset', type: 'uint256' },
+      { name: 'collateralAsset', type: 'string' },
+      { name: 'borrowAsset', type: 'string' },
       { name: 'metadata', type: 'Metadata' },
     ],
   };
@@ -261,4 +264,4 @@ async function main() {
   }).event;
 }
 
-await runWithTimeoutAndExit(main(), 20);
+await runWithTimeoutAndExit(main(), 25);

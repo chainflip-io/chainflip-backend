@@ -367,7 +367,7 @@ pub enum UserSignatureData {
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
 pub enum LendingApi {
-	Borrow { amount: u128, collateral_asset: u128, borrow_asset: u128 },
+	Borrow { amount: u128, collateral_asset: Asset, borrow_asset: Asset },
 }
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
@@ -888,6 +888,7 @@ pub mod pallet {
 			signed_payload: Vec<u8>,
 			decoded_action: UserActionsApi,
 		},
+		FailedToDecodePayload {},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -1530,8 +1531,13 @@ pub mod pallet {
 
 			// We could directly have the action: UserActionsApi as parameter, but this
 			// is more flexible for now. TBD.
-			let decoded_action =
-				UserActionsApi::decode(&mut &payload[..]).expect("Payload should decode");
+			let decoded_action = match UserActionsApi::decode(&mut &payload[..]) {
+				Ok(action) => action,
+				Err(_e) => {
+					Self::deposit_event(Event::<T>::FailedToDecodePayload {});
+					return Ok(());
+				},
+			};
 
 			let (valid, signer_account_id, signed_payload) = match user_signature_data.clone() {
 				UserSignatureData::Solana { signature, signer, sig_type } => {
@@ -1553,7 +1559,6 @@ pub mod pallet {
 						signed_payload,
 					)
 				},
-				// Add prefix here from eth personal_sign. TBD if this is the same for EIP712
 				UserSignatureData::Ethereum { signature, signer, sig_type } => {
 					let signed_payload = match sig_type {
 						EthSigType::Domain => {
@@ -1590,7 +1595,7 @@ pub mod pallet {
 			let expired =
 				frame_system::Pallet::<T>::block_number() >= user_metadata.expiry_block.into();
 
-			// TODO: Execute the intended action user action similar to the delegation Sc Api.
+			// TODO: Execute the intended action user action similar to the delegation ScApi.
 
 			Self::deposit_event(Event::<T>::UserSignedTransactionSubmitted {
 				broker_id,
@@ -3066,21 +3071,22 @@ pub fn build_eip_712_hash(
 	// the dependency in the type string.
 	// i.e. we must append the full definition of Metadata.
 	let borrow_type_str = scale_info::prelude::format!(
-		"Borrow(uint256 amount,uint256 collateralAsset,uint256 borrowAsset,Metadata metadata){}",
+		"Borrow(uint256 amount,string collateralAsset,string borrowAsset,Metadata metadata){}",
 		metadata_type_str
 	);
 	let borrow_type_hash = Keccak256::hash(borrow_type_str.as_bytes());
 
 	let message_hash = match user_action {
 		UserActionsApi::Lending(LendingApi::Borrow { amount, collateral_asset, borrow_asset }) => {
-			let (amount, collateral_asset, borrow_asset) =
-				(U256::from(amount), U256::from(collateral_asset), U256::from(borrow_asset));
-
 			let tokens = vec![
 				Token::FixedBytes(borrow_type_hash.as_bytes().to_vec()),
-				Token::Uint(amount),
-				Token::Uint(collateral_asset),
-				Token::Uint(borrow_asset),
+				Token::Uint(U256::from(amount)),
+				Token::FixedBytes(
+					Keccak256::hash(asset_to_str(collateral_asset).as_bytes()).0.to_vec(),
+				),
+				Token::FixedBytes(
+					Keccak256::hash(asset_to_str(borrow_asset).as_bytes()).0.to_vec(),
+				),
 				Token::FixedBytes(metadata_hash.as_bytes().to_vec()),
 			];
 
@@ -3098,6 +3104,24 @@ pub fn build_eip_712_hash(
 	encoded_final
 }
 
+fn asset_to_str(asset: Asset) -> &'static str {
+	match asset {
+		Asset::Flip => "Flip",
+		Asset::Usdc => "Usdc",
+		Asset::Usdt => "Usdt",
+		Asset::ArbUsdc => "ArbUsdc",
+		Asset::SolUsdc => "SolUsdc",
+		Asset::Eth => "Eth",
+		Asset::Dot => "Dot",
+		Asset::ArbEth => "ArbEth",
+		Asset::Btc => "Btc",
+		Asset::Sol => "Sol",
+		Asset::HubDot => "HubDot",
+		Asset::HubUsdc => "HubUsdc",
+		Asset::HubUsdt => "HubUsdt",
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
@@ -3112,20 +3136,20 @@ mod test {
 		let encoded_final = build_eip_712_hash(
 			UserActionsApi::Lending(LendingApi::Borrow {
 				amount: 1234,
-				collateral_asset: 5,
-				borrow_asset: 3,
+				collateral_asset: Asset::Btc,
+				borrow_asset: Asset::Usdc,
 			}),
 			metadata,
 			from,
 		);
 
-		let expected_signed_payload: Vec<u8> = hex_literal::hex!("1901027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a255edd24da0fe54d051d5ce0afe65838a00ca0058d6d47a7487384fd9d790bf6327").into();
+		let expected_signed_payload: Vec<u8> = hex_literal::hex!("1901027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a255e3bf0c1ac3d32cbc5706141c2a3f08ce0a04896a51b5aad08f14e1831f4aa487").into();
 
 		assert_eq!(encoded_final, expected_signed_payload);
 		println!("Encoded final: {:?}", &encoded_final);
 
 		let expected_eip712_hash =
-			hex_literal::hex!("67f8aa61b1161f0abc544b996ffeb15562a6cdb604e2183add1ea96e250f09c9")
+			hex_literal::hex!("183698bc0d88eda1812287580936a3ca60fb700c7cf361080b261ea879d2882c")
 				.into();
 
 		let eip712_hash = Keccak256::hash(&encoded_final);
@@ -3147,5 +3171,16 @@ mod test {
 
 		let success = EvmCrypto::verify_signature(&signer, &signed_payload, &signature);
 		assert!(success, "Signature verification failed");
+	}
+
+	#[test]
+	fn test_encode_user_action() {
+		let user_action = UserActionsApi::Lending(LendingApi::Borrow {
+			amount: 1234,
+			collateral_asset: Asset::Btc,
+			borrow_asset: Asset::Usdc,
+		});
+		let encoded = user_action.encode();
+		println!("Encoded user action: {:?}", encoded);
 	}
 }
