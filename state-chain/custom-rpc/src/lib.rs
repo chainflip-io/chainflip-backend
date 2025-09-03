@@ -1124,7 +1124,7 @@ pub trait CustomApi {
 	#[method(name = "loan_account")]
 	fn cf_loan_accounts(
 		&self,
-		lender_id: Option<state_chain_runtime::AccountId>,
+		borrower_id: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId, U256>>>;
 }
@@ -1431,11 +1431,11 @@ where
 
 	fn cf_loan_accounts(
 		&self,
-		lender_id: Option<state_chain_runtime::AccountId>,
+		borrower_id: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId, U256>>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
-			api.cf_loan_accounts(hash, lender_id).map(|accounts| {
+			api.cf_loan_accounts(hash, borrower_id).map(|accounts| {
 				accounts
 					.into_iter()
 					.map(|acc| RpcLoanAccount::<_, U256> {

@@ -665,7 +665,7 @@ decl_runtime_apis!(
 		) -> Vec<OraclePrice>;
 		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>>;
 		fn cf_loan_accounts(
-			lender_id: Option<AccountId32>,
+			borrower_id: Option<AccountId32>,
 		) -> Vec<RpcLoanAccount<AccountId32, AssetAmount>>;
 	}
 );

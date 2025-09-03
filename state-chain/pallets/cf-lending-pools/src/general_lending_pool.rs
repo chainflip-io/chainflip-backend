@@ -65,7 +65,7 @@ impl<T: Config> LendingPool<T> {
 		let amount_to_withdraw = core::cmp::min(required_amount, self.available_amount);
 
 		let old_total_amount = self.total_amount;
-		self.total_amount.saturating_reduce(required_amount);
+		self.total_amount.saturating_reduce(amount_to_withdraw);
 		self.available_amount.saturating_reduce(amount_to_withdraw);
 
 		let remaining_owed_amount = total_owed_amount.saturating_sub(amount_to_withdraw);

@@ -389,10 +389,9 @@ impl<T: Config> LoanAccount<T> {
 
 		loan.pay_to_pool(repayment_amount, true /* is principal */);
 
-		let liquidation_fees = match liquidation_fees {
-			Some(fees) => BTreeMap::from([(loan.asset, fees)]),
-			None => Default::default(),
-		};
+		let liquidation_fees = liquidation_fees
+			.map(|fees| BTreeMap::from([(loan.asset, fees)]))
+			.unwrap_or_default();
 
 		Pallet::<T>::deposit_event(Event::LoanRepaid {
 			loan_id,
@@ -665,7 +664,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 	type AccountId = T::AccountId;
 
 	/// Create a new loan (assigning a new loan id) provided that the account's existing collateral
-	/// plus any `extra_collateral` is sufficient. Will update the primary collateral asser if
+	/// plus any `extra_collateral` is sufficient. Will update the primary collateral asset if
 	/// provided.
 	#[transactional]
 	fn new_loan(
@@ -711,9 +710,10 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			account.loans.insert(loan_id, loan);
 
-			if account.derive_ltv()? > chp_config.ltv_target_threshold {
-				fail!(Error::<T>::InsufficientCollateral);
-			}
+			ensure!(
+				account.derive_ltv()? <= chp_config.ltv_target_threshold,
+				Error::<T>::InsufficientCollateral
+			);
 
 			GeneralLendingPools::<T>::try_mutate(asset, |pool| {
 				let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
@@ -993,6 +993,8 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 									swap.to_asset,
 									remaining_amount,
 								);
+							} else {
+								log_or_panic!("Unable to find liquidation swap (swap request id: {swap_request_id}) for loan_id: {loan_id})");
 							}
 
 							// If there are no more liquidation swaps for the loan, we should
@@ -1111,11 +1113,11 @@ pub mod rpc {
 	}
 
 	fn build_rpc_loan_account<T: Config>(
-		lender_id: T::AccountId,
+		borrower_id: T::AccountId,
 		loan_account: LoanAccount<T>,
 	) -> RpcLoanAccount<T::AccountId, AssetAmount> {
 		RpcLoanAccount {
-			account: lender_id,
+			account: borrower_id,
 			primary_collateral_asset: loan_account.primary_collateral_asset,
 			ltv_ratio: loan_account.derive_ltv().ok(),
 			collateral: loan_account
@@ -1155,17 +1157,17 @@ pub mod rpc {
 	}
 
 	pub fn get_loan_accounts<T: Config>(
-		lender_id: Option<T::AccountId>,
+		borrower_id: Option<T::AccountId>,
 	) -> Vec<RpcLoanAccount<T::AccountId, AssetAmount>> {
-		if let Some(lender_id) = lender_id {
-			LoanAccounts::<T>::get(&lender_id)
+		if let Some(borrower_id) = borrower_id {
+			LoanAccounts::<T>::get(&borrower_id)
 				.into_iter()
-				.map(|loan_account| build_rpc_loan_account(lender_id.clone(), loan_account))
+				.map(|loan_account| build_rpc_loan_account(borrower_id.clone(), loan_account))
 				.collect()
 		} else {
 			LoanAccounts::<T>::iter()
-				.map(|(lender_id, loan_account)| {
-					build_rpc_loan_account(lender_id.clone(), loan_account)
+				.map(|(borrower_id, loan_account)| {
+					build_rpc_loan_account(borrower_id.clone(), loan_account)
 				})
 				.collect()
 		}
