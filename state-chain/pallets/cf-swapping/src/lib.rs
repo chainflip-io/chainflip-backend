@@ -1570,8 +1570,11 @@ pub mod pallet {
 							let prefix_bytes = prefix.as_bytes();
 							[prefix_bytes, &concat_data].concat()
 						},
-						EthSigType::Eip712 =>
-							build_eip_712_hash(decoded_action.clone(), user_metadata.clone()),
+						EthSigType::Eip712 => build_eip_712_hash(
+							decoded_action.clone(),
+							user_metadata.clone(),
+							signer,
+						),
 					};
 					(
 						EvmCrypto::verify_signature(&signer, &signed_payload, &signature),
@@ -3015,7 +3018,11 @@ pub(crate) mod utilities {
 	}
 }
 
-pub fn build_eip_712_hash(user_action: UserActionsApi, user_metadata: UserMetadata) -> Vec<u8> {
+pub fn build_eip_712_hash(
+	user_action: UserActionsApi,
+	user_metadata: UserMetadata,
+	signer: EthereumAddress,
+) -> Vec<u8> {
 	use cf_chains::evm::{encode, Token};
 	// -----------------
 	// Domain separator
@@ -3026,7 +3033,6 @@ pub fn build_eip_712_hash(user_action: UserActionsApi, user_metadata: UserMetada
 	let version_hash = Keccak256::hash("0".as_bytes());
 	let chain_id = get_current_chain_id();
 
-	// Create tokens
 	let tokens = vec![
 		Token::FixedBytes(type_hash.as_bytes().to_vec()),
 		Token::FixedBytes(name_hash.as_bytes().to_vec()),
@@ -3041,11 +3047,12 @@ pub fn build_eip_712_hash(user_action: UserActionsApi, user_metadata: UserMetada
 	// -----------------
 	// Metadata struct
 	// -----------------
-	let metadata_type_str = "Metadata(uint256 nonce,uint256 expiryBlock)";
+	let metadata_type_str = "Metadata(address from,uint256 nonce,uint256 expiryBlock)";
 	let metadata_type_hash = Keccak256::hash(metadata_type_str.as_bytes());
 
 	let metadata_tokens = vec![
 		Token::FixedBytes(metadata_type_hash.as_bytes().to_vec()),
+		Token::Address(signer),
 		Token::Uint(U256::from(user_metadata.nonce)),
 		Token::Uint(U256::from(user_metadata.expiry_block)),
 	];
@@ -3057,18 +3064,12 @@ pub fn build_eip_712_hash(user_action: UserActionsApi, user_metadata: UserMetada
 	// -----------------
 	// NOTE: When there’s a nested struct, EIP-712 requires including
 	// the dependency in the type string.
-	//
-	// So Borrow type is actually:
-	// "Borrow(string from,uint256 amount,uint256 collateralAsset,uint256 borrowAsset,Metadata
-	// metadata)Metadata(uint256 nonce,uint256 expiryBlock)"
-	//
 	// i.e. we must append the full definition of Metadata.
-	let borrow_type_str = "Borrow(string from,uint256 amount,uint256 collateralAsset,uint256 borrowAsset,Metadata metadata)Metadata(uint256 nonce,uint256 expiryBlock)";
+	let borrow_type_str = scale_info::prelude::format!(
+		"Borrow(uint256 amount,uint256 collateralAsset,uint256 borrowAsset,Metadata metadata){}",
+		metadata_type_str
+	);
 	let borrow_type_hash = Keccak256::hash(borrow_type_str.as_bytes());
-
-	// For "from" field: hash string -> keccak256(bytes("..."))
-	let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-	let from_hash = Keccak256::hash(from_str.as_bytes());
 
 	let message_hash = match user_action {
 		UserActionsApi::Lending(LendingApi::Borrow { amount, collateral_asset, borrow_asset }) => {
@@ -3077,11 +3078,10 @@ pub fn build_eip_712_hash(user_action: UserActionsApi, user_metadata: UserMetada
 
 			let tokens = vec![
 				Token::FixedBytes(borrow_type_hash.as_bytes().to_vec()),
-				Token::FixedBytes(from_hash.as_bytes().to_vec()),
 				Token::Uint(amount),
 				Token::Uint(collateral_asset),
 				Token::Uint(borrow_asset),
-				Token::FixedBytes(metadata_hash.as_bytes().to_vec()), // nested struct
+				Token::FixedBytes(metadata_hash.as_bytes().to_vec()),
 			];
 
 			let encoded_message = encode(&tokens);
@@ -3090,7 +3090,7 @@ pub fn build_eip_712_hash(user_action: UserActionsApi, user_metadata: UserMetada
 	};
 
 	// -----------------
-	// Final digest
+	// EIP712 digest
 	// -----------------
 	let mut encoded_final = vec![0x19, 0x01];
 	encoded_final.extend_from_slice(domain_separator.0.as_slice());
@@ -3101,24 +3101,31 @@ pub fn build_eip_712_hash(user_action: UserActionsApi, user_metadata: UserMetada
 #[cfg(test)]
 mod test {
 	use super::*;
-	use sp_core::H160;
 	use std::str::FromStr;
 
 	#[test]
 	fn testing() {
-		let encoded_final = build_eip_712_hash(UserActionsApi::Lending(LendingApi::Borrow {
-			amount: 1234,
-			collateral_asset: 5,
-			borrow_asset: 3,
-		}));
+		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+		let from: EthereumAddress = EthereumAddress::from_str(from_str).unwrap();
+		let metadata = UserMetadata { nonce: 1, expiry_block: 10000 };
 
-		let expected_signed_payload: Vec<u8> = hex_literal::hex!("1901027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a2556b9b49724eb5ff27f2fd7f20e3069b9f21ebd4f4215557469a182f4ec211f719").into();
+		let encoded_final = build_eip_712_hash(
+			UserActionsApi::Lending(LendingApi::Borrow {
+				amount: 1234,
+				collateral_asset: 5,
+				borrow_asset: 3,
+			}),
+			metadata,
+			from,
+		);
+
+		let expected_signed_payload: Vec<u8> = hex_literal::hex!("1901027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a255edd24da0fe54d051d5ce0afe65838a00ca0058d6d47a7487384fd9d790bf6327").into();
 
 		assert_eq!(encoded_final, expected_signed_payload);
 		println!("Encoded final: {:?}", &encoded_final);
 
 		let expected_eip712_hash =
-			hex_literal::hex!("5d8bd0a0adb0fd1987425f1bac09f036c155c0e4ce8a9c3f4a101e4cad61863b")
+			hex_literal::hex!("67f8aa61b1161f0abc544b996ffeb15562a6cdb604e2183add1ea96e250f09c9")
 				.into();
 
 		let eip712_hash = Keccak256::hash(&encoded_final);
@@ -3131,7 +3138,8 @@ mod test {
 		use cf_chains::{evm::EvmCrypto, ChainCrypto};
 		// Data before hashing
 		let signed_payload =  hex_literal::hex!("1901027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a255d3cf70c7277187d769dc8701e55bbdfccf6300732bb6513f86614f6267a6f4db");
-		let signer: H160 = H160::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
+		let signer: EthereumAddress =
+			EthereumAddress::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
 		let signature: EthereumSignature = hex_literal::hex!(
 			"4db2efcd4fe0dc3bde6c16745dc0d5420a9f3eee587e5cc271ac98fd975563081eaa2fe79e5b2453ca7d8c5675e4d683ac5c59d5d4d16d854ecdaaf35195d5551b"
 		)

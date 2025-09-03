@@ -32,12 +32,12 @@ scale-info = { workspace = true, features = ["derive"] }
 frame-benchmarking = { workspace = true, optional = true }
 frame-support = { workspace = true }
 frame-system = { workspace = true }
+hex-literal = {workspace = true}
 
 sp-arithmetic = { workspace = true }
 sp-std = { workspace = true }
 sp-runtime = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
-hex-literal.workspace = true
 
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }

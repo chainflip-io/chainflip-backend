@@ -188,11 +188,11 @@ async function main() {
 
   const types = {
     Metadata: [
+      { name: 'from', type: 'address' },
       { name: 'nonce', type: 'uint256' },
       { name: 'expiryBlock', type: 'uint256' },
     ],
     Borrow: [
-      { name: 'from', type: 'string' },
       { name: 'amount', type: 'uint256' },
       { name: 'collateralAsset', type: 'uint256' },
       { name: 'borrowAsset', type: 'uint256' },
@@ -202,11 +202,11 @@ async function main() {
 
   // The data to sign
   const message = {
-    from: evmSigner,
     amount,
     collateralAsset,
     borrowAsset,
     metadata: {
+      from: evmSigner,
       nonce,
       expiryBlock,
     },
