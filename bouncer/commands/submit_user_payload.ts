@@ -46,7 +46,11 @@ const borrowAsset = 'Usdc';
 // For now hardcoded in the SC. It should be network dependent.
 const chainId = 1n;
 
-export function encodePayloadToSign(payload: Uint8Array, userNonce: number, userExpiryBlock: number) {
+export function encodePayloadToSign(
+  payload: Uint8Array,
+  userNonce: number,
+  userExpiryBlock: number,
+) {
   const userMetadata = UserMetadataCodec.enc({
     nonce: userNonce,
     expiryBlock: userExpiryBlock,

@@ -1534,6 +1534,8 @@ pub mod pallet {
 			let decoded_action = match UserActionsApi::decode(&mut &payload[..]) {
 				Ok(action) => action,
 				Err(_e) => {
+					// Emitting event for debugging. For prod we probably want to emit
+					// an error with the reason (nonce, expiry, signature invalid, etc).
 					Self::deposit_event(Event::<T>::FailedToDecodePayload {});
 					return Ok(());
 				},
@@ -1597,6 +1599,8 @@ pub mod pallet {
 
 			// TODO: Execute the intended action user action similar to the delegation ScApi.
 
+			// For debugging purposes we emit the event with all the data. For prod we probably
+			// want the UserSignedTransactionSubmitted event or the Error with Reason event.
 			Self::deposit_event(Event::<T>::UserSignedTransactionSubmitted {
 				broker_id,
 				signer_account_id,
