@@ -552,6 +552,6 @@ impl WeightInfo for () {
 		Weight::from_parts(0, 0)
 	}
 	fn execute_sc_call() -> Weight {
-		Weight::from_parts(0, 0)	
+		Weight::from_parts(0, 0)
 	}
 }

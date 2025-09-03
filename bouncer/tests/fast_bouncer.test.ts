@@ -18,20 +18,19 @@ import { testBrokerLevelScreening } from 'tests/broker_level_screening';
 import { testFundRedeem } from 'tests/fund_redeem';
 import { concurrentTest, serialTest } from 'shared/utils/vitest';
 import { testDelegateFlip } from './delegate_flip';
+import { testSpecialBitcoinSwaps } from './special_btc_swaps';
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {
   // Specify the number of nodes via setting the env var.
   // NODE_COUNT="3-node" pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
-  const givenNumberOfNodes = match ? parseInt(match[0]) : null;
-  const numberOfNodes = givenNumberOfNodes ?? 1;
+  const numberOfNodes = match ? parseInt(match[0]) : 1;
 
   concurrentTest('SwapLessThanED', swapLessThanED, 180);
   testAllSwaps(numberOfNodes === 1 ? 180 : 240); // TODO: find out what the 3-node timeout should be
-  concurrentTest('EvmDeposits', testEvmDeposits, 250);
-  concurrentTest('FundRedeem', testFundRedeem, 1000);
-  concurrentTest('MultipleMembersGovernance', testMultipleMembersGovernance, 120);
+  concurrentTest('EvmDeposits', testEvmDeposits, 300);
+  concurrentTest('FundRedeem', testFundRedeem, 600);
   concurrentTest('LpApi', testLpApi, 240);
   concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200);
   concurrentTest('BoostingForAsset', testBoostingSwap, 200);
@@ -45,7 +44,11 @@ describe('ConcurrentTests', () => {
   // TODO: figure out how to make it less flaky.
   // WHEN CHANGING ANYTHING RELATED TO ASSETHUB OR XCM, run this test locally.
   // concurrentTest('AssethubXCM', testAssethubXcm, 200);
+  concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 60);
   concurrentTest('DelegateFlip', testDelegateFlip, 360);
+
+  // Test this separately since some other tests rely on single member governance.
+  serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 120);
 
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
@@ -60,4 +63,11 @@ describe('ConcurrentTests', () => {
 // Run only the broker level screening tests
 describe('BrokerLevelScreeningTest', () => {
   concurrentTest('BrokerLevelScreening', (context) => testBrokerLevelScreening(context, true), 600);
+});
+
+describe('AllSwaps', () => {
+  const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
+  const numberOfNodes = match ? parseInt(match[0]) : 1;
+
+  testAllSwaps(numberOfNodes === 1 ? 180 : 240); // Adjust timeout based on node count
 });

@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
 use frame_support::assert_err;
 
 use super::*;
@@ -494,17 +495,40 @@ fn fok_test_zero_refund_duration(is_ccm: bool) {
 
 #[test]
 fn test_refund_parameter_validation() {
-	use cf_traits::SwapParameterValidation;
-
 	new_test_ext().execute_with(|| {
 		let max_swap_retry_duration_blocks = MaxSwapRetryDurationBlocks::<Test>::get();
 
-		assert_ok!(Swapping::validate_refund_params(0));
-		assert_ok!(Swapping::validate_refund_params(max_swap_retry_duration_blocks));
+		assert_ok!(Swapping::validate_refund_params(INPUT_ASSET, OUTPUT_ASSET, 0, None));
+		assert_ok!(Swapping::validate_refund_params(
+			INPUT_ASSET,
+			OUTPUT_ASSET,
+			max_swap_retry_duration_blocks,
+			None
+		));
 		assert_err!(
-			Swapping::validate_refund_params(max_swap_retry_duration_blocks + 1),
+			Swapping::validate_refund_params(
+				INPUT_ASSET,
+				OUTPUT_ASSET,
+				max_swap_retry_duration_blocks + 1,
+				None
+			),
 			DispatchError::from(crate::Error::<Test>::RetryDurationTooHigh)
 		);
+
+		MockPriceFeedApi::set_price(INPUT_ASSET, None);
+		MockPriceFeedApi::set_price(OUTPUT_ASSET, Some(U256::from(1)));
+		assert_err!(
+			Swapping::validate_refund_params(INPUT_ASSET, OUTPUT_ASSET, 0, Some(100)),
+			DispatchError::from(crate::Error::<Test>::OraclePriceNotAvailable)
+		);
+		MockPriceFeedApi::set_price(INPUT_ASSET, Some(U256::from(1)));
+		MockPriceFeedApi::set_price(OUTPUT_ASSET, None);
+		assert_err!(
+			Swapping::validate_refund_params(INPUT_ASSET, OUTPUT_ASSET, 0, Some(100)),
+			DispatchError::from(crate::Error::<Test>::OraclePriceNotAvailable)
+		);
+		MockPriceFeedApi::set_price(OUTPUT_ASSET, Some(U256::from(1)));
+		assert_ok!(Swapping::validate_refund_params(INPUT_ASSET, OUTPUT_ASSET, 0, Some(100)));
 	});
 }
 
@@ -816,5 +840,209 @@ mod oracle_swaps {
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. })
 				);
 			});
+	}
+
+	#[test]
+	fn test_negative_oracle_price_delta() {
+		// The swap output will be lower than the oracle
+		const SWAP_RATE_BPS: u32 = 100;
+		const NETWORK_FEE_BPS: u32 = 100;
+		const BROKER_FEE_BPS: u16 = 100;
+
+		// The expected delta is lower than the sum of the bps's because of the order the fees/rate
+		// are applied
+		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(-297);
+
+		new_test_ext()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), INIT_BLOCK);
+
+				// Set the fees, price and swap rate so we get the exact delta we want
+				NetworkFee::<Test>::set(FeeRateAndMinimum {
+					rate: Permill::from_parts(NETWORK_FEE_BPS * 100),
+					minimum: 0,
+				});
+				SwapRate::set(1.0 - (SWAP_RATE_BPS as f64 / 10000.0));
+				// We use a price of 1 for both assets to make the math easier
+				MockPriceFeedApi::set_price(
+					INPUT_ASSET,
+					Some(U256::from(1) << PRICE_FRACTIONAL_BITS),
+				);
+				MockPriceFeedApi::set_price(
+					OUTPUT_ASSET,
+					Some(U256::from(1) << PRICE_FRACTIONAL_BITS),
+				);
+
+				Swapping::init_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					SwapRequestType::Regular {
+						output_action: SwapOutputAction::Egress {
+							output_address: ForeignChainAddress::Eth([2; 20].into()),
+							ccm_deposit_metadata: None,
+						},
+					},
+					vec![Beneficiary { account: BROKER, bps: BROKER_FEE_BPS }].try_into().unwrap(),
+					// No oracle price slippage protection, but we should still get an oracle delta
+					// in the event
+					None,
+					None,
+					SwapOrigin::OnChainAccount(0_u64),
+				);
+			})
+			.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted {
+						oracle_delta: EXPECTED_DELTA,
+						..
+					})
+				);
+			});
+	}
+
+	#[test]
+	fn can_handle_positive_oracle_price_delta() {
+		// The swap output will be higher than the oracle
+		const SWAP_RATE_BPS: u32 = 100;
+		const NETWORK_FEE_BPS: u32 = 10;
+		const BROKER_FEE_BPS: u16 = 10;
+		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(80);
+
+		new_test_ext()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), INIT_BLOCK);
+
+				// Set the fees, price and swap rate so we get the exact delta we want
+				NetworkFee::<Test>::set(FeeRateAndMinimum {
+					rate: Permill::from_parts(NETWORK_FEE_BPS * 100),
+					minimum: 0,
+				});
+				// Using a positive swap rate
+				SwapRate::set(1.0 + (SWAP_RATE_BPS as f64 / 10000.0));
+				// We use a price of 1 for both assets to make the math easier
+				MockPriceFeedApi::set_price(
+					INPUT_ASSET,
+					Some(U256::from(1) << PRICE_FRACTIONAL_BITS),
+				);
+				MockPriceFeedApi::set_price(
+					OUTPUT_ASSET,
+					Some(U256::from(1) << PRICE_FRACTIONAL_BITS),
+				);
+
+				Swapping::init_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					SwapRequestType::Regular {
+						output_action: SwapOutputAction::Egress {
+							output_address: ForeignChainAddress::Eth([2; 20].into()),
+							ccm_deposit_metadata: None,
+						},
+					},
+					vec![Beneficiary { account: BROKER, bps: BROKER_FEE_BPS }].try_into().unwrap(),
+					None,
+					None,
+					SwapOrigin::OnChainAccount(0_u64),
+				);
+			})
+			.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted {
+						oracle_delta: EXPECTED_DELTA,
+						..
+					})
+				);
+			});
+	}
+
+	mod oracle_swap_calculations_with_real_world_values {
+		use super::*;
+
+		// Values from an actual swap
+		const INPUT_AMOUNT: AssetAmount = 1259988846035050000; // 1.25 ETH
+		const OUTPUT_AMOUNT: AssetAmount = 5200905; // 0.052 BTC
+
+		// Real price values
+		static ETH_PRICE: &str = "1564376722621961188695537"; // $4597.29
+		static BTC_PRICE: &str = "378682551463232527188289505131228391"; // $111284.80
+
+		// oracle amount = 5,205,144
+		// delta = 0.00081438669% = 8.14 bps
+		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(-8);
+
+		fn set_prices() {
+			let eth_price = U256::from_dec_str(ETH_PRICE).unwrap();
+			let btc_price = U256::from_dec_str(BTC_PRICE).unwrap();
+
+			MockPriceFeedApi::set_price(Asset::Eth, Some(eth_price));
+			MockPriceFeedApi::set_price(Asset::Btc, Some(btc_price));
+		}
+
+		fn test_swap_state(max_oracle_price_slippage: Option<BasisPoints>) -> SwapState<Test> {
+			SwapState {
+				swap: Swap::new(
+					0.into(),
+					0.into(),
+					Asset::Eth,
+					Asset::Btc,
+					INPUT_AMOUNT,
+					Some(SwapRefundParameters {
+						refund_block: 10,
+						price_limits: PriceLimits {
+							min_price: 0.into(),
+							max_oracle_price_slippage,
+						},
+					}),
+					vec![],
+					Default::default(),
+				),
+				// Fees and stable amount are not used in this test
+				network_fee_taken: None,
+				broker_fee_taken: None,
+				stable_amount: None,
+				final_output: Some(OUTPUT_AMOUNT),
+				oracle_delta: None,
+			}
+		}
+
+		#[test]
+		fn oracle_delta_real_world_values() {
+			new_test_ext().execute_with(|| {
+				set_prices();
+				let mut swap_state = test_swap_state(None);
+				Pallet::<Test>::calculate_oracle_delta(&mut swap_state);
+				assert_eq!(swap_state.oracle_delta, EXPECTED_DELTA);
+			});
+		}
+
+		#[test]
+		fn oracle_swap_price_violation_real_world_values() {
+			new_test_ext().execute_with(|| {
+				set_prices();
+
+				// Oracle delta that is below the slippage limit will pass
+				// Note: setting the slippage to the exact expected delta here will still fail
+				// because the actual oracle delta (8.14) is slightly above 8.
+				assert_eq!(
+					Pallet::<Test>::check_swap_price_violation(&test_swap_state(Some(
+						EXPECTED_DELTA.unwrap().unsigned_abs() + 1
+					))),
+					Ok(())
+				);
+
+				// Oracle delta that is above the slippage limit will fail
+				assert_eq!(
+					Pallet::<Test>::check_swap_price_violation(&test_swap_state(Some(
+						EXPECTED_DELTA.unwrap().unsigned_abs() - 1
+					))),
+					Err(SwapFailureReason::OraclePriceSlippageExceeded)
+				);
+			});
+		}
 	}
 }

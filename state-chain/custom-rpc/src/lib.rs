@@ -1017,7 +1017,10 @@ pub trait CustomApi {
 	#[method(name = "validate_refund_params")]
 	fn cf_validate_refund_params(
 		&self,
+		input_asset: Asset,
+		output_asset: Asset,
 		retry_duration: BlockNumber,
+		max_oracle_price_slippage: Option<BasisPoints>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<()>;
 
@@ -1405,7 +1408,12 @@ where
 			liquidity: Liquidity,
 		) -> PoolPairsMap<AmmAmount>,
 		cf_validate_dca_params(number_of_chunks: u32, chunk_interval: u32) -> (),
-		cf_validate_refund_params(retry_duration: BlockNumber) -> (),
+		cf_validate_refund_params(
+			input_asset: Asset,
+			output_asset: Asset,
+			retry_duration: BlockNumber,
+			max_oracle_price_slippage: Option<BasisPoints>,
+		) -> (),
 	}
 
 	fn cf_lending_pools(

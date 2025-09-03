@@ -38,8 +38,7 @@ use frame_support::{
 use frame_system::RawOrigin;
 use sp_runtime::testing::UintAuthorityId;
 
-const ALICE: u64 = 100;
-const BOB: u64 = 101;
+const NOBODY: u64 = 999; // Non-existent account for testing
 const GENESIS_EPOCH: u32 = 1;
 
 const OPERATOR_SETTINGS: OperatorSettings =
@@ -523,14 +522,26 @@ fn historical_epochs() {
 #[test]
 fn expired_epoch_data_is_removed() {
 	new_test_ext().then_execute_with_checks(|| {
+		let delegator = 123u64;
+		let operator = 456u64;
+		let test_snapshot = DelegationSnapshot::<Test> {
+			operator,
+			delegators: [(delegator, 50u128)].into_iter().collect(),
+			validators: [(ALICE, 150u128)].into_iter().collect(),
+			delegation_fee_bps: 250,
+		};
+
 		// Epoch 1
 		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
 		HistoricalAuthorities::<Test>::insert(1, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(1, 10);
+		test_snapshot.clone().register_for_epoch(1);
+
 		// Epoch 2
 		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
 		HistoricalAuthorities::<Test>::insert(2, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(2, 30);
+		test_snapshot.clone().register_for_epoch(2);
 		let authority_index = AuthorityIndex::<Test>::get(2, ALICE);
 
 		// Expire
@@ -540,16 +551,22 @@ fn expired_epoch_data_is_removed() {
 		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
 		HistoricalAuthorities::<Test>::insert(3, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(3, 20);
+		test_snapshot.clone().register_for_epoch(3);
 
 		// Expect epoch 1's data to be deleted
 		assert!(AuthorityIndex::<Test>::try_get(1, ALICE).is_err());
 		assert!(HistoricalAuthorities::<Test>::try_get(1).is_err());
 		assert!(HistoricalBonds::<Test>::try_get(1).is_err());
+		assert!(DelegationSnapshots::<Test>::get(1, operator).is_none());
 
-		// Expect epoch 2's data to be exist
+		// Expect epoch 2's data to exist
 		assert_eq!(AuthorityIndex::<Test>::get(2, ALICE), authority_index);
 		assert_eq!(HistoricalAuthorities::<Test>::get(2), vec![ALICE]);
 		assert_eq!(HistoricalBonds::<Test>::get(2), 30);
+		assert!(DelegationSnapshots::<Test>::get(2, operator).is_some());
+
+		// Expect epoch 3's data to exist
+		assert!(DelegationSnapshots::<Test>::get(3, operator).is_some());
 	});
 }
 
@@ -1946,27 +1963,54 @@ mod delegation {
 				assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// After authority rotation starts, delegation snapshots should be stored
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				let snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+
+				assert!(!snapshot.validators.contains_key(&OPERATOR));
+				assert!(!snapshot.delegators.contains_key(&OPERATOR));
+
+				// Verify all delegators are in the snapshot
+				for &delegator in &DELEGATORS {
+					assert!(snapshot.delegators.contains_key(&delegator));
+					assert!(!snapshot.validators.contains_key(&delegator));
+				}
+
+				// Verify operator fee is correctly captured in snapshot
+				assert_eq!(snapshot.delegation_fee_bps, 200); // MIN_OPERATOR_FEE
 				MockKeyRotatorA::keygen_success();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// During key handover, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
 				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
 				MockKeyRotatorA::key_handover_success();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// During key activation, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
 				assert_rotation_phase_matches!(RotationPhase::<Test>::ActivatingKeys(..));
 				MockKeyRotatorA::keys_activated();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// During session rotation, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
 				assert_rotation_phase_matches!(RotationPhase::SessionRotating(..));
 			})
 			.then_execute_at_next_block(|_| {
-				assert!(NextDelegators::<Test>::get().is_empty());
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				let active_delegators = CurrentEpochDelegations::<Test>::get();
+				// After rotation is complete, check snapshots are stored for current epoch
+				let current_epoch = ValidatorPallet::epoch_index();
+				let snapshot = DelegationSnapshots::<Test>::get(current_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+				let active_delegators: BTreeSet<u64> =
+					snapshot.delegators.keys().cloned().collect();
 				assert_eq!(BTreeSet::from_iter(DELEGATORS), active_delegators);
 				for delegator in active_delegators {
 					if delegator % 2 == 0 {
@@ -2002,7 +2046,8 @@ mod delegation {
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {
 						assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(*delegator)));
-						assert!(OutgoingDelegators::<Test>::get().contains(delegator));
+						// Delegation choice should be removed after undelegation
+						assert!(DelegationChoice::<Test>::get(delegator).is_none());
 					}
 				}
 			})
@@ -2044,7 +2089,12 @@ mod delegation {
 			})
 			.then_execute_at_next_block(|_| {
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				assert!(CurrentEpochDelegations::<Test>::get().len() == 2);
+				// Only 2 delegators should remain (those that didn't undelegate)
+				let current_epoch = ValidatorPallet::epoch_index();
+				let snapshot = DelegationSnapshots::<Test>::get(current_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+				assert!(snapshot.delegators.len() == 2);
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {
 						assert_eq!(MockBonderFor::<Test>::get_bond(delegator), 0);
@@ -2063,6 +2113,154 @@ mod delegation {
 		new_test_ext().execute_with(|| {
 			MockFlip::credit_funds(&BOB, 200);
 			assert_ok!(ValidatorPallet::set_max_bid(OriginTrait::signed(BOB), Some(100)));
+		});
+	}
+}
+
+#[cfg(test)]
+mod delegation_splitting {
+	use super::*;
+	use crate::delegation::DelegationSnapshot;
+
+	/*
+	 * Test conventions:
+	 * - Operator has id 0
+	 * - Validator has id 1
+	 * - Delegators have ids 2, 3, ...
+	 */
+
+	const BID: u128 = 1_000_000_000;
+	const REWARD: u128 = 100_000_000;
+
+	fn split_amount(
+		total: u128,
+		delegator_bids: Vec<u128>,
+		delegation_fee_bps: u32,
+	) -> BTreeMap<u64, u128> {
+		DelegationSnapshot::<Test> {
+			operator: 0,
+			validators: BTreeMap::from_iter([(1, BID)]),
+			delegators: delegator_bids
+				.into_iter()
+				.enumerate()
+				.map(|(i, b)| ((i + 2) as u64, b))
+				.collect(),
+			delegation_fee_bps,
+		}
+		.distribute(total)
+		.map(|(k, v)| (*k, v))
+		.collect()
+	}
+
+	#[test]
+	fn no_operator_fee() {
+		assert_eq!(
+			split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 0),
+			BTreeMap::from_iter([
+				(0, 0),
+				(1, REWARD),
+				(2, REWARD),
+				(3, 2 * REWARD),
+				(4, 3 * REWARD),
+			])
+		);
+	}
+
+	#[test]
+	fn with_operator_fee() {
+		// 20% operator fee
+		assert_eq!(
+			split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 2000),
+			BTreeMap::from_iter(
+				[
+					// Operator gets 20 % of delegator total
+					(0, (REWARD * 6 / 5)),
+					(1, REWARD),
+					(2, REWARD),
+					(3, 2 * REWARD),
+					(4, 3 * REWARD),
+				]
+				.into_iter()
+				// Delegator reward is reduced by 20%.
+				.map(|(k, v)| if k > 1 { (k, v * 4 / 5) } else { (k, v) })
+				.collect::<BTreeMap<_, _>>()
+			)
+		);
+	}
+
+	#[test]
+	fn block_delegator_requires_account_exists_with_allow_default() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Allow
+				},
+			));
+
+			// Try to block a non-existent account (adds to exceptions list)
+			assert_noop!(
+				ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), NOBODY),
+				Error::<Test>::AccountDoesNotExist
+			);
+
+			// Verify that blocking an existing account still works
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
+		});
+	}
+
+	#[test]
+	fn allow_delegator_requires_account_exists_with_deny_default() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Deny
+				},
+			));
+
+			// Try to allow a non-existent account (adds to exceptions list)
+			assert_noop!(
+				ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), NOBODY),
+				Error::<Test>::AccountDoesNotExist
+			);
+
+			// Verify that allowing an existing account still works
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
+		});
+	}
+
+	#[test]
+	fn block_delegator_succeeds_for_nonexistent_account_with_deny_default() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Deny
+				},
+			));
+
+			// Blocking a non-existent account should succeed (removes from exceptions list - no-op)
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), NOBODY));
+		});
+	}
+
+	#[test]
+	fn allow_delegator_succeeds_for_nonexistent_account_with_allow_default() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Allow
+				},
+			));
+
+			// Allowing a non-existent account should succeed (removes from exceptions list - no-op)
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), NOBODY));
 		});
 	}
 }

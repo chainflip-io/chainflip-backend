@@ -28,7 +28,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, RotationBroadcastsPending,
 };
-use frame_support::{construct_runtime, derive_impl};
+use frame_support::{construct_runtime, derive_impl, traits::HandleLifetime};
 use sp_runtime::{impl_opaque_keys, testing::UintAuthorityId, traits::ConvertInto};
 use std::{cell::RefCell, collections::HashMap};
 
@@ -176,6 +176,9 @@ fn all_validators() -> Vec<ValidatorId> {
 	.to_vec()
 }
 
+pub const ALICE: u64 = 100;
+pub const BOB: u64 = 101;
+
 cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
@@ -204,8 +207,14 @@ cf_test_utilities::impl_test_helpers! {
 	||{
 		for account_id in all_validators()
 		{
+			frame_system::Provider::<Test>::created(&account_id).unwrap();
 			<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&account_id).unwrap();
 		}
+		frame_system::Provider::<Test>::created(&ALICE).unwrap();
+		frame_system::Provider::<Test>::created(&BOB).unwrap();
+		// Account creation is necessary but it emits events. We clear them so that
+		// they don't interfere with event-based tests.
+		frame_system::Pallet::<Test>::reset_events();
 	},
 }
 
@@ -219,6 +228,68 @@ macro_rules! assert_invariants {
 			System::block_number(),
 			ValidatorPallet::current_rotation_phase(),
 		);
+
+		// Each authority should EITHER:
+		// own a delegation snapshot with no delegators.
+		// OR
+		// be a managed validator with a delegation snapshot that contains the authority as a
+		// validator.
+		let all_managed_validators = DelegationSnapshots::<Test>::iter_prefix(
+			ValidatorPallet::epoch_index(),
+		).flat_map(|(_, snapshot)| snapshot.validators.keys().cloned().collect::<Vec<_>>())
+		.collect::<Vec<_>>();
+		// Ensure no duplicates in managed validators
+		let all_managed_validators_set: BTreeSet<ValidatorId> =
+			BTreeSet::from_iter(all_managed_validators.iter().cloned());
+		assert_eq!(
+			all_managed_validators_set.len(),
+			all_managed_validators.len(),
+			"Duplicate validators found in managed validators"
+		);
+		// Each validator in the snapshot should be resolvable to a snapshot that contains them as a validator.
+		let epoch_index = ValidatorPallet::epoch_index();
+		for managed_validator in all_managed_validators_set {
+			// Find the operator for this validator
+			let operator = ValidatorToOperator::<Test>::get(epoch_index, &managed_validator)
+				.expect(&format!(
+					"Managed validator {:?} has no operator mapping at block {:?}",
+					managed_validator,
+					System::block_number()
+				));
+			let snapshot = DelegationSnapshots::<Test>::get(epoch_index, &operator)
+				.expect(&format!(
+					"Operator {:?} for validator {:?} has no delegation snapshot at block {:?}",
+					operator,
+					managed_validator,
+					System::block_number()
+				));
+			assert!(
+				snapshot.validators.contains_key(&managed_validator),
+				"Managed validator {:?} not found in their own delegation snapshot {:?} at block {:?}",
+				managed_validator,
+				snapshot,
+				System::block_number()
+			);
+		}
+		for authority in ValidatorPallet::current_authorities() {
+			// Check if authority is managed by an operator
+			if let Some(operator) = ValidatorToOperator::<Test>::get(epoch_index, &authority) {
+				let snapshot = DelegationSnapshots::<Test>::get(epoch_index, &operator)
+					.expect(&format!(
+						"Operator {:?} for authority {:?} has no delegation snapshot at block {:?}",
+						operator,
+						authority,
+						System::block_number()
+					));
+				assert!(
+					snapshot.validators.contains_key(&authority),
+					"Invalid snapshot {:?} for authority {:?} at block {:?}",
+					snapshot,
+					authority,
+					System::block_number()
+				);
+			}
+		}
 	};
 }
 

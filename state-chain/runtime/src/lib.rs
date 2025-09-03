@@ -111,7 +111,8 @@ use pallet_cf_swapping::{
 };
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use pallet_cf_validator::{
-	AssociationToOperator, DelegationAcceptance, SetSizeMaximisingAuctionResolver,
+	AssociationToOperator, DelegatedRewardsDistribution, DelegationAcceptance, DelegationSlasher,
+	SetSizeMaximisingAuctionResolver,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use runtime_apis::{ChainAccounts, RpcLendingPool, RpcLoanAccount};
@@ -184,7 +185,7 @@ use chainflip::{
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
 use constants::common::*;
-use pallet_cf_flip::{Bonder, FlipSlasher};
+use pallet_cf_flip::{Bonder, FlipIssuance, FlipSlasher};
 pub use pallet_transaction_payment::ChargeTransactionPayment;
 
 // Make the WASM binary available.
@@ -768,7 +769,7 @@ impl pallet_timestamp::Config for Runtime {
 
 impl pallet_authorship::Config for Runtime {
 	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Aura>;
-	type EventHandler = ();
+	type EventHandler = Emissions;
 }
 
 impl pallet_cf_flip::Config for Runtime {
@@ -837,9 +838,8 @@ impl pallet_cf_emissions::Config for Runtime {
 	type FlipBalance = FlipBalance;
 	type ApiCall = eth::api::EthereumApi<EvmEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
-	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
-	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
+	type RewardsDistribution = DelegatedRewardsDistribution<Runtime, FlipIssuance<Runtime>>;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type EthEnvironment = EvmEnvironment;
 	type FlipToBurn = Swapping;
@@ -875,7 +875,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Offence = chainflip::Offence;
 	type HeartbeatBlockInterval = ConstU32<HEARTBEAT_BLOCK_INTERVAL>;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
-	type Slasher = FlipSlasher<Self>;
+	type Slasher = DelegationSlasher<Runtime, FlipSlasher<Runtime>>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type MaximumAccruableReputation = MaximumAccruableReputation;
 	type SafeMode = RuntimeSafeMode;
@@ -892,7 +892,7 @@ impl pallet_cf_threshold_signature::Config<Instance16> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
-	type Slasher = FlipSlasher<Self>;
+	type Slasher = DelegationSlasher<Runtime, FlipSlasher<Runtime>>;
 	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -908,7 +908,7 @@ impl pallet_cf_threshold_signature::Config<Instance15> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
-	type Slasher = FlipSlasher<Self>;
+	type Slasher = DelegationSlasher<Runtime, FlipSlasher<Runtime>>;
 	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -924,7 +924,7 @@ impl pallet_cf_threshold_signature::Config<Instance3> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
-	type Slasher = FlipSlasher<Self>;
+	type Slasher = DelegationSlasher<Runtime, FlipSlasher<Runtime>>;
 	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -940,7 +940,7 @@ impl pallet_cf_threshold_signature::Config<Instance5> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
-	type Slasher = FlipSlasher<Self>;
+	type Slasher = DelegationSlasher<Runtime, FlipSlasher<Runtime>>;
 	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -2363,8 +2363,19 @@ impl_runtime_apis! {
 			pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(&DcaParameters{number_of_chunks, chunk_interval}).map_err(Into::into)
 		}
 
-		fn cf_validate_refund_params(retry_duration: BlockNumber) -> Result<(), DispatchErrorWithMessage> {
-			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration).map_err(Into::into)
+		fn cf_validate_refund_params(
+			input_asset: Asset,
+			output_asset: Asset,
+			retry_duration: BlockNumber,
+			max_oracle_price_slippage: Option<BasisPoints>,
+		) -> Result<(), DispatchErrorWithMessage> {
+			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(
+				input_asset,
+				output_asset,
+				retry_duration,
+				max_oracle_price_slippage,
+			)
+			.map_err(Into::into)
 		}
 
 		fn cf_request_swap_parameter_encoding(
@@ -2383,28 +2394,33 @@ impl_runtime_apis! {
 			let destination_chain = ForeignChain::from(destination_asset);
 
 
-			// Validate refund duration.
-			let retry_duration = match &extra_parameters {
-				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, .. } => {
-					*retry_duration
-				}
+			// Validate refund params
+			let (retry_duration, max_oracle_price_slippage) = match &extra_parameters {
+				VaultSwapExtraParametersEncoded::Bitcoin { retry_duration, max_oracle_price_slippage, .. } => {
+					let max_oracle_price_slippage = match max_oracle_price_slippage {
+						Some(slippage) if *slippage == u8::MAX => None,
+						Some(slippage) => Some((*slippage).into()),
+						None => None,
+					};
+					(*retry_duration, max_oracle_price_slippage)
+				},
 				VaultSwapExtraParametersEncoded::Ethereum(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
 					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
-					refund_parameters.retry_duration
-				}
+					(refund_parameters.retry_duration, refund_parameters.max_oracle_price_slippage)
+				},
 				VaultSwapExtraParametersEncoded::Arbitrum(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
 					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
-					refund_parameters.retry_duration
-				}
+					(refund_parameters.retry_duration, refund_parameters.max_oracle_price_slippage)
+				},
 				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => {
 					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
-					refund_parameters.retry_duration
-				}
+					(refund_parameters.retry_duration, refund_parameters.max_oracle_price_slippage)
+				},
 			};
 
 			let checked_ccm = crate::chainflip::vault_swaps::validate_parameters(
 				&broker,
-				source_chain,
+				source_asset,
 				&destination_address,
 				destination_asset,
 				&dca_parameters,
@@ -2413,6 +2429,7 @@ impl_runtime_apis! {
 				&affiliate_fees,
 				retry_duration,
 				&channel_metadata,
+				max_oracle_price_slippage,
 			)?;
 
 			// Conversion implicitly verifies address validity.
@@ -2557,7 +2574,7 @@ impl_runtime_apis! {
 			// Validate the parameters
 			let checked_ccm = crate::chainflip::vault_swaps::validate_parameters(
 				&broker,
-				source_asset.into(),
+				source_asset,
 				&destination_address,
 				destination_asset,
 				&dca_parameters,
@@ -2566,6 +2583,7 @@ impl_runtime_apis! {
 				&affiliate_fees,
 				refund_parameters.retry_duration,
 				&channel_metadata,
+				refund_parameters.max_oracle_price_slippage,
 			)?;
 
 			let boost_fee: u8 = boost_fee

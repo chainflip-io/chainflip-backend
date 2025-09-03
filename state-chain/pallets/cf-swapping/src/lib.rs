@@ -34,8 +34,8 @@ use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
 	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, IngressEgressFeeApi,
-	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
-	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
+	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -80,6 +80,8 @@ pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
 const DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS: u32 = 86_400 / SECONDS_PER_BLOCK as u32; // 24 hours
 
+type SignedBasisPoints = i16;
+
 pub struct DefaultSwapRetryDelay<T> {
 	_phantom: PhantomData<T>,
 }
@@ -120,6 +122,7 @@ pub struct SwapState<T: Config> {
 	pub broker_fee_taken: Option<AssetAmount>,
 	pub stable_amount: Option<AssetAmount>,
 	pub final_output: Option<AssetAmount>,
+	pub oracle_delta: Option<SignedBasisPoints>,
 }
 
 impl<T: Config> SwapState<T> {
@@ -130,6 +133,7 @@ impl<T: Config> SwapState<T> {
 			network_fee_taken: None,
 			broker_fee_taken: None,
 			swap,
+			oracle_delta: None,
 		}
 	}
 
@@ -759,6 +763,7 @@ pub mod pallet {
 			broker_fee: AssetAmount,
 			intermediate_amount: Option<AssetAmount>,
 			output_amount: AssetAmount,
+			oracle_delta: Option<SignedBasisPoints>,
 		},
 		/// A swap egress has been scheduled.
 		SwapEgressScheduled {
@@ -920,6 +925,8 @@ pub mod pallet {
 		NoRefundAmountRemaining,
 		/// CCM is not supported for the refund chain.
 		CcmUnsupportedForRefundChain,
+		/// Oracle price not available for one or more of the assets.
+		OraclePriceNotAvailable,
 	}
 
 	#[pallet::genesis_config]
@@ -1686,23 +1693,70 @@ pub mod pallet {
 			Ok(())
 		}
 
-		fn check_swap_price_violation(swap: &SwapState<T>) -> Result<(), SwapFailureReason> {
+		/// Calculate executed price delta from the oracle price and save the result to the swap
+		/// state
+		pub(super) fn calculate_oracle_delta(swap: &mut SwapState<T>) {
+			let input_oracle = T::PriceFeedApi::get_price(swap.input_asset());
+			let output_oracle = T::PriceFeedApi::get_price(swap.output_asset());
+
+			let oracle_delta = if let (Some(input_oracle), Some(output_oracle)) =
+				(&input_oracle, &output_oracle)
+			{
+				let oracle_price =
+					cf_amm::math::relative_price(input_oracle.price, output_oracle.price);
+				let oracle_amount =
+					output_amount_floor(swap.swap.input_amount.into(), oracle_price);
+				if oracle_amount.is_zero() {
+					None
+				} else {
+					let output_bps = cf_amm::math::mul_div_ceil(
+						swap.final_output.unwrap().into(),
+						MAX_BASIS_POINTS.into(),
+						oracle_amount,
+					);
+
+					let (delta_bps, sign) = if output_bps < MAX_BASIS_POINTS.into() {
+						(MAX_BASIS_POINTS.saturating_sub(output_bps.saturated_into()), -1)
+					} else {
+						(
+							output_bps
+								.saturated_into::<BasisPoints>()
+								.saturating_sub(MAX_BASIS_POINTS),
+							1,
+						)
+					};
+					Some(delta_bps.saturated_into::<SignedBasisPoints>() * sign)
+				}
+			} else {
+				None
+			};
+
+			swap.oracle_delta = oracle_delta;
+		}
+
+		/// Enforce price protections
+		pub(super) fn check_swap_price_violation(
+			swap: &SwapState<T>,
+		) -> Result<(), SwapFailureReason> {
 			if let Some(params) = swap.refund_params() {
+				let input_oracle = T::PriceFeedApi::get_price(swap.input_asset());
+				let output_oracle = T::PriceFeedApi::get_price(swap.output_asset());
+
 				// Live price protection, aka oracle price protection
 				if let Some(slippage_bps) = params.price_limits.max_oracle_price_slippage {
-					match (
-						T::PriceFeedApi::get_price(swap.input_asset()),
-						T::PriceFeedApi::get_price(swap.output_asset()),
-					) {
-						(Some(oracle1), Some(oracle2)) if oracle1.stale || oracle2.stale =>
+					match (input_oracle, output_oracle) {
+						(Some(input_oracle), Some(output_oracle))
+							if input_oracle.stale || output_oracle.stale =>
 							return Err(SwapFailureReason::OraclePriceStale),
 						(None, _) | (_, None) => {
 							// Ignore the oracle price check if not supported/available
 							// for one of the assets.
 						},
-						(Some(oracle1), Some(oracle2)) => {
-							let relative_price =
-								cf_amm::math::relative_price(oracle1.price, oracle2.price);
+						(Some(input_oracle), Some(output_oracle)) => {
+							let relative_price = cf_amm::math::relative_price(
+								input_oracle.price,
+								output_oracle.price,
+							);
 							// Reduce the relative price by slippage_bps:
 							let min_oracle_price = cf_amm::math::mul_div_floor(
 								relative_price,
@@ -1731,11 +1785,8 @@ pub mod pallet {
 				if swap.final_output.unwrap() < min_price_output {
 					return Err(SwapFailureReason::MinPriceViolation);
 				}
-
-				Ok(())
-			} else {
-				Ok(())
 			}
+			Ok(())
 		}
 
 		#[transactional]
@@ -1754,8 +1805,9 @@ pub mod pallet {
 			let mut violating_swaps = vec![];
 			swaps
 				.into_iter()
-				.for_each(|swap| match Self::check_swap_price_violation(&swap) {
+				.for_each(|mut swap| match Self::check_swap_price_violation(&swap) {
 					Ok(()) => {
+						Self::calculate_oracle_delta(&mut swap);
 						non_violating_swaps.push(swap);
 					},
 					Err(reason) => {
@@ -2025,6 +2077,7 @@ pub mod pallet {
 				output_asset: swap.output_asset(),
 				output_amount,
 				intermediate_amount: swap.intermediate_amount(),
+				oracle_delta: swap.oracle_delta,
 			});
 
 			let request_completed = match &mut request.state {
@@ -2842,11 +2895,27 @@ impl<T: Config> SwapParameterValidation for Pallet<T> {
 		}
 	}
 
-	fn validate_refund_params(retry_duration: BlockNumber) -> Result<(), DispatchError> {
+	fn validate_refund_params(
+		input_asset: Asset,
+		output_asset: Asset,
+		retry_duration: BlockNumber,
+		max_oracle_price_slippage: Option<BasisPoints>,
+	) -> Result<(), DispatchError> {
+		// Check that the retry duration is within limits.
 		let max_swap_retry_duration_blocks = MaxSwapRetryDurationBlocks::<T>::get();
 		if retry_duration > max_swap_retry_duration_blocks {
 			return Err(DispatchError::from(Error::<T>::RetryDurationTooHigh));
 		}
+
+		// Check that the oracle prices are available for the assets.
+		if let Some(_max_oracle_price_slippage) = max_oracle_price_slippage {
+			if T::PriceFeedApi::get_price(input_asset).is_none() ||
+				T::PriceFeedApi::get_price(output_asset).is_none()
+			{
+				return Err(DispatchError::from(Error::<T>::OraclePriceNotAvailable));
+			}
+		}
+
 		Ok(())
 	}
 

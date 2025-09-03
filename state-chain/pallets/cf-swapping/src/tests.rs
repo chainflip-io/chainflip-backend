@@ -785,6 +785,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					output_asset: OUTPUT_ASSET,
 					output_amount: ZERO_AMOUNT,
 					intermediate_amount: None,
+					oracle_delta: None,
 				}),
 			);
 		})
@@ -1433,6 +1434,7 @@ mod swap_batching {
 				broker_fee_taken: None,
 				stable_amount,
 				final_output: None,
+				oracle_delta: None,
 			}
 		}
 	}

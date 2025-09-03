@@ -613,7 +613,10 @@ decl_runtime_apis!(
 			chunk_interval: u32,
 		) -> Result<(), DispatchErrorWithMessage>;
 		fn cf_validate_refund_params(
+			input_asset: Asset,
+			output_asset: Asset,
 			retry_duration: BlockNumber,
+			max_oracle_price_slippage: Option<BasisPoints>,
 		) -> Result<(), DispatchErrorWithMessage>;
 		fn cf_request_swap_parameter_encoding(
 			broker: AccountId32,
