@@ -2622,9 +2622,8 @@ pub mod auction_optimization {
 			// op 1 converts bid to one val to make it, op 2 can't make it even if he combines into
 			// 1
 			(vec![90, 95], vec![50, 45], vec![101, 0, 1, 2], 110),
-			// both consolidate their vals when they have nodes at the boundary of cutoff such that
-			// some vaop 2 can now combine 3 vals into 1 to make it into the setls make it and some
-			// dont. We still consolidate the bids to increase the number of vals in the set
+			// op 2 can now make it by combining 3 vals into 1 to make it and op 1 combines 2 into
+			// 1.
 			(vec![90, 95], vec![50, 45, 30], vec![101, 102, 0, 1], 120),
 			// op 2 combines into 2
 			(vec![90, 95], vec![80, 90, 95], vec![101, 103, 104, 0], 120),
@@ -2748,6 +2747,21 @@ pub mod auction_optimization {
 							}),
 					}) = last_event::<Test>()
 					{
+						let future_epoch = CurrentEpoch::<Test>::get() + 1;
+						for snapshot in
+							DelegationSnapshots::<Test>::iter_prefix_values(future_epoch)
+						{
+							snapshot.validators.iter().for_each(|(val, _)| {
+								assert_eq!(
+									ValidatorToOperator::<Test>::get(future_epoch, val).unwrap(),
+									snapshot.operator
+								);
+								assert_eq!(
+									ManagedValidators::<Test>::get(val).unwrap(),
+									snapshot.operator
+								)
+							})
+						}
 						bond < single_auction_outcome.bond
 					} else {
 						true
