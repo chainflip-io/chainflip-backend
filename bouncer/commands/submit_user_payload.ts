@@ -92,7 +92,7 @@ async function main() {
   const hexSignature = '0x' + Buffer.from(signature).toString('hex');
   const hexSigner = '0x' + whaleKeypair.publicKey.toBuffer().toString('hex');
   console.log('Payload (hex):', hexPayload);
-  console.log('Signed Message (hex):', hexSignature);
+  console.log('Sol Signature (hex):', hexSignature);
   console.log('Signer (hex):', hexSigner);
 
   await brokerMutex.runExclusive(async () => {

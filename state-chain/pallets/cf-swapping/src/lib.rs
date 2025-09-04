@@ -3156,6 +3156,22 @@ mod test {
 	}
 
 	#[test]
+	fn test_verify_solana() {
+		use cf_chains::{sol::SolanaCrypto, ChainCrypto};
+		// Data before hashing
+		let signed_payload =  hex_literal::hex!("ff736f6c616e61206f6666636861696e0000d2040000000000000000000000000000050301000000000000000000000000000000000000000000000000000000000000000100000010270000");
+		let signer: SolAddress =
+			SolAddress::from_str("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp").unwrap();
+		let signature: SolSignature = hex_literal::hex!(
+			"8ba6205389d557394793733f9a2bc809a47aaaf94fa5818a906ce7c18645bf7b897c3fe3f011d479cc4be67d5a964f493b163860ed3df634728d308374cbae06"
+		)
+		.into();
+
+		let success = SolanaCrypto::verify_signature(&signer, &signed_payload, &signature);
+		assert!(success, "Signature verification failed");
+	}
+
+	#[test]
 	fn test_encode_user_action() {
 		let user_action = UserActionsApi::Lending(LendingApi::Borrow {
 			amount: 1234,
