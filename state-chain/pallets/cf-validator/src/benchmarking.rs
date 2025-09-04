@@ -30,7 +30,7 @@ use frame_support::{
 	assert_ok,
 	sp_runtime::{Digest, DigestItem},
 	storage_alias,
-	traits::{OnNewAccount, UnfilteredDispatchable},
+	traits::{HandleLifetime, OnNewAccount, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 use sp_application_crypto::RuntimeAppPublic;
@@ -544,8 +544,7 @@ mod benchmarks {
 		));
 
 		let delegator: T::AccountId = account::<T::AccountId>("whitelisted_caller", 0, 1);
-		frame_system::Pallet::<T>::inc_providers(&delegator);
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&delegator);
+		let _ = frame_system::Provider::<T>::created(&delegator);
 
 		DelegationChoice::<T>::remove(&delegator);
 
@@ -563,10 +562,13 @@ mod benchmarks {
 		.unwrap();
 
 		let delegator: T::AccountId = whitelisted_caller();
-		frame_system::Pallet::<T>::inc_providers(&delegator);
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&delegator);
+		let _ = frame_system::Provider::<T>::created(&delegator);
 
-		DelegationChoice::<T>::insert(&delegator, operator);
+		assert_ok!(Pallet::<T>::delegate(
+			RawOrigin::Signed(delegator.clone()).into(),
+			operator,
+			DelegationAmount::Max
+		));
 
 		#[extrinsic_call]
 		undelegate(RawOrigin::Signed(delegator.clone()), DelegationAmount::Max);
