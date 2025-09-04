@@ -655,7 +655,7 @@ decl_runtime_apis!(
 		) -> Vec<OraclePrice>;
 		fn cf_evm_calldata(
 			caller: EthereumAddress,
-			call: crate::chainflip::ethereum_sc_calls::EthereumSCApi,
+			call: crate::chainflip::ethereum_sc_calls::EthereumSCApi<FlipBalance>,
 		) -> Result<EvmCallDetails, DispatchErrorWithMessage>;
 		#[changed_in(6)]
 		fn cf_evm_calldata();

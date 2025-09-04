@@ -28,7 +28,7 @@ const cfScUtilsAbi = await getEthScUtilsAbi();
 
 const evmCallDetails = z.object({
   calldata: z.string(),
-  value: z.bigint(),
+  value: z.string(),
   to: z.string(),
   source_token_address: z.string().optional(),
 });
@@ -37,32 +37,31 @@ async function encodeAndSendDelegationApiCall(
   logger: Logger,
   caller: string,
   call: DelegationApi,
-): Promise<{ transactionHash: string }> {
+): Promise<string> {
   await using chainflip = await getChainflipApi();
 
-  const payload = await chainflip.rpc.call('cf_evm_calldata', caller, { API: 'Delegation', call });
+  logger.info(`Requesting EVM encoding for ${caller} ${JSON.stringify(call)}`);
 
-  logger.info(`EVM Call payload for ${caller} ${call}: ${payload}`);
+  const payload = await chainflip.raw_rpc('cf_evm_calldata', caller, {
+    API: 'Delegation',
+    call,
+  });
+
+  logger.info(`EVM Call payload for ${caller} ${JSON.stringify(call)}: ${JSON.stringify(payload)}`);
 
   const { calldata, value, to } = evmCallDetails.parse(payload);
 
-  const { transactionHash } = await signAndSendTxEvm(
-    logger,
-    'Ethereum',
-    to,
-    value.toString(),
-    calldata,
-  );
+  const { transactionHash } = await signAndSendTxEvm(logger, 'Ethereum', to, value, calldata);
 
-  return { transactionHash };
+  return transactionHash;
 }
 
 type DelegationApi =
-  | { delegate: { operatorId: string; increase: bigint | 'Max' } }
-  | { undelegate: { decrease: bigint | 'Max' } }
+  | { Delegate: { operator: string; increase: { Some: string } | 'Max' } }
+  | { Undelegate: { decrease: { Some: string } | 'Max' } }
   | {
-      redeem: {
-        amount: { Max: true } | { Exact: bigint };
+      Redeem: {
+        amount: { Max: true } | { Exact: string };
         address: string;
         executor?: string;
       };
@@ -73,12 +72,11 @@ function evmToScAddress(evmAddress: string) {
   return hexPubkeyToFlipAddress('0x' + evmAddress.slice(2).padStart(64, '0'));
 }
 
-async function testDelegate(parentLogger: Logger) {
+export async function testDelegate(logger: Logger) {
   const web3 = new Web3(getEvmEndpoint('Ethereum'));
   const uri = '//Operator_0';
   const scUtilsAddress = getContractAddress('Ethereum', 'SC_UTILS');
   const cfScUtilsContract = new web3.eth.Contract(cfScUtilsAbi, scUtilsAddress);
-  const logger = parentLogger.child({ tag: 'DelegateFlip' });
   const { pubkey: whalePubkey } = getEvmWhaleKeypair('Ethereum');
 
   const amount = amountToFineAmountBigInt(defaultAssetAmounts('Flip'), 'Flip');
@@ -97,7 +95,7 @@ async function testDelegate(parentLogger: Logger) {
 
   logger.info(`Delegating ${amount} Flip to operator ${operator.address}...`);
   const delegateTxHash = await encodeAndSendDelegationApiCall(logger, whalePubkey, {
-    delegate: { operatorId: operator.address, increase: amount },
+    Delegate: { operator: operator.address, increase: { Some: '0x' + amount.toString(16) } },
   });
   logger.info('Delegate flip transaction sent ' + delegateTxHash);
 
@@ -112,12 +110,14 @@ async function testDelegate(parentLogger: Logger) {
   let scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
     test: (event) => {
       const txMatch = event.data.ethTxHash === delegateTxHash;
-      const operatorMatch = event.data.scCall.Delegation.Delegate.operator === operator.address;
+      const operatorMatch =
+        event.data.scCall.Delegation.call.Delegate.operator === operator.address;
       return txMatch && operatorMatch;
     },
   }).event;
   const delegatedEvent = observeEvent(logger, 'validator:Delegated', {
     test: (event) => {
+      logger.debug('Delegated event data: ' + JSON.stringify(event.data));
       const delegatorMatch = event.data.delegator === evmToScAddress(whalePubkey);
       const operatorMatch = event.data.operator === operator.address;
       return delegatorMatch && operatorMatch;
@@ -127,7 +127,7 @@ async function testDelegate(parentLogger: Logger) {
 
   logger.info('Undelegating Flip from operator ' + operator.address + '...');
   const undelegateTxHash = await encodeAndSendDelegationApiCall(logger, whalePubkey, {
-    undelegate: { decrease: 'Max' },
+    Undelegate: { decrease: 'Max' },
   });
   logger.info('Undelegate flip transaction sent ' + undelegateTxHash);
 
@@ -157,7 +157,7 @@ async function testDelegate(parentLogger: Logger) {
     const redemAmount = amount / 2n; // Leave anough to pay fees
 
     const redeemTxHash = await encodeAndSendDelegationApiCall(logger, whalePubkey, {
-      redeem: { amount: { Exact: redemAmount }, address: redeemAddress },
+      Redeem: { amount: { Exact: '0x' + redemAmount.toString(16) }, address: redeemAddress },
     });
     logger.info('Redeem request transaction sent ' + redeemTxHash);
 
@@ -177,7 +177,7 @@ async function testDelegate(parentLogger: Logger) {
   logger.info('Delegation test completed successfully!');
 }
 
-async function testCcmSwapFundAccount(logger: Logger) {
+export async function testCcmSwapFundAccount(logger: Logger) {
   const web3 = new Web3(getEvmEndpoint('Ethereum'));
   const scUtilsAddress = getContractAddress('Ethereum', 'SC_UTILS');
   const scAddress = await newStatechainAddress(randomBytes(32).toString('hex'));
@@ -200,8 +200,4 @@ async function testCcmSwapFundAccount(logger: Logger) {
   await send(logger, 'Btc', swapParams.depositAddress);
   await fundEvent;
   logger.info('Funding event witnessed succesfully!');
-}
-
-export async function testDelegateFlip(testContext: TestContext) {
-  await Promise.all([testDelegate(testContext.logger), testCcmSwapFundAccount(testContext.logger)]);
 }

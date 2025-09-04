@@ -25,32 +25,54 @@ impl EthereumAccount {
 #[derive(
 	Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug, Serialize, Deserialize,
 )]
-pub enum DelegationApi {
+pub enum DelegationApi<A> {
 	Delegate {
 		operator: <Runtime as frame_system::Config>::AccountId,
-		increase: DelegationAmount<<Runtime as cf_traits::Chainflip>::Amount>,
+		increase: DelegationAmount<A>,
 	},
 	Undelegate {
-		decrease: DelegationAmount<<Runtime as cf_traits::Chainflip>::Amount>,
+		decrease: DelegationAmount<A>,
 	},
 	Redeem {
-		amount: RedemptionAmount<<Runtime as cf_traits::Chainflip>::Amount>,
+		amount: RedemptionAmount<A>,
 		address: EthereumAddress,
 		executor: Option<EthereumAddress>,
 	},
+}
+
+impl<A> DelegationApi<A> {
+	pub fn try_fmap<B, E>(self, f: impl FnOnce(A) -> Result<B, E>) -> Result<DelegationApi<B>, E> {
+		match self {
+			DelegationApi::Delegate { operator, increase } =>
+				Ok(DelegationApi::Delegate { operator, increase: increase.try_fmap(f)? }),
+			DelegationApi::Undelegate { decrease } =>
+				Ok(DelegationApi::Undelegate { decrease: decrease.try_fmap(f)? }),
+			DelegationApi::Redeem { amount, address, executor } =>
+				Ok(DelegationApi::Redeem { amount: amount.try_fmap(f)?, address, executor }),
+		}
+	}
 }
 
 #[derive(
 	Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug, Serialize, Deserialize,
 )]
 #[serde(tag = "API")]
-pub enum EthereumSCApi {
-	Delegation { call: DelegationApi },
+pub enum EthereumSCApi<A> {
+	Delegation { call: DelegationApi<A> },
 	// reserved for future Apis for example Loan(LoanApi)...
 	// This allows us to update the API without breaking the encoding.
 }
 
-impl UnfilteredDispatchable for EthereumSCApi {
+impl<A> EthereumSCApi<A> {
+	pub fn try_fmap<B, E>(self, f: impl FnOnce(A) -> Result<B, E>) -> Result<EthereumSCApi<B>, E> {
+		match self {
+			EthereumSCApi::Delegation { call } =>
+				Ok(EthereumSCApi::Delegation { call: call.try_fmap(f)? }),
+		}
+	}
+}
+
+impl UnfilteredDispatchable for EthereumSCApi<u128> {
 	type RuntimeOrigin = <Runtime as frame_system::Config>::RuntimeOrigin;
 	fn dispatch_bypass_filter(
 		self,
@@ -79,7 +101,7 @@ impl UnfilteredDispatchable for EthereumSCApi {
 	}
 }
 
-impl GetDispatchInfo for EthereumSCApi {
+impl GetDispatchInfo for EthereumSCApi<u128> {
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		match self {
 			EthereumSCApi::Delegation { call } => match call {

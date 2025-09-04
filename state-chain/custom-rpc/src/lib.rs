@@ -1102,7 +1102,7 @@ pub trait CustomApi {
 	fn cf_evm_calldata(
 		&self,
 		caller: EthereumAddress,
-		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi,
+		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi<NumberOrHex>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<EvmCallDetails>;
 }
@@ -2126,7 +2126,7 @@ where
 	fn cf_evm_calldata(
 		&self,
 		caller: EthereumAddress,
-		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi,
+		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi<NumberOrHex>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<EvmCallDetails> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
@@ -2142,9 +2142,18 @@ where
 					CfErrorCode::RuntimeApiError,
 				)))
 			} else {
-				api.cf_evm_calldata(hash, caller, call)
-					.map_err(CfApiError::from)?
-					.map_err(CfApiError::from)
+				api.cf_evm_calldata(
+					hash,
+					caller,
+					call.try_fmap(TryInto::try_into).map_err(|s| {
+						CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InvalidParams.code(),
+							format!("Failed to convert call parameters: {s}."),
+							None::<()>,
+						))
+					})?,
+				)?
+				.map_err(CfApiError::from)
 			}
 		})
 	}

@@ -348,12 +348,24 @@ pub mod pallet {
 		Serialize,
 		Deserialize,
 	)]
-	pub enum RedemptionAmount<T: Parameter> {
+	pub enum RedemptionAmount<T> {
 		Max,
 		Exact(T),
 	}
 
-	impl<T: Parameter> From<T> for RedemptionAmount<T> {
+	impl<T> RedemptionAmount<T> {
+		pub fn try_fmap<B, E>(
+			self,
+			f: impl FnOnce(T) -> Result<B, E>,
+		) -> Result<RedemptionAmount<B>, E> {
+			match self {
+				RedemptionAmount::Max => Ok(RedemptionAmount::Max),
+				RedemptionAmount::Exact(amount) => Ok(RedemptionAmount::Exact(f(amount)?)),
+			}
+		}
+	}
+
+	impl<T> From<T> for RedemptionAmount<T> {
 		fn from(t: T) -> Self {
 			Self::Exact(t)
 		}
