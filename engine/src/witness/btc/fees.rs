@@ -14,19 +14,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{cmp, time::Duration};
+use std::cmp;
 
-use crate::{
-	btc::rpc::{BtcRpcApi, BtcRpcClient},
-	settings::HttpBasicAuthEndpoint,
-};
+use crate::btc::rpc::BtcRpcApi;
 use anyhow::anyhow;
 use bitcoin::Txid;
 use cf_chains::btc::BtcAmount;
-use pallet_cf_elections::electoral_systems::oracle_price::primitives::{
-	compute_aggregated, compute_median, select_nth_unstable_checked,
-};
-use tokio::time::sleep;
+use pallet_cf_elections::electoral_systems::oracle_price::primitives::compute_median;
 
 pub async fn predict_fees(
 	client: &impl BtcRpcApi,
@@ -102,21 +96,30 @@ pub async fn predict_fees(
 	Ok(*median_fee)
 }
 
-#[tokio::test]
-async fn track_btc_fees() {
-	let client = BtcRpcClient::new(
-		HttpBasicAuthEndpoint {
-			http_endpoint: "http://localhost:8332".into(),
-			basic_auth_user: "flip".to_string(),
-			basic_auth_password: "flip".to_string(),
-		},
-		None,
-	)
-	.unwrap()
-	.await;
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::{btc::rpc::BtcRpcClient, settings::HttpBasicAuthEndpoint};
+	use std::time::Duration;
+	use tokio::time::sleep;
 
-	loop {
-		predict_fees(&client, 60).await.unwrap();
-		sleep(Duration::from_secs(20)).await;
+	#[ignore = "requires a running localnet"]
+	#[tokio::test]
+	async fn track_btc_fees() {
+		let client = BtcRpcClient::new(
+			HttpBasicAuthEndpoint {
+				http_endpoint: "http://localhost:8332".into(),
+				basic_auth_user: "flip".to_string(),
+				basic_auth_password: "flip".to_string(),
+			},
+			None,
+		)
+		.unwrap()
+		.await;
+
+		loop {
+			predict_fees(&client, 60).await.unwrap();
+			sleep(Duration::from_secs(20)).await;
+		}
 	}
 }

@@ -179,7 +179,7 @@ impl BtcRpcApi for BtcRetryRpcClient {
 				RequestLog::new("mempool_info".to_string(), None),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { Ok(client.mempool_info().await?) })
+					Box::pin(async move { client.mempool_info().await })
 				}),
 				2,
 			)
@@ -192,7 +192,7 @@ impl BtcRpcApi for BtcRetryRpcClient {
 				RequestLog::new("raw_mempool".to_string(), None),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { Ok(client.raw_mempool().await?) })
+					Box::pin(async move { client.raw_mempool().await })
 				}),
 				2,
 			)
@@ -206,7 +206,7 @@ impl BtcRpcApi for BtcRetryRpcClient {
 				Box::pin(move |client| {
 					let txids = txids.clone();
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { Ok(client.mempool_entries(txids).await?) })
+					Box::pin(async move { client.mempool_entries(txids).await })
 				}),
 				2,
 			)
