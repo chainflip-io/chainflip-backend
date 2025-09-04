@@ -820,7 +820,7 @@ mod verification_tests {
 		assert!(success, "Original signature should be valid");
 
 		// Construct malleable signature
-		let mut malleable_signature = original_signature;
+		let mut malleable_signature = original_signature.0; // Convert to underlying [u8; 65]
 		let s_bytes: [u8; 32] = original_signature[32..64].try_into().unwrap();
 
 		// Curve order n for secp256k1 as a 32-byte array
@@ -844,7 +844,7 @@ mod verification_tests {
 		malleable_signature[64] = if original_signature[64] == 27 { 28 } else { 27 };
 
 		// Assert that original and new signature are different
-		assert_ne!(original_signature, malleable_signature, "Signatures should differ");
+		assert_ne!(original_signature.0, malleable_signature, "Signatures should differ");
 		// Verify malleable signature
 		let malleable_success =
 			EvmCrypto::verify_signature(&signer.into(), &payload, &malleable_signature.into());
