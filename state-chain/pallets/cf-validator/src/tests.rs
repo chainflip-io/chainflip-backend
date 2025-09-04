@@ -532,7 +532,6 @@ fn expired_epoch_data_is_removed() {
 			delegators: [(delegator, 50u128)].into_iter().collect(),
 			validators: [(ALICE, 150u128)].into_iter().collect(),
 			delegation_fee_bps: 250,
-			capacity_factor: None,
 		};
 
 		// Epoch 1
@@ -1481,7 +1480,6 @@ fn can_update_all_config_items() {
 			SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 };
 		const NEW_MINIMUM_REPORTED_CFE_VERSION: SemVer = SemVer { major: 1, minor: 0, patch: 0 };
 		const NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE: Percent = Percent::from_percent(10);
-		const NEW_DELEGATION_CAPACITY_FACTOR: Option<u32> = Some(5);
 
 		// Check that the default values are different from the new ones
 		assert_ne!(
@@ -1500,7 +1498,6 @@ fn can_update_all_config_items() {
 			MaxAuthoritySetContractionPercentage::<Test>::get(),
 			NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE
 		);
-		assert_ne!(DelegationCapacityFactor::<Test>::get(), NEW_DELEGATION_CAPACITY_FACTOR);
 
 		// Update all config items
 		let updates = vec![
@@ -1517,7 +1514,6 @@ fn can_update_all_config_items() {
 			PalletConfigUpdate::MaxAuthoritySetContractionPercentage {
 				percentage: NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE,
 			},
-			PalletConfigUpdate::DelegationCapacityFactor { factor: NEW_DELEGATION_CAPACITY_FACTOR },
 		];
 		for update in updates {
 			assert_ok!(ValidatorPallet::update_pallet_config(OriginTrait::root(), update.clone()));
@@ -1543,18 +1539,6 @@ fn can_update_all_config_items() {
 		assert_eq!(
 			MaxAuthoritySetContractionPercentage::<Test>::get(),
 			NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE
-		);
-		assert_eq!(DelegationCapacityFactor::<Test>::get(), NEW_DELEGATION_CAPACITY_FACTOR);
-
-		// Make sure that only governance can update the config
-		assert_noop!(
-			ValidatorPallet::update_pallet_config(
-				OriginTrait::signed(ALICE),
-				PalletConfigUpdate::DelegationCapacityFactor {
-					factor: NEW_DELEGATION_CAPACITY_FACTOR
-				}
-			),
-			sp_runtime::traits::BadOrigin
 		);
 	});
 }
@@ -1835,7 +1819,6 @@ mod operator {
 				validators: Default::default(),
 				delegators: [(BOB, 100u128)].into_iter().collect(),
 				delegation_fee_bps: 250,
-				capacity_factor: None,
 			}
 			.register_for_epoch(current_epoch);
 
@@ -2681,7 +2664,6 @@ pub mod auction_optimization {
 								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
 								.collect(),
 							delegation_fee_bps: OPERATOR_SETTINGS.fee_bps,
-							capacity_factor: None,
 						}
 					);
 
@@ -2702,7 +2684,6 @@ pub mod auction_optimization {
 								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
 								.collect(),
 							delegation_fee_bps: OPERATOR_SETTINGS.fee_bps,
-							capacity_factor: None,
 						}
 					);
 				} else {
@@ -2797,9 +2778,9 @@ mod delegation_splitting {
 		total: u128,
 		delegator_bids: Vec<u128>,
 		delegation_fee_bps: u32,
-		capacity_factor: Option<u32>,
+		bond: Option<u128>,
 	) -> BTreeMap<u64, u128> {
-		DelegationSnapshot::<Test> {
+		let snapshot = DelegationSnapshot::<Test> {
 			operator: 0,
 			validators: BTreeMap::from_iter([(1, BID)]),
 			delegators: delegator_bids
@@ -2808,11 +2789,17 @@ mod delegation_splitting {
 				.map(|(i, b)| ((i + 2) as u64, b))
 				.collect(),
 			delegation_fee_bps,
-			capacity_factor,
-		}
-		.distribute(total)
-		.map(|(k, v)| (*k, v))
-		.collect()
+		};
+
+		// If not specified, assume optimal bond.
+		let bond = bond.unwrap_or_else(|| snapshot.avg_bid());
+		assert!(
+			bond <= snapshot.avg_bid(),
+			"The test requires a bond less than or equal to the average bid. Bond: {bond}, avg_bid: {}",
+			snapshot.avg_bid()
+		);
+
+		snapshot.distribute(total, bond).map(|(k, v)| (*k, v)).collect()
 	}
 
 	#[test]
@@ -2858,42 +2845,50 @@ mod delegation_splitting {
 	#[test]
 	fn with_delegation_limit_no_fee() {
 		new_test_ext().execute_with(|| {
-			const FACTOR: u128 = 3;
+			// TOTAL DELEGATOR BID: 6 * BID
+			// VALIDATOR BID: BID
+			// BOND: 4 * BID
+			// VALIDATOR GETS 1/4 OF TOTAL REWARD = REWARD
+			const VALIDATOR_REWARD: u128 = REWARD;
+			// DELEGATORS GET 3/4 OF TOTAL REWARD = REWARD * 3
+			const DELEGATOR_REWARD: u128 = REWARD * 3;
 			assert_eq!(
-				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 0, Some(FACTOR as u32)),
-				BTreeMap::from_iter(
-					[(0, 0), (1, REWARD), (2, REWARD), (3, 2 * REWARD), (4, 3 * REWARD),]
-						.into_iter()
-						// Delegator reward is reduced by 50% because it's 2x over capacity.
-						.map(|(k, v)| if k > 1 { (k, v / (FACTOR - 1)) } else { (k, v) })
-						.collect::<BTreeMap<_, _>>()
-				)
+				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 0, Some(4 * BID)),
+				BTreeMap::from_iter([
+					(0, 0),
+					(1, VALIDATOR_REWARD),
+					(2, DELEGATOR_REWARD / 6),
+					(3, DELEGATOR_REWARD * 2 / 6),
+					(4, DELEGATOR_REWARD * 3 / 6),
+				])
 			);
 		});
 	}
 
 	#[test]
 	fn with_delegation_limit_and_fee() {
+		// TOTAL BID: 6 * BID
+		// VALIDATOR BID: BID
+		// BOND: 4 * BID
+		// VALIDATOR GETS 1/4 OF TOTAL REWARD = REWARD
+		const VALIDATOR_REWARD: u128 = REWARD;
+		// DELEGATORS GET 3/4 OF TOTAL REWARD = REWARD * 3
+		// BUT OPERATOR TAKES 20% OF THAT
+		const DELEGATOR_REWARD: u128 = REWARD * 3;
+		const OPERATOR_FEE: u128 = DELEGATOR_REWARD / 5;
+		const NET_DELEGATOR_REWARD: u128 = DELEGATOR_REWARD - OPERATOR_FEE;
 		new_test_ext().execute_with(|| {
-			const FACTOR: u128 = 3;
 			// 20% operator fee
 			assert_eq!(
-				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 2000, Some(FACTOR as u32)),
-				BTreeMap::from_iter(
-					[
-						// Operator gets 20 % of *capped* delegator total
-						(0, (REWARD / (FACTOR - 1) * 6 / 5)),
-						(1, REWARD),
-						(2, REWARD),
-						(3, 2 * REWARD),
-						(4, 3 * REWARD),
-					]
-					.into_iter()
-					// Delegator reward is reduced by 50% because it's 2x over capacity.
-					// Delegator reward is further reduced by 20% because of operator fee.
-					.map(|(k, v)| if k > 1 { (k, v / (FACTOR - 1) * 4 / 5) } else { (k, v) })
-					.collect::<BTreeMap<_, _>>()
-				)
+				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 2000, Some(4 * BID)),
+				BTreeMap::from_iter([
+					// Operator gets 20 % of *capped* delegator total
+					(0, OPERATOR_FEE),
+					(1, VALIDATOR_REWARD),
+					(2, NET_DELEGATOR_REWARD / 6),
+					(3, NET_DELEGATOR_REWARD * 2 / 6),
+					(4, NET_DELEGATOR_REWARD * 3 / 6),
+				])
 			);
 		});
 	}
@@ -3030,7 +3025,6 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 				.into_iter()
 				.collect(),
 			delegation_fee_bps: 500, // 5% fee
-			capacity_factor: None,
 		}
 		.register_for_epoch(EPOCH);
 
