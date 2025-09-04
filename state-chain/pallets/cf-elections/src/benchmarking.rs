@@ -557,6 +557,66 @@ mod benchmarks {
 		assert_eq!(ElectionConsensusHistoryUpToDate::<T, I>::iter_keys().count(), 0);
 	}
 
+	#[benchmark]
+	fn test_mismatch<T: crate::pallet::Config<I>, I: 'static>() {
+		let validators = ready_validator_for_vote::<T, I>(1);
+		let caller = validators[0].clone();
+		let mut electoral_data = Pallet::<T, I>::electoral_data(&caller.clone().into())
+			.unwrap()
+			.current_elections
+			.into_iter();
+
+		let (election_identifier0, ..) = electoral_data.next().unwrap();
+		let (election_identifier1, ..) = electoral_data.next().unwrap();
+
+		#[block]
+		{}
+
+		// We are using ElectionIdentifier(UniqueMonotonicIdentifier(1), EE(())) and Vote(A(0)),
+		// vote extrinsic should not fail and that vote should be skipped
+		validators.iter().for_each(|v| {
+			assert_ok!(Pallet::<T, I>::vote(
+				RawOrigin::Signed(v.clone()).into(),
+				Box::new(
+					BoundedBTreeMap::try_from(
+						[(
+							election_identifier1,
+							AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+								BenchmarkValue::benchmark_value()
+							),
+						)]
+						.into_iter()
+						.collect::<BTreeMap<_, _>>(),
+					)
+					.unwrap()
+				),
+			));
+		});
+
+		// Vote was skipped hence no data is being saved
+		assert!(BitmapComponents::<T, I>::iter().count() == 0);
+
+		validators.iter().for_each(|v| {
+			assert_ok!(Pallet::<T, I>::vote(
+				RawOrigin::Signed(v.clone()).into(),
+				Box::new(
+					BoundedBTreeMap::try_from(
+						[(
+							election_identifier0,
+							AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+								BenchmarkValue::benchmark_value()
+							),
+						)]
+						.into_iter()
+						.collect::<BTreeMap<_, _>>(),
+					)
+					.unwrap()
+				),
+			));
+		});
+		assert!(BitmapComponents::<T, I>::iter().count() == 1);
+	}
+
 	#[cfg(test)]
 	mod tests {
 		use super::*;
@@ -594,6 +654,7 @@ mod benchmarks {
 			test_unpause_elections: _unpause_elections(),
 			test_validate_storage: _validate_storage(),
 			test_clear_all_votes: _clear_all_votes(10, 10, 10, 10, 10),
+			test_test_mismatch: _test_mismatch(),
 		}
 	}
 }
