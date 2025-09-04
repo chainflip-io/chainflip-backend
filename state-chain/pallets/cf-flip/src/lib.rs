@@ -188,6 +188,10 @@ pub mod pallet {
 		PalletConfigUpdated {
 			update: PalletConfigUpdate,
 		},
+		FlipMinted {
+			to: T::AccountId,
+			amount: T::Balance,
+		},
 	}
 
 	#[pallet::error]
@@ -577,6 +581,7 @@ impl<T: Config> cf_traits::Issuance for FlipIssuance<T> {
 
 	fn mint(beneficiary: &Self::AccountId, amount: Self::Balance) {
 		Pallet::<T>::settle(beneficiary, Pallet::<T>::mint(amount).into());
+		Pallet::<T>::deposit_event(Event::FlipMinted { to: beneficiary.clone(), amount });
 	}
 
 	fn total_issuance() -> Self::Balance {

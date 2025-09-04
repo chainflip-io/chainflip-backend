@@ -347,12 +347,6 @@ pub trait RewardsDistribution {
 	fn distribute(amount: Self::Balance, beneficiary: &Self::AccountId);
 }
 
-/// Allow triggering of emissions.
-pub trait EmissionsTrigger {
-	/// Trigger emissions.
-	fn trigger_emissions();
-}
-
 /// A representation of the current network state for this heartbeat interval.
 ///
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
