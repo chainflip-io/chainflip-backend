@@ -55,14 +55,19 @@ export async function sendVaultTransaction(
   );
 }
 
-export async function waitForBtcTransaction(logger: Logger, txid: string, confirmations = 1) {
+export async function waitForBtcTransaction(
+  logger: Logger,
+  txid: string,
+  confirmations = 1,
+  client = btcClient,
+) {
   logger.trace(
     `Waiting for Btc transaction to be confirmed, txid: ${txid}, required confirmations: ${confirmations}`,
   );
   // Localnet btc blocktime is 5sec
   const timeoutSeconds = 10 + 5 * confirmations;
   for (let i = 0; i < timeoutSeconds; i++) {
-    const transactionDetails = await btcClient.getTransaction(txid);
+    const transactionDetails = await client.getTransaction(txid);
 
     if (transactionDetails.confirmations < confirmations) {
       await sleep(1000);
@@ -84,6 +89,7 @@ export async function sendBtc(
   address: string,
   amount: number | string,
   confirmations = 1,
+  client = btcClient,
 ): Promise<string> {
   // Btc client has a limit on the number of concurrent requests
   let txid: string;
@@ -93,11 +99,11 @@ export async function sendBtc(
   while (attempts < maxAttempts) {
     try {
       txid = (await btcClientMutex.runExclusive(async () =>
-        btcClient.sendToAddress(address, amount, '', '', false, true, null, 'unset', null, 1),
+        client.sendToAddress(address, amount, '', '', false, true, null, 'unset', null, 1),
       )) as string;
 
       if (confirmations > 0) {
-        await waitForBtcTransaction(logger, txid, confirmations);
+        await waitForBtcTransaction(logger, txid, confirmations, client);
       }
       return txid;
     } catch (error) {
@@ -129,18 +135,19 @@ export async function sendBtcTransactionWithParent(
   amount: number,
   parentConfirmations: number,
   childConfirmations: number,
+  client = btcClient,
 ): Promise<{ parentTxid: string; childTxid: string }> {
   // Btc client has a limit on the number of concurrent requests
   const txids = await btcClientMutex.runExclusive(async () => {
     // create a new address in our wallet that we have the keys for
-    const intermediateAddress = await btcClient.getNewAddress();
+    const intermediateAddress = await client.getNewAddress();
 
     // amount to use for the parent tx
     // Note: bitcoin has 8 decimal places
     const parentAmount = (amount * 1.1).toFixed(8);
 
     // send the parent tx
-    const parentTxid = (await btcClient.sendToAddress(
+    const parentTxid = (await client.sendToAddress(
       intermediateAddress,
       parentAmount,
       '',
@@ -155,11 +162,11 @@ export async function sendBtcTransactionWithParent(
 
     // wait for inclusion in a block
     if (parentConfirmations > 0) {
-      await waitForBtcTransaction(logger, parentTxid, parentConfirmations);
+      await waitForBtcTransaction(logger, parentTxid, parentConfirmations, client);
     }
 
     // Create a raw transaction for the child tx
-    const childRawTx = await btcClient.createRawTransaction(
+    const childRawTx = await client.createRawTransaction(
       [
         {
           txid: parentTxid as string,
@@ -172,23 +179,23 @@ export async function sendBtcTransactionWithParent(
     );
 
     // Fund the child tx
-    const childFundedTx = (await btcClient.fundRawTransaction(childRawTx, {
-      changeAddress: await btcClient.getNewAddress(),
+    const childFundedTx = (await client.fundRawTransaction(childRawTx, {
+      changeAddress: await client.getNewAddress(),
       feeRate: 0.00001,
       lockUnspents: true,
     })) as { hex: string };
 
     // Sign the child tx
-    const childSignedTx = await btcClient.signRawTransactionWithWallet(childFundedTx.hex);
+    const childSignedTx = await client.signRawTransactionWithWallet(childFundedTx.hex);
 
     // Send the signed tx
-    const childTxid = (await btcClient.sendRawTransaction(childSignedTx.hex)) as string;
+    const childTxid = (await client.sendRawTransaction(childSignedTx.hex)) as string;
 
     return { parentTxid, childTxid };
   });
 
   if (childConfirmations > 0) {
-    await waitForBtcTransaction(logger, txids.childTxid, childConfirmations);
+    await waitForBtcTransaction(logger, txids.childTxid, childConfirmations, client);
   }
 
   return txids;

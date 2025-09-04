@@ -390,7 +390,7 @@ export function ingressEgressPalletForChain(chain: Chain) {
   }
 }
 
-export function getBtcClient(): Client {
+export function getBtcClient(wallet: string = 'watch'): Client {
   const endpoint = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
 
   return new Client({
@@ -398,7 +398,7 @@ export function getBtcClient(): Client {
     port: Number(endpoint.split(':')[2]),
     username: 'flip',
     password: 'flip',
-    wallet: 'watch',
+    wallet,
   });
 }
 

@@ -61,7 +61,7 @@ const prettyConsoleTransport = pino.transport({
   },
 });
 
-const getIsoTime = () => {
+export const getIsoTime = () => {
   // Getting the time using the time function of pino, there might be a better way to do this.
   const { time } = JSON.parse(`{"noop": "nothing"${pino.stdTimeFunctions.isoTime()}}`);
   return time as string;
