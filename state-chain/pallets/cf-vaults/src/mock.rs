@@ -136,8 +136,12 @@ pub enum MockRuntimeSafeMode {
 }
 
 impl SafeMode for MockRuntimeSafeMode {
-	const CODE_GREEN: Self = MockRuntimeSafeMode::CodeGreen;
-	const CODE_RED: Self = MockRuntimeSafeMode::CodeRed;
+	fn code_green() -> Self {
+		MockRuntimeSafeMode::CodeGreen
+	}
+	fn code_red() -> Self {
+		MockRuntimeSafeMode::CodeRed
+	}
 }
 
 thread_local! {

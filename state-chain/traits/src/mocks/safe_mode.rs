@@ -50,35 +50,35 @@ mod test {
 			assert!(
 				<MockRuntimeSafeMode as Get<MockRuntimeSafeMode>>::get() ==
 					MockRuntimeSafeMode {
-						a: ExampleSafeModeA::CODE_GREEN,
-						b: ExampleSafeModeB::CODE_GREEN,
+						a: ExampleSafeModeA::code_green(),
+						b: ExampleSafeModeB::code_green(),
 					}
 			);
 			assert!(
 				<MockRuntimeSafeMode as Get<ExampleSafeModeA>>::get() ==
-					ExampleSafeModeA::CODE_GREEN
+					ExampleSafeModeA::code_green()
 			);
 			assert!(
 				<MockRuntimeSafeMode as Get<ExampleSafeModeB>>::get() ==
-					ExampleSafeModeB::CODE_GREEN
+					ExampleSafeModeB::code_green()
 			);
 
-			MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode::CODE_RED);
+			MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode::code_red());
 
 			assert!(
 				<MockRuntimeSafeMode as Get<MockRuntimeSafeMode>>::get() ==
 					MockRuntimeSafeMode {
-						a: ExampleSafeModeA::CODE_RED,
-						b: ExampleSafeModeB::CODE_RED,
+						a: ExampleSafeModeA::code_red(),
+						b: ExampleSafeModeB::code_red(),
 					}
 			);
 			assert_eq!(
 				<MockRuntimeSafeMode as Get<ExampleSafeModeA>>::get(),
-				ExampleSafeModeA::CODE_RED
+				ExampleSafeModeA::code_red()
 			);
 			assert_eq!(
 				<MockRuntimeSafeMode as Get<ExampleSafeModeB>>::get(),
-				ExampleSafeModeB::CODE_RED
+				ExampleSafeModeB::code_red()
 			);
 		});
 	}

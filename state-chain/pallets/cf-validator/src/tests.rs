@@ -627,7 +627,7 @@ fn no_validator_rotation_when_disabled_by_safe_mode() {
 	new_test_ext().then_execute_with_checks(|| {
 		// Activate Safe Mode: CODE RED
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
-		assert!(<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == PalletSafeMode::CODE_RED);
+		assert!(<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == PalletSafeMode::code_red());
 
 		// Try to start a rotation.
 		ValidatorPallet::start_authority_rotation();
@@ -640,7 +640,9 @@ fn no_validator_rotation_when_disabled_by_safe_mode() {
 
 		// Change safe mode to CODE GREEN
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
-		assert!(<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == PalletSafeMode::CODE_GREEN);
+		assert!(
+			<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == PalletSafeMode::code_green()
+		);
 
 		// Try to start a rotation.
 		set_default_test_bids();
