@@ -48,7 +48,7 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
-	EpochIndex, ForeignChain, GasAmount, Ipv6Addr, NetworkEnvironment, Price, SemVer,
+	EpochIndex, ForeignChain, IngressOrEgress, Ipv6Addr, NetworkEnvironment, Price, SemVer,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -961,17 +961,7 @@ pub trait AuthoritiesCfeVersions {
 }
 
 pub trait AdjustedFeeEstimationApi<C: Chain> {
-	fn estimate_ingress_fee(asset: C::ChainAsset) -> C::ChainAmount;
-
-	fn estimate_ingress_fee_vault_swap() -> Option<C::ChainAmount>;
-
-	fn estimate_egress_fee(asset: C::ChainAsset) -> C::ChainAmount;
-
-	fn estimate_ccm_fee(
-		asset: C::ChainAsset,
-		gas_budget: GasAmount,
-		message_length: usize,
-	) -> Option<C::ChainAmount>;
+	fn estimate_fee(asset: C::ChainAsset, ingress_or_egress: IngressOrEgress) -> C::ChainAmount;
 }
 
 pub trait CallDispatchFilter<RuntimeCall> {

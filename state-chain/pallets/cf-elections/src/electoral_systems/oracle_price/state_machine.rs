@@ -14,24 +14,25 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use core::ops::RangeInclusive;
+use enum_iterator::{all, Sequence};
+use itertools::{Either, Itertools};
+
+use crate::electoral_systems::oracle_price::primitives::{Seconds, UnixTime};
+
 use crate::{
 	electoral_systems::{
 		block_witnesser::{primitives::SafeModeStatus, state_machine::HookTypeFor},
 		oracle_price::{
 			price::PriceUnit,
-			primitives::{BasisPoints, Seconds, UnixTime},
+			primitives::{Aggregated, BasisPoints},
 		},
-		state_machine::common_imports::*,
+		state_machine::{
+			common_imports::*,
+			state_machine::{AbstractApi, Statemachine},
+		},
 	},
 	generic_tools::*,
-};
-use core::ops::RangeInclusive;
-use enum_iterator::{all, Sequence};
-use itertools::{Either, Itertools};
-
-use crate::electoral_systems::{
-	oracle_price::primitives::Aggregated,
-	state_machine::state_machine::{AbstractApi, Statemachine},
 };
 use sp_std::{
 	ops::{Index, IndexMut},
@@ -93,7 +94,7 @@ impl<T: OPTypes> HookType for HookTypeFor<T, EmitPricesUpdatedEvent> {
 
 //---------------- the primitives ------------------
 
-def_derive! {
+derive_common_traits! {
 	#[derive(Copy, Sequence, PartialOrd, Ord, TypeInfo)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub enum ExternalPriceChain {
@@ -102,7 +103,7 @@ def_derive! {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo, Copy, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub enum PriceStatus {
@@ -113,7 +114,7 @@ def_derive! {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive_where(Default;)]
 	#[derive(TypeInfo)]
 	#[cfg_attr(test, derive(Arbitrary))]
@@ -126,7 +127,7 @@ def_derive! {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct AssetResponse<T: OPTypes> {
@@ -135,7 +136,7 @@ def_derive! {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive_where(Default;)]
 	#[derive(TypeInfo)]
 	#[cfg_attr(test, derive(Arbitrary))]
@@ -144,7 +145,7 @@ def_derive! {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct ExternalChainStateVote<T: OPTypes> {
@@ -227,7 +228,7 @@ impl<T: OPTypes> ExternalChainState<T> {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct ExternalChainStates<T: OPTypes> {
@@ -274,7 +275,7 @@ impl<T: OPTypes> IndexMut<ExternalPriceChain> for ExternalChainStates<T> {
 
 //---------------- the api ------------------
 
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub enum VotingCondition<T: OPTypes> {
@@ -288,7 +289,7 @@ def_derive! {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct PriceQuery<T: OPTypes> {
@@ -297,7 +298,7 @@ def_derive! {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct OraclePriceSettings {
@@ -317,7 +318,7 @@ impl Index<ExternalPriceChain> for OraclePriceSettings {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct ExternalChainSettings {
@@ -327,7 +328,7 @@ def_derive! {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct OraclePriceTracker<T: OPTypes> {
