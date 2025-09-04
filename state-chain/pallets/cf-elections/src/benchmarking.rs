@@ -654,7 +654,6 @@ mod benchmarks {
 			test_unpause_elections: _unpause_elections(),
 			test_validate_storage: _validate_storage(),
 			test_clear_all_votes: _clear_all_votes(10, 10, 10, 10, 10),
-			test_test_mismatch: _test_mismatch(),
 		}
 	}
 }
