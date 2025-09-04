@@ -850,7 +850,6 @@ fn failed_keygen_with_offenders(offenders: impl IntoIterator<Item = u64>) {
 	CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
 		RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
 			winners: CANDIDATES.collect(),
-			losers: Default::default(),
 			bond: Default::default(),
 		}),
 	));
@@ -921,7 +920,6 @@ mod key_handover {
 		CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
 			RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
 				winners: CANDIDATES.collect(),
-				losers: Default::default(),
 				bond: Default::default(),
 			}),
 		));
@@ -1464,7 +1462,6 @@ fn validator_set_change_propagates_to_session_pallet() {
 			CurrentRotationPhase::put(RotationPhase::<Test>::NewKeysActivated(
 				RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
 					winners: WINNING_BIDS.map(|bidder| bidder.bidder_id).to_vec(),
-					losers: vec![],
 					bond: EXPECTED_BOND,
 				}),
 			));
@@ -1478,7 +1475,6 @@ fn validator_set_change_propagates_to_session_pallet() {
 #[test]
 fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
-		const NEW_AUCTION_BID_CUTOFF_PERCENTAGE: Percent = Percent::from_percent(10);
 		const NEW_REDEMPTION_PERIOD_AS_PERCENTAGE: Percent = Percent::from_percent(10);
 		const NEW_REGISTRATION_BOND_PERCENTAGE: Percent = Percent::from_percent(10);
 		const NEW_AUTHORITY_SET_MIN_SIZE: u32 = 0;
@@ -1490,7 +1486,6 @@ fn can_update_all_config_items() {
 		const NEW_DELEGATION_CAPACITY_FACTOR: Option<u32> = Some(5);
 
 		// Check that the default values are different from the new ones
-		assert_ne!(AuctionBidCutoffPercentage::<Test>::get(), NEW_AUCTION_BID_CUTOFF_PERCENTAGE);
 		assert_ne!(
 			RedemptionPeriodAsPercentage::<Test>::get(),
 			NEW_REDEMPTION_PERIOD_AS_PERCENTAGE
@@ -1508,9 +1503,6 @@ fn can_update_all_config_items() {
 
 		// Update all config items
 		let updates = vec![
-			PalletConfigUpdate::AuctionBidCutoffPercentage {
-				percentage: NEW_AUCTION_BID_CUTOFF_PERCENTAGE,
-			},
 			PalletConfigUpdate::RedemptionPeriodAsPercentage {
 				percentage: NEW_REDEMPTION_PERIOD_AS_PERCENTAGE,
 			},
@@ -1537,7 +1529,6 @@ fn can_update_all_config_items() {
 		}
 
 		// Check that the new values were set
-		assert_eq!(AuctionBidCutoffPercentage::<Test>::get(), NEW_AUCTION_BID_CUTOFF_PERCENTAGE);
 		assert_eq!(
 			RedemptionPeriodAsPercentage::<Test>::get(),
 			NEW_REDEMPTION_PERIOD_AS_PERCENTAGE
@@ -1557,8 +1548,8 @@ fn can_update_all_config_items() {
 		assert_noop!(
 			ValidatorPallet::update_pallet_config(
 				OriginTrait::signed(ALICE),
-				PalletConfigUpdate::AuctionBidCutoffPercentage {
-					percentage: NEW_AUCTION_BID_CUTOFF_PERCENTAGE,
+				PalletConfigUpdate::DelegationCapacityFactor {
+					factor: NEW_DELEGATION_CAPACITY_FACTOR
 				}
 			),
 			sp_runtime::traits::BadOrigin
@@ -2655,7 +2646,6 @@ pub mod auction_optimization {
 					new_phase:
 						RotationPhase::KeygensInProgress(RotationState {
 							primary_candidates,
-							secondary_candidates: _,
 							banned: _,
 							bond,
 							new_epoch_index: _,
@@ -2752,7 +2742,6 @@ pub mod auction_optimization {
 						new_phase:
 							RotationPhase::KeygensInProgress(RotationState {
 								primary_candidates: _,
-								secondary_candidates: _,
 								banned: _,
 								bond,
 								new_epoch_index: _,

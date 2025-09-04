@@ -112,8 +112,6 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 
 	Pallet::<T>::try_start_keygen(RotationState::from_auction_outcome::<T>(AuctionOutcome {
 		winners: bidder_set::<T, ValidatorIdOf<T>, _>(primary_candidates, epoch).collect(),
-		losers: bidder_set::<T, ValidatorIdOf<T>, _>(secondary_candidates, epoch + LARGE_OFFSET)
-			.collect(),
 		bond: 100u32.into(),
 	}));
 
