@@ -150,15 +150,15 @@ fn updating_consolidation_parameters() {
 fn update_safe_mode() {
 	new_test_ext().execute_with(|| {
 		// Default to GREEN
-		assert_eq!(RuntimeSafeMode::<Test>::get(), SafeMode::CODE_GREEN);
+		assert_eq!(RuntimeSafeMode::<Test>::get(), SafeMode::code_green());
 		assert_ok!(Environment::update_safe_mode(OriginTrait::root(), SafeModeUpdate::CodeRed));
-		assert_eq!(RuntimeSafeMode::<Test>::get(), SafeMode::CODE_RED);
+		assert_eq!(RuntimeSafeMode::<Test>::get(), SafeMode::code_red());
 		System::assert_last_event(RuntimeEvent::Environment(Event::RuntimeSafeModeUpdated {
 			safe_mode: SafeModeUpdate::CodeRed,
 		}));
 
 		assert_ok!(Environment::update_safe_mode(OriginTrait::root(), SafeModeUpdate::CodeGreen,));
-		assert_eq!(RuntimeSafeMode::<Test>::get(), SafeMode::CODE_GREEN);
+		assert_eq!(RuntimeSafeMode::<Test>::get(), SafeMode::code_green());
 		System::assert_last_event(RuntimeEvent::Environment(Event::RuntimeSafeModeUpdated {
 			safe_mode: SafeModeUpdate::CodeGreen,
 		}));
