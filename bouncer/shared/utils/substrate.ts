@@ -62,6 +62,7 @@ const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[
 };
 
 export interface CustomApi extends ApiPromise {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   raw_rpc(method: string, ...args: any[]): Promise<any>;
 }
 
@@ -97,7 +98,9 @@ const getCachedSubstrateApi = (endpoint: string) =>
           };
         }
         if (prop === 'raw_rpc') {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           return async (method: string, ...args: any[]) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const provider: WsProvider = (target as any)._rpcCore.provider;
             const result = await provider.send(method, args);
             return result;

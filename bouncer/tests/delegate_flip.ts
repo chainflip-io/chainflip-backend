@@ -12,9 +12,7 @@ import {
   hexPubkeyToFlipAddress,
   newAddress,
 } from 'shared/utils';
-import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
-import { getEthScUtilsAbi } from 'shared/contract_interfaces';
 import { approveErc20 } from 'shared/approve_erc20';
 import { newStatechainAddress } from 'shared/new_statechain_address';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -23,8 +21,6 @@ import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
 import { setupOperatorAccount } from 'shared/setup_account';
 import z from 'zod';
-
-const cfScUtilsAbi = await getEthScUtilsAbi();
 
 const evmCallDetails = z.object({
   calldata: z.string(),
@@ -73,10 +69,8 @@ function evmToScAddress(evmAddress: string) {
 }
 
 export async function testDelegate(logger: Logger) {
-  const web3 = new Web3(getEvmEndpoint('Ethereum'));
   const uri = '//Operator_0';
   const scUtilsAddress = getContractAddress('Ethereum', 'SC_UTILS');
-  const cfScUtilsContract = new web3.eth.Contract(cfScUtilsAbi, scUtilsAddress);
   const { pubkey: whalePubkey } = getEvmWhaleKeypair('Ethereum');
 
   const amount = amountToFineAmountBigInt(defaultAssetAmounts('Flip'), 'Flip');
