@@ -478,9 +478,11 @@ fn cant_rotate_if_previous_rotation_is_pending() {
 			// are still pending.
 			testnet.move_to_the_end_of_epoch();
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-			cf_test_utilities::assert_has_event(state_chain_runtime::RuntimeEvent::Validator(
-				pallet_cf_validator::Event::<Runtime>::PreviousRotationStillPending,
-			));
+			cf_test_utilities::assert_has_event::<Runtime>(
+				state_chain_runtime::RuntimeEvent::Validator(
+					pallet_cf_validator::Event::<Runtime>::PreviousRotationStillPending,
+				),
+			);
 			// we are still in the older epoch
 			assert_eq!(epoch_index, Validator::epoch_index());
 
