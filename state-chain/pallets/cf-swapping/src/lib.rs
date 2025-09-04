@@ -369,6 +369,33 @@ pub enum UserSignatureData {
 pub enum LendingApi {
 	Borrow { amount: u128, collateral_asset: Asset, borrow_asset: Asset },
 }
+impl core::fmt::Display for LendingApi {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		match self {
+			LendingApi::Borrow { amount, collateral_asset, borrow_asset } => {
+				let collateral_str = core::str::from_utf8(collateral_asset.as_bytes())
+					.expect("Asset bytes should always be valid UTF-8");
+				let borrow_str = core::str::from_utf8(borrow_asset.as_bytes())
+					.expect("Asset bytes should always be valid UTF-8");
+				write!(
+					f,
+					"Action: Borrow\namount: {},\ncollateral_asset: {},\nborrow_asset: {},",
+					amount, collateral_str, borrow_str
+				)
+			},
+		}
+	}
+}
+
+impl core::fmt::Display for UserActionsApi {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		match self {
+			UserActionsApi::Lending(api) => {
+				write!(f, "Pallet: Lending\n{}", api)
+			},
+		}
+	}
+}
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
 pub enum UserActionsApi {
@@ -3104,6 +3131,29 @@ pub fn build_eip_712_hash(
 	encoded_final
 }
 
+// For Phantom Solana
+pub fn build_string_message(
+	user_action: &UserActionsApi,
+	user_metadata: &UserMetadata,
+	signer: SolAddress,
+) -> Vec<u8> {
+	let version = "0";
+	let chain_id = get_current_chain_id();
+
+	let result = format!(
+		"Domain: Chainflip\n{}\nVersion: {}\nChain ID: {}\nFrom: {}\nNonce: {}\nexpiry_block: {}",
+		format!("{}", user_action),
+		version,
+		chain_id,
+		signer,
+		user_metadata.nonce,
+		user_metadata.expiry_block
+	);
+
+	println!("{}", result);
+
+	result.into_bytes()
+}
 #[cfg(test)]
 mod test {
 	use super::*;
@@ -3161,9 +3211,9 @@ mod test {
 		// Data before hashing
 		let signed_payload =  hex_literal::hex!("ff736f6c616e61206f6666636861696e0000d2040000000000000000000000000000050301000000000000000000000000000000000000000000000000000000000000000100000010270000");
 		let signer: SolAddress =
-			SolAddress::from_str("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp").unwrap();
+			SolAddress::from_str("XMZoYQv4EAGUguvj9TyWgeczHPgyFqbCeDvMo315bGv").unwrap();
 		let signature: SolSignature = hex_literal::hex!(
-			"8ba6205389d557394793733f9a2bc809a47aaaf94fa5818a906ce7c18645bf7b897c3fe3f011d479cc4be67d5a964f493b163860ed3df634728d308374cbae06"
+			"dac776913051c72ae450cd4ae941efff4a6662befb264cf95627443b579b711de16e7a566c98c956f2d6876d9133ca4850209d23750dabf824ea1785bbc5a807"
 		)
 		.into();
 
@@ -3180,5 +3230,36 @@ mod test {
 		});
 		let encoded = user_action.encode();
 		println!("Encoded user action: {:?}", encoded);
+	}
+
+	#[test]
+	fn test_build_string_phantom() {
+		let action = UserActionsApi::Lending(LendingApi::Borrow {
+			amount: 1234,
+			collateral_asset: Asset::Btc,
+			borrow_asset: Asset::Usdc,
+		});
+		let from = SolAddress::from_str("XMZoYQv4EAGUguvj9TyWgeczHPgyFqbCeDvMo315bGv").unwrap();
+		let nonce = 1;
+		let expiry_block = 10000;
+
+		let bytes = build_string_message(&action, &UserMetadata { nonce, expiry_block }, from);
+
+		let expected_bytes: &[u8] = &[
+			68, 111, 109, 97, 105, 110, 58, 32, 67, 104, 97, 105, 110, 102, 108, 105, 112, 10, 80,
+			97, 108, 108, 101, 116, 58, 32, 76, 101, 110, 100, 105, 110, 103, 10, 65, 99, 116, 105,
+			111, 110, 58, 32, 66, 111, 114, 114, 111, 119, 10, 97, 109, 111, 117, 110, 116, 58, 32,
+			49, 50, 51, 52, 44, 10, 99, 111, 108, 108, 97, 116, 101, 114, 97, 108, 95, 97, 115,
+			115, 101, 116, 58, 32, 66, 105, 116, 99, 111, 105, 110, 45, 66, 84, 67, 44, 10, 98,
+			111, 114, 114, 111, 119, 95, 97, 115, 115, 101, 116, 58, 32, 69, 116, 104, 101, 114,
+			101, 117, 109, 45, 85, 83, 68, 67, 44, 10, 86, 101, 114, 115, 105, 111, 110, 58, 32,
+			48, 10, 67, 104, 97, 105, 110, 32, 73, 68, 58, 32, 49, 10, 70, 114, 111, 109, 58, 32,
+			88, 77, 90, 111, 89, 81, 118, 52, 69, 65, 71, 85, 103, 117, 118, 106, 57, 84, 121, 87,
+			103, 101, 99, 122, 72, 80, 103, 121, 70, 113, 98, 67, 101, 68, 118, 77, 111, 51, 49,
+			53, 98, 71, 118, 10, 78, 111, 110, 99, 101, 58, 32, 49, 10, 101, 120, 112, 105, 114,
+			121, 95, 98, 108, 111, 99, 107, 58, 32, 49, 48, 48, 48, 48,
+		];
+		println!("expected_bytes {:?}", expected_bytes);
+		assert_eq!(bytes, expected_bytes);
 	}
 }
