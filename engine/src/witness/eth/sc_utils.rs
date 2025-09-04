@@ -198,7 +198,7 @@ mod tests {
 		let sc_call_delegate = EthereumSCApi::<FlipBalance>::Delegation {
 			call: DelegationApi::Delegate {
 				operator: AccountId32::new([0xF4; 32]),
-				increase: DelegationAmount::Max,
+				increase: DelegationAmount::<FlipBalance>::Max,
 			},
 		}
 		.encode();

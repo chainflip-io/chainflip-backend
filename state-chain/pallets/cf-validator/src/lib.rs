@@ -1516,7 +1516,9 @@ impl<T: Config> Pallet<T> {
 			.collect::<BTreeMap<_, _>>();
 
 		for outgoing_delegator in outgoing_delegators {
-			if !new_delegator_bids.contains_key(&outgoing_delegator) {
+			if !new_delegator_bids.contains_key(&outgoing_delegator) &&
+				!new_authorities.contains(ValidatorIdOf::<T>::from_ref(&outgoing_delegator))
+			{
 				T::Bonder::update_bond(&outgoing_delegator.clone().into(), T::Amount::from(0_u128));
 				Self::deposit_event(Event::UnDelegationFinalized {
 					delegator: outgoing_delegator.clone(),
