@@ -30,7 +30,7 @@ use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
 	BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip,
 	PolkadotCryptoInstance, PolkadotInstance, PolkadotThresholdSigner, Runtime, RuntimeOrigin,
-	SolanaInstance, SolanaThresholdSigner, System, Validator,
+	SolanaInstance, SolanaThresholdSigner, Validator,
 };
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
