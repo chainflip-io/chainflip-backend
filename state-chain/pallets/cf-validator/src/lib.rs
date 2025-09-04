@@ -335,11 +335,6 @@ pub mod pallet {
 	pub type Exceptions<T: Config> =
 		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
-	/// Maps a managed validator to its operator.
-	#[pallet::storage]
-	pub type ManagedValidators<T: Config> =
-		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
-
 	/// Maps a validator to the operators currently claiming it.
 	#[pallet::storage]
 	pub type ClaimedValidators<T: Config> =
@@ -353,6 +348,11 @@ pub mod pallet {
 	/// Maps an delegator to an associated operator account.
 	#[pallet::storage]
 	pub type DelegationChoice<T: Config> =
+		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
+
+	/// Maps a validator to the operator that manages it.
+	#[pallet::storage]
+	pub type OperatorChoice<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
 
 	/// The max bid determines how much of the delegator's balance can be used
@@ -906,7 +906,7 @@ pub mod pallet {
 		pub fn claim_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResult {
 			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 			ensure!(
-				!ManagedValidators::<T>::contains_key(&validator_id),
+				!OperatorChoice::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyManagedByOperator
 			);
 			ensure!(
@@ -924,7 +924,7 @@ pub mod pallet {
 		pub fn accept_operator(origin: OriginFor<T>, operator: T::AccountId) -> DispatchResult {
 			let validator_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			ensure!(
-				!ManagedValidators::<T>::contains_key(&validator_id),
+				!OperatorChoice::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyManagedByOperator
 			);
 
@@ -936,7 +936,7 @@ pub mod pallet {
 				}
 			})?;
 
-			ManagedValidators::<T>::insert(&validator_id, &operator);
+			OperatorChoice::<T>::insert(&validator_id, &operator);
 
 			Self::deposit_event(Event::OperatorAcceptedByValidator {
 				validator: validator_id,
@@ -953,9 +953,9 @@ pub mod pallet {
 		pub fn remove_validator(origin: OriginFor<T>, validator: T::AccountId) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 			let operator =
-				ManagedValidators::<T>::get(&validator).ok_or(Error::<T>::ValidatorDoesNotExist)?;
+				OperatorChoice::<T>::get(&validator).ok_or(Error::<T>::ValidatorDoesNotExist)?;
 			ensure!(account_id == operator || account_id == validator, Error::<T>::NotAuthorized);
-			ManagedValidators::<T>::remove(&validator);
+			OperatorChoice::<T>::remove(&validator);
 
 			Self::deposit_event(Event::ValidatorRemovedFromOperator { validator, operator });
 
@@ -1117,7 +1117,7 @@ pub mod pallet {
 				AssociationToOperator::Validator,
 				|_| (),
 			) {
-				ManagedValidators::<T>::remove(&validator);
+				OperatorChoice::<T>::remove(&validator);
 				Self::deposit_event(Event::ValidatorRemovedFromOperator {
 					validator,
 					operator: operator.clone(),
@@ -1826,7 +1826,7 @@ impl<T: Config> Pallet<T> {
 		f: impl Fn(&T::AccountId) -> R,
 	) -> BTreeMap<T::AccountId, R> {
 		match association {
-			AssociationToOperator::Validator => ManagedValidators::<T>::iter(),
+			AssociationToOperator::Validator => OperatorChoice::<T>::iter(),
 			AssociationToOperator::Delegator => DelegationChoice::<T>::iter(),
 		}
 		.filter_map(|(account_id, managing_operator)| {
@@ -1853,7 +1853,7 @@ impl<T: Config> Pallet<T> {
 		for Bid { bidder_id, amount } in Self::get_qualified_bidders::<Q>() {
 			// `into_ref` is used to cast between AccountId and ValidatorId.
 			let bidder_ref = bidder_id.into_ref();
-			if let Some(operator) = ManagedValidators::<T>::get(bidder_ref) {
+			if let Some(operator) = OperatorChoice::<T>::get(bidder_ref) {
 				snapshots
 					.entry(operator.clone())
 					.or_insert_with(|| DelegationSnapshot::<T>::init(&operator))

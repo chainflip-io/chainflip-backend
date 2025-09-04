@@ -1772,8 +1772,8 @@ mod operator {
 			);
 
 			// Expected end state:
-			assert_eq!(ManagedValidators::<Test>::get(V_1), Some(OP_2));
-			assert_eq!(ManagedValidators::<Test>::get(V_2), Some(OP_1));
+			assert_eq!(OperatorChoice::<Test>::get(V_1), Some(OP_2));
+			assert_eq!(OperatorChoice::<Test>::get(V_2), Some(OP_1));
 
 			assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
 				Event::OperatorAcceptedByValidator { validator: V_1, operator: OP_2 },
@@ -1786,10 +1786,10 @@ mod operator {
 	#[test]
 	fn validator_and_operator_can_remove_validator() {
 		new_test_ext().execute_with(|| {
-			ManagedValidators::<Test>::insert(BOB, ALICE);
+			OperatorChoice::<Test>::insert(BOB, ALICE);
 			// ALICE can remove BOB
 			assert_ok!(ValidatorPallet::remove_validator(OriginTrait::signed(ALICE), BOB));
-			ManagedValidators::<Test>::insert(BOB, ALICE);
+			OperatorChoice::<Test>::insert(BOB, ALICE);
 			// BOB can remove BOB
 			assert_ok!(ValidatorPallet::remove_validator(OriginTrait::signed(BOB), BOB));
 			assert_event_sequence!(
@@ -1808,13 +1808,13 @@ mod operator {
 				OriginTrait::signed(ALICE),
 				OPERATOR_SETTINGS
 			));
-			ManagedValidators::<Test>::insert(BOB, ALICE);
+			OperatorChoice::<Test>::insert(BOB, ALICE);
 
 			// Should succeed - validators are automatically removed during deregistration
 			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)));
 
 			// Verify validator was removed from operator
-			assert!(!ManagedValidators::<Test>::contains_key(BOB));
+			assert!(!OperatorChoice::<Test>::contains_key(BOB));
 		});
 	}
 
@@ -2047,7 +2047,7 @@ mod delegation {
 						OriginTrait::signed(bid.bidder_id),
 						OPERATOR
 					));
-					assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+					assert!(OperatorChoice::<Test>::get(bid.bidder_id).is_some());
 				}
 
 				set_default_test_bids();
