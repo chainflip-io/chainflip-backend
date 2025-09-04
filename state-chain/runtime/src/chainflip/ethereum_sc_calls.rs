@@ -1,4 +1,5 @@
 use crate::{chainflip::TypeInfo, Decode, Encode, EthereumAddress, Runtime, RuntimeCall};
+use cf_primitives::FlipBalance;
 use codec::MaxEncodedLen;
 use frame_support::{
 	dispatch::{DispatchInfo, GetDispatchInfo},
@@ -72,7 +73,7 @@ impl<A> EthereumSCApi<A> {
 	}
 }
 
-impl UnfilteredDispatchable for EthereumSCApi<u128> {
+impl UnfilteredDispatchable for EthereumSCApi<FlipBalance> {
 	type RuntimeOrigin = <Runtime as frame_system::Config>::RuntimeOrigin;
 	fn dispatch_bypass_filter(
 		self,
@@ -101,7 +102,7 @@ impl UnfilteredDispatchable for EthereumSCApi<u128> {
 	}
 }
 
-impl GetDispatchInfo for EthereumSCApi<u128> {
+impl GetDispatchInfo for EthereumSCApi<FlipBalance> {
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		match self {
 			EthereumSCApi::Delegation { call } => match call {

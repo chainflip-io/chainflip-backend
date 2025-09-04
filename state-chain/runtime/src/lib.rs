@@ -2854,7 +2854,7 @@ impl_runtime_apis! {
 
 		fn cf_evm_calldata(
 			caller: EthereumAddress,
-			call: EthereumSCApi<u128>,
+			call: EthereumSCApi<FlipBalance>,
 		) -> Result<EvmCallDetails, DispatchErrorWithMessage> {
 			use chainflip::ethereum_sc_calls::DelegationApi;
 			let caller_id = EthereumAccount(caller).into_account_id();

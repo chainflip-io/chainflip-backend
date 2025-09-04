@@ -186,6 +186,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 #[cfg(test)]
 mod tests {
+	use cf_primitives::FlipBalance;
 	use codec::Encode;
 	use frame_support::sp_runtime::AccountId32;
 	use state_chain_runtime::chainflip::ethereum_sc_calls::{
@@ -194,7 +195,7 @@ mod tests {
 
 	#[test]
 	fn test_sc_call_encode() {
-		let sc_call_delegate = EthereumSCApi::Delegation {
+		let sc_call_delegate = EthereumSCApi::<FlipBalance>::Delegation {
 			call: DelegationApi::Delegate {
 				operator: AccountId32::new([0xF4; 32]),
 				increase: DelegationAmount::Max,
