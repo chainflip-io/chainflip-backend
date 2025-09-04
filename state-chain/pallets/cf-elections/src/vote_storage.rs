@@ -21,6 +21,7 @@ use frame_support::{pallet_prelude::Member, Parameter};
 use scale_info::TypeInfo;
 
 pub mod bitmap;
+pub mod bitmap_numerical;
 pub mod change;
 pub mod composite;
 pub mod individual;

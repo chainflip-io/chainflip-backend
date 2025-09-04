@@ -1452,14 +1452,8 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	migrations::bitcoin_elections::Migration,
+	migrations::solana_elections::Migration,
 	migrations::generic_elections::Migration,
-	VersionedMigration<
-		6,
-		7,
-		NoopMigration,
-		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
-		<Runtime as frame_system::Config>::DbWeight,
-	>,
 	MigrationsForV1_11,
 );
 
@@ -1509,6 +1503,7 @@ type PalletMigrations = (
 	pallet_cf_trading_strategy::migrations::PalletMigration<Runtime>,
 	pallet_cf_lending_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, SolanaInstance>,
+	pallet_cf_elections::migrations::PalletMigration<Runtime, BitcoinInstance>,
 );
 
 pub struct NoopMigration;
