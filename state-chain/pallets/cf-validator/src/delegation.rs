@@ -227,21 +227,20 @@ impl<T: Config> DelegationSnapshot<T> {
 		auction_outcome: &AuctionOutcome<ValidatorIdOf<T>, T::Amount>,
 	) {
 		while self.validators.len() > 1 && self.avg_bid() <= auction_outcome.bond {
+			// in the case where the operator's nodes are at the boundary, maybe some of the
+			// validators didnt make the set and so we can optimize further where we reduce one node
+			// and increase the avg bid which would allow us to potentially add more of the
+			// operator's nodes to the set thereby increasing the number of nodes in the set.
 			if self.avg_bid() == auction_outcome.bond {
-				let winning_vals = self
-					.validators
-					.iter()
-					.filter_map(|(val, _)| {
-						auction_outcome.winners.contains(val).then_some(val.clone())
-					})
-					.collect::<Vec<_>>();
-
-				if self.validators.len() - winning_vals.len() > 0 {
+				if self.validators.iter().any(|(val, _)| !auction_outcome.winners.contains(val)) {
 					self.move_lowest_validator_to_delegator();
 				} else {
 					break;
 				}
-			} else {
+			}
+			// in case where all of operator's nodes are below bond, we increase the avg bid
+			// sequentially until either the avg bid is equal to bond or greater.
+			else {
 				self.move_lowest_validator_to_delegator();
 			}
 		}

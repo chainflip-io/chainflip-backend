@@ -1618,17 +1618,16 @@ impl<T: Config> Pallet<T> {
 		.map(|(auction_outcome, resolver)| {
 			let mut current_outcome = auction_outcome;
 			loop {
+				let old_snapshots = delegation_snapshots.clone();
 				for (_operator, snapshot) in delegation_snapshots.iter_mut() {
 					snapshot.maybe_optimize_bid(&current_outcome);
 				}
-				if let Ok(new_outcome) =
+				if delegation_snapshots == old_snapshots {
+					break;
+				} else if let Ok(new_outcome) =
 					resolver.resolve_auction(auction_bids(&delegation_snapshots))
 				{
-					if new_outcome == current_outcome {
-						break;
-					} else {
-						current_outcome = new_outcome;
-					}
+					current_outcome = new_outcome;
 				} else {
 					break;
 				}
