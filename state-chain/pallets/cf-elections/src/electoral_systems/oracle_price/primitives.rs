@@ -108,6 +108,12 @@ pub fn select_nth_unstable_checked<A: Ord>(
 	Some(values.select_nth_unstable(index))
 }
 
+pub fn compute_median<A: Ord>(values: &mut [A]) -> Option<&mut A> {
+	let half = (values.len().saturating_sub(1)) / 2;
+	let (_first_half, median, _second_half) = select_nth_unstable_checked(values, half)?;
+	Some(median)
+}
+
 pub fn compute_aggregated<A: AggregationValue>(mut values: Vec<A>) -> Option<Aggregated<A>> {
 	let quarter = values.len().saturating_sub(1) / 4;
 	let half = (values.len().saturating_sub(1)) / 2;

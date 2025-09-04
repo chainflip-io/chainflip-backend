@@ -20,49 +20,53 @@ use crate::{
 	btc::rpc::{BtcRpcApi, BtcRpcClient},
 	settings::HttpBasicAuthEndpoint,
 };
+use anyhow::anyhow;
 use bitcoin::Txid;
 use cf_chains::btc::BtcAmount;
-use pallet_cf_elections::electoral_systems::oracle_price::primitives::compute_aggregated;
+use pallet_cf_elections::electoral_systems::oracle_price::primitives::{
+	compute_aggregated, compute_median, select_nth_unstable_checked,
+};
 use tokio::time::sleep;
 
 pub async fn predict_fees(
 	client: &impl BtcRpcApi,
-	target_tx_sample_count_per_block: u32,
+	tx_sample_count_per_mempool_block: u32,
 ) -> anyhow::Result<BtcAmount> {
 	let info = client.mempool_info().await?;
 
 	if info.size == 0 || info.bytes == 0 {
+		tracing::debug!("mempool is empty, assuming fee = 0");
 		return Ok(0);
 	}
 
 	// -- average vbytes per tx --
 	let vbytes_per_tx = (info.bytes as f64) / (info.size as f64);
-	println!("average vbytes/tx: {vbytes_per_tx}");
+	tracing::debug!("average vbytes/tx: {vbytes_per_tx}");
 
 	// -- number of blocks in the mempool --
 	let blocks_in_mempool = (info.bytes as f64) / 1000000.0;
 	let txs_per_block = 1000000.0 / vbytes_per_tx;
-	println!("there are ~{blocks_in_mempool} blocks in the mempool, with average {txs_per_block} txs per block");
+	tracing::debug!("there are ~{blocks_in_mempool} blocks in the mempool, with average {txs_per_block} txs per block");
 
 	// -- calculate sample target --
-	let sample_size = (target_tx_sample_count_per_block as f64) * blocks_in_mempool;
-	println!("we have to download {sample_size} txs to have an average sample size of {target_tx_sample_count_per_block} per block");
+	let sample_size = (tx_sample_count_per_mempool_block as f64) * blocks_in_mempool;
+	tracing::debug!("we have to download {sample_size} txs to have an average sample size of {tx_sample_count_per_mempool_block} per block");
 
 	// ----------------------------------
 	// downloading txs
 
 	let tx_hashes: Vec<Txid> = client.raw_mempool().await?;
-	println!("Got {} hashes.", tx_hashes.len());
+	tracing::debug!("Got {} hashes.", tx_hashes.len());
 
 	use rand::seq::SliceRandom;
 	let sub_tx_hashes: Vec<Txid> = tx_hashes
-		.choose_multiple(&mut rand::thread_rng(), sample_size as usize)
+		.choose_multiple(&mut rand::thread_rng(), cmp::min(sample_size as usize, tx_hashes.len()))
 		.cloned()
 		.collect();
-	println!("Selected a subset of size {}", sub_tx_hashes.len());
+	tracing::debug!("Selected a subset of size {}", sub_tx_hashes.len());
 
 	let tx_data = client.mempool_entries(sub_tx_hashes).await?;
-	println!("Got data for {} txs", tx_data.len());
+	tracing::debug!("Got data for {} txs", tx_data.len());
 
 	let mut fees: Vec<_> = tx_data
 		.into_iter()
@@ -70,29 +74,32 @@ pub async fn predict_fees(
 			if a.vsize == 0 {
 				return None;
 			}
+			// we multiply by 1000 because our unit on the statechain is sat/vkilobyte,
+			// also this means that we don't need rationals or floating points to get
+			// good enough precision
 			Some((a.fees.base.to_sat() * 1000) / (a.vsize as u64))
 		})
 		.collect();
 	fees.sort_unstable_by(|a, b| b.cmp(a)); // sort in descending order, we don't care about object identities
-	let fees_next_block = &fees[0..cmp::min(target_tx_sample_count_per_block as usize, fees.len())];
+	let fees_next_block_len = cmp::min(tx_sample_count_per_mempool_block as usize, fees.len());
+	let fees_next_block = &mut fees[0..fees_next_block_len];
 
-	let fee_stats = compute_aggregated(fees_next_block.into_iter().cloned().collect());
-	println!(
-		"Got {} fees for the next block. Max: {}, min: {}, stats: {:?}",
-		fees_next_block.len(),
-		fees_next_block[0],
-		fees_next_block[fees_next_block.len() - 1],
-		fee_stats
-	);
+	// make sure that we exit with an error if for some reason we don't have at least half the
+	// sample size that we wanted
+	if fees_next_block_len < (tx_sample_count_per_mempool_block as usize / 2) {
+		return Err(anyhow!(
+			"We got only {fees_next_block_len} fee samples, this is less than half our target sample count."
+		));
+	} else {
+		tracing::debug!("Computing median fee rate of {} values", fees_next_block_len);
+	}
 
-	Ok(0)
-}
+	// compute and return fee
+	let median_fee = compute_median(fees_next_block)
+		.ok_or_else(|| anyhow!("Not enough values to compute median for fee estimation."))?;
+	tracing::debug!("Estimated median fee rate is: {median_fee} sat/vkilobyte");
 
-#[test]
-fn mytestt() {
-	let x = [0, 2];
-	let y = &x[1..5];
-	println!("{y:?}");
+	Ok(*median_fee)
 }
 
 #[tokio::test]

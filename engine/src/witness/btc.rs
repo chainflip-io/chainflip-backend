@@ -19,7 +19,10 @@ pub mod fees;
 pub mod source;
 pub mod vault_swaps;
 
-use crate::btc::rpc::{BtcRpcApi, VerboseTransaction};
+use crate::{
+	btc::rpc::{BtcRpcApi, VerboseTransaction},
+	witness::btc::fees::predict_fees,
+};
 use bitcoin::{hashes::Hash, BlockHash};
 use cf_chains::{
 	btc::{self, deposit_address::DepositAddress, BlockNumber, Hash as H256, CHANGE_ADDRESS_SALT},
@@ -266,9 +269,18 @@ pub struct BitcoinFeeVoter {
 impl VoterApi<BitcoinFeeTracking> for BitcoinFeeVoter {
 	async fn vote(
 		&self,
-		_settings: <BitcoinFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
+		settings: <BitcoinFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
 		_properties: <BitcoinFeeTracking as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<BitcoinFeeTracking>>, anyhow::Error> {
+		if settings.tx_sample_count_per_mempool_block > 0 {
+			match predict_fees(&self.client, settings.tx_sample_count_per_mempool_block).await {
+				Ok(fee) => return Ok(Some(fee)),
+				Err(err) => {
+					tracing::debug!("Could not estimate median mempool fees due to err: {err}. Falling back to native rpc call.");
+				},
+			}
+		}
+
 		if let Some(fee) = self.client.next_block_fee_rate().await? {
 			Ok(Some(fee))
 		} else {
