@@ -61,7 +61,12 @@ const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[
   }) as F;
 };
 
-export type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void> };
+export interface CustomApi extends ApiPromise {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  raw_rpc(method: string, ...args: any[]): Promise<any>;
+}
+
+export type DisposableApiPromise = CustomApi & { [Symbol.asyncDispose](): Promise<void> };
 
 // It is important to cache WS connections because nodes seem to have a
 // limit on how many can be opened at the same time (from the same IP presumably)
@@ -90,6 +95,15 @@ const getCachedSubstrateApi = (endpoint: string) =>
         if (prop === 'disconnect') {
           return async () => {
             // noop
+          };
+        }
+        if (prop === 'raw_rpc') {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          return async (method: string, ...args: any[]) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const provider: WsProvider = (target as any)._rpcCore.provider;
+            const result = await provider.send(method, args);
+            return result;
           };
         }
 

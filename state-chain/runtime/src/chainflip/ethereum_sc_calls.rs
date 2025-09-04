@@ -1,46 +1,86 @@
 use crate::{chainflip::TypeInfo, Decode, Encode, EthereumAddress, Runtime, RuntimeCall};
+use cf_primitives::FlipBalance;
 use codec::MaxEncodedLen;
 use frame_support::{
 	dispatch::{DispatchInfo, GetDispatchInfo},
 	traits::UnfilteredDispatchable,
+	Deserialize, Serialize,
 };
 use pallet_cf_funding::{Call as FundingCall, RedemptionAmount};
 use pallet_cf_validator::Call as ValidatorCall;
-use sp_runtime::traits::Dispatchable;
+use sp_runtime::{traits::Dispatchable, AccountId32};
 
+// Re-export here because it's need to construct the DelegationApi enum.
 pub use pallet_cf_validator::DelegationAmount;
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug)]
-pub enum DelegationApi {
+pub struct EthereumAccount(pub EthereumAddress);
+
+impl EthereumAccount {
+	pub fn into_account_id(&self) -> <Runtime as frame_system::Config>::AccountId {
+		let mut data = [0u8; 32];
+		data[12..32].copy_from_slice(&self.0 .0);
+		AccountId32::new(data)
+	}
+}
+
+#[derive(
+	Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug, Serialize, Deserialize,
+)]
+pub enum DelegationApi<A> {
 	Delegate {
 		operator: <Runtime as frame_system::Config>::AccountId,
-		increase: DelegationAmount<<Runtime as cf_traits::Chainflip>::Amount>,
+		increase: DelegationAmount<A>,
 	},
 	Undelegate {
-		decrease: DelegationAmount<<Runtime as cf_traits::Chainflip>::Amount>,
+		decrease: DelegationAmount<A>,
 	},
 	Redeem {
-		amount: RedemptionAmount<<Runtime as cf_traits::Chainflip>::Amount>,
+		amount: RedemptionAmount<A>,
 		address: EthereumAddress,
 		executor: Option<EthereumAddress>,
 	},
 }
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug)]
-pub enum EthereumSCApi {
-	Delegation(DelegationApi),
+impl<A> DelegationApi<A> {
+	pub fn try_fmap<B, E>(self, f: impl FnOnce(A) -> Result<B, E>) -> Result<DelegationApi<B>, E> {
+		match self {
+			DelegationApi::Delegate { operator, increase } =>
+				Ok(DelegationApi::Delegate { operator, increase: increase.try_fmap(f)? }),
+			DelegationApi::Undelegate { decrease } =>
+				Ok(DelegationApi::Undelegate { decrease: decrease.try_fmap(f)? }),
+			DelegationApi::Redeem { amount, address, executor } =>
+				Ok(DelegationApi::Redeem { amount: amount.try_fmap(f)?, address, executor }),
+		}
+	}
+}
+
+#[derive(
+	Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug, Serialize, Deserialize,
+)]
+#[serde(tag = "API")]
+pub enum EthereumSCApi<A> {
+	Delegation { call: DelegationApi<A> },
 	// reserved for future Apis for example Loan(LoanApi)...
 	// This allows us to update the API without breaking the encoding.
 }
 
-impl UnfilteredDispatchable for EthereumSCApi {
+impl<A> EthereumSCApi<A> {
+	pub fn try_fmap<B, E>(self, f: impl FnOnce(A) -> Result<B, E>) -> Result<EthereumSCApi<B>, E> {
+		match self {
+			EthereumSCApi::Delegation { call } =>
+				Ok(EthereumSCApi::Delegation { call: call.try_fmap(f)? }),
+		}
+	}
+}
+
+impl UnfilteredDispatchable for EthereumSCApi<FlipBalance> {
 	type RuntimeOrigin = <Runtime as frame_system::Config>::RuntimeOrigin;
 	fn dispatch_bypass_filter(
 		self,
 		origin: Self::RuntimeOrigin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		match self {
-			EthereumSCApi::Delegation(delegation_api) => match delegation_api {
+			EthereumSCApi::Delegation { call } => match call {
 				DelegationApi::Delegate { operator, increase } =>
 					RuntimeCall::Validator(ValidatorCall::<Runtime>::delegate {
 						operator,
@@ -62,10 +102,10 @@ impl UnfilteredDispatchable for EthereumSCApi {
 	}
 }
 
-impl GetDispatchInfo for EthereumSCApi {
+impl GetDispatchInfo for EthereumSCApi<FlipBalance> {
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		match self {
-			EthereumSCApi::Delegation(delegation_api) => match delegation_api {
+			EthereumSCApi::Delegation { call } => match call {
 				DelegationApi::Delegate { operator, increase } =>
 					RuntimeCall::Validator(ValidatorCall::<Runtime>::delegate {
 						operator: operator.clone(),
