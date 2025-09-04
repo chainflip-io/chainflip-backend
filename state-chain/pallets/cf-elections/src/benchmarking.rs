@@ -59,6 +59,7 @@ mod benchmarks {
 		.unwrap();
 
 		let epoch = T::EpochInfo::epoch_index();
+		T::EpochInfo::set_authorities(validators.clone().into_iter().map(|v| v.into()).collect());
 		T::EpochInfo::add_authority_info_for_epoch(
 			epoch,
 			validators.clone().into_iter().map(|v| v.into()).collect(),
@@ -79,8 +80,6 @@ mod benchmarks {
 		validator_counts: u32,
 		vote_value: VoteOf<<T as Config<I>>::ElectoralSystemRunner>,
 	) -> ElectionIdentifierOf<T::ElectoralSystemRunner> {
-		// Setup a validator set of validator_counts. 3 is the max, using a bigger value always
-		// result in an authority set of 3.
 		let validators = ready_validator_for_vote::<T, I>(validator_counts);
 		let caller = validators[0].clone();
 		let (election_identifier, ..) = Pallet::<T, I>::electoral_data(&caller.clone().into())
@@ -360,16 +359,20 @@ mod benchmarks {
 
 	#[benchmark]
 	fn clear_election_votes() {
-		// Setup a validator set of 3. 150 breaks, authority set doesn't get correctly initialized
-		// to 150
+		// Setup a validator set of 150.
 		let election_identifier =
-			setup_validators_and_vote::<T, I>(3, BenchmarkValue::benchmark_value());
+			setup_validators_and_vote::<T, I>(150, BenchmarkValue::benchmark_value());
 
 		let call = Call::<T, I>::clear_election_votes {
 			election_identifier,
 			ignore_corrupt_storage: CorruptStorageAdherance::Heed,
 			check_election_exists: true,
 		};
+
+		let epoch = T::EpochInfo::epoch_index();
+		let monotonic_identifier = election_identifier.unique_monotonic();
+
+		ElectionConsensusHistoryUpToDate::<T, I>::insert(monotonic_identifier, epoch);
 
 		#[block]
 		{
@@ -378,17 +381,14 @@ mod benchmarks {
 			);
 		}
 
-		assert!(!ElectionConsensusHistoryUpToDate::<T, I>::contains_key(
-			election_identifier.unique_monotonic()
-		));
+		assert!(!ElectionConsensusHistoryUpToDate::<T, I>::contains_key(monotonic_identifier));
 	}
 
 	#[benchmark]
 	fn invalidate_election_consensus_cache() {
-		// Setup a validator set of 3. 150 breaks, authority set doesn't get correctly initialized
-		// to 150
+		// Setup a validator set of 150.
 		let election_identifier =
-			setup_validators_and_vote::<T, I>(3, BenchmarkValue::benchmark_value());
+			setup_validators_and_vote::<T, I>(150, BenchmarkValue::benchmark_value());
 
 		let call = Call::<T, I>::invalidate_election_consensus_cache {
 			election_identifier,
@@ -399,11 +399,7 @@ mod benchmarks {
 		let epoch = T::EpochInfo::epoch_index();
 		let monotonic_identifier = election_identifier.unique_monotonic();
 
-		Pallet::<T, I>::on_finalize(frame_system::Pallet::<T>::block_number());
-		assert_eq!(
-			ElectionConsensusHistoryUpToDate::<T, I>::get(monotonic_identifier),
-			Some(epoch),
-		);
+		ElectionConsensusHistoryUpToDate::<T, I>::insert(monotonic_identifier, epoch);
 
 		#[block]
 		{
