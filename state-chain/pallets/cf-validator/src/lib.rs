@@ -335,6 +335,11 @@ pub mod pallet {
 	pub type Exceptions<T: Config> =
 		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
+	/// Maps a managed validator to its operator.
+	#[pallet::storage]
+	pub type ManagedValidators<T: Config> =
+		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
+
 	/// Maps a validator to the operators currently claiming it.
 	#[pallet::storage]
 	pub type ClaimedValidators<T: Config> =
@@ -485,6 +490,8 @@ pub mod pallet {
 		AuctionPhase,
 		/// Validator is already associated with an operator.
 		AlreadyManagedByOperator,
+		/// Validator is already claimed by this operator.
+		AlreadyClaimedByOperator,
 		/// Validator does not exist.
 		ValidatorDoesNotExist,
 		/// Not authorized to perform this action.
@@ -507,6 +514,8 @@ pub mod pallet {
 		OperatorStillActive,
 		/// The account does not exist.
 		AccountDoesNotExist,
+		/// The operator already manages the maximum number of validators.
+		TooManyValidators,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -913,7 +922,17 @@ pub mod pallet {
 				T::AccountRoleRegistry::has_account_role(&validator_id, AccountRole::Validator),
 				Error::<T>::NotValidator
 			);
-			ClaimedValidators::<T>::append(&validator_id, &operator);
+			ensure!(
+				ManagedValidators::<T>::get(&operator).len() < MAX_VALIDATORS_PER_OPERATOR,
+				Error::<T>::TooManyValidators
+			);
+			ClaimedValidators::<T>::try_mutate(&validator_id, |claimed| {
+				if !claimed.insert(operator.clone()) {
+					Err(Error::<T>::AlreadyClaimedByOperator)
+				} else {
+					Ok(())
+				}
+			})?;
 			Self::deposit_event(Event::ValidatorClaimed { validator: validator_id, operator });
 			Ok(())
 		}
@@ -937,6 +956,9 @@ pub mod pallet {
 			})?;
 
 			OperatorChoice::<T>::insert(&validator_id, &operator);
+			ManagedValidators::<T>::mutate(&operator, |validators| {
+				validators.insert(validator_id.clone());
+			});
 
 			Self::deposit_event(Event::OperatorAcceptedByValidator {
 				validator: validator_id,
@@ -1133,6 +1155,7 @@ pub mod pallet {
 				Self::deposit_event(Event::Undelegated { delegator, operator: operator.clone() });
 			}
 
+			ManagedValidators::<T>::remove(&operator);
 			Exceptions::<T>::remove(&operator);
 			OperatorSettingsLookup::<T>::remove(&operator);
 
@@ -1825,19 +1848,23 @@ impl<T: Config> Pallet<T> {
 		association: AssociationToOperator,
 		f: impl Fn(&T::AccountId) -> R,
 	) -> BTreeMap<T::AccountId, R> {
+		let apply_f = |acct| {
+			let r = f(&acct);
+			(acct, r)
+		};
 		match association {
-			AssociationToOperator::Validator => OperatorChoice::<T>::iter(),
-			AssociationToOperator::Delegator => DelegationChoice::<T>::iter(),
+			AssociationToOperator::Validator =>
+				ManagedValidators::<T>::get(operator).into_iter().map(apply_f).collect(),
+			AssociationToOperator::Delegator => DelegationChoice::<T>::iter()
+				.filter_map(|(account_id, managing_operator)| {
+					if managing_operator == *operator {
+						Some(apply_f(account_id))
+					} else {
+						None
+					}
+				})
+				.collect(),
 		}
-		.filter_map(|(account_id, managing_operator)| {
-			if managing_operator == *operator {
-				let r = f(&account_id);
-				Some((account_id, r))
-			} else {
-				None
-			}
-		})
-		.collect()
 	}
 
 	/// Builds the delegation snapshots for the next epoch.
