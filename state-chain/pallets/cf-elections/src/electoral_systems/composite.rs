@@ -273,7 +273,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                         },)*
                         // If election ID and vote are not belonging to the same electoral system
                         #[allow(unreachable_patterns)]
-                        _ => Err(DispatchError::Other("VoteMisMatch")),
+                        _ => Err(DispatchError::Other("VoteMismatch")),
                     }
                 }
 
