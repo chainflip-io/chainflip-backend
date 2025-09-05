@@ -1891,19 +1891,20 @@ impl<T: Config> Pallet<T> {
 
 		for (delegator, operator) in DelegationChoice::<T>::iter() {
 			if let Some(snapshot) = snapshots.get_mut(&operator) {
-				let delegator_balance = T::FundingInfo::balance(&delegator);
-				snapshot.delegators.insert(
-					delegator.clone(),
-					if let Some(max_bid) = MaxDelegationBid::<T>::get(delegator.clone()) {
-						core::cmp::min(max_bid, delegator_balance)
-					} else {
-						delegator_balance
-					},
-				);
+				snapshot.delegators.insert(delegator.clone(), Self::delegator_bid(&delegator));
 			}
 		}
 
 		(snapshots, independent_bidders)
+	}
+
+	pub fn delegator_bid(delegator: &T::AccountId) -> T::Amount {
+		let delegator_balance = T::FundingInfo::balance(delegator);
+		if let Some(max_bid) = MaxDelegationBid::<T>::get(delegator) {
+			core::cmp::min(max_bid, delegator_balance)
+		} else {
+			delegator_balance
+		}
 	}
 }
 
