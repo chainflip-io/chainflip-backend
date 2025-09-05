@@ -2723,8 +2723,14 @@ pub mod auction_optimization {
 				.into_iter()
 				.map(|(b1, b2)| {
 					(
-						b1.into_iter().map(|b| b % FLIP_MAX_SUPPLY).collect(),
-						b2.into_iter().map(|b| b % FLIP_MAX_SUPPLY).collect(),
+						b1.into_iter()
+							.take(MAX_VALIDATORS_PER_OPERATOR)
+							.map(|b| b % FLIP_MAX_SUPPLY)
+							.collect(),
+						b2.into_iter()
+							.take(MAX_VALIDATORS_PER_OPERATOR)
+							.map(|b| b % FLIP_MAX_SUPPLY)
+							.collect(),
 						Default::default(),
 						Default::default(),
 					)
