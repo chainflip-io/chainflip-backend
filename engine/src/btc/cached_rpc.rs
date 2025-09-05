@@ -12,6 +12,8 @@ use tokio::sync::mpsc;
 
 #[derive(Clone)]
 pub struct BtcCachingClient {
+	uncached_client: BtcRetryRpcClient,
+
 	block: CachingRequest<BlockHash, VerboseBlock, BtcRetryRpcClient>,
 	block_hash: CachingRequest<BlockNumber, BlockHash, BtcRetryRpcClient>,
 	send_raw_transaction: CachingRequest<Vec<u8>, Txid, BtcRetryRpcClient>,
@@ -19,9 +21,6 @@ pub struct BtcCachingClient {
 	avg_fee_rate: CachingRequest<BlockHash, BtcAmount, BtcRetryRpcClient>,
 	block_header: CachingRequest<BlockHash, BlockHeader, BtcRetryRpcClient>,
 	best_block_hash: CachingRequest<(), BlockHash, BtcRetryRpcClient>,
-	mempool_info: CachingRequest<(), MempoolInfo, BtcRetryRpcClient>,
-	raw_mempool: CachingRequest<(), Vec<Txid>, BtcRetryRpcClient>,
-	mempool_entries: CachingRequest<Vec<Txid>, Vec<MempoolTransaction>, BtcRetryRpcClient>,
 
 	pub cache_invalidation_senders: Vec<mpsc::Sender<()>>,
 }
@@ -45,15 +44,8 @@ impl BtcCachingClient {
 			CachingRequest::<BlockHash, BlockHeader, BtcRetryRpcClient>::new(scope, client.clone());
 		let (best_block_hash, best_block_hash_cache) =
 			CachingRequest::<(), BlockHash, BtcRetryRpcClient>::new(scope, client.clone());
-		let (mempool_info, mempool_info_cache) =
-			CachingRequest::<(), MempoolInfo, BtcRetryRpcClient>::new(scope, client.clone());
-		let (raw_mempool, raw_mempool_cache) =
-			CachingRequest::<(), Vec<Txid>, BtcRetryRpcClient>::new(scope, client.clone());
-		let (mempool_entries, mempool_entries_cache) =
-			CachingRequest::<Vec<Txid>, Vec<MempoolTransaction>, BtcRetryRpcClient>::new(
-				scope, client,
-			);
 		BtcCachingClient {
+			uncached_client: client,
 			block,
 			block_hash,
 			send_raw_transaction,
@@ -61,9 +53,6 @@ impl BtcCachingClient {
 			avg_fee_rate,
 			block_header,
 			best_block_hash,
-			mempool_info,
-			raw_mempool,
-			mempool_entries,
 			cache_invalidation_senders: vec![
 				block_cache,
 				block_hash_cache,
@@ -72,9 +61,6 @@ impl BtcCachingClient {
 				avg_fee_rate_cache,
 				block_header_cache,
 				best_block_hash_cache,
-				mempool_info_cache,
-				raw_mempool_cache,
-				mempool_entries_cache,
 			],
 		}
 	}
@@ -169,40 +155,14 @@ impl BtcRpcApi for BtcCachingClient {
 	}
 
 	async fn mempool_info(&self) -> anyhow::Result<MempoolInfo> {
-		self.mempool_info
-			.get_or_fetch(
-				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.mempool_info().await })
-				}),
-				(),
-			)
-			.await
+		self.uncached_client.mempool_info().await
 	}
 
 	async fn raw_mempool(&self) -> anyhow::Result<Vec<Txid>> {
-		self.raw_mempool
-			.get_or_fetch(
-				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.raw_mempool().await })
-				}),
-				(),
-			)
-			.await
+		self.uncached_client.raw_mempool().await
 	}
 
 	async fn mempool_entries(&self, txids: Vec<Txid>) -> anyhow::Result<Vec<MempoolTransaction>> {
-		let txids_c = txids.clone();
-		self.mempool_entries
-			.get_or_fetch(
-				Box::pin(move |client| {
-					let txids_c = txids_c.clone();
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.mempool_entries(txids_c).await })
-				}),
-				txids,
-			)
-			.await
+		self.uncached_client.mempool_entries(txids).await
 	}
 }

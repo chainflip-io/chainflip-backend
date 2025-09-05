@@ -29,8 +29,7 @@ pub async fn predict_fees(
 	let info = client.mempool_info().await?;
 
 	if info.size == 0 || info.bytes == 0 {
-		tracing::debug!("mempool is empty, assuming fee = 0");
-		return Ok(0);
+		return Err(anyhow!("mempool is empty"));
 	}
 
 	// -- average vbytes per tx --
