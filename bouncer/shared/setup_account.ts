@@ -85,7 +85,7 @@ export async function setupOperatorAccount(logger: Logger, uri: string) {
       const nonce = await chainflip.rpc.system.accountNextIndex(operator.address);
       await chainflip.tx.validator
         .registerAsOperator({
-          feeBps: 200,
+          feeBps: 2_000,
           delegationAcceptance: 'Allow',
         })
         .signAndSend(operator, { nonce }, handleSubstrateError(chainflip));
