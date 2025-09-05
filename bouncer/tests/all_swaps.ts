@@ -10,6 +10,7 @@ import {
 } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
 import { manuallyAddTestToList, concurrentTest } from 'shared/utils/vitest';
+import { SwapContext } from 'shared/utils/swap_context';
 
 export async function initiateSwap(
   testContext: TestContext,
@@ -103,17 +104,24 @@ export function testAllSwaps(timeoutPerSwap: number) {
     });
   });
 
-  // Swaps from/to assethub paired with random chains
+  // Swaps from assethub paired with random chains.
+  // NOTE: we don't test swaps *to* assethub here, those tests are run sequentially in
+  // `testSwapsToAssethub`.
   const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
   assethubAssets.forEach((hubAsset) => {
     appendSwap(hubAsset, randomElement(AssetsWithoutAssethub), testSwap);
-    appendSwap(randomElement(AssetsWithoutAssethub), hubAsset, testSwap);
   });
-  appendSwap('ArbEth', 'HubDot', testVaultSwap);
-  appendSwap('ArbEth', 'HubUsdc', testVaultSwap);
-  appendSwap('ArbEth', 'HubUsdt', testVaultSwap);
 
   for (const swap of allSwaps) {
     concurrentTest(`AllSwaps > ${swap.name}`, swap.test, timeoutPerSwap, true);
+  }
+}
+
+export async function testSwapsToAssethub(testContext: TestContext) {
+  // we run three swaps to assethub in sequence. Otherweise there can be nonce issues,
+  // which caused bouncer flakiness in the past.
+  for (const destinationAsset of ['HubDot', 'HubUsdc', 'HubUsdt'] as Asset[]) {
+    const logger = testContext.logger.child({ tag: `ArbEth to ${destinationAsset}` });
+    await testSwap(logger, 'ArbEth', destinationAsset, undefined, undefined, new SwapContext());
   }
 }
