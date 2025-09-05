@@ -465,7 +465,8 @@ impl UpdateFeeHook<BtcAmount> for BitcoinFeeUpdateHook {
 derive_common_traits! {
 	#[derive(TypeInfo)]
 	pub struct BitcoinFeeSettings {
-		pub tx_sample_count_per_mempool_block: u32
+		pub tx_sample_count_per_mempool_block: u32,
+		pub fixed_median_fee_adjustement_sat_per_vkilobyte: BtcAmount,
 	}
 }
 pub type BitcoinFeeTracking = UnsafeMedian<
@@ -627,7 +628,10 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 			Default::default(),
 			Default::default(),
 			Default::default(),
-			BitcoinFeeSettings { tx_sample_count_per_mempool_block: 20 },
+			BitcoinFeeSettings {
+				tx_sample_count_per_mempool_block: 20,
+				fixed_median_fee_adjustement_sat_per_vkilobyte: 1000,
+			},
 			LIVENESS_CHECK_DURATION,
 		),
 		shared_data_reference_lifetime: 8,

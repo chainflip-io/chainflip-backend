@@ -274,7 +274,8 @@ impl VoterApi<BitcoinFeeTracking> for BitcoinFeeVoter {
 	) -> Result<Option<VoteOf<BitcoinFeeTracking>>, anyhow::Error> {
 		if settings.tx_sample_count_per_mempool_block > 0 {
 			match predict_fees(&self.client, settings.tx_sample_count_per_mempool_block).await {
-				Ok(fee) => return Ok(Some(fee)),
+				Ok(fee) =>
+					return Ok(Some(fee + settings.fixed_median_fee_adjustement_sat_per_vkilobyte)),
 				Err(err) => {
 					tracing::debug!("Could not estimate median mempool fees due to err: {err}. Falling back to native rpc call.");
 				},

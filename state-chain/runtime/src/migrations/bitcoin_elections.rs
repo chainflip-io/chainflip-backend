@@ -451,7 +451,17 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 			for (id, (a, b, c, d, (), f)) in settings_entries {
 				pallet_cf_elections::ElectoralSettings::<Runtime, BitcoinInstance>::insert(
 					id,
-					(a, b, c, d, BitcoinFeeSettings { tx_sample_count_per_mempool_block: 20 }, f),
+					(
+						a,
+						b,
+						c,
+						d,
+						BitcoinFeeSettings {
+							tx_sample_count_per_mempool_block: 20,
+							fixed_median_fee_adjustement_sat_per_vkilobyte: 1000,
+						},
+						f,
+					),
 				);
 			}
 		}
@@ -522,7 +532,10 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 			|(_id, settings)| {
 				assert_eq!(
 					settings.4,
-					BitcoinFeeSettings { tx_sample_count_per_mempool_block: 20 }
+					BitcoinFeeSettings {
+						tx_sample_count_per_mempool_block: 20,
+						fixed_median_fee_adjustement_sat_per_vkilobyte: 1000
+					}
 				);
 			},
 		);
