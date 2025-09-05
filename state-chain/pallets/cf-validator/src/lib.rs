@@ -335,7 +335,7 @@ pub mod pallet {
 	pub type Exceptions<T: Config> =
 		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
-	/// Maps a managed validator to its operator.
+	/// Maps operators to a list of their managed validators.
 	#[pallet::storage]
 	pub type ManagedValidators<T: Config> =
 		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
