@@ -21,7 +21,7 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
-	evm::{Signature as EthereumSignature, U256},
+	evm::{encode, Signature as EthereumSignature, Token, H256, U256},
 	sol::{SolAddress, SolSignature},
 	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersCheckedInternal,
 	ChannelRefundParametersUncheckedEncoded, SwapOrigin,
@@ -375,6 +375,54 @@ pub enum UserActionsApi {
 	Lending(LendingApi),
 	// reserved for future Apis for example Swap(SwapApi)...
 	// This allows us to update the API without breaking the encoding.
+}
+
+// We should probably do some  macro to pull each of the types, stringify it in a EIP712 format
+// and the compute the values for the tokens. For now we do it manially to keep it simple.
+// properly in the EIP712 format.
+impl UserActionsApi {
+	// NOTE: When there’s a nested struct, EIP-712 requires including
+	// the dependency in the type string.
+	// i.e. we must append the full definition of Metadata.
+	pub fn eip712_type_str_with_metadata(
+		&self,
+		metadata_type_str: &str,
+	) -> scale_info::prelude::string::String {
+		match self {
+			UserActionsApi::Lending(LendingApi::Borrow { .. }) => {
+				scale_info::prelude::format!(
+                    "Borrow(uint256 amount,string collateralAsset,string borrowAsset,Metadata metadata){}",
+                    metadata_type_str
+                )
+			}, // Add more variants here as needed
+		}
+	}
+
+	pub fn encode_eip_712_message_with_metadata(
+		&self,
+		metadata_hash: H256,
+		metadata_type_str: &str,
+	) -> Vec<u8> {
+		let action_type_str = self.eip712_type_str_with_metadata(metadata_type_str);
+		let action_type_hash = Keccak256::hash(action_type_str.as_bytes());
+		match self {
+			UserActionsApi::Lending(LendingApi::Borrow {
+				amount,
+				collateral_asset,
+				borrow_asset,
+			}) => {
+				let tokens = vec![
+					Token::FixedBytes(action_type_hash.as_bytes().to_vec()),
+					Token::Uint(U256::from(*amount)),
+					Token::FixedBytes(Keccak256::hash(collateral_asset.as_bytes()).0.to_vec()),
+					Token::FixedBytes(Keccak256::hash(borrow_asset.as_bytes()).0.to_vec()),
+					Token::FixedBytes(metadata_hash.as_bytes().to_vec()),
+				];
+
+				encode(&tokens)
+			},
+		}
+	}
 }
 
 /// This impl is never used. This is purely used to satisfy trait requirement
@@ -1551,8 +1599,7 @@ pub mod pallet {
 								user_metadata.clone().encode(),
 							]
 							.concat();
-							let prefix_bytes = b"\xffsolana offchain";
-							[prefix_bytes.as_ref(), concat_data.as_slice()].concat()
+							[SOLANA_OFFCHAIN_PREFIX, concat_data.as_slice()].concat()
 						},
 					};
 					(
@@ -1571,7 +1618,8 @@ pub mod pallet {
 							]
 							.concat();
 							let prefix = scale_info::prelude::format!(
-								"\x19Ethereum Signed Message:\n{}",
+								"{}{}",
+								ETHEREUM_SIGN_MESSAGE_PREFIX,
 								concat_data.len()
 							);
 							let prefix_bytes = prefix.as_bytes();
@@ -3027,19 +3075,25 @@ pub(crate) mod utilities {
 	}
 }
 
+const EIP712_DOMAIN_TYPE_STR: &str = "EIP712Domain(string name,string version,uint256 chainId)";
+const EIP712_DOMAIN_NAME: &str = "Chainflip";
+const EIP712_DOMAIN_VERSION: &str = "0";
+const EIP712_METADATA_TYPE_STR: &str = "Metadata(address from,uint256 nonce,uint256 expiryBlock)";
+const EIP712_DOMAIN_PREFIX: [u8; 2] = [0x19, 0x01];
+const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
+const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
+
 pub fn build_eip_712_hash(
 	user_action: UserActionsApi,
 	user_metadata: UserMetadata,
 	signer: EthereumAddress,
 ) -> Vec<u8> {
-	use cf_chains::evm::{encode, Token};
 	// -----------------
 	// Domain separator
 	// -----------------
-	let type_str = "EIP712Domain(string name,string version,uint256 chainId)";
-	let type_hash = Keccak256::hash(type_str.as_bytes());
-	let name_hash = Keccak256::hash("Chainflip".as_bytes());
-	let version_hash = Keccak256::hash("0".as_bytes());
+	let type_hash = Keccak256::hash(EIP712_DOMAIN_TYPE_STR.as_bytes());
+	let name_hash = Keccak256::hash(EIP712_DOMAIN_NAME.as_bytes());
+	let version_hash = Keccak256::hash(EIP712_DOMAIN_VERSION.as_bytes());
 	let chain_id = get_current_chain_id();
 
 	let tokens = vec![
@@ -3056,9 +3110,8 @@ pub fn build_eip_712_hash(
 	// -----------------
 	// Metadata struct
 	// -----------------
-	let metadata_type_str = "Metadata(address from,uint256 nonce,uint256 expiryBlock)";
+	let metadata_type_str = EIP712_METADATA_TYPE_STR;
 	let metadata_type_hash = Keccak256::hash(metadata_type_str.as_bytes());
-
 	let metadata_tokens = vec![
 		Token::FixedBytes(metadata_type_hash.as_bytes().to_vec()),
 		Token::Address(signer),
@@ -3069,36 +3122,15 @@ pub fn build_eip_712_hash(
 	let metadata_hash = Keccak256::hash(&encoded_metadata);
 
 	// -----------------
-	// Borrow struct
+	// Message struct
 	// -----------------
-	// NOTE: When there’s a nested struct, EIP-712 requires including
-	// the dependency in the type string.
-	// i.e. we must append the full definition of Metadata.
-	let borrow_type_str = scale_info::prelude::format!(
-		"Borrow(uint256 amount,string collateralAsset,string borrowAsset,Metadata metadata){}",
-		metadata_type_str
-	);
-	let borrow_type_hash = Keccak256::hash(borrow_type_str.as_bytes());
-
-	let message_hash = match user_action {
-		UserActionsApi::Lending(LendingApi::Borrow { amount, collateral_asset, borrow_asset }) => {
-			let tokens = vec![
-				Token::FixedBytes(borrow_type_hash.as_bytes().to_vec()),
-				Token::Uint(U256::from(amount)),
-				Token::FixedBytes(Keccak256::hash(collateral_asset.as_bytes()).0.to_vec()),
-				Token::FixedBytes(Keccak256::hash(borrow_asset.as_bytes()).0.to_vec()),
-				Token::FixedBytes(metadata_hash.as_bytes().to_vec()),
-			];
-
-			let encoded_message = encode(&tokens);
-			Keccak256::hash(&encoded_message)
-		},
-	};
-
+	let encoded_message =
+		user_action.encode_eip_712_message_with_metadata(metadata_hash, metadata_type_str);
+	let message_hash = Keccak256::hash(&encoded_message);
 	// -----------------
 	// EIP712 digest
 	// -----------------
-	let mut encoded_final = vec![0x19, 0x01];
+	let mut encoded_final = EIP712_DOMAIN_PREFIX.to_vec();
 	encoded_final.extend_from_slice(domain_separator.0.as_slice());
 	encoded_final.extend_from_slice(message_hash.0.as_slice());
 	encoded_final
@@ -3110,7 +3142,7 @@ mod test {
 	use std::str::FromStr;
 
 	#[test]
-	fn testing() {
+	fn test_verify_eip_712() {
 		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 		let from: EthereumAddress = EthereumAddress::from_str(from_str).unwrap();
 		let metadata = UserMetadata { nonce: 1, expiry_block: 10000 };
@@ -3140,7 +3172,7 @@ mod test {
 	}
 
 	#[test]
-	fn test_verify_eip_712() {
+	fn test_verify_evm() {
 		use cf_chains::{evm::EvmCrypto, ChainCrypto};
 		// Data before hashing
 		let signed_payload =  hex_literal::hex!("1901027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a255d3cf70c7277187d769dc8701e55bbdfccf6300732bb6513f86614f6267a6f4db");
@@ -3169,16 +3201,5 @@ mod test {
 
 		let success = SolanaCrypto::verify_signature(&signer, &signed_payload, &signature);
 		assert!(success, "Signature verification failed");
-	}
-
-	#[test]
-	fn test_encode_user_action() {
-		let user_action = UserActionsApi::Lending(LendingApi::Borrow {
-			amount: 1234,
-			collateral_asset: Asset::Btc,
-			borrow_asset: Asset::Usdc,
-		});
-		let encoded = user_action.encode();
-		println!("Encoded user action: {:?}", encoded);
 	}
 }
