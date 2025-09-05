@@ -292,7 +292,7 @@ impl pallet_cf_validator::Config for Runtime {
 							pallet_cf_validator::QualifyByCfeVersion<Self>,
 							(
 								ReputationPointsQualification<Self>,
-								pallet_cf_validator::QualifyByMinimumBid<Self>,
+								pallet_cf_validator::QualifyByMinimumStake<Self>,
 							),
 						),
 					),

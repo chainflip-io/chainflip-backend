@@ -783,11 +783,9 @@ fn test_expect_validator_register_fails() {
 		const ID: u64 = 42;
 		assert_ok!(ValidatorPallet::update_pallet_config(
 			RawOrigin::Root.into(),
-			PalletConfigUpdate::RegistrationBondPercentage {
-				percentage: Percent::from_percent(60),
-			},
+			PalletConfigUpdate::MinimumValidatorStake { min_stake: 10_000 },
 		));
-		MockFlip::credit_funds(&ID, Percent::from_percent(40) * GENESIS_BOND);
+		MockFlip::credit_funds(&ID, 5_000 * FLIPPERINOS_PER_FLIP);
 		// Reduce the set size target to the current authority count.
 		assert_ok!(Pallet::<Test>::update_pallet_config(
 			RawOrigin::Root.into(),
@@ -816,7 +814,7 @@ fn test_expect_validator_register_fails() {
 		));
 		// It should be possible to register now since the actual size is below the target.
 		assert_ok!(Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)));
-		MockFlip::credit_funds(&ID, Percent::from_percent(20) * GENESIS_BOND);
+		MockFlip::credit_funds(&ID, 2_000 * FLIPPERINOS_PER_FLIP);
 		// Trying to register again passes the funding check but fails for other reasons.
 		assert_noop!(
 			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)),
@@ -1476,7 +1474,7 @@ fn validator_set_change_propagates_to_session_pallet() {
 fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
 		const NEW_REDEMPTION_PERIOD_AS_PERCENTAGE: Percent = Percent::from_percent(10);
-		const NEW_REGISTRATION_BOND_PERCENTAGE: Percent = Percent::from_percent(10);
+		const NEW_MINIMUM_VALIDATOR_STAKE: u32 = 20_000;
 		const NEW_AUTHORITY_SET_MIN_SIZE: u32 = 0;
 		const NEW_EPOCH_DURATION: u32 = 1;
 		const NEW_AUCTION_PARAMETERS: SetSizeParameters =
@@ -1490,7 +1488,10 @@ fn can_update_all_config_items() {
 			RedemptionPeriodAsPercentage::<Test>::get(),
 			NEW_REDEMPTION_PERIOD_AS_PERCENTAGE
 		);
-		assert_ne!(RegistrationBondPercentage::<Test>::get(), NEW_REGISTRATION_BOND_PERCENTAGE);
+		assert_ne!(
+			MinimumValidatorStake::<Test>::get(),
+			FLIPPERINOS_PER_FLIP.saturating_mul(NEW_MINIMUM_VALIDATOR_STAKE.into())
+		);
 		assert_ne!(AuthoritySetMinSize::<Test>::get(), NEW_AUTHORITY_SET_MIN_SIZE);
 		assert_ne!(EpochDuration::<Test>::get(), NEW_EPOCH_DURATION as u64);
 		assert_ne!(AuctionParameters::<Test>::get(), NEW_AUCTION_PARAMETERS);
@@ -1506,9 +1507,7 @@ fn can_update_all_config_items() {
 			PalletConfigUpdate::RedemptionPeriodAsPercentage {
 				percentage: NEW_REDEMPTION_PERIOD_AS_PERCENTAGE,
 			},
-			PalletConfigUpdate::RegistrationBondPercentage {
-				percentage: NEW_REGISTRATION_BOND_PERCENTAGE,
-			},
+			PalletConfigUpdate::MinimumValidatorStake { min_stake: NEW_MINIMUM_VALIDATOR_STAKE },
 			PalletConfigUpdate::AuthoritySetMinSize { min_size: NEW_AUTHORITY_SET_MIN_SIZE },
 			PalletConfigUpdate::EpochDuration { blocks: NEW_EPOCH_DURATION },
 			PalletConfigUpdate::AuctionParameters { parameters: NEW_AUCTION_PARAMETERS },
@@ -1533,7 +1532,10 @@ fn can_update_all_config_items() {
 			RedemptionPeriodAsPercentage::<Test>::get(),
 			NEW_REDEMPTION_PERIOD_AS_PERCENTAGE
 		);
-		assert_eq!(RegistrationBondPercentage::<Test>::get(), NEW_REGISTRATION_BOND_PERCENTAGE);
+		assert_eq!(
+			MinimumValidatorStake::<Test>::get(),
+			FLIPPERINOS_PER_FLIP.saturating_mul(NEW_MINIMUM_VALIDATOR_STAKE.into())
+		);
 		assert_eq!(AuthoritySetMinSize::<Test>::get(), NEW_AUTHORITY_SET_MIN_SIZE);
 		assert_eq!(EpochDuration::<Test>::get(), NEW_EPOCH_DURATION as u64);
 		assert_eq!(AuctionParameters::<Test>::get(), NEW_AUCTION_PARAMETERS);

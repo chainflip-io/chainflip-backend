@@ -75,8 +75,9 @@ type Ed25519Signature = ed25519::Signature;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
-	RegistrationBondPercentage {
-		percentage: Percent,
+	/// Note the `min_stake` is in whole FLIP, not flipperinos.
+	MinimumValidatorStake {
+		min_stake: u32,
 	},
 	RedemptionPeriodAsPercentage {
 		percentage: Percent,
@@ -299,11 +300,9 @@ pub mod pallet {
 	#[pallet::getter(fn auction_parameters)]
 	pub(super) type AuctionParameters<T: Config> = StorageValue<_, SetSizeParameters, ValueQuery>;
 
-	/// An account's balance must be at least this percentage of the current bond in order to
-	/// register as a validator.
+	/// A validator's balance must be equal or above this amount to be qualified for the auction.
 	#[pallet::storage]
-	#[pallet::getter(fn registration_mab_percentage)]
-	pub(super) type RegistrationBondPercentage<T: Config> = StorageValue<_, Percent, ValueQuery>;
+	pub(super) type MinimumValidatorStake<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
 	/// Determines the minimum version that each CFE must report to be considered qualified
 	/// for Keygen.
@@ -318,7 +317,8 @@ pub mod pallet {
 	pub(super) type MaxAuthoritySetContractionPercentage<T: Config> =
 		StorageValue<_, Percent, ValueQuery>;
 
-	/// Minimum bid amount required to participate in auctions.
+	/// Minimum bid amount (including delegated bids) required to enter the auction. The auction
+	/// cannot resolve with a bond below this amount.
 	#[pallet::storage]
 	pub type MinimumAuctionBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
@@ -655,8 +655,10 @@ pub mod pallet {
 				PalletConfigUpdate::RedemptionPeriodAsPercentage { percentage } => {
 					<RedemptionPeriodAsPercentage<T>>::put(percentage);
 				},
-				PalletConfigUpdate::RegistrationBondPercentage { percentage } => {
-					<RegistrationBondPercentage<T>>::put(percentage);
+				PalletConfigUpdate::MinimumValidatorStake { min_stake } => {
+					<MinimumValidatorStake<T>>::set(
+						FLIPPERINOS_PER_FLIP.saturating_mul(min_stake.into()).into(),
+					);
 				},
 				PalletConfigUpdate::AuthoritySetMinSize { min_size } => {
 					ensure!(
@@ -831,7 +833,7 @@ pub mod pallet {
 			if Self::current_authority_count() >= AuctionParameters::<T>::get().max_size {
 				ensure!(
 					T::FundingInfo::total_balance_of(&account_id) >=
-						RegistrationBondPercentage::<T>::get() * Self::bond(),
+						MinimumValidatorStake::<T>::get(),
 					Error::<T>::NotEnoughFunds
 				);
 			}
@@ -1555,6 +1557,8 @@ impl<T: Config> Pallet<T> {
 		let (delegation_snapshots, independent_bids) =
 			Self::build_delegation_snapshots::<T::KeygenQualification>();
 
+		let minimum_auction_bid = MinimumAuctionBid::<T>::get();
+
 		let auction_bids = |delegation_snapshots: &BTreeMap<
 			T::AccountId,
 			DelegationSnapshot<T>,
@@ -1564,7 +1568,13 @@ impl<T: Config> Pallet<T> {
 				.values()
 				.flat_map(|snapshot| snapshot.effective_validator_bids())
 				.chain(independent_bids.clone())
-				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
+				.filter_map(|(bidder_id, amount)| {
+					if amount >= minimum_auction_bid {
+						Some(Bid { bidder_id, amount })
+					} else {
+						None
+					}
+				})
 				.collect::<Vec<_>>()
 		};
 
@@ -1595,6 +1605,8 @@ impl<T: Config> Pallet<T> {
 		let (mut delegation_snapshots, independent_bids) =
 			Self::build_delegation_snapshots::<T::KeygenQualification>();
 
+		let minimum_auction_bid = MinimumAuctionBid::<T>::get();
+
 		let auction_bids = |delegation_snapshots: &BTreeMap<
 			T::AccountId,
 			DelegationSnapshot<T>,
@@ -1604,7 +1616,13 @@ impl<T: Config> Pallet<T> {
 				.values()
 				.flat_map(|snapshot| snapshot.effective_validator_bids())
 				.chain(independent_bids.clone())
-				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
+				.filter_map(|(bidder_id, amount)| {
+					if amount >= minimum_auction_bid {
+						Some(Bid { bidder_id, amount })
+					} else {
+						None
+					}
+				})
 				.collect::<Vec<_>>()
 		};
 
@@ -2058,17 +2076,17 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 	}
 }
 
-pub struct QualifyByMinimumBid<T>(PhantomData<T>);
+pub struct QualifyByMinimumStake<T>(PhantomData<T>);
 
-impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumBid<T> {
+impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumStake<T> {
 	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
-		T::FundingInfo::balance(validator_id.into_ref()) >= MinimumAuctionBid::<T>::get()
+		T::FundingInfo::balance(validator_id.into_ref()) >= MinimumValidatorStake::<T>::get()
 	}
 
 	fn filter_qualified(
 		validators: BTreeSet<<T as Chainflip>::ValidatorId>,
 	) -> BTreeSet<<T as Chainflip>::ValidatorId> {
-		let min_bid = MinimumAuctionBid::<T>::get();
+		let min_bid = MinimumValidatorStake::<T>::get();
 		validators
 			.into_iter()
 			.filter(|id| T::FundingInfo::balance(id.into_ref()) >= min_bid)
