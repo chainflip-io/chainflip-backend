@@ -5,7 +5,7 @@ import { testPolkadotRuntimeUpdate } from 'tests/polkadot_runtime_update';
 import { checkSolEventAccountsClosure } from 'shared/sol_vault_swap';
 import { checkAvailabilityAllSolanaNonces } from 'shared/utils';
 import { swapLessThanED } from 'tests/swap_less_than_existential_deposit_dot';
-import { testAllSwaps } from 'tests/all_swaps';
+import { testAllSwaps, testSwapsToAssethub } from 'tests/all_swaps';
 import { testEvmDeposits } from 'tests/evm_deposits';
 import { testMultipleMembersGovernance } from 'tests/multiple_members_governance';
 import { testLpApi } from 'tests/lp_api_test';
@@ -29,6 +29,7 @@ describe('ConcurrentTests', () => {
 
   concurrentTest('SwapLessThanED', swapLessThanED, 180);
   testAllSwaps(numberOfNodes === 1 ? 180 : 240); // TODO: find out what the 3-node timeout should be
+  concurrentTest('SwapsToAssethub', testSwapsToAssethub, 600);
   concurrentTest('EvmDeposits', testEvmDeposits, 300);
   concurrentTest('FundRedeem', testFundRedeem, 600);
   concurrentTest('LpApi', testLpApi, 240);
@@ -44,7 +45,7 @@ describe('ConcurrentTests', () => {
   // TODO: figure out how to make it less flaky.
   // WHEN CHANGING ANYTHING RELATED TO ASSETHUB OR XCM, run this test locally.
   // concurrentTest('AssethubXCM', testAssethubXcm, 200);
-  concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 60);
+  concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 140);
   concurrentTest('DelegateFlip', (context) => testDelegate(context.logger), 360);
   concurrentTest(
     'SwapAndFundAccountViaCCM',

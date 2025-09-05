@@ -8564,7 +8564,7 @@ dependencies = [
  "pallet-cf-reputation",
  "pallet-session",
  "parity-scale-codec",
- "proptest 1.6.0",
+ "proptest",
  "proptest-derive",
  "scale-info",
  "serde",
