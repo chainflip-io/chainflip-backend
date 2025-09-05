@@ -2574,13 +2574,13 @@ pub mod auction_optimization {
 		for bid in op_1_bids {
 			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_1), bid.bidder_id));
 			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(bid.bidder_id), OP_1));
-			assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+			assert!(OperatorChoice::<Test>::get(bid.bidder_id).is_some());
 		}
 
 		for bid in op_2_bids {
 			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_2), bid.bidder_id));
 			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(bid.bidder_id), OP_2));
-			assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+			assert!(OperatorChoice::<Test>::get(bid.bidder_id).is_some());
 		}
 	}
 
@@ -2761,7 +2761,7 @@ pub mod auction_optimization {
 									snapshot.operator
 								);
 								assert_eq!(
-									ManagedValidators::<Test>::get(val).unwrap(),
+									OperatorChoice::<Test>::get(val).unwrap(),
 									snapshot.operator
 								)
 							})
