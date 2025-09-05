@@ -900,7 +900,7 @@ fn basic_liquidation() {
 			System::assert_has_event(RuntimeEvent::LendingPools(
 				Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
-					swap_request_ids: vec![LIQUIDATION_SWAP_1],
+					swaps: BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_1])]),
 					is_hard: false,
 				},
 			));
@@ -1000,7 +1000,7 @@ fn basic_liquidation() {
 			System::assert_has_event(RuntimeEvent::LendingPools(
 				Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
-					swap_request_ids: vec![LIQUIDATION_SWAP_2],
+					swaps: BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_2])]),
 					is_hard: true,
 				},
 			));
@@ -1647,7 +1647,7 @@ fn init_liquidation_swaps_test() {
 
 		System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 			borrower_id: BORROWER,
-			swap_request_ids: vec![SWAP_1, SWAP_2, SWAP_3, SWAP_4],
+			swaps: BTreeMap::from([(LOAN_1, vec![SWAP_1, SWAP_3]), (LOAN_2, vec![SWAP_2, SWAP_4])]),
 			is_hard: false,
 		}));
 

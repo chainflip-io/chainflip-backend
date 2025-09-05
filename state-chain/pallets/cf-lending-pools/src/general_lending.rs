@@ -330,6 +330,8 @@ impl<T: Config> LoanAccount<T> {
 	) {
 		let mut liquidation_swaps = BTreeMap::new();
 
+		let mut swaps_for_event = BTreeMap::<LoanId, Vec<SwapRequestId>>::new();
+
 		for AssetCollateralForLoan { loan_id, loan_asset, collateral_asset, collateral_amount } in
 			collateral
 		{
@@ -350,13 +352,15 @@ impl<T: Config> LoanAccount<T> {
 				max_slippage,
 			);
 
+			swaps_for_event.entry(loan_id).or_default().push(swap_request_id);
+
 			liquidation_swaps
 				.insert(swap_request_id, LiquidationSwap { loan_id, from_asset, to_asset });
 		}
 
 		Pallet::<T>::deposit_event(Event::LiquidationInitiated {
 			borrower_id: borrower_id.clone(),
-			swap_request_ids: liquidation_swaps.keys().cloned().collect(),
+			swaps: swaps_for_event,
 			is_hard,
 		});
 

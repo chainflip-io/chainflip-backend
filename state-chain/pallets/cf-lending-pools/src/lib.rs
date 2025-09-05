@@ -500,7 +500,7 @@ pub mod pallet {
 		},
 		LiquidationInitiated {
 			borrower_id: T::AccountId,
-			swap_request_ids: Vec<SwapRequestId>,
+			swaps: BTreeMap<LoanId, Vec<SwapRequestId>>,
 			is_hard: bool,
 		},
 		LoanRepaid {
