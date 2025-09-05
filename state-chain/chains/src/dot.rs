@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::*;
+use crate::{hub::xcm_types, *};
 
 pub mod api;
 
@@ -347,6 +347,7 @@ impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";
 	const GAS_ASSET: Self::ChainAsset = assets::dot::Asset::Dot;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+	const DEPRECATED: bool = true;
 
 	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;
@@ -545,6 +546,28 @@ pub enum PolkadotRuntimeCall {
 	Utility(UtilityCall),
 	#[codec(index = 29u8)] // INDEX FOR WESTEND: 22, FOR POLKADOT: 29
 	Proxy(ProxyCall),
+	#[codec(index = 99u8)] // INDEX FOR WESTEND: ?, FOR POLKADOT: 99
+	Xcm(Box<XcmCall>),
+}
+
+/// Only used for the migration to Assethub
+#[allow(non_camel_case_types)]
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+pub enum XcmCall {
+	#[codec(index = 9u8)]
+	limited_teleport_assets {
+		#[allow(missing_docs)]
+		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
+		#[allow(missing_docs)]
+		beneficiary: xcm_types::hub_runtime_types::xcm::VersionedLocation,
+		#[allow(missing_docs)]
+		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
+		#[allow(missing_docs)]
+		fee_asset_itme: u32,
+		#[allow(missing_docs)]
+		weight_limit: xcm_types::hub_runtime_types::xcm::v3::WeightLimit,
+	},
 }
 
 #[allow(non_camel_case_types)]

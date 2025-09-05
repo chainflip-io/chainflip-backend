@@ -2430,3 +2430,51 @@ impl<T: Config> cf_traits::PoolPriceProvider for Pallet<T> {
 		})
 	}
 }
+
+impl<T: Config> cf_traits::PoolOrdersManager for Pallet<T> {
+	/// Cancels all limit orders and range orders in a pool.
+	fn cancel_all_pool_orders(base_asset: Asset, quote_asset: Asset) -> sp_runtime::DispatchResult {
+		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+
+		Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
+			for (sold_pair, limit_orders_map) in pool.clone().limit_orders_cache.into_iter() {
+				for (lp, limit_orders) in limit_orders_map.iter() {
+					for (order_id, previous_tick) in limit_orders.iter() {
+						Self::inner_update_limit_order_at_tick(
+							pool,
+							lp,
+							asset_pair,
+							sold_pair.sell_order(),
+							*order_id,
+							*previous_tick,
+							IncreaseOrDecrease::Decrease(Amount::MAX),
+							NoOpStatus::Allow,
+						)?;
+					}
+				}
+			}
+			Ok::<(), DispatchError>(())
+		})?;
+
+		Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
+			for (lp, range_orders) in pool.clone().range_orders_cache.iter() {
+				for (order_id, previous_tick_range) in range_orders.iter() {
+					Self::inner_update_range_order(
+						pool,
+						lp,
+						asset_pair,
+						*order_id,
+						previous_tick_range.clone(),
+						IncreaseOrDecrease::Decrease(range_orders::Size::Liquidity {
+							liquidity: Liquidity::MAX,
+						}),
+						NoOpStatus::Allow,
+					)?;
+				}
+			}
+			Ok::<(), DispatchError>(())
+		})?;
+
+		Ok(())
+	}
+}

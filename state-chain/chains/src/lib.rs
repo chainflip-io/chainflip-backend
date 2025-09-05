@@ -305,6 +305,8 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 
 	const WITNESS_PERIOD: Self::ChainBlockNumber;
 
+	const DEPRECATED: bool = false;
+
 	/// Outputs the root block that witnesses the range of blocks after (not including)
 	/// `block_number`
 	fn checked_block_witness_next(
