@@ -60,7 +60,7 @@ macro_rules! impl_runtime_safe_mode {
 		mod __inner {
 			use super::*;
 			use $crate::{SafeMode, SetSafeMode};
-			use codec::{Encode, Decode, MaxEncodedLen};
+			use codec::{Encode, Decode};
 			use frame_support::{
 				storage::StorageValue,
 				traits::Get,
@@ -68,7 +68,7 @@ macro_rules! impl_runtime_safe_mode {
 			};
 			use scale_info::TypeInfo;
 
-			#[derive(serde::Serialize, serde::Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, RuntimeDebug)]
+			#[derive(serde::Serialize, serde::Deserialize, Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
 			pub struct $runtime_safe_mode {
 				$( pub $name: $pallet_safe_mode ),*
 			}

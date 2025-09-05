@@ -1133,83 +1133,400 @@ fn making_loan_repayment() {
 	});
 }
 
-#[test]
-fn safe_mode_for_removing_funds() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
+mod safe_mode {
 
-		MockBalance::credit_account(&LENDER, LOAN_ASSET, INIT_POOL_AMOUNT);
-		assert_ok!(LendingPools::add_lender_funds(
-			RuntimeOrigin::signed(LENDER),
-			LOAN_ASSET,
-			INIT_POOL_AMOUNT
-		));
+	use super::*;
 
-		MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-			withdrawing_lender_funds_enabled: false,
-			..PalletSafeMode::CODE_GREEN
+	#[test]
+	fn safe_mode_for_adding_lender_funds() {
+		let try_to_add_funds = || {
+			LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				INIT_POOL_AMOUNT,
+			)
+		};
+
+		new_test_ext().execute_with(|| {
+			assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
+
+			MockBalance::credit_account(&LENDER, LOAN_ASSET, 10 * INIT_POOL_AMOUNT);
+
+			// Adding lender funds is disbled for all assets:
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					add_lender_funds_enabled: BTreeSet::default(),
+					..PalletSafeMode::code_green()
+				});
+
+				assert_noop!(try_to_add_funds(), Error::<Test>::AddLenderFundsDisabled);
+			}
+
+			// Adding lender funds is enabled, but not for the requested asset:
+			{
+				const OTHER_ASSET: Asset = Asset::Eth;
+				assert_ne!(OTHER_ASSET, LOAN_ASSET);
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					add_lender_funds_enabled: BTreeSet::from([OTHER_ASSET]),
+					..PalletSafeMode::code_green()
+				});
+
+				assert_noop!(try_to_add_funds(), Error::<Test>::AddLenderFundsDisabled);
+			}
+
+			// Adding lender funds is enabled for the requested asset:
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					add_lender_funds_enabled: BTreeSet::from([LOAN_ASSET]),
+					..PalletSafeMode::code_green()
+				});
+				assert_ok!(try_to_add_funds());
+			}
+
+			// Adding lender funds is fully enabled (code green):
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode::code_green());
+				assert_ok!(try_to_add_funds());
+			}
 		});
+	}
 
-		assert_noop!(
-			LendingPools::remove_lender_funds(RuntimeOrigin::signed(LENDER), LOAN_ASSET, None),
-			Error::<Test>::RemoveLenderFundsDisabled
-		);
+	#[test]
+	fn safe_mode_for_removing_lender_funds() {
+		let try_to_withdraw = || {
+			LendingPools::remove_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				Some(INIT_POOL_AMOUNT / 2),
+			)
+		};
 
-		MockRuntimeSafeMode::set_safe_mode(PalletSafeMode { ..PalletSafeMode::CODE_GREEN });
+		new_test_ext().execute_with(|| {
+			assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
 
-		assert_ok!(LendingPools::remove_lender_funds(
-			RuntimeOrigin::signed(LENDER),
-			LOAN_ASSET,
-			None
-		));
-	});
-}
+			MockBalance::credit_account(&LENDER, LOAN_ASSET, INIT_POOL_AMOUNT);
+			assert_ok!(LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				INIT_POOL_AMOUNT
+			));
 
-#[test]
-fn safe_mode_for_creating_chp_loan() {
-	const COLLATERAL_ASSET: Asset = Asset::Eth;
-	const INIT_COLLATERAL: AssetAmount = 2 * PRINCIPAL * SWAP_RATE;
+			// Withdrawing is disbled for all assets:
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					withdraw_lender_funds_enabled: BTreeSet::default(),
+					..PalletSafeMode::code_green()
+				});
 
-	new_test_ext().execute_with(|| {
-		assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
+				assert_noop!(try_to_withdraw(), Error::<Test>::RemoveLenderFundsDisabled);
+			}
 
-		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+			// Withdrawing is enabled, but not for the requested asset:
+			{
+				const OTHER_ASSET: Asset = Asset::Eth;
+				assert_ne!(OTHER_ASSET, LOAN_ASSET);
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					withdraw_lender_funds_enabled: BTreeSet::from([OTHER_ASSET]),
+					..PalletSafeMode::code_green()
+				});
 
-		MockBalance::credit_account(&LENDER, LOAN_ASSET, INIT_POOL_AMOUNT);
-		assert_ok!(LendingPools::add_lender_funds(
-			RuntimeOrigin::signed(LENDER),
-			LOAN_ASSET,
-			INIT_POOL_AMOUNT
-		));
+				assert_noop!(try_to_withdraw(), Error::<Test>::RemoveLenderFundsDisabled);
+			}
 
-		MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-			borrowing_enabled: false,
-			..PalletSafeMode::CODE_GREEN
+			// Withdrawing is enabled for the requested asset:
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					withdraw_lender_funds_enabled: BTreeSet::from([LOAN_ASSET]),
+					..PalletSafeMode::code_green()
+				});
+				assert_ok!(try_to_withdraw());
+			}
+
+			// Withdrawing is fully enabled (code green):
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode::code_green());
+				assert_ok!(try_to_withdraw());
+			}
 		});
+	}
 
-		MockBalance::credit_account(&LP, COLLATERAL_ASSET, 2 * INIT_COLLATERAL);
-		assert_noop!(
+	#[test]
+	fn safe_mode_for_creating_chp_loan() {
+		const COLLATERAL_ASSET: Asset = Asset::Eth;
+		const INIT_COLLATERAL: AssetAmount = 2 * PRINCIPAL * SWAP_RATE;
+
+		let try_to_borrow = || {
 			LendingPools::new_loan(
 				LP,
 				LOAN_ASSET,
 				PRINCIPAL,
 				Some(COLLATERAL_ASSET),
 				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
-			),
-			Error::<Test>::LoanCreationDisabled
-		);
+			)
+		};
 
-		MockRuntimeSafeMode::set_safe_mode(PalletSafeMode { ..PalletSafeMode::CODE_GREEN });
+		new_test_ext().execute_with(|| {
+			assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
 
-		assert_ok!(LendingPools::new_loan(
-			LP,
-			LOAN_ASSET,
-			PRINCIPAL,
-			Some(COLLATERAL_ASSET),
-			BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
-		));
-	});
+			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+
+			MockBalance::credit_account(&LENDER, LOAN_ASSET, INIT_POOL_AMOUNT);
+			assert_ok!(LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				INIT_POOL_AMOUNT
+			));
+
+			MockBalance::credit_account(&LP, COLLATERAL_ASSET, 10 * INIT_COLLATERAL);
+
+			// Borrowing is completely disabled:
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					borrowing_enabled: BTreeSet::default(),
+					..PalletSafeMode::code_green()
+				});
+
+				assert_noop!(try_to_borrow(), Error::<Test>::LoanCreationDisabled);
+			}
+
+			// Borrowing is enabled but, not for the asset that we requested:
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					borrowing_enabled: BTreeSet::from([COLLATERAL_ASSET]),
+					..PalletSafeMode::code_green()
+				});
+
+				assert_noop!(try_to_borrow(), Error::<Test>::LoanCreationDisabled);
+			}
+
+			{
+				// Should be able to borrow once we enable for the requested asset :
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					borrowing_enabled: BTreeSet::from([LOAN_ASSET]),
+					..PalletSafeMode::code_green()
+				});
+				assert_ok!(try_to_borrow());
+			}
+
+			{
+				// Should be able to borrow in code green:
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode::code_green());
+				assert_ok!(try_to_borrow());
+			}
+		});
+	}
+
+	#[test]
+	fn safe_mode_for_adding_collateral() {
+		const COLLATERAL_ASSET_1: Asset = Asset::Eth;
+		const COLLATERAL_ASSET_2: Asset = Asset::Usdc;
+		const INIT_COLLATERAL: AssetAmount = 2 * PRINCIPAL * SWAP_RATE;
+
+		let try_adding_collateral = || {
+			LendingPools::add_collateral(
+				RuntimeOrigin::signed(BORROWER),
+				Some(COLLATERAL_ASSET_1),
+				BTreeMap::from([
+					(COLLATERAL_ASSET_1, INIT_COLLATERAL),
+					(COLLATERAL_ASSET_2, INIT_COLLATERAL),
+				]),
+			)
+		};
+
+		let try_adding_collateral_via_new_loan = || {
+			LendingPools::new_loan(
+				BORROWER,
+				LOAN_ASSET,
+				PRINCIPAL,
+				Some(COLLATERAL_ASSET_1),
+				BTreeMap::from([
+					(COLLATERAL_ASSET_1, INIT_COLLATERAL),
+					(COLLATERAL_ASSET_2, INIT_COLLATERAL),
+				]),
+			)
+		};
+
+		let try_adding_collateral_via_loan_update = || {
+			LendingPools::expand_loan(
+				RuntimeOrigin::signed(BORROWER),
+				LOAN_ID,
+				PRINCIPAL,
+				BTreeMap::from([
+					(COLLATERAL_ASSET_1, INIT_COLLATERAL),
+					(COLLATERAL_ASSET_2, INIT_COLLATERAL),
+				]),
+			)
+		};
+
+		new_test_ext().execute_with(|| {
+			assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
+
+			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+			set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
+			set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+
+			MockBalance::credit_account(&LENDER, LOAN_ASSET, 10 * PRINCIPAL);
+			assert_ok!(LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				10 * PRINCIPAL
+			));
+
+			MockBalance::credit_account(&LP, COLLATERAL_ASSET_1, 10 * INIT_COLLATERAL);
+			MockBalance::credit_account(&LP, COLLATERAL_ASSET_2, 10 * INIT_COLLATERAL);
+
+			// Create a loan so we can test adding collateral when updating it
+			assert_eq!(
+				LendingPools::new_loan(
+					LP,
+					LOAN_ASSET,
+					PRINCIPAL,
+					Some(COLLATERAL_ASSET_1),
+					BTreeMap::from([(COLLATERAL_ASSET_1, INIT_COLLATERAL)]),
+				),
+				Ok(LOAN_ID)
+			);
+
+			// Adding collateral is disabled for all assets:
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					add_collateral_enabled: BTreeSet::default(),
+					..PalletSafeMode::code_green()
+				});
+				assert_noop!(try_adding_collateral(), Error::<Test>::AddingCollateralDisabled);
+				assert_noop!(
+					try_adding_collateral_via_new_loan(),
+					Error::<Test>::AddingCollateralDisabled
+				);
+				assert_noop!(
+					try_adding_collateral_via_loan_update(),
+					Error::<Test>::AddingCollateralDisabled
+				);
+			}
+
+			// Adding collateral is disabled for at least one of the requested assets:
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					add_collateral_enabled: BTreeSet::from([COLLATERAL_ASSET_1]),
+					..PalletSafeMode::code_green()
+				});
+				assert_noop!(try_adding_collateral(), Error::<Test>::AddingCollateralDisabled);
+				assert_noop!(
+					try_adding_collateral_via_new_loan(),
+					Error::<Test>::AddingCollateralDisabled
+				);
+				assert_noop!(
+					try_adding_collateral_via_loan_update(),
+					Error::<Test>::AddingCollateralDisabled
+				);
+			}
+
+			// Adding collateral is enabled for all requested assets:
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					add_collateral_enabled: BTreeSet::from([
+						COLLATERAL_ASSET_1,
+						COLLATERAL_ASSET_2,
+					]),
+					..PalletSafeMode::code_green()
+				});
+				assert_ok!(try_adding_collateral());
+				assert_ok!(try_adding_collateral_via_new_loan());
+				assert_ok!(try_adding_collateral_via_loan_update());
+			}
+
+			// Adding collateral is enabled for all assets (code green):
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode::code_green());
+				assert_ok!(try_adding_collateral());
+				assert_ok!(try_adding_collateral_via_new_loan());
+				assert_ok!(try_adding_collateral_via_loan_update());
+			}
+		});
+	}
+
+	#[test]
+	fn safe_mode_for_removing_collateral() {
+		const COLLATERAL_ASSET_1: Asset = Asset::Eth;
+		const COLLATERAL_ASSET_2: Asset = Asset::Usdc;
+		const COLLATERAL_AMOUNT: AssetAmount = 2 * PRINCIPAL * SWAP_RATE;
+
+		let try_removing_collateral = || {
+			LendingPools::remove_collateral(
+				RuntimeOrigin::signed(BORROWER),
+				Some(COLLATERAL_ASSET_1),
+				BTreeMap::from([
+					(COLLATERAL_ASSET_1, COLLATERAL_AMOUNT),
+					(COLLATERAL_ASSET_2, COLLATERAL_AMOUNT),
+				]),
+			)
+		};
+
+		new_test_ext().execute_with(|| {
+			assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
+
+			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+			set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
+			set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+
+			MockBalance::credit_account(&LENDER, LOAN_ASSET, 10 * PRINCIPAL);
+			assert_ok!(LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				10 * PRINCIPAL
+			));
+
+			MockBalance::credit_account(&LP, COLLATERAL_ASSET_1, 10 * COLLATERAL_AMOUNT);
+			MockBalance::credit_account(&LP, COLLATERAL_ASSET_2, 10 * COLLATERAL_AMOUNT);
+
+			// Add collateral so we can test removing it:
+			assert_ok!(LendingPools::add_collateral(
+				RuntimeOrigin::signed(BORROWER),
+				Some(COLLATERAL_ASSET_1),
+				BTreeMap::from([
+					(COLLATERAL_ASSET_1, 10 * COLLATERAL_AMOUNT),
+					(COLLATERAL_ASSET_2, 10 * COLLATERAL_AMOUNT),
+				]),
+			));
+
+			// Removing collateral is disabled for all assets:
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					remove_collateral_enabled: BTreeSet::default(),
+					..PalletSafeMode::code_green()
+				});
+				assert_noop!(try_removing_collateral(), Error::<Test>::RemovingCollateralDisabled);
+			}
+
+			// Removing collateral is disabled for at least one of the requested assets:
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					remove_collateral_enabled: BTreeSet::from([COLLATERAL_ASSET_1]),
+					..PalletSafeMode::code_green()
+				});
+				assert_noop!(try_removing_collateral(), Error::<Test>::RemovingCollateralDisabled);
+			}
+
+			// Removing collateral is enabled for all requested assets:
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					remove_collateral_enabled: BTreeSet::from([
+						COLLATERAL_ASSET_1,
+						COLLATERAL_ASSET_2,
+					]),
+					..PalletSafeMode::code_green()
+				});
+				assert_ok!(try_removing_collateral());
+			}
+
+			// Removing collateral is enabled for all assets (code green):
+			{
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode::code_green());
+				assert_ok!(try_removing_collateral());
+			}
+		});
+	}
 }
 
 #[test]

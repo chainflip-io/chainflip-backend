@@ -50,6 +50,25 @@ impl<T: Config> LoanAccount<T> {
 		&self.collateral
 	}
 
+	/// Adds collateral to the account from borrower's free balance as long as it's enabled by
+	/// safe mode.
+	fn try_adding_collateral_from_free_balance(
+		&mut self,
+		borrower_id: &T::AccountId,
+		collateral: &BTreeMap<Asset, AssetAmount>,
+	) -> Result<(), DispatchError> {
+		for (asset, amount) in collateral {
+			ensure!(
+				T::SafeMode::get().add_collateral_enabled.contains(asset),
+				Error::<T>::AddingCollateralDisabled
+			);
+			T::Balance::try_debit_account(borrower_id, *asset, *amount)?;
+			self.collateral.entry(*asset).or_default().saturating_accrue(*amount);
+		}
+
+		Ok(())
+	}
+
 	/// Computes account's total collateral value in USD, including what's in liquidation swaps.
 	pub fn total_collateral_usd_value(&self) -> Result<AssetAmount, Error<T>> {
 		let collateral_in_account_usd_value = self
@@ -674,7 +693,10 @@ impl<T: Config> LendingApi for Pallet<T> {
 		primary_collateral_asset: Option<Asset>,
 		extra_collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<LoanId, DispatchError> {
-		ensure!(T::SafeMode::get().borrowing_enabled, Error::<T>::LoanCreationDisabled);
+		ensure!(
+			T::SafeMode::get().borrowing_enabled.contains(&asset),
+			Error::<T>::LoanCreationDisabled
+		);
 
 		let chp_config = LendingConfig::<T>::get();
 
@@ -698,15 +720,9 @@ impl<T: Config> LendingApi for Pallet<T> {
 				owed_principal: amount_to_borrow,
 			};
 
-			for (asset, amount) in &extra_collateral {
-				T::Balance::try_debit_account(&borrower_id, *asset, *amount)?;
-			}
-
 			account.primary_collateral_asset = primary_collateral_asset;
 
-			for (asset, amount) in &extra_collateral {
-				account.collateral.entry(*asset).or_default().saturating_accrue(*amount);
-			}
+			account.try_adding_collateral_from_free_balance(&borrower_id, &extra_collateral)?;
 
 			account.loans.insert(loan_id, loan);
 
@@ -762,22 +778,24 @@ impl<T: Config> LendingApi for Pallet<T> {
 		extra_amount_to_borrow: AssetAmount,
 		extra_collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<(), DispatchError> {
-		ensure!(T::SafeMode::get().borrowing_enabled, Error::<T>::LoanCreationDisabled);
-
 		let chp_config = LendingConfig::<T>::get();
 
 		LoanAccounts::<T>::mutate(&borrower_id, |maybe_account| {
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanNotFound)?;
 
-			for (asset, amount) in &extra_collateral {
-				T::Balance::try_debit_account(&borrower_id, *asset, *amount)?;
-				loan_account.collateral.entry(*asset).or_default().saturating_accrue(*amount);
-			}
-
 			{
 				let loan = loan_account.loans.get_mut(&loan_id).ok_or(Error::<T>::LoanNotFound)?;
+
+				ensure!(
+					T::SafeMode::get().borrowing_enabled.contains(&loan.asset),
+					Error::<T>::LoanCreationDisabled
+				);
+
 				loan.owed_principal.saturating_accrue(extra_amount_to_borrow);
 			}
+
+			loan_account
+				.try_adding_collateral_from_free_balance(&borrower_id, &extra_collateral)?;
 
 			if loan_account.derive_ltv()? > chp_config.ltv_target_threshold {
 				return Err(Error::<T>::InsufficientCollateral.into());
@@ -860,8 +878,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 		primary_collateral_asset: Option<Asset>,
 		collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<(), DispatchError> {
-		ensure!(T::SafeMode::get().adding_collateral_enabled, Error::<T>::AddingCollateralDisabled);
-
 		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
 			let loan_account =
 				Self::create_loan_account_if_empty(maybe_account, primary_collateral_asset)?;
@@ -870,11 +886,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				loan_account.primary_collateral_asset = primary_collateral_asset;
 			}
 
-			for (asset, amount) in &collateral {
-				T::Balance::try_debit_account(borrower_id, *asset, *amount)?;
-
-				loan_account.collateral.entry(*asset).or_insert(0).saturating_accrue(*amount);
-			}
+			loan_account.try_adding_collateral_from_free_balance(borrower_id, &collateral)?;
 
 			Self::deposit_event(Event::CollateralAdded {
 				borrower_id: borrower_id.clone(),
@@ -892,11 +904,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 		primary_collateral_asset: Option<Asset>,
 		collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<(), DispatchError> {
-		ensure!(
-			T::SafeMode::get().removing_collateral_enabled,
-			Error::<T>::RemovingCollateralDisabled
-		);
-
 		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
 			let chp_config = LendingConfig::<T>::get();
 
@@ -907,6 +914,11 @@ impl<T: Config> LendingApi for Pallet<T> {
 			}
 
 			for (asset, amount) in &collateral {
+				ensure!(
+					T::SafeMode::get().remove_collateral_enabled.contains(asset),
+					Error::<T>::RemovingCollateralDisabled
+				);
+
 				let current_amount = loan_account
 					.collateral
 					.get_mut(asset)

@@ -36,11 +36,276 @@ expression: val
   "lending_pools": {
     "add_boost_funds_enabled": true,
     "stop_boosting_enabled": true,
-    "borrowing_enabled": true,
-    "adding_lender_funds_enabled": true,
-    "withdrawing_lender_funds_enabled": true,
-    "adding_collateral_enabled": true,
-    "removing_collateral_enabled": true
+    "borrowing_enabled": [
+      {
+        "chain": "Ethereum",
+        "asset": "ETH"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "FLIP"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Polkadot",
+        "asset": "DOT"
+      },
+      {
+        "chain": "Bitcoin",
+        "asset": "BTC"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "ETH"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
+        "asset": "SOL"
+      },
+      {
+        "chain": "Solana",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "DOT"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "USDC"
+      }
+    ],
+    "add_lender_funds_enabled": [
+      {
+        "chain": "Ethereum",
+        "asset": "ETH"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "FLIP"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Polkadot",
+        "asset": "DOT"
+      },
+      {
+        "chain": "Bitcoin",
+        "asset": "BTC"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "ETH"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
+        "asset": "SOL"
+      },
+      {
+        "chain": "Solana",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "DOT"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "USDC"
+      }
+    ],
+    "withdraw_lender_funds_enabled": [
+      {
+        "chain": "Ethereum",
+        "asset": "ETH"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "FLIP"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Polkadot",
+        "asset": "DOT"
+      },
+      {
+        "chain": "Bitcoin",
+        "asset": "BTC"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "ETH"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
+        "asset": "SOL"
+      },
+      {
+        "chain": "Solana",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "DOT"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "USDC"
+      }
+    ],
+    "add_collateral_enabled": [
+      {
+        "chain": "Ethereum",
+        "asset": "ETH"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "FLIP"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Polkadot",
+        "asset": "DOT"
+      },
+      {
+        "chain": "Bitcoin",
+        "asset": "BTC"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "ETH"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
+        "asset": "SOL"
+      },
+      {
+        "chain": "Solana",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "DOT"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "USDC"
+      }
+    ],
+    "remove_collateral_enabled": [
+      {
+        "chain": "Ethereum",
+        "asset": "ETH"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "FLIP"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Polkadot",
+        "asset": "DOT"
+      },
+      {
+        "chain": "Bitcoin",
+        "asset": "BTC"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "ETH"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
+        "asset": "SOL"
+      },
+      {
+        "chain": "Solana",
+        "asset": "USDC"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "DOT"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Assethub",
+        "asset": "USDC"
+      }
+    ]
   },
   "reputation": {
     "reporting_enabled": true

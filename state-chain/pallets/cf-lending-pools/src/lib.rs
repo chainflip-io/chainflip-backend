@@ -46,8 +46,8 @@ use cf_primitives::{
 	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
 };
 use cf_traits::{
-	impl_pallet_safe_mode, lending::LendingApi, AccountRoleRegistry, BalanceApi, Chainflip,
-	PoolApi, PriceFeedApi, SwapOutputAction, SwapRequestHandler, SwapRequestType,
+	lending::LendingApi, AccountRoleRegistry, BalanceApi, Chainflip, PoolApi, PriceFeedApi,
+	SwapOutputAction, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -76,20 +76,48 @@ pub use pallet::*;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-impl_pallet_safe_mode! {
-	PalletSafeMode;
-	add_boost_funds_enabled,
-	stop_boosting_enabled,
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PalletSafeMode {
+	pub add_boost_funds_enabled: bool,
+	pub stop_boosting_enabled: bool,
 	// whether funds can be borrowed (stale oracle also disables this)
-	borrowing_enabled,
+	pub borrowing_enabled: BTreeSet<Asset>,
 	// whether lenders can add funds to lending pools
-	adding_lender_funds_enabled,
+	pub add_lender_funds_enabled: BTreeSet<Asset>,
 	// whether lenders can withdraw funds from lending pools (stale oracle also disables this)
-	withdrawing_lender_funds_enabled,
+	pub withdraw_lender_funds_enabled: BTreeSet<Asset>,
 	// whether borrowers can add collateral
-	adding_collateral_enabled,
+	pub add_collateral_enabled: BTreeSet<Asset>,
 	// whether borrowers can withdraw collateral (stale oracle also disables this)
-	removing_collateral_enabled,
+	pub remove_collateral_enabled: BTreeSet<Asset>,
+}
+
+impl cf_traits::SafeMode for PalletSafeMode {
+	fn code_red() -> Self {
+		Self {
+			add_boost_funds_enabled: false,
+			stop_boosting_enabled: false,
+			borrowing_enabled: BTreeSet::new(),
+			add_lender_funds_enabled: BTreeSet::new(),
+			withdraw_lender_funds_enabled: BTreeSet::new(),
+			add_collateral_enabled: BTreeSet::new(),
+			remove_collateral_enabled: BTreeSet::new(),
+		}
+	}
+
+	fn code_green() -> Self {
+		Self {
+			add_boost_funds_enabled: true,
+			stop_boosting_enabled: true,
+			borrowing_enabled: BTreeSet::from_iter(Asset::all()),
+			add_lender_funds_enabled: BTreeSet::from_iter(Asset::all()),
+			withdraw_lender_funds_enabled: BTreeSet::from_iter(Asset::all()),
+			add_collateral_enabled: BTreeSet::from_iter(Asset::all()),
+			remove_collateral_enabled: BTreeSet::from_iter(Asset::all()),
+		}
+	}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -515,7 +543,7 @@ pub mod pallet {
 		// TODO: consolidate this with `InsufficientBoostLiquidity`?
 		InsufficientLiquidity,
 		/// Adding lending funds is disabled due to safe mode.
-		AddLendingFundsDisabled,
+		AddLenderFundsDisabled,
 		/// Removing lending funds is disabled due to safe mode.
 		RemoveLenderFundsDisabled,
 		/// Adding collateral is disabled due to safe mode.
@@ -681,8 +709,8 @@ pub mod pallet {
 			amount: AssetAmount,
 		) -> DispatchResult {
 			ensure!(
-				T::SafeMode::get().adding_lender_funds_enabled,
-				Error::<T>::AddLendingFundsDisabled
+				T::SafeMode::get().add_lender_funds_enabled.contains(&asset),
+				Error::<T>::AddLenderFundsDisabled
 			);
 
 			let lender_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
@@ -716,7 +744,7 @@ pub mod pallet {
 			amount: Option<AssetAmount>,
 		) -> DispatchResult {
 			ensure!(
-				T::SafeMode::get().withdrawing_lender_funds_enabled,
+				T::SafeMode::get().withdraw_lender_funds_enabled.contains(&asset),
 				Error::<T>::RemoveLenderFundsDisabled
 			);
 

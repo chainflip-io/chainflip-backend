@@ -41,7 +41,7 @@ impl frame_system::Config for Test {
 	type Block = frame_system::mocking::MockBlock<Test>;
 }
 
-impl_mock_runtime_safe_mode!(trading_strategies: crate::PalletSafeMode);
+impl_mock_runtime_safe_mode!(lending_pools: crate::PalletSafeMode);
 
 impl pallet_cf_lending_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;

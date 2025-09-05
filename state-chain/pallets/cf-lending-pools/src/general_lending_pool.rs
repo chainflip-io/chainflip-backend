@@ -260,7 +260,7 @@ mod tests {
 
 		assert_eq!(chp_pool.get_utilisation(), Permill::from_percent(100));
 
-		assert_eq!(chp_pool.total_amount, 500);
+		assert_eq!(chp_pool.total_amount, 600);
 		assert_eq!(chp_pool.available_amount, 0);
 
 		// Lender 1 still has a share in the pool:
