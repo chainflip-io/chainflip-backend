@@ -24,6 +24,38 @@ pub enum AssociationToOperator {
 	Delegator,
 }
 
+#[derive(
+	Debug,
+	Default,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	Serialize,
+	Deserialize,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+pub enum DelegationAmount<T> {
+	#[default]
+	Max,
+	Some(T),
+}
+
+impl<T> DelegationAmount<T> {
+	pub fn try_fmap<B, E>(
+		self,
+		f: impl FnOnce(T) -> Result<B, E>,
+	) -> Result<DelegationAmount<B>, E> {
+		match self {
+			DelegationAmount::Max => Ok(DelegationAmount::Max),
+			DelegationAmount::Some(amount) => Ok(DelegationAmount::Some(f(amount)?)),
+		}
+	}
+}
+
 /// Represents a validator's default stance on accepting delegations
 #[derive(
 	Copy,

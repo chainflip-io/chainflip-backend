@@ -17,7 +17,7 @@ import { depositChannelCreation } from 'tests/request_swap_deposit_address_with_
 import { testBrokerLevelScreening } from 'tests/broker_level_screening';
 import { testFundRedeem } from 'tests/fund_redeem';
 import { concurrentTest, serialTest } from 'shared/utils/vitest';
-import { testDelegateFlip } from './delegate_flip';
+import { testCcmSwapFundAccount, testDelegate } from './delegate_flip';
 import { testSpecialBitcoinSwaps } from './special_btc_swaps';
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
@@ -47,6 +47,11 @@ describe('ConcurrentTests', () => {
   // concurrentTest('AssethubXCM', testAssethubXcm, 200);
   concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 140);
   concurrentTest('DelegateFlip', testDelegateFlip, 360);
+  concurrentTest(
+    'SwapAndFundAccountViaCCM',
+    (context) => testCcmSwapFundAccount(context.logger),
+    360,
+  );
 
   // Test this separately since some other tests rely on single member governance.
   serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 120);

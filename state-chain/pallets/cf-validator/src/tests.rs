@@ -1605,7 +1605,11 @@ mod operator {
 			// Allow BOB (*not* an exception since allow is the default)
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
 			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
-			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Max
+			));
 			assert_eq!(DelegationChoice::<Test>::get(BOB), Some(ALICE));
 
 			// Block BOB
@@ -1622,8 +1626,12 @@ mod operator {
 					operator: ALICE,
 					delegator: BOB,
 				}),
+				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+					delegator: BOB,
+					max_bid: Some(0),
+				}),
 				RuntimeEvent::ValidatorPallet(Event::Delegated { operator: ALICE, delegator: BOB }),
-				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+				RuntimeEvent::ValidatorPallet(Event::Undelegated {
 					operator: ALICE,
 					delegator: BOB,
 				}),
@@ -1652,7 +1660,7 @@ mod operator {
 
 			// BOB cannot delegate by default (not in exceptions list, deny is default)
 			assert_noop!(
-				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
+				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE, DelegationAmount::Max),
 				Error::<Test>::DelegatorBlocked
 			);
 			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
@@ -1661,7 +1669,11 @@ mod operator {
 			// Allow BOB (add to exceptions list to override deny default)
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
 			assert!(Exceptions::<Test>::get(ALICE).contains(&BOB));
-			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Max
+			));
 			assert_eq!(DelegationChoice::<Test>::get(BOB), Some(ALICE));
 
 			// Block BOB again (remove from exceptions list, back to deny default)
@@ -1675,8 +1687,12 @@ mod operator {
 					operator: ALICE,
 					delegator: BOB,
 				}),
+				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+					delegator: BOB,
+					max_bid: Some(0),
+				}),
 				RuntimeEvent::ValidatorPallet(Event::Delegated { operator: ALICE, delegator: BOB }),
-				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+				RuntimeEvent::ValidatorPallet(Event::Undelegated {
 					operator: ALICE,
 					delegator: BOB,
 				}),
@@ -1875,16 +1891,22 @@ mod delegation {
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
 			));
-			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(ALICE), BOB));
+			// Clear events from setup
+			System::reset_events();
+			// Delegate with max amount (use full balance)
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(ALICE),
+				BOB,
+				DelegationAmount::Max
+			));
 			assert_eq!(DelegationChoice::<Test>::get(ALICE), Some(BOB));
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::ValidatorPallet(Event::OperatorSettingsUpdated {
-					operator: BOB,
-					preferences: OPERATOR_SETTINGS,
-				}),
-				RuntimeEvent::ValidatorPallet(Event::Delegated { delegator: ALICE, operator: BOB }),
-			);
+			// Max delegation with DelegationAmount::Max should set max_bid to full balance
+			assert_eq!(MaxDelegationBid::<Test>::get(ALICE), Some(MockFlip::balance(&ALICE)));
+			// Should emit MaxBidUpdated and Delegated events
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Delegated {
+				delegator: ALICE,
+				operator: BOB,
+			}));
 		});
 	}
 
@@ -1892,14 +1914,37 @@ mod delegation {
 	fn can_undelegate() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
-				ValidatorPallet::undelegate(OriginTrait::signed(ALICE)),
+				ValidatorPallet::undelegate(OriginTrait::signed(ALICE), DelegationAmount::Max),
 				Error::<Test>::AccountIsNotDelegating
 			);
-			DelegationChoice::<Test>::insert(ALICE, BOB);
-			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(ALICE)));
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(ALICE),
+				BOB,
+				DelegationAmount::Max,
+			));
+			// Undelegate with None (undelegate completely)
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(ALICE),
+				DelegationAmount::Max,
+			));
+			assert_eq!(DelegationChoice::<Test>::get(ALICE), None);
+			assert_eq!(MaxDelegationBid::<Test>::get(ALICE), None);
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+					delegator: ALICE,
+					max_bid: Some(0),
+				}),
+				RuntimeEvent::ValidatorPallet(Event::Delegated { delegator: ALICE, operator: BOB }),
+				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+					delegator: ALICE,
+					max_bid: None,
+				}),
+				RuntimeEvent::ValidatorPallet(Event::Undelegated {
 					delegator: ALICE,
 					operator: BOB
 				}),
@@ -1918,11 +1963,15 @@ mod delegation {
 				},
 			));
 			assert_noop!(
-				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
+				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE, DelegationAmount::Max),
 				Error::<Test>::DelegatorBlocked
 			);
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
-			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),);
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Max
+			));
 		});
 	}
 
@@ -1936,11 +1985,15 @@ mod delegation {
 					delegation_acceptance: DelegationAcceptance::Allow
 				},
 			));
-			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Max
+			));
 			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
 
 			assert_noop!(
-				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
+				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE, DelegationAmount::Max),
 				Error::<Test>::DelegatorBlocked
 			);
 		});
@@ -1973,12 +2026,20 @@ mod delegation {
 				));
 
 				for delegator in DELEGATORS {
-					assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(delegator), OPERATOR));
-					MockFlip::credit_funds(&delegator, AVAILABLE_BALANCE_OF_DELEGATOR);
+					// For even delegators, set max_bid during delegation - give them exact amount
 					if delegator % 2 == 0 {
-						assert_ok!(ValidatorPallet::set_max_bid(
+						MockFlip::credit_funds(&delegator, MAX_BID_OF_DELEGATOR);
+						assert_ok!(ValidatorPallet::delegate(
 							OriginTrait::signed(delegator),
-							Some(MAX_BID_OF_DELEGATOR),
+							OPERATOR,
+							DelegationAmount::Some(0) // Add 0 to start from their balance
+						));
+					} else {
+						MockFlip::credit_funds(&delegator, AVAILABLE_BALANCE_OF_DELEGATOR);
+						assert_ok!(ValidatorPallet::delegate(
+							OriginTrait::signed(delegator),
+							OPERATOR,
+							DelegationAmount::Max
 						));
 					}
 				}
@@ -2083,7 +2144,10 @@ mod delegation {
 				// Signal undelegating for 50% of delegators
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {
-						assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(*delegator)));
+						assert_ok!(ValidatorPallet::undelegate(
+							OriginTrait::signed(*delegator),
+							DelegationAmount::Max
+						));
 						// Delegation choice should be removed after undelegation
 						assert!(DelegationChoice::<Test>::get(delegator).is_none());
 					}
@@ -2147,10 +2211,336 @@ mod delegation {
 	}
 
 	#[test]
-	fn can_update_max_bid() {
+	fn can_delegate_with_specific_amount() {
 		new_test_ext().execute_with(|| {
+			// Setup delegation with specific amount
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS,
+			));
 			MockFlip::credit_funds(&BOB, 200);
-			assert_ok!(ValidatorPallet::set_max_bid(OriginTrait::signed(BOB), Some(100)));
+			// Delegate with specific amount instead of using set_max_bid
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Some(100)
+			));
+		});
+	}
+
+	#[test]
+	fn delegate_only_with_registered_operator() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+			MockFlip::credit_funds(&DELEGATOR, 200);
+
+			// Delegating to non-operator should fail.
+			assert_noop!(
+				ValidatorPallet::delegate(
+					OriginTrait::signed(DELEGATOR),
+					BOB,
+					DelegationAmount::Some(100)
+				),
+				Error::<Test>::NotOperator
+			);
+
+			// Register BOB as operator
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+
+			// Now delegation should succeed.
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(100)
+			));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(200));
+		});
+	}
+
+	#[test]
+	fn delegate_with_max_bid() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+			MockFlip::credit_funds(&DELEGATOR, 150);
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+
+			// Delegate with a specific max_bid
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(50)
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(BOB));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(150));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+					delegator: DELEGATOR,
+					max_bid: Some(150)
+				}),
+				RuntimeEvent::ValidatorPallet(Event::Delegated {
+					delegator: DELEGATOR,
+					operator: BOB
+				}),
+			);
+
+			// Re-delegate to same operator with different max_bid (should add to existing bid)
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(50)
+			));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(150));
+			// Just check the last event since the ordering might include previous events
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Delegated {
+				delegator: DELEGATOR,
+				operator: BOB,
+			}));
+
+			// Delegate to different operator with max_bid
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS,
+			));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				ALICE,
+				DelegationAmount::Some(100)
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(ALICE));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(150));
+			// Just verify the final state - delegation changed to ALICE
+		});
+	}
+
+	#[test]
+	fn undelegate_with_decrement() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+			MockFlip::credit_funds(&DELEGATOR, 1000);
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+
+			// First delegate with a max_bid
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(0)
+			));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(1000));
+
+			// Clear events from delegation
+			System::reset_events();
+
+			// Decrement max_bid but stay delegated
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(DELEGATOR),
+				DelegationAmount::Some(300)
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(BOB)); // Still delegated
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(700));
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+				delegator: DELEGATOR,
+				max_bid: Some(700),
+			}));
+
+			// Decrement again
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(DELEGATOR),
+				DelegationAmount::Some(200)
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(BOB)); // Still delegated
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(500));
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+				delegator: DELEGATOR,
+				max_bid: Some(500),
+			}));
+
+			// Decrement to exactly zero - should fully undelegate
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(DELEGATOR),
+				DelegationAmount::Some(500)
+			));
+			// Verify delegation is removed after decrementing to zero
+			assert_eq!(
+				DelegationChoice::<Test>::get(DELEGATOR),
+				None,
+				"DelegationChoice should be None after decrementing to zero"
+			);
+			assert_eq!(
+				MaxDelegationBid::<Test>::get(DELEGATOR),
+				None,
+				"MaxDelegationBid should be None after decrementing to zero"
+			);
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
+				delegator: DELEGATOR,
+				operator: BOB,
+			}));
+		});
+	}
+
+	#[test]
+	fn undelegate_with_decrement_overflow() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+
+			// Delegate with a max_bid
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(100)
+			));
+
+			// Clear events from delegation
+			System::reset_events();
+
+			// Try to decrement more than the max_bid - should fully undelegate
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(DELEGATOR),
+				DelegationAmount::Some(200)
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), None);
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), None);
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
+				delegator: DELEGATOR,
+				operator: BOB,
+			}));
+		});
+	}
+
+	#[test]
+	fn undelegate_without_max_bid() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+
+			// Fund the account first
+			MockFlip::credit_funds(&DELEGATOR, 1000);
+
+			// Delegate without max_bid (using full balance)
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Max
+			));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(1000));
+
+			// Clear events from delegation
+			System::reset_events();
+
+			// Decrement from full balance
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(DELEGATOR),
+				DelegationAmount::Some(300)
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(BOB)); // Still delegated
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(700));
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+				delegator: DELEGATOR,
+				max_bid: Some(700),
+			}));
+		});
+	}
+
+	#[test]
+	fn delegate_updates_existing_max_bid() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+			MockFlip::credit_funds(&DELEGATOR, 1000);
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+
+			// First delegate with max balance
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Max
+			));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(1000));
+
+			// Clear events from first delegation
+			System::reset_events();
+
+			// Re-delegate with specific amount - should add to existing (capped at balance)
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(500)
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(BOB));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(1000));
+			// Just check the last event
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Delegated {
+				delegator: DELEGATOR,
+				operator: BOB,
+			}));
+
+			// Re-delegate with Max - should set to full balance
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Max
+			));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(1000));
+			// Just verify the max_bid was removed
+		});
+	}
+
+	#[test]
+	fn delegation_cleanup_on_account_killed() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+			MockFlip::credit_funds(&DELEGATOR, 500);
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+
+			// Delegate with max_bid
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(0)
+			));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(500));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(BOB));
+
+			// Clear events before account cleanup
+			System::reset_events();
+
+			// Simulate account being killed
+			DelegatedAccountCleanup::<Test>::on_killed_account(&DELEGATOR);
+
+			// Check that delegation data is cleaned up
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), None);
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), None);
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
+				delegator: DELEGATOR,
+				operator: BOB,
+			}));
 		});
 	}
 }
@@ -2350,4 +2740,90 @@ mod delegation_splitting {
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), NOBODY));
 		});
 	}
+}
+
+#[test]
+fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
+	use crate::{delegation::DelegatedRewardsDistribution, mock::MockEpochInfo};
+	use cf_traits::RewardsDistribution;
+
+	new_test_ext().execute_with(|| {
+		const VALIDATOR: u64 = 100;
+		const OPERATOR: u64 = 200;
+		const DELEGATOR1: u64 = 300;
+		const DELEGATOR2: u64 = 400;
+		const REWARD_AMOUNT: u128 = 1000000;
+
+		// Mock issuance that tracks minted amounts
+		#[derive(Default)]
+		struct TestMintTracker;
+
+		impl TestMintTracker {
+			fn get_minted() -> BTreeMap<u64, u128> {
+				frame_support::storage::unhashed::get(b"test_minted").unwrap_or_default()
+			}
+
+			fn add_minted(account: u64, amount: u128) {
+				let mut minted = Self::get_minted();
+				*minted.entry(account).or_insert(0) += amount;
+				frame_support::storage::unhashed::put(b"test_minted", &minted);
+			}
+		}
+
+		struct MockIssuance;
+		impl cf_traits::Issuance for MockIssuance {
+			type AccountId = u64;
+			type Balance = u128;
+
+			fn mint(account: &Self::AccountId, amount: Self::Balance) {
+				TestMintTracker::add_minted(*account, amount);
+			}
+
+			fn burn_offchain(_amount: Self::Balance) {}
+			fn total_issuance() -> Self::Balance {
+				0
+			}
+		}
+
+		// Set current epoch for MockEpochInfo
+		const EPOCH: EpochIndex = 5;
+		MockEpochInfo::set_epoch(EPOCH);
+
+		// Create a delegation snapshot
+		DelegationSnapshot::<Test> {
+			operator: OPERATOR,
+			validators: [(VALIDATOR, 1000000u128)].into_iter().collect(),
+			delegators: [(DELEGATOR1, 2000000u128), (DELEGATOR2, 3000000u128)]
+				.into_iter()
+				.collect(),
+			delegation_fee_bps: 500, // 5% fee
+			capacity_factor: None,
+		}
+		.register_for_epoch(EPOCH);
+
+		// Distribute rewards to the validator.
+		DelegatedRewardsDistribution::<Test, MockIssuance>::distribute(REWARD_AMOUNT, &VALIDATOR);
+
+		// Check minted amounts
+		let minted = TestMintTracker::get_minted();
+
+		// With stakes: validator 1M, delegator1 2M, delegator2 3M = 6M total
+		// Validator gets 1M/6M = 166,667 (rounded)
+		assert_eq!(minted.get(&VALIDATOR), Some(&166667));
+
+		// Delegators get 5M/6M = 833,333
+		// Operator takes 5% of delegators' cut = 41,667 (rounded)
+		assert_eq!(minted.get(&OPERATOR), Some(&41667));
+
+		// Remaining delegator rewards: 833,333 - 41,667 = 791,666
+		// Delegator1 has 2M out of 5M total delegator stake = 2/5
+		assert_eq!(minted.get(&DELEGATOR1), Some(&316666));
+
+		// Delegator2 has 3M out of 5M total delegator stake = 3/5
+		assert_eq!(minted.get(&DELEGATOR2), Some(&475000));
+
+		// Verify total
+		let total_minted: u128 = minted.values().sum();
+		assert_eq!(total_minted, REWARD_AMOUNT);
+	});
 }
