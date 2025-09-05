@@ -1,0 +1,14 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: pool
+---
+{
+  "asset": {
+    "chain": "Ethereum",
+    "asset": "USDC"
+  },
+  "total_amount": "0x7d0",
+  "available_amount": "0x5dc",
+  "utilisation_rate": 9000,
+  "interest_rate": 800
+}

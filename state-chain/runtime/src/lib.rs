@@ -47,11 +47,11 @@ use crate::{
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DispatchErrorWithMessage,
-		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		NetworkFeeDetails, NetworkFees, OpenedDepositChannels, OperatorInfo, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-		TradingStrategyLimits, TransactionScreeningEvent, TransactionScreeningEvents,
-		ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		FailingWitnessValidators, FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo,
+		LiquidityProviderInfo, NetworkFeeDetails, NetworkFees, OpenedDepositChannels, OperatorInfo,
+		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
+		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvent,
+		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -114,7 +114,7 @@ use pallet_cf_validator::{
 	SetSizeMaximisingAuctionResolver,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-use runtime_apis::ChainAccounts;
+use runtime_apis::{ChainAccounts, RpcLendingPool, RpcLoanAccount};
 use scale_info::prelude::string::String;
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
@@ -347,6 +347,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
 	type PriceFeedApi = ChainlinkOracle;
+	type ChpSystemApi = LendingPools;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -1188,6 +1189,7 @@ impl pallet_cf_lending_pools::Config for Runtime {
 	type SwapRequestHandler = Swapping;
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
+	type PriceApi = ChainlinkOracle;
 }
 
 #[frame_support::runtime]
@@ -2223,6 +2225,24 @@ impl_runtime_apis! {
 						})
 					}).collect()
 				}),
+				lending_positions: Asset::all().filter_map(|asset| {
+					pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::get(asset).and_then(|pool| {
+						pool.lender_shares.get(&account_id).map(|share| {
+							(*share * pool.total_amount, pool.available_amount)
+						})
+					}).map(|(total_amount, available_amount)| {
+						LendingPosition {
+							asset,
+							total_amount,
+							available_amount: core::cmp::min(total_amount, available_amount),
+						}
+					})
+
+				}).collect(),
+				collateral_balances:
+					pallet_cf_lending_pools::LoanAccounts::<Runtime>::get(&account_id).map(|loan_account| {
+						loan_account.get_collateral().iter().map(|(asset, amount)| (*asset, *amount)).collect()
+					}).unwrap_or_default(),
 			}
 		}
 
@@ -2836,6 +2856,17 @@ impl_runtime_apis! {
 				vec![]
 			}
 		}
+
+		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>> {
+			pallet_cf_lending_pools::get_lending_pools::<Runtime>(asset)
+		}
+
+		fn cf_loan_accounts(borrower_id: Option<AccountId>) -> Vec<RpcLoanAccount<AccountId, AssetAmount>> {
+			pallet_cf_lending_pools::get_loan_accounts::<Runtime>(borrower_id)
+		}
+
+
+
 	}
 
 

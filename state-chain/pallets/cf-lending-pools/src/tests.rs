@@ -172,7 +172,7 @@ fn test_add_boost_funds() {
 				0,
 				TIER_5_BPS
 			),
-			crate::Error::<Test>::AddBoostAmountMustBeNonZero
+			crate::Error::<Test>::AmountMustBeNonZero
 		);
 
 		// Add some of the LP funds to the boost pool
@@ -483,7 +483,7 @@ fn test_create_boost_pools() {
 				RuntimeOrigin::root(),
 				vec![BoostPoolId { asset: Asset::Eth, tier: TIER_5_BPS }]
 			),
-			crate::Error::<Test>::BoostPoolAlreadyExists
+			crate::Error::<Test>::PoolAlreadyExists
 		);
 
 		// Make sure it did not remove the existing boost pool

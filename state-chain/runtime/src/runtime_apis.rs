@@ -39,7 +39,7 @@ use frame_support::sp_runtime::AccountId32;
 use pallet_cf_elections::electoral_systems::oracle_price::price::PriceAsset;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
-pub use pallet_cf_lending_pools::BoostPoolDetails;
+pub use pallet_cf_lending_pools::{BoostPoolDetails, RpcLendingPool, RpcLoanAccount};
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -56,6 +56,16 @@ use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
 };
+
+#[derive(PartialEq, Eq, Encode, Decode, Clone, TypeInfo, Serialize, Deserialize)]
+pub struct LendingPosition<Amount> {
+	#[serde(flatten)]
+	pub asset: Asset,
+	// Total amount owed to the lender
+	pub total_amount: Amount,
+	// Total amount available to the lender (equals total_amount if the pool has enough liquidity)
+	pub available_amount: Amount,
+}
 
 type VanityName = Vec<u8>;
 
@@ -223,6 +233,7 @@ mod old {
 }
 
 impl From<old::AuctionState> for AuctionState {
+	#[allow(deprecated)]
 	fn from(old: old::AuctionState) -> Self {
 		AuctionState {
 			epoch_duration: old.epoch_duration,
@@ -262,6 +273,8 @@ pub struct LiquidityProviderInfo {
 	pub balances: Vec<(Asset, AssetAmount)>,
 	pub earned_fees: AssetMap<AssetAmount>,
 	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
+	pub lending_positions: Vec<LendingPosition<AssetAmount>>,
+	pub collateral_balances: Vec<(Asset, AssetAmount)>,
 }
 
 #[derive(Encode, Decode, TypeInfo, Default)]
@@ -463,7 +476,7 @@ pub struct NetworkFees {
 //  - Handle the dummy method gracefully in the custom rpc implementation using
 //    runtime_api().api_version().
 decl_runtime_apis!(
-	#[api_version(5)]
+	#[api_version(6)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -653,6 +666,10 @@ decl_runtime_apis!(
 		fn cf_oracle_prices(
 			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		) -> Vec<OraclePrice>;
+		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>>;
+		fn cf_loan_accounts(
+			borrower_id: Option<AccountId32>,
+		) -> Vec<RpcLoanAccount<AccountId32, AssetAmount>>;
 	}
 );
 

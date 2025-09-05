@@ -27,11 +27,19 @@ use cf_primitives::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
+use crate::lending::LoanId;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SwapType {
 	Swap,
 	NetworkFee,
 	IngressEgressFee,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum LendingSwapType<AccountId> {
+	Liquidation { borrower_id: AccountId, loan_id: LoanId },
+	FeeSwap { pool_asset: Asset },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -42,6 +50,9 @@ pub enum SwapOutputActionGeneric<Address, AccountId> {
 	},
 	CreditOnChain {
 		account_id: AccountId,
+	},
+	CreditLendingPool {
+		swap_type: LendingSwapType<AccountId>,
 	},
 }
 
@@ -63,6 +74,8 @@ impl<AccountId> SwapRequestType<AccountId> {
 						},
 					SwapOutputAction::CreditOnChain { account_id } =>
 						SwapOutputActionEncoded::CreditOnChain { account_id },
+					SwapOutputActionGeneric::CreditLendingPool { swap_type } =>
+						SwapOutputActionEncoded::CreditLendingPool { swap_type },
 				},
 			},
 		}
@@ -113,6 +126,12 @@ impl<AccountId> From<ChannelRefundParametersCheckedInternal<AccountId>>
 			max_oracle_price_slippage: params.max_oracle_price_slippage,
 		}
 	}
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct SwapExecutionProgress {
+	pub remaining_input_amount: AssetAmount,
+	pub accumulated_output_amount: AssetAmount,
 }
 
 pub trait SwapRequestHandler {
@@ -191,4 +210,8 @@ pub trait SwapRequestHandler {
 			SwapOrigin::OnChainAccount(account_id),
 		)
 	}
+
+	fn inspect_swap_request(swap_request_id: SwapRequestId) -> Option<SwapExecutionProgress>;
+
+	fn abort_swap_request(swap_request_id: SwapRequestId) -> Option<SwapExecutionProgress>;
 }
