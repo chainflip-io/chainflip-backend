@@ -17,6 +17,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
+#![feature(extract_if)]
 
 mod mock;
 mod tests;
@@ -75,9 +76,6 @@ type Ed25519Signature = ed25519::Signature;
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
 	RegistrationBondPercentage {
-		percentage: Percent,
-	},
-	AuctionBidCutoffPercentage {
 		percentage: Percent,
 	},
 	RedemptionPeriodAsPercentage {
@@ -306,12 +304,6 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn registration_mab_percentage)]
 	pub(super) type RegistrationBondPercentage<T: Config> = StorageValue<_, Percent, ValueQuery>;
-
-	/// Auction losers whose bids are below this percentage of the MAB will not be excluded from
-	/// participating in Keygen.
-	#[pallet::storage]
-	#[pallet::getter(fn auction_bid_cutoff_percentage)]
-	pub(super) type AuctionBidCutoffPercentage<T: Config> = StorageValue<_, Percent, ValueQuery>;
 
 	/// Determines the minimum version that each CFE must report to be considered qualified
 	/// for Keygen.
@@ -660,9 +652,6 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			match update {
-				PalletConfigUpdate::AuctionBidCutoffPercentage { percentage } => {
-					<AuctionBidCutoffPercentage<T>>::put(percentage);
-				},
 				PalletConfigUpdate::RedemptionPeriodAsPercentage { percentage } => {
 					<RedemptionPeriodAsPercentage<T>>::put(percentage);
 				},
@@ -1287,7 +1276,6 @@ pub mod pallet {
 		pub redemption_period_as_percentage: Percent,
 		pub authority_set_min_size: AuthorityCount,
 		pub auction_parameters: SetSizeParameters,
-		pub auction_bid_cutoff_percentage: Percent,
 		pub max_authority_set_contraction_percentage: Percent,
 	}
 
@@ -1304,7 +1292,6 @@ pub mod pallet {
 					max_size: 15,
 					max_expansion: 5,
 				},
-				auction_bid_cutoff_percentage: Zero::zero(),
 				max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 			}
 		}
@@ -1327,8 +1314,6 @@ pub mod pallet {
 
 			Pallet::<T>::try_update_auction_parameters(self.auction_parameters)
 				.expect("we should provide valid auction parameters at genesis");
-
-			AuctionBidCutoffPercentage::<T>::set(self.auction_bid_cutoff_percentage);
 
 			self.genesis_authorities.iter().for_each(|v| {
 				Pallet::<T>::activate_bidding(ValidatorIdOf::<T>::into_ref(v))
@@ -1531,7 +1516,9 @@ impl<T: Config> Pallet<T> {
 			.collect::<BTreeMap<_, _>>();
 
 		for outgoing_delegator in outgoing_delegators {
-			if !new_delegator_bids.contains_key(&outgoing_delegator) {
+			if !new_delegator_bids.contains_key(&outgoing_delegator) &&
+				!new_authorities.contains(ValidatorIdOf::<T>::from_ref(&outgoing_delegator))
+			{
 				T::Bonder::update_bond(&outgoing_delegator.clone().into(), T::Amount::from(0_u128));
 				Self::deposit_event(Event::UnDelegationFinalized {
 					delegator: outgoing_delegator.clone(),
@@ -1563,6 +1550,31 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::<T>::RotationAborted);
 	}
 
+	#[cfg(test)]
+	pub fn dry_run_auction() -> Result<AuctionOutcome<ValidatorIdOf<T>, T::Amount>, AuctionError> {
+		let (delegation_snapshots, independent_bids) =
+			Self::build_delegation_snapshots::<T::KeygenQualification>();
+
+		let auction_bids = |delegation_snapshots: &BTreeMap<
+			T::AccountId,
+			DelegationSnapshot<T>,
+		>|
+		 -> Vec<Bid<_, _>> {
+			delegation_snapshots
+				.values()
+				.flat_map(|snapshot| snapshot.effective_validator_bids())
+				.chain(independent_bids.clone())
+				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
+				.collect::<Vec<_>>()
+		};
+
+		SetSizeMaximisingAuctionResolver::try_new(
+			T::EpochInfo::current_authority_count(),
+			AuctionParameters::<T>::get(),
+		)
+		.and_then(|resolver| resolver.resolve_auction(auction_bids(&delegation_snapshots)))
+	}
+
 	fn start_authority_rotation() -> Weight {
 		if !T::SafeMode::get().authority_rotation_enabled {
 			log::warn!(
@@ -1580,22 +1592,49 @@ impl<T: Config> Pallet<T> {
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 
-		let (delegation_snapshots, independent_bids) =
+		let (mut delegation_snapshots, independent_bids) =
 			Self::build_delegation_snapshots::<T::KeygenQualification>();
 
-		let auction_bids = delegation_snapshots
-			.values()
-			.flat_map(|snapshot| snapshot.effective_validator_bids())
-			.chain(independent_bids)
-			.map(|(bidder_id, amount)| Bid { bidder_id, amount })
-			.collect::<Vec<_>>();
+		let auction_bids = |delegation_snapshots: &BTreeMap<
+			T::AccountId,
+			DelegationSnapshot<T>,
+		>|
+		 -> Vec<Bid<_, _>> {
+			delegation_snapshots
+				.values()
+				.flat_map(|snapshot| snapshot.effective_validator_bids())
+				.chain(independent_bids.clone())
+				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
+				.collect::<Vec<_>>()
+		};
 
 		match SetSizeMaximisingAuctionResolver::try_new(
 			T::EpochInfo::current_authority_count(),
 			AuctionParameters::<T>::get(),
 		)
 		.and_then(|resolver| {
-			resolver.resolve_auction(auction_bids, AuctionBidCutoffPercentage::<T>::get())
+			resolver
+				.resolve_auction(auction_bids(&delegation_snapshots))
+				.map(|outcome| (outcome, resolver))
+		})
+		.map(|(auction_outcome, resolver)| {
+			let mut current_outcome = auction_outcome;
+			loop {
+				let old_snapshots = delegation_snapshots.clone();
+				for (_operator, snapshot) in delegation_snapshots.iter_mut() {
+					snapshot.maybe_optimize_bid(&current_outcome);
+				}
+				if delegation_snapshots == old_snapshots {
+					break;
+				} else if let Ok(new_outcome) =
+					resolver.resolve_auction(auction_bids(&delegation_snapshots))
+				{
+					current_outcome = new_outcome;
+				} else {
+					break;
+				}
+			}
+			current_outcome
 		}) {
 			Ok(auction_outcome) => {
 				Self::deposit_event(Event::AuctionCompleted(
@@ -1605,9 +1644,8 @@ impl<T: Config> Pallet<T> {
 				debug_assert!(!auction_outcome.winners.is_empty());
 				log::info!(
 					target: "cf-validator",
-					"Auction resolved with {} winners and {} losers. Bond will be {}FLIP.",
+					"Auction resolved with {} winners. Bond will be {}FLIP.",
 					auction_outcome.winners.len(),
-					auction_outcome.losers.len(),
 					UniqueSaturatedInto::<u128>::unique_saturated_into(auction_outcome.bond) /
 					FLIPPERINOS_PER_FLIP,
 				);
@@ -1615,7 +1653,7 @@ impl<T: Config> Pallet<T> {
 				// Without reading the full list of bidders we can't know the real number.
 				// Use the winners and losers as an approximation.
 				let weight = T::ValidatorWeightInfo::start_authority_rotation(
-					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
+					(auction_outcome.winners.len()) as u32,
 				);
 
 				// Register the delegation snapshots for the next epoch.

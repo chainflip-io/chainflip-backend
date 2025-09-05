@@ -222,7 +222,6 @@ impl ExtBuilder {
 					max_size: self.max_authorities,
 					max_expansion: self.max_authorities,
 				},
-				auction_bid_cutoff_percentage: Percent::from_percent(0),
 				max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 			},
 			ethereum_vault: EthereumVaultConfig {

@@ -1,6 +1,6 @@
 use crate::{
-	Config, DelegationCapacityFactor, DelegationSnapshots, OperatorSettingsLookup, ValidatorIdOf,
-	ValidatorToOperator,
+	AuctionOutcome, Config, DelegationCapacityFactor, DelegationSnapshots, OperatorSettingsLookup,
+	ValidatorIdOf, ValidatorToOperator,
 };
 use cf_primitives::EpochIndex;
 use cf_traits::{EpochInfo, Issuance, RewardsDistribution, Slashing};
@@ -14,7 +14,7 @@ use frame_support::{
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
 /// The minimum delegation fee that can be charged, in basis points.
 pub const MIN_OPERATOR_FEE: u32 = 200;
@@ -161,7 +161,7 @@ impl<T: Config> DelegationSnapshot<T> {
 		if self.validators.is_empty() {
 			return Default::default();
 		}
-		let avg_bid = self.total_available_bid() / T::Amount::from(self.validators.len() as u32);
+		let avg_bid = self.avg_bid();
 		self.validators.keys().map(|validator| (validator.clone(), avg_bid)).collect()
 	}
 
@@ -207,6 +207,43 @@ impl<T: Config> DelegationSnapshot<T> {
 		core::iter::once((&self.operator, operator_cut))
 			.chain(validator_cuts)
 			.chain(delegator_cuts)
+	}
+
+	pub fn avg_bid(&self) -> T::Amount {
+		self.total_available_bid() / T::Amount::from(self.validators.len() as u32)
+	}
+
+	fn move_lowest_validator_to_delegator(&mut self) {
+		if let Some((validator, amount)) =
+			self.validators.clone().into_iter().min_by_key(|(_, v)| *v)
+		{
+			self.validators.remove(&validator);
+			self.delegators.insert(validator.into_ref().clone(), amount);
+		}
+	}
+
+	pub fn maybe_optimize_bid(
+		&mut self,
+		auction_outcome: &AuctionOutcome<ValidatorIdOf<T>, T::Amount>,
+	) {
+		while self.validators.len() > 1 && self.avg_bid() <= auction_outcome.bond {
+			// in the case where the operator's nodes are at the boundary, maybe some of the
+			// validators didnt make the set and so we can optimize further where we reduce one node
+			// and increase the avg bid which would allow us to potentially add more of the
+			// operator's nodes to the set thereby increasing the number of nodes in the set.
+			if self.avg_bid() == auction_outcome.bond {
+				if self.validators.iter().any(|(val, _)| !auction_outcome.winners.contains(val)) {
+					self.move_lowest_validator_to_delegator();
+				} else {
+					break;
+				}
+			}
+			// in case where all of operator's nodes are below bond, we increase the avg bid
+			// sequentially until either the avg bid is equal to bond or greater.
+			else {
+				self.move_lowest_validator_to_delegator();
+			}
+		}
 	}
 }
 

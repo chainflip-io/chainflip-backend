@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_primitives::AuthorityCount;
-use sp_runtime::{Percent, Permill};
+use sp_runtime::Permill;
 pub use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{chainflip::Offence, BlockNumber, FlipBalance, SetSizeParameters};
 
@@ -99,7 +99,5 @@ pub const REDEMPTION_TTL_SECS: u64 = 2 * 3600;
 
 /// Determines the expiry duration for governance proposals.
 pub const EXPIRY_SPAN_IN_SECONDS: u64 = 24 * 3600;
-
-pub const AUCTION_BID_CUTOFF_PERCENTAGE: Percent = Percent::from_percent(10);
 
 pub const SHARED_DATA_REFERENCE_LIFETIME: u32 = 8;

@@ -63,8 +63,6 @@ pub enum AuctionError {
 pub struct AuctionOutcome<Id, Amount> {
 	/// The auction winners, sorted by descending bid.
 	pub winners: Vec<Id>,
-	/// The auction losers, sorted by descending bid.
-	pub losers: Vec<Id>,
 	/// The resulting bond for the next epoch.
 	pub bond: Amount,
 }
@@ -96,7 +94,6 @@ impl SetSizeMaximisingAuctionResolver {
 	pub fn resolve_auction<CandidateId: Clone, BidAmount: Copy + AtLeast32BitUnsigned>(
 		&self,
 		mut auction_candidates: Vec<Bid<CandidateId, BidAmount>>,
-		auction_bid_cutoff_percentage: Percent,
 	) -> Result<AuctionOutcome<CandidateId, BidAmount>, AuctionError> {
 		ensure!(auction_candidates.len() as u32 >= self.parameters.min_size, {
 			log::warn!(
@@ -121,33 +118,17 @@ impl SetSizeMaximisingAuctionResolver {
 			.map(|bid| bid.amount)
 			.expect("Can't run auction with no candidates, and candidates must be funded > 0.");
 		let winners = auction_candidates.into_iter().map(|bid| bid.bidder_id).collect();
-		let cutoff_bid = auction_bid_cutoff_percentage * bond;
 
 		debug_assert!(losers.is_sorted_by_key(|&Bid { amount, .. }| Reverse(amount)));
 
-		let losers = losers
-			.into_iter()
-			.map_while(
-				|Bid { amount, bidder_id }| {
-					if amount >= cutoff_bid {
-						Some(bidder_id)
-					} else {
-						None
-					}
-				},
-			)
-			.collect();
-
-		Ok(AuctionOutcome { winners, losers, bond })
+		Ok(AuctionOutcome { winners, bond })
 	}
 }
 
 #[cfg(test)]
 mod test_auction_resolution {
 	use super::*;
-
 	use cf_traits::Bid;
-	use sp_std::collections::btree_set::BTreeSet;
 
 	#[test]
 	fn test_parameter_validation() {
@@ -199,13 +180,7 @@ mod test_auction_resolution {
 
 	macro_rules! check_auction_resolution_invariants {
 		($candidates:ident, $resolver:ident, $outcome:ident) => {
-			let AuctionOutcome { winners, losers, .. } = $outcome;
-
-			assert_eq!(
-				winners.iter().chain(losers.iter()).cloned().collect::<BTreeSet<_>>(),
-				$candidates.iter().map(|bid| bid.bidder_id).collect::<BTreeSet<_>>(),
-				"Winners and losers together must make up all candidates."
-			);
+			let AuctionOutcome { winners, .. } = $outcome;
 
 			assert!(
 				winners.len() as u32 >= $resolver.parameters.min_size,
@@ -237,9 +212,7 @@ mod test_auction_resolution {
 			.map(|bidder_id| Bid { bidder_id, amount: 100u128 })
 			.collect::<Vec<_>>();
 
-		let outcome = auction_resolver
-			.resolve_auction(candidates.clone(), Default::default())
-			.unwrap();
+		let outcome = auction_resolver.resolve_auction(candidates.clone()).unwrap();
 
 		assert_eq!(outcome.winners.len() as u32, MAX_SIZE);
 
@@ -260,9 +233,7 @@ mod test_auction_resolution {
 			.map(|bidder_id| Bid { bidder_id, amount: 100u128 })
 			.collect::<Vec<_>>();
 
-		let outcome = auction_resolver
-			.resolve_auction(candidates.clone(), Default::default())
-			.unwrap();
+		let outcome = auction_resolver.resolve_auction(candidates.clone()).unwrap();
 
 		assert_eq!(outcome.winners.len() as u32, CURRENT_SIZE + MAX_EXPANSION);
 
@@ -292,7 +263,7 @@ mod test_auction_resolution {
 			.map(|(bidder_id, amount)| Bid { bidder_id, amount })
 			.collect();
 
-		let outcome = auction_resolver.resolve_auction(candidates, Default::default()).unwrap();
+		let outcome = auction_resolver.resolve_auction(candidates).unwrap();
 
 		assert_eq!(outcome.bond, 195);
 		assert_eq!(outcome.winners.len(), CURRENT_SIZE as usize);
@@ -303,7 +274,6 @@ mod test_auction_resolution {
 		const CURRENT_SIZE: u32 = 100;
 		const MAX_EXPANSION: u32 = 0;
 		const NUM_LOSERS: u32 = 50;
-		const CUTOFF_PERCENT: Percent = Percent::from_percent(50);
 		const AUCTION_PARAMETERS: SetSizeParameters = SetSizeParameters {
 			min_size: CURRENT_SIZE,
 			max_size: CURRENT_SIZE,
@@ -323,11 +293,9 @@ mod test_auction_resolution {
 			.map(|(bidder_id, amount)| Bid { bidder_id, amount })
 			.collect();
 
-		let outcome = auction_resolver.resolve_auction(candidates, CUTOFF_PERCENT).unwrap();
+		let outcome = auction_resolver.resolve_auction(candidates).unwrap();
 
 		assert_eq!(outcome.bond, NUM_LOSERS);
 		assert_eq!(outcome.winners.len(), CURRENT_SIZE as usize);
-
-		assert_eq!(outcome.losers.len() as u32, CUTOFF_PERCENT * NUM_LOSERS);
 	}
 }

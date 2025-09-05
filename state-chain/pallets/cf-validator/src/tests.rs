@@ -36,7 +36,10 @@ use frame_support::{
 	traits::{HandleLifetime, OriginTrait},
 };
 use frame_system::RawOrigin;
+use quickcheck::TestResult;
+use quickcheck_macros::quickcheck;
 use sp_runtime::testing::UintAuthorityId;
+use sp_std::vec;
 
 const NOBODY: u64 = 999; // Non-existent account for testing
 const GENESIS_EPOCH: u32 = 1;
@@ -847,7 +850,6 @@ fn failed_keygen_with_offenders(offenders: impl IntoIterator<Item = u64>) {
 	CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
 		RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
 			winners: CANDIDATES.collect(),
-			losers: Default::default(),
 			bond: Default::default(),
 		}),
 	));
@@ -918,7 +920,6 @@ mod key_handover {
 		CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
 			RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
 				winners: CANDIDATES.collect(),
-				losers: Default::default(),
 				bond: Default::default(),
 			}),
 		));
@@ -1461,7 +1462,6 @@ fn validator_set_change_propagates_to_session_pallet() {
 			CurrentRotationPhase::put(RotationPhase::<Test>::NewKeysActivated(
 				RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
 					winners: WINNING_BIDS.map(|bidder| bidder.bidder_id).to_vec(),
-					losers: vec![],
 					bond: EXPECTED_BOND,
 				}),
 			));
@@ -1475,7 +1475,6 @@ fn validator_set_change_propagates_to_session_pallet() {
 #[test]
 fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
-		const NEW_AUCTION_BID_CUTOFF_PERCENTAGE: Percent = Percent::from_percent(10);
 		const NEW_REDEMPTION_PERIOD_AS_PERCENTAGE: Percent = Percent::from_percent(10);
 		const NEW_REGISTRATION_BOND_PERCENTAGE: Percent = Percent::from_percent(10);
 		const NEW_AUTHORITY_SET_MIN_SIZE: u32 = 0;
@@ -1487,7 +1486,6 @@ fn can_update_all_config_items() {
 		const NEW_DELEGATION_CAPACITY_FACTOR: Option<u32> = Some(5);
 
 		// Check that the default values are different from the new ones
-		assert_ne!(AuctionBidCutoffPercentage::<Test>::get(), NEW_AUCTION_BID_CUTOFF_PERCENTAGE);
 		assert_ne!(
 			RedemptionPeriodAsPercentage::<Test>::get(),
 			NEW_REDEMPTION_PERIOD_AS_PERCENTAGE
@@ -1505,9 +1503,6 @@ fn can_update_all_config_items() {
 
 		// Update all config items
 		let updates = vec![
-			PalletConfigUpdate::AuctionBidCutoffPercentage {
-				percentage: NEW_AUCTION_BID_CUTOFF_PERCENTAGE,
-			},
 			PalletConfigUpdate::RedemptionPeriodAsPercentage {
 				percentage: NEW_REDEMPTION_PERIOD_AS_PERCENTAGE,
 			},
@@ -1534,7 +1529,6 @@ fn can_update_all_config_items() {
 		}
 
 		// Check that the new values were set
-		assert_eq!(AuctionBidCutoffPercentage::<Test>::get(), NEW_AUCTION_BID_CUTOFF_PERCENTAGE);
 		assert_eq!(
 			RedemptionPeriodAsPercentage::<Test>::get(),
 			NEW_REDEMPTION_PERIOD_AS_PERCENTAGE
@@ -1554,8 +1548,8 @@ fn can_update_all_config_items() {
 		assert_noop!(
 			ValidatorPallet::update_pallet_config(
 				OriginTrait::signed(ALICE),
-				PalletConfigUpdate::AuctionBidCutoffPercentage {
-					percentage: NEW_AUCTION_BID_CUTOFF_PERCENTAGE,
+				PalletConfigUpdate::DelegationCapacityFactor {
+					factor: NEW_DELEGATION_CAPACITY_FACTOR
 				}
 			),
 			sp_runtime::traits::BadOrigin
@@ -2542,6 +2536,243 @@ mod delegation {
 				operator: BOB,
 			}));
 		});
+	}
+}
+
+#[cfg(test)]
+pub mod auction_optimization {
+
+	use cf_primitives::FlipBalance;
+
+	use super::*;
+
+	const OP_1: u64 = 1001;
+	const OP_2: u64 = 1002;
+
+	const FLIP_MAX_SUPPLY: FlipBalance = 90_000_000_000_000_000_000_000_000;
+
+	fn setup_bids(
+		op_1_bids: Vec<Bid<ValidatorId, Amount>>,
+		op_2_bids: Vec<Bid<ValidatorId, Amount>>,
+	) {
+		set_default_test_bids();
+		add_bids(op_1_bids.iter().chain(op_2_bids.iter()).cloned().collect());
+
+		assert_ok!(ValidatorPallet::register_as_operator(
+			OriginTrait::signed(OP_1),
+			OPERATOR_SETTINGS,
+		));
+		assert_ok!(ValidatorPallet::register_as_operator(
+			OriginTrait::signed(OP_2),
+			OPERATOR_SETTINGS,
+		));
+
+		for bid in op_1_bids {
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_1), bid.bidder_id));
+			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(bid.bidder_id), OP_1));
+			assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+		}
+
+		for bid in op_2_bids {
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_2), bid.bidder_id));
+			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(bid.bidder_id), OP_2));
+			assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+		}
+	}
+
+	#[allow(clippy::type_complexity)]
+	fn create_operator_bids_combinations<A>(
+		bid_combos: Vec<(Vec<A>, Vec<A>, Vec<ValidatorId>, A)>,
+	) -> Vec<(Vec<Bid<ValidatorId, A>>, Vec<Bid<ValidatorId, A>>, Vec<ValidatorId>, A)> {
+		bid_combos
+			.into_iter()
+			.map(|(op_1_bids, op_2_bids, expected_primary_candidates, expected_bond)| {
+				let mut validator_id_counter: ValidatorId = 99;
+				(
+					op_1_bids
+						.into_iter()
+						.map(|amount| {
+							validator_id_counter += 1;
+							Bid { bidder_id: validator_id_counter, amount }
+						})
+						.collect(),
+					op_2_bids
+						.into_iter()
+						.map(|amount| {
+							validator_id_counter += 1;
+							Bid { bidder_id: validator_id_counter, amount }
+						})
+						.collect(),
+					expected_primary_candidates,
+					expected_bond,
+				)
+			})
+			.collect()
+	}
+
+	#[test]
+	fn test_auction_optimization() {
+		// the validator_ids start from 100 onwards
+
+		let operator_bids_combinations = create_operator_bids_combinations(vec![
+			// both validators from op 1 make it, only one from op 2
+			(vec![150, 140], vec![130, 100], vec![100, 101, 102, 0], 120),
+			// both ops combine into 1 val to make it
+			(vec![80, 90], vec![60, 70], vec![101, 103, 0, 1], 120),
+			// op 1 converts bid to one val to make it, op 2 can't make it even if he combines into
+			// 1
+			(vec![90, 95], vec![50, 45], vec![101, 0, 1, 2], 110),
+			// op 2 can now make it by combining 3 vals into 1 to make it and op 1 combines 2 into
+			// 1.
+			(vec![90, 95], vec![50, 45, 30], vec![101, 102, 0, 1], 120),
+			// op 2 combines into 2
+			(vec![90, 95], vec![80, 90, 95], vec![101, 103, 104, 0], 120),
+			// both consolidate their vals when they have nodes at the boundary of cutoff such that
+			// some vals make it and some dont. We still consolidate the bids to increase the
+			// number of vals in the set
+			(vec![220, 205, 200], vec![150, 140, 130], vec![100, 101, 103, 104], 210),
+		]);
+
+		for (mut op_1_bids, mut op_2_bids, expected_primary_candidates, expected_bond) in
+			operator_bids_combinations
+		{
+			new_test_ext().then_execute_with_checks(|| {
+				setup_bids(op_1_bids.clone(), op_2_bids.clone());
+
+				ValidatorPallet::start_authority_rotation();
+
+				if let RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+					new_phase:
+						RotationPhase::KeygensInProgress(RotationState {
+							primary_candidates,
+							banned: _,
+							bond,
+							new_epoch_index: _,
+						}),
+				}) = last_event::<Test>()
+				{
+					assert_eq!(
+						primary_candidates.into_iter().collect::<BTreeSet<_>>(),
+						expected_primary_candidates.clone().into_iter().collect::<BTreeSet<_>>()
+					);
+					assert_eq!(bond, expected_bond);
+
+					let max_op1_bidder =
+						op_1_bids.iter().max_by_key(|b| b.amount).unwrap().bidder_id;
+					let max_op2_bidder =
+						op_2_bids.iter().max_by_key(|b| b.amount).unwrap().bidder_id;
+
+					assert_eq!(
+						DelegationSnapshots::<Test>::get(CurrentEpoch::<Test>::get() + 1, OP_1)
+							.unwrap(),
+						DelegationSnapshot {
+							operator: OP_1,
+							validators: op_1_bids
+								.extract_if(.., |Bid { bidder_id, amount: _ }| {
+									expected_primary_candidates.contains(bidder_id) ||
+										*bidder_id == max_op1_bidder
+								})
+								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+								.collect(),
+							delegators: op_1_bids
+								.into_iter()
+								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+								.collect(),
+							delegation_fee_bps: OPERATOR_SETTINGS.fee_bps,
+							capacity_factor: None,
+						}
+					);
+
+					assert_eq!(
+						DelegationSnapshots::<Test>::get(CurrentEpoch::<Test>::get() + 1, OP_2)
+							.unwrap(),
+						DelegationSnapshot {
+							operator: OP_2,
+							validators: op_2_bids
+								.extract_if(.., |Bid { bidder_id, amount: _ }| {
+									expected_primary_candidates.contains(bidder_id) ||
+										*bidder_id == max_op2_bidder
+								})
+								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+								.collect(),
+							delegators: op_2_bids
+								.into_iter()
+								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+								.collect(),
+							delegation_fee_bps: OPERATOR_SETTINGS.fee_bps,
+							capacity_factor: None,
+						}
+					);
+				} else {
+					panic!("auction optimization test error: expected event not found ")
+				}
+			});
+		}
+	}
+
+	#[quickcheck]
+	fn test_auction_optimization_invariants(
+		bid_combos: Vec<(Vec<FlipBalance>, Vec<FlipBalance>)>,
+	) -> TestResult {
+		if create_operator_bids_combinations(
+			bid_combos
+				.into_iter()
+				.map(|(b1, b2)| {
+					(
+						b1.into_iter().map(|b| b % FLIP_MAX_SUPPLY).collect(),
+						b2.into_iter().map(|b| b % FLIP_MAX_SUPPLY).collect(),
+						Default::default(),
+						Default::default(),
+					)
+				})
+				.collect::<Vec<_>>(),
+		)
+		.into_iter()
+		.any(|(op_1_bids, op_2_bids, _, _)| {
+			new_test_ext()
+				.then_execute_with_checks(|| -> bool {
+					setup_bids(op_1_bids, op_2_bids);
+
+					let single_auction_outcome = ValidatorPallet::dry_run_auction().unwrap();
+
+					ValidatorPallet::start_authority_rotation();
+
+					if let RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+						new_phase:
+							RotationPhase::KeygensInProgress(RotationState {
+								primary_candidates: _,
+								banned: _,
+								bond,
+								new_epoch_index: _,
+							}),
+					}) = last_event::<Test>()
+					{
+						let future_epoch = CurrentEpoch::<Test>::get() + 1;
+						for snapshot in
+							DelegationSnapshots::<Test>::iter_prefix_values(future_epoch)
+						{
+							snapshot.validators.iter().for_each(|(val, _)| {
+								assert_eq!(
+									ValidatorToOperator::<Test>::get(future_epoch, val).unwrap(),
+									snapshot.operator
+								);
+								assert_eq!(
+									ManagedValidators::<Test>::get(val).unwrap(),
+									snapshot.operator
+								)
+							})
+						}
+						bond < single_auction_outcome.bond
+					} else {
+						true
+					}
+				})
+				.into_context()
+		}) {
+			TestResult::failed()
+		} else {
+			TestResult::passed()
+		}
 	}
 }
 

@@ -20,8 +20,7 @@ use sp_std::collections::btree_set::BTreeSet;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 pub struct RotationState<Id, Amount> {
-	primary_candidates: Vec<Id>,
-	secondary_candidates: Vec<Id>,
+	pub primary_candidates: Vec<Id>,
 	pub banned: BTreeSet<Id>,
 	pub bond: Amount,
 	pub new_epoch_index: EpochIndex,
@@ -29,11 +28,10 @@ pub struct RotationState<Id, Amount> {
 
 impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amount> {
 	pub fn from_auction_outcome<T: Config>(
-		AuctionOutcome { winners, losers, bond }: AuctionOutcome<Id, Amount>,
+		AuctionOutcome { winners, bond, .. }: AuctionOutcome<Id, Amount>,
 	) -> Self {
 		RotationState {
 			primary_candidates: winners,
-			secondary_candidates: losers,
 			banned: Default::default(),
 			bond,
 			new_epoch_index: T::EpochInfo::epoch_index() + 1,
@@ -49,9 +47,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 	pub fn authority_candidates(&self) -> BTreeSet<Id> {
 		self.primary_candidates
 			.iter()
-			.chain(&self.secondary_candidates)
 			.filter(|id| !self.banned.contains(id))
-			.take(self.primary_candidates.len())
 			.cloned()
 			.collect()
 	}
@@ -81,7 +77,6 @@ mod rotation_state_tests {
 	fn banning_is_additive() {
 		let mut rotation_state = RotationState::<Id, Amount> {
 			primary_candidates: (0..10).collect(),
-			secondary_candidates: (20..30).collect(),
 			banned: Default::default(),
 			bond: 500,
 			new_epoch_index: 2,
@@ -103,7 +98,6 @@ mod rotation_state_tests {
 	fn authority_candidates_prefers_primaries_and_excludes_banned() {
 		let rotation_state = RotationState::<Id, Amount> {
 			primary_candidates: (0..10).collect(),
-			secondary_candidates: (20..30).collect(),
 			banned: BTreeSet::from([1, 2, 4]),
 			bond: 500,
 			new_epoch_index: 2,
@@ -111,6 +105,6 @@ mod rotation_state_tests {
 
 		let candidates = rotation_state.authority_candidates();
 
-		assert_eq!(candidates, BTreeSet::from([0, 3, 5, 6, 7, 8, 9, 20, 21, 22]));
+		assert_eq!(candidates, BTreeSet::from([0, 3, 5, 6, 7, 8, 9]));
 	}
 }

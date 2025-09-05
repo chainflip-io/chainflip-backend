@@ -30,6 +30,8 @@ mod old {
 	pub type Backups<T: Config> = StorageValue<Pallet<T>, ()>;
 	#[frame_support::storage_alias]
 	pub type BackupRewardNodePercentage<T: Config> = StorageValue<Pallet<T>, ()>;
+	#[frame_support::storage_alias]
+	pub type AuctionBidCutoffPercentage<T: Config> = StorageValue<Pallet<T>, ()>;
 }
 
 impl<T> UncheckedOnRuntimeUpgrade for Migration<T>
@@ -40,12 +42,14 @@ where
 	fn pre_upgrade() -> Result<Vec<u8>, frame_support::pallet_prelude::DispatchError> {
 		assert!(old::Backups::<T>::exists());
 		assert!(old::BackupRewardNodePercentage::<T>::exists());
+		assert!(old::AuctionBidCutoffPercentage::<T>::exists());
 		Ok(Default::default())
 	}
 
 	fn on_runtime_upgrade() -> frame_support::pallet_prelude::Weight {
 		old::Backups::<T>::kill();
 		old::BackupRewardNodePercentage::<T>::kill();
+		old::AuctionBidCutoffPercentage::<T>::kill();
 		Default::default()
 	}
 
@@ -53,6 +57,7 @@ where
 	fn post_upgrade(_: Vec<u8>) -> Result<(), frame_support::pallet_prelude::DispatchError> {
 		assert!(!old::Backups::<T>::exists());
 		assert!(!old::BackupRewardNodePercentage::<T>::exists());
+		assert!(!old::AuctionBidCutoffPercentage::<T>::exists());
 		Ok(())
 	}
 }

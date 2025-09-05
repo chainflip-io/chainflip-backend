@@ -1799,7 +1799,6 @@ impl_runtime_apis! {
 			.and_then(|resolver| {
 				resolver.resolve_auction(
 					Validator::get_qualified_bidders::<<Runtime as pallet_cf_validator::Config>::KeygenQualification>(),
-					Validator::auction_bid_cutoff_percentage(),
 				)
 			})
 			.ok()
@@ -2977,7 +2976,6 @@ impl_runtime_apis! {
 			.and_then(|resolver| {
 				resolver.resolve_auction(
 					Validator::get_qualified_bidders::<<Runtime as pallet_cf_validator::Config>::KeygenQualification>(),
-					Validator::auction_bid_cutoff_percentage(),
 				)
 			})
 			.ok()

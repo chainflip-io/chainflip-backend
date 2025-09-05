@@ -472,7 +472,6 @@ pub fn inner_cf_development_config(
 			devnet::ETHEREUM_SAFETY_MARGIN,
 			devnet::ARBITRUM_SAFETY_MARGIN,
 			devnet::SOLANA_SAFETY_MARGIN,
-			devnet::AUCTION_BID_CUTOFF_PERCENTAGE,
 			SolanaElectionsConfig {
 				option_initial_state: Some(solana_elections::initial_state(
 					sol_vault_program,
@@ -664,7 +663,6 @@ macro_rules! network_spec {
 						ETHEREUM_SAFETY_MARGIN,
 						ARBITRUM_SAFETY_MARGIN,
 						SOLANA_SAFETY_MARGIN,
-						AUCTION_BID_CUTOFF_PERCENTAGE,
 						SolanaElectionsConfig {
 							option_initial_state: Some(solana_elections::initial_state(
 								sol_vault_program,
@@ -733,7 +731,6 @@ fn testnet_genesis(
 	ethereum_safety_margin: u64,
 	arbitrum_safety_margin: u64,
 	solana_safety_margin: u64,
-	auction_bid_cutoff_percentage: Percent,
 	solana_elections: state_chain_runtime::SolanaElectionsConfig,
 	bitcoin_elections: state_chain_runtime::BitcoinElectionsConfig,
 	generic_elections: state_chain_runtime::GenericElectionsConfig,
@@ -828,7 +825,6 @@ fn testnet_genesis(
 				.expect("At least one authority is required"),
 			authority_set_min_size: min_authorities,
 			auction_parameters,
-			auction_bid_cutoff_percentage,
 			max_authority_set_contraction_percentage,
 		},
 		session: state_chain_runtime::SessionConfig {
