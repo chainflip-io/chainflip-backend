@@ -15,13 +15,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	chainflip,
 	chainflip::{
+		self,
 		bitcoin_block_processor::BtcEvent,
 		bitcoin_elections::{
 			BitcoinBlockHeightWitnesserES, BitcoinDepositChannelWitnessingES,
-			BitcoinEgressWitnessingES, BitcoinLiveness, BitcoinVaultDepositWitnessing,
-			BitcoinVaultDepositWitnessingES,
+			BitcoinEgressWitnessingES, BitcoinFeeSettings, BitcoinLiveness,
+			BitcoinVaultDepositWitnessing, BitcoinVaultDepositWitnessingES,
 		},
 		elections::TypesFor,
 	},
@@ -54,13 +54,13 @@ mod old {
 
 	use super::*;
 	use cf_chains::btc::{self};
-	use frame_support::pallet_prelude::OptionQuery;
+	use frame_support::{pallet_prelude::OptionQuery, Twox64Concat};
 	use pallet_cf_elections::{
 		electoral_systems::{
 			block_witnesser::{primitives::CompactHeightTracker, state_machine::BWElectionType},
 			state_machine::core::hook_test_utils::EmptyHook,
 		},
-		Config,
+		Config, UniqueMonotonicIdentifier,
 	};
 
 	use sp_std::collections::btree_map::BTreeMap;
@@ -159,6 +159,15 @@ mod old {
 		<BitcoinLiveness as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
 	);
 
+	pub type CompositeElectoralSettings = (
+		<BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
+		<BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
+		<BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
+		<BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
+		(),
+		<BitcoinLiveness as ElectoralSystemTypes>::ElectoralSettings,
+	);
+
 	#[frame_support::storage_alias]
 	pub type ElectoralUnsynchronisedState<T: Config<I>, I: 'static> =
 		StorageValue<Pallet<T, I>, CompositeElectoralUnsynchronisedState, OptionQuery>;
@@ -166,6 +175,15 @@ mod old {
 	#[frame_support::storage_alias]
 	pub type ElectoralUnsynchronisedSettings<T: Config<I>, I: 'static> =
 		StorageValue<Pallet<T, I>, CompositeElectoralUnsynchronisedSettings, OptionQuery>;
+
+	#[frame_support::storage_alias]
+	pub type ElectoralSettings<T: Config<I>, I: 'static> = StorageMap<
+		Pallet<T, I>,
+		Twox64Concat,
+		UniqueMonotonicIdentifier,
+		CompositeElectoralSettings,
+		OptionQuery,
+	>;
 }
 
 impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
@@ -419,10 +437,33 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 
 			pallet_cf_elections::ElectoralUnsynchronisedSettings::<Runtime, BitcoinInstance>::put(
 				(
-					a, b, c, d, 10u32, // fee witnessing should happen every 10 SC blocks
+					a, b, c, d, 20u32, // fee witnessing should happen every 20 SC blocks
 					f,
 				),
 			);
+		}
+
+		// migrating settings
+		{
+			let settings_entries: Vec<_> =
+				old::ElectoralSettings::<Runtime, BitcoinInstance>::drain().collect();
+
+			for (id, (a, b, c, d, (), f)) in settings_entries {
+				pallet_cf_elections::ElectoralSettings::<Runtime, BitcoinInstance>::insert(
+					id,
+					(
+						a,
+						b,
+						c,
+						d,
+						BitcoinFeeSettings {
+							tx_sample_count_per_mempool_block: 20,
+							fixed_median_fee_adjustement_sat_per_vkilobyte: 1000,
+						},
+						f,
+					),
+				);
+			}
 		}
 
 		log::info!("🍩 Migration for BTC Election completed");
@@ -480,12 +521,24 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 
 		assert_eq!(current_state.1, 0);
 
-		let current_settings =
+		let current_unsynchronised_settings =
 			pallet_cf_elections::ElectoralUnsynchronisedSettings::<Runtime, BitcoinInstance>::get()
 				.unwrap()
 				.4;
 
-		assert_eq!(current_settings, 10);
+		assert_eq!(current_unsynchronised_settings, 10);
+
+		pallet_cf_elections::ElectoralSettings::<Runtime, BitcoinInstance>::iter().for_each(
+			|(_id, settings)| {
+				assert_eq!(
+					settings.4,
+					BitcoinFeeSettings {
+						tx_sample_count_per_mempool_block: 20,
+						fixed_median_fee_adjustement_sat_per_vkilobyte: 1000
+					}
+				);
+			},
+		);
 
 		Ok(())
 	}

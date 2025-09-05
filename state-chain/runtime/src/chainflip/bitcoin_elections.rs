@@ -18,6 +18,7 @@ use cf_chains::{
 use cf_primitives::{AccountId, ChannelId};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::Chainflip;
+use cf_utilities::derive_common_traits;
 use core::ops::RangeInclusive;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_broadcast::{TransactionConfirmation, TransactionOutIdToBroadcastId};
@@ -54,6 +55,7 @@ use pallet_cf_elections::{
 };
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo, VaultDepositWitness};
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get, MaxEncodedLen};
 use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
@@ -460,9 +462,16 @@ impl UpdateFeeHook<BtcAmount> for BitcoinFeeUpdateHook {
 		}
 	}
 }
+derive_common_traits! {
+	#[derive(TypeInfo)]
+	pub struct BitcoinFeeSettings {
+		pub tx_sample_count_per_mempool_block: u32,
+		pub fixed_median_fee_adjustement_sat_per_vkilobyte: BtcAmount,
+	}
+}
 pub type BitcoinFeeTracking = UnsafeMedian<
 	<Bitcoin as Chain>::ChainAmount,
-	(),
+	BitcoinFeeSettings,
 	BitcoinFeeUpdateHook,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
@@ -619,7 +628,10 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 			Default::default(),
 			Default::default(),
 			Default::default(),
-			Default::default(),
+			BitcoinFeeSettings {
+				tx_sample_count_per_mempool_block: 20,
+				fixed_median_fee_adjustement_sat_per_vkilobyte: 1000,
+			},
 			LIVENESS_CHECK_DURATION,
 		),
 		shared_data_reference_lifetime: 8,
