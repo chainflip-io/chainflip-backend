@@ -1808,7 +1808,11 @@ mod operator {
 				OriginTrait::signed(ALICE),
 				OPERATOR_SETTINGS
 			));
-			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Max
+			));
 
 			// Should succeed - validators are automatically removed during deregistration
 			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)));
