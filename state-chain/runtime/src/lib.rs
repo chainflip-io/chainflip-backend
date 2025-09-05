@@ -49,10 +49,11 @@ use crate::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DispatchErrorWithMessage,
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		NetworkFeeDetails, NetworkFees, OpenedDepositChannels, OperatorInfo, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-		TradingStrategyLimits, TransactionScreeningEvent, TransactionScreeningEvents,
-		ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		NetworkFeeDetails, NetworkFees, OpenedDepositChannels, OperatorInfo,
+		RpcAccountInfoCommonItems, RuntimeApiPenalty, SimulateSwapAdditionalOrder,
+		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
+		TransactionScreeningEvent, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
+		VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -1708,6 +1709,23 @@ impl_runtime_apis! {
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
 		}
+		fn cf_common_account_info(
+			account_id: &AccountId,
+		) -> RpcAccountInfoCommonItems<FlipBalance> {
+			LiquidityPools::sweep(account_id).unwrap();
+			let flip_account = pallet_cf_flip::Account::<Runtime>::get(account_id);
+			RpcAccountInfoCommonItems {
+				flip_balance: flip_account.total(),
+				asset_balances: AssetBalances::free_balances(account_id),
+				bond: flip_account.bond(),
+				estimated_redeemable_balance: pallet_cf_funding::Redemption::<Runtime>::for_rpc(
+					account_id,
+				).map(|redemption| redemption.redeem_amount).unwrap_or_default(),
+				bound_redeem_address: pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id),
+				restricted_balances: pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id),
+				delegating_to: pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id),
+			}
+		}
 		fn cf_validator_info(account_id: &AccountId) -> ValidatorInfo {
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
@@ -1759,9 +1777,8 @@ impl_runtime_apis! {
 				delegators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(
 					account_id,
 					AssociationToOperator::Delegator,
-					pallet_cf_flip::Pallet::<Runtime>::balance
+					pallet_cf_validator::Pallet::<Runtime>::delegator_bid
 				),
-				flip_balance: pallet_cf_flip::Account::<Runtime>::get(account_id).total(),
 			}
 		}
 
