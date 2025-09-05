@@ -277,8 +277,8 @@ mod benchmarks {
 			Pallet::<T>::start_authority_rotation();
 		}
 
-		assert_matches!(<T as Config>::SafeMode::get(), SafeMode::CODE_RED);
-		assert_matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle);
+		assert_eq!(<T as Config>::SafeMode::get(), PalletSafeMode::code_red());
+		assert_eq!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle);
 	}
 
 	/**** 2. RotationPhase::KeygensInProgress *** */

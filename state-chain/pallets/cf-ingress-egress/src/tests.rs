@@ -2033,9 +2033,9 @@ fn safe_mode_prevents_deposit_channel_creation() {
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			ingress_egress_ethereum: PalletSafeMode {
 				deposit_channel_creation_enabled: false,
-				..PalletSafeMode::CODE_GREEN
+				..PalletSafeMode::code_green()
 			},
-			..MockRuntimeSafeMode::CODE_GREEN
+			..MockRuntimeSafeMode::code_green()
 		});
 
 		assert_err!(

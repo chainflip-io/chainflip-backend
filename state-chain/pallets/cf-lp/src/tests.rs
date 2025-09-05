@@ -520,7 +520,7 @@ fn safe_mode_prevents_internal_swaps() {
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			liquidity_provider: PalletSafeMode {
 				internal_swaps_enabled: false,
-				..PalletSafeMode::CODE_GREEN
+				..PalletSafeMode::code_green()
 			},
 		});
 
@@ -528,7 +528,7 @@ fn safe_mode_prevents_internal_swaps() {
 
 		// As soon as we enable internal swaps the LP should be able to schedule a swap:
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
-			liquidity_provider: PalletSafeMode::CODE_GREEN,
+			liquidity_provider: PalletSafeMode::code_green(),
 		});
 
 		assert_ok!(schedule_swap());

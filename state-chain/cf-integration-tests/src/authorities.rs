@@ -30,7 +30,7 @@ use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
 	BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip,
 	PolkadotCryptoInstance, PolkadotInstance, PolkadotThresholdSigner, Runtime, RuntimeOrigin,
-	SolanaInstance, SolanaThresholdSigner, System, Validator,
+	SolanaInstance, SolanaThresholdSigner, Validator,
 };
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
@@ -478,9 +478,11 @@ fn cant_rotate_if_previous_rotation_is_pending() {
 			// are still pending.
 			testnet.move_to_the_end_of_epoch();
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-			System::assert_last_event(state_chain_runtime::RuntimeEvent::Validator(
-				pallet_cf_validator::Event::<Runtime>::PreviousRotationStillPending,
-			));
+			cf_test_utilities::assert_has_event::<Runtime>(
+				state_chain_runtime::RuntimeEvent::Validator(
+					pallet_cf_validator::Event::<Runtime>::PreviousRotationStillPending,
+				),
+			);
 			// we are still in the older epoch
 			assert_eq!(epoch_index, Validator::epoch_index());
 

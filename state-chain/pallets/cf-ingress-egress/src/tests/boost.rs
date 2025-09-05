@@ -17,7 +17,8 @@
 use super::*;
 use cf_chains::{DepositOriginType, FeeEstimationApi};
 use cf_primitives::{
-	AssetAmount, BasisPoints, PrewitnessedDepositId, SwapRequestId, MAX_BASIS_POINTS,
+	AssetAmount, BasisPoints, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
+	MAX_BASIS_POINTS,
 };
 use cf_traits::{
 	mocks::tracked_data_provider::TrackedDataProvider, BalanceApi, SafeMode, SetSafeMode,
@@ -121,7 +122,10 @@ fn setup() {
 	ChainTracker::<Ethereum>::set_fee(INGRESS_FEE);
 
 	TrackedDataProvider::<Ethereum>::set_tracked_data(tracked_data);
-	assert_eq!(tracked_data.estimate_ingress_fee(EthAsset::Eth), INGRESS_FEE);
+	assert_eq!(
+		tracked_data.estimate_fee(EthAsset::Eth, IngressOrEgress::IngressDepositChannel),
+		INGRESS_FEE
+	);
 }
 
 #[test]
@@ -435,7 +439,7 @@ fn boosting_with_safe_mode(enable: bool) {
 		<MockRuntimeSafeMode as sp_core::Get<PalletSafeMode<Instance1>>>::get()
 	}
 
-	let boost_mode = if enable { PalletSafeMode::CODE_GREEN } else { PalletSafeMode::CODE_RED };
+	let boost_mode = if enable { PalletSafeMode::code_green() } else { PalletSafeMode::code_red() };
 
 	let new_mode = PalletSafeMode {
 		deposit_channel_creation_enabled: get_safe_mode().deposit_channel_creation_enabled,

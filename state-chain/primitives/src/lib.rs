@@ -589,3 +589,10 @@ impl From<AssetAndAmount<AssetAmount>> for AssetAndAmount<U256> {
 		Self { asset: other.asset, amount: other.amount.into() }
 	}
 }
+/// Used in cf_ingress_egress and in cf_chains.
+pub enum IngressOrEgress {
+	IngressDepositChannel,
+	IngressVaultSwap,
+	Egress,
+	EgressCcm { gas_budget: GasAmount, message_length: usize },
+}

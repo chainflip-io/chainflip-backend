@@ -1332,6 +1332,15 @@ pub mod pallet {
 						Some(vote),
 					),
 				};
+				if <T::ElectoralSystemRunner as ElectoralSystemRunner>::check_vote_mismatch(
+					election_identifier,
+					&partial_vote,
+				)
+				.is_err()
+				{
+					log::debug!("Authority({authority:?}) voted with {partial_vote:?} for the wrong ES {election_identifier:?}");
+					continue;
+				}
 
 				Self::handle_corrupt_storage(Self::take_vote_and_then(
 					epoch_index,

@@ -26,8 +26,8 @@ use crate::{
 	Chain, FeeEstimationApi, *,
 };
 use assets::eth::Asset as EthAsset;
-use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Ethereum;
+use cf_primitives::{chains::assets, IngressOrEgress};
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Word};
 use evm::api::EvmReplayProtection;
@@ -164,56 +164,45 @@ pub mod fees {
 }
 
 impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
-	fn estimate_ingress_fee(
+	fn estimate_fee(
 		&self,
 		asset: <Ethereum as Chain>::ChainAsset,
+		ingress_or_egress: IngressOrEgress,
 	) -> <Ethereum as Chain>::ChainAmount {
 		use crate::eth::fees::*;
-
-		// Note: this is taking the egress cost of the swap in the ingress currency (and basing the
-		// cost on the ingress chain).
-		let gas_cost_per_fetch = BASE_COST_PER_BATCH +
-			match asset {
-				assets::eth::Asset::Eth => Zero::zero(),
-				assets::eth::Asset::Flip | assets::eth::Asset::Usdc | assets::eth::Asset::Usdt =>
-					GAS_COST_PER_FETCH,
-			};
-
-		self.calculate_transaction_fee(gas_cost_per_fetch)
-	}
-
-	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
-		Some(0)
-	}
-
-	fn estimate_egress_fee(
-		&self,
-		asset: <Ethereum as Chain>::ChainAsset,
-	) -> <Ethereum as Chain>::ChainAmount {
-		use crate::eth::fees::*;
-
-		let gas_cost_per_transfer = BASE_COST_PER_BATCH +
-			match asset {
-				assets::eth::Asset::Eth => GAS_COST_PER_TRANSFER_NATIVE,
-				assets::eth::Asset::Flip | assets::eth::Asset::Usdc | assets::eth::Asset::Usdt =>
-					GAS_COST_PER_TRANSFER_TOKEN,
-			};
-
-		self.calculate_transaction_fee(gas_cost_per_transfer)
-	}
-
-	fn estimate_ccm_fee(
-		&self,
-		asset: <Ethereum as Chain>::ChainAsset,
-		gas_budget: GasAmount,
-		message_length: usize,
-	) -> Option<<Ethereum as Chain>::ChainAmount> {
-		let gas_limit = self.calculate_ccm_gas_limit(
-			asset == <Ethereum as Chain>::GAS_ASSET,
-			gas_budget,
-			message_length,
-		);
-		Some(self.calculate_transaction_fee(gas_limit))
+		match ingress_or_egress {
+			IngressOrEgress::IngressDepositChannel => {
+				// Note: this is taking the egress cost of the swap in the ingress currency (and
+				// basing the cost on the ingress chain).
+				let gas_cost_per_fetch = BASE_COST_PER_BATCH +
+					match asset {
+						assets::eth::Asset::Eth => Zero::zero(),
+						assets::eth::Asset::Flip |
+						assets::eth::Asset::Usdc |
+						assets::eth::Asset::Usdt => GAS_COST_PER_FETCH,
+					};
+				self.calculate_transaction_fee(gas_cost_per_fetch)
+			},
+			IngressOrEgress::IngressVaultSwap => 0,
+			IngressOrEgress::Egress => {
+				let gas_cost_per_transfer = BASE_COST_PER_BATCH +
+					match asset {
+						assets::eth::Asset::Eth => GAS_COST_PER_TRANSFER_NATIVE,
+						assets::eth::Asset::Flip |
+						assets::eth::Asset::Usdc |
+						assets::eth::Asset::Usdt => GAS_COST_PER_TRANSFER_TOKEN,
+					};
+				self.calculate_transaction_fee(gas_cost_per_transfer)
+			},
+			IngressOrEgress::EgressCcm { gas_budget, message_length } => {
+				let gas_limit = self.calculate_ccm_gas_limit(
+					asset == <Ethereum as Chain>::GAS_ASSET,
+					gas_budget,
+					message_length,
+				);
+				self.calculate_transaction_fee(gas_limit)
+			},
+		}
 	}
 }
 

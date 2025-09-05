@@ -51,10 +51,11 @@ sp-runtime = { workspace = true }
 
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }
+cf-primitives = { workspace = true, features = ["test"] }
 cf-chains = { workspace = true, features = ["test", "mocks"] }
 rand = { workspace = true, features = ["std"] }
-proptest = { version = "1.6" }
-proptest-derive = { version = "0.5.1" }
+proptest = { workspace = true}
+proptest-derive = { workspace = true }
 
 [features]
 default = ["std"]

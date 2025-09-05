@@ -102,6 +102,9 @@ pub enum PalletConfigUpdate {
 	MinimumAuctionBid {
 		minimum_flip_bid: u32,
 	},
+	DelegationCapacityFactor {
+		factor: Option<u32>,
+	},
 }
 
 type RuntimeRotationState<T> =
@@ -364,6 +367,14 @@ pub mod pallet {
 	pub type MaxDelegationBid<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
 
+	/// Determines the cap on the total delegation an operator can have relative to their managed
+	/// validators. For example, a factor of 5 means that the total delegation an operator can
+	/// have is capped at 5x the total stake of their managed validators.
+	///
+	/// Note that if this is unset, it is ignored.
+	#[pallet::storage]
+	pub type DelegationCapacityFactor<T> = StorageValue<_, u32, OptionQuery>;
+
 	/// Maps validators to their operators for each epoch.
 	#[pallet::storage]
 	pub type ValidatorToOperator<T: Config> = StorageDoubleMap<
@@ -481,14 +492,10 @@ pub mod pallet {
 		ValidatorDoesNotExist,
 		/// Not authorized to perform this action.
 		NotAuthorized,
-		/// Operator is still associated with validators.
-		StillAssociatedWithValidators,
 		/// The validator is not claimed by any operator.
 		NotClaimedByOperator,
 		/// The provided account id has not the role validator.
 		NotValidator,
-		/// Operator is still being delegated to.
-		StillAssociatedWithDelegators,
 		/// The account is not delegating.
 		AccountIsNotDelegating,
 		/// Delegation is not available to validators or operators.
@@ -499,6 +506,8 @@ pub mod pallet {
 		DelegatorBlocked,
 		/// The provided Operator fee is too low.
 		OperatorFeeTooLow,
+		/// The operator still manages an active delegation.
+		OperatorStillActive,
 		/// The account does not exist.
 		AccountDoesNotExist,
 	}
@@ -680,6 +689,9 @@ pub mod pallet {
 					MinimumAuctionBid::<T>::set(
 						FLIPPERINOS_PER_FLIP.saturating_mul(minimum_flip_bid.into()).into(),
 					);
+				},
+				PalletConfigUpdate::DelegationCapacityFactor { factor } => {
+					DelegationCapacityFactor::<T>::set(factor);
 				},
 			}
 
@@ -1094,30 +1106,40 @@ pub mod pallet {
 		#[pallet::call_index(17)]
 		#[pallet::weight(T::ValidatorWeightInfo::deregister_as_operator())]
 		pub fn deregister_as_operator(origin: OriginFor<T>) -> DispatchResult {
-			let account_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 
 			ensure!(
-				Self::get_all_associations_by_operator(
-					&account_id,
-					AssociationToOperator::Validator
-				)
-				.is_empty(),
-				Error::<T>::StillAssociatedWithValidators
+				((Self::last_expired_epoch() + 1)..=Self::current_epoch()).all(|epoch_index| {
+					!DelegationSnapshots::<T>::contains_key(epoch_index, &operator)
+				}),
+				Error::<T>::OperatorStillActive,
 			);
 
-			ensure!(
-				Self::get_all_associations_by_operator(
-					&account_id,
-					AssociationToOperator::Delegator
-				)
-				.is_empty(),
-				Error::<T>::StillAssociatedWithDelegators
-			);
+			for (validator, ()) in Self::get_all_associations_by_operator(
+				&operator,
+				AssociationToOperator::Validator,
+				|_| (),
+			) {
+				ManagedValidators::<T>::remove(&validator);
+				Self::deposit_event(Event::ValidatorRemovedFromOperator {
+					validator,
+					operator: operator.clone(),
+				});
+			}
 
-			T::AccountRoleRegistry::deregister_as_operator(&account_id)?;
+			for (delegator, ()) in Self::get_all_associations_by_operator(
+				&operator,
+				AssociationToOperator::Delegator,
+				|_| (),
+			) {
+				DelegationChoice::<T>::remove(&delegator);
+				Self::deposit_event(Event::UnDelegated { delegator, operator: operator.clone() });
+			}
 
-			Exceptions::<T>::remove(&account_id);
-			OperatorSettingsLookup::<T>::remove(&account_id);
+			Exceptions::<T>::remove(&operator);
+			OperatorSettingsLookup::<T>::remove(&operator);
+
+			T::AccountRoleRegistry::deregister_as_operator(&operator)?;
 
 			Ok(())
 		}
@@ -1707,18 +1729,19 @@ impl<T: Config> Pallet<T> {
 			frame_system::Pallet::<T>::current_block_number()
 	}
 
-	pub fn get_all_associations_by_operator(
+	pub fn get_all_associations_by_operator<R>(
 		operator: &T::AccountId,
 		association: AssociationToOperator,
-	) -> BTreeMap<T::AccountId, T::Amount> {
+		f: impl Fn(&T::AccountId) -> R,
+	) -> BTreeMap<T::AccountId, R> {
 		match association {
 			AssociationToOperator::Validator => ManagedValidators::<T>::iter(),
 			AssociationToOperator::Delegator => DelegationChoice::<T>::iter(),
 		}
 		.filter_map(|(account_id, managing_operator)| {
 			if managing_operator == *operator {
-				let balance = T::FundingInfo::balance(&account_id);
-				Some((account_id, balance))
+				let r = f(&account_id);
+				Some((account_id, r))
 			} else {
 				None
 			}

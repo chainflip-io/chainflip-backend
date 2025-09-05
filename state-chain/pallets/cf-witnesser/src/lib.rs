@@ -82,13 +82,17 @@ impl<C, CallPermission: CallDispatchFilter<C>> CallDispatchFilter<C>
 
 impl<CallPermission> Default for PalletSafeMode<CallPermission> {
 	fn default() -> Self {
-		<PalletSafeMode<CallPermission> as SafeMode>::CODE_GREEN
+		<PalletSafeMode<CallPermission> as SafeMode>::code_green()
 	}
 }
 
 impl<CallPermission> SafeMode for PalletSafeMode<CallPermission> {
-	const CODE_RED: Self = PalletSafeMode::CodeRed;
-	const CODE_GREEN: Self = PalletSafeMode::CodeGreen;
+	fn code_red() -> Self {
+		PalletSafeMode::CodeRed
+	}
+	fn code_green() -> Self {
+		PalletSafeMode::CodeGreen
+	}
 }
 
 pub trait WitnessDataExtraction {
@@ -205,7 +209,7 @@ pub mod pallet {
 			let mut used_weight = Weight::zero();
 
 			let safe_mode = T::SafeMode::get();
-			if safe_mode != SafeMode::CODE_RED {
+			if safe_mode != SafeMode::code_red() {
 				let last_expired_epoch = T::EpochInfo::last_expired_epoch();
 				let current_epoch = T::EpochInfo::epoch_index();
 				WitnessedCallsScheduledForDispatch::<T>::mutate(|witnessed_calls_storage| {

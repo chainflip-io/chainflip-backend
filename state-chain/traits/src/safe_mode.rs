@@ -15,18 +15,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub trait SafeMode {
-	const CODE_RED: Self;
-	const CODE_GREEN: Self;
+	fn code_red() -> Self;
+	fn code_green() -> Self;
 }
 
 /// Trait for setting the value of current runtime Safe Mode.
 pub trait SetSafeMode<SafeModeType: SafeMode> {
 	fn set_safe_mode(mode: SafeModeType);
 	fn set_code_red() {
-		Self::set_safe_mode(SafeModeType::CODE_RED);
+		Self::set_safe_mode(SafeModeType::code_red());
 	}
 	fn set_code_green() {
-		Self::set_safe_mode(SafeModeType::CODE_GREEN);
+		Self::set_safe_mode(SafeModeType::code_green());
 	}
 }
 
@@ -85,17 +85,22 @@ macro_rules! impl_runtime_safe_mode {
 
 			impl Default for $runtime_safe_mode {
 				fn default() -> Self {
-					<Self as SafeMode>::CODE_GREEN
+					<Self as SafeMode>::code_green()
 				}
 			}
 
 			impl SafeMode for $runtime_safe_mode {
-				const CODE_RED: Self = Self {
-					$( $name: <$pallet_safe_mode as SafeMode>::CODE_RED ),*
-				};
-				const CODE_GREEN: Self = Self {
-					$( $name: <$pallet_safe_mode as SafeMode>::CODE_GREEN ),*
-				};
+				fn code_red() -> Self {
+					Self {
+						$( $name: <$pallet_safe_mode as SafeMode>::code_red()),*
+					}
+				}
+
+				fn code_green() -> Self {
+					Self {
+						$( $name: <$pallet_safe_mode as SafeMode>::code_green()),*
+					}
+				}
 			}
 
 			impl SetSafeMode<$runtime_safe_mode> for $runtime_safe_mode {
@@ -160,21 +165,25 @@ macro_rules! impl_pallet_safe_mode {
 
         impl Default for $pallet_safe_mode {
             fn default() -> Self {
-                <Self as $crate::SafeMode>::CODE_GREEN
+                <Self as $crate::SafeMode>::code_green()
             }
         }
 
         impl $crate::SafeMode for $pallet_safe_mode {
-            const CODE_RED: Self = Self {
-                $(
-                    $flag: false,
-                )+
-            };
-            const CODE_GREEN: Self = Self {
-                $(
-                    $flag: true,
-                )+
-            };
+            fn code_red() -> Self {
+	            Self {
+	                $(
+	                    $flag: false,
+	                )+
+	            }
+            }
+            fn code_green() -> Self {
+	            Self {
+	                $(
+	                    $flag: true,
+	                )+
+	            }
+            }
         }
     };
 
@@ -196,23 +205,27 @@ macro_rules! impl_pallet_safe_mode {
 
         impl<$generic> Default for $pallet_safe_mode<$generic> {
             fn default() -> Self {
-                <Self as $crate::SafeMode>::CODE_GREEN
+                <Self as $crate::SafeMode>::code_green()
             }
         }
 
         impl<$generic> $crate::SafeMode for $pallet_safe_mode<$generic> {
-            const CODE_RED: Self = Self {
-                $(
-                    $flag: false,
-                )+
-                _phantom: ::core::marker::PhantomData,
-            };
-            const CODE_GREEN: Self = Self {
-                $(
-                    $flag: true,
-                )+
-                _phantom: ::core::marker::PhantomData,
-            };
+        	fn code_red() -> Self {
+         		Self {
+         			$(
+         				$flag: false,
+         			)+
+         			_phantom: ::core::marker::PhantomData,
+         		}
+            }
+            fn code_green() -> Self {
+         		Self {
+         			$(
+         				$flag: true,
+         			)+
+         			_phantom: ::core::marker::PhantomData,
+         		}
+            }
         }
     };
 }
@@ -262,13 +275,21 @@ pub(crate) mod test {
 	}
 
 	impl SafeMode for ExampleSafeModeA {
-		const CODE_RED: Self = Self { safe: false };
-		const CODE_GREEN: Self = Self { safe: true };
+		fn code_red() -> Self {
+			Self { safe: false }
+		}
+		fn code_green() -> Self {
+			Self { safe: true }
+		}
 	}
 
 	impl SafeMode for ExampleSafeModeB {
-		const CODE_RED: Self = Self::NotSafe;
-		const CODE_GREEN: Self = Self::Safe;
+		fn code_red() -> Self {
+			Self::NotSafe
+		}
+		fn code_green() -> Self {
+			Self::Safe
+		}
 	}
 
 	// Use this macro to define a basic safe mode struct with a list of bool flags.
@@ -294,23 +315,23 @@ pub(crate) mod test {
 			assert!(
 				<TestRuntimeSafeMode as Get<TestRuntimeSafeMode>>::get() ==
 					TestRuntimeSafeMode {
-						example_a: ExampleSafeModeA::CODE_GREEN,
-						example_b: ExampleSafeModeB::CODE_GREEN,
-						pallet: SafeMode::CODE_GREEN,
-						pallet_2: SafeMode::CODE_GREEN,
+						example_a: ExampleSafeModeA::code_green(),
+						example_b: ExampleSafeModeB::code_green(),
+						pallet: SafeMode::code_green(),
+						pallet_2: SafeMode::code_green(),
 					}
 			);
 			assert!(
 				<TestRuntimeSafeMode as Get<ExampleSafeModeA>>::get() ==
-					ExampleSafeModeA::CODE_GREEN
+					ExampleSafeModeA::code_green()
 			);
 			assert!(
 				<TestRuntimeSafeMode as Get<ExampleSafeModeB>>::get() ==
-					ExampleSafeModeB::CODE_GREEN
+					ExampleSafeModeB::code_green()
 			);
 			assert!(
 				<TestRuntimeSafeMode as Get<TestPalletSafeMode>>::get() ==
-					TestPalletSafeMode::CODE_GREEN
+					TestPalletSafeMode::code_green()
 			);
 
 			// Activate Code Red for all
@@ -319,29 +340,29 @@ pub(crate) mod test {
 			assert!(
 				<TestRuntimeSafeMode as Get<TestRuntimeSafeMode>>::get() ==
 					TestRuntimeSafeMode {
-						example_a: ExampleSafeModeA::CODE_RED,
-						example_b: ExampleSafeModeB::CODE_RED,
-						pallet: SafeMode::CODE_RED,
-						pallet_2: SafeMode::CODE_RED,
+						example_a: ExampleSafeModeA::code_red(),
+						example_b: ExampleSafeModeB::code_red(),
+						pallet: SafeMode::code_red(),
+						pallet_2: SafeMode::code_red(),
 					}
 			);
 			assert_eq!(
 				<TestRuntimeSafeMode as Get<ExampleSafeModeA>>::get(),
-				ExampleSafeModeA::CODE_RED
+				ExampleSafeModeA::code_red()
 			);
 			assert_eq!(
 				<TestRuntimeSafeMode as Get<ExampleSafeModeB>>::get(),
-				ExampleSafeModeB::CODE_RED
+				ExampleSafeModeB::code_red()
 			);
 			assert!(
 				<TestRuntimeSafeMode as Get<TestPalletSafeMode>>::get() ==
-					TestPalletSafeMode::CODE_RED
+					TestPalletSafeMode::code_red()
 			);
 
 			// Code Amber
 			TestRuntimeSafeMode::set_safe_mode(TestRuntimeSafeMode {
-				example_a: ExampleSafeModeA::CODE_RED,
-				example_b: ExampleSafeModeB::CODE_RED,
+				example_a: ExampleSafeModeA::code_red(),
+				example_b: ExampleSafeModeB::code_red(),
 				pallet: TestPalletSafeMode { flag_1: true, flag_2: false },
 				pallet_2: TestPalletSafeMode2 { flag_1: false, flag_2: true },
 			});
@@ -357,7 +378,7 @@ pub(crate) mod test {
 			<TestRuntimeSafeMode as SetSafeMode<ExampleSafeModeA>>::set_code_green();
 			assert!(
 				<TestRuntimeSafeMode as Get<ExampleSafeModeA>>::get() ==
-					ExampleSafeModeA::CODE_GREEN,
+					ExampleSafeModeA::code_green(),
 			);
 		});
 	}

@@ -28,8 +28,6 @@ use cf_primitives::Price;
 use proptest::prelude::Strategy;
 use sp_core::U256;
 
-use crate::electoral_systems::state_machine::common_imports::*;
-
 #[derive(Clone)]
 pub struct PriceUnit {
 	pub base_asset: PriceAsset,
@@ -42,7 +40,7 @@ impl PriceUnit {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(Copy, PartialOrd, Ord, TypeInfo)]
 	pub enum PriceAsset {
 		Btc,
@@ -77,7 +75,7 @@ pub fn denom(d: Denom) -> U256 {
 	U256::from(d) + 1
 }
 
-def_derive! {
+derive_common_traits! {
 	/// Fixed-point fraction type with strongly typed denominator. The internal representation
 	/// of the value is a U256, the const parameter `U: u128` defines the how the integer should
 	/// be interpreted: as the numerator of a fraction with a denominator of `U + 1`.

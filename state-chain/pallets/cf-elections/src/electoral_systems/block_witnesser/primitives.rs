@@ -1,4 +1,5 @@
 use cf_chains::witness_period::SaturatingStep;
+use cf_utilities::macros::*;
 use codec::{Decode, Encode};
 use core::{
 	cmp::min,
@@ -24,7 +25,7 @@ use proptest_derive::Arbitrary;
 
 use crate::electoral_systems::{
 	block_height_witnesser::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes},
-	state_machine::core::{def_derive, defx, Hook, Validate},
+	state_machine::core::{defx, Hook, Validate},
 };
 
 use super::state_machine::{BWElectionType, BWTypes, EngineElectionType};
@@ -531,7 +532,7 @@ impl<T: BWTypes> Arbitrary for ElectionTracker<T> {
 	type Strategy = impl Strategy<Value = Self> + Clone + Sync + Send;
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(GenericTypeInfo)]
 	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
 	#[cfg_attr(test, derive(Arbitrary))]
@@ -548,7 +549,7 @@ impl<T: BWTypes> Validate for OptimisticBlock<T> {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(GenericTypeInfo)]
 	#[expand_name_with(T::Chain::NAME)]
 	pub enum ElectionTrackerEvent<T: BWTypes> {
@@ -566,7 +567,7 @@ def_derive! {
 	}
 }
 
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo)]
 	pub enum UpdateSafeElectionsReason {
 		OutOfSafetyMargin,
