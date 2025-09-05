@@ -46,7 +46,7 @@ describe('ConcurrentTests', () => {
   // WHEN CHANGING ANYTHING RELATED TO ASSETHUB OR XCM, run this test locally.
   // concurrentTest('AssethubXCM', testAssethubXcm, 200);
   concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 140);
-  concurrentTest('DelegateFlip', testDelegateFlip, 360);
+  concurrentTest('DelegateFlip', (context) => testDelegate(context.logger), 360);
   concurrentTest(
     'SwapAndFundAccountViaCCM',
     (context) => testCcmSwapFundAccount(context.logger),
