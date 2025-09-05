@@ -120,7 +120,7 @@ fn block_author_rewards_are_distributed_among_delegators() {
 				&mut testnet,
 				auth.clone(),
 				operator.clone(),
-				500, // 5%
+				1500, // 15%
 				delegators.clone(),
 			);
 
@@ -214,7 +214,7 @@ fn slashings_are_distributed_among_delegators() {
 				&mut testnet,
 				auth.clone(),
 				operator.clone(),
-				500, // 5%
+				1500, // 15%
 				delegators.clone(),
 			);
 
