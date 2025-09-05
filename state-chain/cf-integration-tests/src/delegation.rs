@@ -57,7 +57,7 @@ fn setup_delegation(
 	));
 
 	assert_eq!(
-		pallet_cf_validator::ManagedValidators::<Runtime>::get(&validator),
+		pallet_cf_validator::OperatorChoice::<Runtime>::get(&validator),
 		Some(operator.clone())
 	);
 	assert!(pallet_cf_validator::OperatorSettingsLookup::<Runtime>::get(operator.clone()).is_some());
