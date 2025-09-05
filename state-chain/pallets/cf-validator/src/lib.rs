@@ -75,7 +75,7 @@ type Ed25519Signature = ed25519::Signature;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
-	/// Note the `minimum_flip_bid` is in whole FLIP, not flipperinos.
+	/// Note the `min_stake` is in whole FLIP, not flipperinos.
 	MinimumValidatorStake {
 		min_stake: u32,
 	},
@@ -300,10 +300,8 @@ pub mod pallet {
 	#[pallet::getter(fn auction_parameters)]
 	pub(super) type AuctionParameters<T: Config> = StorageValue<_, SetSizeParameters, ValueQuery>;
 
-	/// An account's balance must be at least this percentage of the current bond in order to
-	/// register as a validator.
+	/// A validator's balance must be equal or above this amount to be qualified for the auction.
 	#[pallet::storage]
-	#[pallet::getter(fn registration_mab_percentage)]
 	pub(super) type MinimumValidatorStake<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
 	/// Determines the minimum version that each CFE must report to be considered qualified
@@ -319,7 +317,8 @@ pub mod pallet {
 	pub(super) type MaxAuthoritySetContractionPercentage<T: Config> =
 		StorageValue<_, Percent, ValueQuery>;
 
-	/// Minimum bid amount required to participate in auctions.
+	/// Minimum bid amount (including delegated bids) required to enter the auction. The auction
+	/// cannot resolve with a bond below this amount.
 	#[pallet::storage]
 	pub type MinimumAuctionBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
@@ -2077,9 +2076,9 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 	}
 }
 
-pub struct QualifyByMinimumBid<T>(PhantomData<T>);
+pub struct QualifyByMinimumStake<T>(PhantomData<T>);
 
-impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumBid<T> {
+impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumStake<T> {
 	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
 		T::FundingInfo::balance(validator_id.into_ref()) >= MinimumValidatorStake::<T>::get()
 	}
