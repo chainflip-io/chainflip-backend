@@ -38,7 +38,7 @@ async function encodeAndSendDelegationApiCall(
 
   logger.info(`Requesting EVM encoding for ${caller} ${JSON.stringify(call)}`);
 
-  const payload = await chainflip.raw_rpc('cf_evm_calldata', caller, {
+  const payload = await chainflip.rpc('cf_evm_calldata', caller, {
     API: 'Delegation',
     call,
   });
