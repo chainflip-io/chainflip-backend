@@ -30,7 +30,7 @@ use frame_support::{
 	assert_ok,
 	sp_runtime::{Digest, DigestItem},
 	storage_alias,
-	traits::{HandleLifetime, OnNewAccount, UnfilteredDispatchable},
+	traits::{OnNewAccount, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 use sp_application_crypto::RuntimeAppPublic;
@@ -533,20 +533,17 @@ mod benchmarks {
 
 	#[benchmark]
 	fn delegate() {
-		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+		let accounts = <T as Chainflip>::AccountRoleRegistry::generate_whitelisted_callers(vec![
 			AccountRole::Operator,
-		)
+			AccountRole::Unregistered,
+		])
 		.unwrap();
+		let (operator, delegator) = (accounts[0].clone(), accounts[1].clone());
 
 		assert_ok!(Pallet::<T>::update_operator_settings(
 			RawOrigin::Signed(operator.clone()).into(),
 			OperatorSettings { fee_bps: 250, delegation_acceptance: DelegationAcceptance::Allow }
 		));
-
-		let delegator: T::AccountId = account::<T::AccountId>("whitelisted_caller", 0, 1);
-		let _ = frame_system::Provider::<T>::created(&delegator);
-
-		DelegationChoice::<T>::remove(&delegator);
 
 		#[extrinsic_call]
 		delegate(RawOrigin::Signed(delegator.clone()), operator.clone(), DelegationAmount::Max);
@@ -556,13 +553,16 @@ mod benchmarks {
 
 	#[benchmark]
 	fn undelegate() {
-		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+		let accounts = <T as Chainflip>::AccountRoleRegistry::generate_whitelisted_callers(vec![
 			AccountRole::Operator,
-		)
+			AccountRole::Unregistered,
+		])
 		.unwrap();
-
-		let delegator: T::AccountId = whitelisted_caller();
-		let _ = frame_system::Provider::<T>::created(&delegator);
+		let (operator, delegator) = (accounts[0].clone(), accounts[1].clone());
+		assert_ok!(Pallet::<T>::update_operator_settings(
+			RawOrigin::Signed(operator.clone()).into(),
+			OperatorSettings { fee_bps: 250, delegation_acceptance: DelegationAcceptance::Allow }
+		));
 
 		assert_ok!(Pallet::<T>::delegate(
 			RawOrigin::Signed(delegator.clone()).into(),
