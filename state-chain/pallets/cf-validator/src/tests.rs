@@ -45,7 +45,7 @@ const NOBODY: u64 = 999; // Non-existent account for testing
 const GENESIS_EPOCH: u32 = 1;
 
 const OPERATOR_SETTINGS: OperatorSettings =
-	OperatorSettings { fee_bps: 250, delegation_acceptance: DelegationAcceptance::Allow };
+	OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Allow };
 
 fn assert_epoch_index(n: EpochIndex) {
 	assert_eq!(
