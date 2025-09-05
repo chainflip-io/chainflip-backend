@@ -1558,6 +1558,8 @@ impl<T: Config> Pallet<T> {
 		let (delegation_snapshots, independent_bids) =
 			Self::build_delegation_snapshots::<T::KeygenQualification>();
 
+		let minimum_auction_bid = MinimumAuctionBid::<T>::get();
+
 		let auction_bids = |delegation_snapshots: &BTreeMap<
 			T::AccountId,
 			DelegationSnapshot<T>,
@@ -1567,7 +1569,13 @@ impl<T: Config> Pallet<T> {
 				.values()
 				.flat_map(|snapshot| snapshot.effective_validator_bids())
 				.chain(independent_bids.clone())
-				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
+				.filter_map(|(bidder_id, amount)| {
+					if amount >= minimum_auction_bid {
+						Some(Bid { bidder_id, amount })
+					} else {
+						None
+					}
+				})
 				.collect::<Vec<_>>()
 		};
 
@@ -1598,6 +1606,8 @@ impl<T: Config> Pallet<T> {
 		let (mut delegation_snapshots, independent_bids) =
 			Self::build_delegation_snapshots::<T::KeygenQualification>();
 
+		let minimum_auction_bid = MinimumAuctionBid::<T>::get();
+
 		let auction_bids = |delegation_snapshots: &BTreeMap<
 			T::AccountId,
 			DelegationSnapshot<T>,
@@ -1607,7 +1617,13 @@ impl<T: Config> Pallet<T> {
 				.values()
 				.flat_map(|snapshot| snapshot.effective_validator_bids())
 				.chain(independent_bids.clone())
-				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
+				.filter_map(|(bidder_id, amount)| {
+					if amount >= minimum_auction_bid {
+						Some(Bid { bidder_id, amount })
+					} else {
+						None
+					}
+				})
 				.collect::<Vec<_>>()
 		};
 
@@ -1638,13 +1654,6 @@ impl<T: Config> Pallet<T> {
 				}
 			}
 			current_outcome
-		})
-		.and_then(|auction_outcome| {
-			if auction_outcome.bond >= MinimumAuctionBid::<T>::get() {
-				Ok(auction_outcome)
-			} else {
-				Err(AuctionError::NotEnoughBidders)
-			}
 		}) {
 			Ok(auction_outcome) => {
 				Self::deposit_event(Event::AuctionCompleted(
