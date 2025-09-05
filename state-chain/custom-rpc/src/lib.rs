@@ -80,11 +80,11 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
-		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
-		FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
-		OpenedDepositChannels, OperatorInfo, RuntimeApiPenalty, SimulatedSwapInformation,
-		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
-		VaultAddresses, VaultSwapDetails,
+		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, EvmCallDetails,
+		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
+		NetworkFees, OpenedDepositChannels, OperatorInfo, RuntimeApiPenalty,
+		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
+		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	FlipBalance, Hash,
@@ -1098,6 +1098,13 @@ pub trait CustomApi {
 		base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<OraclePrice>>;
+	#[method(name = "evm_calldata")]
+	fn cf_evm_calldata(
+		&self,
+		caller: EthereumAddress,
+		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi<NumberOrHex>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<EvmCallDetails>;
 }
 
 /// An RPC extension for the state chain node.
@@ -2113,6 +2120,41 @@ where
 			};
 
 			Ok::<_, CfApiError>(strategies)
+		})
+	}
+
+	fn cf_evm_calldata(
+		&self,
+		caller: EthereumAddress,
+		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi<NumberOrHex>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<EvmCallDetails> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			let api_version = api
+				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)
+				.map_err(CfApiError::from)?
+				.unwrap_or_default();
+
+			if api_version < 6 {
+				// sc calls via ethereum didn't exist before version 6
+				Err(CfApiError::ErrorObject(call_error(
+					"sc calls via ethereum are not supported for the current runtime api version",
+					CfErrorCode::RuntimeApiError,
+				)))
+			} else {
+				api.cf_evm_calldata(
+					hash,
+					caller,
+					call.try_fmap(TryInto::try_into).map_err(|s| {
+						CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InvalidParams.code(),
+							format!("Failed to convert call parameters: {s}."),
+							None::<()>,
+						))
+					})?,
+				)?
+				.map_err(CfApiError::from)
+			}
 		})
 	}
 }
