@@ -106,6 +106,7 @@ impl<T: Config> Redemption<T> {
 			&RestrictedBalances::<T>::get(account_id),
 			Some(redemption_address),
 			MinimumFunding::<T>::get(),
+			true,
 		)
 	}
 	pub fn for_rebalance(
@@ -121,6 +122,7 @@ impl<T: Config> Redemption<T> {
 			&RestrictedBalances::<T>::get(source_account_id),
 			redemption_address.as_ref(),
 			MinimumFunding::<T>::get(),
+			true,
 		)
 	}
 	pub fn for_rpc(account_id: &T::AccountId) -> Result<Self, Error<T>> {
@@ -132,6 +134,7 @@ impl<T: Config> Redemption<T> {
 			&RestrictedBalances::<T>::get(account_id),
 			None,
 			MinimumFunding::<T>::get(),
+			false,
 		)
 	}
 
@@ -144,6 +147,7 @@ impl<T: Config> Redemption<T> {
 		restricted_balances: &BTreeMap<EthereumAddress, FlipBalance<T>>,
 		bound_redeem_address: Option<&EthereumAddress>,
 		minimum_funding: FlipBalance<T>,
+		require_deregistration: bool,
 	) -> Result<Self, Error<T>> {
 		if let Some(address) = redemption_address {
 			if let Some(bound_address) = bound_redeem_address {
@@ -228,7 +232,7 @@ impl<T: Config> Redemption<T> {
 			remaining_balance == Zero::zero() || remaining_balance >= minimum_funding,
 			Error::<T>::BelowMinimumFunding
 		);
-		if account_balance == debit_amount {
+		if require_deregistration && account_balance == debit_amount {
 			ensure!(
 				T::AccountRoleRegistry::is_unregistered(account_id),
 				Error::<T>::AccountMustBeUnregistered
