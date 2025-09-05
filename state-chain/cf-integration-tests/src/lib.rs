@@ -105,21 +105,14 @@ pub fn witness_call(call: RuntimeCall) {
 /// this function witnesses the rotation tx broadcasts for all chains. It takes in the broadcast ids
 /// of the rotation tx in the following chains order: Ethereum, Polkadot, Bitcoin, Arbitrum, Solana,
 /// Assethub (the order in which these chains were integrated in chainflip)
+///
+/// Note: since Polkadot is deprecated and the vault disabled, the `broadcast_ids[1]` (Polkadot) is
+/// ignored!
 pub fn witness_rotation_broadcasts(broadcast_ids: [cf_primitives::BroadcastId; 6]) {
 	witness_ethereum_rotation_broadcast(broadcast_ids[0]);
-	witness_call(RuntimeCall::PolkadotBroadcaster(
-		pallet_cf_broadcast::Call::transaction_succeeded {
-			tx_out_id: AwaitingBroadcast::<Runtime, state_chain_runtime::PolkadotInstance>::get(
-				broadcast_ids[1],
-			)
-			.unwrap()
-			.transaction_out_id,
-			signer_id: Default::default(),
-			tx_fee: 1000,
-			tx_metadata: Default::default(),
-			transaction_ref: Default::default(),
-		},
-	));
+
+	// we skip broadcast_ids[1] (polkadot)
+
 	if let Some(broadcast_data) =
 		AwaitingBroadcast::<Runtime, state_chain_runtime::BitcoinInstance>::get(broadcast_ids[2])
 	{

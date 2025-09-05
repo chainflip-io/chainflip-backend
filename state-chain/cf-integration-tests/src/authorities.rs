@@ -29,10 +29,10 @@ use cf_primitives::{AuthorityCount, FlipBalance, GENESIS_EPOCH};
 use cf_traits::{AsyncResult, EpochInfo, KeyRotationStatusOuter, KeyRotator};
 use cf_utilities::assert_matches;
 
-use pallet_cf_environment::{PolkadotVaultAccountId, SafeModeUpdate};
+use pallet_cf_environment::{AssethubVaultAccountId, PolkadotVaultAccountId, SafeModeUpdate};
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
-	BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip,
+	AssethubInstance, BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip,
 	PolkadotCryptoInstance, PolkadotInstance, PolkadotThresholdSigner, Runtime, RuntimeOrigin,
 	SolanaInstance, SolanaThresholdSigner, System, Validator,
 };
@@ -585,7 +585,7 @@ fn waits_for_governance_when_apicall_fails() {
 
 			let epoch_index = Validator::epoch_index();
 
-			PolkadotVaultAccountId::<Runtime>::set(None);
+			AssethubVaultAccountId::<Runtime>::set(None);
 			testnet.move_to_the_end_of_epoch();
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
@@ -598,7 +598,7 @@ fn waits_for_governance_when_apicall_fails() {
 			);
 
 			assert_matches!(
-				PendingVaultActivation::<Runtime, PolkadotInstance>::get().unwrap(),
+				PendingVaultActivation::<Runtime, AssethubInstance>::get().unwrap(),
 				VaultActivationStatus::ActivationFailedAwaitingGovernance { .. }
 			);
 
@@ -606,7 +606,7 @@ fn waits_for_governance_when_apicall_fails() {
 			testnet.move_forward_blocks(10);
 
 			assert_matches!(
-				PendingVaultActivation::<Runtime, PolkadotInstance>::get().unwrap(),
+				PendingVaultActivation::<Runtime, AssethubInstance>::get().unwrap(),
 				VaultActivationStatus::ActivationFailedAwaitingGovernance { .. }
 			);
 
@@ -619,7 +619,7 @@ fn waits_for_governance_when_apicall_fails() {
 			);
 
 			// manually setting the activation status to complete completes the rotation.
-			PendingVaultActivation::<Runtime, PolkadotInstance>::put(
+			PendingVaultActivation::<Runtime, AssethubInstance>::put(
 				VaultActivationStatus::Complete,
 			);
 			testnet.move_forward_blocks(5);
