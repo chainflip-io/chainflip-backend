@@ -1,5 +1,5 @@
 ---
-source: state-chain/custom-rpc/src/tests.rs
+source: state-chain/custom-rpc/src/tests/before_v7/account_info.rs
 expression: "serde_json::to_value(validator).unwrap()"
 ---
-{"apy_bp":100,"bond":"0xde0b6b3a7640000","bound_redeem_address":"0x0101010101010101010101010101010101010101","estimated_redeemable_balance":"0x0","flip_balance":"0xde0b6b3a7640000","is_bidding":false,"is_current_authority":true,"is_current_backup":false,"is_online":true,"is_qualified":true,"keyholder_epochs":[123],"last_heartbeat":0,"operator":"5D1zPoAtrRPDwRphfJr5BU5CafEzv2FpPZ7UgaDFPqBJU7Wc","reputation_points":0,"restricted_balances":{"0x0101010101010101010101010101010101010101":"0xde0b6b3a7640000"},"role":"validator"}
+{"apy_bp":100,"bond":"0xde0b6b3a7640000","bound_redeem_address":"0x0101010101010101010101010101010101010101","estimated_redeemable_balance":"0x0","flip_balance":"0xde0b6b3a7640000","is_bidding":false,"is_current_authority":true,"is_current_backup":false,"is_online":true,"is_qualified":true,"keyholder_epochs":[123],"last_heartbeat":0,"reputation_points":0,"restricted_balances":{"0x0101010101010101010101010101010101010101":"0xde0b6b3a7640000"},"role":"validator"}

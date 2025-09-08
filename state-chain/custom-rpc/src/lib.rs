@@ -154,7 +154,7 @@ impl ScheduledSwap {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RpcLiquidityProviderBoostPoolInfo {
 	pub fee_tier: u16,
 	pub total_balance: U256,
@@ -184,7 +184,7 @@ impl From<&LiquidityProviderBoostPoolInfo> for RpcLiquidityProviderBoostPoolInfo
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RpcAffiliate {
 	pub account_id: AccountId32,
 	#[serde(flatten)]
@@ -197,7 +197,7 @@ impl From<(AccountId32, AffiliateDetails)> for RpcAffiliate {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RpcAccountInfoWrapper {
 	#[serde(flatten)]
 	pub common_items: RpcAccountInfoCommonItems<NumberOrHex>,
@@ -206,7 +206,7 @@ pub struct RpcAccountInfoWrapper {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum RpcAccountInfo {
 	Unregistered {},

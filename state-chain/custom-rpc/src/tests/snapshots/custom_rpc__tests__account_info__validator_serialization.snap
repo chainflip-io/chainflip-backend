@@ -1,0 +1,57 @@
+---
+source: state-chain/custom-rpc/src/tests/account_info.rs
+expression: wrapper
+---
+{
+  "flip_balance": "0x2b5e3af16b1880000",
+  "asset_balances": {
+    "Ethereum": {
+      "ETH": "0x29a2241af62c0000",
+      "FLIP": "0x0",
+      "USDC": "0x2625a0",
+      "USDT": "0x16e360"
+    },
+    "Polkadot": {
+      "DOT": "0x5d21dba00"
+    },
+    "Bitcoin": {
+      "BTC": "0x47868c0"
+    },
+    "Arbitrum": {
+      "ETH": "0x6f05b59d3b20000",
+      "USDC": "0xf4240"
+    },
+    "Solana": {
+      "SOL": "0x12a05f200",
+      "USDC": "0xb71b0"
+    },
+    "Assethub": {
+      "DOT": "0x2540be400",
+      "USDT": "0x3d090",
+      "USDC": "0x7a120"
+    }
+  },
+  "bond": "0x56bc75e2d63100000",
+  "estimated_redeemable_balance": "0x15af1d78b58c40000",
+  "bound_redeem_address": "0x4444444444444444444444444444444444444444",
+  "restricted_balances": {
+    "0x5555555555555555555555555555555555555555": "0x8ac7230489e80000",
+    "0x6666666666666666666666666666666666666666": "0x4563918244f40000"
+  },
+  "role": "validator",
+  "last_heartbeat": 150000,
+  "reputation_points": 850,
+  "keyholder_epochs": [
+    100,
+    123,
+    124,
+    125
+  ],
+  "is_current_authority": true,
+  "is_current_backup": false,
+  "is_qualified": true,
+  "is_online": true,
+  "is_bidding": false,
+  "apy_bp": 375,
+  "operator": "5EmM3XnzKd5LJMr6oDAD6wEBP1Lgs7juQozaPpurTr3yVFbc"
+}

@@ -1,0 +1,37 @@
+---
+source: state-chain/custom-rpc/src/tests/account_info.rs
+expression: wrapper
+---
+{
+  "flip_balance": "0x14d1120d7b160000",
+  "asset_balances": {
+    "Ethereum": {
+      "ETH": "0x22b1c8c1227a0000",
+      "FLIP": "0x0",
+      "USDC": "0xf4240",
+      "USDT": "0x0"
+    },
+    "Polkadot": {
+      "DOT": "0x2540be400"
+    },
+    "Bitcoin": {
+      "BTC": "0x5f5e100"
+    },
+    "Arbitrum": {
+      "ETH": "0x0",
+      "USDC": "0x0"
+    },
+    "Solana": {
+      "SOL": "0x0",
+      "USDC": "0x0"
+    },
+    "Assethub": {
+      "DOT": "0x0",
+      "USDT": "0x0",
+      "USDC": "0x0"
+    }
+  },
+  "bond": 0,
+  "estimated_redeemable_balance": 0,
+  "role": "unregistered"
+}

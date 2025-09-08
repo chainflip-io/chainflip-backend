@@ -183,7 +183,7 @@ pub struct ValidatorInfo {
 	pub operator: Option<AccountId32>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct OperatorInfo<Amount> {
 	pub managed_validators: BTreeMap<AccountId32, Amount>,
@@ -508,7 +508,7 @@ pub struct NetworkFees {
 	pub internal_swap_network_fee: NetworkFeeDetails,
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default)]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
 pub struct RpcAccountInfoCommonItems<Balance> {
 	pub flip_balance: Balance,
 	pub asset_balances: cf_chains::assets::any::AssetMap<Balance>,

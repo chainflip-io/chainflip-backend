@@ -26,7 +26,7 @@ fn test_no_account_serialization() {
 		},
 		role_specific: RpcAccountInfo::Unregistered {},
 	};
-	insta::assert_snapshot!(serde_json::to_value(wrapper).unwrap());
+	insta::assert_snapshot!(serde_json::to_string_pretty(&wrapper).unwrap());
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn test_broker_serialization() {
 			),
 		},
 	};
-	insta::assert_json_snapshot!(wrapper);
+	insta::assert_snapshot!(serde_json::to_string_pretty(&wrapper).unwrap());
 }
 
 #[test]
@@ -159,22 +159,7 @@ fn test_lp_serialization() {
 				},
 			],
 		},
-		eth: eth::AssetMap {
-			eth: vec![RpcLiquidityProviderBoostPoolInfo {
-				fee_tier: 20,
-				total_balance: 5000000000000000000u128.into(), // 5 ETH
-				available_balance: 3000000000000000000u128.into(), // 3 ETH
-				in_use_balance: 2000000000000000000u128.into(), // 2 ETH
-				is_withdrawing: false,
-			}],
-			flip: vec![],
-			usdc: vec![],
-			usdt: vec![],
-		},
-		dot: dot::AssetMap { dot: vec![] },
-		arb: arb::AssetMap { eth: vec![], usdc: vec![] },
-		sol: sol::AssetMap { sol: vec![], usdc: vec![] },
-		hub: hub::AssetMap { dot: vec![], usdc: vec![], usdt: vec![] },
+		..Default::default()
 	};
 
 	let asset_balances = any::AssetMap {
@@ -212,7 +197,7 @@ fn test_lp_serialization() {
 		},
 	};
 
-	insta::assert_snapshot!(serde_json::to_value(wrapper).unwrap());
+	insta::assert_snapshot!(serde_json::to_string_pretty(&wrapper).unwrap());
 }
 
 #[test]
@@ -260,5 +245,5 @@ fn test_validator_serialization() {
 		},
 	};
 
-	insta::assert_snapshot!(serde_json::to_value(wrapper).unwrap());
+	insta::assert_snapshot!(serde_json::to_string_pretty(&wrapper).unwrap());
 }

@@ -3,8 +3,6 @@ use crate::*;
 pub mod account_info;
 pub mod before_v7;
 
-use std::collections::BTreeSet;
-
 use cf_rpc_apis::{
 	broker::{SwapDepositAddress, WithdrawFeesDetail},
 	lp::{
@@ -19,6 +17,8 @@ use pallet_cf_pools::{
 	RangeOrderLiquidity, UnidirectionalSubPoolDepth,
 };
 use pallet_cf_swapping::FeeRateAndMinimum;
+use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
+use std::collections::BTreeSet;
 
 use cf_chains::{
 	address::EncodedAddress,
@@ -1063,4 +1063,31 @@ fn api_wait_result_serialization() {
 	};
 	insta::assert_json_snapshot!(hash);
 	insta::assert_json_snapshot!(response);
+}
+
+#[test]
+fn operator_info() {
+	let value = OperatorInfo::<NumberOrHex> {
+		managed_validators: BTreeMap::from([
+			(AccountId32::new([0x11; 32]), 1_000_000u128.into()),
+			(AccountId32::new([0x22; 32]), 2_000_000u128.into()),
+		]),
+		settings: OperatorSettings {
+			fee_bps: 2_000,
+			delegation_acceptance: DelegationAcceptance::Deny,
+		},
+		allowed: vec![
+			AccountId32::new([0x11; 32]),
+			AccountId32::new([0x22; 32]),
+			AccountId32::new([0x33; 32]),
+			AccountId32::new([0x44; 32]),
+		],
+		blocked: vec![],
+		delegators: BTreeMap::from([
+			(AccountId32::new([0x33; 32]), 500_000u128.into()),
+			(AccountId32::new([0x44; 32]), 1_500_000u128.into()),
+		]),
+	};
+
+	insta::assert_json_snapshot!(value);
 }
