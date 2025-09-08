@@ -192,6 +192,10 @@ pub mod pallet {
 			to: T::AccountId,
 			amount: T::Balance,
 		},
+		BondUpdated {
+			account_id: T::AccountId,
+			new_bond: T::Balance,
+		},
 	}
 
 	#[pallet::error]
@@ -551,12 +555,11 @@ impl<T: Config> Bonding for Bonder<T> {
 	type AccountId = T::AccountId;
 	type Amount = T::Balance;
 
-	fn update_bond(authority: &Self::AccountId, bond: Self::Amount) {
-		Account::<T>::mutate_exists(authority, |maybe_account| {
-			if let Some(account) = maybe_account.as_mut() {
-				account.bond = bond
-			}
-		})
+	fn update_bond(account_id: &Self::AccountId, new_bond: Self::Amount) {
+		Account::<T>::mutate(account_id, |FlipAccount { balance, bond }| {
+			*bond = core::cmp::min(new_bond, *balance);
+		});
+		Pallet::<T>::deposit_event(Event::BondUpdated { account_id: account_id.clone(), new_bond });
 	}
 }
 
