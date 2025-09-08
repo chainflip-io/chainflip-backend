@@ -31,6 +31,11 @@ async function tryRuntimeCommand(
 ): Promise<boolean> {
   const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
 
+  // NOTE: the `--disable-mbm-checks` flag is very important:
+  // On version 0.8.0 of try-runtime, there's a bug where without this flag,
+  // the pre-and-post checks are run on a state which is already migrated.
+  // This means that it will not catch any migration issues which only manifest themselves
+  // when running on a pre-migrated state.
   const success = await execWithRustLog(
     `try-runtime`,
     `\
@@ -38,6 +43,7 @@ async function tryRuntimeCommand(
 --blocktime 6000 \
 --disable-spec-version-check \
 --checks all ${blockParam} \
+--disable-mbm-checks \
 --uri ${networkUrl}`.split(' '),
     `try-runtime-${blockHash}`,
     'info,runtime::executive=debug',
