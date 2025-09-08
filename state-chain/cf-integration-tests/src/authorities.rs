@@ -25,12 +25,12 @@ use cf_primitives::{AuthorityCount, FlipBalance, GENESIS_EPOCH};
 use cf_traits::{AsyncResult, EpochInfo, KeyRotationStatusOuter, KeyRotator};
 use cf_utilities::assert_matches;
 
-use pallet_cf_environment::{AssethubVaultAccountId, PolkadotVaultAccountId, SafeModeUpdate};
+use pallet_cf_environment::{AssethubVaultAccountId, SafeModeUpdate};
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
 	AssethubInstance, BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip,
-	PolkadotCryptoInstance, PolkadotInstance, PolkadotThresholdSigner, Runtime, RuntimeOrigin,
-	SolanaInstance, SolanaThresholdSigner, Validator,
+	PolkadotCryptoInstance, PolkadotThresholdSigner, Runtime, RuntimeOrigin, SolanaInstance,
+	SolanaThresholdSigner, Validator,
 };
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
