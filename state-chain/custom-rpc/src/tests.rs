@@ -1087,7 +1087,16 @@ fn operator_info() {
 			(AccountId32::new([0x33; 32]), 500_000u128.into()),
 			(AccountId32::new([0x44; 32]), 1_500_000u128.into()),
 		]),
+		active_delegation: Some(DelegationSnapshot {
+			operator: AccountId32::new([0x55; 32]),
+			validators: BTreeMap::from([
+				(AccountId32::new([0x11; 32]), 1_000_000u128.into()),
+				(AccountId32::new([0x22; 32]), 2_000_000u128.into()),
+			]),
+			delegators: BTreeMap::from([(AccountId32::new([0x44; 32]), 1_500_000u128.into())]),
+			delegation_fee_bps: 2_000,
+		}),
 	};
 
-	insta::assert_json_snapshot!(value);
+	insta::assert_snapshot!(serde_json::to_string_pretty(&value).unwrap());
 }

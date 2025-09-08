@@ -1,6 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
-expression: value
+expression: "serde_json::to_string_pretty(&value).unwrap()"
 ---
 {
   "managed_validators": {
@@ -20,5 +20,16 @@ expression: value
   "delegators": {
     "5DDqWU3pDgJsbH5BDsKoY2d8g5SD7jaAZVaYN3YJjtHygLwZ": "0x7a120",
     "5DcDPjV7FAVzGYmQchnQRkmtrJuq45cbmpgYsVPCAsjUdVG4": "0x16e360"
+  },
+  "active_delegation": {
+    "operator": "5DzbGzvQGeh6wpTe1YF1KUvf2YPSzRf2z9nZNwE5bsAyakax",
+    "validators": {
+      "5CT5jwBEAhveEjgiSCQbkaKcKcUyF3VJ8qNXM9rXsuQyn3Kd": "0xf4240",
+      "5CqTdCcXCC7kv1Nwq2sCeJUNVqxbBPXjMAUXrbhRJtrUiyPP": "0x1e8480"
+    },
+    "delegators": {
+      "5DcDPjV7FAVzGYmQchnQRkmtrJuq45cbmpgYsVPCAsjUdVG4": "0x16e360"
+    },
+    "delegation_fee_bps": 2000
   }
 }

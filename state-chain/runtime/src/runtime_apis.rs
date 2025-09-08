@@ -57,6 +57,8 @@ use sp_std::{
 	vec::Vec,
 };
 
+pub use pallet_cf_validator::DelegationSnapshot;
+
 type VanityName = Vec<u8>;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
@@ -183,8 +185,7 @@ pub struct ValidatorInfo {
 	pub operator: Option<AccountId32>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
 pub struct OperatorInfo<Amount> {
 	pub managed_validators: BTreeMap<AccountId32, Amount>,
 	pub settings: OperatorSettings,
@@ -194,6 +195,26 @@ pub struct OperatorInfo<Amount> {
 	pub blocked: Vec<AccountId32>,
 	// TODO: ensure max bid is respected.
 	pub delegators: BTreeMap<AccountId32, Amount>,
+	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Option::is_none"))]
+	pub active_delegation: Option<DelegationSnapshot<AccountId32, Amount>>,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
+pub struct DelegationInfo<Amount> {
+	pub operator: AccountId32,
+	pub bid: Amount,
+}
+
+impl<Amount> DelegationInfo<Amount> {
+	pub fn map_bid<B>(self, f: impl Fn(Amount) -> B + 'static) -> DelegationInfo<B> {
+		DelegationInfo { operator: self.operator, bid: f(self.bid) }
+	}
+	pub fn try_map_bid<B, E>(
+		self,
+		f: impl Fn(Amount) -> Result<B, E>,
+	) -> Result<DelegationInfo<B>, E> {
+		Ok(DelegationInfo { operator: self.operator, bid: f(self.bid)? })
+	}
 }
 
 impl<A> OperatorInfo<A> {
@@ -208,6 +229,7 @@ impl<A> OperatorInfo<A> {
 			allowed: self.allowed,
 			blocked: self.blocked,
 			delegators: self.delegators.into_iter().map(|(k, v)| (k, f(v))).collect(),
+			active_delegation: self.active_delegation.map(|d| d.map_bids(&f)),
 		}
 	}
 
@@ -229,6 +251,7 @@ impl<A> OperatorInfo<A> {
 				.into_iter()
 				.map(|(k, v)| Ok((k, f(v)?)))
 				.collect::<Result<_, E>>()?,
+			active_delegation: self.active_delegation.map(|d| d.try_map_bids(&f)).transpose()?,
 		})
 	}
 }
@@ -519,13 +542,15 @@ pub struct RpcAccountInfoCommonItems<Balance> {
 	#[serde(skip_serializing_if = "BTreeMap::is_empty")]
 	pub restricted_balances: BTreeMap<EthereumAddress, Balance>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub delegating_to: Option<AccountId32>,
+	pub current_delegation_status: Option<DelegationInfo<Balance>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
 }
 
 impl<A> RpcAccountInfoCommonItems<A> {
 	pub fn try_map_balances<B, E>(
 		self,
-		f: impl Fn(A) -> Result<B, E> + 'static,
+		f: impl Fn(A) -> Result<B, E>,
 	) -> Result<RpcAccountInfoCommonItems<B>, E> {
 		Ok(RpcAccountInfoCommonItems {
 			flip_balance: f(self.flip_balance)?,
@@ -538,7 +563,14 @@ impl<A> RpcAccountInfoCommonItems<A> {
 				.into_iter()
 				.map(|(k, v)| Ok((k, f(v)?)))
 				.collect::<Result<_, E>>()?,
-			delegating_to: self.delegating_to,
+			upcoming_delegation_status: self
+				.upcoming_delegation_status
+				.map(|d| d.try_map_bid(&f))
+				.transpose()?,
+			current_delegation_status: self
+				.current_delegation_status
+				.map(|d| d.try_map_bid(&f))
+				.transpose()?,
 		})
 	}
 }
@@ -587,6 +619,8 @@ decl_runtime_apis!(
 		#[changed_in(7)]
 		fn cf_validator_info(account_id: &AccountId32) -> validator_info_before_v7::ValidatorInfo;
 		fn cf_validator_info(account_id: &AccountId32) -> ValidatorInfo;
+		#[changed_in(7)]
+		fn cf_operator_info();
 		fn cf_operator_info(account_id: &AccountId32) -> OperatorInfo<FlipBalance>;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
@@ -762,6 +796,11 @@ decl_runtime_apis!(
 		fn cf_common_account_info(
 			account_id: &AccountId32,
 		) -> RpcAccountInfoCommonItems<FlipBalance>;
+		#[changed_in(7)]
+		fn cf_active_delegations();
+		fn cf_active_delegations(
+			account: Option<AccountId32>,
+		) -> Vec<DelegationSnapshot<AccountId32, FlipBalance>>;
 	}
 );
 

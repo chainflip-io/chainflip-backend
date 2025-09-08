@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
+#![feature(iterator_try_collect)]
 
 use crate::{
 	backend::{CustomRpcBackend, NotificationBehaviour},
@@ -80,11 +81,12 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
-		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, EvmCallDetails,
-		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		NetworkFees, OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems,
-		RuntimeApiPenalty, SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
-		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		CustomRuntimeApi, DelegationSnapshot, DispatchErrorWithMessage, ElectoralRuntimeApi,
+		EvmCallDetails, FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo,
+		LiquidityProviderInfo, NetworkFees, OpenedDepositChannels, OperatorInfo,
+		RpcAccountInfoCommonItems, RuntimeApiPenalty, SimulatedSwapInformation,
+		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
+		VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash,
@@ -315,8 +317,8 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 					estimated_redeemable_balance,
 					bound_redeem_address,
 					restricted_balances,
-					delegating_to: None,
 					bond,
+					..Default::default()
 				},
 				role_specific: RpcAccountInfo::Validator {
 					last_heartbeat,
@@ -1239,6 +1241,12 @@ pub trait CustomApi {
 		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi<NumberOrHex>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<EvmCallDetails>;
+	#[method(name = "active_delegations")]
+	fn cf_active_delegations(
+		&self,
+		operator: Option<state_chain_runtime::AccountId>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<DelegationSnapshot<state_chain_runtime::AccountId, NumberOrHex>>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -2400,6 +2408,33 @@ where
 				.map_err(CfApiError::from)
 			}
 		})
+	}
+
+	fn cf_active_delegations(
+		&self,
+		operator: Option<AccountId32>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<DelegationSnapshot<AccountId32, NumberOrHex>>> {
+		self.rpc_backend
+			.with_versioned_runtime_api(at, |api, hash, version| match version {
+				Some(v) if v < 7 => Err(CfApiError::ErrorObject(call_error(
+					"Delegations are not supported at this runtime api version",
+					CfErrorCode::RuntimeApiError,
+				))),
+				_ => api
+					.cf_active_delegations(hash, operator)
+					.map_err(CfApiError::from)?
+					.into_iter()
+					.map(|delegation| delegation.try_map_bids(TryInto::try_into))
+					.try_collect()
+					.map_err(|s| {
+						CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InvalidParams.code(),
+							format!("Failed to convert call parameters: {s}."),
+							None::<()>,
+						))
+					}),
+			})
 	}
 }
 

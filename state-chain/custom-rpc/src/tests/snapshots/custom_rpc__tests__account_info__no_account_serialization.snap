@@ -1,6 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests/account_info.rs
-expression: wrapper
+expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
 ---
 {
   "flip_balance": "0x14d1120d7b160000",
@@ -33,5 +33,13 @@ expression: wrapper
   },
   "bond": 0,
   "estimated_redeemable_balance": 0,
+  "current_delegation_status": {
+    "operator": "5EmM3XnzKd5LJMr6oDAD6wEBP1Lgs7juQozaPpurTr3yVFbc",
+    "bid": "0xde0b6b3a7640000"
+  },
+  "upcoming_delegation_status": {
+    "operator": "5FY6p4faNbTZeuEZat5QtPXhjUHvjopmqUCbQibdKpvyPbww",
+    "bid": "0x6f05b59d3b20000"
+  },
   "role": "unregistered"
 }

@@ -1,6 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests/account_info.rs
-expression: wrapper
+expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
 ---
 {
   "flip_balance": "0x2b5e3af16b1880000",
@@ -37,6 +37,10 @@ expression: wrapper
   "restricted_balances": {
     "0x5555555555555555555555555555555555555555": "0x8ac7230489e80000",
     "0x6666666666666666666666666666666666666666": "0x4563918244f40000"
+  },
+  "current_delegation_status": {
+    "operator": "5F9ivoEHM7GSydYLC3cozfNwZEpJoTnLd96auGkjtqVUSM86",
+    "bid": "0x1158e460913d00000"
   },
   "role": "validator",
   "last_heartbeat": 150000,

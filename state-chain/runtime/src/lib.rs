@@ -47,13 +47,13 @@ use crate::{
 	},
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
-		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DispatchErrorWithMessage,
-		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		NetworkFeeDetails, NetworkFees, OpenedDepositChannels, OperatorInfo,
-		RpcAccountInfoCommonItems, RuntimeApiPenalty, SimulateSwapAdditionalOrder,
-		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
-		TransactionScreeningEvent, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-		VaultSwapDetails,
+		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DelegationInfo,
+		DispatchErrorWithMessage, FailingWitnessValidators, FeeTypes,
+		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFeeDetails, NetworkFees,
+		OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RuntimeApiPenalty,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
+		TradingStrategyLimits, TransactionScreeningEvent, TransactionScreeningEvents,
+		ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -113,7 +113,7 @@ use pallet_cf_swapping::{
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use pallet_cf_validator::{
 	AssociationToOperator, DelegatedRewardsDistribution, DelegationAcceptance, DelegationAmount,
-	DelegationSlasher, SetSizeMaximisingAuctionResolver,
+	DelegationSlasher, DelegationSnapshot, SetSizeMaximisingAuctionResolver,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use runtime_apis::{ChainAccounts, EvmCallDetails};
@@ -1714,6 +1714,13 @@ impl_runtime_apis! {
 		) -> RpcAccountInfoCommonItems<FlipBalance> {
 			LiquidityPools::sweep(account_id).unwrap();
 			let flip_account = pallet_cf_flip::Account::<Runtime>::get(account_id);
+			let upcoming_delegation_status = pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id)
+				.map(|operator| DelegationInfo { operator, bid: Validator::delegator_bid(account_id)});
+			let current_delegation_status = pallet_cf_validator::DelegationSnapshots::<Runtime>::iter_prefix(Validator::current_epoch())
+				.find_map(|(operator, snapshot)| snapshot.delegators.get(account_id).map(|&bid|
+					DelegationInfo { operator, bid }
+				));
+
 			RpcAccountInfoCommonItems {
 				flip_balance: flip_account.total(),
 				asset_balances: AssetBalances::free_balances(account_id),
@@ -1723,7 +1730,8 @@ impl_runtime_apis! {
 				).map(|redemption| redemption.redeem_amount).unwrap_or_default(),
 				bound_redeem_address: pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id),
 				restricted_balances: pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id),
-				delegating_to: pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id),
+				current_delegation_status,
+				upcoming_delegation_status,
 			}
 		}
 		fn cf_validator_info(account_id: &AccountId) -> ValidatorInfo {
@@ -1778,6 +1786,10 @@ impl_runtime_apis! {
 					account_id,
 					AssociationToOperator::Delegator,
 					pallet_cf_validator::Pallet::<Runtime>::delegator_bid
+				),
+				active_delegation: pallet_cf_validator::DelegationSnapshots::<Runtime>::get(
+					Validator::current_epoch(),
+					account_id,
 				),
 			}
 		}
@@ -2886,6 +2898,15 @@ impl_runtime_apis! {
 					None
 				},
 			})
+		}
+		fn cf_active_delegations(operator: Option<AccountId>) -> Vec<DelegationSnapshot<AccountId, FlipBalance>> {
+			let current_epoch = Validator::current_epoch();
+			if let Some(account_id) = operator {
+				pallet_cf_validator::DelegationSnapshots::<Runtime>::get(current_epoch, &account_id).into_iter().collect()
+			} else {
+				pallet_cf_validator::DelegationSnapshots::<Runtime>::iter_prefix_values(current_epoch)
+					.collect()
+			}
 		}
 	}
 

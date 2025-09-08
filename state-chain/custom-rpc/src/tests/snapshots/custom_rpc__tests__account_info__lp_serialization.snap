@@ -33,14 +33,13 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
   },
   "bond": 0,
   "estimated_redeemable_balance": "0xde0b6b3a7640000",
-  "delegating_to": "5DDqWU3pDgJsbH5BDsKoY2d8g5SD7jaAZVaYN3YJjtHygLwZ",
   "role": "liquidity_provider",
   "refund_addresses": {
-    "Ethereum": "0x1111111111111111111111111111111111111111",
     "Arbitrum": "0x2222222222222222222222222222222222222222",
-    "Polkadot": "15hUeRCARvGw1Xjvuszo9ufT9bSqePGzwbjTeqZKxEeYq1i9",
     "Bitcoin": null,
-    "Solana": "11111111111111111111111111111111"
+    "Solana": "11111111111111111111111111111111",
+    "Polkadot": "15hUeRCARvGw1Xjvuszo9ufT9bSqePGzwbjTeqZKxEeYq1i9",
+    "Ethereum": "0x1111111111111111111111111111111111111111"
   },
   "earned_fees": {
     "Ethereum": {
