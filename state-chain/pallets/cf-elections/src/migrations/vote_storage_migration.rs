@@ -24,12 +24,12 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for VoteStorageMigration<T, I> {
 		// this will cause the validator to re-vote for the same elections again,
 		// which is fine since the worst it can happen is some delayed consensus which is fine since
 		// we are in safe mode
-		SharedDataReferenceCount::<T, I>::drain();
-		SharedData::<T, I>::drain();
-		BitmapComponents::<T, I>::drain();
-		IndividualComponents::<T, I>::drain();
-		ElectionConsensusHistory::<T, I>::drain();
-		ElectionConsensusHistoryUpToDate::<T, I>::drain();
+		SharedDataReferenceCount::<T, I>::clear(u32::MAX, None);
+		SharedData::<T, I>::clear(u32::MAX, None);
+		BitmapComponents::<T, I>::clear(u32::MAX, None);
+		IndividualComponents::<T, I>::clear(u32::MAX, None);
+		ElectionConsensusHistory::<T, I>::clear(u32::MAX, None);
+		ElectionConsensusHistoryUpToDate::<T, I>::clear(u32::MAX, None);
 
 		Weight::zero()
 	}
