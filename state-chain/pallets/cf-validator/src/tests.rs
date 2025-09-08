@@ -2972,7 +2972,7 @@ mod delegation_splitting {
 
 #[test]
 fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
-	use crate::{delegation::DelegatedRewardsDistribution, mock::MockEpochInfo};
+	use crate::delegation::DelegatedRewardsDistribution;
 	use cf_traits::RewardsDistribution;
 
 	new_test_ext().execute_with(|| {
@@ -2980,7 +2980,6 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		const OPERATOR: u64 = 200;
 		const DELEGATOR1: u64 = 300;
 		const DELEGATOR2: u64 = 400;
-		const REWARD_AMOUNT: u128 = 1000000;
 
 		// Mock issuance that tracks minted amounts
 		#[derive(Default)]
@@ -3013,18 +3012,23 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 			}
 		}
 
-		// Set current epoch for MockEpochInfo
-		const EPOCH: EpochIndex = 5;
-		MockEpochInfo::set_epoch(EPOCH);
+		const EPOCH: u32 = 10;
+		const BOND: u128 = 1_000_000u128; // Validator + delegators
+		const VALIDATOR_BID: u128 = 200_000u128;
+		const DELEGATOR1_BID: u128 = 500_000u128;
+		const DELEGATOR2_BID: u128 = 1_500_000u128;
+		const REWARD_AMOUNT: u128 = 100_000u128;
 
-		// Create a delegation snapshot
+		crate::CurrentEpoch::<Test>::put(EPOCH);
+		crate::Bond::<Test>::put(BOND);
+
 		DelegationSnapshot::<Test> {
 			operator: OPERATOR,
-			validators: [(VALIDATOR, 1000000u128)].into_iter().collect(),
-			delegators: [(DELEGATOR1, 2000000u128), (DELEGATOR2, 3000000u128)]
+			validators: [(VALIDATOR, VALIDATOR_BID)].into_iter().collect(),
+			delegators: [(DELEGATOR1, DELEGATOR1_BID), (DELEGATOR2, DELEGATOR2_BID)]
 				.into_iter()
 				.collect(),
-			delegation_fee_bps: 500, // 5% fee
+			delegation_fee_bps: 2000, // 20% fee
 		}
 		.register_for_epoch(EPOCH);
 
@@ -3035,19 +3039,17 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		let minted = TestMintTracker::get_minted();
 
 		// With stakes: validator 1M, delegator1 2M, delegator2 3M = 6M total
-		// Validator gets 1M/6M = 166,667 (rounded)
-		assert_eq!(minted.get(&VALIDATOR), Some(&166667));
+		const EXPECTED_VALIDATOR_REWARD: u128 = REWARD_AMOUNT * VALIDATOR_BID / BOND;
+		assert_eq!(minted.get(&VALIDATOR), Some(&EXPECTED_VALIDATOR_REWARD));
 
-		// Delegators get 5M/6M = 833,333
-		// Operator takes 5% of delegators' cut = 41,667 (rounded)
-		assert_eq!(minted.get(&OPERATOR), Some(&41667));
+		const REMAINING_REWARD: u128 = REWARD_AMOUNT - EXPECTED_VALIDATOR_REWARD;
+		assert_eq!(minted.get(&OPERATOR), Some(&(REMAINING_REWARD / 5))); // 20%
 
-		// Remaining delegator rewards: 833,333 - 41,667 = 791,666
-		// Delegator1 has 2M out of 5M total delegator stake = 2/5
-		assert_eq!(minted.get(&DELEGATOR1), Some(&316666));
+		const DELEGATOR_PORTION: u128 = REMAINING_REWARD * 4 / 5; // 80%
+		assert_eq!(minted.get(&DELEGATOR1), Some(&(DELEGATOR_PORTION / 4)));
 
 		// Delegator2 has 3M out of 5M total delegator stake = 3/5
-		assert_eq!(minted.get(&DELEGATOR2), Some(&475000));
+		assert_eq!(minted.get(&DELEGATOR2), Some(&(DELEGATOR_PORTION * 3 / 4)));
 
 		// Verify total
 		let total_minted: u128 = minted.values().sum();

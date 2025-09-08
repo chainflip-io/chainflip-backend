@@ -290,7 +290,7 @@ pub fn distribute<T: Config>(
 	total: T::Amount,
 	settle: impl Fn(&T::AccountId, T::Amount),
 ) {
-	let epoch_index = T::EpochInfo::epoch_index();
+	let epoch_index = Pallet::<T>::epoch_index();
 
 	if let Some(operator) = ValidatorToOperator::<T>::get(epoch_index, validator) {
 		if let Some(snapshot) = DelegationSnapshots::<T>::get(epoch_index, &operator) {
