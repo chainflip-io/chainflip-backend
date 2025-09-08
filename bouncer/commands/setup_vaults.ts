@@ -25,12 +25,7 @@ import {
   initializeAssethubChain,
 } from 'shared/initialize_new_chains';
 import { globalLogger, loggerChild } from 'shared/utils/logger';
-import {
-  getPolkadotApi,
-  getAssethubApi,
-  observeEvent,
-  DisposableApiPromise,
-} from 'shared/utils/substrate';
+import { getAssethubApi, observeEvent, DisposableApiPromise } from 'shared/utils/substrate';
 import { brokerApiEndpoint, lpApiEndpoint } from 'shared/json_rpc';
 import { updateDefaultPriceFeeds } from 'shared/update_price_feed';
 
@@ -109,7 +104,6 @@ async function main(): Promise<void> {
   const arbClient = new Web3(getEvmEndpoint('Arbitrum'));
   const solClient = getSolConnection();
 
-  await using polkadot = await getPolkadotApi();
   await using assethub = await getAssethubApi();
 
   logger.info(`LP endpoint set to: ${lpApiEndpoint}`);
@@ -125,10 +119,6 @@ async function main(): Promise<void> {
   ]);
 
   // Step 2
-  const dotActivationRequest = observeEvent(
-    logger,
-    'polkadotVault:AwaitingGovernanceActivation',
-  ).event;
   const btcActivationRequest = observeEvent(
     logger,
     'bitcoinVault:AwaitingGovernanceActivation',
@@ -151,35 +141,24 @@ async function main(): Promise<void> {
   // Step 3
   logger.info('Waiting for new keys');
 
-  const dotKey = (await dotActivationRequest).data.newPublicKey;
   const btcKey = (await btcActivationRequest).data.newPublicKey;
   const arbKey = (await arbActivationRequest).data.newPublicKey;
   const solKey = (await solActivationRequest).data.newPublicKey;
   const hubKey = (await hubActivationRequest).data.newPublicKey;
 
   // Step 4
-  logger.info('Requesting Polkadot Vault creation');
-  const { vaultAddress: dotVaultAddress } = await createPolkadotVault(polkadot);
-  logger.info(`Polkadot vault created, address: ${dotVaultAddress}`);
-
   logger.info('Requesting Assethub Vault creation');
   const { vaultAddress: hubVaultAddress } = await createPolkadotVault(assethub);
   logger.info(`AssetHub vault created, address: ${hubVaultAddress}`);
 
   // Step 5
-  const dotProxyAdded = observeEvent(logger, 'proxy:ProxyAdded', {
-    chain: 'polkadot',
-    timeoutSeconds: 120,
-  }).event;
   const hubProxyAdded = observeEvent(logger, 'proxy:ProxyAdded', {
     chain: 'assethub',
     timeoutSeconds: 120,
   }).event;
-  logger.info('Rotating Proxy and Funding Accounts on Polkadot and Assethub');
-  const [, , dotVaultEvent, hubVaultEvent] = await Promise.all([
-    rotateAndFund(polkadot, dotVaultAddress, dotKey),
+  logger.info('Rotating Proxy and Funding Accounts on Assethub');
+  const [, hubVaultEvent] = await Promise.all([
     rotateAndFund(assethub, hubVaultAddress, hubKey),
-    dotProxyAdded,
     hubProxyAdded,
   ]);
 
@@ -193,17 +172,6 @@ async function main(): Promise<void> {
 
   // Step 7
   logger.info('Registering Vaults with state chain');
-  const polkadotVaultCreatedEvent = observeEvent(
-    logger,
-    'polkadotVault:VaultActivationCompleted',
-  ).event;
-  await submitGovernanceExtrinsic((chainflip) =>
-    chainflip.tx.environment.witnessPolkadotVaultCreation(dotVaultAddress, {
-      blockNumber: dotVaultEvent.block,
-      extrinsicIndex: dotVaultEvent.eventIndex,
-    }),
-  );
-  await polkadotVaultCreatedEvent;
 
   const assethubVaultCreatedEvent = observeEvent(
     logger,

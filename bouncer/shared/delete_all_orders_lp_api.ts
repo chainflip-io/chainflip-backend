@@ -12,8 +12,6 @@ export async function DeleteAllOrdersLpApi(logger: Logger) {
   logger.info(`BTC pool: ${JSON.stringify(orders)}`);
   orders = await chainflip.rpc('cf_pool_orders', 'ETH', 'USDC', lp.address);
   logger.info(`ETH pool: ${JSON.stringify(orders)}`);
-  orders = await chainflip.rpc('cf_pool_orders', 'DOT', 'USDC', lp.address);
-  logger.info(`DOT pool: ${JSON.stringify(orders)}`);
   orders = await chainflip.rpc(
     'cf_pool_orders',
     { chain: 'Arbitrum', asset: 'ETH' },
@@ -49,8 +47,6 @@ export async function DeleteAllOrdersLpApi(logger: Logger) {
   logger.info(`BTC pool: ${JSON.stringify(orders)}`);
   orders = await chainflip.rpc('cf_pool_orders', 'ETH', 'USDC', lp.address);
   logger.info(`ETH pool: ${JSON.stringify(orders)}`);
-  orders = await chainflip.rpc('cf_pool_orders', 'DOT', 'USDC', lp.address);
-  logger.info(`DOT pool: ${JSON.stringify(orders)}`);
   orders = await chainflip.rpc(
     'cf_pool_orders',
     { chain: 'Arbitrum', asset: 'ETH' },

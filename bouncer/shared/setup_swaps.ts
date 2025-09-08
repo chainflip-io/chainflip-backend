@@ -5,7 +5,6 @@ import { Asset } from 'shared/utils';
 import { Logger } from 'shared/utils/logger';
 
 export const deposits = new Map<Asset, number>([
-  ['Dot', 20000],
   ['Eth', 1000],
   ['ArbEth', 1000],
   ['Btc', 100],
@@ -21,7 +20,6 @@ export const deposits = new Map<Asset, number>([
 ]);
 
 export const price = new Map<Asset, number>([
-  ['Dot', 10],
   ['Eth', 1000],
   ['ArbEth', 1000],
   ['Btc', 10000],
@@ -41,7 +39,6 @@ export async function setupSwaps(logger: Logger): Promise<void> {
 
   await Promise.all([
     createLpPool(logger, 'Eth', price.get('Eth')!),
-    createLpPool(logger, 'Dot', price.get('Dot')!),
     createLpPool(logger, 'Btc', price.get('Btc')!),
     createLpPool(logger, 'Flip', price.get('Flip')!),
     createLpPool(logger, 'Usdt', price.get('Usdt')!),
@@ -57,7 +54,6 @@ export async function setupSwaps(logger: Logger): Promise<void> {
   const lp1Deposits = Promise.all([
     depositLiquidity(logger, 'Usdc', deposits.get('Usdc')!, false, '//LP_1'),
     depositLiquidity(logger, 'Eth', deposits.get('Eth')!, false, '//LP_1'),
-    depositLiquidity(logger, 'Dot', deposits.get('Dot')!, false, '//LP_1'),
     depositLiquidity(logger, 'Btc', deposits.get('Btc')!, false, '//LP_1'),
     depositLiquidity(logger, 'Flip', deposits.get('Flip')!, false, '//LP_1'),
     depositLiquidity(logger, 'Usdt', deposits.get('Usdt')!, false, '//LP_1'),
@@ -73,7 +69,6 @@ export async function setupSwaps(logger: Logger): Promise<void> {
   const lpApiDeposits = Promise.all([
     depositLiquidity(logger, 'Usdc', 1000, false, '//LP_API'),
     depositLiquidity(logger, 'Eth', 100, false, '//LP_API'),
-    depositLiquidity(logger, 'Dot', 2000, false, '//LP_API'),
     depositLiquidity(logger, 'Btc', 10, false, '//LP_API'),
     depositLiquidity(logger, 'Flip', 10000, false, '//LP_API'),
     depositLiquidity(logger, 'Usdt', 1000, false, '//LP_API'),
@@ -90,7 +85,6 @@ export async function setupSwaps(logger: Logger): Promise<void> {
 
   await Promise.all([
     rangeOrder(logger, 'Eth', deposits.get('Eth')! * 0.9999),
-    rangeOrder(logger, 'Dot', deposits.get('Dot')! * 0.9999),
     rangeOrder(logger, 'Btc', deposits.get('Btc')! * 0.9999),
     rangeOrder(logger, 'Flip', deposits.get('Flip')! * 0.9999),
     rangeOrder(logger, 'Usdt', deposits.get('Usdt')! * 0.9999),

@@ -38,6 +38,13 @@ export async function setMinimumDeposit(logger: Logger, asset: Asset, amount: bi
         ]),
       );
       break;
+    case 'HubDot':
+      await submitGovernanceExtrinsic((api) =>
+        api.tx.assethubIngressEgress.updatePalletConfig([
+          { SetMinimumDepositAssethub: { asset, minimumDeposit: amount } },
+        ]),
+      );
+      break;
     case 'SolUsdc':
     case 'Sol':
       await submitGovernanceExtrinsic((api) =>
