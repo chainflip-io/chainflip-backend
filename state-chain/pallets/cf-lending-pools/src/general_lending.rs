@@ -162,7 +162,7 @@ impl<T: Config> LoanAccount<T> {
 			return Ok(())
 		}
 
-		for loan in self.loans.values() {
+		for loan in self.loans.values_mut() {
 			if frame_system::Pallet::<T>::block_number().saturating_sub(loan.created_at_block) %
 				INTEREST_PAYMENT_INTERVAL.into() ==
 				0u32.into()
@@ -219,6 +219,11 @@ impl<T: Config> LoanAccount<T> {
 
 						remaining_interest_amount_in_loan_asset
 							.saturating_reduce(amount_charged_in_loan_asset);
+
+						loan.fees_paid
+							.entry(collateral_asset)
+							.or_default()
+							.saturating_accrue(amount_charged);
 
 						Pallet::<T>::accrue_fees(loan.asset, collateral_asset, amount_charged);
 
@@ -383,12 +388,8 @@ impl<T: Config> LoanAccount<T> {
 	}
 
 	fn settle_loan(&mut self, loan_id: LoanId) {
-		if let Some(_loan) = self.loans.remove(&loan_id) {
-			// TODO: record all collected fees/interest and provide the total here:
-			Pallet::<T>::deposit_event(Event::LoanSettled {
-				loan_id,
-				total_fees: Default::default(),
-			});
+		if let Some(loan) = self.loans.remove(&loan_id) {
+			Pallet::<T>::deposit_event(Event::LoanSettled { loan_id, total_fees: loan.fees_paid });
 		}
 	}
 
@@ -436,6 +437,9 @@ pub struct GeneralLoan<T: Config> {
 	pub asset: Asset,
 	pub created_at_block: BlockNumberFor<T>,
 	pub owed_principal: AssetAmount,
+	/// Total fees paid to the pool throughout the lifetime of the loan
+	/// (these are to be used for informational purposes only)
+	pub fees_paid: BTreeMap<Asset, AssetAmount>,
 }
 
 impl<T: Config> GeneralLoan<T> {
@@ -722,6 +726,8 @@ impl<T: Config> LendingApi for Pallet<T> {
 				asset,
 				created_at_block: frame_system::Pallet::<T>::current_block_number(),
 				owed_principal: amount_to_borrow,
+				// TODO: should this include origination fee?
+				fees_paid: BTreeMap::new(),
 			};
 
 			account.primary_collateral_asset = primary_collateral_asset;
