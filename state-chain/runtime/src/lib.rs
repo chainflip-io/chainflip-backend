@@ -1792,9 +1792,6 @@ impl_runtime_apis! {
 
 		fn cf_auction_state() -> AuctionState {
 			let auction_params = Validator::auction_parameters();
-			Validator::resolve_auction_iteratively()
-			.ok()
-			.map(|(auction_outcome, _)| auction_outcome.bond);
 			AuctionState {
 				epoch_duration: Validator::epoch_duration(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
@@ -1802,7 +1799,9 @@ impl_runtime_apis! {
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
 				min_bid: pallet_cf_validator::MinimumAuctionBid::<Runtime>::get().unique_saturated_into(),
 				auction_size_range: (auction_params.min_size, auction_params.max_size),
-				min_active_bid,
+				min_active_bid: Validator::resolve_auction_iteratively()
+				.ok()
+				.map(|(auction_outcome, _)| auction_outcome.bond)
 			}
 		}
 
