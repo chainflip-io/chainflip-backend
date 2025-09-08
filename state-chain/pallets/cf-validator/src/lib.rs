@@ -1561,18 +1561,28 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::<T>::RotationAborted);
 	}
 
-	#[cfg(test)]
-	pub fn dry_run_auction() -> Result<AuctionOutcome<ValidatorIdOf<T>, T::Amount>, AuctionError> {
+	#[allow(clippy::type_complexity)]
+	pub fn run_initial_auction() -> Result<
+		(
+			AuctionOutcome<ValidatorIdOf<T>, T::Amount>,
+			SetSizeMaximisingAuctionResolver,
+			BTreeMap<T::AccountId, DelegationSnapshot<T>>,
+			impl Fn(
+				&BTreeMap<T::AccountId, DelegationSnapshot<T>>,
+			) -> Vec<Bid<ValidatorIdOf<T>, T::Amount>>,
+		),
+		AuctionError,
+	> {
 		let (delegation_snapshots, independent_bids) =
 			Self::build_delegation_snapshots::<T::KeygenQualification>();
 
 		let minimum_auction_bid = MinimumAuctionBid::<T>::get();
 
-		let auction_bids = |delegation_snapshots: &BTreeMap<
+		let auction_bids = move |delegation_snapshots: &BTreeMap<
 			T::AccountId,
 			DelegationSnapshot<T>,
 		>|
-		 -> Vec<Bid<_, _>> {
+		      -> Vec<Bid<_, _>> {
 			delegation_snapshots
 				.values()
 				.flat_map(|snapshot| snapshot.effective_validator_bids())
@@ -1591,7 +1601,42 @@ impl<T: Config> Pallet<T> {
 			T::EpochInfo::current_authority_count(),
 			AuctionParameters::<T>::get(),
 		)
-		.and_then(|resolver| resolver.resolve_auction(auction_bids(&delegation_snapshots)))
+		.and_then(|resolver| {
+			resolver
+				.resolve_auction(auction_bids(&delegation_snapshots))
+				.map(|outcome| (outcome, resolver, delegation_snapshots, auction_bids))
+		})
+	}
+
+	#[allow(clippy::type_complexity)]
+	pub fn resolve_auction_iteratively() -> Result<
+		(
+			AuctionOutcome<ValidatorIdOf<T>, T::Amount>,
+			BTreeMap<T::AccountId, DelegationSnapshot<T>>,
+		),
+		AuctionError,
+	> {
+		Self::run_initial_auction().map(
+			|(auction_outcome, resolver, mut delegation_snapshots, auction_bids)| {
+				let mut current_outcome = auction_outcome;
+				loop {
+					let old_snapshots = delegation_snapshots.clone();
+					for (_operator, snapshot) in delegation_snapshots.iter_mut() {
+						snapshot.maybe_optimize_bid(&current_outcome);
+					}
+					if delegation_snapshots == old_snapshots {
+						break;
+					} else if let Ok(new_outcome) =
+						resolver.resolve_auction(auction_bids(&delegation_snapshots))
+					{
+						current_outcome = new_outcome;
+					} else {
+						break;
+					}
+				}
+				(current_outcome, delegation_snapshots)
+			},
+		)
 	}
 
 	fn start_authority_rotation() -> Weight {
@@ -1611,59 +1656,8 @@ impl<T: Config> Pallet<T> {
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 
-		let (mut delegation_snapshots, independent_bids) =
-			Self::build_delegation_snapshots::<T::KeygenQualification>();
-
-		let minimum_auction_bid = MinimumAuctionBid::<T>::get();
-
-		let auction_bids = |delegation_snapshots: &BTreeMap<
-			T::AccountId,
-			DelegationSnapshot<T>,
-		>|
-		 -> Vec<Bid<_, _>> {
-			delegation_snapshots
-				.values()
-				.flat_map(|snapshot| snapshot.effective_validator_bids())
-				.chain(independent_bids.clone())
-				.filter_map(|(bidder_id, amount)| {
-					if amount >= minimum_auction_bid {
-						Some(Bid { bidder_id, amount })
-					} else {
-						None
-					}
-				})
-				.collect::<Vec<_>>()
-		};
-
-		match SetSizeMaximisingAuctionResolver::try_new(
-			T::EpochInfo::current_authority_count(),
-			AuctionParameters::<T>::get(),
-		)
-		.and_then(|resolver| {
-			resolver
-				.resolve_auction(auction_bids(&delegation_snapshots))
-				.map(|outcome| (outcome, resolver))
-		})
-		.map(|(auction_outcome, resolver)| {
-			let mut current_outcome = auction_outcome;
-			loop {
-				let old_snapshots = delegation_snapshots.clone();
-				for (_operator, snapshot) in delegation_snapshots.iter_mut() {
-					snapshot.maybe_optimize_bid(&current_outcome);
-				}
-				if delegation_snapshots == old_snapshots {
-					break;
-				} else if let Ok(new_outcome) =
-					resolver.resolve_auction(auction_bids(&delegation_snapshots))
-				{
-					current_outcome = new_outcome;
-				} else {
-					break;
-				}
-			}
-			current_outcome
-		}) {
-			Ok(auction_outcome) => {
+		match Self::resolve_auction_iteratively() {
+			Ok((auction_outcome, delegation_snapshots)) => {
 				Self::deposit_event(Event::AuctionCompleted(
 					auction_outcome.winners.clone(),
 					auction_outcome.bond,
