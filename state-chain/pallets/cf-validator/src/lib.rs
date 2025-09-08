@@ -332,10 +332,10 @@ pub mod pallet {
 	pub type Exceptions<T: Config> =
 		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
-	/// Maps a managed validator to its operator.
+	/// Maps operators to a list of their managed validators.
 	#[pallet::storage]
 	pub type ManagedValidators<T: Config> =
-		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
+		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
 	/// Maps a validator to the operators currently claiming it.
 	#[pallet::storage]
@@ -350,6 +350,11 @@ pub mod pallet {
 	/// Maps an delegator to an associated operator account.
 	#[pallet::storage]
 	pub type DelegationChoice<T: Config> =
+		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
+
+	/// Maps a validator to the operator that manages it.
+	#[pallet::storage]
+	pub type OperatorChoice<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
 
 	/// The max bid determines how much of the delegator's balance can be used
@@ -474,6 +479,8 @@ pub mod pallet {
 		AuctionPhase,
 		/// Validator is already associated with an operator.
 		AlreadyManagedByOperator,
+		/// Validator is already claimed by this operator.
+		AlreadyClaimedByOperator,
 		/// Validator does not exist.
 		ValidatorDoesNotExist,
 		/// Not authorized to perform this action.
@@ -496,6 +503,8 @@ pub mod pallet {
 		OperatorStillActive,
 		/// The account does not exist.
 		AccountDoesNotExist,
+		/// The operator already manages the maximum number of validators.
+		TooManyValidators,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -894,14 +903,24 @@ pub mod pallet {
 		pub fn claim_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResult {
 			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 			ensure!(
-				!ManagedValidators::<T>::contains_key(&validator_id),
+				!OperatorChoice::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyManagedByOperator
 			);
 			ensure!(
 				T::AccountRoleRegistry::has_account_role(&validator_id, AccountRole::Validator),
 				Error::<T>::NotValidator
 			);
-			ClaimedValidators::<T>::append(&validator_id, &operator);
+			ensure!(
+				ManagedValidators::<T>::get(&operator).len() < MAX_VALIDATORS_PER_OPERATOR,
+				Error::<T>::TooManyValidators
+			);
+			ClaimedValidators::<T>::try_mutate(&validator_id, |claimed| {
+				if !claimed.insert(operator.clone()) {
+					Err(Error::<T>::AlreadyClaimedByOperator)
+				} else {
+					Ok(())
+				}
+			})?;
 			Self::deposit_event(Event::ValidatorClaimed { validator: validator_id, operator });
 			Ok(())
 		}
@@ -912,7 +931,7 @@ pub mod pallet {
 		pub fn accept_operator(origin: OriginFor<T>, operator: T::AccountId) -> DispatchResult {
 			let validator_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			ensure!(
-				!ManagedValidators::<T>::contains_key(&validator_id),
+				!OperatorChoice::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyManagedByOperator
 			);
 
@@ -924,7 +943,10 @@ pub mod pallet {
 				}
 			})?;
 
-			ManagedValidators::<T>::insert(&validator_id, &operator);
+			OperatorChoice::<T>::insert(&validator_id, &operator);
+			ManagedValidators::<T>::mutate(&operator, |validators| {
+				validators.insert(validator_id.clone());
+			});
 
 			Self::deposit_event(Event::OperatorAcceptedByValidator {
 				validator: validator_id,
@@ -941,9 +963,9 @@ pub mod pallet {
 		pub fn remove_validator(origin: OriginFor<T>, validator: T::AccountId) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 			let operator =
-				ManagedValidators::<T>::get(&validator).ok_or(Error::<T>::ValidatorDoesNotExist)?;
+				OperatorChoice::<T>::get(&validator).ok_or(Error::<T>::ValidatorDoesNotExist)?;
 			ensure!(account_id == operator || account_id == validator, Error::<T>::NotAuthorized);
-			ManagedValidators::<T>::remove(&validator);
+			OperatorChoice::<T>::remove(&validator);
 
 			Self::deposit_event(Event::ValidatorRemovedFromOperator { validator, operator });
 
@@ -1105,7 +1127,7 @@ pub mod pallet {
 				AssociationToOperator::Validator,
 				|_| (),
 			) {
-				ManagedValidators::<T>::remove(&validator);
+				OperatorChoice::<T>::remove(&validator);
 				Self::deposit_event(Event::ValidatorRemovedFromOperator {
 					validator,
 					operator: operator.clone(),
@@ -1121,6 +1143,7 @@ pub mod pallet {
 				Self::deposit_event(Event::Undelegated { delegator, operator: operator.clone() });
 			}
 
+			ManagedValidators::<T>::remove(&operator);
 			Exceptions::<T>::remove(&operator);
 			OperatorSettingsLookup::<T>::remove(&operator);
 
@@ -1829,19 +1852,23 @@ impl<T: Config> Pallet<T> {
 		association: AssociationToOperator,
 		f: impl Fn(&T::AccountId) -> R,
 	) -> BTreeMap<T::AccountId, R> {
+		let apply_f = |acct| {
+			let r = f(&acct);
+			(acct, r)
+		};
 		match association {
-			AssociationToOperator::Validator => ManagedValidators::<T>::iter(),
-			AssociationToOperator::Delegator => DelegationChoice::<T>::iter(),
+			AssociationToOperator::Validator =>
+				ManagedValidators::<T>::get(operator).into_iter().map(apply_f).collect(),
+			AssociationToOperator::Delegator => DelegationChoice::<T>::iter()
+				.filter_map(|(account_id, managing_operator)| {
+					if managing_operator == *operator {
+						Some(apply_f(account_id))
+					} else {
+						None
+					}
+				})
+				.collect(),
 		}
-		.filter_map(|(account_id, managing_operator)| {
-			if managing_operator == *operator {
-				let r = f(&account_id);
-				Some((account_id, r))
-			} else {
-				None
-			}
-		})
-		.collect()
 	}
 
 	/// Builds the delegation snapshots for the next epoch.
@@ -1857,7 +1884,7 @@ impl<T: Config> Pallet<T> {
 		for Bid { bidder_id, amount } in Self::get_qualified_bidders::<Q>() {
 			// `into_ref` is used to cast between AccountId and ValidatorId.
 			let bidder_ref = bidder_id.into_ref();
-			if let Some(operator) = ManagedValidators::<T>::get(bidder_ref) {
+			if let Some(operator) = OperatorChoice::<T>::get(bidder_ref) {
 				snapshots
 					.entry(operator.clone())
 					.or_insert_with(|| DelegationSnapshot::<T>::init(&operator))
