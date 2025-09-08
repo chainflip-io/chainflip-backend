@@ -876,7 +876,7 @@ pub trait CustomApi {
 	async fn cf_subscribe_scheduled_swaps(&self, base_asset: Asset, quote_asset: Asset);
 
 	#[subscription(name = "subscribe_lp_order_fills", item = BlockUpdate<OrderFills>)]
-	async fn cf_subscribe_lp_order_fills(&self);
+	async fn cf_subscribe_lp_order_fills(&self, wait_finalized: Option<bool>);
 
 	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
 	async fn cf_subscribe_transaction_screening_events(&self);
@@ -1871,10 +1871,10 @@ where
 			})
 	}
 
-	async fn cf_subscribe_lp_order_fills(&self, sink: PendingSubscriptionSink) {
+	async fn cf_subscribe_lp_order_fills(&self, sink: PendingSubscriptionSink, wait_finalized: Option<bool>) {
 		self.rpc_backend
 			.new_subscription(
-				NotificationBehaviour::Finalized,
+				if wait_finalized.unwrap_or(true) { NotificationBehaviour::Finalized } else { NotificationBehaviour::Best },
 				false,
 				true,
 				sink,
