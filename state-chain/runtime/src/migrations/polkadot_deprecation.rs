@@ -111,6 +111,8 @@ impl OnRuntimeUpgrade for PolkadotDeprecationMigration {
 			}
 		}
 
+		log::info!("In pre_upgrade: Polkadot deprecation: balances: {balances:?}");
+
 		Ok(balances.encode())
 	}
 
@@ -123,14 +125,20 @@ impl OnRuntimeUpgrade for PolkadotDeprecationMigration {
 				.map_err(|_| TryRuntimeError::from("Failed to decode old balances state"))?;
 
 		for (account_id, (old_dot_balance, old_hubdot_balance)) in old_balances.iter() {
+			log::info!(
+				"Post_upgrade: Polkadot deprecation. balance HubDot: {:?} (account: {:?})",
+				FreeBalances::<Runtime>::get(account_id, Asset::HubDot),
+				account_id
+			);
+
 			ensure!(
 				FreeBalances::<Runtime>::get(account_id, Asset::Dot) == 0,
 				"Expected all Dot balances to be zero after migration"
 			);
 
 			ensure!(
-				FreeBalances::<Runtime>::get(account_id, Asset::HubDot) == old_hubdot_balance.saturating_add(*old_dot_balance),
-				"Expected all HubDot balances to be increased by the old Dot balance after migration"
+				FreeBalances::<Runtime>::get(account_id, Asset::HubDot) >= old_hubdot_balance.saturating_add(*old_dot_balance),
+				"Expected all HubDot balances to be increased by the old Dot balance (+ liquidity that was in the pools) after migration"
 			);
 
 			ensure!(
