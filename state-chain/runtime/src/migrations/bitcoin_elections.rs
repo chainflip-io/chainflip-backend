@@ -15,19 +15,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	chainflip,
 	chainflip::{
+		self,
 		bitcoin_block_processor::BtcEvent,
 		bitcoin_elections::{
 			BitcoinBlockHeightWitnesserES, BitcoinDepositChannelWitnessingES,
-			BitcoinEgressWitnessingES, BitcoinFeeTracking, BitcoinLiveness,
-			BitcoinVaultDepositWitnessing,
+			BitcoinEgressWitnessingES, BitcoinFeeSettings, BitcoinLiveness,
+			BitcoinVaultDepositWitnessing, BitcoinVaultDepositWitnessingES,
 		},
 		elections::TypesFor,
 	},
 	BitcoinInstance, Runtime,
 };
-use cf_chains::{refund_parameters::ChannelRefundParameters, Chain};
+use cf_chains::{btc::BtcAmount, refund_parameters::ChannelRefundParameters, Chain};
 use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::{
 	migrations::VersionedMigration, traits::UncheckedOnRuntimeUpgrade, weights::Weight,
@@ -54,13 +54,13 @@ mod old {
 
 	use super::*;
 	use cf_chains::btc::{self};
-	use frame_support::pallet_prelude::OptionQuery;
+	use frame_support::{pallet_prelude::OptionQuery, Twox64Concat};
 	use pallet_cf_elections::{
 		electoral_systems::{
 			block_witnesser::{primitives::CompactHeightTracker, state_machine::BWElectionType},
 			state_machine::core::hook_test_utils::EmptyHook,
 		},
-		Config,
+		Config, UniqueMonotonicIdentifier,
 	};
 
 	use sp_std::collections::btree_map::BTreeMap;
@@ -146,13 +146,44 @@ mod old {
 		<BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
 		BlockWitnesserState,
 		<BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
-		<BitcoinFeeTracking as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
+		BtcAmount,
 		<BitcoinLiveness as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
+	);
+
+	pub type CompositeElectoralUnsynchronisedSettings = (
+		<BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
+		<BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
+		<BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
+		<BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
+		BtcAmount,
+		<BitcoinLiveness as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
+	);
+
+	pub type CompositeElectoralSettings = (
+		<BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
+		<BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
+		<BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
+		<BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
+		(),
+		<BitcoinLiveness as ElectoralSystemTypes>::ElectoralSettings,
 	);
 
 	#[frame_support::storage_alias]
 	pub type ElectoralUnsynchronisedState<T: Config<I>, I: 'static> =
 		StorageValue<Pallet<T, I>, CompositeElectoralUnsynchronisedState, OptionQuery>;
+
+	#[frame_support::storage_alias]
+	pub type ElectoralUnsynchronisedSettings<T: Config<I>, I: 'static> =
+		StorageValue<Pallet<T, I>, CompositeElectoralUnsynchronisedSettings, OptionQuery>;
+
+	#[frame_support::storage_alias]
+	pub type ElectoralSettings<T: Config<I>, I: 'static> = StorageMap<
+		Pallet<T, I>,
+		Twox64Concat,
+		UniqueMonotonicIdentifier,
+		CompositeElectoralSettings,
+		OptionQuery,
+	>;
 }
 
 impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
@@ -186,7 +217,8 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 	fn on_runtime_upgrade() -> Weight {
 		log::info!("🍩 Migration for BTC Election started");
 		let optional_storage = old::ElectoralUnsynchronisedState::<Runtime, BitcoinInstance>::get();
-		let (a, b, old_vault_state, d, e, f) = optional_storage.expect("Should contain something");
+		let (a, b, old_vault_state, d, current_btc_fee, f) =
+			optional_storage.expect("Should contain something");
 
 		let new_block_processor = {
 			let old_blocks_data = old_vault_state.block_processor.blocks_data;
@@ -392,9 +424,47 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 			b,
 			new_vault_state,
 			d,
-			e,
+			(current_btc_fee, 0), // last election concluded at block 0
 			f,
 		));
+
+		// migrating unsynchronised settings
+		{
+			let optional_storage =
+				old::ElectoralUnsynchronisedSettings::<Runtime, BitcoinInstance>::get();
+			let (a, b, c, d, _old_settings_amount, f) =
+				optional_storage.expect("Should contain something");
+
+			pallet_cf_elections::ElectoralUnsynchronisedSettings::<Runtime, BitcoinInstance>::put(
+				(
+					a, b, c, d, 20u32, // fee witnessing should happen every 20 SC blocks
+					f,
+				),
+			);
+		}
+
+		// migrating settings
+		{
+			let settings_entries: Vec<_> =
+				old::ElectoralSettings::<Runtime, BitcoinInstance>::drain().collect();
+
+			for (id, (a, b, c, d, (), f)) in settings_entries {
+				pallet_cf_elections::ElectoralSettings::<Runtime, BitcoinInstance>::insert(
+					id,
+					(
+						a,
+						b,
+						c,
+						d,
+						BitcoinFeeSettings {
+							tx_sample_count_per_mempool_block: 20,
+							fixed_median_fee_adjustement_sat_per_vkilobyte: 1000,
+						},
+						f,
+					),
+				);
+			}
+		}
 
 		log::info!("🍩 Migration for BTC Election completed");
 
@@ -440,6 +510,34 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 					.values()
 					.map(|opti_block| { opti_block.data.len() as u64 })
 					.sum::<u64>()
+		);
+
+		// -----------------
+		// checks for fee election migration
+		let current_state =
+			pallet_cf_elections::ElectoralUnsynchronisedState::<Runtime, BitcoinInstance>::get()
+				.unwrap()
+				.4;
+
+		assert_eq!(current_state.1, 0);
+
+		let current_unsynchronised_settings =
+			pallet_cf_elections::ElectoralUnsynchronisedSettings::<Runtime, BitcoinInstance>::get()
+				.unwrap()
+				.4;
+
+		assert_eq!(current_unsynchronised_settings, 10);
+
+		pallet_cf_elections::ElectoralSettings::<Runtime, BitcoinInstance>::iter().for_each(
+			|(_id, settings)| {
+				assert_eq!(
+					settings.4,
+					BitcoinFeeSettings {
+						tx_sample_count_per_mempool_block: 20,
+						fixed_median_fee_adjustement_sat_per_vkilobyte: 1000
+					}
+				);
+			},
 		);
 
 		Ok(())

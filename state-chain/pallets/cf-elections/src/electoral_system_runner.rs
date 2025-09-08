@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
 use crate::{
@@ -110,6 +111,11 @@ pub trait ElectoralSystemRunner:
 		previous_consensus: Option<&Self::Consensus>,
 		votes: ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError>;
+
+	fn check_vote_mismatch(
+		election_identifier: ElectionIdentifierOf<Self>,
+		partial_vote: &PartialVoteOf<Self>,
+	) -> Result<(), DispatchError>;
 }
 
 use crate::UniqueMonotonicIdentifier;

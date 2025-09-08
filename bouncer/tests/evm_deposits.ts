@@ -142,13 +142,16 @@ async function testTxMultipleVaultSwaps(
         'Vault' in event.data.origin &&
         event.data.origin.Vault.txId.Evm === receipt.transactionHash
       ) {
-        if (++eventCounter > 1) {
+        if (++eventCounter > numSwaps) {
           throwError(logger, new Error('Multiple swap scheduled events detected'));
         }
       }
       return false;
     },
     abortable: true,
+    // Don't stop when the event is found.
+    stopAfter: 'Never',
+    timeoutSeconds: 150,
   });
 
   while (eventCounter === 0) {
@@ -287,6 +290,7 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
   const logger = parentLogger.child({ tag });
   await using chainflip = await getChainflipApi();
 
+  // This will be replaced in PRO-2228 when the SDK is used
   const refundParams: ChannelRefundParameters = {
     retry_duration: 10,
     refund_address: newEvmAddress('refund_eth'),

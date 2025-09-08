@@ -297,6 +297,20 @@ pub struct VerboseTransaction {
 	pub hex: String,
 }
 
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MempoolTransaction {
+	pub vsize: usize,
+	pub fees: Fees,
+}
+
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Fees {
+	#[serde(with = "bitcoin::amount::serde::as_btc")]
+	pub base: Amount,
+}
+
 #[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerboseBlock {
@@ -340,6 +354,17 @@ pub struct BlockHeader {
 	pub target: Option<String>,
 }
 
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MempoolInfo {
+	/// Current tx count
+	pub size: u32,
+
+	/// Sum of all virtual transaction sizes as defined in BIP 141. Differs from actual serialized
+	/// size because witness data is discounted
+	pub bytes: u32,
+}
+
 #[async_trait::async_trait]
 pub trait BtcRpcApi {
 	async fn block(&self, block_hash: BlockHash) -> anyhow::Result<VerboseBlock>;
@@ -361,6 +386,12 @@ pub trait BtcRpcApi {
 	async fn best_block_hash(&self) -> anyhow::Result<BlockHash>;
 
 	async fn block_header(&self, block_hash: BlockHash) -> anyhow::Result<BlockHeader>;
+
+	async fn mempool_info(&self) -> anyhow::Result<MempoolInfo>;
+
+	async fn raw_mempool(&self) -> anyhow::Result<Vec<Txid>>;
+
+	async fn mempool_entries(&self, txids: Vec<Txid>) -> anyhow::Result<Vec<MempoolTransaction>>;
 }
 
 #[async_trait::async_trait]
@@ -473,6 +504,43 @@ impl BtcRpcApi for BtcRpcClient {
 			.into_iter()
 			.next()
 			.ok_or_else(|| anyhow!("Response missing block header"))?)
+	}
+
+	async fn mempool_info(&self) -> anyhow::Result<MempoolInfo> {
+		Ok(self
+			.call_rpc("getmempoolinfo", ReqParams::Empty)
+			.await?
+			.into_iter()
+			.next()
+			.ok_or_else(|| anyhow!("Response missing mempool info"))?)
+	}
+
+	async fn raw_mempool(&self) -> anyhow::Result<Vec<Txid>> {
+		Ok(self
+			.call_rpc("getrawmempool", ReqParams::Empty)
+			.await?
+			.into_iter()
+			.next()
+			.ok_or_else(|| anyhow!("Response missing raw mempool reply"))?)
+	}
+
+	async fn mempool_entries(&self, txids: Vec<Txid>) -> anyhow::Result<Vec<MempoolTransaction>> {
+		Ok(self
+			.call_rpc(
+				"getmempoolentry",
+				ReqParams::Batch(txids.into_iter().map(|a| json!([json!(a)])).collect()),
+			)
+			.await?
+			.into_iter()
+			.filter_map(|a: serde_json::Value| {
+				MempoolTransaction::deserialize(a)
+					.map_err(|err| {
+						println!("err: {err}");
+						err
+					})
+					.ok()
+			})
+			.collect())
 	}
 }
 

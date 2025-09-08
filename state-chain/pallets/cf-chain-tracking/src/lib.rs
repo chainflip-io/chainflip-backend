@@ -27,6 +27,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_chains::{Chain, ChainState, FeeEstimationApi};
+use cf_primitives::IngressOrEgress;
 use cf_traits::{AdjustedFeeEstimationApi, Chainflip, GetBlockHeight};
 use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 use frame_system::pallet_prelude::*;
@@ -227,44 +228,15 @@ impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> AdjustedFeeEstimationApi<T::TargetChain> for Pallet<T, I> {
-	fn estimate_ingress_fee(
+	fn estimate_fee(
 		asset: <T::TargetChain as Chain>::ChainAsset,
+		ingress_or_egress: IngressOrEgress,
 	) -> <T::TargetChain as Chain>::ChainAmount {
 		FeeMultiplier::<T, I>::get().saturating_mul_int(
 			CurrentChainState::<T, I>::get()
 				.expect(NO_CHAIN_STATE)
 				.tracked_data
-				.estimate_ingress_fee(asset),
+				.estimate_fee(asset, ingress_or_egress),
 		)
-	}
-
-	fn estimate_ingress_fee_vault_swap() -> Option<<T::TargetChain as Chain>::ChainAmount> {
-		CurrentChainState::<T, I>::get()
-			.expect(NO_CHAIN_STATE)
-			.tracked_data
-			.estimate_ingress_fee_vault_swap()
-	}
-
-	fn estimate_egress_fee(
-		asset: <T::TargetChain as Chain>::ChainAsset,
-	) -> <T::TargetChain as Chain>::ChainAmount {
-		FeeMultiplier::<T, I>::get().saturating_mul_int(
-			CurrentChainState::<T, I>::get()
-				.expect(NO_CHAIN_STATE)
-				.tracked_data
-				.estimate_egress_fee(asset),
-		)
-	}
-
-	fn estimate_ccm_fee(
-		asset: <T::TargetChain as Chain>::ChainAsset,
-		gas_budget: cf_primitives::GasAmount,
-		message_length: usize,
-	) -> Option<<T::TargetChain as Chain>::ChainAmount> {
-		CurrentChainState::<T, I>::get()
-			.expect(NO_CHAIN_STATE)
-			.tracked_data
-			.estimate_ccm_fee(asset, gas_budget, message_length)
-			.map(|ccm_fee| FeeMultiplier::<T, I>::get().saturating_mul_int(ccm_fee))
 	}
 }

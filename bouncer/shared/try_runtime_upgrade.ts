@@ -17,9 +17,10 @@ async function createSnapshotFile(networkUrl: string, blockHash: string): Promis
   logger.info('Writing snapshot to: ', snapshotOutputPath);
 
   return execWithRustLog(
-    `try-runtime create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath}`,
+    `try-runtime`,
+    `create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath}`.split(' '),
     `create-snapshot-${blockHash}`,
-    'runtime::executive=debug',
+    'info,runtime::executive=debug',
   );
 }
 
@@ -31,14 +32,15 @@ async function tryRuntimeCommand(
   const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
 
   const success = await execWithRustLog(
-    `try-runtime \
-        --runtime ${runtimePath} on-runtime-upgrade \
-        --blocktime 6000 \
-        --disable-spec-version-check \
-        --checks all ${blockParam} \
-        --uri ${networkUrl}`,
+    `try-runtime`,
+    `\
+--runtime ${runtimePath} on-runtime-upgrade \
+--blocktime 6000 \
+--disable-spec-version-check \
+--checks all ${blockParam} \
+--uri ${networkUrl}`.split(' '),
     `try-runtime-${blockHash}`,
-    'runtime::executive=debug',
+    'info,runtime::executive=debug',
   );
   if (!success) {
     await createSnapshotFile(networkUrl, blockHash);

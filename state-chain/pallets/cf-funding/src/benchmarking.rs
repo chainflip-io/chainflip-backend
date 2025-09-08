@@ -27,6 +27,7 @@ use frame_support::{
 	traits::{EnsureOrigin, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
+use sp_std::vec;
 
 fn fund_with_minimum<T: Config>(account_id: &T::AccountId) {
 	assert_ok!(Call::<T>::funded {

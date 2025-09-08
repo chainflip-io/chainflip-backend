@@ -1,9 +1,8 @@
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
 import path from 'path';
 import os from 'os';
 import fs from 'fs/promises';
-import util from 'util';
-// Import the types from child_process
+import { sleep } from 'shared/utils';
 
 export const DEFAULT_LOG_ROOT = 'chainflip/logs/';
 
@@ -13,23 +12,45 @@ export async function mkTmpDir(dir: string): Promise<string> {
   return tmpDir;
 }
 
-const execAsync = util.promisify(exec);
-
 // Execute a command, logging stdout and stderr to a file.
 // The file will be initialised in the default log directory.
 export async function execWithLog(
   command: string,
+  args: string[],
   commandAlias: string,
   additionalEnv: Record<string, string> = {},
 ): Promise<boolean> {
   try {
+    // --- prepare log file ---
     const log = path.join(await mkTmpDir(DEFAULT_LOG_ROOT), `${commandAlias}.log`);
     await using file = await fs.open(log, 'w');
-    const { stdout, stderr } = await execAsync(command, {
+
+    // --- spawn process and register callbacks on events ---
+    let running = true;
+    const ls = spawn(command, args, {
       env: { ...process.env, ...additionalEnv },
     });
-    await file.write(stdout);
-    await file.write(stderr);
+
+    ls.stdout.on('data', async (data) => {
+      await file.write(data.toString());
+      console.log(data.toString());
+    });
+
+    ls.stderr.on('data', async (data) => {
+      await file.write(data.toString());
+      console.log(data.toString());
+    });
+
+    ls.on('exit', (code) => {
+      running = false;
+      console.log('child process exited with code ' + (code?.toString() ?? 'null'));
+    });
+
+    // --- wait for process to exit ---
+    while (running) {
+      await sleep(1000);
+    }
+
     console.debug(`${commandAlias} succeeded`);
     return true;
   } catch (e) {
@@ -40,8 +61,9 @@ export async function execWithLog(
 
 export async function execWithRustLog(
   command: string,
+  args: string[],
   logFileName: string,
   logLevel: string | undefined = 'info',
 ): Promise<boolean> {
-  return execWithLog(command, logFileName, { RUST_LOG: logLevel });
+  return execWithLog(command, args, logFileName, { RUST_LOG: logLevel });
 }

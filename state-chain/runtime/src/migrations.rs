@@ -21,3 +21,4 @@ pub mod generic_elections;
 pub mod housekeeping;
 pub mod polkadot_deprecation;
 pub mod safe_mode;
+pub mod solana_elections;

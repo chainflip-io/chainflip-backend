@@ -51,7 +51,7 @@ const swapEvent = observeEvent(logger, `swapping:CreditedOnChain`, {
 }).event;
 
 logger.info('Submitting on-chain swap extrinsic');
-await lpMutex.runExclusive(async () => {
+await lpMutex.runExclusive(lpUri, async () => {
   const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
   await chainflip.tx.liquidityProvider
     .scheduleSwap(

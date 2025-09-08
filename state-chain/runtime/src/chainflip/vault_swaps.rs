@@ -19,7 +19,7 @@ use crate::{
 		address_derivation::btc::derive_btc_vault_deposit_addresses, AddressConverter,
 		ChainAddressConverter, EvmEnvironment, SolEnvironment,
 	},
-	runtime_apis::{DispatchErrorWithMessage, EvmVaultSwapDetails, VaultSwapDetails},
+	runtime_apis::{DispatchErrorWithMessage, EvmCallDetails, VaultSwapDetails},
 	AccountId, BlockNumber, Environment, Runtime, Swapping,
 };
 
@@ -245,14 +245,14 @@ pub fn evm_vault_swap<A>(
 	}?;
 
 	match source_asset.into() {
-		ForeignChain::Ethereum => Ok(VaultSwapDetails::ethereum(EvmVaultSwapDetails {
+		ForeignChain::Ethereum => Ok(VaultSwapDetails::ethereum(EvmCallDetails {
 			calldata,
 			// Only return `amount` for native currently. 0 for Tokens
 			value: (source_asset == Asset::Eth).then_some(U256::from(amount)).unwrap_or_default(),
 			to: Environment::eth_vault_address(),
 			source_token_address,
 		})),
-		ForeignChain::Arbitrum => Ok(VaultSwapDetails::arbitrum(EvmVaultSwapDetails {
+		ForeignChain::Arbitrum => Ok(VaultSwapDetails::arbitrum(EvmCallDetails {
 			calldata,
 			// Only return `amount` for native currently. 0 for Tokens
 			value: (source_asset == Asset::ArbEth)
@@ -461,7 +461,7 @@ pub fn decode_solana_vault_swap(
 
 pub fn validate_parameters(
 	broker_id: &AccountId,
-	source_chain: ForeignChain,
+	source_asset: Asset,
 	destination_address: &EncodedAddress,
 	destination_asset: Asset,
 	dca_parameters: &Option<DcaParameters>,
@@ -470,7 +470,9 @@ pub fn validate_parameters(
 	affiliate_fees: &Affiliates<AccountId>,
 	retry_duration: BlockNumber,
 	channel_metadata: &Option<CcmChannelMetadataUnchecked>,
+	max_oracle_price_slippage: Option<BasisPoints>,
 ) -> Result<Option<CcmChannelMetadataChecked>, DispatchErrorWithMessage> {
+	let source_chain: ForeignChain = source_asset.into();
 	let destination_chain = destination_address.chain();
 
 	// Validate DCA parameters.
@@ -495,8 +497,13 @@ pub fn validate_parameters(
 		affiliate_fees.clone(),
 	)?;
 
-	// Validate refund duration.
-	pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
+	// Validate refund params
+	pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(
+		source_asset,
+		destination_asset,
+		retry_duration,
+		max_oracle_price_slippage,
+	)?;
 
 	// Ensure CCM message is valid
 	let checked_ccm = channel_metadata

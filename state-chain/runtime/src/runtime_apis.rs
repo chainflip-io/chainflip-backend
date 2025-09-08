@@ -69,11 +69,11 @@ pub enum VaultSwapDetails<BtcAddress> {
 	},
 	Ethereum {
 		#[serde(flatten)]
-		details: EvmVaultSwapDetails,
+		details: EvmCallDetails,
 	},
 	Arbitrum {
 		#[serde(flatten)]
-		details: EvmVaultSwapDetails,
+		details: EvmCallDetails,
 	},
 	Solana {
 		#[serde(flatten)]
@@ -82,7 +82,7 @@ pub enum VaultSwapDetails<BtcAddress> {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-pub struct EvmVaultSwapDetails {
+pub struct EvmCallDetails {
 	/// The encoded calldata payload including function selector.
 	#[serde(with = "sp_core::bytes")]
 	pub calldata: Vec<u8>,
@@ -97,11 +97,11 @@ pub struct EvmVaultSwapDetails {
 }
 
 impl<BtcAddress> VaultSwapDetails<BtcAddress> {
-	pub fn ethereum(details: EvmVaultSwapDetails) -> Self {
+	pub fn ethereum(details: EvmCallDetails) -> Self {
 		VaultSwapDetails::Ethereum { details }
 	}
 
-	pub fn arbitrum(details: EvmVaultSwapDetails) -> Self {
+	pub fn arbitrum(details: EvmCallDetails) -> Self {
 		VaultSwapDetails::Arbitrum { details }
 	}
 
@@ -119,19 +119,6 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
-pub enum BackupOrPassive {
-	Backup,
-	Passive,
-}
-
-// TEMP: so frontend doesn't break after removal of passive from backend
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
-pub enum ChainflipAccountStateWithPassive {
-	CurrentAuthority,
-	BackupOrPassive(BackupOrPassive),
-}
-
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct ValidatorInfo {
 	pub balance: AssetAmount,
@@ -140,6 +127,7 @@ pub struct ValidatorInfo {
 	pub reputation_points: i32,
 	pub keyholder_epochs: Vec<EpochIndex>,
 	pub is_current_authority: bool,
+	#[deprecated]
 	pub is_current_backup: bool,
 	pub is_qualified: bool,
 	pub is_online: bool,
@@ -475,7 +463,7 @@ pub struct NetworkFees {
 //  - Handle the dummy method gracefully in the custom rpc implementation using
 //    runtime_api().api_version().
 decl_runtime_apis!(
-	#[api_version(5)]
+	#[api_version(6)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -494,6 +482,7 @@ decl_runtime_apis!(
 		fn cf_epoch_duration() -> u32;
 		fn cf_current_epoch_started_at() -> u32;
 		fn cf_authority_emission_per_block() -> u128;
+		#[deprecated(note = "The notion of backup nodes is no longer used.")]
 		fn cf_backup_emission_per_block() -> u128;
 		/// Returns the flip supply in the form [total_issuance, offchain_funds]
 		fn cf_flip_supply() -> (u128, u128);
@@ -611,7 +600,10 @@ decl_runtime_apis!(
 			chunk_interval: u32,
 		) -> Result<(), DispatchErrorWithMessage>;
 		fn cf_validate_refund_params(
+			input_asset: Asset,
+			output_asset: Asset,
 			retry_duration: BlockNumber,
+			max_oracle_price_slippage: Option<BasisPoints>,
 		) -> Result<(), DispatchErrorWithMessage>;
 		fn cf_request_swap_parameter_encoding(
 			broker: AccountId32,
@@ -661,6 +653,12 @@ decl_runtime_apis!(
 		fn cf_oracle_prices(
 			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		) -> Vec<OraclePrice>;
+		fn cf_evm_calldata(
+			caller: EthereumAddress,
+			call: crate::chainflip::ethereum_sc_calls::EthereumSCApi<FlipBalance>,
+		) -> Result<EvmCallDetails, DispatchErrorWithMessage>;
+		#[changed_in(6)]
+		fn cf_evm_calldata();
 	}
 );
 

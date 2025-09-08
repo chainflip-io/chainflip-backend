@@ -422,7 +422,6 @@ pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<
 
 // Set to zero initially, will be updated by governance to 7% / 1% annual.
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 0;
-pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 0;
 
 pub const SUPPLY_UPDATE_INTERVAL: u32 = 30 * 24 * HOURS;
 

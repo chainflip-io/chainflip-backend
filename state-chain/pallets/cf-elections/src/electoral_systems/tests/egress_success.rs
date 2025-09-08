@@ -44,7 +44,15 @@ impl MockHook {
 }
 
 type EgressData = u64;
-type SimpleEgressSuccess = ExactValue<(), EgressData, (), MockHook, (), u32>;
+type SimpleEgressSuccess = ExactValue<
+	(),
+	EgressData,
+	(),
+	MockHook,
+	(),
+	u32,
+	crate::vote_storage::bitmap_numerical::BitmapNoHash<EgressData>,
+>;
 
 register_checks! {
 	SimpleEgressSuccess {

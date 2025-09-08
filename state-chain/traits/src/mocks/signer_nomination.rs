@@ -14,13 +14,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use frame_support::parameter_types;
 use sp_std::collections::btree_set::BTreeSet;
 
 use crate::{BroadcastNomination, EpochIndex, EpochInfo, ThresholdSignerNomination};
 
-thread_local! {
-	pub static THRESHOLD_NOMINEES: std::cell::RefCell<Option<BTreeSet<u64>>> = Default::default();
-	pub static LAST_NOMINATED_INDEX: std::cell::RefCell<Option<usize>> = Default::default();
+parameter_types! {
+	pub storage ThresholdNominees: Option<BTreeSet<u64>> = None;
+	pub storage LastNominatedIndex: Option<u32> = None;
 }
 
 pub struct MockNominator;
@@ -32,15 +33,14 @@ impl BroadcastNomination for MockNominator {
 		_seed: S,
 		_exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
 	) -> Option<Self::BroadcasterId> {
-		let next_nomination_index = LAST_NOMINATED_INDEX.with(|cell| {
-			let mut last_nomination = cell.borrow_mut();
-			let next_nomination_index =
-				if let Some(last_nomination) = *last_nomination { last_nomination + 1 } else { 0 };
-			*last_nomination = Some(next_nomination_index);
-			next_nomination_index
-		});
+		let next_nomination_index = LastNominatedIndex::get().map(|n| n + 1).unwrap_or_default();
+		LastNominatedIndex::set(&Some(next_nomination_index));
 
-		Self::get_nominees().unwrap().iter().nth(next_nomination_index).copied()
+		Self::get_nominees()
+			.unwrap()
+			.iter()
+			.nth(next_nomination_index as usize)
+			.copied()
 	}
 }
 
@@ -58,22 +58,22 @@ impl ThresholdSignerNomination for MockNominator {
 // Remove some threadlocal + refcell complexity from test code
 impl MockNominator {
 	pub fn get_nominees() -> Option<BTreeSet<u64>> {
-		THRESHOLD_NOMINEES.with(|cell| cell.borrow().clone())
+		ThresholdNominees::get()
 	}
 
 	pub fn reset_last_nominee() {
-		LAST_NOMINATED_INDEX.with(|cell| *cell.borrow_mut() = None);
+		LastNominatedIndex::set(&None);
 	}
 
 	pub fn set_nominees(nominees: Option<BTreeSet<u64>>) {
-		THRESHOLD_NOMINEES.with(|cell| *cell.borrow_mut() = nominees);
+		ThresholdNominees::set(&nominees);
 	}
 
 	pub fn get_last_nominee() -> Option<u64> {
 		Self::get_nominees()
 			.unwrap()
 			.iter()
-			.nth(LAST_NOMINATED_INDEX.with(|cell| cell.borrow().expect("No one nominated yet")))
+			.nth(LastNominatedIndex::get().expect("No one nominated yet") as usize)
 			.copied()
 	}
 

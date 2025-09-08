@@ -45,7 +45,7 @@ use address::{
 };
 use cf_primitives::{
 	Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
-	DcaParameters, EgressId, EthAmount, GasAmount, TxId,
+	DcaParameters, EgressId, EthAmount, GasAmount, IngressOrEgress, TxId,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -96,6 +96,7 @@ pub mod cf_parameters;
 pub mod instances;
 pub mod refund_parameters;
 
+#[cfg(feature = "mocks")]
 pub mod mocks;
 
 pub mod witness_period {
@@ -1015,7 +1016,7 @@ pub enum TransactionInIdForAnyChain {
 	Polkadot(TxId),
 	Solana(SolanaTransactionInId),
 	None,
-	#[cfg(feature = "std")]
+	#[cfg(feature = "mocks")]
 	MockEthereum([u8; 4]),
 }
 
@@ -1027,6 +1028,7 @@ impl std::fmt::Display for TransactionInIdForAnyChain {
 			Self::Polkadot(transaction_id) =>
 				write!(f, "{}-{}", transaction_id.block_number, transaction_id.extrinsic_index),
 			Self::Solana((address, id)) => write!(f, "{address}-{id}",),
+			#[cfg(feature = "mocks")]
 			Self::MockEthereum(id) => write!(f, "{:?}", id),
 			Self::None => write!(f, "None"),
 		}
@@ -1322,42 +1324,20 @@ pub struct ChainState<C: Chain> {
 }
 
 pub trait FeeEstimationApi<C: Chain> {
-	fn estimate_ingress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
-
-	fn estimate_ingress_fee_vault_swap(&self) -> Option<C::ChainAmount>;
-
-	fn estimate_egress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
-
-	fn estimate_ccm_fee(
+	fn estimate_fee(
 		&self,
-		_asset: C::ChainAsset,
-		_gas_budget: GasAmount,
-		_message_length: usize,
-	) -> Option<C::ChainAmount> {
-		None
-	}
+		asset: C::ChainAsset,
+		ingress_or_egress: IngressOrEgress,
+	) -> C::ChainAmount;
 }
 
 impl<C: Chain> FeeEstimationApi<C> for () {
-	fn estimate_ingress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
-		Default::default()
-	}
-
-	fn estimate_ingress_fee_vault_swap(&self) -> Option<C::ChainAmount> {
-		Default::default()
-	}
-
-	fn estimate_egress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
-		Default::default()
-	}
-
-	fn estimate_ccm_fee(
+	fn estimate_fee(
 		&self,
 		_asset: C::ChainAsset,
-		_gas_budget: GasAmount,
-		_message_length: usize,
-	) -> Option<C::ChainAmount> {
-		None
+		_ingress_or_egress: IngressOrEgress,
+	) -> C::ChainAmount {
+		Default::default()
 	}
 }
 

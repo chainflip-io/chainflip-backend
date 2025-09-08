@@ -24,12 +24,15 @@ use cf_chains::{
 	mocks::{MockAggKey, MockEthereumChainCrypto, MockThresholdSignature},
 	ChainCrypto,
 };
-use cf_primitives::{AuthorityCount, CeremonyId, FlipBalance, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
+use cf_primitives::{AuthorityCount, CeremonyId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
-	mocks::{cfe_interface_mock::MockCfeInterface, signer_nomination::MockNominator},
-	AccountRoleRegistry, AsyncResult, KeyProvider, Slashing, StartKeyActivationResult,
-	ThresholdSigner, VaultActivator,
+	mocks::{
+		cfe_interface_mock::MockCfeInterface, flip_slasher::MockFlipSlasher,
+		signer_nomination::MockNominator,
+	},
+	AccountRoleRegistry, AsyncResult, KeyProvider, StartKeyActivationResult, ThresholdSigner,
+	VaultActivator,
 };
 use cf_utilities::assert_matches;
 use codec::{Decode, Encode};
@@ -65,7 +68,6 @@ impl_mock_chainflip!(Test);
 thread_local! {
 	pub static CALL_DISPATCHED: std::cell::RefCell<Option<RequestId>> = Default::default();
 	pub static TIMES_CALLED: std::cell::RefCell<u8> = Default::default();
-	pub static SLASHES: RefCell<Vec<u64>> = RefCell::new(Default::default());
 	pub static VAULT_ACTIVATION_STATUS: RefCell<AsyncResult<()>> = RefCell::new(AsyncResult::Pending);
 }
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -167,7 +169,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type VaultActivator = MockVaultActivator;
 	type OffenceReporter = MockOffenceReporter;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
-	type Slasher = MockSlasher;
+	type Slasher = MockFlipSlasher<Test>;
 	type SafeMode = MockRuntimeSafeMode;
 	type CfeMultisigRequest = MockCfeInterface;
 	type Weights = ();
@@ -202,41 +204,6 @@ impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 impl MockVaultActivator {
 	pub fn set_activation_completed() {
 		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = AsyncResult::Ready(()))
-	}
-}
-
-pub struct MockSlasher;
-
-impl MockSlasher {
-	pub fn slash_count(validator_id: ValidatorId) -> usize {
-		SLASHES.with(|slashes| slashes.borrow().iter().filter(|id| **id == validator_id).count())
-	}
-}
-
-impl Slashing for MockSlasher {
-	type AccountId = ValidatorId;
-	type BlockNumber = u64;
-	type Balance = u128;
-
-	fn slash(validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {
-		// Count those slashes
-		SLASHES.with(|count| {
-			count.borrow_mut().push(*validator_id);
-		});
-	}
-
-	fn slash_balance(account_id: &Self::AccountId, _amount: FlipBalance) {
-		// Count those slashes
-		SLASHES.with(|count| {
-			count.borrow_mut().push(*account_id);
-		});
-	}
-
-	fn calculate_slash_amount(
-		_account_id: &Self::AccountId,
-		_blocks: Self::BlockNumber,
-	) -> Self::Balance {
-		unimplemented!()
 	}
 }
 

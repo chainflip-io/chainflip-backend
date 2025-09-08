@@ -24,6 +24,7 @@ mod threshold_signing;
 
 mod account;
 mod authorities;
+mod delegation;
 mod fee_scaling;
 mod funding;
 mod genesis;
@@ -34,13 +35,10 @@ mod swapping;
 mod trading_strategy;
 mod witnessing;
 
-use cf_chains::{
-	eth::Address as EthereumAddress, evm::EvmTransactionMetadata, TransactionMetadata,
-};
+use cf_chains::eth::Address as EthereumAddress;
 use cf_primitives::{AuthorityCount, BlockNumber, FlipBalance};
 use cf_traits::EpochInfo;
 use frame_support::{assert_noop, assert_ok, sp_runtime::AccountId32, traits::OnInitialize};
-use pallet_cf_broadcast::AwaitingBroadcast;
 use pallet_cf_funding::EthTransactionHash;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
@@ -69,23 +67,13 @@ pub const BROKER: [u8; 32] = [0xf4; 32];
 // Liquidity Provider
 pub const LIQUIDITY_PROVIDER: [u8; 32] = [0xf5; 32];
 
-pub fn get_validator_state(account_id: &AccountId) -> ChainflipAccountState {
-	if Validator::current_authorities().contains(account_id) {
-		ChainflipAccountState::CurrentAuthority
-	} else {
-		ChainflipAccountState::Backup
-	}
+pub fn is_current_authority(account_id: &AccountId) -> bool {
+	Validator::current_authorities().contains(account_id)
 }
 
 // The minimum number of blocks a vault rotation should last
 // 4 (keygen + key verification) + 4(key handover) + 2(activating_key) + 2(session rotating)
 const VAULT_ROTATION_BLOCKS: BlockNumber = 12;
-
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum ChainflipAccountState {
-	CurrentAuthority,
-	Backup,
-}
 
 pub type AllVaults = <Runtime as pallet_cf_validator::Config>::KeyRotator;
 
@@ -100,100 +88,4 @@ pub fn witness_call(call: RuntimeCall) {
 			epoch,
 		));
 	}
-}
-
-/// this function witnesses the rotation tx broadcasts for all chains. It takes in the broadcast ids
-/// of the rotation tx in the following chains order: Ethereum, Polkadot, Bitcoin, Arbitrum, Solana,
-/// Assethub (the order in which these chains were integrated in chainflip)
-///
-/// Note: since Polkadot is deprecated and the vault disabled, the `broadcast_ids[1]` (Polkadot) is
-/// ignored!
-pub fn witness_rotation_broadcasts(broadcast_ids: [cf_primitives::BroadcastId; 6]) {
-	witness_ethereum_rotation_broadcast(broadcast_ids[0]);
-
-	// we skip broadcast_ids[1] (polkadot)
-
-	if let Some(broadcast_data) =
-		AwaitingBroadcast::<Runtime, state_chain_runtime::BitcoinInstance>::get(broadcast_ids[2])
-	{
-		witness_call(RuntimeCall::BitcoinBroadcaster(
-			pallet_cf_broadcast::Call::transaction_succeeded {
-				tx_out_id: broadcast_data.transaction_out_id,
-				// the ScriptPubkey doesnt mean anything here. we dont care
-				// about the signer_id value so we just put any variant
-				signer_id: cf_chains::btc::ScriptPubkey::P2PKH(Default::default()),
-				tx_fee: 1000,
-				tx_metadata: Default::default(),
-				transaction_ref: Default::default(),
-			},
-		));
-	}
-	let arb_broadcast_data =
-		AwaitingBroadcast::<Runtime, state_chain_runtime::ArbitrumInstance>::get(broadcast_ids[3])
-			.unwrap();
-	witness_call(RuntimeCall::ArbitrumBroadcaster(
-			pallet_cf_broadcast::Call::transaction_succeeded {
-				tx_out_id: arb_broadcast_data
-				.transaction_out_id,
-				signer_id: Default::default(),
-				tx_fee: cf_chains::evm::TransactionFee {
-					effective_gas_price: 1000000,
-					gas_used: 100,
-				},
-				tx_metadata: <EvmTransactionMetadata as TransactionMetadata<
-					cf_chains::Arbitrum,
-				>>::extract_metadata(&arb_broadcast_data.transaction_payload),
-				transaction_ref: Default::default(),
-			},
-		));
-	witness_call(RuntimeCall::SolanaBroadcaster(
-		pallet_cf_broadcast::Call::transaction_succeeded {
-			tx_out_id: AwaitingBroadcast::<Runtime, state_chain_runtime::SolanaInstance>::get(
-				broadcast_ids[4],
-			)
-			.unwrap()
-			.transaction_out_id,
-			signer_id: Default::default(),
-			tx_fee: 1000,
-			tx_metadata: Default::default(),
-			transaction_ref: Default::default(),
-		},
-	));
-	pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::append((
-		<cf_chains::sol::SolAddress as Default>::default(),
-		<cf_chains::sol::SolHash as Default>::default(),
-	));
-	witness_call(RuntimeCall::AssethubBroadcaster(
-		pallet_cf_broadcast::Call::transaction_succeeded {
-			tx_out_id: AwaitingBroadcast::<Runtime, state_chain_runtime::AssethubInstance>::get(
-				broadcast_ids[5],
-			)
-			.unwrap()
-			.transaction_out_id,
-			signer_id: Default::default(),
-			tx_fee: 1000,
-			tx_metadata: Default::default(),
-			transaction_ref: Default::default(),
-		},
-	));
-}
-
-pub fn witness_ethereum_rotation_broadcast(broadcast_id: cf_primitives::BroadcastId) {
-	let eth_broadcast_data =
-		AwaitingBroadcast::<Runtime, state_chain_runtime::EthereumInstance>::get(broadcast_id)
-			.unwrap();
-	witness_call(RuntimeCall::EthereumBroadcaster(
-	pallet_cf_broadcast::Call::transaction_succeeded {
-		tx_out_id: eth_broadcast_data.transaction_out_id,
-		signer_id: Default::default(),
-		tx_fee: cf_chains::evm::TransactionFee {
-			effective_gas_price: 1000000,
-			gas_used: 1000,
-		},
-		tx_metadata:
-			<EvmTransactionMetadata as TransactionMetadata<cf_chains::Ethereum>>::extract_metadata(
-				&eth_broadcast_data.transaction_payload,
-			),
-		transaction_ref: Default::default(),
-	}));
 }

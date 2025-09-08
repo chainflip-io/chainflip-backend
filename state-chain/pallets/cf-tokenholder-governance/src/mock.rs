@@ -17,8 +17,8 @@
 use crate::{self as pallet_cf_tokenholder_governance};
 use cf_chains::{Chain, ChainCrypto, Ethereum, ForeignChain, SetGovKeyWithAggKeyError};
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_on_account_funded, impl_mock_waived_fees,
-	mocks::fee_payment::MockFeePayment, BroadcastAnyChainGovKey, CommKeyBroadcaster, WaivedFees,
+	impl_mock_chainflip, impl_mock_waived_fees, mocks::fee_payment::MockFeePayment,
+	BroadcastAnyChainGovKey, CommKeyBroadcaster, WaivedFees,
 };
 use codec::{Decode, Encode};
 use frame_support::{derive_impl, parameter_types, traits::HandleLifetime};
@@ -57,7 +57,6 @@ parameter_types! {
 
 // Implement mock for RestrictionHandler
 impl_mock_waived_fees!(AccountId, RuntimeCall);
-impl_mock_on_account_funded!(AccountId, u128);
 
 pub struct MockBroadcaster;
 

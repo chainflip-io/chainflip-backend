@@ -16,12 +16,12 @@
 
 #![cfg(test)]
 
-use crate::{mock::*, BlockEmissions, Event, LastSupplyUpdateBlock, Pallet, BURN_FEE_MULTIPLE};
+use crate::{mock::*, Event, LastSupplyUpdateBlock, Pallet, BURN_FEE_MULTIPLE};
 use cf_primitives::SECONDS_PER_BLOCK;
 use cf_test_utilities::{assert_has_event, assert_has_matching_event};
 use cf_traits::{
 	mocks::{egress_handler::MockEgressHandler, flip_burn_info::MockFlipBurnInfo},
-	RewardsDistribution, SetSafeMode,
+	SetSafeMode,
 };
 use frame_support::{
 	assert_noop,
@@ -47,18 +47,25 @@ fn test_should_mint_at() {
 	});
 }
 
+fn distribute_block_rewards() {
+	use pallet_authorship::EventHandler;
+	const AUTHOR: AccountId = 123;
+
+	Pallet::<Test>::note_author(AUTHOR);
+}
+
 #[cfg(test)]
 mod test_block_rewards {
-	use cf_traits::RewardsDistribution;
+	use crate::CurrentAuthorityEmissionPerBlock;
 
 	use super::*;
 
 	fn test_with(emissions_per_block: u128) {
 		new_test_ext().execute_with(|| {
-			Emissions::update_authority_block_emission(emissions_per_block);
+			CurrentAuthorityEmissionPerBlock::<Test>::put(emissions_per_block);
 
 			let before = Flip::<Test>::total_issuance();
-			MockRewardsDistribution::distribute();
+			distribute_block_rewards();
 			let after = Flip::<Test>::total_issuance();
 
 			assert_eq!(before + emissions_per_block, after);
@@ -75,31 +82,10 @@ mod test_block_rewards {
 }
 
 #[test]
-fn test_duplicate_emission_should_be_noop() {
-	new_test_ext().execute_with(|| {
-		Emissions::update_authority_block_emission(EMISSION_RATE);
-
-		let before = Flip::<Test>::total_issuance();
-		MockRewardsDistribution::distribute();
-		let after = Flip::<Test>::total_issuance();
-
-		assert_eq!(before + EMISSION_RATE, after);
-
-		// Minting again at the same block should have no effect.
-		let before = after;
-		MockRewardsDistribution::distribute();
-		let after = Flip::<Test>::total_issuance();
-
-		assert_eq!(before + EMISSION_RATE, after);
-	});
-}
-
-#[test]
 fn should_calculate_block_emissions() {
 	new_test_ext().execute_with(|| {
 		// Block emissions are calculated at genesis.
 		assert!(Emissions::current_authority_emission_per_block() > 0);
-		assert!(Emissions::backup_node_emission_per_block() > 0);
 	});
 }
 
@@ -107,25 +93,30 @@ fn should_calculate_block_emissions() {
 fn should_mint_but_not_broadcast() {
 	new_test_ext().execute_with(|| {
 		let prev_supply_update_block = LastSupplyUpdateBlock::<Test>::get();
-		MockRewardsDistribution::distribute();
+		distribute_block_rewards();
 		assert_eq!(prev_supply_update_block, LastSupplyUpdateBlock::<Test>::get());
 	});
 }
 
 #[test]
-fn should_mint_and_initiate_broadcast() {
+fn should_burn_and_initiate_broadcast() {
 	new_test_ext().execute_with(|| {
 		let before = Flip::<Test>::total_issuance();
 		assert!(MockEmissionsBroadcaster::get_pending_api_calls().is_empty());
 		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
 		let after = Flip::<Test>::total_issuance();
-		assert!(after > before - FLIP_TO_BURN, "Expected {after:?} > {before:?}");
+		assert_eq!(
+			after,
+			before - FLIP_TO_BURN,
+			"Expected after ({after}) to be less than before({before}) by {FLIP_TO_BURN}"
+		);
 		assert_eq!(
 			MockEmissionsBroadcaster::get_pending_api_calls()
 				.first()
 				.unwrap()
 				.new_total_supply,
-			Flip::<Test>::total_issuance()
+			Flip::<Test>::total_issuance(),
+			"Expected emitted total supply to match the total issuance"
 		);
 	});
 }
@@ -266,10 +257,6 @@ fn ensure_governance_origin_checks() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Emissions::update_current_authority_emission_inflation(non_gov_origin.clone(), 0),
-			sp_runtime::traits::BadOrigin,
-		);
-		assert_noop!(
-			Emissions::update_backup_node_emission_inflation(non_gov_origin.clone(), 0),
 			sp_runtime::traits::BadOrigin,
 		);
 		assert_noop!(

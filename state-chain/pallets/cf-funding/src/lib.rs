@@ -27,6 +27,7 @@ pub mod migrations;
 pub mod weights;
 use core::marker::PhantomData;
 
+use frame_support::{Deserialize, Serialize};
 pub use weights::WeightInfo;
 
 #[cfg(test)]
@@ -332,13 +333,39 @@ pub mod pallet {
 
 	pub type EthTransactionHash = [u8; 32];
 
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub enum RedemptionAmount<T: Parameter> {
+	#[derive(
+		Copy,
+		Clone,
+		Debug,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Ord,
+		PartialOrd,
+		Serialize,
+		Deserialize,
+	)]
+	pub enum RedemptionAmount<T> {
 		Max,
 		Exact(T),
 	}
 
-	impl<T: Parameter> From<T> for RedemptionAmount<T> {
+	impl<T> RedemptionAmount<T> {
+		pub fn try_fmap<B, E>(
+			self,
+			f: impl FnOnce(T) -> Result<B, E>,
+		) -> Result<RedemptionAmount<B>, E> {
+			match self {
+				RedemptionAmount::Max => Ok(RedemptionAmount::Max),
+				RedemptionAmount::Exact(amount) => Ok(RedemptionAmount::Exact(f(amount)?)),
+			}
+		}
+	}
+
+	impl<T> From<T> for RedemptionAmount<T> {
 		fn from(t: T) -> Self {
 			Self::Exact(t)
 		}
@@ -376,11 +403,8 @@ pub mod pallet {
 
 		/// Calls that are dispatchable via ethereum contract
 		type EthereumSCApi: UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
-			+ Decode
-			+ Clone
-			+ Ord
-			+ PartialOrd
-			+ Debug
+			+ Member
+			+ Parameter
 			+ GetDispatchInfo;
 
 		/// Safe Mode access.
@@ -1204,7 +1228,7 @@ pub struct EthereumDepositAndSCCall {
 	pub call: Vec<u8>,
 }
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound, Serialize, Deserialize)]
 pub enum EthereumDeposit {
 	FlipToSCGateway { amount: EthAmount },
 	Vault { asset: EthAsset, amount: EthAmount },

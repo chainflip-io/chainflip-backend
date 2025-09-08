@@ -26,6 +26,7 @@ env:
   SOLANA_PROGRAMS_VERSION: v1.2.3
   EVM_CONTRACTS_VERSION: v1.3.2
   NODE_COUNT: "1-node"
+  CHAIN: "dev"
 
 permissions:
   packages: read
@@ -60,7 +61,7 @@ jobs:
 
       - name: Configure NodeJS 🛠️
         if: inputs.run-job
-        uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version-file: ./bouncer/.nvmrc
           cache: "pnpm"
@@ -190,20 +191,6 @@ jobs:
           ./commands/force_sol_nonces.ts
           ./commands/set_sol_alt.ts
 
-      # TODO: This is a temporary workaround to do the initial price feed setup. Remove after 1.11 is released.
-      - name: Setup price feeds
-        if: inputs.run-job
-        run: |
-          git checkout ${{ github.sha }}
-          git rev-parse HEAD
-          cd bouncer
-          pnpm install --frozen-lockfile
-          ./commands/update_price_feeds.ts BTC 10000
-          ./commands/update_price_feeds.ts ETH 1000
-          ./commands/update_price_feeds.ts SOL 100
-          ./commands/update_price_feeds.ts USDC 1
-          ./commands/update_price_feeds.ts USDT 1
-
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
         id: pre-upgrade-bouncer
@@ -232,6 +219,17 @@ jobs:
             --bins ./../upgrade-to-bins \
             --localnet_init ./../localnet/init \
             --oldVersion "${{ env.OLD_BIN_VERSION }}"
+
+      # TODO: This is a temporary workaround to do the initial price feed setup. Remove after 1.11 is released.
+      - name: Setup price feeds
+        if: inputs.run-job
+        run: |
+          git checkout ${{ github.sha }}
+          git rev-parse HEAD
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./commands/setup_elections.ts
+          ./commands/update_price_feeds.ts ALL
 
       - name: Run bouncer after upgrade 🙅‍♂️
         if: inputs.run-job

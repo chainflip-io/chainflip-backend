@@ -18,6 +18,7 @@ use bitcoin::{BlockHash, Txid};
 use cf_utilities::task_scope::Scope;
 
 use crate::{
+	btc::rpc::MempoolInfo,
 	retrier::{Attempt, RequestLog, RetrierClient},
 	settings::{HttpBasicAuthEndpoint, NodeContainer},
 	witness::common::chain_source::{ChainClient, Header},
@@ -28,7 +29,7 @@ use core::time::Duration;
 use anyhow::Result;
 use cf_chains::btc::{BlockNumber, BtcAmount};
 
-use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient, VerboseBlock};
+use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient, MempoolTransaction, VerboseBlock};
 
 #[derive(Clone)]
 pub struct BtcRetryRpcClient {
@@ -171,6 +172,46 @@ impl BtcRpcApi for BtcRetryRpcClient {
 			)
 			.await
 	}
+
+	async fn mempool_info(&self) -> anyhow::Result<MempoolInfo> {
+		self.retry_client
+			.request_with_limit(
+				RequestLog::new("mempool_info".to_string(), None),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.mempool_info().await })
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn raw_mempool(&self) -> anyhow::Result<Vec<Txid>> {
+		self.retry_client
+			.request_with_limit(
+				RequestLog::new("raw_mempool".to_string(), None),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.raw_mempool().await })
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn mempool_entries(&self, txids: Vec<Txid>) -> anyhow::Result<Vec<MempoolTransaction>> {
+		self.retry_client
+			.request_with_limit(
+				RequestLog::new("raw_transaction".to_string(), Some(txids.len().to_string())),
+				Box::pin(move |client| {
+					let txids = txids.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.mempool_entries(txids).await })
+				}),
+				2,
+			)
+			.await
+	}
 }
 
 #[async_trait::async_trait]
@@ -237,6 +278,12 @@ pub mod mocks {
 			) -> anyhow::Result<BlockHeader>;
 
 			async fn best_block_hash(&self) -> anyhow::Result<BlockHash>;
+
+			async fn mempool_info(&self) -> anyhow::Result<MempoolInfo>;
+
+			async fn raw_mempool(&self) -> anyhow::Result<Vec<Txid>>;
+
+			async fn mempool_entries(&self, txids: Vec<Txid>) -> anyhow::Result<Vec<MempoolTransaction>>;
 		}
 	}
 }

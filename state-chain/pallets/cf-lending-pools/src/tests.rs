@@ -366,7 +366,7 @@ fn add_boost_funds_is_disabled_by_safe_mode() {
 
 		MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
 			add_boost_funds_enabled: false,
-			..PalletSafeMode::CODE_GREEN
+			..PalletSafeMode::code_green()
 		});
 
 		// Should not be able to add funds to the boost pool
@@ -382,7 +382,7 @@ fn add_boost_funds_is_disabled_by_safe_mode() {
 
 		assert_eq!(get_available_amount_for_booster(Asset::Eth, TIER_5_BPS, BOOSTER_1), None);
 
-		MockRuntimeSafeMode::set_safe_mode(PalletSafeMode::CODE_GREEN);
+		MockRuntimeSafeMode::set_safe_mode(PalletSafeMode::code_green());
 
 		// Should be able to add funds to the boost pool now that the safe mode is turned off
 		assert_ok!(LendingPools::add_boost_funds(
@@ -414,7 +414,7 @@ fn stop_boosting_is_disabled_by_safe_mode() {
 
 		MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
 			stop_boosting_enabled: false,
-			..PalletSafeMode::CODE_GREEN
+			..PalletSafeMode::code_green()
 		});
 
 		// Should not be able to stop boosting
@@ -428,7 +428,7 @@ fn stop_boosting_is_disabled_by_safe_mode() {
 			Some(BOOST_FUNDS)
 		);
 
-		MockRuntimeSafeMode::set_safe_mode(PalletSafeMode::CODE_GREEN);
+		MockRuntimeSafeMode::set_safe_mode(PalletSafeMode::code_green());
 
 		// Should be able to stop boosting now that the safe mode is turned off
 		assert_ok!(LendingPools::stop_boosting(

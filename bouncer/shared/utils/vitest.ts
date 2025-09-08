@@ -1,7 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { afterEach, beforeEach, it } from 'vitest';
 import { TestContext } from 'shared/utils/test_context';
-import { testInfoFile } from 'shared/utils';
+import { runWithTimeout, testInfoFile } from 'shared/utils';
+import { getTestLogFile, getTestLogFilesForTaggedChildren } from './logger';
 
 // Write the test name and function name to a file to be used by the `run_test.ts` command
 function writeTestInfoFile(name: string, functionName: string) {
@@ -30,16 +31,43 @@ afterEach<{ testContext: TestContext }>((context) => {
   context.testContext.printReport();
 });
 
-function createTestFunction(name: string, testFunction: (context: TestContext) => Promise<void>) {
+function createTestFunction(
+  name: string,
+  timeoutSeconds: number,
+  testFunction: (context: TestContext) => Promise<void>,
+) {
   return async (context: { testContext: TestContext }) => {
     // Attach the test name to the logger
     context.testContext.logger = context.testContext.logger.child({ test: name });
     context.testContext.logger.info(`🧪 Starting test ${name}`);
+
+    // Check whether we currently have a tag, if we don't have one,
+    // we want to later include all the files created by child loggers that had a tag.
+    const tagExists = !!context.testContext.logger.bindings().tag;
+
     // Run the test with the test context
-    await testFunction(context.testContext).catch((error) => {
+    await runWithTimeout(testFunction(context.testContext), timeoutSeconds).catch(async (error) => {
       // We must catch the error here to be able to log it
       context.testContext.error(error);
-      throw error;
+
+      // get childLogs if we didn't have a tag. This operation might cause logging,
+      // and thus we want to run it before we get the logs for the test logger below.
+      let childLogs: { tag: string; logs: string }[] = [];
+      if (!tagExists) {
+        childLogs = await getTestLogFilesForTaggedChildren(context.testContext.logger);
+      }
+
+      // get local logs from file and append them to the error
+      const testLogFileName = getTestLogFile(context.testContext.logger);
+      const logs = readFileSync(testLogFileName);
+
+      let fullLogs = `history\n${logs}`;
+      for (const child of childLogs) {
+        fullLogs += `\n\nhistory of child logger (tag: ${child.tag})\n${child.logs}`;
+      }
+
+      // re-throw error with logs
+      throw new Error(`${error}\n\n${fullLogs}`);
     });
     context.testContext.logger.info(`✅ Finished test ${name}`);
   };
@@ -53,8 +81,10 @@ export function concurrentTest(
 ) {
   it.concurrent<{ testContext: TestContext }>(
     name,
-    createTestFunction(name, testFunction),
-    timeoutSeconds * 1000,
+    createTestFunction(name, timeoutSeconds, testFunction),
+    // we catch the timeout manually inside `createTestFunction` so that we can print the test logs.
+    // the timeout here is a fallback and should never trigger:
+    (timeoutSeconds + 5) * 1000,
   );
 
   if (!excludeFromList) {
@@ -70,8 +100,10 @@ export function serialTest(
 ) {
   it.sequential<{ testContext: TestContext }>(
     name,
-    createTestFunction(name, testFunction),
-    timeoutSeconds * 1000,
+    createTestFunction(name, timeoutSeconds, testFunction),
+    // we catch the timeout manually inside `createTestFunction` so that we can print the test logs.
+    // the timeout here is a fallback and should never trigger:
+    (timeoutSeconds + 5) * 1000,
   );
 
   if (!excludeFromList) {

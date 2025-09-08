@@ -37,7 +37,7 @@ mod benchmarks {
 			assert_ok!(call.dispatch_bypass_filter(origin));
 		}
 
-		assert_eq!(RuntimeSafeMode::<T>::get(), SafeMode::CODE_RED);
+		assert_eq!(RuntimeSafeMode::<T>::get(), SafeMode::code_red());
 	}
 
 	#[benchmark]

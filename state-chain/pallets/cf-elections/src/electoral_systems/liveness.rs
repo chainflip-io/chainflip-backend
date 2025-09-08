@@ -73,7 +73,7 @@ impl<
 
 	// The SC block number that we started the election at.
 	type ElectionState = StateChainBlockNumber;
-	type VoteStorage = vote_storage::bitmap::Bitmap<ChainBlockHash>;
+	type VoteStorage = vote_storage::bitmap_numerical::BitmapNoHash<ChainBlockHash>;
 	type Consensus = BTreeSet<Self::ValidatorId>;
 	// The current SC block number, and the current chain tracking height.
 	type OnFinalizeContext = (StateChainBlockNumber, ChainBlockNumber);

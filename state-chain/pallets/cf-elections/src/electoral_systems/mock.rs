@@ -203,4 +203,11 @@ impl ElectoralSystemRunner for MockElectoralSystemRunner {
 	) -> bool {
 		Self::vote_needed()
 	}
+
+	fn check_vote_mismatch(
+		_election_identifier: ElectionIdentifierOf<Self>,
+		_partial_vote: &PartialVoteOf<Self>,
+	) -> Result<(), sp_runtime::DispatchError> {
+		Ok(())
+	}
 }

@@ -935,7 +935,7 @@ mod safe_mode {
 
 			<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_safe_mode(PalletSafeMode {
 				strategy_updates_enabled: false,
-				..PalletSafeMode::CODE_GREEN
+				..PalletSafeMode::code_green()
 			});
 
 			assert_err!(
@@ -970,7 +970,7 @@ mod safe_mode {
 				<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_safe_mode(
 					PalletSafeMode {
 						strategy_updates_enabled: false,
-						..PalletSafeMode::CODE_GREEN
+						..PalletSafeMode::code_green()
 					},
 				);
 
@@ -1001,7 +1001,7 @@ mod safe_mode {
 				<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_safe_mode(
 					PalletSafeMode {
 						strategy_closure_enabled: false,
-						..PalletSafeMode::CODE_GREEN
+						..PalletSafeMode::code_green()
 					},
 				);
 
@@ -1028,7 +1028,7 @@ mod safe_mode {
 				<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_safe_mode(
 					PalletSafeMode {
 						strategy_execution_enabled: false,
-						..PalletSafeMode::CODE_GREEN
+						..PalletSafeMode::code_green()
 					},
 				);
 			})

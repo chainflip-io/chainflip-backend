@@ -1,5 +1,4 @@
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-import { describe } from 'vitest';
 import { SwapParams } from 'shared/perform_swap';
 import { newCcmMetadata, newVaultSwapCcmMetadata, testSwap, testVaultSwap } from 'shared/swapping';
 import { btcAddressTypes } from 'shared/new_btc_address';
@@ -9,9 +8,9 @@ import {
   VaultSwapParams,
   vaultSwapSupportedChains,
 } from 'shared/utils';
-import { openPrivateBtcChannel } from 'shared/btc_vault_swap';
 import { TestContext } from 'shared/utils/test_context';
-import { manuallyAddTestToList, concurrentTest, serialTest } from 'shared/utils/vitest';
+import { manuallyAddTestToList, concurrentTest } from 'shared/utils/vitest';
+import { SwapContext } from 'shared/utils/swap_context';
 
 export async function initiateSwap(
   testContext: TestContext,
@@ -48,6 +47,8 @@ export async function initiateSwap(
     testContext.swapContext,
   );
 }
+
+manuallyAddTestToList('AllSwaps', 'testAllSwaps');
 
 export function testAllSwaps(timeoutPerSwap: number) {
   const allSwaps: { name: string; test: (context: TestContext) => Promise<void> }[] = [];
@@ -103,29 +104,24 @@ export function testAllSwaps(timeoutPerSwap: number) {
     });
   });
 
-  // Swaps from/to assethub paired with random chains
+  // Swaps from assethub paired with random chains.
+  // NOTE: we don't test swaps *to* assethub here, those tests are run sequentially in
+  // `testSwapsToAssethub`.
   const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
   assethubAssets.forEach((hubAsset) => {
     appendSwap(hubAsset, randomElement(AssetsWithoutAssethub), testSwap);
-    appendSwap(randomElement(AssetsWithoutAssethub), hubAsset, testSwap);
   });
-  appendSwap('ArbEth', 'HubDot', testVaultSwap);
-  appendSwap('ArbEth', 'HubUsdc', testVaultSwap);
-  appendSwap('ArbEth', 'HubUsdt', testVaultSwap);
 
-  describe('AllSwaps', () => {
-    manuallyAddTestToList('AllSwaps', 'testAllSwaps');
-    serialTest(
-      'OpenPrivateBtcChannel',
-      async (context) => {
-        await openPrivateBtcChannel(context.logger, '//BROKER_1');
-        context.logger.info(`🧪 Private broker channel opened`);
-      },
-      120,
-      true,
-    );
-    for (const swap of allSwaps) {
-      concurrentTest(swap.name, swap.test, timeoutPerSwap, true);
-    }
-  });
+  for (const swap of allSwaps) {
+    concurrentTest(`AllSwaps > ${swap.name}`, swap.test, timeoutPerSwap, true);
+  }
+}
+
+export async function testSwapsToAssethub(testContext: TestContext) {
+  // we run three swaps to assethub in sequence. Otherweise there can be nonce issues,
+  // which caused bouncer flakiness in the past.
+  for (const destinationAsset of ['HubDot', 'HubUsdc', 'HubUsdt'] as Asset[]) {
+    const logger = testContext.logger.child({ tag: `ArbEth to ${destinationAsset}` });
+    await testSwap(logger, 'ArbEth', destinationAsset, undefined, undefined, new SwapContext());
+  }
 }

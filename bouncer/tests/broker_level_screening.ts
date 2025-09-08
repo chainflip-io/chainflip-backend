@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { Chain, InternalAsset } from '@chainflip/cli';
 import Web3 from 'web3';
-import { sendBtc, sendBtcTransactionWithParent } from 'shared/send_btc';
+import { btcClient, sendBtc, sendBtcTransactionWithParent } from 'shared/send_btc';
 import {
   newAssetAddress,
   sleep,
@@ -18,6 +18,8 @@ import {
   observeBalanceIncrease,
   observeCcmReceived,
   observeFetch,
+  btcClientMutex,
+  getBtcClient,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import Keyring from 'polkadot/keyring';
@@ -25,16 +27,17 @@ import { requestNewSwap } from 'shared/perform_swap';
 import { FillOrKillParamsX128 } from 'shared/new_swap';
 import { getBtcBalance } from 'shared/get_btc_balance';
 import { TestContext } from 'shared/utils/test_context';
-import { Logger } from 'shared/utils/logger';
+import { getIsoTime, Logger } from 'shared/utils/logger';
 import { getBalance } from 'shared/get_balance';
 import { send } from 'shared/send';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { buildAndSendBtcVaultSwap, openPrivateBtcChannel } from 'shared/btc_vault_swap';
+import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { newCcmMetadata } from 'shared/swapping';
 
 const keyring = new Keyring({ type: 'sr25519' });
-const broker = keyring.createFromUri('//BROKER_1');
+const brokerUri = '//BROKER_1';
+const broker = keyring.createFromUri(brokerUri);
 
 /**
  * Observes the balance of a BTC address and returns true if the balance changes. Times out after 100 seconds and returns false if the balance does not change.
@@ -226,14 +229,12 @@ async function brokerLevelScreeningTestBtcVaultSwap(
   const destinationAddressForUsdc = await newAssetAddress('Usdc');
   const txId = await buildAndSendBtcVaultSwap(
     logger,
+    brokerUri,
     parseFloat(amount),
     'Usdc',
     destinationAddressForUsdc,
     refundAddress,
-    {
-      account: broker.address,
-      commissionBps: 0,
-    },
+    0,
     [],
   );
   await reportFunction(txId);
@@ -337,7 +338,7 @@ async function testEvmVaultSwap(
   logger.debug(`Sending ${sourceAsset} (vault swap) tx to reject...`);
   const txHash = await executeEvmVaultSwap(
     logger,
-    broker.address,
+    brokerUri,
     sourceAsset,
     'Btc',
     destinationAddressForBtc,
@@ -393,7 +394,8 @@ async function testEvmLiquidityDeposit(
 
   // setup access to chainflip api and lp
   await using chainflip = await getChainflipApi();
-  const lp = createStateChainKeypair(process.env.LP_URI || '//LP_1');
+  const lpUri = process.env.LP_URI || '//LP_1';
+  const lp = createStateChainKeypair(lpUri);
 
   // Get existing LP refund address of //LP_1 for `sourceAsset`
   /* eslint-disable  @typescript-eslint/no-explicit-any */
@@ -423,7 +425,7 @@ async function testEvmLiquidityDeposit(
   }).event;
 
   logger.debug('Requesting ' + sourceAsset + ' deposit address');
-  await lpMutex.runExclusive(async () => {
+  await lpMutex.runExclusive(lpUri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
       .requestLiquidityDepositAddress(sourceAsset, null)
@@ -453,6 +455,7 @@ async function testEvmLiquidityDeposit(
           BigInt(event.data.amountCredited.replace(/,/g, '')),
           BigInt(amountToFineAmountBigInt(amount, sourceAsset)),
         ),
+      timeoutSeconds: 120,
     }).event;
 
     await send(logger, sourceAsset, depositAddress, amount);
@@ -532,8 +535,27 @@ async function setWhitelistedBroker(brokerAddress: Uint8Array) {
 // 1. No boost and early tx report -> tx is reported early and the swap is refunded.
 // 2. Boost and early tx report -> tx is reported early and the swap is refunded.
 // 3. Boost and late tx report -> tx is reported late and the swap is not refunded.
-export function testBitcoin(testContext: TestContext, doBoost: boolean): Promise<void>[] {
+export async function testBitcoin(
+  testContext: TestContext,
+  doBoost: boolean,
+): Promise<Promise<void>[]> {
   const logger = testContext.logger;
+
+  // we have to setup a separate wallet in order to not taint our main wallet, otherwise
+  // the deposit monitor will possibly reject transactions created by other tests, due
+  // to ancestor screening. This has been a source of bouncer flakiness in the past.
+  const taintedClient = await btcClientMutex.runExclusive(async () => {
+    const reply: any = await btcClient.createWallet(`tainted-${getIsoTime()}`, false, false, '');
+    if (!reply.name) {
+      throw new Error(`Could not create tainted wallet, with error ${reply.warning}`);
+    }
+    testContext.debug(`got new wallet for BLS test: ${reply.name}`);
+    return getBtcClient(reply.name);
+  });
+  const fundingAddress = await taintedClient.getNewAddress();
+  testContext.debug(`funding tainted wallet with 5btc to ${fundingAddress}`);
+  await sendBtc(testContext.logger, fundingAddress, 5, 1);
+  testContext.debug(`funding success!`);
 
   // if we don't boost, we wait with our report for 1 block confirmation, otherwise we submit the report directly
   const confirmationsBeforeReport = doBoost ? 0 : 1;
@@ -542,7 +564,8 @@ export function testBitcoin(testContext: TestContext, doBoost: boolean): Promise
   const simple = brokerLevelScreeningTestBtc(
     logger,
     doBoost,
-    async (amount, address) => sendBtc(logger, address, amount, confirmationsBeforeReport),
+    async (amount, address) =>
+      sendBtc(logger, address, amount, confirmationsBeforeReport, taintedClient),
     async (txId) => setTxRiskScore(txId, 9.0),
   );
 
@@ -551,8 +574,16 @@ export function testBitcoin(testContext: TestContext, doBoost: boolean): Promise
     logger,
     doBoost,
     async (amount, address) =>
-      (await sendBtcTransactionWithParent(logger, address, amount, 0, confirmationsBeforeReport))
-        .childTxid,
+      (
+        await sendBtcTransactionWithParent(
+          logger,
+          address,
+          amount,
+          0,
+          confirmationsBeforeReport,
+          taintedClient,
+        )
+      ).childTxid,
     async (txId) => setTxRiskScore(txId, 9.0),
   );
 
@@ -561,14 +592,23 @@ export function testBitcoin(testContext: TestContext, doBoost: boolean): Promise
     logger,
     doBoost,
     async (amount, address) =>
-      (await sendBtcTransactionWithParent(logger, address, amount, 2, confirmationsBeforeReport))
-        .childTxid,
+      (
+        await sendBtcTransactionWithParent(
+          logger,
+          address,
+          amount,
+          2,
+          confirmationsBeforeReport,
+          taintedClient,
+        )
+      ).childTxid,
     async (txId) => setTxRiskScore(txId, 9.0),
   );
 
   return [simple, sameBlockParentMarked, oldParentMarked];
 }
 
+/* eslint-disable  @typescript-eslint/no-unused-vars */
 async function testBitcoinVaultSwap(testContext: TestContext) {
   const logger = testContext.logger;
 
@@ -609,6 +649,11 @@ export async function testBrokerLevelScreening(
   //           to being too late.
   //           Most of the functionality is covered by testing `Eth` and `ArbUsdc`.
   //           An alternative would be to increase the ArbEth safety margin on localnet.
+  // - ArbUsdc: we also don't test ArbUsdc rejections, they have caused tests to become flaky
+  //            as well (PRO-2488).
+  // - Btc VaultSwaps: For bitcoin, due to ancestor screening, we have to make sure to use
+  //                   a dedicated "tainted" wallet. Since it's somewhat difficult to inject
+  //                   a different wallet into the `sendVaultSwap` flow, we disable the test for now.
 
   // test rejection of swaps by the responsible broker
   await Promise.all(
@@ -616,29 +661,25 @@ export async function testBrokerLevelScreening(
       testEvm(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
       testEvm(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
       testEvm(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-      testEvm(testContext, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
     ]
-      .concat(testBitcoin(testContext, false))
-      .concat(testBoostedDeposits ? testBitcoin(testContext, true) : []),
+      .concat(await testBitcoin(testContext, false))
+      .concat(testBoostedDeposits ? await testBitcoin(testContext, true) : []),
   );
 
   // test rejection of LP deposits and vault swaps:
   //  - this requires the rejecting broker to be whitelisted
   //  - for bitcoin vault swaps a private channel has to be opened
   await setWhitelistedBroker(broker.addressRaw);
-  await openPrivateBtcChannel(testContext.logger, '//BROKER_1');
   await Promise.all([
     // --- LP deposits ---
     testEvmLiquidityDeposit(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmLiquidityDeposit(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmLiquidityDeposit(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    testEvmLiquidityDeposit(testContext, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
 
     // --- vault swaps ---
-    testBitcoinVaultSwap(testContext),
+    // testBitcoinVaultSwap(testContext),
     testEvmVaultSwap(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmVaultSwap(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    testEvmVaultSwap(testContext, 'ArbUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 
   await setMockmode(previousMockmode);

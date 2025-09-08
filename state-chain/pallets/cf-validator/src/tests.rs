@@ -36,10 +36,12 @@ use frame_support::{
 	traits::{HandleLifetime, OriginTrait},
 };
 use frame_system::RawOrigin;
+use quickcheck::TestResult;
+use quickcheck_macros::quickcheck;
 use sp_runtime::testing::UintAuthorityId;
+use sp_std::vec;
 
-const ALICE: u64 = 100;
-const BOB: u64 = 101;
+const NOBODY: u64 = 999; // Non-existent account for testing
 const GENESIS_EPOCH: u32 = 1;
 
 const OPERATOR_SETTINGS: OperatorSettings =
@@ -523,14 +525,27 @@ fn historical_epochs() {
 #[test]
 fn expired_epoch_data_is_removed() {
 	new_test_ext().then_execute_with_checks(|| {
+		let delegator = 123u64;
+		let operator = 456u64;
+		let test_snapshot = DelegationSnapshot::<Test> {
+			operator,
+			delegators: [(delegator, 50u128)].into_iter().collect(),
+			validators: [(ALICE, 150u128)].into_iter().collect(),
+			delegation_fee_bps: 250,
+			capacity_factor: None,
+		};
+
 		// Epoch 1
 		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
 		HistoricalAuthorities::<Test>::insert(1, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(1, 10);
+		test_snapshot.clone().register_for_epoch(1);
+
 		// Epoch 2
 		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
 		HistoricalAuthorities::<Test>::insert(2, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(2, 30);
+		test_snapshot.clone().register_for_epoch(2);
 		let authority_index = AuthorityIndex::<Test>::get(2, ALICE);
 
 		// Expire
@@ -540,16 +555,22 @@ fn expired_epoch_data_is_removed() {
 		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
 		HistoricalAuthorities::<Test>::insert(3, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(3, 20);
+		test_snapshot.clone().register_for_epoch(3);
 
 		// Expect epoch 1's data to be deleted
 		assert!(AuthorityIndex::<Test>::try_get(1, ALICE).is_err());
 		assert!(HistoricalAuthorities::<Test>::try_get(1).is_err());
 		assert!(HistoricalBonds::<Test>::try_get(1).is_err());
+		assert!(DelegationSnapshots::<Test>::get(1, operator).is_none());
 
-		// Expect epoch 2's data to be exist
+		// Expect epoch 2's data to exist
 		assert_eq!(AuthorityIndex::<Test>::get(2, ALICE), authority_index);
 		assert_eq!(HistoricalAuthorities::<Test>::get(2), vec![ALICE]);
 		assert_eq!(HistoricalBonds::<Test>::get(2), 30);
+		assert!(DelegationSnapshots::<Test>::get(2, operator).is_some());
+
+		// Expect epoch 3's data to exist
+		assert!(DelegationSnapshots::<Test>::get(3, operator).is_some());
 	});
 }
 
@@ -609,7 +630,7 @@ fn no_validator_rotation_when_disabled_by_safe_mode() {
 	new_test_ext().then_execute_with_checks(|| {
 		// Activate Safe Mode: CODE RED
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
-		assert!(<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == PalletSafeMode::CODE_RED);
+		assert!(<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == PalletSafeMode::code_red());
 
 		// Try to start a rotation.
 		ValidatorPallet::start_authority_rotation();
@@ -622,7 +643,9 @@ fn no_validator_rotation_when_disabled_by_safe_mode() {
 
 		// Change safe mode to CODE GREEN
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
-		assert!(<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == PalletSafeMode::CODE_GREEN);
+		assert!(
+			<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == PalletSafeMode::code_green()
+		);
 
 		// Try to start a rotation.
 		set_default_test_bids();
@@ -760,11 +783,9 @@ fn test_expect_validator_register_fails() {
 		const ID: u64 = 42;
 		assert_ok!(ValidatorPallet::update_pallet_config(
 			RawOrigin::Root.into(),
-			PalletConfigUpdate::RegistrationBondPercentage {
-				percentage: Percent::from_percent(60),
-			},
+			PalletConfigUpdate::MinimumValidatorStake { min_stake: 10_000 },
 		));
-		MockFlip::credit_funds(&ID, Percent::from_percent(40) * GENESIS_BOND);
+		MockFlip::credit_funds(&ID, 5_000 * FLIPPERINOS_PER_FLIP);
 		// Reduce the set size target to the current authority count.
 		assert_ok!(Pallet::<Test>::update_pallet_config(
 			RawOrigin::Root.into(),
@@ -793,7 +814,7 @@ fn test_expect_validator_register_fails() {
 		));
 		// It should be possible to register now since the actual size is below the target.
 		assert_ok!(Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)));
-		MockFlip::credit_funds(&ID, Percent::from_percent(20) * GENESIS_BOND);
+		MockFlip::credit_funds(&ID, 2_000 * FLIPPERINOS_PER_FLIP);
 		// Trying to register again passes the funding check but fails for other reasons.
 		assert_noop!(
 			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)),
@@ -827,7 +848,6 @@ fn failed_keygen_with_offenders(offenders: impl IntoIterator<Item = u64>) {
 	CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
 		RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
 			winners: CANDIDATES.collect(),
-			losers: Default::default(),
 			bond: Default::default(),
 		}),
 	));
@@ -898,7 +918,6 @@ mod key_handover {
 		CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
 			RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
 				winners: CANDIDATES.collect(),
-				losers: Default::default(),
 				bond: Default::default(),
 			}),
 		));
@@ -1441,7 +1460,6 @@ fn validator_set_change_propagates_to_session_pallet() {
 			CurrentRotationPhase::put(RotationPhase::<Test>::NewKeysActivated(
 				RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
 					winners: WINNING_BIDS.map(|bidder| bidder.bidder_id).to_vec(),
-					losers: vec![],
 					bond: EXPECTED_BOND,
 				}),
 			));
@@ -1455,26 +1473,26 @@ fn validator_set_change_propagates_to_session_pallet() {
 #[test]
 fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
-		const NEW_AUCTION_BID_CUTOFF_PERCENTAGE: Percent = Percent::from_percent(10);
 		const NEW_REDEMPTION_PERIOD_AS_PERCENTAGE: Percent = Percent::from_percent(10);
-		const NEW_REGISTRATION_BOND_PERCENTAGE: Percent = Percent::from_percent(10);
+		const NEW_MINIMUM_VALIDATOR_STAKE: u32 = 20_000;
 		const NEW_AUTHORITY_SET_MIN_SIZE: u32 = 0;
-		const NEW_BACKUP_REWARD_NODE_PERCENTAGE: Percent = Percent::from_percent(10);
 		const NEW_EPOCH_DURATION: u32 = 1;
 		const NEW_AUCTION_PARAMETERS: SetSizeParameters =
 			SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 };
 		const NEW_MINIMUM_REPORTED_CFE_VERSION: SemVer = SemVer { major: 1, minor: 0, patch: 0 };
 		const NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE: Percent = Percent::from_percent(10);
+		const NEW_DELEGATION_CAPACITY_FACTOR: Option<u32> = Some(5);
 
 		// Check that the default values are different from the new ones
-		assert_ne!(AuctionBidCutoffPercentage::<Test>::get(), NEW_AUCTION_BID_CUTOFF_PERCENTAGE);
 		assert_ne!(
 			RedemptionPeriodAsPercentage::<Test>::get(),
 			NEW_REDEMPTION_PERIOD_AS_PERCENTAGE
 		);
-		assert_ne!(RegistrationBondPercentage::<Test>::get(), NEW_REGISTRATION_BOND_PERCENTAGE);
+		assert_ne!(
+			MinimumValidatorStake::<Test>::get(),
+			FLIPPERINOS_PER_FLIP.saturating_mul(NEW_MINIMUM_VALIDATOR_STAKE.into())
+		);
 		assert_ne!(AuthoritySetMinSize::<Test>::get(), NEW_AUTHORITY_SET_MIN_SIZE);
-		assert_ne!(BackupRewardNodePercentage::<Test>::get(), NEW_BACKUP_REWARD_NODE_PERCENTAGE);
 		assert_ne!(EpochDuration::<Test>::get(), NEW_EPOCH_DURATION as u64);
 		assert_ne!(AuctionParameters::<Test>::get(), NEW_AUCTION_PARAMETERS);
 		assert_ne!(MinimumReportedCfeVersion::<Test>::get(), NEW_MINIMUM_REPORTED_CFE_VERSION);
@@ -1482,22 +1500,15 @@ fn can_update_all_config_items() {
 			MaxAuthoritySetContractionPercentage::<Test>::get(),
 			NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE
 		);
+		assert_ne!(DelegationCapacityFactor::<Test>::get(), NEW_DELEGATION_CAPACITY_FACTOR);
 
 		// Update all config items
 		let updates = vec![
-			PalletConfigUpdate::AuctionBidCutoffPercentage {
-				percentage: NEW_AUCTION_BID_CUTOFF_PERCENTAGE,
-			},
 			PalletConfigUpdate::RedemptionPeriodAsPercentage {
 				percentage: NEW_REDEMPTION_PERIOD_AS_PERCENTAGE,
 			},
-			PalletConfigUpdate::RegistrationBondPercentage {
-				percentage: NEW_REGISTRATION_BOND_PERCENTAGE,
-			},
+			PalletConfigUpdate::MinimumValidatorStake { min_stake: NEW_MINIMUM_VALIDATOR_STAKE },
 			PalletConfigUpdate::AuthoritySetMinSize { min_size: NEW_AUTHORITY_SET_MIN_SIZE },
-			PalletConfigUpdate::BackupRewardNodePercentage {
-				percentage: NEW_BACKUP_REWARD_NODE_PERCENTAGE,
-			},
 			PalletConfigUpdate::EpochDuration { blocks: NEW_EPOCH_DURATION },
 			PalletConfigUpdate::AuctionParameters { parameters: NEW_AUCTION_PARAMETERS },
 			PalletConfigUpdate::MinimumReportedCfeVersion {
@@ -1506,6 +1517,7 @@ fn can_update_all_config_items() {
 			PalletConfigUpdate::MaxAuthoritySetContractionPercentage {
 				percentage: NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE,
 			},
+			PalletConfigUpdate::DelegationCapacityFactor { factor: NEW_DELEGATION_CAPACITY_FACTOR },
 		];
 		for update in updates {
 			assert_ok!(ValidatorPallet::update_pallet_config(OriginTrait::root(), update.clone()));
@@ -1516,14 +1528,15 @@ fn can_update_all_config_items() {
 		}
 
 		// Check that the new values were set
-		assert_eq!(AuctionBidCutoffPercentage::<Test>::get(), NEW_AUCTION_BID_CUTOFF_PERCENTAGE);
 		assert_eq!(
 			RedemptionPeriodAsPercentage::<Test>::get(),
 			NEW_REDEMPTION_PERIOD_AS_PERCENTAGE
 		);
-		assert_eq!(RegistrationBondPercentage::<Test>::get(), NEW_REGISTRATION_BOND_PERCENTAGE);
+		assert_eq!(
+			MinimumValidatorStake::<Test>::get(),
+			FLIPPERINOS_PER_FLIP.saturating_mul(NEW_MINIMUM_VALIDATOR_STAKE.into())
+		);
 		assert_eq!(AuthoritySetMinSize::<Test>::get(), NEW_AUTHORITY_SET_MIN_SIZE);
-		assert_eq!(BackupRewardNodePercentage::<Test>::get(), NEW_BACKUP_REWARD_NODE_PERCENTAGE);
 		assert_eq!(EpochDuration::<Test>::get(), NEW_EPOCH_DURATION as u64);
 		assert_eq!(AuctionParameters::<Test>::get(), NEW_AUCTION_PARAMETERS);
 		assert_eq!(MinimumReportedCfeVersion::<Test>::get(), NEW_MINIMUM_REPORTED_CFE_VERSION);
@@ -1531,13 +1544,14 @@ fn can_update_all_config_items() {
 			MaxAuthoritySetContractionPercentage::<Test>::get(),
 			NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE
 		);
+		assert_eq!(DelegationCapacityFactor::<Test>::get(), NEW_DELEGATION_CAPACITY_FACTOR);
 
 		// Make sure that only governance can update the config
 		assert_noop!(
 			ValidatorPallet::update_pallet_config(
 				OriginTrait::signed(ALICE),
-				PalletConfigUpdate::AuctionBidCutoffPercentage {
-					percentage: NEW_AUCTION_BID_CUTOFF_PERCENTAGE,
+				PalletConfigUpdate::DelegationCapacityFactor {
+					factor: NEW_DELEGATION_CAPACITY_FACTOR
 				}
 			),
 			sp_runtime::traits::BadOrigin
@@ -1587,7 +1601,11 @@ mod operator {
 			// Allow BOB (*not* an exception since allow is the default)
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
 			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
-			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Max
+			));
 			assert_eq!(DelegationChoice::<Test>::get(BOB), Some(ALICE));
 
 			// Block BOB
@@ -1604,8 +1622,12 @@ mod operator {
 					operator: ALICE,
 					delegator: BOB,
 				}),
+				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+					delegator: BOB,
+					max_bid: Some(0),
+				}),
 				RuntimeEvent::ValidatorPallet(Event::Delegated { operator: ALICE, delegator: BOB }),
-				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+				RuntimeEvent::ValidatorPallet(Event::Undelegated {
 					operator: ALICE,
 					delegator: BOB,
 				}),
@@ -1634,7 +1656,7 @@ mod operator {
 
 			// BOB cannot delegate by default (not in exceptions list, deny is default)
 			assert_noop!(
-				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
+				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE, DelegationAmount::Max),
 				Error::<Test>::DelegatorBlocked
 			);
 			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
@@ -1643,7 +1665,11 @@ mod operator {
 			// Allow BOB (add to exceptions list to override deny default)
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
 			assert!(Exceptions::<Test>::get(ALICE).contains(&BOB));
-			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Max
+			));
 			assert_eq!(DelegationChoice::<Test>::get(BOB), Some(ALICE));
 
 			// Block BOB again (remove from exceptions list, back to deny default)
@@ -1657,8 +1683,12 @@ mod operator {
 					operator: ALICE,
 					delegator: BOB,
 				}),
+				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+					delegator: BOB,
+					max_bid: Some(0),
+				}),
 				RuntimeEvent::ValidatorPallet(Event::Delegated { operator: ALICE, delegator: BOB }),
-				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+				RuntimeEvent::ValidatorPallet(Event::Undelegated {
 					operator: ALICE,
 					delegator: BOB,
 				}),
@@ -1774,18 +1804,49 @@ mod operator {
 		});
 	}
 	#[test]
-	fn can_not_deregister_if_their_are_still_validators_associated() {
+	fn can_deregister_with_validators_associated_if_no_active_delegation() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OPERATOR_SETTINGS
 			));
 			ManagedValidators::<Test>::insert(BOB, ALICE);
+
+			// Should succeed - validators are automatically removed during deregistration
+			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)));
+
+			// Verify validator was removed from operator
+			assert!(!ManagedValidators::<Test>::contains_key(BOB));
+		});
+	}
+
+	#[test]
+	fn cannot_deregister_with_unexpired_delegation_snapshots() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS
+			));
+
+			// Create a delegation snapshot for the current epoch (unexpired)
+			let current_epoch = ValidatorPallet::epoch_index();
+			DelegationSnapshot::<Test> {
+				operator: ALICE,
+				validators: Default::default(),
+				delegators: [(BOB, 100u128)].into_iter().collect(),
+				delegation_fee_bps: 250,
+				capacity_factor: None,
+			}
+			.register_for_epoch(current_epoch);
+
+			// Should fail - operator has unexpired delegation snapshots
 			assert_noop!(
 				ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)),
-				Error::<Test>::StillAssociatedWithValidators
+				Error::<Test>::OperatorStillActive
 			);
-			assert_ok!(ValidatorPallet::remove_validator(OriginTrait::signed(ALICE), BOB));
+
+			// After expiring the epoch, deregistration should succeed
+			ValidatorPallet::expire_epoch(current_epoch);
 			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)));
 		});
 	}
@@ -1826,16 +1887,22 @@ mod delegation {
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
 			));
-			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(ALICE), BOB));
+			// Clear events from setup
+			System::reset_events();
+			// Delegate with max amount (use full balance)
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(ALICE),
+				BOB,
+				DelegationAmount::Max
+			));
 			assert_eq!(DelegationChoice::<Test>::get(ALICE), Some(BOB));
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::ValidatorPallet(Event::OperatorSettingsUpdated {
-					operator: BOB,
-					preferences: OPERATOR_SETTINGS,
-				}),
-				RuntimeEvent::ValidatorPallet(Event::Delegated { delegator: ALICE, operator: BOB }),
-			);
+			// Max delegation with DelegationAmount::Max should set max_bid to full balance
+			assert_eq!(MaxDelegationBid::<Test>::get(ALICE), Some(MockFlip::balance(&ALICE)));
+			// Should emit MaxBidUpdated and Delegated events
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Delegated {
+				delegator: ALICE,
+				operator: BOB,
+			}));
 		});
 	}
 
@@ -1843,14 +1910,37 @@ mod delegation {
 	fn can_undelegate() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
-				ValidatorPallet::undelegate(OriginTrait::signed(ALICE)),
+				ValidatorPallet::undelegate(OriginTrait::signed(ALICE), DelegationAmount::Max),
 				Error::<Test>::AccountIsNotDelegating
 			);
-			DelegationChoice::<Test>::insert(ALICE, BOB);
-			assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(ALICE)));
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(ALICE),
+				BOB,
+				DelegationAmount::Max,
+			));
+			// Undelegate with None (undelegate completely)
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(ALICE),
+				DelegationAmount::Max,
+			));
+			assert_eq!(DelegationChoice::<Test>::get(ALICE), None);
+			assert_eq!(MaxDelegationBid::<Test>::get(ALICE), None);
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::ValidatorPallet(Event::UnDelegated {
+				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+					delegator: ALICE,
+					max_bid: Some(0),
+				}),
+				RuntimeEvent::ValidatorPallet(Event::Delegated { delegator: ALICE, operator: BOB }),
+				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+					delegator: ALICE,
+					max_bid: None,
+				}),
+				RuntimeEvent::ValidatorPallet(Event::Undelegated {
 					delegator: ALICE,
 					operator: BOB
 				}),
@@ -1869,11 +1959,15 @@ mod delegation {
 				},
 			));
 			assert_noop!(
-				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
+				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE, DelegationAmount::Max),
 				Error::<Test>::DelegatorBlocked
 			);
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
-			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),);
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Max
+			));
 		});
 	}
 
@@ -1887,11 +1981,15 @@ mod delegation {
 					delegation_acceptance: DelegationAcceptance::Allow
 				},
 			));
-			assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Max
+			));
 			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
 
 			assert_noop!(
-				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE),
+				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE, DelegationAmount::Max),
 				Error::<Test>::DelegatorBlocked
 			);
 		});
@@ -1924,12 +2022,20 @@ mod delegation {
 				));
 
 				for delegator in DELEGATORS {
-					assert_ok!(ValidatorPallet::delegate(OriginTrait::signed(delegator), OPERATOR));
-					MockFlip::credit_funds(&delegator, AVAILABLE_BALANCE_OF_DELEGATOR);
+					// For even delegators, set max_bid during delegation - give them exact amount
 					if delegator % 2 == 0 {
-						assert_ok!(ValidatorPallet::set_max_bid(
+						MockFlip::credit_funds(&delegator, MAX_BID_OF_DELEGATOR);
+						assert_ok!(ValidatorPallet::delegate(
 							OriginTrait::signed(delegator),
-							Some(MAX_BID_OF_DELEGATOR),
+							OPERATOR,
+							DelegationAmount::Some(0) // Add 0 to start from their balance
+						));
+					} else {
+						MockFlip::credit_funds(&delegator, AVAILABLE_BALANCE_OF_DELEGATOR);
+						assert_ok!(ValidatorPallet::delegate(
+							OriginTrait::signed(delegator),
+							OPERATOR,
+							DelegationAmount::Max
 						));
 					}
 				}
@@ -1952,27 +2058,54 @@ mod delegation {
 				assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// After authority rotation starts, delegation snapshots should be stored
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				let snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+
+				assert!(!snapshot.validators.contains_key(&OPERATOR));
+				assert!(!snapshot.delegators.contains_key(&OPERATOR));
+
+				// Verify all delegators are in the snapshot
+				for &delegator in &DELEGATORS {
+					assert!(snapshot.delegators.contains_key(&delegator));
+					assert!(!snapshot.validators.contains_key(&delegator));
+				}
+
+				// Verify operator fee is correctly captured in snapshot
+				assert_eq!(snapshot.delegation_fee_bps, 200); // MIN_OPERATOR_FEE
 				MockKeyRotatorA::keygen_success();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// During key handover, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
 				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
 				MockKeyRotatorA::key_handover_success();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// During key activation, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
 				assert_rotation_phase_matches!(RotationPhase::<Test>::ActivatingKeys(..));
 				MockKeyRotatorA::keys_activated();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(NextDelegators::<Test>::get(), BTreeSet::from(DELEGATORS));
+				// During session rotation, snapshots should still be available
+				let next_epoch = ValidatorPallet::epoch_index() + 1;
+				assert!(DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).is_some());
 				assert_rotation_phase_matches!(RotationPhase::SessionRotating(..));
 			})
 			.then_execute_at_next_block(|_| {
-				assert!(NextDelegators::<Test>::get().is_empty());
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				let active_delegators = CurrentEpochDelegations::<Test>::get();
+				// After rotation is complete, check snapshots are stored for current epoch
+				let current_epoch = ValidatorPallet::epoch_index();
+				let snapshot = DelegationSnapshots::<Test>::get(current_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+				let active_delegators: BTreeSet<u64> =
+					snapshot.delegators.keys().cloned().collect();
 				assert_eq!(BTreeSet::from_iter(DELEGATORS), active_delegators);
 				for delegator in active_delegators {
 					if delegator % 2 == 0 {
@@ -2007,8 +2140,12 @@ mod delegation {
 				// Signal undelegating for 50% of delegators
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {
-						assert_ok!(ValidatorPallet::undelegate(OriginTrait::signed(*delegator)));
-						assert!(OutgoingDelegators::<Test>::get().contains(delegator));
+						assert_ok!(ValidatorPallet::undelegate(
+							OriginTrait::signed(*delegator),
+							DelegationAmount::Max
+						));
+						// Delegation choice should be removed after undelegation
+						assert!(DelegationChoice::<Test>::get(delegator).is_none());
 					}
 				}
 			})
@@ -2050,7 +2187,12 @@ mod delegation {
 			})
 			.then_execute_at_next_block(|_| {
 				assert_rotation_phase_matches!(RotationPhase::Idle);
-				assert!(CurrentEpochDelegations::<Test>::get().len() == 2);
+				// Only 2 delegators should remain (those that didn't undelegate)
+				let current_epoch = ValidatorPallet::epoch_index();
+				let snapshot = DelegationSnapshots::<Test>::get(current_epoch, OPERATOR);
+				assert!(snapshot.is_some());
+				let snapshot = snapshot.unwrap();
+				assert!(snapshot.delegators.len() == 2);
 				for delegator in &DELEGATORS {
 					if delegator % 2 == 0 {
 						assert_eq!(MockBonderFor::<Test>::get_bond(delegator), 0);
@@ -2065,10 +2207,856 @@ mod delegation {
 	}
 
 	#[test]
-	fn can_update_max_bid() {
+	fn can_delegate_with_specific_amount() {
 		new_test_ext().execute_with(|| {
+			// Setup delegation with specific amount
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS,
+			));
 			MockFlip::credit_funds(&BOB, 200);
-			assert_ok!(ValidatorPallet::set_max_bid(OriginTrait::signed(BOB), Some(100)));
+			// Delegate with specific amount instead of using set_max_bid
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Some(100)
+			));
 		});
 	}
+
+	#[test]
+	fn delegate_only_with_registered_operator() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+			MockFlip::credit_funds(&DELEGATOR, 200);
+
+			// Delegating to non-operator should fail.
+			assert_noop!(
+				ValidatorPallet::delegate(
+					OriginTrait::signed(DELEGATOR),
+					BOB,
+					DelegationAmount::Some(100)
+				),
+				Error::<Test>::NotOperator
+			);
+
+			// Register BOB as operator
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+
+			// Now delegation should succeed.
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(100)
+			));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(200));
+		});
+	}
+
+	#[test]
+	fn delegate_with_max_bid() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+			MockFlip::credit_funds(&DELEGATOR, 150);
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+
+			// Delegate with a specific max_bid
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(50)
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(BOB));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(150));
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+					delegator: DELEGATOR,
+					max_bid: Some(150)
+				}),
+				RuntimeEvent::ValidatorPallet(Event::Delegated {
+					delegator: DELEGATOR,
+					operator: BOB
+				}),
+			);
+
+			// Re-delegate to same operator with different max_bid (should add to existing bid)
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(50)
+			));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(150));
+			// Just check the last event since the ordering might include previous events
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Delegated {
+				delegator: DELEGATOR,
+				operator: BOB,
+			}));
+
+			// Delegate to different operator with max_bid
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OPERATOR_SETTINGS,
+			));
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				ALICE,
+				DelegationAmount::Some(100)
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(ALICE));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(150));
+			// Just verify the final state - delegation changed to ALICE
+		});
+	}
+
+	#[test]
+	fn undelegate_with_decrement() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+			MockFlip::credit_funds(&DELEGATOR, 1000);
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+
+			// First delegate with a max_bid
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(0)
+			));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(1000));
+
+			// Clear events from delegation
+			System::reset_events();
+
+			// Decrement max_bid but stay delegated
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(DELEGATOR),
+				DelegationAmount::Some(300)
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(BOB)); // Still delegated
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(700));
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+				delegator: DELEGATOR,
+				max_bid: Some(700),
+			}));
+
+			// Decrement again
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(DELEGATOR),
+				DelegationAmount::Some(200)
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(BOB)); // Still delegated
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(500));
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+				delegator: DELEGATOR,
+				max_bid: Some(500),
+			}));
+
+			// Decrement to exactly zero - should fully undelegate
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(DELEGATOR),
+				DelegationAmount::Some(500)
+			));
+			// Verify delegation is removed after decrementing to zero
+			assert_eq!(
+				DelegationChoice::<Test>::get(DELEGATOR),
+				None,
+				"DelegationChoice should be None after decrementing to zero"
+			);
+			assert_eq!(
+				MaxDelegationBid::<Test>::get(DELEGATOR),
+				None,
+				"MaxDelegationBid should be None after decrementing to zero"
+			);
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
+				delegator: DELEGATOR,
+				operator: BOB,
+			}));
+		});
+	}
+
+	#[test]
+	fn undelegate_with_decrement_overflow() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+
+			// Delegate with a max_bid
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(100)
+			));
+
+			// Clear events from delegation
+			System::reset_events();
+
+			// Try to decrement more than the max_bid - should fully undelegate
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(DELEGATOR),
+				DelegationAmount::Some(200)
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), None);
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), None);
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
+				delegator: DELEGATOR,
+				operator: BOB,
+			}));
+		});
+	}
+
+	#[test]
+	fn undelegate_without_max_bid() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+
+			// Fund the account first
+			MockFlip::credit_funds(&DELEGATOR, 1000);
+
+			// Delegate without max_bid (using full balance)
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Max
+			));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(1000));
+
+			// Clear events from delegation
+			System::reset_events();
+
+			// Decrement from full balance
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(DELEGATOR),
+				DelegationAmount::Some(300)
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(BOB)); // Still delegated
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(700));
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
+				delegator: DELEGATOR,
+				max_bid: Some(700),
+			}));
+		});
+	}
+
+	#[test]
+	fn delegate_updates_existing_max_bid() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+			MockFlip::credit_funds(&DELEGATOR, 1000);
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+
+			// First delegate with max balance
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Max
+			));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(1000));
+
+			// Clear events from first delegation
+			System::reset_events();
+
+			// Re-delegate with specific amount - should add to existing (capped at balance)
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(500)
+			));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(BOB));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(1000));
+			// Just check the last event
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Delegated {
+				delegator: DELEGATOR,
+				operator: BOB,
+			}));
+
+			// Re-delegate with Max - should set to full balance
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Max
+			));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(1000));
+			// Just verify the max_bid was removed
+		});
+	}
+
+	#[test]
+	fn delegation_cleanup_on_account_killed() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+			MockFlip::credit_funds(&DELEGATOR, 500);
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+			));
+
+			// Delegate with max_bid
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(0)
+			));
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), Some(500));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some(BOB));
+
+			// Clear events before account cleanup
+			System::reset_events();
+
+			// Simulate account being killed
+			DelegatedAccountCleanup::<Test>::on_killed_account(&DELEGATOR);
+
+			// Check that delegation data is cleaned up
+			assert_eq!(MaxDelegationBid::<Test>::get(DELEGATOR), None);
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), None);
+			System::assert_last_event(RuntimeEvent::ValidatorPallet(Event::Undelegated {
+				delegator: DELEGATOR,
+				operator: BOB,
+			}));
+		});
+	}
+}
+
+#[cfg(test)]
+pub mod auction_optimization {
+
+	use cf_primitives::FlipBalance;
+
+	use super::*;
+
+	const OP_1: u64 = 1001;
+	const OP_2: u64 = 1002;
+
+	const FLIP_MAX_SUPPLY: FlipBalance = 90_000_000_000_000_000_000_000_000;
+
+	fn setup_bids(
+		op_1_bids: Vec<Bid<ValidatorId, Amount>>,
+		op_2_bids: Vec<Bid<ValidatorId, Amount>>,
+	) {
+		set_default_test_bids();
+		add_bids(op_1_bids.iter().chain(op_2_bids.iter()).cloned().collect());
+
+		assert_ok!(ValidatorPallet::register_as_operator(
+			OriginTrait::signed(OP_1),
+			OPERATOR_SETTINGS,
+		));
+		assert_ok!(ValidatorPallet::register_as_operator(
+			OriginTrait::signed(OP_2),
+			OPERATOR_SETTINGS,
+		));
+
+		for bid in op_1_bids {
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_1), bid.bidder_id));
+			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(bid.bidder_id), OP_1));
+			assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+		}
+
+		for bid in op_2_bids {
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_2), bid.bidder_id));
+			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(bid.bidder_id), OP_2));
+			assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+		}
+	}
+
+	#[allow(clippy::type_complexity)]
+	fn create_operator_bids_combinations<A>(
+		bid_combos: Vec<(Vec<A>, Vec<A>, Vec<ValidatorId>, A)>,
+	) -> Vec<(Vec<Bid<ValidatorId, A>>, Vec<Bid<ValidatorId, A>>, Vec<ValidatorId>, A)> {
+		bid_combos
+			.into_iter()
+			.map(|(op_1_bids, op_2_bids, expected_primary_candidates, expected_bond)| {
+				let mut validator_id_counter: ValidatorId = 99;
+				(
+					op_1_bids
+						.into_iter()
+						.map(|amount| {
+							validator_id_counter += 1;
+							Bid { bidder_id: validator_id_counter, amount }
+						})
+						.collect(),
+					op_2_bids
+						.into_iter()
+						.map(|amount| {
+							validator_id_counter += 1;
+							Bid { bidder_id: validator_id_counter, amount }
+						})
+						.collect(),
+					expected_primary_candidates,
+					expected_bond,
+				)
+			})
+			.collect()
+	}
+
+	#[test]
+	fn test_auction_optimization() {
+		// the validator_ids start from 100 onwards
+
+		let operator_bids_combinations = create_operator_bids_combinations(vec![
+			// both validators from op 1 make it, only one from op 2
+			(vec![150, 140], vec![130, 100], vec![100, 101, 102, 0], 120),
+			// both ops combine into 1 val to make it
+			(vec![80, 90], vec![60, 70], vec![101, 103, 0, 1], 120),
+			// op 1 converts bid to one val to make it, op 2 can't make it even if he combines into
+			// 1
+			(vec![90, 95], vec![50, 45], vec![101, 0, 1, 2], 110),
+			// op 2 can now make it by combining 3 vals into 1 to make it and op 1 combines 2 into
+			// 1.
+			(vec![90, 95], vec![50, 45, 30], vec![101, 102, 0, 1], 120),
+			// op 2 combines into 2
+			(vec![90, 95], vec![80, 90, 95], vec![101, 103, 104, 0], 120),
+			// both consolidate their vals when they have nodes at the boundary of cutoff such that
+			// some vals make it and some dont. We still consolidate the bids to increase the
+			// number of vals in the set
+			(vec![220, 205, 200], vec![150, 140, 130], vec![100, 101, 103, 104], 210),
+		]);
+
+		for (mut op_1_bids, mut op_2_bids, expected_primary_candidates, expected_bond) in
+			operator_bids_combinations
+		{
+			new_test_ext().then_execute_with_checks(|| {
+				setup_bids(op_1_bids.clone(), op_2_bids.clone());
+
+				ValidatorPallet::start_authority_rotation();
+
+				if let RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+					new_phase:
+						RotationPhase::KeygensInProgress(RotationState {
+							primary_candidates,
+							banned: _,
+							bond,
+							new_epoch_index: _,
+						}),
+				}) = last_event::<Test>()
+				{
+					assert_eq!(
+						primary_candidates.into_iter().collect::<BTreeSet<_>>(),
+						expected_primary_candidates.clone().into_iter().collect::<BTreeSet<_>>()
+					);
+					assert_eq!(bond, expected_bond);
+
+					let max_op1_bidder =
+						op_1_bids.iter().max_by_key(|b| b.amount).unwrap().bidder_id;
+					let max_op2_bidder =
+						op_2_bids.iter().max_by_key(|b| b.amount).unwrap().bidder_id;
+
+					assert_eq!(
+						DelegationSnapshots::<Test>::get(CurrentEpoch::<Test>::get() + 1, OP_1)
+							.unwrap(),
+						DelegationSnapshot {
+							operator: OP_1,
+							validators: op_1_bids
+								.extract_if(.., |Bid { bidder_id, amount: _ }| {
+									expected_primary_candidates.contains(bidder_id) ||
+										*bidder_id == max_op1_bidder
+								})
+								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+								.collect(),
+							delegators: op_1_bids
+								.into_iter()
+								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+								.collect(),
+							delegation_fee_bps: OPERATOR_SETTINGS.fee_bps,
+							capacity_factor: None,
+						}
+					);
+
+					assert_eq!(
+						DelegationSnapshots::<Test>::get(CurrentEpoch::<Test>::get() + 1, OP_2)
+							.unwrap(),
+						DelegationSnapshot {
+							operator: OP_2,
+							validators: op_2_bids
+								.extract_if(.., |Bid { bidder_id, amount: _ }| {
+									expected_primary_candidates.contains(bidder_id) ||
+										*bidder_id == max_op2_bidder
+								})
+								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+								.collect(),
+							delegators: op_2_bids
+								.into_iter()
+								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+								.collect(),
+							delegation_fee_bps: OPERATOR_SETTINGS.fee_bps,
+							capacity_factor: None,
+						}
+					);
+				} else {
+					panic!("auction optimization test error: expected event not found ")
+				}
+			});
+		}
+	}
+
+	#[quickcheck]
+	fn test_auction_optimization_invariants(
+		bid_combos: Vec<(Vec<FlipBalance>, Vec<FlipBalance>)>,
+	) -> TestResult {
+		if create_operator_bids_combinations(
+			bid_combos
+				.into_iter()
+				.map(|(b1, b2)| {
+					(
+						b1.into_iter().map(|b| b % FLIP_MAX_SUPPLY).collect(),
+						b2.into_iter().map(|b| b % FLIP_MAX_SUPPLY).collect(),
+						Default::default(),
+						Default::default(),
+					)
+				})
+				.collect::<Vec<_>>(),
+		)
+		.into_iter()
+		.any(|(op_1_bids, op_2_bids, _, _)| {
+			new_test_ext()
+				.then_execute_with_checks(|| -> bool {
+					setup_bids(op_1_bids, op_2_bids);
+
+					let single_auction_outcome = ValidatorPallet::dry_run_auction().unwrap();
+
+					ValidatorPallet::start_authority_rotation();
+
+					if let RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+						new_phase:
+							RotationPhase::KeygensInProgress(RotationState {
+								primary_candidates: _,
+								banned: _,
+								bond,
+								new_epoch_index: _,
+							}),
+					}) = last_event::<Test>()
+					{
+						let future_epoch = CurrentEpoch::<Test>::get() + 1;
+						for snapshot in
+							DelegationSnapshots::<Test>::iter_prefix_values(future_epoch)
+						{
+							snapshot.validators.iter().for_each(|(val, _)| {
+								assert_eq!(
+									ValidatorToOperator::<Test>::get(future_epoch, val).unwrap(),
+									snapshot.operator
+								);
+								assert_eq!(
+									ManagedValidators::<Test>::get(val).unwrap(),
+									snapshot.operator
+								)
+							})
+						}
+						bond < single_auction_outcome.bond
+					} else {
+						true
+					}
+				})
+				.into_context()
+		}) {
+			TestResult::failed()
+		} else {
+			TestResult::passed()
+		}
+	}
+}
+
+#[cfg(test)]
+mod delegation_splitting {
+	use super::*;
+	use crate::delegation::DelegationSnapshot;
+
+	/*
+	 * Test conventions:
+	 * - Operator has id 0
+	 * - Validator has id 1
+	 * - Delegators have ids 2, 3, ...
+	 */
+
+	const BID: u128 = 1_000_000_000;
+	const REWARD: u128 = 100_000_000;
+
+	fn split_amount(
+		total: u128,
+		delegator_bids: Vec<u128>,
+		delegation_fee_bps: u32,
+		capacity_factor: Option<u32>,
+	) -> BTreeMap<u64, u128> {
+		DelegationSnapshot::<Test> {
+			operator: 0,
+			validators: BTreeMap::from_iter([(1, BID)]),
+			delegators: delegator_bids
+				.into_iter()
+				.enumerate()
+				.map(|(i, b)| ((i + 2) as u64, b))
+				.collect(),
+			delegation_fee_bps,
+			capacity_factor,
+		}
+		.distribute(total)
+		.map(|(k, v)| (*k, v))
+		.collect()
+	}
+
+	#[test]
+	fn no_operator_fee() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(
+				split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 0, None),
+				BTreeMap::from_iter([
+					(0, 0),
+					(1, REWARD),
+					(2, REWARD),
+					(3, 2 * REWARD),
+					(4, 3 * REWARD),
+				])
+			);
+		});
+	}
+
+	#[test]
+	fn with_operator_fee() {
+		new_test_ext().execute_with(|| {
+			// 20% operator fee
+			assert_eq!(
+				split_amount(REWARD * 7, vec![BID, 2 * BID, 3 * BID], 2000, None),
+				BTreeMap::from_iter(
+					[
+						// Operator gets 20 % of delegator total
+						(0, (REWARD * 6 / 5)),
+						(1, REWARD),
+						(2, REWARD),
+						(3, 2 * REWARD),
+						(4, 3 * REWARD),
+					]
+					.into_iter()
+					// Delegator reward is reduced by 20%.
+					.map(|(k, v)| if k > 1 { (k, v * 4 / 5) } else { (k, v) })
+					.collect::<BTreeMap<_, _>>()
+				)
+			);
+		});
+	}
+
+	#[test]
+	fn with_delegation_limit_no_fee() {
+		new_test_ext().execute_with(|| {
+			const FACTOR: u128 = 3;
+			assert_eq!(
+				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 0, Some(FACTOR as u32)),
+				BTreeMap::from_iter(
+					[(0, 0), (1, REWARD), (2, REWARD), (3, 2 * REWARD), (4, 3 * REWARD),]
+						.into_iter()
+						// Delegator reward is reduced by 50% because it's 2x over capacity.
+						.map(|(k, v)| if k > 1 { (k, v / (FACTOR - 1)) } else { (k, v) })
+						.collect::<BTreeMap<_, _>>()
+				)
+			);
+		});
+	}
+
+	#[test]
+	fn with_delegation_limit_and_fee() {
+		new_test_ext().execute_with(|| {
+			const FACTOR: u128 = 3;
+			// 20% operator fee
+			assert_eq!(
+				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 2000, Some(FACTOR as u32)),
+				BTreeMap::from_iter(
+					[
+						// Operator gets 20 % of *capped* delegator total
+						(0, (REWARD / (FACTOR - 1) * 6 / 5)),
+						(1, REWARD),
+						(2, REWARD),
+						(3, 2 * REWARD),
+						(4, 3 * REWARD),
+					]
+					.into_iter()
+					// Delegator reward is reduced by 50% because it's 2x over capacity.
+					// Delegator reward is further reduced by 20% because of operator fee.
+					.map(|(k, v)| if k > 1 { (k, v / (FACTOR - 1) * 4 / 5) } else { (k, v) })
+					.collect::<BTreeMap<_, _>>()
+				)
+			);
+		});
+	}
+
+	#[test]
+	fn block_delegator_requires_account_exists_with_allow_default() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Allow
+				},
+			));
+
+			// Try to block a non-existent account (adds to exceptions list)
+			assert_noop!(
+				ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), NOBODY),
+				Error::<Test>::AccountDoesNotExist
+			);
+
+			// Verify that blocking an existing account still works
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), BOB));
+		});
+	}
+
+	#[test]
+	fn allow_delegator_requires_account_exists_with_deny_default() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Deny
+				},
+			));
+
+			// Try to allow a non-existent account (adds to exceptions list)
+			assert_noop!(
+				ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), NOBODY),
+				Error::<Test>::AccountDoesNotExist
+			);
+
+			// Verify that allowing an existing account still works
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
+		});
+	}
+
+	#[test]
+	fn block_delegator_succeeds_for_nonexistent_account_with_deny_default() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Deny
+				},
+			));
+
+			// Blocking a non-existent account should succeed (removes from exceptions list - no-op)
+			assert_ok!(ValidatorPallet::block_delegator(OriginTrait::signed(ALICE), NOBODY));
+		});
+	}
+
+	#[test]
+	fn allow_delegator_succeeds_for_nonexistent_account_with_allow_default() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(ALICE),
+				OperatorSettings {
+					fee_bps: MIN_OPERATOR_FEE,
+					delegation_acceptance: DelegationAcceptance::Allow
+				},
+			));
+
+			// Allowing a non-existent account should succeed (removes from exceptions list - no-op)
+			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), NOBODY));
+		});
+	}
+}
+
+#[test]
+fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
+	use crate::{delegation::DelegatedRewardsDistribution, mock::MockEpochInfo};
+	use cf_traits::RewardsDistribution;
+
+	new_test_ext().execute_with(|| {
+		const VALIDATOR: u64 = 100;
+		const OPERATOR: u64 = 200;
+		const DELEGATOR1: u64 = 300;
+		const DELEGATOR2: u64 = 400;
+		const REWARD_AMOUNT: u128 = 1000000;
+
+		// Mock issuance that tracks minted amounts
+		#[derive(Default)]
+		struct TestMintTracker;
+
+		impl TestMintTracker {
+			fn get_minted() -> BTreeMap<u64, u128> {
+				frame_support::storage::unhashed::get(b"test_minted").unwrap_or_default()
+			}
+
+			fn add_minted(account: u64, amount: u128) {
+				let mut minted = Self::get_minted();
+				*minted.entry(account).or_insert(0) += amount;
+				frame_support::storage::unhashed::put(b"test_minted", &minted);
+			}
+		}
+
+		struct MockIssuance;
+		impl cf_traits::Issuance for MockIssuance {
+			type AccountId = u64;
+			type Balance = u128;
+
+			fn mint(account: &Self::AccountId, amount: Self::Balance) {
+				TestMintTracker::add_minted(*account, amount);
+			}
+
+			fn burn_offchain(_amount: Self::Balance) {}
+			fn total_issuance() -> Self::Balance {
+				0
+			}
+		}
+
+		// Set current epoch for MockEpochInfo
+		const EPOCH: EpochIndex = 5;
+		MockEpochInfo::set_epoch(EPOCH);
+
+		// Create a delegation snapshot
+		DelegationSnapshot::<Test> {
+			operator: OPERATOR,
+			validators: [(VALIDATOR, 1000000u128)].into_iter().collect(),
+			delegators: [(DELEGATOR1, 2000000u128), (DELEGATOR2, 3000000u128)]
+				.into_iter()
+				.collect(),
+			delegation_fee_bps: 500, // 5% fee
+			capacity_factor: None,
+		}
+		.register_for_epoch(EPOCH);
+
+		// Distribute rewards to the validator.
+		DelegatedRewardsDistribution::<Test, MockIssuance>::distribute(REWARD_AMOUNT, &VALIDATOR);
+
+		// Check minted amounts
+		let minted = TestMintTracker::get_minted();
+
+		// With stakes: validator 1M, delegator1 2M, delegator2 3M = 6M total
+		// Validator gets 1M/6M = 166,667 (rounded)
+		assert_eq!(minted.get(&VALIDATOR), Some(&166667));
+
+		// Delegators get 5M/6M = 833,333
+		// Operator takes 5% of delegators' cut = 41,667 (rounded)
+		assert_eq!(minted.get(&OPERATOR), Some(&41667));
+
+		// Remaining delegator rewards: 833,333 - 41,667 = 791,666
+		// Delegator1 has 2M out of 5M total delegator stake = 2/5
+		assert_eq!(minted.get(&DELEGATOR1), Some(&316666));
+
+		// Delegator2 has 3M out of 5M total delegator stake = 3/5
+		assert_eq!(minted.get(&DELEGATOR2), Some(&475000));
+
+		// Verify total
+		let total_minted: u128 = minted.values().sum();
+		assert_eq!(total_minted, REWARD_AMOUNT);
+	});
 }

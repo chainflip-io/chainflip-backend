@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@chainflip/cli':
-        specifier: 1.9.0-assethub.0-ccm-refunds
-        version: 1.9.0-assethub.0-ccm-refunds(axios@1.10.0)(bufferutil@4.0.8)(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.8.3)(utf-8-validate@5.0.10)
+        specifier: 1.9.0-assethub.0-ccm-refunds-oracle-swaps
+        version: 1.9.0-assethub.0-ccm-refunds-oracle-swaps(axios@1.10.0)(bufferutil@4.0.8)(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.8.3)(utf-8-validate@5.0.10)
       '@chainflip/utils':
         specifier: ^0.4.16
         version: 0.4.16
@@ -154,8 +154,8 @@ packages:
   '@chainflip/bitcoin@1.2.4':
     resolution: {integrity: sha512-bAVP4GSPnAOLWc0XVMXV4Mn5bsOlaa2KKhQCd7XKCYy4+e8JawZFxECywGQFCg8ZVeJMqy54RFGyLsMIx74+Iw==}
 
-  '@chainflip/cli@1.9.0-assethub.0-ccm-refunds':
-    resolution: {integrity: sha512-APmlkIoOO+ZdkGW5oNvGJ+F3wdHLVL5PljNQM8nmfXcUsb5iRTEartW5qUII//iGFwgYKPTzBREpuzGwrBG58A==}
+  '@chainflip/cli@1.9.0-assethub.0-ccm-refunds-oracle-swaps':
+    resolution: {integrity: sha512-ZVyrLdlmAgZPtB9cvaV4X/KxDaOI6lk+XokIhkPTSCzwbi3MlCcpwVqHQ7SOUSw4tDs/SV3UsalzNANdYsI3fg==}
     hasBin: true
     peerDependencies:
       axios: ^1.x
@@ -4040,7 +4040,7 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@chainflip/cli@1.9.0-assethub.0-ccm-refunds(axios@1.10.0)(bufferutil@4.0.8)(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.8.3)(utf-8-validate@5.0.10)':
+  '@chainflip/cli@1.9.0-assethub.0-ccm-refunds-oracle-swaps(axios@1.10.0)(bufferutil@4.0.8)(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.8.3)(utf-8-validate@5.0.10)':
     dependencies:
       '@chainflip/bitcoin': 1.2.4(typescript@5.8.3)
       '@chainflip/extrinsics': 1.6.1

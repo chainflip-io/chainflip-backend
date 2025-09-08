@@ -31,6 +31,8 @@ pub use without_std::*;
 #[cfg(any(feature = "test-utils", test))]
 pub mod testing;
 
+pub mod macros;
+
 pub type Port = u16;
 
 /// Simply unwraps the value. Advantage of this is to make it clear in tests

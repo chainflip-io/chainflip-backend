@@ -16,8 +16,10 @@
 
 use super::*;
 use crate::{self as pallet_cf_reputation, PalletSafeMode};
-use cf_primitives::FlipBalance;
-use cf_traits::{impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, Slashing};
+use cf_traits::{
+	impl_mock_chainflip, impl_mock_runtime_safe_mode, mocks::flip_slasher::MockFlipSlasher,
+	AccountRoleRegistry,
+};
 use frame_support::{assert_ok, construct_runtime, derive_impl, parameter_types};
 use serde::{Deserialize, Serialize};
 use sp_std::cell::RefCell;
@@ -27,7 +29,6 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type ValidatorId = u64;
 
 thread_local! {
-	pub static SLASHES: RefCell<Vec<u64>> = RefCell::new(Default::default());
 	pub static HEARTBEATS: RefCell<u32> = RefCell::new(Default::default());
 }
 
@@ -66,62 +67,8 @@ parameter_types! {
 	pub const MaximumAccruableReputation: ReputationPoints = MAX_ACCRUABLE_REPUTATION;
 }
 
-// Mocking the `Slasher` trait
-pub struct MockSlasher;
-
-impl MockSlasher {
-	pub fn slash_count(validator_id: ValidatorId) -> usize {
-		SLASHES.with(|slashes| slashes.borrow().iter().filter(|id| **id == validator_id).count())
-	}
-}
-
-impl Slashing for MockSlasher {
-	type AccountId = ValidatorId;
-	type BlockNumber = u64;
-	type Balance = u128;
-
-	fn slash(validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {
-		// Count those slashes
-		SLASHES.with(|count| {
-			count.borrow_mut().push(*validator_id);
-		});
-	}
-
-	fn slash_balance(account_id: &Self::AccountId, _amount: FlipBalance) {
-		// Count those slashes
-		SLASHES.with(|count| {
-			count.borrow_mut().push(*account_id);
-		});
-	}
-
-	fn calculate_slash_amount(
-		_account_id: &Self::AccountId,
-		_blocks: Self::BlockNumber,
-	) -> Self::Balance {
-		unimplemented!()
-	}
-}
-
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
-
-/// Counts the number of heartbeats.
-pub struct MockHeartbeat;
-
-impl MockHeartbeat {
-	pub fn heartbeats() -> u32 {
-		HEARTBEATS.with(|heartbeats| *heartbeats.borrow())
-	}
-}
-
-impl Heartbeat for MockHeartbeat {
-	type ValidatorId = ValidatorId;
-	type BlockNumber = u64;
-
-	fn on_heartbeat_interval() {
-		HEARTBEATS.with(|heartbeats| *heartbeats.borrow_mut() += 1);
-	}
-}
 
 #[derive(
 	Serialize,
@@ -155,9 +102,8 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = AllOffences;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type Heartbeat = MockHeartbeat;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
-	type Slasher = MockSlasher;
+	type Slasher = MockFlipSlasher<Test>;
 	type WeightInfo = ();
 	type MaximumAccruableReputation = MaximumAccruableReputation;
 	type SafeMode = MockRuntimeSafeMode;

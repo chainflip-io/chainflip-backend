@@ -368,7 +368,7 @@ fn can_purge_stale_storage() {
 fn test_safe_mode() {
 	new_test_ext().execute_with(|| {
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
-			witnesser: PalletSafeMode::CODE_RED,
+			witnesser: PalletSafeMode::code_red(),
 		});
 
 		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
@@ -398,7 +398,7 @@ fn test_safe_mode() {
 		assert!(!WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
 
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
-			witnesser: PalletSafeMode::CODE_GREEN,
+			witnesser: PalletSafeMode::code_green(),
 		});
 
 		// the call should now be able to dispatch since we now deactivated the safe mode but wont
@@ -455,7 +455,7 @@ fn safe_mode_code_amber_can_filter_calls() {
 fn safe_mode_recovery_ignores_duplicates() {
 	new_test_ext().execute_with(|| {
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
-			witnesser: PalletSafeMode::CODE_RED,
+			witnesser: PalletSafeMode::code_red(),
 		});
 
 		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
@@ -489,7 +489,7 @@ fn safe_mode_recovery_ignores_duplicates() {
 		assert_eq!(WitnessedCallsScheduledForDispatch::<Test>::get().len(), 2);
 
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
-			witnesser: PalletSafeMode::CODE_GREEN,
+			witnesser: PalletSafeMode::code_green(),
 		});
 		Witnesser::on_idle(1, Weight::zero().set_ref_time(1_000_000_000_000u64));
 

@@ -43,6 +43,7 @@ use std::{
 };
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
+use super::client::chain_api::ChainApi;
 use crate::{
 	btc::rpc::BtcRpcApi,
 	dot::retry_rpc::DotRetryRpcApi,
@@ -63,8 +64,6 @@ use multisig::{
 	eth::EvmCryptoScheme, polkadot::PolkadotCryptoScheme, ChainSigning, CryptoScheme, KeyId,
 	SignatureToThresholdSignature,
 };
-
-use super::client::chain_api::ChainApi;
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
