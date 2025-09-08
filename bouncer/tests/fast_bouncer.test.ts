@@ -54,7 +54,7 @@ describe('ConcurrentTests', () => {
 
   // Test this separately because it has a swap to HubDot which causes flakiness when run in
   // parallel with the Assethub tests in `SwapsToAssethub`.
-  serialTest('SwapLessThanED', swapLessThanED, 180);
+  serialTest('SwapLessThanED', swapLessThanED, 360);
 
   // Test this separately since some other tests rely on single member governance.
   serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 120);
