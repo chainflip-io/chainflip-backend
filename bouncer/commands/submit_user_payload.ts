@@ -16,7 +16,7 @@ import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
-import { Struct, u32, Enum, u128, u256, u8 } from 'scale-ts';
+import { Struct, u32, Enum, u128, u8, str } from 'scale-ts';
 import { globalLogger } from 'shared/utils/logger';
 import { InternalAsset } from '@chainflip/cli';
 
@@ -32,11 +32,11 @@ export const UserActionsCodec = Enum({
   }),
 });
 
-export const UserMetadataCodec = Struct({
+export const TransactionMetadata = Struct({
   nonce: u32,
   expiryBlock: u32,
 });
-export const ChainIdCodec = u256;
+export const ChainNameCodec = str;
 
 // Example values
 const nonce = 1;
@@ -45,19 +45,19 @@ const amount = 1234;
 const collateralAsset = { asset: 'Btc' as InternalAsset, scAsset: 'Bitcoin-BTC' };
 const borrowAsset = { asset: 'Usdc' as InternalAsset, scAsset: 'Ethereum-USDC' };
 // For now hardcoded in the SC. It should be network dependent.
-const chainId = 1n;
+const chainName = "Chainflip-Berghain";
 
 export function encodePayloadToSign(
   payload: Uint8Array,
   userNonce: number,
   userExpiryBlock: number,
 ) {
-  const userMetadata = UserMetadataCodec.enc({
+  const transactionMetadata = TransactionMetadata.enc({
     nonce: userNonce,
     expiryBlock: userExpiryBlock,
   });
-  const chainIdBytes = ChainIdCodec.enc(chainId);
-  return new Uint8Array([...payload, ...chainIdBytes, ...userMetadata]);
+  const chainNameBytes = ChainNameCodec.enc(chainName);
+  return new Uint8Array([...payload, ...chainNameBytes, ...transactionMetadata]);
 }
 
 async function main() {
@@ -190,9 +190,8 @@ async function main() {
   console.log('Trying EVM EIP712');
 
   const domain = {
-    name: 'Chainflip',
+    name: chainName,
     version: '0',
-    chainId,
   };
 
   const types = {
@@ -236,7 +235,7 @@ async function main() {
     const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     await chainflip.tx.swapping
       .submitUserSignedPayload(
-        // Ethereum prefix will be added in the SC previous to signature verification
+        // The  EIP-712 payload will be build in the State chain previous to signature verification
         hexAction,
         {
           nonce,

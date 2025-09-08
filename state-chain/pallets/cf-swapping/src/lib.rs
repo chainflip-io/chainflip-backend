@@ -330,15 +330,13 @@ struct BatchExecutionOutcomes<T: Config> {
 	failed_swaps: Vec<Swap<T>>,
 }
 
-// TODO: Align on a standard or if we use genesis_hashes, names or
-// some agreed upon number (chainId) to differentiate our networks.
-// EIP712 uses uint256 so we probably want to use that.
-fn get_current_chain_id() -> U256 {
-	U256::from(1u64)
+// TODO: To get the current chain's NETWORK_NAME
+fn get_current_chain_name() -> &'static str {
+	"Chainflip-Berghain"
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct UserMetadata {
+pub struct TransactionMetadata {
 	nonce: u32,
 	expiry_block: BlockNumber,
 }
@@ -929,7 +927,7 @@ pub mod pallet {
 			broker_id: T::AccountId,
 			signer_account_id: AccountId32,
 			payload: Vec<u8>,
-			user_metadata: UserMetadata,
+			transaction_metadata: TransactionMetadata,
 			user_signature_data: UserSignatureData,
 			valid: bool,
 			expired: bool,
@@ -1566,7 +1564,7 @@ pub mod pallet {
 		pub fn submit_user_signed_payload(
 			origin: OriginFor<T>,
 			payload: Vec<u8>,
-			user_metadata: UserMetadata,
+			transaction_metadata: TransactionMetadata,
 			user_signature_data: UserSignatureData,
 		) -> DispatchResult {
 			use cf_chains::{
@@ -1595,8 +1593,8 @@ pub mod pallet {
 						SolSigType::Domain => {
 							let concat_data = [
 								payload.clone(),
-								get_current_chain_id().encode(),
-								user_metadata.clone().encode(),
+								get_current_chain_name().encode(),
+								transaction_metadata.clone().encode(),
 							]
 							.concat();
 							[SOLANA_OFFCHAIN_PREFIX, concat_data.as_slice()].concat()
@@ -1613,8 +1611,8 @@ pub mod pallet {
 						EthSigType::Domain => {
 							let concat_data = [
 								payload.clone(),
-								get_current_chain_id().encode(),
-								user_metadata.clone().encode(),
+								get_current_chain_name().encode(),
+								transaction_metadata.clone().encode(),
 							]
 							.concat();
 							let prefix = scale_info::prelude::format!(
@@ -1627,7 +1625,7 @@ pub mod pallet {
 						},
 						EthSigType::Eip712 => build_eip_712_hash(
 							decoded_action.clone(),
-							user_metadata.clone(),
+							transaction_metadata.clone(),
 							signer,
 						),
 					};
@@ -1642,8 +1640,8 @@ pub mod pallet {
 			// TODO: Add any checks for the metadata. To check nonce and increment.
 
 			// Check expiry
-			let expired =
-				frame_system::Pallet::<T>::block_number() >= user_metadata.expiry_block.into();
+			let expired = frame_system::Pallet::<T>::block_number() >=
+				transaction_metadata.expiry_block.into();
 
 			// TODO: Execute the intended action user action similar to the delegation ScApi.
 
@@ -1653,7 +1651,7 @@ pub mod pallet {
 				broker_id,
 				signer_account_id,
 				payload,
-				user_metadata,
+				transaction_metadata,
 				user_signature_data,
 				valid,
 				expired,
@@ -3075,8 +3073,9 @@ pub(crate) mod utilities {
 	}
 }
 
-const EIP712_DOMAIN_TYPE_STR: &str = "EIP712Domain(string name,string version,uint256 chainId)";
-const EIP712_DOMAIN_NAME: &str = "Chainflip";
+const EIP712_DOMAIN_TYPE_STR: &str = "EIP712Domain(string name,string version)";
+// TODO: Do we want to use version (add it to the TransactionMetadata) and then verison the
+// UserActionsApi or we will add new actions to the enum and deprecate old ones as we go?
 const EIP712_DOMAIN_VERSION: &str = "0";
 const EIP712_METADATA_TYPE_STR: &str = "Metadata(address from,uint256 nonce,uint256 expiryBlock)";
 const EIP712_DOMAIN_PREFIX: [u8; 2] = [0x19, 0x01];
@@ -3085,22 +3084,22 @@ const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
 
 pub fn build_eip_712_hash(
 	user_action: UserActionsApi,
-	user_metadata: UserMetadata,
+	transaction_metadata: TransactionMetadata,
 	signer: EthereumAddress,
 ) -> Vec<u8> {
 	// -----------------
 	// Domain separator
 	// -----------------
+	// Not using chain_id as this is not an EVM network and the domain name
+	// will act as the replay protection between different Chainflip networks.
 	let type_hash = Keccak256::hash(EIP712_DOMAIN_TYPE_STR.as_bytes());
-	let name_hash = Keccak256::hash(EIP712_DOMAIN_NAME.as_bytes());
+	let name_hash = Keccak256::hash(get_current_chain_name().as_bytes());
 	let version_hash = Keccak256::hash(EIP712_DOMAIN_VERSION.as_bytes());
-	let chain_id = get_current_chain_id();
 
 	let tokens = vec![
 		Token::FixedBytes(type_hash.as_bytes().to_vec()),
 		Token::FixedBytes(name_hash.as_bytes().to_vec()),
 		Token::FixedBytes(version_hash.as_bytes().to_vec()),
-		Token::Uint(chain_id),
 	];
 
 	// ABI encode
@@ -3115,8 +3114,8 @@ pub fn build_eip_712_hash(
 	let metadata_tokens = vec![
 		Token::FixedBytes(metadata_type_hash.as_bytes().to_vec()),
 		Token::Address(signer),
-		Token::Uint(U256::from(user_metadata.nonce)),
-		Token::Uint(U256::from(user_metadata.expiry_block)),
+		Token::Uint(U256::from(transaction_metadata.nonce)),
+		Token::Uint(U256::from(transaction_metadata.expiry_block)),
 	];
 	let encoded_metadata = encode(&metadata_tokens);
 	let metadata_hash = Keccak256::hash(&encoded_metadata);
@@ -3145,7 +3144,7 @@ mod test {
 	fn test_verify_eip_712() {
 		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 		let from: EthereumAddress = EthereumAddress::from_str(from_str).unwrap();
-		let metadata = UserMetadata { nonce: 1, expiry_block: 10000 };
+		let metadata = TransactionMetadata { nonce: 1, expiry_block: 10000 };
 
 		let encoded_final = build_eip_712_hash(
 			UserActionsApi::Lending(LendingApi::Borrow {
