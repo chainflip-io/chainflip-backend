@@ -578,10 +578,18 @@ where
 		Ok(tx_hash)
 	}
 
-	async fn subscribe_order_fills(&self, sink: PendingSubscriptionSink, wait_finalized: Option<bool>) {
+	async fn subscribe_order_fills(
+		&self,
+		sink: PendingSubscriptionSink,
+		wait_finalized: Option<bool>,
+	) {
 		self.rpc_backend
 			.new_subscription(
-				if wait_finalized.unwrap_or(true) { NotificationBehaviour::Finalized } else { NotificationBehaviour::Best },
+				if wait_finalized.unwrap_or(true) {
+					NotificationBehaviour::Finalized
+				} else {
+					NotificationBehaviour::Best
+				},
 				false,
 				true,
 				sink,

@@ -304,7 +304,11 @@ impl LpRpcApiServer for RpcServerImpl {
 			.tx_hash)
 	}
 
-	async fn subscribe_order_fills(&self, pending_sink: PendingSubscriptionSink, wait_finalized: Option<bool>) {
+	async fn subscribe_order_fills(
+		&self,
+		pending_sink: PendingSubscriptionSink,
+		wait_finalized: Option<bool>,
+	) {
 		// pipe results from custom-rpc subscription
 		match self.api.raw_client().cf_subscribe_lp_order_fills(wait_finalized).await {
 			Ok(subscription) => {
