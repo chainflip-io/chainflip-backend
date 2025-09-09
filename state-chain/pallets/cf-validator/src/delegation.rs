@@ -54,6 +54,12 @@ impl<T> DelegationAmount<T> {
 	}
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum Change<T> {
+	Increase(T),
+	Decrease(T),
+}
+
 /// Represents a validator's default stance on accepting delegations
 #[derive(
 	Copy,

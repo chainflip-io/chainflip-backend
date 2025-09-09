@@ -348,24 +348,18 @@ pub mod pallet {
 	pub type OperatorSettingsLookup<T: Config> =
 		StorageMap<_, Identity, T::AccountId, OperatorSettings, OptionQuery>;
 
-	/// Maps an delegator to an associated operator account.
+	/// Maps an delegator to an associated operator account and max bid.
+	///
+	/// The max bid determines how much of the delegator's balance can be used
+	/// used by the operator when bidding for an authority slot.
 	#[pallet::storage]
 	pub type DelegationChoice<T: Config> =
-		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
+		StorageMap<_, Identity, T::AccountId, (T::AccountId, T::Amount), OptionQuery>;
 
 	/// Maps a validator to the operator that manages it.
 	#[pallet::storage]
 	pub type OperatorChoice<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
-
-	/// The max bid determines how much of the delegator's balance can be used
-	/// used by the operator when bidding for an authority slot.
-	///
-	/// `None` means no maximum bid, i.e. the entire account balance is used.
-	/// `Some` sets a specific maximum bid.
-	#[pallet::storage]
-	pub type MaxDelegationBid<T: Config> =
-		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
 
 	/// Maps validators to their operators for each epoch.
 	#[pallet::storage]
@@ -430,14 +424,14 @@ pub mod pallet {
 		/// Operator settings have been updated.
 		OperatorSettingsUpdated { operator: T::AccountId, preferences: OperatorSettings },
 		/// An account has undelegated from an operator.
-		Undelegated { delegator: T::AccountId, operator: T::AccountId },
+		Undelegated { delegator: T::AccountId, operator: T::AccountId, max_bid: T::Amount },
 		/// An account has delegated to an operator.
-		Delegated { delegator: T::AccountId, operator: T::AccountId },
+		Delegated { delegator: T::AccountId, operator: T::AccountId, max_bid: T::Amount },
 		/// The undelegation process of an delegator has been finalized.
 		UnDelegationFinalized { delegator: T::AccountId, epoch: EpochIndex },
 		/// The maximum bit of an delegator was updated. If the value is None it means that the
 		/// max_bid has been removed entirly.
-		MaxBidUpdated { delegator: T::AccountId, max_bid: Option<T::Amount> },
+		MaxBidUpdated { delegator: T::AccountId, change: Change<T::Amount> },
 	}
 
 	#[pallet::error]
@@ -1012,19 +1006,19 @@ pub mod pallet {
 
 			// If the delegator is currently delegating to this operator, we need to
 			// undelegate them first.
-			let _ =
-				DelegationChoice::<T>::try_mutate_exists(&delegator, |maybe_assigned_operator| {
-					if let Some(assigned_operator) = maybe_assigned_operator.take() {
-						if assigned_operator == operator {
-							Self::deposit_event(Event::Undelegated {
-								delegator: delegator.clone(),
-								operator: operator.clone(),
-							});
-							return Ok(());
-						}
+			let _ = DelegationChoice::<T>::try_mutate_exists(&delegator, |maybe_operator_choice| {
+				if let Some((assigned_operator, max_bid)) = maybe_operator_choice.take() {
+					if assigned_operator == operator {
+						Self::deposit_event(Event::Undelegated {
+							delegator: delegator.clone(),
+							operator: operator.clone(),
+							max_bid,
+						});
+						return Ok(());
 					}
-					Err(())
-				});
+				}
+				Err(())
+			});
 
 			match OperatorSettingsLookup::<T>::get(&operator)
 				.unwrap_or_default()
@@ -1126,7 +1120,7 @@ pub mod pallet {
 			for (validator, ()) in Self::get_all_associations_by_operator(
 				&operator,
 				AssociationToOperator::Validator,
-				|_| (),
+				|_, _| (),
 			) {
 				OperatorChoice::<T>::remove(&validator);
 				Self::deposit_event(Event::ValidatorRemovedFromOperator {
@@ -1138,10 +1132,15 @@ pub mod pallet {
 			for (delegator, ()) in Self::get_all_associations_by_operator(
 				&operator,
 				AssociationToOperator::Delegator,
-				|_| (),
+				|_, _| (),
 			) {
-				DelegationChoice::<T>::remove(&delegator);
-				Self::deposit_event(Event::Undelegated { delegator, operator: operator.clone() });
+				if let Some((_, max_bid)) = DelegationChoice::<T>::take(&delegator) {
+					Self::deposit_event(Event::Undelegated {
+						delegator,
+						operator: operator.clone(),
+						max_bid,
+					});
+				}
 			}
 
 			ManagedValidators::<T>::remove(&operator);
@@ -1191,35 +1190,49 @@ pub mod pallet {
 				Error::<T>::DelegatorBlocked
 			);
 
-			DelegationChoice::<T>::mutate(&delegator, |maybe_operator| {
-				if let Some(previous_operator) = maybe_operator.replace(operator.clone()) {
-					Self::deposit_event(Event::Undelegated {
-						delegator: delegator.clone(),
-						operator: previous_operator,
-					});
-				}
-			});
+			let balance = T::FundingInfo::balance(&delegator);
+			let (to_remove, to_add, old_max_bid) =
+				if let Some((current_operator, current_max_bid)) =
+					DelegationChoice::<T>::get(&delegator)
+				{
+					if current_operator != operator {
+						(Some(current_operator), (Some(operator.clone())), current_max_bid)
+					} else {
+						(None, None, current_max_bid)
+					}
+				} else {
+					(None, Some(operator.clone()), T::Amount::zero())
+				};
 
-			// Update the max delegation bid.
-			MaxDelegationBid::<T>::mutate(&delegator, |max_bid| {
-				let balance = T::FundingInfo::balance(&delegator);
-				match increase {
-					DelegationAmount::Max => {
-						let _ = max_bid.insert(balance);
-					},
-					DelegationAmount::Some(inc) => {
-						let new_bid =
-							core::cmp::min(max_bid.unwrap_or(balance).saturating_add(inc), balance);
-						let _ = max_bid.insert(new_bid);
-					},
-				}
-				Self::deposit_event(Event::MaxBidUpdated {
+			let new_max_bid = match increase {
+				DelegationAmount::Max => balance,
+				DelegationAmount::Some(inc) =>
+					core::cmp::min(old_max_bid.saturating_add(inc), balance),
+			};
+
+			if let Some(change) = match old_max_bid.cmp(&new_max_bid) {
+				core::cmp::Ordering::Less => Some(Change::Increase(new_max_bid - old_max_bid)),
+				core::cmp::Ordering::Greater => Some(Change::Decrease(old_max_bid - new_max_bid)),
+				core::cmp::Ordering::Equal => None,
+			} {
+				Self::deposit_event(Event::MaxBidUpdated { delegator: delegator.clone(), change });
+			}
+
+			if let Some(old_operator) = to_remove {
+				Self::deposit_event(Event::Undelegated {
 					delegator: delegator.clone(),
-					max_bid: *max_bid,
+					operator: old_operator,
+					max_bid: old_max_bid,
 				});
-			});
-
-			Self::deposit_event(Event::Delegated { delegator, operator });
+			}
+			if let Some(new_operator) = to_add {
+				Self::deposit_event(Event::Delegated {
+					delegator: delegator.clone(),
+					operator: new_operator,
+					max_bid: new_max_bid,
+				});
+			}
+			DelegationChoice::<T>::insert(&delegator, (operator.clone(), new_max_bid));
 
 			Ok(())
 		}
@@ -1232,48 +1245,36 @@ pub mod pallet {
 		) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
-			ensure!(
-				DelegationChoice::<T>::contains_key(&delegator),
-				Error::<T>::AccountIsNotDelegating
-			);
+			let (current_operator, current_max_bid) =
+				DelegationChoice::<T>::get(&delegator).ok_or(Error::<T>::AccountIsNotDelegating)?;
 
-			let undelegated = MaxDelegationBid::<T>::mutate_exists(&delegator, |max_bid| {
-				use frame_support::sp_runtime::traits::Zero;
-				match decrease {
-					DelegationAmount::Some(decr) => {
-						let new_max = max_bid
-							.unwrap_or_else(|| T::FundingInfo::balance(&delegator))
-							.saturating_sub(decr);
-						if new_max.is_zero() {
-							*max_bid = None;
-						} else {
-							*max_bid = Some(new_max);
-						}
-						Self::deposit_event(Event::MaxBidUpdated {
-							delegator: delegator.clone(),
-							max_bid: *max_bid,
-						});
-						max_bid.is_none()
-					},
-					DelegationAmount::Max =>
-						if max_bid.is_some() {
-							*max_bid = None;
-							Self::deposit_event(Event::MaxBidUpdated {
-								delegator: delegator.clone(),
-								max_bid: None,
-							});
-							true
-						} else {
-							false
-						},
-				}
-			});
+			let new_max_bid = match decrease {
+				DelegationAmount::Some(decr) => current_max_bid.saturating_sub(decr),
+				DelegationAmount::Max => T::Amount::zero(),
+			};
 
-			if undelegated {
-				let operator = DelegationChoice::<T>::take(&delegator)
-					.expect("DelegationChoice existence was checked above");
+			if let Some(change) = match current_max_bid.cmp(&new_max_bid) {
+				core::cmp::Ordering::Less => Some(Change::Increase(new_max_bid - current_max_bid)),
+				core::cmp::Ordering::Greater =>
+					Some(Change::Decrease(current_max_bid - new_max_bid)),
+				core::cmp::Ordering::Equal => None,
+			} {
+				Self::deposit_event(Event::MaxBidUpdated { delegator: delegator.clone(), change });
+			}
 
-				Self::deposit_event(Event::Undelegated { delegator, operator });
+			if new_max_bid.is_zero() {
+				DelegationChoice::<T>::remove(&delegator);
+				Self::deposit_event(Event::Undelegated {
+					delegator: delegator.clone(),
+					operator: current_operator,
+					max_bid: current_max_bid,
+				});
+			} else {
+				DelegationChoice::<T>::mutate(&delegator, |choice| {
+					if let Some((_, ref mut max_bid)) = choice {
+						*max_bid = new_max_bid;
+					}
+				});
 			}
 
 			Ok(())
@@ -1847,19 +1848,19 @@ impl<T: Config> Pallet<T> {
 	pub fn get_all_associations_by_operator<R>(
 		operator: &T::AccountId,
 		association: AssociationToOperator,
-		f: impl Fn(&T::AccountId) -> R,
+		f: impl Fn(&T::AccountId, Option<T::Amount>) -> R,
 	) -> BTreeMap<T::AccountId, R> {
-		let apply_f = |acct| {
-			let r = f(&acct);
+		let apply_f = |acct: T::AccountId| {
+			let r = f(&acct, None);
 			(acct, r)
 		};
 		match association {
 			AssociationToOperator::Validator =>
 				ManagedValidators::<T>::get(operator).into_iter().map(apply_f).collect(),
 			AssociationToOperator::Delegator => DelegationChoice::<T>::iter()
-				.filter_map(|(account_id, managing_operator)| {
+				.filter_map(|(account_id, (managing_operator, max_bid))| {
 					if managing_operator == *operator {
-						Some(apply_f(account_id))
+						Some((account_id.clone(), f(&account_id, Some(max_bid))))
 					} else {
 						None
 					}
@@ -1901,22 +1902,16 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 
-		for (delegator, operator) in DelegationChoice::<T>::iter() {
+		for (delegator, (operator, max_bid)) in DelegationChoice::<T>::iter() {
 			if let Some(snapshot) = snapshots.get_mut(&operator) {
-				snapshot.delegators.insert(delegator.clone(), Self::delegator_bid(&delegator));
+				let delegator_balance = T::FundingInfo::balance(&delegator);
+				snapshot
+					.delegators
+					.insert(delegator.clone(), core::cmp::min(max_bid, delegator_balance));
 			}
 		}
 
 		(snapshots, independent_bidders)
-	}
-
-	pub fn delegator_bid(delegator: &T::AccountId) -> T::Amount {
-		let delegator_balance = T::FundingInfo::balance(delegator);
-		if let Some(max_bid) = MaxDelegationBid::<T>::get(delegator) {
-			core::cmp::min(max_bid, delegator_balance)
-		} else {
-			delegator_balance
-		}
 	}
 }
 
@@ -2133,11 +2128,11 @@ pub struct DelegatedAccountCleanup<T>(PhantomData<T>);
 
 impl<T: Config> OnKilledAccount<T::AccountId> for DelegatedAccountCleanup<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		MaxDelegationBid::<T>::remove(account_id);
-		if let Some(operator) = DelegationChoice::<T>::take(account_id) {
+		if let Some((operator, max_bid)) = DelegationChoice::<T>::take(account_id) {
 			Pallet::<T>::deposit_event(Event::Undelegated {
 				delegator: account_id.clone(),
 				operator,
+				max_bid,
 			});
 		}
 	}

@@ -546,7 +546,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		delegate(RawOrigin::Signed(delegator.clone()), operator.clone(), DelegationAmount::Max);
 
-		assert_eq!(DelegationChoice::<T>::get(delegator), Some(operator));
+		assert!(DelegationChoice::<T>::get(delegator).is_some());
 	}
 
 	#[benchmark]
