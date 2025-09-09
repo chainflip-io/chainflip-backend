@@ -45,7 +45,7 @@ const amount = 1234;
 const collateralAsset = { asset: 'Btc' as InternalAsset, scAsset: 'Bitcoin-BTC' };
 const borrowAsset = { asset: 'Usdc' as InternalAsset, scAsset: 'Ethereum-USDC' };
 // For now hardcoded in the SC. It should be network dependent.
-const chainName = "Chainflip-Berghain";
+const chainName = 'Chainflip-Development';
 
 export function encodePayloadToSign(
   payload: Uint8Array,
@@ -97,7 +97,7 @@ async function main() {
 
   await brokerMutex.runExclusive(async () => {
     const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    await chainflip.tx.swapping
+    await chainflip.tx.environment
       .submitUserSignedPayload(
         // Solana prefix will be added in the SC previous to signature verification
         hexAction,
@@ -116,7 +116,7 @@ async function main() {
       .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
   });
 
-  await observeEvent(globalLogger, `swapping:UserSignedTransactionSubmitted`, {
+  await observeEvent(globalLogger, `environment:UserSignedTransactionSubmitted`, {
     test: (event) => {
       const valid = event.data.valid === true && event.data.expired === false;
       const matchDecodedAction = !!event.data.decodedAction.Lending?.Borrow;
@@ -153,7 +153,7 @@ async function main() {
 
   await brokerMutex.runExclusive(async () => {
     const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    await chainflip.tx.swapping
+    await chainflip.tx.environment
       .submitUserSignedPayload(
         // Ethereum prefix will be added in the SC previous to signature verification
         hexAction,
@@ -172,7 +172,7 @@ async function main() {
       .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
   });
 
-  await observeEvent(globalLogger, `swapping:UserSignedTransactionSubmitted`, {
+  await observeEvent(globalLogger, `environment:UserSignedTransactionSubmitted`, {
     test: (event) => {
       const valid = event.data.valid === true && event.data.expired === false;
       const matchDecodedAction = !!event.data.decodedAction.Lending?.Borrow;
@@ -233,7 +233,7 @@ async function main() {
 
   await brokerMutex.runExclusive(async () => {
     const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    await chainflip.tx.swapping
+    await chainflip.tx.environment
       .submitUserSignedPayload(
         // The  EIP-712 payload will be build in the State chain previous to signature verification
         hexAction,
@@ -252,7 +252,7 @@ async function main() {
       .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
   });
 
-  await observeEvent(globalLogger, `swapping:UserSignedTransactionSubmitted`, {
+  await observeEvent(globalLogger, `environment:UserSignedTransactionSubmitted`, {
     test: (event) => {
       const valid = event.data.valid === true && event.data.expired === false;
       const matchDecodedAction = !!event.data.decodedAction.Lending?.Borrow;

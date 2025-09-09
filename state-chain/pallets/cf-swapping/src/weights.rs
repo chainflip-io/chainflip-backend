@@ -58,7 +58,6 @@ pub trait WeightInfo {
 	fn register_affiliate() -> Weight;
 	fn affiliate_withdrawal_request() -> Weight;
 	fn set_vault_swap_minimum_broker_fee() -> Weight;
-	fn submit_user_signed_payload() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -284,12 +283,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	fn submit_user_signed_payload() -> Weight {
-		// TODO: To update
-		Weight::from_parts(0, 0)
-			.saturating_add(T::DbWeight::get().reads(0_u64))
-			.saturating_add(T::DbWeight::get().writes(0_u64))
-	}
 }
 
 // For backwards compatibility and tests
@@ -513,11 +506,5 @@ impl WeightInfo for () {
 		Weight::from_parts(12_000_000, 4002)
 			.saturating_add(ParityDbWeight::get().reads(1_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
-	}
-	fn submit_user_signed_payload() -> Weight {
-		// TODO: To update
-		Weight::from_parts(0, 0)
-			.saturating_add(ParityDbWeight::get().reads(0_u64))
-			.saturating_add(ParityDbWeight::get().writes(0_u64))
 	}
 }
