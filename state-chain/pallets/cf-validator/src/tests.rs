@@ -527,7 +527,7 @@ fn expired_epoch_data_is_removed() {
 	new_test_ext().then_execute_with_checks(|| {
 		let delegator = 123u64;
 		let operator = 456u64;
-		let test_snapshot = DelegationSnapshot::<Test> {
+		let test_snapshot = DelegationSnapshot::<u64, u128> {
 			operator,
 			delegators: [(delegator, 50u128)].into_iter().collect(),
 			validators: [(ALICE, 150u128)].into_iter().collect(),
@@ -538,13 +538,13 @@ fn expired_epoch_data_is_removed() {
 		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
 		HistoricalAuthorities::<Test>::insert(1, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(1, 10);
-		test_snapshot.clone().register_for_epoch(1);
+		test_snapshot.clone().register_for_epoch::<Test>(1);
 
 		// Epoch 2
 		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
 		HistoricalAuthorities::<Test>::insert(2, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(2, 30);
-		test_snapshot.clone().register_for_epoch(2);
+		test_snapshot.clone().register_for_epoch::<Test>(2);
 		let authority_index = AuthorityIndex::<Test>::get(2, ALICE);
 
 		// Expire
@@ -554,7 +554,7 @@ fn expired_epoch_data_is_removed() {
 		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
 		HistoricalAuthorities::<Test>::insert(3, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(3, 20);
-		test_snapshot.clone().register_for_epoch(3);
+		test_snapshot.clone().register_for_epoch::<Test>(3);
 
 		// Expect epoch 1's data to be deleted
 		assert!(AuthorityIndex::<Test>::try_get(1, ALICE).is_err());
@@ -1818,13 +1818,13 @@ mod operator {
 
 			// Create a delegation snapshot for the current epoch (unexpired)
 			let current_epoch = ValidatorPallet::epoch_index();
-			DelegationSnapshot::<Test> {
+			DelegationSnapshot::<u64, u128> {
 				operator: ALICE,
 				validators: Default::default(),
 				delegators: [(BOB, 100u128)].into_iter().collect(),
 				delegation_fee_bps: 250,
 			}
-			.register_for_epoch(current_epoch);
+			.register_for_epoch::<Test>(current_epoch);
 
 			// Should fail - operator has unexpired delegation snapshots
 			assert_noop!(
@@ -2790,7 +2790,7 @@ mod delegation_splitting {
 		delegation_fee_bps: u32,
 		bond: Option<u128>,
 	) -> BTreeMap<u64, u128> {
-		let snapshot = DelegationSnapshot::<Test> {
+		let snapshot = DelegationSnapshot::<u64, u128> {
 			operator: 0,
 			validators: BTreeMap::from_iter([(1, BID)]),
 			delegators: delegator_bids
@@ -3032,7 +3032,7 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		crate::CurrentEpoch::<Test>::put(EPOCH);
 		crate::Bond::<Test>::put(BOND);
 
-		DelegationSnapshot::<Test> {
+		DelegationSnapshot::<u64, u128> {
 			operator: OPERATOR,
 			validators: [(VALIDATOR, VALIDATOR_BID)].into_iter().collect(),
 			delegators: [(DELEGATOR1, DELEGATOR1_BID), (DELEGATOR2, DELEGATOR2_BID)]
@@ -3040,7 +3040,7 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 				.collect(),
 			delegation_fee_bps: 2000, // 20% fee
 		}
-		.register_for_epoch(EPOCH);
+		.register_for_epoch::<Test>(EPOCH);
 
 		// Distribute rewards to the validator.
 		DelegatedRewardsDistribution::<Test, MockIssuance>::distribute(REWARD_AMOUNT, &VALIDATOR);

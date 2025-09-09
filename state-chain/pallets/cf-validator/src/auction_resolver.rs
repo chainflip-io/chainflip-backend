@@ -67,6 +67,12 @@ pub struct AuctionOutcome<Id, Amount> {
 	pub bond: Amount,
 }
 
+impl<Id, Amount> AuctionOutcome<Id, Amount> {
+	pub fn map_ids<T>(self, f: impl Fn(Id) -> T) -> AuctionOutcome<T, Amount> {
+		AuctionOutcome { winners: self.winners.into_iter().map(f).collect(), bond: self.bond }
+	}
+}
+
 impl<T: Config> From<AuctionError> for Error<T> {
 	fn from(err: AuctionError) -> Self {
 		match err {
