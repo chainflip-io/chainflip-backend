@@ -44,7 +44,6 @@ async function tryRuntimeCommand(
 --disable-spec-version-check \
 --disable-mbm-checks \
 --checks all ${blockParam} \
---disable-mbm-checks \
 --uri ${networkUrl}`.split(' '),
     `try-runtime-${blockHash}`,
     'info,runtime::executive=debug',
