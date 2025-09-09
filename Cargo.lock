@@ -8570,6 +8570,8 @@ dependencies = [
  "parity-scale-codec",
  "proptest",
  "proptest-derive",
+ "quickcheck",
+ "quickcheck_macros",
  "scale-info",
  "serde",
  "sp-application-crypto 38.0.0",

@@ -38,7 +38,7 @@ use cf_primitives::{
 
 use state_chain_runtime::{
 	runtime_apis::{
-		BrokerRejectionEventFor, ChannelActionType, EvmVaultSwapDetails, LendingPosition,
+		BrokerRejectionEventFor, ChannelActionType, EvmCallDetails, LendingPosition,
 		NetworkFeeDetails, OpenedDepositChannels,
 	},
 	Runtime,
@@ -838,7 +838,7 @@ fn vault_swap_details_serialization() {
 		deposit_address: "1Pc9wMdCRguVVrZ9Paz8MSgUd47cYfyeQH".to_string().into(),
 	};
 	let eth = VaultSwapDetails::<AddressString>::Ethereum {
-		details: EvmVaultSwapDetails {
+		details: EvmCallDetails {
 			calldata: vec![0x11, 0x22, 0x33, 0x44],
 			value: 12345678.into(),
 			to: H160([0xdd; 20]),
@@ -846,7 +846,7 @@ fn vault_swap_details_serialization() {
 		},
 	};
 	let arb = VaultSwapDetails::<AddressString>::Arbitrum {
-		details: EvmVaultSwapDetails {
+		details: EvmCallDetails {
 			calldata: vec![0x11, 0x22, 0x33, 0x44],
 			value: 2345678.into(),
 			to: H160([0xcc; 20]),

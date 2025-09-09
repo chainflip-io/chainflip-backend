@@ -37,6 +37,7 @@ async function tryRuntimeCommand(
 --runtime ${runtimePath} on-runtime-upgrade \
 --blocktime 6000 \
 --disable-spec-version-check \
+--disable-mbm-checks \
 --checks all ${blockParam} \
 --uri ${networkUrl}`.split(' '),
     `try-runtime-${blockHash}`,

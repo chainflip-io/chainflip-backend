@@ -200,7 +200,6 @@ cf_test_utilities::impl_test_helpers! {
 				max_size: MAX_AUTHORITY_SIZE,
 				max_expansion: MAX_AUTHORITY_SET_EXPANSION,
 			},
-			auction_bid_cutoff_percentage: Percent::from_percent(0),
 			max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 		},
 	},
@@ -210,8 +209,6 @@ cf_test_utilities::impl_test_helpers! {
 			frame_system::Provider::<Test>::created(&account_id).unwrap();
 			<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&account_id).unwrap();
 		}
-		// Default to a high capacity factor for the tests.
-		DelegationCapacityFactor::<Test>::put(1000);
 		frame_system::Provider::<Test>::created(&ALICE).unwrap();
 		frame_system::Provider::<Test>::created(&BOB).unwrap();
 		// Account creation is necessary but it emits events. We clear them so that

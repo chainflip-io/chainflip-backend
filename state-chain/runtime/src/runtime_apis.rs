@@ -79,11 +79,11 @@ pub enum VaultSwapDetails<BtcAddress> {
 	},
 	Ethereum {
 		#[serde(flatten)]
-		details: EvmVaultSwapDetails,
+		details: EvmCallDetails,
 	},
 	Arbitrum {
 		#[serde(flatten)]
-		details: EvmVaultSwapDetails,
+		details: EvmCallDetails,
 	},
 	Solana {
 		#[serde(flatten)]
@@ -92,7 +92,7 @@ pub enum VaultSwapDetails<BtcAddress> {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-pub struct EvmVaultSwapDetails {
+pub struct EvmCallDetails {
 	/// The encoded calldata payload including function selector.
 	#[serde(with = "sp_core::bytes")]
 	pub calldata: Vec<u8>,
@@ -107,11 +107,11 @@ pub struct EvmVaultSwapDetails {
 }
 
 impl<BtcAddress> VaultSwapDetails<BtcAddress> {
-	pub fn ethereum(details: EvmVaultSwapDetails) -> Self {
+	pub fn ethereum(details: EvmCallDetails) -> Self {
 		VaultSwapDetails::Ethereum { details }
 	}
 
-	pub fn arbitrum(details: EvmVaultSwapDetails) -> Self {
+	pub fn arbitrum(details: EvmCallDetails) -> Self {
 		VaultSwapDetails::Arbitrum { details }
 	}
 
@@ -670,6 +670,12 @@ decl_runtime_apis!(
 		fn cf_loan_accounts(
 			borrower_id: Option<AccountId32>,
 		) -> Vec<RpcLoanAccount<AccountId32, AssetAmount>>;
+		fn cf_evm_calldata(
+			caller: EthereumAddress,
+			call: crate::chainflip::ethereum_sc_calls::EthereumSCApi<FlipBalance>,
+		) -> Result<EvmCallDetails, DispatchErrorWithMessage>;
+		#[changed_in(6)]
+		fn cf_evm_calldata();
 	}
 );
 

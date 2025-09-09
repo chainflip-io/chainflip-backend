@@ -30,22 +30,23 @@ mod old {
 	pub type Backups<T: Config> = StorageValue<Pallet<T>, ()>;
 	#[frame_support::storage_alias]
 	pub type BackupRewardNodePercentage<T: Config> = StorageValue<Pallet<T>, ()>;
+	#[frame_support::storage_alias]
+	pub type AuctionBidCutoffPercentage<T: Config> = StorageValue<Pallet<T>, ()>;
+	#[frame_support::storage_alias]
+	pub type RegistrationBondPercentage<T: Config> = StorageValue<Pallet<T>, ()>;
 }
 
 impl<T> UncheckedOnRuntimeUpgrade for Migration<T>
 where
 	T: Config,
 {
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, frame_support::pallet_prelude::DispatchError> {
-		assert!(old::Backups::<T>::exists());
-		assert!(old::BackupRewardNodePercentage::<T>::exists());
-		Ok(Default::default())
-	}
-
 	fn on_runtime_upgrade() -> frame_support::pallet_prelude::Weight {
 		old::Backups::<T>::kill();
 		old::BackupRewardNodePercentage::<T>::kill();
+		old::AuctionBidCutoffPercentage::<T>::kill();
+		old::RegistrationBondPercentage::<T>::kill();
+		// set 20,000 flip as minimum stake required to run a validator.
+		MinimumValidatorStake::<T>::set(FLIPPERINOS_PER_FLIP.saturating_mul(20_000u128).into());
 		Default::default()
 	}
 
@@ -53,6 +54,9 @@ where
 	fn post_upgrade(_: Vec<u8>) -> Result<(), frame_support::pallet_prelude::DispatchError> {
 		assert!(!old::Backups::<T>::exists());
 		assert!(!old::BackupRewardNodePercentage::<T>::exists());
+		assert!(!old::AuctionBidCutoffPercentage::<T>::exists());
+		assert!(!old::RegistrationBondPercentage::<T>::exists());
+		assert!(MinimumValidatorStake::<T>::exists());
 		Ok(())
 	}
 }

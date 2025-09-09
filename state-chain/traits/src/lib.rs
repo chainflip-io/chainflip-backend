@@ -811,6 +811,27 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
+	fn generate_whitelisted_callers(
+		roles: Vec<AccountRole>,
+	) -> Result<Vec<T::AccountId>, DispatchError> {
+		use frame_support::traits::OnNewAccount;
+		roles
+			.into_iter()
+			.enumerate()
+			.map(|(n, role)| {
+				let caller =
+					frame_benchmarking::account::<T::AccountId>("whitelisted_caller", n as u32, 0);
+				if frame_system::Pallet::<T>::providers(&caller) == 0u32 {
+					frame_system::Pallet::<T>::inc_providers(&caller);
+				}
+				<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+				Self::register_account_role(&caller, role)?;
+				Ok(caller)
+			})
+			.collect::<Result<Vec<_>, DispatchError>>()
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
 	fn generate_whitelisted_callers_with_role(
 		role: AccountRole,
 		num: u32,

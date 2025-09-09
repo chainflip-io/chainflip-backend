@@ -112,8 +112,6 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 
 	Pallet::<T>::try_start_keygen(RotationState::from_auction_outcome::<T>(AuctionOutcome {
 		winners: bidder_set::<T, ValidatorIdOf<T>, _>(primary_candidates, epoch).collect(),
-		losers: bidder_set::<T, ValidatorIdOf<T>, _>(secondary_candidates, epoch + LARGE_OFFSET)
-			.collect(),
 		bond: 100u32.into(),
 	}));
 
@@ -121,7 +119,7 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 }
 
 const OPERATOR_SETTINGS: OperatorSettings =
-	OperatorSettings { fee_bps: 250, delegation_acceptance: DelegationAcceptance::Allow };
+	OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Allow };
 
 #[allow(clippy::multiple_bound_locations)]
 #[benchmarks(where T: RuntimeConfig)]
@@ -443,7 +441,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		accept_operator(RawOrigin::Signed(validator.clone()), operator.clone());
 
-		assert!(ManagedValidators::<T>::get(validator).is_some());
+		assert!(OperatorChoice::<T>::get(validator).is_some());
 	}
 
 	#[benchmark]
@@ -458,12 +456,12 @@ mod benchmarks {
 		)
 		.unwrap();
 
-		ManagedValidators::<T>::insert(validator.clone(), operator.clone());
+		OperatorChoice::<T>::insert(validator.clone(), operator.clone());
 
 		#[extrinsic_call]
 		remove_validator(RawOrigin::Signed(validator.clone()), validator.clone());
 
-		assert!(ManagedValidators::<T>::get(validator).is_none());
+		assert!(OperatorChoice::<T>::get(validator).is_none());
 	}
 
 	#[benchmark]
@@ -533,56 +531,46 @@ mod benchmarks {
 
 	#[benchmark]
 	fn delegate() {
-		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+		let accounts = <T as Chainflip>::AccountRoleRegistry::generate_whitelisted_callers(vec![
 			AccountRole::Operator,
-		)
+			AccountRole::Unregistered,
+		])
 		.unwrap();
+		let (operator, delegator) = (accounts[0].clone(), accounts[1].clone());
 
 		assert_ok!(Pallet::<T>::update_operator_settings(
 			RawOrigin::Signed(operator.clone()).into(),
 			OperatorSettings { fee_bps: 250, delegation_acceptance: DelegationAcceptance::Allow }
 		));
 
-		let delegator: T::AccountId = account::<T::AccountId>("whitelisted_caller", 0, 1);
-		frame_system::Pallet::<T>::inc_providers(&delegator);
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&delegator);
-
-		DelegationChoice::<T>::remove(&delegator);
-
 		#[extrinsic_call]
-		delegate(RawOrigin::Signed(delegator.clone()), operator.clone());
+		delegate(RawOrigin::Signed(delegator.clone()), operator.clone(), DelegationAmount::Max);
 
 		assert_eq!(DelegationChoice::<T>::get(delegator), Some(operator));
 	}
 
 	#[benchmark]
 	fn undelegate() {
-		let operator = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+		let accounts = <T as Chainflip>::AccountRoleRegistry::generate_whitelisted_callers(vec![
 			AccountRole::Operator,
-		)
+			AccountRole::Unregistered,
+		])
 		.unwrap();
+		let (operator, delegator) = (accounts[0].clone(), accounts[1].clone());
+		assert_ok!(Pallet::<T>::update_operator_settings(
+			RawOrigin::Signed(operator.clone()).into(),
+			OperatorSettings { fee_bps: 250, delegation_acceptance: DelegationAcceptance::Allow }
+		));
 
-		let delegator: T::AccountId = whitelisted_caller();
-		frame_system::Pallet::<T>::inc_providers(&delegator);
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&delegator);
-
-		DelegationChoice::<T>::insert(&delegator, operator);
+		assert_ok!(Pallet::<T>::delegate(
+			RawOrigin::Signed(delegator.clone()).into(),
+			operator,
+			DelegationAmount::Max
+		));
 
 		#[extrinsic_call]
-		undelegate(RawOrigin::Signed(delegator.clone()));
+		undelegate(RawOrigin::Signed(delegator.clone()), DelegationAmount::Max);
 
 		assert!(DelegationChoice::<T>::get(&delegator).is_none());
-	}
-
-	#[benchmark]
-	fn set_max_bid() {
-		let caller: T::AccountId = whitelisted_caller();
-		frame_system::Pallet::<T>::inc_providers(&caller);
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-
-		#[extrinsic_call]
-		set_max_bid(RawOrigin::Signed(caller.clone()), Some(T::Amount::from(0u128)));
-
-		assert!(MaxDelegationBid::<T>::get(caller).is_some());
 	}
 }

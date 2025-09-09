@@ -203,8 +203,8 @@ fn min_auction_bid_qualification() {
 
 		assert_ok!(Validator::update_pallet_config(
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
-			pallet_cf_validator::PalletConfigUpdate::MinimumAuctionBid {
-				minimum_flip_bid: GENESIS_BALANCE_IN_FLIP
+			pallet_cf_validator::PalletConfigUpdate::MinimumValidatorStake {
+				min_stake: GENESIS_BALANCE_IN_FLIP
 			}
 		));
 		assert!(
@@ -216,8 +216,8 @@ fn min_auction_bid_qualification() {
 		);
 		assert_ok!(Validator::update_pallet_config(
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
-			pallet_cf_validator::PalletConfigUpdate::MinimumAuctionBid {
-				minimum_flip_bid: GENESIS_BALANCE_IN_FLIP + 1
+			pallet_cf_validator::PalletConfigUpdate::MinimumValidatorStake {
+				min_stake: GENESIS_BALANCE_IN_FLIP + 1
 			}
 		));
 		assert!(
@@ -225,7 +225,7 @@ fn min_auction_bid_qualification() {
 				<Runtime as pallet_cf_validator::Config>::KeygenQualification,
 			>()
 			.is_empty(),
-			"No authorities should be qualified if minimum bid is above their balance. Qualified bidders: {:?}",
+			"No authorities should be qualified if minimum stake is above their balance. Qualified bidders: {:?}",
 			Validator::get_qualified_bidders::<
 				<Runtime as pallet_cf_validator::Config>::KeygenQualification,
 			>()

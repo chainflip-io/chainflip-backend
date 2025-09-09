@@ -94,21 +94,7 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ChannelActionCcmRef
 		log::info!("🍩 Running migration for Ingress-Egress pallet: Updating Refund Parameters.");
 		crate::DepositChannelLookup::<T, I>::translate_values::<old::DepositChannelDetails<T, I>, _>(
 			|old| {
-				match old.action.clone() {
-					old::ChannelAction::Swap { refund_params, .. } =>
-					// Convert Refund param into Checked version.
-						Some(ChannelRefundParametersCheckedInternal {
-							retry_duration: refund_params.retry_duration,
-							refund_address: AccountOrAddress::ExternalAddress(
-								refund_params.refund_address,
-							),
-							min_price: refund_params.min_price,
-							refund_ccm_metadata: None,
-							max_oracle_price_slippage: None,
-						}),
-					_ => None,
-				}
-				.map(|checked_refund_params| DepositChannelDetails {
+				Some(DepositChannelDetails {
 					owner: old.owner,
 					deposit_channel: old.deposit_channel,
 					opened_at: old.opened_at,
@@ -119,14 +105,22 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ChannelActionCcmRef
 							destination_address,
 							broker_fees,
 							channel_metadata,
-							refund_params: _,
+							refund_params,
 							dca_params,
 						} => ChannelAction::Swap {
 							destination_asset,
 							destination_address: destination_address.clone(),
 							broker_fees,
 							channel_metadata,
-							refund_params: checked_refund_params,
+							refund_params: ChannelRefundParametersCheckedInternal {
+								retry_duration: refund_params.retry_duration,
+								refund_address: AccountOrAddress::ExternalAddress(
+									refund_params.refund_address,
+								),
+								min_price: refund_params.min_price,
+								refund_ccm_metadata: None,
+								max_oracle_price_slippage: None,
+							},
 							dca_params,
 						},
 						old::ChannelAction::LiquidityProvision { lp_account, refund_address } =>
@@ -156,7 +150,14 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ChannelActionCcmRef
 
 		let post_deposit_channels =
 			DepositChannelLookup::<T, I>::iter_keys().collect::<BTreeSet<_>>();
-		assert_eq!(pre_deposit_channels, post_deposit_channels);
+		assert_eq!(
+			pre_deposit_channels,
+			post_deposit_channels,
+			"Deposit channels should remain the same after migration. Diff: {:?}",
+			pre_deposit_channels
+				.symmetric_difference(&post_deposit_channels)
+				.collect::<Vec<_>>()
+		);
 
 		Ok(())
 	}
