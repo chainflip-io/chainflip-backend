@@ -403,6 +403,7 @@ impl ChainCrypto for PolkadotCrypto {
 		_payload: &[u8],
 		_signature: &Self::Signature,
 	) -> bool {
+		// User offchain signature currently not supported
 		false
 	}
 

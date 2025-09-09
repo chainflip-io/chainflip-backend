@@ -1,7 +1,4 @@
-#!/usr/bin/env -S pnpm tsx
-// INSTRUCTIONS
-//
-
+import { TestContext } from 'shared/utils/test_context';
 import {
   assetContractId,
   brokerMutex,
@@ -10,7 +7,6 @@ import {
   getEvmWhaleKeypair,
   getSolWhaleKeyPair,
   handleSubstrateError,
-  runWithTimeoutAndExit,
 } from 'shared/utils';
 import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -60,7 +56,8 @@ export function encodePayloadToSign(
   return new Uint8Array([...payload, ...chainNameBytes, ...transactionMetadata]);
 }
 
-async function main() {
+export async function testOffchainSignedAction(testContext: TestContext) {
+  const logger = testContext.logger;
   await using chainflip = await getChainflipApi();
 
   const broker = createStateChainKeypair('//BROKER_1');
@@ -81,6 +78,8 @@ async function main() {
   const hexAction = u8aToHex(action);
   const payload = encodePayloadToSign(action, nonce, expiryBlock);
   const hexPayload = u8aToHex(payload);
+
+  logger.info('Signing and submitting user-signed payload with Solana wallet');
 
   const prefixBytes = Buffer.from([0xff, ...Buffer.from('solana offchain', 'utf8')]);
   const solPrefixedMessage = Buffer.concat([prefixBytes, payload]);
@@ -131,9 +130,7 @@ async function main() {
     historicalCheckBlocks: 1,
   }).event;
 
-  console.log('Submitted user signed payload in SVM');
-
-  console.log('Trying with EVM');
+  logger.info('Signing and submitting user-signed payload with EVM wallet using personal_sign');
 
   // Create the Ethereum-prefixed message
   const prefix = `\x19Ethereum Signed Message:\n${payload.length}`;
@@ -187,7 +184,9 @@ async function main() {
     historicalCheckBlocks: 1,
   }).event;
 
-  console.log('Trying EVM EIP712');
+  logger.info('Signing and submitting user-signed payload with EVM wallet using EIP-712');
+
+  // EIP-712 signing
 
   const domain = {
     name: chainName,
@@ -267,5 +266,3 @@ async function main() {
     historicalCheckBlocks: 1,
   }).event;
 }
-
-await runWithTimeoutAndExit(main(), 25);

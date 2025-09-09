@@ -19,6 +19,7 @@ import { testFundRedeem } from 'tests/fund_redeem';
 import { concurrentTest, serialTest } from 'shared/utils/vitest';
 import { testAssethubXcm } from 'tests/assethub_xcm';
 import { testDelegateFlip } from './delegate_flip';
+import { testOffchainSignedAction } from './offchain_signed_action';
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {
@@ -44,6 +45,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('VaultSwaps', testVaultSwap, 600);
   concurrentTest('AssethubXCM', testAssethubXcm, 200);
   concurrentTest('DelegateFlip', testDelegateFlip, 360);
+  concurrentTest('OffchainSignedAction', testOffchainSignedAction, 60);
 
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
