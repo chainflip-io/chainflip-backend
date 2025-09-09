@@ -1236,7 +1236,7 @@ mod swap_simulation {
 			// Small compounding rounding errors
 			assert_eq!(
 				simulated_non_dca_swap.intermediary,
-				simulated_dca_swap.intermediary.map(|amount| amount + 4)
+				simulated_dca_swap.intermediary.map(|amount| amount + 7)
 			);
 			assert_eq!(simulated_non_dca_swap.output, simulated_dca_swap.output + 8);
 		});
@@ -1297,6 +1297,38 @@ mod swap_simulation {
 					simulated_internal_swap.intermediary.unwrap()
 			);
 			assert!(simulated_normal_swap.output < simulated_internal_swap.output);
+		});
+	}
+
+	#[test]
+	fn network_fee_minimum_is_enforced() {
+		// Setting a very large minimum so that it will be used instead of the rate
+		const MINIMUM_NETWORK_FEE: u128 = AMOUNT / 2;
+
+		super::genesis::with_test_defaults().build().execute_with(|| {
+			setup_pool_and_accounts(vec![INPUT_ASSET, OUTPUT_ASSET], OrderType::LimitOrder);
+
+			// Set the network
+			pallet_cf_swapping::NetworkFee::<Runtime>::put(FeeRateAndMinimum {
+				rate: Permill::from_percent(1),
+				minimum: MINIMUM_NETWORK_FEE,
+			});
+
+			let simulated_swap = simulate_swap(
+				INPUT_ASSET,
+				OUTPUT_ASSET,
+				AMOUNT,
+				200,                // broker fee
+				None,               // DCA params
+				None,               // ccm_data
+				Default::default(), // exclude_fees
+				None,               // additional_orders
+				Some(false),        // is_internal
+			)
+			.unwrap();
+
+			assert_eq!(simulated_swap.network_fee, MINIMUM_NETWORK_FEE);
+			assert!(simulated_swap.intermediary.unwrap() < AMOUNT / 2);
 		});
 	}
 }
