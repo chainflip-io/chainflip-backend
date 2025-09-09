@@ -14,21 +14,20 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::RpcResult;
+use crate::{NotificationBehaviour, RpcResult};
 
 use cf_chains::{address::AddressString, evm::U256};
 use cf_primitives::{
 	chains::assets::any::AssetMap, ApiWaitForResult, Asset, BasisPoints, BlockNumber,
 	DcaParameters, EgressId, ForeignChain, PriceLimits, WaitFor,
 };
+pub use cf_rpc_types::lp::*;
 use cf_rpc_types::{
 	AccountId32, BlockUpdate, BoundedVec, ConstU32, EthereumAddress, ExtrinsicResponse, Hash,
 	NumberOrHex, OrderFills,
 };
 use jsonrpsee::proc_macros::rpc;
 use std::ops::Range;
-
-pub use cf_rpc_types::lp::*;
 
 #[rpc(server, client, namespace = "lp")]
 pub trait LpRpcApi {
@@ -139,7 +138,7 @@ pub trait LpRpcApi {
 	) -> RpcResult<Hash>;
 
 	#[subscription(name = "subscribe_order_fills", item = BlockUpdate<OrderFills>)]
-	async fn subscribe_order_fills(&self, wait_finalized: Option<bool>);
+	async fn subscribe_order_fills(&self, wait_finalized: Option<NotificationBehaviour>);
 
 	#[method(name = "order_fills")]
 	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;

@@ -14,10 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-	backend::{CustomRpcBackend, NotificationBehaviour},
-	boost_pool_rpc::BoostPoolFeesRpc,
-};
+use crate::{backend::CustomRpcBackend, boost_pool_rpc::BoostPoolFeesRpc};
 use boost_pool_rpc::BoostPoolDetailsRpc;
 use cf_amm::{
 	common::{PoolPairsMap, Side},
@@ -40,8 +37,8 @@ use cf_rpc_apis::{
 		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc, RpcBytes,
 		VaultSwapExtraParametersRpc, VaultSwapInputRpc,
 	},
-	call_error, internal_error, CfErrorCode, OrderFills, RefundParametersRpc, RpcApiError,
-	RpcResult,
+	call_error, internal_error, CfErrorCode, NotificationBehaviour, OrderFills,
+	RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -876,7 +873,10 @@ pub trait CustomApi {
 	async fn cf_subscribe_scheduled_swaps(&self, base_asset: Asset, quote_asset: Asset);
 
 	#[subscription(name = "subscribe_lp_order_fills", item = BlockUpdate<OrderFills>)]
-	async fn cf_subscribe_lp_order_fills(&self, wait_finalized: Option<bool>);
+	async fn cf_subscribe_lp_order_fills(
+		&self,
+		notification_behaviour: Option<NotificationBehaviour>,
+	);
 
 	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
 	async fn cf_subscribe_transaction_screening_events(&self);
@@ -1874,15 +1874,11 @@ where
 	async fn cf_subscribe_lp_order_fills(
 		&self,
 		sink: PendingSubscriptionSink,
-		wait_finalized: Option<bool>,
+		notification_behaviour: Option<NotificationBehaviour>,
 	) {
 		self.rpc_backend
 			.new_subscription(
-				if wait_finalized.unwrap_or(true) {
-					NotificationBehaviour::Finalized
-				} else {
-					NotificationBehaviour::Best
-				},
+				notification_behaviour.unwrap_or(NotificationBehaviour::Finalized),
 				false,
 				true,
 				sink,
