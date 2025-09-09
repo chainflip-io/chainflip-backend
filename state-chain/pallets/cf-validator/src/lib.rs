@@ -427,7 +427,7 @@ pub mod pallet {
 		/// A validator has been removed from an operator's managed pool.
 		ValidatorRemovedFromOperator { validator: T::AccountId, operator: T::AccountId },
 		/// Operator settings have been updated.
-		OperatorSettingsUpdated { operator: T::AccountId, preferences: OperatorSettings },
+		OperatorSettingsUpdated { operator: T::AccountId, settings: OperatorSettings },
 		/// An account has undelegated from an operator.
 		Undelegated { delegator: T::AccountId, operator: T::AccountId },
 		/// An account has delegated to an operator.
@@ -499,6 +499,8 @@ pub mod pallet {
 		DelegatorBlocked,
 		/// The provided Operator fee is too low.
 		OperatorFeeTooLow,
+		/// The provided Operator fee is too high.
+		OperatorFeeTooHigh,
 		/// The operator still manages an active delegation.
 		OperatorStillActive,
 		/// The account does not exist.
@@ -977,21 +979,22 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::update_operator_settings())]
 		pub fn update_operator_settings(
 			origin: OriginFor<T>,
-			preferences: OperatorSettings,
+			settings: OperatorSettings,
 		) -> DispatchResult {
 			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 
-			ensure!(preferences.fee_bps >= MIN_OPERATOR_FEE, Error::<T>::OperatorFeeTooLow);
+			ensure!(settings.fee_bps >= MIN_OPERATOR_FEE, Error::<T>::OperatorFeeTooLow);
+			ensure!(settings.fee_bps <= MAX_OPERATOR_FEE, Error::<T>::OperatorFeeTooHigh);
 
-			if let Some(current_preferences) = OperatorSettingsLookup::<T>::get(&operator) {
-				if current_preferences.delegation_acceptance != preferences.delegation_acceptance {
+			if let Some(current_settings) = OperatorSettingsLookup::<T>::get(&operator) {
+				if current_settings.delegation_acceptance != settings.delegation_acceptance {
 					Exceptions::<T>::remove(&operator);
 				}
 			}
 
-			OperatorSettingsLookup::<T>::insert(&operator, preferences.clone());
+			OperatorSettingsLookup::<T>::insert(&operator, settings.clone());
 
-			Self::deposit_event(Event::OperatorSettingsUpdated { operator, preferences });
+			Self::deposit_event(Event::OperatorSettingsUpdated { operator, settings });
 			Ok(())
 		}
 
@@ -1102,10 +1105,9 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			settings: OperatorSettings,
 		) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
-			ensure!(settings.fee_bps >= MIN_OPERATOR_FEE, Error::<T>::OperatorFeeTooLow);
+			let account_id = ensure_signed(origin.clone())?;
 			T::AccountRoleRegistry::register_as_operator(&account_id)?;
-			OperatorSettingsLookup::<T>::insert(&account_id, settings);
+			Self::update_operator_settings(origin, settings)?;
 			Ok(())
 		}
 
