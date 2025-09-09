@@ -85,16 +85,8 @@ const getCachedSubstrateApi = (endpoint: string) =>
         },
         UserSignatureData: {
           _enum: {
-            Solana: {
-              signature: 'SolSignature',
-              signer: 'SolAddress',
-              sig_type: 'SolSigType',
-            },
-            Ethereum: {
-              signature: 'EthereumSignature',
-              signer: 'EthereumAddress',
-              sig_type: 'EthSigType',
-            },
+            Solana: '(SolSignature, SolAddress, SolSigType)',
+            Ethereum: '(EthereumSignature, EthereumAddress, EthSigType)',
           },
         },
       },

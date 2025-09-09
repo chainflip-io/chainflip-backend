@@ -1121,7 +1121,7 @@ impl UserActionsApi {
 }
 
 const EIP712_DOMAIN_TYPE_STR: &str = "EIP712Domain(string name,string version)";
-// TODO: Do we want to use version (add it to the TransactionMetadata) and then verison the
+// TODO: Do we want to use version (add it to the TransactionMetadata) and then version the
 // UserActionsApi or we will add new actions to the enum and deprecate old ones as we go?
 const EIP712_DOMAIN_VERSION: &str = "0";
 const EIP712_METADATA_TYPE_STR: &str = "Metadata(address from,uint256 nonce,uint256 expiryBlock)";

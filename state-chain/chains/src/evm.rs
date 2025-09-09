@@ -256,7 +256,7 @@ pub fn to_evm_address(pubkey: PublicKey) -> Address {
 	Address::from_slice(&h.0[12..])
 }
 
-pub fn to_evm_address_from_compressed_pubkey(pubkey: sp_core::ecdsa::Public) -> Option<Address> {
+fn to_evm_address_from_compressed_pubkey(pubkey: sp_core::ecdsa::Public) -> Option<Address> {
 	PublicKey::parse_compressed(&pubkey.0).ok().map(to_evm_address)
 }
 
