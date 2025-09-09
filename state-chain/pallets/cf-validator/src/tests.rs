@@ -45,7 +45,7 @@ const NOBODY: u64 = 999; // Non-existent account for testing
 const GENESIS_EPOCH: u32 = 1;
 
 const OPERATOR_SETTINGS: OperatorSettings =
-	OperatorSettings { fee_bps: 250, delegation_acceptance: DelegationAcceptance::Allow };
+	OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Allow };
 
 fn assert_epoch_index(n: EpochIndex) {
 	assert_eq!(
@@ -532,7 +532,6 @@ fn expired_epoch_data_is_removed() {
 			delegators: [(delegator, 50u128)].into_iter().collect(),
 			validators: [(ALICE, 150u128)].into_iter().collect(),
 			delegation_fee_bps: 250,
-			capacity_factor: None,
 		};
 
 		// Epoch 1
@@ -1481,7 +1480,6 @@ fn can_update_all_config_items() {
 			SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 };
 		const NEW_MINIMUM_REPORTED_CFE_VERSION: SemVer = SemVer { major: 1, minor: 0, patch: 0 };
 		const NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE: Percent = Percent::from_percent(10);
-		const NEW_DELEGATION_CAPACITY_FACTOR: Option<u32> = Some(5);
 
 		// Check that the default values are different from the new ones
 		assert_ne!(
@@ -1500,7 +1498,6 @@ fn can_update_all_config_items() {
 			MaxAuthoritySetContractionPercentage::<Test>::get(),
 			NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE
 		);
-		assert_ne!(DelegationCapacityFactor::<Test>::get(), NEW_DELEGATION_CAPACITY_FACTOR);
 
 		// Update all config items
 		let updates = vec![
@@ -1517,7 +1514,6 @@ fn can_update_all_config_items() {
 			PalletConfigUpdate::MaxAuthoritySetContractionPercentage {
 				percentage: NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE,
 			},
-			PalletConfigUpdate::DelegationCapacityFactor { factor: NEW_DELEGATION_CAPACITY_FACTOR },
 		];
 		for update in updates {
 			assert_ok!(ValidatorPallet::update_pallet_config(OriginTrait::root(), update.clone()));
@@ -1543,18 +1539,6 @@ fn can_update_all_config_items() {
 		assert_eq!(
 			MaxAuthoritySetContractionPercentage::<Test>::get(),
 			NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE
-		);
-		assert_eq!(DelegationCapacityFactor::<Test>::get(), NEW_DELEGATION_CAPACITY_FACTOR);
-
-		// Make sure that only governance can update the config
-		assert_noop!(
-			ValidatorPallet::update_pallet_config(
-				OriginTrait::signed(ALICE),
-				PalletConfigUpdate::DelegationCapacityFactor {
-					factor: NEW_DELEGATION_CAPACITY_FACTOR
-				}
-			),
-			sp_runtime::traits::BadOrigin
 		);
 	});
 }
@@ -1774,8 +1758,8 @@ mod operator {
 			);
 
 			// Expected end state:
-			assert_eq!(ManagedValidators::<Test>::get(V_1), Some(OP_2));
-			assert_eq!(ManagedValidators::<Test>::get(V_2), Some(OP_1));
+			assert_eq!(OperatorChoice::<Test>::get(V_1), Some(OP_2));
+			assert_eq!(OperatorChoice::<Test>::get(V_2), Some(OP_1));
 
 			assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
 				Event::OperatorAcceptedByValidator { validator: V_1, operator: OP_2 },
@@ -1788,10 +1772,10 @@ mod operator {
 	#[test]
 	fn validator_and_operator_can_remove_validator() {
 		new_test_ext().execute_with(|| {
-			ManagedValidators::<Test>::insert(BOB, ALICE);
+			OperatorChoice::<Test>::insert(BOB, ALICE);
 			// ALICE can remove BOB
 			assert_ok!(ValidatorPallet::remove_validator(OriginTrait::signed(ALICE), BOB));
-			ManagedValidators::<Test>::insert(BOB, ALICE);
+			OperatorChoice::<Test>::insert(BOB, ALICE);
 			// BOB can remove BOB
 			assert_ok!(ValidatorPallet::remove_validator(OriginTrait::signed(BOB), BOB));
 			assert_event_sequence!(
@@ -1810,13 +1794,17 @@ mod operator {
 				OriginTrait::signed(ALICE),
 				OPERATOR_SETTINGS
 			));
-			ManagedValidators::<Test>::insert(BOB, ALICE);
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Max
+			));
 
 			// Should succeed - validators are automatically removed during deregistration
 			assert_ok!(ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)));
 
 			// Verify validator was removed from operator
-			assert!(!ManagedValidators::<Test>::contains_key(BOB));
+			assert!(!OperatorChoice::<Test>::contains_key(BOB));
 		});
 	}
 
@@ -1835,7 +1823,6 @@ mod operator {
 				validators: Default::default(),
 				delegators: [(BOB, 100u128)].into_iter().collect(),
 				delegation_fee_bps: 250,
-				capacity_factor: None,
 			}
 			.register_for_epoch(current_epoch);
 
@@ -2049,7 +2036,7 @@ mod delegation {
 						OriginTrait::signed(bid.bidder_id),
 						OPERATOR
 					));
-					assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+					assert!(OperatorChoice::<Test>::get(bid.bidder_id).is_some());
 				}
 
 				set_default_test_bids();
@@ -2572,13 +2559,13 @@ pub mod auction_optimization {
 		for bid in op_1_bids {
 			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_1), bid.bidder_id));
 			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(bid.bidder_id), OP_1));
-			assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+			assert!(OperatorChoice::<Test>::get(bid.bidder_id).is_some());
 		}
 
 		for bid in op_2_bids {
 			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP_2), bid.bidder_id));
 			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(bid.bidder_id), OP_2));
-			assert!(ManagedValidators::<Test>::get(bid.bidder_id).is_some());
+			assert!(OperatorChoice::<Test>::get(bid.bidder_id).is_some());
 		}
 	}
 
@@ -2681,7 +2668,6 @@ pub mod auction_optimization {
 								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
 								.collect(),
 							delegation_fee_bps: OPERATOR_SETTINGS.fee_bps,
-							capacity_factor: None,
 						}
 					);
 
@@ -2702,7 +2688,6 @@ pub mod auction_optimization {
 								.map(|Bid { bidder_id, amount }| (bidder_id, amount))
 								.collect(),
 							delegation_fee_bps: OPERATOR_SETTINGS.fee_bps,
-							capacity_factor: None,
 						}
 					);
 				} else {
@@ -2721,8 +2706,14 @@ pub mod auction_optimization {
 				.into_iter()
 				.map(|(b1, b2)| {
 					(
-						b1.into_iter().map(|b| b % FLIP_MAX_SUPPLY).collect(),
-						b2.into_iter().map(|b| b % FLIP_MAX_SUPPLY).collect(),
+						b1.into_iter()
+							.take(MAX_VALIDATORS_PER_OPERATOR)
+							.map(|b| b % FLIP_MAX_SUPPLY)
+							.collect(),
+						b2.into_iter()
+							.take(MAX_VALIDATORS_PER_OPERATOR)
+							.map(|b| b % FLIP_MAX_SUPPLY)
+							.collect(),
 						Default::default(),
 						Default::default(),
 					)
@@ -2759,7 +2750,7 @@ pub mod auction_optimization {
 									snapshot.operator
 								);
 								assert_eq!(
-									ManagedValidators::<Test>::get(val).unwrap(),
+									OperatorChoice::<Test>::get(val).unwrap(),
 									snapshot.operator
 								)
 							})
@@ -2797,9 +2788,9 @@ mod delegation_splitting {
 		total: u128,
 		delegator_bids: Vec<u128>,
 		delegation_fee_bps: u32,
-		capacity_factor: Option<u32>,
+		bond: Option<u128>,
 	) -> BTreeMap<u64, u128> {
-		DelegationSnapshot::<Test> {
+		let snapshot = DelegationSnapshot::<Test> {
 			operator: 0,
 			validators: BTreeMap::from_iter([(1, BID)]),
 			delegators: delegator_bids
@@ -2808,11 +2799,17 @@ mod delegation_splitting {
 				.map(|(i, b)| ((i + 2) as u64, b))
 				.collect(),
 			delegation_fee_bps,
-			capacity_factor,
-		}
-		.distribute(total)
-		.map(|(k, v)| (*k, v))
-		.collect()
+		};
+
+		// If not specified, assume optimal bond.
+		let bond = bond.unwrap_or_else(|| snapshot.avg_bid());
+		assert!(
+			bond <= snapshot.avg_bid(),
+			"The test requires a bond less than or equal to the average bid. Bond: {bond}, avg_bid: {}",
+			snapshot.avg_bid()
+		);
+
+		snapshot.distribute(total, bond).map(|(k, v)| (*k, v)).collect()
 	}
 
 	#[test]
@@ -2858,42 +2855,50 @@ mod delegation_splitting {
 	#[test]
 	fn with_delegation_limit_no_fee() {
 		new_test_ext().execute_with(|| {
-			const FACTOR: u128 = 3;
+			// TOTAL DELEGATOR BID: 6 * BID
+			// VALIDATOR BID: BID
+			// BOND: 4 * BID
+			// VALIDATOR GETS 1/4 OF TOTAL REWARD = REWARD
+			const VALIDATOR_REWARD: u128 = REWARD;
+			// DELEGATORS GET 3/4 OF TOTAL REWARD = REWARD * 3
+			const DELEGATOR_REWARD: u128 = REWARD * 3;
 			assert_eq!(
-				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 0, Some(FACTOR as u32)),
-				BTreeMap::from_iter(
-					[(0, 0), (1, REWARD), (2, REWARD), (3, 2 * REWARD), (4, 3 * REWARD),]
-						.into_iter()
-						// Delegator reward is reduced by 50% because it's 2x over capacity.
-						.map(|(k, v)| if k > 1 { (k, v / (FACTOR - 1)) } else { (k, v) })
-						.collect::<BTreeMap<_, _>>()
-				)
+				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 0, Some(4 * BID)),
+				BTreeMap::from_iter([
+					(0, 0),
+					(1, VALIDATOR_REWARD),
+					(2, DELEGATOR_REWARD / 6),
+					(3, DELEGATOR_REWARD * 2 / 6),
+					(4, DELEGATOR_REWARD * 3 / 6),
+				])
 			);
 		});
 	}
 
 	#[test]
 	fn with_delegation_limit_and_fee() {
+		// TOTAL BID: 6 * BID
+		// VALIDATOR BID: BID
+		// BOND: 4 * BID
+		// VALIDATOR GETS 1/4 OF TOTAL REWARD = REWARD
+		const VALIDATOR_REWARD: u128 = REWARD;
+		// DELEGATORS GET 3/4 OF TOTAL REWARD = REWARD * 3
+		// BUT OPERATOR TAKES 20% OF THAT
+		const DELEGATOR_REWARD: u128 = REWARD * 3;
+		const OPERATOR_FEE: u128 = DELEGATOR_REWARD / 5;
+		const NET_DELEGATOR_REWARD: u128 = DELEGATOR_REWARD - OPERATOR_FEE;
 		new_test_ext().execute_with(|| {
-			const FACTOR: u128 = 3;
 			// 20% operator fee
 			assert_eq!(
-				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 2000, Some(FACTOR as u32)),
-				BTreeMap::from_iter(
-					[
-						// Operator gets 20 % of *capped* delegator total
-						(0, (REWARD / (FACTOR - 1) * 6 / 5)),
-						(1, REWARD),
-						(2, REWARD),
-						(3, 2 * REWARD),
-						(4, 3 * REWARD),
-					]
-					.into_iter()
-					// Delegator reward is reduced by 50% because it's 2x over capacity.
-					// Delegator reward is further reduced by 20% because of operator fee.
-					.map(|(k, v)| if k > 1 { (k, v / (FACTOR - 1) * 4 / 5) } else { (k, v) })
-					.collect::<BTreeMap<_, _>>()
-				)
+				split_amount(REWARD * 4, vec![BID, 2 * BID, 3 * BID], 2000, Some(4 * BID)),
+				BTreeMap::from_iter([
+					// Operator gets 20 % of *capped* delegator total
+					(0, OPERATOR_FEE),
+					(1, VALIDATOR_REWARD),
+					(2, NET_DELEGATOR_REWARD / 6),
+					(3, NET_DELEGATOR_REWARD * 2 / 6),
+					(4, NET_DELEGATOR_REWARD * 3 / 6),
+				])
 			);
 		});
 	}
@@ -2977,7 +2982,7 @@ mod delegation_splitting {
 
 #[test]
 fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
-	use crate::{delegation::DelegatedRewardsDistribution, mock::MockEpochInfo};
+	use crate::delegation::DelegatedRewardsDistribution;
 	use cf_traits::RewardsDistribution;
 
 	new_test_ext().execute_with(|| {
@@ -2985,7 +2990,6 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		const OPERATOR: u64 = 200;
 		const DELEGATOR1: u64 = 300;
 		const DELEGATOR2: u64 = 400;
-		const REWARD_AMOUNT: u128 = 1000000;
 
 		// Mock issuance that tracks minted amounts
 		#[derive(Default)]
@@ -3018,19 +3022,23 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 			}
 		}
 
-		// Set current epoch for MockEpochInfo
-		const EPOCH: EpochIndex = 5;
-		MockEpochInfo::set_epoch(EPOCH);
+		const EPOCH: u32 = 10;
+		const BOND: u128 = 1_000_000u128; // Validator + delegators
+		const VALIDATOR_BID: u128 = 200_000u128;
+		const DELEGATOR1_BID: u128 = 500_000u128;
+		const DELEGATOR2_BID: u128 = 1_500_000u128;
+		const REWARD_AMOUNT: u128 = 100_000u128;
 
-		// Create a delegation snapshot
+		crate::CurrentEpoch::<Test>::put(EPOCH);
+		crate::Bond::<Test>::put(BOND);
+
 		DelegationSnapshot::<Test> {
 			operator: OPERATOR,
-			validators: [(VALIDATOR, 1000000u128)].into_iter().collect(),
-			delegators: [(DELEGATOR1, 2000000u128), (DELEGATOR2, 3000000u128)]
+			validators: [(VALIDATOR, VALIDATOR_BID)].into_iter().collect(),
+			delegators: [(DELEGATOR1, DELEGATOR1_BID), (DELEGATOR2, DELEGATOR2_BID)]
 				.into_iter()
 				.collect(),
-			delegation_fee_bps: 500, // 5% fee
-			capacity_factor: None,
+			delegation_fee_bps: 2000, // 20% fee
 		}
 		.register_for_epoch(EPOCH);
 
@@ -3041,19 +3049,17 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		let minted = TestMintTracker::get_minted();
 
 		// With stakes: validator 1M, delegator1 2M, delegator2 3M = 6M total
-		// Validator gets 1M/6M = 166,667 (rounded)
-		assert_eq!(minted.get(&VALIDATOR), Some(&166667));
+		const EXPECTED_VALIDATOR_REWARD: u128 = REWARD_AMOUNT * VALIDATOR_BID / BOND;
+		assert_eq!(minted.get(&VALIDATOR), Some(&EXPECTED_VALIDATOR_REWARD));
 
-		// Delegators get 5M/6M = 833,333
-		// Operator takes 5% of delegators' cut = 41,667 (rounded)
-		assert_eq!(minted.get(&OPERATOR), Some(&41667));
+		const REMAINING_REWARD: u128 = REWARD_AMOUNT - EXPECTED_VALIDATOR_REWARD;
+		assert_eq!(minted.get(&OPERATOR), Some(&(REMAINING_REWARD / 5))); // 20%
 
-		// Remaining delegator rewards: 833,333 - 41,667 = 791,666
-		// Delegator1 has 2M out of 5M total delegator stake = 2/5
-		assert_eq!(minted.get(&DELEGATOR1), Some(&316666));
+		const DELEGATOR_PORTION: u128 = REMAINING_REWARD * 4 / 5; // 80%
+		assert_eq!(minted.get(&DELEGATOR1), Some(&(DELEGATOR_PORTION / 4)));
 
 		// Delegator2 has 3M out of 5M total delegator stake = 3/5
-		assert_eq!(minted.get(&DELEGATOR2), Some(&475000));
+		assert_eq!(minted.get(&DELEGATOR2), Some(&(DELEGATOR_PORTION * 3 / 4)));
 
 		// Verify total
 		let total_minted: u128 = minted.values().sum();

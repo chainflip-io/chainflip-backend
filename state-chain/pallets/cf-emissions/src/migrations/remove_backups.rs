@@ -37,13 +37,6 @@ impl<T> UncheckedOnRuntimeUpgrade for Migration<T>
 where
 	T: Config,
 {
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, frame_support::pallet_prelude::DispatchError> {
-		assert!(old::BackupNodeEmissionInflation::<T>::exists());
-		assert!(old::BackupNodeEmissionPerBlock::<T>::exists());
-		Ok(Default::default())
-	}
-
 	fn on_runtime_upgrade() -> frame_support::pallet_prelude::Weight {
 		old::BackupNodeEmissionInflation::<T>::kill();
 		old::BackupNodeEmissionPerBlock::<T>::kill();

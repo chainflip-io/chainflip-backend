@@ -40,15 +40,6 @@ impl<T> UncheckedOnRuntimeUpgrade for Migration<T>
 where
 	T: Config,
 {
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, frame_support::pallet_prelude::DispatchError> {
-		assert!(old::Backups::<T>::exists());
-		assert!(old::BackupRewardNodePercentage::<T>::exists());
-		assert!(old::AuctionBidCutoffPercentage::<T>::exists());
-		assert!(old::RegistrationBondPercentage::<T>::exists());
-		Ok(Default::default())
-	}
-
 	fn on_runtime_upgrade() -> frame_support::pallet_prelude::Weight {
 		old::Backups::<T>::kill();
 		old::BackupRewardNodePercentage::<T>::kill();

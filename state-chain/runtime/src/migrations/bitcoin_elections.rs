@@ -526,7 +526,7 @@ impl UncheckedOnRuntimeUpgrade for BitcoinElectionMigration {
 				.unwrap()
 				.4;
 
-		assert_eq!(current_unsynchronised_settings, 10);
+		assert_eq!(current_unsynchronised_settings, 20);
 
 		pallet_cf_elections::ElectoralSettings::<Runtime, BitcoinInstance>::iter().for_each(
 			|(_id, settings)| {

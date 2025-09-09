@@ -119,7 +119,7 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 }
 
 const OPERATOR_SETTINGS: OperatorSettings =
-	OperatorSettings { fee_bps: 250, delegation_acceptance: DelegationAcceptance::Allow };
+	OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Allow };
 
 #[allow(clippy::multiple_bound_locations)]
 #[benchmarks(where T: RuntimeConfig)]
@@ -441,7 +441,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		accept_operator(RawOrigin::Signed(validator.clone()), operator.clone());
 
-		assert!(ManagedValidators::<T>::get(validator).is_some());
+		assert!(OperatorChoice::<T>::get(validator).is_some());
 	}
 
 	#[benchmark]
@@ -456,12 +456,12 @@ mod benchmarks {
 		)
 		.unwrap();
 
-		ManagedValidators::<T>::insert(validator.clone(), operator.clone());
+		OperatorChoice::<T>::insert(validator.clone(), operator.clone());
 
 		#[extrinsic_call]
 		remove_validator(RawOrigin::Signed(validator.clone()), validator.clone());
 
-		assert!(ManagedValidators::<T>::get(validator).is_none());
+		assert!(OperatorChoice::<T>::get(validator).is_none());
 	}
 
 	#[benchmark]

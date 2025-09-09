@@ -1743,7 +1743,7 @@ impl_runtime_apis! {
 				apy_bp,
 				restricted_balances,
 				estimated_redeemable_balance,
-				operator: pallet_cf_validator::ManagedValidators::<Runtime>::get(account_id),
+				operator: pallet_cf_validator::OperatorChoice::<Runtime>::get(account_id),
 			}
 		}
 

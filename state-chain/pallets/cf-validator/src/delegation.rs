@@ -1,6 +1,6 @@
 use crate::{
-	AuctionOutcome, Config, DelegationCapacityFactor, DelegationSnapshots, OperatorSettingsLookup,
-	ValidatorIdOf, ValidatorToOperator,
+	AuctionOutcome, Config, DelegationSnapshots, OperatorSettingsLookup, Pallet, ValidatorIdOf,
+	ValidatorToOperator,
 };
 use cf_primitives::EpochIndex;
 use cf_traits::{EpochInfo, Issuance, RewardsDistribution, Slashing};
@@ -18,6 +18,8 @@ use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
 /// The minimum delegation fee that can be charged, in basis points.
 pub const MIN_OPERATOR_FEE: u32 = 200;
+
+pub const MAX_VALIDATORS_PER_OPERATOR: usize = 20;
 
 pub enum AssociationToOperator {
 	Validator,
@@ -111,8 +113,6 @@ pub struct DelegationSnapshot<T: Config> {
 	pub delegators: BTreeMap<T::AccountId, T::Amount>,
 	/// Operator fee at time of snapshot creation.
 	pub delegation_fee_bps: u32,
-	/// Capacity factor at time of snapshot creation.
-	pub capacity_factor: Option<u32>,
 }
 
 impl<T: Config> DelegationSnapshot<T> {
@@ -124,7 +124,6 @@ impl<T: Config> DelegationSnapshot<T> {
 			delegation_fee_bps: OperatorSettingsLookup::<T>::get(operator)
 				.map(|settings| settings.fee_bps)
 				.unwrap_or(0),
-			capacity_factor: DelegationCapacityFactor::<T>::get(),
 		}
 	}
 
@@ -134,14 +133,6 @@ impl<T: Config> DelegationSnapshot<T> {
 
 	pub fn total_delegator_bid(&self) -> T::Amount {
 		self.delegators.values().copied().sum()
-	}
-
-	/// The total delegator bid, capped based on the delegation multiple and the total validator
-	/// bid.
-	pub fn total_delegator_bid_capped(&self) -> T::Amount {
-		let total = self.total_delegator_bid();
-		self.capacity_factor
-			.map_or(total, |f| core::cmp::min(total, self.total_validator_bid() * f.into()))
 	}
 
 	/// Stores the validator mappings and snapshot information for the given epoch.
@@ -154,7 +145,7 @@ impl<T: Config> DelegationSnapshot<T> {
 	}
 
 	pub fn total_available_bid(&self) -> T::Amount {
-		self.total_validator_bid() + self.total_delegator_bid_capped()
+		self.total_validator_bid() + self.total_delegator_bid()
 	}
 
 	pub fn effective_validator_bids(&self) -> BTreeMap<ValidatorIdOf<T>, T::Amount> {
@@ -165,7 +156,11 @@ impl<T: Config> DelegationSnapshot<T> {
 		self.validators.keys().map(|validator| (validator.clone(), avg_bid)).collect()
 	}
 
-	pub fn distribute<Amount>(&self, total: Amount) -> impl Iterator<Item = (&T::AccountId, Amount)>
+	pub fn distribute<Amount>(
+		&self,
+		total: Amount,
+		bond: Amount,
+	) -> impl Iterator<Item = (&T::AccountId, Amount)>
 	where
 		Amount: From<T::Amount>
 			+ AtLeast32BitUnsigned
@@ -179,11 +174,14 @@ impl<T: Config> DelegationSnapshot<T> {
 		let total_delegator_stake: Amount = self.total_delegator_bid().into();
 		let total_validator_stake: Amount = self.total_validator_bid().into();
 
-		// The validator's cut is based on the capped delegation amount.
-		let validators_cut = Perquintill::from_rational(
-			total_validator_stake,
-			total_validator_stake + self.total_delegator_bid_capped().into(),
-		) * total;
+		// The validators' cut is based on their proportion of the current epoch's bond.
+		let scaled_bond = bond * T::Amount::from(self.validators.len() as u32).into();
+		let validators_cut = if total_validator_stake < scaled_bond {
+			Perquintill::from_rational(total_validator_stake, scaled_bond)
+		} else {
+			Perquintill::one()
+		} * total;
+
 		let operator_share = Perquintill::from_rational(self.delegation_fee_bps as u64, 10_000u64);
 		let delegators_cut = (Perquintill::one() - operator_share) * (total - validators_cut);
 
@@ -294,11 +292,13 @@ pub fn distribute<T: Config>(
 	total: T::Amount,
 	settle: impl Fn(&T::AccountId, T::Amount),
 ) {
-	let epoch_index = T::EpochInfo::epoch_index();
+	let epoch_index = Pallet::<T>::epoch_index();
 
 	if let Some(operator) = ValidatorToOperator::<T>::get(epoch_index, validator) {
 		if let Some(snapshot) = DelegationSnapshots::<T>::get(epoch_index, &operator) {
-			snapshot.distribute(total).for_each(|(account, amount)| settle(account, amount));
+			snapshot
+				.distribute(total, Pallet::<T>::bond())
+				.for_each(|(account, amount)| settle(account, amount));
 		} else {
 			settle(validator, total);
 			cf_runtime_utilities::log_or_panic!(
@@ -317,6 +317,7 @@ pub fn distribute<T: Config>(
 mod tests {
 	use super::*;
 	use crate::mock::*;
+	use cf_primitives::FLIPPERINOS_PER_FLIP;
 	use proptest::{prelude::*, proptest};
 
 	proptest! {
@@ -324,9 +325,9 @@ mod tests {
 		fn distribute_always_sums_to_total(
 			validator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..10),
 			delegator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..100),
-			total_to_distribute in 1u128..10_000_000_000_000_000_000u128,
+			total_to_distribute in 1u128..10_000u128,
 			delegation_fee_bps in 2_000u32..10_000u32,
-			capacity_factor in prop::option::of(0u32..100u32),
+			bond in 100_000u128..10_000_000u128,
 		) {
 			// Create a delegation snapshot
 			let operator_account = 1u64;
@@ -335,29 +336,31 @@ mod tests {
 				validators: BTreeMap::new(),
 				delegators: BTreeMap::new(),
 				delegation_fee_bps,
-				capacity_factor,
 			};
+			let total_to_distribute = total_to_distribute * FLIPPERINOS_PER_FLIP;
 
 			// Add validators
 			for (i, amount) in validator_amounts.iter().enumerate() {
-				snapshot.validators.insert(i as u64 + 100, *amount);
+				snapshot.validators.insert(i as u64 + 100, *amount * FLIPPERINOS_PER_FLIP);
 			}
 
 			// Add delegators
 			for (i, amount) in delegator_amounts.iter().enumerate() {
-				snapshot.delegators.insert(i as u64 + 1000, *amount);
+				snapshot.delegators.insert(i as u64 + 1000, *amount * FLIPPERINOS_PER_FLIP);
 			}
 
 			// Distribute the total amount
-			let distributions: Vec<_> = snapshot.distribute(total_to_distribute).collect();
-			let sum: u128 = distributions.iter().map(|(_, amount)| *amount).sum();
+			new_test_ext().execute_with(|| {
+				let distributions: Vec<_> = snapshot.distribute(total_to_distribute, bond * FLIPPERINOS_PER_FLIP).collect();
+				let sum: u128 = distributions.iter().map(|(_, amount)| *amount).sum();
 
-			// Property: The sum of all distributed amounts equals the input total
-			assert_eq!(
-				sum, total_to_distribute,
-				"Sum of distributions ({}) does not equal total ({})",
-				sum, total_to_distribute
-			);
+				// Property: The sum of all distributed amounts equals the input total
+				assert_eq!(
+					sum, total_to_distribute,
+					"Sum of distributions ({}) does not equal total ({})",
+					sum, total_to_distribute
+				);
+			});
 		}
 	}
 }
