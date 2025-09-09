@@ -694,6 +694,12 @@ pub mod pallet {
 				decoded_action,
 			});
 
+			// TODO: Execute User Action on behalf of the signer_account_id. This should be done
+			// similarly to the EthereumSCApi execution with `dispatch_bypass_filter`. Probably we
+			// don't want the extrinsic to fail if this fails but instead we want to rollback the
+			// state to consume the user nonce. Otherwise we rely only on the block expiry but
+			// that is mainly to prevent brokers from withholding signed payloads.
+
 			Ok(())
 		}
 	}
