@@ -2963,9 +2963,9 @@ impl_runtime_apis! {
 				epoch_duration: Validator::epoch_duration(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				current_epoch_index: Validator::current_epoch(),
-				min_active_bid:Validator::resolve_auction_iteratively()
-				.ok()
-				.map(|(auction_outcome, _)| auction_outcome.bond),
+				min_active_bid: Validator::resolve_auction_iteratively()
+					.ok()
+					.map(|(auction_outcome, _)| auction_outcome.bond),
 				rotation_phase: Validator::current_rotation_phase().to_str().to_string(),
 			}
 		}
