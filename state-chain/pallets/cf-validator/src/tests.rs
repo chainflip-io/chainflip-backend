@@ -2726,7 +2726,7 @@ pub mod auction_optimization {
 				.then_execute_with_checks(|| -> bool {
 					setup_bids(op_1_bids, op_2_bids);
 
-					let single_auction_outcome = ValidatorPallet::dry_run_auction().unwrap();
+					let single_auction_outcome = ValidatorPallet::run_initial_auction().unwrap().0;
 
 					ValidatorPallet::start_authority_rotation();
 
