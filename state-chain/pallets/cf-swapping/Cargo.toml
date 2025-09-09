@@ -32,7 +32,6 @@ scale-info = { workspace = true, features = ["derive"] }
 frame-benchmarking = { workspace = true, optional = true }
 frame-support = { workspace = true }
 frame-system = { workspace = true }
-hex-literal = {workspace = true}
 
 sp-arithmetic = { workspace = true }
 sp-std = { workspace = true }

@@ -1018,10 +1018,6 @@ impl<T: Config> Pallet<T> {
 			current_id
 		})
 	}
-
-	pub fn get_current_chain_name() -> ChainflipNetwork {
-		Self::chainflip_network()
-	}
 }
 
 impl<T: Config> CompatibleCfeVersions for Pallet<T> {
