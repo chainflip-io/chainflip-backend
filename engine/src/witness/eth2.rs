@@ -74,11 +74,10 @@ use sp_core::{bounded::alloc::collections::VecDeque, H160};
 use state_chain_runtime::{
 	chainflip::ethereum_elections::{
 		EthereumBlockHeightWitnesserES, EthereumChain, EthereumDepositChannelWitnessingES,
-		EthereumEgressWitnessingES, EthereumElectoralSystemRunner, EthereumFeeTracking,
-		EthereumKeyManagerWitnessingES, EthereumLiveness, EthereumStateChainGatewayWitnessingES,
-		EthereumVaultDepositWitnessingES, KeyManagerEvent as SCKeyManagerEvent,
-		StateChainGatewayEvent as SCStateChainGatewayEvent, VaultEvents as SCVaultEvents,
-		ETHEREUM_MAINNET_SAFETY_BUFFER,
+		EthereumElectoralSystemRunner, EthereumFeeTracking, EthereumKeyManagerWitnessingES,
+		EthereumLiveness, EthereumStateChainGatewayWitnessingES, EthereumVaultDepositWitnessingES,
+		KeyManagerEvent as SCKeyManagerEvent, StateChainGatewayEvent as SCStateChainGatewayEvent,
+		VaultEvents as SCVaultEvents, ETHEREUM_MAINNET_SAFETY_BUFFER,
 	},
 	EthereumInstance,
 };
@@ -93,18 +92,13 @@ use crate::{
 		rpc::EvmRpcSigningClient,
 	},
 	state_chain_observer::client::{
-		chain_api::ChainApi,
-		electoral_api::ElectoralApi,
-		extrinsic_api::signed::SignedExtrinsicApi,
-		storage_api::StorageApi,
-		STATE_CHAIN_CONNECTION,
+		chain_api::ChainApi, electoral_api::ElectoralApi,
+		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 	},
 	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
 };
 
-use super::{
-	evm::vault::vault_deposit_witness,
-};
+use super::evm::vault::vault_deposit_witness;
 
 use anyhow::{Context, Result};
 
@@ -833,22 +827,6 @@ impl VoterApi<EthereumKeyManagerWitnessingES> for EthereumKeyManagerWitnesserVot
 	}
 }
 
-// TODO to be removed, egresses are part of key_manager witnessing
-#[derive(Clone)]
-pub struct EthereumEgressWitnesserVoter {
-	_client: EvmCachingClient<EvmRpcSigningClient>,
-}
-#[async_trait::async_trait]
-impl VoterApi<EthereumEgressWitnessingES> for EthereumEgressWitnesserVoter {
-	async fn vote(
-		&self,
-		_settings: <EthereumEgressWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
-		_properties: <EthereumEgressWitnessingES as ElectoralSystemTypes>::ElectionProperties,
-	) -> std::result::Result<Option<VoteOf<EthereumEgressWitnessingES>>, anyhow::Error> {
-		Ok(None)
-	}
-}
-
 #[derive(Clone)]
 pub struct EthereumFeeVoter {
 	client: EvmCachingClient<EvmRpcSigningClient>,
@@ -857,23 +835,18 @@ pub struct EthereumFeeVoter {
 impl VoterApi<EthereumFeeTracking> for EthereumFeeVoter {
 	async fn vote(
 		&self,
-		_settings: <EthereumFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
+		settings: <EthereumFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
 		_properties: <EthereumFeeTracking as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<EthereumFeeTracking>>, anyhow::Error> {
-		const FEE_HISTORY_WINDOW: u64 = 5;
-		// We take the latest base fee. Assuming this will be most likely to be closest to the next
-		// base fee. Then we take the lowest priority fee, which is not limited,
-		// to protect against upward spikes in the priority fee. We only take the last 2 blocks so
-		// we don't lag too much.
-		const PRIORITY_FEE_PERCENTILE: f64 = 50.0;
+		let (fee_history_window, priority_fee_percentile) = settings;
 
 		let best_block_number = self.client.get_block_number().await?;
 		let fee_history = self
 			.client
 			.fee_history(
-				FEE_HISTORY_WINDOW.into(),
+				fee_history_window.into(),
 				best_block_number.low_u64().into(),
-				vec![PRIORITY_FEE_PERCENTILE],
+				vec![priority_fee_percentile as f64],
 			)
 			.await?;
 
@@ -997,7 +970,6 @@ where
 							client: client.clone(),
 							key_manager_address,
 						},
-						EthereumEgressWitnesserVoter { _client: client.clone() },
 						EthereumFeeVoter { client: client.clone() },
 						EthereumLivenessVoter { client: client.clone() },
 					)),

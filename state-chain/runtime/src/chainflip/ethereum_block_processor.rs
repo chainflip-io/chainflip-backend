@@ -5,8 +5,7 @@ use crate::{
 		elections::TypesFor,
 		ethereum_elections::{
 			BlockDataDepositChannel, BlockDataKeyManager, BlockDataStateChainGateway,
-			BlockDataVaultDeposit, EgressBlockData, EthereumDepositChannelWitnessing,
-			EthereumEgressWitnessing, EthereumKeyManagerWitnessing,
+			BlockDataVaultDeposit, EthereumDepositChannelWitnessing, EthereumKeyManagerWitnessing,
 			EthereumStateChainGatewayWitnessing, EthereumVaultDepositWitnessing, KeyManagerEvent,
 			StateChainGatewayEvent, VaultEvents,
 		},
@@ -16,8 +15,6 @@ use crate::{
 use cf_chains::{instances::EthereumInstance, Chain, Ethereum};
 use codec::{Decode, Encode};
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
-use frame_system::pallet_prelude::OriginFor;
-use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::electoral_systems::{
 	block_witnesser::state_machine::{ExecuteHook, HookTypeFor, RulesHook},
 	state_machine::core::Hook,
@@ -44,7 +41,6 @@ type TypesDepositChannelWitnessing = TypesFor<EthereumDepositChannelWitnessing>;
 type TypesVaultDepositWitnessing = TypesFor<EthereumVaultDepositWitnessing>;
 type TypesStateChainGatewayWitnessing = TypesFor<EthereumStateChainGatewayWitnessing>;
 type TypesKeyManagerWitnessing = TypesFor<EthereumKeyManagerWitnessing>;
-type TypesEgressWitnessing = TypesFor<EthereumEgressWitnessing>;
 type BlockNumber = <Ethereum as Chain>::ChainBlockNumber;
 
 /// Returns one event per deposit witness. If multiple events share the same deposit witness:
@@ -92,34 +88,32 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultD
 		for (block, event) in &dedup_events(events) {
 			match event {
 				EthEvent::PreWitness(_) => {},
-				EthEvent::Witness(call) => {
-					match call {
-						VaultEvents::SwapNativeFilter(vault_deposit_witness) |
-						VaultEvents::SwapTokenFilter(vault_deposit_witness) |
-						VaultEvents::XcallNativeFilter(vault_deposit_witness) |
-						VaultEvents::XcallTokenFilter(vault_deposit_witness) => {
-							EthereumIngressEgress::process_vault_swap_request_full_witness(
-								*block,
-								vault_deposit_witness.clone(),
-							);
-						},
-						VaultEvents::TransferNativeFailedFilter {
-							asset,
-							amount,
-							destination_address,
-						} |
-						VaultEvents::TransferTokenFailedFilter {
-							asset,
-							amount,
-							destination_address,
-						} => {
-							EthereumIngressEgress::vault_transfer_failed_inner(
-								*asset,
-								*amount,
-								*destination_address,
-							);
-						},
-					}
+				EthEvent::Witness(call) => match call {
+					VaultEvents::SwapNativeFilter(vault_deposit_witness) |
+					VaultEvents::SwapTokenFilter(vault_deposit_witness) |
+					VaultEvents::XcallNativeFilter(vault_deposit_witness) |
+					VaultEvents::XcallTokenFilter(vault_deposit_witness) => {
+						EthereumIngressEgress::process_vault_swap_request_full_witness(
+							*block,
+							vault_deposit_witness.clone(),
+						);
+					},
+					VaultEvents::TransferNativeFailedFilter {
+						asset,
+						amount,
+						destination_address,
+					} |
+					VaultEvents::TransferTokenFailedFilter {
+						asset,
+						amount,
+						destination_address,
+					} => {
+						EthereumIngressEgress::vault_transfer_failed_inner(
+							*asset,
+							*amount,
+							*destination_address,
+						);
+					},
 				},
 			}
 		}
@@ -182,11 +176,22 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 							tx_fee,
 							tx_metadata,
 							transaction_ref,
-							// TODO: Check that the origin used works
-							// If not we can use root origin? =>
-							// frame_system::RawOrigin::Root.into()
 						} => {
-							let _ = pallet_cf_broadcast::Pallet::<Runtime, EthereumInstance>::egress_success(OriginFor::<Runtime>::root(), tx_out_id, signer_id, tx_fee, tx_metadata, transaction_ref);
+							#[allow(clippy::unit_arg)]
+							if let Err(err) = EthereumBroadcaster::egress_success(
+								pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
+								tx_out_id,
+								signer_id,
+								tx_fee,
+								tx_metadata,
+								transaction_ref,
+							) {
+								log::error!(
+									"Failed to execute Ethereum egress success: TxOutId: {:?}, Error: {:?}",
+									tx_out_id,
+									err
+								)
+							}
 						},
 						KeyManagerEvent::GovernanceAction {
 							call_hash,
@@ -195,29 +200,14 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 						} => {
 							let _ =
 								pallet_cf_governance::Pallet::<Runtime>::set_whitelisted_call_hash(
-									OriginFor::<Runtime>::root(),
+									pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold
+										.into(),
 									call_hash,
 								);
 						},
 					};
 				},
 			};
-		}
-	}
-}
-impl Hook<HookTypeFor<TypesEgressWitnessing, ExecuteHook>> for TypesEgressWitnessing {
-	fn run(
-		&mut self,
-		events: Vec<(BlockNumber, EthEvent<TransactionConfirmation<Runtime, EthereumInstance>>)>,
-	) {
-		let deduped_events = dedup_events(events);
-		for (_, event) in &deduped_events {
-			match event {
-				EthEvent::PreWitness(_) => { /* We don't care about pre-witnessing an egress*/ },
-				EthEvent::Witness(egress) => {
-					EthereumBroadcaster::broadcast_success(egress.clone());
-				},
-			}
 		}
 	}
 }
@@ -278,24 +268,32 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, RulesHook>> for TypesKeyManager
 		(age, block_data, safety_margin): (Range<u32>, BlockDataKeyManager, u32),
 	) -> Vec<EthEvent<KeyManagerEvent>> {
 		let mut results: Vec<EthEvent<KeyManagerEvent>> = vec![];
+		// No safety margin for egress success
+		if age.contains(&0u32) {
+			results.extend(
+				block_data
+					.clone()
+					.into_iter()
+					.filter_map(|event| match event {
+						KeyManagerEvent::AggKeySetByGovKey { .. } |
+						KeyManagerEvent::GovernanceAction { .. } => None,
+						KeyManagerEvent::SignatureAccepted { .. } => Some(EthEvent::Witness(event)),
+					})
+					.collect::<Vec<_>>(),
+			)
+		}
 		if age.contains(&safety_margin) {
-			results.extend(block_data.into_iter().map(EthEvent::Witness).collect::<Vec<_>>())
+			results.extend(
+				block_data
+					.into_iter()
+					.filter_map(|event| match event {
+						KeyManagerEvent::AggKeySetByGovKey { .. } |
+						KeyManagerEvent::GovernanceAction { .. } => Some(EthEvent::Witness(event)),
+						KeyManagerEvent::SignatureAccepted { .. } => None,
+					})
+					.collect::<Vec<_>>(),
+			)
 		}
 		results
-	}
-}
-
-impl Hook<HookTypeFor<TypesEgressWitnessing, RulesHook>> for TypesEgressWitnessing {
-	fn run(
-		&mut self,
-		(age, block_data, safety_margin): (Range<u32>, EgressBlockData, u32),
-	) -> Vec<EthEvent<TransactionConfirmation<Runtime, EthereumInstance>>> {
-		if age.contains(&safety_margin) {
-			return block_data
-				.iter()
-				.map(|egress_witness| EthEvent::Witness(egress_witness.clone()))
-				.collect::<Vec<_>>();
-		}
-		vec![]
 	}
 }
