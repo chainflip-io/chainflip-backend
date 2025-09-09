@@ -115,17 +115,11 @@ export async function testOffchainSignedAction(testContext: TestContext) {
       .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
   });
 
-  await observeEvent(globalLogger, `environment:UserSignedTransactionSubmitted`, {
+  await observeEvent(globalLogger, `environment:UserActionSubmitted`, {
     test: (event) => {
-      const valid = event.data.valid === true && event.data.expired === false;
       const matchDecodedAction = !!event.data.decodedAction.Lending?.Borrow;
       const matchSignedPayload = event.data.signedPayload === solHexPrefixedMessage;
-      const matchUserSignatureData =
-        event.data.userSignatureData?.Solana &&
-        event.data.userSignatureData.Solana.signature.toLowerCase() ===
-          hexSignature.toLowerCase() &&
-        event.data.userSignatureData.Solana.signer.toLowerCase() === hexSigner.toLowerCase();
-      return valid && matchDecodedAction && matchSignedPayload && matchUserSignatureData;
+      return matchDecodedAction && matchSignedPayload;
     },
     historicalCheckBlocks: 1,
   }).event;
@@ -169,17 +163,11 @@ export async function testOffchainSignedAction(testContext: TestContext) {
       .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
   });
 
-  await observeEvent(globalLogger, `environment:UserSignedTransactionSubmitted`, {
+  await observeEvent(globalLogger, `environment:UserActionSubmitted`, {
     test: (event) => {
-      const valid = event.data.valid === true && event.data.expired === false;
       const matchDecodedAction = !!event.data.decodedAction.Lending?.Borrow;
       const matchSignedPayload = event.data.signedPayload === hexPrefixedMessage;
-      const matchUserSignatureData =
-        event.data.userSignatureData?.Ethereum &&
-        event.data.userSignatureData.Ethereum.signature.toLowerCase() ===
-          evmSignature.toLowerCase() &&
-        event.data.userSignatureData.Ethereum.signer.toLowerCase() === evmSigner.toLowerCase();
-      return valid && matchDecodedAction && matchSignedPayload && matchUserSignatureData;
+      return matchDecodedAction && matchSignedPayload;
     },
     historicalCheckBlocks: 1,
   }).event;
@@ -251,17 +239,11 @@ export async function testOffchainSignedAction(testContext: TestContext) {
       .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
   });
 
-  await observeEvent(globalLogger, `environment:UserSignedTransactionSubmitted`, {
+  await observeEvent(globalLogger, `environment:UserActionSubmitted`, {
     test: (event) => {
-      const valid = event.data.valid === true && event.data.expired === false;
       const matchDecodedAction = !!event.data.decodedAction.Lending?.Borrow;
       const matchSignedPayload = event.data.signedPayload === encodedPayload;
-      const matchUserSignatureData =
-        event.data.userSignatureData?.Ethereum &&
-        event.data.userSignatureData.Ethereum.signature.toLowerCase() ===
-          evmSignatureEip712.toLowerCase() &&
-        event.data.userSignatureData.Ethereum.signer.toLowerCase() === evmSigner.toLowerCase();
-      return valid && matchDecodedAction && matchSignedPayload && matchUserSignatureData;
+      return matchDecodedAction && matchSignedPayload;
     },
     historicalCheckBlocks: 1,
   }).event;

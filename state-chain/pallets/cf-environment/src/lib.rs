@@ -152,6 +152,12 @@ pub mod pallet {
 		InvalidUtxoParameters,
 		/// Failed to build Solana Api call. See logs for more details
 		FailedToBuildSolanaApiCall,
+		/// Payload has expired
+		PayloadExpired,
+		// Payload cannot be decoded
+		FailedToDecodePayload,
+		// Signature failed to be verified
+		InvalidSignature,
 	}
 
 	#[pallet::pallet]
@@ -326,55 +332,31 @@ pub mod pallet {
 		/// The address of an supported ARB asset was updated
 		UpdatedArbAsset(ArbAsset, EvmAddress),
 		/// Polkadot Vault Account is successfully set
-		PolkadotVaultAccountSet {
-			polkadot_vault_account_id: PolkadotAccountId,
-		},
+		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
 		/// The starting block number for the new Bitcoin vault was set
-		BitcoinBlockNumberSetForVault {
-			block_number: cf_chains::btc::BlockNumber,
-		},
+		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 		/// The Safe Mode settings for the chain has been updated
-		RuntimeSafeModeUpdated {
-			safe_mode: SafeModeUpdate<T>,
-		},
+		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
 		/// Utxo consolidation parameters has been updated
-		UtxoConsolidationParametersUpdated {
-			params: utxo_selection::ConsolidationParameters,
-		},
+		UtxoConsolidationParametersUpdated { params: utxo_selection::ConsolidationParameters },
 		/// Arbitrum Initialized: contract addresses have been set, first key activated
 		ArbitrumInitialized,
 		/// Solana Initialized: contract addresses have been set, first key activated
 		SolanaInitialized,
 		/// Some unspendable Utxos are discarded from storage.
-		StaleUtxosDiscarded {
-			utxos: Vec<Utxo>,
-		},
+		StaleUtxosDiscarded { utxos: Vec<Utxo> },
 		/// Solana durable nonce is updated to a new nonce for the corresponding nonce account.
-		DurableNonceSetForAccount {
-			nonce_account: SolAddress,
-			durable_nonce: SolHash,
-		},
+		DurableNonceSetForAccount { nonce_account: SolAddress, durable_nonce: SolHash },
 		/// An Governance transaction was dispatched to a Solana Program.
-		SolanaGovCallDispatched {
-			gov_call: SolanaGovCall,
-			broadcast_id: BroadcastId,
-		},
+		SolanaGovCallDispatched { gov_call: SolanaGovCall, broadcast_id: BroadcastId },
 		/// Assethub Vault Account is successfully set
-		AssethubVaultAccountSet {
-			assethub_vault_account_id: PolkadotAccountId,
-		},
-		UserSignedTransactionSubmitted {
+		AssethubVaultAccountSet { assethub_vault_account_id: PolkadotAccountId },
+		UserActionSubmitted {
 			broker_id: T::AccountId,
 			signer_account_id: AccountId32,
-			payload: Vec<u8>,
-			transaction_metadata: TransactionMetadata,
-			user_signature_data: UserSignatureData,
-			valid: bool,
-			expired: bool,
 			signed_payload: Vec<u8>,
 			decoded_action: UserActionsApi,
 		},
-		FailedToDecodePayload,
 	}
 
 	#[pallet::call]
@@ -636,89 +618,78 @@ pub mod pallet {
 
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
+			ensure!(
+				frame_system::Pallet::<T>::block_number() <
+					transaction_metadata.expiry_block.into(),
+				Error::<T>::PayloadExpired
+			);
+
+			// TODO: Check and increment nonce
+
 			// We could directly have the action: UserActionsApi as parameter, but this
 			// is more flexible for now. TBD.
-			let decoded_action = match UserActionsApi::decode(&mut &payload[..]) {
-				Ok(action) => action,
-				Err(_e) => {
-					// Emitting event for debugging. For prod we probably want to emit
-					// an error with the reason (nonce, expiry, signature invalid, etc).
-					Self::deposit_event(Event::<T>::FailedToDecodePayload);
-					return Ok(());
-				},
-			};
+			let decoded_action = UserActionsApi::decode(&mut &payload[..])
+				.map_err(|_| Error::<T>::FailedToDecodePayload)?;
 
 			let chanflip_network_name = Self::chainflip_network();
 
-			let (valid, signer_account_id, signed_payload) = match user_signature_data.clone() {
-				UserSignatureData::Solana { signature, signer, sig_type } => {
-					let signed_payload = match sig_type {
-						SolSigType::Domain => {
-							let concat_data = [
-								payload.clone(),
-								chanflip_network_name.as_str().encode(),
-								transaction_metadata.clone().encode(),
-							]
-							.concat();
-							[SOLANA_OFFCHAIN_PREFIX, concat_data.as_slice()].concat()
-						},
-					};
-					(
-						SolanaCrypto::verify_signature(&signer, &signed_payload, &signature),
-						AccountId32::new(signer.into()),
-						signed_payload,
-					)
-				},
-				UserSignatureData::Ethereum { signature, signer, sig_type } => {
-					let signed_payload = match sig_type {
-						EthSigType::Domain => {
-							let concat_data = [
-								payload.clone(),
-								chanflip_network_name.as_str().encode(),
-								transaction_metadata.clone().encode(),
-							]
-							.concat();
-							let prefix = scale_info::prelude::format!(
-								"{}{}",
-								ETHEREUM_SIGN_MESSAGE_PREFIX,
-								concat_data.len()
-							);
-							let prefix_bytes = prefix.as_bytes();
-							[prefix_bytes, &concat_data].concat()
-						},
-						EthSigType::Eip712 => build_eip_712_hash(
-							decoded_action.clone(),
-							transaction_metadata.clone(),
-							signer,
-							chanflip_network_name,
-						),
-					};
-					(
-						EvmCrypto::verify_signature(&signer, &signed_payload, &signature),
-						signer.into_account_id_32(),
-						signed_payload,
-					)
-				},
-			};
+			let (valid_signature, signer_account_id, signed_payload) =
+				match user_signature_data.clone() {
+					UserSignatureData::Solana { signature, signer, sig_type } => {
+						let signed_payload = match sig_type {
+							SolSigType::Domain => {
+								let concat_data = [
+									payload,
+									chanflip_network_name.as_str().encode(),
+									transaction_metadata.encode(),
+								]
+								.concat();
+								[SOLANA_OFFCHAIN_PREFIX, concat_data.as_slice()].concat()
+							},
+						};
+						(
+							SolanaCrypto::verify_signature(&signer, &signed_payload, &signature),
+							AccountId32::new(signer.into()),
+							signed_payload,
+						)
+					},
+					UserSignatureData::Ethereum { signature, signer, sig_type } => {
+						let signed_payload = match sig_type {
+							EthSigType::Domain => {
+								let concat_data = [
+									payload,
+									chanflip_network_name.as_str().encode(),
+									transaction_metadata.encode(),
+								]
+								.concat();
+								let prefix = scale_info::prelude::format!(
+									"{}{}",
+									ETHEREUM_SIGN_MESSAGE_PREFIX,
+									concat_data.len()
+								);
+								let prefix_bytes = prefix.as_bytes();
+								[prefix_bytes, &concat_data].concat()
+							},
+							EthSigType::Eip712 => build_eip_712_hash(
+								decoded_action.clone(),
+								transaction_metadata,
+								signer,
+								chanflip_network_name,
+							),
+						};
+						(
+							EvmCrypto::verify_signature(&signer, &signed_payload, &signature),
+							signer.into_account_id_32(),
+							signed_payload,
+						)
+					},
+				};
 
-			// TODO: Add any checks for the metadata. To check nonce and increment.
+			ensure!(valid_signature, Error::<T>::InvalidSignature);
 
-			// Check expiry
-			let expired = frame_system::Pallet::<T>::block_number() >=
-				transaction_metadata.expiry_block.into();
-
-			// TODO: Execute the intended action user action similar to the delegation ScApi.
-
-			// For debugging purposes we emit the event with all the data. For prod we probably
-			// want the UserSignedTransactionSubmitted event or the Error with Reason event.
-			Self::deposit_event(Event::<T>::UserSignedTransactionSubmitted {
+			Self::deposit_event(Event::<T>::UserActionSubmitted {
 				broker_id,
 				signer_account_id,
-				payload,
-				transaction_metadata,
-				user_signature_data,
-				valid,
-				expired,
 				signed_payload,
 				decoded_action,
 			});
