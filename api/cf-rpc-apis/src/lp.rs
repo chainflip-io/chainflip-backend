@@ -138,7 +138,7 @@ pub trait LpRpcApi {
 	) -> RpcResult<Hash>;
 
 	#[subscription(name = "subscribe_order_fills", item = BlockUpdate<OrderFills>)]
-	async fn subscribe_order_fills(&self, wait_finalized: Option<NotificationBehaviour>);
+	async fn subscribe_order_fills(&self, notification_behaviour: Option<NotificationBehaviour>);
 
 	#[method(name = "order_fills")]
 	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
