@@ -1072,23 +1072,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			PendingApiCalls::<T, I>::get(broadcast_id).map(|api_call| (broadcast_id, api_call))
 		})
 	}
-
-	pub fn broadcast_success(egress: TransactionConfirmation<T, I>) {
-		if let Err(err) = Self::egress_success(
-			OriginFor::<T>::none(),
-			egress.tx_out_id.clone(),
-			egress.signer_id,
-			egress.tx_fee,
-			egress.tx_metadata,
-			egress.transaction_ref,
-		) {
-			log::error!(
-				"Failed to execute egress success: TxOutId: {:?}, Error: {:?}",
-				egress.tx_out_id,
-				err
-			)
-		}
-	}
 }
 
 impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
