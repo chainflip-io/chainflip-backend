@@ -108,7 +108,7 @@ fn test_broker_serialization() {
 #[test]
 fn test_lp_serialization() {
 	use cf_chains::hub::SubstrateNetworkAddress;
-	let refund_addresses = HashMap::from_iter(vec![
+	let refund_addresses = BTreeMap::from_iter(vec![
 		(
 			ForeignChain::Ethereum,
 			Some(ForeignChainAddressHumanreadable::Eth(H160::from([0x11; 20]))),

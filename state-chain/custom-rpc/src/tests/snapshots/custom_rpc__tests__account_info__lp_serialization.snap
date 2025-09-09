@@ -35,11 +35,11 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
   "estimated_redeemable_balance": "0xde0b6b3a7640000",
   "role": "liquidity_provider",
   "refund_addresses": {
-    "Arbitrum": "0x2222222222222222222222222222222222222222",
-    "Bitcoin": null,
-    "Solana": "11111111111111111111111111111111",
+    "Ethereum": "0x1111111111111111111111111111111111111111",
     "Polkadot": "15hUeRCARvGw1Xjvuszo9ufT9bSqePGzwbjTeqZKxEeYq1i9",
-    "Ethereum": "0x1111111111111111111111111111111111111111"
+    "Bitcoin": null,
+    "Arbitrum": "0x2222222222222222222222222222222222222222",
+    "Solana": "11111111111111111111111111111111"
   },
   "earned_fees": {
     "Ethereum": {

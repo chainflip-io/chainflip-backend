@@ -221,7 +221,7 @@ pub enum RpcAccountInfo {
 		btc_vault_deposit_address: Option<String>,
 	},
 	LiquidityProvider {
-		refund_addresses: HashMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
+		refund_addresses: BTreeMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
 		earned_fees: any::AssetMap<U256>,
 		boost_balances: any::AssetMap<Vec<RpcLiquidityProviderBoostPoolInfo>>,
 	},
@@ -290,7 +290,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 					..Default::default()
 				},
 				role_specific: RpcAccountInfo::LiquidityProvider {
-					refund_addresses,
+					refund_addresses: refund_addresses.into_iter().collect(),
 					earned_fees,
 					boost_balances,
 				},
