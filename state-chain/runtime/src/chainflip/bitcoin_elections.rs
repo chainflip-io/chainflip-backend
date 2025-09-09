@@ -77,12 +77,6 @@ pub type BitcoinElectoralSystemRunner = CompositeRunner<
 	BitcoinElectionHooks,
 >;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct OpenChannelDetails<ChainBlockNumber> {
-	pub open_block: ChainBlockNumber,
-	pub close_block: ChainBlockNumber,
-}
-
 pub struct BitcoinChainTag;
 pub type BitcoinChain = TypesFor<BitcoinChainTag>;
 impl ChainTypes for BitcoinChain {

@@ -50,6 +50,7 @@ use state_chain_runtime::{
 	FundingConfig, GenericElectionsConfig, GovernanceConfig, PolkadotChainTrackingConfig,
 	ReputationConfig, SessionConfig, SolanaChainTrackingConfig, SolanaElectionsConfig,
 	ValidatorConfig,
+	EthereumElectionsConfig,
 };
 
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
@@ -378,6 +379,7 @@ impl ExtBuilder {
 					eth_oracle_feeds: Default::default(),
 				})),
 			},
+			ethereum_elections: EthereumElectionsConfig { option_initial_state: None },
 			ethereum_broadcaster: state_chain_runtime::EthereumBroadcasterConfig {
 				broadcast_timeout: 5 * BLOCKS_PER_MINUTE_ETHEREUM,
 			},

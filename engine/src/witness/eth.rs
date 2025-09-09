@@ -16,7 +16,7 @@
 
 mod chain_tracking;
 mod sc_utils;
-mod state_chain_gateway;
+pub mod state_chain_gateway;
 
 use std::{collections::HashMap, sync::Arc};
 

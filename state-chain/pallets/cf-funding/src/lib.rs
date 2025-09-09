@@ -758,15 +758,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let _ = PendingRedemptions::<T>::take(&account_id)
-				.ok_or(Error::<T>::NoPendingRedemption)?;
-
-			T::Flip::finalize_redemption(&account_id)
-				.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
-
-			Self::kill_account_if_zero_balance(&account_id);
-
-			Self::deposit_event(Event::RedemptionSettled(account_id, redeemed_amount));
+			Self::inner_redeemed(account_id, redeemed_amount)?;
 
 			Ok(())
 		}
@@ -782,24 +774,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let pending_redemption = PendingRedemptions::<T>::take(&account_id)
-				.ok_or(Error::<T>::NoPendingRedemption)?;
-
-			T::Flip::revert_redemption(&account_id).expect(
-				"Pending Redemption should exist since the corresponding redemption existed",
-			);
-
-			// If the address is still restricted, we update the restricted balances again.
-			if RestrictedAddresses::<T>::contains_key(pending_redemption.redeem_address) {
-				RestrictedBalances::<T>::mutate(&account_id, |restricted_balances| {
-					restricted_balances
-						.entry(pending_redemption.redeem_address)
-						.and_modify(|balance| *balance += pending_redemption.restricted)
-						.or_insert(pending_redemption.restricted);
-				});
-			}
-
-			Self::deposit_event(Event::<T>::RedemptionExpired { account_id });
+			Self::inner_redemption_expired(account_id)?;
 
 			Ok(())
 		}
@@ -1141,6 +1116,44 @@ impl<T: Config> Pallet<T> {
 			funds_added: amount,
 			total_balance,
 		});
+	}
+
+
+	pub fn inner_redeemed(
+		account_id: AccountId<T>,
+		redeemed_amount: FlipBalance<T>,
+	) -> DispatchResult {
+		let _ =
+			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
+
+		T::Flip::finalize_redemption(&account_id)
+			.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
+
+		Self::kill_account_if_zero_balance(&account_id);
+
+		Self::deposit_event(Event::RedemptionSettled(account_id, redeemed_amount));
+		Ok(())
+	}
+
+	pub fn inner_redemption_expired(account_id: AccountId<T>) -> DispatchResult {
+		let pending_redemption =
+			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
+
+		T::Flip::revert_redemption(&account_id)
+			.expect("Pending Redemption should exist since the corresponding redemption existed");
+
+		// If the address is still restricted, we update the restricted balances again.
+		if RestrictedAddresses::<T>::contains_key(pending_redemption.redeem_address) {
+			RestrictedBalances::<T>::mutate(&account_id, |restricted_balances| {
+				restricted_balances
+					.entry(pending_redemption.redeem_address)
+					.and_modify(|balance| *balance += pending_redemption.restricted)
+					.or_insert(pending_redemption.restricted);
+			});
+		}
+
+		Self::deposit_event(Event::<T>::RedemptionExpired { account_id });
+		Ok(())
 	}
 }
 
