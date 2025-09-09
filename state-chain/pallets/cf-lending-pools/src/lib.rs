@@ -165,6 +165,9 @@ pub enum LoanUsage {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct LendingConfiguration {
 	pub origination_fee: Permill,
+	/// Portion of the amount of principal asset obtained via liquidation that's
+	/// paid as a fee (instead of reducing the loan's principal)
+	pub liquidation_fee: Permill,
 	/// Interest is computed as interest_base + utilisation *
 	/// interest_utilisation_factor
 	pub interest_base: Perbill,
@@ -326,14 +329,14 @@ pub struct LendingConfigDefault {}
 
 const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	origination_fee: Permill::from_parts(100), // 1 bps
+	liquidation_fee: Permill::from_parts(500), // 5 bps
 	interest_base: Perbill::from_percent(2),   // 2% per year
 	interest_utilisation_factor: Perbill::from_percent(10), // 2% per year
-
 	ltv_target_threshold: FixedU64::from_rational(80, 100), // 80% LTV
-	ltv_topup_threshold: FixedU64::from_rational(85, 100),  // 85% LTV
-	ltv_soft_threshold: FixedU64::from_rational(90, 100),   // 90% LTV
+	ltv_topup_threshold: FixedU64::from_rational(85, 100), // 85% LTV
+	ltv_soft_threshold: FixedU64::from_rational(90, 100), // 90% LTV
 	ltv_soft_liquidation_abort_threshold: FixedU64::from_rational(88, 100), // 88% LTV
-	ltv_hard_threshold: FixedU64::from_rational(95, 100),   // 95% LTV
+	ltv_hard_threshold: FixedU64::from_rational(95, 100), // 95% LTV
 	ltv_hard_liquidation_abort_threshold: FixedU64::from_rational(93, 100), // 93% LTV
 	// don't swap more often than every 10 blocks
 	fee_swap_interval_blocks: 10,
@@ -564,6 +567,7 @@ pub mod pallet {
 		InvalidLoanParameters,
 		/// Failed to read oracle price
 		OraclePriceUnavailable,
+		InternalInvariantViolation,
 	}
 
 	#[pallet::hooks]

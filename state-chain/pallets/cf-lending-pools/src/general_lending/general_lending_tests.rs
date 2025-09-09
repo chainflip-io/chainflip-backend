@@ -177,6 +177,7 @@ fn basic_chp_lending() {
 			assert_eq!(
 				LoanAccounts::<Test>::get(BORROWER),
 				Some(LoanAccount {
+					borrower_id: BORROWER,
 					primary_collateral_asset: COLLATERAL_ASSET,
 					collateral: BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
 					liquidation_status: LiquidationStatus::NoLiquidation,
@@ -261,6 +262,7 @@ fn basic_chp_lending() {
 			assert_eq!(
 				LoanAccounts::<Test>::get(BORROWER),
 				Some(LoanAccount {
+					borrower_id: BORROWER,
 					primary_collateral_asset: COLLATERAL_ASSET,
 					liquidation_status: LiquidationStatus::NoLiquidation,
 					// Note that we don't automatically release the collateral:
@@ -434,6 +436,7 @@ fn basic_loan_aggregation() {
 			assert_eq!(
 				LoanAccounts::<Test>::get(BORROWER).unwrap(),
 				LoanAccount {
+					borrower_id: BORROWER,
 					primary_collateral_asset: COLLATERAL_ASSET,
 					collateral: BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
 					loans: BTreeMap::from([(
@@ -503,6 +506,7 @@ fn basic_loan_aggregation() {
 			assert_eq!(
 				LoanAccounts::<Test>::get(BORROWER).unwrap(),
 				LoanAccount {
+					borrower_id: BORROWER,
 					primary_collateral_asset: COLLATERAL_ASSET,
 					// Loan's collateral has been increased:
 					collateral: BTreeMap::from([(
@@ -768,6 +772,7 @@ fn adding_and_removing_collateral() {
 		assert_eq!(
 			LoanAccounts::<Test>::get(BORROWER).unwrap(),
 			LoanAccount {
+				borrower_id: BORROWER,
 				primary_collateral_asset: COLLATERAL_ASSET,
 				collateral: collateral.clone(),
 				loans: BTreeMap::default(),
@@ -817,8 +822,11 @@ fn basic_liquidation() {
 	const EXECUTED_COLLATERAL: AssetAmount = 2 * INIT_COLLATERAL / 5;
 	// How much of principal asset is bought during first liquidation:
 	const SWAPPED_PRINCIPAL: AssetAmount = EXECUTED_COLLATERAL / NEW_SWAP_RATE;
+
+	let liquidation_fee_1 = CONFIG.liquidation_fee * SWAPPED_PRINCIPAL;
 	// How much of principal asset is bought during second liquidation:
 	const SWAPPED_PRINCIPAL_2: AssetAmount = (INIT_COLLATERAL - EXECUTED_COLLATERAL) / SWAP_RATE_2;
+	let liquidation_fee_2 = CONFIG.liquidation_fee * SWAPPED_PRINCIPAL_2;
 
 	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
 	const LIQUIDATION_SWAP_2: SwapRequestId = SwapRequestId(1);
@@ -927,6 +935,7 @@ fn basic_liquidation() {
 			assert_eq!(
 				LoanAccounts::<Test>::get(BORROWER),
 				Some(LoanAccount {
+					borrower_id: BORROWER,
 					primary_collateral_asset: COLLATERAL_ASSET,
 					liquidation_status: LiquidationStatus::NoLiquidation,
 					// Note that we don't automatically release the collateral:
@@ -939,8 +948,8 @@ fn basic_liquidation() {
 						GeneralLoan {
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
-							owed_principal: PRINCIPAL - SWAPPED_PRINCIPAL,
-							fees_paid: BTreeMap::new(),
+							owed_principal: PRINCIPAL - (SWAPPED_PRINCIPAL - liquidation_fee_1),
+							fees_paid: BTreeMap::from([(LOAN_ASSET, liquidation_fee_1)]),
 						}
 					)])
 				})
@@ -953,7 +962,7 @@ fn basic_liquidation() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
-					total_amount: INIT_POOL_AMOUNT,
+					total_amount: INIT_POOL_AMOUNT + liquidation_fee_1,
 					available_amount: INIT_POOL_AMOUNT - PRINCIPAL + SWAPPED_PRINCIPAL,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
 					collected_fees: BTreeMap::from([(COLLATERAL_ASSET, origination_fee)]),
@@ -1026,24 +1035,26 @@ fn basic_liquidation() {
 			// The should now be settled:
 			System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 				loan_id: LOAN_ID,
-				total_fees: Default::default(),
+				total_fees: BTreeMap::from([(LOAN_ASSET, liquidation_fee_1 + liquidation_fee_2)]),
 			}));
 
-			// This remaining principal will be credited to the borrower's account
-			const REMAINING_PRINCIPAL: u128 = SWAPPED_PRINCIPAL_2 - (PRINCIPAL - SWAPPED_PRINCIPAL);
+			// This excess principal asset amount will be credited to the borrower's account
+			let excess_principal = {
+				let owed_principal = PRINCIPAL - SWAPPED_PRINCIPAL + liquidation_fee_1;
+				SWAPPED_PRINCIPAL_2 - owed_principal - liquidation_fee_2
+			};
 
 			assert_eq!(
 				MockBalance::get_balance(&BORROWER, LOAN_ASSET),
-				PRINCIPAL + REMAINING_PRINCIPAL
+				PRINCIPAL + excess_principal
 			);
 
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
-					total_amount: INIT_POOL_AMOUNT,
-					available_amount: INIT_POOL_AMOUNT,
+					total_amount: INIT_POOL_AMOUNT + liquidation_fee_1 + liquidation_fee_2,
+					available_amount: INIT_POOL_AMOUNT + liquidation_fee_1 + liquidation_fee_2,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					// TODO: liquidation fee should be charged as well!
 					collected_fees: BTreeMap::from([(COLLATERAL_ASSET, origination_fee)]),
 				}
 			);
@@ -1051,6 +1062,7 @@ fn basic_liquidation() {
 			assert_eq!(
 				LoanAccounts::<Test>::get(BORROWER),
 				Some(LoanAccount {
+					borrower_id: BORROWER,
 					primary_collateral_asset: COLLATERAL_ASSET,
 					collateral: Default::default(),
 					liquidation_status: LiquidationStatus::NoLiquidation,
@@ -1605,6 +1617,7 @@ fn init_liquidation_swaps_test() {
 	const BORROWER: u64 = 1;
 
 	let mut loan_account = LoanAccount::<Test> {
+		borrower_id: BORROWER,
 		primary_collateral_asset: Asset::Eth,
 		collateral: BTreeMap::from([(Asset::Eth, 500), (Asset::Usdc, 1_000_000)]),
 		loans: BTreeMap::from([
