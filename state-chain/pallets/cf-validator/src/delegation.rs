@@ -6,7 +6,6 @@ use core::iter::Sum;
 use frame_support::{
 	sp_runtime::{traits::AtLeast32BitUnsigned, Perquintill},
 	traits::IsType,
-	Parameter,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
@@ -169,8 +168,7 @@ where
 		bond: Amount,
 	) -> impl Iterator<Item = (&Account, Amount)>
 	where
-		Amount:
-			From<Bid> + AtLeast32BitUnsigned + Copy + Clone + Default + Sum + From<u64> + Parameter,
+		Amount: From<Bid> + AtLeast32BitUnsigned + Copy + Sum + From<u64>,
 	{
 		let total_delegator_stake: Amount = self.total_delegator_bid().into();
 		let total_validator_stake: Amount = self.total_validator_bid().into();

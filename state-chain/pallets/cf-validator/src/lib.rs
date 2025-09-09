@@ -1659,15 +1659,8 @@ impl<T: Config> Pallet<T> {
 
 		match Self::resolve_auction_iteratively() {
 			Ok((auction_outcome, delegation_snapshots)) => {
-				let auction_outcome = AuctionOutcome {
-					winners: auction_outcome
-						.winners
-						.iter()
-						.map(ValidatorIdOf::<T>::from_ref)
-						.cloned()
-						.collect(),
-					bond: auction_outcome.bond,
-				};
+				let auction_outcome =
+					auction_outcome.map_ids(|id| ValidatorIdOf::<T>::from_ref(&id).clone());
 				Self::deposit_event(Event::AuctionCompleted(
 					auction_outcome.winners.clone(),
 					auction_outcome.bond,
