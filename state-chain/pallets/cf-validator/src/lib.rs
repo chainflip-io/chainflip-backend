@@ -1191,28 +1191,30 @@ pub mod pallet {
 				Error::<T>::DelegatorBlocked
 			);
 
-			DelegationChoice::<T>::mutate(&delegator, |maybe_operator| {
+			let _ = DelegationChoice::<T>::try_mutate(&delegator, |maybe_operator| {
 				if let Some(previous_operator) = maybe_operator.replace(operator.clone()) {
-					Self::deposit_event(Event::Undelegated {
-						delegator: delegator.clone(),
-						operator: previous_operator,
-					});
+					if previous_operator != operator {
+						Self::deposit_event(Event::Undelegated {
+							delegator: delegator.clone(),
+							operator: previous_operator,
+						});
+						Ok(())
+					} else {
+						Err(Error::<T>::AlreadyManagedByOperator)
+					}
+				} else {
+					Ok(())
 				}
 			});
 
 			// Update the max delegation bid.
 			MaxDelegationBid::<T>::mutate(&delegator, |max_bid| {
 				let balance = T::FundingInfo::balance(&delegator);
-				match increase {
-					DelegationAmount::Max => {
-						let _ = max_bid.insert(balance);
-					},
-					DelegationAmount::Some(inc) => {
-						let new_bid =
-							core::cmp::min(max_bid.unwrap_or(balance).saturating_add(inc), balance);
-						let _ = max_bid.insert(new_bid);
-					},
-				}
+				let _ = max_bid.insert(match increase {
+					DelegationAmount::Max => balance,
+					DelegationAmount::Some(inc) =>
+						core::cmp::min(max_bid.unwrap_or(balance).saturating_add(inc), balance),
+				});
 				Self::deposit_event(Event::MaxBidUpdated {
 					delegator: delegator.clone(),
 					max_bid: *max_bid,
