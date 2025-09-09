@@ -112,7 +112,7 @@ use pallet_cf_swapping::{
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use pallet_cf_validator::{
 	AssociationToOperator, DelegatedRewardsDistribution, DelegationAcceptance, DelegationAmount,
-	DelegationSlasher, SetSizeMaximisingAuctionResolver,
+	DelegationSlasher,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use runtime_apis::{ChainAccounts, EvmCallDetails};
@@ -2959,23 +2959,13 @@ impl_runtime_apis! {
 			}).collect()
 		}
 		fn cf_epoch_state() -> EpochState {
-			let auction_params = Validator::auction_parameters();
-			let min_active_bid = SetSizeMaximisingAuctionResolver::try_new(
-				<Runtime as Chainflip>::EpochInfo::current_authority_count(),
-				auction_params,
-			)
-			.and_then(|resolver| {
-				resolver.resolve_auction(
-					Validator::get_qualified_bidders::<<Runtime as pallet_cf_validator::Config>::KeygenQualification>(),
-				)
-			})
-			.ok()
-			.map(|auction_outcome| auction_outcome.bond);
 			EpochState {
 				epoch_duration: Validator::epoch_duration(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				current_epoch_index: Validator::current_epoch(),
-				min_active_bid,
+				min_active_bid:Validator::resolve_auction_iteratively()
+				.ok()
+				.map(|(auction_outcome, _)| auction_outcome.bond),
 				rotation_phase: Validator::current_rotation_phase().to_str().to_string(),
 			}
 		}
