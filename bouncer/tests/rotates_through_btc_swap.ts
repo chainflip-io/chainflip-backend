@@ -6,7 +6,7 @@ import { TestContext } from 'shared/utils/test_context';
 
 async function rotatesThroughBtcSwap(testContext: TestContext) {
   const sourceAsset = 'Btc';
-  const destAsset = 'Dot';
+  const destAsset = 'ArbEth';
 
   const { destAddress, tag } = await prepareSwap(
     testContext.logger,
@@ -19,13 +19,14 @@ async function rotatesThroughBtcSwap(testContext: TestContext) {
   );
   const logger = testContext.logger.child({ tag });
 
-  logger.debug('Generated Dot address: ' + destAddress);
+  logger.debug('Generated ArbEth address: ' + destAddress);
 
   const swapParams = await requestNewSwap(logger, sourceAsset, destAsset, destAddress);
 
+  const newEpochEvent = observeEvent(logger, 'validator:NewEpoch').event;
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
   logger.info(`Vault rotation initiated. Awaiting new epoch.`);
-  await observeEvent(logger, 'validator:NewEpoch').event;
+  await newEpochEvent;
   logger.info('Vault rotated!');
 
   await doPerformSwap(logger, swapParams, undefined, undefined, undefined, testContext.swapContext);
@@ -35,7 +36,7 @@ export async function testRotatesThroughBtcSwap(testContext: TestContext) {
   await rotatesThroughBtcSwap(testContext);
   await testSwap(
     testContext.logger,
-    'Dot',
+    'ArbEth',
     'Btc',
     undefined,
     undefined,

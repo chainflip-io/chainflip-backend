@@ -19,9 +19,23 @@ use jsonrpsee::{
 	tracing::log,
 	types::{error::ErrorObjectOwned, ErrorCode, ErrorObject},
 };
+use serde::{Deserialize, Serialize};
 
 pub mod broker;
 pub mod lp;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum NotificationBehaviour {
+	/// Subscription will return finalized blocks.
+	Finalized,
+	/// Subscription will return best blocks. In the case of a re-org it might drop events.
+	#[default]
+	Best,
+	/// Subscription will return all new blocks. In the case of a re-org it might duplicate events.
+	///
+	/// The caller is responsible for de-duplicating events.
+	New,
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum RpcApiError {

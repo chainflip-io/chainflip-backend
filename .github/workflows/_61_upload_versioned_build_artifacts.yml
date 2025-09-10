@@ -4,6 +4,9 @@ on:
       is_release:
         type: boolean
         default: true
+      is_development:
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
@@ -40,6 +43,8 @@ jobs:
           chmod +x artifacts/chainflip-backend-bin/chainflip-node
           if [[ ${{ inputs.is_release }} == true ]]; then
             VERSION=$(./ci/scripts/extract_version.sh "$(artifacts/chainflip-backend-bin/chainflip-node --version)" full)
+          elif [[ ${{ github.event_name }} == pull_request ]]; then
+            VERSION=${{ github.event.pull_request.head.sha }}
           else
             VERSION=${{ github.sha }}
           fi
@@ -57,11 +62,18 @@ jobs:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
 
-      - name: Upload engine shared libraries S3 🚀
+      - name: Upload Artifacts S3 🚀
         run: |
           aws s3 sync ./artifacts/ s3://artifacts.chainflip.io/${{ env.s3_prefix }}/
 
-      - name: Upload runtime S3 (main Alias) 🚀
-        if: inputs.is_release == false
+      - name: Upload Artifacts S3 (main Alias) 🚀
+        if: inputs.is_release == false && inputs.is_development == false
         run: |
-          aws s3 cp ./artifacts/ s3://artifacts.chainflip.io/main/ --recursive
+          aws s3 sync s3://artifacts.chainflip.io/${{ env.s3_prefix }}/ s3://artifacts.chainflip.io/main/
+
+      - name: Upload Development Artifacts S3 🚀
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+        if: inputs.is_release == false && inputs.is_development == true
+        run: |
+          aws s3 sync s3://artifacts.chainflip.io/${{ env.s3_prefix }}/ s3://artifacts.chainflip.io/${{ env.BRANCH_NAME }}/

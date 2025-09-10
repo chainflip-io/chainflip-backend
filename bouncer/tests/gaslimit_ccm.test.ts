@@ -437,12 +437,12 @@ describe('GasLimitCcmSwaps', () => {
   );
 
   for (const pair of [
-    ['Dot', 'Flip'],
+    ['Btc', 'Flip'],
     ['Eth', 'Usdc'],
     ['Eth', 'Usdt'],
     ['Flip', 'Eth'],
     ['Btc', 'Eth'],
-    ['Dot', 'ArbEth'],
+    ['Sol', 'ArbEth'],
     ['Eth', 'ArbUsdc'],
     ['Flip', 'ArbEth'],
     ['ArbEth', 'Eth'],
@@ -459,12 +459,12 @@ describe('GasLimitCcmSwaps', () => {
   }
 
   for (const pair of [
-    ['Dot', 'Usdc'],
+    ['Sol', 'Usdc'],
     ['Usdc', 'Eth'],
     ['Flip', 'Usdt'],
     ['Usdt', 'Eth'],
     ['Btc', 'Flip'],
-    ['Dot', 'ArbEth'],
+    ['Sol', 'ArbEth'],
     ['Eth', 'ArbUsdc'],
     ['ArbEth', 'Flip'],
     ['Btc', 'ArbUsdc'],
@@ -485,7 +485,7 @@ describe('GasLimitCcmSwaps', () => {
   for (const pair of [
     ['Usdc', 'Sol'],
     ['Btc', 'Sol'],
-    ['Dot', 'Sol'],
+    ['Flip', 'Sol'],
     ['ArbUsdc', 'SolUsdc'],
     ['Eth', 'SolUsdc'],
   ]) {

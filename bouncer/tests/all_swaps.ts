@@ -77,31 +77,35 @@ export function testAllSwaps(timeoutPerSwap: number) {
   // if we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
   // the test starts to randomly fail because the assethub node is overloaded.
 
-  const AssetsWithoutAssethub = Object.values(Assets).filter((id) => !id.startsWith('Hub'));
+  const AssetsWithoutAssethubAndDot = Object.values(Assets).filter(
+    (id) => !id.startsWith('Hub') && id !== 'Dot',
+  );
 
-  AssetsWithoutAssethub.forEach((sourceAsset) => {
-    AssetsWithoutAssethub.filter((destAsset) => sourceAsset !== destAsset).forEach((destAsset) => {
-      // Regular swaps
-      appendSwap(sourceAsset, destAsset, testSwap);
+  AssetsWithoutAssethubAndDot.forEach((sourceAsset) => {
+    AssetsWithoutAssethubAndDot.filter((destAsset) => sourceAsset !== destAsset).forEach(
+      (destAsset) => {
+        // Regular swaps
+        appendSwap(sourceAsset, destAsset, testSwap);
 
-      const sourceChain = chainFromAsset(sourceAsset);
-      const destChain = chainFromAsset(destAsset);
-      if (vaultSwapSupportedChains.includes(sourceChain)) {
-        // Vault Swaps
-        appendSwap(sourceAsset, destAsset, testVaultSwap);
+        const sourceChain = chainFromAsset(sourceAsset);
+        const destChain = chainFromAsset(destAsset);
+        if (vaultSwapSupportedChains.includes(sourceChain)) {
+          // Vault Swaps
+          appendSwap(sourceAsset, destAsset, testVaultSwap);
 
-        // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
-        if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
-          // CCM Vault swaps
-          appendSwap(sourceAsset, destAsset, testVaultSwap, true);
+          // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
+          if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
+            // CCM Vault swaps
+            appendSwap(sourceAsset, destAsset, testVaultSwap, true);
+          }
         }
-      }
 
-      if (ccmSupportedChains.includes(destChain)) {
-        // CCM swaps
-        appendSwap(sourceAsset, destAsset, testSwap, true);
-      }
-    });
+        if (ccmSupportedChains.includes(destChain)) {
+          // CCM swaps
+          appendSwap(sourceAsset, destAsset, testSwap, true);
+        }
+      },
+    );
   });
 
   // Swaps from assethub paired with random chains.
@@ -109,7 +113,7 @@ export function testAllSwaps(timeoutPerSwap: number) {
   // `testSwapsToAssethub`.
   const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
   assethubAssets.forEach((hubAsset) => {
-    appendSwap(hubAsset, randomElement(AssetsWithoutAssethub), testSwap);
+    appendSwap(hubAsset, randomElement(AssetsWithoutAssethubAndDot), testSwap);
   });
 
   for (const swap of allSwaps) {

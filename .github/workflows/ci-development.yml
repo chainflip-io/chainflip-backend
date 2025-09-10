@@ -88,3 +88,10 @@ jobs:
       version: ci/${{ github.sha }}/
       environment: "development"
     secrets: inherit
+  upload-versioned-build-artifacts:
+    needs: [build]
+    uses: ./.github/workflows/_61_upload_versioned_build_artifacts.yml
+    secrets: inherit
+    with:
+      is_release: false
+      is_development: true

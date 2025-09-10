@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::CfApiError;
-use cf_rpc_apis::{call_error, internal_error, CfErrorCode, RpcApiError};
+use cf_rpc_apis::{call_error, internal_error, CfErrorCode, NotificationBehaviour, RpcApiError};
 use futures::{stream, stream::StreamExt, FutureExt};
 use jsonrpsee::{types::error::ErrorObjectOwned, PendingSubscriptionSink, RpcModule};
 
@@ -36,7 +36,7 @@ use state_chain_runtime::{
 	runtime_apis::CustomRuntimeApi,
 	Hash, Header,
 };
-use std::{fmt::Debug, marker::PhantomData, num::NonZero, sync::Arc};
+use std::{marker::PhantomData, num::NonZero, sync::Arc};
 
 /// The CustomRpcBackend struct provides common logic implementation for providing RPC endpoints.
 ///
@@ -99,19 +99,6 @@ where
 			Ok(f(api, hash, api_version)?)
 		})
 	}
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum NotificationBehaviour {
-	/// Subscription will return finalized blocks.
-	Finalized,
-	/// Subscription will return best blocks. In the case of a re-org it might drop events.
-	#[default]
-	Best,
-	/// Subscription will return all new blocks. In the case of a re-org it might duplicate events.
-	///
-	/// The caller is responsible for de-duplicating events.
-	New,
 }
 
 /// Number of pinned blocks before starting to unpin oldest block. Must be lower than
