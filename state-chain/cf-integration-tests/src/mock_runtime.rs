@@ -46,11 +46,10 @@ use state_chain_runtime::{
 	test_runner::*,
 	AccountId, AccountRolesConfig, ArbitrumChainTrackingConfig, AssethubChainTrackingConfig,
 	BitcoinChainTrackingConfig, BitcoinElectionsConfig, EmissionsConfig, EnvironmentConfig,
-	EthereumChainTrackingConfig, EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig,
-	FundingConfig, GenericElectionsConfig, GovernanceConfig, PolkadotChainTrackingConfig,
-	ReputationConfig, SessionConfig, SolanaChainTrackingConfig, SolanaElectionsConfig,
-	ValidatorConfig,
-	EthereumElectionsConfig,
+	EthereumChainTrackingConfig, EthereumElectionsConfig, EthereumVaultConfig,
+	EvmThresholdSignerConfig, FlipConfig, FundingConfig, GenericElectionsConfig, GovernanceConfig,
+	PolkadotChainTrackingConfig, ReputationConfig, SessionConfig, SolanaChainTrackingConfig,
+	SolanaElectionsConfig, ValidatorConfig,
 };
 
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;

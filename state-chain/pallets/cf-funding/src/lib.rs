@@ -1096,7 +1096,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn fund_account(
+	pub fn fund_account(
 		account_id: AccountId<T>,
 		funder: EthereumAddress,
 		amount: FlipBalance<T>,
@@ -1117,7 +1117,6 @@ impl<T: Config> Pallet<T> {
 			total_balance,
 		});
 	}
-
 
 	pub fn inner_redeemed(
 		account_id: AccountId<T>,

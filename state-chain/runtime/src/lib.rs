@@ -34,7 +34,6 @@ use crate::{
 		},
 		calculate_account_apy,
 		ethereum_sc_calls::EthereumAccount,
-		ethereum_elections::EthereumElectoralEvents,
 		solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
 			SolanaNonceTrackingTrigger,
@@ -1186,9 +1185,8 @@ impl pallet_cf_elections::Config<Instance1> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner = chainflip::ethereum_elections::EthereumElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
-	type CreateGovernanceElectionHook =
-		chainflip::ethereum_elections::EthereumGovernanceElectionHook;
-	type ElectoralEvents = EthereumElectoralEvents;
+	type ElectoralSystemConfiguration = chainflip::ethereum_elections::ElectoralSystemConfiguration;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_trading_strategy::Config for Runtime {

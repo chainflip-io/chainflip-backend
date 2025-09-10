@@ -525,7 +525,6 @@ const PRIORITY_FEE_PERCENTILE: u64 = 50;
 /// Settings are FEE_HISTORY_WINDOW and PRIORITY_FEE_PERCENTILE (previously hardcoded in the engine)
 pub type EthereumFeeTracking = UnsafeMedian<
 	EthereumTrackedData,
-	EthereumTrackedData,
 	(u64, u64),
 	EthereumFeeUpdateHook,
 	<Runtime as Chainflip>::ValidatorId,
@@ -584,6 +583,8 @@ impl
 			>,
 		),
 	) -> Result<(), CorruptStorageError> {
+		let current_sc_block_number = crate::System::block_number();
+
 		let chain_progress = EthereumBlockHeightWitnesserES::on_finalize::<
 			DerivedElectoralAccess<
 				_,
@@ -630,7 +631,7 @@ impl
 				EthereumFeeTracking,
 				RunnerStorageAccess<Runtime, EthereumInstance>,
 			>,
-		>(fee_identifiers, &())?;
+		>(fee_identifiers, &current_sc_block_number)?;
 
 		EthereumLiveness::on_finalize::<
 			DerivedElectoralAccess<
@@ -713,8 +714,12 @@ pub enum ElectionTypes {
 	DepositChannels(ElectionPropertiesDepositChannel),
 }
 
-pub struct EthereumGovernanceElectionHook;
-impl pallet_cf_elections::GovernanceElectionHook for EthereumGovernanceElectionHook {
+pub struct ElectoralSystemConfiguration;
+impl pallet_cf_elections::ElectoralSystemConfiguration for ElectoralSystemConfiguration {
+	type SafeMode = ();
+
+	type ElectoralEvents = EthereumElectoralEvents;
+
 	type Properties = (<EthereumChain as ChainTypes>::ChainBlockNumber, ElectionTypes);
 
 	fn start(properties: Self::Properties) {

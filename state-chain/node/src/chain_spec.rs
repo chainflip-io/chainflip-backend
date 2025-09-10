@@ -43,17 +43,17 @@ use sp_core::{
 };
 use state_chain_runtime::{
 	chainflip::{
-		bitcoin_elections,
+		bitcoin_elections, ethereum_elections,
 		generic_elections::{self, ChainlinkOraclePriceSettings},
-		solana_elections, Offence, ethereum_elections
+		solana_elections, Offence,
 	},
 	constants::common::{
 		BLOCKS_PER_MINUTE_ARBITRUM, BLOCKS_PER_MINUTE_ASSETHUB, BLOCKS_PER_MINUTE_ETHEREUM,
 		BLOCKS_PER_MINUTE_POLKADOT, BLOCKS_PER_MINUTE_SOLANA,
 	},
 	opaque::SessionKeys,
-	AccountId, BitcoinElectionsConfig, BlockNumber, FlipBalance, GenericElectionsConfig,EthereumElectionsConfig,
-	SetSizeParameters, Signature, SolanaElectionsConfig, WASM_BINARY,
+	AccountId, BitcoinElectionsConfig, BlockNumber, EthereumElectionsConfig, FlipBalance,
+	GenericElectionsConfig, SetSizeParameters, Signature, SolanaElectionsConfig, WASM_BINARY,
 };
 
 use cf_utilities::clean_hex_address;

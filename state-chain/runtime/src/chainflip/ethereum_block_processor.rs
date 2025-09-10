@@ -129,8 +129,8 @@ impl Hook<HookTypeFor<TypesStateChainGatewayWitnessing, ExecuteHook>>
 				EthEvent::Witness(call) => {
 					match call {
 						StateChainGatewayEvent::Funded { account_id, amount, funder, tx_hash } =>
-							pallet_cf_funding::Pallet::<Runtime>::inner_funded(
-								account_id, amount, funder, tx_hash,
+							pallet_cf_funding::Pallet::<Runtime>::fund_account(
+								account_id, funder, amount, tx_hash,
 							),
 						StateChainGatewayEvent::RedemptionExecuted {
 							account_id,
