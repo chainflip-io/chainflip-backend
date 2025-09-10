@@ -47,9 +47,10 @@ use crate::{
 	},
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
-		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DispatchErrorWithMessage,
-		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		NetworkFeeDetails, NetworkFees, OpenedDepositChannels, OperatorInfo, RuntimeApiPenalty,
+		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DelegationInfo,
+		DispatchErrorWithMessage, FailingWitnessValidators, FeeTypes,
+		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFeeDetails, NetworkFees,
+		OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RuntimeApiPenalty,
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
 		TradingStrategyLimits, TransactionScreeningEvent, TransactionScreeningEvents,
 		ValidatorInfo, VaultAddresses, VaultSwapDetails,
@@ -112,7 +113,7 @@ use pallet_cf_swapping::{
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use pallet_cf_validator::{
 	AssociationToOperator, DelegatedRewardsDistribution, DelegationAcceptance, DelegationAmount,
-	DelegationSlasher, SetSizeMaximisingAuctionResolver,
+	DelegationSlasher, DelegationSnapshot, SetSizeMaximisingAuctionResolver,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use runtime_apis::{ChainAccounts, EvmCallDetails};
@@ -1708,6 +1709,31 @@ impl_runtime_apis! {
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
 		}
+		fn cf_common_account_info(
+			account_id: &AccountId,
+		) -> RpcAccountInfoCommonItems<FlipBalance> {
+			LiquidityPools::sweep(account_id).unwrap();
+			let flip_account = pallet_cf_flip::Account::<Runtime>::get(account_id);
+			let upcoming_delegation_status = pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id)
+				.map(|(operator, max_bid)| DelegationInfo { operator, bid: core::cmp::min(flip_account.total(), max_bid) });
+			let current_delegation_status = pallet_cf_validator::DelegationSnapshots::<Runtime>::iter_prefix(Validator::current_epoch())
+				.find_map(|(operator, snapshot)| snapshot.delegators.get(account_id).map(|&bid|
+					DelegationInfo { operator, bid }
+				));
+
+			RpcAccountInfoCommonItems {
+				flip_balance: flip_account.total(),
+				asset_balances: AssetBalances::free_balances(account_id),
+				bond: flip_account.bond(),
+				estimated_redeemable_balance: pallet_cf_funding::Redemption::<Runtime>::for_rpc(
+					account_id,
+				).map(|redemption| redemption.redeem_amount).unwrap_or_default(),
+				bound_redeem_address: pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id),
+				restricted_balances: pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id),
+				current_delegation_status,
+				upcoming_delegation_status,
+			}
+		}
 		fn cf_validator_info(account_id: &AccountId) -> ValidatorInfo {
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
@@ -1751,7 +1777,7 @@ impl_runtime_apis! {
 				managed_validators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(
 					account_id,
 					AssociationToOperator::Validator,
-					pallet_cf_flip::Pallet::<Runtime>::balance
+					|account_id, _| pallet_cf_flip::Pallet::<Runtime>::balance(account_id)
 				),
 				settings,
 				allowed,
@@ -1759,9 +1785,12 @@ impl_runtime_apis! {
 				delegators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(
 					account_id,
 					AssociationToOperator::Delegator,
-					pallet_cf_flip::Pallet::<Runtime>::balance
+					|account_id, max_bid| pallet_cf_flip::Pallet::<Runtime>::balance(account_id).min(max_bid.unwrap_or(u128::MAX))
 				),
-				flip_balance: pallet_cf_flip::Account::<Runtime>::get(account_id).total(),
+				active_delegation: pallet_cf_validator::DelegationSnapshots::<Runtime>::get(
+					Validator::current_epoch(),
+					account_id,
+				),
 			}
 		}
 
@@ -2844,7 +2873,7 @@ impl_runtime_apis! {
 			let caller_id = EthereumAccount(caller).into_account_id();
 			let required_deposit = match call {
 				EthereumSCApi::Delegation { call: DelegationApi::Delegate { increase: DelegationAmount::Some(ref increase), .. } } => {
-					pallet_cf_validator::MaxDelegationBid::<Runtime>::get(&caller_id).unwrap_or_default()
+					pallet_cf_validator::DelegationChoice::<Runtime>::get(&caller_id).map(|(_, bid)| bid).unwrap_or_default()
 						.saturating_add(*increase)
 						.saturating_sub(pallet_cf_flip::Pallet::<Runtime>::balance(&caller_id))
 				},
@@ -2869,6 +2898,15 @@ impl_runtime_apis! {
 					None
 				},
 			})
+		}
+		fn cf_active_delegations(operator: Option<AccountId>) -> Vec<DelegationSnapshot<AccountId, FlipBalance>> {
+			let current_epoch = Validator::current_epoch();
+			if let Some(account_id) = operator {
+				pallet_cf_validator::DelegationSnapshots::<Runtime>::get(current_epoch, &account_id).into_iter().collect()
+			} else {
+				pallet_cf_validator::DelegationSnapshots::<Runtime>::iter_prefix_values(current_epoch)
+					.collect()
+			}
 		}
 	}
 

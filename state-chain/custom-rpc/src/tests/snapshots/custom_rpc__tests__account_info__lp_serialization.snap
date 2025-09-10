@@ -1,0 +1,113 @@
+---
+source: state-chain/custom-rpc/src/tests/account_info.rs
+expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
+---
+{
+  "flip_balance": "0x15af1d78b58c40000",
+  "asset_balances": {
+    "Ethereum": {
+      "ETH": "0xffffffffffffffffffffffffffffffff",
+      "FLIP": "0x7fffffffffffffffffffffffffffffff",
+      "USDC": "0x989680",
+      "USDT": "0x4c4b40"
+    },
+    "Polkadot": {
+      "DOT": "0x174876e800"
+    },
+    "Bitcoin": {
+      "BTC": "0x1dcd6500"
+    },
+    "Arbitrum": {
+      "ETH": "0x1",
+      "USDC": "0x2"
+    },
+    "Solana": {
+      "SOL": "0x3",
+      "USDC": "0x4"
+    },
+    "Assethub": {
+      "DOT": "0xba43b7400",
+      "USDT": "0x1e8480",
+      "USDC": "0x2dc6c0"
+    }
+  },
+  "bond": 0,
+  "estimated_redeemable_balance": "0xde0b6b3a7640000",
+  "role": "liquidity_provider",
+  "refund_addresses": {
+    "Ethereum": "0x1111111111111111111111111111111111111111",
+    "Polkadot": "15hUeRCARvGw1Xjvuszo9ufT9bSqePGzwbjTeqZKxEeYq1i9",
+    "Bitcoin": null,
+    "Arbitrum": "0x2222222222222222222222222222222222222222",
+    "Solana": "11111111111111111111111111111111"
+  },
+  "earned_fees": {
+    "Ethereum": {
+      "ETH": "0xde0b6b3a7640000",
+      "FLIP": "0xffffffffffffffff",
+      "USDC": "0x7ffffffffffffffe",
+      "USDT": "0x3d090"
+    },
+    "Polkadot": {
+      "DOT": "0x37e11d600"
+    },
+    "Bitcoin": {
+      "BTC": "0x17d7840"
+    },
+    "Arbitrum": {
+      "ETH": "0x1",
+      "USDC": "0x2"
+    },
+    "Solana": {
+      "SOL": "0x2",
+      "USDC": "0x4"
+    },
+    "Assethub": {
+      "DOT": "0x12a05f200",
+      "USDT": "0x7a120",
+      "USDC": "0xf4240"
+    }
+  },
+  "boost_balances": {
+    "Ethereum": {
+      "ETH": [],
+      "FLIP": [],
+      "USDC": [],
+      "USDT": []
+    },
+    "Polkadot": {
+      "DOT": []
+    },
+    "Bitcoin": {
+      "BTC": [
+        {
+          "fee_tier": 5,
+          "total_balance": "0x5f5e100",
+          "available_balance": "0x2faf080",
+          "in_use_balance": "0x2faf080",
+          "is_withdrawing": false
+        },
+        {
+          "fee_tier": 10,
+          "total_balance": "0xbebc200",
+          "available_balance": "0x8f0d180",
+          "in_use_balance": "0x2faf080",
+          "is_withdrawing": true
+        }
+      ]
+    },
+    "Arbitrum": {
+      "ETH": [],
+      "USDC": []
+    },
+    "Solana": {
+      "SOL": [],
+      "USDC": []
+    },
+    "Assethub": {
+      "DOT": [],
+      "USDT": [],
+      "USDC": []
+    }
+  }
+}

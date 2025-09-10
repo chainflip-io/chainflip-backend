@@ -1,15 +1,11 @@
-use crate::{
-	AuctionOutcome, Config, DelegationSnapshots, OperatorSettingsLookup, Pallet, ValidatorIdOf,
-	ValidatorToOperator,
-};
+use crate::{AuctionOutcome, Config, DelegationSnapshots, Pallet, ValidatorToOperator};
 use cf_primitives::EpochIndex;
 use cf_traits::{EpochInfo, Issuance, RewardsDistribution, Slashing};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
 use frame_support::{
 	sp_runtime::{traits::AtLeast32BitUnsigned, Perquintill},
 	traits::IsType,
-	Parameter, RuntimeDebugNoBound,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
@@ -59,6 +55,12 @@ impl<T> DelegationAmount<T> {
 	}
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum Change<T> {
+	Increase(T),
+	Decrease(T),
+}
+
 /// Represents a validator's default stance on accepting delegations
 #[derive(
 	Copy,
@@ -104,52 +106,62 @@ pub struct OperatorSettings {
 
 /// A snapshot of delegations to an operator for a specific epoch, including all
 /// necessary information for reward distribution.
-#[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
-#[scale_info(skip_type_params(T))]
-pub struct DelegationSnapshot<T: Config> {
-	pub operator: T::AccountId,
+#[derive(
+	Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, Debug, Serialize, Deserialize,
+)]
+pub struct DelegationSnapshot<Account: Ord, Bid> {
+	pub operator: Account,
 	/// Map of validator accounts to their bid amounts.
-	pub validators: BTreeMap<ValidatorIdOf<T>, T::Amount>,
+	pub validators: BTreeMap<Account, Bid>,
 	/// Map of delegator accounts to their bid amounts.
-	pub delegators: BTreeMap<T::AccountId, T::Amount>,
+	pub delegators: BTreeMap<Account, Bid>,
 	/// Operator fee at time of snapshot creation.
 	pub delegation_fee_bps: u32,
 }
 
-impl<T: Config> DelegationSnapshot<T> {
-	pub fn init(operator: &T::AccountId) -> Self {
+impl<Account: Ord + Clone + FullCodec + 'static, Bid: FullCodec + 'static>
+	DelegationSnapshot<Account, Bid>
+{
+	/// Stores the validator mappings and snapshot information for the given epoch.
+	pub fn register_for_epoch<T: Config<AccountId = Account, Amount = Bid>>(
+		self,
+		epoch_index: EpochIndex,
+	) {
+		let operator = self.operator.clone();
+		for validator in self.validators.keys() {
+			ValidatorToOperator::<T>::insert(epoch_index, validator, operator.clone());
+		}
+		DelegationSnapshots::<T>::insert(epoch_index, operator, self);
+	}
+}
+
+impl<Account, Bid> DelegationSnapshot<Account, Bid>
+where
+	Account: Ord + Clone,
+	Bid: Default + Copy + From<u64> + AtLeast32BitUnsigned + Sum,
+{
+	pub fn init(operator: &Account, delegation_fee_bps: u32) -> Self {
 		Self {
 			operator: operator.clone(),
 			delegators: Default::default(),
 			validators: Default::default(),
-			delegation_fee_bps: OperatorSettingsLookup::<T>::get(operator)
-				.map(|settings| settings.fee_bps)
-				.unwrap_or(0),
+			delegation_fee_bps,
 		}
 	}
 
-	pub fn total_validator_bid(&self) -> T::Amount {
+	pub fn total_validator_bid(&self) -> Bid {
 		self.validators.values().copied().sum()
 	}
 
-	pub fn total_delegator_bid(&self) -> T::Amount {
+	pub fn total_delegator_bid(&self) -> Bid {
 		self.delegators.values().copied().sum()
 	}
 
-	/// Stores the validator mappings and snapshot information for the given epoch.
-	pub fn register_for_epoch(self, epoch_index: EpochIndex) {
-		let operator = self.operator.clone();
-		for validator in self.validators.keys() {
-			ValidatorToOperator::<T>::insert(epoch_index, validator.into_ref(), operator.clone());
-		}
-		DelegationSnapshots::<T>::insert(epoch_index, operator, self);
-	}
-
-	pub fn total_available_bid(&self) -> T::Amount {
+	pub fn total_available_bid(&self) -> Bid {
 		self.total_validator_bid() + self.total_delegator_bid()
 	}
 
-	pub fn effective_validator_bids(&self) -> BTreeMap<ValidatorIdOf<T>, T::Amount> {
+	pub fn effective_validator_bids(&self) -> BTreeMap<Account, Bid> {
 		if self.validators.is_empty() {
 			return Default::default();
 		}
@@ -161,22 +173,15 @@ impl<T: Config> DelegationSnapshot<T> {
 		&self,
 		total: Amount,
 		bond: Amount,
-	) -> impl Iterator<Item = (&T::AccountId, Amount)>
+	) -> impl Iterator<Item = (&Account, Amount)>
 	where
-		Amount: From<T::Amount>
-			+ AtLeast32BitUnsigned
-			+ Copy
-			+ Clone
-			+ Default
-			+ Sum
-			+ From<u64>
-			+ Parameter,
+		Amount: From<Bid> + AtLeast32BitUnsigned + Copy + Sum + From<u64>,
 	{
 		let total_delegator_stake: Amount = self.total_delegator_bid().into();
 		let total_validator_stake: Amount = self.total_validator_bid().into();
 
 		// The validators' cut is based on their proportion of the current epoch's bond.
-		let scaled_bond = bond * T::Amount::from(self.validators.len() as u32).into();
+		let scaled_bond = bond * Bid::from(self.validators.len() as u32).into();
 		let validators_cut = if total_validator_stake < scaled_bond {
 			Perquintill::from_rational(total_validator_stake, scaled_bond)
 		} else {
@@ -208,8 +213,8 @@ impl<T: Config> DelegationSnapshot<T> {
 			.chain(delegator_cuts)
 	}
 
-	pub fn avg_bid(&self) -> T::Amount {
-		self.total_available_bid() / T::Amount::from(self.validators.len() as u32)
+	pub fn avg_bid(&self) -> Bid {
+		self.total_available_bid() / Bid::from(self.validators.len() as u32)
 	}
 
 	fn move_lowest_validator_to_delegator(&mut self) {
@@ -221,10 +226,7 @@ impl<T: Config> DelegationSnapshot<T> {
 		}
 	}
 
-	pub fn maybe_optimize_bid(
-		&mut self,
-		auction_outcome: &AuctionOutcome<ValidatorIdOf<T>, T::Amount>,
-	) {
+	pub fn maybe_optimize_bid(&mut self, auction_outcome: &AuctionOutcome<Account, Bid>) {
 		while self.validators.len() > 1 && self.avg_bid() <= auction_outcome.bond {
 			// in the case where the operator's nodes are at the boundary, maybe some of the
 			// validators didnt make the set and so we can optimize further where we reduce one node
@@ -243,6 +245,37 @@ impl<T: Config> DelegationSnapshot<T> {
 				self.move_lowest_validator_to_delegator();
 			}
 		}
+	}
+}
+
+impl<Account: Ord + Clone, Bid> DelegationSnapshot<Account, Bid> {
+	pub fn map_bids<B>(self, f: impl Fn(Bid) -> B) -> DelegationSnapshot<Account, B> {
+		DelegationSnapshot {
+			operator: self.operator,
+			validators: self.validators.into_iter().map(|(acct, v)| (acct, f(v))).collect(),
+			delegators: self.delegators.into_iter().map(|(acct, v)| (acct, f(v))).collect(),
+			delegation_fee_bps: self.delegation_fee_bps,
+		}
+	}
+
+	pub fn try_map_bids<B, E>(
+		self,
+		f: impl Fn(Bid) -> Result<B, E>,
+	) -> Result<DelegationSnapshot<Account, B>, E> {
+		Ok(DelegationSnapshot {
+			operator: self.operator,
+			validators: self
+				.validators
+				.into_iter()
+				.map(|(acct, v)| Ok((acct, f(v)?)))
+				.try_collect()?,
+			delegators: self
+				.delegators
+				.into_iter()
+				.map(|(acct, v)| Ok((acct, f(v)?)))
+				.try_collect()?,
+			delegation_fee_bps: self.delegation_fee_bps,
+		})
 	}
 }
 
@@ -332,7 +365,7 @@ mod tests {
 		) {
 			// Create a delegation snapshot
 			let operator_account = 1u64;
-			let mut snapshot = DelegationSnapshot::<Test> {
+			let mut snapshot = DelegationSnapshot::<ValidatorId, u128> {
 				operator: operator_account,
 				validators: BTreeMap::new(),
 				delegators: BTreeMap::new(),
