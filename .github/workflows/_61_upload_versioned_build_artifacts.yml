@@ -70,6 +70,8 @@ jobs:
           aws s3 sync s3://artifacts.chainflip.io/${{ env.s3_prefix }}/ s3://artifacts.chainflip.io/main/
 
       - name: Upload Development Artifacts S3 🚀
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
         if: inputs.is_release == false && inputs.is_development == true
         run: |
-          aws s3 sync s3://artifacts.chainflip.io/${{ env.s3_prefix }}/ s3://artifacts.chainflip.io/${{ github.head_ref }}/
+          aws s3 sync s3://artifacts.chainflip.io/${{ env.s3_prefix }}/ s3://artifacts.chainflip.io/${{ env.BRANCH_NAME }}/
