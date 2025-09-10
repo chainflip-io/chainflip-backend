@@ -102,7 +102,7 @@ enum EgressType {
 	Refund { refund_fee: AssetAmount },
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Copy, Clone)]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Copy, Clone, Debug)]
 pub struct AffiliateDetails {
 	pub short_id: AffiliateShortId,
 	pub withdrawal_address: EthereumAddress,

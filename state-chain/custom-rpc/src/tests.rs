@@ -1,6 +1,7 @@
 use crate::*;
 
-use std::collections::BTreeSet;
+pub mod account_info;
+pub mod before_v7;
 
 use cf_rpc_apis::{
 	broker::{SwapDepositAddress, WithdrawFeesDetail},
@@ -16,6 +17,8 @@ use pallet_cf_pools::{
 	RangeOrderLiquidity, UnidirectionalSubPoolDepth,
 };
 use pallet_cf_swapping::FeeRateAndMinimum;
+use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
+use std::collections::BTreeSet;
 
 use cf_chains::{
 	address::EncodedAddress,
@@ -107,131 +110,6 @@ fn ccm_unchecked() -> CcmChannelMetadataUnchecked {
 		)
 		.unwrap(),
 	}
-}
-
-#[test]
-fn test_no_account_serialization() {
-	insta::assert_snapshot!(serde_json::to_value(RpcAccountInfo::unregistered(
-		0,
-		any::AssetMap::default()
-	))
-	.unwrap());
-}
-
-#[test]
-fn test_broker_serialization() {
-	use cf_chains::btc::BitcoinNetwork;
-	let broker = RpcAccountInfo::broker(
-		BrokerInfo {
-			earned_fees: vec![
-				(Asset::Eth, 0),
-				(Asset::Btc, 0),
-				(Asset::Flip, 1000000000000000000),
-				(Asset::Usdc, 0),
-				(Asset::Usdt, 0),
-				(Asset::Dot, 0),
-				(Asset::ArbEth, 0),
-				(Asset::ArbUsdc, 0),
-				(Asset::Sol, 0),
-				(Asset::SolUsdc, 0),
-			],
-			btc_vault_deposit_address: Some(
-				ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
-			),
-			bond: 0,
-			affiliates: vec![(
-				AccountId32::new([1; 32]),
-				AffiliateDetails { short_id: 1.into(), withdrawal_address: H160::from([0xcf; 20]) },
-			)],
-		},
-		0,
-	);
-	insta::assert_json_snapshot!(broker);
-}
-
-#[test]
-fn test_lp_serialization() {
-	let lp = RpcAccountInfo::lp(
-		LiquidityProviderInfo {
-			refund_addresses: vec![
-				(ForeignChain::Ethereum, Some(ForeignChainAddress::Eth(H160::from([1; 20])))),
-				(ForeignChain::Polkadot, Some(ForeignChainAddress::Dot(Default::default()))),
-				(ForeignChain::Bitcoin, None),
-				(ForeignChain::Arbitrum, Some(ForeignChainAddress::Arb(H160::from([2; 20])))),
-				(ForeignChain::Solana, None),
-			],
-			balances: vec![
-				(Asset::Eth, u128::MAX),
-				(Asset::Btc, 0),
-				(Asset::Flip, u128::MAX / 2),
-				(Asset::Usdc, 0),
-				(Asset::Usdt, 0),
-				(Asset::Dot, 0),
-				(Asset::ArbEth, 1),
-				(Asset::ArbUsdc, 2),
-				(Asset::Sol, 3),
-				(Asset::SolUsdc, 4),
-			],
-			earned_fees: any::AssetMap {
-				eth: eth::AssetMap {
-					eth: 0u32.into(),
-					flip: u64::MAX.into(),
-					usdc: (u64::MAX / 2 - 1).into(),
-					usdt: 0u32.into(),
-				},
-				btc: btc::AssetMap { btc: 0u32.into() },
-				dot: dot::AssetMap { dot: 0u32.into() },
-				arb: arb::AssetMap { eth: 1u32.into(), usdc: 2u32.into() },
-				sol: sol::AssetMap { sol: 2u32.into(), usdc: 4u32.into() },
-				hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
-			},
-			boost_balances: any::AssetMap {
-				btc: btc::AssetMap {
-					btc: vec![LiquidityProviderBoostPoolInfo {
-						fee_tier: 5,
-						total_balance: 100_000_000,
-						available_balance: 50_000_000,
-						in_use_balance: 50_000_000,
-						is_withdrawing: false,
-					}],
-				},
-				..Default::default()
-			},
-			lending_positions: vec![LendingPosition {
-				asset: Asset::Usdc,
-				total_amount: 1_000_000,
-				available_amount: 500_000,
-			}],
-			collateral_balances: vec![(Asset::Btc, 100), (Asset::ArbEth, 500)],
-		},
-		cf_primitives::NetworkEnvironment::Mainnet,
-		0,
-	);
-
-	insta::assert_snapshot!(serde_json::to_value(lp).unwrap());
-}
-
-#[test]
-fn test_validator_serialization() {
-	let validator = RpcAccountInfo::validator(ValidatorInfo {
-		balance: FLIPPERINOS_PER_FLIP,
-		bond: FLIPPERINOS_PER_FLIP,
-		last_heartbeat: 0,
-		reputation_points: 0,
-		keyholder_epochs: vec![123],
-		is_current_authority: true,
-		is_bidding: false,
-		is_current_backup: false,
-		is_online: true,
-		is_qualified: true,
-		bound_redeem_address: Some(H160::from([1; 20])),
-		apy_bp: Some(100u32),
-		restricted_balances: BTreeMap::from_iter(vec![(H160::from([1; 20]), FLIPPERINOS_PER_FLIP)]),
-		estimated_redeemable_balance: 0,
-		operator: Some(AccountId32::new([42; 32])),
-	});
-
-	insta::assert_snapshot!(serde_json::to_value(validator).unwrap());
 }
 
 #[test]
@@ -1228,4 +1106,40 @@ fn loan_account_serialization() {
 	};
 
 	insta::assert_json_snapshot!(loan_account);
+}
+
+#[test]
+fn operator_info() {
+	let value = OperatorInfo::<NumberOrHex> {
+		managed_validators: BTreeMap::from([
+			(AccountId32::new([0x11; 32]), 1_000_000u128.into()),
+			(AccountId32::new([0x22; 32]), 2_000_000u128.into()),
+		]),
+		settings: OperatorSettings {
+			fee_bps: 2_000,
+			delegation_acceptance: DelegationAcceptance::Deny,
+		},
+		allowed: vec![
+			AccountId32::new([0x11; 32]),
+			AccountId32::new([0x22; 32]),
+			AccountId32::new([0x33; 32]),
+			AccountId32::new([0x44; 32]),
+		],
+		blocked: vec![],
+		delegators: BTreeMap::from([
+			(AccountId32::new([0x33; 32]), 500_000u128.into()),
+			(AccountId32::new([0x44; 32]), 1_500_000u128.into()),
+		]),
+		active_delegation: Some(DelegationSnapshot {
+			operator: AccountId32::new([0x55; 32]),
+			validators: BTreeMap::from([
+				(AccountId32::new([0x11; 32]), 1_000_000u128.into()),
+				(AccountId32::new([0x22; 32]), 2_000_000u128.into()),
+			]),
+			delegators: BTreeMap::from([(AccountId32::new([0x44; 32]), 1_500_000u128.into())]),
+			delegation_fee_bps: 2_000,
+		}),
+	};
+
+	insta::assert_snapshot!(serde_json::to_string_pretty(&value).unwrap());
 }
