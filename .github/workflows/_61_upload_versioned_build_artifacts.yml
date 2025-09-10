@@ -72,4 +72,4 @@ jobs:
       - name: Upload Development Artifacts S3 🚀
         if: inputs.is_release == false && inputs.is_development == true
         run: |
-          aws s3 sync s3://artifacts.chainflip.io/${{ env.s3_prefix }}/ s3://artifacts.chainflip.io/${{ github.ref_name }}/
+          aws s3 sync s3://artifacts.chainflip.io/${{ env.s3_prefix }}/ s3://artifacts.chainflip.io/${{ github.head_ref }}/
