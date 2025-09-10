@@ -14,6 +14,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+	runtime_apis::{
+		CcmData, DispatchErrorWithMessage, FeeTypes, SimulateSwapAdditionalOrder,
+		SimulatedSwapInformation,
+	},
+	LiquidityPools, Runtime, Swapping,
+};
 use cf_chains::{
 	assets::any::ForeignChainAndAsset,
 	instances::{
@@ -25,20 +32,15 @@ use cf_primitives::{
 	AccountId, Asset, AssetAmount, BasisPoints, Beneficiary, DcaParameters, IngressOrEgress,
 };
 use cf_traits::{AssetConverter, OrderId};
+use pallet_cf_ingress_egress::AmountAndFeesWithheld;
 use pallet_cf_swapping::{BatchExecutionError, FeeType, NetworkFeeTracker, Swap};
-use sp_runtime::{traits::Saturating, DispatchError};
-
-use crate::{
-	runtime_apis::{
-		CcmData, DispatchErrorWithMessage, FeeTypes, SimulateSwapAdditionalOrder,
-		SimulatedSwapInformation,
-	},
-	LiquidityPools, Runtime, Swapping,
+use sp_runtime::{
+	traits::{Saturating, UniqueSaturatedInto},
+	DispatchError,
 };
-
-use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{collections::btree_set::BTreeSet, vec, vec::Vec};
 
+/// Simulates a swap in order to estimate the output amount and fees.
 pub fn simulate_swap(
 	input_asset: Asset,
 	output_asset: Asset,
@@ -46,18 +48,10 @@ pub fn simulate_swap(
 	broker_commission: BasisPoints,
 	dca_parameters: Option<DcaParameters>,
 	ccm_data: Option<CcmData>,
-	exclude_fees: BTreeSet<FeeTypes>,
+	mut exclude_fees: BTreeSet<FeeTypes>,
 	additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 	is_internal: Option<bool>,
 ) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
-	let is_internal = is_internal.unwrap_or_default();
-	let mut exclude_fees = exclude_fees;
-	if is_internal {
-		exclude_fees.insert(FeeTypes::IngressDepositChannel);
-		exclude_fees.insert(FeeTypes::Egress);
-		exclude_fees.insert(FeeTypes::IngressVaultSwap);
-	}
-
 	if let Some(additional_orders) = additional_orders {
 		for (index, additional_order) in additional_orders.into_iter().enumerate() {
 			match additional_order {
@@ -82,75 +76,30 @@ pub fn simulate_swap(
 		}
 	}
 
-	fn remove_fees(
-		ingress_or_egress: IngressOrEgress,
-		asset: Asset,
-		amount: AssetAmount,
-	) -> (AssetAmount, AssetAmount) {
-		use pallet_cf_ingress_egress::AmountAndFeesWithheld;
-
-		match asset.into() {
-			ForeignChainAndAsset::Ethereum(asset) => {
-				let AmountAndFeesWithheld {
-							amount_after_fees,
-							fees_withheld,
-						} = pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
-
-				(amount_after_fees, fees_withheld)
-			},
-			ForeignChainAndAsset::Polkadot(asset) => {
-				let AmountAndFeesWithheld {
-							amount_after_fees,
-							fees_withheld,
-						} = pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
-
-				(amount_after_fees, fees_withheld)
-			},
-			ForeignChainAndAsset::Bitcoin(asset) => {
-				let AmountAndFeesWithheld {
-							amount_after_fees,
-							fees_withheld,
-						} = pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
-
-				(amount_after_fees.into(), fees_withheld.into())
-			},
-			ForeignChainAndAsset::Arbitrum(asset) => {
-				let AmountAndFeesWithheld {
-							amount_after_fees,
-							fees_withheld,
-						} = pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
-
-				(amount_after_fees, fees_withheld)
-			},
-			ForeignChainAndAsset::Solana(asset) => {
-				let AmountAndFeesWithheld {
-							amount_after_fees,
-							fees_withheld,
-						} = pallet_cf_ingress_egress::Pallet::<Runtime, SolanaInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
-
-				(amount_after_fees.into(), fees_withheld.into())
-			},
-			ForeignChainAndAsset::Assethub(asset) => {
-				let AmountAndFeesWithheld {
-							amount_after_fees,
-							fees_withheld,
-						} = pallet_cf_ingress_egress::Pallet::<Runtime, AssethubInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
-
-				(amount_after_fees, fees_withheld)
-			},
-		}
+	let is_internal = is_internal.unwrap_or(false);
+	if is_internal {
+		exclude_fees.extend([
+			FeeTypes::IngressDepositChannel,
+			FeeTypes::Egress,
+			FeeTypes::IngressVaultSwap,
+		]);
 	}
 
 	let include_fee = |fee_type: FeeTypes| !exclude_fees.contains(&fee_type);
 
 	// Default to using the DepositChannel fee unless specified.
-	let (mut amount_to_swap, ingress_fee) = if include_fee(FeeTypes::IngressDepositChannel) {
-		remove_fees(IngressOrEgress::IngressDepositChannel, input_asset, input_amount)
-	} else if include_fee(FeeTypes::IngressVaultSwap) {
-		remove_fees(IngressOrEgress::IngressVaultSwap, input_asset, input_amount)
-	} else {
-		(input_amount, 0u128)
-	};
+	let AmountAndFeesWithheld { amount_after_fees: mut amount_to_swap, fees_withheld: ingress_fee } =
+		if include_fee(FeeTypes::IngressDepositChannel) {
+			take_ingress_or_egress_fee(
+				IngressOrEgress::IngressDepositChannel,
+				input_asset,
+				input_amount,
+			)
+		} else if include_fee(FeeTypes::IngressVaultSwap) {
+			take_ingress_or_egress_fee(IngressOrEgress::IngressVaultSwap, input_asset, input_amount)
+		} else {
+			AmountAndFeesWithheld { amount_after_fees: input_amount, fees_withheld: 0 }
+		};
 
 	// If no DCA parameter is given, swap the entire amount with 1 chunk.
 	let number_of_chunks: u128 = dca_parameters
@@ -158,11 +107,9 @@ pub fn simulate_swap(
 		.unwrap_or(1u32)
 		.into();
 
-	let mut fees_vec = vec![];
-
 	// Calculate the network fee in both USDC and in terms of the input asset.
 	// We manually calculate the minimum network fee to avoid complications with the network fee
-	// minimum effecting the simulated chunk.
+	// minimum affecting the simulated chunk.
 	let (network_fee_amount_input_asset, network_fee_usdc) = if include_fee(FeeTypes::Network) {
 		let network_fee = pallet_cf_swapping::Pallet::<Runtime>::get_network_fee_for_swap(
 			input_asset,
@@ -210,15 +157,6 @@ pub fn simulate_swap(
 
 	let amount_per_chunk: u128 = amount_to_swap / number_of_chunks;
 
-	if broker_commission > 0 {
-		let fee = FeeType::BrokerFee(
-			vec![Beneficiary { account: AccountId::new([0xbb; 32]), bps: broker_commission }]
-				.try_into()
-				.expect("Beneficiary with a length of 1 must be within length bound."),
-		);
-		fees_vec.push(fee.clone());
-	}
-
 	let swap_output = &Swapping::simulate_swaps(vec![Swap::new(
 		Default::default(), // Swap id
 		Default::default(), // Swap request id
@@ -226,7 +164,15 @@ pub fn simulate_swap(
 		output_asset,
 		amount_per_chunk,
 		None, // Refund params
-		fees_vec,
+		if broker_commission > 0 {
+			vec![FeeType::BrokerFee(
+				vec![Beneficiary { account: AccountId::new([0xbb; 32]), bps: broker_commission }]
+					.try_into()
+					.expect("1 is less than the capacity of Beneficiaries"),
+			)]
+		} else {
+			vec![]
+		},
 		Default::default(), // Execution block
 	)])
 	.map_err(|e| match e {
@@ -243,16 +189,19 @@ pub fn simulate_swap(
 	let output = swap.final_output.unwrap_or_default() * number_of_chunks;
 	let broker_fee = swap.broker_fee_taken.unwrap_or_default() * number_of_chunks;
 
-	let (output, egress_fee) = if include_fee(FeeTypes::Egress) {
-		let egress = match ccm_data {
-			Some(CcmData { gas_budget, message_length }) =>
-				IngressOrEgress::EgressCcm { gas_budget, message_length: message_length as usize },
-			None => IngressOrEgress::Egress,
+	let AmountAndFeesWithheld { amount_after_fees: output, fees_withheld: egress_fee } =
+		if include_fee(FeeTypes::Egress) {
+			let egress = match ccm_data {
+				Some(CcmData { gas_budget, message_length }) => IngressOrEgress::EgressCcm {
+					gas_budget,
+					message_length: message_length as usize,
+				},
+				None => IngressOrEgress::Egress,
+			};
+			take_ingress_or_egress_fee(egress, output_asset, output)
+		} else {
+			AmountAndFeesWithheld { amount_after_fees: output, fees_withheld: 0 }
 		};
-		remove_fees(egress, output_asset, output)
-	} else {
-		(output, 0u128)
-	};
 
 	Ok(SimulatedSwapInformation {
 		intermediary,
@@ -262,4 +211,67 @@ pub fn simulate_swap(
 		egress_fee,
 		broker_fee,
 	})
+}
+
+fn take_ingress_or_egress_fee(
+	ingress_or_egress: IngressOrEgress,
+	asset: Asset,
+	amount: AssetAmount,
+) -> AmountAndFeesWithheld<AssetAmount> {
+	match asset.into() {
+		ForeignChainAndAsset::Ethereum(asset) => pallet_cf_ingress_egress::Pallet::<
+			Runtime,
+			EthereumInstance,
+		>::withhold_ingress_or_egress_fee(
+			ingress_or_egress,
+			asset,
+			amount.unique_saturated_into(),
+		)
+		.map_amounts(Into::into),
+		ForeignChainAndAsset::Polkadot(asset) => pallet_cf_ingress_egress::Pallet::<
+			Runtime,
+			PolkadotInstance,
+		>::withhold_ingress_or_egress_fee(
+			ingress_or_egress,
+			asset,
+			amount.unique_saturated_into(),
+		)
+		.map_amounts(Into::into),
+		ForeignChainAndAsset::Bitcoin(asset) => pallet_cf_ingress_egress::Pallet::<
+			Runtime,
+			BitcoinInstance,
+		>::withhold_ingress_or_egress_fee(
+			ingress_or_egress,
+			asset,
+			amount.unique_saturated_into(),
+		)
+		.map_amounts(Into::into),
+		ForeignChainAndAsset::Arbitrum(asset) => pallet_cf_ingress_egress::Pallet::<
+			Runtime,
+			ArbitrumInstance,
+		>::withhold_ingress_or_egress_fee(
+			ingress_or_egress,
+			asset,
+			amount.unique_saturated_into(),
+		)
+		.map_amounts(Into::into),
+		ForeignChainAndAsset::Solana(asset) => pallet_cf_ingress_egress::Pallet::<
+			Runtime,
+			SolanaInstance,
+		>::withhold_ingress_or_egress_fee(
+			ingress_or_egress,
+			asset,
+			amount.unique_saturated_into(),
+		)
+		.map_amounts(Into::into),
+		ForeignChainAndAsset::Assethub(asset) => pallet_cf_ingress_egress::Pallet::<
+			Runtime,
+			AssethubInstance,
+		>::withhold_ingress_or_egress_fee(
+			ingress_or_egress,
+			asset,
+			amount.unique_saturated_into(),
+		)
+		.map_amounts(Into::into),
+	}
 }
