@@ -133,22 +133,22 @@ impl<T: Config> LoanAccount<T> {
 		// TODO (next): split this into two parts to make the borrower checker happy?
 		match &mut self.liquidation_status {
 			LiquidationStatus::NoLiquidation =>
-				if ltv > config.ltv_hard_threshold {
+				if ltv > config.ltv_thresholds.hard_liquidation {
 					if let Ok(collateral) = self.prepare_collateral_for_liquidation() {
 						self.init_liquidation_swaps(borrower_id, collateral, true);
 					}
-				} else if ltv > config.ltv_soft_threshold {
+				} else if ltv > config.ltv_thresholds.soft_liquidation {
 					if let Ok(collateral) = self.prepare_collateral_for_liquidation() {
 						self.init_liquidation_swaps(borrower_id, collateral, false);
 					}
 				},
 			LiquidationStatus::Liquidating { liquidation_swaps, is_hard } if *is_hard => {
-				if ltv < config.ltv_soft_liquidation_abort_threshold {
+				if ltv < config.ltv_thresholds.soft_liquidation_abort {
 					// Transition from hard liquidation to active:
 					let swaps = core::mem::take(liquidation_swaps);
 					let collateral = self.abort_liquidation_swaps(&swaps);
 					self.return_collateral(collateral);
-				} else if ltv < config.ltv_hard_liquidation_abort_threshold {
+				} else if ltv < config.ltv_thresholds.hard_liquidation_abort {
 					// Transition from hard liquidation to soft liquidation:
 					let swaps = core::mem::take(liquidation_swaps);
 					let collateral = self.abort_liquidation_swaps(&swaps);
@@ -156,12 +156,12 @@ impl<T: Config> LoanAccount<T> {
 				}
 			},
 			LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
-				if ltv > config.ltv_hard_threshold {
+				if ltv > config.ltv_thresholds.hard_liquidation {
 					// Transition from soft liquidation to hard liquidation:
 					let swaps = core::mem::take(liquidation_swaps);
 					let collateral = self.abort_liquidation_swaps(&swaps);
 					self.init_liquidation_swaps(borrower_id, collateral, true);
-				} else if ltv < config.ltv_soft_liquidation_abort_threshold {
+				} else if ltv < config.ltv_thresholds.soft_liquidation_abort {
 					// Transition from soft liquidation to active:
 					let swaps = core::mem::take(liquidation_swaps);
 					let collateral = self.abort_liquidation_swaps(&swaps);
@@ -293,7 +293,8 @@ impl<T: Config> LoanAccount<T> {
 						.map(|pool| pool.get_utilisation())
 						.unwrap_or_default();
 
-					LendingConfig::<T>::get().derive_interest_rate_per_charge_interval(utilisation)
+					LendingConfig::<T>::get()
+						.derive_interest_rate_per_charge_interval(loan.asset, utilisation)
 				};
 
 				let mut remaining_interest_amount_in_loan_asset =
@@ -364,14 +365,15 @@ impl<T: Config> LoanAccount<T> {
 		// Auto top up is currently only possible from the primary collateral asset
 		let config = LendingConfig::<T>::get();
 
-		if self.derive_ltv()? <= config.ltv_topup_threshold {
+		if self.derive_ltv()? <= config.ltv_thresholds.topup {
 			return Ok(())
 		}
 
 		let top_up_required_in_usd = {
 			let loan_value_in_usd = self.total_owed_usd_value()?;
 			let collateral_required_in_usd = config
-				.ltv_target_threshold
+				.ltv_thresholds
+				.target
 				.reciprocal()
 				.map(|ltv_inverted| ltv_inverted.saturating_mul_int(loan_value_in_usd))
 				// This effectively disables auto top up if the ltv target erroneously set to 0:
@@ -541,8 +543,9 @@ impl<T: Config> LoanAccount<T> {
 		}
 
 		let (provided_amount_after_fees, liquidation_fee) = if should_charge_liquidation_fee {
-			let config = LendingConfig::<T>::get();
-			let liquidation_fee = config.liquidation_fee * provided_amount;
+			let liquidation_fee =
+				LendingConfig::<T>::get().get_config_for_asset(loan.asset).liquidation_fee *
+					provided_amount;
 			let after_fees = provided_amount.saturating_sub(liquidation_fee);
 
 			// NOTE: this may not be equal to the provided fee if the provided amount isn't
@@ -778,7 +781,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 			Error::<T>::LoanCreationDisabled
 		);
 
-		let chp_config = LendingConfig::<T>::get();
+		let config = LendingConfig::<T>::get();
 
 		let loan_id = NextLoanId::<T>::get();
 		NextLoanId::<T>::set(loan_id + 1);
@@ -812,7 +815,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 			account.loans.insert(loan_id, loan);
 
 			ensure!(
-				account.derive_ltv()? <= chp_config.ltv_target_threshold,
+				account.derive_ltv()? <= config.ltv_thresholds.target,
 				Error::<T>::InsufficientCollateral
 			);
 
@@ -827,7 +830,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 			let origination_fee_amount = equivalent_amount::<T>(
 				asset,
 				primary_collateral_asset,
-				chp_config.origination_fee * amount_to_borrow,
+				config.origination_fee(asset) * amount_to_borrow,
 			)?;
 
 			T::Balance::try_debit_account(
@@ -863,7 +866,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		extra_amount_to_borrow: AssetAmount,
 		extra_collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<(), DispatchError> {
-		let chp_config = LendingConfig::<T>::get();
+		let config = LendingConfig::<T>::get();
 
 		LoanAccounts::<T>::mutate(&borrower_id, |maybe_account| {
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanNotFound)?;
@@ -882,7 +885,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 			loan_account
 				.try_adding_collateral_from_free_balance(&borrower_id, &extra_collateral)?;
 
-			if loan_account.derive_ltv()? > chp_config.ltv_target_threshold {
+			if loan_account.derive_ltv()? > config.ltv_thresholds.target {
 				return Err(Error::<T>::InsufficientCollateral.into());
 			}
 
@@ -903,7 +906,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 			let origination_fee_amount = equivalent_amount::<T>(
 				loan_asset,
 				primary_collateral_asset,
-				chp_config.origination_fee * extra_amount_to_borrow,
+				config.origination_fee(loan_asset) * extra_amount_to_borrow,
 			)?;
 
 			T::Balance::try_debit_account(
@@ -1027,7 +1030,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			// Only check LTV if there are loans:
 			if !loan_account.loans.is_empty() &&
-				loan_account.derive_ltv()? > chp_config.ltv_target_threshold
+				loan_account.derive_ltv()? > chp_config.ltv_thresholds.target
 			{
 				fail!(Error::<T>::InsufficientCollateral);
 			}
@@ -1290,7 +1293,7 @@ pub mod rpc {
 
 		let utilisation = pool.get_utilisation();
 
-		let interest_rate = config.derive_interest_rate_per_year(utilisation);
+		let interest_rate = config.derive_interest_rate_per_year(asset, utilisation);
 
 		RpcLendingPool {
 			asset,
@@ -1318,7 +1321,7 @@ pub mod rpc {
 /// Interest "curve" is defined as two linear segments. One is in effect from 0% to
 /// `junction_utilisation`, and the second is in effect from `junction_utilisation` to 100%.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct InterestRateConfig {
+pub struct InterestRateConfiguration {
 	pub interest_at_zero_utilisation: Perbill,
 	pub junction_utilisation: Permill,
 	pub interest_at_junction_utilisation: Perbill,
@@ -1326,46 +1329,68 @@ pub struct InterestRateConfig {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct LendingConfiguration {
+pub struct PoolConfiguration {
 	pub origination_fee: Permill,
 	/// Portion of the amount of principal asset obtained via liquidation that's
 	/// paid as a fee (instead of reducing the loan's principal)
 	pub liquidation_fee: Permill,
 	/// Determines how interest rate is calculated based on the utilization rate.
-	pub interest_rate_config: InterestRateConfig,
+	pub interest_rate_config: InterestRateConfiguration,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct LtvThresholds {
+	/// Borrowers aren't allowed to add more collateral if their ltv would drop below this
+	/// threshold.
+	pub minimum: FixedU64,
 	/// Borrowers aren't allowed to borrow more (or withdraw collateral) if their Loan-to-value
 	/// ratio (principal/collateral) would exceed this threshold.
-	pub ltv_target_threshold: FixedU64,
+	pub target: FixedU64,
 	/// Reaching this threshold will trigger a top-up of the collateral
-	pub ltv_topup_threshold: FixedU64,
+	pub topup: FixedU64,
 	/// Reaching this threshold will trigger soft liquidation account's loans
-	pub ltv_soft_threshold: FixedU64,
+	pub soft_liquidation: FixedU64,
 	/// If a loan that's being liquidated reaches this threshold, it will be considered
 	/// "healthy" again and the liquidation will be aborted. This is meant to be slightly
 	/// lower than the soft threshold to avoid frequent oscillations between liquidating and
 	/// not liquidating.
-	pub ltv_soft_liquidation_abort_threshold: FixedU64,
+	pub soft_liquidation_abort: FixedU64,
 	/// Reaching this threshold will trigger hard liquidation of the loan
-	pub ltv_hard_threshold: FixedU64,
+	pub hard_liquidation: FixedU64,
 	/// Same as overcollateralisation_soft_liquidation_abort_threshold, but for
 	/// transitioning from hard to soft liquidation
-	pub ltv_hard_liquidation_abort_threshold: FixedU64,
+	pub hard_liquidation_abort: FixedU64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct LendingConfiguration {
+	/// This configuration is used unless it is overridden in `pool_config_overrides`.
+	pub default_pool_config: PoolConfiguration,
+	/// Determines when events like liquidation should be triggered based on the account's
+	/// loan-to-value ratio.
+	pub ltv_thresholds: LtvThresholds,
 	/// This determines how frequently (in blocks) we check if fees should be swapped into the
 	/// pools asset
 	pub fee_swap_interval_blocks: u32,
 	/// Fees collected in some asset will be swapped into the pool's asset once their usd value
 	/// reaches this threshold
 	pub fee_swap_threshold_usd: AssetAmount,
+	/// If set for a pool/asset, this configuration will be used instead of the default
+	pub pool_config_overrides: BTreeMap<Asset, PoolConfiguration>,
 }
 
 impl LendingConfiguration {
-	pub fn derive_interest_rate_per_year(&self, utilisation: Permill) -> Perbill {
-		let InterestRateConfig {
+	pub fn get_config_for_asset(&self, asset: Asset) -> &PoolConfiguration {
+		self.pool_config_overrides.get(&asset).unwrap_or(&self.default_pool_config)
+	}
+
+	pub fn derive_interest_rate_per_year(&self, asset: Asset, utilisation: Permill) -> Perbill {
+		let InterestRateConfiguration {
 			interest_at_zero_utilisation,
 			junction_utilisation,
 			interest_at_junction_utilisation,
 			interest_at_max_utilisation,
-		} = self.interest_rate_config;
+		} = self.get_config_for_asset(asset).interest_rate_config;
 
 		if utilisation < junction_utilisation {
 			interpolate_linear_segment(
@@ -1386,14 +1411,26 @@ impl LendingConfiguration {
 		}
 	}
 
-	fn derive_interest_rate_per_charge_interval(&self, utilisation: Permill) -> Perbill {
+	fn derive_interest_rate_per_charge_interval(
+		&self,
+		asset: Asset,
+		utilisation: Permill,
+	) -> Perbill {
 		use cf_primitives::BLOCKS_IN_YEAR;
 
-		let interest_rate = self.derive_interest_rate_per_year(utilisation);
+		let interest_rate = self.derive_interest_rate_per_year(asset, utilisation);
 
 		Perbill::from_parts(
 			interest_rate.deconstruct() / (BLOCKS_IN_YEAR / INTEREST_PAYMENT_INTERVAL),
 		)
+	}
+
+	pub fn origination_fee(&self, asset: Asset) -> Permill {
+		self.get_config_for_asset(asset).origination_fee
+	}
+
+	pub fn liquidation_fee(&self, asset: Asset) -> Permill {
+		self.get_config_for_asset(asset).liquidation_fee
 	}
 }
 

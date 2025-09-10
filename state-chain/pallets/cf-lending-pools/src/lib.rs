@@ -22,12 +22,12 @@ mod general_lending;
 mod general_lending_pool;
 
 use cf_chains::SwapOrigin;
-use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
-	InterestRateConfig, LendingConfiguration, RpcLendingPool, RpcLiquidationStatus,
+	InterestRateConfiguration, LendingConfiguration, RpcLendingPool, RpcLiquidationStatus,
 	RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 };
+use general_lending::{LoanAccount, LtvThresholds, PoolConfiguration};
 pub use general_lending_pool::LendingPool;
 // Temporarily exposing this for a migration
 pub use core_lending_pool::{PendingLoan, ScaledAmount};
@@ -276,23 +276,29 @@ mod utils {
 pub struct LendingConfigDefault {}
 
 const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
-	origination_fee: Permill::from_parts(100), // 1 bps
-	liquidation_fee: Permill::from_parts(500), // 5 bps
-	interest_rate_config: InterestRateConfig {
-		interest_at_zero_utilisation: Perbill::from_percent(2),
-		junction_utilisation: Permill::from_percent(90),
-		interest_at_junction_utilisation: Perbill::from_percent(8),
-		interest_at_max_utilisation: Perbill::from_percent(50),
+	default_pool_config: PoolConfiguration {
+		origination_fee: Permill::from_parts(100), // 1 bps
+		liquidation_fee: Permill::from_parts(500), // 5 bps
+		interest_rate_config: InterestRateConfiguration {
+			interest_at_zero_utilisation: Perbill::from_percent(2),
+			junction_utilisation: Permill::from_percent(90),
+			interest_at_junction_utilisation: Perbill::from_percent(8),
+			interest_at_max_utilisation: Perbill::from_percent(50),
+		},
 	},
-	ltv_target_threshold: FixedU64::from_rational(80, 100), // 80% LTV
-	ltv_topup_threshold: FixedU64::from_rational(85, 100),  // 85% LTV
-	ltv_soft_threshold: FixedU64::from_rational(90, 100),   // 90% LTV
-	ltv_soft_liquidation_abort_threshold: FixedU64::from_rational(88, 100), // 88% LTV
-	ltv_hard_threshold: FixedU64::from_rational(95, 100),   // 95% LTV
-	ltv_hard_liquidation_abort_threshold: FixedU64::from_rational(93, 100), // 93% LTV
+	ltv_thresholds: LtvThresholds {
+		minimum: FixedU64::from_rational(10, 100), // 10% LTV,
+		target: FixedU64::from_rational(80, 100),  // 80% LTV,
+		topup: FixedU64::from_rational(85, 100),   // 85% LTV
+		soft_liquidation: FixedU64::from_rational(90, 100), // 90% LTV
+		soft_liquidation_abort: FixedU64::from_rational(88, 100), // 88% LTV
+		hard_liquidation: FixedU64::from_rational(95, 100), // 95% LTV
+		hard_liquidation_abort: FixedU64::from_rational(93, 100), // 93% LTV
+	},
 	// don't swap more often than every 10 blocks
 	fee_swap_interval_blocks: 10,
 	fee_swap_threshold_usd: 20_000_000, // don't swap fewer than 20 USD
+	pool_config_overrides: BTreeMap::new(),
 };
 
 impl Get<LendingConfiguration> for LendingConfigDefault {

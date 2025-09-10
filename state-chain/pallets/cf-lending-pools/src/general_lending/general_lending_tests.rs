@@ -110,19 +110,20 @@ fn basic_chp_lending() {
 
 	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 
-	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
+	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 	let interest_charge_in_eth_1 = {
 		// 25% utilisation is expected:
-		let interest_charge_in_btc =
-			CONFIG.derive_interest_rate_per_charge_interval(Permill::from_percent(50)) * PRINCIPAL;
+		let interest_charge_in_btc = CONFIG
+			.derive_interest_rate_per_charge_interval(LOAN_ASSET, Permill::from_percent(50)) *
+			PRINCIPAL;
 		interest_charge_in_btc * SWAP_RATE
 	};
 
 	let interest_charge_in_eth_2 = {
 		// 25% utilisation is expected:
 		let interest_charge_in_btc = CONFIG
-			.derive_interest_rate_per_charge_interval(Permill::from_percent(25)) *
+			.derive_interest_rate_per_charge_interval(LOAN_ASSET, Permill::from_percent(25)) *
 			PRINCIPAL / 2;
 		interest_charge_in_btc * SWAP_RATE
 	};
@@ -286,7 +287,7 @@ fn collateral_auto_topup() {
 	// The user deposits this much of collateral asset into their balance at a later point
 	const EXTRA_FUNDS: AssetAmount = INIT_COLLATERAL;
 
-	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
+	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 	fn get_ltv() -> FixedU64 {
 		LoanAccounts::<Test>::get(BORROWER).unwrap().derive_ltv().unwrap()
@@ -375,12 +376,12 @@ fn basic_loan_aggregation() {
 	const EXTRA_PRINCIPAL_2: AssetAmount = PRINCIPAL / 2;
 	const EXTRA_COLLATERAL: AssetAmount = INIT_COLLATERAL / 2;
 
-	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
+	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
-	let origination_fee_2 = CONFIG.origination_fee * EXTRA_PRINCIPAL_1 * SWAP_RATE;
+	let origination_fee_2 = CONFIG.origination_fee(LOAN_ASSET) * EXTRA_PRINCIPAL_1 * SWAP_RATE;
 
 	// NOTE: expecting utilisation to go up as we keep borrowing more
-	let origination_fee_3 = CONFIG.origination_fee * EXTRA_PRINCIPAL_2 * SWAP_RATE;
+	let origination_fee_3 = CONFIG.origination_fee(LOAN_ASSET) * EXTRA_PRINCIPAL_2 * SWAP_RATE;
 
 	new_test_ext().execute_with(|| {
 		setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
@@ -551,14 +552,13 @@ fn interest_special_cases() {
 		TOTAL_COLLATERAL_REQUIRED - INIT_COLLATERAL_AMOUNT_PRIMARY;
 
 	let interest_charge = {
-		let interest_charge_in_loan_asset =
-			CONFIG.derive_interest_rate_per_charge_interval(Permill::from_percent(50)) * PRINCIPAL;
+		let interest_charge_in_loan_asset = CONFIG
+			.derive_interest_rate_per_charge_interval(LOAN_ASSET, Permill::from_percent(50)) *
+			PRINCIPAL;
 		interest_charge_in_loan_asset * SWAP_RATE
 	};
 
-	dbg!(interest_charge);
-
-	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
+	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -646,7 +646,7 @@ fn swap_collected_fees() {
 	const INIT_FEE_ASSET_1: AssetAmount = 100;
 	const INIT_FEE_ASSET_2: AssetAmount = 1;
 
-	const FEE_SWAP_BLOCK: u64 = CONFIG.fee_swap_interval_blocks as u64;
+	let fee_swap_block = CONFIG.fee_swap_interval_blocks as u64;
 
 	const FEE_SWAP_ID: SwapRequestId = SwapRequestId(0);
 
@@ -672,7 +672,7 @@ fn swap_collected_fees() {
 		.then_execute_at_next_block(|_| {
 			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 		})
-		.then_execute_at_block(FEE_SWAP_BLOCK, |_| {
+		.then_execute_at_block(fee_swap_block, |_| {
 			// Expecting a fee swap from asset 1 but not asset 2:
 			assert_eq!(
 				MockSwapRequestHandler::<Test>::get_swap_requests(),
@@ -707,7 +707,7 @@ fn swap_collected_fees() {
 				BTreeMap::from([(COLLATERAL_ASSET_1, 0), (COLLATERAL_ASSET_2, INIT_FEE_ASSET_2)]),
 			);
 		})
-		.then_execute_at_block(FEE_SWAP_BLOCK, |_| {
+		.then_execute_at_block(fee_swap_block, |_| {
 			const FEE_SWAP_OUTPUT_1: AssetAmount = INIT_FEE_ASSET_1 / 10;
 
 			// Simulate fee swap:
@@ -740,7 +740,7 @@ fn adding_and_removing_collateral() {
 	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 	const INIT_COLLATERAL_AMOUNT_2: AssetAmount = 1000;
 
-	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
+	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 	new_test_ext().execute_with(|| {
 		setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
@@ -816,17 +816,17 @@ fn basic_liquidation() {
 	const SWAP_RATE_2: u128 = 26;
 
 	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
-	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
+	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 	// How much collateral will be swapped during liquidation:
 	const EXECUTED_COLLATERAL: AssetAmount = 2 * INIT_COLLATERAL / 5;
 	// How much of principal asset is bought during first liquidation:
 	const SWAPPED_PRINCIPAL: AssetAmount = EXECUTED_COLLATERAL / NEW_SWAP_RATE;
 
-	let liquidation_fee_1 = CONFIG.liquidation_fee * SWAPPED_PRINCIPAL;
+	let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL;
 	// How much of principal asset is bought during second liquidation:
 	const SWAPPED_PRINCIPAL_2: AssetAmount = (INIT_COLLATERAL - EXECUTED_COLLATERAL) / SWAP_RATE_2;
-	let liquidation_fee_2 = CONFIG.liquidation_fee * SWAPPED_PRINCIPAL_2;
+	let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL_2;
 
 	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
 	const LIQUIDATION_SWAP_2: SwapRequestId = SwapRequestId(1);
@@ -1077,7 +1077,7 @@ fn making_loan_repayment() {
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
 	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 
-	let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
+	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 	let collateral = BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]);
 
@@ -1746,7 +1746,7 @@ mod rpcs {
 		const COLLATERAL_ASSET: Asset = Asset::Eth;
 		const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 
-		let origination_fee = CONFIG.origination_fee * PRINCIPAL * SWAP_RATE;
+		let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 		const LOAN_ASSET_2: Asset = Asset::Usdc;
 		const PRINCIPAL_2: AssetAmount = PRINCIPAL * 2;
@@ -1755,7 +1755,7 @@ mod rpcs {
 		const BORROWER_2: u64 = OTHER_LP;
 		const LOAN_ID_2: LoanId = LoanId(1);
 
-		let origination_fee_2 = CONFIG.origination_fee * PRINCIPAL_2 * SWAP_RATE;
+		let origination_fee_2 = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL_2 * SWAP_RATE;
 
 		new_test_ext()
 			.execute_with(|| {
@@ -1936,28 +1936,31 @@ fn linear_segment_interpolation() {
 
 #[test]
 fn interest_rate_curve() {
+	// The exact asset is not important for this test
+	let asset = Asset::Btc;
+
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(Permill::from_percent(0)),
+		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(0)),
 		Perbill::from_percent(2)
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(Permill::from_percent(45)),
+		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(45)),
 		Perbill::from_parts(49_999_999) // (2% + 8%) / 2 = 5%
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(Permill::from_percent(90)),
+		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(90)),
 		Perbill::from_percent(8)
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(Permill::from_percent(95)),
+		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(95)),
 		Perbill::from_percent(29) // (8% + 50%) / 2 = 29%
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(Permill::from_percent(100)),
+		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(100)),
 		Perbill::from_percent(50)
 	);
 }
