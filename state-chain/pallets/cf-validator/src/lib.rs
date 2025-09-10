@@ -1913,15 +1913,6 @@ impl<T: Config> Pallet<T> {
 
 		(snapshots, independent_bidders)
 	}
-
-	pub fn delegator_bid(delegator: &T::AccountId) -> T::Amount {
-		let delegator_balance = T::FundingInfo::balance(delegator);
-		if let Some(max_bid) = MaxDelegationBid::<T>::get(delegator) {
-			core::cmp::min(max_bid, delegator_balance)
-		} else {
-			delegator_balance
-		}
-	}
 }
 
 pub struct EpochHistory<T>(PhantomData<T>);
