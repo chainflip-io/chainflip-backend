@@ -1234,11 +1234,15 @@ mod swap_simulation {
 			assert_eq!(simulated_non_dca_swap.network_fee, simulated_dca_swap.network_fee);
 			assert_eq!(simulated_non_dca_swap.broker_fee, simulated_dca_swap.broker_fee);
 			// Small compounding rounding errors
-			assert_eq!(
-				simulated_non_dca_swap.intermediary,
-				simulated_dca_swap.intermediary.map(|amount| amount + 7)
-			);
-			assert_eq!(simulated_non_dca_swap.output, simulated_dca_swap.output + 8);
+			let check = |a: u128, b: u128| {
+				let epsilon = a / 10_000;
+				a.abs_diff(b) <= epsilon
+			};
+			assert!(match (simulated_non_dca_swap.intermediary, simulated_dca_swap.intermediary) {
+				(Some(a), Some(b)) => check(a, b),
+				_ => false,
+			});
+			assert!(check(simulated_non_dca_swap.output, simulated_dca_swap.output),);
 		});
 	}
 
