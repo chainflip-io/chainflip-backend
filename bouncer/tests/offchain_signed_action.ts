@@ -1,8 +1,8 @@
 import { TestContext } from 'shared/utils/test_context';
+import Keyring from 'polkadot/keyring';
 import {
   assetContractId,
   brokerMutex,
-  createStateChainKeypair,
   getEvmEndpoint,
   getEvmWhaleKeypair,
   getSolWhaleKeyPair,
@@ -15,6 +15,9 @@ import { ethers, Wallet } from 'ethers';
 import { Struct, u32, Enum, u128, u8, str } from 'scale-ts';
 import { globalLogger } from 'shared/utils/logger';
 import { InternalAsset } from '@chainflip/cli';
+
+const brokerUri = '//BROKER_1';
+const broker = new Keyring({ type: 'sr25519' }).createFromUri(brokerUri);
 
 // TODO: Update these with the rpc encoding once the logic is implemented.
 export const UserActionsCodec = Enum({
@@ -60,7 +63,6 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   const logger = testContext.logger;
   await using chainflip = await getChainflipApi();
 
-  const broker = createStateChainKeypair('//BROKER_1');
   const whaleKeypair = getSolWhaleKeyPair();
 
   const action = UserActionsCodec.enc({
@@ -94,7 +96,7 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   console.log('Sol Signature (hex):', hexSignature);
   console.log('Signer (hex):', hexSigner);
 
-  await brokerMutex.runExclusive(async () => {
+  await brokerMutex.runExclusive(brokerUri, async () => {
     const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     await chainflip.tx.environment
       .submitUserSignedPayload(
@@ -142,7 +144,7 @@ export async function testOffchainSignedAction(testContext: TestContext) {
 
   const evmSignature = await ethWallet.signMessage(payload);
 
-  await brokerMutex.runExclusive(async () => {
+  await brokerMutex.runExclusive(brokerUri, async () => {
     const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     await chainflip.tx.environment
       .submitUserSignedPayload(
@@ -218,7 +220,7 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   const messageHash = ethers.TypedDataEncoder.from(types).hash(message);
   console.log('EIP-712 Message Hash:', messageHash);
 
-  await brokerMutex.runExclusive(async () => {
+  await brokerMutex.runExclusive(brokerUri, async () => {
     const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     await chainflip.tx.environment
       .submitUserSignedPayload(
