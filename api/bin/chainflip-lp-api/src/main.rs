@@ -19,7 +19,9 @@ use cf_primitives::{
 	chains::{Arbitrum, Solana},
 	ApiWaitForResult, BasisPoints, BlockNumber, DcaParameters, EgressId, PriceLimits, WaitFor,
 };
-use cf_rpc_apis::{lp::LpRpcApiServer, ExtrinsicResponse, RpcApiError, RpcResult};
+use cf_rpc_apis::{
+	lp::LpRpcApiServer, ExtrinsicResponse, NotificationBehaviour, RpcApiError, RpcResult,
+};
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	rpc::NumberOrHex,
@@ -304,9 +306,13 @@ impl LpRpcApiServer for RpcServerImpl {
 			.tx_hash)
 	}
 
-	async fn subscribe_order_fills(&self, pending_sink: PendingSubscriptionSink) {
+	async fn subscribe_order_fills(
+		&self,
+		pending_sink: PendingSubscriptionSink,
+		notification_behaviour: Option<NotificationBehaviour>,
+	) {
 		// pipe results from custom-rpc subscription
-		match self.api.raw_client().cf_subscribe_lp_order_fills().await {
+		match self.api.raw_client().cf_subscribe_lp_order_fills(notification_behaviour).await {
 			Ok(subscription) => {
 				let stream = stream::unfold(subscription, move |mut sub| async move {
 					match sub.next().await {

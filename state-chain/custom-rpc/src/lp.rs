@@ -15,11 +15,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	backend::{CustomRpcBackend, NotificationBehaviour},
+	backend::CustomRpcBackend,
 	get_preallocated_channels, order_fills,
 	pool_client::{is_transaction_status_error, PoolClientError, SignedPoolClient},
 	CfApiError, RpcResult, StorageQueryApi,
 };
+
 use anyhow::anyhow;
 use cf_amm::{common::Side, math::Tick};
 use cf_chains::{
@@ -45,7 +46,7 @@ use cf_rpc_apis::{
 		LpRpcApiServer, OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange,
 		RangeOrderSizeJson, SwapRequestResponse,
 	},
-	ExtrinsicResponse, OrderFills, RedemptionAmount, SwapChannelInfo,
+	ExtrinsicResponse, NotificationBehaviour, OrderFills, RedemptionAmount, SwapChannelInfo,
 };
 use cf_utilities::{rpc::NumberOrHex, try_parse_number_or_hex};
 use frame_support::BoundedVec;
@@ -578,10 +579,14 @@ where
 		Ok(tx_hash)
 	}
 
-	async fn subscribe_order_fills(&self, sink: PendingSubscriptionSink) {
+	async fn subscribe_order_fills(
+		&self,
+		sink: PendingSubscriptionSink,
+		notification_behaviour: Option<NotificationBehaviour>,
+	) {
 		self.rpc_backend
 			.new_subscription(
-				NotificationBehaviour::Finalized,
+				notification_behaviour.unwrap_or(NotificationBehaviour::Finalized),
 				false,
 				true,
 				sink,
