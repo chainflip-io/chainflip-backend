@@ -331,6 +331,12 @@ impl pallet_cf_environment::Config for Runtime {
 	type SolEnvironment = SolEnvironment;
 	type SolanaBroadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
+
+	/// The following three types are only required for migrating polkadot to assethub
+	/// Delete after 1.11.
+	type DotEnvironment = DotEnvironment;
+	type PolkadotBroadcaster = PolkadotBroadcaster;
+	type HubEnvironment = HubEnvironment;
 }
 
 parameter_types! {
@@ -912,7 +918,7 @@ impl pallet_cf_threshold_signature::Config<Instance15> for Runtime {
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = PolkadotCrypto;
-	type VaultActivator = MultiVaultActivator<PolkadotVault, AssethubVault>;
+	type VaultActivator = AssethubVault;
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
@@ -1557,6 +1563,7 @@ macro_rules! instanced_migrations {
 }
 
 type MigrationsForV1_11 = (
+	migrations::polkadot_deprecation::PolkadotDeprecationMigration,
 	VersionedMigration<
 		18,
 		19,

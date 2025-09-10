@@ -33,9 +33,8 @@ pub use swapping::{
 pub mod mocks;
 pub mod offence_reporting;
 
-use core::fmt::Debug;
-
 pub use async_result::AsyncResult;
+use core::fmt::Debug;
 
 use cf_chains::{
 	address::ForeignChainAddress,
@@ -1257,6 +1256,10 @@ pub trait SpawnAccount {
 		parent_account_id: &Self::AccountId,
 		index: Self::Index,
 	) -> Result<Self::AccountId, DispatchError>;
+}
+
+pub trait PoolOrdersManager {
+	fn cancel_all_pool_orders(base_asset: Asset, quote_asset: Asset) -> DispatchResult;
 }
 
 pub struct OraclePrice {

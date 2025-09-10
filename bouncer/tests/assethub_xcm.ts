@@ -3,6 +3,7 @@ import { performSwap } from 'shared/perform_swap';
 import { observeBalanceIncrease } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
 
+// NOTE: this doesn't work any more because Polkadot chain is deprecated.
 export async function testAssethubXcm(testContext: TestContext, _seed?: string) {
   const metadata = {
     message:

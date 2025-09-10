@@ -100,6 +100,7 @@ export async function testDelegate(logger: Logger) {
       const accountIdMatch = evmToScAddress(whalePubkey) === event.data.accountId;
       return txMatch && amountMatch && accountIdMatch;
     },
+    historicalCheckBlocks: 10,
   }).event;
   let scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
     test: (event) => {
@@ -108,6 +109,7 @@ export async function testDelegate(logger: Logger) {
         event.data.scCall.Delegation.call.Delegate.operator === operator.address;
       return txMatch && operatorMatch;
     },
+    historicalCheckBlocks: 10,
   }).event;
   const delegatedEvent = observeEvent(logger, 'validator:Delegated', {
     test: (event) => {
@@ -116,6 +118,7 @@ export async function testDelegate(logger: Logger) {
       const operatorMatch = event.data.operator === operator.address;
       return delegatorMatch && operatorMatch;
     },
+    historicalCheckBlocks: 10,
   }).event;
   await Promise.all([fundEvent, scCallExecutedEvent, delegatedEvent]);
 
