@@ -105,7 +105,7 @@ impl ChainCrypto for EvmCrypto {
 			return false;
 		}
 
-		let norm_signature: sp_core::ecdsa::Signature = sig_bytes.into();
+		let norm_signature: Signature = sig_bytes.into();
 
 		let option_public =
 			norm_signature.recover_prehashed(Keccak256::hash(payload).as_fixed_bytes());
