@@ -1715,7 +1715,7 @@ impl_runtime_apis! {
 			LiquidityPools::sweep(account_id).unwrap();
 			let flip_account = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let upcoming_delegation_status = pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id)
-				.map(|operator| DelegationInfo { operator, bid: Validator::delegator_bid(account_id)});
+				.map(|(operator, max_bid)| DelegationInfo { operator, bid: core::cmp::min(flip_account.total(), max_bid) });
 			let current_delegation_status = pallet_cf_validator::DelegationSnapshots::<Runtime>::iter_prefix(Validator::current_epoch())
 				.find_map(|(operator, snapshot)| snapshot.delegators.get(account_id).map(|&bid|
 					DelegationInfo { operator, bid }
@@ -1777,7 +1777,7 @@ impl_runtime_apis! {
 				managed_validators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(
 					account_id,
 					AssociationToOperator::Validator,
-					pallet_cf_flip::Pallet::<Runtime>::balance
+					|account_id, _| pallet_cf_flip::Pallet::<Runtime>::balance(account_id)
 				),
 				settings,
 				allowed,
@@ -1785,7 +1785,7 @@ impl_runtime_apis! {
 				delegators: pallet_cf_validator::Pallet::<Runtime>::get_all_associations_by_operator(
 					account_id,
 					AssociationToOperator::Delegator,
-					pallet_cf_validator::Pallet::<Runtime>::delegator_bid
+					|account_id, max_bid| pallet_cf_flip::Pallet::<Runtime>::balance(account_id).min(max_bid.unwrap_or(u128::MAX))
 				),
 				active_delegation: pallet_cf_validator::DelegationSnapshots::<Runtime>::get(
 					Validator::current_epoch(),
@@ -2873,7 +2873,7 @@ impl_runtime_apis! {
 			let caller_id = EthereumAccount(caller).into_account_id();
 			let required_deposit = match call {
 				EthereumSCApi::Delegation { call: DelegationApi::Delegate { increase: DelegationAmount::Some(ref increase), .. } } => {
-					pallet_cf_validator::MaxDelegationBid::<Runtime>::get(&caller_id).unwrap_or_default()
+					pallet_cf_validator::DelegationChoice::<Runtime>::get(&caller_id).map(|(_, bid)| bid).unwrap_or_default()
 						.saturating_add(*increase)
 						.saturating_sub(pallet_cf_flip::Pallet::<Runtime>::balance(&caller_id))
 				},
