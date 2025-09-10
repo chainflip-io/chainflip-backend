@@ -1,8 +1,8 @@
 import { requestNewSwap } from 'shared/perform_swap';
 import { setMinimumDeposit } from 'shared/set_minimum_deposit';
 import { observeEvent } from 'shared/utils/substrate';
-import { sendDot } from 'shared/send_dot';
 import { TestContext } from 'shared/utils/test_context';
+import { sendHubAsset } from 'shared/send_hubasset';
 
 export async function testMinimumDeposit(testContext: TestContext) {
   const logger = testContext.logger;
@@ -12,12 +12,12 @@ export async function testMinimumDeposit(testContext: TestContext) {
     await requestNewSwap(logger, 'HubDot', 'Eth', '0xd92bd8c144b8edba742b07909c04f8b93d875d93')
   ).depositAddress;
   const depositFailed = observeEvent(logger, ':DepositFailed');
-  await sendDot(depositAddress, '19');
+  await sendHubAsset(testContext.logger, 'HubDot', depositAddress, '19');
   logger.debug('Sent 19 DOT');
   await depositFailed.event;
   logger.debug('Deposit was ignored');
   const depositSuccess = observeEvent(logger, ':DepositFinalised');
-  await sendDot(depositAddress, '21');
+  await sendHubAsset(testContext.logger, 'HubDot', depositAddress, '21');
   logger.debug('Sent 21 DOT');
   await depositSuccess.event;
   logger.debug('Deposit was successful');
