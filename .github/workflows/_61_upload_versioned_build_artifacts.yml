@@ -43,6 +43,8 @@ jobs:
           chmod +x artifacts/chainflip-backend-bin/chainflip-node
           if [[ ${{ inputs.is_release }} == true ]]; then
             VERSION=$(./ci/scripts/extract_version.sh "$(artifacts/chainflip-backend-bin/chainflip-node --version)" full)
+          elif [[ ${{ github.event_name }} == pull_request ]]; then
+            VERSION=${{ github.event.pull_request.head.sha }}
           else
             VERSION=${{ github.sha }}
           fi
