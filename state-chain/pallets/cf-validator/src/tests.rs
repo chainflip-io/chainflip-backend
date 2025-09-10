@@ -1584,6 +1584,8 @@ mod operator {
 				},
 			));
 			MockFlip::credit_funds(&BOB, BID);
+			System::reset_events();
+
 			// Allow BOB (*not* an exception since allow is the default)
 			assert_ok!(ValidatorPallet::allow_delegator(OriginTrait::signed(ALICE), BOB));
 			assert!(!Exceptions::<Test>::get(ALICE).contains(&BOB));
@@ -1646,6 +1648,7 @@ mod operator {
 				},
 			));
 			MockFlip::credit_funds(&BOB, BID);
+			System::reset_events();
 
 			// BOB cannot delegate by default (not in exceptions list, deny is default)
 			assert_noop!(
@@ -1714,7 +1717,7 @@ mod operator {
 				Test,
 				RuntimeEvent::ValidatorPallet(Event::OperatorSettingsUpdated {
 					operator: ALICE,
-					preferences: OPERATOR_SETTINGS,
+					settings: OPERATOR_SETTINGS,
 				}),
 			);
 		});
@@ -1864,7 +1867,7 @@ mod operator {
 			assert_ok!(ValidatorPallet::update_operator_settings(
 				OriginTrait::signed(ALICE),
 				OperatorSettings {
-					fee_bps: 300,
+					fee_bps: 3000,
 					delegation_acceptance: DelegationAcceptance::Deny,
 				}
 			));
@@ -1921,6 +1924,7 @@ mod delegation {
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
 			));
+			System::reset_events();
 			assert_ok!(ValidatorPallet::delegate(
 				OriginTrait::signed(ALICE),
 				BOB,
@@ -2081,7 +2085,7 @@ mod delegation {
 				}
 
 				// Verify operator fee is correctly captured in snapshot
-				assert_eq!(snapshot.delegation_fee_bps, 200); // MIN_OPERATOR_FEE
+				assert_eq!(snapshot.delegation_fee_bps, MIN_OPERATOR_FEE);
 				MockKeyRotatorA::keygen_success();
 			})
 			.then_execute_at_next_block(|_| {
@@ -2273,6 +2277,7 @@ mod delegation {
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
 			));
+			System::reset_events();
 
 			// Delegate with a specific max_bid
 			assert_ok!(ValidatorPallet::delegate(
