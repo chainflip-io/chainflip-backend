@@ -42,6 +42,7 @@ sp-io = { workspace = true, default-features = true }
 pallet-cf-governance = { workspace = true, default-features = true }
 cf-test-utilities = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
+cf-traits = { workspace = true, features = ["mocks"] }
 
 [features]
 default = ["std"]

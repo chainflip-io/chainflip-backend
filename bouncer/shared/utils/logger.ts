@@ -1,8 +1,51 @@
+import { toUpperCase } from '@chainflip/utils/string';
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'fs';
+import { readdir } from 'fs/promises';
+import { dirname, parse } from 'path';
 import pino from 'pino';
 
 export type Logger = pino.Logger;
 
 const logFile = process.env.BOUNCER_LOG_PATH ?? '/tmp/chainflip/bouncer.log';
+const testLogDir = process.env.BOUNCER_TEST_LOGS_PATH ?? '/tmp/chainflip/bouncer-tests';
+
+export function getTestLogFile(logger: Logger): string {
+  const startTime = logger.bindings().startTime ?? 'UnknownStartStime';
+  const testname = logger.bindings().test ?? 'UnknownTest';
+  const tag = logger.bindings().tag ?? '';
+  const suffix = tag === '' ? '' : `-${tag}`;
+  return `${testLogDir}/${startTime}/${testname}${suffix}.log`;
+}
+
+export async function getTestLogFilesForTaggedChildren(
+  logger: Logger,
+): Promise<{ tag: string; logs: string }[]> {
+  const startTime = logger.bindings().startTime ?? 'UnknownStartStime';
+  const testname = logger.bindings().test ?? 'UnknownTest';
+  const testDir = `${testLogDir}/${startTime}`;
+
+  const taggedLogs = [];
+
+  // get all files in test directory:
+  try {
+    const files = await readdir(testDir);
+    for (const file of files) {
+      const filename = parse(file).name;
+      if (filename !== testname && file.startsWith(testname)) {
+        taggedLogs.push({
+          tag: filename.slice(testname.length + 1), // since the filename is `{testname}-{tag}.log`, we extract the tag
+          logs: String(readFileSync(`${testDir}/${file}`)),
+        });
+      }
+    }
+    return taggedLogs;
+  } catch (err) {
+    logger.warn(
+      `Failed with ${err} when trying to get directory contents of test log directory (${testDir})`,
+    );
+    return [];
+  }
+}
 
 const logFileDestination = pino.destination({
   dest: logFile,
@@ -14,17 +57,38 @@ const prettyConsoleTransport = pino.transport({
   options: {
     colorize: true,
     // Note: we are ignoring the common bindings to keep the cli log clean.
-    ignore: 'test,module,tag',
+    ignore: 'test,module,tag,startTime',
   },
 });
 
+export const getIsoTime = () => {
+  // Getting the time using the time function of pino, there might be a better way to do this.
+  const { time } = JSON.parse(`{"noop": "nothing"${pino.stdTimeFunctions.isoTime()}}`);
+  return time as string;
+};
+
 // Log the given value without having to include %s in the message. Just like console.log
-function logMethod(this: pino.Logger, args: Parameters<pino.LogFn>, method: pino.LogFn) {
+function logMethod(
+  this: pino.Logger,
+  args: Parameters<pino.LogFn>,
+  method: pino.LogFn,
+  level: number,
+) {
   const newArgs = args;
   if (args.length === 2 && !args[0].includes('%s')) {
     newArgs[0] = `${args[0]} %s`;
   }
   method.apply(this, newArgs);
+
+  // Append log line to file. We ignore log levels that are 'trace' or below.
+  if (level > this.levels.values.trace) {
+    const testLogFile = getTestLogFile(this);
+    if (!existsSync(dirname(testLogFile))) {
+      mkdirSync(dirname(testLogFile), { recursive: true });
+    }
+    const logLine = `[${getIsoTime()}] ${toUpperCase(this.levels.labels[level])}: ${newArgs}\n`;
+    appendFileSync(testLogFile, logLine);
+  }
 }
 
 export const globalLogger: Logger = pino(
@@ -32,7 +96,8 @@ export const globalLogger: Logger = pino(
     hooks: { logMethod },
     level: 'trace',
     // We don't want to log the hostname or pid
-    base: undefined,
+    // We do want to save the start time.
+    base: { startTime: getIsoTime() },
     timestamp: pino.stdTimeFunctions.isoTime,
     // Log the level as a string ("info") instead of a number (30)
     formatters: {

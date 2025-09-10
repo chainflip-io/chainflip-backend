@@ -14,62 +14,33 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(feature = "std")]
-
 use crate::{
 	address::IntoForeignChainAddress,
 	evm::{api::EvmReplayProtection, TransactionFee},
 	IntoTransactionInIdForAnyChain, *,
 };
 use cf_utilities::SliceToArray;
+use codec::{Decode, Encode};
+use frame_support::parameter_types;
 use sp_core::{ConstBool, H160};
 use sp_std::marker::PhantomData;
-use std::cell::RefCell;
 
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockEthereum;
 
 pub type MockEthereumChannelId = u128;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum ChainChoice {
 	Ethereum,
 	Polkadot,
 	Bitcoin,
 }
 
-thread_local! {
-	static MOCK_KEY_HANDOVER_IS_REQUIRED: RefCell<bool> = const { RefCell::new(true) };
-	static MOCK_VALID_METADATA: RefCell<bool> = const { RefCell::new(true) };
-	static MOCK_BROADCAST_BARRIERS: RefCell<ChainChoice> = const { RefCell::new(ChainChoice::Ethereum) };
-}
-
-pub struct MockKeyHandoverIsRequired;
-
-impl MockKeyHandoverIsRequired {
-	pub fn set(value: bool) {
-		MOCK_KEY_HANDOVER_IS_REQUIRED.with(|v| *v.borrow_mut() = value);
-	}
-}
-
-impl Get<bool> for MockKeyHandoverIsRequired {
-	fn get() -> bool {
-		MOCK_KEY_HANDOVER_IS_REQUIRED.with(|v| *v.borrow())
-	}
-}
-
-pub struct MockBroadcastBarriers;
-
-impl MockBroadcastBarriers {
-	pub fn set(value: ChainChoice) {
-		MOCK_BROADCAST_BARRIERS.with(|v| *v.borrow_mut() = value);
-	}
-}
-
-impl Get<ChainChoice> for MockBroadcastBarriers {
-	fn get() -> ChainChoice {
-		MOCK_BROADCAST_BARRIERS.with(|v| (*v.borrow()).clone())
-	}
+parameter_types! {
+	pub storage MockKeyHandoverIsRequired: bool = true;
+	storage MockValidMetadata: bool = true;
+	pub storage MockBroadcastBarriers: ChainChoice = ChainChoice::Ethereum;
 }
 
 #[derive(
@@ -83,7 +54,7 @@ impl TransactionMetadata<MockEthereum> for MockEthereumTransactionMetadata {
 	}
 
 	fn verify_metadata(&self, _expected_metadata: &Self) -> bool {
-		MOCK_VALID_METADATA.with(|cell| *cell.borrow())
+		MockValidMetadata::get()
 	}
 }
 
@@ -96,7 +67,7 @@ impl BenchmarkValue for MockEthereumTransactionMetadata {
 
 impl MockEthereumTransactionMetadata {
 	pub fn set_validity(valid: bool) {
-		MOCK_VALID_METADATA.with(|cell| *cell.borrow_mut() = valid);
+		MockValidMetadata::set(&valid);
 	}
 }
 
@@ -144,8 +115,10 @@ impl Chain for MockEthereum {
 }
 
 impl ToHumanreadableAddress for u64 {
+	#[cfg(feature = "std")]
 	type Humanreadable = u64;
 
+	#[cfg(feature = "std")]
 	fn to_humanreadable(
 		&self,
 		_network_environment: cf_primitives::NetworkEnvironment,
@@ -224,30 +197,11 @@ impl BenchmarkValue for MockTrackedData {
 }
 
 impl FeeEstimationApi<MockEthereum> for MockTrackedData {
-	fn estimate_ingress_fee(
+	fn estimate_fee(
 		&self,
 		_asset: <MockEthereum as Chain>::ChainAsset,
+		_ingress_or_egress: IngressOrEgress,
 	) -> <MockEthereum as Chain>::ChainAmount {
-		unimplemented!("Unused for now.")
-	}
-
-	fn estimate_ingress_fee_vault_swap(&self) -> Option<<MockEthereum as Chain>::ChainAmount> {
-		unimplemented!("Unused for now.")
-	}
-
-	fn estimate_egress_fee(
-		&self,
-		_asset: <MockEthereum as Chain>::ChainAsset,
-	) -> <MockEthereum as Chain>::ChainAmount {
-		unimplemented!("Unused for now.")
-	}
-
-	fn estimate_ccm_fee(
-		&self,
-		_asset: <MockEthereum as Chain>::ChainAsset,
-		_gas_budget: GasAmount,
-		_message_length: usize,
-	) -> Option<<MockEthereum as Chain>::ChainAmount> {
 		unimplemented!("Unused for now.")
 	}
 }
@@ -444,7 +398,7 @@ where
 	}
 
 	fn refresh_replay_protection(&mut self) {
-		REFRESHED_REPLAY_PROTECTION.with(|is_valid| *is_valid.borrow_mut() = true)
+		RefreshedReplayProtection::set(&true)
 	}
 
 	fn signer(&self) -> Option<<C as ChainCrypto>::AggKey> {
@@ -452,22 +406,22 @@ where
 	}
 }
 
-thread_local! {
-	pub static REQUIRES_REFRESH: std::cell::RefCell<bool> = const { RefCell::new(false) };
-	pub static REFRESHED_REPLAY_PROTECTION: std::cell::RefCell<bool> = const { RefCell::new(false) };
+parameter_types! {
+	pub storage RequiresRefresh: bool = false;
+	pub storage RefreshedReplayProtection: bool = false;
 }
 
 pub struct MockTransactionBuilder<C, Call>(PhantomData<(C, Call)>);
 
 impl<C, Call> MockTransactionBuilder<C, Call> {
 	pub fn set_requires_refresh() {
-		REQUIRES_REFRESH.with(|is_valid| *is_valid.borrow_mut() = true)
+		RequiresRefresh::set(&true)
 	}
 	pub fn set_refreshed_replay_protection() {
-		REFRESHED_REPLAY_PROTECTION.with(|is_valid| *is_valid.borrow_mut() = false)
+		RefreshedReplayProtection::set(&false)
 	}
 	pub fn get_refreshed_replay_protection_state() -> bool {
-		REFRESHED_REPLAY_PROTECTION.with(|is_valid| *is_valid.borrow())
+		RefreshedReplayProtection::get()
 	}
 }
 
@@ -487,7 +441,7 @@ impl<C: Chain<Transaction = MockTransaction>, Call: ApiCall<C::ChainCrypto>>
 		_payload: &<<C as Chain>::ChainCrypto as ChainCrypto>::Payload,
 		_maybe_current_on_chain_key: Option<<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
 	) -> RequiresSignatureRefresh<C::ChainCrypto, Call> {
-		if REQUIRES_REFRESH.with(|is_valid| *is_valid.borrow()) {
+		if RequiresRefresh::get() {
 			RequiresSignatureRefresh::True(None)
 		} else {
 			RequiresSignatureRefresh::False

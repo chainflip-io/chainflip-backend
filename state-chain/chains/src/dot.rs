@@ -23,6 +23,7 @@ pub mod benchmarking;
 #[cfg(feature = "std")]
 pub mod serializable_address;
 
+use cf_runtime_utilities::log_or_panic;
 use cf_utilities::SliceToArray;
 #[cfg(feature = "std")]
 pub use serializable_address::*;
@@ -306,26 +307,31 @@ pub mod fee_constants {
 }
 
 impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
-	fn estimate_ingress_fee(
+	fn estimate_fee(
 		&self,
 		_asset: <Polkadot as Chain>::ChainAsset,
+		ingress_or_egress: IngressOrEgress,
 	) -> <Polkadot as Chain>::ChainAmount {
-		use fee_constants::fetch::*;
-
-		self.median_tip + fetch::EXTRINSIC_FEE
-	}
-
-	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Polkadot as Chain>::ChainAmount> {
-		None
-	}
-
-	fn estimate_egress_fee(
-		&self,
-		_asset: <Polkadot as Chain>::ChainAsset,
-	) -> <Polkadot as Chain>::ChainAmount {
-		use fee_constants::transfer::*;
-
-		self.median_tip + transfer::EXTRINSIC_FEE
+		match ingress_or_egress {
+			IngressOrEgress::IngressDepositChannel => {
+				use fee_constants::fetch::*;
+				self.median_tip + fetch::EXTRINSIC_FEE
+			},
+			IngressOrEgress::IngressVaultSwap => {
+				log_or_panic!("Tried to get IngressVaultSwap fees for Polkadot, but vault swaps are not supported.");
+				0
+			},
+			IngressOrEgress::Egress => {
+				use fee_constants::transfer::*;
+				self.median_tip + transfer::EXTRINSIC_FEE
+			},
+			IngressOrEgress::EgressCcm { .. } => {
+				log_or_panic!(
+					"Tried to get EgressCcm fees for Polkadot, but egress ccm is not supported."
+				);
+				0
+			},
+		}
 	}
 }
 
@@ -1151,13 +1157,13 @@ mod test_polkadot_extrinsics {
 			median_tip: Default::default(),
 			runtime_version: Default::default(),
 		}
-		.estimate_ingress_fee(assets::dot::Asset::Dot);
+		.estimate_fee(assets::dot::Asset::Dot, IngressOrEgress::IngressDepositChannel);
 
 		let egress_fee = PolkadotTrackedData {
 			median_tip: Default::default(),
 			runtime_version: Default::default(),
 		}
-		.estimate_egress_fee(assets::dot::Asset::Dot);
+		.estimate_fee(assets::dot::Asset::Dot, IngressOrEgress::Egress);
 
 		// The values are not important. This test serves more as a sanity check that
 		// the fees are valid, and a reference to compare against the actual fees. These values must

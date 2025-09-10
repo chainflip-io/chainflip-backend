@@ -16,6 +16,7 @@
 
 use cf_primitives::{chains::assets::any, Price};
 use cf_runtime_utilities::log_or_panic;
+use cf_utilities::macros::*;
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::{Get, RuntimeDebug, H160};
 use sp_std::vec::Vec;
@@ -30,6 +31,7 @@ use pallet_cf_elections::{
 				ChainlinkAssetpair, ChainlinkPrice,
 			},
 			price::PriceAsset,
+			primitives::{Seconds, UnixTime},
 			state_machine::OPTypes,
 		},
 	},
@@ -49,7 +51,7 @@ use pallet_cf_elections::{
 		},
 		oracle_price::{consensus::OraclePriceConsensus, primitives::*, state_machine::*},
 		state_machine::{
-			core::{def_derive, Hook},
+			core::Hook,
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 	},
@@ -98,7 +100,7 @@ pub fn decode_and_get_latest_oracle_price<T: OPTypes>(asset: any::Asset) -> Opti
 
 //--------------- voter settings -------------
 
-def_derive! {
+derive_common_traits! {
 	#[derive(TypeInfo)]
 	pub struct ChainlinkOraclePriceSettings<C: Container = VectorContainer> {
 		pub sol_oracle_program_id: SolAddress,

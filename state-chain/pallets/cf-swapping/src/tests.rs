@@ -92,7 +92,7 @@ struct TestSwapParams {
 	input_asset: Asset,
 	output_asset: Asset,
 	input_amount: AssetAmount,
-	refund_params: Option<ChannelRefundParametersCheckedInternal<u64>>,
+	price_limits_and_expiry: Option<PriceLimitsAndExpiry<u64>>,
 	dca_params: Option<DcaParameters>,
 	output_address: ForeignChainAddress,
 	is_ccm: bool,
@@ -108,7 +108,8 @@ impl TestSwapParams {
 			input_asset: INPUT_ASSET,
 			output_asset: OUTPUT_ASSET,
 			input_amount: INPUT_AMOUNT,
-			refund_params: refund_params.map(|params| params.into_extended_params(INPUT_AMOUNT)),
+			price_limits_and_expiry: refund_params
+				.map(|params| params.into_extended_params(INPUT_AMOUNT)),
 			dca_params,
 			output_address: (*EVM_OUTPUT_ADDRESS).clone(),
 			is_ccm,
@@ -127,23 +128,22 @@ struct TestRefundParams {
 impl TestRefundParams {
 	/// Due to rounding errors, you may have to set the `min_output` to a value one unit higher than
 	/// expected.
-	fn into_extended_params(
-		self,
-		input_amount: AssetAmount,
-	) -> ChannelRefundParametersCheckedInternal<u64> {
+	fn into_extended_params(self, input_amount: AssetAmount) -> PriceLimitsAndExpiry<u64> {
 		use cf_amm::math::{bounded_sqrt_price, sqrt_price_to_price};
 
-		ChannelRefundParametersCheckedInternal {
-			retry_duration: self.retry_duration,
-			refund_address: AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(
-				[10; 20].into(),
-			)),
+		PriceLimitsAndExpiry {
+			expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+				retry_duration: self.retry_duration,
+				refund_address: AccountOrAddress::ExternalAddress(ForeignChainAddress::Eth(
+					[10; 20].into(),
+				)),
+				refund_ccm_metadata: None,
+			},
 			min_price: sqrt_price_to_price(bounded_sqrt_price(
 				self.min_output.into(),
 				input_amount.into(),
 			)),
 			max_oracle_price_slippage: None,
-			refund_ccm_metadata: None,
 		}
 	}
 }
@@ -167,7 +167,7 @@ fn create_test_swap(
 			input_asset,
 			output_asset,
 			state: SwapRequestState::UserSwap {
-				refund_params: None,
+				price_limits_and_expiry: None,
 				output_action: SwapOutputAction::Egress {
 					ccm_deposit_metadata: None,
 					output_address: ForeignChainAddress::Eth(H160::zero()),
@@ -188,7 +188,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			input_asset: Asset::Flip,
 			output_asset: Asset::Usdc,
 			input_amount: 100,
-			refund_params: None,
+			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([2; 20].into()),
 			is_ccm: false,
@@ -198,7 +198,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			input_asset: Asset::Eth,
 			output_asset: Asset::Usdc,
 			input_amount: 40,
-			refund_params: None,
+			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([9; 20].into()),
 			is_ccm: false,
@@ -208,7 +208,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			input_asset: Asset::Flip,
 			output_asset: Asset::Eth,
 			input_amount: 500,
-			refund_params: None,
+			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([2; 20].into()),
 			is_ccm: false,
@@ -218,7 +218,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			input_asset: Asset::Flip,
 			output_asset: Asset::Dot,
 			input_amount: 600,
-			refund_params: None,
+			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([4; 32])),
 			is_ccm: false,
@@ -251,7 +251,7 @@ fn insert_swaps(swaps: &[TestSwapParams]) {
 			swap.output_asset,
 			request_type,
 			bounded_vec![Beneficiary { account: broker_id as u64, bps: BROKER_FEE_BPS }],
-			swap.refund_params.clone(),
+			swap.price_limits_and_expiry.clone(),
 			swap.dca_params.clone(),
 			SwapOrigin::Vault {
 				tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
@@ -785,6 +785,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					output_asset: OUTPUT_ASSET,
 					output_amount: ZERO_AMOUNT,
 					intermediate_amount: None,
+					oracle_delta: None,
 				}),
 			);
 		})
@@ -1059,7 +1060,8 @@ fn swaps_get_retried_after_failure() {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: SwapId(1),
-					execute_at: RETRY_AT_BLOCK
+					execute_at: RETRY_AT_BLOCK,
+					reason: SwapFailureReason::PriceImpactLimit,
 				})
 			);
 
@@ -1067,7 +1069,8 @@ fn swaps_get_retried_after_failure() {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: SwapId(2),
-					execute_at: RETRY_AT_BLOCK
+					execute_at: RETRY_AT_BLOCK,
+					reason: SwapFailureReason::PriceImpactLimit,
 				})
 			);
 
@@ -1431,6 +1434,7 @@ mod swap_batching {
 				broker_fee_taken: None,
 				stable_amount,
 				final_output: None,
+				oracle_delta: None,
 			}
 		}
 	}
@@ -1520,7 +1524,7 @@ mod swap_batching {
 						input_asset,
 						output_asset,
 						input_amount,
-						refund_params: None,
+						price_limits_and_expiry: None,
 						dca_params: None,
 						output_address: ForeignChainAddress::Eth([2; 20].into()),
 						is_ccm: false,
@@ -1546,7 +1550,8 @@ mod swap_batching {
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 					RuntimeEvent::Swapping(Event::SwapRescheduled {
 						swap_id: SwapId(1),
-						execute_at: SWAP_RESCHEDULED_BLOCK
+						execute_at: SWAP_RESCHEDULED_BLOCK,
+						reason: SwapFailureReason::PriceImpactLimit,
 					}),
 				);
 
@@ -1588,7 +1593,7 @@ mod swap_batching {
 						input_asset,
 						output_asset,
 						input_amount,
-						refund_params: None,
+						price_limits_and_expiry: None,
 						dca_params: None,
 						output_address: ForeignChainAddress::Eth([2; 20].into()),
 						is_ccm: false,
@@ -1773,6 +1778,10 @@ mod internal_swaps {
 
 				assert_event_sequence!(
 					Test,
+					RuntimeEvent::Swapping(Event::SwapAborted {
+						swap_id: SwapId(2),
+						reason: SwapFailureReason::MinPriceViolation
+					}),
 					RuntimeEvent::Swapping(Event::SwapRequested {
 						request_type: SwapRequestTypeEncoded::NetworkFee,
 						input_amount: REFUND_FEE,

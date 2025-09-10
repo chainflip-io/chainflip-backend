@@ -28,6 +28,7 @@ use frame_support::{
 	Parameter,
 };
 use itertools::Itertools;
+use sp_runtime::traits::Saturating;
 use sp_std::vec::Vec;
 
 pub trait UpdateFeeHook<Value> {
@@ -42,61 +43,48 @@ pub trait UpdateFeeHook<Value> {
 ///
 /// `Settings` can be used by governance to provide information to authorities about exactly how
 /// they should `vote`.
-pub struct UnsafeMedian<
-	Value,
-	UnsynchronisedSettings,
-	Settings,
-	Hook,
-	ValidatorId,
-	StateChainBlockNumber,
-> {
-	_phantom: core::marker::PhantomData<(
-		Value,
-		UnsynchronisedSettings,
-		Settings,
-		Hook,
-		ValidatorId,
-		StateChainBlockNumber,
-	)>,
+pub struct UnsafeMedian<Value, Settings, Hook, ValidatorId, StateChainBlockNumber> {
+	_phantom:
+		core::marker::PhantomData<(Value, Settings, Hook, ValidatorId, StateChainBlockNumber)>,
 }
 impl<
 		Value: Member + Parameter + MaybeSerializeDeserialize + Ord + BenchmarkValue,
-		UnsynchronisedSettings: Member + Parameter + MaybeSerializeDeserialize,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: UpdateFeeHook<Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize + Default + Saturating,
 	> ElectoralSystemTypes
-	for UnsafeMedian<Value, UnsynchronisedSettings, Settings, Hook, ValidatorId, StateChainBlockNumber>
+	for UnsafeMedian<Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	type ValidatorId = ValidatorId;
 	type StateChainBlockNumber = StateChainBlockNumber;
 
-	type ElectoralUnsynchronisedState = Value;
+	// (the current value, last statechain block when it was updated)
+	type ElectoralUnsynchronisedState = (Value, StateChainBlockNumber);
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
 
-	type ElectoralUnsynchronisedSettings = UnsynchronisedSettings;
+	type ElectoralUnsynchronisedSettings = StateChainBlockNumber;
 	type ElectoralSettings = Settings;
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = ();
 	type ElectionState = ();
-	type VoteStorage =
-		vote_storage::individual::Individual<(), vote_storage::individual::shared::Shared<Value>>;
+	type VoteStorage = vote_storage::individual::Individual<
+		(),
+		vote_storage::individual::identity::Identity<Value>,
+	>;
 	type Consensus = Value;
-	type OnFinalizeContext = ();
+	type OnFinalizeContext = StateChainBlockNumber;
 	type OnFinalizeReturn = ();
 }
 
 impl<
 		Value: Member + Parameter + MaybeSerializeDeserialize + Ord + BenchmarkValue,
-		UnsynchronisedSettings: Member + Parameter + MaybeSerializeDeserialize,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: UpdateFeeHook<Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem
-	for UnsafeMedian<Value, UnsynchronisedSettings, Settings, Hook, ValidatorId, StateChainBlockNumber>
+		StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize + Default + Saturating,
+	> ElectoralSystem for UnsafeMedian<Value, Settings, Hook, ValidatorId, StateChainBlockNumber>
 {
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
@@ -108,8 +96,13 @@ impl<
 
 	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
 		election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
-		_context: &Self::OnFinalizeContext,
+		current_statechain_block: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
+		let (_current_value, last_updated_statechain_block) =
+			ElectoralAccess::unsynchronised_state()?;
+
+		let update_period = ElectoralAccess::unsynchronised_settings()?;
+
 		if let Some(election_identifier) = election_identifiers
 			.into_iter()
 			.at_most_one()
@@ -118,11 +111,20 @@ impl<
 			let election_access = ElectoralAccess::election_mut(election_identifier);
 			if let Some(consensus) = election_access.check_consensus()?.has_consensus() {
 				election_access.delete();
-				ElectoralAccess::set_unsynchronised_state(consensus.clone())?;
+				ElectoralAccess::set_unsynchronised_state((
+					consensus.clone(),
+					current_statechain_block.clone(),
+				))?;
 				Hook::update_fee(consensus);
-				ElectoralAccess::new_election((), (), ())?;
+
+				// we have to immediately create a new election if we want one on every SC block
+				if update_period == Default::default() {
+					ElectoralAccess::new_election((), (), ())?;
+				}
 			}
-		} else {
+		} else if current_statechain_block.clone().saturating_sub(last_updated_statechain_block) >=
+			update_period
+		{
 			ElectoralAccess::new_election((), (), ())?;
 		}
 

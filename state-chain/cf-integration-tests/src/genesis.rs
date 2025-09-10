@@ -17,10 +17,7 @@
 use pallet_cf_reputation::HeartbeatQualification;
 use sp_std::collections::btree_set::BTreeSet;
 
-use crate::mock_runtime::{
-	ExtBuilder, BACKUP_NODE_EMISSION_INFLATION_PERBILL,
-	CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
-};
+use crate::mock_runtime::{ExtBuilder, CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL};
 
 use super::*;
 use cf_primitives::AccountRole;
@@ -121,12 +118,6 @@ fn state_of_genesis_is_as_expected() {
 			"invalid emission inflation for authorities"
 		);
 
-		assert_eq!(
-			Emissions::backup_node_emission_inflation(),
-			BACKUP_NODE_EMISSION_INFLATION_PERBILL,
-			"invalid emission inflation for backup authorities"
-		);
-
 		for account in &accounts {
 			assert_eq!(
 				Reputation::reputation(account),
@@ -144,7 +135,7 @@ fn state_of_genesis_is_as_expected() {
 
 		for account in accounts.iter() {
 			// TODO: Check historical epochs
-			assert_eq!(ChainflipAccountState::CurrentAuthority, get_validator_state(account));
+			assert!(is_current_authority(account), "{} should be a current authority", account);
 		}
 	});
 }

@@ -66,16 +66,22 @@ async function startBrokerAndLpApi(localnetInitPath: string, binaryPath: string,
   logger.info('Starting new broker and lp-api.');
 
   await execWithLog(
-    `${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`,
+    `${localnetInitPath}/scripts/start-broker-api.sh`,
+    [`${binaryPath}`],
     'start-broker-api',
     {
       KEYS_DIR: keysDir,
     },
   );
 
-  await execWithLog(`${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`, 'start-lp-api', {
-    KEYS_DIR: keysDir,
-  });
+  await execWithLog(
+    `${localnetInitPath}/scripts/start-lp-api.sh`,
+    [`${binaryPath}`],
+    'start-lp-api',
+    {
+      KEYS_DIR: keysDir,
+    },
+  );
 
   await sleep(10000);
 
@@ -98,6 +104,7 @@ async function startDepositMonitor(localnetInitPath: string) {
 
   await execWithLog(
     `${localnetInitPath}/scripts/start-deposit-monitor.sh`,
+    [],
     'start-deposit-monitor',
     {
       LOCALNET_INIT_DIR: `${localnetInitPath}`,
@@ -122,7 +129,7 @@ async function compatibleUpgrade(
 
   const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
 
-  await execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, 'start-all-nodes', {
+  await execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, [], 'start-all-nodes', {
     INIT_RPC_PORT: `9944`,
     KEYS_DIR,
     NODE_COUNT: nodeCount,
@@ -137,6 +144,7 @@ async function compatibleUpgrade(
   // engines crashed when node shutdown, so restart them.
   await execWithLog(
     `${localnetInitPath}/scripts/start-all-engines.sh`,
+    [],
     'start-all-engines-post-upgrade',
     {
       INIT_RUN: 'false',
@@ -202,7 +210,7 @@ async function incompatibleUpgradeNoBuild(
   const KEYS_DIR = `${localnetInitPath}/keys`;
 
   const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
-  await execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, 'start-all-nodes', {
+  await execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, [], 'start-all-nodes', {
     INIT_RPC_PORT: `9944`,
     KEYS_DIR,
     NODE_COUNT: nodeCount,
@@ -231,6 +239,7 @@ async function incompatibleUpgradeNoBuild(
   // Restart the engines
   await execWithLog(
     `${localnetInitPath}/scripts/start-all-engines.sh`,
+    [],
     'start-all-engines-post-upgrade',
     {
       INIT_RUN: 'false',

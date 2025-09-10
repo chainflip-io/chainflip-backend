@@ -34,4 +34,25 @@ export async function setupElections(logger: Logger): Promise<void> {
   } else {
     logger.info('Ignoring bitcoin elections setup as bitcoinElections pallet is not available.');
   }
+
+  if (chainflip.query.genericElections) {
+    const upToDateTimeout = 86400;
+
+    const response = JSON.parse(
+      (await chainflip.query.genericElections.electoralUnsynchronisedSettings()) as any,
+    );
+
+    // Set large timeouts for oracle elections so all oracle prices are seen as up to date
+    response.solana.upToDateTimeout = upToDateTimeout;
+    response.ethereum.upToDateTimeout = upToDateTimeout;
+
+    // update election settings
+    await submitGovernanceExtrinsic((api) =>
+      api.tx.genericElections.updateSettings(response, null, 'Heed'),
+    );
+
+    logger.info(`Oracle elections timeout set to ${upToDateTimeout}.`);
+  } else {
+    logger.info('Ignoring Oracle elections setup as genericElections pallet is not available.');
+  }
 }

@@ -138,7 +138,12 @@ try-runtime = [
 	"sp-runtime/try-runtime",
 	"cf-runtime-utilities/try-runtime",
 ]
-
-runtime-integration-tests = ["std", "dep:rand", "ed25519-dalek/rand_core",]
-
+runtime-integration-tests = [
+	"std",
+	"mocks",
+	"dep:rand",
+	"ed25519-dalek/rand_core",
+	"sol-prim/runtime-integration-tests",
+]
 test = ["proptest"]
+mocks = []

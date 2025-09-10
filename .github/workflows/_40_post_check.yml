@@ -24,6 +24,9 @@ on:
       log-postfix:
         type: string
         default: "-post-check"
+      chain:
+        type: string
+        default: "dev"
 
 env:
   FORCE_COLOR: 1
@@ -31,7 +34,7 @@ env:
   NODE_COUNT: "${{ inputs.node-count }}-node"
   BROKER_ENDPOINT: "${{ inputs.broker-endpoint }}"
   LP_ENDPOINT: "${{ inputs.lp-endpoint }}"
-
+  CHAIN: "${{ inputs.chain }}"
 permissions:
   packages: read
   contents: read
@@ -66,7 +69,7 @@ jobs:
           password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
 
       - name: Configure NodeJS 🛠️
-        uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version-file: ./bouncer/.nvmrc
           cache: "pnpm"
@@ -154,6 +157,12 @@ jobs:
           | jq -r '.result.number' \
           | xargs printf "%d\n")
           ./commands/explorer.ts 0 $BLOCK_HEIGHT > /tmp/chainflip/statechain_explorer.txt
+          BLOCK_HEIGHT=$(curl -s -H "Content-Type: application/json" \
+          -d '{"jsonrpc":"2.0","method":"chain_getHeader","params":[],"id":1}' \
+          http://localhost:9947 \
+          | jq -r '.result.number' \
+          | xargs printf "%d\n")
+          CF_NODE_ENDPOINT=ws://localhost:9947 ./commands/explorer.ts 0 $BLOCK_HEIGHT > /tmp/chainflip/polkadot_explorer.txt
           BLOCK_HEIGHT=$(curl -s -H "Content-Type: application/json" \
           -d '{"jsonrpc":"2.0","method":"chain_getHeader","params":[],"id":1}' \
           http://localhost:9955 \

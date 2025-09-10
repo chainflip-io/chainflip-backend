@@ -428,8 +428,8 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			RuntimeSafeMode::<T>::put(match update.clone() {
-				SafeModeUpdate::CodeGreen => SafeMode::CODE_GREEN,
-				SafeModeUpdate::CodeRed => SafeMode::CODE_RED,
+				SafeModeUpdate::CodeGreen => SafeMode::code_green(),
+				SafeModeUpdate::CodeRed => SafeMode::code_red(),
 				SafeModeUpdate::CodeAmber(safe_mode) => safe_mode,
 			});
 

@@ -14,10 +14,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(feature = "std")]
+#![cfg(feature = "mocks")]
 
 use codec::{Decode, Encode, EncodeLike};
 use frame_support::{storage, StorageHasher, Twox64Concat};
+use sp_std::vec::Vec;
 
 pub mod account_role_registry;
 pub mod address_converter;
@@ -42,6 +43,7 @@ pub mod eth_environment_provider;
 pub mod fee_payment;
 pub mod fetches_transfers_limit_provider;
 pub mod flip_burn_info;
+pub mod flip_slasher;
 pub mod funding_info;
 pub mod ingress_egress_fee_handler;
 pub mod key_provider;
@@ -49,12 +51,12 @@ pub mod key_rotator;
 pub mod lending_pools;
 pub mod liability_tracker;
 pub mod offence_reporting;
-pub mod on_account_funded;
 pub mod pool_api;
 pub mod pool_price_api;
 pub mod price_feed_api;
 pub mod qualify_node;
 pub mod reputation_resetter;
+pub mod rewards_distribution;
 pub mod safe_mode;
 pub mod signer_nomination;
 pub mod swap_parameter_validation;

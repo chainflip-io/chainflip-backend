@@ -25,10 +25,24 @@ use frame_support::assert_ok;
 use scale_info::TypeInfo;
 
 // Define two `ExactValue` ElectoralSystems.
-type WitnessExactValueWithStorage =
-	ExactValue<MockIdentifier, Vec<u32>, (), MockHook<true>, u32, u64>;
-type WitnessExactValueWithoutStorage =
-	ExactValue<MockIdentifier, Vec<u32>, (), MockHook<false>, u32, u64>;
+type WitnessExactValueWithStorage = ExactValue<
+	MockIdentifier,
+	Vec<u32>,
+	(),
+	MockHook<true>,
+	u32,
+	u64,
+	crate::vote_storage::bitmap::Bitmap<Vec<u32>>,
+>;
+type WitnessExactValueWithoutStorage = ExactValue<
+	MockIdentifier,
+	Vec<u32>,
+	(),
+	MockHook<false>,
+	u32,
+	u64,
+	crate::vote_storage::bitmap::Bitmap<Vec<u32>>,
+>;
 
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, PartialOrd, Ord, Default)]
 pub struct MockIdentifier(Vec<u32>);

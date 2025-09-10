@@ -56,7 +56,7 @@ fn skip_refunding_if_safe_mode_is_enabled() {
 		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 100);
 
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
-			refunding: crate::PalletSafeMode::CODE_RED,
+			refunding: crate::PalletSafeMode::code_red(),
 		});
 
 		Pallet::<Test>::trigger_reconciliation();

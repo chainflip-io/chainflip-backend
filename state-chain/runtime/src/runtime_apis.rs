@@ -57,6 +57,8 @@ use sp_std::{
 	vec::Vec,
 };
 
+pub use pallet_cf_validator::DelegationSnapshot;
+
 type VanityName = Vec<u8>;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
@@ -69,11 +71,11 @@ pub enum VaultSwapDetails<BtcAddress> {
 	},
 	Ethereum {
 		#[serde(flatten)]
-		details: EvmVaultSwapDetails,
+		details: EvmCallDetails,
 	},
 	Arbitrum {
 		#[serde(flatten)]
-		details: EvmVaultSwapDetails,
+		details: EvmCallDetails,
 	},
 	Solana {
 		#[serde(flatten)]
@@ -82,7 +84,7 @@ pub enum VaultSwapDetails<BtcAddress> {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-pub struct EvmVaultSwapDetails {
+pub struct EvmCallDetails {
 	/// The encoded calldata payload including function selector.
 	#[serde(with = "sp_core::bytes")]
 	pub calldata: Vec<u8>,
@@ -97,11 +99,11 @@ pub struct EvmVaultSwapDetails {
 }
 
 impl<BtcAddress> VaultSwapDetails<BtcAddress> {
-	pub fn ethereum(details: EvmVaultSwapDetails) -> Self {
+	pub fn ethereum(details: EvmCallDetails) -> Self {
 		VaultSwapDetails::Ethereum { details }
 	}
 
-	pub fn arbitrum(details: EvmVaultSwapDetails) -> Self {
+	pub fn arbitrum(details: EvmCallDetails) -> Self {
 		VaultSwapDetails::Arbitrum { details }
 	}
 
@@ -119,17 +121,48 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
-pub enum BackupOrPassive {
-	Backup,
-	Passive,
+pub mod validator_info_before_v7 {
+	use super::*;
+	#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+	pub struct ValidatorInfo {
+		pub balance: AssetAmount,
+		pub bond: AssetAmount,
+		pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
+		pub reputation_points: i32,
+		pub keyholder_epochs: Vec<EpochIndex>,
+		pub is_current_authority: bool,
+		#[deprecated]
+		pub is_current_backup: bool,
+		pub is_qualified: bool,
+		pub is_online: bool,
+		pub is_bidding: bool,
+		pub bound_redeem_address: Option<EthereumAddress>,
+		pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
+		pub restricted_balances: BTreeMap<EthereumAddress, AssetAmount>,
+		pub estimated_redeemable_balance: AssetAmount,
+	}
 }
 
-// TEMP: so frontend doesn't break after removal of passive from backend
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
-pub enum ChainflipAccountStateWithPassive {
-	CurrentAuthority,
-	BackupOrPassive(BackupOrPassive),
+impl From<validator_info_before_v7::ValidatorInfo> for ValidatorInfo {
+	fn from(old: validator_info_before_v7::ValidatorInfo) -> Self {
+		ValidatorInfo {
+			balance: old.balance,
+			bond: old.bond,
+			last_heartbeat: old.last_heartbeat,
+			reputation_points: old.reputation_points,
+			keyholder_epochs: old.keyholder_epochs,
+			is_current_authority: old.is_current_authority,
+			is_current_backup: old.is_current_backup,
+			is_qualified: old.is_qualified,
+			is_online: old.is_online,
+			is_bidding: old.is_bidding,
+			bound_redeem_address: old.bound_redeem_address,
+			apy_bp: old.apy_bp,
+			restricted_balances: old.restricted_balances,
+			estimated_redeemable_balance: old.estimated_redeemable_balance,
+			operator: None,
+		}
+	}
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
@@ -140,6 +173,7 @@ pub struct ValidatorInfo {
 	pub reputation_points: i32,
 	pub keyholder_epochs: Vec<EpochIndex>,
 	pub is_current_authority: bool,
+	#[deprecated]
 	pub is_current_backup: bool,
 	pub is_qualified: bool,
 	pub is_online: bool,
@@ -151,8 +185,7 @@ pub struct ValidatorInfo {
 	pub operator: Option<AccountId32>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
 pub struct OperatorInfo<Amount> {
 	pub managed_validators: BTreeMap<AccountId32, Amount>,
 	pub settings: OperatorSettings,
@@ -160,15 +193,32 @@ pub struct OperatorInfo<Amount> {
 	pub allowed: Vec<AccountId32>,
 	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Vec::is_empty"))]
 	pub blocked: Vec<AccountId32>,
+	// TODO: ensure max bid is respected.
 	pub delegators: BTreeMap<AccountId32, Amount>,
-	pub flip_balance: Amount,
+	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Option::is_none"))]
+	pub active_delegation: Option<DelegationSnapshot<AccountId32, Amount>>,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
+pub struct DelegationInfo<Amount> {
+	pub operator: AccountId32,
+	pub bid: Amount,
+}
+
+impl<Amount> DelegationInfo<Amount> {
+	pub fn map_bid<B>(self, f: impl Fn(Amount) -> B + 'static) -> DelegationInfo<B> {
+		DelegationInfo { operator: self.operator, bid: f(self.bid) }
+	}
+	pub fn try_map_bid<B, E>(
+		self,
+		f: impl Fn(Amount) -> Result<B, E>,
+	) -> Result<DelegationInfo<B>, E> {
+		Ok(DelegationInfo { operator: self.operator, bid: f(self.bid)? })
+	}
 }
 
 impl<A> OperatorInfo<A> {
-	pub fn map_amounts<F, B>(self, f: F) -> OperatorInfo<B>
-	where
-		F: Fn(A) -> B,
-	{
+	pub fn map_amounts<B>(self, f: impl Fn(A) -> B + 'static) -> OperatorInfo<B> {
 		OperatorInfo {
 			managed_validators: self
 				.managed_validators
@@ -179,8 +229,30 @@ impl<A> OperatorInfo<A> {
 			allowed: self.allowed,
 			blocked: self.blocked,
 			delegators: self.delegators.into_iter().map(|(k, v)| (k, f(v))).collect(),
-			flip_balance: f(self.flip_balance),
+			active_delegation: self.active_delegation.map(|d| d.map_bids(&f)),
 		}
+	}
+
+	pub fn try_map_amounts<B, E>(
+		self,
+		f: impl Fn(A) -> Result<B, E> + 'static,
+	) -> Result<OperatorInfo<B>, E> {
+		Ok(OperatorInfo {
+			managed_validators: self
+				.managed_validators
+				.into_iter()
+				.map(|(k, v)| Ok((k, f(v)?)))
+				.collect::<Result<_, E>>()?,
+			settings: self.settings,
+			allowed: self.allowed,
+			blocked: self.blocked,
+			delegators: self
+				.delegators
+				.into_iter()
+				.map(|(k, v)| Ok((k, f(v)?)))
+				.collect::<Result<_, E>>()?,
+			active_delegation: self.active_delegation.map(|d| d.try_map_bids(&f)).transpose()?,
+		})
 	}
 }
 
@@ -459,6 +531,50 @@ pub struct NetworkFees {
 	pub internal_swap_network_fee: NetworkFeeDetails,
 }
 
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
+pub struct RpcAccountInfoCommonItems<Balance> {
+	pub flip_balance: Balance,
+	pub asset_balances: cf_chains::assets::any::AssetMap<Balance>,
+	pub bond: Balance,
+	pub estimated_redeemable_balance: Balance,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub bound_redeem_address: Option<EthereumAddress>,
+	#[serde(skip_serializing_if = "BTreeMap::is_empty")]
+	pub restricted_balances: BTreeMap<EthereumAddress, Balance>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub current_delegation_status: Option<DelegationInfo<Balance>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
+}
+
+impl<A> RpcAccountInfoCommonItems<A> {
+	pub fn try_map_balances<B, E>(
+		self,
+		f: impl Fn(A) -> Result<B, E>,
+	) -> Result<RpcAccountInfoCommonItems<B>, E> {
+		Ok(RpcAccountInfoCommonItems {
+			flip_balance: f(self.flip_balance)?,
+			asset_balances: self.asset_balances.try_map(&f)?,
+			bond: f(self.bond)?,
+			estimated_redeemable_balance: f(self.estimated_redeemable_balance)?,
+			bound_redeem_address: self.bound_redeem_address,
+			restricted_balances: self
+				.restricted_balances
+				.into_iter()
+				.map(|(k, v)| Ok((k, f(v)?)))
+				.collect::<Result<_, E>>()?,
+			upcoming_delegation_status: self
+				.upcoming_delegation_status
+				.map(|d| d.try_map_bid(&f))
+				.transpose()?,
+			current_delegation_status: self
+				.current_delegation_status
+				.map(|d| d.try_map_bid(&f))
+				.transpose()?,
+		})
+	}
+}
+
 // READ THIS BEFORE UPDATING THIS TRAIT:
 //
 // ## When changing an existing method:
@@ -475,7 +591,7 @@ pub struct NetworkFees {
 //  - Handle the dummy method gracefully in the custom rpc implementation using
 //    runtime_api().api_version().
 decl_runtime_apis!(
-	#[api_version(5)]
+	#[api_version(7)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -494,12 +610,17 @@ decl_runtime_apis!(
 		fn cf_epoch_duration() -> u32;
 		fn cf_current_epoch_started_at() -> u32;
 		fn cf_authority_emission_per_block() -> u128;
+		#[deprecated(note = "The notion of backup nodes is no longer used.")]
 		fn cf_backup_emission_per_block() -> u128;
 		/// Returns the flip supply in the form [total_issuance, offchain_funds]
 		fn cf_flip_supply() -> (u128, u128);
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
 		fn cf_account_flip_balance(account_id: &AccountId32) -> u128;
+		#[changed_in(7)]
+		fn cf_validator_info(account_id: &AccountId32) -> validator_info_before_v7::ValidatorInfo;
 		fn cf_validator_info(account_id: &AccountId32) -> ValidatorInfo;
+		#[changed_in(7)]
+		fn cf_operator_info();
 		fn cf_operator_info(account_id: &AccountId32) -> OperatorInfo<FlipBalance>;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
@@ -611,7 +732,10 @@ decl_runtime_apis!(
 			chunk_interval: u32,
 		) -> Result<(), DispatchErrorWithMessage>;
 		fn cf_validate_refund_params(
+			input_asset: Asset,
+			output_asset: Asset,
 			retry_duration: BlockNumber,
+			max_oracle_price_slippage: Option<BasisPoints>,
 		) -> Result<(), DispatchErrorWithMessage>;
 		fn cf_request_swap_parameter_encoding(
 			broker: AccountId32,
@@ -661,6 +785,22 @@ decl_runtime_apis!(
 		fn cf_oracle_prices(
 			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		) -> Vec<OraclePrice>;
+		fn cf_evm_calldata(
+			caller: EthereumAddress,
+			call: crate::chainflip::ethereum_sc_calls::EthereumSCApi<FlipBalance>,
+		) -> Result<EvmCallDetails, DispatchErrorWithMessage>;
+		#[changed_in(6)]
+		fn cf_evm_calldata();
+		#[changed_in(7)]
+		fn cf_common_account_info();
+		fn cf_common_account_info(
+			account_id: &AccountId32,
+		) -> RpcAccountInfoCommonItems<FlipBalance>;
+		#[changed_in(7)]
+		fn cf_active_delegations();
+		fn cf_active_delegations(
+			account: Option<AccountId32>,
+		) -> Vec<DelegationSnapshot<AccountId32, FlipBalance>>;
 	}
 );
 

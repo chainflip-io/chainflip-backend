@@ -59,6 +59,7 @@ mod benchmarks {
 		.unwrap();
 
 		let epoch = T::EpochInfo::epoch_index();
+		T::EpochInfo::set_authorities(validators.clone().into_iter().map(|v| v.into()).collect());
 		T::EpochInfo::add_authority_info_for_epoch(
 			epoch,
 			validators.clone().into_iter().map(|v| v.into()).collect(),
@@ -79,7 +80,6 @@ mod benchmarks {
 		validator_counts: u32,
 		vote_value: VoteOf<<T as Config<I>>::ElectoralSystemRunner>,
 	) -> ElectionIdentifierOf<T::ElectoralSystemRunner> {
-		// Setup a validator set of 150 as in the case of Mainnet.
 		let validators = ready_validator_for_vote::<T, I>(validator_counts);
 		let caller = validators[0].clone();
 		let (election_identifier, ..) = Pallet::<T, I>::electoral_data(&caller.clone().into())
@@ -201,7 +201,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			let _ = Pallet::<T, I>::recheck_contributed_to_consensuses(epoch, &validator_id, epoch);
+			let _ = Pallet::<T, I>::recheck_contributed_to_consensuses(epoch, &validator_id, 0);
 		}
 
 		assert!(
@@ -253,43 +253,30 @@ mod benchmarks {
 	fn provide_shared_data() {
 		let validator_id = ready_validator_for_vote::<T, I>(1)[0].clone();
 
-		let (election_identifier, ..) =
-			Pallet::<T, I>::electoral_data(&validator_id.clone().into())
-				.unwrap()
-				.current_elections
-				.into_iter()
-				.next()
-				.unwrap();
+		let shared_data_value: <
+			<T::ElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage as VoteStorage
+		>::SharedData = BenchmarkValue::benchmark_value();
 
-		assert_ok!(Pallet::<T, I>::vote(
-			RawOrigin::Signed(validator_id.clone()).into(),
-			Box::new(
-				BoundedBTreeMap::try_from(
-					[(
-						election_identifier,
-						AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
-							BenchmarkValue::benchmark_value()
-						),
-					)]
-					.into_iter()
-					.collect::<BTreeMap<_, _>>(),
-				)
-				.unwrap()
-			),
-		));
+		let shared_data_hash = SharedDataHash::of(&shared_data_value);
+
+		// Since we now don't use SharedData we need to manually insert a reference cause vote()
+		// doesn't do that anymore but provide_shared_data always expect a reference to be present
+		SharedDataReferenceCount::<T, I>::insert(
+			shared_data_hash,
+			UniqueMonotonicIdentifier::from(0),
+			ReferenceDetails::<BlockNumberFor<T>> {
+				count: 1u32,
+				created: BlockNumberFor::<T>::from(1u32),
+				expires: BlockNumberFor::<T>::from(10u32),
+			},
+		);
+
+		ElectionConsensusHistoryUpToDate::<T, I>::insert(UniqueMonotonicIdentifier::from(0), 0);
 
 		#[extrinsic_call]
-		provide_shared_data(
-			RawOrigin::Signed(validator_id),
-			Box::new(BenchmarkValue::benchmark_value()),
-		);
+		provide_shared_data(RawOrigin::Signed(validator_id), Box::new(shared_data_value.clone()));
 
-		assert_eq!(
-			SharedData::<T, I>::get(SharedDataHash::of::<
-				VoteOf<<T as Config<I>>::ElectoralSystemRunner>,
-			>(&BenchmarkValue::benchmark_value())),
-			Some(BenchmarkValue::benchmark_value())
-		);
+		assert_eq!(SharedData::<T, I>::get(shared_data_hash), Some(shared_data_value));
 	}
 
 	#[benchmark]
@@ -372,7 +359,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn clear_election_votes() {
-		// Setup a validator set of 150 as in the case of Mainnet.
+		// Setup a validator set of 150.
 		let election_identifier =
 			setup_validators_and_vote::<T, I>(150, BenchmarkValue::benchmark_value());
 
@@ -382,6 +369,11 @@ mod benchmarks {
 			check_election_exists: true,
 		};
 
+		let epoch = T::EpochInfo::epoch_index();
+		let monotonic_identifier = election_identifier.unique_monotonic();
+
+		ElectionConsensusHistoryUpToDate::<T, I>::insert(monotonic_identifier, epoch);
+
 		#[block]
 		{
 			assert_ok!(
@@ -389,14 +381,12 @@ mod benchmarks {
 			);
 		}
 
-		assert!(!ElectionConsensusHistoryUpToDate::<T, I>::contains_key(
-			election_identifier.unique_monotonic()
-		));
+		assert!(!ElectionConsensusHistoryUpToDate::<T, I>::contains_key(monotonic_identifier));
 	}
 
 	#[benchmark]
 	fn invalidate_election_consensus_cache() {
-		// Setup a validator set of 150 and reach consensus
+		// Setup a validator set of 150.
 		let election_identifier =
 			setup_validators_and_vote::<T, I>(150, BenchmarkValue::benchmark_value());
 
@@ -409,11 +399,7 @@ mod benchmarks {
 		let epoch = T::EpochInfo::epoch_index();
 		let monotonic_identifier = election_identifier.unique_monotonic();
 
-		Pallet::<T, I>::on_finalize(frame_system::Pallet::<T>::block_number());
-		assert_eq!(
-			ElectionConsensusHistoryUpToDate::<T, I>::get(monotonic_identifier),
-			Some(epoch),
-		);
+		ElectionConsensusHistoryUpToDate::<T, I>::insert(monotonic_identifier, epoch);
 
 		#[block]
 		{
@@ -569,6 +555,66 @@ mod benchmarks {
 		}
 
 		assert_eq!(ElectionConsensusHistoryUpToDate::<T, I>::iter_keys().count(), 0);
+	}
+
+	#[benchmark]
+	fn test_mismatch<T: crate::pallet::Config<I>, I: 'static>() {
+		let validators = ready_validator_for_vote::<T, I>(1);
+		let caller = validators[0].clone();
+		let mut electoral_data = Pallet::<T, I>::electoral_data(&caller.clone().into())
+			.unwrap()
+			.current_elections
+			.into_iter();
+
+		let (election_identifier0, ..) = electoral_data.next().unwrap();
+		let (election_identifier1, ..) = electoral_data.next().unwrap();
+
+		#[block]
+		{}
+
+		// We are using ElectionIdentifier(UniqueMonotonicIdentifier(1), EE(())) and Vote(A(0)),
+		// vote extrinsic should not fail and that vote should be skipped
+		validators.iter().for_each(|v| {
+			assert_ok!(Pallet::<T, I>::vote(
+				RawOrigin::Signed(v.clone()).into(),
+				Box::new(
+					BoundedBTreeMap::try_from(
+						[(
+							election_identifier1,
+							AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+								BenchmarkValue::benchmark_value()
+							),
+						)]
+						.into_iter()
+						.collect::<BTreeMap<_, _>>(),
+					)
+					.unwrap()
+				),
+			));
+		});
+
+		// Vote was skipped hence no data is being saved
+		assert!(BitmapComponents::<T, I>::iter().count() == 0);
+
+		validators.iter().for_each(|v| {
+			assert_ok!(Pallet::<T, I>::vote(
+				RawOrigin::Signed(v.clone()).into(),
+				Box::new(
+					BoundedBTreeMap::try_from(
+						[(
+							election_identifier0,
+							AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+								BenchmarkValue::benchmark_value()
+							),
+						)]
+						.into_iter()
+						.collect::<BTreeMap<_, _>>(),
+					)
+					.unwrap()
+				),
+			));
+		});
+		assert!(BitmapComponents::<T, I>::iter().count() == 1);
 	}
 
 	#[cfg(test)]

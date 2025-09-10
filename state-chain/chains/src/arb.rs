@@ -183,54 +183,44 @@ pub mod fees {
 }
 
 impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
-	fn estimate_ingress_fee(
+	fn estimate_fee(
 		&self,
 		asset: <Arbitrum as Chain>::ChainAsset,
+		ingress_or_egress: IngressOrEgress,
 	) -> <Arbitrum as Chain>::ChainAmount {
 		use crate::arb::fees::*;
 
-		// Note: this is taking the egress cost of the swap in the ingress currency (and basing the
-		// cost on the ingress chain).
-		let gas_cost_per_fetch = BASE_COST_PER_BATCH +
-			match asset {
-				assets::arb::Asset::ArbEth => Zero::zero(),
-				assets::arb::Asset::ArbUsdc => GAS_COST_PER_FETCH,
-			};
+		match ingress_or_egress {
+			IngressOrEgress::IngressDepositChannel => {
+				// Note: this is taking the egress cost of the swap in the ingress currency (and
+				// basing the cost on the ingress chain).
+				let gas_cost_per_fetch = BASE_COST_PER_BATCH +
+					match asset {
+						assets::arb::Asset::ArbEth => Zero::zero(),
+						assets::arb::Asset::ArbUsdc => GAS_COST_PER_FETCH,
+					};
 
-		self.calculate_transaction_fee(gas_cost_per_fetch)
-	}
+				self.calculate_transaction_fee(gas_cost_per_fetch)
+			},
+			IngressOrEgress::IngressVaultSwap => 0,
+			IngressOrEgress::Egress => {
+				let gas_cost_per_transfer = BASE_COST_PER_BATCH +
+					match asset {
+						assets::arb::Asset::ArbEth => GAS_COST_PER_TRANSFER_NATIVE,
+						assets::arb::Asset::ArbUsdc => GAS_COST_PER_TRANSFER_TOKEN,
+					};
 
-	fn estimate_ingress_fee_vault_swap(&self) -> Option<<Arbitrum as Chain>::ChainAmount> {
-		Some(0)
-	}
-
-	fn estimate_egress_fee(
-		&self,
-		asset: <Arbitrum as Chain>::ChainAsset,
-	) -> <Arbitrum as Chain>::ChainAmount {
-		use crate::arb::fees::*;
-
-		let gas_cost_per_transfer = BASE_COST_PER_BATCH +
-			match asset {
-				assets::arb::Asset::ArbEth => GAS_COST_PER_TRANSFER_NATIVE,
-				assets::arb::Asset::ArbUsdc => GAS_COST_PER_TRANSFER_TOKEN,
-			};
-
-		self.calculate_transaction_fee(gas_cost_per_transfer)
-	}
-
-	fn estimate_ccm_fee(
-		&self,
-		asset: <Arbitrum as Chain>::ChainAsset,
-		gas_budget: GasAmount,
-		message_length: usize,
-	) -> Option<<Arbitrum as Chain>::ChainAmount> {
-		let gas_limit = self.calculate_ccm_gas_limit(
-			asset == <Arbitrum as Chain>::GAS_ASSET,
-			gas_budget,
-			message_length,
-		);
-		Some(self.calculate_transaction_fee(gas_limit))
+				self.calculate_transaction_fee(gas_cost_per_transfer)
+			},
+			IngressOrEgress::EgressCcm { gas_budget, message_length } => {
+				let gas_limit = self.calculate_ccm_gas_limit(
+					asset == <Arbitrum as Chain>::GAS_ASSET,
+					gas_budget,
+					message_length,
+				);
+				self.calculate_transaction_fee(gas_limit)
+			},
+		}
 	}
 }
 

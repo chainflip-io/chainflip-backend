@@ -76,7 +76,7 @@ impl UncheckedOnRuntimeUpgrade for SafeModeMigration {
                     ingress_egress_arbitrum: old.ingress_egress_arbitrum,
                     ingress_egress_solana: old.ingress_egress_solana,
                     ingress_egress_assethub: old.ingress_egress_assethub,
-                    elections_generic: GenericElectionsSafeMode::CODE_GREEN,
+                    elections_generic: GenericElectionsSafeMode::code_green(),
 				})
 			},
 		).map_err(|_| {

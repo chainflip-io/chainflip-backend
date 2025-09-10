@@ -17,6 +17,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
+#![feature(extract_if)]
+#![feature(iterator_try_collect)]
 
 mod mock;
 mod tests;
@@ -26,8 +28,6 @@ mod helpers;
 pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
-
-use frame_support::sp_runtime::traits::CheckedDiv;
 
 mod auction_resolver;
 mod benchmarking;
@@ -46,8 +46,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AsyncResult,
 	AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
 	EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch, KeyRotator,
-	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, RedemptionCheck, ReputationResetter,
-	SetSafeMode,
+	MissedAuthorshipSlots, QualifyNode, RedemptionCheck, ReputationResetter, SetSafeMode,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -77,16 +76,11 @@ type Ed25519Signature = ed25519::Signature;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
-	RegistrationBondPercentage {
-		percentage: Percent,
-	},
-	AuctionBidCutoffPercentage {
-		percentage: Percent,
+	/// Note the `min_stake` is in whole FLIP, not flipperinos.
+	MinimumValidatorStake {
+		min_stake: u32,
 	},
 	RedemptionPeriodAsPercentage {
-		percentage: Percent,
-	},
-	BackupRewardNodePercentage {
 		percentage: Percent,
 	},
 	EpochDuration {
@@ -113,7 +107,7 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
 
 // Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
@@ -142,19 +136,9 @@ impl<T: pallet::Config> RotationPhase<T> {
 }
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
 
-type BackupMap<T> = BTreeMap<ValidatorIdOf<T>, <T as Chainflip>::Amount>;
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	MissedAuthorshipSlot,
-}
-
-#[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
-#[scale_info(skip_type_params(T))]
-pub struct DelegationSnapshot<T: Config> {
-	pub avg_bid: T::Amount,
-	pub delegators: BTreeMap<T::AccountId, T::Amount>,
-	pub validators: BTreeMap<T::AccountId, T::Amount>,
 }
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding_enabled, stop_bidding_enabled);
@@ -304,17 +288,6 @@ pub mod pallet {
 	pub type HistoricalActiveEpochs<T: Config> =
 		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
 
-	/// Backups, validator nodes who are not in the authority set.
-	#[pallet::storage]
-	#[pallet::getter(fn backups)]
-	pub type Backups<T: Config> = StorageValue<_, BackupMap<T>, ValueQuery>;
-
-	/// Determines the number of backup nodes who receive rewards as a percentage
-	/// of the authority count.
-	#[pallet::storage]
-	#[pallet::getter(fn backup_reward_node_percentage)]
-	pub type BackupRewardNodePercentage<T> = StorageValue<_, Percent, ValueQuery>;
-
 	/// The absolute minimum number of authority nodes for the next epoch.
 	#[pallet::storage]
 	#[pallet::getter(fn authority_set_min_size)]
@@ -325,17 +298,9 @@ pub mod pallet {
 	#[pallet::getter(fn auction_parameters)]
 	pub(super) type AuctionParameters<T: Config> = StorageValue<_, SetSizeParameters, ValueQuery>;
 
-	/// An account's balance must be at least this percentage of the current bond in order to
-	/// register as a validator.
+	/// A validator's balance must be equal or above this amount to be qualified for the auction.
 	#[pallet::storage]
-	#[pallet::getter(fn registration_mab_percentage)]
-	pub(super) type RegistrationBondPercentage<T: Config> = StorageValue<_, Percent, ValueQuery>;
-
-	/// Auction losers whose bids are below this percentage of the MAB will not be excluded from
-	/// participating in Keygen.
-	#[pallet::storage]
-	#[pallet::getter(fn auction_bid_cutoff_percentage)]
-	pub(super) type AuctionBidCutoffPercentage<T: Config> = StorageValue<_, Percent, ValueQuery>;
+	pub(super) type MinimumValidatorStake<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
 	/// Determines the minimum version that each CFE must report to be considered qualified
 	/// for Keygen.
@@ -350,7 +315,8 @@ pub mod pallet {
 	pub(super) type MaxAuthoritySetContractionPercentage<T: Config> =
 		StorageValue<_, Percent, ValueQuery>;
 
-	/// Minimum bid amount required to participate in auctions.
+	/// Minimum bid amount (including delegated bids) required to enter the auction. The auction
+	/// cannot resolve with a bond below this amount.
 	#[pallet::storage]
 	pub type MinimumAuctionBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
@@ -367,10 +333,10 @@ pub mod pallet {
 	pub type Exceptions<T: Config> =
 		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
-	/// Maps a managed validator to its operator.
+	/// Maps operators to a list of their managed validators.
 	#[pallet::storage]
 	pub type ManagedValidators<T: Config> =
-		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
+		StorageMap<_, Identity, T::AccountId, BTreeSet<T::AccountId>, ValueQuery>;
 
 	/// Maps a validator to the operators currently claiming it.
 	#[pallet::storage]
@@ -382,28 +348,42 @@ pub mod pallet {
 	pub type OperatorSettingsLookup<T: Config> =
 		StorageMap<_, Identity, T::AccountId, OperatorSettings, OptionQuery>;
 
-	/// Maps an delegator to an associated operator account.
+	/// Maps an delegator to an associated operator account and max bid.
+	///
+	/// The max bid determines how much of the delegator's balance can be used
+	/// used by the operator when bidding for an authority slot.
 	#[pallet::storage]
 	pub type DelegationChoice<T: Config> =
+		StorageMap<_, Identity, T::AccountId, (T::AccountId, T::Amount), OptionQuery>;
+
+	/// Maps a validator to the operator that manages it.
+	#[pallet::storage]
+	pub type OperatorChoice<T: Config> =
 		StorageMap<_, Identity, T::AccountId, T::AccountId, OptionQuery>;
 
-	///  Holds the list of all delegators that have initiated undelegation and will successfully
-	/// undelegate at the end of the current epoch
+	/// Maps validators to their operators for each epoch.
 	#[pallet::storage]
-	pub type OutgoingDelegators<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
+	pub type ValidatorToOperator<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		EpochIndex,
+		Identity,
+		T::AccountId,
+		T::AccountId,
+		OptionQuery,
+	>;
 
+	/// Stores delegation snapshots per epoch and operator.
 	#[pallet::storage]
-	pub type MaxDelegationBid<T: Config> =
-		StorageMap<_, Identity, T::AccountId, T::Amount, OptionQuery>;
-
-	/// Collects all delegation of the current epoch.
-	#[pallet::storage]
-	pub type CurrentEpochDelegations<T: Config> =
-		StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
-
-	/// The set of delegators in the next epoch.
-	#[pallet::storage]
-	pub type NextDelegators<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
+	pub type DelegationSnapshots<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		EpochIndex,
+		Identity,
+		T::AccountId,
+		DelegationSnapshot<T::AccountId, T::Amount>,
+		OptionQuery,
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -429,7 +409,7 @@ pub mod pallet {
 		/// A previously non-bidding account has started bidding.
 		StartedBidding { account_id: T::AccountId },
 		/// The rotation transaction(s) for the previous rotation are still pending to be
-		/// succesfully broadcast, therefore, cannot start a new epoch rotation.
+		/// successfully broadcast, therefore, cannot start a new epoch rotation.
 		PreviousRotationStillPending,
 		/// A delegator has been blocked from delegating to an operator.
 		DelegatorBlocked { delegator: T::AccountId, operator: T::AccountId },
@@ -444,14 +424,14 @@ pub mod pallet {
 		/// Operator settings have been updated.
 		OperatorSettingsUpdated { operator: T::AccountId, preferences: OperatorSettings },
 		/// An account has undelegated from an operator.
-		UnDelegated { delegator: T::AccountId, operator: T::AccountId },
+		Undelegated { delegator: T::AccountId, operator: T::AccountId, max_bid: T::Amount },
 		/// An account has delegated to an operator.
-		Delegated { delegator: T::AccountId, operator: T::AccountId },
+		Delegated { delegator: T::AccountId, operator: T::AccountId, max_bid: T::Amount },
 		/// The undelegation process of an delegator has been finalized.
 		UnDelegationFinalized { delegator: T::AccountId, epoch: EpochIndex },
 		/// The maximum bit of an delegator was updated. If the value is None it means that the
 		/// max_bid has been removed entirly.
-		MaxBidUpdated { delegator: T::AccountId, max_bid: Option<T::Amount> },
+		MaxBidUpdated { delegator: T::AccountId, change: Change<T::Amount> },
 	}
 
 	#[pallet::error]
@@ -494,18 +474,16 @@ pub mod pallet {
 		AuctionPhase,
 		/// Validator is already associated with an operator.
 		AlreadyManagedByOperator,
+		/// Validator is already claimed by this operator.
+		AlreadyClaimedByOperator,
 		/// Validator does not exist.
 		ValidatorDoesNotExist,
 		/// Not authorized to perform this action.
 		NotAuthorized,
-		/// Operator is still associated with validators.
-		StillAssociatedWithValidators,
 		/// The validator is not claimed by any operator.
 		NotClaimedByOperator,
 		/// The provided account id has not the role validator.
 		NotValidator,
-		/// Operator is still being delegated to.
-		StillAssociatedWithDelegators,
 		/// The account is not delegating.
 		AccountIsNotDelegating,
 		/// Delegation is not available to validators or operators.
@@ -516,6 +494,12 @@ pub mod pallet {
 		DelegatorBlocked,
 		/// The provided Operator fee is too low.
 		OperatorFeeTooLow,
+		/// The operator still manages an active delegation.
+		OperatorStillActive,
+		/// The account does not exist.
+		AccountDoesNotExist,
+		/// The operator already manages the maximum number of validators.
+		TooManyValidators,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -661,14 +645,13 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			match update {
-				PalletConfigUpdate::AuctionBidCutoffPercentage { percentage } => {
-					<AuctionBidCutoffPercentage<T>>::put(percentage);
-				},
 				PalletConfigUpdate::RedemptionPeriodAsPercentage { percentage } => {
 					<RedemptionPeriodAsPercentage<T>>::put(percentage);
 				},
-				PalletConfigUpdate::RegistrationBondPercentage { percentage } => {
-					<RegistrationBondPercentage<T>>::put(percentage);
+				PalletConfigUpdate::MinimumValidatorStake { min_stake } => {
+					<MinimumValidatorStake<T>>::set(
+						FLIPPERINOS_PER_FLIP.saturating_mul(min_stake.into()).into(),
+					);
 				},
 				PalletConfigUpdate::AuthoritySetMinSize { min_size } => {
 					ensure!(
@@ -677,9 +660,6 @@ pub mod pallet {
 					);
 
 					AuthoritySetMinSize::<T>::put(min_size);
-				},
-				PalletConfigUpdate::BackupRewardNodePercentage { percentage } => {
-					<BackupRewardNodePercentage<T>>::put(percentage);
 				},
 				PalletConfigUpdate::EpochDuration { blocks } => {
 					ensure!(blocks > 0, Error::<T>::InvalidEpochDuration);
@@ -843,7 +823,7 @@ pub mod pallet {
 			if Self::current_authority_count() >= AuctionParameters::<T>::get().max_size {
 				ensure!(
 					T::FundingInfo::total_balance_of(&account_id) >=
-						RegistrationBondPercentage::<T>::get() * Self::bond(),
+						MinimumValidatorStake::<T>::get(),
 					Error::<T>::NotEnoughFunds
 				);
 			}
@@ -870,6 +850,9 @@ pub mod pallet {
 				MappedPeers::<T>::remove(peer_id);
 				T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
 			}
+
+			ManagedValidators::<T>::remove(&account_id);
+			ClaimedValidators::<T>::remove(&account_id);
 
 			T::AccountRoleRegistry::deregister_as_validator(&account_id)?;
 
@@ -915,14 +898,24 @@ pub mod pallet {
 		pub fn claim_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResult {
 			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 			ensure!(
-				!ManagedValidators::<T>::contains_key(&validator_id),
+				!OperatorChoice::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyManagedByOperator
 			);
 			ensure!(
 				T::AccountRoleRegistry::has_account_role(&validator_id, AccountRole::Validator),
 				Error::<T>::NotValidator
 			);
-			ClaimedValidators::<T>::append(&validator_id, &operator);
+			ensure!(
+				ManagedValidators::<T>::get(&operator).len() < MAX_VALIDATORS_PER_OPERATOR,
+				Error::<T>::TooManyValidators
+			);
+			ClaimedValidators::<T>::try_mutate(&validator_id, |claimed| {
+				if !claimed.insert(operator.clone()) {
+					Err(Error::<T>::AlreadyClaimedByOperator)
+				} else {
+					Ok(())
+				}
+			})?;
 			Self::deposit_event(Event::ValidatorClaimed { validator: validator_id, operator });
 			Ok(())
 		}
@@ -933,7 +926,7 @@ pub mod pallet {
 		pub fn accept_operator(origin: OriginFor<T>, operator: T::AccountId) -> DispatchResult {
 			let validator_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			ensure!(
-				!ManagedValidators::<T>::contains_key(&validator_id),
+				!OperatorChoice::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyManagedByOperator
 			);
 
@@ -945,7 +938,10 @@ pub mod pallet {
 				}
 			})?;
 
-			ManagedValidators::<T>::insert(&validator_id, &operator);
+			OperatorChoice::<T>::insert(&validator_id, &operator);
+			ManagedValidators::<T>::mutate(&operator, |validators| {
+				validators.insert(validator_id.clone());
+			});
 
 			Self::deposit_event(Event::OperatorAcceptedByValidator {
 				validator: validator_id,
@@ -962,9 +958,9 @@ pub mod pallet {
 		pub fn remove_validator(origin: OriginFor<T>, validator: T::AccountId) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 			let operator =
-				ManagedValidators::<T>::get(&validator).ok_or(Error::<T>::ValidatorDoesNotExist)?;
+				OperatorChoice::<T>::get(&validator).ok_or(Error::<T>::ValidatorDoesNotExist)?;
 			ensure!(account_id == operator || account_id == validator, Error::<T>::NotAuthorized);
-			ManagedValidators::<T>::remove(&validator);
+			OperatorChoice::<T>::remove(&validator);
 
 			Self::deposit_event(Event::ValidatorRemovedFromOperator { validator, operator });
 
@@ -1010,22 +1006,19 @@ pub mod pallet {
 
 			// If the delegator is currently delegating to this operator, we need to
 			// undelegate them first.
-			let _ =
-				DelegationChoice::<T>::try_mutate_exists(&delegator, |maybe_assigned_operator| {
-					if let Some(assigned_operator) = maybe_assigned_operator.take() {
-						if assigned_operator == operator {
-							Self::deposit_event(Event::UnDelegated {
-								delegator: delegator.clone(),
-								operator: operator.clone(),
-							});
-							Ok(())
-						} else {
-							Err(())
-						}
-					} else {
-						Err(())
+			let _ = DelegationChoice::<T>::try_mutate_exists(&delegator, |maybe_operator_choice| {
+				if let Some((assigned_operator, max_bid)) = maybe_operator_choice.take() {
+					if assigned_operator == operator {
+						Self::deposit_event(Event::Undelegated {
+							delegator: delegator.clone(),
+							operator: operator.clone(),
+							max_bid,
+						});
+						return Ok(());
 					}
-				});
+				}
+				Err(())
+			});
 
 			match OperatorSettingsLookup::<T>::get(&operator)
 				.unwrap_or_default()
@@ -1041,6 +1034,11 @@ pub mod pallet {
 				DelegationAcceptance::Allow => {
 					// If the operator is set to allow, exceptions are the delegators that are
 					// blocked.
+					ensure!(
+						frame_system::Pallet::<T>::account_exists(&delegator),
+						Error::<T>::AccountDoesNotExist
+					);
+
 					Exceptions::<T>::mutate(&operator, |blocked| {
 						blocked.insert(delegator.clone());
 					});
@@ -1070,6 +1068,10 @@ pub mod pallet {
 				DelegationAcceptance::Deny => {
 					// If the operator is set to deny, exceptions are the delegators that are
 					// allowed.
+					ensure!(
+						frame_system::Pallet::<T>::account_exists(&delegator),
+						Error::<T>::AccountDoesNotExist
+					);
 					Exceptions::<T>::mutate(&operator, |allowed| {
 						allowed.insert(delegator.clone());
 					});
@@ -1106,37 +1108,57 @@ pub mod pallet {
 		#[pallet::call_index(17)]
 		#[pallet::weight(T::ValidatorWeightInfo::deregister_as_operator())]
 		pub fn deregister_as_operator(origin: OriginFor<T>) -> DispatchResult {
-			let account_id = T::AccountRoleRegistry::ensure_operator(origin)?;
+			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 
 			ensure!(
-				Self::get_all_associations_by_operator(
-					&account_id,
-					AssociationToOperator::Validator
-				)
-				.is_empty(),
-				Error::<T>::StillAssociatedWithValidators
+				((Self::last_expired_epoch() + 1)..=Self::current_epoch()).all(|epoch_index| {
+					!DelegationSnapshots::<T>::contains_key(epoch_index, &operator)
+				}),
+				Error::<T>::OperatorStillActive,
 			);
 
-			ensure!(
-				Self::get_all_associations_by_operator(
-					&account_id,
-					AssociationToOperator::Delegator
-				)
-				.is_empty(),
-				Error::<T>::StillAssociatedWithDelegators
-			);
+			for (validator, ()) in Self::get_all_associations_by_operator(
+				&operator,
+				AssociationToOperator::Validator,
+				|_, _| (),
+			) {
+				OperatorChoice::<T>::remove(&validator);
+				Self::deposit_event(Event::ValidatorRemovedFromOperator {
+					validator,
+					operator: operator.clone(),
+				});
+			}
 
-			T::AccountRoleRegistry::deregister_as_operator(&account_id)?;
+			for (delegator, ()) in Self::get_all_associations_by_operator(
+				&operator,
+				AssociationToOperator::Delegator,
+				|_, _| (),
+			) {
+				if let Some((_, max_bid)) = DelegationChoice::<T>::take(&delegator) {
+					Self::deposit_event(Event::Undelegated {
+						delegator,
+						operator: operator.clone(),
+						max_bid,
+					});
+				}
+			}
 
-			Exceptions::<T>::remove(&account_id);
-			OperatorSettingsLookup::<T>::remove(&account_id);
+			ManagedValidators::<T>::remove(&operator);
+			Exceptions::<T>::remove(&operator);
+			OperatorSettingsLookup::<T>::remove(&operator);
+
+			T::AccountRoleRegistry::deregister_as_operator(&operator)?;
 
 			Ok(())
 		}
 
 		#[pallet::call_index(18)]
 		#[pallet::weight(T::ValidatorWeightInfo::delegate())]
-		pub fn delegate(origin: OriginFor<T>, operator: T::AccountId) -> DispatchResult {
+		pub fn delegate(
+			origin: OriginFor<T>,
+			operator: T::AccountId,
+			increase: DelegationAmount<T::Amount>,
+		) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
 			ensure!(
@@ -1168,55 +1190,92 @@ pub mod pallet {
 				Error::<T>::DelegatorBlocked
 			);
 
-			DelegationChoice::<T>::mutate(&delegator, |maybe_operator| {
-				if let Some(previous_operator) = maybe_operator.replace(operator.clone()) {
-					Self::deposit_event(Event::UnDelegated {
-						delegator: delegator.clone(),
-						operator: previous_operator,
-					});
-				}
-			});
+			let balance = T::FundingInfo::balance(&delegator);
+			let (to_remove, to_add, old_max_bid) =
+				if let Some((current_operator, current_max_bid)) =
+					DelegationChoice::<T>::get(&delegator)
+				{
+					if current_operator != operator {
+						(Some(current_operator), (Some(operator.clone())), current_max_bid)
+					} else {
+						(None, None, current_max_bid)
+					}
+				} else {
+					(None, Some(operator.clone()), T::Amount::zero())
+				};
 
-			OutgoingDelegators::<T>::mutate(|outgoing_delegators| {
-				outgoing_delegators.remove(&delegator)
-			});
+			let new_max_bid = match increase {
+				DelegationAmount::Max => balance,
+				DelegationAmount::Some(inc) =>
+					core::cmp::min(old_max_bid.saturating_add(inc), balance),
+			};
 
-			Self::deposit_event(Event::Delegated { delegator, operator });
+			if let Some(change) = match old_max_bid.cmp(&new_max_bid) {
+				core::cmp::Ordering::Less => Some(Change::Increase(new_max_bid - old_max_bid)),
+				core::cmp::Ordering::Greater => Some(Change::Decrease(old_max_bid - new_max_bid)),
+				core::cmp::Ordering::Equal => None,
+			} {
+				Self::deposit_event(Event::MaxBidUpdated { delegator: delegator.clone(), change });
+			}
+
+			if let Some(old_operator) = to_remove {
+				Self::deposit_event(Event::Undelegated {
+					delegator: delegator.clone(),
+					operator: old_operator,
+					max_bid: old_max_bid,
+				});
+			}
+			if let Some(new_operator) = to_add {
+				Self::deposit_event(Event::Delegated {
+					delegator: delegator.clone(),
+					operator: new_operator,
+					max_bid: new_max_bid,
+				});
+			}
+			DelegationChoice::<T>::insert(&delegator, (operator.clone(), new_max_bid));
 
 			Ok(())
 		}
 
 		#[pallet::call_index(19)]
 		#[pallet::weight(T::ValidatorWeightInfo::undelegate())]
-		pub fn undelegate(origin: OriginFor<T>) -> DispatchResult {
+		pub fn undelegate(
+			origin: OriginFor<T>,
+			decrease: DelegationAmount<T::Amount>,
+		) -> DispatchResult {
 			let delegator = ensure_signed(origin)?;
 
-			let operator = DelegationChoice::<T>::take(&delegator)
-				.ok_or(Error::<T>::AccountIsNotDelegating)?;
+			let (current_operator, current_max_bid) =
+				DelegationChoice::<T>::get(&delegator).ok_or(Error::<T>::AccountIsNotDelegating)?;
 
-			OutgoingDelegators::<T>::append(&delegator);
+			let new_max_bid = match decrease {
+				DelegationAmount::Some(decr) => current_max_bid.saturating_sub(decr),
+				DelegationAmount::Max => T::Amount::zero(),
+			};
 
-			Self::deposit_event(Event::UnDelegated { delegator, operator });
-
-			Ok(())
-		}
-
-		/// Sets the max bid of an operator. If the argument is None any active max bid is
-		/// removed. If no max bid is set, we take the entire account balance as
-		/// delegator bond. The max bid is not allowed to be higher than the current account
-		/// balance.
-		#[pallet::call_index(20)]
-		#[pallet::weight(T::ValidatorWeightInfo::set_max_bid())]
-		pub fn set_max_bid(origin: OriginFor<T>, max_bid: Option<T::Amount>) -> DispatchResult {
-			let delegator = ensure_signed(origin)?;
-
-			if let Some(max_bid) = max_bid {
-				MaxDelegationBid::<T>::insert(&delegator, max_bid);
-			} else {
-				MaxDelegationBid::<T>::remove(&delegator);
+			if let Some(change) = match current_max_bid.cmp(&new_max_bid) {
+				core::cmp::Ordering::Less => Some(Change::Increase(new_max_bid - current_max_bid)),
+				core::cmp::Ordering::Greater =>
+					Some(Change::Decrease(current_max_bid - new_max_bid)),
+				core::cmp::Ordering::Equal => None,
+			} {
+				Self::deposit_event(Event::MaxBidUpdated { delegator: delegator.clone(), change });
 			}
 
-			Self::deposit_event(Event::<T>::MaxBidUpdated { delegator, max_bid });
+			if new_max_bid.is_zero() {
+				DelegationChoice::<T>::remove(&delegator);
+				Self::deposit_event(Event::Undelegated {
+					delegator: delegator.clone(),
+					operator: current_operator,
+					max_bid: current_max_bid,
+				});
+			} else {
+				DelegationChoice::<T>::mutate(&delegator, |choice| {
+					if let Some((_, ref mut max_bid)) = choice {
+						*max_bid = new_max_bid;
+					}
+				});
+			}
 
 			Ok(())
 		}
@@ -1225,14 +1284,11 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_authorities: BTreeSet<ValidatorIdOf<T>>,
-		pub genesis_backups: BackupMap<T>,
 		pub epoch_duration: BlockNumberFor<T>,
 		pub bond: T::Amount,
 		pub redemption_period_as_percentage: Percent,
-		pub backup_reward_node_percentage: Percent,
 		pub authority_set_min_size: AuthorityCount,
 		pub auction_parameters: SetSizeParameters,
-		pub auction_bid_cutoff_percentage: Percent,
 		pub max_authority_set_contraction_percentage: Percent,
 	}
 
@@ -1240,18 +1296,15 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				genesis_authorities: Default::default(),
-				genesis_backups: Default::default(),
 				epoch_duration: Zero::zero(),
 				bond: Default::default(),
 				redemption_period_as_percentage: Zero::zero(),
-				backup_reward_node_percentage: Zero::zero(),
 				authority_set_min_size: Zero::zero(),
 				auction_parameters: SetSizeParameters {
 					min_size: 3,
 					max_size: 15,
 					max_expansion: 5,
 				},
-				auction_bid_cutoff_percentage: Zero::zero(),
 				max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 			}
 		}
@@ -1265,7 +1318,6 @@ pub mod pallet {
 			EpochDuration::<T>::set(self.epoch_duration);
 			CurrentRotationPhase::<T>::set(RotationPhase::Idle);
 			RedemptionPeriodAsPercentage::<T>::set(self.redemption_period_as_percentage);
-			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 			MaxAuthoritySetContractionPercentage::<T>::set(
 				self.max_authority_set_contraction_percentage,
@@ -1276,13 +1328,7 @@ pub mod pallet {
 			Pallet::<T>::try_update_auction_parameters(self.auction_parameters)
 				.expect("we should provide valid auction parameters at genesis");
 
-			AuctionBidCutoffPercentage::<T>::set(self.auction_bid_cutoff_percentage);
-
 			self.genesis_authorities.iter().for_each(|v| {
-				Pallet::<T>::activate_bidding(ValidatorIdOf::<T>::into_ref(v))
-					.expect("The account was just created so this can't fail.")
-			});
-			self.genesis_backups.keys().for_each(|v| {
 				Pallet::<T>::activate_bidding(ValidatorIdOf::<T>::into_ref(v))
 					.expect("The account was just created so this can't fail.")
 			});
@@ -1291,7 +1337,6 @@ pub mod pallet {
 				GENESIS_EPOCH,
 				&self.genesis_authorities.iter().cloned().collect(),
 				self.bond,
-				self.genesis_backups.clone(),
 			);
 		}
 	}
@@ -1398,26 +1443,7 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
-		for delegator in OutgoingDelegators::<T>::take() {
-			T::Bonder::update_bond(&delegator.clone().into(), T::Amount::from(0_u128));
-			Self::deposit_event(Event::UnDelegationFinalized { delegator, epoch: old_epoch });
-		}
-
-		Self::initialise_new_epoch(
-			new_epoch,
-			&new_authorities,
-			bond,
-			Self::get_active_bids()
-				.into_iter()
-				.filter_map(|Bid { bidder_id, amount }| {
-					if !new_authorities.contains(&bidder_id) {
-						Some((bidder_id, amount))
-					} else {
-						None
-					}
-				})
-				.collect(),
-		);
+		Self::initialise_new_epoch(new_epoch, &new_authorities, bond);
 
 		Self::deposit_event(Event::NewEpoch(new_epoch));
 		T::EpochTransitionHandler::on_new_epoch(new_epoch);
@@ -1439,6 +1465,10 @@ impl<T: Config> Pallet<T> {
 		}
 
 		HistoricalBonds::<T>::remove(epoch);
+
+		// Clean up delegation snapshots and validator mappings for the expired epoch
+		let _ = DelegationSnapshots::<T>::clear_prefix(epoch, u32::MAX, None);
+		let _ = ValidatorToOperator::<T>::clear_prefix(epoch, u32::MAX, None);
 	}
 
 	fn expire_epochs_up_to(latest_epoch_to_expire: EpochIndex, remaining_weight: Weight) -> Weight {
@@ -1476,7 +1506,6 @@ impl<T: Config> Pallet<T> {
 		new_epoch: EpochIndex,
 		new_authorities: &Vec<ValidatorIdOf<T>>,
 		new_bond: T::Amount,
-		backup_map: BackupMap<T>,
 	) {
 		CurrentAuthorities::<T>::put(new_authorities);
 		HistoricalAuthorities::<T>::insert(new_epoch, new_authorities);
@@ -1491,23 +1520,31 @@ impl<T: Config> Pallet<T> {
 			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 		});
 
-		let delegators = NextDelegators::<T>::take();
+		// Bond delegators based on the snapshots
+		let outgoing_delegators = DelegationSnapshots::<T>::iter_prefix(new_epoch - 1)
+			.flat_map(|(_, snapshot)| snapshot.delegators.keys().cloned().collect::<Vec<_>>())
+			.collect::<BTreeSet<_>>();
+		let new_delegator_bids = DelegationSnapshots::<T>::iter_prefix(new_epoch)
+			.flat_map(|(_, snapshot)| snapshot.delegators.clone())
+			.collect::<BTreeMap<_, _>>();
 
-		for delegator in &delegators {
-			T::Bonder::update_bond(
-				&delegator.clone().into(),
-				MaxDelegationBid::<T>::get(delegator)
-					.map(|max_bid| max_bid.min(T::FundingInfo::total_balance_of(delegator)))
-					.unwrap_or(T::FundingInfo::total_balance_of(delegator)),
-			);
+		for outgoing_delegator in outgoing_delegators {
+			if !new_delegator_bids.contains_key(&outgoing_delegator) &&
+				!new_authorities.contains(ValidatorIdOf::<T>::from_ref(&outgoing_delegator))
+			{
+				T::Bonder::update_bond(&outgoing_delegator.clone().into(), T::Amount::from(0_u128));
+				Self::deposit_event(Event::UnDelegationFinalized {
+					delegator: outgoing_delegator.clone(),
+					epoch: new_epoch,
+				});
+			}
 		}
 
-		CurrentEpochDelegations::<T>::set(delegators);
+		for (delegator, bid) in new_delegator_bids {
+			T::Bonder::update_bond(&delegator.clone().into(), bid);
+		}
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
-
-		// We've got new authorities, which means the backups may have changed.
-		Backups::<T>::put(backup_map);
 	}
 
 	fn set_rotation_phase(new_phase: RotationPhase<T>) {
@@ -1524,6 +1561,84 @@ impl<T: Config> Pallet<T> {
 		T::KeyRotator::reset_key_rotation();
 		Self::set_rotation_phase(RotationPhase::Idle);
 		Self::deposit_event(Event::<T>::RotationAborted);
+	}
+
+	#[allow(clippy::type_complexity)]
+	pub fn run_initial_auction() -> Result<
+		(
+			AuctionOutcome<T::AccountId, T::Amount>,
+			SetSizeMaximisingAuctionResolver,
+			BTreeMap<T::AccountId, DelegationSnapshot<T::AccountId, T::Amount>>,
+			impl Fn(
+				&BTreeMap<T::AccountId, DelegationSnapshot<T::AccountId, T::Amount>>,
+			) -> Vec<Bid<T::AccountId, T::Amount>>,
+		),
+		AuctionError,
+	> {
+		let (delegation_snapshots, independent_bids) =
+			Self::build_delegation_snapshots::<T::KeygenQualification>();
+
+		let minimum_auction_bid = MinimumAuctionBid::<T>::get();
+
+		let auction_bids = move |delegation_snapshots: &BTreeMap<
+			T::AccountId,
+			DelegationSnapshot<_, _>,
+		>|
+		      -> Vec<Bid<_, _>> {
+			delegation_snapshots
+				.values()
+				.flat_map(|snapshot| snapshot.effective_validator_bids())
+				.chain(independent_bids.clone())
+				.filter_map(|(bidder_id, amount)| {
+					if amount >= minimum_auction_bid {
+						Some(Bid { bidder_id, amount })
+					} else {
+						None
+					}
+				})
+				.collect::<Vec<_>>()
+		};
+
+		SetSizeMaximisingAuctionResolver::try_new(
+			T::EpochInfo::current_authority_count(),
+			AuctionParameters::<T>::get(),
+		)
+		.and_then(|resolver| {
+			resolver
+				.resolve_auction(auction_bids(&delegation_snapshots))
+				.map(|outcome| (outcome, resolver, delegation_snapshots, auction_bids))
+		})
+	}
+
+	#[allow(clippy::type_complexity)]
+	pub fn resolve_auction_iteratively() -> Result<
+		(
+			AuctionOutcome<T::AccountId, T::Amount>,
+			BTreeMap<T::AccountId, DelegationSnapshot<T::AccountId, T::Amount>>,
+		),
+		AuctionError,
+	> {
+		Self::run_initial_auction().map(
+			|(auction_outcome, resolver, mut delegation_snapshots, auction_bids)| {
+				let mut current_outcome = auction_outcome;
+				loop {
+					let old_snapshots = delegation_snapshots.clone();
+					for (_operator, snapshot) in delegation_snapshots.iter_mut() {
+						snapshot.maybe_optimize_bid(&current_outcome);
+					}
+					if delegation_snapshots == old_snapshots {
+						break;
+					} else if let Ok(new_outcome) =
+						resolver.resolve_auction(auction_bids(&delegation_snapshots))
+					{
+						current_outcome = new_outcome;
+					} else {
+						break;
+					}
+				}
+				(current_outcome, delegation_snapshots)
+			},
+		)
 	}
 
 	fn start_authority_rotation() -> Weight {
@@ -1543,37 +1658,10 @@ impl<T: Config> Pallet<T> {
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 
-		let qualified_bidders = Self::get_qualified_bidders::<T::KeygenQualification>();
-
-		let delegation_snapshot = Self::build_delegation_snapshot(
-			qualified_bidders.clone().into_iter().map(|bid| bid.bidder_id.into()).collect(),
-		);
-
-		let get_avg_bid_for_validator_if_managed =
-			|validator_id: T::AccountId| -> Option<T::Amount> {
-				let operator_id = ManagedValidators::<T>::get(validator_id)?;
-				let snap = delegation_snapshot.get(&operator_id)?;
-				Some(snap.avg_bid)
-			};
-
-		match SetSizeMaximisingAuctionResolver::try_new(
-			T::EpochInfo::current_authority_count(),
-			AuctionParameters::<T>::get(),
-		)
-		.and_then(|resolver| {
-			resolver.resolve_auction(
-				qualified_bidders
-					.into_iter()
-					.map(|bid| Bid {
-						bidder_id: bid.bidder_id.clone(),
-						amount: get_avg_bid_for_validator_if_managed(bid.bidder_id.into())
-							.unwrap_or(bid.amount),
-					})
-					.collect(),
-				AuctionBidCutoffPercentage::<T>::get(),
-			)
-		}) {
-			Ok(auction_outcome) => {
+		match Self::resolve_auction_iteratively() {
+			Ok((auction_outcome, delegation_snapshots)) => {
+				let auction_outcome =
+					auction_outcome.map_ids(|id| ValidatorIdOf::<T>::from_ref(&id).clone());
 				Self::deposit_event(Event::AuctionCompleted(
 					auction_outcome.winners.clone(),
 					auction_outcome.bond,
@@ -1581,9 +1669,8 @@ impl<T: Config> Pallet<T> {
 				debug_assert!(!auction_outcome.winners.is_empty());
 				log::info!(
 					target: "cf-validator",
-					"Auction resolved with {} winners and {} losers. Bond will be {}FLIP.",
+					"Auction resolved with {} winners. Bond will be {}FLIP.",
 					auction_outcome.winners.len(),
-					auction_outcome.losers.len(),
 					UniqueSaturatedInto::<u128>::unique_saturated_into(auction_outcome.bond) /
 					FLIPPERINOS_PER_FLIP,
 				);
@@ -1591,29 +1678,14 @@ impl<T: Config> Pallet<T> {
 				// Without reading the full list of bidders we can't know the real number.
 				// Use the winners and losers as an approximation.
 				let weight = T::ValidatorWeightInfo::start_authority_rotation(
-					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
+					(auction_outcome.winners.len()) as u32,
 				);
 
-				NextDelegators::<T>::put(
-					auction_outcome
-						.winners
-						.iter()
-						.filter_map(|winner| {
-							ManagedValidators::<T>::get(winner.clone().into()).and_then(
-								|operator| {
-									let snapshot = delegation_snapshot.get(&operator);
-									if snapshot.is_none() {
-										log::warn!(
-											"Expected delegation snapshot for operator {:?} - didn't found one.", operator
-										);
-									}
-									snapshot
-								},
-							)
-						})
-						.flat_map(|snapshot| snapshot.delegators.keys().cloned())
-						.collect::<BTreeSet<T::AccountId>>(),
-				);
+				// Register the delegation snapshots for the next epoch.
+				let next_epoch_index = CurrentEpoch::<T>::get() + 1;
+				for snapshot in delegation_snapshots.into_values() {
+					snapshot.register_for_epoch::<T>(next_epoch_index);
+				}
 
 				Self::try_start_keygen(RotationState::from_auction_outcome::<T>(auction_outcome));
 
@@ -1625,7 +1697,7 @@ impl<T: Config> Pallet<T> {
 
 				// Use an approximation again - see comment above.
 				T::ValidatorWeightInfo::start_authority_rotation({
-					Self::current_authority_count() + Self::backup_reward_nodes_limit() as u32
+					Self::current_authority_count()
 				})
 			},
 		}
@@ -1694,36 +1766,6 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::abort_rotation();
 		}
-	}
-
-	/// Returns the number of backup nodes eligible for rewards
-	pub fn backup_reward_nodes_limit() -> usize {
-		BackupRewardNodePercentage::<T>::get() * Self::current_authority_count() as usize
-	}
-
-	/// Returns the bids of the highest funded backup nodes, who are eligible for the backup rewards
-	/// sorted by bids highest to lowest.
-	pub fn highest_funded_qualified_backup_node_bids(
-	) -> impl Iterator<Item = Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> {
-		let mut backups = T::KeygenQualification::filter_qualified_by_key(
-			Backups::<T>::get().into_iter().collect(),
-			|(bidder_id, _bid)| bidder_id,
-		);
-
-		let limit = Self::backup_reward_nodes_limit();
-		if limit < backups.len() {
-			backups.select_nth_unstable_by_key(limit, |(_, amount)| Reverse(*amount));
-			backups.truncate(limit);
-		}
-
-		backups.into_iter().map(|(bidder_id, amount)| Bid { bidder_id, amount })
-	}
-
-	/// Returns ids as BTreeSet for fast lookups
-	pub fn highest_funded_qualified_backup_nodes_lookup() -> BTreeSet<ValidatorIdOf<T>> {
-		Self::highest_funded_qualified_backup_node_bids()
-			.map(|Bid { bidder_id, .. }| bidder_id)
-			.collect()
 	}
 
 	fn punish_missed_authorship_slots() -> Weight {
@@ -1803,75 +1845,73 @@ impl<T: Config> Pallet<T> {
 			frame_system::Pallet::<T>::current_block_number()
 	}
 
-	pub fn get_all_associations_by_operator(
+	pub fn get_all_associations_by_operator<R>(
 		operator: &T::AccountId,
 		association: AssociationToOperator,
-	) -> BTreeMap<T::AccountId, T::Amount> {
+		f: impl Fn(&T::AccountId, Option<T::Amount>) -> R,
+	) -> BTreeMap<T::AccountId, R> {
+		let apply_f = |acct: T::AccountId| {
+			let r = f(&acct, None);
+			(acct, r)
+		};
 		match association {
-			AssociationToOperator::Validator => ManagedValidators::<T>::iter(),
-			AssociationToOperator::Delegator => DelegationChoice::<T>::iter(),
+			AssociationToOperator::Validator =>
+				ManagedValidators::<T>::get(operator).into_iter().map(apply_f).collect(),
+			AssociationToOperator::Delegator => DelegationChoice::<T>::iter()
+				.filter_map(|(account_id, (managing_operator, max_bid))| {
+					if managing_operator == *operator {
+						Some((account_id.clone(), f(&account_id, Some(max_bid))))
+					} else {
+						None
+					}
+				})
+				.collect(),
 		}
-		.filter_map(|(account_id, managing_operator)| {
-			if managing_operator == *operator {
-				let balance = T::FundingInfo::balance(&account_id);
-				Some((account_id, balance))
-			} else {
-				None
-			}
-		})
-		.collect()
 	}
 
-	pub fn build_delegation_snapshot(
-		qualified_bidder: Vec<T::AccountId>,
-	) -> BTreeMap<T::AccountId, DelegationSnapshot<T>> {
-		let mut snapshot: BTreeMap<T::AccountId, DelegationSnapshot<T>> = BTreeMap::new();
+	/// Builds the delegation snapshots for the next epoch.
+	///
+	/// Return a tuple of the delegation snapshots and the independent bidders (standalone
+	/// validators).
+	#[allow(clippy::type_complexity)]
+	pub fn build_delegation_snapshots<Q: QualifyNode<ValidatorIdOf<T>>>() -> (
+		BTreeMap<T::AccountId, DelegationSnapshot<T::AccountId, T::Amount>>,
+		BTreeMap<T::AccountId, T::Amount>,
+	) {
+		let mut independent_bidders = BTreeMap::new();
+		let mut snapshots = BTreeMap::new();
 
-		for operator in OperatorSettingsLookup::<T>::iter_keys() {
-			let delegators =
-				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Delegator);
-
-			let validators: BTreeMap<T::AccountId, T::Amount> =
-				Self::get_all_associations_by_operator(&operator, AssociationToOperator::Validator)
-					.into_iter()
-					.filter(|(account_id, _)| qualified_bidder.contains(account_id))
-					.collect();
-
-			let total_delegator_balance = delegators
-				.clone()
-				.into_iter()
-				.map(|(account_id, balance)| {
-					MaxDelegationBid::<T>::get(account_id)
-						.map(|max_bid| max_bid.min(balance))
-						.unwrap_or(balance)
-				})
-				.sum::<T::Amount>();
-
-			let total_validator_balance = validators.values().copied().sum::<T::Amount>();
-
-			let total_balance = total_delegator_balance.saturating_add(total_validator_balance);
-
-			match total_balance.checked_div(&T::Amount::from(validators.len() as u128)) {
-				Some(avg_bid) => {
-					snapshot.insert(
-						operator.clone(),
-						DelegationSnapshot { avg_bid, delegators, validators },
-					);
-				},
-				None => {
-					snapshot.insert(
-						operator.clone(),
-						DelegationSnapshot {
-							avg_bid: T::Amount::from(0_u128),
-							delegators,
-							validators,
-						},
-					);
-				},
+		for Bid { bidder_id, amount } in Self::get_qualified_bidders::<Q>() {
+			// `into_ref` is used to cast between AccountId and ValidatorId.
+			let bidder_id = bidder_id.into_ref();
+			if let Some(operator) = OperatorChoice::<T>::get(bidder_id) {
+				snapshots
+					.entry(operator.clone())
+					.or_insert_with(|| {
+						DelegationSnapshot::init(
+							&operator,
+							OperatorSettingsLookup::<T>::get(&operator)
+								.map(|settings| settings.fee_bps)
+								.unwrap_or(MIN_OPERATOR_FEE),
+						)
+					})
+					.validators
+					.insert(bidder_id.clone(), amount);
+			} else {
+				let _ = independent_bidders.insert(bidder_id.clone(), amount);
 			}
 		}
 
-		snapshot
+		for (delegator, (operator, max_bid)) in DelegationChoice::<T>::iter() {
+			if let Some(snapshot) = snapshots.get_mut(&operator) {
+				let delegator_balance = T::FundingInfo::balance(&delegator);
+				snapshot
+					.delegators
+					.insert(delegator.clone(), core::cmp::min(max_bid, delegator_balance));
+			}
+		}
+
+		(snapshots, independent_bidders)
 	}
 }
 
@@ -2014,32 +2054,6 @@ impl<T: Config> ExecutionCondition for NotDuringRotation<T> {
 	}
 }
 
-pub struct UpdateBackupMapping<T>(PhantomData<T>);
-
-impl<T: Config> OnAccountFunded for UpdateBackupMapping<T> {
-	type ValidatorId = ValidatorIdOf<T>;
-	type Amount = T::Amount;
-
-	fn on_account_funded(validator_id: &Self::ValidatorId, amount: Self::Amount) {
-		if <Pallet<T> as EpochInfo>::current_authorities().contains(validator_id) {
-			return
-		}
-
-		Backups::<T>::mutate(|backups| {
-			if amount.is_zero() {
-				if backups.remove(validator_id).is_none() {
-					#[cfg(not(test))]
-					log::warn!("Tried to remove non-existent ValidatorId {validator_id:?}..");
-					#[cfg(test)]
-					panic!("Tried to remove non-existent ValidatorId {validator_id:?}..");
-				}
-			} else {
-				backups.insert(validator_id.clone(), amount);
-			}
-		});
-	}
-}
-
 impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
 	/// Returns the percentage of current authorities that are compatible with the provided version.
 	fn percent_authorities_compatible_with_version(version: SemVer) -> Percent {
@@ -2056,14 +2070,6 @@ impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
 				.count() as u32,
 			authorities_count,
 		)
-	}
-}
-
-pub struct RemoveVanityNames<T>(PhantomData<T>);
-
-impl<T: Config> OnKilledAccount<T::AccountId> for RemoveVanityNames<T> {
-	fn on_killed_account(who: &T::AccountId) {
-		ActiveBidder::<T>::mutate(|bidders| bidders.remove(who));
 	}
 }
 
@@ -2085,17 +2091,17 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 	}
 }
 
-pub struct QualifyByMinimumBid<T>(PhantomData<T>);
+pub struct QualifyByMinimumStake<T>(PhantomData<T>);
 
-impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumBid<T> {
+impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumStake<T> {
 	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
-		T::FundingInfo::balance(validator_id.into_ref()) >= MinimumAuctionBid::<T>::get()
+		T::FundingInfo::balance(validator_id.into_ref()) >= MinimumValidatorStake::<T>::get()
 	}
 
 	fn filter_qualified(
 		validators: BTreeSet<<T as Chainflip>::ValidatorId>,
 	) -> BTreeSet<<T as Chainflip>::ValidatorId> {
-		let min_bid = MinimumAuctionBid::<T>::get();
+		let min_bid = MinimumValidatorStake::<T>::get();
 		validators
 			.into_iter()
 			.filter(|id| T::FundingInfo::balance(id.into_ref()) >= min_bid)
@@ -2115,5 +2121,19 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 		}
 
 		Ok(())
+	}
+}
+
+pub struct DelegatedAccountCleanup<T>(PhantomData<T>);
+
+impl<T: Config> OnKilledAccount<T::AccountId> for DelegatedAccountCleanup<T> {
+	fn on_killed_account(account_id: &T::AccountId) {
+		if let Some((operator, max_bid)) = DelegationChoice::<T>::take(account_id) {
+			Pallet::<T>::deposit_event(Event::Undelegated {
+				delegator: account_id.clone(),
+				operator,
+				max_bid,
+			});
+		}
 	}
 }

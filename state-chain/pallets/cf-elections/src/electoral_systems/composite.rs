@@ -48,6 +48,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             };
 
             use crate::{
+                DispatchError,
                 CorruptStorageError,
                 electoral_system::{
                     ElectoralSystem,
@@ -259,6 +260,20 @@ macro_rules! generate_electoral_system_tuple_impls {
                         // For when we have a composite of 1
                         #[allow(unreachable_patterns)]
                         _ => Err(CorruptStorageError::new()),
+                    }
+                }
+
+                fn check_vote_mismatch(
+                    election_identifier: ElectionIdentifierOf<Self>,
+                    partial_vote: &PartialVoteOf<Self>,
+                ) -> Result<(), DispatchError> {
+                    match (*election_identifier.extra(), partial_vote) {
+                        $((CompositeElectionIdentifierExtra::$electoral_system(extra), CompositePartialVote::$electoral_system(_)) => {
+                            Ok(())
+                        },)*
+                        // If election ID and vote are not belonging to the same electoral system
+                        #[allow(unreachable_patterns)]
+                        _ => Err(DispatchError::Other("VoteMismatch")),
                     }
                 }
 

@@ -1524,7 +1524,7 @@ fn on_finalize_handles_failed_calls() {
 fn consolidation_tx_gets_broadcasted_on_finalize() {
 	new_test_ext().execute_with(|| {
 		// "Enable" consolidation for this test only to reduce noise in other tests
-		cf_traits::mocks::api_call::SHOULD_CONSOLIDATE.with(|cell| cell.set(true));
+		cf_traits::mocks::api_call::ShouldConsolidate::set(&true);
 
 		EthereumIngressEgress::on_finalize(1);
 
@@ -2017,9 +2017,9 @@ fn safe_mode_prevents_deposit_channel_creation() {
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			ingress_egress_ethereum: PalletSafeMode {
 				deposit_channel_creation_enabled: false,
-				..PalletSafeMode::CODE_GREEN
+				..PalletSafeMode::code_green()
 			},
-			..MockRuntimeSafeMode::CODE_GREEN
+			..MockRuntimeSafeMode::code_green()
 		});
 
 		assert_err!(

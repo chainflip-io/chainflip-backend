@@ -14,16 +14,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-	genesis, get_validator_state, network, witness_ethereum_rotation_broadcast,
-	witness_rotation_broadcasts, AllVaults, ChainflipAccountState, NodeId,
-	HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
-};
+use crate::{genesis, network, AllVaults, NodeId, VAULT_ROTATION_BLOCKS};
 
 use frame_support::{assert_err, assert_ok};
 use pallet_cf_vaults::{PendingVaultActivation, VaultActivationStatus};
 use sp_runtime::AccountId32;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 
 use cf_primitives::{AuthorityCount, FlipBalance, GENESIS_EPOCH};
 use cf_traits::{AsyncResult, EpochInfo, KeyRotationStatusOuter, KeyRotator};
@@ -34,19 +30,19 @@ use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
 	BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip,
 	PolkadotCryptoInstance, PolkadotInstance, PolkadotThresholdSigner, Runtime, RuntimeOrigin,
-	SolanaInstance, SolanaThresholdSigner, System, Validator,
+	SolanaInstance, SolanaThresholdSigner, Validator,
 };
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
 pub fn fund_authorities_and_join_auction(
-	num_backups: AuthorityCount,
+	num_extra_nodes: AuthorityCount,
 ) -> (network::Network, Vec<NodeId>, Vec<NodeId>) {
 	// Create MAX_AUTHORITIES backup nodes and fund them above our genesis
 	// authorities The result will be our newly created nodes will be authorities
 	// and the genesis authorities will become backup nodes
 	let genesis_authorities: Vec<AccountId32> = Validator::current_authorities();
 	let (mut testnet, init_backup_nodes) =
-		network::Network::create(num_backups as u8, &genesis_authorities);
+		network::Network::create(num_extra_nodes as u8, &genesis_authorities);
 
 	// An initial balance which is greater than the genesis balances
 	// We intend for these initially backup nodes to win the auction
@@ -90,7 +86,6 @@ fn authority_rotates_with_correct_sequence() {
 			// Skip the first authority rotation, as key handover is guaranteed to succeed
 			// when rotating for the first time.
 			testnet.move_to_the_next_epoch();
-			witness_ethereum_rotation_broadcast(1);
 
 			assert_matches!(Validator::current_rotation_phase(), RotationPhase::Idle);
 			assert_eq!(
@@ -210,76 +205,6 @@ fn authorities_earn_rewards_for_authoring_blocks() {
 					assert!(amount_before < amount_after)
 				},
 			);
-		});
-}
-
-#[test]
-fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
-	// We want to have at least one heartbeat within our reduced epoch
-	const EPOCH_BLOCKS: u32 = 1000;
-	// Reduce our validating set and hence the number of nodes we need to have a backup
-	// set
-	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
-		.max_authorities(MAX_AUTHORITIES)
-		.build()
-		.execute_with(|| {
-			let (mut testnet, genesis_authorities, init_backup_nodes) =
-				fund_authorities_and_join_auction(MAX_AUTHORITIES);
-
-			// Start an auction
-			testnet.move_to_the_next_epoch();
-			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
-
-			// assert list of authorities as being the new nodes
-			let current_authorities = Validator::current_authorities();
-
-			assert_eq!(
-				init_backup_nodes.into_iter().collect::<BTreeSet<AccountId32>>(),
-				current_authorities.clone().into_iter().collect::<BTreeSet<AccountId32>>(),
-				"our new initial backup nodes should be the new authorities"
-			);
-
-			current_authorities.iter().for_each(|account_id| {
-				assert_eq!(
-					get_validator_state(account_id),
-					ChainflipAccountState::CurrentAuthority
-				);
-				// TODO: Check historical epochs
-			});
-
-			// assert list of backup validators as being the genesis authorities
-			let highest_funded_backup_nodes =
-				Validator::highest_funded_qualified_backup_nodes_lookup();
-
-			assert_eq!(
-				genesis_authorities.into_iter().collect::<BTreeSet<AccountId32>>(),
-				highest_funded_backup_nodes,
-				"the genesis authorities should now be the backup nodes"
-			);
-
-			highest_funded_backup_nodes.iter().for_each(|account_id| {
-				// we were active in the first epoch
-				assert_eq!(get_validator_state(account_id), ChainflipAccountState::Backup);
-				// TODO: Check historical epochs
-			});
-
-			let backup_node_balances: HashMap<NodeId, FlipBalance> = highest_funded_backup_nodes
-				.iter()
-				.map(|validator_id| (validator_id.clone(), Flip::total_balance_of(validator_id)))
-				.collect::<Vec<(NodeId, FlipBalance)>>()
-				.into_iter()
-				.collect();
-
-			// Move forward a heartbeat, emissions should be shared to backup nodes
-			testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
-
-			// We won't calculate the exact emissions but they should be greater than their
-			// initial balance
-			for (backup_node, pre_balance) in backup_node_balances {
-				assert!(pre_balance < Flip::total_balance_of(&backup_node));
-			}
 		});
 }
 
@@ -448,8 +373,6 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 			testnet.move_to_the_next_epoch();
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
 
-			witness_ethereum_rotation_broadcast(1);
-
 			// Begin the second rotation.
 			testnet.move_to_the_end_of_epoch();
 			testnet.move_forward_blocks(4);
@@ -514,7 +437,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 /// by going through the correct sequence in sync.
 #[test]
 fn can_move_through_multiple_epochs() {
-	const EPOCH_BLOCKS: u32 = 100;
+	const EPOCH_BLOCKS: u32 = 50;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
 		.epoch_duration(EPOCH_BLOCKS)
@@ -524,13 +447,11 @@ fn can_move_through_multiple_epochs() {
 			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
 			testnet.move_to_the_next_epoch();
-			witness_ethereum_rotation_broadcast(1);
 
-			for i in 1..21 {
-				testnet.move_to_the_next_epoch();
-				witness_rotation_broadcasts([i + 1, i, i, i, i, i]);
-			}
-			assert_eq!(GENESIS_EPOCH + 21, Validator::epoch_index());
+			let current_epoch = Validator::current_epoch();
+			let epochs_to_move = 20;
+			(0..epochs_to_move).for_each(|_| testnet.move_to_the_next_epoch());
+			assert_eq!(Validator::epoch_index(), current_epoch + epochs_to_move);
 		});
 }
 
@@ -546,7 +467,9 @@ fn cant_rotate_if_previous_rotation_is_pending() {
 			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
 			testnet.move_to_the_next_epoch();
-			witness_ethereum_rotation_broadcast(1);
+
+			// Disable witnessing of Rotation tx broadcast.
+			testnet.set_auto_witness_broadcasts(false);
 
 			testnet.move_to_the_next_epoch();
 			let epoch_index = Validator::epoch_index();
@@ -555,15 +478,17 @@ fn cant_rotate_if_previous_rotation_is_pending() {
 			// are still pending.
 			testnet.move_to_the_end_of_epoch();
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-			System::assert_last_event(state_chain_runtime::RuntimeEvent::Validator(
-				pallet_cf_validator::Event::<Runtime>::PreviousRotationStillPending,
-			));
+			cf_test_utilities::assert_has_event::<Runtime>(
+				state_chain_runtime::RuntimeEvent::Validator(
+					pallet_cf_validator::Event::<Runtime>::PreviousRotationStillPending,
+				),
+			);
 			// we are still in the older epoch
 			assert_eq!(epoch_index, Validator::epoch_index());
 
-			// we witness the rotation txs of the older epoch which then causes the rotation to
-			// start on the next block.
-			witness_rotation_broadcasts([2, 1, 1, 1, 1, 1]);
+			testnet.set_auto_witness_broadcasts(true);
+			crate::network::witness_all_outstanding_broadcasts();
+
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 			assert_eq!(epoch_index + 1, Validator::epoch_index());
 		});
@@ -581,7 +506,6 @@ fn waits_for_governance_when_apicall_fails() {
 			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
 			testnet.move_to_the_next_epoch();
-			witness_ethereum_rotation_broadcast(1);
 
 			let epoch_index = Validator::epoch_index();
 

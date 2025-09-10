@@ -371,6 +371,12 @@ macro_rules! assets {
 					}
 				}
 
+				pub fn try_map<R, E, F: FnMut(T) -> Result<R, E>>(self, mut f: F) -> Result<AssetMap<R>, E> {
+					Ok(AssetMap {
+						$($chain_member_and_module: self.$chain_member_and_module.try_map(&mut f)?,)+
+					})
+				}
+
 				pub fn iter(&self) -> impl Iterator<Item = (Asset, &T)> + Clone {
 					Asset::all().map(|asset| {
 						(asset, &self[asset])
@@ -572,6 +578,12 @@ macro_rules! assets {
 						AssetMap {
 							$($asset_member: f(self.$asset_member),)+
 						}
+					}
+
+					pub fn try_map<R, E, F: FnMut(T) -> Result<R, E>>(self, mut f: F) -> Result<AssetMap<R>, E> {
+						Ok(AssetMap {
+							$($asset_member: f(self.$asset_member)?,)+
+						})
 					}
 
 					pub fn iter(&self) -> impl Iterator<Item = (Asset, &T)> + Clone {

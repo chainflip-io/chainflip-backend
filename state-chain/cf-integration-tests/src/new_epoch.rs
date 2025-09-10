@@ -212,19 +212,12 @@ fn epoch_rotates() {
 
 			for account in keyless_nodes.iter() {
 				// TODO: Check historical epochs
-				assert!(
-					matches!(get_validator_state(account), ChainflipAccountState::Backup,),
-					"should be a backup node"
-				);
+				assert!(!is_current_authority(account), "{} should not be an authority", account);
 			}
 
 			for account in &Validator::current_authorities() {
 				// TODO: Check historical epochs
-				assert_eq!(
-					ChainflipAccountState::CurrentAuthority,
-					get_validator_state(account),
-					"should be CurrentAuthority"
-				);
+				assert!(is_current_authority(account), "{} should be an authority", account);
 			}
 
 			// A late funder comes along, they should become a backup node as long as they
@@ -238,10 +231,10 @@ fn epoch_rotates() {
 			// Register the new funds.
 			testnet.move_forward_blocks(1);
 
-			assert_eq!(
-				ChainflipAccountState::Backup,
-				get_validator_state(&late_funder),
-				"late funder should be a backup node"
+			assert!(
+				!is_current_authority(&late_funder),
+				"late funder {} should not be an authority",
+				late_funder
 			);
 		});
 }
@@ -271,7 +264,6 @@ fn can_consolidate_bitcoin_utxos() {
 				crate::network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
 			testnet.move_to_the_next_epoch();
-			witness_ethereum_rotation_broadcast(1);
 			testnet.move_to_the_next_epoch();
 			assert_eq!(Validator::current_epoch(), 3);
 

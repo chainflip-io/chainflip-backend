@@ -59,7 +59,7 @@ curve25519-dalek = { workspace = true, default-features = true, features = [
 ] }
 ed25519-dalek = { workspace = true }
 pin-project = { workspace = true }
-rand = { workspace = true, default-features = true }
+rand = { workspace = true, default-features = true, features = ["alloc"]}
 reqwest = { workspace = true, features = ["rustls-tls"] }
 tracing = { workspace = true }
 x25519-dalek = { workspace = true, features = ["serde"] }

@@ -60,7 +60,7 @@ fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: 
 			},
 		},
 		dca_parameters: None,
-		refund_parameters: None,
+		price_limits_and_expiry: None,
 		broker_fees: Default::default(),
 		origin,
 	}));

@@ -27,6 +27,7 @@ pub mod migrations;
 pub mod weights;
 use core::marker::PhantomData;
 
+use frame_support::{Deserialize, Serialize};
 pub use weights::WeightInfo;
 
 #[cfg(test)]
@@ -105,6 +106,7 @@ impl<T: Config> Redemption<T> {
 			&RestrictedBalances::<T>::get(account_id),
 			Some(redemption_address),
 			MinimumFunding::<T>::get(),
+			true,
 		)
 	}
 	pub fn for_rebalance(
@@ -120,6 +122,7 @@ impl<T: Config> Redemption<T> {
 			&RestrictedBalances::<T>::get(source_account_id),
 			redemption_address.as_ref(),
 			MinimumFunding::<T>::get(),
+			true,
 		)
 	}
 	pub fn for_rpc(account_id: &T::AccountId) -> Result<Self, Error<T>> {
@@ -131,6 +134,7 @@ impl<T: Config> Redemption<T> {
 			&RestrictedBalances::<T>::get(account_id),
 			None,
 			MinimumFunding::<T>::get(),
+			false,
 		)
 	}
 
@@ -143,6 +147,7 @@ impl<T: Config> Redemption<T> {
 		restricted_balances: &BTreeMap<EthereumAddress, FlipBalance<T>>,
 		bound_redeem_address: Option<&EthereumAddress>,
 		minimum_funding: FlipBalance<T>,
+		require_deregistration: bool,
 	) -> Result<Self, Error<T>> {
 		if let Some(address) = redemption_address {
 			if let Some(bound_address) = bound_redeem_address {
@@ -227,7 +232,7 @@ impl<T: Config> Redemption<T> {
 			remaining_balance == Zero::zero() || remaining_balance >= minimum_funding,
 			Error::<T>::BelowMinimumFunding
 		);
-		if account_balance == debit_amount {
+		if require_deregistration && account_balance == debit_amount {
 			ensure!(
 				T::AccountRoleRegistry::is_unregistered(account_id),
 				Error::<T>::AccountMustBeUnregistered
@@ -332,13 +337,39 @@ pub mod pallet {
 
 	pub type EthTransactionHash = [u8; 32];
 
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub enum RedemptionAmount<T: Parameter> {
+	#[derive(
+		Copy,
+		Clone,
+		Debug,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Ord,
+		PartialOrd,
+		Serialize,
+		Deserialize,
+	)]
+	pub enum RedemptionAmount<T> {
 		Max,
 		Exact(T),
 	}
 
-	impl<T: Parameter> From<T> for RedemptionAmount<T> {
+	impl<T> RedemptionAmount<T> {
+		pub fn try_fmap<B, E>(
+			self,
+			f: impl FnOnce(T) -> Result<B, E>,
+		) -> Result<RedemptionAmount<B>, E> {
+			match self {
+				RedemptionAmount::Max => Ok(RedemptionAmount::Max),
+				RedemptionAmount::Exact(amount) => Ok(RedemptionAmount::Exact(f(amount)?)),
+			}
+		}
+	}
+
+	impl<T> From<T> for RedemptionAmount<T> {
 		fn from(t: T) -> Self {
 			Self::Exact(t)
 		}
@@ -376,11 +407,8 @@ pub mod pallet {
 
 		/// Calls that are dispatchable via ethereum contract
 		type EthereumSCApi: UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
-			+ Decode
-			+ Clone
-			+ Ord
-			+ PartialOrd
-			+ Debug
+			+ Member
+			+ Parameter
 			+ GetDispatchInfo;
 
 		/// Safe Mode access.
@@ -1204,7 +1232,7 @@ pub struct EthereumDepositAndSCCall {
 	pub call: Vec<u8>,
 }
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound, Serialize, Deserialize)]
 pub enum EthereumDeposit {
 	FlipToSCGateway { amount: EthAmount },
 	Vault { asset: EthAsset, amount: EthAmount },

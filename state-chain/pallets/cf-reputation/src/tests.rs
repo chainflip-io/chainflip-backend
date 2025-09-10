@@ -17,8 +17,9 @@
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 
 use cf_traits::{
-	mocks::account_role_registry::MockAccountRoleRegistry, offence_reporting::*,
-	AccountRoleRegistry, EpochInfo, QualifyNode, SafeMode, SetSafeMode,
+	mocks::{account_role_registry::MockAccountRoleRegistry, flip_slasher::MockFlipSlasher},
+	offence_reporting::*,
+	AccountRoleRegistry, EpochInfo, QualifyNode, SetSafeMode,
 };
 
 use crate::{mock::*, *};
@@ -60,7 +61,7 @@ fn offline_nodes_get_slashed_if_reputation_is_negative() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(reputation_points(&ALICE), 0);
 		ReputationPallet::penalise_offline_authorities(vec![ALICE]);
-		assert_eq!(MockSlasher::slash_count(ALICE), 1);
+		assert_eq!(MockFlipSlasher::<Test>::slash_count(&ALICE), 1);
 	});
 }
 
@@ -77,7 +78,7 @@ macro_rules! assert_reputation {
 }
 
 #[test]
-fn number_of_submissions_doesnt_affect_reputation_increase() {
+fn number_of_submissions_does_not_affect_reputation_increase() {
 	new_test_ext().execute_with(|| {
 		// Disable reporting to prevent reputation points from being deducted.
 		<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_code_red();
@@ -310,7 +311,7 @@ fn forgiveness() {
 }
 
 #[test]
-fn dont_report_in_safe_mode() {
+fn do_not_report_in_safe_mode() {
 	new_test_ext().execute_with(|| {
 		let marcello = 1;
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
@@ -323,21 +324,6 @@ fn dont_report_in_safe_mode() {
 		});
 		ReputationPallet::report(AllOffences::NotLockingYourComputer, marcello);
 		assert!(ReputationPallet::reputation(marcello).reputation_points < 0);
-	});
-}
-
-#[test]
-fn heartbeats_emitted_in_safe_mode() {
-	new_test_ext().execute_with(|| {
-		assert_eq!(MockHeartbeat::heartbeats(), 0);
-
-		// enable safe mode (disable reporting)
-		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
-			reputation: crate::PalletSafeMode::CODE_RED,
-		});
-		advance_by_heartbeat_intervals(1);
-
-		assert_eq!(MockHeartbeat::heartbeats(), 1);
 	});
 }
 
@@ -383,7 +369,7 @@ mod reporting_adapter_test {
 			assert!(!GrandpaOffenceReporter::is_known_offence(&[OFFENDER], &OFFENCE_TIME_SLOT));
 			assert!(Pallet::<Test>::validators_suspended_for(&[AllOffences::UpsettingGrandpa])
 				.is_empty());
-			assert_eq!(MockSlasher::slash_count(OFFENDER.0), 0);
+			assert_eq!(MockFlipSlasher::<Test>::slash_count(&OFFENDER.0), 0);
 
 			// Report the offence. It should now be known, and a duplicate report should not be
 			// possible.
@@ -403,7 +389,7 @@ mod reporting_adapter_test {
 				ReputationPallet::reputation(OFFENDER.0).reputation_points,
 				-GRANDPA_EQUIVOCATION_PENALTY_POINTS
 			);
-			assert_eq!(MockSlasher::slash_count(OFFENDER.0), 1);
+			assert_eq!(MockFlipSlasher::<Test>::slash_count(&OFFENDER.0), 1);
 
 			// Once an offence has been reported, it's not possible to report an offence for a
 			// previous time slot.
@@ -423,7 +409,7 @@ mod reporting_adapter_test {
 			assert_ok!(GrandpaOffenceReporter::report_offence(Default::default(), FUTURE_OFFENCE,));
 			assert!(GrandpaOffenceReporter::is_known_offence(&[OFFENDER], &NEXT_TIME_SLOT));
 			assert!(GrandpaOffenceReporter::is_known_offence(&[OFFENDER], &FUTURE_TIME_SLOT));
-			assert_eq!(MockSlasher::slash_count(OFFENDER.0), 2);
+			assert_eq!(MockFlipSlasher::<Test>::slash_count(&OFFENDER.0), 2);
 		});
 	}
 }
@@ -508,7 +494,7 @@ fn only_authorities_should_appear_in_network_state() {
 }
 
 #[test]
-fn in_safe_mode_you_dont_lose_reputation_for_being_offline() {
+fn in_safe_mode_you_do_not_lose_reputation_for_being_offline() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(BOB)));
 		assert!(HeartbeatQualification::<Test>::is_qualified(&BOB));

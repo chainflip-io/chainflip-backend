@@ -37,6 +37,7 @@ use sp_core::H160;
 use sp_runtime::{Percent, Permill};
 use state_chain_runtime::{
 	chainflip::{
+		generic_elections::{initial_state, ChainlinkOraclePriceSettings},
 		solana_elections::{SolanaIngressSettings, SolanaVaultSwapsSettings},
 		Offence,
 	},
@@ -52,7 +53,6 @@ use state_chain_runtime::{
 };
 
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
-pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
 pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
 pub const MIN_FUNDING: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
 
@@ -204,7 +204,6 @@ impl ExtBuilder {
 						matches!(role, AccountRole::Validator).then_some(id.clone())
 					})
 					.collect(),
-				genesis_backups: Default::default(),
 				epoch_duration: self.epoch_duration,
 				bond: self
 					.genesis_accounts
@@ -217,14 +216,12 @@ impl ExtBuilder {
 				redemption_period_as_percentage: Percent::from_percent(
 					REDEMPTION_PERIOD_AS_PERCENTAGE,
 				),
-				backup_reward_node_percentage: Percent::from_percent(34),
 				authority_set_min_size: self.min_authorities,
 				auction_parameters: SetSizeParameters {
 					min_size: self.min_authorities,
 					max_size: self.max_authorities,
 					max_expansion: self.max_authorities,
 				},
-				auction_bid_cutoff_percentage: Percent::from_percent(0),
 				max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 			},
 			ethereum_vault: EthereumVaultConfig {
@@ -234,7 +231,6 @@ impl ExtBuilder {
 
 			emissions: EmissionsConfig {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
-				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 				supply_update_interval: SUPPLY_UPDATE_INTERVAL_DEFAULT,
 				..Default::default()
 			},
@@ -373,7 +369,15 @@ impl ExtBuilder {
 				}),
 			},
 			bitcoin_elections: BitcoinElectionsConfig { option_initial_state: None },
-			generic_elections: GenericElectionsConfig { option_initial_state: None },
+			generic_elections: GenericElectionsConfig {
+				option_initial_state: Some(initial_state(ChainlinkOraclePriceSettings {
+					sol_oracle_program_id: Default::default(),
+					sol_oracle_feeds: Default::default(),
+					sol_oracle_query_helper: Default::default(),
+					eth_address_checker: Default::default(),
+					eth_oracle_feeds: Default::default(),
+				})),
+			},
 			ethereum_broadcaster: state_chain_runtime::EthereumBroadcasterConfig {
 				broadcast_timeout: 5 * BLOCKS_PER_MINUTE_ETHEREUM,
 			},
