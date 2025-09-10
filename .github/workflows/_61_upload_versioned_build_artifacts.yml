@@ -67,9 +67,9 @@ jobs:
       - name: Upload Artifacts S3 (main Alias) 🚀
         if: inputs.is_release == false && inputs.is_development == false
         run: |
-          aws s3 cp ./artifacts/ s3://artifacts.chainflip.io/main/ --recursive
+          aws s3 sync s3://artifacts.chainflip.io/${{ env.s3_prefix }}/ s3://artifacts.chainflip.io/main/
 
       - name: Upload Development Artifacts S3 🚀
         if: inputs.is_release == false && inputs.is_development == true
         run: |
-          aws s3 cp ./artifacts/ s3://artifacts.chainflip.io/${{ github.ref_name }}/ --recursive
+          aws s3 sync s3://artifacts.chainflip.io/${{ env.s3_prefix }}/ s3://artifacts.chainflip.io/${{ github.ref_name }}/
