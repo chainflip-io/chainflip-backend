@@ -806,7 +806,7 @@ mod verification_tests {
 	#[test]
 	fn test_signature_malleability() {
 		// Original test data
-		let signer: [u8; 20] = hex_literal::hex!("f39fd6e51aad88f6f4ce6ab8827279cfffb92266").into();
+		let signer: [u8; 20] = hex_literal::hex!("f39fd6e51aad88f6f4ce6ab8827279cfffb92266");
 		let payload = hex_literal::hex!(
 			"19457468657265756d205369676e6564204d6573736167653a0a33324578616d706c652060706572736f6e616c5f7369676e60206d6573736167652e"
 		);
@@ -816,8 +816,7 @@ mod verification_tests {
 		.into();
 
 		// Verify original signature
-		let success =
-			EvmCrypto::verify_signature(&signer.into(), &payload, &original_signature.into());
+		let success = EvmCrypto::verify_signature(&signer.into(), &payload, &original_signature);
 		assert!(success, "Original signature should be valid");
 
 		// Construct malleable signature
