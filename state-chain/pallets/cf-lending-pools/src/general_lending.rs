@@ -3,7 +3,7 @@ use cf_primitives::SwapRequestId;
 use cf_traits::{ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry};
 use frame_support::{
 	fail,
-	sp_runtime::{FixedPointNumber, FixedU64},
+	sp_runtime::{FixedPointNumber, FixedU64, PerThing},
 };
 
 use super::*;
@@ -1313,4 +1313,116 @@ pub mod rpc {
 				.collect()
 		}
 	}
+}
+
+/// Interest "curve" is defined as two linear segments. One is in effect from 0% to
+/// `junction_utilisation`, and the second is in effect from `junction_utilisation` to 100%.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct InterestRateConfig {
+	pub interest_at_zero_utilisation: Perbill,
+	pub junction_utilisation: Permill,
+	pub interest_at_junction_utilisation: Perbill,
+	pub interest_at_max_utilisation: Perbill,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct LendingConfiguration {
+	pub origination_fee: Permill,
+	/// Portion of the amount of principal asset obtained via liquidation that's
+	/// paid as a fee (instead of reducing the loan's principal)
+	pub liquidation_fee: Permill,
+	/// Determines how interest rate is calculated based on the utilization rate.
+	pub interest_rate_config: InterestRateConfig,
+	/// Borrowers aren't allowed to borrow more (or withdraw collateral) if their Loan-to-value
+	/// ratio (principal/collateral) would exceed this threshold.
+	pub ltv_target_threshold: FixedU64,
+	/// Reaching this threshold will trigger a top-up of the collateral
+	pub ltv_topup_threshold: FixedU64,
+	/// Reaching this threshold will trigger soft liquidation account's loans
+	pub ltv_soft_threshold: FixedU64,
+	/// If a loan that's being liquidated reaches this threshold, it will be considered
+	/// "healthy" again and the liquidation will be aborted. This is meant to be slightly
+	/// lower than the soft threshold to avoid frequent oscillations between liquidating and
+	/// not liquidating.
+	pub ltv_soft_liquidation_abort_threshold: FixedU64,
+	/// Reaching this threshold will trigger hard liquidation of the loan
+	pub ltv_hard_threshold: FixedU64,
+	/// Same as overcollateralisation_soft_liquidation_abort_threshold, but for
+	/// transitioning from hard to soft liquidation
+	pub ltv_hard_liquidation_abort_threshold: FixedU64,
+	/// This determines how frequently (in blocks) we check if fees should be swapped into the
+	/// pools asset
+	pub fee_swap_interval_blocks: u32,
+	/// Fees collected in some asset will be swapped into the pool's asset once their usd value
+	/// reaches this threshold
+	pub fee_swap_threshold_usd: AssetAmount,
+}
+
+impl LendingConfiguration {
+	pub fn derive_interest_rate_per_year(&self, utilisation: Permill) -> Perbill {
+		let InterestRateConfig {
+			interest_at_zero_utilisation,
+			junction_utilisation,
+			interest_at_junction_utilisation,
+			interest_at_max_utilisation,
+		} = self.interest_rate_config;
+
+		if utilisation < junction_utilisation {
+			interpolate_linear_segment(
+				interest_at_zero_utilisation,
+				interest_at_junction_utilisation,
+				Permill::zero(),
+				junction_utilisation,
+				utilisation,
+			)
+		} else {
+			interpolate_linear_segment(
+				interest_at_junction_utilisation,
+				interest_at_max_utilisation,
+				junction_utilisation,
+				Permill::one(),
+				utilisation,
+			)
+		}
+	}
+
+	fn derive_interest_rate_per_charge_interval(&self, utilisation: Permill) -> Perbill {
+		use cf_primitives::BLOCKS_IN_YEAR;
+
+		let interest_rate = self.derive_interest_rate_per_year(utilisation);
+
+		Perbill::from_parts(
+			interest_rate.deconstruct() / (BLOCKS_IN_YEAR / INTEREST_PAYMENT_INTERVAL),
+		)
+	}
+}
+
+/// Computes interest rate at utilisation `u` given a linear segment defined by interest values `i0`
+/// and `i1` at utilisation `u0` and `u1`, respectively. The code assumes u0 <= u <= u1, i1 >= i0
+/// and u0 != u1.
+fn interpolate_linear_segment(
+	i0: Perbill,
+	i1: Perbill,
+	u0: Permill,
+	u1: Permill,
+	u: Permill,
+) -> Perbill {
+	if u0 > u || u > u1 || i0 > i1 || u0 == u1 {
+		log_or_panic!("Invalid interest curve parameters");
+		return Perbill::zero();
+	}
+
+	// Converting everything to u64 (as parts per billion) to get access to more methods
+	let i0 = i0.deconstruct() as u64;
+	let i1 = i1.deconstruct() as u64;
+	let u0 = u0.deconstruct() as u64 * (Perbill::ACCURACY / Permill::ACCURACY) as u64;
+	let u1 = u1.deconstruct() as u64 * (Perbill::ACCURACY / Permill::ACCURACY) as u64;
+	let u = u.deconstruct() as u64 * (Perbill::ACCURACY / Permill::ACCURACY) as u64;
+
+	// Slope coefficient:
+	let slope = ((i1 - i0) * Perbill::ACCURACY as u64) / (u1 - u0);
+
+	let result = i0 + slope * (u - u0) / Perbill::ACCURACY as u64;
+
+	Perbill::from_parts(result as u32)
 }

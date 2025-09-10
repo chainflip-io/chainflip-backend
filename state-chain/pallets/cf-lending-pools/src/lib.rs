@@ -25,7 +25,8 @@ use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
-	RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+	InterestRateConfig, LendingConfiguration, RpcLendingPool, RpcLiquidationStatus,
+	RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 };
 pub use general_lending_pool::LendingPool;
 // Temporarily exposing this for a migration
@@ -162,59 +163,6 @@ pub enum LoanUsage {
 	Boost(PrewitnessedDepositId),
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct LendingConfiguration {
-	pub origination_fee: Permill,
-	/// Portion of the amount of principal asset obtained via liquidation that's
-	/// paid as a fee (instead of reducing the loan's principal)
-	pub liquidation_fee: Permill,
-	/// Interest is computed as interest_base + utilisation *
-	/// interest_utilisation_factor
-	pub interest_base: Perbill,
-	pub interest_utilisation_factor: Perbill,
-	/// Borrowers aren't allowed to borrow more (or withdraw collateral) if their Loan-to-value
-	/// ratio (principal/collateral) would exceed this threshold.
-	pub ltv_target_threshold: FixedU64,
-	/// Reaching this threshold will trigger a top-up of the collateral
-	pub ltv_topup_threshold: FixedU64,
-	/// Reaching this threshold will trigger soft liquidation account's loans
-	pub ltv_soft_threshold: FixedU64,
-	/// If a loan that's being liquidated reaches this threshold, it will be considered
-	/// "healthy" again and the liquidation will be aborted. This is meant to be slightly
-	/// lower than the soft threshold to avoid frequent oscillations between liquidating and
-	/// not liquidating.
-	pub ltv_soft_liquidation_abort_threshold: FixedU64,
-	/// Reaching this threshold will trigger hard liquidation of the loan
-	pub ltv_hard_threshold: FixedU64,
-	/// Same as overcollateralisation_soft_liquidation_abort_threshold, but for
-	/// transitioning from hard to soft liquidation
-	pub ltv_hard_liquidation_abort_threshold: FixedU64,
-	/// This determines how frequently (in blocks) we check if fees should be swapped into the
-	/// pools asset
-	pub fee_swap_interval_blocks: u32,
-	/// Fees collected in some asset will be swapped into the pool's asset once their usd value
-	/// reaches this threshold
-	pub fee_swap_threshold_usd: AssetAmount,
-}
-
-impl LendingConfiguration {
-	pub fn derive_interest_rate_per_year(&self, utilisation: Permill) -> Perbill {
-		self.interest_base +
-			Perbill::from_parts(utilisation.deconstruct() * 1000) *
-				self.interest_utilisation_factor
-	}
-
-	fn derive_interest_rate_per_charge_interval(&self, utilisation: Permill) -> Perbill {
-		use cf_primitives::BLOCKS_IN_YEAR;
-
-		let interest_rate = self.derive_interest_rate_per_year(utilisation);
-
-		Perbill::from_parts(
-			interest_rate.deconstruct() / (BLOCKS_IN_YEAR / INTEREST_PAYMENT_INTERVAL),
-		)
-	}
-}
-
 use utils::distribute_proportionally;
 
 mod utils {
@@ -330,13 +278,17 @@ pub struct LendingConfigDefault {}
 const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	origination_fee: Permill::from_parts(100), // 1 bps
 	liquidation_fee: Permill::from_parts(500), // 5 bps
-	interest_base: Perbill::from_percent(2),   // 2% per year
-	interest_utilisation_factor: Perbill::from_percent(10), // 2% per year
+	interest_rate_config: InterestRateConfig {
+		interest_at_zero_utilisation: Perbill::from_percent(2),
+		junction_utilisation: Permill::from_percent(90),
+		interest_at_junction_utilisation: Perbill::from_percent(8),
+		interest_at_max_utilisation: Perbill::from_percent(50),
+	},
 	ltv_target_threshold: FixedU64::from_rational(80, 100), // 80% LTV
-	ltv_topup_threshold: FixedU64::from_rational(85, 100), // 85% LTV
-	ltv_soft_threshold: FixedU64::from_rational(90, 100), // 90% LTV
+	ltv_topup_threshold: FixedU64::from_rational(85, 100),  // 85% LTV
+	ltv_soft_threshold: FixedU64::from_rational(90, 100),   // 90% LTV
 	ltv_soft_liquidation_abort_threshold: FixedU64::from_rational(88, 100), // 88% LTV
-	ltv_hard_threshold: FixedU64::from_rational(95, 100), // 95% LTV
+	ltv_hard_threshold: FixedU64::from_rational(95, 100),   // 95% LTV
 	ltv_hard_liquidation_abort_threshold: FixedU64::from_rational(93, 100), // 93% LTV
 	// don't swap more often than every 10 blocks
 	fee_swap_interval_blocks: 10,

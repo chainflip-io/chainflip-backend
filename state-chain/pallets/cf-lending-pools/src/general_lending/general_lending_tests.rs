@@ -1831,7 +1831,7 @@ mod rpcs {
 			.then_execute_with(|_| {
 				// Interest amount happens to be this much, the exact amount is not important
 				// in this particular test:
-				const INTEREST_AMOUNT: AssetAmount = 2660;
+				const INTEREST_AMOUNT: AssetAmount = 2020;
 
 				// Both accounts should be returned since we don't specify any:
 				assert_eq!(
@@ -1864,7 +1864,7 @@ mod rpcs {
 							account: BORROWER,
 							primary_collateral_asset: COLLATERAL_ASSET,
 							// LTV slightly increased due to interest payment:
-							ltv_ratio: Some(FixedU64::from_rational(800_000_085, 1_000_000_000)),
+							ltv_ratio: Some(FixedU64::from_rational(800_000_065, 1_000_000_000)),
 							collateral: vec![AssetAndAmount {
 								asset: COLLATERAL_ASSET,
 								amount: INIT_COLLATERAL - INTEREST_AMOUNT
@@ -1888,9 +1888,76 @@ mod rpcs {
 						total_amount: INIT_POOL_AMOUNT,
 						available_amount: INIT_POOL_AMOUNT - PRINCIPAL,
 						utilisation_rate: 5000, // 50%
-						interest_rate: 700      // 7%
+						interest_rate: 533      // 5.33%
 					}]
 				)
 			});
 	}
+}
+
+#[test]
+fn linear_segment_interpolation() {
+	// Linear segment starts at 0% and ends at 90%
+	assert_eq!(
+		interpolate_linear_segment(
+			Perbill::from_percent(2),
+			Perbill::from_percent(8),
+			Permill::from_percent(0),
+			Permill::from_percent(90),
+			Permill::from_percent(45),
+		),
+		Perbill::from_parts(49_999_999) // ~5%
+	);
+
+	// Linear segment starts at 90% and ends at 100%
+	assert_eq!(
+		interpolate_linear_segment(
+			Perbill::from_percent(8),
+			Perbill::from_percent(50),
+			Permill::from_percent(90),
+			Permill::from_percent(100),
+			Permill::from_percent(95),
+		),
+		Perbill::from_percent(29)
+	);
+
+	// Linear segment from 0% to 100% and zero slope
+	assert_eq!(
+		interpolate_linear_segment(
+			Perbill::from_percent(5),
+			Perbill::from_percent(5),
+			Permill::from_percent(0),
+			Permill::from_percent(100),
+			Permill::from_percent(75),
+		),
+		Perbill::from_percent(5)
+	);
+}
+
+#[test]
+fn interest_rate_curve() {
+	assert_eq!(
+		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(Permill::from_percent(0)),
+		Perbill::from_percent(2)
+	);
+
+	assert_eq!(
+		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(Permill::from_percent(45)),
+		Perbill::from_parts(49_999_999) // (2% + 8%) / 2 = 5%
+	);
+
+	assert_eq!(
+		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(Permill::from_percent(90)),
+		Perbill::from_percent(8)
+	);
+
+	assert_eq!(
+		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(Permill::from_percent(95)),
+		Perbill::from_percent(29) // (8% + 50%) / 2 = 29%
+	);
+
+	assert_eq!(
+		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(Permill::from_percent(100)),
+		Perbill::from_percent(50)
+	);
 }
