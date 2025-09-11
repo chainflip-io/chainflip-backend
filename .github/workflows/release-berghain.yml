@@ -23,6 +23,7 @@ jobs:
       is-mainnet: true
       ci-runner: "rust-builder-no-cache"
   build-m2:
+    needs: [release-checks]
     uses: ./.github/workflows/_21_build_m2.yml
     secrets: inherit
     with:
