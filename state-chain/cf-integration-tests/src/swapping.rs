@@ -16,6 +16,7 @@
 
 //! Contains tests related to liquidity, pools and swapping
 use cf_rpc_types::OrderFilled;
+use sp_runtime::{Permill, SaturatedConversion};
 use std::{collections::BTreeMap, vec};
 
 use crate::{
@@ -41,9 +42,9 @@ use cf_chains::{
 	TransferAssetParams,
 };
 use cf_primitives::{
-	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, EgressId,
-	IngressOrEgress, PriceLimits, SwapId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET,
-	SWAP_DELAY_BLOCKS,
+	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, DcaParameters,
+	EgressId, IngressOrEgress, PriceLimits, SwapId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH,
+	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{
@@ -61,13 +62,13 @@ use pallet_cf_broadcast::{
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall, VaultDepositWitness};
 use pallet_cf_pools::{HistoricalEarnedFees, RangeOrderSize};
-use pallet_cf_swapping::{SwapRequestIdCounter, SwapRetryDelay};
+use pallet_cf_swapping::{FeeRateAndMinimum, SwapRequestIdCounter, SwapRetryDelay};
 use sp_core::{H160, U256};
 
 use state_chain_runtime::{
 	chainflip::{
-		address_derivation::AddressDerivation, ChainAddressConverter, EthTransactionBuilder,
-		EvmEnvironment,
+		address_derivation::AddressDerivation, simulate_swap::simulate_swap, ChainAddressConverter,
+		EthTransactionBuilder, EvmEnvironment,
 	},
 	AssetBalances, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
 	EthereumInstance, LiquidityPools, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
@@ -84,6 +85,7 @@ const ETH_REFUND_PARAMS: ChannelRefundParametersForChain<Ethereum> =
 		refund_ccm_metadata: None,
 		max_oracle_price_slippage: None,
 	};
+const DECIMALS: u128 = 10u128.pow(18);
 
 pub fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price) {
 	assert_ok!(LiquidityPools::new_pool(
@@ -395,8 +397,6 @@ pub fn setup_pool_and_accounts(assets: Vec<Asset>, order_type: OrderType) {
 	new_account(&DORIS, AccountRole::LiquidityProvider);
 	new_account(&ZION, AccountRole::Broker);
 
-	const DECIMALS: u128 = 10u128.pow(18);
-
 	for (order_id, asset) in (0..).zip(assets) {
 		new_pool(asset, 0u32, price_at_tick(0).unwrap());
 		add_liquidity(&DORIS, asset, 10_000_000 * DECIMALS, order_type, Some(order_id));
@@ -417,7 +417,6 @@ fn basic_pool_setup_provision_and_swap() {
 			register_refund_addresses(&DORIS);
 
 			// Use the same decimals amount for all assets.
-			const DECIMALS: u128 = 10u128.pow(18);
 			credit_account(&DORIS, Asset::Eth, 10_000_000 * DECIMALS);
 			credit_account(&DORIS, Asset::Flip, 10_000_000 * DECIMALS);
 			credit_account(&DORIS, Asset::Usdc, 10_000_000 * DECIMALS);
@@ -455,7 +454,6 @@ fn basic_pool_setup_provision_and_swap() {
 
 #[test]
 fn can_process_ccm_via_swap_deposit_address() {
-	const DECIMALS: u128 = 10u128.pow(18);
 	const GAS_BUDGET: AssetAmount = 50 * DECIMALS;
 	const DEPOSIT_AMOUNT: AssetAmount = 50_000 * DECIMALS;
 
@@ -663,8 +661,6 @@ fn failed_swaps_are_rolled_back() {
 		)
 		.expect("pool must exist")
 	};
-
-	const DECIMALS: u128 = 10u128.pow(18);
 
 	super::genesis::with_test_defaults().build().execute_with(|| {
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Btc, Asset::Flip], OrderType::RangeOrder);
@@ -990,7 +986,6 @@ fn can_handle_failed_vault_transfer() {
 fn order_fills_subscription() {
 	const ORDER_ID: OrderId = 1;
 	const RANGE: std::ops::Range<Tick> = -10..10;
-	const DECIMALS: u128 = 10u128.pow(18);
 	const LIQUIDITY: Liquidity = 1_000_000_000 * DECIMALS;
 
 	super::genesis::with_test_defaults()
@@ -1120,4 +1115,224 @@ fn order_fills_subscription() {
 				]
 			);
 		});
+}
+
+mod swap_simulation {
+	use super::*;
+
+	const INPUT_ASSET: Asset = Asset::Eth;
+	const OUTPUT_ASSET: Asset = Asset::Flip;
+	const AMOUNT: u128 = 1_000 * DECIMALS;
+
+	#[test]
+	fn test_simulate_basic_swap() {
+		let network_fee_rate = Permill::from_percent(1);
+		let broker_fee_rate = Permill::from_percent(2);
+
+		super::genesis::with_test_defaults().build().execute_with(|| {
+			// Using the same price for both assets and Limit orders so the swap will execute at a
+			// 1:1 ratio for easy calculations
+			setup_pool_and_accounts(vec![INPUT_ASSET, OUTPUT_ASSET], OrderType::LimitOrder);
+
+			pallet_cf_swapping::NetworkFee::<Runtime>::put(FeeRateAndMinimum {
+				rate: network_fee_rate,
+				minimum: 0,
+			});
+
+			let simulated_swap = simulate_swap(
+				INPUT_ASSET,
+				OUTPUT_ASSET,
+				AMOUNT,
+				(broker_fee_rate * 10_000_u32).saturated_into(),
+				None,               // dca_parameters
+				None,               // ccm_data
+				Default::default(), // exclude_fees
+				None,               // additional_orders
+				Some(false),        // is_internal
+			)
+			.unwrap();
+
+			assert_eq!(
+				simulated_swap.output +
+					simulated_swap.egress_fee +
+					simulated_swap.ingress_fee +
+					simulated_swap.network_fee +
+					simulated_swap.broker_fee,
+				// Small rounding error
+				AMOUNT - 2
+			);
+			assert!(simulated_swap.output > 0);
+
+			let expected_network_fee = network_fee_rate * (AMOUNT - simulated_swap.ingress_fee);
+			assert_eq!(simulated_swap.network_fee, expected_network_fee);
+
+			let expected_broker_fee =
+				broker_fee_rate * (AMOUNT - simulated_swap.ingress_fee - expected_network_fee);
+			assert_eq!(simulated_swap.broker_fee, expected_broker_fee);
+
+			// Small rounding error
+			let expected_intermediate_amount = AMOUNT -
+				expected_network_fee -
+				expected_broker_fee -
+				simulated_swap.ingress_fee -
+				1;
+			assert_eq!(simulated_swap.intermediary, Some(expected_intermediate_amount));
+		});
+	}
+
+	#[test]
+	fn test_simulate_dca_swap() {
+		const NUMBER_OF_CHUNKS: u32 = 5;
+
+		// We need a large minimum for this test to make sure the smaller first chunk is accounted
+		// for
+		const NETWORK_FEE_MINIMUM: u128 = 20 * DECIMALS;
+
+		let network_fee_rate = Permill::from_percent(1);
+		let broker_fee_rate = Permill::from_percent(2);
+
+		super::genesis::with_test_defaults().build().execute_with(|| {
+			// Using the same price for both assets and Limit orders so the swap will execute at a
+			// 1:1 ratio for easy calculations
+			setup_pool_and_accounts(vec![INPUT_ASSET, OUTPUT_ASSET], OrderType::LimitOrder);
+
+			pallet_cf_swapping::NetworkFee::<Runtime>::put(FeeRateAndMinimum {
+				rate: network_fee_rate,
+				minimum: NETWORK_FEE_MINIMUM,
+			});
+
+			// Simulate a swap with and without the DCA parameters
+			let simulated_dca_swap = simulate_swap(
+				INPUT_ASSET,
+				OUTPUT_ASSET,
+				AMOUNT,
+				(broker_fee_rate * 10_000_u32).saturated_into(),
+				Some(DcaParameters { number_of_chunks: NUMBER_OF_CHUNKS, chunk_interval: 10 }),
+				None,               // ccm_data
+				Default::default(), // exclude_fees
+				None,               // additional_orders
+				Some(false),        // is_internal
+			)
+			.unwrap();
+
+			let simulated_non_dca_swap = simulate_swap(
+				INPUT_ASSET,
+				OUTPUT_ASSET,
+				AMOUNT,
+				(broker_fee_rate * 10_000_u32).saturated_into(),
+				None,               // No DCA params
+				None,               // ccm_data
+				Default::default(), // exclude_fees
+				None,               // additional_orders
+				Some(false),        // is_internal
+			)
+			.unwrap();
+
+			// Compare the swaps
+			assert_eq!(simulated_non_dca_swap.ingress_fee, simulated_dca_swap.ingress_fee);
+			assert_eq!(simulated_non_dca_swap.egress_fee, simulated_dca_swap.egress_fee);
+			assert_eq!(simulated_non_dca_swap.network_fee, simulated_dca_swap.network_fee);
+			assert_eq!(simulated_non_dca_swap.broker_fee, simulated_dca_swap.broker_fee);
+			// Small compounding rounding errors
+			let check = |a: u128, b: u128| {
+				let epsilon = a / 10_000;
+				a.abs_diff(b) <= epsilon
+			};
+			assert!(match (simulated_non_dca_swap.intermediary, simulated_dca_swap.intermediary) {
+				(Some(a), Some(b)) => check(a, b),
+				_ => false,
+			});
+			assert!(check(simulated_non_dca_swap.output, simulated_dca_swap.output),);
+		});
+	}
+
+	#[test]
+	fn test_simulate_internal_swap() {
+		super::genesis::with_test_defaults().build().execute_with(|| {
+			// Using the same price for both assets and Limit orders so the swap will execute at a
+			// 1:1 ratio for easy calculations
+			setup_pool_and_accounts(vec![INPUT_ASSET, OUTPUT_ASSET], OrderType::LimitOrder);
+
+			// Set the network
+			pallet_cf_swapping::NetworkFee::<Runtime>::put(FeeRateAndMinimum {
+				rate: Permill::from_percent(1),
+				minimum: 0,
+			});
+			pallet_cf_swapping::InternalSwapNetworkFee::<Runtime>::put(FeeRateAndMinimum {
+				rate: Permill::from_percent(1),
+				minimum: 0,
+			});
+
+			// Simulate a swap with as internal and as not internal
+			let simulated_internal_swap = simulate_swap(
+				INPUT_ASSET,
+				OUTPUT_ASSET,
+				AMOUNT,
+				200,                // broker fee
+				None,               // DCA params
+				None,               // ccm_data
+				Default::default(), // exclude_fees
+				None,               // additional_orders
+				Some(true),         // is_internal
+			)
+			.unwrap();
+
+			let simulated_normal_swap = simulate_swap(
+				INPUT_ASSET,
+				OUTPUT_ASSET,
+				AMOUNT,
+				200,                // broker fee
+				None,               // DCA params
+				None,               // ccm_data
+				Default::default(), // exclude_fees
+				None,               // additional_orders
+				Some(false),        // is_internal
+			)
+			.unwrap();
+
+			// The ingress and egress fees should be zero for the internal swaps
+			assert_eq!(simulated_internal_swap.ingress_fee, 0);
+			assert_eq!(simulated_internal_swap.egress_fee, 0);
+			// Not concerned with the exact values as they are tested elsewhere
+			assert!(simulated_normal_swap.network_fee < simulated_internal_swap.network_fee);
+			assert!(simulated_normal_swap.broker_fee < simulated_internal_swap.broker_fee);
+			assert!(
+				simulated_normal_swap.intermediary.unwrap() <
+					simulated_internal_swap.intermediary.unwrap()
+			);
+			assert!(simulated_normal_swap.output < simulated_internal_swap.output);
+		});
+	}
+
+	#[test]
+	fn network_fee_minimum_is_enforced() {
+		// Setting a very large minimum so that it will be used instead of the rate
+		const MINIMUM_NETWORK_FEE: u128 = AMOUNT / 2;
+
+		super::genesis::with_test_defaults().build().execute_with(|| {
+			setup_pool_and_accounts(vec![INPUT_ASSET, OUTPUT_ASSET], OrderType::LimitOrder);
+
+			// Set the network
+			pallet_cf_swapping::NetworkFee::<Runtime>::put(FeeRateAndMinimum {
+				rate: Permill::from_percent(1),
+				minimum: MINIMUM_NETWORK_FEE,
+			});
+
+			let simulated_swap = simulate_swap(
+				INPUT_ASSET,
+				OUTPUT_ASSET,
+				AMOUNT,
+				200,                // broker fee
+				None,               // DCA params
+				None,               // ccm_data
+				Default::default(), // exclude_fees
+				None,               // additional_orders
+				Some(false),        // is_internal
+			)
+			.unwrap();
+
+			assert_eq!(simulated_swap.network_fee, MINIMUM_NETWORK_FEE);
+			assert!(simulated_swap.intermediary.unwrap() < AMOUNT / 2);
+		});
+	}
 }

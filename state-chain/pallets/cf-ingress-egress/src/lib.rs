@@ -546,9 +546,18 @@ pub mod pallet {
 		pub boost_status: BoostStatus<TargetChainAmount<T, I>, BlockNumberFor<T>>,
 	}
 
-	pub struct AmountAndFeesWithheld<T: Config<I>, I: 'static> {
-		pub amount_after_fees: TargetChainAmount<T, I>,
-		pub fees_withheld: TargetChainAmount<T, I>,
+	pub struct AmountAndFeesWithheld<A> {
+		pub amount_after_fees: A,
+		pub fees_withheld: A,
+	}
+
+	impl<A> AmountAndFeesWithheld<A> {
+		pub fn map_amounts<B>(self, f: impl Fn(A) -> B) -> AmountAndFeesWithheld<B> {
+			AmountAndFeesWithheld {
+				amount_after_fees: f(self.amount_after_fees),
+				fees_withheld: f(self.fees_withheld),
+			}
+		}
 	}
 
 	/// Determines the action to take when a deposit is made to a channel.
@@ -3054,7 +3063,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
 		origin: &DepositOrigin<T, I>,
-	) -> AmountAndFeesWithheld<T, I> {
+	) -> AmountAndFeesWithheld<TargetChainAmount<T, I>> {
 		match origin {
 			DepositOrigin::DepositChannel { .. } => Self::withhold_ingress_or_egress_fee(
 				IngressOrEgress::IngressDepositChannel,
@@ -3079,7 +3088,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
-	) -> AmountAndFeesWithheld<T, I> {
+	) -> AmountAndFeesWithheld<TargetChainAmount<T, I>> {
 		let fee_estimate = T::ChainTracking::estimate_fee(asset, ingress_or_egress);
 
 		let fees_withheld = if asset == <T::TargetChain as Chain>::GAS_ASSET {
@@ -3105,7 +3114,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			transaction_fee
 		};
 
-		AmountAndFeesWithheld::<T, I> {
+		AmountAndFeesWithheld {
 			amount_after_fees: available_amount.saturating_sub(fees_withheld),
 			fees_withheld,
 		}
