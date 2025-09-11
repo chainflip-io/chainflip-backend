@@ -35,7 +35,6 @@ use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::{DispatchResult, StorageVersion},
 	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnNewAccount, OriginTrait},
-	BoundedVec,
 };
 
 use sp_runtime::traits::Dispatchable;
