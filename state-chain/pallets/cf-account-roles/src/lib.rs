@@ -29,7 +29,7 @@ use sp_std::boxed::Box;
 use cf_traits::Chainflip;
 
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, DeregistrationCheck, SpawnAccount};
+use cf_traits::{AccountRoleRegistry, DeregistrationCheck, SpawnAccount, VanityName};
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	error::BadOrigin,
@@ -37,7 +37,6 @@ use frame_support::{
 	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnNewAccount, OriginTrait},
 	BoundedVec,
 };
-use sp_core::ConstU32;
 
 use sp_runtime::traits::Dispatchable;
 
@@ -48,9 +47,7 @@ pub use pallet::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
-pub const MAX_LENGTH_FOR_VANITY_NAME: u32 = 64;
 
-type VanityName = BoundedVec<u8, ConstU32<MAX_LENGTH_FOR_VANITY_NAME>>;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -182,11 +179,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_vanity_name())]
 		pub fn set_vanity_name(origin: OriginFor<T>, name: VanityName) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
-			ensure!(sp_std::str::from_utf8(&name).is_ok(), Error::<T>::InvalidCharactersInName);
-			VanityNames::<T>::mutate(|vanity_names| {
-				vanity_names.insert(account_id.clone(), name.clone());
-			});
-			Self::deposit_event(Event::VanityNameSet { account_id, name });
+			<Pallet<T> as AccountRoleRegistry<T>>::set_vanity_name(&account_id, name.clone())?;
 			Ok(())
 		}
 
@@ -300,6 +293,18 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 			role: account_role,
 		});
 
+		Ok(())
+	}
+
+	fn set_vanity_name(
+		account_id: &<T as frame_system::Config>::AccountId,
+		name: VanityName,
+	) -> DispatchResult {
+		let _ = sp_std::str::from_utf8(&name).map_err(|_| Error::<T>::InvalidCharactersInName)?;
+		VanityNames::<T>::mutate(|vanity_names| {
+			vanity_names.insert(account_id.clone(), name.clone());
+		});
+		Self::deposit_event(Event::VanityNameSet { account_id: account_id.clone(), name });
 		Ok(())
 	}
 

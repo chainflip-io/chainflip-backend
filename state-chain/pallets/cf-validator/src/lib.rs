@@ -47,6 +47,7 @@ use cf_traits::{
 	AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
 	EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch, KeyRotator,
 	MissedAuthorshipSlots, QualifyNode, RedemptionCheck, ReputationResetter, SetSafeMode,
+	VanityName,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -1099,9 +1100,11 @@ pub mod pallet {
 		pub fn register_as_operator(
 			origin: OriginFor<T>,
 			settings: OperatorSettings,
+			vanity_name: VanityName,
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin.clone())?;
 			T::AccountRoleRegistry::register_as_operator(&account_id)?;
+			T::AccountRoleRegistry::set_vanity_name(&account_id, vanity_name)?;
 			Self::update_operator_settings(origin, settings)?;
 			Ok(())
 		}
