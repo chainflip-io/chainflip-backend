@@ -144,7 +144,7 @@ impl BtcRpcApi for BtcRetryRpcClient {
 	async fn best_block_hash(&self) -> Result<BlockHash> {
 		self.retry_client
 			.request_with_limit(
-				RequestLog::new("best_block_header".to_string(), None),
+				RequestLog::new("best_block_hash".to_string(), None),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
