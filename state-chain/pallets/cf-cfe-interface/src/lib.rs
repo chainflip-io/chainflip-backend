@@ -68,6 +68,11 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
+	/// Use this to catch runtime-upgrade events.
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub type RuntimeUpgradeEvents<T: Config> = StorageValue<_, Vec<CfeEvent<T>>>;
+
 	#[pallet::storage]
 	#[pallet::getter(fn get_cfe_events)]
 	#[pallet::unbounded]
@@ -77,6 +82,10 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			CfeEvents::<T>::kill();
+
+			if let Some(events) = RuntimeUpgradeEvents::<T>::take() {
+				CfeEvents::<T>::put(events);
+			}
 
 			T::WeightInfo::clear_events()
 		}

@@ -116,6 +116,11 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 			genesis_hashes::BERGHAIN => {
 				let utxos = utxos();
 				if crate::VERSION.spec_version == 1_10_05 {
+					use pallet_cf_cfe_interface::{CfeEvents, RuntimeUpgradeEvents};
+					// Clear out any old events.
+					CfeEvents::<Runtime>::kill();
+					RuntimeUpgradeEvents::<Runtime>::kill();
+
 					log::info!("🧹 Doing housekeeping.");
 					let fee_estimator = BitcoinChainTracking::chain_state()
 						.expect("Chain state always exists")
@@ -164,6 +169,9 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 							None,
 							|_| None,
 						);
+
+					// Move events into the runtime upgrade events.
+					RuntimeUpgradeEvents::<Runtime>::put(CfeEvents::<Runtime>::take());
 					log::info!("🧹 Requested signature and broadcast with IDs {broadcast_id}:{threshold_id}.")
 				}
 			},
