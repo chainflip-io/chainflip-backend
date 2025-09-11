@@ -258,7 +258,6 @@ pub enum VaultEvents {
 	},
 }
 
-type ElectionPropertiesVaultDeposit = <Ethereum as Chain>::ChainAccount;
 pub(crate) type BlockDataVaultDeposit = Vec<VaultEvents>;
 
 impls! {
@@ -281,7 +280,7 @@ impls! {
 
 	/// Associating BW types to the struct
 	BWTypes {
-		type ElectionProperties = ElectionPropertiesVaultDeposit;
+		type ElectionProperties = ();
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
 		type ProcessedUpToHook = EmptyHook;
@@ -316,11 +315,9 @@ impls! {
 		}
 	}
 
-	/// implementation of reading vault hook
+	/// Vault address doesn't change, it is read by the engine on startup
 	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: <Ethereum as Chain>::ChainBlockNumber) -> ElectionPropertiesVaultDeposit {
-			pallet_cf_environment::EthereumVaultAddress::<Runtime>::get()
-		}
+		fn run(&mut self, _block_witness_root: <Ethereum as Chain>::ChainBlockNumber) {}
 	}
 }
 
@@ -331,7 +328,6 @@ pub type EthereumVaultDepositWitnessingES =
 // ------------------------ State Chain Gateway witnessing ---------------------------
 pub struct EthereumStateChainGatewayWitnessing;
 
-type ElectionPropertiesStateChainGateway = <Ethereum as Chain>::ChainAccount;
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
@@ -374,7 +370,7 @@ impls! {
 
 	/// Associating BW types to the struct
 	BWTypes {
-		type ElectionProperties = ElectionPropertiesStateChainGateway;
+		type ElectionProperties = ();
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
 		type ProcessedUpToHook = EmptyHook;
@@ -402,11 +398,9 @@ impls! {
 		}
 	}
 
-	/// implementation of reading vault hook
+	/// StateChainGateway address doesn't change, it is read by the engine on startup
 	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: <Ethereum as Chain>::ChainBlockNumber) -> ElectionPropertiesVaultDeposit {
-			pallet_cf_environment::EthereumStateChainGatewayAddress::<Runtime>::get()
-		}
+		fn run(&mut self, _block_witness_root: <Ethereum as Chain>::ChainBlockNumber) {}
 	}
 }
 
@@ -417,7 +411,6 @@ pub type EthereumStateChainGatewayWitnessingES =
 // ------------------------ Key Manager witnessing ---------------------------
 pub struct EthereumKeyManagerWitnessing;
 
-type ElectionPropertiesKeyManager = <Ethereum as Chain>::ChainAccount;
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
@@ -461,7 +454,7 @@ impls! {
 
 	/// Associating BW types to the struct
 	BWTypes {
-		type ElectionProperties = ElectionPropertiesKeyManager;
+		type ElectionProperties = ();
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
 		type ProcessedUpToHook = EmptyHook;
@@ -489,11 +482,9 @@ impls! {
 		}
 	}
 
-	/// implementation of reading vault hook
+	/// KeyManager address doesn't change, it is read by the engine on startup
 	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: <Ethereum as Chain>::ChainBlockNumber) -> ElectionPropertiesKeyManager {
-			pallet_cf_environment::EthereumKeyManagerAddress::<Runtime>::get()
-		}
+		fn run(&mut self, _block_witness_root: <Ethereum as Chain>::ChainBlockNumber) { }
 	}
 }
 
@@ -503,8 +494,6 @@ pub type EthereumKeyManagerWitnessingES =
 
 // ------------------------ SC Utils witnessing ---------------------------
 pub struct EthereumScUtilsWitnessing;
-
-type ElectionPropertiesScUtils = <Ethereum as Chain>::ChainAccount;
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
@@ -539,7 +528,7 @@ impls! {
 
 	/// Associating BW types to the struct
 	BWTypes {
-		type ElectionProperties = ElectionPropertiesScUtils;
+		type ElectionProperties = ();
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
 		type ProcessedUpToHook = EmptyHook;
@@ -567,11 +556,9 @@ impls! {
 		}
 	}
 
-	/// implementation of reading vault hook
+	/// ScUtils address doesn't change, it is read by the engine on startup
 	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: <Ethereum as Chain>::ChainBlockNumber) -> ElectionPropertiesScUtils {
-			pallet_cf_environment::EthereumKeyManagerAddress::<Runtime>::get()
-		}
+		fn run(&mut self, _block_witness_root: <Ethereum as Chain>::ChainBlockNumber) { }
 	}
 }
 
