@@ -2,6 +2,8 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.10.5] - 2025-09-11
+
 ## [1.10.4] - 2025-08-29
 
 ### CI

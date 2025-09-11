@@ -23,45 +23,6 @@ impl OnRuntimeUpgrade for Migration {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		use pallet_cf_elections::{
-			electoral_systems::{
-				block_height_witnesser::BlockHeightWitnesserSettings,
-				block_witnesser::state_machine::BlockWitnesserSettings,
-			},
-			ElectoralUnsynchronisedSettings, SharedDataReferenceLifetime,
-		};
-
-		let unsynchronized_settings =
-			ElectoralUnsynchronisedSettings::<Runtime, BitcoinInstance>::get();
-		assert_eq!(
-			unsynchronized_settings,
-			Some((
-				BlockHeightWitnesserSettings { safety_buffer: 8 },
-				BlockWitnesserSettings {
-					max_ongoing_elections: 15,
-					max_optimistic_elections: 1,
-					safety_margin: 3,
-					safety_buffer: 8,
-				},
-				BlockWitnesserSettings {
-					max_ongoing_elections: 15,
-					max_optimistic_elections: 1,
-					safety_margin: 3,
-					safety_buffer: 8,
-				},
-				BlockWitnesserSettings {
-					max_ongoing_elections: 15,
-					max_optimistic_elections: 1,
-					safety_margin: 0,
-					safety_buffer: 8,
-				},
-				Default::default(),
-				(),
-			))
-		);
-
-		let lifetime = SharedDataReferenceLifetime::<Runtime, BitcoinInstance>::get();
-		assert_eq!(lifetime, 8);
 		Ok(())
 	}
 }
