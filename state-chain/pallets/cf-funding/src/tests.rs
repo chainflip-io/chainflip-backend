@@ -526,7 +526,7 @@ fn redemption_expiry_removes_redemption() {
 			RESTRICTED_AMOUNT - REDEMPTION_TAX - TO_REDEEM
 		);
 
-		assert_ok!(Funding::redemption_expired(RuntimeOrigin::root(), ALICE, Default::default()));
+		assert_ok!(Funding::inner_redemption_expired(ALICE));
 
 		// Tax was paid, rest is returned.
 		assert_eq!(Flip::total_balance_of(&ALICE), TOTAL_FUNDS - REDEMPTION_TAX);
@@ -587,11 +587,7 @@ fn restore_restricted_balance_when_redemption_expires() {
 			// Restricted funds and total balance should have been reduced.
 			assert!(Flip::total_balance_of(&ALICE) < TOTAL_FUNDS);
 
-			assert_ok!(Funding::redemption_expired(
-				RuntimeOrigin::root(),
-				ALICE,
-				Default::default()
-			));
+			assert_ok!(Funding::inner_redemption_expired(ALICE,));
 
 			let (total_funds, restricted_amount) = if redeem_amount == RedemptionAmount::Max {
 				(TOTAL_FUNDS, RESTRICTED_AMOUNT)

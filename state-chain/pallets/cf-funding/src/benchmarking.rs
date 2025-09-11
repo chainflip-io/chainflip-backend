@@ -105,25 +105,6 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn redemption_expired() {
-		let caller: T::AccountId = whitelisted_caller();
-		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
-
-		fund_with_minimum::<T>(&caller);
-		request_max_redemption::<T>(&caller);
-
-		let call =
-			Call::<T>::redemption_expired { account_id: caller.clone(), block_number: 2u32.into() };
-
-		#[block]
-		{
-			assert_ok!(call.dispatch_bypass_filter(origin));
-		}
-
-		assert!(!PendingRedemptions::<T>::contains_key(&caller));
-	}
-
-	#[benchmark]
 	fn update_minimum_funding() {
 		let call =
 			Call::<T>::update_minimum_funding { minimum_funding: MinimumFunding::<T>::get() };

@@ -739,46 +739,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// **This call can only be dispatched from the configured witness origin.**
-		///
-		/// A redemption request has been finalised.
-		///
-		/// Note that calling this doesn't initiate any protocol changes - the `redemption` has
-		/// already been authorised by authority multisig. This merely signals that the
-		/// redeemer has in fact executed the redemption via the StateChainGateway Smart
-		/// Contract and has received their funds. This allows us to finalise any on-chain cleanup.
-		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::redeemed())]
-		pub fn redeemed(
-			origin: OriginFor<T>,
-			account_id: AccountId<T>,
-			redeemed_amount: FlipBalance<T>,
-			// Required to ensure this call is unique per redemption event.
-			_tx_hash: EthTransactionHash,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			Self::inner_redeemed(account_id, redeemed_amount)?;
-
-			Ok(())
-		}
-
-		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::redemption_expired())]
-		pub fn redemption_expired(
-			origin: OriginFor<T>,
-			account_id: AccountId<T>,
-			// The block number uniquely identifies the redemption expiry for a particular account
-			// when witnessing.
-			_block_number: u64,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			Self::inner_redemption_expired(account_id)?;
-
-			Ok(())
-		}
-
 		/// Updates the minimum funding required for an account, the extrinsic is gated with
 		/// governance.
 		#[pallet::call_index(6)]
