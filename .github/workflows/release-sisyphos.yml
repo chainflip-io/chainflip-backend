@@ -38,6 +38,7 @@ jobs:
       profile: "production"
       binary-subdir: "production"
   build-m2:
+    needs: [test]
     uses: ./.github/workflows/_21_build_m2.yml
     secrets: inherit
     with:
