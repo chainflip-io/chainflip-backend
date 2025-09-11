@@ -17,9 +17,15 @@
 use crate::{
 	evm::rpc::address_checker::AddressState,
 	witness::{
-		eth::state_chain_gateway::{
-			FundedFilter, RedemptionExecutedFilter, RedemptionExpiredFilter,
-			StateChainGatewayEvents,
+		eth::{
+			sc_utils::{
+				CallScFilter, DepositAndScCallFilter, DepositToScGatewayAndScCallFilter,
+				DepositToVaultAndScCallFilter, ScUtilsEvents,
+			},
+			state_chain_gateway::{
+				FundedFilter, RedemptionExecutedFilter, RedemptionExpiredFilter,
+				StateChainGatewayEvents,
+			},
 		},
 		evm::{
 			contract_common::Event,
@@ -42,7 +48,8 @@ use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	eth::EthereumTrackedData,
 	evm::{
-		DepositDetails, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee, H256,
+		DepositDetails, EvmTransactionMetadata, SchnorrVerificationComponents, ToAccountId32,
+		TransactionFee, H256,
 	},
 	witness_period::SaturatingStep,
 	CcmChannelMetadata, CcmDepositMetadata, Ethereum, ForeignChain,
@@ -69,15 +76,17 @@ use pallet_cf_elections::{
 	},
 	ElectoralSystemTypes, VoteOf,
 };
+use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall};
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 use sp_core::{bounded::alloc::collections::VecDeque, H160};
 use state_chain_runtime::{
 	chainflip::ethereum_elections::{
 		EthereumBlockHeightWitnesserES, EthereumChain, EthereumDepositChannelWitnessingES,
 		EthereumElectoralSystemRunner, EthereumFeeTracking, EthereumKeyManagerWitnessingES,
-		EthereumLiveness, EthereumStateChainGatewayWitnessingES, EthereumVaultDepositWitnessingES,
-		KeyManagerEvent as SCKeyManagerEvent, StateChainGatewayEvent as SCStateChainGatewayEvent,
-		VaultEvents as SCVaultEvents, ETHEREUM_MAINNET_SAFETY_BUFFER,
+		EthereumLiveness, EthereumScUtilsWitnessingES, EthereumStateChainGatewayWitnessingES,
+		EthereumVaultDepositWitnessingES, KeyManagerEvent as SCKeyManagerEvent, ScUtilsCall,
+		StateChainGatewayEvent as SCStateChainGatewayEvent, VaultEvents as SCVaultEvents,
+		ETHEREUM_MAINNET_SAFETY_BUFFER,
 	},
 	EthereumInstance,
 };
@@ -828,6 +837,135 @@ impl VoterApi<EthereumKeyManagerWitnessingES> for EthereumKeyManagerWitnesserVot
 }
 
 #[derive(Clone)]
+pub struct EthereumScUtilsVoter {
+	client: EvmCachingClient<EvmRpcSigningClient>,
+	sc_utils_address: H160,
+	supported_assets: HashMap<H160, Asset>,
+}
+#[async_trait::async_trait]
+impl VoterApi<EthereumScUtilsWitnessingES> for EthereumScUtilsVoter {
+	async fn vote(
+		&self,
+		_settings: <EthereumScUtilsWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
+		properties: <EthereumScUtilsWitnessingES as ElectoralSystemTypes>::ElectionProperties,
+	) -> std::result::Result<Option<VoteOf<EthereumScUtilsWitnessingES>>, anyhow::Error> {
+		let BWElectionProperties { block_height, properties: _sc_utils, election_type, .. } =
+			properties;
+		let data = query_election_block(&self.client, block_height, election_type).await?;
+
+		let events = events_at_block::<cf_chains::Ethereum, ScUtilsEvents, _>(
+			data.0,
+			block_height,
+			data.2,
+			self.sc_utils_address,
+			&self.client,
+		)
+		.await?;
+
+		let mut result: Vec<ScUtilsCall> = Vec::new();
+
+		for event in events {
+			match event.event_parameters {
+				ScUtilsEvents::DepositToScGatewayAndScCallFilter(
+					DepositToScGatewayAndScCallFilter {
+						sender,    // eth_address to attribute the FLIP to
+						signer: _, // `tx.origin``. Not to be used for now
+						amount,    // FLIP amount deposited
+						sc_call,
+					},
+				) => result.push(ScUtilsCall {
+					deposit_and_call: EthereumDepositAndSCCall {
+						deposit: EthereumDeposit::FlipToSCGateway {
+							amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
+						},
+						call: sc_call.to_vec(),
+					},
+					caller: sender,
+					// use 0 padded ethereum address as account_id which the flip funds
+					// are associated with on SC
+					caller_account_id: sender.into_account_id_32(),
+					eth_tx_hash: event.tx_hash.to_fixed_bytes(),
+				}),
+				ScUtilsEvents::DepositToVaultAndScCallFilter(
+					DepositToVaultAndScCallFilter {
+						sender,
+						signer: _,
+						amount,
+						token,
+						sc_call,
+					},
+				) => {
+					if let Some(asset) = self.supported_assets.get(&token) {
+						result.push(ScUtilsCall {
+							deposit_and_call: EthereumDepositAndSCCall {
+								deposit: EthereumDeposit::Vault {
+									asset: (*asset).try_into().expect("we expect the asset to be an Eth Asset"),
+									amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
+								},
+								call: sc_call.to_vec(),
+							},
+							caller: sender,
+							// use 0 padded ethereum address as account_id which the
+							// flip funds are associated with on SC
+							caller_account_id: sender.into_account_id_32(),
+							eth_tx_hash: event.tx_hash.to_fixed_bytes(),
+						});
+					} else {
+						continue;
+					}
+				},
+
+				ScUtilsEvents::DepositAndScCallFilter(DepositAndScCallFilter {
+					sender,
+					signer: _,
+					amount,
+					token,
+					to,
+					sc_call,
+				}) => {
+					if let Some(asset) = self.supported_assets.get(&token) {
+						result.push(ScUtilsCall {
+							deposit_and_call: EthereumDepositAndSCCall {
+								deposit: EthereumDeposit::Transfer {
+									asset: (*asset).try_into().expect("we expect the asset to be an Eth Asset"),
+									amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
+									destination: to,
+								},
+								call: sc_call.to_vec(),
+							},
+							caller: sender,
+							// use 0 padded ethereum address as account_id which the
+							// flip funds are associated with on SC
+							caller_account_id: sender.into_account_id_32(),
+							eth_tx_hash: event.tx_hash.to_fixed_bytes(),
+						});
+					} else {
+						continue;
+					}
+				},
+
+				ScUtilsEvents::CallScFilter(CallScFilter {
+					sender,
+					signer: _,
+					sc_call,
+				}) => result.push(ScUtilsCall {
+					deposit_and_call: EthereumDepositAndSCCall {
+						deposit: EthereumDeposit::NoDeposit,
+						call: sc_call.to_vec(),
+					},
+					caller: sender,
+					// use 0 padded ethereum address as account_id which the
+					// flip funds are associated with on SC
+					caller_account_id: sender.into_account_id_32(),
+					eth_tx_hash: event.tx_hash.to_fixed_bytes(),
+				}),
+			}
+		}
+
+		Ok(Some((result, data.1)))
+	}
+}
+#[derive(Clone)]
 pub struct EthereumFeeVoter {
 	client: EvmCachingClient<EvmRpcSigningClient>,
 }
@@ -941,6 +1079,13 @@ where
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
 
+	let sc_utils_address = state_chain_client
+		.storage_value::<pallet_cf_environment::EthereumScUtilsAddress<state_chain_runtime::Runtime>>(
+			state_chain_client.latest_finalized_block().hash,
+		)
+		.await
+		.expect("Failed to get Sc Utils contract address from SC");
+
 	scope.spawn(async move {
 		task_scope::task_scope(|scope| {
 			async {
@@ -960,7 +1105,7 @@ where
 						EthereumVaultDepositWitnesserVoter {
 							client: client.clone(),
 							vault_address,
-							supported_assets: supported_erc20_tokens,
+							supported_assets: supported_erc20_tokens.clone(),
 						},
 						EthereumStateChainGatewayWitnesserVoter {
 							client: client.clone(),
@@ -969,6 +1114,11 @@ where
 						EthereumKeyManagerWitnesserVoter {
 							client: client.clone(),
 							key_manager_address,
+						},
+						EthereumScUtilsVoter {
+							client: client.clone(),
+							sc_utils_address,
+							supported_assets: supported_erc20_tokens,
 						},
 						EthereumFeeVoter { client: client.clone() },
 						EthereumLivenessVoter { client: client.clone() },

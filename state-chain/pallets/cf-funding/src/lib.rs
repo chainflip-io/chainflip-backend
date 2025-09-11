@@ -1234,13 +1234,37 @@ impl<T: Config> SpawnAccount for Pallet<T> {
 	}
 }
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	DebugNoBound,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
+)]
 pub struct EthereumDepositAndSCCall {
 	pub deposit: EthereumDeposit,
 	pub call: Vec<u8>,
 }
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	DebugNoBound,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
+)]
 pub enum EthereumDeposit {
 	FlipToSCGateway { amount: EthAmount },
 	Vault { asset: EthAsset, amount: EthAmount },

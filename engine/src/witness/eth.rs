@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod chain_tracking;
-mod sc_utils;
+pub mod sc_utils;
 pub mod state_chain_gateway;
 
 use std::{collections::HashMap, sync::Arc};

@@ -1,19 +1,19 @@
-use core::ops::Range;
-
 use crate::{
 	chainflip::{
 		elections::TypesFor,
 		ethereum_elections::{
-			BlockDataDepositChannel, BlockDataKeyManager, BlockDataStateChainGateway,
-			BlockDataVaultDeposit, EthereumDepositChannelWitnessing, EthereumKeyManagerWitnessing,
+			BlockDataDepositChannel, BlockDataKeyManager, BlockDataScUtils,
+			BlockDataStateChainGateway, BlockDataVaultDeposit, EthereumDepositChannelWitnessing,
+			EthereumKeyManagerWitnessing, EthereumScUtilsWitnessing,
 			EthereumStateChainGatewayWitnessing, EthereumVaultDepositWitnessing, KeyManagerEvent,
-			StateChainGatewayEvent, VaultEvents,
+			ScUtilsCall, StateChainGatewayEvent, VaultEvents,
 		},
 	},
 	EthereumBroadcaster, EthereumIngressEgress, Runtime,
 };
 use cf_chains::{instances::EthereumInstance, Chain, Ethereum};
 use codec::{Decode, Encode};
+use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use pallet_cf_elections::electoral_systems::{
 	block_witnesser::state_machine::{ExecuteHook, HookTypeFor, RulesHook},
@@ -41,6 +41,7 @@ type TypesDepositChannelWitnessing = TypesFor<EthereumDepositChannelWitnessing>;
 type TypesVaultDepositWitnessing = TypesFor<EthereumVaultDepositWitnessing>;
 type TypesStateChainGatewayWitnessing = TypesFor<EthereumStateChainGatewayWitnessing>;
 type TypesKeyManagerWitnessing = TypesFor<EthereumKeyManagerWitnessing>;
+type TypesScUtilsWitnessing = TypesFor<EthereumScUtilsWitnessing>;
 type BlockNumber = <Ethereum as Chain>::ChainBlockNumber;
 
 /// Returns one event per deposit witness. If multiple events share the same deposit witness:
@@ -212,6 +213,33 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 	}
 }
 
+impl Hook<HookTypeFor<TypesScUtilsWitnessing, ExecuteHook>> for TypesScUtilsWitnessing {
+	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<ScUtilsCall>)>) {
+		for (_, event) in dedup_events(events) {
+			match event {
+				EthEvent::PreWitness(_) => {},
+				EthEvent::Witness(call) => {
+					if let Err(err) = pallet_cf_funding::Pallet::<Runtime>::execute_sc_call(
+						pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
+						call.deposit_and_call.clone(),
+						call.caller,
+						// use 0 padded ethereum address as account_id which the flip funds
+						// are associated with on SC
+						call.caller_account_id,
+						call.eth_tx_hash,
+					) {
+						log::error!(
+							"Failed to execute Ethereum sc call {:?}: Error: {:?}",
+							call.deposit_and_call.call,
+							err
+						)
+					}
+				},
+			};
+		}
+	}
+}
+
 impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDepositChannelWitnessing {
 	fn run(
 		&mut self,
@@ -291,6 +319,24 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, RulesHook>> for TypesKeyManager
 						KeyManagerEvent::GovernanceAction { .. } => Some(EthEvent::Witness(event)),
 						KeyManagerEvent::SignatureAccepted { .. } => None,
 					})
+					.collect::<Vec<_>>(),
+			)
+		}
+		results
+	}
+}
+
+impl Hook<HookTypeFor<TypesScUtilsWitnessing, RulesHook>> for TypesScUtilsWitnessing {
+	fn run(
+		&mut self,
+		(age, block_data, safety_margin): (Range<u32>, BlockDataScUtils, u32),
+	) -> Vec<EthEvent<ScUtilsCall>> {
+		let mut results: Vec<EthEvent<ScUtilsCall>> = vec![];
+		if age.contains(&safety_margin) {
+			results.extend(
+				block_data
+					.iter()
+					.map(|call| EthEvent::Witness(call.clone()))
 					.collect::<Vec<_>>(),
 			)
 		}
