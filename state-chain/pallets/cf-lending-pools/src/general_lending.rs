@@ -800,19 +800,9 @@ impl<T: Config> LendingApi for Pallet<T> {
 				Error::<T>::InvalidLoanParameters
 			);
 
-			let loan = GeneralLoan {
-				asset,
-				created_at_block: frame_system::Pallet::<T>::current_block_number(),
-				owed_principal: amount_to_borrow,
-				// TODO: should this include origination fee?
-				fees_paid: BTreeMap::new(),
-			};
-
 			account.primary_collateral_asset = primary_collateral_asset;
 
 			account.try_adding_collateral_from_free_balance(&borrower_id, &extra_collateral)?;
-
-			account.loans.insert(loan_id, loan);
 
 			ensure!(
 				account.derive_ltv()? <= config.ltv_thresholds.target,
@@ -832,6 +822,16 @@ impl<T: Config> LendingApi for Pallet<T> {
 				primary_collateral_asset,
 				config.origination_fee(asset) * amount_to_borrow,
 			)?;
+
+			account.loans.insert(
+				loan_id,
+				GeneralLoan {
+					asset,
+					created_at_block: frame_system::Pallet::<T>::current_block_number(),
+					owed_principal: amount_to_borrow,
+					fees_paid: BTreeMap::from([(primary_collateral_asset, origination_fee_amount)]),
+				},
+			);
 
 			T::Balance::try_debit_account(
 				&borrower_id,
@@ -908,6 +908,11 @@ impl<T: Config> LendingApi for Pallet<T> {
 				primary_collateral_asset,
 				config.origination_fee(loan_asset) * extra_amount_to_borrow,
 			)?;
+
+			loan.fees_paid
+				.entry(primary_collateral_asset)
+				.or_default()
+				.saturating_accrue(origination_fee_amount);
 
 			T::Balance::try_debit_account(
 				&borrower_id,

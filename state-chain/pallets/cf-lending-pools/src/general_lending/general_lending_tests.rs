@@ -105,7 +105,7 @@ fn lender_basic_adding_and_removing_funds() {
 }
 
 #[test]
-fn basic_chp_lending() {
+fn basic_general_lending() {
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
 
 	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
@@ -188,7 +188,7 @@ fn basic_chp_lending() {
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL,
-							fees_paid: BTreeMap::new(),
+							fees_paid: BTreeMap::from([(COLLATERAL_ASSET, origination_fee)]),
 						}
 					)])
 				})
@@ -257,7 +257,7 @@ fn basic_chp_lending() {
 
 			System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 				loan_id: LOAN_ID,
-				total_fees: BTreeMap::from([(COLLATERAL_ASSET, total_interest)]),
+				total_fees: BTreeMap::from([(COLLATERAL_ASSET, origination_fee + total_interest)]),
 			}));
 
 			assert_eq!(
@@ -446,7 +446,10 @@ fn basic_loan_aggregation() {
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL + EXTRA_PRINCIPAL_1,
-							fees_paid: BTreeMap::new(),
+							fees_paid: BTreeMap::from([(
+								COLLATERAL_ASSET,
+								origination_fee + origination_fee_2
+							)]),
 						}
 					)]),
 					liquidation_status: LiquidationStatus::NoLiquidation
@@ -521,7 +524,10 @@ fn basic_loan_aggregation() {
 							created_at_block: INIT_BLOCK,
 							// Loan's owed principal has been increased:
 							owed_principal: PRINCIPAL + EXTRA_PRINCIPAL_1 + EXTRA_PRINCIPAL_2,
-							fees_paid: BTreeMap::new(),
+							fees_paid: BTreeMap::from([(
+								COLLATERAL_ASSET,
+								origination_fee + origination_fee_2 + origination_fee_3
+							)]),
 						}
 					)]),
 					liquidation_status: LiquidationStatus::NoLiquidation
@@ -949,7 +955,10 @@ fn basic_liquidation() {
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL - (SWAPPED_PRINCIPAL - liquidation_fee_1),
-							fees_paid: BTreeMap::from([(LOAN_ASSET, liquidation_fee_1)]),
+							fees_paid: BTreeMap::from([
+								(COLLATERAL_ASSET, origination_fee),
+								(LOAN_ASSET, liquidation_fee_1)
+							]),
 						}
 					)])
 				})
@@ -1035,7 +1044,10 @@ fn basic_liquidation() {
 			// The should now be settled:
 			System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 				loan_id: LOAN_ID,
-				total_fees: BTreeMap::from([(LOAN_ASSET, liquidation_fee_1 + liquidation_fee_2)]),
+				total_fees: BTreeMap::from([
+					(COLLATERAL_ASSET, origination_fee),
+					(LOAN_ASSET, liquidation_fee_1 + liquidation_fee_2),
+				]),
 			}));
 
 			// This excess principal asset amount will be credited to the borrower's account
@@ -1149,7 +1161,7 @@ fn making_loan_repayment() {
 
 		System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 			loan_id: LOAN_ID,
-			total_fees: Default::default(),
+			total_fees: BTreeMap::from([(COLLATERAL_ASSET, origination_fee)]),
 		}));
 	});
 }
