@@ -89,7 +89,7 @@ export async function setupOperatorAccount(logger: Logger, uri: string) {
             feeBps: 2_000,
             delegationAcceptance: 'Allow',
           },
-          'OP1',
+          new TextEncoder().encode(uri),
         )
         .signAndSend(operator, { nonce }, handleSubstrateError(chainflip));
     });

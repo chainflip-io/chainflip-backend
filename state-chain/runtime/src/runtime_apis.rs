@@ -531,8 +531,26 @@ pub struct NetworkFees {
 	pub internal_swap_network_fee: NetworkFeeDetails,
 }
 
+mod serialize_vanity_name {
+	use super::VanityName;
+	use serde::{self, Serializer};
+
+	pub fn from_utf8<S>(name: &VanityName, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		match core::str::from_utf8(name) {
+			Ok(s) => serializer.serialize_str(s),
+			Err(_) => serializer.serialize_str("<Invalid UTF-8>"),
+		}
+	}
+}
+
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
 pub struct RpcAccountInfoCommonItems<Balance> {
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	#[serde(serialize_with = "serialize_vanity_name::from_utf8")]
+	pub vanity_name: VanityName,
 	pub flip_balance: Balance,
 	pub asset_balances: cf_chains::assets::any::AssetMap<Balance>,
 	pub bond: Balance,
@@ -553,6 +571,7 @@ impl<A> RpcAccountInfoCommonItems<A> {
 		f: impl Fn(A) -> Result<B, E>,
 	) -> Result<RpcAccountInfoCommonItems<B>, E> {
 		Ok(RpcAccountInfoCommonItems {
+			vanity_name: self.vanity_name,
 			flip_balance: f(self.flip_balance)?,
 			asset_balances: self.asset_balances.try_map(&f)?,
 			bond: f(self.bond)?,

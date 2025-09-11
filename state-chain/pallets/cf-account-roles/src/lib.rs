@@ -57,6 +57,8 @@ pub mod pallet {
 		pallet_prelude::*,
 	};
 
+	pub use cf_traits::MAX_LENGTH_FOR_VANITY_NAME;
+
 	#[pallet::config]
 	pub trait Config: frame_system::Config + cf_traits::Chainflip {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
