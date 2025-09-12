@@ -628,26 +628,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// **This call can only be dispatched from the configured witness origin.**
-		///
-		/// Funds have been added to an account via the StateChainGateway Smart Contract.
-		///
-		/// If the account doesn't exist, we create it.
-		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::funded())]
-		pub fn funded(
-			origin: OriginFor<T>,
-			account_id: AccountId<T>,
-			amount: FlipBalance<T>,
-			funder: EthereumAddress,
-			// Required to ensure this call is unique per funding event.
-			tx_hash: EthTransactionHash,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-			Self::fund_account(account_id, funder, amount, tx_hash);
-			Ok(())
-		}
-
 		/// Get FLIP that is held for me by the system, signed by my authority key.
 		///
 		/// On success, the implementation of [ThresholdSigner] should emit an event. The attached

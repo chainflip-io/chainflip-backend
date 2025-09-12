@@ -30,40 +30,27 @@ use frame_system::RawOrigin;
 use sp_std::vec;
 
 fn fund_with_minimum<T: Config>(account_id: &T::AccountId) {
-	assert_ok!(Call::<T>::funded {
-		account_id: account_id.clone(),
-		amount: MinimumFunding::<T>::get(),
-		funder: Default::default(),
-		tx_hash: Default::default()
-	}
-	.dispatch_bypass_filter(T::EnsureWitnessed::try_successful_origin().unwrap()));
+	Pallet::<T>::fund_account(
+		account_id.clone(),
+		Default::default(),
+		MinimumFunding::<T>::get(),
+		Default::default(),
+	);
 }
 
-fn request_max_redemption<T: Config>(account_id: &T::AccountId) {
-	assert_ok!(Call::<T>::redeem {
-		amount: RedemptionAmount::Max,
-		address: Default::default(),
-		executor: Default::default(),
-	}
-	.dispatch_bypass_filter(RawOrigin::Signed(account_id.clone()).into()));
-}
+// fn request_max_redemption<T: Config>(account_id: &T::AccountId) {
+// 	assert_ok!(Call::<T>::redeem {
+// 		amount: RedemptionAmount::Max,
+// 		address: Default::default(),
+// 		executor: Default::default(),
+// 	}
+// 	.dispatch_bypass_filter(RawOrigin::Signed(account_id.clone()).into()));
+// }
 
 #[benchmarks]
 mod benchmarks {
 
 	use super::*;
-
-	#[benchmark]
-	fn funded() {
-		let caller: T::AccountId = whitelisted_caller();
-
-		#[block]
-		{
-			fund_with_minimum::<T>(&caller);
-		}
-
-		assert_eq!(T::Flip::balance(&caller), MinimumFunding::<T>::get());
-	}
 
 	#[benchmark]
 	fn redeem() {
@@ -80,28 +67,6 @@ mod benchmarks {
 		);
 
 		assert!(PendingRedemptions::<T>::contains_key(&caller));
-	}
-
-	#[benchmark]
-	fn redeemed() {
-		let caller: T::AccountId = whitelisted_caller();
-		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
-
-		fund_with_minimum::<T>(&caller);
-		request_max_redemption::<T>(&caller);
-
-		let call = Call::<T>::redeemed {
-			account_id: caller.clone(),
-			redeemed_amount: MinimumFunding::<T>::get(),
-			tx_hash: Default::default(),
-		};
-
-		#[block]
-		{
-			assert_ok!(call.dispatch_bypass_filter(origin));
-		}
-
-		assert!(!PendingRedemptions::<T>::contains_key(&caller));
 	}
 
 	#[benchmark]

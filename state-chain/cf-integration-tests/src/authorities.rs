@@ -49,11 +49,7 @@ pub fn fund_authorities_and_join_auction(
 	const INITIAL_FUNDING: FlipBalance = genesis::GENESIS_BALANCE * 2;
 	// Fund these backup nodes so that they are included in the next epoch
 	for node in &init_backup_nodes {
-		testnet.state_chain_gateway_contract.fund_account(
-			node.clone(),
-			INITIAL_FUNDING,
-			GENESIS_EPOCH,
-		);
+		testnet.state_chain_gateway_contract.fund_account(node.clone(), INITIAL_FUNDING);
 	}
 
 	// Allow the funds to be registered, initialise the account keys and peer
