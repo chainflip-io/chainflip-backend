@@ -1310,15 +1310,16 @@ pub mod rpc {
 			loans: loan_account
 				.loans
 				.into_iter()
-				.map(|(loan_id, loan)| {
-					RpcLoan {
-						loan_id,
-						asset: loan.asset,
-						created_at: loan.created_at_block.unique_saturated_into(),
-						principal_amount: loan.owed_principal,
-						// TODO: store historical fees on loans and expose them here
-						total_fees: Default::default(),
-					}
+				.map(|(loan_id, loan)| RpcLoan {
+					loan_id,
+					asset: loan.asset,
+					created_at: loan.created_at_block.unique_saturated_into(),
+					principal_amount: loan.owed_principal,
+					total_fees: loan
+						.fees_paid
+						.into_iter()
+						.map(|(asset, amount)| AssetAndAmount { asset, amount })
+						.collect(),
 				})
 				.collect(),
 			liquidation_status: match loan_account.liquidation_status {
