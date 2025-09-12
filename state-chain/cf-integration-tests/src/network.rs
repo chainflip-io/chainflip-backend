@@ -232,29 +232,6 @@ impl Engine {
 		super::is_current_authority(&self.node_id)
 	}
 
-	// Handle events from contract
-	fn on_contract_event(&self, event: &ContractEvent) {
-		if self.is_current_authority() && self.live {
-			match event {
-				ContractEvent::Funded { node_id: validator_id, amount, .. } => {
-					println!("Funding account");
-					pallet_cf_funding::Pallet::<Runtime>::fund_account(
-						validator_id.clone(),
-						ETH_ZERO_ADDRESS,
-						*amount,
-						TX_HASH,
-					);
-				},
-				ContractEvent::Redeemed { node_id, amount } => {
-					let _ = pallet_cf_funding::Pallet::<Runtime>::inner_redeemed(
-						node_id.clone(),
-						*amount,
-					);
-				},
-			}
-		}
-	}
-
 	// Handle events coming in from the state chain
 	// TODO have this abstracted out
 	fn handle_state_chain_events(&mut self, events: &[RuntimeEvent], cfe_events: &[CfeEvent]) {
@@ -644,6 +621,24 @@ pub fn dispatch_all_pending_extrinsics() {
 	});
 }
 
+// Handle events from contract
+pub fn on_contract_event(event: &ContractEvent) {
+	match event {
+		ContractEvent::Funded { node_id: validator_id, amount, .. } => {
+			println!("Funding account {:?}", validator_id);
+			pallet_cf_funding::Pallet::<Runtime>::fund_account(
+				validator_id.clone(),
+				ETH_ZERO_ADDRESS,
+				*amount,
+				TX_HASH,
+			);
+		},
+		ContractEvent::Redeemed { node_id, amount } => {
+			let _ = pallet_cf_funding::Pallet::<Runtime>::inner_redeemed(node_id.clone(), *amount);
+		},
+	}
+}
+
 impl Network {
 	pub fn live_nodes(&self) -> Vec<NodeId> {
 		self.engines
@@ -787,9 +782,7 @@ impl Network {
 		for block_number in start_block..(start_block + n) {
 			// Process any external events that have occurred.
 			for event in self.state_chain_gateway_contract.events() {
-				for engine in self.engines.values() {
-					engine.on_contract_event(&event);
-				}
+				on_contract_event(&event);
 			}
 			self.state_chain_gateway_contract.clear();
 
