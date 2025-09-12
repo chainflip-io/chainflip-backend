@@ -203,6 +203,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
 		use cf_chains::instances::BitcoinInstance;
+		#[allow(clippy::single_match)]
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN =>
 				if crate::VERSION.spec_version == 1_10_05 {
