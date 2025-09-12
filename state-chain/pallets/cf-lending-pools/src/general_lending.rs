@@ -1,5 +1,3 @@
-use core::future::Pending;
-
 use cf_amm_math::{invert_price, relative_price, Price};
 use cf_primitives::SwapRequestId;
 use cf_traits::{ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry};
@@ -1227,7 +1225,7 @@ impl<T: Config> Pallet<T> {
 			.saturating_accrue(origination_fee_amount);
 
 		T::Balance::try_debit_account(
-			&borrower_id,
+			borrower_id,
 			primary_collateral_asset,
 			origination_fee_amount,
 		)?;
