@@ -28,22 +28,30 @@ use cf_chains::{
 	},
 	dot::{api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
+	evm::{encode, Signature as EthereumSignature, Token, H256, U256},
 	hub::{Assethub, OutputAccountId},
 	sol::{
 		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall},
-		SolAddress, SolApiEnvironment, SolHash, Solana, NONCE_NUMBER_CRITICAL_NONCES,
+		SolAddress, SolApiEnvironment, SolHash, SolSignature, Solana, NONCE_NUMBER_CRITICAL_NONCES,
 	},
 	Chain, ReplayProtectionProvider,
 };
 use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
-	BroadcastId, NetworkEnvironment, SemVer,
+	Asset, BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
-	Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider,
-	SafeMode, SolanaNonceWatch,
+	AccountRoleRegistry, Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider,
+	NetworkEnvironmentProvider, SafeMode, SolanaNonceWatch,
 };
-use frame_support::{pallet_prelude::*, traits::StorageVersion};
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{
+		traits::{Get, Hash, Keccak256},
+		AccountId32, DispatchError,
+	},
+	traits::StorageVersion,
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::{vec, vec::Vec};
@@ -160,6 +168,12 @@ pub mod pallet {
 		InvalidUtxoParameters,
 		/// Failed to build Solana Api call. See logs for more details
 		FailedToBuildSolanaApiCall,
+		/// Payload has expired
+		PayloadExpired,
+		// Payload cannot be decoded
+		FailedToDecodePayload,
+		// Signature failed to be verified
+		InvalidSignature,
 	}
 
 	#[pallet::pallet]
@@ -317,6 +331,11 @@ pub mod pallet {
 	/// Contains the network environment for this runtime.
 	pub type ChainflipNetworkEnvironment<T> = StorageValue<_, NetworkEnvironment, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn chainflip_network)]
+	/// Current Chainflip's network name
+	pub type ChainflipNetworkName<T> = StorageValue<_, ChainflipNetwork, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -348,6 +367,12 @@ pub mod pallet {
 		SolanaGovCallDispatched { gov_call: SolanaGovCall, broadcast_id: BroadcastId },
 		/// Assethub Vault Account is successfully set
 		AssethubVaultAccountSet { assethub_vault_account_id: PolkadotAccountId },
+		UserActionSubmitted {
+			broker_id: T::AccountId,
+			signer_account_id: AccountId32,
+			signed_payload: Vec<u8>,
+			decoded_action: UserActionsApi,
+		},
 	}
 
 	#[pallet::call]
@@ -625,6 +650,107 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::call_index(11)]
+		#[pallet::weight(T::WeightInfo::submit_user_signed_payload())]
+		pub fn submit_user_signed_payload(
+			origin: OriginFor<T>,
+			payload: Vec<u8>,
+			transaction_metadata: TransactionMetadata,
+			user_signature_data: UserSignatureData,
+		) -> DispatchResult {
+			use cf_chains::{
+				evm::{EvmCrypto, ToAccountId32},
+				sol::SolanaCrypto,
+				ChainCrypto,
+			};
+
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			ensure!(
+				frame_system::Pallet::<T>::block_number() <
+					transaction_metadata.expiry_block.into(),
+				Error::<T>::PayloadExpired
+			);
+
+			// TODO: Check and increment nonce
+
+			// We could directly have the action: UserActionsApi as parameter, but this
+			// is more flexible for now. TBD.
+			let decoded_action = UserActionsApi::decode(&mut &payload[..])
+				.map_err(|_| Error::<T>::FailedToDecodePayload)?;
+
+			let chanflip_network_name = Self::chainflip_network();
+
+			let (valid_signature, signer_account_id, signed_payload) =
+				match user_signature_data.clone() {
+					UserSignatureData::Solana { signature, signer, sig_type } => {
+						let signed_payload = match sig_type {
+							SolSigType::Domain => {
+								let concat_data = [
+									payload,
+									chanflip_network_name.as_str().encode(),
+									transaction_metadata.encode(),
+								]
+								.concat();
+								[SOLANA_OFFCHAIN_PREFIX, concat_data.as_slice()].concat()
+							},
+						};
+						(
+							SolanaCrypto::verify_signature(&signer, &signed_payload, &signature),
+							AccountId32::new(signer.into()),
+							signed_payload,
+						)
+					},
+					UserSignatureData::Ethereum { signature, signer, sig_type } => {
+						let signed_payload = match sig_type {
+							EthSigType::Domain => {
+								let concat_data = [
+									payload,
+									chanflip_network_name.as_str().encode(),
+									transaction_metadata.encode(),
+								]
+								.concat();
+								let prefix = scale_info::prelude::format!(
+									"{}{}",
+									ETHEREUM_SIGN_MESSAGE_PREFIX,
+									concat_data.len()
+								);
+								let prefix_bytes = prefix.as_bytes();
+								[prefix_bytes, &concat_data].concat()
+							},
+							EthSigType::Eip712 => build_eip_712_hash(
+								decoded_action.clone(),
+								transaction_metadata,
+								signer,
+								chanflip_network_name,
+							),
+						};
+						(
+							EvmCrypto::verify_signature(&signer, &signed_payload, &signature),
+							signer.into_account_id_32(),
+							signed_payload,
+						)
+					},
+				};
+
+			ensure!(valid_signature, Error::<T>::InvalidSignature);
+
+			Self::deposit_event(Event::<T>::UserActionSubmitted {
+				broker_id,
+				signer_account_id,
+				signed_payload,
+				decoded_action,
+			});
+
+			// TODO: Execute User Action on behalf of the signer_account_id. This should be done
+			// similarly to the EthereumSCApi execution with `dispatch_bypass_filter`. Probably we
+			// don't want the extrinsic to fail if this fails but instead we want to rollback the
+			// state to consume the user nonce. Otherwise we rely only on the block expiry but
+			// that is mainly to prevent brokers from withholding signed payloads.
+
+			Ok(())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -647,6 +773,7 @@ pub mod pallet {
 		pub arb_address_checker_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
 		pub network_environment: NetworkEnvironment,
+		pub chainflip_network: ChainflipNetwork,
 		pub sol_genesis_hash: Option<SolHash>,
 		pub sol_api_env: SolApiEnvironment,
 		pub sol_durable_nonces_and_accounts: Vec<DurableNonceAndAccount>,
@@ -694,6 +821,7 @@ pub mod pallet {
 			AssethubOutputAccountId::<T>::set(1);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
+			ChainflipNetworkName::<T>::set(self.chainflip_network);
 
 			Pallet::<T>::update_current_release_version();
 		}
@@ -927,5 +1055,225 @@ impl<T: Config> CompatibleCfeVersions for Pallet<T> {
 impl<T: Config> NetworkEnvironmentProvider for Pallet<T> {
 	fn get_network_environment() -> NetworkEnvironment {
 		Self::network_environment()
+	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct TransactionMetadata {
+	nonce: u32,
+	expiry_block: BlockNumber,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum EthSigType {
+	Domain, // personal_sign
+	Eip712,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum SolSigType {
+	Domain, /* Using `b"\xffsolana offchain" as per Anza specifications,
+	         * even if we are not using the proposal. Phantom might use
+	         * a different standard though..
+	         * References
+	         * https://docs.anza.xyz/proposals/off-chain-message-signing
+	         * And/or phantom off-chain signing:
+	         * https://github.com/phantom/sign-in-with-solana */
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum UserSignatureData {
+	Solana { signature: SolSignature, signer: SolAddress, sig_type: SolSigType },
+	Ethereum { signature: EthereumSignature, signer: EvmAddress, sig_type: EthSigType },
+}
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
+pub enum LendingApi {
+	Borrow { amount: u128, collateral_asset: Asset, borrow_asset: Asset },
+}
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
+pub enum UserActionsApi {
+	Lending(LendingApi),
+	// reserved for future Apis for example Swap(SwapApi)...
+	// This allows us to update the API without breaking the encoding.
+}
+
+// We should probably do some  macro to pull each of the types, stringify it in a EIP712 format
+// and the compute the values for the tokens. For now we do it manially to keep it simple.
+// properly in the EIP712 format.
+impl UserActionsApi {
+	// NOTE: When there’s a nested struct, EIP-712 requires including
+	// the dependency in the type string.
+	// i.e. we must append the full definition of Metadata.
+	pub fn eip712_type_str_with_metadata(
+		&self,
+		metadata_type_str: &str,
+	) -> scale_info::prelude::string::String {
+		match self {
+			UserActionsApi::Lending(LendingApi::Borrow { .. }) => {
+				scale_info::prelude::format!(
+                    "Borrow(uint256 amount,string collateralAsset,string borrowAsset,Metadata metadata){}",
+                    metadata_type_str
+                )
+			}, // Add more variants here as needed
+		}
+	}
+
+	pub fn encode_eip_712_message_with_metadata(
+		&self,
+		metadata_hash: H256,
+		metadata_type_str: &str,
+	) -> Vec<u8> {
+		let action_type_str = self.eip712_type_str_with_metadata(metadata_type_str);
+		let action_type_hash = Keccak256::hash(action_type_str.as_bytes());
+		match self {
+			UserActionsApi::Lending(LendingApi::Borrow {
+				amount,
+				collateral_asset,
+				borrow_asset,
+			}) => {
+				let tokens = vec![
+					Token::FixedBytes(action_type_hash.as_bytes().to_vec()),
+					Token::Uint(U256::from(*amount)),
+					Token::FixedBytes(Keccak256::hash(collateral_asset.as_bytes()).0.to_vec()),
+					Token::FixedBytes(Keccak256::hash(borrow_asset.as_bytes()).0.to_vec()),
+					Token::FixedBytes(metadata_hash.as_bytes().to_vec()),
+				];
+
+				encode(&tokens)
+			},
+		}
+	}
+}
+
+const EIP712_DOMAIN_TYPE_STR: &str = "EIP712Domain(string name,string version)";
+// TODO: Do we want to use version (add it to the TransactionMetadata) and then version the
+// UserActionsApi or we will add new actions to the enum and deprecate old ones as we go?
+const EIP712_DOMAIN_VERSION: &str = "0";
+const EIP712_METADATA_TYPE_STR: &str = "Metadata(address from,uint256 nonce,uint256 expiryBlock)";
+const EIP712_DOMAIN_PREFIX: [u8; 2] = [0x19, 0x01];
+const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
+const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
+
+pub fn build_eip_712_hash(
+	user_action: UserActionsApi,
+	transaction_metadata: TransactionMetadata,
+	signer: EvmAddress,
+	chain_name: ChainflipNetwork,
+) -> Vec<u8> {
+	// -----------------
+	// Domain separator
+	// -----------------
+	// Not using chain_id as this is not an EVM network and the domain name
+	// will act as the replay protection between different Chainflip networks.
+	let type_hash = Keccak256::hash(EIP712_DOMAIN_TYPE_STR.as_bytes());
+	let name_hash = Keccak256::hash(chain_name.as_str().as_bytes());
+	let version_hash = Keccak256::hash(EIP712_DOMAIN_VERSION.as_bytes());
+
+	let tokens = vec![
+		Token::FixedBytes(type_hash.as_bytes().to_vec()),
+		Token::FixedBytes(name_hash.as_bytes().to_vec()),
+		Token::FixedBytes(version_hash.as_bytes().to_vec()),
+	];
+
+	// ABI encode
+	let encoded = encode(&tokens);
+	let domain_separator = Keccak256::hash(&encoded);
+
+	// -----------------
+	// Metadata struct
+	// -----------------
+	let metadata_type_str = EIP712_METADATA_TYPE_STR;
+	let metadata_type_hash = Keccak256::hash(metadata_type_str.as_bytes());
+	let metadata_tokens = vec![
+		Token::FixedBytes(metadata_type_hash.as_bytes().to_vec()),
+		Token::Address(signer),
+		Token::Uint(U256::from(transaction_metadata.nonce)),
+		Token::Uint(U256::from(transaction_metadata.expiry_block)),
+	];
+	let encoded_metadata = encode(&metadata_tokens);
+	let metadata_hash = Keccak256::hash(&encoded_metadata);
+
+	// -----------------
+	// Message struct
+	// -----------------
+	let encoded_message =
+		user_action.encode_eip_712_message_with_metadata(metadata_hash, metadata_type_str);
+	let message_hash = Keccak256::hash(&encoded_message);
+	// -----------------
+	// EIP712 digest
+	// -----------------
+	let mut encoded_final = EIP712_DOMAIN_PREFIX.to_vec();
+	encoded_final.extend_from_slice(domain_separator.0.as_slice());
+	encoded_final.extend_from_slice(message_hash.0.as_slice());
+	encoded_final
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use std::str::FromStr;
+
+	#[test]
+	fn test_verify_eip_712() {
+		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+		let from: EvmAddress = EvmAddress::from_str(from_str).unwrap();
+		let metadata = TransactionMetadata { nonce: 1, expiry_block: 10000 };
+
+		let encoded_final = build_eip_712_hash(
+			UserActionsApi::Lending(LendingApi::Borrow {
+				amount: 1234,
+				collateral_asset: Asset::Btc,
+				borrow_asset: Asset::Usdc,
+			}),
+			metadata,
+			from,
+			ChainflipNetwork::Development,
+		);
+
+		let expected_signed_payload: Vec<u8> = hex_literal::hex!("190164a55c67b106cafd7b1016a96941a46c6af86d246a4b41fc690ab2f4adfa74988110bb049d0b1bbf717cc5a166498426e490eb0b3e7caee14b72011e8fb182f3").into();
+
+		assert_eq!(encoded_final, expected_signed_payload);
+		println!("Encoded final: {:?}", &encoded_final);
+
+		let expected_eip712_hash =
+			hex_literal::hex!("5721e3b399be58e09beabb50048485c6c099b468809febb7e4025a2dba913c3a")
+				.into();
+
+		let eip712_hash = Keccak256::hash(&encoded_final);
+		println!("EIP-712 final digest: {}", &eip712_hash);
+		assert_eq!(eip712_hash, expected_eip712_hash);
+	}
+
+	#[test]
+	fn test_verify_evm() {
+		use cf_chains::{evm::EvmCrypto, ChainCrypto};
+		// Data before hashing
+		let signed_payload =  hex_literal::hex!("1901027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a255d3cf70c7277187d769dc8701e55bbdfccf6300732bb6513f86614f6267a6f4db");
+		let signer: EvmAddress =
+			EvmAddress::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
+		let signature: EthereumSignature = hex_literal::hex!(
+			"4db2efcd4fe0dc3bde6c16745dc0d5420a9f3eee587e5cc271ac98fd975563081eaa2fe79e5b2453ca7d8c5675e4d683ac5c59d5d4d16d854ecdaaf35195d5551b"
+		)
+		.into();
+
+		let success = EvmCrypto::verify_signature(&signer, &signed_payload, &signature);
+		assert!(success, "Signature verification failed");
+	}
+
+	#[test]
+	fn test_verify_solana() {
+		use cf_chains::{sol::SolanaCrypto, ChainCrypto};
+		// Data before hashing
+		let signed_payload =  hex_literal::hex!("ff736f6c616e61206f6666636861696e0000d2040000000000000000000000000000050301000000000000000000000000000000000000000000000000000000000000000100000010270000");
+		let signer: SolAddress =
+			SolAddress::from_str("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp").unwrap();
+		let signature: SolSignature = hex_literal::hex!(
+			"8ba6205389d557394793733f9a2bc809a47aaaf94fa5818a906ce7c18645bf7b897c3fe3f011d479cc4be67d5a964f493b163860ed3df634728d308374cbae06"
+		)
+		.into();
+
+		let success = SolanaCrypto::verify_signature(&signer, &signed_payload, &signature);
+		assert!(success, "Signature verification failed");
 	}
 }

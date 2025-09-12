@@ -26,7 +26,9 @@ use cf_chains::{
 	dot::RuntimeVersion,
 	sol::{SolAddress, SolHash},
 };
-use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
+use cf_primitives::{
+	AccountId, AccountRole, BlockNumber, ChainflipNetwork, FlipBalance, NetworkEnvironment,
+};
 use cf_utilities::bs58_array;
 use pallet_cf_elections::generic_tools::Array;
 use sc_service::ChainType;
@@ -39,6 +41,7 @@ pub struct Config;
 pub const NETWORK_NAME: &str = "Chainflip-Perseverance";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
 pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Testnet;
+pub const CHAINFLIP_NETWORK: ChainflipNetwork = ChainflipNetwork::Testnet;
 pub const PROTOCOL_ID: &str = "flip-pers-2";
 
 pub const GENESIS_FUNDING_AMOUNT: FlipBalance = 1_000 * FLIPPERINOS_PER_FLIP;

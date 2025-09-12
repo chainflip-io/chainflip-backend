@@ -23,7 +23,10 @@ use super::{
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	eth::api::EthereumApi,
-	evm::{api, to_evm_address, Address, AggKey, SchnorrVerificationComponents, Transaction, H256},
+	evm::{
+		api, to_evm_address, Address, AggKey, SchnorrVerificationComponents, Signature,
+		Transaction, H256,
+	},
 	ApiCall, Chain, ReplayProtectionProvider,
 };
 use cf_primitives::{
@@ -35,6 +38,7 @@ use libsecp256k1::{PublicKey, SecretKey};
 
 const SIG_NONCE: [u8; 32] = [1u8; 32];
 const PRIVATE_KEY: [u8; 32] = [2u8; 32];
+const SIGNATURE: [u8; 65] = [3u8; 65];
 
 pub struct EvmBenchmarkEnv;
 
@@ -147,5 +151,11 @@ impl BenchmarkValue for TransactionFee {
 impl BenchmarkValue for EthAmount {
 	fn benchmark_value() -> Self {
 		2000
+	}
+}
+
+impl BenchmarkValue for Signature {
+	fn benchmark_value() -> Self {
+		SIGNATURE.into()
 	}
 }
