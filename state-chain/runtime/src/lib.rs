@@ -1726,6 +1726,10 @@ impl_runtime_apis! {
 				));
 
 			RpcAccountInfoCommonItems {
+				vanity_name: pallet_cf_account_roles::VanityNames::<Runtime>::get().get(account_id)
+					.cloned()
+					.unwrap_or_default()
+					.into(),
 				flip_balance: flip_account.total(),
 				asset_balances: AssetBalances::free_balances(account_id),
 				bond: flip_account.bond(),
