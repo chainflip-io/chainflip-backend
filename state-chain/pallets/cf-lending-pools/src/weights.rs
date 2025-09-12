@@ -48,6 +48,7 @@ use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_lending_pools.
 pub trait WeightInfo {
+	fn update_pallet_config(n: u32, ) -> Weight;
 	fn add_boost_funds() -> Weight;
 	fn process_deposit_as_lost(n: u32, ) -> Weight;
 	fn stop_boosting() -> Weight;
@@ -57,6 +58,19 @@ pub trait WeightInfo {
 /// Weights for pallet_cf_lending_pools using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
+	/// Storage: `LendingPools::NetworkFeeDeductionFromBoostPercent` (r:0 w:1)
+	/// Proof: `LendingPools::NetworkFeeDeductionFromBoostPercent` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// The range of component `n` is `[1, 10]`.
+	fn update_pallet_config(n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 4_000_000 picoseconds.
+		Weight::from_parts(2_639_919, 0)
+			// Standard Error: 11_322
+			.saturating_add(Weight::from_parts(2_403_976, 0).saturating_mul(n.into()))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
@@ -133,6 +147,19 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
+	/// Storage: `LendingPools::NetworkFeeDeductionFromBoostPercent` (r:0 w:1)
+	/// Proof: `LendingPools::NetworkFeeDeductionFromBoostPercent` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// The range of component `n` is `[1, 10]`.
+	fn update_pallet_config(n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 4_000_000 picoseconds.
+		Weight::from_parts(2_639_919, 0)
+			// Standard Error: 11_322
+			.saturating_add(Weight::from_parts(2_403_976, 0).saturating_mul(n.into()))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
+	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
