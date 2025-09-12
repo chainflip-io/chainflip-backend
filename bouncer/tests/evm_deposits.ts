@@ -20,6 +20,7 @@ import {
   stateChainAssetFromAsset,
   amountToFineAmountBigInt,
   createEvmWalletAndFund,
+  decodeFlipAddressForContract,
 } from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { getCFTesterAbi, getEvmVaultAbi } from 'shared/contract_interfaces';
@@ -314,9 +315,7 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
   const txData = cfVaultContract.methods
     .xSwapNative(
       chainContractId(chainFromAsset(destAsset)),
-      destAsset === 'Dot' || destAddress === 'Hub'
-        ? decodeDotAddressForContract(destAddress)
-        : destAddress,
+      destAsset === 'Flip' ? decodeFlipAddressForContract(destAddress) : destAddress,
       assetContractId(destAsset),
       cfParameters,
     )
@@ -341,40 +340,38 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
 
 export async function testEvmDeposits(testContext: TestContext) {
   const depositTests = Promise.all([
-    testSuccessiveDepositEvm('Eth', 'Dot', testContext),
+    testSuccessiveDepositEvm('Eth', 'Sol', testContext),
     testSuccessiveDepositEvm('Flip', 'Btc', testContext),
-    testSuccessiveDepositEvm('ArbEth', 'Dot', testContext),
+    testSuccessiveDepositEvm('ArbEth', 'Flip', testContext),
     testSuccessiveDepositEvm('ArbUsdc', 'Btc', testContext),
   ]);
 
   const noDuplicatedWitnessingTest = Promise.all([
-    testNoDuplicateWitnessing('Eth', 'Dot', testContext),
+    testNoDuplicateWitnessing('Eth', 'Sol', testContext),
     testNoDuplicateWitnessing('Eth', 'Btc', testContext),
     testNoDuplicateWitnessing('Eth', 'Flip', testContext),
     testNoDuplicateWitnessing('Eth', 'Usdc', testContext),
-    testNoDuplicateWitnessing('ArbEth', 'Dot', testContext),
+    testNoDuplicateWitnessing('ArbEth', 'Sol', testContext),
     testNoDuplicateWitnessing('ArbEth', 'Btc', testContext),
     testNoDuplicateWitnessing('ArbEth', 'Flip', testContext),
     testNoDuplicateWitnessing('ArbEth', 'Usdc', testContext),
   ]);
 
   const multipleTxSwapsTest = Promise.all([
-    testTxMultipleVaultSwaps(testContext.logger, 'Eth', 'Dot'),
     testTxMultipleVaultSwaps(testContext.logger, 'Eth', 'Flip'),
-    testTxMultipleVaultSwaps(testContext.logger, 'ArbEth', 'Dot'),
     testTxMultipleVaultSwaps(testContext.logger, 'ArbEth', 'Flip'),
   ]);
 
   const doubleDepositTests = Promise.all([
-    testDoubleDeposit(testContext.logger, 'Eth', 'Dot'),
+    testDoubleDeposit(testContext.logger, 'Eth', 'Flip'),
     testDoubleDeposit(testContext.logger, 'Usdc', 'Flip'),
-    testDoubleDeposit(testContext.logger, 'ArbEth', 'Dot'),
-    testDoubleDeposit(testContext.logger, 'ArbUsdc', 'Btc'),
+    testDoubleDeposit(testContext.logger, 'ArbEth', 'Sol'),
+    testDoubleDeposit(testContext.logger, 'ArbUsdc', 'Flip'),
   ]);
 
   const testEncodingCfParameters = Promise.all([
     testEncodeCfParameters(testContext.logger, 'ArbEth', 'Eth'),
-    testEncodeCfParameters(testContext.logger, 'Eth', 'Dot'),
+    testEncodeCfParameters(testContext.logger, 'Eth', 'Flip'),
   ]);
 
   await Promise.all([

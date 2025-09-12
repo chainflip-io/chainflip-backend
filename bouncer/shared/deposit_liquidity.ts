@@ -42,10 +42,7 @@ export async function depositLiquidity(
     ).toJSON() === null
   ) {
     let refundAddress = await newAssetAddress(ccy, 'LP_1');
-    refundAddress =
-      chain === 'Dot' || chain === 'Hub'
-        ? decodeDotAddressForContract(refundAddress)
-        : refundAddress;
+    refundAddress = chain === 'Hub' ? decodeDotAddressForContract(refundAddress) : refundAddress;
     refundAddress = chain === 'Sol' ? decodeSolAddress(refundAddress) : refundAddress;
 
     logger.debug(`Registering Liquidity Refund Address for ${refundAddress}`);

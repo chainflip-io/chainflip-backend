@@ -1574,6 +1574,7 @@ dependencies = [
  "cf-primitives",
  "cf-rpc-types",
  "jsonrpsee 0.23.2",
+ "serde",
  "thiserror 1.0.69",
 ]
 

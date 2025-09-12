@@ -113,6 +113,8 @@ pub mod pallet {
 		InsufficientBalance,
 		/// The user has reached the maximum balance.
 		BalanceOverflow,
+		/// The Chain is deprecated.
+		ChainDeprecated,
 	}
 
 	#[pallet::event]
@@ -247,6 +249,14 @@ impl<T: Config> Pallet<T> {
 			ForeignChain::Polkadot | ForeignChain::Assethub => match owner {
 				ExternalOwner::AggKey => {
 					if let Some(active_key) = T::PolkadotKeyProvider::active_epoch_key() {
+						// Polkadot is deprecated.
+						if chain == ForeignChain::Polkadot {
+							Self::deposit_event(Event::RefundSkipped {
+								reason: Error::<T>::ChainDeprecated.into(),
+								chain,
+								address: ForeignChainAddress::Dot(active_key.key),
+							});
+						}
 						let refund_amount = core::cmp::min(*amount_owed, *available);
 						Self::refund_via_egress(
 							chain,

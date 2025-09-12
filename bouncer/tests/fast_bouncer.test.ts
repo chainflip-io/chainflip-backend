@@ -27,7 +27,6 @@ describe('ConcurrentTests', () => {
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
 
-  concurrentTest('SwapLessThanED', swapLessThanED, 180);
   testAllSwaps(numberOfNodes === 1 ? 180 : 240); // TODO: find out what the 3-node timeout should be
   concurrentTest('SwapsToAssethub', testSwapsToAssethub, 600);
   concurrentTest('EvmDeposits', testEvmDeposits, 300);
@@ -52,6 +51,10 @@ describe('ConcurrentTests', () => {
     (context) => testCcmSwapFundAccount(context.logger),
     360,
   );
+
+  // Test this separately because it has a swap to HubDot which causes flakiness when run in
+  // parallel with the Assethub tests in `SwapsToAssethub`.
+  serialTest('SwapLessThanED', swapLessThanED, 360);
 
   // Test this separately since some other tests rely on single member governance.
   serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 120);

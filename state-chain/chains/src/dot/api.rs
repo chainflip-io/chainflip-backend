@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod batch_fetch_and_transfer;
+pub mod migrate_polkadot;
 pub mod rotate_vault_proxy;
 
 use super::{
@@ -35,6 +36,7 @@ pub enum PolkadotApi<Environment: 'static> {
 	RotateVaultProxy(PolkadotExtrinsicBuilder),
 	ChangeGovKey(PolkadotExtrinsicBuilder),
 	ExecuteXSwapAndCall(PolkadotExtrinsicBuilder),
+	MigrateToAssethub(PolkadotExtrinsicBuilder),
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
@@ -174,6 +176,7 @@ macro_rules! map_over_api_variants {
 			PolkadotApi::RotateVaultProxy($var) => $var_method,
 			PolkadotApi::ChangeGovKey($var) => $var_method,
 			PolkadotApi::ExecuteXSwapAndCall($var) => $var_method,
+			PolkadotApi::MigrateToAssethub($var) => $var_method,
 			PolkadotApi::_Phantom(..) => unreachable!(),
 		}
 	};

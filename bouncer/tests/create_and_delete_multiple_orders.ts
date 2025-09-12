@@ -44,7 +44,7 @@ export async function createAndDeleteMultipleOrders(
     // provide liquidity to LP_3
     depositLiquidity(logger, 'Usdc', 10000, false, lpUri),
     depositLiquidity(logger, 'Eth', deposits.get('Eth')!, false, lpUri),
-    depositLiquidity(logger, 'Dot', deposits.get('Dot')!, false, lpUri),
+    depositLiquidity(logger, 'HubDot', deposits.get('HubDot')!, false, lpUri),
     depositLiquidity(logger, 'Btc', deposits.get('Btc')!, false, lpUri),
     depositLiquidity(logger, 'Flip', deposits.get('Flip')!, false, lpUri),
     depositLiquidity(logger, 'Usdt', deposits.get('Usdt')!, false, lpUri),

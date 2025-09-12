@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	backend::{CustomRpcBackend, NotificationBehaviour},
+	backend::CustomRpcBackend,
 	get_preallocated_channels,
 	pool_client::{is_transaction_status_error, PoolClientError, SignedPoolClient},
 	CfApiError,
@@ -32,7 +32,7 @@ use cf_rpc_apis::{
 		DcaParameters, GetOpenDepositChannelsQuery, RpcBytes, SwapDepositAddress, TransactionInId,
 		VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
-	RefundParametersRpc, RpcResult, H256,
+	NotificationBehaviour, RefundParametersRpc, RpcResult, H256,
 };
 use futures::StreamExt;
 use jsonrpsee::{core::async_trait, PendingSubscriptionSink};
