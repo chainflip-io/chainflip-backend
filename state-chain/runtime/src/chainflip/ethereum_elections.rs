@@ -341,7 +341,6 @@ pub enum StateChainGatewayEvent {
 	RedemptionExecuted {
 		account_id: AccountId,
 		redeemed_amount: FlipBalance<Runtime>,
-		tx_hash: EthTransactionHash,
 	},
 	RedemptionExpired {
 		account_id: AccountId,

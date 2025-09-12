@@ -136,7 +136,6 @@ impl Hook<HookTypeFor<TypesStateChainGatewayWitnessing, ExecuteHook>>
 						StateChainGatewayEvent::RedemptionExecuted {
 							account_id,
 							redeemed_amount,
-							tx_hash: _,
 						} => {
 							let _ = pallet_cf_funding::Pallet::<Runtime>::inner_redeemed(
 								account_id,

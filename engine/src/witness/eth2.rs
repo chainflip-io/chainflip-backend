@@ -720,7 +720,6 @@ impl VoterApi<EthereumStateChainGatewayWitnessingES> for EthereumStateChainGatew
 						redeemed_amount: amount
 							.try_into()
 							.expect("Redemption amount should fit in u128"),
-						tx_hash: event.tx_hash.to_fixed_bytes(),
 					});
 				},
 				StateChainGatewayEvents::RedemptionExpiredFilter(RedemptionExpiredFilter {
