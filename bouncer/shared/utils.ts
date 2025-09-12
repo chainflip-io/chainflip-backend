@@ -771,7 +771,7 @@ export async function observeBalanceIncrease(
       );
       return newBalance;
     }
-    await sleep(3000);
+    await sleep(500);
   }
 
   return throwError(
@@ -795,7 +795,7 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
       }
       return;
     }
-    await sleep(3000);
+    await sleep(500);
   }
 
   throw new Error('Failed to observe the fetch');
@@ -863,7 +863,7 @@ export async function observeEVMEvent(
       }
       initBlockNumber = currentBlockNumber + 1;
     }
-    await sleep(2500);
+    await sleep(500);
   }
 
   throw new Error(`Failed to observe the ${eventName} event`);

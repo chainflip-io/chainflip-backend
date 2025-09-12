@@ -1737,6 +1737,9 @@ pub mod pallet {
 				let input_oracle = T::PriceFeedApi::get_price(swap.input_asset());
 				let output_oracle = T::PriceFeedApi::get_price(swap.output_asset());
 
+				log::info!("checking price violation for swap from {:?} to {:?}: {:?}", swap.swap.from, swap.swap.to, swap);
+				log::info!(" |=> oracle slippage: {:?}", params.price_limits.max_oracle_price_slippage);
+
 				// Live price protection, aka oracle price protection
 				if let Some(slippage_bps) = params.price_limits.max_oracle_price_slippage {
 					match (input_oracle, output_oracle) {
@@ -1748,25 +1751,38 @@ pub mod pallet {
 							// for one of the assets.
 						},
 						(Some(input_oracle), Some(output_oracle)) => {
+
+							log::info!(" |=> input_oracle: {:?}, output_oracle: {:?}", input_oracle.price, output_oracle.price);
+
 							let relative_price = cf_amm::math::relative_price(
 								input_oracle.price,
 								output_oracle.price,
 							);
+
+							log::info!(" |=> relative price: {relative_price:?}");
+
 							// Reduce the relative price by slippage_bps:
 							let min_oracle_price = cf_amm::math::mul_div_floor(
 								relative_price,
 								(MAX_BASIS_POINTS - slippage_bps).into(),
 								MAX_BASIS_POINTS,
 							);
+
+							log::info!(" |=> min oracle price: {min_oracle_price:?}");
 							// Use the oracle price to calculate the minimum output needed
 							let min_output_amount = output_amount_floor(
 								swap.swap.input_amount.into(),
 								min_oracle_price,
 							)
 							.unique_saturated_into();
+
+							log::info!(" |=> min output amount: {min_output_amount:?}");
+
 							if swap.final_output.unwrap() < min_output_amount {
+								log::info!(" |=> rejected!!!");
 								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
 							}
+							log::info!(" |=> valid!!");
 						},
 					}
 				};

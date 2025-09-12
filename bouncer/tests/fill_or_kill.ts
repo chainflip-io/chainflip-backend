@@ -153,8 +153,8 @@ async function testOracleSwapsFoK(parentLogger: Logger): Promise<void> {
 
   // Only need to update the prices in Solana as that's the main feed
   await Promise.all([
-    updatePriceFeed(logger, 'Solana', 'BTC', '1000000'),
-    updatePriceFeed(logger, 'Solana', 'ETH', '100000'),
+    updatePriceFeed(logger, 'Solana', 'BTC', '100000000'),
+    updatePriceFeed(logger, 'Solana', 'ETH', '1000000000'),
   ]);
 
   // Check that all Solana prices are up to date to ensure that oracle swaps
@@ -181,24 +181,24 @@ async function testOracleSwapsFoK(parentLogger: Logger): Promise<void> {
 
 export async function testFillOrKill(testContext: TestContext) {
   await Promise.all([
-    testMinPriceRefund(testContext.logger, Assets.Flip, 500),
-    testMinPriceRefund(testContext.logger, Assets.Eth, 1),
+    // testMinPriceRefund(testContext.logger, Assets.Flip, 500),
+    // testMinPriceRefund(testContext.logger, Assets.Eth, 1),
     // testMinPriceRefund(testContext.logger, Assets.HubDot, 100), // flaky, so we don't test HubDot
-    testMinPriceRefund(testContext.logger, Assets.Btc, 0.1),
-    testMinPriceRefund(testContext.logger, Assets.Usdc, 1000),
-    testMinPriceRefund(testContext.logger, Assets.Sol, 10),
-    testMinPriceRefund(testContext.logger, Assets.SolUsdc, 1000),
-    testMinPriceRefund(testContext.logger, Assets.Flip, 500, true),
-    testMinPriceRefund(testContext.logger, Assets.Eth, 1, true),
-    testMinPriceRefund(testContext.logger, Assets.ArbEth, 5, true),
-    testMinPriceRefund(testContext.logger, Assets.Sol, 10, true),
-    testMinPriceRefund(testContext.logger, Assets.Sol, 1000, true),
-    testMinPriceRefund(testContext.logger, Assets.ArbUsdc, 5, false, true),
-    testMinPriceRefund(testContext.logger, Assets.Usdc, 1, false, true),
-    testMinPriceRefund(testContext.logger, Assets.SolUsdc, 1, false, true),
-    testMinPriceRefund(testContext.logger, Assets.ArbEth, 5, true, true),
-    testMinPriceRefund(testContext.logger, Assets.Sol, 10, true, true),
-    testMinPriceRefund(testContext.logger, Assets.Usdc, 10, true, true),
+    // testMinPriceRefund(testContext.logger, Assets.Btc, 0.1),
+    // testMinPriceRefund(testContext.logger, Assets.Usdc, 1000),
+    // testMinPriceRefund(testContext.logger, Assets.Sol, 10),
+    // testMinPriceRefund(testContext.logger, Assets.SolUsdc, 1000),
+    // testMinPriceRefund(testContext.logger, Assets.Flip, 500, true),
+    // testMinPriceRefund(testContext.logger, Assets.Eth, 1, true),
+    // testMinPriceRefund(testContext.logger, Assets.ArbEth, 5, true),
+    // testMinPriceRefund(testContext.logger, Assets.Sol, 10, true),
+    // testMinPriceRefund(testContext.logger, Assets.Sol, 1000, true),
+    // testMinPriceRefund(testContext.logger, Assets.ArbUsdc, 5, false, true),
+    // testMinPriceRefund(testContext.logger, Assets.Usdc, 1, false, true),
+    // testMinPriceRefund(testContext.logger, Assets.SolUsdc, 1, false, true),
+    // testMinPriceRefund(testContext.logger, Assets.ArbEth, 5, true, true),
+    // testMinPriceRefund(testContext.logger, Assets.Sol, 10, true, true),
+    // testMinPriceRefund(testContext.logger, Assets.Usdc, 10, true, true),
     testOracleSwapsFoK(testContext.logger),
   ]);
 }

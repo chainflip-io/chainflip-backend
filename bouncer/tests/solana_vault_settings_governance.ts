@@ -125,7 +125,7 @@ async function awaitVaultSettings(expectedSettings: VaultSwapSettings) {
   }
   await tryUntilSuccess(
     checkVaultSettings,
-    6000,
+    1000,
     10,
     "Vault settings didn't match expected settings",
   );

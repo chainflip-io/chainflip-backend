@@ -1,6 +1,6 @@
 services:
   eth-init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.3.2-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.3.2-2s-blocktime-arb-geth-try-3-${NODE_COUNT}
     pull_policy: if_not_present
     container_name: init
     platform: linux/amd64
@@ -18,7 +18,7 @@ services:
     command: /bin/sh -c "cp -R /solana/solana-ledger.tar.gz /test-ledger"
 
   arb-init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.3.2-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.3.2-2s-blocktime-arb-geth-try-3-${NODE_COUNT}
     restart: always
     container_name: arb-init
     pull_policy: if_not_present
@@ -34,7 +34,7 @@ services:
       - "/tmp/chainflip/data/redis-data:/data"
 
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.3.2-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.3.2-2s-blocktime-arb-geth-try-3-${NODE_COUNT}
     container_name: geth
     platform: linux/amd64
     ports:
@@ -97,9 +97,11 @@ services:
 
   polkadot1:
     container_name: polkadot1
-    platform: linux/amd64
-    image: docker.io/parity/polkadot:v1.18.7
-    pull_policy: if_not_present
+    # platform: linux/amd64
+    # image: docker.io/parity/polkadot:v1.18.7
+    # pull_policy: if_not_present
+    image: localbuild-fast-polkadot-nolimits
+    pull_policy: never
     stop_grace_period: 5s
     stop_signal: SIGINT
     volumes:
@@ -109,6 +111,7 @@ services:
     command:
       - --alice
       - --blocks-pruning=archive
+      # - --chain=/chainspecs/polkadot-fast-6s.raw.json
       - --chain=/chainspecs/polkadot.raw.json
       - --force-authoring
       - --name=PolkaDocker1
@@ -131,9 +134,11 @@ services:
 
   polkadot2:
     container_name: polkadot2
-    platform: linux/amd64
-    image: docker.io/parity/polkadot:v1.18.7
-    pull_policy: if_not_present
+    # platform: linux/amd64
+    # image: docker.io/parity/polkadot:v1.18.7
+    # pull_policy: if_not_present
+    image: localbuild-fast-polkadot-nolimits
+    pull_policy: never
     stop_grace_period: 5s
     stop_signal: SIGINT
     volumes:
@@ -143,6 +148,7 @@ services:
     command:
       - --bob
       - --blocks-pruning=archive
+      # - --chain=/chainspecs/polkadot-fast-6s.raw.json
       - --chain=/chainspecs/polkadot.raw.json
       - --force-authoring
       - --name=PolkaDocker2
@@ -177,6 +183,7 @@ services:
       - --alice
       - --collator
       - --blocks-pruning=archive
+      # - --chain=/chainspecs/assethub-6s.json
       - --chain=/chainspecs/assethub.raw.json
       - --force-authoring
       - --name=AssetHubDocker
@@ -187,6 +194,7 @@ services:
       - --rpc-max-connections=100000
       - --node-key=808c85fab7ea8391de83fd0a16d069f9d5b43faa380886e439d76c4307d06039
       - --
+      # - --chain=/chainspecs/polkadot-fast-6s.raw.json
       - --chain=/chainspecs/polkadot.raw.json
     ports:
       - 9955:9944
@@ -199,9 +207,11 @@ services:
       start_period: 20s
 
   bitcoin:
-    image: ghcr.io/chainflip-io/chainflip-backend/bitcoin:357aa6af70b3d57fe0a9df1fe1815f704e59db07
-    platform: linux/amd64
-    pull_policy: if_not_present
+    # image: ghcr.io/chainflip-io/chainflip-backend/bitcoin:357aa6af70b3d57fe0a9df1fe1815f704e59db07
+    # platform: linux/amd64
+    # pull_policy: if_not_present
+    image: localbuild-fast-bitcoin
+    pull_policy: never
     container_name: bitcoin
     restart: unless-stopped
     ports:

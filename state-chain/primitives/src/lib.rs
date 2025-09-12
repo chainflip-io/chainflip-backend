@@ -234,7 +234,7 @@ pub const MINIMUM_BTC_TX_SIZE_IN_BYTES: u64 = 16;
 /// up by `pallet_aura` to implement `fn slot_duration()`.
 ///
 /// Change this to adjust the block time.
-pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
+pub const MILLISECONDS_PER_BLOCK: u64 = 1000;
 
 pub const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
 
