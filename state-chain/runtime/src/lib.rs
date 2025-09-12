@@ -2099,7 +2099,7 @@ impl_runtime_apis! {
 				}).collect(),
 				collateral_balances:
 					pallet_cf_lending_pools::LoanAccounts::<Runtime>::get(&account_id).map(|loan_account| {
-						loan_account.get_collateral().iter().map(|(asset, amount)| (*asset, *amount)).collect()
+						loan_account.get_total_collateral().iter().map(|(asset, amount)| (*asset, *amount)).collect()
 					}).unwrap_or_default(),
 			}
 		}

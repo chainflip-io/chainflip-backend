@@ -1873,10 +1873,19 @@ mod rpcs {
 		const PRINCIPAL_2: AssetAmount = PRINCIPAL * 2;
 		const COLLATERAL_ASSET_2: Asset = Asset::Sol;
 		const INIT_COLLATERAL_2: AssetAmount = INIT_COLLATERAL * 2;
+
+		/// This much of borrower 2's collateral will be executed during liquidation
+		/// at the time of calling RPC.
+		const EXECUTED_COLLATERAL_2: AssetAmount = INIT_COLLATERAL_2 / 4;
+
 		const BORROWER_2: u64 = OTHER_LP;
 		const LOAN_ID_2: LoanId = LoanId(1);
 
 		let origination_fee_2 = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL_2 * SWAP_RATE;
+
+		/// Price of COLLATERAL_ASSET_2 will be increased to this much to trigger liquidation
+		/// of borrower 2's collateral.
+		const NEW_SWAP_RATE: u128 = 5 * SWAP_RATE / 4;
 
 		new_test_ext()
 			.execute_with(|| {
@@ -1939,17 +1948,33 @@ mod rpcs {
 							asset: LOAN_ASSET,
 							created_at: INIT_BLOCK as u32,
 							principal_amount: PRINCIPAL,
-							total_fees: Default::default()
+							total_fees: vec![AssetAndAmount {
+								asset: COLLATERAL_ASSET,
+								amount: origination_fee
+							}],
 						}],
 						liquidation_status: None
 					}]
 				);
 
-				// Trigger liquidation of one of the accounts:
-				set_asset_price_in_usd(LOAN_ASSET_2, 5 * SWAP_RATE / 4);
+				// Trigger liquidation of one of the accounts (BORROWER_2):
+				set_asset_price_in_usd(LOAN_ASSET_2, NEW_SWAP_RATE);
 			})
 			.then_process_blocks_until_block(INIT_BLOCK + INTEREST_PAYMENT_INTERVAL as u64)
 			.then_execute_with(|_| {
+				// Liquidation swap's execution price will be slightly worse than the oracle price:
+				const ACCUMULATED_OUTPUT_AMOUNT: AssetAmount =
+					98 * (EXECUTED_COLLATERAL_2 / NEW_SWAP_RATE) / 100;
+
+				// Simulate partial execution of the liquidation swap:
+				MockSwapRequestHandler::<Test>::set_swap_request_progress(
+					SwapRequestId(0),
+					SwapExecutionProgress {
+						remaining_input_amount: INIT_COLLATERAL_2 - EXECUTED_COLLATERAL_2,
+						accumulated_output_amount: ACCUMULATED_OUTPUT_AMOUNT,
+					},
+				);
+
 				// Interest amount happens to be this much, the exact amount is not important
 				// in this particular test:
 				const INTEREST_AMOUNT: AssetAmount = 2020;
@@ -1961,17 +1986,25 @@ mod rpcs {
 						RpcLoanAccount {
 							account: BORROWER_2,
 							primary_collateral_asset: COLLATERAL_ASSET_2,
-							ltv_ratio: Some(FixedU64::from_rational(1, 1)),
-							// NOTE: all of the collateral is in liquidation swaps. Should we
-							// include that here too? If so, do we need to include the amount
-							// of loan asset recovered so far through liquidation swaps?
-							collateral: Default::default(),
+							ltv_ratio: Some(FixedU64::from_rational(1_006_666_667, 1_000_000_000)),
+							// NOTE: all of collateral is in liquidation swaps, but we include
+							// any amount that has not been swapped yet:
+							collateral: vec![AssetAndAmount {
+								asset: COLLATERAL_ASSET_2,
+								amount: INIT_COLLATERAL_2 - EXECUTED_COLLATERAL_2,
+							}],
 							loans: vec![RpcLoan {
 								loan_id: LOAN_ID_2,
 								asset: LOAN_ASSET_2,
 								created_at: INIT_BLOCK as u32,
-								principal_amount: PRINCIPAL_2,
-								total_fees: Default::default()
+								// NOTE: we account for the principal asset already swapped in
+								// liquidation swaps:
+								principal_amount: PRINCIPAL_2 - ACCUMULATED_OUTPUT_AMOUNT,
+								total_fees: vec![AssetAndAmount {
+									asset: COLLATERAL_ASSET_2,
+									// NOTE: no interest taken because the loan is being liquidated
+									amount: origination_fee_2
+								}]
 							}],
 							liquidation_status: Some(RpcLiquidationStatus {
 								liquidation_swaps: vec![RpcLiquidationSwap {
@@ -1995,7 +2028,10 @@ mod rpcs {
 								asset: LOAN_ASSET,
 								created_at: INIT_BLOCK as u32,
 								principal_amount: PRINCIPAL,
-								total_fees: Default::default()
+								total_fees: vec![AssetAndAmount {
+									asset: COLLATERAL_ASSET,
+									amount: origination_fee + INTEREST_AMOUNT
+								}]
 							}],
 							liquidation_status: None
 						},

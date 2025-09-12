@@ -56,8 +56,34 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
-	pub fn get_collateral(&self) -> &BTreeMap<Asset, AssetAmount> {
-		&self.collateral
+	/// Returns the account's collateral including any amounts that are in liquidation swaps.
+	pub fn get_total_collateral(&self) -> BTreeMap<Asset, AssetAmount> {
+		// Note that in order to keep things simple we don't guarantee that all of the
+		// all collateral is being liquidated (e.g. it is possible for the user to top
+		// up collateral during liquidation in which case we currently don't update the
+		// liquidation swaps), but we *do* include any collateral sitting in the account
+		// when determining account's collateralisation ratio.
+		//
+		// Start with the collateral sitting in the account:
+		let mut total_collateral = self.collateral.clone();
+
+		// Add any collateral in liquidation swaps:
+		if let LiquidationStatus::Liquidating { liquidation_swaps, .. } = &self.liquidation_status {
+			for (swap_request_id, LiquidationSwap { from_asset, .. }) in liquidation_swaps {
+				if let Some(swap_progress) =
+					T::SwapRequestHandler::inspect_swap_request(*swap_request_id)
+				{
+					total_collateral
+						.entry(*from_asset)
+						.or_default()
+						.saturating_accrue(swap_progress.remaining_input_amount);
+				} else {
+					log_or_panic!("Failed to inspect swap request: {swap_request_id}");
+				}
+			}
+		}
+
+		total_collateral
 	}
 
 	/// Adds collateral to the account from borrower's free balance as long as it's enabled by
@@ -81,40 +107,11 @@ impl<T: Config> LoanAccount<T> {
 
 	/// Computes account's total collateral value in USD, including what's in liquidation swaps.
 	pub fn total_collateral_usd_value(&self) -> Result<AssetAmount, Error<T>> {
-		let collateral_in_account_usd_value = self
-			.collateral
+		self.get_total_collateral()
 			.iter()
 			.map(|(asset, amount)| usd_value_of::<T>(*asset, *amount).ok())
 			.try_fold(0u128, |acc, x| acc.checked_add(x?))
-			.ok_or(Error::<T>::OraclePriceUnavailable)?;
-
-		match &self.liquidation_status {
-			LiquidationStatus::NoLiquidation => Ok(collateral_in_account_usd_value),
-			LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
-				let mut total_collateral_usd_value_in_swaps = 0;
-				// If we are liquidating loans, some of the collateral will be in pending swaps
-				for (swap_request_id, LiquidationSwap { from_asset, .. }) in liquidation_swaps {
-					if let Some(swap_progress) =
-						T::SwapRequestHandler::inspect_swap_request(*swap_request_id)
-					{
-						total_collateral_usd_value_in_swaps.saturating_accrue(usd_value_of::<T>(
-							*from_asset,
-							swap_progress.remaining_input_amount,
-						)?);
-					} else {
-						log_or_panic!("Failed to inspect swap request: {swap_request_id}");
-					}
-				}
-
-				// Note that in order to keep things simple we don't guarantee that all of the
-				// all collateral is being liquidated (e.g. it is possible for the user to top
-				// up collateral during liquidation in which case we currently don't update the
-				// liquidation swaps), but we *do* include any collateral sitting in the account
-				// when determining account's collateralisation ratio.
-				Ok(total_collateral_usd_value_in_swaps
-					.saturating_add(collateral_in_account_usd_value))
-			},
-		}
+			.ok_or(Error::<T>::OraclePriceUnavailable)
 	}
 
 	pub fn check_ltv(&mut self, borrower_id: &T::AccountId) {
@@ -1296,17 +1293,37 @@ pub mod rpc {
 		borrower_id: T::AccountId,
 		loan_account: LoanAccount<T>,
 	) -> RpcLoanAccount<T::AccountId, AssetAmount> {
+		let mut loans = loan_account.loans.clone();
+
+		// Accounting for any partially executed liquidation swaps
+		// when reporting on the outstanding principal amount:
+		if let LiquidationStatus::Liquidating { liquidation_swaps, .. } =
+			&loan_account.liquidation_status
+		{
+			for (swap_request_id, LiquidationSwap { loan_id, .. }) in liquidation_swaps {
+				if let Some(swap_progress) =
+					T::SwapRequestHandler::inspect_swap_request(*swap_request_id)
+				{
+					if let Some(loan) = loans.get_mut(loan_id) {
+						loan.owed_principal
+							.saturating_reduce(swap_progress.accumulated_output_amount);
+					}
+				} else {
+					log_or_panic!("Failed to inspect swap request: {swap_request_id}");
+				}
+			}
+		}
+
 		RpcLoanAccount {
 			account: borrower_id,
 			primary_collateral_asset: loan_account.primary_collateral_asset,
 			ltv_ratio: loan_account.derive_ltv().ok(),
 			collateral: loan_account
-				.collateral
+				.get_total_collateral()
 				.into_iter()
 				.map(|(asset, amount)| AssetAndAmount { asset, amount })
 				.collect(),
-			loans: loan_account
-				.loans
+			loans: loans
 				.into_iter()
 				.map(|(loan_id, loan)| RpcLoan {
 					loan_id,
