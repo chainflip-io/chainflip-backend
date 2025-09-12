@@ -31,6 +31,23 @@ const INIT_POOL_AMOUNT: AssetAmount = PRINCIPAL * 2;
 
 use crate::LENDING_DEFAULT_CONFIG as CONFIG;
 
+/// Takes the full fee and splits it into network fee and the remainder.
+fn take_network_fee(full_amount: AssetAmount) -> (AssetAmount, AssetAmount) {
+	// To keep things simple in tests we assume we take the same % for fee types
+	assert_eq!(
+		CONFIG.network_fee_contributions.from_interest,
+		CONFIG.network_fee_contributions.from_liquidation_fee
+	);
+	assert_eq!(
+		CONFIG.network_fee_contributions.from_interest,
+		CONFIG.network_fee_contributions.from_origination_fee
+	);
+
+	let network_fee = CONFIG.network_fee_contributions.from_interest * full_amount;
+
+	(network_fee, full_amount - network_fee)
+}
+
 fn setup_chp_pool_with_funds(loan_asset: Asset, init_amount: AssetAmount) {
 	LendingConfig::<Test>::set(CONFIG);
 
@@ -154,6 +171,8 @@ fn basic_general_lending() {
 				Ok(LOAN_ID)
 			);
 
+			let (_network_fee, remaining_origination_fee) = take_network_fee(origination_fee);
+
 			System::assert_last_event(RuntimeEvent::LendingPools(Event::<Test>::LoanCreated {
 				loan_id: LOAN_ID,
 				borrower_id: BORROWER,
@@ -171,7 +190,7 @@ fn basic_general_lending() {
 					total_amount: INIT_POOL_AMOUNT,
 					available_amount: INIT_POOL_AMOUNT - PRINCIPAL,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					collected_fees: BTreeMap::from([(COLLATERAL_ASSET, origination_fee)]),
+					collected_fees: BTreeMap::from([(COLLATERAL_ASSET, remaining_origination_fee)]),
 				}
 			);
 
@@ -204,7 +223,10 @@ fn basic_general_lending() {
 
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().collected_fees,
-				BTreeMap::from([(COLLATERAL_ASSET, origination_fee + interest_charge_in_eth_1)])
+				BTreeMap::from([(
+					COLLATERAL_ASSET,
+					take_network_fee(origination_fee + interest_charge_in_eth_1).1
+				)])
 			);
 		})
 		// === REPAYING HALF OF THE LOAN ===
@@ -230,7 +252,7 @@ fn basic_general_lending() {
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
 					collected_fees: BTreeMap::from([(
 						COLLATERAL_ASSET,
-						origination_fee + interest_charge_in_eth_1
+						take_network_fee(origination_fee + interest_charge_in_eth_1).1
 					)]),
 				}
 			);
@@ -247,7 +269,10 @@ fn basic_general_lending() {
 
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().collected_fees,
-				BTreeMap::from([(COLLATERAL_ASSET, origination_fee + total_interest)])
+				BTreeMap::from([(
+					COLLATERAL_ASSET,
+					take_network_fee(origination_fee + total_interest).1
+				)])
 			);
 		})
 		.then_execute_with(|_| {
@@ -429,7 +454,7 @@ fn basic_loan_aggregation() {
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
 					collected_fees: BTreeMap::from([(
 						COLLATERAL_ASSET,
-						origination_fee + origination_fee_2
+						take_network_fee(origination_fee).1 + take_network_fee(origination_fee_2).1
 					)]),
 				}
 			);
@@ -502,7 +527,9 @@ fn basic_loan_aggregation() {
 					// Pool has accrued extra fees:
 					collected_fees: BTreeMap::from([(
 						COLLATERAL_ASSET,
-						origination_fee + origination_fee_2 + origination_fee_3
+						take_network_fee(origination_fee).1 +
+							take_network_fee(origination_fee_2).1 +
+							take_network_fee(origination_fee_3).1
 					)]),
 				}
 			);
@@ -612,9 +639,13 @@ fn interest_special_cases() {
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().collected_fees,
 				BTreeMap::from([
 					// All of the primary asset is consumed as interest:
-					(PRIMARY_COLLATERAL_ASSET, INIT_COLLATERAL_AMOUNT_PRIMARY + origination_fee),
+					(
+						PRIMARY_COLLATERAL_ASSET,
+						take_network_fee(INIT_COLLATERAL_AMOUNT_PRIMARY).1 +
+							take_network_fee(origination_fee).1
+					),
 					// The remainder is charged from the secondary asset:
-					(SECONDARY_COLLATERAL_ASSET, secondary_interest_charge)
+					(SECONDARY_COLLATERAL_ASSET, take_network_fee(secondary_interest_charge).1)
 				])
 			);
 
@@ -634,10 +665,15 @@ fn interest_special_cases() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().collected_fees,
 				BTreeMap::from([
-					(PRIMARY_COLLATERAL_ASSET, INIT_COLLATERAL_AMOUNT_PRIMARY + origination_fee),
+					(
+						PRIMARY_COLLATERAL_ASSET,
+						take_network_fee(INIT_COLLATERAL_AMOUNT_PRIMARY).1 +
+							take_network_fee(origination_fee).1
+					),
 					(
 						SECONDARY_COLLATERAL_ASSET,
-						2 * interest_charge - INIT_COLLATERAL_AMOUNT_PRIMARY
+						2 * take_network_fee(interest_charge).1 -
+							take_network_fee(INIT_COLLATERAL_AMOUNT_PRIMARY).1
 					)
 				])
 			);
@@ -645,7 +681,68 @@ fn interest_special_cases() {
 }
 
 #[test]
-fn swap_collected_fees() {
+fn swap_collected_network_fees() {
+	const ASSET_1: Asset = Asset::Eth;
+	const ASSET_2: Asset = Asset::Usdc;
+
+	const AMOUNT_1: AssetAmount = 200_000;
+	const AMOUNT_2: AssetAmount = 100_000;
+
+	let fee_swap_block = CONFIG.fee_swap_interval_blocks as u64;
+
+	new_test_ext()
+		.execute_with(|| {
+			LendingPools::take_network_fee(AMOUNT_1 * 2, ASSET_1, Percent::from_percent(50));
+			LendingPools::take_network_fee(AMOUNT_2 * 4, ASSET_2, Percent::from_percent(25));
+
+			assert_eq!(
+				PendingNetworkFees::<Test>::iter().collect::<BTreeMap<_, _>>(),
+				BTreeMap::from([(ASSET_1, AMOUNT_1), (ASSET_2, AMOUNT_2)])
+			);
+		})
+		.then_execute_at_block(fee_swap_block, |_| {
+			// Network fee swaps should be initiated here
+			assert_eq!(
+				MockSwapRequestHandler::<Test>::get_swap_requests(),
+				BTreeMap::from([
+					(
+						SwapRequestId(0),
+						MockSwapRequest {
+							input_asset: ASSET_1,
+							output_asset: Asset::Flip,
+							input_amount: AMOUNT_1,
+							remaining_input_amount: AMOUNT_1,
+							accumulated_output_amount: 0,
+							swap_type: SwapRequestType::NetworkFee,
+							broker_fees: Default::default(),
+							origin: SwapOrigin::Internal
+						}
+					),
+					(
+						SwapRequestId(1),
+						MockSwapRequest {
+							input_asset: ASSET_2,
+							output_asset: Asset::Flip,
+							input_amount: AMOUNT_2,
+							remaining_input_amount: AMOUNT_2,
+							accumulated_output_amount: 0,
+							swap_type: SwapRequestType::NetworkFee,
+							broker_fees: Default::default(),
+							origin: SwapOrigin::Internal
+						}
+					)
+				])
+			);
+
+			assert_eq!(
+				PendingNetworkFees::<Test>::iter().collect::<BTreeMap<_, _>>(),
+				BTreeMap::from([(ASSET_1, 0), (ASSET_2, 0)])
+			);
+		});
+}
+
+#[test]
+fn swap_collected_pool_fees() {
 	const COLLATERAL_ASSET_1: Asset = Asset::Usdc;
 	const COLLATERAL_ASSET_2: Asset = Asset::Eth;
 
@@ -866,13 +963,10 @@ fn basic_liquidation() {
 		})
 		.then_execute_at_next_block(|_| {
 			// Expecting a liquidation swap here:
-			let (liquidation_swap_id, liquidation_swap) =
-				MockSwapRequestHandler::<Test>::get_swap_requests()
-					.into_iter()
-					.next()
-					.expect("No swap request found");
-
-			assert_eq!(liquidation_swap_id, LIQUIDATION_SWAP_1);
+			let liquidation_swap = MockSwapRequestHandler::<Test>::get_swap_requests()
+				.get(&LIQUIDATION_SWAP_1)
+				.expect("No swap request found")
+				.clone();
 
 			assert_eq!(
 				liquidation_swap,
@@ -965,16 +1059,24 @@ fn basic_liquidation() {
 			);
 
 			// Liquidation Swap must have been aborted:
-			assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+			assert!(!MockSwapRequestHandler::<Test>::get_swap_requests()
+				.contains_key(&LIQUIDATION_SWAP_1));
+
+			let (liquidation_fee_network, liquidaiton_fee_remainder) =
+				take_network_fee(liquidation_fee_1);
 
 			// Part of the principal has been repaid via liquidation:
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
-					total_amount: INIT_POOL_AMOUNT + liquidation_fee_1,
-					available_amount: INIT_POOL_AMOUNT - PRINCIPAL + SWAPPED_PRINCIPAL,
+					total_amount: INIT_POOL_AMOUNT + liquidaiton_fee_remainder,
+					available_amount: INIT_POOL_AMOUNT - PRINCIPAL +
+						(SWAPPED_PRINCIPAL - liquidation_fee_network),
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					collected_fees: BTreeMap::from([(COLLATERAL_ASSET, origination_fee)]),
+					collected_fees: BTreeMap::from([(
+						COLLATERAL_ASSET,
+						take_network_fee(origination_fee).1
+					)]),
 				}
 			);
 
@@ -983,10 +1085,10 @@ fn basic_liquidation() {
 		})
 		.then_execute_at_next_block(|_| {
 			// Expecting a liquidation swap here:
-			let (_, liquidation_swap) = MockSwapRequestHandler::<Test>::get_swap_requests()
-				.into_iter()
-				.next()
-				.expect("No swap request found");
+			let liquidation_swap = MockSwapRequestHandler::<Test>::get_swap_requests()
+				.get(&LIQUIDATION_SWAP_2)
+				.expect("No swap request found")
+				.clone();
 
 			assert_eq!(
 				liquidation_swap,
@@ -1064,10 +1166,17 @@ fn basic_liquidation() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
-					total_amount: INIT_POOL_AMOUNT + liquidation_fee_1 + liquidation_fee_2,
-					available_amount: INIT_POOL_AMOUNT + liquidation_fee_1 + liquidation_fee_2,
+					total_amount: INIT_POOL_AMOUNT +
+						take_network_fee(liquidation_fee_1).1 +
+						take_network_fee(liquidation_fee_2).1,
+					available_amount: INIT_POOL_AMOUNT +
+						take_network_fee(liquidation_fee_1).1 +
+						take_network_fee(liquidation_fee_2).1,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					collected_fees: BTreeMap::from([(COLLATERAL_ASSET, origination_fee)]),
+					collected_fees: BTreeMap::from([(
+						COLLATERAL_ASSET,
+						take_network_fee(origination_fee).1
+					)]),
 				}
 			);
 

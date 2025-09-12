@@ -1,3 +1,5 @@
+use core::future::Pending;
+
 use cf_amm_math::{invert_price, relative_price, Price};
 use cf_primitives::SwapRequestId;
 use cf_traits::{ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry};
@@ -277,6 +279,8 @@ impl<T: Config> LoanAccount<T> {
 	}
 
 	pub fn charge_interest(&mut self) -> Result<(), Error<T>> {
+		let config = LendingConfig::<T>::get();
+
 		if self.liquidation_status != LiquidationStatus::NoLiquidation {
 			// For simplicity, we don't charge interest during liquidations
 			// (the account will already incur a liquidation fee)
@@ -293,8 +297,7 @@ impl<T: Config> LoanAccount<T> {
 						.map(|pool| pool.get_utilisation())
 						.unwrap_or_default();
 
-					LendingConfig::<T>::get()
-						.derive_interest_rate_per_charge_interval(loan.asset, utilisation)
+					config.derive_interest_rate_per_charge_interval(loan.asset, utilisation)
 				};
 
 				let mut remaining_interest_amount_in_loan_asset =
@@ -331,23 +334,32 @@ impl<T: Config> LoanAccount<T> {
 
 						available_collateral_amount.saturating_reduce(amount_charged);
 
-						// Determine how much we actually charged in loan asset's terms
-						let amount_charged_in_loan_asset =
-							if amount_charged == interest_required_in_collateral_asset {
-								remaining_interest_amount_in_loan_asset
-							} else {
-								equivalent_amount(collateral_asset, loan.asset, amount_charged)?
-							};
+						// Reduce the remaining interest amount to pay in loan asset's terms
+						{
+							let amount_charged_in_loan_asset =
+								if amount_charged == interest_required_in_collateral_asset {
+									remaining_interest_amount_in_loan_asset
+								} else {
+									equivalent_amount(collateral_asset, loan.asset, amount_charged)?
+								};
 
-						remaining_interest_amount_in_loan_asset
-							.saturating_reduce(amount_charged_in_loan_asset);
+							remaining_interest_amount_in_loan_asset
+								.saturating_reduce(amount_charged_in_loan_asset);
+						}
 
 						loan.fees_paid
 							.entry(collateral_asset)
 							.or_default()
 							.saturating_accrue(amount_charged);
 
-						Pallet::<T>::accrue_fees(loan.asset, collateral_asset, amount_charged);
+						// TODO: emit network fee in any event?
+						let remaining_fees = Pallet::<T>::take_network_fee(
+							amount_charged,
+							collateral_asset,
+							config.network_fee_contributions.from_interest,
+						);
+
+						Pallet::<T>::accrue_fees(loan.asset, collateral_asset, remaining_fees);
 
 						if remaining_interest_amount_in_loan_asset == 0 {
 							break;
@@ -527,6 +539,8 @@ impl<T: Config> LoanAccount<T> {
 		provided_amount: AssetAmount,
 		should_charge_liquidation_fee: bool,
 	) -> Result<LoanRepaymentOutcome, DispatchError> {
+		let config = LendingConfig::<T>::get();
+
 		let Some(loan) = self.loans.get_mut(&loan_id) else {
 			// In rare cases it may be possible for the loan to no longer exist if
 			// e.g. the principal was fully covered by a prior liquidation swap.
@@ -544,8 +558,7 @@ impl<T: Config> LoanAccount<T> {
 
 		let (provided_amount_after_fees, liquidation_fee) = if should_charge_liquidation_fee {
 			let liquidation_fee =
-				LendingConfig::<T>::get().get_config_for_asset(loan.asset).liquidation_fee *
-					provided_amount;
+				config.get_config_for_asset(loan.asset).liquidation_fee * provided_amount;
 			let after_fees = provided_amount.saturating_sub(liquidation_fee);
 
 			// NOTE: this may not be equal to the provided fee if the provided amount isn't
@@ -563,8 +576,13 @@ impl<T: Config> LoanAccount<T> {
 		loan.pay_to_pool(repayment_amount, true /* is principal */);
 
 		let liquidation_fees = if liquidation_fee > 0 {
-			// TODO: take network fee here? return to the pool as a fee
-			loan.pay_to_pool(liquidation_fee, false /* is principal */);
+			let remaining_fee = Pallet::<T>::take_network_fee(
+				liquidation_fee,
+				loan.asset,
+				config.network_fee_contributions.from_liquidation_fee,
+			);
+
+			loan.pay_to_pool(remaining_fee, false /* is principal */);
 			loan.fees_paid.entry(loan.asset).or_default().saturating_accrue(liquidation_fee);
 			BTreeMap::from([(loan.asset, liquidation_fee)])
 		} else {
@@ -757,6 +775,20 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 				}
 			})
 		}
+
+		// Additionally swapp all network fee contributions from fees:
+		for asset in PendingNetworkFees::<T>::iter_keys().collect::<Vec<_>>() {
+			PendingNetworkFees::<T>::mutate(asset, |fee_amount| {
+				// NOTE: if asset is FLIP, we shouldn't need to swap, but it should still work,
+				// and it seems easiest to not write a special case (esp if we only support
+				// boost for BTC)
+				if *fee_amount > 0 {
+					let _swap_request_id =
+						T::SwapRequestHandler::init_network_fee_swap_request(asset, *fee_amount);
+				}
+				*fee_amount = 0;
+			});
+		}
 	}
 
 	Weight::zero()
@@ -817,27 +849,21 @@ impl<T: Config> LendingApi for Pallet<T> {
 				Ok::<_, DispatchError>(())
 			})?;
 
-			let origination_fee_amount = equivalent_amount::<T>(
+			let mut loan = GeneralLoan {
 				asset,
-				primary_collateral_asset,
-				config.origination_fee(asset) * amount_to_borrow,
-			)?;
+				created_at_block: frame_system::Pallet::<T>::current_block_number(),
+				owed_principal: amount_to_borrow,
+				fees_paid: BTreeMap::new(),
+			};
 
-			account.loans.insert(
-				loan_id,
-				GeneralLoan {
-					asset,
-					created_at_block: frame_system::Pallet::<T>::current_block_number(),
-					owed_principal: amount_to_borrow,
-					fees_paid: BTreeMap::from([(primary_collateral_asset, origination_fee_amount)]),
-				},
-			);
-
-			T::Balance::try_debit_account(
+			let origination_fee = Self::charge_origination_fee(
 				&borrower_id,
+				&mut loan,
 				primary_collateral_asset,
-				origination_fee_amount,
+				amount_to_borrow,
 			)?;
+
+			account.loans.insert(loan_id, loan);
 
 			T::Balance::credit_account(&borrower_id, asset, amount_to_borrow);
 
@@ -846,10 +872,8 @@ impl<T: Config> LendingApi for Pallet<T> {
 				borrower_id: borrower_id.clone(),
 				asset,
 				principal_amount: amount_to_borrow,
-				origination_fee: origination_fee_amount,
+				origination_fee,
 			});
-
-			Self::accrue_fees(asset, primary_collateral_asset, origination_fee_amount);
 
 			Ok::<_, DispatchError>(())
 		})?;
@@ -903,30 +927,18 @@ impl<T: Config> LendingApi for Pallet<T> {
 				Ok::<_, DispatchError>(())
 			})?;
 
-			let origination_fee_amount = equivalent_amount::<T>(
-				loan_asset,
-				primary_collateral_asset,
-				config.origination_fee(loan_asset) * extra_amount_to_borrow,
-			)?;
-
-			loan.fees_paid
-				.entry(primary_collateral_asset)
-				.or_default()
-				.saturating_accrue(origination_fee_amount);
-
-			T::Balance::try_debit_account(
+			let origination_fee = Self::charge_origination_fee(
 				&borrower_id,
+				loan,
 				primary_collateral_asset,
-				origination_fee_amount,
+				extra_amount_to_borrow,
 			)?;
 
 			Self::deposit_event(Event::LoanUpdated {
 				loan_id,
 				extra_principal_amount: extra_amount_to_borrow,
-				origination_fee: origination_fee_amount,
+				origination_fee,
 			});
-
-			Self::accrue_fees(loan_asset, primary_collateral_asset, origination_fee_amount);
 
 			T::Balance::credit_account(&borrower_id, loan_asset, extra_amount_to_borrow);
 
@@ -1159,6 +1171,21 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
+	/// Takes a portion from the full fee and sends it to where network fees go, returning the rest.
+	fn take_network_fee(
+		full_fee_amount: AssetAmount,
+		fee_asset: Asset,
+		network_fee_contribution: Percent,
+	) -> AssetAmount {
+		let network_fee_amount = network_fee_contribution * full_fee_amount;
+
+		PendingNetworkFees::<T>::mutate(fee_asset, |pending_amount| {
+			pending_amount.saturating_accrue(network_fee_amount);
+		});
+
+		full_fee_amount.saturating_sub(network_fee_amount)
+	}
+
 	fn create_loan_account_if_empty(
 		borrower_id: T::AccountId,
 		maybe_account: &mut Option<LoanAccount<T>>,
@@ -1176,6 +1203,44 @@ impl<T: Config> Pallet<T> {
 		};
 
 		Ok(account)
+	}
+
+	/// Derives the required origination fee, charges it from the borrower's account,
+	/// and sends it to the pool.
+	fn charge_origination_fee(
+		borrower_id: &T::AccountId,
+		loan: &mut GeneralLoan<T>,
+		primary_collateral_asset: Asset,
+		principal: AssetAmount,
+	) -> Result<AssetAmount, DispatchError> {
+		let config = LendingConfig::<T>::get();
+
+		let origination_fee_amount = equivalent_amount::<T>(
+			loan.asset,
+			primary_collateral_asset,
+			config.origination_fee(loan.asset) * principal,
+		)?;
+
+		loan.fees_paid
+			.entry(primary_collateral_asset)
+			.or_default()
+			.saturating_accrue(origination_fee_amount);
+
+		T::Balance::try_debit_account(
+			&borrower_id,
+			primary_collateral_asset,
+			origination_fee_amount,
+		)?;
+
+		let remaining_fee = Self::take_network_fee(
+			origination_fee_amount,
+			primary_collateral_asset,
+			config.network_fee_contributions.from_origination_fee,
+		);
+
+		Self::accrue_fees(loan.asset, primary_collateral_asset, remaining_fee);
+
+		Ok(origination_fee_amount)
 	}
 }
 
@@ -1368,12 +1433,21 @@ pub struct LtvThresholds {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct NetworkFeeContributions {
+	pub from_interest: Percent,
+	pub from_origination_fee: Percent,
+	pub from_liquidation_fee: Percent,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct LendingConfiguration {
 	/// This configuration is used unless it is overridden in `pool_config_overrides`.
 	pub default_pool_config: PoolConfiguration,
 	/// Determines when events like liquidation should be triggered based on the account's
 	/// loan-to-value ratio.
 	pub ltv_thresholds: LtvThresholds,
+	/// Determines what portion of each fee type should be taken as a network fee.
+	pub network_fee_contributions: NetworkFeeContributions,
 	/// This determines how frequently (in blocks) we check if fees should be swapped into the
 	/// pools asset
 	pub fee_swap_interval_blocks: u32,

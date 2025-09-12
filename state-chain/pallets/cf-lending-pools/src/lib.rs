@@ -24,8 +24,8 @@ mod general_lending_pool;
 use cf_chains::SwapOrigin;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
-	InterestRateConfiguration, LendingConfiguration, RpcLendingPool, RpcLiquidationStatus,
-	RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+	InterestRateConfiguration, LendingConfiguration, NetworkFeeContributions, RpcLendingPool,
+	RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 };
 use general_lending::{LoanAccount, LtvThresholds, PoolConfiguration};
 pub use general_lending_pool::LendingPool;
@@ -128,6 +128,7 @@ pub enum PalletConfigUpdate {
 
 define_wrapper_type!(CorePoolId, u32);
 
+// TODO: make this configurable
 const INTEREST_PAYMENT_INTERVAL: u32 = 10; // interest is charged every minute
 const MAX_PALLET_CONFIG_UPDATE: u32 = 10; // used to bound no. of updates per extrinsic
 
@@ -295,6 +296,11 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 		hard_liquidation: FixedU64::from_rational(95, 100), // 95% LTV
 		hard_liquidation_abort: FixedU64::from_rational(93, 100), // 93% LTV
 	},
+	network_fee_contributions: NetworkFeeContributions {
+		from_origination_fee: Percent::from_percent(20),
+		from_interest: Percent::from_percent(20),
+		from_liquidation_fee: Percent::from_percent(20),
+	},
 	// don't swap more often than every 10 blocks
 	fee_swap_interval_blocks: 10,
 	fee_swap_threshold_usd: 20_000_000, // don't swap fewer than 20 USD
@@ -399,6 +405,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type LoanAccounts<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, LoanAccount<T>, OptionQuery>;
+
+	/// Stores collected network fees awaiting to be swapped into FLIP at regular intervals.
+	#[pallet::storage]
+	pub type PendingNetworkFees<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
