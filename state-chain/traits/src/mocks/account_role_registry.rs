@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{MockPallet, MockPalletStorage};
-use crate::AccountRoleRegistry;
+use crate::{AccountRoleRegistry, VanityName};
 use cf_primitives::AccountRole;
 use frame_support::{pallet_prelude::DispatchError, sp_runtime::DispatchResult};
 use frame_system::{ensure_signed, Config};
@@ -27,6 +27,7 @@ impl MockPallet for MockAccountRoleRegistry {
 }
 
 const ACCOUNT_ROLES: &[u8] = b"AccountRoles";
+const VANITY_NAMES: &[u8] = b"VanityNames";
 pub const ALREADY_REGISTERED_ERROR: DispatchError =
 	DispatchError::Other("Account already registered");
 
@@ -54,6 +55,11 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 			Some(_) => Err("Account role mismatch".into()),
 			_ => Err("Account not registered".into()),
 		}
+	}
+
+	fn set_vanity_name(who: &<T as Config>::AccountId, name: VanityName) -> DispatchResult {
+		<Self as MockPalletStorage>::put_storage(VANITY_NAMES, who, name);
+		Ok(())
 	}
 
 	fn account_role(who: &<T as Config>::AccountId) -> AccountRole {

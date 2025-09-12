@@ -47,6 +47,10 @@ const GENESIS_EPOCH: u32 = 1;
 const OPERATOR_SETTINGS: OperatorSettings =
 	OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Allow };
 
+fn vanity() -> VanityName {
+	b"OPERATORS".to_vec().try_into().unwrap()
+}
+
 fn assert_epoch_index(n: EpochIndex) {
 	assert_eq!(
 		ValidatorPallet::epoch_index(),
@@ -1582,6 +1586,7 @@ mod operator {
 					fee_bps: MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Allow,
 				},
+				vanity()
 			));
 			MockFlip::credit_funds(&BOB, BID);
 			System::reset_events();
@@ -1646,6 +1651,7 @@ mod operator {
 					fee_bps: MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Deny,
 				},
+				vanity(),
 			));
 			MockFlip::credit_funds(&BOB, BID);
 			System::reset_events();
@@ -1706,11 +1712,12 @@ mod operator {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
-				OPERATOR_SETTINGS
+				OPERATOR_SETTINGS,
+				vanity()
 			));
 			assert_ok!(ValidatorPallet::update_operator_settings(
 				OriginTrait::signed(ALICE),
-				OPERATOR_SETTINGS
+				OPERATOR_SETTINGS,
 			));
 			assert_eq!(OperatorSettingsLookup::<Test>::get(ALICE), Some(OPERATOR_SETTINGS));
 			assert_event_sequence!(
@@ -1733,10 +1740,12 @@ mod operator {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(OP_1),
 				OPERATOR_SETTINGS,
+				vanity()
 			));
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(OP_2),
 				OPERATOR_SETTINGS,
+				vanity()
 			));
 			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(V_1),));
 			assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(V_2),));
@@ -1809,7 +1818,8 @@ mod operator {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
-				OPERATOR_SETTINGS
+				OPERATOR_SETTINGS,
+				vanity()
 			));
 			assert_ok!(ValidatorPallet::delegate(
 				OriginTrait::signed(BOB),
@@ -1830,7 +1840,8 @@ mod operator {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
-				OPERATOR_SETTINGS
+				OPERATOR_SETTINGS,
+				vanity()
 			));
 
 			// Create a delegation snapshot for the current epoch (unexpired)
@@ -1860,7 +1871,8 @@ mod operator {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
-				OPERATOR_SETTINGS
+				OPERATOR_SETTINGS,
+				vanity()
 			));
 
 			Exceptions::<Test>::insert(ALICE, vec![BOB].into_iter().collect::<BTreeSet<_>>());
@@ -1887,6 +1899,7 @@ mod delegation {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
+				vanity()
 			));
 			assert_ok!(ValidatorPallet::update_operator_settings(
 				OriginTrait::signed(BOB),
@@ -1923,6 +1936,7 @@ mod delegation {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
+				vanity()
 			));
 			System::reset_events();
 			assert_ok!(ValidatorPallet::delegate(
@@ -1969,6 +1983,7 @@ mod delegation {
 					fee_bps: MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Deny
 				},
+				vanity()
 			));
 			assert_noop!(
 				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE, DelegationAmount::Max),
@@ -1992,6 +2007,7 @@ mod delegation {
 					fee_bps: MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Allow
 				},
+				vanity()
 			));
 			assert_ok!(ValidatorPallet::delegate(
 				OriginTrait::signed(BOB),
@@ -2031,6 +2047,7 @@ mod delegation {
 						fee_bps: MIN_OPERATOR_FEE,
 						delegation_acceptance: DelegationAcceptance::Allow
 					},
+					vanity()
 				));
 
 				for delegator in DELEGATORS {
@@ -2224,6 +2241,7 @@ mod delegation {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OPERATOR_SETTINGS,
+				vanity()
 			));
 			MockFlip::credit_funds(&BOB, 200);
 			// Delegate with specific amount instead of using set_max_bid
@@ -2255,6 +2273,7 @@ mod delegation {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
+				vanity()
 			));
 
 			// Now delegation should succeed.
@@ -2276,6 +2295,7 @@ mod delegation {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
+				vanity()
 			));
 			System::reset_events();
 
@@ -2315,6 +2335,7 @@ mod delegation {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OPERATOR_SETTINGS,
+				vanity()
 			));
 			assert_ok!(ValidatorPallet::delegate(
 				OriginTrait::signed(DELEGATOR),
@@ -2342,6 +2363,7 @@ mod delegation {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
+				vanity()
 			));
 
 			// First delegate with a max_bid
@@ -2405,6 +2427,7 @@ mod delegation {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
+				vanity()
 			));
 
 			// Delegate with a max_bid
@@ -2439,6 +2462,7 @@ mod delegation {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
+				vanity()
 			));
 
 			// Fund the account first
@@ -2476,6 +2500,7 @@ mod delegation {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
+				vanity()
 			));
 
 			// First delegate with max balance
@@ -2515,6 +2540,7 @@ mod delegation {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(BOB),
 				OPERATOR_SETTINGS,
+				vanity()
 			));
 
 			// Delegate with max_bid
@@ -2564,10 +2590,12 @@ pub mod auction_optimization {
 		assert_ok!(ValidatorPallet::register_as_operator(
 			OriginTrait::signed(OP_1),
 			OPERATOR_SETTINGS,
+			vanity()
 		));
 		assert_ok!(ValidatorPallet::register_as_operator(
 			OriginTrait::signed(OP_2),
 			OPERATOR_SETTINGS,
+			vanity()
 		));
 
 		for bid in op_1_bids {
@@ -2926,6 +2954,7 @@ mod delegation_splitting {
 					fee_bps: MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Allow
 				},
+				vanity()
 			));
 
 			// Try to block a non-existent account (adds to exceptions list)
@@ -2948,6 +2977,7 @@ mod delegation_splitting {
 					fee_bps: MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Deny
 				},
+				vanity()
 			));
 
 			// Try to allow a non-existent account (adds to exceptions list)
@@ -2970,6 +3000,7 @@ mod delegation_splitting {
 					fee_bps: MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Deny
 				},
+				vanity()
 			));
 
 			// Blocking a non-existent account should succeed (removes from exceptions list - no-op)
@@ -2986,6 +3017,7 @@ mod delegation_splitting {
 					fee_bps: MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Allow
 				},
+				vanity()
 			));
 
 			// Allowing a non-existent account should succeed (removes from exceptions list - no-op)
