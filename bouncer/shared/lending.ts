@@ -10,17 +10,7 @@ export type LendingPoolId = {
   asset: Asset;
 };
 
-const assets: Asset[] = [
-  'Btc',
-  'Eth',
-  'Usdc',
-  'Flip',
-  'Usdt',
-  'Sol',
-  'SolUsdc',
-  'ArbUsdc',
-  'ArbEth',
-];
+const assets: Asset[] = ['Btc', 'Eth', 'Sol', 'Usdc', 'Usdt'];
 
 /// Submits governance extrinsics to create the given lending pools.
 export async function createLendingPools(logger: Logger, newPools: LendingPoolId[]): Promise<void> {
