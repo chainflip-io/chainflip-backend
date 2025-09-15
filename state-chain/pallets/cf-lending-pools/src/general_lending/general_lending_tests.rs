@@ -1699,7 +1699,10 @@ fn distribute_proportionally_test() {
 
 	// Some extreme cases:
 	assert_eq!(
-		distribute_proportionally::<u32, _, _>(1000u128, BTreeMap::from([]).iter()),
+		distribute_proportionally::<u32, _, _>(
+			1000u128,
+			BTreeMap::<u32, u128>::from([]).iter().map(|(k, v)| (k, *v))
+		),
 		BTreeMap::from([])
 	);
 

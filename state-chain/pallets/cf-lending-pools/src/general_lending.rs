@@ -570,7 +570,7 @@ impl<T: Config> LoanAccount<T> {
 		// Making sure the user doesn't pay more than the total principal:
 		let repayment_amount = core::cmp::min(provided_amount_after_fees, loan.owed_principal);
 
-		loan.pay_to_pool(repayment_amount, true /* is principal */);
+		loan.repay_funds(repayment_amount);
 
 		let liquidation_fees = if liquidation_fee > 0 {
 			let remaining_fee = Pallet::<T>::take_network_fee(
@@ -579,7 +579,7 @@ impl<T: Config> LoanAccount<T> {
 				config.network_fee_contributions.from_liquidation_fee,
 			);
 
-			loan.pay_to_pool(remaining_fee, false /* is principal */);
+			loan.pay_fee(remaining_fee);
 			loan.fees_paid.entry(loan.asset).or_default().saturating_accrue(liquidation_fee);
 			BTreeMap::from([(loan.asset, liquidation_fee)])
 		} else {
@@ -621,20 +621,29 @@ impl<T: Config> GeneralLoan<T> {
 		usd_value_of::<T>(self.asset, self.owed_principal)
 	}
 
-	/// Pays loan asset to the pool. Reduces the owed principal
-	/// amount if a principal repayment (rather than a fee)
-	fn pay_to_pool(&mut self, amount: AssetAmount, is_principal: bool) {
+	/// Repays previously borrowed funds to the pool in pool's asset, reducing the owed principal
+	/// amount.
+	fn repay_funds(&mut self, amount: AssetAmount) {
 		GeneralLendingPools::<T>::mutate(self.asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
-				pool.accept_payment(amount, is_principal);
+				pool.receive_repayment(amount);
 			} else {
 				log_or_panic!("CHP Pool must exist for asset {}", self.asset);
 			}
 		});
 
-		if is_principal {
-			self.owed_principal.saturating_reduce(amount);
-		}
+		self.owed_principal.saturating_reduce(amount);
+	}
+
+	/// Pays fee to the pool in pool's asset. Does NOT reduce the owed principal.
+	fn pay_fee(&mut self, amount: AssetAmount) {
+		GeneralLendingPools::<T>::mutate(self.asset, |maybe_pool| {
+			if let Some(pool) = maybe_pool.as_mut() {
+				pool.receive_fees(amount);
+			} else {
+				log_or_panic!("CHP Pool must exist for asset {}", self.asset);
+			}
+		});
 	}
 }
 
@@ -841,7 +850,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 			GeneralLendingPools::<T>::try_mutate(asset, |pool| {
 				let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
-				pool.borrow_funds(amount_to_borrow)?;
+				pool.provide_funds_for_loan(amount_to_borrow)?;
 
 				Ok::<_, DispatchError>(())
 			})?;
@@ -919,7 +928,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 			GeneralLendingPools::<T>::try_mutate(loan_asset, |pool| {
 				let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
-				pool.borrow_funds(extra_amount_to_borrow)?;
+				pool.provide_funds_for_loan(extra_amount_to_borrow)?;
 
 				Ok::<_, DispatchError>(())
 			})?;
@@ -1150,7 +1159,7 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 						return;
 					};
 
-					pool.accept_payment(output_amount, false);
+					pool.receive_fees(output_amount);
 				});
 			},
 		}

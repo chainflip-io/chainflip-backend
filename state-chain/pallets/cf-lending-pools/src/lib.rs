@@ -482,8 +482,8 @@ pub mod pallet {
 		},
 		LoanSettled {
 			loan_id: LoanId,
-			// Includes origination fee, interest, and any liquidation fees collected
-			// throughout the loan's lifetime
+			/// Includes origination fee, interest, and any liquidation fees collected
+			/// throughout the loan's lifetime
 			total_fees: BTreeMap<Asset, AssetAmount>,
 		},
 		LendingFeeCollectionInitiated {

@@ -89,7 +89,7 @@ impl<T: Config> LendingPool<T> {
 		amount_to_withdraw
 	}
 
-	pub fn borrow_funds(&mut self, amount: AssetAmount) -> Result<(), Error<T>> {
+	pub fn provide_funds_for_loan(&mut self, amount: AssetAmount) -> Result<(), Error<T>> {
 		let Some(remaining_amount) = self.available_amount.checked_sub(amount) else {
 			return Err(Error::<T>::InsufficientLiquidity);
 		};
@@ -106,15 +106,19 @@ impl<T: Config> LendingPool<T> {
 		Permill::from_rational(in_use, self.total_amount)
 	}
 
-	/// Either make a repayment of loan principal or pay fees into the pool.
-	pub fn accept_payment(&mut self, amount: AssetAmount, is_principal: bool) {
+	/// Receives fees in the pool's asset (after they have been swapped)
+	pub fn receive_fees(&mut self, amount: AssetAmount) {
+		// Fees increase both the total and available amount
 		self.available_amount.saturating_accrue(amount);
+		self.total_amount.saturating_accrue(amount);
+	}
 
-		// Principal amounts in loans are already accounted for in `total_amount`,
-		// however, fees are not and they should increase the total amount.
-		if !is_principal {
-			self.total_amount.saturating_accrue(amount);
-		}
+	/// Receives repayment funds in the pool's asset (after they has been swapped)
+	pub fn receive_repayment(&mut self, amount: AssetAmount) {
+		// Principal repayment only affects the available amount,
+		// not the total amount (as we never deduct borrowed funds from the total amount
+		// in the first place)
+		self.available_amount.saturating_accrue(amount);
 	}
 }
 
@@ -234,7 +238,7 @@ mod tests {
 		chp_pool.add_funds(&LENDER_2, 400);
 		chp_pool.add_funds(&LENDER_3, 100);
 
-		assert_ok!(chp_pool.borrow_funds(600));
+		assert_ok!(chp_pool.provide_funds_for_loan(600));
 
 		assert_eq!(chp_pool.get_utilisation(), Permill::from_percent(60));
 
