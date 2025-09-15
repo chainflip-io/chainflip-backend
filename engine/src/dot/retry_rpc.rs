@@ -16,6 +16,7 @@
 
 use crate::{
 	common::option_inner,
+	dot::http_rpc::DotHttpRpcClientBuilder,
 	retrier::{Attempt, RetryLimitReturn},
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
@@ -33,14 +34,14 @@ use subxt::{
 
 use crate::retrier::{RequestLog, RetrierClient};
 
-use super::{http_rpc::DotHttpRpcClient, rpc::DotSubClient, PolkadotHash, PolkadotHeader};
+use super::{rpc::DotSubClient, PolkadotHash, PolkadotHeader};
 use anyhow::{anyhow, Result};
 
 use crate::dot::rpc::DotRpcApi;
 
 #[derive(Clone)]
 pub struct DotRetryRpcClient {
-	rpc_retry_client: RetrierClient<DotHttpRpcClient>,
+	rpc_retry_client: RetrierClient<DotHttpRpcClientBuilder>,
 	sub_retry_client: RetrierClient<DotSubClient>,
 }
 
@@ -66,7 +67,7 @@ impl DotRetryRpcClient {
 	) -> Result<Self> {
 		let f_create_clients = |endpoints: WsHttpEndpoints| {
 			Result::<_, anyhow::Error>::Ok((
-				DotHttpRpcClient::new(endpoints.ws_endpoint.clone(), expected_genesis_hash)?,
+				DotHttpRpcClientBuilder::new(endpoints.ws_endpoint.clone(), expected_genesis_hash)?,
 				DotSubClient::new(endpoints.ws_endpoint, expected_genesis_hash),
 			))
 		};
@@ -80,8 +81,8 @@ impl DotRetryRpcClient {
 			rpc_retry_client: RetrierClient::new(
 				scope,
 				"dot_rpc",
-				rpc_client,
-				backup_rpc_client,
+				futures::future::ready(rpc_client),
+				backup_rpc_client.map(futures::future::ready),
 				POLKADOT_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
@@ -126,7 +127,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 				RequestLog::new("block_hash".to_string(), Some(format!("{block_number}"))),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.block_hash(block_number).await })
+					Box::pin(async move { client.connect().await.block_hash(block_number).await })
 				}),
 			)
 			.await
@@ -139,7 +140,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						client.extrinsics(block_hash).await?.ok_or(anyhow!(
+						client.connect().await.extrinsics(block_hash).await?.ok_or(anyhow!(
 						"Block not found when querying for extrinsics at block hash {block_hash:?}"
 					))
 					})
@@ -157,9 +158,11 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 		self.rpc_retry_client
 			.request_with_limit(
 				RequestLog::new("events".to_string(), Some(format!("{block_hash:?}"))),
-				Box::pin(move |client: DotHttpRpcClient| {
+				Box::pin(move |client: DotHttpRpcClientBuilder| {
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.events(block_hash, parent_hash).await })
+					Box::pin(
+						async move { client.connect().await.events(block_hash, parent_hash).await },
+					)
 				}),
 				retry_limit,
 			)
@@ -172,7 +175,9 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 				RequestLog::new("runtime_version".to_string(), None),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.runtime_version(block_hash).await })
+					Box::pin(
+						async move { client.connect().await.runtime_version(block_hash).await },
+					)
 				}),
 			)
 			.await
@@ -191,9 +196,9 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 				Box::pin(move |client| {
 					let encoded_bytes = encoded_bytes.clone();
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(
-						async move { client.submit_raw_encoded_extrinsic(encoded_bytes).await },
-					)
+					Box::pin(async move {
+						client.connect().await.submit_raw_encoded_extrinsic(encoded_bytes).await
+					})
 				}),
 				MAX_BROADCAST_RETRIES,
 			)
@@ -261,6 +266,7 @@ impl ChainClient for DotRetryRpcClient {
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
+						let client = client.connect().await;
 						let block_hash = client
 							.block_hash(index)
 							.await?
