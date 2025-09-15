@@ -16,7 +16,6 @@
 
 use cf_chains::dot::RuntimeVersion;
 use cf_primitives::PolkadotBlockNumber;
-use futures_core::Future;
 use http::uri::Uri;
 use subxt::{
 	backend::{
@@ -81,66 +80,78 @@ fn ensure_port(url: SecretUrl) -> Result<SecretUrl> {
 }
 
 #[derive(Clone)]
+pub struct DotHttpRpcClientBuilder {
+	url: SecretUrl,
+	expected_genesis_hash: Option<PolkadotHash>,
+}
+
+#[derive(Clone)]
 pub struct DotHttpRpcClient {
 	online_client: OnlineClient<PolkadotConfig>,
 	rpc_methods: LegacyRpcMethods<PolkadotConfig>,
 }
 
-impl DotHttpRpcClient {
-	pub fn new(
-		raw_url: SecretUrl,
-		expected_genesis_hash: Option<PolkadotHash>,
-	) -> Result<impl Future<Output = Self>> {
+impl DotHttpRpcClientBuilder {
+	pub fn new(url: SecretUrl, expected_genesis_hash: Option<PolkadotHash>) -> Result<Self> {
 		// Currently, the jsonrpsee library used by the PolkadotHttpClient expects
 		// a port number to be always present in the url. Here we ensure this,
 		// adding the default port if none is present.
-		let url = ensure_port(raw_url)?;
+		Ok(Self { url: ensure_port(url)?, expected_genesis_hash })
+	}
 
-		Ok(async move {
-			// We don't want to return an error here. Returning an error means that we'll exit the
-			// CFE. So on client creation we wait until we can be successfully connected to the
-			// Polkadot node. So the other chains are unaffected
-			let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
-			let (rpc_client, online_client) = loop {
-				poll_interval.tick().await;
+	pub async fn connect(self) -> DotHttpRpcClient {
+		// We don't want to return an error here. Returning an error means that we'll exit the
+		// CFE. So on client creation we wait until we can be successfully connected to the
+		// Polkadot node. So the other chains are unaffected
+		let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
+		let (rpc_client, online_client) = loop {
+			poll_interval.tick().await;
 
-				let maybe_online_client: anyhow::Result<_> =
-					match RpcClient::from_url(url.clone()).await {
-						Ok(rpc_client) =>
-							OnlineClient::<PolkadotConfig>::from_rpc_client(rpc_client.clone())
-								.await
-								.map(move |a| (rpc_client, a))
-								.map_err(|e| e.into()),
-						Err(e) => Err(e.into()),
-					};
+			let maybe_online_client: anyhow::Result<_> =
+				match RpcClient::from_url(self.url.clone()).await {
+					Ok(rpc_client) =>
+						OnlineClient::<PolkadotConfig>::from_rpc_client(rpc_client.clone())
+							.await
+							.map(move |a| (rpc_client, a))
+							.map_err(|e| e.into()),
+					Err(e) => Err(e.into()),
+				};
 
-				match maybe_online_client {
-					Ok((rpc_client, online_client)) => {
-						if let Some(expected_genesis_hash) = expected_genesis_hash {
-							let genesis_hash = online_client.genesis_hash();
-							if genesis_hash == expected_genesis_hash {
-								break (rpc_client, online_client)
-							} else {
-								error!(
-									"Connected to Polkadot node at {url} but the genesis hash {genesis_hash} does not match the expected genesis hash {expected_genesis_hash}. Please check your CFE configuration file."
-								)
-							}
-						} else {
-							warn!("Skipping Polkadot genesis hash check");
+			match maybe_online_client {
+				Ok((rpc_client, online_client)) => {
+					if let Some(expected_genesis_hash) = self.expected_genesis_hash {
+						let genesis_hash = online_client.genesis_hash();
+						if genesis_hash == expected_genesis_hash {
 							break (rpc_client, online_client)
+						} else {
+							error!(
+								"Connected to Polkadot node at {} but the genesis hash {genesis_hash} does not match the expected genesis hash {expected_genesis_hash}. Please check your CFE configuration file.",
+								self.url
+							)
 						}
-					},
-					Err(e) => {
-						error!(
-							"Failed to connect to Polkadot node at {url} with error: {e}. \
-						Please check your CFE configuration file. Retrying in {:?}...",
-							poll_interval.period()
-						);
-					},
-				}
-			};
-			Self { online_client, rpc_methods: LegacyRpcMethods::new(rpc_client) }
-		})
+					} else {
+						warn!("Skipping Polkadot genesis hash check");
+						break (rpc_client, online_client)
+					}
+				},
+				Err(e) => {
+					error!(
+						"Failed to connect to Polkadot node at {} with error: {e}. \
+							Please check your CFE configuration file. Retrying in {:?}...",
+						self.url,
+						poll_interval.period()
+					);
+				},
+			}
+		};
+		DotHttpRpcClient { online_client, rpc_methods: LegacyRpcMethods::new(rpc_client) }
+	}
+}
+
+impl DotHttpRpcClient {
+	#[cfg(test)]
+	pub async fn new(url: SecretUrl, expected_genesis_hash: Option<PolkadotHash>) -> Result<Self> {
+		Ok(DotHttpRpcClientBuilder::new(url, expected_genesis_hash)?.connect().await)
 	}
 
 	pub async fn metadata(&self, block_hash: PolkadotHash) -> Result<subxt::Metadata> {
@@ -248,7 +259,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_http_rpc() {
 		let dot_http_rpc =
-			DotHttpRpcClient::new("http://localhost:9945".into(), None).unwrap().await;
+			DotHttpRpcClient::new("http://localhost:9945".into(), None).await.unwrap();
 		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
 		println!("block_hash: {:?}", block_hash);
 	}
@@ -256,7 +267,7 @@ mod tests {
 	#[ignore = "requires local node"]
 	#[tokio::test]
 	async fn test_ws_rpc() {
-		let dot_http_rpc = DotHttpRpcClient::new("ws://localhost:9945".into(), None).unwrap().await;
+		let dot_http_rpc = DotHttpRpcClient::new("ws://localhost:9945".into(), None).await.unwrap();
 		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
 		println!("block_hash: {:?}", block_hash);
 	}
@@ -295,8 +306,9 @@ mod tests {
 		];
 
 		let dot_http_rpc =
-			DotHttpRpcClient::new("https://polkadot-rpc-tn.dwellir.com:443".into(), None)
+			DotHttpRpcClientBuilder::new("https://polkadot-rpc-tn.dwellir.com:443".into(), None)
 				.unwrap()
+				.connect()
 				.await;
 
 		for block_hash in block_hash_of_runtime_updates {
