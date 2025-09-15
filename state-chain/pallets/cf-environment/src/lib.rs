@@ -1087,15 +1087,29 @@ pub enum UserSignatureData {
 }
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
+pub struct BorrowData {
+	pub amount: u128,
+	pub collateral_asset: Asset,
+	pub borrow_asset: Asset,
+}
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
+pub struct WithdrawData {
+	pub asset: Asset,
+	pub address: EvmAddress,
+}
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
 pub enum LendingApi {
-	Borrow { amount: u128, collateral_asset: Asset, borrow_asset: Asset },
+	Borrow(BorrowData),
+	// Withdraw(WithdrawData),
+	// BorrowAndWithdraw { borrow: BorrowData, withdraw: WithdrawData },
 }
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
 pub enum UserActionsApi {
 	Lending(LendingApi),
-	// reserved for future Apis for example Swap(SwapApi)...
-	// This allows us to update the API without breaking the encoding.
+	// reserved for future APIs...
 }
 
 // We should probably do some  macro to pull each of the types, stringify it in a EIP712 format
@@ -1107,14 +1121,16 @@ impl UserActionsApi {
 	// i.e. we must append the full definition of Metadata.
 	pub fn eip712_type_str_with_metadata(
 		&self,
+		borrow_data_type_str: &str,
 		metadata_type_str: &str,
 	) -> scale_info::prelude::string::String {
 		match self {
 			UserActionsApi::Lending(LendingApi::Borrow { .. }) => {
 				scale_info::prelude::format!(
-                    "Borrow(uint256 amount,string collateralAsset,string borrowAsset,Metadata metadata){}",
-                    metadata_type_str
-                )
+					"Borrow(BorrowData Borrow,Metadata metadata){}{}",
+					borrow_data_type_str,
+					metadata_type_str
+				)
 			}, // Add more variants here as needed
 		}
 	}
@@ -1123,20 +1139,17 @@ impl UserActionsApi {
 		&self,
 		metadata_hash: H256,
 		metadata_type_str: &str,
+		borrow_data_hash: H256,
+		borrow_data_type_str: &str,
 	) -> Vec<u8> {
-		let action_type_str = self.eip712_type_str_with_metadata(metadata_type_str);
+		let action_type_str =
+			self.eip712_type_str_with_metadata(borrow_data_type_str, metadata_type_str);
 		let action_type_hash = Keccak256::hash(action_type_str.as_bytes());
 		match self {
-			UserActionsApi::Lending(LendingApi::Borrow {
-				amount,
-				collateral_asset,
-				borrow_asset,
-			}) => {
+			UserActionsApi::Lending(LendingApi::Borrow(_)) => {
 				let tokens = vec![
 					Token::FixedBytes(action_type_hash.as_bytes().to_vec()),
-					Token::Uint(U256::from(*amount)),
-					Token::FixedBytes(Keccak256::hash(collateral_asset.as_bytes()).0.to_vec()),
-					Token::FixedBytes(Keccak256::hash(borrow_asset.as_bytes()).0.to_vec()),
+					Token::FixedBytes(borrow_data_hash.as_bytes().to_vec()),
 					Token::FixedBytes(metadata_hash.as_bytes().to_vec()),
 				];
 
@@ -1151,6 +1164,8 @@ const EIP712_DOMAIN_TYPE_STR: &str = "EIP712Domain(string name,string version)";
 // UserActionsApi or we will add new actions to the enum and deprecate old ones as we go?
 const EIP712_DOMAIN_VERSION: &str = "0";
 const EIP712_METADATA_TYPE_STR: &str = "Metadata(address from,uint256 nonce,uint256 expiryBlock)";
+const EIP712_BORROW_DATA_TYPE_STR: &str =
+	"BorrowData(uint256 amount,string collateralAsset,string borrowAsset)";
 const EIP712_DOMAIN_PREFIX: [u8; 2] = [0x19, 0x01];
 const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
 const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
@@ -1195,10 +1210,33 @@ pub fn build_eip_712_hash(
 	let metadata_hash = Keccak256::hash(&encoded_metadata);
 
 	// -----------------
+	// Borrow Data struct
+	// -----------------
+	// destructure user action into borrow_data
+	let borrow_data = match user_action.clone() {
+		UserActionsApi::Lending(LendingApi::Borrow(borrow_data)) => borrow_data,
+	};
+
+	let borrow_data_type_str = EIP712_BORROW_DATA_TYPE_STR;
+	let borrow_data_type_hash = Keccak256::hash(borrow_data_type_str.as_bytes());
+	let borrow_data_tokens = vec![
+		Token::FixedBytes(borrow_data_type_hash.as_bytes().to_vec()),
+		Token::Uint(U256::from(borrow_data.amount)),
+		Token::FixedBytes(Keccak256::hash(borrow_data.collateral_asset.as_bytes()).0.to_vec()),
+		Token::FixedBytes(Keccak256::hash(borrow_data.borrow_asset.as_bytes()).0.to_vec()),
+	];
+	let encoded_borrow_data = encode(&borrow_data_tokens);
+	let borrow_data_hash = Keccak256::hash(&encoded_borrow_data);
+
+	// -----------------
 	// Message struct
 	// -----------------
-	let encoded_message =
-		user_action.encode_eip_712_message_with_metadata(metadata_hash, metadata_type_str);
+	let encoded_message = user_action.encode_eip_712_message_with_metadata(
+		metadata_hash,
+		metadata_type_str,
+		borrow_data_hash,
+		borrow_data_type_str,
+	);
 	let message_hash = Keccak256::hash(&encoded_message);
 	// -----------------
 	// EIP712 digest
@@ -1220,24 +1258,23 @@ mod test {
 		let from: EvmAddress = EvmAddress::from_str(from_str).unwrap();
 		let metadata = TransactionMetadata { nonce: 1, expiry_block: 10000 };
 
+		let borrow_data =
+			BorrowData { amount: 1234, collateral_asset: Asset::Btc, borrow_asset: Asset::Usdc };
+
 		let encoded_final = build_eip_712_hash(
-			UserActionsApi::Lending(LendingApi::Borrow {
-				amount: 1234,
-				collateral_asset: Asset::Btc,
-				borrow_asset: Asset::Usdc,
-			}),
+			UserActionsApi::Lending(LendingApi::Borrow(borrow_data)),
 			metadata,
 			from,
 			ChainflipNetwork::Development,
 		);
 
-		let expected_signed_payload: Vec<u8> = hex_literal::hex!("190164a55c67b106cafd7b1016a96941a46c6af86d246a4b41fc690ab2f4adfa74988110bb049d0b1bbf717cc5a166498426e490eb0b3e7caee14b72011e8fb182f3").into();
+		let expected_signed_payload: Vec<u8> = hex_literal::hex!("190164a55c67b106cafd7b1016a96941a46c6af86d246a4b41fc690ab2f4adfa7498d85d77b1e0828a38ad9a4d4390170f9138d474414674cb4ec2382178522decad").into();
 
 		assert_eq!(encoded_final, expected_signed_payload);
 		println!("Encoded final: {:?}", &encoded_final);
 
 		let expected_eip712_hash =
-			hex_literal::hex!("5721e3b399be58e09beabb50048485c6c099b468809febb7e4025a2dba913c3a")
+			hex_literal::hex!("64ba143396067ac0c504f798aadc309114e3a527ad1d33f7ab0773c5b0edc46e")
 				.into();
 
 		let eip712_hash = Keccak256::hash(&encoded_final);
