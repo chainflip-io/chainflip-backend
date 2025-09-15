@@ -301,6 +301,7 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	},
 	// don't swap more often than every 10 blocks
 	fee_swap_interval_blocks: 10,
+	interest_payment_interval_blocks: 10,
 	fee_swap_threshold_usd: 20_000_000, // don't swap fewer than 20 USD
 	pool_config_overrides: BTreeMap::new(),
 };

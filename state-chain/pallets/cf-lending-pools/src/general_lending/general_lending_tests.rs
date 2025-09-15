@@ -213,7 +213,9 @@ fn basic_general_lending() {
 				})
 			);
 		})
-		.then_process_blocks_until_block(INIT_BLOCK + INTEREST_PAYMENT_INTERVAL as u64)
+		.then_process_blocks_until_block(
+			INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
+		)
 		// Checking that interest was charged here:
 		.then_execute_with(|_| {
 			assert_eq!(
@@ -257,7 +259,9 @@ fn basic_general_lending() {
 				}
 			);
 		})
-		.then_process_blocks_until_block(INIT_BLOCK + 2 * INTEREST_PAYMENT_INTERVAL as u64)
+		.then_process_blocks_until_block(
+			INIT_BLOCK + 2 * CONFIG.interest_payment_interval_blocks as u64,
+		)
 		// === Interest is charged the second time ===
 		.then_execute_with(|_| {
 			// This time we expect a smaller amount due to the partial repayment (which both
@@ -630,7 +634,7 @@ fn interest_special_cases() {
 				Ok(LOAN_ID)
 			);
 		})
-		.then_execute_at_block(INIT_BLOCK + INTEREST_PAYMENT_INTERVAL as u64, |_| {
+		.then_execute_at_block(INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64, |_| {
 			let secondary_interest_charge =
 				interest_charge.saturating_sub(INIT_COLLATERAL_AMOUNT_PRIMARY);
 
@@ -661,24 +665,27 @@ fn interest_special_cases() {
 				]),
 			);
 		})
-		.then_execute_at_block(INIT_BLOCK + 2 * INTEREST_PAYMENT_INTERVAL as u64, |_| {
-			// The second time the fee is collected, it comes entirely from the secondary asset:
-			assert_eq!(
-				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().collected_fees,
-				BTreeMap::from([
-					(
-						PRIMARY_COLLATERAL_ASSET,
-						take_network_fee(INIT_COLLATERAL_AMOUNT_PRIMARY).1 +
-							take_network_fee(origination_fee).1
-					),
-					(
-						SECONDARY_COLLATERAL_ASSET,
-						2 * take_network_fee(interest_charge).1 -
-							take_network_fee(INIT_COLLATERAL_AMOUNT_PRIMARY).1
-					)
-				])
-			);
-		});
+		.then_execute_at_block(
+			INIT_BLOCK + 2 * CONFIG.interest_payment_interval_blocks as u64,
+			|_| {
+				// The second time the fee is collected, it comes entirely from the secondary asset:
+				assert_eq!(
+					GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().collected_fees,
+					BTreeMap::from([
+						(
+							PRIMARY_COLLATERAL_ASSET,
+							take_network_fee(INIT_COLLATERAL_AMOUNT_PRIMARY).1 +
+								take_network_fee(origination_fee).1
+						),
+						(
+							SECONDARY_COLLATERAL_ASSET,
+							2 * take_network_fee(interest_charge).1 -
+								take_network_fee(INIT_COLLATERAL_AMOUNT_PRIMARY).1
+						)
+					])
+				);
+			},
+		);
 }
 
 #[test]

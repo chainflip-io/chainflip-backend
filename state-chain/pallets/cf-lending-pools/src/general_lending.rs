@@ -284,7 +284,7 @@ impl<T: Config> LoanAccount<T> {
 
 		for loan in self.loans.values_mut() {
 			if frame_system::Pallet::<T>::block_number().saturating_sub(loan.created_at_block) %
-				INTEREST_PAYMENT_INTERVAL.into() ==
+				config.interest_payment_interval_blocks.into() ==
 				0u32.into()
 			{
 				let interest_rate_per_payment_interval = {
@@ -1479,9 +1479,11 @@ pub struct LendingConfiguration {
 	pub ltv_thresholds: LtvThresholds,
 	/// Determines what portion of each fee type should be taken as a network fee.
 	pub network_fee_contributions: NetworkFeeContributions,
-	/// This determines how frequently (in blocks) we check if fees should be swapped into the
+	/// Determines how frequently (in blocks) we check if fees should be swapped into the
 	/// pools asset
 	pub fee_swap_interval_blocks: u32,
+	/// Determines how frequently (in blocks) we collect interest payments from loans.
+	pub interest_payment_interval_blocks: u32,
 	/// Fees collected in some asset will be swapped into the pool's asset once their usd value
 	/// reaches this threshold
 	pub fee_swap_threshold_usd: AssetAmount,
@@ -1531,7 +1533,7 @@ impl LendingConfiguration {
 		let interest_rate = self.derive_interest_rate_per_year(asset, utilisation);
 
 		Perbill::from_parts(
-			interest_rate.deconstruct() / (BLOCKS_IN_YEAR / INTEREST_PAYMENT_INTERVAL),
+			interest_rate.deconstruct() / (BLOCKS_IN_YEAR / self.interest_payment_interval_blocks),
 		)
 	}
 
