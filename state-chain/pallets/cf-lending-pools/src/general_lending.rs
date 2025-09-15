@@ -219,7 +219,7 @@ impl<T: Config> LoanAccount<T> {
 		}
 
 		for loan_id in fully_repaid_loans {
-			self.settle_loan(*loan_id);
+			self.settle_loan(*loan_id, true /* via liquidation */);
 		}
 
 		collateral_collected
@@ -519,9 +519,13 @@ impl<T: Config> LoanAccount<T> {
 		self.liquidation_status = LiquidationStatus::NoLiquidation;
 	}
 
-	fn settle_loan(&mut self, loan_id: LoanId) {
+	fn settle_loan(&mut self, loan_id: LoanId, via_liquidation: bool) {
 		if let Some(loan) = self.loans.remove(&loan_id) {
-			Pallet::<T>::deposit_event(Event::LoanSettled { loan_id, total_fees: loan.fees_paid });
+			Pallet::<T>::deposit_event(Event::LoanSettled {
+				loan_id,
+				total_fees: loan.fees_paid,
+				via_liquidation,
+			});
 		}
 	}
 
@@ -976,7 +980,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 					repayment_amount,
 					false, /* no liquidation fee */
 				)? {
-				loan_account.settle_loan(loan_id);
+				loan_account.settle_loan(loan_id, false /* via liquidation */);
 
 				T::Balance::credit_account(borrower_id, loan_asset, excess_amount);
 			}
@@ -1148,7 +1152,7 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 					// If this swap is the last liquidation swap for the loan, we should
 					// "settle" it (even if it hasn't been repaid in full):
 					if is_last_liquidation_swap {
-						loan_account.settle_loan(loan_id);
+						loan_account.settle_loan(loan_id, true /* via liquidation */);
 					}
 				});
 			},

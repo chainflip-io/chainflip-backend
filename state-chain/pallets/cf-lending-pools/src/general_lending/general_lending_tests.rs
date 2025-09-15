@@ -283,6 +283,7 @@ fn basic_general_lending() {
 			System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 				loan_id: LOAN_ID,
 				total_fees: BTreeMap::from([(COLLATERAL_ASSET, origination_fee + total_interest)]),
+				via_liquidation: false,
 			}));
 
 			assert_eq!(
@@ -1150,6 +1151,7 @@ fn basic_liquidation() {
 					(COLLATERAL_ASSET, origination_fee),
 					(LOAN_ASSET, liquidation_fee_1 + liquidation_fee_2),
 				]),
+				via_liquidation: true,
 			}));
 
 			// This excess principal asset amount will be credited to the borrower's account
@@ -1271,6 +1273,7 @@ fn making_loan_repayment() {
 		System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 			loan_id: LOAN_ID,
 			total_fees: BTreeMap::from([(COLLATERAL_ASSET, origination_fee)]),
+			via_liquidation: false,
 		}));
 	});
 }

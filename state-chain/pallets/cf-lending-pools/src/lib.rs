@@ -485,6 +485,8 @@ pub mod pallet {
 			/// Includes origination fee, interest, and any liquidation fees collected
 			/// throughout the loan's lifetime
 			total_fees: BTreeMap<Asset, AssetAmount>,
+			/// Indicates whether the loan was settled as a result of liquidation.
+			via_liquidation: bool,
 		},
 		LendingFeeCollectionInitiated {
 			asset: Asset,
