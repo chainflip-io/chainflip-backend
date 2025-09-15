@@ -2,6 +2,10 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.11.1] - 2025-09-15
+
+- Allow Engine witnessing streams to end when there are no more vaults. ([#6117](https://github.com/chainflip-io/chainflip-backend/issues/6117))
+
 ## [1.11.0] - 2025-09-11
 
 ### Features
