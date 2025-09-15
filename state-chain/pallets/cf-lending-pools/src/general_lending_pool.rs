@@ -80,12 +80,10 @@ impl<T: Config> LendingPool<T> {
 		// Recomputing everyone's shares taking the new total amount into account:
 		self.lender_shares = distribute_proportionally(
 			Perquintill::one().deconstruct(),
-			self.lender_shares
-				.iter()
-				.map(|(id, share)| (id.clone(), share.deconstruct().into())),
+			self.lender_shares.iter().map(|(id, share)| (id, share.deconstruct().into())),
 		)
 		.into_iter()
-		.map(|(id, parts)| (id, Perquintill::from_parts(parts)))
+		.map(|(id, parts)| (id.clone(), Perquintill::from_parts(parts)))
 		.collect();
 
 		amount_to_withdraw

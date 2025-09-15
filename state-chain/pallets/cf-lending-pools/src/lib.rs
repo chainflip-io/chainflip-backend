@@ -215,10 +215,10 @@ mod utils {
 	}
 
 	/// Distributes exactly `total_to_distribute` proportionally to the `distribution` map.
-	pub(super) fn distribute_proportionally<K: Ord, N>(
+	pub(super) fn distribute_proportionally<'a, K, N, I>(
 		total_to_distribute: N,
-		distribution: impl IntoIterator<Item = (K, u128)>,
-	) -> BTreeMap<K, N>
+		distribution: I,
+	) -> BTreeMap<&'a K, N>
 	where
 		N: Clone
 			+ From<u64>
@@ -226,16 +226,15 @@ mod utils {
 			+ core::ops::AddAssign
 			+ frame_support::sp_runtime::Saturating
 			+ frame_support::sp_runtime::traits::AtLeast32BitUnsigned,
+		K: Ord,
 		u128: From<N> + UniqueSaturatedInto<N>,
+		I: Iterator<Item = (&'a K, u128)> + Clone,
 	{
 		use nanorand::Rng;
 
-		// Collecting so we can iterate twice:
-		let distribution = distribution.into_iter().collect::<Vec<_>>();
-
 		let total = distribution
-			.iter()
-			.try_fold(0u128, |acc, (_, v)| acc.checked_add(*v))
+			.clone()
+			.try_fold(0u128, |acc, (_, v)| acc.checked_add(v))
 			// Overflow should be unexpected, but this ensures we don't create money out of thin
 			// air (division by zero is handled gracefully below too):
 			.unwrap_or_default();
@@ -243,7 +242,6 @@ mod utils {
 		let mut total_distributed: N = 0u32.into();
 
 		let mut distribution: BTreeMap<_, _> = distribution
-			.into_iter()
 			.map(|(k, v)| {
 				let amount: N = multiply_by_rational_with_rounding(
 					total_to_distribute.into(),

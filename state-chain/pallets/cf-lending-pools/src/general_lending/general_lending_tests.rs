@@ -1675,49 +1675,64 @@ mod safe_mode {
 fn distribute_proportionally_test() {
 	// A single party should get everything:
 	assert_eq!(
-		distribute_proportionally(100u128, BTreeMap::from([(1, 999)])),
-		BTreeMap::from([(1, 100)])
+		distribute_proportionally(100u128, BTreeMap::from([(1, 999)]).iter().map(|(k, v)| (k, *v))),
+		BTreeMap::from([(&1, 100)])
 	);
 
 	// Distributes proportionally:
 	assert_eq!(
-		distribute_proportionally(1000u128, BTreeMap::from([(1, 33), (2, 50), (3, 17)])),
-		BTreeMap::from([(1, 330), (2, 500), (3, 170)])
+		distribute_proportionally(
+			1000u128,
+			BTreeMap::from([(1, 33), (2, 50), (3, 17)]).iter().map(|(k, v)| (k, *v))
+		),
+		BTreeMap::from([(&1, 330), (&2, 500), (&3, 170)])
 	);
 
 	// Handles rounding errors in a reasonable way:
 	assert_eq!(
-		distribute_proportionally(1000u128, BTreeMap::from([(1, 100), (2, 100), (3, 100)])),
-		BTreeMap::from([(1, 333), (2, 333), (3, 334)])
+		distribute_proportionally(
+			1000u128,
+			BTreeMap::from([(1, 100), (2, 100), (3, 100)]).iter().map(|(k, v)| (k, *v))
+		),
+		BTreeMap::from([(&1, 333), (&2, 333), (&3, 334)])
 	);
 
 	// Some extreme cases:
 	assert_eq!(
-		distribute_proportionally::<u32, _>(1000u128, BTreeMap::from([])),
+		distribute_proportionally::<u32, _, _>(1000u128, BTreeMap::from([]).iter()),
 		BTreeMap::from([])
 	);
 
 	assert_eq!(
-		distribute_proportionally::<u32, _>(0u128, BTreeMap::from([(1, 100)])),
-		BTreeMap::from([(1, 0)])
-	);
-
-	assert_eq!(
-		distribute_proportionally::<u32, _>(1000u128, BTreeMap::from([(1, 0), (2, 100)])),
-		BTreeMap::from([(1, 0), (2, 1000)])
-	);
-
-	assert_eq!(
-		distribute_proportionally::<u32, _>(u128::MAX, BTreeMap::from([(1, 100), (2, 100)])),
-		BTreeMap::from([(1, u128::MAX / 2), (2, u128::MAX / 2 + 1)])
-	);
-
-	assert_eq!(
-		distribute_proportionally::<u32, _>(
-			1000u128,
-			BTreeMap::from([(1, u128::MAX), (2, u128::MAX)])
+		distribute_proportionally::<u32, _, _>(
+			0u128,
+			BTreeMap::from([(1, 100)]).iter().map(|(k, v)| (k, *v))
 		),
-		BTreeMap::from([(1, 0), (2, 1000)])
+		BTreeMap::from([(&1, 0)])
+	);
+
+	assert_eq!(
+		distribute_proportionally::<u32, _, _>(
+			1000u128,
+			BTreeMap::from([(1, 0), (2, 100)]).iter().map(|(k, v)| (k, *v))
+		),
+		BTreeMap::from([(&1, 0), (&2, 1000)])
+	);
+
+	assert_eq!(
+		distribute_proportionally::<u32, _, _>(
+			u128::MAX,
+			BTreeMap::from([(1, 100), (2, 100)]).iter().map(|(k, v)| (k, *v))
+		),
+		BTreeMap::from([(&1, u128::MAX / 2), (&2, u128::MAX / 2 + 1)])
+	);
+
+	assert_eq!(
+		distribute_proportionally::<u32, _, _>(
+			1000u128,
+			BTreeMap::from([(1, u128::MAX), (2, u128::MAX)]).iter().map(|(k, v)| (k, *v))
+		),
+		BTreeMap::from([(&1, 0), (&2, 1000)])
 	);
 }
 

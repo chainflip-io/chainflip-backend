@@ -438,13 +438,15 @@ impl<T: Config> LoanAccount<T> {
 			.collect::<Result<Vec<_>, Error<T>>>()?;
 
 		for (collateral_asset, collateral_amount) in core::mem::take(&mut self.collateral) {
-			let distribution =
-				distribute_proportionally(collateral_amount, principal_amounts_usd.iter().cloned());
+			let distribution = distribute_proportionally(
+				collateral_amount,
+				principal_amounts_usd.iter().map(|(k, v)| (k, *v)),
+			);
 
 			for ((loan_id, loan_asset), collateral_amount) in distribution {
 				prepared_collateral.push(AssetCollateralForLoan {
-					loan_id,
-					loan_asset,
+					loan_id: *loan_id,
+					loan_asset: *loan_asset,
 					collateral_asset,
 					collateral_amount,
 				});
