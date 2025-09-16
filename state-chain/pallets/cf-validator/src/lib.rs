@@ -324,9 +324,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MinimumAuctionBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
-	/// Minimum possible fee that the operators can charge.
+	/// Minimum possible fee that the operators can charge, measured in Basis Points.
 	#[pallet::storage]
-	pub type MinimumOperatorFee<T: Config> = StorageValue<_, MinOperatorFee, ValueQuery>;
+	pub type MinimumOperatorFee<T: Config> =
+		StorageValue<_, u32, ValueQuery, ConstU32<DEFAULT_MIN_OPERATOR_FEE>>;
 
 	/// Store the list of accounts that are active bidders.
 	#[pallet::storage]
@@ -690,7 +691,7 @@ pub mod pallet {
 					);
 				},
 				PalletConfigUpdate::MinimumOperatorFee { minimum_operator_fee_in_bps } => {
-					MinimumOperatorFee::<T>::set(MinOperatorFee(minimum_operator_fee_in_bps));
+					MinimumOperatorFee::<T>::set(minimum_operator_fee_in_bps);
 				},
 			}
 
@@ -990,7 +991,7 @@ pub mod pallet {
 			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 
 			ensure!(
-				settings.fee_bps >= MinimumOperatorFee::<T>::get().0,
+				settings.fee_bps >= MinimumOperatorFee::<T>::get(),
 				Error::<T>::OperatorFeeTooLow
 			);
 			ensure!(settings.fee_bps <= MAX_OPERATOR_FEE, Error::<T>::OperatorFeeTooHigh);
@@ -1117,7 +1118,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin.clone())?;
 			ensure!(
-				settings.fee_bps >= MinimumOperatorFee::<T>::get().0,
+				settings.fee_bps >= MinimumOperatorFee::<T>::get(),
 				Error::<T>::OperatorFeeTooLow
 			);
 			ensure!(settings.fee_bps <= MAX_OPERATOR_FEE, Error::<T>::OperatorFeeTooHigh);
@@ -1916,7 +1917,7 @@ impl<T: Config> Pallet<T> {
 							&operator,
 							OperatorSettingsLookup::<T>::get(&operator)
 								.map(|settings| settings.fee_bps)
-								.unwrap_or(MinimumOperatorFee::<T>::get().0),
+								.unwrap_or(MinimumOperatorFee::<T>::get()),
 						)
 					})
 					.validators
