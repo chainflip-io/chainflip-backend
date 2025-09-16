@@ -785,7 +785,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 							config.fee_swap_max_oracle_slippage,
 						);
 
-						Pallet::<T>::deposit_event(Event::LendingFeeCollectionInitiated {
+						Pallet::<T>::deposit_event(Event::LendingPoolFeeCollectionInitiated {
 							asset: pool_asset,
 							swap_request_id,
 						});
@@ -801,8 +801,12 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 				// and it seems easiest to not write a special case (esp if we only support
 				// boost for BTC)
 				if *fee_amount > 0 {
-					let _swap_request_id =
+					let swap_request_id =
 						T::SwapRequestHandler::init_network_fee_swap_request(asset, *fee_amount);
+
+					Pallet::<T>::deposit_event(Event::LendingNetworkFeeCollectionInitiated {
+						swap_request_id,
+					});
 				}
 				*fee_amount = 0;
 			});

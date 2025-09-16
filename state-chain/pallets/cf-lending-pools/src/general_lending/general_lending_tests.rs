@@ -786,9 +786,12 @@ fn swap_collected_pool_fees() {
 	const INIT_FEE_ASSET_1: AssetAmount = 100;
 	const INIT_FEE_ASSET_2: AssetAmount = 1;
 
+	const NETWORK_FEE_AMOUNT: AssetAmount = 30;
+
 	let fee_swap_block = CONFIG.fee_swap_interval_blocks as u64;
 
-	const FEE_SWAP_ID: SwapRequestId = SwapRequestId(0);
+	const POOL_FEE_SWAP_ID: SwapRequestId = SwapRequestId(0);
+	const NETWORK_FEE_SWAP_ID: SwapRequestId = SwapRequestId(1);
 
 	new_test_ext()
 		.execute_with(|| {
@@ -800,6 +803,8 @@ fn swap_collected_pool_fees() {
 
 			LendingPools::accrue_fees(LOAN_ASSET, COLLATERAL_ASSET_1, INIT_FEE_ASSET_1);
 			LendingPools::accrue_fees(LOAN_ASSET, COLLATERAL_ASSET_2, INIT_FEE_ASSET_2);
+
+			LendingPools::take_network_fee(NETWORK_FEE_AMOUNT, COLLATERAL_ASSET_1, Percent::one());
 
 			assert_eq!(
 				PendingPoolFees::<Test>::get(LOAN_ASSET),
@@ -816,29 +821,50 @@ fn swap_collected_pool_fees() {
 			// Expecting a fee swap from asset 1 but not asset 2:
 			assert_eq!(
 				MockSwapRequestHandler::<Test>::get_swap_requests(),
-				BTreeMap::from([(
-					FEE_SWAP_ID,
-					MockSwapRequest {
-						input_asset: COLLATERAL_ASSET_1,
-						output_asset: LOAN_ASSET,
-						input_amount: INIT_FEE_ASSET_1,
-						remaining_input_amount: INIT_FEE_ASSET_1,
-						accumulated_output_amount: 0,
-						swap_type: SwapRequestType::Regular {
-							output_action: SwapOutputAction::CreditLendingPool {
-								swap_type: LendingSwapType::FeeSwap { pool_asset: LOAN_ASSET }
-							}
-						},
-						broker_fees: Default::default(),
-						origin: SwapOrigin::Internal
-					}
-				)])
+				BTreeMap::from([
+					(
+						POOL_FEE_SWAP_ID,
+						MockSwapRequest {
+							input_asset: COLLATERAL_ASSET_1,
+							output_asset: LOAN_ASSET,
+							input_amount: INIT_FEE_ASSET_1,
+							remaining_input_amount: INIT_FEE_ASSET_1,
+							accumulated_output_amount: 0,
+							swap_type: SwapRequestType::Regular {
+								output_action: SwapOutputAction::CreditLendingPool {
+									swap_type: LendingSwapType::FeeSwap { pool_asset: LOAN_ASSET }
+								}
+							},
+							broker_fees: Default::default(),
+							origin: SwapOrigin::Internal
+						}
+					),
+					(
+						NETWORK_FEE_SWAP_ID,
+						MockSwapRequest {
+							input_asset: COLLATERAL_ASSET_1,
+							output_asset: Asset::Flip,
+							input_amount: NETWORK_FEE_AMOUNT,
+							remaining_input_amount: NETWORK_FEE_AMOUNT,
+							accumulated_output_amount: 0,
+							swap_type: SwapRequestType::NetworkFee,
+							broker_fees: Default::default(),
+							origin: SwapOrigin::Internal
+						}
+					)
+				])
 			);
 
 			System::assert_has_event(RuntimeEvent::LendingPools(
-				Event::<Test>::LendingFeeCollectionInitiated {
+				Event::<Test>::LendingPoolFeeCollectionInitiated {
 					asset: LOAN_ASSET,
-					swap_request_id: FEE_SWAP_ID,
+					swap_request_id: POOL_FEE_SWAP_ID,
+				},
+			));
+
+			System::assert_has_event(RuntimeEvent::LendingPools(
+				Event::<Test>::LendingNetworkFeeCollectionInitiated {
+					swap_request_id: NETWORK_FEE_SWAP_ID,
 				},
 			));
 
@@ -852,7 +878,7 @@ fn swap_collected_pool_fees() {
 
 			// Simulate fee swap:
 			LendingPools::process_loan_swap_outcome(
-				FEE_SWAP_ID,
+				POOL_FEE_SWAP_ID,
 				LendingSwapType::FeeSwap { pool_asset: LOAN_ASSET },
 				FEE_SWAP_OUTPUT_1,
 			);
