@@ -98,7 +98,7 @@ derive_common_traits! {
 	#[derive(Copy, Sequence, PartialOrd, Ord, TypeInfo)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub enum ExternalPriceChain {
-		Solana,
+		Arbitrum,
 		Ethereum
 	}
 }
@@ -232,7 +232,7 @@ derive_common_traits! {
 	#[derive(TypeInfo, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct ExternalChainStates<T: OPTypes> {
-		pub solana: ExternalChainState<T>,
+		pub arbitrum: ExternalChainState<T>,
 		pub ethereum: ExternalChainState<T>,
 	}
 }
@@ -258,7 +258,7 @@ impl<T: OPTypes> Index<ExternalPriceChain> for ExternalChainStates<T> {
 
 	fn index(&self, index: ExternalPriceChain) -> &Self::Output {
 		match index {
-			ExternalPriceChain::Solana => &self.solana,
+			ExternalPriceChain::Arbitrum => &self.arbitrum,
 			ExternalPriceChain::Ethereum => &self.ethereum,
 		}
 	}
@@ -267,7 +267,7 @@ impl<T: OPTypes> Index<ExternalPriceChain> for ExternalChainStates<T> {
 impl<T: OPTypes> IndexMut<ExternalPriceChain> for ExternalChainStates<T> {
 	fn index_mut(&mut self, index: ExternalPriceChain) -> &mut Self::Output {
 		match index {
-			ExternalPriceChain::Solana => &mut self.solana,
+			ExternalPriceChain::Arbitrum => &mut self.arbitrum,
 			ExternalPriceChain::Ethereum => &mut self.ethereum,
 		}
 	}
@@ -302,7 +302,7 @@ derive_common_traits! {
 	#[derive(TypeInfo, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct OraclePriceSettings {
-		pub solana: ExternalChainSettings,
+		pub arbitrum: ExternalChainSettings,
 		pub ethereum: ExternalChainSettings,
 	}
 }
@@ -312,7 +312,7 @@ impl Index<ExternalPriceChain> for OraclePriceSettings {
 
 	fn index(&self, index: ExternalPriceChain) -> &Self::Output {
 		match index {
-			ExternalPriceChain::Solana => &self.solana,
+			ExternalPriceChain::Arbitrum => &self.arbitrum,
 			ExternalPriceChain::Ethereum => &self.ethereum,
 		}
 	}

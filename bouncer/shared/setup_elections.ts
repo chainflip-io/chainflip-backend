@@ -43,7 +43,7 @@ export async function setupElections(logger: Logger): Promise<void> {
     );
 
     // Set large timeouts for oracle elections so all oracle prices are seen as up to date
-    response.solana.upToDateTimeout = upToDateTimeout;
+    response.arbitrum.upToDateTimeout = upToDateTimeout;
     response.ethereum.upToDateTimeout = upToDateTimeout;
 
     // update election settings
