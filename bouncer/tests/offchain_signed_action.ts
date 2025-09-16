@@ -194,36 +194,31 @@ export async function testOffchainSignedAction(testContext: TestContext) {
       { name: 'collateralAsset', type: 'string' },
       { name: 'borrowAsset', type: 'string' },
     ],
-    Borrow: [
+    // Borrow: [
+    //   { name: 'Borrow', type: 'BorrowData' },
+    //   { name: 'metadata', type: 'Metadata' },
+    // ],
+    WithdrawData: [
+      { name: 'asset', type: 'string' },
+      { name: 'address', type: 'address' },
+    ],
+
+    BorrowAndWithdrawData: [
       { name: 'Borrow', type: 'BorrowData' },
+      { name: 'Withdraw', type: 'WithdrawData' },
+    ],
+    BorrowAndWithdraw: [
+      { name: 'BorrowAndWithdrawData', type: 'BorrowAndWithdrawData' },
       { name: 'metadata', type: 'Metadata' },
     ],
   };
 
-  const message = {
-    Borrow: {
-      amount,
-      collateralAsset: 'Bitcoin-BTC',
-      borrowAsset: 'Ethereum-USDC',
-    },
-    metadata: {
-      from: evmSigner,
-      nonce: 1,
-      expiryBlock: 10000,
-    },
-  };
-
+  // Borrow
   // const message = {
-  //   Batch: {
-  //     Borrow: {
-  //       amount,
-  //       collateralAsset: 'Bitcoin-BTC',
-  //       borrowAsset: 'Ethereum-USDC',
-  //     },
-  //     Withdraw: {
-  //       address: evmSigner,
-  //       asset: 'Ethereum-USDC',
-  //     },
+  //   Borrow: {
+  //     amount,
+  //     collateralAsset: 'Bitcoin-BTC',
+  //     borrowAsset: 'Ethereum-USDC',
   //   },
   //   metadata: {
   //     from: evmSigner,
@@ -231,6 +226,25 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   //     expiryBlock: 10000,
   //   },
   // };
+
+  const message = {
+    BorrowAndWithdrawData: {
+      Borrow: {
+        amount,
+        collateralAsset: 'Bitcoin-BTC',
+        borrowAsset: 'Ethereum-USDC',
+      },
+      Withdraw: {
+        asset: 'Ethereum-USDC',
+        address: evmSigner,
+      }
+    },
+    metadata: {
+      from: evmSigner,
+      nonce: 1,
+      expiryBlock: 10000,
+    },
+  };
 
   const evmSignatureEip712 = await ethWallet.signTypedData(domain, types, message);
   console.log('EIP712 Signature:', evmSignatureEip712);
@@ -243,6 +257,15 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   console.log('EIP-712 Domain Hash:', hashDomain);
   const messageHash = ethers.TypedDataEncoder.from(types).hash(message);
   console.log('EIP-712 Message Hash:', messageHash);
+
+  console.log('BorrowData hash:', ethers.TypedDataEncoder.hashStruct('BorrowData', types, message.BorrowAndWithdrawData.Borrow));
+  console.log('WithdrawData hash:', ethers.TypedDataEncoder.hashStruct('WithdrawData', types, message.BorrowAndWithdrawData.Withdraw));
+  console.log('BorrowAndWithdrawData hash:', ethers.TypedDataEncoder.hashStruct('BorrowAndWithdrawData', types, message.BorrowAndWithdrawData));
+  console.log('BorrowAndWithdraw hash:', ethers.TypedDataEncoder.hashStruct('BorrowAndWithdraw', types, message));
+  console.log('TypeScript EIP-712 hash:', hash);
+
+  // console.log('Borrow hash:', ethers.TypedDataEncoder.hashStruct('Borrow', types, message));
+
 
   await brokerMutex.runExclusive(brokerUri, async () => {
     const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
