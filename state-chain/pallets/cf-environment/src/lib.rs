@@ -1109,14 +1109,6 @@ pub struct BorrowAndWithdrawData {
 pub enum LendingApi {
 	Borrow(BorrowData),
 	Withdraw(WithdrawData),
-	// TODO: For the more generic code to work should it be  { borrow: BorrowData, withdraw:
-	// WithdrawData } or instead BorrowAndWithdraw(BorrowAndWithdrawData) where
-	// BorrowAndWithdrawData is a struct with both BorrowData and WithdrawData?
-	// I think it's pretty much the same (unnamed struct) so it basically depends on how well it
-	// plays with both the TS code (ethers signing) and this Rust logic's general code.
-	// If possible I think this unnamed is better just because we only want to declare separately
-	// the ones that are to be reused (basic once like BorrowData and WithdrawData).
-	// BorrowAndWithdraw { borrow: BorrowData, withdraw: WithdrawData },
 	BorrowAndWithdraw(BorrowAndWithdrawData),
 }
 
@@ -1184,7 +1176,6 @@ impl UserActionsApi {
 			UserActionsApi::Lending(LendingApi::Borrow(borrow_data)) => {
 				let borrow_data_type_hash =
 					Keccak256::hash(self.eip_712_action_data_str().join("").as_bytes());
-				// println!("Borrow type hash: {:?}", borrow_data_type_hash);
 				let borrow_data_tokens = vec![
 					Token::FixedBytes(borrow_data_type_hash.as_bytes().to_vec()),
 					Token::Uint(U256::from(borrow_data.amount)),
