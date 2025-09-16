@@ -15,10 +15,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::pass_through;
-use crate::{BlockT, CustomRpc, RpcAccountInfoV2, RpcResult};
+use crate::{BTreeMap, BlockT, CustomRpc, RpcAccountInfoV2, RpcResult};
 use cf_chains::{dot::PolkadotAccountId, sol::SolAddress};
 use cf_utilities::rpc::NumberOrHex;
 use jsonrpsee::proc_macros::rpc;
+use pallet_cf_validator::{AuctionOutcome, DelegationSnapshot};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_core::{bounded_vec::BoundedVec, ConstU32};
@@ -126,6 +127,16 @@ pub struct RpcEpochState {
 	pub rotation_phase: String,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AuctionResult {
+	auction_outcome: AuctionOutcome<state_chain_runtime::AccountId, NumberOrHex>,
+	operators_info: BTreeMap<
+		state_chain_runtime::AccountId,
+		DelegationSnapshot<state_chain_runtime::AccountId, NumberOrHex>,
+	>,
+	new_validators: Vec<state_chain_runtime::AccountId>,
+}
+
 #[rpc(server, client, namespace = "cf_monitoring")]
 pub trait MonitoringApi {
 	#[method(name = "authorities")]
@@ -195,6 +206,11 @@ pub trait MonitoringApi {
 		accounts: BoundedVec<state_chain_runtime::AccountId, ConstU32<10>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcAccountInfoV2>>;
+	#[method(name = "simulate_auction")]
+	fn cf_simulate_auction(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<AuctionResult>;
 }
 
 impl<C, B, BE> MonitoringApiServer for CustomRpc<C, B, BE>
@@ -265,5 +281,26 @@ where
 				estimated_redeemable_balance: account_info.estimated_redeemable_balance.into(),
 			})
 			.collect())
+	}
+
+	fn cf_simulate_auction(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<AuctionResult> {
+		let result = crate::flatten_into_error(
+			self.rpc_backend.with_runtime_api(at, |api, hash| api.cf_simulate_auction(hash)),
+		)?;
+		Ok(AuctionResult {
+			auction_outcome: AuctionOutcome {
+				winners: result.0.winners,
+				bond: result.0.bond.into(),
+			},
+			operators_info: result
+				.1
+				.into_iter()
+				.map(|(account, snapshot)| (account, snapshot.map_bids(|bid| bid.into())))
+				.collect(),
+			new_validators: result.2,
+		})
 	}
 }

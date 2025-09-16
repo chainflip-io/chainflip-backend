@@ -109,8 +109,8 @@ use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPoin
 use pallet_cf_swapping::{AffiliateDetails, BrokerPrivateBtcChannels, SwapLegInfo};
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use pallet_cf_validator::{
-	AssociationToOperator, DelegatedRewardsDistribution, DelegationAcceptance, DelegationAmount,
-	DelegationSlasher, DelegationSnapshot,
+	AssociationToOperator, AuctionOutcome, DelegatedRewardsDistribution, DelegationAcceptance,
+	DelegationAmount, DelegationSlasher, DelegationSnapshot,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use runtime_apis::{ChainAccounts, EvmCallDetails};
@@ -2957,6 +2957,18 @@ impl_runtime_apis! {
 			accounts.iter().map(|account_id| {
 				Self::cf_validator_info(account_id)
 			}).collect()
+		}
+		fn cf_simulate_auction() -> Result<(
+				AuctionOutcome<AccountId, AssetAmount>,
+				BTreeMap<AccountId, DelegationSnapshot<AccountId, AssetAmount>>,
+				Vec<AccountId>,
+			), DispatchErrorWithMessage>
+		{
+			let next_auction = Validator::resolve_auction_iteratively()
+				.map_err(|e| runtime_apis::DispatchErrorWithMessage::from(<pallet_cf_validator::Error<Runtime>>::from(e)))?;
+			let next_set: BTreeSet<AccountId> = next_auction.0.winners.iter().cloned().collect();
+			let current_set: BTreeSet<AccountId> = Validator::current_authorities().into_iter().collect();
+			Ok((next_auction.0, next_auction.1, next_set.difference(&current_set).cloned().collect()))
 		}
 	}
 
