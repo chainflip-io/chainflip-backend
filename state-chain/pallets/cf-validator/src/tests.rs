@@ -47,6 +47,8 @@ const GENESIS_EPOCH: u32 = 1;
 const OPERATOR_SETTINGS: OperatorSettings =
 	OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Allow };
 
+const MIN_OPERATOR_FEE: u32 = 200;
+
 fn vanity() -> VanityName {
 	b"OPERATORS".to_vec().try_into().unwrap()
 }

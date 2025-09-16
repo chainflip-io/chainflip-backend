@@ -12,11 +12,18 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
-/// The minimum delegation fee that can be charged, in basis points.
-pub const MIN_OPERATOR_FEE: u32 = 1500;
 pub const MAX_OPERATOR_FEE: u32 = 10_000;
 
 pub const MAX_VALIDATORS_PER_OPERATOR: usize = 20;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct MinOperatorFee(pub u32);
+impl Default for MinOperatorFee {
+	fn default() -> Self {
+		// default min operator fee is set to 200 bps
+		Self(200)
+	}
+}
 
 pub enum AssociationToOperator {
 	Validator,
