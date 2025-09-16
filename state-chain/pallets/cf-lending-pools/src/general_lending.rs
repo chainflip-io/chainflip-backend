@@ -757,12 +757,9 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 	// Swap fees in every asset every FEE_CHECK_INTERVAL blocks, but only if they exceed
 	// FEE_SWAP_THRESHOLD_USD in value
 	if current_block % config.fee_swap_interval_blocks.into() == 0u32.into() {
-		for pool_asset in GeneralLendingPools::<T>::iter_keys().collect::<Vec<_>>() {
-			GeneralLendingPools::<T>::mutate(pool_asset, |maybe_pool| {
-				let pool: &mut LendingPool<T> =
-					maybe_pool.as_mut().expect("Iterating over keys obtained a line above");
-
-				for (collateral_asset, fee_amount) in &mut pool.collected_fees {
+		for pool_asset in PendingPoolFees::<T>::iter_keys().collect::<Vec<_>>() {
+			PendingPoolFees::<T>::mutate(pool_asset, |pending_fees| {
+				for (collateral_asset, fee_amount) in pending_fees {
 					let Ok(fee_usd_value) = usd_value_of::<T>(*collateral_asset, *fee_amount)
 					else {
 						// Don't swap yet if we can't determine asset's price
@@ -785,7 +782,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 						});
 					}
 				}
-			})
+			});
 		}
 
 		// Additionally swapp all network fee contributions from fees:
@@ -1174,12 +1171,8 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 
 impl<T: Config> Pallet<T> {
 	fn accrue_fees(loan_asset: Asset, fee_asset: Asset, fee_amount: AssetAmount) {
-		GeneralLendingPools::<T>::mutate(loan_asset, |pool| {
-			if let Some(pool) = pool {
-				pool.collected_fees.entry(fee_asset).or_insert(0).saturating_accrue(fee_amount);
-			} else {
-				log_or_panic!("CHP pool must exist for {loan_asset}");
-			}
+		PendingPoolFees::<T>::mutate(loan_asset, |pending_fees| {
+			pending_fees.entry(fee_asset).or_insert(0).saturating_accrue(fee_amount);
 		});
 	}
 

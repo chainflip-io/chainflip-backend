@@ -407,6 +407,12 @@ pub mod pallet {
 	pub type PendingNetworkFees<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
+	/// Stores collected pool fees awaiting to be swapped into each pool's asset at regular
+	/// intervals
+	#[pallet::storage]
+	pub type PendingPoolFees<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, BTreeMap<Asset, AssetAmount>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {

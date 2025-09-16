@@ -13,18 +13,11 @@ pub struct LendingPool<T: Config> {
 	// Maps lenders to their shares in the pool; each lender is effectively owed their `share` *
 	// `total_amount` of the pool's asset.
 	pub lender_shares: BTreeMap<T::AccountId, Perquintill>,
-	// Fees collected by the pool but not yet swapped into the pool's asset
-	pub collected_fees: BTreeMap<Asset, AssetAmount>,
 }
 
 impl<T: Config> LendingPool<T> {
 	pub fn new() -> Self {
-		Self {
-			total_amount: 0,
-			available_amount: 0,
-			lender_shares: BTreeMap::new(),
-			collected_fees: BTreeMap::new(),
-		}
+		Self { total_amount: 0, available_amount: 0, lender_shares: BTreeMap::new() }
 	}
 
 	/// Adds funds increasing `lender`'s share in the pool.
