@@ -3,7 +3,7 @@ authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = "build.rs"
 edition = "2021"
 name = "chainflip-engine"
-version = "1.11.0"
+version = "1.12.0"
 license = "Apache-2.0"
 
 [lib]
@@ -59,7 +59,7 @@ curve25519-dalek = { workspace = true, default-features = true, features = [
 ] }
 ed25519-dalek = { workspace = true }
 pin-project = { workspace = true }
-rand = { workspace = true, default-features = true, features = ["alloc"]}
+rand = { workspace = true, default-features = true, features = ["alloc"] }
 reqwest = { workspace = true, features = ["rustls-tls"] }
 tracing = { workspace = true }
 x25519-dalek = { workspace = true, features = ["serde"] }
