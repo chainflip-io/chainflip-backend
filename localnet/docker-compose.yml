@@ -111,8 +111,8 @@ services:
     command:
       - --alice
       - --blocks-pruning=archive
-      # - --chain=/chainspecs/polkadot-fast-6s.raw.json
-      - --chain=/chainspecs/polkadot.raw.json
+      - --chain=/chainspecs/polkadot-3s-161.raw.json
+      # - --chain=/chainspecs/polkadot.raw.json
       - --force-authoring
       - --name=PolkaDocker1
       - --rpc-cors=all
@@ -148,8 +148,8 @@ services:
     command:
       - --bob
       - --blocks-pruning=archive
-      # - --chain=/chainspecs/polkadot-fast-6s.raw.json
-      - --chain=/chainspecs/polkadot.raw.json
+      - --chain=/chainspecs/polkadot-3s-161.raw.json
+      # - --chain=/chainspecs/polkadot.raw.json
       - --force-authoring
       - --name=PolkaDocker2
       - --rpc-cors=all
@@ -171,7 +171,7 @@ services:
   assethub:
     container_name: assethub
     platform: linux/amd64
-    image: docker.io/parity/polkadot-parachain:v1.18.7
+    image: docker.io/parity/polkadot-parachain:v1.19.2
     pull_policy: if_not_present
     stop_grace_period: 5s
     stop_signal: SIGINT
@@ -183,8 +183,8 @@ services:
       - --alice
       - --collator
       - --blocks-pruning=archive
-      # - --chain=/chainspecs/assethub-6s.json
-      - --chain=/chainspecs/assethub.raw.json
+      - --chain=/chainspecs/assethub-3s-161.json
+      # - --chain=/chainspecs/assethub.raw.json
       - --force-authoring
       - --name=AssetHubDocker
       - --rpc-cors=all
@@ -194,8 +194,8 @@ services:
       - --rpc-max-connections=100000
       - --node-key=808c85fab7ea8391de83fd0a16d069f9d5b43faa380886e439d76c4307d06039
       - --
-      # - --chain=/chainspecs/polkadot-fast-6s.raw.json
-      - --chain=/chainspecs/polkadot.raw.json
+      - --chain=/chainspecs/polkadot-3s-161.raw.json
+      # - --chain=/chainspecs/polkadot.raw.json
     ports:
       - 9955:9944
       - 40333:30333

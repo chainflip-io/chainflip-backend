@@ -510,7 +510,7 @@ export function observeEvents<T = any>(
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
   const startTime = Date.now();
-  logger.debug(`Observing event ${eventName}`);
+  logger.debug(`Observing event ${eventName} with historical blocks ${historicalCheckBlocks}`);
 
   const controller = abortable ? new AbortController() : undefined;
 

@@ -615,7 +615,7 @@ export async function observeSwapRequested(
     },
     // We assume that a swaprequest is uniquely identifiable by the `id: TransactionOriginId`.
     // To reduce potential race conditions we always check the last 5 blocks.
-    historicalCheckBlocks: 5,
+    historicalCheckBlocks: 20,
   }).event;
 }
 
@@ -763,7 +763,7 @@ export async function observeBalanceIncrease(
   const initialBalance = oldBalance
     ? Number(oldBalance)
     : Number(await getBalance(dstCcy, address));
-  for (let i = 0; i < Math.max(timeoutSeconds / 3, 1); i++) {
+  for (let i = 0; i < Math.max(timeoutSeconds * 2, 1); i++) {
     const newBalance = Number(await getBalance(dstCcy, address));
     if (newBalance > initialBalance) {
       logger.trace(

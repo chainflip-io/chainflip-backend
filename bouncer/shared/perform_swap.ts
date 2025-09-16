@@ -89,6 +89,7 @@ export async function requestNewSwap(
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
     },
+    historicalCheckBlocks: 20,
   }).event;
 
   await newSwap(
