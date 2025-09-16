@@ -24,10 +24,10 @@ mod general_lending_pool;
 use cf_chains::SwapOrigin;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
-	InterestRateConfiguration, LendingConfiguration, NetworkFeeContributions, RpcLendingPool,
-	RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+	InterestRateConfiguration, LendingConfiguration, NetworkFeeContributions, PoolConfiguration,
+	RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 };
-use general_lending::{LoanAccount, LtvThresholds, PoolConfiguration};
+use general_lending::{LoanAccount, LtvThresholds};
 pub use general_lending_pool::LendingPool;
 // Temporarily exposing this for a migration
 pub use core_lending_pool::{PendingLoan, ScaledAmount};
@@ -129,13 +129,7 @@ pub enum PalletConfigUpdate {
 define_wrapper_type!(CorePoolId, u32);
 
 // TODO: make this configurable
-const INTEREST_PAYMENT_INTERVAL: u32 = 10; // interest is charged every minute
 const MAX_PALLET_CONFIG_UPDATE: u32 = 10; // used to bound no. of updates per extrinsic
-
-// TODO: make these configurable per asset
-const SOFT_LIQUIDATION_MAX_ORACLE_SLIPPAGE: BasisPoints = 30;
-const HARD_LIQUIDATION_MAX_ORACLE_SLIPPAGE: BasisPoints = 500;
-const FEE_SWAP_MAX_ORACLE_SLIPPAGE: BasisPoints = 30;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BoostPool {
@@ -278,11 +272,11 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	default_pool_config: PoolConfiguration {
 		origination_fee: Permill::from_parts(100), // 1 bps
 		liquidation_fee: Permill::from_parts(500), // 5 bps
-		interest_rate_config: InterestRateConfiguration {
-			interest_at_zero_utilisation: Perbill::from_percent(2),
+		interest_rate_curve: InterestRateConfiguration {
+			interest_at_zero_utilisation: Permill::from_percent(2),
 			junction_utilisation: Permill::from_percent(90),
-			interest_at_junction_utilisation: Perbill::from_percent(8),
-			interest_at_max_utilisation: Perbill::from_percent(50),
+			interest_at_junction_utilisation: Permill::from_percent(8),
+			interest_at_max_utilisation: Permill::from_percent(50),
 		},
 	},
 	ltv_thresholds: LtvThresholds {
@@ -303,6 +297,9 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	fee_swap_interval_blocks: 10,
 	interest_payment_interval_blocks: 10,
 	fee_swap_threshold_usd: 20_000_000, // don't swap fewer than 20 USD
+	soft_liquidation_max_oracle_slippage: 50, // 0.5%
+	hard_liquidation_max_oracle_slippage: 500, // 5%
+	fee_swap_max_oracle_slippage: 50,   // 0.5%
 	pool_config_overrides: BTreeMap::new(),
 };
 

@@ -292,7 +292,7 @@ impl<T: Config> LoanAccount<T> {
 						.map(|pool| pool.get_utilisation())
 						.unwrap_or_default();
 
-					config.derive_interest_rate_per_charge_interval(loan.asset, utilisation)
+					config.derive_interest_rate_per_payment_interval(loan.asset, utilisation)
 				};
 
 				let mut remaining_interest_amount_in_loan_asset =
@@ -465,6 +465,8 @@ impl<T: Config> LoanAccount<T> {
 		collateral: Vec<AssetCollateralForLoan>,
 		is_hard: bool,
 	) {
+		let config = LendingConfig::<T>::get();
+
 		let mut liquidation_swaps = BTreeMap::new();
 
 		let mut swaps_for_event = BTreeMap::<LoanId, Vec<SwapRequestId>>::new();
@@ -476,9 +478,9 @@ impl<T: Config> LoanAccount<T> {
 			let to_asset = loan_asset;
 
 			let max_slippage = if is_hard {
-				HARD_LIQUIDATION_MAX_ORACLE_SLIPPAGE
+				config.hard_liquidation_max_oracle_slippage
 			} else {
-				SOFT_LIQUIDATION_MAX_ORACLE_SLIPPAGE
+				config.soft_liquidation_max_oracle_slippage
 			};
 
 			let swap_request_id = initiate_swap::<T>(
@@ -774,7 +776,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 							fees_to_swap,
 							pool_asset,
 							LendingSwapType::FeeSwap { pool_asset },
-							FEE_SWAP_MAX_ORACLE_SLIPPAGE,
+							config.fee_swap_max_oracle_slippage,
 						);
 
 						Pallet::<T>::deposit_event(Event::LendingFeeCollectionInitiated {
@@ -1278,8 +1280,10 @@ pub mod rpc {
 		pub asset: Asset,
 		pub total_amount: Amount,
 		pub available_amount: Amount,
-		pub utilisation_rate: BasisPoints,
-		pub interest_rate: BasisPoints,
+		pub utilisation_rate: Permill,
+		pub current_interest_rate: Permill,
+		#[serde(flatten)]
+		pub config: PoolConfiguration,
 	}
 
 	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -1394,14 +1398,15 @@ pub mod rpc {
 
 		let utilisation = pool.get_utilisation();
 
-		let interest_rate = config.derive_interest_rate_per_year(asset, utilisation);
+		let current_interest_rate = config.derive_interest_rate_per_year(asset, utilisation);
 
 		RpcLendingPool {
 			asset,
 			total_amount: pool.total_amount,
 			available_amount: pool.available_amount,
-			utilisation_rate: (utilisation.deconstruct() / 100) as u16,
-			interest_rate: (interest_rate.deconstruct() / 100_000) as u16,
+			utilisation_rate: utilisation,
+			current_interest_rate,
+			config: config.get_config_for_asset(asset).clone(),
 		}
 	}
 
@@ -1421,22 +1426,26 @@ pub mod rpc {
 
 /// Interest "curve" is defined as two linear segments. One is in effect from 0% to
 /// `junction_utilisation`, and the second is in effect from `junction_utilisation` to 100%.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
+)]
 pub struct InterestRateConfiguration {
-	pub interest_at_zero_utilisation: Perbill,
+	pub interest_at_zero_utilisation: Permill,
 	pub junction_utilisation: Permill,
-	pub interest_at_junction_utilisation: Perbill,
-	pub interest_at_max_utilisation: Perbill,
+	pub interest_at_junction_utilisation: Permill,
+	pub interest_at_max_utilisation: Permill,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
+)]
 pub struct PoolConfiguration {
 	pub origination_fee: Permill,
 	/// Portion of the amount of principal asset obtained via liquidation that's
 	/// paid as a fee (instead of reducing the loan's principal)
 	pub liquidation_fee: Permill,
 	/// Determines how interest rate is calculated based on the utilization rate.
-	pub interest_rate_config: InterestRateConfiguration,
+	pub interest_rate_curve: InterestRateConfiguration,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -1487,6 +1496,12 @@ pub struct LendingConfiguration {
 	/// Fees collected in some asset will be swapped into the pool's asset once their usd value
 	/// reaches this threshold
 	pub fee_swap_threshold_usd: AssetAmount,
+	/// Soft liquidation will be executed with this oracle slippage limit
+	pub soft_liquidation_max_oracle_slippage: BasisPoints,
+	/// Hard liquidation will be executed with this oracle slippage limit
+	pub hard_liquidation_max_oracle_slippage: BasisPoints,
+	/// All fee swaps from lending will be executed with this oracle slippage limit
+	pub fee_swap_max_oracle_slippage: BasisPoints,
 	/// If set for a pool/asset, this configuration will be used instead of the default
 	pub pool_config_overrides: BTreeMap<Asset, PoolConfiguration>,
 }
@@ -1496,13 +1511,13 @@ impl LendingConfiguration {
 		self.pool_config_overrides.get(&asset).unwrap_or(&self.default_pool_config)
 	}
 
-	pub fn derive_interest_rate_per_year(&self, asset: Asset, utilisation: Permill) -> Perbill {
+	pub fn derive_interest_rate_per_year(&self, asset: Asset, utilisation: Permill) -> Permill {
 		let InterestRateConfiguration {
 			interest_at_zero_utilisation,
 			junction_utilisation,
 			interest_at_junction_utilisation,
 			interest_at_max_utilisation,
-		} = self.get_config_for_asset(asset).interest_rate_config;
+		} = self.get_config_for_asset(asset).interest_rate_curve;
 
 		if utilisation < junction_utilisation {
 			interpolate_linear_segment(
@@ -1523,7 +1538,9 @@ impl LendingConfiguration {
 		}
 	}
 
-	fn derive_interest_rate_per_charge_interval(
+	/// Computes the interest rate to be paid each payment interval. Uses Perbill
+	/// as the value is likely to be a very small fraction due to the interval being short.
+	fn derive_interest_rate_per_payment_interval(
 		&self,
 		asset: Asset,
 		utilisation: Permill,
@@ -1533,7 +1550,8 @@ impl LendingConfiguration {
 		let interest_rate = self.derive_interest_rate_per_year(asset, utilisation);
 
 		Perbill::from_parts(
-			interest_rate.deconstruct() / (BLOCKS_IN_YEAR / self.interest_payment_interval_blocks),
+			(interest_rate.deconstruct() * (Perbill::ACCURACY / Permill::ACCURACY)) /
+				(BLOCKS_IN_YEAR / self.interest_payment_interval_blocks),
 		)
 	}
 
@@ -1550,28 +1568,28 @@ impl LendingConfiguration {
 /// and `i1` at utilisation `u0` and `u1`, respectively. The code assumes u0 <= u <= u1, i1 >= i0
 /// and u0 != u1.
 fn interpolate_linear_segment(
-	i0: Perbill,
-	i1: Perbill,
+	i0: Permill,
+	i1: Permill,
 	u0: Permill,
 	u1: Permill,
 	u: Permill,
-) -> Perbill {
+) -> Permill {
 	if u0 > u || u > u1 || i0 > i1 || u0 == u1 {
 		log_or_panic!("Invalid interest curve parameters");
-		return Perbill::zero();
+		return Permill::zero();
 	}
 
-	// Converting everything to u64 (as parts per billion) to get access to more methods
+	// Converting everything to u64 to get access to more operations
 	let i0 = i0.deconstruct() as u64;
 	let i1 = i1.deconstruct() as u64;
-	let u0 = u0.deconstruct() as u64 * (Perbill::ACCURACY / Permill::ACCURACY) as u64;
-	let u1 = u1.deconstruct() as u64 * (Perbill::ACCURACY / Permill::ACCURACY) as u64;
-	let u = u.deconstruct() as u64 * (Perbill::ACCURACY / Permill::ACCURACY) as u64;
+	let u0 = u0.deconstruct() as u64;
+	let u1 = u1.deconstruct() as u64;
+	let u = u.deconstruct() as u64;
 
 	// Slope coefficient:
-	let slope = ((i1 - i0) * Perbill::ACCURACY as u64) / (u1 - u0);
+	let slope = ((i1 - i0) * Permill::ACCURACY as u64) / (u1 - u0);
 
-	let result = i0 + slope * (u - u0) / Perbill::ACCURACY as u64;
+	let result = i0 + slope * (u - u0) / Permill::ACCURACY as u64;
 
-	Perbill::from_parts(result as u32)
+	u32::try_from(result).map(Permill::from_parts).unwrap_or(Permill::one())
 }

@@ -132,7 +132,7 @@ fn basic_general_lending() {
 	let interest_charge_in_eth_1 = {
 		// 25% utilisation is expected:
 		let interest_charge_in_btc = CONFIG
-			.derive_interest_rate_per_charge_interval(LOAN_ASSET, Permill::from_percent(50)) *
+			.derive_interest_rate_per_payment_interval(LOAN_ASSET, Permill::from_percent(50)) *
 			PRINCIPAL;
 		interest_charge_in_btc * SWAP_RATE
 	};
@@ -140,7 +140,7 @@ fn basic_general_lending() {
 	let interest_charge_in_eth_2 = {
 		// 25% utilisation is expected:
 		let interest_charge_in_btc = CONFIG
-			.derive_interest_rate_per_charge_interval(LOAN_ASSET, Permill::from_percent(25)) *
+			.derive_interest_rate_per_payment_interval(LOAN_ASSET, Permill::from_percent(25)) *
 			PRINCIPAL / 2;
 		interest_charge_in_btc * SWAP_RATE
 	};
@@ -591,7 +591,7 @@ fn interest_special_cases() {
 
 	let interest_charge = {
 		let interest_charge_in_loan_asset = CONFIG
-			.derive_interest_rate_per_charge_interval(LOAN_ASSET, Permill::from_percent(50)) *
+			.derive_interest_rate_per_payment_interval(LOAN_ASSET, Permill::from_percent(50)) *
 			PRINCIPAL;
 		interest_charge_in_loan_asset * SWAP_RATE
 	};
@@ -1988,7 +1988,9 @@ mod rpcs {
 				// Trigger liquidation of one of the accounts (BORROWER_2):
 				set_asset_price_in_usd(LOAN_ASSET_2, NEW_SWAP_RATE);
 			})
-			.then_process_blocks_until_block(INIT_BLOCK + INTEREST_PAYMENT_INTERVAL as u64)
+			.then_process_blocks_until_block(
+				INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
+			)
 			.then_execute_with(|_| {
 				// Liquidation swap's execution price will be slightly worse than the oracle price:
 				const ACCUMULATED_OUTPUT_AMOUNT: AssetAmount =
@@ -2072,8 +2074,9 @@ mod rpcs {
 						asset: LOAN_ASSET,
 						total_amount: INIT_POOL_AMOUNT,
 						available_amount: INIT_POOL_AMOUNT - PRINCIPAL,
-						utilisation_rate: 5000, // 50%
-						interest_rate: 533      // 5.33%
+						utilisation_rate: Permill::from_percent(50),
+						current_interest_rate: Permill::from_parts(53_333), // 5.33%
+						config: CONFIG.get_config_for_asset(LOAN_ASSET).clone(),
 					}]
 				)
 			});
@@ -2085,37 +2088,37 @@ fn linear_segment_interpolation() {
 	// Linear segment starts at 0% and ends at 90%
 	assert_eq!(
 		interpolate_linear_segment(
-			Perbill::from_percent(2),
-			Perbill::from_percent(8),
+			Permill::from_percent(2),
+			Permill::from_percent(8),
 			Permill::from_percent(0),
 			Permill::from_percent(90),
 			Permill::from_percent(45),
 		),
-		Perbill::from_parts(49_999_999) // ~5%
+		Permill::from_parts(49_999) // ~5%
 	);
 
 	// Linear segment starts at 90% and ends at 100%
 	assert_eq!(
 		interpolate_linear_segment(
-			Perbill::from_percent(8),
-			Perbill::from_percent(50),
+			Permill::from_percent(8),
+			Permill::from_percent(50),
 			Permill::from_percent(90),
 			Permill::from_percent(100),
 			Permill::from_percent(95),
 		),
-		Perbill::from_percent(29)
+		Permill::from_percent(29)
 	);
 
 	// Linear segment from 0% to 100% and zero slope
 	assert_eq!(
 		interpolate_linear_segment(
-			Perbill::from_percent(5),
-			Perbill::from_percent(5),
+			Permill::from_percent(5),
+			Permill::from_percent(5),
 			Permill::from_percent(0),
 			Permill::from_percent(100),
 			Permill::from_percent(75),
 		),
-		Perbill::from_percent(5)
+		Permill::from_percent(5)
 	);
 }
 
@@ -2126,26 +2129,26 @@ fn interest_rate_curve() {
 
 	assert_eq!(
 		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(0)),
-		Perbill::from_percent(2)
+		Permill::from_percent(2)
 	);
 
 	assert_eq!(
 		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(45)),
-		Perbill::from_parts(49_999_999) // (2% + 8%) / 2 = 5%
+		Permill::from_parts(49_999) // (2% + 8%) / 2 = 5%
 	);
 
 	assert_eq!(
 		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(90)),
-		Perbill::from_percent(8)
+		Permill::from_percent(8)
 	);
 
 	assert_eq!(
 		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(95)),
-		Perbill::from_percent(29) // (8% + 50%) / 2 = 29%
+		Permill::from_percent(29) // (8% + 50%) / 2 = 29%
 	);
 
 	assert_eq!(
 		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(100)),
-		Perbill::from_percent(50)
+		Permill::from_percent(50)
 	);
 }

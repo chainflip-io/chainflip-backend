@@ -1568,7 +1568,8 @@ where
 						total_amount: pool.total_amount.into(),
 						available_amount: pool.available_amount.into(),
 						utilisation_rate: pool.utilisation_rate,
-						interest_rate: pool.interest_rate,
+						current_interest_rate: pool.current_interest_rate,
+						config: pool.config,
 					})
 					.collect()
 			})

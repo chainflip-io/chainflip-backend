@@ -1066,14 +1066,26 @@ fn api_wait_result_serialization() {
 	insta::assert_json_snapshot!(response);
 }
 
+use pallet_cf_lending_pools::{InterestRateConfiguration, PoolConfiguration};
+
 #[test]
 fn lending_pools_serialization() {
 	let pool = RpcLendingPool::<U256> {
 		asset: Asset::Usdc,
 		total_amount: 2_000u128.into(),
 		available_amount: 1_500u128.into(),
-		utilisation_rate: 9_000,
-		interest_rate: 800,
+		utilisation_rate: Permill::from_percent(90),
+		current_interest_rate: Permill::from_percent(8),
+		config: PoolConfiguration {
+			origination_fee: Permill::from_parts(100),
+			liquidation_fee: Permill::from_parts(500),
+			interest_rate_curve: InterestRateConfiguration {
+				interest_at_zero_utilisation: Permill::from_percent(2),
+				junction_utilisation: Permill::from_percent(90),
+				interest_at_junction_utilisation: Permill::from_percent(8),
+				interest_at_max_utilisation: Permill::from_percent(50),
+			},
+		},
 	};
 
 	insta::assert_json_snapshot!(pool);
