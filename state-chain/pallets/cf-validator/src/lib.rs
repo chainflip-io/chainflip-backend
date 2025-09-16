@@ -1916,7 +1916,7 @@ impl<T: Config> Pallet<T> {
 							&operator,
 							OperatorSettingsLookup::<T>::get(&operator)
 								.map(|settings| settings.fee_bps)
-								.unwrap_or(MIN_OPERATOR_FEE),
+								.unwrap_or(MinimumOperatorFee::<T>::get().0),
 						)
 					})
 					.validators
