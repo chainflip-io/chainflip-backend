@@ -472,6 +472,13 @@ pub mod pallet {
 			extra_principal_amount: AssetAmount,
 			origination_fee: AssetAmount,
 		},
+		InterestTaken {
+			loan_id: LoanId,
+			/// NOTE: typically the interest is charged in the primary collateral asset,
+			/// but we might fall back to charging from other assets if the primary
+			/// runs out.
+			amounts: BTreeMap<Asset, AssetAmount>,
+		},
 		LiquidationInitiated {
 			borrower_id: T::AccountId,
 			swaps: BTreeMap<LoanId, Vec<SwapRequestId>>,
@@ -480,8 +487,8 @@ pub mod pallet {
 		LoanRepaid {
 			loan_id: LoanId,
 			amount: AssetAmount,
-			// NOTE: liquidation fees are zero if repayment is triggered by the borrower
-			// rather than via a non-voluntary liquidation
+			/// NOTE: liquidation fees are zero if repayment is triggered by the borrower
+			/// rather than via a non-voluntary liquidation
 			liquidation_fees: BTreeMap<Asset, AssetAmount>,
 		},
 		LoanSettled {

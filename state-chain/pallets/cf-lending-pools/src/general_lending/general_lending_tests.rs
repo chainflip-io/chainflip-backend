@@ -234,6 +234,11 @@ fn basic_general_lending() {
 					take_network_fee(origination_fee + interest_charge_in_eth_1).1
 				)])
 			);
+
+			System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
+				loan_id: LOAN_ID,
+				amounts: BTreeMap::from([(COLLATERAL_ASSET, interest_charge_in_eth_1)]),
+			}));
 		})
 		// === REPAYING HALF OF THE LOAN ===
 		.then_execute_with(|_| {
@@ -680,6 +685,14 @@ fn interest_special_cases() {
 					)
 				]),
 			);
+
+			System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
+				loan_id: LOAN_ID,
+				amounts: BTreeMap::from([
+					(PRIMARY_COLLATERAL_ASSET, INIT_COLLATERAL_AMOUNT_PRIMARY),
+					(SECONDARY_COLLATERAL_ASSET, secondary_interest_charge),
+				]),
+			}));
 		})
 		.then_execute_at_block(
 			INIT_BLOCK + 2 * CONFIG.interest_payment_interval_blocks as u64,

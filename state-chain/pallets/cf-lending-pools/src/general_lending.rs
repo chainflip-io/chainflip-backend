@@ -282,7 +282,7 @@ impl<T: Config> LoanAccount<T> {
 			return Ok(())
 		}
 
-		for loan in self.loans.values_mut() {
+		for (loan_id, loan) in self.loans.iter_mut() {
 			if frame_system::Pallet::<T>::block_number().saturating_sub(loan.created_at_block) %
 				config.interest_payment_interval_blocks.into() ==
 				0u32.into()
@@ -309,6 +309,8 @@ impl<T: Config> LoanAccount<T> {
 							.filter(|asset| *asset != self.primary_collateral_asset),
 					)
 					.collect::<Vec<_>>(); // collecting to make borrow checker happy
+
+				let mut interest_amounts = BTreeMap::new();
 
 				for collateral_asset in collateral_asset_order {
 					// Determine how much should be charged from the given collateral asset
@@ -347,6 +349,8 @@ impl<T: Config> LoanAccount<T> {
 							.or_default()
 							.saturating_accrue(amount_charged);
 
+						interest_amounts.insert(collateral_asset, amount_charged);
+
 						// TODO: emit network fee in any event?
 						let remaining_fees = Pallet::<T>::take_network_fee(
 							amount_charged,
@@ -361,6 +365,11 @@ impl<T: Config> LoanAccount<T> {
 						}
 					}
 				}
+
+				Pallet::<T>::deposit_event(Event::InterestTaken {
+					loan_id: *loan_id,
+					amounts: interest_amounts,
+				});
 			}
 		}
 
