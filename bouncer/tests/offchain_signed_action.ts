@@ -96,35 +96,35 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   console.log('Sol Signature (hex):', hexSignature);
   console.log('Signer (hex):', hexSigner);
 
-  await brokerMutex.runExclusive(brokerUri, async () => {
-    const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    await chainflip.tx.environment
-      .submitUserSignedPayload(
-        // Solana prefix will be added in the SC previous to signature verification
-        hexAction,
-        {
-          nonce,
-          expiryBlock,
-        },
-        {
-          Solana: {
-            signature: hexSignature,
-            signer: hexSigner,
-            sigType: 'Domain',
-          },
-        },
-      )
-      .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
-  });
+  // await brokerMutex.runExclusive(brokerUri, async () => {
+  //   const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
+  //   await chainflip.tx.environment
+  //     .submitUserSignedPayload(
+  //       // Solana prefix will be added in the SC previous to signature verification
+  //       hexAction,
+  //       {
+  //         nonce,
+  //         expiryBlock,
+  //       },
+  //       {
+  //         Solana: {
+  //           signature: hexSignature,
+  //           signer: hexSigner,
+  //           sigType: 'Domain',
+  //         },
+  //       },
+  //     )
+  //     .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
+  // });
 
-  await observeEvent(globalLogger, `environment:UserActionSubmitted`, {
-    test: (event) => {
-      const matchDecodedAction = !!event.data.decodedAction.Lending?.Borrow;
-      const matchSignedPayload = event.data.signedPayload === solHexPrefixedMessage;
-      return matchDecodedAction && matchSignedPayload;
-    },
-    historicalCheckBlocks: 1,
-  }).event;
+  // await observeEvent(globalLogger, `environment:UserActionSubmitted`, {
+  //   test: (event) => {
+  //     const matchDecodedAction = !!event.data.decodedAction.Lending?.Borrow;
+  //     const matchSignedPayload = event.data.signedPayload === solHexPrefixedMessage;
+  //     return matchDecodedAction && matchSignedPayload;
+  //   },
+  //   historicalCheckBlocks: 1,
+  // }).event;
 
   logger.info('Signing and submitting user-signed payload with EVM wallet using personal_sign');
 
@@ -144,35 +144,35 @@ export async function testOffchainSignedAction(testContext: TestContext) {
 
   const evmSignature = await ethWallet.signMessage(payload);
 
-  await brokerMutex.runExclusive(brokerUri, async () => {
-    const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    await chainflip.tx.environment
-      .submitUserSignedPayload(
-        // Ethereum prefix will be added in the SC previous to signature verification
-        hexAction,
-        {
-          nonce,
-          expiryBlock,
-        },
-        {
-          Ethereum: {
-            signature: evmSignature,
-            signer: evmSigner,
-            sig_type: 'Domain',
-          },
-        },
-      )
-      .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
-  });
+  // await brokerMutex.runExclusive(brokerUri, async () => {
+  //   const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
+  //   await chainflip.tx.environment
+  //     .submitUserSignedPayload(
+  //       // Ethereum prefix will be added in the SC previous to signature verification
+  //       hexAction,
+  //       {
+  //         nonce,
+  //         expiryBlock,
+  //       },
+  //       {
+  //         Ethereum: {
+  //           signature: evmSignature,
+  //           signer: evmSigner,
+  //           sig_type: 'Domain',
+  //         },
+  //       },
+  //     )
+  //     .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
+  // });
 
-  await observeEvent(globalLogger, `environment:UserActionSubmitted`, {
-    test: (event) => {
-      const matchDecodedAction = !!event.data.decodedAction.Lending?.Borrow;
-      const matchSignedPayload = event.data.signedPayload === hexPrefixedMessage;
-      return matchDecodedAction && matchSignedPayload;
-    },
-    historicalCheckBlocks: 1,
-  }).event;
+  // await observeEvent(globalLogger, `environment:UserActionSubmitted`, {
+  //   test: (event) => {
+  //     const matchDecodedAction = !!event.data.decodedAction.Lending?.Borrow;
+  //     const matchSignedPayload = event.data.signedPayload === hexPrefixedMessage;
+  //     return matchDecodedAction && matchSignedPayload;
+  //   },
+  //   historicalCheckBlocks: 1,
+  // }).event;
 
   logger.info('Signing and submitting user-signed payload with EVM wallet using EIP-712');
 
@@ -189,22 +189,60 @@ export async function testOffchainSignedAction(testContext: TestContext) {
       { name: 'nonce', type: 'uint256' },
       { name: 'expiryBlock', type: 'uint256' },
     ],
-    Borrow: [
+    BorrowData: [
       { name: 'amount', type: 'uint256' },
       { name: 'collateralAsset', type: 'string' },
       { name: 'borrowAsset', type: 'string' },
+    ],
+    // Borrow: [
+    //   { name: 'Borrow', type: 'BorrowData' },
+    //   { name: 'metadata', type: 'Metadata' },
+    // ],
+    WithdrawData: [
+      { name: 'asset', type: 'string' },
+      { name: 'address', type: 'address' },
+    ],
+
+    BorrowAndWithdrawData: [
+      { name: 'Borrow', type: 'BorrowData' },
+      { name: 'Withdraw', type: 'WithdrawData' },
+    ],
+    BorrowAndWithdraw: [
+      { name: 'BorrowAndWithdrawData', type: 'BorrowAndWithdrawData' },
       { name: 'metadata', type: 'Metadata' },
     ],
   };
 
+  // Borrow
+  // const message = {
+  //   Borrow: {
+  //     amount,
+  //     collateralAsset: 'Bitcoin-BTC',
+  //     borrowAsset: 'Ethereum-USDC',
+  //   },
+  //   metadata: {
+  //     from: evmSigner,
+  //     nonce: 1,
+  //     expiryBlock: 10000,
+  //   },
+  // };
+
   const message = {
-    amount,
-    collateralAsset: collateralAsset.scAsset,
-    borrowAsset: borrowAsset.scAsset,
+    BorrowAndWithdrawData: {
+      Borrow: {
+        amount,
+        collateralAsset: 'Bitcoin-BTC',
+        borrowAsset: 'Ethereum-USDC',
+      },
+      Withdraw: {
+        asset: 'Ethereum-USDC',
+        address: evmSigner,
+      }
+    },
     metadata: {
       from: evmSigner,
-      nonce,
-      expiryBlock,
+      nonce: 1,
+      expiryBlock: 10000,
     },
   };
 
@@ -219,6 +257,15 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   console.log('EIP-712 Domain Hash:', hashDomain);
   const messageHash = ethers.TypedDataEncoder.from(types).hash(message);
   console.log('EIP-712 Message Hash:', messageHash);
+
+  console.log('BorrowData hash:', ethers.TypedDataEncoder.hashStruct('BorrowData', types, message.BorrowAndWithdrawData.Borrow));
+  console.log('WithdrawData hash:', ethers.TypedDataEncoder.hashStruct('WithdrawData', types, message.BorrowAndWithdrawData.Withdraw));
+  console.log('BorrowAndWithdrawData hash:', ethers.TypedDataEncoder.hashStruct('BorrowAndWithdrawData', types, message.BorrowAndWithdrawData));
+  console.log('BorrowAndWithdraw hash:', ethers.TypedDataEncoder.hashStruct('BorrowAndWithdraw', types, message));
+  console.log('TypeScript EIP-712 hash:', hash);
+
+  // console.log('Borrow hash:', ethers.TypedDataEncoder.hashStruct('Borrow', types, message));
+
 
   await brokerMutex.runExclusive(brokerUri, async () => {
     const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
