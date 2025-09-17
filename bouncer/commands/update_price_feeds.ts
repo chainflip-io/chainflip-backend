@@ -22,7 +22,7 @@ export async function updatePriceFeeds(asset: string, price?: string) {
     }
     await Promise.all([
       updatePriceFeed(globalLogger, 'Ethereum', asset as Asset, price),
-      updatePriceFeed(globalLogger, 'Solana', asset as Asset, price),
+      updatePriceFeed(globalLogger, 'Arbitrum', asset as Asset, price),
     ]);
   }
 }
