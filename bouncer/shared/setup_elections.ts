@@ -39,12 +39,20 @@ export async function setupElections(logger: Logger): Promise<void> {
     const upToDateTimeout = 86400;
 
     const response = JSON.parse(
-      (await chainflip.query.genericElections.electoralUnsynchronisedSettings()) as any,
+      (await chainflip.query.genericElections.electoralUnsynchronisedSettings()).toString(),
     );
 
     // Set large timeouts for oracle elections so all oracle prices are seen as up to date
     response.arbitrum.upToDateTimeout = upToDateTimeout;
     response.ethereum.upToDateTimeout = upToDateTimeout;
+
+    // Note: I couldn't find a way to decode the `response` properly. What happens is that these two BTreeMaps
+    // are decoded into dictionaries (`{"UsdcUsd": 90000, ...}`), but they should actually be decoded into
+    // a list of single value dictionaries (?!), as I manually set them here:
+    response.arbitrum.upToDateTimeoutOverrides = [{ UsdcUsd: 90000 }, { UsdtUsd: 90000 }];
+    response.arbitrum.maybeStaleTimeoutOverrides = [{ UsdcUsd: 300 }, { UsdtUsd: 300 }];
+    response.ethereum.upToDateTimeoutOverrides = [{ UsdcUsd: 90000 }, { UsdtUsd: 90000 }];
+    response.ethereum.maybeStaleTimeoutOverrides = [{ UsdcUsd: 300 }, { UsdtUsd: 300 }];
 
     // update election settings
     await submitGovernanceExtrinsic((api) =>
