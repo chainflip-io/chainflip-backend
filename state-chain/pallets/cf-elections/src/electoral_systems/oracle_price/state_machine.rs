@@ -176,16 +176,17 @@ impl<T: OPTypes> ExternalChainState<T> {
 	pub fn update_price_state(
 		&mut self,
 		current_time: &UnixTime,
-		settings: &ExternalChainSettings,
+		settings: &ExternalChainSettings<T>,
 	) {
 		use PriceStatus::*;
-		self.price.values_mut().for_each(|asset_state| {
+		self.price.iter_mut().for_each(|(asset, asset_state)| {
 			// update price deviation setting
 			asset_state.minimal_price_deviation = settings.minimal_price_deviation;
 
 			// update price status
-			let up_to_date_until = asset_state.timestamp.median + settings.up_to_date_timeout;
-			let maybe_stale_until = up_to_date_until + settings.maybe_stale_timeout;
+			let up_to_date_until =
+				asset_state.timestamp.median + settings.get_up_to_date_timeout(asset);
+			let maybe_stale_until = up_to_date_until + settings.get_maybe_stale_timeout(asset);
 
 			asset_state.price_status = if *current_time <= up_to_date_until {
 				UpToDate
@@ -301,14 +302,14 @@ derive_common_traits! {
 derive_common_traits! {
 	#[derive(TypeInfo, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
-	pub struct OraclePriceSettings {
-		pub arbitrum: ExternalChainSettings,
-		pub ethereum: ExternalChainSettings,
+	pub struct OraclePriceSettings<T: OPTypes> {
+		pub arbitrum: ExternalChainSettings<T>,
+		pub ethereum: ExternalChainSettings<T>,
 	}
 }
 
-impl Index<ExternalPriceChain> for OraclePriceSettings {
-	type Output = ExternalChainSettings;
+impl<T: OPTypes> Index<ExternalPriceChain> for OraclePriceSettings<T> {
+	type Output = ExternalChainSettings<T>;
 
 	fn index(&self, index: ExternalPriceChain) -> &Self::Output {
 		match index {
@@ -319,12 +320,27 @@ impl Index<ExternalPriceChain> for OraclePriceSettings {
 }
 
 derive_common_traits! {
-	#[derive(TypeInfo, Default)]
+	#[derive(TypeInfo)]
+	#[derive_where(Default;)]
 	#[cfg_attr(test, derive(Arbitrary))]
-	pub struct ExternalChainSettings {
+	pub struct ExternalChainSettings<T: OPTypes> {
 		pub up_to_date_timeout: Seconds,
 		pub maybe_stale_timeout: Seconds,
 		pub minimal_price_deviation: BasisPoints,
+		pub up_to_date_timeout_overrides: BTreeMap<T::AssetPair, Seconds>,
+		pub maybe_stale_timeout_overrides: BTreeMap<T::AssetPair, Seconds>,
+	}
+}
+
+impl<T: OPTypes> ExternalChainSettings<T> {
+	pub fn get_up_to_date_timeout(&self, asset: &T::AssetPair) -> Seconds {
+		*self.up_to_date_timeout_overrides.get(asset).unwrap_or(&self.up_to_date_timeout)
+	}
+	pub fn get_maybe_stale_timeout(&self, asset: &T::AssetPair) -> Seconds {
+		*self
+			.maybe_stale_timeout_overrides
+			.get(asset)
+			.unwrap_or(&self.maybe_stale_timeout)
 	}
 }
 
@@ -360,7 +376,7 @@ impl<T: OPTypes> AbstractApi for OraclePriceTracker<T> {
 
 impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 	type Context = ();
-	type Settings = OraclePriceSettings;
+	type Settings = OraclePriceSettings<T>;
 	type Output = Result<(), &'static str>;
 	type State = OraclePriceTracker<T>;
 
@@ -516,7 +532,7 @@ pub mod tests {
 		OraclePriceTracker::<MockTypes>::test(
 			file!(),
 			any::<OraclePriceTracker<MockTypes>>(),
-			any::<OraclePriceSettings>(),
+			any::<OraclePriceSettings<MockTypes>>(),
 			|_| any::<BTreeMap<ChainlinkAssetpair, AssetResponse<MockTypes>>>().boxed(),
 			|_| Just(()).boxed(),
 			|state| {

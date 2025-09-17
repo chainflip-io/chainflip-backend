@@ -19,7 +19,7 @@ use cf_runtime_utilities::log_or_panic;
 use cf_utilities::macros::*;
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::{Get, RuntimeDebug, H160};
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use pallet_cf_elections::{
 	electoral_system::ElectoralReadAccess,
@@ -267,6 +267,23 @@ pub type GenericElectoralSystemRunner = CompositeRunner<
 pub fn initial_state(
 	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings,
 ) -> InitialStateOf<Runtime, ()> {
+	// The prices for usdc and usdt are considered up-to-date
+	// if they have been updated at least once every 25 hours.
+	let up_to_date_timeout_overrides: BTreeMap<_, _> = [
+		(ChainlinkAssetpair::UsdcUsd, Seconds(60 * 60 * 25)),
+		(ChainlinkAssetpair::UsdtUsd, Seconds(60 * 60 * 25)),
+	]
+	.into();
+
+	// There is an additionaly 5 minute window during which we
+	// ask the engines to submit any latest price information that
+	// they have. Once this is over, the price is marked as stale.
+	let maybe_stale_timeout_overrides: BTreeMap<_, _> = [
+		(ChainlinkAssetpair::UsdcUsd, Seconds(60 * 5)),
+		(ChainlinkAssetpair::UsdtUsd, Seconds(60 * 5)),
+	]
+	.into();
+
 	InitialState {
 		unsynchronised_state: (OraclePriceTracker {
 			chain_states: ExternalChainStates {
@@ -283,11 +300,15 @@ pub fn initial_state(
 				up_to_date_timeout: Seconds(60),
 				maybe_stale_timeout: Seconds(30),
 				minimal_price_deviation: BasisPoints(10),
+				up_to_date_timeout_overrides: up_to_date_timeout_overrides.clone(),
+				maybe_stale_timeout_overrides: maybe_stale_timeout_overrides.clone(),
 			},
 			ethereum: ExternalChainSettings {
 				up_to_date_timeout: Seconds(60),
 				maybe_stale_timeout: Seconds(30),
 				minimal_price_deviation: BasisPoints(10),
+				up_to_date_timeout_overrides: up_to_date_timeout_overrides.clone(),
+				maybe_stale_timeout_overrides: maybe_stale_timeout_overrides.clone(),
 			},
 		},),
 		settings: (chainlink_oracle_price_settings,),

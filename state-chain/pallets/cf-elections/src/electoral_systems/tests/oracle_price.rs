@@ -57,18 +57,26 @@ type OraclePriceES = StatemachineElectoralSystem<MockTypes>;
 const UP_TO_DATE_TIMEOUT: Seconds = Seconds(60);
 const MAYBE_STALE_TIMEOUT: Seconds = Seconds(30);
 const MINIMAL_PRICE_DEVIATION: BasisPoints = BasisPoints(100);
-const SETTINGS: OraclePriceSettings = OraclePriceSettings {
-	arbitrum: ExternalChainSettings {
-		up_to_date_timeout: UP_TO_DATE_TIMEOUT,
-		maybe_stale_timeout: MAYBE_STALE_TIMEOUT,
-		minimal_price_deviation: MINIMAL_PRICE_DEVIATION,
-	},
-	ethereum: ExternalChainSettings {
-		up_to_date_timeout: UP_TO_DATE_TIMEOUT,
-		maybe_stale_timeout: MAYBE_STALE_TIMEOUT,
-		minimal_price_deviation: MINIMAL_PRICE_DEVIATION,
-	},
-};
+
+// this has to be a function because we initialize BTreeMaps
+fn mock_settings() -> OraclePriceSettings<MockTypes> {
+	OraclePriceSettings {
+		arbitrum: ExternalChainSettings {
+			up_to_date_timeout: UP_TO_DATE_TIMEOUT,
+			maybe_stale_timeout: MAYBE_STALE_TIMEOUT,
+			minimal_price_deviation: MINIMAL_PRICE_DEVIATION,
+			up_to_date_timeout_overrides: Default::default(),
+			maybe_stale_timeout_overrides: Default::default(),
+		},
+		ethereum: ExternalChainSettings {
+			up_to_date_timeout: UP_TO_DATE_TIMEOUT,
+			maybe_stale_timeout: MAYBE_STALE_TIMEOUT,
+			minimal_price_deviation: MINIMAL_PRICE_DEVIATION,
+			up_to_date_timeout_overrides: Default::default(),
+			maybe_stale_timeout_overrides: Default::default(),
+		},
+	}
+}
 const START_TIME: UnixTime = UnixTime { seconds: 1000 };
 const TIME_STEP: Seconds = Seconds(15);
 
@@ -181,7 +189,7 @@ fn election_lifecycle() {
 	use ExternalPriceChain::*;
 	use PriceStatus::*;
 	TestSetup::<OraclePriceES>::default()
-		.with_unsynchronised_settings(SETTINGS)
+		.with_unsynchronised_settings(mock_settings())
 		.build()
 		.mutate_unsynchronized_state(|state| state.get_time.state.state = START_TIME)
 		// on startup all assets on both arbitrum and eth are in `MaybeStale` (we query for the
@@ -356,7 +364,7 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 		[(EthUsd, ChainlinkPrice::integer(3000)), (SolUsd, ChainlinkPrice::integer(160))];
 
 	TestSetup::<OraclePriceES>::default()
-		.with_unsynchronised_settings(SETTINGS)
+		.with_unsynchronised_settings(mock_settings())
 		.build()
 		.mutate_unsynchronized_state(|state| state.get_time.state.state = START_TIME)
 		.test_on_finalize(&vec![()], |_| {}, vec![])
@@ -405,7 +413,7 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 			println!("stepping 2 timesteps (30 seconds) forward");
 			state.get_time.state.state.seconds += TIME_STEP.0 * 2;
 		})
-		// get consensus on 2 assets on Arbitrum (Eth & arb)
+		// get consensus on 2 assets on Arbitrum (Eth & Sol)
 		.expect_consensus_multi(vec![
 			(no_votes(20), None),
 			(
@@ -515,7 +523,7 @@ fn consensus_computes_correct_median_and_iqr() {
 	];
 
 	TestSetup::<OraclePriceES>::default()
-		.with_unsynchronised_settings(SETTINGS)
+		.with_unsynchronised_settings(mock_settings())
 		.build()
 		.mutate_unsynchronized_state(|state| state.get_time.state.state = START_TIME)
 		.test_on_finalize(&vec![()], |_| {}, vec![])
