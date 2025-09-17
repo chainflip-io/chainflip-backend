@@ -117,8 +117,8 @@ impl VoterApi<ChainlinkOraclePriceES> for OraclePriceVoter {
 				let (_, _, price_feeds) = self
 					.arb_client
 					.query_price_feeds(
-						settings.eth_address_checker,
-						settings.eth_oracle_feeds.clone(),
+						settings.arb_address_checker,
+						settings.arb_oracle_feeds.clone(),
 					)
 					.await?;
 				price_feeds
