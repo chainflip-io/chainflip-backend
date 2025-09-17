@@ -1289,7 +1289,7 @@ pub mod rpc {
 		pub utilisation_rate: Permill,
 		pub current_interest_rate: Permill,
 		#[serde(flatten)]
-		pub config: PoolConfiguration,
+		pub config: LendingPoolConfiguration,
 	}
 
 	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -1442,10 +1442,24 @@ pub struct InterestRateConfiguration {
 	pub interest_at_max_utilisation: Permill,
 }
 
+impl InterestRateConfiguration {
+	pub fn validate(&self) -> DispatchResult {
+		// Ensure that the interest rate increases with utilization, which
+		// we rely on when interpolating the curve.
+		ensure!(
+			self.interest_at_zero_utilisation <= self.interest_at_junction_utilisation &&
+				self.interest_at_junction_utilisation <= self.interest_at_max_utilisation,
+			"Invalid curve"
+		);
+
+		Ok(())
+	}
+}
+
 #[derive(
 	Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
 )]
-pub struct PoolConfiguration {
+pub struct LendingPoolConfiguration {
 	pub origination_fee: Permill,
 	/// Portion of the amount of principal asset obtained via liquidation that's
 	/// paid as a fee (instead of reducing the loan's principal)
@@ -1478,6 +1492,26 @@ pub struct LtvThresholds {
 	pub hard_liquidation_abort: FixedU64,
 }
 
+impl LtvThresholds {
+	pub fn validate(&self) -> DispatchResult {
+		ensure!(
+			self.minimum <= self.target &&
+				self.target <= self.topup &&
+				self.topup <= self.soft_liquidation &&
+				self.soft_liquidation <= self.hard_liquidation,
+			"Invalid LTV thresholds"
+		);
+
+		ensure!(
+			self.hard_liquidation_abort < self.hard_liquidation &&
+				self.soft_liquidation_abort < self.soft_liquidation,
+			"Invalid LTV thresholds"
+		);
+
+		Ok(())
+	}
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct NetworkFeeContributions {
 	pub from_interest: Percent,
@@ -1488,7 +1522,7 @@ pub struct NetworkFeeContributions {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct LendingConfiguration {
 	/// This configuration is used unless it is overridden in `pool_config_overrides`.
-	pub default_pool_config: PoolConfiguration,
+	pub default_pool_config: LendingPoolConfiguration,
 	/// Determines when events like liquidation should be triggered based on the account's
 	/// loan-to-value ratio.
 	pub ltv_thresholds: LtvThresholds,
@@ -1509,11 +1543,11 @@ pub struct LendingConfiguration {
 	/// All fee swaps from lending will be executed with this oracle slippage limit
 	pub fee_swap_max_oracle_slippage: BasisPoints,
 	/// If set for a pool/asset, this configuration will be used instead of the default
-	pub pool_config_overrides: BTreeMap<Asset, PoolConfiguration>,
+	pub pool_config_overrides: BTreeMap<Asset, LendingPoolConfiguration>,
 }
 
 impl LendingConfiguration {
-	pub fn get_config_for_asset(&self, asset: Asset) -> &PoolConfiguration {
+	pub fn get_config_for_asset(&self, asset: Asset) -> &LendingPoolConfiguration {
 		self.pool_config_overrides.get(&asset).unwrap_or(&self.default_pool_config)
 	}
 

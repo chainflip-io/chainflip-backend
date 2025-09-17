@@ -1066,7 +1066,7 @@ fn api_wait_result_serialization() {
 	insta::assert_json_snapshot!(response);
 }
 
-use pallet_cf_lending_pools::{InterestRateConfiguration, PoolConfiguration};
+use pallet_cf_lending_pools::{InterestRateConfiguration, LendingPoolConfiguration};
 
 #[test]
 fn lending_pools_serialization() {
@@ -1076,7 +1076,7 @@ fn lending_pools_serialization() {
 		available_amount: 1_500u128.into(),
 		utilisation_rate: Permill::from_percent(90),
 		current_interest_rate: Permill::from_percent(8),
-		config: PoolConfiguration {
+		config: LendingPoolConfiguration {
 			origination_fee: Permill::from_parts(100),
 			liquidation_fee: Permill::from_parts(500),
 			interest_rate_curve: InterestRateConfiguration {

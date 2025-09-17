@@ -24,8 +24,9 @@ mod general_lending_pool;
 use cf_chains::SwapOrigin;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
-	InterestRateConfiguration, LendingConfiguration, NetworkFeeContributions, PoolConfiguration,
-	RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+	InterestRateConfiguration, LendingConfiguration, LendingPoolConfiguration,
+	NetworkFeeContributions, RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan,
+	RpcLoanAccount,
 };
 use general_lending::{LoanAccount, LtvThresholds};
 pub use general_lending_pool::LendingPool;
@@ -51,6 +52,7 @@ use cf_traits::{
 	SwapOutputAction, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
+	fail,
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{BlockNumberProvider, Saturating, UniqueSaturatedInto, Zero},
@@ -121,15 +123,37 @@ impl cf_traits::SafeMode for PalletSafeMode {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum PalletConfigUpdate {
-	SetNetworkFeeDeductionFromBoost { deduction_percent: Percent },
+	SetNetworkFeeDeductionFromBoost {
+		deduction_percent: Percent,
+	},
+	/// Updates pool/asset specific configuration. If `asset` is `None`, updates the default
+	/// configuration (one that applies to all assets). If `config` is `None`, removes
+	/// configuration override for the specified asset (asset must not be `None`).
+	SetLendingPoolConfiguration {
+		asset: Option<Asset>,
+		config: Option<LendingPoolConfiguration>,
+	},
+	SetLtvThresholds {
+		ltv_thresholds: LtvThresholds,
+	},
+	SetNetworkFeeContributions {
+		contributions: NetworkFeeContributions,
+	},
+	SetFeeSwapIntervalBlocks(u32),
+	SetInterestPaymentIntervalBlocks(u32),
+	SetFeeSwapThresholdUsd(AssetAmount),
+	SetOracleSlippageForSwaps {
+		soft_liquidation: BasisPoints,
+		hard_liquidation: BasisPoints,
+		fee_swap: BasisPoints,
+	},
 }
 
 define_wrapper_type!(CorePoolId, u32);
 
-// TODO: make this configurable
-const MAX_PALLET_CONFIG_UPDATE: u32 = 10; // used to bound no. of updates per extrinsic
+const MAX_PALLET_CONFIG_UPDATE: u32 = 100; // used to bound no. of updates per extrinsic
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BoostPool {
@@ -269,7 +293,7 @@ mod utils {
 pub struct LendingConfigDefault {}
 
 const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
-	default_pool_config: PoolConfiguration {
+	default_pool_config: LendingPoolConfiguration {
 		origination_fee: Permill::from_parts(100), // 1 bps
 		liquidation_fee: Permill::from_parts(500), // 5 bps
 		interest_rate_curve: InterestRateConfiguration {
@@ -551,6 +575,7 @@ pub mod pallet {
 		/// Failed to read oracle price
 		OraclePriceUnavailable,
 		InternalInvariantViolation,
+		InvalidConfigurationParameters,
 	}
 
 	#[pallet::hooks]
@@ -573,15 +598,78 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			for update in updates {
-				match update {
-					PalletConfigUpdate::SetNetworkFeeDeductionFromBoost { deduction_percent } =>
-						NetworkFeeDeductionFromBoostPercent::<T>::set(deduction_percent),
-				}
-				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
-			}
+			LendingConfig::<T>::try_mutate(|config| {
+				for update in updates {
+					match &update {
+						PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
+							deduction_percent,
+						} => NetworkFeeDeductionFromBoostPercent::<T>::set(*deduction_percent),
+						PalletConfigUpdate::SetLendingPoolConfiguration {
+							asset,
+							config: pool_config,
+						} => {
+							if let Some(pool_config) = pool_config {
+								pool_config
+									.interest_rate_curve
+									.validate()
+									.map_err(|_| Error::<T>::InvalidConfigurationParameters)?;
+							}
 
-			Ok(())
+							match (asset, pool_config) {
+								(None, Some(pool_config)) => {
+									// Updating the default configuration for all assets:
+									config.default_pool_config = pool_config.clone();
+								},
+								(Some(asset), Some(pool_config)) => {
+									// Creating/updating override for the specified asset:
+									config
+										.pool_config_overrides
+										.insert(*asset, pool_config.clone());
+								},
+								(Some(asset), None) => {
+									// Removing config override for the specified asset:
+									config.pool_config_overrides.remove(asset);
+								},
+								(None, None) => {
+									fail!(Error::<T>::InvalidConfigurationParameters)
+								},
+							}
+						},
+						PalletConfigUpdate::SetLtvThresholds { ltv_thresholds } => {
+							ltv_thresholds
+								.validate()
+								.map_err(|_| Error::<T>::InvalidConfigurationParameters)?;
+							config.ltv_thresholds = ltv_thresholds.clone();
+						},
+						PalletConfigUpdate::SetNetworkFeeContributions { contributions } => {
+							config.network_fee_contributions = contributions.clone();
+						},
+						PalletConfigUpdate::SetFeeSwapIntervalBlocks(interval) => {
+							ensure!(*interval > 0, Error::<T>::InvalidConfigurationParameters);
+							config.fee_swap_interval_blocks = *interval;
+						},
+						PalletConfigUpdate::SetInterestPaymentIntervalBlocks(interval) => {
+							ensure!(*interval > 0, Error::<T>::InvalidConfigurationParameters);
+							config.interest_payment_interval_blocks = *interval;
+						},
+						PalletConfigUpdate::SetFeeSwapThresholdUsd(amount_threshold) => {
+							config.fee_swap_threshold_usd = *amount_threshold;
+						},
+						PalletConfigUpdate::SetOracleSlippageForSwaps {
+							soft_liquidation,
+							hard_liquidation,
+							fee_swap,
+						} => {
+							config.soft_liquidation_max_oracle_slippage = *soft_liquidation;
+							config.hard_liquidation_max_oracle_slippage = *hard_liquidation;
+							config.fee_swap_max_oracle_slippage = *fee_swap;
+						},
+					}
+					Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
+				}
+
+				Ok(())
+			})
 		}
 
 		#[pallet::call_index(1)]

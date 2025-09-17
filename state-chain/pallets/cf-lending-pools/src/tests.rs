@@ -19,7 +19,11 @@ use super::*;
 use crate::mocks::*;
 use cf_test_utilities::{assert_event_sequence, assert_events_eq};
 use cf_traits::{SafeMode, SetSafeMode};
-use frame_support::{assert_noop, assert_ok, sp_runtime, traits::OriginTrait};
+use frame_support::{
+	assert_noop, assert_ok,
+	sp_runtime::{self, bounded_vec},
+	traits::OriginTrait,
+};
 
 type AccountId = u64;
 
@@ -116,15 +120,94 @@ fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
 		const NEW_NETWORK_FEE_DEDUCTION: Percent = Percent::from_percent(50);
 
+		const NEW_LENDING_POOL_CONFIG: LendingPoolConfiguration = LendingPoolConfiguration {
+			origination_fee: Permill::from_percent(1),
+			liquidation_fee: Permill::from_percent(2),
+			interest_rate_curve: InterestRateConfiguration {
+				interest_at_zero_utilisation: Permill::from_percent(1),
+				junction_utilisation: Permill::from_percent(41),
+				interest_at_junction_utilisation: Permill::from_percent(6),
+				interest_at_max_utilisation: Permill::from_percent(91),
+			},
+		};
+
+		const NEW_LTV_THRESHOLDS: LtvThresholds = LtvThresholds {
+			minimum: FixedU64::from_rational(1, 100),
+			target: FixedU64::from_rational(61, 100),
+			topup: FixedU64::from_rational(71, 100),
+			soft_liquidation: FixedU64::from_rational(81, 100),
+			soft_liquidation_abort: FixedU64::from_rational(80, 100),
+			hard_liquidation: FixedU64::from_rational(91, 100),
+			hard_liquidation_abort: FixedU64::from_rational(90, 100),
+		};
+
+		const NEW_NETWORK_FEE_CONTRIBUTIONS_FROM_LENDING: NetworkFeeContributions =
+			NetworkFeeContributions {
+				from_interest: Percent::from_percent(1),
+				from_origination_fee: Percent::from_percent(2),
+				from_liquidation_fee: Percent::from_percent(3),
+			};
+
+		const NEW_FEE_SWAP_INTERVAL_BLOCKS: u32 = 700;
+		const NEW_INTEREST_PAYMENT_INTERVAL_BLOCKS: u32 = 712;
+		const NEW_FEE_SWAP_THRESHOLD_USD: AssetAmount = 42;
+		const NEW_ORACLE_SLIPPAGE_SOFT_LIQUIDATION: BasisPoints = 43;
+		const NEW_ORACLE_SLIPPAGE_HARD_LIQUIDATION: BasisPoints = 44;
+		const NEW_ORACLE_SLIPPAGE_FEE_SWAP: BasisPoints = 45;
+
+		const UPDATE_NETWORK_FEE_DEDUCTION_FROM_BOOST: PalletConfigUpdate =
+			PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
+				deduction_percent: NEW_NETWORK_FEE_DEDUCTION,
+			};
+
+		const UPDATE_LENDING_POOL_CONFIG: PalletConfigUpdate =
+			PalletConfigUpdate::SetLendingPoolConfiguration {
+				asset: None,
+				config: Some(NEW_LENDING_POOL_CONFIG),
+			};
+
+		const UPDATE_LTV_THRESHOLDS: PalletConfigUpdate =
+			PalletConfigUpdate::SetLtvThresholds { ltv_thresholds: NEW_LTV_THRESHOLDS };
+
+		const UPDATE_NETWORK_FEE_CONTRIBUTIONS: PalletConfigUpdate =
+			PalletConfigUpdate::SetNetworkFeeContributions {
+				contributions: NEW_NETWORK_FEE_CONTRIBUTIONS_FROM_LENDING,
+			};
+
+		const UPDATE_FEE_SWAP_INTERVAL_BLOCKS: PalletConfigUpdate =
+			PalletConfigUpdate::SetFeeSwapIntervalBlocks(NEW_FEE_SWAP_INTERVAL_BLOCKS);
+
+		const UPDATE_INTEREST_PAYMENT_INTERVAL_BLOCKS: PalletConfigUpdate =
+			PalletConfigUpdate::SetInterestPaymentIntervalBlocks(
+				NEW_INTEREST_PAYMENT_INTERVAL_BLOCKS,
+			);
+
+		const UPDATE_FEE_SWAP_THRESHOLD_USD: PalletConfigUpdate =
+			PalletConfigUpdate::SetFeeSwapThresholdUsd(NEW_FEE_SWAP_THRESHOLD_USD);
+
+		const UPDATE_ORACLE_SLIPPAGE_FOR_SWAPS: PalletConfigUpdate =
+			PalletConfigUpdate::SetOracleSlippageForSwaps {
+				soft_liquidation: NEW_ORACLE_SLIPPAGE_SOFT_LIQUIDATION,
+				hard_liquidation: NEW_ORACLE_SLIPPAGE_HARD_LIQUIDATION,
+				fee_swap: NEW_ORACLE_SLIPPAGE_FEE_SWAP,
+			};
+
 		// Check that the default values are different from the new ones
 		assert_ne!(NetworkFeeDeductionFromBoostPercent::<Test>::get(), NEW_NETWORK_FEE_DEDUCTION);
 
 		// Update all config items at the same time
 		assert_ok!(LendingPools::update_pallet_config(
 			RuntimeOrigin::root(),
-			vec![PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
-				deduction_percent: NEW_NETWORK_FEE_DEDUCTION
-			}]
+			vec![
+				UPDATE_NETWORK_FEE_DEDUCTION_FROM_BOOST,
+				UPDATE_LENDING_POOL_CONFIG,
+				UPDATE_LTV_THRESHOLDS,
+				UPDATE_NETWORK_FEE_CONTRIBUTIONS,
+				UPDATE_FEE_SWAP_INTERVAL_BLOCKS,
+				UPDATE_INTEREST_PAYMENT_INTERVAL_BLOCKS,
+				UPDATE_FEE_SWAP_THRESHOLD_USD,
+				UPDATE_ORACLE_SLIPPAGE_FOR_SWAPS,
+			]
 			.try_into()
 			.unwrap()
 		));
@@ -132,13 +215,48 @@ fn can_update_all_config_items() {
 		// Check that the new values were set
 		assert_eq!(NetworkFeeDeductionFromBoostPercent::<Test>::get(), NEW_NETWORK_FEE_DEDUCTION);
 
+		assert_eq!(
+			LendingConfig::<Test>::get(),
+			LendingConfiguration {
+				default_pool_config: NEW_LENDING_POOL_CONFIG,
+				ltv_thresholds: NEW_LTV_THRESHOLDS,
+				network_fee_contributions: NEW_NETWORK_FEE_CONTRIBUTIONS_FROM_LENDING,
+				fee_swap_interval_blocks: NEW_FEE_SWAP_INTERVAL_BLOCKS,
+				interest_payment_interval_blocks: NEW_INTEREST_PAYMENT_INTERVAL_BLOCKS,
+				fee_swap_threshold_usd: NEW_FEE_SWAP_THRESHOLD_USD,
+				soft_liquidation_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_SOFT_LIQUIDATION,
+				hard_liquidation_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_HARD_LIQUIDATION,
+				fee_swap_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_FEE_SWAP,
+				pool_config_overrides: BTreeMap::default(),
+			}
+		);
+
 		// Check that the events were emitted
 		assert_events_eq!(
 			Test,
 			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
-				update: PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
-					deduction_percent: NEW_NETWORK_FEE_DEDUCTION
-				}
+				update: UPDATE_NETWORK_FEE_DEDUCTION_FROM_BOOST
+			}),
+			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
+				update: UPDATE_LENDING_POOL_CONFIG
+			}),
+			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
+				update: UPDATE_LTV_THRESHOLDS
+			}),
+			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
+				update: UPDATE_NETWORK_FEE_CONTRIBUTIONS
+			}),
+			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
+				update: UPDATE_FEE_SWAP_INTERVAL_BLOCKS
+			}),
+			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
+				update: UPDATE_INTEREST_PAYMENT_INTERVAL_BLOCKS
+			}),
+			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
+				update: UPDATE_FEE_SWAP_THRESHOLD_USD
+			}),
+			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
+				update: UPDATE_ORACLE_SLIPPAGE_FOR_SWAPS
 			}),
 		);
 
@@ -150,6 +268,83 @@ fn can_update_all_config_items() {
 			),
 			sp_runtime::traits::BadOrigin
 		);
+	});
+}
+
+#[test]
+fn can_update_config_for_specific_asset() {
+	// In this test we set one (default) config for all assets and create an override for BTC.
+	// We will also test that we can remove the override.
+
+	const NEW_LENDING_POOL_CONFIG: LendingPoolConfiguration = LendingPoolConfiguration {
+		origination_fee: Permill::from_percent(1),
+		liquidation_fee: Permill::from_percent(2),
+		interest_rate_curve: InterestRateConfiguration {
+			interest_at_zero_utilisation: Permill::from_percent(1),
+			junction_utilisation: Permill::from_percent(41),
+			interest_at_junction_utilisation: Permill::from_percent(6),
+			interest_at_max_utilisation: Permill::from_percent(91),
+		},
+	};
+
+	const NEW_LENDING_POOL_CONFIG_FOR_BTC: LendingPoolConfiguration = LendingPoolConfiguration {
+		origination_fee: Permill::from_percent(2),
+		liquidation_fee: Permill::from_percent(3),
+		interest_rate_curve: InterestRateConfiguration {
+			interest_at_zero_utilisation: Permill::from_percent(2),
+			junction_utilisation: Permill::from_percent(42),
+			interest_at_junction_utilisation: Permill::from_percent(7),
+			interest_at_max_utilisation: Permill::from_percent(92),
+		},
+	};
+
+	new_test_ext().execute_with(|| {
+		// Executing in separate calls to make sure we don't rely on the order
+		// of updates listed in the vector:
+		assert_ok!(LendingPools::update_pallet_config(
+			RuntimeOrigin::root(),
+			bounded_vec![PalletConfigUpdate::SetLendingPoolConfiguration {
+				asset: Some(Asset::Btc),
+				config: Some(NEW_LENDING_POOL_CONFIG_FOR_BTC),
+			}]
+		));
+
+		// This should not affect the config for BTC:
+		assert_ok!(LendingPools::update_pallet_config(
+			RuntimeOrigin::root(),
+			bounded_vec![PalletConfigUpdate::SetLendingPoolConfiguration {
+				asset: None,
+				config: Some(NEW_LENDING_POOL_CONFIG),
+			}]
+		));
+
+		assert_eq!(LendingConfig::<Test>::get().default_pool_config, NEW_LENDING_POOL_CONFIG);
+		assert_eq!(
+			LendingConfig::<Test>::get().pool_config_overrides,
+			BTreeMap::from([(Asset::Btc, NEW_LENDING_POOL_CONFIG_FOR_BTC)])
+		);
+
+		assert_eq!(
+			LendingConfig::<Test>::get().get_config_for_asset(Asset::Eth),
+			&NEW_LENDING_POOL_CONFIG
+		);
+
+		assert_eq!(
+			LendingConfig::<Test>::get().get_config_for_asset(Asset::Btc),
+			&NEW_LENDING_POOL_CONFIG_FOR_BTC
+		);
+
+		// This should remove the override for BTC
+		assert_ok!(LendingPools::update_pallet_config(
+			RuntimeOrigin::root(),
+			bounded_vec![PalletConfigUpdate::SetLendingPoolConfiguration {
+				asset: Some(Asset::Btc),
+				config: None,
+			}]
+		));
+
+		assert_eq!(LendingConfig::<Test>::get().default_pool_config, NEW_LENDING_POOL_CONFIG);
+		assert_eq!(LendingConfig::<Test>::get().pool_config_overrides, Default::default());
 	});
 }
 
