@@ -36,7 +36,7 @@ import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
 import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logger';
 import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
-import { KeyedMutex } from './utils/keyed_mutex';
+import { KeyedMutex } from 'shared/utils/keyed_mutex';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();

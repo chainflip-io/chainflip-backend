@@ -1,9 +1,9 @@
 import { Asset, Chain } from '@chainflip/cli';
 import Web3 from 'web3';
-import { signAndSendTxEvm } from '../shared/send_evm';
-import { amountToFineAmount, getContractAddress, getEvmEndpoint } from '../shared/utils';
-import { Logger } from '../shared/utils/logger';
-import { price as defaultPrice } from './setup_swaps';
+import { signAndSendTxEvm } from 'shared/send_evm';
+import { amountToFineAmount, getContractAddress, getEvmEndpoint } from 'shared/utils';
+import { Logger } from 'shared/utils/logger';
+import { price as defaultPrice } from 'shared/setup_swaps';
 
 // All price feeds are using 8 decimals
 const PRICE_FEED_DECIMALS = 8;

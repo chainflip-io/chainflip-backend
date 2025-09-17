@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { afterEach, beforeEach, it } from 'vitest';
 import { TestContext } from 'shared/utils/test_context';
 import { runWithTimeout, testInfoFile } from 'shared/utils';
-import { getTestLogFile, getTestLogFilesForTaggedChildren } from './logger';
+import { getTestLogFile, getTestLogFilesForTaggedChildren } from 'shared/utils/logger';
 
 // Write the test name and function name to a file to be used by the `run_test.ts` command
 function writeTestInfoFile(name: string, functionName: string) {

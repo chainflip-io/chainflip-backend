@@ -1,6 +1,6 @@
 import { Logger } from 'shared/utils/logger';
-import { submitGovernanceExtrinsic } from './cf_governance';
-import { getChainflipApi } from './utils/substrate';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { getChainflipApi } from 'shared/utils/substrate';
 
 export async function setupElections(logger: Logger): Promise<void> {
   logger.info('Setting up elections');

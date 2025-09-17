@@ -9,9 +9,9 @@
 // Or: ./commands/update_price_feeds.ts ALL
 
 import { Asset } from '@chainflip/cli';
-import { updatePriceFeed, updateDefaultPriceFeeds } from '../shared/update_price_feed';
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { globalLogger } from '../shared/utils/logger';
+import { updatePriceFeed, updateDefaultPriceFeeds } from 'shared/update_price_feed';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { globalLogger } from 'shared/utils/logger';
 
 export async function updatePriceFeeds(asset: string, price?: string) {
   if (asset.toUpperCase() === 'ALL') {
