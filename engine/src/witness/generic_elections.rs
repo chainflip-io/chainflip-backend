@@ -40,7 +40,6 @@ use crate::{
 	},
 };
 use anyhow::{anyhow, Result};
-use sol_prim::program_instructions::PriceFeedData as SolPriceFeedData;
 
 /// IMPORTANT: These strings have to match with the price feed "description" as returned by
 /// chainlink.
@@ -68,14 +67,6 @@ struct PriceData {
 	pub answer: i128,
 	pub decimals: u8,
 	pub timestamp: UnixTime,
-}
-
-impl From<SolPriceFeedData> for PriceData {
-	fn from(value: SolPriceFeedData) -> Self {
-		let SolPriceFeedData { round_id: _, slot: _, timestamp, answer, decimals, description } =
-			value;
-		Self { description, answer, decimals, timestamp: UnixTime { seconds: timestamp as u64 } }
-	}
 }
 
 impl TryFrom<EthPriceFeedData> for PriceData {
