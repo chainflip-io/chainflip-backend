@@ -1510,7 +1510,7 @@ where
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
 		cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>) -> Vec<OraclePrice>,
-		cf_auction_state() -> RpcAuctionState,
+		cf_auction_state() -> RpcAuctionState [map: Into::into],
 	}
 
 	pass_through_and_flatten! {
