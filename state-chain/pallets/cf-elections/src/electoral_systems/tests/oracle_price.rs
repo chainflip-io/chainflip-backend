@@ -57,18 +57,26 @@ type OraclePriceES = StatemachineElectoralSystem<MockTypes>;
 const UP_TO_DATE_TIMEOUT: Seconds = Seconds(60);
 const MAYBE_STALE_TIMEOUT: Seconds = Seconds(30);
 const MINIMAL_PRICE_DEVIATION: BasisPoints = BasisPoints(100);
-const SETTINGS: OraclePriceSettings = OraclePriceSettings {
-	solana: ExternalChainSettings {
-		up_to_date_timeout: UP_TO_DATE_TIMEOUT,
-		maybe_stale_timeout: MAYBE_STALE_TIMEOUT,
-		minimal_price_deviation: MINIMAL_PRICE_DEVIATION,
-	},
-	ethereum: ExternalChainSettings {
-		up_to_date_timeout: UP_TO_DATE_TIMEOUT,
-		maybe_stale_timeout: MAYBE_STALE_TIMEOUT,
-		minimal_price_deviation: MINIMAL_PRICE_DEVIATION,
-	},
-};
+
+// this has to be a function because we initialize BTreeMaps
+fn mock_settings() -> OraclePriceSettings<MockTypes> {
+	OraclePriceSettings {
+		arbitrum: ExternalChainSettings {
+			up_to_date_timeout: UP_TO_DATE_TIMEOUT,
+			maybe_stale_timeout: MAYBE_STALE_TIMEOUT,
+			minimal_price_deviation: MINIMAL_PRICE_DEVIATION,
+			up_to_date_timeout_overrides: Default::default(),
+			maybe_stale_timeout_overrides: Default::default(),
+		},
+		ethereum: ExternalChainSettings {
+			up_to_date_timeout: UP_TO_DATE_TIMEOUT,
+			maybe_stale_timeout: MAYBE_STALE_TIMEOUT,
+			minimal_price_deviation: MINIMAL_PRICE_DEVIATION,
+			up_to_date_timeout_overrides: Default::default(),
+			maybe_stale_timeout_overrides: Default::default(),
+		},
+	}
+}
 const START_TIME: UnixTime = UnixTime { seconds: 1000 };
 const TIME_STEP: Seconds = Seconds(15);
 
@@ -181,24 +189,24 @@ fn election_lifecycle() {
 	use ExternalPriceChain::*;
 	use PriceStatus::*;
 	TestSetup::<OraclePriceES>::default()
-		.with_unsynchronised_settings(SETTINGS)
+		.with_unsynchronised_settings(mock_settings())
 		.build()
 		.mutate_unsynchronized_state(|state| state.get_time.state.state = START_TIME)
-		// on startup all assets on both solana and eth are in `MaybeStale` (we query for the latest
-		// data the engines have) state
+		// on startup all assets on both arbitrum and eth are in `MaybeStale` (we query for the
+		// latest data the engines have) state
 		.test_on_finalize(
 			&vec![()],
 			|_| {},
 			vec![
-				election_for_chain_with_all_assets(Solana, Some(MaybeStale)),
+				election_for_chain_with_all_assets(Arbitrum, Some(MaybeStale)),
 				election_for_chain_with_all_assets(Ethereum, Some(MaybeStale)),
 			],
 		)
-		//  - For solana: no consensus
+		//  - For arbitrum: no consensus
 		//  - For ethereum: consensus where all 20 voters vote for the exact same prices +
 		//    timestamps
 		.expect_consensus_multi(vec![
-			// Data for the Solana election, no votes
+			// Data for the Arbitrum election, no votes
 			(no_votes(20), None),
 			// Data for the Ethereum election, all 20 voters vote for the default price
 			(
@@ -213,13 +221,13 @@ fn election_lifecycle() {
 			),
 		])
 		// since we got prices for the secondary chain (Ethereum), the elections are:
-		//  - Solana: MaybeStale (since we didn't get Solana prices yet)
+		//  - Arbitrum: MaybeStale (since we didn't get Arbitrum prices yet)
 		//  - Ethereum: UpToDate
 		.test_on_finalize(
 			&vec![()],
 			|_| {},
 			vec![
-				election_for_chain_with_all_assets(Solana, Some(MaybeStale)),
+				election_for_chain_with_all_assets(Arbitrum, Some(MaybeStale)),
 				election_for_chain_with_all_assets(Ethereum, Some(UpToDate)),
 				current_prices_are(&prices1, UpToDate),
 			],
@@ -229,9 +237,9 @@ fn election_lifecycle() {
 			state.get_time.state.state.seconds += 2 * TIME_STEP.0;
 		})
 		// We get consensus:
-		// - Solana: newest prices
+		// - Arbitrum: newest prices
 		.expect_consensus_multi(vec![
-			// Data for the Solana election, all 20 voters vote for the default price
+			// Data for the Arbitrum election, all 20 voters vote for the default price
 			(
 				generate_votes(
 					(0..20).collect(),
@@ -245,15 +253,15 @@ fn election_lifecycle() {
 			// Data for the Ethereum election, no votes
 			(no_votes(20), None),
 		])
-		// since we now got prices for the primary chain (Solana):
+		// since we now got prices for the primary chain (Arbitrum):
 		//  - there should be no ethereum election
-		//  - the Solana election should have all price statuses be `UpToDate`
+		//  - the Arbitrum election should have all price statuses be `UpToDate`
 		//  - the stored prices should reflect the newer `prices2` values
 		.test_on_finalize(
 			&vec![()],
 			|_| {},
 			vec![
-				election_for_chain_with_all_assets(Solana, Some(UpToDate)),
+				election_for_chain_with_all_assets(Arbitrum, Some(UpToDate)),
 				election_for_chain_with_all_assets(Ethereum, None),
 				current_prices_are(&prices2, UpToDate),
 			],
@@ -262,13 +270,14 @@ fn election_lifecycle() {
 			println!("stepping 3 timesteps (45 seconds) forward");
 			state.get_time.state.state.seconds += 3 * TIME_STEP.0;
 		})
-		// The prices on eth should now be MaybeStale, but since the ones on Solana are up to date,
-		// we don't have Eth elections. Also the prices returned by the api are still up to date
+		// The prices on eth should now be MaybeStale, but since the ones on Arbitrum are up to
+		// date, we don't have Eth elections. Also the prices returned by the api are still up to
+		// date
 		.test_on_finalize(
 			&vec![()],
 			|_| {},
 			vec![
-				election_for_chain_with_all_assets(Solana, Some(UpToDate)),
+				election_for_chain_with_all_assets(Arbitrum, Some(UpToDate)),
 				election_for_chain_with_all_assets(Ethereum, None),
 				current_prices_are(&prices2, UpToDate),
 			],
@@ -277,14 +286,14 @@ fn election_lifecycle() {
 			println!("stepping 2 timesteps (30 seconds) forward");
 			state.get_time.state.state.seconds += 2 * TIME_STEP.0;
 		})
-		// - the prices on solana are now maybe stale (sol elections going on)
+		// - the prices on arbitrum are now maybe stale (arb elections going on)
 		// - the prices on Eth are fully stale (eth elections going on)
 		// - the prices returned by the API are still the same and maybe stale
 		.test_on_finalize(
 			&vec![()],
 			|_| {},
 			vec![
-				election_for_chain_with_all_assets(Solana, Some(MaybeStale)),
+				election_for_chain_with_all_assets(Arbitrum, Some(MaybeStale)),
 				election_for_chain_with_all_assets(Ethereum, Some(Stale)),
 				current_prices_are(&prices2, MaybeStale),
 			],
@@ -299,7 +308,7 @@ fn election_lifecycle() {
 			&vec![()],
 			|_| {},
 			vec![
-				election_for_chain_with_all_assets(Solana, Some(Stale)),
+				election_for_chain_with_all_assets(Arbitrum, Some(Stale)),
 				election_for_chain_with_all_assets(Ethereum, Some(Stale)),
 				current_prices_are(&prices2, Stale),
 			],
@@ -309,11 +318,11 @@ fn election_lifecycle() {
 			state.get_time.state.state.seconds = START_TIME.seconds + 100 * TIME_STEP.0;
 		})
 		// We get consensus:
-		// - Solana: newest prices
+		// - Arbitrum: newest prices
 		.expect_consensus_multi(vec![
 			// Data for the Ethereum election, no votes
 			(no_votes(20), None),
-			// Data for the Solana election, all 20 voters vote for price3
+			// Data for the Arbitrum election, all 20 voters vote for price3
 			(
 				generate_votes(
 					(0..20).collect(),
@@ -326,13 +335,13 @@ fn election_lifecycle() {
 			),
 		])
 		// - the prices in the api should be updated to the newest value (prices3)
-		// - there should be a Solana (UpToDate) election going on
+		// - there should be a Arbitrum (UpToDate) election going on
 		// - there should be no Ethereum election
 		.test_on_finalize(
 			&vec![()],
 			|_| {},
 			vec![
-				election_for_chain_with_all_assets(Solana, Some(UpToDate)),
+				election_for_chain_with_all_assets(Arbitrum, Some(UpToDate)),
 				election_for_chain_with_all_assets(Ethereum, None),
 				current_prices_are(&prices3, UpToDate),
 			],
@@ -355,11 +364,11 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 		[(EthUsd, ChainlinkPrice::integer(3000)), (SolUsd, ChainlinkPrice::integer(160))];
 
 	TestSetup::<OraclePriceES>::default()
-		.with_unsynchronised_settings(SETTINGS)
+		.with_unsynchronised_settings(mock_settings())
 		.build()
 		.mutate_unsynchronized_state(|state| state.get_time.state.state = START_TIME)
 		.test_on_finalize(&vec![()], |_| {}, vec![])
-		// get consensus on 4 assets on Solana (Eth is missing)
+		// get consensus on 4 assets on Arbitrum (Eth is missing)
 		.expect_consensus_multi(vec![
 			(
 				generate_votes(
@@ -373,13 +382,13 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 			),
 			(no_votes(20), None),
 		])
-		// this means that we're still querying on both ethereum and solana
+		// this means that we're still querying on both ethereum and arbitrum
 		.test_on_finalize(
 			&vec![()],
 			|_| {},
 			vec![
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					Solana,
+					Arbitrum,
 					Some(
 						all::<ChainlinkAssetpair>()
 							.zip(repeat(UpToDate))
@@ -404,7 +413,7 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 			println!("stepping 2 timesteps (30 seconds) forward");
 			state.get_time.state.state.seconds += TIME_STEP.0 * 2;
 		})
-		// get consensus on 2 assets on Solana (Eth & sol)
+		// get consensus on 2 assets on Arbitrum (Eth & Sol)
 		.expect_consensus_multi(vec![
 			(no_votes(20), None),
 			(
@@ -421,13 +430,13 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 				)),
 			),
 		])
-		// this means that we're now querying only solana and all prices are up to date
+		// this means that we're now querying only arbitrum and all prices are up to date
 		.test_on_finalize(
 			&vec![()],
 			|_| {},
 			vec![
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					Solana,
+					Arbitrum,
 					Some(all::<ChainlinkAssetpair>().zip(repeat(UpToDate)).collect()),
 				)),
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
@@ -456,7 +465,7 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 			|_| {},
 			vec![
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					Solana,
+					Arbitrum,
 					Some(
 						all::<ChainlinkAssetpair>()
 							.zip(repeat(MaybeStale))
@@ -514,7 +523,7 @@ fn consensus_computes_correct_median_and_iqr() {
 	];
 
 	TestSetup::<OraclePriceES>::default()
-		.with_unsynchronised_settings(SETTINGS)
+		.with_unsynchronised_settings(mock_settings())
 		.build()
 		.mutate_unsynchronized_state(|state| state.get_time.state.state = START_TIME)
 		.test_on_finalize(&vec![()], |_| {}, vec![])

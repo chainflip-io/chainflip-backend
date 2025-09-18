@@ -42,7 +42,7 @@ export async function fundFlip(logger: Logger, scAddress: string, flipAmount: st
     flipContractAddress,
   } as const;
   const txOptions = {
-    nonce: await getNextEvmNonce('Ethereum'),
+    nonce: await getNextEvmNonce(logger, 'Ethereum'),
   } as const;
 
   logger.debug('Funding ' + flipAmount + ' Flip to ' + scAddress);

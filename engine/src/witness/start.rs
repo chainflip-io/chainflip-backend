@@ -130,7 +130,7 @@ where
 
 	let start_arb = super::arb::start(
 		scope,
-		arb_client,
+		arb_client.clone(),
 		witness_call.clone(),
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
@@ -138,7 +138,7 @@ where
 		db.clone(),
 	);
 
-	let start_sol = super::sol::start(scope, sol_client.clone(), state_chain_client.clone());
+	let start_sol = super::sol::start(scope, sol_client, state_chain_client.clone());
 
 	let start_btc = super::btc::start(scope, btc_client, state_chain_client.clone());
 
@@ -153,7 +153,7 @@ where
 	);
 
 	let start_generic_elections =
-		super::generic_elections::start(scope, sol_client, eth_client, state_chain_client);
+		super::generic_elections::start(scope, arb_client, eth_client, state_chain_client);
 
 	try_join!(
 		start_eth,

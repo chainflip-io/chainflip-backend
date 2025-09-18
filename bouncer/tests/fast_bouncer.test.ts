@@ -17,8 +17,8 @@ import { depositChannelCreation } from 'tests/request_swap_deposit_address_with_
 import { testBrokerLevelScreening } from 'tests/broker_level_screening';
 import { testFundRedeem } from 'tests/fund_redeem';
 import { concurrentTest, serialTest } from 'shared/utils/vitest';
-import { testCcmSwapFundAccount, testDelegate } from './delegate_flip';
-import { testSpecialBitcoinSwaps } from './special_btc_swaps';
+import { testCcmSwapFundAccount, testDelegate } from 'tests/delegate_flip';
+import { testSpecialBitcoinSwaps } from 'tests/special_btc_swaps';
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {
