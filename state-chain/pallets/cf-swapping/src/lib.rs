@@ -2772,8 +2772,14 @@ pub mod pallet {
 			)
 			.and_then(|amount| C::ChainAmount::try_from(amount).ok())
 			.unwrap_or_else(|| {
-				log::warn!("Unable to calculate input amount required for gas of {required_gas:?} for input asset ${input_asset:?}. Estimating the input amount based on a reference price.");
-				C::input_asset_amount_using_reference_gas_asset_price(input_asset,required_gas)
+				log::warn!("Unable to calculate input amount required for gas of {required_gas:?} for input asset ${input_asset:?}. Estimating the input amount based on either oracle price or reference price.");
+				let oracle_price = T::PriceFeedApi::get_price(input_asset.into());
+				let price = if oracle_price.as_ref().is_some_and(|price| !price.stale) {
+					Some(oracle_price.unwrap().price)
+				} else {
+					None
+				};
+				C::input_asset_amount_using_reference_gas_asset_price(input_asset, required_gas, price)
 			})
 		}
 
@@ -2950,12 +2956,12 @@ pub(crate) mod utilities {
 		const SOL_DECIMALS: u32 = 9;
 
 		/// ~20 Dollars.
-		const FLIP_ESTIMATION_CAP: u128 = 10 * FLIPPERINOS_PER_FLIP;
+		const FLIP_ESTIMATION_CAP: u128 = 25 * FLIPPERINOS_PER_FLIP;
 		const USD_ESTIMATION_CAP: u128 = 20_000_000;
-		const ETH_ESTIMATION_CAP: u128 = 8 * 10u128.pow(ETH_DECIMALS - 3);
-		const DOT_ESTIMATION_CAP: u128 = 4 * 10u128.pow(DOT_DECIMALS);
+		const ETH_ESTIMATION_CAP: u128 = 5 * 10u128.pow(ETH_DECIMALS - 3);
+		const DOT_ESTIMATION_CAP: u128 = 5 * 10u128.pow(DOT_DECIMALS);
 		const BTC_ESTIMATION_CAP: u128 = 2 * 10u128.pow(BTC_DECIMALS - 4);
-		const SOL_ESTIMATION_CAP: u128 = 14 * 10u128.pow(SOL_DECIMALS - 2);
+		const SOL_ESTIMATION_CAP: u128 = 10 * 10u128.pow(SOL_DECIMALS - 2);
 
 		match asset {
 			Asset::Flip => FLIP_ESTIMATION_CAP,

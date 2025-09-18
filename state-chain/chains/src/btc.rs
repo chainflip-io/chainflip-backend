@@ -31,7 +31,7 @@ use arrayref::array_ref;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
-	chains::assets, IngressOrEgress, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILOBYTE,
+	chains::assets, IngressOrEgress, NetworkEnvironment, Price, DEFAULT_FEE_SATS_PER_KILOBYTE,
 	INPUT_UTXO_SIZE_IN_BYTES, MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 	VAULT_UTXO_SIZE_IN_BYTES,
 };
@@ -286,6 +286,7 @@ impl Chain for Bitcoin {
 	fn input_asset_amount_using_reference_gas_asset_price(
 		_input_asset: Self::ChainAsset,
 		required_gas: Self::ChainAmount,
+		_oracle_price: Option<Price>,
 	) -> Self::ChainAmount {
 		required_gas
 	}
