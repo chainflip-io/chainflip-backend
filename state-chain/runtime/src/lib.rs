@@ -2962,13 +2962,15 @@ impl_runtime_apis! {
 				AuctionOutcome<AccountId, AssetAmount>,
 				BTreeMap<AccountId, DelegationSnapshot<AccountId, AssetAmount>>,
 				Vec<AccountId>,
+				AssetAmount
 			), DispatchErrorWithMessage>
 		{
 			let next_auction = Validator::resolve_auction_iteratively()
 				.map_err(|e| runtime_apis::DispatchErrorWithMessage::from(<pallet_cf_validator::Error<Runtime>>::from(e)))?;
 			let next_set: BTreeSet<AccountId> = next_auction.0.winners.iter().cloned().collect();
 			let current_set: BTreeSet<AccountId> = Validator::current_authorities().into_iter().collect();
-			Ok((next_auction.0, next_auction.1, next_set.difference(&current_set).cloned().collect()))
+			let current_mab = Validator::bond();
+			Ok((next_auction.0, next_auction.1, next_set.difference(&current_set).cloned().collect(), current_mab))
 		}
 	}
 

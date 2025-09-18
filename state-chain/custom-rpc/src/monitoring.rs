@@ -135,6 +135,7 @@ pub struct AuctionResult {
 		DelegationSnapshot<state_chain_runtime::AccountId, NumberOrHex>,
 	>,
 	new_validators: Vec<state_chain_runtime::AccountId>,
+	current_mab: NumberOrHex,
 }
 
 #[rpc(server, client, namespace = "cf_monitoring")]
@@ -301,6 +302,7 @@ where
 				.map(|(account, snapshot)| (account, snapshot.map_bids(|bid| bid.into())))
 				.collect(),
 			new_validators: result.2,
+			current_mab: result.3.into(),
 		})
 	}
 }

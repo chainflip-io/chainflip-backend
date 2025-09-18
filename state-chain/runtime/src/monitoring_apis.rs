@@ -203,6 +203,7 @@ decl_runtime_apis!(
 				AuctionOutcome<AccountId32, AssetAmount>,
 				BTreeMap<AccountId32, DelegationSnapshot<AccountId32, AssetAmount>>,
 				Vec<AccountId32>,
+				AssetAmount,
 			),
 			DispatchErrorWithMessage,
 		>;
