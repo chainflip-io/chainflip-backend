@@ -69,27 +69,20 @@ impl Chain for Arbitrum {
 		required_gas: Self::ChainAmount,
 		oracle_price: Option<Price>,
 	) -> Self::ChainAmount {
-		let usd_required = if let Some(p) = oracle_price {
-			output_amount_ceil(U256::from(required_gas), p).try_into().unwrap_or(0u128)
-		} else {
-			multiply_by_rational_with_rounding(
-				required_gas,
-				super::eth::REFERENCE_ETH_PRICE_IN_USD,
-				1_000_000_000_000_000_000u128,
-				sp_runtime::Rounding::Up,
-			)
-			.unwrap_or(0u128)
-		};
-
 		match input_asset {
 			assets::arb::Asset::ArbEth => required_gas,
-			assets::arb::Asset::ArbUsdc => multiply_by_rational_with_rounding(
-				usd_required,
-				required_gas,
-				1_000_000_000_000_000_000u128,
-				sp_runtime::Rounding::Up,
-			)
-			.unwrap_or(0u128),
+			assets::arb::Asset::ArbUsdc =>
+				if let Some(p) = oracle_price {
+					output_amount_ceil(U256::from(required_gas), p).try_into().unwrap_or(0u128)
+				} else {
+					multiply_by_rational_with_rounding(
+						required_gas,
+						super::eth::REFERENCE_ETH_PRICE_IN_USD,
+						1_000_000_000_000_000_000u128,
+						sp_runtime::Rounding::Up,
+					)
+					.unwrap_or(0u128)
+				},
 		}
 	}
 }
