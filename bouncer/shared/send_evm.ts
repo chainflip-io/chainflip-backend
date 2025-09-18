@@ -16,7 +16,7 @@ const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
   Arbitrum: undefined,
 };
 
-export async function getNextEvmNonce(chain: Chain): Promise<number> {
+export async function getNextEvmNonce(logger: Logger, chain: Chain): Promise<number> {
   let mutex;
   switch (chain) {
     case 'Ethereum':
@@ -37,7 +37,7 @@ export async function getNextEvmNonce(chain: Chain): Promise<number> {
       const txCount = await web3.eth.getTransactionCount(address);
       nextEvmNonce[chain] = txCount;
     }
-
+    logger.debug(`Nonce for ${chain} is: ${nextEvmNonce[chain]}`);
     return nextEvmNonce[chain]!++;
   });
 }
@@ -53,7 +53,7 @@ export async function signAndSendTxEvm(
   const web3 = new Web3(getEvmEndpoint(chain));
   const { privkey: whalePrivKey } = getEvmWhaleKeypair('Ethereum');
 
-  const nonce = await getNextEvmNonce(chain);
+  const nonce = await getNextEvmNonce(logger, chain);
   const tx = { to, data, gas, nonce, value };
 
   const signedTx = await web3.eth.accounts.signTransaction(tx, whalePrivKey);

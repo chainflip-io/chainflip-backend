@@ -16,7 +16,6 @@
 
 use crate::{chainflip::generic_elections::ChainlinkOraclePriceSettings, *};
 use frame_support::{pallet_prelude::Weight, traits::OnRuntimeUpgrade};
-use sol_prim::consts::const_address;
 
 use crate::chainflip::generic_elections;
 #[cfg(feature = "try-runtime")]
@@ -34,19 +33,17 @@ impl OnRuntimeUpgrade for Migration {
 		let chainlink_oracle_price_settings =
 			match cf_runtime_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 				cf_runtime_utilities::genesis_hashes::BERGHAIN => ChainlinkOraclePriceSettings {
-					sol_oracle_program_id: const_address(
-						"HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny",
-					),
-					sol_oracle_feeds: vec![
-						const_address("Cv4T27XbjVoKUYwP72NQQanvZeA7W4YF9L4EnYT9kx5o"),
-						const_address("716hFAECqotxcXcj8Hs8nr7AG6q9dBw2oX3k3M8V7uGq"),
-						const_address("CH31Xns5z3M1cTAbKW34jcxPPciazARpijcHj9rxtemt"),
-						const_address("GzGuoKXE8Unn7Vcg1DtomwD27tL4bVUpSK2M1yk6Xfz5"),
-						const_address("8vAuuqC5wVZ9Z9oQUGGDSjYgudTfjmyqGU5VucQxTk5U"),
+					arb_address_checker: hex_literal::hex!(
+						"69c700a0debab9e349dd1f52ed62eb253a3c9892"
+					)
+					.into(),
+					arb_oracle_feeds: vec![
+						hex_literal::hex!("6ce185860a4963106506C203335A2910413708e9").into(),
+						hex_literal::hex!("639Fe6ab55C921f74e7fac1ee960C0B6293ba612").into(),
+						hex_literal::hex!("24ceA4b8ce57cdA5058b924B9B9987992450590c").into(),
+						hex_literal::hex!("50834F3163758fcC1Df9973b6e91f0F0F0434aD3").into(),
+						hex_literal::hex!("3f3f5dF88dC9F13eac63DF89EC16ef6e7E25DdE7").into(),
 					],
-					sol_oracle_query_helper: const_address(
-						"5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX",
-					),
 					eth_address_checker: hex_literal::hex!(
 						"1562Ad6bb0e68980A3111F24531c964c7e155611"
 					)
@@ -61,19 +58,18 @@ impl OnRuntimeUpgrade for Migration {
 				},
 				cf_runtime_utilities::genesis_hashes::PERSEVERANCE |
 				cf_runtime_utilities::genesis_hashes::SISYPHOS => ChainlinkOraclePriceSettings {
-					sol_oracle_program_id: const_address(
-						"HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny",
-					),
-					sol_oracle_feeds: vec![
-						const_address("6PxBx93S8x3tno1TsFZwT5VqP8drrRCbCXygEXYNkFJe"),
-						const_address("669U43LNHx7LsVj95uYksnhXUfWKDsdzVqev3V4Jpw3P"),
-						const_address("99B2bTijsU6f1GCT73HmdR7HCFFjGMBcPZY6jZ96ynrR"),
-						const_address("2EmfL3MqL3YHABudGNmajjCpR13NNEn9Y4LWxbDm6SwR"),
-						const_address("8QQSUPtdRTboa4bKyMftVNRfGFsB4Vp9d7r39hGKi53e"),
+					arb_address_checker: hex_literal::hex!(
+						"564e411634189E68ecD570400eBCF783b4aF8688"
+					)
+					.into(),
+					arb_oracle_feeds: vec![
+						hex_literal::hex!("56a43EB56Da12C0dc1D972ACb089c06a5dEF8e69").into(),
+						hex_literal::hex!("d30e2101a97dcbAeBCBC04F14C3f624E67A35165").into(),
+						hex_literal::hex!("32377717BC9F9bA8Db45A244bCE77e7c0Cc5A775").into(),
+						hex_literal::hex!("0153002d20B96532C639313c2d54c3dA09109309").into(),
+						hex_literal::hex!("80EDee6f667eCc9f63a0a6f55578F870651f06A4").into(),
 					],
-					sol_oracle_query_helper: const_address(
-						"5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX",
-					),
+
 					eth_address_checker: hex_literal::hex!(
 						"26061f315570bddf11d9055411a3d811c5ff0148"
 					)
@@ -90,19 +86,17 @@ impl OnRuntimeUpgrade for Migration {
 				},
 				// localnet:
 				_ => ChainlinkOraclePriceSettings {
-					sol_oracle_program_id: const_address(
-						"DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X",
-					),
-					sol_oracle_feeds: vec![
-						const_address("HDSV2wFxmsrmCwwY34QzaVkvmJpG7VF8S9fX2iThynjG"),
-						const_address("8U3c4SqXaXKPQiarNH3xHXiVoBLYbkqkzusthyJJjGrE"),
-						const_address("CrjmdLxTkmd5bxTQjE82FNgiuxeoY3G4EzzhDJ4RH9Wx"),
-						const_address("7BH1paBwjVDrHTb8YkHcyt7ZfxsCbnBMeByGBH6L8PFk"),
-						const_address("7qdy4DhvG5GDkiGNrsmrMcCyiVNPtmrUmGo3UntcrLwk"),
+					arb_address_checker: hex_literal::hex!(
+						"9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
+					)
+					.into(),
+					arb_oracle_feeds: vec![
+						hex_literal::hex!("a85233C63b9Ee964Add6F2cffe00Fd84eb32338f").into(),
+						hex_literal::hex!("4A679253410272dd5232B3Ff7cF5dbB88f295319").into(),
+						hex_literal::hex!("7a2088a1bFc9d81c55368AE168C2C02570cB814F").into(),
+						hex_literal::hex!("09635F643e140090A9A8Dcd712eD6285858ceBef").into(),
+						hex_literal::hex!("c5a5C42992dECbae36851359345FE25997F5C42d").into(),
 					],
-					sol_oracle_query_helper: const_address(
-						"GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z",
-					),
 					eth_address_checker: hex_literal::hex!(
 						"e7f1725E7734CE288F8367e1Bb143E90bb3F0512"
 					)
@@ -116,6 +110,26 @@ impl OnRuntimeUpgrade for Migration {
 					],
 				},
 			};
+
+		// Before we initialize the pallet, we kill all `OptionQuery` storage entries. This is
+		// because we already released 1.11.x to sisy/persa and it contained a different version
+		// of the elections (with sol as extrenal price chain)
+		use pallet_cf_elections as elections;
+		let _ = elections::SharedDataReferenceCount::<Runtime, ()>::clear(u32::MAX, None);
+		let _ = elections::SharedData::<Runtime, ()>::clear(u32::MAX, None);
+		let _ = elections::BitmapComponents::<Runtime, ()>::clear(u32::MAX, None);
+		let _ = elections::IndividualComponents::<Runtime, ()>::clear(u32::MAX, None);
+		let _ = elections::ElectoralUnsynchronisedStateMap::<Runtime, ()>::clear(u32::MAX, None);
+		let _ = elections::ElectoralSettings::<Runtime, ()>::clear(u32::MAX, None);
+		let _ = elections::ElectionProperties::<Runtime, ()>::clear(u32::MAX, None);
+		let _ = elections::ElectionState::<Runtime, ()>::clear(u32::MAX, None);
+		let _ = elections::ElectionConsensusHistory::<Runtime, ()>::clear(u32::MAX, None);
+		let _ = elections::ElectionConsensusHistoryUpToDate::<Runtime, ()>::clear(u32::MAX, None);
+		let _ = elections::ContributingAuthorities::<Runtime, ()>::clear(u32::MAX, None);
+		elections::NextElectionIdentifier::<Runtime, ()>::kill();
+		elections::ElectoralUnsynchronisedSettings::<Runtime, ()>::kill();
+		elections::ElectoralUnsynchronisedState::<Runtime, ()>::kill();
+		elections::Status::<Runtime, ()>::kill();
 
 		let _result = pallet_cf_elections::Pallet::<Runtime, ()>::internally_initialize(
 			generic_elections::initial_state(chainlink_oracle_price_settings),

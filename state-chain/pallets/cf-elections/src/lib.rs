@@ -559,7 +559,7 @@ pub mod pallet {
 	// election identifier is used elsewhere to mean umi + extra.
 	/// Stores the next valid election identifier.
 	#[pallet::storage]
-	pub(crate) type NextElectionIdentifier<T: Config<I>, I: 'static = ()> =
+	pub type NextElectionIdentifier<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, UniqueMonotonicIdentifier, ValueQuery>;
 
 	/// Stores governance-controlled settings regarding the electoral system. These settings can be
@@ -659,7 +659,7 @@ pub mod pallet {
 	/// the current authority set, and so it may include authorities that are not in the current
 	/// authority set or exclude authorities that are in the current authority set.
 	#[pallet::storage]
-	pub(crate) type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
+	pub type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::ValidatorId, (), OptionQuery>;
 
 	/// Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
