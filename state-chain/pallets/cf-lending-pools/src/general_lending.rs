@@ -855,11 +855,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			account.try_adding_collateral_from_free_balance(&borrower_id, &extra_collateral)?;
 
-			ensure!(
-				account.derive_ltv()? <= config.ltv_thresholds.target,
-				Error::<T>::InsufficientCollateral
-			);
-
 			GeneralLendingPools::<T>::try_mutate(asset, |pool| {
 				let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
@@ -883,6 +878,11 @@ impl<T: Config> LendingApi for Pallet<T> {
 			)?;
 
 			account.loans.insert(loan_id, loan);
+
+			ensure!(
+				dbg!(account.derive_ltv()?) <= config.ltv_thresholds.target,
+				Error::<T>::InsufficientCollateral
+			);
 
 			T::Balance::credit_account(&borrower_id, asset, amount_to_borrow);
 
