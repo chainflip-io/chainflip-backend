@@ -109,12 +109,11 @@ impl<T: Config> LoanAccount<T> {
 	pub fn total_collateral_usd_value(&self) -> Result<AssetAmount, Error<T>> {
 		self.get_total_collateral()
 			.iter()
-			.map(|(asset, amount)| usd_value_of::<T>(*asset, *amount).ok())
-			.try_fold(0u128, |acc, x| acc.checked_add(x?))
-			.ok_or(Error::<T>::OraclePriceUnavailable)
+			.map(|(asset, amount)| usd_value_of::<T>(*asset, *amount))
+			.try_fold(0u128, |acc, x| Ok(acc.saturating_add(x?)))
 	}
 
-	pub fn check_ltv(&mut self, borrower_id: &T::AccountId) {
+	pub fn update_liquidation_status(&mut self, borrower_id: &T::AccountId) {
 		let config = LendingConfig::<T>::get();
 
 		let Ok(ltv) = self.derive_ltv() else {
@@ -267,6 +266,7 @@ impl<T: Config> LoanAccount<T> {
 		let principal = self.total_owed_usd_value()?;
 
 		if collateral == 0 {
+			log_or_panic!("Account has no collateral: {}", self.borrower_id);
 			return Err(Error::<T>::InsufficientCollateral);
 		}
 
@@ -573,11 +573,7 @@ impl<T: Config> LoanAccount<T> {
 				config.get_config_for_asset(loan.asset).liquidation_fee * provided_amount;
 			let after_fees = provided_amount.saturating_sub(liquidation_fee);
 
-			// NOTE: this may not be equal to the provided fee if the provided amount isn't
-			// sufficient
-			let actual_fee = provided_amount.saturating_sub(after_fees);
-
-			(after_fees, actual_fee)
+			(after_fees, liquidation_fee)
 		} else {
 			(provided_amount, 0)
 		};
@@ -595,7 +591,6 @@ impl<T: Config> LoanAccount<T> {
 			);
 
 			loan.pay_fee(remaining_fee);
-			loan.fees_paid.entry(loan.asset).or_default().saturating_accrue(liquidation_fee);
 			BTreeMap::from([(loan.asset, liquidation_fee)])
 		} else {
 			Default::default()
@@ -659,6 +654,8 @@ impl<T: Config> GeneralLoan<T> {
 				log_or_panic!("CHP Pool must exist for asset {}", self.asset);
 			}
 		});
+
+		self.fees_paid.entry(self.asset).or_default().saturating_accrue(amount);
 	}
 }
 
@@ -759,7 +756,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 			// stale oracle)
 			let _ = loan_account.charge_interest();
 			let _ = loan_account.process_auto_top_up(borrower_id);
-			loan_account.check_ltv(borrower_id);
+			loan_account.update_liquidation_status(borrower_id);
 		});
 	}
 
@@ -841,7 +838,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		NextLoanId::<T>::set(loan_id + 1);
 
 		LoanAccounts::<T>::mutate(&borrower_id, |maybe_account| {
-			let account = Self::create_loan_account_if_empty(
+			let account = Self::create_or_update_loan_account(
 				borrower_id.clone(),
 				maybe_account,
 				primary_collateral_asset,
@@ -1008,7 +1005,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<(), DispatchError> {
 		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
-			let loan_account = Self::create_loan_account_if_empty(
+			let loan_account = Self::create_or_update_loan_account(
 				borrower_id.clone(),
 				maybe_account,
 				primary_collateral_asset,
@@ -1204,13 +1201,19 @@ impl<T: Config> Pallet<T> {
 		full_fee_amount.saturating_sub(network_fee_amount)
 	}
 
-	fn create_loan_account_if_empty(
+	fn create_or_update_loan_account(
 		borrower_id: T::AccountId,
 		maybe_account: &mut Option<LoanAccount<T>>,
 		primary_collateral_asset: Option<Asset>,
 	) -> Result<&mut LoanAccount<T>, Error<T>> {
 		let account = match maybe_account {
-			Some(account) => account,
+			Some(account) => {
+				// If the user provides primary collateral asset, we update it:
+				if let Some(asset) = primary_collateral_asset {
+					account.primary_collateral_asset = asset;
+				}
+				account
+			},
 			None => {
 				let primary_collateral_asset =
 					primary_collateral_asset.ok_or(Error::<T>::InvalidLoanParameters)?;
