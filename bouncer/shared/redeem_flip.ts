@@ -89,7 +89,7 @@ export async function redeemFlip(
 
   logger.debug(`Executing redemption`);
 
-  const nonce = await getNextEvmNonce('Ethereum');
+  const nonce = await getNextEvmNonce(logger, 'Ethereum');
 
   const redemptionExecutedHandle = observeEvent(logger, 'funding:RedemptionSettled', {
     test: (event) => event.data[0] === flipWallet.address,

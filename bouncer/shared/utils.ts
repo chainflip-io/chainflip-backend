@@ -36,7 +36,7 @@ import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
 import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logger';
 import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
-import { KeyedMutex } from './utils/keyed_mutex';
+import { KeyedMutex } from 'shared/utils/keyed_mutex';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -159,6 +159,16 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return process.env.ARB_USDC_ADDRESS ?? '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9';
         case 'CFTESTER':
           return '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82';
+        case 'PRICE_FEED_BTC':
+          return '0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f';
+        case 'PRICE_FEED_ETH':
+          return '0x4A679253410272dd5232B3Ff7cF5dbB88f295319';
+        case 'PRICE_FEED_SOL':
+          return '0x7a2088a1bFc9d81c55368AE168C2C02570cB814F';
+        case 'PRICE_FEED_USDC':
+          return '0x09635F643e140090A9A8Dcd712eD6285858ceBef';
+        case 'PRICE_FEED_USDT':
+          return '0xc5a5C42992dECbae36851359345FE25997F5C42d';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -192,18 +202,6 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return 'EWaGcrFXhf9Zq8yxSdpAa75kZmDXkRxaP17sYiL6UpZN';
         case 'USER_ADDRESS_LOOKUP_TABLE':
           return '2UooihWEqsL6C1aadx56ViJN3pgv4as7arJ5pXQRz45F';
-        case 'PRICE_FEED_MOCK':
-          return 'DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X';
-        case 'PRICE_FEED_BTC':
-          return 'HDSV2wFxmsrmCwwY34QzaVkvmJpG7VF8S9fX2iThynjG';
-        case 'PRICE_FEED_ETH':
-          return '8U3c4SqXaXKPQiarNH3xHXiVoBLYbkqkzusthyJJjGrE';
-        case 'PRICE_FEED_SOL':
-          return 'CrjmdLxTkmd5bxTQjE82FNgiuxeoY3G4EzzhDJ4RH9Wx';
-        case 'PRICE_FEED_USDC':
-          return '7BH1paBwjVDrHTb8YkHcyt7ZfxsCbnBMeByGBH6L8PFk';
-        case 'PRICE_FEED_USDT':
-          return '7qdy4DhvG5GDkiGNrsmrMcCyiVNPtmrUmGo3UntcrLwk';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }

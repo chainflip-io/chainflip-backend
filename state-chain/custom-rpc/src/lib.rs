@@ -1660,13 +1660,9 @@ where
 					))
 				},
 				_ => {
-					let role = api.cf_account_role(hash, account_id.clone())?.ok_or_else(|| {
-						CfApiError::ErrorObject(ErrorObject::owned(
-							ErrorCode::InvalidParams.code(),
-							"Unknown Account.",
-							None::<()>,
-						))
-					})?;
+					let role = api
+						.cf_account_role(hash, account_id.clone())?
+						.unwrap_or(AccountRole::Unregistered);
 					let common_items = api
 						.cf_common_account_info(hash, &account_id)?
 						.try_map_balances(TryInto::try_into)

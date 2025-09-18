@@ -1,8 +1,8 @@
 #!/usr/bin/env -S pnpm tsx
 // INSTRUCTIONS
 
-import { runWithTimeoutAndExit } from '../shared/utils';
-import { submitGovernanceExtrinsic } from '../shared/cf_governance';
+import { runWithTimeoutAndExit } from 'shared/utils';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 
 // This command is for the upgrade test when updating Solana images. The deployment of Solana ALTs is non-deterministic
 // and it's address can't be known. Therefore each image will have its own ALT address. This is problematic in the

@@ -19,7 +19,7 @@ use cf_runtime_utilities::log_or_panic;
 use cf_utilities::macros::*;
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::{Get, RuntimeDebug, H160};
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use pallet_cf_elections::{
 	electoral_system::ElectoralReadAccess,
@@ -39,7 +39,6 @@ use pallet_cf_elections::{
 };
 
 use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
-use cf_chains::sol::SolAddress;
 use cf_traits::{impl_pallet_safe_mode, Chainflip, OraclePrice};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
@@ -103,9 +102,8 @@ pub fn decode_and_get_latest_oracle_price<T: OPTypes>(asset: any::Asset) -> Opti
 derive_common_traits! {
 	#[derive(TypeInfo)]
 	pub struct ChainlinkOraclePriceSettings<C: Container = VectorContainer> {
-		pub sol_oracle_program_id: SolAddress,
-		pub sol_oracle_feeds: C::Of<SolAddress>,
-		pub sol_oracle_query_helper: SolAddress,
+		pub arb_address_checker: H160,
+		pub arb_oracle_feeds: C::Of<H160>,
 		pub eth_address_checker: H160,
 		pub eth_oracle_feeds: C::Of<H160>
 	}
@@ -117,16 +115,14 @@ impl<F: Container> ChainlinkOraclePriceSettings<F> {
 		t: impl Transformation<F, G>,
 	) -> ChainlinkOraclePriceSettings<G> {
 		let ChainlinkOraclePriceSettings {
-			sol_oracle_program_id,
-			sol_oracle_feeds,
-			sol_oracle_query_helper,
+			arb_address_checker,
+			arb_oracle_feeds,
 			eth_address_checker,
 			eth_oracle_feeds,
 		} = self;
 		ChainlinkOraclePriceSettings {
-			sol_oracle_program_id,
-			sol_oracle_feeds: t.at(sol_oracle_feeds),
-			sol_oracle_query_helper,
+			arb_address_checker,
+			arb_oracle_feeds: t.at(arb_oracle_feeds),
 			eth_address_checker,
 			eth_oracle_feeds: t.at(eth_oracle_feeds),
 		}
@@ -271,10 +267,27 @@ pub type GenericElectoralSystemRunner = CompositeRunner<
 pub fn initial_state(
 	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings,
 ) -> InitialStateOf<Runtime, ()> {
+	// The prices for usdc and usdt are considered up-to-date
+	// if they have been updated at least once every 25 hours.
+	let up_to_date_timeout_overrides: BTreeMap<_, _> = [
+		(ChainlinkAssetpair::UsdcUsd, Seconds(60 * 60 * 25)),
+		(ChainlinkAssetpair::UsdtUsd, Seconds(60 * 60 * 25)),
+	]
+	.into();
+
+	// There is an additionaly 5 minute window during which we
+	// ask the engines to submit any latest price information that
+	// they have. Once this is over, the price is marked as stale.
+	let maybe_stale_timeout_overrides: BTreeMap<_, _> = [
+		(ChainlinkAssetpair::UsdcUsd, Seconds(60 * 5)),
+		(ChainlinkAssetpair::UsdtUsd, Seconds(60 * 5)),
+	]
+	.into();
+
 	InitialState {
 		unsynchronised_state: (OraclePriceTracker {
 			chain_states: ExternalChainStates {
-				solana: ExternalChainState { price: Default::default() },
+				arbitrum: ExternalChainState { price: Default::default() },
 				ethereum: ExternalChainState { price: Default::default() },
 			},
 			get_time: Default::default(),
@@ -283,15 +296,19 @@ pub fn initial_state(
 			emit_oracle_price_event: Default::default(),
 		},),
 		unsynchronised_settings: (OraclePriceSettings {
-			solana: ExternalChainSettings {
+			arbitrum: ExternalChainSettings {
 				up_to_date_timeout: Seconds(60),
 				maybe_stale_timeout: Seconds(30),
 				minimal_price_deviation: BasisPoints(10),
+				up_to_date_timeout_overrides: up_to_date_timeout_overrides.clone(),
+				maybe_stale_timeout_overrides: maybe_stale_timeout_overrides.clone(),
 			},
 			ethereum: ExternalChainSettings {
 				up_to_date_timeout: Seconds(60),
 				maybe_stale_timeout: Seconds(30),
 				minimal_price_deviation: BasisPoints(10),
+				up_to_date_timeout_overrides: up_to_date_timeout_overrides.clone(),
+				maybe_stale_timeout_overrides: maybe_stale_timeout_overrides.clone(),
 			},
 		},),
 		settings: (chainlink_oracle_price_settings,),

@@ -371,17 +371,16 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		],
 	),
 	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings {
-		sol_oracle_program_id: const_address("HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny"),
-		sol_oracle_feeds: Array {
+		arb_address_checker: H160(hex_literal::hex!("69c700a0debab9e349dd1f52ed62eb253a3c9892")),
+		arb_oracle_feeds: Array {
 			array: [
-				const_address("Cv4T27XbjVoKUYwP72NQQanvZeA7W4YF9L4EnYT9kx5o"),
-				const_address("716hFAECqotxcXcj8Hs8nr7AG6q9dBw2oX3k3M8V7uGq"),
-				const_address("CH31Xns5z3M1cTAbKW34jcxPPciazARpijcHj9rxtemt"),
-				const_address("GzGuoKXE8Unn7Vcg1DtomwD27tL4bVUpSK2M1yk6Xfz5"),
-				const_address("8vAuuqC5wVZ9Z9oQUGGDSjYgudTfjmyqGU5VucQxTk5U"),
+				H160(hex_literal::hex!("6ce185860a4963106506C203335A2910413708e9")),
+				H160(hex_literal::hex!("639Fe6ab55C921f74e7fac1ee960C0B6293ba612")),
+				H160(hex_literal::hex!("24ceA4b8ce57cdA5058b924B9B9987992450590c")),
+				H160(hex_literal::hex!("50834F3163758fcC1Df9973b6e91f0F0F0434aD3")),
+				H160(hex_literal::hex!("3f3f5dF88dC9F13eac63DF89EC16ef6e7E25DdE7")),
 			],
 		},
-		sol_oracle_query_helper: const_address("5Vg6D87L4LMDoyze9gU56NhvcRKWrwbJMquF2tj4vnuX"),
 		eth_address_checker: H160(hex_literal::hex!("1562Ad6bb0e68980A3111F24531c964c7e155611")),
 		eth_oracle_feeds: Array {
 			array: [

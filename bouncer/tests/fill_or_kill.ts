@@ -151,23 +151,23 @@ async function testOracleSwapsFoK(parentLogger: Logger): Promise<void> {
 
   logger.info('Setting up unrealistic prices for oracle swaps to test fill-or-kill');
 
-  // Only need to update the prices in Solana as that's the main feed
+  // Only need to update the prices in Arbitrum as that's the main feed
   await Promise.all([
-    updatePriceFeed(logger, 'Solana', 'BTC', '1000000'),
-    updatePriceFeed(logger, 'Solana', 'ETH', '100000'),
+    updatePriceFeed(logger, 'Arbitrum', 'BTC', '1000000'),
+    updatePriceFeed(logger, 'Arbitrum', 'ETH', '100000'),
   ]);
 
-  // Check that all Solana prices are up to date to ensure that oracle swaps
+  // Check that all Arbitrum prices are up to date to ensure that oracle swaps
   // are not being refunded due to stale prices.
   const chainflip = await getChainflipApi();
   const response = JSON.parse(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (await chainflip.query.genericElections.electoralUnsynchronisedState()) as any,
   );
-  const chainState = response.chainStates.solana.price;
+  const chainState = response.chainStates.arbitrum.price;
   for (const [asset, feed] of Object.entries(chainState) as [string, { priceStatus: string }][]) {
     if (feed.priceStatus !== 'UpToDate') {
-      throw new Error(`Price status for solana.${asset} is not UpToDate: ${feed.priceStatus}`);
+      throw new Error(`Price status for arbitrum.${asset} is not UpToDate: ${feed.priceStatus}`);
     }
   }
 
