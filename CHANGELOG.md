@@ -2,6 +2,16 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.11.3] - 2025-09-18
+
+### Features
+
+- Replace solana by arbitrum (oracle price chain) ([#6126](https://github.com/chainflip-io/chainflip-backend/issues/6126))
+
+### Fixes
+
+- Default account role to unregistered in account_info rpc
+
 ## [1.11.2] - 2025-09-15
 
 - Use fresh WS connection for each dot/hub request.
