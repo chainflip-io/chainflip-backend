@@ -11,7 +11,7 @@ use cf_rpc_apis::{
 	OrderFilled, RefundParametersRpc, SwapChannelInfo,
 };
 use codec::Encode;
-use pallet_cf_lending_pools::OwedAmount;
+use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions, OwedAmount};
 use pallet_cf_pools::{
 	IncreaseOrDecrease, LimitOrder, LimitOrderLiquidity, PoolOrder, RangeOrder,
 	RangeOrderLiquidity, UnidirectionalSubPoolDepth,
@@ -1118,6 +1118,34 @@ fn loan_account_serialization() {
 	};
 
 	insta::assert_json_snapshot!(loan_account);
+}
+
+#[test]
+fn lending_config_serialization() {
+	let config = RpcLendingConfig {
+		ltv_thresholds: LtvThresholds {
+			minimum: FixedU64::from_rational(20, 100),
+			target: FixedU64::from_rational(75, 100),
+			topup: FixedU64::from_rational(80, 100),
+			soft_liquidation: FixedU64::from_rational(90, 100),
+			soft_liquidation_abort: FixedU64::from_rational(88, 100),
+			hard_liquidation: FixedU64::from_rational(95, 100),
+			hard_liquidation_abort: FixedU64::from_rational(93, 100),
+		},
+		network_fee_contributions: NetworkFeeContributions {
+			from_interest: Percent::from_percent(10),
+			from_origination_fee: Percent::from_percent(20),
+			from_liquidation_fee: Percent::from_percent(30),
+		},
+		fee_swap_interval_blocks: 10,
+		interest_payment_interval_blocks: 15,
+		fee_swap_threshold_usd: U256::from(20_000_000),
+		soft_liquidation_max_oracle_slippage: 50,
+		hard_liquidation_max_oracle_slippage: 500,
+		fee_swap_max_oracle_slippage: 50,
+	};
+
+	insta::assert_json_snapshot!(config);
 }
 
 #[test]

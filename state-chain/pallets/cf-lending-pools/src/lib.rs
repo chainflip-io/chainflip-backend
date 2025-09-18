@@ -22,13 +22,13 @@ mod general_lending;
 mod general_lending_pool;
 
 use cf_chains::SwapOrigin;
+use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
-	InterestRateConfiguration, LendingConfiguration, LendingPoolConfiguration,
+	InterestRateConfiguration, LendingConfiguration, LendingPoolConfiguration, LtvThresholds,
 	NetworkFeeContributions, RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan,
 	RpcLoanAccount,
 };
-use general_lending::{LoanAccount, LtvThresholds};
 pub use general_lending_pool::LendingPool;
 // Temporarily exposing this for a migration
 pub use core_lending_pool::{PendingLoan, ScaledAmount};

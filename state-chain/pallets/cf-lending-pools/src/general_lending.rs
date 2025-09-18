@@ -1468,7 +1468,9 @@ pub struct LendingPoolConfiguration {
 	pub interest_rate_curve: InterestRateConfiguration,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
+)]
 pub struct LtvThresholds {
 	/// Borrowers aren't allowed to add more collateral if their ltv would drop below this
 	/// threshold.
@@ -1512,7 +1514,9 @@ impl LtvThresholds {
 	}
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
+)]
 pub struct NetworkFeeContributions {
 	pub from_interest: Percent,
 	pub from_origination_fee: Percent,

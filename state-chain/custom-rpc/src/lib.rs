@@ -83,8 +83,8 @@ use state_chain_runtime::{
 		CustomRuntimeApi, DelegationSnapshot, DispatchErrorWithMessage, ElectoralRuntimeApi,
 		EvmCallDetails, FailingWitnessValidators, FeeTypes, LendingPosition,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees, OpenedDepositChannels,
-		OperatorInfo, RpcAccountInfoCommonItems, RpcLendingPool, RuntimeApiPenalty,
-		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
+		OperatorInfo, RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool,
+		RuntimeApiPenalty, SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
 		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
@@ -1255,6 +1255,12 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId, U256>>>;
 
+	#[method(name = "lending_config")]
+	fn cf_lending_config(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcLendingConfig>;
+
 	#[method(name = "evm_calldata")]
 	fn cf_evm_calldata(
 		&self,
@@ -1530,6 +1536,7 @@ where
 		cf_vault_addresses() -> VaultAddresses,
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
+		cf_lending_config() -> RpcLendingConfig,
 		cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>) -> Vec<OraclePrice>,
 	}
 

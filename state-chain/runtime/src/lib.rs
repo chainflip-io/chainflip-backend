@@ -50,10 +50,10 @@ use crate::{
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DelegationInfo,
 		DispatchErrorWithMessage, FailingWitnessValidators, FeeTypes, LendingPosition,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFeeDetails, NetworkFees,
-		OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-		TradingStrategyLimits, TransactionScreeningEvent, TransactionScreeningEvents,
-		ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RpcLendingConfig,
+		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
+		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvent,
+		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -2727,7 +2727,19 @@ impl_runtime_apis! {
 			pallet_cf_lending_pools::get_loan_accounts::<Runtime>(borrower_id)
 		}
 
-
+		fn cf_lending_config() -> RpcLendingConfig {
+			let config = pallet_cf_lending_pools::LendingConfig::<Runtime>::get();
+			RpcLendingConfig {
+				ltv_thresholds: config.ltv_thresholds,
+				network_fee_contributions: config.network_fee_contributions,
+				fee_swap_interval_blocks: config.fee_swap_interval_blocks,
+				interest_payment_interval_blocks: config.interest_payment_interval_blocks,
+				fee_swap_threshold_usd: config.fee_swap_threshold_usd.into(),
+				soft_liquidation_max_oracle_slippage: config.soft_liquidation_max_oracle_slippage,
+				hard_liquidation_max_oracle_slippage: config.hard_liquidation_max_oracle_slippage,
+				fee_swap_max_oracle_slippage: config.fee_swap_max_oracle_slippage,
+			}
+		}
 
 		fn cf_evm_calldata(
 			caller: EthereumAddress,
