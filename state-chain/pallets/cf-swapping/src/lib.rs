@@ -2772,14 +2772,17 @@ pub mod pallet {
 			)
 			.and_then(|amount| C::ChainAmount::try_from(amount).ok())
 			.unwrap_or_else(|| {
-				log::warn!("Unable to calculate input amount required for gas of {required_gas:?} for input asset ${input_asset:?}. Estimating the input amount based on either oracle price or reference price.");
 				let oracle_price = T::PriceFeedApi::get_price(C::GAS_ASSET.into());
-				let price = if oracle_price.as_ref().is_some_and(|price| !price.stale) {
+				let price = if oracle_price.as_ref().is_some() {
 					Some(oracle_price.unwrap().price)
 				} else {
 					None
 				};
-				C::input_asset_amount_using_reference_gas_asset_price(input_asset, required_gas, price)
+				C::input_asset_amount_using_reference_gas_asset_price(
+					input_asset,
+					required_gas,
+					price,
+				)
 			})
 		}
 
