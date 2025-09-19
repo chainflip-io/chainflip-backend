@@ -12,7 +12,7 @@ import {
   hexPubkeyToFlipAddress,
   newAddress,
 } from 'shared/utils';
-import { Logger } from 'shared/utils/logger';
+import { getIsoTime, Logger } from 'shared/utils/logger';
 import { approveErc20 } from 'shared/approve_erc20';
 import { newStatechainAddress } from 'shared/new_statechain_address';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -69,7 +69,13 @@ function evmToScAddress(evmAddress: string) {
 }
 
 export async function testDelegate(logger: Logger) {
-  const uri = '//Operator_0';
+  // The operator name has to be unique across bouncer runs,
+  // since if the test is run the second time for an account
+  // that's already registered, it won't emit the `funding:Funded`
+  // event
+  const uri = `//Operator_0_${getIsoTime()}`;
+  logger.debug(`Uri for unique operator account is: "${uri}"`);
+
   const scUtilsAddress = getContractAddress('Ethereum', 'SC_UTILS');
   const { pubkey: whalePubkey } = getEvmWhaleKeypair('Ethereum');
 
