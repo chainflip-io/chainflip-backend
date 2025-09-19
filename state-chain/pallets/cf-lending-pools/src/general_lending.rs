@@ -56,6 +56,28 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
+	/// Convenience method to get a loan and at the same time sanity check that the asset
+	/// matches the expected asset.
+	fn get_loan_and_check_asset(
+		&mut self,
+		loan_id: LoanId,
+		asset: Asset,
+	) -> Option<&mut GeneralLoan<T>> {
+		match self.loans.get_mut(&loan_id) {
+			Some(loan) if loan.asset == asset => Some(loan),
+			Some(loan) => {
+				log_or_panic!(
+					"Loan {} has asset {}, but expected ({})",
+					loan_id,
+					loan.asset,
+					asset
+				);
+				None
+			},
+			None => None,
+		}
+	}
+
 	/// Returns the account's collateral including any amounts that are in liquidation swaps.
 	pub fn get_total_collateral(&self) -> BTreeMap<Asset, AssetAmount> {
 		// Note that in order to keep things simple we don't guarantee that all of the
@@ -185,21 +207,23 @@ impl<T: Config> LoanAccount<T> {
 		{
 			if let Some(swap_progress) = T::SwapRequestHandler::abort_swap_request(*swap_request_id)
 			{
-				let excess_amount = match self.repay_principal(
-					*loan_id,
-					*to_asset,
-					swap_progress.accumulated_output_amount,
-					true, /* liquidation */
-				) {
-					Ok(LoanRepaymentOutcome::FullyRepaid { excess_amount }) => {
-						fully_repaid_loans.push(loan_id);
-						excess_amount
+				let excess_amount = match self.get_loan_and_check_asset(*loan_id, *to_asset) {
+					Some(loan) => {
+						match loan.repay_principal(
+							swap_progress.accumulated_output_amount,
+							true, /* liquidation */
+						) {
+							LoanRepaymentOutcome::FullyRepaid { excess_amount } => {
+								fully_repaid_loans.push(loan_id);
+								excess_amount
+							},
+							LoanRepaymentOutcome::PartiallyRepaid => {
+								// On partial repayment the full amount has been consumed.
+								0
+							},
+						}
 					},
-					Ok(LoanRepaymentOutcome::PartiallyRepaid) => 0,
-					Err(_) => {
-						// On failure the full amount is unspent
-						swap_progress.accumulated_output_amount
-					},
+					None => swap_progress.accumulated_output_amount,
 				};
 
 				if excess_amount > 0 {
@@ -539,88 +563,12 @@ impl<T: Config> LoanAccount<T> {
 			});
 		}
 	}
-
-	/// Repays (fully or partially) the loan with `provided_amount` (that was either debited from
-	/// the account or received during liquidation). Returns any unused amount. If the loan does not
-	/// exist, returns `None`.
-	#[transactional]
-	fn repay_principal(
-		&mut self,
-		loan_id: LoanId,
-		provided_asset: Asset,
-		provided_amount: AssetAmount,
-		should_charge_liquidation_fee: bool,
-	) -> Result<LoanRepaymentOutcome, DispatchError> {
-		let config = LendingConfig::<T>::get();
-
-		let Some(loan) = self.loans.get_mut(&loan_id) else {
-			// In rare cases it may be possible for the loan to no longer exist if
-			// e.g. the principal was fully covered by a prior liquidation swap.
-			fail!(Error::<T>::LoanNotFound);
-		};
-
-		if loan.asset != provided_asset {
-			log_or_panic!(
-				"Unexpected asset {} provided to repay loan {loan_id}, expected {}",
-				provided_asset,
-				loan.asset
-			);
-			fail!(Error::<T>::InternalInvariantViolation);
-		}
-
-		let (provided_amount_after_fees, liquidation_fee) = if should_charge_liquidation_fee {
-			let liquidation_fee =
-				config.get_config_for_asset(loan.asset).liquidation_fee * provided_amount;
-			let after_fees = provided_amount.saturating_sub(liquidation_fee);
-
-			(after_fees, liquidation_fee)
-		} else {
-			(provided_amount, 0)
-		};
-
-		// Making sure the user doesn't pay more than the total principal:
-		let repayment_amount = core::cmp::min(provided_amount_after_fees, loan.owed_principal);
-
-		loan.repay_funds(repayment_amount);
-
-		let liquidation_fees = if liquidation_fee > 0 {
-			let remaining_fee = Pallet::<T>::take_network_fee(
-				liquidation_fee,
-				loan.asset,
-				config.network_fee_contributions.from_liquidation_fee,
-			);
-
-			loan.fees_paid.entry(loan.asset).or_default().saturating_accrue(liquidation_fee);
-
-			Pallet::<T>::accrue_fees(loan.asset, loan.asset, remaining_fee);
-
-			BTreeMap::from([(loan.asset, liquidation_fee)])
-		} else {
-			Default::default()
-		};
-
-		Pallet::<T>::deposit_event(Event::LoanRepaid {
-			loan_id,
-			amount: repayment_amount,
-			liquidation_fees,
-		});
-
-		if loan.owed_principal == 0 {
-			// NOTE: in some cases we may want to delay settling/removing the loan (e.g. there may
-			// be pending liquidation swaps to process), so we let the caller settle it instead
-			// of doing it here.
-			Ok(LoanRepaymentOutcome::FullyRepaid {
-				excess_amount: provided_amount_after_fees.saturating_sub(repayment_amount),
-			})
-		} else {
-			Ok(LoanRepaymentOutcome::PartiallyRepaid)
-		}
-	}
 }
 
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct GeneralLoan<T: Config> {
+	pub id: LoanId,
 	pub asset: Asset,
 	pub created_at_block: BlockNumberFor<T>,
 	pub owed_principal: AssetAmount,
@@ -632,6 +580,65 @@ pub struct GeneralLoan<T: Config> {
 impl<T: Config> GeneralLoan<T> {
 	fn owed_principal_usd_value(&self) -> Result<AssetAmount, Error<T>> {
 		usd_value_of::<T>(self.asset, self.owed_principal)
+	}
+
+	/// Repays (fully or partially) the loan with `provided_amount` (that was either debited from
+	/// the account or received during liquidation). Returns any unused amount. The caller is
+	/// responsible for making sure that the provided asset is the same as the loan's asset.
+	fn repay_principal(
+		&mut self,
+		provided_amount: AssetAmount,
+		should_charge_liquidation_fee: bool,
+	) -> LoanRepaymentOutcome {
+		let config = LendingConfig::<T>::get();
+
+		let (provided_amount_after_fees, liquidation_fee) = if should_charge_liquidation_fee {
+			let liquidation_fee =
+				config.get_config_for_asset(self.asset).liquidation_fee * provided_amount;
+			let after_fees = provided_amount.saturating_sub(liquidation_fee);
+
+			(after_fees, liquidation_fee)
+		} else {
+			(provided_amount, 0)
+		};
+
+		// Making sure the user doesn't pay more than the total principal:
+		let repayment_amount = core::cmp::min(provided_amount_after_fees, self.owed_principal);
+
+		self.repay_funds(repayment_amount);
+
+		let liquidation_fees = if liquidation_fee > 0 {
+			let remaining_fee = Pallet::<T>::take_network_fee(
+				liquidation_fee,
+				self.asset,
+				config.network_fee_contributions.from_liquidation_fee,
+			);
+
+			self.fees_paid.entry(self.asset).or_default().saturating_accrue(liquidation_fee);
+
+			Pallet::<T>::accrue_fees(self.asset, self.asset, remaining_fee);
+
+			BTreeMap::from([(self.asset, liquidation_fee)])
+		} else {
+			Default::default()
+		};
+
+		Pallet::<T>::deposit_event(Event::LoanRepaid {
+			loan_id: self.id,
+			amount: repayment_amount,
+			liquidation_fees,
+		});
+
+		if self.owed_principal == 0 {
+			// NOTE: in some cases we may want to delay settling/removing the loan (e.g. there may
+			// be pending liquidation swaps to process), so we let the caller settle it instead
+			// of doing it here.
+			LoanRepaymentOutcome::FullyRepaid {
+				excess_amount: provided_amount_after_fees.saturating_sub(repayment_amount),
+			}
+		} else {
+			LoanRepaymentOutcome::PartiallyRepaid
+		}
 	}
 
 	/// Repays previously borrowed funds to the pool in pool's asset, reducing the owed principal
@@ -884,6 +891,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 			})?;
 
 			let mut loan = GeneralLoan {
+				id: loan_id,
 				asset,
 				created_at_block: frame_system::Pallet::<T>::current_block_number(),
 				owed_principal: amount_to_borrow,
@@ -997,18 +1005,19 @@ impl<T: Config> LendingApi for Pallet<T> {
 		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanNotFound)?;
 
-			let loan_asset =
-				loan_account.loans.get_mut(&loan_id).ok_or(Error::<T>::LoanNotFound)?.asset;
+			let Some(loan) = loan_account.loans.get_mut(&loan_id) else {
+				// In rare cases it may be possible for the loan to no longer exist if
+				// e.g. the principal was fully covered by a prior liquidation swap.
+				fail!(Error::<T>::LoanNotFound);
+			};
+
+			let loan_asset = loan.asset;
 
 			T::Balance::try_debit_account(borrower_id, loan_asset, repayment_amount)?;
 
-			if let LoanRepaymentOutcome::FullyRepaid { excess_amount } = loan_account
-				.repay_principal(
-					loan_id,
-					loan_asset,
-					repayment_amount,
-					false, /* no liquidation fee */
-				)? {
+			if let LoanRepaymentOutcome::FullyRepaid { excess_amount } =
+				loan.repay_principal(repayment_amount, false /* no liquidation fee */)
+			{
 				loan_account.settle_loan(loan_id, false /* via liquidation */);
 
 				T::Balance::credit_account(borrower_id, loan_asset, excess_amount);
@@ -1152,20 +1161,26 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 						},
 					};
 
-					let remaining_amount = match loan_account.repay_principal(
-						loan_id,
-						liquidation_swap.to_asset,
-						output_amount,
-						true, /* liquidation */
-					) {
-						Ok(LoanRepaymentOutcome::FullyRepaid { excess_amount }) => {
-							// NOTE: we don't need to worry about settling the loan just yet
-							// as there may be more liquidation swaps to process for the loan.
-							excess_amount
+					let remaining_amount = match loan_account
+						.get_loan_and_check_asset(loan_id, liquidation_swap.to_asset)
+					{
+						Some(loan) => {
+							match loan.repay_principal(output_amount, true /* liquidation */) {
+								LoanRepaymentOutcome::FullyRepaid { excess_amount } => {
+									// NOTE: we don't need to worry about settling the loan just yet
+									// as there may be more liquidation swaps to process for the
+									// loan.
+									excess_amount
+								},
+								LoanRepaymentOutcome::PartiallyRepaid => {
+									// On partial repayment the full amount has been consumed.
+									0
+								},
+							}
 						},
-						Ok(LoanRepaymentOutcome::PartiallyRepaid) => 0,
-						Err(_) => {
-							// On failure, the full amount is considered unspent
+						None => {
+							// In rare cases it may be possible for the loan to no longer exist if
+							// e.g. the principal was fully covered by a prior liquidation swap.
 							output_amount
 						},
 					};

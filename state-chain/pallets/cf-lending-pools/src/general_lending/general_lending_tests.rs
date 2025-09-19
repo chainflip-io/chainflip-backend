@@ -208,6 +208,7 @@ fn basic_general_lending() {
 					loans: BTreeMap::from([(
 						LOAN_ID,
 						GeneralLoan {
+							id: LOAN_ID,
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL,
@@ -490,6 +491,7 @@ fn basic_loan_aggregation() {
 					loans: BTreeMap::from([(
 						LOAN_ID,
 						GeneralLoan {
+							id: LOAN_ID,
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL + EXTRA_PRINCIPAL_1,
@@ -573,6 +575,7 @@ fn basic_loan_aggregation() {
 					loans: BTreeMap::from([(
 						LOAN_ID,
 						GeneralLoan {
+							id: LOAN_ID,
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							// Loan's owed principal has been increased:
@@ -1110,6 +1113,7 @@ fn basic_liquidation() {
 					loans: BTreeMap::from([(
 						LOAN_ID,
 						GeneralLoan {
+							id: LOAN_ID,
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL - (SWAPPED_PRINCIPAL - liquidation_fee_1),
@@ -1831,6 +1835,7 @@ fn init_liquidation_swaps_test() {
 			(
 				LOAN_1,
 				GeneralLoan {
+					id: LOAN_ID,
 					asset: Asset::Btc,
 					created_at_block: 0,
 					owed_principal: 20,
@@ -1840,6 +1845,7 @@ fn init_liquidation_swaps_test() {
 			(
 				LOAN_2,
 				GeneralLoan {
+					id: LOAN_ID,
 					asset: Asset::Sol,
 					created_at_block: 0,
 					owed_principal: 2000,
