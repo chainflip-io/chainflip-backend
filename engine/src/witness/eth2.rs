@@ -443,6 +443,7 @@ impl VoterApi<EthereumDepositChannelWitnessingES> for EthereumDepositChannelWitn
 					deposit_details: DepositDetails { tx_hashes },
 				})
 				.chain(erc20_ingresses)
+				.sorted_by_key(|deposit_witness| deposit_witness.deposit_address)
 				.collect(),
 			data.1,
 		)))
@@ -662,7 +663,7 @@ impl VoterApi<EthereumVaultDepositWitnessingES> for EthereumVaultDepositWitnesse
 				_ => {},
 			}
 		}
-		Ok(Some((result, data.1)))
+		Ok(Some((result.into_iter().sorted().collect(), data.1)))
 	}
 }
 
@@ -735,7 +736,7 @@ impl VoterApi<EthereumStateChainGatewayWitnessingES> for EthereumStateChainGatew
 			}
 		}
 
-		Ok(Some((result, data.1)))
+		Ok(Some((result.into_iter().sorted().collect(), data.1)))
 	}
 }
 
@@ -831,7 +832,7 @@ impl VoterApi<EthereumKeyManagerWitnessingES> for EthereumKeyManagerWitnesserVot
 			}
 		}
 
-		Ok(Some((result, data.1)))
+		Ok(Some((result.into_iter().sorted().collect(), data.1)))
 	}
 }
 
@@ -961,7 +962,7 @@ impl VoterApi<EthereumScUtilsWitnessingES> for EthereumScUtilsVoter {
 			}
 		}
 
-		Ok(Some((result, data.1)))
+		Ok(Some((result.into_iter().sorted().collect(), data.1)))
 	}
 }
 #[derive(Clone)]
