@@ -25,7 +25,7 @@ use sp_runtime::traits::Member;
 use crate::benchmarking_value::BenchmarkValue;
 use cf_primitives::{
 	chains::{assets, AnyChain},
-	AssetAmount, ChannelId,
+	AssetAmount, ChannelId, Price,
 };
 
 impl Chain for AnyChain {
@@ -55,6 +55,7 @@ impl Chain for AnyChain {
 	fn input_asset_amount_using_reference_gas_asset_price(
 		_input_asset: Self::ChainAsset,
 		_required_gas: Self::ChainAmount,
+		_price: Option<Price>,
 	) -> Self::ChainAmount {
 		0
 	}
