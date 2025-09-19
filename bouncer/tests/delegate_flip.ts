@@ -1,14 +1,14 @@
 import Web3 from 'web3';
 import { randomBytes } from 'crypto';
-import { signAndSendTxEvm } from 'shared/send_evm';
+import { HDNodeWallet } from 'ethers';
 import {
   amountToFineAmountBigInt,
+  createEvmWalletAndFund,
   createStateChainKeypair,
   decodeFlipAddressForContract,
   defaultAssetAmounts,
   getContractAddress,
   getEvmEndpoint,
-  getEvmWhaleKeypair,
   hexPubkeyToFlipAddress,
   newAddress,
 } from 'shared/utils';
@@ -31,25 +31,36 @@ const evmCallDetails = z.object({
 
 async function encodeAndSendDelegationApiCall(
   logger: Logger,
-  caller: string,
+  evmWallet: HDNodeWallet,
   call: DelegationApi,
 ): Promise<string> {
   await using chainflip = await getChainflipApi();
 
-  logger.info(`Requesting EVM encoding for ${caller} ${JSON.stringify(call)}`);
+  logger.info(`Requesting EVM encoding for ${evmWallet.address} ${JSON.stringify(call)}`);
 
-  const payload = await chainflip.rpc('cf_evm_calldata', caller, {
+  const payload = await chainflip.rpc('cf_evm_calldata', evmWallet.address, {
     API: 'Delegation',
     call,
   });
 
-  logger.info(`EVM Call payload for ${caller} ${JSON.stringify(call)}: ${JSON.stringify(payload)}`);
+  logger.info(
+    `EVM Call payload for ${evmWallet.address} ${JSON.stringify(call)}: ${JSON.stringify(payload)}`,
+  );
 
   const { calldata, value, to } = evmCallDetails.parse(payload);
 
-  const { transactionHash } = await signAndSendTxEvm(logger, 'Ethereum', to, value, calldata);
+  const tx = {
+    to,
+    data: calldata,
+    value,
+    gas: 100000,
+  };
 
-  return transactionHash;
+  const web3 = new Web3(getEvmEndpoint('Ethereum'));
+  const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet.privateKey);
+  const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
+
+  return receipt.transactionHash;
 }
 
 type DelegationApi =
@@ -77,7 +88,7 @@ export async function testDelegate(logger: Logger) {
   logger.debug(`Uri for unique operator account is: "${uri}"`);
 
   const scUtilsAddress = getContractAddress('Ethereum', 'SC_UTILS');
-  const { pubkey: whalePubkey } = getEvmWhaleKeypair('Ethereum');
+  const wallet = await createEvmWalletAndFund(logger, 'Flip');
 
   const amount = amountToFineAmountBigInt(defaultAssetAmounts('Flip'), 'Flip');
 
@@ -91,10 +102,10 @@ export async function testDelegate(logger: Logger) {
   await setupOperatorAccount(logger, uri);
 
   logger.info('Approving Flip to SC Utils contract for delegation...');
-  await approveErc20(logger, 'Flip', scUtilsAddress, amount.toString());
+  await approveErc20(logger, 'Flip', scUtilsAddress, amount.toString(), wallet);
 
   logger.info(`Delegating ${amount} Flip to operator ${operator.address}...`);
-  const delegateTxHash = await encodeAndSendDelegationApiCall(logger, whalePubkey, {
+  const delegateTxHash = await encodeAndSendDelegationApiCall(logger, wallet, {
     Delegate: { operator: operator.address, increase: { Some: '0x' + amount.toString(16) } },
   });
   logger.info('Delegate flip transaction sent ' + delegateTxHash);
@@ -103,7 +114,7 @@ export async function testDelegate(logger: Logger) {
     test: (event) => {
       const txMatch = event.data.txHash === delegateTxHash;
       const amountMatch = event.data.fundsAdded.replace(/,/g, '') === amount.toString();
-      const accountIdMatch = evmToScAddress(whalePubkey) === event.data.accountId;
+      const accountIdMatch = evmToScAddress(wallet.address) === event.data.accountId;
       return txMatch && amountMatch && accountIdMatch;
     },
     historicalCheckBlocks: 10,
@@ -120,7 +131,7 @@ export async function testDelegate(logger: Logger) {
   const delegatedEvent = observeEvent(logger, 'validator:Delegated', {
     test: (event) => {
       logger.debug('Delegated event data: ' + JSON.stringify(event.data));
-      const delegatorMatch = event.data.delegator === evmToScAddress(whalePubkey);
+      const delegatorMatch = event.data.delegator === evmToScAddress(wallet.address);
       const operatorMatch = event.data.operator === operator.address;
       return delegatorMatch && operatorMatch;
     },
@@ -129,7 +140,7 @@ export async function testDelegate(logger: Logger) {
   await Promise.all([fundEvent, scCallExecutedEvent, delegatedEvent]);
 
   logger.info('Undelegating Flip from operator ' + operator.address + '...');
-  const undelegateTxHash = await encodeAndSendDelegationApiCall(logger, whalePubkey, {
+  const undelegateTxHash = await encodeAndSendDelegationApiCall(logger, wallet, {
     Undelegate: { decrease: 'Max' },
   });
   logger.info('Undelegate flip transaction sent ' + undelegateTxHash);
@@ -139,7 +150,7 @@ export async function testDelegate(logger: Logger) {
   }).event;
   const undelegatedEvent = observeEvent(logger, 'validator:Undelegated', {
     test: (event) => {
-      const delegatorMatch = event.data.delegator === evmToScAddress(whalePubkey);
+      const delegatorMatch = event.data.delegator === evmToScAddress(wallet.address);
       const operatorMatch = event.data.operator === operator.address;
       return delegatorMatch && operatorMatch;
     },
@@ -148,7 +159,7 @@ export async function testDelegate(logger: Logger) {
 
   await using chainflip = await getChainflipApi();
   const pendingRedemption = await chainflip.query.flip.pendingRedemptionsReserve(
-    evmToScAddress(whalePubkey),
+    evmToScAddress(wallet.address),
   );
 
   // Redeem only if there are no other redemptions to prevent queuing issues when
@@ -157,10 +168,10 @@ export async function testDelegate(logger: Logger) {
     logger.info('Redeeming funds');
 
     const redeemAddress = await newAddress('Flip', randomBytes(32).toString('hex'));
-    const redemAmount = amount / 2n; // Leave anough to pay fees
+    const redeemAmount = amount / 2n; // Leave enough to pay fees
 
-    const redeemTxHash = await encodeAndSendDelegationApiCall(logger, whalePubkey, {
-      Redeem: { amount: { Exact: '0x' + redemAmount.toString(16) }, address: redeemAddress },
+    const redeemTxHash = await encodeAndSendDelegationApiCall(logger, wallet, {
+      Redeem: { amount: { Exact: '0x' + redeemAmount.toString(16) }, address: redeemAddress },
     });
     logger.info('Redeem request transaction sent ' + redeemTxHash);
 
@@ -169,8 +180,8 @@ export async function testDelegate(logger: Logger) {
     }).event;
     const redeemEvent = observeEvent(logger, 'funding:RedemptionRequested', {
       test: (event) => {
-        const accountMatch = event.data.accountId === evmToScAddress(whalePubkey);
-        const amountMatch = event.data.amount.replace(/,/g, '') === redemAmount.toString();
+        const accountMatch = event.data.accountId === evmToScAddress(wallet.address);
+        const amountMatch = event.data.amount.replace(/,/g, '') === redeemAmount.toString();
         return accountMatch && amountMatch;
       },
     }).event;
