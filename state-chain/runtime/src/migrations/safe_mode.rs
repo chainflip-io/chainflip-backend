@@ -7,12 +7,18 @@ pub struct SafeModeMigration;
 
 mod old {
 	use crate::safe_mode::WitnesserCallPermission;
-	use codec::{Decode, Encode, MaxEncodedLen};
+	use codec::{Decode, Encode};
 	use frame_support::instances::*;
 	use scale_info::TypeInfo;
 	use sp_core::RuntimeDebug;
 
-	#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, RuntimeDebug)]
+	#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+	pub struct LendingPoolsSafeMode {
+		pub add_boost_funds_enabled: bool,
+		pub stop_boosting_enabled: bool,
+	}
+
+	#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
 	pub struct RuntimeSafeMode {
 		pub emissions: pallet_cf_emissions::PalletSafeMode,
 		pub funding: pallet_cf_funding::PalletSafeMode,
@@ -21,7 +27,7 @@ mod old {
 		pub validator: pallet_cf_validator::PalletSafeMode,
 		pub pools: pallet_cf_pools::PalletSafeMode,
 		pub trading_strategies: pallet_cf_trading_strategy::PalletSafeMode,
-		pub lending_pools: pallet_cf_lending_pools::PalletSafeMode,
+		pub lending_pools: LendingPoolsSafeMode,
 		pub reputation: pallet_cf_reputation::PalletSafeMode,
 		pub asset_balances: pallet_cf_asset_balances::PalletSafeMode,
 		pub threshold_signature_evm: pallet_cf_threshold_signature::PalletSafeMode<Instance16>,
@@ -56,7 +62,11 @@ impl UncheckedOnRuntimeUpgrade for SafeModeMigration {
                     validator: old.validator,
                     pools: old.pools,
                     trading_strategies: old.trading_strategies,
-                    lending_pools: old.lending_pools,
+                    lending_pools: pallet_cf_lending_pools::PalletSafeMode {
+                        add_boost_funds_enabled: old.lending_pools.add_boost_funds_enabled,
+                        stop_boosting_enabled: old.lending_pools.stop_boosting_enabled,
+                        ..pallet_cf_lending_pools::PalletSafeMode::code_green()
+                    },
                     reputation: old.reputation,
                     asset_balances: old.asset_balances,
                     threshold_signature_evm: old.threshold_signature_evm,
