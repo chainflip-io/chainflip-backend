@@ -4,24 +4,43 @@ use super::*;
 /// owed to lenders (and how much of it is available to be borrowed), and the collected
 /// fees in various assets that are yet to be swapped into the pool's asset.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-#[scale_info(skip_type_params(T))]
-pub struct LendingPool<T: Config> {
+#[scale_info(skip_type_params(AccountId))]
+pub struct LendingPool<AccountId>
+where
+	AccountId: Decode + Encode + Ord + Clone,
+{
 	// Total amount owed to active lenders (includes what's currently in loans)
 	pub total_amount: AssetAmount,
 	// Amount available to be borrowed
 	pub available_amount: AssetAmount,
 	// Maps lenders to their shares in the pool; each lender is effectively owed their `share` *
 	// `total_amount` of the pool's asset.
-	pub lender_shares: BTreeMap<T::AccountId, Perquintill>,
+	pub lender_shares: BTreeMap<AccountId, Perquintill>,
 }
 
-impl<T: Config> LendingPool<T> {
+#[derive(Debug)]
+pub enum LendingPoolError {
+	InsufficientLiquidity,
+}
+
+impl<T: Config> From<LendingPoolError> for Error<T> {
+	fn from(error: LendingPoolError) -> Self {
+		match error {
+			LendingPoolError::InsufficientLiquidity => Error::<T>::InsufficientLiquidity,
+		}
+	}
+}
+
+impl<AccountId> LendingPool<AccountId>
+where
+	AccountId: Decode + Encode + Ord + Clone,
+{
 	pub fn new() -> Self {
 		Self { total_amount: 0, available_amount: 0, lender_shares: BTreeMap::new() }
 	}
 
 	/// Adds funds increasing `lender`'s share in the pool.
-	pub fn add_funds(&mut self, lender: &T::AccountId, amount: AssetAmount) {
+	pub fn add_funds(&mut self, lender: &AccountId, amount: AssetAmount) {
 		let new_total_amount = self.total_amount.saturating_add(amount);
 		let scaling_factor = Perquintill::from_rational(self.total_amount, new_total_amount);
 		self.total_amount = new_total_amount;
@@ -41,11 +60,7 @@ impl<T: Config> LendingPool<T> {
 
 	/// Remove funds owed to `lender` reducing their share in the pool. The funds are removed
 	/// partially if the pool does not have enough available.
-	pub fn remove_funds(
-		&mut self,
-		lender: &T::AccountId,
-		amount: Option<AssetAmount>,
-	) -> AssetAmount {
+	pub fn remove_funds(&mut self, lender: &AccountId, amount: Option<AssetAmount>) -> AssetAmount {
 		let Some(share) = self.lender_shares.get_mut(lender) else {
 			return 0;
 		};
@@ -82,9 +97,9 @@ impl<T: Config> LendingPool<T> {
 		amount_to_withdraw
 	}
 
-	pub fn provide_funds_for_loan(&mut self, amount: AssetAmount) -> Result<(), Error<T>> {
+	pub fn provide_funds_for_loan(&mut self, amount: AssetAmount) -> Result<(), LendingPoolError> {
 		let Some(remaining_amount) = self.available_amount.checked_sub(amount) else {
-			return Err(Error::<T>::InsufficientLiquidity);
+			return Err(LendingPoolError::InsufficientLiquidity);
 		};
 
 		self.available_amount = remaining_amount;
@@ -120,14 +135,14 @@ mod tests {
 
 	use super::*;
 	use frame_support::assert_ok;
-	use mocks::Test;
+	use mocks::AccountId;
 
 	// Note that the precision of expected values is lower because we want to ignore rounding
 	// errors.
 	#[track_caller]
 	fn check_shares(
-		chp_pool: &LendingPool<Test>,
-		expected_shares: impl IntoIterator<Item = (u64, Perquintill)>,
+		chp_pool: &LendingPool<AccountId>,
+		expected_shares: impl IntoIterator<Item = (AccountId, Perquintill)>,
 	) {
 		if let Some(total_shares) =
 			chp_pool.lender_shares.values().copied().reduce(|acc, share| acc + share)
@@ -149,13 +164,13 @@ mod tests {
 		assert_eq!(expected_shares_count, chp_pool.lender_shares.len());
 	}
 
-	const LENDER_1: u64 = 123;
-	const LENDER_2: u64 = 234;
-	const LENDER_3: u64 = 345;
+	const LENDER_1: AccountId = 123;
+	const LENDER_2: AccountId = 234;
+	const LENDER_3: AccountId = 345;
 
 	#[test]
 	fn adding_and_removing_funds() {
-		let mut chp_pool = LendingPool::<Test>::new();
+		let mut chp_pool = LendingPool::<u64>::new();
 
 		chp_pool.add_funds(&LENDER_1, 100);
 
@@ -225,7 +240,7 @@ mod tests {
 
 	#[test]
 	fn remove_funds_partially() {
-		let mut chp_pool = LendingPool::<Test>::new();
+		let mut chp_pool = LendingPool::<AccountId>::new();
 
 		chp_pool.add_funds(&LENDER_1, 500);
 		chp_pool.add_funds(&LENDER_2, 400);

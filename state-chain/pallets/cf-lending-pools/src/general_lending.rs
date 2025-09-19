@@ -878,7 +878,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 			GeneralLendingPools::<T>::try_mutate(asset, |pool| {
 				let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
-				pool.provide_funds_for_loan(amount_to_borrow)?;
+				pool.provide_funds_for_loan(amount_to_borrow).map_err(Error::<T>::from)?;
 
 				Ok::<_, DispatchError>(())
 			})?;
@@ -961,7 +961,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 			GeneralLendingPools::<T>::try_mutate(loan_asset, |pool| {
 				let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
-				pool.provide_funds_for_loan(extra_amount_to_borrow)?;
+				pool.provide_funds_for_loan(extra_amount_to_borrow).map_err(Error::<T>::from)?;
 
 				Ok::<_, DispatchError>(())
 			})?;
@@ -1434,7 +1434,7 @@ pub mod rpc {
 
 	fn build_rpc_lending_pool<T: Config>(
 		asset: Asset,
-		pool: &LendingPool<T>,
+		pool: &LendingPool<T::AccountId>,
 	) -> RpcLendingPool<AssetAmount> {
 		let config = LendingConfig::<T>::get();
 
@@ -1456,11 +1456,11 @@ pub mod rpc {
 		if let Some(asset) = asset {
 			GeneralLendingPools::<T>::get(asset)
 				.iter()
-				.map(|pool| build_rpc_lending_pool(asset, pool))
+				.map(|pool| build_rpc_lending_pool::<T>(asset, pool))
 				.collect()
 		} else {
 			GeneralLendingPools::<T>::iter()
-				.map(|(asset, pool)| build_rpc_lending_pool(asset, &pool))
+				.map(|(asset, pool)| build_rpc_lending_pool::<T>(asset, &pool))
 				.collect()
 		}
 	}

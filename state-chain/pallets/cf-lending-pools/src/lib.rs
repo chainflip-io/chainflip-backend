@@ -412,7 +412,7 @@ pub mod pallet {
 	/// Stores Lending pools for each asset.
 	#[pallet::storage]
 	pub type GeneralLendingPools<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, LendingPool<T>, OptionQuery>;
+		StorageMap<_, Twox64Concat, Asset, LendingPool<T::AccountId>, OptionQuery>;
 
 	/// The next loan id to assign to a new loan.
 	#[pallet::storage]

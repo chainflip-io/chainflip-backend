@@ -53,7 +53,7 @@ impl pallet_cf_lending_pools::Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 }
 
-type AccountId = <Test as frame_system::Config>::AccountId;
+pub type AccountId = <Test as frame_system::Config>::AccountId;
 
 pub const LP: AccountId = 123u64;
 pub const OTHER_LP: AccountId = 234u64;
