@@ -1,5 +1,5 @@
 use cf_amm_math::{invert_price, relative_price, Price};
-use cf_primitives::SwapRequestId;
+use cf_primitives::{DcaParameters, SwapRequestId};
 use cf_traits::{ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry};
 use frame_support::{
 	fail,
@@ -266,7 +266,7 @@ impl<T: Config> LoanAccount<T> {
 		let principal = self.total_owed_usd_value()?;
 
 		if collateral == 0 {
-			log_or_panic!("Account has no collateral: {}", self.borrower_id);
+			log_or_panic!("Account has no collateral: {:?}", self.borrower_id);
 			return Err(Error::<T>::InsufficientCollateral);
 		}
 
@@ -590,7 +590,10 @@ impl<T: Config> LoanAccount<T> {
 				config.network_fee_contributions.from_liquidation_fee,
 			);
 
-			loan.pay_fee(remaining_fee);
+			loan.fees_paid.entry(loan.asset).or_default().saturating_accrue(liquidation_fee);
+
+			Pallet::<T>::accrue_fees(loan.asset, loan.asset, remaining_fee);
+
 			BTreeMap::from([(loan.asset, liquidation_fee)])
 		} else {
 			Default::default()
@@ -644,19 +647,6 @@ impl<T: Config> GeneralLoan<T> {
 
 		self.owed_principal.saturating_reduce(amount);
 	}
-
-	/// Pays fee to the pool in pool's asset. Does NOT reduce the owed principal.
-	fn pay_fee(&mut self, amount: AssetAmount) {
-		GeneralLendingPools::<T>::mutate(self.asset, |maybe_pool| {
-			if let Some(pool) = maybe_pool.as_mut() {
-				pool.receive_fees(amount);
-			} else {
-				log_or_panic!("CHP Pool must exist for asset {}", self.asset);
-			}
-		});
-
-		self.fees_paid.entry(self.asset).or_default().saturating_accrue(amount);
-	}
 }
 
 fn get_price<T: Config>(asset: Asset) -> Result<Price, Error<T>> {
@@ -704,6 +694,36 @@ fn initiate_swap<T: Config>(
 	swap_type: LendingSwapType<T::AccountId>,
 	max_oracle_price_slippage: BasisPoints,
 ) -> SwapRequestId {
+	let dca_params = match swap_type {
+		LendingSwapType::Liquidation { .. } => {
+			let number_of_chunks = match usd_value_of::<T>(from_asset, amount) {
+				Ok(total_amount_usd) =>
+					(total_amount_usd / LendingConfig::<T>::get().liquidation_swap_chunk_size_usd)
+						as u32,
+				Err(_) => {
+					// It shouldn't be possible to not get the price here (we don't initiate
+					// liquidations unless we can get prices), but if we do, let's fallback
+					// to DEFAULT_LIQUIDATION_CHUNKS chunks
+					log_or_panic!(
+						"Failed to estimate optimal chunk size for a {}->{} swap",
+						from_asset,
+						to_asset
+					);
+
+					// This number is chosen in attempt to have individual chunks that aren't too
+					// large and can be processed, while keeping the total liquidation time
+					// reasonable, i.e. ~5 mins.
+					const DEFAULT_LIQUIDATION_CHUNKS: u32 = 50;
+					DEFAULT_LIQUIDATION_CHUNKS
+				},
+			};
+
+			Some(DcaParameters { number_of_chunks, chunk_interval: 1 })
+		},
+		// Fee swaps are expected to be small so we won't bother splitting them into chunks
+		LendingSwapType::FeeSwap { .. } => None,
+	};
+
 	T::SwapRequestHandler::init_swap_request(
 		from_asset,
 		amount,
@@ -717,7 +737,7 @@ fn initiate_swap<T: Config>(
 			min_price: Default::default(),
 			max_oracle_price_slippage: Some(max_oracle_price_slippage),
 		}),
-		None, // no dca parameters
+		dca_params,
 		SwapOrigin::Internal,
 	)
 }
@@ -880,7 +900,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 			account.loans.insert(loan_id, loan);
 
 			ensure!(
-				dbg!(account.derive_ltv()?) <= config.ltv_thresholds.target,
+				account.derive_ltv()? <= config.ltv_thresholds.target,
 				Error::<T>::InsufficientCollateral
 			);
 
@@ -1180,10 +1200,23 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Pays fee to the pool in *any* asset. If the asset doesn't match the pool's native
+	/// asset, the amount will be combined with other pending fees awaiting a swap into the
+	/// native asset.
 	fn accrue_fees(loan_asset: Asset, fee_asset: Asset, fee_amount: AssetAmount) {
-		PendingPoolFees::<T>::mutate(loan_asset, |pending_fees| {
-			pending_fees.entry(fee_asset).or_insert(0).saturating_accrue(fee_amount);
-		});
+		if loan_asset == fee_asset {
+			GeneralLendingPools::<T>::mutate(loan_asset, |maybe_pool| {
+				if let Some(pool) = maybe_pool.as_mut() {
+					pool.receive_fees(fee_amount);
+				} else {
+					log_or_panic!("Lending Pool must exist for asset {}", loan_asset);
+				}
+			});
+		} else {
+			PendingPoolFees::<T>::mutate(loan_asset, |pending_fees| {
+				pending_fees.entry(fee_asset).or_insert(0).saturating_accrue(fee_amount);
+			});
+		}
 	}
 
 	/// Takes a portion from the full fee and sends it to where network fees go, returning the rest.
@@ -1547,6 +1580,8 @@ pub struct LendingConfiguration {
 	pub soft_liquidation_max_oracle_slippage: BasisPoints,
 	/// Hard liquidation will be executed with this oracle slippage limit
 	pub hard_liquidation_max_oracle_slippage: BasisPoints,
+	/// Liquidation swaps will use chunks that are equivalent to this amount of USD
+	pub liquidation_swap_chunk_size_usd: AssetAmount,
 	/// All fee swaps from lending will be executed with this oracle slippage limit
 	pub fee_swap_max_oracle_slippage: BasisPoints,
 	/// If set for a pool/asset, this configuration will be used instead of the default

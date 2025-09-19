@@ -155,6 +155,8 @@ fn can_update_all_config_items() {
 		const NEW_ORACLE_SLIPPAGE_HARD_LIQUIDATION: BasisPoints = 44;
 		const NEW_ORACLE_SLIPPAGE_FEE_SWAP: BasisPoints = 45;
 
+		const NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD: AssetAmount = 30_000_000_000;
+
 		const UPDATE_NETWORK_FEE_DEDUCTION_FROM_BOOST: PalletConfigUpdate =
 			PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
 				deduction_percent: NEW_NETWORK_FEE_DEDUCTION,
@@ -192,6 +194,9 @@ fn can_update_all_config_items() {
 				fee_swap: NEW_ORACLE_SLIPPAGE_FEE_SWAP,
 			};
 
+		const UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD: PalletConfigUpdate =
+			PalletConfigUpdate::SetLiquidationSwapChunkSizeUsd(NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD);
+
 		// Check that the default values are different from the new ones
 		assert_ne!(NetworkFeeDeductionFromBoostPercent::<Test>::get(), NEW_NETWORK_FEE_DEDUCTION);
 
@@ -207,6 +212,7 @@ fn can_update_all_config_items() {
 				UPDATE_INTEREST_PAYMENT_INTERVAL_BLOCKS,
 				UPDATE_FEE_SWAP_THRESHOLD_USD,
 				UPDATE_ORACLE_SLIPPAGE_FOR_SWAPS,
+				UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD
 			]
 			.try_into()
 			.unwrap()
@@ -226,6 +232,7 @@ fn can_update_all_config_items() {
 				fee_swap_threshold_usd: NEW_FEE_SWAP_THRESHOLD_USD,
 				soft_liquidation_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_SOFT_LIQUIDATION,
 				hard_liquidation_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_HARD_LIQUIDATION,
+				liquidation_swap_chunk_size_usd: NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD,
 				fee_swap_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_FEE_SWAP,
 				pool_config_overrides: BTreeMap::default(),
 			}
@@ -257,6 +264,9 @@ fn can_update_all_config_items() {
 			}),
 			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
 				update: UPDATE_ORACLE_SLIPPAGE_FOR_SWAPS
+			}),
+			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
+				update: UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD
 			}),
 		);
 

@@ -149,6 +149,7 @@ pub enum PalletConfigUpdate {
 		hard_liquidation: BasisPoints,
 		fee_swap: BasisPoints,
 	},
+	SetLiquidationSwapChunkSizeUsd(AssetAmount),
 }
 
 define_wrapper_type!(CorePoolId, u32);
@@ -323,6 +324,7 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	fee_swap_threshold_usd: 20_000_000, // don't swap fewer than 20 USD
 	soft_liquidation_max_oracle_slippage: 50, // 0.5%
 	hard_liquidation_max_oracle_slippage: 500, // 5%
+	liquidation_swap_chunk_size_usd: 10_000_000_000, //10k USD
 	fee_swap_max_oracle_slippage: 50,   // 0.5%
 	pool_config_overrides: BTreeMap::new(),
 };
@@ -663,6 +665,9 @@ pub mod pallet {
 							config.soft_liquidation_max_oracle_slippage = *soft_liquidation;
 							config.hard_liquidation_max_oracle_slippage = *hard_liquidation;
 							config.fee_swap_max_oracle_slippage = *fee_swap;
+						},
+						PalletConfigUpdate::SetLiquidationSwapChunkSizeUsd(amount) => {
+							config.liquidation_swap_chunk_size_usd = *amount;
 						},
 					}
 					Self::deposit_event(Event::<T>::PalletConfigUpdated { update });

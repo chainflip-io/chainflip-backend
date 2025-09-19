@@ -574,6 +574,8 @@ pub struct RpcLendingConfig {
 	/// Fees collected in some asset will be swapped into the pool's asset once their usd value
 	/// reaches this threshold
 	pub fee_swap_threshold_usd: U256,
+	/// Liquidation swaps will use chunks that are equivalent to this amount of USD
+	pub liquidation_swap_chunk_size_usd: U256,
 	/// Soft liquidation will be executed with this oracle slippage limit
 	pub soft_liquidation_max_oracle_slippage: BasisPoints,
 	/// Hard liquidation will be executed with this oracle slippage limit
