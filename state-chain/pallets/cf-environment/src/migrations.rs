@@ -17,13 +17,12 @@
 use crate::{Config, Pallet};
 #[cfg(feature = "try-runtime")]
 use crate::{CurrentReleaseVersion, Get};
-use frame_support::{migrations::VersionedMigration, traits::OnRuntimeUpgrade};
+use cf_runtime_utilities::PlaceholderMigration;
+use frame_support::traits::OnRuntimeUpgrade;
 #[cfg(feature = "try-runtime")]
 use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
-
-mod eth_sc_utils_environment;
 
 // NOTE: Do not remove this. This is used to update the on-chain version for CFE compatibility
 // checks.
@@ -51,15 +50,7 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	}
 }
 
-pub type PalletMigration<T> = (
-	VersionedMigration<
-		17,
-		18,
-		eth_sc_utils_environment::EthScUtilsEnvironmentMigration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-);
+pub type PalletMigration<T> = (PlaceholderMigration<18, Pallet<T>>,);
 
 #[cfg(test)]
 mod tests {

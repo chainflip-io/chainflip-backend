@@ -93,7 +93,7 @@ use cf_traits::{
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
+use frame_support::{derive_impl, instances::*};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
 use pallet_cf_elections::electoral_systems::oracle_price::{
@@ -243,7 +243,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 1_11_00,
+	spec_version: 1_12_00,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 13,
@@ -328,12 +328,6 @@ impl pallet_cf_environment::Config for Runtime {
 	type SolEnvironment = SolEnvironment;
 	type SolanaBroadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
-
-	/// The following three types are only required for migrating polkadot to assethub
-	/// Delete after 1.11.
-	type DotEnvironment = DotEnvironment;
-	type PolkadotBroadcaster = PolkadotBroadcaster;
-	type HubEnvironment = HubEnvironment;
 }
 
 parameter_types! {
@@ -1463,10 +1457,7 @@ type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
-	migrations::bitcoin_elections::Migration,
-	migrations::solana_elections::Migration,
-	migrations::generic_elections::Migration,
-	MigrationsForV1_11,
+	MigrationsForV1_12,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1559,16 +1550,7 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV1_11 = (
-	migrations::polkadot_deprecation::PolkadotDeprecationMigration,
-	VersionedMigration<
-		18,
-		19,
-		migrations::safe_mode::SafeModeMigration,
-		pallet_cf_environment::Pallet<Runtime>,
-		<Runtime as frame_system::Config>::DbWeight,
-	>,
-);
+type MigrationsForV1_12 = ();
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]

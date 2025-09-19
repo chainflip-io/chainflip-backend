@@ -1,4 +1,5 @@
 import Web3 from 'web3';
+import { HDNodeWallet } from 'ethers';
 import { InternalAsset as Asset } from '@chainflip/cli';
 import {
   amountToFineAmount,
@@ -17,6 +18,7 @@ export async function approveErc20(
   asset: Asset,
   toAddress: string,
   amount: string,
+  evmWallet?: HDNodeWallet,
 ) {
   const chain = chainFromAsset(asset);
 
@@ -33,5 +35,18 @@ export async function approveErc20(
 
   logger.debug('Approving ' + amount + ' ' + asset + ' to ' + toAddress);
 
-  await signAndSendTxEvm(logger, chain, tokenContractAddress, '0', txData);
+  // Use the default whale keypair if no wallet is provided
+  if (evmWallet) {
+    const tx = {
+      to: tokenContractAddress,
+      data: txData,
+      value: '0',
+      gas: 100000,
+    };
+
+    const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet!.privateKey);
+    await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
+  } else {
+    await signAndSendTxEvm(logger, chain, tokenContractAddress, '0', txData);
+  }
 }
