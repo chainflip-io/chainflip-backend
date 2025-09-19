@@ -43,6 +43,7 @@ pub async fn predict_fees(
 
 	// -- calculate sample target --
 	let sample_size = (tx_sample_count_per_mempool_block as f64) * blocks_in_mempool;
+	let sample_size = cmp::max(sample_size, tx_sample_count_per_mempool_block);
 	tracing::debug!("we have to download {sample_size} txs to have an average sample size of {tx_sample_count_per_mempool_block} per block");
 
 	// ----------------------------------
