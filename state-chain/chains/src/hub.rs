@@ -36,7 +36,7 @@ use dot::{
 };
 
 pub use cf_primitives::chains::Assethub;
-use cf_primitives::PolkadotBlockNumber;
+use cf_primitives::{PolkadotBlockNumber, Price};
 use codec::{Decode, Encode};
 use frame_support::{
 	pallet_prelude::{TransactionValidity, TransactionValidityError, ValidTransaction},
@@ -49,7 +49,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, DispatchInfoOf, Hash, SignedExtension},
 };
 
-pub const REFERENCE_HUBDOT_PRICE_IN_USD: PolkadotBalance = 3_400_000u128; //3.4 usd
+pub const REFERENCE_HUBDOT_PRICE_IN_USD: PolkadotBalance = 4_400_000u128; //4.4 usd
 
 impl Chain for Assethub {
 	const NAME: &'static str = "Assethub";
@@ -78,6 +78,7 @@ impl Chain for Assethub {
 	fn input_asset_amount_using_reference_gas_asset_price(
 		input_asset: Self::ChainAsset,
 		required_gas: Self::ChainAmount,
+		_oracle_price: Option<Price>,
 	) -> Self::ChainAmount {
 		match input_asset {
 			assets::hub::Asset::HubUsdc | assets::hub::Asset::HubUsdt =>

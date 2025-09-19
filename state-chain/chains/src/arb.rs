@@ -23,8 +23,9 @@ use crate::{
 	evm::{DeploymentStatus, EvmFetchId},
 	*,
 };
-use cf_primitives::chains::assets;
+use cf_amm_math::output_amount_ceil;
 pub use cf_primitives::chains::Arbitrum;
+use cf_primitives::{chains::assets, Price};
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Word};
 use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
@@ -66,16 +67,22 @@ impl Chain for Arbitrum {
 	fn input_asset_amount_using_reference_gas_asset_price(
 		input_asset: Self::ChainAsset,
 		required_gas: Self::ChainAmount,
+		oracle_price: Option<Price>,
 	) -> Self::ChainAmount {
 		match input_asset {
 			assets::arb::Asset::ArbEth => required_gas,
-			assets::arb::Asset::ArbUsdc => multiply_by_rational_with_rounding(
-				super::eth::REFERENCE_ETH_PRICE_IN_USD,
-				required_gas,
-				1_000_000_000_000_000_000u128,
-				sp_runtime::Rounding::Up,
-			)
-			.unwrap_or(0u128),
+			assets::arb::Asset::ArbUsdc =>
+				if let Some(price) = oracle_price {
+					output_amount_ceil(U256::from(required_gas), price).try_into().unwrap_or(0u128)
+				} else {
+					multiply_by_rational_with_rounding(
+						required_gas,
+						super::eth::REFERENCE_ETH_PRICE_IN_USD,
+						1_000_000_000_000_000_000u128,
+						sp_runtime::Rounding::Up,
+					)
+					.unwrap_or(0u128)
+				},
 		}
 	}
 }

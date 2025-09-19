@@ -53,8 +53,8 @@ impl AssetConverter for MockAssetConverter {
 		)
 		.and_then(|amount| C::ChainAmount::try_from(amount).ok())
 		.unwrap_or_else(|| {
-			log::warn!("nable to calculate input amount required for gas of {required_gas:?} for input asset ${input_asset:?}. Estimating the input amount based on a reference price.");
-			C::input_asset_amount_using_reference_gas_asset_price(input_asset,required_gas)
+			log::warn!("Unable to calculate input amount required for gas of {required_gas:?} for input asset ${input_asset:?}. Estimating the input amount based on either oracle price or reference price.");
+			C::input_asset_amount_using_reference_gas_asset_price(input_asset,required_gas, None)
 		})
 	}
 

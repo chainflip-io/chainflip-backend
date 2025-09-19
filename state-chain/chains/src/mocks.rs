@@ -106,10 +106,12 @@ impl Chain for MockEthereum {
 	fn input_asset_amount_using_reference_gas_asset_price(
 		input_asset: Self::ChainAsset,
 		required_gas: Self::ChainAmount,
+		oracle_price: Option<Price>,
 	) -> Self::ChainAmount {
 		<Ethereum as Chain>::input_asset_amount_using_reference_gas_asset_price(
 			input_asset,
 			required_gas,
+			oracle_price,
 		)
 	}
 }
