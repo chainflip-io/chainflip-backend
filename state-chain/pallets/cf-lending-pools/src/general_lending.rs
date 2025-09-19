@@ -35,6 +35,10 @@ pub enum LiquidationStatus {
 	Liquidating { liquidation_swaps: BTreeMap<SwapRequestId, LiquidationSwap>, is_hard: bool },
 }
 
+struct ExpandLoanOutcome {
+	origination_fee: AssetAmount,
+}
+
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct LoanAccount<T: Config> {
@@ -112,7 +116,6 @@ impl<T: Config> LoanAccount<T> {
 	/// safe mode.
 	fn try_adding_collateral_from_free_balance(
 		&mut self,
-		borrower_id: &T::AccountId,
 		collateral: &BTreeMap<Asset, AssetAmount>,
 	) -> Result<(), DispatchError> {
 		for (asset, amount) in collateral {
@@ -120,7 +123,7 @@ impl<T: Config> LoanAccount<T> {
 				T::SafeMode::get().add_collateral_enabled.contains(asset),
 				Error::<T>::AddingCollateralDisabled
 			);
-			T::Balance::try_debit_account(borrower_id, *asset, *amount)?;
+			T::Balance::try_debit_account(&self.borrower_id, *asset, *amount)?;
 			self.collateral.entry(*asset).or_default().saturating_accrue(*amount);
 		}
 
@@ -563,6 +566,50 @@ impl<T: Config> LoanAccount<T> {
 			});
 		}
 	}
+
+	fn expand_loan_inner(
+		&mut self,
+		mut loan: GeneralLoan<T>,
+		extra_principal: AssetAmount,
+		extra_collateral: BTreeMap<Asset, AssetAmount>,
+	) -> Result<ExpandLoanOutcome, DispatchError> {
+		let config = LendingConfig::<T>::get();
+		let loan_asset = loan.asset;
+
+		ensure!(
+			T::SafeMode::get().borrowing_enabled.contains(&loan_asset),
+			Error::<T>::LoanCreationDisabled
+		);
+
+		self.try_adding_collateral_from_free_balance(&extra_collateral)?;
+
+		GeneralLendingPools::<T>::try_mutate(loan_asset, |pool| {
+			let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
+
+			pool.provide_funds_for_loan(extra_principal).map_err(Error::<T>::from)?;
+
+			Ok::<_, DispatchError>(())
+		})?;
+
+		loan.owed_principal.saturating_accrue(extra_principal);
+
+		let origination_fee = Pallet::<T>::charge_origination_fee(
+			&self.borrower_id,
+			&mut loan,
+			self.primary_collateral_asset,
+			extra_principal,
+		)?;
+
+		self.loans.insert(loan.id, loan);
+
+		if self.derive_ltv()? > config.ltv_thresholds.target {
+			return Err(Error::<T>::InsufficientCollateral.into());
+		}
+
+		T::Balance::credit_account(&self.borrower_id, loan_asset, extra_principal);
+
+		Ok(ExpandLoanOutcome { origination_fee })
+	}
 }
 
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -854,13 +901,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 		primary_collateral_asset: Option<Asset>,
 		extra_collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<LoanId, DispatchError> {
-		ensure!(
-			T::SafeMode::get().borrowing_enabled.contains(&asset),
-			Error::<T>::LoanCreationDisabled
-		);
-
-		let config = LendingConfig::<T>::get();
-
 		let loan_id = NextLoanId::<T>::get();
 		NextLoanId::<T>::set(loan_id + 1);
 
@@ -878,41 +918,17 @@ impl<T: Config> LendingApi for Pallet<T> {
 				Error::<T>::InvalidLoanParameters
 			);
 
-			account.primary_collateral_asset = primary_collateral_asset;
-
-			account.try_adding_collateral_from_free_balance(&borrower_id, &extra_collateral)?;
-
-			GeneralLendingPools::<T>::try_mutate(asset, |pool| {
-				let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
-
-				pool.provide_funds_for_loan(amount_to_borrow).map_err(Error::<T>::from)?;
-
-				Ok::<_, DispatchError>(())
-			})?;
-
-			let mut loan = GeneralLoan {
+			// Creating a loan with 0 principal first, the using `expand_loan_inner` to update it
+			let loan = GeneralLoan {
 				id: loan_id,
 				asset,
 				created_at_block: frame_system::Pallet::<T>::current_block_number(),
-				owed_principal: amount_to_borrow,
+				owed_principal: 0,
 				fees_paid: BTreeMap::new(),
 			};
 
-			let origination_fee = Self::charge_origination_fee(
-				&borrower_id,
-				&mut loan,
-				primary_collateral_asset,
-				amount_to_borrow,
-			)?;
-
-			account.loans.insert(loan_id, loan);
-
-			ensure!(
-				account.derive_ltv()? <= config.ltv_thresholds.target,
-				Error::<T>::InsufficientCollateral
-			);
-
-			T::Balance::credit_account(&borrower_id, asset, amount_to_borrow);
+			let ExpandLoanOutcome { origination_fee } =
+				account.expand_loan_inner(loan, amount_to_borrow, extra_collateral)?;
 
 			Self::deposit_event(Event::LoanCreated {
 				loan_id,
@@ -937,57 +953,19 @@ impl<T: Config> LendingApi for Pallet<T> {
 		extra_amount_to_borrow: AssetAmount,
 		extra_collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<(), DispatchError> {
-		let config = LendingConfig::<T>::get();
-
 		LoanAccounts::<T>::mutate(&borrower_id, |maybe_account| {
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanNotFound)?;
 
-			{
-				let loan = loan_account.loans.get_mut(&loan_id).ok_or(Error::<T>::LoanNotFound)?;
+			let loan = loan_account.loans.remove(&loan_id).ok_or(Error::<T>::LoanNotFound)?;
 
-				ensure!(
-					T::SafeMode::get().borrowing_enabled.contains(&loan.asset),
-					Error::<T>::LoanCreationDisabled
-				);
-
-				loan.owed_principal.saturating_accrue(extra_amount_to_borrow);
-			}
-
-			loan_account
-				.try_adding_collateral_from_free_balance(&borrower_id, &extra_collateral)?;
-
-			if loan_account.derive_ltv()? > config.ltv_thresholds.target {
-				return Err(Error::<T>::InsufficientCollateral.into());
-			}
-
-			// NOTE: have to get a new reference to the loan again to satisfy the borrow checker
-			let loan = loan_account.loans.get_mut(&loan_id).expect("checked above");
-
-			let primary_collateral_asset = loan_account.primary_collateral_asset;
-			let loan_asset = loan.asset;
-
-			GeneralLendingPools::<T>::try_mutate(loan_asset, |pool| {
-				let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
-
-				pool.provide_funds_for_loan(extra_amount_to_borrow).map_err(Error::<T>::from)?;
-
-				Ok::<_, DispatchError>(())
-			})?;
-
-			let origination_fee = Self::charge_origination_fee(
-				&borrower_id,
-				loan,
-				primary_collateral_asset,
-				extra_amount_to_borrow,
-			)?;
+			let ExpandLoanOutcome { origination_fee } =
+				loan_account.expand_loan_inner(loan, extra_amount_to_borrow, extra_collateral)?;
 
 			Self::deposit_event(Event::LoanUpdated {
 				loan_id,
 				extra_principal_amount: extra_amount_to_borrow,
 				origination_fee,
 			});
-
-			T::Balance::credit_account(&borrower_id, loan_asset, extra_amount_to_borrow);
 
 			Ok::<_, DispatchError>(())
 		})?;
@@ -1044,7 +1022,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				loan_account.primary_collateral_asset = primary_collateral_asset;
 			}
 
-			loan_account.try_adding_collateral_from_free_balance(borrower_id, &collateral)?;
+			loan_account.try_adding_collateral_from_free_balance(&collateral)?;
 
 			Self::deposit_event(Event::CollateralAdded {
 				borrower_id: borrower_id.clone(),
