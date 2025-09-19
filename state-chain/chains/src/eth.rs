@@ -49,6 +49,7 @@ pub const CHAIN_ID_KOVAN: u64 = 42;
 
 pub const REFERENCE_ETH_PRICE_IN_USD: AssetAmount = 4_500_000_000u128; //4500 usd
 pub const REFERENCE_FLIP_PRICE_IN_USD: AssetAmount = 750_000u128; //0.75 usd
+pub const ONE_ETH: AssetAmount = 1_000_000_000_000_000_000u128;
 
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
@@ -87,7 +88,7 @@ impl Chain for Ethereum {
 					multiply_by_rational_with_rounding(
 						required_gas,
 						REFERENCE_ETH_PRICE_IN_USD,
-						1_000_000_000_000_000_000u128,
+						ONE_ETH,
 						sp_runtime::Rounding::Up,
 					)
 					.unwrap_or(0u128)
@@ -95,7 +96,7 @@ impl Chain for Ethereum {
 			EthAsset::Flip => multiply_by_rational_with_rounding(
 				required_gas,
 				if let Some(price) = oracle_price {
-					output_amount_ceil(U256::from(10u128.checked_pow(18).unwrap()), price)
+					output_amount_ceil(U256::from(ONE_ETH), price)
 						.try_into()
 						.unwrap_or(REFERENCE_ETH_PRICE_IN_USD)
 				} else {

@@ -78,7 +78,7 @@ impl Chain for Arbitrum {
 					multiply_by_rational_with_rounding(
 						required_gas,
 						super::eth::REFERENCE_ETH_PRICE_IN_USD,
-						1_000_000_000_000_000_000u128,
+						super::eth::ONE_ETH,
 						sp_runtime::Rounding::Up,
 					)
 					.unwrap_or(0u128)
