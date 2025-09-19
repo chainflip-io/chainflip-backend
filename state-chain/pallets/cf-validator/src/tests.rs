@@ -1583,7 +1583,7 @@ mod operator {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OperatorSettings {
-					fee_bps: MIN_OPERATOR_FEE,
+					fee_bps: DEFAULT_MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Allow,
 				},
 				vanity()
@@ -1648,7 +1648,7 @@ mod operator {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OperatorSettings {
-					fee_bps: MIN_OPERATOR_FEE,
+					fee_bps: DEFAULT_MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Deny,
 				},
 				vanity(),
@@ -1980,7 +1980,7 @@ mod delegation {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OperatorSettings {
-					fee_bps: MIN_OPERATOR_FEE,
+					fee_bps: DEFAULT_MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Deny
 				},
 				vanity()
@@ -2004,7 +2004,7 @@ mod delegation {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OperatorSettings {
-					fee_bps: MIN_OPERATOR_FEE,
+					fee_bps: DEFAULT_MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Allow
 				},
 				vanity()
@@ -2044,7 +2044,7 @@ mod delegation {
 				assert_ok!(ValidatorPallet::register_as_operator(
 					OriginTrait::signed(OPERATOR),
 					OperatorSettings {
-						fee_bps: MIN_OPERATOR_FEE,
+						fee_bps: DEFAULT_MIN_OPERATOR_FEE,
 						delegation_acceptance: DelegationAcceptance::Allow
 					},
 					vanity()
@@ -2102,7 +2102,7 @@ mod delegation {
 				}
 
 				// Verify operator fee is correctly captured in snapshot
-				assert_eq!(snapshot.delegation_fee_bps, MIN_OPERATOR_FEE);
+				assert_eq!(snapshot.delegation_fee_bps, DEFAULT_MIN_OPERATOR_FEE);
 				MockKeyRotatorA::keygen_success();
 			})
 			.then_execute_at_next_block(|_| {
@@ -2951,7 +2951,7 @@ mod delegation_splitting {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OperatorSettings {
-					fee_bps: MIN_OPERATOR_FEE,
+					fee_bps: DEFAULT_MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Allow
 				},
 				vanity()
@@ -2974,7 +2974,7 @@ mod delegation_splitting {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OperatorSettings {
-					fee_bps: MIN_OPERATOR_FEE,
+					fee_bps: DEFAULT_MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Deny
 				},
 				vanity()
@@ -2997,7 +2997,7 @@ mod delegation_splitting {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OperatorSettings {
-					fee_bps: MIN_OPERATOR_FEE,
+					fee_bps: DEFAULT_MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Deny
 				},
 				vanity()
@@ -3014,7 +3014,7 @@ mod delegation_splitting {
 			assert_ok!(ValidatorPallet::register_as_operator(
 				OriginTrait::signed(ALICE),
 				OperatorSettings {
-					fee_bps: MIN_OPERATOR_FEE,
+					fee_bps: DEFAULT_MIN_OPERATOR_FEE,
 					delegation_acceptance: DelegationAcceptance::Allow
 				},
 				vanity()
