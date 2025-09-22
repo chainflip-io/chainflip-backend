@@ -152,7 +152,8 @@ async function testTxMultipleVaultSwaps(
     abortable: true,
     // Don't stop when the event is found.
     stopAfter: 'Never',
-    timeoutSeconds: 150,
+    timeoutSeconds: 50,
+    historicalCheckBlocks: 20,
   });
 
   while (eventCounter === 0) {
@@ -160,7 +161,7 @@ async function testTxMultipleVaultSwaps(
   }
 
   // Wait some more time after the first event to ensure another one is not emitted
-  await sleep(30000);
+  await sleep(20000);
 
   observingEvent.stop();
   await observingEvent.event;

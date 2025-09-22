@@ -21,7 +21,9 @@ export async function sendHubAsset(
   await using assethub = await getAssethubApi();
 
   for (let retryCount = 0; retryCount < 3; retryCount++) {
-    logger.info(`sending hubdot! attempt ${retryCount}, plankAmount: ${planckAmount}, address: ${address}`);
+    logger.info(
+      `sending hubdot! attempt ${retryCount}, plankAmount: ${planckAmount}, address: ${address}`,
+    );
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let resolve: any;

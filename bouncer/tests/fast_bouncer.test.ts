@@ -49,7 +49,6 @@ describe('ConcurrentTests', () => {
   // CURRENTLY NOT WORKING
   // concurrentTest('DelegateFlip', (context) => testDelegate(context.logger), 360);
 
-
   concurrentTest(
     'SwapAndFundAccountViaCCM',
     (context) => testCcmSwapFundAccount(context.logger),
