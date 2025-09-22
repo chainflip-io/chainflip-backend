@@ -42,8 +42,14 @@ pub async fn predict_fees(
 	tracing::debug!("there are ~{blocks_in_mempool} blocks in the mempool, with average {txs_per_block} txs per block");
 
 	// -- calculate sample target --
-	let sample_size = (tx_sample_count_per_mempool_block as f64) * blocks_in_mempool;
-	tracing::debug!("we have to download {sample_size} txs to have an average sample size of {tx_sample_count_per_mempool_block} per block");
+	let sample_size = if blocks_in_mempool >= 1.0 {
+		let sample_size = (tx_sample_count_per_mempool_block as f64) * blocks_in_mempool;
+		tracing::debug!("we have to download {sample_size} txs to have an average sample size of {tx_sample_count_per_mempool_block} per block");
+		sample_size as usize
+	} else {
+		tracing::debug!("there is less than a single mempool block, falling back to downloading at most {tx_sample_count_per_mempool_block} transactions");
+		tx_sample_count_per_mempool_block as usize
+	};
 
 	// ----------------------------------
 	// downloading txs
@@ -53,7 +59,7 @@ pub async fn predict_fees(
 
 	use rand::seq::SliceRandom;
 	let sub_tx_hashes: Vec<Txid> = tx_hashes
-		.choose_multiple(&mut rand::thread_rng(), cmp::min(sample_size as usize, tx_hashes.len()))
+		.choose_multiple(&mut rand::thread_rng(), cmp::min(sample_size, tx_hashes.len()))
 		.cloned()
 		.collect();
 	tracing::debug!("Selected a subset of size {}", sub_tx_hashes.len());
