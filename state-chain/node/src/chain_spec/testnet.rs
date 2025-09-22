@@ -141,7 +141,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		),
 		(
 			const_address("3pGbKatko2ckoLEy139McfKiirNgy9brYxieNqFGdN1W"),
-			const_hash("EbWq3dgSjaa8pX3YeXVHopANoHCAsEkXrbALMjndbvr1"),
+			const_hash("64hFuYc2RjeDLWAatbnbD3XCWgRBgbHLxCjfeNxx1G5e"),
 		),
 		(
 			const_address("9Mcd8BTievK2yTvyiqG9Ft4HfDFf6mjGFBWMnCSRQP8S"),
