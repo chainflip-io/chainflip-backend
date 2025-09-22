@@ -361,6 +361,8 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 }
 
 impl pallet_cf_environment::Config for Test {
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;

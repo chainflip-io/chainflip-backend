@@ -28,7 +28,7 @@ use cf_chains::{
 	},
 	dot::{api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
-	evm::{encode, Signature as EthereumSignature, Token, H256, U256},
+	evm::Signature as EthereumSignature,
 	hub::{Assethub, OutputAccountId},
 	sol::{
 		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall},
@@ -38,19 +38,19 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
-	Asset, BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
+	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
 	AccountRoleRegistry, Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider,
 	NetworkEnvironmentProvider, SafeMode, SolanaNonceWatch,
 };
+use codec::{Decode, Encode};
 use frame_support::{
+	dispatch::{DispatchResult, GetDispatchInfo},
 	pallet_prelude::*,
-	sp_runtime::{
-		traits::{Get, Hash, Keccak256},
-		AccountId32, DispatchError,
-	},
-	traits::StorageVersion,
+	sp_runtime::{traits::Get, AccountId32, DispatchError, TransactionOutcome},
+	storage::with_transaction,
+	traits::{StorageVersion, UnfilteredDispatchable},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -63,6 +63,9 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
+
+const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
+const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(19);
 
@@ -154,6 +157,16 @@ pub mod pallet {
 			Callback = RuntimeCallFor<Self>,
 		>;
 
+		type RuntimeOrigin: From<frame_system::RawOrigin<<Self as frame_system::Config>::AccountId>>;
+
+		/// The overarching call type.
+		type RuntimeCall: Member
+			+ Parameter
+			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
+			+ From<frame_system::Call<Self>>
+			+ From<Call<Self>>
+			+ GetDispatchInfo;
+
 		/// Weight information
 		type WeightInfo: WeightInfo;
 	}
@@ -174,6 +187,8 @@ pub mod pallet {
 		FailedToDecodePayload,
 		// Signature failed to be verified
 		InvalidSignature,
+		// Nonce missmatch
+		InvalidNonce,
 	}
 
 	#[pallet::pallet]
@@ -369,9 +384,10 @@ pub mod pallet {
 		AssethubVaultAccountSet { assethub_vault_account_id: PolkadotAccountId },
 		UserActionSubmitted {
 			broker_id: T::AccountId,
-			signer_account_id: AccountId32,
+			signer_account_id: T::AccountId,
 			signed_payload: Vec<u8>,
-			decoded_action: UserActionsApi,
+			serialized_call: Vec<u8>,
+			call_success: bool,
 		},
 	}
 
@@ -655,7 +671,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit_user_signed_payload())]
 		pub fn submit_user_signed_payload(
 			origin: OriginFor<T>,
-			payload: Vec<u8>,
+			#[allow(clippy::boxed_local)] call: sp_std::boxed::Box<<T as Config>::RuntimeCall>,
 			transaction_metadata: TransactionMetadata,
 			user_signature_data: UserSignatureData,
 		) -> DispatchResult {
@@ -673,22 +689,15 @@ pub mod pallet {
 				Error::<T>::PayloadExpired
 			);
 
-			// TODO: Check and increment nonce
-
-			// We could directly have the action: UserActionsApi as parameter, but this
-			// is more flexible for now. TBD.
-			let decoded_action = UserActionsApi::decode(&mut &payload[..])
-				.map_err(|_| Error::<T>::FailedToDecodePayload)?;
-
 			let chanflip_network_name = Self::chainflip_network();
 
-			let (valid_signature, signer_account_id, signed_payload) =
+			let (valid_signature, signer_account_id_32, signed_payload) =
 				match user_signature_data.clone() {
 					UserSignatureData::Solana { signature, signer, sig_type } => {
 						let signed_payload = match sig_type {
 							SolSigType::Domain => {
 								let concat_data = [
-									payload,
+									call.clone().encode(),
 									chanflip_network_name.as_str().encode(),
 									transaction_metadata.encode(),
 								]
@@ -706,7 +715,7 @@ pub mod pallet {
 						let signed_payload = match sig_type {
 							EthSigType::Domain => {
 								let concat_data = [
-									payload,
+									call.clone().encode(),
 									chanflip_network_name.as_str().encode(),
 									transaction_metadata.encode(),
 								]
@@ -719,11 +728,11 @@ pub mod pallet {
 								let prefix_bytes = prefix.as_bytes();
 								[prefix_bytes, &concat_data].concat()
 							},
-							EthSigType::Eip712 => build_eip_712_hash(
-								decoded_action.clone(),
-								transaction_metadata,
-								signer,
+							EthSigType::Eip712 => Self::build_eip_712_payload(
+								*call.clone(),
+								transaction_metadata.clone(),
 								chanflip_network_name,
+								signer,
 							),
 						};
 						(
@@ -736,18 +745,30 @@ pub mod pallet {
 
 			ensure!(valid_signature, Error::<T>::InvalidSignature);
 
+			// Is there a better way?
+			let signer_account_id: T::AccountId =
+				T::AccountId::decode(&mut signer_account_id_32.encode().as_slice())
+					.map_err(|_| Error::<T>::FailedToDecodePayload)?;
+
+			let signer_current_nonce = frame_system::Pallet::<T>::account_nonce(&signer_account_id);
+			ensure!(
+				signer_current_nonce == transaction_metadata.nonce.into(),
+				Error::<T>::InvalidNonce
+			);
+
+			// Increment the account nonce to prevent replay attacks
+			frame_system::Pallet::<T>::inc_account_nonce(&signer_account_id);
+
+			let call_success =
+				Self::dispatch_user_call(*call.clone(), signer_account_id.clone()).is_ok();
+
 			Self::deposit_event(Event::<T>::UserActionSubmitted {
 				broker_id,
 				signer_account_id,
 				signed_payload,
-				decoded_action,
+				serialized_call: call.encode(),
+				call_success,
 			});
-
-			// TODO: Execute User Action on behalf of the signer_account_id. This should be done
-			// similarly to the EthereumSCApi execution with `dispatch_bypass_filter`. Probably we
-			// don't want the extrinsic to fail if this fails but instead we want to rollback the
-			// state to consume the user nonce. Otherwise we rely only on the block expiry but
-			// that is mainly to prevent brokers from withholding signed payloads.
 
 			Ok(())
 		}
@@ -1044,6 +1065,32 @@ impl<T: Config> Pallet<T> {
 			current_id
 		})
 	}
+
+	/// Dispatches a call from the user account, with transactional semantics, ie. if the call
+	/// dispatch returns `Err`, rolls back any storage updates.
+	fn dispatch_user_call(
+		call: <T as Config>::RuntimeCall,
+		user_account: T::AccountId,
+	) -> DispatchResultWithPostInfo {
+		with_transaction(move || {
+			match call.dispatch_bypass_filter(frame_system::RawOrigin::Signed(user_account).into())
+			{
+				r @ Ok(_) => TransactionOutcome::Commit(r),
+				r @ Err(_) => TransactionOutcome::Rollback(r),
+			}
+		})
+	}
+
+	/// `signer is not technically necessary but is added as part of the metadata so
+	/// it is displayed separately to the user in the wallet
+	fn build_eip_712_payload(
+		_call: <T as Config>::RuntimeCall,
+		_transaction_metadata: TransactionMetadata,
+		_chain_name: ChainflipNetwork,
+		_signer: EvmAddress,
+	) -> Vec<u8> {
+		todo!("implement eip-712");
+	}
 }
 
 impl<T: Config> CompatibleCfeVersions for Pallet<T> {
@@ -1084,334 +1131,4 @@ pub enum SolSigType {
 pub enum UserSignatureData {
 	Solana { signature: SolSignature, signer: SolAddress, sig_type: SolSigType },
 	Ethereum { signature: EthereumSignature, signer: EvmAddress, sig_type: EthSigType },
-}
-
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
-pub struct BorrowData {
-	pub amount: u128,
-	pub collateral_asset: Asset,
-	pub borrow_asset: Asset,
-}
-
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
-pub struct WithdrawData {
-	pub asset: Asset,
-	pub address: EvmAddress,
-}
-
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
-pub struct BorrowAndWithdrawData {
-	pub borrow: BorrowData,
-	pub withdraw: WithdrawData,
-}
-
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
-pub enum LendingApi {
-	Borrow(BorrowData),
-	Withdraw(WithdrawData),
-	BorrowAndWithdraw(BorrowAndWithdrawData),
-}
-
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, PartialOrd, Ord)]
-pub enum UserActionsApi {
-	Lending(LendingApi),
-	// reserved for future APIs...
-}
-
-// We should probably do some  macro to pull each of the types, stringify it in a EIP712 format
-// and the compute the values for the tokens. For now we do it manially to keep it simple.
-// properly in the EIP712 format.
-impl UserActionsApi {
-	// NOTE: When there’s a nested struct, EIP-712 requires including
-	// the dependency in the type string.
-	// i.e. we must append the full definition of all types alphabetically
-	pub fn encode_eip712_type_str_with_metadata(
-		&self,
-		mut types: Vec<&str>,
-	) -> scale_info::prelude::string::String {
-		let root_action_str = match self {
-			UserActionsApi::Lending(LendingApi::Borrow { .. }) =>
-				"Borrow(BorrowData Borrow,Metadata metadata)",
-			UserActionsApi::Lending(LendingApi::Withdraw { .. }) =>
-				"Withdraw(WithdrawData Withdraw,Metadata metadata)",
-			UserActionsApi::Lending(LendingApi::BorrowAndWithdraw { .. }) =>
-				"BorrowAndWithdraw(BorrowAndWithdrawData BorrowAndWithdrawData,Metadata metadata)",
-			// Add more variants here as needed
-		};
-
-		// Sort alphabetically according to EIP-712
-		types.sort();
-
-		// Prepend the root type
-		let mut all_types = Vec::with_capacity(types.len() + 1);
-		all_types.push(root_action_str);
-		all_types.extend(types);
-
-		// Concatenate
-		all_types.join("")
-	}
-
-	pub fn eip_712_action_data_str(&self) -> Vec<&'static str> {
-		// The first string is the root type followed by any inner types. This is not very safe,
-		// just done as a quick PoC.
-		match self {
-			UserActionsApi::Lending(LendingApi::Borrow { .. }) => {
-				vec![EIP712_BORROW_DATA_TYPE_STR]
-			},
-			UserActionsApi::Lending(LendingApi::Withdraw { .. }) => {
-				vec![EIP712_WITHDRAW_DATA_TYPE_STR]
-			},
-			UserActionsApi::Lending(LendingApi::BorrowAndWithdraw { .. }) => {
-				vec![
-					EIP712_BORROW_AND_WITHDRAW_DATA_TYPE_STR,
-					EIP712_BORROW_DATA_TYPE_STR,
-					EIP712_WITHDRAW_DATA_TYPE_STR,
-				]
-			}, // Add more variants here as needed
-		}
-	}
-
-	pub fn encode_eip_712_action_data_hash(&self) -> H256 {
-		match self {
-			UserActionsApi::Lending(LendingApi::Borrow(borrow_data)) => {
-				let borrow_data_type_hash =
-					Keccak256::hash(self.eip_712_action_data_str().join("").as_bytes());
-				let borrow_data_tokens = vec![
-					Token::FixedBytes(borrow_data_type_hash.as_bytes().to_vec()),
-					Token::Uint(U256::from(borrow_data.amount)),
-					Token::FixedBytes(
-						Keccak256::hash(borrow_data.collateral_asset.as_bytes()).0.to_vec(),
-					),
-					Token::FixedBytes(
-						Keccak256::hash(borrow_data.borrow_asset.as_bytes()).0.to_vec(),
-					),
-				];
-				let encoded_action_data = encode(&borrow_data_tokens);
-				Keccak256::hash(&encoded_action_data)
-			},
-			UserActionsApi::Lending(LendingApi::Withdraw(withdraw_data)) => {
-				let withdraw_data_type_hash =
-					Keccak256::hash(self.eip_712_action_data_str().join("").as_bytes());
-				let withdraw_data_tokens = vec![
-					Token::FixedBytes(withdraw_data_type_hash.as_bytes().to_vec()),
-					Token::FixedBytes(Keccak256::hash(withdraw_data.asset.as_bytes()).0.to_vec()),
-					Token::Address(withdraw_data.address),
-				];
-				let encoded_withdraw_data = encode(&withdraw_data_tokens);
-				Keccak256::hash(&encoded_withdraw_data)
-			},
-			UserActionsApi::Lending(LendingApi::BorrowAndWithdraw(BorrowAndWithdrawData {
-				borrow,
-				withdraw,
-			})) => {
-				let borrow_data_hash = UserActionsApi::Lending(LendingApi::Borrow(borrow.clone()))
-					.encode_eip_712_action_data_hash();
-				let withdraw_data_hash =
-					UserActionsApi::Lending(LendingApi::Withdraw(withdraw.clone()))
-						.encode_eip_712_action_data_hash();
-
-				let borrow_and_withdraw_data_type_hash =
-					Keccak256::hash(self.eip_712_action_data_str().join("").as_bytes());
-				let borrow_and_withdraw_data_tokens = vec![
-					Token::FixedBytes(borrow_and_withdraw_data_type_hash.as_bytes().to_vec()),
-					Token::FixedBytes(borrow_data_hash.as_bytes().to_vec()),
-					Token::FixedBytes(withdraw_data_hash.as_bytes().to_vec()),
-				];
-				let encoded_borrow_and_withdraw_data = encode(&borrow_and_withdraw_data_tokens);
-				Keccak256::hash(&encoded_borrow_and_withdraw_data)
-			},
-			// Add more variants here as needed
-		}
-	}
-
-	pub fn encode_eip_712_message_with_metadata(
-		&self,
-		metadata_hash: H256,
-		metadata_type_str: &str,
-	) -> H256 {
-		let mut action_data_type_str = self.eip_712_action_data_str();
-		action_data_type_str.push(metadata_type_str);
-		let action_type_str = self.encode_eip712_type_str_with_metadata(action_data_type_str);
-
-		let action_type_hash = Keccak256::hash(action_type_str.as_bytes());
-
-		let action_data_hash = self.encode_eip_712_action_data_hash();
-		let tokens = vec![
-			Token::FixedBytes(action_type_hash.as_bytes().to_vec()),
-			Token::FixedBytes(action_data_hash.as_bytes().to_vec()),
-			Token::FixedBytes(metadata_hash.as_bytes().to_vec()),
-		];
-		let encoded_message = encode(&tokens);
-		Keccak256::hash(&encoded_message)
-	}
-}
-
-const EIP712_DOMAIN_TYPE_STR: &str = "EIP712Domain(string name,string version)";
-const EIP712_DOMAIN_VERSION: &str = "0";
-const EIP712_METADATA_TYPE_STR: &str = "Metadata(address from,uint256 nonce,uint256 expiryBlock)";
-const EIP712_BORROW_DATA_TYPE_STR: &str =
-	"BorrowData(uint256 amount,string collateralAsset,string borrowAsset)";
-const EIP712_WITHDRAW_DATA_TYPE_STR: &str = "WithdrawData(string asset,address address)";
-const EIP712_BORROW_AND_WITHDRAW_DATA_TYPE_STR: &str =
-	"BorrowAndWithdrawData(BorrowData Borrow,WithdrawData Withdraw)";
-
-const EIP712_DOMAIN_PREFIX: [u8; 2] = [0x19, 0x01];
-const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
-const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
-
-pub fn build_eip_712_hash(
-	user_action: UserActionsApi,
-	transaction_metadata: TransactionMetadata,
-	signer: EvmAddress,
-	chain_name: ChainflipNetwork,
-) -> Vec<u8> {
-	// -----------------
-	// Domain separator
-	// -----------------
-	// Not using chain_id as this is not an EVM network and the domain name
-	// will act as the replay protection between different Chainflip networks.
-	let type_hash = Keccak256::hash(EIP712_DOMAIN_TYPE_STR.as_bytes());
-	let name_hash = Keccak256::hash(chain_name.as_str().as_bytes());
-	let version_hash = Keccak256::hash(EIP712_DOMAIN_VERSION.as_bytes());
-
-	let tokens = vec![
-		Token::FixedBytes(type_hash.as_bytes().to_vec()),
-		Token::FixedBytes(name_hash.as_bytes().to_vec()),
-		Token::FixedBytes(version_hash.as_bytes().to_vec()),
-	];
-
-	// ABI encode
-	let encoded = encode(&tokens);
-	let domain_separator = Keccak256::hash(&encoded);
-	// -----------------
-	// Metadata struct
-	// -----------------
-	let metadata_type_str = EIP712_METADATA_TYPE_STR;
-	let metadata_type_hash = Keccak256::hash(metadata_type_str.as_bytes());
-	let metadata_tokens = vec![
-		Token::FixedBytes(metadata_type_hash.as_bytes().to_vec()),
-		Token::Address(signer),
-		Token::Uint(U256::from(transaction_metadata.nonce)),
-		Token::Uint(U256::from(transaction_metadata.expiry_block)),
-	];
-	let encoded_metadata = encode(&metadata_tokens);
-	let metadata_hash = Keccak256::hash(&encoded_metadata);
-	// -----------------
-	// Message struct
-	// -----------------
-	let message_hash =
-		user_action.encode_eip_712_message_with_metadata(metadata_hash, metadata_type_str);
-
-	// -----------------
-	// EIP712 digest
-	// -----------------
-	let mut encoded_payload = EIP712_DOMAIN_PREFIX.to_vec();
-	encoded_payload.extend_from_slice(domain_separator.0.as_slice());
-	encoded_payload.extend_from_slice(message_hash.0.as_slice());
-	println!("Final encoded payload: {:?}", encoded_payload);
-	encoded_payload
-}
-
-#[cfg(test)]
-mod test {
-	use super::*;
-	use std::str::FromStr;
-
-	#[test]
-	fn test_verify_eip_712_borrow() {
-		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-		let from: EvmAddress = EvmAddress::from_str(from_str).unwrap();
-		let metadata = TransactionMetadata { nonce: 1, expiry_block: 10000 };
-
-		let borrow_data =
-			BorrowData { amount: 1234, collateral_asset: Asset::Btc, borrow_asset: Asset::Usdc };
-
-		let encoded_payload = build_eip_712_hash(
-			UserActionsApi::Lending(LendingApi::Borrow(borrow_data)),
-			metadata,
-			from,
-			ChainflipNetwork::Development,
-		);
-
-		let expected_signed_payload: Vec<u8> = hex_literal::hex!("190164a55c67b106cafd7b1016a96941a46c6af86d246a4b41fc690ab2f4adfa7498d85d77b1e0828a38ad9a4d4390170f9138d474414674cb4ec2382178522decad").into();
-
-		assert_eq!(encoded_payload, expected_signed_payload);
-		println!("Encoded final: {:?}", &encoded_payload);
-
-		let expected_eip712_hash =
-			hex_literal::hex!("64ba143396067ac0c504f798aadc309114e3a527ad1d33f7ab0773c5b0edc46e")
-				.into();
-
-		let eip712_hash = Keccak256::hash(&encoded_payload);
-		println!("EIP-712 final digest: {}", &eip712_hash);
-		assert_eq!(eip712_hash, expected_eip712_hash);
-	}
-
-	#[test]
-	fn test_verify_eip_712_borrow_and_withdraw() {
-		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-		let from: EvmAddress = EvmAddress::from_str(from_str).unwrap();
-		let metadata = TransactionMetadata { nonce: 1, expiry_block: 10000 };
-
-		let borrow_and_withdraw_data = BorrowAndWithdrawData {
-			borrow: BorrowData {
-				amount: 1234,
-				collateral_asset: Asset::Btc,
-				borrow_asset: Asset::Usdc,
-			},
-			withdraw: WithdrawData { asset: Asset::Usdc, address: from },
-		};
-
-		let encoded_payload = build_eip_712_hash(
-			UserActionsApi::Lending(LendingApi::BorrowAndWithdraw(borrow_and_withdraw_data)),
-			metadata,
-			from,
-			ChainflipNetwork::Development,
-		);
-
-		let expected_signed_payload: Vec<u8> = hex_literal::hex!("190164a55c67b106cafd7b1016a96941a46c6af86d246a4b41fc690ab2f4adfa74989162c18354761152c5d3bd9184e60343d89ff7bb5d92a6ebd8b534b17f788a2e").into();
-
-		assert_eq!(encoded_payload, expected_signed_payload);
-		println!("Encoded final: {:?}", &encoded_payload);
-
-		let expected_eip712_hash =
-			hex_literal::hex!("bf82bd1e2aca0e7011dfa1d5bb843dd63b71f82a2dbe955b18831f8faeec2118")
-				.into();
-
-		let eip712_hash = Keccak256::hash(&encoded_payload);
-		println!("EIP-712 final digest: {}", &eip712_hash);
-		assert_eq!(eip712_hash, expected_eip712_hash);
-	}
-
-	#[test]
-	fn test_verify_evm() {
-		use cf_chains::{evm::EvmCrypto, ChainCrypto};
-		// Data before hashing
-		let signed_payload =  hex_literal::hex!("1901027021202b377ece5da4b3c36e8635beba925042bdc8f26e7e3b4d0318b6a255d3cf70c7277187d769dc8701e55bbdfccf6300732bb6513f86614f6267a6f4db");
-		let signer: EvmAddress =
-			EvmAddress::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
-		let signature: EthereumSignature = hex_literal::hex!(
-			"4db2efcd4fe0dc3bde6c16745dc0d5420a9f3eee587e5cc271ac98fd975563081eaa2fe79e5b2453ca7d8c5675e4d683ac5c59d5d4d16d854ecdaaf35195d5551b"
-		)
-		.into();
-
-		let success = EvmCrypto::verify_signature(&signer, &signed_payload, &signature);
-		assert!(success, "Signature verification failed");
-	}
-
-	#[test]
-	fn test_verify_solana() {
-		use cf_chains::{sol::SolanaCrypto, ChainCrypto};
-		// Data before hashing
-		let signed_payload =  hex_literal::hex!("ff736f6c616e61206f6666636861696e0000d2040000000000000000000000000000050301000000000000000000000000000000000000000000000000000000000000000100000010270000");
-		let signer: SolAddress =
-			SolAddress::from_str("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp").unwrap();
-		let signature: SolSignature = hex_literal::hex!(
-			"8ba6205389d557394793733f9a2bc809a47aaaf94fa5818a906ce7c18645bf7b897c3fe3f011d479cc4be67d5a964f493b163860ed3df634728d308374cbae06"
-		)
-		.into();
-
-		let success = SolanaCrypto::verify_signature(&signer, &signed_payload, &signature);
-		assert!(success, "Signature verification failed");
-	}
 }
