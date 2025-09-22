@@ -1,6 +1,7 @@
 use crate::mocks::*;
 use cf_amm_math::PRICE_FRACTIONAL_BITS;
 use cf_chains::evm::U256;
+use cf_primitives::SWAP_DELAY_BLOCKS;
 use cf_test_utilities::assert_matching_event_count;
 use cf_traits::{
 	lending::ChpSystemApi,
@@ -130,7 +131,7 @@ fn basic_general_lending() {
 	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 	let interest_charge_in_eth_1 = {
-		// 25% utilisation is expected:
+		// 50% utilisation is expected:
 		let interest_charge_in_btc = CONFIG
 			.derive_interest_rate_per_payment_interval(LOAN_ASSET, Permill::from_percent(50)) *
 			PRINCIPAL;
@@ -450,7 +451,7 @@ fn basic_loan_aggregation() {
 			Ok(LOAN_ID)
 		);
 
-		// Should have enough collateral to borrow a litte more on the same loan
+		// Should have enough collateral to borrow a little more on the same loan
 		{
 			assert_ok!(LendingPools::expand_loan(
 				RuntimeOrigin::signed(BORROWER),
@@ -876,7 +877,7 @@ fn swap_collected_pool_fees() {
 				BTreeMap::from([(COLLATERAL_ASSET_1, 0), (COLLATERAL_ASSET_2, INIT_FEE_ASSET_2)]),
 			);
 		})
-		.then_execute_at_block(fee_swap_block, |_| {
+		.then_execute_at_block(fee_swap_block + SWAP_DELAY_BLOCKS as u64, |_| {
 			const FEE_SWAP_OUTPUT_1: AssetAmount = INIT_FEE_ASSET_1 / 10;
 
 			// Simulate fee swap:
@@ -973,7 +974,7 @@ fn adding_and_removing_collateral() {
 #[test]
 fn basic_liquidation() {
 	// Summary: creates a loan and drops oracle price to trigger soft liquidation. The liquidation
-	// swap is executed half way through, which should be sufficient to bring CR back to healty and
+	// swap is executed half way through, which should be sufficient to bring CR back to healthy and
 	// abort the liquidation. Then we drop the price again to trigger hard liquidation, which will
 	// be fully executed repaying the principal in full and closing the loan.
 
@@ -1130,14 +1131,14 @@ fn basic_liquidation() {
 			assert!(!MockSwapRequestHandler::<Test>::get_swap_requests()
 				.contains_key(&LIQUIDATION_SWAP_1));
 
-			let (liquidation_fee_network, liquidaiton_fee_remainder) =
+			let (liquidation_fee_network, liquidation_fee_remainder) =
 				take_network_fee(liquidation_fee_1);
 
 			// Part of the principal has been repaid via liquidation:
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
-					total_amount: INIT_POOL_AMOUNT + liquidaiton_fee_remainder,
+					total_amount: INIT_POOL_AMOUNT + liquidation_fee_remainder,
 					available_amount: INIT_POOL_AMOUNT - PRINCIPAL +
 						(SWAPPED_PRINCIPAL - liquidation_fee_network),
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
@@ -1228,10 +1229,7 @@ fn basic_liquidation() {
 				SWAPPED_PRINCIPAL_2 - owed_principal - liquidation_fee_2
 			};
 
-			assert_eq!(
-				MockBalance::get_balance(&BORROWER, LOAN_ASSET),
-				PRINCIPAL + excess_principal
-			);
+			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
 
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
@@ -1256,7 +1254,7 @@ fn basic_liquidation() {
 				Some(LoanAccount {
 					borrower_id: BORROWER,
 					primary_collateral_asset: COLLATERAL_ASSET,
-					collateral: Default::default(),
+					collateral: BTreeMap::from([(LOAN_ASSET, excess_principal)]),
 					liquidation_status: LiquidationStatus::NoLiquidation,
 					loans: Default::default()
 				})

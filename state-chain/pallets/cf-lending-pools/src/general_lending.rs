@@ -1163,13 +1163,13 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 						},
 					};
 
-					// Any amount left after repaying the loan should be returned to the
-					// borrower:
-					T::Balance::credit_account(
-						&borrower_id,
-						liquidation_swap.to_asset,
-						remaining_amount,
-					);
+					// Any amount left after repaying the loan is added to the borrower's
+					// collateral balance:
+					loan_account
+						.collateral
+						.entry(liquidation_swap.to_asset)
+						.or_default()
+						.saturating_accrue(remaining_amount);
 
 					// If this swap is the last liquidation swap for the loan, we should
 					// "settle" it (even if it hasn't been repaid in full):
