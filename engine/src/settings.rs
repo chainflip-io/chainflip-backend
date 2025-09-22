@@ -35,6 +35,7 @@ use cf_utilities::{
 	redact_endpoint_secret::SecretUrl, Port,
 };
 use clap::Parser;
+use ethers::types::transaction::eip712::{Eip712, Types};
 
 use crate::constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT};
 
@@ -916,7 +917,17 @@ fn is_valid_db_path(db_file: &Path) -> Result<()> {
 
 #[cfg(test)]
 pub mod tests {
+	use std::collections::BTreeMap;
+
 	use cf_utilities::assert_ok;
+	use codec::{Decode, Encode};
+	use ethers::types::{
+		transaction::eip712::{EIP712Domain, Eip712DomainType, TypedData},
+		Address, Bytes,
+	};
+	use scale_info::{MetaType, Registry, TypeDef, TypeInfo};
+	use serde::Serialize;
+	use sp_core::{H160, U256};
 
 	use crate::constants::{
 		ARB_BACKUP_HTTP_ENDPOINT, ARB_BACKUP_WS_ENDPOINT, ARB_HTTP_ENDPOINT, ARB_WS_ENDPOINT,
@@ -1445,6 +1456,216 @@ pub mod tests {
 			resolve_settings_path(&config_root, &PathBuf::from("/path/to/somewhere"), None)
 				.unwrap(),
 			PathBuf::from("/path/to/somewhere"),
+		);
+	}
+
+	#[test]
+	fn test_type_info_eip_712() {
+		use ethers::types::{transaction::eip712::Types, Address};
+
+		#[derive(Encode, Decode, TypeInfo, Clone, Serialize, Deserialize)]
+		pub struct Mail {
+			pub from: Person,
+			pub to: Person,
+			pub message: String,
+		}
+
+		#[derive(Encode, Decode, TypeInfo, Clone, Serialize, Deserialize)]
+		pub struct Person {
+			pub name: String,
+		}
+
+		let payload = Mail {
+			from: Person { name: String::from("Ramiz") },
+			to: Person { name: String::from("Albert") },
+			message: String::from("hello Albert"),
+		};
+
+		let mut registry = Registry::new();
+		registry.register_type(&MetaType::new::<Mail>());
+
+		//let types = vec![];
+		for (_, ty) in registry.types() {
+			//types.push(ty)
+			println!("Type: {:#?}", ty);
+		}
+
+		println!("here");
+
+		let typed_data = TypedData {
+			domain: EIP712Domain {
+				name: Some(String::from("Seaport")),
+				version: Some(String::from("1.1")),
+				chain_id: Some(U256([1, 0, 0, 0])),
+				verifying_contract: Some(H160([0xef; 20])),
+				salt: None,
+			},
+			types: registry
+				.types()
+				.filter_map(|(_, ty)| {
+					Some((
+						ty.path.segments.last()?.clone(),
+						match &ty.type_def {
+							TypeDef::Composite(comp_type) => {
+								comp_type
+									.fields
+									.clone()
+									.into_iter()
+									.filter_map(|field| {
+										Some(Eip712DomainType {
+											//find out if there are unnamed fields in evm structs
+											// e.g. struct A(pub u8)
+											name: field.name?,
+											// find out in which cases type name would be empty.
+											r#type: match field.type_name.unwrap() {
+												s if s == "String".to_string() =>
+													"string".to_string(),
+												s => s,
+											},
+										})
+									})
+									.collect()
+							},
+							//todo
+							_ => Default::default(),
+						},
+					))
+				})
+				.collect(),
+			primary_type: Mail::type_info().path.segments.last().unwrap().clone().to_string(),
+			message: match serde_json::to_value(&payload).unwrap() {
+				serde_json::Value::Object(fields) => fields.into_iter().collect(),
+				_ => Default::default(), //todo
+			},
+		};
+
+		println!("{typed_data:?}");
+		println!("{}", hex::encode(&typed_data.encode_eip712().unwrap()[..]));
+	}
+
+	#[test]
+	fn test_hash_nested_struct_array() {
+		let json = serde_json::json!({
+		  "types": {
+			"EIP712Domain": [
+			  {
+				"name": "name",
+				"type": "string"
+			  },
+			  {
+				"name": "version",
+				"type": "string"
+			  },
+			  {
+				"name": "chainId",
+				"type": "uint256"
+			  },
+			  {
+				"name": "verifyingContract",
+				"type": "Address"
+			  }
+			],
+			"OrderComponents": [
+			  {
+				"name": "offerer",
+				"type": "address"
+			  },
+			  {
+				"name": "zone",
+				"type": "address"
+			  },
+			  {
+				"name": "offer",
+				"type": "OfferItem[]"
+			  },
+			  {
+				"name": "startTime",
+				"type": "uint256"
+			  },
+			  {
+				"name": "endTime",
+				"type": "uint256"
+			  },
+			  {
+				"name": "zoneHash",
+				"type": "bytes32"
+			  },
+			  {
+				"name": "salt",
+				"type": "uint256"
+			  },
+			  {
+				"name": "conduitKey",
+				"type": "bytes32"
+			  },
+			  {
+				"name": "counter",
+				"type": "uint256"
+			  }
+			],
+			"OfferItem": [
+			  {
+				"name": "token",
+				"type": "address"
+			  }
+			],
+			"ConsiderationItem": [
+			  {
+				"name": "token",
+				"type": "address"
+			  },
+			  {
+				"name": "identifierOrCriteria",
+				"type": "uint256"
+			  },
+			  {
+				"name": "startAmount",
+				"type": "uint256"
+			  },
+			  {
+				"name": "endAmount",
+				"type": "uint256"
+			  },
+			  {
+				"name": "recipient",
+				"type": "address"
+			  }
+			]
+		  },
+		  "primaryType": "OrderComponents",
+		  "domain": {
+			"name": "Seaport",
+			"version": "1.1",
+			"chainId": "1",
+			"verifyingContract": "0x00000000006c3852cbEf3e08E8dF289169EdE581"
+		  },
+		  "message": {
+			"offerer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+			"offer": [
+			  {
+				"token": "0xA604060890923Ff400e8c6f5290461A83AEDACec"
+			  }
+			],
+			"startTime": "1658645591",
+			"endTime": "1659250386",
+			"zone": "0x004C00500000aD104D7DBd00e3ae0A5C00560C00",
+			"zoneHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+			"salt": "16178208897136618",
+			"conduitKey": "0x0000007b02230091a7ed01230072f7006a004d60a8d4e71d599b8104250f0000",
+			"totalOriginalConsiderationItems": "2",
+			"counter": "0"
+		  }
+		}
+				);
+
+		let typed_data: TypedData = serde_json::from_value(json).unwrap();
+
+		println!("{typed_data:?}");
+
+		let hash = typed_data.encode_eip712().unwrap();
+		assert_eq!(
+			"0b8aa9f3712df0034bc29fe5b24dd88cfdba02c7f499856ab24632e2969709a8",
+			hex::encode(&hash[..])
 		);
 	}
 }
