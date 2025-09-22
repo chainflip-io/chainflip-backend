@@ -16,10 +16,10 @@
 
 pub use cf_primitives::chains::Solana;
 
-use cf_amm_math::output_amount_ceil;
+use cf_amm_math::{output_amount_ceil, relative_price};
 use cf_primitives::{
 	AffiliateAndFee, BasisPoints, Beneficiary, ChannelId, DcaParameters, ForeignChain,
-	IngressOrEgress, Price,
+	IngressOrEgress, PriceFeedApi,
 };
 use sol_prim::program_instructions::FunctionDiscriminator;
 use sp_core::{ConstBool, U256};
@@ -139,16 +139,21 @@ impl Chain for Solana {
 	type ReplayProtection = ();
 	type TransactionRef = SolSignature;
 
-	fn input_asset_amount_using_reference_gas_asset_price(
+	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
 		input_asset: Self::ChainAsset,
 		required_gas: Self::ChainAmount,
-		oracle_price: Option<Price>,
 	) -> Self::ChainAmount {
 		match input_asset {
 			assets::sol::Asset::Sol => required_gas,
 			assets::sol::Asset::SolUsdc =>
-				if let Some(price) = oracle_price {
-					output_amount_ceil(U256::from(required_gas), price).try_into().unwrap_or(0u64)
+				if let (Some(price_sol), Some(price_usdc)) = (
+					T::get_price(Self::GAS_ASSET.into()),
+					T::get_price(assets::sol::Asset::SolUsdc.into()),
+				) {
+					let price_usdc_sol = relative_price(price_sol.price, price_usdc.price);
+					output_amount_ceil(U256::from(required_gas), price_usdc_sol)
+						.try_into()
+						.unwrap_or(0u64)
 				} else {
 					multiply_by_rational_with_rounding(
 						required_gas.into(),

@@ -1,6 +1,4 @@
-use cf_primitives::{Asset, Price};
-
-use crate::{OraclePrice, PriceFeedApi};
+use cf_primitives::{Asset, OraclePrice, Price, PriceFeedApi};
 
 use super::{MockPallet, MockPalletStorage};
 

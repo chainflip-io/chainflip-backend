@@ -29,7 +29,7 @@ use cf_utilities::SliceToArray;
 pub use serializable_address::*;
 
 pub use cf_primitives::chains::Polkadot;
-use cf_primitives::{PolkadotBlockNumber, Price, TxId};
+use cf_primitives::{PolkadotBlockNumber, PriceFeedApi, TxId};
 use codec::{Decode, Encode};
 use core::str::FromStr;
 use frame_support::sp_runtime::{
@@ -368,10 +368,9 @@ impl Chain for Polkadot {
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
 
-	fn input_asset_amount_using_reference_gas_asset_price(
+	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
 		_input_asset: Self::ChainAsset,
 		required_gas: Self::ChainAmount,
-		_oracle_price: Option<Price>,
 	) -> Self::ChainAmount {
 		required_gas
 	}

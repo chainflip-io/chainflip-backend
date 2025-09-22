@@ -96,13 +96,13 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
-	DcaParameters,
+	DcaParameters, OraclePrice,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BroadcastAnyChainGovKey, Broadcaster,
 	CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
 	FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider, OnBroadcastReady, OnDeposit,
-	OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
+	QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
 };
 
 use codec::{Decode, Encode};
@@ -1110,7 +1110,7 @@ impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
 }
 
 pub struct ChainlinkOracle;
-impl cf_traits::PriceFeedApi for ChainlinkOracle {
+impl cf_primitives::PriceFeedApi for ChainlinkOracle {
 	fn get_price(asset: assets::any::Asset) -> Option<OraclePrice> {
 		decode_and_get_latest_oracle_price::<TypesFor<Chainlink>>(asset)
 	}

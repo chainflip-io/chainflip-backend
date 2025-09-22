@@ -26,9 +26,9 @@ use crate::{
 	Chain, FeeEstimationApi, *,
 };
 use assets::eth::Asset as EthAsset;
-use cf_amm_math::output_amount_ceil;
+use cf_amm_math::{output_amount_ceil, relative_price};
 pub use cf_primitives::chains::Ethereum;
-use cf_primitives::{chains::assets, IngressOrEgress, Price};
+use cf_primitives::{chains::assets, IngressOrEgress, PriceFeedApi};
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Word};
 use evm::api::EvmReplayProtection;
@@ -75,15 +75,19 @@ impl Chain for Ethereum {
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EvmReplayProtection;
 
-	fn input_asset_amount_using_reference_gas_asset_price(
+	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
 		input_asset: Self::ChainAsset,
 		required_gas: Self::ChainAmount,
-		oracle_price: Option<Price>,
 	) -> Self::ChainAmount {
 		match input_asset {
-			EthAsset::Usdt | EthAsset::Usdc =>
-				if let Some(price) = oracle_price {
-					output_amount_ceil(U256::from(required_gas), price).try_into().unwrap_or(0u128)
+			EthAsset::Usdt => {
+				if let (Some(price_eth), Some(price_usdt)) =
+					(T::get_price(Self::GAS_ASSET.into()), T::get_price(EthAsset::Usdt.into()))
+				{
+					let price_usdt_eth = relative_price(price_eth.price, price_usdt.price);
+					output_amount_ceil(U256::from(required_gas), price_usdt_eth)
+						.try_into()
+						.unwrap_or(0u128)
 				} else {
 					multiply_by_rational_with_rounding(
 						required_gas,
@@ -92,11 +96,30 @@ impl Chain for Ethereum {
 						sp_runtime::Rounding::Up,
 					)
 					.unwrap_or(0u128)
-				},
+				}
+			},
+			EthAsset::Usdc => {
+				if let (Some(price_eth), Some(price_usdc)) =
+					(T::get_price(Self::GAS_ASSET.into()), T::get_price(EthAsset::Usdc.into()))
+				{
+					let price_usdc_eth = relative_price(price_eth.price, price_usdc.price);
+					output_amount_ceil(U256::from(required_gas), price_usdc_eth)
+						.try_into()
+						.unwrap_or(0u128)
+				} else {
+					multiply_by_rational_with_rounding(
+						required_gas,
+						REFERENCE_ETH_PRICE_IN_USD,
+						ONE_ETH,
+						sp_runtime::Rounding::Up,
+					)
+					.unwrap_or(0u128)
+				}
+			},
 			EthAsset::Flip => multiply_by_rational_with_rounding(
 				required_gas,
-				if let Some(price) = oracle_price {
-					output_amount_ceil(U256::from(ONE_ETH), price)
+				if let Some(price) = T::get_price(Self::GAS_ASSET.into()) {
+					output_amount_ceil(U256::from(ONE_ETH), price.price)
 						.try_into()
 						.unwrap_or(REFERENCE_ETH_PRICE_IN_USD)
 				} else {

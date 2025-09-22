@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use cf_primitives::{chains::assets::any::AssetMap, Price};
+use cf_primitives::{chains::assets::any::AssetMap, PriceFeedApi};
 use frame_support::traits::ConstBool;
 
 /// A Chain that can't be constructed.
@@ -45,10 +45,9 @@ impl Chain for NoneChain {
 		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = AssetMap<T>;
 
-	fn input_asset_amount_using_reference_gas_asset_price(
+	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
 		_input_asset: Self::ChainAsset,
 		_required_gas: Self::ChainAmount,
-		_oracle_price: Option<Price>,
 	) -> Self::ChainAmount {
 		0
 	}

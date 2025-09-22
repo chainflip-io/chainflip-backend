@@ -18,7 +18,7 @@ use cf_chains::Chain;
 use cf_primitives::{Asset, AssetAmount};
 use frame_support::sp_runtime::traits::{UniqueSaturatedInto, Zero};
 
-use crate::AssetConverter;
+use crate::{mocks::price_feed_api::MockPriceFeedApi, AssetConverter};
 
 use super::{MockPallet, MockPalletStorage};
 
@@ -53,7 +53,10 @@ impl AssetConverter for MockAssetConverter {
 		)
 		.and_then(|amount| C::ChainAmount::try_from(amount).ok())
 		.unwrap_or_else(|| {
-			C::input_asset_amount_using_reference_gas_asset_price(input_asset, required_gas, None)
+			C::input_asset_amount_using_reference_gas_asset_price::<MockPriceFeedApi>(
+				input_asset,
+				required_gas,
+			)
 		})
 	}
 

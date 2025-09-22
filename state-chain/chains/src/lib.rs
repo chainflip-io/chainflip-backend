@@ -45,7 +45,7 @@ use address::{
 };
 use cf_primitives::{
 	Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
-	DcaParameters, EgressId, EthAmount, GasAmount, IngressOrEgress, Price, TxId,
+	DcaParameters, EgressId, EthAmount, GasAmount, IngressOrEgress, PriceFeedApi, TxId,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -356,10 +356,9 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	}
 
 	/// estimate ingress fee in input asset using reference prices
-	fn input_asset_amount_using_reference_gas_asset_price(
+	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
 		input_asset: Self::ChainAsset,
 		required_das: Self::ChainAmount,
-		oracle_price: Option<Price>,
 	) -> Self::ChainAmount;
 
 	type ChainCrypto: ChainCrypto;

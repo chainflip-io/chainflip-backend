@@ -579,3 +579,16 @@ pub enum IngressOrEgress {
 	Egress,
 	EgressCcm { gas_budget: GasAmount, message_length: usize },
 }
+
+pub struct OraclePrice {
+	/// Statechain encoded price, fixed-point value with 128 bits for fractional part, ie.
+	/// denominator is 2^128.
+	pub price: Price,
+
+	/// Whether the price is stale according to the oracle price ES settings.
+	pub stale: bool,
+}
+
+pub trait PriceFeedApi {
+	fn get_price(asset: Asset) -> Option<OraclePrice>;
+}

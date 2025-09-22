@@ -26,16 +26,16 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
-	BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceLimits, SwapId, SwapLeg,
-	SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
+	BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceFeedApi, PriceLimits, SwapId,
+	SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
 	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
 	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, IngressEgressFeeApi,
-	PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -2772,16 +2772,9 @@ pub mod pallet {
 			)
 			.and_then(|amount| C::ChainAmount::try_from(amount).ok())
 			.unwrap_or_else(|| {
-				let oracle_price = T::PriceFeedApi::get_price(C::GAS_ASSET.into());
-				let price = if oracle_price.as_ref().is_some() {
-					Some(oracle_price.unwrap().price)
-				} else {
-					None
-				};
-				C::input_asset_amount_using_reference_gas_asset_price(
+				C::input_asset_amount_using_reference_gas_asset_price::<<T as Config>::PriceFeedApi>(
 					input_asset,
 					required_gas,
-					price,
 				)
 			})
 		}

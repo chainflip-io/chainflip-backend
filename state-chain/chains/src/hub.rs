@@ -36,7 +36,7 @@ use dot::{
 };
 
 pub use cf_primitives::chains::Assethub;
-use cf_primitives::{PolkadotBlockNumber, Price};
+use cf_primitives::{PolkadotBlockNumber, PriceFeedApi};
 use codec::{Decode, Encode};
 use frame_support::{
 	pallet_prelude::{TransactionValidity, TransactionValidityError, ValidTransaction},
@@ -75,10 +75,9 @@ impl Chain for Assethub {
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
 
-	fn input_asset_amount_using_reference_gas_asset_price(
+	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
 		input_asset: Self::ChainAsset,
 		required_gas: Self::ChainAmount,
-		_oracle_price: Option<Price>,
 	) -> Self::ChainAmount {
 		match input_asset {
 			assets::hub::Asset::HubUsdc | assets::hub::Asset::HubUsdt =>

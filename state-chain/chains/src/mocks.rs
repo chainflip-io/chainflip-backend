@@ -103,15 +103,13 @@ impl Chain for MockEthereum {
 	type ReplayProtectionParams = ();
 	type ReplayProtection = EvmReplayProtection;
 
-	fn input_asset_amount_using_reference_gas_asset_price(
+	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
 		input_asset: Self::ChainAsset,
 		required_gas: Self::ChainAmount,
-		oracle_price: Option<Price>,
 	) -> Self::ChainAmount {
-		<Ethereum as Chain>::input_asset_amount_using_reference_gas_asset_price(
+		<Ethereum as Chain>::input_asset_amount_using_reference_gas_asset_price::<T>(
 			input_asset,
 			required_gas,
-			oracle_price,
 		)
 	}
 }
