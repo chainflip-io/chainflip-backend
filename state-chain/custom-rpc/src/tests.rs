@@ -1134,8 +1134,8 @@ fn lending_config_serialization() {
 		},
 		network_fee_contributions: NetworkFeeContributions {
 			extra_interest: Permill::from_percent(1),
-			from_origination_fee: Percent::from_percent(20),
-			from_liquidation_fee: Percent::from_percent(30),
+			from_origination_fee: Permill::from_percent(20),
+			from_liquidation_fee: Permill::from_percent(30),
 		},
 		fee_swap_interval_blocks: 10,
 		interest_payment_interval_blocks: 15,

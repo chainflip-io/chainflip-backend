@@ -93,7 +93,7 @@ use cf_traits::{
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use frame_support::{derive_impl, instances::*};
+use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
 use pallet_cf_elections::electoral_systems::oracle_price::{
@@ -1552,7 +1552,15 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV1_12 = ();
+type MigrationsForV1_12 = (
+	VersionedMigration<
+		19,
+		20,
+		migrations::safe_mode::SafeModeMigration,
+		pallet_cf_environment::Pallet<Runtime>,
+		<Runtime as frame_system::Config>::DbWeight,
+	>,
+);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
