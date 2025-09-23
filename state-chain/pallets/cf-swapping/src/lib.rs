@@ -2835,8 +2835,8 @@ pub mod pallet {
 					} else {
 						multiply_by_rational_with_rounding(
 							required_gas.into(),
-							C::NATIVE_TOKEN_PRICE_IN_USD.into(),
-							C::ONE_UNIT_IN_SMALLEST_UNITS.into(),
+							C::NATIVE_TOKEN_PRICE_IN_FINE_USD.into(),
+							C::SMALLEST_UNIT_PER_UNIT.into(),
 							sp_runtime::Rounding::Up,
 						)
 						.and_then(|x| x.try_into().ok())
@@ -2847,11 +2847,11 @@ pub mod pallet {
 					required_gas.into(),
 					T::PriceFeedApi::get_price(C::GAS_ASSET.into())
 						.and_then(|price| {
-							output_amount_ceil(C::ONE_UNIT_IN_SMALLEST_UNITS.into(), price.price)
+							output_amount_ceil(C::SMALLEST_UNIT_PER_UNIT.into(), price.price)
 								.try_into()
 								.ok()
 						})
-						.unwrap_or(C::NATIVE_TOKEN_PRICE_IN_USD.into()),
+						.unwrap_or(C::NATIVE_TOKEN_PRICE_IN_FINE_USD.into()),
 					cf_chains::eth::REFERENCE_FLIP_PRICE_IN_USD,
 					sp_runtime::Rounding::Up,
 				)

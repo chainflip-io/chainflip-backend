@@ -309,11 +309,11 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 
 	/// Reference price of 1 full native token (e.g. 1 ETH, 1 BTC, 1 SOL)
 	/// denominated in fineUSD (1e6 = $1.00).
-	const NATIVE_TOKEN_PRICE_IN_USD: Self::ChainAmount;
+	const NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount;
 
 	/// Number of smallest units that make up 1 full token.
 	/// For example: 1 ETH = 1_000_000_000_000_000_000 wei.
-	const ONE_UNIT_IN_SMALLEST_UNITS: Self::ChainAmount;
+	const SMALLEST_UNIT_PER_UNIT: Self::ChainAmount;
 
 	/// Outputs the root block that witnesses the range of blocks after (not including)
 	/// `block_number`

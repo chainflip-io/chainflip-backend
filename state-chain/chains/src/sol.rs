@@ -99,7 +99,7 @@ pub const MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES: usize = 5;
 pub const MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS: u32 = 14400;
 pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES: usize = 3;
 
-pub const REFERENCE_SOL_PRICE_IN_USD: u64 = 250_000_000u64; //250 usd
+pub const REFERENCE_SOL_PRICE_IN_USD: u64 = 220_000_000u64; //220 usd
 
 // Use serialized transaction
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
@@ -117,8 +117,8 @@ impl Chain for Solana {
 	const NAME: &'static str = "Solana";
 	const GAS_ASSET: Self::ChainAsset = assets::sol::Asset::Sol;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 15;
-	const NATIVE_TOKEN_PRICE_IN_USD: Self::ChainAmount = REFERENCE_SOL_PRICE_IN_USD;
-	const ONE_UNIT_IN_SMALLEST_UNITS: Self::ChainAmount = 1_000_000_000u64;
+	const NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = REFERENCE_SOL_PRICE_IN_USD;
+	const SMALLEST_UNIT_PER_UNIT: Self::ChainAmount = 1_000_000_000u64;
 
 	type ChainCrypto = SolanaCrypto;
 	type ChainBlockNumber = SlotNumber;

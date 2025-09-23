@@ -48,15 +48,15 @@ use sp_runtime::{
 	traits::{BlakeTwo256, DispatchInfoOf, Hash, SignedExtension},
 };
 
-pub const REFERENCE_HUBDOT_PRICE_IN_USD: PolkadotBalance = 4_400_000u128; //4.4 usd
+pub const REFERENCE_HUBDOT_PRICE_IN_USD: PolkadotBalance = 4_000_000u128; //4 usd
 pub const ONE_DOT: PolkadotBalance = 10_000_000_000u128;
 
 impl Chain for Assethub {
 	const NAME: &'static str = "Assethub";
 	const GAS_ASSET: Self::ChainAsset = assets::hub::Asset::HubDot;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
-	const NATIVE_TOKEN_PRICE_IN_USD: Self::ChainAmount = REFERENCE_HUBDOT_PRICE_IN_USD;
-	const ONE_UNIT_IN_SMALLEST_UNITS: Self::ChainAmount = ONE_DOT;
+	const NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = REFERENCE_HUBDOT_PRICE_IN_USD;
+	const SMALLEST_UNIT_PER_UNIT: Self::ChainAmount = ONE_DOT;
 
 	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;

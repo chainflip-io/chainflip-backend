@@ -348,8 +348,9 @@ impl Chain for Polkadot {
 	const GAS_ASSET: Self::ChainAsset = assets::dot::Asset::Dot;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const DEPRECATED: bool = true;
-	const NATIVE_TOKEN_PRICE_IN_USD: Self::ChainAmount = crate::hub::REFERENCE_HUBDOT_PRICE_IN_USD;
-	const ONE_UNIT_IN_SMALLEST_UNITS: Self::ChainAmount = crate::hub::ONE_DOT;
+	const NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount =
+		crate::hub::REFERENCE_HUBDOT_PRICE_IN_USD;
+	const SMALLEST_UNIT_PER_UNIT: Self::ChainAmount = crate::hub::ONE_DOT;
 
 	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;

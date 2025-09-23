@@ -262,8 +262,8 @@ impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
-	const NATIVE_TOKEN_PRICE_IN_USD: Self::ChainAmount = 12_000_000_000_000u64;
-	const ONE_UNIT_IN_SMALLEST_UNITS: Self::ChainAmount = 100_000_000u64;
+	const NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = 113_000_000_000u64;
+	const SMALLEST_UNIT_PER_UNIT: Self::ChainAmount = 100_000_000u64;
 
 	type ChainCrypto = BitcoinCrypto;
 	type ChainBlockNumber = BlockNumber;

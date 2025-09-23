@@ -82,8 +82,9 @@ impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";
 	const GAS_ASSET: Self::ChainAsset = assets::eth::Asset::Eth;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
-	const NATIVE_TOKEN_PRICE_IN_USD: Self::ChainAmount = crate::eth::REFERENCE_ETH_PRICE_IN_USD;
-	const ONE_UNIT_IN_SMALLEST_UNITS: Self::ChainAmount = crate::eth::ONE_ETH;
+	const NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount =
+		crate::eth::REFERENCE_ETH_PRICE_IN_USD;
+	const SMALLEST_UNIT_PER_UNIT: Self::ChainAmount = crate::eth::ONE_ETH;
 
 	type ChainCrypto = MockEthereumChainCrypto;
 

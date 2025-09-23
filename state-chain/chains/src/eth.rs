@@ -44,16 +44,16 @@ pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_SEPOLIA: u64 = 11155111;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
-pub const REFERENCE_ETH_PRICE_IN_USD: AssetAmount = 4_500_000_000u128; //4500 usd
-pub const REFERENCE_FLIP_PRICE_IN_USD: AssetAmount = 750_000u128; //0.75 usd
+pub const REFERENCE_ETH_PRICE_IN_USD: AssetAmount = 4_200_000_000u128; //4200 usd
+pub const REFERENCE_FLIP_PRICE_IN_USD: AssetAmount = 660_000u128; //0.66 usd
 pub const ONE_ETH: AssetAmount = 1_000_000_000_000_000_000u128;
 
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
 	const GAS_ASSET: Self::ChainAsset = EthAsset::Eth;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
-	const NATIVE_TOKEN_PRICE_IN_USD: Self::ChainAmount = REFERENCE_ETH_PRICE_IN_USD;
-	const ONE_UNIT_IN_SMALLEST_UNITS: Self::ChainAmount = ONE_ETH;
+	const NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = REFERENCE_ETH_PRICE_IN_USD;
+	const SMALLEST_UNIT_PER_UNIT: Self::ChainAmount = ONE_ETH;
 
 	type ChainCrypto = evm::EvmCrypto;
 	type ChainBlockNumber = u64;

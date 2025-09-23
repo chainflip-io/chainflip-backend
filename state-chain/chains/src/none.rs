@@ -26,8 +26,8 @@ impl Chain for NoneChain {
 	const NAME: &'static str = "NONE";
 	const GAS_ASSET: Self::ChainAsset = assets::any::Asset::Usdc;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
-	const NATIVE_TOKEN_PRICE_IN_USD: Self::ChainAmount = 1_000_000;
-	const ONE_UNIT_IN_SMALLEST_UNITS: Self::ChainAmount = 1_000_000;
+	const NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = 1_000_000;
+	const SMALLEST_UNIT_PER_UNIT: Self::ChainAmount = 1_000_000;
 	type ChainCrypto = NoneChainCrypto;
 	type ChainBlockNumber = u64;
 	type ChainAmount = u64;
