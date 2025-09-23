@@ -1,8 +1,6 @@
 import { TestContext } from 'shared/utils/test_context';
-import Keyring from 'polkadot/keyring';
 import {
   assetContractId,
-  brokerMutex,
   getEvmEndpoint,
   getEvmWhaleKeypair,
   getSolWhaleKeyPair,
@@ -15,9 +13,6 @@ import { ethers, Wallet } from 'ethers';
 import { Struct, u32, Enum, u128, u8, str } from 'scale-ts';
 import { globalLogger } from 'shared/utils/logger';
 import { InternalAsset } from '@chainflip/cli';
-
-const brokerUri = '//BROKER_1';
-const broker = new Keyring({ type: 'sr25519' }).createFromUri(brokerUri);
 
 export const TransactionMetadata = Struct({
   nonce: u32,
@@ -82,32 +77,30 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   console.log('Sol Signature (hex):', hexSignature);
   console.log('Signer (hex):', hexSigner);
 
-  await brokerMutex.runExclusive(brokerUri, async () => {
-    const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    await chainflip.tx.environment
-      .submitUserSignedPayload(
-        // Solana prefix will be added in the SC previous to signature verification
-        hexRuntimeCall,
-        {
-          nonce: svmNonce,
-          expiryBlock,
+  // Submit as unsigned extrinsic - no broker needed
+  await chainflip.tx.environment
+    .submitUserSignedPayload(
+      // Solana prefix will be added in the SC previous to signature verification
+      hexRuntimeCall,
+      {
+        nonce: svmNonce,
+        expiryBlock,
+      },
+      {
+        Solana: {
+          signature: hexSignature,
+          signer: hexSigner,
+          sigType: 'Domain',
         },
-        {
-          Solana: {
-            signature: hexSignature,
-            signer: hexSigner,
-            sigType: 'Domain',
-          },
-        },
-      )
-      .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
-  });
+      },
+    )
+    .send();
 
   await observeEvent(globalLogger, `environment:UserActionSubmitted`, {
     test: (event) => {
       const matchSerializedCall = event.data.serializedCall === hexRuntimeCall;
-      const matchSignedPayload = event.data.signedPayload === solHexPrefixedMessage;
-      return matchSerializedCall && matchSignedPayload;
+      const matchSigner = event.data.signerAccountId === 'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1';
+      return matchSerializedCall && matchSigner;
     },
     historicalCheckBlocks: 1,
   }).event;
@@ -135,32 +128,30 @@ export async function testOffchainSignedAction(testContext: TestContext) {
 
   const evmSignature = await ethWallet.signMessage(evmPayload);
 
-  await brokerMutex.runExclusive(brokerUri, async () => {
-    const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    await chainflip.tx.environment
-      .submitUserSignedPayload(
-        // Ethereum prefix will be added in the SC previous to signature verification
-        hexRuntimeCall,
-        {
-          nonce: evmNonce,
-          expiryBlock,
+  // Submit as unsigned extrinsic - no broker needed
+  await chainflip.tx.environment
+    .submitUserSignedPayload(
+      // Ethereum prefix will be added in the SC previous to signature verification
+      hexRuntimeCall,
+      {
+        nonce: evmNonce,
+        expiryBlock,
+      },
+      {
+        Ethereum: {
+          signature: evmSignature,
+          signer: evmSigner,
+          sig_type: 'Domain',
         },
-        {
-          Ethereum: {
-            signature: evmSignature,
-            signer: evmSigner,
-            sig_type: 'Domain',
-          },
-        },
-      )
-      .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
-  });
+      },
+    )
+    .send();
 
   await observeEvent(globalLogger, `environment:UserActionSubmitted`, {
     test: (event) => {
       const matchSerializedCall = event.data.serializedCall === hexRuntimeCall;
-      const matchSignedPayload = event.data.signedPayload === evmHexPrefixedMessage;
-      return matchSerializedCall && matchSignedPayload;
+      const matchSigner = event.data.signerAccountId === 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7';
+      return matchSerializedCall && matchSigner;
     },
     historicalCheckBlocks: 1,
   }).event;
