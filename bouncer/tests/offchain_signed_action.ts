@@ -1,18 +1,15 @@
 import { TestContext } from 'shared/utils/test_context';
 import {
-  assetContractId,
   getEvmEndpoint,
   getEvmWhaleKeypair,
   getSolWhaleKeyPair,
-  handleSubstrateError,
 } from 'shared/utils';
 import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
-import { Struct, u32, Enum, u128, u8, str } from 'scale-ts';
+import { Struct, u32,str /* Enum, u128, u8 */  } from 'scale-ts';
 import { globalLogger } from 'shared/utils/logger';
-import { InternalAsset } from '@chainflip/cli';
 
 export const TransactionMetadata = Struct({
   nonce: u32,
@@ -22,9 +19,9 @@ export const ChainNameCodec = str;
 
 // Example values
 const expiryBlock = 10000;
-const amount = 1234;
-const collateralAsset = { asset: 'Btc' as InternalAsset, scAsset: 'Bitcoin-BTC' };
-const borrowAsset = { asset: 'Usdc' as InternalAsset, scAsset: 'Ethereum-USDC' };
+// const amount = 1234;
+// const collateralAsset = { asset: 'Btc' as InternalAsset, scAsset: 'Bitcoin-BTC' };
+// const borrowAsset = { asset: 'Usdc' as InternalAsset, scAsset: 'Ethereum-USDC' };
 // For now hardcoded in the SC. It should be network dependent.
 const chainName = 'Chainflip-Development';
 
@@ -99,8 +96,10 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   await observeEvent(globalLogger, `environment:UserActionSubmitted`, {
     test: (event) => {
       const matchSerializedCall = event.data.serializedCall === hexRuntimeCall;
-      const matchSigner = event.data.signerAccountId === 'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1';
-      return matchSerializedCall && matchSigner;
+      const matchSigner =
+        event.data.signerAccountId === 'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1';
+      const dispatchOk = event.data.dispatchResult.Ok !== undefined;
+      return matchSerializedCall && matchSigner && dispatchOk;
     },
     historicalCheckBlocks: 1,
   }).event;
@@ -111,7 +110,7 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   let evmNonce = (await chainflip.rpc.system.accountNextIndex(
     'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
   )) as unknown as number;
-  let evmPayload = encodePayloadDomainToSign(runtimeCall, evmNonce, expiryBlock);
+  const evmPayload = encodePayloadDomainToSign(runtimeCall, evmNonce, expiryBlock);
   // Create the Ethereum-prefixed message
   const prefix = `\x19Ethereum Signed Message:\n${evmPayload.length}`;
   const prefixedMessage = Buffer.concat([Buffer.from(prefix, 'utf8'), evmPayload]);
@@ -150,8 +149,10 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   await observeEvent(globalLogger, `environment:UserActionSubmitted`, {
     test: (event) => {
       const matchSerializedCall = event.data.serializedCall === hexRuntimeCall;
-      const matchSigner = event.data.signerAccountId === 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7';
-      return matchSerializedCall && matchSigner;
+      const matchSigner =
+        event.data.signerAccountId === 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7';
+      const dispatchOk = event.data.dispatchResult.Ok !== undefined;
+      return matchSerializedCall && matchSigner && dispatchOk;
     },
     historicalCheckBlocks: 1,
   }).event;

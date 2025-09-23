@@ -386,7 +386,7 @@ pub mod pallet {
 		UserActionSubmitted {
 			signer_account_id: T::AccountId,
 			serialized_call: Vec<u8>,
-			call_success: bool,
+			dispatch_result: DispatchResultWithPostInfo,
 		},
 	}
 
@@ -687,13 +687,13 @@ pub mod pallet {
 			// Increment the account nonce to prevent replay attacks
 			frame_system::Pallet::<T>::inc_account_nonce(&signer_account_id);
 
-			let call_success =
-				Self::dispatch_user_call(*call.clone(), signer_account_id.clone()).is_ok();
+			let dispatch_result =
+				Self::dispatch_user_call(*call.clone(), signer_account_id.clone());
 
 			Self::deposit_event(Event::<T>::UserActionSubmitted {
 				signer_account_id,
 				serialized_call: call.encode(),
-				call_success,
+				dispatch_result,
 			});
 
 			Ok(())
@@ -782,10 +782,9 @@ pub mod pallet {
 					return InvalidTransaction::Stale.into();
 				}
 
-				// Create a unique identifier for this transaction to prevent replay
-				let unique_id = (signer_account_id, transaction_metadata.nonce);
 
 				// TODO: We could also use Self::name(), depends on the final implementation/structure of this.
+				let unique_id = (signer_account_id, transaction_metadata.nonce);
 				ValidTransaction::with_tag_prefix("user-signed-payload")
 					.and_provides(unique_id)
 					.build()
