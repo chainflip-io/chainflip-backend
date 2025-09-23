@@ -23,7 +23,7 @@ use crate::{
 	evm::{DeploymentStatus, EvmFetchId},
 	*,
 };
-use cf_amm_math::{output_amount_ceil, relative_price};
+use cf_amm_math::output_amount_ceil;
 pub use cf_primitives::chains::Arbitrum;
 use cf_primitives::{chains::assets, PriceFeedApi};
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -71,12 +71,10 @@ impl Chain for Arbitrum {
 		match input_asset {
 			assets::arb::Asset::ArbEth => required_gas,
 			assets::arb::Asset::ArbUsdc =>
-				if let (Some(price_eth), Some(price_usdc)) = (
-					T::get_price(Self::GAS_ASSET.into()),
-					T::get_price(assets::arb::Asset::ArbUsdc.into()),
-				) {
-					let price_usdc_eth = relative_price(price_eth.price, price_usdc.price);
-					output_amount_ceil(U256::from(required_gas), price_usdc_eth)
+				if let Some(relative_price) =
+					T::get_relative_price(Self::GAS_ASSET.into(), input_asset.into())
+				{
+					output_amount_ceil(U256::from(required_gas), relative_price.price)
 						.try_into()
 						.unwrap_or(0u128)
 				} else {

@@ -26,7 +26,7 @@ use crate::{
 	Chain, FeeEstimationApi, *,
 };
 use assets::eth::Asset as EthAsset;
-use cf_amm_math::{output_amount_ceil, relative_price};
+use cf_amm_math::output_amount_ceil;
 pub use cf_primitives::chains::Ethereum;
 use cf_primitives::{chains::assets, IngressOrEgress, PriceFeedApi};
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -80,30 +80,11 @@ impl Chain for Ethereum {
 		required_gas: Self::ChainAmount,
 	) -> Self::ChainAmount {
 		match input_asset {
-			EthAsset::Usdt => {
-				if let (Some(price_eth), Some(price_usdt)) =
-					(T::get_price(Self::GAS_ASSET.into()), T::get_price(EthAsset::Usdt.into()))
+			EthAsset::Usdt | EthAsset::Usdc => {
+				if let Some(relative_price) =
+					T::get_relative_price(Self::GAS_ASSET.into(), input_asset.into())
 				{
-					let price_usdt_eth = relative_price(price_eth.price, price_usdt.price);
-					output_amount_ceil(U256::from(required_gas), price_usdt_eth)
-						.try_into()
-						.unwrap_or(0u128)
-				} else {
-					multiply_by_rational_with_rounding(
-						required_gas,
-						REFERENCE_ETH_PRICE_IN_USD,
-						ONE_ETH,
-						sp_runtime::Rounding::Up,
-					)
-					.unwrap_or(0u128)
-				}
-			},
-			EthAsset::Usdc => {
-				if let (Some(price_eth), Some(price_usdc)) =
-					(T::get_price(Self::GAS_ASSET.into()), T::get_price(EthAsset::Usdc.into()))
-				{
-					let price_usdc_eth = relative_price(price_eth.price, price_usdc.price);
-					output_amount_ceil(U256::from(required_gas), price_usdc_eth)
+					output_amount_ceil(U256::from(required_gas), relative_price.price)
 						.try_into()
 						.unwrap_or(0u128)
 				} else {
@@ -118,13 +99,11 @@ impl Chain for Ethereum {
 			},
 			EthAsset::Flip => multiply_by_rational_with_rounding(
 				required_gas,
-				if let Some(price) = T::get_price(Self::GAS_ASSET.into()) {
-					output_amount_ceil(U256::from(ONE_ETH), price.price)
-						.try_into()
-						.unwrap_or(REFERENCE_ETH_PRICE_IN_USD)
-				} else {
-					REFERENCE_ETH_PRICE_IN_USD
-				},
+				T::get_price(Self::GAS_ASSET.into())
+					.and_then(|price| {
+						output_amount_ceil(U256::from(ONE_ETH), price.price).try_into().ok()
+					})
+					.unwrap_or(REFERENCE_ETH_PRICE_IN_USD),
 				REFERENCE_FLIP_PRICE_IN_USD,
 				sp_runtime::Rounding::Up,
 			)

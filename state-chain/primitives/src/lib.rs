@@ -591,4 +591,5 @@ pub struct OraclePrice {
 
 pub trait PriceFeedApi {
 	fn get_price(asset: Asset) -> Option<OraclePrice>;
+	fn get_relative_price(asset1: Asset, asset2: Asset) -> Option<OraclePrice>;
 }

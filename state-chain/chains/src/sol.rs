@@ -16,7 +16,7 @@
 
 pub use cf_primitives::chains::Solana;
 
-use cf_amm_math::{output_amount_ceil, relative_price};
+use cf_amm_math::output_amount_ceil;
 use cf_primitives::{
 	AffiliateAndFee, BasisPoints, Beneficiary, ChannelId, DcaParameters, ForeignChain,
 	IngressOrEgress, PriceFeedApi,
@@ -146,12 +146,10 @@ impl Chain for Solana {
 		match input_asset {
 			assets::sol::Asset::Sol => required_gas,
 			assets::sol::Asset::SolUsdc =>
-				if let (Some(price_sol), Some(price_usdc)) = (
-					T::get_price(Self::GAS_ASSET.into()),
-					T::get_price(assets::sol::Asset::SolUsdc.into()),
-				) {
-					let price_usdc_sol = relative_price(price_sol.price, price_usdc.price);
-					output_amount_ceil(U256::from(required_gas), price_usdc_sol)
+				if let Some(relative_price) =
+					T::get_relative_price(Self::GAS_ASSET.into(), input_asset.into())
+				{
+					output_amount_ceil(U256::from(required_gas), relative_price.price)
 						.try_into()
 						.unwrap_or(0u64)
 				} else {
@@ -161,7 +159,7 @@ impl Chain for Solana {
 						1_000_000_000u128,
 						sp_runtime::Rounding::Up,
 					)
-					.map(|v| v.try_into().unwrap_or(0u64))
+					.and_then(|v| v.try_into().ok())
 					.unwrap_or(0u64)
 				},
 		}
