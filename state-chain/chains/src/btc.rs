@@ -29,12 +29,12 @@ use crate::{
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
-pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
 	chains::assets, IngressOrEgress, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILOBYTE,
 	INPUT_UTXO_SIZE_IN_BYTES, MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 	VAULT_UTXO_SIZE_IN_BYTES,
 };
+pub use cf_primitives::{chains::Bitcoin, PriceFeedApi};
 use cf_runtime_utilities::log_or_panic;
 use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
@@ -283,7 +283,7 @@ impl Chain for Bitcoin {
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 
-	fn input_asset_amount_using_reference_gas_asset_price(
+	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
 		_input_asset: Self::ChainAsset,
 		required_gas: Self::ChainAmount,
 	) -> Self::ChainAmount {

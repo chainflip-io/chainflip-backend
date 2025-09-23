@@ -26,14 +26,16 @@ use crate::{
 	Chain, FeeEstimationApi, *,
 };
 use assets::eth::Asset as EthAsset;
+use cf_amm_math::output_amount_ceil;
 pub use cf_primitives::chains::Ethereum;
-use cf_primitives::{chains::assets, IngressOrEgress};
+use cf_primitives::{chains::assets, IngressOrEgress, PriceFeedApi};
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Word};
 use evm::api::EvmReplayProtection;
 use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::U256;
 use sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
 use sp_std::{cmp::min, convert::TryInto, str};
 
@@ -45,8 +47,9 @@ pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_SEPOLIA: u64 = 11155111;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
-pub const REFERENCE_ETH_PRICE_IN_USD: AssetAmount = 2_200_000_000u128; //2200 usd
-pub const REFERENCE_FLIP_PRICE_IN_USD: AssetAmount = 330_000u128; //0.33 usd
+pub const REFERENCE_ETH_PRICE_IN_USD: AssetAmount = 4_500_000_000u128; //4500 usd
+pub const REFERENCE_FLIP_PRICE_IN_USD: AssetAmount = 750_000u128; //0.75 usd
+pub const ONE_ETH: AssetAmount = 1_000_000_000_000_000_000u128;
 
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
@@ -72,21 +75,35 @@ impl Chain for Ethereum {
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EvmReplayProtection;
 
-	fn input_asset_amount_using_reference_gas_asset_price(
+	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
 		input_asset: Self::ChainAsset,
 		required_gas: Self::ChainAmount,
 	) -> Self::ChainAmount {
 		match input_asset {
-			EthAsset::Usdt | EthAsset::Usdc => multiply_by_rational_with_rounding(
-				required_gas,
-				REFERENCE_ETH_PRICE_IN_USD,
-				1_000_000_000_000_000_000u128,
-				sp_runtime::Rounding::Up,
-			)
-			.unwrap_or(0u128),
+			EthAsset::Usdt | EthAsset::Usdc => {
+				if let Some(relative_price) =
+					T::get_relative_price(Self::GAS_ASSET.into(), input_asset.into())
+				{
+					output_amount_ceil(U256::from(required_gas), relative_price.price)
+						.try_into()
+						.unwrap_or(0u128)
+				} else {
+					multiply_by_rational_with_rounding(
+						required_gas,
+						REFERENCE_ETH_PRICE_IN_USD,
+						ONE_ETH,
+						sp_runtime::Rounding::Up,
+					)
+					.unwrap_or(0u128)
+				}
+			},
 			EthAsset::Flip => multiply_by_rational_with_rounding(
 				required_gas,
-				REFERENCE_ETH_PRICE_IN_USD,
+				T::get_price(Self::GAS_ASSET.into())
+					.and_then(|price| {
+						output_amount_ceil(U256::from(ONE_ETH), price.price).try_into().ok()
+					})
+					.unwrap_or(REFERENCE_ETH_PRICE_IN_USD),
 				REFERENCE_FLIP_PRICE_IN_USD,
 				sp_runtime::Rounding::Up,
 			)

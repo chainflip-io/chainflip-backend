@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_primitives::{chains::assets::any, Price};
+use cf_primitives::{chains::assets::any, OraclePrice, Price};
 use cf_runtime_utilities::log_or_panic;
 use cf_utilities::macros::*;
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -39,7 +39,7 @@ use pallet_cf_elections::{
 };
 
 use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
-use cf_traits::{impl_pallet_safe_mode, Chainflip, OraclePrice};
+use cf_traits::{impl_pallet_safe_mode, Chainflip};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{

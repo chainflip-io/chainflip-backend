@@ -1,6 +1,4 @@
-use cf_primitives::{Asset, Price};
-
-use crate::{OraclePrice, PriceFeedApi};
+use cf_primitives::{Asset, OraclePrice, Price, PriceFeedApi};
 
 use super::{MockPallet, MockPalletStorage};
 
@@ -30,5 +28,28 @@ impl PriceFeedApi for MockPriceFeedApi {
 		let stale = Self::get_storage::<_, bool>(ORACLE_STALE, asset).unwrap_or_default();
 		Self::get_storage::<_, Option<Price>>(ORACLE_PRICE, asset)
 			.and_then(|price| price.map(|price| OraclePrice { price, stale }))
+	}
+	fn get_relative_price(asset1: Asset, asset2: Asset) -> Option<OraclePrice> {
+		if let (Some(price_1), Some(price_2)) = (
+			Self::get_storage::<_, Option<Price>>(ORACLE_PRICE, asset1).and_then(|price| {
+				price.map(|price| OraclePrice {
+					price,
+					stale: Self::get_storage::<_, bool>(ORACLE_STALE, asset1).unwrap_or_default(),
+				})
+			}),
+			Self::get_storage::<_, Option<Price>>(ORACLE_PRICE, asset2).and_then(|price| {
+				price.map(|price| OraclePrice {
+					price,
+					stale: Self::get_storage::<_, bool>(ORACLE_STALE, asset2).unwrap_or_default(),
+				})
+			}),
+		) {
+			Some(OraclePrice {
+				price: cf_amm::math::relative_price(price_1.price, price_2.price),
+				stale: price_1.stale || price_2.stale,
+			})
+		} else {
+			None
+		}
 	}
 }

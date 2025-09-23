@@ -23,8 +23,9 @@ use crate::{
 	evm::{DeploymentStatus, EvmFetchId},
 	*,
 };
-use cf_primitives::chains::assets;
+use cf_amm_math::output_amount_ceil;
 pub use cf_primitives::chains::Arbitrum;
+use cf_primitives::{chains::assets, PriceFeedApi};
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Word};
 use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
@@ -63,19 +64,28 @@ impl Chain for Arbitrum {
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = evm::api::EvmReplayProtection;
 
-	fn input_asset_amount_using_reference_gas_asset_price(
+	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
 		input_asset: Self::ChainAsset,
 		required_gas: Self::ChainAmount,
 	) -> Self::ChainAmount {
 		match input_asset {
 			assets::arb::Asset::ArbEth => required_gas,
-			assets::arb::Asset::ArbUsdc => multiply_by_rational_with_rounding(
-				super::eth::REFERENCE_ETH_PRICE_IN_USD,
-				required_gas,
-				1_000_000_000_000_000_000u128,
-				sp_runtime::Rounding::Up,
-			)
-			.unwrap_or(0u128),
+			assets::arb::Asset::ArbUsdc =>
+				if let Some(relative_price) =
+					T::get_relative_price(Self::GAS_ASSET.into(), input_asset.into())
+				{
+					output_amount_ceil(U256::from(required_gas), relative_price.price)
+						.try_into()
+						.unwrap_or(0u128)
+				} else {
+					multiply_by_rational_with_rounding(
+						required_gas,
+						super::eth::REFERENCE_ETH_PRICE_IN_USD,
+						super::eth::ONE_ETH,
+						sp_runtime::Rounding::Up,
+					)
+					.unwrap_or(0u128)
+				},
 		}
 	}
 }
