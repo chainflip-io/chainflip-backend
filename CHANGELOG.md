@@ -2,6 +2,18 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.11.4] - 2025-09-23
+
+### Features
+
+- Use oracle_price if available for fee estimation.
+- Add `cf_simulate_auction` rpc ([#6124](https://github.com/chainflip-io/chainflip-backend/issues/6124))
+
+### Fixes
+
+- Filter out zero-value rewards and slashes
+- Better sampling of txs for btc fees if mempool is almost empty ([#6132](https://github.com/chainflip-io/chainflip-backend/issues/6132))
+
 ## [1.11.3] - 2025-09-18
 
 ### Features
