@@ -314,16 +314,36 @@ impl<T: Config> LoanAccount<T> {
 				config.interest_payment_interval_blocks.into() ==
 				0u32.into()
 			{
-				let interest_rate_per_payment_interval = {
-					let utilisation = GeneralLendingPools::<T>::get(loan.asset)
-						.map(|pool| pool.get_utilisation())
-						.unwrap_or_default();
+				let (total_interest_rate_per_payment_interval, network_fee_portion) = {
+					let base_interest = {
+						let utilisation = GeneralLendingPools::<T>::get(loan.asset)
+							.map(|pool| pool.get_utilisation())
+							.unwrap_or_default();
 
-					config.derive_interest_rate_per_payment_interval(loan.asset, utilisation)
+						config
+							.derive_base_interest_rate_per_payment_interval(loan.asset, utilisation)
+					};
+
+					let network_interest =
+						config.derive_network_interest_rate_per_payment_interval();
+
+					let total_interest = base_interest + network_interest;
+
+					// Work out how much of the total fee should be the network fee
+					let total = total_interest.deconstruct();
+					let network = network_interest.deconstruct();
+
+					let network_fee_portion = if total != 0 {
+						Permill::from_rational(network, total)
+					} else {
+						Permill::zero()
+					};
+
+					(total_interest, network_fee_portion)
 				};
 
 				let mut remaining_interest_amount_in_loan_asset =
-					interest_rate_per_payment_interval * loan.owed_principal;
+					total_interest_rate_per_payment_interval * loan.owed_principal;
 
 				// Interest is charged from the primary collateral asset first. If it fails to cover
 				// the interest, we use the remaining assets:
@@ -378,11 +398,10 @@ impl<T: Config> LoanAccount<T> {
 
 						interest_amounts.insert(collateral_asset, amount_charged);
 
-						// TODO: emit network fee in any event?
 						let remaining_fees = Pallet::<T>::take_network_fee(
 							amount_charged,
 							collateral_asset,
-							config.network_fee_contributions.from_interest,
+							network_fee_portion,
 						);
 
 						Pallet::<T>::accrue_fees(loan.asset, collateral_asset, remaining_fees);
@@ -1216,7 +1235,7 @@ impl<T: Config> Pallet<T> {
 	fn take_network_fee(
 		full_fee_amount: AssetAmount,
 		fee_asset: Asset,
-		network_fee_contribution: Percent,
+		network_fee_contribution: Permill,
 	) -> AssetAmount {
 		let network_fee_amount = network_fee_contribution * full_fee_amount;
 
@@ -1547,9 +1566,13 @@ impl LtvThresholds {
 	Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
 )]
 pub struct NetworkFeeContributions {
-	pub from_interest: Percent,
-	pub from_origination_fee: Percent,
-	pub from_liquidation_fee: Percent,
+	/// A fixed % that's added to the base interest to get the total borrow rate (as a % on the
+	/// principal paid every year)
+	pub extra_interest: Permill,
+	/// The % of the origination fee that should be taken as a network fee.
+	pub from_origination_fee: Permill,
+	/// The % of the liquidation fee that should be taken as a network fee.
+	pub from_liquidation_fee: Permill,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -1613,20 +1636,32 @@ impl LendingConfiguration {
 		}
 	}
 
-	/// Computes the interest rate to be paid each payment interval. Uses Perbill
-	/// as the value is likely to be a very small fraction due to the interval being short.
-	fn derive_interest_rate_per_payment_interval(
+	fn interest_per_year_to_per_payment_interval(&self, interest_per_year: Permill) -> Perquintill {
+		use cf_primitives::BLOCKS_IN_YEAR;
+
+		Perquintill::from_parts(
+			(interest_per_year.deconstruct() as u64 *
+				(Perquintill::ACCURACY / Permill::ACCURACY as u64)) /
+				(BLOCKS_IN_YEAR / self.interest_payment_interval_blocks) as u64,
+		)
+	}
+
+	/// Computes the interest rate to be paid each payment interval. Uses Perquintill for better
+	/// precision as the value is likely to be a very small fraction due to the interval being
+	/// short.
+	fn derive_base_interest_rate_per_payment_interval(
 		&self,
 		asset: Asset,
 		utilisation: Permill,
-	) -> Perbill {
-		use cf_primitives::BLOCKS_IN_YEAR;
-
+	) -> Perquintill {
 		let interest_rate = self.derive_interest_rate_per_year(asset, utilisation);
 
-		Perbill::from_parts(
-			(interest_rate.deconstruct() * (Perbill::ACCURACY / Permill::ACCURACY)) /
-				(BLOCKS_IN_YEAR / self.interest_payment_interval_blocks),
+		self.interest_per_year_to_per_payment_interval(interest_rate)
+	}
+
+	fn derive_network_interest_rate_per_payment_interval(&self) -> Perquintill {
+		self.interest_per_year_to_per_payment_interval(
+			self.network_fee_contributions.extra_interest,
 		)
 	}
 

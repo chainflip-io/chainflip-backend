@@ -56,7 +56,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{BlockNumberProvider, Saturating, UniqueSaturatedInto, Zero},
-		FixedU64, Perbill, Percent, Permill, Perquintill,
+		FixedU64, Percent, Permill, Perquintill,
 	},
 	transactional,
 };
@@ -314,9 +314,13 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 		hard_liquidation_abort: FixedU64::from_rational(93, 100), // 93% LTV
 	},
 	network_fee_contributions: NetworkFeeContributions {
-		from_origination_fee: Percent::from_percent(20),
-		from_interest: Percent::from_percent(20),
-		from_liquidation_fee: Percent::from_percent(20),
+		// A fixed 1% per year is added to the base interest rate (the latter determined by the
+		// interest rate curve) and paid to the network.
+		extra_interest: Permill::from_percent(1),
+		// 20% of all origination fees is paid to the network.
+		from_origination_fee: Permill::from_percent(20),
+		// 20% of all liquidation fees is paid to the network.
+		from_liquidation_fee: Permill::from_percent(20),
 	},
 	// don't swap more often than every 10 blocks
 	fee_swap_interval_blocks: 10,

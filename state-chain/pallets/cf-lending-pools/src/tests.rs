@@ -143,9 +143,9 @@ fn can_update_all_config_items() {
 
 		const NEW_NETWORK_FEE_CONTRIBUTIONS_FROM_LENDING: NetworkFeeContributions =
 			NetworkFeeContributions {
-				from_interest: Percent::from_percent(1),
-				from_origination_fee: Percent::from_percent(2),
-				from_liquidation_fee: Percent::from_percent(3),
+				extra_interest: Permill::from_percent(1),
+				from_origination_fee: Permill::from_percent(2),
+				from_liquidation_fee: Permill::from_percent(3),
 			};
 
 		const NEW_FEE_SWAP_INTERVAL_BLOCKS: u32 = 700;

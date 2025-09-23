@@ -1133,7 +1133,7 @@ fn lending_config_serialization() {
 			hard_liquidation_abort: FixedU64::from_rational(93, 100),
 		},
 		network_fee_contributions: NetworkFeeContributions {
-			from_interest: Percent::from_percent(10),
+			extra_interest: Permill::from_percent(1),
 			from_origination_fee: Percent::from_percent(20),
 			from_liquidation_fee: Percent::from_percent(30),
 		},
