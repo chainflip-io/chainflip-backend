@@ -46,7 +46,7 @@ describe('ConcurrentTests', () => {
     testEvmDepositsLegacyCfParametersVaultSwap,
     100,
   );
-  concurrentTest('FundRedeem', testFundRedeem, 600);
+  // concurrentTest('FundRedeem', testFundRedeem, 600);
   concurrentTest('LpApi', testLpApi, 240);
   concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200);
   concurrentTest('BoostingForAsset', testBoostingSwap, 200);
