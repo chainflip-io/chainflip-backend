@@ -189,7 +189,7 @@ export async function doPerformSwap(
 
   await observeEvent(logger, 'swapping:SwapRequestCompleted', {
     test: (event) => event.data.swapRequestId === swapRequestId,
-    historicalCheckBlocks: 4,
+    historicalCheckBlocks: 20,
   }).event;
 
   swapContext?.updateStatus(logger, SwapStatus.SwapCompleted);
@@ -199,7 +199,7 @@ export async function doPerformSwap(
   const { egressId, amount: egressAmount } = (
     await observeEvent(logger, 'swapping:SwapEgressScheduled', {
       test: (event) => event.data.swapRequestId === swapRequestId,
-      historicalCheckBlocks: 4,
+      historicalCheckBlocks: 20,
     }).event
   ).data;
 
