@@ -585,6 +585,8 @@ pub mod pallet {
 		LenderNotFoundInPool,
 		/// Certain actions (such as removing collateral) are disabled during liquidation.
 		LiquidationInProgress,
+		/// The provided collateral amount is empty/zero.
+		EmptyCollateral,
 	}
 
 	#[pallet::hooks]

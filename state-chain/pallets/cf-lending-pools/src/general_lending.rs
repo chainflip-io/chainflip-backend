@@ -948,6 +948,9 @@ impl<T: Config> LendingApi for Pallet<T> {
 			let ExpandLoanOutcome { origination_fee } =
 				account.expand_loan_inner(loan, amount_to_borrow, extra_collateral)?;
 
+			// Sanity check: the account either already had collateral or it was just added
+			ensure_non_zero_collateral(&account.collateral)?;
+
 			Self::deposit_event(Event::LoanCreated {
 				loan_id,
 				borrower_id: borrower_id.clone(),
@@ -1029,6 +1032,8 @@ impl<T: Config> LendingApi for Pallet<T> {
 		primary_collateral_asset: Option<Asset>,
 		collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<(), DispatchError> {
+		ensure_non_zero_collateral::<T>(&collateral)?;
+
 		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
 			let loan_account = Self::create_or_update_loan_account(
 				borrower_id.clone(),
@@ -1706,4 +1711,13 @@ fn interpolate_linear_segment(
 	let result = i0 + slope * (u - u0) / Permill::ACCURACY as u64;
 
 	u32::try_from(result).map(Permill::from_parts).unwrap_or(Permill::one())
+}
+
+fn ensure_non_zero_collateral<T: Config>(
+	collateral: &BTreeMap<Asset, AssetAmount>,
+) -> Result<(), Error<T>> {
+	ensure!(!collateral.is_empty(), Error::<T>::EmptyCollateral);
+	ensure!(collateral.values().all(|amount| *amount > 0), Error::<T>::EmptyCollateral);
+
+	Ok(())
 }
