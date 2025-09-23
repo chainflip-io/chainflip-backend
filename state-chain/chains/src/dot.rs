@@ -29,7 +29,7 @@ use cf_utilities::SliceToArray;
 pub use serializable_address::*;
 
 pub use cf_primitives::chains::Polkadot;
-use cf_primitives::{PolkadotBlockNumber, PriceFeedApi, TxId};
+use cf_primitives::{PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use core::str::FromStr;
 use frame_support::sp_runtime::{
@@ -348,6 +348,8 @@ impl Chain for Polkadot {
 	const GAS_ASSET: Self::ChainAsset = assets::dot::Asset::Dot;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const DEPRECATED: bool = true;
+	const NATIVE_TOKEN_PRICE_IN_USD: Self::ChainAmount = crate::hub::REFERENCE_HUBDOT_PRICE_IN_USD;
+	const ONE_UNIT_IN_SMALLEST_UNITS: Self::ChainAmount = crate::hub::ONE_DOT;
 
 	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;
@@ -367,13 +369,6 @@ impl Chain for Polkadot {
 	type TransactionRef = PolkadotTransactionId;
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
-
-	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
-		_input_asset: Self::ChainAsset,
-		required_gas: Self::ChainAmount,
-	) -> Self::ChainAmount {
-		required_gas
-	}
 }
 
 pub type ResetProxyAccountNonce = bool;

@@ -26,16 +26,16 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
-	BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceFeedApi, PriceLimits, SwapId,
-	SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
+	BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceLimits, SwapId, SwapLeg,
+	SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
 	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
 	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, IngressEgressFeeApi,
-	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
-	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
+	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -1691,16 +1691,11 @@ pub mod pallet {
 		/// Calculate executed price delta from the oracle price and save the result to the swap
 		/// state
 		pub(super) fn calculate_oracle_delta(swap: &mut SwapState<T>) {
-			let input_oracle = T::PriceFeedApi::get_price(swap.input_asset());
-			let output_oracle = T::PriceFeedApi::get_price(swap.output_asset());
-
-			let oracle_delta = if let (Some(input_oracle), Some(output_oracle)) =
-				(&input_oracle, &output_oracle)
+			let oracle_delta = if let Some(oracle_price) =
+				T::PriceFeedApi::get_relative_price(swap.input_asset(), swap.output_asset())
 			{
-				let oracle_price =
-					cf_amm::math::relative_price(input_oracle.price, output_oracle.price);
 				let oracle_amount =
-					output_amount_floor(swap.swap.input_amount.into(), oracle_price);
+					output_amount_floor(swap.swap.input_amount.into(), oracle_price.price);
 				if oracle_amount.is_zero() {
 					None
 				} else {
@@ -1734,27 +1729,17 @@ pub mod pallet {
 			swap: &SwapState<T>,
 		) -> Result<(), SwapFailureReason> {
 			if let Some(params) = swap.refund_params() {
-				let input_oracle = T::PriceFeedApi::get_price(swap.input_asset());
-				let output_oracle = T::PriceFeedApi::get_price(swap.output_asset());
-
 				// Live price protection, aka oracle price protection
 				if let Some(slippage_bps) = params.price_limits.max_oracle_price_slippage {
-					match (input_oracle, output_oracle) {
-						(Some(input_oracle), Some(output_oracle))
-							if input_oracle.stale || output_oracle.stale =>
-							return Err(SwapFailureReason::OraclePriceStale),
-						(None, _) | (_, None) => {
-							// Ignore the oracle price check if not supported/available
-							// for one of the assets.
-						},
-						(Some(input_oracle), Some(output_oracle)) => {
-							let relative_price = cf_amm::math::relative_price(
-								input_oracle.price,
-								output_oracle.price,
-							);
+					if let Some(oracle_price) =
+						T::PriceFeedApi::get_relative_price(swap.input_asset(), swap.output_asset())
+					{
+						if oracle_price.stale {
+							return Err(SwapFailureReason::OraclePriceStale);
+						} else {
 							// Reduce the relative price by slippage_bps:
 							let min_oracle_price = cf_amm::math::mul_div_floor(
-								relative_price,
+								oracle_price.price,
 								(MAX_BASIS_POINTS - slippage_bps).into(),
 								MAX_BASIS_POINTS,
 							);
@@ -1767,9 +1752,9 @@ pub mod pallet {
 							if swap.final_output.unwrap() < min_output_amount {
 								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
 							}
-						},
+						}
 					}
-				};
+				}
 
 				// Minimum price protection, aka FoK price protection
 				let min_price_output = output_amount_floor(
@@ -2772,7 +2757,7 @@ pub mod pallet {
 			)
 			.and_then(|amount| C::ChainAmount::try_from(amount).ok())
 			.unwrap_or_else(|| {
-				C::input_asset_amount_using_reference_gas_asset_price::<<T as Config>::PriceFeedApi>(
+				Self::input_asset_amount_using_reference_gas_asset_price::<C>(
 					input_asset,
 					required_gas,
 				)
@@ -2824,6 +2809,55 @@ pub mod pallet {
 				} else {
 					Some(input_amount_to_convert.unique_saturated_into())
 				}
+			}
+		}
+
+		fn input_asset_amount_using_reference_gas_asset_price<C: cf_chains::Chain>(
+			input_asset: C::ChainAsset,
+			required_gas: C::ChainAmount,
+		) -> C::ChainAmount {
+			if input_asset == C::GAS_ASSET {
+				return required_gas;
+			}
+			match Into::<Asset>::into(input_asset) {
+				Asset::ArbUsdc |
+				Asset::SolUsdc |
+				Asset::Usdt |
+				Asset::Usdc |
+				Asset::HubUsdc |
+				Asset::HubUsdt => {
+					if let Some(relative_price) =
+						T::PriceFeedApi::get_relative_price(C::GAS_ASSET.into(), input_asset.into())
+					{
+						output_amount_ceil(required_gas.into(), relative_price.price)
+							.try_into()
+							.unwrap_or(0u32.into())
+					} else {
+						multiply_by_rational_with_rounding(
+							required_gas.into(),
+							C::NATIVE_TOKEN_PRICE_IN_USD.into(),
+							C::ONE_UNIT_IN_SMALLEST_UNITS.into(),
+							sp_runtime::Rounding::Up,
+						)
+						.and_then(|x| x.try_into().ok())
+						.unwrap_or(0u32.into())
+					}
+				},
+				Asset::Flip => multiply_by_rational_with_rounding(
+					required_gas.into(),
+					T::PriceFeedApi::get_price(C::GAS_ASSET.into())
+						.and_then(|price| {
+							output_amount_ceil(C::ONE_UNIT_IN_SMALLEST_UNITS.into(), price.price)
+								.try_into()
+								.ok()
+						})
+						.unwrap_or(C::NATIVE_TOKEN_PRICE_IN_USD.into()),
+					cf_chains::eth::REFERENCE_FLIP_PRICE_IN_USD,
+					sp_runtime::Rounding::Up,
+				)
+				.and_then(|x| x.try_into().ok())
+				.unwrap_or(0u32.into()),
+				_ => 0u32.into(),
 			}
 		}
 	}

@@ -45,7 +45,7 @@ use address::{
 };
 use cf_primitives::{
 	Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
-	DcaParameters, EgressId, EthAmount, GasAmount, IngressOrEgress, PriceFeedApi, TxId,
+	DcaParameters, EgressId, EthAmount, GasAmount, IngressOrEgress, TxId,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -307,6 +307,14 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 
 	const DEPRECATED: bool = false;
 
+	/// Reference price of 1 full native token (e.g. 1 ETH, 1 BTC, 1 SOL)
+	/// denominated in fineUSD (1e6 = $1.00).
+	const NATIVE_TOKEN_PRICE_IN_USD: Self::ChainAmount;
+
+	/// Number of smallest units that make up 1 full token.
+	/// For example: 1 ETH = 1_000_000_000_000_000_000 wei.
+	const ONE_UNIT_IN_SMALLEST_UNITS: Self::ChainAmount;
+
 	/// Outputs the root block that witnesses the range of blocks after (not including)
 	/// `block_number`
 	fn checked_block_witness_next(
@@ -355,12 +363,6 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		witness_period::block_witness_range(Self::WITNESS_PERIOD, block_number)
 	}
 
-	/// estimate ingress fee in input asset using reference prices
-	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
-		input_asset: Self::ChainAsset,
-		required_das: Self::ChainAmount,
-	) -> Self::ChainAmount;
-
 	type ChainCrypto: ChainCrypto;
 
 	type ChainBlockNumber: FullCodec
@@ -388,6 +390,8 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ AtLeast32BitUnsigned
 		+ Into<AssetAmount>
 		+ TryFrom<AssetAmount, Error: Debug>
+		+ TryFrom<U256>
+		+ Into<U256>
 		+ FullCodec
 		+ MaxEncodedLen
 		+ BenchmarkValue;

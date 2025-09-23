@@ -16,13 +16,12 @@
 
 pub use cf_primitives::chains::Solana;
 
-use cf_amm_math::output_amount_ceil;
 use cf_primitives::{
 	AffiliateAndFee, BasisPoints, Beneficiary, ChannelId, DcaParameters, ForeignChain,
-	IngressOrEgress, PriceFeedApi,
+	IngressOrEgress,
 };
 use sol_prim::program_instructions::FunctionDiscriminator;
-use sp_core::{ConstBool, U256};
+use sp_core::ConstBool;
 use sp_std::{vec, vec::Vec};
 
 use crate::{
@@ -45,7 +44,7 @@ use frame_support::{
 	Parameter,
 };
 use serde::{Deserialize, Serialize};
-use sp_runtime::{helpers_128bit::multiply_by_rational_with_rounding, traits::Member};
+use sp_runtime::traits::Member;
 
 use super::{Chain, ChainCrypto};
 
@@ -100,7 +99,7 @@ pub const MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES: usize = 5;
 pub const MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS: u32 = 14400;
 pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES: usize = 3;
 
-pub const REFERENCE_SOL_PRICE_IN_USD: u128 = 250_000_000u128; //250 usd
+pub const REFERENCE_SOL_PRICE_IN_USD: u64 = 250_000_000u64; //250 usd
 
 // Use serialized transaction
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
@@ -118,6 +117,8 @@ impl Chain for Solana {
 	const NAME: &'static str = "Solana";
 	const GAS_ASSET: Self::ChainAsset = assets::sol::Asset::Sol;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 15;
+	const NATIVE_TOKEN_PRICE_IN_USD: Self::ChainAmount = REFERENCE_SOL_PRICE_IN_USD;
+	const ONE_UNIT_IN_SMALLEST_UNITS: Self::ChainAmount = 1_000_000_000u64;
 
 	type ChainCrypto = SolanaCrypto;
 	type ChainBlockNumber = SlotNumber;
@@ -138,32 +139,6 @@ impl Chain for Solana {
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 	type TransactionRef = SolSignature;
-
-	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
-		input_asset: Self::ChainAsset,
-		required_gas: Self::ChainAmount,
-	) -> Self::ChainAmount {
-		match input_asset {
-			assets::sol::Asset::Sol => required_gas,
-			assets::sol::Asset::SolUsdc =>
-				if let Some(relative_price) =
-					T::get_relative_price(Self::GAS_ASSET.into(), input_asset.into())
-				{
-					output_amount_ceil(U256::from(required_gas), relative_price.price)
-						.try_into()
-						.unwrap_or(0u64)
-				} else {
-					multiply_by_rational_with_rounding(
-						required_gas.into(),
-						REFERENCE_SOL_PRICE_IN_USD,
-						1_000_000_000u128,
-						sp_runtime::Rounding::Up,
-					)
-					.and_then(|v| v.try_into().ok())
-					.unwrap_or(0u64)
-				},
-		}
-	}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

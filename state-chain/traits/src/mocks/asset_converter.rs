@@ -14,11 +14,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{mocks::price_feed_api::MockPriceFeedApi, AssetConverter, PriceFeedApi};
+use cf_amm::math::output_amount_ceil;
 use cf_chains::Chain;
 use cf_primitives::{Asset, AssetAmount};
-use frame_support::sp_runtime::traits::{UniqueSaturatedInto, Zero};
-
-use crate::{mocks::price_feed_api::MockPriceFeedApi, AssetConverter};
+use frame_support::sp_runtime::{
+	helpers_128bit::multiply_by_rational_with_rounding,
+	traits::{UniqueSaturatedInto, Zero},
+	Rounding::Up,
+};
 
 use super::{MockPallet, MockPalletStorage};
 
@@ -53,10 +57,7 @@ impl AssetConverter for MockAssetConverter {
 		)
 		.and_then(|amount| C::ChainAmount::try_from(amount).ok())
 		.unwrap_or_else(|| {
-			C::input_asset_amount_using_reference_gas_asset_price::<MockPriceFeedApi>(
-				input_asset,
-				required_gas,
-			)
+			Self::input_asset_amount_using_reference_gas_asset_price::<C>(input_asset, required_gas)
 		})
 	}
 
@@ -80,5 +81,54 @@ impl AssetConverter for MockAssetConverter {
 			.map(|price| desired_output_amount * price)?;
 
 		Some(required_input.unique_saturated_into())
+	}
+
+	fn input_asset_amount_using_reference_gas_asset_price<C: Chain>(
+		input_asset: C::ChainAsset,
+		required_gas: C::ChainAmount,
+	) -> C::ChainAmount {
+		if input_asset == C::GAS_ASSET {
+			return required_gas;
+		}
+		match Into::<Asset>::into(input_asset) {
+			Asset::ArbUsdc |
+			Asset::SolUsdc |
+			Asset::Usdt |
+			Asset::Usdc |
+			Asset::HubUsdc |
+			Asset::HubUsdt => {
+				if let Some(relative_price) =
+					MockPriceFeedApi::get_relative_price(C::GAS_ASSET.into(), input_asset.into())
+				{
+					output_amount_ceil(required_gas.into(), relative_price.price)
+						.try_into()
+						.unwrap_or(0u32.into())
+				} else {
+					multiply_by_rational_with_rounding(
+						required_gas.into(),
+						C::NATIVE_TOKEN_PRICE_IN_USD.into(),
+						C::ONE_UNIT_IN_SMALLEST_UNITS.into(),
+						Up,
+					)
+					.and_then(|x| x.try_into().ok())
+					.unwrap_or(0u32.into())
+				}
+			},
+			Asset::Flip => multiply_by_rational_with_rounding(
+				required_gas.into(),
+				MockPriceFeedApi::get_price(C::GAS_ASSET.into())
+					.and_then(|price| {
+						output_amount_ceil(C::ONE_UNIT_IN_SMALLEST_UNITS.into(), price.price)
+							.try_into()
+							.ok()
+					})
+					.unwrap_or(C::NATIVE_TOKEN_PRICE_IN_USD.into()),
+				cf_chains::eth::REFERENCE_FLIP_PRICE_IN_USD,
+				Up,
+			)
+			.and_then(|x| x.try_into().ok())
+			.unwrap_or(0u32.into()),
+			_ => 0u32.into(),
+		}
 	}
 }

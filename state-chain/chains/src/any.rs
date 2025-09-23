@@ -25,13 +25,15 @@ use sp_runtime::traits::Member;
 use crate::benchmarking_value::BenchmarkValue;
 use cf_primitives::{
 	chains::{assets, AnyChain},
-	AssetAmount, ChannelId, PriceFeedApi,
+	AssetAmount, ChannelId,
 };
 
 impl Chain for AnyChain {
 	const NAME: &'static str = "AnyChain";
 	const GAS_ASSET: Self::ChainAsset = assets::any::Asset::Usdc;
 	const WITNESS_PERIOD: u64 = 1;
+	const NATIVE_TOKEN_PRICE_IN_USD: Self::ChainAmount = 1_000_000;
+	const ONE_UNIT_IN_SMALLEST_UNITS: Self::ChainAmount = 1_000_000;
 
 	type ChainCrypto = NoneChainCrypto;
 	type ChainBlockNumber = u64;
@@ -51,13 +53,6 @@ impl Chain for AnyChain {
 	type TransactionRef = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
-
-	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
-		_input_asset: Self::ChainAsset,
-		_required_gas: Self::ChainAmount,
-	) -> Self::ChainAmount {
-		0
-	}
 }
 
 impl FeeRefundCalculator<AnyChain> for () {

@@ -1012,6 +1012,11 @@ pub trait AssetConverter {
 		desired_output_amount: AssetAmount,
 		with_network_fee: bool,
 	) -> Option<AssetAmount>;
+
+	fn input_asset_amount_using_reference_gas_asset_price<C: Chain>(
+		input_asset: C::ChainAsset,
+		required_gas: C::ChainAmount,
+	) -> C::ChainAmount;
 }
 
 pub trait IngressEgressFeeApi<C: Chain> {
@@ -1265,4 +1270,18 @@ pub trait SpawnAccount {
 
 pub trait PoolOrdersManager {
 	fn cancel_all_pool_orders(base_asset: Asset, quote_asset: Asset) -> DispatchResult;
+}
+
+pub struct OraclePrice {
+	/// Statechain encoded price, fixed-point value with 128 bits for fractional part, ie.
+	/// denominator is 2^128.
+	pub price: Price,
+
+	/// Whether the price is stale according to the oracle price ES settings.
+	pub stale: bool,
+}
+
+pub trait PriceFeedApi {
+	fn get_price(asset: Asset) -> Option<OraclePrice>;
+	fn get_relative_price(asset1: Asset, asset2: Asset) -> Option<OraclePrice>;
 }
