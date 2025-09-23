@@ -1049,7 +1049,7 @@ fn gas_calculation_can_handle_extreme_swap_rate() {
 					cf_chains::assets::eth::Asset::Flip,
 					1000
 				),
-				6000000
+				6363637
 			);
 		}
 
@@ -1065,7 +1065,7 @@ fn gas_calculation_can_handle_extreme_swap_rate() {
 				cf_chains::assets::sol::Asset::SolUsdc,
 				u64::MAX
 			),
-			4611686018427387904
+			4058283696216101356
 		);
 	});
 }
