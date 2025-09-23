@@ -552,7 +552,7 @@ pub mod pallet {
 		PoolDoesNotExist,
 		/// The account id is not a member of the boost pool.
 		AccountNotFoundInPool,
-		/// You cannot add 0 to a boost pool.
+		/// You cannot add 0 amount to a pool.
 		AmountMustBeNonZero,
 		/// Not enough available liquidity to boost a deposit
 		InsufficientBoostLiquidity,
@@ -582,6 +582,9 @@ pub mod pallet {
 		OraclePriceUnavailable,
 		InternalInvariantViolation,
 		InvalidConfigurationParameters,
+		LenderNotFoundInPool,
+		/// Certain actions (such as removing collateral) are disabled during liquidation.
+		LiquidationInProgress,
 	}
 
 	#[pallet::hooks]
@@ -837,7 +840,8 @@ pub mod pallet {
 			let unlocked_amount = GeneralLendingPools::<T>::try_mutate(asset, |maybe_pool| {
 				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
-				let unlocked_amount = pool.remove_funds(&lender_id, amount);
+				let unlocked_amount =
+					pool.remove_funds(&lender_id, amount).map_err(Error::<T>::from)?;
 
 				Ok::<_, DispatchError>(unlocked_amount)
 			})?;

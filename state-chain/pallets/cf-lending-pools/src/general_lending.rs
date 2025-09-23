@@ -888,8 +888,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 		for asset in PendingNetworkFees::<T>::iter_keys().collect::<Vec<_>>() {
 			PendingNetworkFees::<T>::mutate(asset, |fee_amount| {
 				// NOTE: if asset is FLIP, we shouldn't need to swap, but it should still work,
-				// and it seems easiest to not write a special case (esp if we only support
-				// boost for BTC)
+				// and it seems easiest to not write a special case
 				if *fee_amount > 0 {
 					let swap_request_id =
 						T::SwapRequestHandler::init_network_fee_swap_request(asset, *fee_amount);
@@ -1063,6 +1062,11 @@ impl<T: Config> LendingApi for Pallet<T> {
 			let chp_config = LendingConfig::<T>::get();
 
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanAccountNotFound)?;
+
+			ensure!(
+				loan_account.liquidation_status == LiquidationStatus::NoLiquidation,
+				Error::<T>::LiquidationInProgress
+			);
 
 			if let Some(primary_collateral_asset) = primary_collateral_asset {
 				loan_account.primary_collateral_asset = primary_collateral_asset;
