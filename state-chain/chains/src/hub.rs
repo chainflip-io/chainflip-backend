@@ -36,7 +36,7 @@ use dot::{
 };
 
 pub use cf_primitives::chains::Assethub;
-use cf_primitives::PolkadotBlockNumber;
+use cf_primitives::{PolkadotBlockNumber, PriceFeedApi};
 use codec::{Decode, Encode};
 use frame_support::{
 	pallet_prelude::{TransactionValidity, TransactionValidityError, ValidTransaction},
@@ -49,7 +49,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, DispatchInfoOf, Hash, SignedExtension},
 };
 
-pub const REFERENCE_HUBDOT_PRICE_IN_USD: PolkadotBalance = 3_400_000u128; //3.4 usd
+pub const REFERENCE_HUBDOT_PRICE_IN_USD: PolkadotBalance = 4_400_000u128; //4.4 usd
 
 impl Chain for Assethub {
 	const NAME: &'static str = "Assethub";
@@ -75,7 +75,7 @@ impl Chain for Assethub {
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
 
-	fn input_asset_amount_using_reference_gas_asset_price(
+	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
 		input_asset: Self::ChainAsset,
 		required_gas: Self::ChainAmount,
 	) -> Self::ChainAmount {

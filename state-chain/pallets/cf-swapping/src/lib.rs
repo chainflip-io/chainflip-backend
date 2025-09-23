@@ -26,16 +26,16 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
-	BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceLimits, SwapId, SwapLeg,
-	SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
+	BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceFeedApi, PriceLimits, SwapId,
+	SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
 	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
 	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, IngressEgressFeeApi,
-	PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -2772,8 +2772,10 @@ pub mod pallet {
 			)
 			.and_then(|amount| C::ChainAmount::try_from(amount).ok())
 			.unwrap_or_else(|| {
-				log::warn!("Unable to calculate input amount required for gas of {required_gas:?} for input asset ${input_asset:?}. Estimating the input amount based on a reference price.");
-				C::input_asset_amount_using_reference_gas_asset_price(input_asset,required_gas)
+				C::input_asset_amount_using_reference_gas_asset_price::<<T as Config>::PriceFeedApi>(
+					input_asset,
+					required_gas,
+				)
 			})
 		}
 
@@ -2950,12 +2952,12 @@ pub(crate) mod utilities {
 		const SOL_DECIMALS: u32 = 9;
 
 		/// ~20 Dollars.
-		const FLIP_ESTIMATION_CAP: u128 = 10 * FLIPPERINOS_PER_FLIP;
+		const FLIP_ESTIMATION_CAP: u128 = 25 * FLIPPERINOS_PER_FLIP;
 		const USD_ESTIMATION_CAP: u128 = 20_000_000;
-		const ETH_ESTIMATION_CAP: u128 = 8 * 10u128.pow(ETH_DECIMALS - 3);
-		const DOT_ESTIMATION_CAP: u128 = 4 * 10u128.pow(DOT_DECIMALS);
+		const ETH_ESTIMATION_CAP: u128 = 5 * 10u128.pow(ETH_DECIMALS - 3);
+		const DOT_ESTIMATION_CAP: u128 = 5 * 10u128.pow(DOT_DECIMALS);
 		const BTC_ESTIMATION_CAP: u128 = 2 * 10u128.pow(BTC_DECIMALS - 4);
-		const SOL_ESTIMATION_CAP: u128 = 14 * 10u128.pow(SOL_DECIMALS - 2);
+		const SOL_ESTIMATION_CAP: u128 = 10 * 10u128.pow(SOL_DECIMALS - 2);
 
 		match asset {
 			Asset::Flip => FLIP_ESTIMATION_CAP,

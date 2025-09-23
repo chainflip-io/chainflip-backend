@@ -25,7 +25,7 @@ use sp_runtime::traits::Member;
 use crate::benchmarking_value::BenchmarkValue;
 use cf_primitives::{
 	chains::{assets, AnyChain},
-	AssetAmount, ChannelId,
+	AssetAmount, ChannelId, PriceFeedApi,
 };
 
 impl Chain for AnyChain {
@@ -52,7 +52,7 @@ impl Chain for AnyChain {
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 
-	fn input_asset_amount_using_reference_gas_asset_price(
+	fn input_asset_amount_using_reference_gas_asset_price<T: PriceFeedApi>(
 		_input_asset: Self::ChainAsset,
 		_required_gas: Self::ChainAmount,
 	) -> Self::ChainAmount {
