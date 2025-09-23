@@ -63,7 +63,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 140);
 
   // CURRENTLY NOT WORKING
-  // concurrentTest('DelegateFlip', (context) => testDelegate(context.logger), 360);
+  concurrentTest('DelegateFlip', (context) => testDelegate(context.logger), 360);
 
   concurrentTest(
     'SwapAndFundAccountViaCCM',
@@ -85,8 +85,8 @@ describe('ConcurrentTests', () => {
 
   // Post test checks
   // CURRENTLY NOT WORKING
-  // serialTest('CheckSolEventAccountsClosure', checkSolEventAccountsClosure, 150);
-  // serialTest('CheckAvailabilityAllSolanaNonces', checkAvailabilityAllSolanaNonces, 50);
+  serialTest('CheckSolEventAccountsClosure', checkSolEventAccountsClosure, 150);
+  serialTest('CheckAvailabilityAllSolanaNonces', checkAvailabilityAllSolanaNonces, 50);
 });
 
 // Run only the broker level screening tests

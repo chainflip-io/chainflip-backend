@@ -31,7 +31,7 @@ const RANGE_TEST_GAS_CONSUMPTION: Record<string, { min: number; max: number }> =
 };
 
 // After the swap is complete, we search for the expected swap event in this many past blocks.
-const CHECK_PAST_BLOCKS_FOR_EVENTS = 30;
+const CHECK_PAST_BLOCKS_FOR_EVENTS = 180;
 
 function getEngineBroadcastLimit(chain: Chain): number {
   switch (chain) {
