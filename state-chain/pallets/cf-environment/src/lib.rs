@@ -28,22 +28,32 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
+	evm::{verify_evm_signature, Signature as EthereumSignature},
 	hub::{Assethub, OutputAccountId},
 	sol::{
 		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall},
-		SolAddress, SolApiEnvironment, SolHash, Solana, NONCE_NUMBER_CRITICAL_NONCES,
+		verify_sol_signature, SolAddress, SolApiEnvironment, SolHash, SolSignature, Solana,
+		NONCE_NUMBER_CRITICAL_NONCES,
 	},
 	Chain,
 };
 use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
-	BroadcastId, NetworkEnvironment, SemVer,
+	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
 	Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider,
 	SafeMode, SolanaNonceWatch,
 };
-use frame_support::{pallet_prelude::*, traits::StorageVersion};
+use codec::{Decode, Encode};
+use frame_support::{
+	dispatch::{DispatchResult, GetDispatchInfo},
+	pallet_prelude::{InvalidTransaction, *},
+	sp_runtime::{traits::Get, AccountId32, DispatchError, TransactionOutcome},
+	storage::with_transaction,
+	traits::{StorageVersion, UnfilteredDispatchable},
+	unsigned::{TransactionValidity, ValidateUnsigned},
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::{vec, vec::Vec};
@@ -55,6 +65,10 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
+
+const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
+const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
+const USER_RUNTIME_CALL_VERSION: &str = "0";
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(19);
 
@@ -130,6 +144,16 @@ pub mod pallet {
 			Callback = RuntimeCallFor<Self>,
 		>;
 
+		type RuntimeOrigin: From<frame_system::RawOrigin<<Self as frame_system::Config>::AccountId>>;
+
+		/// The overarching call type.
+		type RuntimeCall: Member
+			+ Parameter
+			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
+			+ From<frame_system::Call<Self>>
+			+ From<Call<Self>>
+			+ GetDispatchInfo;
+
 		/// Weight information
 		type WeightInfo: WeightInfo;
 	}
@@ -144,6 +168,8 @@ pub mod pallet {
 		InvalidUtxoParameters,
 		/// Failed to build Solana Api call. See logs for more details
 		FailedToBuildSolanaApiCall,
+		// Signer cannot be decoded
+		FailedToDecodeSigner,
 	}
 
 	#[pallet::pallet]
@@ -301,6 +327,11 @@ pub mod pallet {
 	/// Contains the network environment for this runtime.
 	pub type ChainflipNetworkEnvironment<T> = StorageValue<_, NetworkEnvironment, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn chainflip_network)]
+	/// Current Chainflip's network name
+	pub type ChainflipNetworkName<T> = StorageValue<_, ChainflipNetwork, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -332,6 +363,11 @@ pub mod pallet {
 		SolanaGovCallDispatched { gov_call: SolanaGovCall, broadcast_id: BroadcastId },
 		/// Assethub Vault Account is successfully set
 		AssethubVaultAccountSet { assethub_vault_account_id: PolkadotAccountId },
+		SignedRuntimeCallSubmitted {
+			signer_account_id: T::AccountId,
+			serialized_call: Vec<u8>,
+			dispatch_result: DispatchResultWithPostInfo,
+		},
 	}
 
 	#[pallet::call]
@@ -576,6 +612,131 @@ pub mod pallet {
 			// Witness the agg_key rotation manually in the vaults pallet for assethub
 			T::AssethubVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)
 		}
+
+		#[pallet::call_index(10)]
+		#[pallet::weight(T::WeightInfo::submit_signed_runtime_call())]
+		pub fn submit_signed_runtime_call(
+			origin: OriginFor<T>,
+			call: sp_std::boxed::Box<<T as Config>::RuntimeCall>,
+			_transaction_metadata: TransactionMetadata,
+			user_signature_data: UserSignatureData,
+		) -> DispatchResult {
+			// This is now an unsigned extrinsic - validation happens in ValidateUnsigned
+			frame_system::ensure_none(origin)?;
+
+			// Extract signer account ID based on signature type. Validation already done in
+			// ValidateUnsigned, it should never fail to decode the signer.
+			let signer_account_id: T::AccountId = user_signature_data
+				.signer_account_id::<T>()
+				.map_err(|_| Error::<T>::FailedToDecodeSigner)?;
+
+			// Increment the account nonce to prevent replay attacks
+			frame_system::Pallet::<T>::inc_account_nonce(&signer_account_id);
+
+			let dispatch_result =
+				Self::dispatch_user_call(*call.clone(), signer_account_id.clone());
+
+			Self::deposit_event(Event::<T>::SignedRuntimeCallSubmitted {
+				signer_account_id,
+				serialized_call: call.encode(),
+				dispatch_result,
+			});
+
+			Ok(())
+		}
+	}
+
+	#[pallet::validate_unsigned]
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
+		type Call = Call<T>;
+
+		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			if let Call::submit_signed_runtime_call {
+				call,
+				transaction_metadata,
+				user_signature_data,
+			} = call
+			{
+				// Check if payload hasn't expired
+				if frame_system::Pallet::<T>::block_number() >=
+					transaction_metadata.expiry_block.into()
+				{
+					return InvalidTransaction::Stale.into();
+				}
+
+				let chanflip_network_name = Self::chainflip_network();
+				let serialized_call: Vec<u8> = call.encode();
+
+				let build_domain_data = || -> Vec<u8> {
+					[
+						serialized_call.clone(),
+						chanflip_network_name.as_str().encode(),
+						USER_RUNTIME_CALL_VERSION.encode(),
+						transaction_metadata.encode(),
+					]
+					.concat()
+				};
+
+				let valid_signature = match user_signature_data {
+					UserSignatureData::Solana { signature, signer, sig_type } => {
+						let signed_payload = match sig_type {
+							SolSigType::Domain => {
+								let domain_data = build_domain_data();
+								[SOLANA_OFFCHAIN_PREFIX, domain_data.as_slice()].concat()
+							},
+						};
+						verify_sol_signature(signer, &signed_payload, signature)
+					},
+					UserSignatureData::Ethereum { signature, signer, sig_type } => {
+						let signed_payload = match sig_type {
+							EthSigType::Domain => {
+								let domain_data = build_domain_data();
+								let prefix = scale_info::prelude::format!(
+									"{}{}",
+									ETHEREUM_SIGN_MESSAGE_PREFIX,
+									domain_data.len()
+								);
+								let prefix_bytes = prefix.as_bytes();
+								[prefix_bytes, &domain_data].concat()
+							},
+							EthSigType::Eip712 => Self::build_eip_712_payload(
+								*call.clone(),
+								chanflip_network_name.as_str(),
+								USER_RUNTIME_CALL_VERSION,
+								transaction_metadata.clone(),
+								*signer,
+							),
+						};
+						verify_evm_signature(signer, &signed_payload, signature)
+					},
+				};
+
+				if !valid_signature {
+					return InvalidTransaction::BadProof.into();
+				}
+
+				// Extract signer account ID
+				let signer_account_id = match user_signature_data.signer_account_id::<T>() {
+					Ok(account_id) => account_id,
+					Err(_) => return InvalidTransaction::BadSigner.into(),
+				};
+
+				// Check account nonce
+				let signer_current_nonce =
+					frame_system::Pallet::<T>::account_nonce(&signer_account_id);
+				if signer_current_nonce != transaction_metadata.nonce.into() {
+					return InvalidTransaction::Stale.into();
+				}
+
+				// TODO: We could also use Self::name(), depends the final implementation/structure
+				let unique_id = (signer_account_id, transaction_metadata.nonce);
+				ValidTransaction::with_tag_prefix("user-signed-payload")
+					.and_provides(unique_id)
+					.build()
+			} else {
+				InvalidTransaction::Call.into()
+			}
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -598,6 +759,7 @@ pub mod pallet {
 		pub arb_address_checker_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
 		pub network_environment: NetworkEnvironment,
+		pub chainflip_network: ChainflipNetwork,
 		pub sol_genesis_hash: Option<SolHash>,
 		pub sol_api_env: SolApiEnvironment,
 		pub sol_durable_nonces_and_accounts: Vec<DurableNonceAndAccount>,
@@ -645,6 +807,7 @@ pub mod pallet {
 			AssethubOutputAccountId::<T>::set(1);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
+			ChainflipNetworkName::<T>::set(self.chainflip_network);
 
 			Pallet::<T>::update_current_release_version();
 		}
@@ -867,6 +1030,33 @@ impl<T: Config> Pallet<T> {
 			current_id
 		})
 	}
+
+	/// Dispatches a call from the user account, with transactional semantics, ie. if the call
+	/// dispatch returns `Err`, rolls back any storage updates.
+	fn dispatch_user_call(
+		call: <T as Config>::RuntimeCall,
+		user_account: T::AccountId,
+	) -> DispatchResultWithPostInfo {
+		with_transaction(move || {
+			match call.dispatch_bypass_filter(frame_system::RawOrigin::Signed(user_account).into())
+			{
+				r @ Ok(_) => TransactionOutcome::Commit(r),
+				r @ Err(_) => TransactionOutcome::Rollback(r),
+			}
+		})
+	}
+
+	/// `signer is not technically necessary but is added as part of the metadata so
+	/// it is displayed separately to the user in the wallet
+	fn build_eip_712_payload(
+		_call: <T as Config>::RuntimeCall,
+		_chain_name: &str,
+		_version: &str,
+		_transaction_metadata: TransactionMetadata,
+		_signer: EvmAddress,
+	) -> Vec<u8> {
+		todo!("implement eip-712");
+	}
 }
 
 impl<T: Config> CompatibleCfeVersions for Pallet<T> {
@@ -878,5 +1068,47 @@ impl<T: Config> CompatibleCfeVersions for Pallet<T> {
 impl<T: Config> NetworkEnvironmentProvider for Pallet<T> {
 	fn get_network_environment() -> NetworkEnvironment {
 		Self::network_environment()
+	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct TransactionMetadata {
+	nonce: u32,
+	expiry_block: BlockNumber,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum EthSigType {
+	Domain, // personal_sign
+	Eip712,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum SolSigType {
+	Domain, /* Using `b"\xffsolana offchain" as per Anza specifications,
+	         * even if we are not using the proposal. Phantom might use
+	         * a different standard though..
+	         * References
+	         * https://docs.anza.xyz/proposals/off-chain-message-signing
+	         * And/or phantom off-chain signing:
+	         * https://github.com/phantom/sign-in-with-solana */
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum UserSignatureData {
+	Solana { signature: SolSignature, signer: SolAddress, sig_type: SolSigType },
+	Ethereum { signature: EthereumSignature, signer: EvmAddress, sig_type: EthSigType },
+}
+
+impl UserSignatureData {
+	/// Extract the signer account ID as T::AccountId from the signature data
+	pub fn signer_account_id<T: Config>(&self) -> Result<T::AccountId, codec::Error> {
+		use cf_chains::evm::ToAccountId32;
+
+		let account_id_32 = match self {
+			UserSignatureData::Solana { signer, .. } => AccountId32::new((*signer).into()),
+			UserSignatureData::Ethereum { signer, .. } => signer.into_account_id_32(),
+		};
+
+		T::AccountId::decode(&mut account_id_32.encode().as_slice())
 	}
 }

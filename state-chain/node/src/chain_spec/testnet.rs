@@ -17,7 +17,9 @@
 pub use super::common::*;
 use super::{get_account_id_from_seed, StateChainEnvironment};
 use cf_chains::{dot::RuntimeVersion, sol::SolAddress};
-use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
+use cf_primitives::{
+	AccountId, AccountRole, BlockNumber, ChainflipNetwork, FlipBalance, NetworkEnvironment,
+};
 use cf_utilities::bs58_array;
 use pallet_cf_elections::generic_tools::Array;
 use sc_service::ChainType;
@@ -30,6 +32,7 @@ pub struct Config;
 pub const NETWORK_NAME: &str = "Chainflip-Testnet";
 pub const CHAIN_TYPE: ChainType = ChainType::Development;
 pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Development;
+pub const CHAINFLIP_NETWORK: ChainflipNetwork = ChainflipNetwork::Development;
 pub const PROTOCOL_ID: &str = "flip-test";
 
 // These represent approximately 2 hours on testnet block times
