@@ -52,8 +52,8 @@ impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
 	const GAS_ASSET: Self::ChainAsset = EthAsset::Eth;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
-	const NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = REFERENCE_ETH_PRICE_IN_USD;
-	const SMALLEST_UNIT_PER_UNIT: Self::ChainAmount = ONE_ETH;
+	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = REFERENCE_ETH_PRICE_IN_USD;
+	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = ONE_ETH;
 
 	type ChainCrypto = evm::EvmCrypto;
 	type ChainBlockNumber = u64;

@@ -29,12 +29,12 @@ use crate::{
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
+pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
 	chains::assets, IngressOrEgress, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILOBYTE,
 	INPUT_UTXO_SIZE_IN_BYTES, MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 	VAULT_UTXO_SIZE_IN_BYTES,
 };
-pub use cf_primitives::{chains::Bitcoin, PriceFeedApi};
 use cf_runtime_utilities::log_or_panic;
 use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
@@ -262,8 +262,8 @@ impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
-	const NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = 113_000_000_000u64;
-	const SMALLEST_UNIT_PER_UNIT: Self::ChainAmount = 100_000_000u64;
+	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = 113_000_000_000u64;
+	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 100_000_000u64;
 
 	type ChainCrypto = BitcoinCrypto;
 	type ChainBlockNumber = BlockNumber;

@@ -2757,10 +2757,10 @@ pub mod pallet {
 			)
 			.and_then(|amount| C::ChainAmount::try_from(amount).ok())
 			.unwrap_or_else(|| {
-				Self::input_asset_amount_using_reference_gas_asset_price::<C>(
-					input_asset,
-					required_gas,
-				)
+				Self::input_asset_amount_using_oracle_or_reference_gas_asset_price::<
+					C,
+					T::PriceFeedApi,
+				>(input_asset, required_gas)
 			})
 		}
 
@@ -2809,55 +2809,6 @@ pub mod pallet {
 				} else {
 					Some(input_amount_to_convert.unique_saturated_into())
 				}
-			}
-		}
-
-		fn input_asset_amount_using_reference_gas_asset_price<C: cf_chains::Chain>(
-			input_asset: C::ChainAsset,
-			required_gas: C::ChainAmount,
-		) -> C::ChainAmount {
-			if input_asset == C::GAS_ASSET {
-				return required_gas;
-			}
-			match Into::<Asset>::into(input_asset) {
-				Asset::ArbUsdc |
-				Asset::SolUsdc |
-				Asset::Usdt |
-				Asset::Usdc |
-				Asset::HubUsdc |
-				Asset::HubUsdt => {
-					if let Some(relative_price) =
-						T::PriceFeedApi::get_relative_price(C::GAS_ASSET.into(), input_asset.into())
-					{
-						output_amount_ceil(required_gas.into(), relative_price.price)
-							.try_into()
-							.unwrap_or(0u32.into())
-					} else {
-						multiply_by_rational_with_rounding(
-							required_gas.into(),
-							C::NATIVE_TOKEN_PRICE_IN_FINE_USD.into(),
-							C::SMALLEST_UNIT_PER_UNIT.into(),
-							sp_runtime::Rounding::Up,
-						)
-						.and_then(|x| x.try_into().ok())
-						.unwrap_or(0u32.into())
-					}
-				},
-				Asset::Flip => multiply_by_rational_with_rounding(
-					required_gas.into(),
-					T::PriceFeedApi::get_price(C::GAS_ASSET.into())
-						.and_then(|price| {
-							output_amount_ceil(C::SMALLEST_UNIT_PER_UNIT.into(), price.price)
-								.try_into()
-								.ok()
-						})
-						.unwrap_or(C::NATIVE_TOKEN_PRICE_IN_FINE_USD.into()),
-					cf_chains::eth::REFERENCE_FLIP_PRICE_IN_USD,
-					sp_runtime::Rounding::Up,
-				)
-				.and_then(|x| x.try_into().ok())
-				.unwrap_or(0u32.into()),
-				_ => 0u32.into(),
 			}
 		}
 	}

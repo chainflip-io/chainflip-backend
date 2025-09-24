@@ -117,8 +117,8 @@ impl Chain for Solana {
 	const NAME: &'static str = "Solana";
 	const GAS_ASSET: Self::ChainAsset = assets::sol::Asset::Sol;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 15;
-	const NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = REFERENCE_SOL_PRICE_IN_USD;
-	const SMALLEST_UNIT_PER_UNIT: Self::ChainAmount = 1_000_000_000u64;
+	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = REFERENCE_SOL_PRICE_IN_USD;
+	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 1_000_000_000u64;
 
 	type ChainCrypto = SolanaCrypto;
 	type ChainBlockNumber = SlotNumber;
