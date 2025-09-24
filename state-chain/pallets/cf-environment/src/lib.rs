@@ -184,14 +184,8 @@ pub mod pallet {
 		InvalidUtxoParameters,
 		/// Failed to build Solana Api call. See logs for more details
 		FailedToBuildSolanaApiCall,
-		/// Payload has expired
-		PayloadExpired,
 		// Signer cannot be decoded
 		FailedToDecodeSigner,
-		// Signature failed to be verified
-		InvalidSignature,
-		// Nonce missmatch
-		InvalidNonce,
 	}
 
 	#[pallet::pallet]
@@ -679,8 +673,8 @@ pub mod pallet {
 			// This is now an unsigned extrinsic - validation happens in ValidateUnsigned
 			frame_system::ensure_none(origin)?;
 
-			// Extract signer account ID based on signature type - validation already done in
-			// ValidateUnsigned
+			// Extract signer account ID based on signature type. Validation already done in
+			// ValidateUnsigned, it should never fail to decode the signer.
 			let signer_account_id: T::AccountId = user_signature_data
 				.signer_account_id::<T>()
 				.map_err(|_| Error::<T>::FailedToDecodeSigner)?;
@@ -776,7 +770,7 @@ pub mod pallet {
 					Err(_) => return InvalidTransaction::BadSigner.into(),
 				};
 
-				// Check and increase nonce
+				// Check account nonce
 				let signer_current_nonce =
 					frame_system::Pallet::<T>::account_nonce(&signer_account_id);
 				if signer_current_nonce != transaction_metadata.nonce.into() {
@@ -784,7 +778,6 @@ pub mod pallet {
 				}
 
 				// TODO: We could also use Self::name(), depends the final implementation/structure
-				// of this.
 				let unique_id = (signer_account_id, transaction_metadata.nonce);
 				ValidTransaction::with_tag_prefix("user-signed-payload")
 					.and_provides(unique_id)
