@@ -1248,7 +1248,7 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLendingPool<U256>>>;
 
-	#[method(name = "loan_account")]
+	#[method(name = "loan_accounts")]
 	fn cf_loan_accounts(
 		&self,
 		borrower_id: Option<state_chain_runtime::AccountId>,
