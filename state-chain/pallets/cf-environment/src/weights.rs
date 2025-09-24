@@ -57,7 +57,7 @@ pub trait WeightInfo {
 	fn witness_initialize_solana_vault() -> Weight;
 	fn witness_assethub_vault_creation() -> Weight;
 	fn dispatch_solana_gov_call() -> Weight;
-	fn submit_user_signed_payload() -> Weight;
+	fn submit_signed_runtime_call() -> Weight;
 }
 
 /// Weights for pallet_cf_environment using the Substrate node and recommended hardware.
@@ -231,7 +231,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(14_u64))
 	}
 	// TODO: To set correct values
-	fn submit_user_signed_payload() -> Weight {
+	fn submit_signed_runtime_call() -> Weight {
 		Weight::from_parts(0, 0)
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
@@ -407,7 +407,7 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().writes(14_u64))
 	}
 	// TODO: To set proper values
-	fn submit_user_signed_payload() -> Weight {
+	fn submit_signed_runtime_call() -> Weight {
 		Weight::from_parts(0, 0)
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}

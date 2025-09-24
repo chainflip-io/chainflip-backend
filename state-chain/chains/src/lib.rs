@@ -505,16 +505,8 @@ pub trait ChainCrypto: ChainCryptoInstanceAlias + Sized {
 		+ Ord
 		+ Default // the "zero" address
 		+ BenchmarkValue;
-	type Signer: MaybeSerializeDeserialize
-		+ Member
-		+ Parameter
-		+ Copy
-		+ Ord
-		+ Default // the "zero" address
-		+ BenchmarkValue;
 	type Payload: Member + Parameter + BenchmarkValue;
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
-	type Signature: Member + Parameter + BenchmarkValue;
 
 	/// Uniquely identifies a transaction on the incoming direction.
 	type TransactionInId: Member
@@ -543,12 +535,6 @@ pub trait ChainCrypto: ChainCryptoInstanceAlias + Sized {
 		agg_key: &Self::AggKey,
 		payload: &Self::Payload,
 		signature: &Self::ThresholdSignature,
-	) -> bool;
-
-	fn verify_signature(
-		agg_key: &Self::Signer,
-		payload: &[u8],
-		signature: &Self::Signature,
 	) -> bool;
 
 	/// We use the AggKey as the payload for keygen verification ceremonies.

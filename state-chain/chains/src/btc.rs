@@ -304,8 +304,6 @@ impl ChainCrypto for BitcoinCrypto {
 	type UtxoChain = ConstBool<true>;
 
 	type AggKey = AggKey;
-	type Signer = [u8; 32];
-	type Signature = Signature;
 
 	// A single transaction can sign over multiple UTXOs
 	type Payload = Vec<(PreviousOrCurrent, SigningPayload)>;
@@ -318,15 +316,6 @@ impl ChainCrypto for BitcoinCrypto {
 	type KeyHandoverIsRequired = ConstBool<true>;
 
 	type GovKey = Self::AggKey;
-
-	fn verify_signature(
-		_signer: &Self::Signer,
-		_payload: &[u8],
-		_signature: &Self::Signature,
-	) -> bool {
-		// Wallet offchain signature currently not supported
-		false
-	}
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,

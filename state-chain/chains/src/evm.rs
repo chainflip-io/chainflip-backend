@@ -69,8 +69,6 @@ impl ChainCrypto for EvmCrypto {
 	type UtxoChain = ConstBool<false>;
 
 	type AggKey = evm::AggKey;
-	type Signer = Address;
-	type Signature = Signature;
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
 	type TransactionInId = H256;
@@ -79,39 +77,6 @@ impl ChainCrypto for EvmCrypto {
 	type TransactionOutId = Self::ThresholdSignature;
 	type KeyHandoverIsRequired = ConstBool<false>;
 	type GovKey = Address;
-
-	fn verify_signature(
-		signer: &Self::Signer,
-		payload: &[u8],
-		signature: &Self::Signature,
-	) -> bool {
-		let mut sig_bytes = signature.0;
-
-		// Normalize signature's v if needed
-		if sig_bytes[64] >= 27 {
-			sig_bytes[64] -= 27;
-		}
-
-		// Prevent signature malleability - reject high-s signatures
-		// s < 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141 / 2
-		let s = U256::from_big_endian(&sig_bytes[32..64]);
-		let half_curve_order: [u8; 32] = [
-			0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-			0xFF, 0xFF, 0x5D, 0x57, 0x6E, 0x73, 0x57, 0xA4, 0x50, 0x1D, 0xDF, 0xE9, 0x2F, 0x46,
-			0x68, 0x1B, 0x20, 0xA0,
-		];
-		let half_curve_order_uint = U256::from_big_endian(&half_curve_order);
-		if s > half_curve_order_uint {
-			return false;
-		}
-
-		let norm_signature: Signature = sig_bytes.into();
-
-		let option_public =
-			norm_signature.recover_prehashed(Keccak256::hash(payload).as_fixed_bytes());
-
-		option_public.and_then(to_evm_address_from_compressed_pubkey) == Some(*signer)
-	}
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -254,10 +219,6 @@ pub fn to_evm_address(pubkey: PublicKey) -> Address {
 	let [_, k_times_g @ ..] = pubkey.serialize();
 	let h = Keccak256::hash(&k_times_g[..]);
 	Address::from_slice(&h.0[12..])
-}
-
-fn to_evm_address_from_compressed_pubkey(pubkey: sp_core::ecdsa::Public) -> Option<Address> {
-	PublicKey::parse_compressed(&pubkey.0).ok().map(to_evm_address)
 }
 
 impl AggKey {
@@ -752,6 +713,38 @@ impl ToAccountId32 for Address {
 	}
 }
 
+fn to_evm_address_from_compressed_pubkey(pubkey: sp_core::ecdsa::Public) -> Option<Address> {
+	PublicKey::parse_compressed(&pubkey.0).ok().map(to_evm_address)
+}
+
+pub fn verify_evm_signature(signer: &Address, payload: &[u8], signature: &Signature) -> bool {
+	let mut sig_bytes = signature.0;
+
+	// Normalize signature's v if needed
+	if sig_bytes[64] >= 27 {
+		sig_bytes[64] -= 27;
+	}
+
+	// Prevent signature malleability - reject high-s signatures
+	// s < 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141 / 2
+	let s = U256::from_big_endian(&sig_bytes[32..64]);
+	let half_curve_order: [u8; 32] = [
+		0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+		0xFF, 0x5D, 0x57, 0x6E, 0x73, 0x57, 0xA4, 0x50, 0x1D, 0xDF, 0xE9, 0x2F, 0x46, 0x68, 0x1B,
+		0x20, 0xA0,
+	];
+	let half_curve_order_uint = U256::from_big_endian(&half_curve_order);
+	if s > half_curve_order_uint {
+		return false;
+	}
+
+	let norm_signature: Signature = sig_bytes.into();
+
+	let option_public = norm_signature.recover_prehashed(Keccak256::hash(payload).as_fixed_bytes());
+
+	option_public.and_then(to_evm_address_from_compressed_pubkey) == Some(*signer)
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
@@ -791,7 +784,7 @@ mod verification_tests {
 
 	#[test]
 	fn test_verify_signature() {
-		let success = EvmCrypto::verify_signature(
+		let success = verify_evm_signature(
 			// signer
 			&hex_literal::hex!("f39fd6e51aad88f6f4ce6ab8827279cfffb92266").into(),
 			// payload
@@ -816,7 +809,7 @@ mod verification_tests {
 		.into();
 
 		// Verify original signature
-		let success = EvmCrypto::verify_signature(&signer.into(), &payload, &original_signature);
+		let success = verify_evm_signature(&signer.into(), &payload, &original_signature);
 		assert!(success, "Original signature should be valid");
 
 		// Construct malleable signature
@@ -847,7 +840,7 @@ mod verification_tests {
 		assert_ne!(original_signature.0, malleable_signature, "Signatures should differ");
 		// Verify malleable signature
 		let malleable_success =
-			EvmCrypto::verify_signature(&signer.into(), &payload, &malleable_signature.into());
+			verify_evm_signature(&signer.into(), &payload, &malleable_signature.into());
 		assert!(
 			!malleable_success,
 			"Malleable signature should be invalid if normalization is enforced"

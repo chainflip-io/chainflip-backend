@@ -23,7 +23,7 @@ const expiryBlock = 10000;
 const chainName = 'Chainflip-Development';
 const version = '0';
 
-export function encodePayloadDomainToSign(
+export function encodeDomainDataToSign(
   payload: Uint8Array,
   nonce: number,
   userExpiryBlock: number,
@@ -37,7 +37,7 @@ export function encodePayloadDomainToSign(
   return new Uint8Array([...payload, ...chainNameBytes, ...versionBytes, ...transactionMetadata]);
 }
 
-export async function testOffchainSignedAction(testContext: TestContext) {
+export async function testSignedRuntimeCall(testContext: TestContext) {
   const logger = testContext.logger;
   await using chainflip = await getChainflipApi();
 
@@ -55,7 +55,7 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   const svmNonce = (await chainflip.rpc.system.accountNextIndex(
     'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1',
   )) as unknown as number;
-  const svmPayload = encodePayloadDomainToSign(runtimeCall, svmNonce, expiryBlock);
+  const svmPayload = encodeDomainDataToSign(runtimeCall, svmNonce, expiryBlock);
   const svmHexPayload = u8aToHex(svmPayload);
 
   logger.info('Signing and submitting user-signed payload with Solana wallet');
@@ -75,7 +75,7 @@ export async function testOffchainSignedAction(testContext: TestContext) {
 
   // Submit as unsigned extrinsic - no broker needed
   await chainflip.tx.environment
-    .submitUserSignedPayload(
+    .submitSignedRuntimeCall(
       // Solana prefix will be added in the SC previous to signature verification
       hexRuntimeCall,
       {
@@ -92,7 +92,7 @@ export async function testOffchainSignedAction(testContext: TestContext) {
     )
     .send();
 
-  await observeEvent(globalLogger, `environment:UserActionSubmitted`, {
+  await observeEvent(globalLogger, `environment:SignedRuntimeCallSubmitted`, {
     test: (event) => {
       const matchSerializedCall = event.data.serializedCall === hexRuntimeCall;
       const matchSigner =
@@ -109,7 +109,7 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   let evmNonce = (await chainflip.rpc.system.accountNextIndex(
     'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
   )) as unknown as number;
-  const evmPayload = encodePayloadDomainToSign(runtimeCall, evmNonce, expiryBlock);
+  const evmPayload = encodeDomainDataToSign(runtimeCall, evmNonce, expiryBlock);
   // Create the Ethereum-prefixed message
   const prefix = `\x19Ethereum Signed Message:\n${evmPayload.length}`;
   const prefixedMessage = Buffer.concat([Buffer.from(prefix, 'utf8'), evmPayload]);
@@ -128,7 +128,7 @@ export async function testOffchainSignedAction(testContext: TestContext) {
 
   // Submit as unsigned extrinsic - no broker needed
   await chainflip.tx.environment
-    .submitUserSignedPayload(
+    .submitSignedRuntimeCall(
       // Ethereum prefix will be added in the SC previous to signature verification
       hexRuntimeCall,
       {
@@ -145,7 +145,7 @@ export async function testOffchainSignedAction(testContext: TestContext) {
     )
     .send();
 
-  await observeEvent(globalLogger, `environment:UserActionSubmitted`, {
+  await observeEvent(globalLogger, `environment:SignedRuntimeCallSubmitted`, {
     test: (event) => {
       const matchSerializedCall = event.data.serializedCall === hexRuntimeCall;
       const matchSigner =
@@ -219,7 +219,7 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   // await brokerMutex.runExclusive(brokerUri, async () => {
   //   const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
   //   await chainflip.tx.environment
-  //     .submitUserSignedPayload(
+  //     .submitSignedRuntimeCall(
   //       // The  EIP-712 payload will be build in the State chain previous to signature verification
   //       hexRuntimeCall,
   //       {
@@ -237,7 +237,7 @@ export async function testOffchainSignedAction(testContext: TestContext) {
   //     .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
   // });
 
-  // await observeEvent(globalLogger, `environment:UserActionSubmitted`, {
+  // await observeEvent(globalLogger, `environment:SignedRuntimeCallSubmitted`, {
   //   test: (event) => {
   //     const matchSerializedCall = !!event.data.decodedAction.Lending?.Borrow;
   //     const matchSignedPayload = event.data.signedPayload === encodedPayload;

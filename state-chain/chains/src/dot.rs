@@ -395,8 +395,6 @@ impl ChainCrypto for PolkadotCrypto {
 	type UtxoChain = ConstBool<false>;
 
 	type AggKey = PolkadotPublicKey;
-	type Signer = PolkadotPublicKey;
-	type Signature = PolkadotSignature;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
 	type TransactionInId = TxId;
@@ -404,16 +402,6 @@ impl ChainCrypto for PolkadotCrypto {
 	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type GovKey = PolkadotPublicKey;
-
-	fn verify_signature(
-		_signer: &Self::Signer,
-		_payload: &[u8],
-		_signature: &Self::Signature,
-	) -> bool {
-		// Wallet offchain signature doesn't need supported
-		// as Polkadot wallets are already natively supported.
-		false
-	}
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,

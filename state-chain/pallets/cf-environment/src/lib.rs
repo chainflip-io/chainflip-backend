@@ -28,11 +28,12 @@ use cf_chains::{
 	},
 	dot::{api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
-	evm::Signature as EthereumSignature,
+	evm::{verify_evm_signature, Signature as EthereumSignature},
 	hub::{Assethub, OutputAccountId},
 	sol::{
 		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall},
-		SolAddress, SolApiEnvironment, SolHash, SolSignature, Solana, NONCE_NUMBER_CRITICAL_NONCES,
+		verify_sol_signature, SolAddress, SolApiEnvironment, SolHash, SolSignature, Solana,
+		NONCE_NUMBER_CRITICAL_NONCES,
 	},
 	Chain, ReplayProtectionProvider,
 };
@@ -384,7 +385,7 @@ pub mod pallet {
 		SolanaGovCallDispatched { gov_call: SolanaGovCall, broadcast_id: BroadcastId },
 		/// Assethub Vault Account is successfully set
 		AssethubVaultAccountSet { assethub_vault_account_id: PolkadotAccountId },
-		UserActionSubmitted {
+		SignedRuntimeCallSubmitted {
 			signer_account_id: T::AccountId,
 			serialized_call: Vec<u8>,
 			dispatch_result: DispatchResultWithPostInfo,
@@ -668,8 +669,8 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(11)]
-		#[pallet::weight(T::WeightInfo::submit_user_signed_payload())]
-		pub fn submit_user_signed_payload(
+		#[pallet::weight(T::WeightInfo::submit_signed_runtime_call())]
+		pub fn submit_signed_runtime_call(
 			origin: OriginFor<T>,
 			call: sp_std::boxed::Box<<T as Config>::RuntimeCall>,
 			_transaction_metadata: TransactionMetadata,
@@ -690,7 +691,7 @@ pub mod pallet {
 			let dispatch_result =
 				Self::dispatch_user_call(*call.clone(), signer_account_id.clone());
 
-			Self::deposit_event(Event::<T>::UserActionSubmitted {
+			Self::deposit_event(Event::<T>::SignedRuntimeCallSubmitted {
 				signer_account_id,
 				serialized_call: call.encode(),
 				dispatch_result,
@@ -705,14 +706,12 @@ pub mod pallet {
 		type Call = Call<T>;
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::submit_user_signed_payload {
+			if let Call::submit_signed_runtime_call {
 				call,
 				transaction_metadata,
 				user_signature_data,
 			} = call
 			{
-				use cf_chains::{evm::EvmCrypto, sol::SolanaCrypto, ChainCrypto};
-
 				// Check if payload hasn't expired
 				if frame_system::Pallet::<T>::block_number() >=
 					transaction_metadata.expiry_block.into()
@@ -741,7 +740,7 @@ pub mod pallet {
 								[SOLANA_OFFCHAIN_PREFIX, domain_data.as_slice()].concat()
 							},
 						};
-						SolanaCrypto::verify_signature(signer, &signed_payload, signature)
+						verify_sol_signature(signer, &signed_payload, signature)
 					},
 					UserSignatureData::Ethereum { signature, signer, sig_type } => {
 						let signed_payload = match sig_type {
@@ -763,7 +762,7 @@ pub mod pallet {
 								*signer,
 							),
 						};
-						EvmCrypto::verify_signature(signer, &signed_payload, signature)
+						verify_evm_signature(signer, &signed_payload, signature)
 					},
 				};
 
@@ -777,15 +776,15 @@ pub mod pallet {
 					Err(_) => return InvalidTransaction::BadSigner.into(),
 				};
 
-				// Check nonce
+				// Check and increase nonce
 				let signer_current_nonce =
 					frame_system::Pallet::<T>::account_nonce(&signer_account_id);
 				if signer_current_nonce != transaction_metadata.nonce.into() {
 					return InvalidTransaction::Stale.into();
 				}
 
-				// TODO: We could also use Self::name(), depends on the final
-				// implementation/structure of this.
+				// TODO: We could also use Self::name(), depends the final implementation/structure
+				// of this.
 				let unique_id = (signer_account_id, transaction_metadata.nonce);
 				ValidTransaction::with_tag_prefix("user-signed-payload")
 					.and_provides(unique_id)
