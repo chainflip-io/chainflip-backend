@@ -34,15 +34,12 @@ use crate::{
 		retry_rpc::{address_checker::AddressCheckerRetryRpcApi, EvmRetryRpcClient},
 		rpc::{address_checker::PriceFeedData as EthPriceFeedData, EvmRpcSigningClient},
 	},
-	sol::retry_rpc::SolRetryRpcClient,
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 	},
-	witness::sol::oracle_witnessing::get_price_feeds,
 };
 use anyhow::{anyhow, Result};
-use sol_prim::program_instructions::PriceFeedData as SolPriceFeedData;
 
 /// IMPORTANT: These strings have to match with the price feed "description" as returned by
 /// chainlink.
@@ -60,7 +57,7 @@ pub fn asset_pair_from_description(description: String) -> Option<ChainlinkAsset
 
 #[derive(Clone)]
 struct OraclePriceVoter {
-	sol_client: SolRetryRpcClient,
+	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 }
 
@@ -70,14 +67,6 @@ struct PriceData {
 	pub answer: i128,
 	pub decimals: u8,
 	pub timestamp: UnixTime,
-}
-
-impl From<SolPriceFeedData> for PriceData {
-	fn from(value: SolPriceFeedData) -> Self {
-		let SolPriceFeedData { round_id: _, slot: _, timestamp, answer, decimals, description } =
-			value;
-		Self { description, answer, decimals, timestamp: UnixTime { seconds: timestamp as u64 } }
-	}
 }
 
 impl TryFrom<EthPriceFeedData> for PriceData {
@@ -115,16 +104,20 @@ impl VoterApi<ChainlinkOraclePriceES> for OraclePriceVoter {
 		properties: <ChainlinkOraclePriceES as ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<ChainlinkOraclePriceES>>, anyhow::Error> {
 		let price_feeds = match properties.chain {
-			ExternalPriceChain::Solana => {
-				let (price_feeds, _, _) = get_price_feeds(
-					&self.sol_client,
-					settings.sol_oracle_query_helper,
-					settings.sol_oracle_program_id,
-					settings.sol_oracle_feeds.clone(),
-					None,
-				)
-				.await?;
-				price_feeds.into_iter().map(Into::into).collect::<Vec<PriceData>>()
+			ExternalPriceChain::Arbitrum => {
+				let (_, _, price_feeds) = self
+					.arb_client
+					.query_price_feeds(
+						settings.arb_address_checker,
+						settings.arb_oracle_feeds.clone(),
+					)
+					.await?;
+				price_feeds
+					.into_iter()
+					.filter_map(|data| {
+						data.try_into().inspect_err(|err| tracing::warn!("{err}")).ok()
+					})
+					.collect::<Vec<PriceData>>()
 			},
 			ExternalPriceChain::Ethereum => {
 				let (_, _, price_feeds) = self
@@ -209,7 +202,7 @@ impl VoterApi<ChainlinkOraclePriceES> for OraclePriceVoter {
 use std::{collections::BTreeMap, sync::Arc};
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
-	sol_client: SolRetryRpcClient,
+	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
 ) -> Result<()>
@@ -225,7 +218,7 @@ where
 					scope,
 					state_chain_client,
 					CompositeVoter::<GenericElectoralSystemRunner, _>::new((OraclePriceVoter {
-						sol_client: sol_client.clone(),
+						arb_client: arb_client.clone(),
 						eth_client: eth_client.clone(),
 					},)),
 					None,

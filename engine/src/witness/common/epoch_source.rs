@@ -285,7 +285,7 @@ impl<
 					}
 				}
 			},
-			|_state_chain_client, _epoch, _block_hash, historic_info| async move { historic_info },
+			|_state_chain_client, _epoch, _block_hash, historic_info| async move { Some(historic_info) },
 		)
 		.await
 	}
@@ -315,7 +315,7 @@ impl<
 			+ Send
 			+ Sync
 			+ 'static,
-		HIFut: Future<Output = MappedHistoricInfo> + Send + 'static,
+		HIFut: Future<Output = Option<MappedHistoricInfo>> + Send + 'static,
 		MappedHistoricInfo: Clone + Send + Sync + 'static,
 	{
 		let EpochSourceBuilder {
@@ -343,7 +343,7 @@ impl<
 							(
 								mapped_info,
 								match option_historic_info {
-									Some(historic_info) => Some(
+									Some(historic_info) =>
 										map_historic_info(
 											state_chain_client.clone(),
 											epoch,
@@ -351,7 +351,6 @@ impl<
 											historic_info,
 										)
 										.await,
-									),
 									None => None,
 								},
 							),
@@ -380,11 +379,13 @@ impl<
 							},
 							EpochUpdate::Historic(historic_info) => {
 								if epochs.contains(&epoch) {
-									epoch_update_sender.send((
-										epoch,
-										block_hash,
-										EpochUpdate::Historic(map_historic_info(state_chain_client.clone(), epoch, block_hash, historic_info).await),
-									)).await;
+									if let Some(mapped_historic_info) = map_historic_info(state_chain_client.clone(), epoch, block_hash, historic_info).await {
+										epoch_update_sender.send((
+											epoch,
+											block_hash,
+											EpochUpdate::Historic(mapped_historic_info),
+										)).await;
+									}
 								}
 							},
 							EpochUpdate::Expired => {
@@ -464,25 +465,27 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 				}
 			},
 			|state_chain_client, epoch, block_hash, historic_info| async move {
-				(
+				if let (Some(keys), Some(start_blocks)) = (
 					state_chain_client
 						.storage_map_entry::<pallet_cf_threshold_signature::Keys<
 							state_chain_runtime::Runtime,
 							CryptoInstanceFor<TChain>,
 						>>(block_hash, &(epoch + 1))
 						.await
-						.expect(STATE_CHAIN_CONNECTION)
-						.expect("We know the epoch ended, so the next vault must exist."),
+						.expect(STATE_CHAIN_CONNECTION),
 					state_chain_client
 						.storage_map_entry::<pallet_cf_vaults::VaultStartBlockNumbers<
 							state_chain_runtime::Runtime,
 							ChainInstanceFor<TChain>,
 						>>(block_hash, &(epoch + 1))
 						.await
-						.expect(STATE_CHAIN_CONNECTION)
-						.expect("We know the epoch ended, so the next vault must exist."),
-					historic_info,
-				)
+						.expect(STATE_CHAIN_CONNECTION),
+				) {
+					Some((keys, start_blocks, historic_info))
+				} else {
+					tracing::warn!("Vault info not available for epoch {}", epoch + 1);
+					None
+				}
 			},
 		)
 		.await
