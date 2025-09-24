@@ -615,7 +615,7 @@ export async function observeSwapRequested(
     },
     // We assume that a swaprequest is uniquely identifiable by the `id: TransactionOriginId`.
     // To reduce potential race conditions we always check the last 5 blocks.
-    historicalCheckBlocks: 5,
+    historicalCheckBlocks: 20,
   }).event;
 }
 
@@ -763,7 +763,7 @@ export async function observeBalanceIncrease(
   const initialBalance = oldBalance
     ? Number(oldBalance)
     : Number(await getBalance(dstCcy, address));
-  for (let i = 0; i < Math.max(timeoutSeconds / 3, 1); i++) {
+  for (let i = 0; i < Math.max(timeoutSeconds * 2, 1); i++) {
     const newBalance = Number(await getBalance(dstCcy, address));
     if (newBalance > initialBalance) {
       logger.trace(
@@ -771,7 +771,7 @@ export async function observeBalanceIncrease(
       );
       return newBalance;
     }
-    await sleep(3000);
+    await sleep(500);
   }
 
   return throwError(
@@ -795,7 +795,7 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
       }
       return;
     }
-    await sleep(3000);
+    await sleep(500);
   }
 
   throw new Error('Failed to observe the fetch');
@@ -863,7 +863,7 @@ export async function observeEVMEvent(
       }
       initBlockNumber = currentBlockNumber + 1;
     }
-    await sleep(2500);
+    await sleep(500);
   }
 
   throw new Error(`Failed to observe the ${eventName} event`);

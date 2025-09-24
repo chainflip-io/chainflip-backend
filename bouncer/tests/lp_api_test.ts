@@ -119,6 +119,7 @@ async function testLiquidityDepositLegacy(logger: Logger) {
     isValidEthAddress(liquidityDepositAddress),
     `Invalid deposit address: ${liquidityDepositAddress}`,
   );
+  logger.debug(`Depositing liquidity to deposit address ${liquidityDepositAddress}`);
 
   // Send funds to the deposit address and watch for deposit event
   const observeAccountCreditedEvent = observeEvent(logger, 'assetBalances:AccountCredited', {
@@ -164,6 +165,7 @@ async function testLiquidityDeposit(logger: Logger) {
     isValidEthAddress(liquidityDepositAddress),
     `Invalid deposit address: ${liquidityDepositAddress}`,
   );
+  logger.debug(`Depositing liquidity to deposit address ${liquidityDepositAddress}`);
 
   // Send funds to the deposit address and watch for deposit event
   const observeAccountCreditedEvent = observeEvent(logger, 'assetBalances:AccountCredited', {

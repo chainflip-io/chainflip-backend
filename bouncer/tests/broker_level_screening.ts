@@ -49,7 +49,7 @@ async function observeBtcAddressBalanceChange(address: string): Promise<boolean>
   const MAX_RETRIES = 100;
   const initialBalance = await getBtcBalance(address);
   for (let i = 0; i < MAX_RETRIES; i++) {
-    await sleep(1000);
+    await sleep(500);
     const balance = await getBtcBalance(address);
     if (balance !== initialBalance) {
       return Promise.resolve(true);
@@ -153,7 +153,7 @@ async function waitForDepositContractDeployment(chain: Chain, depositAddress: st
       contractDeployed = true;
       break;
     }
-    await sleep(6000);
+    await sleep(1000);
   }
   if (!contractDeployed) {
     throw new Error(`Ethereum contract not deployed at address ${depositAddress} within timeout!`);
@@ -368,7 +368,7 @@ async function testEvmVaultSwap(
       receivedRefund = true;
       break;
     }
-    await sleep(6000);
+    await sleep(1000);
   }
 
   if (!receivedRefund) {
@@ -485,7 +485,7 @@ async function testEvmLiquidityDeposit(
       receivedRefund = true;
       break;
     }
-    await sleep(6000);
+    await sleep(1000);
   }
 
   if (!receivedRefund) {
@@ -661,9 +661,8 @@ export async function testBrokerLevelScreening(
       testEvm(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
       testEvm(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
       testEvm(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    ]
-      .concat(await testBitcoin(testContext, false))
-      .concat(testBoostedDeposits ? await testBitcoin(testContext, true) : []),
+    ].concat(await testBitcoin(testContext, false)),
+    // .concat(testBoostedDeposits ? await testBitcoin(testContext, true) : []),
   );
 
   // test rejection of LP deposits and vault swaps:

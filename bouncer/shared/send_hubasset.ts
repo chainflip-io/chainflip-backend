@@ -21,6 +21,9 @@ export async function sendHubAsset(
   await using assethub = await getAssethubApi();
 
   for (let retryCount = 0; retryCount < 3; retryCount++) {
+    logger.info(
+      `sending hubdot! attempt ${retryCount}, plankAmount: ${planckAmount}, address: ${address}`,
+    );
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let resolve: any;
@@ -55,6 +58,7 @@ export async function sendHubAsset(
           throw new Error(`Unsupported hub asset type: ${asset}`);
         }
 
+        logger.info(`sending!!!`);
         const unsubscribe = await transferFunction.signAndSend(alice, { nonce }, (result) => {
           if (result.dispatchError !== undefined) {
             if (result.dispatchError.isModule) {

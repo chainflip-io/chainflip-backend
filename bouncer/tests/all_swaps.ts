@@ -5,6 +5,7 @@ import { btcAddressTypes } from 'shared/new_btc_address';
 import {
   ccmSupportedChains,
   chainFromAsset,
+  sleep,
   VaultSwapParams,
   vaultSwapSupportedChains,
 } from 'shared/utils';
@@ -25,6 +26,10 @@ export async function initiateSwap(
       functionCall === testSwap
         ? await newCcmMetadata(destAsset)
         : await newVaultSwapCcmMetadata(sourceAsset, destAsset);
+  }
+
+  if (sourceAsset === 'Btc') {
+    await sleep(Math.random() * 20000);
   }
 
   if (destAsset === 'Btc') {

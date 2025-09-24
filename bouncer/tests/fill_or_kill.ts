@@ -153,8 +153,8 @@ async function testOracleSwapsFoK(parentLogger: Logger): Promise<void> {
 
   // Only need to update the prices in Solana as that's the main feed
   await Promise.all([
-    updatePriceFeed(logger, 'Solana', 'BTC', '1000000'),
-    updatePriceFeed(logger, 'Solana', 'ETH', '100000'),
+    updatePriceFeed(logger, 'Solana', 'BTC', '100000000'),
+    updatePriceFeed(logger, 'Solana', 'ETH', '1000000000'),
   ]);
 
   // Check that all Solana prices are up to date to ensure that oracle swaps

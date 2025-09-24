@@ -1,6 +1,6 @@
 services:
   eth-init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.3.2-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.3.2-2s-blocktime-arb-geth-try-3-${NODE_COUNT}
     pull_policy: if_not_present
     container_name: init
     platform: linux/amd64
@@ -18,7 +18,7 @@ services:
     command: /bin/sh -c "cp -R /solana/solana-ledger.tar.gz /test-ledger"
 
   arb-init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.3.2-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.3.2-2s-blocktime-arb-geth-try-3-${NODE_COUNT}
     restart: always
     container_name: arb-init
     pull_policy: if_not_present
@@ -34,7 +34,7 @@ services:
       - "/tmp/chainflip/data/redis-data:/data"
 
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.3.2-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.3.2-2s-blocktime-arb-geth-try-3-${NODE_COUNT}
     container_name: geth
     platform: linux/amd64
     ports:
@@ -97,9 +97,11 @@ services:
 
   polkadot1:
     container_name: polkadot1
-    platform: linux/amd64
-    image: docker.io/parity/polkadot:v1.18.7
-    pull_policy: if_not_present
+    # platform: linux/amd64
+    # image: docker.io/parity/polkadot:v1.18.7
+    # pull_policy: if_not_present
+    image: localbuild-fast-polkadot-nolimits
+    pull_policy: never
     stop_grace_period: 5s
     stop_signal: SIGINT
     volumes:
@@ -109,7 +111,8 @@ services:
     command:
       - --alice
       - --blocks-pruning=archive
-      - --chain=/chainspecs/polkadot.raw.json
+      - --chain=/chainspecs/polkadot-3s-161.raw.json
+      # - --chain=/chainspecs/polkadot.raw.json
       - --force-authoring
       - --name=PolkaDocker1
       - --rpc-cors=all
@@ -131,9 +134,11 @@ services:
 
   polkadot2:
     container_name: polkadot2
-    platform: linux/amd64
-    image: docker.io/parity/polkadot:v1.18.7
-    pull_policy: if_not_present
+    # platform: linux/amd64
+    # image: docker.io/parity/polkadot:v1.18.7
+    # pull_policy: if_not_present
+    image: localbuild-fast-polkadot-nolimits
+    pull_policy: never
     stop_grace_period: 5s
     stop_signal: SIGINT
     volumes:
@@ -143,7 +148,8 @@ services:
     command:
       - --bob
       - --blocks-pruning=archive
-      - --chain=/chainspecs/polkadot.raw.json
+      - --chain=/chainspecs/polkadot-3s-161.raw.json
+      # - --chain=/chainspecs/polkadot.raw.json
       - --force-authoring
       - --name=PolkaDocker2
       - --rpc-cors=all
@@ -165,7 +171,7 @@ services:
   assethub:
     container_name: assethub
     platform: linux/amd64
-    image: docker.io/parity/polkadot-parachain:v1.18.7
+    image: docker.io/parity/polkadot-parachain:v1.19.2
     pull_policy: if_not_present
     stop_grace_period: 5s
     stop_signal: SIGINT
@@ -177,7 +183,8 @@ services:
       - --alice
       - --collator
       - --blocks-pruning=archive
-      - --chain=/chainspecs/assethub.raw.json
+      - --chain=/chainspecs/assethub-3s-161.json
+      # - --chain=/chainspecs/assethub.raw.json
       - --force-authoring
       - --name=AssetHubDocker
       - --rpc-cors=all
@@ -187,7 +194,8 @@ services:
       - --rpc-max-connections=100000
       - --node-key=808c85fab7ea8391de83fd0a16d069f9d5b43faa380886e439d76c4307d06039
       - --
-      - --chain=/chainspecs/polkadot.raw.json
+      - --chain=/chainspecs/polkadot-3s-161.raw.json
+      # - --chain=/chainspecs/polkadot.raw.json
     ports:
       - 9955:9944
       - 40333:30333
@@ -199,9 +207,11 @@ services:
       start_period: 20s
 
   bitcoin:
-    image: ghcr.io/chainflip-io/chainflip-backend/bitcoin:357aa6af70b3d57fe0a9df1fe1815f704e59db07
-    platform: linux/amd64
-    pull_policy: if_not_present
+    # image: ghcr.io/chainflip-io/chainflip-backend/bitcoin:357aa6af70b3d57fe0a9df1fe1815f704e59db07
+    # platform: linux/amd64
+    # pull_policy: if_not_present
+    image: localbuild-fast-bitcoin
+    pull_policy: never
     container_name: bitcoin
     restart: unless-stopped
     ports:
@@ -281,3 +291,27 @@ services:
       - CFDM_ARB_RPC_WS_ENDPOINT=ws://sequencer:8548
       - CFDM_ARB_RPC_HTTP_ENDPOINT=http://sequencer:8547
       - CFDM_ARB_USDC_ADDRESS=0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9
+
+  postgres:
+    image: postgres:15.3
+    restart: always
+    volumes:
+      - /var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: squid_archive
+    ports:
+      - "${INDEXER_DB_PORT:-5432}:5432"
+
+  indexer:
+    depends_on:
+      - postgres
+    restart: on-failure
+    image: subsquid/substrate-ingest:firesquid
+    command: [
+        "-e",
+        "ws://host.docker.internal:9944",
+        "--out",
+        "postgres://postgres:postgres@host.docker.internal:${INDEXER_DB_PORT:-5432}/squid_archive",
+      ]

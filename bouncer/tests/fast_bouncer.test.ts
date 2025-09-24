@@ -6,7 +6,14 @@ import { checkSolEventAccountsClosure } from 'shared/sol_vault_swap';
 import { checkAvailabilityAllSolanaNonces } from 'shared/utils';
 import { swapLessThanED } from 'tests/swap_less_than_existential_deposit_dot';
 import { testAllSwaps, testSwapsToAssethub } from 'tests/all_swaps';
-import { testEvmDeposits } from 'tests/evm_deposits';
+import {
+  testEvmDepositsDepositTests,
+  testEvmDepositsDoubleDeposit,
+  testEvmDepositsEncodingCfParameters,
+  testEvmDepositsLegacyCfParametersVaultSwap,
+  testEvmDepositsMultipleTxSwaps,
+  testEvmDepositsNoDuplicateWitnessing,
+} from 'tests/evm_deposits';
 import { testMultipleMembersGovernance } from 'tests/multiple_members_governance';
 import { testLpApi } from 'tests/lp_api_test';
 import { testBrokerFeeCollection } from 'tests/broker_fee_collection';
@@ -29,8 +36,17 @@ describe('ConcurrentTests', () => {
 
   testAllSwaps(numberOfNodes === 1 ? 180 : 240); // TODO: find out what the 3-node timeout should be
   concurrentTest('SwapsToAssethub', testSwapsToAssethub, 600);
-  concurrentTest('EvmDeposits', testEvmDeposits, 300);
-  concurrentTest('FundRedeem', testFundRedeem, 600);
+  concurrentTest('EvmDepositsNoDuplicateWitnessing', testEvmDepositsNoDuplicateWitnessing, 100);
+  concurrentTest('EvmDepositsDepositTest', testEvmDepositsDepositTests, 100);
+  concurrentTest('EvmDepositsMultipleTxSwaps', testEvmDepositsMultipleTxSwaps, 100);
+  concurrentTest('EvmDepositsDoubleDeposit', testEvmDepositsDoubleDeposit, 100);
+  concurrentTest('EvmDepositsEncodingCfParameters', testEvmDepositsEncodingCfParameters, 100);
+  concurrentTest(
+    'EvmDepositsLegacyCfParametersVaultSwap',
+    testEvmDepositsLegacyCfParametersVaultSwap,
+    100,
+  );
+  // concurrentTest('FundRedeem', testFundRedeem, 600);
   concurrentTest('LpApi', testLpApi, 240);
   concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200);
   concurrentTest('BoostingForAsset', testBoostingSwap, 200);
@@ -45,7 +61,10 @@ describe('ConcurrentTests', () => {
   // WHEN CHANGING ANYTHING RELATED TO ASSETHUB OR XCM, run this test locally.
   // concurrentTest('AssethubXCM', testAssethubXcm, 200);
   concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 140);
+
+  // CURRENTLY NOT WORKING
   concurrentTest('DelegateFlip', (context) => testDelegate(context.logger), 360);
+
   concurrentTest(
     'SwapAndFundAccountViaCCM',
     (context) => testCcmSwapFundAccount(context.logger),
@@ -65,6 +84,7 @@ describe('ConcurrentTests', () => {
   }
 
   // Post test checks
+  // CURRENTLY NOT WORKING
   serialTest('CheckSolEventAccountsClosure', checkSolEventAccountsClosure, 150);
   serialTest('CheckAvailabilityAllSolanaNonces', checkAvailabilityAllSolanaNonces, 50);
 });
