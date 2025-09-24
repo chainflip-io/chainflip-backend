@@ -1,14 +1,10 @@
 import { TestContext } from 'shared/utils/test_context';
-import {
-  getEvmEndpoint,
-  getEvmWhaleKeypair,
-  getSolWhaleKeyPair,
-} from 'shared/utils';
+import { getEvmEndpoint, getEvmWhaleKeypair, getSolWhaleKeyPair } from 'shared/utils';
 import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
-import { Struct, u32,str /* Enum, u128, u8 */  } from 'scale-ts';
+import { Struct, u32, str /* Enum, u128, u8 */ } from 'scale-ts';
 import { globalLogger } from 'shared/utils/logger';
 
 export const TransactionMetadata = Struct({
@@ -16,6 +12,7 @@ export const TransactionMetadata = Struct({
   expiryBlock: u32,
 });
 export const ChainNameCodec = str;
+export const VersionCodec = str;
 
 // Example values
 const expiryBlock = 10000;
@@ -24,6 +21,7 @@ const expiryBlock = 10000;
 // const borrowAsset = { asset: 'Usdc' as InternalAsset, scAsset: 'Ethereum-USDC' };
 // For now hardcoded in the SC. It should be network dependent.
 const chainName = 'Chainflip-Development';
+const version = '0';
 
 export function encodePayloadDomainToSign(
   payload: Uint8Array,
@@ -35,7 +33,8 @@ export function encodePayloadDomainToSign(
     expiryBlock: userExpiryBlock,
   });
   const chainNameBytes = ChainNameCodec.enc(chainName);
-  return new Uint8Array([...payload, ...chainNameBytes, ...transactionMetadata]);
+  const versionBytes = VersionCodec.enc(version);
+  return new Uint8Array([...payload, ...chainNameBytes, ...versionBytes, ...transactionMetadata]);
 }
 
 export async function testOffchainSignedAction(testContext: TestContext) {

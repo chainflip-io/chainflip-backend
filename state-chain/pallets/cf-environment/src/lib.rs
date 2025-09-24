@@ -41,8 +41,8 @@ use cf_primitives::{
 	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
-	Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider,
-	NetworkEnvironmentProvider, SafeMode, SolanaNonceWatch,
+	Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider,
+	SafeMode, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -67,6 +67,7 @@ pub mod migrations;
 
 const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
 const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
+const USER_RUNTIME_CALL_VERSION: &str = "0";
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(19);
 
@@ -674,12 +675,11 @@ pub mod pallet {
 			_transaction_metadata: TransactionMetadata,
 			user_signature_data: UserSignatureData,
 		) -> DispatchResult {
-			use frame_system::ensure_none;
-
 			// This is now an unsigned extrinsic - validation happens in ValidateUnsigned
-			ensure_none(origin)?;
+			frame_system::ensure_none(origin)?;
 
-			// Extract signer account ID based on signature type - validation already done in ValidateUnsigned
+			// Extract signer account ID based on signature type - validation already done in
+			// ValidateUnsigned
 			let signer_account_id: T::AccountId = user_signature_data
 				.signer_account_id::<T>()
 				.map_err(|_| Error::<T>::FailedToDecodeSigner)?;
@@ -705,33 +705,40 @@ pub mod pallet {
 		type Call = Call<T>;
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::submit_user_signed_payload { call, transaction_metadata, user_signature_data } = call {
-				use cf_chains::{
-					evm::EvmCrypto,
-					sol::SolanaCrypto,
-					ChainCrypto,
-				};
+			if let Call::submit_user_signed_payload {
+				call,
+				transaction_metadata,
+				user_signature_data,
+			} = call
+			{
+				use cf_chains::{evm::EvmCrypto, sol::SolanaCrypto, ChainCrypto};
 
 				// Check if payload hasn't expired
-				if frame_system::Pallet::<T>::block_number() >= transaction_metadata.expiry_block.into() {
+				if frame_system::Pallet::<T>::block_number() >=
+					transaction_metadata.expiry_block.into()
+				{
 					return InvalidTransaction::Stale.into();
 				}
 
 				let chanflip_network_name = Self::chainflip_network();
 				let serialized_call: Vec<u8> = call.encode();
 
+				let build_domain_data = || -> Vec<u8> {
+					[
+						serialized_call.clone(),
+						chanflip_network_name.as_str().encode(),
+						USER_RUNTIME_CALL_VERSION.encode(),
+						transaction_metadata.encode(),
+					]
+					.concat()
+				};
 
 				let valid_signature = match user_signature_data {
 					UserSignatureData::Solana { signature, signer, sig_type } => {
 						let signed_payload = match sig_type {
 							SolSigType::Domain => {
-								let concat_data = [
-									serialized_call.clone(),
-									chanflip_network_name.as_str().encode(),
-									transaction_metadata.encode(),
-								]
-								.concat();
-								[SOLANA_OFFCHAIN_PREFIX, concat_data.as_slice()].concat()
+								let domain_data = build_domain_data();
+								[SOLANA_OFFCHAIN_PREFIX, domain_data.as_slice()].concat()
 							},
 						};
 						SolanaCrypto::verify_signature(signer, &signed_payload, signature)
@@ -739,28 +746,22 @@ pub mod pallet {
 					UserSignatureData::Ethereum { signature, signer, sig_type } => {
 						let signed_payload = match sig_type {
 							EthSigType::Domain => {
-								let concat_data = [
-									serialized_call.clone(),
-									chanflip_network_name.as_str().encode(),
-									transaction_metadata.encode(),
-								]
-								.concat();
+								let domain_data = build_domain_data();
 								let prefix = scale_info::prelude::format!(
 									"{}{}",
 									ETHEREUM_SIGN_MESSAGE_PREFIX,
-									concat_data.len()
+									domain_data.len()
 								);
 								let prefix_bytes = prefix.as_bytes();
-								[prefix_bytes, &concat_data].concat()
+								[prefix_bytes, &domain_data].concat()
 							},
-							EthSigType::Eip712 => {
-								Self::build_eip_712_payload(
-									*call.clone(),
-									transaction_metadata.clone(),
-									chanflip_network_name,
-									*signer,
-								)
-							},
+							EthSigType::Eip712 => Self::build_eip_712_payload(
+								*call.clone(),
+								chanflip_network_name.as_str(),
+								USER_RUNTIME_CALL_VERSION,
+								transaction_metadata.clone(),
+								*signer,
+							),
 						};
 						EvmCrypto::verify_signature(signer, &signed_payload, signature)
 					},
@@ -777,13 +778,14 @@ pub mod pallet {
 				};
 
 				// Check nonce
-				let signer_current_nonce = frame_system::Pallet::<T>::account_nonce(&signer_account_id);
+				let signer_current_nonce =
+					frame_system::Pallet::<T>::account_nonce(&signer_account_id);
 				if signer_current_nonce != transaction_metadata.nonce.into() {
 					return InvalidTransaction::Stale.into();
 				}
 
-
-				// TODO: We could also use Self::name(), depends on the final implementation/structure of this.
+				// TODO: We could also use Self::name(), depends on the final
+				// implementation/structure of this.
 				let unique_id = (signer_account_id, transaction_metadata.nonce);
 				ValidTransaction::with_tag_prefix("user-signed-payload")
 					.and_provides(unique_id)
@@ -1105,8 +1107,9 @@ impl<T: Config> Pallet<T> {
 	/// it is displayed separately to the user in the wallet
 	fn build_eip_712_payload(
 		_call: <T as Config>::RuntimeCall,
+		_chain_name: &str,
+		_version: &str,
 		_transaction_metadata: TransactionMetadata,
-		_chain_name: ChainflipNetwork,
 		_signer: EvmAddress,
 	) -> Vec<u8> {
 		todo!("implement eip-712");
@@ -1157,12 +1160,12 @@ impl UserSignatureData {
 	/// Extract the signer account ID as T::AccountId from the signature data
 	pub fn signer_account_id<T: Config>(&self) -> Result<T::AccountId, codec::Error> {
 		use cf_chains::evm::ToAccountId32;
-		
+
 		let account_id_32 = match self {
 			UserSignatureData::Solana { signer, .. } => AccountId32::new((*signer).into()),
 			UserSignatureData::Ethereum { signer, .. } => signer.into_account_id_32(),
 		};
-		
+
 		T::AccountId::decode(&mut account_id_32.encode().as_slice())
 	}
 }
