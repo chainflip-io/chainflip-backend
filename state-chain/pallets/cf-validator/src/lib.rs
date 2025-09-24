@@ -47,6 +47,7 @@ use cf_traits::{
 	AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
 	EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch, KeyRotator,
 	MissedAuthorshipSlots, QualifyNode, RedemptionCheck, ReputationResetter, SetSafeMode,
+	VanityName,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -101,6 +102,9 @@ pub enum PalletConfigUpdate {
 	/// Note the `minimum_flip_bid` is in whole FLIP, not flipperinos.
 	MinimumAuctionBid {
 		minimum_flip_bid: u32,
+	},
+	MinimumOperatorFee {
+		minimum_operator_fee_in_bps: u32,
 	},
 }
 
@@ -319,6 +323,11 @@ pub mod pallet {
 	/// cannot resolve with a bond below this amount.
 	#[pallet::storage]
 	pub type MinimumAuctionBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
+
+	/// Minimum possible fee that the operators can charge, measured in Basis Points.
+	#[pallet::storage]
+	pub type MinimumOperatorFee<T: Config> =
+		StorageValue<_, u32, ValueQuery, ConstU32<DEFAULT_MIN_OPERATOR_FEE>>;
 
 	/// Store the list of accounts that are active bidders.
 	#[pallet::storage]
@@ -681,6 +690,9 @@ pub mod pallet {
 						FLIPPERINOS_PER_FLIP.saturating_mul(minimum_flip_bid.into()).into(),
 					);
 				},
+				PalletConfigUpdate::MinimumOperatorFee { minimum_operator_fee_in_bps } => {
+					MinimumOperatorFee::<T>::set(minimum_operator_fee_in_bps);
+				},
 			}
 
 			Self::deposit_event(Event::PalletConfigUpdated { update });
@@ -978,7 +990,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
 
-			ensure!(settings.fee_bps >= MIN_OPERATOR_FEE, Error::<T>::OperatorFeeTooLow);
+			ensure!(
+				settings.fee_bps >= MinimumOperatorFee::<T>::get(),
+				Error::<T>::OperatorFeeTooLow
+			);
 			ensure!(settings.fee_bps <= MAX_OPERATOR_FEE, Error::<T>::OperatorFeeTooHigh);
 
 			if let Some(current_settings) = OperatorSettingsLookup::<T>::get(&operator) {
@@ -1099,9 +1114,17 @@ pub mod pallet {
 		pub fn register_as_operator(
 			origin: OriginFor<T>,
 			settings: OperatorSettings,
+			vanity_name: VanityName,
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin.clone())?;
+			ensure!(
+				settings.fee_bps >= MinimumOperatorFee::<T>::get(),
+				Error::<T>::OperatorFeeTooLow
+			);
+			ensure!(settings.fee_bps <= MAX_OPERATOR_FEE, Error::<T>::OperatorFeeTooHigh);
+
 			T::AccountRoleRegistry::register_as_operator(&account_id)?;
+			T::AccountRoleRegistry::set_vanity_name(&account_id, vanity_name)?;
 			Self::update_operator_settings(origin, settings)?;
 			Ok(())
 		}
@@ -1894,7 +1917,7 @@ impl<T: Config> Pallet<T> {
 							&operator,
 							OperatorSettingsLookup::<T>::get(&operator)
 								.map(|settings| settings.fee_bps)
-								.unwrap_or(MIN_OPERATOR_FEE),
+								.unwrap_or(MinimumOperatorFee::<T>::get()),
 						)
 					})
 					.validators

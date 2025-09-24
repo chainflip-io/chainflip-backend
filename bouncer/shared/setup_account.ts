@@ -84,10 +84,13 @@ export async function setupOperatorAccount(logger: Logger, uri: string) {
     await lpMutex.runExclusive(uri, async () => {
       const nonce = await chainflip.rpc.system.accountNextIndex(operator.address);
       await chainflip.tx.validator
-        .registerAsOperator({
-          feeBps: 2_000,
-          delegationAcceptance: 'Allow',
-        })
+        .registerAsOperator(
+          {
+            feeBps: 2_000,
+            delegationAcceptance: 'Allow',
+          },
+          uri,
+        )
         .signAndSend(operator, { nonce }, handleSubstrateError(chainflip));
     });
     await eventHandle;

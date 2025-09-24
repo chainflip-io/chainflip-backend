@@ -291,35 +291,6 @@ pub struct RuntimeApiPenalty {
 	pub suspension_duration_blocks: u32,
 }
 
-mod old {
-	use super::*;
-
-	#[deprecated(note = "Use the new AuctionState struct instead. Remove this after 1.10 release.")]
-	#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
-	pub struct AuctionState {
-		pub epoch_duration: u32,
-		pub current_epoch_started_at: u32,
-		pub redemption_period_as_percentage: u8,
-		pub min_funding: u128,
-		pub auction_size_range: (u32, u32),
-		pub min_active_bid: Option<u128>,
-	}
-}
-
-impl From<old::AuctionState> for AuctionState {
-	fn from(old: old::AuctionState) -> Self {
-		AuctionState {
-			epoch_duration: old.epoch_duration,
-			current_epoch_started_at: old.current_epoch_started_at,
-			redemption_period_as_percentage: old.redemption_period_as_percentage,
-			min_funding: old.min_funding,
-			min_bid: 0, // min_bid was added in version 5
-			auction_size_range: old.auction_size_range,
-			min_active_bid: old.min_active_bid,
-		}
-	}
-}
-
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct AuctionState {
 	pub epoch_duration: u32,
@@ -382,7 +353,7 @@ pub enum FeeTypes {
 }
 
 /// Struct that represents the estimated output of a Swap.
-#[derive(Encode, Decode, TypeInfo)]
+#[derive(Encode, Decode, TypeInfo, Debug)]
 pub struct SimulatedSwapInformation {
 	pub intermediary: Option<AssetAmount>,
 	pub output: AssetAmount,
@@ -531,8 +502,26 @@ pub struct NetworkFees {
 	pub internal_swap_network_fee: NetworkFeeDetails,
 }
 
+mod serialize_vanity_name {
+	use super::VanityName;
+	use serde::{self, Serializer};
+
+	pub fn from_utf8<S>(name: &VanityName, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		match core::str::from_utf8(name) {
+			Ok(s) => serializer.serialize_str(s),
+			Err(_) => serializer.serialize_str("<Invalid UTF-8>"),
+		}
+	}
+}
+
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
 pub struct RpcAccountInfoCommonItems<Balance> {
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	#[serde(serialize_with = "serialize_vanity_name::from_utf8")]
+	pub vanity_name: VanityName,
 	pub flip_balance: Balance,
 	pub asset_balances: cf_chains::assets::any::AssetMap<Balance>,
 	pub bond: Balance,
@@ -553,6 +542,7 @@ impl<A> RpcAccountInfoCommonItems<A> {
 		f: impl Fn(A) -> Result<B, E>,
 	) -> Result<RpcAccountInfoCommonItems<B>, E> {
 		Ok(RpcAccountInfoCommonItems {
+			vanity_name: self.vanity_name,
 			flip_balance: f(self.flip_balance)?,
 			asset_balances: self.asset_balances.try_map(&f)?,
 			bond: f(self.bond)?,
@@ -625,8 +615,6 @@ decl_runtime_apis!(
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
-		#[changed_in(5)]
-		fn cf_auction_state() -> old::AuctionState;
 		fn cf_auction_state() -> AuctionState;
 		fn cf_pool_price(from: Asset, to: Asset) -> Option<PoolPriceV1>;
 		fn cf_pool_price_v2(

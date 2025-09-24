@@ -510,7 +510,11 @@ mod benchmarks {
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 
 		#[extrinsic_call]
-		register_as_operator(RawOrigin::Signed(caller), OPERATOR_SETTINGS);
+		register_as_operator(
+			RawOrigin::Signed(caller),
+			OPERATOR_SETTINGS,
+			b"OP".to_vec().try_into().unwrap(),
+		);
 	}
 
 	#[benchmark]

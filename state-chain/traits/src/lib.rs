@@ -56,9 +56,9 @@ use frame_support::{
 	pallet_prelude::{DispatchResultWithPostInfo, Member},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
-		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
+		BoundedVec, DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
-	traits::{EnsureOrigin, Get, IsType, UnfilteredDispatchable},
+	traits::{ConstU32, EnsureOrigin, Get, IsType, UnfilteredDispatchable},
 	weights::Weight,
 	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
 };
@@ -735,10 +735,15 @@ pub trait DepositApi<C: Chain> {
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 }
 
+pub const MAX_LENGTH_FOR_VANITY_NAME: u32 = 64;
+pub type VanityName = BoundedVec<u8, ConstU32<MAX_LENGTH_FOR_VANITY_NAME>>;
+
 pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn register_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
 
 	fn deregister_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
+
+	fn set_vanity_name(who: &T::AccountId, name: VanityName) -> DispatchResult;
 
 	fn has_account_role(who: &T::AccountId, role: AccountRole) -> bool;
 

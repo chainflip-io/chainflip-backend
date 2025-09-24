@@ -19,7 +19,7 @@
 use super::*;
 use cf_primitives::{FlipBalance, FLIPPERINOS_PER_FLIP};
 use frame_benchmarking::v2::*;
-use frame_support::assert_ok;
+use frame_support::{assert_ok, sp_runtime::BoundedVec};
 use sp_std::vec;
 
 fn create_funded_parent_account<T: Config>(

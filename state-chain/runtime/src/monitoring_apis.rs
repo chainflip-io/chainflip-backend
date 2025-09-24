@@ -14,7 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chainflip::Offence, ValidatorInfo};
+use crate::{
+	chainflip::Offence, AuctionOutcome, BTreeMap, DelegationSnapshot, DispatchErrorWithMessage,
+	ValidatorInfo,
+};
 use cf_chains::{
 	dot::PolkadotAccountId,
 	sol::{api::DurableNonceAndAccount, SolAddress, SolSignature},
@@ -194,5 +197,15 @@ decl_runtime_apis!(
 		fn cf_accounts_info(
 			accounts: BoundedVec<AccountId32, sp_core::ConstU32<10>>,
 		) -> Vec<ValidatorInfo>;
+		#[allow(clippy::type_complexity)]
+		fn cf_simulate_auction() -> Result<
+			(
+				AuctionOutcome<AccountId32, AssetAmount>,
+				BTreeMap<AccountId32, DelegationSnapshot<AccountId32, AssetAmount>>,
+				Vec<AccountId32>,
+				AssetAmount,
+			),
+			DispatchErrorWithMessage,
+		>;
 	}
 );

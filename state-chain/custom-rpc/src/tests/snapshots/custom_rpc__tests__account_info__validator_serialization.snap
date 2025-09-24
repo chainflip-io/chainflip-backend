@@ -3,6 +3,7 @@ source: state-chain/custom-rpc/src/tests/account_info.rs
 expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
 ---
 {
+  "vanity_name": "TEST",
   "flip_balance": "0x2b5e3af16b1880000",
   "asset_balances": {
     "Ethereum": {

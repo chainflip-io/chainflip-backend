@@ -83,8 +83,8 @@ use cf_chains::{
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
-	Affiliates, BasisPoints, Beneficiary, BroadcastId, ChannelId, DcaParameters, EpochIndex,
-	IngressOrEgress, NetworkEnvironment, STABLE_ASSET,
+	Affiliates, BasisPoints, BroadcastId, ChannelId, DcaParameters, EpochIndex, IngressOrEgress,
+	NetworkEnvironment, STABLE_ASSET,
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
@@ -93,7 +93,7 @@ use cf_traits::{
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
+use frame_support::{derive_impl, instances::*};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
 use pallet_cf_elections::electoral_systems::oracle_price::{
@@ -106,14 +106,11 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
-use pallet_cf_swapping::{
-	AffiliateDetails, BatchExecutionError, BrokerPrivateBtcChannels, FeeType, NetworkFeeTracker,
-	Swap, SwapLegInfo,
-};
+use pallet_cf_swapping::{AffiliateDetails, BrokerPrivateBtcChannels, SwapLegInfo};
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 use pallet_cf_validator::{
-	AssociationToOperator, DelegatedRewardsDistribution, DelegationAcceptance, DelegationAmount,
-	DelegationSlasher, DelegationSnapshot,
+	AssociationToOperator, AuctionOutcome, DelegatedRewardsDistribution, DelegationAcceptance,
+	DelegationAmount, DelegationSlasher, DelegationSnapshot,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use runtime_apis::{ChainAccounts, EvmCallDetails};
@@ -165,7 +162,7 @@ pub use sp_runtime::BuildStorage;
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, DispatchError, MultiSignature,
+	ApplyExtrinsicResult, MultiSignature,
 };
 pub use sp_runtime::{Perbill, Permill};
 use sp_std::prelude::*;
@@ -246,7 +243,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 1_11_00,
+	spec_version: 1_12_00,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 13,
@@ -333,12 +330,6 @@ impl pallet_cf_environment::Config for Runtime {
 	type SolEnvironment = SolEnvironment;
 	type SolanaBroadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
-
-	/// The following three types are only required for migrating polkadot to assethub
-	/// Delete after 1.11.
-	type DotEnvironment = DotEnvironment;
-	type PolkadotBroadcaster = PolkadotBroadcaster;
-	type HubEnvironment = HubEnvironment;
 }
 
 parameter_types! {
@@ -1468,10 +1459,7 @@ type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
-	migrations::bitcoin_elections::Migration,
-	migrations::solana_elections::Migration,
-	migrations::generic_elections::Migration,
-	MigrationsForV1_11,
+	MigrationsForV1_12,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1564,16 +1552,7 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV1_11 = (
-	migrations::polkadot_deprecation::PolkadotDeprecationMigration,
-	VersionedMigration<
-		18,
-		19,
-		migrations::safe_mode::SafeModeMigration,
-		pallet_cf_environment::Pallet<Runtime>,
-		<Runtime as frame_system::Config>::DbWeight,
-	>,
-);
+type MigrationsForV1_12 = ();
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
@@ -1731,6 +1710,10 @@ impl_runtime_apis! {
 				));
 
 			RpcAccountInfoCommonItems {
+				vanity_name: pallet_cf_account_roles::VanityNames::<Runtime>::get().get(account_id)
+					.cloned()
+					.unwrap_or_default()
+					.into(),
 				flip_balance: flip_account.total(),
 				asset_balances: AssetBalances::free_balances(account_id),
 				bond: flip_account.bond(),
@@ -1876,191 +1859,17 @@ impl_runtime_apis! {
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 			is_internal: Option<bool>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
-			let is_internal = is_internal.unwrap_or_default();
-			let mut exclude_fees = exclude_fees;
-			if is_internal {
-				exclude_fees.insert(FeeTypes::IngressDepositChannel);
-				exclude_fees.insert(FeeTypes::Egress);
-				exclude_fees.insert(FeeTypes::IngressVaultSwap);
-			}
-
-			if let Some(additional_orders) = additional_orders {
-				for (index, additional_order) in additional_orders.into_iter().enumerate() {
-					match additional_order {
-						SimulateSwapAdditionalOrder::LimitOrder {
-							base_asset,
-							quote_asset,
-							side,
-							tick,
-							sell_amount,
-						} => {
-							LiquidityPools::try_add_limit_order(
-								&AccountId::new([0; 32]),
-								base_asset,
-								quote_asset,
-								side,
-								index as OrderId,
-								tick,
-								sell_amount.into(),
-							)?;
-						}
-					}
-				}
-			}
-
-			fn remove_fees(ingress_or_egress: IngressOrEgress, asset: Asset, amount: AssetAmount) -> (AssetAmount, AssetAmount) {
-				use pallet_cf_ingress_egress::AmountAndFeesWithheld;
-
-				match asset.into() {
-					ForeignChainAndAsset::Ethereum(asset) => {
-						let AmountAndFeesWithheld {
-							amount_after_fees,
-							fees_withheld,
-						} = pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
-
-						(amount_after_fees, fees_withheld)
-					},
-					ForeignChainAndAsset::Polkadot(asset) => {
-						let AmountAndFeesWithheld {
-							amount_after_fees,
-							fees_withheld,
-						} = pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
-
-						(amount_after_fees, fees_withheld)
-					},
-					ForeignChainAndAsset::Bitcoin(asset) => {
-						let AmountAndFeesWithheld {
-							amount_after_fees,
-							fees_withheld,
-						} = pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
-
-						(amount_after_fees.into(), fees_withheld.into())
-					},
-					ForeignChainAndAsset::Arbitrum(asset) => {
-						let AmountAndFeesWithheld {
-							amount_after_fees,
-							fees_withheld,
-						} = pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
-
-						(amount_after_fees, fees_withheld)
-					},
-					ForeignChainAndAsset::Solana(asset) => {
-						let AmountAndFeesWithheld {
-							amount_after_fees,
-							fees_withheld,
-						} = pallet_cf_ingress_egress::Pallet::<Runtime, SolanaInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
-
-						(amount_after_fees.into(), fees_withheld.into())
-					},
-					ForeignChainAndAsset::Assethub(asset) => {
-						let AmountAndFeesWithheld {
-							amount_after_fees,
-							fees_withheld,
-						} = pallet_cf_ingress_egress::Pallet::<Runtime, AssethubInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
-
-						(amount_after_fees, fees_withheld)
-					},
-				}
-			}
-
-			let include_fee = |fee_type: FeeTypes| !exclude_fees.contains(&fee_type);
-
-			// Default to using the DepositChannel fee unless specified.
-			let (amount_to_swap, ingress_fee) = if include_fee(FeeTypes::IngressDepositChannel) {
-				remove_fees(IngressOrEgress::IngressDepositChannel, input_asset, input_amount)
-			} else if include_fee(FeeTypes::IngressVaultSwap) {
-				remove_fees(IngressOrEgress::IngressVaultSwap, input_asset, input_amount)
-			}else {
-				(input_amount, 0u128)
-			};
-
-			// Estimate swap result for a chunk, then extrapolate the result.
-			// If no DCA parameter is given, swap the entire amount with 1 chunk.
-			let number_of_chunks: u128 = dca_parameters.map(|dca|dca.number_of_chunks).unwrap_or(1u32).into();
-			let amount_per_chunk = amount_to_swap / number_of_chunks;
-
-			let mut fees_vec = vec![];
-
-			if include_fee(FeeTypes::Network) {
-				fees_vec.push(FeeType::NetworkFee(NetworkFeeTracker::new(
-					pallet_cf_swapping::Pallet::<Runtime>::get_network_fee_for_swap(
-						input_asset,
-						output_asset,
-						is_internal,
-					),
-				)));
-			}
-
-			if broker_commission > 0 {
-				fees_vec.push(FeeType::BrokerFee(
-					vec![Beneficiary {
-						account: AccountId::new([0xbb; 32]),
-						bps: broker_commission,
-					}]
-					.try_into()
-					.expect("Beneficiary with a length of 1 must be within length bound.")
-				));
-			}
-
-			// Simulate the swap
-			let swap_output_per_chunk = Swapping::try_execute_without_violations(
-				vec![
-					Swap::new(
-						Default::default(), // Swap id
-						Default::default(), // Swap request id
-						input_asset,
-						output_asset,
-						amount_per_chunk,
-						None,
-						fees_vec,
-						Default::default(), // Execution block
-					)
-				],
-			).map_err(|e| match e {
-				BatchExecutionError::SwapLegFailed { .. } => DispatchError::Other("Swap leg failed."),
-				BatchExecutionError::PriceViolation { .. } => DispatchError::Other("Price Violation: Some swaps failed due to Price Impact Limitations."),
-				BatchExecutionError::DispatchError { error } => error,
-			})?;
-
-			let (
-				network_fee,
-				broker_fee,
-				intermediary,
-				output,
-			) = {
-				(
-					swap_output_per_chunk[0].network_fee_taken.unwrap_or_default() * number_of_chunks,
-					swap_output_per_chunk[0].broker_fee_taken.unwrap_or_default() * number_of_chunks,
-					swap_output_per_chunk[0].stable_amount.map(|amount| amount * number_of_chunks)
-						.filter(|_| ![input_asset, output_asset].contains(&STABLE_ASSET)),
-					swap_output_per_chunk[0].final_output.unwrap_or_default() * number_of_chunks,
-				)
-			};
-
-			let (output, egress_fee) = if include_fee(FeeTypes::Egress) {
-				let egress = match ccm_data {
-					Some(CcmData { gas_budget, message_length}) => {
-						IngressOrEgress::EgressCcm {
-							gas_budget,
-							message_length: message_length as usize,
-						}
-					},
-					None => IngressOrEgress::Egress,
-				};
-				remove_fees(egress, output_asset, output)
-			} else {
-				(output, 0u128)
-			};
-
-
-			Ok(SimulatedSwapInformation {
-				intermediary,
-				output,
-				network_fee,
-				ingress_fee,
-				egress_fee,
-				broker_fee,
-			})
+			chainflip::simulate_swap::simulate_swap(
+				input_asset,
+				output_asset,
+				input_amount,
+				broker_commission,
+				dca_parameters,
+				ccm_data,
+				exclude_fees,
+				additional_orders,
+				is_internal,
+			)
 		}
 
 		fn cf_pool_info(base_asset: Asset, quote_asset: Asset) -> Result<PoolInfo, DispatchErrorWithMessage> {
@@ -3132,6 +2941,20 @@ impl_runtime_apis! {
 			accounts.iter().map(|account_id| {
 				Self::cf_validator_info(account_id)
 			}).collect()
+		}
+		fn cf_simulate_auction() -> Result<(
+				AuctionOutcome<AccountId, AssetAmount>,
+				BTreeMap<AccountId, DelegationSnapshot<AccountId, AssetAmount>>,
+				Vec<AccountId>,
+				AssetAmount
+			), DispatchErrorWithMessage>
+		{
+			let next_auction = Validator::resolve_auction_iteratively()
+				.map_err(|e| runtime_apis::DispatchErrorWithMessage::from(<pallet_cf_validator::Error<Runtime>>::from(e)))?;
+			let next_set: BTreeSet<AccountId> = next_auction.0.winners.iter().cloned().collect();
+			let current_set: BTreeSet<AccountId> = Validator::current_authorities().into_iter().collect();
+			let current_mab = Validator::bond();
+			Ok((next_auction.0, next_auction.1, next_set.difference(&current_set).cloned().collect(), current_mab))
 		}
 	}
 

@@ -1510,6 +1510,7 @@ where
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
 		cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>) -> Vec<OraclePrice>,
+		cf_auction_state() -> RpcAuctionState [map: Into::into],
 	}
 
 	pass_through_and_flatten! {
@@ -1537,18 +1538,6 @@ where
 		#[allow(deprecated)]
 		self.rpc_backend
 			.with_runtime_api(None, |api, hash| api.cf_current_compatibility_version(hash))
-	}
-
-	fn cf_auction_state(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcAuctionState> {
-		self.rpc_backend
-			.with_versioned_runtime_api(at, |api, hash, version| match version {
-				Some(v) if v < 5 => api.cf_auction_state_before_version_5(hash).map(Into::into),
-				_ => api.cf_auction_state(hash),
-			})
-			.map(Into::into)
 	}
 
 	fn cf_max_swap_amount(&self, asset: Asset) -> RpcResult<Option<AssetAmount>> {

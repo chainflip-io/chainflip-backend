@@ -40,8 +40,10 @@ jobs:
         run: |
           brew install protobuf
           wget https://raw.githubusercontent.com/Homebrew/homebrew-core/b4e46db74e74a8c1650b38b1da222284ce1ec5ce/Formula/c/cmake.rb -O ~/cmake.rb
+          brew tap-new cf/local
+          mv ~/cmake.rb $(brew --repo cf/local)/Formula/cmake.rb
           brew unlink cmake
-          brew install -s ~/cmake.rb
+          brew install cf/local/cmake
 
       # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands to get commit hash for `--version`
       - name: Configure Git 🛠️

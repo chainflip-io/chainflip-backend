@@ -10,6 +10,7 @@
 # USAGE FOR CHAINFLIP RELEASES:
 #
 # For example, assuming a new tag `0.9.3` containing commits `85654cc..HEAD`:
+# (use `git merge-base release/{previous} HEAD` to find the start commit)
 #
 # `git cliff --prepend CHANGELOG.md --tag 0.9.3 85654cc..HEAD`
 #
@@ -90,6 +91,6 @@ ignore_tags = ""
 # sort the tags topologically
 topo_order = false
 # sort the commits inside sections by oldest/newest order
-sort_commits = "oldest"
+sort_commits = "newest"
 # limit the number of commits included in the changelog.
 # limit_commits = 42

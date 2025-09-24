@@ -21,12 +21,8 @@ use std::collections::BTreeSet;
 use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinFeeInfo},
-	dot::{
-		api::{CreatePolkadotVault, PolkadotEnvironment},
-		PolkadotCrypto,
-	},
+	dot::{api::CreatePolkadotVault, PolkadotCrypto},
 	eth,
-	hub::api::AssethubEnvironment,
 	sol::{
 		api::{
 			AllNonceAccounts, AltWitnessingConsensusResult, ApiEnvironment, ComputePrice,
@@ -284,82 +280,6 @@ impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 
 pub type MockBitcoinKeyProvider = MockKeyProvider<BitcoinCrypto>;
 
-pub struct MockPolkadotEnvironment;
-impl PolkadotEnvironment for MockPolkadotEnvironment {
-	fn try_vault_account() -> Option<cf_chains::dot::PolkadotAccountId> {
-		panic!("This is temporary code required for the migration to 1.11.")
-	}
-
-	fn runtime_version() -> cf_chains::dot::RuntimeVersion {
-		panic!("This is temporary code required for the migration to 1.11.")
-	}
-}
-impl cf_chains::ReplayProtectionProvider<cf_chains::Polkadot> for MockPolkadotEnvironment {
-	fn replay_protection(
-		_params: <cf_chains::Polkadot as Chain>::ReplayProtectionParams,
-	) -> <cf_chains::Polkadot as Chain>::ReplayProtection {
-		panic!("This is temporary code required for the migration to 1.11.")
-	}
-}
-
-pub struct MockAssethubEnvironment;
-impl AssethubEnvironment for MockAssethubEnvironment {
-	fn try_vault_account() -> Option<cf_chains::dot::PolkadotAccountId> {
-		panic!("This is temporary code required for the migration to 1.11.")
-	}
-
-	fn runtime_version() -> cf_chains::dot::RuntimeVersion {
-		panic!("This is temporary code required for the migration to 1.11.")
-	}
-
-	fn get_new_output_channel_id() -> cf_chains::hub::OutputAccountId {
-		panic!("This is temporary code required for the migration to 1.11.")
-	}
-}
-
-pub struct MockPolkadotBroadcaster;
-impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
-	type ApiCall = cf_chains::dot::api::PolkadotApi<MockPolkadotEnvironment>;
-	type Callback = RuntimeCall;
-
-	fn threshold_sign_and_broadcast(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		panic!("This is temporary code required for the migration to 1.11.")
-	}
-
-	fn threshold_sign_and_broadcast_with_callback(
-		_api_call: Self::ApiCall,
-		_success_callback: Option<Self::Callback>,
-		_failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
-	) -> BroadcastId {
-		panic!("This is temporary code required for the migration to 1.11.")
-	}
-
-	fn threshold_sign_and_broadcast_rotation_tx(
-		_api_call: Self::ApiCall,
-		_new_key: <<Polkadot as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		panic!("This is temporary code required for the migration to 1.11.")
-	}
-
-	fn re_sign_broadcast(
-		_broadcast_id: BroadcastId,
-		_request_broadcast: bool,
-		_refresh_replay_protection: bool,
-	) -> Result<ThresholdSignatureRequestId, DispatchError> {
-		panic!("This is temporary code required for the migration to 1.11.")
-	}
-
-	fn threshold_sign(_api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
-		panic!("This is temporary code required for the migration to 1.11.")
-	}
-
-	fn expire_broadcast(_broadcast_id: BroadcastId) {
-		panic!("This is temporary code required for the migration to 1.11.")
-	}
-}
-
 impl pallet_cf_environment::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
@@ -377,9 +297,6 @@ impl pallet_cf_environment::Config for Test {
 	type SolEnvironment = MockSolEnvironment;
 	type SolanaBroadcaster = MockSolanaBroadcaster;
 	type WeightInfo = ();
-	type DotEnvironment = MockPolkadotEnvironment;
-	type HubEnvironment = MockAssethubEnvironment;
-	type PolkadotBroadcaster = MockPolkadotBroadcaster;
 }
 
 pub const STATE_CHAIN_GATEWAY_ADDRESS: eth::Address = H160([0u8; 20]);

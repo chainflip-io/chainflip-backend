@@ -24,7 +24,6 @@ use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 use sp_std::vec::Vec;
 
 mod chainflip_network_name_environment;
-mod eth_sc_utils_environment;
 
 // NOTE: Do not remove this. This is used to update the on-chain version for CFE compatibility
 // checks.
@@ -53,13 +52,6 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 }
 
 pub type PalletMigration<T> = (
-	VersionedMigration<
-		17,
-		18,
-		eth_sc_utils_environment::EthScUtilsEnvironmentMigration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
 	VersionedMigration<
 		18,
 		19,
