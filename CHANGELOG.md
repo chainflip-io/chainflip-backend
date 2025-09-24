@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.11.5] - 2025-09-24
+
+## Fixes
+
+- Make voting for optimistic elections work independently of best_block_height ([#5995](https://github.com/chainflip-io/chainflip-backend/issues/5995)).
+
 ## [1.11.4] - 2025-09-23
 
 ### Features
