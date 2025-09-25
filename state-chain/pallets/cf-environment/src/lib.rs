@@ -69,6 +69,7 @@ pub mod migrations;
 const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
 const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
 const USER_RUNTIME_CALL_VERSION: &str = "0";
+const BATCHED_CALL_LIMITS: usize = 10;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(19);
 
@@ -170,6 +171,8 @@ pub mod pallet {
 		FailedToBuildSolanaApiCall,
 		// Signer cannot be decoded
 		FailedToDecodeSigner,
+		/// Too many calls batched.
+		TooManyCalls,
 	}
 
 	#[pallet::pallet]
@@ -368,6 +371,12 @@ pub mod pallet {
 			serialized_call: Vec<u8>,
 			dispatch_result: DispatchResultWithPostInfo,
 		},
+		/// A single item within a Batch of dispatches has completed with no error.
+		ItemCompleted,
+		/// Batch of dispatches completed fully with no error.
+		BatchCompleted,
+		/// Batch of dispatches failed at a specific index.
+		BatchFailed { dispatch_error: frame_support::dispatch::DispatchErrorWithPostInfo },
 	}
 
 	#[pallet::call]
@@ -614,10 +623,14 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::submit_signed_runtime_call())]
+		#[pallet::weight({
+			let (dispatch_weight, dispatch_class) = Pallet::<T>::weight_and_dispatch_class(calls);
+			let dispatch_weight = dispatch_weight.saturating_add(T::WeightInfo::submit_signed_runtime_call(calls.len() as u32));
+			(dispatch_weight, dispatch_class)
+		})]
 		pub fn submit_signed_runtime_call(
 			origin: OriginFor<T>,
-			call: sp_std::boxed::Box<<T as Config>::RuntimeCall>,
+			calls: Vec<<T as Config>::RuntimeCall>,
 			_transaction_metadata: TransactionMetadata,
 			user_signature_data: UserSignatureData,
 		) -> DispatchResult {
@@ -633,12 +646,18 @@ pub mod pallet {
 			// Increment the account nonce to prevent replay attacks
 			frame_system::Pallet::<T>::inc_account_nonce(&signer_account_id);
 
+			// Don't fail so the nonce is increased
 			let dispatch_result =
-				Self::dispatch_user_call(*call.clone(), signer_account_id.clone());
+				Self::dispatch_user_calls(calls.clone(), signer_account_id.clone());
+
+			match dispatch_result {
+				Ok(_) => Self::deposit_event(Event::BatchCompleted),
+				Err(dispatch_error) => Self::deposit_event(Event::BatchFailed { dispatch_error }),
+			};
 
 			Self::deposit_event(Event::<T>::SignedRuntimeCallSubmitted {
 				signer_account_id,
-				serialized_call: call.encode(),
+				serialized_call: calls.encode(),
 				dispatch_result,
 			});
 
@@ -652,7 +671,7 @@ pub mod pallet {
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::submit_signed_runtime_call {
-				call,
+				calls,
 				transaction_metadata,
 				user_signature_data,
 			} = call
@@ -665,11 +684,11 @@ pub mod pallet {
 				}
 
 				let chanflip_network_name = Self::chainflip_network();
-				let serialized_call: Vec<u8> = call.encode();
+				let serialized_calls: Vec<u8> = calls.encode();
 
 				let build_domain_data = || -> Vec<u8> {
 					[
-						serialized_call.clone(),
+						serialized_calls.clone(),
 						chanflip_network_name.as_str().encode(),
 						USER_RUNTIME_CALL_VERSION.encode(),
 						transaction_metadata.encode(),
@@ -700,7 +719,7 @@ pub mod pallet {
 								[prefix_bytes, &domain_data].concat()
 							},
 							EthSigType::Eip712 => Self::build_eip_712_payload(
-								*call.clone(),
+								calls.clone(),
 								chanflip_network_name.as_str(),
 								USER_RUNTIME_CALL_VERSION,
 								transaction_metadata.clone(),
@@ -1031,31 +1050,81 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
+	// TODO: Add support for best-effort batches? I think for that we don't need to store state
+	// with `with_transaction`, we can directly execute call by call like the `fn batch` in:
+	// https://paritytech.github.io/polkadot-sdk/master/src/pallet_utility/lib.rs.html#199
+	// TODO: User should be charged for the fee, pretty sure it is not right now.
 	/// Dispatches a call from the user account, with transactional semantics, ie. if the call
-	/// dispatch returns `Err`, rolls back any storage updates.
-	fn dispatch_user_call(
-		call: <T as Config>::RuntimeCall,
+	/// dispatch returns `Err`, rolls back any storage updates. Inspiration from pallet_utility
+	/// https://paritytech.github.io/polkadot-sdk/master/pallet_utility/pallet/struct.Pallet.html#method.batch_all
+	fn dispatch_user_calls(
+		calls: Vec<<T as Config>::RuntimeCall>,
 		user_account: T::AccountId,
 	) -> DispatchResultWithPostInfo {
-		with_transaction(move || {
-			match call.dispatch_bypass_filter(frame_system::RawOrigin::Signed(user_account).into())
-			{
-				r @ Ok(_) => TransactionOutcome::Commit(r),
-				r @ Err(_) => TransactionOutcome::Rollback(r),
+		let calls_len = calls.len();
+		if calls_len > BATCHED_CALL_LIMITS {
+			return Err(Error::<T>::TooManyCalls.into());
+		}
+
+		// Track the actual weight of each of the batch calls.
+		with_transaction(|| {
+			let mut weight = Weight::zero();
+
+			for (index, call) in calls.into_iter().enumerate() {
+				let info = call.get_dispatch_info();
+
+				let origin = frame_system::RawOrigin::Signed(user_account.clone()).into();
+
+				// TODO: Add check for nesting?
+				// https://paritytech.github.io/polkadot-sdk/master/src/pallet_utility/lib.rs.html#330
+				let result = call.dispatch_bypass_filter(origin);
+				// Add the weight of this call.
+				weight = weight
+					.saturating_add(frame_support::dispatch::extract_actual_weight(&result, &info));
+
+				if let Err(mut err) = result {
+					// Adjust error weight before rollback
+					let base_weight =
+						T::WeightInfo::submit_signed_runtime_call(index.saturating_add(1) as u32);
+					err.post_info = Some(base_weight.saturating_add(weight)).into();
+					return TransactionOutcome::Rollback(Err(err));
+				};
 			}
+
+			// All calls succeeded -> commit
+			let base_weight = T::WeightInfo::submit_signed_runtime_call(calls_len as u32);
+			let total_weight = base_weight.saturating_add(weight);
+			TransactionOutcome::Commit(Ok(Some(total_weight).into()))
 		})
 	}
 
 	/// `signer is not technically necessary but is added as part of the metadata so
 	/// it is displayed separately to the user in the wallet
 	fn build_eip_712_payload(
-		_call: <T as Config>::RuntimeCall,
+		_calls: Vec<<T as Config>::RuntimeCall>,
 		_chain_name: &str,
 		_version: &str,
 		_transaction_metadata: TransactionMetadata,
 		_signer: EvmAddress,
 	) -> Vec<u8> {
 		todo!("implement eip-712");
+	}
+
+	/// Get the accumulated `weight` and the dispatch class for the given `calls`.
+	fn weight_and_dispatch_class(calls: &[<T as Config>::RuntimeCall]) -> (Weight, DispatchClass) {
+		let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info());
+		let (dispatch_weight, dispatch_class) = dispatch_infos.fold(
+			(Weight::zero(), DispatchClass::Operational),
+			|(total_weight, dispatch_class): (Weight, DispatchClass), di| {
+				(
+					total_weight.saturating_add(di.weight),
+					// If not all are `Operational`, we want to use `DispatchClass::Normal`.
+					if di.class == DispatchClass::Normal { di.class } else { dispatch_class },
+				)
+			},
+		);
+
+		(dispatch_weight, dispatch_class)
 	}
 }
 

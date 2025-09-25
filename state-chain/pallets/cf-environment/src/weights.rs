@@ -43,7 +43,7 @@
 #![allow(unused_imports)]
 #![allow(missing_docs)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::ParityDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::{ParityDbWeight,RocksDbWeight}}};
 use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_environment.
@@ -57,7 +57,7 @@ pub trait WeightInfo {
 	fn witness_initialize_solana_vault() -> Weight;
 	fn witness_assethub_vault_creation() -> Weight;
 	fn dispatch_solana_gov_call() -> Weight;
-	fn submit_signed_runtime_call() -> Weight;
+	fn submit_signed_runtime_call(c: u32, ) -> Weight;
 }
 
 /// Weights for pallet_cf_environment using the Substrate node and recommended hardware.
@@ -230,10 +230,20 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(20_u64))
 			.saturating_add(T::DbWeight::get().writes(14_u64))
 	}
-	// TODO: To set correct values
-	fn submit_signed_runtime_call() -> Weight {
-		Weight::from_parts(0, 0)
-			.saturating_add(ParityDbWeight::get().writes(1_u64))
+	/// Storage: `SafeMode::EnteredUntil` (r:1 w:0)
+	/// Proof: `SafeMode::EnteredUntil` (`max_values`: Some(1), `max_size`: Some(4), added: 499, mode: `MaxEncodedLen`)
+	/// Storage: `TxPause::PausedCalls` (r:1 w:0)
+	/// Proof: `TxPause::PausedCalls` (`max_values`: None, `max_size`: Some(532), added: 3007, mode: `MaxEncodedLen`)
+	/// The range of component `c` is `[0, 1000]`.
+	fn submit_signed_runtime_call(c: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `3997`
+		// Minimum execution time: 3_983_000 picoseconds.
+		Weight::from_parts(4_075_000, 3997)
+			// Standard Error: 2_176
+			.saturating_add(Weight::from_parts(5_127_263, 0).saturating_mul(c.into()))
+			.saturating_add(T::DbWeight::get().reads(2_u64))
 	}
 }
 
@@ -406,9 +416,19 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().reads(20_u64))
 			.saturating_add(ParityDbWeight::get().writes(14_u64))
 	}
-	// TODO: To set proper values
-	fn submit_signed_runtime_call() -> Weight {
-		Weight::from_parts(0, 0)
-			.saturating_add(ParityDbWeight::get().writes(1_u64))
+	/// Storage: `SafeMode::EnteredUntil` (r:1 w:0)
+	/// Proof: `SafeMode::EnteredUntil` (`max_values`: Some(1), `max_size`: Some(4), added: 499, mode: `MaxEncodedLen`)
+	/// Storage: `TxPause::PausedCalls` (r:1 w:0)
+	/// Proof: `TxPause::PausedCalls` (`max_values`: None, `max_size`: Some(532), added: 3007, mode: `MaxEncodedLen`)
+	/// The range of component `c` is `[0, 1000]`.
+	fn submit_signed_runtime_call(c: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `3997`
+		// Minimum execution time: 3_983_000 picoseconds.
+		Weight::from_parts(4_075_000, 3997)
+			// Standard Error: 2_176
+			.saturating_add(Weight::from_parts(5_127_263, 0).saturating_mul(c.into()))
+			.saturating_add(RocksDbWeight::get().reads(2_u64))
 	}
 }

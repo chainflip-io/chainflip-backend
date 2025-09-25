@@ -43,19 +43,23 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   const whaleKeypair = getSolWhaleKeyPair();
 
-  // Create a simple RuntimeCall - system.remark with empty data
-  const call = chainflip.tx.system.remark([]);
+  // Create a vector of RuntimeCalls - multiple system.remark calls
+  const calls = [chainflip.tx.system.remark([])];
+  // Example of a call with the first runtimeCall succeeding and the second one failing.
+  // Maybe add a test with that ad check that the nonce is increased.
+  // const calls = [chainflip.tx.system.remark([]), chainflip.tx.validator.forceRotation()];
 
-  // SCALE encode the RuntimeCall and convert to hex
-  const runtimeCall = call.method.toU8a();
-  const hexRuntimeCall = u8aToHex(runtimeCall);
+  // SCALE encode the vector of RuntimeCalls and convert to hex
+  const runtimeCalls = calls.map((call) => call.method);
+  const encodedCalls = chainflip.createType('Vec<Call>', runtimeCalls).toU8a();
+  const hexRuntimeCall = u8aToHex(encodedCalls);
   console.log('hexRuntimeCall', hexRuntimeCall);
 
   // SVM Whale -> SC account (`cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1`)
   const svmNonce = (await chainflip.rpc.system.accountNextIndex(
     'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1',
   )) as unknown as number;
-  const svmPayload = encodeDomainDataToSign(runtimeCall, svmNonce, expiryBlock);
+  const svmPayload = encodeDomainDataToSign(encodedCalls, svmNonce, expiryBlock);
   const svmHexPayload = u8aToHex(svmPayload);
 
   logger.info('Signing and submitting user-signed payload with Solana wallet');
@@ -109,7 +113,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   let evmNonce = (await chainflip.rpc.system.accountNextIndex(
     'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
   )) as unknown as number;
-  const evmPayload = encodeDomainDataToSign(runtimeCall, evmNonce, expiryBlock);
+  const evmPayload = encodeDomainDataToSign(encodedCalls, evmNonce, expiryBlock);
   // Create the Ethereum-prefixed message
   const prefix = `\x19Ethereum Signed Message:\n${evmPayload.length}`;
   const prefixedMessage = Buffer.concat([Buffer.from(prefix, 'utf8'), evmPayload]);
@@ -165,7 +169,6 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   const domain = {
     name: chainName,
-    // TBD if we need/want this
     version: '0',
   };
 
