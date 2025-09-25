@@ -676,9 +676,6 @@ pub struct GeneralLoan<T: Config> {
 	pub asset: Asset,
 	pub created_at_block: BlockNumberFor<T>,
 	pub owed_principal: AssetAmount,
-	/// Total fees paid to the pool throughout the lifetime of the loan
-	/// (these are to be used for informational purposes only)
-	pub fees_paid: BTreeMap<Asset, AssetAmount>,
 }
 
 impl<T: Config> GeneralLoan<T> {
@@ -717,8 +714,6 @@ impl<T: Config> GeneralLoan<T> {
 				self.asset,
 				config.network_fee_contributions.from_liquidation_fee,
 			);
-
-			self.fees_paid.entry(self.asset).or_default().saturating_accrue(liquidation_fee);
 
 			Pallet::<T>::credit_fees_to_pool(self.asset, self.asset, remaining_fee);
 
@@ -969,20 +964,12 @@ impl<T: Config> LendingApi for Pallet<T> {
 				primary_collateral_asset,
 			)?;
 
-			let primary_collateral_asset = account.primary_collateral_asset;
-
-			ensure!(
-				extra_collateral.contains_key(&primary_collateral_asset),
-				Error::<T>::InvalidLoanParameters
-			);
-
 			// Creating a loan with 0 principal first, the using `expand_loan_inner` to update it
 			let loan = GeneralLoan {
 				id: loan_id,
 				asset,
 				created_at_block: frame_system::Pallet::<T>::current_block_number(),
 				owed_principal: 0,
-				fees_paid: BTreeMap::new(),
 			};
 
 			let ExpandLoanOutcome { origination_fee } =
@@ -1340,11 +1327,6 @@ impl<T: Config> Pallet<T> {
 			primary_collateral_asset,
 			config.origination_fee(loan.asset) * principal,
 		)?;
-
-		loan.fees_paid
-			.entry(primary_collateral_asset)
-			.or_default()
-			.saturating_accrue(origination_fee_amount);
 
 		T::Balance::try_debit_account(
 			borrower_id,

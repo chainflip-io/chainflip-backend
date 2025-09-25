@@ -230,7 +230,6 @@ fn basic_general_lending() {
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL,
-							fees_paid: BTreeMap::from([(COLLATERAL_ASSET, origination_fee)]),
 						}
 					)])
 				})
@@ -524,10 +523,6 @@ fn basic_loan_aggregation() {
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL + EXTRA_PRINCIPAL_1,
-							fees_paid: BTreeMap::from([(
-								COLLATERAL_ASSET,
-								origination_fee + origination_fee_2
-							)]),
 						}
 					)]),
 					liquidation_status: LiquidationStatus::NoLiquidation
@@ -609,10 +604,6 @@ fn basic_loan_aggregation() {
 							created_at_block: INIT_BLOCK,
 							// Loan's owed principal has been increased:
 							owed_principal: PRINCIPAL + EXTRA_PRINCIPAL_1 + EXTRA_PRINCIPAL_2,
-							fees_paid: BTreeMap::from([(
-								COLLATERAL_ASSET,
-								origination_fee + origination_fee_2 + origination_fee_3
-							)]),
 						}
 					)]),
 					liquidation_status: LiquidationStatus::NoLiquidation
@@ -1175,10 +1166,6 @@ fn basic_liquidation() {
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL - (SWAPPED_PRINCIPAL - liquidation_fee_1),
-							fees_paid: BTreeMap::from([
-								(COLLATERAL_ASSET, origination_fee),
-								(LOAN_ASSET, liquidation_fee_1)
-							]),
 						}
 					)])
 				})
@@ -1889,7 +1876,6 @@ fn init_liquidation_swaps_test() {
 					asset: Asset::Btc,
 					created_at_block: 0,
 					owed_principal: 20,
-					fees_paid: BTreeMap::new(),
 				},
 			),
 			(
@@ -1899,7 +1885,6 @@ fn init_liquidation_swaps_test() {
 					asset: Asset::Sol,
 					created_at_block: 0,
 					owed_principal: 2000,
-					fees_paid: BTreeMap::new(),
 				},
 			),
 		]),
