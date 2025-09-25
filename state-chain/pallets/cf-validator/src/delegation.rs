@@ -168,6 +168,22 @@ where
 		self.validators.keys().map(|validator| (validator.clone(), avg_bid)).collect()
 	}
 
+	/// Returns a mapping of the bond amounts for each validator such that
+	/// the full bond is accounted for.
+	pub fn validator_bond_distribution(&self, bond: Bid) -> BTreeMap<Account, Bid> {
+		let mut total_bond = bond * Bid::from(self.validators.len() as u32);
+		let mut validator_bids = self.validators.clone().into_iter().collect::<Vec<_>>();
+		validator_bids.sort_by_key(|(_, v)| *v);
+		validator_bids
+			.into_iter()
+			.map(|(id, bid)| {
+				let individual_bond = core::cmp::min(bid, total_bond);
+				total_bond.saturating_reduce(individual_bond);
+				(id, individual_bond)
+			})
+			.collect()
+	}
+
 	pub fn distribute<Amount>(
 		&self,
 		total: Amount,
@@ -394,12 +410,30 @@ mod tests {
 				let sum: u128 = distributions.iter().map(|(_, amount)| *amount).sum();
 
 				// Property: The sum of all distributed amounts equals the input total
-				assert_eq!(
+				prop_assert_eq!(
 					sum, total_to_distribute,
 					"Sum of distributions ({}) does not equal total ({})",
 					sum, total_to_distribute
 				);
+
+				Ok(())
 			});
 		}
+	}
+
+	#[test]
+	fn test_validator_bond_distribution() {
+		let snapshot = DelegationSnapshot::<u64, u128> {
+			operator: 1,
+			validators: [(100, 800), (101, 300), (102, 200)].into_iter().collect(),
+			..Default::default()
+		};
+
+		let bond = 400;
+		let distribution = snapshot.validator_bond_distribution(bond);
+
+		assert_eq!(distribution[&100], 700);
+		assert_eq!(distribution[&101], 300);
+		assert_eq!(distribution[&102], 200);
 	}
 }

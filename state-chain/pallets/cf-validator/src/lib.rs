@@ -1539,19 +1539,16 @@ impl<T: Config> Pallet<T> {
 
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
-		new_authorities.iter().enumerate().for_each(|(index, account_id)| {
-			AuthorityIndex::<T>::insert(new_epoch, account_id, index as AuthorityCount);
-			EpochHistory::<T>::activate_epoch(account_id, new_epoch);
-			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
-		});
-
-		// Bond delegators based on the snapshots
-		let outgoing_delegators = DelegationSnapshots::<T>::iter_prefix(new_epoch - 1)
-			.flat_map(|(_, snapshot)| snapshot.delegators.keys().cloned().collect::<Vec<_>>())
-			.collect::<BTreeSet<_>>();
-		let new_delegator_bids = DelegationSnapshots::<T>::iter_prefix(new_epoch)
-			.flat_map(|(_, snapshot)| snapshot.delegators.clone())
-			.collect::<BTreeMap<_, _>>();
+		let mut new_delegator_bids = BTreeMap::new();
+		let mut new_managed_validator_bonds = BTreeMap::new();
+		for (_, snapshot) in DelegationSnapshots::<T>::iter_prefix(new_epoch) {
+			new_delegator_bids.extend(snapshot.delegators.clone());
+			new_managed_validator_bonds.extend(snapshot.validator_bond_distribution(new_bond));
+		}
+		let mut outgoing_delegators = BTreeSet::new();
+		for (_, snapshot) in DelegationSnapshots::<T>::iter_prefix(new_epoch - 1) {
+			outgoing_delegators.extend(snapshot.delegators.keys().cloned());
+		}
 
 		for outgoing_delegator in outgoing_delegators {
 			if !new_delegator_bids.contains_key(&outgoing_delegator) &&
@@ -1562,6 +1559,16 @@ impl<T: Config> Pallet<T> {
 					delegator: outgoing_delegator.clone(),
 					epoch: new_epoch,
 				});
+			}
+		}
+
+		for (index, account_id) in new_authorities.iter().enumerate() {
+			AuthorityIndex::<T>::insert(new_epoch, account_id, index as AuthorityCount);
+			EpochHistory::<T>::activate_epoch(account_id, new_epoch);
+			if let Some(bond) = new_managed_validator_bonds.get(account_id.into_ref()) {
+				T::Bonder::update_bond(account_id, *bond);
+			} else {
+				T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 			}
 		}
 
