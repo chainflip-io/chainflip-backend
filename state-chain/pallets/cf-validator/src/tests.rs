@@ -781,7 +781,7 @@ fn test_validator_registration_min_balance() {
 }
 
 #[test]
-fn test_expect_validator_register_fails() {
+fn validator_registration_min_stake() {
 	new_test_ext().then_execute_with_checks(|| {
 		const ID: u64 = 42;
 		assert_ok!(ValidatorPallet::update_pallet_config(
@@ -789,35 +789,13 @@ fn test_expect_validator_register_fails() {
 			PalletConfigUpdate::MinimumValidatorStake { min_stake: 10_000 },
 		));
 		MockFlip::credit_funds(&ID, 5_000 * FLIPPERINOS_PER_FLIP);
-		// Reduce the set size target to the current authority count.
-		assert_ok!(Pallet::<Test>::update_pallet_config(
-			RawOrigin::Root.into(),
-			PalletConfigUpdate::AuctionParameters {
-				parameters: SetSizeParameters {
-					min_size: MIN_AUTHORITY_SIZE,
-					max_size: <Pallet<Test> as EpochInfo>::current_authority_count(),
-					max_expansion: MAX_AUTHORITY_SET_EXPANSION,
-				},
-			},
-		));
 		assert_noop!(
 			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID),),
 			crate::Error::<Test>::NotEnoughFunds
 		);
-		// Now set it back to the default.
-		assert_ok!(Pallet::<Test>::update_pallet_config(
-			RawOrigin::Root.into(),
-			PalletConfigUpdate::AuctionParameters {
-				parameters: SetSizeParameters {
-					min_size: MIN_AUTHORITY_SIZE,
-					max_size: MAX_AUTHORITY_SIZE,
-					max_expansion: MAX_AUTHORITY_SET_EXPANSION,
-				},
-			},
-		));
-		// It should be possible to register now since the actual size is below the target.
+		MockFlip::credit_funds(&ID, 5_000 * FLIPPERINOS_PER_FLIP);
+		// Now we have enough funds
 		assert_ok!(Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)));
-		MockFlip::credit_funds(&ID, 2_000 * FLIPPERINOS_PER_FLIP);
 		// Trying to register again passes the funding check but fails for other reasons.
 		assert_noop!(
 			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)),
