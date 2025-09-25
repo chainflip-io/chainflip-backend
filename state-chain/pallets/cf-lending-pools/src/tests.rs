@@ -132,12 +132,12 @@ fn can_update_all_config_items() {
 		};
 
 		const NEW_LTV_THRESHOLDS: LtvThresholds = LtvThresholds {
-			target: FixedU64::from_rational(61, 100),
-			topup: FixedU64::from_rational(71, 100),
-			soft_liquidation: FixedU64::from_rational(81, 100),
-			soft_liquidation_abort: FixedU64::from_rational(80, 100),
-			hard_liquidation: FixedU64::from_rational(91, 100),
-			hard_liquidation_abort: FixedU64::from_rational(90, 100),
+			target: Permill::from_percent(61),
+			topup: Permill::from_percent(71),
+			soft_liquidation: Permill::from_percent(81),
+			soft_liquidation_abort: Permill::from_percent(80),
+			hard_liquidation: Permill::from_percent(91),
+			hard_liquidation_abort: Permill::from_percent(90),
 			low_ltv: Permill::from_percent(60),
 		};
 
@@ -146,7 +146,6 @@ fn can_update_all_config_items() {
 				extra_interest: Permill::from_percent(1),
 				from_origination_fee: Permill::from_percent(2),
 				from_liquidation_fee: Permill::from_percent(3),
-				interest_on_collateral_min: Permill::from_percent(4),
 				interest_on_collateral_max: Permill::from_percent(5),
 			};
 

@@ -147,6 +147,9 @@ impl<T: Config> LoanAccount<T> {
 			return;
 		};
 
+		// This will saturate at 100%, but that's good enough (non of our thresholds exceed 100%):
+		let ltv: Permill = ltv.into_clamped_perthing();
+
 		// Every time we transition from a liquidating state we abort all liquidation swaps
 		// and repay any swapped into principal. If the next state is "NoLiquidation", the
 		// collateral is returned into the loan account; if it is "Liquidating", the collateral
@@ -467,15 +470,14 @@ impl<T: Config> LoanAccount<T> {
 		// Auto top up is currently only possible from the primary collateral asset
 		let config = LendingConfig::<T>::get();
 
-		if self.derive_ltv()? <= config.ltv_thresholds.topup {
+		if self.derive_ltv()? <= config.ltv_thresholds.topup.into() {
 			return Ok(())
 		}
 
 		let top_up_required_in_usd = {
 			let loan_value_in_usd = self.total_owed_usd_value()?;
-			let collateral_required_in_usd = config
-				.ltv_thresholds
-				.target
+
+			let collateral_required_in_usd = FixedU64::from(config.ltv_thresholds.target)
 				.reciprocal()
 				.map(|ltv_inverted| ltv_inverted.saturating_mul_int(loan_value_in_usd))
 				// This effectively disables auto top up if the ltv target erroneously set to 0:
@@ -657,7 +659,7 @@ impl<T: Config> LoanAccount<T> {
 
 		self.loans.insert(loan.id, loan);
 
-		if self.derive_ltv()? > config.ltv_thresholds.target {
+		if self.derive_ltv()? > config.ltv_thresholds.target.into() {
 			return Err(Error::<T>::InsufficientCollateral.into());
 		}
 
@@ -1139,7 +1141,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			// Only check LTV if there are loans:
 			if !loan_account.loans.is_empty() &&
-				loan_account.derive_ltv()? > chp_config.ltv_thresholds.target
+				loan_account.derive_ltv()? > chp_config.ltv_thresholds.target.into()
 			{
 				fail!(Error::<T>::InsufficientCollateral);
 			}
@@ -1568,21 +1570,21 @@ pub struct LendingPoolConfiguration {
 pub struct LtvThresholds {
 	/// Borrowers aren't allowed to borrow more (or withdraw collateral) if their Loan-to-value
 	/// ratio (principal/collateral) would exceed this threshold.
-	pub target: FixedU64,
+	pub target: Permill,
 	/// Reaching this threshold will trigger a top-up of the collateral
-	pub topup: FixedU64,
+	pub topup: Permill,
 	/// Reaching this threshold will trigger soft liquidation account's loans
-	pub soft_liquidation: FixedU64,
+	pub soft_liquidation: Permill,
 	/// If a loan that's being liquidated reaches this threshold, it will be considered
 	/// "healthy" again and the liquidation will be aborted. This is meant to be slightly
 	/// lower than the soft threshold to avoid frequent oscillations between liquidating and
 	/// not liquidating.
-	pub soft_liquidation_abort: FixedU64,
+	pub soft_liquidation_abort: Permill,
 	/// Reaching this threshold will trigger hard liquidation of the loan
-	pub hard_liquidation: FixedU64,
+	pub hard_liquidation: Permill,
 	/// Same as overcollateralisation_soft_liquidation_abort_threshold, but for
 	/// transitioning from hard to soft liquidation
-	pub hard_liquidation_abort: FixedU64,
+	pub hard_liquidation_abort: Permill,
 	/// The max value for LTV that doesn't lead to borrowers paying extra interest to the network
 	/// on their collateral
 	pub low_ltv: Permill,
@@ -1618,8 +1620,6 @@ pub struct NetworkFeeContributions {
 	pub from_origination_fee: Permill,
 	/// The % of the liquidation fee that should be taken as a network fee.
 	pub from_liquidation_fee: Permill,
-	/// Interest on collateral paid when LTV approaches `low_ltv`
-	pub interest_on_collateral_min: Permill,
 	/// Interest on collateral paid when LTV approaches 0
 	pub interest_on_collateral_max: Permill,
 }
@@ -1723,7 +1723,7 @@ impl LendingConfiguration {
 
 		interpolate_linear_segment(
 			self.network_fee_contributions.interest_on_collateral_max,
-			self.network_fee_contributions.interest_on_collateral_min,
+			Permill::zero(),
 			Permill::zero(),
 			self.ltv_thresholds.low_ltv,
 			ltv,

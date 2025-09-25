@@ -56,7 +56,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{BlockNumberProvider, Saturating, UniqueSaturatedInto, Zero},
-		FixedU64, Percent, Permill, Perquintill,
+		Percent, Permill, Perquintill,
 	},
 	transactional,
 };
@@ -305,13 +305,13 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 		},
 	},
 	ltv_thresholds: LtvThresholds {
-		target: FixedU64::from_rational(80, 100), // 80% LTV,
-		topup: FixedU64::from_rational(85, 100),  // 85% LTV
-		soft_liquidation: FixedU64::from_rational(90, 100), // 90% LTV
-		soft_liquidation_abort: FixedU64::from_rational(88, 100), // 88% LTV
-		hard_liquidation: FixedU64::from_rational(95, 100), // 95% LTV
-		hard_liquidation_abort: FixedU64::from_rational(93, 100), // 93% LTV
-		low_ltv: Permill::from_percent(50),       // 50% LTV
+		target: Permill::from_percent(80),
+		topup: Permill::from_percent(85),
+		soft_liquidation: Permill::from_percent(90),
+		soft_liquidation_abort: Permill::from_percent(88),
+		hard_liquidation: Permill::from_percent(95),
+		hard_liquidation_abort: Permill::from_percent(93),
+		low_ltv: Permill::from_percent(50),
 	},
 	network_fee_contributions: NetworkFeeContributions {
 		// A fixed 1% per year is added to the base interest rate (the latter determined by the
@@ -321,7 +321,6 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 		from_origination_fee: Permill::from_percent(20),
 		// 20% of all liquidation fees is paid to the network.
 		from_liquidation_fee: Permill::from_percent(20),
-		interest_on_collateral_min: Permill::from_percent(0),
 		interest_on_collateral_max: Permill::from_percent(1),
 	},
 	// don't swap more often than every 10 blocks
