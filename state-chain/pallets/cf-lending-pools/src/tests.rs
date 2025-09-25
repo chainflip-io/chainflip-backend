@@ -132,13 +132,13 @@ fn can_update_all_config_items() {
 		};
 
 		const NEW_LTV_THRESHOLDS: LtvThresholds = LtvThresholds {
-			minimum: FixedU64::from_rational(1, 100),
 			target: FixedU64::from_rational(61, 100),
 			topup: FixedU64::from_rational(71, 100),
 			soft_liquidation: FixedU64::from_rational(81, 100),
 			soft_liquidation_abort: FixedU64::from_rational(80, 100),
 			hard_liquidation: FixedU64::from_rational(91, 100),
 			hard_liquidation_abort: FixedU64::from_rational(90, 100),
+			low_ltv: Permill::from_percent(60),
 		};
 
 		const NEW_NETWORK_FEE_CONTRIBUTIONS_FROM_LENDING: NetworkFeeContributions =
@@ -146,6 +146,8 @@ fn can_update_all_config_items() {
 				extra_interest: Permill::from_percent(1),
 				from_origination_fee: Permill::from_percent(2),
 				from_liquidation_fee: Permill::from_percent(3),
+				interest_on_collateral_min: Permill::from_percent(4),
+				interest_on_collateral_max: Permill::from_percent(5),
 			};
 
 		const NEW_FEE_SWAP_INTERVAL_BLOCKS: u32 = 700;

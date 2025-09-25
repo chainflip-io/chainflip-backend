@@ -1106,7 +1106,6 @@ fn loan_account_serialization() {
 			asset: Asset::Usdc,
 			created_at: 400,
 			principal_amount: 1000u128.into(),
-			total_fees: vec![AssetAndAmount { asset: Asset::Eth, amount: 6u128.into() }],
 		}],
 		liquidation_status: Some(RpcLiquidationStatus {
 			liquidation_swaps: vec![RpcLiquidationSwap {
@@ -1124,7 +1123,7 @@ fn loan_account_serialization() {
 fn lending_config_serialization() {
 	let config = RpcLendingConfig {
 		ltv_thresholds: LtvThresholds {
-			minimum: FixedU64::from_rational(20, 100),
+			low_ltv: Permill::from_percent(50),
 			target: FixedU64::from_rational(75, 100),
 			topup: FixedU64::from_rational(80, 100),
 			soft_liquidation: FixedU64::from_rational(90, 100),
@@ -1136,6 +1135,8 @@ fn lending_config_serialization() {
 			extra_interest: Permill::from_percent(1),
 			from_origination_fee: Permill::from_percent(20),
 			from_liquidation_fee: Permill::from_percent(30),
+			interest_on_collateral_min: Permill::from_percent(0),
+			interest_on_collateral_max: Permill::from_percent(50),
 		},
 		fee_swap_interval_blocks: 10,
 		interest_payment_interval_blocks: 15,

@@ -24,14 +24,7 @@ expression: loan_account
         "asset": "USDC"
       },
       "created_at": 400,
-      "principal_amount": "0x3e8",
-      "total_fees": [
-        {
-          "chain": "Ethereum",
-          "asset": "ETH",
-          "amount": "0x6"
-        }
-      ]
+      "principal_amount": "0x3e8"
     }
   ],
   "liquidation_status": {

@@ -2,7 +2,7 @@ use crate::mocks::*;
 use cf_amm_math::PRICE_FRACTIONAL_BITS;
 use cf_chains::evm::U256;
 use cf_primitives::SWAP_DELAY_BLOCKS;
-use cf_test_utilities::assert_matching_event_count;
+use cf_test_utilities::{assert_has_event, assert_matching_event_count};
 use cf_traits::{
 	lending::ChpSystemApi,
 	mocks::{
@@ -62,7 +62,7 @@ fn setup_chp_pool_with_funds(loan_asset: Asset, init_amount: AssetAmount) {
 		init_amount
 	));
 
-	System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LendingFundsAdded {
+	assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LendingFundsAdded {
 		lender_id: LENDER,
 		asset: loan_asset,
 		amount: init_amount,
@@ -97,7 +97,7 @@ fn lender_basic_adding_and_removing_funds() {
 		));
 		assert_eq!(MockBalance::get_balance(&LENDER, LOAN_ASSET), INIT_POOL_AMOUNT / 4);
 
-		System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LendingFundsRemoved {
+		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LendingFundsRemoved {
 			lender_id: LENDER,
 			asset: LOAN_ASSET,
 			unlocked_amount: INIT_POOL_AMOUNT / 4,
@@ -111,7 +111,7 @@ fn lender_basic_adding_and_removing_funds() {
 		));
 		assert_eq!(MockBalance::get_balance(&LENDER, LOAN_ASSET), INIT_POOL_AMOUNT);
 
-		System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LendingFundsRemoved {
+		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LendingFundsRemoved {
 			lender_id: LENDER,
 			asset: LOAN_ASSET,
 			unlocked_amount: 3 * INIT_POOL_AMOUNT / 4,
@@ -136,7 +136,11 @@ fn derive_interest_amounts(
 	let network_portion =
 		Permill::from_rational(network_interest.deconstruct(), total_interest.deconstruct());
 
-	(total_interest_amount, network_portion * total_interest_amount)
+	let network_amount = network_portion * total_interest_amount;
+
+	let pool_amount = total_interest_amount - network_amount;
+
+	(pool_amount, network_amount)
 }
 
 #[test]
@@ -147,15 +151,19 @@ fn basic_general_lending() {
 
 	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
+	// Repaying a small portion to make sure we don't hit low LTV penalty:
+	const REPAYMENT_AMOUNT: AssetAmount = PRINCIPAL / 10;
+
 	// 50% utilisation is expected:
-	let (total_interest_in_eth_1, network_interest_in_eth_1) =
+	let (pool_interest_1, network_interest_1) =
 		derive_interest_amounts(PRINCIPAL, Permill::from_percent(50));
 
-	// 25% utilisation is expected:
-	let (total_interest_in_eth_2, network_interest_in_eth_2) =
-		derive_interest_amounts(PRINCIPAL / 2, Permill::from_percent(25));
+	// 45% utilisation is expected:
+	let (pool_interest_2, network_interest_2) =
+		derive_interest_amounts(PRINCIPAL - REPAYMENT_AMOUNT, Permill::from_percent(45));
 
-	let total_interest = total_interest_in_eth_1 + total_interest_in_eth_2;
+	let total_interest =
+		pool_interest_1 + network_interest_1 + pool_interest_2 + network_interest_2;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -235,26 +243,34 @@ fn basic_general_lending() {
 		.then_execute_with(|_| {
 			assert_eq!(
 				LoanAccounts::<Test>::get(BORROWER).unwrap().collateral,
-				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL - total_interest_in_eth_1)])
+				BTreeMap::from([(
+					COLLATERAL_ASSET,
+					INIT_COLLATERAL - pool_interest_1 - network_interest_1
+				)])
 			);
 
 			let pool_fees = PendingPoolFees::<Test>::get(LOAN_ASSET);
 			assert_eq!(pool_fees.len(), 1);
 			assert_eq!(
 				pool_fees[&COLLATERAL_ASSET],
-				take_network_fee(origination_fee).1 + total_interest_in_eth_1 -
-					network_interest_in_eth_1
+				take_network_fee(origination_fee).1 + pool_interest_1
 			);
 
-			System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
 				loan_id: LOAN_ID,
-				amounts: BTreeMap::from([(COLLATERAL_ASSET, total_interest_in_eth_1)]),
-			}));
+				pool_interest: BTreeMap::from([(COLLATERAL_ASSET, pool_interest_1)]),
+				network_interest: BTreeMap::from([(COLLATERAL_ASSET, network_interest_1)]),
+				broker_interest: Default::default(),
+				low_ltv_penalty: Default::default(),
+			}))
 		})
-		// === REPAYING HALF OF THE LOAN ===
+		// === REPAYING SOME OF THE LOAN ===
 		.then_execute_with(|_| {
-			assert_ok!(LendingPools::try_making_repayment(&BORROWER, LOAN_ID, PRINCIPAL / 2));
-			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL / 2);
+			assert_ok!(LendingPools::try_making_repayment(&BORROWER, LOAN_ID, REPAYMENT_AMOUNT));
+			assert_eq!(
+				MockBalance::get_balance(&BORROWER, LOAN_ASSET),
+				PRINCIPAL - REPAYMENT_AMOUNT
+			);
 
 			assert_eq!(
 				LoanAccounts::<Test>::get(BORROWER)
@@ -263,14 +279,14 @@ fn basic_general_lending() {
 					.get(&LOAN_ID)
 					.unwrap()
 					.owed_principal,
-				PRINCIPAL / 2
+				PRINCIPAL - REPAYMENT_AMOUNT
 			);
 			// Funds have been returned to the pool:
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
 					total_amount: INIT_POOL_AMOUNT,
-					available_amount: INIT_POOL_AMOUNT - PRINCIPAL / 2,
+					available_amount: INIT_POOL_AMOUNT - PRINCIPAL + REPAYMENT_AMOUNT,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
 				}
 			);
@@ -279,8 +295,7 @@ fn basic_general_lending() {
 				PendingPoolFees::<Test>::get(LOAN_ASSET),
 				BTreeMap::from([(
 					COLLATERAL_ASSET,
-					take_network_fee(origination_fee).1 + total_interest_in_eth_1 -
-						network_interest_in_eth_1
+					take_network_fee(origination_fee).1 + pool_interest_1
 				)])
 			);
 		})
@@ -300,20 +315,21 @@ fn basic_general_lending() {
 				PendingPoolFees::<Test>::get(LOAN_ASSET),
 				BTreeMap::from([(
 					COLLATERAL_ASSET,
-					take_network_fee(origination_fee).1 +
-						(total_interest_in_eth_1 - network_interest_in_eth_1) +
-						(total_interest_in_eth_2 - network_interest_in_eth_2)
+					take_network_fee(origination_fee).1 + pool_interest_1 + pool_interest_2
 				)])
 			);
 		})
 		.then_execute_with(|_| {
 			// Repaying the remainder of the borrowed amount should finalise the loan:
-			assert_ok!(LendingPools::try_making_repayment(&BORROWER, LOAN_ID, PRINCIPAL / 2));
+			assert_ok!(LendingPools::try_making_repayment(
+				&BORROWER,
+				LOAN_ID,
+				PRINCIPAL - REPAYMENT_AMOUNT
+			));
 			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), 0);
 
-			System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 				loan_id: LOAN_ID,
-				total_fees: BTreeMap::from([(COLLATERAL_ASSET, origination_fee + total_interest)]),
 				via_liquidation: false,
 			}));
 
@@ -472,7 +488,7 @@ fn basic_loan_aggregation() {
 				Default::default()
 			));
 
-			System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LoanUpdated {
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanUpdated {
 				loan_id: LOAN_ID,
 				extra_principal_amount: EXTRA_PRINCIPAL_1,
 				origination_fee: origination_fee_2,
@@ -649,8 +665,13 @@ fn interest_special_cases() {
 	);
 
 	let network_primary_interest_amount = network_interest_portion * total_primary_interest_amount;
+	let pool_primary_interest_amount =
+		total_primary_interest_amount - network_primary_interest_amount;
+
 	let network_secondary_interest_amount =
 		network_interest_portion * total_secondary_interest_amount;
+	let pool_secondary_interest_amount =
+		total_secondary_interest_amount - network_secondary_interest_amount;
 
 	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
@@ -699,14 +720,10 @@ fn interest_special_cases() {
 					// All of the primary asset is consumed as interest:
 					(
 						PRIMARY_COLLATERAL_ASSET,
-						total_primary_interest_amount - network_primary_interest_amount +
-							take_network_fee(origination_fee).1
+						pool_primary_interest_amount + take_network_fee(origination_fee).1
 					),
 					// The remainder is charged from the secondary asset:
-					(
-						SECONDARY_COLLATERAL_ASSET,
-						total_secondary_interest_amount - network_secondary_interest_amount
-					)
+					(SECONDARY_COLLATERAL_ASSET, pool_secondary_interest_amount)
 				])
 			);
 
@@ -721,12 +738,18 @@ fn interest_special_cases() {
 				]),
 			);
 
-			System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
 				loan_id: LOAN_ID,
-				amounts: BTreeMap::from([
-					(PRIMARY_COLLATERAL_ASSET, INIT_COLLATERAL_AMOUNT_PRIMARY),
-					(SECONDARY_COLLATERAL_ASSET, total_secondary_interest_amount),
+				pool_interest: BTreeMap::from([
+					(PRIMARY_COLLATERAL_ASSET, pool_primary_interest_amount),
+					(SECONDARY_COLLATERAL_ASSET, pool_secondary_interest_amount),
 				]),
+				network_interest: BTreeMap::from([
+					(PRIMARY_COLLATERAL_ASSET, network_primary_interest_amount),
+					(SECONDARY_COLLATERAL_ASSET, network_secondary_interest_amount),
+				]),
+				broker_interest: Default::default(),
+				low_ltv_penalty: Default::default(),
 			}));
 		})
 		.then_execute_at_block(
@@ -738,13 +761,12 @@ fn interest_special_cases() {
 					BTreeMap::from([
 						(
 							PRIMARY_COLLATERAL_ASSET,
-							total_primary_interest_amount - network_primary_interest_amount +
-								take_network_fee(origination_fee).1
+							pool_primary_interest_amount + take_network_fee(origination_fee).1
 						),
 						(
 							SECONDARY_COLLATERAL_ASSET,
 							// First interest payment (portion paid in the primary asset)
-							(total_secondary_interest_amount - network_secondary_interest_amount) +
+							pool_secondary_interest_amount +
 							// Second interest payment in exactly as much as the first payment,
 							// but this time it is entirely in the secondary collateral asset:
 								full_interest_amount - (network_primary_interest_amount +
@@ -840,8 +862,8 @@ fn swap_collected_pool_fees() {
 			set_asset_price_in_usd(COLLATERAL_ASSET_2, 5_000_000);
 			set_asset_price_in_usd(LOAN_ASSET, 10_000_000);
 
-			LendingPools::accrue_fees(LOAN_ASSET, COLLATERAL_ASSET_1, INIT_FEE_ASSET_1);
-			LendingPools::accrue_fees(LOAN_ASSET, COLLATERAL_ASSET_2, INIT_FEE_ASSET_2);
+			LendingPools::credit_fees_to_pool(LOAN_ASSET, COLLATERAL_ASSET_1, INIT_FEE_ASSET_1);
+			LendingPools::credit_fees_to_pool(LOAN_ASSET, COLLATERAL_ASSET_2, INIT_FEE_ASSET_2);
 
 			LendingPools::take_network_fee(NETWORK_FEE_AMOUNT, COLLATERAL_ASSET_1, Permill::one());
 
@@ -894,14 +916,14 @@ fn swap_collected_pool_fees() {
 				])
 			);
 
-			System::assert_has_event(RuntimeEvent::LendingPools(
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(
 				Event::<Test>::LendingPoolFeeCollectionInitiated {
 					asset: LOAN_ASSET,
 					swap_request_id: POOL_FEE_SWAP_ID,
 				},
 			));
 
-			System::assert_has_event(RuntimeEvent::LendingPools(
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(
 				Event::<Test>::LendingNetworkFeeCollectionInitiated {
 					swap_request_id: NETWORK_FEE_SWAP_ID,
 				},
@@ -968,7 +990,7 @@ fn adding_and_removing_collateral() {
 			collateral.clone(),
 		));
 
-		System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
 			borrower_id: BORROWER,
 			collateral: collateral.clone(),
 			primary_collateral_asset: COLLATERAL_ASSET,
@@ -995,7 +1017,7 @@ fn adding_and_removing_collateral() {
 			]),
 		));
 
-		System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::CollateralRemoved {
+		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::CollateralRemoved {
 			borrower_id: BORROWER,
 			collateral,
 			primary_collateral_asset: COLLATERAL_ASSET,
@@ -1116,7 +1138,7 @@ fn basic_liquidation() {
 			// can still calculate its value:
 			assert_eq!(loan_account.total_collateral_usd_value().unwrap(), INIT_COLLATERAL);
 
-			System::assert_has_event(RuntimeEvent::LendingPools(
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(
 				Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
 					swaps: BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_1])]),
@@ -1231,7 +1253,7 @@ fn basic_liquidation() {
 				}
 			);
 
-			System::assert_has_event(RuntimeEvent::LendingPools(
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(
 				Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
 					swaps: BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_2])]),
@@ -1249,12 +1271,8 @@ fn basic_liquidation() {
 			);
 
 			// The should now be settled:
-			System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 				loan_id: LOAN_ID,
-				total_fees: BTreeMap::from([
-					(COLLATERAL_ASSET, origination_fee),
-					(LOAN_ASSET, liquidation_fee_1 + liquidation_fee_2),
-				]),
 				via_liquidation: true,
 			}));
 
@@ -1342,7 +1360,7 @@ fn making_loan_repayment() {
 		);
 		assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL - FIRST_REPAYMENT);
 
-		System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 			loan_id: LOAN_ID,
 			amount: FIRST_REPAYMENT,
 			liquidation_fees: Default::default(),
@@ -1366,15 +1384,14 @@ fn making_loan_repayment() {
 		assert_eq!(LoanAccounts::<Test>::get(BORROWER).unwrap().collateral, collateral);
 		assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), 0);
 
-		System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 			loan_id: LOAN_ID,
 			amount: PRINCIPAL - FIRST_REPAYMENT,
 			liquidation_fees: Default::default(),
 		}));
 
-		System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 			loan_id: LOAN_ID,
-			total_fees: BTreeMap::from([(COLLATERAL_ASSET, origination_fee)]),
 			via_liquidation: false,
 		}));
 	});
@@ -1929,7 +1946,7 @@ fn init_liquidation_swaps_test() {
 		})
 		.collect();
 
-		System::assert_has_event(RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
+		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 			borrower_id: BORROWER,
 			swaps: BTreeMap::from([(LOAN_1, vec![SWAP_1, SWAP_3]), (LOAN_2, vec![SWAP_2, SWAP_4])]),
 			is_hard: false,
@@ -2073,10 +2090,6 @@ mod rpcs {
 							asset: LOAN_ASSET,
 							created_at: INIT_BLOCK as u32,
 							principal_amount: PRINCIPAL,
-							total_fees: vec![AssetAndAmount {
-								asset: COLLATERAL_ASSET,
-								amount: origination_fee
-							}],
 						}],
 						liquidation_status: None
 					}]
@@ -2127,11 +2140,6 @@ mod rpcs {
 								// NOTE: we account for the principal asset already swapped in
 								// liquidation swaps:
 								principal_amount: PRINCIPAL_2 - ACCUMULATED_OUTPUT_AMOUNT,
-								total_fees: vec![AssetAndAmount {
-									asset: COLLATERAL_ASSET_2,
-									// NOTE: no interest taken because the loan is being liquidated
-									amount: origination_fee_2
-								}]
 							}],
 							liquidation_status: Some(RpcLiquidationStatus {
 								liquidation_swaps: vec![RpcLiquidationSwap {
@@ -2155,10 +2163,6 @@ mod rpcs {
 								asset: LOAN_ASSET,
 								created_at: INIT_BLOCK as u32,
 								principal_amount: PRINCIPAL,
-								total_fees: vec![AssetAndAmount {
-									asset: COLLATERAL_ASSET,
-									amount: origination_fee + INTEREST_AMOUNT
-								}]
 							}],
 							liquidation_status: None
 						},
@@ -2217,6 +2221,40 @@ fn linear_segment_interpolation() {
 		),
 		Permill::from_percent(5)
 	);
+
+	// === Some linear segments with a negative slope ===
+	assert_eq!(
+		interpolate_linear_segment(
+			Permill::from_percent(50),
+			Permill::from_percent(10),
+			Permill::from_percent(0),
+			Permill::from_percent(50),
+			Permill::from_percent(25),
+		),
+		Permill::from_percent(30)
+	);
+
+	assert_eq!(
+		interpolate_linear_segment(
+			Permill::from_percent(50),
+			Permill::from_percent(10),
+			Permill::from_percent(0),
+			Permill::from_percent(50),
+			Permill::from_percent(0),
+		),
+		Permill::from_percent(50)
+	);
+
+	assert_eq!(
+		interpolate_linear_segment(
+			Permill::from_percent(50),
+			Permill::from_percent(10),
+			Permill::from_percent(0),
+			Permill::from_percent(50),
+			Permill::from_percent(50),
+		),
+		Permill::from_percent(10)
+	);
 }
 
 #[test]
@@ -2247,5 +2285,44 @@ fn interest_rate_curve() {
 	assert_eq!(
 		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(100)),
 		Permill::from_percent(50)
+	);
+}
+
+#[test]
+fn derive_extra_interest_from_low_ltv() {
+	assert_eq!(
+		LENDING_DEFAULT_CONFIG.derive_low_ltv_interest_rate_per_year(FixedU64::zero()),
+		Permill::from_percent(1)
+	);
+
+	assert_eq!(
+		LENDING_DEFAULT_CONFIG
+			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(10, 100)),
+		Permill::from_parts(8_000) // 0.8%
+	);
+
+	assert_eq!(
+		LENDING_DEFAULT_CONFIG
+			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(25, 100)),
+		Permill::from_parts(5_000) // 0.5%
+	);
+
+	// Any value above 50% LTV should result in 0% additional interest:
+	assert_eq!(
+		LENDING_DEFAULT_CONFIG
+			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(50, 100)),
+		Permill::from_percent(0)
+	);
+
+	assert_eq!(
+		LENDING_DEFAULT_CONFIG
+			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(80, 100)),
+		Permill::from_percent(0)
+	);
+
+	assert_eq!(
+		LENDING_DEFAULT_CONFIG
+			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(120, 100)),
+		Permill::from_percent(0)
 	);
 }

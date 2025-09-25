@@ -305,13 +305,13 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 		},
 	},
 	ltv_thresholds: LtvThresholds {
-		minimum: FixedU64::from_rational(10, 100), // 10% LTV,
-		target: FixedU64::from_rational(80, 100),  // 80% LTV,
-		topup: FixedU64::from_rational(85, 100),   // 85% LTV
+		target: FixedU64::from_rational(80, 100), // 80% LTV,
+		topup: FixedU64::from_rational(85, 100),  // 85% LTV
 		soft_liquidation: FixedU64::from_rational(90, 100), // 90% LTV
 		soft_liquidation_abort: FixedU64::from_rational(88, 100), // 88% LTV
 		hard_liquidation: FixedU64::from_rational(95, 100), // 95% LTV
 		hard_liquidation_abort: FixedU64::from_rational(93, 100), // 93% LTV
+		low_ltv: Permill::from_percent(50),       // 50% LTV
 	},
 	network_fee_contributions: NetworkFeeContributions {
 		// A fixed 1% per year is added to the base interest rate (the latter determined by the
@@ -321,6 +321,8 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 		from_origination_fee: Permill::from_percent(20),
 		// 20% of all liquidation fees is paid to the network.
 		from_liquidation_fee: Permill::from_percent(20),
+		interest_on_collateral_min: Permill::from_percent(0),
+		interest_on_collateral_max: Permill::from_percent(1),
 	},
 	// don't swap more often than every 10 blocks
 	fee_swap_interval_blocks: 10,
@@ -507,7 +509,10 @@ pub mod pallet {
 			/// NOTE: typically the interest is charged in the primary collateral asset,
 			/// but we might fall back to charging from other assets if the primary
 			/// runs out.
-			amounts: BTreeMap<Asset, AssetAmount>,
+			pool_interest: BTreeMap<Asset, AssetAmount>,
+			network_interest: BTreeMap<Asset, AssetAmount>,
+			broker_interest: BTreeMap<Asset, AssetAmount>,
+			low_ltv_penalty: BTreeMap<Asset, AssetAmount>,
 		},
 		LiquidationInitiated {
 			borrower_id: T::AccountId,
@@ -523,9 +528,6 @@ pub mod pallet {
 		},
 		LoanSettled {
 			loan_id: LoanId,
-			/// Includes origination fee, interest, and any liquidation fees collected
-			/// throughout the loan's lifetime
-			total_fees: BTreeMap<Asset, AssetAmount>,
 			/// Indicates whether the loan was settled as a result of liquidation.
 			via_liquidation: bool,
 		},

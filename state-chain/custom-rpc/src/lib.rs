@@ -1606,7 +1606,6 @@ where
 								asset: loan.asset,
 								created_at: loan.created_at,
 								principal_amount: loan.principal_amount.into(),
-								total_fees: loan.total_fees.into_iter().map(Into::into).collect(),
 							})
 							.collect(),
 						liquidation_status: acc.liquidation_status,

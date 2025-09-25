@@ -300,7 +300,73 @@ impl<T: Config> LoanAccount<T> {
 		Ok(FixedU64::from_rational(principal, collateral))
 	}
 
-	pub fn charge_interest(&mut self) -> Result<(), Error<T>> {
+	/// Reduce collateral by amount that's equivalent to `fee_amount` in `fee_asset`.
+	/// Primary collateral asset is deducted from first, but if that's depleted,
+	/// the remainder is deducted from other collateral assets.
+	pub fn charge_fee_from_collateral(
+		&mut self,
+		fee_asset: Asset,
+		fee_amount: AssetAmount,
+	) -> Result<BTreeMap<Asset, AssetAmount>, Error<T>> {
+		let mut remaining_fee_amount_in_loan_asset = fee_amount;
+
+		// The actual amounts taken from each collateral asset
+		let mut fees_taken = BTreeMap::new();
+
+		// Fees are charged from the primary collateral asset first. If it fails to cover
+		// the interest, we use the remaining assets:
+		let collateral_asset_order = [self.primary_collateral_asset]
+			.into_iter()
+			.chain(
+				self.collateral
+					.keys()
+					.copied()
+					.filter(|asset| *asset != self.primary_collateral_asset),
+			)
+			.collect::<Vec<_>>(); // collecting to make borrow checker happy
+
+		for collateral_asset in collateral_asset_order {
+			// Determine how much should be charged in the given collateral asset
+			let amount_required_in_collateral_asset = equivalent_amount::<T>(
+				fee_asset,
+				collateral_asset,
+				remaining_fee_amount_in_loan_asset,
+			)?;
+
+			if let Some(available_collateral_amount) = self.collateral.get_mut(&collateral_asset) {
+				// Don't charge more than what's available
+				let amount_charged = core::cmp::min(
+					amount_required_in_collateral_asset,
+					*available_collateral_amount,
+				);
+
+				available_collateral_amount.saturating_reduce(amount_charged);
+
+				// Reduce the remaining interest amount to pay in loan asset's terms
+				{
+					let amount_charged_in_loan_asset =
+						if amount_charged == amount_required_in_collateral_asset {
+							remaining_fee_amount_in_loan_asset
+						} else {
+							equivalent_amount(collateral_asset, fee_asset, amount_charged)?
+						};
+
+					remaining_fee_amount_in_loan_asset
+						.saturating_reduce(amount_charged_in_loan_asset);
+				}
+
+				fees_taken.insert(collateral_asset, amount_charged);
+
+				if remaining_fee_amount_in_loan_asset == 0 {
+					break;
+				}
+			}
+		}
+
+		Ok(fees_taken)
+	}
+
+	pub fn derive_and_charge_interest(&mut self, ltv: FixedU64) -> Result<(), Error<T>> {
 		let config = LendingConfig::<T>::get();
 
 		if self.liquidation_status != LiquidationStatus::NoLiquidation {
@@ -309,115 +375,89 @@ impl<T: Config> LoanAccount<T> {
 			return Ok(())
 		}
 
-		for (loan_id, loan) in self.loans.iter_mut() {
+		// Temporarily moving the loans out of the account lets us iterate over them
+		// while being able to update the account:
+		let loans = core::mem::take(&mut self.loans);
+
+		for (loan_id, loan) in &loans {
 			if frame_system::Pallet::<T>::block_number().saturating_sub(loan.created_at_block) %
 				config.interest_payment_interval_blocks.into() ==
 				0u32.into()
 			{
-				let (total_interest_rate_per_payment_interval, network_fee_portion) = {
-					let base_interest = {
-						let utilisation = GeneralLendingPools::<T>::get(loan.asset)
-							.map(|pool| pool.get_utilisation())
-							.unwrap_or_default();
+				let base_interest_rate = {
+					let utilisation = GeneralLendingPools::<T>::get(loan.asset)
+						.map(|pool| pool.get_utilisation())
+						.unwrap_or_default();
 
-						config
-							.derive_base_interest_rate_per_payment_interval(loan.asset, utilisation)
-					};
-
-					let network_interest =
-						config.derive_network_interest_rate_per_payment_interval();
-
-					let total_interest = base_interest + network_interest;
-
-					// Work out how much of the total fee should be the network fee
-					let total = total_interest.deconstruct();
-					let network = network_interest.deconstruct();
-
-					let network_fee_portion = if total != 0 {
-						Permill::from_rational(network, total)
-					} else {
-						Permill::zero()
-					};
-
-					(total_interest, network_fee_portion)
+					config.derive_base_interest_rate_per_payment_interval(loan.asset, utilisation)
 				};
 
-				let mut remaining_interest_amount_in_loan_asset =
-					total_interest_rate_per_payment_interval * loan.owed_principal;
+				let network_interest_rate =
+					config.derive_network_interest_rate_per_payment_interval();
 
-				// Interest is charged from the primary collateral asset first. If it fails to cover
-				// the interest, we use the remaining assets:
-				let collateral_asset_order = [self.primary_collateral_asset]
-					.into_iter()
-					.chain(
-						self.collateral
-							.keys()
-							.copied()
-							.filter(|asset| *asset != self.primary_collateral_asset),
-					)
-					.collect::<Vec<_>>(); // collecting to make borrow checker happy
+				let low_ltv_penalty_rate =
+					config.derive_low_ltv_penalty_rate_per_payment_interval(ltv);
 
-				let mut interest_amounts = BTreeMap::new();
+				let total_interest_rate =
+					base_interest_rate + network_interest_rate + low_ltv_penalty_rate;
 
-				for collateral_asset in collateral_asset_order {
-					// Determine how much should be charged from the given collateral asset
-					let interest_required_in_collateral_asset = equivalent_amount::<T>(
-						loan.asset,
-						collateral_asset,
-						remaining_interest_amount_in_loan_asset,
-					)?;
+				let interest_amounts = self.charge_fee_from_collateral(
+					loan.asset,
+					total_interest_rate * loan.owed_principal,
+				)?;
 
-					if let Some(available_collateral_amount) =
-						self.collateral.get_mut(&collateral_asset)
-					{
-						// Don't charge more than what's available
-						let amount_charged = core::cmp::min(
-							interest_required_in_collateral_asset,
-							*available_collateral_amount,
-						);
+				// Now we need to split the collected fees and distribute between
+				// pool/network/broker:
+				let mut network_interest = BTreeMap::new();
+				let mut low_ltv_fee = BTreeMap::new();
+				let mut pool_interest = BTreeMap::new();
 
-						available_collateral_amount.saturating_reduce(amount_charged);
+				fn portion_of_interest(interest: Perquintill, total: Perquintill) -> Permill {
+					Permill::from_rational(interest.deconstruct(), total.deconstruct())
+				}
 
-						// Reduce the remaining interest amount to pay in loan asset's terms
-						{
-							let amount_charged_in_loan_asset =
-								if amount_charged == interest_required_in_collateral_asset {
-									remaining_interest_amount_in_loan_asset
-								} else {
-									equivalent_amount(collateral_asset, loan.asset, amount_charged)?
-								};
+				let network_share = portion_of_interest(network_interest_rate, total_interest_rate);
+				let low_ltv_share = portion_of_interest(low_ltv_penalty_rate, total_interest_rate);
 
-							remaining_interest_amount_in_loan_asset
-								.saturating_reduce(amount_charged_in_loan_asset);
-						}
+				for (collateral_asset, amount_to_split) in interest_amounts {
+					let network_amount = network_share * amount_to_split;
+					let low_ltv_amount = low_ltv_share * amount_to_split;
 
-						loan.fees_paid
-							.entry(collateral_asset)
-							.or_default()
-							.saturating_accrue(amount_charged);
-
-						interest_amounts.insert(collateral_asset, amount_charged);
-
-						let remaining_fees = Pallet::<T>::take_network_fee(
-							amount_charged,
-							collateral_asset,
-							network_fee_portion,
-						);
-
-						Pallet::<T>::accrue_fees(loan.asset, collateral_asset, remaining_fees);
-
-						if remaining_interest_amount_in_loan_asset == 0 {
-							break;
-						}
+					if network_amount > 0 {
+						network_interest.insert(collateral_asset, network_amount);
 					}
+
+					if low_ltv_amount > 0 {
+						low_ltv_fee.insert(collateral_asset, low_ltv_amount);
+					}
+
+					// This shouldn't underflow because network and low_ltv fees should be less than
+					// the total.
+					let pool_amount =
+						amount_to_split.saturating_sub(network_amount + low_ltv_amount);
+
+					pool_interest.insert(collateral_asset, pool_amount);
+
+					Pallet::<T>::credit_fees_to_network(
+						collateral_asset,
+						network_amount + low_ltv_amount,
+					);
+
+					Pallet::<T>::credit_fees_to_pool(loan.asset, collateral_asset, pool_amount);
 				}
 
 				Pallet::<T>::deposit_event(Event::InterestTaken {
 					loan_id: *loan_id,
-					amounts: interest_amounts,
+					pool_interest,
+					network_interest,
+					// TODO: broker fees
+					broker_interest: Default::default(),
+					low_ltv_penalty: low_ltv_fee,
 				});
 			}
 		}
+
+		self.loans = loans;
 
 		Ok(())
 	}
@@ -577,12 +617,8 @@ impl<T: Config> LoanAccount<T> {
 	}
 
 	fn settle_loan(&mut self, loan_id: LoanId, via_liquidation: bool) {
-		if let Some(loan) = self.loans.remove(&loan_id) {
-			Pallet::<T>::deposit_event(Event::LoanSettled {
-				loan_id,
-				total_fees: loan.fees_paid,
-				via_liquidation,
-			});
+		if let Some(_loan) = self.loans.remove(&loan_id) {
+			Pallet::<T>::deposit_event(Event::LoanSettled { loan_id, via_liquidation });
 		}
 	}
 
@@ -682,7 +718,7 @@ impl<T: Config> GeneralLoan<T> {
 
 			self.fees_paid.entry(self.asset).or_default().saturating_accrue(liquidation_fee);
 
-			Pallet::<T>::accrue_fees(self.asset, self.asset, remaining_fee);
+			Pallet::<T>::credit_fees_to_pool(self.asset, self.asset, remaining_fee);
 
 			BTreeMap::from([(self.asset, liquidation_fee)])
 		} else {
@@ -847,9 +883,11 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 
 			// Not being able to charge interest or top up collateral is OK (most likely due to
 			// stale oracle)
-			let _ = loan_account.charge_interest();
-			let _ = loan_account.process_auto_top_up(borrower_id);
-			loan_account.update_liquidation_status(borrower_id);
+			if let Ok(ltv) = loan_account.derive_ltv() {
+				let _ = loan_account.derive_and_charge_interest(ltv);
+				let _ = loan_account.process_auto_top_up(borrower_id);
+				loan_account.update_liquidation_status(borrower_id);
+			}
 		});
 	}
 
@@ -949,7 +987,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				account.expand_loan_inner(loan, amount_to_borrow, extra_collateral)?;
 
 			// Sanity check: the account either already had collateral or it was just added
-			ensure_non_zero_collateral(&account.collateral)?;
+			ensure_non_zero_collateral::<T>(&account.collateral)?;
 
 			Self::deposit_event(Event::LoanCreated {
 				loan_id,
@@ -1224,7 +1262,7 @@ impl<T: Config> Pallet<T> {
 	/// Pays fee to the pool in *any* asset. If the asset doesn't match the pool's native
 	/// asset, the amount will be combined with other pending fees awaiting a swap into the
 	/// native asset.
-	fn accrue_fees(loan_asset: Asset, fee_asset: Asset, fee_amount: AssetAmount) {
+	fn credit_fees_to_pool(loan_asset: Asset, fee_asset: Asset, fee_amount: AssetAmount) {
 		if loan_asset == fee_asset {
 			GeneralLendingPools::<T>::mutate(loan_asset, |maybe_pool| {
 				if let Some(pool) = maybe_pool.as_mut() {
@@ -1240,6 +1278,13 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	fn credit_fees_to_network(fee_asset: Asset, fee_amount: AssetAmount) {
+		PendingNetworkFees::<T>::mutate(fee_asset, |pending_amount| {
+			// Low ltv penalty/fee is also credited to network fees
+			pending_amount.saturating_accrue(fee_amount);
+		});
+	}
+
 	/// Takes a portion from the full fee and sends it to where network fees go, returning the rest.
 	fn take_network_fee(
 		full_fee_amount: AssetAmount,
@@ -1248,9 +1293,7 @@ impl<T: Config> Pallet<T> {
 	) -> AssetAmount {
 		let network_fee_amount = network_fee_contribution * full_fee_amount;
 
-		PendingNetworkFees::<T>::mutate(fee_asset, |pending_amount| {
-			pending_amount.saturating_accrue(network_fee_amount);
-		});
+		Self::credit_fees_to_network(fee_asset, network_fee_amount);
 
 		full_fee_amount.saturating_sub(network_fee_amount)
 	}
@@ -1313,7 +1356,7 @@ impl<T: Config> Pallet<T> {
 			config.network_fee_contributions.from_origination_fee,
 		);
 
-		Self::accrue_fees(loan.asset, primary_collateral_asset, remaining_fee);
+		Self::credit_fees_to_pool(loan.asset, primary_collateral_asset, remaining_fee);
 
 		Ok(origination_fee_amount)
 	}
@@ -1334,7 +1377,6 @@ pub mod rpc {
 		pub asset: Asset,
 		pub created_at: u32,
 		pub principal_amount: Amount,
-		pub total_fees: Vec<AssetAndAmount<Amount>>,
 	}
 
 	// TODO: see what other parameters are needed
@@ -1412,11 +1454,6 @@ pub mod rpc {
 					asset: loan.asset,
 					created_at: loan.created_at_block.unique_saturated_into(),
 					principal_amount: loan.owed_principal,
-					total_fees: loan
-						.fees_paid
-						.into_iter()
-						.map(|(asset, amount)| AssetAndAmount { asset, amount })
-						.collect(),
 				})
 				.collect(),
 			liquidation_status: match loan_account.liquidation_status {
@@ -1529,9 +1566,6 @@ pub struct LendingPoolConfiguration {
 	Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
 )]
 pub struct LtvThresholds {
-	/// Borrowers aren't allowed to add more collateral if their ltv would drop below this
-	/// threshold.
-	pub minimum: FixedU64,
 	/// Borrowers aren't allowed to borrow more (or withdraw collateral) if their Loan-to-value
 	/// ratio (principal/collateral) would exceed this threshold.
 	pub target: FixedU64,
@@ -1549,13 +1583,15 @@ pub struct LtvThresholds {
 	/// Same as overcollateralisation_soft_liquidation_abort_threshold, but for
 	/// transitioning from hard to soft liquidation
 	pub hard_liquidation_abort: FixedU64,
+	/// The max value for LTV that doesn't lead to borrowers paying extra interest to the network
+	/// on their collateral
+	pub low_ltv: Permill,
 }
 
 impl LtvThresholds {
 	pub fn validate(&self) -> DispatchResult {
 		ensure!(
-			self.minimum <= self.target &&
-				self.target <= self.topup &&
+			self.target <= self.topup &&
 				self.topup <= self.soft_liquidation &&
 				self.soft_liquidation <= self.hard_liquidation,
 			"Invalid LTV thresholds"
@@ -1582,6 +1618,10 @@ pub struct NetworkFeeContributions {
 	pub from_origination_fee: Permill,
 	/// The % of the liquidation fee that should be taken as a network fee.
 	pub from_liquidation_fee: Permill,
+	/// Interest on collateral paid when LTV approaches `low_ltv`
+	pub interest_on_collateral_min: Permill,
+	/// Interest on collateral paid when LTV approaches 0
+	pub interest_on_collateral_max: Permill,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -1674,6 +1714,27 @@ impl LendingConfiguration {
 		)
 	}
 
+	fn derive_low_ltv_interest_rate_per_year(&self, ltv: FixedU64) -> Permill {
+		let ltv: Permill = ltv.into_clamped_perthing();
+
+		if ltv >= self.ltv_thresholds.low_ltv {
+			return Permill::zero();
+		}
+
+		interpolate_linear_segment(
+			self.network_fee_contributions.interest_on_collateral_max,
+			self.network_fee_contributions.interest_on_collateral_min,
+			Permill::zero(),
+			self.ltv_thresholds.low_ltv,
+			ltv,
+		)
+	}
+
+	fn derive_low_ltv_penalty_rate_per_payment_interval(&self, ltv: FixedU64) -> Perquintill {
+		let interest_rate = self.derive_low_ltv_interest_rate_per_year(ltv);
+		self.interest_per_year_to_per_payment_interval(interest_rate)
+	}
+
 	pub fn origination_fee(&self, asset: Asset) -> Permill {
 		self.get_config_for_asset(asset).origination_fee
 	}
@@ -1684,7 +1745,7 @@ impl LendingConfiguration {
 }
 
 /// Computes interest rate at utilisation `u` given a linear segment defined by interest values `i0`
-/// and `i1` at utilisation `u0` and `u1`, respectively. The code assumes u0 <= u <= u1, i1 >= i0
+/// and `i1` at utilisation `u0` and `u1`, respectively. The code assumes u0 <= u <= u1
 /// and u0 != u1.
 fn interpolate_linear_segment(
 	i0: Permill,
@@ -1693,22 +1754,31 @@ fn interpolate_linear_segment(
 	u1: Permill,
 	u: Permill,
 ) -> Permill {
-	if u0 > u || u > u1 || i0 > i1 || u0 == u1 {
-		log_or_panic!("Invalid interest curve parameters");
+	if u0 > u || u > u1 || u0 == u1 {
+		log_or_panic!("Invalid parameters");
 		return Permill::zero();
 	}
 
 	// Converting everything to u64 to get access to more operations
-	let i0 = i0.deconstruct() as u64;
-	let i1 = i1.deconstruct() as u64;
+	let mut i0 = i0.deconstruct() as u64;
+	let mut i1 = i1.deconstruct() as u64;
 	let u0 = u0.deconstruct() as u64;
 	let u1 = u1.deconstruct() as u64;
 	let u = u.deconstruct() as u64;
 
-	// Slope coefficient:
-	let slope = ((i1 - i0) * Permill::ACCURACY as u64) / (u1 - u0);
+	let negative_slope = if i1 >= i0 {
+		false
+	} else {
+		// Ensure that we can subtract without underflow
+		core::mem::swap(&mut i0, &mut i1);
+		true
+	};
 
-	let result = i0 + slope * (u - u0) / Permill::ACCURACY as u64;
+	let abs_slope = ((i1 - i0) * Permill::ACCURACY as u64) / (u1 - u0);
+
+	let delta = abs_slope * (u - u0) / Permill::ACCURACY as u64;
+
+	let result = if negative_slope { i1.saturating_sub(delta) } else { i0.saturating_add(delta) };
 
 	u32::try_from(result).map(Permill::from_parts).unwrap_or(Permill::one())
 }
