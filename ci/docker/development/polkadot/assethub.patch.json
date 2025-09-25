@@ -1,0 +1,38 @@
+{
+    "genesis": {
+        "runtimeGenesis": {
+            "patch": {
+                "assets": {
+                    "accounts": [
+                        [
+                            1337,
+                            "15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5",
+                            1000000000000
+                        ],
+                        [
+                            1984,
+                            "15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5",
+                            1000000000000
+                        ]
+                    ],
+                    "assets": [
+                        [
+                            1337,
+                            "15gBWkDE9vhLsikuCBidxxrVchu3smt628GTxHdtrysCYRYf",
+                            true,
+                            10000
+                        ],
+                        [
+                            1984,
+                            "15gBWkDE9vhLsikuCBidxxrVchu3smt628GTxHdtrysCYRYf",
+                            true,
+                            10000
+                        ]
+                    ],
+                    "metadata": [],
+                    "nextAssetId": null
+                }
+            }
+        }
+    }
+}

@@ -23,7 +23,7 @@ get-workflow() {
       echo "❌ Invalid NODE_COUNT value: $NODE_COUNT"
       exit 1
     fi
-    echo "🎩 You have chosen $NODE_COUNT node(s) network"
+    echo "🎩 You have chosen $NODE_COUNT_INPUT node(s) network"
     export NODE_COUNT="$NODE_COUNT_INPUT-node"
 
     if [[ -z "${BINARY_ROOT_PATH}" ]]; then
@@ -38,6 +38,14 @@ get-workflow() {
     echo
     export START_TRACKER=${START_TRACKER:-"NO"}
 
+    echo "🏃‍️ Would you like to run faster? (Type n or leave empty)"
+    read -p "(default: YES) " FAST_LOCALNET_INPUT
+    echo
+    if [[ "$FAST_LOCALNET_INPUT" == "n" ]]; then
+      export LOCALNET_SPEED="STANDARD"
+    else
+      export LOCALNET_SPEED="FAST"
+    fi
   fi
 }
 

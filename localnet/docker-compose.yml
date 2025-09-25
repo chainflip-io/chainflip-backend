@@ -111,8 +111,7 @@ services:
     command:
       - --alice
       - --blocks-pruning=archive
-      - --chain=/chainspecs/polkadot-3s-161.raw.json
-      # - --chain=/chainspecs/polkadot.raw.json
+      - --chain=/chainspecs/v1.6.1/polkadot-${LOCALNET_SPEED}.json
       - --force-authoring
       - --name=PolkaDocker1
       - --rpc-cors=all
@@ -148,8 +147,7 @@ services:
     command:
       - --bob
       - --blocks-pruning=archive
-      - --chain=/chainspecs/polkadot-3s-161.raw.json
-      # - --chain=/chainspecs/polkadot.raw.json
+      - --chain=/chainspecs/v1.6.1/polkadot-${LOCALNET_SPEED}.json
       - --force-authoring
       - --name=PolkaDocker2
       - --rpc-cors=all
@@ -183,8 +181,7 @@ services:
       - --alice
       - --collator
       - --blocks-pruning=archive
-      - --chain=/chainspecs/assethub-3s-161.json
-      # - --chain=/chainspecs/assethub.raw.json
+      - --chain=/chainspecs/v1.6.1/assethub-${LOCALNET_SPEED}.json
       - --force-authoring
       - --name=AssetHubDocker
       - --rpc-cors=all
@@ -194,8 +191,7 @@ services:
       - --rpc-max-connections=100000
       - --node-key=808c85fab7ea8391de83fd0a16d069f9d5b43faa380886e439d76c4307d06039
       - --
-      - --chain=/chainspecs/polkadot-3s-161.raw.json
-      # - --chain=/chainspecs/polkadot.raw.json
+      - --chain=/chainspecs/v1.6.1/polkadot-${LOCALNET_SPEED}.json
     ports:
       - 9955:9944
       - 40333:30333
