@@ -130,6 +130,7 @@ async function testLiquidityDepositLegacy(logger: Logger) {
         BigInt(event.data.amountCredited.replace(/,/g, '')),
         BigInt(testAssetAmount),
       ),
+    historicalCheckBlocks: 20,
   }).event;
   await sendEvmNative(
     logger,

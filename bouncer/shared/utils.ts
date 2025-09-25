@@ -1134,11 +1134,15 @@ export function isValidEthAddress(address: string): boolean {
 }
 
 export function isWithinOnePercent(value1: bigint, value2: bigint): boolean {
+  return isWithinXPercent(value1, value2, 1);
+}
+
+export function isWithinXPercent(value1: bigint, value2: bigint, percent: number): boolean {
   if (value1 < value2) {
-    return value2 - value1 <= value2 / BigInt(100);
+    return value2 - value1 <= (value2 / BigInt(100)) * BigInt(percent);
   }
   if (value2 < value1) {
-    return value1 - value2 <= value1 / BigInt(100);
+    return value1 - value2 <= (value1 / BigInt(100)) * BigInt(percent);
   }
   return true;
 }

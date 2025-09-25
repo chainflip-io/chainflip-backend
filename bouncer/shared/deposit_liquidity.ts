@@ -12,6 +12,7 @@ import {
   assetDecimals,
   createStateChainKeypair,
   runWithTimeout,
+  isWithinXPercent,
 } from 'shared/utils';
 import { send } from 'shared/send';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -68,17 +69,17 @@ export async function depositLiquidity(
 
   const ingressAddress = (await eventHandle).data.depositAddress[chain];
 
-  logger.trace(`Initiating transfer to ${ingressAddress}`);
+  logger.debug(`Initiating transfer to ${ingressAddress}`);
   eventHandle = observeEvent(logger, 'assetBalances:AccountCredited', {
     test: (event) =>
       event.data.asset === ccy &&
       event.data.accountId === lp.address &&
-      isWithinOnePercent(
+      isWithinXPercent(
         BigInt(event.data.amountCredited.replace(/,/g, '')),
         BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
+        3,
       ),
     finalized: waitForFinalization,
-    timeoutSeconds: 120,
   }).event;
 
   const txHash = await runWithTimeout(

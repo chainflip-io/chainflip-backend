@@ -380,7 +380,7 @@ function spamEvmChain(logger: Logger, chain: Chain): () => void {
     case 'Arbitrum':
       (async () => {
         while (!stop) {
-          await signAndSendTxEvm(logger, chain, whalePubkey, '1', undefined, undefined);
+          signAndSendTxEvm(logger, chain, whalePubkey, '1', undefined, undefined);
           await sleep(200);
         }
       })();
