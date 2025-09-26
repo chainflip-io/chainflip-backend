@@ -29,6 +29,7 @@ use frame_system as system;
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 124u64;
+pub const CHARLIE: <Test as frame_system::Config>::AccountId = 125u64;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -67,8 +68,11 @@ cf_test_utilities::impl_test_helpers! {
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
 			&BOB,
 		));
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+			&CHARLIE,
+		));
 
-		for lp in [ALICE, BOB] {
+		for lp in [ALICE, BOB, CHARLIE] {
 			for chain in ForeignChain::iter() {
 				MockLpRegistration::register_refund_address(lp, chain);
 			}

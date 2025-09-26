@@ -110,5 +110,20 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "USDT": [],
       "USDC": []
     }
-  }
+  },
+  "lending_positions": [
+    {
+      "chain": "Ethereum",
+      "asset": "USDC",
+      "total_amount": "0x927c0",
+      "available_amount": "0x61a80"
+    }
+  ],
+  "collateral_balances": [
+    {
+      "chain": "Ethereum",
+      "asset": "FLIP",
+      "amount": "0x7a120"
+    }
+  ]
 }

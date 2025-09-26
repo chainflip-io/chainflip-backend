@@ -27,8 +27,9 @@ mod swapping;
 
 use sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
 pub use swapping::{
-	ExpiryBehaviour, PriceLimitsAndExpiry, SwapOutputAction, SwapOutputActionEncoded,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry, SwapExecutionProgress,
+	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
+	SwapRequestTypeEncoded, SwapType,
 };
 
 pub mod mocks;
