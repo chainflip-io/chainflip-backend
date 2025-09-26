@@ -496,12 +496,16 @@ pub mod pallet {
 			asset: Asset,
 			borrower_id: T::AccountId,
 			principal_amount: AssetAmount,
-			origination_fee: AssetAmount,
 		},
 		LoanUpdated {
 			loan_id: LoanId,
 			extra_principal_amount: AssetAmount,
-			origination_fee: AssetAmount,
+		},
+		OriginationFeeTaken {
+			loan_id: LoanId,
+			pool_fee: AssetAmount,
+			network_fee: AssetAmount,
+			broker_fee: AssetAmount,
 		},
 		InterestTaken {
 			loan_id: LoanId,
@@ -518,12 +522,15 @@ pub mod pallet {
 			swaps: BTreeMap<LoanId, Vec<SwapRequestId>>,
 			is_hard: bool,
 		},
+		LiquidationFeeTaken {
+			loan_id: LoanId,
+			pool_fee: AssetAmount,
+			network_fee: AssetAmount,
+			broker_fee: AssetAmount,
+		},
 		LoanRepaid {
 			loan_id: LoanId,
 			amount: AssetAmount,
-			/// NOTE: liquidation fees are zero if repayment is triggered by the borrower
-			/// rather than via a non-voluntary liquidation
-			liquidation_fees: BTreeMap<Asset, AssetAmount>,
 		},
 		LoanSettled {
 			loan_id: LoanId,

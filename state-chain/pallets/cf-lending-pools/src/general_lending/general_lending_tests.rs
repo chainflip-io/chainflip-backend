@@ -2,7 +2,7 @@ use crate::mocks::*;
 use cf_amm_math::PRICE_FRACTIONAL_BITS;
 use cf_chains::evm::U256;
 use cf_primitives::SWAP_DELAY_BLOCKS;
-use cf_test_utilities::{assert_has_event, assert_matching_event_count};
+use cf_test_utilities::{assert_event_sequence, assert_has_event, assert_matching_event_count};
 use cf_traits::{
 	lending::ChpSystemApi,
 	mocks::{
@@ -178,6 +178,8 @@ fn basic_general_lending() {
 				INIT_COLLATERAL + origination_fee,
 			);
 
+			System::reset_events();
+
 			assert_eq!(
 				LendingPools::new_loan(
 					BORROWER,
@@ -189,15 +191,24 @@ fn basic_general_lending() {
 				Ok(LOAN_ID)
 			);
 
-			let (_network_fee, remaining_origination_fee) = take_network_fee(origination_fee);
+			let (network_fee, pool_fee) = take_network_fee(origination_fee);
 
-			System::assert_last_event(RuntimeEvent::LendingPools(Event::<Test>::LoanCreated {
-				loan_id: LOAN_ID,
-				borrower_id: BORROWER,
-				asset: LOAN_ASSET,
-				principal_amount: PRINCIPAL,
-				origination_fee,
-			}));
+			// NOTE: the sequence of events is important here
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanCreated {
+					loan_id: LOAN_ID,
+					borrower_id: BORROWER,
+					asset: LOAN_ASSET,
+					principal_amount: PRINCIPAL,
+				}),
+				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
+					loan_id: LOAN_ID,
+					pool_fee: pool_fee_taken,
+					network_fee: network_fee_taken,
+					broker_fee: 0,
+				}) if pool_fee_taken == pool_fee && network_fee_taken == network_fee
+			);
 
 			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
 			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
@@ -213,7 +224,7 @@ fn basic_general_lending() {
 
 			assert_eq!(
 				PendingPoolFees::<Test>::get(LOAN_ASSET),
-				BTreeMap::from([(COLLATERAL_ASSET, remaining_origination_fee)])
+				BTreeMap::from([(COLLATERAL_ASSET, pool_fee)])
 			);
 
 			assert_eq!(
@@ -478,6 +489,8 @@ fn basic_loan_aggregation() {
 			Ok(LOAN_ID)
 		);
 
+		System::reset_events();
+
 		// Should have enough collateral to borrow a little more on the same loan
 		{
 			assert_ok!(LendingPools::expand_loan(
@@ -490,8 +503,23 @@ fn basic_loan_aggregation() {
 			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanUpdated {
 				loan_id: LOAN_ID,
 				extra_principal_amount: EXTRA_PRINCIPAL_1,
-				origination_fee: origination_fee_2,
 			}));
+
+			let (network_fee, pool_fee) = take_network_fee(origination_fee_2);
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanUpdated {
+					loan_id: LOAN_ID,
+					extra_principal_amount: EXTRA_PRINCIPAL_1,
+				}),
+				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
+					loan_id: LOAN_ID,
+					pool_fee: pool_fee_taken,
+					network_fee: network_fee_taken,
+					broker_fee: 0,
+				}) if pool_fee_taken == pool_fee && network_fee_taken == network_fee
+			);
 
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
@@ -1043,9 +1071,16 @@ fn basic_liquidation() {
 	const SWAPPED_PRINCIPAL: AssetAmount = EXECUTED_COLLATERAL / NEW_SWAP_RATE;
 
 	let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL;
+
+	// This much will be repaid via first liquidation (everything swapped minus liquidation fee)
+	let repaid_amount_1 = SWAPPED_PRINCIPAL - liquidation_fee_1;
+
 	// How much of principal asset is bought during second liquidation:
 	const SWAPPED_PRINCIPAL_2: AssetAmount = (INIT_COLLATERAL - EXECUTED_COLLATERAL) / SWAP_RATE_2;
 	let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL_2;
+
+	// This much will be repaid via second liquidation (full principal after first repayment)
+	let repaid_amount_2 = PRINCIPAL - repaid_amount_1;
 
 	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
 	const LIQUIDATION_SWAP_2: SwapRequestId = SwapRequestId(1);
@@ -1175,14 +1210,14 @@ fn basic_liquidation() {
 			assert!(!MockSwapRequestHandler::<Test>::get_swap_requests()
 				.contains_key(&LIQUIDATION_SWAP_1));
 
-			let (liquidation_fee_network, liquidation_fee_remainder) =
+			let (liquidation_fee_network, liquidation_fee_pool) =
 				take_network_fee(liquidation_fee_1);
 
 			// Part of the principal has been repaid via liquidation:
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
-					total_amount: INIT_POOL_AMOUNT + liquidation_fee_remainder,
+					total_amount: INIT_POOL_AMOUNT + liquidation_fee_pool,
 					available_amount: INIT_POOL_AMOUNT - PRINCIPAL +
 						(SWAPPED_PRINCIPAL - liquidation_fee_network),
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
@@ -1192,6 +1227,20 @@ fn basic_liquidation() {
 			assert_eq!(
 				PendingPoolFees::<Test>::get(LOAN_ASSET),
 				BTreeMap::from([(COLLATERAL_ASSET, take_network_fee(origination_fee).1)])
+			);
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+					loan_id: LOAN_ID,
+					amount,
+				}) if amount == repaid_amount_1,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
+					loan_id: LOAN_ID,
+					pool_fee,
+					network_fee,
+					broker_fee
+				}) if pool_fee == liquidation_fee_pool && network_fee == liquidation_fee_network && broker_fee == 0
 			);
 
 			// Drop oracle price again to trigger liquidation:
@@ -1251,23 +1300,39 @@ fn basic_liquidation() {
 		.then_execute_at_next_block(|_| {
 			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
 
+			System::reset_events();
+
 			LendingPools::process_loan_swap_outcome(
 				LIQUIDATION_SWAP_2,
 				LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
 				SWAPPED_PRINCIPAL_2,
 			);
 
-			// The should now be settled:
-			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
-				loan_id: LOAN_ID,
-				via_liquidation: true,
-			}));
+			let (liquidation_fee_network_2, liquidation_fee_pool_2) =
+				take_network_fee(liquidation_fee_2);
+
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+					loan_id: LOAN_ID,
+					amount,
+				}) if amount == repaid_amount_2,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
+					loan_id: LOAN_ID,
+					pool_fee,
+					network_fee,
+					broker_fee
+				}) if pool_fee == liquidation_fee_pool_2 && network_fee == liquidation_fee_network_2 && broker_fee == 0,
+				// The should now be settled:
+				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+					loan_id: LOAN_ID,
+					via_liquidation: true,
+				})
+			);
 
 			// This excess principal asset amount will be credited to the borrower's account
-			let excess_principal = {
-				let owed_principal = PRINCIPAL - SWAPPED_PRINCIPAL + liquidation_fee_1;
-				SWAPPED_PRINCIPAL_2 - owed_principal - liquidation_fee_2
-			};
+			let excess_principal = SWAPPED_PRINCIPAL_2 - repaid_amount_2 - liquidation_fee_2;
 
 			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
 
@@ -1350,14 +1415,18 @@ fn making_loan_repayment() {
 		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 			loan_id: LOAN_ID,
 			amount: FIRST_REPAYMENT,
-			liquidation_fees: Default::default(),
 		}));
+
+		// No liquidation fees taken:
+		assert_matching_event_count!(Test, RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken{..}) => 0);
 
 		// Should not see this event yet:
 		assert_matching_event_count!(
 			Test,
 			RuntimeEvent::LendingPools(Event::<Test>::LoanSettled { .. }) => 0
 		);
+
+		System::reset_events();
 
 		// Repay the remaining principal:
 		assert_ok!(Pallet::<Test>::make_repayment(
@@ -1371,16 +1440,18 @@ fn making_loan_repayment() {
 		assert_eq!(LoanAccounts::<Test>::get(BORROWER).unwrap().collateral, collateral);
 		assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), 0);
 
-		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
-			loan_id: LOAN_ID,
-			amount: PRINCIPAL - FIRST_REPAYMENT,
-			liquidation_fees: Default::default(),
-		}));
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+				loan_id: LOAN_ID,
+				amount: amount_in_event,
+			}) if amount_in_event == PRINCIPAL - FIRST_REPAYMENT,
+			RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+				loan_id: LOAN_ID,
+				via_liquidation: false,
+			})
+		);
 
-		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
-			loan_id: LOAN_ID,
-			via_liquidation: false,
-		}));
 	});
 }
 

@@ -35,10 +35,6 @@ pub enum LiquidationStatus {
 	Liquidating { liquidation_swaps: BTreeMap<SwapRequestId, LiquidationSwap>, is_hard: bool },
 }
 
-struct ExpandLoanOutcome {
-	origination_fee: AssetAmount,
-}
-
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct LoanAccount<T: Config> {
@@ -629,7 +625,7 @@ impl<T: Config> LoanAccount<T> {
 		mut loan: GeneralLoan<T>,
 		extra_principal: AssetAmount,
 		extra_collateral: BTreeMap<Asset, AssetAmount>,
-	) -> Result<ExpandLoanOutcome, DispatchError> {
+	) -> Result<(), DispatchError> {
 		let config = LendingConfig::<T>::get();
 		let loan_asset = loan.asset;
 
@@ -650,7 +646,7 @@ impl<T: Config> LoanAccount<T> {
 
 		loan.owed_principal.saturating_accrue(extra_principal);
 
-		let origination_fee = Pallet::<T>::charge_origination_fee(
+		Pallet::<T>::charge_origination_fee(
 			&self.borrower_id,
 			&mut loan,
 			self.primary_collateral_asset,
@@ -665,7 +661,7 @@ impl<T: Config> LoanAccount<T> {
 
 		T::Balance::credit_account(&self.borrower_id, loan_asset, extra_principal);
 
-		Ok(ExpandLoanOutcome { origination_fee })
+		Ok(())
 	}
 }
 
@@ -708,25 +704,28 @@ impl<T: Config> GeneralLoan<T> {
 
 		self.repay_funds(repayment_amount);
 
-		let liquidation_fees = if liquidation_fee > 0 {
-			let remaining_fee = Pallet::<T>::take_network_fee(
+		Pallet::<T>::deposit_event(Event::LoanRepaid {
+			loan_id: self.id,
+			amount: repayment_amount,
+		});
+
+		if liquidation_fee > 0 {
+			let (pool_fee, network_fee) = Pallet::<T>::take_network_fee(
 				liquidation_fee,
 				self.asset,
 				config.network_fee_contributions.from_liquidation_fee,
 			);
 
-			Pallet::<T>::credit_fees_to_pool(self.asset, self.asset, remaining_fee);
+			Pallet::<T>::deposit_event(Event::LiquidationFeeTaken {
+				loan_id: self.id,
+				pool_fee,
+				network_fee,
+				// TODO: add support for broker fees
+				broker_fee: 0,
+			});
 
-			BTreeMap::from([(self.asset, liquidation_fee)])
-		} else {
-			Default::default()
-		};
-
-		Pallet::<T>::deposit_event(Event::LoanRepaid {
-			loan_id: self.id,
-			amount: repayment_amount,
-			liquidation_fees,
-		});
+			Pallet::<T>::credit_fees_to_pool(self.asset, self.asset, pool_fee);
+		}
 
 		if self.owed_principal == 0 {
 			// NOTE: in some cases we may want to delay settling/removing the loan (e.g. there may
@@ -972,19 +971,18 @@ impl<T: Config> LendingApi for Pallet<T> {
 				owed_principal: 0,
 			};
 
-			let ExpandLoanOutcome { origination_fee } =
-				account.expand_loan_inner(loan, amount_to_borrow, extra_collateral)?;
-
-			// Sanity check: the account either already had collateral or it was just added
-			ensure_non_zero_collateral::<T>(&account.collateral)?;
-
+			// NOTE: it is important that this event is emitted before `OriginationFeeTaken` event
 			Self::deposit_event(Event::LoanCreated {
 				loan_id,
 				borrower_id: borrower_id.clone(),
 				asset,
 				principal_amount: amount_to_borrow,
-				origination_fee,
 			});
+
+			account.expand_loan_inner(loan, amount_to_borrow, extra_collateral)?;
+
+			// Sanity check: the account either already had collateral or it was just added
+			ensure_non_zero_collateral::<T>(&account.collateral)?;
 
 			Ok::<_, DispatchError>(())
 		})?;
@@ -1006,14 +1004,12 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			let loan = loan_account.loans.remove(&loan_id).ok_or(Error::<T>::LoanNotFound)?;
 
-			let ExpandLoanOutcome { origination_fee } =
-				loan_account.expand_loan_inner(loan, extra_amount_to_borrow, extra_collateral)?;
-
 			Self::deposit_event(Event::LoanUpdated {
 				loan_id,
 				extra_principal_amount: extra_amount_to_borrow,
-				origination_fee,
 			});
+
+			loan_account.expand_loan_inner(loan, extra_amount_to_borrow, extra_collateral)?;
 
 			Ok::<_, DispatchError>(())
 		})?;
@@ -1274,17 +1270,18 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
-	/// Takes a portion from the full fee and sends it to where network fees go, returning the rest.
+	/// Takes a portion from the full fee and sends it to where network fees go, returning
+	/// (remainder, fee_taken).
 	fn take_network_fee(
 		full_fee_amount: AssetAmount,
 		fee_asset: Asset,
 		network_fee_contribution: Permill,
-	) -> AssetAmount {
+	) -> (AssetAmount, AssetAmount) {
 		let network_fee_amount = network_fee_contribution * full_fee_amount;
 
 		Self::credit_fees_to_network(fee_asset, network_fee_amount);
 
-		full_fee_amount.saturating_sub(network_fee_amount)
+		(full_fee_amount.saturating_sub(network_fee_amount), network_fee_amount)
 	}
 
 	fn create_or_update_loan_account(
@@ -1319,7 +1316,7 @@ impl<T: Config> Pallet<T> {
 		loan: &mut GeneralLoan<T>,
 		primary_collateral_asset: Asset,
 		principal: AssetAmount,
-	) -> Result<AssetAmount, DispatchError> {
+	) -> Result<(), DispatchError> {
 		let config = LendingConfig::<T>::get();
 
 		let origination_fee_amount = equivalent_amount::<T>(
@@ -1334,15 +1331,23 @@ impl<T: Config> Pallet<T> {
 			origination_fee_amount,
 		)?;
 
-		let remaining_fee = Self::take_network_fee(
+		let (pool_fee, network_fee) = Self::take_network_fee(
 			origination_fee_amount,
 			primary_collateral_asset,
 			config.network_fee_contributions.from_origination_fee,
 		);
 
-		Self::credit_fees_to_pool(loan.asset, primary_collateral_asset, remaining_fee);
+		Self::credit_fees_to_pool(loan.asset, primary_collateral_asset, pool_fee);
 
-		Ok(origination_fee_amount)
+		Self::deposit_event(Event::OriginationFeeTaken {
+			loan_id: loan.id,
+			pool_fee,
+			network_fee,
+			// TODO: add support for broker fees
+			broker_fee: 0,
+		});
+
+		Ok(())
 	}
 }
 
