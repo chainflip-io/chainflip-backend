@@ -162,14 +162,7 @@ impl ChainCrypto for SolanaCrypto {
 		payload: &Self::Payload,
 		signature: &Self::ThresholdSignature,
 	) -> bool {
-		use sp_core::ed25519::{Public, Signature};
-		use sp_io::crypto::ed25519_verify;
-
-		ed25519_verify(
-			&Signature::from_raw(signature.0),
-			payload.serialize().as_slice(),
-			&Public::from_raw(agg_key.0),
-		)
+		verify_sol_signature(agg_key, payload.serialize().as_slice(), signature)
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
@@ -663,6 +656,13 @@ pub fn decode_sol_instruction_data(
 		ccm,
 		seed: seed.try_into().map_err(|_| "Seed too long")?,
 	})
+}
+
+pub fn verify_sol_signature(signer: &SolAddress, payload: &[u8], signature: &SolSignature) -> bool {
+	use sp_core::ed25519::{Public, Signature};
+	use sp_io::crypto::ed25519_verify;
+
+	ed25519_verify(&Signature::from_raw(signature.0), payload, &Public::from_raw(signer.0))
 }
 
 #[cfg(test)]

@@ -132,6 +132,11 @@ macro_rules! assets {
 						)+
 					}
 				}
+				pub fn as_bytes(&self) -> &'static [u8] {
+					match self {
+						$( $( Self::$asset_variant => concat!($chain_string, "-", $asset_string).as_bytes(), )+ )+
+					}
+				}
 			}
 			impl From<Asset> for $crate::ForeignChain {
 				fn from(asset: Asset) -> Self {

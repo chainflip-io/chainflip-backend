@@ -281,6 +281,8 @@ impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 pub type MockBitcoinKeyProvider = MockKeyProvider<BitcoinCrypto>;
 
 impl pallet_cf_environment::Config for Test {
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
