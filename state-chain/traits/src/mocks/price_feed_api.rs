@@ -1,9 +1,7 @@
 use cf_primitives::{Asset, Price};
 
-use crate::{OraclePrice, PriceFeedApi};
-
 use super::{MockPallet, MockPalletStorage};
-
+use crate::{OraclePrice, PriceFeedApi};
 pub struct MockPriceFeedApi {}
 
 impl MockPriceFeedApi {}
