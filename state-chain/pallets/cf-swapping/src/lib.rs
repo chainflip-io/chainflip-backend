@@ -1689,97 +1689,105 @@ pub mod pallet {
 		}
 
 		/// Calculate executed price delta from the oracle price and save the result to the swap
-		/// state
+		/// state. Must be called after the final output has been set.
 		pub(super) fn calculate_oracle_delta(swap: &mut SwapState<T>) {
-			let input_oracle = T::PriceFeedApi::get_price(swap.input_asset());
-			let output_oracle = T::PriceFeedApi::get_price(swap.output_asset());
-
-			let oracle_delta = if let (Some(input_oracle), Some(output_oracle)) =
-				(&input_oracle, &output_oracle)
-			{
-				let oracle_price =
-					cf_amm::math::relative_price(input_oracle.price, output_oracle.price);
-				let oracle_amount =
-					output_amount_floor(swap.swap.input_amount.into(), oracle_price);
-				if oracle_amount.is_zero() {
-					None
-				} else {
-					let output_bps = cf_amm::math::mul_div_ceil(
-						swap.final_output.unwrap().into(),
-						MAX_BASIS_POINTS.into(),
-						oracle_amount,
-					);
-
-					let (delta_bps, sign) = if output_bps < MAX_BASIS_POINTS.into() {
-						(MAX_BASIS_POINTS.saturating_sub(output_bps.saturated_into()), -1)
-					} else {
-						(
-							output_bps
-								.saturated_into::<BasisPoints>()
-								.saturating_sub(MAX_BASIS_POINTS),
-							1,
-						)
-					};
-					Some(delta_bps.saturated_into::<SignedBasisPoints>() * sign)
-				}
-			} else {
-				None
-			};
-
-			swap.oracle_delta = oracle_delta;
-		}
-
-		/// Enforce price protections
-		pub(super) fn check_swap_price_violation(
-			swap: &SwapState<T>,
-		) -> Result<(), SwapFailureReason> {
-			if let Some(params) = swap.refund_params() {
+			if let Some(final_output) = swap.final_output {
 				let input_oracle = T::PriceFeedApi::get_price(swap.input_asset());
 				let output_oracle = T::PriceFeedApi::get_price(swap.output_asset());
 
-				// Live price protection, aka oracle price protection
-				if let Some(slippage_bps) = params.price_limits.max_oracle_price_slippage {
-					match (input_oracle, output_oracle) {
-						(Some(input_oracle), Some(output_oracle))
-							if input_oracle.stale || output_oracle.stale =>
-							return Err(SwapFailureReason::OraclePriceStale),
-						(None, _) | (_, None) => {
-							// Ignore the oracle price check if not supported/available
-							// for one of the assets.
-						},
-						(Some(input_oracle), Some(output_oracle)) => {
-							let relative_price = cf_amm::math::relative_price(
-								input_oracle.price,
-								output_oracle.price,
-							);
-							// Reduce the relative price by slippage_bps:
-							let min_oracle_price = cf_amm::math::mul_div_floor(
-								relative_price,
-								(MAX_BASIS_POINTS - slippage_bps).into(),
-								MAX_BASIS_POINTS,
-							);
-							// Use the oracle price to calculate the minimum output needed
-							let min_output_amount = output_amount_floor(
-								swap.swap.input_amount.into(),
-								min_oracle_price,
+				let oracle_delta = if let (Some(input_oracle), Some(output_oracle)) =
+					(&input_oracle, &output_oracle)
+				{
+					let oracle_price =
+						cf_amm::math::relative_price(input_oracle.price, output_oracle.price);
+					let oracle_amount =
+						output_amount_floor(swap.swap.input_amount.into(), oracle_price);
+					if oracle_amount.is_zero() {
+						None
+					} else {
+						let output_bps = cf_amm::math::mul_div_ceil(
+							final_output.into(),
+							MAX_BASIS_POINTS.into(),
+							oracle_amount,
+						);
+
+						let (delta_bps, sign) = if output_bps < MAX_BASIS_POINTS.into() {
+							(MAX_BASIS_POINTS.saturating_sub(output_bps.saturated_into()), -1)
+						} else {
+							(
+								output_bps
+									.saturated_into::<BasisPoints>()
+									.saturating_sub(MAX_BASIS_POINTS),
+								1,
 							)
-							.unique_saturated_into();
-							if swap.final_output.unwrap() < min_output_amount {
-								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
-							}
-						},
+						};
+						Some(delta_bps.saturated_into::<SignedBasisPoints>() * sign)
 					}
+				} else {
+					None
 				};
 
-				// Minimum price protection, aka FoK price protection
-				let min_price_output = output_amount_floor(
-					swap.swap.input_amount.into(),
-					params.price_limits.min_price,
-				)
-				.unique_saturated_into();
-				if swap.final_output.unwrap() < min_price_output {
-					return Err(SwapFailureReason::MinPriceViolation);
+				swap.oracle_delta = oracle_delta;
+			} else {
+				log_or_panic!("Final output should be set");
+			}
+		}
+
+		/// Enforce price protections. Must be called after the final output has been set.
+		pub(super) fn check_swap_price_violation(
+			swap: &SwapState<T>,
+		) -> Result<(), SwapFailureReason> {
+			if let Some(final_output) = swap.final_output {
+				if let Some(params) = swap.refund_params() {
+					let input_oracle = T::PriceFeedApi::get_price(swap.input_asset());
+					let output_oracle = T::PriceFeedApi::get_price(swap.output_asset());
+
+					// Live price protection, aka oracle price protection
+					if let Some(slippage_bps) = params.price_limits.max_oracle_price_slippage {
+						match (input_oracle, output_oracle) {
+							(Some(input_oracle), Some(output_oracle))
+								if input_oracle.stale || output_oracle.stale =>
+								return Err(SwapFailureReason::OraclePriceStale),
+							(None, _) | (_, None) => {
+								// Ignore the oracle price check if not supported/available
+								// for one of the assets.
+							},
+							(Some(input_oracle), Some(output_oracle)) => {
+								let relative_price = cf_amm::math::relative_price(
+									input_oracle.price,
+									output_oracle.price,
+								);
+								// Reduce the relative price by slippage_bps:
+								let min_oracle_price = cf_amm::math::mul_div_floor(
+									relative_price,
+									(MAX_BASIS_POINTS - slippage_bps).into(),
+									MAX_BASIS_POINTS,
+								);
+								// Use the oracle price to calculate the minimum output needed
+								let min_output_amount = output_amount_floor(
+									swap.swap.input_amount.into(),
+									min_oracle_price,
+								)
+								.unique_saturated_into();
+								if final_output < min_output_amount {
+									return Err(SwapFailureReason::OraclePriceSlippageExceeded);
+								}
+							},
+						}
+					};
+
+					// Minimum price protection, aka FoK price protection
+					let min_price_output = output_amount_floor(
+						swap.swap.input_amount.into(),
+						params.price_limits.min_price,
+					)
+					.unique_saturated_into();
+					if final_output < min_price_output {
+						return Err(SwapFailureReason::MinPriceViolation);
+					}
 				}
+			} else {
+				log_or_panic!("Final output should be set");
 			}
 			Ok(())
 		}
