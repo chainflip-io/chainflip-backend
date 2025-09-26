@@ -421,6 +421,42 @@ mod tests {
 		}
 	}
 
+	proptest! {
+		#[test]
+		fn validator_bond_amounts_capped(
+			validator_amounts in prop::collection::vec(1u128..1_000_000u128, 1..10),
+			bond in 1u128..1_000_000u128,
+		) {
+			// Create a delegation snapshot
+			let snapshot = DelegationSnapshot::<ValidatorId, u128> {
+				validators: validator_amounts.iter().enumerate()
+					.map(|(i, bid)| (i as u64 + 100, *bid))
+					.collect(),
+				..Default::default()
+			};
+
+			// Distribute the total amount
+			new_test_ext().execute_with(|| {
+				let dist = snapshot.validator_bond_distribution(bond);
+
+				// Total bond cannot exceed
+				let max_expected_bond = bond * snapshot.validators.len() as u128;
+				let total_bonded = dist.values().sum::<u128>();
+				let total_available_stake = snapshot.validators.values().sum();
+
+				prop_assert!(
+					total_bonded == core::cmp::min(
+						total_available_stake
+						,max_expected_bond
+
+					)
+				);
+
+				Ok(())
+			});
+		}
+	}
+
 	#[test]
 	fn test_validator_bond_distribution() {
 		let snapshot = DelegationSnapshot::<u64, u128> {
