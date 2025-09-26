@@ -209,14 +209,6 @@ enum FullWitnessDepositOutcome {
 	BoostConsumed,
 	BoostNotConsumed,
 }
-
-#[derive(RuntimeDebug, Clone)]
-pub struct ValidatedVaultSwapParams<AccountId> {
-	pub broker_fees: BoundedVec<Beneficiary<AccountId>, ConstU32<6>>,
-	pub egress_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
-	pub destination_address: ForeignChainAddress,
-}
-
 mod deposit_origin {
 
 	use super::*;
