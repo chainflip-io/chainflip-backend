@@ -53,8 +53,8 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 
 pub type PalletMigration<T> = (
 	VersionedMigration<
-		18,
 		19,
+		20,
 		chainflip_network_name_environment::CfNetworkNameEnvironmentMigration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,

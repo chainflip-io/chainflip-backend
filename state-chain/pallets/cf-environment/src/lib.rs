@@ -71,7 +71,7 @@ const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
 const USER_RUNTIME_CALL_VERSION: &str = "0";
 const BATCHED_CALL_LIMITS: usize = 10;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(19);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(20);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
