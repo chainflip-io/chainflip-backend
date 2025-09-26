@@ -937,14 +937,14 @@ fn swap_collected_pool_fees() {
 			);
 
 			assert_has_event::<Test>(RuntimeEvent::LendingPools(
-				Event::<Test>::LendingPoolFeeCollectionInitiated {
+				Event::<Test>::LendingPoolFeeSwapInitiated {
 					asset: LOAN_ASSET,
 					swap_request_id: POOL_FEE_SWAP_ID,
 				},
 			));
 
 			assert_has_event::<Test>(RuntimeEvent::LendingPools(
-				Event::<Test>::LendingNetworkFeeCollectionInitiated {
+				Event::<Test>::LendingNetworkFeeSwapInitiated {
 					swap_request_id: NETWORK_FEE_SWAP_ID,
 				},
 			));

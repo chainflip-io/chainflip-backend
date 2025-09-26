@@ -913,7 +913,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 							config.fee_swap_max_oracle_slippage,
 						);
 
-						Pallet::<T>::deposit_event(Event::LendingPoolFeeCollectionInitiated {
+						Pallet::<T>::deposit_event(Event::LendingPoolFeeSwapInitiated {
 							asset: pool_asset,
 							swap_request_id,
 						});
@@ -931,7 +931,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 					let swap_request_id =
 						T::SwapRequestHandler::init_network_fee_swap_request(asset, *fee_amount);
 
-					Pallet::<T>::deposit_event(Event::LendingNetworkFeeCollectionInitiated {
+					Pallet::<T>::deposit_event(Event::LendingNetworkFeeSwapInitiated {
 						swap_request_id,
 					});
 				}
