@@ -324,6 +324,8 @@ pub enum SwapFailureReason {
 	PredecessorSwapFailure,
 	/// Swapping is disabled due to safe mode
 	SafeModeActive,
+	/// Some unexpected state has been reached.
+	LogicError,
 }
 
 pub enum BatchExecutionError<T: Config> {
@@ -415,8 +417,8 @@ impl DcaState {
 			self.accumulated_output_amount += completed_chunk_output_amount;
 		} else {
 			log_or_panic!(
-					"Invariant violation: the completed swap id {completed_chunk_swap_id} does not match a scheduled chunk."
-				);
+				"Invariant violation: the completed swap id {completed_chunk_swap_id} does not match a scheduled chunk."
+			);
 		}
 	}
 }
@@ -1689,8 +1691,13 @@ pub mod pallet {
 		}
 
 		/// Calculate executed price delta from the oracle price and save the result to the swap
-		/// state
+		/// state. Must be called after the final output has been set.
 		pub(super) fn calculate_oracle_delta(swap: &mut SwapState<T>) {
+			let Some(final_output) = swap.final_output else {
+				log_or_panic!("Final output should be set");
+				return;
+			};
+
 			let oracle_delta = if let Some(oracle_price) =
 				T::PriceFeedApi::get_relative_price(swap.input_asset(), swap.output_asset())
 			{
@@ -1700,7 +1707,7 @@ pub mod pallet {
 					None
 				} else {
 					let output_bps = cf_amm::math::mul_div_ceil(
-						swap.final_output.unwrap().into(),
+						final_output.into(),
 						MAX_BASIS_POINTS.into(),
 						oracle_amount,
 					);
@@ -1724,10 +1731,15 @@ pub mod pallet {
 			swap.oracle_delta = oracle_delta;
 		}
 
-		/// Enforce price protections
+		/// Enforce price protections. Must be called after the final output has been set.
 		pub(super) fn check_swap_price_violation(
 			swap: &SwapState<T>,
 		) -> Result<(), SwapFailureReason> {
+			let Some(final_output) = swap.final_output else {
+				log_or_panic!("Final output should be set");
+				return Err(SwapFailureReason::LogicError);
+			};
+
 			if let Some(params) = swap.refund_params() {
 				// Live price protection, aka oracle price protection
 				if let Some(slippage_bps) = params.price_limits.max_oracle_price_slippage {
@@ -1749,7 +1761,7 @@ pub mod pallet {
 								min_oracle_price,
 							)
 							.unique_saturated_into();
-							if swap.final_output.unwrap() < min_output_amount {
+							if final_output < min_output_amount {
 								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
 							}
 						}
@@ -1762,10 +1774,11 @@ pub mod pallet {
 					params.price_limits.min_price,
 				)
 				.unique_saturated_into();
-				if swap.final_output.unwrap() < min_price_output {
+				if final_output < min_price_output {
 					return Err(SwapFailureReason::MinPriceViolation);
 				}
 			}
+
 			Ok(())
 		}
 
