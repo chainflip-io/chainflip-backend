@@ -10,7 +10,7 @@ import { globalLogger } from 'shared/utils/logger';
 export const TransactionMetadata = Struct({
   nonce: u32,
   expiryBlock: u32,
-  atomic: bool
+  atomic: bool,
 });
 export const ChainNameCodec = str;
 export const VersionCodec = str;
@@ -33,7 +33,7 @@ export function encodeDomainDataToSign(
   const transactionMetadata = TransactionMetadata.enc({
     nonce,
     expiryBlock: userExpiryBlock,
-    atomic
+    atomic,
   });
   const chainNameBytes = ChainNameCodec.enc(chainName);
   const versionBytes = VersionCodec.enc(version);
@@ -88,7 +88,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
       {
         nonce: svmNonce,
         expiryBlock,
-        atomic
+        atomic,
       },
       {
         Solana: {

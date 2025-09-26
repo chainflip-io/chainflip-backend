@@ -624,6 +624,9 @@ pub mod pallet {
 			T::AssethubVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)
 		}
 
+		// TODO: User should be charged a transaction fee. For now that is not the case (no tx fee).
+		// Ideally it should follow the same fee curve as regular txs, so that it can be set
+		// exponential by governance.
 		#[pallet::call_index(10)]
 		#[pallet::weight({
 			let (dispatch_weight, dispatch_class) = Pallet::<T>::weight_and_dispatch_class(calls);
@@ -648,7 +651,6 @@ pub mod pallet {
 			// Increment the account nonce to prevent replay attacks
 			frame_system::Pallet::<T>::inc_account_nonce(&signer_account_id);
 
-			// Don't fail so the nonce is increased
 			let dispatch_result = Self::dispatch_user_calls(
 				calls.clone(),
 				signer_account_id.clone(),
@@ -1050,13 +1052,12 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	// TODO: User should be charged for the fee, pretty sure it is not right now.
 	/// Dispatches a call from the user account. If `atomic` is true, uses transactional semantics
 	/// where if any call dispatch returns `Err`, all storage updates are rolled back. If `atomic`
 	/// is false, executes calls without transaction protection and always returns Ok, executing
 	/// as best effort.
 	/// Inspiration from pallet_utility
-	/// https://paritytech.github.io/polkadot-sdk/master/pallet_utility/pallet/struct.Pallet.html#method.batch_all
+	/// https://paritytech.github.io/polkadot-sdk/master/pallet_utility/pallet/struct.Pallet.html
 	fn dispatch_user_calls(
 		calls: Vec<<T as Config>::RuntimeCall>,
 		user_account: T::AccountId,
@@ -1109,7 +1110,7 @@ impl<T: Config> Pallet<T> {
 		calls: Vec<<T as Config>::RuntimeCall>,
 		user_account: T::AccountId,
 	) -> Result<Weight, (usize, DispatchErrorWithPostInfo)> {
-		// Track the actual weight of each of the batch calls with transaction protection.
+		// Track the actual weight of each of the batch calls
 		let mut weight = Weight::zero();
 		let calls_len = calls.len();
 
@@ -1118,7 +1119,7 @@ impl<T: Config> Pallet<T> {
 
 			let origin = frame_system::RawOrigin::Signed(user_account.clone()).into();
 
-			// Don't allow users to nest `batch_all` calls.
+			// Don't allow users to nest `submit_signed_runtime_call` calls.
 			if let Some(Call::submit_signed_runtime_call { .. }) = call.is_sub_type() {
 				let base_weight =
 					T::WeightInfo::submit_signed_runtime_call(index.saturating_add(1) as u32);
