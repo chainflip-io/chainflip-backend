@@ -47,11 +47,11 @@ use cf_traits::{
 };
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::{DispatchResult, GetDispatchInfo},
+	dispatch::{DispatchErrorWithPostInfo, DispatchResult, GetDispatchInfo},
 	pallet_prelude::{InvalidTransaction, *},
 	sp_runtime::{traits::Get, AccountId32, DispatchError, TransactionOutcome},
 	storage::with_transaction,
-	traits::{StorageVersion, UnfilteredDispatchable},
+	traits::{IsSubType, StorageVersion, UnfilteredDispatchable},
 	unsigned::{TransactionValidity, ValidateUnsigned},
 };
 use frame_system::pallet_prelude::*;
@@ -153,7 +153,9 @@ pub mod pallet {
 			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
 			+ From<frame_system::Call<Self>>
 			+ From<Call<Self>>
-			+ GetDispatchInfo;
+			+ GetDispatchInfo
+			+ IsSubType<Call<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// Weight information
 		type WeightInfo: WeightInfo;
@@ -376,7 +378,7 @@ pub mod pallet {
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
 		/// Batch of dispatches failed at a specific index.
-		BatchFailed { dispatch_error: frame_support::dispatch::DispatchErrorWithPostInfo },
+		BatchFailed { dispatch_error: DispatchErrorWithPostInfo, failure_index: u32 },
 	}
 
 	#[pallet::call]
@@ -631,10 +633,10 @@ pub mod pallet {
 		pub fn submit_signed_runtime_call(
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::RuntimeCall>,
-			_transaction_metadata: TransactionMetadata,
+			transaction_metadata: TransactionMetadata,
 			user_signature_data: UserSignatureData,
 		) -> DispatchResult {
-			// This is now an unsigned extrinsic - validation happens in ValidateUnsigned
+			// unsigned extrinsic - validation happens in ValidateUnsigned
 			frame_system::ensure_none(origin)?;
 
 			// Extract signer account ID based on signature type. Validation already done in
@@ -647,13 +649,11 @@ pub mod pallet {
 			frame_system::Pallet::<T>::inc_account_nonce(&signer_account_id);
 
 			// Don't fail so the nonce is increased
-			let dispatch_result =
-				Self::dispatch_user_calls(calls.clone(), signer_account_id.clone());
-
-			match dispatch_result {
-				Ok(_) => Self::deposit_event(Event::BatchCompleted),
-				Err(dispatch_error) => Self::deposit_event(Event::BatchFailed { dispatch_error }),
-			};
+			let dispatch_result = Self::dispatch_user_calls(
+				calls.clone(),
+				signer_account_id.clone(),
+				transaction_metadata.atomic,
+			);
 
 			Self::deposit_event(Event::<T>::SignedRuntimeCallSubmitted {
 				signer_account_id,
@@ -1050,52 +1050,105 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	// TODO: Add support for best-effort batches? I think for that we don't need to store state
-	// with `with_transaction`, we can directly execute call by call like the `fn batch` in:
-	// https://paritytech.github.io/polkadot-sdk/master/src/pallet_utility/lib.rs.html#199
 	// TODO: User should be charged for the fee, pretty sure it is not right now.
-	/// Dispatches a call from the user account, with transactional semantics, ie. if the call
-	/// dispatch returns `Err`, rolls back any storage updates. Inspiration from pallet_utility
+	/// Dispatches a call from the user account. If `atomic` is true, uses transactional semantics
+	/// where if any call dispatch returns `Err`, all storage updates are rolled back. If `atomic`
+	/// is false, executes calls without transaction protection and always returns Ok, executing
+	/// as best effort.
+	/// Inspiration from pallet_utility
 	/// https://paritytech.github.io/polkadot-sdk/master/pallet_utility/pallet/struct.Pallet.html#method.batch_all
 	fn dispatch_user_calls(
 		calls: Vec<<T as Config>::RuntimeCall>,
 		user_account: T::AccountId,
+		atomic: bool,
 	) -> DispatchResultWithPostInfo {
 		let calls_len = calls.len();
 		if calls_len > BATCHED_CALL_LIMITS {
 			return Err(Error::<T>::TooManyCalls.into());
 		}
 
-		// Track the actual weight of each of the batch calls.
-		with_transaction(|| {
-			let mut weight = Weight::zero();
+		if atomic {
+			let result = with_transaction(|| {
+				let result = Self::execute_batch_calls(calls, user_account);
+				match result {
+					Ok(weight) => TransactionOutcome::Commit(Ok(Some(weight).into())),
+					Err((_, err)) => TransactionOutcome::Rollback(Err(err)),
+				}
+			});
+			match result {
+				Ok(_) => Self::deposit_event(Event::BatchCompleted),
+				// Revert the entire batch
+				Err(err) => Self::deposit_event(Event::BatchFailed {
+					dispatch_error: err,
+					failure_index: 0_u32,
+				}),
+			};
+			result
+		} else {
+			let result = Self::execute_batch_calls(calls, user_account);
+			match result {
+				Ok(weight) => {
+					Self::deposit_event(Event::BatchCompleted);
+					Ok(Some(weight).into())
+				},
+				Err((failure_index, err)) => {
+					Self::deposit_event(Event::BatchFailed {
+						dispatch_error: err,
+						failure_index: failure_index as u32,
+					});
+					let weight = err.post_info.actual_weight.unwrap_or_default();
+					Ok(Some(weight).into())
+				},
+			}
+		}
+	}
 
-			for (index, call) in calls.into_iter().enumerate() {
-				let info = call.get_dispatch_info();
+	/// Executes a batch of calls and returns the total weight or an error with an associated call
+	/// index.
+	fn execute_batch_calls(
+		calls: Vec<<T as Config>::RuntimeCall>,
+		user_account: T::AccountId,
+	) -> Result<Weight, (usize, DispatchErrorWithPostInfo)> {
+		// Track the actual weight of each of the batch calls with transaction protection.
+		let mut weight = Weight::zero();
+		let calls_len = calls.len();
 
-				let origin = frame_system::RawOrigin::Signed(user_account.clone()).into();
+		for (index, call) in calls.into_iter().enumerate() {
+			let info = call.get_dispatch_info();
 
-				// TODO: Add check for nesting?
-				// https://paritytech.github.io/polkadot-sdk/master/src/pallet_utility/lib.rs.html#330
-				let result = call.dispatch_bypass_filter(origin);
-				// Add the weight of this call.
-				weight = weight
-					.saturating_add(frame_support::dispatch::extract_actual_weight(&result, &info));
+			let origin = frame_system::RawOrigin::Signed(user_account.clone()).into();
 
-				if let Err(mut err) = result {
-					// Adjust error weight before rollback
-					let base_weight =
-						T::WeightInfo::submit_signed_runtime_call(index.saturating_add(1) as u32);
-					err.post_info = Some(base_weight.saturating_add(weight)).into();
-					return TransactionOutcome::Rollback(Err(err));
+			// Don't allow users to nest `batch_all` calls.
+			if let Some(Call::submit_signed_runtime_call { .. }) = call.is_sub_type() {
+				let base_weight =
+					T::WeightInfo::submit_signed_runtime_call(index.saturating_add(1) as u32);
+				let err = DispatchErrorWithPostInfo {
+					post_info: Some(base_weight.saturating_add(weight)).into(),
+					error: DispatchError::Other("Nested submit_signed_runtime_call not allowed"),
 				};
+				return Err((index, err));
 			}
 
-			// All calls succeeded -> commit
-			let base_weight = T::WeightInfo::submit_signed_runtime_call(calls_len as u32);
-			let total_weight = base_weight.saturating_add(weight);
-			TransactionOutcome::Commit(Ok(Some(total_weight).into()))
-		})
+			let result = call.dispatch_bypass_filter(origin);
+
+			// Add the weight of this call.
+			weight = weight
+				.saturating_add(frame_support::dispatch::extract_actual_weight(&result, &info));
+
+			if let Err(mut err) = result {
+				// Take the weight of this function itself into account.
+				let base_weight =
+					T::WeightInfo::submit_signed_runtime_call(index.saturating_add(1) as u32);
+				// Return the actual used weight + base_weight of this call.
+				err.post_info = Some(base_weight.saturating_add(weight)).into();
+				return Err((index, err));
+			};
+		}
+
+		// All calls succeeded -> return total weight
+		let base_weight = T::WeightInfo::submit_signed_runtime_call(calls_len as u32);
+		let total_weight = base_weight.saturating_add(weight);
+		Ok(total_weight)
 	}
 
 	/// `signer is not technically necessary but is added as part of the metadata so
@@ -1144,6 +1197,7 @@ impl<T: Config> NetworkEnvironmentProvider for Pallet<T> {
 pub struct TransactionMetadata {
 	nonce: u32,
 	expiry_block: BlockNumber,
+	atomic: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]

@@ -4,12 +4,13 @@ import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
-import { Struct, u32, str /* Enum, u128, u8 */ } from 'scale-ts';
+import { Struct, u32, str, bool /* Enum, u128, u8 */ } from 'scale-ts';
 import { globalLogger } from 'shared/utils/logger';
 
 export const TransactionMetadata = Struct({
   nonce: u32,
   expiryBlock: u32,
+  atomic: bool
 });
 export const ChainNameCodec = str;
 export const VersionCodec = str;
@@ -22,6 +23,7 @@ const expiryBlock = 10000;
 // For now hardcoded in the SC. It should be network dependent.
 const chainName = 'Chainflip-Development';
 const version = '0';
+const atomic = false;
 
 export function encodeDomainDataToSign(
   payload: Uint8Array,
@@ -31,6 +33,7 @@ export function encodeDomainDataToSign(
   const transactionMetadata = TransactionMetadata.enc({
     nonce,
     expiryBlock: userExpiryBlock,
+    atomic
   });
   const chainNameBytes = ChainNameCodec.enc(chainName);
   const versionBytes = VersionCodec.enc(version);
@@ -85,6 +88,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
       {
         nonce: svmNonce,
         expiryBlock,
+        atomic
       },
       {
         Solana: {
@@ -138,6 +142,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
       {
         nonce: evmNonce,
         expiryBlock,
+        atomic,
       },
       {
         Ethereum: {
