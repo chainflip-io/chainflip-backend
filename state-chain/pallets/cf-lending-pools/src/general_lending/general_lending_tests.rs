@@ -340,6 +340,7 @@ fn basic_general_lending() {
 
 			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 				loan_id: LOAN_ID,
+				outstanding_principal: 0,
 				via_liquidation: false,
 			}));
 
@@ -1324,9 +1325,10 @@ fn basic_liquidation() {
 					network_fee,
 					broker_fee
 				}) if pool_fee == liquidation_fee_pool_2 && network_fee == liquidation_fee_network_2 && broker_fee == 0,
-				// The should now be settled:
+				// The loan should now be settled:
 				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 					loan_id: LOAN_ID,
+					outstanding_principal: 0,
 					via_liquidation: true,
 				})
 			);
@@ -1364,6 +1366,92 @@ fn basic_liquidation() {
 					loans: Default::default()
 				})
 			);
+		});
+}
+
+#[test]
+fn liquidation_with_outstanding_principal() {
+	// Test a scenario where a loan is liquidated and the recovered principal
+	// isn't enought to cover the total loan amount.
+
+	const COLLATERAL_ASSET: Asset = Asset::Eth;
+	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
+
+	const RECOVERED_PRINCIPAL: AssetAmount = 3 * PRINCIPAL / 4;
+
+	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
+	let collateral = BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]);
+
+	const NEW_SWAP_RATE: u128 = SWAP_RATE * 2;
+
+	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
+
+	new_test_ext()
+		.execute_with(|| {
+			setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
+			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+
+			MockBalance::credit_account(
+				&BORROWER,
+				COLLATERAL_ASSET,
+				INIT_COLLATERAL + origination_fee,
+			);
+
+			assert_eq!(
+				LendingPools::new_loan(
+					BORROWER,
+					LOAN_ASSET,
+					PRINCIPAL,
+					Some(COLLATERAL_ASSET),
+					collateral.clone(),
+				),
+				Ok(LOAN_ID)
+			);
+
+			// Drop oracle price to trigger liquidation
+			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+		})
+		.then_execute_at_next_block(|_| {
+			assert!(MockSwapRequestHandler::<Test>::get_swap_requests()
+				.contains_key(&LIQUIDATION_SWAP_1));
+
+			System::reset_events();
+
+			LendingPools::process_loan_swap_outcome(
+				LIQUIDATION_SWAP_1,
+				LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
+				RECOVERED_PRINCIPAL,
+			);
+
+			let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * RECOVERED_PRINCIPAL;
+			let (liquidation_fee_network, liquidation_fee_pool) =
+				take_network_fee(liquidation_fee);
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+					loan_id: LOAN_ID,
+					amount
+				}) if amount == RECOVERED_PRINCIPAL - liquidation_fee,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
+					loan_id: LOAN_ID,
+					pool_fee,
+					network_fee,
+					broker_fee
+				}) if pool_fee == liquidation_fee_pool && network_fee == liquidation_fee_network && broker_fee == 0,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+					loan_id: LOAN_ID,
+					outstanding_principal,
+					via_liquidation: true,
+				}) if outstanding_principal == PRINCIPAL - RECOVERED_PRINCIPAL + liquidation_fee
+			);
+
+			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
+			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
+
+			// The account has no loans and no collateral, so it should have been removed:
+			assert!(!LoanAccounts::<Test>::contains_key(&BORROWER));
 		});
 }
 
@@ -1448,6 +1536,7 @@ fn making_loan_repayment() {
 			}) if amount_in_event == PRINCIPAL - FIRST_REPAYMENT,
 			RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 				loan_id: LOAN_ID,
+				outstanding_principal: 0,
 				via_liquidation: false,
 			})
 		);

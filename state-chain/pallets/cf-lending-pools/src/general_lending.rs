@@ -615,8 +615,12 @@ impl<T: Config> LoanAccount<T> {
 	}
 
 	fn settle_loan(&mut self, loan_id: LoanId, via_liquidation: bool) {
-		if let Some(_loan) = self.loans.remove(&loan_id) {
-			Pallet::<T>::deposit_event(Event::LoanSettled { loan_id, via_liquidation });
+		if let Some(loan) = self.loans.remove(&loan_id) {
+			Pallet::<T>::deposit_event(Event::LoanSettled {
+				loan_id,
+				outstanding_principal: loan.owed_principal,
+				via_liquidation,
+			});
 		}
 	}
 
@@ -1154,7 +1158,7 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 	) {
 		match swap_type {
 			LendingSwapType::Liquidation { borrower_id, loan_id } => {
-				LoanAccounts::<T>::mutate(&borrower_id, |maybe_account| {
+				LoanAccounts::<T>::mutate_exists(&borrower_id, |maybe_account| {
 					let Some(loan_account) = maybe_account else {
 						log_or_panic!("Loan account does not exist for {borrower_id:?}");
 						return;
@@ -1216,16 +1220,23 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 
 					// Any amount left after repaying the loan is added to the borrower's
 					// collateral balance:
-					loan_account
-						.collateral
-						.entry(liquidation_swap.to_asset)
-						.or_default()
-						.saturating_accrue(remaining_amount);
+					if remaining_amount > 0 {
+						loan_account
+							.collateral
+							.entry(liquidation_swap.to_asset)
+							.or_default()
+							.saturating_accrue(remaining_amount);
+					}
 
 					// If this swap is the last liquidation swap for the loan, we should
 					// "settle" it (even if it hasn't been repaid in full):
 					if is_last_liquidation_swap {
 						loan_account.settle_loan(loan_id, true /* via liquidation */);
+
+						// If account has no loans and no collateral, it should now be removed
+						if loan_account.loans.is_empty() && loan_account.collateral.is_empty() {
+							*maybe_account = None;
+						}
 					}
 				});
 			},

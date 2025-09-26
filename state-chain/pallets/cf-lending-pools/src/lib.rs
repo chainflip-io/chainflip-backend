@@ -534,6 +534,10 @@ pub mod pallet {
 		},
 		LoanSettled {
 			loan_id: LoanId,
+			/// The amount of principal that the borrower failed to repay at the time of settlement
+			/// (can only be non-zero as a result of liquidation that didn't fully recover the
+			/// principal)
+			outstanding_principal: AssetAmount,
 			/// Indicates whether the loan was settled as a result of liquidation.
 			via_liquidation: bool,
 		},
