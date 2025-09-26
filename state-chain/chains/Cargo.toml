@@ -70,6 +70,7 @@ derive-where = "1.2.7"
 proptest = { version = "1.6", optional = true }
 duplicate = "2.0.0"
 saturating_cast = "0.1.0"
+n-functor = { workspace = true }
 
 # Substrate packages
 ss58-registry = { workspace = true, optional = true }

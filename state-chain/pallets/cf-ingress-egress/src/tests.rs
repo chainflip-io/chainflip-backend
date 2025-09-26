@@ -2746,7 +2746,6 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 		asset: EthAsset::Eth,
 		deposit_details: Default::default(),
 		deposit_address: None,
-		source_address: None,
 		action: ChannelAction::LiquidityProvision {
 			lp_account: 0,
 			refund_address: ForeignChainAddress::Eth(Default::default()),
@@ -2762,7 +2761,6 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 			deposit.asset,
 			deposit.amount,
 			deposit.deposit_details.clone(),
-			deposit.source_address.clone(),
 			boost_status,
 			deposit.boost_fee,
 			deposit.channel_id,

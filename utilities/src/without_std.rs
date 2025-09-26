@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod bounded_vec;
 pub mod conditional;
 
 pub const fn bs58_array<const S: usize>(s: &'static str) -> [u8; S] {
