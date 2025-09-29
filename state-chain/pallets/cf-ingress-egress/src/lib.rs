@@ -2708,15 +2708,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let refund_action = |reason| ChannelAction::Refund {
 			reason,
 			refund_address,
-			refund_ccm_metadata: checked_refund_params.refund_ccm_metadata.clone().map(
-				|mut refund_ccm_metadata| {
-					// TODO: Check: @Albert is this intentional? setting the
-					// source_address to None is what implicitly happened in the
-					// refund flow until now
-					refund_ccm_metadata.source_address = None;
-					refund_ccm_metadata
-				},
-			),
+			refund_ccm_metadata: checked_refund_params.refund_ccm_metadata.clone(),
 		};
 
 		// ------ fees -----
