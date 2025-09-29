@@ -117,7 +117,16 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ChannelActionCcmRef
 							channel_metadata,
 							refund_params: ChannelRefundParameters {
 								retry_duration,
-								refund_address,
+								// We migrate the refund address from `AccountOrAddress` to simply a
+								// ForeignChainAddress. It should not have been possible to
+								// create deposit channels that have an internal refund address.
+								refund_address: match refund_address.clone() {
+									AccountOrAddress::InternalAccount(_) => {
+										log::error!("Encountered deposit channel with refund address that's an InternalAccount! ({:?})", refund_address);
+										return None
+									},
+									AccountOrAddress::ExternalAddress(address) => address,
+								},
 								min_price,
 								refund_ccm_metadata: refund_ccm_metadata.map(|d| {
 									// extract the `CcmChannelMetadata` from `CcmDepositMetadata`

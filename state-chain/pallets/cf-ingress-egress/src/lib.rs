@@ -543,14 +543,11 @@ pub mod pallet {
 		Swap {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
-			#[map_with(|arg, f| map_bounded_vec(arg, |x: Beneficiary<_>| x.map(f)))]
+			#[map_with(|beneficiaries, f| map_bounded_vec(beneficiaries, |beneficiary: Beneficiary<_>| beneficiary.map(f)))]
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: Option<CcmMetadata>,
-			#[map_with(|arg: ChannelRefundParameters<_,_>, f0, f1| arg.map(|x: AccountOrAddress<_,_>| x.map(f0, |a| a), |z: Option<_>| z.map(f1)))]
-			refund_params: ChannelRefundParameters<
-				AccountOrAddress<AccountId, ForeignChainAddress>,
-				Option<CcmMetadata>,
-			>,
+			#[map_with(|refund_parameters: ChannelRefundParameters<_,_>, f| refund_parameters.map(|address| address, |metadata: Option<_>| metadata.map(f)))]
+			refund_params: ChannelRefundParameters<ForeignChainAddress, Option<CcmMetadata>>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
@@ -2069,7 +2066,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						},
 					},
 					broker_fees,
-					Some(refund_params.into()),
+					Some(
+						refund_params
+							.map(AccountOrAddress::ExternalAddress, |refund_details| refund_details)
+							.into(),
+					),
 					dca_params.clone(),
 					origin.into(),
 				);
@@ -2515,17 +2516,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 					if is_marked_by_broker_or_screening_id {
 						let (refund_address, refund_ccm_metadata) = match &action {
-							ChannelAction::Swap { refund_params, .. } =>
-							// Refund address for a deposit must be external address
-								if let AccountOrAddress::ExternalAddress(refund_addr) =
-									refund_params.refund_address.clone()
-								{
-									Ok((refund_addr, refund_params.refund_ccm_metadata.clone()))
-								} else {
-									Err(DepositFailedReason::DepositWitnessRejected(
-										"Invalid Refund address".into(),
-									))
-								}?,
+							ChannelAction::Swap { refund_params, .. } => (
+								refund_params.refund_address.clone(),
+								refund_params.refund_ccm_metadata.clone(),
+							),
 							ChannelAction::LiquidityProvision { refund_address, .. } =>
 								(refund_address.clone(), None),
 							ChannelAction::Refund {
@@ -2695,15 +2689,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// ------ refund parameters -----
 
 		let refund_address = refund_params.refund_address.clone();
-		let checked_refund_params =
-			match refund_params.map_refund_address_to_foreign_chain_address().into_checked(
+		let Ok(checked_refund_params) =
+			refund_params.map_refund_address_to_foreign_chain_address().into_checked(
 				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
 				source_asset.into(),
-			) {
-				Ok(checked_refund_params) =>
-					checked_refund_params.map_address(AccountOrAddress::ExternalAddress),
-				Err(_) => return ChannelAction::Unrefundable,
-			};
+			)
+		else {
+			return ChannelAction::Unrefundable;
+		};
 
 		let refund_action = |reason| ChannelAction::Refund {
 			reason,
@@ -3301,7 +3294,6 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 				refund_params: refund_params
 					.map_refund_address_to_foreign_chain_address()
 					.into_checked(None, source_asset.into())?
-					.map_address(AccountOrAddress::ExternalAddress)
 					// we map the CcmDepositMetadata to a CcmChannelMetadata, forgetting the other
 					// fields:
 					.map(|x| x, |y| y.map(|y| y.channel_metadata)),
