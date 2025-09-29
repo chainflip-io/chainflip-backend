@@ -750,7 +750,7 @@ fn can_dispatch_solana_gov_call() {
 }
 
 #[test]
-fn can_submit_signed_runtime_call() {
+fn can_submit_unsigned_batch_runtime_call() {
 	new_test_ext().execute_with(|| {
         // Prepare a simple runtime call (e.g., a remark call from frame_system)
         let remark_call = frame_system::Call::<Test>::remark { remark: vec![42] };
@@ -780,7 +780,7 @@ fn can_submit_signed_runtime_call() {
         let initial_nonce = frame_system::Pallet::<Test>::account_nonce(caller);
         assert_eq!(initial_nonce, 0);
 
-        assert_ok!(Environment::submit_signed_runtime_call(
+        assert_ok!(Environment::submit_unsigned_batch_runtime_call(
             RuntimeOrigin::none(),
             calls.clone(),
             transaction_metadata,

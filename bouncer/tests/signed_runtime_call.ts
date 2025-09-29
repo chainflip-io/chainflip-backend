@@ -83,7 +83,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   // Submit as unsigned extrinsic - no broker needed
   await chainflip.tx.environment
-    .submitSignedRuntimeCall(
+    .submitUnsignedBatchRuntimeCall(
       // Solana prefix will be added in the SC previous to signature verification
       hexRuntimeCall,
       {
@@ -137,7 +137,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   // Submit as unsigned extrinsic - no broker needed
   await chainflip.tx.environment
-    .submitSignedRuntimeCall(
+    .submitUnsignedBatchRuntimeCall(
       // Ethereum prefix will be added in the SC previous to signature verification
       hexRuntimeCall,
       {
@@ -228,7 +228,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   // await brokerMutex.runExclusive(brokerUri, async () => {
   //   const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
   //   await chainflip.tx.environment
-  //     .submitSignedRuntimeCall(
+  //     .submitUnsignedBatchRuntimeCall(
   //       // The  EIP-712 payload will be build in the State chain previous to signature verification
   //       hexRuntimeCall,
   //       {

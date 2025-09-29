@@ -68,7 +68,7 @@ pub mod migrations;
 
 const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
 const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
-const USER_RUNTIME_CALL_VERSION: &str = "0";
+const UNSIGNED_BATCH_VERSION: &str = "0";
 const BATCHED_CALL_LIMITS: usize = 10;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(20);
@@ -629,10 +629,10 @@ pub mod pallet {
 		#[pallet::call_index(10)]
 		#[pallet::weight({
 			let (dispatch_weight, dispatch_class) = Pallet::<T>::weight_and_dispatch_class(calls);
-			let dispatch_weight = dispatch_weight.saturating_add(T::WeightInfo::submit_signed_runtime_call(calls.len() as u32));
+			let dispatch_weight = dispatch_weight.saturating_add(T::WeightInfo::submit_unsigned_batch_runtime_call(calls.len() as u32));
 			(dispatch_weight, dispatch_class)
 		})]
-		pub fn submit_signed_runtime_call(
+		pub fn submit_unsigned_batch_runtime_call(
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::RuntimeCall>,
 			transaction_metadata: TransactionMetadata,
@@ -654,7 +654,7 @@ pub mod pallet {
 				calls.clone(),
 				signer_account_id.clone(),
 				transaction_metadata.atomic,
-				T::WeightInfo::submit_signed_runtime_call,
+				T::WeightInfo::submit_unsigned_batch_runtime_call,
 			);
 
 			Self::deposit_event(Event::<T>::SignedRuntimeCallSubmitted {
@@ -683,7 +683,7 @@ pub mod pallet {
 				calls.clone(),
 				account_id.clone(),
 				atomic,
-				T::WeightInfo::submit_signed_runtime_call,
+				T::WeightInfo::submit_unsigned_batch_runtime_call,
 			);
 
 			Self::deposit_event(Event::<T>::SignedRuntimeCallSubmitted {
@@ -703,7 +703,7 @@ pub mod pallet {
 		// TODO: We might want to add a check here that the signer has balance > 0 as no extrinsic
 		// should succeed. Fees need to be paid by the signer.
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::submit_signed_runtime_call {
+			if let Call::submit_unsigned_batch_runtime_call {
 				calls,
 				transaction_metadata,
 				user_signature_data,
@@ -739,7 +739,7 @@ pub mod pallet {
 					[
 						serialized_calls.clone(),
 						chanflip_network_name.as_str().encode(),
-						USER_RUNTIME_CALL_VERSION.encode(),
+						UNSIGNED_BATCH_VERSION.encode(),
 						transaction_metadata.encode(),
 					]
 					.concat()
@@ -770,7 +770,7 @@ pub mod pallet {
 							EthSigType::Eip712 => Self::build_eip_712_payload(
 								calls.clone(),
 								chanflip_network_name.as_str(),
-								USER_RUNTIME_CALL_VERSION,
+								UNSIGNED_BATCH_VERSION,
 								transaction_metadata.clone(),
 								*signer,
 							),
@@ -1162,7 +1162,7 @@ impl<T: Config> Pallet<T> {
 			let origin = frame_system::RawOrigin::Signed(user_account.clone()).into();
 
 			// Don't allow users to nest calls.
-			if let Some(Call::submit_signed_runtime_call { .. }) |
+			if let Some(Call::submit_unsigned_batch_runtime_call { .. }) |
 			Some(Call::submit_batch_runtime_call { .. }) = call.is_sub_type()
 			{
 				let base_weight = weight_fn(index.saturating_add(1) as u32);

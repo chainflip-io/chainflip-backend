@@ -57,7 +57,7 @@ pub trait WeightInfo {
 	fn witness_initialize_solana_vault() -> Weight;
 	fn witness_assethub_vault_creation() -> Weight;
 	fn dispatch_solana_gov_call() -> Weight;
-	fn submit_signed_runtime_call(c: u32, ) -> Weight;
+	fn submit_unsigned_batch_runtime_call(c: u32, ) -> Weight;
 	fn submit_batch_runtime_call(c: u32, ) -> Weight;
 }
 
@@ -234,7 +234,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Storage: `System::Account` (r:1 w:1)
 	/// Proof: `System::Account` (`max_values`: None, `max_size`: Some(64), added: 2539, mode: `MaxEncodedLen`)
 	/// The range of component `c` is `[0, 1000]`.
-	fn submit_signed_runtime_call(c: u32, ) -> Weight {
+	fn submit_unsigned_batch_runtime_call(c: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `37`
 		//  Estimated: `3529`
@@ -429,7 +429,7 @@ impl WeightInfo for () {
 	/// Storage: `System::Account` (r:1 w:1)
 	/// Proof: `System::Account` (`max_values`: None, `max_size`: Some(64), added: 2539, mode: `MaxEncodedLen`)
 	/// The range of component `c` is `[0, 1000]`.
-	fn submit_signed_runtime_call(c: u32, ) -> Weight {
+	fn submit_unsigned_batch_runtime_call(c: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `37`
 		//  Estimated: `3529`

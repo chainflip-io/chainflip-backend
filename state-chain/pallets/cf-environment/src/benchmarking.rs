@@ -204,7 +204,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn submit_signed_runtime_call(c: Linear<0, 1000>) {
+	fn submit_unsigned_batch_runtime_call(c: Linear<0, 1000>) {
 		let calls = vec![frame_system::Call::remark { remark: vec![] }.into(); c as usize];
 		let transaction_metadata =
 			TransactionMetadata { nonce: 0, expiry_block: 10000u32, atomic: true };
@@ -217,7 +217,7 @@ mod benchmarks {
         };
 
 		#[extrinsic_call]
-		submit_signed_runtime_call(
+		submit_unsigned_batch_runtime_call(
 			frame_system::RawOrigin::None,
 			calls,
 			transaction_metadata,
