@@ -624,6 +624,8 @@ pub mod pallet {
 			T::AssethubVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)
 		}
 
+		// TODO: Add call for generalised batching. Probably a separate function with only `calls`
+		// or an enum of just calls or calls+transaction_metadata+user_signature_data.
 		// TODO: User should be charged a transaction fee. For now that is not the case (no tx fee).
 		// Ideally it should follow the same fee curve as regular txs, so that it can be set
 		// exponential by governance.
@@ -1067,6 +1069,7 @@ impl<T: Config> Pallet<T> {
 			return Err(Error::<T>::TooManyCalls.into());
 		}
 
+		// TODO: If atomic but only one call we can skip the storage reversion?
 		if atomic {
 			let result = with_transaction(|| {
 				let result = Self::execute_batch_calls(calls, user_account);

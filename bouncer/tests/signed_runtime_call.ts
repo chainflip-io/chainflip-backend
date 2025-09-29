@@ -45,9 +45,10 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   await using chainflip = await getChainflipApi();
 
   const whaleKeypair = getSolWhaleKeyPair();
+  console.log('Sol whale pubkey', whaleKeypair.publicKey.toBase58());
 
   // Create a vector of RuntimeCalls - multiple system.remark calls
-  const calls = [chainflip.tx.system.remark([])];
+  const calls = [chainflip.tx.system.remark([42])];
   // Example of a call with the first runtimeCall succeeding and the second one failing.
   // Maybe add a test with that ad check that the nonce is increased.
   // const calls = [chainflip.tx.system.remark([]), chainflip.tx.validator.forceRotation()];

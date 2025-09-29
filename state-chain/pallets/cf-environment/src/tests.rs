@@ -31,7 +31,8 @@ use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 
 use crate::{
 	mock::*, BitcoinAvailableUtxos, ConsolidationParameters, Event, RuntimeSafeMode,
-	SafeModeUpdate, SolanaAvailableNonceAccounts, SolanaUnavailableNonceAccounts,
+	SafeModeUpdate, SolSigType, SolSignature, SolanaAvailableNonceAccounts,
+	SolanaUnavailableNonceAccounts, TransactionMetadata, UserSignatureData,
 };
 
 fn utxo(amount: BtcAmount, salt: u32, pub_key: Option<[u8; 32]>) -> Utxo {
@@ -746,4 +747,50 @@ fn can_dispatch_solana_gov_call() {
 			SolanaTransactionType::UpgradeProgram
 		);
 	});
+}
+
+#[test]
+fn can_submit_signed_runtime_call() {
+	new_test_ext().execute_with(|| {
+        // Prepare a simple runtime call (e.g., a remark call from frame_system)
+        let remark_call = frame_system::Call::<Test>::remark { remark: vec![42] };
+        let calls = vec![remark_call.into()];
+
+        // Create transaction metadata
+        let transaction_metadata = TransactionMetadata {
+            nonce: 0,
+            expiry_block: 10000u32,
+            atomic: true,
+        };
+
+        // Create user signature data
+        // In a real scenario, this would involve signing the serialized call with the caller's private key.
+        // For testing, we use a mock signature that passes validation in the mock environment.
+		let user_signature_data = UserSignatureData::Solana {
+			signature: SolSignature(hex_literal::hex!(
+				"1c3e51b4b12bcc95419a43dc4c1854663edda1df5dd788a059a66c6d237a32fafbeff6515d4b8af0267ce8365ba7a83cf483d7b66d3e3164db027302e308c60e"
+			)),
+			signer: SolAddress(cf_utilities::bs58_array("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp")),
+			sig_type: SolSigType::Domain,
+		};
+
+		let caller: <Test as frame_system::Config>::AccountId = user_signature_data
+			.signer_account_id::<Test>().unwrap();
+
+        let initial_nonce = frame_system::Pallet::<Test>::account_nonce(caller);
+        assert_eq!(initial_nonce, 0);
+
+        assert_ok!(Environment::submit_signed_runtime_call(
+            RuntimeOrigin::none(),
+            calls.clone(),
+            transaction_metadata,
+            user_signature_data.clone(),
+        ));
+
+        // Verify the nonce was incremented
+        assert_eq!(frame_system::Pallet::<Test>::account_nonce(caller), initial_nonce + 1);
+
+		System::assert_has_event(RuntimeEvent::Environment(Event::BatchCompleted {
+		}));
+    });
 }
