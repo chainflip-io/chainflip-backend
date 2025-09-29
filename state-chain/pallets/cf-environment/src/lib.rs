@@ -671,6 +671,8 @@ pub mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 
+		// TODO: We might want to add a check here that the signer has balance > 0 as no extrinsic
+		// should succeed. Fees need to be paid by the signer.
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::submit_signed_runtime_call {
 				calls,
@@ -749,11 +751,8 @@ pub mod pallet {
 					return InvalidTransaction::Stale.into();
 				}
 
-				// TODO: We could also use Self::name(), depends the final implementation/structure
 				let unique_id = (signer_account_id, transaction_metadata.nonce);
-				ValidTransaction::with_tag_prefix("user-signed-payload")
-					.and_provides(unique_id)
-					.build()
+				ValidTransaction::with_tag_prefix(Self::name()).and_provides(unique_id).build()
 			} else {
 				InvalidTransaction::Call.into()
 			}
