@@ -333,7 +333,6 @@ pub mod pallet {
 	pub type ChainflipNetworkEnvironment<T> = StorageValue<_, NetworkEnvironment, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn chainflip_network)]
 	/// Current Chainflip's network name
 	pub type ChainflipNetworkName<T> = StorageValue<_, ChainflipNetwork, ValueQuery>;
 
@@ -624,8 +623,6 @@ pub mod pallet {
 			T::AssethubVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)
 		}
 
-		// TODO: Add call for generalised batching. Probably a separate function with only `calls`
-		// or an enum of just calls or calls+transaction_metadata+user_signature_data.
 		// TODO: User should be charged a transaction fee. For now that is not the case (no tx fee).
 		// Ideally it should follow the same fee curve as regular txs, so that it can be set
 		// exponential by governance.
@@ -657,6 +654,7 @@ pub mod pallet {
 				calls.clone(),
 				signer_account_id.clone(),
 				transaction_metadata.atomic,
+				T::WeightInfo::submit_signed_runtime_call,
 			);
 
 			Self::deposit_event(Event::<T>::SignedRuntimeCallSubmitted {
@@ -681,8 +679,12 @@ pub mod pallet {
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 
-			let dispatch_result =
-				Self::dispatch_user_calls(calls.clone(), account_id.clone(), atomic);
+			let dispatch_result = Self::dispatch_user_calls(
+				calls.clone(),
+				account_id.clone(),
+				atomic,
+				T::WeightInfo::submit_signed_runtime_call,
+			);
 
 			Self::deposit_event(Event::<T>::SignedRuntimeCallSubmitted {
 				signer_account_id: account_id,
@@ -714,7 +716,23 @@ pub mod pallet {
 					return InvalidTransaction::Stale.into();
 				}
 
-				let chanflip_network_name = Self::chainflip_network();
+				// Extract signer account ID
+				let signer_account_id = match user_signature_data.signer_account_id::<T>() {
+					Ok(account_id) => account_id,
+					Err(_) => return InvalidTransaction::BadSigner.into(),
+				};
+
+				// Check account nonce
+				let current_nonce = frame_system::Pallet::<T>::account_nonce(&signer_account_id);
+				let tx_nonce: <T as frame_system::Config>::Nonce =
+					transaction_metadata.nonce.into();
+
+				if tx_nonce < current_nonce {
+					return InvalidTransaction::Stale.into();
+				}
+
+				// Signature check
+				let chanflip_network_name = ChainflipNetworkName::<T>::get();
 				let serialized_calls: Vec<u8> = calls.encode();
 
 				let build_domain_data = || -> Vec<u8> {
@@ -765,21 +783,18 @@ pub mod pallet {
 					return InvalidTransaction::BadProof.into();
 				}
 
-				// Extract signer account ID
-				let signer_account_id = match user_signature_data.signer_account_id::<T>() {
-					Ok(account_id) => account_id,
-					Err(_) => return InvalidTransaction::BadSigner.into(),
-				};
+				// Build transaction validity with requires/provides
+				let unique_id = (signer_account_id.clone(), transaction_metadata.nonce);
 
-				// Check account nonce
-				let signer_current_nonce =
-					frame_system::Pallet::<T>::account_nonce(&signer_account_id);
-				if signer_current_nonce != transaction_metadata.nonce.into() {
-					return InvalidTransaction::Stale.into();
+				let mut tx =
+					ValidTransaction::with_tag_prefix(Self::name()).and_provides(unique_id);
+
+				if tx_nonce > current_nonce {
+					// This is a future tx, require the immediately previous nonce
+					tx = tx.and_requires((signer_account_id, transaction_metadata.nonce - 1));
 				}
 
-				let unique_id = (signer_account_id, transaction_metadata.nonce);
-				ValidTransaction::with_tag_prefix(Self::name()).and_provides(unique_id).build()
+				tx.build()
 			} else {
 				InvalidTransaction::Call.into()
 			}
@@ -1088,16 +1103,16 @@ impl<T: Config> Pallet<T> {
 		calls: Vec<<T as Config>::RuntimeCall>,
 		user_account: T::AccountId,
 		atomic: bool,
+		weight_fn: fn(u32) -> Weight,
 	) -> DispatchResultWithPostInfo {
 		let calls_len = calls.len();
 		if calls_len > BATCHED_CALL_LIMITS {
 			return Err(Error::<T>::TooManyCalls.into());
 		}
 
-		// TODO: If atomic but only one call we can skip the storage reversion?
 		if atomic {
 			let result = with_transaction(|| {
-				let result = Self::execute_batch_calls(calls, user_account);
+				let result = Self::execute_batch_calls(calls, user_account, weight_fn);
 				match result {
 					Ok(weight) => TransactionOutcome::Commit(Ok(Some(weight).into())),
 					Err((_, err)) => TransactionOutcome::Rollback(Err(err)),
@@ -1113,7 +1128,7 @@ impl<T: Config> Pallet<T> {
 			};
 			result
 		} else {
-			let result = Self::execute_batch_calls(calls, user_account);
+			let result = Self::execute_batch_calls(calls, user_account, weight_fn);
 			match result {
 				Ok(weight) => {
 					Self::deposit_event(Event::BatchCompleted);
@@ -1136,8 +1151,8 @@ impl<T: Config> Pallet<T> {
 	fn execute_batch_calls(
 		calls: Vec<<T as Config>::RuntimeCall>,
 		user_account: T::AccountId,
+		weight_fn: fn(u32) -> Weight,
 	) -> Result<Weight, (usize, DispatchErrorWithPostInfo)> {
-		// Track the actual weight of each of the batch calls
 		let mut weight = Weight::zero();
 		let calls_len = calls.len();
 
@@ -1150,8 +1165,7 @@ impl<T: Config> Pallet<T> {
 			if let Some(Call::submit_signed_runtime_call { .. }) |
 			Some(Call::submit_batch_runtime_call { .. }) = call.is_sub_type()
 			{
-				let base_weight =
-					T::WeightInfo::submit_signed_runtime_call(index.saturating_add(1) as u32);
+				let base_weight = weight_fn(index.saturating_add(1) as u32);
 				let err = DispatchErrorWithPostInfo {
 					post_info: Some(base_weight.saturating_add(weight)).into(),
 					error: DispatchError::Other("Nested runtime call batches not allowed"),
@@ -1161,22 +1175,17 @@ impl<T: Config> Pallet<T> {
 
 			let result = call.dispatch_bypass_filter(origin);
 
-			// Add the weight of this call.
 			weight = weight
 				.saturating_add(frame_support::dispatch::extract_actual_weight(&result, &info));
 
 			if let Err(mut err) = result {
-				// Take the weight of this function itself into account.
-				let base_weight =
-					T::WeightInfo::submit_signed_runtime_call(index.saturating_add(1) as u32);
-				// Return the actual used weight + base_weight of this call.
+				let base_weight = weight_fn(index.saturating_add(1) as u32);
 				err.post_info = Some(base_weight.saturating_add(weight)).into();
 				return Err((index, err));
 			};
 		}
 
-		// All calls succeeded -> return total weight
-		let base_weight = T::WeightInfo::submit_signed_runtime_call(calls_len as u32);
+		let base_weight = weight_fn(calls_len as u32);
 		let total_weight = base_weight.saturating_add(weight);
 		Ok(total_weight)
 	}
