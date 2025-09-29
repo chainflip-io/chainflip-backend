@@ -26,12 +26,12 @@ scale-info = { workspace = true, features = ["derive"] }
 
 cf-utilities = { workspace = true }
 
-proptest-derive = { workspace = true, optional = true}
-proptest = { workspace = true, optional = true}
+proptest-derive = { workspace = true, optional = true }
+proptest = { workspace = true, optional = true }
 
 [dev-dependencies]
 sp-runtime = { workspace = true, default-features = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, default-features = true }
 
 
 [features]
@@ -47,7 +47,4 @@ std = [
 	"sp-std/std",
 	"strum/std",
 ]
-test = [
-	"dep:proptest-derive",
-	"dep:proptest"
-]
+test = ["dep:proptest-derive", "dep:proptest"]
