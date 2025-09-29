@@ -26,7 +26,7 @@ use cf_chains::{
 		SolAddress, SolHash,
 	},
 };
-use cf_traits::SafeMode;
+use cf_traits::{BalanceApi, SafeMode};
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 
 use crate::{
@@ -793,4 +793,27 @@ fn can_submit_signed_runtime_call() {
 		System::assert_has_event(RuntimeEvent::Environment(Event::BatchCompleted {
 		}));
     });
+}
+
+#[test]
+fn can_submit_batch_runtime_call() {
+	new_test_ext().execute_with(|| {
+		const ALICE: u64 = 1;
+		cf_traits::mocks::balance_api::MockBalance::credit_account(
+			&ALICE,
+			cf_chains::assets::any::Asset::Flip,
+			1_000_000,
+		);
+
+		let remark_call = frame_system::Call::<Test>::remark { remark: vec![42] };
+		let calls = vec![remark_call.into()];
+
+		assert_ok!(Environment::submit_batch_runtime_call(
+			RuntimeOrigin::signed(ALICE),
+			calls.clone(),
+			false
+		));
+
+		System::assert_has_event(RuntimeEvent::Environment(Event::BatchCompleted {}));
+	});
 }

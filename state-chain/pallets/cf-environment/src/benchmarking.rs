@@ -227,5 +227,15 @@ mod benchmarks {
 		assert!(frame_system::Pallet::<T>::events().len() > 0);
 	}
 
+	#[benchmark]
+	fn submit_batch_runtime_call(c: Linear<0, 1000>) {
+		let caller: T::AccountId = whitelisted_caller();
+		let calls = vec![frame_system::Call::remark { remark: vec![] }.into(); c as usize];
+
+		#[extrinsic_call]
+		submit_batch_runtime_call(frame_system::RawOrigin::Signed(caller.clone()), calls, true);
+		assert!(frame_system::Pallet::<T>::events().len() > 0);
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
 }

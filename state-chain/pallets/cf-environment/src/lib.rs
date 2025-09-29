@@ -667,6 +667,31 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::call_index(11)]
+		#[pallet::weight({
+			let (dispatch_weight, dispatch_class) = Pallet::<T>::weight_and_dispatch_class(calls);
+			let dispatch_weight = dispatch_weight.saturating_add(T::WeightInfo::submit_batch_runtime_call(calls.len() as u32));
+			(dispatch_weight, dispatch_class)
+		})]
+		pub fn submit_batch_runtime_call(
+			origin: OriginFor<T>,
+			calls: Vec<<T as Config>::RuntimeCall>,
+			atomic: bool,
+		) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+
+			let dispatch_result =
+				Self::dispatch_user_calls(calls.clone(), account_id.clone(), atomic);
+
+			Self::deposit_event(Event::<T>::SignedRuntimeCallSubmitted {
+				signer_account_id: account_id,
+				serialized_call: calls.encode(),
+				dispatch_result,
+			});
+
+			Ok(())
+		}
 	}
 
 	#[pallet::validate_unsigned]
@@ -1121,13 +1146,15 @@ impl<T: Config> Pallet<T> {
 
 			let origin = frame_system::RawOrigin::Signed(user_account.clone()).into();
 
-			// Don't allow users to nest `submit_signed_runtime_call` calls.
-			if let Some(Call::submit_signed_runtime_call { .. }) = call.is_sub_type() {
+			// Don't allow users to nest calls.
+			if let Some(Call::submit_signed_runtime_call { .. }) |
+			Some(Call::submit_batch_runtime_call { .. }) = call.is_sub_type()
+			{
 				let base_weight =
 					T::WeightInfo::submit_signed_runtime_call(index.saturating_add(1) as u32);
 				let err = DispatchErrorWithPostInfo {
 					post_info: Some(base_weight.saturating_add(weight)).into(),
-					error: DispatchError::Other("Nested submit_signed_runtime_call not allowed"),
+					error: DispatchError::Other("Nested runtime call batches not allowed"),
 				};
 				return Err((index, err));
 			}
