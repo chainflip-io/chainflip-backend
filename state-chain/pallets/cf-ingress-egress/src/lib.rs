@@ -142,7 +142,7 @@ struct PendingPrewitnessedDeposit<T: Config<I>, I: 'static> {
 	asset: TargetChainAsset<T, I>,
 	deposit_details: <T::TargetChain as Chain>::DepositDetails,
 	deposit_address: Option<TargetChainAccount<T, I>>,
-	action: ChannelActionForDeposit<T::AccountId, <T::TargetChain as Chain>::ChainAccount>,
+	action: ChannelActionForDeposit<T::AccountId, TargetChainAccount<T, I>>,
 	boost_fee: u16,
 	channel_id: Option<u64>,
 	origin: DepositOrigin<T, I>,
@@ -217,7 +217,7 @@ mod deposit_origin {
 	#[scale_info(skip_type_params(T, I))]
 	pub(super) enum DepositOrigin<T: Config<I>, I: 'static> {
 		DepositChannel {
-			deposit_address: <T::TargetChain as Chain>::ChainAccount,
+			deposit_address: TargetChainAccount<T, I>,
 			channel_id: ChannelId,
 			deposit_block_height: u64,
 			broker_id: T::AccountId,
@@ -230,7 +230,7 @@ mod deposit_origin {
 
 	impl<T: Config<I>, I: 'static> DepositOrigin<T, I> {
 		pub fn deposit_channel(
-			deposit_address: <T::TargetChain as Chain>::ChainAccount,
+			deposit_address: TargetChainAccount<T, I>,
 			channel_id: ChannelId,
 			deposit_block_height: <T::TargetChain as Chain>::ChainBlockNumber,
 			broker_id: T::AccountId,
@@ -511,7 +511,7 @@ pub mod pallet {
 		pub expires_at: TargetChainBlockNumber<T, I>,
 		/// The action to be taken when the DepositChannel is deposited to.
 		#[skip_name_expansion]
-		pub action: ChannelAction<T::AccountId, <T::TargetChain as Chain>::ChainAccount>,
+		pub action: ChannelAction<T::AccountId, TargetChainAccount<T, I>>,
 		/// The boost fee
 		#[skip_name_expansion]
 		pub boost_fee: BasisPoints,
@@ -1524,7 +1524,7 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
-	type Account = <T::TargetChain as Chain>::ChainAccount;
+	type Account = TargetChainAccount<T, I>;
 	type Asset = <T::TargetChain as Chain>::ChainAsset;
 	type Amount = <T::TargetChain as Chain>::ChainAmount;
 	type BlockNumber = <T::TargetChain as Chain>::ChainBlockNumber;
@@ -1579,7 +1579,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Ok(())
 	}
-	fn recycle_channel(used_weight: &mut Weight, address: <T::TargetChain as Chain>::ChainAccount) {
+	fn recycle_channel(used_weight: &mut Weight, address: TargetChainAccount<T, I>) {
 		if let Some(DepositChannelDetails { deposit_channel, boost_status, .. }) =
 			DepositChannelLookup::<T, I>::take(address)
 		{
@@ -1616,7 +1616,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// be retried).
 	fn try_broadcast_rejection_refund_or_store_tx_details(
 		tx: TransactionRejectionDetails<T, I>,
-		refund_address: <T::TargetChain as Chain>::ChainAccount,
+		refund_address: TargetChainAccount<T, I>,
 		deposit_fetch_id: Option<<T::TargetChain as Chain>::DepositFetchId>,
 	) {
 		let AmountAndFeesWithheld {
@@ -2040,7 +2040,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn perform_channel_action(
-		action: ChannelActionForDeposit<T::AccountId, <T::TargetChain as Chain>::ChainAccount>,
+		action: ChannelActionForDeposit<T::AccountId, TargetChainAccount<T, I>>,
 		asset: TargetChainAsset<T, I>,
 		amount_after_fees: TargetChainAmount<T, I>,
 		origin: DepositOrigin<T, I>,
@@ -2479,7 +2479,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		boost_status: BoostStatus<TargetChainAmount<T, I>, BlockNumberFor<T>>,
 		max_boost_fee_bps: BasisPoints,
 		channel_id: Option<u64>,
-		action: ChannelActionForDeposit<T::AccountId, <T::TargetChain as Chain>::ChainAccount>,
+		action: ChannelActionForDeposit<T::AccountId, TargetChainAccount<T, I>>,
 		block_height: TargetChainBlockNumber<T, I>,
 		origin: DepositOrigin<T, I>,
 	) -> Result<FullWitnessDepositOutcome, DepositFailedReason> {
@@ -2678,7 +2678,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn derive_channel_action_from_vault_deposit_witness(
 		vault_deposit_witness: VaultDepositWitness<T, I>,
-	) -> ChannelActionForDeposit<T::AccountId, <T::TargetChain as Chain>::ChainAccount> {
+	) -> ChannelActionForDeposit<T::AccountId, TargetChainAccount<T, I>> {
 		let VaultDepositWitness {
 			input_asset: source_asset,
 			deposit_address,
@@ -2912,7 +2912,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn open_channel(
 		requester: &T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
-		action: ChannelAction<T::AccountId, <T::TargetChain as Chain>::ChainAccount>,
+		action: ChannelAction<T::AccountId, TargetChainAccount<T, I>>,
 		boost_fee: BasisPoints,
 	) -> Result<
 		(DepositChannel<T::TargetChain>, TargetChainBlockNumber<T, I>, T::Amount),

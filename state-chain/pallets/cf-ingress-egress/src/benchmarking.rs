@@ -76,10 +76,11 @@ mod benchmarks {
 						source_asset,
 					)
 					.unwrap(),
-				action: ChannelAction::<T::AccountId, <T::TargetChain as Chain>::ChainAccount>::LiquidityProvision {
-					lp_account: account("doogle", 0, 0),
-					refund_address: ForeignChainAddress::benchmark_value(),
-				},
+				action:
+					ChannelAction::<T::AccountId, TargetChainAccount<T, I>>::LiquidityProvision {
+						lp_account: account("doogle", 0, 0),
+						refund_address: ForeignChainAddress::benchmark_value(),
+					},
 				boost_fee: 0,
 				boost_status: BoostStatus::NotBoosted,
 			},
