@@ -45,7 +45,8 @@ mod tests;
 mod benchmarking;
 
 use cf_primitives::{
-	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
+	define_wrapper_type, Asset, AssetAmount, AssetList, BasisPoints, BoostPoolTier,
+	PrewitnessedDepositId,
 };
 use cf_traits::{
 	lending::LendingApi, AccountRoleRegistry, BalanceApi, Chainflip, PoolApi, PriceFeedApi,
@@ -86,15 +87,15 @@ pub struct PalletSafeMode {
 	pub add_boost_funds_enabled: bool,
 	pub stop_boosting_enabled: bool,
 	// whether funds can be borrowed (stale oracle also disables this)
-	pub borrowing_enabled: BTreeSet<Asset>,
+	pub borrowing_enabled: AssetList,
 	// whether lenders can add funds to lending pools
-	pub add_lender_funds_enabled: BTreeSet<Asset>,
+	pub add_lender_funds_enabled: AssetList,
 	// whether lenders can withdraw funds from lending pools (stale oracle also disables this)
-	pub withdraw_lender_funds_enabled: BTreeSet<Asset>,
+	pub withdraw_lender_funds_enabled: AssetList,
 	// whether borrowers can add collateral
-	pub add_collateral_enabled: BTreeSet<Asset>,
+	pub add_collateral_enabled: AssetList,
 	// whether borrowers can withdraw collateral (stale oracle also disables this)
-	pub remove_collateral_enabled: BTreeSet<Asset>,
+	pub remove_collateral_enabled: AssetList,
 }
 
 impl cf_traits::SafeMode for PalletSafeMode {
@@ -102,11 +103,11 @@ impl cf_traits::SafeMode for PalletSafeMode {
 		Self {
 			add_boost_funds_enabled: false,
 			stop_boosting_enabled: false,
-			borrowing_enabled: BTreeSet::new(),
-			add_lender_funds_enabled: BTreeSet::new(),
-			withdraw_lender_funds_enabled: BTreeSet::new(),
-			add_collateral_enabled: BTreeSet::new(),
-			remove_collateral_enabled: BTreeSet::new(),
+			borrowing_enabled: AssetList::None,
+			add_lender_funds_enabled: AssetList::None,
+			withdraw_lender_funds_enabled: AssetList::None,
+			add_collateral_enabled: AssetList::None,
+			remove_collateral_enabled: AssetList::None,
 		}
 	}
 
@@ -114,11 +115,11 @@ impl cf_traits::SafeMode for PalletSafeMode {
 		Self {
 			add_boost_funds_enabled: true,
 			stop_boosting_enabled: true,
-			borrowing_enabled: BTreeSet::from_iter(Asset::all()),
-			add_lender_funds_enabled: BTreeSet::from_iter(Asset::all()),
-			withdraw_lender_funds_enabled: BTreeSet::from_iter(Asset::all()),
-			add_collateral_enabled: BTreeSet::from_iter(Asset::all()),
-			remove_collateral_enabled: BTreeSet::from_iter(Asset::all()),
+			borrowing_enabled: AssetList::All,
+			add_lender_funds_enabled: AssetList::All,
+			withdraw_lender_funds_enabled: AssetList::All,
+			add_collateral_enabled: AssetList::All,
+			remove_collateral_enabled: AssetList::All,
 		}
 	}
 }
