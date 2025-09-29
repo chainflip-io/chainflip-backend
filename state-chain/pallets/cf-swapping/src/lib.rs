@@ -326,6 +326,8 @@ pub enum SwapFailureReason {
 	SafeModeActive,
 	/// Aborted by the originator of the swap
 	AbortedFromOrigin,
+	/// Some unexpected state has been reached.
+	LogicError,
 }
 
 pub enum BatchExecutionError<T: Config> {
@@ -417,8 +419,8 @@ impl DcaState {
 			self.accumulated_output_amount += completed_chunk_output_amount;
 		} else {
 			log_or_panic!(
-					"Invariant violation: the completed swap id {completed_chunk_swap_id} does not match a scheduled chunk."
-				);
+				"Invariant violation: the completed swap id {completed_chunk_swap_id} does not match a scheduled chunk."
+			);
 		}
 	}
 }
@@ -1694,23 +1696,23 @@ pub mod pallet {
 		}
 
 		/// Calculate executed price delta from the oracle price and save the result to the swap
-		/// state
+		/// state. Must be called after the final output has been set.
 		pub(super) fn calculate_oracle_delta(swap: &mut SwapState<T>) {
-			let input_oracle = T::PriceFeedApi::get_price(swap.input_asset());
-			let output_oracle = T::PriceFeedApi::get_price(swap.output_asset());
+			let Some(final_output) = swap.final_output else {
+				log_or_panic!("Final output should be set");
+				return;
+			};
 
-			let oracle_delta = if let (Some(input_oracle), Some(output_oracle)) =
-				(&input_oracle, &output_oracle)
+			let oracle_delta = if let Some(oracle_price) =
+				T::PriceFeedApi::get_relative_price(swap.input_asset(), swap.output_asset())
 			{
-				let oracle_price =
-					cf_amm::math::relative_price(input_oracle.price, output_oracle.price);
 				let oracle_amount =
-					output_amount_floor(swap.swap.input_amount.into(), oracle_price);
+					output_amount_floor(swap.swap.input_amount.into(), oracle_price.price);
 				if oracle_amount.is_zero() {
 					None
 				} else {
 					let output_bps = cf_amm::math::mul_div_ceil(
-						swap.final_output.unwrap().into(),
+						final_output.into(),
 						MAX_BASIS_POINTS.into(),
 						oracle_amount,
 					);
@@ -1734,32 +1736,27 @@ pub mod pallet {
 			swap.oracle_delta = oracle_delta;
 		}
 
-		/// Enforce price protections
+		/// Enforce price protections. Must be called after the final output has been set.
 		pub(super) fn check_swap_price_violation(
 			swap: &SwapState<T>,
 		) -> Result<(), SwapFailureReason> {
-			if let Some(params) = swap.refund_params() {
-				let input_oracle = T::PriceFeedApi::get_price(swap.input_asset());
-				let output_oracle = T::PriceFeedApi::get_price(swap.output_asset());
+			let Some(final_output) = swap.final_output else {
+				log_or_panic!("Final output should be set");
+				return Err(SwapFailureReason::LogicError);
+			};
 
+			if let Some(params) = swap.refund_params() {
 				// Live price protection, aka oracle price protection
 				if let Some(slippage_bps) = params.price_limits.max_oracle_price_slippage {
-					match (input_oracle, output_oracle) {
-						(Some(input_oracle), Some(output_oracle))
-							if input_oracle.stale || output_oracle.stale =>
-							return Err(SwapFailureReason::OraclePriceStale),
-						(None, _) | (_, None) => {
-							// Ignore the oracle price check if not supported/available
-							// for one of the assets.
-						},
-						(Some(input_oracle), Some(output_oracle)) => {
-							let relative_price = cf_amm::math::relative_price(
-								input_oracle.price,
-								output_oracle.price,
-							);
+					if let Some(oracle_price) =
+						T::PriceFeedApi::get_relative_price(swap.input_asset(), swap.output_asset())
+					{
+						if oracle_price.stale {
+							return Err(SwapFailureReason::OraclePriceStale);
+						} else {
 							// Reduce the relative price by slippage_bps:
 							let min_oracle_price = cf_amm::math::mul_div_floor(
-								relative_price,
+								oracle_price.price,
 								(MAX_BASIS_POINTS - slippage_bps).into(),
 								MAX_BASIS_POINTS,
 							);
@@ -1769,12 +1766,12 @@ pub mod pallet {
 								min_oracle_price,
 							)
 							.unique_saturated_into();
-							if swap.final_output.unwrap() < min_output_amount {
+							if final_output < min_output_amount {
 								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
 							}
-						},
+						}
 					}
-				};
+				}
 
 				// Minimum price protection, aka FoK price protection
 				let min_price_output = output_amount_floor(
@@ -1782,10 +1779,11 @@ pub mod pallet {
 					params.price_limits.min_price,
 				)
 				.unique_saturated_into();
-				if swap.final_output.unwrap() < min_price_output {
+				if final_output < min_price_output {
 					return Err(SwapFailureReason::MinPriceViolation);
 				}
 			}
+
 			Ok(())
 		}
 
@@ -2832,8 +2830,10 @@ pub mod pallet {
 			)
 			.and_then(|amount| C::ChainAmount::try_from(amount).ok())
 			.unwrap_or_else(|| {
-				log::warn!("Unable to calculate input amount required for gas of {required_gas:?} for input asset ${input_asset:?}. Estimating the input amount based on a reference price.");
-				C::input_asset_amount_using_reference_gas_asset_price(input_asset,required_gas)
+				Self::input_asset_amount_using_oracle_or_reference_gas_asset_price::<
+					C,
+					T::PriceFeedApi,
+				>(input_asset, required_gas)
 			})
 		}
 
@@ -3010,12 +3010,12 @@ pub(crate) mod utilities {
 		const SOL_DECIMALS: u32 = 9;
 
 		/// ~20 Dollars.
-		const FLIP_ESTIMATION_CAP: u128 = 10 * FLIPPERINOS_PER_FLIP;
+		const FLIP_ESTIMATION_CAP: u128 = 25 * FLIPPERINOS_PER_FLIP;
 		const USD_ESTIMATION_CAP: u128 = 20_000_000;
-		const ETH_ESTIMATION_CAP: u128 = 8 * 10u128.pow(ETH_DECIMALS - 3);
-		const DOT_ESTIMATION_CAP: u128 = 4 * 10u128.pow(DOT_DECIMALS);
+		const ETH_ESTIMATION_CAP: u128 = 5 * 10u128.pow(ETH_DECIMALS - 3);
+		const DOT_ESTIMATION_CAP: u128 = 5 * 10u128.pow(DOT_DECIMALS);
 		const BTC_ESTIMATION_CAP: u128 = 2 * 10u128.pow(BTC_DECIMALS - 4);
-		const SOL_ESTIMATION_CAP: u128 = 14 * 10u128.pow(SOL_DECIMALS - 2);
+		const SOL_ESTIMATION_CAP: u128 = 10 * 10u128.pow(SOL_DECIMALS - 2);
 
 		match asset {
 			Asset::Flip => FLIP_ESTIMATION_CAP,

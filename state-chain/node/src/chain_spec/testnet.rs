@@ -141,7 +141,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		),
 		(
 			const_address("3pGbKatko2ckoLEy139McfKiirNgy9brYxieNqFGdN1W"),
-			const_hash("EbWq3dgSjaa8pX3YeXVHopANoHCAsEkXrbALMjndbvr1"),
+			const_hash("64hFuYc2RjeDLWAatbnbD3XCWgRBgbHLxCjfeNxx1G5e"),
 		),
 		(
 			const_address("9Mcd8BTievK2yTvyiqG9Ft4HfDFf6mjGFBWMnCSRQP8S"),
@@ -370,15 +370,16 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		],
 	),
 	chainlink_oracle_price_settings: ChainlinkOraclePriceSettings {
-		sol_oracle_program_id: const_address("DfYdrym1zoNgc6aANieNqj9GotPj2Br88rPRLUmpre7X"),
-		sol_oracle_feeds: Array {array: [
-			const_address("HDSV2wFxmsrmCwwY34QzaVkvmJpG7VF8S9fX2iThynjG"),
-			const_address("8U3c4SqXaXKPQiarNH3xHXiVoBLYbkqkzusthyJJjGrE"),
-			const_address("CrjmdLxTkmd5bxTQjE82FNgiuxeoY3G4EzzhDJ4RH9Wx"),
-			const_address("7BH1paBwjVDrHTb8YkHcyt7ZfxsCbnBMeByGBH6L8PFk"),
-			const_address("7qdy4DhvG5GDkiGNrsmrMcCyiVNPtmrUmGo3UntcrLwk"),
-		]},
-		sol_oracle_query_helper: const_address("GXn7uzbdNgozXuS8fEbqHER1eGpD9yho7FHTeuthWU8z"),
+		arb_address_checker: H160(hex_literal::hex!("9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0")),
+		arb_oracle_feeds: Array {
+			array: [
+				H160(hex_literal::hex!("a85233C63b9Ee964Add6F2cffe00Fd84eb32338f")),
+				H160(hex_literal::hex!("4A679253410272dd5232B3Ff7cF5dbB88f295319")),
+				H160(hex_literal::hex!("7a2088a1bFc9d81c55368AE168C2C02570cB814F")),
+				H160(hex_literal::hex!("09635F643e140090A9A8Dcd712eD6285858ceBef")),
+				H160(hex_literal::hex!("c5a5C42992dECbae36851359345FE25997F5C42d")),
+			],
+		},
 		eth_address_checker: H160(hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512")),
 		eth_oracle_feeds: Array{ array:[
 			H160(hex_literal::hex!("322813Fd9A801c5507c9de605d63CEA4f2CE6c44")),

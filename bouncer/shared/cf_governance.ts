@@ -4,7 +4,7 @@ import Keyring from 'polkadot/keyring';
 import { snowWhiteMutex, waitForExt } from 'shared/utils';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { Logger } from 'pino';
-import { globalLogger } from './utils/logger';
+import { globalLogger } from 'shared/utils/logger';
 
 const snowWhiteUri =
   process.env.SNOWWHITE_URI ??

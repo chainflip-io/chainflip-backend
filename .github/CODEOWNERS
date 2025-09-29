@@ -3,9 +3,7 @@
 /api/bin/chainflip-ingress-egress-tracker @chainflip-io/web
 /api/ @nmammeri
 
-/bouncer/shared/sol_vault_swap.ts @albert-llimos
-/bouncer/tests/gaslimit_ccm.ts @albert-llimos
-/bouncer/ @martin-chainflip
+/bouncer/ @albert-llimos
 
 /charts/ @chainflip-io/platform
 
@@ -34,7 +32,7 @@ engine-upgrade-utils/ @nmammeri @dandanlen
 
 /state-chain/ @dandanlen
 
-/state-chain/amm/ @martin-chainflip
+/state-chain/amm/ @albert-llimos @dandanlen @msgmaxim
 
 /state-chain/cfe-events/ @msgmaxim
 
@@ -44,7 +42,7 @@ engine-upgrade-utils/ @nmammeri @dandanlen
 /state-chain/chains/eth/ @albert-llimos @dandanlen @ramizhasan111
 /state-chain/chains/evm.rs @albert-llimos @dandanlen @ramizhasan111
 /state-chain/chains/evm/ @albert-llimos @dandanlen @ramizhasan111
-/state-chain/chains/hub/ @martin-chainflip @dandanlen
+/state-chain/chains/hub/ @dandanlen @ramizhasan111
 /state-chain/chains/sol.rs @albert-llimos @ramizhasan111
 /state-chain/chains/sol/ @albert-llimos @ramizhasan111
 
@@ -56,8 +54,8 @@ engine-upgrade-utils/ @nmammeri @dandanlen
 /state-chain/pallets/cf-vaults/ @ramizhasan111 @dandanlen
 /state-chain/pallets/cf-elections/ @MxmUrw @marcellorigotti
 /state-chain/pallets/cf-funding/ @dandanlen
-/state-chain/pallets/cf-lending-pools/ @martin-chainflip @dandanlen @msgmaxim
-/state-chain/pallets/cf-pools/ @martin-chainflip @dandanlen @msgmaxim
+/state-chain/pallets/cf-lending-pools/ @dandanlen @msgmaxim
+/state-chain/pallets/cf-pools/ @dandanlen @msgmaxim
 /state-chain/pallets/cf-swapping/ @msgmaxim @j4m1ef0rd
 /state-chain/pallets/cf-tokenholder-governance/ @dandanlen
 /state-chain/pallets/cf-trading-strategy/ @msgmaxim @j4m1ef0rd
