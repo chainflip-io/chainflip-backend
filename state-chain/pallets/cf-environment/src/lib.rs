@@ -620,9 +620,7 @@ pub mod pallet {
 			T::AssethubVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)
 		}
 
-		// TODO: User should be charged a transaction fee. For now that is not the case (no tx fee).
-		// Ideally it should follow the same fee curve as regular txs, so that it can be set
-		// exponential by governance.
+		// TODO: PRO-2554 - User should be charged a transaction fee
 		#[pallet::call_index(10)]
 		#[pallet::weight({
 			let (dispatch_weight, dispatch_class) = weight_and_dispatch_class::<T>(calls);

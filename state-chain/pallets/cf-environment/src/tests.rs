@@ -827,7 +827,7 @@ fn can_submit_batch_runtime_call() {
 			RuntimeEvent::Environment(Event::BatchCompleted {
 				signer_account: ref acct,
 				..
-			}) if acct == &caller
+			}) if acct == &ALICE
 		)));
 	});
 }

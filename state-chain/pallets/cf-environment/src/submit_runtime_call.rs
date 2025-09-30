@@ -180,7 +180,8 @@ pub(crate) fn execute_batch_calls<T: Config>(
 }
 
 /// `signer is not technically necessary but is added as part of the metadata so
-/// it is displayed separately to the user in the wallet
+/// we add it so is displayed separately to the user in the wallet.
+/// To be implemented in PRO-2535.
 pub(crate) fn build_eip_712_payload<T: Config>(
 	_calls: Vec<<T as Config>::RuntimeCall>,
 	_chain_name: &str,

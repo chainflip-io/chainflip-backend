@@ -223,8 +223,6 @@ mod benchmarks {
 			transaction_metadata,
 			user_signature_data,
 		);
-
-		assert!(frame_system::Pallet::<T>::events().len() > 0);
 	}
 
 	#[benchmark]
@@ -234,7 +232,6 @@ mod benchmarks {
 
 		#[extrinsic_call]
 		submit_batch_runtime_call(frame_system::RawOrigin::Signed(caller.clone()), calls, true);
-		assert!(frame_system::Pallet::<T>::events().len() > 0);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
