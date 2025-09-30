@@ -38,7 +38,6 @@ use pallet_cf_elections::{
 	},
 	VoteOf,
 };
-use sol_prim::program_instructions::PriceFeedData as SolPriceFeedData;
 use sp_core::U256;
 use state_chain_runtime::chainflip::generic_elections::*;
 
