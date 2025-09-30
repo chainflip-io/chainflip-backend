@@ -66,13 +66,12 @@ pub fn bidder_set<T: Chainflip, Id: From<<T as frame_system::Config>::AccountId>
 pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_funded: u128) {
 	for bidder in bidder_set::<T, <T as frame_system::Config>::AccountId, _>(n, set_id) {
 		let bidder_origin: OriginFor<T> = RawOrigin::Signed(bidder.clone()).into();
-		assert_ok!(pallet_cf_funding::Pallet::<T>::funded(
-			T::EnsureWitnessed::try_successful_origin().unwrap(),
+		pallet_cf_funding::Pallet::<T>::fund_account(
 			bidder.clone(),
+			Default::default(),
 			(flip_funded * FLIPPERINOS_PER_FLIP).unique_saturated_into(),
 			Default::default(),
-			Default::default()
-		));
+		);
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&bidder);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&bidder));
 		assert_ok!(Pallet::<T>::start_bidding(bidder_origin.clone(),));

@@ -898,11 +898,9 @@ fn can_handle_failed_vault_transfer() {
 			let (mut testnet, backup_nodes) =
 				Network::create(10, &Validator::current_authorities());
 			for node in &backup_nodes {
-				testnet.state_chain_gateway_contract.fund_account(
-					node.clone(),
-					genesis::GENESIS_BALANCE,
-					GENESIS_EPOCH,
-				);
+				testnet
+					.state_chain_gateway_contract
+					.fund_account(node.clone(), genesis::GENESIS_BALANCE);
 			}
 			testnet.move_forward_blocks(1);
 			for node in backup_nodes.clone() {

@@ -39,6 +39,7 @@ use super::{
 	contract_common::events_at_block,
 };
 
+#[derive(Debug)]
 pub enum Erc20Events {
 	TransferFilter { to: H160, from: H160, value: U256 },
 	Other,

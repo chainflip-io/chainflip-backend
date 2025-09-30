@@ -14,6 +14,21 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+	elections::voter_api::{CompositeVoter, VoterApi},
+	evm::{
+		cached_rpc::AddressCheckerRetryRpcApiWithResult,
+		rpc::{address_checker::PriceFeedData as EthPriceFeedData, EvmRpcSigningClient},
+	},
+	sol::retry_rpc::SolRetryRpcClient,
+	state_chain_observer::client::{
+		chain_api::ChainApi, electoral_api::ElectoralApi,
+		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+	},
+	witness::sol::oracle_witnessing::get_price_feeds,
+	EvmCachingClient,
+};
+use anyhow::{anyhow, Result};
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
@@ -25,6 +40,7 @@ use pallet_cf_elections::{
 	},
 	VoteOf,
 };
+use sol_prim::program_instructions::PriceFeedData as SolPriceFeedData;
 use sp_core::U256;
 use state_chain_runtime::chainflip::generic_elections::*;
 

@@ -87,6 +87,8 @@ impl Chain for Ethereum {
 	TypeInfo,
 	Serialize,
 	Deserialize,
+	PartialOrd,
+	Ord,
 )]
 #[codec(mel_bound())]
 pub struct EthereumTrackedData {
