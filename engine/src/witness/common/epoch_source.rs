@@ -277,7 +277,7 @@ impl<
 						.await
 						.expect(STATE_CHAIN_CONNECTION)
 						.iter()
-						.any(|participating_epoch| *participating_epoch == epoch)
+						.any(|(participating_epoch, _)| *participating_epoch == epoch)
 					{
 						Some(info)
 					} else {

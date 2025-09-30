@@ -1725,7 +1725,7 @@ impl_runtime_apis! {
 			}
 		}
 		fn cf_validator_info(account_id: &AccountId) -> ValidatorInfo {
-			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
+			let keyholder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id).into_iter().map(|(e, _)| e).collect();
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
 			let is_bidding = Validator::is_bidding(account_id);
@@ -1742,7 +1742,7 @@ impl_runtime_apis! {
 				bond: account_info.bond(),
 				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(account_id).unwrap_or(0),
 				reputation_points: reputation_info.reputation_points,
-				keyholder_epochs: key_holder_epochs,
+				keyholder_epochs,
 				is_current_authority,
 				is_current_backup: false,
 				is_qualified: is_bidding && is_qualified,

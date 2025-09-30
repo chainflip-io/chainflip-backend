@@ -290,7 +290,7 @@ pub mod pallet {
 	/// A map between an authority and a set of all the active epochs a node was an authority in
 	#[pallet::storage]
 	pub type HistoricalActiveEpochs<T: Config> =
-		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
+		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<(EpochIndex, T::Amount)>, ValueQuery>;
 
 	/// The absolute minimum number of authority nodes for the next epoch.
 	#[pallet::storage]
@@ -1406,11 +1406,12 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_authority_info_for_epoch(
 		epoch_index: EpochIndex,
+		bond: Self::Amount,
 		new_authorities: Vec<Self::ValidatorId>,
 	) {
 		for (i, authority) in new_authorities.iter().enumerate() {
 			AuthorityIndex::<T>::insert(epoch_index, authority, i as AuthorityCount);
-			HistoricalActiveEpochs::<T>::append(authority, epoch_index);
+			HistoricalActiveEpochs::<T>::append(authority, (epoch_index, bond));
 		}
 		HistoricalAuthorities::<T>::insert(epoch_index, new_authorities);
 	}
@@ -1477,7 +1478,6 @@ impl<T: Config> Pallet<T> {
 			if EpochHistory::<T>::number_of_active_epochs_for_authority(authority) == 0 {
 				T::ReputationResetter::reset_reputation(authority);
 			}
-			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
 		}
 		T::EpochTransitionHandler::on_expired_epoch(epoch);
 
@@ -1536,7 +1536,9 @@ impl<T: Config> Pallet<T> {
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
 		let mut new_delegator_bids = BTreeMap::new();
+		let mut managed_validator_bonds = BTreeMap::new();
 		for (_, snapshot) in DelegationSnapshots::<T>::iter_prefix(new_epoch) {
+			managed_validator_bonds.extend(snapshot.validator_bond_distribution(new_bond));
 			new_delegator_bids.extend(snapshot.delegators.clone());
 		}
 		let mut outgoing_delegators = BTreeSet::new();
@@ -1558,8 +1560,11 @@ impl<T: Config> Pallet<T> {
 
 		for (index, account_id) in new_authorities.iter().enumerate() {
 			AuthorityIndex::<T>::insert(new_epoch, account_id, index as AuthorityCount);
-			EpochHistory::<T>::activate_epoch(account_id, new_epoch);
-			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
+			EpochHistory::<T>::activate_epoch(
+				account_id,
+				new_epoch,
+				managed_validator_bonds.get(account_id.into_ref()).copied().unwrap_or(new_bond),
+			);
 		}
 
 		for (delegator, bid) in new_delegator_bids {
@@ -1952,7 +1957,9 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 		HistoricalBonds::<T>::get(epoch)
 	}
 
-	fn active_epochs_for_authority(authority: &Self::ValidatorId) -> Vec<Self::EpochIndex> {
+	fn active_epochs_for_authority(
+		authority: &Self::ValidatorId,
+	) -> Vec<(Self::EpochIndex, Self::Amount)> {
 		HistoricalActiveEpochs::<T>::get(authority)
 	}
 
@@ -1962,33 +1969,26 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 
 	fn deactivate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex) {
 		let is_empty = HistoricalActiveEpochs::<T>::mutate(authority, |active_epochs| {
-			active_epochs.retain(|&x| x != epoch);
+			active_epochs.retain(|(x, _)| *x != epoch);
 			active_epochs.is_empty()
 		});
+		T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
 		if is_empty {
 			HistoricalActiveEpochs::<T>::remove(authority);
 		}
 	}
 
-	fn activate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex) {
-		HistoricalActiveEpochs::<T>::append(authority, epoch);
+	fn activate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex, bond: Self::Amount) {
+		HistoricalActiveEpochs::<T>::append(authority, (epoch, bond));
+		T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
 	}
 
 	fn active_bond(authority: &Self::ValidatorId) -> Self::Amount {
 		Self::active_epochs_for_authority(authority)
 			.iter()
-			.map(|epoch| {
-				let authority = authority.into_ref();
-				let epoch_bond = Self::epoch_bond(*epoch);
-				ValidatorToOperator::<T>::get(epoch, authority)
-					.and_then(|operator| {
-						DelegationSnapshots::<T>::get(epoch, operator).and_then(|snapshot| {
-							snapshot.validator_bond_distribution(epoch_bond).get(authority).copied()
-						})
-					})
-					.unwrap_or(epoch_bond)
-			})
+			.map(|(_, bond)| bond)
 			.max()
+			.copied()
 			.unwrap_or_else(|| Self::Amount::from(0_u32))
 	}
 }

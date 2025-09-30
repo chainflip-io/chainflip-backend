@@ -183,18 +183,18 @@ mod benchmarks {
 		const OLD_EPOCH: EpochIndex = 1;
 		const EPOCH_TO_EXPIRE: EpochIndex = OLD_EPOCH + 1;
 
-		let amount = T::Amount::from(1000u32);
+		let bond = T::Amount::from(1000u32);
 
-		HistoricalBonds::<T>::insert(OLD_EPOCH, amount);
-		HistoricalBonds::<T>::insert(EPOCH_TO_EXPIRE, amount);
+		HistoricalBonds::<T>::insert(OLD_EPOCH, bond);
+		HistoricalBonds::<T>::insert(EPOCH_TO_EXPIRE, bond);
 
 		let authorities: Vec<_> = (0..a).map(|id| account("hello", id, id)).collect();
 
 		HistoricalAuthorities::<T>::insert(OLD_EPOCH, authorities.clone());
 		HistoricalAuthorities::<T>::insert(EPOCH_TO_EXPIRE, authorities.clone());
 		for a in authorities {
-			EpochHistory::<T>::activate_epoch(&a, OLD_EPOCH);
-			EpochHistory::<T>::activate_epoch(&a, EPOCH_TO_EXPIRE);
+			EpochHistory::<T>::activate_epoch(&a, OLD_EPOCH, bond);
+			EpochHistory::<T>::activate_epoch(&a, EPOCH_TO_EXPIRE, bond);
 		}
 
 		// Ensure that we are expiring the expected number of authorities.
