@@ -994,8 +994,24 @@ pub mod pallet {
 			ensure!(settings.fee_bps <= MAX_OPERATOR_FEE, Error::<T>::OperatorFeeTooHigh);
 
 			if let Some(current_settings) = OperatorSettingsLookup::<T>::get(&operator) {
-				if current_settings.delegation_acceptance != settings.delegation_acceptance {
-					Exceptions::<T>::remove(&operator);
+				match (current_settings.delegation_acceptance, settings.delegation_acceptance) {
+					(DelegationAcceptance::Allow, DelegationAcceptance::Deny) => {
+						Exceptions::<T>::mutate(&operator, |allowed| {
+							allowed.clear();
+							// Any existing delegators need be added to the allowed list.
+							for (delegator, (assigned_operator, max_bid)) in
+								DelegationChoice::<T>::iter()
+							{
+								if assigned_operator == operator {
+									allowed.insert(delegator.clone());
+								}
+							}
+						});
+					},
+					(DelegationAcceptance::Deny, DelegationAcceptance::Allow) => {
+						Exceptions::<T>::remove(&operator);
+					},
+					_ => {},
 				}
 			}
 

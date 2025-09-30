@@ -1738,8 +1738,31 @@ mod operator {
 					settings: OPERATOR_SETTINGS,
 				}),
 			);
+			// Delegator delegates to ALICE
+			const BID: u128 = 1_000;
+			MockFlip::credit_funds(&BOB, BID);
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(BOB),
+				ALICE,
+				DelegationAmount::Max
+			));
+			assert_eq!(DelegationChoice::<Test>::get(BOB), Some((ALICE, BID)));
+			// Update operator settings to DENY delegation acceptance.
+			const NEW_OPERATOR_SETTINGS: OperatorSettings = OperatorSettings {
+				fee_bps: DEFAULT_MIN_OPERATOR_FEE,
+				delegation_acceptance: DelegationAcceptance::Deny,
+			};
+			assert!(Exceptions::<Test>::get(ALICE).is_empty());
+			assert_ok!(ValidatorPallet::update_operator_settings(
+				OriginTrait::signed(ALICE),
+				NEW_OPERATOR_SETTINGS,
+			));
+			assert_eq!(OperatorSettingsLookup::<Test>::get(ALICE), Some(NEW_OPERATOR_SETTINGS));
+			// BOB should be added to exceptions list because he was already a delegator.
+			assert!(Exceptions::<Test>::get(ALICE).contains(&BOB));
 		});
 	}
+
 	#[test]
 	fn can_claim_by_operator_and_accept_by_validator() {
 		const OP_1: u64 = 1001;
