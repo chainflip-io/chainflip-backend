@@ -1416,6 +1416,7 @@ dependencies = [
  "itertools 0.13.0",
  "libsecp256k1",
  "log",
+ "n-functor",
  "parity-scale-codec",
  "proptest",
  "rand",
@@ -1550,6 +1551,7 @@ version = "0.1.0"
 dependencies = [
  "frame-support",
  "hex",
+ "n-functor",
  "parity-scale-codec",
  "proptest",
  "proptest-derive",
@@ -7521,6 +7523,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "n-functor"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e279584350f406d0be657b1f66ed3450c2da43cfa154f8320470984e81b28b9d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
+]
+
+[[package]]
 name = "nalgebra"
 version = "0.33.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8347,6 +8360,7 @@ dependencies = [
  "generic-typeinfo-derive",
  "hex-literal",
  "log",
+ "n-functor",
  "pallet-cf-governance",
  "parity-scale-codec",
  "scale-info",
