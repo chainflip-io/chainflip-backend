@@ -19,7 +19,6 @@
 //! Chainflip Primitives
 //!
 //! Primitive types to be used across Chainflip's various crates.
-use sp_std::collections::btree_set::BTreeSet;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
@@ -597,21 +596,4 @@ pub enum IngressOrEgress {
 	IngressVaultSwap,
 	Egress,
 	EgressCcm { gas_budget: GasAmount, message_length: usize },
-}
-
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum AssetList {
-	All,
-	Some(BTreeSet<Asset>),
-	None,
-}
-
-impl AssetList {
-	pub fn contains(&self, asset: &Asset) -> bool {
-		match self {
-			AssetList::All => true,
-			AssetList::Some(set) => set.contains(asset),
-			AssetList::None => false,
-		}
-	}
 }

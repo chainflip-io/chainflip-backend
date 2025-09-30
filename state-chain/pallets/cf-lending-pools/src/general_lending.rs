@@ -116,7 +116,7 @@ impl<T: Config> LoanAccount<T> {
 	) -> Result<(), DispatchError> {
 		for (asset, amount) in collateral {
 			ensure!(
-				T::SafeMode::get().add_collateral_enabled.contains(asset),
+				T::SafeMode::get().add_collateral_enabled.enabled(asset),
 				Error::<T>::AddingCollateralDisabled
 			);
 			T::Balance::try_debit_account(&self.borrower_id, *asset, *amount)?;
@@ -634,7 +634,7 @@ impl<T: Config> LoanAccount<T> {
 		let loan_asset = loan.asset;
 
 		ensure!(
-			T::SafeMode::get().borrowing_enabled.contains(&loan_asset),
+			T::SafeMode::get().borrowing_enabled.enabled(&loan_asset),
 			Error::<T>::LoanCreationDisabled
 		);
 
@@ -1106,7 +1106,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			for (asset, amount) in &collateral {
 				ensure!(
-					T::SafeMode::get().remove_collateral_enabled.contains(asset),
+					T::SafeMode::get().remove_collateral_enabled.enabled(asset),
 					Error::<T>::RemovingCollateralDisabled
 				);
 

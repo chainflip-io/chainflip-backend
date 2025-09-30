@@ -45,12 +45,11 @@ mod tests;
 mod benchmarking;
 
 use cf_primitives::{
-	define_wrapper_type, Asset, AssetAmount, AssetList, BasisPoints, BoostPoolTier,
-	PrewitnessedDepositId,
+	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
 };
 use cf_traits::{
 	lending::LendingApi, AccountRoleRegistry, BalanceApi, Chainflip, PoolApi, PriceFeedApi,
-	SwapOutputAction, SwapRequestHandler, SwapRequestType,
+	SafeModeSet, SwapOutputAction, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	fail,
@@ -87,15 +86,15 @@ pub struct PalletSafeMode {
 	pub add_boost_funds_enabled: bool,
 	pub stop_boosting_enabled: bool,
 	// whether funds can be borrowed (stale oracle also disables this)
-	pub borrowing_enabled: AssetList,
+	pub borrowing_enabled: SafeModeSet<Asset>,
 	// whether lenders can add funds to lending pools
-	pub add_lender_funds_enabled: AssetList,
+	pub add_lender_funds_enabled: SafeModeSet<Asset>,
 	// whether lenders can withdraw funds from lending pools (stale oracle also disables this)
-	pub withdraw_lender_funds_enabled: AssetList,
+	pub withdraw_lender_funds_enabled: SafeModeSet<Asset>,
 	// whether borrowers can add collateral
-	pub add_collateral_enabled: AssetList,
+	pub add_collateral_enabled: SafeModeSet<Asset>,
 	// whether borrowers can withdraw collateral (stale oracle also disables this)
-	pub remove_collateral_enabled: AssetList,
+	pub remove_collateral_enabled: SafeModeSet<Asset>,
 }
 
 impl cf_traits::SafeMode for PalletSafeMode {
@@ -103,11 +102,11 @@ impl cf_traits::SafeMode for PalletSafeMode {
 		Self {
 			add_boost_funds_enabled: false,
 			stop_boosting_enabled: false,
-			borrowing_enabled: AssetList::None,
-			add_lender_funds_enabled: AssetList::None,
-			withdraw_lender_funds_enabled: AssetList::None,
-			add_collateral_enabled: AssetList::None,
-			remove_collateral_enabled: AssetList::None,
+			borrowing_enabled: SafeModeSet::code_red(),
+			add_lender_funds_enabled: SafeModeSet::code_red(),
+			withdraw_lender_funds_enabled: SafeModeSet::code_red(),
+			add_collateral_enabled: SafeModeSet::code_red(),
+			remove_collateral_enabled: SafeModeSet::code_red(),
 		}
 	}
 
@@ -115,11 +114,11 @@ impl cf_traits::SafeMode for PalletSafeMode {
 		Self {
 			add_boost_funds_enabled: true,
 			stop_boosting_enabled: true,
-			borrowing_enabled: AssetList::All,
-			add_lender_funds_enabled: AssetList::All,
-			withdraw_lender_funds_enabled: AssetList::All,
-			add_collateral_enabled: AssetList::All,
-			remove_collateral_enabled: AssetList::All,
+			borrowing_enabled: SafeModeSet::code_green(),
+			add_lender_funds_enabled: SafeModeSet::code_green(),
+			withdraw_lender_funds_enabled: SafeModeSet::code_green(),
+			add_collateral_enabled: SafeModeSet::code_green(),
+			remove_collateral_enabled: SafeModeSet::code_green(),
 		}
 	}
 }
@@ -811,7 +810,7 @@ pub mod pallet {
 			amount: AssetAmount,
 		) -> DispatchResult {
 			ensure!(
-				T::SafeMode::get().add_lender_funds_enabled.contains(&asset),
+				T::SafeMode::get().add_lender_funds_enabled.enabled(&asset),
 				Error::<T>::AddLenderFundsDisabled
 			);
 
@@ -846,7 +845,7 @@ pub mod pallet {
 			amount: Option<AssetAmount>,
 		) -> DispatchResult {
 			ensure!(
-				T::SafeMode::get().withdraw_lender_funds_enabled.contains(&asset),
+				T::SafeMode::get().withdraw_lender_funds_enabled.enabled(&asset),
 				Error::<T>::RemoveLenderFundsDisabled
 			);
 
