@@ -1038,6 +1038,27 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	pub fn redemption_expired(account_id: AccountId<T>) -> DispatchResult {
+		let pending_redemption =
+			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
+
+		T::Flip::revert_redemption(&account_id)
+			.expect("Pending Redemption should exist since the corresponding redemption existed");
+
+		// If the address is still restricted, we update the restricted balances again.
+		if RestrictedAddresses::<T>::contains_key(pending_redemption.redeem_address) {
+			RestrictedBalances::<T>::mutate(&account_id, |restricted_balances| {
+				restricted_balances
+					.entry(pending_redemption.redeem_address)
+					.and_modify(|balance| *balance += pending_redemption.restricted)
+					.or_insert(pending_redemption.restricted);
+			});
+		}
+
+		Self::deposit_event(Event::<T>::RedemptionExpired { account_id });
+		Ok(())
+	}
+
 	pub fn redeemed(account_id: AccountId<T>, redeemed_amount: FlipBalance<T>) -> DispatchResult {
 		let _ =
 			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
