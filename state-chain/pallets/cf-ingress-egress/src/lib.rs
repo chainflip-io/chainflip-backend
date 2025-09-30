@@ -1994,12 +1994,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				deposit_details,
 				deposit_address: Some(deposit_address.clone()),
 				action: action.map(
-					|x| x,
-					|y| y,
+					|account_id| account_id,
+					|target_chain_account| target_chain_account,
 					|channel_metadata| CcmDepositMetadataChecked {
 						channel_metadata,
 						source_chain: asset.into(),
-						source_address: None, // TODO: Are we sure this is correct?
+						// For deposit channels we don't witness the source address
+						source_address: None,
 					},
 				),
 				boost_fee,
@@ -2154,12 +2155,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_channel_details.boost_fee,
 			Some(channel_id),
 			deposit_channel_details.action.map(
-				|x| x,
-				|y| y,
+				|account_id| account_id,
+				|target_chain_account| target_chain_account,
 				|channel_metadata| CcmDepositMetadataChecked {
 					channel_metadata,
 					source_chain: (*asset).into(),
-					source_address: None, // TODO: Are we sure this is correct?
+					// For deposit channels we don't witness the source address
+					source_address: None,
 				},
 			),
 			block_height,
@@ -3296,7 +3298,12 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					.into_checked(None, source_asset.into())?
 					// we map the CcmDepositMetadata to a CcmChannelMetadata, forgetting the other
 					// fields:
-					.map(|x| x, |y| y.map(|y| y.channel_metadata)),
+					.map(
+						|address| address,
+						|maybe_deposit_metadata| {
+							maybe_deposit_metadata.map(|metadata| metadata.channel_metadata)
+						},
+					),
 				dca_params,
 			},
 			boost_fee,
