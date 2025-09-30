@@ -1140,6 +1140,7 @@ fn lending_config_serialization() {
 		fee_swap_interval_blocks: 10,
 		interest_payment_interval_blocks: 15,
 		fee_swap_threshold_usd: U256::from(20_000_000),
+		interest_collection_threshold_usd: U256::from(2_000_000),
 		liquidation_swap_chunk_size_usd: U256::from(5_000_000_000u64),
 		soft_liquidation_max_oracle_slippage: 50,
 		hard_liquidation_max_oracle_slippage: 500,

@@ -142,6 +142,7 @@ pub enum PalletConfigUpdate {
 	SetFeeSwapIntervalBlocks(u32),
 	SetInterestPaymentIntervalBlocks(u32),
 	SetFeeSwapThresholdUsd(AssetAmount),
+	SetInterestCollectionThresholdUsd(AssetAmount),
 	SetOracleSlippageForSwaps {
 		soft_liquidation: BasisPoints,
 		hard_liquidation: BasisPoints,
@@ -325,6 +326,7 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	fee_swap_interval_blocks: 10,
 	interest_payment_interval_blocks: 10,
 	fee_swap_threshold_usd: 20_000_000, // don't swap fewer than 20 USD
+	interest_collection_threshold_usd: 100_000, // don't collect less than 0.1 USD
 	soft_liquidation_max_oracle_slippage: 50, // 0.5%
 	hard_liquidation_max_oracle_slippage: 500, // 5%
 	liquidation_swap_chunk_size_usd: 10_000_000_000, //10k USD
@@ -675,6 +677,9 @@ pub mod pallet {
 						},
 						PalletConfigUpdate::SetFeeSwapThresholdUsd(amount_threshold) => {
 							config.fee_swap_threshold_usd = *amount_threshold;
+						},
+						PalletConfigUpdate::SetInterestCollectionThresholdUsd(amount_threshold) => {
+							config.interest_collection_threshold_usd = *amount_threshold;
 						},
 						PalletConfigUpdate::SetOracleSlippageForSwaps {
 							soft_liquidation,

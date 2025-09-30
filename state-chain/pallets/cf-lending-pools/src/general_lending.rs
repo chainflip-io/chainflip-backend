@@ -1,6 +1,7 @@
 use cf_amm_math::{invert_price, relative_price, Price};
 use cf_primitives::{DcaParameters, SwapRequestId};
 use cf_traits::{ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry};
+use core_lending_pool::ScaledAmountHP;
 use frame_support::{
 	fail,
 	sp_runtime::{FixedPointNumber, FixedU64, PerThing},
@@ -33,6 +34,14 @@ pub struct LiquidationSwap {
 pub enum LiquidationStatus {
 	NoLiquidation,
 	Liquidating { liquidation_swaps: BTreeMap<SwapRequestId, LiquidationSwap>, is_hard: bool },
+}
+
+#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+struct InterestBreakdown {
+	network: ScaledAmountHP,
+	pool: ScaledAmountHP,
+	broker: ScaledAmountHP,
+	low_ltv_penalty: ScaledAmountHP,
 }
 
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -376,9 +385,9 @@ impl<T: Config> LoanAccount<T> {
 
 		// Temporarily moving the loans out of the account lets us iterate over them
 		// while being able to update the account:
-		let loans = core::mem::take(&mut self.loans);
+		let mut loans = core::mem::take(&mut self.loans);
 
-		for (loan_id, loan) in &loans {
+		for (loan_id, loan) in &mut loans {
 			if frame_system::Pallet::<T>::block_number().saturating_sub(loan.created_at_block) %
 				config.interest_payment_interval_blocks.into() ==
 				0u32.into()
@@ -397,52 +406,47 @@ impl<T: Config> LoanAccount<T> {
 				let low_ltv_penalty_rate =
 					config.derive_low_ltv_penalty_rate_per_payment_interval(ltv);
 
-				let total_interest_rate =
-					base_interest_rate + network_interest_rate + low_ltv_penalty_rate;
+				// Calculating interest in scaled amounts for better precision
+				let owed_principal = ScaledAmountHP::from_asset_amount(loan.owed_principal);
 
-				let interest_amounts = self.charge_fee_from_collateral(
-					loan.asset,
-					total_interest_rate * loan.owed_principal,
-				)?;
+				let network_interest_amount = owed_principal * network_interest_rate;
+				let low_ltv_penalty_amount = owed_principal * low_ltv_penalty_rate;
+				let pool_interest_amount = owed_principal * base_interest_rate;
 
-				// Now we need to split the collected fees and distribute between
-				// pool/network/broker:
-				let mut network_interest = BTreeMap::new();
-				let mut low_ltv_fee = BTreeMap::new();
-				let mut pool_interest = BTreeMap::new();
+				// Record owed interest amounts. We may or may not charge these immediately
+				// depending on whether the amounts exceed some threshold.
+				loan.pending_interest.network.saturating_accrue(network_interest_amount);
+				loan.pending_interest.pool.saturating_accrue(pool_interest_amount);
+				loan.pending_interest.low_ltv_penalty.saturating_accrue(low_ltv_penalty_amount);
 
-				fn portion_of_interest(interest: Perquintill, total: Perquintill) -> Permill {
-					Permill::from_rational(interest.deconstruct(), total.deconstruct())
+				let loan_asset = loan.asset;
+
+				let mut charge_fee_if_exceeds_threshold = |fee: &mut ScaledAmountHP| {
+					// Only charge fees if the accumulated amount is greater than some threshold
+					// (say 10c)
+					let fee_usd_value = usd_value_of(loan_asset, fee.into_asset_amount())?;
+					if fee_usd_value >= config.interest_collection_threshold_usd {
+						self.charge_fee_from_collateral(loan_asset, fee.take_whole_amount())
+					} else {
+						Ok(Default::default())
+					}
+				};
+
+				let network_interest =
+					charge_fee_if_exceeds_threshold(&mut loan.pending_interest.network)?;
+
+				let low_ltv_penalty =
+					charge_fee_if_exceeds_threshold(&mut loan.pending_interest.low_ltv_penalty)?;
+
+				for (asset, amount) in network_interest.iter().chain(&low_ltv_penalty) {
+					Pallet::<T>::credit_fees_to_network(*asset, *amount);
 				}
 
-				let network_share = portion_of_interest(network_interest_rate, total_interest_rate);
-				let low_ltv_share = portion_of_interest(low_ltv_penalty_rate, total_interest_rate);
+				let pool_interest =
+					charge_fee_if_exceeds_threshold(&mut loan.pending_interest.pool)?;
 
-				for (collateral_asset, amount_to_split) in interest_amounts {
-					let network_amount = network_share * amount_to_split;
-					let low_ltv_amount = low_ltv_share * amount_to_split;
-
-					if network_amount > 0 {
-						network_interest.insert(collateral_asset, network_amount);
-					}
-
-					if low_ltv_amount > 0 {
-						low_ltv_fee.insert(collateral_asset, low_ltv_amount);
-					}
-
-					// This shouldn't underflow because network and low_ltv fees should be less than
-					// the total.
-					let pool_amount =
-						amount_to_split.saturating_sub(network_amount + low_ltv_amount);
-
-					pool_interest.insert(collateral_asset, pool_amount);
-
-					Pallet::<T>::credit_fees_to_network(
-						collateral_asset,
-						network_amount + low_ltv_amount,
-					);
-
-					Pallet::<T>::credit_fees_to_pool(loan.asset, collateral_asset, pool_amount);
+				for (asset, amount) in &pool_interest {
+					Pallet::<T>::credit_fees_to_pool(loan_asset, *asset, *amount);
 				}
 
 				Pallet::<T>::deposit_event(Event::InterestTaken {
@@ -451,7 +455,7 @@ impl<T: Config> LoanAccount<T> {
 					network_interest,
 					// TODO: broker fees
 					broker_interest: Default::default(),
-					low_ltv_penalty: low_ltv_fee,
+					low_ltv_penalty,
 				});
 			}
 		}
@@ -676,6 +680,7 @@ pub struct GeneralLoan<T: Config> {
 	pub asset: Asset,
 	pub created_at_block: BlockNumberFor<T>,
 	pub owed_principal: AssetAmount,
+	pending_interest: InterestBreakdown,
 }
 
 impl<T: Config> GeneralLoan<T> {
@@ -973,6 +978,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				asset,
 				created_at_block: frame_system::Pallet::<T>::current_block_number(),
 				owed_principal: 0,
+				pending_interest: Default::default(),
 			};
 
 			// NOTE: it is important that this event is emitted before `OriginationFeeTaken` event
@@ -1634,8 +1640,11 @@ pub struct LendingConfiguration {
 	/// Determines how frequently (in blocks) we check if fees should be swapped into the
 	/// pools asset
 	pub fee_swap_interval_blocks: u32,
-	/// Determines how frequently (in blocks) we collect interest payments from loans.
+	/// Determines how frequently (in blocks) we calculate and record interest payments from loans.
 	pub interest_payment_interval_blocks: u32,
+	/// If loan account's owed interest reaches this threshold, it will be taken from the account's
+	/// collateral
+	pub interest_collection_threshold_usd: AssetAmount,
 	/// Fees collected in some asset will be swapped into the pool's asset once their usd value
 	/// reaches this threshold
 	pub fee_swap_threshold_usd: AssetAmount,

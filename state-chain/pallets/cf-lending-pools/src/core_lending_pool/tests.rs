@@ -32,16 +32,40 @@ const LOAN_2: CoreLoanId = CoreLoanId(1);
 const USAGE: LoanUsage = LoanUsage::Boost(PrewitnessedDepositId(0));
 
 #[test]
-fn test_scaled_amount() {
-	// This shows that we can have unreasonably large amounts in chains with
+fn test_scaled_amount_for_boost_supports_large_amounts() {
+	// This shows that we can support sufficiently large amounts in chains with
 	// a large number of decimals and still fit into u128 after scaling up:
 	use cf_primitives::FLIPPERINOS_PER_FLIP;
 
-	// 1 trillion FLIP (or ETH; other chains have smaller number of decimals)
+	// 1 trillion FLIP/ETH (other chains have smaller number of decimals)
 	let original = 1_000_000_000_000 * FLIPPERINOS_PER_FLIP;
 	let scaled: ScaledAmount = ScaledAmount::from_asset_amount(original);
 	let recovered = scaled.into_asset_amount();
 	assert_eq!(original, recovered);
+}
+
+#[test]
+fn test_scaled_amount_high_precision_supports_large_amounts() {
+	// This shows that we can support sufficiently large amounts in chains with
+	// a large number of decimals and still fit into u128 after scaling up:
+	use cf_primitives::FLIPPERINOS_PER_FLIP;
+
+	// 100 billion FLIP/ETH (other chains have smaller number of decimals)
+	let original = 100_000_000_000 * FLIPPERINOS_PER_FLIP;
+	let scaled: ScaledAmountHP = ScaledAmountHP::from_asset_amount(original);
+	let recovered = scaled.into_asset_amount();
+	assert_eq!(original, recovered);
+}
+
+#[test]
+fn take_whole_amount() {
+	let mut amount = ScaledAmountHP::from_raw(2_700_000_000);
+
+	// Should return the "whole" part as AssetAmount
+	assert_eq!(amount.take_whole_amount(), 2);
+
+	// The remaining fractional part should still be there
+	assert_eq!(amount.as_raw(), 700_000_000);
 }
 
 #[track_caller]
