@@ -101,14 +101,9 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     )
     .send();
 
-  await observeEvent(globalLogger, `environment:SignedRuntimeCallSubmitted`, {
-    test: (event) => {
-      const matchSerializedCall = event.data.serializedCall === hexRuntimeCall;
-      const matchSigner =
-        event.data.signerAccountId === 'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1';
-      const dispatchOk = event.data.dispatchResult.Ok !== undefined;
-      return matchSerializedCall && matchSigner && dispatchOk;
-    },
+  await observeEvent(globalLogger, `environment:BatchCompleted`, {
+    test: (event) =>
+      event.data.signerAccount === 'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1',
     historicalCheckBlocks: 1,
   }).event;
 
@@ -155,14 +150,9 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     )
     .send();
 
-  await observeEvent(globalLogger, `environment:SignedRuntimeCallSubmitted`, {
-    test: (event) => {
-      const matchSerializedCall = event.data.serializedCall === hexRuntimeCall;
-      const matchSigner =
-        event.data.signerAccountId === 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7';
-      const dispatchOk = event.data.dispatchResult.Ok !== undefined;
-      return matchSerializedCall && matchSigner && dispatchOk;
-    },
+  await observeEvent(globalLogger, `environment:BatchCompleted`, {
+    test: (event) =>
+      event.data.signerAccount === 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
     historicalCheckBlocks: 1,
   }).event;
 
@@ -246,7 +236,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   //     .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
   // });
 
-  // await observeEvent(globalLogger, `environment:SignedRuntimeCallSubmitted`, {
+  // await observeEvent(globalLogger, `environment:BatchCompleted`, {
   //   test: (event) => {
   //     const matchSerializedCall = !!event.data.decodedAction.Lending?.Borrow;
   //     const matchSignedPayload = event.data.signedPayload === encodedPayload;
