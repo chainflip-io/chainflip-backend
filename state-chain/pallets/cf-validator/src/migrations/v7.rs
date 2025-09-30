@@ -16,7 +16,7 @@
 
 use cf_primitives::EpochIndex;
 use frame_support::traits::UncheckedOnRuntimeUpgrade;
-use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
 
 use crate::{Config, HistoricalActiveEpochs, HistoricalBonds};
 
