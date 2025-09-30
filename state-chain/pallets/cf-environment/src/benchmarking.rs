@@ -213,7 +213,7 @@ mod benchmarks {
                 "1c3e51b4b12bcc95419a43dc4c1854663edda1df5dd788a059a66c6d237a32fafbeff6515d4b8af0267ce8365ba7a83cf483d7b66d3e3164db027302e308c60e"
             )),
             signer: SolAddress(cf_utilities::bs58_array("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp")),
-            sig_type: SolSigType::Domain,
+            sig_type: submit_runtime_call::SolSigType::Domain,
         };
 
 		#[extrinsic_call]

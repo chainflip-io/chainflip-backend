@@ -19,6 +19,9 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+use crate::submit_runtime_call::{
+	dispatch_user_calls, weight_and_dispatch_class, TransactionMetadata, UserSignatureData,
+};
 use cf_chains::{
 	btc::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
@@ -65,11 +68,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
-
-const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
-const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
-const UNSIGNED_BATCH_VERSION: &str = "0";
-const BATCHED_CALL_LIMITS: usize = 10;
+pub mod submit_runtime_call;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(20);
 
@@ -367,17 +366,15 @@ pub mod pallet {
 		SolanaGovCallDispatched { gov_call: SolanaGovCall, broadcast_id: BroadcastId },
 		/// Assethub Vault Account is successfully set
 		AssethubVaultAccountSet { assethub_vault_account_id: PolkadotAccountId },
-		SignedRuntimeCallSubmitted {
-			signer_account_id: T::AccountId,
-			serialized_call: Vec<u8>,
+		/// Batch of dispatches completed fully with no error.
+		BatchCompleted { signer_account: T::AccountId, dispatch_result: DispatchResultWithPostInfo },
+		/// Batch of dispatches failed at a specific index.
+		BatchFailed {
+			signer_account: T::AccountId,
+			dispatch_error: DispatchErrorWithPostInfo,
+			failure_index: u32,
 			dispatch_result: DispatchResultWithPostInfo,
 		},
-		/// A single item within a Batch of dispatches has completed with no error.
-		ItemCompleted,
-		/// Batch of dispatches completed fully with no error.
-		BatchCompleted,
-		/// Batch of dispatches failed at a specific index.
-		BatchFailed { dispatch_error: DispatchErrorWithPostInfo, failure_index: u32 },
 	}
 
 	#[pallet::call]
@@ -628,7 +625,7 @@ pub mod pallet {
 		// exponential by governance.
 		#[pallet::call_index(10)]
 		#[pallet::weight({
-			let (dispatch_weight, dispatch_class) = Pallet::<T>::weight_and_dispatch_class(calls);
+			let (dispatch_weight, dispatch_class) = weight_and_dispatch_class::<T>(calls);
 			let dispatch_weight = dispatch_weight.saturating_add(T::WeightInfo::submit_unsigned_batch_runtime_call(calls.len() as u32));
 			(dispatch_weight, dispatch_class)
 		})]
@@ -643,32 +640,26 @@ pub mod pallet {
 
 			// Extract signer account ID based on signature type. Validation already done in
 			// ValidateUnsigned, it should never fail to decode the signer.
-			let signer_account_id: T::AccountId = user_signature_data
-				.signer_account_id::<T>()
+			let signer_account: T::AccountId = user_signature_data
+				.signer_account::<T>()
 				.map_err(|_| Error::<T>::FailedToDecodeSigner)?;
 
 			// Increment the account nonce to prevent replay attacks
-			frame_system::Pallet::<T>::inc_account_nonce(&signer_account_id);
+			frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
 
-			let dispatch_result = Self::dispatch_user_calls(
+			let _ = dispatch_user_calls::<T>(
 				calls.clone(),
-				signer_account_id.clone(),
+				signer_account.clone(),
 				transaction_metadata.atomic,
 				T::WeightInfo::submit_unsigned_batch_runtime_call,
 			);
-
-			Self::deposit_event(Event::<T>::SignedRuntimeCallSubmitted {
-				signer_account_id,
-				serialized_call: calls.encode(),
-				dispatch_result,
-			});
 
 			Ok(())
 		}
 
 		#[pallet::call_index(11)]
 		#[pallet::weight({
-			let (dispatch_weight, dispatch_class) = Pallet::<T>::weight_and_dispatch_class(calls);
+			let (dispatch_weight, dispatch_class) = weight_and_dispatch_class::<T>(calls);
 			let dispatch_weight = dispatch_weight.saturating_add(T::WeightInfo::submit_batch_runtime_call(calls.len() as u32));
 			(dispatch_weight, dispatch_class)
 		})]
@@ -679,18 +670,12 @@ pub mod pallet {
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 
-			let dispatch_result = Self::dispatch_user_calls(
+			let _ = dispatch_user_calls::<T>(
 				calls.clone(),
 				account_id.clone(),
 				atomic,
 				T::WeightInfo::submit_unsigned_batch_runtime_call,
 			);
-
-			Self::deposit_event(Event::<T>::SignedRuntimeCallSubmitted {
-				signer_account_id: account_id,
-				serialized_call: calls.encode(),
-				dispatch_result,
-			});
 
 			Ok(())
 		}
@@ -700,104 +685,8 @@ pub mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 
-		// TODO: We might want to add a check here that the signer has balance > 0 as no extrinsic
-		// should succeed. Fees need to be paid by the signer.
-		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::submit_unsigned_batch_runtime_call {
-				calls,
-				transaction_metadata,
-				user_signature_data,
-			} = call
-			{
-				// Check if payload hasn't expired
-				if frame_system::Pallet::<T>::block_number() >=
-					transaction_metadata.expiry_block.into()
-				{
-					return InvalidTransaction::Stale.into();
-				}
-
-				// Extract signer account ID
-				let signer_account_id = match user_signature_data.signer_account_id::<T>() {
-					Ok(account_id) => account_id,
-					Err(_) => return InvalidTransaction::BadSigner.into(),
-				};
-
-				// Check account nonce
-				let current_nonce = frame_system::Pallet::<T>::account_nonce(&signer_account_id);
-				let tx_nonce: <T as frame_system::Config>::Nonce =
-					transaction_metadata.nonce.into();
-
-				if tx_nonce < current_nonce {
-					return InvalidTransaction::Stale.into();
-				}
-
-				// Signature check
-				let chanflip_network_name = ChainflipNetworkName::<T>::get();
-				let serialized_calls: Vec<u8> = calls.encode();
-
-				let build_domain_data = || -> Vec<u8> {
-					[
-						serialized_calls.clone(),
-						chanflip_network_name.as_str().encode(),
-						UNSIGNED_BATCH_VERSION.encode(),
-						transaction_metadata.encode(),
-					]
-					.concat()
-				};
-
-				let valid_signature = match user_signature_data {
-					UserSignatureData::Solana { signature, signer, sig_type } => {
-						let signed_payload = match sig_type {
-							SolSigType::Domain => {
-								let domain_data = build_domain_data();
-								[SOLANA_OFFCHAIN_PREFIX, domain_data.as_slice()].concat()
-							},
-						};
-						verify_sol_signature(signer, &signed_payload, signature)
-					},
-					UserSignatureData::Ethereum { signature, signer, sig_type } => {
-						let signed_payload = match sig_type {
-							EthSigType::Domain => {
-								let domain_data = build_domain_data();
-								let prefix = scale_info::prelude::format!(
-									"{}{}",
-									ETHEREUM_SIGN_MESSAGE_PREFIX,
-									domain_data.len()
-								);
-								let prefix_bytes = prefix.as_bytes();
-								[prefix_bytes, &domain_data].concat()
-							},
-							EthSigType::Eip712 => Self::build_eip_712_payload(
-								calls.clone(),
-								chanflip_network_name.as_str(),
-								UNSIGNED_BATCH_VERSION,
-								transaction_metadata.clone(),
-								*signer,
-							),
-						};
-						verify_evm_signature(signer, &signed_payload, signature)
-					},
-				};
-
-				if !valid_signature {
-					return InvalidTransaction::BadProof.into();
-				}
-
-				// Build transaction validity with requires/provides
-				let unique_id = (signer_account_id.clone(), transaction_metadata.nonce);
-
-				let mut tx =
-					ValidTransaction::with_tag_prefix(Self::name()).and_provides(unique_id);
-
-				if tx_nonce > current_nonce {
-					// This is a future tx, require the immediately previous nonce
-					tx = tx.and_requires((signer_account_id, transaction_metadata.nonce - 1));
-				}
-
-				tx.build()
-			} else {
-				InvalidTransaction::Call.into()
-			}
+		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			submit_runtime_call::validate_unsigned::<T>(source, call)
 		}
 	}
 
@@ -1092,132 +981,6 @@ impl<T: Config> Pallet<T> {
 			current_id
 		})
 	}
-
-	/// Dispatches a call from the user account. If `atomic` is true, uses transactional semantics
-	/// where if any call dispatch returns `Err`, all storage updates are rolled back. If `atomic`
-	/// is false, executes calls without transaction protection and always returns Ok, executing
-	/// as best effort.
-	/// Inspiration from pallet_utility
-	/// https://paritytech.github.io/polkadot-sdk/master/pallet_utility/pallet/struct.Pallet.html
-	fn dispatch_user_calls(
-		calls: Vec<<T as Config>::RuntimeCall>,
-		user_account: T::AccountId,
-		atomic: bool,
-		weight_fn: fn(u32) -> Weight,
-	) -> DispatchResultWithPostInfo {
-		let calls_len = calls.len();
-		if calls_len > BATCHED_CALL_LIMITS {
-			return Err(Error::<T>::TooManyCalls.into());
-		}
-
-		if atomic {
-			let result = with_transaction(|| {
-				let result = Self::execute_batch_calls(calls, user_account, weight_fn);
-				match result {
-					Ok(weight) => TransactionOutcome::Commit(Ok(Some(weight).into())),
-					Err((_, err)) => TransactionOutcome::Rollback(Err(err)),
-				}
-			});
-			match result {
-				Ok(_) => Self::deposit_event(Event::BatchCompleted),
-				// Revert the entire batch
-				Err(err) => Self::deposit_event(Event::BatchFailed {
-					dispatch_error: err,
-					failure_index: 0_u32,
-				}),
-			};
-			result
-		} else {
-			let result = Self::execute_batch_calls(calls, user_account, weight_fn);
-			match result {
-				Ok(weight) => {
-					Self::deposit_event(Event::BatchCompleted);
-					Ok(Some(weight).into())
-				},
-				Err((failure_index, err)) => {
-					Self::deposit_event(Event::BatchFailed {
-						dispatch_error: err,
-						failure_index: failure_index as u32,
-					});
-					let weight = err.post_info.actual_weight.unwrap_or_default();
-					Ok(Some(weight).into())
-				},
-			}
-		}
-	}
-
-	/// Executes a batch of calls and returns the total weight or an error with an associated call
-	/// index.
-	fn execute_batch_calls(
-		calls: Vec<<T as Config>::RuntimeCall>,
-		user_account: T::AccountId,
-		weight_fn: fn(u32) -> Weight,
-	) -> Result<Weight, (usize, DispatchErrorWithPostInfo)> {
-		let mut weight = Weight::zero();
-		let calls_len = calls.len();
-
-		for (index, call) in calls.into_iter().enumerate() {
-			let info = call.get_dispatch_info();
-
-			let origin = frame_system::RawOrigin::Signed(user_account.clone()).into();
-
-			// Don't allow users to nest calls.
-			if let Some(Call::submit_unsigned_batch_runtime_call { .. }) |
-			Some(Call::submit_batch_runtime_call { .. }) = call.is_sub_type()
-			{
-				let base_weight = weight_fn(index.saturating_add(1) as u32);
-				let err = DispatchErrorWithPostInfo {
-					post_info: Some(base_weight.saturating_add(weight)).into(),
-					error: DispatchError::Other("Nested runtime call batches not allowed"),
-				};
-				return Err((index, err));
-			}
-
-			let result = call.dispatch_bypass_filter(origin);
-
-			weight = weight
-				.saturating_add(frame_support::dispatch::extract_actual_weight(&result, &info));
-
-			if let Err(mut err) = result {
-				let base_weight = weight_fn(index.saturating_add(1) as u32);
-				err.post_info = Some(base_weight.saturating_add(weight)).into();
-				return Err((index, err));
-			};
-		}
-
-		let base_weight = weight_fn(calls_len as u32);
-		let total_weight = base_weight.saturating_add(weight);
-		Ok(total_weight)
-	}
-
-	/// `signer is not technically necessary but is added as part of the metadata so
-	/// it is displayed separately to the user in the wallet
-	fn build_eip_712_payload(
-		_calls: Vec<<T as Config>::RuntimeCall>,
-		_chain_name: &str,
-		_version: &str,
-		_transaction_metadata: TransactionMetadata,
-		_signer: EvmAddress,
-	) -> Vec<u8> {
-		todo!("implement eip-712");
-	}
-
-	/// Get the accumulated `weight` and the dispatch class for the given `calls`.
-	fn weight_and_dispatch_class(calls: &[<T as Config>::RuntimeCall]) -> (Weight, DispatchClass) {
-		let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info());
-		let (dispatch_weight, dispatch_class) = dispatch_infos.fold(
-			(Weight::zero(), DispatchClass::Operational),
-			|(total_weight, dispatch_class): (Weight, DispatchClass), di| {
-				(
-					total_weight.saturating_add(di.weight),
-					// If not all are `Operational`, we want to use `DispatchClass::Normal`.
-					if di.class == DispatchClass::Normal { di.class } else { dispatch_class },
-				)
-			},
-		);
-
-		(dispatch_weight, dispatch_class)
-	}
 }
 
 impl<T: Config> CompatibleCfeVersions for Pallet<T> {
@@ -1229,48 +992,5 @@ impl<T: Config> CompatibleCfeVersions for Pallet<T> {
 impl<T: Config> NetworkEnvironmentProvider for Pallet<T> {
 	fn get_network_environment() -> NetworkEnvironment {
 		Self::network_environment()
-	}
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct TransactionMetadata {
-	nonce: u32,
-	expiry_block: BlockNumber,
-	atomic: bool,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum EthSigType {
-	Domain, // personal_sign
-	Eip712,
-}
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum SolSigType {
-	Domain, /* Using `b"\xffsolana offchain" as per Anza specifications,
-	         * even if we are not using the proposal. Phantom might use
-	         * a different standard though..
-	         * References
-	         * https://docs.anza.xyz/proposals/off-chain-message-signing
-	         * And/or phantom off-chain signing:
-	         * https://github.com/phantom/sign-in-with-solana */
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum UserSignatureData {
-	Solana { signature: SolSignature, signer: SolAddress, sig_type: SolSigType },
-	Ethereum { signature: EthereumSignature, signer: EvmAddress, sig_type: EthSigType },
-}
-
-impl UserSignatureData {
-	/// Extract the signer account ID as T::AccountId from the signature data
-	pub fn signer_account_id<T: Config>(&self) -> Result<T::AccountId, codec::Error> {
-		use cf_chains::evm::ToAccountId32;
-
-		let account_id_32 = match self {
-			UserSignatureData::Solana { signer, .. } => AccountId32::new((*signer).into()),
-			UserSignatureData::Ethereum { signer, .. } => signer.into_account_id_32(),
-		};
-
-		T::AccountId::decode(&mut account_id_32.encode().as_slice())
 	}
 }

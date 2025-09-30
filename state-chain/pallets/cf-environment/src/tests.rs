@@ -30,8 +30,8 @@ use cf_traits::{BalanceApi, SafeMode};
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 
 use crate::{
-	mock::*, BitcoinAvailableUtxos, ConsolidationParameters, Event, RuntimeSafeMode,
-	SafeModeUpdate, SolSigType, SolSignature, SolanaAvailableNonceAccounts,
+	mock::*, submit_runtime_call::SolSigType, BitcoinAvailableUtxos, ConsolidationParameters,
+	Event, RuntimeSafeMode, SafeModeUpdate, SolSignature, SolanaAvailableNonceAccounts,
 	SolanaUnavailableNonceAccounts, TransactionMetadata, UserSignatureData,
 };
 
@@ -775,7 +775,7 @@ fn can_submit_unsigned_batch_runtime_call() {
 		};
 
 		let caller: <Test as frame_system::Config>::AccountId = user_signature_data
-			.signer_account_id::<Test>().unwrap();
+			.signer_account::<Test>().unwrap();
 
         let initial_nonce = frame_system::Pallet::<Test>::account_nonce(caller);
         assert_eq!(initial_nonce, 0);
@@ -790,8 +790,16 @@ fn can_submit_unsigned_batch_runtime_call() {
         // Verify the nonce was incremented
         assert_eq!(frame_system::Pallet::<Test>::account_nonce(caller), initial_nonce + 1);
 
-		System::assert_has_event(RuntimeEvent::Environment(Event::BatchCompleted {
-		}));
+		assert!(
+			System::events().iter().any(|record| matches!(
+				record.event,
+				RuntimeEvent::Environment(Event::BatchCompleted {
+					signer_account: ref acct,
+					..
+				}) if acct == &caller
+			))
+		);
+
     });
 }
 
@@ -814,6 +822,12 @@ fn can_submit_batch_runtime_call() {
 			false
 		));
 
-		System::assert_has_event(RuntimeEvent::Environment(Event::BatchCompleted {}));
+		assert!(System::events().iter().any(|record| matches!(
+			record.event,
+			RuntimeEvent::Environment(Event::BatchCompleted {
+				signer_account: ref acct,
+				..
+			}) if acct == &caller
+		)));
 	});
 }
