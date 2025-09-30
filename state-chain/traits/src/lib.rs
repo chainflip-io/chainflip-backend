@@ -159,6 +159,7 @@ pub trait EpochInfo {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_authority_info_for_epoch(
 		epoch_index: EpochIndex,
+		bond: Self::Amount,
 		new_authorities: Vec<Self::ValidatorId>,
 	);
 
@@ -656,11 +657,12 @@ pub trait HistoricalEpoch {
 	/// The bond for an epoch
 	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
 	/// The unexpired epochs for which a node was in the authority set.
-	fn active_epochs_for_authority(id: &Self::ValidatorId) -> Vec<Self::EpochIndex>;
+	fn active_epochs_for_authority(id: &Self::ValidatorId)
+		-> Vec<(Self::EpochIndex, Self::Amount)>;
 	/// Removes an epoch from an authority's list of active epochs.
-	fn deactivate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
+	fn deactivate_epoch(authority: &Self::ValidatorId, epoch: Self::EpochIndex);
 	/// Add an epoch to an authority's list of active epochs.
-	fn activate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
+	fn activate_epoch(authority: &Self::ValidatorId, epoch: Self::EpochIndex, bond: Self::Amount);
 	/// Returns the amount of a authority's funds that are currently bonded.
 	fn active_bond(authority: &Self::ValidatorId) -> Self::Amount;
 	/// Returns the number of active epochs a authority is still active in

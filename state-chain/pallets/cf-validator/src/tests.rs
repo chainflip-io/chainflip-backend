@@ -506,23 +506,29 @@ fn rerun_auction_if_not_enough_participants() {
 
 #[test]
 fn historical_epochs() {
+	fn active_epochs(account: u64) -> Vec<EpochIndex> {
+		HistoricalActiveEpochs::<Test>::get(account)
+			.iter()
+			.map(|(epoch, _)| *epoch)
+			.collect()
+	}
 	new_test_ext().then_execute_with_checks(|| {
 		// Activate an epoch for ALICE
-		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
+		EpochHistory::<Test>::activate_epoch(&ALICE, 1, 10);
 		// Expect the the epoch to be in the storage for ALICE
-		assert!(HistoricalActiveEpochs::<Test>::get(ALICE).contains(&1));
+		assert!(active_epochs(ALICE).contains(&1));
 		// Activate the next epoch
-		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
+		EpochHistory::<Test>::activate_epoch(&ALICE, 2, 10);
 		// Remove epoch 1 for ALICE
 		EpochHistory::<Test>::deactivate_epoch(&ALICE, 1);
 		// Expect the epoch to be removed
-		assert!(!HistoricalActiveEpochs::<Test>::get(ALICE).contains(&1));
+		assert!(!active_epochs(ALICE).contains(&1));
 		// and epoch 2 still in storage
-		assert!(HistoricalActiveEpochs::<Test>::get(ALICE).contains(&2));
+		assert!(active_epochs(ALICE).contains(&2));
 		// Deactivate epoch 2
 		EpochHistory::<Test>::deactivate_epoch(&ALICE, 2);
 		// And expect the historical active epoch array for ALICE to be empty
-		assert!(HistoricalActiveEpochs::<Test>::get(ALICE).is_empty());
+		assert!(active_epochs(ALICE).is_empty());
 	});
 }
 
@@ -539,13 +545,13 @@ fn expired_epoch_data_is_removed() {
 		};
 
 		// Epoch 1
-		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
+		EpochHistory::<Test>::activate_epoch(&ALICE, 1, 10);
 		HistoricalAuthorities::<Test>::insert(1, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(1, 10);
 		test_snapshot.clone().register_for_epoch::<Test>(1);
 
 		// Epoch 2
-		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
+		EpochHistory::<Test>::activate_epoch(&ALICE, 2, 30);
 		HistoricalAuthorities::<Test>::insert(2, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(2, 30);
 		test_snapshot.clone().register_for_epoch::<Test>(2);
@@ -555,7 +561,7 @@ fn expired_epoch_data_is_removed() {
 		ValidatorPallet::expire_epoch(1);
 
 		// Epoch 3
-		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
+		EpochHistory::<Test>::activate_epoch(&ALICE, 3, 20);
 		HistoricalAuthorities::<Test>::insert(3, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(3, 20);
 		test_snapshot.clone().register_for_epoch::<Test>(3);
@@ -581,17 +587,14 @@ fn expired_epoch_data_is_removed() {
 fn highest_bond() {
 	new_test_ext().then_execute_with_checks(|| {
 		// Epoch 1
-		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
+		EpochHistory::<Test>::activate_epoch(&ALICE, 1, 10);
 		HistoricalAuthorities::<Test>::insert(1, Vec::from([ALICE]));
-		HistoricalBonds::<Test>::insert(1, 10);
 		// Epoch 2
-		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
+		EpochHistory::<Test>::activate_epoch(&ALICE, 2, 30);
 		HistoricalAuthorities::<Test>::insert(2, Vec::from([ALICE]));
-		HistoricalBonds::<Test>::insert(2, 30);
 		// Epoch 3
-		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
+		EpochHistory::<Test>::activate_epoch(&ALICE, 3, 20);
 		HistoricalAuthorities::<Test>::insert(3, Vec::from([ALICE]));
-		HistoricalBonds::<Test>::insert(3, 20);
 		// Expect the bond of epoch 2
 		assert_eq!(EpochHistory::<Test>::active_bond(&ALICE), 30);
 		// Deactivate all epochs
@@ -703,14 +706,29 @@ mod bond_expiry {
 				assert_eq!(MockBonderFor::<Test>::get_bond(account_id), NEXT_BOND);
 			});
 
-			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
+			assert_eq!(
+				EpochHistory::<Test>::active_epochs_for_authority(&1)
+					.into_iter()
+					.map(|(e, _)| e)
+					.collect::<Vec<_>>(),
+				[initial_epoch + 1]
+			);
 			assert_eq!(EpochHistory::<Test>::active_bond(&1), BOND);
 			assert_eq!(
-				EpochHistory::<Test>::active_epochs_for_authority(&2),
+				EpochHistory::<Test>::active_epochs_for_authority(&2)
+					.into_iter()
+					.map(|(e, _)| e)
+					.collect::<Vec<_>>(),
 				[initial_epoch + 1, initial_epoch + 2]
 			);
 			assert_eq!(EpochHistory::<Test>::active_bond(&2), NEXT_BOND);
-			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&3), [initial_epoch + 2]);
+			assert_eq!(
+				EpochHistory::<Test>::active_epochs_for_authority(&3)
+					.into_iter()
+					.map(|(e, _)| e)
+					.collect::<Vec<_>>(),
+				[initial_epoch + 2]
+			);
 			assert_eq!(EpochHistory::<Test>::active_bond(&3), NEXT_BOND);
 		});
 	}
@@ -735,14 +753,29 @@ mod bond_expiry {
 			// Uses the new bond
 			assert_eq!(MockBonderFor::<Test>::get_bond(&3), 99);
 
-			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
+			assert_eq!(
+				EpochHistory::<Test>::active_epochs_for_authority(&1)
+					.into_iter()
+					.map(|(e, _)| e)
+					.collect::<Vec<_>>(),
+				[initial_epoch + 1]
+			);
 			assert_eq!(EpochHistory::<Test>::active_bond(&1), 100);
 			assert_eq!(
-				EpochHistory::<Test>::active_epochs_for_authority(&2),
+				EpochHistory::<Test>::active_epochs_for_authority(&2)
+					.into_iter()
+					.map(|(e, _)| e)
+					.collect::<Vec<_>>(),
 				[initial_epoch + 1, initial_epoch + 2]
 			);
 			assert_eq!(EpochHistory::<Test>::active_bond(&2), 100);
-			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&3), [initial_epoch + 2]);
+			assert_eq!(
+				EpochHistory::<Test>::active_epochs_for_authority(&3)
+					.into_iter()
+					.map(|(e, _)| e)
+					.collect::<Vec<_>>(),
+				[initial_epoch + 2]
+			);
 			assert_eq!(EpochHistory::<Test>::active_bond(&3), 99);
 		});
 	}
@@ -781,7 +814,7 @@ fn test_validator_registration_min_balance() {
 }
 
 #[test]
-fn test_expect_validator_register_fails() {
+fn validator_registration_min_stake() {
 	new_test_ext().then_execute_with_checks(|| {
 		const ID: u64 = 42;
 		assert_ok!(ValidatorPallet::update_pallet_config(
@@ -789,35 +822,13 @@ fn test_expect_validator_register_fails() {
 			PalletConfigUpdate::MinimumValidatorStake { min_stake: 10_000 },
 		));
 		MockFlip::credit_funds(&ID, 5_000 * FLIPPERINOS_PER_FLIP);
-		// Reduce the set size target to the current authority count.
-		assert_ok!(Pallet::<Test>::update_pallet_config(
-			RawOrigin::Root.into(),
-			PalletConfigUpdate::AuctionParameters {
-				parameters: SetSizeParameters {
-					min_size: MIN_AUTHORITY_SIZE,
-					max_size: <Pallet<Test> as EpochInfo>::current_authority_count(),
-					max_expansion: MAX_AUTHORITY_SET_EXPANSION,
-				},
-			},
-		));
 		assert_noop!(
 			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID),),
 			crate::Error::<Test>::NotEnoughFunds
 		);
-		// Now set it back to the default.
-		assert_ok!(Pallet::<Test>::update_pallet_config(
-			RawOrigin::Root.into(),
-			PalletConfigUpdate::AuctionParameters {
-				parameters: SetSizeParameters {
-					min_size: MIN_AUTHORITY_SIZE,
-					max_size: MAX_AUTHORITY_SIZE,
-					max_expansion: MAX_AUTHORITY_SET_EXPANSION,
-				},
-			},
-		));
-		// It should be possible to register now since the actual size is below the target.
+		MockFlip::credit_funds(&ID, 5_000 * FLIPPERINOS_PER_FLIP);
+		// Now we have enough funds
 		assert_ok!(Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)));
-		MockFlip::credit_funds(&ID, 2_000 * FLIPPERINOS_PER_FLIP);
 		// Trying to register again passes the funding check but fails for other reasons.
 		assert_noop!(
 			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)),
@@ -1561,12 +1572,12 @@ fn should_expire_all_previous_epochs() {
 
 		assert_eq!(
 			HistoricalActiveEpochs::<Test>::get(ID),
-			vec![first_epoch, second_epoch, third_epoch]
+			vec![(first_epoch, BOND), (second_epoch, BOND), (third_epoch, BOND)]
 		);
 
 		ValidatorPallet::expire_epochs_up_to(second_epoch, Weight::from_all(u64::MAX));
 
-		assert_eq!(HistoricalActiveEpochs::<Test>::get(ID), vec![third_epoch]);
+		assert_eq!(HistoricalActiveEpochs::<Test>::get(ID), vec![(third_epoch, BOND)]);
 	});
 }
 
