@@ -999,8 +999,7 @@ pub mod pallet {
 						Exceptions::<T>::mutate(&operator, |allowed| {
 							allowed.clear();
 							// Any existing delegators need be added to the allowed list.
-							for (delegator, (assigned_operator, max_bid)) in
-								DelegationChoice::<T>::iter()
+							for (delegator, (assigned_operator, _)) in DelegationChoice::<T>::iter()
 							{
 								if assigned_operator == operator {
 									allowed.insert(delegator.clone());
