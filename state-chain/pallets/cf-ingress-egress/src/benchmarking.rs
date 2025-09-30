@@ -111,22 +111,24 @@ mod benchmarks {
 			let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset =
 				BenchmarkValue::benchmark_value();
 			let block_number = TargetChainBlockNumber::<T, I>::benchmark_value();
-			let mut channel =
-				DepositChannelDetails::<T, I> {
-					owner: account("doogle", 0, 0),
-					opened_at: block_number,
-					expires_at: block_number,
-					deposit_channel: DepositChannel::generate_new::<
-						<T as Config<I>>::AddressDerivation,
-					>(1, source_asset)
+			let mut channel = DepositChannelDetails::<T, I> {
+				owner: account("doogle", 0, 0),
+				opened_at: block_number,
+				expires_at: block_number,
+				deposit_channel:
+					DepositChannel::generate_new::<<T as Config<I>>::AddressDerivation>(
+						1,
+						source_asset,
+					)
 					.unwrap(),
-					action: ChannelAction::<T::AccountId, <T::TargetChain as Chain>::ChainAccount>::LiquidityProvision {
+				action:
+					ChannelAction::<T::AccountId, TargetChainAccount<T, I>>::LiquidityProvision {
 						lp_account: account("doogle", 0, 0),
 						refund_address: ForeignChainAddress::benchmark_value(),
 					},
-					boost_fee: 0,
-					boost_status: BoostStatus::NotBoosted,
-				};
+				boost_fee: 0,
+				boost_status: BoostStatus::NotBoosted,
+			};
 			channel.deposit_channel.state.on_fetch_scheduled();
 			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), channel);
 			addresses.push(deposit_address);
