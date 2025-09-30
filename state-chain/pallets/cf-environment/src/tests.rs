@@ -775,7 +775,7 @@ fn can_submit_unsigned_batch_runtime_call() {
 		};
 
 		let caller: <Test as frame_system::Config>::AccountId = user_signature_data
-			.signer_account::<Test>().unwrap();
+			.signer_account().unwrap();
 
         let initial_nonce = frame_system::Pallet::<Test>::account_nonce(caller);
         assert_eq!(initial_nonce, 0);

@@ -57,7 +57,7 @@ pub enum UserSignatureData {
 
 impl UserSignatureData {
 	/// Extract the signer account ID as T::AccountId from the signature data
-	pub fn signer_account<T: Config>(&self) -> Result<T::AccountId, codec::Error> {
+	pub fn signer_account<AccountId: codec::Decode>(&self) -> Result<AccountId, codec::Error> {
 		use cf_chains::evm::ToAccountId32;
 
 		let account_id_32 = match self {
@@ -65,7 +65,7 @@ impl UserSignatureData {
 			UserSignatureData::Ethereum { signer, .. } => signer.into_account_id_32(),
 		};
 
-		T::AccountId::decode(&mut account_id_32.encode().as_slice())
+		AccountId::decode(&mut account_id_32.encode().as_slice())
 	}
 }
 
@@ -229,7 +229,7 @@ pub(crate) fn validate_unsigned<T: Config>(
 		}
 
 		// Extract signer account ID
-		let signer_account = match user_signature_data.signer_account::<T>() {
+		let signer_account: T::AccountId = match user_signature_data.signer_account() {
 			Ok(account_id) => account_id,
 			Err(_) => return InvalidTransaction::BadSigner.into(),
 		};

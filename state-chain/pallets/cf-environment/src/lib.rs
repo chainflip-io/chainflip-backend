@@ -639,7 +639,7 @@ pub mod pallet {
 			// Extract signer account ID based on signature type. Validation already done in
 			// ValidateUnsigned, it should never fail to decode the signer.
 			let signer_account: T::AccountId = user_signature_data
-				.signer_account::<T>()
+				.signer_account()
 				.map_err(|_| Error::<T>::FailedToDecodeSigner)?;
 
 			// Increment the account nonce to prevent replay attacks
