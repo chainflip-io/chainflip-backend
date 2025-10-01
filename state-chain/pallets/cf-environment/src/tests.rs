@@ -793,7 +793,7 @@ fn can_non_native_signed_call() {
 		assert!(
 			System::events().iter().any(|record| matches!(
 				record.event,
-				RuntimeEvent::Environment(Event::BatchCompleted {
+				RuntimeEvent::Environment(Event::NonNativeSignedCall {
 					signer_account: ref acct,
 					..
 				}) if acct == &caller

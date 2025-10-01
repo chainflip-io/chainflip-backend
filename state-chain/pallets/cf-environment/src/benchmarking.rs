@@ -228,12 +228,12 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn batch(c: Linear<0, 1000>) {
+	fn batch(c: Linear<0, 10>) {
 		let caller: T::AccountId = whitelisted_caller();
 		let calls = vec![frame_system::Call::remark { remark: vec![] }.into(); c as usize];
 
 		#[extrinsic_call]
-		batch(frame_system::RawOrigin::Signed(caller.clone()), calls, true);
+		batch(frame_system::RawOrigin::Signed(caller.clone()), calls, false);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);

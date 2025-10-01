@@ -50,7 +50,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   // Try a call batch that fails
   // const calls = [remarkCall, chainflip.tx.validator.forceRotation()];
 
-  const batchCall = chainflip.tx.environment.batch(calls, false);
+  const batchCall = chainflip.tx.environment.batch(calls, atomic);
   const batchRuntimeCall = batchCall.method;
   const encodedCall = chainflip.createType('Call', batchRuntimeCall).toU8a();
   const hexRuntimeCall = u8aToHex(encodedCall);
@@ -86,7 +86,6 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
       {
         nonce: svmNonce,
         expiryBlock,
-        atomic,
       },
       {
         Solana: {
@@ -141,7 +140,6 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
       {
         nonce: evmNonce,
         expiryBlock,
-        atomic,
       },
       {
         Ethereum: {
