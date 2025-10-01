@@ -750,17 +750,17 @@ fn can_dispatch_solana_gov_call() {
 }
 
 #[test]
-fn can_submit_unsigned_batch_runtime_call() {
+fn can_non_native_signed_call() {
 	new_test_ext().execute_with(|| {
-        // Prepare a simple runtime call (e.g., a remark call from frame_system)
-        let remark_call = frame_system::Call::<Test>::remark { remark: vec![42] };
-        let calls = vec![remark_call.into()];
+        // Prepare a simple runtime call (e.g., a remark call from frame_system) 
+		let system_call = frame_system::Call::remark { remark: vec![] };
+		let runtime_call: <Test as crate::Config>::RuntimeCall = system_call.into();
+		let call = Box::new(runtime_call);
 
         // Create transaction metadata
         let transaction_metadata = TransactionMetadata {
             nonce: 0,
             expiry_block: 10000u32,
-            atomic: true,
         };
 
         // Create user signature data
@@ -780,9 +780,9 @@ fn can_submit_unsigned_batch_runtime_call() {
         let initial_nonce = frame_system::Pallet::<Test>::account_nonce(caller);
         assert_eq!(initial_nonce, 0);
 
-        assert_ok!(Environment::submit_unsigned_batch_runtime_call(
+        assert_ok!(Environment::non_native_signed_call(
             RuntimeOrigin::none(),
-            calls.clone(),
+            call,
             transaction_metadata,
             user_signature_data.clone(),
         ));
@@ -804,7 +804,7 @@ fn can_submit_unsigned_batch_runtime_call() {
 }
 
 #[test]
-fn can_submit_batch_runtime_call() {
+fn can_batch() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 1;
 		cf_traits::mocks::balance_api::MockBalance::credit_account(
@@ -816,11 +816,7 @@ fn can_submit_batch_runtime_call() {
 		let remark_call = frame_system::Call::<Test>::remark { remark: vec![42] };
 		let calls = vec![remark_call.into()];
 
-		assert_ok!(Environment::submit_batch_runtime_call(
-			RuntimeOrigin::signed(ALICE),
-			calls.clone(),
-			false
-		));
+		assert_ok!(Environment::batch(RuntimeOrigin::signed(ALICE), calls.clone(), false));
 
 		assert!(System::events().iter().any(|record| matches!(
 			record.event,

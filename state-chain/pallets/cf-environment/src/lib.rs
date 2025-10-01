@@ -366,9 +366,14 @@ pub mod pallet {
 		SolanaGovCallDispatched { gov_call: SolanaGovCall, broadcast_id: BroadcastId },
 		/// Assethub Vault Account is successfully set
 		AssethubVaultAccountSet { assethub_vault_account_id: PolkadotAccountId },
+		/// Unsigned Runtime Call was dispatched
+		UnsignedRuntimeCallDispatched {
+			signer_account: T::AccountId,
+			dispatch_result: DispatchResultWithPostInfo,
+		},
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted { signer_account: T::AccountId, dispatch_result: DispatchResultWithPostInfo },
-		/// Batch of dispatches failed at a specific index.
+		/// Batch of dispatches failed executing calls before it failed at the specified index.
 		BatchFailed {
 			signer_account: T::AccountId,
 			dispatch_error: DispatchErrorWithPostInfo,
@@ -620,17 +625,22 @@ pub mod pallet {
 			T::AssethubVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)
 		}
 
-		// TODO: PRO-2554 - User should be charged a transaction fee
+		// TODO: PRO-2554 - User should be charged a transaction fee.
+		// We might want to add a check that the signer has balance > 0 as part of
+		// the validate_unsigned.
+		/// Allows for submitting unsigned runtime calls where validation is done on
+		/// the user_signature_data instead. This allows for off-chain signing of
+		/// runtime calls for non-native wallets, such as EVM and Solana wallets.
 		#[pallet::call_index(10)]
 		#[pallet::weight({
-			let (dispatch_weight, dispatch_class) = weight_and_dispatch_class::<T>(calls);
-			let dispatch_weight = dispatch_weight.saturating_add(T::WeightInfo::submit_unsigned_batch_runtime_call(calls.len() as u32));
-			(dispatch_weight, dispatch_class)
+			let di = call.get_dispatch_info();
+			let dispatch_weight = di.weight.saturating_add(T::WeightInfo::non_native_signed_call());
+			(dispatch_weight, di.class)
 		})]
-		pub fn submit_unsigned_batch_runtime_call(
+		pub fn non_native_signed_call(
 			origin: OriginFor<T>,
-			calls: Vec<<T as Config>::RuntimeCall>,
-			transaction_metadata: TransactionMetadata,
+			call: scale_info::prelude::boxed::Box<<T as Config>::RuntimeCall>,
+			_transaction_metadata: TransactionMetadata,
 			user_signature_data: UserSignatureData,
 		) -> DispatchResult {
 			// unsigned extrinsic - validation happens in ValidateUnsigned
@@ -645,23 +655,25 @@ pub mod pallet {
 			// Increment the account nonce to prevent replay attacks
 			frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
 
-			let _ = dispatch_user_calls::<T>(
-				calls.clone(),
-				signer_account.clone(),
-				transaction_metadata.atomic,
-				T::WeightInfo::submit_unsigned_batch_runtime_call,
-			);
+			let origin = frame_system::RawOrigin::Signed(signer_account.clone()).into();
+			let dispatch_result = (*call).dispatch_bypass_filter(origin);
+
+			Self::deposit_event(Event::<T>::UnsignedRuntimeCallDispatched {
+				signer_account,
+				dispatch_result,
+			});
 
 			Ok(())
 		}
 
+		/// Allows for batching signed runtime calls.
 		#[pallet::call_index(11)]
 		#[pallet::weight({
 			let (dispatch_weight, dispatch_class) = weight_and_dispatch_class::<T>(calls);
-			let dispatch_weight = dispatch_weight.saturating_add(T::WeightInfo::submit_batch_runtime_call(calls.len() as u32));
+			let dispatch_weight = dispatch_weight.saturating_add(T::WeightInfo::batch(calls.len() as u32));
 			(dispatch_weight, dispatch_class)
 		})]
-		pub fn submit_batch_runtime_call(
+		pub fn batch(
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::RuntimeCall>,
 			atomic: bool,
@@ -672,7 +684,7 @@ pub mod pallet {
 				calls.clone(),
 				account_id.clone(),
 				atomic,
-				T::WeightInfo::submit_unsigned_batch_runtime_call,
+				T::WeightInfo::batch,
 			);
 
 			Ok(())

@@ -30,7 +30,6 @@ pub const BATCHED_CALL_LIMITS: usize = 10;
 pub struct TransactionMetadata {
 	pub nonce: u32,
 	pub expiry_block: BlockNumber,
-	pub atomic: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -151,8 +150,8 @@ pub(crate) fn execute_batch_calls<T: Config>(
 		let origin = frame_system::RawOrigin::Signed(signer_account.clone()).into();
 
 		// Don't allow users to nest calls.
-		if let Some(Call::submit_unsigned_batch_runtime_call { .. }) |
-		Some(Call::submit_batch_runtime_call { .. }) = call.is_sub_type()
+		if let Some(Call::non_native_signed_call { .. }) | Some(Call::batch { .. }) =
+			call.is_sub_type()
 		{
 			let base_weight = weight_fn(index.saturating_add(1) as u32);
 			let err = DispatchErrorWithPostInfo {
@@ -183,7 +182,7 @@ pub(crate) fn execute_batch_calls<T: Config>(
 /// we add it so is displayed separately to the user in the wallet.
 /// To be implemented in PRO-2535.
 pub(crate) fn build_eip_712_payload<T: Config>(
-	_calls: Vec<<T as Config>::RuntimeCall>,
+	_call: <T as Config>::RuntimeCall,
 	_chain_name: &str,
 	_version: &str,
 	_transaction_metadata: TransactionMetadata,
@@ -211,18 +210,11 @@ pub(crate) fn weight_and_dispatch_class<T: Config>(
 	(dispatch_weight, dispatch_class)
 }
 
-// TODO: We might want to add a check here that the signer has balance > 0 as no extrinsic
-// should succeed. Fees need to be paid by the signer.
 pub(crate) fn validate_unsigned<T: Config>(
 	_source: TransactionSource,
 	call: &Call<T>,
 ) -> TransactionValidity {
-	if let Call::submit_unsigned_batch_runtime_call {
-		calls,
-		transaction_metadata,
-		user_signature_data,
-	} = call
-	{
+	if let Call::non_native_signed_call { call, transaction_metadata, user_signature_data } = call {
 		// Check if payload hasn't expired
 		if frame_system::Pallet::<T>::block_number() >= transaction_metadata.expiry_block.into() {
 			return InvalidTransaction::Stale.into();
@@ -244,7 +236,7 @@ pub(crate) fn validate_unsigned<T: Config>(
 
 		// Signature check
 		let chanflip_network_name = ChainflipNetworkName::<T>::get();
-		let serialized_calls: Vec<u8> = calls.encode();
+		let serialized_calls: Vec<u8> = call.encode();
 
 		let build_domain_data = || -> Vec<u8> {
 			[
@@ -279,7 +271,7 @@ pub(crate) fn validate_unsigned<T: Config>(
 						[prefix_bytes, &domain_data].concat()
 					},
 					EthSigType::Eip712 => build_eip_712_payload::<T>(
-						calls.clone(),
+						*call.clone(),
 						chanflip_network_name.as_str(),
 						UNSIGNED_BATCH_VERSION,
 						transaction_metadata.clone(),

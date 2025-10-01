@@ -204,10 +204,12 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn submit_unsigned_batch_runtime_call(c: Linear<0, 1000>) {
-		let calls = vec![frame_system::Call::remark { remark: vec![] }.into(); c as usize];
-		let transaction_metadata =
-			TransactionMetadata { nonce: 0, expiry_block: 10000u32, atomic: true };
+	fn non_native_signed_call() {
+		let system_call = frame_system::Call::<T>::remark { remark: vec![] };
+		let runtime_call: <T as Config>::RuntimeCall = system_call.into();
+		let call = scale_info::prelude::boxed::Box::new(runtime_call);
+
+		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000u32 };
 		let user_signature_data: UserSignatureData = UserSignatureData::Solana {
             signature: SolSignature(hex_literal::hex!(
                 "1c3e51b4b12bcc95419a43dc4c1854663edda1df5dd788a059a66c6d237a32fafbeff6515d4b8af0267ce8365ba7a83cf483d7b66d3e3164db027302e308c60e"
@@ -217,21 +219,21 @@ mod benchmarks {
         };
 
 		#[extrinsic_call]
-		submit_unsigned_batch_runtime_call(
+		non_native_signed_call(
 			frame_system::RawOrigin::None,
-			calls,
+			call,
 			transaction_metadata,
 			user_signature_data,
 		);
 	}
 
 	#[benchmark]
-	fn submit_batch_runtime_call(c: Linear<0, 1000>) {
+	fn batch(c: Linear<0, 1000>) {
 		let caller: T::AccountId = whitelisted_caller();
 		let calls = vec![frame_system::Call::remark { remark: vec![] }.into(); c as usize];
 
 		#[extrinsic_call]
-		submit_batch_runtime_call(frame_system::RawOrigin::Signed(caller.clone()), calls, true);
+		batch(frame_system::RawOrigin::Signed(caller.clone()), calls, true);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);

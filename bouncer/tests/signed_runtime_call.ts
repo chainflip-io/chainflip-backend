@@ -10,7 +10,6 @@ import { globalLogger } from 'shared/utils/logger';
 export const TransactionMetadata = Struct({
   nonce: u32,
   expiryBlock: u32,
-  atomic: bool,
 });
 export const ChainNameCodec = str;
 export const VersionCodec = str;
@@ -33,7 +32,6 @@ export function encodeDomainDataToSign(
   const transactionMetadata = TransactionMetadata.enc({
     nonce,
     expiryBlock: userExpiryBlock,
-    atomic,
   });
   const chainNameBytes = ChainNameCodec.enc(chainName);
   const versionBytes = VersionCodec.enc(version);
@@ -47,23 +45,22 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   const whaleKeypair = getSolWhaleKeyPair();
   console.log('Sol whale pubkey', whaleKeypair.publicKey.toBase58());
 
-  // Create a vector of RuntimeCalls - multiple system.remark calls
-  const calls = [chainflip.tx.system.remark([42])];
-  // Example of a call with the first runtimeCall succeeding and the second one failing.
-  // Maybe add a test with that ad check that the nonce is increased.
-  // const calls = [chainflip.tx.system.remark([]), chainflip.tx.validator.forceRotation()];
+  const remarkCall = chainflip.tx.system.remark([42]);
+  const calls = [remarkCall];
+  // Try a call batch that fails
+  // const calls = [remarkCall, chainflip.tx.validator.forceRotation()];
 
-  // SCALE encode the vector of RuntimeCalls and convert to hex
-  const runtimeCalls = calls.map((call) => call.method);
-  const encodedCalls = chainflip.createType('Vec<Call>', runtimeCalls).toU8a();
-  const hexRuntimeCall = u8aToHex(encodedCalls);
+  const batchCall = chainflip.tx.environment.batch(calls, false);
+  const batchRuntimeCall = batchCall.method;
+  const encodedCall = chainflip.createType('Call', batchRuntimeCall).toU8a();
+  const hexRuntimeCall = u8aToHex(encodedCall);
   console.log('hexRuntimeCall', hexRuntimeCall);
 
   // SVM Whale -> SC account (`cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1`)
   const svmNonce = (await chainflip.rpc.system.accountNextIndex(
     'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1',
   )) as unknown as number;
-  const svmPayload = encodeDomainDataToSign(encodedCalls, svmNonce, expiryBlock);
+  const svmPayload = encodeDomainDataToSign(encodedCall, svmNonce, expiryBlock);
   const svmHexPayload = u8aToHex(svmPayload);
 
   logger.info('Signing and submitting user-signed payload with Solana wallet');
@@ -83,7 +80,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   // Submit as unsigned extrinsic - no broker needed
   await chainflip.tx.environment
-    .submitUnsignedBatchRuntimeCall(
+    .nonNativeSignedCall(
       // Solana prefix will be added in the SC previous to signature verification
       hexRuntimeCall,
       {
@@ -101,11 +98,18 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     )
     .send();
 
+  await observeEvent(globalLogger, `environment:UnsignedRuntimeCallDispatched`, {
+    test: (event) =>
+      event.data.signerAccount === 'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1',
+    historicalCheckBlocks: 1,
+  }).event;
+
   await observeEvent(globalLogger, `environment:BatchCompleted`, {
     test: (event) =>
       event.data.signerAccount === 'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1',
     historicalCheckBlocks: 1,
   }).event;
+
 
   logger.info('Signing and submitting user-signed payload with EVM wallet using personal_sign');
 
@@ -113,7 +117,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   let evmNonce = (await chainflip.rpc.system.accountNextIndex(
     'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
   )) as unknown as number;
-  const evmPayload = encodeDomainDataToSign(encodedCalls, evmNonce, expiryBlock);
+  const evmPayload = encodeDomainDataToSign(encodedCall, evmNonce, expiryBlock);
   // Create the Ethereum-prefixed message
   const prefix = `\x19Ethereum Signed Message:\n${evmPayload.length}`;
   const prefixedMessage = Buffer.concat([Buffer.from(prefix, 'utf8'), evmPayload]);
@@ -132,7 +136,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   // Submit as unsigned extrinsic - no broker needed
   await chainflip.tx.environment
-    .submitUnsignedBatchRuntimeCall(
+    .nonNativeSignedCall(
       // Ethereum prefix will be added in the SC previous to signature verification
       hexRuntimeCall,
       {
@@ -150,53 +154,60 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     )
     .send();
 
+  await observeEvent(globalLogger, `environment:UnsignedRuntimeCallDispatched`, {
+    test: (event) =>
+      event.data.signerAccount === 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
+    historicalCheckBlocks: 1,
+  }).event;
+
+
   await observeEvent(globalLogger, `environment:BatchCompleted`, {
     test: (event) =>
       event.data.signerAccount === 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
     historicalCheckBlocks: 1,
   }).event;
 
-  logger.info('Signing and submitting user-signed payload with EVM wallet using EIP-712');
+  // logger.info('Signing and submitting user-signed payload with EVM wallet using EIP-712');
 
-  // EIP-712 signing
-  evmNonce = (
-    await chainflip.rpc.system.accountNextIndex('cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7')
-  ).toNumber();
+  // // EIP-712 signing
+  // evmNonce = (
+  //   await chainflip.rpc.system.accountNextIndex('cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7')
+  // ).toNumber();
 
-  const domain = {
-    name: chainName,
-    version: '0',
-  };
+  // const domain = {
+  //   name: chainName,
+  //   version: '0',
+  // };
 
-  const types = {
-    Metadata: [
-      { name: 'from', type: 'address' },
-      { name: 'nonce', type: 'uint256' },
-      { name: 'expiryBlock', type: 'uint256' },
-    ],
-    // This is just an example.
-    SystemRemark: [{ name: 'remark', type: 'bytes[]' }],
-    RuntimeCall: [
-      { name: 'call', type: 'SystemRemark' },
-      { name: 'metadata', type: 'Metadata' },
-    ],
-  };
+  // const types = {
+  //   Metadata: [
+  //     { name: 'from', type: 'address' },
+  //     { name: 'nonce', type: 'uint256' },
+  //     { name: 'expiryBlock', type: 'uint256' },
+  //   ],
+  //   // This is just an example.
+  //   SystemRemark: [{ name: 'remark', type: 'bytes[]' }],
+  //   RuntimeCall: [
+  //     { name: 'call', type: 'SystemRemark' },
+  //     { name: 'metadata', type: 'Metadata' },
+  //   ],
+  // };
 
-  const message = {
-    // TODO: Runtime Calls will need to be converted appropriately
-    // to an EIP-712 human-readable format.
-    call: {
-      remark: [], // Empty bytes for system.remark([])
-    },
-    metadata: {
-      from: evmSigner,
-      nonce: evmNonce,
-      expiryBlock,
-    },
-  };
+  // const message = {
+  //   // TODO: Runtime Calls will need to be converted appropriately
+  //   // to an EIP-712 human-readable format.
+  //   call: {
+  //     remark: [], // Empty bytes for system.remark([])
+  //   },
+  //   metadata: {
+  //     from: evmSigner,
+  //     nonce: evmNonce,
+  //     expiryBlock,
+  //   },
+  // };
 
-  const evmSignatureEip712 = await ethWallet.signTypedData(domain, types, message);
-  console.log('EIP712 Signature:', evmSignatureEip712);
+  // const evmSignatureEip712 = await ethWallet.signTypedData(domain, types, message);
+  // console.log('EIP712 Signature:', evmSignatureEip712);
 
   // const encodedPayload = ethers.TypedDataEncoder.encode(domain, types, message);
   // console.log('EIP-712 Encoded Payload:', encodedPayload);
@@ -218,7 +229,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   // await brokerMutex.runExclusive(brokerUri, async () => {
   //   const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
   //   await chainflip.tx.environment
-  //     .submitUnsignedBatchRuntimeCall(
+  //     .nonNativeSignedCall(
   //       // The  EIP-712 payload will be build in the State chain previous to signature verification
   //       hexRuntimeCall,
   //       {
