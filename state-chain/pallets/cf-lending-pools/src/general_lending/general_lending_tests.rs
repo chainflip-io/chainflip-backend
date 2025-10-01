@@ -1453,6 +1453,124 @@ fn liquidation_with_outstanding_principal() {
 }
 
 #[test]
+fn small_interest_amounts_accumulate() {
+	const PRINCIPAL: AssetAmount = 10_000_000;
+	const INIT_POOL_AMOUNT: AssetAmount = PRINCIPAL * 10;
+	const COLLATERAL_ASSET: Asset = Asset::Eth;
+	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
+
+	let config = LendingConfiguration {
+		network_fee_contributions: NetworkFeeContributions {
+			// Set a higher network interest so it is closer to the pool interest,
+			// which means both interest amounts will reach the threshold at the same time
+			extra_interest: Permill::from_percent(3),
+			..CONFIG.network_fee_contributions
+		},
+		// Set a low interest collection threshold so we can test both being able to collect
+		// fractional interest and taking interest when reaching the threshold without too
+		// many iterations:
+		interest_collection_threshold_usd: 1,
+		..CONFIG
+	};
+
+	let origination_fee = config.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
+
+	let pool_interest = config
+		.derive_base_interest_rate_per_payment_interval(LOAN_ASSET, Permill::from_percent(10));
+
+	let network_interest = config.derive_network_interest_rate_per_payment_interval();
+
+	// Expected fees in pool's asset
+	let pool_amount = ScaledAmountHP::from_asset_amount(PRINCIPAL) * pool_interest;
+	let network_amount = ScaledAmountHP::from_asset_amount(PRINCIPAL) * network_interest;
+
+	// Making sure the fees are non-zero fractions below 1:
+	assert_eq!(pool_amount.into_asset_amount(), 0);
+	assert_eq!(network_amount.into_asset_amount(), 0);
+	assert!(pool_amount.as_raw() > 0);
+	assert!(network_amount.as_raw() > 0);
+
+	new_test_ext()
+		.execute_with(|| {
+			setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
+
+			LendingConfig::<Test>::set(config);
+
+			set_asset_price_in_usd(LOAN_ASSET, 1000 * SWAP_RATE);
+			set_asset_price_in_usd(COLLATERAL_ASSET, 1000);
+
+			MockBalance::credit_account(
+				&BORROWER,
+				COLLATERAL_ASSET,
+				INIT_COLLATERAL + origination_fee,
+			);
+
+			assert_eq!(
+				LendingPools::new_loan(
+					BORROWER,
+					LOAN_ASSET,
+					PRINCIPAL,
+					Some(COLLATERAL_ASSET),
+					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
+				),
+				Ok(LOAN_ID)
+			);
+		})
+		.then_process_blocks_until_block(
+			INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
+		)
+		// Interest should be recorded here, but not taken yet (it is too small)
+		.then_execute_with(|_| {
+			let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
+			assert_eq!(account.collateral, BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]));
+
+			assert_eq!(
+				account.loans[&LOAN_ID].pending_interest,
+				InterestBreakdown {
+					network: network_amount,
+					pool: pool_amount,
+					broker: Default::default(),
+					low_ltv_penalty: Default::default()
+				}
+			);
+		})
+		.then_process_blocks_until_block(
+			INIT_BLOCK + 2 * CONFIG.interest_payment_interval_blocks as u64,
+		)
+		.then_execute_with(|_| {
+			let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
+
+			let mut pool_amount_total = pool_amount.saturating_add(pool_amount);
+			let mut network_amount_total = network_amount.saturating_add(network_amount);
+
+			let pool_amount_taken = pool_amount_total.take_whole_amount();
+			let network_amount_taken = network_amount_total.take_whole_amount();
+
+			// Over two interest payment periods both amounts are expected to become non-zero
+			assert!(pool_amount_taken > 0);
+			assert!(network_amount_taken > 0);
+
+			assert_eq!(
+				account.collateral,
+				BTreeMap::from([(
+					COLLATERAL_ASSET,
+					INIT_COLLATERAL - (pool_amount_taken + network_amount_taken) * SWAP_RATE
+				)])
+			);
+
+			assert_eq!(
+				account.loans[&LOAN_ID].pending_interest,
+				InterestBreakdown {
+					network: network_amount_total,
+					pool: pool_amount_total,
+					broker: Default::default(),
+					low_ltv_penalty: Default::default()
+				}
+			);
+		});
+}
+
+#[test]
 fn making_loan_repayment() {
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
 	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
