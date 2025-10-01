@@ -98,7 +98,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     )
     .send();
 
-  await observeEvent(globalLogger, `environment:UnsignedRuntimeCallDispatched`, {
+  await observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
     test: (event) =>
       event.data.signerAccount === 'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1',
     historicalCheckBlocks: 1,
@@ -109,7 +109,6 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
       event.data.signerAccount === 'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1',
     historicalCheckBlocks: 1,
   }).event;
-
 
   logger.info('Signing and submitting user-signed payload with EVM wallet using personal_sign');
 
@@ -154,12 +153,11 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     )
     .send();
 
-  await observeEvent(globalLogger, `environment:UnsignedRuntimeCallDispatched`, {
+  await observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
     test: (event) =>
       event.data.signerAccount === 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
     historicalCheckBlocks: 1,
   }).event;
-
 
   await observeEvent(globalLogger, `environment:BatchCompleted`, {
     test: (event) =>

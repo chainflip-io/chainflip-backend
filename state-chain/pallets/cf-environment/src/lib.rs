@@ -367,7 +367,7 @@ pub mod pallet {
 		/// Assethub Vault Account is successfully set
 		AssethubVaultAccountSet { assethub_vault_account_id: PolkadotAccountId },
 		/// Unsigned Runtime Call was dispatched
-		UnsignedRuntimeCallDispatched {
+		NonNativeSignedCall {
 			signer_account: T::AccountId,
 			dispatch_result: DispatchResultWithPostInfo,
 		},
@@ -658,7 +658,7 @@ pub mod pallet {
 			let origin = frame_system::RawOrigin::Signed(signer_account.clone()).into();
 			let dispatch_result = (*call).dispatch_bypass_filter(origin);
 
-			Self::deposit_event(Event::<T>::UnsignedRuntimeCallDispatched {
+			Self::deposit_event(Event::<T>::NonNativeSignedCall {
 				signer_account,
 				dispatch_result,
 			});
