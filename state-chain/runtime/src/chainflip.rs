@@ -731,6 +731,7 @@ macro_rules! impl_deposit_api_for_anychain {
 			type Amount = <Runtime as Chainflip>::Amount;
 
 			fn request_liquidity_deposit_address(
+				requester_account: Self::AccountId,
 				lp_account: Self::AccountId,
 				source_asset: Asset,
 				boost_fee: BasisPoints,
@@ -740,6 +741,7 @@ macro_rules! impl_deposit_api_for_anychain {
 					$(
 						ForeignChainAndAsset::$chain(source_asset) =>
 							$pallet::request_liquidity_deposit_address(
+								requester_account,
 								lp_account,
 								source_asset,
 								boost_fee,

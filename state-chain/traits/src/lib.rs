@@ -719,6 +719,7 @@ pub trait DepositApi<C: Chain> {
 
 	/// Issues a channel id and deposit address for a new liquidity deposit.
 	fn request_liquidity_deposit_address(
+		requester_account: Self::AccountId,
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
 		boost_fee: BasisPoints,

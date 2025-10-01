@@ -1050,3 +1050,21 @@ impl<T: Config> NetworkEnvironmentProvider for Pallet<T> {
 		Self::network_environment()
 	}
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum UserSignatureData {
+	Solana { this_is_a_mock_replace_it: () },
+	Ethereum { this_is_a_mock_replace_it: () },
+}
+
+impl UserSignatureData {
+	/// Extract the signer account ID as T::AccountId from the signature data
+	// pub fn signer_account_id<T: Config>(&self) -> Result<T::AccountId, codec::Error> {
+	// 	// REPLACE THIS BY THE REAL IMPLEMENTATION
+	// 	todo!("this_is_a_mock_replace_it")
+	// }
+
+	pub fn signer_account_id<AccountId: Into<cf_primitives::AccountId>>(&self) -> AccountId {
+		todo!()
+	}
+}
