@@ -2,11 +2,17 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.11.8] - 2025-10-01
+
+### Fixes
+
+- Use correct input asset when calculating network fee in swap_rate_v3.
+
 ## [1.11.7] - 2025-10-01
 
 ### CI
 
-- fix: `cmake` installation on M2 runners ([#6151](https://github.com/chainflip-io/chainflip-backend/issues/6151))
+- `cmake` installation on M2 runners ([#6151](https://github.com/chainflip-io/chainflip-backend/issues/6151))
 
 ## [1.11.6] - 2025-10-01
 
