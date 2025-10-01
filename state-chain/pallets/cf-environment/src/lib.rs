@@ -174,6 +174,8 @@ pub mod pallet {
 		FailedToDecodeSigner,
 		/// Too many calls batched.
 		TooManyCalls,
+		// Failed to execute batch
+		FailedToExecuteBatch,
 	}
 
 	#[pallet::pallet]
@@ -666,7 +668,9 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Allows for batching signed runtime calls.
+		/// Allows for batching signed runtime calls. Atomic batches will execute as an
+		/// all-or-nothing. Non-atomic will execute as best-effort, it won't execute subsequent
+		/// calls after a call fails.
 		#[pallet::call_index(11)]
 		#[pallet::weight({
 			let (dispatch_weight, dispatch_class) = weight_and_dispatch_class::<T>(calls);
@@ -685,7 +689,8 @@ pub mod pallet {
 				account_id.clone(),
 				atomic,
 				T::WeightInfo::batch,
-			);
+			)
+			.map_err(|_| Error::<T>::FailedToExecuteBatch)?;
 
 			Ok(())
 		}
