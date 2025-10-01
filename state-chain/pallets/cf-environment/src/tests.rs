@@ -26,12 +26,13 @@ use cf_chains::{
 		SolAddress, SolHash,
 	},
 };
-use cf_traits::SafeMode;
+use cf_traits::{BalanceApi, SafeMode};
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 
 use crate::{
-	mock::*, BitcoinAvailableUtxos, ConsolidationParameters, Event, RuntimeSafeMode,
-	SafeModeUpdate, SolanaAvailableNonceAccounts, SolanaUnavailableNonceAccounts,
+	mock::*, submit_runtime_call::SolSigType, BitcoinAvailableUtxos, ConsolidationParameters,
+	Event, RuntimeSafeMode, SafeModeUpdate, SolSignature, SolanaAvailableNonceAccounts,
+	SolanaUnavailableNonceAccounts, TransactionMetadata, UserSignatureData,
 };
 
 fn utxo(amount: BtcAmount, salt: u32, pub_key: Option<[u8; 32]>) -> Utxo {
@@ -745,5 +746,84 @@ fn can_dispatch_solana_gov_call() {
 			SolanaCallBroadcasted::get().unwrap().call_type,
 			SolanaTransactionType::UpgradeProgram
 		);
+	});
+}
+
+#[test]
+fn can_non_native_signed_call() {
+	new_test_ext().execute_with(|| {
+        // Prepare a simple runtime call (e.g., a remark call from frame_system) 
+		let system_call = frame_system::Call::remark { remark: vec![] };
+		let runtime_call: <Test as crate::Config>::RuntimeCall = system_call.into();
+		let call = Box::new(runtime_call);
+
+        // Create transaction metadata
+        let transaction_metadata = TransactionMetadata {
+            nonce: 0,
+            expiry_block: 10000u32,
+        };
+
+        // Create user signature data
+        // In a real scenario, this would involve signing the serialized call with the caller's private key.
+        // For testing, we use a mock signature that passes validation in the mock environment.
+		let user_signature_data = UserSignatureData::Solana {
+			signature: SolSignature(hex_literal::hex!(
+				"1c3e51b4b12bcc95419a43dc4c1854663edda1df5dd788a059a66c6d237a32fafbeff6515d4b8af0267ce8365ba7a83cf483d7b66d3e3164db027302e308c60e"
+			)),
+			signer: SolAddress(cf_utilities::bs58_array("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp")),
+			sig_type: SolSigType::Domain,
+		};
+
+		let caller: <Test as frame_system::Config>::AccountId = user_signature_data
+			.signer_account().unwrap();
+
+        let initial_nonce = frame_system::Pallet::<Test>::account_nonce(caller);
+        assert_eq!(initial_nonce, 0);
+
+        assert_ok!(Environment::non_native_signed_call(
+            RuntimeOrigin::none(),
+            call,
+            transaction_metadata,
+            user_signature_data.clone(),
+        ));
+
+        // Verify the nonce was incremented
+        assert_eq!(frame_system::Pallet::<Test>::account_nonce(caller), initial_nonce + 1);
+
+		assert!(
+			System::events().iter().any(|record| matches!(
+				record.event,
+				RuntimeEvent::Environment(Event::NonNativeSignedCall {
+					signer_account: ref acct,
+					..
+				}) if acct == &caller
+			))
+		);
+
+    });
+}
+
+#[test]
+fn can_batch() {
+	new_test_ext().execute_with(|| {
+		const ALICE: u64 = 1;
+		cf_traits::mocks::balance_api::MockBalance::credit_account(
+			&ALICE,
+			cf_chains::assets::any::Asset::Flip,
+			1_000_000,
+		);
+
+		let remark_call = frame_system::Call::<Test>::remark { remark: vec![42] };
+		let calls = vec![remark_call.into()];
+
+		assert_ok!(Environment::batch(RuntimeOrigin::signed(ALICE), calls.clone(), false));
+
+		assert!(System::events().iter().any(|record| matches!(
+			record.event,
+			RuntimeEvent::Environment(Event::BatchCompleted {
+				signer_account: ref acct,
+				..
+			}) if acct == &ALICE
+		)));
 	});
 }

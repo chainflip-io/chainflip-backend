@@ -441,6 +441,32 @@ impl core::fmt::Display for NetworkEnvironment {
 	}
 }
 
+/// Determines the Chainflip network.
+#[derive(
+	PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Default, Serialize, Deserialize,
+)]
+pub enum ChainflipNetwork {
+	/// Chainflip public mainnet.
+	Mainnet,
+	/// Chainflip public testnet
+	Testnet,
+	/// Chainflip development public testnet
+	TestnetDev,
+	/// Chainflip local development
+	#[default]
+	Development,
+}
+impl ChainflipNetwork {
+	pub fn as_str(&self) -> &'static str {
+		match self {
+			ChainflipNetwork::Mainnet => "Chainflip-Mainnet",
+			ChainflipNetwork::Testnet => "Chainflip-Testnet",
+			ChainflipNetwork::TestnetDev => "Chainflip-TestnetDev",
+			ChainflipNetwork::Development => "Chainflip-Development",
+		}
+	}
+}
+
 #[test]
 fn is_more_recent_semver() {
 	fn ver(major: u8, minor: u8, patch: u8) -> SemVer {
