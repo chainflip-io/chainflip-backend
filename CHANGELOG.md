@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.11.6] - 2025-10-01
+
+### Fixes
+
+- Correctly update exceptions list with existing delegators
+- Ensure bond for managed validators is distributed correctly
+
 ## [1.11.5] - 2025-09-24
 
 ## Fixes
