@@ -41,18 +41,19 @@ impl frame_system::Config for Test {
 	type Block = frame_system::mocking::MockBlock<Test>;
 }
 
-impl_mock_runtime_safe_mode!(trading_strategies: crate::PalletSafeMode);
+impl_mock_runtime_safe_mode!(lending_pools: crate::PalletSafeMode);
 
 impl pallet_cf_lending_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type Balance = cf_traits::mocks::balance_api::MockBalance;
 	type PoolApi = MockPoolApi;
+	type PriceApi = cf_traits::mocks::price_feed_api::MockPriceFeedApi;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type SafeMode = MockRuntimeSafeMode;
 }
 
-type AccountId = <Test as frame_system::Config>::AccountId;
+pub type AccountId = <Test as frame_system::Config>::AccountId;
 
 pub const LP: AccountId = 123u64;
 pub const OTHER_LP: AccountId = 234u64;

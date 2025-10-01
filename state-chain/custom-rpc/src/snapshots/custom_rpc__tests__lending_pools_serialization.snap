@@ -1,0 +1,22 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: pool
+---
+{
+  "asset": {
+    "chain": "Ethereum",
+    "asset": "USDC"
+  },
+  "total_amount": "0x7d0",
+  "available_amount": "0x5dc",
+  "utilisation_rate": 900000,
+  "current_interest_rate": 80000,
+  "origination_fee": 100,
+  "liquidation_fee": 500,
+  "interest_rate_curve": {
+    "interest_at_zero_utilisation": 20000,
+    "junction_utilisation": 900000,
+    "interest_at_junction_utilisation": 80000,
+    "interest_at_max_utilisation": 500000
+  }
+}
