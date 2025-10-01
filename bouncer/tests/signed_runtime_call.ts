@@ -174,7 +174,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     nonce: evmNonce,
     expiry_block: 10000,
   });
-  console.log("payload", payload)
+  console.log("payload", JSON.stringify(payload, null, 2));
 
   // const domain = {
   //   name: chainName,

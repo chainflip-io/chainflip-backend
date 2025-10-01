@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chainflip::Offence, Runtime, RuntimeSafeMode};
+use crate::{chainflip::Offence, Runtime, RuntimeCall, RuntimeSafeMode};
 use pallet_cf_elections::electoral_systems::oracle_price::chainlink::OraclePrice;
 
 use cf_amm::{
@@ -133,6 +133,24 @@ pub struct Eip712DomainType {
 
 pub type Types = BTreeMap<String, Vec<Eip712DomainType>>;
 
+// TODO: Set right Message type
+#[derive(
+	Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, TypeInfo, Decode, Encode,
+)]
+pub struct Person {
+	pub name: String,
+	pub address: String,
+}
+
+#[derive(
+	Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, TypeInfo, Decode, Encode,
+)]
+pub struct Message {
+	pub from: Person,
+	pub to: Person,
+	pub message: String,
+}
+
 #[derive(
 	Debug, Default, Clone, Encode, PartialEq, Eq, Serialize, Deserialize, TypeInfo, Decode,
 )]
@@ -146,7 +164,7 @@ pub struct EIP712Data {
 	/// The custom types used by this message.
 	pub types: Types,
 	// The message to be signed.
-	// pub message: BTreeMap<String, serde_json::Value>,
+	pub message: Message,
 }
 
 #[derive(
@@ -848,13 +866,13 @@ decl_runtime_apis!(
 		) -> Vec<DelegationSnapshot<AccountId32, FlipBalance>>;
 		fn cf_eip_data(
 			caller: EthereumAddress,
-			// call: <T as Config> ::RuntimeCall,
+			// call: RuntimeCall,
 			transaction_metadata: TransactionMetadata,
 		) -> Result<EIP712Data, DispatchErrorWithMessage>;
 		#[changed_in(8)]
 		fn cf_eip_data(
 			caller: EthereumAddress,
-			// call: <T as Config> ::RuntimeCall,
+			// call: RuntimeCall,
 			transaction_metadata: TransactionMetadata,
 		);
 	}

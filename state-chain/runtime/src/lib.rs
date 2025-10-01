@@ -50,7 +50,7 @@ use crate::{
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DelegationInfo,
 		DispatchErrorWithMessage, EIP712Data, EIP712Domain, Eip712DomainType,
 		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		NetworkFeeDetails, NetworkFees, OpenedDepositChannels, OperatorInfo,
+		Message, NetworkFeeDetails, NetworkFees, OpenedDepositChannels, OperatorInfo, Person,
 		RpcAccountInfoCommonItems, RuntimeApiPenalty, SimulateSwapAdditionalOrder,
 		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
 		TransactionScreeningEvent, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
@@ -2731,11 +2731,11 @@ impl_runtime_apis! {
 
 		fn cf_eip_data(
 			_caller: EthereumAddress,
-			// call: <T as Config>::RuntimeCall,
+			// _call: RuntimeCall,
 			_transaction_metadata: TransactionMetadata,
 		) -> Result<EIP712Data, DispatchErrorWithMessage> {
 			// TODO: Encode this appropriately
-			let mut types =  BTreeMap::from([
+			let types =  BTreeMap::from([
 			(
 				"Person".to_string(),
 				vec![
@@ -2763,6 +2763,17 @@ impl_runtime_apis! {
 				],
 			),
 		]);
+		let message = Message {
+		from: Person {
+			name: String::from("Alice"),
+			address: String::from("0x1234567890abcdef1234567890abcdef12345678"),
+		},
+		to: Person {
+			name: String::from("Bob"),
+			address: String::from("0xabcdef1234567890abcdef1234567890abcdef12"),
+		},
+		message: String::from("Hello, Bob!"),
+	};
 
 			Ok(
 				EIP712Data
@@ -2775,7 +2786,7 @@ impl_runtime_apis! {
 						salt: None
 					},
 					types,
-					// message:Default::default(),
+					message,
 				})
 		}
 	}

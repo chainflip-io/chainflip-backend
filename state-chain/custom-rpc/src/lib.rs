@@ -87,7 +87,7 @@ use state_chain_runtime::{
 		VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
-	Hash,
+	Hash, RuntimeCall,
 };
 use std::{
 	collections::{BTreeMap, BTreeSet, HashMap},
@@ -1252,7 +1252,7 @@ pub trait CustomApi {
 	fn cf_eip_data(
 		&self,
 		caller: EthereumAddress,
-		// call: <T as Config>::RuntimeCall,
+		// call: RuntimeCall,
 		transaction_metadata: TransactionMetadata,
 	) -> RpcResult<EIP712Data>;
 }
@@ -2437,7 +2437,7 @@ where
 	fn cf_eip_data(
 		&self,
 		caller: EthereumAddress,
-		// call: <T as Config>::RuntimeCall,
+		// call: RuntimeCall,
 		transaction_metadata: TransactionMetadata,
 	) -> RpcResult<EIP712Data> {
 		self.rpc_backend.with_runtime_api(None, |api, hash| {
@@ -2456,13 +2456,7 @@ where
 				api.cf_eip_data(
 					hash,
 					caller,
-					// call.try_fmap(TryInto::try_into).map_err(|s| {
-					// 	CfApiError::ErrorObject(ErrorObject::owned(
-					// 		ErrorCode::InvalidParams.code(),
-					// 		format!("Failed to convert call parameters: {s}."),
-					// 		None::<()>,
-					// 	))
-					// })?,
+					// call,
 					transaction_metadata,
 				)?
 				.map_err(CfApiError::from)
