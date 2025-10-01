@@ -4,7 +4,7 @@ import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
-import { Struct, u32, str, bool /* Enum, u128, u8 */ } from 'scale-ts';
+import { Struct, u32, str /* bool, Enum, u128, u8 */ } from 'scale-ts';
 import { globalLogger } from 'shared/utils/logger';
 
 export const TransactionMetadata = Struct({
@@ -113,7 +113,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   logger.info('Signing and submitting user-signed payload with EVM wallet using personal_sign');
 
   // EVM Whale -> SC account (`cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7`)
-  let evmNonce = (await chainflip.rpc.system.accountNextIndex(
+  const evmNonce = (await chainflip.rpc.system.accountNextIndex(
     'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
   )) as unknown as number;
   const evmPayload = encodeDomainDataToSign(encodedCall, evmNonce, expiryBlock);
