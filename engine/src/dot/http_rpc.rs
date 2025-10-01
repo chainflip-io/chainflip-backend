@@ -108,7 +108,7 @@ impl DotHttpRpcClientBuilder {
 			poll_interval.tick().await;
 
 			let maybe_online_client: anyhow::Result<_> =
-				match RpcClient::from_url(self.url.clone()).await {
+				match RpcClient::from_insecure_url(self.url.clone()).await {
 					Ok(rpc_client) =>
 						OnlineClient::<PolkadotConfig>::from_rpc_client(rpc_client.clone())
 							.await
