@@ -118,5 +118,10 @@ expression: val
   },
   "elections_generic": {
     "oracle_price_elections": true
+  },
+  "ethereum_elections": {
+    "state_chain_gateway_witnessing": true,
+    "key_manager_witnessing": true,
+    "sc_utils_witnessing": true
   }
 }
