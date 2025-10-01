@@ -55,6 +55,7 @@ use jsonrpsee::{
 use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::OraclePrice, price::PriceAsset,
 };
+use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
@@ -78,10 +79,10 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
-		CustomRuntimeApi, DelegationSnapshot, DispatchErrorWithMessage, ElectoralRuntimeApi,
-		EvmCallDetails, FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo,
-		LiquidityProviderInfo, NetworkFees, OpenedDepositChannels, OperatorInfo,
-		RpcAccountInfoCommonItems, RuntimeApiPenalty, SimulatedSwapInformation,
+		CustomRuntimeApi, DelegationSnapshot, DispatchErrorWithMessage, EIP712Data,
+		ElectoralRuntimeApi, EvmCallDetails, FailingWitnessValidators, FeeTypes,
+		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees, OpenedDepositChannels,
+		OperatorInfo, RpcAccountInfoCommonItems, RuntimeApiPenalty, SimulatedSwapInformation,
 		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
 		VaultAddresses, VaultSwapDetails,
 	},
@@ -1247,6 +1248,13 @@ pub trait CustomApi {
 		operator: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<DelegationSnapshot<state_chain_runtime::AccountId, NumberOrHex>>>;
+	#[method(name = "eip_data")]
+	fn cf_eip_data(
+		&self,
+		caller: EthereumAddress,
+		// call: <T as Config>::RuntimeCall,
+		transaction_metadata: TransactionMetadata,
+	) -> RpcResult<EIP712Data>;
 }
 
 /// An RPC extension for the state chain node.
@@ -2424,6 +2432,42 @@ where
 						))
 					}),
 			})
+	}
+
+	fn cf_eip_data(
+		&self,
+		caller: EthereumAddress,
+		// call: <T as Config>::RuntimeCall,
+		transaction_metadata: TransactionMetadata,
+	) -> RpcResult<EIP712Data> {
+		self.rpc_backend.with_runtime_api(None, |api, hash| {
+			let api_version = api
+				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)
+				.map_err(CfApiError::from)?
+				.unwrap_or_default();
+
+			if api_version < 8 {
+				// sc calls via ethereum didn't exist before version 8
+				Err(CfApiError::ErrorObject(call_error(
+					"EIP data generation is not supported for the current runtime api version",
+					CfErrorCode::RuntimeApiError,
+				)))
+			} else {
+				api.cf_eip_data(
+					hash,
+					caller,
+					// call.try_fmap(TryInto::try_into).map_err(|s| {
+					// 	CfApiError::ErrorObject(ErrorObject::owned(
+					// 		ErrorCode::InvalidParams.code(),
+					// 		format!("Failed to convert call parameters: {s}."),
+					// 		None::<()>,
+					// 	))
+					// })?,
+					transaction_metadata,
+				)?
+				.map_err(CfApiError::from)
+			}
+		})
 	}
 }
 

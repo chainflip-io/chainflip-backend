@@ -20,13 +20,14 @@ use frame_support::{
 	traits::UnfilteredDispatchable,
 	weights::Weight,
 };
+use serde::{Deserialize, Serialize};
 
 pub const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
 pub const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
 pub const UNSIGNED_BATCH_VERSION: &str = "0";
 pub const BATCHED_CALL_LIMITS: usize = 10;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 pub struct TransactionMetadata {
 	pub nonce: u32,
 	pub expiry_block: BlockNumber,

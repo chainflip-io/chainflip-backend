@@ -48,12 +48,13 @@ use crate::{
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DelegationInfo,
-		DispatchErrorWithMessage, FailingWitnessValidators, FeeTypes,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFeeDetails, NetworkFees,
-		OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-		TradingStrategyLimits, TransactionScreeningEvent, TransactionScreeningEvents,
-		ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		DispatchErrorWithMessage, EIP712Data, EIP712Domain, Eip712DomainType,
+		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
+		NetworkFeeDetails, NetworkFees, OpenedDepositChannels, OperatorInfo,
+		RpcAccountInfoCommonItems, RuntimeApiPenalty, SimulateSwapAdditionalOrder,
+		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
+		TransactionScreeningEvent, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
+		VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -100,6 +101,7 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::{get_latest_oracle_prices, OraclePrice},
 	price::PriceAsset,
 };
+use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
 	AskBidMap, HistoricalEarnedFees, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
@@ -2725,6 +2727,56 @@ impl_runtime_apis! {
 				pallet_cf_validator::DelegationSnapshots::<Runtime>::iter_prefix_values(current_epoch)
 					.collect()
 			}
+		}
+
+		fn cf_eip_data(
+			_caller: EthereumAddress,
+			// call: <T as Config>::RuntimeCall,
+			_transaction_metadata: TransactionMetadata,
+		) -> Result<EIP712Data, DispatchErrorWithMessage> {
+			// TODO: Encode this appropriately
+			let mut types =  BTreeMap::from([
+			(
+				"Person".to_string(),
+				vec![
+					Eip712DomainType {
+						name: "name".to_string(),
+						r#type: "string".to_string(),
+					},
+					Eip712DomainType {
+						name: "age".to_string(),
+						r#type: "uint256".to_string(),
+					},
+				],
+			),
+			(
+				"Mail".to_string(),
+				vec![
+					Eip712DomainType {
+						name: "from".to_string(),
+						r#type: "address".to_string(),
+					},
+					Eip712DomainType {
+						name: "contents".to_string(),
+						r#type: "string".to_string(),
+					},
+				],
+			),
+		]);
+
+			Ok(
+				EIP712Data
+				{
+					domain: EIP712Domain {
+						name: Some("Chainflip-Mainnet".into()),
+						version: Some("1.0".into()),
+						chain_id: None,
+						verifying_contract: None,
+						salt: None
+					},
+					types,
+					// message:Default::default(),
+				})
 		}
 	}
 

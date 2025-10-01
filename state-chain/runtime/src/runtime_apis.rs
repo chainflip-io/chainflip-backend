@@ -37,6 +37,7 @@ use codec::{Decode, Encode};
 use core::{ops::Range, str};
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_elections::electoral_systems::oracle_price::price::PriceAsset;
+use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::BoostPoolDetails;
@@ -119,6 +120,62 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 			VaultSwapDetails::Arbitrum { details } => VaultSwapDetails::Arbitrum { details },
 		}
 	}
+}
+
+/// Represents the name and type pair
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TypeInfo, Decode, Encode)]
+#[serde(deny_unknown_fields)]
+pub struct Eip712DomainType {
+	pub name: String,
+	#[serde(rename = "type")]
+	pub r#type: String,
+}
+
+pub type Types = BTreeMap<String, Vec<Eip712DomainType>>;
+
+#[derive(
+	Debug, Default, Clone, Encode, PartialEq, Eq, Serialize, Deserialize, TypeInfo, Decode,
+)]
+#[serde(rename_all = "camelCase")]
+pub struct EIP712Data {
+	/// Signing domain metadata. The signing domain is the intended context for the signature (e.g.
+	/// the dapp, protocol, etc. that it's intended for). This data is used to construct the domain
+	/// seperator of the message.
+	#[serde(default)]
+	pub domain: EIP712Domain,
+	/// The custom types used by this message.
+	pub types: Types,
+	// The message to be signed.
+	// pub message: BTreeMap<String, serde_json::Value>,
+}
+
+#[derive(
+	Debug, Default, Clone, Encode, PartialEq, Eq, Serialize, Deserialize, TypeInfo, Decode,
+)]
+#[serde(rename_all = "camelCase")]
+pub struct EIP712Domain {
+	///  The user readable name of signing domain, i.e. the name of the DApp or the protocol.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub name: Option<String>,
+
+	/// The current major version of the signing domain. Signatures from different versions are not
+	/// compatible.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub version: Option<String>,
+
+	/// The EIP-155 chain id. The user-agent should refuse signing if it does not match the
+	/// currently active chain.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub chain_id: Option<sp_core::U256>,
+
+	/// The address of the contract that will verify the signature.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub verifying_contract: Option<sp_core::H160>,
+
+	/// A disambiguating salt for the protocol. This can be used as a domain separator of last
+	/// resort.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub salt: Option<[u8; 32]>,
 }
 
 pub mod validator_info_before_v7 {
@@ -581,7 +638,7 @@ impl<A> RpcAccountInfoCommonItems<A> {
 //  - Handle the dummy method gracefully in the custom rpc implementation using
 //    runtime_api().api_version().
 decl_runtime_apis!(
-	#[api_version(7)]
+	#[api_version(8)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -789,6 +846,17 @@ decl_runtime_apis!(
 		fn cf_active_delegations(
 			account: Option<AccountId32>,
 		) -> Vec<DelegationSnapshot<AccountId32, FlipBalance>>;
+		fn cf_eip_data(
+			caller: EthereumAddress,
+			// call: <T as Config> ::RuntimeCall,
+			transaction_metadata: TransactionMetadata,
+		) -> Result<EIP712Data, DispatchErrorWithMessage>;
+		#[changed_in(8)]
+		fn cf_eip_data(
+			caller: EthereumAddress,
+			// call: <T as Config> ::RuntimeCall,
+			transaction_metadata: TransactionMetadata,
+		);
 	}
 );
 

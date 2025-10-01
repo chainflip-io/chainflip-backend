@@ -112,7 +112,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   logger.info('Signing and submitting user-signed payload with EVM wallet using personal_sign');
 
   // EVM Whale -> SC account (`cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7`)
-  const evmNonce = (await chainflip.rpc.system.accountNextIndex(
+  let evmNonce = (await chainflip.rpc.system.accountNextIndex(
     'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
   )) as unknown as number;
   const evmPayload = encodeDomainDataToSign(encodedCall, evmNonce, expiryBlock);
@@ -163,12 +163,18 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     historicalCheckBlocks: 1,
   }).event;
 
-  // logger.info('Signing and submitting user-signed payload with EVM wallet using EIP-712');
+  logger.info('Signing and submitting user-signed payload with EVM wallet using EIP-712');
 
-  // // EIP-712 signing
-  // evmNonce = (
-  //   await chainflip.rpc.system.accountNextIndex('cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7')
-  // ).toNumber();
+  // EIP-712 signing
+  evmNonce = (
+    await chainflip.rpc.system.accountNextIndex('cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7')
+  ).toNumber();
+
+  const payload = await chainflip.rpc('cf_eip_data', ethWallet.address, {
+    nonce: evmNonce,
+    expiry_block: 10000,
+  });
+  console.log("payload", payload)
 
   // const domain = {
   //   name: chainName,

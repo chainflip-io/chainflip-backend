@@ -19,8 +19,9 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+pub use crate::submit_runtime_call::TransactionMetadata;
 use crate::submit_runtime_call::{
-	dispatch_user_calls, weight_and_dispatch_class, TransactionMetadata, UserSignatureData,
+	dispatch_user_calls, weight_and_dispatch_class, UserSignatureData,
 };
 use cf_chains::{
 	btc::{
