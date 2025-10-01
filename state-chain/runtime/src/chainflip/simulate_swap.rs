@@ -119,7 +119,7 @@ pub fn simulate_swap(
 
 		let min_network_fee_input_asset =
 			pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_desired_output(
-				output_asset,
+				input_asset,
 				Asset::Usdc,
 				network_fee.minimum,
 				false, // Do not apply network fee to this calculation
