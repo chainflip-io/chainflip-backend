@@ -3383,8 +3383,10 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	type AccountId = T::AccountId;
 	type Amount = T::Amount;
 
-	// This should be callable by the LP pallet.
+	// This should be callable by the LP pallet and also by the broker (when creating liquidity
+	// deposit channels for unfunded evm/sol based accounts)
 	fn request_liquidity_deposit_address(
+		requester_account: T::AccountId,
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
 		boost_fee: BasisPoints,
@@ -3394,9 +3396,9 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		DispatchError,
 	> {
 		let (deposit_channel, expiry_block, channel_opening_fee) = Self::open_channel(
-			&lp_account,
+			&requester_account,
 			source_asset,
-			ChannelAction::LiquidityProvision { lp_account: lp_account.clone(), refund_address },
+			ChannelAction::LiquidityProvision { lp_account, refund_address },
 			boost_fee,
 		)?;
 

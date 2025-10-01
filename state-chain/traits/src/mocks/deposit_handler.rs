@@ -105,6 +105,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 	type Amount = T::Amount;
 
 	fn request_liquidity_deposit_address(
+		requester_account: Self::AccountId,
 		lp_account: Self::AccountId,
 		source_asset: <C as cf_chains::Chain>::ChainAsset,
 		boost_fee: BasisPoints,

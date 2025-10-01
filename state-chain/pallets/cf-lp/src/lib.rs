@@ -210,6 +210,7 @@ pub mod pallet {
 				let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
 					T::DepositHandler::request_liquidity_deposit_address(
 						account_id.clone(),
+						account_id.clone(),
 						asset,
 						boost_fee,
 						refund_address,
