@@ -40,6 +40,7 @@ pub enum LiquidationStatus {
 	Liquidating { liquidation_swaps: BTreeMap<SwapRequestId, LiquidationSwap>, is_hard: bool },
 }
 
+/// High precision interest amounts broken down by type
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 struct InterestBreakdown {
 	network: ScaledAmountHP,
@@ -98,7 +99,7 @@ impl<T: Config> LoanAccount<T> {
 		// up collateral during liquidation in which case we currently don't update the
 		// liquidation swaps), but we *do* include any collateral sitting in the account
 		// when determining account's collateralisation ratio.
-		//
+
 		// Start with the collateral sitting in the account:
 		let mut total_collateral = self.collateral.clone();
 
@@ -156,14 +157,13 @@ impl<T: Config> LoanAccount<T> {
 			return;
 		};
 
-		// This will saturate at 100%, but that's good enough (non of our thresholds exceed 100%):
+		// This will saturate at 100%, but that's good enough (none of our thresholds exceed 100%):
 		let ltv: Permill = ltv.into_clamped_perthing();
 
 		// Every time we transition from a liquidating state we abort all liquidation swaps
 		// and repay any swapped into principal. If the next state is "NoLiquidation", the
 		// collateral is returned into the loan account; if it is "Liquidating", the collateral
 		// is used in the new liquidation swaps.
-		// TODO (next): split this into two parts to make the borrower checker happy?
 		match &mut self.liquidation_status {
 			LiquidationStatus::NoLiquidation =>
 				if ltv > config.ltv_thresholds.hard_liquidation {
@@ -684,6 +684,7 @@ pub struct GeneralLoan<T: Config> {
 	pub asset: Asset,
 	pub created_at_block: BlockNumberFor<T>,
 	pub owed_principal: AssetAmount,
+	/// Interest owed on the loan but not yet taken (it is below the threshold)
 	pending_interest: InterestBreakdown,
 }
 
@@ -767,6 +768,7 @@ impl<T: Config> GeneralLoan<T> {
 	}
 }
 
+/// Uses oracle API to get the price and makes sure that it is not stale
 fn get_price<T: Config>(asset: Asset) -> Result<Price, Error<T>> {
 	Ok(T::PriceApi::get_price(asset).ok_or(Error::<T>::OraclePriceUnavailable)?.price)
 }
@@ -873,6 +875,7 @@ fn try_sweep<T: Config>(account_id: &T::AccountId) {
 	})
 }
 
+/// Collateral amount linked to a specific loan
 struct AssetCollateralForLoan {
 	loan_id: LoanId,
 	loan_asset: Asset,
