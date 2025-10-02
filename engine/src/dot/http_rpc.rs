@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use cf_chains::dot::RuntimeVersion;
 use cf_primitives::PolkadotBlockNumber;
@@ -133,7 +133,7 @@ fn ensure_port(url: &SecretUrl) -> Result<SecretUrl> {
 pub struct DotRpcClientBuilder {
 	ws_url: SecretUrl,
 	http_url: SecretUrl,
-	http_rpc_client: OnceLock<DotRpcClient>,
+	http_rpc_client: Arc<OnceLock<DotRpcClient>>,
 	expected_genesis_hash: Option<PolkadotHash>,
 }
 
@@ -155,7 +155,12 @@ impl DotRpcClientBuilder {
 		let ws_url = ensure_port(&ws_url)?;
 		let http_url = ensure_port(&http_url)?;
 
-		Ok(Self { ws_url, http_url, expected_genesis_hash, http_rpc_client: OnceLock::new() })
+		Ok(Self {
+			ws_url,
+			http_url,
+			expected_genesis_hash,
+			http_rpc_client: Arc::new(OnceLock::new()),
+		})
 	}
 
 	/// Creates a new websocket client. This always creates a new websocket client and does not
