@@ -2,6 +2,10 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.11.10] - 2025-10-02
+
+- Prevent duplication of polkadot rpc client.
+
 ## [1.11.9] - 2025-10-02
 
 ### Fixes
