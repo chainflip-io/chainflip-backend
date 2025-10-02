@@ -16,7 +16,7 @@
 
 use crate::{
 	common::option_inner,
-	dot::http_rpc::DotHttpRpcClientBuilder,
+	dot::http_rpc::DotRpcClientBuilder,
 	retrier::{Attempt, RetryLimitReturn},
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
@@ -41,7 +41,7 @@ use crate::dot::rpc::DotRpcApi;
 
 #[derive(Clone)]
 pub struct DotRetryRpcClient {
-	rpc_retry_client: RetrierClient<DotHttpRpcClientBuilder>,
+	rpc_retry_client: RetrierClient<DotRpcClientBuilder>,
 	sub_retry_client: RetrierClient<DotSubClient>,
 }
 
@@ -67,7 +67,11 @@ impl DotRetryRpcClient {
 	) -> Result<Self> {
 		let f_create_clients = |endpoints: WsHttpEndpoints| {
 			Result::<_, anyhow::Error>::Ok((
-				DotHttpRpcClientBuilder::new(endpoints.ws_endpoint.clone(), expected_genesis_hash)?,
+				DotRpcClientBuilder::new(
+					endpoints.ws_endpoint.clone(),
+					endpoints.http_endpoint.clone(),
+					expected_genesis_hash,
+				)?,
 				DotSubClient::new(endpoints.ws_endpoint, expected_genesis_hash),
 			))
 		};
@@ -127,7 +131,9 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 				RequestLog::new("block_hash".to_string(), Some(format!("{block_number}"))),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.connect().await.block_hash(block_number).await })
+					Box::pin(
+						async move { client.http_client().await.block_hash(block_number).await },
+					)
 				}),
 			)
 			.await
@@ -140,7 +146,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						client.connect().await.extrinsics(block_hash).await?.ok_or(anyhow!(
+						client.http_client().await.extrinsics(block_hash).await?.ok_or(anyhow!(
 						"Block not found when querying for extrinsics at block hash {block_hash:?}"
 					))
 					})
@@ -158,11 +164,11 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 		self.rpc_retry_client
 			.request_with_limit(
 				RequestLog::new("events".to_string(), Some(format!("{block_hash:?}"))),
-				Box::pin(move |client: DotHttpRpcClientBuilder| {
+				Box::pin(move |client: DotRpcClientBuilder| {
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(
-						async move { client.connect().await.events(block_hash, parent_hash).await },
-					)
+					Box::pin(async move {
+						client.http_client().await.events(block_hash, parent_hash).await
+					})
 				}),
 				retry_limit,
 			)
@@ -176,7 +182,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(
-						async move { client.connect().await.runtime_version(block_hash).await },
+						async move { client.http_client().await.runtime_version(block_hash).await },
 					)
 				}),
 			)
@@ -197,7 +203,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					let encoded_bytes = encoded_bytes.clone();
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						client.connect().await.submit_raw_encoded_extrinsic(encoded_bytes).await
+						client.ws_client().await.submit_raw_encoded_extrinsic(encoded_bytes).await
 					})
 				}),
 				MAX_BROADCAST_RETRIES,
@@ -263,10 +269,10 @@ impl ChainClient for DotRetryRpcClient {
 		self.rpc_retry_client
 			.request(
 				RequestLog::new("header_at_index".to_string(), Some(format!("{index}"))),
-				Box::pin(move |client| {
+				Box::pin(move |client_builder| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						let client = client.connect().await;
+						let client = client_builder.http_client().await;
 						let block_hash = client
 							.block_hash(index)
 							.await?
@@ -304,14 +310,14 @@ pub mod mocks {
 	use mockall::mock;
 
 	mock! {
-		pub DotHttpRpcClient {}
+		pub DotRpcClient {}
 
-		impl Clone for DotHttpRpcClient {
+		impl Clone for DotRpcClient {
 			fn clone(&self) -> Self;
 		}
 
 		#[async_trait::async_trait]
-		impl DotRetryRpcApi for DotHttpRpcClient {
+		impl DotRetryRpcApi for DotRpcClient {
 			async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
 			async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<Bytes>;
