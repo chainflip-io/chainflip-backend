@@ -382,17 +382,8 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 
 	fn get_queries(state: &mut Self::State) -> Vec<Self::Query> {
 		if state.safe_mode_enabled.run(()) == SafeModeStatus::Disabled {
+			// Always create elections for both external chains
 			all::<ExternalPriceChain>()
-				.take_while_inclusive(|chain| {
-					// return true if at least one asset does not exist OR is not `UpToDate`
-					all::<T::AssetPair>().any(|asset| {
-						state.chain_states[*chain]
-							.price
-							.get(&asset)
-							.map(|asset_state| asset_state.price_status != PriceStatus::UpToDate)
-							.unwrap_or(true)
-					})
-				})
 				.map(|chain| PriceQuery { chain, assets: state.chain_states[chain].get_query() })
 				.collect()
 		} else {
