@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.11.8] - 2025-10-02
+
+### Fixes
+
+- Use http client where appropriate for polkadot rpcs.
+
 ## [1.11.8] - 2025-10-01
 
 ### Fixes
