@@ -426,7 +426,7 @@ impl<T: Config> LoanAccount<T> {
 					// (say 10c)
 					let fee_usd_value = usd_value_of(loan_asset, fee.into_asset_amount())?;
 					if fee_usd_value >= config.interest_collection_threshold_usd {
-						self.charge_fee_from_collateral(loan_asset, fee.take_whole_amount())
+						self.charge_fee_from_collateral(loan_asset, fee.take_non_fractional_part())
 					} else {
 						Ok(Default::default())
 					}

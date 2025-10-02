@@ -1548,8 +1548,8 @@ fn small_interest_amounts_accumulate() {
 			let mut pool_amount_total = pool_amount.saturating_add(pool_amount);
 			let mut network_amount_total = network_amount.saturating_add(network_amount);
 
-			let pool_amount_taken = pool_amount_total.take_whole_amount();
-			let network_amount_taken = network_amount_total.take_whole_amount();
+			let pool_amount_taken = pool_amount_total.take_non_fractional_part();
+			let network_amount_taken = network_amount_total.take_non_fractional_part();
 
 			// Over two interest payment periods both amounts are expected to become non-zero
 			assert!(pool_amount_taken > 0);

@@ -104,7 +104,8 @@ mod scaled_amount {
 				.saturated_into()
 		}
 
-		pub fn take_whole_amount(&mut self) -> AssetAmount {
+		/// Removes and returns the "whole" part leaving only the fractional part
+		pub fn take_non_fractional_part(&mut self) -> AssetAmount {
 			let amount_taken = self.into_asset_amount();
 
 			self.saturating_reduce(Self::from_asset_amount(amount_taken));

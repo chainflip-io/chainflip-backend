@@ -62,7 +62,7 @@ fn take_whole_amount() {
 	let mut amount = ScaledAmountHP::from_raw(2_700_000_000);
 
 	// Should return the "whole" part as AssetAmount
-	assert_eq!(amount.take_whole_amount(), 2);
+	assert_eq!(amount.take_non_fractional_part(), 2);
 
 	// The remaining fractional part should still be there
 	assert_eq!(amount.as_raw(), 700_000_000);
