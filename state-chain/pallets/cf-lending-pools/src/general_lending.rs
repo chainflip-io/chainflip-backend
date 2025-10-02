@@ -12,6 +12,10 @@ use super::*;
 #[cfg(test)]
 mod general_lending_tests;
 
+mod general_lending_pool;
+
+pub use general_lending_pool::LendingPool;
+
 pub enum LoanRepaymentOutcome {
 	// In case of full repayment, we may have some excess amount left
 	// over which the caller of `repay_loan` will need to allocate somewhere
