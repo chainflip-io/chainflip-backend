@@ -292,9 +292,11 @@ mod utils {
 
 pub struct LendingConfigDefault {}
 
+const DEFAULT_ORIGINATION_FEE: Permill = Permill::from_parts(100); // 1 bps
+
 const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	default_pool_config: LendingPoolConfiguration {
-		origination_fee: Permill::from_parts(100), // 1 bps
+		origination_fee: DEFAULT_ORIGINATION_FEE,
 		liquidation_fee: Permill::from_parts(500), // 5 bps
 		interest_rate_curve: InterestRateConfiguration {
 			interest_at_zero_utilisation: Permill::from_percent(2),
