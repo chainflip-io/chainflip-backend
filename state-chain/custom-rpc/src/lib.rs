@@ -1308,7 +1308,7 @@ pub trait CustomApi {
 	fn cf_eip_data(
 		&self,
 		caller: EthereumAddress,
-		call: String, // TODO: Should be RuntimeCall but it's missing Deserialize
+		call: Vec<u8>, // TODO: Should be RuntimeCall but it's missing Deserialize
 		transaction_metadata: TransactionMetadata,
 	) -> RpcResult<TypedData>;
 }
@@ -2493,7 +2493,7 @@ where
 	fn cf_eip_data(
 		&self,
 		caller: EthereumAddress,
-		call: String, // TODO: Should be RuntimeCall but it's missing Deserialize
+		call: Vec<u8>, /* TODO: Should be RuntimeCall but it's missing Deserialize */
 		transaction_metadata: TransactionMetadata,
 	) -> RpcResult<TypedData> {
 		self.rpc_backend.with_runtime_api(None, |api, hash| {
@@ -2503,7 +2503,7 @@ where
 				.unwrap_or_default();
 
 			if api_version < 8 {
-				// sc calls via ethereum didn't exist before version 8
+				// eip-712 data encoding didn't exist before version 8
 				Err(CfApiError::ErrorObject(call_error(
 					"EIP data generation is not supported for the current runtime api version",
 					CfErrorCode::RuntimeApiError,
@@ -2512,7 +2512,6 @@ where
 				let chainflip_network = api
 					.cf_eip_data(hash, caller, transaction_metadata)
 					.map_err(CfApiError::from)??;
-				let call_hex = format!("0x{}", hex::encode(&call));
 				let json = serde_json::json!( {
 				   "domain": {
 						"name": chainflip_network,
@@ -2536,10 +2535,6 @@ where
 					],
 					"RuntimeCall": [
 					  {
-						"name": "name",
-						"type": "string"
-					  },
-					  {
 						"name": "value",
 						"type": "bytes"
 					  }
@@ -2558,8 +2553,7 @@ where
 				  "primaryType": "Transaction",
 				  "message": {
 					"Call": {
-						"name": "RuntimeCallExampleName",
-						"value": call_hex,
+						"value":  format!("0x{}", hex::encode(&call)),
 					},
 					"Metadata": {
 						"from": caller,
