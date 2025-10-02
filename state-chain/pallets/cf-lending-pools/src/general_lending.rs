@@ -539,7 +539,7 @@ impl<T: Config> LoanAccount<T> {
 			.collect::<Result<Vec<_>, Error<T>>>()?;
 
 		for (collateral_asset, collateral_amount) in core::mem::take(&mut self.collateral) {
-			let distribution = distribute_proportionally(
+			let distribution = utils::distribute_proportionally(
 				collateral_amount,
 				principal_amounts_usd.iter().map(|(k, v)| (k, *v)),
 			);

@@ -93,7 +93,7 @@ where
 		}
 
 		// Recomputing everyone's shares taking the new total amount into account:
-		self.lender_shares = distribute_proportionally(
+		self.lender_shares = utils::distribute_proportionally(
 			Perquintill::one().deconstruct(),
 			self.lender_shares.iter().map(|(id, share)| (id, share.deconstruct().into())),
 		)
