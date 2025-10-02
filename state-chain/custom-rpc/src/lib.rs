@@ -67,6 +67,7 @@ use sc_client_api::{
 	HeaderBackend, StorageProvider,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
@@ -79,15 +80,15 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
-		CustomRuntimeApi, DelegationSnapshot, DispatchErrorWithMessage, EIP712Data,
-		ElectoralRuntimeApi, EvmCallDetails, FailingWitnessValidators, FeeTypes,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees, OpenedDepositChannels,
-		OperatorInfo, RpcAccountInfoCommonItems, RuntimeApiPenalty, SimulatedSwapInformation,
+		CustomRuntimeApi, DelegationSnapshot, DispatchErrorWithMessage, ElectoralRuntimeApi,
+		EvmCallDetails, FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo,
+		LiquidityProviderInfo, NetworkFees, OpenedDepositChannels, OperatorInfo,
+		RpcAccountInfoCommonItems, RuntimeApiPenalty, SimulatedSwapInformation,
 		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
 		VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
-	Hash, RuntimeCall,
+	Hash,
 };
 use std::{
 	collections::{BTreeMap, BTreeSet, HashMap},
@@ -104,6 +105,61 @@ pub mod pool_client;
 
 #[cfg(test)]
 mod tests;
+
+/// Represents the name and type pair
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Eip712DomainType {
+	pub name: String,
+	#[serde(rename = "type")]
+	pub r#type: String,
+}
+
+pub type Types = BTreeMap<String, Vec<Eip712DomainType>>;
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TypedData {
+	/// Signing domain metadata. The signing domain is the intended context for the signature (e.g.
+	/// the dapp, protocol, etc. that it's intended for). This data is used to construct the domain
+	/// seperator of the message.
+	#[serde(default)]
+	pub domain: EIP712Domain,
+	/// The custom types used by this message.
+	pub types: Types,
+	#[serde(rename = "primaryType")]
+	/// The type of the message.
+	pub primary_type: String,
+	// The message to be signed.
+	pub message: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EIP712Domain {
+	///  The user readable name of signing domain, i.e. the name of the DApp or the protocol.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub name: Option<String>,
+
+	/// The current major version of the signing domain. Signatures from different versions are not
+	/// compatible.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub version: Option<String>,
+
+	/// The EIP-155 chain id. The user-agent should refuse signing if it does not match the
+	/// currently active chain.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub chain_id: Option<sp_core::U256>,
+
+	/// The address of the contract that will verify the signature.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub verifying_contract: Option<sp_core::H160>,
+
+	/// A disambiguating salt for the protocol. This can be used as a domain separator of last
+	/// resort.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub salt: Option<[u8; 32]>,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
@@ -1252,9 +1308,9 @@ pub trait CustomApi {
 	fn cf_eip_data(
 		&self,
 		caller: EthereumAddress,
-		// call: RuntimeCall,
+		call: String, // TODO: Should be RuntimeCall but it's missing Deserialize
 		transaction_metadata: TransactionMetadata,
-	) -> RpcResult<EIP712Data>;
+	) -> RpcResult<TypedData>;
 }
 
 /// An RPC extension for the state chain node.
@@ -2437,9 +2493,9 @@ where
 	fn cf_eip_data(
 		&self,
 		caller: EthereumAddress,
-		// call: RuntimeCall,
+		call: String, // TODO: Should be RuntimeCall but it's missing Deserialize
 		transaction_metadata: TransactionMetadata,
-	) -> RpcResult<EIP712Data> {
+	) -> RpcResult<TypedData> {
 		self.rpc_backend.with_runtime_api(None, |api, hash| {
 			let api_version = api
 				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)
@@ -2453,13 +2509,68 @@ where
 					CfErrorCode::RuntimeApiError,
 				)))
 			} else {
-				api.cf_eip_data(
-					hash,
-					caller,
-					// call,
-					transaction_metadata,
-				)?
-				.map_err(CfApiError::from)
+				let chainflip_network = api
+					.cf_eip_data(hash, caller, transaction_metadata)
+					.map_err(CfApiError::from)??;
+				let call_hex = format!("0x{}", hex::encode(&call));
+				let json = serde_json::json!( {
+				   "domain": {
+						"name": chainflip_network,
+						"version": "0",
+					},
+				  "types": {
+						"EIP712Domain": [
+							{
+								"name": "name",
+								"type": "string"
+							},
+							{
+								"name": "version",
+								"type": "string"
+							},
+						],
+					"Metadata": [
+						{ "name": "from", "type": "address" },
+						{ "name": "nonce", "type": "uint32" },
+						{ "name": "expiryBlock", "type": "uint32" },
+					],
+					"RuntimeCall": [
+					  {
+						"name": "name",
+						"type": "string"
+					  },
+					  {
+						"name": "value",
+						"type": "bytes"
+					  }
+					],
+					"Transaction": [
+					  {
+						"name": "Call",
+						"type": "RuntimeCall"
+					  },
+					  {
+						"name": "Metadata",
+						"type": "Metadata"
+					  },
+					]
+				  },
+				  "primaryType": "Transaction",
+				  "message": {
+					"Call": {
+						"name": "RuntimeCallExampleName",
+						"value": call_hex,
+					},
+					"Metadata": {
+						"from": caller,
+						"nonce": transaction_metadata.nonce.to_string(),
+						"expiryBlock": transaction_metadata.expiry_block.to_string(),
+					},
+				  }
+				});
+
+				let typed_data: TypedData = serde_json::from_value(json).unwrap();
+				Ok(typed_data)
 			}
 		})
 	}

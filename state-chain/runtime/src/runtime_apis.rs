@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chainflip::Offence, Runtime, RuntimeCall, RuntimeSafeMode};
+use crate::{chainflip::Offence, Runtime, RuntimeSafeMode};
 use pallet_cf_elections::electoral_systems::oracle_price::chainlink::OraclePrice;
 
 use cf_amm::{
@@ -120,80 +120,6 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 			VaultSwapDetails::Arbitrum { details } => VaultSwapDetails::Arbitrum { details },
 		}
 	}
-}
-
-/// Represents the name and type pair
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TypeInfo, Decode, Encode)]
-#[serde(deny_unknown_fields)]
-pub struct Eip712DomainType {
-	pub name: String,
-	#[serde(rename = "type")]
-	pub r#type: String,
-}
-
-pub type Types = BTreeMap<String, Vec<Eip712DomainType>>;
-
-// TODO: Set right Message type
-#[derive(
-	Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, TypeInfo, Decode, Encode,
-)]
-pub struct Person {
-	pub name: String,
-	pub address: String,
-}
-
-#[derive(
-	Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, TypeInfo, Decode, Encode,
-)]
-pub struct Message {
-	pub from: Person,
-	pub to: Person,
-	pub message: String,
-}
-
-#[derive(
-	Debug, Default, Clone, Encode, PartialEq, Eq, Serialize, Deserialize, TypeInfo, Decode,
-)]
-#[serde(rename_all = "camelCase")]
-pub struct EIP712Data {
-	/// Signing domain metadata. The signing domain is the intended context for the signature (e.g.
-	/// the dapp, protocol, etc. that it's intended for). This data is used to construct the domain
-	/// seperator of the message.
-	#[serde(default)]
-	pub domain: EIP712Domain,
-	/// The custom types used by this message.
-	pub types: Types,
-	// The message to be signed.
-	pub message: Message,
-}
-
-#[derive(
-	Debug, Default, Clone, Encode, PartialEq, Eq, Serialize, Deserialize, TypeInfo, Decode,
-)]
-#[serde(rename_all = "camelCase")]
-pub struct EIP712Domain {
-	///  The user readable name of signing domain, i.e. the name of the DApp or the protocol.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub name: Option<String>,
-
-	/// The current major version of the signing domain. Signatures from different versions are not
-	/// compatible.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub version: Option<String>,
-
-	/// The EIP-155 chain id. The user-agent should refuse signing if it does not match the
-	/// currently active chain.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub chain_id: Option<sp_core::U256>,
-
-	/// The address of the contract that will verify the signature.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub verifying_contract: Option<sp_core::H160>,
-
-	/// A disambiguating salt for the protocol. This can be used as a domain separator of last
-	/// resort.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub salt: Option<[u8; 32]>,
 }
 
 pub mod validator_info_before_v7 {
@@ -868,7 +794,7 @@ decl_runtime_apis!(
 			caller: EthereumAddress,
 			// call: RuntimeCall,
 			transaction_metadata: TransactionMetadata,
-		) -> Result<EIP712Data, DispatchErrorWithMessage>;
+		) -> Result<String, DispatchErrorWithMessage>;
 		#[changed_in(8)]
 		fn cf_eip_data(
 			caller: EthereumAddress,

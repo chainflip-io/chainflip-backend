@@ -48,13 +48,12 @@ use crate::{
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DelegationInfo,
-		DispatchErrorWithMessage, EIP712Data, EIP712Domain, Eip712DomainType,
-		FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		Message, NetworkFeeDetails, NetworkFees, OpenedDepositChannels, OperatorInfo, Person,
-		RpcAccountInfoCommonItems, RuntimeApiPenalty, SimulateSwapAdditionalOrder,
-		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
-		TransactionScreeningEvent, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-		VaultSwapDetails,
+		DispatchErrorWithMessage, FailingWitnessValidators, FeeTypes,
+		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFeeDetails, NetworkFees,
+		OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RuntimeApiPenalty,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
+		TradingStrategyLimits, TransactionScreeningEvent, TransactionScreeningEvents,
+		ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -2733,61 +2732,8 @@ impl_runtime_apis! {
 			_caller: EthereumAddress,
 			// _call: RuntimeCall,
 			_transaction_metadata: TransactionMetadata,
-		) -> Result<EIP712Data, DispatchErrorWithMessage> {
-			// TODO: Encode this appropriately
-			let types =  BTreeMap::from([
-			(
-				"Person".to_string(),
-				vec![
-					Eip712DomainType {
-						name: "name".to_string(),
-						r#type: "string".to_string(),
-					},
-					Eip712DomainType {
-						name: "age".to_string(),
-						r#type: "uint256".to_string(),
-					},
-				],
-			),
-			(
-				"Mail".to_string(),
-				vec![
-					Eip712DomainType {
-						name: "from".to_string(),
-						r#type: "address".to_string(),
-					},
-					Eip712DomainType {
-						name: "contents".to_string(),
-						r#type: "string".to_string(),
-					},
-				],
-			),
-		]);
-		let message = Message {
-		from: Person {
-			name: String::from("Alice"),
-			address: String::from("0x1234567890abcdef1234567890abcdef12345678"),
-		},
-		to: Person {
-			name: String::from("Bob"),
-			address: String::from("0xabcdef1234567890abcdef1234567890abcdef12"),
-		},
-		message: String::from("Hello, Bob!"),
-	};
-
-			Ok(
-				EIP712Data
-				{
-					domain: EIP712Domain {
-						name: Some("Chainflip-Mainnet".into()),
-						version: Some("1.0".into()),
-						chain_id: None,
-						verifying_contract: None,
-						salt: None
-					},
-					types,
-					message,
-				})
+		) -> Result<String, DispatchErrorWithMessage> {
+			Ok( pallet_cf_environment::ChainflipNetworkName::<Runtime>::get().as_str().to_string())
 		}
 	}
 
