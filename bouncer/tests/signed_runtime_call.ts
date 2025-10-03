@@ -103,13 +103,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   console.log('Sol whale pubkey', whaleKeypair.publicKey.toBase58());
 
   const remarkCall = chainflip.tx.system.remark([42]);
-  const calls = [remarkCall];
-  // Try a call batch that fails
-  // const calls = [remarkCall, chainflip.tx.validator.forceRotation()];
-
-  const batchCall = chainflip.tx.environment.batch(calls, atomic);
-  const batchRuntimeCall = batchCall.method;
-  const encodedCall = chainflip.createType('Call', batchRuntimeCall).toU8a();
+  const encodedCall = chainflip.createType('Call', remarkCall.method).toU8a();
   const hexRuntimeCall = u8aToHex(encodedCall);
   console.log('hexRuntimeCall', hexRuntimeCall);
 
@@ -177,21 +171,24 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     historicalCheckBlocks: 1,
   }).event;
 
-  await observeEvent(globalLogger, `environment:BatchCompleted`, {
-    test: (event) =>
-      event.data.signerAccount === 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
-    historicalCheckBlocks: 1,
-  }).event;
-
   return; // Temporary early return to skip the rest of the test while debugging
 
   logger.info('Signing and submitting user-signed payload with Solana wallet');
+  const calls = [remarkCall];
+  // Try a call batch that fails
+  // const calls = [remarkCall, chainflip.tx.validator.forceRotation()];
+
+  const batchCall = chainflip.tx.environment.batch(calls, atomic);
+  const batchRuntimeCall = batchCall.method;
+  const encodedBatchCall = chainflip.createType('Call', batchRuntimeCall).toU8a();
+  const hexBatchRuntimeCall = u8aToHex(encodedBatchCall);
+  console.log('hexBatchRuntimeCall', hexBatchRuntimeCall);
 
   // SVM Whale -> SC account (`cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1`)
   const svmNonce = (await chainflip.rpc.system.accountNextIndex(
     'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1',
   )) as unknown as number;
-  const svmPayload = encodeDomainDataToSign(encodedCall, svmNonce, expiryBlock);
+  const svmPayload = encodeDomainDataToSign(encodedBatchCall, svmNonce, expiryBlock);
   const svmHexPayload = u8aToHex(svmPayload);
 
   const prefixBytes = Buffer.from([0xff, ...Buffer.from('solana offchain', 'utf8')]);
@@ -211,7 +208,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   await chainflip.tx.environment
     .nonNativeSignedCall(
       // Solana prefix will be added in the SC previous to signature verification
-      hexRuntimeCall,
+      hexBatchRuntimeCall,
       {
         nonce: svmNonce,
         expiryBlock,
@@ -244,7 +241,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   evmNonce = (await chainflip.rpc.system.accountNextIndex(
     'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
   )) as unknown as number;
-  const evmPayload = encodeDomainDataToSign(encodedCall, evmNonce, expiryBlock);
+  const evmPayload = encodeDomainDataToSign(encodedBatchCall, evmNonce, expiryBlock);
   // Create the Ethereum-prefixed message
   const prefix = `\x19Ethereum Signed Message:\n${evmPayload.length}`;
   const prefixedMessage = Buffer.concat([Buffer.from(prefix, 'utf8'), evmPayload]);
@@ -257,7 +254,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   await chainflip.tx.environment
     .nonNativeSignedCall(
       // Ethereum prefix will be added in the SC previous to signature verification
-      hexRuntimeCall,
+      hexBatchRuntimeCall,
       {
         nonce: evmNonce,
         expiryBlock,
