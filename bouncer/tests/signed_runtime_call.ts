@@ -6,7 +6,7 @@ import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
 import { Struct, u32, str /* bool, Enum, u128, u8 */ } from 'scale-ts';
 import { globalLogger } from 'shared/utils/logger';
-import z from 'zod';
+import { fundFlip } from 'shared/fund_flip';
 
 export const TransactionMetadata = Struct({
   nonce: u32,
@@ -99,21 +99,43 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   const logger = testContext.logger;
   await using chainflip = await getChainflipApi();
 
-  const whaleKeypair = getSolWhaleKeyPair();
-  console.log('Sol whale pubkey', whaleKeypair.publicKey.toBase58());
+  const role = JSON.stringify(
+    await chainflip.query.accountRoles.accountRoles(
+      'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
+    ),
+  ).replace(/"/g, '');
 
-  const remarkCall = chainflip.tx.system.remark([42]);
-  const encodedCall = chainflip.createType('Call', remarkCall.method).toU8a();
+  // This will be done via a broker deposit channel via a new deposit action - when the user
+  // wants to deposit BTC to, for example, borrow USDC, we will open a deposit channel via a
+  // broker that will receive the BTC and swap a small amount to FLIp. That will register and
+  // fund the account.
+  if (role === 'null') {
+    await fundFlip(logger, 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7', '1000');
+  } else {
+    logger.info(`Account already registered, skipping funding`);
+  }
+
+  // Examples of some calls. Bear in mind that some of these calls will
+  // only execute succesfully one time, as after that they will already
+  // have a registered role, you then need to deregister.
+  // const call = chainflip.tx.liquidityProvider.registerLpAccount();
+  // const call = chainflip.tx.swapping.registerAsBroker();
+  // const call = chainflip.tx.validator.deregisterAsOperator();
+  const call = chainflip.tx.validator.registerAsOperator(
+    {
+      feeBps: 2000,
+      delegationAcceptance: 'Allow',
+    },
+    'TestOperator',
+  );
+
+  const encodedCall = chainflip.createType('Call', call.method).toU8a();
   const hexRuntimeCall = u8aToHex(encodedCall);
-  console.log('hexRuntimeCall', hexRuntimeCall);
 
   // EIP-712 signing
   let evmNonce = (
     await chainflip.rpc.system.accountNextIndex('cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7')
   ).toNumber();
-
-  console.log('hexRuntimeCall', hexRuntimeCall);
-  console.log('Array vec runtime call', Array.from(encodedCall));
 
   const eipPayload = await chainflip.rpc(
     'cf_eip_data',
@@ -124,15 +146,12 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
       expiry_block: 10000,
     },
   );
-  console.log('message', JSON.stringify(eipPayload, null, 2));
-  console.log('hexRuntimeCall', hexRuntimeCall);
 
   // Extract data loosely. To be done in a more strict typechecked method once it's settled.
-  let domain = eipPayload.domain;
-  let types = eipPayload.types;
-  // Some libraries (e.g. wagmi) also require the primaryType
-  let primaryType = eipPayload.primaryType;
-  let message = eipPayload.message;
+  const domain = eipPayload.domain;
+  const types = eipPayload.types;
+  // Some libraries (e.g. wagmi) also require the primaryType (eipPayload.primaryType)
+  const message = eipPayload.message;
 
   // Remove the EIP712Domain from the message to smoothen out differences between Rust and
   // TS's ethers signTypedData. With Wagmi we don't need to remove this. There might be other
@@ -141,11 +160,6 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   const evmSignatureEip712 = await ethWallet.signTypedData(domain, types, message);
   console.log('EIP712 Signature:', evmSignatureEip712);
-
-  const hash = ethers.TypedDataEncoder.hash(domain, types, message);
-  console.log('EIP-712 Hash:', hash);
-  const messageHash = ethers.TypedDataEncoder.from(types).hash(message);
-  console.log('EIP-712 Message Hash:', messageHash);
 
   // Submit to the SC
   await chainflip.tx.environment
@@ -166,14 +180,31 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     .send();
 
   await observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
-    test: (event) =>
-      event.data.signerAccount === 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
+    test: (event) => {
+      const dispatchResult = event.data.dispatchResult;
+      const signerAccountMatch =
+        event.data.signerAccount === 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7';
+      if (!signerAccountMatch) {
+        return false;
+      }
+      // Error early as there shouldn't be other calls like this in parallel for this PoC.
+      if ('Err' in dispatchResult) {
+        throw new Error(
+          `NonNativeSignedCall failed for signer ${event.data.signerAccount}, error found in execution`,
+        );
+      }
+      return 'Ok' in dispatchResult;
+    },
     historicalCheckBlocks: 1,
   }).event;
 
   return; // Temporary early return to skip the rest of the test while debugging
 
   logger.info('Signing and submitting user-signed payload with Solana wallet');
+
+  const whaleKeypair = getSolWhaleKeyPair();
+  console.log('Sol whale pubkey', whaleKeypair.publicKey.toBase58());
+
   const calls = [remarkCall];
   // Try a call batch that fails
   // const calls = [remarkCall, chainflip.tx.validator.forceRotation()];

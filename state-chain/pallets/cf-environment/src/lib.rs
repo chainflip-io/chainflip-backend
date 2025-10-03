@@ -373,6 +373,7 @@ pub mod pallet {
 		NonNativeSignedCall {
 			signer_account: T::AccountId,
 			dispatch_result: DispatchResultWithPostInfo,
+			runtime_call: <T as pallet::Config>::RuntimeCall,
 		},
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted { signer_account: T::AccountId, dispatch_result: DispatchResultWithPostInfo },
@@ -658,12 +659,14 @@ pub mod pallet {
 			// Increment the account nonce to prevent replay attacks
 			frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
 
-			let origin = frame_system::RawOrigin::Signed(signer_account.clone()).into();
-			let dispatch_result = (*call).dispatch_bypass_filter(origin);
+			let signer_account_origin =
+				frame_system::RawOrigin::Signed(signer_account.clone()).into();
+			let dispatch_result = (*call.clone()).dispatch_bypass_filter(signer_account_origin);
 
 			Self::deposit_event(Event::<T>::NonNativeSignedCall {
 				signer_account,
 				dispatch_result,
+				runtime_call: *call,
 			});
 
 			Ok(())
