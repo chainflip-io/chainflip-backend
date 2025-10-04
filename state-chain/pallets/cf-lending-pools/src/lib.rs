@@ -149,6 +149,9 @@ pub enum PalletConfigUpdate {
 		fee_swap: BasisPoints,
 	},
 	SetLiquidationSwapChunkSizeUsd(AssetAmount),
+	SetLoanMinimumAmounts {
+		minimum_loan_amounts: BTreeMap<Asset, AssetAmount>,
+	},
 }
 
 define_wrapper_type!(CorePoolId, u32);
@@ -292,51 +295,57 @@ mod utils {
 
 pub struct LendingConfigDefault {}
 
-const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
-	default_pool_config: LendingPoolConfiguration {
-		origination_fee: Permill::from_parts(100), // 1 bps
-		liquidation_fee: Permill::from_parts(500), // 5 bps
-		interest_rate_curve: InterestRateConfiguration {
-			interest_at_zero_utilisation: Permill::from_percent(2),
-			junction_utilisation: Permill::from_percent(90),
-			interest_at_junction_utilisation: Permill::from_percent(8),
-			interest_at_max_utilisation: Permill::from_percent(50),
-		},
-	},
-	ltv_thresholds: LtvThresholds {
-		target: Permill::from_percent(80),
-		topup: Permill::from_percent(85),
-		soft_liquidation: Permill::from_percent(90),
-		soft_liquidation_abort: Permill::from_percent(88),
-		hard_liquidation: Permill::from_percent(95),
-		hard_liquidation_abort: Permill::from_percent(93),
-		low_ltv: Permill::from_percent(50),
-	},
-	network_fee_contributions: NetworkFeeContributions {
-		// A fixed 1% per year is added to the base interest rate (the latter determined by the
-		// interest rate curve) and paid to the network.
-		extra_interest: Permill::from_percent(1),
-		// 20% of all origination fees is paid to the network.
-		from_origination_fee: Permill::from_percent(20),
-		// 20% of all liquidation fees is paid to the network.
-		from_liquidation_fee: Permill::from_percent(20),
-		interest_on_collateral_max: Permill::from_percent(1),
-	},
-	// don't swap more often than every 10 blocks
-	fee_swap_interval_blocks: 10,
-	interest_payment_interval_blocks: 10,
-	fee_swap_threshold_usd: 20_000_000, // don't swap fewer than 20 USD
-	interest_collection_threshold_usd: 100_000, // don't collect less than 0.1 USD
-	soft_liquidation_max_oracle_slippage: 50, // 0.5%
-	hard_liquidation_max_oracle_slippage: 500, // 5%
-	liquidation_swap_chunk_size_usd: 10_000_000_000, //10k USD
-	fee_swap_max_oracle_slippage: 50,   // 0.5%
-	pool_config_overrides: BTreeMap::new(),
-};
-
 impl Get<LendingConfiguration> for LendingConfigDefault {
 	fn get() -> LendingConfiguration {
-		LENDING_DEFAULT_CONFIG
+		LendingConfiguration {
+			default_pool_config: LendingPoolConfiguration {
+				origination_fee: Permill::from_parts(100), // 1 bps
+				liquidation_fee: Permill::from_parts(500), // 5 bps
+				interest_rate_curve: InterestRateConfiguration {
+					interest_at_zero_utilisation: Permill::from_percent(2),
+					junction_utilisation: Permill::from_percent(90),
+					interest_at_junction_utilisation: Permill::from_percent(8),
+					interest_at_max_utilisation: Permill::from_percent(50),
+				},
+			},
+			ltv_thresholds: LtvThresholds {
+				target: Permill::from_percent(80),
+				topup: Permill::from_percent(85),
+				soft_liquidation: Permill::from_percent(90),
+				soft_liquidation_abort: Permill::from_percent(88),
+				hard_liquidation: Permill::from_percent(95),
+				hard_liquidation_abort: Permill::from_percent(93),
+				low_ltv: Permill::from_percent(50),
+			},
+			network_fee_contributions: NetworkFeeContributions {
+				// A fixed 1% per year is added to the base interest rate (the latter determined by
+				// the interest rate curve) and paid to the network.
+				extra_interest: Permill::from_percent(1),
+				// 20% of all origination fees is paid to the network.
+				from_origination_fee: Permill::from_percent(20),
+				// 20% of all liquidation fees is paid to the network.
+				from_liquidation_fee: Permill::from_percent(20),
+				interest_on_collateral_max: Permill::from_percent(1),
+			},
+			// don't swap more often than every 10 blocks
+			fee_swap_interval_blocks: 10,
+			interest_payment_interval_blocks: 10,
+			fee_swap_threshold_usd: 20_000_000, // don't swap fewer than 20 USD
+			interest_collection_threshold_usd: 100_000, // don't collect less than 0.1 USD
+			soft_liquidation_max_oracle_slippage: 50, // 0.5%
+			hard_liquidation_max_oracle_slippage: 500, // 5%
+			liquidation_swap_chunk_size_usd: 10_000_000_000, //10k USD
+			fee_swap_max_oracle_slippage: 50,   // 0.5%
+			pool_config_overrides: BTreeMap::new(),
+			minimum_loan_amount: BTreeMap::from([
+				// $100 worth of each lending supported asset:
+				(Asset::Btc, 87000),
+				(Asset::Eth, 24000000000000000),
+				(Asset::Sol, 480000000),
+				(Asset::Usdc, 100),
+				(Asset::Usdt, 100),
+			]),
+		}
 	}
 }
 
@@ -425,8 +434,7 @@ pub mod pallet {
 
 	/// Stores the configuration for lending (updatable by governance).
 	#[pallet::storage]
-	pub type LendingConfig<T: Config> =
-		StorageValue<_, LendingConfiguration, ValueQuery, LendingConfigDefault>;
+	pub type LendingConfig<T: Config> = StorageValue<_, LendingConfiguration, ValueQuery>;
 
 	/// Stores loan accounts for borrowers and their loans.
 	#[pallet::storage]
@@ -599,6 +607,8 @@ pub mod pallet {
 		LiquidationInProgress,
 		/// The provided collateral amount is empty/zero.
 		EmptyCollateral,
+		/// The loan amount would be below the minimum allowed.
+		LoanBelowMinimumAmount,
 	}
 
 	#[pallet::hooks]
@@ -692,6 +702,16 @@ pub mod pallet {
 						},
 						PalletConfigUpdate::SetLiquidationSwapChunkSizeUsd(amount) => {
 							config.liquidation_swap_chunk_size_usd = *amount;
+						},
+						PalletConfigUpdate::SetLoanMinimumAmounts { minimum_loan_amounts } => {
+							minimum_loan_amounts.iter().for_each(|(asset, amount)| {
+								if amount.is_zero() {
+									// 0 minimum is the same as no minimum set
+									config.minimum_loan_amount.remove(asset);
+								} else {
+									config.minimum_loan_amount.insert(*asset, *amount);
+								}
+							});
 						},
 					}
 					Self::deposit_event(Event::<T>::PalletConfigUpdated { update });

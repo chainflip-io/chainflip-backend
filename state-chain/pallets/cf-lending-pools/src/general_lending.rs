@@ -654,6 +654,11 @@ impl<T: Config> LoanAccount<T> {
 
 		loan.owed_principal.saturating_accrue(extra_principal);
 
+		ensure!(
+			&loan.owed_principal >= config.minimum_loan_amount.get(&loan_asset).unwrap_or(&0),
+			Error::<T>::LoanBelowMinimumAmount
+		);
+
 		Pallet::<T>::charge_origination_fee(
 			&self.borrower_id,
 			&mut loan,
@@ -1027,7 +1032,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		Ok(())
 	}
 
-	/// Repays (fully or partially) a loan.
+	/// Repays (fully or partially) a loan. Must be left above the minimum loan amount.
 	#[transactional]
 	fn try_making_repayment(
 		borrower_id: &T::AccountId,
@@ -1053,6 +1058,13 @@ impl<T: Config> LendingApi for Pallet<T> {
 				loan_account.settle_loan(loan_id, false /* via liquidation */);
 
 				T::Balance::credit_account(borrower_id, loan_asset, excess_amount);
+			} else {
+				let config = LendingConfig::<T>::get();
+				ensure!(
+					&loan.owed_principal >=
+						config.minimum_loan_amount.get(&loan_asset).unwrap_or(&0),
+					Error::<T>::LoanBelowMinimumAmount
+				);
 			}
 
 			Ok::<_, DispatchError>(())
@@ -1628,7 +1640,7 @@ pub struct NetworkFeeContributions {
 	pub interest_on_collateral_max: Permill,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct LendingConfiguration {
 	/// This configuration is used unless it is overridden in `pool_config_overrides`.
 	pub default_pool_config: LendingPoolConfiguration,
@@ -1658,6 +1670,14 @@ pub struct LendingConfiguration {
 	pub fee_swap_max_oracle_slippage: BasisPoints,
 	/// If set for a pool/asset, this configuration will be used instead of the default
 	pub pool_config_overrides: BTreeMap<Asset, LendingPoolConfiguration>,
+	/// Minimum amount of principle that a loan must have at all times.
+	pub minimum_loan_amount: BTreeMap<Asset, AssetAmount>,
+}
+
+impl Default for LendingConfiguration {
+	fn default() -> Self {
+		LendingConfigDefault::get()
+	}
 }
 
 impl LendingConfiguration {

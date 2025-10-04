@@ -159,6 +159,27 @@ fn can_update_all_config_items() {
 
 		const NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD: AssetAmount = 30_000_000_000;
 
+		let new_minimum_loan_amounts: BTreeMap<Asset, AssetAmount> = BTreeMap::from([
+			(Asset::Eth, 1_000_000_000_000),
+			(Asset::Btc, 1_000_000_000),
+			(Asset::Usdc, 0),
+			(Asset::Usdt, 0),
+		]);
+
+		let expected_minimum_loan_amounts: BTreeMap<Asset, AssetAmount> = BTreeMap::from([
+			(Asset::Eth, 1_000_000_000_000),
+			(Asset::Btc, 1_000_000_000),
+			// Usdc and Usdt will be removed, but the existing value for Sol should still be there.
+			(
+				Asset::Sol,
+				LendingConfiguration::default()
+					.minimum_loan_amount
+					.get(&Asset::Sol)
+					.copied()
+					.unwrap(),
+			),
+		]);
+
 		const UPDATE_NETWORK_FEE_DEDUCTION_FROM_BOOST: PalletConfigUpdate =
 			PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
 				deduction_percent: NEW_NETWORK_FEE_DEDUCTION,
@@ -204,6 +225,11 @@ fn can_update_all_config_items() {
 		const UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD: PalletConfigUpdate =
 			PalletConfigUpdate::SetLiquidationSwapChunkSizeUsd(NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD);
 
+		let update_minimum_loan_amounts: PalletConfigUpdate =
+			PalletConfigUpdate::SetLoanMinimumAmounts {
+				minimum_loan_amounts: new_minimum_loan_amounts.clone(),
+			};
+
 		// Check that the default values are different from the new ones
 		assert_ne!(NetworkFeeDeductionFromBoostPercent::<Test>::get(), NEW_NETWORK_FEE_DEDUCTION);
 
@@ -220,7 +246,8 @@ fn can_update_all_config_items() {
 				UPDATE_FEE_SWAP_THRESHOLD_USD,
 				UPDATE_ORACLE_SLIPPAGE_FOR_SWAPS,
 				UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD,
-				UPDATE_INTEREST_COLLECTION_THRESHOLD_USD
+				UPDATE_INTEREST_COLLECTION_THRESHOLD_USD,
+				update_minimum_loan_amounts.clone(),
 			]
 			.try_into()
 			.unwrap()
@@ -244,6 +271,7 @@ fn can_update_all_config_items() {
 				liquidation_swap_chunk_size_usd: NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD,
 				fee_swap_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_FEE_SWAP,
 				pool_config_overrides: BTreeMap::default(),
+				minimum_loan_amount: expected_minimum_loan_amounts,
 			}
 		);
 
@@ -276,6 +304,9 @@ fn can_update_all_config_items() {
 			}),
 			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
 				update: UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD
+			}),
+			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
+				update: update_minimum_loan_amounts
 			}),
 		);
 
