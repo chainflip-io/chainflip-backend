@@ -236,7 +236,8 @@ macro_rules! impl_pallet_safe_mode {
     };
 }
 
-/// A wrapper around a BTreeSet to make setting safe mode for all items easier.
+/// A wrapper around a BTreeSet to make setting safe mode for all items easier. Amber contains a
+/// list of disabled items.
 #[derive(Deserialize, Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug, Default)]
 pub enum SafeModeSet<T: Ord> {
 	#[default]
@@ -247,9 +248,12 @@ pub enum SafeModeSet<T: Ord> {
 
 impl<T: Ord> SafeModeSet<T> {
 	pub fn enabled(&self, t: &T) -> bool {
+		!self.disabled(t)
+	}
+	pub fn disabled(&self, t: &T) -> bool {
 		match self {
-			SafeModeSet::Red => false,
-			SafeModeSet::Green => true,
+			SafeModeSet::Red => true,
+			SafeModeSet::Green => false,
 			SafeModeSet::Amber(set) => set.contains(t),
 		}
 	}

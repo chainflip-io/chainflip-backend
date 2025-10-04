@@ -1566,7 +1566,7 @@ mod safe_mode {
 			// Adding lender funds is disabled for all assets:
 			{
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					add_lender_funds_enabled: SafeModeSet::Red,
+					add_lender_funds: SafeModeSet::Red,
 					..PalletSafeMode::code_green()
 				});
 
@@ -1575,10 +1575,8 @@ mod safe_mode {
 
 			// Adding lender funds is enabled, but not for the requested asset:
 			{
-				const OTHER_ASSET: Asset = Asset::Eth;
-				assert_ne!(OTHER_ASSET, LOAN_ASSET);
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					add_lender_funds_enabled: SafeModeSet::Amber(BTreeSet::from([OTHER_ASSET])),
+					add_lender_funds: SafeModeSet::Amber(BTreeSet::from([LOAN_ASSET])),
 					..PalletSafeMode::code_green()
 				});
 
@@ -1587,8 +1585,10 @@ mod safe_mode {
 
 			// Adding lender funds is enabled for the requested asset:
 			{
+				const OTHER_ASSET: Asset = Asset::Eth;
+				assert_ne!(OTHER_ASSET, LOAN_ASSET);
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					add_lender_funds_enabled: SafeModeSet::Amber(BTreeSet::from([LOAN_ASSET])),
+					add_lender_funds: SafeModeSet::Amber(BTreeSet::from([OTHER_ASSET])),
 					..PalletSafeMode::code_green()
 				});
 				assert_ok!(try_to_add_funds());
@@ -1622,10 +1622,10 @@ mod safe_mode {
 				INIT_POOL_AMOUNT
 			));
 
-			// Withdrawing is disbled for all assets:
+			// Withdrawing is disabled for all assets:
 			{
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					withdraw_lender_funds_enabled: SafeModeSet::Red,
+					withdraw_lender_funds: SafeModeSet::Red,
 					..PalletSafeMode::code_green()
 				});
 
@@ -1634,12 +1634,8 @@ mod safe_mode {
 
 			// Withdrawing is enabled, but not for the requested asset:
 			{
-				const OTHER_ASSET: Asset = Asset::Eth;
-				assert_ne!(OTHER_ASSET, LOAN_ASSET);
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					withdraw_lender_funds_enabled: SafeModeSet::Amber(BTreeSet::from([
-						OTHER_ASSET,
-					])),
+					withdraw_lender_funds: SafeModeSet::Amber(BTreeSet::from([LOAN_ASSET])),
 					..PalletSafeMode::code_green()
 				});
 
@@ -1648,8 +1644,10 @@ mod safe_mode {
 
 			// Withdrawing is enabled for the requested asset:
 			{
+				const OTHER_ASSET: Asset = Asset::Eth;
+				assert_ne!(OTHER_ASSET, LOAN_ASSET);
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					withdraw_lender_funds_enabled: SafeModeSet::Amber(BTreeSet::from([LOAN_ASSET])),
+					withdraw_lender_funds: SafeModeSet::Amber(BTreeSet::from([OTHER_ASSET])),
 					..PalletSafeMode::code_green()
 				});
 				assert_ok!(try_to_withdraw());
@@ -1696,7 +1694,7 @@ mod safe_mode {
 			// Borrowing is completely disabled:
 			{
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					borrowing_enabled: SafeModeSet::Red,
+					borrowing: SafeModeSet::Red,
 					..PalletSafeMode::code_green()
 				});
 
@@ -1706,7 +1704,7 @@ mod safe_mode {
 			// Borrowing is enabled but, not for the asset that we requested:
 			{
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					borrowing_enabled: SafeModeSet::Amber(BTreeSet::from([COLLATERAL_ASSET])),
+					borrowing: SafeModeSet::Amber(BTreeSet::from([LOAN_ASSET])),
 					..PalletSafeMode::code_green()
 				});
 
@@ -1716,7 +1714,7 @@ mod safe_mode {
 			{
 				// Should be able to borrow once we enable for the requested asset :
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					borrowing_enabled: SafeModeSet::Amber(BTreeSet::from([LOAN_ASSET])),
+					borrowing: SafeModeSet::Amber(BTreeSet::from([COLLATERAL_ASSET])),
 					..PalletSafeMode::code_green()
 				});
 				assert_ok!(try_to_borrow());
@@ -1804,7 +1802,7 @@ mod safe_mode {
 			// Adding collateral is disabled for all assets:
 			{
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					add_collateral_enabled: SafeModeSet::Red,
+					add_collateral: SafeModeSet::Red,
 					..PalletSafeMode::code_green()
 				});
 				assert_noop!(try_adding_collateral(), Error::<Test>::AddingCollateralDisabled);
@@ -1818,12 +1816,10 @@ mod safe_mode {
 				);
 			}
 
-			// Adding collateral is disabled for at least one of the requested assets:
+			// Adding collateral is disabled for one of the requested assets:
 			{
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					add_collateral_enabled: SafeModeSet::Amber(BTreeSet::from([
-						COLLATERAL_ASSET_1,
-					])),
+					add_collateral: SafeModeSet::Amber(BTreeSet::from([COLLATERAL_ASSET_1])),
 					..PalletSafeMode::code_green()
 				});
 				assert_noop!(try_adding_collateral(), Error::<Test>::AddingCollateralDisabled);
@@ -1835,20 +1831,6 @@ mod safe_mode {
 					try_adding_collateral_via_loan_update(),
 					Error::<Test>::AddingCollateralDisabled
 				);
-			}
-
-			// Adding collateral is enabled for all requested assets:
-			{
-				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					add_collateral_enabled: SafeModeSet::Amber(BTreeSet::from([
-						COLLATERAL_ASSET_1,
-						COLLATERAL_ASSET_2,
-					])),
-					..PalletSafeMode::code_green()
-				});
-				assert_ok!(try_adding_collateral());
-				assert_ok!(try_adding_collateral_via_new_loan());
-				assert_ok!(try_adding_collateral_via_loan_update());
 			}
 
 			// Adding collateral is enabled for all assets (code green):
@@ -1908,33 +1890,19 @@ mod safe_mode {
 			// Removing collateral is disabled for all assets:
 			{
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					remove_collateral_enabled: SafeModeSet::Red,
+					remove_collateral: SafeModeSet::Red,
 					..PalletSafeMode::code_green()
 				});
 				assert_noop!(try_removing_collateral(), Error::<Test>::RemovingCollateralDisabled);
 			}
 
-			// Removing collateral is disabled for at least one of the requested assets:
+			// Removing collateral is disabled for one of the requested assets:
 			{
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					remove_collateral_enabled: SafeModeSet::Amber(BTreeSet::from([
-						COLLATERAL_ASSET_1,
-					])),
+					remove_collateral: SafeModeSet::Amber(BTreeSet::from([COLLATERAL_ASSET_1])),
 					..PalletSafeMode::code_green()
 				});
 				assert_noop!(try_removing_collateral(), Error::<Test>::RemovingCollateralDisabled);
-			}
-
-			// Removing collateral is enabled for all requested assets:
-			{
-				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
-					remove_collateral_enabled: SafeModeSet::Amber(BTreeSet::from([
-						COLLATERAL_ASSET_1,
-						COLLATERAL_ASSET_2,
-					])),
-					..PalletSafeMode::code_green()
-				});
-				assert_ok!(try_removing_collateral());
 			}
 
 			// Removing collateral is enabled for all assets (code green):

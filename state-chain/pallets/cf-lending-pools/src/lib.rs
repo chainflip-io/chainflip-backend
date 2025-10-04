@@ -86,15 +86,15 @@ pub struct PalletSafeMode {
 	pub add_boost_funds_enabled: bool,
 	pub stop_boosting_enabled: bool,
 	// whether funds can be borrowed (stale oracle also disables this)
-	pub borrowing_enabled: SafeModeSet<Asset>,
+	pub borrowing: SafeModeSet<Asset>,
 	// whether lenders can add funds to lending pools
-	pub add_lender_funds_enabled: SafeModeSet<Asset>,
+	pub add_lender_funds: SafeModeSet<Asset>,
 	// whether lenders can withdraw funds from lending pools (stale oracle also disables this)
-	pub withdraw_lender_funds_enabled: SafeModeSet<Asset>,
+	pub withdraw_lender_funds: SafeModeSet<Asset>,
 	// whether borrowers can add collateral
-	pub add_collateral_enabled: SafeModeSet<Asset>,
+	pub add_collateral: SafeModeSet<Asset>,
 	// whether borrowers can withdraw collateral (stale oracle also disables this)
-	pub remove_collateral_enabled: SafeModeSet<Asset>,
+	pub remove_collateral: SafeModeSet<Asset>,
 }
 
 impl cf_traits::SafeMode for PalletSafeMode {
@@ -102,11 +102,11 @@ impl cf_traits::SafeMode for PalletSafeMode {
 		Self {
 			add_boost_funds_enabled: false,
 			stop_boosting_enabled: false,
-			borrowing_enabled: SafeModeSet::code_red(),
-			add_lender_funds_enabled: SafeModeSet::code_red(),
-			withdraw_lender_funds_enabled: SafeModeSet::code_red(),
-			add_collateral_enabled: SafeModeSet::code_red(),
-			remove_collateral_enabled: SafeModeSet::code_red(),
+			borrowing: SafeModeSet::code_red(),
+			add_lender_funds: SafeModeSet::code_red(),
+			withdraw_lender_funds: SafeModeSet::code_red(),
+			add_collateral: SafeModeSet::code_red(),
+			remove_collateral: SafeModeSet::code_red(),
 		}
 	}
 
@@ -114,11 +114,11 @@ impl cf_traits::SafeMode for PalletSafeMode {
 		Self {
 			add_boost_funds_enabled: true,
 			stop_boosting_enabled: true,
-			borrowing_enabled: SafeModeSet::code_green(),
-			add_lender_funds_enabled: SafeModeSet::code_green(),
-			withdraw_lender_funds_enabled: SafeModeSet::code_green(),
-			add_collateral_enabled: SafeModeSet::code_green(),
-			remove_collateral_enabled: SafeModeSet::code_green(),
+			borrowing: SafeModeSet::code_green(),
+			add_lender_funds: SafeModeSet::code_green(),
+			withdraw_lender_funds: SafeModeSet::code_green(),
+			add_collateral: SafeModeSet::code_green(),
+			remove_collateral: SafeModeSet::code_green(),
 		}
 	}
 }
@@ -810,7 +810,7 @@ pub mod pallet {
 			amount: AssetAmount,
 		) -> DispatchResult {
 			ensure!(
-				T::SafeMode::get().add_lender_funds_enabled.enabled(&asset),
+				T::SafeMode::get().add_lender_funds.enabled(&asset),
 				Error::<T>::AddLenderFundsDisabled
 			);
 
@@ -845,7 +845,7 @@ pub mod pallet {
 			amount: Option<AssetAmount>,
 		) -> DispatchResult {
 			ensure!(
-				T::SafeMode::get().withdraw_lender_funds_enabled.enabled(&asset),
+				T::SafeMode::get().withdraw_lender_funds.enabled(&asset),
 				Error::<T>::RemoveLenderFundsDisabled
 			);
 
