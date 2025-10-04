@@ -30,24 +30,30 @@ const SWAP_RATE: u128 = 20;
 
 const INIT_POOL_AMOUNT: AssetAmount = PRINCIPAL * 2;
 
-use crate::LENDING_DEFAULT_CONFIG as CONFIG;
+fn config() -> LendingConfiguration {
+	LendingConfiguration {
+		// Remove the minimum loan requirement for tests by default
+		minimum_loan_amount: BTreeMap::new(),
+		..LendingConfiguration::default()
+	}
+}
 
 /// Takes the full fee and splits it into network fee and the remainder.
 fn take_network_fee(full_amount: AssetAmount) -> (AssetAmount, AssetAmount) {
 	// To keep things simple in tests we assume we take the same % from origination and liquidation
 	// fees
 	assert_eq!(
-		CONFIG.network_fee_contributions.from_origination_fee,
-		CONFIG.network_fee_contributions.from_liquidation_fee
+		config().network_fee_contributions.from_origination_fee,
+		config().network_fee_contributions.from_liquidation_fee
 	);
 
-	let network_fee = CONFIG.network_fee_contributions.from_origination_fee * full_amount;
+	let network_fee = config().network_fee_contributions.from_origination_fee * full_amount;
 
 	(network_fee, full_amount - network_fee)
 }
 
 fn setup_chp_pool_with_funds(loan_asset: Asset, init_amount: AssetAmount) {
-	LendingConfig::<Test>::set(CONFIG);
+	LendingConfig::<Test>::set(config());
 
 	assert_ok!(LendingPools::new_lending_pool(loan_asset));
 
@@ -125,9 +131,9 @@ fn derive_interest_amounts(
 	utilisation: Permill,
 ) -> (AssetAmount, AssetAmount) {
 	let base_interest =
-		CONFIG.derive_base_interest_rate_per_payment_interval(LOAN_ASSET, utilisation);
+		config().derive_base_interest_rate_per_payment_interval(LOAN_ASSET, utilisation);
 
-	let network_interest = CONFIG.derive_network_interest_rate_per_payment_interval();
+	let network_interest = config().derive_network_interest_rate_per_payment_interval();
 
 	let pool_amount = (ScaledAmountHP::from_asset_amount(principal) * base_interest)
 		.into_asset_amount() *
@@ -153,7 +159,7 @@ fn basic_general_lending() {
 
 	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 
-	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
+	let origination_fee = config().origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 	// Repaying a small portion to make sure we don't hit low LTV penalty:
 	const REPAYMENT_AMOUNT: AssetAmount = PRINCIPAL / 10;
@@ -176,7 +182,7 @@ fn basic_general_lending() {
 			// Disable fee swaps for this test (so we easily can check all collected fees)
 			LendingConfig::<Test>::set(LendingConfiguration {
 				fee_swap_threshold_usd: u128::MAX,
-				..CONFIG
+				..config()
 			});
 
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
@@ -258,7 +264,7 @@ fn basic_general_lending() {
 			);
 		})
 		.then_process_blocks_until_block(
-			INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
+			INIT_BLOCK + config().interest_payment_interval_blocks as u64,
 		)
 		// Checking that interest was charged here:
 		.then_execute_with(|_| {
@@ -322,7 +328,7 @@ fn basic_general_lending() {
 			);
 		})
 		.then_process_blocks_until_block(
-			INIT_BLOCK + 2 * CONFIG.interest_payment_interval_blocks as u64,
+			INIT_BLOCK + 2 * config().interest_payment_interval_blocks as u64,
 		)
 		// === Interest is charged the second time ===
 		.then_execute_with(|_| {
@@ -383,7 +389,7 @@ fn collateral_auto_topup() {
 	// The user deposits this much of collateral asset into their balance at a later point
 	const EXTRA_FUNDS: AssetAmount = INIT_COLLATERAL;
 
-	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
+	let origination_fee = config().origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 	fn get_ltv() -> FixedU64 {
 		LoanAccounts::<Test>::get(BORROWER).unwrap().derive_ltv().unwrap()
@@ -472,12 +478,12 @@ fn basic_loan_aggregation() {
 	const EXTRA_PRINCIPAL_2: AssetAmount = PRINCIPAL / 2;
 	const EXTRA_COLLATERAL: AssetAmount = INIT_COLLATERAL / 2;
 
-	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
+	let origination_fee = config().origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
-	let origination_fee_2 = CONFIG.origination_fee(LOAN_ASSET) * EXTRA_PRINCIPAL_1 * SWAP_RATE;
+	let origination_fee_2 = config().origination_fee(LOAN_ASSET) * EXTRA_PRINCIPAL_1 * SWAP_RATE;
 
 	// NOTE: expecting utilisation to go up as we keep borrowing more
-	let origination_fee_3 = CONFIG.origination_fee(LOAN_ASSET) * EXTRA_PRINCIPAL_2 * SWAP_RATE;
+	let origination_fee_3 = config().origination_fee(LOAN_ASSET) * EXTRA_PRINCIPAL_2 * SWAP_RATE;
 
 	new_test_ext().execute_with(|| {
 		setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
@@ -694,7 +700,7 @@ fn interest_special_cases() {
 	// A portion of pool interest will have to be charged from the secondary collateral
 	let pool_interest_amount_secondary = full_pool_interest_amount - pool_interest_amount_primary;
 
-	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
+	let origination_fee = config().origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -732,47 +738,52 @@ fn interest_special_cases() {
 				Ok(LOAN_ID)
 			);
 		})
-		.then_execute_at_block(INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64, |_| {
-			assert_eq!(
-				&PendingPoolFees::<Test>::get(LOAN_ASSET),
-				&BTreeMap::from([
-					// All of the primary asset is consumed as interest:
-					(
-						PRIMARY_COLLATERAL_ASSET,
-						pool_interest_amount_primary + take_network_fee(origination_fee).1,
-					),
-					// The remainder is charged from the secondary asset:
-					(SECONDARY_COLLATERAL_ASSET, pool_interest_amount_secondary),
-				]),
-			);
-
-			assert_eq!(
-				&LoanAccounts::<Test>::get(BORROWER).unwrap().collateral,
-				&BTreeMap::from([
-					(PRIMARY_COLLATERAL_ASSET, 0),
-					(
-						SECONDARY_COLLATERAL_ASSET,
-						INIT_COLLATERAL_AMOUNT_SECONDARY - pool_interest_amount_secondary,
-					),
-				]),
-			);
-
-			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
-				loan_id: LOAN_ID,
-				pool_interest: BTreeMap::from([
-					(PRIMARY_COLLATERAL_ASSET, pool_interest_amount_primary),
-					(SECONDARY_COLLATERAL_ASSET, pool_interest_amount_secondary),
-				]),
-				network_interest: BTreeMap::from([(
-					PRIMARY_COLLATERAL_ASSET,
-					full_network_interest_amount,
-				)]),
-				broker_interest: Default::default(),
-				low_ltv_penalty: Default::default(),
-			}));
-		})
 		.then_execute_at_block(
-			INIT_BLOCK + 2 * CONFIG.interest_payment_interval_blocks as u64,
+			INIT_BLOCK + config().interest_payment_interval_blocks as u64,
+			|_| {
+				assert_eq!(
+					&PendingPoolFees::<Test>::get(LOAN_ASSET),
+					&BTreeMap::from([
+						// All of the primary asset is consumed as interest:
+						(
+							PRIMARY_COLLATERAL_ASSET,
+							pool_interest_amount_primary + take_network_fee(origination_fee).1,
+						),
+						// The remainder is charged from the secondary asset:
+						(SECONDARY_COLLATERAL_ASSET, pool_interest_amount_secondary),
+					]),
+				);
+
+				assert_eq!(
+					&LoanAccounts::<Test>::get(BORROWER).unwrap().collateral,
+					&BTreeMap::from([
+						(PRIMARY_COLLATERAL_ASSET, 0),
+						(
+							SECONDARY_COLLATERAL_ASSET,
+							INIT_COLLATERAL_AMOUNT_SECONDARY - pool_interest_amount_secondary,
+						),
+					]),
+				);
+
+				assert_has_event::<Test>(RuntimeEvent::LendingPools(
+					Event::<Test>::InterestTaken {
+						loan_id: LOAN_ID,
+						pool_interest: BTreeMap::from([
+							(PRIMARY_COLLATERAL_ASSET, pool_interest_amount_primary),
+							(SECONDARY_COLLATERAL_ASSET, pool_interest_amount_secondary),
+						]),
+						network_interest: BTreeMap::from([(
+							PRIMARY_COLLATERAL_ASSET,
+							full_network_interest_amount,
+						)]),
+						broker_interest: Default::default(),
+						low_ltv_penalty: Default::default(),
+					},
+				));
+			},
+		)
+		.then_execute_at_block(
+			INIT_BLOCK + 2 * config().interest_payment_interval_blocks as u64,
 			|_| {
 				// The second time the fee is collected, it comes entirely from the secondary asset:
 				assert_eq!(
@@ -802,7 +813,7 @@ fn swap_collected_network_fees() {
 	const AMOUNT_1: AssetAmount = 200_000;
 	const AMOUNT_2: AssetAmount = 100_000;
 
-	let fee_swap_block = CONFIG.fee_swap_interval_blocks as u64;
+	let fee_swap_block = config().fee_swap_interval_blocks as u64;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -865,7 +876,7 @@ fn swap_collected_pool_fees() {
 
 	const NETWORK_FEE_AMOUNT: AssetAmount = 30;
 
-	let fee_swap_block = CONFIG.fee_swap_interval_blocks as u64;
+	let fee_swap_block = config().fee_swap_interval_blocks as u64;
 
 	const POOL_FEE_SWAP_ID: SwapRequestId = SwapRequestId(0);
 	const NETWORK_FEE_SWAP_ID: SwapRequestId = SwapRequestId(1);
@@ -984,7 +995,7 @@ fn adding_and_removing_collateral() {
 	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 	const INIT_COLLATERAL_AMOUNT_2: AssetAmount = 1000;
 
-	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
+	let origination_fee = config().origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 	new_test_ext().execute_with(|| {
 		setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
@@ -1060,21 +1071,21 @@ fn basic_liquidation() {
 	const SWAP_RATE_2: u128 = 26;
 
 	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
-	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
+	let origination_fee = config().origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 	// How much collateral will be swapped during liquidation:
 	const EXECUTED_COLLATERAL: AssetAmount = 2 * INIT_COLLATERAL / 5;
 	// How much of principal asset is bought during first liquidation:
 	const SWAPPED_PRINCIPAL: AssetAmount = EXECUTED_COLLATERAL / NEW_SWAP_RATE;
 
-	let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL;
+	let liquidation_fee_1 = config().liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL;
 
 	// This much will be repaid via first liquidation (everything swapped minus liquidation fee)
 	let repaid_amount_1 = SWAPPED_PRINCIPAL - liquidation_fee_1;
 
 	// How much of principal asset is bought during second liquidation:
 	const SWAPPED_PRINCIPAL_2: AssetAmount = (INIT_COLLATERAL - EXECUTED_COLLATERAL) / SWAP_RATE_2;
-	let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL_2;
+	let liquidation_fee_2 = config().liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL_2;
 
 	// This much will be repaid via second liquidation (full principal after first repayment)
 	let repaid_amount_2 = PRINCIPAL - repaid_amount_1;
@@ -1376,7 +1387,7 @@ fn liquidation_with_outstanding_principal() {
 
 	const RECOVERED_PRINCIPAL: AssetAmount = 3 * PRINCIPAL / 4;
 
-	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
+	let origination_fee = config().origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 	let collateral = BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]);
 
 	const NEW_SWAP_RATE: u128 = SWAP_RATE * 2;
@@ -1421,7 +1432,7 @@ fn liquidation_with_outstanding_principal() {
 				RECOVERED_PRINCIPAL,
 			);
 
-			let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * RECOVERED_PRINCIPAL;
+			let liquidation_fee = config().liquidation_fee(LOAN_ASSET) * RECOVERED_PRINCIPAL;
 			let (liquidation_fee_network, liquidation_fee_pool) =
 				take_network_fee(liquidation_fee);
 
@@ -1457,7 +1468,7 @@ fn making_loan_repayment() {
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
 	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 
-	let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
+	let origination_fee = config().origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 	let collateral = BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]);
 
@@ -2158,7 +2169,7 @@ mod rpcs {
 		const COLLATERAL_ASSET: Asset = Asset::Eth;
 		const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 
-		let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
+		let origination_fee = config().origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
 
 		const LOAN_ASSET_2: Asset = Asset::Usdc;
 		const PRINCIPAL_2: AssetAmount = PRINCIPAL * 2;
@@ -2172,7 +2183,7 @@ mod rpcs {
 		const BORROWER_2: u64 = OTHER_LP;
 		const LOAN_ID_2: LoanId = LoanId(1);
 
-		let origination_fee_2 = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL_2 * SWAP_RATE;
+		let origination_fee_2 = config().origination_fee(LOAN_ASSET) * PRINCIPAL_2 * SWAP_RATE;
 
 		/// Price of COLLATERAL_ASSET_2 will be increased to this much to trigger liquidation
 		/// of borrower 2's collateral.
@@ -2248,7 +2259,7 @@ mod rpcs {
 				set_asset_price_in_usd(LOAN_ASSET_2, NEW_SWAP_RATE);
 			})
 			.then_process_blocks_until_block(
-				INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
+				INIT_BLOCK + config().interest_payment_interval_blocks as u64,
 			)
 			.then_execute_with(|_| {
 				// Liquidation swap's execution price will be slightly worse than the oracle price:
@@ -2326,7 +2337,7 @@ mod rpcs {
 						available_amount: INIT_POOL_AMOUNT - PRINCIPAL,
 						utilisation_rate: Permill::from_percent(50),
 						current_interest_rate: Permill::from_parts(53_333), // 5.33%
-						config: CONFIG.get_config_for_asset(LOAN_ASSET).clone(),
+						config: config().get_config_for_asset(LOAN_ASSET).clone(),
 					}]
 				)
 			});
@@ -2412,27 +2423,27 @@ fn interest_rate_curve() {
 	let asset = Asset::Btc;
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(0)),
+		config().derive_interest_rate_per_year(asset, Permill::from_percent(0)),
 		Permill::from_percent(2)
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(45)),
+		config().derive_interest_rate_per_year(asset, Permill::from_percent(45)),
 		Permill::from_parts(49_999) // (2% + 8%) / 2 = 5%
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(90)),
+		config().derive_interest_rate_per_year(asset, Permill::from_percent(90)),
 		Permill::from_percent(8)
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(95)),
+		config().derive_interest_rate_per_year(asset, Permill::from_percent(95)),
 		Permill::from_percent(29) // (8% + 50%) / 2 = 29%
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(100)),
+		config().derive_interest_rate_per_year(asset, Permill::from_percent(100)),
 		Permill::from_percent(50)
 	);
 }
@@ -2440,38 +2451,94 @@ fn interest_rate_curve() {
 #[test]
 fn derive_extra_interest_from_low_ltv() {
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_low_ltv_interest_rate_per_year(FixedU64::zero()),
+		config().derive_low_ltv_interest_rate_per_year(FixedU64::zero()),
 		Permill::from_percent(1)
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG
-			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(10, 100)),
+		config().derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(10, 100)),
 		Permill::from_parts(8_000) // 0.8%
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG
-			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(25, 100)),
+		config().derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(25, 100)),
 		Permill::from_parts(5_000) // 0.5%
 	);
 
 	// Any value above 50% LTV should result in 0% additional interest:
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG
-			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(50, 100)),
+		config().derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(50, 100)),
 		Permill::from_percent(0)
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG
-			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(80, 100)),
+		config().derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(80, 100)),
 		Permill::from_percent(0)
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG
-			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(120, 100)),
+		config().derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(120, 100)),
 		Permill::from_percent(0)
 	);
+}
+
+#[test]
+fn test_loan_minimum_is_enforced() {
+	const MIN_LOAN_AMOUNT: AssetAmount = 1_000;
+	const COLLATERAL_ASSET: Asset = Asset::Eth;
+	const COLLATERAL_AMOUNT: AssetAmount = MIN_LOAN_AMOUNT * SWAP_RATE * 2;
+
+	new_test_ext().execute_with(|| {
+		setup_chp_pool_with_funds(LOAN_ASSET, MIN_LOAN_AMOUNT * 2);
+
+		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+
+		LendingConfig::<Test>::set(LendingConfiguration {
+			minimum_loan_amount: BTreeMap::from([(LOAN_ASSET, MIN_LOAN_AMOUNT)]),
+			..Default::default()
+		});
+
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, COLLATERAL_AMOUNT);
+
+		// Should not be able to create a loan below the minimum amount
+		assert_noop!(
+			LendingPools::new_loan(
+				BORROWER,
+				LOAN_ASSET,
+				MIN_LOAN_AMOUNT - 1,
+				Some(COLLATERAL_ASSET),
+				BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_AMOUNT)])
+			),
+			Error::<Test>::LoanBelowMinimumAmount
+		);
+
+		// A loan equal to or above the minimum amount should be fine
+		assert_eq!(
+			LendingPools::new_loan(
+				BORROWER,
+				LOAN_ASSET,
+				MIN_LOAN_AMOUNT,
+				Some(COLLATERAL_ASSET),
+				BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_AMOUNT)])
+			),
+			Ok(LOAN_ID)
+		);
+
+		// Now try and repay an amount that would leave the loan below the minimum
+		assert_noop!(
+			LendingPools::try_making_repayment(&BORROWER, LOAN_ID, 1),
+			Error::<Test>::LoanBelowMinimumAmount,
+		);
+
+		// If we expand the loan so a partial repayment would not take it below the minimum,
+		assert_eq!(
+			LendingPools::expand_loan(RuntimeOrigin::signed(BORROWER), LOAN_ID, 1, BTreeMap::new()),
+			Ok(())
+		);
+		assert_ok!(LendingPools::try_making_repayment(&BORROWER, LOAN_ID, 1),);
+
+		// Finally, repay the rest of the loan should be fine, even though 0 is below the minimum
+		assert_ok!(LendingPools::try_making_repayment(&BORROWER, LOAN_ID, MIN_LOAN_AMOUNT));
+	});
 }
