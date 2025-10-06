@@ -104,15 +104,6 @@ derive_common_traits! {
 	}
 }
 
-impl ExternalPriceChain {
-	pub fn statechain_blocks_to_skip_when_querying(self) -> u32 {
-		match self {
-			ExternalPriceChain::Arbitrum => 0,
-			ExternalPriceChain::Ethereum => 1,
-		}
-	}
-}
-
 derive_common_traits! {
 	#[derive(TypeInfo, Copy, Default)]
 	#[cfg_attr(test, derive(Arbitrary))]
@@ -393,18 +384,14 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 	fn get_queries(state: &mut Self::State) -> Vec<Self::Query> {
 		if state.safe_mode_enabled.run(()) == SafeModeStatus::Disabled {
 			all::<ExternalPriceChain>()
-				// skip `statechain_blocks_to_skip_when_querying`-blocks when querying external
-				// chain
-				//
-				// This means: for Arb we query on every SC block, for Eth we query every second SC
-				// block.
 				.filter(|chain| {
-					let height = state.get_statechain_block_height.run(());
-					let skip_blocks: T::StateChainBlockNumber =
-						chain.statechain_blocks_to_skip_when_querying().into();
-					let zero: T::StateChainBlockNumber = 0u32.into();
-					let one: T::StateChainBlockNumber = 1u32.into();
-					height % (skip_blocks + one) == zero
+					match chain {
+						ExternalPriceChain::Arbitrum => true,
+						ExternalPriceChain::Ethereum => {
+							// only query every second block for ethereum
+							state.get_statechain_block_height.run(()) % 2u32.into() == 0u32.into()
+						},
+					}
 				})
 				.map(|chain| PriceQuery { chain, assets: state.chain_states[chain].get_query() })
 				.collect()
