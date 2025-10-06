@@ -173,26 +173,30 @@ impl<T: Config> LoanAccount<T> {
 				if ltv < config.ltv_thresholds.soft_liquidation_abort {
 					// Transition from hard liquidation to active:
 					let swaps = core::mem::take(liquidation_swaps);
-					let collateral = self.abort_liquidation_swaps(&swaps);
-					self.return_collateral(collateral);
+					self.abort_liquidation_swaps(&swaps);
+					self.liquidation_status = LiquidationStatus::NoLiquidation;
 				} else if ltv < config.ltv_thresholds.hard_liquidation_abort {
 					// Transition from hard liquidation to soft liquidation:
 					let swaps = core::mem::take(liquidation_swaps);
-					let collateral = self.abort_liquidation_swaps(&swaps);
-					self.init_liquidation_swaps(borrower_id, collateral, false);
+					self.abort_liquidation_swaps(&swaps);
+					if let Ok(collateral) = self.prepare_collateral_for_liquidation() {
+						self.init_liquidation_swaps(borrower_id, collateral, false);
+					}
 				}
 			},
 			LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
 				if ltv > config.ltv_thresholds.hard_liquidation {
 					// Transition from soft liquidation to hard liquidation:
 					let swaps = core::mem::take(liquidation_swaps);
-					let collateral = self.abort_liquidation_swaps(&swaps);
-					self.init_liquidation_swaps(borrower_id, collateral, true);
+					self.abort_liquidation_swaps(&swaps);
+					if let Ok(collateral) = self.prepare_collateral_for_liquidation() {
+						self.init_liquidation_swaps(borrower_id, collateral, true);
+					}
 				} else if ltv < config.ltv_thresholds.soft_liquidation_abort {
 					// Transition from soft liquidation to active:
 					let swaps = core::mem::take(liquidation_swaps);
-					let collateral = self.abort_liquidation_swaps(&swaps);
-					self.return_collateral(collateral);
+					self.abort_liquidation_swaps(&swaps);
+					self.liquidation_status = LiquidationStatus::NoLiquidation;
 				}
 			},
 		}
@@ -203,9 +207,7 @@ impl<T: Config> LoanAccount<T> {
 	fn abort_liquidation_swaps(
 		&mut self,
 		liquidation_swaps: &BTreeMap<SwapRequestId, LiquidationSwap>,
-	) -> Vec<AssetCollateralForLoan> {
-		let mut collateral_collected = vec![];
-
+	) {
 		// It should be rare, but not impossible that a partial liquidation fully repays
 		// the loan. We delay settling them until the end of this function to make sure that
 		// all liquidations fees are correctly paid.
@@ -239,12 +241,12 @@ impl<T: Config> LoanAccount<T> {
 					T::Balance::credit_account(&self.borrower_id, *to_asset, excess_amount);
 				}
 
-				collateral_collected.push(AssetCollateralForLoan {
-					loan_id: *loan_id,
-					loan_asset: *to_asset,
-					collateral_asset: *from_asset,
-					collateral_amount: swap_progress.remaining_input_amount,
-				});
+				// Any input funds not yet liquidated are returned to the
+				// account's collateral balance
+				self.collateral
+					.entry(*from_asset)
+					.or_default()
+					.saturating_accrue(swap_progress.remaining_input_amount);
 			} else {
 				log_or_panic!("Failed to abort swap request: {swap_request_id}");
 			}
@@ -253,8 +255,6 @@ impl<T: Config> LoanAccount<T> {
 		for loan_id in fully_repaid_loans {
 			self.settle_loan(*loan_id, true /* via liquidation */);
 		}
-
-		collateral_collected
 	}
 
 	/// Computes the total amount owed in account's loans in USD adjusting for the amount that will
@@ -609,21 +609,6 @@ impl<T: Config> LoanAccount<T> {
 		self.liquidation_status = LiquidationStatus::Liquidating { liquidation_swaps, is_hard };
 	}
 
-	/// Return collateral from aborted liquidation swaps (to be called when no further liquidation
-	/// is required).
-	fn return_collateral(&mut self, liquidation_swaps_collected: Vec<AssetCollateralForLoan>) {
-		for AssetCollateralForLoan { collateral_asset, collateral_amount, .. } in
-			liquidation_swaps_collected
-		{
-			self.collateral
-				.entry(collateral_asset)
-				.or_default()
-				.saturating_accrue(collateral_amount);
-		}
-
-		self.liquidation_status = LiquidationStatus::NoLiquidation;
-	}
-
 	fn settle_loan(&mut self, loan_id: LoanId, via_liquidation: bool) {
 		if let Some(loan) = self.loans.remove(&loan_id) {
 			Pallet::<T>::deposit_event(Event::LoanSettled {
@@ -894,7 +879,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 			if let Ok(ltv) = loan_account.derive_ltv() {
 				let _ = loan_account.derive_and_charge_interest(ltv);
 
-				let new_ltv = if Ok(true) == loan_account.process_auto_top_up(borrower_id, ltv) {
+				let new_ltv = if let Ok(true) = loan_account.process_auto_top_up(borrower_id, ltv) {
 					// A successful topup means we have to re-derive LTV
 					loan_account.derive_ltv()
 				} else {
@@ -903,7 +888,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 
 				// This should always return OK, but let's check anyway as a defensive measure:
 				if let Ok(new_ltv) = new_ltv {
-					loan_account.update_liquidation_status(borrower_id);
+					loan_account.update_liquidation_status(borrower_id, new_ltv);
 				}
 			}
 		});
@@ -940,7 +925,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 			});
 		}
 
-		// Additionally swapp all network fee contributions from fees:
+		// Additionally swap all network fee contributions from fees:
 		for asset in PendingNetworkFees::<T>::iter_keys().collect::<Vec<_>>() {
 			PendingNetworkFees::<T>::mutate(asset, |fee_amount| {
 				// NOTE: if asset is FLIP, we shouldn't need to swap, but it should still work,
@@ -952,8 +937,9 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 					Pallet::<T>::deposit_event(Event::LendingNetworkFeeSwapInitiated {
 						swap_request_id,
 					});
+
+					*fee_amount = 0;
 				}
-				*fee_amount = 0;
 			});
 		}
 	}
