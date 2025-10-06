@@ -2798,13 +2798,9 @@ pub mod pallet {
 			let swap_progress = Self::inspect_swap_request(swap_request_id)?;
 
 			// Cancel any scheduled swaps:
-			{
-				let swap_request = SwapRequests::<T>::get(swap_request_id)?;
+			let swap_request = SwapRequests::<T>::get(swap_request_id)?;
 
-				let SwapRequestState::UserSwap { dca_state, .. } = swap_request.state else {
-					return None;
-				};
-
+			if let SwapRequestState::UserSwap { dca_state, .. } = swap_request.state {
 				for swap_id in dca_state.scheduled_chunks {
 					Self::cancel_swap(swap_id, SwapFailureReason::AbortedFromOrigin);
 				}

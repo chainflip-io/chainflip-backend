@@ -711,6 +711,8 @@ pub mod pallet {
 
 			let lender_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
+			// TODO: should enforce:
+			// - The user does not add amount that's too small
 			ensure!(amount > Zero::zero(), Error::<T>::AmountMustBeNonZero);
 
 			// `try_debit_account` does not account for any unswept open positions, so we sweep to
@@ -743,6 +745,13 @@ pub mod pallet {
 				T::SafeMode::get().withdraw_lender_funds_enabled.contains(&asset),
 				Error::<T>::RemoveLenderFundsDisabled
 			);
+
+			// TODO: should enforce:
+			// 1. The user does not remove amount that's too small
+			// 2. The user does not leave amount in the pool that's too small
+			if let Some(amount) = amount {
+				ensure!(amount > Zero::zero(), Error::<T>::AmountMustBeNonZero);
+			}
 
 			let lender_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 

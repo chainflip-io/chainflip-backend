@@ -100,7 +100,7 @@ impl<T: Config> LoanAccount<T> {
 		// liquidation swaps), but we *do* include any collateral sitting in the account
 		// when determining account's collateralisation ratio.
 
-		// Start with the collateral sitting in the account:
+		// Start with any collateral that may be sitting in the account:
 		let mut total_collateral = self.collateral.clone();
 
 		// Add any collateral in liquidation swaps:
@@ -148,14 +148,8 @@ impl<T: Config> LoanAccount<T> {
 			.try_fold(0u128, |acc, x| Ok(acc.saturating_add(x?)))
 	}
 
-	pub fn update_liquidation_status(&mut self, borrower_id: &T::AccountId) {
+	pub fn update_liquidation_status(&mut self, borrower_id: &T::AccountId, ltv: FixedU64) {
 		let config = LendingConfig::<T>::get();
-
-		let Ok(ltv) = self.derive_ltv() else {
-			// Don't change liquidation status if we can't determine the
-			// collateralisation ratio
-			return;
-		};
 
 		// This will saturate at 100%, but that's good enough (none of our thresholds exceed 100%):
 		let ltv: Permill = ltv.into_clamped_perthing();
@@ -320,7 +314,7 @@ impl<T: Config> LoanAccount<T> {
 		fee_asset: Asset,
 		fee_amount: AssetAmount,
 	) -> Result<BTreeMap<Asset, AssetAmount>, Error<T>> {
-		let mut remaining_fee_amount_in_loan_asset = fee_amount;
+		let mut remaining_fee_amount_in_requested_asset = fee_amount;
 
 		// The actual amounts taken from each collateral asset
 		let mut fees_taken = BTreeMap::new();
@@ -342,7 +336,7 @@ impl<T: Config> LoanAccount<T> {
 			let amount_required_in_collateral_asset = equivalent_amount::<T>(
 				fee_asset,
 				collateral_asset,
-				remaining_fee_amount_in_loan_asset,
+				remaining_fee_amount_in_requested_asset,
 			)?;
 
 			if let Some(available_collateral_amount) = self.collateral.get_mut(&collateral_asset) {
@@ -354,22 +348,22 @@ impl<T: Config> LoanAccount<T> {
 
 				available_collateral_amount.saturating_reduce(amount_charged);
 
-				// Reduce the remaining interest amount to pay in loan asset's terms
+				// Reduce the remaining interest amount to pay in requested asset's terms
 				{
-					let amount_charged_in_loan_asset =
+					let amount_charged_in_requested_asset =
 						if amount_charged == amount_required_in_collateral_asset {
-							remaining_fee_amount_in_loan_asset
+							remaining_fee_amount_in_requested_asset
 						} else {
 							equivalent_amount(collateral_asset, fee_asset, amount_charged)?
 						};
 
-					remaining_fee_amount_in_loan_asset
-						.saturating_reduce(amount_charged_in_loan_asset);
+					remaining_fee_amount_in_requested_asset
+						.saturating_reduce(amount_charged_in_requested_asset);
 				}
 
 				fees_taken.insert(collateral_asset, amount_charged);
 
-				if remaining_fee_amount_in_loan_asset == 0 {
+				if remaining_fee_amount_in_requested_asset == 0 {
 					break;
 				}
 			}
@@ -396,12 +390,14 @@ impl<T: Config> LoanAccount<T> {
 				config.interest_payment_interval_blocks.into() ==
 				0u32.into()
 			{
+				let loan_asset = loan.asset;
+
 				let base_interest_rate = {
-					let utilisation = GeneralLendingPools::<T>::get(loan.asset)
+					let utilisation = GeneralLendingPools::<T>::get(loan_asset)
 						.map(|pool| pool.get_utilisation())
 						.unwrap_or_default();
 
-					config.derive_base_interest_rate_per_payment_interval(loan.asset, utilisation)
+					config.derive_base_interest_rate_per_payment_interval(loan_asset, utilisation)
 				};
 
 				let network_interest_rate =
@@ -413,17 +409,16 @@ impl<T: Config> LoanAccount<T> {
 				// Calculating interest in scaled amounts for better precision
 				let owed_principal = ScaledAmountHP::from_asset_amount(loan.owed_principal);
 
+				// Work out how much interest has accrued in loan's asset terms:
 				let network_interest_amount = owed_principal * network_interest_rate;
 				let low_ltv_penalty_amount = owed_principal * low_ltv_penalty_rate;
 				let pool_interest_amount = owed_principal * base_interest_rate;
 
-				// Record owed interest amounts. We may or may not charge these immediately
+				// Record the accued interest amounts. We may or may not charge these immediately
 				// depending on whether the amounts exceed some threshold.
 				loan.pending_interest.network.saturating_accrue(network_interest_amount);
 				loan.pending_interest.pool.saturating_accrue(pool_interest_amount);
 				loan.pending_interest.low_ltv_penalty.saturating_accrue(low_ltv_penalty_amount);
-
-				let loan_asset = loan.asset;
 
 				let mut charge_fee_if_exceeds_threshold = |fee: &mut ScaledAmountHP| {
 					// Only charge fees if the accumulated amount is greater than some threshold
@@ -469,13 +464,17 @@ impl<T: Config> LoanAccount<T> {
 		Ok(())
 	}
 
-	/// Checks if a top up is required and if so, performs it
-	pub fn process_auto_top_up(&mut self, borrower_id: &T::AccountId) -> Result<(), Error<T>> {
-		// Auto top up is currently only possible from the primary collateral asset
+	/// Checks if a top up is required and if so, performs it. Returns
+	/// boolean indicating whether a topup has been performed.
+	pub fn process_auto_top_up(
+		&mut self,
+		borrower_id: &T::AccountId,
+		ltv: FixedU64,
+	) -> Result<bool, Error<T>> {
 		let config = LendingConfig::<T>::get();
 
-		if self.derive_ltv()? <= config.ltv_thresholds.topup.into() {
-			return Ok(())
+		if ltv <= config.ltv_thresholds.topup.into() {
+			return Ok(false)
 		}
 
 		let top_up_required_in_usd = {
@@ -490,6 +489,7 @@ impl<T: Config> LoanAccount<T> {
 			collateral_required_in_usd.saturating_sub(self.total_collateral_usd_value()?)
 		};
 
+		// Auto top up is currently only possible from the primary collateral asset
 		let top_up_required_in_collateral_asset =
 			amount_from_usd_value::<T>(self.primary_collateral_asset, top_up_required_in_usd)?;
 
@@ -516,9 +516,11 @@ impl<T: Config> LoanAccount<T> {
 			} else {
 				log_or_panic!("Unable to debit after checking balance");
 			}
-		}
 
-		Ok(())
+			Ok(true)
+		} else {
+			Ok(false)
+		}
 	}
 
 	/// Split collateral proportionally to the usd value of each loan (to give each loan a fair
@@ -716,7 +718,15 @@ impl<T: Config> GeneralLoan<T> {
 		// Making sure the user doesn't pay more than the total principal:
 		let repayment_amount = core::cmp::min(provided_amount_after_fees, self.owed_principal);
 
-		self.repay_funds(repayment_amount);
+		GeneralLendingPools::<T>::mutate(self.asset, |maybe_pool| {
+			if let Some(pool) = maybe_pool.as_mut() {
+				pool.receive_repayment(repayment_amount);
+			} else {
+				log_or_panic!("Lending pool must exist for asset {}", self.asset);
+			}
+		});
+
+		self.owed_principal.saturating_reduce(repayment_amount);
 
 		Pallet::<T>::deposit_event(Event::LoanRepaid {
 			loan_id: self.id,
@@ -751,20 +761,6 @@ impl<T: Config> GeneralLoan<T> {
 		} else {
 			LoanRepaymentOutcome::PartiallyRepaid
 		}
-	}
-
-	/// Repays previously borrowed funds to the pool in pool's asset, reducing the owed principal
-	/// amount.
-	fn repay_funds(&mut self, amount: AssetAmount) {
-		GeneralLendingPools::<T>::mutate(self.asset, |maybe_pool| {
-			if let Some(pool) = maybe_pool.as_mut() {
-				pool.receive_repayment(amount);
-			} else {
-				log_or_panic!("CHP Pool must exist for asset {}", self.asset);
-			}
-		});
-
-		self.owed_principal.saturating_reduce(amount);
 	}
 }
 
@@ -897,8 +893,18 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 			// stale oracle)
 			if let Ok(ltv) = loan_account.derive_ltv() {
 				let _ = loan_account.derive_and_charge_interest(ltv);
-				let _ = loan_account.process_auto_top_up(borrower_id);
-				loan_account.update_liquidation_status(borrower_id);
+
+				let new_ltv = if Ok(true) == loan_account.process_auto_top_up(borrower_id, ltv) {
+					// A successful topup means we have to re-derive LTV
+					loan_account.derive_ltv()
+				} else {
+					Ok(ltv)
+				};
+
+				// This should always return OK, but let's check anyway as a defensive measure:
+				if let Ok(new_ltv) = new_ltv {
+					loan_account.update_liquidation_status(borrower_id);
+				}
 			}
 		});
 	}
@@ -1045,8 +1051,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanNotFound)?;
 
 			let Some(loan) = loan_account.loans.get_mut(&loan_id) else {
-				// In rare cases it may be possible for the loan to no longer exist if
-				// e.g. the principal was fully covered by a prior liquidation swap.
 				fail!(Error::<T>::LoanNotFound);
 			};
 
@@ -1057,10 +1061,14 @@ impl<T: Config> LendingApi for Pallet<T> {
 			if let LoanRepaymentOutcome::FullyRepaid { excess_amount } =
 				loan.repay_principal(repayment_amount, false /* no liquidation fee */)
 			{
-				loan_account.settle_loan(loan_id, false /* via liquidation */);
+				loan_account.settle_loan(loan_id, false /* not via liquidation */);
 
 				T::Balance::credit_account(borrower_id, loan_asset, excess_amount);
 			}
+
+			// NOTE: even if we settle the last loan here, we don't remove
+			// the account as there must still be collateral in the account (it is not
+			// released automatically).
 
 			Ok::<_, DispatchError>(())
 		})
@@ -1080,10 +1088,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 				maybe_account,
 				primary_collateral_asset,
 			)?;
-
-			if let Some(primary_collateral_asset) = primary_collateral_asset {
-				loan_account.primary_collateral_asset = primary_collateral_asset;
-			}
 
 			loan_account.try_adding_collateral_from_free_balance(&collateral)?;
 
@@ -1260,7 +1264,7 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 						return;
 					};
 
-					pool.receive_fees(output_amount);
+					pool.receive_fees_in_pools_asset(output_amount);
 				});
 			},
 		}
@@ -1275,7 +1279,7 @@ impl<T: Config> Pallet<T> {
 		if loan_asset == fee_asset {
 			GeneralLendingPools::<T>::mutate(loan_asset, |maybe_pool| {
 				if let Some(pool) = maybe_pool.as_mut() {
-					pool.receive_fees(fee_amount);
+					pool.receive_fees_in_pools_asset(fee_amount);
 				} else {
 					log_or_panic!("Lending Pool must exist for asset {}", loan_asset);
 				}
@@ -1289,7 +1293,6 @@ impl<T: Config> Pallet<T> {
 
 	fn credit_fees_to_network(fee_asset: Asset, fee_amount: AssetAmount) {
 		PendingNetworkFees::<T>::mutate(fee_asset, |pending_amount| {
-			// Low ltv penalty/fee is also credited to network fees
 			pending_amount.saturating_accrue(fee_amount);
 		});
 	}
@@ -1322,6 +1325,8 @@ impl<T: Config> Pallet<T> {
 				account
 			},
 			None => {
+				// If the user has no account, they must provide primary collateral asset
+				// in order for us to create a new account for them
 				let primary_collateral_asset =
 					primary_collateral_asset.ok_or(Error::<T>::InvalidLoanParameters)?;
 
