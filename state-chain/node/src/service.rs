@@ -64,9 +64,6 @@ pub type Service = sc_service::PartialComponents<
 >;
 
 pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
-
-	info!("Starting service with db_config.recreate_onstart: {:?}", config.db_config().recreate_onstart);
-
 	let telemetry = config
 		.telemetry_endpoints
 		.clone()
