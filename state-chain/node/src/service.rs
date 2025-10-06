@@ -35,6 +35,7 @@ use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use state_chain_runtime::{self, opaque::Block, RuntimeApi};
 use std::{sync::Arc, time::Duration};
+use log::info;
 
 pub(crate) type FullClient = sc_service::TFullClient<
 	Block,
@@ -63,6 +64,9 @@ pub type Service = sc_service::PartialComponents<
 >;
 
 pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
+
+	info!("Starting service with db_config.recreate_onstart: {:?}", config.db_config().recreate_onstart);
+
 	let telemetry = config
 		.telemetry_endpoints
 		.clone()
