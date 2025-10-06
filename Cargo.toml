@@ -179,7 +179,7 @@ zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v
 # TODO: remove the commit hash when subxt is released > 0.41.0
 subxt = { git = "https://github.com/paritytech/subxt", rev = "da3ea0b" }
 
-# TODO: remove "nadjib/prune-block-headers" when polkadot-sdk is merged and released
+# TODO: remove "nadjib/prune-block-headers" when polkadot-sdk is merged
 # PolkadotSdk Pallets
 pallet-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", branch = "nadjib/prune-block-headers", default-features = false }
 pallet-authorship = { git = "https://github.com/chainflip-io/polkadot-sdk.git", branch = "nadjib/prune-block-headers", default-features = false }
