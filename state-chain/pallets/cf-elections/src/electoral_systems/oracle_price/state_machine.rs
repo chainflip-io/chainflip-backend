@@ -16,7 +16,8 @@
 
 use core::ops::RangeInclusive;
 use enum_iterator::{all, Sequence};
-use itertools::{Either, Itertools};
+use itertools::Either;
+use sp_runtime::traits::AtLeast32BitUnsigned;
 
 use crate::electoral_systems::oracle_price::primitives::{Seconds, UnixTime};
 
@@ -45,7 +46,7 @@ use proptest_derive::Arbitrary;
 //--------------- configuration trait -----------------
 
 pub trait OPTypes: 'static + Sized + CommonTraits {
-	type StateChainBlockNumber: CommonTraits + Default + MaybeArbitrary;
+	type StateChainBlockNumber: CommonTraits + Default + MaybeArbitrary + AtLeast32BitUnsigned;
 
 	type Price: PriceTrait + CommonTraits + Ord + Default + MaybeArbitrary;
 
@@ -100,6 +101,15 @@ derive_common_traits! {
 	pub enum ExternalPriceChain {
 		Arbitrum,
 		Ethereum
+	}
+}
+
+impl ExternalPriceChain {
+	pub fn statechain_blocks_to_skip_when_querying(self) -> u32 {
+		match self {
+			ExternalPriceChain::Arbitrum => 0,
+			ExternalPriceChain::Ethereum => 1,
+		}
 	}
 }
 
@@ -382,8 +392,20 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 
 	fn get_queries(state: &mut Self::State) -> Vec<Self::Query> {
 		if state.safe_mode_enabled.run(()) == SafeModeStatus::Disabled {
-			// Always create elections for both external chains
 			all::<ExternalPriceChain>()
+				// skip `statechain_blocks_to_skip_when_querying`-blocks when querying external
+				// chain
+				//
+				// This means: for Arb we query on every SC block, for Eth we query every second SC
+				// block.
+				.filter(|chain| {
+					let height = state.get_statechain_block_height.run(());
+					let skip_blocks: T::StateChainBlockNumber =
+						chain.statechain_blocks_to_skip_when_querying().into();
+					let zero: T::StateChainBlockNumber = 0u32.into();
+					let one: T::StateChainBlockNumber = 1u32.into();
+					height % (skip_blocks + one) == zero
+				})
 				.map(|chain| PriceQuery { chain, assets: state.chain_states[chain].get_query() })
 				.collect()
 		} else {

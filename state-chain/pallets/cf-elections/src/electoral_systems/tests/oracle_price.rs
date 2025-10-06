@@ -262,7 +262,7 @@ fn election_lifecycle() {
 			|_| {},
 			vec![
 				election_for_chain_with_all_assets(Arbitrum, Some(UpToDate)),
-				election_for_chain_with_all_assets(Ethereum, None),
+				election_for_chain_with_all_assets(Ethereum, Some(MaybeStale)),
 				current_prices_are(&prices2, UpToDate),
 			],
 		)
@@ -278,7 +278,7 @@ fn election_lifecycle() {
 			|_| {},
 			vec![
 				election_for_chain_with_all_assets(Arbitrum, Some(UpToDate)),
-				election_for_chain_with_all_assets(Ethereum, None),
+				election_for_chain_with_all_assets(Ethereum, Some(Stale)),
 				current_prices_are(&prices2, UpToDate),
 			],
 		)
@@ -342,7 +342,7 @@ fn election_lifecycle() {
 			|_| {},
 			vec![
 				election_for_chain_with_all_assets(Arbitrum, Some(UpToDate)),
-				election_for_chain_with_all_assets(Ethereum, None),
+				election_for_chain_with_all_assets(Ethereum, Some(Stale)),
 				current_prices_are(&prices3, UpToDate),
 			],
 		);
