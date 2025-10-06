@@ -1036,7 +1036,6 @@ fn adding_and_removing_collateral() {
 
 		assert_ok!(LendingPools::remove_collateral(
 			RuntimeOrigin::signed(BORROWER),
-			Some(COLLATERAL_ASSET_1),
 			BTreeMap::from([
 				(COLLATERAL_ASSET_1, INIT_COLLATERAL),
 				(COLLATERAL_ASSET_2, INIT_COLLATERAL_AMOUNT_2),
@@ -1046,7 +1045,6 @@ fn adding_and_removing_collateral() {
 		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::CollateralRemoved {
 			borrower_id: BORROWER,
 			collateral,
-			primary_collateral_asset: COLLATERAL_ASSET_1,
 		}));
 
 		// Account is removed if all of its collateral is removed:
@@ -1968,7 +1966,6 @@ mod safe_mode {
 		let try_removing_collateral = || {
 			LendingPools::remove_collateral(
 				RuntimeOrigin::signed(BORROWER),
-				Some(COLLATERAL_ASSET_1),
 				BTreeMap::from([
 					(COLLATERAL_ASSET_1, COLLATERAL_AMOUNT),
 					(COLLATERAL_ASSET_2, COLLATERAL_AMOUNT),

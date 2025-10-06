@@ -1090,7 +1090,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 	#[transactional]
 	fn remove_collateral(
 		borrower_id: &Self::AccountId,
-		primary_collateral_asset: Option<Asset>,
 		collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<(), DispatchError> {
 		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
@@ -1102,10 +1101,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 				loan_account.liquidation_status == LiquidationStatus::NoLiquidation,
 				Error::<T>::LiquidationInProgress
 			);
-
-			if let Some(primary_collateral_asset) = primary_collateral_asset {
-				loan_account.primary_collateral_asset = primary_collateral_asset;
-			}
 
 			for (asset, amount) in &collateral {
 				ensure!(
@@ -1139,7 +1134,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 			Self::deposit_event(Event::CollateralRemoved {
 				borrower_id: borrower_id.clone(),
 				collateral,
-				primary_collateral_asset: loan_account.primary_collateral_asset,
 			});
 
 			if loan_account.collateral.is_empty() && loan_account.loans.is_empty() {

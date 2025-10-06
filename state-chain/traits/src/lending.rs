@@ -91,7 +91,6 @@ pub trait LendingApi {
 
 	fn remove_collateral(
 		borrower_id: &Self::AccountId,
-		primary_collateral_asset: Option<Asset>,
 		collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<(), DispatchError>;
 }

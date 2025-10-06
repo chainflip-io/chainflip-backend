@@ -381,7 +381,6 @@ pub mod pallet {
 		CollateralRemoved {
 			borrower_id: T::AccountId,
 			collateral: BTreeMap<Asset, AssetAmount>,
-			primary_collateral_asset: Asset,
 		},
 		LoanCreated {
 			loan_id: LoanId,
@@ -791,16 +790,11 @@ pub mod pallet {
 		#[pallet::weight(Weight::zero())]
 		pub fn remove_collateral(
 			origin: OriginFor<T>,
-			primary_collateral_asset: Option<Asset>,
 			collateral: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			<Self as LendingApi>::remove_collateral(
-				&borrower_id,
-				primary_collateral_asset,
-				collateral,
-			)
+			<Self as LendingApi>::remove_collateral(&borrower_id, collateral)
 		}
 
 		#[pallet::call_index(9)]
