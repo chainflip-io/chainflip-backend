@@ -15,11 +15,7 @@ export const TransactionMetadata = Struct({
 export const ChainNameCodec = str;
 export const VersionCodec = str;
 
-// Example values
-// const amount = 1234;
-// const collateralAsset = { asset: 'Btc' as InternalAsset, scAsset: 'Bitcoin-BTC' };
-// const borrowAsset = { asset: 'Usdc' as InternalAsset, scAsset: 'Ethereum-USDC' };
-// For now hardcoded in the SC. It should be network dependent.
+// Default values
 const expiryBlock = 10000;
 const chainName = 'Chainflip-Development';
 const version = '0';
@@ -109,7 +105,8 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   // Examples of some calls. Bear in mind that some of these calls will
   // only execute succesfully one time, as after that they will already
   // have a registered role, you then need to deregister. Then doing a
-  // different call depending on the current role
+  // different call depending on the current role to avoid failure on
+  // consecutive test runs.
   // const call = chainflip.tx.liquidityProvider.registerLpAccount();
   // const call = chainflip.tx.swapping.registerAsBroker();
   // let call = chainflip.tx.system.remark([]);
