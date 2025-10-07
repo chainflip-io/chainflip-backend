@@ -262,7 +262,7 @@ fn election_lifecycle() {
 			|_| {},
 			vec![
 				election_for_chain_with_all_assets(Arbitrum, Some(UpToDate)),
-				election_for_chain_with_all_assets(Ethereum, None),
+				election_for_chain_with_all_assets(Ethereum, Some(UpToDate)),
 				current_prices_are(&prices2, UpToDate),
 			],
 		)
@@ -278,7 +278,7 @@ fn election_lifecycle() {
 			|_| {},
 			vec![
 				election_for_chain_with_all_assets(Arbitrum, Some(UpToDate)),
-				election_for_chain_with_all_assets(Ethereum, None),
+				election_for_chain_with_all_assets(Ethereum, Some(MaybeStale)),
 				current_prices_are(&prices2, UpToDate),
 			],
 		)
@@ -342,7 +342,7 @@ fn election_lifecycle() {
 			|_| {},
 			vec![
 				election_for_chain_with_all_assets(Arbitrum, Some(UpToDate)),
-				election_for_chain_with_all_assets(Ethereum, None),
+				election_for_chain_with_all_assets(Ethereum, Some(Stale)),
 				current_prices_are(&prices3, UpToDate),
 			],
 		);
@@ -430,7 +430,7 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 				)),
 			),
 		])
-		// this means that we're now querying only arbitrum and all prices are up to date
+		// we're still querying Arb and Eth both
 		.test_on_finalize(
 			&vec![()],
 			|_| {},
@@ -440,7 +440,8 @@ fn election_lifecycles_handles_missing_assets_and_disparate_timestamps() {
 					Some(all::<ChainlinkAssetpair>().zip(repeat(UpToDate)).collect()),
 				)),
 				Check::<OraclePriceES>::election_for_chain_ongoing_with_asset_status((
-					Ethereum, None,
+					Ethereum,
+					Some(all::<ChainlinkAssetpair>().zip(repeat(MaybeStale)).collect()),
 				)),
 				Check::<OraclePriceES>::electoral_price_api_returns(
 					prices4assets
