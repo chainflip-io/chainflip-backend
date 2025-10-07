@@ -45,16 +45,19 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{
 	generic::SignedPayload,
-	helpers_128bit::multiply_by_rational_with_rounding,
 	traits::{BlakeTwo256, DispatchInfoOf, Hash, SignedExtension},
 };
 
-pub const REFERENCE_HUBDOT_PRICE_IN_USD: PolkadotBalance = 3_400_000u128; //3.4 usd
+pub const REFERENCE_HUBDOT_PRICE_IN_USD: PolkadotBalance = 4_000_000u128; //4 usd
+pub const ONE_DOT: PolkadotBalance = 10_000_000_000u128;
 
 impl Chain for Assethub {
 	const NAME: &'static str = "Assethub";
 	const GAS_ASSET: Self::ChainAsset = assets::hub::Asset::HubDot;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount =
+		REFERENCE_HUBDOT_PRICE_IN_USD;
+	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = ONE_DOT;
 
 	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;
@@ -74,23 +77,6 @@ impl Chain for Assethub {
 	type TransactionRef = PolkadotTransactionId;
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
-
-	fn input_asset_amount_using_reference_gas_asset_price(
-		input_asset: Self::ChainAsset,
-		required_gas: Self::ChainAmount,
-	) -> Self::ChainAmount {
-		match input_asset {
-			assets::hub::Asset::HubUsdc | assets::hub::Asset::HubUsdt =>
-				multiply_by_rational_with_rounding(
-					required_gas,
-					REFERENCE_HUBDOT_PRICE_IN_USD,
-					10_000_000_000u128,
-					sp_runtime::Rounding::Up,
-				)
-				.unwrap_or(0u128),
-			assets::hub::Asset::HubDot => required_gas,
-		}
-	}
 }
 
 /// The payload being signed in transactions.

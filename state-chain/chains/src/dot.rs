@@ -348,6 +348,9 @@ impl Chain for Polkadot {
 	const GAS_ASSET: Self::ChainAsset = assets::dot::Asset::Dot;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const DEPRECATED: bool = true;
+	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount =
+		crate::hub::REFERENCE_HUBDOT_PRICE_IN_USD;
+	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = crate::hub::ONE_DOT;
 
 	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;
@@ -367,13 +370,6 @@ impl Chain for Polkadot {
 	type TransactionRef = PolkadotTransactionId;
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
-
-	fn input_asset_amount_using_reference_gas_asset_price(
-		_input_asset: Self::ChainAsset,
-		required_gas: Self::ChainAmount,
-	) -> Self::ChainAmount {
-		required_gas
-	}
 }
 
 pub type ResetProxyAccountNonce = bool;

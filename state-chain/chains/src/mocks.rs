@@ -82,6 +82,9 @@ impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";
 	const GAS_ASSET: Self::ChainAsset = assets::eth::Asset::Eth;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount =
+		crate::eth::REFERENCE_ETH_PRICE_IN_USD;
+	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = crate::eth::ONE_ETH;
 
 	type ChainCrypto = MockEthereumChainCrypto;
 
@@ -102,16 +105,6 @@ impl Chain for MockEthereum {
 	type TransactionRef = u32;
 	type ReplayProtectionParams = ();
 	type ReplayProtection = EvmReplayProtection;
-
-	fn input_asset_amount_using_reference_gas_asset_price(
-		input_asset: Self::ChainAsset,
-		required_gas: Self::ChainAmount,
-	) -> Self::ChainAmount {
-		<Ethereum as Chain>::input_asset_amount_using_reference_gas_asset_price(
-			input_asset,
-			required_gas,
-		)
-	}
 }
 
 impl ToHumanreadableAddress for u64 {

@@ -10,7 +10,7 @@ import { depositLiquidity } from 'shared/deposit_liquidity';
 import { rangeOrder } from 'shared/range_order';
 import { deferredPromise, handleSubstrateError, runWithTimeoutAndExit } from 'shared/utils';
 import { aliceKeyringPair } from 'shared/polkadot_keyring';
-import { createPolkadotVault } from './setup_vaults';
+import { createPolkadotVault } from 'commands/setup_vaults';
 
 export async function rotateAndFund(
   api: DisposableApiPromise,

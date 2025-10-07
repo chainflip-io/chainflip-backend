@@ -93,7 +93,7 @@ where
 		}
 
 		// Recomputing everyone's shares taking the new total amount into account:
-		self.lender_shares = distribute_proportionally(
+		self.lender_shares = utils::distribute_proportionally(
 			Perquintill::one().deconstruct(),
 			self.lender_shares.iter().map(|(id, share)| (id, share.deconstruct().into())),
 		)
@@ -122,7 +122,7 @@ where
 	}
 
 	/// Receives fees in the pool's asset (after they have been swapped)
-	pub fn receive_fees(&mut self, amount: AssetAmount) {
+	pub fn receive_fees_in_pools_asset(&mut self, amount: AssetAmount) {
 		// Fees increase both the total and available amount
 		self.available_amount.saturating_accrue(amount);
 		self.total_amount.saturating_accrue(amount);
@@ -209,36 +209,51 @@ mod tests {
 			[(LENDER_1, Perquintill::from_percent(50)), (LENDER_2, Perquintill::from_percent(50))],
 		);
 
-		chp_pool.add_funds(&LENDER_3, 300);
+		chp_pool.add_funds(&LENDER_1, 200);
 
-		assert_eq!(chp_pool.total_amount, 900);
-		assert_eq!(chp_pool.available_amount, 900);
+		assert_eq!(chp_pool.total_amount, 800);
+		assert_eq!(chp_pool.available_amount, 800);
 		check_shares(
 			&chp_pool,
 			[
-				(LENDER_1, Perquintill::from_rational(1u64, 3u64)),
-				(LENDER_2, Perquintill::from_rational(1u64, 3u64)),
-				(LENDER_3, Perquintill::from_rational(1u64, 3u64)),
+				(LENDER_1, Perquintill::from_rational(5u64, 8)),
+				(LENDER_2, Perquintill::from_rational(3u64, 8)),
+			],
+		);
+
+		chp_pool.add_funds(&LENDER_3, 300);
+
+		assert_eq!(chp_pool.total_amount, 1100);
+		assert_eq!(chp_pool.available_amount, 1100);
+		check_shares(
+			&chp_pool,
+			[
+				(LENDER_1, Perquintill::from_rational(5u64, 11u64)),
+				(LENDER_2, Perquintill::from_rational(3u64, 11u64)),
+				(LENDER_3, Perquintill::from_rational(3u64, 11u64)),
 			],
 		);
 
 		// --- Start removing funds here ---
 		assert_eq!(chp_pool.remove_funds(&LENDER_2, None), Ok(300));
-		assert_eq!(chp_pool.total_amount, 600);
-		assert_eq!(chp_pool.available_amount, 600);
+		assert_eq!(chp_pool.total_amount, 800);
+		assert_eq!(chp_pool.available_amount, 800);
 
 		check_shares(
 			&chp_pool,
-			[(LENDER_1, Perquintill::from_percent(50)), (LENDER_3, Perquintill::from_percent(50))],
+			[
+				(LENDER_1, Perquintill::from_rational(5u64, 8)),
+				(LENDER_3, Perquintill::from_rational(3u64, 8)),
+			],
 		);
 
 		assert_eq!(chp_pool.remove_funds(&LENDER_3, None), Ok(300));
-		assert_eq!(chp_pool.total_amount, 300);
-		assert_eq!(chp_pool.available_amount, 300);
+		assert_eq!(chp_pool.total_amount, 500);
+		assert_eq!(chp_pool.available_amount, 500);
 
 		check_shares(&chp_pool, [(LENDER_1, Perquintill::from_percent(100))]);
 
-		assert_eq!(chp_pool.remove_funds(&LENDER_1, None), Ok(300));
+		assert_eq!(chp_pool.remove_funds(&LENDER_1, None), Ok(500));
 		assert_eq!(chp_pool.total_amount, 0);
 		assert_eq!(chp_pool.available_amount, 0);
 

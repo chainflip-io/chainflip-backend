@@ -19,22 +19,18 @@
 
 mod core_lending_pool;
 mod general_lending;
-mod general_lending_pool;
+mod utils;
 
 use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
-	InterestRateConfiguration, LendingConfiguration, LendingPoolConfiguration, LtvThresholds,
-	NetworkFeeContributions, RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan,
-	RpcLoanAccount,
+	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolConfiguration,
+	LtvThresholds, NetworkFeeContributions, RpcLendingPool, RpcLiquidationStatus,
+	RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 };
-pub use general_lending_pool::LendingPool;
-// Temporarily exposing this for a migration
-pub use core_lending_pool::{PendingLoan, ScaledAmount};
 
 pub mod migrations;
-
 pub mod weights;
 
 #[cfg(test)]
@@ -144,6 +140,7 @@ pub enum PalletConfigUpdate {
 	SetFeeSwapIntervalBlocks(u32),
 	SetInterestPaymentIntervalBlocks(u32),
 	SetFeeSwapThresholdUsd(AssetAmount),
+	SetInterestCollectionThresholdUsd(AssetAmount),
 	SetOracleSlippageForSwaps {
 		soft_liquidation: BasisPoints,
 		hard_liquidation: BasisPoints,
@@ -183,119 +180,13 @@ pub enum LoanUsage {
 	Boost(PrewitnessedDepositId),
 }
 
-use utils::distribute_proportionally;
-
-mod utils {
-
-	use super::*;
-	use frame_support::sp_runtime::{
-		helpers_128bit::multiply_by_rational_with_rounding, Permill, Rounding,
-	};
-
-	/// Boosted amount is the amount provided by the pool plus boost fee,
-	/// (and the sum of all boosted amounts from each participating pool
-	/// must be equal the deposit amount being boosted). The fee is payed
-	/// per boosted amount, and so here we multiply by fee_bps directly.
-	pub(super) fn fee_from_boosted_amount(
-		amount_to_boost: AssetAmount,
-		fee_bps: u16,
-	) -> AssetAmount {
-		use cf_primitives::BASIS_POINTS_PER_MILLION;
-		let fee_permill = Permill::from_parts(fee_bps as u32 * BASIS_POINTS_PER_MILLION);
-
-		fee_permill * amount_to_boost
-	}
-
-	/// Unlike `fee_from_boosted_amount`, the boosted amount is not known here
-	/// so we have to calculate it first from the provided amount in order to
-	/// calculate the boost fee amount.
-	pub(super) fn fee_from_provided_amount(
-		provided_amount: AssetAmount,
-		fee_bps: u16,
-	) -> Result<AssetAmount, &'static str> {
-		// Compute `boosted = provided / (1 - fee)`
-		let boosted_amount = {
-			const BASIS_POINTS_MAX: u16 = 10_000;
-
-			let inverse_fee = BASIS_POINTS_MAX.saturating_sub(fee_bps);
-
-			multiply_by_rational_with_rounding(
-				provided_amount,
-				BASIS_POINTS_MAX as u128,
-				inverse_fee as u128,
-				Rounding::Down,
-			)
-			.ok_or("invalid fee")?
-		};
-
-		let fee_amount = boosted_amount.checked_sub(provided_amount).ok_or("invalid fee")?;
-
-		Ok(fee_amount)
-	}
-
-	/// Distributes exactly `total_to_distribute` proportionally to the `distribution` map.
-	pub(super) fn distribute_proportionally<'a, K, N, I>(
-		total_to_distribute: N,
-		distribution: I,
-	) -> BTreeMap<&'a K, N>
-	where
-		N: Clone
-			+ From<u64>
-			+ Copy
-			+ core::ops::AddAssign
-			+ frame_support::sp_runtime::Saturating
-			+ frame_support::sp_runtime::traits::AtLeast32BitUnsigned,
-		K: Ord,
-		u128: From<N> + UniqueSaturatedInto<N>,
-		I: Iterator<Item = (&'a K, u128)> + Clone,
-	{
-		use nanorand::Rng;
-
-		let total = distribution
-			.clone()
-			.try_fold(0u128, |acc, (_, v)| acc.checked_add(v))
-			// Overflow should be unexpected, but this ensures we don't create money out of thin
-			// air (division by zero is handled gracefully below too):
-			.unwrap_or_default();
-
-		let mut total_distributed: N = 0u32.into();
-
-		let mut distribution: BTreeMap<_, _> = distribution
-			.map(|(k, v)| {
-				let amount: N = multiply_by_rational_with_rounding(
-					total_to_distribute.into(),
-					v,
-					total,
-					Rounding::Down,
-				)
-				.unwrap_or_default()
-				.unique_saturated_into();
-
-				total_distributed += amount;
-				(k, amount)
-			})
-			.collect();
-
-		// Due to always rounding down we may have a small amount left over, give it a random key
-		let remaining_to_distribute = total_to_distribute.saturating_sub(total_distributed);
-		let lucky_index = {
-			// Convert to u64 by ignoring high bits
-			let seed = u128::from(total_to_distribute) as u64;
-			nanorand::WyRand::new_seed(seed).generate_range(0..distribution.len())
-		};
-		if let Some((_lp_id, amount)) = distribution.iter_mut().nth(lucky_index) {
-			amount.saturating_accrue(remaining_to_distribute);
-		}
-
-		distribution
-	}
-}
-
 pub struct LendingConfigDefault {}
+
+const DEFAULT_ORIGINATION_FEE: Permill = Permill::from_parts(100); // 1 bps
 
 const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	default_pool_config: LendingPoolConfiguration {
-		origination_fee: Permill::from_parts(100), // 1 bps
+		origination_fee: DEFAULT_ORIGINATION_FEE,
 		liquidation_fee: Permill::from_parts(500), // 5 bps
 		interest_rate_curve: InterestRateConfiguration {
 			interest_at_zero_utilisation: Permill::from_percent(2),
@@ -327,6 +218,7 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	fee_swap_interval_blocks: 10,
 	interest_payment_interval_blocks: 10,
 	fee_swap_threshold_usd: 20_000_000, // don't swap fewer than 20 USD
+	interest_collection_threshold_usd: 100_000, // don't collect less than 0.1 USD
 	soft_liquidation_max_oracle_slippage: 50, // 0.5%
 	hard_liquidation_max_oracle_slippage: 500, // 5%
 	liquidation_swap_chunk_size_usd: 10_000_000_000, //10k USD
@@ -678,6 +570,9 @@ pub mod pallet {
 						PalletConfigUpdate::SetFeeSwapThresholdUsd(amount_threshold) => {
 							config.fee_swap_threshold_usd = *amount_threshold;
 						},
+						PalletConfigUpdate::SetInterestCollectionThresholdUsd(amount_threshold) => {
+							config.interest_collection_threshold_usd = *amount_threshold;
+						},
 						PalletConfigUpdate::SetOracleSlippageForSwaps {
 							soft_liquidation,
 							hard_liquidation,
@@ -816,6 +711,8 @@ pub mod pallet {
 
 			let lender_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
+			// TODO: should enforce:
+			// - The user does not add amount that's too small
 			ensure!(amount > Zero::zero(), Error::<T>::AmountMustBeNonZero);
 
 			// `try_debit_account` does not account for any unswept open positions, so we sweep to
@@ -848,6 +745,13 @@ pub mod pallet {
 				T::SafeMode::get().withdraw_lender_funds.enabled(&asset),
 				Error::<T>::RemoveLenderFundsDisabled
 			);
+
+			// TODO: should enforce:
+			// 1. The user does not remove amount that's too small
+			// 2. The user does not leave amount in the pool that's too small
+			if let Some(amount) = amount {
+				ensure!(amount > Zero::zero(), Error::<T>::AmountMustBeNonZero);
+			}
 
 			let lender_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
@@ -1276,273 +1180,4 @@ pub fn get_boost_pool_details<T: Config>(
 			)
 		})
 		.collect()
-}
-
-pub mod migration_support {
-
-	use core_lending_pool::PendingLoan;
-	use frame_support::sp_runtime::Perquintill;
-
-	use super::*;
-
-	pub mod old {
-
-		use super::*;
-
-		pub type OwedAmountScaled = OwedAmount<ScaledAmount>;
-
-		#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-		pub struct BoostPool<AccountId> {
-			// Fee charged by the pool
-			pub fee_bps: BasisPoints,
-			// Total available amount (not currently used in any boost)
-			pub available_amount: ScaledAmount,
-			// Mapping from booster to the available amount they own in `available_amount`
-			pub amounts: BTreeMap<AccountId, ScaledAmount>,
-			// Boosted deposits awaiting finalisation and how much of them is owed to which booster
-			pub pending_boosts:
-				BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId, OwedAmountScaled>>,
-			// Stores boosters who have indicated that they want to stop boosting along with
-			// the pending deposits that they have to wait to be finalised
-			pub pending_withdrawals: BTreeMap<AccountId, BTreeSet<PrewitnessedDepositId>>,
-		}
-	}
-
-	pub fn migrate_boost_pools<T: Config>(
-		asset: Asset,
-		tier: BoostPoolTier,
-		boost_pool: old::BoostPool<T::AccountId>,
-	) {
-		let core_pool_id = NextCorePoolId::<T>::get();
-		NextCorePoolId::<T>::set(CorePoolId(core_pool_id.0 + 1));
-
-		let (core_pool, pool_contributions) =
-			deconstruct_legacy_boost_pool::<T>(core_pool_id, boost_pool);
-
-		for (deposit_id, contributions) in pool_contributions {
-			BoostedDeposits::<T>::mutate_exists(asset, deposit_id, |all_contributions| {
-				let all_contributions = all_contributions.get_or_insert_default();
-
-				all_contributions.insert(tier, contributions);
-			})
-		}
-
-		BoostPools::<T>::insert(asset, tier, BoostPool { fee_bps: tier, core_pool_id });
-
-		CorePools::<T>::insert(asset, core_pool_id, core_pool);
-	}
-
-	fn deconstruct_legacy_boost_pool<T: Config>(
-		core_pool_id: CorePoolId,
-		old_pool: old::BoostPool<T::AccountId>,
-	) -> (CoreLendingPool<T::AccountId>, BTreeMap<PrewitnessedDepositId, BoostPoolContribution>) {
-		let mut next_loan_id = 0;
-
-		use frame_support::sp_runtime::{PerThing, Rounding};
-
-		let mut boost_contributions: BTreeMap<PrewitnessedDepositId, BoostPoolContribution> =
-			Default::default();
-
-		let pending_loans: BTreeMap<_, _> = old_pool
-			.pending_boosts
-			.into_iter()
-			.map(|(deposit_id, owed_amounts)| {
-				// Each pending boost is assigned a loan id:
-				let loan_id = next_loan_id;
-				next_loan_id += 1;
-
-				let total_boosted_amount: ScaledAmount =
-					owed_amounts.values().map(|a| a.total).sum();
-
-				let shares: BTreeMap<_, _> = owed_amounts
-					.iter()
-					.map(|(booster_id, OwedAmount { total: amount, .. })| {
-						let share = Perquintill::from_rational_with_rounding::<u128>(
-							(*amount).into(),
-							total_boosted_amount.into(),
-							// Round down to ensure the sum of shares does not exceed 1
-							Rounding::Down,
-						)
-						.unwrap_or_default();
-
-						(booster_id.clone(), share)
-					})
-					.collect();
-
-				boost_contributions.insert(
-					deposit_id,
-					BoostPoolContribution {
-						core_pool_id,
-						loan_id: loan_id.into(),
-						boosted_amount: total_boosted_amount.into_asset_amount(),
-						network_fee: 0, // keeping things simple
-					},
-				);
-
-				(loan_id.into(), PendingLoan { usage: LoanUsage::Boost(deposit_id), shares })
-			})
-			.collect();
-
-		let pending_withdrawals = old_pool
-			.pending_withdrawals
-			.into_iter()
-			.map(|(acc_id, deposit_ids)| {
-				let loan_ids: BTreeSet<CoreLoanId> = deposit_ids
-					.into_iter()
-					.filter_map(|deposit_id| {
-						boost_contributions.get(&deposit_id).map(|c| c.loan_id)
-					})
-					.collect();
-
-				(acc_id, loan_ids)
-			})
-			.collect();
-
-		(
-			CoreLendingPool {
-				next_loan_id: next_loan_id.into(),
-				available_amount: old_pool.available_amount,
-				amounts: old_pool.amounts,
-				pending_loans,
-				pending_withdrawals,
-			},
-			boost_contributions,
-		)
-	}
-
-	#[cfg(test)]
-	mod tests {
-
-		use super::*;
-
-		use mocks::{BOOSTER_1, BOOSTER_2, BOOSTER_3};
-
-		use old::OwedAmountScaled;
-
-		const AMOUNT_1: ScaledAmount = ScaledAmount::from_raw(200_000);
-		const AMOUNT_2: ScaledAmount = ScaledAmount::from_raw(300_000);
-
-		const DEPOSIT_1: PrewitnessedDepositId = PrewitnessedDepositId(7);
-		const DEPOSIT_2: PrewitnessedDepositId = PrewitnessedDepositId(8);
-
-		const LOAN_1: CoreLoanId = CoreLoanId(0); // Corresponds to DEPOSIT_1
-		const LOAN_2: CoreLoanId = CoreLoanId(1); // Corresponds to DEPOSIT_2
-
-		fn old_pool_mock() -> old::BoostPool<u64> {
-			let pending_boosts = BTreeMap::from_iter([
-				(
-					DEPOSIT_1,
-					BTreeMap::from_iter([
-						(
-							BOOSTER_1,
-							OwedAmountScaled {
-								total: ScaledAmount::from_raw(20_000),
-								fee: ScaledAmount::from_raw(10),
-							},
-						),
-						(
-							BOOSTER_2,
-							OwedAmountScaled {
-								total: ScaledAmount::from_raw(10_000),
-								fee: ScaledAmount::from_raw(5),
-							},
-						),
-						(
-							BOOSTER_3,
-							OwedAmountScaled {
-								total: ScaledAmount::from_raw(50_000),
-								fee: ScaledAmount::from_raw(15),
-							},
-						),
-					]),
-				),
-				(
-					DEPOSIT_2,
-					BTreeMap::from_iter([(
-						BOOSTER_1,
-						OwedAmountScaled {
-							total: ScaledAmount::from_raw(50_000),
-							fee: ScaledAmount::from_raw(25),
-						},
-					)]),
-				),
-			]);
-
-			let pending_withdrawals =
-				BTreeMap::from_iter([(BOOSTER_3, BTreeSet::from_iter([DEPOSIT_1]))]);
-
-			old::BoostPool {
-				fee_bps: 5,
-				available_amount: AMOUNT_1 + AMOUNT_2,
-				amounts: BTreeMap::from_iter([(BOOSTER_1, AMOUNT_1), (BOOSTER_2, AMOUNT_2)]),
-				pending_boosts,
-				pending_withdrawals,
-			}
-		}
-
-		#[test]
-		fn test_core_pool_from_legacy_boost_pool() {
-			const CORE_POOL_ID: CorePoolId = CorePoolId(3);
-
-			let (core_pool, contributions) =
-				deconstruct_legacy_boost_pool::<mocks::Test>(CORE_POOL_ID, old_pool_mock());
-
-			assert_eq!(
-				core_pool,
-				CoreLendingPool {
-					next_loan_id: LOAN_2 + 1,
-					available_amount: AMOUNT_1 + AMOUNT_2,
-					amounts: BTreeMap::from_iter([(BOOSTER_1, AMOUNT_1), (BOOSTER_2, AMOUNT_2)]),
-					pending_loans: BTreeMap::from_iter([
-						(
-							LOAN_1,
-							PendingLoan {
-								usage: LoanUsage::Boost(DEPOSIT_1),
-								shares: BTreeMap::from_iter([
-									(BOOSTER_1, Perquintill::from_float(0.250)),
-									(BOOSTER_2, Perquintill::from_float(0.125)),
-									(BOOSTER_3, Perquintill::from_float(0.625))
-								])
-							}
-						),
-						(
-							LOAN_2,
-							PendingLoan {
-								usage: LoanUsage::Boost(DEPOSIT_2),
-								shares: BTreeMap::from_iter([(BOOSTER_1, Perquintill::one())])
-							}
-						),
-					]),
-					pending_withdrawals: BTreeMap::from_iter([(
-						BOOSTER_3,
-						BTreeSet::from_iter([LOAN_1])
-					)]),
-				}
-			);
-
-			assert_eq!(
-				contributions,
-				BTreeMap::from_iter([
-					(
-						DEPOSIT_1,
-						BoostPoolContribution {
-							core_pool_id: CORE_POOL_ID,
-							loan_id: LOAN_1,
-							boosted_amount: 80,
-							network_fee: 0
-						}
-					),
-					(
-						DEPOSIT_2,
-						BoostPoolContribution {
-							core_pool_id: CORE_POOL_ID,
-							loan_id: LOAN_2,
-							boosted_amount: 50,
-							network_fee: 0
-						}
-					)
-				])
-			);
-		}
-	}
 }

@@ -254,7 +254,7 @@ where
 			deposit_chain_block_height: height.into(),
 			deposit_address: EncodedAddress::from_chain_account::<C>(self.deposit_address, network)
 				.into(),
-			amount: self.amount.into().into(),
+			amount: Into::<u128>::into(self.amount).into(),
 			asset: self.asset.into(),
 			deposit_details: self.deposit_details.into_any_chain(),
 		}
@@ -288,7 +288,7 @@ where
 			deposit_chain_block_height: height.into(),
 			input_asset: self.input_asset.into(),
 			output_asset: self.output_asset,
-			amount: self.deposit_amount.into().into(),
+			amount: Into::<u128>::into(self.deposit_amount).into(),
 			destination_address: self.destination_address.into(),
 			ccm_deposit_metadata: self.deposit_metadata,
 			deposit_details: self.deposit_details.into_any_chain(),

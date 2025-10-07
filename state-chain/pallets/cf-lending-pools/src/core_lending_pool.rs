@@ -28,7 +28,6 @@ use frame_support::{
 };
 use nanorand::{Rng, WyRand};
 use scale_info::TypeInfo;
-use scaled_amount::amount_from_share;
 use sp_std::{vec, vec::Vec};
 
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
@@ -42,40 +41,39 @@ mod scaled_amount {
 	use cf_primitives::AssetAmount;
 	use frame_support::sp_runtime::{traits::Saturating, SaturatedConversion};
 
-	const SCALE_FACTOR: u128 = 1000;
 	/// Represents 1/SCALE_FACTOR of Asset amount as a way to gain extra precision.
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
-	pub struct ScaledAmount {
+	pub struct ScaledAmount<const SCALE_FACTOR: u128> {
 		val: u128,
 	}
 
-	impl PartialOrd for ScaledAmount {
+	impl<const SCALE_FACTOR: u128> PartialOrd for ScaledAmount<SCALE_FACTOR> {
 		fn partial_cmp(&self, other: &Self) -> Option<scale_info::prelude::cmp::Ordering> {
 			self.val.partial_cmp(&other.val)
 		}
 	}
 
-	impl Copy for ScaledAmount {}
+	impl<const SCALE_FACTOR: u128> Copy for ScaledAmount<SCALE_FACTOR> {}
 
-	impl core::iter::Sum for ScaledAmount {
+	impl<const SCALE_FACTOR: u128> core::iter::Sum for ScaledAmount<SCALE_FACTOR> {
 		fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
 			iter.fold(ScaledAmount::default(), |acc, x| acc + x)
 		}
 	}
 
-	impl From<ScaledAmount> for u128 {
-		fn from(amount: ScaledAmount) -> Self {
+	impl<const SCALE_FACTOR: u128> From<ScaledAmount<SCALE_FACTOR>> for u128 {
+		fn from(amount: ScaledAmount<SCALE_FACTOR>) -> Self {
 			amount.val
 		}
 	}
 
-	impl From<u128> for ScaledAmount {
+	impl<const SCALE_FACTOR: u128> From<u128> for ScaledAmount<SCALE_FACTOR> {
 		fn from(val: u128) -> Self {
 			ScaledAmount { val }
 		}
 	}
 
-	impl core::ops::Add<Self> for ScaledAmount {
+	impl<const SCALE_FACTOR: u128> core::ops::Add<Self> for ScaledAmount<SCALE_FACTOR> {
 		type Output = Self;
 
 		fn add(self, rhs: Self) -> Self::Output {
@@ -83,7 +81,7 @@ mod scaled_amount {
 		}
 	}
 
-	impl ScaledAmount {
+	impl<const SCALE_FACTOR: u128> ScaledAmount<SCALE_FACTOR> {
 		pub fn from_asset_amount(amount: AssetAmount) -> Self {
 			let amount: u128 = amount.saturated_into();
 			amount.saturating_mul(SCALE_FACTOR).into()
@@ -104,6 +102,15 @@ mod scaled_amount {
 				.checked_div(SCALE_FACTOR)
 				.expect("Scale factor is not 0")
 				.saturated_into()
+		}
+
+		/// Removes and returns the "whole" part leaving only the fractional part
+		pub fn take_non_fractional_part(&mut self) -> AssetAmount {
+			let amount_taken = self.into_asset_amount();
+
+			self.saturating_reduce(Self::from_asset_amount(amount_taken));
+
+			amount_taken
 		}
 
 		pub fn checked_sub(self, rhs: Self) -> Option<Self> {
@@ -132,13 +139,21 @@ mod scaled_amount {
 		}
 	}
 
-	pub fn amount_from_share(total: ScaledAmount, share: Perquintill) -> ScaledAmount {
-		ScaledAmount::from_raw(share.mul_floor(total.as_raw()))
+	impl<const SCALE_FACTOR: u128> core::ops::Mul<Perquintill> for ScaledAmount<SCALE_FACTOR> {
+		type Output = Self;
+
+		fn mul(self, rhs: Perquintill) -> Self::Output {
+			ScaledAmount::from_raw(rhs.mul_floor(self.as_raw()))
+		}
 	}
 }
 
-// NOTE: temporarily exposing this to help with migration
-pub use scaled_amount::ScaledAmount;
+/// Low precision version of scaled amount that's sufficient for representing boost fees
+/// (boost could also use ScaledAmountHP, but that would require migration)
+type ScaledAmount = scaled_amount::ScaledAmount<1000>;
+
+/// High precision version of scaled amount
+pub type ScaledAmountHP = scaled_amount::ScaledAmount<1_000_000_000>;
 
 define_wrapper_type!(CoreLoanId, u64, extra_derives: Ord, PartialOrd);
 
@@ -302,7 +317,7 @@ where
 			let mut amounts_to_credit: BTreeMap<_, _> = shares
 				.iter()
 				.map(|(lp_id, share)| {
-					let lp_amount = amount_from_share(repayment_amount, *share);
+					let lp_amount = repayment_amount * (*share);
 					total_credited = total_credited.saturating_add(lp_amount);
 
 					(lp_id.clone(), lp_amount)

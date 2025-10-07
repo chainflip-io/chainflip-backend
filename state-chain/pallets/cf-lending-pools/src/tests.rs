@@ -155,6 +155,7 @@ fn can_update_all_config_items() {
 		const NEW_ORACLE_SLIPPAGE_SOFT_LIQUIDATION: BasisPoints = 43;
 		const NEW_ORACLE_SLIPPAGE_HARD_LIQUIDATION: BasisPoints = 44;
 		const NEW_ORACLE_SLIPPAGE_FEE_SWAP: BasisPoints = 45;
+		const NEW_INTEREST_COLLECTION_THRESHOLD_USD: AssetAmount = 46;
 
 		const NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD: AssetAmount = 30_000_000_000;
 
@@ -188,6 +189,11 @@ fn can_update_all_config_items() {
 		const UPDATE_FEE_SWAP_THRESHOLD_USD: PalletConfigUpdate =
 			PalletConfigUpdate::SetFeeSwapThresholdUsd(NEW_FEE_SWAP_THRESHOLD_USD);
 
+		const UPDATE_INTEREST_COLLECTION_THRESHOLD_USD: PalletConfigUpdate =
+			PalletConfigUpdate::SetInterestCollectionThresholdUsd(
+				NEW_INTEREST_COLLECTION_THRESHOLD_USD,
+			);
+
 		const UPDATE_ORACLE_SLIPPAGE_FOR_SWAPS: PalletConfigUpdate =
 			PalletConfigUpdate::SetOracleSlippageForSwaps {
 				soft_liquidation: NEW_ORACLE_SLIPPAGE_SOFT_LIQUIDATION,
@@ -213,7 +219,8 @@ fn can_update_all_config_items() {
 				UPDATE_INTEREST_PAYMENT_INTERVAL_BLOCKS,
 				UPDATE_FEE_SWAP_THRESHOLD_USD,
 				UPDATE_ORACLE_SLIPPAGE_FOR_SWAPS,
-				UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD
+				UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD,
+				UPDATE_INTEREST_COLLECTION_THRESHOLD_USD
 			]
 			.try_into()
 			.unwrap()
@@ -231,6 +238,7 @@ fn can_update_all_config_items() {
 				fee_swap_interval_blocks: NEW_FEE_SWAP_INTERVAL_BLOCKS,
 				interest_payment_interval_blocks: NEW_INTEREST_PAYMENT_INTERVAL_BLOCKS,
 				fee_swap_threshold_usd: NEW_FEE_SWAP_THRESHOLD_USD,
+				interest_collection_threshold_usd: NEW_INTEREST_COLLECTION_THRESHOLD_USD,
 				soft_liquidation_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_SOFT_LIQUIDATION,
 				hard_liquidation_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_HARD_LIQUIDATION,
 				liquidation_swap_chunk_size_usd: NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD,

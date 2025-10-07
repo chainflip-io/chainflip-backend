@@ -2725,6 +2725,7 @@ impl_runtime_apis! {
 				fee_swap_interval_blocks: config.fee_swap_interval_blocks,
 				interest_payment_interval_blocks: config.interest_payment_interval_blocks,
 				fee_swap_threshold_usd: config.fee_swap_threshold_usd.into(),
+				interest_collection_threshold_usd: config.interest_collection_threshold_usd.into(),
 				liquidation_swap_chunk_size_usd: config.liquidation_swap_chunk_size_usd.into(),
 				soft_liquidation_max_oracle_slippage: config.soft_liquidation_max_oracle_slippage,
 				hard_liquidation_max_oracle_slippage: config.hard_liquidation_max_oracle_slippage,

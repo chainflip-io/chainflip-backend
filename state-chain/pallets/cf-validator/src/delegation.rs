@@ -325,13 +325,19 @@ pub fn distribute<T: Config>(
 	total: T::Amount,
 	settle: impl Fn(&T::AccountId, T::Amount),
 ) {
+	use frame_support::sp_runtime::traits::Zero;
+	if total.is_zero() {
+		return;
+	}
 	let epoch_index = Pallet::<T>::epoch_index();
 
 	if let Some(operator) = ValidatorToOperator::<T>::get(epoch_index, validator) {
 		if let Some(snapshot) = DelegationSnapshots::<T>::get(epoch_index, &operator) {
-			snapshot
-				.distribute(total, Pallet::<T>::bond())
-				.for_each(|(account, amount)| settle(account, amount));
+			snapshot.distribute(total, Pallet::<T>::bond()).for_each(|(account, amount)| {
+				if amount > Zero::zero() {
+					settle(account, amount);
+				}
+			});
 		} else {
 			settle(validator, total);
 			cf_runtime_utilities::log_or_panic!(
