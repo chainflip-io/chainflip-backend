@@ -813,29 +813,26 @@ fn can_build_eip_712_payload_validate_unsigned() {
 	new_test_ext().execute_with(|| {
 		let system_call = frame_system::Call::remark { remark: vec![] };
 		let runtime_call: <Test as crate::Config>::RuntimeCall = system_call.clone().into();
-		println!("runtime_call str: {:?}", scale_info::prelude::format!("{:?}", runtime_call));
 
 		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000 };
 		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 		let signer: EvmAddress = EvmAddress::from_str(from_str).unwrap();
 		let user_signature_data: UserSignatureData = UserSignatureData::Ethereum {
             signature: hex_literal::hex!(
-                "890aee4af6e311e20d4fd2edfcc7ae861bc54c4c8ed32f5a9b04cf3779ac83935767e6f103236bfabf07f5fca3e48cd39ed8e995805ad50544d263da4dc475861c"
+                "q712d40241c7ad17d589a3dba2e46ab9a1279c184383f85c91f6dede41774b5f4067a875634d227973e6d63e9651ca24c7025a0b80091807d79c05df1ba7355271b"
             ).into(),
             signer,
             sig_type: EthSigType::Eip712,
         };
 
 		let validate = validate_unsigned::<Test>(
-			TransactionSource::External, // irrelevant
+			TransactionSource::External, // unused
 			&Call::non_native_signed_call {
 				call: Box::new(runtime_call.clone()),
 				transaction_metadata,
 				user_signature_data,
 			},
 		);
-		println!("Validate result: {:?}", validate);
-
 		assert!(validate.is_ok());
 	});
 }
@@ -845,7 +842,6 @@ fn can_build_eip_712_payload() {
 	new_test_ext().execute_with(|| {
 		let system_call = frame_system::Call::remark { remark: vec![] };
 		let runtime_call: <Test as crate::Config>::RuntimeCall = system_call.clone().into();
-		println!("runtime_call str: {:?}", scale_info::prelude::format!("{:?}", runtime_call));
 
 		let chain_name = "Chainflip-Development";
 		let version = "0";
