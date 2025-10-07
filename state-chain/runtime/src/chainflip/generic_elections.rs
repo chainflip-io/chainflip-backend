@@ -297,16 +297,16 @@ pub fn initial_state(
 		},),
 		unsynchronised_settings: (OraclePriceSettings {
 			arbitrum: ExternalChainSettings {
-				up_to_date_timeout: Seconds(60),
+				up_to_date_timeout: Seconds(60 * 60),
 				maybe_stale_timeout: Seconds(30),
-				minimal_price_deviation: BasisPoints(10),
+				minimal_price_deviation: BasisPoints(5),
 				up_to_date_timeout_overrides: up_to_date_timeout_overrides.clone(),
 				maybe_stale_timeout_overrides: maybe_stale_timeout_overrides.clone(),
 			},
 			ethereum: ExternalChainSettings {
-				up_to_date_timeout: Seconds(60),
+				up_to_date_timeout: Seconds(60 * 60),
 				maybe_stale_timeout: Seconds(30),
-				minimal_price_deviation: BasisPoints(10),
+				minimal_price_deviation: BasisPoints(5),
 				up_to_date_timeout_overrides: up_to_date_timeout_overrides.clone(),
 				maybe_stale_timeout_overrides: maybe_stale_timeout_overrides.clone(),
 			},
