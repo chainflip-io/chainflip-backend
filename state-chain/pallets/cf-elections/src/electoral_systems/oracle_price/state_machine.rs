@@ -16,7 +16,8 @@
 
 use core::ops::RangeInclusive;
 use enum_iterator::{all, Sequence};
-use itertools::{Either, Itertools};
+use itertools::Either;
+use sp_runtime::traits::AtLeast32BitUnsigned;
 
 use crate::electoral_systems::oracle_price::primitives::{Seconds, UnixTime};
 
@@ -45,7 +46,7 @@ use proptest_derive::Arbitrary;
 //--------------- configuration trait -----------------
 
 pub trait OPTypes: 'static + Sized + CommonTraits {
-	type StateChainBlockNumber: CommonTraits + Default + MaybeArbitrary;
+	type StateChainBlockNumber: CommonTraits + Default + MaybeArbitrary + AtLeast32BitUnsigned;
 
 	type Price: PriceTrait + CommonTraits + Ord + Default + MaybeArbitrary;
 
@@ -383,15 +384,14 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 	fn get_queries(state: &mut Self::State) -> Vec<Self::Query> {
 		if state.safe_mode_enabled.run(()) == SafeModeStatus::Disabled {
 			all::<ExternalPriceChain>()
-				.take_while_inclusive(|chain| {
-					// return true if at least one asset does not exist OR is not `UpToDate`
-					all::<T::AssetPair>().any(|asset| {
-						state.chain_states[*chain]
-							.price
-							.get(&asset)
-							.map(|asset_state| asset_state.price_status != PriceStatus::UpToDate)
-							.unwrap_or(true)
-					})
+				.filter(|chain| {
+					match chain {
+						ExternalPriceChain::Arbitrum => true,
+						ExternalPriceChain::Ethereum => {
+							// only query every second block for ethereum
+							state.get_statechain_block_height.run(()) % 2u32.into() == 0u32.into()
+						},
+					}
 				})
 				.map(|chain| PriceQuery { chain, assets: state.chain_states[chain].get_query() })
 				.collect()
