@@ -816,7 +816,7 @@ fn can_batch() {
 		let remark_call = frame_system::Call::<Test>::remark { remark: vec![42] };
 		let calls = vec![remark_call.into()];
 
-		assert_ok!(Environment::batch(RuntimeOrigin::signed(ALICE), calls.clone(), false));
+		assert_ok!(Environment::batch(RuntimeOrigin::signed(ALICE), calls.clone()));
 
 		assert!(System::events().iter().any(|record| matches!(
 			record.event,

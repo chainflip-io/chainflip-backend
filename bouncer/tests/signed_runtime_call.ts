@@ -22,7 +22,6 @@ const expiryBlock = 10000;
 // For now hardcoded in the SC. It should be network dependent.
 const chainName = 'Chainflip-Development';
 const version = '0';
-const atomic = false;
 
 export function encodeDomainDataToSign(
   payload: Uint8Array,
@@ -47,10 +46,11 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   const remarkCall = chainflip.tx.system.remark([42]);
   const calls = [remarkCall];
-  // Try a call batch that fails
+  // Try a call batch that fails - it will still emit the NonNativeSignedCall event
+  // but have an error in the dispatch_result.
   // const calls = [remarkCall, chainflip.tx.validator.forceRotation()];
 
-  const batchCall = chainflip.tx.environment.batch(calls, atomic);
+  const batchCall = chainflip.tx.environment.batch(calls);
   const batchRuntimeCall = batchCall.method;
   const encodedCall = chainflip.createType('Call', batchRuntimeCall).toU8a();
   const hexRuntimeCall = u8aToHex(encodedCall);

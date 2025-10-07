@@ -20,7 +20,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use crate::submit_runtime_call::{
-	dispatch_user_calls, weight_and_dispatch_class, TransactionMetadata, UserSignatureData,
+	batch_all, weight_and_dispatch_class, TransactionMetadata, UserSignatureData,
 };
 use cf_chains::{
 	btc::{
@@ -50,10 +50,9 @@ use cf_traits::{
 };
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::{DispatchErrorWithPostInfo, DispatchResult, GetDispatchInfo},
+	dispatch::{DispatchResult, GetDispatchInfo},
 	pallet_prelude::{InvalidTransaction, *},
-	sp_runtime::{traits::Get, AccountId32, DispatchError, TransactionOutcome},
-	storage::with_transaction,
+	sp_runtime::{traits::Get, AccountId32, DispatchError},
 	traits::{IsSubType, StorageVersion, UnfilteredDispatchable},
 	unsigned::{TransactionValidity, ValidateUnsigned},
 };
@@ -372,15 +371,12 @@ pub mod pallet {
 		NonNativeSignedCall {
 			signer_account: T::AccountId,
 			dispatch_result: DispatchResultWithPostInfo,
+			runtime_call: <T as pallet::Config>::RuntimeCall,
 		},
-		/// Batch of dispatches completed fully with no error.
-		BatchCompleted { signer_account: T::AccountId, dispatch_result: DispatchResultWithPostInfo },
-		/// Batch of dispatches failed executing calls before it failed at the specified index.
-		BatchFailed {
+		// Runtime Call Batch was dispatched
+		BatchCompleted {
 			signer_account: T::AccountId,
-			dispatch_error: DispatchErrorWithPostInfo,
-			failure_index: u32,
-			dispatch_result: DispatchResultWithPostInfo,
+			runtime_call: Vec<<T as pallet::Config>::RuntimeCall>,
 		},
 	}
 
@@ -631,8 +627,9 @@ pub mod pallet {
 		// We might want to add a check that the signer has balance > 0 as part of
 		// the validate_unsigned.
 		/// Allows for submitting unsigned runtime calls where validation is done on
-		/// the user_signature_data instead. This allows for off-chain signing of
-		/// runtime calls for non-native wallets, such as EVM and Solana wallets.
+		/// the `user_signature_data` instead. This adds off-chain signing support
+		/// for non-native wallets, such as EVM and Solana wallets. If the inner call
+		/// fails the extrinsic still executes succesfully and consumes the nonce.
 		#[pallet::call_index(10)]
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
@@ -657,20 +654,20 @@ pub mod pallet {
 			// Increment the account nonce to prevent replay attacks
 			frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
 
-			let origin = frame_system::RawOrigin::Signed(signer_account.clone()).into();
-			let dispatch_result = (*call).dispatch_bypass_filter(origin);
+			let signer_account_origin =
+				frame_system::RawOrigin::Signed(signer_account.clone()).into();
+
+			let dispatch_result = (*call.clone()).dispatch_bypass_filter(signer_account_origin);
 
 			Self::deposit_event(Event::<T>::NonNativeSignedCall {
 				signer_account,
 				dispatch_result,
+				runtime_call: *call,
 			});
-
 			Ok(())
 		}
 
-		/// Allows for batching signed runtime calls. Atomic batches will execute as an
-		/// all-or-nothing. Non-atomic will execute as best-effort, it won't execute subsequent
-		/// calls after a call fails.
+		/// Executes an atomic batch of runtime calls. It will execute as an all-or-nothing.
 		#[pallet::call_index(11)]
 		#[pallet::weight({
 			let (dispatch_weight, dispatch_class) = weight_and_dispatch_class::<T>(calls);
@@ -680,17 +677,16 @@ pub mod pallet {
 		pub fn batch(
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::RuntimeCall>,
-			atomic: bool,
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 
-			let _ = dispatch_user_calls::<T>(
-				calls.clone(),
-				account_id.clone(),
-				atomic,
-				T::WeightInfo::batch,
-			)
-			.map_err(|_| Error::<T>::FailedToExecuteBatch)?;
+			let _ = batch_all::<T>(account_id.clone(), calls.clone(), T::WeightInfo::batch)
+				.map_err(|_| Error::<T>::FailedToExecuteBatch)?;
+
+			Self::deposit_event(Event::<T>::BatchCompleted {
+				signer_account: account_id,
+				runtime_call: calls,
+			});
 
 			Ok(())
 		}

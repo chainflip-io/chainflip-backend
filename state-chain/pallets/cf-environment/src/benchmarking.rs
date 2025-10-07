@@ -233,7 +233,7 @@ mod benchmarks {
 		let calls = vec![frame_system::Call::remark { remark: vec![] }.into(); c as usize];
 
 		#[extrinsic_call]
-		batch(frame_system::RawOrigin::Signed(caller.clone()), calls, false);
+		batch(frame_system::RawOrigin::Signed(caller.clone()), calls);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);

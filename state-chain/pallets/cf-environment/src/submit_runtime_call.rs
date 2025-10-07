@@ -16,9 +16,7 @@
 
 use super::*;
 use frame_support::{
-	dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo},
-	traits::UnfilteredDispatchable,
-	weights::Weight,
+	dispatch::DispatchErrorWithPostInfo, traits::UnfilteredDispatchable, weights::Weight,
 };
 
 pub const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
@@ -68,88 +66,27 @@ impl UserSignatureData {
 	}
 }
 
-/// Dispatches a call from the user account. If `atomic` is true, uses transactional semantics
-/// where if any call dispatch returns `Err`, all storage updates are rolled back. If `atomic`
-/// is false, executes calls without transaction protection and always returns Ok, executing
-/// as best effort.
+/// Executes a batch of calls and returns the total weight or an error with an associated call
+/// index. It will error early as soon as a call fails.
 /// Inspiration from pallet_utility
 /// https://paritytech.github.io/polkadot-sdk/master/pallet_utility/pallet/struct.Pallet.html
-pub(crate) fn dispatch_user_calls<T: Config>(
-	calls: Vec<<T as Config>::RuntimeCall>,
+pub(crate) fn batch_all<T: Config>(
 	signer_account: T::AccountId,
-	atomic: bool,
+	calls: Vec<<T as Config>::RuntimeCall>,
 	weight_fn: fn(u32) -> Weight,
 ) -> DispatchResultWithPostInfo {
+	let mut weight = Weight::zero();
 	let calls_len = calls.len();
 	if calls_len > BATCHED_CALL_LIMITS {
 		return Err(Error::<T>::TooManyCalls.into());
 	}
-
-	if atomic {
-		let result = with_transaction(|| {
-			let result = execute_batch_calls::<T>(calls, signer_account.clone(), weight_fn);
-			match result {
-				Ok(weight) => TransactionOutcome::Commit(Ok(Some(weight).into())),
-				Err((_, err)) => TransactionOutcome::Rollback(Err(err)),
-			}
-		});
-		match result {
-			Ok(_) => pallet::Pallet::<T>::deposit_event(Event::BatchCompleted {
-				signer_account,
-				dispatch_result: result,
-			}),
-			// Revert the entire batch
-			Err(err) => pallet::Pallet::<T>::deposit_event(Event::BatchFailed {
-				signer_account,
-				dispatch_error: err,
-				failure_index: 0_u32,
-				dispatch_result: result,
-			}),
-		};
-		result
-	} else {
-		let result = execute_batch_calls::<T>(calls, signer_account.clone(), weight_fn);
-		match result {
-			Ok(weight) => {
-				let dispatch_result = Ok(Some(weight).into());
-				pallet::Pallet::<T>::deposit_event(Event::BatchCompleted {
-					signer_account,
-					dispatch_result,
-				});
-				dispatch_result
-			},
-			Err((failure_index, err)) => {
-				let weight = err.post_info.actual_weight.unwrap_or_default();
-				let dispatch_result = Ok(Some(weight).into());
-				// Best effort execution
-				pallet::Pallet::<T>::deposit_event(Event::BatchFailed {
-					signer_account,
-					dispatch_error: err,
-					failure_index: failure_index as u32,
-					dispatch_result,
-				});
-				dispatch_result
-			},
-		}
-	}
-}
-
-/// Executes a batch of calls and returns the total weight or an error with an associated call
-/// index.
-pub(crate) fn execute_batch_calls<T: Config>(
-	calls: Vec<<T as Config>::RuntimeCall>,
-	signer_account: T::AccountId,
-	weight_fn: fn(u32) -> Weight,
-) -> Result<Weight, (usize, DispatchErrorWithPostInfo)> {
-	let mut weight = Weight::zero();
-	let calls_len = calls.len();
 
 	for (index, call) in calls.into_iter().enumerate() {
 		let info = call.get_dispatch_info();
 
 		let origin = frame_system::RawOrigin::Signed(signer_account.clone()).into();
 
-		// Don't allow users to nest calls.
+		// Don't allow nested calls.
 		if let Some(Call::non_native_signed_call { .. }) | Some(Call::batch { .. }) =
 			call.is_sub_type()
 		{
@@ -158,7 +95,7 @@ pub(crate) fn execute_batch_calls<T: Config>(
 				post_info: Some(base_weight.saturating_add(weight)).into(),
 				error: DispatchError::Other("Nested runtime call batches not allowed"),
 			};
-			return Err((index, err));
+			return Err(err);
 		}
 
 		let result = call.dispatch_bypass_filter(origin);
@@ -166,16 +103,17 @@ pub(crate) fn execute_batch_calls<T: Config>(
 		weight =
 			weight.saturating_add(frame_support::dispatch::extract_actual_weight(&result, &info));
 
-		if let Err(mut err) = result {
+		result.map_err(|mut err| {
+			// Take the weight of this function itself into account.
 			let base_weight = weight_fn(index.saturating_add(1) as u32);
+			// Return the actual used weight + base_weight of this call.
 			err.post_info = Some(base_weight.saturating_add(weight)).into();
-			return Err((index, err));
-		};
+			err
+		})?;
 	}
 
 	let base_weight = weight_fn(calls_len as u32);
-	let total_weight = base_weight.saturating_add(weight);
-	Ok(total_weight)
+	Ok(Some(base_weight.saturating_add(weight)).into())
 }
 
 /// `signer is not technically necessary but is added as part of the metadata so
