@@ -34,10 +34,10 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthAmount};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthAmount, SwapId};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
-	Funding, RedemptionCheck, SpawnAccount,
+	FundAccount, Funding, FundingSource, RedemptionCheck, SpawnAccount,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -319,7 +319,7 @@ impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled);
 pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
-	use cf_primitives::BroadcastId;
+	use cf_primitives::{BroadcastId, SwapId};
 	use cf_traits::RedemptionCheck;
 	use frame_support::{pallet_prelude::*, storage::with_transaction, Parameter};
 	use frame_system::pallet_prelude::*;
@@ -483,7 +483,7 @@ pub mod pallet {
 		/// An account has been funded with some FLIP.
 		Funded {
 			account_id: AccountId<T>,
-			tx_hash: EthTransactionHash,
+			source: FundingSource,
 			funds_added: FlipBalance<T>,
 			// may include rewards earned
 			total_balance: FlipBalance<T>,
@@ -648,7 +648,12 @@ pub mod pallet {
 			tx_hash: EthTransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			Self::fund_account(account_id, funder, amount, tx_hash);
+			Self::fund_account(
+				account_id,
+				Some(funder),
+				amount,
+				FundingSource::EthTransaction { tx_hash },
+			);
 			Ok(())
 		}
 
@@ -998,9 +1003,9 @@ pub mod pallet {
 			match deposit_and_call.deposit {
 				EthereumDeposit::FlipToSCGateway { amount } => Self::fund_account(
 					caller_account_id.clone(),
-					caller,
+					Some(caller),
 					amount.into(),
-					eth_tx_hash,
+					FundingSource::EthTransaction { tx_hash: eth_tx_hash },
 				),
 
 				// nothing to do
@@ -1124,28 +1129,6 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 	}
-
-	fn fund_account(
-		account_id: AccountId<T>,
-		funder: EthereumAddress,
-		amount: FlipBalance<T>,
-		tx_hash: EthTransactionHash,
-	) {
-		let total_balance = Self::add_funds_to_account(&account_id, amount);
-
-		if RestrictedAddresses::<T>::contains_key(funder) {
-			RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
-				map.entry(funder).and_modify(|balance| *balance += amount).or_insert(amount);
-			});
-		}
-
-		Self::deposit_event(Event::Funded {
-			account_id,
-			tx_hash,
-			funds_added: amount,
-			total_balance,
-		});
-	}
 }
 
 /// Ensure we clean up account specific items that definitely won't be required once the account
@@ -1223,6 +1206,35 @@ impl<T: Config> SpawnAccount for Pallet<T> {
 				.as_ref(),
 		))
 		.map_err(|_| Error::<T>::SubAccountIdDerivationFailed)?)
+	}
+}
+
+impl<T: Config> FundAccount for Pallet<T> {
+	type AccountId = T::AccountId;
+	type Amount = T::Amount;
+
+	fn fund_account(
+		account_id: Self::AccountId,
+		funder: Option<EthereumAddress>,
+		amount: Self::Amount,
+		source: FundingSource,
+	) {
+		let total_balance = Self::add_funds_to_account(&account_id, amount);
+
+		if let Some(funder) = funder {
+			if RestrictedAddresses::<T>::contains_key(funder) {
+				RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
+					map.entry(funder).and_modify(|balance| *balance += amount).or_insert(amount);
+				});
+			}
+		}
+
+		Self::deposit_event(Event::Funded {
+			account_id,
+			source,
+			funds_added: amount,
+			total_balance,
+		});
 	}
 }
 
