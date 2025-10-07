@@ -1224,6 +1224,15 @@ impl pallet_cf_elections::Config<Instance1> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 }
 
+impl pallet_cf_elections::Config<Instance4> for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = <Arbitrum as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
+	type RuntimeEvent = RuntimeEvent;
+	type ElectoralSystemRunner = chainflip::arbitrum_elections::ArbitrumElectoralSystemRunner;
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+	type ElectoralSystemConfiguration = chainflip::arbitrum_elections::ElectoralSystemConfiguration;
+	type SafeMode = RuntimeSafeMode;
+}
+
 impl pallet_cf_trading_strategy::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;
@@ -1383,6 +1392,8 @@ mod runtime {
 	pub type GenericElections = pallet_cf_elections;
 	#[runtime::pallet_index(56)]
 	pub type EthereumElections = pallet_cf_elections<Instance1>;
+	#[runtime::pallet_index(57)]
+	pub type ArbitrumElections = pallet_cf_elections<Instance4>;
 }
 
 /// The address format for describing accounts.

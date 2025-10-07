@@ -723,6 +723,7 @@ where
 		BitcoinElections(_) |
 		GenericElections(_) |
 		EthereumElections(_) |
+		ArbitrumElections(_) |
 		TradingStrategy(_) => {},
 		LendingPools(_) => {},
 	};
