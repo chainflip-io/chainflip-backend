@@ -78,6 +78,8 @@ impl Chain for Arbitrum {
 	TypeInfo,
 	Serialize,
 	Deserialize,
+	PartialOrd,
+	Ord,
 )]
 #[codec(mel_bound())]
 pub struct ArbitrumTrackedData {
