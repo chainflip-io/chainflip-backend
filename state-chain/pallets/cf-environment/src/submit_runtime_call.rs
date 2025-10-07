@@ -187,10 +187,10 @@ const EIP712_RUNTIMECALL_TYPE_STR: &str = "RuntimeCall(bytes value)";
 
 /// `signer is not technically necessary but is added as part of the metadata so
 /// we add it so is displayed separately to the user in the wallet.
-/// TODO: This is a temporary simple implementation for testing purposes.
-/// Full logic to be implemented in PRO-2535.
-pub(crate) fn build_eip_712_payload(
-	call: Vec<u8>,
+/// TODO: This is a temporary simplified implementation for basic EIP-712 support
+/// in a specific format. Full logic to be implemented in PRO-2535.
+pub(crate) fn build_eip_712_payload<T: Config>(
+	call: <T as Config>::RuntimeCall,
 	chain_name: &str,
 	version: &str,
 	transaction_metadata: TransactionMetadata,
@@ -237,7 +237,7 @@ pub(crate) fn build_eip_712_payload(
 
 	let runtime_call_tokens = vec![
 		Token::FixedBytes(runtime_call_type_hash.as_bytes().to_vec()),
-		Token::FixedBytes(Keccak256::hash(&call).0.to_vec()),
+		Token::FixedBytes(Keccak256::hash(&call.encode()).0.to_vec()),
 	];
 	let encoded_runtime_call = encode(&runtime_call_tokens);
 	let runtime_call_hash = Keccak256::hash(&encoded_runtime_call);
@@ -292,7 +292,12 @@ pub(crate) fn validate_unsigned<T: Config>(
 	_source: TransactionSource,
 	call: &Call<T>,
 ) -> TransactionValidity {
-	if let Call::non_native_signed_call { call, transaction_metadata, user_signature_data } = call {
+	if let Call::non_native_signed_call {
+		call: inner_call,
+		transaction_metadata,
+		user_signature_data,
+	} = call
+	{
 		// Check if payload hasn't expired
 		if frame_system::Pallet::<T>::block_number() >= transaction_metadata.expiry_block.into() {
 			return InvalidTransaction::Stale.into();
@@ -314,7 +319,7 @@ pub(crate) fn validate_unsigned<T: Config>(
 
 		// Signature check
 		let chanflip_network_name = ChainflipNetworkName::<T>::get();
-		let serialized_calls: Vec<u8> = call.encode();
+		let serialized_calls: Vec<u8> = inner_call.encode();
 
 		let build_domain_data = || -> Vec<u8> {
 			[
@@ -348,8 +353,8 @@ pub(crate) fn validate_unsigned<T: Config>(
 						let prefix_bytes = prefix.as_bytes();
 						[prefix_bytes, &domain_data].concat()
 					},
-					EthSigType::Eip712 => build_eip_712_payload(
-						call.encode(),
+					EthSigType::Eip712 => build_eip_712_payload::<T>(
+						(**inner_call).clone(),
 						chanflip_network_name.as_str(),
 						UNSIGNED_BATCH_VERSION,
 						*transaction_metadata,
@@ -378,20 +383,4 @@ pub(crate) fn validate_unsigned<T: Config>(
 	} else {
 		InvalidTransaction::Call.into()
 	}
-}
-
-#[test]
-fn can_build_eip_712_payload_basic() {
-	use std::str::FromStr;
-
-	let call: Vec<u8> = vec![0x02, 0x0b, 0x04, 0x00, 0x00, 0x04, 0x2a, 0x00];
-	let chain_name = "Chainflip-Development";
-	let version = "0";
-	let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000 };
-	let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-	let signer: EvmAddress = EvmAddress::from_str(from_str).unwrap();
-
-	let payload = build_eip_712_payload(call, chain_name, version, transaction_metadata, signer);
-	println!("EIP-712 Payload: {:?}", payload);
-	println!("EIP hash {:?}", Keccak256::hash(&payload).0);
 }

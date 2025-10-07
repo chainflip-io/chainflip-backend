@@ -100,7 +100,6 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::{get_latest_oracle_prices, OraclePrice},
 	price::PriceAsset,
 };
-use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
 	AskBidMap, HistoricalEarnedFees, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
@@ -2729,11 +2728,8 @@ impl_runtime_apis! {
 		}
 
 		fn cf_eip_data(
-			_caller: EthereumAddress,
-			// _call: RuntimeCall,
-			_transaction_metadata: TransactionMetadata,
-		) -> Result<String, DispatchErrorWithMessage> {
-			Ok( pallet_cf_environment::ChainflipNetworkName::<Runtime>::get().as_str().to_string())
+		) -> Result< cf_primitives::ChainflipNetwork, DispatchErrorWithMessage> {
+			Ok( pallet_cf_environment::ChainflipNetworkName::<Runtime>::get())
 		}
 	}
 

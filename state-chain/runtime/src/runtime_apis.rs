@@ -37,7 +37,6 @@ use codec::{Decode, Encode};
 use core::{ops::Range, str};
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_elections::electoral_systems::oracle_price::price::PriceAsset;
-use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::BoostPoolDetails;
@@ -790,17 +789,9 @@ decl_runtime_apis!(
 		fn cf_active_delegations(
 			account: Option<AccountId32>,
 		) -> Vec<DelegationSnapshot<AccountId32, FlipBalance>>;
-		fn cf_eip_data(
-			caller: EthereumAddress,
-			// call: RuntimeCall,
-			transaction_metadata: TransactionMetadata,
-		) -> Result<String, DispatchErrorWithMessage>;
 		#[changed_in(8)]
-		fn cf_eip_data(
-			caller: EthereumAddress,
-			// call: RuntimeCall,
-			transaction_metadata: TransactionMetadata,
-		);
+		fn cf_eip_data();
+		fn cf_eip_data() -> Result<cf_primitives::ChainflipNetwork, DispatchErrorWithMessage>;
 	}
 );
 

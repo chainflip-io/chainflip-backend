@@ -16,11 +16,11 @@ export const ChainNameCodec = str;
 export const VersionCodec = str;
 
 // Example values
-const expiryBlock = 10000;
 // const amount = 1234;
 // const collateralAsset = { asset: 'Btc' as InternalAsset, scAsset: 'Bitcoin-BTC' };
 // const borrowAsset = { asset: 'Usdc' as InternalAsset, scAsset: 'Ethereum-USDC' };
 // For now hardcoded in the SC. It should be network dependent.
+const expiryBlock = 10000;
 const chainName = 'Chainflip-Development';
 const version = '0';
 const atomic = false;
@@ -49,10 +49,10 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   }
   console.log('EVM whale address', ethWallet.address);
 
-  // EIP-712 manual signing to try out encodings manually.
+  // // EIP-712 manual signing to try out encodings manually.
   // const domainTemp = {
-  //   name: "Chainflip-Development",
-  //   version: '0',
+  //   name: chainName,
+  //   version,
   // };
 
   // const typesTemp = {
@@ -61,7 +61,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   //     { name: 'nonce', type: 'uint32' },
   //     { name: 'expiryBlock', type: 'uint32' },
   //   ],
-  //   RuntimeCall: [{ name: 'value', type: 'bytes' }],
+  //   RuntimeCall: [{ name: 'call', type: 'string' }],
   //   Transaction: [
   //     { name: 'Call', type: 'RuntimeCall' },
   //     { name: 'Metadata', type: 'Metadata' },
@@ -70,7 +70,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   // const messageTemp = {
   //   Call: {
-  //     value: "0x020b040000042a00",
+  //     call: "RuntimeCall::System(Call::remark { remark: [] })",
   //   },
   //   Metadata: {
   //     from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
@@ -86,15 +86,16 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   // console.log('EIP-712 Encoded Payload:', encodedPayload);
   // const hashTemp = ethers.TypedDataEncoder.hash(domainTemp, typesTemp, messageTemp);
   // console.log('EIP-712 Hash:', hashTemp);
-  // const hashDomain = ethers.TypedDataEncoder.hashDomain(domainTemp);
-  // console.log('EIP-712 Domain Hash:', hashDomain);
+  // console.log("EIP-712 Hash uint8Array",  hexToU8a(hashTemp));
+  // const hashDomainTemp = ethers.TypedDataEncoder.hashDomain(domainTemp);
+  // console.log('EIP-712 Domain Hash:', hashDomainTemp);
   // const messageHashTemp = ethers.TypedDataEncoder.from(typesTemp).hash(messageTemp);
   // console.log('EIP-712 Message Hash:', messageHashTemp);
 
-  // console.log('Transaction hash:', ethers.TypedDataEncoder.hashStruct('Transaction', typesTemp, messageTemp));
-  // console.log('RuntimeCall hash:', ethers.TypedDataEncoder.hashStruct('RuntimeCall', typesTemp, messageTemp.Call));
-  // console.log('Metadata hash:', ethers.TypedDataEncoder.hashStruct('Metadata', typesTemp, messageTemp.Metadata));
-  // return;
+  // // console.log('Transaction hash:', ethers.TypedDataEncoder.hashStruct('Transaction', typesTemp, messageTemp));
+  // // console.log('RuntimeCall hash:', ethers.TypedDataEncoder.hashStruct('RuntimeCall', typesTemp, messageTemp.Call));
+  // // console.log('Metadata hash:', ethers.TypedDataEncoder.hashStruct('Metadata', typesTemp, messageTemp.Metadata));
+  // // return;
 
   const logger = testContext.logger;
   await using chainflip = await getChainflipApi();
@@ -105,29 +106,41 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     ),
   ).replace(/"/g, '');
 
-  // This will be done via a broker deposit channel via a new deposit action - when the user
-  // wants to deposit BTC to, for example, borrow USDC, we will open a deposit channel via a
-  // broker that will receive the BTC and swap a small amount to FLIp. That will register and
-  // fund the account.
-  if (role === 'null') {
-    await fundFlip(logger, 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7', '1000');
-  } else {
-    logger.info(`Account already registered, skipping funding`);
-  }
-
   // Examples of some calls. Bear in mind that some of these calls will
   // only execute succesfully one time, as after that they will already
-  // have a registered role, you then need to deregister.
+  // have a registered role, you then need to deregister. Then doing a
+  // different call depending on the current role
   // const call = chainflip.tx.liquidityProvider.registerLpAccount();
   // const call = chainflip.tx.swapping.registerAsBroker();
-  // const call = chainflip.tx.validator.deregisterAsOperator();
-  const call = chainflip.tx.validator.registerAsOperator(
+  // let call = chainflip.tx.system.remark([]);
+  let call = chainflip.tx.validator.registerAsOperator(
     {
       feeBps: 2000,
       delegationAcceptance: 'Allow',
     },
     'TestOperator',
   );
+
+  if (role === 'null') {
+    logger.info(`Funding with FLIP to register`);
+    // This will be done via a broker deposit channel via a new deposit action - when the user
+    // wants to deposit BTC to, for example, borrow USDC, we will open a deposit channel via a
+    // broker that will receive the BTC and swap a small amount to FLIp. That will register and
+    // fund the account.
+    await fundFlip(logger, 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7', '1000');
+    logger.info(`Registering as operator`);
+    chainflip.tx.validator.registerAsOperator(
+      {
+        feeBps: 2000,
+        delegationAcceptance: 'Allow',
+      },
+      'TestOperator',
+    );
+  } else if (role === 'Operator') {
+    call = chainflip.tx.validator.deregisterAsOperator();
+  } else {
+    call = chainflip.tx.system.remark([]);
+  }
 
   const encodedCall = chainflip.createType('Call', call.method).toU8a();
   const hexRuntimeCall = u8aToHex(encodedCall);
@@ -143,9 +156,11 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     Array.from(encodedCall),
     {
       nonce: evmNonce,
-      expiry_block: 10000,
+      expiry_block: expiryBlock,
     },
   );
+  // Print with json stringify
+  console.log('eipPayload', JSON.stringify(eipPayload, null, 2));
 
   // Extract data loosely. To be done in a more strict typechecked method once it's settled.
   const domain = eipPayload.domain;
@@ -179,32 +194,33 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     )
     .send();
 
+  // Needs to check that the result is not error, as the transaction won't
+  // automatically revert/fail as for regular extrinsics.
   await observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
     test: (event) => {
       const dispatchResult = event.data.dispatchResult;
       const signerAccountMatch =
         event.data.signerAccount === 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7';
-      if (!signerAccountMatch) {
-        return false;
-      }
-      // Error early as there shouldn't be other calls like this in parallel for this PoC.
-      if ('Err' in dispatchResult) {
-        throw new Error(
-          `NonNativeSignedCall failed for signer ${event.data.signerAccount}, error found in execution`,
-        );
-      }
-      return 'Ok' in dispatchResult;
+      return signerAccountMatch && 'Ok' in dispatchResult;
     },
     historicalCheckBlocks: 1,
   }).event;
 
-  return; // Temporary early return to skip the rest of the test while debugging
+  // return; // Temporary early return to skip the rest of the test while debugging
 
   logger.info('Signing and submitting user-signed payload with Solana wallet');
+
+  if (role === 'null') {
+    logger.info(`Funding with FLIP to register`);
+    await fundFlip(logger, 'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1', '1000');
+  } else {
+    logger.info(`Account already registered, skipping funding`);
+  }
 
   const whaleKeypair = getSolWhaleKeyPair();
   console.log('Sol whale pubkey', whaleKeypair.publicKey.toBase58());
 
+  const remarkCall = chainflip.tx.system.remark([]);
   const calls = [remarkCall];
   // Try a call batch that fails
   // const calls = [remarkCall, chainflip.tx.validator.forceRotation()];
