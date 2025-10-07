@@ -21,8 +21,8 @@ use cf_chains::{
 	ChannelRefundParametersCheckedInternal, ForeignChainAddress, SwapOrigin,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, DcaParameters, Price, PriceLimits,
-	SwapRequestId,
+	AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, DcaParameters, Price,
+	PriceLimits, SwapRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -53,6 +53,10 @@ pub enum SwapOutputActionGeneric<Address, AccountId> {
 	CreditLendingPool {
 		swap_type: LendingSwapType<AccountId>,
 	},
+	CreditFlipAndTransferToGateway {
+		account_id: AccountId,
+		role_to_register: AccountRole,
+	},
 }
 
 pub type SwapOutputAction<AccountId> = SwapOutputActionGeneric<ForeignChainAddress, AccountId>;
@@ -75,6 +79,13 @@ impl<AccountId> SwapRequestType<AccountId> {
 						SwapOutputActionEncoded::CreditOnChain { account_id },
 					SwapOutputActionGeneric::CreditLendingPool { swap_type } =>
 						SwapOutputActionEncoded::CreditLendingPool { swap_type },
+					SwapOutputAction::CreditFlipAndTransferToGateway {
+						account_id,
+						role_to_register,
+					} => SwapOutputActionEncoded::CreditFlipAndTransferToGateway {
+						account_id,
+						role_to_register,
+					},
 				},
 			},
 		}

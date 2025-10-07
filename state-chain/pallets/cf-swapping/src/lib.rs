@@ -33,9 +33,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, IngressEgressFeeApi,
-	PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, FundingSource,
+	IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction,
+	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -519,8 +520,8 @@ pub mod pallet {
 		PriceLimits, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{
-		lending::LendingSystemApi, AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider,
-		PriceFeedApi, ScheduledEgressDetails, SwapExecutionProgress,
+		lending::LendingSystemApi, AccountRoleRegistry, Chainflip, EgressApi, FundAccount,
+		PoolPriceProvider, PriceFeedApi, ScheduledEgressDetails, SwapExecutionProgress,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
@@ -568,6 +569,11 @@ pub mod pallet {
 
 		type LendingSystemApi: LendingSystemApi<
 			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
+
+		type FundAccount: FundAccount<
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
 		>;
 
 		type PoolPriceApi: PoolPriceProvider;
@@ -2102,6 +2108,23 @@ pub mod pallet {
 							SwapOutputAction::CreditLendingPool { swap_type } => {
 								log_or_panic!("Unexpected refund of a loan swap: {swap_type:?}");
 							},
+							SwapOutputAction::CreditFlipAndTransferToGateway {
+								account_id,
+								role_to_register,
+							} => {
+								if request.output_asset == Asset::Flip {
+									T::FundAccount::fund_account(
+										account_id.clone(),
+										None,
+										dca_state.accumulated_output_amount,
+										FundingSource::Swap { swap_request_id },
+									)
+
+									// TODO: transfer funds to gateway
+								} else {
+									log_or_panic!("Encountered transfer to gateway swap for asset that isn't Flip: {swap_request_id:?}");
+								}
+							},
 						}
 					}
 				},
@@ -2235,6 +2258,12 @@ pub mod pallet {
 										swap_type.clone(),
 										dca_state.accumulated_output_amount,
 									);
+								},
+								SwapOutputAction::CreditFlipAndTransferToGateway {
+									account_id,
+									role_to_register,
+								} => {
+									// TODO do the same as above
 								},
 							}
 							true

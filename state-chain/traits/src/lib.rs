@@ -50,7 +50,7 @@ use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
 	EpochIndex, ForeignChain, IngressOrEgress, Ipv6Addr, NetworkEnvironment, Price, SemVer,
-	ThresholdSignatureRequestId,
+	SwapRequestId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -1322,6 +1322,25 @@ pub trait SpawnAccount {
 		parent_account_id: &Self::AccountId,
 		index: Self::Index,
 	) -> Result<Self::AccountId, DispatchError>;
+}
+
+/// Used in cf_traits and in cf_funding.
+#[derive(Encode, Decode, PartialEq, Debug, TypeInfo, Clone)]
+pub enum FundingSource {
+	EthTransaction { tx_hash: cf_chains::eth::Address },
+	Swap { swap_request_id: SwapRequestId },
+}
+
+pub trait FundAccount {
+	type AccountId;
+	type Amount;
+
+	fn fund_account(
+		account_id: Self::AccountId,
+		funder: Option<cf_chains::eth::Address>,
+		amount: Self::Amount,
+		source: FundingSource,
+	);
 }
 
 pub trait PoolOrdersManager {

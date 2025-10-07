@@ -324,6 +324,14 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum AdditionalDepositAction {
+	FundFlip {
+		flip_amount_to_credit: Option<cf_primitives::AssetAmount>,
+		role_to_register: AccountRole,
+	},
+}
+
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(28);
 
 impl_pallet_safe_mode! {
@@ -557,6 +565,7 @@ pub mod pallet {
 		LiquidityProvision {
 			lp_account: AccountId,
 			refund_address: ForeignChainAddress,
+			additional_action: Option<AdditionalDepositAction>,
 		},
 		Refund {
 			reason: RefundReason,
@@ -2147,8 +2156,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		origin: DepositOrigin<T, I>,
 	) -> DepositAction<T, I> {
 		match action.clone() {
-			ChannelAction::LiquidityProvision { lp_account, .. } => {
+			ChannelAction::LiquidityProvision { lp_account, additional_action, .. } => {
 				T::Balance::credit_account(&lp_account, asset.into(), amount_after_fees.into());
+
+				// TODO execute additional_action
+
 				DepositAction::LiquidityProvision { lp_account }
 			},
 			ChannelAction::Swap {
@@ -3398,7 +3410,11 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		let (deposit_channel, expiry_block, channel_opening_fee) = Self::open_channel(
 			&requester_account,
 			source_asset,
-			ChannelAction::LiquidityProvision { lp_account, refund_address },
+			ChannelAction::LiquidityProvision {
+				lp_account,
+				refund_address,
+				additional_action: todo!("TODO"),
+			},
 			boost_fee,
 		)?;
 
