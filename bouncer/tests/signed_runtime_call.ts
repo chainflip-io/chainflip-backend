@@ -1,11 +1,26 @@
 import { TestContext } from 'shared/utils/test_context';
-import { getEvmEndpoint, getEvmWhaleKeypair, getSolWhaleKeyPair } from 'shared/utils';
+import {
+  decodeSolAddress,
+  externalChainToScAccount,
+  getEvmEndpoint,
+  getEvmWhaleKeypair,
+  getSolWhaleKeyPair,
+} from 'shared/utils';
 import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
 import { Struct, u32, str /* bool, Enum, u128, u8 */ } from 'scale-ts';
 import { globalLogger } from 'shared/utils/logger';
+import { fundFlip } from 'shared/fund_flip';
+import z from 'zod';
+
+const eipPayloadSchema = z.object({
+  domain: z.any(),
+  types: z.any(),
+  message: z.any(),
+  primaryType: z.string(), // Some libraries (e.g. wagmi) also require the primaryType
+});
 
 export const TransactionMetadata = Struct({
   nonce: u32,
@@ -14,12 +29,8 @@ export const TransactionMetadata = Struct({
 export const ChainNameCodec = str;
 export const VersionCodec = str;
 
-// Example values
+// Default values
 const expiryBlock = 10000;
-// const amount = 1234;
-// const collateralAsset = { asset: 'Btc' as InternalAsset, scAsset: 'Bitcoin-BTC' };
-// const borrowAsset = { asset: 'Usdc' as InternalAsset, scAsset: 'Ethereum-USDC' };
-// For now hardcoded in the SC. It should be network dependent.
 const chainName = 'Chainflip-Development';
 const version = '0';
 
@@ -41,10 +52,127 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   const logger = testContext.logger;
   await using chainflip = await getChainflipApi();
 
-  const whaleKeypair = getSolWhaleKeyPair();
-  console.log('Sol whale pubkey', whaleKeypair.publicKey.toBase58());
+  logger.info('Signing and submitting user-signed payload with EVM wallet using EIP-712');
 
-  const remarkCall = chainflip.tx.system.remark([42]);
+  const { privkey: whalePrivKey, pubkey: evmSigner } = getEvmWhaleKeypair('Ethereum');
+  const ethWallet = new Wallet(whalePrivKey).connect(
+    ethers.getDefaultProvider(getEvmEndpoint('Ethereum')),
+  );
+  if (evmSigner.toLowerCase() !== ethWallet.address.toLowerCase()) {
+    throw new Error('Address does not match expected pubkey');
+  }
+  // EVM Whale -> SC account (`cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7`)
+  const evmScAccount = externalChainToScAccount(ethWallet.address);
+
+  const role = JSON.stringify(
+    await chainflip.query.accountRoles.accountRoles(evmScAccount),
+  ).replace(/"/g, '');
+
+  // Examples of some calls. Bear in mind that some of these calls will
+  // only execute succesfully one time, as after that they will already
+  // have a registered role, you then need to deregister. Then doing a
+  // different call depending on the current role to avoid failure on
+  // consecutive test runs.
+  // const call = chainflip.tx.liquidityProvider.registerLpAccount();
+  // const call = chainflip.tx.swapping.registerAsBroker();
+  let call = chainflip.tx.system.remark([]);
+
+  if (role === 'null') {
+    logger.info(`Funding with FLIP to register`);
+    // This will be done via a broker deposit channel via a new deposit action - when the user
+    // wants to deposit BTC to, for example, borrow USDC, we will open a deposit channel via a
+    // broker that will receive the BTC and swap a small amount to FLIP. That will register and
+    // fund the account. See PRO-2551.
+    await fundFlip(logger, evmScAccount, '1000');
+    logger.info(`Registering as operator`);
+    call = chainflip.tx.validator.registerAsOperator(
+      {
+        feeBps: 2000,
+        delegationAcceptance: 'Allow',
+      },
+      'TestOperator',
+    );
+  } else if (role === 'Operator') {
+    call = chainflip.tx.validator.deregisterAsOperator();
+  }
+
+  const encodedCall = chainflip.createType('Call', call.method).toU8a();
+  const hexRuntimeCall = u8aToHex(encodedCall);
+
+  // EIP-712 signing
+  let evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
+
+  const eipPayload = await chainflip.rpc(
+    'cf_eip_data',
+    ethWallet.address,
+    Array.from(encodedCall),
+    {
+      nonce: evmNonce,
+      expiry_block: expiryBlock,
+    },
+  );
+  // To print with json stringify
+  logger.debug('eipPayload', JSON.stringify(eipPayload, null, 2));
+
+  // Some libraries (e.g. wagmi) also require the primaryType (eipPayload.primaryType)
+  const { domain, types, message, primaryType } = eipPayloadSchema.parse(eipPayload);
+  logger.debug('primaryType:', primaryType);
+
+  // Remove the EIP712Domain from the message to smoothen out differences between Rust and
+  // TS's ethers signTypedData. With Wagmi we don't need to remove this. There might be other
+  // small conversions that will be needed depending on the exact data that the rpc ends up providing.
+  delete types.EIP712Domain;
+
+  const evmSignatureEip712 = await ethWallet.signTypedData(domain, types, message);
+  logger.debug('EIP712 Signature:', evmSignatureEip712);
+
+  // Submit to the SC
+  await chainflip.tx.environment
+    .nonNativeSignedCall(
+      hexRuntimeCall,
+      {
+        nonce: evmNonce,
+        expiryBlock,
+      },
+      {
+        Ethereum: {
+          signature: evmSignatureEip712,
+          signer: evmSigner,
+          sigType: 'Eip712',
+        },
+      },
+    )
+    .send();
+
+  // Needs to check that the result is not error, as the transaction won't
+  // automatically revert/fail as for regular extrinsics.
+  await observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
+    test: (event) => {
+      const dispatchResult = event.data.dispatchResult;
+      const signerAccountMatch = event.data.signerAccount === evmScAccount;
+      return signerAccountMatch && 'Ok' in dispatchResult;
+    },
+    historicalCheckBlocks: 1,
+  }).event;
+
+  // return; // Temporary early return to just test the EIP-
+
+  logger.info('Signing and submitting user-signed payload with Solana wallet');
+  const whaleKeypair = getSolWhaleKeyPair();
+
+  // SVM Whale -> SC account (`cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1`)
+  const svmScAccount = externalChainToScAccount(
+    decodeSolAddress(whaleKeypair.publicKey.toString()),
+  );
+
+  if (role === 'null') {
+    logger.info(`Funding with FLIP to register`);
+    await fundFlip(logger, svmScAccount, '1000');
+  } else {
+    logger.info(`Account already registered, skipping funding`);
+  }
+
+  const remarkCall = chainflip.tx.system.remark([]);
   const calls = [remarkCall];
   // Try a call batch that fails - it will still emit the NonNativeSignedCall event
   // but have an error in the dispatch_result.
@@ -52,37 +180,24 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   const batchCall = chainflip.tx.environment.batch(calls);
   const batchRuntimeCall = batchCall.method;
-  const encodedCall = chainflip.createType('Call', batchRuntimeCall).toU8a();
-  const hexRuntimeCall = u8aToHex(encodedCall);
-  console.log('hexRuntimeCall', hexRuntimeCall);
+  const encodedBatchCall = chainflip.createType('Call', batchRuntimeCall).toU8a();
+  const hexBatchRuntimeCall = u8aToHex(encodedBatchCall);
 
-  // SVM Whale -> SC account (`cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1`)
-  const svmNonce = (await chainflip.rpc.system.accountNextIndex(
-    'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1',
-  )) as unknown as number;
-  const svmPayload = encodeDomainDataToSign(encodedCall, svmNonce, expiryBlock);
-  const svmHexPayload = u8aToHex(svmPayload);
-
-  logger.info('Signing and submitting user-signed payload with Solana wallet');
+  const svmNonce = (await chainflip.rpc.system.accountNextIndex(svmScAccount)) as unknown as number;
+  const svmPayload = encodeDomainDataToSign(encodedBatchCall, svmNonce, expiryBlock);
 
   const prefixBytes = Buffer.from([0xff, ...Buffer.from('solana offchain', 'utf8')]);
   const solPrefixedMessage = Buffer.concat([prefixBytes, svmPayload]);
-  const solHexPrefixedMessage = '0x' + solPrefixedMessage.toString('hex');
-  console.log('solPrefixedMessage:', solPrefixedMessage);
-  console.log('SolPrefixed Message (hex):', solHexPrefixedMessage);
 
   const signature = sign(solPrefixedMessage, whaleKeypair.secretKey.slice(0, 32));
   const hexSignature = '0x' + Buffer.from(signature).toString('hex');
   const hexSigner = '0x' + whaleKeypair.publicKey.toBuffer().toString('hex');
-  console.log('Payload (hex):', svmHexPayload);
-  console.log('Sol Signature (hex):', hexSignature);
-  console.log('Signer (hex):', hexSigner);
 
   // Submit as unsigned extrinsic - no broker needed
   await chainflip.tx.environment
     .nonNativeSignedCall(
       // Solana prefix will be added in the SC previous to signature verification
-      hexRuntimeCall,
+      hexBatchRuntimeCall,
       {
         nonce: svmNonce,
         expiryBlock,
@@ -98,45 +213,27 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     .send();
 
   await observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
-    test: (event) =>
-      event.data.signerAccount === 'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1',
+    test: (event) => event.data.signerAccount === svmScAccount,
     historicalCheckBlocks: 1,
   }).event;
 
   await observeEvent(globalLogger, `environment:BatchCompleted`, {
-    test: (event) =>
-      event.data.signerAccount === 'cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1',
+    test: (event) => event.data.signerAccount === svmScAccount,
     historicalCheckBlocks: 1,
   }).event;
 
   logger.info('Signing and submitting user-signed payload with EVM wallet using personal_sign');
 
   // EVM Whale -> SC account (`cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7`)
-  const evmNonce = (await chainflip.rpc.system.accountNextIndex(
-    'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
-  )) as unknown as number;
-  const evmPayload = encodeDomainDataToSign(encodedCall, evmNonce, expiryBlock);
-  // Create the Ethereum-prefixed message
-  const prefix = `\x19Ethereum Signed Message:\n${evmPayload.length}`;
-  const prefixedMessage = Buffer.concat([Buffer.from(prefix, 'utf8'), evmPayload]);
-  const evmHexPrefixedMessage = '0x' + prefixedMessage.toString('hex');
-  console.log('Prefixed Message (hex):', evmHexPrefixedMessage);
-
-  const { privkey: whalePrivKey, pubkey: evmSigner } = getEvmWhaleKeypair('Ethereum');
-  const ethWallet = new Wallet(whalePrivKey).connect(
-    ethers.getDefaultProvider(getEvmEndpoint('Ethereum')),
-  );
-  if (evmSigner.toLowerCase() !== ethWallet.address.toLowerCase()) {
-    throw new Error('Address does not match expected pubkey');
-  }
-
+  evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)) as unknown as number;
+  const evmPayload = encodeDomainDataToSign(encodedBatchCall, evmNonce, expiryBlock);
   const evmSignature = await ethWallet.signMessage(evmPayload);
 
   // Submit as unsigned extrinsic - no broker needed
   await chainflip.tx.environment
     .nonNativeSignedCall(
       // Ethereum prefix will be added in the SC previous to signature verification
-      hexRuntimeCall,
+      hexBatchRuntimeCall,
       {
         nonce: evmNonce,
         expiryBlock,
@@ -152,103 +249,60 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     .send();
 
   await observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
-    test: (event) =>
-      event.data.signerAccount === 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
+    test: (event) => event.data.signerAccount === evmScAccount,
     historicalCheckBlocks: 1,
   }).event;
 
   await observeEvent(globalLogger, `environment:BatchCompleted`, {
-    test: (event) =>
-      event.data.signerAccount === 'cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7',
+    test: (event) => event.data.signerAccount === evmScAccount,
     historicalCheckBlocks: 1,
   }).event;
-
-  // logger.info('Signing and submitting user-signed payload with EVM wallet using EIP-712');
-
-  // // EIP-712 signing
-  // evmNonce = (
-  //   await chainflip.rpc.system.accountNextIndex('cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7')
-  // ).toNumber();
-
-  // const domain = {
-  //   name: chainName,
-  //   version: '0',
-  // };
-
-  // const types = {
-  //   Metadata: [
-  //     { name: 'from', type: 'address' },
-  //     { name: 'nonce', type: 'uint256' },
-  //     { name: 'expiryBlock', type: 'uint256' },
-  //   ],
-  //   // This is just an example.
-  //   SystemRemark: [{ name: 'remark', type: 'bytes[]' }],
-  //   RuntimeCall: [
-  //     { name: 'call', type: 'SystemRemark' },
-  //     { name: 'metadata', type: 'Metadata' },
-  //   ],
-  // };
-
-  // const message = {
-  //   // TODO: Runtime Calls will need to be converted appropriately
-  //   // to an EIP-712 human-readable format.
-  //   call: {
-  //     remark: [], // Empty bytes for system.remark([])
-  //   },
-  //   metadata: {
-  //     from: evmSigner,
-  //     nonce: evmNonce,
-  //     expiryBlock,
-  //   },
-  // };
-
-  // const evmSignatureEip712 = await ethWallet.signTypedData(domain, types, message);
-  // console.log('EIP712 Signature:', evmSignatureEip712);
-
-  // const encodedPayload = ethers.TypedDataEncoder.encode(domain, types, message);
-  // console.log('EIP-712 Encoded Payload:', encodedPayload);
-  // const hash = ethers.TypedDataEncoder.hash(domain, types, message);
-  // console.log('EIP-712 Hash:', hash);
-  // const hashDomain = ethers.TypedDataEncoder.hashDomain(domain);
-  // console.log('EIP-712 Domain Hash:', hashDomain);
-  // const messageHash = ethers.TypedDataEncoder.from(types).hash(message);
-  // console.log('EIP-712 Message Hash:', messageHash);
-
-  // console.log('BorrowData hash:', ethers.TypedDataEncoder.hashStruct('BorrowData', types, message.BorrowAndWithdrawData.Borrow));
-  // console.log('WithdrawData hash:', ethers.TypedDataEncoder.hashStruct('WithdrawData', types, message.BorrowAndWithdrawData.Withdraw));
-  // console.log('BorrowAndWithdrawData hash:', ethers.TypedDataEncoder.hashStruct('BorrowAndWithdrawData', types, message.BorrowAndWithdrawData));
-  // console.log('BorrowAndWithdraw hash:', ethers.TypedDataEncoder.hashStruct('BorrowAndWithdraw', types, message));
-  // console.log('TypeScript EIP-712 hash:', hash);
-
-  // // console.log('Borrow hash:', ethers.TypedDataEncoder.hashStruct('Borrow', types, message));
-
-  // await brokerMutex.runExclusive(brokerUri, async () => {
-  //   const brokerNonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-  //   await chainflip.tx.environment
-  //     .nonNativeSignedCall(
-  //       // The  EIP-712 payload will be build in the State chain previous to signature verification
-  //       hexRuntimeCall,
-  //       {
-  //         nonce,
-  //         expiryBlock,
-  //       },
-  //       {
-  //         Ethereum: {
-  //           signature: evmSignatureEip712,
-  //           signer: evmSigner,
-  //           sig_type: 'Eip712',
-  //         },
-  //       },
-  //     )
-  //     .signAndSend(broker, { nonce: brokerNonce }, handleSubstrateError(chainflip));
-  // });
-
-  // await observeEvent(globalLogger, `environment:BatchCompleted`, {
-  //   test: (event) => {
-  //     const matchSerializedCall = !!event.data.decodedAction.Lending?.Borrow;
-  //     const matchSignedPayload = event.data.signedPayload === encodedPayload;
-  //     return matchSerializedCall && matchSignedPayload;
-  //   },
-  //   historicalCheckBlocks: 1,
-  // }).event;
 }
+
+// // Code to manually to try  EIP-712 manual signing to try out encodings manually
+// const domainTemp = {
+//   name: chainName,
+//   version,
+// };
+
+// const typesTemp = {
+//   Metadata: [
+//     { name: 'from', type: 'address' },
+//     { name: 'nonce', type: 'uint32' },
+//     { name: 'expiryBlock', type: 'uint32' },
+//   ],
+//   RuntimeCall: [{ name: 'call', type: 'string' }],
+//   Transaction: [
+//     { name: 'Call', type: 'RuntimeCall' },
+//     { name: 'Metadata', type: 'Metadata' },
+//   ],
+// };
+
+// const messageTemp = {
+//   Call: {
+//     call: "RuntimeCall::System(Call::remark { remark: [] })",
+//   },
+//   Metadata: {
+//     from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+//     nonce: 0,
+//     expiryBlock: 10000,
+//   },
+// };
+
+// const evmSignatureEip712Temp = await ethWallet.signTypedData(domainTemp, typesTemp, messageTemp);
+// console.log('EIP712 Signature:', evmSignatureEip712Temp);
+
+// const encodedPayload = ethers.TypedDataEncoder.encode(domainTemp, typesTemp, messageTemp);
+// console.log('EIP-712 Encoded Payload:', encodedPayload);
+// const hashTemp = ethers.TypedDataEncoder.hash(domainTemp, typesTemp, messageTemp);
+// console.log('EIP-712 Hash:', hashTemp);
+// console.log("EIP-712 Hash uint8Array",  hexToU8a(hashTemp));
+// const hashDomainTemp = ethers.TypedDataEncoder.hashDomain(domainTemp);
+// console.log('EIP-712 Domain Hash:', hashDomainTemp);
+// const messageHashTemp = ethers.TypedDataEncoder.from(typesTemp).hash(messageTemp);
+// console.log('EIP-712 Message Hash:', messageHashTemp);
+
+// console.log('Transaction hash:', ethers.TypedDataEncoder.hashStruct('Transaction', typesTemp, messageTemp));
+// console.log('RuntimeCall hash:', ethers.TypedDataEncoder.hashStruct('RuntimeCall', typesTemp, messageTemp.Call));
+// console.log('Metadata hash:', ethers.TypedDataEncoder.hashStruct('Metadata', typesTemp, messageTemp.Metadata));
+// return;

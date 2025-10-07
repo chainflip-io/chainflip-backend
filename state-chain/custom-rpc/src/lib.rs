@@ -42,6 +42,7 @@ use cf_rpc_apis::{
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::rpc::NumberOrHex;
+use codec::Decode;
 use core::ops::Range;
 use jsonrpsee::{
 	core::async_trait,
@@ -55,6 +56,7 @@ use jsonrpsee::{
 use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::OraclePrice, price::PriceAsset,
 };
+use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
@@ -96,6 +98,7 @@ use std::{
 
 pub mod backend;
 pub mod broker;
+pub mod eip_712_types;
 pub mod lp;
 pub mod monitoring;
 pub mod order_fills;
@@ -1247,6 +1250,13 @@ pub trait CustomApi {
 		operator: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<DelegationSnapshot<state_chain_runtime::AccountId, NumberOrHex>>>;
+	#[method(name = "eip_data")]
+	fn cf_eip_data(
+		&self,
+		caller: EthereumAddress,
+		call: Vec<u8>,
+		transaction_metadata: TransactionMetadata,
+	) -> RpcResult<eip_712_types::TypedData>;
 }
 
 /// An RPC extension for the state chain node.
@@ -2424,6 +2434,56 @@ where
 						))
 					}),
 			})
+	}
+
+	fn cf_eip_data(
+		&self,
+		caller: EthereumAddress,
+		call: Vec<u8>,
+		transaction_metadata: TransactionMetadata,
+	) -> RpcResult<eip_712_types::TypedData> {
+		self.rpc_backend.with_runtime_api(None, |api, hash| {
+			let api_version = api
+				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)
+				.map_err(CfApiError::from)?
+				.unwrap_or_default();
+
+			if api_version < 8 {
+				// eip-712 data encoding didn't exist before version 8
+				Err(CfApiError::ErrorObject(call_error(
+					"EIP data generation is not supported for the current runtime api version",
+					CfErrorCode::RuntimeApiError,
+				)))
+			} else {
+				// Not using RuntimeCall as a parameter to this function because it doesn't
+				// have Serialize/Deserialize implemented. We then decode to verify it's a
+				// valid RuntimeCall.
+				if let Err(err) = state_chain_runtime::RuntimeCall::decode(&mut &call[..]) {
+					return Err(CfApiError::ErrorObject(ErrorObject::owned(
+						ErrorCode::InvalidParams.code(),
+						format!("Failed to deserialize into a RuntimeCall {:?}", err),
+						None::<()>,
+					)));
+				}
+				let chainflip_network =
+					api.cf_chainflip_network(hash).map_err(CfApiError::from)??;
+
+				let typed_data: eip_712_types::TypedData = eip_712_types::build_eip712_typed_data(
+					chainflip_network,
+					caller,
+					call,
+					transaction_metadata,
+				)
+				.map_err(|e| {
+					CfApiError::ErrorObject(ErrorObject::owned(
+						ErrorCode::InvalidParams.code(),
+						format!("Failed to build eip712 typed data: {e}"),
+						None::<()>,
+					))
+				})?;
+				Ok(typed_data)
+			}
+		})
 	}
 }
 

@@ -16,6 +16,13 @@
 
 #![cfg(test)]
 
+use crate::{
+	mock::*,
+	submit_runtime_call::{build_eip_712_payload, validate_unsigned, EthSigType, SolSigType},
+	BitcoinAvailableUtxos, Call, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
+	SafeModeUpdate, SolSignature, SolanaAvailableNonceAccounts, SolanaUnavailableNonceAccounts,
+	TransactionMetadata, TransactionSource, UserSignatureData,
+};
 use cf_chains::{
 	btc::{
 		api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, AggKey,
@@ -27,13 +34,12 @@ use cf_chains::{
 	},
 };
 use cf_traits::{BalanceApi, SafeMode};
-use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
-
-use crate::{
-	mock::*, submit_runtime_call::SolSigType, BitcoinAvailableUtxos, ConsolidationParameters,
-	Event, RuntimeSafeMode, SafeModeUpdate, SolSignature, SolanaAvailableNonceAccounts,
-	SolanaUnavailableNonceAccounts, TransactionMetadata, UserSignatureData,
+use frame_support::{
+	assert_noop, assert_ok,
+	sp_runtime::traits::{Hash, Keccak256},
+	traits::OriginTrait,
 };
+use std::str::FromStr;
 
 fn utxo(amount: BtcAmount, salt: u32, pub_key: Option<[u8; 32]>) -> Utxo {
 	Utxo {
@@ -801,6 +807,64 @@ fn can_non_native_signed_call() {
 		);
 
     });
+}
+#[test]
+fn can_build_eip_712_payload_validate_unsigned() {
+	new_test_ext().execute_with(|| {
+		let system_call = frame_system::Call::remark { remark: vec![] };
+		let runtime_call: <Test as crate::Config>::RuntimeCall = system_call.clone().into();
+
+		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000 };
+		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+		let signer: EvmAddress = EvmAddress::from_str(from_str).unwrap();
+		let user_signature_data: UserSignatureData = UserSignatureData::Ethereum {
+            signature: hex_literal::hex!(
+                "712d40241c7ad17d589a3dba2e46ab9a1279c184383f85c91f6dede41774b5f4067a875634d227973e6d63e9651ca24c7025a0b80091807d79c05df1ba7355271b"
+            ).into(),
+            signer,
+            sig_type: EthSigType::Eip712,
+        };
+
+		let validate = validate_unsigned::<Test>(
+			TransactionSource::External, // unused
+			&Call::non_native_signed_call {
+				call: Box::new(runtime_call.clone()),
+				transaction_metadata,
+				user_signature_data,
+			},
+		);
+		assert!(validate.is_ok());
+	});
+}
+
+#[test]
+fn can_build_eip_712_payload() {
+	new_test_ext().execute_with(|| {
+		let system_call = frame_system::Call::remark { remark: vec![] };
+		let runtime_call: <Test as crate::Config>::RuntimeCall = system_call.clone().into();
+
+		let chain_name = "Chainflip-Development";
+		let version = "0";
+		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000 };
+		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+		let signer: EvmAddress = EvmAddress::from_str(from_str).unwrap();
+
+		let payload = build_eip_712_payload::<Test>(
+			runtime_call,
+			chain_name,
+			version,
+			transaction_metadata,
+			signer,
+		);
+		let eip_712_hash = Keccak256::hash(&payload).0;
+		assert_eq!(
+			eip_712_hash,
+			[
+				177, 74, 139, 71, 34, 1, 94, 155, 148, 231, 176, 28, 108, 61, 223, 229, 210, 181,
+				155, 61, 255, 133, 218, 50, 7, 42, 65, 195, 57, 177, 181, 204
+			]
+		);
+	});
 }
 
 #[test]

@@ -19,9 +19,8 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use crate::submit_runtime_call::{
-	batch_all, weight_and_dispatch_class, TransactionMetadata, UserSignatureData,
-};
+pub use crate::submit_runtime_call::TransactionMetadata;
+use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, UserSignatureData};
 use cf_chains::{
 	btc::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
@@ -656,7 +655,6 @@ pub mod pallet {
 
 			let signer_account_origin =
 				frame_system::RawOrigin::Signed(signer_account.clone()).into();
-
 			let dispatch_result = (*call.clone()).dispatch_bypass_filter(signer_account_origin);
 
 			Self::deposit_event(Event::<T>::NonNativeSignedCall {

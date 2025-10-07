@@ -15,16 +15,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use cf_chains::evm::{encode, Token, U256};
 use frame_support::{
-	dispatch::DispatchErrorWithPostInfo, traits::UnfilteredDispatchable, weights::Weight,
+	dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo},
+	sp_runtime::traits::{Hash, Keccak256},
+	traits::UnfilteredDispatchable,
+	weights::Weight,
 };
-
+use serde::{Deserialize, Serialize};
 pub const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
 pub const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
 pub const UNSIGNED_BATCH_VERSION: &str = "0";
 pub const BATCHED_CALL_LIMITS: usize = 10;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 pub struct TransactionMetadata {
 	pub nonce: u32,
 	pub expiry_block: BlockNumber,
@@ -116,17 +120,93 @@ pub(crate) fn batch_all<T: Config>(
 	Ok(Some(base_weight.saturating_add(weight)).into())
 }
 
+const EIP712_DOMAIN_TYPE_STR: &str = "EIP712Domain(string name,string version)";
+const EIP712_DOMAIN_PREFIX: [u8; 2] = [0x19, 0x01];
+const EIP712_METADATA_TYPE_STR: &str = "Metadata(address from,uint32 nonce,uint32 expiryBlock)";
+const EIP712_RUNTIMECALL_TYPE_STR: &str = "RuntimeCall(bytes value)";
+
 /// `signer is not technically necessary but is added as part of the metadata so
 /// we add it so is displayed separately to the user in the wallet.
-/// To be implemented in PRO-2535.
+/// TODO: This is a temporary simplified implementation for basic EIP-712 support
+/// in a specific format. Full logic to be implemented in PRO-2535.
 pub(crate) fn build_eip_712_payload<T: Config>(
-	_call: <T as Config>::RuntimeCall,
-	_chain_name: &str,
-	_version: &str,
-	_transaction_metadata: TransactionMetadata,
-	_signer: EvmAddress,
+	call: <T as Config>::RuntimeCall,
+	chain_name: &str,
+	version: &str,
+	transaction_metadata: TransactionMetadata,
+	signer: EvmAddress,
 ) -> Vec<u8> {
-	todo!("implement eip-712");
+	// -----------------
+	// Domain separator
+	// -----------------
+	// Not using chain_id as this is not an EVM network and the domain name
+	// will act as the replay protection between different Chainflip networks.
+	let type_hash = Keccak256::hash(EIP712_DOMAIN_TYPE_STR.as_bytes());
+	let name_hash = Keccak256::hash(chain_name.as_bytes());
+	let version_hash = Keccak256::hash(version.as_bytes());
+
+	let tokens = vec![
+		Token::FixedBytes(type_hash.as_bytes().to_vec()),
+		Token::FixedBytes(name_hash.as_bytes().to_vec()),
+		Token::FixedBytes(version_hash.as_bytes().to_vec()),
+	];
+
+	// ABI encode
+	let encoded = encode(&tokens);
+	let domain_separator = Keccak256::hash(&encoded);
+
+	// -----------------
+	// Metadata struct
+	// -----------------
+	let metadata_type_str = EIP712_METADATA_TYPE_STR;
+	let metadata_type_hash = Keccak256::hash(metadata_type_str.as_bytes());
+	let metadata_tokens = vec![
+		Token::FixedBytes(metadata_type_hash.as_bytes().to_vec()),
+		Token::Address(signer),
+		Token::Uint(U256::from(transaction_metadata.nonce)),
+		Token::Uint(U256::from(transaction_metadata.expiry_block)),
+	];
+	let encoded_metadata = encode(&metadata_tokens);
+	let metadata_hash = Keccak256::hash(&encoded_metadata);
+
+	// -----------------
+	// RuntimeCall struct
+	// -----------------
+	let runtime_call_type_str = EIP712_RUNTIMECALL_TYPE_STR;
+	let runtime_call_type_hash = Keccak256::hash(runtime_call_type_str.as_bytes());
+
+	let runtime_call_tokens = vec![
+		Token::FixedBytes(runtime_call_type_hash.as_bytes().to_vec()),
+		Token::FixedBytes(Keccak256::hash(&call.encode()).0.to_vec()),
+	];
+	let encoded_runtime_call = encode(&runtime_call_tokens);
+	let runtime_call_hash = Keccak256::hash(&encoded_runtime_call);
+
+	// -----------------
+	// Message struct
+	// -----------------
+	let action_type_str = scale_info::prelude::format!(
+		"Transaction(RuntimeCall Call,Metadata Metadata){}{}",
+		metadata_type_str,
+		runtime_call_type_str,
+	);
+	let action_type_hash = Keccak256::hash(action_type_str.as_bytes());
+	let tokens = vec![
+		Token::FixedBytes(action_type_hash.as_bytes().to_vec()),
+		Token::FixedBytes(runtime_call_hash.as_bytes().to_vec()),
+		Token::FixedBytes(metadata_hash.as_bytes().to_vec()),
+	];
+
+	let encoded_message = encode(&tokens);
+	let message_hash = Keccak256::hash(&encoded_message);
+
+	// -----------------
+	// EIP712 digest
+	// -----------------
+	let mut encoded_final = EIP712_DOMAIN_PREFIX.to_vec();
+	encoded_final.extend_from_slice(domain_separator.0.as_slice());
+	encoded_final.extend_from_slice(message_hash.0.as_slice());
+	encoded_final
 }
 
 /// Get the accumulated `weight` and the dispatch class for the given `calls`.
@@ -152,7 +232,12 @@ pub(crate) fn validate_unsigned<T: Config>(
 	_source: TransactionSource,
 	call: &Call<T>,
 ) -> TransactionValidity {
-	if let Call::non_native_signed_call { call, transaction_metadata, user_signature_data } = call {
+	if let Call::non_native_signed_call {
+		call: inner_call,
+		transaction_metadata,
+		user_signature_data,
+	} = call
+	{
 		// Check if payload hasn't expired
 		if frame_system::Pallet::<T>::block_number() >= transaction_metadata.expiry_block.into() {
 			return InvalidTransaction::Stale.into();
@@ -174,7 +259,7 @@ pub(crate) fn validate_unsigned<T: Config>(
 
 		// Signature check
 		let chanflip_network_name = ChainflipNetworkName::<T>::get();
-		let serialized_calls: Vec<u8> = call.encode();
+		let serialized_calls: Vec<u8> = inner_call.encode();
 
 		let build_domain_data = || -> Vec<u8> {
 			[
@@ -209,10 +294,10 @@ pub(crate) fn validate_unsigned<T: Config>(
 						[prefix_bytes, &domain_data].concat()
 					},
 					EthSigType::Eip712 => build_eip_712_payload::<T>(
-						*call.clone(),
+						(**inner_call).clone(),
 						chanflip_network_name.as_str(),
 						UNSIGNED_BATCH_VERSION,
-						transaction_metadata.clone(),
+						*transaction_metadata,
 						*signer,
 					),
 				};
