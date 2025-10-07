@@ -149,6 +149,27 @@ pub struct PriceLimits {
 	pub max_oracle_price_slippage: Option<BasisPoints>,
 }
 
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	MaxEncodedLen,
+	PartialOrd,
+	Ord,
+	Copy,
+	Default,
+)]
+pub struct Temp {
+	limits: PriceLimits,
+	other: u32,
+}
+
 /// The `log1.0001(price)` rounded to the nearest integer. Note [Price] is always
 /// in units of asset One.
 pub type Tick = i32;

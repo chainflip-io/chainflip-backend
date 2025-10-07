@@ -2,6 +2,10 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.11.11] - 2025-10-07
+
+- Always create oracle price elections for both Eth and Arb. ([#6153](https://github.com/chainflip-io/chainflip-backend/issues/6153))
+
 ## [1.11.10] - 2025-10-02
 
 - Prevent duplication of polkadot rpc client.
