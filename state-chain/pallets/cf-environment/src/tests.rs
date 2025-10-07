@@ -819,7 +819,7 @@ fn can_build_eip_712_payload_validate_unsigned() {
 		let signer: EvmAddress = EvmAddress::from_str(from_str).unwrap();
 		let user_signature_data: UserSignatureData = UserSignatureData::Ethereum {
             signature: hex_literal::hex!(
-                "q712d40241c7ad17d589a3dba2e46ab9a1279c184383f85c91f6dede41774b5f4067a875634d227973e6d63e9651ca24c7025a0b80091807d79c05df1ba7355271b"
+                "712d40241c7ad17d589a3dba2e46ab9a1279c184383f85c91f6dede41774b5f4067a875634d227973e6d63e9651ca24c7025a0b80091807d79c05df1ba7355271b"
             ).into(),
             signer,
             sig_type: EthSigType::Eip712,
