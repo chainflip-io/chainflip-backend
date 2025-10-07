@@ -19,7 +19,6 @@ export const VersionCodec = str;
 const expiryBlock = 10000;
 const chainName = 'Chainflip-Development';
 const version = '0';
-const atomic = false;
 
 export function encodeDomainDataToSign(
   payload: Uint8Array,
@@ -219,10 +218,11 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   const remarkCall = chainflip.tx.system.remark([]);
   const calls = [remarkCall];
-  // Try a call batch that fails
+  // Try a call batch that fails - it will still emit the NonNativeSignedCall event
+  // but have an error in the dispatch_result.
   // const calls = [remarkCall, chainflip.tx.validator.forceRotation()];
 
-  const batchCall = chainflip.tx.environment.batch(calls, atomic);
+  const batchCall = chainflip.tx.environment.batch(calls);
   const batchRuntimeCall = batchCall.method;
   const encodedBatchCall = chainflip.createType('Call', batchRuntimeCall).toU8a();
   const hexBatchRuntimeCall = u8aToHex(encodedBatchCall);
