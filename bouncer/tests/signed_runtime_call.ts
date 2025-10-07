@@ -44,54 +44,6 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   }
   console.log('EVM whale address', ethWallet.address);
 
-  // // EIP-712 manual signing to try out encodings manually.
-  // const domainTemp = {
-  //   name: chainName,
-  //   version,
-  // };
-
-  // const typesTemp = {
-  //   Metadata: [
-  //     { name: 'from', type: 'address' },
-  //     { name: 'nonce', type: 'uint32' },
-  //     { name: 'expiryBlock', type: 'uint32' },
-  //   ],
-  //   RuntimeCall: [{ name: 'call', type: 'string' }],
-  //   Transaction: [
-  //     { name: 'Call', type: 'RuntimeCall' },
-  //     { name: 'Metadata', type: 'Metadata' },
-  //   ],
-  // };
-
-  // const messageTemp = {
-  //   Call: {
-  //     call: "RuntimeCall::System(Call::remark { remark: [] })",
-  //   },
-  //   Metadata: {
-  //     from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-  //     nonce: 0,
-  //     expiryBlock: 10000,
-  //   },
-  // };
-
-  // const evmSignatureEip712Temp = await ethWallet.signTypedData(domainTemp, typesTemp, messageTemp);
-  // console.log('EIP712 Signature:', evmSignatureEip712Temp);
-
-  // const encodedPayload = ethers.TypedDataEncoder.encode(domainTemp, typesTemp, messageTemp);
-  // console.log('EIP-712 Encoded Payload:', encodedPayload);
-  // const hashTemp = ethers.TypedDataEncoder.hash(domainTemp, typesTemp, messageTemp);
-  // console.log('EIP-712 Hash:', hashTemp);
-  // console.log("EIP-712 Hash uint8Array",  hexToU8a(hashTemp));
-  // const hashDomainTemp = ethers.TypedDataEncoder.hashDomain(domainTemp);
-  // console.log('EIP-712 Domain Hash:', hashDomainTemp);
-  // const messageHashTemp = ethers.TypedDataEncoder.from(typesTemp).hash(messageTemp);
-  // console.log('EIP-712 Message Hash:', messageHashTemp);
-
-  // // console.log('Transaction hash:', ethers.TypedDataEncoder.hashStruct('Transaction', typesTemp, messageTemp));
-  // // console.log('RuntimeCall hash:', ethers.TypedDataEncoder.hashStruct('RuntimeCall', typesTemp, messageTemp.Call));
-  // // console.log('Metadata hash:', ethers.TypedDataEncoder.hashStruct('Metadata', typesTemp, messageTemp.Metadata));
-  // // return;
-
   const logger = testContext.logger;
   await using chainflip = await getChainflipApi();
 
@@ -155,8 +107,8 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
       expiry_block: expiryBlock,
     },
   );
-  // Print with json stringify
-  console.log('eipPayload', JSON.stringify(eipPayload, null, 2));
+  // To print with json stringify
+  // console.log('eipPayload', JSON.stringify(eipPayload, null, 2));
 
   // Extract data loosely. To be done in a more strict typechecked method once it's settled.
   const domain = eipPayload.domain;
@@ -202,7 +154,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     historicalCheckBlocks: 1,
   }).event;
 
-  // return; // Temporary early return to skip the rest of the test while debugging
+  // return; // Temporary early return to just test the EIP-
 
   logger.info('Signing and submitting user-signed payload with Solana wallet');
 
@@ -327,3 +279,51 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   logger.info('Signing and submitting user-signed payload with EVM wallet using EIP-712');
 }
+
+// Code to manually to try  EIP-712 manual signing to try out encodings manually
+// const domainTemp = {
+//   name: chainName,
+//   version,
+// };
+
+// const typesTemp = {
+//   Metadata: [
+//     { name: 'from', type: 'address' },
+//     { name: 'nonce', type: 'uint32' },
+//     { name: 'expiryBlock', type: 'uint32' },
+//   ],
+//   RuntimeCall: [{ name: 'call', type: 'string' }],
+//   Transaction: [
+//     { name: 'Call', type: 'RuntimeCall' },
+//     { name: 'Metadata', type: 'Metadata' },
+//   ],
+// };
+
+// const messageTemp = {
+//   Call: {
+//     call: "RuntimeCall::System(Call::remark { remark: [] })",
+//   },
+//   Metadata: {
+//     from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+//     nonce: 0,
+//     expiryBlock: 10000,
+//   },
+// };
+
+// const evmSignatureEip712Temp = await ethWallet.signTypedData(domainTemp, typesTemp, messageTemp);
+// console.log('EIP712 Signature:', evmSignatureEip712Temp);
+
+// const encodedPayload = ethers.TypedDataEncoder.encode(domainTemp, typesTemp, messageTemp);
+// console.log('EIP-712 Encoded Payload:', encodedPayload);
+// const hashTemp = ethers.TypedDataEncoder.hash(domainTemp, typesTemp, messageTemp);
+// console.log('EIP-712 Hash:', hashTemp);
+// console.log("EIP-712 Hash uint8Array",  hexToU8a(hashTemp));
+// const hashDomainTemp = ethers.TypedDataEncoder.hashDomain(domainTemp);
+// console.log('EIP-712 Domain Hash:', hashDomainTemp);
+// const messageHashTemp = ethers.TypedDataEncoder.from(typesTemp).hash(messageTemp);
+// console.log('EIP-712 Message Hash:', messageHashTemp);
+
+// // console.log('Transaction hash:', ethers.TypedDataEncoder.hashStruct('Transaction', typesTemp, messageTemp));
+// // console.log('RuntimeCall hash:', ethers.TypedDataEncoder.hashStruct('RuntimeCall', typesTemp, messageTemp.Call));
+// // console.log('Metadata hash:', ethers.TypedDataEncoder.hashStruct('Metadata', typesTemp, messageTemp.Metadata));
+// // return;

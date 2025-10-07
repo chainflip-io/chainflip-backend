@@ -2461,11 +2461,12 @@ where
 				if let Err(err) = state_chain_runtime::RuntimeCall::decode(&mut &call[..]) {
 					return Err(CfApiError::ErrorObject(ErrorObject::owned(
 						ErrorCode::InvalidParams.code(),
-						format!("Failed to deserialize runtimecall parameter {:?}", err),
+						format!("Failed to deserialize into a RuntimeCall {:?}", err),
 						None::<()>,
 					)));
 				}
-				let chainflip_network = api.cf_eip_data(hash).map_err(CfApiError::from)??;
+				let chainflip_network =
+					api.cf_chainflip_network(hash).map_err(CfApiError::from)??;
 
 				let typed_data: eip_712_types::TypedData = eip_712_types::build_eip712_typed_data(
 					chainflip_network,

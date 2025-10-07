@@ -790,8 +790,9 @@ decl_runtime_apis!(
 			account: Option<AccountId32>,
 		) -> Vec<DelegationSnapshot<AccountId32, FlipBalance>>;
 		#[changed_in(8)]
-		fn cf_eip_data();
-		fn cf_eip_data() -> Result<cf_primitives::ChainflipNetwork, DispatchErrorWithMessage>;
+		fn cf_chainflip_network();
+		fn cf_chainflip_network(
+		) -> Result<cf_primitives::ChainflipNetwork, DispatchErrorWithMessage>;
 	}
 );
 

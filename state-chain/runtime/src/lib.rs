@@ -2727,7 +2727,7 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_eip_data(
+		fn cf_chainflip_network(
 		) -> Result< cf_primitives::ChainflipNetwork, DispatchErrorWithMessage> {
 			Ok( pallet_cf_environment::ChainflipNetworkName::<Runtime>::get())
 		}
