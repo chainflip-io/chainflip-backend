@@ -727,7 +727,7 @@ pub mod pallet {
 					Err(_) => return Err(InvalidTransaction::BadSigner.into()),
 				};
 				frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
-				
+
 				Ok(())
 			} else {
 				Err(InvalidTransaction::Call.into())

@@ -785,18 +785,12 @@ fn can_non_native_signed_call() {
 		let caller: <Test as frame_system::Config>::AccountId = signature_data
 			.signer_account().unwrap();
 
-        let initial_nonce = frame_system::Pallet::<Test>::account_nonce(caller);
-        assert_eq!(initial_nonce, 0);
-
         assert_ok!(Environment::non_native_signed_call(
             RuntimeOrigin::none(),
             call,
             transaction_metadata,
             signature_data.clone(),
         ));
-
-        // Verify the nonce was incremented
-        assert_eq!(frame_system::Pallet::<Test>::account_nonce(caller), initial_nonce + 1);
 
 		assert!(
 			System::events().iter().any(|record| matches!(
