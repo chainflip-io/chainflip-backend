@@ -91,9 +91,7 @@ pub(crate) fn batch_all<T: Config>(
 		let origin = frame_system::RawOrigin::Signed(signer_account.clone()).into();
 
 		// Don't allow nested calls.
-		if let Some(Call::non_native_signed_call { .. }) | Some(Call::batch { .. }) =
-			call.is_sub_type()
-		{
+		if let Some(Call::batch { .. }) = call.is_sub_type() {
 			let base_weight = weight_fn(index.saturating_add(1) as u32);
 			let err = DispatchErrorWithPostInfo {
 				post_info: Some(base_weight.saturating_add(weight)).into(),
