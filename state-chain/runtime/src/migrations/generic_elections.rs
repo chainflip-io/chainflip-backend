@@ -31,7 +31,7 @@ impl OnRuntimeUpgrade for Migration {
 	}
 
 	fn on_runtime_upgrade() -> Weight {
-		if crate::VERSION.spec_version == 1_11_11 {
+		if crate::VERSION.spec_version == 1_11_12 {
 			let result = pallet_cf_elections::Pallet::<Runtime, ()>::update_settings(
 				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 				Some(
