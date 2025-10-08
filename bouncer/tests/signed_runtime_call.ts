@@ -34,14 +34,10 @@ const expiryBlock = 10000;
 const chainName = 'Chainflip-Development';
 const version = '0';
 
-export function encodeDomainDataToSign(
-  payload: Uint8Array,
-  nonce: number,
-  userExpiryBlock: number,
-) {
+export function encodeDomainDataToSign(payload: Uint8Array, nonce: number, blockNumber?: number) {
   const transactionMetadata = TransactionMetadata.enc({
     nonce,
-    expiryBlock: userExpiryBlock,
+    expiryBlock: blockNumber ?? expiryBlock,
   });
   const chainNameBytes = ChainNameCodec.enc(chainName);
   const versionBytes = VersionCodec.enc(version);
@@ -184,7 +180,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   const hexBatchRuntimeCall = u8aToHex(encodedBatchCall);
 
   const svmNonce = (await chainflip.rpc.system.accountNextIndex(svmScAccount)) as unknown as number;
-  const svmPayload = encodeDomainDataToSign(encodedBatchCall, svmNonce, expiryBlock);
+  const svmPayload = encodeDomainDataToSign(encodedBatchCall, svmNonce);
 
   const prefixBytes = Buffer.from([0xff, ...Buffer.from('solana offchain', 'utf8')]);
   const solPrefixedMessage = Buffer.concat([prefixBytes, svmPayload]);
@@ -226,7 +222,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   // EVM Whale -> SC account (`cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7`)
   evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)) as unknown as number;
-  const evmPayload = encodeDomainDataToSign(encodedBatchCall, evmNonce, expiryBlock);
+  const evmPayload = encodeDomainDataToSign(encodedBatchCall, evmNonce);
   const evmSignature = await ethWallet.signMessage(evmPayload);
 
   // Submit as unsigned extrinsic - no broker needed

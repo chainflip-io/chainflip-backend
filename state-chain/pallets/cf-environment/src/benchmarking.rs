@@ -210,7 +210,7 @@ mod benchmarks {
 		let call = scale_info::prelude::boxed::Box::new(runtime_call);
 
 		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000u32 };
-		let user_signature_data: UserSignatureData = UserSignatureData::Solana {
+		let signature_data: SignatureData = SignatureData::Solana {
             signature: SolSignature(hex_literal::hex!(
                 "1c3e51b4b12bcc95419a43dc4c1854663edda1df5dd788a059a66c6d237a32fafbeff6515d4b8af0267ce8365ba7a83cf483d7b66d3e3164db027302e308c60e"
             )),
@@ -223,7 +223,7 @@ mod benchmarks {
 			frame_system::RawOrigin::None,
 			call,
 			transaction_metadata,
-			user_signature_data,
+			signature_data,
 		);
 	}
 

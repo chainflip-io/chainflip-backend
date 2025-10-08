@@ -20,7 +20,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 pub use crate::submit_runtime_call::TransactionMetadata;
-use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, UserSignatureData};
+use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
 use cf_chains::{
 	btc::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
@@ -626,7 +626,7 @@ pub mod pallet {
 		// We might want to add a check that the signer has balance > 0 as part of
 		// the validate_unsigned.
 		/// Allows for submitting unsigned runtime calls where validation is done on
-		/// the `user_signature_data` instead. This adds off-chain signing support
+		/// the `signature_data` instead. This adds off-chain signing support
 		/// for non-native wallets, such as EVM and Solana wallets. If the inner call
 		/// fails the extrinsic still executes succesfully and consumes the nonce.
 		#[pallet::call_index(10)]
@@ -639,16 +639,15 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			call: scale_info::prelude::boxed::Box<<T as Config>::RuntimeCall>,
 			_transaction_metadata: TransactionMetadata,
-			user_signature_data: UserSignatureData,
+			signature_data: SignatureData,
 		) -> DispatchResult {
 			// unsigned extrinsic - validation happens in ValidateUnsigned
 			frame_system::ensure_none(origin)?;
 
 			// Extract signer account ID based on signature type. Validation already done in
 			// ValidateUnsigned, it should never fail to decode the signer.
-			let signer_account: T::AccountId = user_signature_data
-				.signer_account()
-				.map_err(|_| Error::<T>::FailedToDecodeSigner)?;
+			let signer_account: T::AccountId =
+				signature_data.signer_account().map_err(|_| Error::<T>::FailedToDecodeSigner)?;
 
 			// Increment the account nonce to prevent replay attacks
 			frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
@@ -694,8 +693,8 @@ pub mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 
-		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			submit_runtime_call::validate_unsigned::<T>(source, call)
+		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			submit_runtime_call::validate_unsigned::<T>(call)
 		}
 	}
 

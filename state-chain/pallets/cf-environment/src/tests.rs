@@ -20,8 +20,8 @@ use crate::{
 	mock::*,
 	submit_runtime_call::{build_eip_712_payload, validate_unsigned, EthSigType, SolSigType},
 	BitcoinAvailableUtxos, Call, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
-	SafeModeUpdate, SolSignature, SolanaAvailableNonceAccounts, SolanaUnavailableNonceAccounts,
-	TransactionMetadata, TransactionSource, UserSignatureData,
+	SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
+	SolanaUnavailableNonceAccounts, TransactionMetadata,
 };
 use cf_chains::{
 	btc::{
@@ -772,7 +772,7 @@ fn can_non_native_signed_call() {
         // Create user signature data
         // In a real scenario, this would involve signing the serialized call with the caller's private key.
         // For testing, we use a mock signature that passes validation in the mock environment.
-		let user_signature_data = UserSignatureData::Solana {
+		let signature_data = SignatureData::Solana {
 			signature: SolSignature(hex_literal::hex!(
 				"1c3e51b4b12bcc95419a43dc4c1854663edda1df5dd788a059a66c6d237a32fafbeff6515d4b8af0267ce8365ba7a83cf483d7b66d3e3164db027302e308c60e"
 			)),
@@ -780,7 +780,7 @@ fn can_non_native_signed_call() {
 			sig_type: SolSigType::Domain,
 		};
 
-		let caller: <Test as frame_system::Config>::AccountId = user_signature_data
+		let caller: <Test as frame_system::Config>::AccountId = signature_data
 			.signer_account().unwrap();
 
         let initial_nonce = frame_system::Pallet::<Test>::account_nonce(caller);
@@ -790,7 +790,7 @@ fn can_non_native_signed_call() {
             RuntimeOrigin::none(),
             call,
             transaction_metadata,
-            user_signature_data.clone(),
+            signature_data.clone(),
         ));
 
         // Verify the nonce was incremented
@@ -817,7 +817,7 @@ fn can_build_eip_712_payload_validate_unsigned() {
 		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000 };
 		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 		let signer: EvmAddress = EvmAddress::from_str(from_str).unwrap();
-		let user_signature_data: UserSignatureData = UserSignatureData::Ethereum {
+		let signature_data: SignatureData = SignatureData::Ethereum {
             signature: hex_literal::hex!(
                 "712d40241c7ad17d589a3dba2e46ab9a1279c184383f85c91f6dede41774b5f4067a875634d227973e6d63e9651ca24c7025a0b80091807d79c05df1ba7355271b"
             ).into(),
@@ -826,11 +826,10 @@ fn can_build_eip_712_payload_validate_unsigned() {
         };
 
 		let validate = validate_unsigned::<Test>(
-			TransactionSource::External, // unused
 			&Call::non_native_signed_call {
 				call: Box::new(runtime_call.clone()),
 				transaction_metadata,
-				user_signature_data,
+				signature_data,
 			},
 		);
 		assert!(validate.is_ok());

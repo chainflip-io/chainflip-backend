@@ -25,8 +25,9 @@ use frame_support::{
 use serde::{Deserialize, Serialize};
 pub const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
 pub const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
-pub const UNSIGNED_BATCH_VERSION: &str = "0";
 pub const BATCHED_CALL_LIMITS: usize = 10;
+// Using a str for consistency between EIP-712 and other encodings
+pub const UNSIGNED_DATA_VERSION: &str = "0";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 pub struct TransactionMetadata {
@@ -51,19 +52,19 @@ pub enum SolSigType {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum UserSignatureData {
+pub enum SignatureData {
 	Solana { signature: SolSignature, signer: SolAddress, sig_type: SolSigType },
 	Ethereum { signature: EthereumSignature, signer: EvmAddress, sig_type: EthSigType },
 }
 
-impl UserSignatureData {
+impl SignatureData {
 	/// Extract the signer account ID as T::AccountId from the signature data
 	pub fn signer_account<AccountId: codec::Decode>(&self) -> Result<AccountId, codec::Error> {
 		use cf_chains::evm::ToAccountId32;
 
 		let account_id_32 = match self {
-			UserSignatureData::Solana { signer, .. } => AccountId32::new((*signer).into()),
-			UserSignatureData::Ethereum { signer, .. } => signer.into_account_id_32(),
+			SignatureData::Solana { signer, .. } => AccountId32::new((*signer).into()),
+			SignatureData::Ethereum { signer, .. } => signer.into_account_id_32(),
 		};
 
 		AccountId::decode(&mut account_id_32.encode().as_slice())
@@ -226,15 +227,9 @@ pub(crate) fn weight_and_dispatch_class<T: Config>(
 	(dispatch_weight, dispatch_class)
 }
 
-pub(crate) fn validate_unsigned<T: Config>(
-	_source: TransactionSource,
-	call: &Call<T>,
-) -> TransactionValidity {
-	if let Call::non_native_signed_call {
-		call: inner_call,
-		transaction_metadata,
-		user_signature_data,
-	} = call
+pub(crate) fn validate_unsigned<T: Config>(call: &Call<T>) -> TransactionValidity {
+	if let Call::non_native_signed_call { call: inner_call, transaction_metadata, signature_data } =
+		call
 	{
 		// Check if payload hasn't expired
 		if frame_system::Pallet::<T>::block_number() >= transaction_metadata.expiry_block.into() {
@@ -242,7 +237,7 @@ pub(crate) fn validate_unsigned<T: Config>(
 		}
 
 		// Extract signer account ID
-		let signer_account: T::AccountId = match user_signature_data.signer_account() {
+		let signer_account: T::AccountId = match signature_data.signer_account() {
 			Ok(account_id) => account_id,
 			Err(_) => return InvalidTransaction::BadSigner.into(),
 		};
@@ -263,14 +258,14 @@ pub(crate) fn validate_unsigned<T: Config>(
 			[
 				serialized_calls.clone(),
 				chanflip_network_name.as_str().encode(),
-				UNSIGNED_BATCH_VERSION.encode(),
+				UNSIGNED_DATA_VERSION.encode(),
 				transaction_metadata.encode(),
 			]
 			.concat()
 		};
 
-		let valid_signature = match user_signature_data {
-			UserSignatureData::Solana { signature, signer, sig_type } => {
+		let valid_signature = match signature_data {
+			SignatureData::Solana { signature, signer, sig_type } => {
 				let signed_payload = match sig_type {
 					SolSigType::Domain => {
 						let domain_data = build_domain_data();
@@ -279,7 +274,7 @@ pub(crate) fn validate_unsigned<T: Config>(
 				};
 				verify_sol_signature(signer, &signed_payload, signature)
 			},
-			UserSignatureData::Ethereum { signature, signer, sig_type } => {
+			SignatureData::Ethereum { signature, signer, sig_type } => {
 				let signed_payload = match sig_type {
 					EthSigType::Domain => {
 						let domain_data = build_domain_data();
@@ -294,7 +289,7 @@ pub(crate) fn validate_unsigned<T: Config>(
 					EthSigType::Eip712 => build_eip_712_payload::<T>(
 						(**inner_call).clone(),
 						chanflip_network_name.as_str(),
-						UNSIGNED_BATCH_VERSION,
+						UNSIGNED_DATA_VERSION,
 						*transaction_metadata,
 						*signer,
 					),
