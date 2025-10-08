@@ -158,6 +158,8 @@ fn can_update_all_config_items() {
 		const NEW_INTEREST_COLLECTION_THRESHOLD_USD: AssetAmount = 46;
 
 		const NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD: AssetAmount = 30_000_000_000;
+		const NEW_MINIMUM_LOAN_AMOUNT_USD: AssetAmount = 12345;
+		const NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD: AssetAmount = 1234;
 
 		const UPDATE_NETWORK_FEE_DEDUCTION_FROM_BOOST: PalletConfigUpdate =
 			PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
@@ -204,8 +206,50 @@ fn can_update_all_config_items() {
 		const UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD: PalletConfigUpdate =
 			PalletConfigUpdate::SetLiquidationSwapChunkSizeUsd(NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD);
 
+		const UPDATE_LOAN_MINIMUMS: PalletConfigUpdate = PalletConfigUpdate::SetMinimumAmounts {
+			minimum_loan_amount_usd: NEW_MINIMUM_LOAN_AMOUNT_USD,
+			minimum_update_loan_amount_usd: NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD,
+		};
+
 		// Check that the default values are different from the new ones
 		assert_ne!(NetworkFeeDeductionFromBoostPercent::<Test>::get(), NEW_NETWORK_FEE_DEDUCTION);
+		assert_ne!(
+			LendingConfig::<Test>::get().fee_swap_interval_blocks,
+			NEW_FEE_SWAP_INTERVAL_BLOCKS
+		);
+		assert_ne!(
+			LendingConfig::<Test>::get().interest_payment_interval_blocks,
+			NEW_INTEREST_PAYMENT_INTERVAL_BLOCKS
+		);
+		assert_ne!(LendingConfig::<Test>::get().fee_swap_threshold_usd, NEW_FEE_SWAP_THRESHOLD_USD);
+		assert_ne!(
+			LendingConfig::<Test>::get().interest_collection_threshold_usd,
+			NEW_INTEREST_COLLECTION_THRESHOLD_USD
+		);
+		assert_ne!(
+			LendingConfig::<Test>::get().soft_liquidation_max_oracle_slippage,
+			NEW_ORACLE_SLIPPAGE_SOFT_LIQUIDATION
+		);
+		assert_ne!(
+			LendingConfig::<Test>::get().hard_liquidation_max_oracle_slippage,
+			NEW_ORACLE_SLIPPAGE_HARD_LIQUIDATION
+		);
+		assert_ne!(
+			LendingConfig::<Test>::get().fee_swap_max_oracle_slippage,
+			NEW_ORACLE_SLIPPAGE_FEE_SWAP
+		);
+		assert_ne!(
+			LendingConfig::<Test>::get().liquidation_swap_chunk_size_usd,
+			NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD
+		);
+		assert_ne!(
+			LendingConfig::<Test>::get().minimum_loan_amount_usd,
+			NEW_MINIMUM_LOAN_AMOUNT_USD
+		);
+		assert_ne!(
+			LendingConfig::<Test>::get().minimum_update_loan_amount_usd,
+			NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD
+		);
 
 		// Update all config items at the same time
 		assert_ok!(LendingPools::update_pallet_config(
@@ -220,7 +264,8 @@ fn can_update_all_config_items() {
 				UPDATE_FEE_SWAP_THRESHOLD_USD,
 				UPDATE_ORACLE_SLIPPAGE_FOR_SWAPS,
 				UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD,
-				UPDATE_INTEREST_COLLECTION_THRESHOLD_USD
+				UPDATE_INTEREST_COLLECTION_THRESHOLD_USD,
+				UPDATE_LOAN_MINIMUMS,
 			]
 			.try_into()
 			.unwrap()
@@ -243,6 +288,8 @@ fn can_update_all_config_items() {
 				hard_liquidation_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_HARD_LIQUIDATION,
 				liquidation_swap_chunk_size_usd: NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD,
 				fee_swap_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_FEE_SWAP,
+				minimum_loan_amount_usd: NEW_MINIMUM_LOAN_AMOUNT_USD,
+				minimum_update_loan_amount_usd: NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD,
 				pool_config_overrides: BTreeMap::default(),
 			}
 		);
@@ -277,6 +324,7 @@ fn can_update_all_config_items() {
 			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
 				update: UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD
 			}),
+			RuntimeEvent::LendingPools(Event::PalletConfigUpdated { update: UPDATE_LOAN_MINIMUMS }),
 		);
 
 		// Make sure that only governance can update the config

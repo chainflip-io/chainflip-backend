@@ -147,6 +147,10 @@ pub enum PalletConfigUpdate {
 		fee_swap: BasisPoints,
 	},
 	SetLiquidationSwapChunkSizeUsd(AssetAmount),
+	SetMinimumAmounts {
+		minimum_loan_amount_usd: AssetAmount,
+		minimum_update_loan_amount_usd: AssetAmount,
+	},
 }
 
 define_wrapper_type!(CorePoolId, u32);
@@ -224,6 +228,8 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	liquidation_swap_chunk_size_usd: 10_000_000_000, //10k USD
 	fee_swap_max_oracle_slippage: 50,   // 0.5%
 	pool_config_overrides: BTreeMap::new(),
+	minimum_loan_amount_usd: 100_000_000,       // 100 USD
+	minimum_update_loan_amount_usd: 10_000_000, // 10 USD
 };
 
 impl Get<LendingConfiguration> for LendingConfigDefault {
@@ -317,8 +323,7 @@ pub mod pallet {
 
 	/// Stores the configuration for lending (updatable by governance).
 	#[pallet::storage]
-	pub type LendingConfig<T: Config> =
-		StorageValue<_, LendingConfiguration, ValueQuery, LendingConfigDefault>;
+	pub type LendingConfig<T: Config> = StorageValue<_, LendingConfiguration, ValueQuery>;
 
 	/// Stores loan accounts for borrowers and their loans.
 	#[pallet::storage]
@@ -493,6 +498,10 @@ pub mod pallet {
 		LiquidationInProgress,
 		/// The provided collateral amount is empty/zero.
 		EmptyCollateral,
+		/// The loan amount would be below the minimum allowed.
+		LoanBelowMinimumAmount,
+		/// You must expand or repay the loan by at least the minimum allowed amount.
+		AmountBelowMinimum,
 	}
 
 	#[pallet::hooks]
@@ -586,6 +595,13 @@ pub mod pallet {
 						},
 						PalletConfigUpdate::SetLiquidationSwapChunkSizeUsd(amount) => {
 							config.liquidation_swap_chunk_size_usd = *amount;
+						},
+						PalletConfigUpdate::SetMinimumAmounts {
+							minimum_loan_amount_usd,
+							minimum_update_loan_amount_usd,
+						} => {
+							config.minimum_loan_amount_usd = *minimum_loan_amount_usd;
+							config.minimum_update_loan_amount_usd = *minimum_update_loan_amount_usd;
 						},
 					}
 					Self::deposit_event(Event::<T>::PalletConfigUpdated { update });

@@ -607,6 +607,12 @@ impl<T: Config> LoanAccount<T> {
 
 		loan.owed_principal.saturating_accrue(extra_principal);
 
+		ensure!(
+			loan.owed_principal >=
+				amount_from_usd_value::<T>(loan.asset, config.minimum_loan_amount_usd)?,
+			Error::<T>::LoanBelowMinimumAmount
+		);
+
 		Pallet::<T>::charge_origination_fee(
 			&self.borrower_id,
 			&mut loan,
@@ -972,7 +978,8 @@ impl<T: Config> LendingApi for Pallet<T> {
 	}
 
 	/// Borrows `extra_amount_to_borrow` by expanding `loan_id`. Adds any extra collateral to the
-	/// account (which may be required to cover the new total owed amount).
+	/// account (which may be required to cover the new total owed amount). The extra amount to
+	/// borrow must be above the minimum update amount.
 	#[transactional]
 	fn expand_loan(
 		borrower_id: Self::AccountId,
@@ -990,6 +997,16 @@ impl<T: Config> LendingApi for Pallet<T> {
 				extra_principal_amount: extra_amount_to_borrow,
 			});
 
+			let config = LendingConfig::<T>::get();
+			ensure!(
+				extra_amount_to_borrow >=
+					amount_from_usd_value::<T>(
+						loan.asset,
+						config.minimum_update_loan_amount_usd
+					)?,
+				Error::<T>::AmountBelowMinimum
+			);
+
 			loan_account.expand_loan_inner(loan, extra_amount_to_borrow, extra_collateral)?;
 
 			Ok::<_, DispatchError>(())
@@ -998,7 +1015,8 @@ impl<T: Config> LendingApi for Pallet<T> {
 		Ok(())
 	}
 
-	/// Repays (fully or partially) a loan.
+	/// Repays (fully or partially) a loan. Must be left above the minimum loan amount and the
+	/// repayment amount must be at least the minimum update amount, unless it's a full repayment.
 	#[transactional]
 	fn try_making_repayment(
 		borrower_id: &T::AccountId,
@@ -1014,6 +1032,19 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			let loan_asset = loan.asset;
 
+			let config = LendingConfig::<T>::get();
+
+			if repayment_amount < loan.owed_principal {
+				ensure!(
+					repayment_amount >=
+						amount_from_usd_value::<T>(
+							loan.asset,
+							config.minimum_update_loan_amount_usd
+						)?,
+					Error::<T>::AmountBelowMinimum
+				);
+			}
+
 			T::Balance::try_debit_account(borrower_id, loan_asset, repayment_amount)?;
 
 			if let LoanRepaymentOutcome::FullyRepaid { excess_amount } =
@@ -1022,6 +1053,13 @@ impl<T: Config> LendingApi for Pallet<T> {
 				loan_account.settle_loan(loan_id, false /* not via liquidation */);
 
 				T::Balance::credit_account(borrower_id, loan_asset, excess_amount);
+			} else {
+				let config = LendingConfig::<T>::get();
+				ensure!(
+					loan.owed_principal >=
+						amount_from_usd_value::<T>(loan.asset, config.minimum_loan_amount_usd)?,
+					Error::<T>::LoanBelowMinimumAmount
+				);
 			}
 
 			// NOTE: even if we settle the last loan here, we don't remove
@@ -1601,7 +1639,7 @@ pub struct NetworkFeeContributions {
 	pub interest_on_collateral_max: Permill,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct LendingConfiguration {
 	/// This configuration is used unless it is overridden in `pool_config_overrides`.
 	pub default_pool_config: LendingPoolConfiguration,
@@ -1631,6 +1669,16 @@ pub struct LendingConfiguration {
 	pub fee_swap_max_oracle_slippage: BasisPoints,
 	/// If set for a pool/asset, this configuration will be used instead of the default
 	pub pool_config_overrides: BTreeMap<Asset, LendingPoolConfiguration>,
+	/// Minimum amount of principle that a loan must have at all times.
+	pub minimum_loan_amount_usd: AssetAmount,
+	/// Minimum amount of principal that can be used to expand or repay an existing loan.
+	pub minimum_update_loan_amount_usd: AssetAmount,
+}
+
+impl Default for LendingConfiguration {
+	fn default() -> Self {
+		LendingConfigDefault::get()
+	}
 }
 
 impl LendingConfiguration {
