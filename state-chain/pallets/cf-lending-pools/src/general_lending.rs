@@ -633,6 +633,14 @@ impl<T: Config> LoanAccount<T> {
 			Error::<T>::LoanCreationDisabled
 		);
 
+		// To avoid unnecessary edge cases we disable creation of new loans
+		// while the account is being liquidation (even if the user provides
+		// sufficient collateral)
+		ensure!(
+			self.liquidation_status == LiquidationStatus::NoLiquidation,
+			Error::<T>::LiquidationInProgress
+		);
+
 		self.try_adding_collateral_from_free_balance(&extra_collateral)?;
 
 		if !extra_collateral.is_empty() {

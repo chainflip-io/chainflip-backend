@@ -12,6 +12,7 @@ use cf_traits::{
 	},
 	SafeMode, SetSafeMode, SwapExecutionProgress,
 };
+use cf_utilities::assert_matches;
 
 use super::*;
 use frame_support::{assert_err, assert_noop, assert_ok};
@@ -1703,6 +1704,66 @@ fn making_loan_repayment() {
 		);
 
 	});
+}
+
+#[test]
+fn borrowing_disallowed_during_liquidation() {
+	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
+
+	new_test_ext()
+		.execute_with(|| {
+			setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
+
+			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+
+			MockBalance::credit_account(
+				&BORROWER,
+				COLLATERAL_ASSET,
+				INIT_COLLATERAL + ORIGINATION_FEE,
+			);
+
+			assert_eq!(
+				LendingPools::new_loan(
+					BORROWER,
+					LOAN_ASSET,
+					PRINCIPAL,
+					Some(COLLATERAL_ASSET),
+					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
+				),
+				Ok(LOAN_ID)
+			);
+
+			// Force liquidation
+			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE * 2);
+		})
+		.then_execute_at_next_block(|_| {
+			assert_matches!(
+				LoanAccounts::<Test>::get(BORROWER).unwrap().liquidation_status,
+				LiquidationStatus::Liquidating { .. }
+			);
+
+			assert_noop!(
+				LendingPools::new_loan(
+					BORROWER,
+					LOAN_ASSET,
+					PRINCIPAL,
+					Some(COLLATERAL_ASSET),
+					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
+				),
+				Error::<Test>::LiquidationInProgress
+			);
+
+			assert_noop!(
+				<LendingPools as LendingApi>::expand_loan(
+					BORROWER,
+					LOAN_ID,
+					PRINCIPAL,
+					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
+				),
+				Error::<Test>::LiquidationInProgress
+			);
+		});
 }
 
 mod safe_mode {
