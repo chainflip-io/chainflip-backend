@@ -29,7 +29,7 @@ mod old {
 }
 
 mod new {
-	#[engine_proc_macros::link_engine_library_version("1.11.11")]
+	#[engine_proc_macros::link_engine_library_version("1.11.12")]
 	extern "C" {
 		fn cfe_entrypoint(
 			c_args: engine_upgrade_utils::CStrArray,
