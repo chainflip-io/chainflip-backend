@@ -199,28 +199,39 @@ fn basic_general_lending() {
 
 			System::reset_events();
 
+			let collateral = BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]);
+
 			assert_eq!(
 				LendingPools::new_loan(
 					BORROWER,
 					LOAN_ASSET,
 					PRINCIPAL,
 					Some(COLLATERAL_ASSET),
-					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
+					collateral.clone(),
 				),
 				Ok(LOAN_ID)
 			);
 
 			let (network_fee, pool_fee) = take_network_fee(ORIGINATION_FEE);
 
-			// NOTE: the sequence of events is important here
+			// NOTE: we want LoanCreated event to be emitted before any event
+			// referencing it (e.g. OriginationFeeTaken)
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::PrimaryCollateralAssetUpdated{
+					borrower_id: BORROWER,
+					primary_collateral_asset: COLLATERAL_ASSET,
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LoanCreated {
 					loan_id: LOAN_ID,
 					borrower_id: BORROWER,
 					asset: LOAN_ASSET,
 					principal_amount: PRINCIPAL,
 				}),
+				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+					borrower_id: BORROWER,
+					collateral: ref collateral_in_event,
+				}) if collateral_in_event == &collateral,
 				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
 					loan_id: LOAN_ID,
 					pool_fee: pool_fee_taken,
@@ -496,13 +507,15 @@ fn basic_loan_aggregation() {
 			INIT_COLLATERAL + ORIGINATION_FEE + ORIGINATION_FEE_2,
 		);
 
+		let collateral = BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]);
+
 		assert_eq!(
 			LendingPools::new_loan(
 				BORROWER,
 				LOAN_ASSET,
 				PRINCIPAL,
 				Some(COLLATERAL_ASSET),
-				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
+				collateral.clone()
 			),
 			Ok(LOAN_ID)
 		);
@@ -531,6 +544,10 @@ fn basic_loan_aggregation() {
 					loan_id: LOAN_ID,
 					extra_principal_amount: EXTRA_PRINCIPAL_1,
 				}),
+				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+					borrower_id: BORROWER,
+					collateral: ref collateral_in_event,
+				}) if collateral_in_event == &collateral,
 				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
 					loan_id: LOAN_ID,
 					pool_fee: pool_fee_taken,
@@ -1010,17 +1027,25 @@ fn adding_and_removing_collateral() {
 			(COLLATERAL_ASSET_2, INIT_COLLATERAL_AMOUNT_2),
 		]);
 
+		System::reset_events();
+
 		assert_ok!(LendingPools::add_collateral(
 			RuntimeOrigin::signed(BORROWER),
 			Some(COLLATERAL_ASSET_1),
 			collateral.clone(),
 		));
 
-		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
-			borrower_id: BORROWER,
-			collateral: collateral.clone(),
-			primary_collateral_asset: COLLATERAL_ASSET_1,
-		}));
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::LendingPools(Event::<Test>::PrimaryCollateralAssetUpdated{
+				borrower_id: BORROWER,
+				primary_collateral_asset: COLLATERAL_ASSET_1,
+			}),
+			RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+				borrower_id: BORROWER,
+				collateral: ref collateral_in_event,
+			}) if collateral_in_event == &collateral
+		);
 
 		// Adding collateral creates a loan account:
 		assert_eq!(

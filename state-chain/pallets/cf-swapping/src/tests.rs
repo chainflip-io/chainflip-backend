@@ -50,7 +50,7 @@ use cf_traits::{
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 		pool_price_api::MockPoolPriceApi,
 	},
-	AccountRoleRegistry, AssetConverter, Chainflip, SetSafeMode,
+	AccountRoleRegistry, AssetConverter, Chainflip, SetSafeMode, SwapExecutionProgress,
 };
 use frame_support::{
 	assert_noop, assert_ok,
@@ -2181,7 +2181,7 @@ fn abort_swap_request() {
 
 mod lending_fee_swaps {
 
-	use cf_traits::{mocks::lending_pools::MockChpSystemApi, SwapExecutionProgress};
+	use cf_traits::mocks::lending_pools::MockChpSystemApi;
 
 	use super::*;
 

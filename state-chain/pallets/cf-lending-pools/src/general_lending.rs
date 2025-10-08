@@ -635,6 +635,13 @@ impl<T: Config> LoanAccount<T> {
 
 		self.try_adding_collateral_from_free_balance(&extra_collateral)?;
 
+		if !extra_collateral.is_empty() {
+			Pallet::<T>::deposit_event(Event::CollateralAdded {
+				borrower_id: self.borrower_id.clone(),
+				collateral: extra_collateral,
+			});
+		}
+
 		GeneralLendingPools::<T>::try_mutate(loan_asset, |pool| {
 			let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
@@ -1080,7 +1087,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 			Self::deposit_event(Event::CollateralAdded {
 				borrower_id: borrower_id.clone(),
 				collateral,
-				primary_collateral_asset: loan_account.primary_collateral_asset,
 			});
 
 			Ok::<_, DispatchError>(())
@@ -1296,11 +1302,16 @@ impl<T: Config> Pallet<T> {
 		maybe_account: &mut Option<LoanAccount<T>>,
 		primary_collateral_asset: Option<Asset>,
 	) -> Result<&mut LoanAccount<T>, Error<T>> {
+		let mut primary_collateral_asset_updated = false;
+
 		let account = match maybe_account {
 			Some(account) => {
 				// If the user provides primary collateral asset, we update it:
 				if let Some(asset) = primary_collateral_asset {
-					account.primary_collateral_asset = asset;
+					if account.primary_collateral_asset != asset {
+						account.primary_collateral_asset = asset;
+						primary_collateral_asset_updated = true;
+					}
 				}
 				account
 			},
@@ -1310,10 +1321,19 @@ impl<T: Config> Pallet<T> {
 				let primary_collateral_asset =
 					primary_collateral_asset.ok_or(Error::<T>::InvalidLoanParameters)?;
 
-				let account = LoanAccount::new(borrower_id, primary_collateral_asset);
+				primary_collateral_asset_updated = true;
+
+				let account = LoanAccount::new(borrower_id.clone(), primary_collateral_asset);
 				maybe_account.insert(account)
 			},
 		};
+
+		if primary_collateral_asset_updated {
+			Self::deposit_event(Event::PrimaryCollateralAssetUpdated {
+				borrower_id,
+				primary_collateral_asset: account.primary_collateral_asset,
+			});
+		}
 
 		Ok(account)
 	}

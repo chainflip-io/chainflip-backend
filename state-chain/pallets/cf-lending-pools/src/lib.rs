@@ -376,7 +376,6 @@ pub mod pallet {
 		CollateralAdded {
 			borrower_id: T::AccountId,
 			collateral: BTreeMap<Asset, AssetAmount>,
-			primary_collateral_asset: Asset,
 		},
 		CollateralRemoved {
 			borrower_id: T::AccountId,
@@ -391,6 +390,10 @@ pub mod pallet {
 		LoanUpdated {
 			loan_id: LoanId,
 			extra_principal_amount: AssetAmount,
+		},
+		PrimaryCollateralAssetUpdated {
+			borrower_id: T::AccountId,
+			primary_collateral_asset: Asset,
 		},
 		OriginationFeeTaken {
 			loan_id: LoanId,
