@@ -172,6 +172,8 @@ pub mod pallet {
 		FailedToDecodeSigner,
 		/// Too many calls batched.
 		TooManyCalls,
+		// Failed to execute non-native signed call
+		FailedToExecuteNonNativeSignedCall,
 		// Failed to execute batch
 		FailedToExecuteBatch,
 	}
@@ -369,7 +371,6 @@ pub mod pallet {
 		/// Unsigned Runtime Call was dispatched
 		NonNativeSignedCall {
 			signer_account: T::AccountId,
-			dispatch_result: DispatchResultWithPostInfo,
 			runtime_call: <T as pallet::Config>::RuntimeCall,
 		},
 		// Runtime Call Batch was dispatched
@@ -627,8 +628,7 @@ pub mod pallet {
 		// the validate_unsigned.
 		/// Allows for submitting unsigned runtime calls where validation is done on
 		/// the `signature_data` instead. This adds off-chain signing support
-		/// for non-native wallets, such as EVM and Solana wallets. If the inner call
-		/// fails the extrinsic still executes succesfully and consumes the nonce.
+		/// for non-native wallets, such as EVM and Solana wallets.
 		#[pallet::call_index(10)]
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
@@ -644,21 +644,18 @@ pub mod pallet {
 			// unsigned extrinsic - validation happens in ValidateUnsigned
 			frame_system::ensure_none(origin)?;
 
-			// Extract signer account ID based on signature type. Validation already done in
-			// ValidateUnsigned, it should never fail to decode the signer.
 			let signer_account: T::AccountId =
 				signature_data.signer_account().map_err(|_| Error::<T>::FailedToDecodeSigner)?;
 
-			// Increment the account nonce to prevent replay attacks
-			frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
-
 			let signer_account_origin =
 				frame_system::RawOrigin::Signed(signer_account.clone()).into();
-			let dispatch_result = (*call.clone()).dispatch_bypass_filter(signer_account_origin);
+
+			let _ = (*call.clone())
+				.dispatch_bypass_filter(signer_account_origin)
+				.map_err(|_| Error::<T>::FailedToExecuteBatch)?;
 
 			Self::deposit_event(Event::<T>::NonNativeSignedCall {
 				signer_account,
-				dispatch_result,
 				runtime_call: *call,
 			});
 			Ok(())
@@ -678,7 +675,7 @@ pub mod pallet {
 			let account_id = ensure_signed(origin)?;
 
 			let _ = batch_all::<T>(account_id.clone(), calls.clone(), T::WeightInfo::batch)
-				.map_err(|_| Error::<T>::FailedToExecuteBatch)?;
+				.map_err(|_| Error::<T>::FailedToExecuteNonNativeSignedCall)?;
 
 			Self::deposit_event(Event::<T>::BatchCompleted {
 				signer_account: account_id,
@@ -694,7 +691,47 @@ pub mod pallet {
 		type Call = Call<T>;
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			submit_runtime_call::validate_unsigned::<T>(call)
+			if let Call::non_native_signed_call {
+				call: inner_call,
+				transaction_metadata,
+				signature_data,
+			} = call
+			{
+				submit_runtime_call::validate_non_native_signed_call::<T>(
+					&**inner_call,
+					*transaction_metadata,
+					signature_data,
+				)
+			} else {
+				Err(InvalidTransaction::Call.into())
+			}
+		}
+		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+			if let Call::non_native_signed_call {
+				call: inner_call,
+				transaction_metadata,
+				signature_data,
+			} = call
+			{
+				// Validate the non-native signed call to prevent it from being included
+				// in a blocks in case they became invalid since being added to the pool.
+				submit_runtime_call::validate_non_native_signed_call::<T>(
+					&**inner_call,
+					*transaction_metadata,
+					signature_data,
+				)?;
+
+				// Extract signer account ID and increment the nonce
+				let signer_account: T::AccountId = match signature_data.signer_account() {
+					Ok(account_id) => account_id,
+					Err(_) => return Err(InvalidTransaction::BadSigner.into()),
+				};
+				frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
+				
+				Ok(())
+			} else {
+				Err(InvalidTransaction::Call.into())
+			}
 		}
 	}
 

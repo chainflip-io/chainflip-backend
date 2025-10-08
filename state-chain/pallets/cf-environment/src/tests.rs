@@ -18,8 +18,10 @@
 
 use crate::{
 	mock::*,
-	submit_runtime_call::{build_eip_712_payload, validate_unsigned, EthSigType, SolSigType},
-	BitcoinAvailableUtxos, Call, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
+	submit_runtime_call::{
+		build_eip_712_payload, validate_non_native_signed_call, EthSigType, SolSigType,
+	},
+	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
 	SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
 	SolanaUnavailableNonceAccounts, TransactionMetadata,
 };
@@ -825,12 +827,10 @@ fn can_build_eip_712_payload_validate_unsigned() {
             sig_type: EthSigType::Eip712,
         };
 
-		let validate = validate_unsigned::<Test>(
-			&Call::non_native_signed_call {
-				call: Box::new(runtime_call.clone()),
+		let validate = validate_non_native_signed_call::<Test>(
+				&runtime_call,
 				transaction_metadata,
-				signature_data,
-			},
+				&signature_data,
 		);
 		assert!(validate.is_ok());
 	});
@@ -849,7 +849,7 @@ fn can_build_eip_712_payload() {
 		let signer: EvmAddress = EvmAddress::from_str(from_str).unwrap();
 
 		let payload = build_eip_712_payload::<Test>(
-			runtime_call,
+			&runtime_call,
 			chain_name,
 			version,
 			transaction_metadata,

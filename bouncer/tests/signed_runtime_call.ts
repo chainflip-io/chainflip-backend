@@ -143,11 +143,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   // Needs to check that the result is not error, as the transaction won't
   // automatically revert/fail as for regular extrinsics.
   await observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
-    test: (event) => {
-      const dispatchResult = event.data.dispatchResult;
-      const signerAccountMatch = event.data.signerAccount === evmScAccount;
-      return signerAccountMatch && 'Ok' in dispatchResult;
-    },
+    test: (event) => event.data.signerAccount === evmScAccount,
     historicalCheckBlocks: 1,
   }).event;
 
