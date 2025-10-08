@@ -14,6 +14,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use codec::{Decode, Encode};
+use frame_support::sp_runtime::RuntimeDebug;
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
+use sp_std::collections::btree_set::BTreeSet;
+
 pub trait SafeMode {
 	fn code_red() -> Self;
 	fn code_green() -> Self;
@@ -228,6 +234,53 @@ macro_rules! impl_pallet_safe_mode {
             }
         }
     };
+}
+
+/// A wrapper around a BTreeSet to make setting safe mode for all items easier. Amber contains a
+/// list of disabled items.
+#[derive(Deserialize, Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug, Default)]
+pub enum SafeModeSet<T: Ord> {
+	#[default]
+	Green,
+	Red,
+	Amber(BTreeSet<T>),
+}
+
+impl<T: Ord> SafeModeSet<T> {
+	pub fn enabled(&self, t: &T) -> bool {
+		!self.disabled(t)
+	}
+	pub fn disabled(&self, t: &T) -> bool {
+		match self {
+			SafeModeSet::Red => true,
+			SafeModeSet::Green => false,
+			SafeModeSet::Amber(set) => set.contains(t),
+		}
+	}
+}
+
+impl<T: Ord> SafeMode for SafeModeSet<T> {
+	fn code_red() -> Self {
+		Self::Red
+	}
+	fn code_green() -> Self {
+		Self::Green
+	}
+}
+
+/// Custom serialization for SafeModeSet so that it serializes like a normal BTreeSet without the
+/// enum wrapper.
+impl<T: Ord + Serialize + strum::IntoEnumIterator> Serialize for SafeModeSet<T> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		match self {
+			Self::Red => BTreeSet::<T>::new().serialize(serializer),
+			Self::Green => T::iter().collect::<BTreeSet<_>>().serialize(serializer),
+			Self::Amber(set) => set.serialize(serializer),
+		}
+	}
 }
 
 #[cfg(test)]
