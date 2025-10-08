@@ -538,16 +538,13 @@ fn basic_loan_aggregation() {
 
 			let (network_fee, pool_fee) = take_network_fee(ORIGINATION_FEE_2);
 
+			// NOTE: no CollateralAdded event since we are not adding any yet
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanUpdated {
 					loan_id: LOAN_ID,
 					extra_principal_amount: EXTRA_PRINCIPAL_1,
 				}),
-				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
-					borrower_id: BORROWER,
-					collateral: ref collateral_in_event,
-				}) if collateral_in_event == &collateral,
 				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
 					loan_id: LOAN_ID,
 					pool_fee: pool_fee_taken,
@@ -620,12 +617,36 @@ fn basic_loan_aggregation() {
 
 		// Should succeed when trying again with extra collateral
 		{
+			System::reset_events();
+
+			let extra_collateral = BTreeMap::from([(COLLATERAL_ASSET, EXTRA_COLLATERAL)]);
+
 			assert_ok!(LendingPools::expand_loan(
 				RuntimeOrigin::signed(BORROWER),
 				LOAN_ID,
 				EXTRA_PRINCIPAL_2,
-				BTreeMap::from([(COLLATERAL_ASSET, EXTRA_COLLATERAL)])
+				extra_collateral.clone()
 			));
+
+			let (network_fee, pool_fee) = take_network_fee(ORIGINATION_FEE_3);
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanUpdated {
+					loan_id: LOAN_ID,
+					extra_principal_amount: EXTRA_PRINCIPAL_2,
+				}),
+				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+					borrower_id: BORROWER,
+					collateral: ref collateral_in_event,
+				}) if collateral_in_event == &extra_collateral,
+				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
+					loan_id: LOAN_ID,
+					pool_fee: pool_fee_taken,
+					network_fee: network_fee_taken,
+					broker_fee: 0,
+				}) if pool_fee_taken == pool_fee && network_fee_taken == network_fee
+			);
 
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
