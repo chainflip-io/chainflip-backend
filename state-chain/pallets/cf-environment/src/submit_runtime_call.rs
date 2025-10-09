@@ -257,19 +257,21 @@ pub(crate) fn validate_metadata<T: Config>(
 }
 
 fn build_domain_data(
-	prefix: &[u8],
 	call: impl Encode,
 	chainflip_network_name: &'static str,
 	transaction_metadata: &TransactionMetadata,
 ) -> Vec<u8> {
 	[
-		prefix,
 		&call.encode()[..],
 		chainflip_network_name.as_bytes(),
 		UNSIGNED_CALL_VERSION.as_bytes(),
 		&transaction_metadata.encode()[..],
 	]
 	.concat()
+}
+
+fn prefix_and_payload(prefix: &[u8], payload: &[u8]) -> Vec<u8> {
+	[prefix, payload].concat()
 }
 
 /// Validates the signature, given some call and metadata.
@@ -281,21 +283,25 @@ pub(crate) fn is_valid_signature(
 	transaction_metadata: &TransactionMetadata,
 	signature_data: &SignatureData,
 ) -> bool {
-	let raw_payload_with_prefix = |prefix: &[u8]| {
-		build_domain_data(prefix, &call, chainflip_network_name, transaction_metadata)
-	};
+	let raw_payload = || build_domain_data(&call, chainflip_network_name, transaction_metadata);
 
 	match signature_data {
 		SignatureData::Solana { signature, signer, sig_type } => {
 			let signed_payload = match sig_type {
-				SolEncodingType::Domain => raw_payload_with_prefix(SOLANA_OFFCHAIN_PREFIX),
+				SolEncodingType::Domain =>
+					prefix_and_payload(SOLANA_OFFCHAIN_PREFIX, &raw_payload()),
 			};
 			verify_sol_signature(signer, &signed_payload, signature)
 		},
 		SignatureData::Ethereum { signature, signer, sig_type } => {
 			let signed_payload = match sig_type {
-				EthEncodingType::PersonalSign =>
-					raw_payload_with_prefix(ETHEREUM_SIGN_MESSAGE_PREFIX),
+				EthEncodingType::PersonalSign => {
+					let payload = raw_payload();
+					let prefix =
+						[ETHEREUM_SIGN_MESSAGE_PREFIX, payload.len().to_string().as_bytes()]
+							.concat();
+					prefix_and_payload(&prefix, &payload)
+				},
 				EthEncodingType::Eip712 => build_eip_712_payload(
 					call,
 					chainflip_network_name,
