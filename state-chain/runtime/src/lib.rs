@@ -353,7 +353,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
 	type PriceFeedApi = ChainlinkOracle;
-	type ChpSystemApi = LendingPools;
+	type LendingSystemApi = LendingPools;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {

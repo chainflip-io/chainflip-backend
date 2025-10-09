@@ -95,7 +95,7 @@ pub trait LendingApi {
 	) -> Result<(), DispatchError>;
 }
 
-pub trait ChpSystemApi {
+pub trait LendingSystemApi {
 	type AccountId;
 
 	fn process_loan_swap_outcome(

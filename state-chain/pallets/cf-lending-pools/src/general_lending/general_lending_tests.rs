@@ -4,7 +4,7 @@ use cf_chains::evm::U256;
 use cf_primitives::SWAP_DELAY_BLOCKS;
 use cf_test_utilities::{assert_event_sequence, assert_has_event, assert_matching_event_count};
 use cf_traits::{
-	lending::ChpSystemApi,
+	lending::LendingSystemApi,
 	mocks::{
 		balance_api::MockBalance,
 		price_feed_api::MockPriceFeedApi,
@@ -43,7 +43,7 @@ trait LendingTestRunnerExt {
 impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<Test, Ctx> {
 	fn with_funded_pool(self, init_pool_amount: AssetAmount) -> Self {
 		self.then_execute_with(|ctx| {
-			setup_chp_pool_with_funds(LOAN_ASSET, init_pool_amount);
+			setup_pool_with_funds(LOAN_ASSET, init_pool_amount);
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
 
@@ -97,7 +97,7 @@ fn take_network_fee(full_amount: AssetAmount) -> (AssetAmount, AssetAmount) {
 	(network_fee, full_amount - network_fee)
 }
 
-fn setup_chp_pool_with_funds(loan_asset: Asset, init_amount: AssetAmount) {
+fn setup_pool_with_funds(loan_asset: Asset, init_amount: AssetAmount) {
 	LendingConfig::<Test>::set(CONFIG);
 
 	assert_ok!(LendingPools::new_lending_pool(loan_asset));
@@ -453,7 +453,7 @@ fn collateral_auto_topup() {
 
 	new_test_ext()
 		.execute_with(|| {
-			setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
+			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE * 1_000_000);
 			set_asset_price_in_usd(COLLATERAL_ASSET, 1_000_000);
@@ -534,7 +534,7 @@ fn basic_loan_aggregation() {
 		portion_of_amount(DEFAULT_ORIGINATION_FEE, EXTRA_PRINCIPAL_2) * SWAP_RATE;
 
 	new_test_ext().execute_with(|| {
-		setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
+		setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
@@ -780,7 +780,7 @@ fn interest_special_cases() {
 
 	new_test_ext()
 		.execute_with(|| {
-			setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
+			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 
@@ -954,7 +954,7 @@ fn swap_collected_pool_fees() {
 
 	new_test_ext()
 		.execute_with(|| {
-			setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
+			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 			set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
 			set_asset_price_in_usd(COLLATERAL_ASSET_2, 5);
@@ -1069,7 +1069,7 @@ fn adding_and_removing_collateral() {
 	const INIT_COLLATERAL_AMOUNT_2: AssetAmount = 1000;
 
 	new_test_ext().execute_with(|| {
-		setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
+		setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 		set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
 		set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
@@ -1607,7 +1607,7 @@ fn small_interest_amounts_accumulate() {
 
 	new_test_ext()
 		.execute_with(|| {
-			setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
+			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 			LendingConfig::<Test>::set(config);
 
@@ -1913,7 +1913,7 @@ mod safe_mode {
 	}
 
 	#[test]
-	fn safe_mode_for_creating_chp_loan() {
+	fn safe_mode_for_creating_loan() {
 		const INIT_COLLATERAL: AssetAmount = 2 * PRINCIPAL * SWAP_RATE;
 
 		let try_to_borrow = || {
@@ -2339,8 +2339,8 @@ mod rpcs {
 
 		new_test_ext()
 			.execute_with(|| {
-				setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
-				setup_chp_pool_with_funds(LOAN_ASSET_2, INIT_POOL_AMOUNT * 2);
+				setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
+				setup_pool_with_funds(LOAN_ASSET_2, INIT_POOL_AMOUNT * 2);
 
 				set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 				set_asset_price_in_usd(COLLATERAL_ASSET, 1);

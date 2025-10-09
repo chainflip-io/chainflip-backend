@@ -2181,7 +2181,7 @@ fn abort_swap_request() {
 
 mod lending_fee_swaps {
 
-	use cf_traits::mocks::lending_pools::MockChpSystemApi;
+	use cf_traits::mocks::lending_pools::MockLendingSystemApi;
 
 	use super::*;
 
@@ -2214,9 +2214,9 @@ mod lending_fee_swaps {
 			.then_process_blocks_until_block(SWAP_BLOCK)
 			.then_execute_with(|_| {
 				// Check that swapped fees would be returned to the lending
-				// pallet through ChpSystemApi:
+				// pallet through LendingSystemApi:
 				assert_eq!(
-					MockChpSystemApi::get_swapped_fees(OUTPUT_ASSET),
+					MockLendingSystemApi::get_swapped_fees(OUTPUT_ASSET),
 					Some(FEE_AMOUNT * DEFAULT_SWAP_RATE)
 				)
 			});

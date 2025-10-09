@@ -1162,7 +1162,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 	}
 }
 
-impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
+impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 	type AccountId = T::AccountId;
 
 	fn process_loan_swap_outcome(

@@ -508,7 +508,7 @@ pub mod pallet {
 		PriceLimits, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{
-		lending::ChpSystemApi, AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider,
+		lending::LendingSystemApi, AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider,
 		PriceFeedApi, ScheduledEgressDetails, SwapExecutionProgress,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
@@ -555,7 +555,9 @@ pub mod pallet {
 		/// The balance API for interacting with the asset-balance pallet.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
-		type ChpSystemApi: ChpSystemApi<AccountId = <Self as frame_system::Config>::AccountId>;
+		type LendingSystemApi: LendingSystemApi<
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 
 		type PoolPriceApi: PoolPriceProvider;
 
@@ -2147,7 +2149,7 @@ pub mod pallet {
 									);
 								},
 								SwapOutputAction::CreditLendingPool { swap_type } => {
-									T::ChpSystemApi::process_loan_swap_outcome(
+									T::LendingSystemApi::process_loan_swap_outcome(
 										swap_request_id,
 										swap_type.clone(),
 										dca_state.accumulated_output_amount,

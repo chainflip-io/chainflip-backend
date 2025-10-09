@@ -17,7 +17,7 @@
 use sp_std::collections::btree_map::BTreeMap;
 
 use crate::{
-	lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome, ChpSystemApi},
+	lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome, LendingSystemApi},
 	LendingSwapType,
 };
 
@@ -140,15 +140,15 @@ impl BoostApi for MockBoostApi {
 	}
 }
 
-pub struct MockChpSystemApi {}
+pub struct MockLendingSystemApi {}
 
-impl MockPallet for MockChpSystemApi {
-	const PREFIX: &'static [u8] = b"MockChpSystemApi";
+impl MockPallet for MockLendingSystemApi {
+	const PREFIX: &'static [u8] = b"MockLendingSystemApi";
 }
 
 const SWAPPED_FEES: &[u8] = b"SWAPPED_FEES";
 
-impl MockChpSystemApi {
+impl MockLendingSystemApi {
 	pub fn set_swapped_fees(asset: Asset, amount: AssetAmount) {
 		Self::put_storage(SWAPPED_FEES, asset, amount);
 	}
@@ -158,7 +158,7 @@ impl MockChpSystemApi {
 	}
 }
 
-impl ChpSystemApi for MockChpSystemApi {
+impl LendingSystemApi for MockLendingSystemApi {
 	type AccountId = u64;
 
 	fn process_loan_swap_outcome(
