@@ -19,7 +19,7 @@
 use crate::{
 	mock::*,
 	submit_runtime_call::{
-		build_eip_712_payload, validate_non_native_signed_call, EthEncodingType, SolEncodingType,
+		build_eip_712_payload, EthEncodingType, SolEncodingType,
 	},
 	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
 	SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
@@ -27,13 +27,10 @@ use crate::{
 };
 use cf_chains::{
 	btc::{
-		api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, AggKey,
-		BitcoinFeeInfo, BtcAmount, Utxo, CHANGE_ADDRESS_SALT,
+		AggKey, BitcoinFeeInfo, BtcAmount, CHANGE_ADDRESS_SALT, Utxo, api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection
 	},
-	sol::{
-		api::{SolanaGovCall, SolanaTransactionType},
-		SolAddress, SolHash,
-	},
+	sol::{SolAddress, SolHash, api::{SolanaGovCall, SolanaTransactionType}},
+
 };
 use cf_traits::{BalanceApi, SafeMode};
 use frame_support::{
@@ -44,6 +41,7 @@ use frame_support::{
 	},
 	traits::OriginTrait,
 };
+use sp_runtime::traits::ValidateUnsigned;
 use std::str::FromStr;
 
 fn utxo(amount: BtcAmount, salt: u32, pub_key: Option<[u8; 32]>) -> Utxo {
@@ -830,12 +828,12 @@ fn can_build_eip_712_payload_validate_unsigned() {
             signer,
             sig_type: EthEncodingType::Eip712,
         };
-
-		assert_ok!(validate_non_native_signed_call::<Test>(
-				&runtime_call,
-				transaction_metadata,
-				&signature_data,
-		));
+		let user_submission = crate::Call::non_native_signed_call { call: Box::new(runtime_call), transaction_metadata, signature_data };
+		
+		assert_ok!(
+			<crate::Pallet::<Test> as ValidateUnsigned>::validate_unsigned(frame_support::pallet_prelude::TransactionSource::External, &user_submission)
+		);
+		assert_ok!(<crate::Pallet::<Test> as ValidateUnsigned>::pre_dispatch(&user_submission));
 	});
 }
 
@@ -850,7 +848,7 @@ fn can_build_eip_712_payload() {
 		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000 };
 
 		let payload =
-			build_eip_712_payload::<Test>(&runtime_call, chain_name, version, transaction_metadata);
+			build_eip_712_payload(&runtime_call, chain_name, version, transaction_metadata, signer);
 		let eip_712_hash = Keccak256::hash(&payload).0;
 		assert_eq!(
 			eip_712_hash,

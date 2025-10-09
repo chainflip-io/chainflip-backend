@@ -96,6 +96,8 @@ pub enum SafeModeUpdate<T: Config> {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use crate::submit_runtime_call::{is_valid_signature, validate_metadata};
+
 	use super::*;
 	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum};
 	use cf_primitives::TxId;
@@ -389,9 +391,9 @@ pub mod pallet {
 			assethub_vault_account_id: PolkadotAccountId,
 		},
 		/// Unsigned Runtime Call was dispatched
-		NonNativeSignedCall {},
+		NonNativeSignedCall,
 		// Runtime Call Batch was dispatched
-		BatchCompleted {},
+		BatchCompleted,
 	}
 
 	#[pallet::call]
@@ -668,7 +670,7 @@ pub mod pallet {
 				.dispatch_bypass_filter(signer_account_origin)
 				.map_err(|_| Error::<T>::FailedToExecuteBatch)?;
 
-			Self::deposit_event(Event::<T>::NonNativeSignedCall {});
+			Self::deposit_event(Event::<T>::NonNativeSignedCall);
 			Ok(())
 		}
 
@@ -685,7 +687,7 @@ pub mod pallet {
 			let _ = batch_all::<T>(account_id.clone(), calls.clone(), T::WeightInfo::batch)
 				.map_err(|_| Error::<T>::FailedToExecuteNonNativeSignedCall)?;
 
-			Self::deposit_event(Event::<T>::BatchCompleted {});
+			Self::deposit_event(Event::<T>::BatchCompleted);
 
 			Ok(())
 		}
@@ -702,37 +704,35 @@ pub mod pallet {
 				signature_data,
 			} = call
 			{
-				submit_runtime_call::validate_non_native_signed_call::<T>(
-					&**inner_call,
-					*transaction_metadata,
-					signature_data,
-				)
+				let Ok(signer_account) = signature_data.signer_account() else {
+					return Err(InvalidTransaction::BadSigner.into());
+				};
+				let valid_tx = validate_metadata::<T>(transaction_metadata, &signer_account)?;
+				ensure!(
+					is_valid_signature(
+						inner_call,
+						ChainflipNetworkName::<T>::get().as_str(),
+						transaction_metadata,
+						signature_data
+					),
+					InvalidTransaction::BadProof
+				);
+				Ok(valid_tx)
 			} else {
 				Err(InvalidTransaction::Call.into())
 			}
 		}
+
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-			if let Call::non_native_signed_call {
-				call: inner_call,
-				transaction_metadata,
-				signature_data,
-			} = call
+			if let Call::non_native_signed_call { transaction_metadata, signature_data, .. } = call
 			{
-				// Validate the non-native signed call to prevent it from being included
-				// in a blocks in case it has became invalid since being added to the pool.
-				submit_runtime_call::validate_non_native_signed_call::<T>(
-					&**inner_call,
-					*transaction_metadata,
-					signature_data,
-				)?;
-
-				// Extract signer account ID and increment the nonce
-				let signer_account: T::AccountId = match signature_data.signer_account() {
-					Ok(account_id) => account_id,
-					Err(_) => return Err(InvalidTransaction::BadSigner.into()),
+				let Ok(signer_account) = signature_data.signer_account() else {
+					return Err(InvalidTransaction::BadSigner.into());
 				};
-				frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
 
+				// Signature validity already checked in `validate_unsigned`
+				let _ = validate_metadata::<T>(transaction_metadata, &signer_account)?;
+				frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
 				Ok(())
 			} else {
 				Err(InvalidTransaction::Call.into())
