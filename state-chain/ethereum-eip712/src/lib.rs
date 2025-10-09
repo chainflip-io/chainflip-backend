@@ -27,43 +27,6 @@ pub fn encode_eip712_using_type_info<T: TypeInfo + Encode + Decode + 'static>(
 	let mut registry = Registry::new();
 	let id = registry.register_type(&MetaType::new::<T>());
 
-	let typed_data = TypedData {
-		domain,
-		types: registry
-			.types()
-			.filter_map(|(_, ty)| {
-				Some((
-					ty.path.segments.last()?.to_string().clone(),
-					match &ty.type_def {
-						TypeDef::Composite(comp_type) => {
-							comp_type
-								.fields
-								.clone()
-								.into_iter()
-								.filter_map(|field| {
-									Some(Eip712DomainType {
-										//find out if there are unnamed fields in evm structs
-										// e.g. struct A(pub u8)
-										name: field.name?.to_string(),
-										// find out in which cases type name would be empty.
-										r#type: match field.type_name.unwrap() {
-											s if s == "String" => "string".to_string(),
-											s => s.to_string(),
-										},
-									})
-								})
-								.collect()
-						},
-						//todo
-						_ => Default::default(),
-					},
-				))
-			})
-			.collect(),
-		primary_type: T::type_info().path.segments.last().unwrap().to_string(),
-		message: Default::default(),
-	};
-
 	let portable_registry: scale_info::PortableRegistry = registry.into();
 	let value =
 		scale_value::scale::decode_as_type(&mut &value.encode()[..], id.id, &portable_registry)
@@ -74,9 +37,10 @@ pub fn encode_eip712_using_type_info<T: TypeInfo + Encode + Decode + 'static>(
 			})?;
 
 	let mut types: BTreeMap<String, Vec<Eip712DomainType>> = BTreeMap::new();
-	let mut values: BTreeMap<String, Vec<scale_value::Value>> = BTreeMap::new();
-	let _ = recursively_construct_types(value, MetaType::new::<T>(), &mut types, &mut values)
+	let primary_type = recursively_construct_types(value.clone(), MetaType::new::<T>(), &mut types)
 		.map_err(|e| Eip712Error::Message(format!("error while constructing types: {e}")))?;
+
+	let typed_data = TypedData { domain, types, primary_type, message: value.remove_context() };
 
 	typed_data.encode_eip712()
 }
@@ -85,7 +49,6 @@ pub fn recursively_construct_types<C: Clone>(
 	v: Value<C>,
 	ty: MetaType,
 	types: &mut BTreeMap<String, Vec<Eip712DomainType>>,
-	values: &mut BTreeMap<String, Vec<scale_value::Value>>,
 ) -> Result<String, &'static str> {
 	//handle errors
 	let t = ty.type_info();
@@ -97,7 +60,7 @@ pub fn recursively_construct_types<C: Clone>(
 				// Should never error. Its a composite type so the name has to exist
 				.ok_or("Type doesnt have a name")?
 				.to_string(),
-			process_composite(type_def_composite.fields, comp_value, types, values)?,
+			process_composite(type_def_composite.fields, comp_value, types)?,
 		),
 
 		(TypeDef::Variant(type_def_variant), ValueDef::Variant(value_variant)) => (
@@ -105,30 +68,26 @@ pub fn recursively_construct_types<C: Clone>(
 				.ident()
 				// Should never error. Its a composite type so the name has to exist
 				.ok_or("Type doesnt have a name")?
-				.to_string() + "_" + &value_variant.name.to_string(),
+				.to_string() + "_" +
+				&value_variant.name.to_string(),
 			// find the variant in type_def_variant that matches the
 			type_def_variant
 				.variants
 				.into_iter()
 				.find(|variant| value_variant.name == variant.name)
-				.map(|variant| process_composite(variant.fields, value_variant.values, types, values))
+				.map(|variant| process_composite(variant.fields, value_variant.values, types))
 				.ok_or("variant name in value should match one of the variants in type def")??,
 		),
 
-		(TypeDef::Sequence(type_def_sequence), ValueDef::Composite(Composite::Unnamed(fs))) =>
-			(
-				// convert the type name of the sequence to something like "TypeName[]"
-				recursively_construct_types(
-					fs[0].clone(),
-					type_def_sequence.type_param,
-					types,, values
-				)? + "[]",
-				// ensures that we dont add this type to types list
-				vec![],
-			),
+		(TypeDef::Sequence(type_def_sequence), ValueDef::Composite(Composite::Unnamed(fs))) => (
+			// convert the type name of the sequence to something like "TypeName[]"
+			recursively_construct_types(fs[0].clone(), type_def_sequence.type_param, types)? + "[]",
+			// ensures that we dont add this type to types list
+			vec![],
+		),
 		(TypeDef::Array(type_def_array), ValueDef::Composite(Composite::Unnamed(fs))) => (
 			// convert the type name of the array to something like "TypeName[len]"
-			recursively_construct_types(fs[0].clone(), type_def_array.type_param, types, values)? +
+			recursively_construct_types(fs[0].clone(), type_def_array.type_param, types)? +
 				"[" + &type_def_array.len.to_string() +
 				"]",
 			// ensures that we dont add this type to types list
@@ -147,7 +106,7 @@ pub fn recursively_construct_types<C: Clone>(
 					.into_iter()
 					.zip(fs.into_iter())
 					.map(|(ty, value)| {
-						let type_name = recursively_construct_types(value, ty, types, values)?;
+						let type_name = recursively_construct_types(value.clone(), ty, types)?;
 						Ok::<_, &'static str>(Eip712DomainType {
 							// In case of unnamed fields, we decide to name it by its type name
 							name: type_name.clone(),
@@ -178,8 +137,10 @@ pub fn recursively_construct_types<C: Clone>(
 			vec![],
 		),
 		(TypeDef::Compact(type_def_compact), _) =>
-			(recursively_construct_types(v, type_def_compact.type_param, types, values)?, vec![]),
-		(TypeDef::BitSequence(_), _) => return Err("This is only used when scale-info's bitvec feature is enabled and since we dont use that feature, this variant should be unreachable"),
+			(recursively_construct_types(v.clone(), type_def_compact.type_param, types)?, vec![]),
+		// his is only used when scale-info's bitvec feature is enabled and since we dont use that
+		// feature, this variant should be unreachable
+		(TypeDef::BitSequence(_), _) => return Err("Unreachable"),
 
 		_ => return Err("Type and Value do not match"),
 	};
@@ -196,7 +157,6 @@ fn process_composite<C: Clone>(
 	fields: Vec<Field>,
 	comp_value: Composite<C>,
 	types: &mut BTreeMap<String, Vec<Eip712DomainType>>,
-	values: &mut BTreeMap<String, Vec<scale_value::Value>>,
 ) -> Result<Vec<Eip712DomainType>, &'static str> {
 	match comp_value {
 		Composite::Named(fs) => {
@@ -204,19 +164,15 @@ fn process_composite<C: Clone>(
 			fields
 				.clone()
 				.into_iter()
-				.map(|field| -> Result<Eip712DomainType, &'static str> {
-					let field_name = field.name.ok_or("field name doesnt exist. shouldn't be possible since we are in Named variant")?.to_string();
+				.map(|field| -> Result<_, &'static str> {
+					// field name doesnt exist. shouldn't be possible since we are in Named variant
+					let field_name = field.name.ok_or("field name doesn't exist")?.to_string();
+					let value =
+						fs_map.get(&field_name).ok_or("field with this name has to exist")?.clone();
 					Ok(Eip712DomainType {
 						name: field_name.clone(),
 						// find out in which cases type name would be empty.
-						r#type: recursively_construct_types(
-							fs_map
-								.get(&field_name)
-								.ok_or("field with this name has to exist")?
-								.clone(),
-							field.ty,
-							types, values
-						)?,
+						r#type: recursively_construct_types(value.clone(), field.ty, types)?,
 					})
 				})
 				.collect::<Result<_, _>>()
@@ -226,8 +182,8 @@ fn process_composite<C: Clone>(
 				.clone()
 				.into_iter()
 				.zip(fs)
-				.map(|(field, value)| -> Result<Eip712DomainType, &'static str>{
-					let type_name = recursively_construct_types(value, field.ty, types, values)?;
+				.map(|(field, value)| -> Result<_, &'static str> {
+					let type_name = recursively_construct_types(value.clone(), field.ty, types)?;
 					Ok(Eip712DomainType {
 						// In case of unnamed fields, we decide to name it by its type name
 						name: type_name.clone(),
@@ -238,6 +194,28 @@ fn process_composite<C: Clone>(
 		},
 	}
 }
+
+impl<C: Clone> GetScaleValueFields for scale_value::Value<C> {
+	fn get_scale_value_fields(&self) -> Result<Vec<Value<C>>, &'static str> {
+		match &self.value {
+			ValueDef::Composite(comp) => Ok(match comp.clone() {
+				Composite::Named(fs) => fs.into_iter().map(|(_, v)| v).collect(),
+				Composite::Unnamed(fs) => fs,
+			}),
+			ValueDef::Variant(v) => Ok(match v.values.clone() {
+				Composite::Named(fs) => fs.into_iter().map(|(_, v)| v).collect(),
+				Composite::Unnamed(fs) => fs,
+			}),
+			ValueDef::Primitive(_) => Err("Primitive type does not have fields"),
+			ValueDef::BitSequence(_) => Err("BitSequence not supported"),
+		}
+	}
+}
+
+pub trait GetScaleValueFields: Sized {
+	fn get_scale_value_fields(&self) -> Result<Vec<Self>, &'static str>;
+}
+
 #[cfg(test)]
 pub mod tests {
 
@@ -273,6 +251,29 @@ pub mod tests {
 			to: Person { name: String::from("Albert") },
 			message: String::from("hello Albert"),
 		};
+
+		let mut registry = Registry::new();
+		let id = registry.register_type(&MetaType::new::<Mail>());
+
+		//let types = vec![];
+		for (id, ty) in registry.types() {
+			//types.push(ty)
+			println!("ID: {:?},   Type: {:#?}", id, ty);
+		}
+		let mut b = BTreeMap::new();
+		b.insert(1u8, 2u64);
+
+		let portable_registry: scale_info::PortableRegistry = registry.into();
+		let val = scale_value::scale::decode_as_type(
+			&mut &payload.encode()[..],
+			id.id,
+			&portable_registry,
+		)
+		.unwrap();
+		//println!("{:?}", encode_eip712_using_type_info(t, domain))
+		println!("{:?}", val);
+		// println!("{:?}", encode_eip712_using_type_info(payload,
+		// domain).unwrap().encode_eip712());
 
 		assert_eq!(
 			hex::encode(&encode_eip712_using_type_info(payload, domain).unwrap()[..]),
