@@ -2755,7 +2755,6 @@ fn derive_extra_interest_from_low_ltv() {
 fn test_loan_minimum_is_enforced() {
 	const MIN_LOAN_AMOUNT_USD: AssetAmount = 1_000;
 	const MIN_LOAN_AMOUNT_ASSET: AssetAmount = MIN_LOAN_AMOUNT_USD / SWAP_RATE;
-	const COLLATERAL_ASSET: Asset = Asset::Eth;
 	const COLLATERAL_AMOUNT: AssetAmount = MIN_LOAN_AMOUNT_ASSET * SWAP_RATE * 2;
 
 	new_test_ext().execute_with(|| {

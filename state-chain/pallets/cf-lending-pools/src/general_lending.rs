@@ -1024,6 +1024,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		repayment_amount: AssetAmount,
 	) -> Result<(), DispatchError> {
 		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
+			let config = LendingConfig::<T>::get();
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanNotFound)?;
 
 			let Some(loan) = loan_account.loans.get_mut(&loan_id) else {
@@ -1031,8 +1032,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 			};
 
 			let loan_asset = loan.asset;
-
-			let config = LendingConfig::<T>::get();
 
 			if repayment_amount < loan.owed_principal {
 				ensure!(
@@ -1054,7 +1053,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 				T::Balance::credit_account(borrower_id, loan_asset, excess_amount);
 			} else {
-				let config = LendingConfig::<T>::get();
 				ensure!(
 					loan.owed_principal >=
 						amount_from_usd_value::<T>(loan.asset, config.minimum_loan_amount_usd)?,
@@ -1669,7 +1667,7 @@ pub struct LendingConfiguration {
 	pub fee_swap_max_oracle_slippage: BasisPoints,
 	/// If set for a pool/asset, this configuration will be used instead of the default
 	pub pool_config_overrides: BTreeMap<Asset, LendingPoolConfiguration>,
-	/// Minimum amount of principle that a loan must have at all times.
+	/// Minimum amount of principal that a loan must have at all times.
 	pub minimum_loan_amount_usd: AssetAmount,
 	/// Minimum amount of principal that can be used to expand or repay an existing loan.
 	pub minimum_update_loan_amount_usd: AssetAmount,
