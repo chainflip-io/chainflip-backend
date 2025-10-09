@@ -23,6 +23,7 @@ use cf_chains::{
 	dot::{PolkadotExtrinsicIndex, PolkadotTransactionId},
 	evm::{SchnorrVerificationComponents, H256},
 	instances::ChainInstanceFor,
+	sol::SolanaTransactionInId,
 	AnyChain, Arbitrum, Assethub, Bitcoin, CcmDepositMetadataUnchecked, Chain, ChainCrypto,
 	ChannelRefundParametersUnchecked, Ethereum, ForeignChainAddress,
 	IntoTransactionInIdForAnyChain, Polkadot, TransactionInIdForAnyChain,
@@ -228,6 +229,11 @@ impl IntoDepositDetailsAnyChain for Vec<H256> {
 	}
 }
 impl IntoDepositDetailsAnyChain for () {
+	fn into_any_chain(self) -> Option<DepositDetails> {
+		None
+	}
+}
+impl IntoDepositDetailsAnyChain for SolanaTransactionInId {
 	fn into_any_chain(self) -> Option<DepositDetails> {
 		None
 	}

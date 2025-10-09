@@ -544,6 +544,7 @@ pub mod pallet {
 		pub boost_fee: BasisPoints,
 		/// Boost status, indicating whether there is pending boost on the channel
 		pub boost_status: BoostStatus<TargetChainAmount<T, I>, BlockNumberFor<T>>,
+		pub is_tainted: bool,
 	}
 
 	pub struct AmountAndFeesWithheld<A> {
@@ -833,6 +834,11 @@ pub mod pallet {
 	pub type BoostDelayBlocks<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
+	/// How many blocks to wait before processing a new deposit.
+	#[pallet::storage]
+	pub type DepositDelayBlocks<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
 	/// Stores the latest prewitnessed deposit id used.
 	#[pallet::storage]
 	pub type PrewitnessedDepositIdCounter<T: Config<I>, I: 'static = ()> =
@@ -892,6 +898,24 @@ pub mod pallet {
 		Twox64Concat,
 		BlockNumberFor<T>,
 		Vec<PendingPrewitnessedDepositEntry<T, I>>,
+		ValueQuery,
+	>;
+
+	#[pallet::storage]
+	pub type PendingDepositChannelDeposits<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		BlockNumberFor<T>,
+		Vec<(DepositWitness<T::TargetChain>, TargetChainBlockNumber<T, I>)>,
+		ValueQuery,
+	>;
+
+	#[pallet::storage]
+	pub type PendingVaultDeposits<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		BlockNumberFor<T>,
+		Vec<(VaultDepositWitness<T, I>, TargetChainBlockNumber<T, I>)>,
 		ValueQuery,
 	>;
 
@@ -1185,6 +1209,24 @@ pub mod pallet {
 						deposit
 					);
 				}
+			}
+
+			for (deposit_witness, block_height) in PendingDepositChannelDeposits::<T, I>::take(n) {
+				Self::process_channel_deposit_full_witness_inner(&deposit_witness, block_height)
+					.unwrap_or_else(|e| {
+						Self::deposit_event(Event::<T, I>::DepositFailed {
+							block_height,
+							reason: DepositFailedReason::DepositWitnessRejected(e),
+							details: DepositFailedDetails::DepositChannel { deposit_witness },
+						});
+					})
+			}
+
+			for (vault_deposit_witness, block_height) in PendingVaultDeposits::<T, I>::take(n) {
+				Self::process_vault_swap_request_full_witness_inner(
+					block_height,
+					vault_deposit_witness,
+				);
 			}
 
 			Weight::zero()
@@ -1538,6 +1580,18 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::call_index(14)]
+		#[pallet::weight(T::WeightInfo::mark_transaction_for_rejection())]
+		pub fn mark_deposit_channel_as_tainted(
+			origin: OriginFor<T>,
+			deposit_address: TargetChainAccount<T, I>,
+		) -> DispatchResult {
+			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+			ensure!(T::AllowTransactionReports::get(), Error::<T, I>::UnsupportedChain);
+			Self::mark_deposit_channel_as_tainted_inner(account_id, deposit_address)?;
+			Ok(())
+		}
 	}
 }
 
@@ -1597,6 +1651,38 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Ok(())
 	}
+
+	fn mark_deposit_channel_as_tainted_inner(
+		account_id: T::AccountId,
+		deposit_address: TargetChainAccount<T, I>,
+	) -> DispatchResult {
+		DepositChannelLookup::<T, I>::try_mutate(&deposit_address, |channel| {
+			if let Some(channel) = channel {
+				ensure!(
+					channel.owner == account_id ||
+						WhitelistedBrokers::<T, I>::contains_key(&account_id),
+					Error::<T, I>::TransactionAlreadyPrewitnessed //TODO! change error?
+				);
+				ensure!(
+					!matches!(channel.boost_status, BoostStatus::Boosted { .. }),
+					Error::<T, I>::TransactionAlreadyPrewitnessed
+				);
+
+				channel.is_tainted = true;
+				Ok::<_, DispatchError>(())
+			} 
+			
+		})?;
+
+		//TODO change event?
+		// Self::deposit_event(Event::<T, I>::TransactionRejectionRequestReceived {
+		// 	account_id,
+		// 	tx_id,
+		// 	expires_at,
+		// });
+		Ok(())
+	}
+
 	fn recycle_channel(used_weight: &mut Weight, address: <T::TargetChain as Chain>::ChainAccount) {
 		if let Some(DepositChannelDetails { deposit_channel, boost_status, .. }) =
 			DepositChannelLookup::<T, I>::take(address)
@@ -2122,14 +2208,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deposit_witness: DepositWitness<T::TargetChain>,
 		block_height: TargetChainBlockNumber<T, I>,
 	) {
-		Self::process_channel_deposit_full_witness_inner(&deposit_witness, block_height)
-			.unwrap_or_else(|e| {
-				Self::deposit_event(Event::<T, I>::DepositFailed {
-					block_height,
-					reason: DepositFailedReason::DepositWitnessRejected(e),
-					details: DepositFailedDetails::DepositChannel { deposit_witness },
-				});
-			})
+		let delay = DepositDelayBlocks::<T, I>::get();
+		if delay > Default::default() {
+			let process_at_block = frame_system::Pallet::<T>::block_number() + delay;
+			PendingDepositChannelDeposits::<T, I>::append(
+				process_at_block,
+				(deposit_witness, block_height),
+			);
+		} else {
+			Self::process_channel_deposit_full_witness_inner(&deposit_witness, block_height)
+				.unwrap_or_else(|e| {
+					Self::deposit_event(Event::<T, I>::DepositFailed {
+						block_height,
+						reason: DepositFailedReason::DepositWitnessRejected(e),
+						details: DepositFailedDetails::DepositChannel { deposit_witness },
+					});
+				})
+		}
 	}
 
 	/// Completes a single deposit request.
@@ -2532,76 +2627,90 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				return Err(DepositFailedReason::BelowMinimumDeposit);
 			}
 			if T::AllowTransactionReports::get() {
-				if let (Some(tx_ids), Some(broker_id)) =
-					(deposit_details.deposit_ids(), origin.broker_id())
-				{
-					let is_marked_by_broker_or_screening_id = !tx_ids
-						.iter()
-						.filter_map(|tx_id| {
-							// The transaction may have been marked by a whitelisted broker
-							// (screening_id) or, by the channel owner if the owner is not
-							// whitelisted.
-							let screening_id = T::ScreeningBrokerId::get();
-							match (
-								TransactionsMarkedForRejection::<T, I>::take(&screening_id, tx_id),
-								TransactionsMarkedForRejection::<T, I>::take(broker_id, tx_id),
-							) {
-								(None, None) => None,
-								_ => Some(()),
-							}
-						})
-						// Collect to ensure that the iterator is fully consumed.
-						.collect::<Vec<_>>()
-						.is_empty();
+				let is_marked_by_broker_or_screening_id = {
+					let transaction_marked = if let (Some(tx_ids), Some(broker_id)) =
+						(deposit_details.deposit_ids(), origin.broker_id())
+					{
+						!tx_ids
+							.iter()
+							.filter_map(|tx_id| {
+								// The transaction may have been marked by a whitelisted broker
+								// (screening_id) or, by the channel owner if the owner is not
+								// whitelisted.
+								let screening_id = T::ScreeningBrokerId::get();
+								match (
+									TransactionsMarkedForRejection::<T, I>::take(
+										&screening_id,
+										tx_id,
+									),
+									TransactionsMarkedForRejection::<T, I>::take(broker_id, tx_id),
+								) {
+									(None, None) => None,
+									_ => Some(()),
+								}
+							})
+							// Collect to ensure that the iterator is fully consumed.
+							.collect::<Vec<_>>()
+							.is_empty()
+					} else {
+						false
+					};
 
-					if is_marked_by_broker_or_screening_id {
-						let (refund_address, refund_ccm_metadata) = match &action {
-							ChannelAction::Swap { refund_params, .. } =>
-							// Refund address for a deposit must be external address
-								if let AccountOrAddress::ExternalAddress(refund_addr) =
-									refund_params.refund_address.clone()
-								{
-									Ok((
-										refund_addr,
-										refund_params
-											.refund_ccm_metadata
-											.clone()
-											.map(|refund| refund.channel_metadata),
-									))
-								} else {
-									Err(DepositFailedReason::DepositWitnessRejected(
-										"Invalid Refund address".into(),
-									))
-								}?,
-							ChannelAction::LiquidityProvision { refund_address, .. } =>
-								(refund_address.clone(), None),
-							ChannelAction::Refund {
-								refund_address, refund_ccm_metadata, ..
-							} => (
-								refund_address.clone().into_foreign_chain_address(),
-								refund_ccm_metadata.clone(),
-							),
-						};
+					let channel_marked = if let Some(ref deposit_address) = deposit_address {
+						DepositChannelLookup::<T, I>::get(deposit_address)
+							.is_some_and(|deposit_channel| deposit_channel.is_tainted)
+					} else {
+						false
+					};
 
-						ScheduledTransactionsForRejection::<T, I>::append(
-							TransactionRejectionDetails {
-								deposit_address: deposit_address.clone(),
-								refund_address,
-								amount: deposit_amount,
-								asset,
-								deposit_details: deposit_details.clone(),
-								refund_ccm_metadata: refund_ccm_metadata.map(|metadata| {
-									CcmDepositMetadata {
-										channel_metadata: metadata,
-										source_chain: asset.into(),
-										source_address,
-									}
-								}),
-							},
-						);
+					transaction_marked || channel_marked
+				};
 
-						return Err(DepositFailedReason::TransactionRejectedByBroker);
-					}
+				if is_marked_by_broker_or_screening_id {
+					let (refund_address, refund_ccm_metadata) = match &action {
+						ChannelAction::Swap { refund_params, .. } =>
+						// Refund address for a deposit must be external address
+							if let AccountOrAddress::ExternalAddress(refund_addr) =
+								refund_params.refund_address.clone()
+							{
+								Ok((
+									refund_addr,
+									refund_params
+										.refund_ccm_metadata
+										.clone()
+										.map(|refund| refund.channel_metadata),
+								))
+							} else {
+								Err(DepositFailedReason::DepositWitnessRejected(
+									"Invalid Refund address".into(),
+								))
+							}?,
+						ChannelAction::LiquidityProvision { refund_address, .. } =>
+							(refund_address.clone(), None),
+						ChannelAction::Refund { refund_address, refund_ccm_metadata, .. } => (
+							refund_address.clone().into_foreign_chain_address(),
+							refund_ccm_metadata.clone(),
+						),
+					};
+
+					ScheduledTransactionsForRejection::<T, I>::append(
+						TransactionRejectionDetails {
+							deposit_address: deposit_address.clone(),
+							refund_address,
+							amount: deposit_amount,
+							asset,
+							deposit_details: deposit_details.clone(),
+							refund_ccm_metadata: refund_ccm_metadata.map(|metadata| {
+								CcmDepositMetadata {
+									channel_metadata: metadata,
+									source_chain: asset.into(),
+									source_address,
+								}
+							}),
+						},
+					);
+
+					return Err(DepositFailedReason::TransactionRejectedByBroker);
 				}
 			}
 		}
@@ -2800,6 +2909,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn process_vault_swap_request_full_witness(
+		block_height: TargetChainBlockNumber<T, I>,
+		vault_deposit_witness: VaultDepositWitness<T, I>,
+	) {
+		let delay = DepositDelayBlocks::<T, I>::get();
+		if delay > Default::default() {
+			let process_at_block = frame_system::Pallet::<T>::block_number() + delay;
+			PendingVaultDeposits::<T, I>::append(
+				process_at_block,
+				(vault_deposit_witness, block_height),
+			);
+		} else {
+			Self::process_vault_swap_request_full_witness_inner(block_height, vault_deposit_witness)
+		}
+	}
+
+	pub fn process_vault_swap_request_full_witness_inner(
 		block_height: TargetChainBlockNumber<T, I>,
 		vault_deposit_witness: VaultDepositWitness<T, I>,
 	) {
@@ -3038,6 +3163,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				action,
 				boost_fee,
 				boost_status: BoostStatus::NotBoosted,
+				is_tainted: false,
 			},
 		);
 		<T::IngressSource as IngressSource>::open_channel(

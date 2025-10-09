@@ -131,7 +131,7 @@ impl Chain for Solana {
 	type ChainAccount = SolAddress;
 	type DepositFetchId = SolanaDepositFetchId;
 	type DepositChannelState = AccountBump;
-	type DepositDetails = ();
+	type DepositDetails = SolanaTransactionInId;
 	type Transaction = SolanaTransactionData;
 	type TransactionMetadata = ();
 	// There is no need for replay protection on Solana since it uses blockhashes.
@@ -527,7 +527,11 @@ pub struct SolApiEnvironment {
 	pub address_lookup_table_account: AddressLookupTableAccount,
 }
 
-impl DepositDetailsToTransactionInId<SolanaCrypto> for () {}
+impl DepositDetailsToTransactionInId<SolanaCrypto> for SolanaTransactionInId {
+	fn deposit_ids(&self) -> Option<Vec<SolanaTransactionInId>> {
+		Some(vec![*self])
+	}
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct DecodedXSwapParams {

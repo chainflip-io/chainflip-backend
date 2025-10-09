@@ -134,6 +134,7 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for ChannelActionCcmRef
 					},
 					boost_fee: old.boost_fee,
 					boost_status: old.boost_status,
+					is_tainted: false,
 				})
 			},
 		);

@@ -23,6 +23,10 @@ use crate::{
 };
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
+use cf_chains::{
+	instances::SolanaInstance,
+	sol::{SolAddress, SolanaTransactionInId},
+};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::IngressSink;
 use cf_utilities::success_threshold_from_share_count;
@@ -93,7 +97,7 @@ pub struct DeltaBasedIngress<Sink: IngressSink, Settings, ValidatorId, StateChai
 impl<Sink, Settings, ValidatorId, StateChainBlockNumber>
 	DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
 where
-	Sink: IngressSink<DepositDetails = ()> + 'static,
+	Sink: IngressSink<DepositDetails = SolanaTransactionInId> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
@@ -144,7 +148,7 @@ where
 impl<Sink, Settings, ValidatorId, StateChainBlockNumber> ElectoralSystemTypes
 	for DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
 where
-	Sink: IngressSink<DepositDetails = ()> + 'static,
+	Sink: IngressSink<DepositDetails = SolanaTransactionInId> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
@@ -194,7 +198,8 @@ where
 impl<Sink, Settings, ValidatorId, StateChainBlockNumber> ElectoralSystem
 	for DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
 where
-	Sink: IngressSink<DepositDetails = ()> + 'static,
+	Sink: IngressSink<DepositDetails = SolanaTransactionInId, Account = SolAddress, BlockNumber = u64>
+		+ 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
@@ -370,7 +375,7 @@ where
 								details.asset,
 								ready_total.amount - previous_amount,
 								ready_total.block_number,
-								(),
+								(*account, ready_total.block_number),
 							);
 							ElectoralAccess::set_unsynchronised_state_map(
 								(account.clone(), details.asset),

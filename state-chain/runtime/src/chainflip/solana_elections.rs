@@ -621,7 +621,7 @@ impl
 				deposit_address: None,
 				channel_id: None,
 				deposit_amount: swap_details.deposit_amount,
-				deposit_details: (),
+				deposit_details: (swap_details.swap_account, swap_details.creation_slot),
 				output_asset: swap_details.to,
 				destination_address: swap_details.destination_address,
 				deposit_metadata: swap_details.deposit_metadata,
