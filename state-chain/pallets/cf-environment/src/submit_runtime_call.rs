@@ -128,8 +128,8 @@ const EIP712_TRANSACTION_TYPE_STR: &str = "Transaction(RuntimeCall call,Metadata
 /// we add it so is displayed separately to the user in the wallet.
 /// TODO: This is a temporary simplified implementation for basic EIP-712 support
 /// in a specific format. Full logic to be implemented in PRO-2535.
-pub(crate) fn build_eip_712_payload<T: Config>(
-	call: &<T as Config>::RuntimeCall,
+pub(crate) fn build_eip_712_payload(
+	call: impl Encode,
 	chain_name: &str,
 	version: &str,
 	transaction_metadata: TransactionMetadata,
@@ -226,101 +226,92 @@ pub(crate) fn weight_and_dispatch_class<T: Config>(
 	(dispatch_weight, dispatch_class)
 }
 
-pub fn build_domain_data(
-	encoded_call: Vec<u8>,
-	chanflip_network_name: ChainflipNetwork,
-	transaction_metadata: TransactionMetadata,
+/// Checks non-native signed call metadata against current chain state.
+pub(crate) fn validate_metadata<T: Config>(
+	transaction_metadata: &TransactionMetadata,
+	signer_account: &T::AccountId,
+) -> TransactionValidity {
+	// Check if payload hasn't expired
+	ensure!(
+		BlockNumberFor::<T>::from(transaction_metadata.expiry_block) >
+			frame_system::Pallet::<T>::block_number(),
+		InvalidTransaction::Stale
+	);
+
+	// Check account nonce
+	let current_nonce = frame_system::Pallet::<T>::account_nonce(signer_account);
+	let tx_nonce: <T as frame_system::Config>::Nonce = transaction_metadata.nonce.into();
+
+	ensure!(tx_nonce >= current_nonce, InvalidTransaction::Stale);
+
+	// Build transaction validity with requires/provides
+	let mut tx_builder = ValidTransaction::with_tag_prefix(<Pallet<T>>::name())
+		.and_provides((signer_account, transaction_metadata.nonce));
+
+	if tx_nonce > current_nonce {
+		// This is a future tx, require the immediately previous nonce
+		tx_builder = tx_builder.and_requires((signer_account, transaction_metadata.nonce - 1));
+	}
+
+	tx_builder.build()
+}
+
+fn build_domain_data(
+	call: impl Encode,
+	chainflip_network_name: &'static str,
+	transaction_metadata: &TransactionMetadata,
 ) -> Vec<u8> {
 	[
-		encoded_call,
-		chanflip_network_name.as_str().encode(),
-		UNSIGNED_CALL_VERSION.encode(),
-		transaction_metadata.encode(),
+		&call.encode()[..],
+		&chainflip_network_name.encode()[..],
+		&UNSIGNED_CALL_VERSION.encode()[..],
+		&transaction_metadata.encode()[..],
 	]
 	.concat()
 }
 
-pub(crate) fn validate_non_native_signed_call<T: Config>(
-	call: &<T as Config>::RuntimeCall,
-	transaction_metadata: TransactionMetadata,
+fn prefix_and_payload(prefix: &[u8], payload: &[u8]) -> Vec<u8> {
+	[prefix, payload].concat()
+}
+
+/// Validates the signature, given some call and metadata.
+///
+/// This call should be kept idempotent: it should not access storage.
+pub(crate) fn is_valid_signature(
+	call: impl Encode,
+	chainflip_network_name: &'static str,
+	transaction_metadata: &TransactionMetadata,
 	signature_data: &SignatureData,
-) -> TransactionValidity {
-	// Check if payload hasn't expired
-	if frame_system::Pallet::<T>::block_number() >= transaction_metadata.expiry_block.into() {
-		return InvalidTransaction::Stale.into();
-	}
+) -> bool {
+	let raw_payload = || build_domain_data(&call, chainflip_network_name, transaction_metadata);
 
-	// Extract signer account ID
-	let signer_account: T::AccountId = match signature_data.signer_account() {
-		Ok(account_id) => account_id,
-		Err(_) => return InvalidTransaction::BadSigner.into(),
-	};
-
-	// Check account nonce
-	let current_nonce = frame_system::Pallet::<T>::account_nonce(&signer_account);
-	let tx_nonce: <T as frame_system::Config>::Nonce = transaction_metadata.nonce.into();
-
-	if tx_nonce < current_nonce {
-		return InvalidTransaction::Stale.into();
-	}
-
-	// Signature check
-	let chanflip_network_name = ChainflipNetworkName::<T>::get();
-
-	let valid_signature = match signature_data {
+	match signature_data {
 		SignatureData::Solana { signature, signer, sig_type } => {
 			let signed_payload = match sig_type {
-				SolEncodingType::Domain => {
-					let domain_data = build_domain_data(
-						call.encode(),
-						chanflip_network_name,
-						transaction_metadata,
-					);
-					[SOLANA_OFFCHAIN_PREFIX, domain_data.as_slice()].concat()
-				},
+				SolEncodingType::Domain =>
+					prefix_and_payload(SOLANA_OFFCHAIN_PREFIX, &raw_payload()),
 			};
 			verify_sol_signature(signer, &signed_payload, signature)
 		},
 		SignatureData::Ethereum { signature, signer, sig_type } => {
 			let signed_payload = match sig_type {
 				EthEncodingType::PersonalSign => {
-					let domain_data = build_domain_data(
-						call.encode(),
-						chanflip_network_name,
-						transaction_metadata,
-					);
+					let payload = raw_payload();
 					let prefix = scale_info::prelude::format!(
 						"{}{}",
 						ETHEREUM_SIGN_MESSAGE_PREFIX,
-						domain_data.len()
+						payload.len()
 					);
-					let prefix_bytes = prefix.as_bytes();
-					[prefix_bytes, &domain_data].concat()
+					prefix_and_payload(prefix.as_bytes(), &payload)
 				},
-				EthEncodingType::Eip712 => build_eip_712_payload::<T>(
+				EthEncodingType::Eip712 => build_eip_712_payload(
 					call,
-					chanflip_network_name.as_str(),
+					chainflip_network_name,
 					UNSIGNED_CALL_VERSION,
-					transaction_metadata,
+					*transaction_metadata,
 				),
 			};
 			verify_evm_signature(signer, &signed_payload, signature)
 		},
-	};
-
-	if !valid_signature {
-		return InvalidTransaction::BadProof.into();
 	}
-
-	// Build transaction validity with requires/provides
-	let unique_id = (signer_account.clone(), transaction_metadata.nonce);
-
-	let mut tx = ValidTransaction::with_tag_prefix(<Pallet<T>>::name()).and_provides(unique_id);
-
-	if tx_nonce > current_nonce {
-		// This is a future tx, require the immediately previous nonce
-		tx = tx.and_requires((signer_account, transaction_metadata.nonce - 1));
-	}
-
-	tx.build()
 }

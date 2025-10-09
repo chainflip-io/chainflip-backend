@@ -18,9 +18,7 @@
 
 use crate::{
 	mock::*,
-	submit_runtime_call::{
-		build_eip_712_payload, validate_non_native_signed_call, EthEncodingType, SolEncodingType,
-	},
+	submit_runtime_call::{build_eip_712_payload, EthEncodingType, SolEncodingType},
 	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
 	SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
 	SolanaUnavailableNonceAccounts, TransactionMetadata,
@@ -44,6 +42,7 @@ use frame_support::{
 	},
 	traits::OriginTrait,
 };
+use sp_runtime::traits::ValidateUnsigned;
 use std::str::FromStr;
 
 fn utxo(amount: BtcAmount, salt: u32, pub_key: Option<[u8; 32]>) -> Utxo {
@@ -763,20 +762,20 @@ fn can_dispatch_solana_gov_call() {
 #[test]
 fn can_non_native_signed_call() {
 	new_test_ext().execute_with(|| {
-        // Prepare a simple runtime call (e.g., a remark call from frame_system) 
+		// Prepare a simple runtime call (e.g., a remark call from frame_system) 
 		let system_call = frame_system::Call::remark { remark: vec![] };
 		let runtime_call: <Test as crate::Config>::RuntimeCall = system_call.into();
 		let call = Box::new(runtime_call);
 
-        // Create transaction metadata
-        let transaction_metadata = TransactionMetadata {
-            nonce: 0,
-            expiry_block: 10000u32,
-        };
+		// Create transaction metadata
+		let transaction_metadata = TransactionMetadata {
+			nonce: 0,
+			expiry_block: 10000u32,
+		};
 
-        // Create user signature data
-        // In a real scenario, this would involve signing the serialized call with the caller's private key.
-        // For testing, we use a mock signature that passes validation in the mock environment.
+		// Create user signature data
+		// In a real scenario, this would involve signing the serialized call with the caller's private key.
+		// For testing, we use a mock signature that passes validation in the mock environment.
 		let signature_data = SignatureData::Solana {
 			signature: SolSignature(hex_literal::hex!(
 				"1c3e51b4b12bcc95419a43dc4c1854663edda1df5dd788a059a66c6d237a32fafbeff6515d4b8af0267ce8365ba7a83cf483d7b66d3e3164db027302e308c60e"
@@ -788,20 +787,20 @@ fn can_non_native_signed_call() {
 		// Check origin
 		assert_noop!(
 			Environment::non_native_signed_call(
-            RuntimeOrigin::root(),
-            call.clone(),
-            transaction_metadata,
-            signature_data.clone(),
-       		),
+			RuntimeOrigin::root(),
+			call.clone(),
+			transaction_metadata,
+			signature_data.clone(),
+	   		),
 			sp_runtime::traits::BadOrigin,
 		);
 
-        assert_ok!(Environment::non_native_signed_call(
-            RuntimeOrigin::none(),
-            call,
-            transaction_metadata,
-            signature_data.clone(),
-        ));
+		assert_ok!(Environment::non_native_signed_call(
+			RuntimeOrigin::none(),
+			call,
+			transaction_metadata,
+			signature_data.clone(),
+		));
 
 
 		assert!(
@@ -813,7 +812,7 @@ fn can_non_native_signed_call() {
 				))
 				.count() == 1
 		);
-    });
+	});
 }
 #[test]
 fn can_build_eip_712_payload_validate_unsigned() {
@@ -830,12 +829,11 @@ fn can_build_eip_712_payload_validate_unsigned() {
             signer,
             sig_type: EthEncodingType::Eip712,
         };
-
-		assert_ok!(validate_non_native_signed_call::<Test>(
-				&runtime_call,
-				transaction_metadata,
-				&signature_data,
-		));
+		let user_submission = crate::Call::non_native_signed_call { call: Box::new(runtime_call), transaction_metadata, signature_data };
+		assert_ok!(
+			<crate::Pallet::<Test> as ValidateUnsigned>::validate_unsigned(frame_support::pallet_prelude::TransactionSource::External, &user_submission)
+		);
+		assert_ok!(<crate::Pallet::<Test> as ValidateUnsigned>::pre_dispatch(&user_submission));
 	});
 }
 
@@ -850,7 +848,7 @@ fn can_build_eip_712_payload() {
 		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000 };
 
 		let payload =
-			build_eip_712_payload::<Test>(&runtime_call, chain_name, version, transaction_metadata);
+			build_eip_712_payload(&runtime_call, chain_name, version, transaction_metadata);
 		let eip_712_hash = Keccak256::hash(&payload).0;
 		assert_eq!(
 			eip_712_hash,
@@ -895,12 +893,12 @@ fn can_batch() {
 
 		// Adding a failing call to a working batch will revert the entire batch.
 		let signature_data: SignatureData = SignatureData::Ethereum {
-            signature: hex_literal::hex!(
-                "b257dc9c477563cfd7cea8b02f1458609f726535eee44a60e5914dfc9343f6834111cfd49271ada1f94d02fcd96b1bfadcdd2f5fb1922144e475f8c91ed353861b"
-            ).into(),
-            signer: EvmAddress::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap(),
-            sig_type: EthEncodingType::Eip712,
-        };
+			signature: hex_literal::hex!(
+				"b257dc9c477563cfd7cea8b02f1458609f726535eee44a60e5914dfc9343f6834111cfd49271ada1f94d02fcd96b1bfadcdd2f5fb1922144e475f8c91ed353861b"
+			).into(),
+			signer: EvmAddress::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap(),
+			sig_type: EthEncodingType::Eip712,
+		};
 		let failing_call = crate::Call::non_native_signed_call {
 			call: Box::new(remark_call.clone().into()),
 			transaction_metadata: TransactionMetadata { nonce: 0, expiry_block: 10000 },
