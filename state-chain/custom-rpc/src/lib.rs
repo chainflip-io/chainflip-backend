@@ -107,10 +107,10 @@ pub mod pool_client;
 #[cfg(test)]
 mod tests;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum EncodedNonNativeCall {
 	Eip712(eip_712_types::TypedData),
-	Bytes(Vec<u8>),
+	Bytes(RpcBytes),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1259,9 +1259,9 @@ pub trait CustomApi {
 	#[method(name = "encode_non_native_call")]
 	fn cf_encode_non_native_call(
 		&self,
-		caller: EthereumAddress,
-		call: Vec<u8>,
+		call: RpcBytes,
 		transaction_metadata: TransactionMetadata,
+		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<EncodedNonNativeCall>;
 }
 
@@ -2444,57 +2444,54 @@ where
 
 	fn cf_encode_non_native_call(
 		&self,
-		caller: EthereumAddress,
-		call: Vec<u8>,
+		call: RpcBytes,
 		transaction_metadata: TransactionMetadata,
+		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<EncodedNonNativeCall> {
-		self.rpc_backend.with_runtime_api(None, |api, hash| {
-			let api_version = api
-				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)
-				.map_err(CfApiError::from)?
-				.unwrap_or_default();
-
-			if api_version < 8 {
-				// eip-712 data encoding didn't exist before version 8
-				Err(CfApiError::ErrorObject(call_error(
-					"EIP data generation is not supported for the current runtime api version",
+		self.rpc_backend
+			.with_versioned_runtime_api(at, |api, hash, version| match version {
+				Some(v) if v < 8 => Err(CfApiError::ErrorObject(call_error(
+					"Encoding of non native calls are not supported at this runtime api version",
 					CfErrorCode::RuntimeApiError,
-				)))
-			} else {
-				// Not using RuntimeCall as a parameter to this function because it doesn't
-				// have Serialize/Deserialize implemented. We then decode to verify it's a
-				// valid RuntimeCall.
-				if let Err(err) = state_chain_runtime::RuntimeCall::decode(&mut &call[..]) {
-					return Err(CfApiError::ErrorObject(ErrorObject::owned(
-						ErrorCode::InvalidParams.code(),
-						format!("Failed to deserialize into a RuntimeCall {:?}", err),
-						None::<()>,
-					)));
-				}
-				let chainflip_network =
-					api.cf_chainflip_network(hash).map_err(CfApiError::from)??;
+				))),
+				_ => {
+					let call_bytes: Vec<u8> = call.into();
 
-				// TODO: Instead of getting a `caller: EthereumAddress` and encoding EIP-712, we
-				// should  get a signer (Ethereum/Solana) and an encodingType (Domain, EIP-712).
-				// Then encode via `build_eip712_typed_data` or `build_domain_data` (with the
-				// right chain's domain).
+					// Not using RuntimeCall as a parameter to this function because it doesn't
+					// have Serialize/Deserialize implemented. We then decode to verify it's a
+					// valid RuntimeCall.
+					if let Err(err) = state_chain_runtime::RuntimeCall::decode(&mut &call_bytes[..])
+					{
+						return Err(CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InvalidParams.code(),
+							format!("Failed to deserialize into a RuntimeCall {:?}", err),
+							None::<()>,
+						)));
+					}
+					let chainflip_network =
+						api.cf_chainflip_network(hash).map_err(CfApiError::from)??;
 
-				let typed_data: eip_712_types::TypedData = eip_712_types::build_eip712_typed_data(
-					chainflip_network,
-					caller,
-					call,
-					transaction_metadata,
-				)
-				.map_err(|e| {
-					CfApiError::ErrorObject(ErrorObject::owned(
-						ErrorCode::InvalidParams.code(),
-						format!("Failed to build eip712 typed data: {e}"),
-						None::<()>,
-					))
-				})?;
-				Ok(EncodedNonNativeCall::Eip712(typed_data))
-			}
-		})
+					// TODO: Instead of getting a `caller: EthereumAddress` and encoding EIP-712, we
+					// should  get a signer (Ethereum/Solana) and an encodingType (Domain, EIP-712).
+					// Then encode via `build_eip712_typed_data` or `build_domain_data` (with the
+					// right chain's domain). Here we only need to add the Solana prefix because
+					// the Ethereum one is added by default with the personal sign.
+					let typed_data: eip_712_types::TypedData =
+						eip_712_types::build_eip712_typed_data(
+							chainflip_network,
+							call_bytes,
+							transaction_metadata,
+						)
+						.map_err(|e| {
+							CfApiError::ErrorObject(ErrorObject::owned(
+								ErrorCode::InvalidParams.code(),
+								format!("Failed to build eip712 typed data: {e}"),
+								None::<()>,
+							))
+						})?;
+					Ok(EncodedNonNativeCall::Eip712(typed_data))
+				},
+			})
 	}
 }
 

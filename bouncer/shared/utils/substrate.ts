@@ -80,12 +80,12 @@ const getCachedSubstrateApi = (endpoint: string) =>
           },
         },
         EthEncodingType: {
-          _enum: ['Domain', 'Eip712'],
+          _enum: ['PersonalSign', 'Eip712'],
         },
         SolEncodingType: {
           _enum: ['Domain'],
         },
-        UserSignatureData: {
+        SignatureData: {
           _enum: {
             Solana: '(SolSignature, SolAddress, SolEncodingType)',
             Ethereum: '(EthereumSignature, EthereumAddress, EthEncodingType)',

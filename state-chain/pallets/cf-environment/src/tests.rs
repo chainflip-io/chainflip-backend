@@ -785,6 +785,17 @@ fn can_non_native_signed_call() {
 		let caller: <Test as frame_system::Config>::AccountId = signature_data
 			.signer_account().unwrap();
 
+		// Check origin
+		assert_noop!(
+			Environment::non_native_signed_call(
+            RuntimeOrigin::root(),
+            call.clone(),
+            transaction_metadata,
+            signature_data.clone(),
+       		),
+			sp_runtime::traits::BadOrigin,
+		);
+
         assert_ok!(Environment::non_native_signed_call(
             RuntimeOrigin::none(),
             call,
@@ -811,11 +822,10 @@ fn can_build_eip_712_payload_validate_unsigned() {
 		let runtime_call: <Test as crate::Config>::RuntimeCall = system_call.clone().into();
 
 		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000 };
-		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-		let signer: EvmAddress = EvmAddress::from_str(from_str).unwrap();
+		let signer: EvmAddress = EvmAddress::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
 		let signature_data: SignatureData = SignatureData::Ethereum {
             signature: hex_literal::hex!(
-                "712d40241c7ad17d589a3dba2e46ab9a1279c184383f85c91f6dede41774b5f4067a875634d227973e6d63e9651ca24c7025a0b80091807d79c05df1ba7355271b"
+                "b257dc9c477563cfd7cea8b02f1458609f726535eee44a60e5914dfc9343f6834111cfd49271ada1f94d02fcd96b1bfadcdd2f5fb1922144e475f8c91ed353861b"
             ).into(),
             signer,
             sig_type: EthEncodingType::Eip712,
@@ -839,22 +849,15 @@ fn can_build_eip_712_payload() {
 		let chain_name = "Chainflip-Development";
 		let version = "0";
 		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000 };
-		let from_str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-		let signer: EvmAddress = EvmAddress::from_str(from_str).unwrap();
 
-		let payload = build_eip_712_payload::<Test>(
-			&runtime_call,
-			chain_name,
-			version,
-			transaction_metadata,
-			signer,
-		);
+		let payload =
+			build_eip_712_payload::<Test>(&runtime_call, chain_name, version, transaction_metadata);
 		let eip_712_hash = Keccak256::hash(&payload).0;
 		assert_eq!(
 			eip_712_hash,
 			[
-				177, 74, 139, 71, 34, 1, 94, 155, 148, 231, 176, 28, 108, 61, 223, 229, 210, 181,
-				155, 61, 255, 133, 218, 50, 7, 42, 65, 195, 57, 177, 181, 204
+				12, 195, 66, 97, 26, 196, 177, 148, 196, 167, 150, 254, 105, 11, 244, 200, 72, 245,
+				136, 81, 207, 166, 141, 67, 148, 88, 16, 75, 136, 49, 41, 48
 			]
 		);
 	});
@@ -871,16 +874,43 @@ fn can_batch() {
 		);
 
 		let remark_call = frame_system::Call::<Test>::remark { remark: vec![42] };
-		let calls = vec![remark_call.into()];
+		let mut calls = vec![remark_call.clone().into(), remark_call.clone().into()];
+
+		assert_noop!(
+			Environment::batch(RuntimeOrigin::none(), calls.clone()),
+			sp_runtime::traits::BadOrigin,
+		);
 
 		assert_ok!(Environment::batch(RuntimeOrigin::signed(ALICE), calls.clone()));
 
-		assert!(System::events().iter().any(|record| matches!(
-			record.event,
-			RuntimeEvent::Environment(Event::BatchCompleted {
-				signer_account: ref acct,
-				..
-			}) if acct == &ALICE
-		)));
+		assert!(
+			System::events()
+				.iter()
+				.filter(|record| matches!(
+					record.event,
+					RuntimeEvent::Environment(Event::BatchCompleted {})
+				))
+				.count() == 1
+		);
+
+		// Adding a failing call to a working batch will revert the entire batch.
+		let signature_data: SignatureData = SignatureData::Ethereum {
+            signature: hex_literal::hex!(
+                "b257dc9c477563cfd7cea8b02f1458609f726535eee44a60e5914dfc9343f6834111cfd49271ada1f94d02fcd96b1bfadcdd2f5fb1922144e475f8c91ed353861b"
+            ).into(),
+            signer: EvmAddress::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap(),
+            sig_type: EthEncodingType::Eip712,
+        };
+		let failing_call = crate::Call::non_native_signed_call {
+			call: Box::new(remark_call.clone().into()),
+			transaction_metadata: TransactionMetadata { nonce: 0, expiry_block: 10000 },
+			signature_data: signature_data.clone(),
+		};
+		calls.push(failing_call.into());
+
+		assert_noop!(
+			Environment::batch(RuntimeOrigin::none(), calls.clone()),
+			sp_runtime::traits::BadOrigin,
+		);
 	});
 }

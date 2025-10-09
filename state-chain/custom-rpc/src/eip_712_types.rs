@@ -13,7 +13,6 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use cf_chains::eth::Address as EthereumAddress;
 use cf_primitives::ChainflipNetwork;
 use pallet_cf_environment::{TransactionMetadata, UNSIGNED_CALL_VERSION};
 use serde::{Deserialize, Serialize};
@@ -79,7 +78,6 @@ pub struct EIP712Domain {
 // and validate in the pallet_cf_environment::submit_runtime_call.rs
 pub fn build_eip712_typed_data(
 	chainflip_network: ChainflipNetwork,
-	caller: EthereumAddress,
 	call: Vec<u8>,
 	transaction_metadata: TransactionMetadata,
 ) -> Result<TypedData, serde_json::Error> {
@@ -100,7 +98,6 @@ pub fn build_eip712_typed_data(
 				},
 			],
 			"Metadata": [
-				{ "name": "from", "type": "address" },
 				{ "name": "nonce", "type": "uint32" },
 				{ "name": "expiryBlock", "type": "uint32" },
 			],
@@ -127,7 +124,6 @@ pub fn build_eip712_typed_data(
 				"value": format!("0x{}", hex::encode(&call)),
 			},
 			"Metadata": {
-				"from": caller,
 				"nonce": transaction_metadata.nonce.to_string(),
 				"expiryBlock": transaction_metadata.expiry_block.to_string(),
 			},

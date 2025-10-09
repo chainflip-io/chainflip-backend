@@ -37,7 +37,7 @@ pub struct TransactionMetadata {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum EthEncodingType {
-	Domain, // personal_sign
+	PersonalSign,
 	Eip712,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -96,7 +96,7 @@ pub(crate) fn batch_all<T: Config>(
 			let base_weight = weight_fn(index.saturating_add(1) as u32);
 			let err = DispatchErrorWithPostInfo {
 				post_info: Some(base_weight.saturating_add(weight)).into(),
-				error: DispatchError::Other("Nested runtime call batches not allowed"),
+				error: Error::<T>::InvalidNestedBatch.into(),
 			};
 			return Err(err);
 		}
@@ -121,7 +121,7 @@ pub(crate) fn batch_all<T: Config>(
 
 const EIP712_DOMAIN_TYPE_STR: &str = "EIP712Domain(string name,string version)";
 const EIP712_DOMAIN_PREFIX: [u8; 2] = [0x19, 0x01];
-const EIP712_METADATA_TYPE_STR: &str = "Metadata(address from,uint32 nonce,uint32 expiryBlock)";
+const EIP712_METADATA_TYPE_STR: &str = "Metadata(uint32 nonce,uint32 expiryBlock)";
 const EIP712_RUNTIMECALL_TYPE_STR: &str = "RuntimeCall(bytes value)";
 
 /// `signer is not technically necessary but is added as part of the metadata so
@@ -133,7 +133,6 @@ pub(crate) fn build_eip_712_payload<T: Config>(
 	chain_name: &str,
 	version: &str,
 	transaction_metadata: TransactionMetadata,
-	signer: EvmAddress,
 ) -> Vec<u8> {
 	// -----------------
 	// Domain separator
@@ -161,7 +160,6 @@ pub(crate) fn build_eip_712_payload<T: Config>(
 	let metadata_type_hash = Keccak256::hash(metadata_type_str.as_bytes());
 	let metadata_tokens = vec![
 		Token::FixedBytes(metadata_type_hash.as_bytes().to_vec()),
-		Token::Address(signer),
 		Token::Uint(U256::from(transaction_metadata.nonce)),
 		Token::Uint(U256::from(transaction_metadata.expiry_block)),
 	];
@@ -235,7 +233,7 @@ pub fn build_domain_data(
 	[
 		encoded_call,
 		chanflip_network_name.as_str().encode(),
-		UNSIGNED_CALL_VERSION.as_bytes().to_vec(),
+		UNSIGNED_CALL_VERSION.encode(),
 		transaction_metadata.encode(),
 	]
 	.concat()
@@ -284,7 +282,7 @@ pub(crate) fn validate_non_native_signed_call<T: Config>(
 		},
 		SignatureData::Ethereum { signature, signer, sig_type } => {
 			let signed_payload = match sig_type {
-				EthEncodingType::Domain => {
+				EthEncodingType::PersonalSign => {
 					let domain_data = build_domain_data(
 						call.encode(),
 						chanflip_network_name,
@@ -303,7 +301,6 @@ pub(crate) fn validate_non_native_signed_call<T: Config>(
 					chanflip_network_name.as_str(),
 					UNSIGNED_CALL_VERSION,
 					transaction_metadata,
-					*signer,
 				),
 			};
 			verify_evm_signature(signer, &signed_payload, signature)

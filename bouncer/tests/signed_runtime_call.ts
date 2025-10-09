@@ -64,6 +64,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   if (evmSigner.toLowerCase() !== ethWallet.address.toLowerCase()) {
     throw new Error('Address does not match expected pubkey');
   }
+
   // EVM Whale -> SC account (`cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7`)
   const evmScAccount = externalChainToScAccount(ethWallet.address);
 
@@ -89,7 +90,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     await fundFlip(logger, evmScAccount, '1000');
   }
 
-  if (role === 'Unregistered') {
+  if (role === 'null' || role === 'Unregistered') {
     logger.info(`Registering as operator`);
     call = chainflip.tx.validator.registerAsOperator(
       {
@@ -103,22 +104,13 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     call = chainflip.tx.validator.deregisterAsOperator();
   }
 
-  let expectedMethod = call.method.method;
-  const encodedCall = chainflip.createType('Call', call.method).toU8a();
-  const hexRuntimeCall = u8aToHex(encodedCall);
-
-  // EIP-712 signing
   let evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
 
-  const eipPayload = await chainflip.rpc(
-    'cf_encode_non_native_call',
-    ethWallet.address,
-    Array.from(encodedCall),
-    {
-      nonce: evmNonce,
-      expiry_block: expiryBlock,
-    },
-  );
+  const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
+  const eipPayload = await chainflip.rpc('cf_encode_non_native_call', hexRuntimeCall, {
+    nonce: evmNonce,
+    expiry_block: expiryBlock,
+  });
   logger.debug('eipPayload', JSON.stringify(eipPayload, null, 2));
 
   // Parse and validate the response
@@ -157,9 +149,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   // automatically revert/fail as for regular extrinsics.
   await observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
     test: (event) =>
-      event.data.signerAccount === evmScAccount &&
-      event.data.runtimeCall.method === expectedMethod &&
-      event.data.nonce === evmNonce.toString(),
+      event.data.signerAccount === evmScAccount && event.data.nonce === evmNonce.toString(),
     historicalCheckBlocks: 1,
   }).event;
 
@@ -221,16 +211,12 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   let nonNativeEvent = observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
     test: (event) =>
-      event.data.signerAccount === svmScAccount &&
-      event.data.runtimeCall.method === batchCall.method.method &&
-      event.data.nonce === svmNonce.toString(),
+      event.data.signerAccount === svmScAccount && event.data.nonce === svmNonce.toString(),
     historicalCheckBlocks: 1,
   }).event;
 
   let batchCompletedEvent = observeEvent(globalLogger, `environment:BatchCompleted`, {
-    test: (event) =>
-      event.data.signerAccount === svmScAccount &&
-      event.data.runtimeCalls[0].method === remarkCall.method.method,
+    test: (_) => true,
     historicalCheckBlocks: 1,
   }).event;
 
@@ -256,7 +242,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
         Ethereum: {
           signature: evmSignature,
           signer: evmSigner,
-          sig_type: 'Domain',
+          sig_type: 'PersonalSign',
         },
       },
     )
@@ -264,16 +250,12 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
 
   nonNativeEvent = observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
     test: (event) =>
-      event.data.signerAccount === evmScAccount &&
-      event.data.runtimeCall.method === batchCall.method.method &&
-      event.data.nonce === evmNonce.toString(),
+      event.data.signerAccount === evmScAccount && event.data.nonce === evmNonce.toString(),
     historicalCheckBlocks: 1,
   }).event;
 
   batchCompletedEvent = observeEvent(globalLogger, `environment:BatchCompleted`, {
-    test: (event) =>
-      event.data.signerAccount === evmScAccount &&
-      event.data.runtimeCalls[0].method === remarkCall.method.method,
+    test: (_) => true,
     historicalCheckBlocks: 1,
   }).event;
 

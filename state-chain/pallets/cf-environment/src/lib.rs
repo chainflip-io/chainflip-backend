@@ -176,6 +176,8 @@ pub mod pallet {
 		FailedToExecuteNonNativeSignedCall,
 		// Failed to execute batch
 		FailedToExecuteBatch,
+		// Nested batches not allowed
+		InvalidNestedBatch,
 	}
 
 	#[pallet::pallet]
@@ -349,36 +351,50 @@ pub mod pallet {
 		/// The address of an supported ARB asset was updated
 		UpdatedArbAsset(ArbAsset, EvmAddress),
 		/// Polkadot Vault Account is successfully set
-		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
+		PolkadotVaultAccountSet {
+			polkadot_vault_account_id: PolkadotAccountId,
+		},
 		/// The starting block number for the new Bitcoin vault was set
-		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
+		BitcoinBlockNumberSetForVault {
+			block_number: cf_chains::btc::BlockNumber,
+		},
 		/// The Safe Mode settings for the chain has been updated
-		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
+		RuntimeSafeModeUpdated {
+			safe_mode: SafeModeUpdate<T>,
+		},
 		/// Utxo consolidation parameters has been updated
-		UtxoConsolidationParametersUpdated { params: utxo_selection::ConsolidationParameters },
+		UtxoConsolidationParametersUpdated {
+			params: utxo_selection::ConsolidationParameters,
+		},
 		/// Arbitrum Initialized: contract addresses have been set, first key activated
 		ArbitrumInitialized,
 		/// Solana Initialized: contract addresses have been set, first key activated
 		SolanaInitialized,
 		/// Some unspendable Utxos are discarded from storage.
-		StaleUtxosDiscarded { utxos: Vec<Utxo> },
+		StaleUtxosDiscarded {
+			utxos: Vec<Utxo>,
+		},
 		/// Solana durable nonce is updated to a new nonce for the corresponding nonce account.
-		DurableNonceSetForAccount { nonce_account: SolAddress, durable_nonce: SolHash },
+		DurableNonceSetForAccount {
+			nonce_account: SolAddress,
+			durable_nonce: SolHash,
+		},
 		/// An Governance transaction was dispatched to a Solana Program.
-		SolanaGovCallDispatched { gov_call: SolanaGovCall, broadcast_id: BroadcastId },
+		SolanaGovCallDispatched {
+			gov_call: SolanaGovCall,
+			broadcast_id: BroadcastId,
+		},
 		/// Assethub Vault Account is successfully set
-		AssethubVaultAccountSet { assethub_vault_account_id: PolkadotAccountId },
+		AssethubVaultAccountSet {
+			assethub_vault_account_id: PolkadotAccountId,
+		},
 		/// Unsigned Runtime Call was dispatched
 		NonNativeSignedCall {
 			signer_account: T::AccountId,
-			runtime_call: <T as pallet::Config>::RuntimeCall,
 			nonce: u32,
 		},
 		// Runtime Call Batch was dispatched
-		BatchCompleted {
-			signer_account: T::AccountId,
-			runtime_calls: Vec<<T as pallet::Config>::RuntimeCall>,
-		},
+		BatchCompleted {},
 	}
 
 	#[pallet::call]
@@ -657,7 +673,6 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::NonNativeSignedCall {
 				signer_account,
-				runtime_call: *call,
 				nonce: transaction_metadata.nonce,
 			});
 			Ok(())
@@ -679,10 +694,7 @@ pub mod pallet {
 			let _ = batch_all::<T>(account_id.clone(), calls.clone(), T::WeightInfo::batch)
 				.map_err(|_| Error::<T>::FailedToExecuteNonNativeSignedCall)?;
 
-			Self::deposit_event(Event::<T>::BatchCompleted {
-				signer_account: account_id,
-				runtime_calls: calls,
-			});
+			Self::deposit_event(Event::<T>::BatchCompleted {});
 
 			Ok(())
 		}
