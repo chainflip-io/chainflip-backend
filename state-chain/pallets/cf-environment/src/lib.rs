@@ -102,7 +102,7 @@ pub mod pallet {
 	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum};
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
-	use frame_support::DefaultNoBound;
+	use frame_support::{traits::OriginTrait, DefaultNoBound};
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -146,7 +146,8 @@ pub mod pallet {
 			Callback = RuntimeCallFor<Self>,
 		>;
 
-		type RuntimeOrigin: From<frame_system::RawOrigin<<Self as frame_system::Config>::AccountId>>;
+		type RuntimeOrigin: From<frame_system::RawOrigin<<Self as frame_system::Config>::AccountId>>
+			+ OriginTrait<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// The overarching call type.
 		type RuntimeCall: Member
@@ -664,10 +665,7 @@ pub mod pallet {
 			let signer_account: T::AccountId =
 				signature_data.signer_account().map_err(|_| Error::<T>::FailedToDecodeSigner)?;
 
-			let signer_account_origin =
-				frame_system::RawOrigin::Signed(signer_account.clone()).into();
-
-			let _ = (*call.clone()).dispatch_bypass_filter(signer_account_origin)?;
+			let _ = call.dispatch_bypass_filter(OriginTrait::signed(signer_account))?;
 
 			Self::deposit_event(Event::<T>::NonNativeSignedCall);
 			Ok(().into())
