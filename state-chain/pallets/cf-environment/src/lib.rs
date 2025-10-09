@@ -372,11 +372,12 @@ pub mod pallet {
 		NonNativeSignedCall {
 			signer_account: T::AccountId,
 			runtime_call: <T as pallet::Config>::RuntimeCall,
+			nonce: u32,
 		},
 		// Runtime Call Batch was dispatched
 		BatchCompleted {
 			signer_account: T::AccountId,
-			runtime_call: Vec<<T as pallet::Config>::RuntimeCall>,
+			runtime_calls: Vec<<T as pallet::Config>::RuntimeCall>,
 		},
 	}
 
@@ -638,7 +639,7 @@ pub mod pallet {
 		pub fn non_native_signed_call(
 			origin: OriginFor<T>,
 			call: scale_info::prelude::boxed::Box<<T as Config>::RuntimeCall>,
-			_transaction_metadata: TransactionMetadata,
+			transaction_metadata: TransactionMetadata,
 			signature_data: SignatureData,
 		) -> DispatchResult {
 			// unsigned extrinsic - validation happens in ValidateUnsigned
@@ -657,6 +658,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::NonNativeSignedCall {
 				signer_account,
 				runtime_call: *call,
+				nonce: transaction_metadata.nonce,
 			});
 			Ok(())
 		}
@@ -679,7 +681,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::BatchCompleted {
 				signer_account: account_id,
-				runtime_call: calls,
+				runtime_calls: calls,
 			});
 
 			Ok(())
@@ -714,7 +716,7 @@ pub mod pallet {
 			} = call
 			{
 				// Validate the non-native signed call to prevent it from being included
-				// in a blocks in case they became invalid since being added to the pool.
+				// in a blocks in case it has became invalid since being added to the pool.
 				submit_runtime_call::validate_non_native_signed_call::<T>(
 					&**inner_call,
 					*transaction_metadata,

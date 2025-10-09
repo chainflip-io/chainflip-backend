@@ -86,7 +86,7 @@ pub fn build_eip712_typed_data(
 	let json = serde_json::json!({
 		"domain": {
 			"name": chainflip_network.as_str().to_string(),
-			"version": "0",
+			"version": UNSIGNED_DATA_VERSION,
 		},
 		"types": {
 			"EIP712Domain": [

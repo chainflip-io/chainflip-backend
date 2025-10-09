@@ -80,6 +80,9 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     // broker that will receive the BTC and swap a small amount to FLIP. That will register and
     // fund the account. See PRO-2551.
     await fundFlip(logger, evmScAccount, '1000');
+  }
+
+  if (role === 'Unregistered') {
     logger.info(`Registering as operator`);
     call = chainflip.tx.validator.registerAsOperator(
       {
@@ -89,9 +92,11 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
       'TestOperator',
     );
   } else if (role === 'Operator') {
+    logger.info(`Deregistering as operator`);
     call = chainflip.tx.validator.deregisterAsOperator();
   }
 
+  let expectedMethod = call.method.method;
   const encodedCall = chainflip.createType('Call', call.method).toU8a();
   const hexRuntimeCall = u8aToHex(encodedCall);
 
@@ -99,7 +104,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   let evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
 
   const eipPayload = await chainflip.rpc(
-    'cf_eip_data',
+    'cf_encode_non_native_call',
     ethWallet.address,
     Array.from(encodedCall),
     {
@@ -143,7 +148,10 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   // Needs to check that the result is not error, as the transaction won't
   // automatically revert/fail as for regular extrinsics.
   await observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
-    test: (event) => event.data.signerAccount === evmScAccount,
+    test: (event) =>
+      event.data.signerAccount === evmScAccount &&
+      event.data.runtimeCall.method === expectedMethod &&
+      event.data.nonce === evmNonce.toString(),
     historicalCheckBlocks: 1,
   }).event;
 
@@ -171,8 +179,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   // const calls = [remarkCall, chainflip.tx.validator.forceRotation()];
 
   const batchCall = chainflip.tx.environment.batch(calls);
-  const batchRuntimeCall = batchCall.method;
-  const encodedBatchCall = chainflip.createType('Call', batchRuntimeCall).toU8a();
+  const encodedBatchCall = chainflip.createType('Call', batchCall.method).toU8a();
   const hexBatchRuntimeCall = u8aToHex(encodedBatchCall);
 
   const svmNonce = (await chainflip.rpc.system.accountNextIndex(svmScAccount)) as unknown as number;
@@ -204,15 +211,22 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     )
     .send();
 
-  await observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
-    test: (event) => event.data.signerAccount === svmScAccount,
+  let nonNativeEvent = observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
+    test: (event) =>
+      event.data.signerAccount === svmScAccount &&
+      event.data.runtimeCall.method === batchCall.method.method &&
+      event.data.nonce === svmNonce.toString(),
     historicalCheckBlocks: 1,
   }).event;
 
-  await observeEvent(globalLogger, `environment:BatchCompleted`, {
-    test: (event) => event.data.signerAccount === svmScAccount,
+  let batchCompletedEvent = observeEvent(globalLogger, `environment:BatchCompleted`, {
+    test: (event) =>
+      event.data.signerAccount === svmScAccount &&
+      event.data.runtimeCalls[0].method === remarkCall.method.method,
     historicalCheckBlocks: 1,
   }).event;
+
+  await Promise.all([nonNativeEvent, batchCompletedEvent]);
 
   logger.info('Signing and submitting user-signed payload with EVM wallet using personal_sign');
 
@@ -240,15 +254,22 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     )
     .send();
 
-  await observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
-    test: (event) => event.data.signerAccount === evmScAccount,
+  nonNativeEvent = observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
+    test: (event) =>
+      event.data.signerAccount === evmScAccount &&
+      event.data.runtimeCall.method === batchCall.method.method &&
+      event.data.nonce === evmNonce.toString(),
     historicalCheckBlocks: 1,
   }).event;
 
-  await observeEvent(globalLogger, `environment:BatchCompleted`, {
-    test: (event) => event.data.signerAccount === evmScAccount,
+  batchCompletedEvent = observeEvent(globalLogger, `environment:BatchCompleted`, {
+    test: (event) =>
+      event.data.signerAccount === evmScAccount &&
+      event.data.runtimeCalls[0].method === remarkCall.method.method,
     historicalCheckBlocks: 1,
   }).event;
+
+  await Promise.all([nonNativeEvent, batchCompletedEvent]);
 }
 
 // // Code to manually to try  EIP-712 manual signing to try out encodings manually

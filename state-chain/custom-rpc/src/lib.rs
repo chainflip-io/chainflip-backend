@@ -1250,8 +1250,8 @@ pub trait CustomApi {
 		operator: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<DelegationSnapshot<state_chain_runtime::AccountId, NumberOrHex>>>;
-	#[method(name = "eip_data")]
-	fn cf_eip_data(
+	#[method(name = "encode_non_native_call")]
+	fn cf_encode_non_native_call(
 		&self,
 		caller: EthereumAddress,
 		call: Vec<u8>,
@@ -2436,7 +2436,7 @@ where
 			})
 	}
 
-	fn cf_eip_data(
+	fn cf_encode_non_native_call(
 		&self,
 		caller: EthereumAddress,
 		call: Vec<u8>,
