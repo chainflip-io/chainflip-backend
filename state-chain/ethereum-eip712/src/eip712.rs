@@ -1,11 +1,13 @@
 use crate::{
-	bytes::Bytes, hash::keccak256, lexer::HumanReadableParser, serde_helpers::StringifiedNumeric,
+	hash::keccak256, lexer::HumanReadableParser, serde_helpers::StringifiedNumeric,
+	GetScaleValueFields,
 };
 use ethabi::{
 	encode,
 	ethereum_types::{Address, U256},
 	ParamType, Token,
 };
+use scale_value::{Composite, Primitive, ValueDef};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use scale_info::prelude::{
@@ -319,7 +321,7 @@ pub struct TypedData {
 	/// The type of the message.
 	pub primary_type: String,
 	/// The message to be signed.
-	pub message: BTreeMap<String, serde_json::Value>,
+	pub message: scale_value::Value,
 }
 
 /// According to the MetaMask implementation,
@@ -337,7 +339,7 @@ impl<'de> Deserialize<'de> for TypedData {
 			types: Types,
 			#[serde(rename = "primaryType")]
 			primary_type: String,
-			message: BTreeMap<String, serde_json::Value>,
+			message: scale_value::Value,
 		}
 
 		#[derive(Deserialize)]
@@ -375,11 +377,7 @@ impl Eip712 for TypedData {
 	}
 
 	fn struct_hash(&self) -> Result<[u8; 32], Self::Error> {
-		let tokens = encode_data(
-			&self.primary_type,
-			&serde_json::Value::Object(serde_json::Map::from_iter(self.message.clone())),
-			&self.types,
-		)?;
+		let tokens = encode_data(&self.primary_type, &self.message.clone(), &self.types)?;
 		Ok(keccak256(encode(&tokens)))
 	}
 
@@ -420,23 +418,24 @@ pub struct Eip712DomainType {
 /// Returns an encoded representation of an object
 pub fn encode_data(
 	primary_type: &str,
-	data: &serde_json::Value,
+	data: &scale_value::Value,
 	types: &Types,
 ) -> Result<Vec<Token>, Eip712Error> {
 	let hash = hash_type(primary_type, types)?;
 	let mut tokens = vec![Token::Uint(U256::from(hash))];
 
 	if let Some(fields) = types.get(primary_type) {
-		for field in fields {
+		for (field, value) in
+			fields.iter().zip(data.get_scale_value_fields().map_err(|e| {
+				Eip712Error::Message(format!("Failed to get fields from data: {e}"))
+			})?) {
 			// handle recursive types
-			if let Some(value) = data.get(&field.name) {
-				let field = encode_field(types, &field.name, &field.r#type, value)?;
-				tokens.push(field);
-			} else if types.contains_key(&field.r#type) {
-				tokens.push(Token::Uint(U256::zero()));
-			} else {
-				return Err(Eip712Error::Message(format!("No data found for: `{}`", field.name)));
-			}
+
+			let field = encode_field(types, &field.name, &field.r#type, &value)?;
+			tokens.push(field);
+			//  else if types.contains_key(&field.r#type) {
+			// 	tokens.push(Token::Uint(U256::zero()));
+			// }
 		}
 	}
 
@@ -452,7 +451,7 @@ pub fn encode_data(
 /// Returns the hash of the `primary_type` object
 pub fn hash_struct(
 	primary_type: &str,
-	data: &serde_json::Value,
+	data: &scale_value::Value,
 	types: &Types,
 ) -> Result<[u8; 32], Eip712Error> {
 	let tokens = encode_data(primary_type, data, types)?;
@@ -530,7 +529,7 @@ pub fn encode_field(
 	types: &Types,
 	_field_name: &str,
 	field_type: &str,
-	value: &serde_json::Value,
+	value: &scale_value::Value,
 ) -> Result<Token, Eip712Error> {
 	let token = {
 		// check if field is custom data type
@@ -543,11 +542,15 @@ pub fn encode_field(
 				s if s.contains('[') => {
 					let (stripped_type, _) = s.rsplit_once('[').unwrap();
 					// ensure value is an array
-					let values = value.as_array().ok_or_else(|| {
-						Eip712Error::Message(format!(
+					let values = if let ValueDef::Composite(Composite::Unnamed(vals)) =
+						value.value.clone()
+					{
+						vals
+					} else {
+						return Err(Eip712Error::Message(format!(
 							"Expected array for type `{s}`, but got `{value}`",
-						))
-					})?;
+						)));
+					};
 					let tokens = values
 						.iter()
 						.map(|value| encode_field(types, _field_name, stripped_type, value))
@@ -562,17 +565,31 @@ pub fn encode_field(
 						Eip712Error::Message(format!("Failed to parse type {s}: {err}",))
 					})?;
 
+					let prim_val = if let ValueDef::Primitive(p) = &value.value {
+						p
+					} else {
+						return Err(Eip712Error::Message(format!(
+							"Expected primitive value for type `{s}`, but got `{value}`",
+						)));
+					};
+
 					match param {
 						ParamType::Address =>
-							Token::Address(serde_json::from_value(value.clone())?),
-						ParamType::Bytes => {
-							let data: Bytes = serde_json::from_value(value.clone())?;
-							encode_eip712_type(Token::Bytes(data.to_vec()))
-						},
-						ParamType::Int(_) => Token::Uint(serde_json::from_value(value.clone())?),
+							return Err(Eip712Error::Message(format!("Unsupported type {s}",))),
+						ParamType::Bytes =>
+							return Err(Eip712Error::Message(format!("Unsupported type {s}",))),
+
+						ParamType::Int(_) => Token::Uint(match prim_val {
+							Primitive::I128(i) => U256::from(*i as u128),
+							Primitive::I256(i) => todo!(),
+							_ =>
+								return Err(Eip712Error::Message(format!(
+									"Expected integer value for type `{s}`, but got `{value}`",
+								))),
+						}),
 						ParamType::Uint(_) => {
 							// uints are commonly stringified due to how ethers-js encodes
-							let val: StringifiedNumeric = serde_json::from_value(value.clone())?;
+							let val: StringifiedNumeric = todo!();
 							let val = val.try_into().map_err(|err| {
 								Eip712Error::Message(format!("Failed to parse uint {err}"))
 							})?;
@@ -580,18 +597,29 @@ pub fn encode_field(
 							Token::Uint(val)
 						},
 						ParamType::Bool =>
-							encode_eip712_type(Token::Bool(serde_json::from_value(value.clone())?)),
+							encode_eip712_type(Token::Bool(if let Primitive::Bool(b) = prim_val {
+								*b
+							} else {
+								return Err(Eip712Error::Message(format!(
+									"Expected boolean value for type `{s}`, but got `{value}`",
+								)))
+							})),
 						ParamType::String => {
-							let s: String = serde_json::from_value(value.clone())?;
+							let s: String = if let Primitive::String(s) = prim_val {
+								s.clone()
+							} else {
+								return Err(Eip712Error::Message(format!(
+									"Expected string value for type `{s}`, but got `{value}`",
+								)))
+							};
 							encode_eip712_type(Token::String(s))
 						},
 						ParamType::FixedArray(_, _) | ParamType::Array(_) => {
 							unreachable!("is handled in separate arm")
 						},
-						ParamType::FixedBytes(_) => {
-							let data: Bytes = serde_json::from_value(value.clone())?;
-							encode_eip712_type(Token::FixedBytes(data.to_vec()))
-						},
+						ParamType::FixedBytes(_) =>
+							return Err(Eip712Error::Message(format!("Unsupported type {s}",))),
+
 						ParamType::Tuple(_) =>
 							return Err(Eip712Error::Message(format!("Unexpected tuple type {s}",))),
 					}

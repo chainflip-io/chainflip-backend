@@ -32,6 +32,8 @@ serde = { workspace = true, features = ["derive", "alloc"] }
 sp-std = { workspace = true }
 ethabi = { workspace = true }
 serde_json = { workspace = true, features = ["alloc"] }
+scale-value = "0.18.0"
+codec = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 cf-utilities = { workspace = true, default-features = true, features = [
