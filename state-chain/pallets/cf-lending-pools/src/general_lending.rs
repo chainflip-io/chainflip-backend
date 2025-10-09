@@ -134,10 +134,17 @@ impl<T: Config> LoanAccount<T> {
 				Error::<T>::AddingCollateralDisabled
 			);
 			T::Balance::try_debit_account(&self.borrower_id, *asset, *amount)?;
-			self.collateral.entry(*asset).or_default().saturating_accrue(*amount);
+
+			self.add_to_collateral(*asset, *amount);
 		}
 
 		Ok(())
+	}
+
+	/// Helper function that makes sure the collateral is added correctly (not overriding existing
+	/// amounts and creating entries for new assets if necessary)
+	fn add_to_collateral(&mut self, asset: Asset, amount: AssetAmount) {
+		self.collateral.entry(asset).or_default().saturating_accrue(amount);
 	}
 
 	/// Computes account's total collateral value in USD, including what's in liquidation swaps.
@@ -238,15 +245,14 @@ impl<T: Config> LoanAccount<T> {
 				};
 
 				if excess_amount > 0 {
-					T::Balance::credit_account(&self.borrower_id, *to_asset, excess_amount);
+					// In case we have liquidated more than necessary the excess amount
+					// is added to the account's collateral balance:
+					self.add_to_collateral(*to_asset, excess_amount);
 				}
 
 				// Any input funds not yet liquidated are returned to the
-				// account's collateral balance
-				self.collateral
-					.entry(*from_asset)
-					.or_default()
-					.saturating_accrue(swap_progress.remaining_input_amount);
+				// account's collateral balance:
+				self.add_to_collateral(*from_asset, swap_progress.remaining_input_amount);
 			} else {
 				log_or_panic!("Failed to abort swap request: {swap_request_id}");
 			}
@@ -509,10 +515,7 @@ impl<T: Config> LoanAccount<T> {
 			)
 			.is_ok()
 			{
-				self.collateral
-					.entry(self.primary_collateral_asset)
-					.or_default()
-					.saturating_accrue(top_up_amount);
+				self.add_to_collateral(self.primary_collateral_asset, top_up_amount);
 			} else {
 				log_or_panic!("Unable to debit after checking balance");
 			}
@@ -1232,11 +1235,7 @@ impl<T: Config> cf_traits::lending::ChpSystemApi for Pallet<T> {
 					// Any amount left after repaying the loan is added to the borrower's
 					// collateral balance:
 					if remaining_amount > 0 {
-						loan_account
-							.collateral
-							.entry(liquidation_swap.to_asset)
-							.or_default()
-							.saturating_accrue(remaining_amount);
+						loan_account.add_to_collateral(liquidation_swap.to_asset, remaining_amount);
 					}
 
 					// If this swap is the last liquidation swap for the loan, we should

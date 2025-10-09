@@ -25,6 +25,7 @@ const BORROWER: u64 = LP;
 const LOAN_ASSET: Asset = Asset::Btc;
 const COLLATERAL_ASSET: Asset = Asset::Eth;
 const PRINCIPAL: AssetAmount = 1_000_000_000;
+const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 
 const LOAN_ID: LoanId = LoanId(0);
 
@@ -33,6 +34,46 @@ const SWAP_RATE: u128 = 20;
 const INIT_POOL_AMOUNT: AssetAmount = PRINCIPAL * 2;
 
 use crate::LENDING_DEFAULT_CONFIG as CONFIG;
+
+trait LendingTestRunnerExt {
+	fn with_default_pool(self) -> Self;
+	fn with_default_loan(self) -> Self;
+}
+
+impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<Test, Ctx> {
+	fn with_default_pool(self) -> Self {
+		self.then_execute_with(|ctx| {
+			setup_chp_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
+			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+
+			ctx
+		})
+	}
+
+	fn with_default_loan(self) -> Self {
+		self.then_execute_with(|ctx| {
+			MockBalance::credit_account(
+				&BORROWER,
+				COLLATERAL_ASSET,
+				INIT_COLLATERAL + ORIGINATION_FEE,
+			);
+
+			assert_eq!(
+				LendingPools::new_loan(
+					BORROWER,
+					LOAN_ASSET,
+					PRINCIPAL,
+					Some(COLLATERAL_ASSET),
+					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
+				),
+				Ok(LOAN_ID)
+			);
+
+			ctx
+		})
+	}
+}
 
 // This is a workaround for Permill not providing const methods...
 const fn portion_of_amount(fee: Permill, principal: AssetAmount) -> AssetAmount {
@@ -1415,6 +1456,80 @@ fn basic_liquidation() {
 					loans: Default::default(),
 				})
 			);
+		});
+}
+
+#[test]
+fn liquidation_fully_repays_loan_when_aborted() {
+	// Test a (likely rare) scenario where liquidation is aborted (due to reaching
+	// acceptable LTV), but the collateral already swapped is enough to fully cover
+	// a loan.
+
+	const NEW_SWAP_RATE: u128 = SWAP_RATE * 2;
+
+	// The amount "recovered" during liquidation is larger than the total
+	// owed principal:
+	const RECOVERED_LOAN_ASSET: AssetAmount = PRINCIPAL + PRINCIPAL / 50;
+	const REMAINING_COLLATERAL: AssetAmount = INIT_COLLATERAL / 10;
+
+	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
+
+	new_test_ext()
+		.with_default_pool()
+		.with_default_loan()
+		.then_execute_with(|_| {
+			// Drop oracle price to trigger liquidation
+			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+		})
+		.then_execute_at_next_block(|_| {
+			assert_eq!(
+				LoanAccounts::<Test>::get(BORROWER).unwrap().liquidation_status,
+				LiquidationStatus::Liquidating {
+					liquidation_swaps: BTreeMap::from([(
+						LIQUIDATION_SWAP_1,
+						LiquidationSwap {
+							loan_id: LOAN_ID,
+							from_asset: COLLATERAL_ASSET,
+							to_asset: LOAN_ASSET
+						}
+					)]),
+					is_hard: true
+				}
+			);
+
+			// Simulate partial liquidation: it is not yet complete, but already produced enough of
+			// the loan asset to fully repay the loan. Liquidation swap should be aborted at the
+			// next block.
+			MockSwapRequestHandler::<Test>::set_swap_request_progress(
+				LIQUIDATION_SWAP_1,
+				SwapExecutionProgress {
+					remaining_input_amount: REMAINING_COLLATERAL,
+					accumulated_output_amount: RECOVERED_LOAN_ASSET,
+				},
+			);
+		})
+		.then_execute_at_next_block(|_| {
+			let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * RECOVERED_LOAN_ASSET;
+
+			// The loan has been repaid, the remaining collateral amount and the excess loan asset
+			// amount are credited to the collateral balance:
+			assert_eq!(
+				LoanAccounts::<Test>::get(BORROWER),
+				Some(LoanAccount {
+					borrower_id: BORROWER,
+					primary_collateral_asset: COLLATERAL_ASSET,
+					liquidation_status: LiquidationStatus::NoLiquidation,
+					collateral: BTreeMap::from([
+						(COLLATERAL_ASSET, REMAINING_COLLATERAL),
+						(LOAN_ASSET, RECOVERED_LOAN_ASSET - PRINCIPAL - liquidation_fee)
+					]),
+					loans: Default::default(),
+				})
+			);
+
+			// Making sure account's free balance is unaffected:
+			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
+			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
 		});
 }
 
