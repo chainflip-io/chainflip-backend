@@ -785,9 +785,6 @@ fn can_non_native_signed_call() {
 			sig_type: SolEncodingType::Domain,
 		};
 
-		let caller: <Test as frame_system::Config>::AccountId = signature_data
-			.signer_account().unwrap();
-
 		// Check origin
 		assert_noop!(
 			Environment::non_native_signed_call(
