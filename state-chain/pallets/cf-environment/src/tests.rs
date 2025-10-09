@@ -806,16 +806,16 @@ fn can_non_native_signed_call() {
             signature_data.clone(),
         ));
 
-		assert!(
-			System::events().iter().any(|record| matches!(
-				record.event,
-				RuntimeEvent::Environment(Event::NonNativeSignedCall {
-					signer_account: ref acct,
-					..
-				}) if acct == &caller
-			))
-		);
 
+		assert!(
+			System::events()
+				.iter()
+				.filter(|record| matches!(
+					record.event,
+					RuntimeEvent::Environment(Event::NonNativeSignedCall {})
+				))
+				.count() == 1
+		);
     });
 }
 #[test]

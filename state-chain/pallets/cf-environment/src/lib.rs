@@ -389,10 +389,7 @@ pub mod pallet {
 			assethub_vault_account_id: PolkadotAccountId,
 		},
 		/// Unsigned Runtime Call was dispatched
-		NonNativeSignedCall {
-			signer_account: T::AccountId,
-			nonce: u32,
-		},
+		NonNativeSignedCall {},
 		// Runtime Call Batch was dispatched
 		BatchCompleted {},
 	}
@@ -655,7 +652,7 @@ pub mod pallet {
 		pub fn non_native_signed_call(
 			origin: OriginFor<T>,
 			call: scale_info::prelude::boxed::Box<<T as Config>::RuntimeCall>,
-			transaction_metadata: TransactionMetadata,
+			_transaction_metadata: TransactionMetadata,
 			signature_data: SignatureData,
 		) -> DispatchResult {
 			// unsigned extrinsic - validation happens in ValidateUnsigned
@@ -671,10 +668,7 @@ pub mod pallet {
 				.dispatch_bypass_filter(signer_account_origin)
 				.map_err(|_| Error::<T>::FailedToExecuteBatch)?;
 
-			Self::deposit_event(Event::<T>::NonNativeSignedCall {
-				signer_account,
-				nonce: transaction_metadata.nonce,
-			});
+			Self::deposit_event(Event::<T>::NonNativeSignedCall {});
 			Ok(())
 		}
 

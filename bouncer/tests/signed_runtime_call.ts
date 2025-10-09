@@ -148,8 +148,6 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   // Needs to check that the result is not error, as the transaction won't
   // automatically revert/fail as for regular extrinsics.
   await observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
-    test: (event) =>
-      event.data.signerAccount === evmScAccount && event.data.nonce === evmNonce.toString(),
     historicalCheckBlocks: 1,
   }).event;
 
@@ -210,13 +208,10 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     .send();
 
   let nonNativeEvent = observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
-    test: (event) =>
-      event.data.signerAccount === svmScAccount && event.data.nonce === svmNonce.toString(),
     historicalCheckBlocks: 1,
   }).event;
 
   let batchCompletedEvent = observeEvent(globalLogger, `environment:BatchCompleted`, {
-    test: (_) => true,
     historicalCheckBlocks: 1,
   }).event;
 
@@ -249,13 +244,10 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     .send();
 
   nonNativeEvent = observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
-    test: (event) =>
-      event.data.signerAccount === evmScAccount && event.data.nonce === evmNonce.toString(),
     historicalCheckBlocks: 1,
   }).event;
 
   batchCompletedEvent = observeEvent(globalLogger, `environment:BatchCompleted`, {
-    test: (_) => true,
     historicalCheckBlocks: 1,
   }).event;
 
