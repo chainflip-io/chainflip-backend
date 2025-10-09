@@ -27,7 +27,7 @@ pub const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
 pub const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
 pub const BATCHED_CALL_LIMITS: usize = 10;
 // Using a str for consistency between EIP-712 and other encodings
-pub const UNSIGNED_DATA_VERSION: &str = "0";
+pub const UNSIGNED_CALL_VERSION: &str = "0";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 pub struct TransactionMetadata {
@@ -36,12 +36,12 @@ pub struct TransactionMetadata {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum EthSigType {
+pub enum EthEncodingType {
 	Domain, // personal_sign
 	Eip712,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum SolSigType {
+pub enum SolEncodingType {
 	Domain, /* Using `b"\xffsolana offchain" as per Anza specifications,
 	         * even if we are not using the proposal. Phantom might use
 	         * a different standard though..
@@ -53,8 +53,8 @@ pub enum SolSigType {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SignatureData {
-	Solana { signature: SolSignature, signer: SolAddress, sig_type: SolSigType },
-	Ethereum { signature: EthereumSignature, signer: EvmAddress, sig_type: EthSigType },
+	Solana { signature: SolSignature, signer: SolAddress, sig_type: SolEncodingType },
+	Ethereum { signature: EthereumSignature, signer: EvmAddress, sig_type: EthEncodingType },
 }
 
 impl SignatureData {
@@ -227,6 +227,20 @@ pub(crate) fn weight_and_dispatch_class<T: Config>(
 	(dispatch_weight, dispatch_class)
 }
 
+pub fn build_domain_data(
+	encoded_call: Vec<u8>,
+	chanflip_network_name: ChainflipNetwork,
+	transaction_metadata: TransactionMetadata,
+) -> Vec<u8> {
+	[
+		encoded_call,
+		chanflip_network_name.as_str().encode(),
+		UNSIGNED_CALL_VERSION.as_bytes().to_vec(),
+		transaction_metadata.encode(),
+	]
+	.concat()
+}
+
 pub(crate) fn validate_non_native_signed_call<T: Config>(
 	call: &<T as Config>::RuntimeCall,
 	transaction_metadata: TransactionMetadata,
@@ -253,23 +267,16 @@ pub(crate) fn validate_non_native_signed_call<T: Config>(
 
 	// Signature check
 	let chanflip_network_name = ChainflipNetworkName::<T>::get();
-	let serialized_calls: Vec<u8> = call.encode();
-
-	let build_domain_data = || -> Vec<u8> {
-		[
-			serialized_calls.clone(),
-			chanflip_network_name.as_str().encode(),
-			UNSIGNED_DATA_VERSION.encode(),
-			transaction_metadata.encode(),
-		]
-		.concat()
-	};
 
 	let valid_signature = match signature_data {
 		SignatureData::Solana { signature, signer, sig_type } => {
 			let signed_payload = match sig_type {
-				SolSigType::Domain => {
-					let domain_data = build_domain_data();
+				SolEncodingType::Domain => {
+					let domain_data = build_domain_data(
+						call.encode(),
+						chanflip_network_name,
+						transaction_metadata,
+					);
 					[SOLANA_OFFCHAIN_PREFIX, domain_data.as_slice()].concat()
 				},
 			};
@@ -277,8 +284,12 @@ pub(crate) fn validate_non_native_signed_call<T: Config>(
 		},
 		SignatureData::Ethereum { signature, signer, sig_type } => {
 			let signed_payload = match sig_type {
-				EthSigType::Domain => {
-					let domain_data = build_domain_data();
+				EthEncodingType::Domain => {
+					let domain_data = build_domain_data(
+						call.encode(),
+						chanflip_network_name,
+						transaction_metadata,
+					);
 					let prefix = scale_info::prelude::format!(
 						"{}{}",
 						ETHEREUM_SIGN_MESSAGE_PREFIX,
@@ -287,10 +298,10 @@ pub(crate) fn validate_non_native_signed_call<T: Config>(
 					let prefix_bytes = prefix.as_bytes();
 					[prefix_bytes, &domain_data].concat()
 				},
-				EthSigType::Eip712 => build_eip_712_payload::<T>(
+				EthEncodingType::Eip712 => build_eip_712_payload::<T>(
 					call,
 					chanflip_network_name.as_str(),
-					UNSIGNED_DATA_VERSION,
+					UNSIGNED_CALL_VERSION,
 					transaction_metadata,
 					*signer,
 				),

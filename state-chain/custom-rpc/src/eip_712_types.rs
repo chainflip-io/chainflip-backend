@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use cf_chains::eth::Address as EthereumAddress;
 use cf_primitives::ChainflipNetwork;
-use pallet_cf_environment::TransactionMetadata;
+use pallet_cf_environment::{TransactionMetadata, UNSIGNED_CALL_VERSION};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -86,7 +86,7 @@ pub fn build_eip712_typed_data(
 	let json = serde_json::json!({
 		"domain": {
 			"name": chainflip_network.as_str().to_string(),
-			"version": UNSIGNED_DATA_VERSION,
+			"version": UNSIGNED_CALL_VERSION,
 		},
 		"types": {
 			"EIP712Domain": [

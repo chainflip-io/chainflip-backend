@@ -108,6 +108,12 @@ pub mod pool_client;
 mod tests;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EncodedNonNativeCall {
+	Eip712(eip_712_types::TypedData),
+	Bytes(Vec<u8>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
 	pub swap_id: SwapId,
 	pub swap_request_id: SwapRequestId,
@@ -1256,7 +1262,7 @@ pub trait CustomApi {
 		caller: EthereumAddress,
 		call: Vec<u8>,
 		transaction_metadata: TransactionMetadata,
-	) -> RpcResult<eip_712_types::TypedData>;
+	) -> RpcResult<EncodedNonNativeCall>;
 }
 
 /// An RPC extension for the state chain node.
@@ -2441,7 +2447,7 @@ where
 		caller: EthereumAddress,
 		call: Vec<u8>,
 		transaction_metadata: TransactionMetadata,
-	) -> RpcResult<eip_712_types::TypedData> {
+	) -> RpcResult<EncodedNonNativeCall> {
 		self.rpc_backend.with_runtime_api(None, |api, hash| {
 			let api_version = api
 				.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)
@@ -2468,6 +2474,11 @@ where
 				let chainflip_network =
 					api.cf_chainflip_network(hash).map_err(CfApiError::from)??;
 
+				// TODO: Instead of getting a `caller: EthereumAddress` and encoding EIP-712, we
+				// should  get a signer (Ethereum/Solana) and an encodingType (Domain, EIP-712).
+				// Then encode via `build_eip712_typed_data` or `build_domain_data` (with the
+				// right chain's domain).
+
 				let typed_data: eip_712_types::TypedData = eip_712_types::build_eip712_typed_data(
 					chainflip_network,
 					caller,
@@ -2481,7 +2492,7 @@ where
 						None::<()>,
 					))
 				})?;
-				Ok(typed_data)
+				Ok(EncodedNonNativeCall::Eip712(typed_data))
 			}
 		})
 	}

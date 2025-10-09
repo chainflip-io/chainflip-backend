@@ -19,8 +19,8 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-pub use crate::submit_runtime_call::TransactionMetadata;
 use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
+pub use crate::submit_runtime_call::{TransactionMetadata, UNSIGNED_CALL_VERSION};
 use cf_chains::{
 	btc::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},

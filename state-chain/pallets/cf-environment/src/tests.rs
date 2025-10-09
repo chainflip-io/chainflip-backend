@@ -19,7 +19,7 @@
 use crate::{
 	mock::*,
 	submit_runtime_call::{
-		build_eip_712_payload, validate_non_native_signed_call, EthSigType, SolSigType,
+		build_eip_712_payload, validate_non_native_signed_call, EthEncodingType, SolEncodingType,
 	},
 	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
 	SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
@@ -779,7 +779,7 @@ fn can_non_native_signed_call() {
 				"1c3e51b4b12bcc95419a43dc4c1854663edda1df5dd788a059a66c6d237a32fafbeff6515d4b8af0267ce8365ba7a83cf483d7b66d3e3164db027302e308c60e"
 			)),
 			signer: SolAddress(cf_utilities::bs58_array("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp")),
-			sig_type: SolSigType::Domain,
+			sig_type: SolEncodingType::Domain,
 		};
 
 		let caller: <Test as frame_system::Config>::AccountId = signature_data
@@ -818,7 +818,7 @@ fn can_build_eip_712_payload_validate_unsigned() {
                 "712d40241c7ad17d589a3dba2e46ab9a1279c184383f85c91f6dede41774b5f4067a875634d227973e6d63e9651ca24c7025a0b80091807d79c05df1ba7355271b"
             ).into(),
             signer,
-            sig_type: EthSigType::Eip712,
+            sig_type: EthEncodingType::Eip712,
         };
 
 		let validate = validate_non_native_signed_call::<Test>(

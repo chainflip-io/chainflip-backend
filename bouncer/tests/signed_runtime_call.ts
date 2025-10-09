@@ -22,6 +22,13 @@ const eipPayloadSchema = z.object({
   primaryType: z.string(), // Some libraries (e.g. wagmi) also require the primaryType
 });
 
+// Define the schema for EncodedNonNativeCall::Eip712
+const encodedNonNativeCallSchema = z
+  .object({
+    Eip712: eipPayloadSchema,
+  })
+  .strict();
+
 export const TransactionMetadata = Struct({
   nonce: u32,
   expiryBlock: u32,
@@ -112,11 +119,12 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
       expiry_block: expiryBlock,
     },
   );
-  // To print with json stringify
   logger.debug('eipPayload', JSON.stringify(eipPayload, null, 2));
 
-  // Some libraries (e.g. wagmi) also require the primaryType (eipPayload.primaryType)
-  const { domain, types, message, primaryType } = eipPayloadSchema.parse(eipPayload);
+  // Parse and validate the response
+  const parsedPayload = encodedNonNativeCallSchema.parse(eipPayload);
+  const { domain, types, message, primaryType } = parsedPayload.Eip712;
+
   logger.debug('primaryType:', primaryType);
 
   // Remove the EIP712Domain from the message to smoothen out differences between Rust and
