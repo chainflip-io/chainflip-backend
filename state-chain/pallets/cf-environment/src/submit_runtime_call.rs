@@ -263,8 +263,8 @@ fn build_domain_data(
 ) -> Vec<u8> {
 	[
 		&call.encode()[..],
-		chainflip_network_name.as_bytes(),
-		UNSIGNED_CALL_VERSION.as_bytes(),
+		&chainflip_network_name.encode()[..],
+		&UNSIGNED_CALL_VERSION.encode()[..],
 		&transaction_metadata.encode()[..],
 	]
 	.concat()
