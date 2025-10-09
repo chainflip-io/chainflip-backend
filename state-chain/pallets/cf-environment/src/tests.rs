@@ -825,18 +825,17 @@ fn can_build_eip_712_payload_validate_unsigned() {
 		let signer: EvmAddress = EvmAddress::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
 		let signature_data: SignatureData = SignatureData::Ethereum {
             signature: hex_literal::hex!(
-                "b257dc9c477563cfd7cea8b02f1458609f726535eee44a60e5914dfc9343f6834111cfd49271ada1f94d02fcd96b1bfadcdd2f5fb1922144e475f8c91ed353861b"
+                "a7296a5c22c4ccb38ebc0973a105ea3964a0cc5736fe2850a2fa3568942c2476492d38fa7abf7ba3886d6473a137b7b0a9db5de035e49a027ae75a9a3d30ff081b"
             ).into(),
             signer,
             sig_type: EthEncodingType::Eip712,
         };
 
-		let validate = validate_non_native_signed_call::<Test>(
+		assert_ok!(validate_non_native_signed_call::<Test>(
 				&runtime_call,
 				transaction_metadata,
 				&signature_data,
-		);
-		assert!(validate.is_ok());
+		));
 	});
 }
 
