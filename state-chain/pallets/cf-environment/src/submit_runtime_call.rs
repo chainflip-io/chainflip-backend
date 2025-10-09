@@ -25,9 +25,11 @@ use frame_support::{
 use serde::{Deserialize, Serialize};
 pub const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
 pub const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
-pub const BATCHED_CALL_LIMITS: usize = 10;
+pub const MAX_BATCHED_CALLS: u32 = 10u32;
 // Using a str for consistency between EIP-712 and other encodings
 pub const UNSIGNED_CALL_VERSION: &str = "0";
+
+pub type BatchedCalls<T> = BoundedVec<<T as Config>::RuntimeCall, ConstU32<MAX_BATCHED_CALLS>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 pub struct TransactionMetadata {
@@ -77,14 +79,11 @@ impl SignatureData {
 /// https://paritytech.github.io/polkadot-sdk/master/pallet_utility/pallet/struct.Pallet.html
 pub(crate) fn batch_all<T: Config>(
 	signer_account: T::AccountId,
-	calls: Vec<<T as Config>::RuntimeCall>,
+	calls: BatchedCalls<T>,
 	weight_fn: fn(u32) -> Weight,
 ) -> DispatchResultWithPostInfo {
 	let mut weight = Weight::zero();
 	let calls_len = calls.len();
-	if calls_len > BATCHED_CALL_LIMITS {
-		return Err(Error::<T>::TooManyCalls.into());
-	}
 
 	for (index, call) in calls.into_iter().enumerate() {
 		let info = call.get_dispatch_info();
@@ -123,6 +122,7 @@ const EIP712_DOMAIN_TYPE_STR: &str = "EIP712Domain(string name,string version)";
 const EIP712_DOMAIN_PREFIX: [u8; 2] = [0x19, 0x01];
 const EIP712_METADATA_TYPE_STR: &str = "Metadata(uint32 nonce,uint32 expiryBlock)";
 const EIP712_RUNTIMECALL_TYPE_STR: &str = "RuntimeCall(bytes value)";
+const EIP712_TRANSACTION_TYPE_STR: &str = "Transaction(RuntimeCall call,Metadata metadata)";
 
 /// `signer is not technically necessary but is added as part of the metadata so
 /// we add it so is displayed separately to the user in the wallet.
@@ -182,14 +182,15 @@ pub(crate) fn build_eip_712_payload<T: Config>(
 	// -----------------
 	// Message struct
 	// -----------------
-	let action_type_str = scale_info::prelude::format!(
-		"Transaction(RuntimeCall Call,Metadata Metadata){}{}",
+	let transaction_type_str = scale_info::prelude::format!(
+		"{}{}{}",
+		EIP712_TRANSACTION_TYPE_STR,
 		metadata_type_str,
 		runtime_call_type_str,
 	);
-	let action_type_hash = Keccak256::hash(action_type_str.as_bytes());
+	let transaction_type_hash = Keccak256::hash(transaction_type_str.as_bytes());
 	let tokens = vec![
-		Token::FixedBytes(action_type_hash.as_bytes().to_vec()),
+		Token::FixedBytes(transaction_type_hash.as_bytes().to_vec()),
 		Token::FixedBytes(runtime_call_hash.as_bytes().to_vec()),
 		Token::FixedBytes(metadata_hash.as_bytes().to_vec()),
 	];

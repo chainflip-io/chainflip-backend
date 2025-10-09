@@ -2471,8 +2471,7 @@ where
 					let chainflip_network =
 						api.cf_chainflip_network(hash).map_err(CfApiError::from)??;
 
-					// TODO: Instead of getting a `caller: EthereumAddress` and encoding EIP-712, we
-					// should  get a signer (Ethereum/Solana) and an encodingType (Domain, EIP-712).
+					// TODO: We should get an encoding type (PersonalSign, Domain, EIP-712).
 					// Then encode via `build_eip712_typed_data` or `build_domain_data` (with the
 					// right chain's domain). Here we only need to add the Solana prefix because
 					// the Ethereum one is added by default with the personal sign.

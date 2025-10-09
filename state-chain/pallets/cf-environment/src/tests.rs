@@ -38,7 +38,10 @@ use cf_chains::{
 use cf_traits::{BalanceApi, SafeMode};
 use frame_support::{
 	assert_noop, assert_ok,
-	sp_runtime::traits::{Hash, Keccak256},
+	sp_runtime::{
+		traits::{Hash, Keccak256},
+		BoundedVec,
+	},
 	traits::OriginTrait,
 };
 use std::str::FromStr;
@@ -874,14 +877,15 @@ fn can_batch() {
 		);
 
 		let remark_call = frame_system::Call::<Test>::remark { remark: vec![42] };
-		let mut calls = vec![remark_call.clone().into(), remark_call.clone().into()];
+		let calls = vec![remark_call.clone().into(), remark_call.clone().into()];
+		let bounded_vec_calls: BoundedVec<_, sp_core::ConstU32<10>> = calls.clone().try_into().unwrap();
 
 		assert_noop!(
-			Environment::batch(RuntimeOrigin::none(), calls.clone()),
+			Environment::batch(RuntimeOrigin::none(), bounded_vec_calls.clone()),
 			sp_runtime::traits::BadOrigin,
 		);
 
-		assert_ok!(Environment::batch(RuntimeOrigin::signed(ALICE), calls.clone()));
+		assert_ok!(Environment::batch(RuntimeOrigin::signed(ALICE), bounded_vec_calls.clone()));
 
 		assert!(
 			System::events()
@@ -906,10 +910,12 @@ fn can_batch() {
 			transaction_metadata: TransactionMetadata { nonce: 0, expiry_block: 10000 },
 			signature_data: signature_data.clone(),
 		};
-		calls.push(failing_call.into());
+		let mut new_calls = calls;
+		new_calls.push(failing_call.into());
+		let bounded_vec_calls: BoundedVec<_, sp_core::ConstU32<10>> = new_calls.try_into().expect("3 calls is within the bound of 10");
 
 		assert_noop!(
-			Environment::batch(RuntimeOrigin::none(), calls.clone()),
+			Environment::batch(RuntimeOrigin::none(), bounded_vec_calls.clone()),
 			sp_runtime::traits::BadOrigin,
 		);
 	});

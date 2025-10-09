@@ -109,21 +109,21 @@ pub fn build_eip712_typed_data(
 			],
 			"Transaction": [
 				{
-					"name": "Call",
+					"name": "call",
 					"type": "RuntimeCall"
 				},
 				{
-					"name": "Metadata",
+					"name": "metadata",
 					"type": "Metadata"
 				},
 			]
 		},
 		"primaryType": "Transaction",
 		"message": {
-			"Call": {
+			"call": {
 				"value": format!("0x{}", hex::encode(&call)),
 			},
-			"Metadata": {
+			"metadata": {
 				"nonce": transaction_metadata.nonce.to_string(),
 				"expiryBlock": transaction_metadata.expiry_block.to_string(),
 			},

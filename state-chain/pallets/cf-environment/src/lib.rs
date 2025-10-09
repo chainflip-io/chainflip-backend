@@ -20,7 +20,9 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
-pub use crate::submit_runtime_call::{TransactionMetadata, UNSIGNED_CALL_VERSION};
+pub use crate::submit_runtime_call::{
+	BatchedCalls, TransactionMetadata, MAX_BATCHED_CALLS, UNSIGNED_CALL_VERSION,
+};
 use cf_chains::{
 	btc::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
@@ -170,8 +172,6 @@ pub mod pallet {
 		FailedToBuildSolanaApiCall,
 		// Signer cannot be decoded
 		FailedToDecodeSigner,
-		/// Too many calls batched.
-		TooManyCalls,
 		// Failed to execute non-native signed call
 		FailedToExecuteNonNativeSignedCall,
 		// Failed to execute batch
@@ -685,10 +685,7 @@ pub mod pallet {
 			let dispatch_weight = dispatch_weight.saturating_add(T::WeightInfo::batch(calls.len() as u32));
 			(dispatch_weight, dispatch_class)
 		})]
-		pub fn batch(
-			origin: OriginFor<T>,
-			calls: Vec<<T as Config>::RuntimeCall>,
-		) -> DispatchResult {
+		pub fn batch(origin: OriginFor<T>, calls: BatchedCalls<T>) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 
 			let _ = batch_all::<T>(account_id.clone(), calls.clone(), T::WeightInfo::batch)
