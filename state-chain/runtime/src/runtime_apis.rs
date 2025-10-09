@@ -444,7 +444,7 @@ impl<AccountId, C> From<ChannelAction<AccountId, C>> for ChannelActionType {
 pub type OpenedDepositChannels = (AccountId32, ChannelActionType, ChainAccounts);
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
-pub enum TransactionScreeningEvent<TxId> {
+pub enum TransactionScreeningEvent<TxId, Address> {
 	TransactionRejectionRequestReceived {
 		account_id: <Runtime as frame_system::Config>::AccountId,
 		tx_id: TxId,
@@ -459,16 +459,31 @@ pub enum TransactionScreeningEvent<TxId> {
 		refund_broadcast_id: BroadcastId,
 		tx_id: TxId,
 	},
+
+	ChannelRejectionRequestReceived {
+		account_id: <Runtime as frame_system::Config>::AccountId,
+		deposit_address: Address,
+	},
 }
 
-pub type BrokerRejectionEventFor<C> =
-	TransactionScreeningEvent<<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId>;
+pub type BrokerRejectionEventFor<C> = TransactionScreeningEvent<
+	<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId,
+	<C as Chain>::ChainAccount,
+>;
+
+pub type BrokerRejectionEventDepositDetailsFor<C> = TransactionScreeningEvent<
+	<C as Chain>::DepositDetails,
+>;
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct TransactionScreeningEvents {
 	pub btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>>,
 	pub eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>>,
 	pub arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>>,
+	pub sol_events: Vec<TransactionScreeningEvent<
+		<cf_chains::Solana as Chain>::DepositDetails,
+		<cf_chains::Solana as Chain>::ChainAccount
+	>>,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
@@ -476,6 +491,12 @@ pub struct VaultAddresses {
 	pub ethereum: EncodedAddress,
 	pub arbitrum: EncodedAddress,
 	pub bitcoin: Vec<(AccountId32, EncodedAddress)>,
+
+	// Decide which ones we need:
+	// pub solana_swap_endpoint_native_vault_pda: EncodedAddress,
+	// pub solana_usdc_token_vault_ata: EncodedAddress,
+	pub swap_endpoint_data_account_address: EncodedAddress,
+	pub usdc_token_mint_pubkey: EncodedAddress,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]

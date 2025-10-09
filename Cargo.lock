@@ -13773,6 +13773,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "log",
+ "n-functor",
  "nanorand",
  "pallet-aura",
  "pallet-authorship",

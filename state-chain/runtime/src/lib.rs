@@ -2512,9 +2512,11 @@ impl_runtime_apis! {
 			let btc_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, BitcoinInstance>();
 			let eth_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, EthereumInstance>();
 			let arb_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, ArbitrumInstance>();
+			let sol_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, SolanaInstance>();
 			let accounts = btc_chain_accounts.keys()
 				.chain(eth_chain_accounts.keys())
 				.chain(arb_chain_accounts.keys())
+				.chain(sol_chain_accounts.keys())
 				.cloned().collect::<BTreeSet<_>>();
 
 			accounts.into_iter().map(|key| {
@@ -2524,6 +2526,7 @@ impl_runtime_apis! {
 						btc_chain_accounts.get(&key).cloned().unwrap_or_default(),
 						eth_chain_accounts.get(&key).cloned().unwrap_or_default(),
 						arb_chain_accounts.get(&key).cloned().unwrap_or_default(),
+						sol_chain_accounts.get(&key).cloned().unwrap_or_default(),
 					].into_iter().flatten().collect()
 				})
 			}).collect()
@@ -2555,14 +2558,18 @@ impl_runtime_apis! {
 				}
 			}
 
+			// TODO: after rebase, add parsing for channelrejectionrequestreceived
+
 			let mut btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>> = Default::default();
 			let mut eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>> = Default::default();
 			let mut arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>> = Default::default();
+			let mut sol_events: Vec<BrokerRejectionEventFor<cf_chains::Solana>> = Default::default();
 			for event_record in System::read_events_no_consensus() {
 				match event_record.event {
 					RuntimeEvent::BitcoinIngressEgress(event) => btc_events.extend(extract_screening_events::<Runtime, BitcoinInstance>(event)),
 					RuntimeEvent::EthereumIngressEgress(event) => eth_events.extend(extract_screening_events::<Runtime, EthereumInstance>(event)),
 					RuntimeEvent::ArbitrumIngressEgress(event) => arb_events.extend(extract_screening_events::<Runtime, ArbitrumInstance>(event)),
+					RuntimeEvent::SolanaIngressEgress(event) => sol_events.extend(extract_screening_events::<Runtime, SolanaInstance>(event)),
 					_ => {},
 				}
 			}
@@ -2571,6 +2578,7 @@ impl_runtime_apis! {
 				btc_events,
 				eth_events,
 				arb_events,
+				sol_events,
 			}
 		}
 
@@ -2600,6 +2608,11 @@ impl_runtime_apis! {
 							.map(move |address| (account_id.clone(), address))
 					})
 					.collect(),
+				// solana_swap_endpoint_native_vault_pda: todo!(),
+				// solana_usdc_token_vault_ata: todo!(),
+
+				swap_endpoint_data_account_address: todo!(),
+				usdc_token_mint_pubkey: todo!(),
 			}
 		}
 
