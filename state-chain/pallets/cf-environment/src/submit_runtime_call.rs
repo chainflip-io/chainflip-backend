@@ -256,7 +256,7 @@ pub(crate) fn validate_metadata<T: Config>(
 	tx_builder.build()
 }
 
-fn build_raw_payload(
+fn build_domain_data(
 	prefix: &[u8],
 	call: impl Encode,
 	chainflip_network_name: &'static str,
@@ -282,7 +282,7 @@ pub(crate) fn is_valid_signature(
 	signature_data: &SignatureData,
 ) -> bool {
 	let raw_payload_with_prefix = |prefix: &[u8]| {
-		build_raw_payload(prefix, call, chainflip_network_name, transaction_metadata)
+		build_domain_data(prefix, &call, chainflip_network_name, transaction_metadata)
 	};
 
 	match signature_data {

@@ -645,6 +645,7 @@ pub mod pallet {
 		/// Allows for submitting unsigned runtime calls where validation is done on
 		/// the `signature_data` instead. This adds off-chain signing support
 		/// for non-native wallets, such as EVM and Solana wallets.
+		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(10)]
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
@@ -656,7 +657,7 @@ pub mod pallet {
 			call: scale_info::prelude::boxed::Box<<T as Config>::RuntimeCall>,
 			_transaction_metadata: TransactionMetadata,
 			signature_data: SignatureData,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			// unsigned extrinsic - validation happens in ValidateUnsigned
 			frame_system::ensure_none(origin)?;
 
@@ -666,12 +667,10 @@ pub mod pallet {
 			let signer_account_origin =
 				frame_system::RawOrigin::Signed(signer_account.clone()).into();
 
-			let _ = (*call.clone())
-				.dispatch_bypass_filter(signer_account_origin)
-				.map_err(|_| Error::<T>::FailedToExecuteBatch)?;
+			let _ = (*call.clone()).dispatch_bypass_filter(signer_account_origin)?;
 
 			Self::deposit_event(Event::<T>::NonNativeSignedCall);
-			Ok(())
+			Ok(().into())
 		}
 
 		/// Executes an atomic batch of runtime calls. It will execute as an all-or-nothing.
