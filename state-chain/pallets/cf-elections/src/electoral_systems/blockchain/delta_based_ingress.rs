@@ -24,7 +24,7 @@ use crate::{
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_runtime_utilities::log_or_panic;
-use cf_traits::IngressSink;
+use cf_traits::{DerivedIngressSink, IngressSink};
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::cmp::Ordering;
@@ -87,13 +87,27 @@ impl BenchmarkValue for BackoffSettings<u32> {
 	}
 }
 
-pub struct DeltaBasedIngress<Sink: IngressSink, Settings, ValidatorId, StateChainBlockNumber> {
-	_phantom: core::marker::PhantomData<(Sink, Settings, ValidatorId, StateChainBlockNumber)>,
+pub struct DeltaBasedIngress<
+	Sink: IngressSink,
+	DerivedSink: DerivedIngressSink<Sink::Account, Sink::BlockNumber, Sink::DepositDetails>,
+	Settings,
+	ValidatorId,
+	StateChainBlockNumber,
+> {
+	_phantom: core::marker::PhantomData<(
+		Sink,
+		DerivedSink,
+		Settings,
+		ValidatorId,
+		StateChainBlockNumber,
+	)>,
 }
-impl<Sink, Settings, ValidatorId, StateChainBlockNumber>
-	DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
+impl<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber>
+	DeltaBasedIngress<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber>
 where
-	Sink: IngressSink<DepositDetails = ()> + 'static,
+	Sink: IngressSink + 'static,
+	DerivedSink:
+		DerivedIngressSink<Sink::Account, Sink::BlockNumber, Sink::DepositDetails> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
@@ -141,10 +155,12 @@ where
 		Ok(())
 	}
 }
-impl<Sink, Settings, ValidatorId, StateChainBlockNumber> ElectoralSystemTypes
-	for DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
+impl<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber> ElectoralSystemTypes
+	for DeltaBasedIngress<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber>
 where
-	Sink: IngressSink<DepositDetails = ()> + 'static,
+	Sink: IngressSink + 'static,
+	DerivedSink:
+		DerivedIngressSink<Sink::Account, Sink::BlockNumber, Sink::DepositDetails> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
@@ -191,10 +207,12 @@ where
 	type OnFinalizeReturn = ();
 }
 
-impl<Sink, Settings, ValidatorId, StateChainBlockNumber> ElectoralSystem
-	for DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
+impl<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber> ElectoralSystem
+	for DeltaBasedIngress<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber>
 where
-	Sink: IngressSink<DepositDetails = ()> + 'static,
+	Sink: IngressSink + 'static,
+	DerivedSink:
+		DerivedIngressSink<Sink::Account, Sink::BlockNumber, Sink::DepositDetails> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
@@ -370,7 +388,10 @@ where
 								details.asset,
 								ready_total.amount - previous_amount,
 								ready_total.block_number,
-								(),
+								DerivedSink::derive_deposit_details(
+									account.clone(),
+									ready_total.block_number,
+								),
 							);
 							ElectoralAccess::set_unsynchronised_state_map(
 								(account.clone(), details.asset),

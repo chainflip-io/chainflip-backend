@@ -32,7 +32,7 @@ use cf_chains::{
 		compute_units_costs::MIN_COMPUTE_PRICE,
 		sol_tx_core::SlotNumber,
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolHash, SolSignature, SolTrackedData,
-		SolanaCrypto,
+		SolanaCrypto, TxOrChannelId,
 	},
 	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain, FeeEstimationApi,
 	FetchAndCloseSolanaVaultSwapAccounts, ForeignChainAddress, Solana,
@@ -40,8 +40,8 @@ use cf_chains::{
 use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters, IngressOrEgress};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	AdjustedFeeEstimationApi, Broadcaster, Chainflip, ElectionEgressWitnesser, GetBlockHeight,
-	IngressSource, SolanaNonceWatch,
+	AdjustedFeeEstimationApi, Broadcaster, Chainflip, DerivedIngressSink, ElectionEgressWitnesser,
+	GetBlockHeight, IngressSource, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -133,9 +133,18 @@ pub type SolanaBlockHeightTracking = electoral_systems::monotonic_median::Monoto
 	BlockNumberFor<Runtime>,
 >;
 
+pub struct DerivedDepositDetails {}
+
+impl DerivedIngressSink<SolAddress, u64, TxOrChannelId> for DerivedDepositDetails {
+	fn derive_deposit_details(account: SolAddress, block_number: u64) -> TxOrChannelId {
+		TxOrChannelId::Channel((account, block_number))
+	}
+}
+
 pub type SolanaIngressTracking =
 	electoral_systems::blockchain::delta_based_ingress::DeltaBasedIngress<
 		pallet_cf_ingress_egress::Pallet<Runtime, Instance>,
+		DerivedDepositDetails,
 		SolanaIngressSettings,
 		<Runtime as Chainflip>::ValidatorId,
 		BlockNumberFor<Runtime>,
@@ -621,7 +630,10 @@ impl
 				deposit_address: None,
 				channel_id: None,
 				deposit_amount: swap_details.deposit_amount,
-				deposit_details: (),
+				deposit_details: TxOrChannelId::Tx((
+					swap_details.swap_account,
+					swap_details.creation_slot,
+				)),
 				output_asset: swap_details.to,
 				destination_address: swap_details.destination_address,
 				deposit_metadata: swap_details.deposit_metadata,

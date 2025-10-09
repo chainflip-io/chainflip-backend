@@ -99,7 +99,7 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultD
 					);
 				},
 				BtcEvent::Witness(deposit) => {
-					BitcoinIngressEgress::process_vault_swap_request_full_witness(
+					BitcoinIngressEgress::process_vault_swap_request_full_witness_inner(
 						*block,
 						deposit.clone(),
 					);

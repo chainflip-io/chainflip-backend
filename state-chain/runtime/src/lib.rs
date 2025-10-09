@@ -568,7 +568,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
 	type AffiliateRegistry = Swapping;
-	type AllowTransactionReports = ConstBool<false>;
+	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
 }
