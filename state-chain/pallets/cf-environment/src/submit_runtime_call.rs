@@ -23,7 +23,7 @@ use frame_support::{
 	weights::Weight,
 };
 use serde::{Deserialize, Serialize};
-pub const ETHEREUM_SIGN_MESSAGE_PREFIX: &[u8] = b"\x19Ethereum Signed Message:\n";
+pub const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
 pub const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
 pub const MAX_BATCHED_CALLS: u32 = 10u32;
 // Using a str for consistency between EIP-712 and other encodings
@@ -297,10 +297,12 @@ pub(crate) fn is_valid_signature(
 			let signed_payload = match sig_type {
 				EthEncodingType::PersonalSign => {
 					let payload = raw_payload();
-					let prefix =
-						[ETHEREUM_SIGN_MESSAGE_PREFIX, payload.len().to_string().as_bytes()]
-							.concat();
-					prefix_and_payload(&prefix, &payload)
+					let prefix = scale_info::prelude::format!(
+						"{}{}",
+						ETHEREUM_SIGN_MESSAGE_PREFIX,
+						payload.len()
+					);
+					prefix_and_payload(prefix.as_bytes(), &payload)
 				},
 				EthEncodingType::Eip712 => build_eip_712_payload(
 					call,

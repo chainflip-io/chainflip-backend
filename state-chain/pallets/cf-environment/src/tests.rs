@@ -18,19 +18,20 @@
 
 use crate::{
 	mock::*,
-	submit_runtime_call::{
-		build_eip_712_payload, EthEncodingType, SolEncodingType,
-	},
+	submit_runtime_call::{build_eip_712_payload, EthEncodingType, SolEncodingType},
 	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
 	SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
 	SolanaUnavailableNonceAccounts, TransactionMetadata,
 };
 use cf_chains::{
 	btc::{
-		AggKey, BitcoinFeeInfo, BtcAmount, CHANGE_ADDRESS_SALT, Utxo, api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection
+		api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, AggKey,
+		BitcoinFeeInfo, BtcAmount, Utxo, CHANGE_ADDRESS_SALT,
 	},
-	sol::{SolAddress, SolHash, api::{SolanaGovCall, SolanaTransactionType}},
-
+	sol::{
+		api::{SolanaGovCall, SolanaTransactionType},
+		SolAddress, SolHash,
+	},
 };
 use cf_traits::{BalanceApi, SafeMode};
 use frame_support::{
@@ -829,7 +830,6 @@ fn can_build_eip_712_payload_validate_unsigned() {
             sig_type: EthEncodingType::Eip712,
         };
 		let user_submission = crate::Call::non_native_signed_call { call: Box::new(runtime_call), transaction_metadata, signature_data };
-		
 		assert_ok!(
 			<crate::Pallet::<Test> as ValidateUnsigned>::validate_unsigned(frame_support::pallet_prelude::TransactionSource::External, &user_submission)
 		);
