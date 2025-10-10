@@ -399,7 +399,7 @@ impl<T: Config> LoanAccount<T> {
 				.try_into()
 				.unwrap_or(u32::MAX);
 
-			if blocks_since_last_payment >= config.interest_payment_interval_blocks.into() {
+			if blocks_since_last_payment >= config.interest_payment_interval_blocks {
 				let loan_asset = loan.asset;
 
 				let base_interest_rate = {
