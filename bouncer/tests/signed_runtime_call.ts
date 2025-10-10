@@ -130,10 +130,12 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   // Submit to the SC
   await chainflip.tx.environment
     .nonNativeSignedCall(
-      hexRuntimeCall,
       {
-        nonce: evmNonce,
-        expiryBlock,
+        call: hexRuntimeCall,
+        metadata: {
+          nonce: evmNonce,
+          expiryBlock,
+        },
       },
       {
         Ethereum: {
@@ -192,10 +194,12 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   await chainflip.tx.environment
     .nonNativeSignedCall(
       // Solana prefix will be added in the SC previous to signature verification
-      hexBatchRuntimeCall,
       {
-        nonce: svmNonce,
-        expiryBlock,
+        call: hexBatchRuntimeCall,
+        metadata: {
+          nonce: svmNonce,
+          expiryBlock,
+        },
       },
       {
         Solana: {
@@ -222,16 +226,20 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   // EVM Whale -> SC account (`cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7`)
   evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)) as unknown as number;
   const evmPayload = encodeDomainDataToSign(encodedBatchCall, evmNonce);
+  // Sign with personal_sign (automatically adds prefix)
   const evmSignature = await ethWallet.signMessage(evmPayload);
 
   // Submit as unsigned extrinsic - no broker needed
   await chainflip.tx.environment
     .nonNativeSignedCall(
       // Ethereum prefix will be added in the SC previous to signature verification
-      hexBatchRuntimeCall,
+
       {
-        nonce: evmNonce,
-        expiryBlock,
+        call: hexBatchRuntimeCall,
+        metadata: {
+          nonce: evmNonce,
+          expiryBlock,
+        },
       },
       {
         Ethereum: {

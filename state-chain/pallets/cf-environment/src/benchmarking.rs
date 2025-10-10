@@ -221,8 +221,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		non_native_signed_call(
 			frame_system::RawOrigin::None,
-			call,
-			transaction_metadata,
+			Message { call, metadata: transaction_metadata },
 			signature_data,
 		);
 	}

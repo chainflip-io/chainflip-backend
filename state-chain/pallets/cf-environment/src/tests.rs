@@ -19,7 +19,7 @@
 use crate::{
 	mock::*,
 	submit_runtime_call::{build_eip_712_payload, EthEncodingType, SolEncodingType},
-	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
+	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, Message, RuntimeSafeMode,
 	SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
 	SolanaUnavailableNonceAccounts, TransactionMetadata,
 };
@@ -788,8 +788,10 @@ fn can_non_native_signed_call() {
 		assert_noop!(
 			Environment::non_native_signed_call(
 			RuntimeOrigin::root(),
-			call.clone(),
-			transaction_metadata,
+			Message {
+				call: call.clone(),
+				metadata: transaction_metadata,
+			},
 			signature_data.clone(),
 	   		),
 			sp_runtime::traits::BadOrigin,
@@ -797,8 +799,10 @@ fn can_non_native_signed_call() {
 
 		assert_ok!(Environment::non_native_signed_call(
 			RuntimeOrigin::none(),
-			call,
-			transaction_metadata,
+			Message {
+				call,
+				metadata: transaction_metadata,
+			},
 			signature_data.clone(),
 		));
 
@@ -829,7 +833,7 @@ fn can_build_eip_712_payload_validate_unsigned() {
             signer,
             sig_type: EthEncodingType::Eip712,
         };
-		let user_submission = crate::Call::non_native_signed_call { call: Box::new(runtime_call), transaction_metadata, signature_data };
+		let user_submission = crate::Call::non_native_signed_call { message: Message {call: Box::new(runtime_call), metadata: transaction_metadata} , signature_data };
 		assert_ok!(
 			<crate::Pallet::<Test> as ValidateUnsigned>::validate_unsigned(frame_support::pallet_prelude::TransactionSource::External, &user_submission)
 		);
@@ -900,8 +904,10 @@ fn can_batch() {
 			sig_type: EthEncodingType::Eip712,
 		};
 		let failing_call = crate::Call::non_native_signed_call {
-			call: Box::new(remark_call.clone().into()),
-			transaction_metadata: TransactionMetadata { nonce: 0, expiry_block: 10000 },
+			message: Message {
+				call: Box::new(remark_call.clone().into()),
+				metadata: TransactionMetadata { nonce: 0, expiry_block: 10000 },
+			},
 			signature_data: signature_data.clone(),
 		};
 		let mut new_calls = calls;
