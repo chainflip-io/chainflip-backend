@@ -26,7 +26,7 @@ pub mod serde_helpers;
 pub fn encode_eip712_using_type_info<T: TypeInfo + Encode + Decode + 'static>(
 	value: T,
 	domain: EIP712Domain,
-) -> Result<TypedData, Eip712Error> {
+) -> Result<[u8; 32], Eip712Error> {
 	let mut registry = Registry::new();
 	let id = registry.register_type(&MetaType::new::<T>());
 
@@ -45,7 +45,7 @@ pub fn encode_eip712_using_type_info<T: TypeInfo + Encode + Decode + 'static>(
 
 	let typed_data = TypedData { domain, types, primary_type, message: value.remove_context() };
 
-	Ok(typed_data)
+	typed_data.encode_eip712()
 }
 
 pub fn recursively_construct_types<C: Clone>(
