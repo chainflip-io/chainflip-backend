@@ -111,6 +111,21 @@ pub struct SolanaTransactionData {
 
 /// A Solana transaction in id is a tuple of the AccountAddress and the slot number.
 pub type SolanaTransactionInId = (SolAddress, u64);
+#[derive(
+	Ord, PartialOrd, Eq, PartialEq, Encode, Decode, Clone, Debug, TypeInfo, Serialize, Deserialize,
+)]
+pub enum TxOrChannelId {
+	Tx(SolanaTransactionInId),
+	Channel(SolanaTransactionInId),
+}
+
+impl TxOrChannelId {
+	fn inner(&self) -> SolanaTransactionInId {
+		match self {
+			Self::Tx(tx_id) | Self::Channel(tx_id) => *tx_id,
+		}
+	}
+}
 
 pub type SolSeed = BoundedVec<u8, sp_core::ConstU32<SOLANA_PDA_MAX_SEED_LEN>>;
 
@@ -131,7 +146,7 @@ impl Chain for Solana {
 	type ChainAccount = SolAddress;
 	type DepositFetchId = SolanaDepositFetchId;
 	type DepositChannelState = AccountBump;
-	type DepositDetails = SolanaTransactionInId;
+	type DepositDetails = TxOrChannelId;
 	type Transaction = SolanaTransactionData;
 	type TransactionMetadata = ();
 	// There is no need for replay protection on Solana since it uses blockhashes.
@@ -527,9 +542,9 @@ pub struct SolApiEnvironment {
 	pub address_lookup_table_account: AddressLookupTableAccount,
 }
 
-impl DepositDetailsToTransactionInId<SolanaCrypto> for SolanaTransactionInId {
+impl DepositDetailsToTransactionInId<SolanaCrypto> for TxOrChannelId {
 	fn deposit_ids(&self) -> Option<Vec<SolanaTransactionInId>> {
-		Some(vec![*self])
+		Some(vec![self.inner()])
 	}
 }
 

@@ -20,7 +20,7 @@ use crate::{
 	ElectionIdentifier, UniqueMonotonicIdentifier,
 };
 use cf_primitives::Asset;
-use cf_traits::IngressSink;
+use cf_traits::{DerivedIngressSink, IngressSink};
 use codec::{Decode, Encode};
 use frame_support::assert_ok;
 use sp_std::collections::btree_map::BTreeMap;
@@ -36,8 +36,14 @@ type Amount = u64;
 type BlockNumber = u64;
 type StateChainBlockNumber = u32;
 
+struct MockDerivedSink;
+impl DerivedIngressSink<AccountId, BlockNumber, ()> for MockDerivedSink {
+	fn derive_deposit_details(account: AccountId, block_number: BlockNumber) {
+		()
+	}
+}
 struct MockIngressSink;
-impl IngressSink for MockIngressSink {
+impl IngressSink<MockDerivedSink> for MockIngressSink {
 	type Account = AccountId;
 	type Asset = Asset;
 	type Amount = Amount;
@@ -49,7 +55,6 @@ impl IngressSink for MockIngressSink {
 		asset: Self::Asset,
 		amount: Self::Amount,
 		_block_number: Self::BlockNumber,
-		_details: Self::DepositDetails,
 	) {
 		AMOUNT_INGRESSED.with(|cell| {
 			let mut ingresses = cell.borrow_mut();
@@ -111,7 +116,7 @@ impl DepositChannel {
 
 fn to_state(
 	channels: impl IntoIterator<Item = DepositChannel>,
-) -> BTreeMap<AccountId, ChannelTotalIngressedFor<MockIngressSink>> {
+) -> BTreeMap<AccountId, ChannelTotalIngressedFor<MockIngressSink, MockDerivedSink>> {
 	channels
 		.into_iter()
 		.map(|channel| {
@@ -128,7 +133,7 @@ fn to_state(
 
 fn to_state_map(
 	channels: impl IntoIterator<Item = DepositChannel>,
-) -> BTreeMap<(AccountId, Asset), ChannelTotalIngressedFor<MockIngressSink>> {
+) -> BTreeMap<(AccountId, Asset), ChannelTotalIngressedFor<MockIngressSink, MockDerivedSink>> {
 	channels
 		.into_iter()
 		.map(|channel| {
@@ -150,7 +155,10 @@ fn to_properties(
 ) -> (
 	BTreeMap<
 		AccountId,
-		(OpenChannelDetailsFor<MockIngressSink>, ChannelTotalIngressedFor<MockIngressSink>),
+		(
+			OpenChannelDetailsFor<MockIngressSink, MockDerivedSink>,
+			ChannelTotalIngressedFor<MockIngressSink, MockDerivedSink>,
+		),
 	>,
 	u32,
 ) {

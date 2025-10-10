@@ -23,12 +23,8 @@ use crate::{
 };
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
-use cf_chains::{
-	instances::SolanaInstance,
-	sol::{SolAddress, SolanaTransactionInId},
-};
 use cf_runtime_utilities::log_or_panic;
-use cf_traits::IngressSink;
+use cf_traits::{DerivedIngressSink, IngressSink};
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::cmp::Ordering;
@@ -67,11 +63,15 @@ pub struct OpenChannelDetails<Asset, BlockNumber> {
 	pub close_block: BlockNumber,
 }
 
-pub type ChannelTotalIngressedFor<Sink> =
-	ChannelTotalIngressed<<Sink as IngressSink>::BlockNumber, <Sink as IngressSink>::Amount>;
+pub type ChannelTotalIngressedFor<Sink, DerivedSink> = ChannelTotalIngressed<
+	<Sink as IngressSink<DerivedSink>>::BlockNumber,
+	<Sink as IngressSink<DerivedSink>>::Amount,
+>;
 
-pub type OpenChannelDetailsFor<Sink> =
-	OpenChannelDetails<<Sink as IngressSink>::Asset, <Sink as IngressSink>::BlockNumber>;
+pub type OpenChannelDetailsFor<Sink, DerivedSink> = OpenChannelDetails<
+	<Sink as IngressSink<DerivedSink>>::Asset,
+	<Sink as IngressSink<DerivedSink>>::BlockNumber,
+>;
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Default,
@@ -91,16 +91,30 @@ impl BenchmarkValue for BackoffSettings<u32> {
 	}
 }
 
-pub struct DeltaBasedIngress<Sink: IngressSink, Settings, ValidatorId, StateChainBlockNumber> {
-	_phantom: core::marker::PhantomData<(Sink, Settings, ValidatorId, StateChainBlockNumber)>,
+pub struct DeltaBasedIngress<
+	Sink: IngressSink<DerivedSink>,
+	DerivedSink: DerivedIngressSink<Sink::Account, Sink::BlockNumber, Sink::DepositDetails>,
+	Settings,
+	ValidatorId,
+	StateChainBlockNumber,
+> {
+	_phantom: core::marker::PhantomData<(
+		Sink,
+		DerivedSink,
+		Settings,
+		ValidatorId,
+		StateChainBlockNumber,
+	)>,
 }
-impl<Sink, Settings, ValidatorId, StateChainBlockNumber>
-	DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
+impl<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber>
+	DeltaBasedIngress<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber>
 where
-	Sink: IngressSink<DepositDetails = SolanaTransactionInId> + 'static,
+	Sink: IngressSink<DerivedSink> + 'static,
+	DerivedSink:
+		DerivedIngressSink<Sink::Account, Sink::BlockNumber, Sink::DepositDetails> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
-	<Sink as IngressSink>::Account: Ord,
-	<Sink as IngressSink>::Amount: Default,
+	<Sink as IngressSink<DerivedSink>>::Account: Ord,
+	<Sink as IngressSink<DerivedSink>>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
@@ -145,13 +159,15 @@ where
 		Ok(())
 	}
 }
-impl<Sink, Settings, ValidatorId, StateChainBlockNumber> ElectoralSystemTypes
-	for DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
+impl<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber> ElectoralSystemTypes
+	for DeltaBasedIngress<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber>
 where
-	Sink: IngressSink<DepositDetails = SolanaTransactionInId> + 'static,
+	Sink: IngressSink<DerivedSink> + 'static,
+	DerivedSink:
+		DerivedIngressSink<Sink::Account, Sink::BlockNumber, Sink::DepositDetails> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
-	<Sink as IngressSink>::Account: Ord,
-	<Sink as IngressSink>::Amount: Default,
+	<Sink as IngressSink<DerivedSink>>::Account: Ord,
+	<Sink as IngressSink<DerivedSink>>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	StateChainBlockNumber: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
@@ -163,7 +179,7 @@ where
 	// told the `IngressEgress` pallet about, and for example, for swap deposit channels, has been
 	// scheduled to be swapped.
 	type ElectoralUnsynchronisedStateMapKey = (Sink::Account, Sink::Asset);
-	type ElectoralUnsynchronisedStateMapValue = ChannelTotalIngressedFor<Sink>;
+	type ElectoralUnsynchronisedStateMapValue = ChannelTotalIngressedFor<Sink, DerivedSink>;
 
 	type ElectoralUnsynchronisedSettings = ();
 	type ElectoralSettings = (Settings, BackoffSettings<StateChainBlockNumber>);
@@ -171,7 +187,10 @@ where
 
 	// Stores the channels a given election is witnessing, and a recent total ingressed value.
 	type ElectionProperties = (
-		BTreeMap<Sink::Account, (OpenChannelDetailsFor<Sink>, ChannelTotalIngressedFor<Sink>)>,
+		BTreeMap<
+			Sink::Account,
+			(OpenChannelDetailsFor<Sink, DerivedSink>, ChannelTotalIngressedFor<Sink, DerivedSink>),
+		>,
 		// Last Channel Opened At - We use this to determine when it is ok to backoff
 		// request frequency.
 		StateChainBlockNumber,
@@ -179,30 +198,31 @@ where
 
 	// Stores the any pending total ingressed values that are waiting for
 	// the safety margin to pass.
-	type ElectionState = BTreeMap<Sink::Account, ChannelTotalIngressedFor<Sink>>;
+	type ElectionState = BTreeMap<Sink::Account, ChannelTotalIngressedFor<Sink, DerivedSink>>;
 	type VoteStorage = vote_storage::individual::Individual<
 		(),
 		vote_storage::individual::identity::Identity<
 			BoundedBTreeMap<
 				Sink::Account,
-				ChannelTotalIngressedFor<Sink>,
+				ChannelTotalIngressedFor<Sink, DerivedSink>,
 				ConstU32<MAXIMUM_CHANNELS_PER_ELECTION>,
 			>,
 		>,
 	>;
-	type Consensus = BTreeMap<Sink::Account, ChannelTotalIngressedFor<Sink>>;
+	type Consensus = BTreeMap<Sink::Account, ChannelTotalIngressedFor<Sink, DerivedSink>>;
 	type OnFinalizeContext = Sink::BlockNumber;
 	type OnFinalizeReturn = ();
 }
 
-impl<Sink, Settings, ValidatorId, StateChainBlockNumber> ElectoralSystem
-	for DeltaBasedIngress<Sink, Settings, ValidatorId, StateChainBlockNumber>
+impl<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber> ElectoralSystem
+	for DeltaBasedIngress<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber>
 where
-	Sink: IngressSink<DepositDetails = SolanaTransactionInId, Account = SolAddress, BlockNumber = u64>
-		+ 'static,
+	Sink: IngressSink<DerivedSink> + 'static,
+	DerivedSink:
+		DerivedIngressSink<Sink::Account, Sink::BlockNumber, Sink::DepositDetails> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
-	<Sink as IngressSink>::Account: Ord,
-	<Sink as IngressSink>::Amount: Default,
+	<Sink as IngressSink<DerivedSink>>::Account: Ord,
+	<Sink as IngressSink<DerivedSink>>::Amount: Default,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	StateChainBlockNumber: Member
 		+ Parameter
@@ -375,7 +395,6 @@ where
 								details.asset,
 								ready_total.amount - previous_amount,
 								ready_total.block_number,
-								(*account, ready_total.block_number),
 							);
 							ElectoralAccess::set_unsynchronised_state_map(
 								(account.clone(), details.asset),

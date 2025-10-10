@@ -55,7 +55,7 @@ use cf_traits::{
 	lending::{BoostApi, BoostOutcome},
 	AccountRoleRegistry, AdjustedFeeEstimationApi, AffiliateRegistry, AssetConverter,
 	AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
-	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
+	ChannelIdAllocator, DepositApi, DerivedIngressSink, EgressApi, EpochInfo, FeePayment,
 	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
 	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapOutputAction,
 	SwapParameterValidation, SwapRequestHandler, SwapRequestType,
@@ -1072,6 +1072,10 @@ pub mod pallet {
 		PalletConfigUpdated {
 			update: PalletConfigUpdate<T, I>,
 		},
+		ChannelRejectionRequestReceived {
+			account_id: T::AccountId,
+			deposit_address: TargetChainAccount<T, I>,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -1107,6 +1111,8 @@ pub mod pallet {
 		MissingAssethubVault,
 		/// The Chain is deprecated, support is being phased out.
 		ChainDeprecated,
+		/// A channel is marked by an invalid account (not owner and not whitelisted)
+		CannotMarkChannel,
 	}
 
 	#[pallet::hooks]
@@ -1595,7 +1601,12 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
+impl<
+		T: Config<I>,
+		I: 'static,
+		P: DerivedIngressSink<Self::Account, Self::BlockNumber, Self::DepositDetails>,
+	> IngressSink<P> for Pallet<T, I>
+{
 	type Account = <T::TargetChain as Chain>::ChainAccount;
 	type Asset = <T::TargetChain as Chain>::ChainAsset;
 	type Amount = <T::TargetChain as Chain>::ChainAmount;
@@ -1607,10 +1618,14 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 		asset: Self::Asset,
 		amount: Self::Amount,
 		block_number: Self::BlockNumber,
-		details: Self::DepositDetails,
 	) {
 		Self::process_channel_deposit_full_witness(
-			DepositWitness { deposit_address: channel, asset, amount, deposit_details: details },
+			DepositWitness {
+				deposit_address: channel,
+				asset,
+				amount,
+				deposit_details: P::derive_deposit_details(channel, block_number),
+			},
 			block_number,
 		);
 	}
@@ -1661,7 +1676,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ensure!(
 					channel.owner == account_id ||
 						WhitelistedBrokers::<T, I>::contains_key(&account_id),
-					Error::<T, I>::TransactionAlreadyPrewitnessed //TODO! change error?
+					Error::<T, I>::CannotMarkChannel
 				);
 				ensure!(
 					!matches!(channel.boost_status, BoostStatus::Boosted { .. }),
@@ -1670,16 +1685,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				channel.is_tainted = true;
 				Ok::<_, DispatchError>(())
-			} 
-			
+			} else {
+				Err(Error::<T, I>::InvalidDepositAddress.into())
+			}
 		})?;
 
-		//TODO change event?
-		// Self::deposit_event(Event::<T, I>::TransactionRejectionRequestReceived {
-		// 	account_id,
-		// 	tx_id,
-		// 	expires_at,
-		// });
+		Self::deposit_event(Event::<T, I>::ChannelRejectionRequestReceived {
+			account_id,
+			deposit_address,
+		});
 		Ok(())
 	}
 
@@ -1723,6 +1737,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		refund_address: <T::TargetChain as Chain>::ChainAccount,
 		deposit_fetch_id: Option<<T::TargetChain as Chain>::DepositFetchId>,
 	) {
+		if let Some(limit) = T::FetchesTransfersLimitProvider::maybe_transfers_limit() {
+			// In case we don't have enough nonces we put the tx back to be retried next block
+			if limit.is_zero() {
+				ScheduledTransactionsForRejection::<T, I>::append(tx);
+				return;
+			}
+		}
 		let AmountAndFeesWithheld {
 			amount_after_fees: amount_after_ingress_fees,
 			fees_withheld: _,
