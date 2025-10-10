@@ -7,11 +7,25 @@ import { Logger } from 'shared/utils/logger';
 export async function setupLpAccount(logger: Logger, uri: string) {
   const lp = createStateChainKeypair(uri);
 
-  await fundFlip(logger, lp.address, '1000');
-  logger.debug(`Registering ${lp.address} as an LP...`);
-
   await using chainflip = await getChainflipApi();
 
+  // Check for existing role
+  logger.trace(`Checking existing role for ${uri}`);
+  const role = JSON.stringify(await chainflip.query.accountRoles.accountRoles(lp.address)).replace(
+    /"/g,
+    '',
+  );
+  if (role === 'LiquidityProvider') {
+    logger.debug(`${lp.address} is already registered as an LP`);
+    return lp;
+  }
+  if (role !== 'null' && role !== 'Unregistered') {
+    throw new Error(`Cannot register ${uri} as LP because it has a role: ${role}`);
+  }
+
+  // Register as LP
+  await fundFlip(logger, lp.address, '1000');
+  logger.debug(`Registering ${lp.address} as an LP...`);
   const eventHandle = observeEvent(logger, 'accountRoles:AccountRoleRegistered', {
     test: (event) => event.data.accountId === lp.address,
   }).event;
@@ -25,6 +39,8 @@ export async function setupLpAccount(logger: Logger, uri: string) {
   await eventHandle;
 
   logger.debug(`${lp.address} successfully registered as an LP`);
+
+  return lp;
 }
 
 /// Sets up a broker account by registering it as a broker if it is not already registered and funding it with 1000 Flip.

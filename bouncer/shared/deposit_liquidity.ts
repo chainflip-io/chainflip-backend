@@ -93,3 +93,11 @@ export async function depositLiquidity(
   logger.debug(`Liquidity deposited to ${ingressAddress}`);
   return txHash;
 }
+
+export async function getFreeBalance(accountAddress: string, asset: Asset): Promise<bigint> {
+  await using chainflip = await getChainflipApi();
+  return (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((await chainflip.query.assetBalances.freeBalances(accountAddress, asset)) as any).toBigInt()
+  );
+}

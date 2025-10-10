@@ -17,7 +17,7 @@ import {
   createStateChainKeypair,
 } from 'shared/utils';
 import { lpApiRpc } from 'shared/json_rpc';
-import { depositLiquidity } from 'shared/deposit_liquidity';
+import { depositLiquidity, getFreeBalance } from 'shared/deposit_liquidity';
 import { sendEvmNative } from 'shared/send_evm';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -208,9 +208,7 @@ async function testTransferAsset(logger: Logger) {
   await using chainflip = await getChainflipApi();
   const amountToTransfer = testAssetAmount.toString(16);
 
-  const getLpBalance = async (account: string) =>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((await chainflip.query.assetBalances.freeBalances(account, testAsset)) as any).toBigInt();
+  const getLpBalance = async (account: string) => getFreeBalance(account, testAsset);
 
   const sourceLpAccount = createStateChainKeypair('//LP_API');
   const destinationLpAccount = createStateChainKeypair('//LP_2');
