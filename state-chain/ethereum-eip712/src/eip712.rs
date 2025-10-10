@@ -4,7 +4,7 @@ use crate::{
 };
 use ethabi::{
 	encode,
-	ethereum_types::{Address, U256},
+	ethereum_types::{Address, H160, U256},
 	ParamType, Token,
 };
 use scale_value::{Composite, Primitive, ValueDef};
@@ -565,52 +565,47 @@ pub fn encode_field(
 						Eip712Error::Message(format!("Failed to parse type {s}: {err}",))
 					})?;
 
-					let prim_val = if let ValueDef::Primitive(p) = &value.value {
-						p
-					} else {
-						return Err(Eip712Error::Message(format!(
-							"Expected primitive value for type `{s}`, but got `{value}`",
-						)));
-					};
+					let err = Eip712Error::Message(format!(
+						"Expected address value for type `{s}`, but got `{value}`",
+					));
 
 					match param {
-						ParamType::Address =>
-							return Err(Eip712Error::Message(format!("Unsupported type {s}",))),
-						ParamType::Bytes =>
-							return Err(Eip712Error::Message(format!("Unsupported type {s}",))),
-
-						ParamType::Int(_) => Token::Uint(match prim_val {
-							Primitive::I128(i) => U256::from(*i as u128),
-							Primitive::I256(i) => todo!(),
-							_ =>
-								return Err(Eip712Error::Message(format!(
-									"Expected integer value for type `{s}`, but got `{value}`",
-								))),
-						}),
-						ParamType::Uint(_) => {
-							// uints are commonly stringified due to how ethers-js encodes
-							let val: StringifiedNumeric = todo!();
-							let val = val.try_into().map_err(|err| {
-								Eip712Error::Message(format!("Failed to parse uint {err}"))
-							})?;
-
-							Token::Uint(val)
+						ParamType::Address => Token::Address(H160(
+							extract_primitive_types(value)
+								.and_then(|r| r.try_into().map_err(|_| ()))
+								.map_err(|_| err)?,
+						)),
+						ParamType::Bytes => {
+							if let Ok(bytes) = extract_primitive_array::<u8>(value) {
+								Token::Bytes(bytes)
+							} else {
+								Token::Bytes(extract_primitive_types::<u8>(value).map_err(|_| err)?)
+							}
 						},
-						ParamType::Bool =>
-							encode_eip712_type(Token::Bool(if let Primitive::Bool(b) = prim_val {
-								*b
+
+						ParamType::Int(_) =>
+							return Err(Eip712Error::Message(format!("Unsupported type {s}",))),
+
+						ParamType::Uint(_) => match value.value.clone() {
+							ValueDef::Primitive(Primitive::U128(v)) => Token::Uint(v.into()),
+							_ => Token::Uint(U256(
+								extract_primitive_types::<u64>(value)
+									.and_then(|r| r.try_into().map_err(|_| ()))
+									.map_err(|_| err)?,
+							)),
+						},
+						ParamType::Bool => encode_eip712_type(Token::Bool(
+							if let ValueDef::Primitive(Primitive::Bool(b)) = value.value {
+								b
 							} else {
-								return Err(Eip712Error::Message(format!(
-									"Expected boolean value for type `{s}`, but got `{value}`",
-								)))
-							})),
+								return Err(err)
+							},
+						)),
 						ParamType::String => {
-							let s: String = if let Primitive::String(s) = prim_val {
-								s.clone()
-							} else {
-								return Err(Eip712Error::Message(format!(
-									"Expected string value for type `{s}`, but got `{value}`",
-								)))
+							let s: String = match &value.value {
+								ValueDef::Primitive(Primitive::String(s)) => s.clone(),
+								ValueDef::Primitive(Primitive::Char(c)) => c.to_string(),
+								_ => return Err(err),
 							};
 							encode_eip712_type(Token::String(s))
 						},
@@ -629,6 +624,35 @@ pub fn encode_field(
 	};
 
 	Ok(token)
+}
+
+// of the kind [_;N]
+fn extract_primitive_array<T: TryFrom<u128>>(value: &scale_value::Value) -> Result<Vec<T>, ()> {
+	if let ValueDef::Composite(Composite::Unnamed(fs)) = value.value.clone() {
+		fs.into_iter()
+			.map(|v| {
+				if let ValueDef::Primitive(Primitive::U128(el)) = v.value {
+					Ok(T::try_from(el).map_err(|_| ())?)
+				} else {
+					Err(())
+				}
+			})
+			.collect::<Result<Vec<T>, _>>()
+	} else {
+		return Err(())
+	}
+}
+
+// of the kind U256
+fn extract_primitive_types<T: TryFrom<u128>>(value: &scale_value::Value) -> Result<Vec<T>, ()> {
+	if let ValueDef::Composite(Composite::Unnamed(fs)) = value.value.clone() {
+		if fs.len() != 1 {
+			return Err(());
+		}
+		extract_primitive_array::<T>(&fs[0]).map_err(|_| ())
+	} else {
+		Err(())
+	}
 }
 
 /// Convert hash map of field names and types into a type hash corresponding to enc types;
