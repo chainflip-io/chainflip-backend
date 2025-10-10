@@ -203,5 +203,37 @@ mod benchmarks {
 		}
 	}
 
+	#[benchmark]
+	fn non_native_signed_call() {
+		let system_call = frame_system::Call::<T>::remark { remark: vec![] };
+		let runtime_call: <T as Config>::RuntimeCall = system_call.into();
+		let call = scale_info::prelude::boxed::Box::new(runtime_call);
+
+		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000u32 };
+		let signature_data: SignatureData = SignatureData::Solana {
+            signature: SolSignature(hex_literal::hex!(
+                "1c3e51b4b12bcc95419a43dc4c1854663edda1df5dd788a059a66c6d237a32fafbeff6515d4b8af0267ce8365ba7a83cf483d7b66d3e3164db027302e308c60e"
+            )),
+            signer: SolAddress(cf_utilities::bs58_array("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp")),
+            sig_type: submit_runtime_call::SolEncodingType::Domain,
+        };
+
+		#[extrinsic_call]
+		non_native_signed_call(
+			frame_system::RawOrigin::None,
+			Message { call, metadata: transaction_metadata },
+			signature_data,
+		);
+	}
+
+	#[benchmark]
+	fn batch(c: Linear<0, 10>) {
+		let caller: T::AccountId = whitelisted_caller();
+		let calls = vec![frame_system::Call::remark { remark: vec![] }.into(); c as usize];
+
+		#[extrinsic_call]
+		batch(frame_system::RawOrigin::Signed(caller.clone()), calls.try_into().unwrap());
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
 }

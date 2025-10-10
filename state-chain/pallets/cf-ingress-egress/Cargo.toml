@@ -16,6 +16,7 @@ workspace = true
 [dependencies]
 cf-chains = { workspace = true }
 cf-primitives = { workspace = true }
+cf-utilities = { workspace = true }
 cf-traits = { workspace = true }
 cf-runtime-utilities = { workspace = true, features = ["derive"] }
 generic-typeinfo-derive = { workspace = true }
@@ -24,6 +25,7 @@ log = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
+n-functor = { workspace = true }
 
 # ==== Parity deps ====
 codec = { workspace = true, features = ["derive"] }

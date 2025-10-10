@@ -315,6 +315,8 @@ parameter_types! {
 
 impl pallet_cf_environment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type ArbitrumVaultKeyWitnessedHandler = ArbitrumVault;
@@ -434,7 +436,6 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
-	type PoolApi = LiquidityPools;
 	type ChainApiCall = eth::api::EthereumApi<EvmEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type DepositHandler = chainflip::DepositHandler;
@@ -465,7 +466,6 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
-	type PoolApi = LiquidityPools;
 	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
@@ -496,7 +496,6 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
-	type PoolApi = LiquidityPools;
 	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
@@ -527,7 +526,6 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
-	type PoolApi = LiquidityPools;
 	type ChainApiCall = ArbitrumApi<EvmEnvironment>;
 	type Broadcaster = ArbitrumBroadcaster;
 	type DepositHandler = chainflip::DepositHandler;
@@ -558,7 +556,6 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
-	type PoolApi = LiquidityPools;
 	type ChainApiCall = cf_chains::sol::api::SolanaApi<SolEnvironment>;
 	type Broadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
@@ -589,7 +586,6 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
-	type PoolApi = LiquidityPools;
 	type ChainApiCall = hub::api::AssethubApi<chainflip::HubEnvironment>;
 	type Broadcaster = AssethubBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
@@ -1735,7 +1731,7 @@ impl_runtime_apis! {
 			}
 		}
 		fn cf_validator_info(account_id: &AccountId) -> ValidatorInfo {
-			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
+			let keyholder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id).into_iter().map(|(e, _)| e).collect();
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
 			let is_bidding = Validator::is_bidding(account_id);
@@ -1752,7 +1748,7 @@ impl_runtime_apis! {
 				bond: account_info.bond(),
 				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(account_id).unwrap_or(0),
 				reputation_points: reputation_info.reputation_points,
-				keyholder_epochs: key_holder_epochs,
+				keyholder_epochs,
 				is_current_authority,
 				is_current_backup: false,
 				is_qualified: is_bidding && is_qualified,
@@ -2775,6 +2771,11 @@ impl_runtime_apis! {
 				pallet_cf_validator::DelegationSnapshots::<Runtime>::iter_prefix_values(current_epoch)
 					.collect()
 			}
+		}
+
+		fn cf_chainflip_network(
+		) -> Result< cf_primitives::ChainflipNetwork, DispatchErrorWithMessage> {
+			Ok( pallet_cf_environment::ChainflipNetworkName::<Runtime>::get())
 		}
 	}
 

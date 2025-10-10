@@ -79,6 +79,18 @@ const getCachedSubstrateApi = (endpoint: string) =>
             Btc: 'Vec<u8>',
           },
         },
+        EthEncodingType: {
+          _enum: ['PersonalSign', 'Eip712'],
+        },
+        SolEncodingType: {
+          _enum: ['Domain'],
+        },
+        SignatureData: {
+          _enum: {
+            Solana: '(SolSignature, SolAddress, SolEncodingType)',
+            Ethereum: '(EthereumSignature, EthereumAddress, EthEncodingType)',
+          },
+        },
       },
     });
 

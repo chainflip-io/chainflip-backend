@@ -1421,6 +1421,111 @@ fn broker_deregistration_checks_private_channels() {
 	});
 }
 
+#[test]
+fn can_handle_input_and_output_being_the_same_asset() {
+	const ASSET: Asset = Asset::Eth;
+	const AMOUNT: AssetAmount = 1_000_000;
+	const NETWORK_FEE_RATE: Permill = Permill::from_parts(100);
+	const NETWORK_FEE: FeeRateAndMinimum = FeeRateAndMinimum { rate: NETWORK_FEE_RATE, minimum: 0 };
+
+	new_test_ext()
+		.execute_with(|| {
+			NetworkFee::<Test>::set(NETWORK_FEE);
+
+			Swapping::init_swap_request(
+				ASSET,
+				AMOUNT,
+				ASSET,
+				SwapRequestType::Regular {
+					output_action: SwapOutputAction::Egress {
+						output_address: ForeignChainAddress::Eth([1; 20].into()),
+						ccm_deposit_metadata: None,
+					},
+				},
+				Default::default(),
+				None,
+				None,
+				SwapOrigin::Vault {
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: Some(BROKER),
+				},
+			);
+
+			assert_eq!(ScheduledSwaps::<Test>::get().len(), 1);
+		})
+		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+		.then_execute_with(|_| {
+			let network_fee_amount = NETWORK_FEE_RATE * AMOUNT * DEFAULT_SWAP_RATE;
+			// Its still a 2 leg swap, so the swap rate is applied twice.
+			let output_amount: AssetAmount =
+				((AMOUNT * DEFAULT_SWAP_RATE) - network_fee_amount) * DEFAULT_SWAP_RATE;
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+					swap_request_id: SwapRequestId(1),
+					egress_id: (ForeignChain::Ethereum, 1),
+					amount,
+					..
+				}) if amount == output_amount,
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
+			);
+		});
+}
+
+#[test]
+fn can_handle_input_and_output_being_the_stable_asset() {
+	const ASSET: Asset = STABLE_ASSET;
+	const AMOUNT: AssetAmount = 1_000_000;
+	const NETWORK_FEE_RATE: Permill = Permill::from_parts(100);
+	const NETWORK_FEE: FeeRateAndMinimum = FeeRateAndMinimum { rate: NETWORK_FEE_RATE, minimum: 0 };
+
+	new_test_ext()
+		.execute_with(|| {
+			NetworkFee::<Test>::set(NETWORK_FEE);
+
+			Swapping::init_swap_request(
+				ASSET,
+				AMOUNT,
+				ASSET,
+				SwapRequestType::Regular {
+					output_action: SwapOutputAction::Egress {
+						output_address: ForeignChainAddress::Eth([1; 20].into()),
+						ccm_deposit_metadata: None,
+					},
+				},
+				Default::default(),
+				None,
+				None,
+				SwapOrigin::Vault {
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+					broker_id: Some(BROKER),
+				},
+			);
+
+			assert_eq!(ScheduledSwaps::<Test>::get().len(), 1);
+		})
+		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+		.then_execute_with(|_| {
+			let network_fee_amount = NETWORK_FEE_RATE * AMOUNT;
+			// The swap rate should not apply because its already in the stable asset.
+			let output_amount: AssetAmount = AMOUNT - network_fee_amount;
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+					swap_request_id: SwapRequestId(1),
+					egress_id: (ForeignChain::Ethereum, 1),
+					amount,
+					..
+				}) if amount == output_amount,
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
+			);
+		});
+}
+
 #[cfg(test)]
 mod swap_batching {
 

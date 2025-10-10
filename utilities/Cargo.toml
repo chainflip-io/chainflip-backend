@@ -33,7 +33,7 @@ regex = { workspace = true, optional = true }
 scale-info = { workspace = true, optional = true }
 scopeguard = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive", "alloc"] }
-sp-core = { workspace = true, optional = true }
+sp-core = { workspace = true, optional = false }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["full"] }
@@ -76,8 +76,7 @@ std = [
 	"dep:tracing",
 	"dep:tracing-subscriber",
 	"dep:warp",
-	"dep:sp-core",
-	"sp-core?/std",
+	"sp-core/std",
 	"dep:num-traits",
 	"dep:regex",
 	"dep:url",

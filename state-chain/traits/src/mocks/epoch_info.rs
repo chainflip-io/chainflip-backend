@@ -143,8 +143,13 @@ macro_rules! impl_mock_epoch_info {
 			}
 
 			#[cfg(feature = "runtime-benchmarks")]
-			fn add_authority_info_for_epoch(epoch_index: $epoch_index, new_authorities: sp_std::vec::Vec<Self::ValidatorId>) {
+			fn add_authority_info_for_epoch(
+				epoch_index: $epoch_index,
+				bond: Self::Amount,
+				new_authorities: sp_std::vec::Vec<Self::ValidatorId>
+			) {
 				MockEpochInfo::inner_add_authority_info_for_epoch(epoch_index, new_authorities);
+				MockEpochInfo::set_bond(bond);
 			}
 
 			#[cfg(feature = "runtime-benchmarks")]

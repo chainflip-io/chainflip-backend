@@ -47,6 +47,8 @@ use crate::Call;
 	<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralSettings: BenchmarkValue,
 )]
 mod benchmarks {
+	use sp_runtime::traits::Zero;
+
 	use super::*;
 
 	fn ready_validator_for_vote<T: crate::pallet::Config<I>, I: 'static>(
@@ -62,6 +64,7 @@ mod benchmarks {
 		T::EpochInfo::set_authorities(validators.clone().into_iter().map(|v| v.into()).collect());
 		T::EpochInfo::add_authority_info_for_epoch(
 			epoch,
+			Zero::zero(),
 			validators.clone().into_iter().map(|v| v.into()).collect(),
 		);
 
@@ -141,7 +144,7 @@ mod benchmarks {
 		let validator_id: T::ValidatorId = caller.clone().into();
 		let epoch = T::EpochInfo::epoch_index();
 
-		T::EpochInfo::add_authority_info_for_epoch(epoch, vec![validator_id.clone()]);
+		T::EpochInfo::add_authority_info_for_epoch(epoch, Zero::zero(), vec![validator_id.clone()]);
 
 		Status::<T, I>::put(ElectionPalletStatus::Running);
 
@@ -158,7 +161,7 @@ mod benchmarks {
 		let validator_id: T::ValidatorId = caller.clone().into();
 		let epoch = T::EpochInfo::epoch_index();
 
-		T::EpochInfo::add_authority_info_for_epoch(epoch, vec![validator_id.clone()]);
+		T::EpochInfo::add_authority_info_for_epoch(epoch, Zero::zero(), vec![validator_id.clone()]);
 
 		Status::<T, I>::put(ElectionPalletStatus::Running);
 

@@ -290,7 +290,7 @@ pub mod pallet {
 	/// A map between an authority and a set of all the active epochs a node was an authority in
 	#[pallet::storage]
 	pub type HistoricalActiveEpochs<T: Config> =
-		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
+		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<(EpochIndex, T::Amount)>, ValueQuery>;
 
 	/// The absolute minimum number of authority nodes for the next epoch.
 	#[pallet::storage]
@@ -834,13 +834,10 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::register_as_validator())]
 		pub fn register_as_validator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id: T::AccountId = ensure_signed(origin)?;
-			if Self::current_authority_count() >= AuctionParameters::<T>::get().max_size {
-				ensure!(
-					T::FundingInfo::total_balance_of(&account_id) >=
-						MinimumValidatorStake::<T>::get(),
-					Error::<T>::NotEnoughFunds
-				);
-			}
+			ensure!(
+				T::FundingInfo::total_balance_of(&account_id) >= MinimumValidatorStake::<T>::get(),
+				Error::<T>::NotEnoughFunds
+			);
 			T::AccountRoleRegistry::register_as_validator(&account_id)
 		}
 
@@ -997,8 +994,23 @@ pub mod pallet {
 			ensure!(settings.fee_bps <= MAX_OPERATOR_FEE, Error::<T>::OperatorFeeTooHigh);
 
 			if let Some(current_settings) = OperatorSettingsLookup::<T>::get(&operator) {
-				if current_settings.delegation_acceptance != settings.delegation_acceptance {
-					Exceptions::<T>::remove(&operator);
+				match (current_settings.delegation_acceptance, settings.delegation_acceptance) {
+					(DelegationAcceptance::Allow, DelegationAcceptance::Deny) => {
+						Exceptions::<T>::mutate(&operator, |allowed| {
+							allowed.clear();
+							// Any existing delegators need be added to the allowed list.
+							for (delegator, (assigned_operator, _)) in DelegationChoice::<T>::iter()
+							{
+								if assigned_operator == operator {
+									allowed.insert(delegator.clone());
+								}
+							}
+						});
+					},
+					(DelegationAcceptance::Deny, DelegationAcceptance::Allow) => {
+						Exceptions::<T>::remove(&operator);
+					},
+					_ => {},
 				}
 			}
 
@@ -1409,11 +1421,12 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_authority_info_for_epoch(
 		epoch_index: EpochIndex,
+		bond: Self::Amount,
 		new_authorities: Vec<Self::ValidatorId>,
 	) {
 		for (i, authority) in new_authorities.iter().enumerate() {
 			AuthorityIndex::<T>::insert(epoch_index, authority, i as AuthorityCount);
-			HistoricalActiveEpochs::<T>::append(authority, epoch_index);
+			HistoricalActiveEpochs::<T>::append(authority, (epoch_index, bond));
 		}
 		HistoricalAuthorities::<T>::insert(epoch_index, new_authorities);
 	}
@@ -1480,7 +1493,6 @@ impl<T: Config> Pallet<T> {
 			if EpochHistory::<T>::number_of_active_epochs_for_authority(authority) == 0 {
 				T::ReputationResetter::reset_reputation(authority);
 			}
-			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
 		}
 		T::EpochTransitionHandler::on_expired_epoch(epoch);
 
@@ -1533,25 +1545,21 @@ impl<T: Config> Pallet<T> {
 		new_bond: T::Amount,
 	) {
 		CurrentAuthorities::<T>::put(new_authorities);
-		HistoricalAuthorities::<T>::insert(new_epoch, new_authorities);
-
 		Bond::<T>::set(new_bond);
 
+		HistoricalAuthorities::<T>::insert(new_epoch, new_authorities);
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
-		new_authorities.iter().enumerate().for_each(|(index, account_id)| {
-			AuthorityIndex::<T>::insert(new_epoch, account_id, index as AuthorityCount);
-			EpochHistory::<T>::activate_epoch(account_id, new_epoch);
-			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
-		});
-
-		// Bond delegators based on the snapshots
-		let outgoing_delegators = DelegationSnapshots::<T>::iter_prefix(new_epoch - 1)
-			.flat_map(|(_, snapshot)| snapshot.delegators.keys().cloned().collect::<Vec<_>>())
-			.collect::<BTreeSet<_>>();
-		let new_delegator_bids = DelegationSnapshots::<T>::iter_prefix(new_epoch)
-			.flat_map(|(_, snapshot)| snapshot.delegators.clone())
-			.collect::<BTreeMap<_, _>>();
+		let mut new_delegator_bids = BTreeMap::new();
+		let mut managed_validator_bonds = BTreeMap::new();
+		for (_, snapshot) in DelegationSnapshots::<T>::iter_prefix(new_epoch) {
+			managed_validator_bonds.extend(snapshot.validator_bond_distribution(new_bond));
+			new_delegator_bids.extend(snapshot.delegators.clone());
+		}
+		let mut outgoing_delegators = BTreeSet::new();
+		for (_, snapshot) in DelegationSnapshots::<T>::iter_prefix(new_epoch - 1) {
+			outgoing_delegators.extend(snapshot.delegators.keys().cloned());
+		}
 
 		for outgoing_delegator in outgoing_delegators {
 			if !new_delegator_bids.contains_key(&outgoing_delegator) &&
@@ -1563,6 +1571,15 @@ impl<T: Config> Pallet<T> {
 					epoch: new_epoch,
 				});
 			}
+		}
+
+		for (index, account_id) in new_authorities.iter().enumerate() {
+			AuthorityIndex::<T>::insert(new_epoch, account_id, index as AuthorityCount);
+			EpochHistory::<T>::activate_epoch(
+				account_id,
+				new_epoch,
+				managed_validator_bonds.get(account_id.into_ref()).copied().unwrap_or(new_bond),
+			);
 		}
 
 		for (delegator, bid) in new_delegator_bids {
@@ -1946,6 +1963,7 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 	type EpochIndex = EpochIndex;
 	type Amount = T::Amount;
+
 	fn epoch_authorities(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId> {
 		HistoricalAuthorities::<T>::get(epoch)
 	}
@@ -1954,7 +1972,9 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 		HistoricalBonds::<T>::get(epoch)
 	}
 
-	fn active_epochs_for_authority(authority: &Self::ValidatorId) -> Vec<Self::EpochIndex> {
+	fn active_epochs_for_authority(
+		authority: &Self::ValidatorId,
+	) -> Vec<(Self::EpochIndex, Self::Amount)> {
 		HistoricalActiveEpochs::<T>::get(authority)
 	}
 
@@ -1963,20 +1983,27 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	}
 
 	fn deactivate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex) {
-		HistoricalActiveEpochs::<T>::mutate(authority, |active_epochs| {
-			active_epochs.retain(|&x| x != epoch);
+		let is_empty = HistoricalActiveEpochs::<T>::mutate(authority, |active_epochs| {
+			active_epochs.retain(|(x, _)| *x != epoch);
+			active_epochs.is_empty()
 		});
+		T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
+		if is_empty {
+			HistoricalActiveEpochs::<T>::remove(authority);
+		}
 	}
 
-	fn activate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex) {
-		HistoricalActiveEpochs::<T>::append(authority, epoch);
+	fn activate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex, bond: Self::Amount) {
+		HistoricalActiveEpochs::<T>::append(authority, (epoch, bond));
+		T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
 	}
 
 	fn active_bond(authority: &Self::ValidatorId) -> Self::Amount {
 		Self::active_epochs_for_authority(authority)
 			.iter()
-			.map(|epoch| Self::epoch_bond(*epoch))
+			.map(|(_, bond)| bond)
 			.max()
+			.copied()
 			.unwrap_or_else(|| Self::Amount::from(0_u32))
 	}
 }

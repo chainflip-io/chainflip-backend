@@ -144,7 +144,7 @@ pub trait RecoverDurableNonce {
 }
 
 /// Errors that can arise when building Solana Transactions.
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, TypeInfo, RuntimeDebug)]
+#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, TypeInfo, Debug)]
 pub enum SolanaTransactionBuildingError {
 	CannotLookupApiEnvironment,
 	CannotLookupCurrentAggKey,
@@ -684,7 +684,7 @@ impl<Env: 'static + SolanaEnvironment> SetAggKeyWithAggKey<SolanaCrypto> for Sol
 		new_key: <SolanaCrypto as ChainCrypto>::AggKey,
 	) -> Result<Option<Self>, crate::SetAggKeyWithAggKeyError> {
 		Self::rotate_agg_key(new_key).map(Some).map_err(|e| {
-			log::error!("Failed to construct Solana Rotate Agg key transaction! Error: {:?}", e);
+			log::warn!("Failed to construct Solana Rotate Agg key transaction: {:?}", e);
 			crate::SetAggKeyWithAggKeyError::FinalTransactionExceededMaxLength
 		})
 	}
@@ -714,7 +714,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 			}?,
 		)
 		.map_err(|e| {
-			log::error!("Failed to construct Solana CCM transfer transaction! \nError: {:?}", e);
+			log::warn!("Failed to construct Solana CCM transfer transaction: {:?}", e);
 			match e {
 				SolanaTransactionBuildingError::AltsNotYetWitnessed =>
 					ExecutexSwapAndCallError::AuxDataNotReady,

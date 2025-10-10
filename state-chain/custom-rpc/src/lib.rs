@@ -43,6 +43,7 @@ use cf_rpc_apis::{
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::rpc::NumberOrHex;
+use codec::Decode;
 use core::ops::Range;
 use jsonrpsee::{
 	core::async_trait,
@@ -56,6 +57,7 @@ use jsonrpsee::{
 use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::OraclePrice, price::PriceAsset,
 };
+use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_lending_pools::{RpcLoan, RpcLoanAccount};
 use pallet_cf_pools::{
@@ -98,6 +100,7 @@ use std::{
 
 pub mod backend;
 pub mod broker;
+pub mod eip_712_types;
 pub mod lp;
 pub mod monitoring;
 pub mod order_fills;
@@ -105,6 +108,12 @@ pub mod pool_client;
 
 #[cfg(test)]
 mod tests;
+
+#[derive(Clone, Serialize, Deserialize)]
+pub enum EncodedNonNativeCall {
+	Eip712(eip_712_types::TypedData),
+	Bytes(RpcBytes),
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
@@ -1274,6 +1283,13 @@ pub trait CustomApi {
 		operator: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<DelegationSnapshot<state_chain_runtime::AccountId, NumberOrHex>>>;
+	#[method(name = "encode_non_native_call")]
+	fn cf_encode_non_native_call(
+		&self,
+		call: RpcBytes,
+		transaction_metadata: TransactionMetadata,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<EncodedNonNativeCall>;
 }
 
 /// An RPC extension for the state chain node.
@@ -2521,6 +2537,57 @@ where
 							None::<()>,
 						))
 					}),
+			})
+	}
+
+	fn cf_encode_non_native_call(
+		&self,
+		call: RpcBytes,
+		transaction_metadata: TransactionMetadata,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<EncodedNonNativeCall> {
+		self.rpc_backend
+			.with_versioned_runtime_api(at, |api, hash, version| match version {
+				Some(v) if v < 8 => Err(CfApiError::ErrorObject(call_error(
+					"Encoding of non native calls are not supported at this runtime api version",
+					CfErrorCode::RuntimeApiError,
+				))),
+				_ => {
+					let call_bytes: Vec<u8> = call.into();
+
+					// Not using RuntimeCall as a parameter to this function because it doesn't
+					// have Serialize/Deserialize implemented. We then decode to verify it's a
+					// valid RuntimeCall.
+					if let Err(err) = state_chain_runtime::RuntimeCall::decode(&mut &call_bytes[..])
+					{
+						return Err(CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InvalidParams.code(),
+							format!("Failed to deserialize into a RuntimeCall {:?}", err),
+							None::<()>,
+						)));
+					}
+					let chainflip_network =
+						api.cf_chainflip_network(hash).map_err(CfApiError::from)??;
+
+					// TODO: We should get an encoding type (PersonalSign, Domain, EIP-712).
+					// Then encode via `build_eip712_typed_data` or `build_domain_data` (with the
+					// right chain's domain). Here we only need to add the Solana prefix because
+					// the Ethereum one is added by default with the personal sign.
+					let typed_data: eip_712_types::TypedData =
+						eip_712_types::build_eip712_typed_data(
+							chainflip_network,
+							call_bytes,
+							transaction_metadata,
+						)
+						.map_err(|e| {
+							CfApiError::ErrorObject(ErrorObject::owned(
+								ErrorCode::InvalidParams.code(),
+								format!("Failed to build eip712 typed data: {e}"),
+								None::<()>,
+							))
+						})?;
+					Ok(EncodedNonNativeCall::Eip712(typed_data))
+				},
 			})
 	}
 }

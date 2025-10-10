@@ -440,14 +440,16 @@ pub enum ChannelActionType {
 	Swap,
 	LiquidityProvision,
 	Refund,
+	Unrefundable,
 }
 
-impl<AccountId, C: Chain> From<ChannelAction<AccountId, C>> for ChannelActionType {
+impl<AccountId, C> From<ChannelAction<AccountId, C>> for ChannelActionType {
 	fn from(action: ChannelAction<AccountId, C>) -> Self {
 		match action {
 			ChannelAction::Swap { .. } => ChannelActionType::Swap,
 			ChannelAction::LiquidityProvision { .. } => ChannelActionType::LiquidityProvision,
 			ChannelAction::Refund { .. } => ChannelActionType::Refund,
+			ChannelAction::Unrefundable => ChannelActionType::Unrefundable,
 		}
 	}
 }
@@ -621,7 +623,7 @@ impl<A> RpcAccountInfoCommonItems<A> {
 //  - Handle the dummy method gracefully in the custom rpc implementation using
 //    runtime_api().api_version().
 decl_runtime_apis!(
-	#[api_version(7)]
+	#[api_version(8)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -834,6 +836,10 @@ decl_runtime_apis!(
 		fn cf_active_delegations(
 			account: Option<AccountId32>,
 		) -> Vec<DelegationSnapshot<AccountId32, FlipBalance>>;
+		#[changed_in(8)]
+		fn cf_chainflip_network();
+		fn cf_chainflip_network(
+		) -> Result<cf_primitives::ChainflipNetwork, DispatchErrorWithMessage>;
 	}
 );
 

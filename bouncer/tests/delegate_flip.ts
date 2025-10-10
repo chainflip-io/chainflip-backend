@@ -7,6 +7,7 @@ import {
   createStateChainKeypair,
   decodeFlipAddressForContract,
   defaultAssetAmounts,
+  externalChainToScAccount,
   getContractAddress,
   getEvmEndpoint,
   hexPubkeyToFlipAddress,
@@ -74,11 +75,6 @@ type DelegationApi =
       };
     };
 
-// Left pad the EVM address to convert it to a Statechain address.
-function evmToScAddress(evmAddress: string) {
-  return hexPubkeyToFlipAddress('0x' + evmAddress.slice(2).padStart(64, '0'));
-}
-
 export async function testDelegate(logger: Logger) {
   // The operator name has to be unique across bouncer runs,
   // since if the test is run the second time for an account
@@ -114,7 +110,7 @@ export async function testDelegate(logger: Logger) {
     test: (event) => {
       const txMatch = event.data.txHash === delegateTxHash;
       const amountMatch = event.data.fundsAdded.replace(/,/g, '') === amount.toString();
-      const accountIdMatch = evmToScAddress(wallet.address) === event.data.accountId;
+      const accountIdMatch = externalChainToScAccount(wallet.address) === event.data.accountId;
       return txMatch && amountMatch && accountIdMatch;
     },
     historicalCheckBlocks: 10,
@@ -131,7 +127,7 @@ export async function testDelegate(logger: Logger) {
   const delegatedEvent = observeEvent(logger, 'validator:Delegated', {
     test: (event) => {
       logger.debug('Delegated event data: ' + JSON.stringify(event.data));
-      const delegatorMatch = event.data.delegator === evmToScAddress(wallet.address);
+      const delegatorMatch = event.data.delegator === externalChainToScAccount(wallet.address);
       const operatorMatch = event.data.operator === operator.address;
       return delegatorMatch && operatorMatch;
     },
@@ -150,7 +146,7 @@ export async function testDelegate(logger: Logger) {
   }).event;
   const undelegatedEvent = observeEvent(logger, 'validator:Undelegated', {
     test: (event) => {
-      const delegatorMatch = event.data.delegator === evmToScAddress(wallet.address);
+      const delegatorMatch = event.data.delegator === externalChainToScAccount(wallet.address);
       const operatorMatch = event.data.operator === operator.address;
       return delegatorMatch && operatorMatch;
     },
@@ -159,7 +155,7 @@ export async function testDelegate(logger: Logger) {
 
   await using chainflip = await getChainflipApi();
   const pendingRedemption = await chainflip.query.flip.pendingRedemptionsReserve(
-    evmToScAddress(wallet.address),
+    externalChainToScAccount(wallet.address),
   );
 
   // Redeem only if there are no other redemptions to prevent queuing issues when
@@ -180,7 +176,7 @@ export async function testDelegate(logger: Logger) {
     }).event;
     const redeemEvent = observeEvent(logger, 'funding:RedemptionRequested', {
       test: (event) => {
-        const accountMatch = event.data.accountId === evmToScAddress(wallet.address);
+        const accountMatch = event.data.accountId === externalChainToScAccount(wallet.address);
         const amountMatch = event.data.amount.replace(/,/g, '') === redeemAmount.toString();
         return accountMatch && amountMatch;
       },

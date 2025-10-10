@@ -1044,6 +1044,17 @@ export function getEncodedSolAddress(address: string): string {
   return /^0x[a-fA-F0-9]+$/.test(address) ? encodeSolAddress(address) : address;
 }
 
+// Left pad the external chain's address to convert it to a Statechain address.
+export function externalChainToScAccount(evmAddress: string) {
+  // Check that the address is either 20 bytes (EVM) or 32 (SVM)
+  if (evmAddress.length !== 42 && evmAddress.length !== 66) {
+    throw new Error(`Invalid address: ${evmAddress}`);
+  }
+  let hex = evmAddress.startsWith('0x') ? evmAddress.slice(2) : evmAddress;
+  hex = hex.padStart(64, '0');
+  return hexPubkeyToFlipAddress('0x' + hex);
+}
+
 export function handleDispatchError(api: ApiPromise, exit = true) {
   return ({ dispatchError }: { dispatchError: DispatchError | undefined }) => {
     if (dispatchError) {
