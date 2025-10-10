@@ -40,8 +40,8 @@ use cf_chains::{
 use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters, IngressOrEgress};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	AdjustedFeeEstimationApi, Broadcaster, Chainflip, ElectionEgressWitnesser, GetBlockHeight,
-	IngressSink, IngressSource, SolanaNonceWatch,
+	AdjustedFeeEstimationApi, Broadcaster, Chainflip, DerivedIngressSink, ElectionEgressWitnesser,
+	GetBlockHeight, IngressSource, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -49,7 +49,7 @@ use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		self,
-		blockchain::delta_based_ingress::{BackoffSettings, DerivedIngressSink},
+		blockchain::delta_based_ingress::BackoffSettings,
 		composite::{tags::G, tuple_7_impls::Hooks, CompositeRunner},
 		exact_value::ExactValueHook,
 		monotonic_change::OnChangeHook,
@@ -133,13 +133,10 @@ pub type SolanaBlockHeightTracking = electoral_systems::monotonic_median::Monoto
 	BlockNumberFor<Runtime>,
 >;
 
-struct DerivedDepositDetails {}
+pub struct DerivedDepositDetails {}
 
-impl DerivedIngressSink for DerivedDepositDetails {
-	fn derive_deposit_details(
-		account: Self::Account,
-		block_number: Self::BlockNumber,
-	) -> Self::DepositDetails {
+impl DerivedIngressSink<SolAddress, u64, TxOrChannelId> for DerivedDepositDetails {
+	fn derive_deposit_details(account: SolAddress, block_number: u64) -> TxOrChannelId {
 		TxOrChannelId::Channel((account, block_number))
 	}
 }

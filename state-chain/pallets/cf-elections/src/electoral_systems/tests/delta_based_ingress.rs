@@ -38,12 +38,10 @@ type StateChainBlockNumber = u32;
 
 struct MockDerivedSink;
 impl DerivedIngressSink<AccountId, BlockNumber, ()> for MockDerivedSink {
-	fn derive_deposit_details(account: AccountId, block_number: BlockNumber) {
-		()
-	}
+	fn derive_deposit_details(_account: AccountId, _block_number: BlockNumber) {}
 }
 struct MockIngressSink;
-impl IngressSink<MockDerivedSink> for MockIngressSink {
+impl IngressSink for MockIngressSink {
 	type Account = AccountId;
 	type Asset = Asset;
 	type Amount = Amount;
@@ -55,6 +53,7 @@ impl IngressSink<MockDerivedSink> for MockIngressSink {
 		asset: Self::Asset,
 		amount: Self::Amount,
 		_block_number: Self::BlockNumber,
+		_deposit_details: Self::DepositDetails,
 	) {
 		AMOUNT_INGRESSED.with(|cell| {
 			let mut ingresses = cell.borrow_mut();
@@ -71,7 +70,7 @@ impl IngressSink<MockDerivedSink> for MockIngressSink {
 }
 
 type SimpleDeltaBasedIngress =
-	DeltaBasedIngress<MockIngressSink, (), AccountId, StateChainBlockNumber>;
+	DeltaBasedIngress<MockIngressSink, MockDerivedSink, (), AccountId, StateChainBlockNumber>;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Encode, Decode)]
 struct DepositChannel {
@@ -116,7 +115,7 @@ impl DepositChannel {
 
 fn to_state(
 	channels: impl IntoIterator<Item = DepositChannel>,
-) -> BTreeMap<AccountId, ChannelTotalIngressedFor<MockIngressSink, MockDerivedSink>> {
+) -> BTreeMap<AccountId, ChannelTotalIngressedFor<MockIngressSink>> {
 	channels
 		.into_iter()
 		.map(|channel| {
@@ -133,7 +132,7 @@ fn to_state(
 
 fn to_state_map(
 	channels: impl IntoIterator<Item = DepositChannel>,
-) -> BTreeMap<(AccountId, Asset), ChannelTotalIngressedFor<MockIngressSink, MockDerivedSink>> {
+) -> BTreeMap<(AccountId, Asset), ChannelTotalIngressedFor<MockIngressSink>> {
 	channels
 		.into_iter()
 		.map(|channel| {
@@ -155,10 +154,7 @@ fn to_properties(
 ) -> (
 	BTreeMap<
 		AccountId,
-		(
-			OpenChannelDetailsFor<MockIngressSink, MockDerivedSink>,
-			ChannelTotalIngressedFor<MockIngressSink, MockDerivedSink>,
-		),
+		(OpenChannelDetailsFor<MockIngressSink>, ChannelTotalIngressedFor<MockIngressSink>),
 	>,
 	u32,
 ) {

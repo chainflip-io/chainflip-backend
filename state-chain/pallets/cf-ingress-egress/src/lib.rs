@@ -55,7 +55,7 @@ use cf_traits::{
 	lending::{BoostApi, BoostOutcome},
 	AccountRoleRegistry, AdjustedFeeEstimationApi, AffiliateRegistry, AssetConverter,
 	AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
-	ChannelIdAllocator, DepositApi, DerivedIngressSink, EgressApi, EpochInfo, FeePayment,
+	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
 	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
 	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapOutputAction,
 	SwapParameterValidation, SwapRequestHandler, SwapRequestType,
@@ -1601,12 +1601,7 @@ pub mod pallet {
 	}
 }
 
-impl<
-		T: Config<I>,
-		I: 'static,
-		P: DerivedIngressSink<Self::Account, Self::BlockNumber, Self::DepositDetails>,
-	> IngressSink<P> for Pallet<T, I>
-{
+impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 	type Account = <T::TargetChain as Chain>::ChainAccount;
 	type Asset = <T::TargetChain as Chain>::ChainAsset;
 	type Amount = <T::TargetChain as Chain>::ChainAmount;
@@ -1618,14 +1613,10 @@ impl<
 		asset: Self::Asset,
 		amount: Self::Amount,
 		block_number: Self::BlockNumber,
+		deposit_details: Self::DepositDetails,
 	) {
 		Self::process_channel_deposit_full_witness(
-			DepositWitness {
-				deposit_address: channel,
-				asset,
-				amount,
-				deposit_details: P::derive_deposit_details(channel, block_number),
-			},
+			DepositWitness { deposit_address: channel, asset, amount, deposit_details },
 			block_number,
 		);
 	}

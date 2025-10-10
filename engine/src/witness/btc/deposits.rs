@@ -316,6 +316,7 @@ pub mod tests {
 			},
 			boost_fee: 0,
 			boost_status: BoostStatus::NotBoosted,
+			is_tainted: false,
 		}
 	}
 

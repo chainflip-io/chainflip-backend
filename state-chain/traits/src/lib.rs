@@ -1112,8 +1112,7 @@ pub trait DerivedIngressSink<Account, BlockNumber, DepositDetails> {
 	fn derive_deposit_details(account: Account, block_number: BlockNumber) -> DepositDetails;
 }
 
-pub trait IngressSink<T: DerivedIngressSink<Self::Account, Self::BlockNumber, Self::DepositDetails>>
-{
+pub trait IngressSink {
 	type Account: Member + Parameter;
 	type Asset: Member + Parameter + Copy;
 	type Amount: Member + Parameter + Copy + AtLeast32BitUnsigned;
@@ -1125,6 +1124,7 @@ pub trait IngressSink<T: DerivedIngressSink<Self::Account, Self::BlockNumber, Se
 		asset: Self::Asset,
 		amount: Self::Amount,
 		block_number: Self::BlockNumber,
+		deposit_details: Self::DepositDetails,
 	);
 	fn on_channel_closed(channel: Self::Account);
 }
