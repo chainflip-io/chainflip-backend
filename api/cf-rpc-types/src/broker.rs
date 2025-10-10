@@ -158,6 +158,12 @@ impl From<Vec<u8>> for RpcBytes {
 	}
 }
 
+impl From<RpcBytes> for Vec<u8> {
+	fn from(val: RpcBytes) -> Self {
+		val.0
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

@@ -23,6 +23,7 @@ use cf_primitives::ChannelId;
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::ParamType;
 pub use ethabi::{
+	encode,
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint, Word,
 };
@@ -34,7 +35,7 @@ use frame_support::sp_runtime::{
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::ConstBool;
+pub use sp_core::{ecdsa::Signature, ConstBool};
 use sp_std::{convert::TryFrom, str, vec};
 
 use crate::DepositDetailsToTransactionInId;
@@ -712,6 +713,38 @@ impl ToAccountId32 for Address {
 	}
 }
 
+fn to_evm_address_from_compressed_pubkey(pubkey: sp_core::ecdsa::Public) -> Option<Address> {
+	PublicKey::parse_compressed(&pubkey.0).ok().map(to_evm_address)
+}
+
+pub fn verify_evm_signature(signer: &Address, payload: &[u8], signature: &Signature) -> bool {
+	let mut sig_bytes = signature.0;
+
+	// Normalize signature's v if needed
+	if sig_bytes[64] >= 27 {
+		sig_bytes[64] -= 27;
+	}
+
+	// Prevent signature malleability - reject high-s signatures
+	// s < 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141 / 2
+	let s = U256::from_big_endian(&sig_bytes[32..64]);
+	let half_curve_order: [u8; 32] = [
+		0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+		0xFF, 0x5D, 0x57, 0x6E, 0x73, 0x57, 0xA4, 0x50, 0x1D, 0xDF, 0xE9, 0x2F, 0x46, 0x68, 0x1B,
+		0x20, 0xA0,
+	];
+	let half_curve_order_uint = U256::from_big_endian(&half_curve_order);
+	if s > half_curve_order_uint {
+		return false;
+	}
+
+	let norm_signature: Signature = sig_bytes.into();
+
+	let option_public = norm_signature.recover_prehashed(Keccak256::hash(payload).as_fixed_bytes());
+
+	option_public.and_then(to_evm_address_from_compressed_pubkey) == Some(*signer)
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
@@ -748,6 +781,83 @@ mod verification_tests {
 	use super::*;
 	use frame_support::{assert_err, assert_ok};
 	use libsecp256k1::{PublicKey, SecretKey};
+
+	#[test]
+	fn test_verify_signature() {
+		let success = verify_evm_signature(
+			// signer
+			&hex_literal::hex!("f39fd6e51aad88f6f4ce6ab8827279cfffb92266").into(),
+			// payload
+			hex_literal::hex!("19457468657265756d205369676e6564204d6573736167653a0a33324578616d706c652060706572736f6e616c5f7369676e60206d6573736167652e").as_slice(),
+			// signature
+			&hex_literal::hex!("c0f877901cd322c16c9f2ebe7dd67acd64da57b582bfb196cea1e30be246d38266be768ce58923128e8230a17f73ca7a1fa4b82a7b2f7661f6ce054613feecfe1b").into(),
+			);
+
+		assert!(success);
+	}
+
+	#[test]
+	fn test_signature_malleability() {
+		// Original test data
+		let signer: [u8; 20] = hex_literal::hex!("f39fd6e51aad88f6f4ce6ab8827279cfffb92266");
+		let payload = hex_literal::hex!(
+			"19457468657265756d205369676e6564204d6573736167653a0a33324578616d706c652060706572736f6e616c5f7369676e60206d6573736167652e"
+		);
+		let original_signature: Signature = hex_literal::hex!(
+			"c0f877901cd322c16c9f2ebe7dd67acd64da57b582bfb196cea1e30be246d38266be768ce58923128e8230a17f73ca7a1fa4b82a7b2f7661f6ce054613feecfe1b"
+		)
+		.into();
+
+		// Verify original signature
+		let success = verify_evm_signature(&signer.into(), &payload, &original_signature);
+		assert!(success, "Original signature should be valid");
+
+		// Construct malleable signature
+		let mut malleable_signature = original_signature.0; // Convert to underlying [u8; 65]
+		let s_bytes: [u8; 32] = original_signature[32..64].try_into().unwrap();
+
+		// Curve order n for secp256k1 as a 32-byte array
+		let n: [u8; 32] =
+			hex_literal::hex!("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+
+		// Compute n - s using byte subtraction with borrow
+		let mut malleable_s = [0u8; 32];
+		let mut borrow = 0u8;
+		for i in (0..32).rev() {
+			let n_byte = n[i] as u16;
+			let s_byte = s_bytes[i] as u16;
+			let diff = n_byte.wrapping_sub(s_byte).wrapping_sub(borrow.into());
+			malleable_s[i] = (diff & 0xFF) as u8;
+			borrow = if diff < 0x100 { 0 } else { 1 };
+		}
+
+		// Update s in the signature
+		malleable_signature[32..64].copy_from_slice(&malleable_s);
+		// Toggle v (assuming v is 27 or 28 in Ethereum format)
+		malleable_signature[64] = if original_signature[64] == 27 { 28 } else { 27 };
+
+		// Assert that original and new signature are different
+		assert_ne!(original_signature.0, malleable_signature, "Signatures should differ");
+		// Verify malleable signature
+		let malleable_success =
+			verify_evm_signature(&signer.into(), &payload, &malleable_signature.into());
+		assert!(
+			!malleable_success,
+			"Malleable signature should be invalid if normalization is enforced"
+		);
+	}
+
+	#[test]
+	fn test_convert_public_to_evm() {
+		let public_key_compressed: sp_core::ecdsa::Public =
+			hex_literal::hex!("038318535b54105d4a7aae60c08fc45f9687181b4fdfc625bd1a753fa7397fed75")
+				.into();
+		let evm_address = to_evm_address_from_compressed_pubkey(public_key_compressed);
+		assert_eq!(
+			evm_address,
+			Some(hex_literal::hex!("f39fd6e51aad88f6f4ce6ab8827279cfffb92266").into())
+		);
+	}
 
 	#[test]
 	#[cfg(feature = "runtime-integration-tests")]

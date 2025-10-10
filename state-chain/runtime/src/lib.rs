@@ -315,6 +315,8 @@ parameter_types! {
 
 impl pallet_cf_environment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type ArbitrumVaultKeyWitnessedHandler = ArbitrumVault;
@@ -2717,6 +2719,11 @@ impl_runtime_apis! {
 				pallet_cf_validator::DelegationSnapshots::<Runtime>::iter_prefix_values(current_epoch)
 					.collect()
 			}
+		}
+
+		fn cf_chainflip_network(
+		) -> Result< cf_primitives::ChainflipNetwork, DispatchErrorWithMessage> {
+			Ok( pallet_cf_environment::ChainflipNetworkName::<Runtime>::get())
 		}
 	}
 

@@ -28,7 +28,7 @@ use cf_chains::{
 	Arbitrum, Assethub, Bitcoin, ChainState, Ethereum, Polkadot,
 };
 use cf_primitives::{
-	chains::Solana, AccountRole, AuthorityCount, NetworkEnvironment,
+	chains::Solana, AccountRole, AuthorityCount, ChainflipNetwork, NetworkEnvironment,
 	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 };
 use common::{FLIPPERINOS_PER_FLIP, SHARED_DATA_REFERENCE_LIFETIME};
@@ -439,6 +439,7 @@ pub fn inner_cf_development_config(
 				},
 				sol_durable_nonces_and_accounts: sol_durable_nonces_and_accounts.to_vec(),
 				network_environment: NetworkEnvironment::Development,
+				chainflip_network: ChainflipNetwork::Development,
 				..Default::default()
 			},
 			eth_init_agg_key,
@@ -631,6 +632,7 @@ macro_rules! network_spec {
 								},
 							},
 							network_environment: NETWORK_ENVIRONMENT,
+							chainflip_network: CHAINFLIP_NETWORK,
 							..Default::default()
 						},
 						eth_init_agg_key,

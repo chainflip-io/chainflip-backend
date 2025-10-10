@@ -19,6 +19,10 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
+pub use crate::submit_runtime_call::{
+	BatchedCalls, Message, TransactionMetadata, MAX_BATCHED_CALLS, UNSIGNED_CALL_VERSION,
+};
 use cf_chains::{
 	btc::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
@@ -28,22 +32,31 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
+	evm::{verify_evm_signature, Signature as EthereumSignature},
 	hub::{Assethub, OutputAccountId},
 	sol::{
 		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall},
-		SolAddress, SolApiEnvironment, SolHash, Solana, NONCE_NUMBER_CRITICAL_NONCES,
+		verify_sol_signature, SolAddress, SolApiEnvironment, SolHash, SolSignature, Solana,
+		NONCE_NUMBER_CRITICAL_NONCES,
 	},
 	Chain,
 };
 use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
-	BroadcastId, NetworkEnvironment, SemVer,
+	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
 	Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider,
 	SafeMode, SolanaNonceWatch,
 };
-use frame_support::{pallet_prelude::*, traits::StorageVersion};
+use codec::{Decode, Encode};
+use frame_support::{
+	dispatch::{DispatchResult, GetDispatchInfo},
+	pallet_prelude::{InvalidTransaction, *},
+	sp_runtime::{traits::Get, AccountId32, DispatchError},
+	traits::{IsSubType, StorageVersion, UnfilteredDispatchable},
+	unsigned::{TransactionValidity, ValidateUnsigned},
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::{vec, vec::Vec};
@@ -55,8 +68,9 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
+pub mod submit_runtime_call;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(19);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(20);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
@@ -82,11 +96,13 @@ pub enum SafeModeUpdate<T: Config> {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use crate::submit_runtime_call::{is_valid_signature, validate_metadata};
+
 	use super::*;
 	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum};
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
-	use frame_support::DefaultNoBound;
+	use frame_support::{traits::OriginTrait, DefaultNoBound};
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -130,6 +146,19 @@ pub mod pallet {
 			Callback = RuntimeCallFor<Self>,
 		>;
 
+		type RuntimeOrigin: From<frame_system::RawOrigin<<Self as frame_system::Config>::AccountId>>
+			+ OriginTrait<AccountId = <Self as frame_system::Config>::AccountId>;
+
+		/// The overarching call type.
+		type RuntimeCall: Member
+			+ Parameter
+			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
+			+ From<frame_system::Call<Self>>
+			+ From<Call<Self>>
+			+ GetDispatchInfo
+			+ IsSubType<Call<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
+
 		/// Weight information
 		type WeightInfo: WeightInfo;
 	}
@@ -144,6 +173,14 @@ pub mod pallet {
 		InvalidUtxoParameters,
 		/// Failed to build Solana Api call. See logs for more details
 		FailedToBuildSolanaApiCall,
+		// Signer cannot be decoded
+		FailedToDecodeSigner,
+		// Failed to execute non-native signed call
+		FailedToExecuteNonNativeSignedCall,
+		// Failed to execute batch
+		FailedToExecuteBatch,
+		// Nested batches not allowed
+		InvalidNestedBatch,
 	}
 
 	#[pallet::pallet]
@@ -301,6 +338,10 @@ pub mod pallet {
 	/// Contains the network environment for this runtime.
 	pub type ChainflipNetworkEnvironment<T> = StorageValue<_, NetworkEnvironment, ValueQuery>;
 
+	#[pallet::storage]
+	/// Current Chainflip's network name
+	pub type ChainflipNetworkName<T> = StorageValue<_, ChainflipNetwork, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -313,25 +354,47 @@ pub mod pallet {
 		/// The address of an supported ARB asset was updated
 		UpdatedArbAsset(ArbAsset, EvmAddress),
 		/// Polkadot Vault Account is successfully set
-		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
+		PolkadotVaultAccountSet {
+			polkadot_vault_account_id: PolkadotAccountId,
+		},
 		/// The starting block number for the new Bitcoin vault was set
-		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
+		BitcoinBlockNumberSetForVault {
+			block_number: cf_chains::btc::BlockNumber,
+		},
 		/// The Safe Mode settings for the chain has been updated
-		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
+		RuntimeSafeModeUpdated {
+			safe_mode: SafeModeUpdate<T>,
+		},
 		/// Utxo consolidation parameters has been updated
-		UtxoConsolidationParametersUpdated { params: utxo_selection::ConsolidationParameters },
+		UtxoConsolidationParametersUpdated {
+			params: utxo_selection::ConsolidationParameters,
+		},
 		/// Arbitrum Initialized: contract addresses have been set, first key activated
 		ArbitrumInitialized,
 		/// Solana Initialized: contract addresses have been set, first key activated
 		SolanaInitialized,
 		/// Some unspendable Utxos are discarded from storage.
-		StaleUtxosDiscarded { utxos: Vec<Utxo> },
+		StaleUtxosDiscarded {
+			utxos: Vec<Utxo>,
+		},
 		/// Solana durable nonce is updated to a new nonce for the corresponding nonce account.
-		DurableNonceSetForAccount { nonce_account: SolAddress, durable_nonce: SolHash },
+		DurableNonceSetForAccount {
+			nonce_account: SolAddress,
+			durable_nonce: SolHash,
+		},
 		/// An Governance transaction was dispatched to a Solana Program.
-		SolanaGovCallDispatched { gov_call: SolanaGovCall, broadcast_id: BroadcastId },
+		SolanaGovCallDispatched {
+			gov_call: SolanaGovCall,
+			broadcast_id: BroadcastId,
+		},
 		/// Assethub Vault Account is successfully set
-		AssethubVaultAccountSet { assethub_vault_account_id: PolkadotAccountId },
+		AssethubVaultAccountSet {
+			assethub_vault_account_id: PolkadotAccountId,
+		},
+		/// Unsigned Runtime Call was dispatched
+		NonNativeSignedCall,
+		// Runtime Call Batch was dispatched
+		BatchCompleted,
 	}
 
 	#[pallet::call]
@@ -576,6 +639,104 @@ pub mod pallet {
 			// Witness the agg_key rotation manually in the vaults pallet for assethub
 			T::AssethubVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)
 		}
+
+		// TODO: PRO-2554 - User should be charged a transaction fee.
+		// We might want to add a check that the signer has balance > 0 as part of
+		// the validate_unsigned.
+		/// Allows for submitting unsigned runtime calls where validation is done on
+		/// the `signature_data` instead. This adds off-chain signing support
+		/// for non-native wallets, such as EVM and Solana wallets.
+		#[allow(clippy::useless_conversion)]
+		#[pallet::call_index(10)]
+		#[pallet::weight({
+			let di = message.call.get_dispatch_info();
+			let dispatch_weight = di.weight.saturating_add(T::WeightInfo::non_native_signed_call());
+			(dispatch_weight, di.class)
+		})]
+		pub fn non_native_signed_call(
+			origin: OriginFor<T>,
+			message: Message<<T as Config>::RuntimeCall>,
+			signature_data: SignatureData,
+		) -> DispatchResultWithPostInfo {
+			// unsigned extrinsic - validation happens in ValidateUnsigned
+			frame_system::ensure_none(origin)?;
+
+			let signer_account: T::AccountId =
+				signature_data.signer_account().map_err(|_| Error::<T>::FailedToDecodeSigner)?;
+
+			let _ = message.call.dispatch_bypass_filter(OriginTrait::signed(signer_account))?;
+
+			Self::deposit_event(Event::<T>::NonNativeSignedCall);
+			Ok(().into())
+		}
+
+		/// Executes an atomic batch of runtime calls. It will execute as an all-or-nothing.
+		#[pallet::call_index(11)]
+		#[pallet::weight({
+			let (dispatch_weight, dispatch_class) = weight_and_dispatch_class::<T>(calls);
+			let dispatch_weight = dispatch_weight.saturating_add(T::WeightInfo::batch(calls.len() as u32));
+			(dispatch_weight, dispatch_class)
+		})]
+		pub fn batch(origin: OriginFor<T>, calls: BatchedCalls<T>) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+
+			let _ = batch_all::<T>(account_id.clone(), calls.clone(), T::WeightInfo::batch)
+				.map_err(|_| Error::<T>::FailedToExecuteNonNativeSignedCall)?;
+
+			Self::deposit_event(Event::<T>::BatchCompleted);
+
+			Ok(())
+		}
+	}
+
+	#[pallet::validate_unsigned]
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
+		type Call = Call<T>;
+
+		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			if let Call::non_native_signed_call {
+				message: Message { call: inner_call, metadata },
+				signature_data,
+			} = call
+			{
+				let Ok(signer_account) = signature_data.signer_account() else {
+					return Err(InvalidTransaction::BadSigner.into());
+				};
+				let valid_tx = validate_metadata::<T>(metadata, &signer_account)?;
+				ensure!(
+					is_valid_signature(
+						inner_call,
+						ChainflipNetworkName::<T>::get(),
+						metadata,
+						signature_data
+					),
+					InvalidTransaction::BadProof
+				);
+				Ok(valid_tx)
+			} else {
+				Err(InvalidTransaction::Call.into())
+			}
+		}
+
+		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+			if let Call::non_native_signed_call {
+				message: Message { metadata, .. },
+				signature_data,
+				..
+			} = call
+			{
+				let Ok(signer_account) = signature_data.signer_account() else {
+					return Err(InvalidTransaction::BadSigner.into());
+				};
+
+				// Signature validity already checked in `validate_unsigned`
+				let _ = validate_metadata::<T>(metadata, &signer_account)?;
+				frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
+				Ok(())
+			} else {
+				Err(InvalidTransaction::Call.into())
+			}
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -598,6 +759,7 @@ pub mod pallet {
 		pub arb_address_checker_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
 		pub network_environment: NetworkEnvironment,
+		pub chainflip_network: ChainflipNetwork,
 		pub sol_genesis_hash: Option<SolHash>,
 		pub sol_api_env: SolApiEnvironment,
 		pub sol_durable_nonces_and_accounts: Vec<DurableNonceAndAccount>,
@@ -645,6 +807,7 @@ pub mod pallet {
 			AssethubOutputAccountId::<T>::set(1);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
+			ChainflipNetworkName::<T>::set(self.chainflip_network);
 
 			Pallet::<T>::update_current_release_version();
 		}
