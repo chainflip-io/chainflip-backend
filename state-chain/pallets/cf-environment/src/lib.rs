@@ -21,7 +21,7 @@
 
 use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
 pub use crate::submit_runtime_call::{
-	BatchedCalls, TransactionMetadata, MAX_BATCHED_CALLS, UNSIGNED_CALL_VERSION,
+	BatchedCalls, Message, TransactionMetadata, MAX_BATCHED_CALLS, UNSIGNED_CALL_VERSION,
 };
 use cf_chains::{
 	btc::{
@@ -649,14 +649,13 @@ pub mod pallet {
 		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(10)]
 		#[pallet::weight({
-			let di = call.get_dispatch_info();
+			let di = message.call.get_dispatch_info();
 			let dispatch_weight = di.weight.saturating_add(T::WeightInfo::non_native_signed_call());
 			(dispatch_weight, di.class)
 		})]
 		pub fn non_native_signed_call(
 			origin: OriginFor<T>,
-			call: scale_info::prelude::boxed::Box<<T as Config>::RuntimeCall>,
-			_transaction_metadata: TransactionMetadata,
+			message: Message<<T as Config>::RuntimeCall>,
 			signature_data: SignatureData,
 		) -> DispatchResultWithPostInfo {
 			// unsigned extrinsic - validation happens in ValidateUnsigned
@@ -665,7 +664,7 @@ pub mod pallet {
 			let signer_account: T::AccountId =
 				signature_data.signer_account().map_err(|_| Error::<T>::FailedToDecodeSigner)?;
 
-			let _ = call.dispatch_bypass_filter(OriginTrait::signed(signer_account))?;
+			let _ = message.call.dispatch_bypass_filter(OriginTrait::signed(signer_account))?;
 
 			Self::deposit_event(Event::<T>::NonNativeSignedCall);
 			Ok(().into())
@@ -696,20 +695,19 @@ pub mod pallet {
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::non_native_signed_call {
-				call: inner_call,
-				transaction_metadata,
+				message: Message { call: inner_call, metadata },
 				signature_data,
 			} = call
 			{
 				let Ok(signer_account) = signature_data.signer_account() else {
 					return Err(InvalidTransaction::BadSigner.into());
 				};
-				let valid_tx = validate_metadata::<T>(transaction_metadata, &signer_account)?;
+				let valid_tx = validate_metadata::<T>(metadata, &signer_account)?;
 				ensure!(
 					is_valid_signature(
 						inner_call,
-						ChainflipNetworkName::<T>::get().as_str(),
-						transaction_metadata,
+						ChainflipNetworkName::<T>::get(),
+						metadata,
 						signature_data
 					),
 					InvalidTransaction::BadProof
@@ -721,14 +719,18 @@ pub mod pallet {
 		}
 
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-			if let Call::non_native_signed_call { transaction_metadata, signature_data, .. } = call
+			if let Call::non_native_signed_call {
+				message: Message { metadata, .. },
+				signature_data,
+				..
+			} = call
 			{
 				let Ok(signer_account) = signature_data.signer_account() else {
 					return Err(InvalidTransaction::BadSigner.into());
 				};
 
 				// Signature validity already checked in `validate_unsigned`
-				let _ = validate_metadata::<T>(transaction_metadata, &signer_account)?;
+				let _ = validate_metadata::<T>(metadata, &signer_account)?;
 				frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
 				Ok(())
 			} else {

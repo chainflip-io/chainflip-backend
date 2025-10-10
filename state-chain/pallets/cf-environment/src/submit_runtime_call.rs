@@ -31,6 +31,12 @@ pub const UNSIGNED_CALL_VERSION: &str = "0";
 
 pub type BatchedCalls<T> = BoundedVec<<T as Config>::RuntimeCall, ConstU32<MAX_BATCHED_CALLS>>;
 
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq)]
+pub struct Message<C> {
+	pub call: scale_info::prelude::boxed::Box<C>,
+	pub metadata: TransactionMetadata,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 pub struct TransactionMetadata {
 	pub nonce: u32,
@@ -279,11 +285,11 @@ fn prefix_and_payload(prefix: &[u8], payload: &[u8]) -> Vec<u8> {
 /// This call should be kept idempotent: it should not access storage.
 pub(crate) fn is_valid_signature(
 	call: impl Encode,
-	chainflip_network_name: &'static str,
+	chainflip_network: ChainflipNetwork,
 	transaction_metadata: &TransactionMetadata,
 	signature_data: &SignatureData,
 ) -> bool {
-	let raw_payload = || build_domain_data(&call, chainflip_network_name, transaction_metadata);
+	let raw_payload = || build_domain_data(&call, chainflip_network.as_str(), transaction_metadata);
 
 	match signature_data {
 		SignatureData::Solana { signature, signer, sig_type } => {
@@ -306,7 +312,7 @@ pub(crate) fn is_valid_signature(
 				},
 				EthEncodingType::Eip712 => build_eip_712_payload(
 					call,
-					chainflip_network_name,
+					chainflip_network.as_str(),
 					UNSIGNED_CALL_VERSION,
 					*transaction_metadata,
 				),
