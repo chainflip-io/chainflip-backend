@@ -150,6 +150,7 @@ pub enum PalletConfigUpdate {
 	SetMinimumAmounts {
 		minimum_loan_amount_usd: AssetAmount,
 		minimum_update_loan_amount_usd: AssetAmount,
+		minimum_update_collateral_amount_usd: AssetAmount,
 	},
 }
 
@@ -228,8 +229,9 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	liquidation_swap_chunk_size_usd: 10_000_000_000, //10k USD
 	fee_swap_max_oracle_slippage: 50,   // 0.5%
 	pool_config_overrides: BTreeMap::new(),
-	minimum_loan_amount_usd: 100_000_000,       // 100 USD
-	minimum_update_loan_amount_usd: 10_000_000, // 10 USD
+	minimum_loan_amount_usd: 100_000_000,             // 100 USD
+	minimum_update_loan_amount_usd: 10_000_000,       // 10 USD
+	minimum_update_collateral_amount_usd: 10_000_000, // 10 USD
 };
 
 impl Get<LendingConfiguration> for LendingConfigDefault {
@@ -500,7 +502,8 @@ pub mod pallet {
 		EmptyCollateral,
 		/// The loan amount would be below the minimum allowed.
 		LoanBelowMinimumAmount,
-		/// You must expand or repay the loan by at least the minimum allowed amount.
+		/// The amount specified to update a loan or collateral must be at least the minimum
+		/// allowed amount.
 		AmountBelowMinimum,
 	}
 
@@ -599,9 +602,12 @@ pub mod pallet {
 						PalletConfigUpdate::SetMinimumAmounts {
 							minimum_loan_amount_usd,
 							minimum_update_loan_amount_usd,
+							minimum_update_collateral_amount_usd,
 						} => {
 							config.minimum_loan_amount_usd = *minimum_loan_amount_usd;
 							config.minimum_update_loan_amount_usd = *minimum_update_loan_amount_usd;
+							config.minimum_update_collateral_amount_usd =
+								*minimum_update_collateral_amount_usd;
 						},
 					}
 					Self::deposit_event(Event::<T>::PalletConfigUpdated { update });

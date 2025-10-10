@@ -160,6 +160,7 @@ fn can_update_all_config_items() {
 		const NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD: AssetAmount = 30_000_000_000;
 		const NEW_MINIMUM_LOAN_AMOUNT_USD: AssetAmount = 12345;
 		const NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD: AssetAmount = 1234;
+		const NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD: AssetAmount = 567;
 
 		const UPDATE_NETWORK_FEE_DEDUCTION_FROM_BOOST: PalletConfigUpdate =
 			PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
@@ -209,6 +210,7 @@ fn can_update_all_config_items() {
 		const UPDATE_LOAN_MINIMUMS: PalletConfigUpdate = PalletConfigUpdate::SetMinimumAmounts {
 			minimum_loan_amount_usd: NEW_MINIMUM_LOAN_AMOUNT_USD,
 			minimum_update_loan_amount_usd: NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD,
+			minimum_update_collateral_amount_usd: NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD,
 		};
 
 		// Check that the default values are different from the new ones
@@ -250,6 +252,10 @@ fn can_update_all_config_items() {
 			LendingConfig::<Test>::get().minimum_update_loan_amount_usd,
 			NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD
 		);
+		assert_ne!(
+			LendingConfig::<Test>::get().minimum_update_collateral_amount_usd,
+			NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD
+		);
 
 		// Update all config items at the same time
 		assert_ok!(LendingPools::update_pallet_config(
@@ -290,6 +296,7 @@ fn can_update_all_config_items() {
 				fee_swap_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_FEE_SWAP,
 				minimum_loan_amount_usd: NEW_MINIMUM_LOAN_AMOUNT_USD,
 				minimum_update_loan_amount_usd: NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD,
+				minimum_update_collateral_amount_usd: NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD,
 				pool_config_overrides: BTreeMap::default(),
 			}
 		);

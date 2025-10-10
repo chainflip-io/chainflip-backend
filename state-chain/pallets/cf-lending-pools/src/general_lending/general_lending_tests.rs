@@ -2735,7 +2735,7 @@ fn derive_extra_interest_from_low_ltv() {
 }
 
 #[test]
-fn test_loan_minimum_is_enforced() {
+fn loan_minimum_is_enforced() {
 	const MIN_LOAN_AMOUNT_USD: AssetAmount = 1_000;
 	const MIN_LOAN_AMOUNT_ASSET: AssetAmount = MIN_LOAN_AMOUNT_USD / SWAP_RATE;
 	const COLLATERAL_AMOUNT: AssetAmount = MIN_LOAN_AMOUNT_ASSET * SWAP_RATE * 2;
@@ -2796,7 +2796,7 @@ fn test_loan_minimum_is_enforced() {
 }
 
 #[test]
-fn test_expand_or_repay_loan_minimum_is_enforced() {
+fn expand_or_repay_loan_minimum_is_enforced() {
 	const MIN_LOAN_AMOUNT_USD: AssetAmount = 1_000;
 	const MIN_UPDATE_USD: AssetAmount = 500;
 	const MIN_UPDATE_AMOUNT_ASSET: AssetAmount = MIN_UPDATE_USD / SWAP_RATE;
@@ -2881,6 +2881,96 @@ fn test_expand_or_repay_loan_minimum_is_enforced() {
 			RuntimeOrigin::signed(BORROWER),
 			LOAN_ID,
 			MIN_LOAN_AMOUNT_ASSET
+		));
+	});
+}
+
+#[test]
+fn adding_or_removing_collateral_minimum_is_enforced() {
+	const MIN_UPDATE_USD: AssetAmount = 6000;
+	const MIN_UPDATE_AMOUNT_ASSET: AssetAmount = MIN_UPDATE_USD / SWAP_RATE;
+	const EXTRA_COLLATERAL_AMOUNT: AssetAmount = 100;
+
+	const COLLATERAL_ASSET: Asset = Asset::Eth;
+	const COLLATERAL_ASSET_2: Asset = Asset::Flip;
+
+	new_test_ext().execute_with(|| {
+		set_asset_price_in_usd(COLLATERAL_ASSET, SWAP_RATE);
+		set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+		MockBalance::credit_account(
+			&BORROWER,
+			COLLATERAL_ASSET,
+			MIN_UPDATE_AMOUNT_ASSET + MIN_UPDATE_AMOUNT_ASSET / 2 + EXTRA_COLLATERAL_AMOUNT,
+		);
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET_2, MIN_UPDATE_USD / 2);
+
+		// Set the minimum collateral update amount
+		LendingConfig::<Test>::set(LendingConfiguration {
+			minimum_update_collateral_amount_usd: MIN_UPDATE_USD,
+			..Default::default()
+		});
+
+		// Should not be able to add collateral below the minimum amount
+		assert_noop!(
+			LendingPools::add_collateral(
+				RuntimeOrigin::signed(BORROWER),
+				Some(COLLATERAL_ASSET),
+				BTreeMap::from([(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET - 1)])
+			),
+			Error::<Test>::AmountBelowMinimum
+		);
+
+		// Adding an amount equal to or above the minimum amount should be fine
+		assert_ok!(LendingPools::add_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			Some(COLLATERAL_ASSET),
+			BTreeMap::from([(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET)])
+		));
+
+		// As long as the total added is above the minimum, it should be fine
+		assert_ok!(LendingPools::add_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			Some(COLLATERAL_ASSET),
+			BTreeMap::from([
+				(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET / 2 + EXTRA_COLLATERAL_AMOUNT),
+				(COLLATERAL_ASSET_2, MIN_UPDATE_USD / 2)
+			])
+		));
+
+		// Should not be able to remove collateral below the minimum amount
+		assert_noop!(
+			LendingPools::remove_collateral(
+				RuntimeOrigin::signed(BORROWER),
+				BTreeMap::from([(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET - 1)])
+			),
+			Error::<Test>::AmountBelowMinimum
+		);
+
+		// Removing an amount equal to or above the minimum amount should be fine
+		assert_ok!(LendingPools::remove_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			BTreeMap::from([(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET)])
+		));
+
+		// Even if its split between multiple assets, as long as the total is above the minimum
+		assert_ok!(LendingPools::remove_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			BTreeMap::from([
+				(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET / 2),
+				(COLLATERAL_ASSET_2, MIN_UPDATE_USD / 2)
+			])
+		));
+
+		// And if only a small amount is left, it should be fine to remove it all
+		let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
+		let extra_collateral_amount = account.collateral.get(&COLLATERAL_ASSET).unwrap();
+		assert!(
+			extra_collateral_amount < &MIN_UPDATE_AMOUNT_ASSET,
+			"Left over collateral needs to be below the minimum for test to work."
+		);
+		assert_ok!(LendingPools::remove_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			BTreeMap::from([(COLLATERAL_ASSET, *extra_collateral_amount)])
 		));
 	});
 }

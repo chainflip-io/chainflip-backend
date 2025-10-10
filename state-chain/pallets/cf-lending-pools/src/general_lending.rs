@@ -745,6 +745,19 @@ fn usd_value_of<T: Config>(asset: Asset, amount: AssetAmount) -> Result<AssetAmo
 	Ok(cf_amm_math::output_amount_ceil(amount.into(), price_in_usd).unique_saturated_into())
 }
 
+// Uses oracle prices to calculate the total USD value of the entire map of assets
+fn total_usd_value_of<T: Config>(
+	assets_amounts: &BTreeMap<Asset, AssetAmount>,
+) -> Result<AssetAmount, DispatchError> {
+	let mut total_collateral_usd = 0;
+	for (asset, amount) in assets_amounts {
+		total_collateral_usd =
+			total_collateral_usd.saturating_add(usd_value_of::<T>(*asset, *amount)?);
+	}
+
+	Ok(total_collateral_usd)
+}
+
 /// Uses oracle prices to calculate the amount of `asset` that's equivalent in USD value to
 /// `amount` of USD
 fn amount_from_usd_value<T: Config>(
@@ -1076,6 +1089,12 @@ impl<T: Config> LendingApi for Pallet<T> {
 	) -> Result<(), DispatchError> {
 		ensure_non_zero_collateral::<T>(&collateral)?;
 
+		ensure!(
+			total_usd_value_of::<T>(&collateral)? >=
+				LendingConfig::<T>::get().minimum_update_collateral_amount_usd,
+			Error::<T>::AmountBelowMinimum
+		);
+
 		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
 			let loan_account = Self::create_or_update_loan_account(
 				borrower_id.clone(),
@@ -1108,6 +1127,15 @@ impl<T: Config> LendingApi for Pallet<T> {
 				loan_account.liquidation_status == LiquidationStatus::NoLiquidation,
 				Error::<T>::LiquidationInProgress
 			);
+
+			let total_collateral_usd = total_usd_value_of::<T>(&collateral)?;
+			if total_collateral_usd < total_usd_value_of::<T>(&loan_account.collateral)? {
+				ensure!(
+					total_collateral_usd >=
+						LendingConfig::<T>::get().minimum_update_collateral_amount_usd,
+					Error::<T>::AmountBelowMinimum
+				);
+			}
 
 			for (asset, amount) in &collateral {
 				ensure!(
@@ -1669,8 +1697,11 @@ pub struct LendingConfiguration {
 	pub pool_config_overrides: BTreeMap<Asset, LendingPoolConfiguration>,
 	/// Minimum amount of principal that a loan must have at all times.
 	pub minimum_loan_amount_usd: AssetAmount,
-	/// Minimum amount of principal that can be used to expand or repay an existing loan.
+	/// Minimum equivalent amount of principal that can be used to expand or repay an existing
+	/// loan.
 	pub minimum_update_loan_amount_usd: AssetAmount,
+	/// Minimum equivalent amount of collateral that can be added or removed from a loan account.
+	pub minimum_update_collateral_amount_usd: AssetAmount,
 }
 
 impl Default for LendingConfiguration {
