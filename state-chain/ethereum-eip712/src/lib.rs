@@ -11,7 +11,10 @@ use scale_info::{
 use scale_value::{Composite, Value, ValueDef};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
-use crate::eip712::{EIP712Domain, Eip712, Eip712DomainType, Eip712Error, TypedData};
+use crate::{
+	eip712::{EIP712Domain, Eip712, Eip712DomainType, Eip712Error, TypedData},
+	hash::keccak256,
+};
 
 pub mod bytes;
 pub mod eip712;
@@ -94,26 +97,30 @@ pub fn recursively_construct_types<C: Clone>(
 			vec![],
 		),
 		(TypeDef::Tuple(type_def_tuple), ValueDef::Composite(Composite::Unnamed(fs))) => {
-			(
-				// In case of tuple, we decide to name it "UnnamedTuple" since tuples, although
-				// supported in solidity, cant be easily displayed in metamask. Naming it so will
-				// display it in metamask which will indicate to the signer that this is indeed a
-				// tuple
-				"UnnamedTuple".to_string(),
-				type_def_tuple
-					.fields
-					.clone()
-					.into_iter()
-					.zip(fs.into_iter())
-					.map(|(ty, value)| {
-						let type_name = recursively_construct_types(value.clone(), ty, types)?;
-						Ok::<_, &'static str>(Eip712DomainType {
-							// In case of unnamed fields, we decide to name it by its type name
-							name: type_name.clone(),
-							r#type: type_name,
-						})
+			let fields = type_def_tuple
+				.fields
+				.clone()
+				.into_iter()
+				.zip(fs.into_iter())
+				.enumerate()
+				.map(|(i, (ty, value))| -> Result<_, &'static str> {
+					let type_name = recursively_construct_types(value.clone(), ty, types)?;
+					Ok(Eip712DomainType {
+						// In case of unnamed fields, we decide to name it by its type name appended
+						// by its index in the tuple
+						name: type_name.clone() + "_" + &i.to_string(),
+						r#type: type_name,
 					})
-					.collect::<Result<_, _>>()?,
+				})
+				.collect::<Result<Vec<_>, _>>()?;
+			(
+				// In case of tuple, we decide to name it "UnnamedTuple_{first 4 bytes of hash of
+				// the fields}" since tuples, although supported in solidity, cant be easily
+				// displayed in metamask. Naming it so will display it in metamask which will
+				// indicate to the signer that this is indeed a tuple. The 4 bytes of hash is
+				// just to avoid name collisions in case there are multiple unnamed tuples.
+				"UnnamedTuple_".to_string() + &hex::encode(&keccak256(&format!("{fields:?}"))[..4]),
+				fields,
 			)
 		},
 		(TypeDef::Primitive(type_def_primitive), ValueDef::Primitive(_p)) => (
@@ -138,8 +145,8 @@ pub fn recursively_construct_types<C: Clone>(
 		),
 		(TypeDef::Compact(type_def_compact), _) =>
 			(recursively_construct_types(v.clone(), type_def_compact.type_param, types)?, vec![]),
-		// his is only used when scale-info's bitvec feature is enabled and since we dont use that
-		// feature, this variant should be unreachable
+		// this is only used when scale-info's bitvec feature is enabled and since we dont use that
+		// feature, this variant should be unreachable.
 		(TypeDef::BitSequence(_), _) => return Err("Unreachable"),
 
 		_ => return Err("Type and Value do not match"),
@@ -165,7 +172,7 @@ fn process_composite<C: Clone>(
 				.clone()
 				.into_iter()
 				.map(|field| -> Result<_, &'static str> {
-					// field name doesnt exist. shouldn't be possible since we are in Named variant
+					// shouldn't be possible since we are in Named variant
 					let field_name = field.name.ok_or("field name doesn't exist")?.to_string();
 					let value =
 						fs_map.get(&field_name).ok_or("field with this name has to exist")?.clone();
@@ -182,11 +189,13 @@ fn process_composite<C: Clone>(
 				.clone()
 				.into_iter()
 				.zip(fs)
-				.map(|(field, value)| -> Result<_, &'static str> {
+				.enumerate()
+				.map(|(i, (field, value))| -> Result<_, &'static str> {
 					let type_name = recursively_construct_types(value.clone(), field.ty, types)?;
 					Ok(Eip712DomainType {
-						// In case of unnamed fields, we decide to name it by its type name
-						name: type_name.clone(),
+						// In case of unnamed fields, we decide to name it by its type name appended
+						// by its index in the tuple
+						name: type_name.clone() + "_" + &i.to_string(),
 						r#type: type_name,
 					})
 				})
