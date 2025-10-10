@@ -15,7 +15,7 @@ use cf_traits::{
 use cf_utilities::assert_matches;
 
 use super::*;
-use frame_support::{assert_err, assert_noop, assert_ok};
+use frame_support::{assert_err, assert_noop, assert_ok, sp_runtime::bounded_vec};
 
 const INIT_BLOCK: u64 = 1;
 
@@ -32,6 +32,9 @@ const LOAN_ID: LoanId = LoanId(0);
 const SWAP_RATE: u128 = 20;
 
 const INIT_POOL_AMOUNT: AssetAmount = PRINCIPAL * 2;
+
+/// Utilisation based on `PRINCIPAL` and `INIT_POOL_AMOUNT`
+const DEFAULT_UTILISATION: Permill = Permill::from_percent(50);
 
 use crate::LENDING_DEFAULT_CONFIG as CONFIG;
 
@@ -170,15 +173,21 @@ fn lender_basic_adding_and_removing_funds() {
 	});
 }
 
-/// Derives the total interest amount to be paid by the borrower per interest charge interval.
+/// Derives interest amounts (pool and network portions) to be paid by the borrower
+/// per interest charge interval. Returns (pool amount, network amount).
 fn derive_interest_amounts(
 	principal: AssetAmount,
 	utilisation: Permill,
+	payment_interval_blocks: u32,
 ) -> (AssetAmount, AssetAmount) {
-	let base_interest =
-		CONFIG.derive_base_interest_rate_per_payment_interval(LOAN_ASSET, utilisation);
+	let base_interest = CONFIG.derive_base_interest_rate_per_payment_interval(
+		LOAN_ASSET,
+		utilisation,
+		payment_interval_blocks,
+	);
 
-	let network_interest = CONFIG.derive_network_interest_rate_per_payment_interval();
+	let network_interest =
+		CONFIG.derive_network_interest_rate_per_payment_interval(payment_interval_blocks);
 
 	let pool_amount = (ScaledAmountHP::from_asset_amount(principal) * base_interest)
 		.into_asset_amount() *
@@ -210,12 +219,18 @@ fn basic_general_lending() {
 	const REPAYMENT_AMOUNT: AssetAmount = PRINCIPAL / 10;
 
 	// 50% utilisation is expected:
-	let (pool_interest_1, network_interest_1) =
-		derive_interest_amounts(PRINCIPAL, Permill::from_percent(50));
+	let (pool_interest_1, network_interest_1) = derive_interest_amounts(
+		PRINCIPAL,
+		Permill::from_percent(50),
+		CONFIG.interest_payment_interval_blocks,
+	);
 
 	// 45% utilisation is expected:
-	let (pool_interest_2, network_interest_2) =
-		derive_interest_amounts(PRINCIPAL - REPAYMENT_AMOUNT, Permill::from_percent(45));
+	let (pool_interest_2, network_interest_2) = derive_interest_amounts(
+		PRINCIPAL - REPAYMENT_AMOUNT,
+		Permill::from_percent(45),
+		CONFIG.interest_payment_interval_blocks,
+	);
 
 	let total_interest =
 		pool_interest_1 + network_interest_1 + pool_interest_2 + network_interest_2;
@@ -308,6 +323,7 @@ fn basic_general_lending() {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
+							last_interest_payment_at: INIT_BLOCK,
 							owed_principal: PRINCIPAL,
 							pending_interest: InterestBreakdown::default(),
 						}
@@ -326,6 +342,16 @@ fn basic_general_lending() {
 					COLLATERAL_ASSET,
 					INIT_COLLATERAL - pool_interest_1 - network_interest_1
 				)])
+			);
+
+			assert_eq!(
+				LoanAccounts::<Test>::get(BORROWER)
+					.unwrap()
+					.loans
+					.get(&LOAN_ID)
+					.unwrap()
+					.last_interest_payment_at,
+				INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64
 			);
 
 			assert_eq!(
@@ -427,6 +453,74 @@ fn basic_general_lending() {
 					)]),
 					loans: Default::default(),
 				})
+			);
+		});
+}
+
+#[test]
+fn dynamic_interest_payment_interval() {
+	// Testing a scenario where we fail to charge interest at the usual block
+	// (according to the regular interval) and instead a larger amount of interest will be charged
+	// at a later block.
+
+	let get_loan = || {
+		LoanAccounts::<Test>::get(BORROWER)
+			.unwrap()
+			.loans
+			.get(&LOAN_ID)
+			.unwrap()
+			.clone()
+	};
+
+	let interest_payment_first_attempt_block =
+		INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64;
+
+	// NOTE: amounts calculated using payment interval extended by 1 block
+	let (pool_interest, network_interest) = derive_interest_amounts(
+		PRINCIPAL,
+		DEFAULT_UTILISATION,
+		CONFIG.interest_payment_interval_blocks + 1,
+	);
+
+	let (network_origination_fee, pool_origination_fee) = take_network_fee(ORIGINATION_FEE);
+
+	new_test_ext()
+		.with_funded_pool(INIT_POOL_AMOUNT)
+		.with_default_loan()
+		.then_execute_with(|_| {
+			// Set a low collection threshold so we can more easily check the collected amount
+			assert_ok!(Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::root(),
+				bounded_vec![PalletConfigUpdate::SetInterestCollectionThresholdUsd(1)],
+			));
+
+			// Making oracle price unavailable to cause interest calculations
+			// be skipped for now:
+			MockPriceFeedApi::set_price(LOAN_ASSET, None);
+		})
+		.then_process_blocks_until_block(interest_payment_first_attempt_block)
+		.then_execute_with(|_| {
+			// No interest payment yet:
+			assert_eq!(get_loan().last_interest_payment_at, INIT_BLOCK);
+
+			// Making oracle price available will cause interest to be
+			// calculated/taken at the next block
+			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+		})
+		.then_execute_at_next_block(|_| {
+			assert_eq!(
+				get_loan().last_interest_payment_at,
+				interest_payment_first_attempt_block + 1
+			);
+
+			assert_eq!(
+				PendingPoolFees::<Test>::get(LOAN_ASSET),
+				BTreeMap::from([(COLLATERAL_ASSET, pool_origination_fee + pool_interest)])
+			);
+
+			assert_eq!(
+				PendingNetworkFees::<Test>::get(COLLATERAL_ASSET),
+				network_origination_fee + network_interest
 			);
 		});
 }
@@ -620,6 +714,7 @@ fn basic_loan_aggregation() {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
+							last_interest_payment_at: INIT_BLOCK,
 							owed_principal: PRINCIPAL + EXTRA_PRINCIPAL_1,
 							pending_interest: Default::default()
 						}
@@ -725,6 +820,7 @@ fn basic_loan_aggregation() {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
+							last_interest_payment_at: INIT_BLOCK,
 							// Loan's owed principal has been increased:
 							owed_principal: PRINCIPAL + EXTRA_PRINCIPAL_1 + EXTRA_PRINCIPAL_2,
 							pending_interest: Default::default()
@@ -745,7 +841,7 @@ fn basic_loan_aggregation() {
 }
 
 #[test]
-fn interest_special_cases() {
+fn can_take_interest_from_non_primary_collateral_asset() {
 	// We want the amount to be large enough that we can charge interest immediately
 	// (rather than waiting for fractional amounts to accumulate).
 	const PRINCIPAL: AssetAmount = 2_000_000_000_000;
@@ -762,8 +858,11 @@ fn interest_special_cases() {
 	const INIT_COLLATERAL_AMOUNT_SECONDARY: AssetAmount =
 		TOTAL_COLLATERAL_REQUIRED - INIT_COLLATERAL_AMOUNT_PRIMARY;
 
-	let (full_pool_interest_amount, full_network_interest_amount) =
-		derive_interest_amounts(PRINCIPAL, Permill::from_percent(50));
+	let (full_pool_interest_amount, full_network_interest_amount) = derive_interest_amounts(
+		PRINCIPAL,
+		Permill::from_percent(50),
+		CONFIG.interest_payment_interval_blocks,
+	);
 
 	// Primary collateral is expected to cover network fee entirely
 	assert!(full_network_interest_amount < INIT_COLLATERAL_AMOUNT_PRIMARY);
@@ -881,8 +980,9 @@ fn swap_collected_network_fees() {
 	const ASSET_1: Asset = Asset::Eth;
 	const ASSET_2: Asset = Asset::Usdc;
 
-	const AMOUNT_1: AssetAmount = 200_000;
-	const AMOUNT_2: AssetAmount = 100_000;
+	// NOTE: these need to be large enough to exceed fee swap threshold
+	const AMOUNT_1: AssetAmount = 2_000_000;
+	const AMOUNT_2: AssetAmount = 1_000_000;
 
 	let fee_swap_block = CONFIG.fee_swap_interval_blocks as u64;
 
@@ -890,6 +990,10 @@ fn swap_collected_network_fees() {
 		.execute_with(|| {
 			LendingPools::take_network_fee(AMOUNT_1 * 2, ASSET_1, Permill::from_percent(50));
 			LendingPools::take_network_fee(AMOUNT_2 * 4, ASSET_2, Permill::from_percent(25));
+
+			// Network fee collection requires oracle prices available:
+			set_asset_price_in_usd(ASSET_1, SWAP_RATE);
+			set_asset_price_in_usd(ASSET_2, SWAP_RATE);
 
 			assert_eq!(
 				PendingNetworkFees::<Test>::iter().collect::<BTreeMap<_, _>>(),
@@ -1264,6 +1368,7 @@ fn basic_liquidation() {
 						GeneralLoan {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
+							last_interest_payment_at: INIT_BLOCK,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL - (SWAPPED_PRINCIPAL - liquidation_fee_1),
 							pending_interest: Default::default()
@@ -1587,13 +1692,20 @@ fn small_interest_amounts_accumulate() {
 		..CONFIG
 	};
 
+	// Expecting regular intervals:
+	let interest_payment_interval = config.interest_payment_interval_blocks;
+
 	const ORIGINATION_FEE: AssetAmount =
 		portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL) * SWAP_RATE;
 
-	let pool_interest = config
-		.derive_base_interest_rate_per_payment_interval(LOAN_ASSET, Permill::from_percent(10));
+	let pool_interest = config.derive_base_interest_rate_per_payment_interval(
+		LOAN_ASSET,
+		Permill::from_percent(10),
+		interest_payment_interval,
+	);
 
-	let network_interest = config.derive_network_interest_rate_per_payment_interval();
+	let network_interest =
+		config.derive_network_interest_rate_per_payment_interval(interest_payment_interval);
 
 	// Expected fees in pool's asset
 	let pool_amount = ScaledAmountHP::from_asset_amount(PRINCIPAL) * pool_interest;
@@ -1631,9 +1743,7 @@ fn small_interest_amounts_accumulate() {
 				Ok(LOAN_ID)
 			);
 		})
-		.then_process_blocks_until_block(
-			INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
-		)
+		.then_process_blocks_until_block(INIT_BLOCK + interest_payment_interval as u64)
 		// Interest should be recorded here, but not taken yet (it is too small)
 		.then_execute_with(|_| {
 			let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
@@ -1649,9 +1759,7 @@ fn small_interest_amounts_accumulate() {
 				}
 			);
 		})
-		.then_process_blocks_until_block(
-			INIT_BLOCK + 2 * CONFIG.interest_payment_interval_blocks as u64,
-		)
+		.then_process_blocks_until_block(INIT_BLOCK + 2 * interest_payment_interval as u64)
 		.then_execute_with(|_| {
 			let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
 
@@ -2190,6 +2298,7 @@ fn init_liquidation_swaps_test() {
 					id: LOAN_ID,
 					asset: Asset::Btc,
 					created_at_block: 0,
+					last_interest_payment_at: 0,
 					owed_principal: 20,
 					pending_interest: Default::default(),
 				},
@@ -2200,6 +2309,7 @@ fn init_liquidation_swaps_test() {
 					id: LOAN_ID,
 					asset: Asset::Sol,
 					created_at_block: 0,
+					last_interest_payment_at: 0,
 					owed_principal: 2000,
 					pending_interest: Default::default(),
 				},

@@ -378,24 +378,28 @@ impl<T: Config> LoanAccount<T> {
 		Ok(fees_taken)
 	}
 
-	pub fn derive_and_charge_interest(&mut self, ltv: FixedU64) -> Result<(), Error<T>> {
+	#[transactional]
+	pub fn derive_and_charge_interest(&mut self, ltv: FixedU64) -> DispatchResult {
 		let config = LendingConfig::<T>::get();
 
 		if self.liquidation_status != LiquidationStatus::NoLiquidation {
 			// For simplicity, we don't charge interest during liquidations
-			// (the account will already incur a liquidation fee)
 			return Ok(())
 		}
+
+		let current_block = frame_system::Pallet::<T>::block_number();
 
 		// Temporarily moving the loans out of the account lets us iterate over them
 		// while being able to update the account:
 		let mut loans = core::mem::take(&mut self.loans);
 
 		for (loan_id, loan) in &mut loans {
-			if frame_system::Pallet::<T>::block_number().saturating_sub(loan.created_at_block) %
-				config.interest_payment_interval_blocks.into() ==
-				0u32.into()
-			{
+			let blocks_since_last_payment: u32 = current_block
+				.saturating_sub(loan.last_interest_payment_at)
+				.try_into()
+				.unwrap_or(u32::MAX);
+
+			if blocks_since_last_payment >= config.interest_payment_interval_blocks.into() {
 				let loan_asset = loan.asset;
 
 				let base_interest_rate = {
@@ -403,14 +407,20 @@ impl<T: Config> LoanAccount<T> {
 						.map(|pool| pool.get_utilisation())
 						.unwrap_or_default();
 
-					config.derive_base_interest_rate_per_payment_interval(loan_asset, utilisation)
+					config.derive_base_interest_rate_per_payment_interval(
+						loan_asset,
+						utilisation,
+						blocks_since_last_payment,
+					)
 				};
 
-				let network_interest_rate =
-					config.derive_network_interest_rate_per_payment_interval();
+				let network_interest_rate = config
+					.derive_network_interest_rate_per_payment_interval(blocks_since_last_payment);
 
-				let low_ltv_penalty_rate =
-					config.derive_low_ltv_penalty_rate_per_payment_interval(ltv);
+				let low_ltv_penalty_rate = config.derive_low_ltv_penalty_rate_per_payment_interval(
+					ltv,
+					blocks_since_last_payment,
+				);
 
 				// Calculating interest in scaled amounts for better precision
 				let owed_principal = ScaledAmountHP::from_asset_amount(loan.owed_principal);
@@ -454,6 +464,8 @@ impl<T: Config> LoanAccount<T> {
 					Pallet::<T>::credit_fees_to_pool(loan_asset, *asset, *amount);
 				}
 
+				loan.last_interest_payment_at = current_block;
+
 				Pallet::<T>::deposit_event(Event::InterestTaken {
 					loan_id: *loan_id,
 					pool_interest,
@@ -472,11 +484,12 @@ impl<T: Config> LoanAccount<T> {
 
 	/// Checks if a top up is required and if so, performs it. Returns
 	/// boolean indicating whether a topup has been performed.
+	#[transactional]
 	pub fn process_auto_top_up(
 		&mut self,
 		borrower_id: &T::AccountId,
 		ltv: FixedU64,
-	) -> Result<bool, Error<T>> {
+	) -> Result<bool, DispatchError> {
 		let config = LendingConfig::<T>::get();
 
 		if ltv <= config.ltv_thresholds.topup.into() {
@@ -687,6 +700,7 @@ impl<T: Config> LoanAccount<T> {
 pub struct GeneralLoan<T: Config> {
 	pub id: LoanId,
 	pub asset: Asset,
+	pub last_interest_payment_at: BlockNumberFor<T>,
 	pub created_at_block: BlockNumberFor<T>,
 	pub owed_principal: AssetAmount,
 	/// Interest owed on the loan but not yet taken (it is below the threshold)
@@ -892,8 +906,9 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 		LoanAccounts::<T>::mutate(borrower_id, |loan_account| {
 			let loan_account = loan_account.as_mut().expect("Using keys read just above");
 
-			// Not being able to charge interest or top up collateral is OK (most likely due to
-			// stale oracle)
+			// Some of these may fail due to oracle prices being unavailable, but that's
+			// OK and doesn't need any specific error handling (they will simply be re-tried
+			// at a later point).
 			if let Ok(ltv) = loan_account.derive_ltv() {
 				let _ = loan_account.derive_and_charge_interest(ltv);
 
@@ -904,7 +919,8 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 					Ok(ltv)
 				};
 
-				// This should always return OK, but let's check anyway as a defensive measure:
+				// This should always be Ok (otherwise we wouldn't be able to derive LTV the first
+				// time), but let's check anyway as a defensive measure:
 				if let Ok(new_ltv) = new_ltv {
 					loan_account.update_liquidation_status(borrower_id, new_ltv);
 				}
@@ -948,7 +964,12 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 			PendingNetworkFees::<T>::mutate(asset, |fee_amount| {
 				// NOTE: if asset is FLIP, we shouldn't need to swap, but it should still work,
 				// and it seems easiest to not write a special case
-				if *fee_amount > 0 {
+				let Ok(fee_usd_value) = usd_value_of::<T>(asset, *fee_amount) else {
+					// Don't swap yet if we can't determine asset's price
+					return;
+				};
+
+				if fee_usd_value >= config.fee_swap_threshold_usd {
 					let swap_request_id =
 						T::SwapRequestHandler::init_network_fee_swap_request(asset, *fee_amount);
 
@@ -993,6 +1014,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 			let loan = GeneralLoan {
 				id: loan_id,
 				asset,
+				last_interest_payment_at: frame_system::Pallet::<T>::current_block_number(),
 				created_at_block: frame_system::Pallet::<T>::current_block_number(),
 				owed_principal: 0,
 				pending_interest: Default::default(),
@@ -1711,13 +1733,17 @@ impl LendingConfiguration {
 		}
 	}
 
-	fn interest_per_year_to_per_payment_interval(&self, interest_per_year: Permill) -> Perquintill {
+	fn interest_per_year_to_per_payment_interval(
+		&self,
+		interest_per_year: Permill,
+		interval_blocks: u32,
+	) -> Perquintill {
 		use cf_primitives::BLOCKS_IN_YEAR;
 
 		Perquintill::from_parts(
 			(interest_per_year.deconstruct() as u64 *
 				(Perquintill::ACCURACY / Permill::ACCURACY as u64)) /
-				(BLOCKS_IN_YEAR / self.interest_payment_interval_blocks) as u64,
+				(BLOCKS_IN_YEAR / interval_blocks) as u64,
 		)
 	}
 
@@ -1728,15 +1754,20 @@ impl LendingConfiguration {
 		&self,
 		asset: Asset,
 		utilisation: Permill,
+		interval_blocks: u32,
 	) -> Perquintill {
 		let interest_rate = self.derive_interest_rate_per_year(asset, utilisation);
 
-		self.interest_per_year_to_per_payment_interval(interest_rate)
+		self.interest_per_year_to_per_payment_interval(interest_rate, interval_blocks)
 	}
 
-	fn derive_network_interest_rate_per_payment_interval(&self) -> Perquintill {
+	fn derive_network_interest_rate_per_payment_interval(
+		&self,
+		interval_blocks: u32,
+	) -> Perquintill {
 		self.interest_per_year_to_per_payment_interval(
 			self.network_fee_contributions.extra_interest,
+			interval_blocks,
 		)
 	}
 
@@ -1756,9 +1787,13 @@ impl LendingConfiguration {
 		)
 	}
 
-	fn derive_low_ltv_penalty_rate_per_payment_interval(&self, ltv: FixedU64) -> Perquintill {
+	fn derive_low_ltv_penalty_rate_per_payment_interval(
+		&self,
+		ltv: FixedU64,
+		interval_blocks: u32,
+	) -> Perquintill {
 		let interest_rate = self.derive_low_ltv_interest_rate_per_year(ltv);
-		self.interest_per_year_to_per_payment_interval(interest_rate)
+		self.interest_per_year_to_per_payment_interval(interest_rate, interval_blocks)
 	}
 
 	pub fn origination_fee(&self, asset: Asset) -> Permill {
