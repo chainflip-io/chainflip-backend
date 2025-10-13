@@ -2484,6 +2484,7 @@ impl_runtime_apis! {
 					open_deposit_channels_for_account::<Runtime, BitcoinInstance>(account_id.as_ref()),
 					open_deposit_channels_for_account::<Runtime, EthereumInstance>(account_id.as_ref()),
 					open_deposit_channels_for_account::<Runtime, ArbitrumInstance>(account_id.as_ref()),
+					open_deposit_channels_for_account::<Runtime, SolanaInstance>(account_id.as_ref()),
 				].into_iter().flatten().collect()
 			}
 		}
@@ -2540,25 +2541,18 @@ impl_runtime_apis! {
 			>(
 				event: pallet_cf_ingress_egress::Event::<T, I>,
 			) -> Vec<BrokerRejectionEventFor<T::TargetChain>> {
-				use cf_chains::DepositDetailsToTransactionInId;
 				match event {
 					pallet_cf_ingress_egress::Event::TransactionRejectionRequestExpired { account_id, tx_id } =>
 						vec![TransactionScreeningEvent::TransactionRejectionRequestExpired { account_id, tx_id }],
 					pallet_cf_ingress_egress::Event::TransactionRejectionRequestReceived { account_id, tx_id, expires_at: _ } =>
 						vec![TransactionScreeningEvent::TransactionRejectionRequestReceived { account_id, tx_id }],
-					pallet_cf_ingress_egress::Event::TransactionRejectedByBroker { broadcast_id, tx_id } => tx_id
-						.deposit_ids()
-						.into_iter()
-						.flat_map(IntoIterator::into_iter)
-						.map(|tx_id|
-							TransactionScreeningEvent::TransactionRejectedByBroker { refund_broadcast_id: broadcast_id, tx_id }
-						)
-						.collect(),
+					pallet_cf_ingress_egress::Event::TransactionRejectedByBroker { broadcast_id, tx_id: deposit_details } =>
+						vec![TransactionScreeningEvent::TransactionRejectedByBroker { refund_broadcast_id: broadcast_id, deposit_details }],
+					pallet_cf_ingress_egress::Event::ChannelRejectionRequestReceived { account_id, deposit_address } =>
+						vec![TransactionScreeningEvent::ChannelRejectionRequestReceived { account_id, deposit_address }],
 					_ => Default::default(),
 				}
 			}
-
-			// TODO: after rebase, add parsing for channelrejectionrequestreceived
 
 			let mut btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>> = Default::default();
 			let mut eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>> = Default::default();

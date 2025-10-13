@@ -444,7 +444,7 @@ impl<AccountId, C> From<ChannelAction<AccountId, C>> for ChannelActionType {
 pub type OpenedDepositChannels = (AccountId32, ChannelActionType, ChainAccounts);
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
-pub enum TransactionScreeningEvent<TxId, Address> {
+pub enum TransactionScreeningEvent<TxId, DepositDetails, Address> {
 	TransactionRejectionRequestReceived {
 		account_id: <Runtime as frame_system::Config>::AccountId,
 		tx_id: TxId,
@@ -457,7 +457,7 @@ pub enum TransactionScreeningEvent<TxId, Address> {
 
 	TransactionRejectedByBroker {
 		refund_broadcast_id: BroadcastId,
-		tx_id: TxId,
+		deposit_details: DepositDetails,
 	},
 
 	ChannelRejectionRequestReceived {
@@ -468,11 +468,8 @@ pub enum TransactionScreeningEvent<TxId, Address> {
 
 pub type BrokerRejectionEventFor<C> = TransactionScreeningEvent<
 	<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId,
-	<C as Chain>::ChainAccount,
->;
-
-pub type BrokerRejectionEventDepositDetailsFor<C> = TransactionScreeningEvent<
 	<C as Chain>::DepositDetails,
+	<C as Chain>::ChainAccount,
 >;
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
@@ -480,10 +477,7 @@ pub struct TransactionScreeningEvents {
 	pub btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>>,
 	pub eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>>,
 	pub arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>>,
-	pub sol_events: Vec<TransactionScreeningEvent<
-		<cf_chains::Solana as Chain>::DepositDetails,
-		<cf_chains::Solana as Chain>::ChainAccount
-	>>,
+	pub sol_events: Vec<BrokerRejectionEventFor<cf_chains::Solana>>,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]

@@ -2647,9 +2647,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						),
 						ChannelAction::LiquidityProvision { refund_address, .. } =>
 							(refund_address.clone(), None),
-						ChannelAction::Refund {
-							refund_address, refund_ccm_metadata, ..
-						} => (
+						ChannelAction::Refund { refund_address, refund_ccm_metadata, .. } => (
 							refund_address.clone().into_foreign_chain_address(),
 							refund_ccm_metadata.clone(),
 						),

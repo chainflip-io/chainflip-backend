@@ -127,10 +127,10 @@ mod benchmarks {
 						lp_account: account("doogle", 0, 0),
 						refund_address: ForeignChainAddress::benchmark_value(),
 					},
-					boost_fee: 0,
-					boost_status: BoostStatus::NotBoosted,
-					is_tainted: false,
-				};
+				boost_fee: 0,
+				boost_status: BoostStatus::NotBoosted,
+				is_tainted: false,
+			};
 			channel.deposit_channel.state.on_fetch_scheduled();
 			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), channel);
 			addresses.push(deposit_address);
