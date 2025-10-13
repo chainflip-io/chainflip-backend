@@ -155,7 +155,7 @@ pub fn recursively_construct_types<C: Clone>(
 					// bytes of hash is just to avoid name collisions in case there are
 					// multiple unnamed tuples.
 					"UnnamedTuple__".to_string() +
-						&hex::encode(&keccak256(&format!("{fields:?}"))[..4]),
+						&hex::encode(&keccak256(format!("{fields:?}"))[..4]),
 					fields,
 				)
 			},
@@ -193,7 +193,7 @@ pub fn recursively_construct_types<C: Clone>(
 	// If there are generic parameters to this type, append uniqueness to the type name to avoid
 	// collisions
 	if t.type_params.len() > 0 {
-		type_name = type_name + "__" + &hex::encode(&keccak256(&format!("{fields:?}"))[..4]);
+		type_name = type_name + "__" + &hex::encode(&keccak256(format!("{fields:?}"))[..4]);
 	}
 
 	//TODO: maybe use the full path as the type name to avoid collisions due to same name types in

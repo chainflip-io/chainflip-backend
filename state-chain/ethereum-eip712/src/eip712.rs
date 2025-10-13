@@ -1,7 +1,4 @@
-use crate::{
-	hash::keccak256, lexer::HumanReadableParser, serde_helpers::StringifiedNumeric,
-	GetScaleValueFields,
-};
+use crate::{hash::keccak256, lexer::HumanReadableParser, GetScaleValueFields};
 use ethabi::{
 	encode,
 	ethereum_types::{Address, H160, U256},
@@ -639,7 +636,7 @@ fn extract_primitive_array<T: TryFrom<u128>>(value: &scale_value::Value) -> Resu
 			})
 			.collect::<Result<Vec<T>, _>>()
 	} else {
-		return Err(())
+		Err(())
 	}
 }
 
