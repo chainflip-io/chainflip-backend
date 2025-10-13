@@ -312,72 +312,6 @@ impl<T: Config> LoanAccount<T> {
 		Ok(FixedU64::from_rational(principal, collateral))
 	}
 
-	/// Reduce collateral by amount that's equivalent to `fee_amount` in `fee_asset`.
-	/// Primary collateral asset is deducted from first, but if that's depleted,
-	/// the remainder is deducted from other collateral assets.
-	pub fn charge_fee_from_collateral(
-		&mut self,
-		fee_asset: Asset,
-		fee_amount: AssetAmount,
-	) -> Result<BTreeMap<Asset, AssetAmount>, Error<T>> {
-		let mut remaining_fee_amount_in_requested_asset = fee_amount;
-
-		// The actual amounts taken from each collateral asset
-		let mut fees_taken = BTreeMap::new();
-
-		// Fees are charged from the primary collateral asset first. If it fails to cover
-		// the interest, we use the remaining assets:
-		let collateral_asset_order = [self.primary_collateral_asset]
-			.into_iter()
-			.chain(
-				self.collateral
-					.keys()
-					.copied()
-					.filter(|asset| *asset != self.primary_collateral_asset),
-			)
-			.collect::<Vec<_>>(); // collecting to make borrow checker happy
-
-		for collateral_asset in collateral_asset_order {
-			// Determine how much should be charged in the given collateral asset
-			let amount_required_in_collateral_asset = equivalent_amount::<T>(
-				fee_asset,
-				collateral_asset,
-				remaining_fee_amount_in_requested_asset,
-			)?;
-
-			if let Some(available_collateral_amount) = self.collateral.get_mut(&collateral_asset) {
-				// Don't charge more than what's available
-				let amount_charged = core::cmp::min(
-					amount_required_in_collateral_asset,
-					*available_collateral_amount,
-				);
-
-				available_collateral_amount.saturating_reduce(amount_charged);
-
-				// Reduce the remaining interest amount to pay in requested asset's terms
-				{
-					let amount_charged_in_requested_asset =
-						if amount_charged == amount_required_in_collateral_asset {
-							remaining_fee_amount_in_requested_asset
-						} else {
-							equivalent_amount(collateral_asset, fee_asset, amount_charged)?
-						};
-
-					remaining_fee_amount_in_requested_asset
-						.saturating_reduce(amount_charged_in_requested_asset);
-				}
-
-				fees_taken.insert(collateral_asset, amount_charged);
-
-				if remaining_fee_amount_in_requested_asset == 0 {
-					break;
-				}
-			}
-		}
-
-		Ok(fees_taken)
-	}
-
 	#[transactional]
 	pub fn derive_and_charge_interest(&mut self, ltv: FixedU64) -> DispatchResult {
 		let config = LendingConfig::<T>::get();
@@ -389,11 +323,7 @@ impl<T: Config> LoanAccount<T> {
 
 		let current_block = frame_system::Pallet::<T>::block_number();
 
-		// Temporarily moving the loans out of the account lets us iterate over them
-		// while being able to update the account:
-		let mut loans = core::mem::take(&mut self.loans);
-
-		for (loan_id, loan) in &mut loans {
+		for (loan_id, loan) in &mut self.loans {
 			let blocks_since_last_payment: u32 = current_block
 				.saturating_sub(loan.last_interest_payment_at)
 				.try_into()
@@ -441,7 +371,12 @@ impl<T: Config> LoanAccount<T> {
 					// (say 10c)
 					let fee_usd_value = usd_value_of(loan_asset, fee.into_asset_amount())?;
 					if fee_usd_value >= config.interest_collection_threshold_usd {
-						self.charge_fee_from_collateral(loan_asset, fee.take_non_fractional_part())
+						charge_fee_from_collateral::<T>(
+							&mut self.collateral,
+							self.primary_collateral_asset,
+							loan_asset,
+							fee.take_non_fractional_part(),
+						)
 					} else {
 						Ok(Default::default())
 					}
@@ -476,8 +411,6 @@ impl<T: Config> LoanAccount<T> {
 				});
 			}
 		}
-
-		self.loans = loans;
 
 		Ok(())
 	}
@@ -521,17 +454,16 @@ impl<T: Config> LoanAccount<T> {
 		);
 
 		if top_up_amount > 0 {
-			if T::Balance::try_debit_account(
+			T::Balance::try_debit_account(
 				borrower_id,
 				self.primary_collateral_asset,
 				top_up_amount,
 			)
-			.is_ok()
-			{
-				self.add_to_collateral(self.primary_collateral_asset, top_up_amount);
-			} else {
+			.inspect_err(|_| {
 				log_or_panic!("Unable to debit after checking balance");
-			}
+			})?;
+
+			self.add_to_collateral(self.primary_collateral_asset, top_up_amount);
 
 			Ok(true)
 		} else {
@@ -831,7 +763,8 @@ fn initiate_swap<T: Config>(
 		LendingSwapType::Liquidation { .. } => {
 			let number_of_chunks = match usd_value_of::<T>(from_asset, amount) {
 				Ok(total_amount_usd) =>
-					(total_amount_usd / LendingConfig::<T>::get().liquidation_swap_chunk_size_usd)
+					(total_amount_usd
+						.div_ceil(LendingConfig::<T>::get().liquidation_swap_chunk_size_usd))
 						as u32,
 				Err(_) => {
 					// It shouldn't be possible to not get the price here (we don't initiate
@@ -1842,6 +1775,66 @@ fn interpolate_linear_segment(
 	let result = if negative_slope { i1.saturating_sub(delta) } else { i0.saturating_add(delta) };
 
 	u32::try_from(result).map(Permill::from_parts).unwrap_or(Permill::one())
+}
+
+/// Reduce collateral by amount that's equivalent to `fee_amount` in `fee_asset`.
+/// Primary collateral asset is deducted from first, but if that's depleted,
+/// the remainder is deducted from other collateral assets.
+pub fn charge_fee_from_collateral<T: Config>(
+	collateral: &mut BTreeMap<Asset, AssetAmount>,
+	primary_collateral_asset: Asset,
+	fee_asset: Asset,
+	fee_amount: AssetAmount,
+) -> Result<BTreeMap<Asset, AssetAmount>, Error<T>> {
+	let mut remaining_fee_amount_in_requested_asset = fee_amount;
+
+	// The actual amounts taken from each collateral asset
+	let mut fees_taken = BTreeMap::new();
+
+	// Fees are charged from the primary collateral asset first. If it fails to cover
+	// the interest, we use the remaining assets:
+	let collateral_asset_order = [primary_collateral_asset]
+		.into_iter()
+		.chain(collateral.keys().copied().filter(|asset| *asset != primary_collateral_asset))
+		.collect::<Vec<_>>(); // collecting to make borrow checker happy
+
+	for collateral_asset in collateral_asset_order {
+		// Determine how much should be charged in the given collateral asset
+		let amount_required_in_collateral_asset = equivalent_amount::<T>(
+			fee_asset,
+			collateral_asset,
+			remaining_fee_amount_in_requested_asset,
+		)?;
+
+		if let Some(available_collateral_amount) = collateral.get_mut(&collateral_asset) {
+			// Don't charge more than what's available
+			let amount_charged =
+				core::cmp::min(amount_required_in_collateral_asset, *available_collateral_amount);
+
+			available_collateral_amount.saturating_reduce(amount_charged);
+
+			// Reduce the remaining interest amount to pay in requested asset's terms
+			{
+				let amount_charged_in_requested_asset =
+					if amount_charged == amount_required_in_collateral_asset {
+						remaining_fee_amount_in_requested_asset
+					} else {
+						equivalent_amount(collateral_asset, fee_asset, amount_charged)?
+					};
+
+				remaining_fee_amount_in_requested_asset
+					.saturating_reduce(amount_charged_in_requested_asset);
+			}
+
+			fees_taken.insert(collateral_asset, amount_charged);
+
+			if remaining_fee_amount_in_requested_asset == 0 {
+				break;
+			}
+		}
+	}
+
+	Ok(fees_taken)
 }
 
 fn ensure_non_zero_collateral<T: Config>(

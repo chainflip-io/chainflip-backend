@@ -2630,6 +2630,10 @@ pub mod pallet {
 						dca_params.number_of_chunks,
 					);
 				}
+
+				// There has to be a at least one chunk
+				dca_params.number_of_chunks = core::cmp::max(dca_params.number_of_chunks, 1);
+
 				dca_params
 			});
 
