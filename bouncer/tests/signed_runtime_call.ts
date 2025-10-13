@@ -133,7 +133,6 @@ async function testSvmDomain(logger: Logger) {
   // Create a new Solana keypair for each test run to ensure a unique account
   // const svmKeypair = await generateKeyPair();
   const svmKeypair = await generateKeyPairSigner();
-  console.log('Signer public key:', svmKeypair.address);
 
   // SVM Whale -> SC account (`cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1`)
   const svmScAccount = externalChainToScAccount(decodeSolAddress(svmKeypair.address.toString()));
@@ -179,6 +178,7 @@ async function testSvmDomain(logger: Logger) {
   await chainflip.tx.environment
     .nonNativeSignedCall(
       {
+        // Solana prefix will be added in the SC previous to signature verification
         call: hexBatchRuntimeCall,
         metadata: {
           nonce: svmNonce,
@@ -235,7 +235,6 @@ async function testEvmPersonalSign(logger: Logger) {
   // Parse and validate the response
   const parsedEvmPayload = encodedBytesSchema.parse(evmPayload);
   const evmString = parsedEvmPayload.String;
-  console.log('evmString:', evmString);
 
   // Sign with personal_sign (automatically adds prefix)
   const evmSignature = await evmWallet.signMessage(evmString);

@@ -27,8 +27,6 @@ use scale_info::prelude::{boxed::Box, format, string::String};
 use serde::{Deserialize, Serialize};
 pub const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
 pub const MAX_BATCHED_CALLS: u32 = 10u32;
-// Using a str for consistency between EIP-712 and other encodings
-pub const UNSIGNED_CALL_VERSION: &str = "0";
 // We don't use Anza's offchain prefix as it's not widely supported. For example
 // Phantom only supports signing utf-8, which is not compatible with Anza's prefix.
 pub const SOLANA_OFFCHAIN_PREFIX: &str = "solana offchain";
@@ -260,12 +258,12 @@ pub fn build_domain_data(
 	call: impl Encode,
 	chainflip_network: &ChainflipNetwork,
 	transaction_metadata: &TransactionMetadata,
+	spec_version: u32,
 ) -> String {
 	format!(
 		"/network:{}/version:{}/call:{}/nonce:{}/expiry_block:{}",
 		chainflip_network.as_str(),
-		// TODO: Use runtime's spec_version instead of this
-		UNSIGNED_CALL_VERSION,
+		spec_version,
 		hex::encode(call.encode()),
 		transaction_metadata.nonce,
 		transaction_metadata.expiry_block
@@ -280,8 +278,10 @@ pub(crate) fn is_valid_signature(
 	chainflip_network: &ChainflipNetwork,
 	transaction_metadata: &TransactionMetadata,
 	signature_data: &SignatureData,
+	spec_version: u32,
 ) -> bool {
-	let raw_payload = || build_domain_data(&call, chainflip_network, transaction_metadata);
+	let raw_payload =
+		|| build_domain_data(&call, chainflip_network, transaction_metadata, spec_version);
 
 	match signature_data {
 		SignatureData::Solana { signature, signer, sig_type } => {
@@ -301,7 +301,7 @@ pub(crate) fn is_valid_signature(
 				EthEncodingType::Eip712 => build_eip_712_payload(
 					call,
 					chainflip_network.as_str(),
-					UNSIGNED_CALL_VERSION,
+					&format!("{}", spec_version),
 					*transaction_metadata,
 				),
 			};

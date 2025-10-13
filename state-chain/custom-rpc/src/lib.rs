@@ -2480,8 +2480,9 @@ where
 								))),
 						};
 
-					let chainflip_network =
-						api.cf_chainflip_network(hash).map_err(CfApiError::from)??;
+					let (chainflip_network, spec_version) = api
+						.cf_chainflip_network_and_spec_version(hash)
+						.map_err(CfApiError::from)??;
 
 					match encoding {
 						// Encode domain without the prefix because wallets automatically prefix
@@ -2491,6 +2492,7 @@ where
 								runtime_call.clone(),
 								&chainflip_network,
 								&transaction_metadata,
+								spec_version,
 							))),
 						EncodingType::Eth(EthEncodingType::Eip712) => {
 							let typed_data: eip_712_types::TypedData =
@@ -2498,6 +2500,7 @@ where
 									&chainflip_network,
 									call_bytes,
 									&transaction_metadata,
+									spec_version,
 								)
 								.map_err(|e| {
 									CfApiError::ErrorObject(ErrorObject::owned(
@@ -2513,6 +2516,7 @@ where
 								runtime_call,
 								&chainflip_network,
 								&transaction_metadata,
+								spec_version,
 							);
 							Ok(EncodedNonNativeCall::String(format!(
 								"{}{}",
