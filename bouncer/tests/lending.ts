@@ -1,6 +1,6 @@
 import { Logger } from 'pino';
 import assert from 'assert';
-import { depositLiquidity, getFreeBalance } from 'shared/deposit_liquidity';
+import { depositLiquidity } from 'shared/deposit_liquidity';
 import { setupLpAccount } from 'shared/setup_account';
 import {
   amountToFineAmount,
@@ -9,6 +9,7 @@ import {
   assetDecimals,
   ChainflipExtrinsicSubmitter,
   lpMutex,
+  getFreeBalance,
 } from 'shared/utils';
 import { globalLogger } from 'shared/utils/logger';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';

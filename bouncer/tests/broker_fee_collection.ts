@@ -16,13 +16,13 @@ import {
   TransactionOrigin,
   defaultAssetAmounts,
   newAssetAddress,
+  getFreeBalance,
 } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
-import { getFreeBalance } from 'shared/deposit_liquidity';
 
 const commissionBps = 1000; // 10%
 
