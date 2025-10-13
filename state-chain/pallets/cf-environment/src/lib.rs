@@ -21,7 +21,8 @@
 
 use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
 pub use crate::submit_runtime_call::{
-	BatchedCalls, Message, TransactionMetadata, MAX_BATCHED_CALLS, UNSIGNED_CALL_VERSION,
+	build_domain_data, prefix_and_payload, BatchedCalls, EthEncodingType, Message, SolEncodingType,
+	TransactionMetadata, MAX_BATCHED_CALLS, SOLANA_OFFCHAIN_PREFIX, UNSIGNED_CALL_VERSION,
 };
 use cf_chains::{
 	btc::{
@@ -706,7 +707,7 @@ pub mod pallet {
 				ensure!(
 					is_valid_signature(
 						inner_call,
-						ChainflipNetworkName::<T>::get(),
+						&ChainflipNetworkName::<T>::get(),
 						metadata,
 						signature_data
 					),

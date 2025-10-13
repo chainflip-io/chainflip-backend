@@ -56,7 +56,10 @@ use jsonrpsee::{
 use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::OraclePrice, price::PriceAsset,
 };
-use pallet_cf_environment::TransactionMetadata;
+use pallet_cf_environment::{
+	build_domain_data, prefix_and_payload, EthEncodingType, SolEncodingType, TransactionMetadata,
+	SOLANA_OFFCHAIN_PREFIX,
+};
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
@@ -111,6 +114,12 @@ mod tests;
 pub enum EncodedNonNativeCall {
 	Eip712(eip_712_types::TypedData),
 	Bytes(RpcBytes),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Decode, Serialize, Deserialize)]
+pub enum EncodingType {
+	Eth(EthEncodingType),
+	Sol(SolEncodingType),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1261,6 +1270,7 @@ pub trait CustomApi {
 		&self,
 		call: RpcBytes,
 		transaction_metadata: TransactionMetadata,
+		encoding: EncodingType,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<EncodedNonNativeCall>;
 }
@@ -2446,6 +2456,7 @@ where
 		&self,
 		call: RpcBytes,
 		transaction_metadata: TransactionMetadata,
+		encoding: EncodingType,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<EncodedNonNativeCall> {
 		self.rpc_backend
@@ -2471,24 +2482,45 @@ where
 					let chainflip_network =
 						api.cf_chainflip_network(hash).map_err(CfApiError::from)??;
 
-					// TODO: We should get an encoding type (PersonalSign, Domain, EIP-712).
-					// Then encode via `build_eip712_typed_data` or `build_domain_data` (with the
-					// right chain's domain). Here we only need to add the Solana prefix because
-					// the Ethereum one is added by default with the personal sign.
-					let typed_data: eip_712_types::TypedData =
-						eip_712_types::build_eip712_typed_data(
-							chainflip_network,
-							call_bytes,
-							transaction_metadata,
-						)
-						.map_err(|e| {
-							CfApiError::ErrorObject(ErrorObject::owned(
-								ErrorCode::InvalidParams.code(),
-								format!("Failed to build eip712 typed data: {e}"),
-								None::<()>,
+					match encoding {
+						// Encode domain without the prefix because wallets automatically prefix
+						// the calldata when using personal_sign
+						EncodingType::Eth(EthEncodingType::PersonalSign) =>
+							Ok(EncodedNonNativeCall::Bytes(
+								build_domain_data(
+									call_bytes,
+									&chainflip_network,
+									&transaction_metadata,
+								)
+								.into(),
+							)),
+						EncodingType::Eth(EthEncodingType::Eip712) => {
+							let typed_data: eip_712_types::TypedData =
+								eip_712_types::build_eip712_typed_data(
+									&chainflip_network,
+									call_bytes,
+									&transaction_metadata,
+								)
+								.map_err(|e| {
+									CfApiError::ErrorObject(ErrorObject::owned(
+										ErrorCode::InvalidParams.code(),
+										format!("Failed to build eip712 typed data: {e}"),
+										None::<()>,
+									))
+								})?;
+							Ok(EncodedNonNativeCall::Eip712(typed_data))
+						},
+						EncodingType::Sol(SolEncodingType::Domain) => {
+							let raw_payload = build_domain_data(
+								call_bytes,
+								&chainflip_network,
+								&transaction_metadata,
+							);
+							Ok(EncodedNonNativeCall::Bytes(
+								prefix_and_payload(SOLANA_OFFCHAIN_PREFIX, &raw_payload).into(),
 							))
-						})?;
-					Ok(EncodedNonNativeCall::Eip712(typed_data))
+						},
+					}
 				},
 			})
 	}

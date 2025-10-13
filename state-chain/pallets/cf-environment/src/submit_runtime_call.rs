@@ -43,12 +43,12 @@ pub struct TransactionMetadata {
 	pub expiry_block: BlockNumber,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub enum EthEncodingType {
 	PersonalSign,
 	Eip712,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub enum SolEncodingType {
 	Domain, /* Using `b"\xffsolana offchain" as per Anza specifications,
 	         * even if we are not using the proposal. Phantom might use
@@ -262,21 +262,21 @@ pub(crate) fn validate_metadata<T: Config>(
 	tx_builder.build()
 }
 
-fn build_domain_data(
+pub fn build_domain_data(
 	call: impl Encode,
-	chainflip_network_name: &'static str,
+	chainflip_network: &ChainflipNetwork,
 	transaction_metadata: &TransactionMetadata,
 ) -> Vec<u8> {
 	[
 		&call.encode()[..],
-		&chainflip_network_name.encode()[..],
+		&chainflip_network.as_str().encode()[..],
 		&UNSIGNED_CALL_VERSION.encode()[..],
 		&transaction_metadata.encode()[..],
 	]
 	.concat()
 }
 
-fn prefix_and_payload(prefix: &[u8], payload: &[u8]) -> Vec<u8> {
+pub fn prefix_and_payload(prefix: &[u8], payload: &[u8]) -> Vec<u8> {
 	[prefix, payload].concat()
 }
 
@@ -285,11 +285,11 @@ fn prefix_and_payload(prefix: &[u8], payload: &[u8]) -> Vec<u8> {
 /// This call should be kept idempotent: it should not access storage.
 pub(crate) fn is_valid_signature(
 	call: impl Encode,
-	chainflip_network: ChainflipNetwork,
+	chainflip_network: &ChainflipNetwork,
 	transaction_metadata: &TransactionMetadata,
 	signature_data: &SignatureData,
 ) -> bool {
-	let raw_payload = || build_domain_data(&call, chainflip_network.as_str(), transaction_metadata);
+	let raw_payload = || build_domain_data(&call, &chainflip_network, transaction_metadata);
 
 	match signature_data {
 		SignatureData::Solana { signature, signer, sig_type } => {

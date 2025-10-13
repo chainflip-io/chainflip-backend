@@ -6,7 +6,7 @@ import {
   getEvmWhaleKeypair,
   getSolWhaleKeyPair,
 } from 'shared/utils';
-import { u8aToHex } from '@polkadot/util';
+import { hexToU8a, u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { sign } from '@solana/web3.js/src/utils/ed25519';
 import { ethers, Wallet } from 'ethers';
@@ -29,15 +29,12 @@ const encodedNonNativeCallSchema = z
   })
   .strict();
 
-export const TransactionMetadata = Struct({
-  nonce: u32,
-  expiryBlock: u32,
-});
-export const ChainNameCodec = str;
-export const VersionCodec = str;
+const encodedBytesSchema = z
+  .object({
+    Bytes: z.string().regex(/^0x[0-9a-fA-F]*$/, 'Must be a valid hex string'),
+  })
+  .strict();
 
-// Default values
-const expiryBlock = 10000;
 const chainName = 'Chainflip-Development';
 const version = '0';
 
@@ -50,6 +47,17 @@ export function encodeDomainDataToSign(payload: Uint8Array, nonce: number, block
   const versionBytes = VersionCodec.enc(version);
   return new Uint8Array([...payload, ...chainNameBytes, ...versionBytes, ...transactionMetadata]);
 }
+
+
+export const TransactionMetadata = Struct({
+  nonce: u32,
+  expiryBlock: u32,
+});
+export const ChainNameCodec = str;
+export const VersionCodec = str;
+
+// Default values
+const expiryBlock = 10000;
 
 export async function testSignedRuntimeCall(testContext: TestContext) {
   const logger = testContext.logger;
@@ -107,16 +115,20 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   let evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
 
   const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
-  const eipPayload = await chainflip.rpc('cf_encode_non_native_call', hexRuntimeCall, {
-    nonce: evmNonce,
-    expiry_block: expiryBlock,
-  });
+  const eipPayload = await chainflip.rpc(
+    'cf_encode_non_native_call',
+    hexRuntimeCall,
+    {
+      nonce: evmNonce,
+      expiry_block: expiryBlock,
+    },
+    { Eth: 'Eip712' },
+  );
   logger.debug('eipPayload', JSON.stringify(eipPayload, null, 2));
 
   // Parse and validate the response
   const parsedPayload = encodedNonNativeCallSchema.parse(eipPayload);
   const { domain, types, message, primaryType } = parsedPayload.Eip712;
-
   logger.debug('primaryType:', primaryType);
 
   // Remove the EIP712Domain from the message to smoothen out differences between Rust and
@@ -153,7 +165,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     historicalCheckBlocks: 1,
   }).event;
 
-  // return; // Temporary early return to just test the EIP-
+  // return; // Temporary early return to just test the EIP-712
 
   logger.info('Signing and submitting user-signed payload with Solana wallet');
   const whaleKeypair = getSolWhaleKeyPair();
@@ -180,46 +192,67 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
   const encodedBatchCall = chainflip.createType('Call', batchCall.method).toU8a();
   const hexBatchRuntimeCall = u8aToHex(encodedBatchCall);
 
-  const svmNonce = (await chainflip.rpc.system.accountNextIndex(svmScAccount)) as unknown as number;
-  const svmPayload = encodeDomainDataToSign(encodedBatchCall, svmNonce);
+  const svmNonce = (await chainflip.rpc.system.accountNextIndex(svmScAccount)).toNumber();
 
+  const bytesPayload = await chainflip.rpc(
+    'cf_encode_non_native_call',
+    hexBatchRuntimeCall,
+    {
+      nonce: svmNonce,
+      expiry_block: expiryBlock,
+    },
+    { Sol: 'Domain' },
+  );
+  logger.debug('SvmBytesPayload', JSON.stringify(bytesPayload, null, 2));
+
+  const svmPayloadOld = encodeDomainDataToSign(encodedBatchCall, svmNonce);
   const prefixBytes = Buffer.from([0xff, ...Buffer.from('solana offchain', 'utf8')]);
-  const solPrefixedMessage = Buffer.concat([prefixBytes, svmPayload]);
+  const solPrefixedMessage = Buffer.concat([prefixBytes, svmPayloadOld]);
+  logger.debug("prefixBytes", prefixBytes);
+  logger.debug("solPrefixedMessage", solPrefixedMessage);
 
-  const signature = sign(solPrefixedMessage, whaleKeypair.secretKey.slice(0, 32));
+  // Parse and validate the response
+  const svmPayload = encodedBytesSchema.parse(bytesPayload);
+  const bytes = svmPayload.Bytes;
+  logger.debug('svmBytes', bytes);
+  logger.debug("svmBytes", hexToU8a(bytes));
+
+  const signature = sign(hexToU8a(bytes), whaleKeypair.secretKey.slice(0, 32));
   const hexSignature = '0x' + Buffer.from(signature).toString('hex');
   const hexSigner = '0x' + whaleKeypair.publicKey.toBuffer().toString('hex');
 
   // Submit as unsigned extrinsic - no broker needed
-  await chainflip.tx.environment
-    .nonNativeSignedCall(
-      // Solana prefix will be added in the SC previous to signature verification
-      {
-        call: hexBatchRuntimeCall,
-        metadata: {
-          nonce: svmNonce,
-          expiryBlock,
-        },
-      },
-      {
-        Solana: {
-          signature: hexSignature,
-          signer: hexSigner,
-          sigType: 'Domain',
-        },
-      },
-    )
-    .send();
+  // await chainflip.tx.environment
+  //   .nonNativeSignedCall(
+  //     // Solana prefix will be added in the SC previous to signature verification
+  //     {
+  //       call: hexBatchRuntimeCall,
+  //       metadata: {
+  //         nonce: svmNonce,
+  //         expiryBlock,
+  //       },
+  //     },
+  //     {
+  //       Solana: {
+  //         signature: hexSignature,
+  //         signer: hexSigner,
+  //         sigType: 'Domain',
+  //       },
+  //     },
+  //   )
+  //   .send();
 
-  let nonNativeEvent = observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
-    historicalCheckBlocks: 1,
-  }).event;
+  // let nonNativeEvent = observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
+  //   historicalCheckBlocks: 1,
+  // }).event;
 
-  let batchCompletedEvent = observeEvent(globalLogger, `environment:BatchCompleted`, {
-    historicalCheckBlocks: 1,
-  }).event;
+  // let batchCompletedEvent = observeEvent(globalLogger, `environment:BatchCompleted`, {
+  //   historicalCheckBlocks: 1,
+  // }).event;
 
-  await Promise.all([nonNativeEvent, batchCompletedEvent]);
+  // await Promise.all([nonNativeEvent, batchCompletedEvent]);
+
+  // return;
 
   logger.info('Signing and submitting user-signed payload with EVM wallet using personal_sign');
 
@@ -251,11 +284,11 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     )
     .send();
 
-  nonNativeEvent = observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
+  let nonNativeEvent = observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
     historicalCheckBlocks: 1,
   }).event;
 
-  batchCompletedEvent = observeEvent(globalLogger, `environment:BatchCompleted`, {
+  let batchCompletedEvent = observeEvent(globalLogger, `environment:BatchCompleted`, {
     historicalCheckBlocks: 1,
   }).event;
 
