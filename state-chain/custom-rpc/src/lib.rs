@@ -57,7 +57,7 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::OraclePrice, price::PriceAsset,
 };
 use pallet_cf_environment::{
-	build_domain_data, prefix_and_payload, EthEncodingType, SolEncodingType, TransactionMetadata,
+	build_domain_data, EthEncodingType, SolEncodingType, TransactionMetadata,
 	SOLANA_OFFCHAIN_PREFIX,
 };
 use pallet_cf_governance::GovCallHash;
@@ -113,7 +113,7 @@ mod tests;
 #[derive(Clone, Serialize, Deserialize)]
 pub enum EncodedNonNativeCall {
 	Eip712(eip_712_types::TypedData),
-	Bytes(RpcBytes),
+	String(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Decode, Serialize, Deserialize)]
@@ -2469,16 +2469,16 @@ where
 					let call_bytes: Vec<u8> = call.into();
 
 					// Decode to verify it's a valid RuntimeCall and use the decoded value
-					let runtime_call = match state_chain_runtime::RuntimeCall::decode(&mut &call_bytes[..]) {
-						Ok(rc) => rc,
-						Err(err) => {
-							return Err(CfApiError::ErrorObject(ErrorObject::owned(
-								ErrorCode::InvalidParams.code(),
-								format!("Failed to deserialize into a RuntimeCall {:?}", err),
-								None::<()>,
-							)))
-						}
-					};
+					let runtime_call =
+						match state_chain_runtime::RuntimeCall::decode(&mut &call_bytes[..]) {
+							Ok(rc) => rc,
+							Err(err) =>
+								return Err(CfApiError::ErrorObject(ErrorObject::owned(
+									ErrorCode::InvalidParams.code(),
+									format!("Failed to deserialize into a RuntimeCall {:?}", err),
+									None::<()>,
+								))),
+						};
 
 					let chainflip_network =
 						api.cf_chainflip_network(hash).map_err(CfApiError::from)??;
@@ -2487,14 +2487,11 @@ where
 						// Encode domain without the prefix because wallets automatically prefix
 						// the calldata when using personal_sign
 						EncodingType::Eth(EthEncodingType::PersonalSign) =>
-							Ok(EncodedNonNativeCall::Bytes(
-								build_domain_data(
-									runtime_call.clone(),
-									&chainflip_network,
-									&transaction_metadata,
-								)
-								.into(),
-							)),
+							Ok(EncodedNonNativeCall::String(build_domain_data(
+								runtime_call.clone(),
+								&chainflip_network,
+								&transaction_metadata,
+							))),
 						EncodingType::Eth(EthEncodingType::Eip712) => {
 							let typed_data: eip_712_types::TypedData =
 								eip_712_types::build_eip712_typed_data(
@@ -2517,9 +2514,10 @@ where
 								&chainflip_network,
 								&transaction_metadata,
 							);
-							Ok(EncodedNonNativeCall::Bytes(
-								prefix_and_payload(SOLANA_OFFCHAIN_PREFIX, &raw_payload).into(),
-							))
+							Ok(EncodedNonNativeCall::String(format!(
+								"{}{}",
+								SOLANA_OFFCHAIN_PREFIX, raw_payload,
+							)))
 						},
 					}
 				},

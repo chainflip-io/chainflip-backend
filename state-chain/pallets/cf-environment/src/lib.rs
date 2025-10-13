@@ -21,7 +21,7 @@
 
 use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
 pub use crate::submit_runtime_call::{
-	build_domain_data, prefix_and_payload, BatchedCalls, EthEncodingType, Message, SolEncodingType,
+	build_domain_data, BatchedCalls, EthEncodingType, Message, SolEncodingType,
 	TransactionMetadata, MAX_BATCHED_CALLS, SOLANA_OFFCHAIN_PREFIX, UNSIGNED_CALL_VERSION,
 };
 use cf_chains::{

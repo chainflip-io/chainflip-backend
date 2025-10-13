@@ -1,14 +1,12 @@
 import { TestContext } from 'shared/utils/test_context';
 import { createEvmWallet, decodeSolAddress, externalChainToScAccount } from 'shared/utils';
-import { hexToU8a, u8aToHex } from '@polkadot/util';
+import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
-import { sign } from '@solana/web3.js/src/utils/ed25519';
-import { Struct, u32, str /* bool, Enum, u128, u8 */ } from 'scale-ts';
 import { globalLogger, Logger } from 'shared/utils/logger';
 import { fundFlip } from 'shared/fund_flip';
 import z from 'zod';
-import { Keypair } from '@solana/web3.js';
 import { ApiPromise } from '@polkadot/api';
+import { signBytes, getUtf8Encoder, generateKeyPairSigner } from '@solana/kit';
 
 const eipPayloadSchema = z.object({
   domain: z.any(),
@@ -26,16 +24,9 @@ const encodedNonNativeCallSchema = z
 
 const encodedBytesSchema = z
   .object({
-    Bytes: z.string().regex(/^0x[0-9a-fA-F]*$/, 'Must be a valid hex string'),
+    String: z.string(), // just a regular string
   })
   .strict();
-
-export const TransactionMetadata = Struct({
-  nonce: u32,
-  expiryBlock: u32,
-});
-export const ChainNameCodec = str;
-export const VersionCodec = str;
 
 // Default values
 const expiryBlock = 10000;
@@ -140,11 +131,12 @@ async function testSvmDomain(logger: Logger) {
   logger.info('Signing and submitting user-signed payload with Solana wallet');
 
   // Create a new Solana keypair for each test run to ensure a unique account
-  const svmKeypair = Keypair.generate();
-  logger.debug('Using Solana keypair:', svmKeypair);
+  // const svmKeypair = await generateKeyPair();
+  const svmKeypair = await generateKeyPairSigner();
+  console.log('Signer public key:', svmKeypair.address);
 
   // SVM Whale -> SC account (`cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1`)
-  const svmScAccount = externalChainToScAccount(decodeSolAddress(svmKeypair.publicKey.toString()));
+  const svmScAccount = externalChainToScAccount(decodeSolAddress(svmKeypair.address.toString()));
 
   logger.info(`Funding with FLIP to register the SVM account: ${svmScAccount}`);
   await fundFlip(logger, svmScAccount, '1000');
@@ -174,16 +166,18 @@ async function testSvmDomain(logger: Logger) {
 
   // Parse and validate the response
   const svmPayload = encodedBytesSchema.parse(svmBytesPayload);
-  const svmBytes = svmPayload.Bytes;
+  const message = getUtf8Encoder().encode(svmPayload.String);
 
-  const signature = sign(Buffer.from(hexToU8a(svmBytes)), svmKeypair.secretKey.slice(0, 32));
-  const hexSignature = '0x' + Buffer.from(signature).toString('hex');
-  const hexSigner = '0x' + svmKeypair.publicKey.toBuffer().toString('hex');
+  // Using Solana Kit instead of the @solana/web3.js because it has a direct
+  // method to sign raw bytes.
+  const signedBytes = await signBytes(svmKeypair.keyPair.privateKey, message);
+
+  const hexSigner = decodeSolAddress(svmKeypair.address);
+  const hexSignature = '0x' + Buffer.from(signedBytes).toString('hex');
 
   // Submit as unsigned extrinsic - no broker needed
   await chainflip.tx.environment
     .nonNativeSignedCall(
-      // Solana prefix will be added in the SC previous to signature verification
       {
         call: hexBatchRuntimeCall,
         metadata: {
@@ -240,10 +234,11 @@ async function testEvmPersonalSign(logger: Logger) {
 
   // Parse and validate the response
   const parsedEvmPayload = encodedBytesSchema.parse(evmPayload);
-  const evmBytes = parsedEvmPayload.Bytes;
+  const evmString = parsedEvmPayload.String;
+  console.log('evmString:', evmString);
 
   // Sign with personal_sign (automatically adds prefix)
-  const evmSignature = await evmWallet.signMessage(Buffer.from(hexToU8a(evmBytes)));
+  const evmSignature = await evmWallet.signMessage(evmString);
 
   // Submit as unsigned extrinsic - no broker needed
   await chainflip.tx.environment
