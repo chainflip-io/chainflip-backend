@@ -558,12 +558,12 @@ pub struct RpcLendingConfig {
 	/// All fee swaps from lending will be executed with this oracle slippage limit
 	pub fee_swap_max_oracle_slippage: BasisPoints,
 	/// Minimum equivalent amount of principal that a loan must have at all times.
-	pub minimum_loan_amount_usd: AssetAmount,
+	pub minimum_loan_amount_usd: U256,
 	/// Minimum equivalent amount of principal that can be used to expand or repay an existing
 	/// loan.
-	pub minimum_update_loan_amount_usd: AssetAmount,
+	pub minimum_update_loan_amount_usd: U256,
 	/// Minimum equivalent amount of collateral that can be added or removed from a loan account.
-	pub minimum_update_collateral_amount_usd: AssetAmount,
+	pub minimum_update_collateral_amount_usd: U256,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]

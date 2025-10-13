@@ -180,10 +180,14 @@ fn derive_interest_amounts(
 	utilisation: Permill,
 	payment_interval_blocks: u32,
 ) -> (AssetAmount, AssetAmount) {
-	let base_interest =
-		config().derive_base_interest_rate_per_payment_interval(LOAN_ASSET, utilisation);
+	let base_interest = CONFIG.derive_base_interest_rate_per_payment_interval(
+		LOAN_ASSET,
+		utilisation,
+		payment_interval_blocks,
+	);
 
-	let network_interest = config().derive_network_interest_rate_per_payment_interval();
+	let network_interest =
+		CONFIG.derive_network_interest_rate_per_payment_interval(payment_interval_blocks);
 
 	let pool_amount = (ScaledAmountHP::from_asset_amount(principal) * base_interest)
 		.into_asset_amount() *
@@ -2421,7 +2425,8 @@ mod rpcs {
 
 		const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 
-		let origination_fee = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL * SWAP_RATE;
+		const ORIGINATION_FEE: AssetAmount =
+			portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL) * SWAP_RATE;
 
 		const LOAN_ASSET_2: Asset = Asset::Sol;
 		const PRINCIPAL_2: AssetAmount = PRINCIPAL * 2;
@@ -2435,7 +2440,8 @@ mod rpcs {
 		const BORROWER_2: u64 = OTHER_LP;
 		const LOAN_ID_2: LoanId = LoanId(1);
 
-		let origination_fee_2 = CONFIG.origination_fee(LOAN_ASSET) * PRINCIPAL_2 * SWAP_RATE;
+		const ORIGINATION_FEE_2: AssetAmount =
+			portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL_2) * SWAP_RATE;
 
 		/// Price of COLLATERAL_ASSET_2 will be increased to this much to trigger liquidation
 		/// of borrower 2's collateral.
@@ -2455,13 +2461,13 @@ mod rpcs {
 				MockBalance::credit_account(
 					&BORROWER,
 					COLLATERAL_ASSET,
-					INIT_COLLATERAL + origination_fee,
+					INIT_COLLATERAL + ORIGINATION_FEE,
 				);
 
 				MockBalance::credit_account(
 					&BORROWER_2,
 					COLLATERAL_ASSET_2,
-					INIT_COLLATERAL_2 + origination_fee_2,
+					INIT_COLLATERAL_2 + ORIGINATION_FEE_2,
 				);
 
 				assert_eq!(

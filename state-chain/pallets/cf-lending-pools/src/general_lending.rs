@@ -751,8 +751,7 @@ fn total_usd_value_of<T: Config>(
 ) -> Result<AssetAmount, DispatchError> {
 	let mut total_collateral_usd = 0;
 	for (asset, amount) in assets_amounts {
-		total_collateral_usd =
-			total_collateral_usd.saturating_add(usd_value_of::<T>(*asset, *amount)?);
+		total_collateral_usd.saturating_accrue(usd_value_of::<T>(*asset, *amount)?);
 	}
 
 	Ok(total_collateral_usd)
@@ -1048,11 +1047,8 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			if repayment_amount < loan.owed_principal {
 				ensure!(
-					repayment_amount >=
-						amount_from_usd_value::<T>(
-							loan.asset,
-							config.minimum_update_loan_amount_usd
-						)?,
+					usd_value_of::<T>(loan.asset, repayment_amount)? >=
+						config.minimum_update_loan_amount_usd,
 					Error::<T>::AmountBelowMinimum
 				);
 			}
@@ -1067,8 +1063,8 @@ impl<T: Config> LendingApi for Pallet<T> {
 				T::Balance::credit_account(borrower_id, loan_asset, excess_amount);
 			} else {
 				ensure!(
-					loan.owed_principal >=
-						amount_from_usd_value::<T>(loan.asset, config.minimum_loan_amount_usd)?,
+					usd_value_of::<T>(loan.asset, loan.owed_principal)? >=
+						config.minimum_loan_amount_usd,
 					Error::<T>::LoanBelowMinimumAmount
 				);
 			}
