@@ -1370,16 +1370,25 @@ export function getTimeStamp(): string {
   return `${hours}:${minutes}:${seconds}`;
 }
 
-export async function createEvmWalletAndFund(logger: Logger, asset: Asset): Promise<HDNodeWallet> {
-  const chain = chainFromAsset(asset);
-
+export async function createEvmWallet(chain?: Chain): Promise<HDNodeWallet> {
   const mnemonic = Wallet.createRandom().mnemonic?.phrase ?? '';
   if (mnemonic === '') {
     throw new Error('Failed to create random mnemonic');
   }
-  const wallet = Wallet.fromPhrase(mnemonic).connect(getDefaultProvider(getEvmEndpoint(chain)));
-  await send(logger, chainGasAsset(chain) as SDKAsset, wallet.address, undefined);
-  await send(logger, asset, wallet.address, undefined);
+  const wallet = Wallet.fromPhrase(mnemonic).connect(
+    getDefaultProvider(getEvmEndpoint(chain ?? 'Ethereum')),
+  );
+  return wallet;
+}
+
+export async function createEvmWalletAndFund(logger: Logger, asset: Asset): Promise<HDNodeWallet> {
+  const chain = chainFromAsset(asset);
+  const wallet = await createEvmWallet(chain);
+
+  await Promise.all([
+    send(logger, chainGasAsset(chain) as SDKAsset, wallet.address),
+    send(logger, asset, wallet.address),
+  ]);
   return wallet;
 }
 
