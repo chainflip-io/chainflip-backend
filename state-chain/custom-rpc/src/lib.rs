@@ -2468,17 +2468,18 @@ where
 				_ => {
 					let call_bytes: Vec<u8> = call.into();
 
-					// Not using RuntimeCall as a parameter to this function because it doesn't
-					// have Serialize/Deserialize implemented. We then decode to verify it's a
-					// valid RuntimeCall.
-					if let Err(err) = state_chain_runtime::RuntimeCall::decode(&mut &call_bytes[..])
-					{
-						return Err(CfApiError::ErrorObject(ErrorObject::owned(
-							ErrorCode::InvalidParams.code(),
-							format!("Failed to deserialize into a RuntimeCall {:?}", err),
-							None::<()>,
-						)));
-					}
+					// Decode to verify it's a valid RuntimeCall and use the decoded value
+					let runtime_call = match state_chain_runtime::RuntimeCall::decode(&mut &call_bytes[..]) {
+						Ok(rc) => rc,
+						Err(err) => {
+							return Err(CfApiError::ErrorObject(ErrorObject::owned(
+								ErrorCode::InvalidParams.code(),
+								format!("Failed to deserialize into a RuntimeCall {:?}", err),
+								None::<()>,
+							)))
+						}
+					};
+
 					let chainflip_network =
 						api.cf_chainflip_network(hash).map_err(CfApiError::from)??;
 
@@ -2488,7 +2489,7 @@ where
 						EncodingType::Eth(EthEncodingType::PersonalSign) =>
 							Ok(EncodedNonNativeCall::Bytes(
 								build_domain_data(
-									call_bytes,
+									runtime_call.clone(),
 									&chainflip_network,
 									&transaction_metadata,
 								)
@@ -2512,7 +2513,7 @@ where
 						},
 						EncodingType::Sol(SolEncodingType::Domain) => {
 							let raw_payload = build_domain_data(
-								call_bytes,
+								runtime_call,
 								&chainflip_network,
 								&transaction_metadata,
 							);

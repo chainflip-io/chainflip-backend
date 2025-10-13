@@ -289,7 +289,7 @@ pub(crate) fn is_valid_signature(
 	transaction_metadata: &TransactionMetadata,
 	signature_data: &SignatureData,
 ) -> bool {
-	let raw_payload = || build_domain_data(&call, &chainflip_network, transaction_metadata);
+	let raw_payload = || build_domain_data(&call, chainflip_network, transaction_metadata);
 
 	match signature_data {
 		SignatureData::Solana { signature, signer, sig_type } => {
