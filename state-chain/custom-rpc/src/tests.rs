@@ -23,15 +23,15 @@ use std::collections::BTreeSet;
 use cf_chains::{
 	address::EncodedAddress,
 	assets::sol,
-	btc::ScriptPubkey,
+	btc::{deposit_address::DepositAddress, ScriptPubkey, Utxo, UtxoId},
 	ccm_checker::{DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData},
 	dot::PolkadotAccountId,
 	sol::{
 		SolAddress, SolAddressLookupTableAccount, SolApiEnvironment, SolCcmAccounts, SolCcmAddress,
-		SolPubkey,
+		SolPubkey, TxOrChannelId,
 	},
 	Arbitrum, Bitcoin, CcmAdditionalData, CcmChannelMetadataChecked, Ethereum,
-	EvmVaultSwapExtraParameters, ForeignChainAddress,
+	EvmVaultSwapExtraParameters, ForeignChainAddress, Solana,
 };
 
 use cf_primitives::{
@@ -386,6 +386,8 @@ fn test_vault_addresses_custom_rpc() {
 		ethereum: EncodedAddress::Eth([0; 20]),
 		arbitrum: EncodedAddress::Arb([1; 20]),
 		bitcoin: vec![(ID_1.clone(), EncodedAddress::Btc(Vec::new()))],
+		swap_endpoint_data_account_address: EncodedAddress::Sol([2; 32]),
+		usdc_token_mint_pubkey: EncodedAddress::Sol([3; 32]),
 	};
 	insta::assert_json_snapshot!(val);
 }
@@ -887,7 +889,11 @@ fn transaction_screening_events_serialization() {
 			},
 			BrokerRejectionEventFor::<Bitcoin>::TransactionRejectedByBroker {
 				refund_broadcast_id: 3u32,
-				tx_id: H256([0xe2; 32]),
+				deposit_details: Utxo {
+					id: UtxoId { tx_id: H256([0xe3; 32]), vout: 7 },
+					amount: 1_000_000,
+					deposit_address: DepositAddress::new([0xe2; 32], 1),
+				},
 			},
 		],
 		eth_events: vec![
@@ -901,7 +907,9 @@ fn transaction_screening_events_serialization() {
 			},
 			BrokerRejectionEventFor::<Ethereum>::TransactionRejectedByBroker {
 				refund_broadcast_id: 3u32,
-				tx_id: H256([0xe2; 32]),
+				deposit_details: cf_chains::evm::DepositDetails {
+					tx_hashes: Some(vec![H256([0xe2; 32])]),
+				},
 			},
 		],
 		arb_events: vec![
@@ -915,7 +923,23 @@ fn transaction_screening_events_serialization() {
 			},
 			BrokerRejectionEventFor::<Arbitrum>::TransactionRejectedByBroker {
 				refund_broadcast_id: 3u32,
-				tx_id: H256([0xe2; 32]),
+				deposit_details: cf_chains::evm::DepositDetails {
+					tx_hashes: Some(vec![H256([0xe2; 32])]),
+				},
+			},
+		],
+		sol_events: vec![
+			BrokerRejectionEventFor::<Solana>::TransactionRejectionRequestReceived {
+				account_id: ID_1,
+				tx_id: (SolAddress([0xe1; 32]), 7u64),
+			},
+			BrokerRejectionEventFor::<Solana>::TransactionRejectionRequestExpired {
+				account_id: ID_2,
+				tx_id: (SolAddress([0xe2; 32]), 9u64),
+			},
+			BrokerRejectionEventFor::<Solana>::TransactionRejectedByBroker {
+				refund_broadcast_id: 3u32,
+				deposit_details: TxOrChannelId::Channel((SolAddress([0xe3; 32]), 11u64)),
 			},
 		],
 	};

@@ -2436,6 +2436,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				if any_reported.contains(&true) {
 					return BoostStatus::NotBoosted;
 				}
+				if deposit_address.as_ref().is_some_and(|deposit_addr| {
+					DepositChannelLookup::<T, I>::get(deposit_addr)
+						.is_some_and(|deposit_channel| deposit_channel.is_tainted)
+				}) {
+					return BoostStatus::NotBoosted;
+				}
 			}
 		}
 

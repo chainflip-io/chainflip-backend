@@ -14,55 +14,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-	chainflip::{
-		self,
-		bitcoin_block_processor::BtcEvent,
-		bitcoin_elections::{
-			BitcoinBlockHeightWitnesserES, BitcoinDepositChannelWitnessingES,
-			BitcoinEgressWitnessingES, BitcoinFeeSettings, BitcoinLiveness,
-			BitcoinVaultDepositWitnessing, BitcoinVaultDepositWitnessingES,
-		},
-		elections::TypesFor,
-	},
-	BitcoinInstance, Runtime,
-};
-use cf_chains::{btc::BtcAmount, refund_parameters::ChannelRefundParameters, Chain};
-use cf_runtime_utilities::PlaceholderMigration;
-use frame_support::{
-	migrations::VersionedMigration, traits::UncheckedOnRuntimeUpgrade, weights::Weight,
-};
-use pallet_cf_elections::{ElectoralSystemTypes, Pallet};
-#[cfg(feature = "try-runtime")]
-use sp_runtime::TryRuntimeError;
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
-
-pub type Migration = (
-	VersionedMigration<
-		6,
-		7,
-		IngressEgressDelay,
-		pallet_cf_elections::Pallet<Runtime, BitcoinInstance>,
-		<Runtime as frame_system::Config>::DbWeight,
-	>,
-	PlaceholderMigration<7, Pallet<Runtime, BitcoinInstance>>,
-);
+use crate::{Runtime, SolanaInstance};
+use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 
 pub struct IngressEgressDelay;
 
-impl UncheckedOnRuntimeUpgrade for IngressEgressDelay {
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-
-	}
-
+impl OnRuntimeUpgrade for IngressEgressDelay {
 	fn on_runtime_upgrade() -> Weight {
-
+		pallet_cf_ingress_egress::DepositDelayBlocks::<Runtime, SolanaInstance>::set(10);
 
 		Weight::zero()
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
 	}
 }
