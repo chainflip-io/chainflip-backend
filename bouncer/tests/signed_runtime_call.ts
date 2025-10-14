@@ -63,14 +63,14 @@ async function testEvmEip712(logger: Logger) {
 
   logger.info('Signing and submitting user-signed payload with EVM wallet using EIP-712');
 
-  // EVM Whale -> SC account e.g. whalet -> `cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7`)
+  // EVM to ScAccount e.g. whale wallet -> `cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7`
   const evmWallet = await createEvmWallet();
   const evmScAccount = externalChainToScAccount(evmWallet.address);
 
   logger.info(`Funding with FLIP to register the EVM account: ${evmScAccount}`);
   await fundFlip(logger, evmScAccount, '1000');
 
-  logger.info(`Registering EVM account as operator`);
+  logger.info(`Registering EVM account as operator: ${evmScAccount}`);
   const call = getRegisterOperatorCall(chainflip);
   const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
 
@@ -134,13 +134,13 @@ async function testSvmDomain(logger: Logger) {
   // const svmKeypair = await generateKeyPair();
   const svmKeypair = await generateKeyPairSigner();
 
-  // SVM Whale -> SC account (`cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1`)
+  // SVM to ScAccount e.g. whale wallet -> `cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1`
   const svmScAccount = externalChainToScAccount(decodeSolAddress(svmKeypair.address.toString()));
 
   logger.info(`Funding with FLIP to register the SVM account: ${svmScAccount}`);
   await fundFlip(logger, svmScAccount, '1000');
 
-  logger.info(`Registering SVM account as operator`);
+  logger.info(`Registering SVM account as operator: ${svmScAccount}`);
   const call = getRegisterOperatorCall(chainflip);
   const calls = [call];
   // To try a call batch that fails we could do something like this:
@@ -165,10 +165,10 @@ async function testSvmDomain(logger: Logger) {
 
   // Parse and validate the response
   const svmPayload = encodedBytesSchema.parse(svmBytesPayload);
-  const message = getUtf8Encoder().encode(svmPayload.String);
 
   // Using Solana Kit instead of the @solana/web3.js because it has a direct
   // method to sign raw bytes.
+  const message = getUtf8Encoder().encode(svmPayload.String);
   const signedBytes = await signBytes(svmKeypair.keyPair.privateKey, message);
 
   const hexSigner = decodeSolAddress(svmKeypair.address);
