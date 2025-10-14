@@ -1453,7 +1453,7 @@ type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
-	MigrationsForV1_12,
+	MigrationsForV2_0,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1546,7 +1546,7 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV1_12 = ();
+type MigrationsForV2_0 = ();
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
