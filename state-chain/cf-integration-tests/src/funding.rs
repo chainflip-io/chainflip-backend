@@ -49,11 +49,7 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 			// Fund these nodes so that they are included in the next epoch
 			let funding_amount = genesis::GENESIS_BALANCE;
 			for node in &nodes {
-				testnet.state_chain_gateway_contract.fund_account(
-					node.clone(),
-					funding_amount,
-					GENESIS_EPOCH,
-				);
+				testnet.state_chain_gateway_contract.fund_account(node.clone(), funding_amount);
 			}
 
 			// Move forward one block to process events

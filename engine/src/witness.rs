@@ -19,6 +19,7 @@ pub mod btc;
 pub mod common;
 pub mod dot;
 pub mod eth;
+pub mod eth2;
 pub mod evm;
 pub mod generic_elections;
 pub mod hub;

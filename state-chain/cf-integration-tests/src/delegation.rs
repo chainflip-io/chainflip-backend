@@ -66,13 +66,7 @@ fn setup_delegation(
 	let delegators: BTreeMap<_, _> = delegators
 		.into_iter()
 		.map(|(d, stake)| {
-			assert_ok!(Funding::funded(
-				pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
-				d.clone(),
-				stake,
-				Default::default(),
-				Default::default(),
-			));
+			Funding::fund_account(d.clone(), Default::default(), stake, Default::default());
 			assert_ok!(Validator::delegate(
 				RuntimeOrigin::signed(d.clone()),
 				operator.clone(),
