@@ -269,9 +269,8 @@ impl<T: Config> LoanAccount<T> {
 		let total_owed = self
 			.loans
 			.values()
-			.map(|loan| loan.owed_principal_usd_value().ok())
-			.try_fold(0u128, |acc, x| acc.checked_add(x?))
-			.ok_or(Error::<T>::OraclePriceUnavailable)?;
+			.map(|loan| loan.owed_principal_usd_value())
+			.try_fold(0u128, |acc, x| x.map(|v| acc.saturating_add(v)))?;
 
 		let swapped_from_collateral = match &self.liquidation_status {
 			LiquidationStatus::NoLiquidation => 0,
