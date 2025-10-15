@@ -5,7 +5,8 @@ DATETIME=$(date '+%Y-%m-%d_%H-%M-%S')
 source $LOCALNET_INIT_DIR/../helper.sh
 
 # On some machines (e.g. MacOS), 172.17.0.1 is not accessible from inside the container, so we need to use host.docker.internal
-if [[ $CI == true ]]; then
+# In CI (and more generally Linux), host.docker.internal is not available, so we need to use the host's IP address
+if [[ $CI == true || $(uname -s) == Linux* ]]; then
   export CFDM_BROKER_API_URL='ws://172.17.0.1:10997'
   export CFDM_CHAINFLIP_RPC_URL='ws://172.17.0.1:9944'
 else
