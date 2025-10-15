@@ -4,7 +4,7 @@ use cf_traits::{ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry};
 use core_lending_pool::ScaledAmountHP;
 use frame_support::{
 	fail,
-	sp_runtime::{FixedPointNumber, FixedU64, PerThing},
+	sp_runtime::{FixedI64, FixedPointNumber, FixedU64, PerThing},
 };
 
 use super::*;
@@ -1752,28 +1752,17 @@ fn interpolate_linear_segment(
 		return Permill::zero();
 	}
 
-	// Converting everything to u64 to get access to more operations
-	let mut i0 = i0.deconstruct() as u64;
-	let mut i1 = i1.deconstruct() as u64;
-	let u0 = u0.deconstruct() as u64;
-	let u1 = u1.deconstruct() as u64;
-	let u = u.deconstruct() as u64;
+	let i0 = FixedI64::from(i0);
+	let i1 = FixedI64::from(i1);
+	let u0 = FixedI64::from(u0);
+	let u1 = FixedI64::from(u1);
+	let u = FixedI64::from(u);
 
-	let negative_slope = if i1 >= i0 {
-		false
-	} else {
-		// Ensure that we can subtract without underflow
-		core::mem::swap(&mut i0, &mut i1);
-		true
-	};
+	let slope = (i1 - i0) / (u1 - u0);
 
-	let abs_slope = ((i1 - i0) * Permill::ACCURACY as u64) / (u1 - u0);
+	let delta = slope * (u - u0);
 
-	let delta = abs_slope * (u - u0) / Permill::ACCURACY as u64;
-
-	let result = if negative_slope { i1.saturating_sub(delta) } else { i0.saturating_add(delta) };
-
-	u32::try_from(result).map(Permill::from_parts).unwrap_or(Permill::one())
+	i0.saturating_add(delta).into_clamped_perthing()
 }
 
 /// Reduce collateral by amount that's equivalent to `fee_amount` in `fee_asset`.
