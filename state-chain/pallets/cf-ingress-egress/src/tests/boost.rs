@@ -551,7 +551,7 @@ fn taking_network_fee_from_boost_fee() {
 
 			assert_eq!(MockBoostApi::get_available_amount(), DEPOSIT_AMOUNT + 50);
 
-			assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests(), vec![]);
+			assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests(), Default::default());
 
 			assert_has_matching_event!(
 				Test,
@@ -579,14 +579,19 @@ fn taking_network_fee_from_boost_fee() {
 
 			assert_eq!(
 				MockSwapRequestHandler::<Test>::get_swap_requests(),
-				vec![MockSwapRequest {
-					input_asset: ASSET.into(),
-					output_asset: Asset::Flip,
-					input_amount: 10,
-					swap_type: SwapRequestType::NetworkFee,
-					broker_fees: Default::default(),
-					origin: SwapOrigin::Internal
-				}]
+				BTreeMap::from([(
+					SwapRequestId(0),
+					MockSwapRequest {
+						input_asset: ASSET.into(),
+						output_asset: Asset::Flip,
+						input_amount: 10,
+						swap_type: SwapRequestType::NetworkFee,
+						broker_fees: Default::default(),
+						origin: SwapOrigin::Internal,
+						remaining_input_amount: 10,
+						accumulated_output_amount: 0,
+					}
+				)])
 			);
 
 			assert_has_matching_event!(
@@ -675,32 +680,42 @@ mod vault_swaps {
 
 				assert_eq!(
 					MockSwapRequestHandler::<Test>::get_swap_requests(),
-					vec![
-						MockSwapRequest {
-							input_asset: INPUT_ASSET,
-							output_asset: OUTPUT_ASSET,
-							input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
-							swap_type: SwapRequestType::Regular {
-								output_action: SwapOutputAction::Egress {
-									output_address,
-									ccm_deposit_metadata: None
-								}
-							},
-							broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 5 }],
-							origin: SwapOrigin::Vault {
-								tx_id: TransactionInIdForAnyChain::Evm(tx_id),
-								broker_id: Some(BROKER)
-							},
-						},
-						MockSwapRequest {
-							input_asset: OUTPUT_ASSET,
-							output_asset: Asset::Eth,
-							input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
-							swap_type: SwapRequestType::IngressEgressFee,
-							broker_fees: bounded_vec![],
-							origin: SwapOrigin::Internal,
-						},
-					]
+					BTreeMap::from([
+						(
+							SwapRequestId(0),
+							MockSwapRequest {
+								input_asset: INPUT_ASSET,
+								output_asset: OUTPUT_ASSET,
+								input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
+								swap_type: SwapRequestType::Regular {
+									output_action: SwapOutputAction::Egress {
+										output_address,
+										ccm_deposit_metadata: None
+									}
+								},
+								broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 5 }],
+								origin: SwapOrigin::Vault {
+									tx_id: TransactionInIdForAnyChain::Evm(tx_id),
+									broker_id: Some(BROKER)
+								},
+								remaining_input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
+								accumulated_output_amount: 0,
+							}
+						),
+						(
+							SwapRequestId(1),
+							MockSwapRequest {
+								input_asset: OUTPUT_ASSET,
+								output_asset: Asset::Eth,
+								input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
+								swap_type: SwapRequestType::IngressEgressFee,
+								broker_fees: bounded_vec![],
+								origin: SwapOrigin::Internal,
+								remaining_input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
+								accumulated_output_amount: 0,
+							}
+						)
+					])
 				);
 
 				assert_has_matching_event!(

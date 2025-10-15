@@ -48,12 +48,12 @@ use crate::{
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DelegationInfo,
-		DispatchErrorWithMessage, FailingWitnessValidators, FeeTypes,
+		DispatchErrorWithMessage, FailingWitnessValidators, FeeTypes, LendingPosition,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFeeDetails, NetworkFees,
-		OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-		TradingStrategyLimits, TransactionScreeningEvent, TransactionScreeningEvents,
-		ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RpcLendingConfig,
+		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
+		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvent,
+		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -93,7 +93,7 @@ use cf_traits::{
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use frame_support::{derive_impl, instances::*};
+use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
 use pallet_cf_elections::electoral_systems::oracle_price::{
@@ -113,7 +113,7 @@ use pallet_cf_validator::{
 	DelegationAmount, DelegationSlasher, DelegationSnapshot,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-use runtime_apis::{ChainAccounts, EvmCallDetails};
+use runtime_apis::{ChainAccounts, EvmCallDetails, RpcLendingPool, RpcLoanAccount};
 use scale_info::prelude::string::String;
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
@@ -355,6 +355,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type ChannelIdAllocator = BitcoinIngressEgress;
 	type Bonder = Bonder<Runtime>;
 	type PriceFeedApi = ChainlinkOracle;
+	type LendingSystemApi = LendingPools;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -1191,6 +1192,7 @@ impl pallet_cf_lending_pools::Config for Runtime {
 	type SwapRequestHandler = Swapping;
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
+	type PriceApi = ChainlinkOracle;
 }
 
 #[frame_support::runtime]
@@ -1546,7 +1548,15 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV2_0 = ();
+type MigrationsForV2_0 = (
+	VersionedMigration<
+		19,
+		20,
+		migrations::safe_mode::SafeModeMigration,
+		pallet_cf_environment::Pallet<Runtime>,
+		<Runtime as frame_system::Config>::DbWeight,
+	>,
+);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
@@ -2063,6 +2073,24 @@ impl_runtime_apis! {
 						})
 					}).collect()
 				}),
+				lending_positions: Asset::all().filter_map(|asset| {
+					pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::get(asset).and_then(|pool| {
+						pool.lender_shares.get(&account_id).map(|share| {
+							(*share * pool.total_amount, pool.available_amount)
+						})
+					}).map(|(total_amount, available_amount)| {
+						LendingPosition {
+							asset,
+							total_amount,
+							available_amount: core::cmp::min(total_amount, available_amount),
+						}
+					})
+
+				}).collect(),
+				collateral_balances:
+					pallet_cf_lending_pools::LoanAccounts::<Runtime>::get(&account_id).map(|loan_account| {
+						loan_account.get_total_collateral().iter().map(|(asset, amount)| (*asset, *amount)).collect()
+					}).unwrap_or_default(),
 			}
 		}
 
@@ -2674,6 +2702,30 @@ impl_runtime_apis! {
 				get_latest_oracle_prices(&state.0, base_and_quote_asset)
 			} else {
 				vec![]
+			}
+		}
+
+		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>> {
+			pallet_cf_lending_pools::get_lending_pools::<Runtime>(asset)
+		}
+
+		fn cf_loan_accounts(borrower_id: Option<AccountId>) -> Vec<RpcLoanAccount<AccountId, AssetAmount>> {
+			pallet_cf_lending_pools::get_loan_accounts::<Runtime>(borrower_id)
+		}
+
+		fn cf_lending_config() -> RpcLendingConfig {
+			let config = pallet_cf_lending_pools::LendingConfig::<Runtime>::get();
+			RpcLendingConfig {
+				ltv_thresholds: config.ltv_thresholds,
+				network_fee_contributions: config.network_fee_contributions,
+				fee_swap_interval_blocks: config.fee_swap_interval_blocks,
+				interest_payment_interval_blocks: config.interest_payment_interval_blocks,
+				fee_swap_threshold_usd: config.fee_swap_threshold_usd.into(),
+				interest_collection_threshold_usd: config.interest_collection_threshold_usd.into(),
+				liquidation_swap_chunk_size_usd: config.liquidation_swap_chunk_size_usd.into(),
+				soft_liquidation_max_oracle_slippage: config.soft_liquidation_max_oracle_slippage,
+				hard_liquidation_max_oracle_slippage: config.hard_liquidation_max_oracle_slippage,
+				fee_swap_max_oracle_slippage: config.fee_swap_max_oracle_slippage,
 			}
 		}
 

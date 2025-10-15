@@ -192,6 +192,14 @@ fn test_lp_serialization() {
 		},
 	};
 
+	let collateral_balances =
+		vec![AssetAndAmount { asset: Asset::Flip, amount: 500_000u128.into() }];
+	let lending_positions = vec![LendingPosition {
+		asset: Asset::Usdc,
+		total_amount: U256::from(600_000),
+		available_amount: U256::from(400_000),
+	}];
+
 	let wrapper = RpcAccountInfoWrapper {
 		common_items: RpcAccountInfoCommonItems {
 			vanity_name: b"TEST".to_vec(),
@@ -208,6 +216,8 @@ fn test_lp_serialization() {
 			refund_addresses,
 			earned_fees,
 			boost_balances,
+			collateral_balances,
+			lending_positions,
 		},
 	};
 

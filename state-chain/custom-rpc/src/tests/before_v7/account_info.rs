@@ -89,6 +89,12 @@ fn test_lp_serialization() {
 				},
 				..Default::default()
 			},
+			collateral_balances: vec![(Asset::SolUsdc, 400_000)],
+			lending_positions: vec![LendingPosition {
+				asset: Asset::Usdt,
+				total_amount: 500_000,
+				available_amount: 250_000,
+			}],
 		},
 		cf_primitives::NetworkEnvironment::Mainnet,
 		0,

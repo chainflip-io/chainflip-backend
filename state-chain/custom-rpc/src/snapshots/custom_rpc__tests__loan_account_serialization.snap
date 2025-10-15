@@ -1,0 +1,39 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: loan_account
+---
+{
+  "account": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+  "primary_collateral_asset": {
+    "chain": "Bitcoin",
+    "asset": "BTC"
+  },
+  "ltv_ratio": "1333333333",
+  "collateral": [
+    {
+      "chain": "Bitcoin",
+      "asset": "BTC",
+      "amount": "0x3"
+    }
+  ],
+  "loans": [
+    {
+      "loan_id": 1,
+      "asset": {
+        "chain": "Ethereum",
+        "asset": "USDC"
+      },
+      "created_at": 400,
+      "principal_amount": "0x3e8"
+    }
+  ],
+  "liquidation_status": {
+    "liquidation_swaps": [
+      {
+        "swap_request_id": 1,
+        "loan_id": 1
+      }
+    ],
+    "is_hard": true
+  }
+}

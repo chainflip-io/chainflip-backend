@@ -11,7 +11,7 @@ use cf_rpc_apis::{
 	OrderFilled, RefundParametersRpc, SwapChannelInfo,
 };
 use codec::Encode;
-use pallet_cf_lending_pools::OwedAmount;
+use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions, OwedAmount};
 use pallet_cf_pools::{
 	IncreaseOrDecrease, LimitOrder, LimitOrderLiquidity, PoolOrder, RangeOrder,
 	RangeOrderLiquidity, UnidirectionalSubPoolDepth,
@@ -36,19 +36,19 @@ use cf_chains::{
 
 use cf_primitives::{
 	chains::assets::{any, arb, btc, dot, eth, hub},
-	ApiWaitForResult, Beneficiary, PrewitnessedDepositId, FLIPPERINOS_PER_FLIP,
+	ApiWaitForResult, AssetAndAmount, Beneficiary, PrewitnessedDepositId, FLIPPERINOS_PER_FLIP,
 };
 
 use state_chain_runtime::{
 	runtime_apis::{
-		BrokerRejectionEventFor, ChannelActionType, EvmCallDetails, NetworkFeeDetails,
-		OpenedDepositChannels,
+		BrokerRejectionEventFor, ChannelActionType, EvmCallDetails, LendingPosition,
+		NetworkFeeDetails, OpenedDepositChannels,
 	},
 	Runtime,
 };
 
 use sp_core::{H160, H256};
-use sp_runtime::AccountId32;
+use sp_runtime::{AccountId32, FixedU64};
 
 /*
 	changing any of these serialization tests signifies a breaking change in the
@@ -114,6 +114,7 @@ fn ccm_unchecked() -> CcmChannelMetadataUnchecked {
 
 #[test]
 fn test_environment_serialization() {
+	#[allow(deprecated)]
 	let env = RpcEnvironment {
 		swapping: SwappingEnvironment {
 			maximum_swap_amounts: any::AssetMap {
@@ -1063,6 +1064,90 @@ fn api_wait_result_serialization() {
 	};
 	insta::assert_json_snapshot!(hash);
 	insta::assert_json_snapshot!(response);
+}
+
+use pallet_cf_lending_pools::{InterestRateConfiguration, LendingPoolConfiguration};
+
+#[test]
+fn lending_pools_serialization() {
+	let pool = RpcLendingPool::<U256> {
+		asset: Asset::Usdc,
+		total_amount: 2_000u128.into(),
+		available_amount: 1_500u128.into(),
+		utilisation_rate: Permill::from_percent(90),
+		current_interest_rate: Permill::from_percent(8),
+		config: LendingPoolConfiguration {
+			origination_fee: Permill::from_parts(100),
+			liquidation_fee: Permill::from_parts(500),
+			interest_rate_curve: InterestRateConfiguration {
+				interest_at_zero_utilisation: Permill::from_percent(2),
+				junction_utilisation: Permill::from_percent(90),
+				interest_at_junction_utilisation: Permill::from_percent(8),
+				interest_at_max_utilisation: Permill::from_percent(50),
+			},
+		},
+	};
+
+	insta::assert_json_snapshot!(pool);
+}
+
+#[test]
+fn loan_account_serialization() {
+	use cf_traits::lending::LoanId;
+	use pallet_cf_lending_pools::{RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan};
+
+	let loan_account = RpcLoanAccount::<_, U256> {
+		account: ID_1,
+		primary_collateral_asset: Asset::Btc,
+		ltv_ratio: Some(FixedU64::from_rational(4, 3)),
+		collateral: vec![(AssetAndAmount { asset: Asset::Btc, amount: 3u128.into() })],
+		loans: vec![RpcLoan {
+			loan_id: LoanId(1),
+			asset: Asset::Usdc,
+			created_at: 400,
+			principal_amount: 1000u128.into(),
+		}],
+		liquidation_status: Some(RpcLiquidationStatus {
+			liquidation_swaps: vec![RpcLiquidationSwap {
+				swap_request_id: SwapRequestId(1),
+				loan_id: LoanId(1),
+			}],
+			is_hard: true,
+		}),
+	};
+
+	insta::assert_json_snapshot!(loan_account);
+}
+
+#[test]
+fn lending_config_serialization() {
+	let config = RpcLendingConfig {
+		ltv_thresholds: LtvThresholds {
+			low_ltv: Permill::from_percent(50),
+			target: Permill::from_percent(75),
+			topup: Permill::from_percent(80),
+			soft_liquidation: Permill::from_percent(90),
+			soft_liquidation_abort: Permill::from_percent(88),
+			hard_liquidation: Permill::from_percent(95),
+			hard_liquidation_abort: Permill::from_percent(93),
+		},
+		network_fee_contributions: NetworkFeeContributions {
+			extra_interest: Permill::from_percent(1),
+			from_origination_fee: Permill::from_percent(20),
+			from_liquidation_fee: Permill::from_percent(30),
+			interest_on_collateral_max: Permill::from_percent(50),
+		},
+		fee_swap_interval_blocks: 10,
+		interest_payment_interval_blocks: 15,
+		fee_swap_threshold_usd: U256::from(20_000_000),
+		interest_collection_threshold_usd: U256::from(2_000_000),
+		liquidation_swap_chunk_size_usd: U256::from(5_000_000_000u64),
+		soft_liquidation_max_oracle_slippage: 50,
+		hard_liquidation_max_oracle_slippage: 500,
+		fee_swap_max_oracle_slippage: 50,
+	};
+
+	insta::assert_json_snapshot!(config);
 }
 
 #[test]

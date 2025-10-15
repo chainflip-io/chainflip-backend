@@ -8,6 +8,7 @@
 import { existsSync, unlinkSync } from 'fs';
 import { setupBoostPools } from 'shared/setup_boost_pools';
 import { setupElections } from 'shared/setup_elections';
+import { setupLendingPools } from 'shared/lending';
 import { setupSwaps } from 'shared/setup_swaps';
 import { runWithTimeoutAndExit } from 'shared/utils';
 import { globalLogger } from 'shared/utils/logger';
@@ -24,6 +25,7 @@ async function main(): Promise<void> {
   await Promise.all([
     setupSwaps(globalLogger),
     setupBoostPools(globalLogger),
+    setupLendingPools(globalLogger),
     setupElections(globalLogger),
   ]);
   globalLogger.info('Setup concurrent complete');

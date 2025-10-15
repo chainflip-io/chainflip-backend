@@ -19,6 +19,7 @@
 //! Chainflip Primitives
 //!
 //! Primitive types to be used across Chainflip's various crates.
+
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
@@ -45,9 +46,9 @@ macro_rules! define_wrapper_type {
 			frame_support::sp_runtime::RuntimeDebug,
 			PartialEq,
 			Eq,
-			Encode,
-			Decode,
-			TypeInfo,
+			codec::Encode,
+			codec::Decode,
+			scale_info::TypeInfo,
 			frame_support::pallet_prelude::MaxEncodedLen,
 			Default,
 			$($( $extra_derive ),*)?
@@ -237,6 +238,11 @@ pub const MINIMUM_BTC_TX_SIZE_IN_BYTES: u64 = 16;
 pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
 
 pub const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
+
+/// This considers a year to have 365.25 days on average
+pub const SECONDS_IN_YEAR: u32 = 60 * 60 * 24 * 365 + 60 * 60 * 24 / 4;
+
+pub const BLOCKS_IN_YEAR: u32 = SECONDS_IN_YEAR / SECONDS_PER_BLOCK as u32;
 
 pub const BASIS_POINTS_PER_MILLION: u32 = 100;
 
@@ -599,6 +605,18 @@ impl<T> ApiWaitForResult<T> {
 	}
 }
 
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct AssetAndAmount<Amount> {
+	#[serde(flatten)]
+	pub asset: Asset,
+	pub amount: Amount,
+}
+
+impl From<AssetAndAmount<AssetAmount>> for AssetAndAmount<U256> {
+	fn from(other: AssetAndAmount<AssetAmount>) -> Self {
+		Self { asset: other.asset, amount: other.amount.into() }
+	}
+}
 /// Used in cf_ingress_egress and in cf_chains.
 pub enum IngressOrEgress {
 	IngressDepositChannel,

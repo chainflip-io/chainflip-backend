@@ -19,12 +19,15 @@ workspace = true
 log = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 nanorand = { workspace = true, features = ["wyrand"] }
+num-traits = { workspace = true, optional = true }
+
 
 # Local deps
 cf-primitives = { workspace = true }
 cf-chains = { workspace = true }
 cf-traits = { workspace = true }
 cf-runtime-utilities = { workspace = true }
+cf-amm-math = { workspace = true }
 
 
 # Parity deps
@@ -39,6 +42,7 @@ frame-benchmarking = { workspace = true, optional = true }
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }
 cf-traits = { workspace = true, features = ["mocks"] }
+cf-utilities = { workspace = true, default-features = true }
 
 [features]
 default = ["std"]
@@ -51,6 +55,7 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"frame-benchmarking?/std",
+	"dep:num-traits",
 ]
 runtime-benchmarks = [
 	"frame-support/runtime-benchmarks",

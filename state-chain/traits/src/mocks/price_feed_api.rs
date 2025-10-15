@@ -14,7 +14,7 @@ const ORACLE_PRICE: &[u8] = b"ORACLE_PRICE";
 const ORACLE_STALE: &[u8] = b"ORACLE_STALE";
 
 impl MockPriceFeedApi {
-	pub fn set_price(asset: cf_primitives::Asset, price: Option<Price>) {
+	pub fn set_price(asset: Asset, price: Option<Price>) {
 		Self::put_storage(ORACLE_PRICE, asset, price);
 	}
 

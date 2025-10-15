@@ -14,10 +14,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_primitives::{Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId};
+use cf_primitives::{
+	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
+	SwapRequestId,
+};
+use serde::{Deserialize, Serialize};
 use sp_std::collections::btree_map::BTreeMap;
 
 use frame_support::pallet_prelude::DispatchError;
+
+use crate::LendingSwapType;
 
 #[derive(Debug)]
 pub struct BoostOutcome {
@@ -41,4 +47,60 @@ pub trait BoostApi {
 	fn finalise_boost(deposit_id: PrewitnessedDepositId, asset: Asset) -> BoostFinalisationOutcome;
 
 	fn process_deposit_as_lost(deposit_id: PrewitnessedDepositId, asset: Asset);
+}
+
+define_wrapper_type!(LoanId, u64, extra_derives: PartialOrd, Ord, Serialize, Deserialize);
+
+impl core::ops::Add<u64> for LoanId {
+	type Output = Self;
+
+	fn add(self, rhs: u64) -> Self::Output {
+		LoanId(self.0 + rhs)
+	}
+}
+
+pub trait LendingApi {
+	type AccountId;
+
+	fn expand_loan(
+		borrower: Self::AccountId,
+		loan_id: LoanId,
+		extra_amount_to_borrow: AssetAmount,
+		extra_collateral: BTreeMap<Asset, AssetAmount>,
+	) -> Result<(), DispatchError>;
+
+	fn new_loan(
+		borrower: Self::AccountId,
+		asset: Asset,
+		amount_to_borrow: AssetAmount,
+		primary_collateral_asset: Option<Asset>,
+		collateral: BTreeMap<Asset, AssetAmount>,
+	) -> Result<LoanId, DispatchError>;
+
+	fn try_making_repayment(
+		borrower_id: &Self::AccountId,
+		loan_id: LoanId,
+		amount: AssetAmount,
+	) -> Result<(), DispatchError>;
+
+	fn add_collateral(
+		borrower_id: &Self::AccountId,
+		primary_collateral_asset: Option<Asset>,
+		collateral: BTreeMap<Asset, AssetAmount>,
+	) -> Result<(), DispatchError>;
+
+	fn remove_collateral(
+		borrower_id: &Self::AccountId,
+		collateral: BTreeMap<Asset, AssetAmount>,
+	) -> Result<(), DispatchError>;
+}
+
+pub trait LendingSystemApi {
+	type AccountId;
+
+	fn process_loan_swap_outcome(
+		swap_request_id: SwapRequestId,
+		swap_type: LendingSwapType<Self::AccountId>,
+		output_amount: AssetAmount,
+	);
 }

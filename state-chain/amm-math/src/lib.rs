@@ -99,6 +99,11 @@ pub fn output_amount_floor(input: Amount, price: Price) -> Amount {
 	mul_div_floor(input, price, U256::one() << PRICE_FRACTIONAL_BITS)
 }
 
+/// Given price of asset 1 in terms of asset 2, compute the price of asset 2 in terms of asset 1
+pub fn invert_price(price: Price) -> Price {
+	mul_div_floor(U256::one() << PRICE_FRACTIONAL_BITS, U256::one() << PRICE_FRACTIONAL_BITS, price)
+}
+
 pub fn output_amount_ceil(input: Amount, price: Price) -> Amount {
 	mul_div_ceil(input, price, U256::one() << PRICE_FRACTIONAL_BITS)
 }

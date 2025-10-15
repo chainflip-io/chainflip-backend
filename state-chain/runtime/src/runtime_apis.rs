@@ -39,7 +39,7 @@ use frame_support::sp_runtime::AccountId32;
 use pallet_cf_elections::electoral_systems::oracle_price::price::PriceAsset;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
-pub use pallet_cf_lending_pools::BoostPoolDetails;
+pub use pallet_cf_lending_pools::{BoostPoolDetails, RpcLendingPool, RpcLoanAccount};
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -51,11 +51,22 @@ use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
+use sp_core::U256;
 use sp_runtime::{DispatchError, Permill};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
 };
+
+#[derive(PartialEq, Eq, Encode, Decode, Clone, TypeInfo, Serialize, Deserialize, Debug)]
+pub struct LendingPosition<Amount> {
+	#[serde(flatten)]
+	pub asset: Asset,
+	// Total amount owed to the lender
+	pub total_amount: Amount,
+	// Total amount available to the lender (equals total_amount if the pool has enough liquidity)
+	pub available_amount: Amount,
+}
 
 pub use pallet_cf_validator::DelegationSnapshot;
 
@@ -317,6 +328,8 @@ pub struct LiquidityProviderInfo {
 	pub balances: Vec<(Asset, AssetAmount)>,
 	pub earned_fees: AssetMap<AssetAmount>,
 	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
+	pub lending_positions: Vec<LendingPosition<AssetAmount>>,
+	pub collateral_balances: Vec<(Asset, AssetAmount)>,
 }
 
 #[derive(Encode, Decode, TypeInfo, Default)]
@@ -517,6 +530,33 @@ mod serialize_vanity_name {
 			Err(_) => serializer.serialize_str("<Invalid UTF-8>"),
 		}
 	}
+}
+
+use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions};
+
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
+pub struct RpcLendingConfig {
+	pub ltv_thresholds: LtvThresholds,
+	pub network_fee_contributions: NetworkFeeContributions,
+	/// Determines how frequently (in blocks) we check if fees should be swapped into the
+	/// pools asset
+	pub fee_swap_interval_blocks: u32,
+	/// Determines how frequently (in blocks) we collect interest payments from loans.
+	pub interest_payment_interval_blocks: u32,
+	/// Fees collected in some asset will be swapped into the pool's asset once their usd value
+	/// reaches this threshold
+	pub fee_swap_threshold_usd: U256,
+	/// If loan account's owed interest reaches this threshold, it will be taken from the
+	/// account's collateral
+	pub interest_collection_threshold_usd: U256,
+	/// Liquidation swaps will use chunks that are equivalent to this amount of USD
+	pub liquidation_swap_chunk_size_usd: U256,
+	/// Soft liquidation will be executed with this oracle slippage limit
+	pub soft_liquidation_max_oracle_slippage: BasisPoints,
+	/// Hard liquidation will be executed with this oracle slippage limit
+	pub hard_liquidation_max_oracle_slippage: BasisPoints,
+	/// All fee swaps from lending will be executed with this oracle slippage limit
+	pub fee_swap_max_oracle_slippage: BasisPoints,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
@@ -775,6 +815,11 @@ decl_runtime_apis!(
 		fn cf_oracle_prices(
 			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		) -> Vec<OraclePrice>;
+		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>>;
+		fn cf_loan_accounts(
+			borrower_id: Option<AccountId32>,
+		) -> Vec<RpcLoanAccount<AccountId32, AssetAmount>>;
+		fn cf_lending_config() -> RpcLendingConfig;
 		fn cf_evm_calldata(
 			caller: EthereumAddress,
 			call: crate::chainflip::ethereum_sc_calls::EthereumSCApi<FlipBalance>,

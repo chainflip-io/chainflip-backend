@@ -42,7 +42,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries,
-	Beneficiary, ChannelId, DcaParameters, ForeignChain, PrewitnessedDepositId, MAX_AFFILIATES,
+	Beneficiary, ChannelId, DcaParameters, ForeignChain, PrewitnessedDepositId, SwapRequestId,
+	MAX_AFFILIATES,
 };
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -66,7 +67,7 @@ use cf_traits::{
 	FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, SafeMode, ScheduledEgressDetails,
 	SwapOutputAction, SwapRequestType,
 };
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 #[cfg(test)]
 use cf_utilities::assert_matches;
@@ -1945,32 +1946,47 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(test_function: i
 
 		assert_eq!(
 			MockSwapRequestHandler::<Test>::get_swap_requests(),
-			vec![
-				MockSwapRequest {
-					input_asset: cf_primitives::Asset::Flip,
-					output_asset: cf_primitives::Asset::Eth,
-					input_amount: GAS_FEE,
-					swap_type: SwapRequestType::IngressEgressFee,
-					broker_fees: Default::default(),
-					origin: SwapOrigin::Internal,
-				},
-				MockSwapRequest {
-					input_asset: cf_primitives::Asset::Usdc,
-					output_asset: cf_primitives::Asset::Eth,
-					input_amount: GAS_FEE,
-					swap_type: SwapRequestType::IngressEgressFee,
-					broker_fees: Default::default(),
-					origin: SwapOrigin::Internal,
-				},
-				MockSwapRequest {
-					input_asset: cf_primitives::Asset::Usdt,
-					output_asset: cf_primitives::Asset::Eth,
-					input_amount: GAS_FEE,
-					swap_type: SwapRequestType::IngressEgressFee,
-					broker_fees: Default::default(),
-					origin: SwapOrigin::Internal,
-				}
-			]
+			BTreeMap::from([
+				(
+					SwapRequestId(0),
+					MockSwapRequest {
+						input_asset: cf_primitives::Asset::Flip,
+						output_asset: cf_primitives::Asset::Eth,
+						input_amount: GAS_FEE,
+						swap_type: SwapRequestType::IngressEgressFee,
+						broker_fees: Default::default(),
+						origin: SwapOrigin::Internal,
+						remaining_input_amount: GAS_FEE,
+						accumulated_output_amount: 0,
+					}
+				),
+				(
+					SwapRequestId(1),
+					MockSwapRequest {
+						input_asset: cf_primitives::Asset::Usdc,
+						output_asset: cf_primitives::Asset::Eth,
+						input_amount: GAS_FEE,
+						swap_type: SwapRequestType::IngressEgressFee,
+						broker_fees: Default::default(),
+						origin: SwapOrigin::Internal,
+						remaining_input_amount: GAS_FEE,
+						accumulated_output_amount: 0,
+					}
+				),
+				(
+					SwapRequestId(2),
+					MockSwapRequest {
+						input_asset: cf_primitives::Asset::Usdt,
+						output_asset: cf_primitives::Asset::Eth,
+						input_amount: GAS_FEE,
+						swap_type: SwapRequestType::IngressEgressFee,
+						broker_fees: Default::default(),
+						origin: SwapOrigin::Internal,
+						remaining_input_amount: GAS_FEE,
+						accumulated_output_amount: 0,
+					}
+				)
+			])
 		);
 	});
 }
@@ -2314,22 +2330,27 @@ fn can_request_swap_via_extrinsic() {
 
 		assert_eq!(
 			MockSwapRequestHandler::<Test>::get_swap_requests(),
-			vec![MockSwapRequest {
-				input_asset: INPUT_ASSET,
-				output_asset: OUTPUT_ASSET,
-				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Regular {
-					output_action: SwapOutputAction::Egress {
-						output_address,
-						ccm_deposit_metadata: None
-					}
-				},
-				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
-				origin: SwapOrigin::Vault {
-					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(BROKER),
-				},
-			},]
+			BTreeMap::from([(
+				SwapRequestId(0),
+				MockSwapRequest {
+					input_asset: INPUT_ASSET,
+					output_asset: OUTPUT_ASSET,
+					input_amount: INPUT_AMOUNT,
+					swap_type: SwapRequestType::Regular {
+						output_action: SwapOutputAction::Egress {
+							output_address,
+							ccm_deposit_metadata: None
+						}
+					},
+					broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
+					origin: SwapOrigin::Vault {
+						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+						broker_id: Some(BROKER),
+					},
+					remaining_input_amount: INPUT_AMOUNT,
+					accumulated_output_amount: 0,
+				}
+			)])
 		);
 	});
 }
@@ -2379,27 +2400,32 @@ fn vault_swaps_support_affiliate_fees() {
 
 		assert_eq!(
 			MockSwapRequestHandler::<Test>::get_swap_requests(),
-			vec![MockSwapRequest {
-				input_asset: INPUT_ASSET,
-				output_asset: OUTPUT_ASSET,
-				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Regular {
-					output_action: SwapOutputAction::Egress {
-						output_address,
-						ccm_deposit_metadata: None
-					}
-				},
-				broker_fees: bounded_vec![
-					Beneficiary { account: BROKER, bps: BROKER_FEE },
-					// Only one affiliate is used (short id for affiliate 2 has not been
-					// recognised):
-					Beneficiary { account: AFFILIATE_1, bps: AFFILIATE_FEE }
-				],
-				origin: SwapOrigin::Vault {
-					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(BROKER),
-				},
-			},]
+			BTreeMap::from([(
+				SwapRequestId(0),
+				MockSwapRequest {
+					input_asset: INPUT_ASSET,
+					output_asset: OUTPUT_ASSET,
+					input_amount: INPUT_AMOUNT,
+					swap_type: SwapRequestType::Regular {
+						output_action: SwapOutputAction::Egress {
+							output_address,
+							ccm_deposit_metadata: None
+						}
+					},
+					broker_fees: bounded_vec![
+						Beneficiary { account: BROKER, bps: BROKER_FEE },
+						// Only one affiliate is used (short id for affiliate 2 has not been
+						// recognised):
+						Beneficiary { account: AFFILIATE_1, bps: AFFILIATE_FEE }
+					],
+					origin: SwapOrigin::Vault {
+						tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default()),
+						broker_id: Some(BROKER),
+					},
+					remaining_input_amount: INPUT_AMOUNT,
+					accumulated_output_amount: 0,
+				}
+			)]),
 		);
 
 		assert_has_event::<Test>(RuntimeEvent::EthereumIngressEgress(
@@ -2482,24 +2508,31 @@ fn can_request_ccm_swap_via_extrinsic() {
 
 		assert_eq!(
 			MockSwapRequestHandler::<Test>::get_swap_requests(),
-			vec![MockSwapRequest {
-				input_asset: INPUT_ASSET,
-				output_asset: OUTPUT_ASSET,
-				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Regular {
-					output_action: SwapOutputAction::Egress {
-						output_address: output_address.clone(),
-						ccm_deposit_metadata: Some(
-							ccm_deposit_metadata.to_checked(OUTPUT_ASSET, output_address).unwrap()
-						)
-					}
-				},
-				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
-				origin: SwapOrigin::Vault {
-					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(BROKER),
-				},
-			},]
+			BTreeMap::from([(
+				SwapRequestId(0),
+				MockSwapRequest {
+					input_asset: INPUT_ASSET,
+					output_asset: OUTPUT_ASSET,
+					input_amount: INPUT_AMOUNT,
+					swap_type: SwapRequestType::Regular {
+						output_action: SwapOutputAction::Egress {
+							output_address: output_address.clone(),
+							ccm_deposit_metadata: Some(
+								ccm_deposit_metadata
+									.to_checked(OUTPUT_ASSET, output_address)
+									.unwrap()
+							)
+						}
+					},
+					broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
+					origin: SwapOrigin::Vault {
+						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+						broker_id: Some(BROKER),
+					},
+					accumulated_output_amount: 0,
+					remaining_input_amount: INPUT_AMOUNT,
+				}
+			)])
 		);
 	});
 }
@@ -2584,7 +2617,8 @@ fn vault_swap_minimum_broker_fee_is_enforced() {
 
 		assert_eq!(
 			MockSwapRequestHandler::<Test>::get_swap_requests()
-				.first()
+				.values()
+				.next()
 				.unwrap()
 				.broker_fees
 				.first()

@@ -14,10 +14,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use crate::{mock::*, Error, Event, LiquidityRefundAddress, PalletSafeMode};
 
 use cf_chains::{address::EncodedAddress, ForeignChainAddress};
-use cf_primitives::{Asset, AssetAmount, ForeignChain};
+use cf_primitives::{Asset, AssetAmount, ForeignChain, SwapRequestId};
 
 use cf_test_utilities::assert_events_match;
 use cf_traits::{
@@ -473,7 +475,7 @@ fn schedule_swap_checks() {
 		));
 
 		assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests(),
-			vec![MockSwapRequest {
+			BTreeMap::from([(SwapRequestId(0), MockSwapRequest {
 				input_asset: Asset::Eth,
 				output_asset: Asset::Flip,
 				input_amount: INPUT_AMOUNT,
@@ -481,8 +483,10 @@ fn schedule_swap_checks() {
 					output_action: SwapOutputAction::CreditOnChain { account_id: LP_ACCOUNT }
 				},
 				broker_fees: Default::default(),
-				origin: cf_chains::SwapOrigin::OnChainAccount(LP_ACCOUNT)
-			}]
+				origin: cf_chains::SwapOrigin::OnChainAccount(LP_ACCOUNT),
+				remaining_input_amount: INPUT_AMOUNT,
+				accumulated_output_amount: 0,
+			})])
 		);
 
 	});
