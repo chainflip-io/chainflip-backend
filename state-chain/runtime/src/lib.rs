@@ -2467,15 +2467,18 @@ impl_runtime_apis! {
 		fn cf_get_open_deposit_channels(account_id: Option<<Runtime as frame_system::Config>::AccountId>) -> ChainAccounts {
 			fn open_deposit_channels_for_account<T: pallet_cf_ingress_egress::Config<I>, I: 'static>(
 				account_id: Option<&<T as frame_system::Config>::AccountId>
-			) -> Vec<EncodedAddress>
+			) -> Vec<(EncodedAddress, Asset)>
 			{
 				let network_environment = Environment::network_environment();
 				pallet_cf_ingress_egress::DepositChannelLookup::<T, I>::iter_values()
 					.filter(|channel_details| account_id.is_none() || Some(&channel_details.owner) == account_id)
 					.map(|channel_details|
-						channel_details.deposit_channel.address
-							.into_foreign_chain_address()
-							.to_encoded_address(network_environment)
+						(
+							channel_details.deposit_channel.address
+								.into_foreign_chain_address()
+								.to_encoded_address(network_environment),
+							channel_details.deposit_channel.asset.into()
+						)
 					)
 					.collect::<Vec<_>>()
 			}
@@ -2495,7 +2498,7 @@ impl_runtime_apis! {
 
 			#[allow(clippy::type_complexity)]
 			fn open_deposit_channels_for_chain_instance<T: pallet_cf_ingress_egress::Config<I>, I: 'static>()
-				-> BTreeMap<(<T as frame_system::Config>::AccountId, ChannelActionType), Vec<EncodedAddress>>
+				-> BTreeMap<(<T as frame_system::Config>::AccountId, ChannelActionType), Vec<(EncodedAddress, Asset)>>
 			{
 				let network_environment = Environment::network_environment();
 				pallet_cf_ingress_egress::DepositChannelLookup::<T, I>::iter_values()
@@ -2503,9 +2506,12 @@ impl_runtime_apis! {
 						acc.entry((channel_details.owner.clone(), channel_details.action.into()))
 							.or_default()
 							.push(
-								channel_details.deposit_channel.address
-								.into_foreign_chain_address()
-								.to_encoded_address(network_environment)
+								(
+									channel_details.deposit_channel.address
+									.into_foreign_chain_address()
+									.to_encoded_address(network_environment),
+									channel_details.deposit_channel.asset.into()
+								)
 							);
 						acc
 					})

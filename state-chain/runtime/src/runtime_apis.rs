@@ -406,7 +406,7 @@ pub struct FailingWitnessValidators {
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct ChainAccounts {
-	pub chain_accounts: Vec<EncodedAddress>,
+	pub chain_accounts: Vec<(EncodedAddress, Asset)>,
 }
 
 #[derive(
