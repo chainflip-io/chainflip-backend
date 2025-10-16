@@ -69,23 +69,16 @@ pub fn recursively_construct_types(
 			(TypeDef::Composite(type_def_composite), ValueDef::Composite(comp_value)) =>
 			// if the type is primitive_types::H160, we interpret it as an address. We also map
 			// other primitives to solidity primitives directly without recursing further.
-				match t.path {
-					Path { segments: s } if s == vec!["primitive_types", "H160"] =>
-						("address".to_string(), (vec![], v)),
-					Path { segments: s } if s == vec!["primitive_types", "U256"] =>
-						("uint256".to_string(), (vec![], v)),
-					Path { segments: s } if s == vec!["primitive_types", "U128"] =>
-						("uint128".to_string(), (vec![], v)),
-					Path { segments: s } if s == vec!["primitive_types", "H128"] =>
-						("bytes".to_string(), (vec![], v)),
-					Path { segments: s } if s == vec!["primitive_types", "H256"] =>
-						("bytes".to_string(), (vec![], v)),
-					Path { segments: s } if s == vec!["primitive_types", "H384"] =>
-						("bytes".to_string(), (vec![], v)),
-					Path { segments: s } if s == vec!["primitive_types", "H512"] =>
-						("bytes".to_string(), (vec![], v)),
+				match t.path.segments.as_slice() {
+					["primitive_types", "H160"] => ("address".to_string(), (vec![], v)),
+					["primitive_types", "U256"] => ("uint256".to_string(), (vec![], v)),
+					["primitive_types", "U128"] => ("uint128".to_string(), (vec![], v)),
+					["primitive_types", "H128"] => ("bytes".to_string(), (vec![], v)),
+					["primitive_types", "H256"] => ("bytes".to_string(), (vec![], v)),
+					["primitive_types", "H384"] => ("bytes".to_string(), (vec![], v)),
+					["primitive_types", "H512"] => ("bytes".to_string(), (vec![], v)),
 					path => (
-						path.ident()
+						path.last()
 							// Should never error. Its a composite type so the name has to exist
 							.ok_or("Type doesnt have a name")?
 							.to_string(),
@@ -242,11 +235,7 @@ fn process_composite(
 					let (type_name, value) =
 						recursively_construct_types(value.clone(), field.ty, types)?;
 					Ok((
-						Eip712DomainType {
-							name: field_name.clone(),
-							// find out in which cases type name would be empty.
-							r#type: type_name,
-						},
+						Eip712DomainType { name: field_name.clone(), r#type: type_name },
 						(field_name, value),
 					))
 				})
