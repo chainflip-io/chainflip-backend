@@ -59,7 +59,7 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 };
 use pallet_cf_environment::{
 	build_domain_data, EthEncodingType, SolEncodingType, TransactionMetadata,
-	SOLANA_OFFCHAIN_PREFIX,
+	DOMAIN_OFFCHAIN_PREFIX,
 };
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_lending_pools::{RpcLoan, RpcLoanAccount};
@@ -122,6 +122,12 @@ pub enum EncodedNonNativeCall {
 pub enum EncodingType {
 	Eth(EthEncodingType),
 	Sol(SolEncodingType),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Decode, Serialize, Deserialize)]
+pub enum NonceOrAccount {
+	Nonce(u32),
+	Account(state_chain_runtime::AccountId),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1296,10 +1302,11 @@ pub trait CustomApi {
 	fn cf_encode_non_native_call(
 		&self,
 		call: RpcBytes,
-		transaction_metadata: TransactionMetadata,
+		blocks_to_expiry: BlockNumber,
+		nonce_or_account: NonceOrAccount,
 		encoding: EncodingType,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<EncodedNonNativeCall>;
+	) -> RpcResult<(EncodedNonNativeCall, TransactionMetadata)>;
 }
 
 /// An RPC extension for the state chain node.
@@ -2553,10 +2560,11 @@ where
 	fn cf_encode_non_native_call(
 		&self,
 		call: RpcBytes,
-		transaction_metadata: TransactionMetadata,
+		blocks_to_expiry: BlockNumber,
+		nonce_or_account: NonceOrAccount,
 		encoding: EncodingType,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<EncodedNonNativeCall> {
+	) -> RpcResult<(EncodedNonNativeCall, TransactionMetadata)> {
 		self.rpc_backend
 			.with_versioned_runtime_api(at, |api, hash, version| match version {
 				Some(v) if v < 8 => Err(CfApiError::ErrorObject(call_error(
@@ -2578,20 +2586,28 @@ where
 								))),
 						};
 
-					let (chainflip_network, spec_version) = api
-						.cf_chainflip_network_and_spec_version(hash)
-						.map_err(CfApiError::from)??;
+					let (chainflip_network, spec_version, current_block) =
+						api.cf_chainflip_network_and_state(hash).map_err(CfApiError::from)??;
 
-					match encoding {
+					let transaction_metadata = TransactionMetadata {
+						expiry_block: current_block.saturating_add(blocks_to_expiry),
+						nonce: match nonce_or_account {
+							NonceOrAccount::Nonce(nonce) => nonce,
+							NonceOrAccount::Account(account) =>
+								api.cf_account_nonce(hash, account)?,
+						},
+					};
+
+					let encoded_data = match encoding {
 						// Encode domain without the prefix because wallets automatically prefix
 						// the calldata when using personal_sign
 						EncodingType::Eth(EthEncodingType::PersonalSign) =>
-							Ok(EncodedNonNativeCall::String(build_domain_data(
+							EncodedNonNativeCall::String(build_domain_data(
 								runtime_call.clone(),
 								&chainflip_network,
 								&transaction_metadata,
 								spec_version,
-							))),
+							)),
 						EncodingType::Eth(EthEncodingType::Eip712) => {
 							let typed_data: eip_712_types::TypedData =
 								eip_712_types::build_eip712_typed_data(
@@ -2607,7 +2623,7 @@ where
 										None::<()>,
 									))
 								})?;
-							Ok(EncodedNonNativeCall::Eip712(typed_data))
+							EncodedNonNativeCall::Eip712(typed_data)
 						},
 						EncodingType::Sol(SolEncodingType::Domain) => {
 							let raw_payload = build_domain_data(
@@ -2616,12 +2632,15 @@ where
 								&transaction_metadata,
 								spec_version,
 							);
-							Ok(EncodedNonNativeCall::String(format!(
+							EncodedNonNativeCall::String(format!(
 								"{}{}",
-								SOLANA_OFFCHAIN_PREFIX, raw_payload,
-							)))
+								DOMAIN_OFFCHAIN_PREFIX, raw_payload,
+							))
 						},
-					}
+					};
+					// Return the `transaction_metadata` because it will need
+					// to be submitted as part of the `non_native_signed_call`.
+					Ok((encoded_data, transaction_metadata))
 				},
 			})
 	}

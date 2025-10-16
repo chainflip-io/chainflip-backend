@@ -2773,10 +2773,15 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_chainflip_network_and_spec_version(
-		) -> Result< (cf_primitives::ChainflipNetwork, u32), DispatchErrorWithMessage> {
+		fn cf_account_nonce(account: AccountId) -> u32 {
+			System::account_nonce(account)
+		}
+
+		fn cf_chainflip_network_and_state(
+		) -> Result< (cf_primitives::ChainflipNetwork, u32, BlockNumber), DispatchErrorWithMessage> {
 			let version = <Runtime as frame_system::Config>::Version::get();
-			Ok( (pallet_cf_environment::ChainflipNetworkName::<Runtime>::get(), version.spec_version))
+			let current_block_number = <frame_system::Pallet<Runtime>>::block_number();
+			Ok( (pallet_cf_environment::ChainflipNetworkName::<Runtime>::get(), version.spec_version, current_block_number))
 		}
 	}
 

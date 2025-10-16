@@ -15,7 +15,6 @@ const eipPayloadSchema = z.object({
   primaryType: z.string(), // Some libraries (e.g. wagmi) also require the primaryType
 });
 
-// Define the schema for EncodedNonNativeCall::Eip712
 const encodedNonNativeCallSchema = z
   .object({
     Eip712: eipPayloadSchema,
@@ -24,12 +23,22 @@ const encodedNonNativeCallSchema = z
 
 const encodedBytesSchema = z
   .object({
-    String: z.string(), // just a regular string
+    String: z.string(),
   })
   .strict();
 
-// Default values
-const expiryBlock = 10000;
+const transactionMetadataSchema = z.object({
+  nonce: z.number(),
+  expiry_block: z.number(),
+});
+
+const encodeNonNativeCallResponseSchema = z.tuple([
+  z.union([encodedNonNativeCallSchema, encodedBytesSchema]),
+  transactionMetadataSchema,
+]);
+
+// Default value for number of blocks after which the signed call will expire
+const blocksToExpiry = 20;
 
 async function observeNonNativeSignedCallAndRole(logger: Logger, scAccount: string) {
   const nonNativeSignedCallEvent = observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
@@ -76,18 +85,20 @@ async function testEvmEip712(logger: Logger) {
 
   const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
 
-  const eipPayload = await chainflip.rpc(
+  const response = await chainflip.rpc(
     'cf_encode_non_native_call',
     hexRuntimeCall,
-    {
-      nonce: evmNonce,
-      expiry_block: expiryBlock,
-    },
+    blocksToExpiry,
+    { Account: evmScAccount },
     { Eth: 'Eip712' },
   );
-  logger.debug('eipPayload', JSON.stringify(eipPayload, null, 2));
 
-  // Parse and validate the response
+  // Parse and validate the tuple response
+  const [eipPayload, transactionMetadata] = encodeNonNativeCallResponseSchema.parse(response);
+  logger.debug('eipPayload', JSON.stringify(eipPayload, null, 2));
+  logger.debug('transactionMetadata', JSON.stringify(transactionMetadata, null, 2));
+
+  // Parse and validate the EIP712 payload specifically
   const parsedPayload = encodedNonNativeCallSchema.parse(eipPayload);
   const { domain, types, message, primaryType } = parsedPayload.Eip712;
   logger.debug('primaryType:', primaryType);
@@ -106,8 +117,8 @@ async function testEvmEip712(logger: Logger) {
       {
         call: hexRuntimeCall,
         metadata: {
-          nonce: evmNonce,
-          expiryBlock,
+          nonce: transactionMetadata.nonce,
+          expiryBlock: transactionMetadata.expiry_block,
         },
       },
       {
@@ -143,27 +154,26 @@ async function testSvmDomain(logger: Logger) {
   logger.info(`Registering SVM account as operator: ${svmScAccount}`);
   const call = getRegisterOperatorCall(chainflip);
   const calls = [call];
-  // To try a call batch that fails we could do something like this:
-  // const calls = [call, chainflip.tx.validator.forceRotation()];
 
   const batchCall = chainflip.tx.environment.batch(calls);
   const encodedBatchCall = chainflip.createType('Call', batchCall.method).toU8a();
   const hexBatchRuntimeCall = u8aToHex(encodedBatchCall);
 
-  const svmNonce = (await chainflip.rpc.system.accountNextIndex(svmScAccount)).toNumber();
-
-  const svmBytesPayload = await chainflip.rpc(
+  const svmResponse = await chainflip.rpc(
     'cf_encode_non_native_call',
     hexBatchRuntimeCall,
-    {
-      nonce: svmNonce,
-      expiry_block: expiryBlock,
-    },
+    blocksToExpiry,
+    { Account: svmScAccount },
     { Sol: 'Domain' },
   );
-  logger.debug('SvmBytesPayload', JSON.stringify(svmBytesPayload, null, 2));
 
-  // Parse and validate the response
+  // Parse and validate the tuple response
+  const [svmBytesPayload, svmTransactionMetadata] =
+    encodeNonNativeCallResponseSchema.parse(svmResponse);
+  logger.debug('SvmBytesPayload', JSON.stringify(svmBytesPayload, null, 2));
+  logger.debug('svmTransactionMetadata', JSON.stringify(svmTransactionMetadata, null, 2));
+
+  // Parse and validate the string payload specifically
   const svmPayload = encodedBytesSchema.parse(svmBytesPayload);
 
   // Using Solana Kit instead of the @solana/web3.js because it has a direct
@@ -180,10 +190,7 @@ async function testSvmDomain(logger: Logger) {
       {
         // Solana prefix will be added in the SC previous to signature verification
         call: hexBatchRuntimeCall,
-        metadata: {
-          nonce: svmNonce,
-          expiryBlock,
-        },
+        metadata: svmTransactionMetadata,
       },
       {
         Solana: {
@@ -221,20 +228,29 @@ async function testEvmPersonalSign(logger: Logger) {
   const call = getRegisterOperatorCall(chainflip);
   const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
 
-  const evmPayload = await chainflip.rpc(
+  const personalSignResponse = await chainflip.rpc(
     'cf_encode_non_native_call',
     hexRuntimeCall,
-    {
-      nonce: evmNonce,
-      expiry_block: expiryBlock,
-    },
+    blocksToExpiry,
+    { Nonce: evmNonce },
     { Eth: 'PersonalSign' },
   );
-  logger.debug('evmPayload', JSON.stringify(evmPayload, null, 2));
 
-  // Parse and validate the response
+  // Parse and validate the tuple response
+  const [evmPayload, personalSignMetadata] =
+    encodeNonNativeCallResponseSchema.parse(personalSignResponse);
+  logger.debug('evmPayload', JSON.stringify(evmPayload, null, 2));
+  logger.debug('personalSignMetadata', JSON.stringify(personalSignMetadata, null, 2));
+
+  // Parse and validate the string payload specifically
   const parsedEvmPayload = encodedBytesSchema.parse(evmPayload);
   const evmString = parsedEvmPayload.String;
+
+  if (evmNonce !== personalSignMetadata.nonce) {
+    throw new Error(
+      `Nonce mismatch: provided ${evmNonce}, metadata has ${personalSignMetadata.nonce}`,
+    );
+  }
 
   // Sign with personal_sign (automatically adds prefix)
   const evmSignature = await evmWallet.signMessage(evmString);
@@ -245,10 +261,7 @@ async function testEvmPersonalSign(logger: Logger) {
       // Ethereum prefix will be added in the SC previous to signature verification
       {
         call: hexRuntimeCall,
-        metadata: {
-          nonce: evmNonce,
-          expiryBlock,
-        },
+        metadata: personalSignMetadata,
       },
       {
         Ethereum: {
