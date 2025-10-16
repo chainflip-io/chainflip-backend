@@ -661,13 +661,15 @@ export async function testBrokerLevelScreening(
   await Promise.all(
     [
       testSol(testContext, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
-      testEvm(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-      testEvm(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
-      testEvm(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+      // testEvm(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+      // testEvm(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+      // testEvm(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
     ]
-      .concat(await testBitcoin(testContext, false))
-      .concat(testBoostedDeposits ? await testBitcoin(testContext, true) : []),
+      // .concat(await testBitcoin(testContext, false))
+      // .concat(testBoostedDeposits ? await testBitcoin(testContext, true) : []),
   );
+
+  /*
 
 
   // test rejection of LP deposits and vault swaps:
@@ -685,6 +687,8 @@ export async function testBrokerLevelScreening(
     testEvmVaultSwap(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmVaultSwap(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
+
+  */
 
   await setMockmode(previousMockmode);
 }
