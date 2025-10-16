@@ -2773,9 +2773,10 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_chainflip_network(
-		) -> Result< cf_primitives::ChainflipNetwork, DispatchErrorWithMessage> {
-			Ok( pallet_cf_environment::ChainflipNetworkName::<Runtime>::get())
+		fn cf_chainflip_network_and_spec_version(
+		) -> Result< (cf_primitives::ChainflipNetwork, u32), DispatchErrorWithMessage> {
+			let version = <Runtime as frame_system::Config>::Version::get();
+			Ok( (pallet_cf_environment::ChainflipNetworkName::<Runtime>::get(), version.spec_version))
 		}
 	}
 
