@@ -2612,7 +2612,8 @@ impl_runtime_apis! {
 				// solana_swap_endpoint_native_vault_pda: todo!(),
 				// solana_usdc_token_vault_ata: todo!(),
 
-				swap_endpoint_data_account_address: Environment::solana_api_environment().swap_endpoint_program.into(),
+				sol_vault_program: Environment::solana_api_environment().vault_program.into(),
+				sol_swap_endpoint_program_data_account: Environment::solana_api_environment().swap_endpoint_program_data_account.into(),
 				usdc_token_mint_pubkey: Environment::solana_api_environment().usdc_token_mint_pubkey.into(),
 			}
 		}

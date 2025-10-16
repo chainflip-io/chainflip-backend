@@ -489,7 +489,8 @@ pub struct VaultAddresses {
 	// Decide which ones we need:
 	// pub solana_swap_endpoint_native_vault_pda: EncodedAddress,
 	// pub solana_usdc_token_vault_ata: EncodedAddress,
-	pub swap_endpoint_data_account_address: EncodedAddress,
+	pub sol_vault_program: EncodedAddress,
+	pub sol_swap_endpoint_program_data_account: EncodedAddress,
 	pub usdc_token_mint_pubkey: EncodedAddress,
 }
 
