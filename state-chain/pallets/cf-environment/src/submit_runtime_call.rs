@@ -25,10 +25,13 @@ use frame_support::{
 };
 use scale_info::prelude::{boxed::Box, format, string::String};
 use serde::{Deserialize, Serialize};
+
 pub const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
 pub const MAX_BATCHED_CALLS: u32 = 10u32;
-// We don't use Anza's offchain prefix as it's not widely supported. For example
-// Phantom only supports signing utf-8, which is not compatible with Anza's prefix.
+// We don't use Anza's offchain signing proposal because it's not supported by wallets.
+// The main Solana wallets support utf-8 signing only so we can't use Anza's prefix
+// either. We strip the non-utf-8 characters from Anza's prefix. These transactions won't
+// result in on-chain Solana transactions anyway.
 pub const SOLANA_OFFCHAIN_PREFIX: &str = "solana offchain";
 
 pub type BatchedCalls<T> = BoundedVec<<T as Config>::RuntimeCall, ConstU32<MAX_BATCHED_CALLS>>;
