@@ -79,6 +79,10 @@ pub enum TransactionInId {
 	Bitcoin(TransactionInIdFor<cf_chains::Bitcoin>),
 	Ethereum(TransactionInIdFor<cf_chains::Ethereum>),
 	Arbitrum(TransactionInIdFor<cf_chains::Arbitrum>),
+
+	// Deposit channels are marked differently than vault swaps
+	Solana(TransactionInIdFor<cf_chains::Solana>),
+	SolanaDepositChannel(TransactionInIdFor<cf_chains::Solana>),
 	// other variants reserved for other chains.
 }
 

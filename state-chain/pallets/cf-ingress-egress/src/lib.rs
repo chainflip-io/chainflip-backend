@@ -1568,13 +1568,13 @@ pub mod pallet {
 
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::mark_transaction_for_rejection())]
-		pub fn mark_deposit_channel_as_tainted(
+		pub fn mark_deposit_channel_for_rejection(
 			origin: OriginFor<T>,
 			deposit_address: TargetChainAccount<T, I>,
 		) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 			ensure!(T::AllowTransactionReports::get(), Error::<T, I>::UnsupportedChain);
-			Self::mark_deposit_channel_as_tainted_inner(account_id, deposit_address)?;
+			Self::mark_deposit_channel_for_rejection_inner(account_id, deposit_address)?;
 			Ok(())
 		}
 	}
@@ -1636,7 +1636,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Ok(())
 	}
-	fn mark_deposit_channel_as_tainted_inner(
+	fn mark_deposit_channel_for_rejection_inner(
 		account_id: T::AccountId,
 		deposit_address: TargetChainAccount<T, I>,
 	) -> DispatchResult {

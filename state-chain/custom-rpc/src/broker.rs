@@ -401,6 +401,18 @@ where
 					TransactionInId::Arbitrum(tx_id) => RuntimeCall::ArbitrumIngressEgress(
 						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
 					),
+					TransactionInId::Solana(tx_id) =>
+						state_chain_runtime::RuntimeCall::SolanaIngressEgress(
+							pallet_cf_ingress_egress::Call::mark_transaction_for_rejection {
+								tx_id,
+							},
+						),
+					TransactionInId::SolanaDepositChannel((deposit_address, _slot)) =>
+						state_chain_runtime::RuntimeCall::SolanaIngressEgress(
+							pallet_cf_ingress_egress::Call::mark_deposit_channel_for_rejection {
+								deposit_address,
+							},
+						),
 				},
 				false,
 				true,
