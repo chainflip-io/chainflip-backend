@@ -1,4 +1,6 @@
-use crate::{hash::keccak256, lexer::HumanReadableParser, GetScaleValueFields};
+use crate::{
+	hash::keccak256, lexer::HumanReadableParser, minimized_scale_value::MinimizedScaleValue,
+};
 use ethabi::{
 	encode,
 	ethereum_types::{Address, H160, U256},
@@ -318,7 +320,7 @@ pub struct TypedData {
 	/// The type of the message.
 	pub primary_type: String,
 	/// The message to be signed.
-	pub message: scale_value::Value,
+	pub message: MinimizedScaleValue,
 }
 
 /// According to the MetaMask implementation,
@@ -336,7 +338,7 @@ impl<'de> Deserialize<'de> for TypedData {
 			types: Types,
 			#[serde(rename = "primaryType")]
 			primary_type: String,
-			message: scale_value::Value,
+			message: MinimizedScaleValue,
 		}
 
 		#[derive(Deserialize)]
@@ -415,20 +417,24 @@ pub struct Eip712DomainType {
 /// Returns an encoded representation of an object
 pub fn encode_data(
 	primary_type: &str,
-	data: &scale_value::Value,
+	data: &MinimizedScaleValue,
 	types: &Types,
 ) -> Result<Vec<Token>, Eip712Error> {
 	let hash = hash_type(primary_type, types)?;
 	let mut tokens = vec![Token::Uint(U256::from(hash))];
 
 	if let Some(fields) = types.get(primary_type) {
-		for (field, value) in
-			fields.iter().zip(data.get_scale_value_fields().map_err(|e| {
-				Eip712Error::Message(format!("Failed to get fields from data: {e}"))
-			})?) {
+		for field in fields.iter() {
 			// handle recursive types
 
-			let field = encode_field(types, &field.name, &field.r#type, &value)?;
+			let field = encode_field(
+				types,
+				&field.name,
+				&field.r#type,
+				&data.get_struct_field(field.name.clone()).map_err(|e| {
+					Eip712Error::Message(format!("Failed to get fields from data: {e}"))
+				})?,
+			)?;
 			tokens.push(field);
 			//  else if types.contains_key(&field.r#type) {
 			// 	tokens.push(Token::Uint(U256::zero()));
@@ -448,7 +454,7 @@ pub fn encode_data(
 /// Returns the hash of the `primary_type` object
 pub fn hash_struct(
 	primary_type: &str,
-	data: &scale_value::Value,
+	data: &MinimizedScaleValue,
 	types: &Types,
 ) -> Result<[u8; 32], Eip712Error> {
 	let tokens = encode_data(primary_type, data, types)?;
@@ -526,7 +532,7 @@ pub fn encode_field(
 	types: &Types,
 	_field_name: &str,
 	field_type: &str,
-	value: &scale_value::Value,
+	value: &MinimizedScaleValue,
 ) -> Result<Token, Eip712Error> {
 	let token = {
 		// check if field is custom data type
@@ -539,13 +545,11 @@ pub fn encode_field(
 				s if s.contains('[') => {
 					let (stripped_type, _) = s.rsplit_once('[').unwrap();
 					// ensure value is an array
-					let values = if let ValueDef::Composite(Composite::Unnamed(vals)) =
-						value.value.clone()
-					{
+					let values = if let MinimizedScaleValue::Sequence(vals) = value.clone() {
 						vals
 					} else {
 						return Err(Eip712Error::Message(format!(
-							"Expected array for type `{s}`, but got `{value}`",
+							"Expected array for type `{s}`, but got `{value:?}`",
 						)));
 					};
 					let tokens = values
@@ -563,45 +567,50 @@ pub fn encode_field(
 					})?;
 
 					let err = Eip712Error::Message(format!(
-						"Expected address value for type `{s}`, but got `{value}`",
+						"Expected address value for type `{s}`, but got `{value:?}`",
 					));
 
 					match param {
 						ParamType::Address => Token::Address(H160(
-							extract_primitive_types(value)
+							value
+								.extract_primitive_types()
 								.and_then(|r| r.try_into().map_err(|_| ()))
 								.map_err(|_| err)?,
 						)),
 						ParamType::Bytes => {
-							if let Ok(bytes) = extract_primitive_array::<u8>(value) {
+							if let Ok(bytes) = value.extract_primitive_array::<u8>() {
 								Token::Bytes(bytes)
 							} else {
-								Token::Bytes(extract_primitive_types::<u8>(value).map_err(|_| err)?)
+								Token::Bytes(
+									value.extract_primitive_types::<u8>().map_err(|_| err)?,
+								)
 							}
 						},
 
 						ParamType::Int(_) =>
 							return Err(Eip712Error::Message(format!("Unsupported type {s}",))),
 
-						ParamType::Uint(_) => match value.value.clone() {
-							ValueDef::Primitive(Primitive::U128(v)) => Token::Uint(v.into()),
+						ParamType::Uint(_) => match value.clone() {
+							MinimizedScaleValue::Primitive(Primitive::U128(v)) =>
+								Token::Uint(v.into()),
 							_ => Token::Uint(U256(
-								extract_primitive_types::<u64>(value)
+								value
+									.extract_primitive_types::<u64>()
 									.and_then(|r| r.try_into().map_err(|_| ()))
 									.map_err(|_| err)?,
 							)),
 						},
 						ParamType::Bool => encode_eip712_type(Token::Bool(
-							if let ValueDef::Primitive(Primitive::Bool(b)) = value.value {
-								b
+							if let MinimizedScaleValue::Primitive(Primitive::Bool(b)) = value {
+								*b
 							} else {
 								return Err(err)
 							},
 						)),
 						ParamType::String => {
-							let s: String = match &value.value {
-								ValueDef::Primitive(Primitive::String(s)) => s.clone(),
-								ValueDef::Primitive(Primitive::Char(c)) => c.to_string(),
+							let s: String = match &value {
+								MinimizedScaleValue::Primitive(Primitive::String(s)) => s.clone(),
+								MinimizedScaleValue::Primitive(Primitive::Char(c)) => c.to_string(),
 								_ => return Err(err),
 							};
 							encode_eip712_type(Token::String(s))
@@ -621,35 +630,6 @@ pub fn encode_field(
 	};
 
 	Ok(token)
-}
-
-// of the kind [_;N]
-fn extract_primitive_array<T: TryFrom<u128>>(value: &scale_value::Value) -> Result<Vec<T>, ()> {
-	if let ValueDef::Composite(Composite::Unnamed(fs)) = value.value.clone() {
-		fs.into_iter()
-			.map(|v| {
-				if let ValueDef::Primitive(Primitive::U128(el)) = v.value {
-					Ok(T::try_from(el).map_err(|_| ())?)
-				} else {
-					Err(())
-				}
-			})
-			.collect::<Result<Vec<T>, _>>()
-	} else {
-		Err(())
-	}
-}
-
-// of the kind U256
-fn extract_primitive_types<T: TryFrom<u128>>(value: &scale_value::Value) -> Result<Vec<T>, ()> {
-	if let ValueDef::Composite(Composite::Unnamed(fs)) = value.value.clone() {
-		if fs.len() != 1 {
-			return Err(());
-		}
-		extract_primitive_array::<T>(&fs[0]).map_err(|_| ())
-	} else {
-		Err(())
-	}
 }
 
 /// Convert hash map of field names and types into a type hash corresponding to enc types;
