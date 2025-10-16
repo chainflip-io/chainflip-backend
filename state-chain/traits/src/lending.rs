@@ -19,6 +19,7 @@ use cf_primitives::{
 	SwapRequestId,
 };
 use serde::{Deserialize, Serialize};
+use sp_runtime::DispatchResult;
 use sp_std::collections::btree_map::BTreeMap;
 
 use frame_support::pallet_prelude::DispatchError;
@@ -67,7 +68,7 @@ pub trait LendingApi {
 		loan_id: LoanId,
 		extra_amount_to_borrow: AssetAmount,
 		extra_collateral: BTreeMap<Asset, AssetAmount>,
-	) -> Result<(), DispatchError>;
+	) -> DispatchResult;
 
 	fn new_loan(
 		borrower: Self::AccountId,
@@ -81,18 +82,23 @@ pub trait LendingApi {
 		borrower_id: &Self::AccountId,
 		loan_id: LoanId,
 		amount: AssetAmount,
-	) -> Result<(), DispatchError>;
+	) -> DispatchResult;
 
 	fn add_collateral(
 		borrower_id: &Self::AccountId,
 		primary_collateral_asset: Option<Asset>,
 		collateral: BTreeMap<Asset, AssetAmount>,
-	) -> Result<(), DispatchError>;
+	) -> DispatchResult;
 
 	fn remove_collateral(
 		borrower_id: &Self::AccountId,
 		collateral: BTreeMap<Asset, AssetAmount>,
-	) -> Result<(), DispatchError>;
+	) -> DispatchResult;
+
+	fn update_primary_collateral_asset(
+		borrower_id: &Self::AccountId,
+		primary_collateral_asset: Asset,
+	) -> DispatchResult;
 }
 
 pub trait LendingSystemApi {

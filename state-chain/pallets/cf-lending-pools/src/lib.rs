@@ -824,6 +824,20 @@ pub mod pallet {
 
 		#[pallet::call_index(10)]
 		#[pallet::weight(Weight::zero())]
+		pub fn update_primary_collateral_asset(
+			origin: OriginFor<T>,
+			primary_collateral_asset: Asset,
+		) -> DispatchResult {
+			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			<Self as LendingApi>::update_primary_collateral_asset(
+				&borrower_id,
+				primary_collateral_asset,
+			)
+		}
+
+		#[pallet::call_index(11)]
+		#[pallet::weight(Weight::zero())]
 		pub fn expand_loan(
 			origin: OriginFor<T>,
 			loan_id: LoanId,
@@ -837,12 +851,10 @@ pub mod pallet {
 				loan_id,
 				extra_amount_to_borrow,
 				extra_collateral,
-			)?;
-
-			Ok(())
+			)
 		}
 
-		#[pallet::call_index(11)]
+		#[pallet::call_index(12)]
 		#[pallet::weight(Weight::zero())]
 		pub fn make_repayment(
 			origin: OriginFor<T>,
