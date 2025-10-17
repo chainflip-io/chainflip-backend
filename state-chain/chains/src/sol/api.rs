@@ -814,7 +814,8 @@ impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<
 		asset: <Solana as Chain>::ChainAsset,
 		deposit_fetch_id: Option<<Solana as Chain>::DepositFetchId>,
 	) -> Result<Self, RejectError> {
-		// Should we fetch anyway as we might have taken fees?
+		// TODO: I think we should probably fetch (for deposit channels) if the amount
+		// is zero as we might still need to fetch an amount that has been taken as fees
 		let amount = refund_amount.ok_or(RejectError::NotRequired)?;
 		if amount == 0_u64 {
 			return Err(RejectError::NotRequired);
@@ -839,7 +840,65 @@ impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<
 					compute_price,
 				)
 			},
-			_ => todo!(),
+			(Some(fetch_id), SolAsset::SolUsdc) => {
+				let ata = derive_associated_token_account(
+					refund_address,
+					sol_api_environment.usdc_token_mint_pubkey,
+				)
+				.map_err(|_| RejectError::Other)?;
+				let fetch_param = FetchAssetParams { deposit_fetch_id: fetch_id, asset };
+				SolanaTransactionBuilder::refund_token(
+					fetch_param,
+					ata.address,
+					amount,
+					refund_address,
+					sol_api_environment.vault_program,
+					sol_api_environment.vault_program_data_account,
+					sol_api_environment.token_vault_pda_account,
+					sol_api_environment.usdc_token_vault_ata,
+					sol_api_environment.usdc_token_mint_pubkey,
+					SOL_USDC_DECIMAL,
+					sol_api_environment.clone(),
+					agg_key,
+					durable_nonce,
+					compute_price,
+					vec![sol_api_environment.clone().address_lookup_table_account],
+				)
+			},
+			// TODO: This will be the case for Vault swaps that don't require
+			// fetching but unclear if we will get no fetch_id or we need to
+			// figure it out from the deposit details.
+			(None, SolAsset::Sol) => {
+				SolanaTransactionBuilder::transfer_native(
+					amount,
+					refund_address,
+					agg_key,
+					durable_nonce,
+					compute_price,
+				)
+			},
+			(None, SolAsset::SolUsdc) => {
+				let ata = derive_associated_token_account(
+					refund_address,
+					sol_api_environment.usdc_token_mint_pubkey,
+				)
+				.map_err(|_| RejectError::Other)?;
+				SolanaTransactionBuilder::transfer_token(
+					ata.address,
+					amount,
+					refund_address,
+					sol_api_environment.vault_program,
+					sol_api_environment.vault_program_data_account,
+					sol_api_environment.token_vault_pda_account,
+					sol_api_environment.usdc_token_vault_ata,
+					sol_api_environment.usdc_token_mint_pubkey,
+					agg_key,
+					durable_nonce,
+					compute_price,
+					SOL_USDC_DECIMAL,
+					vec![sol_api_environment.address_lookup_table_account.clone()],
+				)
+			},
 		}
 		.map_err(|_| RejectError::Other)?;
 
