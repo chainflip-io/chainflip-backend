@@ -1700,13 +1700,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	// This function is not doing the maybe_transfers_limit and maybe_fetches_limit checks that
-	// the `do_egress_scheduled_*` are doing. That is not problematic for BTC and EVM BLS because
-	// BTC doesn't use it and EVM is only to limit max batching. However, that could be problematic
-	// if we were to use Solana BLS since that checks nonce availability. A nonce not being
-	// available would cause the rejection to fail. Actually it might be worse, it could consume
-	// the last available nonce and make a Solana rotation API construction tx to fail (or have to
-	// be retried).
+	// This function is only doing the maybe_transfers_limit and not the maybe_fetches_limit checks that
+	// the `do_egress_scheduled_*` are doing.
 	fn try_broadcast_rejection_refund_or_store_tx_details(
 		tx: TransactionRejectionDetails<T, I>,
 		refund_address: TargetChainAccount<T, I>,
