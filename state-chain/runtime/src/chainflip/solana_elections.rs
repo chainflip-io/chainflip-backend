@@ -32,7 +32,7 @@ use cf_chains::{
 		compute_units_costs::MIN_COMPUTE_PRICE,
 		sol_tx_core::SlotNumber,
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolHash, SolSignature, SolTrackedData,
-		SolanaCrypto, TxOrChannelId,
+		SolanaCrypto, VaultSwapOrDepositChannelId,
 	},
 	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain, FeeEstimationApi,
 	FetchAndCloseSolanaVaultSwapAccounts, ForeignChainAddress, Solana,
@@ -135,9 +135,9 @@ pub type SolanaBlockHeightTracking = electoral_systems::monotonic_median::Monoto
 
 pub struct DerivedDepositDetails {}
 
-impl DerivedIngressSink<SolAddress, u64, TxOrChannelId> for DerivedDepositDetails {
-	fn derive_deposit_details(account: SolAddress, block_number: u64) -> TxOrChannelId {
-		TxOrChannelId::Channel((account, block_number))
+impl DerivedIngressSink<SolAddress, VaultSwapOrDepositChannelId> for DerivedDepositDetails {
+	fn derive_deposit_details(account: SolAddress) -> VaultSwapOrDepositChannelId {
+		VaultSwapOrDepositChannelId::Channel(account)
 	}
 }
 
@@ -630,7 +630,7 @@ impl
 				deposit_address: None,
 				channel_id: None,
 				deposit_amount: swap_details.deposit_amount,
-				deposit_details: TxOrChannelId::Tx((
+				deposit_details: VaultSwapOrDepositChannelId::VaultSwapAccount((
 					swap_details.swap_account,
 					swap_details.creation_slot,
 				)),
