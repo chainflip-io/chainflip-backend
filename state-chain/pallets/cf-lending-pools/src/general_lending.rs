@@ -1119,7 +1119,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		borrower_id: &Self::AccountId,
 		primary_collateral_asset: Asset,
 	) -> Result<(), DispatchError> {
-		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
+		LoanAccounts::<T>::try_mutate(borrower_id, |maybe_account| {
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanAccountNotFound)?;
 
 			if loan_account.primary_collateral_asset != primary_collateral_asset {
