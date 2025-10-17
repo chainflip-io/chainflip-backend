@@ -25,7 +25,7 @@ pub enum LoanRepaymentOutcome {
 }
 
 /// Helps to link swap id in liquidation status to loan id
-#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct LiquidationSwap {
 	loan_id: LoanId,
 	from_asset: Asset,
@@ -34,14 +34,14 @@ pub struct LiquidationSwap {
 
 /// Whether the account's collateral is being liquidated (and if so, stores ids of liquidation
 /// swaps)
-#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum LiquidationStatus {
 	NoLiquidation,
 	Liquidating { liquidation_swaps: BTreeMap<SwapRequestId, LiquidationSwap>, is_hard: bool },
 }
 
 /// High precision interest amounts broken down by type
-#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 struct InterestBreakdown {
 	network: ScaledAmountHP,
 	pool: ScaledAmountHP,
@@ -311,6 +311,67 @@ impl<T: Config> LoanAccount<T> {
 		Ok(FixedU64::from_rational(principal, collateral))
 	}
 
+	fn charge_pending_interest_if_above_threshold(
+		loan: &mut GeneralLoan<T>,
+		collateral: &mut BTreeMap<Asset, AssetAmount>,
+		primary_collateral_asset: Asset,
+		threshold_usd: AssetAmount,
+	) -> DispatchResult {
+		let loan_asset = loan.asset;
+
+		// Make sure that the threshold isn't 0:
+		let threshold_usd = core::cmp::max(threshold_usd, 1);
+
+		if loan.pending_interest == Default::default() {
+			return Ok(());
+		}
+
+		let mut charge_fee_if_exceeds_threshold = |fee: &mut ScaledAmountHP| {
+			// Only charge fees if the accumulated amount is greater than some threshold
+			let fee_usd_value = usd_value_of(loan_asset, fee.into_asset_amount())?;
+
+			if fee_usd_value >= threshold_usd {
+				charge_fee_from_collateral::<T>(
+					collateral,
+					primary_collateral_asset,
+					loan_asset,
+					fee.take_non_fractional_part(),
+				)
+			} else {
+				Ok(Default::default())
+			}
+		};
+
+		let network_interest = charge_fee_if_exceeds_threshold(&mut loan.pending_interest.network)?;
+
+		let low_ltv_penalty =
+			charge_fee_if_exceeds_threshold(&mut loan.pending_interest.low_ltv_penalty)?;
+
+		for (asset, amount) in network_interest.iter().chain(&low_ltv_penalty) {
+			Pallet::<T>::credit_fees_to_network(*asset, *amount);
+		}
+
+		let pool_interest = charge_fee_if_exceeds_threshold(&mut loan.pending_interest.pool)?;
+
+		for (asset, amount) in &pool_interest {
+			Pallet::<T>::credit_fees_to_pool(loan_asset, *asset, *amount);
+		}
+
+		if !pool_interest.is_empty() || !network_interest.is_empty() || !low_ltv_penalty.is_empty()
+		{
+			Pallet::<T>::deposit_event(Event::InterestTaken {
+				loan_id: loan.id,
+				pool_interest,
+				network_interest,
+				// TODO: broker fees
+				broker_interest: Default::default(),
+				low_ltv_penalty,
+			});
+		}
+
+		Ok(())
+	}
+
 	#[transactional]
 	pub fn derive_and_charge_interest(&mut self, ltv: FixedU64) -> DispatchResult {
 		let config = LendingConfig::<T>::get();
@@ -322,7 +383,7 @@ impl<T: Config> LoanAccount<T> {
 
 		let current_block = frame_system::Pallet::<T>::block_number();
 
-		for (loan_id, loan) in &mut self.loans {
+		for loan in self.loans.values_mut() {
 			let blocks_since_last_payment: u32 = current_block
 				.saturating_sub(loan.last_interest_payment_at)
 				.try_into()
@@ -365,49 +426,14 @@ impl<T: Config> LoanAccount<T> {
 				loan.pending_interest.pool.saturating_accrue(pool_interest_amount);
 				loan.pending_interest.low_ltv_penalty.saturating_accrue(low_ltv_penalty_amount);
 
-				let mut charge_fee_if_exceeds_threshold = |fee: &mut ScaledAmountHP| {
-					// Only charge fees if the accumulated amount is greater than some threshold
-					// (say 10c)
-					let fee_usd_value = usd_value_of(loan_asset, fee.into_asset_amount())?;
-					if fee_usd_value >= config.interest_collection_threshold_usd {
-						charge_fee_from_collateral::<T>(
-							&mut self.collateral,
-							self.primary_collateral_asset,
-							loan_asset,
-							fee.take_non_fractional_part(),
-						)
-					} else {
-						Ok(Default::default())
-					}
-				};
-
-				let network_interest =
-					charge_fee_if_exceeds_threshold(&mut loan.pending_interest.network)?;
-
-				let low_ltv_penalty =
-					charge_fee_if_exceeds_threshold(&mut loan.pending_interest.low_ltv_penalty)?;
-
-				for (asset, amount) in network_interest.iter().chain(&low_ltv_penalty) {
-					Pallet::<T>::credit_fees_to_network(*asset, *amount);
-				}
-
-				let pool_interest =
-					charge_fee_if_exceeds_threshold(&mut loan.pending_interest.pool)?;
-
-				for (asset, amount) in &pool_interest {
-					Pallet::<T>::credit_fees_to_pool(loan_asset, *asset, *amount);
-				}
-
 				loan.last_interest_payment_at = current_block;
 
-				Pallet::<T>::deposit_event(Event::InterestTaken {
-					loan_id: *loan_id,
-					pool_interest,
-					network_interest,
-					// TODO: broker fees
-					broker_interest: Default::default(),
-					low_ltv_penalty,
-				});
+				Self::charge_pending_interest_if_above_threshold(
+					loan,
+					&mut self.collateral,
+					self.primary_collateral_asset,
+					config.interest_collection_threshold_usd,
+				)?;
 			}
 		}
 
@@ -557,7 +583,17 @@ impl<T: Config> LoanAccount<T> {
 	}
 
 	fn settle_loan(&mut self, loan_id: LoanId, via_liquidation: bool) {
-		if let Some(loan) = self.loans.remove(&loan_id) {
+		if let Some(mut loan) = self.loans.remove(&loan_id) {
+			// NOTE: if for whatever reason we fail to take the final interest payment at this stage
+			// (likely due to oracle price unavailability), it will be waived (this amount is
+			// expected to be very small anyway).
+			let _ = Self::charge_pending_interest_if_above_threshold(
+				&mut loan,
+				&mut self.collateral,
+				self.primary_collateral_asset,
+				1, // collecting any non-zero amount
+			);
+
 			Pallet::<T>::deposit_event(Event::LoanSettled {
 				loan_id,
 				outstanding_principal: loan.owed_principal,

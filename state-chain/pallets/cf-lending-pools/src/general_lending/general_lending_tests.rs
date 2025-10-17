@@ -1794,6 +1794,75 @@ fn small_interest_amounts_accumulate() {
 }
 
 #[test]
+fn reconciling_interest_before_settling_loan() {
+	// This test makes sure that we collect any pending interest before settling a loan.
+
+	let interest_payment_interval = CONFIG.interest_payment_interval_blocks;
+
+	new_test_ext()
+		.with_funded_pool(INIT_POOL_AMOUNT)
+		.with_default_loan()
+		.then_process_blocks_until_block(INIT_BLOCK + interest_payment_interval as u64)
+		.then_execute_with(|_| {
+			// Pending interest has been recorded, but not yet taken from collateral
+
+			let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
+			assert_eq!(account.collateral, BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]));
+
+			let pool_interest = CONFIG.derive_base_interest_rate_per_payment_interval(
+				LOAN_ASSET,
+				DEFAULT_UTILISATION,
+				interest_payment_interval,
+			);
+
+			let network_interest =
+				CONFIG.derive_network_interest_rate_per_payment_interval(interest_payment_interval);
+
+			let pool_amount_scaled = ScaledAmountHP::from_asset_amount(PRINCIPAL) * pool_interest;
+			let network_amount_scaled =
+				ScaledAmountHP::from_asset_amount(PRINCIPAL) * network_interest;
+
+			assert_eq!(
+				account.loans[&LOAN_ID].pending_interest,
+				InterestBreakdown {
+					network: network_amount_scaled,
+					pool: pool_amount_scaled,
+					broker: Default::default(),
+					low_ltv_penalty: Default::default()
+				}
+			);
+
+			// Repaying the loan should result in collection of all pending interest
+			let pool_amount = pool_amount_scaled.into_asset_amount() * SWAP_RATE;
+			let network_amount = network_amount_scaled.into_asset_amount() * SWAP_RATE;
+
+			// The test is only effective if we have non-fractional fees to collect
+			assert!(pool_amount > 0 && network_amount > 0, "interest amounts must be non-zero");
+
+			assert_ok!(LendingPools::try_making_repayment(&BORROWER, LOAN_ID, PRINCIPAL));
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+					loan_id: LOAN_ID,
+					amount: PRINCIPAL,
+				}),
+				RuntimeEvent::LendingPools(Event::<Test>::InterestTaken { .. }),
+				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled { .. })
+			);
+
+			// Checking the actual values separately to avoid using the awkward matching syntax:
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
+				loan_id: LOAN_ID,
+				pool_interest: BTreeMap::from([(COLLATERAL_ASSET, pool_amount)]),
+				network_interest: BTreeMap::from([(COLLATERAL_ASSET, network_amount)]),
+				broker_interest: Default::default(),
+				low_ltv_penalty: Default::default(),
+			}));
+		});
+}
+
+#[test]
 fn making_loan_repayment() {
 	const INIT_COLLATERAL: AssetAmount = (5 * PRINCIPAL / 4) * SWAP_RATE; // 80% LTV
 
