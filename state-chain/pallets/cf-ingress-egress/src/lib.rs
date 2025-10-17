@@ -1700,8 +1700,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	// This function is only doing the maybe_transfers_limit and not the maybe_fetches_limit checks that
-	// the `do_egress_scheduled_*` are doing.
+	// This function is only doing the maybe_transfers_limit and not the maybe_fetches_limit checks
+	// that the `do_egress_scheduled_*` are doing.
 	fn try_broadcast_rejection_refund_or_store_tx_details(
 		tx: TransactionRejectionDetails<T, I>,
 		refund_address: TargetChainAccount<T, I>,
