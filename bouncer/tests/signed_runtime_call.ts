@@ -93,12 +93,10 @@ async function testEvmEip712(logger: Logger) {
     { Eth: 'Eip712' },
   );
 
-  // Parse and validate the tuple response
   const [eipPayload, transactionMetadata] = encodeNonNativeCallResponseSchema.parse(response);
   logger.debug('eipPayload', JSON.stringify(eipPayload, null, 2));
   logger.debug('transactionMetadata', JSON.stringify(transactionMetadata, null, 2));
 
-  // Parse and validate the EIP712 payload specifically
   const parsedPayload = encodedNonNativeCallSchema.parse(eipPayload);
   const { domain, types, message, primaryType } = parsedPayload.Eip712;
   logger.debug('primaryType:', primaryType);
@@ -167,13 +165,11 @@ async function testSvmDomain(logger: Logger) {
     { Sol: 'Domain' },
   );
 
-  // Parse and validate the tuple response
   const [svmBytesPayload, svmTransactionMetadata] =
     encodeNonNativeCallResponseSchema.parse(svmResponse);
   logger.debug('SvmBytesPayload', JSON.stringify(svmBytesPayload, null, 2));
   logger.debug('svmTransactionMetadata', JSON.stringify(svmTransactionMetadata, null, 2));
 
-  // Parse and validate the string payload specifically
   const svmPayload = encodedBytesSchema.parse(svmBytesPayload);
 
   // Using Solana Kit instead of the @solana/web3.js because it has a direct
@@ -236,13 +232,11 @@ async function testEvmPersonalSign(logger: Logger) {
     { Eth: 'PersonalSign' },
   );
 
-  // Parse and validate the tuple response
   const [evmPayload, personalSignMetadata] =
     encodeNonNativeCallResponseSchema.parse(personalSignResponse);
   logger.debug('evmPayload', JSON.stringify(evmPayload, null, 2));
   logger.debug('personalSignMetadata', JSON.stringify(personalSignMetadata, null, 2));
 
-  // Parse and validate the string payload specifically
   const parsedEvmPayload = encodedBytesSchema.parse(evmPayload);
   const evmString = parsedEvmPayload.String;
 

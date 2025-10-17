@@ -2639,7 +2639,8 @@ where
 						},
 					};
 					// Return the `transaction_metadata` because it will need
-					// to be submitted as part of the `non_native_signed_call`.
+					// to be submitted as part of the `non_native_signed_call`
+					// and it is being modified here.
 					Ok((encoded_data, transaction_metadata))
 				},
 			})
