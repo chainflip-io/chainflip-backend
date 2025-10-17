@@ -39,7 +39,7 @@ use pallet_cf_elections::{
 };
 
 use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
-use cf_traits::{impl_pallet_safe_mode, Chainflip, OraclePrice};
+use cf_traits::{impl_pallet_safe_mode, Chainflip, OraclePrice, PriceFeedApi};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
@@ -313,5 +313,42 @@ pub fn initial_state(
 		},),
 		settings: (chainlink_oracle_price_settings,),
 		shared_data_reference_lifetime: 8,
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+pub struct ChainlinkBenchmarkPriceSetter;
+
+#[cfg(feature = "runtime-benchmarks")]
+impl cf_traits::BenchmarkPriceSetter for ChainlinkBenchmarkPriceSetter {
+	fn set_price(asset: any::Asset, price: Price) {
+		use pallet_cf_elections::electoral_systems::oracle_price::{
+			chainlink::statechain_price_to_chainlink_price, price::StatechainPrice,
+		};
+
+		let asset_pair = match asset {
+			any::Asset::Eth => ChainlinkAssetpair::EthUsd,
+			any::Asset::Usdc => ChainlinkAssetpair::UsdcUsd,
+			any::Asset::Usdt => ChainlinkAssetpair::UsdtUsd,
+			any::Asset::Btc => ChainlinkAssetpair::BtcUsd,
+			any::Asset::Sol => ChainlinkAssetpair::SolUsd,
+			_ => panic!("Asset not supported for price oracle"),
+		};
+
+		let price =
+			statechain_price_to_chainlink_price(&StatechainPrice::from_raw(price), asset_pair)
+				.unwrap();
+
+		let mut state: OraclePriceTracker<TypesFor<Chainlink>> =
+			pallet_cf_elections::ElectoralUnsynchronisedState::<Runtime>::get().unwrap().0;
+		state.chain_states.arbitrum.price.insert(
+			asset_pair,
+			AssetState {
+				price: Aggregated { median: price.clone(), iq_range: price.clone()..=price },
+				..Default::default()
+			},
+		);
+
+		pallet_cf_elections::ElectoralUnsynchronisedState::<Runtime>::set(Some((state,)));
 	}
 }

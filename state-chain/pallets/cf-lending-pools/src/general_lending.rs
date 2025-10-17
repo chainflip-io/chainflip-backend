@@ -714,7 +714,11 @@ impl<T: Config> GeneralLoan<T> {
 
 /// Uses oracle API to get the price and makes sure that it is not stale
 fn get_price<T: Config>(asset: Asset) -> Result<Price, Error<T>> {
-	Ok(T::PriceApi::get_price(asset).ok_or(Error::<T>::OraclePriceUnavailable)?.price)
+	let price = T::PriceApi::get_price(asset).ok_or(Error::<T>::OraclePriceUnavailable)?.price;
+	if price == Price::zero() {
+		fail!(Error::<T>::InvalidPrice); // TODO JAMIE: just use OraclePriceUnavailable?
+	}
+	Ok(price)
 }
 
 /// Uses oracle prices to calculate the amount of `asset_2` that's equivalent in USD value to
@@ -841,8 +845,9 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 			// Some of these may fail due to oracle prices being unavailable, but that's
 			// OK and doesn't need any specific error handling (they will simply be re-tried
 			// at a later point).
+			// derive_ltv(n) n=1..max_assets
 			if let Ok(ltv) = loan_account.derive_ltv() {
-				let _ = loan_account.derive_and_charge_interest(ltv);
+				let _ = loan_account.derive_and_charge_interest(ltv); // depends on if it is time to charge interest on each loan.
 
 				let new_ltv = if let Ok(true) = loan_account.process_auto_top_up(borrower_id, ltv) {
 					// A successful topup means we have to re-derive LTV
@@ -915,7 +920,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 		}
 	}
 
-	Weight::zero()
+	Weight::zero() // TODO JAMIE: benchmark
 }
 
 impl<T: Config> LendingApi for Pallet<T> {

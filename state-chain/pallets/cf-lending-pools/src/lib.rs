@@ -236,7 +236,8 @@ impl Get<LendingConfiguration> for LendingConfigDefault {
 pub mod pallet {
 
 	use cf_primitives::SwapRequestId;
-	use cf_traits::PriceFeedApi;
+	#[cfg(feature = "runtime-benchmarks")]
+	use cf_traits::{BenchmarkPriceSetter, PriceFeedApi};
 
 	use super::*;
 
@@ -259,6 +260,9 @@ pub mod pallet {
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
+
+		#[cfg(feature = "runtime-benchmarks")]
+		type BenchmarkPriceSetter: BenchmarkPriceSetter;
 	}
 
 	#[pallet::pallet]
@@ -489,6 +493,7 @@ pub mod pallet {
 		InternalInvariantViolation,
 		InvalidConfigurationParameters,
 		LenderNotFoundInPool,
+		InvalidPrice,
 		/// Certain actions (such as removing collateral) are disabled during liquidation.
 		LiquidationInProgress,
 		/// The provided collateral amount is empty/zero.

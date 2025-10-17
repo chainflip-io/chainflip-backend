@@ -51,6 +51,18 @@ impl pallet_cf_lending_pools::Config for Test {
 	type PriceApi = cf_traits::mocks::price_feed_api::MockPriceFeedApi;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type SafeMode = MockRuntimeSafeMode;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkPriceSetter = DummyBenchmarkPriceSetter;
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+pub struct DummyBenchmarkPriceSetter;
+
+#[cfg(feature = "runtime-benchmarks")]
+impl cf_traits::BenchmarkPriceSetter for DummyBenchmarkPriceSetter {
+	fn set_price(_asset_id: cf_primitives::Asset, _price: cf_amm_math::Price) {
+		unimplemented!();
+	}
 }
 
 pub type AccountId = <Test as frame_system::Config>::AccountId;

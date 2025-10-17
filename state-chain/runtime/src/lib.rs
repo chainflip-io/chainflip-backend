@@ -1193,6 +1193,8 @@ impl pallet_cf_lending_pools::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type PriceApi = ChainlinkOracle;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkPriceSetter = chainflip::generic_elections::ChainlinkBenchmarkPriceSetter;
 }
 
 #[frame_support::runtime]

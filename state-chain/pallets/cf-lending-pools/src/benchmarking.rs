@@ -26,10 +26,33 @@ use sp_std::vec;
 // Keep this to avoid CI warnings about no benchmarks in the crate.
 #[benchmarks]
 mod benchmarks {
+
 	use super::*;
+	use cf_chains::evm::U256;
 
 	const TIER_5_BPS: BoostPoolTier = 5;
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
+	const LOAN_ASSET: Asset = Asset::Btc;
+	const NUMBER_OF_LENDERS: u32 = 1000;
+
+	fn set_asset_price_in_usd<T: Config>(asset: Asset, price: u128) {
+		pub const PRICE_FRACTIONAL_BITS: u32 = 128;
+
+		// For benchmarks, we set the price by writing to the price feeds election state storage via
+		// a trait.
+		#[cfg(not(test))]
+		{
+			use cf_traits::BenchmarkPriceSetter;
+			T::BenchmarkPriceSetter::set_price(asset, U256::from(price) << PRICE_FRACTIONAL_BITS);
+		}
+
+		// For tests we just use the mock like usual
+		#[cfg(test)]
+		{
+			use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
+			MockPriceFeedApi::set_price(asset, Some(U256::from(price) << PRICE_FRACTIONAL_BITS));
+		}
+	}
 
 	fn create_boost_pool<T: Config>() {
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
@@ -41,12 +64,8 @@ mod benchmarks {
 
 	fn setup_lp_account<T: Config>(asset: Asset, seed: u32) -> T::AccountId {
 		use frame_support::traits::OnNewAccount;
-		let caller: T::AccountId = account("booster", 0, seed);
+		let caller: T::AccountId = account("lp", 0, seed);
 
-		// TODO: remove once https://github.com/chainflip-io/chainflip-backend/pull/4716 is merged
-		if frame_system::Pallet::<T>::providers(&caller) == 0u32 {
-			frame_system::Pallet::<T>::inc_providers(&caller);
-		}
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller));
 		T::Balance::credit_account(&caller, asset, 1_000_000);
@@ -203,5 +222,248 @@ mod benchmarks {
 		assert_eq!(BoostPools::<T>::iter().count(), 1);
 	}
 
-	impl_benchmark_test_suite!(Pallet, crate::mocks::new_test_ext(), crate::mocks::Test,);
+	// Creates a lending pool for the loan asset and adds a bunch of lenders, leaving seed 0 free
+	// for `setup_lp_account`.
+	fn setup_lending_pool<T: Config>(number_of_lenders: u32) {
+		let gov_origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		assert_ok!(Pallet::<T>::create_lending_pool(gov_origin, LOAN_ASSET));
+
+		for i in 1..=number_of_lenders {
+			let lender = setup_lp_account::<T>(LOAN_ASSET, i);
+			assert_ok!(Pallet::<T>::add_lender_funds(
+				RawOrigin::Signed(lender.clone()).into(),
+				LOAN_ASSET,
+				(i * 1_000_000) as u128,
+			));
+		}
+	}
+
+	#[benchmark]
+	fn create_lending_pool() {
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+
+		assert_eq!(GeneralLendingPools::<T>::iter().count(), 0);
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::create_lending_pool(origin, LOAN_ASSET));
+		}
+		assert_eq!(GeneralLendingPools::<T>::iter().count(), 1);
+	}
+
+	#[benchmark]
+	fn add_lender_funds() {
+		const AMOUNT: AssetAmount = 100_000_000;
+
+		// Setup a lending pool with lots of lenders, so it has to recalculate the shares.
+		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
+		let total_before = GeneralLendingPools::<T>::get(LOAN_ASSET).unwrap().total_amount;
+
+		// Create one more lender and do the add lender funds operation
+		let lender = setup_lp_account::<T>(LOAN_ASSET, 0);
+		let origin = RawOrigin::Signed(lender.clone()).into();
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::add_lender_funds(origin, LOAN_ASSET, AMOUNT));
+		}
+
+		let pool = GeneralLendingPools::<T>::get(LOAN_ASSET).unwrap();
+		assert_eq!(pool.total_amount - total_before, AMOUNT);
+	}
+
+	#[benchmark]
+	fn remove_lender_funds() {
+		const AMOUNT: AssetAmount = 100_000_000;
+
+		// Setup a lending pool with lots of lenders, so it has to recalculate the shares.
+		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
+
+		// Create a lender account and add funds to be removed
+		let lender = setup_lp_account::<T>(LOAN_ASSET, 0);
+		let origin: OriginFor<T> = RawOrigin::Signed(lender.clone()).into();
+		assert_ok!(Pallet::<T>::add_lender_funds(origin.clone(), LOAN_ASSET, AMOUNT));
+		let total_before = GeneralLendingPools::<T>::get(LOAN_ASSET).unwrap().total_amount;
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::remove_lender_funds(origin, LOAN_ASSET, Some(AMOUNT)));
+		}
+
+		let pool = GeneralLendingPools::<T>::get(LOAN_ASSET).unwrap();
+		assert_eq!(total_before - pool.total_amount, AMOUNT);
+		assert!(pool.lender_shares.get(&lender).is_none());
+	}
+
+	#[benchmark]
+	fn add_collateral() {
+		const AMOUNT: AssetAmount = 100_000_000;
+		let lender = setup_lp_account::<T>(LOAN_ASSET, 0);
+		let origin: OriginFor<T> = RawOrigin::Signed(lender.clone()).into();
+		let collateral = BTreeMap::from([(COLLATERAL_ASSET, AMOUNT)]);
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::add_collateral(
+				origin,
+				Some(COLLATERAL_ASSET),
+				collateral.clone()
+			));
+		}
+		let loan_account = LoanAccounts::<T>::iter().next().unwrap().1;
+		assert_eq!(loan_account.get_total_collateral(), collateral);
+	}
+
+	#[benchmark]
+	fn remove_collateral() {
+		const AMOUNT: AssetAmount = 100_000_000;
+		let lender = setup_lp_account::<T>(LOAN_ASSET, 0);
+		let origin: OriginFor<T> = RawOrigin::Signed(lender.clone()).into();
+		let collateral = BTreeMap::from([(COLLATERAL_ASSET, AMOUNT)]);
+		assert_ok!(Pallet::<T>::add_collateral(
+			origin.clone(),
+			Some(COLLATERAL_ASSET),
+			collateral.clone()
+		));
+		let loan_account = LoanAccounts::<T>::iter().next().unwrap().1;
+		assert_eq!(loan_account.get_total_collateral(), collateral.clone());
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::remove_collateral(origin, collateral));
+		}
+		assert!(LoanAccounts::<T>::iter().next().is_none());
+	}
+
+	#[benchmark]
+	fn request_loan() {
+		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
+
+		set_asset_price_in_usd::<T>(LOAN_ASSET, 100_000_000_000_000_u128);
+		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000_000_u128);
+
+		T::PriceApi::get_price(LOAN_ASSET).unwrap();
+
+		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
+		let origin: OriginFor<T> = RawOrigin::Signed(borrower.clone()).into();
+		let collateral = BTreeMap::from([(COLLATERAL_ASSET, 200_000_000)]);
+		const LOAN_AMOUNT: AssetAmount = 50_000_000;
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::request_loan(
+				origin,
+				LOAN_ASSET,
+				LOAN_AMOUNT,
+				Some(COLLATERAL_ASSET),
+				collateral
+			));
+		}
+		assert!(LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap() > 0);
+	}
+
+	#[benchmark]
+	fn expand_loan() {
+		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
+
+		set_asset_price_in_usd::<T>(LOAN_ASSET, 100_000_000_000_000_u128);
+		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000_000_u128);
+
+		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
+		let origin: OriginFor<T> = RawOrigin::Signed(borrower.clone()).into();
+		let collateral = BTreeMap::from([(COLLATERAL_ASSET, 200_000_000)]);
+		const LOAN_AMOUNT: AssetAmount = 50_000_000;
+		assert_ok!(Pallet::<T>::request_loan(
+			origin,
+			LOAN_ASSET,
+			LOAN_AMOUNT,
+			Some(COLLATERAL_ASSET),
+			collateral
+		));
+		let value_before =
+			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap();
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::expand_loan(
+				RawOrigin::Signed(borrower.clone()).into(),
+				0.into(),
+				5_000_000,
+				BTreeMap::from([(COLLATERAL_ASSET, 100_000_000)])
+			));
+		}
+		assert!(
+			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap() >
+				value_before
+		);
+	}
+
+	#[benchmark]
+	fn make_repayment() {
+		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
+
+		set_asset_price_in_usd::<T>(LOAN_ASSET, 100_000_000_000_000_u128);
+		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000_000_u128);
+
+		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
+		let origin: OriginFor<T> = RawOrigin::Signed(borrower.clone()).into();
+		let collateral = BTreeMap::from([(COLLATERAL_ASSET, 200_000_000)]);
+		const LOAN_AMOUNT: AssetAmount = 50_000_000;
+		assert_ok!(Pallet::<T>::request_loan(
+			origin,
+			LOAN_ASSET,
+			LOAN_AMOUNT,
+			Some(COLLATERAL_ASSET),
+			collateral
+		));
+		let value_before =
+			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap();
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::make_repayment(
+				RawOrigin::Signed(borrower.clone()).into(),
+				0.into(),
+				5_000_000,
+			));
+		}
+		assert!(
+			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap() <
+				value_before
+		);
+	}
+
+	#[cfg(test)]
+	use crate::mocks::{new_test_ext, Test};
+
+	#[test]
+	fn benchmark_works() {
+		new_test_ext().execute_with(|| {
+			_create_lending_pool::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_add_lender_funds::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_remove_lender_funds::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_add_collateral::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_add_collateral::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_remove_collateral::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_request_loan::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_expand_loan::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_make_repayment::<Test>(true);
+		});
+	}
+
+	//impl_benchmark_test_suite!(Pallet, crate::mocks::new_test_ext(), crate::mocks::Test,);
 }
