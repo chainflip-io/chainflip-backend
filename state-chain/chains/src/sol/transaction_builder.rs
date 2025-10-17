@@ -364,6 +364,59 @@ impl SolanaTransactionBuilder {
 		)
 	}
 
+	/// Create a refund transaction that fetches tokens from a deposit channel and transfers them.
+	/// This combines fetch and transfer operations in a single transaction for token refunds.
+	pub fn refund_token(
+		fetch_param: FetchAssetParams<Solana>,
+		transfer_ata: SolAddress,
+		transfer_amount: SolAmount,
+		transfer_to: SolAddress,
+		vault_program: SolAddress,
+		vault_program_data_account: SolAddress,
+		token_vault_pda_account: SolAddress,
+		token_vault_ata: SolAddress,
+		token_mint_pubkey: SolAddress,
+		token_decimals: u8,
+		sol_api_environment: SolApiEnvironment,
+		agg_key: SolAddress,
+		durable_nonce: DurableNonceAndAccount,
+		compute_price: SolAmount,
+		address_lookup_tables: Vec<SolAddressLookupTableAccount>,
+	) -> Result<SolVersionedTransaction, SolanaTransactionBuildingError> {
+		let (fetch_instruction, fetch_compute_units) =
+			Self::create_fetch_instruction(fetch_param, &sol_api_environment, agg_key)?;
+
+		let transfer_instructions = Self::create_transfer_token_instructions(
+			transfer_ata,
+			transfer_amount,
+			transfer_to,
+			vault_program,
+			vault_program_data_account,
+			token_vault_pda_account,
+			token_vault_ata,
+			token_mint_pubkey,
+			agg_key,
+			token_decimals,
+		);
+
+		let mut instructions = vec![fetch_instruction];
+		instructions.extend(transfer_instructions);
+
+		let total_compute_units =
+			BASE_COMPUTE_UNITS_PER_TX + fetch_compute_units + COMPUTE_UNITS_PER_TRANSFER_TOKEN;
+
+		Self::build(
+			instructions,
+			durable_nonce,
+			agg_key.into(),
+			compute_price,
+			compute_limit_with_buffer(total_compute_units),
+			address_lookup_tables,
+		)
+	}
+
+	
+
 	/// Create an instruction set to rotate the current Vault agg key to the next key.
 	pub fn rotate_agg_key(
 		new_agg_key: SolAddress,
