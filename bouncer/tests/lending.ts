@@ -55,7 +55,7 @@ async function lendingTestForAsset(
   const lp = await setupLpAccount(logger, lpUri);
   const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex.for(lpUri));
 
-  // Add collateral to the account, a little extra to cover fees
+  // Add collateral to the account, a little extra to cover the origination fee
   await depositLiquidity(logger, collateralAsset, collateralAmount * 1.1, true, lpUri);
   logger.debug(`Adding collateral`);
   const collateral: [Asset, string][] = [
@@ -93,7 +93,7 @@ async function lendingTestForAsset(
     `Free Balances after loan: ${collateralAssetFreeBalance2} ${collateralAsset}, ${loanAssetFreeBalance2} ${loanAsset}`,
   );
   assert(
-    collateralAssetFreeBalance2 - collateralAssetFreeBalance1 <
+    collateralAssetFreeBalance1 - collateralAssetFreeBalance2 >=
       amountToFineAmountBigInt(collateralAmount, collateralAsset),
     'Collateral balance did not decrease',
   );
