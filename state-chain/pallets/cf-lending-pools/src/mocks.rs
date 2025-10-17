@@ -57,6 +57,7 @@ pub type AccountId = <Test as frame_system::Config>::AccountId;
 
 pub const LP: AccountId = 123u64;
 pub const OTHER_LP: AccountId = 234u64;
+pub const NON_LP: AccountId = 345u64;
 pub const BOOSTER_1: AccountId = 1;
 pub const BOOSTER_2: AccountId = 2;
 pub const BOOSTER_3: AccountId = 3;

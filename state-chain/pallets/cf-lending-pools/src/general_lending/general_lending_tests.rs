@@ -1903,6 +1903,54 @@ fn borrowing_disallowed_during_liquidation() {
 		});
 }
 
+#[test]
+fn updating_primary_collateral_asset() {
+	const NEW_PRIMARY_ASSEET: Asset = Asset::Btc;
+
+	assert_ne!(COLLATERAL_ASSET, NEW_PRIMARY_ASSEET);
+
+	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
+		// Must have LP role:
+		assert_noop!(
+			LendingPools::update_primary_collateral_asset(
+				RuntimeOrigin::signed(NON_LP),
+				NEW_PRIMARY_ASSEET
+			),
+			DispatchError::BadOrigin
+		);
+
+		// Must alreaady have a loan account:
+		assert_noop!(
+			LendingPools::update_primary_collateral_asset(
+				RuntimeOrigin::signed(BORROWER),
+				NEW_PRIMARY_ASSEET
+			),
+			Error::<Test>::LoanAccountNotFound
+		);
+
+		// Should succeed after adding collateral (which implicitly creates an account):
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+
+		assert_ok!(LendingPools::add_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			Some(COLLATERAL_ASSET),
+			BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
+		));
+
+		assert_ok!(LendingPools::update_primary_collateral_asset(
+			RuntimeOrigin::signed(BORROWER),
+			NEW_PRIMARY_ASSEET
+		));
+
+		assert_has_event::<Test>(RuntimeEvent::LendingPools(
+			Event::<Test>::PrimaryCollateralAssetUpdated {
+				borrower_id: BORROWER,
+				primary_collateral_asset: NEW_PRIMARY_ASSEET,
+			},
+		));
+	});
+}
+
 mod safe_mode {
 
 	use super::*;

@@ -1054,7 +1054,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				collateral,
 			});
 
-			Ok::<_, DispatchError>(())
+			Ok(())
 		})
 	}
 
@@ -1109,6 +1109,26 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			if loan_account.collateral.is_empty() && loan_account.loans.is_empty() {
 				*maybe_account = None;
+			}
+
+			Ok(())
+		})
+	}
+
+	fn update_primary_collateral_asset(
+		borrower_id: &Self::AccountId,
+		primary_collateral_asset: Asset,
+	) -> Result<(), DispatchError> {
+		LoanAccounts::<T>::try_mutate(borrower_id, |maybe_account| {
+			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanAccountNotFound)?;
+
+			if loan_account.primary_collateral_asset != primary_collateral_asset {
+				loan_account.primary_collateral_asset = primary_collateral_asset;
+
+				Self::deposit_event(Event::PrimaryCollateralAssetUpdated {
+					borrower_id: borrower_id.clone(),
+					primary_collateral_asset,
+				});
 			}
 
 			Ok(())
