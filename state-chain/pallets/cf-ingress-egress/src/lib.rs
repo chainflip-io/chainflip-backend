@@ -382,7 +382,7 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 		account_role: AccountRole,
 		num_channels: u8,
 	},
-	SetDepositDelay {
+	SetIngressDelay {
 		delay_blocks: BlockNumberFor<T>,
 	},
 }
@@ -818,7 +818,7 @@ pub mod pallet {
 
 	/// How many blocks to wait before processing a new deposit.
 	#[pallet::storage]
-	pub type DepositDelayBlocks<T: Config<I>, I: 'static = ()> =
+	pub type IngressDelayBlocks<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Stores the latest prewitnessed deposit id used.
@@ -1526,8 +1526,8 @@ pub mod pallet {
 					PalletConfigUpdate::SetBoostDelay { delay_blocks } => {
 						BoostDelayBlocks::<T, I>::set(delay_blocks);
 					},
-					PalletConfigUpdate::SetDepositDelay { delay_blocks } => {
-						DepositDelayBlocks::<T, I>::set(delay_blocks);
+					PalletConfigUpdate::SetIngressDelay { delay_blocks } => {
+						IngressDelayBlocks::<T, I>::set(delay_blocks);
 					},
 					PalletConfigUpdate::SetMaximumPreallocatedChannels {
 						account_role,
@@ -2205,7 +2205,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deposit_witness: DepositWitness<T::TargetChain>,
 		block_height: TargetChainBlockNumber<T, I>,
 	) {
-		let delay = DepositDelayBlocks::<T, I>::get();
+		let delay = IngressDelayBlocks::<T, I>::get();
 		if delay > Default::default() {
 			let process_at_block = frame_system::Pallet::<T>::block_number() + delay;
 			PendingDepositChannelDeposits::<T, I>::append(
@@ -2909,7 +2909,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		block_height: TargetChainBlockNumber<T, I>,
 		vault_deposit_witness: VaultDepositWitness<T, I>,
 	) {
-		let delay = DepositDelayBlocks::<T, I>::get();
+		let delay = IngressDelayBlocks::<T, I>::get();
 		if delay > Default::default() {
 			let process_at_block = frame_system::Pallet::<T>::block_number() + delay;
 			PendingVaultDeposits::<T, I>::append(
