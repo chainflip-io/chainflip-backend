@@ -28,7 +28,7 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	sol::{
 		SolAddress, SolAddressLookupTableAccount, SolApiEnvironment, SolCcmAccounts, SolCcmAddress,
-		SolPubkey, TxOrChannelId,
+		SolPubkey, VaultSwapOrDepositChannelId,
 	},
 	Arbitrum, Bitcoin, CcmAdditionalData, CcmChannelMetadataChecked, Ethereum,
 	EvmVaultSwapExtraParameters, ForeignChainAddress, Solana,
@@ -962,7 +962,7 @@ fn transaction_screening_events_serialization() {
 			},
 			BrokerRejectionEventFor::<Solana>::TransactionRejectedByBroker {
 				refund_broadcast_id: 3u32,
-				deposit_details: TxOrChannelId::Channel((SolAddress([0xe3; 32]), 11u64)),
+				deposit_details: VaultSwapOrDepositChannelId::Channel(SolAddress([0xe3; 32])),
 			},
 		],
 	};

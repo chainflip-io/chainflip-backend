@@ -23,7 +23,7 @@ use cf_chains::{
 	dot::{PolkadotExtrinsicIndex, PolkadotTransactionId},
 	evm::{SchnorrVerificationComponents, H256},
 	instances::ChainInstanceFor,
-	sol::TxOrChannelId,
+	sol::VaultSwapOrDepositChannelId,
 	AnyChain, Arbitrum, Assethub, Bitcoin, CcmDepositMetadataUnchecked, Chain, ChainCrypto,
 	ChannelRefundParametersUnchecked, Ethereum, ForeignChainAddress,
 	IntoTransactionInIdForAnyChain, Polkadot, TransactionInIdForAnyChain,
@@ -233,7 +233,7 @@ impl IntoDepositDetailsAnyChain for () {
 		None
 	}
 }
-impl IntoDepositDetailsAnyChain for TxOrChannelId {
+impl IntoDepositDetailsAnyChain for VaultSwapOrDepositChannelId {
 	fn into_any_chain(self) -> Option<DepositDetails> {
 		None
 	}

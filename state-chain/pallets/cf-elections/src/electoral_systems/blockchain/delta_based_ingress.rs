@@ -89,7 +89,7 @@ impl BenchmarkValue for BackoffSettings<u32> {
 
 pub struct DeltaBasedIngress<
 	Sink: IngressSink,
-	DerivedSink: DerivedIngressSink<Sink::Account, Sink::BlockNumber, Sink::DepositDetails>,
+	DerivedSink: DerivedIngressSink<Sink::Account, Sink::DepositDetails>,
 	Settings,
 	ValidatorId,
 	StateChainBlockNumber,
@@ -106,8 +106,7 @@ impl<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber>
 	DeltaBasedIngress<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber>
 where
 	Sink: IngressSink + 'static,
-	DerivedSink:
-		DerivedIngressSink<Sink::Account, Sink::BlockNumber, Sink::DepositDetails> + 'static,
+	DerivedSink: DerivedIngressSink<Sink::Account, Sink::DepositDetails> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
@@ -159,8 +158,7 @@ impl<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber> ElectoralS
 	for DeltaBasedIngress<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber>
 where
 	Sink: IngressSink + 'static,
-	DerivedSink:
-		DerivedIngressSink<Sink::Account, Sink::BlockNumber, Sink::DepositDetails> + 'static,
+	DerivedSink: DerivedIngressSink<Sink::Account, Sink::DepositDetails> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
@@ -211,8 +209,7 @@ impl<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber> ElectoralS
 	for DeltaBasedIngress<Sink, DerivedSink, Settings, ValidatorId, StateChainBlockNumber>
 where
 	Sink: IngressSink + 'static,
-	DerivedSink:
-		DerivedIngressSink<Sink::Account, Sink::BlockNumber, Sink::DepositDetails> + 'static,
+	DerivedSink: DerivedIngressSink<Sink::Account, Sink::DepositDetails> + 'static,
 	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
 	<Sink as IngressSink>::Account: Ord,
 	<Sink as IngressSink>::Amount: Default,
@@ -388,10 +385,7 @@ where
 								details.asset,
 								ready_total.amount - previous_amount,
 								ready_total.block_number,
-								DerivedSink::derive_deposit_details(
-									account.clone(),
-									ready_total.block_number,
-								),
+								DerivedSink::derive_deposit_details(account.clone()),
 							);
 							ElectoralAccess::set_unsynchronised_state_map(
 								(account.clone(), details.asset),

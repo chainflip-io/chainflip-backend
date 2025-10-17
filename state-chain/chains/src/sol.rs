@@ -113,15 +113,16 @@ pub type SolanaTransactionInId = (SolAddress, u64);
 #[derive(
 	Ord, PartialOrd, Eq, PartialEq, Encode, Decode, Clone, Debug, TypeInfo, Serialize, Deserialize,
 )]
-pub enum TxOrChannelId {
-	Tx(SolanaTransactionInId),
-	Channel(SolanaTransactionInId),
+pub enum VaultSwapOrDepositChannelId {
+	Channel(SolAddress),
+	VaultSwapAccount(SolanaTransactionInId),
 }
 
-impl TxOrChannelId {
+impl VaultSwapOrDepositChannelId {
 	fn inner(&self) -> SolanaTransactionInId {
 		match self {
-			Self::Tx(tx_id) | Self::Channel(tx_id) => *tx_id,
+			Self::VaultSwapAccount(tx_id) => *tx_id,
+			Self::Channel(channel_address) => (*channel_address, 0),
 		}
 	}
 }
@@ -147,7 +148,7 @@ impl Chain for Solana {
 	type ChainAccount = SolAddress;
 	type DepositFetchId = SolanaDepositFetchId;
 	type DepositChannelState = AccountBump;
-	type DepositDetails = TxOrChannelId;
+	type DepositDetails = VaultSwapOrDepositChannelId;
 	type Transaction = SolanaTransactionData;
 	type TransactionMetadata = ();
 	// There is no need for replay protection on Solana since it uses blockhashes.
@@ -517,7 +518,7 @@ pub struct SolApiEnvironment {
 	pub address_lookup_table_account: AddressLookupTableAccount,
 }
 
-impl DepositDetailsToTransactionInId<SolanaCrypto> for TxOrChannelId {
+impl DepositDetailsToTransactionInId<SolanaCrypto> for VaultSwapOrDepositChannelId {
 	fn deposit_ids(&self) -> Option<Vec<SolanaTransactionInId>> {
 		Some(vec![self.inner()])
 	}

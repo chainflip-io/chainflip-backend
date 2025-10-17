@@ -1,6 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
-assertion_line: 938
+assertion_line: 970
 expression: val
 ---
 {
@@ -249,10 +249,7 @@ expression: val
       "TransactionRejectedByBroker": {
         "refund_broadcast_id": 3,
         "deposit_details": {
-          "Channel": [
-            "GLb6VMiKEhRRfYnD1p3a3iCAR3kgtRr8qdHxEHAzbdDU",
-            11
-          ]
+          "Channel": "GLb6VMiKEhRRfYnD1p3a3iCAR3kgtRr8qdHxEHAzbdDU"
         }
       }
     }

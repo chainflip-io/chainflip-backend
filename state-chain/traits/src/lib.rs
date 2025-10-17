@@ -1163,8 +1163,8 @@ pub trait BalanceApi {
 	}
 }
 
-pub trait DerivedIngressSink<Account, BlockNumber, DepositDetails> {
-	fn derive_deposit_details(account: Account, block_number: BlockNumber) -> DepositDetails;
+pub trait DerivedIngressSink<Account, DepositDetails> {
+	fn derive_deposit_details(account: Account) -> DepositDetails;
 }
 
 pub trait IngressSink {
