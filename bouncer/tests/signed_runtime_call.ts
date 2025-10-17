@@ -83,8 +83,6 @@ async function testEvmEip712(logger: Logger) {
   const call = getRegisterOperatorCall(chainflip);
   const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
 
-  const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
-
   const response = await chainflip.rpc(
     'cf_encode_non_native_call',
     hexRuntimeCall,
