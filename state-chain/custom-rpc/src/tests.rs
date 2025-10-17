@@ -386,8 +386,9 @@ fn test_vault_addresses_custom_rpc() {
 		ethereum: EncodedAddress::Eth([0; 20]),
 		arbitrum: EncodedAddress::Arb([1; 20]),
 		bitcoin: vec![(ID_1.clone(), EncodedAddress::Btc(Vec::new()))],
-		swap_endpoint_data_account_address: EncodedAddress::Sol([2; 32]),
+		sol_swap_endpoint_program_data_account: EncodedAddress::Sol([2; 32]),
 		usdc_token_mint_pubkey: EncodedAddress::Sol([3; 32]),
+		sol_vault_program: EncodedAddress::Sol([4; 32]),
 	};
 	insta::assert_json_snapshot!(val);
 }
@@ -856,19 +857,41 @@ fn vault_swap_input_serialization() {
 fn chain_accounts_serialization() {
 	let val = ChainAccounts {
 		chain_accounts: vec![
-			ForeignChainAddress::Eth(cf_chains::evm::Address::from([1u8; 20]))
-				.to_encoded_address(Default::default()),
-			ForeignChainAddress::Dot(PolkadotAccountId([2u8; 32]))
-				.to_encoded_address(Default::default()),
-			ForeignChainAddress::Btc(ScriptPubkey::P2WPKH([3u8; 20]))
-				.to_encoded_address(Default::default()),
-			ForeignChainAddress::Btc(ScriptPubkey::Taproot([4u8; 32]))
-				.to_encoded_address(Default::default()),
-			ForeignChainAddress::Arb(cf_chains::evm::Address::from([5u8; 20]))
-				.to_encoded_address(Default::default()),
-			ForeignChainAddress::Sol(SolAddress([6u8; 32])).to_encoded_address(Default::default()),
-			ForeignChainAddress::Hub(PolkadotAccountId([7u8; 32]))
-				.to_encoded_address(Default::default()),
+			(
+				ForeignChainAddress::Eth(cf_chains::evm::Address::from([1u8; 20]))
+					.to_encoded_address(Default::default()),
+				Asset::Eth,
+			),
+			(
+				ForeignChainAddress::Dot(PolkadotAccountId([2u8; 32]))
+					.to_encoded_address(Default::default()),
+				Asset::Dot,
+			),
+			(
+				ForeignChainAddress::Btc(ScriptPubkey::P2WPKH([3u8; 20]))
+					.to_encoded_address(Default::default()),
+				Asset::Btc,
+			),
+			(
+				ForeignChainAddress::Btc(ScriptPubkey::Taproot([4u8; 32]))
+					.to_encoded_address(Default::default()),
+				Asset::Btc,
+			),
+			(
+				ForeignChainAddress::Arb(cf_chains::evm::Address::from([5u8; 20]))
+					.to_encoded_address(Default::default()),
+				Asset::ArbEth,
+			),
+			(
+				ForeignChainAddress::Sol(SolAddress([6u8; 32]))
+					.to_encoded_address(Default::default()),
+				Asset::Sol,
+			),
+			(
+				ForeignChainAddress::Hub(PolkadotAccountId([7u8; 32]))
+					.to_encoded_address(Default::default()),
+				Asset::HubDot,
+			),
 		],
 	};
 
@@ -953,17 +976,17 @@ fn opened_deposit_channels_serialization() {
 		(
 			ID_1,
 			ChannelActionType::LiquidityProvision,
-			ChainAccounts { chain_accounts: vec![EncodedAddress::Eth([0x01; 20])] },
+			ChainAccounts { chain_accounts: vec![(EncodedAddress::Eth([0x01; 20]), Asset::Eth)] },
 		),
 		(
 			ID_1,
 			ChannelActionType::Swap,
-			ChainAccounts { chain_accounts: vec![EncodedAddress::Sol([0x02; 32])] },
+			ChainAccounts { chain_accounts: vec![(EncodedAddress::Sol([0x02; 32]), Asset::Sol)] },
 		),
 		(
 			ID_1,
 			ChannelActionType::Refund,
-			ChainAccounts { chain_accounts: vec![EncodedAddress::Eth([0x01; 20])] },
+			ChainAccounts { chain_accounts: vec![(EncodedAddress::Eth([0x01; 20]), Asset::Eth)] },
 		),
 	];
 

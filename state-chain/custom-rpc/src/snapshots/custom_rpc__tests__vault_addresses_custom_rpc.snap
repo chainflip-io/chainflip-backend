@@ -1,6 +1,5 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
-assertion_line: 385
 expression: val
 ---
 {
@@ -60,7 +59,43 @@ expression: val
       }
     ]
   ],
-  "swap_endpoint_data_account_address": {
+  "sol_vault_program": {
+    "Sol": [
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4
+    ]
+  },
+  "sol_swap_endpoint_program_data_account": {
     "Sol": [
       2,
       2,
