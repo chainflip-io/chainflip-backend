@@ -33,9 +33,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, IngressEgressFeeApi,
-	PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, FundingSource,
+	IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction,
+	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -49,6 +50,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use pallet_cf_environment::UserSignatureData;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::{
 	helpers_128bit::multiply_by_rational_with_rounding,
@@ -508,8 +510,8 @@ pub mod pallet {
 		PriceLimits, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{
-		lending::LendingSystemApi, AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider,
-		PriceFeedApi, ScheduledEgressDetails, SwapExecutionProgress,
+		lending::LendingSystemApi, AccountRoleRegistry, Chainflip, EgressApi, FundAccount,
+		PoolPriceProvider, PriceFeedApi, ScheduledEgressDetails, SwapExecutionProgress,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
@@ -517,7 +519,7 @@ pub mod pallet {
 	use super::*;
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: Chainflip {
+	pub trait Config: Chainflip<AccountId = cf_primitives::AccountId> {
 		/// Standard Event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -557,6 +559,11 @@ pub mod pallet {
 
 		type LendingSystemApi: LendingSystemApi<
 			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
+
+		type FundAccount: FundAccount<
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
 		>;
 
 		type PoolPriceApi: PoolPriceProvider;
@@ -859,6 +866,19 @@ pub mod pallet {
 			swap_id: SwapId,
 			reason: SwapFailureReason,
 		},
+		// TODO: This is now duplicated between pallet-cf-lp and pallet-cf-swapping
+		LiquidityDepositAddressReady {
+			channel_id: ChannelId,
+			asset: Asset,
+			deposit_address: EncodedAddress,
+			// TODO: This one is not in the original LiquidityDepositAddressReady event in cf-lp
+			requester_id: T::AccountId,
+			// account the funds will be credited to upon deposit
+			account_id: T::AccountId,
+			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
+			boost_fee: BasisPoints,
+			channel_opening_fee: T::Amount,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -931,6 +951,8 @@ pub mod pallet {
 		CcmUnsupportedForRefundChain,
 		/// Oracle price not available for one or more of the assets.
 		OraclePriceNotAvailable,
+		/// Account id could not be derived from user signature data.
+		InvalidUserSignatureData,
 	}
 
 	#[pallet::genesis_config]
@@ -1484,6 +1506,56 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// For when the user wants to deposit assets into the Chain but doesn't have
+		/// a statechain account yet. Generates a new deposit address for the user to posit their
+		/// assets.
+		#[pallet::call_index(18)]
+		#[pallet::weight(Weight::zero())]
+		pub fn request_liquidity_deposit_address_for_external_account(
+			origin: OriginFor<T>,
+			external_account: UserSignatureData,
+			asset: Asset,
+			boost_fee: BasisPoints,
+			refund_address: ForeignChainAddress,
+		) -> DispatchResult {
+			// TODO, how to do this?
+			// ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
+
+			let requester_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			// TODO: verify the user signature
+			let target_account_id =
+				external_account.signer_account_id::<cf_primitives::AccountId>();
+			// let Ok(target_account_id) : Result<T::AccountId, codec::Error> =
+			// external_account.signer_account_id() else {
+			// 	return Err(DispatchError::from(Error::<T>::InvalidUserSignatureData));
+			// };
+
+			// TODO: verify that refund address is for the correct chain/asset
+
+			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
+				T::DepositHandler::request_liquidity_deposit_address(
+					requester_id.clone(),
+					target_account_id.clone(),
+					asset,
+					boost_fee,
+					refund_address,
+				)?;
+
+			Self::deposit_event(Event::LiquidityDepositAddressReady {
+				channel_id,
+				asset,
+				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
+				requester_id,
+				account_id: target_account_id,
+				deposit_chain_expiry_block: expiry_block,
+				boost_fee,
+				channel_opening_fee,
+			});
+
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -2025,6 +2097,23 @@ pub mod pallet {
 							SwapOutputAction::CreditLendingPool { swap_type } => {
 								log_or_panic!("Unexpected refund of a loan swap: {swap_type:?}");
 							},
+							SwapOutputAction::CreditFlipAndTransferToGateway {
+								account_id,
+								role_to_register,
+							} => {
+								if request.output_asset == Asset::Flip {
+									T::FundAccount::fund_account(
+										account_id.clone(),
+										None,
+										dca_state.accumulated_output_amount,
+										FundingSource::Swap { swap_request_id },
+									)
+
+									// TODO: transfer funds to gateway
+								} else {
+									log_or_panic!("Encountered transfer to gateway swap for asset that isn't Flip: {swap_request_id:?}");
+								}
+							},
 						}
 					}
 				},
@@ -2154,6 +2243,12 @@ pub mod pallet {
 										swap_type.clone(),
 										dca_state.accumulated_output_amount,
 									);
+								},
+								SwapOutputAction::CreditFlipAndTransferToGateway {
+									account_id,
+									role_to_register,
+								} => {
+									// TODO do the same as above
 								},
 							}
 							true
