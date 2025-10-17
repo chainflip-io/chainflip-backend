@@ -382,6 +382,9 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 		account_role: AccountRole,
 		num_channels: u8,
 	},
+	SetDepositDelay {
+		delay_blocks: BlockNumberFor<T>,
+	},
 }
 
 #[frame_support::pallet]
@@ -1522,6 +1525,9 @@ pub mod pallet {
 					},
 					PalletConfigUpdate::SetBoostDelay { delay_blocks } => {
 						BoostDelayBlocks::<T, I>::set(delay_blocks);
+					},
+					PalletConfigUpdate::SetDepositDelay { delay_blocks } => {
+						DepositDelayBlocks::<T, I>::set(delay_blocks);
 					},
 					PalletConfigUpdate::SetMaximumPreallocatedChannels {
 						account_role,
