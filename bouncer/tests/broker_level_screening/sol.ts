@@ -88,7 +88,7 @@ export async function testSol(
   const txHash = result.transaction.signatures[0] as string;
   logger.debug(`Sent ${sourceAsset} tx, hash is ${txHash}`);
 
-  await reportFunction(txHash);
+  await reportFunction(`ActualSignature(S(${txHash}))`);
   logger.debug(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
 
   await observeEvent(logger, `${ingressEgressPallet}:TransactionRejectedByBroker`).event;

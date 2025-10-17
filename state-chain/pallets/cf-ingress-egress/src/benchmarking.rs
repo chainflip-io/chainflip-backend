@@ -83,7 +83,7 @@ mod benchmarks {
 					},
 				boost_fee: 0,
 				boost_status: BoostStatus::NotBoosted,
-				is_tainted: false,
+				is_marked_for_rejection: false,
 			},
 		);
 
@@ -129,7 +129,7 @@ mod benchmarks {
 					},
 				boost_fee: 0,
 				boost_status: BoostStatus::NotBoosted,
-				is_tainted: false,
+				is_marked_for_rejection: false,
 			};
 			channel.deposit_channel.state.on_fetch_scheduled();
 			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), channel);

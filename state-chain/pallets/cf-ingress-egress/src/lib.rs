@@ -520,7 +520,7 @@ pub mod pallet {
 		pub boost_fee: BasisPoints,
 		/// Boost status, indicating whether there is pending boost on the channel
 		pub boost_status: BoostStatus<TargetChainAmount<T, I>, BlockNumberFor<T>>,
-		pub is_tainted: bool,
+		pub is_marked_for_rejection: bool,
 	}
 
 	pub struct AmountAndFeesWithheld<A> {
@@ -1658,7 +1658,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Error::<T, I>::TransactionAlreadyPrewitnessed
 				);
 
-				channel.is_tainted = true;
+				channel.is_marked_for_rejection = true;
 				Ok::<_, DispatchError>(())
 			} else {
 				Err(Error::<T, I>::InvalidDepositAddress.into())
@@ -2444,7 +2444,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 				if deposit_address.as_ref().is_some_and(|deposit_addr| {
 					DepositChannelLookup::<T, I>::get(deposit_addr)
-						.is_some_and(|deposit_channel| deposit_channel.is_tainted)
+						.is_some_and(|deposit_channel| deposit_channel.is_marked_for_rejection)
 				}) {
 					return BoostStatus::NotBoosted;
 				}
@@ -2643,7 +2643,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 					let channel_marked = if let Some(ref deposit_address) = deposit_address {
 						DepositChannelLookup::<T, I>::get(deposit_address)
-							.is_some_and(|deposit_channel| deposit_channel.is_tainted)
+							.is_some_and(|deposit_channel| deposit_channel.is_marked_for_rejection)
 					} else {
 						false
 					};
@@ -3118,7 +3118,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				action,
 				boost_fee,
 				boost_status: BoostStatus::NotBoosted,
-				is_tainted: false,
+				is_marked_for_rejection: false,
 			},
 		);
 		<T::IngressSource as IngressSource>::open_channel(
