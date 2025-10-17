@@ -689,7 +689,7 @@ pub trait DepositMonitorApi:
 					),
 				)
 				.await,
-			TransactionInId::SolanaDepositChannel((deposit_address, _slot)) =>
+			TransactionInId::SolanaDepositChannel(deposit_address) =>
 				self.simple_submission_with_dry_run(
 					state_chain_runtime::RuntimeCall::SolanaIngressEgress(
 						pallet_cf_ingress_egress::Call::mark_deposit_channel_for_rejection {

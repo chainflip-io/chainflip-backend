@@ -407,7 +407,7 @@ where
 								tx_id,
 							},
 						),
-					TransactionInId::SolanaDepositChannel((deposit_address, _slot)) =>
+					TransactionInId::SolanaDepositChannel(deposit_address) =>
 						state_chain_runtime::RuntimeCall::SolanaIngressEgress(
 							pallet_cf_ingress_egress::Call::mark_deposit_channel_for_rejection {
 								deposit_address,
