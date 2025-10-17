@@ -68,7 +68,7 @@ export async function testSol(
   const txHash = result.transaction.signatures[0] as string;
   logger.debug(`Sent ${sourceAsset} tx, hash is ${txHash}`);
 
-  await reportFunction(`ActualSignature(S(${txHash}))`);
+  await reportFunction(txHash);
   logger.debug(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
 
   await observeEvent(logger, `${ingressEgressPallet}:TransactionRejectedByBroker`).event;
@@ -137,7 +137,7 @@ export async function testSolVaultSwap(
   const txHash = receipt.txHash;
   logger.debug(`Sent ${sourceAsset} (vault swap) tx...`);
 
-  await reportFunction(`ActualSignature(S(${txHash}))`);
+  await reportFunction(txHash);
   logger.debug(`Marked ${sourceAsset} (vault swap) ${txHash} for rejection. Awaiting refund.`);
 
   // Currently this event cannot be decoded correctly, so we don't wait for it,
