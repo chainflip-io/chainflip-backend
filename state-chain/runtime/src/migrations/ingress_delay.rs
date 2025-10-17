@@ -21,7 +21,7 @@ pub struct IngressEgressDelay;
 
 impl OnRuntimeUpgrade for IngressEgressDelay {
 	fn on_runtime_upgrade() -> Weight {
-		pallet_cf_ingress_egress::DepositDelayBlocks::<Runtime, SolanaInstance>::set(10);
+		pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, SolanaInstance>::set(10);
 
 		Weight::zero()
 	}
