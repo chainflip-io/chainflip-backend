@@ -191,6 +191,7 @@ pub enum SolanaTransactionType {
 	SetProgramSwapParameters,
 	SetTokenSwapParameters,
 	UpgradeProgram,
+	Refund,
 }
 
 /// The Solana Api call. Contains a call_type and the actual Transaction itself.
@@ -805,15 +806,49 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 	}
 }
 
-impl<Env: 'static> RejectCall<Solana> for SolanaApi<Env> {
+impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<Environment> {
 	fn new_unsigned(
 		_deposit_details: <Solana as Chain>::DepositDetails,
-		_refund_address: <Solana as Chain>::ChainAccount,
-		_refund_amount: Option<<Solana as Chain>::ChainAmount>,
-		_asset: <Solana as Chain>::ChainAsset,
-		_deposit_fetch_id: Option<<Solana as Chain>::DepositFetchId>,
+		refund_address: <Solana as Chain>::ChainAccount,
+		refund_amount: Option<<Solana as Chain>::ChainAmount>,
+		asset: <Solana as Chain>::ChainAsset,
+		deposit_fetch_id: Option<<Solana as Chain>::DepositFetchId>,
 	) -> Result<Self, RejectError> {
-		todo!()
+		// Should we fetch anyway as we might have taken fees?
+		let amount = refund_amount.ok_or(RejectError::NotRequired)?;
+		if amount == 0_u64 {
+			return Err(RejectError::NotRequired);
+		}
+
+		// Lookup environment variables
+		let agg_key = Environment::current_agg_key().map_err(|_| RejectError::Other)?;
+		let sol_api_environment = Environment::api_environment().map_err(|_| RejectError::Other)?;
+		let compute_price = Environment::compute_price().map_err(|_| RejectError::Other)?;
+		let durable_nonce = Environment::nonce_account().map_err(|_| RejectError::Other)?;
+
+		let transaction = match (deposit_fetch_id, asset) {
+			(Some(fetch_id), SolAsset::Sol) => {
+				let fetch_param = FetchAssetParams { deposit_fetch_id: fetch_id, asset };
+				SolanaTransactionBuilder::refund_native(
+					fetch_param,
+					amount,
+					refund_address,
+					sol_api_environment,
+					agg_key,
+					durable_nonce,
+					compute_price,
+				)
+			},
+			_ => todo!(),
+		}
+		.map_err(|_| RejectError::Other)?;
+
+		Ok(Self {
+			call_type: SolanaTransactionType::Refund,
+			transaction,
+			signer: None,
+			_phantom: Default::default(),
+		})
 	}
 }
 
