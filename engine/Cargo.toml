@@ -45,7 +45,7 @@ serde = { workspace = true, default-features = true, features = [
 	"derive",
 	"rc",
 ] }
-serde_json = { workspace = true }
+serde_json = { workspace = true, default-features = true }
 sha2 = { workspace = true, default-features = true }
 subxt = { workspace = true }
 thiserror = { workspace = true, default-features = true }
