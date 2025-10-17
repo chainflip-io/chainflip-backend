@@ -14,7 +14,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//! Chainflip runtime storage migrations.
+use crate::{Runtime, SolanaInstance};
+use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 
-pub mod housekeeping;
-pub mod ingress_delay;
+pub struct IngressEgressDelay;
+
+impl OnRuntimeUpgrade for IngressEgressDelay {
+	fn on_runtime_upgrade() -> Weight {
+		pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, SolanaInstance>::set(10);
+
+		Weight::zero()
+	}
+}

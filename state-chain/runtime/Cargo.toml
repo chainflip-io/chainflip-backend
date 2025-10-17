@@ -105,6 +105,9 @@ pallet-transaction-payment-rpc-runtime-api = { workspace = true }
 
 cf-test-utilities = { workspace = true, optional = true }
 
+# other
+n-functor = { workspace = true }
+
 [dev-dependencies]
 sp-io = { workspace = true, default-features = true }
 proptest = { version = "1.6" }

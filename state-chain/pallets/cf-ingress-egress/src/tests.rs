@@ -3525,7 +3525,7 @@ fn test_various_refund_reasons() {
 				"Refund broadcast should not have been scheduled!"
 			);
 
-			EthereumIngressEgress::process_vault_swap_request_full_witness(0, vault_swap);
+			EthereumIngressEgress::process_vault_swap_request_full_witness_inner(0, vault_swap);
 
 			assert!(
 				MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),

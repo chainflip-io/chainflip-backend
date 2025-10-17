@@ -14,7 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ccm_checker::VersionedSolanaCcmAdditionalData, RejectCall, SetGovKeyWithAggKeyError};
+use crate::{
+	ccm_checker::VersionedSolanaCcmAdditionalData, Chain, RejectCall, RejectError,
+	SetGovKeyWithAggKeyError,
+};
 use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::marker::PhantomData;
@@ -802,7 +805,17 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 	}
 }
 
-impl<Env: 'static> RejectCall<Solana> for SolanaApi<Env> {}
+impl<Env: 'static> RejectCall<Solana> for SolanaApi<Env> {
+	fn new_unsigned(
+		_deposit_details: <Solana as Chain>::DepositDetails,
+		_refund_address: <Solana as Chain>::ChainAccount,
+		_refund_amount: Option<<Solana as Chain>::ChainAmount>,
+		_asset: <Solana as Chain>::ChainAsset,
+		_deposit_fetch_id: Option<<Solana as Chain>::DepositFetchId>,
+	) -> Result<Self, RejectError> {
+		todo!()
+	}
+}
 
 #[derive(
 	Serialize,

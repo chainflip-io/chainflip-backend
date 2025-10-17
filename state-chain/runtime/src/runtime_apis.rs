@@ -406,7 +406,7 @@ pub struct FailingWitnessValidators {
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct ChainAccounts {
-	pub chain_accounts: Vec<EncodedAddress>,
+	pub chain_accounts: Vec<(EncodedAddress, Asset)>,
 }
 
 #[derive(
@@ -444,7 +444,7 @@ impl<AccountId, C> From<ChannelAction<AccountId, C>> for ChannelActionType {
 pub type OpenedDepositChannels = (AccountId32, ChannelActionType, ChainAccounts);
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
-pub enum TransactionScreeningEvent<TxId> {
+pub enum TransactionScreeningEvent<TxId, DepositDetails, Address> {
 	TransactionRejectionRequestReceived {
 		account_id: <Runtime as frame_system::Config>::AccountId,
 		tx_id: TxId,
@@ -457,18 +457,27 @@ pub enum TransactionScreeningEvent<TxId> {
 
 	TransactionRejectedByBroker {
 		refund_broadcast_id: BroadcastId,
-		tx_id: TxId,
+		deposit_details: DepositDetails,
+	},
+
+	ChannelRejectionRequestReceived {
+		account_id: <Runtime as frame_system::Config>::AccountId,
+		deposit_address: Address,
 	},
 }
 
-pub type BrokerRejectionEventFor<C> =
-	TransactionScreeningEvent<<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId>;
+pub type BrokerRejectionEventFor<C> = TransactionScreeningEvent<
+	<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId,
+	<C as Chain>::DepositDetails,
+	<C as Chain>::ChainAccount,
+>;
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct TransactionScreeningEvents {
 	pub btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>>,
 	pub eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>>,
 	pub arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>>,
+	pub sol_events: Vec<BrokerRejectionEventFor<cf_chains::Solana>>,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
@@ -476,6 +485,13 @@ pub struct VaultAddresses {
 	pub ethereum: EncodedAddress,
 	pub arbitrum: EncodedAddress,
 	pub bitcoin: Vec<(AccountId32, EncodedAddress)>,
+
+	// Decide which ones we need:
+	// pub solana_swap_endpoint_native_vault_pda: EncodedAddress,
+	// pub solana_usdc_token_vault_ata: EncodedAddress,
+	pub sol_vault_program: EncodedAddress,
+	pub sol_swap_endpoint_program_data_account: EncodedAddress,
+	pub usdc_token_mint_pubkey: EncodedAddress,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]

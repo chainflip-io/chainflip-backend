@@ -18,7 +18,8 @@ use anyhow::bail;
 
 use crate::{RefundParametersRpc, H256, U256};
 use cf_chains::{
-	Chain, ChainCrypto, ForeignChain, VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
+	sol::SolAddress, Chain, ChainCrypto, ForeignChain, VaultSwapExtraParametersEncoded,
+	VaultSwapInputEncoded,
 };
 use cf_primitives::AffiliateShortId;
 use cf_utilities::rpc::NumberOrHex;
@@ -79,6 +80,10 @@ pub enum TransactionInId {
 	Bitcoin(TransactionInIdFor<cf_chains::Bitcoin>),
 	Ethereum(TransactionInIdFor<cf_chains::Ethereum>),
 	Arbitrum(TransactionInIdFor<cf_chains::Arbitrum>),
+
+	// Deposit channels are marked differently than vault swaps
+	Solana(TransactionInIdFor<cf_chains::Solana>),
+	SolanaDepositChannel(SolAddress),
 	// other variants reserved for other chains.
 }
 
