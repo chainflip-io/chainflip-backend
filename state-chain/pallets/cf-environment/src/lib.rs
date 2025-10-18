@@ -22,7 +22,7 @@
 use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
 pub use crate::submit_runtime_call::{
 	build_domain_data, BatchedCalls, EthEncodingType, Message, SolEncodingType,
-	TransactionMetadata, MAX_BATCHED_CALLS, SOLANA_OFFCHAIN_PREFIX,
+	TransactionMetadata, DOMAIN_OFFCHAIN_PREFIX, MAX_BATCHED_CALLS,
 };
 use cf_chains::{
 	btc::{
