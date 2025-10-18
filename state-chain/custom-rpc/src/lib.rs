@@ -125,6 +125,7 @@ pub enum EncodingType {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Decode, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum NonceOrAccount {
 	Nonce(u32),
 	Account(state_chain_runtime::AccountId),

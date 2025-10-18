@@ -87,7 +87,7 @@ async function testEvmEip712(logger: Logger) {
     'cf_encode_non_native_call',
     hexRuntimeCall,
     blocksToExpiry,
-    { Account: evmScAccount },
+    evmScAccount,
     { Eth: 'Eip712' },
   );
 
@@ -159,7 +159,7 @@ async function testSvmDomain(logger: Logger) {
     'cf_encode_non_native_call',
     hexBatchRuntimeCall,
     blocksToExpiry,
-    { Account: svmScAccount },
+    svmScAccount,
     { Sol: 'Domain' },
   );
 
@@ -226,7 +226,7 @@ async function testEvmPersonalSign(logger: Logger) {
     'cf_encode_non_native_call',
     hexRuntimeCall,
     blocksToExpiry,
-    { Nonce: evmNonce },
+    evmNonce,
     { Eth: 'PersonalSign' },
   );
 
