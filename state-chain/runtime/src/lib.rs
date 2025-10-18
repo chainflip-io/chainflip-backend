@@ -2780,9 +2780,7 @@ impl_runtime_apis! {
 			Ok( (pallet_cf_environment::ChainflipNetworkName::<Runtime>::get(), version.spec_version, current_block_number))
 		}
 
-		fn cf_account_nonce(account: AccountId) -> u32 {
-			System::account_nonce(account)
-		}
+
 	}
 
 

@@ -840,7 +840,6 @@ decl_runtime_apis!(
 		fn cf_chainflip_network_and_state();
 		fn cf_chainflip_network_and_state(
 		) -> Result<(cf_primitives::ChainflipNetwork, u32, BlockNumber), DispatchErrorWithMessage>;
-		fn cf_account_nonce(account: AccountId32) -> u32;
 	}
 );
 

@@ -45,6 +45,7 @@ use cf_rpc_apis::{
 use cf_utilities::rpc::NumberOrHex;
 use codec::Decode;
 use core::ops::Range;
+use frame_system_rpc_runtime_api::AccountNonceApi;
 use jsonrpsee::{
 	core::async_trait,
 	proc_macros::rpc,
@@ -1517,7 +1518,9 @@ where
 		+ BlockchainEvents<B>
 		+ CallApiAt<B>
 		+ StorageProvider<B, BE>,
-	C::Api: CustomRuntimeApi<B> + ElectoralRuntimeApi<B>,
+	C::Api: CustomRuntimeApi<B>
+		+ ElectoralRuntimeApi<B>
+		+ AccountNonceApi<B, state_chain_runtime::AccountId, state_chain_runtime::Nonce>,
 {
 	pass_through! {
 		cf_is_auction_phase() -> bool,
@@ -2575,7 +2578,7 @@ where
 				_ => {
 					let call_bytes: Vec<u8> = call.into();
 
-					// Decode to verify it's a valid RuntimeCall and use the decoded value
+					// This will ensure it is a valid RuntimeCall
 					let runtime_call =
 						match state_chain_runtime::RuntimeCall::decode(&mut &call_bytes[..]) {
 							Ok(rc) => rc,
@@ -2594,8 +2597,7 @@ where
 						expiry_block: current_block.saturating_add(blocks_to_expiry),
 						nonce: match nonce_or_account {
 							NonceOrAccount::Nonce(nonce) => nonce,
-							NonceOrAccount::Account(account) =>
-								api.cf_account_nonce(hash, account)?,
+							NonceOrAccount::Account(account) => api.account_nonce(hash, account)?,
 						},
 					};
 
