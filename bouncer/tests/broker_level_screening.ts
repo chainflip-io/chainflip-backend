@@ -660,32 +660,32 @@ export async function testBrokerLevelScreening(
   await Promise.all(
     [
       testSol(testContext, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
-      // testSol(testContext, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-      // testEvm(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-      // testEvm(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
-      // testEvm(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    ],
-    // .concat(await testBitcoin(testContext, false))
-    // .concat(testBoostedDeposits ? await testBitcoin(testContext, true) : []),
+      testSol(testContext, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+      testEvm(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+      testEvm(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+      testEvm(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    ]
+      .concat(await testBitcoin(testContext, false))
+      .concat(testBoostedDeposits ? await testBitcoin(testContext, true) : []),
   );
 
   // test rejection of LP deposits and vault swaps:
   //  - this requires the rejecting broker to be whitelisted
   //  - for bitcoin vault swaps a private channel has to be opened
   await setWhitelistedBroker(broker.addressRaw);
-  // await Promise.all([
-  //   // --- LP deposits ---
-  //   testEvmLiquidityDeposit(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-  //   testEvmLiquidityDeposit(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
-  //   testEvmLiquidityDeposit(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+  await Promise.all([
+    // --- LP deposits ---
+    testEvmLiquidityDeposit(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    testEvmLiquidityDeposit(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    testEvmLiquidityDeposit(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
 
-  //   // --- vault swaps ---
-  //   // testBitcoinVaultSwap(testContext),
-  //   testEvmVaultSwap(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-  //   testEvmVaultSwap(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-  //   // testSolVaultSwap(testContext, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
-  //   // testSolVaultSwap(testContext, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-  // ]);
+    // --- vault swaps ---
+    // testBitcoinVaultSwap(testContext),
+    testEvmVaultSwap(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    testEvmVaultSwap(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    testSolVaultSwap(testContext, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
+    testSolVaultSwap(testContext, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+  ]);
 
   await setMockmode(previousMockmode);
 }

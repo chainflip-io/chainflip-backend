@@ -27,46 +27,46 @@ describe('ConcurrentTests', () => {
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
 
-  // testAllSwaps(numberOfNodes === 1 ? 180 : 240); // TODO: find out what the 3-node timeout should be
-  // concurrentTest('SwapsToAssethub', testSwapsToAssethub, 600);
-  // concurrentTest('EvmDeposits', testEvmDeposits, 300);
-  // concurrentTest('FundRedeem', testFundRedeem, 600);
-  // concurrentTest('LpApi', testLpApi, 240);
-  // concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200);
-  // concurrentTest('BoostingForAsset', testBoostingSwap, 200);
-  // concurrentTest('FillOrKill', testFillOrKill, 300);
-  // concurrentTest('DCASwaps', testDCASwaps, 300);
-  // concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 120);
-  // concurrentTest('DepositChannelCreation', depositChannelCreation, 30);
+  testAllSwaps(numberOfNodes === 1 ? 180 : 240); // TODO: find out what the 3-node timeout should be
+  concurrentTest('SwapsToAssethub', testSwapsToAssethub, 600);
+  concurrentTest('EvmDeposits', testEvmDeposits, 300);
+  concurrentTest('FundRedeem', testFundRedeem, 600);
+  concurrentTest('LpApi', testLpApi, 240);
+  concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200);
+  concurrentTest('BoostingForAsset', testBoostingSwap, 200);
+  concurrentTest('FillOrKill', testFillOrKill, 300);
+  concurrentTest('DCASwaps', testDCASwaps, 300);
+  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 120);
+  concurrentTest('DepositChannelCreation', depositChannelCreation, 30);
   concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 600);
-  // concurrentTest('VaultSwaps', testVaultSwap, 600);
-  // // This test times out far too often.
-  // // TODO: figure out how to make it less flaky.
-  // // WHEN CHANGING ANYTHING RELATED TO ASSETHUB OR XCM, run this test locally.
-  // // concurrentTest('AssethubXCM', testAssethubXcm, 200);
-  // concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 140);
-  // concurrentTest('DelegateFlip', (context) => testDelegate(context.logger), 360);
-  // concurrentTest(
-  //   'SwapAndFundAccountViaCCM',
-  //   (context) => testCcmSwapFundAccount(context.logger),
-  //   360,
-  // );
+  concurrentTest('VaultSwaps', testVaultSwap, 600);
+  // This test times out far too often.
+  // TODO: figure out how to make it less flaky.
+  // WHEN CHANGING ANYTHING RELATED TO ASSETHUB OR XCM, run this test locally.
+  // concurrentTest('AssethubXCM', testAssethubXcm, 200);
+  concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 140);
+  concurrentTest('DelegateFlip', (context) => testDelegate(context.logger), 360);
+  concurrentTest(
+    'SwapAndFundAccountViaCCM',
+    (context) => testCcmSwapFundAccount(context.logger),
+    360,
+  );
 
-  // // Test this separately because it has a swap to HubDot which causes flakiness when run in
-  // // parallel with the Assethub tests in `SwapsToAssethub`.
-  // serialTest('SwapLessThanED', swapLessThanED, 360);
+  // Test this separately because it has a swap to HubDot which causes flakiness when run in
+  // parallel with the Assethub tests in `SwapsToAssethub`.
+  serialTest('SwapLessThanED', swapLessThanED, 360);
 
-  // // Test this separately since some other tests rely on single member governance.
-  // serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 120);
+  // Test this separately since some other tests rely on single member governance.
+  serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 120);
 
-  // // Tests that only work if there is more than one node
-  // if (numberOfNodes > 1) {
-  //   concurrentTest('PolkadotRuntimeUpdate', testPolkadotRuntimeUpdate, 1300);
-  // }
+  // Tests that only work if there is more than one node
+  if (numberOfNodes > 1) {
+    concurrentTest('PolkadotRuntimeUpdate', testPolkadotRuntimeUpdate, 1300);
+  }
 
-  // // Post test checks
-  // serialTest('CheckSolEventAccountsClosure', checkSolEventAccountsClosure, 150);
-  // serialTest('CheckAvailabilityAllSolanaNonces', checkAvailabilityAllSolanaNonces, 50);
+  // Post test checks
+  serialTest('CheckSolEventAccountsClosure', checkSolEventAccountsClosure, 150);
+  serialTest('CheckAvailabilityAllSolanaNonces', checkAvailabilityAllSolanaNonces, 50);
 });
 
 // Run only the broker level screening tests
