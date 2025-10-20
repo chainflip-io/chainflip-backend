@@ -31,14 +31,14 @@ impl TryFrom<Value> for MinimizedScaleValue {
 }
 
 impl MinimizedScaleValue {
-	pub fn get_struct_field(&self, field_name: String) -> Result<Self, &'static str> {
+	pub fn get_struct_field(&self, field_name: String) -> Result<Self, String> {
 		match &self {
 			Self::NamedStruct(fs) => fs
 				.iter()
 				.find(|(name, _)| *name == field_name)
-				.ok_or("field with this name not found")
+				.ok_or(format!("field with this name not found: {:?}", field_name))
 				.map(|(_, v)| (*v).clone()),
-			_ => Err("this value is not a struct"),
+			_ => Err("this value is not a struct".to_string()),
 		}
 	}
 
@@ -66,6 +66,14 @@ impl MinimizedScaleValue {
 					}
 				})
 				.collect::<Result<Vec<T>, _>>()
+		} else {
+			Err(())
+		}
+	}
+
+	pub fn extract_hex_bytes(&self) -> Result<Vec<u8>, ()> {
+		if let Self::Primitive(Primitive::String(s)) = self.clone() {
+			hex::decode(s).map_err(|_| ())
 		} else {
 			Err(())
 		}

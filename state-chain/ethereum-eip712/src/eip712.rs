@@ -6,7 +6,7 @@ use ethabi::{
 	ethereum_types::{Address, H160, U256},
 	ParamType, Token,
 };
-use scale_value::{Composite, Primitive, ValueDef};
+use scale_value::Primitive;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use scale_info::prelude::{
@@ -427,18 +427,17 @@ pub fn encode_data(
 		for field in fields.iter() {
 			// handle recursive types
 
-			let field = encode_field(
-				types,
-				&field.name,
-				&field.r#type,
-				&data.get_struct_field(field.name.clone()).map_err(|e| {
-					Eip712Error::Message(format!("Failed to get fields from data: {e}"))
-				})?,
-			)?;
-			tokens.push(field);
-			//  else if types.contains_key(&field.r#type) {
-			// 	tokens.push(Token::Uint(U256::zero()));
-			// }
+			if let Ok(field_value) = data.get_struct_field(field.name.clone()) {
+				let field = encode_field(types, &field.name, &field.r#type, &field_value)?;
+				tokens.push(field);
+			} else if types.contains_key(&field.r#type) {
+				tokens.push(Token::Uint(U256::zero()));
+			} else {
+				return Err(Eip712Error::Message(format!(
+					"Failed to get field data for field: {}",
+					field.name
+				)));
+			}
 		}
 	}
 
@@ -573,19 +572,13 @@ pub fn encode_field(
 					match param {
 						ParamType::Address => Token::Address(H160(
 							value
-								.extract_primitive_types()
+								.extract_hex_bytes()
 								.and_then(|r| r.try_into().map_err(|_| ()))
 								.map_err(|_| err)?,
 						)),
-						ParamType::Bytes => {
-							if let Ok(bytes) = value.extract_primitive_array::<u8>() {
-								Token::Bytes(bytes)
-							} else {
-								Token::Bytes(
-									value.extract_primitive_types::<u8>().map_err(|_| err)?,
-								)
-							}
-						},
+						ParamType::Bytes => encode_eip712_type(Token::Bytes(
+							value.extract_hex_bytes().map_err(|_| err)?,
+						)),
 
 						ParamType::Int(_) =>
 							return Err(Eip712Error::Message(format!("Unsupported type {s}",))),

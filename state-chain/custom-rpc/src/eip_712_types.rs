@@ -14,21 +14,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use cf_primitives::ChainflipNetwork;
+use codec::{Decode, Encode};
+use ethereum_eip712::eip712::{EIP712Domain, Eip712DomainType, Eip712Error, Types};
 use pallet_cf_environment::TransactionMetadata;
+use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
-
-/// Represents the name and type pair
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Eip712DomainType {
-	pub name: String,
-	#[serde(rename = "type")]
-	pub r#type: String,
-}
-
-pub type Types = BTreeMap<String, Vec<Eip712DomainType>>;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,89 +39,98 @@ pub struct TypedData {
 	pub message: BTreeMap<String, Value>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EIP712Domain {
-	///  The user readable name of signing domain, i.e. the name of the DApp or the protocol.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub name: Option<String>,
-
-	/// The current major version of the signing domain. Signatures from different versions are not
-	/// compatible.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub version: Option<String>,
-
-	/// The EIP-155 chain id. The user-agent should refuse signing if it does not match the
-	/// currently active chain.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub chain_id: Option<sp_core::U256>,
-
-	/// The address of the contract that will verify the signature.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub verifying_contract: Option<sp_core::H160>,
-
-	/// A disambiguating salt for the protocol. This can be used as a domain separator of last
-	/// resort.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub salt: Option<[u8; 32]>,
+#[derive(Encode, Decode, TypeInfo)]
+pub struct ChainflipExtrinsic {
+	pub call: state_chain_runtime::RuntimeCall,
+	pub transaction_metadata: TransactionMetadata,
 }
 
 // Building the EIP-712 typed data customized to the types we expect
 // and validate in the pallet_cf_environment::submit_runtime_call.rs
 pub fn build_eip712_typed_data(
 	chainflip_network: &ChainflipNetwork,
-	call: Vec<u8>,
+	call: state_chain_runtime::RuntimeCall,
 	transaction_metadata: &TransactionMetadata,
 	spec_version: u32,
-) -> Result<TypedData, serde_json::Error> {
-	let json = serde_json::json!({
-		"domain": {
-			"name": chainflip_network.as_str().to_string(),
-			"version": spec_version.to_string(),
-		},
-		"types": {
-			"EIP712Domain": [
-				{
-					"name": "name",
-					"type": "string"
-				},
-				{
-					"name": "version",
-					"type": "string"
-				},
-			],
-			"Metadata": [
-				{ "name": "nonce", "type": "uint32" },
-				{ "name": "expiryBlock", "type": "uint32" },
-			],
-			"RuntimeCall": [
-				{
-					"name": "value",
-					"type": "bytes"
-				}
-			],
-			"Transaction": [
-				{
-					"name": "call",
-					"type": "RuntimeCall"
-				},
-				{
-					"name": "metadata",
-					"type": "Metadata"
-				},
-			]
-		},
-		"primaryType": "Transaction",
-		"message": {
-			"call": {
-				"value": format!("0x{}", hex::encode(&call)),
-			},
-			"metadata": {
-				"nonce": transaction_metadata.nonce.to_string(),
-				"expiryBlock": transaction_metadata.expiry_block.to_string(),
-			},
-		}
-	});
+) -> Result<TypedData, Eip712Error> {
+	let domain = ethereum_eip712::eip712::EIP712Domain {
+		name: Some(chainflip_network.as_str().to_string()),
+		version: Some(spec_version.to_string()),
+		chain_id: None,
+		verifying_contract: None,
+		salt: None,
+	};
 
-	serde_json::from_value(json)
+	let typed_data = ethereum_eip712::encode_eip712_using_type_info(
+		ChainflipExtrinsic { call, transaction_metadata: *transaction_metadata },
+		domain,
+	)?;
+
+	let message_scale_value: scale_value::Value = typed_data.message.clone().into();
+
+	let mut types = typed_data.types.clone();
+	types.insert(
+		"EIP712Domain".to_string(),
+		vec![
+			Eip712DomainType { name: "name".to_string(), r#type: "string".to_string() },
+			Eip712DomainType { name: "version".to_string(), r#type: "string".to_string() },
+		],
+	);
+
+	Ok(TypedData {
+		domain: typed_data.domain,
+		types,
+		primary_type: typed_data.primary_type,
+		message: serde_json::to_value(message_scale_value)?
+			.as_object()
+			.ok_or(Eip712Error::Message(
+				"the primary type is not a JSON object but one of the primitive types".to_string(),
+			))?
+			.clone()
+			.into_iter()
+			.collect(),
+	})
+}
+
+#[test]
+fn test_build_eip712_typed_data() {
+	use pallet_cf_ingress_egress::DepositWitness;
+	let chainflip_network = ChainflipNetwork::Mainnet;
+
+	let call = state_chain_runtime::RuntimeCall::SolanaIngressEgress(
+		pallet_cf_ingress_egress::Call::process_deposits {
+			deposit_witnesses: vec![
+				DepositWitness {
+					deposit_address: [3u8; 32].into(),
+					amount: 5000u64,
+					asset: cf_chains::assets::sol::Asset::Sol,
+					deposit_details: (),
+				},
+				DepositWitness {
+					deposit_address: [4u8; 32].into(),
+					amount: 6000u64,
+					asset: cf_chains::assets::sol::Asset::SolUsdc,
+					deposit_details: (),
+				},
+			],
+			block_height: 6u64,
+		},
+	);
+
+	let transaction_metadata = TransactionMetadata { nonce: 1, expiry_block: 1000 };
+	let spec_version = 1;
+
+	let typed_data_result =
+		build_eip712_typed_data(&chainflip_network, call, &transaction_metadata, spec_version)
+			.unwrap();
+
+	println!(
+		"Typed Data: {:#?}",
+		serde_json::to_writer_pretty(std::io::stdout(), &typed_data_result).unwrap()
+	);
+
+	// assert_eq!(
+	// 	hex::encode(eip_hash),
+	// 	"e8842057ce73848ea270aa3fed7c843970736c0c2ead670d09e08c358cc46f29"
+	// );
 }

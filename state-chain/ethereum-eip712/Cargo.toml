@@ -32,7 +32,7 @@ serde = { workspace = true, features = ["derive", "alloc"] }
 sp-std = { workspace = true }
 ethabi = { workspace = true }
 serde_json = { workspace = true, features = ["alloc"] }
-scale-value = "0.18.0"
+scale-value = { workspace = true }
 codec = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]

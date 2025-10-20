@@ -145,6 +145,7 @@ rlp = { version = "0.5.2", default-features = false }
 rocksdb = { version = "0.21.0" }
 scale-decode = { version = "0.13" }
 scale-info = { version = "2.11.1", default-features = false }
+scale-value = { version = "0.18.0" }
 scale-type-resolver = { version = "0.2" }
 schnorrkel = { version = "0.11.4" }
 scopeguard = { version = "1.2.0" }

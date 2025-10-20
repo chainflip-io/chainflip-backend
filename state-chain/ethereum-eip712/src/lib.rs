@@ -6,14 +6,14 @@ use scale_info::{
 		format,
 		string::{String, ToString},
 	},
-	Field, MetaType, Path, Registry, TypeDef, TypeDefPrimitive, TypeInfo,
+	Field, MetaType, Registry, TypeDef, TypeDefPrimitive, TypeInfo,
 };
 use scale_value::{Composite, Primitive, Value, ValueDef};
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use crate::{
-	eip712::{EIP712Domain, Eip712, Eip712DomainType, Eip712Error, TypedData},
+	eip712::{EIP712Domain, Eip712DomainType, Eip712Error, TypedData},
 	hash::keccak256,
 };
 use minimized_scale_value::MinimizedScaleValue;
@@ -56,6 +56,44 @@ pub fn encode_eip712_using_type_info<T: TypeInfo + Encode + Decode + 'static>(
 	Ok(typed_data)
 }
 
+enum AddTypeOrNot {
+	DontAdd,
+	AddType { type_fields: Vec<Eip712DomainType> },
+}
+
+pub fn scale_value_bytes_to_hex(v: Value) -> Result<Value, &'static str> {
+	if let ValueDef::Composite(Composite::Unnamed(v)) = v.value {
+		Ok(Value {
+			value: ValueDef::Primitive(Primitive::String(
+				"0x".to_string() +
+					&hex::encode(
+						v.into_iter()
+							.map(|e| match e.value {
+								ValueDef::Primitive(Primitive::U128(b)) =>
+									Ok(b.try_into().map_err(|_| "u128 to u8 conversion failed")?),
+								_ => Err("Expected u8 primitive"),
+							})
+							.collect::<Result<Vec<u8>, _>>()?,
+					),
+			)),
+			context: (),
+		})
+	} else {
+		Err("Expected unnamed composite for bytes extraction")
+	}
+}
+
+fn extract_primitive_types(v: Composite<()>) -> Result<Value, &'static str> {
+	if let Composite::Unnamed(fs) = v {
+		if fs.len() != 1 {
+			return Err("expected one element");
+		}
+		Ok(fs[0].clone())
+	} else {
+		Err("expected Unnamed")
+	}
+}
+
 pub fn recursively_construct_types(
 	v: Value,
 	ty: MetaType,
@@ -64,19 +102,51 @@ pub fn recursively_construct_types(
 	//handle errors
 	let t = ty.type_info();
 
-	let (mut type_name, (fields, value)): (String, (Vec<Eip712DomainType>, Value)) =
+	let (mut type_name, (maybe_add_type, value)): (String, (AddTypeOrNot, Value)) =
 		match (t.type_def, v.value.clone()) {
 			(TypeDef::Composite(type_def_composite), ValueDef::Composite(comp_value)) =>
 			// if the type is primitive_types::H160, we interpret it as an address. We also map
 			// other primitives to solidity primitives directly without recursing further.
 				match t.path.segments.as_slice() {
-					["primitive_types", "H160"] => ("address".to_string(), (vec![], v)),
-					["primitive_types", "U256"] => ("uint256".to_string(), (vec![], v)),
-					["primitive_types", "U128"] => ("uint128".to_string(), (vec![], v)),
-					["primitive_types", "H128"] => ("bytes".to_string(), (vec![], v)),
-					["primitive_types", "H256"] => ("bytes".to_string(), (vec![], v)),
-					["primitive_types", "H384"] => ("bytes".to_string(), (vec![], v)),
-					["primitive_types", "H512"] => ("bytes".to_string(), (vec![], v)),
+					["primitive_types", "H160"] => (
+						"address".to_string(),
+						(
+							AddTypeOrNot::DontAdd,
+							scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
+						),
+					),
+					["primitive_types", "U256"] =>
+						("uint256".to_string(), (AddTypeOrNot::DontAdd, v)),
+					["primitive_types", "U128"] =>
+						("uint128".to_string(), (AddTypeOrNot::DontAdd, v)),
+					["primitive_types", "H128"] => (
+						"bytes".to_string(),
+						(
+							AddTypeOrNot::DontAdd,
+							scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
+						),
+					),
+					["primitive_types", "H256"] => (
+						"bytes".to_string(),
+						(
+							AddTypeOrNot::DontAdd,
+							scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
+						),
+					),
+					["primitive_types", "H384"] => (
+						"bytes".to_string(),
+						(
+							AddTypeOrNot::DontAdd,
+							scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
+						),
+					),
+					["primitive_types", "H512"] => (
+						"bytes".to_string(),
+						(
+							AddTypeOrNot::DontAdd,
+							scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
+						),
+					),
 					path => (
 						path.last()
 							// Should never error. Its a composite type so the name has to exist
@@ -85,54 +155,85 @@ pub fn recursively_construct_types(
 						process_composite(type_def_composite.fields, comp_value, types)?,
 					),
 				},
-			(TypeDef::Variant(type_def_variant), ValueDef::Variant(value_variant)) => (
-				t.path
-					.ident()
-					// Should never error. Its a composite type so the name has to exist
-					.ok_or("Type doesnt have a name")?
-					.to_string() + "__" +
-					&value_variant.name.to_string(),
-				// find the variant in type_def_variant that matches the
+			(TypeDef::Variant(type_def_variant), ValueDef::Variant(value_variant)) =>
+			// find the variant in type_def_variant that matches the variant the value is
+			// initialized with
 				type_def_variant
 					.variants
 					.into_iter()
 					.find(|variant| value_variant.name == variant.name)
-					.map(|variant| process_composite(variant.fields, value_variant.values, types))
-					.ok_or(
-						"variant name in value should match one of the variants in type def",
-					)??,
-			),
+					.map(|variant| -> Result<_, &'static str> {
+						if variant.fields.is_empty() {
+							Ok((
+								"string".to_string(),
+								(
+									AddTypeOrNot::DontAdd,
+									Value::string(value_variant.name.to_string()),
+								),
+							))
+						} else {
+							Ok((
+								t.path
+									.ident()
+									// Should never error. Its a composite type so the name has to
+									// exist
+									.ok_or("Type doesnt have a name")?
+									.to_string() + "__" + &value_variant.name.to_string(),
+								process_composite(variant.fields, value_variant.values, types)?,
+							))
+						}
+					})
+					.ok_or("variant name in value should match one of the variants in type def")??,
 
 			(TypeDef::Sequence(type_def_sequence), ValueDef::Composite(Composite::Unnamed(fs))) => {
-				let (type_name, _) = recursively_construct_types(
-					fs[0].clone(),
-					type_def_sequence.type_param,
-					types,
-				)?;
-				(
-					// convert the type name of the sequence to something like "TypeName[]". If its
-					// aa sequence to type u8, then we interpret it as bytes
-					if type_name == "u8" { "bytes".to_string() } else { type_name + "[]" },
-					// ensures that we dont add this type to types list
-					(vec![], v),
-				)
+				let (type_names, values): (Vec<_>, Vec<_>) = fs
+					.into_iter()
+					.map(|f| recursively_construct_types(f, type_def_sequence.type_param, types))
+					.collect::<Result<Vec<_>, _>>()?
+					.into_iter()
+					.unzip();
+
+				let modified_value =
+					Value::without_context(ValueDef::Composite(Composite::Unnamed(values)));
+				// convert the type name of the sequence to something like "TypeName[]".
+				// If its a sequence of type u8, then we interpret it as bytes.
+				// empty vec![] ensures that we dont add this type to types list
+				if type_names[0] == "uint8" {
+					(
+						"bytes".to_string(),
+						(AddTypeOrNot::DontAdd, scale_value_bytes_to_hex(modified_value)?),
+					)
+				} else {
+					(type_names[0].clone() + "[]", (AddTypeOrNot::DontAdd, modified_value))
+				}
 			},
 			(TypeDef::Array(type_def_array), ValueDef::Composite(Composite::Unnamed(fs))) => {
-				let (type_name, _) =
-					recursively_construct_types(fs[0].clone(), type_def_array.type_param, types)?;
-				(
-					// convert the type name of the array to something like "TypeName[len]"
-					if type_name == "u8" {
-						"bytes".to_string()
-					} else {
-						type_name + "[" + &type_def_array.len.to_string() + "]"
-					},
-					// ensures that we dont add this type to types list
-					(vec![], v),
-				)
+				let (type_names, values): (Vec<_>, Vec<_>) = fs
+					.into_iter()
+					.map(|f| recursively_construct_types(f, type_def_array.type_param, types))
+					.collect::<Result<Vec<_>, _>>()?
+					.into_iter()
+					.unzip();
+				let modified_value =
+					Value::without_context(ValueDef::Composite(Composite::Unnamed(values)));
+
+				// convert the type name of the array to something like "TypeName[len]".
+				// If its a sequence of type u8, then we interpret it as bytes.
+				// vec![] ensures that we dont add this type to types list
+				if type_names[0] == "uint8" {
+					(
+						"bytes".to_string(),
+						(AddTypeOrNot::DontAdd, scale_value_bytes_to_hex(modified_value)?),
+					)
+				} else {
+					(
+						type_names[0].clone() + "[" + &type_def_array.len.to_string() + "]",
+						(AddTypeOrNot::DontAdd, modified_value),
+					)
+				}
 			},
 			(TypeDef::Tuple(type_def_tuple), ValueDef::Composite(Composite::Unnamed(fs))) => {
-				let (fields, values): (_, Vec<(String, Value)>) = type_def_tuple
+				let (type_fields, values): (_, Vec<(String, Value)>) = type_def_tuple
 					.fields
 					.clone()
 					.into_iter()
@@ -144,8 +245,8 @@ pub fn recursively_construct_types(
 						let field_name = type_name.clone() + "__" + &i.to_string();
 						Ok((
 							Eip712DomainType {
-								// In case of unnamed fields, we decide to name it by its type name
-								// appended by its index in the tuple
+								// In case of unnamed type_fields, we decide to name it by its type
+								// name appended by its index in the tuple
 								name: field_name.clone(),
 								r#type: type_name,
 							},
@@ -157,14 +258,14 @@ pub fn recursively_construct_types(
 					.unzip();
 				(
 					// In case of tuple, we decide to name it "UnnamedTuple_{first 4 bytes of hash
-					// of the fields}" since tuples, although supported in solidity, cant be
+					// of the type_fields}" since tuples, although supported in solidity, cant be
 					// easily displayed in metamask. Naming it so will display it in metamask
 					// which will indicate to the signer that this is indeed a tuple. The 4
 					// bytes of hash is just to avoid name collisions in case there are
 					// multiple unnamed tuples.
 					"UnnamedTuple__".to_string() +
-						&hex::encode(&keccak256(format!("{fields:?}"))[..4]),
-					(fields, Value::named_composite(values)),
+						&hex::encode(&keccak256(format!("{type_fields:?}"))[..4]),
+					(AddTypeOrNot::AddType { type_fields }, Value::named_composite(values)),
 				)
 			},
 			(TypeDef::Primitive(type_def_primitive), ValueDef::Primitive(_p)) => (
@@ -185,12 +286,12 @@ pub fn recursively_construct_types(
 					TypeDefPrimitive::I128 => "int128".to_string(),
 					TypeDefPrimitive::I256 => "int256".to_string(),
 				},
-				(vec![], v),
+				(AddTypeOrNot::DontAdd, v),
 			),
 			(TypeDef::Compact(type_def_compact), _) => {
 				let (type_name, c_value) =
 					recursively_construct_types(v.clone(), type_def_compact.type_param, types)?;
-				(type_name, (vec![], c_value))
+				(type_name, (AddTypeOrNot::DontAdd, c_value))
 			},
 			// this is only used when scale-info's bitvec feature is enabled and since we dont use
 			// that feature, this variant should be unreachable.
@@ -199,32 +300,35 @@ pub fn recursively_construct_types(
 			_ => return Err("Type and Value do not match"),
 		};
 
-	// If there are generic parameters to this type, append uniqueness to the type name to avoid
-	// collisions
-	if t.type_params.len() > 0 {
-		type_name = type_name + "__" + &hex::encode(&keccak256(format!("{fields:?}"))[..4]);
-	}
+	if let AddTypeOrNot::AddType { type_fields } = maybe_add_type {
+		// If there are generic parameters to this type, append uniqueness to the type name to avoid
+		// collisions
+		if t.type_params.len() > 0 {
+			type_name =
+				type_name + "__" + &hex::encode(&keccak256(format!("{type_fields:?}"))[..4]);
+		}
 
-	//TODO: maybe use the full path as the type name to avoid collisions due to same name types in
-	// different paths
+		//TODO: maybe use the full path as the type name to avoid collisions due to same name types
+		// in different paths
 
-	// Only insert if there are fields (to avoid empty struct definitions)
-	if !fields.is_empty() {
-		types.insert(type_name.clone(), fields);
+		types.insert(type_name.clone(), type_fields);
+		// Only insert if there are fields (to avoid empty struct definitions)
+		// if !fields.is_empty() {
+		// }
 	}
 
 	Ok((type_name, value))
 }
 
 fn process_composite(
-	fields: Vec<Field>,
+	type_fields: Vec<Field>,
 	comp_value: Composite<()>,
 	types: &mut BTreeMap<String, Vec<Eip712DomainType>>,
-) -> Result<(Vec<Eip712DomainType>, Value), &'static str> {
+) -> Result<(AddTypeOrNot, Value), &'static str> {
 	match comp_value {
 		Composite::Named(fs) => {
 			let fs_map = fs.into_iter().collect::<BTreeMap<_, _>>();
-			fields
+			type_fields
 				.clone()
 				.into_iter()
 				.map(|field| -> Result<_, &'static str> {
@@ -232,8 +336,7 @@ fn process_composite(
 					let field_name = field.name.ok_or("field name doesn't exist")?.to_string();
 					let value =
 						fs_map.get(&field_name).ok_or("field with this name has to exist")?.clone();
-					let (type_name, value) =
-						recursively_construct_types(value.clone(), field.ty, types)?;
+					let (type_name, value) = recursively_construct_types(value, field.ty, types)?;
 					Ok((
 						Eip712DomainType { name: field_name.clone(), r#type: type_name },
 						(field_name, value),
@@ -242,7 +345,7 @@ fn process_composite(
 				.collect::<Result<_, _>>()
 		},
 		Composite::Unnamed(fs) => {
-			fields
+			type_fields
 				.clone()
 				.into_iter()
 				.zip(fs)
@@ -250,7 +353,7 @@ fn process_composite(
 				.map(|(i, (field, value))| -> Result<_, &'static str> {
 					let (type_name, value) =
 						recursively_construct_types(value.clone(), field.ty, types)?;
-					// In case of unnamed fields, we decide to name it by its type name
+					// In case of unnamed type_fields, we decide to name it by its type name
 					// appended by its index in the tuple
 					let field_name = type_name.clone() + "_" + &i.to_string();
 					Ok((
@@ -262,8 +365,8 @@ fn process_composite(
 		},
 	}
 	.map(|v: Vec<(Eip712DomainType, (String, Value))>| {
-		let (fs, vs): (_, Vec<(String, Value)>) = v.into_iter().unzip();
-		(fs, Value::named_composite(vs))
+		let (type_fields, vals): (_, Vec<(String, Value)>) = v.into_iter().unzip();
+		(AddTypeOrNot::AddType { type_fields }, Value::named_composite(vals))
 	})
 }
 
@@ -271,9 +374,9 @@ fn process_composite(
 pub mod tests {
 
 	use super::*;
+	use crate::eip712::Eip712;
 	use ethabi::ethereum_types::{H160, U256};
 	use scale_info::prelude::string::String;
-	//se serde::Deserialize;
 
 	#[test]
 	fn test_type_info_eip_712() {
@@ -321,7 +424,7 @@ pub mod tests {
 			&portable_registry,
 		)
 		.unwrap();
-		//println!("{:?}", encode_eip712_using_type_info(t, domain))
+		// println!("{:?}", encode_eip712_using_type_info(t, domain))
 		println!("{:?}", val);
 		// println!("{:?}", encode_eip712_using_type_info(payload,
 		// domain).unwrap().encode_eip712());
@@ -337,7 +440,7 @@ pub mod tests {
 	#[test]
 	fn playground() {
 		use scale_value;
-		let _domain = EIP712Domain {
+		let domain = EIP712Domain {
 			name: Some(String::from("Seaport")),
 			version: Some(String::from("1.1")),
 			chain_id: Some(U256([1, 0, 0, 0])),
@@ -368,7 +471,17 @@ pub mod tests {
 			C(Vec<u128>),
 			D { dd: u16 },
 		}
+		#[derive(TypeInfo, Encode, Decode)]
+		pub struct TestEmpty;
+		#[derive(TypeInfo, Encode, Decode)]
+		pub struct TestEmptyNested(TestEmpty);
 
+		#[derive(TypeInfo, Encode, Decode)]
+		pub enum TestEmptyEnum {
+			Aaaaa,
+			Bbbbb,
+		}
+		println!("{:?}", encode_eip712_using_type_info(TestEmptyEnum::Aaaaa, domain));
 		#[derive(TypeInfo, Encode, Decode)]
 		pub struct Abs((u8, u128));
 
@@ -381,7 +494,7 @@ pub mod tests {
 		let mut registry = Registry::new();
 		// registry.register_type(&MetaType::new::<Test1<u64, Test1<u8, u16>>>());
 		//let id = registry.register_type(&MetaType::new::<TestEnum<u8, Mail>>());
-		let id = registry.register_type(&MetaType::new::<U256>());
+		let id = registry.register_type(&MetaType::new::<TestEmptyNested>());
 
 		//let types = vec![];
 		for (id, ty) in registry.types() {
@@ -390,17 +503,10 @@ pub mod tests {
 		}
 
 		let portable_registry: scale_info::PortableRegistry = registry.into();
-		let val = scale_value::scale::decode_as_type(
-			&mut &U256(Default::default()).encode()[..],
-			id.id,
-			&portable_registry,
-		)
-		.unwrap();
+		let val =
+			scale_value::scale::decode_as_type(&mut &().encode()[..], id.id, &portable_registry)
+				.unwrap();
 		//println!("{:?}", encode_eip712_using_type_info(t, domain))
 		println!("{:?}", val);
-		let jsonv = serde_json::to_value((5u8, "six")).unwrap();
-		println!("{:?}", jsonv);
-		let va: U256 = serde_json::from_value(jsonv).unwrap();
-		println!("{:?}", va);
 	}
 }
