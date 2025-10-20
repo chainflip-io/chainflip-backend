@@ -715,7 +715,7 @@ pub trait FundingInfo {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum AdditionalDepositAction {
 	FundFlip {
-		flip_amount_to_credit: Option<cf_primitives::AssetAmount>,
+		flip_amount_to_credit: cf_primitives::AssetAmount,
 		role_to_register: AccountRole,
 	},
 }
@@ -959,6 +959,8 @@ pub trait CommKeyBroadcaster {
 pub trait FlipBurnInfo {
 	/// Takes the available Flip and returns it.
 	fn take_flip_to_burn() -> AssetAmount;
+
+	fn take_flip_to_be_sent_to_gateway() -> AssetAmount;
 }
 
 /// The trait implementation is intentionally no-op by default

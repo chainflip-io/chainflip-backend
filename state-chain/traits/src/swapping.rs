@@ -55,7 +55,6 @@ pub enum SwapOutputActionGeneric<Address, AccountId> {
 	},
 	CreditFlipAndTransferToGateway {
 		account_id: AccountId,
-		role_to_register: AccountRole,
 	},
 }
 
@@ -81,10 +80,8 @@ impl<AccountId> SwapRequestType<AccountId> {
 						SwapOutputActionEncoded::CreditLendingPool { swap_type },
 					SwapOutputAction::CreditFlipAndTransferToGateway {
 						account_id,
-						role_to_register,
 					} => SwapOutputActionEncoded::CreditFlipAndTransferToGateway {
 						account_id,
-						role_to_register,
 					},
 				},
 			},
