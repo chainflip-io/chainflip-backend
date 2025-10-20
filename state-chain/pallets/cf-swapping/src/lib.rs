@@ -612,6 +612,10 @@ pub mod pallet {
 	/// FLIP ready to be burned.
 	#[pallet::storage]
 	pub type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+	
+	/// FLIP ready to be sent to gateway.
+	#[pallet::storage]
+	pub type FlipToBeSentToGateway<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
 	/// Interval at which we buy FLIP in order to burn it.
 	#[pallet::storage]
@@ -1532,6 +1536,10 @@ pub mod pallet {
 			// 	return Err(DispatchError::from(Error::<T>::InvalidUserSignatureData));
 			// };
 
+
+			//TODO: Use proper error -> do we want to check this?
+			// ensure!(T::AccountRoleRegistry::is_unregistered(target_account_id), Error::<T>::);
+
 			let refund_address_internal =
 				T::AddressConverter::decode_and_validate_address_for_asset(
 					refund_address.clone(),
@@ -1547,7 +1555,7 @@ pub mod pallet {
 					boost_fee,
 					refund_address_internal,
 					Some(AdditionalDepositAction::FundFlip {
-						flip_amount_to_credit: Some(5000000000000000000), //5FLIP
+						flip_amount_to_credit: 5000000000000000000, //5FLIP
 						role_to_register: AccountRole::LiquidityProvider,
 					}),
 				)?;
@@ -2106,19 +2114,21 @@ pub mod pallet {
 							SwapOutputAction::CreditLendingPool { swap_type } => {
 								log_or_panic!("Unexpected refund of a loan swap: {swap_type:?}");
 							},
+							//TODO: Not sure this is even possible we won't do a DCA swap to get the few flip necessary to fund an account
+							//check that we trigger normal swap without dca
 							SwapOutputAction::CreditFlipAndTransferToGateway {
 								account_id,
-								role_to_register,
 							} => {
 								if request.output_asset == Asset::Flip {
 									T::FundAccount::fund_account(
 										account_id.clone(),
 										None,
-										dca_state.accumulated_output_amount.into(),
+										dca_state.accumulated_output_amount.saturating_sub(100_000_000_000_000_000).into(),
 										FundingSource::Swap { swap_request_id },
-									)
-
-									// TODO: transfer funds to gateway
+									);
+									FlipToBeSentToGateway::<T>::mutate(|total| {
+										total.saturating_accrue(dca_state.accumulated_output_amount);
+									});
 								} else {
 									log_or_panic!("Encountered transfer to gateway swap for asset that isn't Flip: {swap_request_id:?}");
 								}
@@ -2256,17 +2266,17 @@ pub mod pallet {
 								},
 								SwapOutputAction::CreditFlipAndTransferToGateway {
 									account_id,
-									role_to_register,
 								} => {
 									if request.output_asset == Asset::Flip {
 										T::FundAccount::fund_account(
 											account_id.clone(),
 											None,
-											dca_state.accumulated_output_amount.into(),
+											output_amount.saturating_sub(100_000_000_000_000_000).into(),
 											FundingSource::Swap { swap_request_id },
-										)
-
-										// TODO: transfer funds to gateway
+										);
+										FlipToBeSentToGateway::<T>::mutate(|total| {
+											total.saturating_accrue(output_amount);
+										});
 									} else {
 										log_or_panic!("Encountered transfer to gateway swap for asset that isn't Flip: {swap_request_id:?}");
 									}
@@ -3008,6 +3018,9 @@ pub mod pallet {
 impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	fn take_flip_to_burn() -> AssetAmount {
 		FlipToBurn::<T>::take()
+	}
+	fn take_flip_to_be_sent_to_gateway() -> AssetAmount {
+		FlipToBeSentToGateway::<T>::take()
 	}
 }
 
