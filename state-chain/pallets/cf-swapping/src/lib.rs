@@ -25,15 +25,15 @@ use cf_chains::{
 	SwapOrigin,
 };
 use cf_primitives::{
-	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
-	BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceLimits, SwapId, SwapLeg,
+	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
+	Beneficiary, BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceLimits, SwapId, SwapLeg,
 	SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
 	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, FundingSource,
+	impl_pallet_safe_mode, AdditionalDepositAction, AffiliateRegistry, AssetConverter, BalanceApi,
+	Bonding, ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, FundingSource,
 	IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction,
 	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
 	SwappingApi,
@@ -878,7 +878,7 @@ pub mod pallet {
 			reason: SwapFailureReason,
 		},
 		// TODO: This is now duplicated between pallet-cf-lp and pallet-cf-swapping
-		LiquidityDepositAddressReady {
+		AccountCreationDepositAddressReady {
 			channel_id: ChannelId,
 			asset: Asset,
 			deposit_address: EncodedAddress,
@@ -1528,7 +1528,7 @@ pub mod pallet {
 			external_account: UserSignatureData,
 			asset: Asset,
 			boost_fee: BasisPoints,
-			refund_address: ForeignChainAddress,
+			refund_address: EncodedAddress,
 		) -> DispatchResult {
 			// TODO, how to do this?
 			// ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
@@ -1543,7 +1543,12 @@ pub mod pallet {
 			// 	return Err(DispatchError::from(Error::<T>::InvalidUserSignatureData));
 			// };
 
-			// TODO: verify that refund address is for the correct chain/asset
+			let refund_address_internal =
+				T::AddressConverter::decode_and_validate_address_for_asset(
+					refund_address.clone(),
+					asset,
+				)
+				.map_err(address_error_to_pallet_error::<T>)?;
 
 			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
 				T::DepositHandler::request_liquidity_deposit_address(
@@ -1551,10 +1556,14 @@ pub mod pallet {
 					target_account_id.clone(),
 					asset,
 					boost_fee,
-					refund_address,
+					refund_address_internal,
+					Some(AdditionalDepositAction::FundFlip {
+						flip_amount_to_credit: Some(5000000000000000000), //5FLIP
+						role_to_register: AccountRole::LiquidityProvider,
+					}),
 				)?;
 
-			Self::deposit_event(Event::LiquidityDepositAddressReady {
+			Self::deposit_event(Event::AccountCreationDepositAddressReady {
 				channel_id,
 				asset,
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
@@ -2116,7 +2125,7 @@ pub mod pallet {
 									T::FundAccount::fund_account(
 										account_id.clone(),
 										None,
-										dca_state.accumulated_output_amount,
+										dca_state.accumulated_output_amount.into(),
 										FundingSource::Swap { swap_request_id },
 									)
 
@@ -2263,7 +2272,18 @@ pub mod pallet {
 									account_id,
 									role_to_register,
 								} => {
-									// TODO do the same as above
+									if request.output_asset == Asset::Flip {
+										T::FundAccount::fund_account(
+											account_id.clone(),
+											None,
+											dca_state.accumulated_output_amount.into(),
+											FundingSource::Swap { swap_request_id },
+										)
+
+										// TODO: transfer funds to gateway
+									} else {
+										log_or_panic!("Encountered transfer to gateway swap for asset that isn't Flip: {swap_request_id:?}");
+									}
 								},
 							}
 							true
