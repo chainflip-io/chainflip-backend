@@ -32,7 +32,7 @@ pub const MAX_BATCHED_CALLS: u32 = 10u32;
 // The main Solana wallets support utf-8 signing only so we can't use Anza's prefix
 // either. We strip the non-utf-8 characters from Anza's prefix. These transactions won't
 // result in on-chain Solana transactions anyway.
-pub const SOLANA_OFFCHAIN_PREFIX: &str = "solana offchain";
+pub const DOMAIN_OFFCHAIN_PREFIX: &str = "chainflip offchain";
 
 pub type BatchedCalls<T> = BoundedVec<<T as Config>::RuntimeCall, ConstU32<MAX_BATCHED_CALLS>>;
 
@@ -290,7 +290,7 @@ pub(crate) fn is_valid_signature(
 		SignatureData::Solana { signature, signer, sig_type } => {
 			let signed_payload = match sig_type {
 				SolEncodingType::Domain =>
-					format!("{}{}", SOLANA_OFFCHAIN_PREFIX, raw_payload()).into_bytes(),
+					format!("{}{}", DOMAIN_OFFCHAIN_PREFIX, raw_payload()).into_bytes(),
 			};
 			verify_sol_signature(signer, &signed_payload, signature)
 		},
