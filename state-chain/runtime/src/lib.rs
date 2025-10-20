@@ -356,6 +356,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type Bonder = Bonder<Runtime>;
 	type PriceFeedApi = ChainlinkOracle;
 	type LendingSystemApi = LendingPools;
+	type FundAccount = Funding;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -454,6 +455,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -484,6 +486,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -514,6 +517,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -544,6 +548,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -574,6 +579,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
@@ -604,6 +610,7 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
 }
 
 impl pallet_cf_pools::Config for Runtime {

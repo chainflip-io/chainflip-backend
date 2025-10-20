@@ -214,6 +214,7 @@ pub mod pallet {
 						asset,
 						boost_fee,
 						refund_address,
+						None,
 					)?;
 
 				Self::deposit_event(Event::LiquidityDepositAddressReady {
