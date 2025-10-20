@@ -821,9 +821,12 @@ impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<
 		let durable_nonce = Environment::nonce_account().map_err(|_| RejectError::Other)?;
 
 		// We expect Deposit channels to provide a deposit_fetch_id and Vault swaps to not have one.
-		if matches!(deposit_details, VaultSwapOrDepositChannelId::VaultSwapAccount(_)) && deposit_fetch_id.is_some() {
+		if matches!(deposit_details, VaultSwapOrDepositChannelId::VaultSwapAccount(_)) &&
+			deposit_fetch_id.is_some()
+		{
 			log_or_panic!("Invalid rejection: Vault swap ingress with a deposit_fetch_id");
-		} else if matches!(deposit_details, VaultSwapOrDepositChannelId::Channel(_)) && deposit_fetch_id.is_none()
+		} else if matches!(deposit_details, VaultSwapOrDepositChannelId::Channel(_)) &&
+			deposit_fetch_id.is_none()
 		{
 			log_or_panic!("Invalid rejection: Deposit channel ingress with no deposit_fetch_id");
 		}
