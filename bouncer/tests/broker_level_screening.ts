@@ -66,7 +66,6 @@ async function observeBtcAddressBalanceChange(address: string): Promise<boolean>
  * @param body The request body, is serialized as JSON.
  */
 async function postToDepositMonitor(portAndRoute: string, body: string | object) {
-  console.log(`sending request to DM: ${JSON.stringify(body)}`);
   return axios
     .post('http://127.0.0.1' + portAndRoute, JSON.stringify(body), {
       headers: {

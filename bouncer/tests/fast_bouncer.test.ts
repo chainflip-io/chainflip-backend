@@ -70,7 +70,7 @@ describe('ConcurrentTests', () => {
 });
 
 // Run only the broker level screening tests
-describe('BrokerLevelScreeningTest', () => {
+describe('BrokerLevelScreeningTestWithBoost', () => {
   concurrentTest('BrokerLevelScreening', (context) => testBrokerLevelScreening(context, true), 600);
 });
 

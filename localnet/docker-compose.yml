@@ -217,7 +217,7 @@ services:
       start_period: 10s
 
   deposit-monitor:
-    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-4f8ebd990b6103d41f7be26185cb7bb0401fb683}
+    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-d18b5c708ab9893e7b9f3425079089ff3207fd92}
     platform: linux/amd64
     container_name: deposit-monitor
     restart: unless-stopped
@@ -251,6 +251,9 @@ services:
       - CFDM_ANALYSIS_PROVIDER_ALSO_USE_BYBIT_API=false
       - CFDM_ANALYSIS_PROVIDER_ALSO_USE_BYBIT_REALTIME_API=false
       - CFDM_ANALYSIS_PROVIDER_ALSO_USE_CHAINFLIP_API=false
+
+      - CFDM_ELLIPTIC_RULES_TO_IGNORE_ANCESTOR_SCORES=""
+      - CFDM_ELLIPTIC_MIN_ANCESTOR_CONTRIBUTION_PERCENTAGE=0
 
       - CFDM_BLACKLIST_BYBIT_PROVIDER=BybitBlacklist
       - CFDM_BLACKLIST_BYBIT_URL=""
@@ -294,4 +297,4 @@ services:
 
       - CFDM_SOL_ENABLE_DEPOSIT_MONITORING=true
       - CFDM_SOL_JUDGEMENT_PROCESSOR_CONFIRMATION_TIMEOUT_SECS=300
-      - CFDM_SOL_RPC_HTTP_ENDPOINT=http://127.0.0.1:8899
+      - CFDM_SOL_RPC_HTTP_ENDPOINT=${CFDM_SOL_RPC_HTTP_ENDPOINT}
