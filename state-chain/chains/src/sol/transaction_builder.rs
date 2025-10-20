@@ -415,8 +415,6 @@ impl SolanaTransactionBuilder {
 		)
 	}
 
-	
-
 	/// Create an instruction set to rotate the current Vault agg key to the next key.
 	pub fn rotate_agg_key(
 		new_agg_key: SolAddress,
