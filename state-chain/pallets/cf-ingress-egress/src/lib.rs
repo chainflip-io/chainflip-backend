@@ -53,12 +53,12 @@ use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode,
 	lending::{BoostApi, BoostOutcome},
-	AccountRoleRegistry, AdjustedFeeEstimationApi, AffiliateRegistry, AssetConverter,
-	AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
+	AccountRoleRegistry, AdditionalDepositAction, AdjustedFeeEstimationApi, AffiliateRegistry,
+	AssetConverter, AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
-	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
-	NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails, SwapOutputAction,
-	SwapParameterValidation, SwapRequestHandler, SwapRequestType,
+	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, IngressEgressFeeApi,
+	IngressSink, IngressSource, NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails,
+	SwapOutputAction, SwapParameterValidation, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -322,14 +322,6 @@ impl<C: Chain> CrossChainMessage<C> {
 	fn asset(&self) -> C::ChainAsset {
 		self.asset
 	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum AdditionalDepositAction {
-	FundFlip {
-		flip_amount_to_credit: Option<cf_primitives::AssetAmount>,
-		role_to_register: AccountRole,
-	},
 }
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(28);
@@ -724,6 +716,11 @@ pub mod pallet {
 
 		#[pallet::constant]
 		type ScreeningBrokerId: Get<Self::AccountId>;
+
+		type FundAccount: FundAccount<
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
+		>;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -2054,9 +2051,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DepositAction<T, I> {
 		match action.clone() {
 			ChannelAction::LiquidityProvision { lp_account, additional_action, .. } => {
-				T::Balance::credit_account(&lp_account, asset.into(), amount_after_fees.into());
+				if let Some(additional_action) = additional_action {
+					//0.1FLIP
+					T::FundAccount::fund_account(
+						lp_account.clone(),
+						None,
+						100_000_000_000_000_000u128.into(),
+						FundingSource::InitialFunding,
+					);
 
-				// TODO execute additional_action
+					// TODO:
+					// - calculate input amount for ~5FLIP
+					// - start swap with that amunt
+				}
+				T::Balance::credit_account(&lp_account, asset.into(), amount_after_fees.into());
 
 				DepositAction::LiquidityProvision { lp_account }
 			},
@@ -3254,6 +3262,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		source_asset: TargetChainAsset<T, I>,
 		boost_fee: BasisPoints,
 		refund_address: ForeignChainAddress,
+		additional_action: Option<AdditionalDepositAction>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
@@ -3261,11 +3270,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		let (deposit_channel, expiry_block, channel_opening_fee) = Self::open_channel(
 			&requester_account,
 			source_asset,
-			ChannelAction::LiquidityProvision {
-				lp_account,
-				refund_address,
-				additional_action: todo!("TODO"),
-			},
+			ChannelAction::LiquidityProvision { lp_account, refund_address, additional_action },
 			boost_fee,
 		)?;
 

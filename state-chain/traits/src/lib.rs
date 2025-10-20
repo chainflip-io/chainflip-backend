@@ -712,6 +712,14 @@ pub trait FundingInfo {
 	fn total_onchain_funds() -> Self::Balance;
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum AdditionalDepositAction {
+	FundFlip {
+		flip_amount_to_credit: Option<cf_primitives::AssetAmount>,
+		role_to_register: AccountRole,
+	},
+}
+
 /// Allow pallets to open and expire deposit addresses.
 pub trait DepositApi<C: Chain> {
 	type AccountId;
@@ -724,6 +732,7 @@ pub trait DepositApi<C: Chain> {
 		source_asset: C::ChainAsset,
 		boost_fee: BasisPoints,
 		refund_address: ForeignChainAddress,
+		additional_action: Option<AdditionalDepositAction>,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
@@ -1323,8 +1332,9 @@ pub trait SpawnAccount {
 /// Used in cf_traits and in cf_funding.
 #[derive(Encode, Decode, PartialEq, Debug, TypeInfo, Clone)]
 pub enum FundingSource {
-	EthTransaction { tx_hash: cf_chains::eth::Address },
+	EthTransaction { tx_hash: [u8; 32] },
 	Swap { swap_request_id: SwapRequestId },
+	InitialFunding,
 }
 
 pub trait FundAccount {
