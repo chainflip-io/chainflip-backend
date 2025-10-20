@@ -37,8 +37,8 @@ type BlockNumber = u64;
 type StateChainBlockNumber = u32;
 
 struct MockDerivedSink;
-impl DerivedIngressSink<AccountId, BlockNumber, ()> for MockDerivedSink {
-	fn derive_deposit_details(_account: AccountId, _block_number: BlockNumber) {}
+impl DerivedIngressSink<AccountId, ()> for MockDerivedSink {
+	fn derive_deposit_details(_account: AccountId) {}
 }
 struct MockIngressSink;
 impl IngressSink for MockIngressSink {
