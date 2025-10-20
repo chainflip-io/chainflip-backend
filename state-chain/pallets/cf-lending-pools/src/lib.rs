@@ -325,7 +325,8 @@ pub mod pallet {
 
 	/// Stores the configuration for lending (updatable by governance).
 	#[pallet::storage]
-	pub type LendingConfig<T: Config> = StorageValue<_, LendingConfiguration, ValueQuery>;
+	pub type LendingConfig<T: Config> =
+		StorageValue<_, LendingConfiguration, ValueQuery, LendingConfigDefault>;
 
 	/// Stores loan accounts for borrowers and their loans.
 	#[pallet::storage]

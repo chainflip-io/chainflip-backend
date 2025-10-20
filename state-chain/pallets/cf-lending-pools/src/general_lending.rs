@@ -607,12 +607,6 @@ impl<T: Config> LoanAccount<T> {
 
 		loan.owed_principal.saturating_accrue(extra_principal);
 
-		ensure!(
-			loan.owed_principal >=
-				amount_from_usd_value::<T>(loan.asset, config.minimum_loan_amount_usd)?,
-			Error::<T>::LoanBelowMinimumAmount
-		);
-
 		Pallet::<T>::charge_origination_fee(
 			&self.borrower_id,
 			&mut loan,
@@ -950,6 +944,12 @@ impl<T: Config> LendingApi for Pallet<T> {
 		primary_collateral_asset: Option<Asset>,
 		extra_collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<LoanId, DispatchError> {
+		let config = LendingConfig::<T>::get();
+		ensure!(
+			amount_to_borrow >= amount_from_usd_value::<T>(asset, config.minimum_loan_amount_usd)?,
+			Error::<T>::LoanBelowMinimumAmount
+		);
+
 		let loan_id = NextLoanId::<T>::get();
 		NextLoanId::<T>::set(loan_id + 1);
 
@@ -1124,14 +1124,27 @@ impl<T: Config> LendingApi for Pallet<T> {
 				Error::<T>::LiquidationInProgress
 			);
 
-			let total_collateral_usd = total_usd_value_of::<T>(&collateral)?;
-			if total_collateral_usd < total_usd_value_of::<T>(&loan_account.collateral)? {
-				ensure!(
-					total_collateral_usd >=
-						LendingConfig::<T>::get().minimum_update_collateral_amount_usd,
-					Error::<T>::AmountBelowMinimum
-				);
-			}
+			// If no collateral specified, remove all collateral
+			let collateral = if collateral.is_empty() {
+				loan_account.collateral.clone()
+			} else {
+				// Check if all of the collateral being removed, else check that we are removing
+				// more than the minimum.
+				if !loan_account.collateral.iter().all(|(asset, loan_amount)| {
+					collateral
+						.get(asset)
+						.map(|remove_amount| remove_amount >= loan_amount)
+						.unwrap_or(false)
+				}) {
+					let total_collateral_usd = total_usd_value_of::<T>(&collateral)?;
+					ensure!(
+						total_collateral_usd >=
+							LendingConfig::<T>::get().minimum_update_collateral_amount_usd,
+						Error::<T>::AmountBelowMinimum
+					);
+				}
+				collateral
+			};
 
 			for (asset, amount) in &collateral {
 				ensure!(
@@ -1698,12 +1711,6 @@ pub struct LendingConfiguration {
 	pub minimum_update_loan_amount_usd: AssetAmount,
 	/// Minimum equivalent amount of collateral that can be added or removed from a loan account.
 	pub minimum_update_collateral_amount_usd: AssetAmount,
-}
-
-impl Default for LendingConfiguration {
-	fn default() -> Self {
-		LendingConfigDefault::get()
-	}
 }
 
 impl LendingConfiguration {

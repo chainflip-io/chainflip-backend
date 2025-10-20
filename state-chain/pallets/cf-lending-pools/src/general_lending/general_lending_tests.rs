@@ -2978,5 +2978,28 @@ fn adding_or_removing_collateral_minimum_is_enforced() {
 			RuntimeOrigin::signed(BORROWER),
 			BTreeMap::from([(COLLATERAL_ASSET, *extra_collateral_amount)])
 		));
+
+		// One more time we want a small amount left over for the next test case
+		assert_ok!(LendingPools::add_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			Some(COLLATERAL_ASSET),
+			BTreeMap::from([(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET + 1)])
+		));
+		assert_ok!(LendingPools::remove_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			BTreeMap::from([(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET)])
+		));
+		let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
+		let extra_collateral_amount = account.collateral.get(&COLLATERAL_ASSET).unwrap();
+		assert!(
+			extra_collateral_amount < &MIN_UPDATE_AMOUNT_ASSET,
+			"Left over collateral needs to be below the minimum for test to work."
+		);
+
+		// Now test the an empty collateral parameter will remove all collateral
+		assert_ok!(LendingPools::remove_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			BTreeMap::new(),
+		));
 	});
 }
