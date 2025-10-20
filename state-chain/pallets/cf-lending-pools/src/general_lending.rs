@@ -1124,27 +1124,23 @@ impl<T: Config> LendingApi for Pallet<T> {
 				Error::<T>::LiquidationInProgress
 			);
 
-			// If no collateral specified, remove all collateral
-			let collateral = if collateral.is_empty() {
-				loan_account.collateral.clone()
-			} else {
-				// Check if all of the collateral being removed, else check that we are removing
-				// more than the minimum.
-				if !loan_account.collateral.iter().all(|(asset, loan_amount)| {
-					collateral
-						.get(asset)
-						.map(|remove_amount| remove_amount >= loan_amount)
-						.unwrap_or(false)
-				}) {
-					let total_collateral_usd = total_usd_value_of::<T>(&collateral)?;
-					ensure!(
-						total_collateral_usd >=
-							LendingConfig::<T>::get().minimum_update_collateral_amount_usd,
-						Error::<T>::AmountBelowMinimum
-					);
-				}
+			// If a larger than or equal amount of collateral is being removed from all collateral
+			// assets, then we are removing all collateral and do not need to check the minimum
+			// amount. Being able to specify a large (eg u128::MAX) amount for all assets lets the
+			// user avoid exact values (useful because of fees).
+			if !loan_account.collateral.iter().all(|(asset, loan_amount)| {
 				collateral
-			};
+					.get(asset)
+					.map(|remove_amount| remove_amount >= loan_amount)
+					.unwrap_or(false)
+			}) {
+				let total_collateral_usd = total_usd_value_of::<T>(&collateral)?;
+				ensure!(
+					total_collateral_usd >=
+						LendingConfig::<T>::get().minimum_update_collateral_amount_usd,
+					Error::<T>::AmountBelowMinimum
+				);
+			}
 
 			for (asset, amount) in &collateral {
 				ensure!(

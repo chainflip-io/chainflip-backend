@@ -2754,7 +2754,7 @@ fn loan_minimum_is_enforced() {
 		LendingConfig::<Test>::set(LendingConfiguration {
 			minimum_loan_amount_usd: MIN_LOAN_AMOUNT_USD,
 			minimum_update_loan_amount_usd: 0,
-			..Default::default()
+			..LendingConfigDefault::get()
 		});
 
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, COLLATERAL_AMOUNT);
@@ -2818,7 +2818,7 @@ fn expand_or_repay_loan_minimum_is_enforced() {
 		LendingConfig::<Test>::set(LendingConfiguration {
 			minimum_loan_amount_usd: MIN_LOAN_AMOUNT_USD,
 			minimum_update_loan_amount_usd: MIN_UPDATE_USD,
-			..Default::default()
+			..LendingConfigDefault::get()
 		});
 
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, COLLATERAL_AMOUNT);
@@ -2878,7 +2878,7 @@ fn expand_or_repay_loan_minimum_is_enforced() {
 		LendingConfig::<Test>::set(LendingConfiguration {
 			minimum_loan_amount_usd: MIN_LOAN_AMOUNT_USD,
 			minimum_update_loan_amount_usd: MIN_LOAN_AMOUNT_ASSET * 1000000,
-			..Default::default()
+			..LendingConfigDefault::get()
 		});
 
 		// Now make sure we can repay the full amount even though it's below the minimum update
@@ -2913,7 +2913,7 @@ fn adding_or_removing_collateral_minimum_is_enforced() {
 		// Set the minimum collateral update amount
 		LendingConfig::<Test>::set(LendingConfiguration {
 			minimum_update_collateral_amount_usd: MIN_UPDATE_USD,
-			..Default::default()
+			..LendingConfigDefault::get()
 		});
 
 		// Should not be able to add collateral below the minimum amount
@@ -2977,29 +2977,6 @@ fn adding_or_removing_collateral_minimum_is_enforced() {
 		assert_ok!(LendingPools::remove_collateral(
 			RuntimeOrigin::signed(BORROWER),
 			BTreeMap::from([(COLLATERAL_ASSET, *extra_collateral_amount)])
-		));
-
-		// One more time we want a small amount left over for the next test case
-		assert_ok!(LendingPools::add_collateral(
-			RuntimeOrigin::signed(BORROWER),
-			Some(COLLATERAL_ASSET),
-			BTreeMap::from([(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET + 1)])
-		));
-		assert_ok!(LendingPools::remove_collateral(
-			RuntimeOrigin::signed(BORROWER),
-			BTreeMap::from([(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET)])
-		));
-		let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
-		let extra_collateral_amount = account.collateral.get(&COLLATERAL_ASSET).unwrap();
-		assert!(
-			extra_collateral_amount < &MIN_UPDATE_AMOUNT_ASSET,
-			"Left over collateral needs to be below the minimum for test to work."
-		);
-
-		// Now test the an empty collateral parameter will remove all collateral
-		assert_ok!(LendingPools::remove_collateral(
-			RuntimeOrigin::signed(BORROWER),
-			BTreeMap::new(),
 		));
 	});
 }
