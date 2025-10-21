@@ -267,7 +267,8 @@ impl<T: Config> Pallet<T> {
 		));
 	}
 
-	//TODO: rename function and trait/use separate trait to get the FLIP to be sent to the state chain gateway
+	//TODO: rename function and trait/use separate trait to get the FLIP to be sent to the state
+	// chain gateway
 	fn burn_flip_network_fee() {
 		let flip_to_be_sent_to_gateway = T::FlipToBurn::take_flip_to_be_sent_to_gateway();
 		match with_storage_layer(|| {
@@ -293,8 +294,13 @@ impl<T: Config> Pallet<T> {
 			)
 		}) {
 			Ok(ScheduledEgressDetails { egress_id, egress_amount, .. }) => {
-				T::Issuance::burn_offchain(egress_amount.saturating_sub(flip_to_be_sent_to_gateway).into());
-				Self::deposit_event(Event::NetworkFeeBurned { amount: egress_amount.saturating_sub(flip_to_be_sent_to_gateway), egress_id });
+				T::Issuance::burn_offchain(
+					egress_amount.saturating_sub(flip_to_be_sent_to_gateway).into(),
+				);
+				Self::deposit_event(Event::NetworkFeeBurned {
+					amount: egress_amount.saturating_sub(flip_to_be_sent_to_gateway),
+					egress_id,
+				});
 			},
 			Err(e) => {
 				Self::deposit_event(Event::FlipBurnSkipped { reason: e });

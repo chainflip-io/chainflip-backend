@@ -79,11 +79,8 @@ impl<AccountId> SwapRequestType<AccountId> {
 						SwapOutputActionEncoded::CreditOnChain { account_id },
 					SwapOutputActionGeneric::CreditLendingPool { swap_type } =>
 						SwapOutputActionEncoded::CreditLendingPool { swap_type },
-					SwapOutputAction::CreditFlipAndTransferToGateway {
-						account_id,
-					} => SwapOutputActionEncoded::CreditFlipAndTransferToGateway {
-						account_id,
-					},
+					SwapOutputAction::CreditFlipAndTransferToGateway { account_id } =>
+						SwapOutputActionEncoded::CreditFlipAndTransferToGateway { account_id },
 				},
 			},
 		}
