@@ -873,6 +873,7 @@ pub enum RejectError {
 	NotSupportedForAsset,
 	NotRequired,
 	Other,
+	FailedToBuildRejection,
 }
 
 impl From<AllBatchError> for RejectError {

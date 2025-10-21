@@ -39,7 +39,7 @@ use crate::{
 	ccm_checker::{DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData},
 	dot::PolkadotTransactionId,
 	evm::{DepositDetails, EvmFetchId, EvmTransactionMetadata},
-	sol::{SolAddress, SolCcmAccounts, SolCcmAddress, SolPubkey},
+	sol::{SolAddress, SolCcmAccounts, SolCcmAddress, SolPubkey, VaultSwapOrDepositChannelId},
 };
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
@@ -174,6 +174,13 @@ impl BenchmarkValueExtended for crate::sol::SolanaDepositFetchId {
 			address: crate::sol::SolAddress([id; 32]),
 			bump: 255u8,
 		}
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for VaultSwapOrDepositChannelId {
+	fn benchmark_value() -> Self {
+		VaultSwapOrDepositChannelId::Channel(Default::default())
 	}
 }
 

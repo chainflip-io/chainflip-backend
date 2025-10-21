@@ -568,7 +568,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
 	type AffiliateRegistry = Swapping;
-	type AllowTransactionReports = ConstBool<false>;
+	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
 }
@@ -1452,6 +1452,7 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	MigrationsForV1_12,
+	migrations::ingress_delay::IngressEgressDelay,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -2466,15 +2467,18 @@ impl_runtime_apis! {
 		fn cf_get_open_deposit_channels(account_id: Option<<Runtime as frame_system::Config>::AccountId>) -> ChainAccounts {
 			fn open_deposit_channels_for_account<T: pallet_cf_ingress_egress::Config<I>, I: 'static>(
 				account_id: Option<&<T as frame_system::Config>::AccountId>
-			) -> Vec<EncodedAddress>
+			) -> Vec<(EncodedAddress, Asset)>
 			{
 				let network_environment = Environment::network_environment();
 				pallet_cf_ingress_egress::DepositChannelLookup::<T, I>::iter_values()
 					.filter(|channel_details| account_id.is_none() || Some(&channel_details.owner) == account_id)
 					.map(|channel_details|
-						channel_details.deposit_channel.address
-							.into_foreign_chain_address()
-							.to_encoded_address(network_environment)
+						(
+							channel_details.deposit_channel.address
+								.into_foreign_chain_address()
+								.to_encoded_address(network_environment),
+							channel_details.deposit_channel.asset.into()
+						)
 					)
 					.collect::<Vec<_>>()
 			}
@@ -2484,6 +2488,7 @@ impl_runtime_apis! {
 					open_deposit_channels_for_account::<Runtime, BitcoinInstance>(account_id.as_ref()),
 					open_deposit_channels_for_account::<Runtime, EthereumInstance>(account_id.as_ref()),
 					open_deposit_channels_for_account::<Runtime, ArbitrumInstance>(account_id.as_ref()),
+					open_deposit_channels_for_account::<Runtime, SolanaInstance>(account_id.as_ref()),
 				].into_iter().flatten().collect()
 			}
 		}
@@ -2493,7 +2498,7 @@ impl_runtime_apis! {
 
 			#[allow(clippy::type_complexity)]
 			fn open_deposit_channels_for_chain_instance<T: pallet_cf_ingress_egress::Config<I>, I: 'static>()
-				-> BTreeMap<(<T as frame_system::Config>::AccountId, ChannelActionType), Vec<EncodedAddress>>
+				-> BTreeMap<(<T as frame_system::Config>::AccountId, ChannelActionType), Vec<(EncodedAddress, Asset)>>
 			{
 				let network_environment = Environment::network_environment();
 				pallet_cf_ingress_egress::DepositChannelLookup::<T, I>::iter_values()
@@ -2501,9 +2506,12 @@ impl_runtime_apis! {
 						acc.entry((channel_details.owner.clone(), channel_details.action.into()))
 							.or_default()
 							.push(
-								channel_details.deposit_channel.address
-								.into_foreign_chain_address()
-								.to_encoded_address(network_environment)
+								(
+									channel_details.deposit_channel.address
+									.into_foreign_chain_address()
+									.to_encoded_address(network_environment),
+									channel_details.deposit_channel.asset.into()
+								)
 							);
 						acc
 					})
@@ -2512,9 +2520,11 @@ impl_runtime_apis! {
 			let btc_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, BitcoinInstance>();
 			let eth_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, EthereumInstance>();
 			let arb_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, ArbitrumInstance>();
+			let sol_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, SolanaInstance>();
 			let accounts = btc_chain_accounts.keys()
 				.chain(eth_chain_accounts.keys())
 				.chain(arb_chain_accounts.keys())
+				.chain(sol_chain_accounts.keys())
 				.cloned().collect::<BTreeSet<_>>();
 
 			accounts.into_iter().map(|key| {
@@ -2524,6 +2534,7 @@ impl_runtime_apis! {
 						btc_chain_accounts.get(&key).cloned().unwrap_or_default(),
 						eth_chain_accounts.get(&key).cloned().unwrap_or_default(),
 						arb_chain_accounts.get(&key).cloned().unwrap_or_default(),
+						sol_chain_accounts.get(&key).cloned().unwrap_or_default(),
 					].into_iter().flatten().collect()
 				})
 			}).collect()
@@ -2537,20 +2548,15 @@ impl_runtime_apis! {
 			>(
 				event: pallet_cf_ingress_egress::Event::<T, I>,
 			) -> Vec<BrokerRejectionEventFor<T::TargetChain>> {
-				use cf_chains::DepositDetailsToTransactionInId;
 				match event {
 					pallet_cf_ingress_egress::Event::TransactionRejectionRequestExpired { account_id, tx_id } =>
 						vec![TransactionScreeningEvent::TransactionRejectionRequestExpired { account_id, tx_id }],
 					pallet_cf_ingress_egress::Event::TransactionRejectionRequestReceived { account_id, tx_id, expires_at: _ } =>
 						vec![TransactionScreeningEvent::TransactionRejectionRequestReceived { account_id, tx_id }],
-					pallet_cf_ingress_egress::Event::TransactionRejectedByBroker { broadcast_id, tx_id } => tx_id
-						.deposit_ids()
-						.into_iter()
-						.flat_map(IntoIterator::into_iter)
-						.map(|tx_id|
-							TransactionScreeningEvent::TransactionRejectedByBroker { refund_broadcast_id: broadcast_id, tx_id }
-						)
-						.collect(),
+					pallet_cf_ingress_egress::Event::TransactionRejectedByBroker { broadcast_id, tx_id: deposit_details } =>
+						vec![TransactionScreeningEvent::TransactionRejectedByBroker { refund_broadcast_id: broadcast_id, deposit_details }],
+					pallet_cf_ingress_egress::Event::ChannelRejectionRequestReceived { account_id, deposit_address } =>
+						vec![TransactionScreeningEvent::ChannelRejectionRequestReceived { account_id, deposit_address }],
 					_ => Default::default(),
 				}
 			}
@@ -2558,11 +2564,13 @@ impl_runtime_apis! {
 			let mut btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>> = Default::default();
 			let mut eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>> = Default::default();
 			let mut arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>> = Default::default();
+			let mut sol_events: Vec<BrokerRejectionEventFor<cf_chains::Solana>> = Default::default();
 			for event_record in System::read_events_no_consensus() {
 				match event_record.event {
 					RuntimeEvent::BitcoinIngressEgress(event) => btc_events.extend(extract_screening_events::<Runtime, BitcoinInstance>(event)),
 					RuntimeEvent::EthereumIngressEgress(event) => eth_events.extend(extract_screening_events::<Runtime, EthereumInstance>(event)),
 					RuntimeEvent::ArbitrumIngressEgress(event) => arb_events.extend(extract_screening_events::<Runtime, ArbitrumInstance>(event)),
+					RuntimeEvent::SolanaIngressEgress(event) => sol_events.extend(extract_screening_events::<Runtime, SolanaInstance>(event)),
 					_ => {},
 				}
 			}
@@ -2571,6 +2579,7 @@ impl_runtime_apis! {
 				btc_events,
 				eth_events,
 				arb_events,
+				sol_events,
 			}
 		}
 
@@ -2600,6 +2609,10 @@ impl_runtime_apis! {
 							.map(move |address| (account_id.clone(), address))
 					})
 					.collect(),
+
+				sol_vault_program: Environment::solana_api_environment().vault_program.into(),
+				sol_swap_endpoint_program_data_account: Environment::solana_api_environment().swap_endpoint_program_data_account.into(),
+				usdc_token_mint_pubkey: Environment::solana_api_environment().usdc_token_mint_pubkey.into(),
 			}
 		}
 
