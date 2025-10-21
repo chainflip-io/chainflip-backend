@@ -1700,13 +1700,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	// This function is only doing the maybe_transfers_limit and not the maybe_fetches_limit checks
-	// that the `do_egress_scheduled_*` are doing.
 	fn try_broadcast_rejection_refund_or_store_tx_details(
 		tx: TransactionRejectionDetails<T, I>,
 		refund_address: TargetChainAccount<T, I>,
 		deposit_fetch_id: Option<<T::TargetChain as Chain>::DepositFetchId>,
 	) {
+		// This function is only doing the maybe_transfers_limit (most restrictive) and not the
+		// maybe_fetches_limit checks that the `do_egress_scheduled_*` are doing.
 		if let Some(limit) = T::FetchesTransfersLimitProvider::maybe_transfers_limit() {
 			// In case we don't have enough nonces we put the tx back to be retried next block
 			if limit.is_zero() {

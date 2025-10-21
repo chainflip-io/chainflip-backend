@@ -2609,8 +2609,6 @@ impl_runtime_apis! {
 							.map(move |address| (account_id.clone(), address))
 					})
 					.collect(),
-				// solana_swap_endpoint_native_vault_pda: todo!(),
-				// solana_usdc_token_vault_ata: todo!(),
 
 				sol_vault_program: Environment::solana_api_environment().vault_program.into(),
 				sol_swap_endpoint_program_data_account: Environment::solana_api_environment().swap_endpoint_program_data_account.into(),
