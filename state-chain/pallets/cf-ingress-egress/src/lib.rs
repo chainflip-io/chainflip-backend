@@ -59,10 +59,12 @@ use cf_traits::{
 	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, IngressEgressFeeApi,
 	IngressSink, IngressSource, NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails,
 	SwapOutputAction, SwapParameterValidation, SwapRequestHandler, SwapRequestType,
+	INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
 	sp_runtime::{traits::Zero, DispatchError, Saturating},
+	traits::HandleLifetime,
 	transactional, OrdNoBound, PartialOrdNoBound,
 };
 use frame_system::pallet_prelude::*;
@@ -2063,17 +2065,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							flip_amount_to_credit,
 							true,
 						) {
-						//0.1FLIP
 						T::FundAccount::fund_account(
 							lp_account.clone(),
 							None,
-							100_000_000_000_000_000u128.into(),
+							INITIAL_FLIP_FUNDING.into(),
 							FundingSource::InitialFunding,
 						);
 						if let Err(err) = T::AccountRoleRegistry::register_account_role(
 							&lp_account,
 							role_to_register,
 						) {
+							// TODO! maybe not log it anymore since we are accepting subsequent
+							// funding through this additional_action
 							log::warn!("Failed to register account role {role_to_register:?} for account: {:?}, error: {:?}", lp_account, err);
 						};
 						T::SwapRequestHandler::init_swap_request(
@@ -2086,14 +2089,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								},
 							},
 							BoundedVec::new(),
+							None, //TODO: use MIN_PRICE provided in the extrinsic
 							None,
-							None,
-							origin.into(), //maybe change it to internal/OnChainAccount?
+							SwapOrigin::Internal,
 						);
 						input_amount
 					} else {
-						// TODO: we want to derive some hardcoded amount to avoid situations where
-						// the simulation fails
+						// TODO: we will calculate an amount based on the MIN_PRICE provided in the
+						// extrinsic
 						log_or_panic!(
 							"Failed to calculate input amount for funding flip swap, skipping initial funding",
 						);
@@ -2102,6 +2105,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				} else {
 					0u128
 				};
+				if !frame_system::Pallet::<T>::account_exists(&lp_account) {
+					// Creates an account
+					let _ = frame_system::Provider::<T>::created(&lp_account);
+				}
 				T::Balance::credit_account(
 					&lp_account,
 					asset.into(),

@@ -50,7 +50,7 @@ use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
 	EpochIndex, ForeignChain, IngressOrEgress, Ipv6Addr, NetworkEnvironment, Price, SemVer,
-	SwapRequestId, ThresholdSignatureRequestId,
+	SwapRequestId, ThresholdSignatureRequestId, FLIPPERINOS_PER_FLIP,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -716,6 +716,10 @@ pub trait FundingInfo {
 pub enum AdditionalDepositAction {
 	FundFlip { flip_amount_to_credit: cf_primitives::AssetAmount, role_to_register: AccountRole },
 }
+
+// The max cost for an extrinsic is 1 FLIP, this means that account with less than 1FLIP cannot send
+// extrinsics hence we pre-fund with 2 FLIP
+pub const INITIAL_FLIP_FUNDING: u128 = FLIPPERINOS_PER_FLIP * 2;
 
 /// Allow pallets to open and expire deposit addresses.
 pub trait DepositApi<C: Chain> {

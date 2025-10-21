@@ -25,8 +25,8 @@ use cf_chains::{
 	SwapOrigin,
 };
 use cf_primitives::{
-	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
-	Beneficiary, BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceLimits, SwapId, SwapLeg,
+	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
+	BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceLimits, SwapId, SwapLeg,
 	SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
 	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
@@ -36,7 +36,7 @@ use cf_traits::{
 	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, FundingSource,
 	IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction,
 	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
-	SwappingApi,
+	SwappingApi, INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -518,7 +518,7 @@ pub mod pallet {
 	use super::*;
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: Chainflip<AccountId = cf_primitives::AccountId> {
+	pub trait Config: Chainflip {
 		/// Standard Event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -869,19 +869,6 @@ pub mod pallet {
 			swap_id: SwapId,
 			reason: SwapFailureReason,
 		},
-		// TODO: This is now duplicated between pallet-cf-lp and pallet-cf-swapping
-		AccountCreationDepositAddressReady {
-			channel_id: ChannelId,
-			asset: Asset,
-			deposit_address: EncodedAddress,
-			// TODO: This one is not in the original LiquidityDepositAddressReady event in cf-lp
-			requester_id: T::AccountId,
-			// account the funds will be credited to upon deposit
-			account_id: T::AccountId,
-			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
-			boost_fee: BasisPoints,
-			channel_opening_fee: T::Amount,
-		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -954,8 +941,6 @@ pub mod pallet {
 		CcmUnsupportedForRefundChain,
 		/// Oracle price not available for one or more of the assets.
 		OraclePriceNotAvailable,
-		/// Account id could not be derived from user signature data.
-		InvalidUserSignatureData,
 	}
 
 	#[pallet::genesis_config]
@@ -2060,7 +2045,7 @@ pub mod pallet {
 										None,
 										dca_state
 											.accumulated_output_amount
-											.saturating_sub(100_000_000_000_000_000)
+											.saturating_sub(INITIAL_FLIP_FUNDING)
 											.into(),
 										FundingSource::Swap { swap_request_id },
 									);
@@ -2208,7 +2193,7 @@ pub mod pallet {
 											account_id.clone(),
 											None,
 											output_amount
-												.saturating_sub(100_000_000_000_000_000)
+												.saturating_sub(INITIAL_FLIP_FUNDING)
 												.into(),
 											FundingSource::Swap { swap_request_id },
 										);
