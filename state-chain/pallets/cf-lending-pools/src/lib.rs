@@ -714,7 +714,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(4)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::create_lending_pool())]
 		pub fn create_lending_pool(origin: OriginFor<T>, asset: Asset) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -845,7 +845,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(10)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::update_primary_collateral_asset())]
 		pub fn update_primary_collateral_asset(
 			origin: OriginFor<T>,
 			primary_collateral_asset: Asset,

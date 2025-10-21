@@ -126,6 +126,7 @@ pub fn chainlink_price_to_statechain_price(
 	Some(price)
 }
 
+#[cfg(any(feature = "runtime-benchmarks", test))]
 pub fn statechain_price_to_chainlink_price(
 	price: &StatechainPrice,
 	assetpair: ChainlinkAssetpair,

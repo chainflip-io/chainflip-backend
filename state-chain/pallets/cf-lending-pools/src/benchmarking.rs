@@ -287,6 +287,7 @@ mod benchmarks {
 	#[benchmark]
 	fn add_collateral() {
 		const AMOUNT: AssetAmount = 100_000_000;
+		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000);
 		let lender = setup_lp_account::<T>(LOAN_ASSET, 0);
 		let origin: OriginFor<T> = RawOrigin::Signed(lender.clone()).into();
 		let collateral = BTreeMap::from([(COLLATERAL_ASSET, AMOUNT)]);
@@ -305,23 +306,41 @@ mod benchmarks {
 
 	#[benchmark]
 	fn remove_collateral() {
-		const AMOUNT: AssetAmount = 100_000_000;
-		let lender = setup_lp_account::<T>(LOAN_ASSET, 0);
-		let origin: OriginFor<T> = RawOrigin::Signed(lender.clone()).into();
-		let collateral = BTreeMap::from([(COLLATERAL_ASSET, AMOUNT)]);
-		assert_ok!(Pallet::<T>::add_collateral(
+		const INITIAL_COLLATERAL: AssetAmount = 100_000_000;
+		const REMOVE_COLLATERAL: AssetAmount = 10_000_000;
+		const LOAN_AMOUNT: AssetAmount = 50_000_000;
+		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
+		let borrower = setup_lp_account::<T>(LOAN_ASSET, 0);
+		let origin: OriginFor<T> = RawOrigin::Signed(borrower.clone()).into();
+		let collateral = BTreeMap::from([(COLLATERAL_ASSET, INITIAL_COLLATERAL)]);
+
+		// Create a loan with collateral so it must perform checks when removing collateral
+		assert_ok!(Pallet::<T>::request_loan(
 			origin.clone(),
+			LOAN_ASSET,
+			LOAN_AMOUNT,
 			Some(COLLATERAL_ASSET),
-			collateral.clone()
+			collateral.clone(),
 		));
+
 		let loan_account = LoanAccounts::<T>::iter().next().unwrap().1;
 		assert_eq!(loan_account.get_total_collateral(), collateral.clone());
 
+		let collateral = BTreeMap::from([(COLLATERAL_ASSET, REMOVE_COLLATERAL)]);
 		#[block]
 		{
 			assert_ok!(Pallet::<T>::remove_collateral(origin, collateral));
 		}
-		assert!(LoanAccounts::<T>::iter().next().is_none());
+		assert_eq!(
+			get_loan_accounts::<T>(Some(borrower))
+				.first()
+				.unwrap()
+				.collateral
+				.first()
+				.unwrap()
+				.amount,
+			INITIAL_COLLATERAL - REMOVE_COLLATERAL,
+		);
 	}
 
 	#[benchmark]
@@ -416,6 +435,8 @@ mod benchmarks {
 		let collateral =
 			BTreeMap::from([(COLLATERAL_ASSET, 200_000_000), (LOAN_ASSET, 100_000_000)]);
 
+		set_asset_price_in_usd::<T>(LOAN_ASSET, 100_000_000_000);
+		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000);
 		T::Balance::credit_account(&borrower, LOAN_ASSET, 100_000_000);
 		assert_ok!(Pallet::<T>::add_collateral(
 			origin.clone(),
