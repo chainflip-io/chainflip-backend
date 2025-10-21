@@ -714,10 +714,7 @@ pub trait FundingInfo {
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum AdditionalDepositAction {
-	FundFlip {
-		flip_amount_to_credit: cf_primitives::AssetAmount,
-		role_to_register: AccountRole,
-	},
+	FundFlip { flip_amount_to_credit: cf_primitives::AssetAmount, role_to_register: AccountRole },
 }
 
 /// Allow pallets to open and expire deposit addresses.
