@@ -50,7 +50,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use pallet_cf_environment::UserSignatureData;
+use pallet_cf_environment::submit_runtime_call::SignatureData;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::{
 	helpers_128bit::multiply_by_rational_with_rounding,
@@ -622,7 +622,7 @@ pub mod pallet {
 	/// FLIP ready to be burned.
 	#[pallet::storage]
 	pub type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
-	
+
 	/// FLIP ready to be sent to gateway.
 	#[pallet::storage]
 	pub type FlipToBeSentToGateway<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
@@ -1529,7 +1529,7 @@ pub mod pallet {
 		#[pallet::weight(Weight::zero())]
 		pub fn request_liquidity_deposit_address_for_external_account(
 			origin: OriginFor<T>,
-			external_account: UserSignatureData,
+			external_account: SignatureData,
 			asset: Asset,
 			boost_fee: BasisPoints,
 			refund_address: EncodedAddress,
@@ -1539,16 +1539,15 @@ pub mod pallet {
 
 			let requester_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			// TODO: verify the user signature
-			let target_account_id =
-				external_account.signer_account_id::<cf_primitives::AccountId>();
-			// let Ok(target_account_id) : Result<T::AccountId, codec::Error> =
-			// external_account.signer_account_id() else {
-			// 	return Err(DispatchError::from(Error::<T>::InvalidUserSignatureData));
-			// };
+			// TODO: First we need to verify that the signer is the actual signer of the signature
+			// contained in SignatureData
+			let Ok(target_account_id) =
+				external_account.signer_account::<cf_primitives::AccountId>()
+			else {
+				return Err(DispatchError::from(Error::<T>::InvalidUserSignatureData));
+			};
 
-
-			//TODO: Use proper error -> do we want to check this?
+			// TODO: Use proper error -> do we want to check this?
 			// ensure!(T::AccountRoleRegistry::is_unregistered(target_account_id), Error::<T>::);
 
 			let refund_address_internal =
@@ -2125,25 +2124,27 @@ pub mod pallet {
 							SwapOutputAction::CreditLendingPool { swap_type } => {
 								log_or_panic!("Unexpected refund of a loan swap: {swap_type:?}");
 							},
-							//TODO: Not sure this is even possible we won't do a DCA swap to get the few flip necessary to fund an account
-							//check that we trigger normal swap without dca
-							SwapOutputAction::CreditFlipAndTransferToGateway {
-								account_id,
-							} => {
+							//TODO: Not sure this is even possible we won't do a DCA swap to get
+							// the few flip necessary to fund an account check that we
+							// trigger normal swap without dca
+							SwapOutputAction::CreditFlipAndTransferToGateway { account_id } =>
 								if request.output_asset == Asset::Flip {
 									T::FundAccount::fund_account(
 										account_id.clone(),
 										None,
-										dca_state.accumulated_output_amount.saturating_sub(100_000_000_000_000_000).into(),
+										dca_state
+											.accumulated_output_amount
+											.saturating_sub(100_000_000_000_000_000)
+											.into(),
 										FundingSource::Swap { swap_request_id },
 									);
 									FlipToBeSentToGateway::<T>::mutate(|total| {
-										total.saturating_accrue(dca_state.accumulated_output_amount);
+										total
+											.saturating_accrue(dca_state.accumulated_output_amount);
 									});
 								} else {
 									log_or_panic!("Encountered transfer to gateway swap for asset that isn't Flip: {swap_request_id:?}");
-								}
-							},
+								},
 						}
 					}
 				},
@@ -2278,14 +2279,14 @@ pub mod pallet {
 										dca_state.accumulated_output_amount,
 									);
 								},
-								SwapOutputAction::CreditFlipAndTransferToGateway {
-									account_id,
-								} => {
+								SwapOutputAction::CreditFlipAndTransferToGateway { account_id } =>
 									if request.output_asset == Asset::Flip {
 										T::FundAccount::fund_account(
 											account_id.clone(),
 											None,
-											output_amount.saturating_sub(100_000_000_000_000_000).into(),
+											output_amount
+												.saturating_sub(100_000_000_000_000_000)
+												.into(),
 											FundingSource::Swap { swap_request_id },
 										);
 										FlipToBeSentToGateway::<T>::mutate(|total| {
@@ -2293,8 +2294,7 @@ pub mod pallet {
 										});
 									} else {
 										log_or_panic!("Encountered transfer to gateway swap for asset that isn't Flip: {swap_request_id:?}");
-									}
-								},
+									},
 							}
 							true
 						} else {

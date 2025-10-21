@@ -2154,13 +2154,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DepositAction<T, I> {
 		match action.clone() {
 			ChannelAction::LiquidityProvision { lp_account, additional_action, .. } => {
-				let used_for_flip_funding_swap = if let Some( AdditionalDepositAction::FundFlip { flip_amount_to_credit, role_to_register}) = additional_action {
-					if let Some(input_amount) = T::AssetConverter::calculate_input_for_desired_output(
-						asset.into(),
-						Asset::Flip,
-						flip_amount_to_credit,
-						true
-					) {
+				let used_for_flip_funding_swap = if let Some(AdditionalDepositAction::FundFlip {
+					flip_amount_to_credit,
+					role_to_register,
+				}) = additional_action
+				{
+					if let Some(input_amount) =
+						T::AssetConverter::calculate_input_for_desired_output(
+							asset.into(),
+							Asset::Flip,
+							flip_amount_to_credit,
+							true,
+						) {
 						//0.1FLIP
 						T::FundAccount::fund_account(
 							lp_account.clone(),
@@ -2168,7 +2173,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							100_000_000_000_000_000u128.into(),
 							FundingSource::InitialFunding,
 						);
-						if let Err(err) = T::AccountRoleRegistry::register_account_role(&lp_account, role_to_register) {
+						if let Err(err) = T::AccountRoleRegistry::register_account_role(
+							&lp_account,
+							role_to_register,
+						) {
 							log::warn!("Failed to register account role {role_to_register:?} for account: {:?}, error: {:?}", lp_account, err);
 						};
 						T::SwapRequestHandler::init_swap_request(
@@ -2180,7 +2188,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									account_id: lp_account.clone(),
 								},
 							},
-							BoundedVec::new(),		
+							BoundedVec::new(),
 							None,
 							None,
 							origin.into(), //maybe change it to internal/OnChainAccount?
@@ -2195,7 +2203,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				} else {
 					0u128
 				};
-				T::Balance::credit_account(&lp_account, asset.into(), Into::<u128>::into(amount_after_fees).saturating_sub(used_for_flip_funding_swap).into());
+				T::Balance::credit_account(
+					&lp_account,
+					asset.into(),
+					Into::<u128>::into(amount_after_fees)
+						.saturating_sub(used_for_flip_funding_swap)
+						.into(),
+				);
 
 				DepositAction::LiquidityProvision { lp_account }
 			},
