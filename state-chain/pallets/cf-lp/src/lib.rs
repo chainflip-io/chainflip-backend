@@ -22,7 +22,7 @@ use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, DcaParameters,
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdditionalDepositAction, BalanceApi,
 	BoostBalancesApi, Chainflip, DepositApi, EgressApi, LpRegistration, PoolApi,
-	ScheduledEgressDetails, SwapRequestHandler,
+	ScheduledEgressDetails, SwapRequestHandler, INITIAL_FLIP_FUNDING,
 };
 use pallet_cf_environment::submit_runtime_call::SignatureData;
 
@@ -434,7 +434,7 @@ pub mod pallet {
 					boost_fee,
 					refund_address_internal,
 					Some(AdditionalDepositAction::FundFlip {
-						flip_amount_to_credit: 5000000000000000000, //5FLIP
+						flip_amount_to_credit: INITIAL_FLIP_FUNDING * 10,
 						role_to_register: AccountRole::LiquidityProvider,
 					}),
 				)?;
