@@ -83,7 +83,7 @@ export async function testSol(
     : Promise.resolve();
 
   await Promise.all([
-    observeBalanceIncrease(logger, sourceAsset, solRefundAddress, initialRefundAddressBalance),
+    observeBalanceIncrease(logger, sourceAsset, solRefundAddress, initialRefundAddressBalance, 360),
     ccmEventEmitted,
     observeFetch(sourceAsset, swapParams.depositAddress),
   ]);
