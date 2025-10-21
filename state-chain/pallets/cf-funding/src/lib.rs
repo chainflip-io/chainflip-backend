@@ -34,7 +34,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthAmount, SwapId};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthAmount};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
 	FundAccount, Funding, FundingSource, RedemptionCheck, SpawnAccount,
@@ -319,7 +319,7 @@ impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled);
 pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
-	use cf_primitives::{BroadcastId, SwapId};
+	use cf_primitives::BroadcastId;
 	use cf_traits::RedemptionCheck;
 	use frame_support::{pallet_prelude::*, storage::with_transaction, Parameter};
 	use frame_system::pallet_prelude::*;

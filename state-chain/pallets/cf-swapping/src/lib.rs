@@ -32,8 +32,8 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AdditionalDepositAction, AffiliateRegistry, AssetConverter, BalanceApi,
-	Bonding, ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, FundingSource,
+	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
+	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, FundingSource,
 	IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction,
 	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
 	SwappingApi,
@@ -50,7 +50,6 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use pallet_cf_environment::submit_runtime_call::SignatureData;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::{
 	helpers_128bit::multiply_by_rational_with_rounding,
@@ -1517,68 +1516,6 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::VaultSwapMinimumBrokerFeeSet {
 				broker_id,
 				minimum_fee_bps,
-			});
-
-			Ok(())
-		}
-
-		/// For when the user wants to deposit assets into the Chain but doesn't have
-		/// a statechain account yet. Generates a new deposit address for the user to posit their
-		/// assets.
-		#[pallet::call_index(18)]
-		#[pallet::weight(Weight::zero())]
-		pub fn request_liquidity_deposit_address_for_external_account(
-			origin: OriginFor<T>,
-			external_account: SignatureData,
-			asset: Asset,
-			boost_fee: BasisPoints,
-			refund_address: EncodedAddress,
-		) -> DispatchResult {
-			// TODO, how to do this?
-			// ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
-
-			let requester_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-
-			// TODO: First we need to verify that the signer is the actual signer of the signature
-			// contained in SignatureData
-			let Ok(target_account_id) =
-				external_account.signer_account::<cf_primitives::AccountId>()
-			else {
-				return Err(DispatchError::from(Error::<T>::InvalidUserSignatureData));
-			};
-
-			// TODO: Use proper error -> do we want to check this?
-			// ensure!(T::AccountRoleRegistry::is_unregistered(target_account_id), Error::<T>::);
-
-			let refund_address_internal =
-				T::AddressConverter::decode_and_validate_address_for_asset(
-					refund_address.clone(),
-					asset,
-				)
-				.map_err(address_error_to_pallet_error::<T>)?;
-
-			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
-				T::DepositHandler::request_liquidity_deposit_address(
-					requester_id.clone(),
-					target_account_id.clone(),
-					asset,
-					boost_fee,
-					refund_address_internal,
-					Some(AdditionalDepositAction::FundFlip {
-						flip_amount_to_credit: 5000000000000000000, //5FLIP
-						role_to_register: AccountRole::LiquidityProvider,
-					}),
-				)?;
-
-			Self::deposit_event(Event::AccountCreationDepositAddressReady {
-				channel_id,
-				asset,
-				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
-				requester_id,
-				account_id: target_account_id,
-				deposit_chain_expiry_block: expiry_block,
-				boost_fee,
-				channel_opening_fee,
 			});
 
 			Ok(())

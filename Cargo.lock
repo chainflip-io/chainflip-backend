@@ -8441,6 +8441,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-cf-account-roles",
+ "pallet-cf-environment",
  "parity-scale-codec",
  "scale-info",
  "serde",

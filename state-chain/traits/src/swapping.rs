@@ -21,8 +21,8 @@ use cf_chains::{
 	ChannelRefundParametersCheckedInternal, ForeignChainAddress, SwapOrigin,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, DcaParameters, Price,
-	PriceLimits, SwapRequestId,
+	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, DcaParameters, Price, PriceLimits,
+	SwapRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;

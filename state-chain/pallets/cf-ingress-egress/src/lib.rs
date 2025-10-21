@@ -2195,6 +2195,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						);
 						input_amount
 					} else {
+						// TODO: we want to derive some hardcoded amount to avoid situations where
+						// the simulation fails
 						log_or_panic!(
 							"Failed to calculate input amount for funding flip swap, skipping initial funding",
 						);
