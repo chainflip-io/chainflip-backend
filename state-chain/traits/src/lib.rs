@@ -1344,4 +1344,6 @@ pub trait PriceFeedApi {
 			None
 		}
 	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_price(asset: Asset, price: Price);
 }

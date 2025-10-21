@@ -125,6 +125,22 @@ pub fn chainlink_price_to_statechain_price(
 	let price: StatechainPrice = convert_unit(price, from_unit, to_unit)?;
 	Some(price)
 }
+
+pub fn statechain_price_to_chainlink_price(
+	price: &StatechainPrice,
+	assetpair: ChainlinkAssetpair,
+) -> Option<ChainlinkPrice> {
+	let from_unit = PriceUnit { base_asset: PriceAsset::Fine, quote_asset: PriceAsset::Fine };
+	let to_unit = assetpair.to_price_unit();
+	// WARNING: It is important that we first do the unit conversion,
+	// and then convert to chainlink prices, because in the chainlink representation there aren't
+	// enough decimals to represent "FineEth / FineUsd" prices
+	// (1 Usd per Eth translates to 10^-12 FineUsd per FineEth)
+	let price: StatechainPrice = convert_unit(price.clone(), from_unit, to_unit)?;
+	let price: ChainlinkPrice = price.clone().convert()?;
+	Some(price)
+}
+
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
 pub struct OraclePrice {
 	pub price: Price,
@@ -177,6 +193,7 @@ where
 mod tests {
 	use super::*;
 	use cf_amm_math::mul_div_floor_checked;
+	use core::ops::Sub;
 	use sp_core::U256;
 
 	#[test]
@@ -197,6 +214,13 @@ mod tests {
 		// let's say the price is for Btc, convert it to our internal price
 		let internal_price: StatechainPrice =
 			chainlink_price_to_statechain_price(&price, ChainlinkAssetpair::BtcUsd).unwrap();
+
+		// Also checking the reverse conversion (with small rounding error)
+		assert_eq!(
+			statechain_price_to_chainlink_price(&internal_price, ChainlinkAssetpair::BtcUsd)
+				.unwrap(),
+			price.sub(ChainlinkPrice::from_raw(U256::one()))
+		);
 
 		// now let's check whether we got the right result:
 		//
@@ -268,6 +292,13 @@ mod tests {
 			internal_price.0,
 			mul_div_floor_checked(U256::from(2_5555u128), internal_denom, 10u128.pow(0 + 4))
 				.unwrap()
+		);
+
+		// Also checking the reverse conversion (with small rounding error)
+		assert_eq!(
+			statechain_price_to_chainlink_price(&internal_price, ChainlinkAssetpair::UsdcUsd)
+				.unwrap(),
+			price.sub(ChainlinkPrice::from_raw(U256::one()))
 		);
 	}
 }
