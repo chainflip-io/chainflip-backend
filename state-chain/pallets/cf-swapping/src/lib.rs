@@ -2903,7 +2903,7 @@ pub mod pallet {
 				return Some(desired_output_amount)
 			}
 
-			let estimation_input = utilities::fee_estimation_basis(input_asset);
+			let estimation_input = utilities::estimated_20usd_input(input_asset);
 
 			let estimation_output = with_transaction_unchecked(|| {
 				TransactionOutcome::Rollback(if with_network_fee {
@@ -3057,7 +3057,7 @@ pub mod utilities {
 	///
 	/// The value should be large enough to allow a good estimation of the fee, but small enough
 	/// to not exhaust the pool liquidity.
-	pub fn fee_estimation_basis(asset: Asset) -> u128 {
+	pub fn estimated_20usd_input(asset: Asset) -> u128 {
 		use cf_primitives::FLIPPERINOS_PER_FLIP;
 
 		const ETH_DECIMALS: u32 = 18;
