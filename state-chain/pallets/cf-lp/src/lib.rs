@@ -406,8 +406,7 @@ pub mod pallet {
 			boost_fee: BasisPoints,
 			refund_address: EncodedAddress,
 		) -> DispatchResult {
-			// TODO, how to do this?
-			// ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
+			ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
 
 			let requester_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
@@ -546,7 +545,6 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> LpRegistration for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
-	#[cfg(feature = "runtime-benchmarks")]
 	fn register_liquidity_refund_address(
 		account_id: &Self::AccountId,
 		address: ForeignChainAddress,
