@@ -616,6 +616,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type FlipToBeSentToGateway<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
+	/// FLIP deficit from initial funding swap
+	#[pallet::storage]
+	pub type FlipDeficitToOffset<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
 	/// Interval at which we buy FLIP in order to burn it.
 	#[pallet::storage]
 	pub type FlipBuyInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
@@ -2035,27 +2039,9 @@ pub mod pallet {
 							SwapOutputAction::CreditLendingPool { swap_type } => {
 								log_or_panic!("Unexpected refund of a loan swap: {swap_type:?}");
 							},
-							//TODO: Not sure this is even possible we won't do a DCA swap to get
-							// the few flip necessary to fund an account check that we
-							// trigger normal swap without dca
-							SwapOutputAction::CreditFlipAndTransferToGateway { account_id } =>
-								if request.output_asset == Asset::Flip {
-									T::FundAccount::fund_account(
-										account_id.clone(),
-										None,
-										dca_state
-											.accumulated_output_amount
-											.saturating_sub(INITIAL_FLIP_FUNDING)
-											.into(),
-										FundingSource::Swap { swap_request_id },
-									);
-									FlipToBeSentToGateway::<T>::mutate(|total| {
-										total
-											.saturating_accrue(dca_state.accumulated_output_amount);
-									});
-								} else {
-									log_or_panic!("Encountered transfer to gateway swap for asset that isn't Flip: {swap_request_id:?}");
-								},
+							SwapOutputAction::CreditFlipAndTransferToGateway { .. } => {
+								log_or_panic!("Unexpected refund of initial funding swap: {swap_request_id:?}");
+							},
 						}
 					}
 				},
@@ -2189,17 +2175,31 @@ pub mod pallet {
 								},
 								SwapOutputAction::CreditFlipAndTransferToGateway { account_id } =>
 									if request.output_asset == Asset::Flip {
-										T::FundAccount::fund_account(
-											account_id.clone(),
-											None,
-											output_amount
-												.saturating_sub(INITIAL_FLIP_FUNDING)
-												.into(),
-											FundingSource::Swap { swap_request_id },
-										);
-										FlipToBeSentToGateway::<T>::mutate(|total| {
-											total.saturating_accrue(output_amount);
-										});
+										if output_amount < INITIAL_FLIP_FUNDING {
+											// In the rare event that this occurs we will track the
+											// deficit and offset it agains the next burn
+											FlipDeficitToOffset::<T>::mutate(|total| {
+												total.saturating_accrue(
+													INITIAL_FLIP_FUNDING
+														.saturating_sub(output_amount),
+												);
+											});
+											FlipToBeSentToGateway::<T>::mutate(|total| {
+												total.saturating_accrue(INITIAL_FLIP_FUNDING);
+											});
+										} else {
+											T::FundAccount::fund_account(
+												account_id.clone(),
+												None,
+												output_amount
+													.saturating_sub(INITIAL_FLIP_FUNDING)
+													.into(),
+												FundingSource::Swap { swap_request_id },
+											);
+											FlipToBeSentToGateway::<T>::mutate(|total| {
+												total.saturating_accrue(output_amount);
+											});
+										}
 									} else {
 										log_or_panic!("Encountered transfer to gateway swap for asset that isn't Flip: {swap_request_id:?}");
 									},
@@ -2943,6 +2943,9 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	}
 	fn take_flip_to_be_sent_to_gateway() -> AssetAmount {
 		FlipToBeSentToGateway::<T>::take()
+	}
+	fn take_flip_deficit() -> AssetAmount {
+		FlipDeficitToOffset::<T>::take()
 	}
 }
 
