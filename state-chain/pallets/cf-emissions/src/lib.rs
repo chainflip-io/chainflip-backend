@@ -21,8 +21,8 @@
 use cf_chains::{eth::api::StateChainGatewayAddressProvider, UpdateFlipSupply};
 use cf_primitives::{AssetAmount, EgressId};
 use cf_traits::{
-	impl_pallet_safe_mode, Broadcaster, EgressApi, FlipBurnInfo, Issuance, RewardsDistribution,
-	ScheduledEgressDetails,
+	impl_pallet_safe_mode, Broadcaster, EgressApi, FlipBurnOrMoveInfo, Issuance,
+	RewardsDistribution, ScheduledEgressDetails,
 };
 use codec::MaxEncodedLen;
 use frame_support::storage::transactional::with_storage_layer;
@@ -108,7 +108,7 @@ pub mod pallet {
 		type EthEnvironment: StateChainGatewayAddressProvider;
 
 		/// The interface for accessing the amount of Flip we want burn.
-		type FlipToBurn: FlipBurnInfo;
+		type FlipToBurnOrMove: FlipBurnOrMoveInfo;
 
 		/// API for handling asset egress. Emissions only interacts with Ethereum.
 		type EgressHandler: EgressApi<Ethereum>;
@@ -271,9 +271,9 @@ impl<T: Config> Pallet<T> {
 	// chain gateway
 	fn burn_flip_network_fee() {
 		match with_storage_layer(|| {
-			let flip_to_be_sent_to_gateway = T::FlipToBurn::take_flip_to_be_sent_to_gateway();
-			let flip_to_offset = T::FlipToBurn::take_flip_deficit();
-			let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
+			let flip_to_be_sent_to_gateway = T::FlipToBurnOrMove::take_flip_to_be_sent_to_gateway();
+			let flip_to_offset = T::FlipToBurnOrMove::take_flip_deficit();
+			let flip_to_burn = T::FlipToBurnOrMove::take_flip_to_burn();
 			if flip_to_burn == Zero::zero() {
 				return Err(Error::<T>::FlipBalanceBelowBurnThreshold.into())
 			}

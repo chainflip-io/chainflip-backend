@@ -405,6 +405,7 @@ pub mod pallet {
 			asset: Asset,
 			boost_fee: BasisPoints,
 			refund_address: EncodedAddress,
+			role_to_register: Option<AccountRole>,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
 
@@ -434,7 +435,7 @@ pub mod pallet {
 					refund_address_internal,
 					Some(AdditionalDepositAction::FundFlip {
 						flip_amount_to_credit: INITIAL_FLIP_FUNDING * 10,
-						role_to_register: AccountRole::LiquidityProvider,
+						role_to_register,
 					}),
 				)?;
 
