@@ -267,8 +267,6 @@ impl<T: Config> Pallet<T> {
 		));
 	}
 
-	//TODO: rename function and trait/use separate trait to get the FLIP to be sent to the state
-	// chain gateway
 	fn burn_flip_network_fee() {
 		match with_storage_layer(|| {
 			let flip_to_be_sent_to_gateway = T::FlipToBurnOrMove::take_flip_to_be_sent_to_gateway();
