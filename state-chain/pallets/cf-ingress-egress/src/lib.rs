@@ -57,9 +57,9 @@ use cf_traits::{
 	AssetConverter, AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
 	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, IngressEgressFeeApi,
-	IngressSink, IngressSource, NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails,
-	SwapOutputAction, SwapParameterValidation, SwapRequestHandler, SwapRequestType,
-	INITIAL_FLIP_FUNDING,
+	IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider, OnDeposit,
+	ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
+	SwapRequestType, INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -722,6 +722,8 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Amount = <Self as Chainflip>::Amount,
 		>;
+
+		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -2051,7 +2053,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		origin: DepositOrigin<T, I>,
 	) -> DepositAction<T, I> {
 		match action.clone() {
-			ChannelAction::LiquidityProvision { lp_account, additional_action, .. } => {
+			ChannelAction::LiquidityProvision { lp_account, additional_action, refund_address } => {
 				let used_for_flip_funding_swap = if let Some(AdditionalDepositAction::FundFlip {
 					flip_amount_to_credit,
 					role_to_register,
@@ -2064,7 +2066,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						true,
 					)
 					.unwrap_or(
-						pallet_cf_swapping::utilities::fee_estimation_basis(asset.into()) / 2,
+						pallet_cf_swapping::utilities::estimated_20usd_input(asset.into()) / 2,
 					);
 					let input_amount = core::cmp::min(input_amount, amount_after_fees.into());
 					T::FundAccount::fund_account(
@@ -2076,6 +2078,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					let _ = T::AccountRoleRegistry::register_account_role(
 						&lp_account,
 						role_to_register,
+					);
+					T::LpRegistrationApi::register_liquidity_refund_address(
+						&lp_account,
+						refund_address,
 					);
 					T::SwapRequestHandler::init_swap_request(
 						asset.into(),
@@ -2089,7 +2095,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						BoundedVec::new(),
 						None,
 						None,
-						SwapOrigin::Internal,
+						SwapOrigin::OnChainAccount(lp_account.clone()),
 					);
 					input_amount
 				} else {
