@@ -2161,57 +2161,42 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					role_to_register,
 				}) = additional_action
 				{
-					if let Some(input_amount) =
-						T::AssetConverter::calculate_input_for_desired_output(
-							asset.into(),
-							Asset::Flip,
-							flip_amount_to_credit,
-							true,
-						) {
-						T::FundAccount::fund_account(
-							lp_account.clone(),
-							None,
-							INITIAL_FLIP_FUNDING.into(),
-							FundingSource::InitialFunding,
-						);
-						if let Err(err) = T::AccountRoleRegistry::register_account_role(
-							&lp_account,
-							role_to_register,
-						) {
-							// TODO! maybe not log it anymore since we are accepting subsequent
-							// funding through this additional_action
-							log::warn!("Failed to register account role {role_to_register:?} for account: {:?}, error: {:?}", lp_account, err);
-						};
-						T::SwapRequestHandler::init_swap_request(
-							asset.into(),
-							input_amount.into(),
-							Asset::Flip,
-							SwapRequestType::Regular {
-								output_action: SwapOutputAction::CreditFlipAndTransferToGateway {
-									account_id: lp_account.clone(),
-								},
+					let input_amount = T::AssetConverter::calculate_input_for_desired_output(
+						asset.into(),
+						Asset::Flip,
+						flip_amount_to_credit,
+						true,
+					)
+					.unwrap_or(pallet_cf_swapping::utilities::fee_estimation_basis(asset.into()) / 2);
+					let input_amount = core::cmp::min(input_amount, amount_after_fees.into());
+					T::FundAccount::fund_account(
+						lp_account.clone(),
+						None,
+						INITIAL_FLIP_FUNDING.into(),
+						FundingSource::InitialFunding,
+					);
+					let _ = T::AccountRoleRegistry::register_account_role(
+						&lp_account,
+						role_to_register,
+					);
+					T::SwapRequestHandler::init_swap_request(
+						asset.into(),
+						input_amount.into(),
+						Asset::Flip,
+						SwapRequestType::Regular {
+							output_action: SwapOutputAction::CreditFlipAndTransferToGateway {
+								account_id: lp_account.clone(),
 							},
-							BoundedVec::new(),
-							None, //TODO: use MIN_PRICE provided in the extrinsic
-							None,
-							SwapOrigin::Internal,
-						);
-						input_amount
-					} else {
-						// TODO: we will calculate an amount based on the MIN_PRICE provided in the
-						// extrinsic
-						log_or_panic!(
-							"Failed to calculate input amount for funding flip swap, skipping initial funding",
-						);
-						0u128
-					}
+						},
+						BoundedVec::new(),
+						None,
+						None,
+						SwapOrigin::Internal,
+					);
+					input_amount
 				} else {
 					0u128
 				};
-				if !frame_system::Pallet::<T>::account_exists(&lp_account) {
-					// Creates an account
-					let _ = frame_system::Provider::<T>::created(&lp_account);
-				}
 				T::Balance::credit_account(
 					&lp_account,
 					asset.into(),

@@ -3065,7 +3065,7 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 	}
 }
 
-pub(crate) mod utilities {
+pub mod utilities {
 	use super::*;
 
 	/// The amount of a non-gas asset to be used for transaction fee estimation.
@@ -3074,7 +3074,7 @@ pub(crate) mod utilities {
 	///
 	/// The value should be large enough to allow a good estimation of the fee, but small enough
 	/// to not exhaust the pool liquidity.
-	pub(crate) fn fee_estimation_basis(asset: Asset) -> u128 {
+	pub fn fee_estimation_basis(asset: Asset) -> u128 {
 		use cf_primitives::FLIPPERINOS_PER_FLIP;
 
 		const ETH_DECIMALS: u32 = 18;
@@ -3083,10 +3083,10 @@ pub(crate) mod utilities {
 		const SOL_DECIMALS: u32 = 9;
 
 		/// ~20 Dollars.
-		const FLIP_ESTIMATION_CAP: u128 = 25 * FLIPPERINOS_PER_FLIP;
+		const FLIP_ESTIMATION_CAP: u128 = 40 * FLIPPERINOS_PER_FLIP;
 		const USD_ESTIMATION_CAP: u128 = 20_000_000;
 		const ETH_ESTIMATION_CAP: u128 = 5 * 10u128.pow(ETH_DECIMALS - 3);
-		const DOT_ESTIMATION_CAP: u128 = 5 * 10u128.pow(DOT_DECIMALS);
+		const DOT_ESTIMATION_CAP: u128 = 7 * 10u128.pow(DOT_DECIMALS);
 		const BTC_ESTIMATION_CAP: u128 = 2 * 10u128.pow(BTC_DECIMALS - 4);
 		const SOL_ESTIMATION_CAP: u128 = 10 * 10u128.pow(SOL_DECIMALS - 2);
 

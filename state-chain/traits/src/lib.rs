@@ -718,8 +718,8 @@ pub enum AdditionalDepositAction {
 }
 
 // The max cost for an extrinsic is 1 FLIP, this means that account with less than 1FLIP cannot send
-// extrinsics hence we pre-fund with 2 FLIP
-pub const INITIAL_FLIP_FUNDING: u128 = FLIPPERINOS_PER_FLIP * 2;
+// extrinsics hence we pre-fund with 1.5 FLIP
+pub const INITIAL_FLIP_FUNDING: u128 = FLIPPERINOS_PER_FLIP + FLIPPERINOS_PER_FLIP / 2;
 
 /// Allow pallets to open and expire deposit addresses.
 pub trait DepositApi<C: Chain> {
