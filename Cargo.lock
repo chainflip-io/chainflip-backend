@@ -8385,6 +8385,7 @@ dependencies = [
  "log",
  "n-functor",
  "pallet-cf-governance",
+ "pallet-cf-swapping",
  "parity-scale-codec",
  "scale-info",
  "serde",
