@@ -56,7 +56,8 @@ async function lendingTestForAsset(
   const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex.for(lpUri));
 
   // Add collateral to the account, a little extra to cover the origination fee
-  await depositLiquidity(logger, collateralAsset, collateralAmount * 1.1, true, lpUri);
+  await depositLiquidity(logger, collateralAsset, collateralAmount * 1.01, true, lpUri);
+  const collateralAssetFreeBalance1 = await getFreeBalance(lp.address, collateralAsset);
   logger.debug(`Adding collateral`);
   const collateral: [Asset, string][] = [
     [
@@ -70,12 +71,24 @@ async function lendingTestForAsset(
       new Map(collateral.map(([asset, amount]) => [{ [asset]: {} }, amount])),
     ),
   );
+  await observeEvent(logger, 'lendingPools:CollateralAdded', {
+    test: (event) => event.data.borrower_id === lp.address,
+    historicalCheckBlocks: 15,
+  });
 
-  // Get balances before loan
-  const collateralAssetFreeBalance1 = await getFreeBalance(lp.address, collateralAsset);
-  const loanAssetFreeBalance1 = await getFreeBalance(lp.address, loanAsset);
+  // Check that our collateral is gone
+  const collateralAssetFreeBalance2 = await getFreeBalance(lp.address, collateralAsset);
+  assert(
+    collateralAssetFreeBalance1 - collateralAssetFreeBalance2 >=
+      amountToFineAmountBigInt(collateralAmount, collateralAsset),
+    `Free balance of collateral asset did not decrease the expected amount after doing \`addCollateral\`, expected a decrease of at least ${amountToFineAmountBigInt(
+      collateralAmount,
+      collateralAsset,
+    )} but got ${collateralAssetFreeBalance1 - collateralAssetFreeBalance2}`,
+  );
 
   // Create a loan
+  const loanAssetFreeBalance1 = await getFreeBalance(lp.address, loanAsset);
   const loanDetails = await extrinsicSubmitter.submit(
     chainflip.tx.lendingPools.requestLoan(
       loanAsset,
@@ -85,22 +98,17 @@ async function lendingTestForAsset(
     ),
   );
   logger.debug(`Created loan ${JSON.stringify(loanDetails)}`);
+  await observeEvent(logger, 'lendingPools:LoanCreated', {
+    test: (event) => event.data.borrower_id === lp.address,
+    historicalCheckBlocks: 15,
+  });
 
-  // Check that our collateral is gone and we got the loan asset
-  const collateralAssetFreeBalance2 = await getFreeBalance(lp.address, collateralAsset);
+  // Check that we got the loan amount
   const loanAssetFreeBalance2 = await getFreeBalance(lp.address, loanAsset);
-  logger.debug(
-    `Free Balances after loan: ${collateralAssetFreeBalance2} ${collateralAsset}, ${loanAssetFreeBalance2} ${loanAsset}`,
-  );
-  assert(
-    collateralAssetFreeBalance1 - collateralAssetFreeBalance2 >=
-      amountToFineAmountBigInt(collateralAmount, collateralAsset),
-    'Collateral balance did not decrease',
-  );
   assert.strictEqual(
     loanAssetFreeBalance2 - loanAssetFreeBalance1,
     amountToFineAmountBigInt(loanAmount, loanAsset),
-    'Loan balance did not increase correctly',
+    'Free balance of loan asset did not increase as expected after loan creation',
   );
 
   // Make sure the origination fee was taken
@@ -109,6 +117,11 @@ async function lendingTestForAsset(
     test: (event) => event.data.loan_id === loanId,
     historicalCheckBlocks: 15,
   });
+  const collateralAssetFreeBalance3 = await getFreeBalance(lp.address, collateralAsset);
+  assert(
+    collateralAssetFreeBalance2 > collateralAssetFreeBalance3,
+    'Did not take origination fee from free balance of collateral asset',
+  );
 
   // Wait for some interest
   await observeEvent(logger, 'lendingPools:InterestTaken', {
@@ -126,11 +139,11 @@ async function lendingTestForAsset(
   );
 
   // Check balances
-  const collateralAssetFreeBalance3 = await getFreeBalance(lp.address, collateralAsset);
+  const collateralAssetFreeBalance4 = await getFreeBalance(lp.address, collateralAsset);
   const loanAssetFreeBalance3 = await getFreeBalance(lp.address, loanAsset);
   assert.strictEqual(
+    collateralAssetFreeBalance4,
     collateralAssetFreeBalance3,
-    collateralAssetFreeBalance2,
     'Expected free balance of collateral asset to not change yet',
   );
   assert(
@@ -162,10 +175,10 @@ async function lendingTestForAsset(
   );
 
   // Check balances
-  const collateralAssetFreeBalance4 = await getFreeBalance(lp.address, collateralAsset);
+  const collateralAssetFreeBalance5 = await getFreeBalance(lp.address, collateralAsset);
   const loanAssetFreeBalance4 = await getFreeBalance(lp.address, loanAsset);
   assert(
-    collateralAssetFreeBalance4 > collateralAssetFreeBalance2,
+    collateralAssetFreeBalance5 > collateralAssetFreeBalance4,
     'Did not get collateral back after we removed collateral',
   );
   assert(
