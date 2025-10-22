@@ -962,6 +962,8 @@ pub trait FlipBurnInfo {
 	fn take_flip_to_burn() -> AssetAmount;
 
 	fn take_flip_to_be_sent_to_gateway() -> AssetAmount;
+
+	fn take_flip_deficit() -> AssetAmount;
 }
 
 /// The trait implementation is intentionally no-op by default

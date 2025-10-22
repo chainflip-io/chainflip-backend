@@ -64,7 +64,6 @@ use cf_traits::{
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
 	sp_runtime::{traits::Zero, DispatchError, Saturating},
-	traits::HandleLifetime,
 	transactional, OrdNoBound, PartialOrdNoBound,
 };
 use frame_system::pallet_prelude::*;
@@ -2167,7 +2166,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						flip_amount_to_credit,
 						true,
 					)
-					.unwrap_or(pallet_cf_swapping::utilities::fee_estimation_basis(asset.into()) / 2);
+					.unwrap_or(
+						pallet_cf_swapping::utilities::fee_estimation_basis(asset.into()) / 2,
+					);
 					let input_amount = core::cmp::min(input_amount, amount_after_fees.into());
 					T::FundAccount::fund_account(
 						lp_account.clone(),
