@@ -20,7 +20,7 @@ use crate::{mock::*, Event, LastSupplyUpdateBlock, Pallet, BURN_FEE_MULTIPLE};
 use cf_primitives::SECONDS_PER_BLOCK;
 use cf_test_utilities::{assert_has_event, assert_has_matching_event};
 use cf_traits::{
-	mocks::{egress_handler::MockEgressHandler, flip_burn_info::MockFlipBurnInfo},
+	mocks::{egress_handler::MockEgressHandler, flip_burn_info::MockFlipBurnOrMoveInfo},
 	SetSafeMode,
 };
 use frame_support::{
@@ -224,7 +224,7 @@ fn dont_burn_flip_below_threshold() {
 			"Expected total issuance to remain unchanged"
 		);
 		assert_eq!(
-			MockFlipBurnInfo::peek_flip_to_burn(),
+			MockFlipBurnOrMoveInfo::peek_flip_to_burn(),
 			FLIP_TO_BURN,
 			"Expected flip to remain available."
 		);
@@ -247,7 +247,7 @@ fn dont_burn_flip_below_threshold() {
 			TOTAL_ISSUANCE - (FLIP_TO_BURN - LOW_FEE),
 			"Expected total issuance to be reduced by net egress amount."
 		);
-		assert_eq!(MockFlipBurnInfo::peek_flip_to_burn(), 0, "Expected flip to be burned.");
+		assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_burn(), 0, "Expected flip to be burned.");
 	});
 }
 

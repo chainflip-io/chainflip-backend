@@ -2178,10 +2178,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						INITIAL_FLIP_FUNDING.into(),
 						FundingSource::InitialFunding,
 					);
-					let _ = T::AccountRoleRegistry::register_account_role(
-						&lp_account,
-						role_to_register,
-					);
+					if let Some(role) = role_to_register {
+						let _ = T::AccountRoleRegistry::register_account_role(&lp_account, role);
+					}
 					T::LpRegistrationApi::register_liquidity_refund_address(
 						&lp_account,
 						refund_address,

@@ -2957,7 +2957,7 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
+impl<T: Config> cf_traits::FlipBurnOrMoveInfo for Pallet<T> {
 	fn take_flip_to_burn() -> AssetAmount {
 		FlipToBurn::<T>::take()
 	}

@@ -714,7 +714,10 @@ pub trait FundingInfo {
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum AdditionalDepositAction {
-	FundFlip { flip_amount_to_credit: cf_primitives::AssetAmount, role_to_register: AccountRole },
+	FundFlip {
+		flip_amount_to_credit: cf_primitives::AssetAmount,
+		role_to_register: Option<AccountRole>,
+	},
 }
 
 // The max cost for an extrinsic is 1 FLIP, this means that account with less than 1FLIP cannot send
@@ -956,8 +959,9 @@ pub trait CommKeyBroadcaster {
 	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey);
 }
 
-/// Provides an interface to access the amount of Flip that is ready to be burned.
-pub trait FlipBurnInfo {
+/// Provides an interface to access the amount of Flip that is ready to be burned,
+/// moved to the state-chain-gateway or to be offsetted against the burn
+pub trait FlipBurnOrMoveInfo {
 	/// Takes the available Flip and returns it.
 	fn take_flip_to_burn() -> AssetAmount;
 
