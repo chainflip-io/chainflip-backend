@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use cf_primitives::ChainflipNetwork;
-use pallet_cf_environment::{TransactionMetadata, UNSIGNED_CALL_VERSION};
+use pallet_cf_environment::TransactionMetadata;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -77,14 +77,15 @@ pub struct EIP712Domain {
 // Building the EIP-712 typed data customized to the types we expect
 // and validate in the pallet_cf_environment::submit_runtime_call.rs
 pub fn build_eip712_typed_data(
-	chainflip_network: ChainflipNetwork,
+	chainflip_network: &ChainflipNetwork,
 	call: Vec<u8>,
-	transaction_metadata: TransactionMetadata,
+	transaction_metadata: &TransactionMetadata,
+	spec_version: u32,
 ) -> Result<TypedData, serde_json::Error> {
 	let json = serde_json::json!({
 		"domain": {
 			"name": chainflip_network.as_str().to_string(),
-			"version": UNSIGNED_CALL_VERSION,
+			"version": spec_version.to_string(),
 		},
 		"types": {
 			"EIP712Domain": [

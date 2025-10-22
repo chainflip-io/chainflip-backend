@@ -16,6 +16,7 @@
     "@polkadot/types": "16.1.1",
     "@polkadot/util": "13.5.1",
     "@polkadot/util-crypto": "13.5.1",
+    "@solana/kit": "^4.0.0",
     "@solana/spl-token": "^0.4.13",
     "@solana/web3.js": "^1.98.2",
     "@types/yargs": "^17.0.33",

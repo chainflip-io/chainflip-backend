@@ -25,7 +25,7 @@ pub enum LoanRepaymentOutcome {
 }
 
 /// Helps to link swap id in liquidation status to loan id
-#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct LiquidationSwap {
 	loan_id: LoanId,
 	from_asset: Asset,
@@ -34,14 +34,14 @@ pub struct LiquidationSwap {
 
 /// Whether the account's collateral is being liquidated (and if so, stores ids of liquidation
 /// swaps)
-#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum LiquidationStatus {
 	NoLiquidation,
 	Liquidating { liquidation_swaps: BTreeMap<SwapRequestId, LiquidationSwap>, is_hard: bool },
 }
 
 /// High precision interest amounts broken down by type
-#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 struct InterestBreakdown {
 	network: ScaledAmountHP,
 	pool: ScaledAmountHP,
@@ -311,6 +311,67 @@ impl<T: Config> LoanAccount<T> {
 		Ok(FixedU64::from_rational(principal, collateral))
 	}
 
+	fn charge_pending_interest_if_above_threshold(
+		loan: &mut GeneralLoan<T>,
+		collateral: &mut BTreeMap<Asset, AssetAmount>,
+		primary_collateral_asset: Asset,
+		threshold_usd: AssetAmount,
+	) -> DispatchResult {
+		let loan_asset = loan.asset;
+
+		// Make sure that the threshold isn't 0:
+		let threshold_usd = core::cmp::max(threshold_usd, 1);
+
+		if loan.pending_interest == Default::default() {
+			return Ok(());
+		}
+
+		let mut charge_fee_if_exceeds_threshold = |fee: &mut ScaledAmountHP| {
+			// Only charge fees if the accumulated amount is greater than some threshold
+			let fee_usd_value = usd_value_of(loan_asset, fee.into_asset_amount())?;
+
+			if fee_usd_value >= threshold_usd {
+				charge_fee_from_collateral::<T>(
+					collateral,
+					primary_collateral_asset,
+					loan_asset,
+					fee.take_non_fractional_part(),
+				)
+			} else {
+				Ok(Default::default())
+			}
+		};
+
+		let network_interest = charge_fee_if_exceeds_threshold(&mut loan.pending_interest.network)?;
+
+		let low_ltv_penalty =
+			charge_fee_if_exceeds_threshold(&mut loan.pending_interest.low_ltv_penalty)?;
+
+		for (asset, amount) in network_interest.iter().chain(&low_ltv_penalty) {
+			Pallet::<T>::credit_fees_to_network(*asset, *amount);
+		}
+
+		let pool_interest = charge_fee_if_exceeds_threshold(&mut loan.pending_interest.pool)?;
+
+		for (asset, amount) in &pool_interest {
+			Pallet::<T>::credit_fees_to_pool(loan_asset, *asset, *amount);
+		}
+
+		if !pool_interest.is_empty() || !network_interest.is_empty() || !low_ltv_penalty.is_empty()
+		{
+			Pallet::<T>::deposit_event(Event::InterestTaken {
+				loan_id: loan.id,
+				pool_interest,
+				network_interest,
+				// TODO: broker fees
+				broker_interest: Default::default(),
+				low_ltv_penalty,
+			});
+		}
+
+		Ok(())
+	}
+
 	#[transactional]
 	pub fn derive_and_charge_interest(&mut self, ltv: FixedU64) -> DispatchResult {
 		let config = LendingConfig::<T>::get();
@@ -322,7 +383,7 @@ impl<T: Config> LoanAccount<T> {
 
 		let current_block = frame_system::Pallet::<T>::block_number();
 
-		for (loan_id, loan) in &mut self.loans {
+		for loan in self.loans.values_mut() {
 			let blocks_since_last_payment: u32 = current_block
 				.saturating_sub(loan.last_interest_payment_at)
 				.try_into()
@@ -365,49 +426,14 @@ impl<T: Config> LoanAccount<T> {
 				loan.pending_interest.pool.saturating_accrue(pool_interest_amount);
 				loan.pending_interest.low_ltv_penalty.saturating_accrue(low_ltv_penalty_amount);
 
-				let mut charge_fee_if_exceeds_threshold = |fee: &mut ScaledAmountHP| {
-					// Only charge fees if the accumulated amount is greater than some threshold
-					// (say 10c)
-					let fee_usd_value = usd_value_of(loan_asset, fee.into_asset_amount())?;
-					if fee_usd_value >= config.interest_collection_threshold_usd {
-						charge_fee_from_collateral::<T>(
-							&mut self.collateral,
-							self.primary_collateral_asset,
-							loan_asset,
-							fee.take_non_fractional_part(),
-						)
-					} else {
-						Ok(Default::default())
-					}
-				};
-
-				let network_interest =
-					charge_fee_if_exceeds_threshold(&mut loan.pending_interest.network)?;
-
-				let low_ltv_penalty =
-					charge_fee_if_exceeds_threshold(&mut loan.pending_interest.low_ltv_penalty)?;
-
-				for (asset, amount) in network_interest.iter().chain(&low_ltv_penalty) {
-					Pallet::<T>::credit_fees_to_network(*asset, *amount);
-				}
-
-				let pool_interest =
-					charge_fee_if_exceeds_threshold(&mut loan.pending_interest.pool)?;
-
-				for (asset, amount) in &pool_interest {
-					Pallet::<T>::credit_fees_to_pool(loan_asset, *asset, *amount);
-				}
-
 				loan.last_interest_payment_at = current_block;
 
-				Pallet::<T>::deposit_event(Event::InterestTaken {
-					loan_id: *loan_id,
-					pool_interest,
-					network_interest,
-					// TODO: broker fees
-					broker_interest: Default::default(),
-					low_ltv_penalty,
-				});
+				Self::charge_pending_interest_if_above_threshold(
+					loan,
+					&mut self.collateral,
+					self.primary_collateral_asset,
+					config.interest_collection_threshold_usd,
+				)?;
 			}
 		}
 
@@ -557,7 +583,17 @@ impl<T: Config> LoanAccount<T> {
 	}
 
 	fn settle_loan(&mut self, loan_id: LoanId, via_liquidation: bool) {
-		if let Some(loan) = self.loans.remove(&loan_id) {
+		if let Some(mut loan) = self.loans.remove(&loan_id) {
+			// NOTE: if for whatever reason we fail to take the final interest payment at this stage
+			// (likely due to oracle price unavailability), it will be waived (this amount is
+			// expected to be very small anyway).
+			let _ = Self::charge_pending_interest_if_above_threshold(
+				&mut loan,
+				&mut self.collateral,
+				self.primary_collateral_asset,
+				1, // collecting any non-zero amount
+			);
+
 			Pallet::<T>::deposit_event(Event::LoanSettled {
 				loan_id,
 				outstanding_principal: loan.owed_principal,
@@ -737,6 +773,18 @@ fn equivalent_amount<T: Config>(
 fn usd_value_of<T: Config>(asset: Asset, amount: AssetAmount) -> Result<AssetAmount, Error<T>> {
 	let price_in_usd = get_price::<T>(asset)?;
 	Ok(cf_amm_math::output_amount_ceil(amount.into(), price_in_usd).unique_saturated_into())
+}
+
+// Uses oracle prices to calculate the total USD value of the entire map of assets
+fn total_usd_value_of<T: Config>(
+	assets_amounts: &BTreeMap<Asset, AssetAmount>,
+) -> Result<AssetAmount, DispatchError> {
+	let mut total_collateral_usd = 0;
+	for (asset, amount) in assets_amounts {
+		total_collateral_usd.saturating_accrue(usd_value_of::<T>(*asset, *amount)?);
+	}
+
+	Ok(total_collateral_usd)
 }
 
 /// Uses oracle prices to calculate the amount of `asset` that's equivalent in USD value to
@@ -932,6 +980,12 @@ impl<T: Config> LendingApi for Pallet<T> {
 		primary_collateral_asset: Option<Asset>,
 		extra_collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<LoanId, DispatchError> {
+		let config = LendingConfig::<T>::get();
+		ensure!(
+			amount_to_borrow >= amount_from_usd_value::<T>(asset, config.minimum_loan_amount_usd)?,
+			Error::<T>::LoanBelowMinimumAmount
+		);
+
 		let loan_id = NextLoanId::<T>::get();
 		NextLoanId::<T>::set(loan_id + 1);
 
@@ -972,7 +1026,8 @@ impl<T: Config> LendingApi for Pallet<T> {
 	}
 
 	/// Borrows `extra_amount_to_borrow` by expanding `loan_id`. Adds any extra collateral to the
-	/// account (which may be required to cover the new total owed amount).
+	/// account (which may be required to cover the new total owed amount). The extra amount to
+	/// borrow must be above the minimum update amount.
 	#[transactional]
 	fn expand_loan(
 		borrower_id: Self::AccountId,
@@ -990,6 +1045,16 @@ impl<T: Config> LendingApi for Pallet<T> {
 				extra_principal_amount: extra_amount_to_borrow,
 			});
 
+			let config = LendingConfig::<T>::get();
+			ensure!(
+				extra_amount_to_borrow >=
+					amount_from_usd_value::<T>(
+						loan.asset,
+						config.minimum_update_loan_amount_usd
+					)?,
+				Error::<T>::AmountBelowMinimum
+			);
+
 			loan_account.expand_loan_inner(loan, extra_amount_to_borrow, extra_collateral)?;
 
 			Ok::<_, DispatchError>(())
@@ -998,7 +1063,8 @@ impl<T: Config> LendingApi for Pallet<T> {
 		Ok(())
 	}
 
-	/// Repays (fully or partially) a loan.
+	/// Repays (fully or partially) a loan. Must be left above the minimum loan amount and the
+	/// repayment amount must be at least the minimum update amount, unless it's a full repayment.
 	#[transactional]
 	fn try_making_repayment(
 		borrower_id: &T::AccountId,
@@ -1006,6 +1072,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		repayment_amount: AssetAmount,
 	) -> Result<(), DispatchError> {
 		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
+			let config = LendingConfig::<T>::get();
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanNotFound)?;
 
 			let Some(loan) = loan_account.loans.get_mut(&loan_id) else {
@@ -1013,6 +1080,14 @@ impl<T: Config> LendingApi for Pallet<T> {
 			};
 
 			let loan_asset = loan.asset;
+
+			if repayment_amount < loan.owed_principal {
+				ensure!(
+					usd_value_of::<T>(loan.asset, repayment_amount)? >=
+						config.minimum_update_loan_amount_usd,
+					Error::<T>::AmountBelowMinimum
+				);
+			}
 
 			T::Balance::try_debit_account(borrower_id, loan_asset, repayment_amount)?;
 
@@ -1022,6 +1097,12 @@ impl<T: Config> LendingApi for Pallet<T> {
 				loan_account.settle_loan(loan_id, false /* not via liquidation */);
 
 				T::Balance::credit_account(borrower_id, loan_asset, excess_amount);
+			} else {
+				ensure!(
+					usd_value_of::<T>(loan.asset, loan.owed_principal)? >=
+						config.minimum_loan_amount_usd,
+					Error::<T>::LoanBelowMinimumAmount
+				);
 			}
 
 			// NOTE: even if we settle the last loan here, we don't remove
@@ -1040,6 +1121,12 @@ impl<T: Config> LendingApi for Pallet<T> {
 	) -> Result<(), DispatchError> {
 		ensure_non_zero_collateral::<T>(&collateral)?;
 
+		ensure!(
+			total_usd_value_of::<T>(&collateral)? >=
+				LendingConfig::<T>::get().minimum_update_collateral_amount_usd,
+			Error::<T>::AmountBelowMinimum
+		);
+
 		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
 			let loan_account = Self::create_or_update_loan_account(
 				borrower_id.clone(),
@@ -1054,7 +1141,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				collateral,
 			});
 
-			Ok::<_, DispatchError>(())
+			Ok(())
 		})
 	}
 
@@ -1072,6 +1159,24 @@ impl<T: Config> LendingApi for Pallet<T> {
 				loan_account.liquidation_status == LiquidationStatus::NoLiquidation,
 				Error::<T>::LiquidationInProgress
 			);
+
+			// If a larger than or equal amount of collateral is being removed from all collateral
+			// assets, then we are removing all collateral and do not need to check the minimum
+			// amount. Being able to specify a large (eg u128::MAX) amount for all assets lets the
+			// user avoid exact values (useful because of fees).
+			if !loan_account.collateral.iter().all(|(asset, loan_amount)| {
+				collateral
+					.get(asset)
+					.map(|remove_amount| remove_amount >= loan_amount)
+					.unwrap_or(false)
+			}) {
+				let total_collateral_usd = total_usd_value_of::<T>(&collateral)?;
+				ensure!(
+					total_collateral_usd >=
+						LendingConfig::<T>::get().minimum_update_collateral_amount_usd,
+					Error::<T>::AmountBelowMinimum
+				);
+			}
 
 			for (asset, amount) in &collateral {
 				ensure!(
@@ -1109,6 +1214,26 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			if loan_account.collateral.is_empty() && loan_account.loans.is_empty() {
 				*maybe_account = None;
+			}
+
+			Ok(())
+		})
+	}
+
+	fn update_primary_collateral_asset(
+		borrower_id: &Self::AccountId,
+		primary_collateral_asset: Asset,
+	) -> Result<(), DispatchError> {
+		LoanAccounts::<T>::try_mutate(borrower_id, |maybe_account| {
+			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanAccountNotFound)?;
+
+			if loan_account.primary_collateral_asset != primary_collateral_asset {
+				loan_account.primary_collateral_asset = primary_collateral_asset;
+
+				Self::deposit_event(Event::PrimaryCollateralAssetUpdated {
+					borrower_id: borrower_id.clone(),
+					primary_collateral_asset,
+				});
 			}
 
 			Ok(())
@@ -1601,7 +1726,7 @@ pub struct NetworkFeeContributions {
 	pub interest_on_collateral_max: Permill,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct LendingConfiguration {
 	/// This configuration is used unless it is overridden in `pool_config_overrides`.
 	pub default_pool_config: LendingPoolConfiguration,
@@ -1631,6 +1756,13 @@ pub struct LendingConfiguration {
 	pub fee_swap_max_oracle_slippage: BasisPoints,
 	/// If set for a pool/asset, this configuration will be used instead of the default
 	pub pool_config_overrides: BTreeMap<Asset, LendingPoolConfiguration>,
+	/// Minimum amount of principal that a loan must have at all times.
+	pub minimum_loan_amount_usd: AssetAmount,
+	/// Minimum equivalent amount of principal that can be used to expand or repay an existing
+	/// loan.
+	pub minimum_update_loan_amount_usd: AssetAmount,
+	/// Minimum equivalent amount of collateral that can be added or removed from a loan account.
+	pub minimum_update_collateral_amount_usd: AssetAmount,
 }
 
 impl LendingConfiguration {

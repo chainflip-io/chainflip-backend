@@ -147,6 +147,11 @@ pub enum PalletConfigUpdate {
 		fee_swap: BasisPoints,
 	},
 	SetLiquidationSwapChunkSizeUsd(AssetAmount),
+	SetMinimumAmounts {
+		minimum_loan_amount_usd: AssetAmount,
+		minimum_update_loan_amount_usd: AssetAmount,
+		minimum_update_collateral_amount_usd: AssetAmount,
+	},
 }
 
 define_wrapper_type!(CorePoolId, u32);
@@ -224,6 +229,9 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	liquidation_swap_chunk_size_usd: 10_000_000_000, //10k USD
 	fee_swap_max_oracle_slippage: 50,   // 0.5%
 	pool_config_overrides: BTreeMap::new(),
+	minimum_loan_amount_usd: 100_000_000,             // 100 USD
+	minimum_update_loan_amount_usd: 10_000_000,       // 10 USD
+	minimum_update_collateral_amount_usd: 10_000_000, // 10 USD
 };
 
 impl Get<LendingConfiguration> for LendingConfigDefault {
@@ -493,6 +501,11 @@ pub mod pallet {
 		LiquidationInProgress,
 		/// The provided collateral amount is empty/zero.
 		EmptyCollateral,
+		/// The loan amount would be below the minimum allowed.
+		LoanBelowMinimumAmount,
+		/// The amount specified to update a loan or collateral must be at least the minimum
+		/// allowed amount.
+		AmountBelowMinimum,
 	}
 
 	#[pallet::hooks]
@@ -586,6 +599,16 @@ pub mod pallet {
 						},
 						PalletConfigUpdate::SetLiquidationSwapChunkSizeUsd(amount) => {
 							config.liquidation_swap_chunk_size_usd = *amount;
+						},
+						PalletConfigUpdate::SetMinimumAmounts {
+							minimum_loan_amount_usd,
+							minimum_update_loan_amount_usd,
+							minimum_update_collateral_amount_usd,
+						} => {
+							config.minimum_loan_amount_usd = *minimum_loan_amount_usd;
+							config.minimum_update_loan_amount_usd = *minimum_update_loan_amount_usd;
+							config.minimum_update_collateral_amount_usd =
+								*minimum_update_collateral_amount_usd;
 						},
 					}
 					Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
@@ -824,6 +847,20 @@ pub mod pallet {
 
 		#[pallet::call_index(10)]
 		#[pallet::weight(Weight::zero())]
+		pub fn update_primary_collateral_asset(
+			origin: OriginFor<T>,
+			primary_collateral_asset: Asset,
+		) -> DispatchResult {
+			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			<Self as LendingApi>::update_primary_collateral_asset(
+				&borrower_id,
+				primary_collateral_asset,
+			)
+		}
+
+		#[pallet::call_index(11)]
+		#[pallet::weight(Weight::zero())]
 		pub fn expand_loan(
 			origin: OriginFor<T>,
 			loan_id: LoanId,
@@ -837,12 +874,10 @@ pub mod pallet {
 				loan_id,
 				extra_amount_to_borrow,
 				extra_collateral,
-			)?;
-
-			Ok(())
+			)
 		}
 
-		#[pallet::call_index(11)]
+		#[pallet::call_index(12)]
 		#[pallet::weight(Weight::zero())]
 		pub fn make_repayment(
 			origin: OriginFor<T>,

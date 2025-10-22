@@ -1721,7 +1721,7 @@ fn small_interest_amounts_accumulate() {
 		.execute_with(|| {
 			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
-			LendingConfig::<Test>::set(config);
+			LendingConfig::<Test>::set(config.clone());
 
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
@@ -1790,6 +1790,75 @@ fn small_interest_amounts_accumulate() {
 					low_ltv_penalty: Default::default()
 				}
 			);
+		});
+}
+
+#[test]
+fn reconciling_interest_before_settling_loan() {
+	// This test makes sure that we collect any pending interest before settling a loan.
+
+	let interest_payment_interval = CONFIG.interest_payment_interval_blocks;
+
+	new_test_ext()
+		.with_funded_pool(INIT_POOL_AMOUNT)
+		.with_default_loan()
+		.then_process_blocks_until_block(INIT_BLOCK + interest_payment_interval as u64)
+		.then_execute_with(|_| {
+			// Pending interest has been recorded, but not yet taken from collateral
+
+			let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
+			assert_eq!(account.collateral, BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]));
+
+			let pool_interest = CONFIG.derive_base_interest_rate_per_payment_interval(
+				LOAN_ASSET,
+				DEFAULT_UTILISATION,
+				interest_payment_interval,
+			);
+
+			let network_interest =
+				CONFIG.derive_network_interest_rate_per_payment_interval(interest_payment_interval);
+
+			let pool_amount_scaled = ScaledAmountHP::from_asset_amount(PRINCIPAL) * pool_interest;
+			let network_amount_scaled =
+				ScaledAmountHP::from_asset_amount(PRINCIPAL) * network_interest;
+
+			assert_eq!(
+				account.loans[&LOAN_ID].pending_interest,
+				InterestBreakdown {
+					network: network_amount_scaled,
+					pool: pool_amount_scaled,
+					broker: Default::default(),
+					low_ltv_penalty: Default::default()
+				}
+			);
+
+			// Repaying the loan should result in collection of all pending interest
+			let pool_amount = pool_amount_scaled.into_asset_amount() * SWAP_RATE;
+			let network_amount = network_amount_scaled.into_asset_amount() * SWAP_RATE;
+
+			// The test is only effective if we have non-fractional fees to collect
+			assert!(pool_amount > 0 && network_amount > 0, "interest amounts must be non-zero");
+
+			assert_ok!(LendingPools::try_making_repayment(&BORROWER, LOAN_ID, PRINCIPAL));
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+					loan_id: LOAN_ID,
+					amount: PRINCIPAL,
+				}),
+				RuntimeEvent::LendingPools(Event::<Test>::InterestTaken { .. }),
+				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled { .. })
+			);
+
+			// Checking the actual values separately to avoid using the awkward matching syntax:
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
+				loan_id: LOAN_ID,
+				pool_interest: BTreeMap::from([(COLLATERAL_ASSET, pool_amount)]),
+				network_interest: BTreeMap::from([(COLLATERAL_ASSET, network_amount)]),
+				broker_interest: Default::default(),
+				low_ltv_penalty: Default::default(),
+			}));
 		});
 }
 
@@ -1901,6 +1970,54 @@ fn borrowing_disallowed_during_liquidation() {
 				Error::<Test>::LiquidationInProgress
 			);
 		});
+}
+
+#[test]
+fn updating_primary_collateral_asset() {
+	const NEW_PRIMARY_ASSEET: Asset = Asset::Btc;
+
+	assert_ne!(COLLATERAL_ASSET, NEW_PRIMARY_ASSEET);
+
+	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
+		// Must have LP role:
+		assert_noop!(
+			LendingPools::update_primary_collateral_asset(
+				RuntimeOrigin::signed(NON_LP),
+				NEW_PRIMARY_ASSEET
+			),
+			DispatchError::BadOrigin
+		);
+
+		// Must alreaady have a loan account:
+		assert_noop!(
+			LendingPools::update_primary_collateral_asset(
+				RuntimeOrigin::signed(BORROWER),
+				NEW_PRIMARY_ASSEET
+			),
+			Error::<Test>::LoanAccountNotFound
+		);
+
+		// Should succeed after adding collateral (which implicitly creates an account):
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+
+		assert_ok!(LendingPools::add_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			Some(COLLATERAL_ASSET),
+			BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
+		));
+
+		assert_ok!(LendingPools::update_primary_collateral_asset(
+			RuntimeOrigin::signed(BORROWER),
+			NEW_PRIMARY_ASSEET
+		));
+
+		assert_has_event::<Test>(RuntimeEvent::LendingPools(
+			Event::<Test>::PrimaryCollateralAssetUpdated {
+				borrower_id: BORROWER,
+				primary_collateral_asset: NEW_PRIMARY_ASSEET,
+			},
+		));
+	});
 }
 
 mod safe_mode {
@@ -2681,27 +2798,27 @@ fn interest_rate_curve() {
 	let asset = Asset::Btc;
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(0)),
+		CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(0)),
 		Permill::from_percent(2)
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(45)),
+		CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(45)),
 		Permill::from_parts(49_999) // (2% + 8%) / 2 = 5%
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(90)),
+		CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(90)),
 		Permill::from_percent(8)
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(95)),
+		CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(95)),
 		Permill::from_percent(29) // (8% + 50%) / 2 = 29%
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(100)),
+		CONFIG.derive_interest_rate_per_year(asset, Permill::from_percent(100)),
 		Permill::from_percent(50)
 	);
 }
@@ -2709,38 +2826,274 @@ fn interest_rate_curve() {
 #[test]
 fn derive_extra_interest_from_low_ltv() {
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG.derive_low_ltv_interest_rate_per_year(FixedU64::zero()),
+		CONFIG.derive_low_ltv_interest_rate_per_year(FixedU64::zero()),
 		Permill::from_percent(1)
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG
-			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(10, 100)),
+		CONFIG.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(10, 100)),
 		Permill::from_parts(8_000) // 0.8%
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG
-			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(25, 100)),
+		CONFIG.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(25, 100)),
 		Permill::from_parts(5_000) // 0.5%
 	);
 
 	// Any value above 50% LTV should result in 0% additional interest:
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG
-			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(50, 100)),
+		CONFIG.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(50, 100)),
 		Permill::from_percent(0)
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG
-			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(80, 100)),
+		CONFIG.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(80, 100)),
 		Permill::from_percent(0)
 	);
 
 	assert_eq!(
-		LENDING_DEFAULT_CONFIG
-			.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(120, 100)),
+		CONFIG.derive_low_ltv_interest_rate_per_year(FixedU64::from_rational(120, 100)),
 		Permill::from_percent(0)
 	);
+}
+
+#[test]
+fn loan_minimum_is_enforced() {
+	const MIN_LOAN_AMOUNT_USD: AssetAmount = 1_000;
+	const MIN_LOAN_AMOUNT_ASSET: AssetAmount = MIN_LOAN_AMOUNT_USD / SWAP_RATE;
+	const COLLATERAL_AMOUNT: AssetAmount = MIN_LOAN_AMOUNT_ASSET * SWAP_RATE * 2;
+
+	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
+		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+
+		// Set the minimum loan amount
+		LendingConfig::<Test>::set(LendingConfiguration {
+			minimum_loan_amount_usd: MIN_LOAN_AMOUNT_USD,
+			minimum_update_loan_amount_usd: 0,
+			..LendingConfigDefault::get()
+		});
+
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, COLLATERAL_AMOUNT);
+
+		// Should not be able to create a loan below the minimum amount
+		assert_noop!(
+			LendingPools::new_loan(
+				BORROWER,
+				LOAN_ASSET,
+				MIN_LOAN_AMOUNT_ASSET - 1,
+				Some(COLLATERAL_ASSET),
+				BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_AMOUNT)])
+			),
+			Error::<Test>::LoanBelowMinimumAmount
+		);
+
+		// A loan equal to or above the minimum amount should be fine
+		assert_eq!(
+			LendingPools::new_loan(
+				BORROWER,
+				LOAN_ASSET,
+				MIN_LOAN_AMOUNT_ASSET,
+				Some(COLLATERAL_ASSET),
+				BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_AMOUNT)])
+			),
+			Ok(LOAN_ID)
+		);
+
+		// Now try and repay an amount that would leave the loan below the minimum
+		assert_noop!(
+			LendingPools::try_making_repayment(&BORROWER, LOAN_ID, 1),
+			Error::<Test>::LoanBelowMinimumAmount,
+		);
+
+		// If we expand the loan so a partial repayment would not take it below the minimum,
+		assert_eq!(
+			LendingPools::expand_loan(RuntimeOrigin::signed(BORROWER), LOAN_ID, 1, BTreeMap::new()),
+			Ok(())
+		);
+		assert_ok!(LendingPools::try_making_repayment(&BORROWER, LOAN_ID, 1),);
+
+		// Finally, repay the rest of the loan should be fine, even though 0 is below the minimum
+		assert_ok!(LendingPools::try_making_repayment(&BORROWER, LOAN_ID, MIN_LOAN_AMOUNT_ASSET));
+	});
+}
+
+#[test]
+fn expand_or_repay_loan_minimum_is_enforced() {
+	const MIN_LOAN_AMOUNT_USD: AssetAmount = 1_000;
+	const MIN_UPDATE_USD: AssetAmount = 500;
+	const MIN_UPDATE_AMOUNT_ASSET: AssetAmount = MIN_UPDATE_USD / SWAP_RATE;
+	const MIN_LOAN_AMOUNT_ASSET: AssetAmount = MIN_LOAN_AMOUNT_USD / SWAP_RATE;
+	const COLLATERAL_ASSET: Asset = Asset::Eth;
+	const COLLATERAL_AMOUNT: AssetAmount = MIN_LOAN_AMOUNT_ASSET * SWAP_RATE * 2;
+
+	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
+		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+
+		// Set the minimum loan amount
+		LendingConfig::<Test>::set(LendingConfiguration {
+			minimum_loan_amount_usd: MIN_LOAN_AMOUNT_USD,
+			minimum_update_loan_amount_usd: MIN_UPDATE_USD,
+			..LendingConfigDefault::get()
+		});
+
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, COLLATERAL_AMOUNT);
+
+		// Create a loan, doesn't really matter what amount.
+		assert_eq!(
+			LendingPools::new_loan(
+				BORROWER,
+				LOAN_ASSET,
+				MIN_LOAN_AMOUNT_ASSET,
+				Some(COLLATERAL_ASSET),
+				BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_AMOUNT)])
+			),
+			Ok(LOAN_ID)
+		);
+
+		// Should not be able to expand the loan by an amount below the minimum
+		assert_noop!(
+			LendingPools::expand_loan(
+				RuntimeOrigin::signed(BORROWER),
+				LOAN_ID,
+				MIN_UPDATE_AMOUNT_ASSET - 1,
+				BTreeMap::new()
+			),
+			Error::<Test>::AmountBelowMinimum
+		);
+
+		// Expanding by an amount equal to or above the minimum should be fine
+		assert_eq!(
+			LendingPools::expand_loan(
+				RuntimeOrigin::signed(BORROWER),
+				LOAN_ID,
+				MIN_UPDATE_AMOUNT_ASSET,
+				BTreeMap::new()
+			),
+			Ok(())
+		);
+
+		// Should not be able to repay an amount that is below the minimum
+		assert_noop!(
+			LendingPools::make_repayment(
+				RuntimeOrigin::signed(BORROWER),
+				LOAN_ID,
+				MIN_UPDATE_AMOUNT_ASSET - 1
+			),
+			Error::<Test>::AmountBelowMinimum
+		);
+
+		// Repaying an amount equal to or above the minimum should be fine
+		assert_ok!(LendingPools::make_repayment(
+			RuntimeOrigin::signed(BORROWER),
+			LOAN_ID,
+			MIN_UPDATE_AMOUNT_ASSET
+		));
+
+		// Set a very high minimum update amount
+		LendingConfig::<Test>::set(LendingConfiguration {
+			minimum_loan_amount_usd: MIN_LOAN_AMOUNT_USD,
+			minimum_update_loan_amount_usd: MIN_LOAN_AMOUNT_ASSET * 1000000,
+			..LendingConfigDefault::get()
+		});
+
+		// Now make sure we can repay the full amount even though it's below the minimum update
+		// amount
+		assert_ok!(LendingPools::make_repayment(
+			RuntimeOrigin::signed(BORROWER),
+			LOAN_ID,
+			MIN_LOAN_AMOUNT_ASSET
+		));
+	});
+}
+
+#[test]
+fn adding_or_removing_collateral_minimum_is_enforced() {
+	const MIN_UPDATE_USD: AssetAmount = 6000;
+	const MIN_UPDATE_AMOUNT_ASSET: AssetAmount = MIN_UPDATE_USD / SWAP_RATE;
+	const EXTRA_COLLATERAL_AMOUNT: AssetAmount = 100;
+
+	const COLLATERAL_ASSET: Asset = Asset::Eth;
+	const COLLATERAL_ASSET_2: Asset = Asset::Flip;
+
+	new_test_ext().execute_with(|| {
+		set_asset_price_in_usd(COLLATERAL_ASSET, SWAP_RATE);
+		set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+		MockBalance::credit_account(
+			&BORROWER,
+			COLLATERAL_ASSET,
+			MIN_UPDATE_AMOUNT_ASSET + MIN_UPDATE_AMOUNT_ASSET / 2 + EXTRA_COLLATERAL_AMOUNT,
+		);
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET_2, MIN_UPDATE_USD / 2);
+
+		// Set the minimum collateral update amount
+		LendingConfig::<Test>::set(LendingConfiguration {
+			minimum_update_collateral_amount_usd: MIN_UPDATE_USD,
+			..LendingConfigDefault::get()
+		});
+
+		// Should not be able to add collateral below the minimum amount
+		assert_noop!(
+			LendingPools::add_collateral(
+				RuntimeOrigin::signed(BORROWER),
+				Some(COLLATERAL_ASSET),
+				BTreeMap::from([(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET - 1)])
+			),
+			Error::<Test>::AmountBelowMinimum
+		);
+
+		// Adding an amount equal to or above the minimum amount should be fine
+		assert_ok!(LendingPools::add_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			Some(COLLATERAL_ASSET),
+			BTreeMap::from([(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET)])
+		));
+
+		// As long as the total added is above the minimum, it should be fine
+		assert_ok!(LendingPools::add_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			Some(COLLATERAL_ASSET),
+			BTreeMap::from([
+				(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET / 2 + EXTRA_COLLATERAL_AMOUNT),
+				(COLLATERAL_ASSET_2, MIN_UPDATE_USD / 2)
+			])
+		));
+
+		// Should not be able to remove collateral below the minimum amount
+		assert_noop!(
+			LendingPools::remove_collateral(
+				RuntimeOrigin::signed(BORROWER),
+				BTreeMap::from([(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET - 1)])
+			),
+			Error::<Test>::AmountBelowMinimum
+		);
+
+		// Removing an amount equal to or above the minimum amount should be fine
+		assert_ok!(LendingPools::remove_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			BTreeMap::from([(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET)])
+		));
+
+		// Even if its split between multiple assets, as long as the total is above the minimum
+		assert_ok!(LendingPools::remove_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			BTreeMap::from([
+				(COLLATERAL_ASSET, MIN_UPDATE_AMOUNT_ASSET / 2),
+				(COLLATERAL_ASSET_2, MIN_UPDATE_USD / 2)
+			])
+		));
+
+		// And if only a small amount is left, it should be fine to remove it all
+		let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
+		let extra_collateral_amount = account.collateral.get(&COLLATERAL_ASSET).unwrap();
+		assert!(
+			extra_collateral_amount < &MIN_UPDATE_AMOUNT_ASSET,
+			"Left over collateral needs to be below the minimum for test to work."
+		);
+		assert_ok!(LendingPools::remove_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			BTreeMap::from([(COLLATERAL_ASSET, *extra_collateral_amount)])
+		));
+	});
 }

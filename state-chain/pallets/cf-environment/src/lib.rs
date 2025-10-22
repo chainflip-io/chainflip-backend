@@ -21,7 +21,8 @@
 
 use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
 pub use crate::submit_runtime_call::{
-	BatchedCalls, Message, TransactionMetadata, MAX_BATCHED_CALLS, UNSIGNED_CALL_VERSION,
+	build_domain_data, BatchedCalls, EthEncodingType, Message, SolEncodingType,
+	TransactionMetadata, DOMAIN_OFFCHAIN_PREFIX, MAX_BATCHED_CALLS,
 };
 use cf_chains::{
 	btc::{
@@ -703,12 +704,16 @@ pub mod pallet {
 					return Err(InvalidTransaction::BadSigner.into());
 				};
 				let valid_tx = validate_metadata::<T>(metadata, &signer_account)?;
+
+				let runtime_version = <T as frame_system::Config>::Version::get();
+
 				ensure!(
 					is_valid_signature(
 						inner_call,
-						ChainflipNetworkName::<T>::get(),
+						&ChainflipNetworkName::<T>::get(),
 						metadata,
-						signature_data
+						signature_data,
+						runtime_version.spec_version,
 					),
 					InvalidTransaction::BadProof
 				);

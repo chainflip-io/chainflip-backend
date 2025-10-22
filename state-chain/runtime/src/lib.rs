@@ -2726,6 +2726,9 @@ impl_runtime_apis! {
 				soft_liquidation_max_oracle_slippage: config.soft_liquidation_max_oracle_slippage,
 				hard_liquidation_max_oracle_slippage: config.hard_liquidation_max_oracle_slippage,
 				fee_swap_max_oracle_slippage: config.fee_swap_max_oracle_slippage,
+				minimum_loan_amount_usd: config.minimum_loan_amount_usd.into(),
+				minimum_update_loan_amount_usd: config.minimum_update_loan_amount_usd.into(),
+				minimum_update_collateral_amount_usd: config.minimum_update_collateral_amount_usd.into(),
 			}
 		}
 
@@ -2773,10 +2776,14 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_chainflip_network(
-		) -> Result< cf_primitives::ChainflipNetwork, DispatchErrorWithMessage> {
-			Ok( pallet_cf_environment::ChainflipNetworkName::<Runtime>::get())
+		fn cf_chainflip_network_and_state(
+		) -> Result< (cf_primitives::ChainflipNetwork, u32, BlockNumber), DispatchErrorWithMessage> {
+			let version = <Runtime as frame_system::Config>::Version::get();
+			let current_block_number = <frame_system::Pallet<Runtime>>::block_number();
+			Ok( (pallet_cf_environment::ChainflipNetworkName::<Runtime>::get(), version.spec_version, current_block_number))
 		}
+
+
 	}
 
 

@@ -85,6 +85,12 @@ const getCachedSubstrateApi = (endpoint: string) =>
         SolEncodingType: {
           _enum: ['Domain'],
         },
+        EncodingType: {
+          _enum: {
+            Eth: 'EthEncodingType',
+            Sol: 'SolEncodingType',
+          },
+        },
         SignatureData: {
           _enum: {
             Solana: '(SolSignature, SolAddress, SolEncodingType)',
