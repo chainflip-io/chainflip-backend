@@ -20,7 +20,6 @@ use minimized_scale_value::MinimizedScaleValue;
 
 pub mod bytes;
 pub mod eip712;
-//pub mod eip712_serializer;
 pub mod hash;
 pub mod lexer;
 pub mod minimized_scale_value;
@@ -195,16 +194,28 @@ pub fn recursively_construct_types(
 
 				let modified_value =
 					Value::without_context(ValueDef::Composite(Composite::Unnamed(values)));
-				// convert the type name of the sequence to something like "TypeName[]".
-				// If its a sequence of type u8, then we interpret it as bytes.
-				// empty vec![] ensures that we dont add this type to types list
-				if type_names[0] == "uint8" {
-					(
-						"bytes".to_string(),
-						(AddTypeOrNot::DontAdd, scale_value_bytes_to_hex(modified_value)?),
-					)
+
+				// If the sequence is empty, there is no use, constructing the type of the array
+				// elements, and so we map the empty array to an Empty type called EmptySequence
+				if let Some(type_name) = type_names.first() {
+					// convert the type name of the sequence to something like "TypeName[]".
+					// If its a sequence of type u8, then we interpret it as bytes.
+					// empty vec![] ensures that we dont add this type to types list
+					if type_name == "uint8" {
+						(
+							"bytes".to_string(),
+							(AddTypeOrNot::DontAdd, scale_value_bytes_to_hex(modified_value)?),
+						)
+					} else {
+						(type_name.clone() + "[]", (AddTypeOrNot::DontAdd, modified_value))
+					}
 				} else {
-					(type_names[0].clone() + "[]", (AddTypeOrNot::DontAdd, modified_value))
+					recursively_construct_types(
+						modified_value,
+						MetaType::new::<EmptySequence>(),
+						types,
+					)
+					.map(|(n, v)| (n, (AddTypeOrNot::DontAdd, v)))?
 				}
 			},
 			(TypeDef::Array(type_def_array), ValueDef::Composite(Composite::Unnamed(fs))) => {
@@ -217,19 +228,30 @@ pub fn recursively_construct_types(
 				let modified_value =
 					Value::without_context(ValueDef::Composite(Composite::Unnamed(values)));
 
-				// convert the type name of the array to something like "TypeName[len]".
-				// If its a sequence of type u8, then we interpret it as bytes.
-				// vec![] ensures that we dont add this type to types list
-				if type_names[0] == "uint8" {
-					(
-						"bytes".to_string(),
-						(AddTypeOrNot::DontAdd, scale_value_bytes_to_hex(modified_value)?),
-					)
+				// If the array is empty, there is no use, constructing the type of the array
+				// elements, and so we map the empty array to an Empty type called EmptyArray
+				if let Some(type_name) = type_names.first() {
+					// convert the type name of the array to something like "TypeName[len]".
+					// If its a sequence of type u8, then we interpret it as bytes.
+					// vec![] ensures that we dont add this type to types list
+					if type_name == "uint8" {
+						(
+							"bytes".to_string(),
+							(AddTypeOrNot::DontAdd, scale_value_bytes_to_hex(modified_value)?),
+						)
+					} else {
+						(
+							type_name.clone() + "[" + &type_def_array.len.to_string() + "]",
+							(AddTypeOrNot::DontAdd, modified_value),
+						)
+					}
 				} else {
-					(
-						type_names[0].clone() + "[" + &type_def_array.len.to_string() + "]",
-						(AddTypeOrNot::DontAdd, modified_value),
+					recursively_construct_types(
+						modified_value,
+						MetaType::new::<EmptyArray>(),
+						types,
 					)
+					.map(|(n, v)| (n, (AddTypeOrNot::DontAdd, v)))?
 				}
 			},
 			(TypeDef::Tuple(type_def_tuple), ValueDef::Composite(Composite::Unnamed(fs))) => {
@@ -258,8 +280,7 @@ pub fn recursively_construct_types(
 					.unzip();
 				(
 					// In case of tuple, we decide to name it "UnnamedTuple_{first 4 bytes of hash
-					// of the type_fields}" since tuples, although supported in solidity, cant be
-					// easily displayed in metamask. Naming it so will display it in metamask
+					// of the type_fields}". Naming it so will display it in metamask
 					// which will indicate to the signer that this is indeed a tuple. The 4
 					// bytes of hash is just to avoid name collisions in case there are
 					// multiple unnamed tuples.
@@ -312,9 +333,6 @@ pub fn recursively_construct_types(
 		// in different paths
 
 		types.insert(type_name.clone(), type_fields);
-		// Only insert if there are fields (to avoid empty struct definitions)
-		// if !fields.is_empty() {
-		// }
 	}
 
 	Ok((type_name, value))
@@ -369,6 +387,11 @@ fn process_composite(
 		(AddTypeOrNot::AddType { type_fields }, Value::named_composite(vals))
 	})
 }
+
+#[derive(TypeInfo, Clone, Encode)]
+pub struct EmptySequence;
+#[derive(TypeInfo, Clone, Encode)]
+pub struct EmptyArray;
 
 #[cfg(test)]
 pub mod tests {
