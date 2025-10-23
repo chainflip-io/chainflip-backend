@@ -30,6 +30,7 @@ env:
 jobs:
   compile:
     runs-on: namespace-profile-${{ inputs.ci-runner }}
+    timeout-minutes: 40
     container:
       image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-01-1"
       volumes:
