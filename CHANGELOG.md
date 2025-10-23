@@ -2,6 +2,25 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.12.0] - 2025-10-22
+
+### Features
+
+- BLS for Solana ([#6162](https://github.com/chainflip-io/chainflip-backend/issues/6162))
+- Use oracle price to estimate gas ([#6131](https://github.com/chainflip-io/chainflip-backend/issues/6131))
+
+### Fixes
+
+- Use correct nonce for one of the sol localnet nonce accounts. ([#6134](https://github.com/chainflip-io/chainflip-backend/issues/6134))
+
+### Refactor
+
+- Better channel action handling in ingress-egress pallet ([#6144](https://github.com/chainflip-io/chainflip-backend/issues/6144))
+
+### Testing
+
+- Ensure that swapping out of and into the same asset works ([#6156](https://github.com/chainflip-io/chainflip-backend/issues/6156))
+
 ## [1.11.12] - 2025-10-07
 
 - Downgrade CCM construction error to warning and print error.
