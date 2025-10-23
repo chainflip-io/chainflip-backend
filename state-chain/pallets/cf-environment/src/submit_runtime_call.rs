@@ -162,7 +162,7 @@ pub(crate) fn build_eip_712_payload(
 		],
 	);
 
-	typed_data.encode_eip712().map(|eip_encoded| eip_encoded.to_vec())
+	typed_data.encode_eip712()
 }
 
 /// Get the accumulated `weight` and the dispatch class for the given `calls`.

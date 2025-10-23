@@ -121,7 +121,7 @@ pub trait Eip712 {
 	/// When using the derive macro, this is the primary method used for computing the final
 	/// EIP-712 encoded payload. This method relies on the aforementioned methods for computing
 	/// the final encoded payload.
-	fn encode_eip712(&self) -> Result<[u8; 32], Self::Error> {
+	fn encode_eip712(&self) -> Result<Vec<u8>, Self::Error> {
 		// encode the digest to be compatible with solidity abi.encodePacked()
 		// See: https://github.com/gakonst/ethers-rs/blob/master/examples/permit_hash.rs#L72
 
@@ -130,7 +130,7 @@ pub trait Eip712 {
 
 		let digest_input = [&[0x19, 0x01], &domain_separator[..], &struct_hash[..]].concat();
 
-		Ok(keccak256(digest_input))
+		Ok(digest_input)
 	}
 }
 
@@ -383,7 +383,7 @@ impl Eip712 for TypedData {
 	/// Hash a typed message according to EIP-712. The returned message starts with the EIP-712
 	/// prefix, which is "1901", followed by the hash of the domain separator, then the data (if
 	/// any). The result is hashed again and returned.
-	fn encode_eip712(&self) -> Result<[u8; 32], Self::Error> {
+	fn encode_eip712(&self) -> Result<Vec<u8>, Self::Error> {
 		let domain_separator = self.domain.separator();
 		let mut digest_input = [&[0x19, 0x01], &domain_separator[..]].concat().to_vec();
 
@@ -391,7 +391,7 @@ impl Eip712 for TypedData {
 			// compatibility with <https://github.com/MetaMask/eth-sig-util>
 			digest_input.extend(&self.struct_hash()?[..])
 		}
-		Ok(keccak256(digest_input))
+		Ok(digest_input)
 	}
 }
 
