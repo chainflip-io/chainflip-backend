@@ -1347,7 +1347,7 @@ pub mod pallet {
 
 				for tx in ScheduledTransactionsForRejection::<T, I>::take() {
 					match try {
-						Self::try_broadcast_rejection_refund_or_store_tx_details(
+						Self::try_broadcast_rejection_refund(
 							tx.clone(),
 							get_refund_address(&tx)?,
 							get_fetch_id(&tx)?,
@@ -1726,7 +1726,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn try_broadcast_rejection_refund_or_store_tx_details(
+	fn try_broadcast_rejection_refund(
 		tx: TransactionRejectionDetails<T, I>,
 		refund_address: TargetChainAccount<T, I>,
 		deposit_fetch_id: Option<<T::TargetChain as Chain>::DepositFetchId>,
