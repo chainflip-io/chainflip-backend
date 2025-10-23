@@ -17,6 +17,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extract_if)]
 #![feature(map_try_insert)]
+#![feature(try_blocks)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -209,6 +210,12 @@ enum FullWitnessDepositOutcome {
 	BoostConsumed,
 	BoostNotConsumed,
 }
+
+enum RejectionRefundDidntSucceed {
+	RetryLater,
+	RecordFailureAndAbortRefund,
+}
+
 mod deposit_origin {
 
 	use super::*;
@@ -1293,54 +1300,73 @@ pub mod pallet {
 			if T::AllowTransactionReports::get() {
 				let mut deferred_rejections = Vec::new();
 
-				for tx in ScheduledTransactionsForRejection::<T, I>::take() {
-					let Ok(refund_address) = tx.refund_address.clone().try_into() else {
-						FailedRejections::<T, I>::append(tx.clone());
-						continue;
+				// ----------
+				// extracting refund address
+				// ----------
+				let get_refund_address = |tx: &TransactionRejectionDetails<T, I>| {
+					if let Ok(refund_address) = tx.refund_address.clone().try_into() {
+						Ok(refund_address)
+					} else {
+						Err(RejectionRefundDidntSucceed::RecordFailureAndAbortRefund)
+					}
+				};
+
+				// ----------
+				// extracting fetch id
+				//  - for deposit channels we need a fetch id
+				//  - for vault swaps we don't need one
+				// ----------
+				let get_fetch_id = |tx: &TransactionRejectionDetails<T, I>| -> Result<_, RejectionRefundDidntSucceed> {
+
+					// the tx has no associated deposit_address so it must be a vault swap without fetch id
+					let Some(deposit_address) = tx.deposit_address.clone() else {
+						return Ok(None);
 					};
 
-					match tx.deposit_address {
-						Some(ref deposit_address) => {
-							if !DepositChannelLookup::<T, I>::contains_key(deposit_address) {
-								Self::try_broadcast_rejection_refund_or_store_tx_details(
-									tx.clone(),
-									refund_address,
-									None,
-								);
-								continue;
-							}
+					// lookup the deposit address, and if:
+					//  - there's no deposit channel with this address, so we assume it's a vault swap
+					//  - it belongs to a deposit channel, we extract the fetch id from the deposit details.
+					//    But: sometimes we cannot yet fetch, so we check for that.
+					DepositChannelLookup::<T, I>::mutate(deposit_address, |details| match details {
+						None => Ok(None),
+						Some(details) => {
+							let can_fetch = details.deposit_channel.state.can_fetch();
 
-							let maybe_fetch_id =
-								DepositChannelLookup::<T, I>::mutate(deposit_address, |details| {
-									details.as_mut().and_then(|details| {
-										let can_fetch = details.deposit_channel.state.can_fetch();
-
-										if can_fetch {
-											let fetch_id = details.deposit_channel.fetch_id();
-											details.deposit_channel.state.on_fetch_scheduled();
-											Some(fetch_id)
-										} else {
-											None
-										}
-									})
-								});
-
-							if let Some(fetch_id) = maybe_fetch_id {
-								Self::try_broadcast_rejection_refund_or_store_tx_details(
-									tx,
-									refund_address,
-									Some(fetch_id),
-								);
+							// check if we can fetch from the deposit channel (sometimes not possible while
+							// contracts have to be deployed on evm chains)
+							if can_fetch {
+								let fetch_id = details.deposit_channel.fetch_id();
+								details.deposit_channel.state.on_fetch_scheduled();
+								Ok(Some(fetch_id))
 							} else {
-								deferred_rejections.push(tx);
+								Err(RejectionRefundDidntSucceed::RetryLater)
 							}
+						}
+					})
+				};
+
+				for tx in ScheduledTransactionsForRejection::<T, I>::take() {
+					match try {
+						Self::try_broadcast_rejection_refund_or_store_tx_details(
+							tx.clone(),
+							get_refund_address(&tx)?,
+							get_fetch_id(&tx)?,
+						)?
+					} {
+						Ok(broadcast_id) => {
+							Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
+								broadcast_id,
+								tx_id: tx.deposit_details.clone(),
+							});
 						},
-						None => {
-							Self::try_broadcast_rejection_refund_or_store_tx_details(
-								tx,
-								refund_address,
-								None,
-							);
+						Err(RejectionRefundDidntSucceed::RetryLater) => {
+							deferred_rejections.push(tx);
+						},
+						Err(RejectionRefundDidntSucceed::RecordFailureAndAbortRefund) => {
+							FailedRejections::<T, I>::append(tx.clone());
+							Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
+								tx_id: tx.deposit_details.clone(),
+							});
 						},
 					}
 				}
@@ -1704,16 +1730,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		tx: TransactionRejectionDetails<T, I>,
 		refund_address: TargetChainAccount<T, I>,
 		deposit_fetch_id: Option<<T::TargetChain as Chain>::DepositFetchId>,
-	) {
+	) -> Result<BroadcastId, RejectionRefundDidntSucceed> {
+		use RejectionRefundDidntSucceed::*;
+
 		// This function is only doing the maybe_transfers_limit (most restrictive) and not the
 		// maybe_fetches_limit checks that the `do_egress_scheduled_*` are doing.
 		if let Some(limit) = T::FetchesTransfersLimitProvider::maybe_transfers_limit() {
-			// In case we don't have enough nonces we put the tx back to be retried next block
+			// In case we don't have enough nonces we will schedule this tx to be retried in the
+			// next block.
 			if limit.is_zero() {
-				ScheduledTransactionsForRejection::<T, I>::append(tx);
-				return;
+				return Err(RetryLater);
 			}
 		}
+
 		let AmountAndFeesWithheld {
 			amount_after_fees: amount_after_ingress_fees,
 			fees_withheld: _,
@@ -1759,31 +1788,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 				// Only emit TransactionRejectedByBroker for the actual egress (refund) transaction
 				if no_ccm_refund {
-					Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
-						broadcast_id,
-						tx_id: tx.deposit_details.clone(),
-					});
+					return Ok(broadcast_id);
 				}
 			},
 			Err(cf_chains::RejectError::NotRequired) => (),
 			Err(_) =>
 			// Only consider it failed if we are not doing a ccm refund
 				if no_ccm_refund {
-					FailedRejections::<T, I>::append(tx.clone());
-					Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
-						tx_id: tx.deposit_details.clone(),
-					});
+					return Err(RecordFailureAndAbortRefund);
 				},
 		};
 
 		if let Some(ref ccm_refund_metadata) = tx.refund_ccm_metadata {
-			let handle_ccm_failure = || {
-				FailedRejections::<T, I>::append(tx.clone());
-				Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
-					tx_id: tx.deposit_details.clone(),
-				});
-			};
-
 			// Solana CCM refunds with ALT is not supported, since we don't want to witness ALTs
 			// here.
 			if ccm_refund_metadata
@@ -1794,8 +1810,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.unwrap_or(false)
 			{
 				debug_assert!(false, "Solana refund CCM with ALTs is not supported");
-				handle_ccm_failure();
-				return;
+				return Err(RecordFailureAndAbortRefund);
 			}
 
 			if let Ok(api_call) =
@@ -1818,17 +1833,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					}),
 					|_| None,
 				);
-				Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
-					broadcast_id,
-					tx_id: tx.deposit_details.clone(),
-				});
+				return Ok(broadcast_id);
 			} else {
 				// NOTE: This could be appending a rejection that might have an already successful
 				// fetch (RejectCall) but not the CCM refund. We must ensure that
 				// FailedRejections are not being retried.
-				handle_ccm_failure();
+				return Err(RecordFailureAndAbortRefund);
 			}
 		}
+
+		// If we still haven't had a success this means that we didn't create a refund, considering
+		// this as a failure.
+		Err(RecordFailureAndAbortRefund)
 	}
 
 	fn take_recyclable_addresses(
