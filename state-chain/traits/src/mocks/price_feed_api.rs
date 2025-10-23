@@ -29,4 +29,9 @@ impl PriceFeedApi for MockPriceFeedApi {
 		Self::get_storage::<_, Option<Price>>(ORACLE_PRICE, asset)
 			.and_then(|price| price.map(|price| OraclePrice { price, stale }))
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_price(asset: cf_primitives::Asset, price: Price) {
+		Self::set_price(asset, Some(price));
+	}
 }
