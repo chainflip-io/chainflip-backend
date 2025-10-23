@@ -368,6 +368,7 @@ pub fn new_full<
 						pool.clone(),
 						pair.clone(),
 					)))?;
+					log::info!("Broker key found in the keystore, enabling Broker related RPCs ...");
 				}
 
 				// Add lp RPCs if lp key was found
@@ -379,6 +380,7 @@ pub fn new_full<
 						pool.clone(),
 						pair.clone(),
 					)))?;
+					log::info!("Lp key found in the keystore, enabling LP-related RPCs ...");
 				}
 
 				Ok(module)
