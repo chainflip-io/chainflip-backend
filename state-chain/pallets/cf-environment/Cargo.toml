@@ -24,6 +24,7 @@ hex-literal = { workspace = true }
 log = { workspace = true }
 cf-runtime-utilities = { workspace = true }
 cf-utilities = { workspace = true }
+ethereum-eip712 = { workspace = true }
 
 # Parity deps
 codec = { workspace = true, features = ["derive"] }
@@ -41,6 +42,9 @@ sp-core = { workspace = true, default-features = true }
 sp-io = { workspace = true, default-features = true }
 cf-test-utilities = { workspace = true, default-features = true }
 cf-traits = { workspace = true, features = ["mocks"] }
+state-chain-runtime = { workspace = true, default-features = true }
+pallet-cf-ingress-egress = { workspace = true, default-features = true }
+
 
 [features]
 default = ["std"]

@@ -18,8 +18,10 @@
 
 use crate::{
 	mock::*,
-	submit_runtime_call::{build_eip_712_payload, EthEncodingType, SolEncodingType},
-	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, Message, RuntimeSafeMode,
+	submit_runtime_call::{
+		build_eip_712_payload, ChainflipExtrinsic, EthEncodingType, SolEncodingType,
+	},
+	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
 	SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
 	SolanaUnavailableNonceAccounts, TransactionMetadata,
 };
@@ -34,14 +36,7 @@ use cf_chains::{
 	},
 };
 use cf_traits::{BalanceApi, SafeMode};
-use frame_support::{
-	assert_noop, assert_ok,
-	sp_runtime::{
-		traits::{Hash, Keccak256},
-		BoundedVec,
-	},
-	traits::OriginTrait,
-};
+use frame_support::{assert_noop, assert_ok, sp_runtime::BoundedVec, traits::OriginTrait};
 use sp_runtime::traits::ValidateUnsigned;
 use std::str::FromStr;
 
@@ -788,9 +783,9 @@ fn can_non_native_signed_call() {
 		assert_noop!(
 			Environment::non_native_signed_call(
 			RuntimeOrigin::root(),
-			Message {
+			ChainflipExtrinsic {
 				call: call.clone(),
-				metadata: transaction_metadata,
+				transaction_metadata,
 			},
 			signature_data.clone(),
 	   		),
@@ -799,9 +794,9 @@ fn can_non_native_signed_call() {
 
 		assert_ok!(Environment::non_native_signed_call(
 			RuntimeOrigin::none(),
-			Message {
+			ChainflipExtrinsic {
 				call,
-				metadata: transaction_metadata,
+				transaction_metadata,
 			},
 			signature_data.clone(),
 		));
@@ -833,7 +828,7 @@ fn can_build_eip_712_payload_validate_unsigned() {
             signer,
             sig_type: EthEncodingType::Eip712,
         };
-		let user_submission = crate::Call::non_native_signed_call { message: Message {call: Box::new(runtime_call), metadata: transaction_metadata} , signature_data };
+		let user_submission = crate::Call::non_native_signed_call { chainflip_extrinsic: ChainflipExtrinsic  {call: Box::new(runtime_call), transaction_metadata} , signature_data };
 		assert_ok!(
 			<crate::Pallet::<Test> as ValidateUnsigned>::validate_unsigned(frame_support::pallet_prelude::TransactionSource::External, &user_submission)
 		);
@@ -844,22 +839,38 @@ fn can_build_eip_712_payload_validate_unsigned() {
 #[test]
 fn can_build_eip_712_payload() {
 	new_test_ext().execute_with(|| {
-		let system_call = frame_system::Call::remark { remark: vec![] };
-		let runtime_call: <Test as crate::Config>::RuntimeCall = system_call.clone().into();
+		use pallet_cf_ingress_egress::DepositWitness;
 
-		let chain_name = "Chainflip-Development";
-		let version = "0";
-		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000 };
+		let call = state_chain_runtime::RuntimeCall::SolanaIngressEgress(
+			pallet_cf_ingress_egress::Call::process_deposits {
+				deposit_witnesses: vec![
+					DepositWitness {
+						deposit_address: [3u8; 32].into(),
+						amount: 5000u64,
+						asset: cf_chains::assets::sol::Asset::Sol,
+						deposit_details: (),
+					},
+					DepositWitness {
+						deposit_address: [4u8; 32].into(),
+						amount: 6000u64,
+						asset: cf_chains::assets::sol::Asset::SolUsdc,
+						deposit_details: (),
+					},
+				],
+				block_height: 6u64,
+			},
+		);
 
-		let payload =
-			build_eip_712_payload(&runtime_call, chain_name, version, transaction_metadata);
-		let eip_712_hash = Keccak256::hash(&payload).0;
+		let chain_name = "Chainflip-Mainnet";
+		let version = "1";
+		let transaction_metadata = TransactionMetadata { nonce: 1, expiry_block: 1000 };
+
+		let eip_hash =
+			build_eip_712_payload(call, chain_name, version, transaction_metadata).unwrap();
+
 		assert_eq!(
-			eip_712_hash,
-			[
-				137, 67, 22, 72, 124, 150, 209, 33, 234, 59, 223, 133, 50, 30, 120, 155, 182, 73,
-				183, 29, 64, 83, 9, 56, 11, 120, 128, 86, 57, 231, 155, 48
-			]
+			hex::encode(eip_hash),
+			"76951bf21085c66f332db183ece640390ca47aa87035815808209b1813c349f8"
 		);
 	});
 }
@@ -904,9 +915,9 @@ fn can_batch() {
 			sig_type: EthEncodingType::Eip712,
 		};
 		let failing_call = crate::Call::non_native_signed_call {
-			message: Message {
+			chainflip_extrinsic: ChainflipExtrinsic  {
 				call: Box::new(remark_call.clone().into()),
-				metadata: TransactionMetadata { nonce: 0, expiry_block: 10000 },
+				transaction_metadata: TransactionMetadata { nonce: 0, expiry_block: 10000 },
 			},
 			signature_data: signature_data.clone(),
 		};

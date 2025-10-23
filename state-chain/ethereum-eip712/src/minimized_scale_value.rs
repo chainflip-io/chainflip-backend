@@ -23,7 +23,7 @@ impl TryFrom<Value> for MinimizedScaleValue {
 					.collect::<Result<Vec<Self>, &'static str>>()?,
 			)),
 			ValueDef::Variant(_) =>
-				return Err("scale value with variant cannot be converted to MinimizedScaleValue"),
+				Err("scale value with variant cannot be converted to MinimizedScaleValue"),
 			ValueDef::Primitive(p) => Ok(Self::Primitive(p)),
 			ValueDef::BitSequence(_) => Err("BitSequence not supported"),
 		}
@@ -43,6 +43,7 @@ impl MinimizedScaleValue {
 	}
 
 	// of the kind U256
+	#[allow(clippy::result_unit_err)]
 	pub fn extract_primitive_types<T: TryFrom<u128>>(&self) -> Result<Vec<T>, ()> {
 		if let Self::NamedStruct(fs) = self.clone() {
 			if fs.len() != 1 {
@@ -55,6 +56,7 @@ impl MinimizedScaleValue {
 	}
 
 	// of the kind [_;N]
+	#[allow(clippy::result_unit_err)]
 	pub fn extract_primitive_array<T: TryFrom<u128>>(&self) -> Result<Vec<T>, ()> {
 		if let Self::Sequence(fs) = self.clone() {
 			fs.into_iter()
@@ -71,6 +73,7 @@ impl MinimizedScaleValue {
 		}
 	}
 
+	#[allow(clippy::result_unit_err)]
 	pub fn extract_hex_bytes(&self) -> Result<Vec<u8>, ()> {
 		if let Self::Primitive(Primitive::String(s)) = self.clone() {
 			hex::decode(s).map_err(|_| ())

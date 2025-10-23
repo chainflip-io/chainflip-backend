@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::Encode;
 use scale_info::{
 	prelude::{
 		format,
@@ -26,7 +26,7 @@ pub mod lexer;
 pub mod minimized_scale_value;
 pub mod serde_helpers;
 
-pub fn encode_eip712_using_type_info<T: TypeInfo + Encode + Decode + 'static>(
+pub fn encode_eip712_using_type_info<T: TypeInfo + Encode + 'static>(
 	value: T,
 	domain: EIP712Domain,
 ) -> Result<TypedData, Eip712Error> {
@@ -388,14 +388,14 @@ pub mod tests {
 			salt: None,
 		};
 
-		#[derive(TypeInfo, Clone, Encode, Decode)]
+		#[derive(TypeInfo, Clone, Encode)]
 		pub struct Mail {
 			pub from: Person,
 			pub to: Person,
 			pub message: String,
 		}
 
-		#[derive(TypeInfo, Clone, Encode, Decode)]
+		#[derive(TypeInfo, Clone, Encode)]
 		pub struct Person {
 			pub name: String,
 		}
@@ -405,108 +405,11 @@ pub mod tests {
 			to: Person { name: String::from("Albert") },
 			message: String::from("hello Albert"),
 		};
-
-		let mut registry = Registry::new();
-		let id = registry.register_type(&MetaType::new::<Mail>());
-
-		//let types = vec![];
-		for (id, ty) in registry.types() {
-			//types.push(ty)
-			println!("ID: {:?},   Type: {:#?}", id, ty);
-		}
-		let mut b = BTreeMap::new();
-		b.insert(1u8, 2u64);
-
-		let portable_registry: scale_info::PortableRegistry = registry.into();
-		let val = scale_value::scale::decode_as_type(
-			&mut &payload.encode()[..],
-			id.id,
-			&portable_registry,
-		)
-		.unwrap();
-		// println!("{:?}", encode_eip712_using_type_info(t, domain))
-		println!("{:?}", val);
-		// println!("{:?}", encode_eip712_using_type_info(payload,
-		// domain).unwrap().encode_eip712());
-
 		assert_eq!(
 			hex::encode(
 				&encode_eip712_using_type_info(payload, domain).unwrap().encode_eip712().unwrap()[..]
 			),
 			"36b58675f9b9390f1de60902297828280ab2cc1eaecb6453cfcb0328b2c35b33"
 		);
-	}
-
-	#[test]
-	fn playground() {
-		use scale_value;
-		let domain = EIP712Domain {
-			name: Some(String::from("Seaport")),
-			version: Some(String::from("1.1")),
-			chain_id: Some(U256([1, 0, 0, 0])),
-			verifying_contract: Some(H160([0xef; 20])),
-			salt: None,
-		};
-
-		#[derive(serde::Serialize, Encode, Decode, TypeInfo)]
-		pub struct Mail {
-			pub from: String,
-			pub to: String,
-			pub message: String,
-		}
-
-		#[derive(TypeInfo, serde::Serialize, Encode, Decode)]
-		//#[scale_info(skip_type_params(S))]
-		pub struct Test1<T, S> {
-			#[codec(compact)]
-			pub c: u128,
-			pub a: T,
-			pub b: S,
-		}
-
-		#[derive(TypeInfo, Encode, Decode)]
-		pub enum TestEnum<T, S> {
-			A(T),
-			B(S),
-			C(Vec<u128>),
-			D { dd: u16 },
-		}
-		#[derive(TypeInfo, Encode, Decode)]
-		pub struct TestEmpty;
-		#[derive(TypeInfo, Encode, Decode)]
-		pub struct TestEmptyNested(TestEmpty);
-
-		#[derive(TypeInfo, Encode, Decode)]
-		pub enum TestEmptyEnum {
-			Aaaaa,
-			Bbbbb,
-		}
-		println!("{:?}", encode_eip712_using_type_info(TestEmptyEnum::Aaaaa, domain));
-		#[derive(TypeInfo, Encode, Decode)]
-		pub struct Abs((u8, u128));
-
-		// let t: u128 = 5;
-		// let t = Test::A(Box::new(Test::C(5)));
-		let t = Test1 { a: 5u64, b: 6u128, c: 6 };
-		println!("{:?}", serde_json::to_value(&t).unwrap());
-		println!("{:?}", serde_json::to_value(vec![2, 3, 4, 5]).unwrap());
-
-		let mut registry = Registry::new();
-		// registry.register_type(&MetaType::new::<Test1<u64, Test1<u8, u16>>>());
-		//let id = registry.register_type(&MetaType::new::<TestEnum<u8, Mail>>());
-		let id = registry.register_type(&MetaType::new::<TestEmptyNested>());
-
-		//let types = vec![];
-		for (id, ty) in registry.types() {
-			//types.push(ty)
-			println!("ID: {:?},   Type: {:#?}", id, ty);
-		}
-
-		let portable_registry: scale_info::PortableRegistry = registry.into();
-		let val =
-			scale_value::scale::decode_as_type(&mut &().encode()[..], id.id, &portable_registry)
-				.unwrap();
-		//println!("{:?}", encode_eip712_using_type_info(t, domain))
-		println!("{:?}", val);
 	}
 }

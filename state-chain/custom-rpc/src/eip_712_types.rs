@@ -14,10 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use cf_primitives::ChainflipNetwork;
-use codec::{Decode, Encode};
 use ethereum_eip712::eip712::{EIP712Domain, Eip712DomainType, Eip712Error, Types};
-use pallet_cf_environment::TransactionMetadata;
-use scale_info::TypeInfo;
+use pallet_cf_environment::{submit_runtime_call::ChainflipExtrinsic, TransactionMetadata};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -37,12 +35,6 @@ pub struct TypedData {
 	pub primary_type: String,
 	// The message to be signed.
 	pub message: BTreeMap<String, Value>,
-}
-
-#[derive(Encode, Decode, TypeInfo)]
-pub struct ChainflipExtrinsic {
-	pub call: state_chain_runtime::RuntimeCall,
-	pub transaction_metadata: TransactionMetadata,
 }
 
 // Building the EIP-712 typed data customized to the types we expect
@@ -93,6 +85,7 @@ pub fn build_eip712_typed_data(
 }
 
 #[test]
+#[ignore = "used to generate the Json typed data to then test in the browser"]
 fn test_build_eip712_typed_data() {
 	use pallet_cf_ingress_egress::DepositWitness;
 	let chainflip_network = ChainflipNetwork::Mainnet;
@@ -124,13 +117,9 @@ fn test_build_eip712_typed_data() {
 		build_eip712_typed_data(&chainflip_network, call, &transaction_metadata, spec_version)
 			.unwrap();
 
+	// this should eip712 hash to "76951bf21085c66f332db183ece640390ca47aa87035815808209b1813c349f8"
 	println!(
 		"Typed Data: {:#?}",
 		serde_json::to_writer_pretty(std::io::stdout(), &typed_data_result).unwrap()
 	);
-
-	// assert_eq!(
-	// 	hex::encode(eip_hash),
-	// 	"e8842057ce73848ea270aa3fed7c843970736c0c2ead670d09e08c358cc46f29"
-	// );
 }
