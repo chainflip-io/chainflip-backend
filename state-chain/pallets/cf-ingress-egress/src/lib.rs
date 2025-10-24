@@ -2059,44 +2059,57 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					role_to_register,
 				}) = additional_action
 				{
-					let input_amount = T::AssetConverter::calculate_input_for_desired_output(
-						asset.into(),
-						Asset::Flip,
-						flip_amount_to_credit,
-						true,
-					)
-					.unwrap_or(
-						pallet_cf_swapping::utilities::estimated_20usd_input(asset.into()) / 2,
-					);
-					let input_amount = core::cmp::min(input_amount, amount_after_fees.into());
+					let is_flip_asset = matches!(asset.into(), Asset::Flip);
+					let funding_amount =
+						if is_flip_asset { amount_after_fees.into() } else { INITIAL_FLIP_FUNDING };
+
 					T::FundAccount::fund_account(
 						lp_account.clone(),
 						None,
-						INITIAL_FLIP_FUNDING.into(),
+						funding_amount.into(),
 						FundingSource::InitialFunding,
 					);
 					if let Some(role) = role_to_register {
-						let _ = T::AccountRoleRegistry::register_account_role(&lp_account, role);
+						if let Err(err) =
+							T::AccountRoleRegistry::register_account_role(&lp_account, role)
+						{
+							log::warn!("Failed to register account role: {err:?}");
+						}
 					}
 					T::LpRegistrationApi::register_liquidity_refund_address(
 						&lp_account,
 						refund_address,
 					);
-					T::SwapRequestHandler::init_swap_request(
-						asset.into(),
-						input_amount.into(),
-						Asset::Flip,
-						SwapRequestType::Regular {
-							output_action: SwapOutputAction::CreditFlipAndTransferToGateway {
-								account_id: lp_account.clone(),
+
+					if is_flip_asset {
+						amount_after_fees.into()
+					} else {
+						let input_amount = T::AssetConverter::calculate_input_for_desired_output(
+							asset.into(),
+							Asset::Flip,
+							flip_amount_to_credit,
+							true,
+						)
+						.unwrap_or(
+							pallet_cf_swapping::utilities::estimated_20usd_input(asset.into()) / 2,
+						);
+						let input_amount = core::cmp::min(input_amount, amount_after_fees.into());
+						T::SwapRequestHandler::init_swap_request(
+							asset.into(),
+							input_amount,
+							Asset::Flip,
+							SwapRequestType::Regular {
+								output_action: SwapOutputAction::CreditFlipAndTransferToGateway {
+									account_id: lp_account.clone(),
+								},
 							},
-						},
-						BoundedVec::new(),
-						None,
-						None,
-						SwapOrigin::OnChainAccount(lp_account.clone()),
-					);
-					input_amount
+							BoundedVec::new(),
+							None,
+							None,
+							SwapOrigin::OnChainAccount(lp_account.clone()),
+						);
+						input_amount
+					}
 				} else {
 					0u128
 				};
@@ -2104,8 +2117,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					&lp_account,
 					asset.into(),
 					Into::<u128>::into(amount_after_fees)
-						.saturating_sub(used_for_flip_funding_swap)
-						.into(),
+						.saturating_sub(used_for_flip_funding_swap),
 				);
 
 				DepositAction::LiquidityProvision { lp_account }

@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{MockPallet, MockPalletStorage};
-use crate::{Chainflip, DepositApi};
+use crate::{AdditionalDepositAction, Chainflip, DepositApi};
 use cf_chains::{
 	address::ForeignChainAddress, dot::PolkadotAccountId, CcmChannelMetadataChecked, Chain,
 	ChannelRefundParametersForChain, ForeignChain,
@@ -105,11 +105,12 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 	type Amount = T::Amount;
 
 	fn request_liquidity_deposit_address(
-		requester_account: Self::AccountId,
+		_requester_account: Self::AccountId,
 		lp_account: Self::AccountId,
 		source_asset: <C as cf_chains::Chain>::ChainAsset,
 		boost_fee: BasisPoints,
 		_refund_address: ForeignChainAddress,
+		_additional_action: Option<AdditionalDepositAction>,
 	) -> Result<
 		(
 			cf_primitives::ChannelId,

@@ -59,7 +59,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: Chainflip<AccountId = cf_primitives::AccountId> {
+	pub trait Config: Chainflip {
 		/// Because we want to emit events when there is a config change during
 		/// an runtime upgrade
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -414,7 +414,7 @@ pub mod pallet {
 			// TODO: First we need to verify that the signer is the actual signer of the signature
 			// contained in SignatureData
 			let Ok(target_account_id) =
-				external_account.signer_account::<cf_primitives::AccountId>()
+				external_account.signer_account::<<T as frame_system::Config>::AccountId>()
 			else {
 				return Err(DispatchError::from(Error::<T>::InvalidUserSignatureData));
 			};

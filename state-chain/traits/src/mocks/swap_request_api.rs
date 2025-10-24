@@ -134,6 +134,7 @@ where
 					// do nothing: for now it is the test's responsibility to manually call
 					// process_loan_swap_outcome where required
 				},
+				SwapOutputAction::CreditFlipAndTransferToGateway { .. } => todo!(),
 			},
 			_ => { /* do nothing */ },
 		};

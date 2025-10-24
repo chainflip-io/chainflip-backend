@@ -161,7 +161,7 @@ impl pallet_cf_emissions::Config for Test {
 	type EthEnvironment = MockStateChainGatewayProvider;
 	type RewardsDistribution = FlipDistribution;
 	type Broadcaster = MockEmissionsBroadcaster;
-	type FlipToBurn = MockFlipBurnOrMoveInfo;
+	type FlipToBurnOrMove = MockFlipBurnOrMoveInfo;
 	type SafeMode = MockRuntimeSafeMode;
 	type EgressHandler = MockEgressHandler<Ethereum>;
 	type WeightInfo = ();
