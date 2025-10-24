@@ -338,12 +338,6 @@ pub mod pallet {
 	pub type PendingNetworkFees<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
-	/// Stores collected pool fees awaiting to be swapped into each pool's asset at regular
-	/// intervals
-	#[pallet::storage]
-	pub type PendingPoolFees<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, BTreeMap<Asset, AssetAmount>, ValueQuery>;
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -411,13 +405,12 @@ pub mod pallet {
 		},
 		InterestTaken {
 			loan_id: LoanId,
-			/// NOTE: typically the interest is charged in the primary collateral asset,
-			/// but we might fall back to charging from other assets if the primary
-			/// runs out.
-			pool_interest: BTreeMap<Asset, AssetAmount>,
-			network_interest: BTreeMap<Asset, AssetAmount>,
-			broker_interest: BTreeMap<Asset, AssetAmount>,
-			low_ltv_penalty: BTreeMap<Asset, AssetAmount>,
+			// Interest is always charged in the loan's asset (effectively increasing
+			// the loan's principal)
+			pool_interest: AssetAmount,
+			network_interest: AssetAmount,
+			broker_interest: AssetAmount,
+			low_ltv_penalty: AssetAmount,
 		},
 		LiquidationInitiated {
 			borrower_id: T::AccountId,

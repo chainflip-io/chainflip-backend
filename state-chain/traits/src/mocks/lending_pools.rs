@@ -17,7 +17,7 @@
 use sp_std::collections::btree_map::BTreeMap;
 
 use crate::{
-	lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome, LendingSystemApi},
+	lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome, LendingSystemApi, LoanId},
 	LendingSwapType,
 };
 
@@ -146,15 +146,27 @@ impl MockPallet for MockLendingSystemApi {
 	const PREFIX: &'static [u8] = b"MockLendingSystemApi";
 }
 
-const SWAPPED_FEES: &[u8] = b"SWAPPED_FEES";
+const LIQUIDATION_SWAP_OUTCOMES: &[u8] = b"LIQUIDATION_SWAP_OUTCOMES";
+
+#[derive(Encode, Decode, PartialEq, Eq, Debug)]
+pub struct LiquidationSwapOutcome {
+	pub borrower_id: u64,
+	pub loan_id: LoanId,
+	pub output_amount: AssetAmount,
+}
 
 impl MockLendingSystemApi {
-	pub fn set_swapped_fees(asset: Asset, amount: AssetAmount) {
-		Self::put_storage(SWAPPED_FEES, asset, amount);
+	pub fn set_liquidation_swap_outcome(
+		swap_request_id: SwapRequestId,
+		outcome: LiquidationSwapOutcome,
+	) {
+		Self::put_storage(LIQUIDATION_SWAP_OUTCOMES, swap_request_id, outcome);
 	}
 
-	pub fn get_swapped_fees(asset: Asset) -> Option<AssetAmount> {
-		Self::get_storage(SWAPPED_FEES, asset)
+	pub fn get_liquidation_swap_outcome(
+		swap_request_id: SwapRequestId,
+	) -> Option<LiquidationSwapOutcome> {
+		Self::get_storage(LIQUIDATION_SWAP_OUTCOMES, swap_request_id)
 	}
 }
 
@@ -162,18 +174,16 @@ impl LendingSystemApi for MockLendingSystemApi {
 	type AccountId = u64;
 
 	fn process_loan_swap_outcome(
-		_swap_request_id: SwapRequestId,
+		swap_request_id: SwapRequestId,
 		swap_type: LendingSwapType<Self::AccountId>,
 		output_amount: AssetAmount,
 	) {
 		match swap_type {
-			LendingSwapType::Liquidation { .. } => {
-				// TODO: implement if needed by some test
-			},
-			LendingSwapType::FeeSwap { pool_asset } => {
-				let current_fees = Self::get_swapped_fees(pool_asset).unwrap_or_default();
-				Self::set_swapped_fees(pool_asset, current_fees + output_amount);
-			},
+			LendingSwapType::Liquidation { borrower_id, loan_id } =>
+				Self::set_liquidation_swap_outcome(
+					swap_request_id,
+					LiquidationSwapOutcome { borrower_id, loan_id, output_amount },
+				),
 		}
 	}
 }
