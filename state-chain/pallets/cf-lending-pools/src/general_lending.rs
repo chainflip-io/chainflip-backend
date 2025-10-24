@@ -1,6 +1,6 @@
 use cf_amm_math::{invert_price, relative_price, Price};
 use cf_primitives::{DcaParameters, SwapRequestId};
-use cf_traits::{ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry};
+use cf_traits::{ExpiryBehaviour, LendingSwapType, LpRegistration, PriceLimitsAndExpiry};
 use core_lending_pool::ScaledAmountHP;
 use frame_support::{
 	fail,
@@ -980,6 +980,9 @@ impl<T: Config> LendingApi for Pallet<T> {
 		primary_collateral_asset: Option<Asset>,
 		extra_collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<LoanId, DispatchError> {
+		T::LpRegistrationApi::ensure_has_refund_address_for_asset(&borrower_id, asset)
+			.map_err(|_| Error::<T>::NoRefundAddressSet)?;
+
 		let config = LendingConfig::<T>::get();
 		ensure!(
 			amount_to_borrow >= amount_from_usd_value::<T>(asset, config.minimum_loan_amount_usd)?,
