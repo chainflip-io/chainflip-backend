@@ -99,8 +99,8 @@ use cf_primitives::{
 	DcaParameters,
 };
 use cf_traits::{
-	AccountInfo, AccountRoleRegistry, BroadcastAnyChainGovKey, Broadcaster,
-	CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
+	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BroadcastAnyChainGovKey,
+	Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
 	FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider, OnBroadcastReady, OnDeposit,
 	OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
 };
@@ -731,19 +731,23 @@ macro_rules! impl_deposit_api_for_anychain {
 			type Amount = <Runtime as Chainflip>::Amount;
 
 			fn request_liquidity_deposit_address(
+				requester_account: Self::AccountId,
 				lp_account: Self::AccountId,
 				source_asset: Asset,
 				boost_fee: BasisPoints,
 				refund_address: ForeignChainAddress,
+				additional_action: Option<AdditionalDepositAction>
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
 					$(
 						ForeignChainAndAsset::$chain(source_asset) =>
 							$pallet::request_liquidity_deposit_address(
+								requester_account,
 								lp_account,
 								source_asset,
 								boost_fee,
 								refund_address,
+								additional_action,
 							).map(|(channel, address, block_number, channel_opening_fee)| (channel, address, block_number.into(), channel_opening_fee)),
 					)+
 				}

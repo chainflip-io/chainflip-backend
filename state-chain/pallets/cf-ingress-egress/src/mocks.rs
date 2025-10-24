@@ -37,7 +37,7 @@ use cf_traits::{
 		},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
-		balance_api::MockBalance,
+		balance_api::{MockBalance, MockLpRegistration},
 		broadcaster::MockBroadcaster,
 		ccm_additional_data_handler::MockCcmAdditionalDataHandler,
 		chain_tracking::ChainTracker,
@@ -143,6 +143,8 @@ impl Config<Instance1> for Test {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
 	type BoostApi = MockBoostApi;
+	type FundAccount = MockFundingInfo<Test>;
+	type LpRegistrationApi = MockLpRegistration;
 }
 
 impl Config<Instance2> for Test {
@@ -173,6 +175,8 @@ impl Config<Instance2> for Test {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ConstU64<SCREENING_ID>;
 	type BoostApi = MockBoostApi;
+	type FundAccount = MockFundingInfo<Test>;
+	type LpRegistrationApi = MockLpRegistration;
 }
 
 impl_mock_chainflip!(Test);
@@ -352,9 +356,11 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 					DepositRequest::Liquidity { lp_account, asset } =>
 						Pallet::<Test, I>::request_liquidity_deposit_address(
 							lp_account,
+							lp_account,
 							asset,
 							0,
 							ForeignChainAddress::Eth(Default::default()),
+							None,
 						)
 						.map(|(id, addr, ..)| {
 							(

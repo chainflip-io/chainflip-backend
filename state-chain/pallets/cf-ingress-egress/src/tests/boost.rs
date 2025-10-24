@@ -65,9 +65,11 @@ fn request_deposit_address(
 	let (channel_id, deposit_address, ..) =
 		EthereumIngressEgress::request_liquidity_deposit_address(
 			account_id,
+			account_id,
 			asset,
 			max_boost_fee,
 			ForeignChainAddress::Eth(Default::default()),
+			None,
 		)
 		.unwrap();
 
@@ -492,7 +494,7 @@ fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 
 		let (deposit_channel, _, _) = EthereumIngressEgress::open_channel(
 			&ALICE, EthAsset::Eth,
-			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: ForeignChainAddress::Eth([0u8; 20].into()) },
+			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: ForeignChainAddress::Eth([0u8; 20].into()), additional_action: None },
 			TIER_5_BPS,
 		)
 		.unwrap();

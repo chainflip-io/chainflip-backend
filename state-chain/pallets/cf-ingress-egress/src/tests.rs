@@ -299,9 +299,11 @@ fn request_address_and_deposit(
 ) -> (ChannelId, <Ethereum as Chain>::ChainAccount) {
 	let (id, address, ..) = EthereumIngressEgress::request_liquidity_deposit_address(
 		who,
+		who,
 		asset,
 		0,
 		ForeignChainAddress::Eth(Default::default()),
+		None,
 	)
 	.unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
@@ -575,6 +577,7 @@ fn reused_address_channel_id_matches() {
 			ChannelAction::LiquidityProvision {
 				lp_account: 0,
 				refund_address: ForeignChainAddress::Eth([0u8; 20].into()),
+				additional_action: None,
 			},
 			0,
 		)
@@ -655,9 +658,11 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 		.then_execute_at_next_block(|_| {
 			let (_, address, ..) = EthereumIngressEgress::request_liquidity_deposit_address(
 				ALICE,
+				ALICE,
 				ETH,
 				0,
 				ForeignChainAddress::Eth(Default::default()),
+				None,
 			)
 			.unwrap();
 			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
@@ -671,9 +676,11 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 		.then_execute_at_next_block(|address| {
 			let (_, address2, ..) = EthereumIngressEgress::request_liquidity_deposit_address(
 				ALICE,
+				ALICE,
 				ETH,
 				0,
 				ForeignChainAddress::Eth(Default::default()),
+				None,
 			)
 			.unwrap();
 			let address2: <Ethereum as Chain>::ChainAccount = address2.try_into().unwrap();
@@ -984,9 +991,11 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 
 		let (_id, address, ..) = EthereumIngressEgress::request_liquidity_deposit_address(
 			ALICE,
+			ALICE,
 			ASSET,
 			0,
 			ForeignChainAddress::Eth(Default::default()),
+			None,
 		)
 		.unwrap();
 		let deposit_address = address.try_into().unwrap();
@@ -1611,6 +1620,7 @@ fn preallocated_channels_from_global_pool() {
 		let chan_action = ChannelAction::LiquidityProvision {
 			lp_account: ALICE,
 			refund_address: ForeignChainAddress::Eth(Default::default()),
+			additional_action: None,
 		};
 
 		// STEP 1: If we allocate a channel, it should be one from the global pool.
@@ -1714,6 +1724,7 @@ fn preallocated_channels_no_global_pool() {
 		let chan_action = ChannelAction::LiquidityProvision {
 			lp_account: ALICE,
 			refund_address: ForeignChainAddress::Eth(Default::default()),
+			additional_action: None,
 		};
 
 		// STEP 1: If we allocate a channel, it should be newly generated with id of 1
@@ -1801,6 +1812,7 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 			ChannelAction::LiquidityProvision {
 				lp_account: CHANNEL_REQUESTER,
 				refund_address: ForeignChainAddress::Eth(Default::default()),
+				additional_action: None,
 			},
 			0
 		));
@@ -1818,6 +1830,7 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 				ChannelAction::LiquidityProvision {
 					lp_account: CHANNEL_REQUESTER,
 					refund_address: ForeignChainAddress::Eth(Default::default()),
+					additional_action: None,
 				},
 				0
 			),
@@ -2023,7 +2036,8 @@ fn safe_mode_prevents_deposit_channel_creation() {
 			EthAsset::Eth,
 			ChannelAction::LiquidityProvision {
 				lp_account: 0,
-				refund_address: ForeignChainAddress::Eth(Default::default())
+				refund_address: ForeignChainAddress::Eth(Default::default()),
+				additional_action: None,
 			},
 			0,
 		));
@@ -2044,7 +2058,8 @@ fn safe_mode_prevents_deposit_channel_creation() {
 				EthAsset::Eth,
 				ChannelAction::LiquidityProvision {
 					lp_account: 0,
-					refund_address: ForeignChainAddress::Eth(Default::default())
+					refund_address: ForeignChainAddress::Eth(Default::default()),
+					additional_action: None,
 				},
 				0,
 			),
@@ -2110,9 +2125,11 @@ fn trigger_n_fetches(n: usize) -> Vec<H160> {
 	for i in 1..=n {
 		let (_, address, ..) = EthereumIngressEgress::request_liquidity_deposit_address(
 			i.try_into().unwrap(),
+			i.try_into().unwrap(),
 			ASSET,
 			0,
 			ForeignChainAddress::Eth(Default::default()),
+			None,
 		)
 		.unwrap();
 
@@ -2710,6 +2727,7 @@ fn private_and_regular_channel_ids_do_not_overlap() {
 				ChannelAction::LiquidityProvision {
 					lp_account: 0,
 					refund_address: ForeignChainAddress::Eth(Default::default()),
+					additional_action: None,
 				},
 				0,
 			)
@@ -2783,6 +2801,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 		action: ChannelAction::LiquidityProvision {
 			lp_account: 0,
 			refund_address: ForeignChainAddress::Eth(Default::default()),
+			additional_action: None,
 		},
 		boost_fee: 5,
 		channel_id: None,
@@ -2871,9 +2890,11 @@ mod evm_transaction_rejection {
 			let (_, deposit_address, block, _) =
 				EthereumIngressEgress::request_liquidity_deposit_address(
 					BROKER,
+					BROKER,
 					ETH,
 					0,
 					ForeignChainAddress::Eth(Default::default()),
+					None,
 				)
 				.unwrap();
 
@@ -2940,9 +2961,11 @@ mod evm_transaction_rejection {
 			let (_, deposit_address, block, _) =
 				EthereumIngressEgress::request_liquidity_deposit_address(
 					BROKER,
+					BROKER,
 					ETH,
 					0,
 					ForeignChainAddress::Eth(Default::default()),
+					None,
 				)
 				.unwrap();
 			let deposit_address: <Ethereum as Chain>::ChainAccount =
@@ -3034,9 +3057,11 @@ mod evm_transaction_rejection {
 
 			let (_, deposit_address, block, _) = EthereumIngressEgress::request_liquidity_deposit_address(
 				ALICE,
+				ALICE,
 				ETH,
 				0,
 				ForeignChainAddress::Eth(Default::default()),
+				None,
 			)
 			.unwrap();
 

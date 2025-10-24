@@ -53,12 +53,13 @@ use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode,
 	lending::{BoostApi, BoostOutcome},
-	AccountRoleRegistry, AdjustedFeeEstimationApi, AffiliateRegistry, AssetConverter,
-	AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
+	AccountRoleRegistry, AdditionalDepositAction, AdjustedFeeEstimationApi, AffiliateRegistry,
+	AssetConverter, AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
-	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
-	NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails, SwapOutputAction,
-	SwapParameterValidation, SwapRequestHandler, SwapRequestType,
+	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, IngressEgressFeeApi,
+	IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider, OnDeposit,
+	ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
+	SwapRequestType, INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -553,6 +554,7 @@ pub mod pallet {
 		LiquidityProvision {
 			lp_account: AccountId,
 			refund_address: ForeignChainAddress,
+			additional_action: Option<AdditionalDepositAction>,
 		},
 		Refund {
 			reason: RefundReason,
@@ -715,6 +717,13 @@ pub mod pallet {
 
 		#[pallet::constant]
 		type ScreeningBrokerId: Get<Self::AccountId>;
+
+		type FundAccount: FundAccount<
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
+		>;
+
+		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -2044,8 +2053,73 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		origin: DepositOrigin<T, I>,
 	) -> DepositAction<T, I> {
 		match action.clone() {
-			ChannelAction::LiquidityProvision { lp_account, .. } => {
-				T::Balance::credit_account(&lp_account, asset.into(), amount_after_fees.into());
+			ChannelAction::LiquidityProvision { lp_account, additional_action, refund_address } => {
+				let used_for_flip_funding_swap = if let Some(AdditionalDepositAction::FundFlip {
+					flip_amount_to_credit,
+					role_to_register,
+				}) = additional_action
+				{
+					let is_flip_asset = matches!(asset.into(), Asset::Flip);
+					let funding_amount =
+						if is_flip_asset { amount_after_fees.into() } else { INITIAL_FLIP_FUNDING };
+
+					T::FundAccount::fund_account(
+						lp_account.clone(),
+						None,
+						funding_amount.into(),
+						FundingSource::InitialFunding,
+					);
+					if let Some(role) = role_to_register {
+						if let Err(err) =
+							T::AccountRoleRegistry::register_account_role(&lp_account, role)
+						{
+							log::warn!("Failed to register account role: {err:?}");
+						}
+					}
+					T::LpRegistrationApi::register_liquidity_refund_address(
+						&lp_account,
+						refund_address,
+					);
+
+					if is_flip_asset {
+						amount_after_fees.into()
+					} else {
+						let input_amount = T::AssetConverter::calculate_input_for_desired_output(
+							asset.into(),
+							Asset::Flip,
+							flip_amount_to_credit,
+							true,
+						)
+						.unwrap_or(
+							pallet_cf_swapping::utilities::estimated_20usd_input(asset.into()) / 2,
+						);
+						let input_amount = core::cmp::min(input_amount, amount_after_fees.into());
+						T::SwapRequestHandler::init_swap_request(
+							asset.into(),
+							input_amount,
+							Asset::Flip,
+							SwapRequestType::Regular {
+								output_action: SwapOutputAction::CreditFlipAndTransferToGateway {
+									account_id: lp_account.clone(),
+								},
+							},
+							BoundedVec::new(),
+							None,
+							None,
+							SwapOrigin::OnChainAccount(lp_account.clone()),
+						);
+						input_amount
+					}
+				} else {
+					0u128
+				};
+				T::Balance::credit_account(
+					&lp_account,
+					asset.into(),
+					Into::<u128>::into(amount_after_fees)
+						.saturating_sub(used_for_flip_funding_swap),
+				);
+
 				DepositAction::LiquidityProvision { lp_account }
 			},
 			ChannelAction::Swap {
@@ -3234,20 +3308,23 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	type AccountId = T::AccountId;
 	type Amount = T::Amount;
 
-	// This should be callable by the LP pallet.
+	// This should be callable by the LP pallet and also by the broker (when creating liquidity
+	// deposit channels for unfunded evm/sol based accounts)
 	fn request_liquidity_deposit_address(
+		requester_account: T::AccountId,
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
 		boost_fee: BasisPoints,
 		refund_address: ForeignChainAddress,
+		additional_action: Option<AdditionalDepositAction>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
 		let (deposit_channel, expiry_block, channel_opening_fee) = Self::open_channel(
-			&lp_account,
+			&requester_account,
 			source_asset,
-			ChannelAction::LiquidityProvision { lp_account: lp_account.clone(), refund_address },
+			ChannelAction::LiquidityProvision { lp_account, refund_address, additional_action },
 			boost_fee,
 		)?;
 
