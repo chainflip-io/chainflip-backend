@@ -1193,6 +1193,7 @@ impl pallet_cf_lending_pools::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type PriceApi = ChainlinkOracle;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 #[frame_support::runtime]
