@@ -8,8 +8,6 @@ import {
   newAssetAddress,
   shortChainFromAsset,
   sleep,
-  shortChainFromAsset,
-  sleep,
 } from 'shared/utils';
 import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -95,8 +93,6 @@ async function testEvmEip712(logger: Logger) {
   logger.info(`Registering EVM account as operator: ${evmScAccount}`);
   const call = getRegisterOperatorCall(chainflip);
   const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
-
-  const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
 
   const response = await chainflip.rpc(
     'cf_encode_non_native_call',
@@ -293,9 +289,18 @@ async function testSpecialLpDeposit(logger: Logger) {
   const broker = createStateChainKeypair(brokerUri);
   await setupBrokerAccount(logger, brokerUri);
 
-  // It's a bit strange here because we have to input an absolute block number, as this is
-  // a catch 22. This can maybe be improved as part of the work to not encode a runtimeCall?
-  const expiryBlock = 10000;
+  // TODO: Workaround to encode a call using the RPC. We encode this call via the rpc
+  // that will then be verified. However, the expiry block is a bit of a catch22 with
+  // this approach as it needs to be preencoded in the call before the rpc. Then the
+  // rpc modifies the expiry block in the transaction metadata. Therefore we then
+  // need an extra step below to fix the override the expiry block in the message
+  // after the rpc call to match the initial call.
+  // We might want to sign something different in the future and either do a different
+  // rpc call for encoding or just simply encode something simpler that doesn't
+  // require the rpc to encode it. However, it will have the runtime version so we
+  // most likely want an rpc call to ensure compatibility.
+  const currentBlock = await chainflip.query.system.number();
+  const expiryBlock = Number(currentBlock.toString()) + blocksToExpiry;
 
   const evmWallet = await createEvmWallet();
   const evmScAccount = externalChainToScAccount(evmWallet.address);
@@ -319,14 +324,8 @@ async function testSpecialLpDeposit(logger: Logger) {
     { eth: refundAddress },
     'LiquidityProvider',
   );
-  // let call = chainflip.tx.system.remark([]);
   const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
 
-  // TODO: Workaround to encode a call using the RPC. We encode this call via the rpc
-  // that will then be verified. However, the expiry block is a bit of a catch22 with
-  // this workaround as it needs to be preencoded in the call before the rpc, which
-  // modifies it. Therefore we then need an extra step below to fix the override
-  // the expiry block in the message after the rpc call to match the initial call.
   const response = await chainflip.rpc(
     'cf_encode_non_native_call',
     hexRuntimeCall,

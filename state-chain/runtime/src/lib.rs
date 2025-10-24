@@ -357,8 +357,6 @@ impl pallet_cf_swapping::Config for Runtime {
 	type PriceFeedApi = ChainlinkOracle;
 	type LendingSystemApi = LendingPools;
 	type FundAccount = Funding;
-	type RuntimeCall = RuntimeCall;
-	type ChainflipNetwork = chainflip::ChainflipNetworkProvider;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
