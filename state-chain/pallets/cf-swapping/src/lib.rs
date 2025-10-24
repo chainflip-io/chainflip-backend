@@ -509,9 +509,8 @@ pub mod pallet {
 		PriceLimits, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{
-		lending::LendingSystemApi, AccountRoleRegistry, Chainflip, ChainflipNetworkInfo,
-		EgressApi, FundAccount, PoolPriceProvider, PriceFeedApi, ScheduledEgressDetails,
-		SwapExecutionProgress,
+		lending::LendingSystemApi, AccountRoleRegistry, Chainflip, EgressApi, FundAccount,
+		PoolPriceProvider, PriceFeedApi, ScheduledEgressDetails, SwapExecutionProgress,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
@@ -576,11 +575,6 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Amount = <Self as Chainflip>::Amount,
 		>;
-
-		/// For getting the Chainflip network.
-		type ChainflipNetwork: ChainflipNetworkInfo;
-
-		type RuntimeCall: Member + Parameter + From<frame_system::Call<Self>> + From<Call<Self>>;
 	}
 
 	#[pallet::pallet]
@@ -1500,121 +1494,6 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::VaultSwapMinimumBrokerFeeSet {
 				broker_id,
 				minimum_fee_bps,
-			});
-
-			Ok(())
-		}
-
-		/// For when the user wants to deposit assets into the Chain but doesn't have
-		/// a statechain account yet. Generates a new deposit address for the user to posit their
-		/// assets.
-		#[pallet::call_index(18)]
-		#[pallet::weight(Weight::zero())]
-		pub fn request_liquidity_deposit_address_for_external_account(
-			origin: OriginFor<T>,
-			signature_data: SignatureData,
-			transaction_metadata: TransactionMetadata,
-			asset: Asset,
-			boost_fee: BasisPoints,
-			refund_address: EncodedAddress,
-		) -> DispatchResult {
-			// TODO, how to do this?
-			// ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
-
-			let requester_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-
-			// TODO: First we need to verify that the signer is the actual signer of the signature
-			// contained in SignatureData
-			let Ok(signer_account) = signature_data.signer_account::<cf_primitives::AccountId>()
-			else {
-				return Err(DispatchError::from(Error::<T>::InvalidUserSignatureData));
-			};
-
-			// TODO: Use proper error -> do we want to check this?
-			// ensure!(T::AccountRoleRegistry::is_unregistered(signer_account), Error::<T>::);
-			let runtime_version = <T as frame_system::Config>::Version::get();
-
-			// Manual `validate_metadata` because there is mempool-specific logic we don't need
-			let current_nonce = frame_system::Pallet::<T>::account_nonce(&signer_account);
-			let tx_nonce: <T as frame_system::Config>::Nonce = transaction_metadata.nonce.into();
-
-			ensure!(
-				tx_nonce == current_nonce,
-				DispatchError::from(Error::<T>::InvalidTransactionMetadata)
-			);
-			ensure!(
-				BlockNumberFor::<T>::from(transaction_metadata.expiry_block) >
-					frame_system::Pallet::<T>::block_number(),
-				DispatchError::from(Error::<T>::InvalidTransactionMetadata)
-			);
-			// Increment the nonce to prevent replay
-			frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
-
-			// Create the runtime call for signature verification. The only issue
-			// with this approach is that if the user is already funded, the call
-			// can be submitted into `non_native_signed_call`. It will fail because
-			// of the origin check for broker, but it will consume the nonce. This
-			// should not be a problem in practice.
-			let runtime_call: <T as Config>::RuntimeCall =
-				Call::<T>::request_liquidity_deposit_address_for_external_account {
-					// Using empty signature for verification to avoid circular dependency
-					signature_data: match signature_data.clone() {
-						SignatureData::Solana { signer, sig_type, .. } =>
-							SignatureData::Solana { signer, sig_type, signature: [0u8; 64].into() },
-						SignatureData::Ethereum { signer, sig_type, .. } =>
-							SignatureData::Ethereum {
-								signer,
-								sig_type,
-								signature: [0u8; 65].into(),
-							},
-					},
-					transaction_metadata: transaction_metadata.clone(),
-					asset,
-					boost_fee,
-					refund_address: refund_address.clone(),
-				}
-				.into();
-
-			ensure!(
-				is_valid_signature(
-					runtime_call,
-					&T::ChainflipNetwork::chainflip_network(),
-					&transaction_metadata,
-					&signature_data,
-					runtime_version.spec_version,
-				),
-				DispatchError::from(Error::<T>::InvalidUserSignatureData)
-			);
-
-			let refund_address_internal =
-				T::AddressConverter::decode_and_validate_address_for_asset(
-					refund_address.clone(),
-					asset,
-				)
-				.map_err(address_error_to_pallet_error::<T>)?;
-
-			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
-				T::DepositHandler::request_liquidity_deposit_address(
-					requester_id.clone(),
-					signer_account.clone(),
-					asset,
-					boost_fee,
-					refund_address_internal,
-					Some(AdditionalDepositAction::FundFlip {
-						flip_amount_to_credit: 5000000000000000000, //5FLIP
-						role_to_register: AccountRole::LiquidityProvider,
-					}),
-				)?;
-
-			Self::deposit_event(Event::AccountCreationDepositAddressReady {
-				channel_id,
-				asset,
-				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
-				requester_id,
-				account_id: signer_account,
-				deposit_chain_expiry_block: expiry_block,
-				boost_fee,
-				channel_opening_fee,
 			});
 
 			Ok(())
