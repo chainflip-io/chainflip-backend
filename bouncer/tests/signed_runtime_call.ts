@@ -112,7 +112,7 @@ async function testEvmEip712(logger: Logger) {
     .nonNativeSignedCall(
       {
         call: hexRuntimeCall,
-        metadata: {
+        transactionMetadata: {
           nonce: transactionMetadata.nonce,
           expiryBlock: transactionMetadata.expiry_block,
         },
@@ -184,7 +184,7 @@ async function testSvmDomain(logger: Logger) {
       {
         // Solana prefix will be added in the SC previous to signature verification
         call: hexBatchRuntimeCall,
-        metadata: svmTransactionMetadata,
+        transactionMetadata: svmTransactionMetadata,
       },
       {
         Solana: {
@@ -253,7 +253,7 @@ async function testEvmPersonalSign(logger: Logger) {
       // Ethereum prefix will be added in the SC previous to signature verification
       {
         call: hexRuntimeCall,
-        metadata: personalSignMetadata,
+        transactionMetadata: personalSignMetadata,
       },
       {
         Ethereum: {
