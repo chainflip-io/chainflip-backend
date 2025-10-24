@@ -38,7 +38,6 @@ use cf_chains::{
 };
 use cf_traits::{BalanceApi, SafeMode};
 use frame_support::{assert_noop, assert_ok, sp_runtime::BoundedVec, traits::OriginTrait};
-use sp_runtime::traits::ValidateUnsigned;
 use std::str::FromStr;
 
 fn utxo(amount: BtcAmount, salt: u32, pub_key: Option<[u8; 32]>) -> Utxo {

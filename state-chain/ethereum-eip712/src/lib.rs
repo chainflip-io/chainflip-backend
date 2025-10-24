@@ -93,6 +93,17 @@ fn extract_primitive_types(v: Composite<()>) -> Result<Value, &'static str> {
 	}
 }
 
+fn concatenate_name_segments(segments: Vec<&'static str>) -> Result<String, &'static str> {
+	if segments.is_empty() {
+		return Err("Type doesn't have a name")
+	}
+	let mut out = segments[0].to_string();
+	for segment in &segments[1..] {
+		out = out + "::" + segment;
+	}
+	Ok(out)
+}
+
 pub fn recursively_construct_types(
 	v: Value,
 	ty: MetaType,
@@ -147,10 +158,7 @@ pub fn recursively_construct_types(
 						),
 					),
 					path => (
-						path.last()
-							// Should never error. Its a composite type so the name has to exist
-							.ok_or("Type doesnt have a name")?
-							.to_string(),
+						concatenate_name_segments(path.to_vec())?,
 						process_composite(type_def_composite.fields, comp_value, types)?,
 					),
 				},
@@ -172,12 +180,10 @@ pub fn recursively_construct_types(
 							))
 						} else {
 							Ok((
-								t.path
-									.ident()
-									// Should never error. Its a composite type so the name has to
-									// exist
-									.ok_or("Type doesnt have a name")?
-									.to_string() + "__" + &value_variant.name.to_string(),
+								// Should never error. Its a composite type so the name has to
+								// exist
+								concatenate_name_segments(t.path.segments)? +
+									"__" + &value_variant.name.to_string(),
 								process_composite(variant.fields, value_variant.values, types)?,
 							))
 						}

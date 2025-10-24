@@ -382,7 +382,7 @@ impl Eip712 for TypedData {
 
 	/// Hash a typed message according to EIP-712. The returned message starts with the EIP-712
 	/// prefix, which is "1901", followed by the hash of the domain separator, then the data (if
-	/// any). The result is hashed again and returned.
+	/// any).
 	fn encode_eip712(&self) -> Result<Vec<u8>, Self::Error> {
 		let domain_separator = self.domain.separator();
 		let mut digest_input = [&[0x19, 0x01], &domain_separator[..]].concat().to_vec();
