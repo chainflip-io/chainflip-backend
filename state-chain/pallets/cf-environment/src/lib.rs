@@ -21,7 +21,7 @@
 
 use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
 pub use crate::submit_runtime_call::{
-	build_domain_data, BatchedCalls, EthEncodingType, Message, SolEncodingType,
+	build_domain_data, is_valid_signature, BatchedCalls, EthEncodingType, Message, SolEncodingType,
 	TransactionMetadata, DOMAIN_OFFCHAIN_PREFIX, MAX_BATCHED_CALLS,
 };
 use cf_chains::{
@@ -47,8 +47,8 @@ use cf_primitives::{
 	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
-	Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider,
-	SafeMode, SolanaNonceWatch,
+	Broadcaster, ChainflipNetworkInfo, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider,
+	NetworkEnvironmentProvider, SafeMode, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -97,7 +97,7 @@ pub enum SafeModeUpdate<T: Config> {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::submit_runtime_call::{is_valid_signature, validate_metadata};
+	use crate::submit_runtime_call::validate_metadata;
 
 	use super::*;
 	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum};
@@ -1046,5 +1046,11 @@ impl<T: Config> CompatibleCfeVersions for Pallet<T> {
 impl<T: Config> NetworkEnvironmentProvider for Pallet<T> {
 	fn get_network_environment() -> NetworkEnvironment {
 		Self::network_environment()
+	}
+}
+
+impl<T: Config> ChainflipNetworkInfo for Pallet<T> {
+	fn chainflip_network() -> ChainflipNetwork {
+		ChainflipNetworkName::<T>::get()
 	}
 }

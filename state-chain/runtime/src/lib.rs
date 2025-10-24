@@ -357,6 +357,8 @@ impl pallet_cf_swapping::Config for Runtime {
 	type PriceFeedApi = ChainlinkOracle;
 	type LendingSystemApi = LendingPools;
 	type FundAccount = Funding;
+	type RuntimeCall = RuntimeCall;
+	type ChainflipNetwork = chainflip::ChainflipNetworkProvider;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -642,6 +644,8 @@ impl pallet_cf_lp::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type MinimumDeposit = MinimumDepositProvider;
+	type RuntimeCall = RuntimeCall;
+	type ChainflipNetwork = chainflip::ChainflipNetworkProvider;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {

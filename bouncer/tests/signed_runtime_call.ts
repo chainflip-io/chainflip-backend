@@ -1,5 +1,16 @@
 import { TestContext } from 'shared/utils/test_context';
-import { createEvmWallet, decodeSolAddress, externalChainToScAccount } from 'shared/utils';
+import {
+  createEvmWallet,
+  createStateChainKeypair,
+  decodeSolAddress,
+  externalChainToScAccount,
+  handleSubstrateError,
+  newAssetAddress,
+  shortChainFromAsset,
+  sleep,
+  shortChainFromAsset,
+  sleep,
+} from 'shared/utils';
 import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { globalLogger, Logger } from 'shared/utils/logger';
@@ -7,6 +18,8 @@ import { fundFlip } from 'shared/fund_flip';
 import z from 'zod';
 import { ApiPromise } from '@polkadot/api';
 import { signBytes, getUtf8Encoder, generateKeyPairSigner } from '@solana/kit';
+import { send } from 'shared/send';
+import { setupBrokerAccount } from 'shared/setup_account';
 
 const eipPayloadSchema = z.object({
   domain: z.any(),
@@ -82,6 +95,8 @@ async function testEvmEip712(logger: Logger) {
   logger.info(`Registering EVM account as operator: ${evmScAccount}`);
   const call = getRegisterOperatorCall(chainflip);
   const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
+
+  const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
 
   const response = await chainflip.rpc(
     'cf_encode_non_native_call',
@@ -269,10 +284,132 @@ async function testEvmPersonalSign(logger: Logger) {
   await observeNonNativeSignedCallAndRole(logger, evmScAccount);
 }
 
+async function testSpecialLpDeposit(logger: Logger) {
+  await using chainflip = await getChainflipApi();
+
+  // Setup broker accounts. Different for each asset and specific to this test.
+  logger.info('Setting up a broker account');
+  const brokerUri = `//BROKER_SPECIAL_DEPOSIT_CHANNEL`;
+  const broker = createStateChainKeypair(brokerUri);
+  await setupBrokerAccount(logger, brokerUri);
+
+  // It's a bit strange here because we have to input an absolute block number, as this is
+  // a catch 22. This can maybe be improved as part of the work to not encode a runtimeCall?
+  const expiryBlock = 10000;
+
+  const evmWallet = await createEvmWallet();
+  const evmScAccount = externalChainToScAccount(evmWallet.address);
+  const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
+  const refundAddress = await newAssetAddress('Eth', brokerUri + Math.random() * 100);
+
+  const call = chainflip.tx.liquidityProvider.requestLiquidityDepositAddressForExternalAccount(
+    {
+      Ethereum: {
+        signature: '0x' + '00'.repeat(65),
+        signer: evmWallet.address,
+        sigType: 'Eip712',
+      },
+    },
+    {
+      nonce: evmNonce,
+      expiryBlock,
+    },
+    'eth',
+    0,
+    { eth: refundAddress },
+    'LiquidityProvider',
+  );
+  // let call = chainflip.tx.system.remark([]);
+  const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
+
+  // TODO: Workaround to encode a call using the RPC. We encode this call via the rpc
+  // that will then be verified. However, the expiry block is a bit of a catch22 with
+  // this workaround as it needs to be preencoded in the call before the rpc, which
+  // modifies it. Therefore we then need an extra step below to fix the override
+  // the expiry block in the message after the rpc call to match the initial call.
+  const response = await chainflip.rpc(
+    'cf_encode_non_native_call',
+    hexRuntimeCall,
+    blocksToExpiry,
+    evmNonce,
+    { Eth: 'Eip712' },
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [eipPayload, transactionMetadata] = encodeNonNativeCallResponseSchema.parse(response);
+  const parsedPayload = encodedNonNativeCallSchema.parse(eipPayload);
+  const { domain, types, message } = parsedPayload.Eip712;
+  delete types.EIP712Domain;
+
+  // Apply patch - We then cannot use the transactionMetadata as both the nonce and
+  // the expiry block need to match the initial call.
+  message.metadata.expiryBlock = expiryBlock.toString();
+
+  const evmSignatureEip712 = await evmWallet.signTypedData(domain, types, message);
+
+  const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
+  await chainflip.tx.liquidityProvider
+    .requestLiquidityDepositAddressForExternalAccount(
+      {
+        Ethereum: {
+          signature: evmSignatureEip712,
+          signer: evmWallet.address,
+          sigType: 'Eip712',
+        },
+      },
+      {
+        nonce: evmNonce,
+        expiryBlock,
+      },
+      'Eth',
+      0,
+      { eth: refundAddress },
+      'LiquidityProvider',
+    )
+    .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
+
+  logger.info('Opening special deposit channel and depositing..');
+
+  const eventResult = await observeEvent(
+    logger,
+    'liquidityProvider:AccountCreationDepositAddressReady',
+    {
+      test: (event) =>
+        event.data.requesterId === broker.address && event.data.accountId === evmScAccount,
+    },
+  ).event;
+  const depositAddress = eventResult.data.depositAddress[shortChainFromAsset('Eth')];
+
+  await send(logger, 'Eth', depositAddress);
+
+  logger.info('Waiting for FLIP balance to be credited...');
+
+  let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const account = (await chainflip.query.flip.account(evmScAccount)).toJSON() as {
+      balance: string;
+    };
+    const balance = BigInt(account.balance);
+
+    if (balance > 0) {
+      logger.info('FLIP balance credited successfully');
+      break;
+    }
+
+    if (attempt >= 10) {
+      throw new Error('Timeout waiting for FLIP balance to be credited');
+    }
+    attempt++;
+    await sleep(6000);
+  }
+}
+
 export async function testSignedRuntimeCall(testContext: TestContext) {
   await Promise.all([
     testEvmEip712(testContext.logger.child({ tag: `EvmSignedCall` })),
     testSvmDomain(testContext.logger.child({ tag: `SvmDomain` })),
     testEvmPersonalSign(testContext.logger.child({ tag: `EvmPersonalSign` })),
+    testSpecialLpDeposit(testContext.logger.child({ tag: `SpecialLpDeposit` })),
   ]);
 }

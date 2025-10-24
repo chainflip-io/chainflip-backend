@@ -129,8 +129,6 @@ const EIP712_METADATA_TYPE_STR: &str = "Metadata(uint32 nonce,uint32 expiryBlock
 const EIP712_RUNTIMECALL_TYPE_STR: &str = "RuntimeCall(bytes value)";
 const EIP712_TRANSACTION_TYPE_STR: &str = "Transaction(RuntimeCall call,Metadata metadata)";
 
-/// `signer is not technically necessary but is added as part of the metadata so
-/// we add it so is displayed separately to the user in the wallet.
 /// TODO: This is a temporary simplified implementation for basic EIP-712 support
 /// in a specific format. Full logic to be implemented in PRO-2535.
 pub(crate) fn build_eip_712_payload(
@@ -276,7 +274,7 @@ pub fn build_domain_data(
 /// Validates the signature, given some call and metadata.
 ///
 /// This call should be kept idempotent: it should not access storage.
-pub(crate) fn is_valid_signature(
+pub fn is_valid_signature(
 	call: impl Encode,
 	chainflip_network: &ChainflipNetwork,
 	transaction_metadata: &TransactionMetadata,

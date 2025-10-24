@@ -18,13 +18,17 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{address::AddressConverter, AccountOrAddress, AnyChain, ForeignChainAddress};
-use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, DcaParameters, ForeignChain};
+use cf_primitives::{
+	AccountRole, Asset, AssetAmount, BasisPoints, ChainflipNetwork, DcaParameters, ForeignChain,
+};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdditionalDepositAction, BalanceApi,
-	BoostBalancesApi, Chainflip, DepositApi, EgressApi, LpRegistration, PoolApi,
-	ScheduledEgressDetails, SwapRequestHandler, INITIAL_FLIP_FUNDING,
+	BoostBalancesApi, Chainflip, ChainflipNetworkInfo, DepositApi, EgressApi, LpRegistration,
+	PoolApi, ScheduledEgressDetails, SwapRequestHandler, INITIAL_FLIP_FUNDING,
 };
-use pallet_cf_environment::submit_runtime_call::SignatureData;
+use pallet_cf_environment::submit_runtime_call::{
+	is_valid_signature, SignatureData, TransactionMetadata,
+};
 
 use sp_std::vec;
 
@@ -105,6 +109,11 @@ pub mod pallet {
 
 		/// The interface to access the minimum deposit amount for each asset
 		type MinimumDeposit: MinimumDeposit;
+
+		/// For getting the Chainflip network.
+		type ChainflipNetwork: ChainflipNetworkInfo;
+
+		type RuntimeCall: Member + Parameter + From<frame_system::Call<Self>> + From<Call<Self>>;
 	}
 
 	#[pallet::error]
@@ -140,8 +149,10 @@ pub mod pallet {
 		InternalSwapBelowMinimumDepositAmount,
 		/// Internal swaps disabled due to safe mode.
 		InternalSwapsDisabled,
-		/// Account id could not be derived from user signature data.
+		/// The provided Signature Data is invalid
 		InvalidUserSignatureData,
+		/// The provided Transaction Metadata is invalid
+		InvalidTransactionMetadata,
 	}
 
 	#[pallet::event]
@@ -401,7 +412,8 @@ pub mod pallet {
 		#[pallet::weight(Weight::zero())]
 		pub fn request_liquidity_deposit_address_for_external_account(
 			origin: OriginFor<T>,
-			external_account: SignatureData,
+			signature_data: SignatureData,
+			transaction_metadata: TransactionMetadata,
 			asset: Asset,
 			boost_fee: BasisPoints,
 			refund_address: EncodedAddress,
@@ -411,10 +423,8 @@ pub mod pallet {
 
 			let requester_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			// TODO: First we need to verify that the signer is the actual signer of the signature
-			// contained in SignatureData
-			let Ok(target_account_id) =
-				external_account.signer_account::<<T as frame_system::Config>::AccountId>()
+			let Ok(signer_account) =
+				signature_data.signer_account::<<T as frame_system::Config>::AccountId>()
 			else {
 				return Err(DispatchError::from(Error::<T>::InvalidUserSignatureData));
 			};
@@ -426,10 +436,65 @@ pub mod pallet {
 				)
 				.map_err(|_| Error::<T>::InvalidEncodedAddress)?;
 
+			// Manual `validate_metadata` because there is mempool-specific logic we don't need
+			let current_nonce = frame_system::Pallet::<T>::account_nonce(&signer_account);
+			let tx_nonce: <T as frame_system::Config>::Nonce = transaction_metadata.nonce.into();
+			ensure!(
+				tx_nonce == current_nonce,
+				DispatchError::from(Error::<T>::InvalidTransactionMetadata)
+			);
+			ensure!(
+				BlockNumberFor::<T>::from(transaction_metadata.expiry_block) >
+					frame_system::Pallet::<T>::block_number(),
+				DispatchError::from(Error::<T>::InvalidTransactionMetadata)
+			);
+			// Increment the nonce to prevent replay attacks
+			frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
+			let runtime_version = <T as frame_system::Config>::Version::get();
+
+			// Create the runtime call for signature verification. The only issue
+			// with this approach is that if the user is already funded, the call
+			// can be submitted into `non_native_signed_call`. It will fail because
+			// of the origin check for broker, but it will consume the nonce. This
+			// should not be a problem in practice.
+			// TODO: Look into signing and verifying differently so it's not a runtime
+			// call that can potentially be submitted via `non_native_signed_call`.
+			let runtime_call: <T as Config>::RuntimeCall =
+				Call::<T>::request_liquidity_deposit_address_for_external_account {
+					// Using empty signature for verification to avoid circular dependency
+					signature_data: match signature_data.clone() {
+						SignatureData::Solana { signer, sig_type, .. } =>
+							SignatureData::Solana { signer, sig_type, signature: [0u8; 64].into() },
+						SignatureData::Ethereum { signer, sig_type, .. } =>
+							SignatureData::Ethereum {
+								signer,
+								sig_type,
+								signature: [0u8; 65].into(),
+							},
+					},
+					transaction_metadata,
+					asset,
+					boost_fee,
+					refund_address: refund_address.clone(),
+					role_to_register,
+				}
+				.into();
+
+			ensure!(
+				is_valid_signature(
+					runtime_call,
+					&ChainflipNetwork::Development,
+					&transaction_metadata,
+					&signature_data,
+					runtime_version.spec_version,
+				),
+				DispatchError::from(Error::<T>::InvalidUserSignatureData)
+			);
+
 			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
 				T::DepositHandler::request_liquidity_deposit_address(
 					requester_id.clone(),
-					target_account_id.clone(),
+					signer_account.clone(),
 					asset,
 					boost_fee,
 					refund_address_internal,
@@ -444,7 +509,7 @@ pub mod pallet {
 				asset,
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				requester_id,
-				account_id: target_account_id,
+				account_id: signer_account,
 				deposit_chain_expiry_block: expiry_block,
 				boost_fee,
 				channel_opening_fee,
