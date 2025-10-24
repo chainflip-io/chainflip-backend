@@ -19,7 +19,8 @@
 use crate::{
 	mock::*,
 	submit_runtime_call::{
-		build_eip_712_payload, ChainflipExtrinsic, EthEncodingType, SolEncodingType,
+		build_eip_712_payload, is_valid_signature, ChainflipExtrinsic, EthEncodingType,
+		SolEncodingType,
 	},
 	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
 	SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
@@ -814,25 +815,30 @@ fn can_non_native_signed_call() {
 	});
 }
 #[test]
-fn can_build_eip_712_payload_validate_unsigned() {
+fn can_build_eip_712_payload_and_validate() {
 	new_test_ext().execute_with(|| {
 		let system_call = frame_system::Call::remark { remark: vec![] };
 		let runtime_call: <Test as crate::Config>::RuntimeCall = system_call.clone().into();
 
-		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000 };
+		let version = 20000;
+		let transaction_metadata = TransactionMetadata { nonce: 5, expiry_block: 130 };
+
 		let signer: EvmAddress = EvmAddress::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
 		let signature_data: SignatureData = SignatureData::Ethereum {
             signature: hex_literal::hex!(
-                "a7296a5c22c4ccb38ebc0973a105ea3964a0cc5736fe2850a2fa3568942c2476492d38fa7abf7ba3886d6473a137b7b0a9db5de035e49a027ae75a9a3d30ff081b"
+                "5af160dc4d05b401f2f1a004c6a51dace43d23f2d2e564fa76acfbbfd9be1fd5038f4c2d217fd6669973cfe8d3527e477579859282d45f86ca968f9fc29aa8db1b"
             ).into(),
             signer,
             sig_type: EthEncodingType::Eip712,
         };
-		let user_submission = crate::Call::non_native_signed_call { chainflip_extrinsic: ChainflipExtrinsic  {call: Box::new(runtime_call), transaction_metadata} , signature_data };
-		assert_ok!(
-			<crate::Pallet::<Test> as ValidateUnsigned>::validate_unsigned(frame_support::pallet_prelude::TransactionSource::External, &user_submission)
+		let valid_signature = is_valid_signature(
+					runtime_call,
+					&cf_primitives::ChainflipNetwork::Development,
+					&transaction_metadata,
+					&signature_data,
+					version,
 		);
-		assert_ok!(<crate::Pallet::<Test> as ValidateUnsigned>::pre_dispatch(&user_submission));
+		assert!(valid_signature.unwrap());
 	});
 }
 
