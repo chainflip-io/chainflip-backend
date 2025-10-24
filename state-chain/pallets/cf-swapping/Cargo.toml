@@ -22,7 +22,6 @@ cf-primitives = { workspace = true }
 cf-amm = { workspace = true }
 cf-runtime-utilities = { workspace = true }
 cf-traits = { workspace = true }
-pallet-cf-environment = { workspace = true }
 
 log = { workspace = true }
 

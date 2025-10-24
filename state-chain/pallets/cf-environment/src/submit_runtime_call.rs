@@ -125,10 +125,6 @@ pub struct ChainflipExtrinsic<C> {
 	pub transaction_metadata: TransactionMetadata,
 }
 
-/// `signer is not technically necessary but is added as part of the metadata so
-/// we add it so is displayed separately to the user in the wallet.
-/// TODO: This is a temporary simplified implementation for basic EIP-712 support
-/// in a specific format. Full logic to be implemented in PRO-2535.
 pub(crate) fn build_eip_712_payload(
 	call: impl Encode + TypeInfo + 'static,
 	chain_name: &str,
