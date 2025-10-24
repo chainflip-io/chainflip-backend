@@ -61,9 +61,11 @@ mod helpers {
 	) -> (ChannelId, <Bitcoin as Chain>::ChainAccount) {
 		let (id, address, ..) = BitcoinIngressEgress::request_liquidity_deposit_address(
 			who,
+			who,
 			asset,
 			0,
 			ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS)),
+			None,
 		)
 		.unwrap();
 		let address: <Bitcoin as Chain>::ChainAccount = address.try_into().unwrap();
@@ -458,9 +460,11 @@ fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
 
 		let (_id, address, ..) = BitcoinIngressEgress::request_liquidity_deposit_address(
 			BROKER,
+			BROKER,
 			btc::Asset::Btc,
 			0,
 			ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS)),
+			None,
 		)
 		.unwrap();
 

@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{AccountInfo, Chainflip, FundingInfo};
+use crate::{AccountInfo, Chainflip, FundAccount, FundingInfo, FundingSource};
 use frame_support::{
 	sp_runtime::{
 		traits::{CheckedSub, Zero},
@@ -116,5 +116,18 @@ impl<T: Chainflip> AccountInfo for MockFundingInfo<T> {
 	/// Returns the account's liquid funds, net of the bond.
 	fn liquid_funds(account_id: &Self::AccountId) -> Self::Amount {
 		Self::balance(account_id).saturating_sub(Self::bond(account_id))
+	}
+}
+
+impl<T: Chainflip> FundAccount for MockFundingInfo<T> {
+	type AccountId = u64;
+	type Amount = u128;
+
+	fn fund_account(
+		_account_id: Self::AccountId,
+		_funder: Option<cf_chains::eth::Address>,
+		_amount: Self::Amount,
+		_source: FundingSource,
+	) {
 	}
 }

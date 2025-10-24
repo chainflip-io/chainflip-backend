@@ -203,6 +203,7 @@ impl pallet_cf_swapping::Config for Test {
 	type Bonder = MockBonderFor<Self>;
 	type PoolPriceApi = MockPoolPriceApi;
 	type PriceFeedApi = MockPriceFeedApi;
+	type FundAccount = MockFundingInfo<Test>;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
