@@ -1299,6 +1299,18 @@ pub mod pallet {
 						continue;
 					};
 
+					// Below we're calling
+					// `Self::try_broadcast_rejection_refund_or_store_tx_details` which assumes
+					// that this check has been done.
+					if let Some(limit) = T::FetchesTransfersLimitProvider::maybe_transfers_limit() {
+						// In case we don't have enough nonces we put the tx back to be retried next
+						// block
+						if limit.is_zero() {
+							deferred_rejections.push(tx);
+							continue;
+						}
+					}
+
 					match tx.deposit_address {
 						Some(ref deposit_address) => {
 							if !DepositChannelLookup::<T, I>::contains_key(deposit_address) {
@@ -1700,20 +1712,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	// WARNING: This function assumes that
+	// `T::FetchesTransfersLimitProvider::maybe_transfers_limit() > 0`
 	fn try_broadcast_rejection_refund_or_store_tx_details(
 		tx: TransactionRejectionDetails<T, I>,
 		refund_address: TargetChainAccount<T, I>,
 		deposit_fetch_id: Option<<T::TargetChain as Chain>::DepositFetchId>,
 	) {
-		// This function is only doing the maybe_transfers_limit (most restrictive) and not the
-		// maybe_fetches_limit checks that the `do_egress_scheduled_*` are doing.
-		if let Some(limit) = T::FetchesTransfersLimitProvider::maybe_transfers_limit() {
-			// In case we don't have enough nonces we put the tx back to be retried next block
-			if limit.is_zero() {
-				ScheduledTransactionsForRejection::<T, I>::append(tx);
-				return;
-			}
-		}
 		let AmountAndFeesWithheld {
 			amount_after_fees: amount_after_ingress_fees,
 			fees_withheld: _,
