@@ -44,7 +44,7 @@ impl Bytes {
 	/// # Examples
 	///
 	/// ```
-	/// use ethers_core::types::Bytes;
+	/// use ethereum_eip712::bytes::Bytes;
 	///
 	/// let b = Bytes::new();
 	/// assert_eq!(&b[..], b"");
@@ -62,7 +62,7 @@ impl Bytes {
 	/// # Examples
 	///
 	/// ```
-	/// use ethers_core::types::Bytes;
+	/// use ethereum_eip712::bytes::Bytes;
 	///
 	/// let b = Bytes::from_static(b"hello");
 	/// assert_eq!(&b[..], b"hello");

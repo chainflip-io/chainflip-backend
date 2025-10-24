@@ -117,7 +117,6 @@ fn test_build_eip712_typed_data() {
 		build_eip712_typed_data(&chainflip_network, call, &transaction_metadata, spec_version)
 			.unwrap();
 
-	// this should eip712 hash to "76951bf21085c66f332db183ece640390ca47aa87035815808209b1813c349f8"
 	println!(
 		"Typed Data: {:#?}",
 		serde_json::to_writer_pretty(std::io::stdout(), &typed_data_result).unwrap()

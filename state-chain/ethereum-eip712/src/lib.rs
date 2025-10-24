@@ -55,55 +55,6 @@ pub fn encode_eip712_using_type_info<T: TypeInfo + Encode + 'static>(
 	Ok(typed_data)
 }
 
-enum AddTypeOrNot {
-	DontAdd,
-	AddType { type_fields: Vec<Eip712DomainType> },
-}
-
-pub fn scale_value_bytes_to_hex(v: Value) -> Result<Value, &'static str> {
-	if let ValueDef::Composite(Composite::Unnamed(v)) = v.value {
-		Ok(Value {
-			value: ValueDef::Primitive(Primitive::String(
-				"0x".to_string() +
-					&hex::encode(
-						v.into_iter()
-							.map(|e| match e.value {
-								ValueDef::Primitive(Primitive::U128(b)) =>
-									Ok(b.try_into().map_err(|_| "u128 to u8 conversion failed")?),
-								_ => Err("Expected u8 primitive"),
-							})
-							.collect::<Result<Vec<u8>, _>>()?,
-					),
-			)),
-			context: (),
-		})
-	} else {
-		Err("Expected unnamed composite for bytes extraction")
-	}
-}
-
-fn extract_primitive_types(v: Composite<()>) -> Result<Value, &'static str> {
-	if let Composite::Unnamed(fs) = v {
-		if fs.len() != 1 {
-			return Err("expected one element");
-		}
-		Ok(fs[0].clone())
-	} else {
-		Err("expected Unnamed")
-	}
-}
-
-fn concatenate_name_segments(segments: Vec<&'static str>) -> Result<String, &'static str> {
-	if segments.is_empty() {
-		return Err("Type doesn't have a name")
-	}
-	let mut out = segments[0].to_string();
-	for segment in &segments[1..] {
-		out = out + "::" + segment;
-	}
-	Ok(out)
-}
-
 pub fn recursively_construct_types(
 	v: Value,
 	ty: MetaType,
@@ -394,6 +345,55 @@ fn process_composite(
 	})
 }
 
+enum AddTypeOrNot {
+	DontAdd,
+	AddType { type_fields: Vec<Eip712DomainType> },
+}
+
+pub fn scale_value_bytes_to_hex(v: Value) -> Result<Value, &'static str> {
+	if let ValueDef::Composite(Composite::Unnamed(v)) = v.value {
+		Ok(Value {
+			value: ValueDef::Primitive(Primitive::String(
+				"0x".to_string() +
+					&hex::encode(
+						v.into_iter()
+							.map(|e| match e.value {
+								ValueDef::Primitive(Primitive::U128(b)) =>
+									Ok(b.try_into().map_err(|_| "u128 to u8 conversion failed")?),
+								_ => Err("Expected u8 primitive"),
+							})
+							.collect::<Result<Vec<u8>, _>>()?,
+					),
+			)),
+			context: (),
+		})
+	} else {
+		Err("Expected unnamed composite for bytes extraction")
+	}
+}
+
+fn extract_primitive_types(v: Composite<()>) -> Result<Value, &'static str> {
+	if let Composite::Unnamed(fs) = v {
+		if fs.len() != 1 {
+			return Err("expected one element");
+		}
+		Ok(fs[0].clone())
+	} else {
+		Err("expected Unnamed")
+	}
+}
+
+fn concatenate_name_segments(segments: Vec<&'static str>) -> Result<String, &'static str> {
+	if segments.is_empty() {
+		return Err("Type doesn't have a name")
+	}
+	let mut out = segments[0].to_string();
+	for segment in &segments[1..] {
+		out = out + "____" + segment;
+	}
+	Ok(out)
+}
+
 #[derive(TypeInfo, Clone, Encode)]
 pub struct EmptySequence;
 #[derive(TypeInfo, Clone, Encode)]
@@ -434,11 +434,17 @@ pub mod tests {
 			to: Person { name: String::from("Albert") },
 			message: String::from("hello Albert"),
 		};
+
 		assert_eq!(
 			hex::encode(
-				&encode_eip712_using_type_info(payload, domain).unwrap().encode_eip712().unwrap()[..]
+				&keccak256(
+					encode_eip712_using_type_info(payload, domain)
+						.unwrap()
+						.encode_eip712()
+						.unwrap()
+				)[..]
 			),
-			"36b58675f9b9390f1de60902297828280ab2cc1eaecb6453cfcb0328b2c35b33"
+			"336ec92e268f26ea42492c5a5d80111b76fc59ea4897eb4128f10dc7da396452"
 		);
 	}
 }

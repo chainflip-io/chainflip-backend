@@ -325,7 +325,7 @@ impl<'input> HumanReadableParser<'input> {
 	/// # Example
 	///
 	/// ```
-	/// use ethers_core::abi::HumanReadableParser;
+	/// use ethereum_eip712::lexer::HumanReadableParser;
 	/// let mut fun = HumanReadableParser::parse_function("function get(address author, string oldValue, string newValue)").unwrap();
 	/// ```
 	pub fn parse_function(input: &'input str) -> Result<Function, LexerError> {
@@ -337,7 +337,7 @@ impl<'input> HumanReadableParser<'input> {
 	/// # Example
 	///
 	/// ```
-	/// use ethers_core::abi::HumanReadableParser;
+	/// use ethereum_eip712::lexer::HumanReadableParser;
 	/// let err = HumanReadableParser::parse_error("error MyError(address author, string oldValue, string newValue)").unwrap();
 	/// ```
 	pub fn parse_error(input: &'input str) -> Result<AbiError, LexerError> {
@@ -349,7 +349,7 @@ impl<'input> HumanReadableParser<'input> {
 	/// # Example
 	///
 	/// ```
-	/// use ethers_core::abi::HumanReadableParser;
+	/// use ethereum_eip712::lexer::HumanReadableParser;
 	/// let mut constructor = HumanReadableParser::parse_constructor("constructor(address author, string oldValue, string newValue)").unwrap();
 	/// ```
 	pub fn parse_constructor(input: &'input str) -> Result<Constructor, LexerError> {
@@ -361,7 +361,7 @@ impl<'input> HumanReadableParser<'input> {
 	/// # Example
 	///
 	/// ```
-	/// use ethers_core::abi::HumanReadableParser;
+	/// use ethereum_eip712::lexer::HumanReadableParser;
 	/// let mut event = HumanReadableParser::parse_event("event ValueChanged(address indexed author, string oldValue, string newValue)").unwrap();
 	/// ```
 	pub fn parse_event(input: &'input str) -> Result<Event, LexerError> {

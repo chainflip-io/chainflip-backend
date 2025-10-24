@@ -870,12 +870,13 @@ fn can_build_eip_712_payload() {
 		let version = "1";
 		let transaction_metadata = TransactionMetadata { nonce: 1, expiry_block: 1000 };
 
-		let eip_hash =
-			build_eip_712_payload(call, chain_name, version, transaction_metadata).unwrap();
+		let eip_hash = ethereum_eip712::hash::keccak256(
+			build_eip_712_payload(call, chain_name, version, transaction_metadata).unwrap(),
+		);
 
 		assert_eq!(
 			hex::encode(eip_hash),
-			"76951bf21085c66f332db183ece640390ca47aa87035815808209b1813c349f8"
+			"73590dc7f1b2b0f97e55030f449d7cae3fb9276f1371982221f3b671d705b960"
 		);
 	});
 }

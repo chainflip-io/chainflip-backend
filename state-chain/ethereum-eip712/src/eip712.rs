@@ -675,6 +675,38 @@ pub fn encode_eip712_type(token: Token) -> Token {
 mod tests {
 	use super::*;
 
+	#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+	#[serde(deny_unknown_fields)]
+	pub struct OriginalTypedData {
+		/// Signing domain metadata. The signing domain is the intended context for the signature
+		/// (e.g. the dapp, protocol, etc. that it's intended for). This data is used to
+		/// construct the domain seperator of the message.
+		pub domain: EIP712Domain,
+		/// The custom types used by this message.
+		pub types: Types,
+		#[serde(rename = "primaryType")]
+		/// The type of the message.
+		pub primary_type: String,
+		/// The message to be signed.
+		pub message: BTreeMap<String, serde_json::Value>,
+	}
+
+	fn to_typed_data(json: serde_json::Value) -> TypedData {
+		let typed_data: OriginalTypedData = serde_json::from_value(json).unwrap();
+
+		let scale_value: scale_value::Value = serde_json::from_value(serde_json::Value::Object(
+			typed_data.message.into_iter().collect(),
+		))
+		.unwrap();
+
+		TypedData {
+			domain: typed_data.domain,
+			types: typed_data.types,
+			primary_type: typed_data.primary_type,
+			message: scale_value.try_into().unwrap(),
+		}
+	}
+
 	#[test]
 	fn test_full_domain() {
 		let json = serde_json::json!({
@@ -712,9 +744,7 @@ mod tests {
 		  "message": {}
 		});
 
-		let typed_data: TypedData = serde_json::from_value(json).unwrap();
-
-		let hash = typed_data.encode_eip712().unwrap();
+		let hash = keccak256(to_typed_data(json).encode_eip712().unwrap());
 		assert_eq!(
 			"122d1c8ef94b76dad44dcb03fa772361e20855c63311a15d5afe02d1b38f6077",
 			hex::encode(&hash[..])
@@ -725,9 +755,7 @@ mod tests {
 	fn test_minimal_message() {
 		let json = serde_json::json!( {"types":{"EIP712Domain":[]},"primaryType":"EIP712Domain","domain":{},"message":{}});
 
-		let typed_data: TypedData = serde_json::from_value(json).unwrap();
-
-		let hash = typed_data.encode_eip712().unwrap();
+		let hash = keccak256(to_typed_data(json).encode_eip712().unwrap());
 		assert_eq!(
 			"8d4a3f4082945b7879e2b55f181c31a77c8c0a464b70669458abbaaf99de4c38",
 			hex::encode(&hash[..])
@@ -738,9 +766,7 @@ mod tests {
 	fn test_encode_custom_array_type() {
 		let json = serde_json::json!({"domain":{},"types":{"EIP712Domain":[],"Person":[{"name":"name","type":"string"},{"name":"wallet","type":"address[]"}],"Mail":[{"name":"from","type":"Person"},{"name":"to","type":"Person[]"},{"name":"contents","type":"string"}]},"primaryType":"Mail","message":{"from":{"name":"Cow","wallet":["0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826","0xDD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"]},"to":[{"name":"Bob","wallet":["0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"]}],"contents":"Hello, Bob!"}});
 
-		let typed_data: TypedData = serde_json::from_value(json).unwrap();
-
-		let hash = typed_data.encode_eip712().unwrap();
+		let hash = keccak256(to_typed_data(json).encode_eip712().unwrap());
 		assert_eq!(
 			"80a3aeb51161cfc47884ddf8eac0d2343d6ae640efe78b6a69be65e3045c1321",
 			hex::encode(&hash[..])
@@ -788,9 +814,7 @@ mod tests {
 		  }
 		});
 
-		let typed_data: TypedData = serde_json::from_value(json).unwrap();
-
-		let hash = typed_data.encode_eip712().unwrap();
+		let hash = keccak256(to_typed_data(json).encode_eip712().unwrap());
 		assert_eq!(
 			"232cd3ec058eb935a709f093e3536ce26cc9e8e193584b0881992525f6236eef",
 			hex::encode(&hash[..])
@@ -801,9 +825,7 @@ mod tests {
 	fn test_hash_custom_data_type() {
 		let json = serde_json::json!(  {"domain":{},"types":{"EIP712Domain":[],"Person":[{"name":"name","type":"string"},{"name":"wallet","type":"address"}],"Mail":[{"name":"from","type":"Person"},{"name":"to","type":"Person"},{"name":"contents","type":"string"}]},"primaryType":"Mail","message":{"from":{"name":"Cow","wallet":"0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"},"to":{"name":"Bob","wallet":"0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"},"contents":"Hello, Bob!"}});
 
-		let typed_data: TypedData = serde_json::from_value(json).unwrap();
-
-		let hash = typed_data.encode_eip712().unwrap();
+		let hash = keccak256(to_typed_data(json).encode_eip712().unwrap());
 		assert_eq!(
 			"25c3d40a39e639a4d0b6e4d2ace5e1281e039c88494d97d8d08f99a6ea75d775",
 			hex::encode(&hash[..])
@@ -870,9 +892,7 @@ mod tests {
 		  }
 		});
 
-		let typed_data: TypedData = serde_json::from_value(json).unwrap();
-
-		let hash = typed_data.encode_eip712().unwrap();
+		let hash = keccak256(to_typed_data(json).encode_eip712().unwrap());
 		assert_eq!(
 			"0808c17abba0aef844b0470b77df9c994bc0fa3e244dc718afd66a3901c4bd7b",
 			hex::encode(&hash[..])
@@ -924,7 +944,7 @@ mod tests {
 			  },
 			  {
 				"name": "zoneHash",
-				"type": "bytes32"
+				"type": "bytes"
 			  },
 			  {
 				"name": "salt",
@@ -932,7 +952,7 @@ mod tests {
 			  },
 			  {
 				"name": "conduitKey",
-				"type": "bytes32"
+				"type": "bytes"
 			  },
 			  {
 				"name": "counter",
@@ -982,23 +1002,139 @@ mod tests {
 				"token": "0xA604060890923Ff400e8c6f5290461A83AEDACec"
 			  }
 			],
-			"startTime": "1658645591",
-			"endTime": "1659250386",
+			"startTime": 1658645591,
+			"endTime": 1659250386,
 			"zone": "0x004C00500000aD104D7DBd00e3ae0A5C00560C00",
 			"zoneHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-			"salt": "16178208897136618",
+			"salt": 16178208897136618u64,
 			"conduitKey": "0x0000007b02230091a7ed01230072f7006a004d60a8d4e71d599b8104250f0000",
 			"totalOriginalConsiderationItems": "2",
-			"counter": "0"
+			"counter": 0
 		  }
 		}
 				);
 
-		let typed_data: TypedData = serde_json::from_value(json).unwrap();
-
-		let hash = typed_data.encode_eip712().unwrap();
+		let hash = keccak256(to_typed_data(json).encode_eip712().unwrap());
 		assert_eq!(
-			"0b8aa9f3712df0034bc29fe5b24dd88cfdba02c7f499856ab24632e2969709a8",
+			"ed9f79b89ea927d75070c8bdc209a389fe4925b980aadb344ef6584c11048e97",
+			hex::encode(&hash[..])
+		);
+	}
+
+	#[test]
+	fn test_chainflip_extrinsic() {
+		let json = serde_json::json!({
+		  "domain": {
+			"name": "Chainflip-Mainnet",
+			"version": "1"
+		  },
+		  "types": {
+			"EIP712Domain": [
+			  {
+				"name": "name",
+				"type": "string"
+			  },
+			  {
+				"name": "version",
+				"type": "string"
+			  }
+			],
+			"UnnamedTuple__518674ab": [],
+			"pallet_cf_environment____submit_runtime_call____ChainflipExtrinsic__0dbf7cd2": [
+			  {
+				"name": "call",
+				"type": "state_chain_runtime____RuntimeCall__SolanaIngressEgress"
+			  },
+			  {
+				"name": "transaction_metadata",
+				"type": "pallet_cf_environment____submit_runtime_call____TransactionMetadata"
+			  }
+			],
+			"pallet_cf_environment____submit_runtime_call____TransactionMetadata": [
+			  {
+				"name": "nonce",
+				"type": "uint32"
+			  },
+			  {
+				"name": "expiry_block",
+				"type": "uint32"
+			  }
+			],
+			"pallet_cf_ingress_egress____pallet____Call__process_deposits__e922a3c2": [
+			  {
+				"name": "deposit_witnesses",
+				"type": "pallet_cf_ingress_egress____pallet____DepositWitnessSolana[]"
+			  },
+			  {
+				"name": "block_height",
+				"type": "uint64"
+			  }
+			],
+			"pallet_cf_ingress_egress____pallet____DepositWitnessSolana": [
+			  {
+				"name": "deposit_address",
+				"type": "sol_prim____address____Address"
+			  },
+			  {
+				"name": "asset",
+				"type": "string"
+			  },
+			  {
+				"name": "amount",
+				"type": "uint64"
+			  },
+			  {
+				"name": "deposit_details",
+				"type": "UnnamedTuple__518674ab"
+			  }
+			],
+			"sol_prim____address____Address": [
+			  {
+				"name": "bytes_0",
+				"type": "bytes"
+			  }
+			],
+			"state_chain_runtime____RuntimeCall__SolanaIngressEgress": [
+			  {
+				"name": "pallet_cf_ingress_egress____pallet____Call__process_deposits__e922a3c2_0",
+				"type": "pallet_cf_ingress_egress____pallet____Call__process_deposits__e922a3c2"
+			  }
+			]
+		  },
+		  "primaryType": "pallet_cf_environment____submit_runtime_call____ChainflipExtrinsic__0dbf7cd2",
+		  "message": {
+			"call": {
+			  "pallet_cf_ingress_egress____pallet____Call__process_deposits__e922a3c2_0": {
+				"block_height": 6,
+				"deposit_witnesses": [
+				  {
+					"amount": 5000,
+					"asset": "Sol",
+					"deposit_address": {
+					  "bytes_0": "0x0303030303030303030303030303030303030303030303030303030303030303"
+					},
+					"deposit_details": {}
+				  },
+				  {
+					"amount": 6000,
+					"asset": "SolUsdc",
+					"deposit_address": {
+					  "bytes_0": "0x0404040404040404040404040404040404040404040404040404040404040404"
+					},
+					"deposit_details": {}
+				  }
+				]
+			  }
+			},
+			"transaction_metadata": {
+			  "expiry_block": 1000,
+			  "nonce": 1
+			}
+		  }
+		});
+		let hash = keccak256(to_typed_data(json).encode_eip712().unwrap());
+		assert_eq!(
+			"73590dc7f1b2b0f97e55030f449d7cae3fb9276f1371982221f3b671d705b960",
 			hex::encode(&hash[..])
 		);
 	}
