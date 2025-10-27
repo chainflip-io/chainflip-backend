@@ -2877,11 +2877,11 @@ fn additional_action_correctly_prefund_and_create_account() {
 				}),
 			},
 			0,
-			DepositOrigin::DepositChannel { 
-				deposit_address: Default::default(), 
-				channel_id: 0, 
-				deposit_block_height: 0, 
-				broker_id: BROKER 
+			DepositOrigin::DepositChannel {
+				deposit_address: Default::default(),
+				channel_id: 0,
+				deposit_block_height: 0,
+				broker_id: BROKER,
 			},
 		)
 	};
