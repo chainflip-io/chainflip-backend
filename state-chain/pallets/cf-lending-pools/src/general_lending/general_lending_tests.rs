@@ -242,13 +242,15 @@ fn basic_general_lending() {
 
 	const ORIGINATION_FEE: AssetAmount = portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL);
 
-	let (origination_fee_network, originatin_fee_pool) = take_network_fee(ORIGINATION_FEE);
+	let (origination_fee_network, origination_fee_pool) = take_network_fee(ORIGINATION_FEE);
 
 	// Repaying a small portion to make sure we don't hit low LTV penalty:
 	const REPAYMENT_AMOUNT: AssetAmount = PRINCIPAL / 10;
 
-	let utilisation_1 =
-		Permill::from_rational(PRINCIPAL + ORIGINATION_FEE, INIT_POOL_AMOUNT + originatin_fee_pool);
+	let utilisation_1 = Permill::from_rational(
+		PRINCIPAL + ORIGINATION_FEE,
+		INIT_POOL_AMOUNT + origination_fee_pool,
+	);
 
 	let mut interest = Interest::new();
 
@@ -267,7 +269,7 @@ fn basic_general_lending() {
 
 	let utilisation_2 = Permill::from_rational(
 		total_owed_after_first_repayment,
-		INIT_POOL_AMOUNT + originatin_fee_pool + pool_interest_1,
+		INIT_POOL_AMOUNT + origination_fee_pool + pool_interest_1,
 	);
 
 	interest.accrue_interest(
@@ -337,7 +339,7 @@ fn basic_general_lending() {
 			assert_has_event::<Test>(RuntimeEvent::LendingPools(
 				Event::<Test>::OriginationFeeTaken {
 					loan_id: LOAN_ID,
-					pool_fee: originatin_fee_pool,
+					pool_fee: origination_fee_pool,
 					network_fee: origination_fee_network,
 					broker_fee: 0,
 				},
@@ -350,7 +352,7 @@ fn basic_general_lending() {
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
 					// The pool's value has increased by pool's origination fee
-					total_amount: INIT_POOL_AMOUNT + originatin_fee_pool,
+					total_amount: INIT_POOL_AMOUNT + origination_fee_pool,
 					// The available amount has been decreased not only by the loan's principal, but
 					// also by the network's origination fee (it will be by the borrower repaid at a
 					// later point)
@@ -400,7 +402,7 @@ fn basic_general_lending() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
-					total_amount: INIT_POOL_AMOUNT + originatin_fee_pool + pool_interest_1,
+					total_amount: INIT_POOL_AMOUNT + origination_fee_pool + pool_interest_1,
 					available_amount: INIT_POOL_AMOUNT -
 						PRINCIPAL - origination_fee_network -
 						network_interest_1,
@@ -438,7 +440,7 @@ fn basic_general_lending() {
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
-					total_amount: INIT_POOL_AMOUNT + originatin_fee_pool + pool_interest_1,
+					total_amount: INIT_POOL_AMOUNT + origination_fee_pool + pool_interest_1,
 					available_amount: INIT_POOL_AMOUNT - PRINCIPAL + REPAYMENT_AMOUNT -
 						origination_fee_network -
 						network_interest_1,
@@ -475,7 +477,7 @@ fn basic_general_lending() {
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
 					total_amount: INIT_POOL_AMOUNT +
-						originatin_fee_pool +
+						origination_fee_pool +
 						pool_interest_1 + pool_interest_2,
 					available_amount: INIT_POOL_AMOUNT - PRINCIPAL + REPAYMENT_AMOUNT -
 						origination_fee_network -
@@ -517,10 +519,10 @@ fn basic_general_lending() {
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
 					total_amount: INIT_POOL_AMOUNT +
-						originatin_fee_pool +
+						origination_fee_pool +
 						pool_interest_1 + pool_interest_2,
 					available_amount: INIT_POOL_AMOUNT +
-						originatin_fee_pool +
+						origination_fee_pool +
 						pool_interest_1 + pool_interest_2,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
 					owed_to_network: 0,
@@ -1098,11 +1100,12 @@ fn basic_liquidation() {
 
 	// How much of principal asset is bought during second liquidation:
 	const SWAPPED_PRINCIPAL_2: AssetAmount = (INIT_COLLATERAL - EXECUTED_COLLATERAL) / SWAP_RATE_2;
-	let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL_2;
-	let (liquidation_fee_network_2, liquidation_fee_pool_2) = take_network_fee(liquidation_fee_2);
 
 	// This much will be repaid via second liquidation (full principal after first repayment)
 	let repaid_amount_2 = PRINCIPAL + ORIGINATION_FEE - repaid_amount_1;
+
+	let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) * repaid_amount_2;
+	let (liquidation_fee_network_2, liquidation_fee_pool_2) = take_network_fee(liquidation_fee_2);
 
 	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
 	const LIQUIDATION_SWAP_2: SwapRequestId = SwapRequestId(1);
@@ -1417,7 +1420,9 @@ fn liquidation_fully_repays_loan_when_aborted() {
 			);
 		})
 		.then_execute_at_next_block(|_| {
-			let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * RECOVERED_LOAN_ASSET;
+			// Liquidation fee is computed on the total amount to repay:
+			let liquidation_fee =
+				CONFIG.liquidation_fee(LOAN_ASSET) * (PRINCIPAL + ORIGINATION_FEE);
 
 			// The loan has been repaid, the remaining collateral amount and the excess loan asset
 			// amount are credited to the collateral balance:
@@ -1657,12 +1662,12 @@ fn reconciling_interest_before_settling_loan() {
 			let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
 			assert_eq!(account.loans[&LOAN_ID].owed_principal, TOTAL_AMOUNT_OWED);
 
-			let (_, originatin_fee_pool) = take_network_fee(ORIGINATION_FEE);
+			let (_, origination_fee_pool) = take_network_fee(ORIGINATION_FEE);
 
 			let pool_interest_scaled = {
 				let utilisation = Permill::from_rational(
 					TOTAL_AMOUNT_OWED,
-					INIT_POOL_AMOUNT + originatin_fee_pool,
+					INIT_POOL_AMOUNT + origination_fee_pool,
 				);
 
 				let pool_interest_rate = CONFIG.derive_base_interest_rate_per_payment_interval(

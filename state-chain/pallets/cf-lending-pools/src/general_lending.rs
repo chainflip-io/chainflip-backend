@@ -359,7 +359,7 @@ impl<T: Config> LoanAccount<T> {
 				let low_ltv_penalty_amount = owed_principal * low_ltv_penalty_rate;
 				let pool_interest_amount = owed_principal * base_interest_rate;
 
-				// Record the accued interest amounts. We may or may not charge these immediately
+				// Record the accrued interest amounts. We may or may not charge these immediately
 				// depending on whether the amounts exceed some threshold.
 				loan.pending_interest.network.saturating_accrue(network_interest_amount);
 				loan.pending_interest.pool.saturating_accrue(pool_interest_amount);
@@ -640,8 +640,8 @@ impl<T: Config> GeneralLoan<T> {
 		);
 
 		let provided_amount_after_fees = if should_charge_liquidation_fee {
-			let liquidation_fee =
-				config.get_config_for_asset(self.asset).liquidation_fee * provided_amount;
+			let liquidation_fee = config.get_config_for_asset(self.asset).liquidation_fee *
+				core::cmp::min(provided_amount, self.owed_principal);
 
 			if liquidation_fee > 0 {
 				let liquidation_fee_network =
