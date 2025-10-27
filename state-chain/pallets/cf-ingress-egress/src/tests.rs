@@ -43,7 +43,7 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries,
 	Beneficiary, ChannelId, DcaParameters, ForeignChain, PrewitnessedDepositId, SwapRequestId,
-	MAX_AFFILIATES,
+	FLIPPERINOS_PER_FLIP, MAX_AFFILIATES,
 };
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -63,9 +63,9 @@ use cf_traits::{
 		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
-	AccountRoleRegistry, BalanceApi, DepositApi, EgressApi, EpochInfo,
-	FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, SafeMode, ScheduledEgressDetails,
-	SwapOutputAction, SwapRequestType,
+	AccountRoleRegistry, AdditionalDepositAction, BalanceApi, DepositApi, EgressApi, EpochInfo,
+	FetchesTransfersLimitProvider, FundAccount, FundingInfo, GetBlockHeight, SafeMode,
+	ScheduledEgressDetails, SwapOutputAction, SwapRequestType, INITIAL_FLIP_FUNDING,
 };
 use std::collections::{BTreeMap, HashSet};
 
@@ -2851,6 +2851,64 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 			amount: DEPOSIT_AMOUNT
 		})
 		.is_ok());
+	});
+}
+
+#[test]
+fn additional_action_correctly_prefund_and_create_account() {
+	const DEPOSIT_AMOUNT: AssetAmount = 1_000_000_000_000_000_000;
+	const LP_ACCOUNT: u64 = 0;
+
+	let full_witness = || {
+		EthereumIngressEgress::process_full_witness_deposit_inner(
+			None,
+			EthAsset::Eth,
+			DEPOSIT_AMOUNT,
+			Default::default(),
+			BoostStatus::NotBoosted,
+			0,
+			None,
+			ChannelAction::LiquidityProvision {
+				lp_account: LP_ACCOUNT,
+				refund_address: ForeignChainAddress::Eth(Default::default()),
+				additional_action: Some(AdditionalDepositAction::FundFlip {
+					flip_amount_to_credit: FLIPPERINOS_PER_FLIP * 10,
+					role_to_register: Some(AccountRole::LiquidityProvider),
+				}),
+			},
+			0,
+			DepositOrigin::DepositChannel { 
+				deposit_address: Default::default(), 
+				channel_id: 0, 
+				deposit_block_height: 0, 
+				broker_id: BROKER 
+			},
+		)
+	};
+
+	new_test_ext().execute_with(|| {
+		assert_eq!(MockFundingInfo::<Test>::get_bond(LP_ACCOUNT), 0);
+		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::is_unregistered(
+			&LP_ACCOUNT
+		));
+		assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, Asset::Eth), 0);
+
+		assert!(full_witness().is_ok());
+
+		let credited_balance = MockBalance::get_balance(&LP_ACCOUNT, Asset::Eth);
+		let swapped_amount = DEPOSIT_AMOUNT.saturating_sub(credited_balance);
+
+		let funding_swap = MockSwapRequestHandler::<Test>::get_swap_requests()
+			.get(&SwapRequestId(0))
+			.unwrap()
+			.clone();
+
+		assert_eq!(funding_swap.input_amount, swapped_amount);
+		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(
+			&LP_ACCOUNT,
+			AccountRole::LiquidityProvider
+		));
+		assert_eq!(MockFundingInfo::<Test>::get_bond(LP_ACCOUNT), INITIAL_FLIP_FUNDING);
 	});
 }
 

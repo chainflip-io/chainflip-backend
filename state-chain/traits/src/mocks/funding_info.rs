@@ -123,11 +123,32 @@ impl<T: Chainflip> FundAccount for MockFundingInfo<T> {
 	type AccountId = u64;
 	type Amount = u128;
 
+	#[cfg(feature = "runtime-benchmarks")]
+	fn get_bond(account_id: Self::AccountId) -> Self::Amount {
+		<Self as MockPalletStorage>::get_value(BONDS)
+			.and_then(|balances: BTreeMap<Self::AccountId, Self::Amount>| {
+				balances.get(&account_id).cloned()
+			})
+			.unwrap_or_default()
+	}
+
 	fn fund_account(
-		_account_id: Self::AccountId,
+		account_id: Self::AccountId,
 		_funder: Option<cf_chains::eth::Address>,
-		_amount: Self::Amount,
+		amount: Self::Amount,
 		_source: FundingSource,
 	) {
+		<Self as MockPalletStorage>::mutate_value(
+			BONDS,
+			|storage: &mut Option<BTreeMap<Self::AccountId, Self::Amount>>| {
+				if let Some(bonds) = storage.as_mut() {
+					bonds.entry(account_id).or_default().saturating_accrue(amount);
+				} else {
+					let _ = storage.insert(BTreeMap::from_iter([(account_id, amount)]));
+				}
+				Ok::<_, Never>(())
+			},
+		)
+		.unwrap();
 	}
 }
