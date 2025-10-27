@@ -977,6 +977,16 @@ fn swap_collected_network_fees() {
 				])
 			);
 
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LendingNetworkFeeSwapInitiated {
+					swap_request_id: SwapRequestId(0)
+				}),
+				RuntimeEvent::LendingPools(Event::<Test>::LendingNetworkFeeSwapInitiated {
+					swap_request_id: SwapRequestId(1)
+				})
+			);
+
 			assert_eq!(
 				PendingNetworkFees::<Test>::iter().collect::<BTreeMap<_, _>>(),
 				BTreeMap::from([(ASSET_1, 0), (ASSET_2, 0)])
@@ -1871,6 +1881,165 @@ fn updating_primary_collateral_asset() {
 			},
 		));
 	});
+}
+
+#[test]
+fn network_fees_under_full_utilisation() {
+	// Here we test we correctly record how much is owed to the network
+	// so that if utilisation is 100% and it is not possible for the
+	// network to take earnings from the pool, we can still collect
+	// the full owed amount when some pool funds become available.
+
+	// The loan will request all available funds
+	const PRINCIPAL: AssetAmount = INIT_POOL_AMOUNT;
+	const INIT_COLLATERAL: AssetAmount = (4 * PRINCIPAL / 3) * SWAP_RATE; // 75% LTV
+
+	// Additional funds that will be added to the pool later:
+	const EXTRA_POOL_AMOUNT: AssetAmount = INIT_POOL_AMOUNT / 2;
+
+	const ORIGINATION_FEE: AssetAmount = portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL);
+
+	let (origination_fee_network, origination_fee_pool) = take_network_fee(ORIGINATION_FEE);
+
+	let mut interest = Interest::new();
+
+	let utilisation_1 = Permill::from_rational(
+		PRINCIPAL + ORIGINATION_FEE,
+		INIT_POOL_AMOUNT + origination_fee_pool,
+	);
+
+	// Confirming that utilisation is 100% (in fact it is technically slightly higher due network
+	// fee depth, but it will be clamped at 100%):
+	assert_eq!(utilisation_1, Permill::from_percent(100));
+
+	// First interest payment:
+	interest.accrue_interest(
+		PRINCIPAL + ORIGINATION_FEE,
+		utilisation_1,
+		CONFIG.interest_payment_interval_blocks,
+	);
+
+	let (pool_interest_1, network_interest_1) = interest.collect();
+
+	let utilisation_2 = Permill::from_rational(
+		PRINCIPAL + ORIGINATION_FEE + pool_interest_1 + network_interest_1,
+		INIT_POOL_AMOUNT + EXTRA_POOL_AMOUNT + origination_fee_pool + pool_interest_1,
+	);
+
+	// Second interest payment:
+	interest.accrue_interest(
+		PRINCIPAL + ORIGINATION_FEE + pool_interest_1 + network_interest_1,
+		utilisation_2,
+		CONFIG.interest_payment_interval_blocks,
+	);
+
+	let (pool_interest_2, network_interest_2) = interest.collect();
+
+	new_test_ext()
+		.with_funded_pool(INIT_POOL_AMOUNT)
+		.execute_with(|| {
+			// Set a low collection threshold so we can more easily check the collected amount
+			assert_ok!(Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::root(),
+				bounded_vec![PalletConfigUpdate::SetInterestCollectionThresholdUsd(1)],
+			));
+
+			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+
+			assert_eq!(
+				LendingPools::new_loan(
+					BORROWER,
+					LOAN_ASSET,
+					PRINCIPAL,
+					Some(COLLATERAL_ASSET),
+					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
+				),
+				Ok(LOAN_ID)
+			);
+
+			assert_eq!(
+				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
+				LendingPool {
+					total_amount: INIT_POOL_AMOUNT + origination_fee_pool,
+					available_amount: 0,
+					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
+					owed_to_network: origination_fee_network,
+				}
+			);
+		})
+		.then_process_blocks_until_block(
+			INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
+		)
+		.then_execute_with(|_| {
+			assert_eq!(
+				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
+				LendingPool {
+					total_amount: INIT_POOL_AMOUNT + origination_fee_pool + pool_interest_1,
+					available_amount: 0,
+					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
+					owed_to_network: origination_fee_network + network_interest_1,
+				}
+			);
+
+			// LP Adds additional funds, they will (partially) be used to repay the network
+			// upon next interest collection
+			MockBalance::credit_account(&LENDER, LOAN_ASSET, EXTRA_POOL_AMOUNT);
+			assert_ok!(LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				EXTRA_POOL_AMOUNT
+			));
+
+			assert_eq!(
+				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
+				LendingPool {
+					total_amount: INIT_POOL_AMOUNT +
+						EXTRA_POOL_AMOUNT + origination_fee_pool +
+						pool_interest_1,
+					available_amount: EXTRA_POOL_AMOUNT,
+					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
+					owed_to_network: origination_fee_network + network_interest_1,
+				}
+			);
+
+			// Note that we expose `network_interest_1` in the event despite it not techincally
+			// accessible to the network yet
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
+				loan_id: LOAN_ID,
+				pool_interest: pool_interest_1,
+				network_interest: network_interest_1,
+				broker_interest: 0,
+				low_ltv_penalty: 0,
+			}));
+		})
+		.then_process_blocks_until_block(
+			INIT_BLOCK + 2 * CONFIG.interest_payment_interval_blocks as u64,
+		)
+		.then_execute_with(|_| {
+			// Expecting the second interest charge + fees payed to the network to be repaid in
+			// full.
+			assert_eq!(
+				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
+				LendingPool {
+					total_amount: INIT_POOL_AMOUNT +
+						EXTRA_POOL_AMOUNT + origination_fee_pool +
+						pool_interest_1 + pool_interest_2,
+					available_amount: EXTRA_POOL_AMOUNT -
+						origination_fee_network -
+						network_interest_1 - network_interest_2,
+					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
+					owed_to_network: 0,
+				}
+			);
+
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
+				loan_id: LOAN_ID,
+				pool_interest: pool_interest_2,
+				network_interest: network_interest_2,
+				broker_interest: 0,
+				low_ltv_penalty: 0,
+			}));
+		});
 }
 
 mod safe_mode {

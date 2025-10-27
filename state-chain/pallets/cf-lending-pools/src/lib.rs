@@ -436,10 +436,6 @@ pub mod pallet {
 			/// Indicates whether the loan was settled as a result of liquidation.
 			via_liquidation: bool,
 		},
-		LendingPoolFeeSwapInitiated {
-			asset: Asset,
-			swap_request_id: SwapRequestId,
-		},
 		LendingNetworkFeeSwapInitiated {
 			swap_request_id: SwapRequestId,
 		},
