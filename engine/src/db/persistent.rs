@@ -233,7 +233,8 @@ fn migrate_db_to_version(
 		match existing_hash {
 			Some(existing_hash) =>
 				if existing_hash != provided_genesis_hash {
-					bail!("Genesis hash mismatch. Have you changed Chainflip network?",)
+					tracing::warn!("Genesis hash mismatch. Have {existing_hash}, new {provided_genesis_hash}. Continuing anyways and writing new hash to database.");
+					db.put_genesis_hash(provided_genesis_hash)?
 				},
 			None => db.put_genesis_hash(provided_genesis_hash)?,
 		}
