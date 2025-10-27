@@ -385,13 +385,10 @@ fn extract_primitive_types(v: Composite<()>) -> Result<Value, &'static str> {
 
 fn concatenate_name_segments(segments: Vec<&'static str>) -> Result<String, &'static str> {
 	if segments.is_empty() {
-		return Err("Type doesn't have a name")
+		Err("Type doesn't have a name")
+	} else {
+		Ok(segments.join("____"))
 	}
-	let mut out = segments[0].to_string();
-	for segment in &segments[1..] {
-		out = out + "____" + segment;
-	}
-	Ok(out)
 }
 
 #[derive(TypeInfo, Clone, Encode)]
