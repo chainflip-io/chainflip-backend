@@ -307,6 +307,13 @@ pub fn new_full<
 			},
 		};
 
+		if broker_key_pair.is_some() {
+			log::info!("🗝️ Broker key found in the keystore, enabling Broker-related RPCs");
+		}
+		if lp_key_pair.is_some() {
+			log::info!("🗝️ Lp key found in the keystore, enabling LP-related RPCs");
+		}
+
 		Box::new(move |deny_unsafe, subscription_executor| {
 			let build = || {
 				let mut module = RpcModule::new(());
