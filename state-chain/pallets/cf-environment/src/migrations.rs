@@ -17,6 +17,7 @@
 use crate::{Config, Pallet};
 #[cfg(feature = "try-runtime")]
 use crate::{CurrentReleaseVersion, Get};
+use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::{migrations::VersionedMigration, traits::OnRuntimeUpgrade};
 #[cfg(feature = "try-runtime")]
 use frame_support::{pallet_prelude::DispatchError, sp_runtime};
@@ -59,6 +60,7 @@ pub type PalletMigration<T> = (
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
+	PlaceholderMigration<20, Pallet<T>>,
 );
 
 #[cfg(test)]
