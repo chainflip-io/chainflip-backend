@@ -406,9 +406,9 @@ async function testSpecialLpDeposit(logger: Logger) {
 
 export async function testSignedRuntimeCall(testContext: TestContext) {
   await Promise.all([
-    // testEvmEip712(testContext.logger.child({ tag: `EvmSignedCall` })),
-    // testSvmDomain(testContext.logger.child({ tag: `SvmDomain` })),
-    // testEvmPersonalSign(testContext.logger.child({ tag: `EvmPersonalSign` })),
+    testEvmEip712(testContext.logger.child({ tag: `EvmSignedCall` })),
+    testSvmDomain(testContext.logger.child({ tag: `SvmDomain` })),
+    testEvmPersonalSign(testContext.logger.child({ tag: `EvmPersonalSign` })),
     testSpecialLpDeposit(testContext.logger.child({ tag: `SpecialLpDeposit` })),
   ]);
 }

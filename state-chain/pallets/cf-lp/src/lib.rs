@@ -151,6 +151,8 @@ pub mod pallet {
 		InvalidUserSignatureData,
 		/// The provided Transaction Metadata is invalid
 		InvalidTransactionMetadata,
+		// Failed to encode data
+		CannotEncodeData,
 	}
 
 	#[pallet::event]
@@ -478,17 +480,16 @@ pub mod pallet {
 				}
 				.into();
 
-			ensure!(
-				is_valid_signature(
-					runtime_call,
-					&T::ChainflipNetwork::chainflip_network(),
-					&transaction_metadata,
-					&signature_data,
-					runtime_version.spec_version,
-				)
-				.is_ok(),
-				Error::<T>::InvalidUserSignatureData
-			);
+			match is_valid_signature(
+				runtime_call,
+				&T::ChainflipNetwork::chainflip_network(),
+				&transaction_metadata,
+				&signature_data,
+				runtime_version.spec_version,
+			) {
+				Ok(is_valid) => ensure!(is_valid, Error::<T>::InvalidUserSignatureData),
+				Err(_) => return Err(Error::<T>::CannotEncodeData.into()),
+			}
 
 			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
 				T::DepositHandler::request_liquidity_deposit_address(
