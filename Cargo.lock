@@ -3619,7 +3619,6 @@ dependencies = [
 name = "ethereum-eip712"
 version = "0.1.0"
 dependencies = [
- "bytes",
  "const-hex",
  "ethabi",
  "parity-scale-codec",

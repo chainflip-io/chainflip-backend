@@ -6,34 +6,22 @@ edition = "2021"
 [lints]
 workspace = true
 
-[dependencies.bytes]
-version = "1.4"
-features = ["serde"]
-default-features = false
-
-[dependencies.tiny-keccak]
-version = "2.0.2"
-features = ["keccak"]
-default-features = false
-
-[dependencies.hex]
-version = "1.6"
-features = ["hex", "alloc"]
-package = "const-hex"
-default-features = false
-
-[dependencies.unicode-xid]
-version = "0.2"
-features = ["no_std"]
-
 [dependencies]
-scale-info = { workspace = true, features = ["derive"] }
-serde = { workspace = true, features = ["derive", "alloc"] }
-sp-std = { workspace = true }
-ethabi = { workspace = true }
-serde_json = { workspace = true, features = ["alloc"] }
-scale-value = { workspace = true }
 codec = { workspace = true, features = ["derive"] }
+ethabi = { workspace = true }
+hex = { package = "const-hex", version = "1.6", features = [
+    "hex",
+    "alloc",
+], default-features = false }
+scale-info = { workspace = true, features = ["derive"] }
+scale-value = { workspace = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
+serde_json = { workspace = true, features = ["alloc"] }
+sp-std = { workspace = true }
+tiny-keccak = { version = "2.0.2", features = [
+    "keccak",
+], default-features = false }
+unicode-xid = { version = "0.2", features = ["no_std"] }
 
 [dev-dependencies]
 cf-utilities = { workspace = true, default-features = true, features = [
@@ -43,10 +31,10 @@ cf-utilities = { workspace = true, default-features = true, features = [
 [features]
 default = ["std"]
 std = [
-    "scale-info/std",
-    "sp-std/std",
-    "bytes/std",
-    "hex/std",
+    "codec/std",
     "ethabi/std",
+    "hex/std",
+    "scale-info/std",
     "serde_json/std",
+    "sp-std/std",
 ]
