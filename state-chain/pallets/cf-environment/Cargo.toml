@@ -42,9 +42,6 @@ sp-core = { workspace = true, default-features = true }
 sp-io = { workspace = true, default-features = true }
 cf-test-utilities = { workspace = true, default-features = true }
 cf-traits = { workspace = true, features = ["mocks"] }
-state-chain-runtime = { workspace = true, default-features = true }
-pallet-cf-ingress-egress = { workspace = true, default-features = true }
-
 
 [features]
 default = ["std"]

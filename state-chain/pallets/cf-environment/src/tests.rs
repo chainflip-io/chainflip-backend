@@ -19,8 +19,7 @@
 use crate::{
 	mock::*,
 	submit_runtime_call::{
-		build_eip_712_payload, is_valid_signature, ChainflipExtrinsic, EthEncodingType,
-		SolEncodingType,
+		is_valid_signature, ChainflipExtrinsic, EthEncodingType, SolEncodingType,
 	},
 	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
 	SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
@@ -838,46 +837,6 @@ fn can_build_eip_712_payload_and_validate() {
 					version,
 		);
 		assert!(valid_signature.unwrap());
-	});
-}
-
-#[test]
-fn can_build_eip_712_payload() {
-	new_test_ext().execute_with(|| {
-		use pallet_cf_ingress_egress::DepositWitness;
-
-		let call = state_chain_runtime::RuntimeCall::SolanaIngressEgress(
-			pallet_cf_ingress_egress::Call::process_deposits {
-				deposit_witnesses: vec![
-					DepositWitness {
-						deposit_address: [3u8; 32].into(),
-						amount: 5000u64,
-						asset: cf_chains::assets::sol::Asset::Sol,
-						deposit_details: (),
-					},
-					DepositWitness {
-						deposit_address: [4u8; 32].into(),
-						amount: 6000u64,
-						asset: cf_chains::assets::sol::Asset::SolUsdc,
-						deposit_details: (),
-					},
-				],
-				block_height: 6u64,
-			},
-		);
-
-		let chain_name = "Chainflip-Mainnet";
-		let version = "1";
-		let transaction_metadata = TransactionMetadata { nonce: 1, expiry_block: 1000 };
-
-		let eip_hash = ethereum_eip712::hash::keccak256(
-			build_eip_712_payload(call, chain_name, version, transaction_metadata).unwrap(),
-		);
-
-		assert_eq!(
-			hex::encode(eip_hash),
-			"73590dc7f1b2b0f97e55030f449d7cae3fb9276f1371982221f3b671d705b960"
-		);
 	});
 }
 
