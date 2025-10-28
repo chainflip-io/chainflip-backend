@@ -814,8 +814,8 @@ fn can_non_native_signed_call() {
 }
 // Our encoding type encodes the path, encoding `*_mock_*` into the type names for these unit tests.
 // That is not the same for the bouncer. Therefore to generate this test vector, we must manually
-// create the EIP-712 payload in this test and and sign it externally. Then paste the signature here.
-// this can be removed once the testing is expanded.
+// create the EIP-712 payload in this test and and sign it externally. Then paste the signature
+// here. this can be removed once the testing is expanded.
 #[test]
 fn can_build_eip_712_payload_and_validate() {
 	new_test_ext().execute_with(|| {
