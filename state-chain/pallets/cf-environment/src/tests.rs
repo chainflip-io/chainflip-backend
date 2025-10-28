@@ -812,6 +812,10 @@ fn can_non_native_signed_call() {
 		);
 	});
 }
+// Our encoding type encodes the path, encoding `*_mock_*` into the type names for these unit tests.
+// That is not the same for the bouncer. Therefore to generate this test vector, we must manually
+// create the EIP-712 payload in this test and and sign it externally. Then paste the signature here.
+// this can be removed once the testing is expanded.
 #[test]
 fn can_build_eip_712_payload_and_validate() {
 	new_test_ext().execute_with(|| {
@@ -819,12 +823,12 @@ fn can_build_eip_712_payload_and_validate() {
 		let runtime_call: <Test as crate::Config>::RuntimeCall = system_call.clone().into();
 
 		let version = 20000;
-		let transaction_metadata = TransactionMetadata { nonce: 5, expiry_block: 130 };
+		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 61 };
 
-		let signer: EvmAddress = EvmAddress::from_str("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
+		let signer: EvmAddress = EvmAddress::from_str("0x274fA0a0A529AACa83Aa0084cb6DC4AC54EC4fEA").unwrap();
 		let signature_data: SignatureData = SignatureData::Ethereum {
             signature: hex_literal::hex!(
-                "5af160dc4d05b401f2f1a004c6a51dace43d23f2d2e564fa76acfbbfd9be1fd5038f4c2d217fd6669973cfe8d3527e477579859282d45f86ca968f9fc29aa8db1b"
+                "9db5c4c49903e1c3da9cfb4dc366fdb0a17b3843129c89b2e2bb311bbd3566400bd5f5ee1f4bf265f3c2d313f6fced6e33a74fe927d9f91ab9190dd86735b89a1b"
             ).into(),
             signer,
             sig_type: EthEncodingType::Eip712,
