@@ -18,9 +18,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{address::AddressConverter, AccountOrAddress, AnyChain, ForeignChainAddress};
-use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BasisPoints, ChainflipNetwork, DcaParameters, ForeignChain,
-};
+use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, DcaParameters, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdditionalDepositAction, BalanceApi,
 	BoostBalancesApi, Chainflip, ChainflipNetworkInfo, DepositApi, EgressApi, LpRegistration,
@@ -483,12 +481,13 @@ pub mod pallet {
 			ensure!(
 				is_valid_signature(
 					runtime_call,
-					&ChainflipNetwork::Development,
+					&T::ChainflipNetwork::chainflip_network(),
 					&transaction_metadata,
 					&signature_data,
 					runtime_version.spec_version,
-				),
-				DispatchError::from(Error::<T>::InvalidUserSignatureData)
+				)
+				.is_ok(),
+				Error::<T>::InvalidUserSignatureData
 			);
 
 			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =

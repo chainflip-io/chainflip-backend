@@ -229,7 +229,7 @@ pub fn build_domain_data(
 /// Validates the signature, given some call and metadata.
 ///
 /// This call should be kept idempotent: it should not access storage.
-pub(crate) fn is_valid_signature(
+pub fn is_valid_signature(
 	call: impl Encode + TypeInfo + 'static,
 	chainflip_network: &ChainflipNetwork,
 	transaction_metadata: &TransactionMetadata,

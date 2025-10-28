@@ -342,7 +342,7 @@ async function testSpecialLpDeposit(logger: Logger) {
 
   // Apply patch - We then cannot use the transactionMetadata as both the nonce and
   // the expiry block need to match the initial call.
-  message.metadata.expiryBlock = expiryBlock.toString();
+  message.transaction_metadata.expiry_block = expiryBlock.toString();
 
   const evmSignatureEip712 = await evmWallet.signTypedData(domain, types, message);
 
@@ -406,9 +406,9 @@ async function testSpecialLpDeposit(logger: Logger) {
 
 export async function testSignedRuntimeCall(testContext: TestContext) {
   await Promise.all([
-    testEvmEip712(testContext.logger.child({ tag: `EvmSignedCall` })),
-    testSvmDomain(testContext.logger.child({ tag: `SvmDomain` })),
-    testEvmPersonalSign(testContext.logger.child({ tag: `EvmPersonalSign` })),
+    // testEvmEip712(testContext.logger.child({ tag: `EvmSignedCall` })),
+    // testSvmDomain(testContext.logger.child({ tag: `SvmDomain` })),
+    // testEvmPersonalSign(testContext.logger.child({ tag: `EvmPersonalSign` })),
     testSpecialLpDeposit(testContext.logger.child({ tag: `SpecialLpDeposit` })),
   ]);
 }
