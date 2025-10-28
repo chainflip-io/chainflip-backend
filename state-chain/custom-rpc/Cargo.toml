@@ -19,7 +19,7 @@ futures = { workspace = true }
 jsonrpsee = { workspace = true, features = ["full"] }
 hex = { workspace = true, default-features = true }
 serde = { workspace = true, default-features = true, features = ["derive"] }
-serde_json = { workspace = true }
+serde_json = { workspace = true, default-features = true }
 thiserror = { workspace = true }
 log = { workspace = true }
 
@@ -39,6 +39,7 @@ pallet-cf-environment = { workspace = true, default-features = true }
 pallet-cf-lending-pools = { workspace = true, default-features = true }
 pallet-cf-validator = { workspace = true, default-features = true }
 pallet-cf-elections = { workspace = true, default-features = true }
+ethereum-eip712 = { workspace = true }
 
 sp-api = { workspace = true, default-features = true }
 sp-core = { workspace = true, default-features = true }
@@ -51,6 +52,7 @@ sc-client-api = { workspace = true, default-features = true }
 frame-system = { workspace = true, default-features = true }
 frame-support = { workspace = true, default-features = true }
 lru = { workspace = true, default-features = true }
+scale-value = { workspace = true }
 
 cf-rpc-apis = { workspace = true }
 cf-node-client = { workspace = true }
@@ -65,5 +67,5 @@ substrate-frame-rpc-system = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["json"] }
-serde_json = { workspace = true }
+serde_json = { workspace = true, default-features = true }
 pallet-cf-trading-strategy = { workspace = true, default-features = true }

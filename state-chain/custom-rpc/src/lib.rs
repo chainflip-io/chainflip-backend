@@ -2615,7 +2615,7 @@ where
 							let typed_data: eip_712_types::TypedData =
 								eip_712_types::build_eip712_typed_data(
 									&chainflip_network,
-									call_bytes,
+									runtime_call,
 									&transaction_metadata,
 									spec_version,
 								)

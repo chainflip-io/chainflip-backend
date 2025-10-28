@@ -21,7 +21,7 @@ serde = { workspace = true, default-features = true, features = [
 	"rc",
 ] }
 tokio = { workspace = true, features = ["full"] }
-serde_json = { workspace = true }
+serde_json = { workspace = true, default-features = true }
 
 # Local Deps
 chainflip-engine = { workspace = true }
