@@ -178,7 +178,7 @@ impl<T: Config> LoanAccount<T> {
 				},
 			LiquidationStatus::Liquidating { liquidation_swaps, is_hard } if *is_hard => {
 				if ltv < config.ltv_thresholds.soft_liquidation_abort {
-					// Transition from hard liquidation to active:
+					// Transition from hard liquidation to "no liquidation":
 					let swaps = core::mem::take(liquidation_swaps);
 					self.abort_liquidation_swaps(&swaps);
 					self.liquidation_status = LiquidationStatus::NoLiquidation;
@@ -200,7 +200,7 @@ impl<T: Config> LoanAccount<T> {
 						self.init_liquidation_swaps(borrower_id, collateral, true);
 					}
 				} else if ltv < config.ltv_thresholds.soft_liquidation_abort {
-					// Transition from soft liquidation to active:
+					// Transition from soft liquidation to "no liquidation":
 					let swaps = core::mem::take(liquidation_swaps);
 					self.abort_liquidation_swaps(&swaps);
 					self.liquidation_status = LiquidationStatus::NoLiquidation;
@@ -630,6 +630,12 @@ impl<T: Config> GeneralLoan<T> {
 		provided_amount: AssetAmount,
 		should_charge_liquidation_fee: bool,
 	) -> LoanRepaymentOutcome {
+		if provided_amount == 0 {
+			// The name is slightly misleading, but the main point is that
+			// we don't have any excess amount left (since 0 is provided).
+			return LoanRepaymentOutcome::PartiallyRepaid;
+		}
+
 		let config = LendingConfig::<T>::get();
 
 		// Collect any pending interest before any repayment. Note that in the unlikely scenario
@@ -863,6 +869,7 @@ fn try_sweep<T: Config>(account_id: &T::AccountId) {
 }
 
 /// Collateral amount linked to a specific loan
+#[derive(Debug)]
 struct AssetCollateralForLoan {
 	loan_id: LoanId,
 	loan_asset: Asset,
@@ -1062,7 +1069,9 @@ impl<T: Config> LendingApi for Pallet<T> {
 			{
 				loan_account.settle_loan(loan_id, false /* not via liquidation */);
 
-				T::Balance::credit_account(borrower_id, loan_asset, excess_amount);
+				if excess_amount > 0 {
+					T::Balance::credit_account(borrower_id, loan_asset, excess_amount);
+				}
 			} else {
 				ensure!(
 					usd_value_of::<T>(loan.asset, loan.owed_principal)? >=
