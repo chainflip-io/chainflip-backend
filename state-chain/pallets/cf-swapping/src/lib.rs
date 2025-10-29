@@ -2119,6 +2119,7 @@ pub mod pallet {
 
 						dca_state.record_chunk_completion(swap.swap_id(), output_amount);
 
+						// This may or may not be the last chunk (some may already be scheduled)
 						if dca_state.scheduled_chunks.is_empty() {
 							match output_action {
 								SwapOutputAction::Egress {
@@ -2804,7 +2805,7 @@ pub mod pallet {
 			let swap_progress = Self::inspect_swap_request(swap_request_id)?;
 
 			// Cancel any scheduled swaps:
-			let swap_request = SwapRequests::<T>::get(swap_request_id)?;
+			let swap_request = SwapRequests::<T>::take(swap_request_id)?;
 
 			if let SwapRequestState::UserSwap { dca_state, .. } = swap_request.state {
 				for swap_id in dca_state.scheduled_chunks {
@@ -2812,7 +2813,7 @@ pub mod pallet {
 				}
 			}
 
-			SwapRequests::<T>::remove(swap_request_id);
+			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
 
 			Some(swap_progress)
 		}

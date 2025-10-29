@@ -2288,6 +2288,13 @@ mod lending_liquidation_swaps {
 					})
 				);
 
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+						swap_request_id: SWAP_REQUEST_ID,
+					}),
+				);
+
 				assert!(SwapRequests::<Test>::get(SWAP_REQUEST_ID).is_none());
 				assert!(ScheduledSwaps::<Test>::get().is_empty());
 			});

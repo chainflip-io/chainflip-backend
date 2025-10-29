@@ -24,6 +24,7 @@ hex-literal = { workspace = true }
 log = { workspace = true }
 cf-runtime-utilities = { workspace = true }
 cf-utilities = { workspace = true }
+ethereum-eip712 = { workspace = true }
 
 # Parity deps
 codec = { workspace = true, features = ["derive"] }

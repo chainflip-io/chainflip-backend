@@ -86,7 +86,7 @@ sha2-const = { workspace = true }
 
 [dev-dependencies]
 cf-test-utilities = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, default-features = true }
 rand = { workspace = true, features = ["std"] }
 ed25519-dalek = { workspace = true, features = ["rand_core"] }
 

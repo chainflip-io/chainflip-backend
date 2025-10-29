@@ -42,7 +42,7 @@ sp-core = { workspace = true }
 cf-primitives = { workspace = true }
 
 [dev-dependencies]
-serde_json = { workspace = true }
+serde_json = { workspace = true, default-features = true }
 ed25519-dalek = { workspace = true, features = ["rand_core"] }
 heck = { workspace = true }
 

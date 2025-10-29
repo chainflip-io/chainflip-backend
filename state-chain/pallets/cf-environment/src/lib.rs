@@ -21,8 +21,8 @@
 
 use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
 pub use crate::submit_runtime_call::{
-	build_domain_data, BatchedCalls, EthEncodingType, Message, SolEncodingType,
-	TransactionMetadata, DOMAIN_OFFCHAIN_PREFIX, MAX_BATCHED_CALLS,
+	build_domain_data, BatchedCalls, EthEncodingType, SolEncodingType, TransactionMetadata,
+	DOMAIN_OFFCHAIN_PREFIX, MAX_BATCHED_CALLS,
 };
 use cf_chains::{
 	btc::{
@@ -60,7 +60,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::{vec, vec::Vec};
+use sp_std::{boxed::Box, vec, vec::Vec};
 
 mod benchmarking;
 mod mock;
@@ -97,7 +97,7 @@ pub enum SafeModeUpdate<T: Config> {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::submit_runtime_call::{is_valid_signature, validate_metadata};
+	use crate::submit_runtime_call::{is_valid_signature, validate_metadata, ChainflipExtrinsic};
 
 	use super::*;
 	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum};
@@ -650,13 +650,13 @@ pub mod pallet {
 		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(10)]
 		#[pallet::weight({
-			let di = message.call.get_dispatch_info();
+			let di = chainflip_extrinsic.call.get_dispatch_info();
 			let dispatch_weight = di.weight.saturating_add(T::WeightInfo::non_native_signed_call());
 			(dispatch_weight, di.class)
 		})]
 		pub fn non_native_signed_call(
 			origin: OriginFor<T>,
-			message: Message<<T as Config>::RuntimeCall>,
+			chainflip_extrinsic: ChainflipExtrinsic<Box<<T as Config>::RuntimeCall>>,
 			signature_data: SignatureData,
 		) -> DispatchResultWithPostInfo {
 			// unsigned extrinsic - validation happens in ValidateUnsigned
@@ -665,7 +665,9 @@ pub mod pallet {
 			let signer_account: T::AccountId =
 				signature_data.signer_account().map_err(|_| Error::<T>::FailedToDecodeSigner)?;
 
-			let _ = message.call.dispatch_bypass_filter(OriginTrait::signed(signer_account))?;
+			let _ = chainflip_extrinsic
+				.call
+				.dispatch_bypass_filter(OriginTrait::signed(signer_account))?;
 
 			Self::deposit_event(Event::<T>::NonNativeSignedCall);
 			Ok(().into())
@@ -696,27 +698,27 @@ pub mod pallet {
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::non_native_signed_call {
-				message: Message { call: inner_call, metadata },
+				chainflip_extrinsic: ChainflipExtrinsic { call: inner_call, transaction_metadata },
 				signature_data,
 			} = call
 			{
 				let Ok(signer_account) = signature_data.signer_account() else {
 					return Err(InvalidTransaction::BadSigner.into());
 				};
-				let valid_tx = validate_metadata::<T>(metadata, &signer_account)?;
+				let valid_tx = validate_metadata::<T>(transaction_metadata, &signer_account)?;
 
 				let runtime_version = <T as frame_system::Config>::Version::get();
 
-				ensure!(
-					is_valid_signature(
-						inner_call,
-						&ChainflipNetworkName::<T>::get(),
-						metadata,
-						signature_data,
-						runtime_version.spec_version,
-					),
-					InvalidTransaction::BadProof
-				);
+				match is_valid_signature(
+					(*inner_call).clone(),
+					&ChainflipNetworkName::<T>::get(),
+					transaction_metadata,
+					signature_data,
+					runtime_version.spec_version,
+				) {
+					Ok(is_valid) => ensure!(is_valid, InvalidTransaction::BadProof),
+					Err(_) => return Err(InvalidTransaction::Custom(0).into()),
+				}
 				Ok(valid_tx)
 			} else {
 				Err(InvalidTransaction::Call.into())
@@ -725,7 +727,7 @@ pub mod pallet {
 
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 			if let Call::non_native_signed_call {
-				message: Message { metadata, .. },
+				chainflip_extrinsic: ChainflipExtrinsic { transaction_metadata, .. },
 				signature_data,
 				..
 			} = call
@@ -735,7 +737,7 @@ pub mod pallet {
 				};
 
 				// Signature validity already checked in `validate_unsigned`
-				let _ = validate_metadata::<T>(metadata, &signer_account)?;
+				let _ = validate_metadata::<T>(transaction_metadata, &signer_account)?;
 				frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
 				Ok(())
 			} else {
