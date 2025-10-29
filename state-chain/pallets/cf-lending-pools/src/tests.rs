@@ -17,6 +17,7 @@
 use super::*;
 
 use crate::mocks::*;
+use boost::BoostPoolId;
 use cf_test_utilities::{assert_event_sequence, assert_events_eq};
 use cf_traits::{SafeMode, SetSafeMode};
 use frame_support::{
@@ -841,6 +842,8 @@ fn boost_account_balance() {
 
 #[test]
 fn boost_pool_details() {
+	use crate::boost::{BoostPoolDetails, OwedAmount};
+
 	new_test_ext().execute_with(|| {
 		setup();
 		const ETH_AMOUNT_1: AssetAmount = 50_000;
