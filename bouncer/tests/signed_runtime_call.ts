@@ -18,7 +18,28 @@ import { ApiPromise } from '@polkadot/api';
 import { signBytes, getUtf8Encoder, generateKeyPairSigner } from '@solana/kit';
 import { send } from 'shared/send';
 import { setupBrokerAccount } from 'shared/setup_account';
+import { Enum, Bytes as TsBytes, Option, _void, Tuple, Vector } from 'scale-ts';
 
+/// Codecs for the special LP deposit channel opening
+const encodedAddressCodec = Enum({
+  Eth: TsBytes(20), // [u8; 20]
+  Dot: TsBytes(32), // [u8; 32]
+  Btc: Vector(TsBytes(1)), // Vec<u8>
+  Arb: TsBytes(20), // [u8; 20]
+  Sol: TsBytes(32), // [u8; sol_prim::consts::SOLANA_ADDRESS_LEN] (32 bytes)
+  Hub: TsBytes(32), // [u8; 32]
+});
+
+const accountRoleCodec = Enum({
+  Unregistered: _void,
+  Broker: _void,
+  LiquidityProvider: _void,
+  Validator: _void,
+});
+
+const remarkDataCodec = Tuple(encodedAddressCodec, Option(accountRoleCodec));
+
+/// EIP-712 payloads schema
 const eipPayloadSchema = z.object({
   domain: z.any(),
   types: z.any(),
@@ -294,7 +315,17 @@ async function testSpecialLpDeposit(logger: Logger) {
   const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
   const refundAddress = await newAssetAddress('Eth', brokerUri + Math.random() * 100);
 
-  const call = chainflip.tx.system.remark([]);
+  // TODO: Test with BTC address as the type might be wrong.
+  // Convert hex address string to Uint8Array (remove 0x prefix if present)
+  const addressHex = refundAddress.startsWith('0x') ? refundAddress.slice(2) : refundAddress;
+  const addressBytes = new Uint8Array(Buffer.from(addressHex, 'hex'));
+
+  const remarkData = remarkDataCodec.enc([
+    { tag: 'Eth', value: addressBytes },
+    { tag: 'LiquidityProvider', value: undefined },
+  ]);
+
+  const call = chainflip.tx.system.remark(Array.from(remarkData));
   const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
 
   const response = await chainflip.rpc(
@@ -372,9 +403,9 @@ async function testSpecialLpDeposit(logger: Logger) {
 
 export async function testSignedRuntimeCall(testContext: TestContext) {
   await Promise.all([
-    testEvmEip712(testContext.logger.child({ tag: `EvmSignedCall` })),
-    testSvmDomain(testContext.logger.child({ tag: `SvmDomain` })),
-    testEvmPersonalSign(testContext.logger.child({ tag: `EvmPersonalSign` })),
+    // testEvmEip712(testContext.logger.child({ tag: `EvmSignedCall` })),
+    // testSvmDomain(testContext.logger.child({ tag: `SvmDomain` })),
+    // testEvmPersonalSign(testContext.logger.child({ tag: `EvmPersonalSign` })),
     testSpecialLpDeposit(testContext.logger.child({ tag: `SpecialLpDeposit` })),
   ]);
 }

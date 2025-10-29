@@ -196,6 +196,7 @@ pub mod pallet {
 			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
+			role_to_register: Option<AccountRole>,
 		},
 	}
 
@@ -452,11 +453,12 @@ pub mod pallet {
 			frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
 			let runtime_version = <T as frame_system::Config>::Version::get();
 
-			// Simple runtime call for signature verification.
+			// Simple runtime call for signature verification. Signing over the refund address
+			// and the role to register so they can't be tampered with.
+			let remark_data = (refund_address.clone(), role_to_register).encode();
 			let runtime_call: <T as Config>::RuntimeCall = 
 				frame_system::Call::<T>::remark { 
-					remark: vec![]
-					// remark: refund_address.encode()
+					remark: remark_data
 				}.into();
 
 			match is_valid_signature(
@@ -492,6 +494,7 @@ pub mod pallet {
 				deposit_chain_expiry_block: expiry_block,
 				boost_fee,
 				channel_opening_fee,
+				role_to_register,
 			});
 
 			Ok(())
