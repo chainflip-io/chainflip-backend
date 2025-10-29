@@ -1460,6 +1460,8 @@ fn liquidation_with_outstanding_principal() {
 
 	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
 
+	let (origination_fee_network, origination_fee_pool) = take_network_fee(ORIGINATION_FEE);
+
 	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).with_default_loan()
 		.execute_with(|| {
 			// Drop oracle price to trigger liquidation
@@ -1471,15 +1473,29 @@ fn liquidation_with_outstanding_principal() {
 
 			System::reset_events();
 
+			assert_eq!(
+				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
+				LendingPool {
+					total_amount: INIT_POOL_AMOUNT + origination_fee_pool,
+					available_amount: INIT_POOL_AMOUNT - PRINCIPAL - origination_fee_network,
+					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
+					owed_to_network: 0,
+				}
+			);
+
 			LendingPools::process_loan_swap_outcome(
 				LIQUIDATION_SWAP_1,
 				LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
 				RECOVERED_PRINCIPAL,
 			);
 
+
 			let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * RECOVERED_PRINCIPAL;
 			let (liquidation_fee_network, liquidation_fee_pool) =
 				take_network_fee(liquidation_fee);
+
+			let repaid_principal = RECOVERED_PRINCIPAL - liquidation_fee;
+			let expected_outstanding_principal = PRINCIPAL + ORIGINATION_FEE - repaid_principal;
 
 			assert_event_sequence!(
 				Test,
@@ -1497,11 +1513,132 @@ fn liquidation_with_outstanding_principal() {
 					loan_id: LOAN_ID,
 					outstanding_principal,
 					via_liquidation: true,
-				}) if outstanding_principal == PRINCIPAL + ORIGINATION_FEE - RECOVERED_PRINCIPAL + liquidation_fee
+				}) if outstanding_principal == expected_outstanding_principal
 			);
 
 			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
 			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
+
+			// The pool has lost outstanding principal (but has accrued origination and liquidation fees):
+			let new_total_amount = INIT_POOL_AMOUNT + origination_fee_pool + liquidation_fee_pool - expected_outstanding_principal;
+
+			assert_eq!(
+				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
+				LendingPool {
+					total_amount: new_total_amount,
+					available_amount: new_total_amount,
+					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
+					owed_to_network: 0,
+				}
+			);
+
+			// The account has no loans and no collateral, so it should have been removed:
+			assert!(!LoanAccounts::<Test>::contains_key(BORROWER));
+		});
+}
+
+#[test]
+fn liquidation_with_outstanding_principal_and_owed_network_fees() {
+	// Same as in `liquidation_with_outstanding_principal`, we test a scenario where a loan is
+	// liquidated and the recovered principal isn't enought to cover the total loan amount. However,
+	// in this test utilisation is 100% and we want to check that the pool owing some fees to the
+	// network does not break anything when writing off debt.
+
+	const PRINCIPAL: AssetAmount = INIT_POOL_AMOUNT;
+	const INIT_COLLATERAL: AssetAmount = (4 * PRINCIPAL / 3) * SWAP_RATE; // 75% LTV
+
+	const RECOVERED_PRINCIPAL: AssetAmount = 3 * PRINCIPAL / 4;
+
+	const NEW_SWAP_RATE: u128 = SWAP_RATE * 2;
+
+	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
+
+	const ORIGINATION_FEE: AssetAmount = portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL);
+	let (origination_fee_network, origination_fee_pool) = take_network_fee(ORIGINATION_FEE);
+
+	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT)
+		.execute_with(|| {
+
+			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+
+			assert_eq!(
+				LendingPools::new_loan(
+					BORROWER,
+					LOAN_ASSET,
+					PRINCIPAL,
+					Some(COLLATERAL_ASSET),
+					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
+				),
+				Ok(LOAN_ID)
+			);
+
+			// Drop oracle price to trigger liquidation
+			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+		})
+		.then_execute_at_next_block(|_| {
+			assert!(MockSwapRequestHandler::<Test>::get_swap_requests()
+				.contains_key(&LIQUIDATION_SWAP_1));
+
+			System::reset_events();
+
+			assert_eq!(
+				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
+				LendingPool {
+					total_amount: INIT_POOL_AMOUNT + origination_fee_pool,
+					available_amount: 0,
+					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
+					owed_to_network: origination_fee_network,
+				}
+			);
+
+			LendingPools::process_loan_swap_outcome(
+				LIQUIDATION_SWAP_1,
+				LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
+				RECOVERED_PRINCIPAL,
+			);
+
+			let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * RECOVERED_PRINCIPAL;
+			let (liquidation_fee_network, liquidation_fee_pool) =
+				take_network_fee(liquidation_fee);
+
+			let repaid_principal = RECOVERED_PRINCIPAL - liquidation_fee;
+			let expected_outstanding_principal = PRINCIPAL + ORIGINATION_FEE - repaid_principal;
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
+					loan_id: LOAN_ID,
+					pool_fee,
+					network_fee,
+					broker_fee
+				}) if pool_fee == liquidation_fee_pool && network_fee == liquidation_fee_network && broker_fee == 0,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+					loan_id: LOAN_ID,
+					amount
+				}) if amount == RECOVERED_PRINCIPAL - liquidation_fee,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+					loan_id: LOAN_ID,
+					outstanding_principal,
+					via_liquidation: true,
+				}) if outstanding_principal == expected_outstanding_principal
+			);
+
+			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
+			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
+
+			// The pool has lost outstanding principal (but has accrued origination and liquidation fees):
+			let new_total_amount = INIT_POOL_AMOUNT + origination_fee_pool + liquidation_fee_pool - expected_outstanding_principal;
+
+			assert_eq!(
+				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
+				LendingPool {
+					total_amount: new_total_amount,
+					// Network hasn't collected the fees, but the funds for that are available:
+					available_amount: new_total_amount + origination_fee_network,
+					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
+					owed_to_network: origination_fee_network,
+				}
+			);
 
 			// The account has no loans and no collateral, so it should have been removed:
 			assert!(!LoanAccounts::<Test>::contains_key(BORROWER));
