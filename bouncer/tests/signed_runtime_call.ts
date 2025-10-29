@@ -289,41 +289,12 @@ async function testSpecialLpDeposit(logger: Logger) {
   const broker = createStateChainKeypair(brokerUri);
   await setupBrokerAccount(logger, brokerUri);
 
-  // TODO: Workaround to encode a call using the RPC. We encode this call via the rpc
-  // that will then be verified. However, the expiry block is a bit of a catch22 with
-  // this approach as it needs to be preencoded in the call before the rpc. Then the
-  // rpc modifies the expiry block in the transaction metadata. Therefore we then
-  // need an extra step below to fix the override the expiry block in the message
-  // after the rpc call to match the initial call.
-  // We might want to sign something different in the future and either do a different
-  // rpc call for encoding or just simply encode something simpler that doesn't
-  // require the rpc to encode it. However, it will have the runtime version so we
-  // most likely want an rpc call to ensure compatibility.
-  const currentBlock = await chainflip.query.system.number();
-  const expiryBlock = Number(currentBlock.toString()) + blocksToExpiry;
-
   const evmWallet = await createEvmWallet();
   const evmScAccount = externalChainToScAccount(evmWallet.address);
   const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
   const refundAddress = await newAssetAddress('Eth', brokerUri + Math.random() * 100);
 
-  const call = chainflip.tx.liquidityProvider.requestLiquidityDepositAddressForExternalAccount(
-    {
-      Ethereum: {
-        signature: '0x' + '00'.repeat(65),
-        signer: evmWallet.address,
-        sigType: 'Eip712',
-      },
-    },
-    {
-      nonce: evmNonce,
-      expiryBlock,
-    },
-    'eth',
-    0,
-    { eth: refundAddress },
-    'LiquidityProvider',
-  );
+  const call = chainflip.tx.system.remark([]);
   const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
 
   const response = await chainflip.rpc(
@@ -334,15 +305,10 @@ async function testSpecialLpDeposit(logger: Logger) {
     { Eth: 'Eip712' },
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [eipPayload, transactionMetadata] = encodeNonNativeCallResponseSchema.parse(response);
   const parsedPayload = encodedNonNativeCallSchema.parse(eipPayload);
   const { domain, types, message } = parsedPayload.Eip712;
   delete types.EIP712Domain;
-
-  // Apply patch - We then cannot use the transactionMetadata as both the nonce and
-  // the expiry block need to match the initial call.
-  message.transaction_metadata.expiry_block = expiryBlock.toString();
 
   const evmSignatureEip712 = await evmWallet.signTypedData(domain, types, message);
 
@@ -357,8 +323,8 @@ async function testSpecialLpDeposit(logger: Logger) {
         },
       },
       {
-        nonce: evmNonce,
-        expiryBlock,
+        nonce: transactionMetadata.nonce,
+        expiryBlock: transactionMetadata.expiry_block,
       },
       'Eth',
       0,

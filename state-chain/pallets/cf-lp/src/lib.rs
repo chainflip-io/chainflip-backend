@@ -452,33 +452,12 @@ pub mod pallet {
 			frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
 			let runtime_version = <T as frame_system::Config>::Version::get();
 
-			// Create the runtime call for signature verification. The only issue
-			// with this approach is that if the user is already funded, the call
-			// can be submitted into `non_native_signed_call`. It will fail because
-			// of the origin check for broker, but it will consume the nonce. This
-			// should not be a problem in practice.
-			// TODO: Look into signing and verifying differently so it's not a runtime
-			// call that can potentially be submitted via `non_native_signed_call`.
-			let runtime_call: <T as Config>::RuntimeCall =
-				Call::<T>::request_liquidity_deposit_address_for_external_account {
-					// Using empty signature for verification to avoid circular dependency
-					signature_data: match signature_data.clone() {
-						SignatureData::Solana { signer, sig_type, .. } =>
-							SignatureData::Solana { signer, sig_type, signature: [0u8; 64].into() },
-						SignatureData::Ethereum { signer, sig_type, .. } =>
-							SignatureData::Ethereum {
-								signer,
-								sig_type,
-								signature: [0u8; 65].into(),
-							},
-					},
-					transaction_metadata,
-					asset,
-					boost_fee,
-					refund_address: refund_address.clone(),
-					role_to_register,
-				}
-				.into();
+			// Simple runtime call for signature verification.
+			let runtime_call: <T as Config>::RuntimeCall = 
+				frame_system::Call::<T>::remark { 
+					remark: vec![]
+					// remark: refund_address.encode()
+				}.into();
 
 			match is_valid_signature(
 				runtime_call,
