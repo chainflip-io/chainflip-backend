@@ -16,6 +16,7 @@
 
 #![cfg(test)]
 
+use core::marker::PhantomData;
 use std::collections::BTreeSet;
 
 use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
@@ -38,9 +39,16 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
 	mocks::key_provider::MockKeyProvider, Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
-use frame_support::{derive_impl, parameter_types};
+use frame_support::{
+	derive_impl,
+	pallet_prelude::{InvalidTransaction, TransactionValidityError},
+	parameter_types, DebugNoBound, DefaultNoBound,
+};
 use sp_core::{H160, H256};
-use sp_runtime::DispatchError;
+use sp_runtime::{
+	traits::{DispatchInfoOf, SignedExtension},
+	DispatchError,
+};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -280,6 +288,35 @@ impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 
 pub type MockBitcoinKeyProvider = MockKeyProvider<BitcoinCrypto>;
 
+/// A Mock payment extension that simply checks whether the account exists in the system.
+#[derive(Clone, DebugNoBound, DefaultNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[scale_info(skip_type_params(T))]
+pub struct MockPayment<T>(PhantomData<T>);
+
+impl<T: frame_system::Config + Send + Sync + 'static> SignedExtension for MockPayment<T> {
+	type AccountId = T::AccountId;
+	type AdditionalSigned = ();
+	type Call = T::RuntimeCall;
+	type Pre = ();
+	const IDENTIFIER: &'static str = "UnitSignedExtension";
+	fn additional_signed(&self) -> Result<(), TransactionValidityError> {
+		Ok(())
+	}
+	fn pre_dispatch(
+		self,
+		who: &Self::AccountId,
+		_call: &Self::Call,
+		_info: &DispatchInfoOf<Self::Call>,
+		_len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
+		if frame_system::Account::<T>::contains_key(who) {
+			Ok(())
+		} else {
+			Err(TransactionValidityError::Invalid(InvalidTransaction::Payment))
+		}
+	}
+}
+
 impl pallet_cf_environment::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
@@ -296,6 +333,7 @@ impl pallet_cf_environment::Config for Test {
 	type CurrentReleaseVersion = CurrentReleaseVersion;
 	type SolEnvironment = MockSolEnvironment;
 	type SolanaBroadcaster = MockSolanaBroadcaster;
+	type TransactionPayments = MockPayment<Self>;
 	type WeightInfo = ();
 }
 

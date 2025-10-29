@@ -329,6 +329,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type CurrentReleaseVersion = CurrentReleaseVersion;
 	type SolEnvironment = SolEnvironment;
 	type SolanaBroadcaster = SolanaBroadcaster;
+	type TransactionPayments = pallet_transaction_payment::ChargeTransactionPayment<Self>;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
