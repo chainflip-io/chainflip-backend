@@ -2775,10 +2775,10 @@ fn linear_segment_interpolation() {
 	// Linear segment starts at 0% and ends at 90%
 	assert_eq!(
 		interpolate_linear_segment(
-			Permill::from_percent(2),
-			Permill::from_percent(8),
 			Permill::from_percent(0),
 			Permill::from_percent(90),
+			Permill::from_percent(2),
+			Permill::from_percent(8),
 			Permill::from_percent(45),
 		),
 		Permill::from_parts(49_999) // ~5%
@@ -2787,10 +2787,10 @@ fn linear_segment_interpolation() {
 	// Linear segment starts at 90% and ends at 100%
 	assert_eq!(
 		interpolate_linear_segment(
-			Permill::from_percent(8),
-			Permill::from_percent(50),
 			Permill::from_percent(90),
 			Permill::from_percent(100),
+			Permill::from_percent(8),
+			Permill::from_percent(50),
 			Permill::from_percent(95),
 		),
 		Permill::from_percent(29)
@@ -2799,10 +2799,10 @@ fn linear_segment_interpolation() {
 	// Linear segment from 0% to 100% and zero slope
 	assert_eq!(
 		interpolate_linear_segment(
-			Permill::from_percent(5),
-			Permill::from_percent(5),
 			Permill::from_percent(0),
 			Permill::from_percent(100),
+			Permill::from_percent(5),
+			Permill::from_percent(5),
 			Permill::from_percent(75),
 		),
 		Permill::from_percent(5)
@@ -2811,10 +2811,10 @@ fn linear_segment_interpolation() {
 	// === Some linear segments with a negative slope ===
 	assert_eq!(
 		interpolate_linear_segment(
-			Permill::from_percent(50),
-			Permill::from_percent(10),
 			Permill::from_percent(0),
 			Permill::from_percent(50),
+			Permill::from_percent(50),
+			Permill::from_percent(10),
 			Permill::from_percent(25),
 		),
 		Permill::from_percent(30)
@@ -2822,10 +2822,10 @@ fn linear_segment_interpolation() {
 
 	assert_eq!(
 		interpolate_linear_segment(
-			Permill::from_percent(50),
-			Permill::from_percent(10),
 			Permill::from_percent(0),
 			Permill::from_percent(50),
+			Permill::from_percent(50),
+			Permill::from_percent(10),
 			Permill::from_percent(0),
 		),
 		Permill::from_percent(50)
@@ -2833,10 +2833,10 @@ fn linear_segment_interpolation() {
 
 	assert_eq!(
 		interpolate_linear_segment(
-			Permill::from_percent(50),
-			Permill::from_percent(10),
 			Permill::from_percent(0),
 			Permill::from_percent(50),
+			Permill::from_percent(50),
+			Permill::from_percent(10),
 			Permill::from_percent(50),
 		),
 		Permill::from_percent(10)

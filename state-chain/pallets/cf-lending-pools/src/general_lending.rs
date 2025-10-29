@@ -1673,18 +1673,18 @@ impl LendingConfiguration {
 
 		if utilisation < junction_utilisation {
 			interpolate_linear_segment(
-				interest_at_zero_utilisation,
-				interest_at_junction_utilisation,
 				Permill::zero(),
 				junction_utilisation,
+				interest_at_zero_utilisation,
+				interest_at_junction_utilisation,
 				utilisation,
 			)
 		} else {
 			interpolate_linear_segment(
-				interest_at_junction_utilisation,
-				interest_at_max_utilisation,
 				junction_utilisation,
 				Permill::one(),
+				interest_at_junction_utilisation,
+				interest_at_max_utilisation,
 				utilisation,
 			)
 		}
@@ -1728,6 +1728,9 @@ impl LendingConfiguration {
 		)
 	}
 
+	/// Computes an additional annual interest/penalty for loan accounts with LTV below
+	/// `low_ltv` to incentivise capital efficiency. The penalty decreases linearly
+	/// from `interest_on_collateral_max` at 0% LTV to zero at `low_ltv` threshold.
 	fn derive_low_ltv_interest_rate_per_year(&self, ltv: FixedU64) -> Permill {
 		let ltv: Permill = ltv.into_clamped_perthing();
 
@@ -1736,10 +1739,10 @@ impl LendingConfiguration {
 		}
 
 		interpolate_linear_segment(
-			self.network_fee_contributions.interest_on_collateral_max,
-			Permill::zero(),
 			Permill::zero(),
 			self.ltv_thresholds.low_ltv,
+			self.network_fee_contributions.interest_on_collateral_max,
+			Permill::zero(),
 			ltv,
 		)
 	}
@@ -1762,32 +1765,31 @@ impl LendingConfiguration {
 	}
 }
 
-/// Computes interest rate at utilisation `u` given a linear segment defined by interest values `i0`
-/// and `i1` at utilisation `u0` and `u1`, respectively. The code assumes u0 <= u <= u1
-/// and u0 != u1.
+/// Computes the value of `f(x)` where f is a linear function defined by two points:
+/// (x0, y0) and (x1, y1). The code assumes x0 <= x <= x1 and x0 != x1.
 fn interpolate_linear_segment(
-	i0: Permill,
-	i1: Permill,
-	u0: Permill,
-	u1: Permill,
-	u: Permill,
+	x0: Permill,
+	x1: Permill,
+	y0: Permill,
+	y1: Permill,
+	x: Permill,
 ) -> Permill {
-	if u0 > u || u > u1 || u0 == u1 {
+	if x0 > x || x > x1 || x0 == x1 {
 		log_or_panic!("Invalid parameters");
 		return Permill::zero();
 	}
 
-	let i0 = FixedI64::from(i0);
-	let i1 = FixedI64::from(i1);
-	let u0 = FixedI64::from(u0);
-	let u1 = FixedI64::from(u1);
-	let u = FixedI64::from(u);
+	let y0 = FixedI64::from(y0);
+	let y1 = FixedI64::from(y1);
+	let x0 = FixedI64::from(x0);
+	let x1 = FixedI64::from(x1);
+	let x = FixedI64::from(x);
 
-	let slope = (i1 - i0) / (u1 - u0);
+	let slope = (y1 - y0) / (x1 - x0);
 
-	let delta = slope * (u - u0);
+	let delta = slope * (x - x0);
 
-	i0.saturating_add(delta).into_clamped_perthing()
+	y0.saturating_add(delta).into_clamped_perthing()
 }
 
 fn ensure_non_zero_collateral<T: Config>(
