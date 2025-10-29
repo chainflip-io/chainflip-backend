@@ -196,6 +196,7 @@ pub mod pallet {
 			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
+			refund_address: ForeignChainAddress,
 			role_to_register: Option<AccountRole>,
 		},
 	}
@@ -437,7 +438,8 @@ pub mod pallet {
 				)
 				.map_err(|_| Error::<T>::InvalidEncodedAddress)?;
 
-			// Manual `validate_metadata` because there is mempool-specific logic we don't need
+			// Manual metadata validation because the `validate_metadata` function has
+			// mempool-specific logic
 			let current_nonce = frame_system::Pallet::<T>::account_nonce(&signer_account);
 			let tx_nonce: <T as frame_system::Config>::Nonce = transaction_metadata.nonce.into();
 			ensure!(
@@ -451,22 +453,19 @@ pub mod pallet {
 			);
 			// Increment the nonce to prevent replay attacks
 			frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
-			let runtime_version = <T as frame_system::Config>::Version::get();
 
 			// Simple runtime call for signature verification. Signing over the refund address
 			// and the role to register so they can't be tampered with.
 			let remark_data = (refund_address.clone(), role_to_register).encode();
-			let runtime_call: <T as Config>::RuntimeCall = 
-				frame_system::Call::<T>::remark { 
-					remark: remark_data
-				}.into();
+			let runtime_call: <T as Config>::RuntimeCall =
+				frame_system::Call::<T>::remark { remark: remark_data }.into();
 
 			match is_valid_signature(
 				runtime_call,
 				&T::ChainflipNetwork::chainflip_network(),
 				&transaction_metadata,
 				&signature_data,
-				runtime_version.spec_version,
+				<T as frame_system::Config>::Version::get().spec_version,
 			) {
 				Ok(is_valid) => ensure!(is_valid, Error::<T>::InvalidUserSignatureData),
 				Err(_) => return Err(Error::<T>::CannotEncodeData.into()),
@@ -478,7 +477,7 @@ pub mod pallet {
 					signer_account.clone(),
 					asset,
 					boost_fee,
-					refund_address_internal,
+					refund_address_internal.clone(),
 					Some(AdditionalDepositAction::FundFlip {
 						flip_amount_to_credit: INITIAL_FLIP_FUNDING * 10,
 						role_to_register,
@@ -494,6 +493,7 @@ pub mod pallet {
 				deposit_chain_expiry_block: expiry_block,
 				boost_fee,
 				channel_opening_fee,
+				refund_address: refund_address_internal,
 				role_to_register,
 			});
 

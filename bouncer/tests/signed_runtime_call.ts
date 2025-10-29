@@ -1,4 +1,5 @@
 import { TestContext } from 'shared/utils/test_context';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import {
   createEvmWallet,
   createStateChainKeypair,
@@ -18,15 +19,15 @@ import { ApiPromise } from '@polkadot/api';
 import { signBytes, getUtf8Encoder, generateKeyPairSigner } from '@solana/kit';
 import { send } from 'shared/send';
 import { setupBrokerAccount } from 'shared/setup_account';
-import { Enum, Bytes as TsBytes, Option, _void, Tuple, Vector } from 'scale-ts';
+import { Enum, Bytes as TsBytes, Option, _void, Tuple } from 'scale-ts';
 
 /// Codecs for the special LP deposit channel opening
 const encodedAddressCodec = Enum({
   Eth: TsBytes(20), // [u8; 20]
   Dot: TsBytes(32), // [u8; 32]
-  Btc: Vector(TsBytes(1)), // Vec<u8>
+  Btc: TsBytes(), // Vec<u8>
   Arb: TsBytes(20), // [u8; 20]
-  Sol: TsBytes(32), // [u8; sol_prim::consts::SOLANA_ADDRESS_LEN] (32 bytes)
+  Sol: TsBytes(32), // [u8; 32]
   Hub: TsBytes(32), // [u8; 32]
 });
 
@@ -301,10 +302,9 @@ async function testEvmPersonalSign(logger: Logger) {
   await observeNonNativeSignedCallAndRole(logger, evmScAccount);
 }
 
-async function testSpecialLpDeposit(logger: Logger) {
+async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
   await using chainflip = await getChainflipApi();
 
-  // Setup broker accounts. Different for each asset and specific to this test.
   logger.info('Setting up a broker account');
   const brokerUri = `//BROKER_SPECIAL_DEPOSIT_CHANNEL`;
   const broker = createStateChainKeypair(brokerUri);
@@ -313,15 +313,19 @@ async function testSpecialLpDeposit(logger: Logger) {
   const evmWallet = await createEvmWallet();
   const evmScAccount = externalChainToScAccount(evmWallet.address);
   const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
-  const refundAddress = await newAssetAddress('Eth', brokerUri + Math.random() * 100);
+  const refundAddress = await newAssetAddress(asset, brokerUri + Math.random() * 100);
 
-  // TODO: Test with BTC address as the type might be wrong.
-  // Convert hex address string to Uint8Array (remove 0x prefix if present)
-  const addressHex = refundAddress.startsWith('0x') ? refundAddress.slice(2) : refundAddress;
-  const addressBytes = new Uint8Array(Buffer.from(addressHex, 'hex'));
+  let addressBytes;
+
+  if (asset === 'Btc') {
+    // In prod we should encode the BTC with the adequate encoding, this is to keep it simple
+    addressBytes = new Uint8Array(Buffer.from(refundAddress, 'utf-8'));
+  } else {
+    addressBytes = new Uint8Array(Buffer.from(refundAddress.slice(2), 'hex'));
+  }
 
   const remarkData = remarkDataCodec.enc([
-    { tag: 'Eth', value: addressBytes },
+    { tag: shortChainFromAsset(asset), value: addressBytes },
     { tag: 'LiquidityProvider', value: undefined },
   ]);
 
@@ -357,9 +361,9 @@ async function testSpecialLpDeposit(logger: Logger) {
         nonce: transactionMetadata.nonce,
         expiryBlock: transactionMetadata.expiry_block,
       },
-      'Eth',
+      asset,
       0,
-      { eth: refundAddress },
+      { [shortChainFromAsset(asset).toLowerCase()]: refundAddress },
       'LiquidityProvider',
     )
     .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
@@ -374,9 +378,9 @@ async function testSpecialLpDeposit(logger: Logger) {
         event.data.requesterId === broker.address && event.data.accountId === evmScAccount,
     },
   ).event;
-  const depositAddress = eventResult.data.depositAddress[shortChainFromAsset('Eth')];
+  const depositAddress = eventResult.data.depositAddress[shortChainFromAsset(asset)];
 
-  await send(logger, 'Eth', depositAddress);
+  await send(logger, asset, depositAddress);
 
   logger.info('Waiting for FLIP balance to be credited...');
 
@@ -403,9 +407,10 @@ async function testSpecialLpDeposit(logger: Logger) {
 
 export async function testSignedRuntimeCall(testContext: TestContext) {
   await Promise.all([
-    // testEvmEip712(testContext.logger.child({ tag: `EvmSignedCall` })),
-    // testSvmDomain(testContext.logger.child({ tag: `SvmDomain` })),
-    // testEvmPersonalSign(testContext.logger.child({ tag: `EvmPersonalSign` })),
-    testSpecialLpDeposit(testContext.logger.child({ tag: `SpecialLpDeposit` })),
+    testEvmEip712(testContext.logger.child({ tag: `EvmSignedCall` })),
+    testSvmDomain(testContext.logger.child({ tag: `SvmDomain` })),
+    testEvmPersonalSign(testContext.logger.child({ tag: `EvmPersonalSign` })),
+    testSpecialLpDeposit(testContext.logger.child({ tag: `SpecialLpDeposit` }), 'Btc'),
+    testSpecialLpDeposit(testContext.logger.child({ tag: `SpecialLpDeposit` }), 'Eth'),
   ]);
 }
