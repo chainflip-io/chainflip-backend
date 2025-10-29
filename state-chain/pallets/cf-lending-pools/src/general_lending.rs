@@ -1,4 +1,4 @@
-use cf_amm_math::{invert_price, relative_price, Price};
+use cf_amm_math::{invert_price, Price};
 use cf_primitives::{DcaParameters, SwapRequestId};
 use cf_traits::{ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry};
 use core_lending_pool::ScaledAmountHP;
@@ -311,67 +311,6 @@ impl<T: Config> LoanAccount<T> {
 		Ok(FixedU64::from_rational(principal, collateral))
 	}
 
-	fn charge_pending_interest_if_above_threshold(
-		loan: &mut GeneralLoan<T>,
-		collateral: &mut BTreeMap<Asset, AssetAmount>,
-		primary_collateral_asset: Asset,
-		threshold_usd: AssetAmount,
-	) -> DispatchResult {
-		let loan_asset = loan.asset;
-
-		// Make sure that the threshold isn't 0:
-		let threshold_usd = core::cmp::max(threshold_usd, 1);
-
-		if loan.pending_interest == Default::default() {
-			return Ok(());
-		}
-
-		let mut charge_fee_if_exceeds_threshold = |fee: &mut ScaledAmountHP| {
-			// Only charge fees if the accumulated amount is greater than some threshold
-			let fee_usd_value = usd_value_of(loan_asset, fee.into_asset_amount())?;
-
-			if fee_usd_value >= threshold_usd {
-				charge_fee_from_collateral::<T>(
-					collateral,
-					primary_collateral_asset,
-					loan_asset,
-					fee.take_non_fractional_part(),
-				)
-			} else {
-				Ok(Default::default())
-			}
-		};
-
-		let network_interest = charge_fee_if_exceeds_threshold(&mut loan.pending_interest.network)?;
-
-		let low_ltv_penalty =
-			charge_fee_if_exceeds_threshold(&mut loan.pending_interest.low_ltv_penalty)?;
-
-		for (asset, amount) in network_interest.iter().chain(&low_ltv_penalty) {
-			Pallet::<T>::credit_fees_to_network(*asset, *amount);
-		}
-
-		let pool_interest = charge_fee_if_exceeds_threshold(&mut loan.pending_interest.pool)?;
-
-		for (asset, amount) in &pool_interest {
-			Pallet::<T>::credit_fees_to_pool(loan_asset, *asset, *amount);
-		}
-
-		if !pool_interest.is_empty() || !network_interest.is_empty() || !low_ltv_penalty.is_empty()
-		{
-			Pallet::<T>::deposit_event(Event::InterestTaken {
-				loan_id: loan.id,
-				pool_interest,
-				network_interest,
-				// TODO: broker fees
-				broker_interest: Default::default(),
-				low_ltv_penalty,
-			});
-		}
-
-		Ok(())
-	}
-
 	#[transactional]
 	pub fn derive_and_charge_interest(&mut self, ltv: FixedU64) -> DispatchResult {
 		let config = LendingConfig::<T>::get();
@@ -420,7 +359,7 @@ impl<T: Config> LoanAccount<T> {
 				let low_ltv_penalty_amount = owed_principal * low_ltv_penalty_rate;
 				let pool_interest_amount = owed_principal * base_interest_rate;
 
-				// Record the accued interest amounts. We may or may not charge these immediately
+				// Record the accrued interest amounts. We may or may not charge these immediately
 				// depending on whether the amounts exceed some threshold.
 				loan.pending_interest.network.saturating_accrue(network_interest_amount);
 				loan.pending_interest.pool.saturating_accrue(pool_interest_amount);
@@ -428,10 +367,7 @@ impl<T: Config> LoanAccount<T> {
 
 				loan.last_interest_payment_at = current_block;
 
-				Self::charge_pending_interest_if_above_threshold(
-					loan,
-					&mut self.collateral,
-					self.primary_collateral_asset,
+				loan.charge_pending_interest_if_above_threshold(
 					config.interest_collection_threshold_usd,
 				)?;
 			}
@@ -583,17 +519,7 @@ impl<T: Config> LoanAccount<T> {
 	}
 
 	fn settle_loan(&mut self, loan_id: LoanId, via_liquidation: bool) {
-		if let Some(mut loan) = self.loans.remove(&loan_id) {
-			// NOTE: if for whatever reason we fail to take the final interest payment at this stage
-			// (likely due to oracle price unavailability), it will be waived (this amount is
-			// expected to be very small anyway).
-			let _ = Self::charge_pending_interest_if_above_threshold(
-				&mut loan,
-				&mut self.collateral,
-				self.primary_collateral_asset,
-				1, // collecting any non-zero amount
-			);
-
+		if let Some(loan) = self.loans.remove(&loan_id) {
 			Pallet::<T>::deposit_event(Event::LoanSettled {
 				loan_id,
 				outstanding_principal: loan.owed_principal,
@@ -633,22 +559,39 @@ impl<T: Config> LoanAccount<T> {
 			});
 		}
 
+		// Will need to request this much more from the pool
+		let origination_fee_total = config.origination_fee(loan.asset) * extra_principal;
+
+		let origination_fee_network =
+			config.network_fee_contributions.from_origination_fee * origination_fee_total;
+
+		let origination_fee_pool = origination_fee_total.saturating_sub(origination_fee_network);
+
 		GeneralLendingPools::<T>::try_mutate(loan_asset, |pool| {
 			let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
 			pool.provide_funds_for_loan(extra_principal).map_err(Error::<T>::from)?;
 
+			pool.record_pool_fee(origination_fee_pool);
+
+			let network_fee_collected =
+				pool.record_and_collect_network_fee(origination_fee_network);
+
+			Pallet::<T>::credit_fees_to_network(loan_asset, network_fee_collected);
+
 			Ok::<_, DispatchError>(())
 		})?;
 
 		loan.owed_principal.saturating_accrue(extra_principal);
+		loan.owed_principal.saturating_accrue(origination_fee_total);
 
-		Pallet::<T>::charge_origination_fee(
-			&self.borrower_id,
-			&mut loan,
-			self.primary_collateral_asset,
-			extra_principal,
-		)?;
+		Pallet::<T>::deposit_event(Event::OriginationFeeTaken {
+			loan_id: loan.id,
+			pool_fee: origination_fee_pool,
+			network_fee: origination_fee_network,
+			// TODO: add support for broker fees
+			broker_fee: 0,
+		});
 
 		self.loans.insert(loan.id, loan);
 
@@ -689,17 +632,40 @@ impl<T: Config> GeneralLoan<T> {
 	) -> LoanRepaymentOutcome {
 		let config = LendingConfig::<T>::get();
 
-		let (provided_amount_after_fees, liquidation_fee) = if should_charge_liquidation_fee {
-			let liquidation_fee =
-				config.get_config_for_asset(self.asset).liquidation_fee * provided_amount;
-			let after_fees = provided_amount.saturating_sub(liquidation_fee);
+		// Collect any pending interest before any repayment. Note that in the unlikely scenario
+		// where this fails (due to unavailable oracle prices), the protocol/pool may miss out
+		// on the very last (and very small) interest payment, which should be OK.
+		let _ = self.charge_pending_interest_if_above_threshold(
+			1, /* collecting any non-zero amount */
+		);
 
-			(after_fees, liquidation_fee)
+		let provided_amount_after_fees = if should_charge_liquidation_fee {
+			let liquidation_fee = config.get_config_for_asset(self.asset).liquidation_fee *
+				core::cmp::min(provided_amount, self.owed_principal);
+
+			if liquidation_fee > 0 {
+				let liquidation_fee_network =
+					config.network_fee_contributions.from_liquidation_fee * liquidation_fee;
+				Pallet::<T>::credit_fees_to_network(self.asset, liquidation_fee_network);
+
+				let liquidation_fee_pool = liquidation_fee.saturating_sub(liquidation_fee_network);
+				Pallet::<T>::credit_fees_to_pool(self.asset, liquidation_fee_pool);
+
+				Pallet::<T>::deposit_event(Event::LiquidationFeeTaken {
+					loan_id: self.id,
+					pool_fee: liquidation_fee_pool,
+					network_fee: liquidation_fee_network,
+					// TODO: add support for broker fees
+					broker_fee: 0,
+				});
+			}
+
+			provided_amount.saturating_sub(liquidation_fee)
 		} else {
-			(provided_amount, 0)
+			provided_amount
 		};
 
-		// Making sure the user doesn't pay more than the total principal:
+		// Making sure the user doesn't pay more than the total principal plus liquidation fee:
 		let repayment_amount = core::cmp::min(provided_amount_after_fees, self.owed_principal);
 
 		GeneralLendingPools::<T>::mutate(self.asset, |maybe_pool| {
@@ -717,24 +683,6 @@ impl<T: Config> GeneralLoan<T> {
 			amount: repayment_amount,
 		});
 
-		if liquidation_fee > 0 {
-			let (pool_fee, network_fee) = Pallet::<T>::take_network_fee(
-				liquidation_fee,
-				self.asset,
-				config.network_fee_contributions.from_liquidation_fee,
-			);
-
-			Pallet::<T>::deposit_event(Event::LiquidationFeeTaken {
-				loan_id: self.id,
-				pool_fee,
-				network_fee,
-				// TODO: add support for broker fees
-				broker_fee: 0,
-			});
-
-			Pallet::<T>::credit_fees_to_pool(self.asset, self.asset, pool_fee);
-		}
-
 		if self.owed_principal == 0 {
 			// NOTE: in some cases we may want to delay settling/removing the loan (e.g. there may
 			// be pending liquidation swaps to process), so we let the caller settle it instead
@@ -746,27 +694,75 @@ impl<T: Config> GeneralLoan<T> {
 			LoanRepaymentOutcome::PartiallyRepaid
 		}
 	}
+
+	fn charge_pending_interest_if_above_threshold(
+		&mut self,
+		threshold_usd: AssetAmount,
+	) -> DispatchResult {
+		let loan_asset = self.asset;
+
+		// Making sure that the threshold isn't 0:
+		let threshold_usd = core::cmp::max(threshold_usd, 1);
+
+		if self.pending_interest == Default::default() {
+			return Ok(());
+		}
+
+		let charge_fee_if_exceeds_threshold = |fee: &mut ScaledAmountHP| {
+			// Only charge fees if the accumulated amount is greater than some threshold
+			let fee_usd_value = usd_value_of::<T>(loan_asset, fee.into_asset_amount())?;
+
+			let fee_taken = if fee_usd_value >= threshold_usd {
+				fee.take_non_fractional_part()
+			} else {
+				Default::default()
+			};
+
+			Ok::<_, DispatchError>(fee_taken)
+		};
+
+		let network_interest = charge_fee_if_exceeds_threshold(&mut self.pending_interest.network)?;
+
+		let low_ltv_penalty =
+			charge_fee_if_exceeds_threshold(&mut self.pending_interest.low_ltv_penalty)?;
+
+		let pool_interest = charge_fee_if_exceeds_threshold(&mut self.pending_interest.pool)?;
+
+		let fees_owed_to_network = network_interest.saturating_add(low_ltv_penalty);
+
+		self.owed_principal.saturating_accrue(pool_interest);
+		self.owed_principal.saturating_accrue(fees_owed_to_network);
+
+		GeneralLendingPools::<T>::mutate(loan_asset, |maybe_pool| {
+			if let Some(pool) = maybe_pool.as_mut() {
+				pool.record_pool_fee(pool_interest);
+
+				let network_fees_collected =
+					pool.record_and_collect_network_fee(fees_owed_to_network);
+				Pallet::<T>::credit_fees_to_network(loan_asset, network_fees_collected);
+			} else {
+				log_or_panic!("Lending Pool must exist for asset {}", loan_asset);
+			}
+		});
+
+		if pool_interest != 0 || network_interest != 0 || low_ltv_penalty != 0 {
+			Pallet::<T>::deposit_event(Event::InterestTaken {
+				loan_id: self.id,
+				pool_interest,
+				network_interest,
+				// TODO: broker fees
+				broker_interest: Default::default(),
+				low_ltv_penalty,
+			});
+		}
+
+		Ok(())
+	}
 }
 
 /// Uses oracle API to get the price and makes sure that it is not stale
 fn get_price<T: Config>(asset: Asset) -> Result<Price, Error<T>> {
 	Ok(T::PriceApi::get_price(asset).ok_or(Error::<T>::OraclePriceUnavailable)?.price)
-}
-
-/// Uses oracle prices to calculate the amount of `asset_2` that's equivalent in USD value to
-/// `amount` of `asset_1`
-fn equivalent_amount<T: Config>(
-	asset_1: Asset,
-	asset_2: Asset,
-	amount: AssetAmount,
-) -> Result<AssetAmount, Error<T>> {
-	let asset_1_price = get_price::<T>(asset_1)?;
-	let asset_2_price = get_price::<T>(asset_2)?;
-
-	// how much of asset 2 you get per asset 1
-	let price = relative_price(asset_1_price, asset_2_price);
-
-	Ok(cf_amm_math::output_amount_ceil(amount.into(), price).unique_saturated_into())
 }
 
 /// Uses oracle prices to calculate the USD value of the given asset amount
@@ -833,8 +829,6 @@ fn initiate_swap<T: Config>(
 
 			Some(DcaParameters { number_of_chunks, chunk_interval: 1 })
 		},
-		// Fee swaps are expected to be small so we won't bother splitting them into chunks
-		LendingSwapType::FeeSwap { .. } => None,
 	};
 
 	T::SwapRequestHandler::init_swap_request(
@@ -911,34 +905,6 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 	// Swap fees in every asset every FEE_CHECK_INTERVAL blocks, but only if they exceed
 	// FEE_SWAP_THRESHOLD_USD in value
 	if current_block % config.fee_swap_interval_blocks.into() == 0u32.into() {
-		for pool_asset in PendingPoolFees::<T>::iter_keys().collect::<Vec<_>>() {
-			PendingPoolFees::<T>::mutate(pool_asset, |pending_fees| {
-				for (collateral_asset, fee_amount) in pending_fees {
-					let Ok(fee_usd_value) = usd_value_of::<T>(*collateral_asset, *fee_amount)
-					else {
-						// Don't swap yet if we can't determine asset's price
-						continue;
-					};
-
-					if fee_usd_value >= config.fee_swap_threshold_usd {
-						let fees_to_swap = core::mem::take(fee_amount);
-						let swap_request_id = initiate_swap::<T>(
-							*collateral_asset,
-							fees_to_swap,
-							pool_asset,
-							LendingSwapType::FeeSwap { pool_asset },
-							config.fee_swap_max_oracle_slippage,
-						);
-
-						Pallet::<T>::deposit_event(Event::LendingPoolFeeSwapInitiated {
-							asset: pool_asset,
-							swap_request_id,
-						});
-					}
-				}
-			});
-		}
-
 		// Additionally swap all network fee contributions from fees:
 		for asset in PendingNetworkFees::<T>::iter_keys().collect::<Vec<_>>() {
 			PendingNetworkFees::<T>::mutate(asset, |fee_amount| {
@@ -1329,58 +1295,26 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 					}
 				});
 			},
-			LendingSwapType::FeeSwap { pool_asset } => {
-				GeneralLendingPools::<T>::mutate(pool_asset, |pool| {
-					let Some(pool) = pool.as_mut() else {
-						log_or_panic!("Pool must exist for {pool_asset}");
-						return;
-					};
-
-					pool.receive_fees_in_pools_asset(output_amount);
-				});
-			},
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	/// Pays fee to the pool in *any* asset. If the asset doesn't match the pool's native
-	/// asset, the amount will be combined with other pending fees awaiting a swap into the
-	/// native asset.
-	fn credit_fees_to_pool(loan_asset: Asset, fee_asset: Asset, fee_amount: AssetAmount) {
-		if loan_asset == fee_asset {
-			GeneralLendingPools::<T>::mutate(loan_asset, |maybe_pool| {
-				if let Some(pool) = maybe_pool.as_mut() {
-					pool.receive_fees_in_pools_asset(fee_amount);
-				} else {
-					log_or_panic!("Lending Pool must exist for asset {}", loan_asset);
-				}
-			});
-		} else {
-			PendingPoolFees::<T>::mutate(loan_asset, |pending_fees| {
-				pending_fees.entry(fee_asset).or_insert(0).saturating_accrue(fee_amount);
-			});
-		}
+	/// Pays fee to the pool in the pool's asset.
+	fn credit_fees_to_pool(loan_asset: Asset, fee_amount: AssetAmount) {
+		GeneralLendingPools::<T>::mutate(loan_asset, |maybe_pool| {
+			if let Some(pool) = maybe_pool.as_mut() {
+				pool.receive_fees_in_pools_asset(fee_amount);
+			} else {
+				log_or_panic!("Lending Pool must exist for asset {}", loan_asset);
+			}
+		});
 	}
 
 	fn credit_fees_to_network(fee_asset: Asset, fee_amount: AssetAmount) {
 		PendingNetworkFees::<T>::mutate(fee_asset, |pending_amount| {
 			pending_amount.saturating_accrue(fee_amount);
 		});
-	}
-
-	/// Takes a portion from the full fee and sends it to where network fees go, returning
-	/// (remainder, fee_taken).
-	fn take_network_fee(
-		full_fee_amount: AssetAmount,
-		fee_asset: Asset,
-		network_fee_contribution: Permill,
-	) -> (AssetAmount, AssetAmount) {
-		let network_fee_amount = network_fee_contribution * full_fee_amount;
-
-		Self::credit_fees_to_network(fee_asset, network_fee_amount);
-
-		(full_fee_amount.saturating_sub(network_fee_amount), network_fee_amount)
 	}
 
 	fn create_or_update_loan_account(
@@ -1422,47 +1356,6 @@ impl<T: Config> Pallet<T> {
 		}
 
 		Ok(account)
-	}
-
-	/// Derives the required origination fee, charges it from the borrower's account,
-	/// and sends it to the pool.
-	fn charge_origination_fee(
-		borrower_id: &T::AccountId,
-		loan: &mut GeneralLoan<T>,
-		primary_collateral_asset: Asset,
-		principal: AssetAmount,
-	) -> Result<(), DispatchError> {
-		let config = LendingConfig::<T>::get();
-
-		let origination_fee_amount = equivalent_amount::<T>(
-			loan.asset,
-			primary_collateral_asset,
-			config.origination_fee(loan.asset) * principal,
-		)?;
-
-		T::Balance::try_debit_account(
-			borrower_id,
-			primary_collateral_asset,
-			origination_fee_amount,
-		)?;
-
-		let (pool_fee, network_fee) = Self::take_network_fee(
-			origination_fee_amount,
-			primary_collateral_asset,
-			config.network_fee_contributions.from_origination_fee,
-		);
-
-		Self::credit_fees_to_pool(loan.asset, primary_collateral_asset, pool_fee);
-
-		Self::deposit_event(Event::OriginationFeeTaken {
-			loan_id: loan.id,
-			pool_fee,
-			network_fee,
-			// TODO: add support for broker fees
-			broker_fee: 0,
-		});
-
-		Ok(())
 	}
 }
 
@@ -1895,66 +1788,6 @@ fn interpolate_linear_segment(
 	let delta = slope * (u - u0);
 
 	i0.saturating_add(delta).into_clamped_perthing()
-}
-
-/// Reduce collateral by amount that's equivalent to `fee_amount` in `fee_asset`.
-/// Primary collateral asset is deducted from first, but if that's depleted,
-/// the remainder is deducted from other collateral assets.
-pub fn charge_fee_from_collateral<T: Config>(
-	collateral: &mut BTreeMap<Asset, AssetAmount>,
-	primary_collateral_asset: Asset,
-	fee_asset: Asset,
-	fee_amount: AssetAmount,
-) -> Result<BTreeMap<Asset, AssetAmount>, Error<T>> {
-	let mut remaining_fee_amount_in_requested_asset = fee_amount;
-
-	// The actual amounts taken from each collateral asset
-	let mut fees_taken = BTreeMap::new();
-
-	// Fees are charged from the primary collateral asset first. If it fails to cover
-	// the interest, we use the remaining assets:
-	let collateral_asset_order = [primary_collateral_asset]
-		.into_iter()
-		.chain(collateral.keys().copied().filter(|asset| *asset != primary_collateral_asset))
-		.collect::<Vec<_>>(); // collecting to make borrow checker happy
-
-	for collateral_asset in collateral_asset_order {
-		// Determine how much should be charged in the given collateral asset
-		let amount_required_in_collateral_asset = equivalent_amount::<T>(
-			fee_asset,
-			collateral_asset,
-			remaining_fee_amount_in_requested_asset,
-		)?;
-
-		if let Some(available_collateral_amount) = collateral.get_mut(&collateral_asset) {
-			// Don't charge more than what's available
-			let amount_charged =
-				core::cmp::min(amount_required_in_collateral_asset, *available_collateral_amount);
-
-			available_collateral_amount.saturating_reduce(amount_charged);
-
-			// Reduce the remaining interest amount to pay in requested asset's terms
-			{
-				let amount_charged_in_requested_asset =
-					if amount_charged == amount_required_in_collateral_asset {
-						remaining_fee_amount_in_requested_asset
-					} else {
-						equivalent_amount(collateral_asset, fee_asset, amount_charged)?
-					};
-
-				remaining_fee_amount_in_requested_asset
-					.saturating_reduce(amount_charged_in_requested_asset);
-			}
-
-			fees_taken.insert(collateral_asset, amount_charged);
-
-			if remaining_fee_amount_in_requested_asset == 0 {
-				break;
-			}
-		}
-	}
-
-	Ok(fees_taken)
 }
 
 fn ensure_non_zero_collateral<T: Config>(

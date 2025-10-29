@@ -2209,127 +2209,141 @@ mod affiliates {
 	}
 }
 
-#[test]
-fn abort_swap_request() {
-	const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-	const SWAP_AMOUNT: AssetAmount = 1000;
+mod lending_liquidation_swaps {
 
-	const NUMBER_OF_CHUNKS: u32 = 2;
-
-	const SWAP_REQUEST_2_ID: SwapRequestId = SwapRequestId(2);
-
-	const CHUNK_AMOUNT: AssetAmount = SWAP_AMOUNT / NUMBER_OF_CHUNKS as u128;
-
-	fn init_swap() -> SwapRequestId {
-		Swapping::init_swap_request(
-			INPUT_ASSET,
-			SWAP_AMOUNT,
-			OUTPUT_ASSET,
-			SwapRequestType::Regular {
-				output_action: SwapOutputAction::CreditLendingPool {
-					swap_type: cf_traits::LendingSwapType::Liquidation {
-						borrower_id: ALICE,
-						loan_id: cf_traits::lending::LoanId(0),
-					},
-				},
-			},
-			Default::default(), // no broker fees
-			None,               // no FoK
-			Some(DcaParameters { number_of_chunks: NUMBER_OF_CHUNKS, chunk_interval: 2 }),
-			SwapOrigin::Internal,
-		)
-	}
-
-	new_test_ext()
-		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
-			// Start 2 swap requests, one of them is aborted immediately
-			assert_eq!(init_swap(), SWAP_REQUEST_ID);
-			assert_eq!(init_swap(), SWAP_REQUEST_2_ID);
-
-			assert_eq!(
-				Swapping::abort_swap_request(SWAP_REQUEST_2_ID),
-				Some(SwapExecutionProgress {
-					remaining_input_amount: SWAP_AMOUNT,
-					accumulated_output_amount: 0
-				})
-			);
-		})
-		.then_process_blocks_until_block(SWAP_BLOCK)
-		.then_execute_with(|_| {
-			// One chunk should have been executed here:
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted {
-					swap_request_id: SWAP_REQUEST_ID,
-					..
-				}),
-			);
-
-			assert!(SwapRequests::<Test>::get(SWAP_REQUEST_ID).is_some());
-			assert_eq!(ScheduledSwaps::<Test>::get().len(), 1);
-
-			// Aborting at this point should return the remaining chunk and the swapped amount:
-			assert_eq!(
-				Swapping::abort_swap_request(SWAP_REQUEST_ID),
-				Some(SwapExecutionProgress {
-					remaining_input_amount: CHUNK_AMOUNT,
-					accumulated_output_amount: CHUNK_AMOUNT * DEFAULT_SWAP_RATE
-				})
-			);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID,
-				}),
-			);
-
-			assert!(SwapRequests::<Test>::get(SWAP_REQUEST_ID).is_none());
-			assert!(ScheduledSwaps::<Test>::get().is_empty());
-		});
-}
-
-mod lending_fee_swaps {
-
-	use cf_traits::mocks::lending_pools::MockLendingSystemApi;
+	use cf_traits::{
+		lending::LoanId,
+		mocks::lending_pools::{LiquidationSwapOutcome, MockLendingSystemApi},
+	};
 
 	use super::*;
 
 	#[test]
-	fn lending_fee_swap() {
+	fn abort_swap_request() {
 		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-		const FEE_AMOUNT: AssetAmount = 1000;
+		const SWAP_AMOUNT: AssetAmount = 1000;
+
+		const NUMBER_OF_CHUNKS: u32 = 2;
+
+		const SWAP_REQUEST_2_ID: SwapRequestId = SwapRequestId(2);
+
+		const CHUNK_AMOUNT: AssetAmount = SWAP_AMOUNT / NUMBER_OF_CHUNKS as u128;
+
+		fn init_swap() -> SwapRequestId {
+			Swapping::init_swap_request(
+				INPUT_ASSET,
+				SWAP_AMOUNT,
+				OUTPUT_ASSET,
+				SwapRequestType::Regular {
+					output_action: SwapOutputAction::CreditLendingPool {
+						swap_type: cf_traits::LendingSwapType::Liquidation {
+							borrower_id: ALICE,
+							loan_id: cf_traits::lending::LoanId(0),
+						},
+					},
+				},
+				Default::default(), // no broker fees
+				None,               // no FoK
+				Some(DcaParameters { number_of_chunks: NUMBER_OF_CHUNKS, chunk_interval: 2 }),
+				SwapOrigin::Internal,
+			)
+		}
 
 		new_test_ext()
 			.execute_with(|| {
 				assert_eq!(System::block_number(), INIT_BLOCK);
 
-				Swapping::init_swap_request(
-					INPUT_ASSET,
-					FEE_AMOUNT,
-					OUTPUT_ASSET,
-					SwapRequestType::Regular {
-						output_action: SwapOutputAction::CreditLendingPool {
-							swap_type: cf_traits::LendingSwapType::FeeSwap {
-								pool_asset: OUTPUT_ASSET,
-							},
-						},
-					},
-					Default::default(), // no broker fees
-					None,               // no FoK
-					None,               // no DCA
-					SwapOrigin::Internal,
+				// Start 2 swap requests, one of them is aborted immediately
+				assert_eq!(init_swap(), SWAP_REQUEST_ID);
+				assert_eq!(init_swap(), SWAP_REQUEST_2_ID);
+
+				assert_eq!(
+					Swapping::abort_swap_request(SWAP_REQUEST_2_ID),
+					Some(SwapExecutionProgress {
+						remaining_input_amount: SWAP_AMOUNT,
+						accumulated_output_amount: 0
+					})
 				);
 			})
 			.then_process_blocks_until_block(SWAP_BLOCK)
 			.then_execute_with(|_| {
-				// Check that swapped fees would be returned to the lending
+				// One chunk should have been executed here:
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted {
+						swap_request_id: SWAP_REQUEST_ID,
+						..
+					}),
+				);
+
+				assert!(SwapRequests::<Test>::get(SWAP_REQUEST_ID).is_some());
+				assert_eq!(ScheduledSwaps::<Test>::get().len(), 1);
+
+				// Aborting at this point should return the remaining chunk and the swapped amount:
+				assert_eq!(
+					Swapping::abort_swap_request(SWAP_REQUEST_ID),
+					Some(SwapExecutionProgress {
+						remaining_input_amount: CHUNK_AMOUNT,
+						accumulated_output_amount: CHUNK_AMOUNT * DEFAULT_SWAP_RATE
+					})
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+						swap_request_id: SWAP_REQUEST_ID,
+					}),
+				);
+
+				assert!(SwapRequests::<Test>::get(SWAP_REQUEST_ID).is_none());
+				assert!(ScheduledSwaps::<Test>::get().is_empty());
+			});
+	}
+
+	#[test]
+	fn lending_liquidation_swap() {
+		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const FEE_AMOUNT: AssetAmount = 1000;
+
+		const BORROWER_ID: u64 = 8;
+		const LOAN_ID: LoanId = LoanId(0);
+
+		new_test_ext()
+			.execute_with(|| {
+				assert_eq!(System::block_number(), INIT_BLOCK);
+
+				assert_eq!(
+					Swapping::init_swap_request(
+						INPUT_ASSET,
+						FEE_AMOUNT,
+						OUTPUT_ASSET,
+						SwapRequestType::Regular {
+							output_action: SwapOutputAction::CreditLendingPool {
+								swap_type: cf_traits::LendingSwapType::Liquidation {
+									borrower_id: BORROWER_ID,
+									loan_id: LOAN_ID,
+								},
+							},
+						},
+						Default::default(), // no broker fees
+						None,               // no FoK
+						None,               // no DCA
+						SwapOrigin::Internal,
+					),
+					SWAP_REQUEST_ID
+				);
+			})
+			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_execute_with(|_| {
+				// Check that upon completion liquidation swap calls into the lending
 				// pallet through LendingSystemApi:
 				assert_eq!(
-					MockLendingSystemApi::get_swapped_fees(OUTPUT_ASSET),
-					Some(FEE_AMOUNT * DEFAULT_SWAP_RATE)
+					MockLendingSystemApi::get_liquidation_swap_outcome(SWAP_REQUEST_ID),
+					Some(LiquidationSwapOutcome {
+						borrower_id: BORROWER_ID,
+						loan_id: LOAN_ID,
+						output_amount: FEE_AMOUNT * DEFAULT_SWAP_RATE
+					})
 				)
 			});
 	}
