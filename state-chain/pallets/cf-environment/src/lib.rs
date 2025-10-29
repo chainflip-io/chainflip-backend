@@ -746,13 +746,17 @@ pub mod pallet {
 				let Ok(signer_account) = signature_data.signer_account() else {
 					return Err(InvalidTransaction::BadSigner.into());
 				};
-				let valid_tx = validate_metadata::<T>(transaction_metadata, &signer_account)?;
+				ensure!(
+					frame_system::Account::<T>::contains_key(&signer_account),
+					InvalidTransaction::BadSigner
+				);
 				T::TransactionPayments::default().validate(
 					&signer_account,
 					inner_call,
 					&inner_call.get_dispatch_info(),
 					inner_call.encoded_size(),
 				)?;
+				let valid_tx = validate_metadata::<T>(transaction_metadata, &signer_account)?;
 
 				let runtime_version = <T as frame_system::Config>::Version::get();
 
