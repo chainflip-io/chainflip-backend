@@ -10,12 +10,14 @@ import {
   amountToFineAmount,
   assetDecimals,
   createEvmWallet,
+  createStateChainKeypair,
   decodeDotAddressForContract,
   decodeSolAddress,
   externalChainToScAccount,
   getEvmEndpoint,
   handleSubstrateError,
   isWithinOnePercent,
+  lpMutex,
   newAssetAddress,
   runWithTimeout,
   runWithTimeoutAndExit,
@@ -42,6 +44,7 @@ const args = z.tuple([
     .refine((val) => Array.isArray(val) && val.length > 0, {
       message: 'EVM mnemonics must be provided',
     }),
+  z.string().refine((val) => val.length > 0, { message: 'Whale mnemonic needed' }),
 ]);
 
 const blocksToExpiry = 20;
@@ -184,8 +187,9 @@ async function signCallUsingEvmWallet(
 }
 
 async function main() {
-  const [_, __, mnemonics] = args.parse(process.argv);
+  const [_, __, mnemonics, whaleMnemonic] = args.parse(process.argv);
   await using chainflipApi = await getChainflipApi();
+  const whaleLp = createStateChainKeypair(whaleMnemonic, true);
 
   for (const mnemonic of mnemonics) {
     const evmWallet = Wallet.fromPhrase(mnemonic).connect(
@@ -211,7 +215,7 @@ async function main() {
       ['Btc', 'Eth', 'Usdc', 'Usdt', 'Sol'].includes(asset),
     )) {
       let amount;
-      const chain = shortChainFromAsset(asset as InternalAsset);
+
       switch (asset) {
         case 'Btc':
           amount = 2;
@@ -233,47 +237,38 @@ async function main() {
           break;
       }
 
-      // SET REFUND ADDRESS
-      await signCallUsingEvmWallet(
-        globalLogger,
-        await getRegisterRefundAddress(chainflipApi, asset as InternalAsset, chain),
-        chainflipApi,
-        evmWallet,
-      );
-      await observeEvent(globalLogger, 'liquidityProvider:LiquidityRefundAddressRegistered', {
-        test: (event) => event.data.address.Eth === evmScAccount,
-      }).event;
-
-      // OPEN DEPOSIT CHANNEL
-      await signCallUsingEvmWallet(
-        globalLogger,
-        getOpenDepositChannelCall(chainflipApi, asset as InternalAsset),
-        chainflipApi,
-        evmWallet,
-      );
-
-      console.log('Waiting for deposit address ready event', evmScAccount, asset);
-      const depositAddressReady = await observeEvent(
-        globalLogger,
-        'liquidityProvider:LiquidityDepositAddressReady',
-        {
-          test: (event) => event.data.asset === asset && event.data.accountId === evmScAccount,
-        },
-      ).event;
-      const ingressAddress = depositAddressReady.data.depositAddress[chain];
-      globalLogger.trace(`Initiating transfer to ${ingressAddress}`);
-
-      // DEPOSIT TO DEPOSIT CHANNEL
-      await runWithTimeout(
-        send(globalLogger, asset as InternalAsset, ingressAddress, String(amount)),
-        130,
-        globalLogger,
-        `sending liquidity ${amount} ${asset}.`,
-      );
-      await observeNonNativeAccountCredited(asset as InternalAsset, evmScAccount, String(amount));
-      globalLogger.debug(`Liquidity deposited to ${ingressAddress}`);
+      await lpMutex.runExclusive(whaleMnemonic, async () => {
+        const nonce = await chainflipApi.rpc.system.accountNextIndex(whaleLp.address);
+        await chainflipApi.tx.liquidityProvider
+          .transferAsset({
+            amount: amount.toString(),
+            asset: asset as InternalAsset,
+            destination: evmScAccount,
+          })
+          .signAndSend(whaleLp, { nonce }, handleSubstrateError(chainflipApi));
+      });
     }
   }
 }
 
-await runWithTimeoutAndExit(main(), 120_000);
+const generateNEvmWallets = async (n: number) => {
+  let i = 0;
+  const wallets = [];
+  while (i < n) {
+    const wallet = await createEvmWallet();
+    console.log(`EVM Wallet ${i + 1}: ${wallet.address}`);
+    console.log(`MNEMONIC ${i + 1}: ${wallet.mnemonic?.phrase}`);
+    console.log(`PKEY ${i + 1}: ${wallet.privateKey}`);
+    console.log('');
+    wallets.push(wallet);
+    i++;
+  }
+
+  console.log(JSON.stringify(wallets.map((w) => w.mnemonic?.phrase)));
+};
+
+await runWithTimeoutAndExit(
+  // generateNEvmWallets(10)
+  main(),
+  120_000,
+);
