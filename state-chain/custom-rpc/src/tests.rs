@@ -277,6 +277,14 @@ fn test_environment_serialization() {
 				(ForeignChain::Solana, 1000u32.into()),
 				(ForeignChain::Assethub, 1000u32.into()),
 			]),
+			ingress_delays: HashMap::from([
+				(ForeignChain::Bitcoin, 0u32),
+				(ForeignChain::Ethereum, 5u32),
+				(ForeignChain::Polkadot, 2u32),
+				(ForeignChain::Arbitrum, 5u32),
+				(ForeignChain::Solana, 123u32),
+				(ForeignChain::Assethub, 2u32),
+			]),
 		},
 		funding: FundingEnvironment {
 			redemption_tax: 0u32.into(),

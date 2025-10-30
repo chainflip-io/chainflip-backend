@@ -23,7 +23,6 @@ use frame_support::{migrations::VersionedMigration, traits::OnRuntimeUpgrade};
 use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
-
 mod chainflip_network_name_environment;
 
 // NOTE: Do not remove this. This is used to update the on-chain version for CFE compatibility

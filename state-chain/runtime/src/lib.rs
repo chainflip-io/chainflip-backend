@@ -2186,6 +2186,17 @@ impl_runtime_apis! {
 			}
 		}
 
+		fn cf_ingress_delay(chain: ForeignChain) -> u32 {
+			match chain {
+				ForeignChain::Ethereum => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, EthereumInstance>::get(),
+				ForeignChain::Polkadot => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, PolkadotInstance>::get(),
+				ForeignChain::Bitcoin => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, BitcoinInstance>::get(),
+				ForeignChain::Arbitrum => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, ArbitrumInstance>::get(),
+				ForeignChain::Solana => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, SolanaInstance>::get(),
+				ForeignChain::Assethub => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, AssethubInstance>::get(),
+			}
+		}
+
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth> {
 
 			pallet_cf_lending_pools::boost_pools_iter::<Runtime>().map(|(asset, tier, core_pool)| {

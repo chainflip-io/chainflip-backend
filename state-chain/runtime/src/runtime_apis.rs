@@ -863,6 +863,9 @@ decl_runtime_apis!(
 		fn cf_chainflip_network_and_state();
 		fn cf_chainflip_network_and_state(
 		) -> Result<(cf_primitives::ChainflipNetwork, u32, BlockNumber), DispatchErrorWithMessage>;
+		#[changed_in(8)]
+		fn cf_ingress_delay();
+		fn cf_ingress_delay(chain: ForeignChain) -> u32;
 	}
 );
 
