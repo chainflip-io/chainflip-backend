@@ -147,6 +147,9 @@ async function signCallUsingEvmWallet(
     { Eth: 'PersonalSign' },
   );
 
+  console.log('Received encode_non_native_call response from chainflip node');
+  console.log(JSON.stringify(personalSignResponse, null, 2));
+
   const [evmPayload, personalSignMetadata] =
     encodeNonNativeCallResponseSchema.parse(personalSignResponse);
 
@@ -154,6 +157,7 @@ async function signCallUsingEvmWallet(
   const evmString = parsedEvmPayload.String;
 
   if (evmNonce !== personalSignMetadata.nonce) {
+    console.log(`EVM Nonce: ${evmNonce}, Metadata Nonce: ${personalSignMetadata.nonce}`);
     throw new Error(
       `Nonce mismatch: provided ${evmNonce}, metadata has ${personalSignMetadata.nonce}`,
     );
@@ -162,6 +166,7 @@ async function signCallUsingEvmWallet(
   // Sign with personal_sign (automatically adds prefix)
   const evmSignature = await evmWallet.signMessage(evmString);
 
+  console.log('Submitting EVM PersonalSign call (nonNativeSignedCall)...');
   // Submit as unsigned extrinsic - no broker needed
   await chainflipApi.tx.environment
     .nonNativeSignedCall(
