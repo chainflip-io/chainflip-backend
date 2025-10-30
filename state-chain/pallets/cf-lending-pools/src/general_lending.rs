@@ -227,10 +227,7 @@ impl<T: Config> LoanAccount<T> {
 			{
 				let excess_amount = match self.get_loan_and_check_asset(*loan_id, *to_asset) {
 					Some(loan) => {
-						match loan.repay_principal(
-							swap_progress.accumulated_output_amount,
-							true, /* liquidation */
-						) {
+						match loan.repay_via_liquidation(swap_progress.accumulated_output_amount) {
 							LoanRepaymentOutcome::FullyRepaid { excess_amount } => {
 								fully_repaid_loans.push(loan_id);
 								excess_amount
@@ -622,17 +619,7 @@ impl<T: Config> GeneralLoan<T> {
 		usd_value_of::<T>(self.asset, self.owed_principal)
 	}
 
-	/// Repays (fully or partially) the loan with `provided_amount` (that was either debited from
-	/// the account or received during liquidation). Returns any unused amount. The caller is
-	/// responsible for making sure that the provided asset is the same as the loan's asset.
-	fn repay_principal(
-		&mut self,
-		provided_amount: AssetAmount,
-		should_charge_liquidation_fee: bool,
-	) -> LoanRepaymentOutcome {
-		let config = LendingConfig::<T>::get();
-
-		// Collect any pending interest before any repayment:
+	fn collect_pending_interest(&mut self) {
 		if self
 			.charge_pending_interest_if_above_threshold(None /* no threshold */)
 			.is_err()
@@ -641,8 +628,16 @@ impl<T: Config> GeneralLoan<T> {
 				"Final interest charge should not fail since the price oracle is not required here"
 			);
 		}
+	}
 
-		let provided_amount_after_fees = if should_charge_liquidation_fee {
+	/// Repays the loan after collecting any pending interest and deducting liquidation fee
+	/// from the provided amount.
+	fn repay_via_liquidation(&mut self, provided_amount: AssetAmount) -> LoanRepaymentOutcome {
+		let config = LendingConfig::<T>::get();
+
+		self.collect_pending_interest();
+
+		let provided_amount_after_fees = {
 			let liquidation_fee = config.get_config_for_asset(self.asset).liquidation_fee *
 				core::cmp::min(provided_amount, self.owed_principal);
 
@@ -664,12 +659,18 @@ impl<T: Config> GeneralLoan<T> {
 			}
 
 			provided_amount.saturating_sub(liquidation_fee)
-		} else {
-			provided_amount
 		};
 
+		self.repay_principal(provided_amount_after_fees)
+	}
+
+	/// Repays (fully or partially) the loan with `provided_amount` (that was either debited from
+	/// the account or received during liquidation). Returns any unused amount. The caller is
+	/// responsible for making sure that all pending interest has already been collected (via
+	/// [collect_pending_interest]) and that the provided asset is the same as the loan's asset.
+	fn repay_principal(&mut self, provided_amount: AssetAmount) -> LoanRepaymentOutcome {
 		// Making sure the user doesn't pay more than the total principal plus liquidation fee:
-		let repayment_amount = core::cmp::min(provided_amount_after_fees, self.owed_principal);
+		let repayment_amount = core::cmp::min(provided_amount, self.owed_principal);
 
 		GeneralLendingPools::<T>::mutate(self.asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
@@ -691,7 +692,7 @@ impl<T: Config> GeneralLoan<T> {
 			// be pending liquidation swaps to process), so we let the caller settle it instead
 			// of doing it here.
 			LoanRepaymentOutcome::FullyRepaid {
-				excess_amount: provided_amount_after_fees.saturating_sub(repayment_amount),
+				excess_amount: provided_amount.saturating_sub(repayment_amount),
 			}
 		} else {
 			LoanRepaymentOutcome::PartiallyRepaid
@@ -1038,7 +1039,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 	fn try_making_repayment(
 		borrower_id: &T::AccountId,
 		loan_id: LoanId,
-		repayment_amount: AssetAmount,
+		repayment_amount: RepaymentAmount,
 	) -> Result<(), DispatchError> {
 		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
 			let config = LendingConfig::<T>::get();
@@ -1050,18 +1051,27 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			let loan_asset = loan.asset;
 
-			if repayment_amount < loan.owed_principal {
-				ensure!(
-					usd_value_of::<T>(loan.asset, repayment_amount)? >=
-						config.minimum_update_loan_amount_usd,
-					Error::<T>::AmountBelowMinimum
-				);
-			}
+			loan.collect_pending_interest();
+
+			let repayment_amount = match repayment_amount {
+				RepaymentAmount::Full => loan.owed_principal,
+				RepaymentAmount::Exact(amount) => {
+					if amount < loan.owed_principal {
+						ensure!(
+							usd_value_of::<T>(loan.asset, amount)? >=
+								config.minimum_update_loan_amount_usd,
+							Error::<T>::AmountBelowMinimum
+						);
+					}
+
+					amount
+				},
+			};
 
 			T::Balance::try_debit_account(borrower_id, loan_asset, repayment_amount)?;
 
 			if let LoanRepaymentOutcome::FullyRepaid { excess_amount } =
-				loan.repay_principal(repayment_amount, false /* no liquidation fee */)
+				loan.repay_principal(repayment_amount)
 			{
 				loan_account.settle_loan(loan_id, false /* not via liquidation */);
 
@@ -1260,7 +1270,7 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 						.get_loan_and_check_asset(loan_id, liquidation_swap.to_asset)
 					{
 						Some(loan) => {
-							match loan.repay_principal(output_amount, true /* liquidation */) {
+							match loan.repay_via_liquidation(output_amount) {
 								LoanRepaymentOutcome::FullyRepaid { excess_amount } => {
 									// NOTE: we don't need to worry about settling the loan just yet
 									// as there may be more liquidation swaps to process for the
