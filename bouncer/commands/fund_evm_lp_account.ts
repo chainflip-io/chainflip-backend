@@ -25,8 +25,6 @@ import {
 } from 'shared/utils';
 import { globalLogger, Logger } from 'shared/utils/logger';
 import { Asset, assetConstants, InternalAsset } from '@chainflip/cli';
-import { depositLiquidity } from 'shared/deposit_liquidity';
-import { setupLpAccount } from 'shared/setup_account';
 import { z } from 'zod';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
@@ -203,23 +201,24 @@ async function main() {
     console.log('Mnemonic: ', evmWallet.mnemonic?.phrase);
     const evmScAccount = externalChainToScAccount(evmWallet.address);
 
-    globalLogger.info(`Funding with FLIP to register the EVM account: ${evmScAccount}`);
-    await fundFlip(globalLogger, evmScAccount, '1000');
+    // globalLogger.info(`Funding with FLIP to register the EVM account: ${evmScAccount}`);
+    // await fundFlip(globalLogger, evmScAccount, '1000');
 
     // register LP account
-    await signCallUsingEvmWallet(
-      globalLogger,
-      getRegisterLpCall(chainflipApi),
-      chainflipApi,
-      evmWallet as HDNodeWallet,
-      () => observeNonNativeSignedRegisterLpCall(globalLogger, evmScAccount),
-    );
-    console.log(`Successfully registered LP account ${evmScAccount}`);
+    // await signCallUsingEvmWallet(
+    //   globalLogger,
+    //   getRegisterLpCall(chainflipApi),
+    //   chainflipApi,
+    //   evmWallet as HDNodeWallet,
+    //   () => observeNonNativeSignedRegisterLpCall(globalLogger, evmScAccount),
+    // );
+    // console.log(`Successfully registered LP account ${evmScAccount}`);
 
     for (const asset of Object.keys(assetConstants).filter((asset) =>
       ['Btc', 'Eth', 'Usdc', 'Usdt', 'Sol'].includes(asset),
     )) {
       let amount;
+      const chain = shortChainFromAsset(asset as InternalAsset);
 
       switch (asset) {
         case 'Btc':
@@ -242,12 +241,38 @@ async function main() {
           break;
       }
 
-      await lpMutex.runExclusive(whaleMnemonic, async () => {
-        const nonce = await chainflipApi.rpc.system.accountNextIndex(whaleLp.address);
-        await chainflipApi.tx.liquidityProvider
-          .transferAsset(amount.toString(), asset as InternalAsset, evmScAccount)
-          .signAndSend(whaleLp, { nonce }, handleSubstrateError(chainflipApi));
-      });
+      // SET REFUND ADDRESS
+      console.log(`Setting refund address for ${asset}`);
+      await signCallUsingEvmWallet(
+        globalLogger,
+        await getRegisterRefundAddress(chainflipApi, asset as InternalAsset, chain),
+        chainflipApi,
+        evmWallet,
+      );
+      await observeEvent(globalLogger, 'liquidityProvider:LiquidityRefundAddressRegistered', {
+        test: (event) => event.data.address.Eth === evmScAccount,
+      }).event;
+      console.log(`Successfully set refund address for ${asset}`);
+
+      try {
+        console.log(`Depositing ${amount} ${asset} to LP account ${evmScAccount}`);
+        await lpMutex.runExclusive(whaleMnemonic, async () => {
+          const nonce = await chainflipApi.rpc.system.accountNextIndex(whaleLp.address);
+          await chainflipApi.tx.liquidityProvider
+            .transferAsset(amount.toString(), asset as InternalAsset, evmScAccount)
+            .signAndSend(whaleLp, { nonce }, handleSubstrateError(chainflipApi));
+        });
+
+        await observeEvent(globalLogger, 'assetBalances:AccountCredited', {
+          test: (event) => event.data.asset === asset && event.data.accountId === evmScAccount,
+          finalized: false,
+          timeoutSeconds: 120,
+        }).event;
+
+        console.log(`Successfully deposited ${amount} ${asset} to LP account ${evmScAccount}`);
+      } catch (e) {
+        console.log(e);
+      }
     }
   }
 }
