@@ -367,9 +367,9 @@ impl<T: Config> LoanAccount<T> {
 
 				loan.last_interest_payment_at = current_block;
 
-				loan.charge_pending_interest_if_above_threshold(
+				loan.charge_pending_interest_if_above_threshold(Some(
 					config.interest_collection_threshold_usd,
-				)?;
+				))?;
 			}
 		}
 
@@ -632,12 +632,15 @@ impl<T: Config> GeneralLoan<T> {
 	) -> LoanRepaymentOutcome {
 		let config = LendingConfig::<T>::get();
 
-		// Collect any pending interest before any repayment. Note that in the unlikely scenario
-		// where this fails (due to unavailable oracle prices), the protocol/pool may miss out
-		// on the very last (and very small) interest payment, which should be OK.
-		let _ = self.charge_pending_interest_if_above_threshold(
-			1, /* collecting any non-zero amount */
-		);
+		// Collect any pending interest before any repayment:
+		if self
+			.charge_pending_interest_if_above_threshold(None /* no threshold */)
+			.is_err()
+		{
+			log_or_panic!(
+				"Final interest charge should not fail since the price oracle is not required here"
+			);
+		}
 
 		let provided_amount_after_fees = if should_charge_liquidation_fee {
 			let liquidation_fee = config.get_config_for_asset(self.asset).liquidation_fee *
@@ -697,25 +700,25 @@ impl<T: Config> GeneralLoan<T> {
 
 	fn charge_pending_interest_if_above_threshold(
 		&mut self,
-		threshold_usd: AssetAmount,
+		threshold_usd: Option<AssetAmount>,
 	) -> DispatchResult {
 		let loan_asset = self.asset;
-
-		// Making sure that the threshold isn't 0:
-		let threshold_usd = core::cmp::max(threshold_usd, 1);
 
 		if self.pending_interest == Default::default() {
 			return Ok(());
 		}
 
 		let charge_fee_if_exceeds_threshold = |fee: &mut ScaledAmountHP| {
-			// Only charge fees if the accumulated amount is greater than some threshold
-			let fee_usd_value = usd_value_of::<T>(loan_asset, fee.into_asset_amount())?;
-
-			let fee_taken = if fee_usd_value >= threshold_usd {
-				fee.take_non_fractional_part()
+			let fee_taken = if let Some(threshold) = threshold_usd {
+				// If the threshold is provided, take fees only if they exceed it:
+				if usd_value_of::<T>(loan_asset, fee.into_asset_amount())? > threshold {
+					fee.take_non_fractional_part()
+				} else {
+					Default::default()
+				}
 			} else {
-				Default::default()
+				// If no threshold is provided, take the fees unconditionally:
+				fee.take_non_fractional_part()
 			};
 
 			Ok::<_, DispatchError>(fee_taken)
