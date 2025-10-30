@@ -1344,10 +1344,11 @@ export async function checkAvailabilityAllSolanaNonces(testContext: TestContext)
   }
 }
 
-export function createStateChainKeypair(uri: string) {
+export function createStateChainKeypair(uriOrMnemonic: string, fromMnemonic?: boolean) {
   const keyring = new Keyring({ type: 'sr25519' });
   keyring.setSS58Format(2112);
-  return keyring.createFromUri(uri);
+  if (fromMnemonic) return keyring.addFromMnemonic(uriOrMnemonic);
+  return keyring.createFromUri(uriOrMnemonic);
 }
 
 /// Takes the user friendly price of an "asset per asset" and converts it to the internal price format.

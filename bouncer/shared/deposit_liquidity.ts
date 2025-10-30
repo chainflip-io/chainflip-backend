@@ -23,14 +23,15 @@ export async function depositLiquidity(
   amount: number,
   waitForFinalization = false,
   optionLpUri?: string,
+  optionLpMnemonic?: string,
 ) {
-  const lpUri = optionLpUri ?? (process.env.LP_URI || '//LP_1');
+  const lpUri = optionLpUri ?? optionLpMnemonic ?? (process.env.LP_URI || '//LP_1');
   const logger = parentLogger.child({ ccy, amount, lpUri });
 
   await using chainflip = await getChainflipApi();
   const chain = shortChainFromAsset(ccy);
 
-  const lp = createStateChainKeypair(lpUri);
+  const lp = createStateChainKeypair(lpUri, optionLpMnemonic ? true : false);
 
   // If no liquidity refund address is registered, then do that now
   if (
