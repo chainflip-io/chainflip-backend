@@ -334,6 +334,7 @@ impl pallet_cf_environment::Config for Test {
 	type SolEnvironment = MockSolEnvironment;
 	type SolanaBroadcaster = MockSolanaBroadcaster;
 	type TransactionPayments = MockPayment<Self>;
+	type GetTransactionPayments = ();
 	type WeightInfo = ();
 }
 

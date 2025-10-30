@@ -166,10 +166,14 @@ pub mod pallet {
 			+ IsSubType<Call<Self>>
 			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
+		/// Handles fee processing.
 		type TransactionPayments: SignedExtension<
-				AccountId = <Self as frame_system::Config>::AccountId,
-				Call = <Self as Config>::RuntimeCall,
-			> + Default;
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Call = <Self as Config>::RuntimeCall,
+		>;
+
+		/// Required as a workaround because TransactionPayments doesn't implement Default.
+		type GetTransactionPayments: Get<Self::TransactionPayments>;
 
 		/// Weight information
 		type WeightInfo: WeightInfo;
@@ -685,7 +689,7 @@ pub mod pallet {
 				signature_data.signer_account().map_err(|_| Error::<T>::FailedToDecodeSigner)?;
 
 			// Pre-dispatch fee processing
-			let fee_processor = T::TransactionPayments::default();
+			let fee_processor = T::GetTransactionPayments::get();
 			let dispatch_info = chainflip_extrinsic.call.get_dispatch_info();
 			let len = chainflip_extrinsic.call.encoded_size();
 			let pre_dispatch_info = fee_processor
@@ -750,7 +754,7 @@ pub mod pallet {
 					frame_system::Account::<T>::contains_key(&signer_account),
 					InvalidTransaction::BadSigner
 				);
-				T::TransactionPayments::default().validate(
+				T::GetTransactionPayments::get().validate(
 					&signer_account,
 					inner_call,
 					&inner_call.get_dispatch_info(),
