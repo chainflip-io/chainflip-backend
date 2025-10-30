@@ -29,10 +29,9 @@ async function main() {
   const [_, __, keyType, lpKeys] = args.parse(process.argv);
 
   for (const key of lpKeys) {
-    console.log(key);
     await setupLpAccount(globalLogger, key);
 
-    for (const asset of Object.keys(assetConstants)) {
+    for (const asset of Object.keys(assetConstants).filter((asset) => asset !== 'Dot')) {
       let amount;
       switch (asset) {
         case 'BTC':
