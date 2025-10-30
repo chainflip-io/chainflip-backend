@@ -48,9 +48,10 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
-	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
-	EpochIndex, ForeignChain, IngressOrEgress, Ipv6Addr, NetworkEnvironment, Price, SemVer,
-	SwapRequestId, ThresholdSignatureRequestId, FLIPPERINOS_PER_FLIP,
+	BlockNumber, BroadcastId, ChainflipNetwork, ChannelId, DcaParameters, Ed25519PublicKey,
+	EgressCounter, EgressId, EpochIndex, ForeignChain, IngressOrEgress, Ipv6Addr,
+	NetworkEnvironment, Price, SemVer, SwapRequestId, ThresholdSignatureRequestId,
+	FLIPPERINOS_PER_FLIP,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -995,6 +996,10 @@ pub trait GetBlockHeight<C: Chain> {
 
 pub trait CompatibleCfeVersions {
 	fn current_release_version() -> SemVer;
+}
+
+pub trait ChainflipNetworkInfo {
+	fn chainflip_network() -> ChainflipNetwork;
 }
 
 pub trait AuthoritiesCfeVersions {

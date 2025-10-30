@@ -113,7 +113,7 @@ async function testFeeCollection(
   const brokerUri = `//BROKER_VAULT_FEE_COLLECTION_${inputAsset}`;
   const broker = createStateChainKeypair(brokerUri);
   const refundAddress = await newAssetAddress('Eth', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
-  await Promise.all([setupBrokerAccount(logger, brokerUri)]);
+  await setupBrokerAccount(logger, brokerUri);
   logger.debug('Registering affiliate');
   const { affiliateId, shortId } = await registerAffiliate(logger, brokerUri, refundAddress);
 
