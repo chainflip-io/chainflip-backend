@@ -87,6 +87,7 @@ pub fn build_eip712_typed_data(
 #[test]
 #[ignore = "used to generate the Json typed data to then test in the browser"]
 fn test_build_eip712_typed_data() {
+	use cf_chains::sol::VaultSwapOrDepositChannelId;
 	use pallet_cf_ingress_egress::DepositWitness;
 	let chainflip_network = ChainflipNetwork::Mainnet;
 
@@ -97,13 +98,13 @@ fn test_build_eip712_typed_data() {
 					deposit_address: [3u8; 32].into(),
 					amount: 5000u64,
 					asset: cf_chains::assets::sol::Asset::Sol,
-					deposit_details: (),
+					deposit_details: VaultSwapOrDepositChannelId::Channel(Default::default()),
 				},
 				DepositWitness {
 					deposit_address: [4u8; 32].into(),
 					amount: 6000u64,
 					asset: cf_chains::assets::sol::Asset::SolUsdc,
-					deposit_details: (),
+					deposit_details: VaultSwapOrDepositChannelId::Channel(Default::default()),
 				},
 			],
 			block_height: 6u64,
