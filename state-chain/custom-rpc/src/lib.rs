@@ -593,6 +593,7 @@ pub struct IngressEgressEnvironment {
 	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
 	pub egress_dust_limits: any::AssetMap<NumberOrHex>,
 	pub channel_opening_fees: HashMap<ForeignChain, NumberOrHex>,
+	pub ingress_delays: HashMap<ForeignChain, u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -1888,13 +1889,21 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<IngressEgressEnvironment> {
-		self.rpc_backend.with_runtime_api(at, |api, hash| {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
 			let mut witness_safety_margins = HashMap::new();
 			let mut channel_opening_fees = HashMap::new();
+			let mut ingress_delays = HashMap::new();
 
 			for chain in ForeignChain::iter() {
 				witness_safety_margins.insert(chain, api.cf_witness_safety_margin(hash, chain)?);
 				channel_opening_fees.insert(chain, api.cf_channel_opening_fee(hash, chain)?.into());
+				match version {
+					Some(v) if v >= 8 => {
+						ingress_delays.insert(chain, api.cf_ingress_delay(hash, chain)?);
+					},
+					// Not defined before v8
+					_ => {},
+				}
 			}
 
 			Ok::<_, CfApiError>(IngressEgressEnvironment {
@@ -1912,6 +1921,7 @@ where
 					api.cf_egress_dust_limit(hash, asset).map(Into::into)
 				})?,
 				channel_opening_fees,
+				ingress_delays,
 			})
 		})
 	}
