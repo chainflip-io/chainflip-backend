@@ -63,11 +63,8 @@ mod benchmarks {
 		caller
 	}
 
-	fn gov_origin<T: Config>() -> RawOrigin<T::AccountId> {
-		T::EnsureGovernance::try_successful_origin()
-			.unwrap()
-			.into()
-			.unwrap_or_else(|_| panic!("Could not create governance origin"))
+	fn gov_origin<T: Config>() -> <T as frame_system::Config>::RuntimeOrigin {
+		T::EnsureGovernance::try_successful_origin().unwrap()
 	}
 
 	#[benchmark]
@@ -82,8 +79,10 @@ mod benchmarks {
 		.try_into()
 		.expect("Length is within the configured len");
 
-		#[extrinsic_call]
-		update_pallet_config(origin, updates);
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::update_pallet_config(origin, updates));
+		}
 	}
 
 	#[benchmark]
@@ -194,8 +193,10 @@ mod benchmarks {
 
 		assert_eq!(BoostPools::<T>::iter().count(), 0);
 
-		#[extrinsic_call]
-		create_boost_pools(origin, new_pools.clone());
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::create_boost_pools(origin, new_pools.clone()));
+		}
 
 		assert_eq!(BoostPools::<T>::iter().count(), 1);
 	}
@@ -206,7 +207,7 @@ mod benchmarks {
 		set_asset_price_in_usd::<T>(LOAN_ASSET, 100_000_000_000);
 		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000);
 
-		assert_ok!(Pallet::<T>::create_lending_pool(gov_origin::<T>().into(), LOAN_ASSET));
+		assert_ok!(Pallet::<T>::create_lending_pool(gov_origin::<T>(), LOAN_ASSET));
 
 		for i in 1..=number_of_lenders {
 			let lender = setup_lp_account::<T>(LOAN_ASSET, i);
@@ -224,8 +225,10 @@ mod benchmarks {
 
 		assert_eq!(GeneralLendingPools::<T>::iter().count(), 0);
 
-		#[extrinsic_call]
-		create_lending_pool(origin, LOAN_ASSET);
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::create_lending_pool(origin, LOAN_ASSET));
+		}
 
 		assert_eq!(GeneralLendingPools::<T>::iter().count(), 1);
 	}
