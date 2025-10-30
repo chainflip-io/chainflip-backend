@@ -42,19 +42,19 @@ async function main() {
     )) {
       let amount;
       switch (asset) {
-        case 'BTC':
+        case 'Btc':
           amount = 2;
           break;
-        case 'ETH':
+        case 'Eth':
           amount = 10;
           break;
-        case 'USDC':
+        case 'Usdc':
           amount = 10000;
           break;
-        case 'USDT':
+        case 'Usdt':
           amount = 10000;
           break;
-        case 'SOL':
+        case 'Sol':
           amount = 10;
           break;
         default:

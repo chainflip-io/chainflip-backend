@@ -94,7 +94,8 @@ async function observeNonNativeSignedRegisterLpCall(logger: Logger, scAccount: s
 
 // REGISTER REFUND ADDRESS
 async function getRegisterRefundAddress(chainflip: ApiPromise, ccy: InternalAsset, chain: string) {
-  let refundAddress = await newAssetAddress(ccy, 'LP_1');
+  let refundAddress =
+    chain === 'Btc' ? 'mo3MtB6mLxTBBSmzzJvR3TtgrT9qBkoup3' : await newAssetAddress(ccy, 'LP_1');
   refundAddress = chain === 'Hub' ? decodeDotAddressForContract(refundAddress) : refundAddress;
   refundAddress = chain === 'Sol' ? decodeSolAddress(refundAddress) : refundAddress;
 
@@ -212,19 +213,19 @@ async function main() {
       let amount;
       const chain = shortChainFromAsset(asset as InternalAsset);
       switch (asset) {
-        case 'BTC':
+        case 'Btc':
           amount = 2;
           break;
-        case 'ETH':
+        case 'Eth':
           amount = 10;
           break;
-        case 'USDC':
+        case 'Usdc':
           amount = 10000;
           break;
-        case 'USDT':
+        case 'Usdt':
           amount = 10000;
           break;
-        case 'SOL':
+        case 'Sol':
           amount = 10;
           break;
         default:
