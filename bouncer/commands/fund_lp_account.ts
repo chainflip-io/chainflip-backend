@@ -52,7 +52,7 @@ async function main() {
           amount = 10000;
           break;
         case 'Usdt':
-          amount = 10;
+          amount = 10000;
           break;
         case 'Sol':
           amount = 10;
