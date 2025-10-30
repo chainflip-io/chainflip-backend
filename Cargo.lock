@@ -8294,6 +8294,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "log",
+ "pallet-cf-flip",
  "parity-scale-codec",
  "scale-info",
  "serde",

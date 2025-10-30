@@ -24,8 +24,14 @@ use cf_traits::VaultKeyWitnessedHandler;
 use frame_benchmarking::v2::*;
 use frame_support::{assert_ok, traits::UnfilteredDispatchable};
 
-#[benchmarks]
+#[benchmarks(
+	where
+		T: pallet_cf_flip::Config,
+)]
 mod benchmarks {
+	use cf_primitives::FLIPPERINOS_PER_FLIP;
+	use cf_traits::FeePayment;
+
 	use super::*;
 
 	#[benchmark]
@@ -219,6 +225,11 @@ mod benchmarks {
             sig_type: submit_runtime_call::SolEncodingType::Domain,
         };
 
+		pallet_cf_flip::Pallet::<T>::mint_to_account(
+			&signature_data.signer_account().unwrap(),
+			(10 * FLIPPERINOS_PER_FLIP).into(),
+		);
+
 		#[extrinsic_call]
 		non_native_signed_call(
 			frame_system::RawOrigin::None,
@@ -236,5 +247,9 @@ mod benchmarks {
 		batch(frame_system::RawOrigin::Signed(caller.clone()), calls.try_into().unwrap());
 	}
 
-	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(
+		Pallet,
+		crate::mock::benchmarks_mock::new_test_ext(),
+		crate::mock::benchmarks_mock::BenchmarksTest
+	);
 }

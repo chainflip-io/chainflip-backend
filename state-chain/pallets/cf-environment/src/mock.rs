@@ -42,7 +42,9 @@ use cf_traits::{
 use frame_support::{
 	derive_impl,
 	pallet_prelude::{InvalidTransaction, TransactionValidityError},
-	parameter_types, DebugNoBound, DefaultNoBound,
+	parameter_types,
+	traits::UnfilteredDispatchable,
+	DebugNoBound, DefaultNoBound,
 };
 use sp_core::{H160, H256};
 use sp_runtime::{
@@ -239,10 +241,10 @@ impl
 
 impl SolanaEnvironment for MockSolEnvironment {}
 
-pub struct MockSolanaBroadcaster;
-impl Broadcaster<Solana> for MockSolanaBroadcaster {
+pub struct MockSolanaBroadcaster<C>(PhantomData<C>);
+impl<C: UnfilteredDispatchable> Broadcaster<Solana> for MockSolanaBroadcaster<C> {
 	type ApiCall = cf_chains::sol::api::SolanaApi<MockSolEnvironment>;
-	type Callback = RuntimeCall;
+	type Callback = C;
 
 	fn threshold_sign_and_broadcast(
 		api_call: Self::ApiCall,
@@ -332,7 +334,7 @@ impl pallet_cf_environment::Config for Test {
 	type RuntimeSafeMode = MockRuntimeSafeMode;
 	type CurrentReleaseVersion = CurrentReleaseVersion;
 	type SolEnvironment = MockSolEnvironment;
-	type SolanaBroadcaster = MockSolanaBroadcaster;
+	type SolanaBroadcaster = MockSolanaBroadcaster<RuntimeCall>;
 	type TransactionPayments = MockPayment<Self>;
 	type GetTransactionPayments = ();
 	type WeightInfo = ();
@@ -377,6 +379,99 @@ cf_test_utilities::impl_test_helpers! {
 			assethub_vault_account_id: None,
 			sol_genesis_hash: None,
 			..Default::default()
+		},
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarks_mock {
+	use cf_traits::WaivedFees;
+	use sp_core::ConstU64;
+
+	use super::*;
+
+	#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+	impl frame_system::Config for BenchmarksTest {
+		type Block = Block;
+	}
+
+	// Configure a mock runtime to test the pallet.
+	frame_support::construct_runtime!(
+		pub enum BenchmarksTest {
+			System: frame_system,
+			Environment: pallet_cf_environment,
+			Flip: pallet_cf_flip,
+		}
+	);
+
+	impl_mock_chainflip!(BenchmarksTest);
+
+	impl pallet_cf_environment::Config for BenchmarksTest {
+		type RuntimeOrigin = RuntimeOrigin;
+		type RuntimeCall = RuntimeCall;
+		type RuntimeEvent = RuntimeEvent;
+		type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
+		type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
+		type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
+		type SolanaVaultKeyWitnessedHandler = MockSolanaVaultKeyWitnessedHandler;
+		type AssethubVaultKeyWitnessedHandler = MockAssethubVaultKeyWitnessedHandler;
+		type SolanaNonceWatch = ();
+		type BitcoinFeeInfo = MockBitcoinFeeInfo;
+		type BitcoinKeyProvider = MockBitcoinKeyProvider;
+		type RuntimeSafeMode = MockRuntimeSafeMode;
+		type CurrentReleaseVersion = CurrentReleaseVersion;
+		type SolEnvironment = MockSolEnvironment;
+		type SolanaBroadcaster = MockSolanaBroadcaster<RuntimeCall>;
+		type TransactionPayments = MockPayment<Self>;
+		type GetTransactionPayments = ();
+		type WeightInfo = ();
+	}
+
+	pub struct MockWaivedFees;
+	impl WaivedFees for MockWaivedFees {
+		type AccountId = u64;
+		type RuntimeCall = RuntimeCall;
+		fn should_waive_fees(_call: &Self::RuntimeCall, _caller: &Self::AccountId) -> bool {
+			false
+		}
+	}
+
+	impl pallet_cf_flip::Config for BenchmarksTest {
+		type RuntimeEvent = RuntimeEvent;
+		type Balance = u128;
+		type BlocksPerDay = ConstU64<14400>;
+		type WeightInfo = ();
+		type WaivedFees = MockWaivedFees;
+		type CallIndexer = ();
+	}
+
+	cf_test_utilities::impl_test_helpers! {
+		BenchmarksTest,
+		RuntimeGenesisConfig {
+			system: Default::default(),
+			environment: EnvironmentConfig {
+				state_chain_gateway_address: STATE_CHAIN_GATEWAY_ADDRESS,
+				eth_key_manager_address: ETH_KEY_MANAGER_ADDRESS,
+				ethereum_chain_id: ETH_CHAIN_ID,
+				eth_vault_address: ETH_VAULT_ADDRESS,
+				eth_address_checker_address: ETH_ADDRESS_CHECKER_ADDRESS,
+				eth_sc_utils_address: ETH_SC_UTILS_ADDRESS,
+				arb_key_manager_address: ARB_KEY_MANAGER_ADDRESS,
+				arb_vault_address: ARB_VAULT_ADDRESS,
+				arb_address_checker_address: ARB_ADDRESS_CHECKER_ADDRESS,
+				arb_usdc_address: ARB_USDC_TOKEN_ADDRESS,
+				arbitrum_chain_id: ARB_CHAIN_ID,
+				flip_token_address: [0u8; 20].into(),
+				eth_usdc_address: [0x2; 20].into(),
+				eth_usdt_address: [0x2; 20].into(),
+				polkadot_genesis_hash: H256([0u8; 32]),
+				polkadot_vault_account_id: None,
+				assethub_genesis_hash: H256([0u8; 32]),
+				assethub_vault_account_id: None,
+				sol_genesis_hash: None,
+				..Default::default()
+			},
+			flip: Default::default(),
 		},
 	}
 }
