@@ -50,7 +50,6 @@ mod benchmarks {
 		use frame_support::traits::OnNewAccount;
 		let caller: T::AccountId = account("lp", 0, seed);
 
-		// TODO: remove once https://github.com/chainflip-io/chainflip-backend/pull/4716 is merged
 		if frame_system::Pallet::<T>::providers(&caller) == 0u32 {
 			frame_system::Pallet::<T>::inc_providers(&caller);
 		}
@@ -64,9 +63,16 @@ mod benchmarks {
 		caller
 	}
 
+	fn gov_origin<T: Config>() -> RawOrigin<T::AccountId> {
+		T::EnsureGovernance::try_successful_origin()
+			.unwrap()
+			.into()
+			.unwrap_or_else(|_| panic!("Could not create governance origin"))
+	}
+
 	#[benchmark]
 	fn update_pallet_config(n: Linear<1, MAX_PALLET_CONFIG_UPDATE>) {
-		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		let origin = gov_origin::<T>();
 		let updates = vec![
 			PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
 				deduction_percent: Percent::from_percent(10),
@@ -76,10 +82,8 @@ mod benchmarks {
 		.try_into()
 		.expect("Length is within the configured len");
 
-		#[block]
-		{
-			assert_ok!(Pallet::<T>::update_pallet_config(origin, updates));
-		}
+		#[extrinsic_call]
+		update_pallet_config(origin, updates);
 	}
 
 	#[benchmark]
@@ -92,15 +96,8 @@ mod benchmarks {
 
 		let lp_account = setup_lp_account::<T>(asset, 0);
 
-		#[block]
-		{
-			assert_ok!(Pallet::<T>::add_boost_funds(
-				RawOrigin::Signed(lp_account.clone()).into(),
-				asset,
-				amount,
-				TIER_5_BPS
-			));
-		}
+		#[extrinsic_call]
+		add_boost_funds(RawOrigin::Signed(lp_account.clone()), asset, amount, TIER_5_BPS);
 
 		let boost_pool = BoostPools::<T>::get(asset, TIER_5_BPS).unwrap();
 
@@ -176,15 +173,8 @@ mod benchmarks {
 			));
 		}
 
-		#[block]
-		{
-			// This depends on the number active boosts:
-			assert_ok!(Pallet::<T>::stop_boosting(
-				RawOrigin::Signed(lp_account).into(),
-				asset,
-				TIER_5_BPS
-			));
-		}
+		#[extrinsic_call]
+		stop_boosting(RawOrigin::Signed(lp_account), asset, TIER_5_BPS);
 
 		let boost_pool = BoostPools::<T>::get(asset, TIER_5_BPS).unwrap();
 
@@ -198,15 +188,15 @@ mod benchmarks {
 
 	#[benchmark]
 	fn create_boost_pools() {
-		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		let origin = gov_origin::<T>();
 
 		let new_pools = vec![BoostPoolId { asset: Asset::Eth, tier: TIER_5_BPS }];
 
 		assert_eq!(BoostPools::<T>::iter().count(), 0);
-		#[block]
-		{
-			assert_ok!(Pallet::<T>::create_boost_pools(origin, new_pools.clone()));
-		}
+
+		#[extrinsic_call]
+		create_boost_pools(origin, new_pools.clone());
+
 		assert_eq!(BoostPools::<T>::iter().count(), 1);
 	}
 
@@ -216,8 +206,7 @@ mod benchmarks {
 		set_asset_price_in_usd::<T>(LOAN_ASSET, 100_000_000_000);
 		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000);
 
-		let gov_origin = T::EnsureGovernance::try_successful_origin().unwrap();
-		assert_ok!(Pallet::<T>::create_lending_pool(gov_origin, LOAN_ASSET));
+		assert_ok!(Pallet::<T>::create_lending_pool(gov_origin::<T>().into(), LOAN_ASSET));
 
 		for i in 1..=number_of_lenders {
 			let lender = setup_lp_account::<T>(LOAN_ASSET, i);
@@ -231,13 +220,13 @@ mod benchmarks {
 
 	#[benchmark]
 	fn create_lending_pool() {
-		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		let origin = gov_origin::<T>();
 
 		assert_eq!(GeneralLendingPools::<T>::iter().count(), 0);
-		#[block]
-		{
-			assert_ok!(Pallet::<T>::create_lending_pool(origin, LOAN_ASSET));
-		}
+
+		#[extrinsic_call]
+		create_lending_pool(origin, LOAN_ASSET);
+
 		assert_eq!(GeneralLendingPools::<T>::iter().count(), 1);
 	}
 
@@ -251,11 +240,9 @@ mod benchmarks {
 
 		// Create one more lender and do the add lender funds operation
 		let lender = setup_lp_account::<T>(LOAN_ASSET, 0);
-		let origin = RawOrigin::Signed(lender.clone()).into();
-		#[block]
-		{
-			assert_ok!(Pallet::<T>::add_lender_funds(origin, LOAN_ASSET, AMOUNT));
-		}
+
+		#[extrinsic_call]
+		add_lender_funds(RawOrigin::Signed(lender.clone()), LOAN_ASSET, AMOUNT);
 
 		let pool = GeneralLendingPools::<T>::get(LOAN_ASSET).unwrap();
 		assert_eq!(pool.total_amount - total_before, AMOUNT);
@@ -270,14 +257,12 @@ mod benchmarks {
 
 		// Create a lender account and add funds to be removed
 		let lender = setup_lp_account::<T>(LOAN_ASSET, 0);
-		let origin: OriginFor<T> = RawOrigin::Signed(lender.clone()).into();
-		assert_ok!(Pallet::<T>::add_lender_funds(origin.clone(), LOAN_ASSET, AMOUNT));
+		let origin = RawOrigin::Signed(lender.clone());
+		assert_ok!(Pallet::<T>::add_lender_funds(origin.clone().into(), LOAN_ASSET, AMOUNT));
 		let total_before = GeneralLendingPools::<T>::get(LOAN_ASSET).unwrap().total_amount;
 
-		#[block]
-		{
-			assert_ok!(Pallet::<T>::remove_lender_funds(origin, LOAN_ASSET, Some(AMOUNT)));
-		}
+		#[extrinsic_call]
+		remove_lender_funds(origin, LOAN_ASSET, Some(AMOUNT));
 
 		let pool = GeneralLendingPools::<T>::get(LOAN_ASSET).unwrap();
 		assert_eq!(total_before - pool.total_amount, AMOUNT);
@@ -289,17 +274,11 @@ mod benchmarks {
 		const AMOUNT: AssetAmount = 100_000_000;
 		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000);
 		let lender = setup_lp_account::<T>(LOAN_ASSET, 0);
-		let origin: OriginFor<T> = RawOrigin::Signed(lender.clone()).into();
 		let collateral = BTreeMap::from([(COLLATERAL_ASSET, AMOUNT)]);
 
-		#[block]
-		{
-			assert_ok!(Pallet::<T>::add_collateral(
-				origin,
-				Some(COLLATERAL_ASSET),
-				collateral.clone()
-			));
-		}
+		#[extrinsic_call]
+		add_collateral(RawOrigin::Signed(lender), Some(COLLATERAL_ASSET), collateral.clone());
+
 		let loan_account = LoanAccounts::<T>::iter().next().unwrap().1;
 		assert_eq!(loan_account.get_total_collateral(), collateral);
 	}
@@ -311,12 +290,12 @@ mod benchmarks {
 		const LOAN_AMOUNT: AssetAmount = 50_000_000;
 		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
 		let borrower = setup_lp_account::<T>(LOAN_ASSET, 0);
-		let origin: OriginFor<T> = RawOrigin::Signed(borrower.clone()).into();
+		let origin = RawOrigin::Signed(borrower.clone());
 		let collateral = BTreeMap::from([(COLLATERAL_ASSET, INITIAL_COLLATERAL)]);
 
 		// Create a loan with collateral so it must perform checks when removing collateral
 		assert_ok!(Pallet::<T>::request_loan(
-			origin.clone(),
+			origin.clone().into(),
 			LOAN_ASSET,
 			LOAN_AMOUNT,
 			Some(COLLATERAL_ASSET),
@@ -327,10 +306,10 @@ mod benchmarks {
 		assert_eq!(loan_account.get_total_collateral(), collateral.clone());
 
 		let collateral = BTreeMap::from([(COLLATERAL_ASSET, REMOVE_COLLATERAL)]);
-		#[block]
-		{
-			assert_ok!(Pallet::<T>::remove_collateral(origin, collateral));
-		}
+
+		#[extrinsic_call]
+		remove_collateral(origin, collateral);
+
 		assert_eq!(
 			get_loan_accounts::<T>(Some(borrower))
 				.first()
@@ -350,20 +329,18 @@ mod benchmarks {
 		T::PriceApi::get_price(LOAN_ASSET).unwrap();
 
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
-		let origin: OriginFor<T> = RawOrigin::Signed(borrower.clone()).into();
 		let collateral = BTreeMap::from([(COLLATERAL_ASSET, 200_000_000)]);
 		const LOAN_AMOUNT: AssetAmount = 50_000_000;
 
-		#[block]
-		{
-			assert_ok!(Pallet::<T>::request_loan(
-				origin,
-				LOAN_ASSET,
-				LOAN_AMOUNT,
-				Some(COLLATERAL_ASSET),
-				collateral
-			));
-		}
+		#[extrinsic_call]
+		request_loan(
+			RawOrigin::Signed(borrower),
+			LOAN_ASSET,
+			LOAN_AMOUNT,
+			Some(COLLATERAL_ASSET),
+			collateral,
+		);
+
 		assert!(LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap() > 0);
 	}
 
@@ -372,11 +349,11 @@ mod benchmarks {
 		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
 
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
-		let origin: OriginFor<T> = RawOrigin::Signed(borrower.clone()).into();
+		let origin = RawOrigin::Signed(borrower.clone());
 		let collateral = BTreeMap::from([(COLLATERAL_ASSET, 200_000_000)]);
 		const LOAN_AMOUNT: AssetAmount = 50_000_000;
 		assert_ok!(Pallet::<T>::request_loan(
-			origin.clone(),
+			origin.clone().into(),
 			LOAN_ASSET,
 			LOAN_AMOUNT,
 			Some(COLLATERAL_ASSET),
@@ -385,15 +362,9 @@ mod benchmarks {
 		let value_before =
 			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap();
 
-		#[block]
-		{
-			assert_ok!(Pallet::<T>::expand_loan(
-				origin,
-				0.into(),
-				5_000_000,
-				BTreeMap::from([(COLLATERAL_ASSET, 100_000_000)])
-			));
-		}
+		#[extrinsic_call]
+		expand_loan(origin, 0.into(), 5_000_000, BTreeMap::from([(COLLATERAL_ASSET, 100_000_000)]));
+
 		assert!(
 			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap() >
 				value_before
@@ -405,11 +376,11 @@ mod benchmarks {
 		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
 
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
-		let origin: OriginFor<T> = RawOrigin::Signed(borrower.clone()).into();
+		let origin = RawOrigin::Signed(borrower.clone());
 		let collateral = BTreeMap::from([(COLLATERAL_ASSET, 200_000_000)]);
 		const LOAN_AMOUNT: AssetAmount = 50_000_000;
 		assert_ok!(Pallet::<T>::request_loan(
-			origin.clone(),
+			origin.clone().into(),
 			LOAN_ASSET,
 			LOAN_AMOUNT,
 			Some(COLLATERAL_ASSET),
@@ -418,10 +389,9 @@ mod benchmarks {
 		let value_before =
 			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap();
 
-		#[block]
-		{
-			assert_ok!(Pallet::<T>::make_repayment(origin, 0.into(), 5_000_000,));
-		}
+		#[extrinsic_call]
+		make_repayment(origin, 0.into(), 5_000_000);
+
 		assert!(
 			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap() <
 				value_before
@@ -431,7 +401,7 @@ mod benchmarks {
 	#[benchmark]
 	fn update_primary_collateral_asset() {
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
-		let origin: OriginFor<T> = RawOrigin::Signed(borrower.clone()).into();
+		let origin = RawOrigin::Signed(borrower.clone());
 		let collateral =
 			BTreeMap::from([(COLLATERAL_ASSET, 200_000_000), (LOAN_ASSET, 100_000_000)]);
 
@@ -439,15 +409,13 @@ mod benchmarks {
 		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000);
 		T::Balance::credit_account(&borrower, LOAN_ASSET, 100_000_000);
 		assert_ok!(Pallet::<T>::add_collateral(
-			origin.clone(),
+			origin.clone().into(),
 			Some(COLLATERAL_ASSET),
 			collateral.clone()
 		));
 
-		#[block]
-		{
-			assert_ok!(Pallet::<T>::update_primary_collateral_asset(origin, LOAN_ASSET,));
-		}
+		#[extrinsic_call]
+		update_primary_collateral_asset(origin, LOAN_ASSET);
 
 		assert_eq!(
 			get_loan_accounts::<T>(Some(borrower)).first().unwrap().primary_collateral_asset,
