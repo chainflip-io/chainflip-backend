@@ -62,6 +62,8 @@ async function main() {
           break;
       }
 
+      amount = lpKeys.length == 1 ? amount * 10000 : amount;
+
       await depositLiquidity(
         globalLogger,
         asset as any,
