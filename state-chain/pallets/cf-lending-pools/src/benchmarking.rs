@@ -393,7 +393,7 @@ mod benchmarks {
 			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap();
 
 		#[extrinsic_call]
-		make_repayment(origin, 0.into(), 5_000_000);
+		make_repayment(origin, 0.into(), RepaymentAmount::Exact(5_000_000));
 
 		assert!(
 			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap() <
