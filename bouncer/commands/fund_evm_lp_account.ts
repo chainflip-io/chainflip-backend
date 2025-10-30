@@ -188,24 +188,24 @@ async function main() {
   await using chainflipApi = await getChainflipApi();
 
   for (const mnemonic of mnemonics) {
-    const evmWallet = await Wallet.fromPhrase(mnemonic).connect(
+    const evmWallet = Wallet.fromPhrase(mnemonic).connect(
       getDefaultProvider(getEvmEndpoint('Ethereum')),
     );
     console.log('Mnemonic: ', evmWallet.mnemonic?.phrase);
     const evmScAccount = externalChainToScAccount(evmWallet.address);
 
-    // globalLogger.info(`Funding with FLIP to register the EVM account: ${evmScAccount}`);
-    // await fundFlip(globalLogger, evmScAccount, '1000');
+    globalLogger.info(`Funding with FLIP to register the EVM account: ${evmScAccount}`);
+    await fundFlip(globalLogger, evmScAccount, '1000');
 
-    // // register LP account
-    // await signCallUsingEvmWallet(
-    //   globalLogger,
-    //   getRegisterLpCall(chainflipApi),
-    //   chainflipApi,
-    //   evmWallet as HDNodeWallet,
-    //   () => observeNonNativeSignedRegisterLpCall(globalLogger, evmScAccount),
-    // );
-    // console.log(`Successfully registered LP account ${evmScAccount}`);
+    // register LP account
+    await signCallUsingEvmWallet(
+      globalLogger,
+      getRegisterLpCall(chainflipApi),
+      chainflipApi,
+      evmWallet as HDNodeWallet,
+      () => observeNonNativeSignedRegisterLpCall(globalLogger, evmScAccount),
+    );
+    console.log(`Successfully registered LP account ${evmScAccount}`);
 
     for (const asset of Object.keys(assetConstants).filter((asset) => asset !== 'Dot')) {
       let amount;
@@ -231,13 +231,18 @@ async function main() {
           break;
       }
 
-      //   await signCallUsingEvmWallet(
-      //     globalLogger,
-      //     await getRegisterRefundAddress(chainflipApi, asset as InternalAsset, chain),
-      //     chainflipApi,
-      //     evmWallet,
-      //   );
+      // SET REFUND ADDRESS
+      await signCallUsingEvmWallet(
+        globalLogger,
+        await getRegisterRefundAddress(chainflipApi, asset as InternalAsset, chain),
+        chainflipApi,
+        evmWallet,
+      );
+      await observeEvent(globalLogger, 'liquidityProvider:LiquidityRefundAddressRegistered', {
+        test: (event) => event.data.address.Eth === evmScAccount,
+      }).event;
 
+      // OPEN DEPOSIT CHANNEL
       await signCallUsingEvmWallet(
         globalLogger,
         getOpenDepositChannelCall(chainflipApi, asset as InternalAsset),
@@ -253,33 +258,20 @@ async function main() {
           test: (event) => event.data.asset === asset && event.data.accountId === evmScAccount,
         },
       ).event;
-
       const ingressAddress = depositAddressReady.data.depositAddress[chain];
-
       globalLogger.trace(`Initiating transfer to ${ingressAddress}`);
 
+      // DEPOSIT TO DEPOSIT CHANNEL
       await runWithTimeout(
         send(globalLogger, asset as InternalAsset, ingressAddress, String(amount)),
         130,
         globalLogger,
         `sending liquidity ${amount} ${asset}.`,
       );
-
       await observeNonNativeAccountCredited(asset as InternalAsset, evmScAccount, String(amount));
       globalLogger.debug(`Liquidity deposited to ${ingressAddress}`);
     }
   }
 }
 
-// const main = async () => {
-//   let i = 0;
-
-//   while (i < 10) {
-//     const wallet = await createEvmWallet();
-//     console.log(`Mnemonic ${i}: `, wallet.mnemonic?.phrase);
-//     console.log('PK: ', wallet.privateKey);
-//     console.log('');
-//     i++;
-//   }
-// };
 await runWithTimeoutAndExit(main(), 120_000);
