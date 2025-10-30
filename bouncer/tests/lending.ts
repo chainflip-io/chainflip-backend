@@ -10,11 +10,20 @@ import {
   ChainflipExtrinsicSubmitter,
   lpMutex,
   getFreeBalance,
+  sleep,
+  submitExtrinsic,
 } from 'shared/utils';
-import { globalLogger } from 'shared/utils/logger';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { randomBytes } from 'crypto';
+import { TestContext } from 'shared/utils/test_context';
+
+export interface Loan {
+  loan_id: number;
+  asset: Asset;
+  created_at: number;
+  principal_amount: string;
+}
 
 async function getLoanAccount(address: string) {
   await using chainflip = await getChainflipApi();
@@ -27,7 +36,7 @@ async function getLoanAccount(address: string) {
   return loanAccounts[0];
 }
 
-async function getLoan(address: string) {
+async function getLoan(address: string): Promise<Loan> {
   const loanAccount = await getLoanAccount(address);
   assert.strictEqual(loanAccount.loans.length, 1, 'Expected one loan');
   return loanAccount.loans[0];
@@ -43,21 +52,25 @@ async function lendingTestForAsset(
   const logger = parentLogger.child({ collateralAsset, loanAsset });
   await using chainflip = await getChainflipApi();
 
-  // Change the interest interval to 1 block for testing
-  logger.debug(`Setting interest payment interval to 1 block`);
-  await submitGovernanceExtrinsic((api) =>
-    api.tx.lendingPools.updatePalletConfig([{ SetInterestPaymentIntervalBlocks: 10 }]),
-  );
-
   // Create a new random LP account
   const seed = randomBytes(4).toString('hex');
   const lpUri = `//LP_LENDING_${collateralAsset}_${loanAsset}_${seed}`;
   const lp = await setupLpAccount(logger, lpUri);
   const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex.for(lpUri));
 
-  // Add collateral to the account, a little extra to cover the origination fee
-  await depositLiquidity(logger, collateralAsset, collateralAmount * 1.01, true, lpUri);
+  // Credit the account with the collateral and a little of the loan asset to be able to settle the loan.
+  // We also need a little extra of both assets to cover the ingress fee.
+  const loanAssetDecimals = assetDecimals(loanAsset);
+  const factor = 10 ** loanAssetDecimals;
+  const extraLoanAssetAmount = Math.round(0.01 * loanAmount * factor) / factor;
+  await Promise.all([
+    depositLiquidity(logger, loanAsset, extraLoanAssetAmount * 1.01, true, lpUri),
+    depositLiquidity(logger, collateralAsset, collateralAmount * 1.05, true, lpUri),
+  ]);
+
+  // Add collateral to the account
   const collateralAssetFreeBalance1 = await getFreeBalance(lp.address, collateralAsset);
+  logger.debug(`Current free balance of collateral asset: ${collateralAssetFreeBalance1}`);
   logger.debug(`Adding collateral`);
   const collateral: [Asset, string][] = [
     [
@@ -71,10 +84,6 @@ async function lendingTestForAsset(
       new Map(collateral.map(([asset, amount]) => [{ [asset]: {} }, amount])),
     ),
   );
-  await observeEvent(logger, 'lendingPools:CollateralAdded', {
-    test: (event) => event.data.borrower_id === lp.address,
-    historicalCheckBlocks: 15,
-  });
 
   // Check that our collateral is gone
   const collateralAssetFreeBalance2 = await getFreeBalance(lp.address, collateralAsset);
@@ -88,20 +97,27 @@ async function lendingTestForAsset(
   );
 
   // Create a loan
+  logger.debug(`Requesting loan of ${loanAmount} ${loanAsset}`);
   const loanAssetFreeBalance1 = await getFreeBalance(lp.address, loanAsset);
-  const loanDetails = await extrinsicSubmitter.submit(
-    chainflip.tx.lendingPools.requestLoan(
-      loanAsset,
-      amountToFineAmount(loanAmount.toString(), assetDecimals(loanAsset)),
-      collateralAsset,
-      [],
-    ),
+
+  const loanId = Number(
+    (
+      await submitExtrinsic(
+        lpUri,
+        chainflip,
+        chainflip.tx.lendingPools.requestLoan(
+          loanAsset,
+          amountToFineAmount(loanAmount.toString(), assetDecimals(loanAsset)),
+          collateralAsset,
+          [], // No extra collateral needed
+        ),
+        'lendingPools:LoanCreated',
+        logger,
+      )
+    ).data.loanId,
   );
-  logger.debug(`Created loan ${JSON.stringify(loanDetails)}`);
-  await observeEvent(logger, 'lendingPools:LoanCreated', {
-    test: (event) => event.data.borrower_id === lp.address,
-    historicalCheckBlocks: 15,
-  });
+
+  logger.debug(`Created loan id: ${loanId}`);
 
   // Check that we got the loan amount
   const loanAssetFreeBalance2 = await getFreeBalance(lp.address, loanAsset);
@@ -111,39 +127,45 @@ async function lendingTestForAsset(
     'Free balance of loan asset did not increase as expected after loan creation',
   );
 
-  // Make sure the origination fee was taken
-  const loanId = (await getLoan(lp.address)).loan_id;
-  await observeEvent(logger, 'lendingPools:OriginationFeeTaken', {
-    test: (event) => event.data.loan_id === loanId,
-    historicalCheckBlocks: 15,
-  });
-  const collateralAssetFreeBalance3 = await getFreeBalance(lp.address, collateralAsset);
+  // Make sure the origination fee was added to the loan amount
+  const loan = await getLoan(lp.address);
+  assert(loan !== undefined, 'Did not find a loan on the account');
+  logger.info(`type 1 = ${typeof loan.loan_id}`);
+  logger.info(`type 2 = ${typeof loanId}`);
+  assert.strictEqual(loanId, loan.loan_id, `Loan ID does not match ${loanId} !== ${loan.loan_id}`);
   assert(
-    collateralAssetFreeBalance2 > collateralAssetFreeBalance3,
-    'Did not take origination fee from free balance of collateral asset',
+    BigInt(loan.principal_amount) > amountToFineAmountBigInt(loanAmount, loanAsset),
+    'Loan amount did not increase due to origination fee',
   );
 
   // Wait for some interest
-  await observeEvent(logger, 'lendingPools:InterestTaken', {
-    test: (event) => event.data.loan_id === loanId,
+  await sleep(6000);
+  const interestTakenEvent = await observeEvent(logger, 'lendingPools:InterestTaken', {
+    test: (event) => Number(event.data.loanId) === loanId,
     timeoutSeconds: 15,
-  });
+  }).event;
+  logger.debug(`Interest taken event: ${JSON.stringify(interestTakenEvent)}`);
+  assert(
+    (await getLoan(lp.address)).principal_amount > loan.principal_amount,
+    `Loan amount did not increase due to interest, expected more than ${loan.principal_amount} ${loanAsset}`,
+  );
 
   // Repay part of the loan
   logger.debug(`Repaying half the loan`);
+  const partialRepaymentAmount = loanAmount / 2;
   await extrinsicSubmitter.submit(
     chainflip.tx.lendingPools.makeRepayment(
       loanId,
-      amountToFineAmount((loanAmount / 2).toString(), assetDecimals(loanAsset)),
+      amountToFineAmount(partialRepaymentAmount.toString(), assetDecimals(loanAsset)),
     ),
   );
 
   // Check balances
-  const collateralAssetFreeBalance4 = await getFreeBalance(lp.address, collateralAsset);
+  const collateralAssetFreeBalance3 = await getFreeBalance(lp.address, collateralAsset);
   const loanAssetFreeBalance3 = await getFreeBalance(lp.address, loanAsset);
   assert.strictEqual(
-    collateralAssetFreeBalance4,
     collateralAssetFreeBalance3,
+    collateralAssetFreeBalance2,
     'Expected free balance of collateral asset to not change yet',
   );
   assert(
@@ -151,18 +173,27 @@ async function lendingTestForAsset(
     'Did not lose loan asset after partial repayment',
   );
 
-  // Repay the rest of the loan
+  // Repay the rest of the loan (a bit extra to cover the origination fee and interest)
+  assert(
+    BigInt((await getLoan(lp.address)).principal_amount) <= loanAssetFreeBalance3,
+    'Not enough free balance to fully repay the loan',
+  );
+  const repayFullyAmount = loanAmount - partialRepaymentAmount + extraLoanAssetAmount;
+  assert(
+    loanAssetFreeBalance3 >= amountToFineAmountBigInt(repayFullyAmount, loanAsset),
+    'Missing loan asset before',
+  );
   logger.debug(`Repaying the rest of the loan`);
-  const loanSettledEvent = observeEvent(logger, 'lendingPools:LoanSettled', {
-    test: (event) => event.data.loan_id === loanId,
-  });
-  await extrinsicSubmitter.submit(
+  await submitExtrinsic(
+    lpUri,
+    chainflip,
     chainflip.tx.lendingPools.makeRepayment(
       loanId,
-      amountToFineAmount((loanAmount / 2).toString(), assetDecimals(loanAsset)),
+      amountToFineAmount(repayFullyAmount.toString(), assetDecimals(loanAsset)),
     ),
+    'lendingPools:LoanSettled',
+    logger,
   );
-  await loanSettledEvent;
 
   // Recover the collateral
   const collateralAmountToRemove = (await getLoanAccount(lp.address)).collateral[0]
@@ -178,7 +209,7 @@ async function lendingTestForAsset(
   const collateralAssetFreeBalance5 = await getFreeBalance(lp.address, collateralAsset);
   const loanAssetFreeBalance4 = await getFreeBalance(lp.address, loanAsset);
   assert(
-    collateralAssetFreeBalance5 > collateralAssetFreeBalance4,
+    collateralAssetFreeBalance5 > collateralAssetFreeBalance3,
     'Did not get collateral back after we removed collateral',
   );
   assert(
@@ -187,6 +218,15 @@ async function lendingTestForAsset(
   );
 }
 
-export async function lendingTest() {
-  await lendingTestForAsset(globalLogger, 'Eth', 35, 'Btc', 1.8);
+export async function lendingTest(testContext: TestContext): Promise<void> {
+  // Change the interest interval to 1 block and the threshold to minimum for testing
+  testContext.logger.debug(`Setting interest payment interval to 1 block`);
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.lendingPools.updatePalletConfig([
+      { SetInterestPaymentIntervalBlocks: 1 },
+      { SetInterestCollectionThresholdUsd: 1 },
+    ]),
+  );
+
+  await lendingTestForAsset(testContext.logger, 'Eth', 35, 'Btc', 1.8);
 }

@@ -1444,3 +1444,36 @@ export async function getFreeBalance(accountAddress: string, asset: Asset): Prom
     ((await chainflip.query.assetBalances.freeBalances(accountAddress, asset)) as any).toBigInt()
   );
 }
+
+/// Submits an extrinsic and finds a specific event in the returned events.
+export async function submitExtrinsic(
+  uri: string,
+  api: ApiPromise,
+  extrinsic: SubmittableExtrinsic<'promise'>,
+  findEvent: string,
+  logger: Logger,
+  mutex = lpMutex,
+) {
+  const account = createStateChainKeypair(uri);
+  const [expectedSection, expectedMethod] = findEvent.split(':');
+  if (!expectedSection || !expectedMethod) {
+    throw new Error(`Invalid event format: ${findEvent}`);
+  }
+  const release = await mutex.acquire(uri);
+  const { promise, waiter } = waitForExt(api, logger, 'InBlock');
+  const nonce = (await api.rpc.system.accountNextIndex(account.address)) as unknown as number;
+  const unsub = await extrinsic.signAndSend(account, { nonce }, waiter);
+  const events = await promise;
+  unsub();
+  release();
+
+  const eventRecord = events.find(
+    ({ event }) => event.section === expectedSection && event.method === expectedMethod,
+  )!;
+  if (!eventRecord) {
+    throw new Error(
+      `Didn't find event ${findEvent} after submitting extrinsic ${extrinsic.meta.name}`,
+    );
+  }
+  return eventRecord.event as unknown as Event;
+}

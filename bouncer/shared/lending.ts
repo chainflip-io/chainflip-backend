@@ -97,7 +97,7 @@ export async function setupLendingPools(logger: Logger): Promise<void> {
   logger.info('Funding BTC Lending Pool');
   const btcIngressFee = 0.0001; // Some small amount to cover the ingress fee
 
-  const btcFundingAmount = 20;
+  const btcFundingAmount = 50;
 
   await depositLiquidity(logger, Assets.Btc, btcFundingAmount + btcIngressFee, false, '//LP_BOOST');
   await addLenderFunds(logger, Assets.Btc, btcFundingAmount, '//LP_BOOST');
