@@ -37,6 +37,7 @@ import { TestContext } from 'shared/utils/test_context';
 import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logger';
 import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
 import { KeyedMutex } from 'shared/utils/keyed_mutex';
+import { SubmittableExtrinsic } from '@polkadot/api/types';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -1109,7 +1110,7 @@ export function waitForExt(
         mutexRelease!();
         release = false;
       }
-      logger.debug(`Extrinsic status: ${status.toString()}`);
+      logger.trace(`Extrinsic status: ${status.toString()}`);
       if (dispatchError) {
         logger.warn(`Extrinsic error: ${dispatchError.toString()}`);
         handleDispatchError(api)({ dispatchError });

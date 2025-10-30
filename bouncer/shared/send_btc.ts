@@ -98,10 +98,13 @@ export async function sendBtc(
   let attempts = 0;
   const maxAttempts = 3;
 
+  // The client will error if the amount has more than 8 decimal places
+  const roundedAmount = Math.round(Number(amount) * 1e8) / 1e8;
+
   while (attempts < maxAttempts) {
     try {
       txid = (await btcClientMutex.runExclusive(async () =>
-        client.sendToAddress(address, amount, '', '', false, true, null, 'unset', null, 1),
+        client.sendToAddress(address, roundedAmount, '', '', false, true, null, 'unset', null, 1),
       )) as string;
 
       if (confirmations > 0) {

@@ -116,6 +116,7 @@ pnpm vitest list
 ```
 
 Or use the custom run test command with the file path of you test instead.
+This script will run with `debug` level logs outputting to the console. Useful for working on an individual test.
 
 ```sh copy
 ./commands/run_test.ts ./tests/myNewTest.ts
@@ -129,10 +130,10 @@ Ways to run multiple test:
 
 ```sh
 # Run just the tests in a test group
-pnpm vitest run -t "ConcurrentTests"
+pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
 
 # run all tests in a file
-pnpm vitest run -t ./tests/fast_bouncer.test.ts
+pnpm vitest --maxConcurrency=100 run -t ./tests/fast_bouncer.test.ts
 ```
 
 ## Logging

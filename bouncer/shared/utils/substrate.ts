@@ -2,7 +2,7 @@ import 'disposablestack/auto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Observable, Subject } from 'rxjs';
 import { runWithTimeout } from 'shared/utils';
-import { globalLogger, Logger } from 'shared/utils/logger';
+import { Logger } from 'shared/utils/logger';
 import { AsyncQueue } from 'shared/utils/async_queue';
 import { appendFileSync } from 'node:fs';
 import { EventRecord, Header } from '@polkadot/types/interfaces';
@@ -413,9 +413,9 @@ class EventCache {
   }
 }
 
-const chainflipEventCache = new EventCache(100, 'chainflip', stateChainEventLogFile, globalLogger);
-const polkadotEventCache = new EventCache(100, 'polkadot', undefined, globalLogger);
-const assethubEventCache = new EventCache(100, 'assethub', undefined, globalLogger);
+const chainflipEventCache = new EventCache(100, 'chainflip', stateChainEventLogFile);
+const polkadotEventCache = new EventCache(100, 'polkadot', undefined);
+const assethubEventCache = new EventCache(100, 'assethub', undefined);
 const eventCacheMap = {
   chainflip: chainflipEventCache,
   polkadot: polkadotEventCache,
@@ -527,6 +527,9 @@ export function observeEvents<T = any>(
   }: Options<T> | AbortableOptions<T> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
+  if (!expectedSection || !expectedMethod) {
+    throw new Error(`Invalid event format: ${eventName}`);
+  }
   const startTime = Date.now();
   logger.debug(`Observing event ${eventName}`);
 
@@ -588,7 +591,7 @@ export function observeEvents<T = any>(
     // eslint-disable-next-line prefer-const
     let { stop, foundEvents } = checkEvents(latestResult.value.events, 'current');
     if (stop) {
-      logger.debug(`Found ${foundEvents.length} ${eventName} events in the first batch.`);
+      logger.trace(`Found ${foundEvents.length} ${eventName} events in the first batch.`);
       return foundEvents;
     }
     logger.trace(`No ${eventName} events found in the first batch.`);
@@ -599,9 +602,12 @@ export function observeEvents<T = any>(
         await getPastEvents(chain, latestResult.value.header, historicalCheckBlocks),
         'historical',
       );
+      if (historicalEvents.length > 0) {
+        logger.trace(`Found ${historicalEvents.length} historical ${eventName} events.`);
+      }
       foundEvents = [...historicalEvents, ...foundEvents];
       if (stop) {
-        logger.debug(`Found ${historicalEvents.length} ${eventName} events in historical query.`);
+        logger.trace(`Found ${historicalEvents.length} ${eventName} events in historical query.`);
         return foundEvents;
       }
       logger.trace(`No historical ${eventName} events found.`);
