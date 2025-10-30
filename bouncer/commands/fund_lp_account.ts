@@ -23,8 +23,7 @@ const args = z.tuple([
 ]);
 
 async function main() {
-  const [_, keyType, lpKey] = args.parse(process.argv);
-
+  const [_, __, keyType, lpKey] = args.parse(process.argv);
   await setupLpAccount(globalLogger, lpKey);
 
   for (const asset of Object.keys(assetConstants)) {
