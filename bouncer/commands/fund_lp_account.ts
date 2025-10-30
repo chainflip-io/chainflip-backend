@@ -19,45 +19,52 @@ const args = z.tuple([
   z.string().refine((val) => ['uri', 'mnemonic', 'evm'].includes(val), {
     message: 'Key type must be "uri" or "mnemonic" or "evm"',
   }),
-  z.string().refine((val) => val.length > 0, { message: 'LP key must be provided' }),
+  z
+    .string()
+    .transform((val) => JSON.parse(val))
+    .refine((val) => Array.isArray(val) && val.length > 0, { message: 'LP keys must be provided' }),
 ]);
 
 async function main() {
-  const [_, __, keyType, lpKey] = args.parse(process.argv);
-  await setupLpAccount(globalLogger, lpKey);
+  const [_, __, keyType, lpKeys] = args.parse(process.argv);
 
-  for (const asset of Object.keys(assetConstants)) {
-    let amount;
-    switch (asset) {
-      case 'BTC':
-        amount = 2;
-        break;
-      case 'ETH':
-        amount = 10;
-        break;
-      case 'USDC':
-        amount = 10000;
-        break;
-      case 'USDT':
-        amount = 10000;
-        break;
-      case 'SOL':
-        amount = 10;
-        break;
-      default:
-        amount = 1000;
-        break;
+  for (const key of lpKeys) {
+    console.log(key);
+    await setupLpAccount(globalLogger, key);
+
+    for (const asset of Object.keys(assetConstants)) {
+      let amount;
+      switch (asset) {
+        case 'BTC':
+          amount = 2;
+          break;
+        case 'ETH':
+          amount = 10;
+          break;
+        case 'USDC':
+          amount = 10000;
+          break;
+        case 'USDT':
+          amount = 10000;
+          break;
+        case 'SOL':
+          amount = 10;
+          break;
+        default:
+          amount = 1000;
+          break;
+      }
+
+      await depositLiquidity(
+        globalLogger,
+        asset as any,
+        amount,
+        false,
+        keyType === 'uri' ? key : undefined,
+        keyType === 'mnemonic' ? key : undefined,
+      );
     }
-
-    await depositLiquidity(
-      globalLogger,
-      asset as any,
-      amount,
-      false,
-      keyType === 'uri' ? lpKey : undefined,
-      keyType === 'mnemonic' ? lpKey : undefined,
-    );
   }
 }
 
-await runWithTimeoutAndExit(main(), 12000);
+await runWithTimeoutAndExit(main(), 120_000);
