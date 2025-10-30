@@ -102,7 +102,6 @@ async function getRegisterRefundAddress(chainflip: ApiPromise, ccy: InternalAsse
 }
 
 // OPEN DEPOSIT CHANNEL
-
 function getOpenDepositChannelCall(chainflip: ApiPromise, ccy: InternalAsset) {
   return chainflip.tx.liquidityProvider.requestLiquidityDepositAddress(ccy, null);
 }
@@ -207,7 +206,9 @@ async function main() {
     );
     console.log(`Successfully registered LP account ${evmScAccount}`);
 
-    for (const asset of Object.keys(assetConstants).filter((asset) => asset !== 'Dot')) {
+    for (const asset of Object.keys(assetConstants).filter((asset) =>
+      ['Btc', 'Eth', 'Usdc', 'Usdt', 'Sol'].includes(asset),
+    )) {
       let amount;
       const chain = shortChainFromAsset(asset as InternalAsset);
       switch (asset) {
