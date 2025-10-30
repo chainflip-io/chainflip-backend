@@ -240,11 +240,7 @@ async function main() {
       await lpMutex.runExclusive(whaleMnemonic, async () => {
         const nonce = await chainflipApi.rpc.system.accountNextIndex(whaleLp.address);
         await chainflipApi.tx.liquidityProvider
-          .transferAsset({
-            amount: amount.toString(),
-            asset: asset as InternalAsset,
-            destination: evmScAccount,
-          })
+          .transferAsset(amount.toString(), asset as InternalAsset, evmScAccount)
           .signAndSend(whaleLp, { nonce }, handleSubstrateError(chainflipApi));
       });
     }

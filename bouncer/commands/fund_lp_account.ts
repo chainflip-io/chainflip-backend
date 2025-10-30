@@ -29,14 +29,14 @@ async function main() {
   const [_, __, keyType, lpKeys] = args.parse(process.argv);
 
   for (const key of lpKeys) {
-    // await setupLpAccount(globalLogger, key);
+    await setupLpAccount(globalLogger, key);
 
     for (const asset of Object.keys(assetConstants).filter((asset) =>
       [
         'Btc',
         'Eth',
         'Usdc',
-        // 'Usdt', Throwing some weird errors..
+        'Usdt', // Throwing some weird errors..
         'Sol',
       ].includes(asset),
     )) {
