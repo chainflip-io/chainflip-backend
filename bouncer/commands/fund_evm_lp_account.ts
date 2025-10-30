@@ -33,6 +33,17 @@ import { u8aToHex } from '@polkadot/util';
 import { getDefaultProvider, HDNodeWallet, Wallet } from 'ethers';
 import { send } from 'shared/send';
 
+const args = z.tuple([
+  z.any(),
+  z.any(),
+  z
+    .string()
+    .transform((val) => JSON.parse(val))
+    .refine((val) => Array.isArray(val) && val.length > 0, {
+      message: 'EVM mnemonics must be provided',
+    }),
+]);
+
 const blocksToExpiry = 20;
 
 const eipPayloadSchema = z.object({
@@ -101,27 +112,8 @@ async function observeNonNativeSignedLiquidityDepositAddressReady(
   scAccount: string,
   ccy: InternalAsset,
 ) {
-  return observeEvent(logger, 'liquidityProvider:LiquidityDepositAddressReady', {
+  return await observeEvent(logger, 'liquidityProvider:LiquidityDepositAddressReady', {
     test: (event) => event.data.asset === ccy && event.data.accountId === scAccount,
-  }).event;
-}
-
-async function observeDeposit(
-  logger: Logger,
-  scAccount: string,
-  ccy: InternalAsset,
-  amount: string,
-) {
-  await observeEvent(logger, 'assetBalances:AccountCredited', {
-    test: (event) =>
-      event.data.asset === ccy &&
-      event.data.accountId === scAccount &&
-      isWithinOnePercent(
-        BigInt(event.data.amountCredited.replace(/,/g, '')),
-        BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
-      ),
-    finalized: false,
-    timeoutSeconds: 120,
   }).event;
 }
 
@@ -178,19 +170,10 @@ async function signCallUsingEvmWallet(
     .send();
 
   logger.info('EVM PersonalSign signed call submitted, waiting for events...');
-  await observeFn?.();
+  if (observeFn) {
+    await observeFn();
+  }
 }
-
-const args = z.tuple([
-  z.any(),
-  z.any(),
-  z
-    .string()
-    .transform((val) => JSON.parse(val))
-    .refine((val) => Array.isArray(val) && val.length > 0, {
-      message: 'EVM mnemonics must be provided',
-    }),
-]);
 
 async function main() {
   const [_, __, mnemonics] = args.parse(process.argv);
@@ -247,15 +230,27 @@ async function main() {
         evmWallet,
       );
 
-      const depositAddressReady = await observeNonNativeSignedLiquidityDepositAddressReady(
+      console.log('Waiting for deposit address ready event', evmScAccount, asset);
+      const depositAddressReady = await observeEvent(
         globalLogger,
-        evmScAccount,
-        asset as InternalAsset,
-      );
+        'liquidityProvider:LiquidityDepositAddressReady',
+        {
+          test: (event) => event.data.asset === asset && event.data.accountId === evmScAccount,
+        },
+      ).event;
+
       const ingressAddress = depositAddressReady.data.depositAddress[chain];
 
       globalLogger.trace(`Initiating transfer to ${ingressAddress}`);
-      const accountCredited = observeEvent(globalLogger, 'assetBalances:AccountCredited', {
+
+      await runWithTimeout(
+        send(globalLogger, asset as InternalAsset, ingressAddress, String(amount)),
+        130,
+        globalLogger,
+        `sending liquidity ${amount} ${asset}.`,
+      );
+
+      await observeEvent(globalLogger, 'assetBalances:AccountCredited', {
         test: (event) =>
           event.data.asset === asset &&
           event.data.accountId === evmScAccount &&
@@ -267,18 +262,20 @@ async function main() {
         timeoutSeconds: 120,
       }).event;
 
-      const txHash = await runWithTimeout(
-        send(globalLogger, asset as InternalAsset, ingressAddress, String(amount)),
-        130,
-        globalLogger,
-        `sending liquidity ${amount} ${asset}.`,
-      );
-
-      await accountCredited;
-
       globalLogger.debug(`Liquidity deposited to ${ingressAddress}`);
     }
   }
 }
 
+// const main = async () => {
+//   let i = 0;
+
+//   while (i < 10) {
+//     const wallet = await createEvmWallet();
+//     console.log(`Mnemonic ${i}: `, wallet.mnemonic?.phrase);
+//     console.log('PK: ', wallet.privateKey);
+//     console.log('');
+//     i++;
+//   }
+// };
 await runWithTimeoutAndExit(main(), 120_000);
