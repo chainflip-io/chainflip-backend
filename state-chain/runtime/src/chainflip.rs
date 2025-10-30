@@ -95,8 +95,8 @@ use cf_chains::{
 	SetGovKeyWithAggKey, SetGovKeyWithAggKeyError, Solana, TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
-	DcaParameters,
+	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChainflipNetwork,
+	ChannelId, DcaParameters,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BroadcastAnyChainGovKey,
@@ -1122,5 +1122,12 @@ impl cf_traits::PriceFeedApi for ChainlinkOracle {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_price(asset: assets::any::Asset, price: cf_primitives::Price) {
 		generic_elections::set_price(asset, price);
+	}
+}
+
+pub struct ChainflipNetworkProvider;
+impl cf_traits::ChainflipNetworkInfo for ChainflipNetworkProvider {
+	fn chainflip_network() -> ChainflipNetwork {
+		Environment::chainflip_network()
 	}
 }

@@ -654,6 +654,8 @@ impl pallet_cf_lp::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type MinimumDeposit = MinimumDepositProvider;
+	type RuntimeCall = RuntimeCall;
+	type ChainflipNetwork = chainflip::ChainflipNetworkProvider;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {

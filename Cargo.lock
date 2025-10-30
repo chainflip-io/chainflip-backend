@@ -8516,7 +8516,6 @@ dependencies = [
  "itertools 0.13.0",
  "log",
  "pallet-cf-account-roles",
- "pallet-cf-environment",
  "parity-scale-codec",
  "scale-info",
  "serde",
