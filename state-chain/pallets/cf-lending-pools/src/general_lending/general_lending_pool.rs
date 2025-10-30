@@ -162,6 +162,13 @@ where
 		available_for_collection
 	}
 
+	/// Inform the pool that it won't be receiving `amount` as a result of account liquidation
+	/// not being able to recover the debt in full. This effectively socialises the loss by
+	/// reducing the pool's total amount.
+	pub fn write_off_unrecoverable_debt(&mut self, amount: AssetAmount) {
+		self.total_amount.saturating_reduce(amount);
+	}
+
 	/// Receives repayment funds in the pool's asset (after they has been swapped)
 	pub fn receive_repayment(&mut self, amount: AssetAmount) {
 		// Principal repayment only affects the available amount,

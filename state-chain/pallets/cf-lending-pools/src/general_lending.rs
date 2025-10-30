@@ -520,6 +520,12 @@ impl<T: Config> LoanAccount<T> {
 
 	fn settle_loan(&mut self, loan_id: LoanId, via_liquidation: bool) {
 		if let Some(loan) = self.loans.remove(&loan_id) {
+			if loan.owed_principal > 0 {
+				Pallet::<T>::mutate_existing_pool(loan.asset, |pool| {
+					pool.write_off_unrecoverable_debt(loan.owed_principal);
+				});
+			}
+
 			Pallet::<T>::deposit_event(Event::LoanSettled {
 				loan_id,
 				outstanding_principal: loan.owed_principal,
@@ -668,12 +674,8 @@ impl<T: Config> GeneralLoan<T> {
 		// Making sure the user doesn't pay more than the total principal plus liquidation fee:
 		let repayment_amount = core::cmp::min(provided_amount_after_fees, self.owed_principal);
 
-		GeneralLendingPools::<T>::mutate(self.asset, |maybe_pool| {
-			if let Some(pool) = maybe_pool.as_mut() {
-				pool.receive_repayment(repayment_amount);
-			} else {
-				log_or_panic!("Lending pool must exist for asset {}", self.asset);
-			}
+		Pallet::<T>::mutate_existing_pool(self.asset, |pool| {
+			pool.receive_repayment(repayment_amount);
 		});
 
 		self.owed_principal.saturating_reduce(repayment_amount);
@@ -733,16 +735,11 @@ impl<T: Config> GeneralLoan<T> {
 		self.owed_principal.saturating_accrue(pool_interest);
 		self.owed_principal.saturating_accrue(fees_owed_to_network);
 
-		GeneralLendingPools::<T>::mutate(loan_asset, |maybe_pool| {
-			if let Some(pool) = maybe_pool.as_mut() {
-				pool.record_pool_fee(pool_interest);
+		Pallet::<T>::mutate_existing_pool(loan_asset, |pool| {
+			pool.record_pool_fee(pool_interest);
 
-				let network_fees_collected =
-					pool.record_and_collect_network_fee(fees_owed_to_network);
-				Pallet::<T>::credit_fees_to_network(loan_asset, network_fees_collected);
-			} else {
-				log_or_panic!("Lending Pool must exist for asset {}", loan_asset);
-			}
+			let network_fees_collected = pool.record_and_collect_network_fee(fees_owed_to_network);
+			Pallet::<T>::credit_fees_to_network(loan_asset, network_fees_collected);
 		});
 
 		if pool_interest != 0 || network_interest != 0 || low_ltv_penalty != 0 {
@@ -1302,12 +1299,8 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Pays fee to the pool in the pool's asset.
 	fn credit_fees_to_pool(loan_asset: Asset, fee_amount: AssetAmount) {
-		GeneralLendingPools::<T>::mutate(loan_asset, |maybe_pool| {
-			if let Some(pool) = maybe_pool.as_mut() {
-				pool.receive_fees_in_pools_asset(fee_amount);
-			} else {
-				log_or_panic!("Lending Pool must exist for asset {}", loan_asset);
-			}
+		Pallet::<T>::mutate_existing_pool(loan_asset, |pool| {
+			pool.receive_fees_in_pools_asset(fee_amount);
 		});
 	}
 
@@ -1356,6 +1349,20 @@ impl<T: Config> Pallet<T> {
 		}
 
 		Ok(account)
+	}
+
+	/// Mutates for pool for `asset` expecting it to exist.
+	fn mutate_existing_pool<F>(asset: Asset, f: F)
+	where
+		F: FnOnce(&mut LendingPool<T::AccountId>),
+	{
+		GeneralLendingPools::<T>::mutate(asset, |maybe_pool| {
+			if let Some(pool) = maybe_pool.as_mut() {
+				f(pool)
+			} else {
+				log_or_panic!("Lending Pool must exist for asset {}", asset);
+			}
+		});
 	}
 }
 
