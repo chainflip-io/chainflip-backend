@@ -305,6 +305,10 @@ async function testEvmPersonalSign(logger: Logger) {
 async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
   await using chainflip = await getChainflipApi();
 
+  const initialFlipToBeSentToGateway = (
+    await chainflip.query.swapping.flipToBeSentToGateway()
+  ).toJSON() as number;
+
   logger.info('Setting up a broker account');
   const brokerUri = `//BROKER_SPECIAL_DEPOSIT_CHANNEL`;
   const broker = createStateChainKeypair(brokerUri);
@@ -312,6 +316,7 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
 
   const evmWallet = await createEvmWallet();
   const evmScAccount = externalChainToScAccount(evmWallet.address);
+  logger.info('evmScAccount for special LP deposit channel:', evmScAccount);
   const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
   const refundAddress = await newAssetAddress(asset, brokerUri + Math.random() * 100);
 
@@ -385,23 +390,57 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
   logger.info('Waiting for FLIP balance to be credited...');
 
   let attempt = 0;
+  let flipBalanceCredited = false;
+  let flipToGatewayIncreased = false;
+
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const account = (await chainflip.query.flip.account(evmScAccount)).toJSON() as {
-      balance: string;
-    };
-    const balance = BigInt(account.balance);
+    // Check FLIP balance if not already credited
+    if (!flipBalanceCredited) {
+      const account = (await chainflip.query.flip.account(evmScAccount)).toJSON() as {
+        balance: string;
+      };
+      const balance = BigInt(account.balance);
 
-    if (balance > 0) {
-      logger.info('FLIP balance credited successfully');
+      if (balance > 0) {
+        logger.info('FLIP balance credited successfully');
+        flipBalanceCredited = true;
+      }
+    }
+
+    // Check FLIP to be sent to Gateway if not already increased
+    if (!flipToGatewayIncreased) {
+      const flipToBeSentToGateway = (
+        await chainflip.query.swapping.flipToBeSentToGateway()
+      ).toJSON() as number;
+
+      if (flipToBeSentToGateway > initialFlipToBeSentToGateway) {
+        logger.info('FLIP to be sent to Gateway increased successfully');
+        flipToGatewayIncreased = true;
+      }
+    }
+
+    // Break if both conditions are met
+    if (flipBalanceCredited && flipToGatewayIncreased) {
       break;
     }
 
     if (attempt >= 10) {
-      throw new Error('Timeout waiting for FLIP balance to be credited');
+      if (!flipBalanceCredited) {
+        throw new Error('Timeout waiting for FLIP balance to be credited');
+      }
+      if (!flipToGatewayIncreased) {
+        throw new Error('Timeout waiting for FLIP to be sent to Gateway to increase');
+      }
     }
     attempt++;
     await sleep(6000);
+  }
+
+  // Check that there is no FLIP deficit
+  const flipDeficit = (await chainflip.query.swapping.flipDeficitToOffset()).toJSON() as number;
+  if (flipDeficit > 0) {
+    throw new Error(`Flip deficit is greater than zero: ${flipDeficit}`);
   }
 }
 
