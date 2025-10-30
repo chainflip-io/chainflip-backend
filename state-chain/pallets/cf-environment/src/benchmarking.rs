@@ -24,9 +24,10 @@ use cf_traits::VaultKeyWitnessedHandler;
 use frame_benchmarking::v2::*;
 use frame_support::{assert_ok, traits::UnfilteredDispatchable};
 
+#[allow(clippy::multiple_bound_locations)]
 #[benchmarks(
 	where
-		T: pallet_cf_flip::Config,
+	T: pallet_cf_flip::Config,
 )]
 mod benchmarks {
 	use cf_primitives::FLIPPERINOS_PER_FLIP;
