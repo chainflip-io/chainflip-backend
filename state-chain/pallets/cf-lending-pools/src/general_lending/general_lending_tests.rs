@@ -1809,6 +1809,8 @@ fn repaying_more_than_necessary() {
 
 	const EXTRA_AMOUNT: AssetAmount = PRINCIPAL / 10;
 
+	let (_origination_fee_network, origination_fee_pool) = take_network_fee(ORIGINATION_FEE);
+
 	new_test_ext()
 		.with_funded_pool(INIT_POOL_AMOUNT)
 		.with_default_loan()
@@ -1843,10 +1845,20 @@ fn repaying_more_than_necessary() {
 
 			assert_eq!(LoanAccounts::<Test>::get(BORROWER).unwrap().loans, Default::default());
 
-			// Check that excess amount isn't erroneously added to collateral:
+			// Check that excess amount isn't erroneously added to collateral or the pool:
 			assert_eq!(
 				LoanAccounts::<Test>::get(BORROWER).unwrap().collateral,
 				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
+			);
+
+			assert_eq!(
+				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
+				LendingPool {
+					total_amount: INIT_POOL_AMOUNT + origination_fee_pool,
+					available_amount: INIT_POOL_AMOUNT + origination_fee_pool,
+					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
+					owed_to_network: 0,
+				}
 			);
 		});
 }
