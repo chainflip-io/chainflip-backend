@@ -1,17 +1,22 @@
 use crate::{
-	hash::keccak256, lexer::HumanReadableParser, minimized_scale_value::MinimizedScaleValue,
+	hash::keccak256,
+	lexer::HumanReadableParser,
+	minimized_scale_value::{MinimizedPrimitive, MinimizedScaleValue},
 };
+use codec::{Decode, Encode};
 use ethabi::{
 	encode,
 	ethereum_types::{Address, H160, U256},
 	ParamType, Token,
 };
-use scale_value::Primitive;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use scale_info::prelude::{
-	format,
-	string::{String, ToString},
+use scale_info::{
+	prelude::{
+		format,
+		string::{String, ToString},
+	},
+	TypeInfo,
 };
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
@@ -21,24 +26,6 @@ use sp_std::{
 
 /// Custom types for `TypedData`
 pub type Types = BTreeMap<String, Vec<Eip712DomainType>>;
-
-/// Pre-computed value of the following expression:
-///
-/// `keccak256("EIP712Domain(string name,string version,uint256 chainId,address
-/// verifyingContract)")`
-pub const EIP712_DOMAIN_TYPE_HASH: [u8; 32] = [
-	139, 115, 195, 198, 155, 184, 254, 61, 81, 46, 204, 76, 247, 89, 204, 121, 35, 159, 123, 23,
-	155, 15, 250, 202, 169, 167, 93, 82, 43, 57, 64, 15,
-];
-
-/// Pre-computed value of the following expression:
-///
-/// `keccak256("EIP712Domain(string name,string version,uint256 chainId,address
-/// verifyingContract,bytes32 salt)")`
-pub const EIP712_DOMAIN_TYPE_HASH_WITH_SALT: [u8; 32] = [
-	216, 124, 214, 239, 121, 212, 226, 185, 94, 21, 206, 138, 191, 115, 45, 181, 30, 199, 113, 241,
-	202, 46, 220, 207, 34, 164, 108, 114, 154, 197, 100, 114,
-];
 
 /// An EIP-712 error.
 #[derive(Debug)]
@@ -139,7 +126,9 @@ pub trait Eip712 {
 ///
 /// Protocol designers only need to include the fields that make sense for their signing domain.
 /// Unused fields are left out of the struct type.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Debug, Default, Clone, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct EIP712Domain {
 	///  The user readable name of signing domain, i.e. the name of the DApp or the protocol.
@@ -307,7 +296,7 @@ impl<T: Eip712 + Clone> Eip712 for EIP712WithDomain<T> {
 ///     "required": ["types", "primaryType", "domain", "message"]
 /// }
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize, TypeInfo)]
 #[serde(deny_unknown_fields)]
 pub struct TypedData {
 	/// Signing domain metadata. The signing domain is the intended context for the signature (e.g.
@@ -396,7 +385,7 @@ impl Eip712 for TypedData {
 }
 
 /// Represents the name and type pair
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 #[serde(deny_unknown_fields)]
 pub struct Eip712DomainType {
 	pub name: String,
@@ -584,7 +573,7 @@ pub fn encode_field(
 							return Err(Eip712Error::Message(format!("Unsupported type {s}",))),
 
 						ParamType::Uint(_) => match value.clone() {
-							MinimizedScaleValue::Primitive(Primitive::U128(v)) =>
+							MinimizedScaleValue::Primitive(MinimizedPrimitive::U128(v)) =>
 								Token::Uint(v.into()),
 							_ => Token::Uint(U256(
 								value
@@ -594,7 +583,9 @@ pub fn encode_field(
 							)),
 						},
 						ParamType::Bool => encode_eip712_type(Token::Bool(
-							if let MinimizedScaleValue::Primitive(Primitive::Bool(b)) = value {
+							if let MinimizedScaleValue::Primitive(MinimizedPrimitive::Bool(b)) =
+								value
+							{
 								*b
 							} else {
 								return Err(err)
@@ -602,8 +593,10 @@ pub fn encode_field(
 						)),
 						ParamType::String => {
 							let s: String = match &value {
-								MinimizedScaleValue::Primitive(Primitive::String(s)) => s.clone(),
-								MinimizedScaleValue::Primitive(Primitive::Char(c)) => c.to_string(),
+								MinimizedScaleValue::Primitive(MinimizedPrimitive::String(s)) =>
+									s.clone(),
+								MinimizedScaleValue::Primitive(MinimizedPrimitive::Char(c)) =>
+									c.to_string(),
 								_ => return Err(err),
 							};
 							encode_eip712_type(Token::String(s))

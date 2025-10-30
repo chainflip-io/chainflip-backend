@@ -13810,6 +13810,7 @@ dependencies = [
  "cf-traits",
  "derive-where",
  "ethabi",
+ "ethereum-eip712",
  "frame-benchmarking",
  "frame-executive",
  "frame-metadata-hash-extension",

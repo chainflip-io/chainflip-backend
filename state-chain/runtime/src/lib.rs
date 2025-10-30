@@ -48,12 +48,13 @@ use crate::{
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DelegationInfo,
-		DispatchErrorWithMessage, FailingWitnessValidators, FeeTypes, LendingPosition,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFeeDetails, NetworkFees,
-		OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RpcLendingConfig,
-		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
-		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvent,
-		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		DispatchErrorWithMessage, EncodedNonNativeCall, EncodingType, FailingWitnessValidators,
+		FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
+		NetworkFeeDetails, NetworkFees, NonceOrAccount, OpenedDepositChannels, OperatorInfo,
+		RpcAccountInfoCommonItems, RpcLendingConfig, RuntimeApiPenalty,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
+		TradingStrategyLimits, TransactionScreeningEvent, TransactionScreeningEvents,
+		ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -93,12 +94,17 @@ use cf_traits::{
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
+use ethereum_eip712::{eip_712_types::build_eip712_typed_data, eip712::TypedData};
 use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
 use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::{get_latest_oracle_prices, OraclePrice},
 	price::PriceAsset,
+};
+use pallet_cf_environment::{
+	build_domain_data, submit_runtime_call::ChainflipExtrinsic, EthEncodingType, SolEncodingType,
+	TransactionMetadata, DOMAIN_OFFCHAIN_PREFIX,
 };
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
@@ -114,7 +120,7 @@ use pallet_cf_validator::{
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use runtime_apis::{ChainAccounts, EvmCallDetails, RpcLendingPool, RpcLoanAccount};
-use scale_info::prelude::string::String;
+use scale_info::prelude::{string::String, format};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
 use crate::chainflip::ethereum_sc_calls::EthereumSCApi;
@@ -2791,13 +2797,76 @@ impl_runtime_apis! {
 		}
 
 		fn cf_chainflip_network_and_state(
-		) -> Result< (cf_primitives::ChainflipNetwork, u32, BlockNumber), DispatchErrorWithMessage> {
-			let version = <Runtime as frame_system::Config>::Version::get();
+			call: Vec<u8>,
+			blocks_to_expiry: BlockNumber,
+			nonce_or_account: NonceOrAccount,
+			encoding: EncodingType,
+		) -> Result< (EncodedNonNativeCall, TransactionMetadata), DispatchErrorWithMessage> {
+			let spec_version = <Runtime as frame_system::Config>::Version::get().spec_version;
 			let current_block_number = <frame_system::Pallet<Runtime>>::block_number();
-			Ok( (pallet_cf_environment::ChainflipNetworkName::<Runtime>::get(), version.spec_version, current_block_number))
+			let chainflip_network = <pallet_cf_environment::ChainflipNetworkName::<Runtime>>::get();
+
+			// Ensure it is a valid RuntimeCall
+			let runtime_call =
+				match RuntimeCall::decode(&mut &call[..]) {
+					Ok(rc) => rc,
+					Err(_) => {
+						return Err(DispatchErrorWithMessage::from(
+							"Failed to deserialize into a RuntimeCall",
+						));
+					},
+				};
+
+			let transaction_metadata = TransactionMetadata {
+				expiry_block: current_block_number.saturating_add(blocks_to_expiry),
+				nonce: match nonce_or_account {
+					NonceOrAccount::Nonce(nonce) => nonce,
+					NonceOrAccount::Account(account) => System::account_nonce(account),
+				},
+			};
+			let encoded_data = match encoding {
+				// Encode domain without the prefix because wallets automatically prefix
+				// the calldata when using personal_sign
+				EncodingType::Eth(EthEncodingType::PersonalSign) =>
+					EncodedNonNativeCall::String(build_domain_data(
+						runtime_call.clone(),
+						&chainflip_network,
+						&transaction_metadata,
+						spec_version,
+					)),
+				EncodingType::Eth(EthEncodingType::Eip712) => {
+					let chainflip_extrinsic = ChainflipExtrinsic { call: runtime_call, transaction_metadata };
+					let typed_data: TypedData =
+						build_eip712_typed_data(
+							chainflip_network.as_str().to_string(),
+							chainflip_extrinsic,
+							spec_version,
+						)
+						.map_err(|_| {
+							DispatchErrorWithMessage::from(
+								"Failed to build eip712 typed data"
+							)
+						})?;
+					EncodedNonNativeCall::Eip712(typed_data)
+				},
+				EncodingType::Sol(SolEncodingType::Domain) => {
+					let raw_payload = build_domain_data(
+						runtime_call,
+						&chainflip_network,
+						&transaction_metadata,
+						spec_version,
+					);
+					EncodedNonNativeCall::String(format!(
+						"{}{}",
+						DOMAIN_OFFCHAIN_PREFIX, raw_payload,
+					))
+				},
+			};
+			// Return the `transaction_metadata` because it will need
+			// to be submitted as part of the `non_native_signed_call`
+			// and it is being modified here.
+			Ok((encoded_data, transaction_metadata))
 		}
-
-
 	}
 
 

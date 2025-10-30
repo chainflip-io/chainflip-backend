@@ -35,8 +35,10 @@ use cf_primitives::{
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
 use core::{ops::Range, str};
+use ethereum_eip712::eip712::TypedData;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_elections::electoral_systems::oracle_price::price::PriceAsset;
+use pallet_cf_environment::{EthEncodingType, SolEncodingType, submit_runtime_call::TransactionMetadata};
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::{BoostPoolDetails, RpcLendingPool, RpcLoanAccount};
@@ -57,6 +59,25 @@ use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
 };
+
+#[derive(Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
+pub enum EncodedNonNativeCall {
+	Eip712(TypedData),
+	String(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
+pub enum EncodingType {
+	Eth(EthEncodingType),
+	Sol(SolEncodingType),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
+#[serde(untagged)]
+pub enum NonceOrAccount {
+	Nonce(u32),
+	Account(AccountId32),
+}
 
 #[derive(PartialEq, Eq, Encode, Decode, Clone, TypeInfo, Serialize, Deserialize, Debug)]
 pub struct LendingPosition<Amount> {
@@ -862,7 +883,11 @@ decl_runtime_apis!(
 		#[changed_in(8)]
 		fn cf_chainflip_network_and_state();
 		fn cf_chainflip_network_and_state(
-		) -> Result<(cf_primitives::ChainflipNetwork, u32, BlockNumber), DispatchErrorWithMessage>;
+			call: Vec<u8>,
+			blocks_to_expiry: BlockNumber,
+			nonce_or_account: NonceOrAccount,
+			encoding: EncodingType,
+		) -> Result<(EncodedNonNativeCall, TransactionMetadata), DispatchErrorWithMessage>;
 	}
 );
 
