@@ -31,7 +31,15 @@ async function main() {
   for (const key of lpKeys) {
     await setupLpAccount(globalLogger, key);
 
-    for (const asset of Object.keys(assetConstants).filter((asset) => asset !== 'Dot')) {
+    for (const asset of Object.keys(assetConstants).filter((asset) =>
+      [
+        'Btc',
+        'Eth',
+        'Usdc',
+        // 'Usdt', Throwing some weird errors..
+        'Sol',
+      ].includes(asset),
+    )) {
       let amount;
       switch (asset) {
         case 'BTC':
