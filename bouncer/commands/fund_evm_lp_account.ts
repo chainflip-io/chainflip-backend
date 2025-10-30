@@ -103,29 +103,6 @@ async function getRegisterRefundAddress(chainflip: ApiPromise, ccy: InternalAsse
   return chainflip.tx.liquidityProvider.registerLiquidityRefundAddress({ [chain]: refundAddress });
 }
 
-// OPEN DEPOSIT CHANNEL
-function getOpenDepositChannelCall(chainflip: ApiPromise, ccy: InternalAsset) {
-  return chainflip.tx.liquidityProvider.requestLiquidityDepositAddress(ccy, null);
-}
-
-async function observeNonNativeAccountCredited(
-  asset: InternalAsset,
-  scAccount: string,
-  amount: string,
-) {
-  await observeEvent(globalLogger, 'assetBalances:AccountCredited', {
-    test: (event) =>
-      event.data.asset === asset &&
-      event.data.accountId === scAccount &&
-      isWithinOnePercent(
-        BigInt(event.data.amountCredited.replace(/,/g, '')),
-        BigInt(amountToFineAmount(String(amount), assetDecimals(asset as InternalAsset))),
-      ),
-    finalized: false,
-    timeoutSeconds: 120,
-  }).event;
-}
-
 async function signCallUsingEvmWallet(
   logger: Logger,
   call: ReturnType<typeof getRegisterLpCall>,
@@ -201,18 +178,18 @@ async function main() {
     console.log('Mnemonic: ', evmWallet.mnemonic?.phrase);
     const evmScAccount = externalChainToScAccount(evmWallet.address);
 
-    // globalLogger.info(`Funding with FLIP to register the EVM account: ${evmScAccount}`);
-    // await fundFlip(globalLogger, evmScAccount, '1000');
+    globalLogger.info(`Funding with FLIP to register the EVM account: ${evmScAccount}`);
+    await fundFlip(globalLogger, evmScAccount, '1000');
 
     // register LP account
-    // await signCallUsingEvmWallet(
-    //   globalLogger,
-    //   getRegisterLpCall(chainflipApi),
-    //   chainflipApi,
-    //   evmWallet as HDNodeWallet,
-    //   () => observeNonNativeSignedRegisterLpCall(globalLogger, evmScAccount),
-    // );
-    // console.log(`Successfully registered LP account ${evmScAccount}`);
+    console.log(`Registering LP account for EVM account ${evmScAccount}`);
+    await signCallUsingEvmWallet(
+      globalLogger,
+      getRegisterLpCall(chainflipApi),
+      chainflipApi,
+      evmWallet as HDNodeWallet,
+      () => observeNonNativeSignedRegisterLpCall(globalLogger, evmScAccount),
+    );
 
     for (const asset of Object.keys(assetConstants).filter((asset) =>
       ['Btc', 'Eth', 'Usdc', 'Usdt', 'Sol'].includes(asset),
@@ -250,29 +227,26 @@ async function main() {
         evmWallet,
       );
       await observeEvent(globalLogger, 'liquidityProvider:LiquidityRefundAddressRegistered', {
-        test: (event) => event.data.address.Eth === evmScAccount,
+        test: (event) => event.data.accountId === evmScAccount,
       }).event;
-      console.log(`Successfully set refund address for ${asset}`);
 
-      try {
-        console.log(`Depositing ${amount} ${asset} to LP account ${evmScAccount}`);
-        await lpMutex.runExclusive(whaleMnemonic, async () => {
-          const nonce = await chainflipApi.rpc.system.accountNextIndex(whaleLp.address);
-          await chainflipApi.tx.liquidityProvider
-            .transferAsset(amount.toString(), asset as InternalAsset, evmScAccount)
-            .signAndSend(whaleLp, { nonce }, handleSubstrateError(chainflipApi));
-        });
+      console.log(`Depositing ${amount} ${asset} to LP account ${evmScAccount}`);
+      await lpMutex.runExclusive(whaleMnemonic, async () => {
+        const nonce = await chainflipApi.rpc.system.accountNextIndex(whaleLp.address);
+        await chainflipApi.tx.liquidityProvider
+          .transferAsset(
+            amountToFineAmount(String(amount), assetDecimals(asset as InternalAsset)),
+            asset as InternalAsset,
+            evmScAccount,
+          )
+          .signAndSend(whaleLp, { nonce }, handleSubstrateError(chainflipApi));
+      });
 
-        await observeEvent(globalLogger, 'assetBalances:AccountCredited', {
-          test: (event) => event.data.asset === asset && event.data.accountId === evmScAccount,
-          finalized: false,
-          timeoutSeconds: 120,
-        }).event;
-
-        console.log(`Successfully deposited ${amount} ${asset} to LP account ${evmScAccount}`);
-      } catch (e) {
-        console.log(e);
-      }
+      await observeEvent(globalLogger, 'assetBalances:AccountCredited', {
+        test: (event) => event.data.asset === asset && event.data.accountId === evmScAccount,
+        finalized: false,
+        timeoutSeconds: 120,
+      }).event;
     }
   }
 }
