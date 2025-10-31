@@ -2825,9 +2825,9 @@ impl_runtime_apis! {
 				},
 			};
 			let encoded_data = match encoding {
-				// Encode domain without the prefix because wallets automatically prefix
-				// the calldata when using personal_sign
 				EncodingType::Eth(EthEncodingType::PersonalSign) =>
+					// Encode domain without the prefix because EVM wallets automatically
+					// prefix the calldata when using personal_sign
 					EncodedNonNativeCall::String(build_domain_data(
 						runtime_call.clone(),
 						&chainflip_network,
@@ -2862,9 +2862,6 @@ impl_runtime_apis! {
 					))
 				},
 			};
-			// Return the `transaction_metadata` because it will need
-			// to be submitted as part of the `non_native_signed_call`
-			// and it is being modified here.
 			Ok((encoded_data, transaction_metadata))
 		}
 	}
