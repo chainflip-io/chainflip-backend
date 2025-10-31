@@ -997,14 +997,14 @@ mod tests {
 				"token": "0xA604060890923Ff400e8c6f5290461A83AEDACec"
 			  }
 			],
-			"startTime": 1658645591,
-			"endTime": 1659250386,
+			"startTime": "1658645591",
+			"endTime": "1659250386",
 			"zone": "0x004C00500000aD104D7DBd00e3ae0A5C00560C00",
 			"zoneHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-			"salt": 16178208897136618u64,
+			"salt": "16178208897136618",
 			"conduitKey": "0x0000007b02230091a7ed01230072f7006a004d60a8d4e71d599b8104250f0000",
 			"totalOriginalConsiderationItems": "2",
-			"counter": 0
+			"counter": "0"
 		  }
 		}
 				);
@@ -1100,10 +1100,10 @@ mod tests {
 		  "message": {
 			"call": {
 			  "pallet_cf_ingress_egress____pallet____Call__process_deposits__e922a3c2_0": {
-				"block_height": 6,
+				"block_height": "6",
 				"deposit_witnesses": [
 				  {
-					"amount": 5000,
+					"amount": "5000",
 					"asset": "Sol",
 					"deposit_address": {
 					  "bytes_0": "0x0303030303030303030303030303030303030303030303030303030303030303"
@@ -1111,7 +1111,7 @@ mod tests {
 					"deposit_details": {}
 				  },
 				  {
-					"amount": 6000,
+					"amount": "6000",
 					"asset": "SolUsdc",
 					"deposit_address": {
 					  "bytes_0": "0x0404040404040404040404040404040404040404040404040404040404040404"
@@ -1122,8 +1122,8 @@ mod tests {
 			  }
 			},
 			"transaction_metadata": {
-			  "expiry_block": 1000,
-			  "nonce": 1
+			  "expiry_block": "1000",
+			  "nonce": "1"
 			}
 		  }
 		});
