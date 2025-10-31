@@ -1565,6 +1565,7 @@ fn liquidation_with_outstanding_principal_and_owed_network_fees() {
 		.execute_with(|| {
 
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 
 			assert_eq!(
 				LendingPools::new_loan(
@@ -2154,6 +2155,7 @@ fn network_fees_under_full_utilisation() {
 			));
 
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 
 			assert_eq!(
 				LendingPools::new_loan(
