@@ -284,6 +284,14 @@ fn test_environment_serialization() {
 				(ForeignChain::Solana, 123u32),
 				(ForeignChain::Assethub, 2u32),
 			]),
+			boost_delays: HashMap::from([
+				(ForeignChain::Bitcoin, 0u32),
+				(ForeignChain::Ethereum, 5u32),
+				(ForeignChain::Polkadot, 0u32),
+				(ForeignChain::Arbitrum, 0u32),
+				(ForeignChain::Solana, 456u32),
+				(ForeignChain::Assethub, 2u32),
+			]),
 		},
 		funding: FundingEnvironment {
 			redemption_tax: 0u32.into(),

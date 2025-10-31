@@ -594,6 +594,7 @@ pub struct IngressEgressEnvironment {
 	pub egress_dust_limits: any::AssetMap<NumberOrHex>,
 	pub channel_opening_fees: HashMap<ForeignChain, NumberOrHex>,
 	pub ingress_delays: HashMap<ForeignChain, u32>,
+	pub boost_delays: HashMap<ForeignChain, u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -1893,6 +1894,7 @@ where
 			let mut witness_safety_margins = HashMap::new();
 			let mut channel_opening_fees = HashMap::new();
 			let mut ingress_delays = HashMap::new();
+			let mut boost_delays = HashMap::new();
 
 			for chain in ForeignChain::iter() {
 				witness_safety_margins.insert(chain, api.cf_witness_safety_margin(hash, chain)?);
@@ -1900,6 +1902,7 @@ where
 				match version {
 					Some(v) if v >= 8 => {
 						ingress_delays.insert(chain, api.cf_ingress_delay(hash, chain)?);
+						boost_delays.insert(chain, api.cf_boost_delay(hash, chain)?);
 					},
 					// Not defined before v8
 					_ => {},
@@ -1922,6 +1925,7 @@ where
 				})?,
 				channel_opening_fees,
 				ingress_delays,
+				boost_delays,
 			})
 		})
 	}

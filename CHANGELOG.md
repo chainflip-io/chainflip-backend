@@ -7,6 +7,7 @@ All notable changes included in each Chainflip release will be documented in thi
 ### Features
 
 - Expose ingress delay via environment rpc.
+- Expose boost delay via environment rpc.
 
 ## [1.12.0] - 2025-10-22
 
