@@ -61,10 +61,13 @@ use sp_std::{
 };
 
 #[derive(Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
-pub enum EncodedNonNativeCall {
-	Eip712(TypedData),
+pub enum EncodedNonNativeCallGeneric<T> {
+	Eip712(T),
 	String(String),
 }
+
+pub type EncodedNonNativeCall = EncodedNonNativeCallGeneric<TypedData>;
+
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 pub enum EncodingType {
