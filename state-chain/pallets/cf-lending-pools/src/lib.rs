@@ -17,6 +17,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(map_try_insert)]
 
+mod boost;
 mod core_lending_pool;
 mod general_lending;
 mod utils;
@@ -29,6 +30,9 @@ pub use general_lending::{
 	LtvThresholds, NetworkFeeContributions, RpcLendingPool, RpcLiquidationStatus,
 	RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 };
+
+pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
+use boost::{BoostPool, BoostPoolContribution, BoostPoolId};
 
 pub mod migrations;
 pub mod weights;
@@ -157,27 +161,6 @@ pub enum PalletConfigUpdate {
 define_wrapper_type!(CorePoolId, u32);
 
 const MAX_PALLET_CONFIG_UPDATE: u32 = 100; // used to bound no. of updates per extrinsic
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct BoostPool {
-	// Fee charged by the pool
-	pub fee_bps: BasisPoints,
-	pub core_pool_id: CorePoolId,
-}
-
-#[derive(Encode, Decode, TypeInfo, Debug, PartialEq, Eq, Clone)]
-pub struct BoostPoolContribution {
-	pub core_pool_id: CorePoolId,
-	pub loan_id: CoreLoanId,
-	pub boosted_amount: AssetAmount,
-	pub network_fee: AssetAmount,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct BoostPoolId {
-	pub asset: Asset,
-	pub tier: BoostPoolTier,
-}
 
 // Rename this to LoanPurpose?
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
@@ -338,12 +321,6 @@ pub mod pallet {
 	pub type PendingNetworkFees<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
-	/// Stores collected pool fees awaiting to be swapped into each pool's asset at regular
-	/// intervals
-	#[pallet::storage]
-	pub type PendingPoolFees<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, BTreeMap<Asset, AssetAmount>, ValueQuery>;
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -411,13 +388,12 @@ pub mod pallet {
 		},
 		InterestTaken {
 			loan_id: LoanId,
-			/// NOTE: typically the interest is charged in the primary collateral asset,
-			/// but we might fall back to charging from other assets if the primary
-			/// runs out.
-			pool_interest: BTreeMap<Asset, AssetAmount>,
-			network_interest: BTreeMap<Asset, AssetAmount>,
-			broker_interest: BTreeMap<Asset, AssetAmount>,
-			low_ltv_penalty: BTreeMap<Asset, AssetAmount>,
+			// Interest is always charged in the loan's asset (effectively increasing
+			// the loan's principal)
+			pool_interest: AssetAmount,
+			network_interest: AssetAmount,
+			broker_interest: AssetAmount,
+			low_ltv_penalty: AssetAmount,
 		},
 		LiquidationInitiated {
 			borrower_id: T::AccountId,
@@ -442,10 +418,6 @@ pub mod pallet {
 			outstanding_principal: AssetAmount,
 			/// Indicates whether the loan was settled as a result of liquidation.
 			via_liquidation: bool,
-		},
-		LendingPoolFeeSwapInitiated {
-			asset: Asset,
-			swap_request_id: SwapRequestId,
 		},
 		LendingNetworkFeeSwapInitiated {
 			swap_request_id: SwapRequestId,
@@ -927,289 +899,4 @@ impl<T: Config> Pallet<T> {
 			Ok::<(), Error<T>>(())
 		})?)
 	}
-}
-
-impl<T: Config> BoostApi for Pallet<T> {
-	#[transactional]
-	fn try_boosting(
-		deposit_id: PrewitnessedDepositId,
-		asset: Asset,
-		deposit_amount: AssetAmount,
-		max_boost_fee_bps: BasisPoints,
-	) -> Result<BoostOutcome, DispatchError> {
-		let mut remaining_amount = deposit_amount;
-		let mut total_fee_amount: AssetAmount = 0;
-
-		let mut used_pools = BTreeMap::new();
-
-		let network_fee_portion = NetworkFeeDeductionFromBoostPercent::<T>::get();
-
-		let sorted_boost_pools = BoostPools::<T>::iter_prefix(asset)
-			.map(|(tier, pool)| (tier, pool.core_pool_id))
-			.collect::<BTreeMap<_, _>>();
-
-		for (boost_tier, core_pool_id) in sorted_boost_pools {
-			if boost_tier > max_boost_fee_bps {
-				break
-			}
-
-			let Some((loan_id, boosted_amount, fee)) =
-				CorePools::<T>::mutate(asset, core_pool_id, |pool| {
-					let core_pool: &mut CoreLendingPool<_> = match pool {
-						Some(pool) if pool.get_available_amount() == Zero::zero() => {
-							return Ok::<_, DispatchError>(None);
-						},
-						None => {
-							// Pool not existing for some reason is equivalent to not having funds:
-							return Ok::<_, DispatchError>(None);
-						},
-						Some(pool) => pool,
-					};
-
-					// 1. Derive the amount that needs to be borrowed:
-					let full_amount_fee =
-						utils::fee_from_boosted_amount(remaining_amount, boost_tier);
-					let required_amount = remaining_amount.saturating_sub(full_amount_fee);
-
-					let available_amount = core_pool.get_available_amount();
-
-					let (amount_to_provide, fee_amount) = if available_amount >= required_amount {
-						// Will borrow full required amount
-						(required_amount, full_amount_fee)
-					} else {
-						// Will only borrow what is available
-						let amount_to_provide = available_amount;
-						let fee = utils::fee_from_provided_amount(amount_to_provide, boost_tier)?;
-
-						(amount_to_provide, fee)
-					};
-
-					let loan_id =
-						core_pool.new_loan(amount_to_provide, LoanUsage::Boost(deposit_id))?;
-
-					Ok(Some((loan_id, amount_to_provide.saturating_add(fee_amount), fee_amount)))
-				})?
-			else {
-				// Can't use the current pool, moving on to the next
-				continue;
-			};
-
-			// NOTE: A portion of the boost pool fees will be charged as network fee:
-			let network_fee = network_fee_portion * fee;
-			used_pools.insert(
-				boost_tier,
-				BoostPoolContribution { core_pool_id, loan_id, boosted_amount, network_fee },
-			);
-
-			remaining_amount.saturating_reduce(boosted_amount);
-			total_fee_amount.saturating_accrue(fee);
-
-			if remaining_amount == 0u32.into() {
-				let boost_output = BoostOutcome {
-					used_pools: used_pools
-						.iter()
-						.map(|(tier, pool)| (*tier, pool.boosted_amount))
-						.collect(),
-					total_fee: total_fee_amount,
-				};
-
-				BoostedDeposits::<T>::insert(asset, deposit_id, used_pools);
-				return Ok(boost_output);
-			}
-		}
-
-		Err(Error::<T>::InsufficientBoostLiquidity.into())
-	}
-
-	fn finalise_boost(deposit_id: PrewitnessedDepositId, asset: Asset) -> BoostFinalisationOutcome {
-		let Some(pool_contributions) = BoostedDeposits::<T>::take(asset, deposit_id) else {
-			return Default::default();
-		};
-
-		let mut total_network_fee = 0;
-
-		for BoostPoolContribution { core_pool_id, loan_id, boosted_amount, network_fee } in
-			pool_contributions.values()
-		{
-			total_network_fee += network_fee;
-
-			CorePools::<T>::mutate(asset, core_pool_id, |pool| {
-				if let Some(pool) = pool {
-					for (booster_id, unlocked_amount) in
-						pool.make_repayment(*loan_id, boosted_amount.saturating_sub(*network_fee))
-					{
-						T::Balance::credit_account(&booster_id, asset, unlocked_amount);
-					}
-					pool.finalise_loan(*loan_id);
-				}
-			});
-		}
-
-		BoostFinalisationOutcome { network_fee: total_network_fee }
-	}
-
-	fn process_deposit_as_lost(deposit_id: PrewitnessedDepositId, asset: Asset) {
-		let Some(pool_contributions) = BoostedDeposits::<T>::take(asset, deposit_id) else {
-			log_or_panic!("Boost record for a lost deposit not found: {}", deposit_id);
-			return;
-		};
-
-		for BoostPoolContribution { core_pool_id, loan_id, .. } in pool_contributions.values() {
-			CorePools::<T>::mutate(asset, core_pool_id, |pool| {
-				if let Some(pool) = pool {
-					pool.finalise_loan(*loan_id);
-				}
-			});
-		}
-	}
-}
-
-impl<T: Config> cf_traits::BoostBalancesApi for Pallet<T> {
-	type AccountId = T::AccountId;
-	fn boost_pool_account_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
-		let available = BoostPools::<T>::iter_prefix(asset).fold(0, |acc, (_tier, pool)| {
-			let Some(core_pool) = CorePools::<T>::get(asset, pool.core_pool_id) else {
-				return 0;
-			};
-
-			acc + core_pool.get_available_amount_for_account(who).unwrap_or(0)
-		});
-
-		let in_all_boosted_deposits =
-			BoostedDeposits::<T>::iter_prefix(asset).fold(0, |acc, (_, pool_contributions)| {
-				let in_boosted_deposit = pool_contributions.iter().fold(
-					0,
-					|acc,
-					 (
-						_,
-						BoostPoolContribution {
-							core_pool_id,
-							loan_id,
-							boosted_amount,
-							network_fee,
-						},
-					)| {
-						let Some(core_pool) = CorePools::<T>::get(asset, core_pool_id) else {
-							return 0;
-						};
-
-						let Some(loan) = core_pool.pending_loans.get(loan_id) else { return 0 };
-
-						let Some(share) = loan.shares.get(who) else { return 0 };
-
-						acc + *share * boosted_amount.saturating_sub(*network_fee)
-					},
-				);
-
-				acc + in_boosted_deposit
-			});
-
-		available + in_all_boosted_deposits
-	}
-}
-
-pub fn boost_pools_iter<T: Config>(
-) -> impl Iterator<Item = (Asset, BoostPoolTier, CoreLendingPool<T::AccountId>)> {
-	BoostPools::<T>::iter().filter_map(move |(asset, tier, pool)| {
-		CorePools::<T>::get(asset, pool.core_pool_id).map(|core_pool| (asset, tier, core_pool))
-	})
-}
-
-pub fn boost_pools_for_asset_iter<T: Config>(
-	asset: Asset,
-) -> impl Iterator<Item = (BoostPoolTier, CoreLendingPool<T::AccountId>)> {
-	BoostPools::<T>::iter_prefix(asset).filter_map(move |(tier, pool)| {
-		CorePools::<T>::get(asset, pool.core_pool_id).map(|core_pool| (tier, core_pool))
-	})
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct OwedAmount<AmountT> {
-	pub total: AmountT,
-	pub fee: AmountT,
-}
-
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
-pub struct BoostPoolDetails<AccountId> {
-	pub available_amounts: BTreeMap<AccountId, AssetAmount>,
-	pub pending_boosts:
-		BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId, OwedAmount<AssetAmount>>>,
-	pub pending_withdrawals: BTreeMap<AccountId, BTreeSet<PrewitnessedDepositId>>,
-	pub network_fee_deduction_percent: Percent,
-}
-
-pub fn get_boost_pool_details<T: Config>(
-	asset: Asset,
-) -> BTreeMap<BoostPoolTier, BoostPoolDetails<T::AccountId>> {
-	let network_fee_deduction_percent = NetworkFeeDeductionFromBoostPercent::<T>::get();
-
-	boost_pools_for_asset_iter::<T>(asset)
-		.map(|(tier, core_pool)| {
-			let pending_boosts = core_pool
-				.get_pending_loans()
-				.iter()
-				.map(|(_loan_id, loan)| {
-					let LoanUsage::Boost(deposit_id) = loan.usage;
-					(deposit_id, loan)
-				})
-				.map(|(deposit_id, loan)| {
-					let Some(contribution) = BoostedDeposits::<T>::get(asset, deposit_id)
-						.and_then(|pools| pools.get(&tier).cloned())
-					else {
-						return (deposit_id, BTreeMap::default());
-					};
-
-					let BoostPoolContribution { boosted_amount, network_fee, .. } = contribution;
-
-					let total_owed_amount = boosted_amount.saturating_sub(network_fee);
-
-					let boosters_fee = utils::fee_from_boosted_amount(boosted_amount, tier)
-						.saturating_sub(network_fee);
-
-					let owed_amounts = loan
-						.shares
-						.iter()
-						.map(|(acc_id, share)| {
-							(
-								acc_id.clone(),
-								OwedAmount {
-									total: *share * total_owed_amount,
-									fee: *share * boosters_fee,
-								},
-							)
-						})
-						.collect();
-
-					(deposit_id, owed_amounts)
-				})
-				.collect();
-
-			let pending_withdrawals = core_pool
-				.pending_withdrawals
-				.iter()
-				.map(|(acc_id, loan_ids)| {
-					let deposit_ids = loan_ids
-						.iter()
-						.filter_map(|loan_id| {
-							core_pool.pending_loans.get(loan_id).map(|loan| {
-								let LoanUsage::Boost(deposit_id) = loan.usage;
-								deposit_id
-							})
-						})
-						.collect();
-
-					(acc_id.clone(), deposit_ids)
-				})
-				.collect();
-			(
-				tier,
-				BoostPoolDetails {
-					available_amounts: core_pool.get_amounts(),
-					pending_boosts,
-					pending_withdrawals,
-					network_fee_deduction_percent,
-				},
-			)
-		})
-		.collect()
 }

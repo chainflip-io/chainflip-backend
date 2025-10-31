@@ -13,7 +13,7 @@ anyhow = { workspace = true }
 hex = { workspace = true, default-features = true }
 bincode = { workspace = true }
 csv = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, default-features = true }
 serde = { workspace = true, default-features = true, features = ["derive"] }
 # have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
 rand = { workspace = true, default-features = true }

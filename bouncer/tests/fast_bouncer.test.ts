@@ -73,6 +73,11 @@ describe('ConcurrentTests', () => {
   serialTest('CheckAvailabilityAllSolanaNonces', checkAvailabilityAllSolanaNonces, 50);
 });
 
+// Run only the broker level screening tests
+describe('BrokerLevelScreeningTestWithBoost', () => {
+  concurrentTest('BrokerLevelScreening', (context) => testBrokerLevelScreening(context, true), 600);
+});
+
 describe('AllSwaps', () => {
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;

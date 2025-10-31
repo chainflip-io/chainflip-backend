@@ -764,7 +764,7 @@ mod vault_swaps {
 
 			// Fully witnessing a boosted deposit should finalise boost:
 			{
-				EthereumIngressEgress::process_vault_swap_request_full_witness(
+				EthereumIngressEgress::process_vault_swap_request_full_witness_inner(
 					block_height,
 					deposit.clone(),
 				);
@@ -1014,7 +1014,7 @@ mod delayed_boosting {
 			.then_execute_with(|deposit| {
 				// EDGE CASE: full witness arrives before the delayed prewitness is processed,
 				//
-				EthereumIngressEgress::process_vault_swap_request_full_witness(
+				EthereumIngressEgress::process_vault_swap_request_full_witness_inner(
 					DEPOSIT_BLOCK_HEIGHT,
 					deposit.clone(),
 				);
@@ -1086,7 +1086,7 @@ mod delayed_boosting {
 					BoostedVaultTransactions::<Test, Instance1>::get(tx_id)
 				);
 
-				EthereumIngressEgress::process_vault_swap_request_full_witness(
+				EthereumIngressEgress::process_vault_swap_request_full_witness_inner(
 					DEPOSIT_BLOCK_HEIGHT,
 					deposit.clone(),
 				);

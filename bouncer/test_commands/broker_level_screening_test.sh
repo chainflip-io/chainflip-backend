@@ -1,2 +1,2 @@
 #!/bin/bash
-pnpm vitest run -t "BrokerLevelScreening" --silent=false
+pnpm vitest run -t "BrokerLevelScreeningTestWithBoost" --silent=false

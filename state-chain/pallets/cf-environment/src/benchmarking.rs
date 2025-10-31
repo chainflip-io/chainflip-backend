@@ -18,6 +18,7 @@
 
 use super::*;
 
+use crate::submit_runtime_call::ChainflipExtrinsic;
 use cf_primitives::TxId;
 use cf_traits::VaultKeyWitnessedHandler;
 use frame_benchmarking::v2::*;
@@ -221,7 +222,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		non_native_signed_call(
 			frame_system::RawOrigin::None,
-			Message { call, metadata: transaction_metadata },
+			ChainflipExtrinsic { call, transaction_metadata },
 			signature_data,
 		);
 	}

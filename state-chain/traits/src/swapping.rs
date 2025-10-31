@@ -39,7 +39,6 @@ pub enum SwapType {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum LendingSwapType<AccountId> {
 	Liquidation { borrower_id: AccountId, loan_id: LoanId },
-	FeeSwap { pool_asset: Asset },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
