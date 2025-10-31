@@ -88,6 +88,7 @@ pub trait Chainflip: frame_system::Config {
 		+ MaybeSerializeDeserialize
 		+ Bounded
 		+ From<u128>
+		+ Into<u128>
 		+ From<u64>
 		+ Sum<Self::Amount>;
 
@@ -1391,4 +1392,8 @@ pub trait PriceFeedApi {
 			None
 		}
 	}
+}
+
+pub trait GetMinimumFunding {
+	fn get_min_funding_amount() -> AssetAmount;
 }
