@@ -85,12 +85,12 @@ use state_chain_runtime::{
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DelegationSnapshot, DispatchErrorWithMessage, ElectoralRuntimeApi,
-		EncodedNonNativeCall, EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes,
-		LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
-		NonceOrAccount, OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems,
-		RpcLendingConfig, RpcLendingPool, RuntimeApiPenalty, SimulatedSwapInformation,
-		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
-		VaultAddresses, VaultSwapDetails,
+		EncodedNonNativeCall, EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails,
+		FailingWitnessValidators, FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo,
+		LiquidityProviderInfo, NetworkFees, NonceOrAccount, OpenedDepositChannels, OperatorInfo,
+		RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiPenalty,
+		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
+		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash,
@@ -111,7 +111,7 @@ pub mod pool_client;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize /*, TypeInfo */ )]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize /* , TypeInfo */)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcTypedData {
 	/// Signing domain metadata. The signing domain is the intended context for the signature (e.g.
@@ -2573,7 +2573,7 @@ where
 				))),
 				_ => {
 					let (encoded_call, metadata) = api
-						.cf_chainflip_network_and_state(
+						.cf_encode_non_native_call(
 							hash,
 							call.into(),
 							blocks_to_expiry,
@@ -2581,34 +2581,46 @@ where
 							encoding,
 						)
 						.map_err(CfApiError::from)?
-						.map_err(CfApiError::from)?;
-					
-					// Convert EncodedNonNativeCall to EncodedNonNativeCallRpc
-						let converted_call = match encoded_call {
-							EncodedNonNativeCall::Eip712(typed_data) => {
-								let message_scale_value: scale_value::Value = typed_data.message.clone().into();
-								let message_json = serde_json::to_value(message_scale_value)
-									.map_err(|e| CfApiError::from(anyhow::Error::from(e)))?;
-								let message_object = message_json
-									.as_object()
-									.ok_or_else(|| CfApiError::from(anyhow::Error::msg(
-										"the primary type is not a JSON object but one of the primitive types"
-									)))?;
-								
-								EncodedNonNativeCallRpc::Eip712(RpcTypedData {
-									domain: typed_data.domain,
-									types: typed_data.types,
-									primary_type: typed_data.primary_type,
-									message: message_object.clone().into_iter().collect(),
-								})
-							},
-							EncodedNonNativeCall::String(s) => {
-								EncodedNonNativeCallRpc::String(s)
-							},
-						};
-						Ok((converted_call, metadata))
-					}
-				})
+						.map_err(|e| {
+							CfApiError::ErrorObject(ErrorObject::owned(
+								ErrorCode::InternalError.code(),
+								format!("Failed to encode non native call: {}", e),
+								None::<()>,
+							))
+						})?;
+
+					let converted_call = match encoded_call {
+						EncodedNonNativeCall::Eip712(typed_data) => {
+							let message_scale_value: scale_value::Value =
+								typed_data.message.clone().into();
+							let message_json =
+								serde_json::to_value(message_scale_value).map_err(|e| {
+									CfApiError::ErrorObject(ErrorObject::owned(
+										ErrorCode::InternalError.code(),
+										format!("Failed to serialize message to JSON: {}", e),
+										None::<()>,
+									))
+								})?;
+							let message_object = message_json.as_object().ok_or_else(|| {
+								CfApiError::ErrorObject(ErrorObject::owned(
+									ErrorCode::InternalError.code(),
+									"the primary type is not a JSON object but one of the primitive types",
+									None::<()>,
+								))
+							})?;
+
+							EncodedNonNativeCallRpc::Eip712(RpcTypedData {
+								domain: typed_data.domain,
+								types: typed_data.types,
+								primary_type: typed_data.primary_type,
+								message: message_object.clone().into_iter().collect(),
+							})
+						},
+						EncodedNonNativeCall::String(s) => EncodedNonNativeCallRpc::String(s),
+					};
+					Ok((converted_call, metadata))
+				},
+			})
 	}
 }
 

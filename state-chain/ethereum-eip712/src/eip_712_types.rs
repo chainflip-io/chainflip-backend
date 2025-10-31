@@ -1,4 +1,3 @@
-
 // Copyright 2025 Chainflip Labs GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +21,6 @@ use super::{
 use codec::{alloc::string::ToString, Encode};
 use scale_info::{prelude::string::String, TypeInfo};
 use sp_std::vec;
-
 
 // Building the EIP-712 typed data customized to the types we expect
 // and validate in the pallet_cf_environment::submit_runtime_call.rs

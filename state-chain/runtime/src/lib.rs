@@ -94,7 +94,7 @@ use cf_traits::{
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use ethereum_eip712::{eip_712_types::build_eip712_typed_data, eip712::TypedData};
+use ethereum_eip712::{eip712::TypedData, eip_712_types::build_eip712_typed_data};
 use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
@@ -120,7 +120,7 @@ use pallet_cf_validator::{
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use runtime_apis::{ChainAccounts, EvmCallDetails, RpcLendingPool, RpcLoanAccount};
-use scale_info::prelude::{string::String, format};
+use scale_info::prelude::{format, string::String};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
 use crate::chainflip::ethereum_sc_calls::EthereumSCApi;
@@ -2796,7 +2796,7 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_chainflip_network_and_state(
+		fn cf_encode_non_native_call(
 			call: Vec<u8>,
 			blocks_to_expiry: BlockNumber,
 			nonce_or_account: NonceOrAccount,

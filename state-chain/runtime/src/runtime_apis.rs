@@ -38,7 +38,9 @@ use core::{ops::Range, str};
 use ethereum_eip712::eip712::TypedData;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_elections::electoral_systems::oracle_price::price::PriceAsset;
-use pallet_cf_environment::{EthEncodingType, SolEncodingType, submit_runtime_call::TransactionMetadata};
+use pallet_cf_environment::{
+	submit_runtime_call::TransactionMetadata, EthEncodingType, SolEncodingType,
+};
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::{BoostPoolDetails, RpcLendingPool, RpcLoanAccount};
@@ -67,7 +69,6 @@ pub enum EncodedNonNativeCallGeneric<T> {
 }
 
 pub type EncodedNonNativeCall = EncodedNonNativeCallGeneric<TypedData>;
-
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 pub enum EncodingType {
@@ -884,8 +885,8 @@ decl_runtime_apis!(
 			account: Option<AccountId32>,
 		) -> Vec<DelegationSnapshot<AccountId32, FlipBalance>>;
 		#[changed_in(8)]
-		fn cf_chainflip_network_and_state();
-		fn cf_chainflip_network_and_state(
+		fn cf_encode_non_native_call();
+		fn cf_encode_non_native_call(
 			call: Vec<u8>,
 			blocks_to_expiry: BlockNumber,
 			nonce_or_account: NonceOrAccount,
