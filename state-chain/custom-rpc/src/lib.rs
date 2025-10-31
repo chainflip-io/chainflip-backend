@@ -2618,6 +2618,9 @@ where
 						},
 						EncodedNonNativeCall::String(s) => EncodedNonNativeCallRpc::String(s),
 					};
+					// Return the `transaction_metadata` because it will need
+					// to be submitted as part of the `non_native_signed_call`
+					// and it has been modified in the runtime api.
 					Ok((serialized_call, metadata))
 				},
 			})
