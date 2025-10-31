@@ -32,6 +32,7 @@ use core::str::FromStr;
 use pallet_cf_cfe_interface::{CfeEvents, RuntimeUpgradeEvents};
 
 pub mod reap_old_accounts;
+pub mod remove_unused_wallets_from_storage;
 pub mod solana_remove_unused_channels_state;
 
 pub type Migration = (
@@ -39,6 +40,7 @@ pub type Migration = (
 	reap_old_accounts::Migration,
 	// Can be removed once Solana address re-use is activated.
 	solana_remove_unused_channels_state::SolanaRemoveUnusedChannelsState,
+	remove_unused_wallets_from_storage::RemoveUnusedWallets,
 );
 
 pub struct NetworkSpecificHousekeeping;
