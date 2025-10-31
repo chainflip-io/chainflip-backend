@@ -21,8 +21,8 @@ use cf_chains::{address::AddressConverter, AccountOrAddress, AnyChain, ForeignCh
 use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, DcaParameters, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdditionalDepositAction, BalanceApi,
-	BoostBalancesApi, Chainflip, ChainflipNetworkInfo, DepositApi, EgressApi, LpRegistration,
-	PoolApi, ScheduledEgressDetails, SwapRequestHandler, INITIAL_FLIP_FUNDING,
+	BoostBalancesApi, Chainflip, ChainflipNetworkInfo, DepositApi, EgressApi, GetMinimumFunding,
+	LpRegistration, PoolApi, ScheduledEgressDetails, SwapRequestHandler,
 };
 use pallet_cf_environment::submit_runtime_call::{
 	is_valid_signature, SignatureData, TransactionMetadata,
@@ -112,6 +112,8 @@ pub mod pallet {
 		type ChainflipNetwork: ChainflipNetworkInfo;
 
 		type RuntimeCall: Member + Parameter + From<frame_system::Call<Self>> + From<Call<Self>>;
+
+		type MinimumFunding: GetMinimumFunding;
 	}
 
 	#[pallet::error]
@@ -479,7 +481,7 @@ pub mod pallet {
 					boost_fee,
 					refund_address_internal.clone(),
 					Some(AdditionalDepositAction::FundFlip {
-						flip_amount_to_credit: INITIAL_FLIP_FUNDING * 10,
+						flip_amount_to_credit: T::MinimumFunding::get_min_funding_amount(),
 						role_to_register,
 					}),
 				)?;

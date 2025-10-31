@@ -47,7 +47,7 @@ use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary,
 	BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex,
 	ForeignChain, GasAmount, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
-	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
+	ThresholdSignatureRequestId, FLIPPERINOS_PER_FLIP, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -70,7 +70,7 @@ use frame_system::pallet_prelude::*;
 use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
 use serde::{Deserialize, Serialize};
-use sp_runtime::traits::UniqueSaturatedInto;
+use sp_runtime::{helpers_128bit::multiply_by_rational_with_rounding, traits::UniqueSaturatedInto};
 use sp_std::{boxed::Box, vec, vec::Vec};
 pub use weights::WeightInfo;
 
@@ -2194,7 +2194,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							true,
 						)
 						.unwrap_or(
-							pallet_cf_swapping::utilities::estimated_20usd_input(asset.into()) / 2,
+							multiply_by_rational_with_rounding(
+								// This first operation gives us the $ amount of
+								// INITIAL_FUNDING_FLIP in FineUSD
+								multiply_by_rational_with_rounding(
+									cf_chains::eth::REFERENCE_FLIP_PRICE_IN_USD,
+									flip_amount_to_credit,
+									FLIPPERINOS_PER_FLIP,
+									sp_runtime::Rounding::Up,
+								)
+								.unwrap_or(5_000_000),
+								// This is the amount of input asset per 1$
+								pallet_cf_swapping::utilities::estimated_20usd_input(asset.into()) /
+									20,
+								// We need to divide by FineUSD since the initial $amount was in
+								// FineUSD
+								10u128.pow(6),
+								sp_runtime::Rounding::Up,
+							)
+							.unwrap_or(0),
 						);
 						let input_amount = core::cmp::min(input_amount, amount_after_fees.into());
 						T::SwapRequestHandler::init_swap_request(

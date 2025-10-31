@@ -37,7 +37,7 @@ use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthAmount};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
-	FundAccount, Funding, FundingSource, RedemptionCheck, SpawnAccount,
+	FundAccount, Funding, FundingSource, GetMinimumFunding, RedemptionCheck, SpawnAccount,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -1243,6 +1243,11 @@ impl<T: Config> FundAccount for Pallet<T> {
 	}
 }
 
+impl<T: Config> GetMinimumFunding for Pallet<T> {
+	fn get_min_funding_amount() -> cf_primitives::AssetAmount {
+		MinimumFunding::<T>::get().into()
+	}
+}
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
 pub struct EthereumDepositAndSCCall {
 	pub deposit: EthereumDeposit,

@@ -2191,7 +2191,7 @@ pub mod pallet {
 									if request.output_asset == Asset::Flip {
 										if output_amount < INITIAL_FLIP_FUNDING {
 											// In the rare event that this occurs we will track the
-											// deficit and offset it agains the next burn
+											// deficit and offset it against the next burn
 											FlipDeficitToOffset::<T>::mutate(|total| {
 												total.saturating_accrue(
 													INITIAL_FLIP_FUNDING

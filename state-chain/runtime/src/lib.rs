@@ -656,6 +656,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type MinimumDeposit = MinimumDepositProvider;
 	type RuntimeCall = RuntimeCall;
 	type ChainflipNetwork = chainflip::ChainflipNetworkProvider;
+	type MinimumFunding = Funding;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
