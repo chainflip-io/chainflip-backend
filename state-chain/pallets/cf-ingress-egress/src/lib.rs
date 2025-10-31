@@ -2203,7 +2203,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									FLIPPERINOS_PER_FLIP,
 									sp_runtime::Rounding::Up,
 								)
-								.unwrap_or(5_000_000),
+								.unwrap_or(5_000_000), // 5$
 								// This is the amount of input asset per 1$
 								pallet_cf_swapping::utilities::estimated_20usd_input(asset.into()) /
 									20,
