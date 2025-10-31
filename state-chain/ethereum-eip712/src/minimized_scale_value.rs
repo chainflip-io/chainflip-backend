@@ -1,10 +1,48 @@
 use crate::*;
+use codec::{Decode, Encode};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// A "primitive" value (this includes strings).
+///
+/// TODO: We probably don't need all of these.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
+pub enum MinimizedPrimitive {
+	/// A boolean value.
+	Bool(bool),
+	/// A single character.
+	Char(u8), // Note: `char` doesn't implement `Encode`/`Decode`
+	/// A string.
+	String(String),
+	/// A u128 value.
+	U128(u128),
+	/// An i128 value.
+	I128(i128),
+	/// An unsigned 256 bit number (internally represented as a 32 byte array).
+	U256([u8; 32]),
+	/// A signed 256 bit number (internally represented as a 32 byte array).
+	I256([u8; 32]),
+}
+
+impl From<scale_value::Primitive> for MinimizedPrimitive {
+	fn from(p: scale_value::Primitive) -> Self {
+		match p {
+			_ => todo!("We probably don't need all of these variants"),
+		}
+	}
+}
+
+impl From<MinimizedPrimitive> for scale_value::Primitive {
+	fn from(p: MinimizedPrimitive) -> Self {
+		match p {
+			_ => todo!("Same thing in reverse"),
+		}
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 pub enum MinimizedScaleValue {
 	NamedStruct(Vec<(String, MinimizedScaleValue)>),
 	Sequence(Vec<MinimizedScaleValue>),
-	Primitive(scale_value::Primitive),
+	Primitive(MinimizedPrimitive),
 }
 
 impl TryFrom<Value> for MinimizedScaleValue {
@@ -24,7 +62,7 @@ impl TryFrom<Value> for MinimizedScaleValue {
 			)),
 			ValueDef::Variant(_) =>
 				Err("scale value with variant cannot be converted to MinimizedScaleValue"),
-			ValueDef::Primitive(p) => Ok(Self::Primitive(p)),
+			ValueDef::Primitive(p) => Ok(Self::Primitive(p.into())),
 			ValueDef::BitSequence(_) => Err("BitSequence not supported"),
 		}
 	}
@@ -61,7 +99,7 @@ impl MinimizedScaleValue {
 		if let Self::Sequence(fs) = self.clone() {
 			fs.into_iter()
 				.map(|v| {
-					if let Self::Primitive(Primitive::U128(el)) = v {
+					if let Self::Primitive(MinimizedPrimitive::U128(el)) = v {
 						Ok(T::try_from(el).map_err(|_| ())?)
 					} else {
 						Err(())
@@ -75,7 +113,7 @@ impl MinimizedScaleValue {
 
 	#[allow(clippy::result_unit_err)]
 	pub fn extract_hex_bytes(&self) -> Result<Vec<u8>, ()> {
-		if let Self::Primitive(Primitive::String(s)) = self.clone() {
+		if let Self::Primitive(MinimizedPrimitive::String(s)) = self.clone() {
 			hex::decode(s).map_err(|_| ())
 		} else {
 			Err(())
@@ -99,7 +137,7 @@ impl From<MinimizedScaleValue> for Value {
 				context: (),
 			},
 			MinimizedScaleValue::Primitive(p) =>
-				Value { value: ValueDef::Primitive(p), context: () },
+				Value { value: ValueDef::Primitive(p.into()), context: () },
 		}
 	}
 }
