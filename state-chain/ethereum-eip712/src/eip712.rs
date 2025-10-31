@@ -583,15 +583,10 @@ pub fn encode_field(
 						ParamType::Int(_) =>
 							return Err(Eip712Error::Message(format!("Unsupported type {s}",))),
 
-						ParamType::Uint(_) => match value.clone() {
-							MinimizedScaleValue::Primitive(Primitive::U128(v)) =>
-								Token::Uint(v.into()),
-							_ => Token::Uint(U256(
-								value
-									.extract_primitive_types::<u64>()
-									.and_then(|r| r.try_into().map_err(|_| ()))
-									.map_err(|_| err)?,
-							)),
+						ParamType::Uint(_) => match value {
+							MinimizedScaleValue::Primitive(Primitive::String(n)) =>
+								Token::Uint(U256::from_dec_str(n).map_err(|_| err)?),
+							_ => return Err(err),
 						},
 						ParamType::Bool => encode_eip712_type(Token::Bool(
 							if let MinimizedScaleValue::Primitive(Primitive::Bool(b)) = value {

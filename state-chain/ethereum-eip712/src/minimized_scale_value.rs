@@ -42,37 +42,6 @@ impl MinimizedScaleValue {
 		}
 	}
 
-	// of the kind U256
-	#[allow(clippy::result_unit_err)]
-	pub fn extract_primitive_types<T: TryFrom<u128>>(&self) -> Result<Vec<T>, ()> {
-		if let Self::NamedStruct(fs) = self.clone() {
-			if fs.len() != 1 {
-				return Err(());
-			}
-			fs[0].1.extract_primitive_array::<T>().map_err(|_| ())
-		} else {
-			Err(())
-		}
-	}
-
-	// of the kind [_;N]
-	#[allow(clippy::result_unit_err)]
-	pub fn extract_primitive_array<T: TryFrom<u128>>(&self) -> Result<Vec<T>, ()> {
-		if let Self::Sequence(fs) = self.clone() {
-			fs.into_iter()
-				.map(|v| {
-					if let Self::Primitive(Primitive::U128(el)) = v {
-						Ok(T::try_from(el).map_err(|_| ())?)
-					} else {
-						Err(())
-					}
-				})
-				.collect::<Result<Vec<T>, _>>()
-		} else {
-			Err(())
-		}
-	}
-
 	#[allow(clippy::result_unit_err)]
 	pub fn extract_hex_bytes(&self) -> Result<Vec<u8>, ()> {
 		if let Self::Primitive(Primitive::String(s)) = self.clone() {

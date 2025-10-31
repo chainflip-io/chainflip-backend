@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
+use ethabi::ethereum_types::U256;
 use scale_info::{
 	prelude::{
 		format,
@@ -75,8 +76,13 @@ pub fn recursively_construct_types(
 							scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
 						),
 					),
-					["primitive_types", "U256"] =>
-						("uint256".to_string(), (AddTypeOrNot::DontAdd, v)),
+					["primitive_types", "U256"] => (
+						"uint256".to_string(),
+						(
+							AddTypeOrNot::DontAdd,
+							stringified_unsigned_number(extract_primitive_types(comp_value)?)?,
+						),
+					),
 					["primitive_types", "U128"] =>
 						("uint128".to_string(), (AddTypeOrNot::DontAdd, v)),
 					["primitive_types", "H128"] => (
@@ -245,26 +251,43 @@ pub fn recursively_construct_types(
 					(AddTypeOrNot::AddType { type_fields }, Value::named_composite(values)),
 				)
 			},
-			(TypeDef::Primitive(type_def_primitive), ValueDef::Primitive(_p)) => (
+			(TypeDef::Primitive(type_def_primitive), ValueDef::Primitive(_p)) =>
 				match type_def_primitive {
-					TypeDefPrimitive::Bool => "bool".to_string(),
-					TypeDefPrimitive::Char => "string".to_string(),
-					TypeDefPrimitive::Str => "string".to_string(),
-					TypeDefPrimitive::U8 => "uint8".to_string(),
-					TypeDefPrimitive::U16 => "uint16".to_string(),
-					TypeDefPrimitive::U32 => "uint32".to_string(),
-					TypeDefPrimitive::U64 => "uint64".to_string(),
-					TypeDefPrimitive::U128 => "uint128".to_string(),
-					TypeDefPrimitive::U256 => "uint256".to_string(),
-					TypeDefPrimitive::I8 => "int8".to_string(),
-					TypeDefPrimitive::I16 => "int16".to_string(),
-					TypeDefPrimitive::I32 => "int32".to_string(),
-					TypeDefPrimitive::I64 => "int64".to_string(),
-					TypeDefPrimitive::I128 => "int128".to_string(),
-					TypeDefPrimitive::I256 => "int256".to_string(),
+					TypeDefPrimitive::Bool => ("bool".to_string(), (AddTypeOrNot::DontAdd, v)),
+					TypeDefPrimitive::Char => ("string".to_string(), (AddTypeOrNot::DontAdd, v)),
+					TypeDefPrimitive::Str => ("string".to_string(), (AddTypeOrNot::DontAdd, v)),
+					TypeDefPrimitive::U8 => (
+						"uint8".to_string(),
+						(AddTypeOrNot::DontAdd, stringified_unsigned_number(v)?),
+					),
+					TypeDefPrimitive::U16 => (
+						"uint16".to_string(),
+						(AddTypeOrNot::DontAdd, stringified_unsigned_number(v)?),
+					),
+					TypeDefPrimitive::U32 => (
+						"uint32".to_string(),
+						(AddTypeOrNot::DontAdd, stringified_unsigned_number(v)?),
+					),
+					TypeDefPrimitive::U64 => (
+						"uint64".to_string(),
+						(AddTypeOrNot::DontAdd, stringified_unsigned_number(v)?),
+					),
+					TypeDefPrimitive::U128 => (
+						"uint128".to_string(),
+						(AddTypeOrNot::DontAdd, stringified_unsigned_number(v)?),
+					),
+					TypeDefPrimitive::U256 => (
+						"uint256".to_string(),
+						(AddTypeOrNot::DontAdd, stringified_unsigned_number(v)?),
+					),
+					TypeDefPrimitive::I8 => ("int8".to_string(), (AddTypeOrNot::DontAdd, v)),
+					TypeDefPrimitive::I16 => ("int16".to_string(), (AddTypeOrNot::DontAdd, v)),
+					TypeDefPrimitive::I32 => ("int32".to_string(), (AddTypeOrNot::DontAdd, v)),
+					TypeDefPrimitive::I64 => ("int64".to_string(), (AddTypeOrNot::DontAdd, v)),
+					TypeDefPrimitive::I128 => ("int128".to_string(), (AddTypeOrNot::DontAdd, v)),
+					TypeDefPrimitive::I256 => ("int256".to_string(), (AddTypeOrNot::DontAdd, v)),
 				},
-				(AddTypeOrNot::DontAdd, v),
-			),
+
 			(TypeDef::Compact(type_def_compact), _) => {
 				let (type_name, c_value) =
 					recursively_construct_types(v.clone(), type_def_compact.type_param, types)?;
@@ -368,6 +391,37 @@ pub fn scale_value_bytes_to_hex(v: Value) -> Result<Value, &'static str> {
 		})
 	} else {
 		Err("Expected unnamed composite for bytes extraction")
+	}
+}
+
+fn stringified_unsigned_number(v: Value) -> Result<Value, &'static str> {
+	match v.value {
+		// this corresponds to the U256 in primitive_types crate
+		ValueDef::Composite(Composite::Unnamed(v)) => Ok(Value {
+			value: ValueDef::Primitive(Primitive::String(
+				U256(
+					v.into_iter()
+						.map(|e| match e.value {
+							ValueDef::Primitive(Primitive::U128(b)) =>
+								Ok(b.try_into().map_err(|_| "u128 to u64 conversion failed")?),
+							_ => Err("Expected u64 primitive"),
+						})
+						.collect::<Result<Vec<u64>, _>>()?
+						.try_into()
+						.map_err(|_| "failed to convert scale value into U256")?,
+				)
+				.to_string(),
+			)),
+			context: (),
+		}),
+		ValueDef::Primitive(Primitive::U128(u)) =>
+			Ok(Value { value: ValueDef::Primitive(Primitive::String(u.to_string())), context: () }),
+		// this case should not be possible since u256 cant be constructed in native rust. This
+		// could be possible if a type were to communicate to TypeInfo that a specific type is
+		// actually a U256 and implements conversion to it. We dont support this.
+		ValueDef::Primitive(Primitive::U256(_)) =>
+			Err("scale values mapped to U256 primitives not supported"),
+		_ => Err("unexpected value: cannot convert to stringified number"),
 	}
 }
 
