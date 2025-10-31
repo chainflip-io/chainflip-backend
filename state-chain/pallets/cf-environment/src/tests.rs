@@ -791,6 +791,19 @@ fn can_non_native_signed_call() {
 			sp_runtime::traits::BadOrigin,
 		);
 
+		// Account doesn't exist yet so can't pay fees
+		assert_noop!(Environment::non_native_signed_call(
+			RuntimeOrigin::none(),
+			ChainflipExtrinsic {
+				call: call.clone(),
+				transaction_metadata,
+			},
+			signature_data.clone(),
+		), crate::Error::<Test>::FailedToProcessFee);
+
+		// Create the account so it can pay fees.
+		use frame_support::traits::HandleLifetime;
+		frame_system::Provider::<Test>::created(&signature_data.signer_account().unwrap()).unwrap();
 		assert_ok!(Environment::non_native_signed_call(
 			RuntimeOrigin::none(),
 			ChainflipExtrinsic {
