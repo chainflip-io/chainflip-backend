@@ -9,10 +9,11 @@ source $LOCALNET_INIT_DIR/../helper.sh
 if [[ $CI == true || $(uname -s) == Linux* ]]; then
   export CFDM_BROKER_API_URL='ws://172.17.0.1:10997'
   export CFDM_CHAINFLIP_RPC_URL='ws://172.17.0.1:9944'
+  export CFDM_SOL_RPC_HTTP_ENDPOINT='http://172.17.0.1:8899'
 else
   export CFDM_BROKER_API_URL='ws://host.docker.internal:10997'
   export CFDM_CHAINFLIP_RPC_URL='ws://host.docker.internal:9944'
-
+  export CFDM_SOL_RPC_HTTP_ENDPOINT='http://host.docker.internal:8899'
 fi
 $DOCKER_COMPOSE_CMD -f $LOCALNET_INIT_DIR/../docker-compose.yml -p "chainflip-localnet" up $DEPOSIT_MONITOR_CONTAINER $additional_docker_compose_up_args -d \
   > /tmp/chainflip/chainflip-deposit-monitor.$DATETIME.log 2>&1

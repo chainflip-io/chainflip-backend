@@ -9,13 +9,18 @@ pub struct LendingPool<AccountId>
 where
 	AccountId: Decode + Encode + Ord + Clone,
 {
-	// Total amount owed to active lenders (includes what's currently in loans)
+	/// Total amount owed to active lenders (includes what's currently in loans)
 	pub total_amount: AssetAmount,
-	// Amount available to be borrowed
+	/// Amount available to be borrowed
 	pub available_amount: AssetAmount,
-	// Maps lenders to their shares in the pool; each lender is effectively owed their `share` *
-	// `total_amount` of the pool's asset.
+	/// Maps lenders to their shares in the pool; each lender is effectively owed their `share` *
+	/// `total_amount` of the pool's asset.
 	pub lender_shares: BTreeMap<AccountId, Perquintill>,
+	/// Interest is paid upon loan repayment so this field keeps tracks of how much in pool's
+	/// asset is owed to the network. In practice we will still try to pay the network regularly
+	/// by taking from available funds, but this field is necessary in case available funds aren't
+	/// enough (i.e. utilisation is near 100%).
+	pub owed_to_network: AssetAmount,
 }
 
 #[derive(PartialEq, Debug)]
@@ -38,7 +43,12 @@ where
 	AccountId: Decode + Encode + Ord + Clone,
 {
 	pub fn new() -> Self {
-		Self { total_amount: 0, available_amount: 0, lender_shares: BTreeMap::new() }
+		Self {
+			total_amount: 0,
+			available_amount: 0,
+			owed_to_network: 0,
+			lender_shares: BTreeMap::new(),
+		}
 	}
 
 	/// Adds funds increasing `lender`'s share in the pool.
@@ -115,17 +125,48 @@ where
 	}
 
 	pub fn get_utilisation(&self) -> Permill {
-		let in_use = self.total_amount.saturating_sub(self.available_amount);
+		let available_for_borrowing = self.available_amount.saturating_sub(self.owed_to_network);
+		let in_use = self.total_amount.saturating_sub(available_for_borrowing);
 
 		// Note: `from_rational` does not panic on invalid inputs and instead returns 100%.
 		Permill::from_rational(in_use, self.total_amount)
 	}
 
-	/// Receives fees in the pool's asset (after they have been swapped)
+	/// Receives fees in the pool's asset. Unlike `record_pool_fee` the amount
+	/// is provided (e.g. via liquidation) and immediately available.
 	pub fn receive_fees_in_pools_asset(&mut self, amount: AssetAmount) {
 		// Fees increase both the total and available amount
 		self.available_amount.saturating_accrue(amount);
 		self.total_amount.saturating_accrue(amount);
+	}
+
+	/// Record `amount` as a fee that's owed to the pool (it is to be added to some
+	/// loan's principal). This increases the pool's total "value", but the extra funds will only
+	/// become available upon loan repayment.
+	pub fn record_pool_fee(&mut self, amount: AssetAmount) {
+		self.total_amount.saturating_accrue(amount);
+	}
+
+	/// Record `amount` as a fee that's owed to the network (it is to be added to some
+	/// loan's principal). This does not increase the total "value" of the pool,
+	/// but `amount` will be repaid as part of loan repayment, so we record this to know
+	/// how much the network can collect from `available_amount`. The method then tries
+	/// to collect as much as possible (it is possible that we can't collect all owed fees
+	/// immediately in case utilisation approaches 100%).
+	pub fn record_and_collect_network_fee(&mut self, amount: AssetAmount) -> AssetAmount {
+		self.owed_to_network.saturating_accrue(amount);
+
+		let available_for_collection = core::cmp::min(self.available_amount, self.owed_to_network);
+		self.owed_to_network.saturating_reduce(available_for_collection);
+		self.available_amount.saturating_reduce(available_for_collection);
+		available_for_collection
+	}
+
+	/// Inform the pool that it won't be receiving `amount` as a result of account liquidation
+	/// not being able to recover the debt in full. This effectively socialises the loss by
+	/// reducing the pool's total amount.
+	pub fn write_off_unrecoverable_debt(&mut self, amount: AssetAmount) {
+		self.total_amount.saturating_reduce(amount);
 	}
 
 	/// Receives repayment funds in the pool's asset (after they has been swapped)

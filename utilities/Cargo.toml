@@ -50,7 +50,7 @@ scale-json = { workspace = true, optional = true }
 
 
 [dev-dependencies]
-serde_json = { workspace = true }
+serde_json = { workspace = true, default-features = true }
 tempfile = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls"] }
 

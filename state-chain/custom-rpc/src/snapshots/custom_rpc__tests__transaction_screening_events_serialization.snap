@@ -1,5 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
+assertion_line: 970
 expression: val
 ---
 {
@@ -19,7 +20,161 @@ expression: val
     {
       "TransactionRejectedByBroker": {
         "refund_broadcast_id": 3,
-        "tx_id": "0xe2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2"
+        "deposit_details": {
+          "id": {
+            "tx_id": "0xe3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3",
+            "vout": 7
+          },
+          "amount": 1000000,
+          "deposit_address": {
+            "pubkey_x": [
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226,
+              226
+            ],
+            "script_path": {
+              "salt": 1,
+              "tweaked_pubkey_bytes": [
+                3,
+                138,
+                180,
+                249,
+                178,
+                73,
+                156,
+                78,
+                234,
+                47,
+                197,
+                118,
+                142,
+                251,
+                160,
+                16,
+                11,
+                68,
+                90,
+                255,
+                65,
+                61,
+                181,
+                243,
+                145,
+                167,
+                187,
+                100,
+                156,
+                117,
+                23,
+                119,
+                251
+              ],
+              "tapleaf_hash": [
+                208,
+                107,
+                88,
+                39,
+                251,
+                57,
+                48,
+                209,
+                104,
+                150,
+                166,
+                134,
+                200,
+                113,
+                233,
+                120,
+                170,
+                245,
+                115,
+                191,
+                70,
+                9,
+                62,
+                99,
+                51,
+                231,
+                4,
+                160,
+                70,
+                174,
+                9,
+                241
+              ],
+              "unlock_script": {
+                "bytes": [
+                  81,
+                  117,
+                  32,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  226,
+                  172
+                ]
+              }
+            }
+          }
+        }
       }
     }
   ],
@@ -39,7 +194,11 @@ expression: val
     {
       "TransactionRejectedByBroker": {
         "refund_broadcast_id": 3,
-        "tx_id": "0xe2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2"
+        "deposit_details": {
+          "tx_hashes": [
+            "0xe2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2"
+          ]
+        }
       }
     }
   ],
@@ -59,7 +218,39 @@ expression: val
     {
       "TransactionRejectedByBroker": {
         "refund_broadcast_id": 3,
-        "tx_id": "0xe2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2"
+        "deposit_details": {
+          "tx_hashes": [
+            "0xe2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2"
+          ]
+        }
+      }
+    }
+  ],
+  "sol_events": [
+    {
+      "TransactionRejectionRequestReceived": {
+        "account_id": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+        "tx_id": [
+          "GCkWCknJ46pyPNHC9DPjTxedvjLHYJUVioxe7X5o6xa4",
+          7
+        ]
+      }
+    },
+    {
+      "TransactionRejectionRequestExpired": {
+        "account_id": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
+        "tx_id": [
+          "GGfoM4FJeQ8CXTXhaWiekqRQAtYVDNAKHDdJAu8PrHtm",
+          9
+        ]
+      }
+    },
+    {
+      "TransactionRejectedByBroker": {
+        "refund_broadcast_id": 3,
+        "deposit_details": {
+          "Channel": "GLb6VMiKEhRRfYnD1p3a3iCAR3kgtRr8qdHxEHAzbdDU"
+        }
       }
     }
   ]

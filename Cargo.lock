@@ -2734,6 +2734,7 @@ dependencies = [
  "cf-primitives",
  "cf-rpc-apis",
  "cf-traits",
+ "ethereum-eip712",
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
@@ -2763,6 +2764,7 @@ dependencies = [
  "sc-transaction-pool",
  "sc-transaction-pool-api",
  "scale-info",
+ "scale-value",
  "serde",
  "serde_json",
  "sp-api 34.0.0",
@@ -3611,6 +3613,23 @@ dependencies = [
  "serde",
  "sha3",
  "triehash",
+]
+
+[[package]]
+name = "ethereum-eip712"
+version = "0.1.0"
+dependencies = [
+ "const-hex",
+ "ethabi",
+ "parity-scale-codec",
+ "scale-info",
+ "scale-value",
+ "serde",
+ "serde_json",
+ "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B4)",
+ "tiny-keccak",
+ "unicode-xid",
+ "utilities",
 ]
 
 [[package]]
@@ -8268,6 +8287,7 @@ dependencies = [
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
+ "ethereum-eip712",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -13779,6 +13799,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "log",
+ "n-functor",
  "nanorand",
  "pallet-aura",
  "pallet-authorship",
