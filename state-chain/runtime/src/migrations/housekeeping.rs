@@ -47,7 +47,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	fn on_runtime_upgrade() -> Weight {
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN =>
-				if crate::VERSION.spec_version == 1_12_00 {
+				if crate::VERSION.spec_version == 1_12_01 {
 					const REFUNDS: [(&str, &str, u128, &str); 1] = [(
 						"0x374e18980ef5c633fd2d0c8762f35c59ef900590",
 						"0xCb22D1F41C5bd7B763aF099FFF60b2bb5A318Ce8",
@@ -57,7 +57,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 
 					fetch_and_egress(REFUNDS);
 				} else {
-					log::info!("Runtime version is not 1.12.0, skipping migration.");
+					log::info!("Runtime version is not 1.12.1, skipping migration.");
 				},
 			genesis_hashes::PERSEVERANCE =>
 				if crate::VERSION.spec_version == 1_12_00 {
