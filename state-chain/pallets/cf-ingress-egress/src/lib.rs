@@ -18,6 +18,7 @@
 #![feature(extract_if)]
 #![feature(map_try_insert)]
 #![feature(try_blocks)]
+#![feature(stmt_expr_attributes)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -41,8 +42,9 @@ use cf_chains::{
 	CcmDepositMetadataChecked, CcmDepositMetadataUnchecked, CcmMessage, Chain, ChainCrypto,
 	ChannelLifecycleHooks, ChannelRefundParameters, ChannelRefundParametersForChain,
 	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, DepositOriginType,
-	ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
-	IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin, TransferAssetParams,
+	ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, FetchForRejection,
+	ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
+	TransferAssetParams, TransferForRejection,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary,
@@ -1743,77 +1745,92 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 
-		let AmountAndFeesWithheld {
-			amount_after_fees: amount_after_ingress_fees,
-			fees_withheld: _,
-		} = Self::withhold_ingress_or_egress_fee(
-			if deposit_fetch_id.is_some() {
-				IngressOrEgress::IngressDepositChannel
-			} else {
-				IngressOrEgress::IngressVaultSwap
-			},
-			tx.asset,
-			tx.amount,
-		);
-		let AmountAndFeesWithheld { amount_after_fees: amount_to_refund, fees_withheld: _ } =
-			Self::withhold_ingress_or_egress_fee(
-				match tx.refund_ccm_metadata {
-					Some(ref refund_ccm) => IngressOrEgress::EgressCcm {
-						gas_budget: refund_ccm.channel_metadata.gas_budget,
-						message_length: refund_ccm.channel_metadata.message.len(),
-					},
-					None => IngressOrEgress::Egress,
-				},
-				tx.asset,
-				amount_after_ingress_fees,
-			);
-
-		// By building the ccm call, we will know if a separate "fetch" is required as part of the
-		// refund.
-		let no_ccm_refund = tx.refund_ccm_metadata.is_none();
-		match <T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
-			tx.deposit_details.clone(),
-			refund_address.clone(),
-			no_ccm_refund.then_some(amount_to_refund),
-			tx.asset,
-			deposit_fetch_id,
-		) {
-			Ok(api_call) => {
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
-					api_call,
-					tx.deposit_address.clone().map(|deposit_address| {
-						Call::finalise_ingress { addresses: vec![deposit_address] }.into()
-					}),
-					|_| None,
-				);
-				// Only emit TransactionRejectedByBroker for the actual egress (refund) transaction
-				if no_ccm_refund {
-					return Ok(broadcast_id);
-				}
-			},
-			Err(cf_chains::RejectError::NotRequired) => (),
-			Err(_) =>
-			// Only consider it failed if we are not doing a ccm refund
-				if no_ccm_refund {
-					return Err(RecordFailureAndAbortRefund);
-				},
+		let (ingress_type, fetch_command) = {
+			match deposit_fetch_id {
+				Some(deposit_fetch_id) => (
+					IngressOrEgress::IngressDepositChannel,
+					FetchForRejection::Fetch { deposit_fetch_id },
+				),
+				None => (IngressOrEgress::IngressVaultSwap, FetchForRejection::NotRequired),
+			}
 		};
 
-		if let Some(ref ccm_refund_metadata) = tx.refund_ccm_metadata {
-			// Solana CCM refunds with ALT is not supported, since we don't want to witness ALTs
-			// here.
-			if ccm_refund_metadata
-				.channel_metadata
-				.ccm_additional_data
-				.alt_addresses()
-				.map(|alts| !alts.is_empty())
-				.unwrap_or(false)
-			{
-				debug_assert!(false, "Solana refund CCM with ALTs is not supported");
-				return Err(RecordFailureAndAbortRefund);
+		let egress_type = {
+			match tx.refund_ccm_metadata {
+				Some(ref refund_ccm) => IngressOrEgress::EgressCcm {
+					gas_budget: refund_ccm.channel_metadata.gas_budget,
+					message_length: refund_ccm.channel_metadata.message.len(),
+				},
+				None => IngressOrEgress::Egress,
 			}
+		};
 
-			if let Ok(api_call) =
+		// withhold both ingress and egress fees
+		let amount_after_ingress_fees =
+			Self::withhold_ingress_or_egress_fee(ingress_type, tx.asset, tx.amount)
+				.amount_after_fees;
+		let amount_to_refund =
+			Self::withhold_ingress_or_egress_fee(egress_type, tx.asset, amount_after_ingress_fees)
+				.amount_after_fees;
+
+		// this is the function we use to broadcast, used multiple times below
+		let broadcast_and_finalise_ingress = |api_call| {
+			T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+				api_call,
+				tx.deposit_address.clone().map(|deposit_address| {
+					Call::finalise_ingress { addresses: vec![deposit_address] }.into()
+				}),
+				|_| None,
+			)
+		};
+
+		// the actual refund logic depends on whether we're doing a ccm refund or not
+		#[rustfmt::skip]
+		match tx.refund_ccm_metadata {
+			// Case 1: simple transfer without ccm
+			None => {
+				<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
+					tx.deposit_details.clone(),
+					tx.asset,
+					fetch_command,
+					TransferForRejection::Transfer {
+						address: refund_address,
+						amount: amount_to_refund,
+					},
+				)
+				.map_err(|_| RecordFailureAndAbortRefund)
+				.map(broadcast_and_finalise_ingress)
+			},
+			// Case 2: ccm refund
+			Some(ref ccm_refund_metadata) => {
+				// the first api call is either a fetch or nothing,
+				// the actual refund ccm call is done in a second step.
+				//
+				// We currently ignore any errors that can happen in the first step.
+				let _fetch_broadcast_id =
+					<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
+						tx.deposit_details.clone(),
+						tx.asset,
+						fetch_command,
+						TransferForRejection::TransferWillBeCcmCallAndIsHandledSeparately,
+					)
+					.map(broadcast_and_finalise_ingress);
+
+				// Solana CCM refunds with ALT is not supported, since we don't want to witness ALTs
+				// here.
+				if ccm_refund_metadata
+					.channel_metadata
+					.ccm_additional_data
+					.alt_addresses()
+					.map(|alts| !alts.is_empty())
+					.unwrap_or(false)
+				{
+					debug_assert!(false, "Solana refund CCM with ALTs is not supported");
+					return Err(RecordFailureAndAbortRefund);
+				}
+
+				// We try to construct the call and broadcast it. If the call can't be constructed,
+				// we record this as failure.
 				<T::ChainApiCall as ExecutexSwapAndCall<T::TargetChain>>::new_unsigned(
 					TransferAssetParams {
 						asset: tx.asset,
@@ -1825,26 +1842,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ccm_refund_metadata.channel_metadata.gas_budget,
 					ccm_refund_metadata.channel_metadata.message.to_vec(),
 					ccm_refund_metadata.channel_metadata.ccm_additional_data.clone(),
-				) {
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
-					api_call,
-					tx.deposit_address.clone().map(|deposit_address| {
-						Call::finalise_ingress { addresses: vec![deposit_address] }.into()
-					}),
-					|_| None,
-				);
-				return Ok(broadcast_id);
-			} else {
-				// NOTE: This could be appending a rejection that might have an already successful
-				// fetch (RejectCall) but not the CCM refund. We must ensure that
-				// FailedRejections are not being retried.
-				return Err(RecordFailureAndAbortRefund);
-			}
+				)
+				.map_err(|_| RecordFailureAndAbortRefund)
+				.map(broadcast_and_finalise_ingress)
+			},
 		}
-
-		// If we still haven't had a success this means that we didn't create a refund, considering
-		// this as a failure.
-		Err(RecordFailureAndAbortRefund)
 	}
 
 	fn take_recyclable_addresses(

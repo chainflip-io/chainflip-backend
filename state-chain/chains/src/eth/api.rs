@@ -260,19 +260,23 @@ where
 {
 	fn new_unsigned(
 		_deposit_details: <Ethereum as Chain>::DepositDetails,
-		refund_address: <Ethereum as Chain>::ChainAccount,
-		refund_amount: Option<<Ethereum as Chain>::ChainAmount>,
 		asset: <Ethereum as Chain>::ChainAsset,
-		deposit_fetch_id: Option<<Ethereum as Chain>::DepositFetchId>,
+		fetch: FetchForRejection<Ethereum>,
+		transfer: TransferForRejection<Ethereum>,
 	) -> Result<Self, RejectError> {
+		use FetchForRejection::*;
+		use TransferForRejection::*;
+
 		match evm_all_batch_builder::<Ethereum, _>(
-			deposit_fetch_id
-				.map(|id| vec![FetchAssetParams { deposit_fetch_id: id, asset }])
-				.unwrap_or_default(),
-			refund_amount
-				.map(|amount| TransferAssetParams { asset, amount, to: refund_address })
-				.into_iter()
-				.collect(),
+			match fetch {
+				Fetch { deposit_fetch_id } => vec![FetchAssetParams { deposit_fetch_id, asset }],
+				NotRequired => vec![],
+			},
+			match transfer {
+				Transfer { address, amount } =>
+					vec![TransferAssetParams { asset, amount, to: address }],
+				TransferWillBeCcmCallAndIsHandledSeparately => vec![],
+			},
 			E::token_address,
 			E::replay_protection(E::vault_address()),
 		) {
