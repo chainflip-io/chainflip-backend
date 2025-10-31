@@ -380,8 +380,9 @@ pub fn scale_value_bytes_to_hex(v: Value) -> Result<Value, &'static str> {
 					&hex::encode(
 						v.into_iter()
 							.map(|e| match e.value {
-								ValueDef::Primitive(Primitive::U128(b)) =>
-									Ok(b.try_into().map_err(|_| "u128 to u8 conversion failed")?),
+								ValueDef::Primitive(Primitive::String(s)) => Ok(s
+									.parse()
+									.map_err(|_| "the string is not a valid u8 number")?),
 								_ => Err("Expected u8 primitive"),
 							})
 							.collect::<Result<Vec<u8>, _>>()?,
