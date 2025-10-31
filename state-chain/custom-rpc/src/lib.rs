@@ -2589,7 +2589,7 @@ where
 							))
 						})?;
 
-					let converted_call = match encoded_call {
+					let serialized_call = match encoded_call {
 						EncodedNonNativeCall::Eip712(typed_data) => {
 							let message_scale_value: scale_value::Value =
 								typed_data.message.clone().into();
@@ -2618,7 +2618,7 @@ where
 						},
 						EncodedNonNativeCall::String(s) => EncodedNonNativeCallRpc::String(s),
 					};
-					Ok((converted_call, metadata))
+					Ok((serialized_call, metadata))
 				},
 			})
 	}

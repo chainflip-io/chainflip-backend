@@ -2,13 +2,11 @@ use crate::*;
 use codec::{Decode, Encode};
 
 /// A "primitive" value (this includes strings).
-///
-/// TODO: We probably don't need all of these.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 pub enum MinimizedPrimitive {
 	/// A boolean value.
 	Bool(bool),
-	/// A single character.
+	/// A single ASCII character.
 	Char(u8), // Note: `char` doesn't implement `Encode`/`Decode`
 	/// A string.
 	String(String),
@@ -25,7 +23,13 @@ pub enum MinimizedPrimitive {
 impl From<scale_value::Primitive> for MinimizedPrimitive {
 	fn from(p: scale_value::Primitive) -> Self {
 		match p {
-			_ => todo!("We probably don't need all of these variants"),
+			scale_value::Primitive::Bool(b) => MinimizedPrimitive::Bool(b),
+			scale_value::Primitive::Char(c) => MinimizedPrimitive::Char(c as u8),
+			scale_value::Primitive::String(s) => MinimizedPrimitive::String(s),
+			scale_value::Primitive::U128(n) => MinimizedPrimitive::U128(n),
+			scale_value::Primitive::U256(bytes) => MinimizedPrimitive::U256(bytes),
+			scale_value::Primitive::I128(n) => MinimizedPrimitive::I128(n),
+			scale_value::Primitive::I256(bytes) => MinimizedPrimitive::I256(bytes),
 		}
 	}
 }
@@ -33,7 +37,13 @@ impl From<scale_value::Primitive> for MinimizedPrimitive {
 impl From<MinimizedPrimitive> for scale_value::Primitive {
 	fn from(p: MinimizedPrimitive) -> Self {
 		match p {
-			_ => todo!("Same thing in reverse"),
+			MinimizedPrimitive::Bool(b) => scale_value::Primitive::Bool(b),
+			MinimizedPrimitive::Char(c) => scale_value::Primitive::Char(c as char),
+			MinimizedPrimitive::String(s) => scale_value::Primitive::String(s),
+			MinimizedPrimitive::U128(n) => scale_value::Primitive::U128(n),
+			MinimizedPrimitive::I128(n) => scale_value::Primitive::I128(n),
+			MinimizedPrimitive::U256(bytes) => scale_value::Primitive::U256(bytes),
+			MinimizedPrimitive::I256(bytes) => scale_value::Primitive::I256(bytes),
 		}
 	}
 }
