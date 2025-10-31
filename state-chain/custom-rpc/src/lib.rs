@@ -43,8 +43,8 @@ use cf_rpc_apis::{
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::rpc::NumberOrHex;
-use codec::Decode;
 use core::ops::Range;
+use ethereum_eip712::eip712::{EIP712Domain, Types};
 use jsonrpsee::{
 	core::async_trait,
 	proc_macros::rpc,
@@ -71,6 +71,7 @@ use sc_client_api::{
 	HeaderBackend, StorageProvider,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
@@ -84,7 +85,7 @@ use state_chain_runtime::{
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DelegationSnapshot, DispatchErrorWithMessage, ElectoralRuntimeApi,
-		EncodedNonNativeCall, EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes,
+		EncodedNonNativeCall, EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes,
 		LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
 		NonceOrAccount, OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems,
 		RpcLendingConfig, RpcLendingPool, RuntimeApiPenalty, SimulatedSwapInformation,
@@ -110,22 +111,24 @@ pub mod pool_client;
 #[cfg(test)]
 mod tests;
 
-// #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, TypeInfo)]
-// #[serde(rename_all = "camelCase")]
-// pub struct TypedData {
-// 	/// Signing domain metadata. The signing domain is the intended context for the signature (e.g.
-// 	/// the dapp, protocol, etc. that it's intended for). This data is used to construct the domain
-// 	/// separator of the message.
-// 	#[serde(default)]
-// 	pub domain: EIP712Domain,
-// 	/// The custom types used by this message.
-// 	pub types: Types,
-// 	#[serde(rename = "primaryType")]
-// 	/// The type of the message.
-// 	pub primary_type: String,
-// 	// The message to be signed.
-// 	pub message: BTreeMap<String, Value>,
-// }
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize /*, TypeInfo */ )]
+#[serde(rename_all = "camelCase")]
+pub struct RpcTypedData {
+	/// Signing domain metadata. The signing domain is the intended context for the signature (e.g.
+	/// the dapp, protocol, etc. that it's intended for). This data is used to construct the domain
+	/// separator of the message.
+	#[serde(default)]
+	pub domain: EIP712Domain,
+	/// The custom types used by this message.
+	pub types: Types,
+	#[serde(rename = "primaryType")]
+	/// The type of the message.
+	pub primary_type: String,
+	// The message to be signed.
+	pub message: BTreeMap<String, Value>,
+}
+
+type EncodedNonNativeCallRpc = EncodedNonNativeCallGeneric<RpcTypedData>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
@@ -1303,7 +1306,7 @@ pub trait CustomApi {
 		nonce_or_account: NonceOrAccount,
 		encoding: EncodingType,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<(EncodedNonNativeCall, TransactionMetadata)>;
+	) -> RpcResult<(EncodedNonNativeCallRpc, TransactionMetadata)>;
 }
 
 /// An RPC extension for the state chain node.
@@ -2554,9 +2557,6 @@ where
 			})
 	}
 
-	// TODO: For the EIP712 we should take the eip712::TypedData returned and use serde_json
-	// to convert it to the JSON representation to return it via rpc. We should probably have
-	// the EncodedNonNativeCall be generic over the EIP712 type.
 	fn cf_encode_non_native_call(
 		&self,
 		call: RpcBytes,
@@ -2564,15 +2564,15 @@ where
 		nonce_or_account: NonceOrAccount,
 		encoding: EncodingType,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<(EncodedNonNativeCall, TransactionMetadata)> {
-		flatten_into_error(
-			self.rpc_backend
-				.with_versioned_runtime_api(at, |api, hash, version| match version {
-					Some(v) if v < 8 => Err(CfApiError::ErrorObject(call_error(
-						"Encoding of non native calls are not supported at this runtime api version",
-						CfErrorCode::RuntimeApiError,
-					))),
-					_ => api
+	) -> RpcResult<(EncodedNonNativeCallRpc, TransactionMetadata)> {
+		self.rpc_backend
+			.with_versioned_runtime_api(at, |api, hash, version| match version {
+				Some(v) if v < 8 => Err(CfApiError::ErrorObject(call_error(
+					"Encoding of non native calls are not supported at this runtime api version",
+					CfErrorCode::RuntimeApiError,
+				))),
+				_ => {
+					let (encoded_call, metadata) = api
 						.cf_chainflip_network_and_state(
 							hash,
 							call.into(),
@@ -2580,9 +2580,35 @@ where
 							nonce_or_account,
 							encoding,
 						)
-						.map_err(CfApiError::from),
+						.map_err(CfApiError::from)?
+						.map_err(CfApiError::from)?;
+					
+					// Convert EncodedNonNativeCall to EncodedNonNativeCallRpc
+						let converted_call = match encoded_call {
+							EncodedNonNativeCall::Eip712(typed_data) => {
+								let message_scale_value: scale_value::Value = typed_data.message.clone().into();
+								let message_json = serde_json::to_value(message_scale_value)
+									.map_err(|e| CfApiError::from(anyhow::Error::from(e)))?;
+								let message_object = message_json
+									.as_object()
+									.ok_or_else(|| CfApiError::from(anyhow::Error::msg(
+										"the primary type is not a JSON object but one of the primitive types"
+									)))?;
+								
+								EncodedNonNativeCallRpc::Eip712(RpcTypedData {
+									domain: typed_data.domain,
+									types: typed_data.types,
+									primary_type: typed_data.primary_type,
+									message: message_object.clone().into_iter().collect(),
+								})
+							},
+							EncodedNonNativeCall::String(s) => {
+								EncodedNonNativeCallRpc::String(s)
+							},
+						};
+						Ok((converted_call, metadata))
+					}
 				})
-		)
 	}
 }
 
