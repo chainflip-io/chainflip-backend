@@ -269,10 +269,83 @@ async function testEvmPersonalSign(logger: Logger) {
   await observeNonNativeSignedCallAndRole(logger, evmScAccount);
 }
 
+// Testing encoding of a few values in the EIP-712 payload, mainly for u128 and U256
+// that can be problematic between Rust and JS big ints. This can be removed once we
+// have more extensive tests in PRO-2584.
+async function testEvmEip712Encoding(logger: Logger) {
+  await using chainflip = await getChainflipApi();
+
+  const evmWallet = await createEvmWallet();
+  const evmScAccount = externalChainToScAccount(evmWallet.address);
+
+  const call = chainflip.tx.liquidityProvider.scheduleSwap(
+    '1000000000000000000000',
+    'Flip',
+    'Usdc',
+    50,
+    {
+      maxOraclePriceSlippage: null,
+      minPrice: 1000000000000000,
+    },
+    null,
+  );
+
+  const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
+
+  const response = await chainflip.rpc(
+    'cf_encode_non_native_call',
+    hexRuntimeCall,
+    blocksToExpiry,
+    evmScAccount,
+    { Eth: 'Eip712' },
+  );
+
+  const [eipPayload, transactionMetadata] = encodeNonNativeCallResponseSchema.parse(response);
+  logger.debug('eipPayload', JSON.stringify(eipPayload, null, 2));
+  logger.debug('transactionMetadata', JSON.stringify(transactionMetadata, null, 2));
+
+  const parsedPayload = encodedNonNativeCallSchema.parse(eipPayload);
+  const { domain, types, message } = parsedPayload.Eip712;
+  delete types.EIP712Domain;
+
+  // Overriding with these values make the signing work but then it will fail
+  // validation as it is not matching what the SC encodes.
+  // message.call.pallet_cf_lp____pallet____Call__schedule_swap__e1c6eb2b_0.amount =
+  //   '1000000000000000000000';
+  // message.call.pallet_cf_lp____pallet____Call__schedule_swap__e1c6eb2b_0.price_limits.min_price =
+  //   '1000000000000000';
+
+  const evmSignatureEip712 = await evmWallet.signTypedData(domain, types, message);
+
+  // If the signing works proceed to fund the account and submit the call to ensure it works.
+  // Doing it afterwards to make debugging of the signing faster (not waiting for the funding).
+  await fundFlip(logger, evmScAccount, '1000');
+
+  await chainflip.tx.environment
+    .nonNativeSignedCall(
+      {
+        call: hexRuntimeCall,
+        transactionMetadata: {
+          nonce: transactionMetadata.nonce,
+          expiryBlock: transactionMetadata.expiry_block,
+        },
+      },
+      {
+        Ethereum: {
+          signature: evmSignatureEip712,
+          signer: evmWallet.address,
+          sigType: 'Eip712',
+        },
+      },
+    )
+    .send();
+}
+
 export async function testSignedRuntimeCall(testContext: TestContext) {
   await Promise.all([
     testEvmEip712(testContext.logger.child({ tag: `EvmSignedCall` })),
     testSvmDomain(testContext.logger.child({ tag: `SvmDomain` })),
     testEvmPersonalSign(testContext.logger.child({ tag: `EvmPersonalSign` })),
+    testEvmEip712Encoding(testContext.logger.child({ tag: `EvmEip712Encoding` })),
   ]);
 }
