@@ -913,13 +913,3 @@ fn can_batch() {
 		);
 	});
 }
-
-// #[test]
-// fn non_native_call_is_noop_if_account_cannot_pay() {
-// 	new_test_ext().execute_with(|| {
-// 		const BOB: u64 = 2;
-
-// 		let system_call = frame_system::Call::remark { remark: vec![] };
-// 		let runtime_call: <Test as crate::Config>::RuntimeCall = system_call.clone().into();
-
-// }

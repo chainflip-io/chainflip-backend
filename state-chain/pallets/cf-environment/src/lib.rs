@@ -658,15 +658,12 @@ pub mod pallet {
 			T::AssethubVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)
 		}
 
-		// TODO: PRO-2554 - User should be charged a transaction fee.
-		// We might want to add a check that the signer has balance > 0 as part of
-		// the validate_unsigned.
 		/// Allows for submitting unsigned runtime calls where validation is done on
 		/// the `signature_data` instead. This adds off-chain signing support
 		/// for non-native wallets, such as EVM and Solana wallets.
 		///
 		/// A note on fees: Fees are processed in the extrinsic itself because we need access
-		/// to pre_dispatch_info for post_dispatch processing. The unsigned version of pre_disptch
+		/// to pre_dispatch_info for post_dispatch processing. The unsigned version of pre_dispatch
 		/// in ValidateUnsigned does not return this info. It should be possible to move this
 		/// processing into the transaction extensions after upgrading Polkadot SDK to a version
 		/// that supports new-style generic transaction extensions.
