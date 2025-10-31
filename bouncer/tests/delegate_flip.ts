@@ -108,7 +108,7 @@ export async function testDelegate(logger: Logger) {
 
   const fundEvent = observeEvent(logger, 'funding:Funded', {
     test: (event) => {
-      const txMatch = event.data.txHash === delegateTxHash;
+      const txMatch = event.data.source?.EthTransaction?.txHash === delegateTxHash;
       const amountMatch = event.data.fundsAdded.replace(/,/g, '') === amount.toString();
       const accountIdMatch = externalChainToScAccount(wallet.address) === event.data.accountId;
       return txMatch && amountMatch && accountIdMatch;

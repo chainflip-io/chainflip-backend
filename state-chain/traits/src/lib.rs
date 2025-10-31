@@ -48,9 +48,10 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
-	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
-	EpochIndex, ForeignChain, IngressOrEgress, Ipv6Addr, NetworkEnvironment, Price, SemVer,
-	ThresholdSignatureRequestId,
+	BlockNumber, BroadcastId, ChainflipNetwork, ChannelId, DcaParameters, Ed25519PublicKey,
+	EgressCounter, EgressId, EpochIndex, ForeignChain, IngressOrEgress, Ipv6Addr,
+	NetworkEnvironment, Price, SemVer, SwapRequestId, ThresholdSignatureRequestId,
+	FLIPPERINOS_PER_FLIP,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -87,6 +88,7 @@ pub trait Chainflip: frame_system::Config {
 		+ MaybeSerializeDeserialize
 		+ Bounded
 		+ From<u128>
+		+ Into<u128>
 		+ From<u64>
 		+ Sum<Self::Amount>;
 
@@ -712,6 +714,18 @@ pub trait FundingInfo {
 	fn total_onchain_funds() -> Self::Balance;
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum AdditionalDepositAction {
+	FundFlip {
+		flip_amount_to_credit: cf_primitives::AssetAmount,
+		role_to_register: Option<AccountRole>,
+	},
+}
+
+// The max cost for an extrinsic is 1 FLIP, this means that account with less than 1FLIP cannot send
+// extrinsics hence we pre-fund with 1.5 FLIP
+pub const INITIAL_FLIP_FUNDING: u128 = FLIPPERINOS_PER_FLIP + FLIPPERINOS_PER_FLIP / 2;
+
 /// Allow pallets to open and expire deposit addresses.
 pub trait DepositApi<C: Chain> {
 	type AccountId;
@@ -719,10 +733,12 @@ pub trait DepositApi<C: Chain> {
 
 	/// Issues a channel id and deposit address for a new liquidity deposit.
 	fn request_liquidity_deposit_address(
+		requester_account: Self::AccountId,
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
 		boost_fee: BasisPoints,
 		refund_address: ForeignChainAddress,
+		additional_action: Option<AdditionalDepositAction>,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
@@ -945,10 +961,15 @@ pub trait CommKeyBroadcaster {
 	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey);
 }
 
-/// Provides an interface to access the amount of Flip that is ready to be burned.
-pub trait FlipBurnInfo {
+/// Provides an interface to access the amount of Flip that is ready to be burned,
+/// moved to the state-chain-gateway or to be offsetted against the burn
+pub trait FlipBurnOrMoveInfo {
 	/// Takes the available Flip and returns it.
 	fn take_flip_to_burn() -> AssetAmount;
+
+	fn take_flip_to_be_sent_to_gateway() -> AssetAmount;
+
+	fn take_flip_deficit() -> AssetAmount;
 }
 
 /// The trait implementation is intentionally no-op by default
@@ -976,6 +997,10 @@ pub trait GetBlockHeight<C: Chain> {
 
 pub trait CompatibleCfeVersions {
 	fn current_release_version() -> SemVer;
+}
+
+pub trait ChainflipNetworkInfo {
+	fn chainflip_network() -> ChainflipNetwork;
 }
 
 pub trait AuthoritiesCfeVersions {
@@ -1323,6 +1348,29 @@ pub trait SpawnAccount {
 	) -> Result<Self::AccountId, DispatchError>;
 }
 
+/// Used in cf_traits and in cf_funding.
+#[derive(Encode, Decode, PartialEq, Debug, TypeInfo, Clone)]
+pub enum FundingSource {
+	EthTransaction { tx_hash: [u8; 32] },
+	Swap { swap_request_id: SwapRequestId },
+	InitialFunding,
+}
+
+pub trait FundAccount {
+	type AccountId;
+	type Amount;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn get_bond(_account_id: Self::AccountId) -> Self::Amount;
+
+	fn fund_account(
+		account_id: Self::AccountId,
+		funder: Option<cf_chains::eth::Address>,
+		amount: Self::Amount,
+		source: FundingSource,
+	);
+}
+
 pub trait PoolOrdersManager {
 	fn cancel_all_pool_orders(base_asset: Asset, quote_asset: Asset) -> DispatchResult;
 }
@@ -1350,4 +1398,8 @@ pub trait PriceFeedApi {
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_price(asset: Asset, price: Price);
+}
+
+pub trait GetMinimumFunding {
+	fn get_min_funding_amount() -> AssetAmount;
 }

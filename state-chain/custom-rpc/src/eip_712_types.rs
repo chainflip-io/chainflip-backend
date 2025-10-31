@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use cf_primitives::ChainflipNetwork;
+use codec::Encode;
 use ethereum_eip712::eip712::{EIP712Domain, Eip712DomainType, Eip712Error, Types};
 use pallet_cf_environment::{submit_runtime_call::ChainflipExtrinsic, TransactionMetadata};
 use serde::{Deserialize, Serialize};
@@ -41,7 +42,7 @@ pub struct TypedData {
 // and validate in the pallet_cf_environment::submit_runtime_call.rs
 pub fn build_eip712_typed_data(
 	chainflip_network: &ChainflipNetwork,
-	call: state_chain_runtime::RuntimeCall,
+	call: impl Encode + scale_info::TypeInfo + 'static,
 	transaction_metadata: &TransactionMetadata,
 	spec_version: u32,
 ) -> Result<TypedData, Eip712Error> {

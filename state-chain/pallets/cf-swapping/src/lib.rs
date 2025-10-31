@@ -33,9 +33,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, IngressEgressFeeApi,
-	PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, FundingSource,
+	IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction,
+	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	SwappingApi, INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -508,8 +509,8 @@ pub mod pallet {
 		PriceLimits, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{
-		lending::LendingSystemApi, AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider,
-		PriceFeedApi, ScheduledEgressDetails, SwapExecutionProgress,
+		lending::LendingSystemApi, AccountRoleRegistry, Chainflip, EgressApi, FundAccount,
+		PoolPriceProvider, PriceFeedApi, ScheduledEgressDetails, SwapExecutionProgress,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
@@ -559,6 +560,11 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 
+		type FundAccount: FundAccount<
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
+		>;
+
 		type PoolPriceApi: PoolPriceProvider;
 
 		type PriceFeedApi: PriceFeedApi;
@@ -605,6 +611,14 @@ pub mod pallet {
 	/// FLIP ready to be burned.
 	#[pallet::storage]
 	pub type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
+	/// FLIP ready to be sent to gateway.
+	#[pallet::storage]
+	pub type FlipToBeSentToGateway<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
+	/// FLIP deficit from initial funding swap
+	#[pallet::storage]
+	pub type FlipDeficitToOffset<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
 	/// Interval at which we buy FLIP in order to burn it.
 	#[pallet::storage]
@@ -2025,6 +2039,9 @@ pub mod pallet {
 							SwapOutputAction::CreditLendingPool { swap_type } => {
 								log_or_panic!("Unexpected refund of a loan swap: {swap_type:?}");
 							},
+							SwapOutputAction::CreditFlipAndTransferToGateway { .. } => {
+								log_or_panic!("Unexpected refund of initial funding swap: {swap_request_id:?}");
+							},
 						}
 					}
 				},
@@ -2156,6 +2173,36 @@ pub mod pallet {
 										dca_state.accumulated_output_amount,
 									);
 								},
+								SwapOutputAction::CreditFlipAndTransferToGateway { account_id } =>
+									if request.output_asset == Asset::Flip {
+										if output_amount < INITIAL_FLIP_FUNDING {
+											// In the rare event that this occurs we will track the
+											// deficit and offset it against the next burn
+											FlipDeficitToOffset::<T>::mutate(|total| {
+												total.saturating_accrue(
+													INITIAL_FLIP_FUNDING
+														.saturating_sub(output_amount),
+												);
+											});
+											FlipToBeSentToGateway::<T>::mutate(|total| {
+												total.saturating_accrue(INITIAL_FLIP_FUNDING);
+											});
+										} else {
+											T::FundAccount::fund_account(
+												account_id.clone(),
+												None,
+												output_amount
+													.saturating_sub(INITIAL_FLIP_FUNDING)
+													.into(),
+												FundingSource::Swap { swap_request_id },
+											);
+											FlipToBeSentToGateway::<T>::mutate(|total| {
+												total.saturating_accrue(output_amount);
+											});
+										}
+									} else {
+										log_or_panic!("Encountered transfer to gateway swap for asset that isn't Flip: {swap_request_id:?}");
+									},
 							}
 							true
 						} else {
@@ -2856,7 +2903,7 @@ pub mod pallet {
 				return Some(desired_output_amount)
 			}
 
-			let estimation_input = utilities::fee_estimation_basis(input_asset);
+			let estimation_input = utilities::estimated_20usd_input(input_asset);
 
 			let estimation_output = with_transaction_unchecked(|| {
 				TransactionOutcome::Rollback(if with_network_fee {
@@ -2890,9 +2937,15 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
+impl<T: Config> cf_traits::FlipBurnOrMoveInfo for Pallet<T> {
 	fn take_flip_to_burn() -> AssetAmount {
 		FlipToBurn::<T>::take()
+	}
+	fn take_flip_to_be_sent_to_gateway() -> AssetAmount {
+		FlipToBeSentToGateway::<T>::take()
+	}
+	fn take_flip_deficit() -> AssetAmount {
+		FlipDeficitToOffset::<T>::take()
 	}
 }
 
@@ -2995,7 +3048,7 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 	}
 }
 
-pub(crate) mod utilities {
+pub mod utilities {
 	use super::*;
 
 	/// The amount of a non-gas asset to be used for transaction fee estimation.
@@ -3004,7 +3057,7 @@ pub(crate) mod utilities {
 	///
 	/// The value should be large enough to allow a good estimation of the fee, but small enough
 	/// to not exhaust the pool liquidity.
-	pub(crate) fn fee_estimation_basis(asset: Asset) -> u128 {
+	pub fn estimated_20usd_input(asset: Asset) -> u128 {
 		use cf_primitives::FLIPPERINOS_PER_FLIP;
 
 		const ETH_DECIMALS: u32 = 18;
@@ -3013,10 +3066,10 @@ pub(crate) mod utilities {
 		const SOL_DECIMALS: u32 = 9;
 
 		/// ~20 Dollars.
-		const FLIP_ESTIMATION_CAP: u128 = 25 * FLIPPERINOS_PER_FLIP;
+		const FLIP_ESTIMATION_CAP: u128 = 40 * FLIPPERINOS_PER_FLIP;
 		const USD_ESTIMATION_CAP: u128 = 20_000_000;
 		const ETH_ESTIMATION_CAP: u128 = 5 * 10u128.pow(ETH_DECIMALS - 3);
-		const DOT_ESTIMATION_CAP: u128 = 5 * 10u128.pow(DOT_DECIMALS);
+		const DOT_ESTIMATION_CAP: u128 = 7 * 10u128.pow(DOT_DECIMALS);
 		const BTC_ESTIMATION_CAP: u128 = 2 * 10u128.pow(BTC_DECIMALS - 4);
 		const SOL_ESTIMATION_CAP: u128 = 10 * 10u128.pow(SOL_DECIMALS - 2);
 

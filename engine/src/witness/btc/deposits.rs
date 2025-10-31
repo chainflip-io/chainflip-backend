@@ -313,6 +313,7 @@ pub mod tests {
 			action: ChannelAction::<AccountId32, <Bitcoin as cf_chains::Chain>::ChainAccount>::LiquidityProvision {
 				lp_account: AccountId32::new([0xab; 32]),
 				refund_address: ForeignChainAddress::Btc(ScriptPubkey::P2PKH([0; 20])),
+				additional_action: None,
 			},
 			boost_fee: 0,
 			boost_status: BoostStatus::NotBoosted,

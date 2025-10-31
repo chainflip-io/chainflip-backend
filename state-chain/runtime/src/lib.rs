@@ -356,6 +356,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type Bonder = Bonder<Runtime>;
 	type PriceFeedApi = ChainlinkOracle;
 	type LendingSystemApi = LendingPools;
+	type FundAccount = Funding;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -454,6 +455,8 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -484,6 +487,8 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -514,6 +519,8 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -544,6 +551,8 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -574,6 +583,8 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
@@ -604,6 +615,8 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_pools::Config for Runtime {
@@ -629,6 +642,9 @@ impl pallet_cf_lp::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type MinimumDeposit = MinimumDepositProvider;
+	type RuntimeCall = RuntimeCall;
+	type ChainflipNetwork = chainflip::ChainflipNetworkProvider;
+	type MinimumFunding = Funding;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
@@ -844,7 +860,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type RewardsDistribution = DelegatedRewardsDistribution<Runtime, FlipIssuance<Runtime>>;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type EthEnvironment = EvmEnvironment;
-	type FlipToBurn = Swapping;
+	type FlipToBurnOrMove = Swapping;
 	type EgressHandler = pallet_cf_ingress_egress::Pallet<Runtime, EthereumInstance>;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
