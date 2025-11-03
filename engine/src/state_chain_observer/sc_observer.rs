@@ -594,7 +594,7 @@ where
                                                 match sol_rpc.broadcast_transaction(payload).await {
                                                     Ok(tx_signature) => info!("Solana TransactionBroadcastRequest {broadcast_id:?} success: tx_signature: {tx_signature:?}"),
                                                     Err(error) => {
-                                                        error!("Error on Solana TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                                        warn!("Error on Solana TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
                                                         state_chain_client.finalize_signed_extrinsic(
                                                             RuntimeCall::SolanaBroadcaster(
                                                                 pallet_cf_broadcast::Call::transaction_failed {
