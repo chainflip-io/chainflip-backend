@@ -566,7 +566,7 @@ pub fn encode_field(
 					})?;
 
 					let err = Eip712Error::Message(format!(
-						"Expected address value for type `{s}`, but got `{value:?}`",
+						"got unexpected value: `{value:?}` for type `{s}`",
 					));
 
 					match param {
