@@ -30,7 +30,7 @@ use cf_traits::{
 		egress_handler::MockEgressHandler, fee_payment::MockFeePayment, pool_api::MockPoolApi,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	AccountRoleRegistry, BalanceApi, BoostBalancesApi, MinimumDeposit,
+	AccountRoleRegistry, BalanceApi, BoostBalancesApi, GetMinimumFunding, MinimumDeposit,
 };
 use frame_support::{
 	assert_ok, derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160,
@@ -81,6 +81,12 @@ pub const MINIMUM_DEPOSIT: u128 = 100;
 pub struct MockMinimumDepositProvider;
 impl MinimumDeposit for MockMinimumDepositProvider {
 	fn get(_asset: Asset) -> AssetAmount {
+		MINIMUM_DEPOSIT
+	}
+}
+
+impl GetMinimumFunding for MockMinimumDepositProvider {
+	fn get_min_funding_amount() -> AssetAmount {
 		MINIMUM_DEPOSIT
 	}
 }
@@ -185,6 +191,7 @@ impl crate::Config for Test {
 	type MinimumDeposit = MockMinimumDepositProvider;
 	type RuntimeCall = RuntimeCall;
 	type ChainflipNetwork = MockChainflipNetworkProvider;
+	type MinimumFunding = MockMinimumDepositProvider;
 }
 
 pub struct MockIngressEgressBoostApi;
