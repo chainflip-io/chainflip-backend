@@ -407,11 +407,11 @@ fn stringified_unsigned_number(v: Value) -> Result<Value, &'static str> {
 		ValueDef::Composite(Composite::Unnamed(v)) => {
 			let val_vec = v
 				.into_iter()
-						.map(|e| match e.value {
-							ValueDef::Primitive(Primitive::U128(b)) =>
-								Ok(b.try_into().map_err(|_| "u128 to u64 conversion failed")?),
-							_ => Err("Expected u64 primitive"),
-						})
+				.map(|e| match e.value {
+					ValueDef::Primitive(Primitive::U128(b)) =>
+						Ok(b.try_into().map_err(|_| "u128 to u64 conversion failed")?),
+					_ => Err("Expected u64 primitive"),
+				})
 				.collect::<Result<Vec<u64>, _>>()?;
 
 			Ok(Value {
@@ -423,8 +423,8 @@ fn stringified_unsigned_number(v: Value) -> Result<Value, &'static str> {
 					} else {
 						return Err("failed to convert scale value into U256 or U128")
 					},
-			)),
-			context: (),
+				)),
+				context: (),
 			})
 		},
 		ValueDef::Primitive(Primitive::U128(u)) =>
