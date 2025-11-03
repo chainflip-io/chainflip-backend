@@ -64,8 +64,10 @@ use super::common::{
 };
 
 // To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
-// subxt metadata --pallets Proxy,Balances,TransactionPayment,System,Assets --url
+// subxt metadata --version=14 --pallets Proxy,Balances,TransactionPayment,System,Assets --url
 // wss://asset-hub-polkadot-rpc.dwellir.com:443 > metadata.assethub.scale
+//
+// Make sure to use subxt version 0.41 to generate the metadata file.
 #[subxt::subxt(runtime_metadata_path = "metadata.assethub.scale")]
 pub mod assethub {}
 
