@@ -307,18 +307,6 @@ async fn run_main(
 				};
 				BtcCachingClient::new(scope, btc_client)
 			};
-			let dot_client = {
-				let expected_dot_genesis_hash = PolkadotHash::from_slice(
-					state_chain_client
-						.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
-							state_chain_client.latest_finalized_block().hash,
-						)
-						.await
-						.expect(STATE_CHAIN_CONNECTION)
-						.as_bytes(),
-				);
-				DotRetryRpcClient::new(scope, settings.dot.nodes, expected_dot_genesis_hash)?
-			};
 
 			let sol_client = {
 				let expected_sol_genesis_hash = state_chain_client
@@ -355,7 +343,6 @@ async fn run_main(
 				eth_client.clone(),
 				arb_client.clone(),
 				btc_client.clone(),
-				dot_client.clone(),
 				sol_client.clone(),
 				hub_client.clone(),
 				state_chain_client.clone(),
@@ -370,7 +357,6 @@ async fn run_main(
 				state_chain_stream,
 				eth_client,
 				arb_client,
-				dot_client,
 				btc_client,
 				sol_client,
 				hub_client,
