@@ -48,8 +48,9 @@ use cf_primitives::{
 	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
 };
 use cf_traits::{
-	lending::LendingApi, AccountRoleRegistry, BalanceApi, Chainflip, PoolApi, PriceFeedApi,
-	SafeModeSet, SwapOutputAction, SwapRequestHandler, SwapRequestType,
+	lending::{LendingApi, RepaymentAmount},
+	AccountRoleRegistry, BalanceApi, Chainflip, PoolApi, PriceFeedApi, SafeModeSet,
+	SwapOutputAction, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	fail,
@@ -853,7 +854,7 @@ pub mod pallet {
 		pub fn make_repayment(
 			origin: OriginFor<T>,
 			loan_id: LoanId,
-			amount: AssetAmount,
+			amount: RepaymentAmount,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 

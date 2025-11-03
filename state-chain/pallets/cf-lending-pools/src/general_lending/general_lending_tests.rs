@@ -421,7 +421,11 @@ fn basic_general_lending() {
 		})
 		// === REPAYING SOME OF THE LOAN ===
 		.then_execute_with(|_| {
-			assert_ok!(LendingPools::try_making_repayment(&BORROWER, LOAN_ID, REPAYMENT_AMOUNT));
+			assert_ok!(LendingPools::try_making_repayment(
+				&BORROWER,
+				LOAN_ID,
+				RepaymentAmount::Exact(REPAYMENT_AMOUNT)
+			));
 			assert_eq!(
 				MockBalance::get_balance(&BORROWER, LOAN_ASSET),
 				PRINCIPAL - REPAYMENT_AMOUNT
@@ -505,7 +509,7 @@ fn basic_general_lending() {
 			assert_ok!(LendingPools::try_making_repayment(
 				&BORROWER,
 				LOAN_ID,
-				total_owed_after_second_interest_payment
+				RepaymentAmount::Exact(total_owed_after_second_interest_payment)
 			));
 			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), 0);
 
@@ -1845,7 +1849,7 @@ fn reconciling_interest_before_settling_loan() {
 			assert_ok!(LendingPools::try_making_repayment(
 				&BORROWER,
 				LOAN_ID,
-				total_amount_to_repay
+				RepaymentAmount::Exact(total_amount_to_repay)
 			));
 
 			assert_event_sequence!(
@@ -1884,7 +1888,7 @@ fn making_loan_repayment() {
 			assert_ok!(Pallet::<Test>::make_repayment(
 				RuntimeOrigin::signed(BORROWER),
 				LOAN_ID,
-				FIRST_REPAYMENT
+				RepaymentAmount::Exact(FIRST_REPAYMENT)
 			));
 
 			assert_eq!(
@@ -1915,7 +1919,7 @@ fn making_loan_repayment() {
 			assert_ok!(Pallet::<Test>::make_repayment(
 				RuntimeOrigin::signed(BORROWER),
 				LOAN_ID,
-				PRINCIPAL - FIRST_REPAYMENT + ORIGINATION_FEE
+				RepaymentAmount::Full
 			));
 
 			assert_eq!(LoanAccounts::<Test>::get(BORROWER).unwrap().loans, Default::default());
@@ -1957,7 +1961,7 @@ fn repaying_more_than_necessary() {
 			assert_ok!(Pallet::<Test>::make_repayment(
 				RuntimeOrigin::signed(BORROWER),
 				LOAN_ID,
-				PRINCIPAL + EXTRA_AMOUNT
+				RepaymentAmount::Exact(PRINCIPAL + EXTRA_AMOUNT)
 			));
 
 			assert_event_sequence!(
@@ -3395,7 +3399,7 @@ fn loan_minimum_is_enforced() {
 
 		// Now try and repay an amount that would leave the loan below the minimum
 		assert_noop!(
-			LendingPools::try_making_repayment(&BORROWER, LOAN_ID, 1),
+			LendingPools::try_making_repayment(&BORROWER, LOAN_ID, RepaymentAmount::Exact(1)),
 			Error::<Test>::LoanBelowMinimumAmount,
 		);
 
@@ -3404,10 +3408,18 @@ fn loan_minimum_is_enforced() {
 			LendingPools::expand_loan(RuntimeOrigin::signed(BORROWER), LOAN_ID, 1, BTreeMap::new()),
 			Ok(())
 		);
-		assert_ok!(LendingPools::try_making_repayment(&BORROWER, LOAN_ID, 1),);
+		assert_ok!(LendingPools::try_making_repayment(
+			&BORROWER,
+			LOAN_ID,
+			RepaymentAmount::Exact(1)
+		));
 
 		// Finally, repay the rest of the loan should be fine, even though 0 is below the minimum
-		assert_ok!(LendingPools::try_making_repayment(&BORROWER, LOAN_ID, MIN_LOAN_AMOUNT_ASSET));
+		assert_ok!(LendingPools::try_making_repayment(
+			&BORROWER,
+			LOAN_ID,
+			RepaymentAmount::Exact(MIN_LOAN_AMOUNT_ASSET)
+		));
 	});
 }
 
@@ -3472,7 +3484,7 @@ fn expand_or_repay_loan_minimum_is_enforced() {
 			LendingPools::make_repayment(
 				RuntimeOrigin::signed(BORROWER),
 				LOAN_ID,
-				MIN_UPDATE_AMOUNT_ASSET - 1
+				RepaymentAmount::Exact(MIN_UPDATE_AMOUNT_ASSET - 1)
 			),
 			Error::<Test>::AmountBelowMinimum
 		);
@@ -3481,7 +3493,7 @@ fn expand_or_repay_loan_minimum_is_enforced() {
 		assert_ok!(LendingPools::make_repayment(
 			RuntimeOrigin::signed(BORROWER),
 			LOAN_ID,
-			MIN_UPDATE_AMOUNT_ASSET
+			RepaymentAmount::Exact(MIN_UPDATE_AMOUNT_ASSET)
 		));
 
 		// Set a very high minimum update amount
@@ -3496,7 +3508,7 @@ fn expand_or_repay_loan_minimum_is_enforced() {
 		assert_ok!(LendingPools::make_repayment(
 			RuntimeOrigin::signed(BORROWER),
 			LOAN_ID,
-			MIN_LOAN_AMOUNT_ASSET
+			RepaymentAmount::Exact(MIN_LOAN_AMOUNT_ASSET)
 		));
 	});
 }
