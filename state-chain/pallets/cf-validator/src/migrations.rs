@@ -19,8 +19,10 @@ use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
 mod v7;
+mod v8;
 
 pub type PalletMigration<T> = (
 	VersionedMigration<6, 7, v7::Migration<T>, Pallet<T>, <T as frame_system::Config>::DbWeight>,
-	PlaceholderMigration<7, Pallet<T>>,
+	VersionedMigration<7, 8, v8::Migration<T>, Pallet<T>, <T as frame_system::Config>::DbWeight>,
+	PlaceholderMigration<8, Pallet<T>>,
 );

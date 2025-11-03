@@ -19,6 +19,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 #![feature(extract_if)]
 #![feature(iterator_try_collect)]
+#![feature(btree_extract_if)]
 
 mod mock;
 mod tests;
@@ -111,7 +112,7 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
 
 // Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
@@ -972,6 +973,9 @@ pub mod pallet {
 				OperatorChoice::<T>::get(&validator).ok_or(Error::<T>::ValidatorDoesNotExist)?;
 			ensure!(account_id == operator || account_id == validator, Error::<T>::NotAuthorized);
 			OperatorChoice::<T>::remove(&validator);
+			ManagedValidators::<T>::mutate(&operator, |validators| {
+				validators.remove(&validator);
+			});
 
 			Self::deposit_event(Event::ValidatorRemovedFromOperator { validator, operator });
 
