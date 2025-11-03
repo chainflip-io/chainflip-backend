@@ -31,11 +31,15 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		let bonds = HistoricalBonds::<T>::iter().collect::<BTreeMap<EpochIndex, T::Amount>>();
 		HistoricalActiveEpochs::<T>::translate(|_k, v: Vec<EpochIndex>| {
-			Some(
-				v.into_iter()
-					.filter_map(|e| Some((e, *bonds.get(&e)?)))
-					.collect::<Vec<(EpochIndex, T::Amount)>>(),
-			)
+			if v.is_empty() {
+				None
+			} else {
+				Some(
+					v.into_iter()
+						.filter_map(|e| Some((e, *bonds.get(&e)?)))
+						.collect::<Vec<(EpochIndex, T::Amount)>>(),
+				)
+			}
 		});
 		Default::default()
 	}
@@ -47,15 +51,25 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		use crate::CurrentAuthorities;
+		use crate::HistoricalAuthorities;
 		use sp_std::collections::btree_set::BTreeSet;
 
 		// There should be one entry per authority
 		let accounts_in_historical_active_epochs = HistoricalActiveEpochs::<T>::iter()
 			.map(|(account, _)| account)
 			.collect::<BTreeSet<_>>();
-		let authorities = CurrentAuthorities::<T>::get().into_iter().collect::<BTreeSet<_>>();
-		assert_eq!(accounts_in_historical_active_epochs, authorities);
+		let authorities = HistoricalAuthorities::<T>::iter()
+			.map(|(_, accounts)| accounts)
+			.flatten()
+			.collect::<BTreeSet<_>>();
+
+		assert_eq!(
+			accounts_in_historical_active_epochs,
+			authorities,
+			"Mismatch between accounts in HistoricalActiveEpochs and CurrentAuthorities. Not in HistoricalActiveEpochs: {:?}, Not in CurrentAuthorities: {:?}",
+			accounts_in_historical_active_epochs.difference(&authorities).collect::<Vec<_>>(),
+			authorities.difference(&accounts_in_historical_active_epochs).collect::<Vec<_>>()
+		);
 		Ok(())
 	}
 }
