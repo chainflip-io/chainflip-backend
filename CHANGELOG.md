@@ -2,6 +2,18 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.12.1] - 2025-10-30
+
+### Features
+
+- Expose ingress delay via environment rpc.
+- Expose boost delay via environment rpc.
+
+### Fixes
+
+- Remove all operator associations when operator removes validator.
+- Fix color escape codes.
+
 ## [1.12.0] - 2025-10-22
 
 ### Features
