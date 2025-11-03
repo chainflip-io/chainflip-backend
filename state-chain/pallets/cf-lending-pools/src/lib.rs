@@ -48,8 +48,9 @@ use cf_primitives::{
 	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
 };
 use cf_traits::{
-	lending::LendingApi, AccountRoleRegistry, BalanceApi, Chainflip, PoolApi, PriceFeedApi,
-	SafeModeSet, SwapOutputAction, SwapRequestHandler, SwapRequestType,
+	lending::{LendingApi, RepaymentAmount},
+	AccountRoleRegistry, BalanceApi, Chainflip, LpRegistration, PoolApi, PriceFeedApi, SafeModeSet,
+	SwapOutputAction, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	fail,
@@ -227,7 +228,6 @@ impl Get<LendingConfiguration> for LendingConfigDefault {
 pub mod pallet {
 
 	use cf_primitives::SwapRequestId;
-	use cf_traits::{LpRegistration, PriceFeedApi};
 
 	use super::*;
 
@@ -691,7 +691,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(4)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::create_lending_pool())]
 		pub fn create_lending_pool(origin: OriginFor<T>, asset: Asset) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -699,7 +699,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(5)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::add_lender_funds())]
 		pub fn add_lender_funds(
 			origin: OriginFor<T>,
 			asset: Asset,
@@ -736,7 +736,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(6)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::remove_lender_funds())]
 		pub fn remove_lender_funds(
 			origin: OriginFor<T>,
 			asset: Asset,
@@ -777,7 +777,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(7)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::add_collateral())]
 		pub fn add_collateral(
 			origin: OriginFor<T>,
 			primary_collateral_asset: Option<Asset>,
@@ -789,7 +789,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(8)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::remove_collateral())]
 		pub fn remove_collateral(
 			origin: OriginFor<T>,
 			collateral: BTreeMap<Asset, AssetAmount>,
@@ -800,7 +800,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(9)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::request_loan())]
 		pub fn request_loan(
 			origin: OriginFor<T>,
 			loan_asset: Asset,
@@ -822,7 +822,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(10)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::update_primary_collateral_asset())]
 		pub fn update_primary_collateral_asset(
 			origin: OriginFor<T>,
 			primary_collateral_asset: Asset,
@@ -836,7 +836,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(11)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::expand_loan())]
 		pub fn expand_loan(
 			origin: OriginFor<T>,
 			loan_id: LoanId,
@@ -854,11 +854,11 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(12)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::make_repayment())]
 		pub fn make_repayment(
 			origin: OriginFor<T>,
 			loan_id: LoanId,
-			amount: AssetAmount,
+			amount: RepaymentAmount,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
