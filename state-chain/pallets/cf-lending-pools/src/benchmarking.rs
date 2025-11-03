@@ -26,7 +26,7 @@ use sp_std::vec;
 #[benchmarks]
 mod benchmarks {
 	use super::*;
-	use cf_chains::evm::U256;
+	use cf_chains::{btc::ScriptPubkey, evm::U256, ForeignChainAddress};
 
 	const TIER_5_BPS: BoostPoolTier = 5;
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
@@ -49,6 +49,11 @@ mod benchmarks {
 	fn setup_lp_account<T: Config>(asset: Asset, seed: u32) -> T::AccountId {
 		use frame_support::traits::OnNewAccount;
 		let caller: T::AccountId = account("lp", 0, seed);
+
+		T::LpRegistrationApi::register_liquidity_refund_address(
+			&caller,
+			ForeignChainAddress::Btc(ScriptPubkey::Taproot([4u8; 32])),
+		);
 
 		if frame_system::Pallet::<T>::providers(&caller) == 0u32 {
 			frame_system::Pallet::<T>::inc_providers(&caller);

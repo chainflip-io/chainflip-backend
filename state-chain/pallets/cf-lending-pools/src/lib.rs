@@ -49,7 +49,7 @@ use cf_primitives::{
 };
 use cf_traits::{
 	lending::{LendingApi, RepaymentAmount},
-	AccountRoleRegistry, BalanceApi, Chainflip, PoolApi, PriceFeedApi, SafeModeSet,
+	AccountRoleRegistry, BalanceApi, Chainflip, LpRegistration, PoolApi, PriceFeedApi, SafeModeSet,
 	SwapOutputAction, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
@@ -247,6 +247,8 @@ pub mod pallet {
 		type PoolApi: PoolApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type PriceApi: PriceFeedApi;
+
+		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
@@ -478,6 +480,8 @@ pub mod pallet {
 		/// The amount specified to update a loan or collateral must be at least the minimum
 		/// allowed amount.
 		AmountBelowMinimum,
+		/// No refund address has been set for the loan asset.
+		NoRefundAddressSet,
 	}
 
 	#[pallet::hooks]

@@ -1,11 +1,11 @@
 use crate::mocks::*;
 use cf_amm_math::PRICE_FRACTIONAL_BITS;
-use cf_chains::evm::U256;
+use cf_chains::{evm::U256, ForeignChain};
 use cf_test_utilities::{assert_event_sequence, assert_has_event, assert_matching_event_count};
 use cf_traits::{
 	lending::LendingSystemApi,
 	mocks::{
-		balance_api::MockBalance,
+		balance_api::{MockBalance, MockLpRegistration},
 		price_feed_api::MockPriceFeedApi,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
@@ -22,6 +22,7 @@ const LENDER: u64 = BOOSTER_1;
 const BORROWER: u64 = LP;
 
 const LOAN_ASSET: Asset = Asset::Btc;
+const LOAN_CHAIN: ForeignChain = ForeignChain::Bitcoin;
 const COLLATERAL_ASSET: Asset = Asset::Eth;
 const PRINCIPAL: AssetAmount = 1_000_000_000;
 const INIT_COLLATERAL: AssetAmount = (4 * PRINCIPAL / 3) * SWAP_RATE; // 75% LTV
@@ -53,6 +54,7 @@ impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<T
 	fn with_default_loan(self) -> Self {
 		self.then_execute_with(|ctx| {
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 
 			assert_eq!(
 				LendingPools::new_loan(
@@ -296,6 +298,7 @@ fn basic_general_lending() {
 			});
 
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 
 			System::reset_events();
 
@@ -648,6 +651,7 @@ fn collateral_auto_topup() {
 				COLLATERAL_ASSET,
 				INIT_COLLATERAL + COLLATERAL_TOPUP,
 			);
+			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 
 			assert_eq!(
 				LendingPools::new_loan(
@@ -728,6 +732,7 @@ fn basic_loan_aggregation() {
 		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
 
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 
 		let collateral = BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]);
 
@@ -1564,6 +1569,7 @@ fn liquidation_with_outstanding_principal_and_owed_network_fees() {
 		.execute_with(|| {
 
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 
 			assert_eq!(
 				LendingPools::new_loan(
@@ -1712,6 +1718,7 @@ fn small_interest_amounts_accumulate() {
 			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
 
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 
 			assert_eq!(
 				LendingPools::new_loan(
@@ -2152,6 +2159,7 @@ fn network_fees_under_full_utilisation() {
 			));
 
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 
 			assert_eq!(
 				LendingPools::new_loan(
@@ -2631,6 +2639,7 @@ mod safe_mode {
 			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
 
 			MockBalance::credit_account(&LENDER, LOAN_ASSET, 2 * INIT_POOL_AMOUNT);
+			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 			assert_ok!(LendingPools::add_lender_funds(
 				RuntimeOrigin::signed(LENDER),
 				LOAN_ASSET,
@@ -2726,6 +2735,7 @@ mod safe_mode {
 			set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
 
 			MockBalance::credit_account(&LENDER, LOAN_ASSET, 10 * PRINCIPAL);
+			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 			assert_ok!(LendingPools::add_lender_funds(
 				RuntimeOrigin::signed(LENDER),
 				LOAN_ASSET,
@@ -3018,6 +3028,7 @@ mod rpcs {
 		const ORIGINATION_FEE: AssetAmount = portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL);
 
 		const LOAN_ASSET_2: Asset = Asset::Sol;
+		const LOAN_CHAIN_2: ForeignChain = ForeignChain::Solana;
 		const PRINCIPAL_2: AssetAmount = PRINCIPAL * 2;
 		const COLLATERAL_ASSET_2: Asset = Asset::Usdc;
 		const INIT_COLLATERAL_2: AssetAmount = INIT_COLLATERAL * 2;
@@ -3058,6 +3069,9 @@ mod rpcs {
 					COLLATERAL_ASSET_2,
 					INIT_COLLATERAL_2 + ORIGINATION_FEE_2,
 				);
+
+				MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+				MockLpRegistration::register_refund_address(BORROWER_2, LOAN_CHAIN_2);
 
 				assert_eq!(
 					LendingPools::new_loan(
@@ -3361,9 +3375,6 @@ fn loan_minimum_is_enforced() {
 	const COLLATERAL_AMOUNT: AssetAmount = MIN_LOAN_AMOUNT_ASSET * SWAP_RATE * 2;
 
 	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
-		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
-
 		// Set the minimum loan amount
 		LendingConfig::<Test>::set(LendingConfiguration {
 			minimum_loan_amount_usd: MIN_LOAN_AMOUNT_USD,
@@ -3372,6 +3383,7 @@ fn loan_minimum_is_enforced() {
 		});
 
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, COLLATERAL_AMOUNT);
+		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 
 		// Should not be able to create a loan below the minimum amount
 		assert_noop!(
@@ -3433,9 +3445,6 @@ fn expand_or_repay_loan_minimum_is_enforced() {
 	const COLLATERAL_AMOUNT: AssetAmount = MIN_LOAN_AMOUNT_ASSET * SWAP_RATE * 2;
 
 	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
-		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
-
 		// Set the minimum loan amount
 		LendingConfig::<Test>::set(LendingConfiguration {
 			minimum_loan_amount_usd: MIN_LOAN_AMOUNT_USD,
@@ -3444,6 +3453,7 @@ fn expand_or_repay_loan_minimum_is_enforced() {
 		});
 
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, COLLATERAL_AMOUNT);
+		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 
 		// Create a loan, doesn't really matter what amount.
 		assert_eq!(
@@ -3600,5 +3610,40 @@ fn adding_or_removing_collateral_minimum_is_enforced() {
 			RuntimeOrigin::signed(BORROWER),
 			BTreeMap::from([(COLLATERAL_ASSET, *extra_collateral_amount)])
 		));
+	});
+}
+
+#[test]
+fn must_have_refund_address_for_loan_asset() {
+	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
+		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL + ORIGINATION_FEE);
+
+		// Should not be able to create a loan without a refund address set
+		assert_noop!(
+			LendingPools::new_loan(
+				BORROWER,
+				LOAN_ASSET,
+				PRINCIPAL,
+				Some(COLLATERAL_ASSET),
+				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
+			),
+			Error::<Test>::NoRefundAddressSet
+		);
+
+		// Set refund address and try again
+		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		assert_eq!(
+			LendingPools::new_loan(
+				BORROWER,
+				LOAN_ASSET,
+				PRINCIPAL,
+				Some(COLLATERAL_ASSET),
+				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
+			),
+			Ok(LOAN_ID)
+		);
 	});
 }
