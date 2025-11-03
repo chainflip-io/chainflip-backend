@@ -403,7 +403,7 @@ pub fn scale_value_bytes_to_hex(v: Value) -> Result<Value, &'static str> {
 // uints are commonly stringified due to how ethers-js encodes
 fn stringified_unsigned_number(v: Value) -> Result<Value, &'static str> {
 	match v.value {
-		// this corresponds to the U256 in primitive_types crate
+		// this corresponds to the U256 in primitive_types crate.
 		ValueDef::Composite(Composite::Unnamed(v)) => {
 			let val_vec = v
 				.into_iter()
