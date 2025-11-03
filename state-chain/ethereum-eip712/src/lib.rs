@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
-use ethabi::ethereum_types::U256;
+use ethabi::ethereum_types::{U128, U256};
 use scale_info::{
 	prelude::{
 		format,
@@ -83,8 +83,13 @@ pub fn recursively_construct_types(
 							stringified_unsigned_number(extract_primitive_types(comp_value)?)?,
 						),
 					),
-					["primitive_types", "U128"] =>
-						("uint128".to_string(), (AddTypeOrNot::DontAdd, v)),
+					["primitive_types", "U128"] => (
+						"uint128".to_string(),
+						(
+							AddTypeOrNot::DontAdd,
+							stringified_unsigned_number(extract_primitive_types(comp_value)?)?,
+						),
+					),
 					["primitive_types", "H128"] => (
 						"bytes".to_string(),
 						(
@@ -395,26 +400,33 @@ pub fn scale_value_bytes_to_hex(v: Value) -> Result<Value, &'static str> {
 	}
 }
 
+// uints are commonly stringified due to how ethers-js encodes
 fn stringified_unsigned_number(v: Value) -> Result<Value, &'static str> {
 	match v.value {
 		// this corresponds to the U256 in primitive_types crate
-		ValueDef::Composite(Composite::Unnamed(v)) => Ok(Value {
-			value: ValueDef::Primitive(Primitive::String(
-				U256(
-					v.into_iter()
+		ValueDef::Composite(Composite::Unnamed(v)) => {
+			let val_vec = v
+				.into_iter()
 						.map(|e| match e.value {
 							ValueDef::Primitive(Primitive::U128(b)) =>
 								Ok(b.try_into().map_err(|_| "u128 to u64 conversion failed")?),
 							_ => Err("Expected u64 primitive"),
 						})
-						.collect::<Result<Vec<u64>, _>>()?
-						.try_into()
-						.map_err(|_| "failed to convert scale value into U256")?,
-				)
-				.to_string(),
+				.collect::<Result<Vec<u64>, _>>()?;
+
+			Ok(Value {
+				value: ValueDef::Primitive(Primitive::String(
+					if let Ok(arr) = <[u64; 4]>::try_from(val_vec.as_slice()) {
+						U256(arr).to_string()
+					} else if let Ok(arr) = <[u64; 2]>::try_from(val_vec) {
+						U128(arr).to_string()
+					} else {
+						return Err("failed to convert scale value into U256 or U128")
+					},
 			)),
 			context: (),
-		}),
+			})
+		},
 		ValueDef::Primitive(Primitive::U128(u)) =>
 			Ok(Value { value: ValueDef::Primitive(Primitive::String(u.to_string())), context: () }),
 		// this case should not be possible since u256 cant be constructed in native rust. This
