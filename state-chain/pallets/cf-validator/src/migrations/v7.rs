@@ -59,8 +59,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 			.map(|(account, _)| account)
 			.collect::<BTreeSet<_>>();
 		let authorities = HistoricalAuthorities::<T>::iter()
-			.map(|(_, accounts)| accounts)
-			.flatten()
+			.flat_map(|(_, accounts)| accounts)
 			.collect::<BTreeSet<_>>();
 
 		assert_eq!(
