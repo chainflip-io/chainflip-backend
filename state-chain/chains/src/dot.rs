@@ -230,18 +230,23 @@ pub const RAW_SEED_3: [u8; 32] =
 	hex_literal::hex!("ce7fec0dd410141c04e246a91f7ac909aa9707b56a8ecd33e794a49f1b5d70e6");
 pub const NONCE_3: u32 = 0; //correct nonce has to be provided for this account (see/track onchain)
 
-// FROM: https://github.com/paritytech/polkadot/blob/v0.9.33/runtime/polkadot/src/lib.rs
 #[allow(clippy::unnecessary_cast)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum PolkadotProxyType {
-	Any = 0,
-	NonTransfer = 1,
-	Governance = 2,
-	Staking = 3,
-	// Skip 4 as it is now removed (was SudoBalances)
-	IdentityJudgement = 5,
-	CancelProxy = 6,
-	Auction = 7,
+	/// Fully permissioned proxy. Can execute any call on behalf of _proxied_.
+	Any,
+	/// Can execute any call that does not transfer funds or assets.
+	NonTransfer,
+	/// Proxy with the ability to reject time-delay proxy announcements.
+	CancelProxy,
+	/// Assets proxy. Can execute any call from `assets`, **including asset transfers**.
+	Assets,
+	/// Owner proxy. Can execute calls related to asset ownership.
+	AssetOwner,
+	/// Asset manager. Can execute calls related to asset management.
+	AssetManager,
+	/// Collator selection proxy. Can execute calls related to collator selection mechanism.
+	Collator,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
