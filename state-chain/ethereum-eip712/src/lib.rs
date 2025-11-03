@@ -20,6 +20,8 @@ use crate::{
 use minimized_scale_value::MinimizedScaleValue;
 
 pub mod eip712;
+#[cfg(test)]
+pub mod extra_tests;
 pub mod hash;
 pub mod lexer;
 pub mod minimized_scale_value;
