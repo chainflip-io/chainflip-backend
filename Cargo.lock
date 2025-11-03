@@ -2738,6 +2738,7 @@ dependencies = [
  "futures",
  "hex",
  "insta",
+ "itertools 0.13.0",
  "jsonrpsee 0.23.2",
  "log",
  "lru 0.13.0",

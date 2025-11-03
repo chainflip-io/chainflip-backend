@@ -34,6 +34,8 @@ pub use state_chain_runtime::{chainflip::BlockUpdate, runtime_apis::OpenedDeposi
 pub mod broker;
 /// Defines all LP related RPC types
 pub mod lp;
+/// Defines all tracability related RPC types
+pub mod traceability;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ExtrinsicResponse<Response> {

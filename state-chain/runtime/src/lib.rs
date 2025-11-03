@@ -77,7 +77,7 @@ use cf_chains::{
 	hub,
 	instances::ChainInstanceAlias,
 	sol::{SolAddress, SolanaCrypto},
-	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked,
+	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked, ChainEnvironment,
 	ChannelRefundParametersUncheckedEncoded, DefaultRetryPolicy, EvmVaultSwapExtraParameters,
 	ForeignChain, Polkadot, Solana, TransactionBuilder, VaultSwapExtraParameters,
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
@@ -2623,6 +2623,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_vault_addresses() -> VaultAddresses {
+			let bitcoin_agg_key = <BtcEnvironment as ChainEnvironment<_, cf_chains::btc::AggKey>>::lookup(());
 			VaultAddresses {
 				ethereum: EncodedAddress::Eth(Environment::eth_vault_address().into()),
 				arbitrum: EncodedAddress::Arb(Environment::arb_vault_address().into()),
@@ -2637,7 +2638,10 @@ impl_runtime_apis! {
 
 				sol_vault_program: Environment::solana_api_environment().vault_program.into(),
 				sol_swap_endpoint_program_data_account: Environment::solana_api_environment().swap_endpoint_program_data_account.into(),
-				usdc_token_mint_pubkey: Environment::solana_api_environment().usdc_token_mint_pubkey.into(),
+				// solana_usdc_token_vault_ata: Environment::solana_api_environment().usdc_token_vault_ata.into(),
+				solana_sol_vault: <SolEnvironment as ChainEnvironment<_, SolAddress>>::lookup(cf_chains::sol::api::CurrentAggKey).map(Into::into),
+				solana_usdc_vault: Environment::solana_api_environment().usdc_token_vault_ata.into(),
+				bitcoin_vault: bitcoin_agg_key.map(|agg_key| EncodedAddress::Btc(agg_key.current.to_vec())),
 			}
 		}
 

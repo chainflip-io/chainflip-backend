@@ -491,7 +491,11 @@ pub struct VaultAddresses {
 	// pub solana_usdc_token_vault_ata: EncodedAddress,
 	pub sol_vault_program: EncodedAddress,
 	pub sol_swap_endpoint_program_data_account: EncodedAddress,
-	pub usdc_token_mint_pubkey: EncodedAddress,
+	// pub solana_usdc_token_vault_ata: EncodedAddress,
+
+	pub bitcoin_vault: Option<EncodedAddress>,
+	pub solana_sol_vault: Option<EncodedAddress>,
+	pub solana_usdc_vault: EncodedAddress,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
