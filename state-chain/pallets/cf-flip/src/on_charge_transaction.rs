@@ -21,7 +21,7 @@
 
 use crate::{imbalances::Surplus, Config as FlipConfig, OpaqueCallIndex, Pallet as Flip};
 use cf_primitives::{FlipBalance, FLIPPERINOS_PER_FLIP};
-use cf_traits::WaivedFees;
+use cf_traits::{AccountInfo, WaivedFees};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::InvalidTransaction,
@@ -65,9 +65,11 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 			return Ok(Default::default())
 		}
 
-		// Check if there's an upfront fee for spam prevention
-		let call_index = T::CallIndexer::call_index(call)
-			.inspect(|_| fee = sp_std::cmp::max(fee, UP_FRONT_ESCROW_FEE.into()));
+		// Check if there's an upfront fee for spam prevention.
+		// If the user has less than the upfront fee, we escrow whatever they have.
+		let escrowed_fee = core::cmp::min(Flip::<T>::balance(who), UP_FRONT_ESCROW_FEE.into());
+		let call_index =
+			T::CallIndexer::call_index(call).inspect(|_| fee = sp_std::cmp::max(fee, escrowed_fee));
 
 		if let Some(surplus) = Flip::<T>::try_debit(who, fee) {
 			Ok(if surplus.peek().is_zero() {
