@@ -2,6 +2,7 @@ use crate::*;
 
 pub mod account_info;
 pub mod before_v7;
+pub mod eip712;
 
 use cf_rpc_apis::{
 	broker::{SwapDepositAddress, WithdrawFeesDetail},
