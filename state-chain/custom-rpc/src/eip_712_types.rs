@@ -84,42 +84,92 @@ pub fn build_eip712_typed_data(
 	})
 }
 
-#[test]
-#[ignore = "used to generate the Json typed data to then test in the browser"]
-fn test_build_eip712_typed_data() {
-	use cf_chains::sol::VaultSwapOrDepositChannelId;
-	use pallet_cf_ingress_egress::DepositWitness;
-	let chainflip_network = ChainflipNetwork::Mainnet;
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use ethereum_eip712::eip712::Eip712;
+	use sp_core::U256;
+	use state_chain_runtime::RuntimeCall;
 
-	let call = state_chain_runtime::RuntimeCall::SolanaIngressEgress(
-		pallet_cf_ingress_egress::Call::process_deposits {
-			deposit_witnesses: vec![
-				DepositWitness {
-					deposit_address: [3u8; 32].into(),
-					amount: 5000u64,
-					asset: cf_chains::assets::sol::Asset::Sol,
-					deposit_details: VaultSwapOrDepositChannelId::Channel(Default::default()),
-				},
-				DepositWitness {
-					deposit_address: [4u8; 32].into(),
-					amount: 6000u64,
-					asset: cf_chains::assets::sol::Asset::SolUsdc,
-					deposit_details: VaultSwapOrDepositChannelId::Channel(Default::default()),
-				},
-			],
-			block_height: 6u64,
-		},
-	);
+	#[test]
+	#[ignore = "used to generate the Json typed data to then test in the browser"]
+	fn test_process_deposits_call() {
+		use cf_chains::sol::VaultSwapOrDepositChannelId;
+		use pallet_cf_ingress_egress::DepositWitness;
+		test_build_eip712_typed_data(state_chain_runtime::RuntimeCall::SolanaIngressEgress(
+			pallet_cf_ingress_egress::Call::process_deposits {
+				deposit_witnesses: vec![
+					DepositWitness {
+						deposit_address: [3u8; 32].into(),
+						amount: 5000u64,
+						asset: cf_chains::assets::sol::Asset::Sol,
+						deposit_details: VaultSwapOrDepositChannelId::Channel(Default::default()),
+					},
+					DepositWitness {
+						deposit_address: [4u8; 32].into(),
+						amount: 6000u64,
+						asset: cf_chains::assets::sol::Asset::SolUsdc,
+						deposit_details: VaultSwapOrDepositChannelId::Channel(Default::default()),
+					},
+				],
+				block_height: 6u64,
+			},
+		));
+	}
 
-	let transaction_metadata = TransactionMetadata { nonce: 1, expiry_block: 1000 };
-	let spec_version = 1;
+	#[test]
+	#[ignore = "used to generate the Json typed data to then test in the browser"]
+	fn test_swap_request_call() {
+		test_build_eip712_typed_data(state_chain_runtime::RuntimeCall::LiquidityProvider(pallet_cf_lp::Call::schedule_swap {
+			amount: 12345u128,
+			input_asset: cf_primitives::Asset::Sol,
+			output_asset: cf_primitives::Asset::Btc,
+			retry_duration: 543u32,
+			price_limits: cf_primitives::PriceLimits {
+				min_price: U256::from_dec_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap(),
+				max_oracle_price_slippage: Some(98u16),
+			},
+			dca_params: None,
+		}));
+	}
 
-	let typed_data_result =
-		build_eip712_typed_data(&chainflip_network, call, &transaction_metadata, spec_version)
-			.unwrap();
+	fn test_build_eip712_typed_data(call: RuntimeCall) {
+		let chainflip_network = ChainflipNetwork::Mainnet;
 
-	println!(
-		"Typed Data: {:#?}",
-		serde_json::to_writer_pretty(std::io::stdout(), &typed_data_result).unwrap()
-	);
+		let transaction_metadata = TransactionMetadata { nonce: 1, expiry_block: 1000 };
+		let spec_version = 1;
+
+		let typed_data_result = build_eip712_typed_data(
+			&chainflip_network,
+			call.clone(),
+			&transaction_metadata,
+			spec_version,
+		)
+		.unwrap();
+
+		println!(
+			"Typed Data: {:#?}",
+			serde_json::to_writer_pretty(std::io::stdout(), &typed_data_result).unwrap()
+		);
+
+		let domain = ethereum_eip712::eip712::EIP712Domain {
+			name: Some(chainflip_network.as_str().to_string()),
+			version: Some(spec_version.to_string()),
+			chain_id: None,
+			verifying_contract: None,
+			salt: None,
+		};
+
+		let hash = hex::encode(ethereum_eip712::hash::keccak256(
+			ethereum_eip712::encode_eip712_using_type_info(
+				ChainflipExtrinsic { call, transaction_metadata },
+				domain,
+			)
+			.unwrap()
+			.encode_eip712()
+			.unwrap(),
+		));
+
+		println!("hash {hash:?}");
+	}
 }
