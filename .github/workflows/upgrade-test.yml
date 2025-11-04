@@ -10,6 +10,11 @@ on:
         description: "Run the upgrade test job"
         required: false
         default: true
+      ref:
+        type: string
+        description: "The branch or tag to run the upgrade test against"
+        required: false
+        default: ""
 
   workflow_call:
     inputs:
@@ -20,6 +25,11 @@ on:
         description: "Run the upgrade test job"
         required: false
         default: true
+      ref:
+        type: string
+        description: "The branch or tag to run the upgrade test against"
+        required: false
+        default: ""
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v2.1.13
@@ -43,6 +53,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
           fetch-depth: 0
+          ref: ${{ inputs.ref != '' && inputs.ref || github.ref_name }}
 
       - name: Login to Github Container Registry 🔑
         if: inputs.run-job
