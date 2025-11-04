@@ -3626,7 +3626,7 @@ dependencies = [
  "scale-value",
  "serde",
  "serde_json",
- "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B4)",
+ "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B6)",
  "tiny-keccak",
  "unicode-xid",
  "utilities",
