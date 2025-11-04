@@ -83,7 +83,7 @@ impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<T
 			assert_has_event::<Test>(RuntimeEvent::LendingPools(
 				Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
-					is_hard: false,
+					liquidation_type: LiquidationType::SoftVoluntary,
 					swaps: BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP])]),
 				},
 			));
@@ -1220,7 +1220,7 @@ fn basic_liquidation() {
 				Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
 					swaps: BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_1])]),
-					is_hard: false,
+					liquidation_type: LiquidationType::Soft,
 				},
 			));
 
@@ -1344,7 +1344,7 @@ fn basic_liquidation() {
 				Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
 					swaps: BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_2])]),
-					is_hard: true,
+					liquidation_type: LiquidationType::Hard,
 				},
 			));
 		})
@@ -2402,7 +2402,7 @@ fn adding_collateral_during_liquidation() {
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
 					ref swaps,
-					is_hard: true,
+					liquidation_type: LiquidationType::Hard,
 				}) if swaps == &BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_1])])
 			);
 
@@ -2463,7 +2463,7 @@ fn adding_collateral_during_liquidation() {
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
 					ref swaps,
-					is_hard: false,
+					liquidation_type: LiquidationType::Soft,
 				}) if swaps == &BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_2])])
 			);
 
@@ -2797,7 +2797,7 @@ mod voluntary_liquidation {
 					}),
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 						borrower_id: BORROWER,
-						is_hard: false,
+						liquidation_type: LiquidationType::Soft,
 						ref swaps
 					}) if swaps == &BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_2])]),
 				);
@@ -2880,7 +2880,7 @@ mod voluntary_liquidation {
 					}) if amount == SWAPPED_PRINCIPAL_2 - liquidation_fee,
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 						borrower_id: BORROWER,
-						is_hard: false,
+						liquidation_type: LiquidationType::SoftVoluntary,
 						ref swaps
 					}) if swaps == &BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_3])]),
 				);
@@ -3388,7 +3388,7 @@ fn init_liquidation_swaps_test() {
 		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 			borrower_id: BORROWER,
 			swaps: BTreeMap::from([(LOAN_1, vec![SWAP_1, SWAP_3]), (LOAN_2, vec![SWAP_2, SWAP_4])]),
-			is_hard: false,
+			liquidation_type: LiquidationType::Soft,
 		}));
 
 		assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests(), expected_swaps);

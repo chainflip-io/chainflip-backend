@@ -398,7 +398,7 @@ pub mod pallet {
 		LiquidationInitiated {
 			borrower_id: T::AccountId,
 			swaps: BTreeMap<LoanId, Vec<SwapRequestId>>,
-			is_hard: bool,
+			liquidation_type: LiquidationType,
 		},
 		LiquidationFeeTaken {
 			loan_id: LoanId,

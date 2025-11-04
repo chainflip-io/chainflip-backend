@@ -32,7 +32,7 @@ pub struct LiquidationSwap {
 	to_asset: Asset,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub enum LiquidationType {
 	SoftVoluntary,
 	Soft,
@@ -620,7 +620,7 @@ impl<T: Config> LoanAccount<T> {
 		Pallet::<T>::deposit_event(Event::LiquidationInitiated {
 			borrower_id: borrower_id.clone(),
 			swaps: swaps_for_event,
-			is_hard: liquidation_type == LiquidationType::Hard,
+			liquidation_type,
 		});
 
 		self.liquidation_status =
