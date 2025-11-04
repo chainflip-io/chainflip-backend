@@ -1141,7 +1141,9 @@ fn lending_pools_serialization() {
 #[test]
 fn loan_account_serialization() {
 	use cf_traits::lending::LoanId;
-	use pallet_cf_lending_pools::{RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan};
+	use pallet_cf_lending_pools::{
+		LiquidationType, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan,
+	};
 
 	let loan_account = RpcLoanAccount::<_, U256> {
 		account: ID_1,
@@ -1159,7 +1161,7 @@ fn loan_account_serialization() {
 				swap_request_id: SwapRequestId(1),
 				loan_id: LoanId(1),
 			}],
-			is_hard: true,
+			liquidation_type: LiquidationType::SoftVoluntary,
 		}),
 	};
 

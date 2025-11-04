@@ -27,7 +27,7 @@ use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
 	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolConfiguration,
-	LtvThresholds, NetworkFeeContributions, RpcLendingPool, RpcLiquidationStatus,
+	LiquidationType, LtvThresholds, NetworkFeeContributions, RpcLendingPool, RpcLiquidationStatus,
 	RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 };
 
@@ -859,6 +859,22 @@ pub mod pallet {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			Self::try_making_repayment(&borrower_id, loan_id, amount)
+		}
+
+		#[pallet::call_index(13)]
+		#[pallet::weight(Weight::zero())]
+		pub fn initiate_voluntary_liquidation(origin: OriginFor<T>) -> DispatchResult {
+			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			<Self as LendingApi>::set_voluntary_liquidation_flag(borrower_id, true)
+		}
+
+		#[pallet::call_index(14)]
+		#[pallet::weight(Weight::zero())]
+		pub fn stop_voluntary_liquidation(origin: OriginFor<T>) -> DispatchResult {
+			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			<Self as LendingApi>::set_voluntary_liquidation_flag(borrower_id, false)
 		}
 	}
 }
