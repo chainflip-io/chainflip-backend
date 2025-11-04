@@ -182,7 +182,9 @@ async function main() {
     await fundFlip(globalLogger, evmScAccount, '1000');
 
     // register LP account
-    console.log(`Registering LP account for EVM account ${evmScAccount}`);
+    console.log(
+      `Registering LP account for EVM account ${evmWallet.address} CF account ${evmScAccount}`,
+    );
     await signCallUsingEvmWallet(
       globalLogger,
       getRegisterLpCall(chainflipApi),

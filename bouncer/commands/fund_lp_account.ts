@@ -23,17 +23,13 @@ const args = z.tuple([
     .string()
     .transform((val) => JSON.parse(val))
     .refine((val) => Array.isArray(val) && val.length > 0, { message: 'LP keys must be provided' }),
-  z
-    .string()
-    .transform((val) => val === 'nosetup')
-    .optional(),
 ]);
 
 async function main() {
-  const [_, __, keyType, lpKeys, ignoreSetup] = args.parse(process.argv);
+  const [_, __, keyType, lpKeys] = args.parse(process.argv);
 
   for (const key of lpKeys) {
-    if (!ignoreSetup) await setupLpAccount(globalLogger, key);
+    await setupLpAccount(globalLogger, key);
 
     for (const asset of Object.keys(assetConstants).filter((asset) =>
       [
