@@ -88,7 +88,8 @@ fn both_fok_and_regular_swaps_succeed_first_try(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: REGULAR_REQUEST_ID
+					swap_request_id: REGULAR_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Executed
 				}),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: FOK_SWAP_ID, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -96,7 +97,8 @@ fn both_fok_and_regular_swaps_succeed_first_try(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: FOK_REQUEST_ID
+					swap_request_id: FOK_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 		});
@@ -165,7 +167,8 @@ fn price_limit_is_respected_in_fok_swap(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(1)
+					swap_request_id: SwapRequestId(1),
+					reason: SwapRequestCompletionReason::Executed
 				}),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: FOK_SWAP_2_ID, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -173,7 +176,8 @@ fn price_limit_is_respected_in_fok_swap(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(3)
+					swap_request_id: SwapRequestId(3),
+					reason: SwapRequestCompletionReason::Executed
 				}),
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: FOK_SWAP_1_ID,
@@ -197,7 +201,8 @@ fn price_limit_is_respected_in_fok_swap(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(2)
+					swap_request_id: SwapRequestId(2),
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 
@@ -257,7 +262,8 @@ fn fok_swap_gets_refunded_due_to_price_limit(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: OTHER_SWAP_REQUEST_ID
+					swap_request_id: OTHER_SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Executed
 				}),
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: FOK_SWAP_ID,
@@ -283,7 +289,8 @@ fn fok_swap_gets_refunded_due_to_price_limit(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: FOK_SWAP_REQUEST_ID
+					swap_request_id: FOK_SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Expired
 				}),
 			);
 		});
@@ -439,7 +446,8 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: FOK_SWAP_REQUEST_ID
+					swap_request_id: FOK_SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Expired
 				}),
 			);
 		});

@@ -359,6 +359,13 @@ impl<T: Config> From<DispatchError> for BatchExecutionError<T> {
 	}
 }
 
+#[derive(Clone, Copy, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+pub enum SwapRequestCompletionReason {
+	Aborted,
+	Expired,
+	Executed,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct DcaState {
 	scheduled_chunks: BTreeSet<SwapId>,
@@ -723,6 +730,7 @@ pub mod pallet {
 		},
 		SwapRequestCompleted {
 			swap_request_id: SwapRequestId,
+			reason: SwapRequestCompletionReason,
 		},
 		/// An new swap deposit channel has been opened.
 		SwapDepositAddressReady {
@@ -2034,7 +2042,10 @@ pub mod pallet {
 					);
 				},
 			};
-			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id: request.id });
+			Self::deposit_event(Event::<T>::SwapRequestCompleted {
+				swap_request_id: request.id,
+				reason: SwapRequestCompletionReason::Expired,
+			});
 		}
 
 		// Removes the swap from the scheduled swaps and returns the input amount of the canceled
@@ -2193,7 +2204,10 @@ pub mod pallet {
 			};
 
 			if request_completed {
-				Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
+				Self::deposit_event(Event::<T>::SwapRequestCompleted {
+					swap_request_id,
+					reason: SwapRequestCompletionReason::Executed,
+				});
 			} else {
 				SwapRequests::<T>::insert(swap_request_id, request);
 			}
@@ -2813,7 +2827,10 @@ pub mod pallet {
 				}
 			}
 
-			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
+			Self::deposit_event(Event::<T>::SwapRequestCompleted {
+				swap_request_id,
+				reason: SwapRequestCompletionReason::Aborted,
+			});
 
 			Some(swap_progress)
 		}
