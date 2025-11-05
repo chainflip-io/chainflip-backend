@@ -29,8 +29,8 @@ async function main() {
   const [_, __, keyType, lpKeys] = args.parse(process.argv);
 
   for (const key of lpKeys) {
+    console.log(`Setting up LP account for key type ${keyType} and key ${key}`);
     await setupLpAccount(globalLogger, key);
-
     for (const asset of Object.keys(assetConstants).filter((asset) =>
       [
         'Btc',
@@ -49,10 +49,10 @@ async function main() {
           amount = 10;
           break;
         case 'Usdc':
-          amount = 10000;
+          amount = 1000;
           break;
         case 'Usdt':
-          amount = 10000;
+          amount = 1000;
           break;
         case 'Sol':
           amount = 10;
@@ -63,7 +63,7 @@ async function main() {
       }
 
       amount = lpKeys.length == 1 ? amount * 10000 : amount;
-
+      console.log(`Depositing liquidity for ${asset} amount ${amount}`);
       await depositLiquidity(
         globalLogger,
         asset as any,
