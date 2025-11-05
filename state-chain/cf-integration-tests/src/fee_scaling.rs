@@ -118,7 +118,7 @@ fn fee_scales_within_a_pool() {
 				)
 				.unwrap();
 				assert_eq!(
-					Flip::total_balance_of(&id),
+					Flip::total_balance_of(id),
 					initial_balance,
 					"LP balance should be restored after fee correction"
 				);
