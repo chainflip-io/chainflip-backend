@@ -1,9 +1,10 @@
-use cf_primitives::{AccountRole, Asset, AuthorityCount, FLIPPERINOS_PER_FLIP};
+use cf_primitives::{AccountRole, Asset, AuthorityCount};
 use cf_traits::IncreaseOrDecrease;
 use codec::Encode;
-use frame_support::pallet_prelude::TransactionValidityError;
+use frame_support::{dispatch::DispatchInfo, pallet_prelude::TransactionValidityError};
 use pallet_cf_flip::{FeeScalingRate, FeeScalingRateConfig};
 use pallet_cf_pools::RangeOrderSize;
+use pallet_transaction_payment::OnChargeTransaction;
 use sp_block_builder::runtime_decl_for_block_builder::BlockBuilderV6;
 use sp_keyring::test::AccountKeyring;
 use sp_runtime::{generic::Era, MultiSignature};
@@ -59,19 +60,26 @@ const fn update_range_order_call(base_asset: Asset) -> RuntimeCall {
 const UPDATE_ETH_RANGE_ORDER: RuntimeCall = update_range_order_call(Asset::Eth);
 const UPDATE_BTC_RANGE_ORDER: RuntimeCall = update_range_order_call(Asset::Btc);
 
+use pallet_cf_flip::UP_FRONT_ESCROW_FEE;
+
+const POOR_LP_INITIAL_BALANCE: Balance = UP_FRONT_ESCROW_FEE / 2;
+const RICH_LP_INITIAL_BALANCE: Balance = 5 * UP_FRONT_ESCROW_FEE;
+
 #[test]
 fn fee_scales_within_a_pool() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	let lp = AccountKeyring::Alice;
+	let rich_lp = AccountKeyring::Alice;
+	let rich_lp_id = rich_lp.to_account_id();
+	let poor_lp = AccountKeyring::Bob;
+	let poor_lp_id = poor_lp.to_account_id();
 	super::genesis::with_test_defaults()
 		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
-		.with_additional_accounts(&[(
-			lp.to_account_id(),
-			AccountRole::LiquidityProvider,
-			5 * FLIPPERINOS_PER_FLIP,
-		)])
+		.with_additional_accounts(&[
+			(rich_lp.to_account_id(), AccountRole::LiquidityProvider, RICH_LP_INITIAL_BALANCE),
+			(poor_lp.to_account_id(), AccountRole::LiquidityProvider, POOR_LP_INITIAL_BALANCE),
+		])
 		.build()
 		.execute_with(|| {
 			let (mut testnet, _, _) =
@@ -79,11 +87,52 @@ fn fee_scales_within_a_pool() {
 
 			assert_eq!(FeeScalingRate::<Runtime>::get(), FeeScalingRateConfig::NoScaling);
 
+			let check_escrow_amount = |id, initial_balance, expected_escrowed| {
+				use frame_support::traits::Imbalance;
+
+				let liquidity_info =
+					pallet_cf_flip::FlipTransactionPayment::<Runtime>::withdraw_fee(
+						id,
+						&UPDATE_ETH_RANGE_ORDER,
+						&DispatchInfo::default(),
+						Default::default(),
+						Default::default(),
+					)
+					.unwrap();
+				assert!(
+					matches!(&liquidity_info, &Some((ref surplus, Some(_))) if surplus.peek() == expected_escrowed),
+					"LP should have escrowed the correct amount"
+				);
+				assert_eq!(
+					Flip::total_balance_of(id),
+					initial_balance - expected_escrowed,
+					"LP balance should be reduced by escrowed amount"
+				);
+				pallet_cf_flip::FlipTransactionPayment::<Runtime>::correct_and_deposit_fee(
+					id,
+					&Default::default(),
+					&Default::default(),
+					0,
+					0,
+					liquidity_info,
+				)
+				.unwrap();
+				assert_eq!(
+					Flip::total_balance_of(&id),
+					initial_balance,
+					"LP balance should be restored after fee correction"
+				);
+			};
+
+			check_escrow_amount(&poor_lp_id, POOR_LP_INITIAL_BALANCE, POOR_LP_INITIAL_BALANCE);
+			check_escrow_amount(&rich_lp_id, RICH_LP_INITIAL_BALANCE, UP_FRONT_ESCROW_FEE);
+
 			let fees = (1u16..=10)
 				.map(|call_count| {
 					(
 						call_count,
-						apply_extrinsic_and_calculate_gas_fee(lp, UPDATE_ETH_RANGE_ORDER).unwrap(),
+						apply_extrinsic_and_calculate_gas_fee(rich_lp, UPDATE_ETH_RANGE_ORDER)
+							.unwrap(),
 					)
 				})
 				.collect::<Vec<_>>();
@@ -109,7 +158,8 @@ fn fee_scales_within_a_pool() {
 				.map(|call_count| {
 					(
 						call_count,
-						apply_extrinsic_and_calculate_gas_fee(lp, UPDATE_ETH_RANGE_ORDER).unwrap(),
+						apply_extrinsic_and_calculate_gas_fee(rich_lp, UPDATE_ETH_RANGE_ORDER)
+							.unwrap(),
 					)
 				})
 				.collect::<Vec<_>>();
@@ -146,7 +196,8 @@ fn fee_scales_within_a_pool() {
 				.map(|call_count| {
 					(
 						call_count,
-						apply_extrinsic_and_calculate_gas_fee(lp, UPDATE_BTC_RANGE_ORDER).unwrap(),
+						apply_extrinsic_and_calculate_gas_fee(rich_lp, UPDATE_BTC_RANGE_ORDER)
+							.unwrap(),
 					)
 				})
 				.collect::<Vec<_>>();

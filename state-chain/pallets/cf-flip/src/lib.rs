@@ -33,7 +33,9 @@ pub use weights::WeightInfo;
 use cf_traits::{AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, Slashing};
 use imbalances::{Deficit, ImbalanceSource, Surplus};
 
-pub use on_charge_transaction::{CallIndexer, FeeScalingRateConfig, FlipTransactionPayment};
+pub use on_charge_transaction::{
+	CallIndexer, FeeScalingRateConfig, FlipTransactionPayment, UP_FRONT_ESCROW_FEE,
+};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{

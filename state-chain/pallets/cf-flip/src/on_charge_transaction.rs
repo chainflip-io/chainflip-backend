@@ -44,7 +44,7 @@ use sp_std::marker::PhantomData;
 /// Any excess fees are refunded to the caller.
 pub struct FlipTransactionPayment<T>(PhantomData<T>);
 
-const UP_FRONT_ESCROW_FEE: FlipBalance = FLIPPERINOS_PER_FLIP;
+pub const UP_FRONT_ESCROW_FEE: FlipBalance = FLIPPERINOS_PER_FLIP;
 
 pub type CallIndexFor<T> = <<T as crate::Config>::CallIndexer as CallIndexer<
 	<T as frame_system::Config>::RuntimeCall,
