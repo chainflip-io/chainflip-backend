@@ -313,6 +313,16 @@ parameter_types! {
 	};
 }
 
+/// A workaround for the lack of `Default` implementation on
+/// `pallet_transaction_payment::ChargeTransactionPayment`.
+pub struct GetTransactionPayments;
+
+impl Get<pallet_transaction_payment::ChargeTransactionPayment<Runtime>> for GetTransactionPayments {
+	fn get() -> pallet_transaction_payment::ChargeTransactionPayment<Runtime> {
+		pallet_transaction_payment::ChargeTransactionPayment::from(Default::default())
+	}
+}
+
 impl pallet_cf_environment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -329,6 +339,8 @@ impl pallet_cf_environment::Config for Runtime {
 	type CurrentReleaseVersion = CurrentReleaseVersion;
 	type SolEnvironment = SolEnvironment;
 	type SolanaBroadcaster = SolanaBroadcaster;
+	type TransactionPayments = pallet_transaction_payment::ChargeTransactionPayment<Self>;
+	type GetTransactionPayments = GetTransactionPayments;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
