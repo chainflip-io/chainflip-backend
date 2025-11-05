@@ -12,8 +12,9 @@ import { assetConstants } from '@chainflip/cli';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { setupLpAccount } from 'shared/setup_account';
 import { z } from 'zod';
+import { depositLiquidityViaTransfer } from 'shared/deposit_liquidity_via_transfer';
 
-const args = z.tuple([
+const mandatoryOptions = z.tuple([
   z.any(),
   z.any(),
   z.string().refine((val) => ['uri', 'mnemonic', 'evm'].includes(val), {
@@ -25,8 +26,10 @@ const args = z.tuple([
     .refine((val) => Array.isArray(val) && val.length > 0, { message: 'LP keys must be provided' }),
 ]);
 
+const options = mandatoryOptions.or(z.tuple([...mandatoryOptions.items, z.string()]));
+
 async function main() {
-  const [_, __, keyType, lpKeys] = args.parse(process.argv);
+  const [_, __, keyType, lpKeys, funderLp] = options.parse(process.argv);
 
   for (const key of lpKeys) {
     console.log(`Setting up LP account for key type ${keyType} and key ${key}`);
@@ -63,15 +66,30 @@ async function main() {
       }
 
       amount = lpKeys.length == 1 ? amount * 10000 : amount;
-      console.log(`Depositing liquidity for ${asset} amount ${amount}`);
-      await depositLiquidity(
-        globalLogger,
-        asset as any,
-        amount,
-        false,
-        keyType === 'uri' ? key : undefined,
-        keyType === 'mnemonic' ? key : undefined,
+      console.log(
+        `Depositing ${funderLp ? 'directly' : 'via transfer'} - liquidity for ${asset} amount ${amount}`,
       );
+
+      if (funderLp) {
+        await depositLiquidityViaTransfer(
+          globalLogger,
+          asset as any,
+          amount,
+          false,
+          funderLp,
+          keyType === 'uri' ? key : undefined,
+          keyType === 'mnemonic' ? key : undefined,
+        );
+      } else {
+        await depositLiquidity(
+          globalLogger,
+          asset as any,
+          amount,
+          false,
+          keyType === 'uri' ? key : undefined,
+          keyType === 'mnemonic' ? key : undefined,
+        );
+      }
     }
   }
 }
