@@ -34,6 +34,7 @@ async function main() {
   for (const key of lpKeys) {
     console.log(`Setting up LP account for key type ${keyType} and key ${key}`);
     await setupLpAccount(globalLogger, key);
+
     for (const asset of Object.keys(assetConstants).filter((asset) =>
       [
         'Btc',
@@ -65,7 +66,6 @@ async function main() {
           break;
       }
 
-      amount = lpKeys.length == 1 ? amount * 10000 : amount;
       console.log(
         `Depositing ${funderLp ? 'directly' : 'via transfer'} - liquidity for ${asset} amount ${amount}`,
       );
@@ -75,7 +75,6 @@ async function main() {
           globalLogger,
           asset as any,
           amount,
-          false,
           funderLp,
           keyType === 'uri' ? key : undefined,
           keyType === 'mnemonic' ? key : undefined,

@@ -6,14 +6,12 @@ import {
   lpMutex,
   shortChainFromAsset,
   amountToFineAmount,
-  isWithinOnePercent,
   chainFromAsset,
   decodeSolAddress,
   assetDecimals,
   createStateChainKeypair,
   runWithTimeout,
 } from 'shared/utils';
-import { send } from 'shared/send';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { Logger } from 'shared/utils/logger';
 
@@ -21,7 +19,6 @@ export async function depositLiquidityViaTransfer(
   parentLogger: Logger,
   ccy: InternalAsset,
   amount: number,
-  waitForFinalization = false,
   funderLpMnemonic: string,
   optionLpUri?: string,
   optionLpMnemonic?: string,
@@ -56,18 +53,17 @@ export async function depositLiquidityViaTransfer(
     });
   }
 
-  const funderLpKeypair = createStateChainKeypair(lpUri, true);
-
-  console.log(`Depositing ${amount} ${ccy} to LP account ${funderLpKeypair.address}`);
+  const funderLp = createStateChainKeypair(funderLpMnemonic, true);
+  console.log(`Depositing ${amount} ${ccy} to LP account ${lp.address}`);
   await lpMutex.runExclusive(funderLpMnemonic, async () => {
-    const nonce = await chainflip.rpc.system.accountNextIndex(funderLpKeypair.address);
+    const nonce = await chainflip.rpc.system.accountNextIndex(funderLp.address);
     await chainflip.tx.liquidityProvider
       .transferAsset(
         amountToFineAmount(String(amount), assetDecimals(ccy as InternalAsset)),
         ccy as InternalAsset,
         lp.address,
       )
-      .signAndSend(funderLpKeypair, { nonce }, handleSubstrateError(chainflip));
+      .signAndSend(funderLp, { nonce }, handleSubstrateError(chainflip));
   });
 
   await observeEvent(logger, 'assetBalances:AccountCredited', {
