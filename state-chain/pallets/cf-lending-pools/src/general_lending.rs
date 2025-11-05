@@ -148,24 +148,36 @@ impl<T: Config> LoanAccount<T> {
 	/// safe mode.
 	fn try_adding_collateral_from_free_balance(
 		&mut self,
-		collateral: &BTreeMap<Asset, AssetAmount>,
+		collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<(), DispatchError> {
-		for (asset, amount) in collateral {
+		for (asset, amount) in &collateral {
 			ensure!(
 				T::SafeMode::get().add_collateral.enabled(asset),
 				Error::<T>::AddingCollateralDisabled
 			);
 			T::Balance::try_debit_account(&self.borrower_id, *asset, *amount)?;
-
-			self.add_to_collateral(*asset, *amount);
 		}
+
+		self.add_new_collateral(collateral);
 
 		Ok(())
 	}
 
-	/// Helper function that makes sure the collateral is added correctly (not overriding existing
-	/// amounts and creating entries for new assets if necessary)
-	fn add_to_collateral(&mut self, asset: Asset, amount: AssetAmount) {
+	/// Add to the user's collateral and emit the corresponding event.
+	fn add_new_collateral(&mut self, collateral: BTreeMap<Asset, AssetAmount>) {
+		for (asset, amount) in &collateral {
+			self.collateral.entry(*asset).or_default().saturating_accrue(*amount);
+		}
+
+		Pallet::<T>::deposit_event(Event::CollateralAdded {
+			borrower_id: self.borrower_id.clone(),
+			collateral,
+		});
+	}
+
+	/// Return user's existing collateral (what hasn't been swapped during liquidation).
+	/// Unlike [add_new_collateral], we don't emit an event when collateral is returned.
+	fn return_collateral(&mut self, asset: Asset, amount: AssetAmount) {
 		self.collateral.entry(asset).or_default().saturating_accrue(amount);
 	}
 
@@ -375,12 +387,12 @@ impl<T: Config> LoanAccount<T> {
 				if excess_amount > 0 {
 					// In case we have liquidated more than necessary the excess amount
 					// is added to the account's collateral balance:
-					self.add_to_collateral(to_asset, excess_amount);
+					self.add_new_collateral(BTreeMap::from([(to_asset, excess_amount)]));
 				}
 
 				// Any input funds not yet liquidated are returned to the
-				// account's collateral balance:
-				self.add_to_collateral(from_asset, swap_progress.remaining_input_amount);
+				// account's collateral balance.
+				self.return_collateral(from_asset, swap_progress.remaining_input_amount);
 			} else {
 				log_or_panic!("Failed to abort swap request: {swap_request_id}");
 			}
@@ -552,7 +564,10 @@ impl<T: Config> LoanAccount<T> {
 				log_or_panic!("Unable to debit after checking balance");
 			})?;
 
-			self.add_to_collateral(self.primary_collateral_asset, top_up_amount);
+			self.add_new_collateral(BTreeMap::from([(
+				self.primary_collateral_asset,
+				top_up_amount,
+			)]));
 
 			Ok(true)
 		} else {
@@ -691,13 +706,8 @@ impl<T: Config> LoanAccount<T> {
 			Error::<T>::LiquidationInProgress
 		);
 
-		self.try_adding_collateral_from_free_balance(&extra_collateral)?;
-
 		if !extra_collateral.is_empty() {
-			Pallet::<T>::deposit_event(Event::CollateralAdded {
-				borrower_id: self.borrower_id.clone(),
-				collateral: extra_collateral,
-			});
+			self.try_adding_collateral_from_free_balance(extra_collateral)?;
 		}
 
 		// Will need to request this much more from the pool
@@ -1273,12 +1283,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				primary_collateral_asset,
 			)?;
 
-			loan_account.try_adding_collateral_from_free_balance(&collateral)?;
-
-			Self::deposit_event(Event::CollateralAdded {
-				borrower_id: borrower_id.clone(),
-				collateral,
-			});
+			loan_account.try_adding_collateral_from_free_balance(collateral)?;
 
 			Ok(())
 		})
@@ -1460,7 +1465,7 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 						},
 					};
 
-					let remaining_amount = match loan_account
+					let excess_amount = match loan_account
 						.get_loan_and_check_asset(loan_id, liquidation_swap.to_asset)
 					{
 						Some(loan) => {
@@ -1486,8 +1491,11 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 
 					// Any amount left after repaying the loan is added to the borrower's
 					// collateral balance:
-					if remaining_amount > 0 {
-						loan_account.add_to_collateral(liquidation_swap.to_asset, remaining_amount);
+					if excess_amount > 0 {
+						loan_account.add_new_collateral(BTreeMap::from([(
+							liquidation_swap.to_asset,
+							excess_amount,
+						)]));
 					}
 
 					// If this swap is the last liquidation swap for the loan, we should

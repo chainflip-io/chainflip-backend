@@ -725,6 +725,11 @@ fn collateral_auto_topup() {
 
 			// After we give the user more funds, auto-top up should bring CR back to target
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, EXTRA_FUNDS);
+
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+				borrower_id: BORROWER,
+				collateral: BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_TOPUP)]),
+			}));
 		})
 		.then_execute_at_next_block(|_| {
 			let collateral_topup_2 =
@@ -897,8 +902,8 @@ fn basic_loan_aggregation() {
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
 					borrower_id: BORROWER,
-					collateral: ref collateral_in_event,
-				}) if collateral_in_event == &extra_collateral,
+					ref collateral,
+				}) if collateral == &extra_collateral,
 				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
 					loan_id: LOAN_ID,
 					pool_fee: pool_fee_taken,
@@ -1298,6 +1303,10 @@ fn basic_liquidation() {
 				}) if amount == repaid_amount_1,
 			);
 
+			// No CollateralAdded event when returning existing collateral:
+			assert_matching_event_count!(Test, RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded{..}) => 0);
+
+
 			// Change oracle price again to trigger liquidation:
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE_2);
 		})
@@ -1363,6 +1372,9 @@ fn basic_liquidation() {
 				SWAPPED_PRINCIPAL_2,
 			);
 
+			// This excess principal asset amount will be credited to the borrower's collateral
+			let excess_principal = SWAPPED_PRINCIPAL_2 - repaid_amount_2 - liquidation_fee_2;
+
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
@@ -1379,6 +1391,10 @@ fn basic_liquidation() {
 					loan_id: LOAN_ID,
 					amount,
 				}) if amount == repaid_amount_2,
+				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+					borrower_id: BORROWER,
+					ref collateral,
+				}) if collateral == &BTreeMap::from([(LOAN_ASSET, excess_principal)]),
 				// The loan should now be settled:
 				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 					loan_id: LOAN_ID,
@@ -1386,9 +1402,6 @@ fn basic_liquidation() {
 					via_liquidation: true,
 				}),
 			);
-
-			// This excess principal asset amount will be credited to the borrower's account
-			let excess_principal = SWAPPED_PRINCIPAL_2 - repaid_amount_2 - liquidation_fee_2;
 
 			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
 
@@ -2612,6 +2625,8 @@ mod voluntary_liquidation {
 				);
 			})
 			.then_execute_at_next_block(|_| {
+				const EXCESS_PRINCIPAL: AssetAmount = SWAPPED_PRINCIPAL - TOTAL_TO_REPAY;
+
 				assert_eq!(
 					LoanAccounts::<Test>::get(BORROWER).unwrap(),
 					LoanAccount {
@@ -2619,7 +2634,7 @@ mod voluntary_liquidation {
 						primary_collateral_asset: COLLATERAL_ASSET,
 						collateral: BTreeMap::from([
 							(COLLATERAL_ASSET, INIT_COLLATERAL - SWAPPED_COLLATERAL),
-							(LOAN_ASSET, SWAPPED_PRINCIPAL - TOTAL_TO_REPAY)
+							(LOAN_ASSET, EXCESS_PRINCIPAL)
 						]),
 						loans: Default::default(),
 						liquidation_status: LiquidationStatus::NoLiquidation,
@@ -2638,6 +2653,10 @@ mod voluntary_liquidation {
 						loan_id: LOAN_ID,
 						amount: TOTAL_TO_REPAY,
 					}),
+					RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+						borrower_id: BORROWER,
+						ref collateral,
+					}) if collateral == &BTreeMap::from([(LOAN_ASSET, EXCESS_PRINCIPAL)]),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 						loan_id: LOAN_ID,
 						outstanding_principal: 0,
@@ -2957,6 +2976,10 @@ mod voluntary_liquidation {
 						loan_id: LOAN_ID,
 						amount,
 					}) if amount == owed_after_liquidation_2,
+					RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+						borrower_id: BORROWER,
+						ref collateral,
+					}) if collateral == &BTreeMap::from([(LOAN_ASSET, SWAPPED_PRINCIPAL_EXTRA)]),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 						loan_id: LOAN_ID,
 						outstanding_principal: 0,
