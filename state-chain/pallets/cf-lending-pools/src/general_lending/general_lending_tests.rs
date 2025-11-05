@@ -1282,6 +1282,10 @@ fn basic_liquidation() {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+					borrower_id: BORROWER,
+					reason: LiquidationCompletedReason::LtvChange,
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
 					loan_id: LOAN_ID,
 					pool_fee,
@@ -1361,6 +1365,10 @@ fn basic_liquidation() {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+					borrower_id: BORROWER,
+					reason: LiquidationCompletedReason::FullySwapped,
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
 					loan_id: LOAN_ID,
 					pool_fee,
@@ -1376,7 +1384,7 @@ fn basic_liquidation() {
 					loan_id: LOAN_ID,
 					outstanding_principal: 0,
 					via_liquidation: true,
-				})
+				}),
 			);
 
 			// This excess principal asset amount will be credited to the borrower's account
@@ -1549,6 +1557,10 @@ fn liquidation_with_outstanding_principal() {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+					borrower_id: BORROWER,
+					reason: LiquidationCompletedReason::FullySwapped
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
 					loan_id: LOAN_ID,
 					pool_fee,
@@ -1656,6 +1668,10 @@ fn liquidation_with_outstanding_principal_and_owed_network_fees() {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+					borrower_id: BORROWER,
+					reason: LiquidationCompletedReason::FullySwapped,
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
 					loan_id: LOAN_ID,
 					pool_fee,
@@ -2456,6 +2472,10 @@ fn adding_collateral_during_liquidation() {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+					borrower_id: BORROWER,
+					reason: LiquidationCompletedReason::LtvChange,
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
 					amount: RECOVERED_PRINCIPAL_1
@@ -2531,6 +2551,10 @@ fn adding_collateral_during_liquidation() {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+					borrower_id: BORROWER,
+					reason: LiquidationCompletedReason::LtvChange,
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
 					amount: RECOVERED_PRINCIPAL_2
@@ -2606,6 +2630,10 @@ mod voluntary_liquidation {
 
 				assert_event_sequence!(
 					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+						borrower_id: BORROWER,
+						reason: LiquidationCompletedReason::FullySwapped,
+					}),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 						loan_id: LOAN_ID,
 						amount: TOTAL_TO_REPAY,
@@ -2683,6 +2711,10 @@ mod voluntary_liquidation {
 
 				assert_event_sequence!(
 					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+						borrower_id: BORROWER,
+						reason: LiquidationCompletedReason::ManualAbort,
+					}),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 						loan_id: LOAN_ID,
 						amount: SWAPPED_PRINCIPAL,
@@ -2791,6 +2823,10 @@ mod voluntary_liquidation {
 
 				assert_event_sequence!(
 					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+						borrower_id: BORROWER,
+						reason: LiquidationCompletedReason::LtvChange,
+					}),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 						loan_id: LOAN_ID,
 						amount: SWAPPED_PRINCIPAL_1,
@@ -2873,6 +2909,10 @@ mod voluntary_liquidation {
 
 				assert_event_sequence!(
 					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+						borrower_id: BORROWER,
+						reason: LiquidationCompletedReason::LtvChange,
+					}),
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. }),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 						loan_id: LOAN_ID,
@@ -2909,6 +2949,10 @@ mod voluntary_liquidation {
 
 				assert_event_sequence!(
 					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+						borrower_id: BORROWER,
+						reason: LiquidationCompletedReason::FullySwapped,
+					}),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 						loan_id: LOAN_ID,
 						amount,

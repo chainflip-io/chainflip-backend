@@ -27,8 +27,8 @@ use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
 	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolConfiguration,
-	LiquidationType, LtvThresholds, NetworkFeeContributions, RpcLendingPool, RpcLiquidationStatus,
-	RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+	LiquidationCompletedReason, LiquidationType, LtvThresholds, NetworkFeeContributions,
+	RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 };
 
 pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
@@ -399,6 +399,10 @@ pub mod pallet {
 			borrower_id: T::AccountId,
 			swaps: BTreeMap<LoanId, Vec<SwapRequestId>>,
 			liquidation_type: LiquidationType,
+		},
+		LiquidationCompleted {
+			borrower_id: T::AccountId,
+			reason: LiquidationCompletedReason,
 		},
 		LiquidationFeeTaken {
 			loan_id: LoanId,
