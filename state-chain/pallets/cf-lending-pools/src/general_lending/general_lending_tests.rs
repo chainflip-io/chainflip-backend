@@ -37,7 +37,7 @@ use crate::LENDING_DEFAULT_CONFIG as CONFIG;
 trait LendingTestRunnerExt {
 	fn with_funded_pool(self, init_pool_amount: AssetAmount) -> Self;
 	fn with_default_loan(self) -> Self;
-	fn trigger_voluntary_liquidation(self) -> Self;
+	fn with_voluntary_liquidation(self) -> Self;
 }
 
 impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<Test, Ctx> {
@@ -72,7 +72,7 @@ impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<T
 
 	/// This method initiates voluntary liquidation. Only expected to be called immediately after
 	/// [with_default_loan].
-	fn trigger_voluntary_liquidation(self) -> Self {
+	fn with_voluntary_liquidation(self) -> Self {
 		const LIQUIDATION_SWAP: SwapRequestId = SwapRequestId(0);
 
 		self.then_execute_with_keep_context(|_| {
@@ -2615,7 +2615,7 @@ mod voluntary_liquidation {
 		new_test_ext()
 			.with_funded_pool(INIT_POOL_AMOUNT)
 			.with_default_loan()
-			.trigger_voluntary_liquidation()
+			.with_voluntary_liquidation()
 			.then_execute_with(|_| {
 				// Simulate partial execution of the liquidaiton swap. This should be
 				// sufficient to fully repay the loan.
@@ -2685,7 +2685,7 @@ mod voluntary_liquidation {
 		new_test_ext()
 			.with_funded_pool(INIT_POOL_AMOUNT)
 			.with_default_loan()
-			.trigger_voluntary_liquidation()
+			.with_voluntary_liquidation()
 			.then_execute_with(|_| {
 				System::reset_events();
 
@@ -2781,7 +2781,7 @@ mod voluntary_liquidation {
 		new_test_ext()
 			.with_funded_pool(INIT_POOL_AMOUNT)
 			.with_default_loan()
-			.trigger_voluntary_liquidation()
+			.with_voluntary_liquidation()
 			.then_execute_with(|_| {
 				// Simulate partial execution of the liquidaiton swap. This won't be enough
 				// to repay the loan yet.
@@ -2997,6 +2997,25 @@ mod voluntary_liquidation {
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. }) => 0
 				);
 			});
+	}
+
+	#[test]
+	fn voluntary_liquidation_requires_loans() {
+		new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).then_execute_with(|_| {
+			// Add collateral to ensure the account	exists:
+			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+
+			assert_ok!(LendingPools::add_collateral(
+				RuntimeOrigin::signed(BORROWER),
+				Some(COLLATERAL_ASSET),
+				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL),])
+			));
+
+			assert_noop!(
+				LendingPools::initiate_voluntary_liquidation(RuntimeOrigin::signed(BORROWER)),
+				Error::<Test>::AccountHasNoLoans
+			);
+		});
 	}
 }
 

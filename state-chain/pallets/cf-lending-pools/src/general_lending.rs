@@ -296,9 +296,9 @@ impl<T: Config> LoanAccount<T> {
 					}
 				} else if ltv == Permill::zero() {
 					// LTV of 0 implies that liquidation swaps have resulted in enough of
-					// loan assets to fully repay all outstanding loans.
-					// In this case we abort liquidation, and switch off the voluntary
-					// liquidation flag in case the user creates new loans in the future.
+					// loan assets to fully repay all outstanding loans, in which case
+					// we abort the liquidation (this will reset the voluntary liquidation
+					// flag).
 					LiquidationStatusChange::AbortLiquidation {
 						reason: LiquidationCompletionReason::FullySwapped,
 					}
@@ -1385,6 +1385,8 @@ impl<T: Config> LendingApi for Pallet<T> {
 	fn set_voluntary_liquidation_flag(borrower_id: Self::AccountId, value: bool) -> DispatchResult {
 		LoanAccounts::<T>::try_mutate(&borrower_id, |maybe_account| {
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanAccountNotFound)?;
+
+			ensure!(!loan_account.loans.is_empty(), Error::<T>::AccountHasNoLoans);
 
 			loan_account.voluntary_liquidation_requested = value;
 			Ok(())

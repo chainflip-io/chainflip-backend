@@ -464,6 +464,8 @@ pub mod pallet {
 		/// Specified loan account not found (in methods where one should not be created by
 		/// default)
 		LoanAccountNotFound,
+		/// Can't trigger voluntary liquidation because account has no loans
+		AccountHasNoLoans,
 		/// The borrower has insufficient collateral for the requested loan
 		InsufficientCollateral,
 		/// A catch-all error for invalid loan parameters where a more specific error is not
