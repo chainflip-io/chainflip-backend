@@ -756,9 +756,12 @@ impl<T: Config> LoanAccount<T> {
 			return Err(Error::<T>::InsufficientCollateral.into());
 		}
 
-		// If the user requests any additional loans, we assume they no longer want to
-		// be in voluntary liquidation mode (if for whatever reason it was active)
-		self.voluntary_liquidation_requested = false;
+		if self.voluntary_liquidation_requested {
+			log_or_panic!("Voluntary liquidation flag is set on loan creation");
+			// If the user requests any additional loans, we assume they no longer want to
+			// be in voluntary liquidation mode (if for whatever reason it was active)
+			self.voluntary_liquidation_requested = false;
+		}
 
 		T::Balance::credit_account(&self.borrower_id, loan_asset, extra_principal);
 
