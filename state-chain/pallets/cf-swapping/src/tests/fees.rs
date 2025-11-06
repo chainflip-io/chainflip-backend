@@ -579,7 +579,7 @@ fn network_fee_swap_gets_burnt() {
 		})
 		.then_process_blocks_until_block(SWAP_BLOCK)
 		.then_execute_with(|_| {
-			assert_eq!(FlipToBurn::<Test>::get(), AMOUNT * DEFAULT_SWAP_RATE);
+			assert_eq!(FlipToBurn::<Test>::get(), (AMOUNT * DEFAULT_SWAP_RATE).try_into().unwrap());
 			assert_swaps_queue_is_empty();
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 			assert_has_matching_event!(Test, RuntimeEvent::Swapping(Event::SwapExecuted { .. }),);
@@ -1049,7 +1049,7 @@ fn gas_calculation_can_handle_extreme_swap_rate() {
 					cf_chains::assets::eth::Asset::Flip,
 					1000
 				),
-				8400000
+				14000000
 			);
 		}
 

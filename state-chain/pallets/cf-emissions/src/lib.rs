@@ -270,16 +270,13 @@ impl<T: Config> Pallet<T> {
 	fn burn_flip_network_fee() {
 		match with_storage_layer(|| {
 			let flip_to_be_sent_to_gateway = T::FlipToBurnOrMove::take_flip_to_be_sent_to_gateway();
-			let flip_to_offset = T::FlipToBurnOrMove::take_flip_deficit();
 			let flip_to_burn = T::FlipToBurnOrMove::take_flip_to_burn();
-			if flip_to_burn == Zero::zero() {
+			if flip_to_burn <= Zero::zero() {
 				return Err(Error::<T>::FlipBalanceBelowBurnThreshold.into())
 			}
 			T::EgressHandler::schedule_egress(
 				cf_chains::assets::eth::Asset::Flip,
-				flip_to_burn
-					.saturating_add(flip_to_be_sent_to_gateway)
-					.saturating_sub(flip_to_offset),
+				flip_to_burn.saturated_into::<u128>().saturating_add(flip_to_be_sent_to_gateway),
 				T::EthEnvironment::state_chain_gateway_address(),
 				None,
 			)

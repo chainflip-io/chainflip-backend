@@ -21,7 +21,6 @@ cf-chains = { workspace = true }
 cf-primitives = { workspace = true }
 cf-traits = { workspace = true }
 cf-runtime-utilities = { workspace = true }
-pallet-cf-environment = { workspace = true }
 
 serde = { workspace = true, features = ["derive", "alloc"] }
 

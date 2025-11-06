@@ -33,10 +33,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, FundingSource,
-	IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction,
-	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
-	SwappingApi, INITIAL_FLIP_FUNDING,
+	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo,
+	FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry,
+	SwapOutputAction, SwapParameterValidation, SwapRequestHandler, SwapRequestType,
+	SwapRequestTypeEncoded, SwapType, SwappingApi, INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -50,6 +50,9 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use pallet_cf_environment::submit_runtime_call::{
+	is_valid_signature, SignatureData, TransactionMetadata,
+};
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::{
 	helpers_128bit::multiply_by_rational_with_rounding,
@@ -492,7 +495,7 @@ pub enum PalletConfigUpdate<T: Config> {
 }
 
 impl_pallet_safe_mode! {
-	PalletSafeMode; swaps_enabled, withdrawals_enabled, broker_registration_enabled,
+	PalletSafeMode; swaps_enabled, withdrawals_enabled, broker_registration_enabled, deposit_enabled
 }
 
 fn address_error_to_pallet_error<T>(error: AddressError) -> Error<T>
@@ -519,8 +522,9 @@ pub mod pallet {
 		PriceLimits, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{
-		lending::LendingSystemApi, AccountRoleRegistry, Chainflip, EgressApi, FundAccount,
-		PoolPriceProvider, PriceFeedApi, ScheduledEgressDetails, SwapExecutionProgress,
+		lending::LendingSystemApi, AccountRoleRegistry, AdditionalDepositAction, Chainflip,
+		EgressApi, FundAccount, PoolPriceProvider, PriceFeedApi, ScheduledEgressDetails,
+		SwapExecutionProgress,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
@@ -585,6 +589,13 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Amount = <Self as Chainflip>::Amount,
 		>;
+
+		type MinimumFunding: GetMinimumFunding;
+
+		type RuntimeCall: Member + Parameter + From<frame_system::Call<Self>> + From<Call<Self>>;
+
+		/// For getting the Chainflip network.
+		type ChainflipNetwork: ChainflipNetworkInfo;
 	}
 
 	#[pallet::pallet]
@@ -620,15 +631,11 @@ pub mod pallet {
 
 	/// FLIP ready to be burned.
 	#[pallet::storage]
-	pub type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+	pub type FlipToBurn<T: Config> = StorageValue<_, i128, ValueQuery>;
 
 	/// FLIP ready to be sent to gateway.
 	#[pallet::storage]
 	pub type FlipToBeSentToGateway<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
-
-	/// FLIP deficit from initial funding swap
-	#[pallet::storage]
-	pub type FlipDeficitToOffset<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
 	/// Interval at which we buy FLIP in order to burn it.
 	#[pallet::storage]
@@ -884,6 +891,18 @@ pub mod pallet {
 			swap_id: SwapId,
 			reason: SwapFailureReason,
 		},
+		AccountCreationDepositAddressReady {
+			channel_id: ChannelId,
+			asset: Asset,
+			deposit_address: EncodedAddress,
+			requested_by: T::AccountId,
+			// account the funds will be credited to upon deposit
+			requested_for: T::AccountId,
+			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
+			boost_fee: BasisPoints,
+			channel_opening_fee: T::Amount,
+			refund_address: ForeignChainAddress,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -956,6 +975,16 @@ pub mod pallet {
 		CcmUnsupportedForRefundChain,
 		/// Oracle price not available for one or more of the assets.
 		OraclePriceNotAvailable,
+		/// The provided Signature Data is invalid
+		InvalidUserSignatureData,
+		/// The provided Transaction Metadata is invalid
+		InvalidTransactionMetadata,
+		/// Failed to encode data
+		CannotEncodeData,
+		/// Liquidity deposit is disabled due to Safe Mode.
+		LiquidityDepositDisabled,
+		/// Account already exists, cannot opet a creation deposit channel
+		AccountAlreadyExists,
 	}
 
 	#[pallet::genesis_config]
@@ -1505,6 +1534,97 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::VaultSwapMinimumBrokerFeeSet {
 				broker_id,
 				minimum_fee_bps,
+			});
+
+			Ok(())
+		}
+
+		/// For when the user wants to deposit assets into the Chain but doesn't have
+		/// a statechain account yet. Generates a new deposit address for the user to deposit their
+		/// assets.
+		#[pallet::call_index(18)]
+		#[pallet::weight(Weight::zero())]
+		pub fn request_liquidity_deposit_address_for_external_account(
+			origin: OriginFor<T>,
+			signature_data: SignatureData,
+			transaction_metadata: TransactionMetadata,
+			asset: Asset,
+			boost_fee: BasisPoints,
+			refund_address: EncodedAddress,
+		) -> DispatchResult {
+			ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
+
+			let requested_by = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			let Ok(signer_account) =
+				signature_data.signer_account::<<T as frame_system::Config>::AccountId>()
+			else {
+				return Err(DispatchError::from(Error::<T>::InvalidUserSignatureData));
+			};
+
+			if frame_system::Pallet::<T>::account_exists(&signer_account) {
+				return Err(DispatchError::from(Error::<T>::AccountAlreadyExists));
+			}
+			let refund_address_internal =
+				T::AddressConverter::decode_and_validate_address_for_asset(
+					refund_address.clone(),
+					asset,
+				)
+				.map_err(|_| Error::<T>::IncompatibleAssetAndAddress)?;
+
+			// Manual metadata validation because the `validate_metadata` function has
+			// mempool-specific logic
+			let current_nonce = frame_system::Pallet::<T>::account_nonce(&signer_account);
+			let tx_nonce: <T as frame_system::Config>::Nonce = transaction_metadata.nonce.into();
+			ensure!(
+				tx_nonce == current_nonce,
+				DispatchError::from(Error::<T>::InvalidTransactionMetadata)
+			);
+			ensure!(
+				BlockNumberFor::<T>::from(transaction_metadata.expiry_block) >
+					frame_system::Pallet::<T>::block_number(),
+				DispatchError::from(Error::<T>::InvalidTransactionMetadata)
+			);
+
+			// Simple runtime call for signature verification. Signing over the refund address
+			// and the role to register so they can't be tampered with.
+			let remark_data = refund_address.clone().encode();
+			let runtime_call: <T as Config>::RuntimeCall =
+				frame_system::Call::<T>::remark { remark: remark_data }.into();
+
+			match is_valid_signature(
+				runtime_call,
+				&T::ChainflipNetwork::chainflip_network(),
+				&transaction_metadata,
+				&signature_data,
+				<T as frame_system::Config>::Version::get().spec_version,
+			) {
+				Ok(is_valid) => ensure!(is_valid, Error::<T>::InvalidUserSignatureData),
+				Err(_) => return Err(Error::<T>::CannotEncodeData.into()),
+			}
+
+			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
+				T::DepositHandler::request_liquidity_deposit_address(
+					requested_by.clone(),
+					signer_account.clone(),
+					asset,
+					boost_fee,
+					refund_address_internal.clone(),
+					Some(AdditionalDepositAction::FundFlip {
+						flip_amount_to_credit: T::MinimumFunding::get_min_funding_amount(),
+					}),
+				)?;
+
+			Self::deposit_event(Event::AccountCreationDepositAddressReady {
+				channel_id,
+				asset,
+				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
+				requested_by,
+				requested_for: signer_account,
+				deposit_chain_expiry_block: expiry_block,
+				boost_fee,
+				channel_opening_fee,
+				refund_address: refund_address_internal,
 			});
 
 			Ok(())
@@ -2192,10 +2312,12 @@ pub mod pallet {
 										if output_amount < INITIAL_FLIP_FUNDING {
 											// In the rare event that this occurs we will track the
 											// deficit and offset it against the next burn
-											FlipDeficitToOffset::<T>::mutate(|total| {
-												total.saturating_accrue(
+											FlipToBurn::<T>::mutate(|total| {
+												total.saturating_reduce(
 													INITIAL_FLIP_FUNDING
-														.saturating_sub(output_amount),
+														.saturating_sub(output_amount)
+														.try_into()
+														.unwrap_or(i128::MAX),
 												);
 											});
 											FlipToBeSentToGateway::<T>::mutate(|total| {
@@ -2204,7 +2326,6 @@ pub mod pallet {
 										} else {
 											T::FundAccount::fund_account(
 												account_id.clone(),
-												None,
 												output_amount
 													.saturating_sub(INITIAL_FLIP_FUNDING)
 													.into(),
@@ -2226,7 +2347,7 @@ pub mod pallet {
 				SwapRequestState::NetworkFee => {
 					if swap.output_asset() == Asset::Flip {
 						FlipToBurn::<T>::mutate(|total| {
-							total.saturating_accrue(output_amount);
+							total.saturating_accrue(output_amount.try_into().unwrap_or(i128::MAX));
 						});
 					} else {
 						log_or_panic!(
@@ -2958,14 +3079,11 @@ pub mod pallet {
 }
 
 impl<T: Config> cf_traits::FlipBurnOrMoveInfo for Pallet<T> {
-	fn take_flip_to_burn() -> AssetAmount {
+	fn take_flip_to_burn() -> i128 {
 		FlipToBurn::<T>::take()
 	}
 	fn take_flip_to_be_sent_to_gateway() -> AssetAmount {
 		FlipToBeSentToGateway::<T>::take()
-	}
-	fn take_flip_deficit() -> AssetAmount {
-		FlipDeficitToOffset::<T>::take()
 	}
 }
 

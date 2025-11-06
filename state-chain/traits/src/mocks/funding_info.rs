@@ -132,12 +132,7 @@ impl<T: Chainflip> FundAccount for MockFundingInfo<T> {
 			.unwrap_or_default()
 	}
 
-	fn fund_account(
-		account_id: Self::AccountId,
-		_funder: Option<cf_chains::eth::Address>,
-		amount: Self::Amount,
-		_source: FundingSource,
-	) {
+	fn fund_account(account_id: Self::AccountId, amount: Self::Amount, _source: FundingSource) {
 		<Self as MockPalletStorage>::mutate_value(
 			BONDS,
 			|storage: &mut Option<BTreeMap<Self::AccountId, Self::Amount>>| {

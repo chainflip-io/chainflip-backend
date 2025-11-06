@@ -2058,7 +2058,7 @@ mod credit_flip_and_transfer {
 
 				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
 				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), 0);
-				assert_eq!(FlipDeficitToOffset::<Test>::get(), 0);
+				assert_eq!(FlipToBurn::<Test>::get(), 0);
 				assert_eq!(FlipToBeSentToGateway::<Test>::get(), 0);
 			})
 			.then_process_blocks_until_block(SWAP_BLOCK)
@@ -2075,8 +2075,13 @@ mod credit_flip_and_transfer {
 				);
 
 				assert_eq!(
-					FlipDeficitToOffset::<Test>::get(),
-					INITIAL_FLIP_FUNDING.saturating_sub(EXPECTED_OUTPUT_AMOUNT)
+					FlipToBurn::<Test>::get(),
+					0i128.saturating_sub(
+						INITIAL_FLIP_FUNDING
+							.saturating_sub(EXPECTED_OUTPUT_AMOUNT)
+							.try_into()
+							.unwrap()
+					)
 				);
 				assert_eq!(FlipToBeSentToGateway::<Test>::get(), INITIAL_FLIP_FUNDING);
 			});

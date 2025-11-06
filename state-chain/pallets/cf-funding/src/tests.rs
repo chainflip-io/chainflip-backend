@@ -117,20 +117,20 @@ fn funded_amount_is_added_and_subtracted() {
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
 			RuntimeEvent::Funding(Event::Funded {
 				account_id: ALICE,
-				source: FundingSource::EthTransaction { tx_hash: TX_HASH },
+				source: FundingSource::EthTransaction { tx_hash: TX_HASH, funder: _ },
 				funds_added: AMOUNT_A1,
 				total_balance: AMOUNT_A1
 			}),
 			RuntimeEvent::Funding(Event::Funded {
 				account_id: ALICE,
-				source: FundingSource::EthTransaction { tx_hash: TX_HASH },
+				source: FundingSource::EthTransaction { tx_hash: TX_HASH, funder: _ },
 				funds_added: AMOUNT_A2,
 				total_balance: TOTAL_A,
 			}),
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: BOB }),
 			RuntimeEvent::Funding(Event::Funded {
 				account_id: BOB,
-				source: FundingSource::EthTransaction { tx_hash: TX_HASH },
+				source: FundingSource::EthTransaction { tx_hash: TX_HASH, funder: _ },
 				funds_added: AMOUNT_B,
 				total_balance: AMOUNT_B
 			})
@@ -197,7 +197,7 @@ fn redeeming_unredeemable_is_err() {
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
 			RuntimeEvent::Funding(Event::Funded {
 				account_id: ALICE,
-				source: FundingSource::EthTransaction { tx_hash: TX_HASH },
+				source: FundingSource::EthTransaction { tx_hash: TX_HASH, funder: _ },
 				funds_added: AMOUNT,
 				total_balance: AMOUNT
 			})
@@ -311,7 +311,7 @@ fn redemption_cannot_occur_without_funding_first() {
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
 			RuntimeEvent::Funding(Event::Funded {
 				account_id: ALICE,
-				source: FundingSource::EthTransaction { tx_hash: TX_HASH },
+				source: FundingSource::EthTransaction { tx_hash: TX_HASH, funder: _ },
 				funds_added: FUNDING_AMOUNT,
 				total_balance: FUNDING_AMOUNT
 			}),
@@ -472,7 +472,7 @@ fn test_redeem_all() {
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
 			RuntimeEvent::Funding(Event::Funded {
 				account_id: ALICE,
-				source: FundingSource::EthTransaction { tx_hash: TX_HASH },
+				source: FundingSource::EthTransaction { tx_hash: TX_HASH, funder: _ },
 				funds_added: AMOUNT,
 				total_balance: AMOUNT
 			})
@@ -1862,7 +1862,7 @@ pub mod ethereum_sc_calls {
 				RuntimeEvent::System(frame_system::Event::NewAccount { account: CALLER_32 }),
 				RuntimeEvent::Funding(Event::Funded {
 					account_id: CALLER_32,
-					source: FundingSource::EthTransaction { tx_hash: TX_HASH },
+					source: FundingSource::EthTransaction { tx_hash: TX_HASH, funder: _ },
 					funds_added: FUND_AMOUNT,
 					total_balance: FUND_AMOUNT,
 				}),
@@ -1893,7 +1893,7 @@ pub mod ethereum_sc_calls {
 				RuntimeEvent::System(frame_system::Event::NewAccount { account: CALLER_32 }),
 				RuntimeEvent::Funding(Event::Funded {
 					account_id: CALLER_32,
-					source: FundingSource::EthTransaction { tx_hash: TX_HASH },
+					source: FundingSource::EthTransaction { tx_hash: TX_HASH, funder: _ },
 					funds_added: FUND_AMOUNT,
 					total_balance: FUND_AMOUNT,
 				}),
@@ -2092,14 +2092,14 @@ pub mod rebalancing {
 				RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
 				RuntimeEvent::Funding(Event::Funded {
 					account_id: ALICE,
-					source: FundingSource::EthTransaction { tx_hash: _ },
+					source: FundingSource::EthTransaction { tx_hash: _, funder: _ },
 					funds_added: AMOUNT,
 					total_balance: AMOUNT
 				}),
 				RuntimeEvent::System(frame_system::Event::NewAccount { account: BOB }),
 				RuntimeEvent::Funding(Event::Funded {
 					account_id: BOB,
-					source: FundingSource::EthTransaction { tx_hash: _ },
+					source: FundingSource::EthTransaction { tx_hash: _, funder: _ },
 					funds_added: MIN_FUNDING,
 					total_balance: MIN_FUNDING
 				}),

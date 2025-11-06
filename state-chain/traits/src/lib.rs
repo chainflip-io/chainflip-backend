@@ -716,15 +716,11 @@ pub trait FundingInfo {
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum AdditionalDepositAction {
-	FundFlip {
-		flip_amount_to_credit: cf_primitives::AssetAmount,
-		role_to_register: Option<AccountRole>,
-	},
+	FundFlip { flip_amount_to_credit: cf_primitives::AssetAmount },
 }
 
-// The max cost for an extrinsic is 1 FLIP, this means that account with less than 1FLIP cannot send
-// extrinsics hence we pre-fund with 1.5 FLIP
-pub const INITIAL_FLIP_FUNDING: u128 = FLIPPERINOS_PER_FLIP + FLIPPERINOS_PER_FLIP / 2;
+// Initial amount of FLIP to fund an account with. 0.01 FLIP
+pub const INITIAL_FLIP_FUNDING: u128 = FLIPPERINOS_PER_FLIP / 100;
 
 /// Allow pallets to open and expire deposit addresses.
 pub trait DepositApi<C: Chain> {
@@ -965,11 +961,9 @@ pub trait CommKeyBroadcaster {
 /// moved to the state-chain-gateway or to be offsetted against the burn
 pub trait FlipBurnOrMoveInfo {
 	/// Takes the available Flip and returns it.
-	fn take_flip_to_burn() -> AssetAmount;
+	fn take_flip_to_burn() -> i128;
 
 	fn take_flip_to_be_sent_to_gateway() -> AssetAmount;
-
-	fn take_flip_deficit() -> AssetAmount;
 }
 
 /// The trait implementation is intentionally no-op by default
@@ -1348,10 +1342,9 @@ pub trait SpawnAccount {
 	) -> Result<Self::AccountId, DispatchError>;
 }
 
-/// Used in cf_traits and in cf_funding.
 #[derive(Encode, Decode, PartialEq, Debug, TypeInfo, Clone)]
 pub enum FundingSource {
-	EthTransaction { tx_hash: [u8; 32] },
+	EthTransaction { tx_hash: [u8; 32], funder: cf_chains::eth::Address },
 	Swap { swap_request_id: SwapRequestId },
 	InitialFunding,
 }
@@ -1363,12 +1356,7 @@ pub trait FundAccount {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn get_bond(_account_id: Self::AccountId) -> Self::Amount;
 
-	fn fund_account(
-		account_id: Self::AccountId,
-		funder: Option<cf_chains::eth::Address>,
-		amount: Self::Amount,
-		source: FundingSource,
-	);
+	fn fund_account(account_id: Self::AccountId, amount: Self::Amount, source: FundingSource);
 }
 
 pub trait PoolOrdersManager {

@@ -2873,7 +2873,6 @@ fn additional_action_correctly_prefund_and_create_account() {
 				refund_address: ForeignChainAddress::Eth(Default::default()),
 				additional_action: Some(AdditionalDepositAction::FundFlip {
 					flip_amount_to_credit: FLIPPERINOS_PER_FLIP * 10,
-					role_to_register: Some(AccountRole::LiquidityProvider),
 				}),
 			},
 			0,

@@ -20,12 +20,8 @@
 use cf_chains::{address::AddressConverter, AccountOrAddress, AnyChain, ForeignChainAddress};
 use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, DcaParameters, ForeignChain};
 use cf_traits::{
-	impl_pallet_safe_mode, AccountRoleRegistry, AdditionalDepositAction, BalanceApi,
-	BoostBalancesApi, Chainflip, ChainflipNetworkInfo, DepositApi, EgressApi, GetMinimumFunding,
-	LpRegistration, PoolApi, ScheduledEgressDetails, SwapRequestHandler,
-};
-use pallet_cf_environment::submit_runtime_call::{
-	is_valid_signature, SignatureData, TransactionMetadata,
+	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, BoostBalancesApi, Chainflip,
+	DepositApi, EgressApi, LpRegistration, PoolApi, ScheduledEgressDetails, SwapRequestHandler,
 };
 
 use sp_std::vec;
@@ -107,13 +103,6 @@ pub mod pallet {
 
 		/// The interface to access the minimum deposit amount for each asset
 		type MinimumDeposit: MinimumDeposit;
-
-		/// For getting the Chainflip network.
-		type ChainflipNetwork: ChainflipNetworkInfo;
-
-		type RuntimeCall: Member + Parameter + From<frame_system::Call<Self>> + From<Call<Self>>;
-
-		type MinimumFunding: GetMinimumFunding;
 	}
 
 	#[pallet::error]
@@ -192,14 +181,13 @@ pub mod pallet {
 			channel_id: ChannelId,
 			asset: Asset,
 			deposit_address: EncodedAddress,
-			requester_id: T::AccountId,
+			requested_by: T::AccountId,
 			// account the funds will be credited to upon deposit
-			account_id: T::AccountId,
+			requested_for: T::AccountId,
 			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
 			refund_address: ForeignChainAddress,
-			role_to_register: Option<AccountRole>,
 		},
 	}
 
@@ -222,7 +210,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// For when the user wants to deposit assets into the Chain.
-		/// Generates a new deposit address for the user to posit their assets.
+		/// Generates a new deposit address for the user to deposit their assets.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::request_liquidity_deposit_address())]
 		pub fn request_liquidity_deposit_address(
@@ -405,99 +393,6 @@ pub mod pallet {
 				dca_params,
 				account_id,
 			);
-
-			Ok(())
-		}
-
-		/// For when the user wants to deposit assets into the Chain but doesn't have
-		/// a statechain account yet. Generates a new deposit address for the user to deposit their
-		/// assets.
-		#[pallet::call_index(8)]
-		#[pallet::weight(Weight::zero())]
-		pub fn request_liquidity_deposit_address_for_external_account(
-			origin: OriginFor<T>,
-			signature_data: SignatureData,
-			transaction_metadata: TransactionMetadata,
-			asset: Asset,
-			boost_fee: BasisPoints,
-			refund_address: EncodedAddress,
-			role_to_register: Option<AccountRole>,
-		) -> DispatchResult {
-			ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
-
-			let requester_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-
-			let Ok(signer_account) =
-				signature_data.signer_account::<<T as frame_system::Config>::AccountId>()
-			else {
-				return Err(DispatchError::from(Error::<T>::InvalidUserSignatureData));
-			};
-
-			let refund_address_internal =
-				T::AddressConverter::decode_and_validate_address_for_asset(
-					refund_address.clone(),
-					asset,
-				)
-				.map_err(|_| Error::<T>::InvalidEncodedAddress)?;
-
-			// Manual metadata validation because the `validate_metadata` function has
-			// mempool-specific logic
-			let current_nonce = frame_system::Pallet::<T>::account_nonce(&signer_account);
-			let tx_nonce: <T as frame_system::Config>::Nonce = transaction_metadata.nonce.into();
-			ensure!(
-				tx_nonce == current_nonce,
-				DispatchError::from(Error::<T>::InvalidTransactionMetadata)
-			);
-			ensure!(
-				BlockNumberFor::<T>::from(transaction_metadata.expiry_block) >
-					frame_system::Pallet::<T>::block_number(),
-				DispatchError::from(Error::<T>::InvalidTransactionMetadata)
-			);
-			// Increment the nonce to prevent replay attacks
-			frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
-
-			// Simple runtime call for signature verification. Signing over the refund address
-			// and the role to register so they can't be tampered with.
-			let remark_data = (refund_address.clone(), role_to_register).encode();
-			let runtime_call: <T as Config>::RuntimeCall =
-				frame_system::Call::<T>::remark { remark: remark_data }.into();
-
-			match is_valid_signature(
-				runtime_call,
-				&T::ChainflipNetwork::chainflip_network(),
-				&transaction_metadata,
-				&signature_data,
-				<T as frame_system::Config>::Version::get().spec_version,
-			) {
-				Ok(is_valid) => ensure!(is_valid, Error::<T>::InvalidUserSignatureData),
-				Err(_) => return Err(Error::<T>::CannotEncodeData.into()),
-			}
-
-			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
-				T::DepositHandler::request_liquidity_deposit_address(
-					requester_id.clone(),
-					signer_account.clone(),
-					asset,
-					boost_fee,
-					refund_address_internal.clone(),
-					Some(AdditionalDepositAction::FundFlip {
-						flip_amount_to_credit: T::MinimumFunding::get_min_funding_amount(),
-						role_to_register,
-					}),
-				)?;
-
-			Self::deposit_event(Event::AccountCreationDepositAddressReady {
-				channel_id,
-				asset,
-				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
-				requester_id,
-				account_id: signer_account,
-				deposit_chain_expiry_block: expiry_block,
-				boost_fee,
-				channel_opening_fee,
-				refund_address: refund_address_internal,
-				role_to_register,
-			});
 
 			Ok(())
 		}

@@ -650,9 +650,8 @@ pub mod pallet {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			Self::fund_account(
 				account_id,
-				Some(funder),
 				amount,
-				FundingSource::EthTransaction { tx_hash },
+				FundingSource::EthTransaction { tx_hash, funder },
 			);
 			Ok(())
 		}
@@ -1003,9 +1002,8 @@ pub mod pallet {
 			match deposit_and_call.deposit {
 				EthereumDeposit::FlipToSCGateway { amount } => Self::fund_account(
 					caller_account_id.clone(),
-					Some(caller),
 					amount.into(),
-					FundingSource::EthTransaction { tx_hash: eth_tx_hash },
+					FundingSource::EthTransaction { tx_hash: eth_tx_hash, funder: caller },
 				),
 
 				// nothing to do
@@ -1218,15 +1216,9 @@ impl<T: Config> FundAccount for Pallet<T> {
 		T::Flip::balance(&account_id)
 	}
 
-	fn fund_account(
-		account_id: Self::AccountId,
-		funder: Option<EthereumAddress>,
-		amount: Self::Amount,
-		source: FundingSource,
-	) {
+	fn fund_account(account_id: Self::AccountId, amount: Self::Amount, source: FundingSource) {
 		let total_balance = Self::add_funds_to_account(&account_id, amount);
-
-		if let Some(funder) = funder {
+		if let FundingSource::EthTransaction { funder, .. } = source {
 			if RestrictedAddresses::<T>::contains_key(funder) {
 				RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
 					map.entry(funder).and_modify(|balance| *balance += amount).or_insert(amount);

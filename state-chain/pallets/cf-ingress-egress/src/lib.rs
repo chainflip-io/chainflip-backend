@@ -47,7 +47,7 @@ use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary,
 	BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex,
 	ForeignChain, GasAmount, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
-	ThresholdSignatureRequestId, FLIPPERINOS_PER_FLIP, SECONDS_PER_BLOCK,
+	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -70,7 +70,7 @@ use frame_system::pallet_prelude::*;
 use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
 use serde::{Deserialize, Serialize};
-use sp_runtime::{helpers_128bit::multiply_by_rational_with_rounding, traits::UniqueSaturatedInto};
+use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{boxed::Box, vec, vec::Vec};
 pub use weights::WeightInfo;
 
@@ -2157,82 +2157,70 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DepositAction<T, I> {
 		match action.clone() {
 			ChannelAction::LiquidityProvision { lp_account, additional_action, refund_address } => {
-				let used_for_flip_funding_swap = if let Some(AdditionalDepositAction::FundFlip {
-					flip_amount_to_credit,
-					role_to_register,
-				}) = additional_action
-				{
-					let is_flip_asset = matches!(asset.into(), Asset::Flip);
-					let funding_amount =
-						if is_flip_asset { amount_after_fees.into() } else { INITIAL_FLIP_FUNDING };
+				let used_for_flip_funding_swap = match additional_action {
+					Some(AdditionalDepositAction::FundFlip { flip_amount_to_credit })
+						if !frame_system::Pallet::<T>::account_exists(&lp_account) =>
+					{
+						let is_flip_asset = matches!(asset.into(), Asset::Flip);
+						let funding_amount = if is_flip_asset {
+							amount_after_fees.into()
+						} else {
+							INITIAL_FLIP_FUNDING
+						};
 
-					T::FundAccount::fund_account(
-						lp_account.clone(),
-						None,
-						funding_amount.into(),
-						FundingSource::InitialFunding,
-					);
-					if let Some(role) = role_to_register {
-						if let Err(err) =
-							T::AccountRoleRegistry::register_account_role(&lp_account, role)
-						{
-							log::warn!("Failed to register account role: {err:?}");
-						}
-					}
-					T::LpRegistrationApi::register_liquidity_refund_address(
-						&lp_account,
-						refund_address,
-					);
+						T::FundAccount::fund_account(
+							lp_account.clone(),
+							funding_amount.into(),
+							FundingSource::InitialFunding,
+						);
+						// Increment the nonce to prevent replay attacks
+						frame_system::Pallet::<T>::inc_account_nonce(&lp_account);
 
-					if is_flip_asset {
-						amount_after_fees.into()
-					} else {
-						let input_amount = T::AssetConverter::calculate_input_for_desired_output(
-							asset.into(),
-							Asset::Flip,
-							flip_amount_to_credit,
-							true,
-						)
-						.unwrap_or(
-							multiply_by_rational_with_rounding(
-								// This first operation gives us the $ amount of
-								// INITIAL_FUNDING_FLIP in FineUSD
-								multiply_by_rational_with_rounding(
-									cf_chains::eth::REFERENCE_FLIP_PRICE_IN_USD,
+						let _ = T::AccountRoleRegistry::register_account_role(
+							&lp_account,
+							AccountRole::LiquidityProvider,
+						);
+						T::LpRegistrationApi::register_liquidity_refund_address(
+							&lp_account,
+							refund_address,
+						);
+
+						if is_flip_asset {
+							amount_after_fees.into()
+						} else {
+							let input_amount =
+								T::AssetConverter::calculate_input_for_desired_output(
+									asset.into(),
+									Asset::Flip,
 									flip_amount_to_credit,
-									FLIPPERINOS_PER_FLIP,
-									sp_runtime::Rounding::Up,
+									true,
 								)
-								.unwrap_or(5_000_000), // 5$
-								// This is the amount of input asset per 1$
-								pallet_cf_swapping::utilities::estimated_20usd_input(asset.into()) /
-									20,
-								// We need to divide by FineUSD since the initial $amount was in
-								// FineUSD
-								10u128.pow(6),
-								sp_runtime::Rounding::Up,
-							)
-							.unwrap_or(0),
-						);
-						let input_amount = core::cmp::min(input_amount, amount_after_fees.into());
-						T::SwapRequestHandler::init_swap_request(
-							asset.into(),
-							input_amount,
-							Asset::Flip,
-							SwapRequestType::Regular {
-								output_action: SwapOutputAction::CreditFlipAndTransferToGateway {
-									account_id: lp_account.clone(),
+								.unwrap_or(
+									pallet_cf_swapping::utilities::estimated_20usd_input(
+										asset.into(),
+									) / 20,
+								);
+							let input_amount =
+								core::cmp::min(input_amount, amount_after_fees.into());
+							T::SwapRequestHandler::init_swap_request(
+								asset.into(),
+								input_amount,
+								Asset::Flip,
+								SwapRequestType::Regular {
+									output_action:
+										SwapOutputAction::CreditFlipAndTransferToGateway {
+											account_id: lp_account.clone(),
+										},
 								},
-							},
-							BoundedVec::new(),
-							None,
-							None,
-							SwapOrigin::OnChainAccount(lp_account.clone()),
-						);
-						input_amount
-					}
-				} else {
-					0u128
+								BoundedVec::new(),
+								None,
+								None,
+								SwapOrigin::OnChainAccount(lp_account.clone()),
+							);
+							input_amount
+						}
+					},
+					_ => 0u128,
 				};
 				T::Balance::credit_account(
 					&lp_account,

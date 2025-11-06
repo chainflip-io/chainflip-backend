@@ -21,7 +21,7 @@ use cf_chains::{
 	assets::any::Asset,
 	AnyChain, Chain, Ethereum,
 };
-use cf_primitives::{chains::assets, AssetAmount, ChainflipNetwork, ChannelId};
+use cf_primitives::{chains::assets, AssetAmount, ChannelId};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
@@ -30,7 +30,7 @@ use cf_traits::{
 		egress_handler::MockEgressHandler, fee_payment::MockFeePayment, pool_api::MockPoolApi,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	AccountRoleRegistry, BalanceApi, BoostBalancesApi, GetMinimumFunding, MinimumDeposit,
+	AccountRoleRegistry, BalanceApi, BoostBalancesApi, MinimumDeposit,
 };
 use frame_support::{
 	assert_ok, derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160,
@@ -82,20 +82,6 @@ pub struct MockMinimumDepositProvider;
 impl MinimumDeposit for MockMinimumDepositProvider {
 	fn get(_asset: Asset) -> AssetAmount {
 		MINIMUM_DEPOSIT
-	}
-}
-
-impl GetMinimumFunding for MockMinimumDepositProvider {
-	fn get_min_funding_amount() -> AssetAmount {
-		MINIMUM_DEPOSIT
-	}
-}
-
-pub struct MockChainflipNetworkProvider;
-
-impl cf_traits::ChainflipNetworkInfo for MockChainflipNetworkProvider {
-	fn chainflip_network() -> ChainflipNetwork {
-		ChainflipNetwork::Development
 	}
 }
 
@@ -189,9 +175,6 @@ impl crate::Config for Test {
 	type BoostBalancesApi = MockIngressEgressBoostApi;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type MinimumDeposit = MockMinimumDepositProvider;
-	type RuntimeCall = RuntimeCall;
-	type ChainflipNetwork = MockChainflipNetworkProvider;
-	type MinimumFunding = MockMinimumDepositProvider;
 }
 
 pub struct MockIngressEgressBoostApi;

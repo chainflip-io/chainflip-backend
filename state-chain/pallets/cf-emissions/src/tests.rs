@@ -267,16 +267,14 @@ fn ensure_governance_origin_checks() {
 }
 
 #[test]
-fn burn_correctly_offset_deficit() {
+fn burn_also_moves_flip_to_gateway() {
 	new_test_ext().execute_with(|| {
-		const DEFICIT: u128 = 10;
 		// Set a lower fee.
 		const LOW_FEE: u128 = FLIP_TO_BURN / BURN_FEE_MULTIPLE / 2;
 		MockEgressHandler::<Ethereum>::set_fee(LOW_FEE);
 		// Flip are sent to the gateway in the same egress as the burn but they are not counted in
 		// the burning
 		MockFlipBurnOrMoveInfo::set_flip_to_be_sent_to_gateway(1_000);
-		MockFlipBurnOrMoveInfo::set_flip_deficit(DEFICIT);
 
 		Pallet::<Test>::burn_flip_network_fee();
 		assert_has_matching_event!(
@@ -284,11 +282,11 @@ fn burn_correctly_offset_deficit() {
 			RuntimeEvent::Emissions(Event::NetworkFeeBurned {
 				amount,
 				..
-			}) if *amount == FLIP_TO_BURN - LOW_FEE - DEFICIT,
+			}) if *amount == FLIP_TO_BURN - LOW_FEE,
 		);
 		assert_eq!(
 			Flip::<Test>::total_issuance(),
-			TOTAL_ISSUANCE - (FLIP_TO_BURN - LOW_FEE - DEFICIT),
+			TOTAL_ISSUANCE - (FLIP_TO_BURN - LOW_FEE),
 			"Expected total issuance to be reduced by net egress amount."
 		);
 		assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_burn(), 0, "Expected flip to be burned.");
@@ -296,11 +294,6 @@ fn burn_correctly_offset_deficit() {
 			MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(),
 			0,
 			"Expected flip to be moved to gateway."
-		);
-		assert_eq!(
-			MockFlipBurnOrMoveInfo::peek_flip_deficit(),
-			0,
-			"Expected deficit of flip to be offsetted against burn."
 		);
 	});
 }
