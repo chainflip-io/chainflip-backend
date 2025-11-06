@@ -27,7 +27,7 @@ use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
 	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolConfiguration,
-	LiquidationCompletedReason, LiquidationType, LtvThresholds, NetworkFeeContributions,
+	LiquidationCompletionReason, LiquidationType, LtvThresholds, NetworkFeeContributions,
 	RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 };
 
@@ -402,7 +402,7 @@ pub mod pallet {
 		},
 		LiquidationCompleted {
 			borrower_id: T::AccountId,
-			reason: LiquidationCompletedReason,
+			reason: LiquidationCompletionReason,
 		},
 		LiquidationFeeTaken {
 			loan_id: LoanId,
@@ -428,6 +428,7 @@ pub mod pallet {
 		},
 	}
 
+	#[derive(PartialEq)]
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Adding boost funds is disabled due to safe mode.

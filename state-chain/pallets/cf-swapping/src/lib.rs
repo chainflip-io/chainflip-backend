@@ -361,8 +361,11 @@ impl<T: Config> From<DispatchError> for BatchExecutionError<T> {
 
 #[derive(Clone, Copy, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
 pub enum SwapRequestCompletionReason {
+	/// Aborted explicitly without waiting for timeout (e.g. used in liquidation swaps).
 	Aborted,
+	/// Auto-aborted due to reacing timeout (usually due to failing to meet min price limit).
 	Expired,
+	/// Fully swapped.
 	Executed,
 }
 

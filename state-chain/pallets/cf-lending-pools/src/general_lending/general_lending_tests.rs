@@ -1289,7 +1289,7 @@ fn basic_liquidation() {
 				Test,
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
 					borrower_id: BORROWER,
-					reason: LiquidationCompletedReason::LtvChange,
+					reason: LiquidationCompletionReason::LtvChange,
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
 					loan_id: LOAN_ID,
@@ -1379,7 +1379,7 @@ fn basic_liquidation() {
 				Test,
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
 					borrower_id: BORROWER,
-					reason: LiquidationCompletedReason::FullySwapped,
+					reason: LiquidationCompletionReason::FullySwapped,
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
 					loan_id: LOAN_ID,
@@ -1572,7 +1572,7 @@ fn liquidation_with_outstanding_principal() {
 				Test,
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
 					borrower_id: BORROWER,
-					reason: LiquidationCompletedReason::FullySwapped
+					reason: LiquidationCompletionReason::FullySwapped
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
 					loan_id: LOAN_ID,
@@ -1683,7 +1683,7 @@ fn liquidation_with_outstanding_principal_and_owed_network_fees() {
 				Test,
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
 					borrower_id: BORROWER,
-					reason: LiquidationCompletedReason::FullySwapped,
+					reason: LiquidationCompletionReason::FullySwapped,
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
 					loan_id: LOAN_ID,
@@ -2487,7 +2487,7 @@ fn adding_collateral_during_liquidation() {
 				Test,
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
 					borrower_id: BORROWER,
-					reason: LiquidationCompletedReason::LtvChange,
+					reason: LiquidationCompletionReason::LtvChange,
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
@@ -2566,7 +2566,7 @@ fn adding_collateral_during_liquidation() {
 				Test,
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
 					borrower_id: BORROWER,
-					reason: LiquidationCompletedReason::LtvChange,
+					reason: LiquidationCompletionReason::LtvChange,
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
@@ -2647,7 +2647,7 @@ mod voluntary_liquidation {
 					Test,
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
 						borrower_id: BORROWER,
-						reason: LiquidationCompletedReason::FullySwapped,
+						reason: LiquidationCompletionReason::FullySwapped,
 					}),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 						loan_id: LOAN_ID,
@@ -2732,7 +2732,7 @@ mod voluntary_liquidation {
 					Test,
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
 						borrower_id: BORROWER,
-						reason: LiquidationCompletedReason::ManualAbort,
+						reason: LiquidationCompletionReason::ManualAbort,
 					}),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 						loan_id: LOAN_ID,
@@ -2844,7 +2844,7 @@ mod voluntary_liquidation {
 					Test,
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
 						borrower_id: BORROWER,
-						reason: LiquidationCompletedReason::LtvChange,
+						reason: LiquidationCompletionReason::LtvChange,
 					}),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 						loan_id: LOAN_ID,
@@ -2930,7 +2930,7 @@ mod voluntary_liquidation {
 					Test,
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
 						borrower_id: BORROWER,
-						reason: LiquidationCompletedReason::LtvChange,
+						reason: LiquidationCompletionReason::LtvChange,
 					}),
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. }),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
@@ -2970,7 +2970,7 @@ mod voluntary_liquidation {
 					Test,
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
 						borrower_id: BORROWER,
-						reason: LiquidationCompletedReason::FullySwapped,
+						reason: LiquidationCompletionReason::FullySwapped,
 					}),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 						loan_id: LOAN_ID,

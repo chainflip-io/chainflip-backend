@@ -4,7 +4,7 @@ use cf_traits::{ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry};
 use core_lending_pool::ScaledAmountHP;
 use frame_support::{
 	fail,
-	sp_runtime::{FixedI64, FixedPointNumber, FixedU64, PerThing},
+	sp_runtime::{traits::Bounded, FixedI64, FixedPointNumber, FixedU64, PerThing},
 };
 
 use super::*;
@@ -60,8 +60,8 @@ struct InterestBreakdown {
 }
 
 #[derive(Clone, Copy, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
-pub enum LiquidationCompletedReason {
-	/// Full liquidation
+pub enum LiquidationCompletionReason {
+	/// Full liquidation (loans are fully repaid and/or all collateral has been swapped)
 	FullySwapped,
 	/// Aborted to change liquidation state (e.g. to "no liquidation")
 	LtvChange,
@@ -199,8 +199,8 @@ impl<T: Config> LoanAccount<T> {
 		enum LiquidationStatusChange {
 			NoChange,
 			HealthyToLiquidation { liquidation_type: LiquidationType },
-			ChangeLiqiudationType { liquidation_type: LiquidationType },
-			AbortLiquidation { reason: LiquidationCompletedReason },
+			ChangeLiquidationType { liquidation_type: LiquidationType },
+			AbortLiquidation { reason: LiquidationCompletionReason },
 		}
 
 		// Every time we transition from a liquidating state we abort all liquidation swaps
@@ -234,16 +234,16 @@ impl<T: Config> LoanAccount<T> {
 				// aborting liqiudation: if it is set, we transition to voluntary liquidation.
 				if ltv < config.ltv_thresholds.soft_liquidation_abort {
 					if self.voluntary_liquidation_requested {
-						LiquidationStatusChange::ChangeLiqiudationType {
+						LiquidationStatusChange::ChangeLiquidationType {
 							liquidation_type: LiquidationType::SoftVoluntary,
 						}
 					} else {
 						LiquidationStatusChange::AbortLiquidation {
-							reason: LiquidationCompletedReason::LtvChange,
+							reason: LiquidationCompletionReason::LtvChange,
 						}
 					}
 				} else if ltv < config.ltv_thresholds.hard_liquidation_abort {
-					LiquidationStatusChange::ChangeLiqiudationType {
+					LiquidationStatusChange::ChangeLiquidationType {
 						liquidation_type: LiquidationType::Soft,
 					}
 				} else {
@@ -257,17 +257,17 @@ impl<T: Config> LoanAccount<T> {
 				// aborting liqiudation: if it is set, we transition to voluntary liquidation.
 
 				if ltv > config.ltv_thresholds.hard_liquidation {
-					LiquidationStatusChange::ChangeLiqiudationType {
+					LiquidationStatusChange::ChangeLiquidationType {
 						liquidation_type: LiquidationType::Hard,
 					}
 				} else if ltv < config.ltv_thresholds.soft_liquidation_abort {
 					if self.voluntary_liquidation_requested {
-						LiquidationStatusChange::ChangeLiqiudationType {
+						LiquidationStatusChange::ChangeLiquidationType {
 							liquidation_type: LiquidationType::SoftVoluntary,
 						}
 					} else {
 						LiquidationStatusChange::AbortLiquidation {
-							reason: LiquidationCompletedReason::LtvChange,
+							reason: LiquidationCompletionReason::LtvChange,
 						}
 					}
 				} else {
@@ -281,34 +281,29 @@ impl<T: Config> LoanAccount<T> {
 				// If according to LTV we should be in soft/hard liquidation, abort the current
 				// voluntary liquidation and start a forced liquidation.
 				if ltv > config.ltv_thresholds.hard_liquidation {
-					LiquidationStatusChange::ChangeLiqiudationType {
+					LiquidationStatusChange::ChangeLiquidationType {
 						liquidation_type: LiquidationType::Hard,
 					}
 				} else if ltv > config.ltv_thresholds.soft_liquidation {
-					LiquidationStatusChange::ChangeLiqiudationType {
+					LiquidationStatusChange::ChangeLiquidationType {
 						liquidation_type: LiquidationType::Soft,
 					}
 				} else if !self.voluntary_liquidation_requested {
 					// If the user switched off the manual liquidation flag (and LTV is "healthy"),
 					// abort liquidation and transition to the "no liquidation" state.
 					LiquidationStatusChange::AbortLiquidation {
-						reason: LiquidationCompletedReason::ManualAbort,
+						reason: LiquidationCompletionReason::ManualAbort,
+					}
+				} else if ltv == Permill::zero() {
+					// LTV of 0 implies that liquidation swaps have resulted in enough of
+					// loan assets to fully repay all outstanding loans.
+					// In this case we abort liquidation, and switch off the voluntary
+					// liquidation flag in case the user creates new loans in the future.
+					LiquidationStatusChange::AbortLiquidation {
+						reason: LiquidationCompletionReason::FullySwapped,
 					}
 				} else {
-					// If owed principal is effectively 0 (after taking into account what's
-					// already been swapped into the loan asset in ongoing liquidation swaps),
-					// abort liquidation, and switch off the voluntary liquidation flag in case
-					// the user creates new loans in the future.
-					let can_repay_in_full =
-						matches!(self.total_owed_usd_value(), Ok(total_owed) if total_owed == 0);
-
-					if can_repay_in_full {
-						LiquidationStatusChange::AbortLiquidation {
-							reason: LiquidationCompletedReason::FullySwapped,
-						}
-					} else {
-						LiquidationStatusChange::NoChange
-					}
+					LiquidationStatusChange::NoChange
 				}
 			},
 		};
@@ -322,9 +317,9 @@ impl<T: Config> LoanAccount<T> {
 			LiquidationStatusChange::AbortLiquidation { reason } => {
 				self.abort_liquidation_swaps(reason);
 			},
-			LiquidationStatusChange::ChangeLiqiudationType { liquidation_type } => {
+			LiquidationStatusChange::ChangeLiquidationType { liquidation_type } => {
 				// Going from one liquidation type to another is always due to LTV change
-				self.abort_liquidation_swaps(LiquidationCompletedReason::LtvChange);
+				self.abort_liquidation_swaps(LiquidationCompletionReason::LtvChange);
 				if let Ok(collateral) = self.prepare_collateral_for_liquidation() {
 					self.init_liquidation_swaps(borrower_id, collateral, liquidation_type);
 				}
@@ -333,9 +328,9 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
-	// Abort all curent liquidation swaps, repays any already swapped principal assets and
-	// returns remaining collateral assets alongside the corresponding loan information.
-	fn abort_liquidation_swaps(&mut self, reason: LiquidationCompletedReason) {
+	/// Aborts all current liquidation swaps, repays any already swapped principal assets and
+	/// returns remaining collateral assets alongside the corresponding loan information.
+	fn abort_liquidation_swaps(&mut self, reason: LiquidationCompletionReason) {
 		let (is_voluntary, liquidation_swaps) = match &mut self.liquidation_status {
 			LiquidationStatus::NoLiquidation => {
 				log_or_panic!("Attempting to abort liquidation swaps in no-liquidation state");
@@ -444,8 +439,11 @@ impl<T: Config> LoanAccount<T> {
 		let principal = self.total_owed_usd_value()?;
 
 		if collateral == 0 {
-			log_or_panic!("Account has no collateral: {:?}", self.borrower_id);
-			return Err(Error::<T>::InsufficientCollateral);
+			if principal == 0 {
+				return Ok(FixedU64::zero());
+			} else {
+				return Ok(FixedU64::max_value());
+			}
 		}
 
 		Ok(FixedU64::from_rational(principal, collateral))
@@ -1453,7 +1451,7 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 
 									Pallet::<T>::deposit_event(Event::LiquidationCompleted {
 										borrower_id: borrower_id.clone(),
-										reason: LiquidationCompletedReason::FullySwapped,
+										reason: LiquidationCompletionReason::FullySwapped,
 									});
 								}
 
