@@ -73,13 +73,16 @@ impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<T
 	/// This method initiates voluntary liquidation. Only expected to be called immediately after
 	/// [with_default_loan].
 	fn trigger_voluntary_liquidation(self) -> Self {
-		self.then_execute_with(|ctx| {
-			const LIQUIDATION_SWAP: SwapRequestId = SwapRequestId(0);
+		const LIQUIDATION_SWAP: SwapRequestId = SwapRequestId(0);
 
+		self.then_execute_with_keep_context(|_| {
 			assert_ok!(LendingPools::initiate_voluntary_liquidation(RuntimeOrigin::signed(
 				BORROWER
 			)));
 
+			// The liquidation is expected to start at the next block
+		})
+		.then_execute_at_next_block(|ctx| {
 			assert_has_event::<Test>(RuntimeEvent::LendingPools(
 				Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
@@ -2699,7 +2702,8 @@ mod voluntary_liquidation {
 				assert_ok!(LendingPools::stop_voluntary_liquidation(RuntimeOrigin::signed(
 					BORROWER
 				)));
-
+			})
+			.then_execute_at_next_block(|_| {
 				assert_eq!(
 					LoanAccounts::<Test>::get(BORROWER).unwrap(),
 					LoanAccount {

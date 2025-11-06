@@ -1387,15 +1387,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanAccountNotFound)?;
 
 			loan_account.voluntary_liquidation_requested = value;
-
-			// Re-evaluate liquidation status taking the new value of the flag into
-			// account. This may or may not update the actual status depending on LTV.
-			// Note that we ignore the error to allow the user to update
-			// the voluntary liquidation flag even if oracle prices aren't available.
-			if let Ok(ltv) = loan_account.derive_ltv() {
-				loan_account.update_liquidation_status(&borrower_id, ltv);
-			}
-
 			Ok(())
 		})
 	}
