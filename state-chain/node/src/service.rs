@@ -410,13 +410,15 @@ pub fn new_full<
 	})?;
 
 	if role.is_authority() {
-		let proposer_factory = sc_basic_authorship::ProposerFactory::new(
+		let mut proposer_factory = sc_basic_authorship::ProposerFactory::new(
 			task_manager.spawn_handle(),
 			client.clone(),
 			transaction_pool.clone(),
 			prometheus_registry.as_ref(),
 			telemetry.as_ref().map(|x| x.handle()),
 		);
+		proposer_factory
+			.set_default_block_size_limit(state_chain_runtime::MAX_BLOCK_LENGTH as usize);
 
 		let slot_duration = sc_consensus_aura::slot_duration(&*client)?;
 
