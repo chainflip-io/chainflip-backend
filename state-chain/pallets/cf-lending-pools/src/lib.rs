@@ -169,6 +169,19 @@ pub enum LoanUsage {
 	Boost(PrewitnessedDepositId),
 }
 
+/// Indicates how the action of adding collateral was triggered.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum CollateralAddedActionType {
+	/// Triggered manually by the user. Collateral is taken from the user's free balance.
+	Manual,
+	/// Triggered by the protocol due to high LTV. Collateral is taken from the user's free
+	/// balance.
+	SystemTopup,
+	/// Triggered by the protocol as a result of liquidation obtaining more of the loan asset
+	/// than was required.
+	SystemLiquidationExcessAmount,
+}
+
 pub struct LendingConfigDefault {}
 
 const DEFAULT_ORIGINATION_FEE: Permill = Permill::from_parts(100); // 1 bps
@@ -361,6 +374,7 @@ pub mod pallet {
 		CollateralAdded {
 			borrower_id: T::AccountId,
 			collateral: BTreeMap<Asset, AssetAmount>,
+			action_type: CollateralAddedActionType,
 		},
 		CollateralRemoved {
 			borrower_id: T::AccountId,
