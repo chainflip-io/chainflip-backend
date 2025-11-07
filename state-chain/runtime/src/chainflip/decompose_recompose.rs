@@ -23,6 +23,12 @@ use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_std::{mem, prelude::*};
 
 impl WitnessDataExtraction for RuntimeCall {
+	fn is_dot_witnessing(&self) -> bool {
+		if matches!(self, RuntimeCall::PolkadotChainTracking(_)) {
+			return true;
+		}
+		false
+	}
 	fn extract(&mut self) -> Option<Vec<u8>> {
 		match self {
 			RuntimeCall::EthereumChainTracking(pallet_cf_chain_tracking::Call::<

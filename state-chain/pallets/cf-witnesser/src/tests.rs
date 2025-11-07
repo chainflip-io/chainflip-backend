@@ -513,7 +513,7 @@ fn setup_witness_authorities(
 	MockEpochInfo::next_epoch(authorities.clone());
 	let mut call: Box<RuntimeCall> =
 		Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
-	let (_, call_hash) = Witnesser::split_calldata(&mut call);
+	let (_, call_hash, _) = Witnesser::split_calldata(&mut call);
 	(call, call_hash)
 }
 
