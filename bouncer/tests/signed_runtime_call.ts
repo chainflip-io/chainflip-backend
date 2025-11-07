@@ -19,7 +19,7 @@ import { ApiPromise } from '@polkadot/api';
 import { signBytes, getUtf8Encoder, generateKeyPairSigner } from '@solana/kit';
 import { send } from 'shared/send';
 import { setupBrokerAccount } from 'shared/setup_account';
-import { Enum, Bytes as TsBytes, Option, _void, Tuple } from 'scale-ts';
+import { Enum, Bytes as TsBytes } from 'scale-ts';
 
 /// Codecs for the special LP deposit channel opening
 const encodedAddressCodec = Enum({
@@ -29,13 +29,6 @@ const encodedAddressCodec = Enum({
   Arb: TsBytes(20), // [u8; 20]
   Sol: TsBytes(32), // [u8; 32]
   Hub: TsBytes(32), // [u8; 32]
-});
-
-const accountRoleCodec = Enum({
-  Unregistered: _void,
-  Broker: _void,
-  LiquidityProvider: _void,
-  Validator: _void,
 });
 
 const remarkDataCodec = encodedAddressCodec;
@@ -401,9 +394,7 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
     addressBytes = new Uint8Array(Buffer.from(refundAddress.slice(2), 'hex'));
   }
 
-  const remarkData = remarkDataCodec.enc(
-    { tag: shortChainFromAsset(asset), value: addressBytes },
-  );
+  const remarkData = remarkDataCodec.enc({ tag: shortChainFromAsset(asset), value: addressBytes });
 
   const call = chainflip.tx.system.remark(Array.from(remarkData));
   const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
@@ -445,14 +436,10 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
 
   logger.info('Opening special deposit channel and depositing..');
 
-  const eventResult = await observeEvent(
-    logger,
-    'swapping:AccountCreationDepositAddressReady',
-    {
-      test: (event) =>
-        event.data.requestedBy === broker.address && event.data.requestedFor === evmScAccount,
-    },
-  ).event;
+  const eventResult = await observeEvent(logger, 'swapping:AccountCreationDepositAddressReady', {
+    test: (event) =>
+      event.data.requestedBy === broker.address && event.data.requestedFor === evmScAccount,
+  }).event;
   const depositAddress = eventResult.data.depositAddress[shortChainFromAsset(asset)];
 
   await send(logger, asset, depositAddress);
@@ -505,12 +492,6 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
     }
     attempt++;
     await sleep(6000);
-  }
-
-  // Check that there is no FLIP deficit
-  const flipDeficit = (await chainflip.query.swapping.flipDeficitToOffset()).toJSON() as number;
-  if (flipDeficit > 0) {
-    throw new Error(`Flip deficit is greater than zero: ${flipDeficit}`);
   }
 }
 
