@@ -688,6 +688,7 @@ impl pallet_session::historical::Config for Runtime {
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(50);
+const BLOCK_LENGTH_RATIO: Perbill = Perbill::from_percent(40);
 
 parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
@@ -699,7 +700,7 @@ parameter_types! {
 			NORMAL_DISPATCH_RATIO,
 		);
 	pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength
-		::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
+		::max_with_normal_ratio(1024 * 1024 * 625 / 100, BLOCK_LENGTH_RATIO);
 }
 
 // Configure FRAME pallets to include in runtime.
