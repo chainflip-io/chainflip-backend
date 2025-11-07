@@ -98,6 +98,29 @@ impl MinimizedScaleValue {
 			Err(())
 		}
 	}
+
+	pub fn stringify_integers(self) -> Result<Self, &'static str> {
+		match self {
+			MinimizedScaleValue::NamedStruct(fs) => Ok(MinimizedScaleValue::NamedStruct(
+				fs.into_iter()
+					.map(|(name, v)| -> Result<_, &'static str> {
+						Ok((name, Self::stringify_integers(v)?))
+					})
+					.collect::<Result<Vec<_>, _>>()?,
+			)),
+			MinimizedScaleValue::Sequence(v) => Ok(MinimizedScaleValue::Sequence(
+				v.into_iter().map(Self::stringify_integers).collect::<Result<Vec<Self>, _>>()?,
+			)),
+			MinimizedScaleValue::Primitive(MinimizedPrimitive::U128(n)) =>
+				Ok(MinimizedScaleValue::Primitive(MinimizedPrimitive::String(n.to_string()))),
+			// this case should not be possible since u256 cant be constructed in native rust. This
+			// could be possible if a type were to communicate to TypeInfo that a specific type is
+			// actually a U256 and implements conversion to it. We dont support this.
+			MinimizedScaleValue::Primitive(MinimizedPrimitive::U256(_)) =>
+				Err("scale values mapped to U256 primitives not supported"),
+			MinimizedScaleValue::Primitive(p) => Ok(MinimizedScaleValue::Primitive(p)),
+		}
+	}
 }
 
 impl From<MinimizedScaleValue> for Value {
