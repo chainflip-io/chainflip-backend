@@ -26,7 +26,9 @@ use sp_std::vec;
 #[benchmarks]
 mod benchmarks {
 	use super::*;
+	use crate::general_lending::{GeneralLoan, LiquidationStatus};
 	use cf_chains::{btc::ScriptPubkey, evm::U256, ForeignChainAddress};
+	use frame_support::sp_runtime::FixedU64;
 
 	const TIER_5_BPS: BoostPoolTier = 5;
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
@@ -46,14 +48,22 @@ mod benchmarks {
 		));
 	}
 
+	pub fn register_refund_addresses<T: Config>(account_id: &T::AccountId) {
+		for encoded_address in [
+			ForeignChainAddress::Eth(Default::default()),
+			ForeignChainAddress::Dot(Default::default()),
+			ForeignChainAddress::Btc(ScriptPubkey::Taproot([4u8; 32])),
+			ForeignChainAddress::Sol(Default::default()),
+		] {
+			T::LpRegistrationApi::register_liquidity_refund_address(&account_id, encoded_address);
+		}
+	}
+
 	fn setup_lp_account<T: Config>(asset: Asset, seed: u32) -> T::AccountId {
 		use frame_support::traits::OnNewAccount;
 		let caller: T::AccountId = account("lp", 0, seed);
 
-		T::LpRegistrationApi::register_liquidity_refund_address(
-			&caller,
-			ForeignChainAddress::Btc(ScriptPubkey::Taproot([4u8; 32])),
-		);
+		register_refund_addresses::<T>(&caller);
 
 		if frame_system::Pallet::<T>::providers(&caller) == 0u32 {
 			frame_system::Pallet::<T>::inc_providers(&caller);
@@ -70,6 +80,52 @@ mod benchmarks {
 
 	fn gov_origin<T: Config>() -> <T as frame_system::Config>::RuntimeOrigin {
 		T::EnsureGovernance::try_successful_origin().unwrap()
+	}
+
+	fn create_loan<T: Config>(borrower: &T::AccountId, amount: AssetAmount) -> GeneralLoan<T>
+	where
+		T: Config,
+	{
+		let collateral = BTreeMap::from([(COLLATERAL_ASSET, amount * 2)]);
+		assert_ok!(Pallet::<T>::request_loan(
+			RawOrigin::Signed(borrower.clone()).into(),
+			LOAN_ASSET,
+			amount,
+			Some(COLLATERAL_ASSET),
+			collateral
+		));
+		let loan_account = LoanAccounts::<T>::get(borrower).unwrap();
+		loan_account.loans.get(&LoanId::from(0)).unwrap().clone()
+	}
+
+	fn create_pools_and_loans_for_all_assets<T: Config>(
+		borrower: &T::AccountId,
+		lender: &T::AccountId,
+	) {
+		const AMOUNT: AssetAmount = 100_000_000;
+
+		// Setup a loan account with some collateral and loans
+		for asset in [Asset::Eth, Asset::Btc, Asset::Sol, Asset::Usdc, Asset::Usdt] {
+			// Setup the pool with a lender
+			assert_ok!(Pallet::<T>::create_lending_pool(gov_origin::<T>(), asset));
+			set_asset_price_in_usd::<T>(asset, 100_000_000_000);
+			T::Balance::credit_account(&lender, asset, AMOUNT * 2);
+			assert_ok!(Pallet::<T>::add_lender_funds(
+				RawOrigin::Signed(lender.clone()).into(),
+				asset,
+				AMOUNT * 2,
+			));
+
+			// Create the loan with collateral (same assets for simplicity)
+			T::Balance::credit_account(borrower, asset, AMOUNT);
+			assert_ok!(Pallet::<T>::request_loan(
+				RawOrigin::Signed(borrower.clone()).into(),
+				asset,
+				AMOUNT / 2,
+				Some(asset),
+				BTreeMap::from([(asset, AMOUNT)]),
+			));
+		}
 	}
 
 	#[benchmark]
@@ -281,11 +337,11 @@ mod benchmarks {
 	fn add_collateral() {
 		const AMOUNT: AssetAmount = 100_000_000;
 		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000);
-		let lender = setup_lp_account::<T>(LOAN_ASSET, 0);
+		let borrower = setup_lp_account::<T>(LOAN_ASSET, 0);
 		let collateral = BTreeMap::from([(COLLATERAL_ASSET, AMOUNT)]);
 
 		#[extrinsic_call]
-		add_collateral(RawOrigin::Signed(lender), Some(COLLATERAL_ASSET), collateral.clone());
+		add_collateral(RawOrigin::Signed(borrower), Some(COLLATERAL_ASSET), collateral.clone());
 
 		let loan_account = LoanAccounts::<T>::iter().next().unwrap().1;
 		assert_eq!(loan_account.get_total_collateral(), collateral);
@@ -431,6 +487,129 @@ mod benchmarks {
 		);
 	}
 
+	#[benchmark]
+	fn usd_value_of() {
+		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000);
+
+		#[block]
+		{
+			assert_eq!(
+				general_lending::usd_value_of::<T>(COLLATERAL_ASSET, 1_000_000).unwrap(),
+				200_000_000_000_000_000_u128,
+			);
+		}
+	}
+
+	#[benchmark]
+	fn initiate_network_fee_swap() {
+		#[block]
+		{
+			general_lending::initiate_network_fee_swap::<T>(
+				COLLATERAL_ASSET,
+				1_000_000, // fee amount
+			);
+		}
+	}
+
+	#[benchmark]
+	fn derive_ltv() {
+		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
+		let lender = setup_lp_account::<T>(LOAN_ASSET, 1);
+
+		create_pools_and_loans_for_all_assets::<T>(&borrower, &lender);
+		let loan_account = LoanAccounts::<T>::get(borrower).unwrap();
+
+		#[block]
+		{
+			assert_ok!(loan_account.derive_ltv());
+		}
+	}
+
+	#[benchmark]
+	fn loan_charge_interest() {
+		const AT_BLOCK: u32 = 100;
+		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
+		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
+		let mut loan = create_loan::<T>(&borrower, 100_000_000);
+
+		#[block]
+		{
+			assert_ok!(loan.charge_interest(
+				FixedU64::from_rational(75, 100),
+				AT_BLOCK.into(),
+				AT_BLOCK - 1,
+				&LendingConfig::<T>::get(),
+			));
+		}
+		assert_eq!(loan.last_interest_payment_at, AT_BLOCK.into());
+	}
+
+	#[benchmark]
+	fn loan_calculate_top_up_amount() {
+		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
+		let lender = setup_lp_account::<T>(LOAN_ASSET, 1);
+
+		create_pools_and_loans_for_all_assets::<T>(&borrower, &lender);
+		let loan_account = LoanAccounts::<T>::get(borrower.clone()).unwrap();
+
+		#[block]
+		{
+			assert_ok!(loan_account
+				.calculate_top_up_amount(&borrower, LENDING_DEFAULT_CONFIG.ltv_thresholds.target));
+		}
+	}
+
+	#[benchmark]
+	fn start_liquidation_swaps() {
+		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
+		let lender = setup_lp_account::<T>(LOAN_ASSET, 1);
+		create_pools_and_loans_for_all_assets::<T>(&borrower, &lender);
+		let mut loan_account = LoanAccounts::<T>::get(&borrower).unwrap();
+
+		#[block]
+		{
+			let collateral = loan_account.prepare_collateral_for_liquidation().unwrap();
+			loan_account.init_liquidation_swaps(&borrower, collateral, LiquidationType::Hard);
+		}
+
+		assert!(matches!(loan_account.liquidation_status, LiquidationStatus::Liquidating { .. }));
+	}
+
+	#[benchmark]
+	fn abort_liquidation_swaps() {
+		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
+		let lender = setup_lp_account::<T>(LOAN_ASSET, 1);
+		create_pools_and_loans_for_all_assets::<T>(&borrower, &lender);
+		let mut loan_account = LoanAccounts::<T>::get(&borrower).unwrap();
+
+		// Start the liquidation swaps
+		let collateral = loan_account.prepare_collateral_for_liquidation().unwrap();
+		loan_account.init_liquidation_swaps(&borrower, collateral, LiquidationType::Hard);
+		assert!(matches!(loan_account.liquidation_status, LiquidationStatus::Liquidating { .. }));
+
+		#[block]
+		{
+			loan_account.abort_liquidation_swaps(LiquidationCompletionReason::FullySwapped);
+		}
+		assert!(matches!(loan_account.liquidation_status, LiquidationStatus::NoLiquidation));
+	}
+
+	#[benchmark]
+	fn change_voluntary_liquidation() {
+		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
+		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
+		create_loan::<T>(&borrower, 100_000_000);
+		assert_eq!(
+			LoanAccounts::<T>::get(&borrower).unwrap().voluntary_liquidation_requested,
+			false
+		);
+
+		#[extrinsic_call]
+		initiate_voluntary_liquidation(RawOrigin::Signed(borrower.clone()));
+
+		assert_eq!(LoanAccounts::<T>::get(borrower).unwrap().voluntary_liquidation_requested, true);
+	}
+
 	#[cfg(test)]
 	use crate::mocks::{new_test_ext, Test};
 
@@ -465,6 +644,30 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_update_primary_collateral_asset::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_usd_value_of::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_initiate_network_fee_swap::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_derive_ltv::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_loan_charge_interest::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_loan_calculate_top_up_amount::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_start_liquidation_swaps::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_abort_liquidation_swaps::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_change_voluntary_liquidation::<Test>(true);
 		});
 	}
 }
