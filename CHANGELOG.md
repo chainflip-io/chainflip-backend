@@ -2,11 +2,11 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [1.12.3] - 2025-11-07
-
-### Fixes
+## [1.12.4] - 2025-11-07
 
 - Increase max extrinsic length.
+
+## [1.12.3] - 2025-11-07
 
 ## [1.12.2] - 2025-11-03
 
