@@ -38,7 +38,7 @@ pub mod old {
 		pub action: ChannelAction<T::AccountId, TargetChainAccount<T, I>>,
 		pub boost_fee: BasisPoints,
 		pub boost_status: BoostStatus<TargetChainAmount<T, I>, BlockNumberFor<T>>,
-		pub is_tainted: bool,
+		pub is_marked_for_rejection: bool,
 	}
 
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
@@ -125,7 +125,7 @@ impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for AdditionalChannelAc
 					},
 					boost_fee: old.boost_fee,
 					boost_status: old.boost_status,
-					is_marked_for_rejection: false,
+					is_marked_for_rejection: old.is_marked_for_rejection,
 				})
 			},
 		);

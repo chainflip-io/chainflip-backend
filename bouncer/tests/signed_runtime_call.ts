@@ -38,7 +38,7 @@ const accountRoleCodec = Enum({
   Validator: _void,
 });
 
-const remarkDataCodec = Tuple(encodedAddressCodec, Option(accountRoleCodec));
+const remarkDataCodec = encodedAddressCodec;
 
 /// EIP-712 payloads schema
 const eipPayloadSchema = z.object({
@@ -401,10 +401,9 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
     addressBytes = new Uint8Array(Buffer.from(refundAddress.slice(2), 'hex'));
   }
 
-  const remarkData = remarkDataCodec.enc([
+  const remarkData = remarkDataCodec.enc(
     { tag: shortChainFromAsset(asset), value: addressBytes },
-    { tag: 'LiquidityProvider', value: undefined },
-  ]);
+  );
 
   const call = chainflip.tx.system.remark(Array.from(remarkData));
   const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
@@ -425,7 +424,7 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
   const evmSignatureEip712 = await evmWallet.signTypedData(domain, types, message);
 
   const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-  await chainflip.tx.liquidityProvider
+  await chainflip.tx.swapping
     .requestLiquidityDepositAddressForExternalAccount(
       {
         Ethereum: {
@@ -441,7 +440,6 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
       asset,
       0,
       { [shortChainFromAsset(asset).toLowerCase()]: refundAddress },
-      'LiquidityProvider',
     )
     .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
 
@@ -449,10 +447,10 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
 
   const eventResult = await observeEvent(
     logger,
-    'liquidityProvider:AccountCreationDepositAddressReady',
+    'swapping:AccountCreationDepositAddressReady',
     {
       test: (event) =>
-        event.data.requesterId === broker.address && event.data.accountId === evmScAccount,
+        event.data.requestedBy === broker.address && event.data.requestedFor === evmScAccount,
     },
   ).event;
   const depositAddress = eventResult.data.depositAddress[shortChainFromAsset(asset)];
