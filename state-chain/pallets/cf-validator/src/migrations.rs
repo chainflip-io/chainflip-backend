@@ -17,4 +17,4 @@
 use crate::Pallet;
 use cf_runtime_utilities::PlaceholderMigration;
 
-pub type PalletMigration<T> = (PlaceholderMigration<7, Pallet<T>>,);
+pub type PalletMigration<T> = (PlaceholderMigration<8, Pallet<T>>,);
