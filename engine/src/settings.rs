@@ -132,6 +132,18 @@ impl Evm {
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct Dot {
+	#[serde(flatten)]
+	pub nodes: NodeContainer<WsHttpEndpoints>,
+}
+
+impl Dot {
+	pub fn validate_settings(&self) -> Result<(), ConfigError> {
+		self.nodes.validate()
+	}
+}
+
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct HttpBasicAuthEndpoint {
 	pub http_endpoint: SecretUrl,
 	pub basic_auth_user: String,
@@ -195,6 +207,7 @@ pub struct Settings {
 	pub state_chain: StateChain,
 	// External Chain settings
 	pub eth: Evm,
+	pub dot: Option<Dot>,
 	pub btc: Btc,
 	pub arb: Evm,
 	pub sol: Sol,
@@ -228,6 +241,19 @@ pub struct EthOptions {
 
 	#[clap(long = "eth.private_key_file")]
 	pub eth_private_key_file: Option<PathBuf>,
+}
+
+#[derive(Parser, Debug, Clone, Default)]
+pub struct DotOptions {
+	#[clap(long = "dot.rpc.ws_endpoint")]
+	pub dot_ws_endpoint: Option<String>,
+	#[clap(long = "dot.rpc.http_endpoint")]
+	pub dot_http_endpoint: Option<String>,
+
+	#[clap(long = "dot.backup_rpc.ws_endpoint")]
+	pub dot_backup_ws_endpoint: Option<String>,
+	#[clap(long = "dot.backup_rpc.http_endpoint")]
+	pub dot_backup_http_endpoint: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -313,6 +339,9 @@ pub struct CommandLineOptions {
 	pub eth_opts: EthOptions,
 
 	#[clap(flatten)]
+	pub dot_opts: Option<DotOptions>,
+
+	#[clap(flatten)]
 	pub btc_opts: BtcOptions,
 
 	#[clap(flatten)]
@@ -358,6 +387,7 @@ impl Default for CommandLineOptions {
 			p2p_opts: P2POptions::default(),
 			state_chain_opts: StateChainOptions::default(),
 			eth_opts: EthOptions::default(),
+			dot_opts: None,
 			btc_opts: BtcOptions::default(),
 			arb_opts: ArbOptions::default(),
 			sol_opts: SolOptions::default(),
@@ -1050,6 +1080,13 @@ pub mod tests {
 				eth_backup_http_endpoint: Some("http://second_endpoint:4321".to_owned()),
 				eth_private_key_file: Some(PathBuf::from_str("keys/eth_private_key_2").unwrap()),
 			},
+			dot_opts: Some(DotOptions {
+				dot_ws_endpoint: Some("ws://endpoint:4321".to_owned()),
+				dot_http_endpoint: Some("http://endpoint:4321".to_owned()),
+
+				dot_backup_ws_endpoint: Some("ws://second.endpoint:4321".to_owned()),
+				dot_backup_http_endpoint: Some("http://second.endpoint:4321".to_owned()),
+			}),
 			btc_opts: BtcOptions {
 				btc_http_endpoint: Some("http://btc-endpoint:4321".to_owned()),
 				btc_basic_auth_user: Some("my_username".to_owned()),
