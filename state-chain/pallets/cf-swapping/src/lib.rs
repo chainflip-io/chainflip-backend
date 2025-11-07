@@ -1574,10 +1574,9 @@ pub mod pallet {
 
 			// Manual metadata validation because the `validate_metadata` function has
 			// mempool-specific logic
-			let current_nonce = frame_system::Pallet::<T>::account_nonce(&signer_account);
 			let tx_nonce: <T as frame_system::Config>::Nonce = transaction_metadata.nonce.into();
 			ensure!(
-				tx_nonce == current_nonce,
+				tx_nonce == 0u32.into(),
 				DispatchError::from(Error::<T>::InvalidTransactionMetadata)
 			);
 			ensure!(

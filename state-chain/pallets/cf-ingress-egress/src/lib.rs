@@ -2163,7 +2163,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					{
 						let is_flip_asset = matches!(asset.into(), Asset::Flip);
 						let funding_amount = if is_flip_asset {
-							amount_after_fees.into()
+							core::cmp::min(flip_amount_to_credit, amount_after_fees.into())
 						} else {
 							INITIAL_FLIP_FUNDING
 						};
@@ -2186,14 +2186,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						);
 
 						if is_flip_asset {
-							amount_after_fees.into()
+							funding_amount
 						} else {
 							let input_amount =
 								T::AssetConverter::calculate_input_for_desired_output(
 									asset.into(),
 									Asset::Flip,
 									flip_amount_to_credit,
-									true,
+									false,
 								)
 								.unwrap_or(
 									pallet_cf_swapping::utilities::estimated_20usd_input(

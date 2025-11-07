@@ -45,7 +45,7 @@ pub const CHAIN_ID_SEPOLIA: u64 = 11155111;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
 pub const REFERENCE_ETH_PRICE_IN_USD: AssetAmount = 4_200_000_000u128; //4200 usd
-pub const REFERENCE_FLIP_PRICE_IN_USD: AssetAmount = 300_000u128; //0.35 usd
+pub const REFERENCE_FLIP_PRICE_IN_USD: AssetAmount = 350_000u128; //0.35 usd
 pub const ONE_ETH: AssetAmount = 1_000_000_000_000_000_000u128;
 
 impl Chain for Ethereum {

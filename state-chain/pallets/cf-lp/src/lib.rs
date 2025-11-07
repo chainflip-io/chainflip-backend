@@ -138,12 +138,6 @@ pub mod pallet {
 		InternalSwapBelowMinimumDepositAmount,
 		/// Internal swaps disabled due to safe mode.
 		InternalSwapsDisabled,
-		/// The provided Signature Data is invalid
-		InvalidUserSignatureData,
-		/// The provided Transaction Metadata is invalid
-		InvalidTransactionMetadata,
-		// Failed to encode data
-		CannotEncodeData,
 	}
 
 	#[pallet::event]
@@ -176,18 +170,6 @@ pub mod pallet {
 			to: T::AccountId,
 			asset: Asset,
 			amount: AssetAmount,
-		},
-		AccountCreationDepositAddressReady {
-			channel_id: ChannelId,
-			asset: Asset,
-			deposit_address: EncodedAddress,
-			requested_by: T::AccountId,
-			// account the funds will be credited to upon deposit
-			requested_for: T::AccountId,
-			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
-			boost_fee: BasisPoints,
-			channel_opening_fee: T::Amount,
-			refund_address: ForeignChainAddress,
 		},
 	}
 
