@@ -191,10 +191,6 @@ pub mod pallet {
 		FailedToBuildSolanaApiCall,
 		/// Signer cannot be decoded
 		FailedToDecodeSigner,
-		/// Failed to execute non-native signed call
-		FailedToExecuteNonNativeSignedCall,
-		/// Failed to execute batch
-		FailedToExecuteBatch,
 		/// Nested batches not allowed
 		InvalidNestedBatch,
 		/// Signer is unable to pay fee.
@@ -716,21 +712,21 @@ pub mod pallet {
 		}
 
 		/// Executes an atomic batch of runtime calls. It will execute as an all-or-nothing.
+		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(11)]
 		#[pallet::weight({
 			let (dispatch_weight, dispatch_class) = weight_and_dispatch_class::<T>(calls);
 			let dispatch_weight = dispatch_weight.saturating_add(T::WeightInfo::batch(calls.len() as u32));
 			(dispatch_weight, dispatch_class)
 		})]
-		pub fn batch(origin: OriginFor<T>, calls: BatchedCalls<T>) -> DispatchResult {
+		pub fn batch(origin: OriginFor<T>, calls: BatchedCalls<T>) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
-			let _ = batch_all::<T>(account_id.clone(), calls.clone(), T::WeightInfo::batch)
-				.map_err(|_| Error::<T>::FailedToExecuteNonNativeSignedCall)?;
+			batch_all::<T>(account_id.clone(), calls.clone(), T::WeightInfo::batch)?;
 
 			Self::deposit_event(Event::<T>::BatchCompleted);
 
-			Ok(())
+			Ok(().into())
 		}
 	}
 
