@@ -38,6 +38,7 @@ use crate::LENDING_DEFAULT_CONFIG as CONFIG;
 trait LendingTestRunnerExt {
 	fn with_funded_pool(self, init_pool_amount: AssetAmount) -> Self;
 	fn with_default_loan(self) -> Self;
+	fn with_voluntary_liquidation(self) -> Self;
 }
 
 impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<Test, Ctx> {
@@ -65,6 +66,46 @@ impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<T
 					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
 				),
 				Ok(LOAN_ID)
+			);
+
+			ctx
+		})
+	}
+
+	/// This method initiates voluntary liquidation. Only expected to be called immediately after
+	/// [with_default_loan].
+	fn with_voluntary_liquidation(self) -> Self {
+		const LIQUIDATION_SWAP: SwapRequestId = SwapRequestId(0);
+
+		self.then_execute_with_keep_context(|_| {
+			assert_ok!(LendingPools::initiate_voluntary_liquidation(RuntimeOrigin::signed(
+				BORROWER
+			)));
+
+			// The liquidation is expected to start at the next block
+		})
+		.then_execute_at_next_block(|ctx| {
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(
+				Event::<Test>::LiquidationInitiated {
+					borrower_id: BORROWER,
+					liquidation_type: LiquidationType::SoftVoluntary,
+					swaps: BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP])]),
+				},
+			));
+
+			assert_eq!(
+				LoanAccounts::<Test>::get(BORROWER).unwrap().liquidation_status,
+				LiquidationStatus::Liquidating {
+					liquidation_swaps: BTreeMap::from([(
+						LIQUIDATION_SWAP,
+						LiquidationSwap {
+							loan_id: LOAN_ID,
+							from_asset: COLLATERAL_ASSET,
+							to_asset: LOAN_ASSET
+						}
+					)]),
+					liquidation_type: LiquidationType::SoftVoluntary
+				}
 			);
 
 			ctx
@@ -332,6 +373,7 @@ fn basic_general_lending() {
 				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
 					borrower_id: BORROWER,
 					collateral: ref collateral_in_event,
+					action_type: CollateralAddedActionType::Manual,
 				}) if collateral_in_event == &collateral,
 				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
 					loan_id: LOAN_ID,
@@ -372,6 +414,7 @@ fn basic_general_lending() {
 					primary_collateral_asset: COLLATERAL_ASSET,
 					collateral: BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
 					liquidation_status: LiquidationStatus::NoLiquidation,
+					voluntary_liquidation_requested: false,
 					loans: BTreeMap::from([(
 						LOAN_ID,
 						GeneralLoan {
@@ -541,6 +584,7 @@ fn basic_general_lending() {
 					borrower_id: BORROWER,
 					primary_collateral_asset: COLLATERAL_ASSET,
 					liquidation_status: LiquidationStatus::NoLiquidation,
+					voluntary_liquidation_requested: false,
 					// Note that we don't automatically release the collateral:
 					collateral: BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
 					loans: Default::default(),
@@ -688,6 +732,12 @@ fn collateral_auto_topup() {
 
 			// After we give the user more funds, auto-top up should bring CR back to target
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, EXTRA_FUNDS);
+
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+				borrower_id: BORROWER,
+				collateral: BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_TOPUP)]),
+				action_type: CollateralAddedActionType::SystemTopup,
+			}));
 		})
 		.then_execute_at_next_block(|_| {
 			let collateral_topup_2 =
@@ -812,6 +862,7 @@ fn basic_loan_aggregation() {
 						}
 					)]),
 					liquidation_status: LiquidationStatus::NoLiquidation,
+					voluntary_liquidation_requested: false,
 				}
 			);
 
@@ -859,8 +910,9 @@ fn basic_loan_aggregation() {
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
 					borrower_id: BORROWER,
-					collateral: ref collateral_in_event,
-				}) if collateral_in_event == &extra_collateral,
+					ref collateral,
+					action_type: CollateralAddedActionType::Manual,
+				}) if collateral == &extra_collateral,
 				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
 					loan_id: LOAN_ID,
 					pool_fee: pool_fee_taken,
@@ -913,6 +965,7 @@ fn basic_loan_aggregation() {
 						}
 					)]),
 					liquidation_status: LiquidationStatus::NoLiquidation,
+					voluntary_liquidation_requested: false,
 				}
 			);
 
@@ -1045,6 +1098,7 @@ fn adding_and_removing_collateral() {
 			RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
 				borrower_id: BORROWER,
 				collateral: ref collateral_in_event,
+				action_type: CollateralAddedActionType::Manual,
 			}) if collateral_in_event == &collateral
 		);
 
@@ -1057,6 +1111,7 @@ fn adding_and_removing_collateral() {
 				collateral: collateral.clone(),
 				loans: BTreeMap::default(),
 				liquidation_status: LiquidationStatus::NoLiquidation,
+				voluntary_liquidation_requested: false,
 			}
 		);
 
@@ -1120,7 +1175,7 @@ fn basic_liquidation() {
 		.with_funded_pool(INIT_POOL_AMOUNT)
 		.with_default_loan()
 		.execute_with(|| {
-			// Drop oracle price to trigger liquidation
+			// Change oracle price to trigger liquidation
 			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
 		})
 		.then_execute_at_next_block(|_| {
@@ -1164,7 +1219,7 @@ fn basic_liquidation() {
 							to_asset: LOAN_ASSET
 						}
 					)]),
-					is_hard: false
+					liquidation_type: LiquidationType::Soft
 				}
 			);
 
@@ -1179,7 +1234,7 @@ fn basic_liquidation() {
 				Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
 					swaps: BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_1])]),
-					is_hard: false,
+					liquidation_type: LiquidationType::Soft,
 				},
 			));
 
@@ -1200,6 +1255,7 @@ fn basic_liquidation() {
 					borrower_id: BORROWER,
 					primary_collateral_asset: COLLATERAL_ASSET,
 					liquidation_status: LiquidationStatus::NoLiquidation,
+					voluntary_liquidation_requested: false,
 					// Note that we don't automatically release the collateral:
 					collateral: BTreeMap::from([(
 						COLLATERAL_ASSET,
@@ -1239,6 +1295,10 @@ fn basic_liquidation() {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+					borrower_id: BORROWER,
+					reason: LiquidationCompletionReason::LtvChange,
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
 					loan_id: LOAN_ID,
 					pool_fee,
@@ -1251,7 +1311,11 @@ fn basic_liquidation() {
 				}) if amount == repaid_amount_1,
 			);
 
-			// Drop oracle price again to trigger liquidation:
+			// No CollateralAdded event when returning existing collateral:
+			assert_matching_event_count!(Test, RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded{..}) => 0);
+
+
+			// Change oracle price again to trigger liquidation:
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE_2);
 		})
 		.then_execute_at_next_block(|_| {
@@ -1293,7 +1357,7 @@ fn basic_liquidation() {
 							to_asset: LOAN_ASSET
 						}
 					)]),
-					is_hard: true
+					liquidation_type: LiquidationType::Hard
 				}
 			);
 
@@ -1301,7 +1365,7 @@ fn basic_liquidation() {
 				Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
 					swaps: BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_2])]),
-					is_hard: true,
+					liquidation_type: LiquidationType::Hard,
 				},
 			));
 		})
@@ -1316,8 +1380,15 @@ fn basic_liquidation() {
 				SWAPPED_PRINCIPAL_2,
 			);
 
+			// This excess principal asset amount will be credited to the borrower's collateral
+			let excess_principal = SWAPPED_PRINCIPAL_2 - repaid_amount_2 - liquidation_fee_2;
+
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+					borrower_id: BORROWER,
+					reason: LiquidationCompletionReason::FullySwapped,
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
 					loan_id: LOAN_ID,
 					pool_fee,
@@ -1328,16 +1399,18 @@ fn basic_liquidation() {
 					loan_id: LOAN_ID,
 					amount,
 				}) if amount == repaid_amount_2,
+				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+					borrower_id: BORROWER,
+					ref collateral,
+					action_type: CollateralAddedActionType::SystemLiquidationExcessAmount,
+				}) if collateral == &BTreeMap::from([(LOAN_ASSET, excess_principal)]),
 				// The loan should now be settled:
 				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 					loan_id: LOAN_ID,
 					outstanding_principal: 0,
 					via_liquidation: true,
-				})
+				}),
 			);
-
-			// This excess principal asset amount will be credited to the borrower's account
-			let excess_principal = SWAPPED_PRINCIPAL_2 - repaid_amount_2 - liquidation_fee_2;
 
 			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
 
@@ -1369,6 +1442,7 @@ fn basic_liquidation() {
 					primary_collateral_asset: COLLATERAL_ASSET,
 					collateral: BTreeMap::from([(LOAN_ASSET, excess_principal)]),
 					liquidation_status: LiquidationStatus::NoLiquidation,
+					voluntary_liquidation_requested: false,
 					loans: Default::default(),
 				})
 			);
@@ -1394,7 +1468,7 @@ fn liquidation_fully_repays_loan_when_aborted() {
 		.with_funded_pool(INIT_POOL_AMOUNT)
 		.with_default_loan()
 		.then_execute_with(|_| {
-			// Drop oracle price to trigger liquidation
+			// Change oracle price to trigger liquidation
 			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
 		})
 		.then_execute_at_next_block(|_| {
@@ -1409,7 +1483,7 @@ fn liquidation_fully_repays_loan_when_aborted() {
 							to_asset: LOAN_ASSET
 						}
 					)]),
-					is_hard: true
+					liquidation_type: LiquidationType::Hard
 				}
 			);
 
@@ -1437,6 +1511,7 @@ fn liquidation_fully_repays_loan_when_aborted() {
 					borrower_id: BORROWER,
 					primary_collateral_asset: COLLATERAL_ASSET,
 					liquidation_status: LiquidationStatus::NoLiquidation,
+					voluntary_liquidation_requested: false,
 					collateral: BTreeMap::from([
 						(COLLATERAL_ASSET, REMAINING_COLLATERAL),
 						(
@@ -1469,7 +1544,7 @@ fn liquidation_with_outstanding_principal() {
 
 	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).with_default_loan()
 		.execute_with(|| {
-			// Drop oracle price to trigger liquidation
+			// Change oracle price to trigger liquidation
 			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
 		})
 		.then_execute_at_next_block(|_| {
@@ -1504,6 +1579,10 @@ fn liquidation_with_outstanding_principal() {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+					borrower_id: BORROWER,
+					reason: LiquidationCompletionReason::FullySwapped
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
 					loan_id: LOAN_ID,
 					pool_fee,
@@ -1578,7 +1657,7 @@ fn liquidation_with_outstanding_principal_and_owed_network_fees() {
 				Ok(LOAN_ID)
 			);
 
-			// Drop oracle price to trigger liquidation
+			// Update oracle price to trigger liquidation
 			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
 		})
 		.then_execute_at_next_block(|_| {
@@ -1612,6 +1691,10 @@ fn liquidation_with_outstanding_principal_and_owed_network_fees() {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+					borrower_id: BORROWER,
+					reason: LiquidationCompletionReason::FullySwapped,
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
 					loan_id: LOAN_ID,
 					pool_fee,
@@ -2352,7 +2435,7 @@ fn adding_collateral_during_liquidation() {
 		.then_execute_at_next_block(|_| {
 			assert_matches!(
 				get_account().liquidation_status,
-				LiquidationStatus::Liquidating { is_hard: true, .. }
+				LiquidationStatus::Liquidating { liquidation_type: LiquidationType::Hard, .. }
 			);
 
 			assert_event_sequence!(
@@ -2360,7 +2443,7 @@ fn adding_collateral_during_liquidation() {
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
 					ref swaps,
-					is_hard: true,
+					liquidation_type: LiquidationType::Hard,
 				}) if swaps == &BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_1])])
 			);
 
@@ -2395,7 +2478,7 @@ fn adding_collateral_during_liquidation() {
 		.then_execute_at_next_block(|_| {
 			assert_matches!(
 				get_account().liquidation_status,
-				LiquidationStatus::Liquidating { is_hard: true, .. }
+				LiquidationStatus::Liquidating { liquidation_type: LiquidationType::Hard, .. }
 			);
 
 			// Adding more collateral is expected to result in a transition from hard
@@ -2407,14 +2490,17 @@ fn adding_collateral_during_liquidation() {
 			);
 		})
 		.then_execute_at_next_block(|_| {
-			// dbg!(get_account().derive_ltv(), get_account().liquidation_status);
 			assert_matches!(
 				get_account().liquidation_status,
-				LiquidationStatus::Liquidating { is_hard: false, .. }
+				LiquidationStatus::Liquidating { liquidation_type: LiquidationType::Soft, .. }
 			);
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+					borrower_id: BORROWER,
+					reason: LiquidationCompletionReason::LtvChange,
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
 					amount: RECOVERED_PRINCIPAL_1
@@ -2422,7 +2508,7 @@ fn adding_collateral_during_liquidation() {
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
 					ref swaps,
-					is_hard: false,
+					liquidation_type: LiquidationType::Soft,
 				}) if swaps == &BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_2])])
 			);
 
@@ -2482,18 +2568,462 @@ fn adding_collateral_during_liquidation() {
 							}
 						}
 					)]),
-					liquidation_status: LiquidationStatus::NoLiquidation
+					liquidation_status: LiquidationStatus::NoLiquidation,
+					voluntary_liquidation_requested: false
 				}
 			);
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+					borrower_id: BORROWER,
+					reason: LiquidationCompletionReason::LtvChange,
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
 					amount: RECOVERED_PRINCIPAL_2
 				}),
 			);
 		});
+}
+
+mod voluntary_liquidation {
+
+	use super::*;
+
+	fn mock_liquidation_swap(input_amount: AssetAmount) -> MockSwapRequest {
+		MockSwapRequest {
+			input_asset: COLLATERAL_ASSET,
+			output_asset: LOAN_ASSET,
+			input_amount,
+			remaining_input_amount: input_amount,
+			accumulated_output_amount: 0,
+			swap_type: SwapRequestType::Regular {
+				output_action: SwapOutputAction::CreditLendingPool {
+					swap_type: LendingSwapType::Liquidation {
+						borrower_id: BORROWER,
+						loan_id: LOAN_ID,
+					},
+				},
+			},
+			broker_fees: Default::default(),
+			origin: SwapOrigin::Internal,
+		}
+	}
+
+	#[test]
+	fn voluntary_liquidation_happy_path() {
+		const LIQUIDATION_SWAP: SwapRequestId = SwapRequestId(0);
+
+		const SWAPPED_COLLATERAL: AssetAmount = 4 * INIT_COLLATERAL / 5;
+		const SWAPPED_PRINCIPAL: AssetAmount = SWAPPED_COLLATERAL / SWAP_RATE;
+
+		const TOTAL_TO_REPAY: AssetAmount = PRINCIPAL + ORIGINATION_FEE;
+
+		new_test_ext()
+			.with_funded_pool(INIT_POOL_AMOUNT)
+			.with_default_loan()
+			.with_voluntary_liquidation()
+			.then_execute_with(|_| {
+				// Simulate partial execution of the liquidaiton swap. This should be
+				// sufficient to fully repay the loan.
+				MockSwapRequestHandler::<Test>::set_swap_request_progress(
+					LIQUIDATION_SWAP,
+					SwapExecutionProgress {
+						remaining_input_amount: INIT_COLLATERAL - SWAPPED_COLLATERAL,
+						accumulated_output_amount: SWAPPED_PRINCIPAL,
+					},
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				const EXCESS_PRINCIPAL: AssetAmount = SWAPPED_PRINCIPAL - TOTAL_TO_REPAY;
+
+				assert_eq!(
+					LoanAccounts::<Test>::get(BORROWER).unwrap(),
+					LoanAccount {
+						borrower_id: BORROWER,
+						primary_collateral_asset: COLLATERAL_ASSET,
+						collateral: BTreeMap::from([
+							(COLLATERAL_ASSET, INIT_COLLATERAL - SWAPPED_COLLATERAL),
+							(LOAN_ASSET, EXCESS_PRINCIPAL)
+						]),
+						loans: Default::default(),
+						liquidation_status: LiquidationStatus::NoLiquidation,
+						// The flag has been reset:
+						voluntary_liquidation_requested: false
+					}
+				);
+
+				assert_event_sequence!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+						borrower_id: BORROWER,
+						reason: LiquidationCompletionReason::FullySwapped,
+					}),
+					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+						loan_id: LOAN_ID,
+						amount: TOTAL_TO_REPAY,
+					}),
+					RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+						borrower_id: BORROWER,
+						ref collateral,
+						action_type: CollateralAddedActionType::SystemLiquidationExcessAmount,
+					}) if collateral == &BTreeMap::from([(LOAN_ASSET, EXCESS_PRINCIPAL)]),
+					RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+						loan_id: LOAN_ID,
+						outstanding_principal: 0,
+						via_liquidation: true,
+					}),
+				);
+
+				// No liquidation fee should be taken (thus no event):
+				assert_matching_event_count!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. }) => 0
+				);
+			});
+	}
+
+	#[test]
+	fn voluntary_liquidation_stopped_manually() {
+		const LIQUIDATION_SWAP: SwapRequestId = SwapRequestId(0);
+
+		const SWAPPED_COLLATERAL: AssetAmount = INIT_COLLATERAL / 5;
+		const SWAPPED_PRINCIPAL: AssetAmount = SWAPPED_COLLATERAL / SWAP_RATE;
+
+		new_test_ext()
+			.with_funded_pool(INIT_POOL_AMOUNT)
+			.with_default_loan()
+			.with_voluntary_liquidation()
+			.then_execute_with(|_| {
+				System::reset_events();
+
+				// Simulate partial execution of the liquidaiton swap.
+				MockSwapRequestHandler::<Test>::set_swap_request_progress(
+					LIQUIDATION_SWAP,
+					SwapExecutionProgress {
+						remaining_input_amount: INIT_COLLATERAL - SWAPPED_COLLATERAL,
+						accumulated_output_amount: SWAPPED_PRINCIPAL,
+					},
+				);
+
+				// The user manually aborts the liquidation:
+				assert_ok!(LendingPools::stop_voluntary_liquidation(RuntimeOrigin::signed(
+					BORROWER
+				)));
+			})
+			.then_execute_at_next_block(|_| {
+				assert_eq!(
+					LoanAccounts::<Test>::get(BORROWER).unwrap(),
+					LoanAccount {
+						borrower_id: BORROWER,
+						primary_collateral_asset: COLLATERAL_ASSET,
+						// Part of collateral was used in liquidation:
+						collateral: BTreeMap::from([(
+							COLLATERAL_ASSET,
+							INIT_COLLATERAL - SWAPPED_COLLATERAL
+						),]),
+						// The loan is partially repaid:
+						loans: BTreeMap::from([(
+							LOAN_ID,
+							GeneralLoan {
+								id: LOAN_ID,
+								asset: LOAN_ASSET,
+								last_interest_payment_at: INIT_BLOCK,
+								owed_principal: PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL,
+								pending_interest: Default::default()
+							}
+						)]),
+						liquidation_status: LiquidationStatus::NoLiquidation,
+						// The flag has been reset:
+						voluntary_liquidation_requested: false
+					}
+				);
+
+				assert_event_sequence!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+						borrower_id: BORROWER,
+						reason: LiquidationCompletionReason::ManualAbort,
+					}),
+					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+						loan_id: LOAN_ID,
+						amount: SWAPPED_PRINCIPAL,
+					}),
+				);
+
+				// No liquidation fee should be taken (thus no event):
+				assert_matching_event_count!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. }) => 0
+				);
+			});
+	}
+
+	#[test]
+	fn voluntary_liquidation_with_escalation_and_deescalation() {
+		const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
+		const LIQUIDATION_SWAP_2: SwapRequestId = SwapRequestId(1);
+		const LIQUIDATION_SWAP_3: SwapRequestId = SwapRequestId(2);
+
+		const SWAPPED_COLLATERAL_1: AssetAmount = INIT_COLLATERAL / 10;
+		const SWAPPED_PRINCIPAL_1: AssetAmount = SWAPPED_COLLATERAL_1 / SWAP_RATE;
+
+		const NEW_SWAP_RATE: u128 = 13 * SWAP_RATE / 10;
+
+		const SWAPPED_COLLATERAL_2: AssetAmount = INIT_COLLATERAL / 10;
+		const SWAPPED_PRINCIPAL_2: AssetAmount = SWAPPED_COLLATERAL_2 / NEW_SWAP_RATE;
+
+		let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL_2;
+
+		let owed_after_liquidation_2 =
+			PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL_1 - SWAPPED_PRINCIPAL_2 +
+				liquidation_fee;
+
+		// Thrid liquidation will result in this much extra principal (after repaying
+		// the loan in full).
+		const SWAPPED_PRINCIPAL_EXTRA: AssetAmount = PRINCIPAL / 50;
+
+		let get_account = || LoanAccounts::<Test>::get(BORROWER).unwrap();
+
+		new_test_ext()
+			.with_funded_pool(INIT_POOL_AMOUNT)
+			.with_default_loan()
+			.with_voluntary_liquidation()
+			.then_execute_with(|_| {
+				// Simulate partial execution of the liquidaiton swap. This won't be enough
+				// to repay the loan yet.
+				MockSwapRequestHandler::<Test>::set_swap_request_progress(
+					LIQUIDATION_SWAP_1,
+					SwapExecutionProgress {
+						remaining_input_amount: INIT_COLLATERAL - SWAPPED_COLLATERAL_1,
+						accumulated_output_amount: SWAPPED_PRINCIPAL_1,
+					},
+				);
+
+				// Oracle price change leads to high LTV triggering escalation to soft
+				// (forced) liquidation:
+				set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+			})
+			.then_execute_at_next_block(|_| {
+				// Loan has been partially repaid:
+				assert_eq!(
+					get_account().loans,
+					BTreeMap::from([(
+						LOAN_ID,
+						GeneralLoan {
+							id: LOAN_ID,
+							asset: LOAN_ASSET,
+							last_interest_payment_at: INIT_BLOCK,
+							owed_principal: PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL_1,
+							pending_interest: Default::default()
+						}
+					)])
+				);
+
+				// Transitioned to soft (forced) liquidation via a new swap:
+				assert_eq!(
+					get_account().liquidation_status,
+					LiquidationStatus::Liquidating {
+						liquidation_swaps: BTreeMap::from([(
+							LIQUIDATION_SWAP_2,
+							LiquidationSwap {
+								loan_id: LOAN_ID,
+								from_asset: COLLATERAL_ASSET,
+								to_asset: LOAN_ASSET
+							}
+						)]),
+						liquidation_type: LiquidationType::Soft
+					}
+				);
+
+				// The flag is still set:
+				assert!(get_account().voluntary_liquidation_requested);
+
+				// All of collateral is still in liquidation:
+				assert_eq!(get_account().collateral, Default::default());
+
+				assert_eq!(
+					MockSwapRequestHandler::<Test>::get_swap_requests(),
+					BTreeMap::from([(
+						LIQUIDATION_SWAP_2,
+						mock_liquidation_swap(INIT_COLLATERAL - SWAPPED_COLLATERAL_1)
+					)])
+				);
+
+				assert_event_sequence!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+						borrower_id: BORROWER,
+						reason: LiquidationCompletionReason::LtvChange,
+					}),
+					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+						loan_id: LOAN_ID,
+						amount: SWAPPED_PRINCIPAL_1,
+					}),
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
+						borrower_id: BORROWER,
+						liquidation_type: LiquidationType::Soft,
+						ref swaps
+					}) if swaps == &BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_2])]),
+				);
+
+				// No liquidation fee should be taken (thus no event):
+				assert_matching_event_count!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. }) => 0
+				);
+
+				// Simulate partial execution of the liquidaiton swap. This won't be enough
+				// to repay the loan yet.
+				MockSwapRequestHandler::<Test>::set_swap_request_progress(
+					LIQUIDATION_SWAP_2,
+					SwapExecutionProgress {
+						remaining_input_amount: INIT_COLLATERAL -
+							SWAPPED_COLLATERAL_1 - SWAPPED_COLLATERAL_2,
+						accumulated_output_amount: SWAPPED_PRINCIPAL_2,
+					},
+				);
+
+				// Updating the price again to trigger "recovery" into voluntary liquidation
+				set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+			})
+			.then_execute_at_next_block(|_| {
+				// Loan has been partially repaid again:
+				assert_eq!(
+					get_account().loans,
+					BTreeMap::from([(
+						LOAN_ID,
+						GeneralLoan {
+							id: LOAN_ID,
+							asset: LOAN_ASSET,
+							last_interest_payment_at: INIT_BLOCK,
+							owed_principal: owed_after_liquidation_2,
+							pending_interest: Default::default()
+						}
+					)])
+				);
+
+				// The flag is still set:
+				assert!(get_account().voluntary_liquidation_requested);
+
+				// All of collateral is still in liquidation:
+				assert_eq!(get_account().collateral, Default::default());
+
+				// Transitioned back to voluntary liquidation via a new swap:
+				assert_eq!(
+					get_account().liquidation_status,
+					LiquidationStatus::Liquidating {
+						liquidation_swaps: BTreeMap::from([(
+							LIQUIDATION_SWAP_3,
+							LiquidationSwap {
+								loan_id: LOAN_ID,
+								from_asset: COLLATERAL_ASSET,
+								to_asset: LOAN_ASSET
+							}
+						)]),
+						liquidation_type: LiquidationType::SoftVoluntary
+					}
+				);
+
+				assert_eq!(
+					MockSwapRequestHandler::<Test>::get_swap_requests(),
+					BTreeMap::from([(
+						LIQUIDATION_SWAP_3,
+						mock_liquidation_swap(
+							INIT_COLLATERAL - SWAPPED_COLLATERAL_1 - SWAPPED_COLLATERAL_2
+						)
+					)])
+				);
+
+				assert_event_sequence!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+						borrower_id: BORROWER,
+						reason: LiquidationCompletionReason::LtvChange,
+					}),
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. }),
+					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+						loan_id: LOAN_ID,
+						amount,
+					}) if amount == SWAPPED_PRINCIPAL_2 - liquidation_fee,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
+						borrower_id: BORROWER,
+						liquidation_type: LiquidationType::SoftVoluntary,
+						ref swaps
+					}) if swaps == &BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_3])]),
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				// Now the liquidation swap will be executed in full
+
+				LendingPools::process_loan_swap_outcome(
+					LIQUIDATION_SWAP_3,
+					LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
+					owed_after_liquidation_2 + SWAPPED_PRINCIPAL_EXTRA,
+				);
+
+				assert_eq!(
+					LoanAccounts::<Test>::get(BORROWER).unwrap(),
+					LoanAccount {
+						borrower_id: BORROWER,
+						primary_collateral_asset: COLLATERAL_ASSET,
+						collateral: BTreeMap::from([(LOAN_ASSET, SWAPPED_PRINCIPAL_EXTRA)]),
+						loans: Default::default(),
+						liquidation_status: LiquidationStatus::NoLiquidation,
+						// The flag has been reset:
+						voluntary_liquidation_requested: false
+					}
+				);
+
+				assert_event_sequence!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+						borrower_id: BORROWER,
+						reason: LiquidationCompletionReason::FullySwapped,
+					}),
+					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
+						loan_id: LOAN_ID,
+						amount,
+					}) if amount == owed_after_liquidation_2,
+					RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+						borrower_id: BORROWER,
+						ref collateral,
+						action_type: CollateralAddedActionType::SystemLiquidationExcessAmount,
+					}) if collateral == &BTreeMap::from([(LOAN_ASSET, SWAPPED_PRINCIPAL_EXTRA)]),
+					RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+						loan_id: LOAN_ID,
+						outstanding_principal: 0,
+						via_liquidation: true,
+					}),
+				);
+
+				// No liquidation fee should be taken (thus no event):
+				assert_matching_event_count!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. }) => 0
+				);
+			});
+	}
+
+	#[test]
+	fn voluntary_liquidation_requires_loans() {
+		new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).then_execute_with(|_| {
+			// Add collateral to ensure the account	exists:
+			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+
+			assert_ok!(LendingPools::add_collateral(
+				RuntimeOrigin::signed(BORROWER),
+				Some(COLLATERAL_ASSET),
+				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL),])
+			));
+
+			assert_noop!(
+				LendingPools::initiate_voluntary_liquidation(RuntimeOrigin::signed(BORROWER)),
+				Error::<Test>::AccountHasNoLoans
+			);
+		});
+	}
 }
 
 mod safe_mode {
@@ -2909,6 +3439,7 @@ fn init_liquidation_swaps_test() {
 			),
 		]),
 		liquidation_status: LiquidationStatus::NoLiquidation,
+		voluntary_liquidation_requested: false,
 	};
 
 	new_test_ext().execute_with(|| {
@@ -2918,7 +3449,7 @@ fn init_liquidation_swaps_test() {
 		set_asset_price_in_usd(Asset::Usdc, 1);
 
 		let collateral = loan_account.prepare_collateral_for_liquidation().unwrap();
-		loan_account.init_liquidation_swaps(&BORROWER, collateral, false);
+		loan_account.init_liquidation_swaps(&BORROWER, collateral, LiquidationType::Soft);
 
 		let expected_swaps = [
 			(SWAP_1, LOAN_1, Asset::Eth, Asset::Btc, 417),
@@ -2954,7 +3485,7 @@ fn init_liquidation_swaps_test() {
 		assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 			borrower_id: BORROWER,
 			swaps: BTreeMap::from([(LOAN_1, vec![SWAP_1, SWAP_3]), (LOAN_2, vec![SWAP_2, SWAP_4])]),
-			is_hard: false,
+			liquidation_type: LiquidationType::Soft,
 		}));
 
 		assert_eq!(MockSwapRequestHandler::<Test>::get_swap_requests(), expected_swaps);
@@ -2962,7 +3493,7 @@ fn init_liquidation_swaps_test() {
 		assert_eq!(
 			loan_account.liquidation_status,
 			LiquidationStatus::Liquidating {
-				is_hard: false,
+				liquidation_type: LiquidationType::Soft,
 				liquidation_swaps: BTreeMap::from([
 					(
 						SWAP_1,
@@ -3179,7 +3710,7 @@ mod rpcs {
 									swap_request_id: SwapRequestId(0),
 									loan_id: LOAN_ID_2,
 								}],
-								is_hard: true
+								liquidation_type: LiquidationType::Hard
 							})
 						},
 						RpcLoanAccount {

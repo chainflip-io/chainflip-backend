@@ -180,7 +180,8 @@ fn dca_happy_path(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
+					swap_request_id: SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 		});
@@ -228,7 +229,8 @@ fn dca_single_chunk(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
+					swap_request_id: SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Executed
 				})
 			);
 		});
@@ -324,7 +326,8 @@ fn dca_with_fok_full_refund(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
+					swap_request_id: SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Expired
 				}),
 			);
 		});
@@ -444,7 +447,8 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
+					swap_request_id: SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Expired,
 				}),
 			);
 		});
@@ -568,7 +572,8 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
+					swap_request_id: SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 		});
@@ -709,7 +714,8 @@ fn can_handle_dca_chunk_size_of_zero(is_ccm: bool) {
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
+					swap_request_id: SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 		});
@@ -923,7 +929,8 @@ fn dca_with_one_block_interval() {
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
+					swap_request_id: SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 		});

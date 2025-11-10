@@ -33,6 +33,6 @@ expression: loan_account
         "loan_id": 1
       }
     ],
-    "is_hard": true
+    "liquidation_type": "SoftVoluntary"
   }
 }

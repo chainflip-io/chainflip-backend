@@ -277,6 +277,22 @@ fn test_environment_serialization() {
 				(ForeignChain::Solana, 1000u32.into()),
 				(ForeignChain::Assethub, 1000u32.into()),
 			]),
+			ingress_delays: HashMap::from([
+				(ForeignChain::Bitcoin, 0u32),
+				(ForeignChain::Ethereum, 5u32),
+				(ForeignChain::Polkadot, 2u32),
+				(ForeignChain::Arbitrum, 5u32),
+				(ForeignChain::Solana, 123u32),
+				(ForeignChain::Assethub, 2u32),
+			]),
+			boost_delays: HashMap::from([
+				(ForeignChain::Bitcoin, 0u32),
+				(ForeignChain::Ethereum, 5u32),
+				(ForeignChain::Polkadot, 0u32),
+				(ForeignChain::Arbitrum, 0u32),
+				(ForeignChain::Solana, 456u32),
+				(ForeignChain::Assethub, 2u32),
+			]),
 		},
 		funding: FundingEnvironment {
 			redemption_tax: 0u32.into(),
@@ -1141,7 +1157,9 @@ fn lending_pools_serialization() {
 #[test]
 fn loan_account_serialization() {
 	use cf_traits::lending::LoanId;
-	use pallet_cf_lending_pools::{RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan};
+	use pallet_cf_lending_pools::{
+		LiquidationType, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan,
+	};
 
 	let loan_account = RpcLoanAccount::<_, U256> {
 		account: ID_1,
@@ -1158,7 +1176,7 @@ fn loan_account_serialization() {
 				swap_request_id: SwapRequestId(1),
 				loan_id: LoanId(1),
 			}],
-			is_hard: true,
+			liquidation_type: LiquidationType::SoftVoluntary,
 		}),
 	};
 
