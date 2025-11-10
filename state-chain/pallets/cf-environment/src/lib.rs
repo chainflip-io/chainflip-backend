@@ -712,7 +712,7 @@ pub mod pallet {
 			);
 
 			Self::deposit_event(Event::<T>::NonNativeSignedCall);
-			Ok(().into())
+			dispatch_result
 		}
 
 		/// Executes an atomic batch of runtime calls. It will execute as an all-or-nothing.
