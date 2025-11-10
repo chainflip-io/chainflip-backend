@@ -111,6 +111,10 @@ pub trait LendingApi {
 		borrower_id: &Self::AccountId,
 		primary_collateral_asset: Asset,
 	) -> DispatchResult;
+
+	/// Can be used to indicate user's intent to trigger (value=true) or stop (value=false)
+	/// voluntary liquidation.
+	fn set_voluntary_liquidation_flag(borrower_id: Self::AccountId, value: bool) -> DispatchResult;
 }
 
 pub trait LendingSystemApi {

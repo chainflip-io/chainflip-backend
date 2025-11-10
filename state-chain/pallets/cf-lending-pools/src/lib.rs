@@ -27,8 +27,8 @@ use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
 	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolConfiguration,
-	LtvThresholds, NetworkFeeContributions, RpcLendingPool, RpcLiquidationStatus,
-	RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+	LiquidationCompletionReason, LiquidationType, LtvThresholds, NetworkFeeContributions,
+	RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 };
 
 pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
@@ -167,6 +167,19 @@ const MAX_PALLET_CONFIG_UPDATE: u32 = 100; // used to bound no. of updates per e
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
 pub enum LoanUsage {
 	Boost(PrewitnessedDepositId),
+}
+
+/// Indicates how the action of adding collateral was triggered.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum CollateralAddedActionType {
+	/// Triggered manually by the user. Collateral is taken from the user's free balance.
+	Manual,
+	/// Triggered by the protocol due to high LTV. Collateral is taken from the user's free
+	/// balance.
+	SystemTopup,
+	/// Triggered by the protocol as a result of liquidation obtaining more of the loan asset
+	/// than was required.
+	SystemLiquidationExcessAmount,
 }
 
 pub struct LendingConfigDefault {}
@@ -363,6 +376,7 @@ pub mod pallet {
 		CollateralAdded {
 			borrower_id: T::AccountId,
 			collateral: BTreeMap<Asset, AssetAmount>,
+			action_type: CollateralAddedActionType,
 		},
 		CollateralRemoved {
 			borrower_id: T::AccountId,
@@ -400,7 +414,11 @@ pub mod pallet {
 		LiquidationInitiated {
 			borrower_id: T::AccountId,
 			swaps: BTreeMap<LoanId, Vec<SwapRequestId>>,
-			is_hard: bool,
+			liquidation_type: LiquidationType,
+		},
+		LiquidationCompleted {
+			borrower_id: T::AccountId,
+			reason: LiquidationCompletionReason,
 		},
 		LiquidationFeeTaken {
 			loan_id: LoanId,
@@ -426,6 +444,7 @@ pub mod pallet {
 		},
 	}
 
+	#[derive(PartialEq)]
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Adding boost funds is disabled due to safe mode.
@@ -461,6 +480,8 @@ pub mod pallet {
 		/// Specified loan account not found (in methods where one should not be created by
 		/// default)
 		LoanAccountNotFound,
+		/// Can't trigger voluntary liquidation because account has no loans
+		AccountHasNoLoans,
 		/// The borrower has insufficient collateral for the requested loan
 		InsufficientCollateral,
 		/// A catch-all error for invalid loan parameters where a more specific error is not
@@ -863,6 +884,22 @@ pub mod pallet {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			Self::try_making_repayment(&borrower_id, loan_id, amount)
+		}
+
+		#[pallet::call_index(13)]
+		#[pallet::weight(Weight::zero())]
+		pub fn initiate_voluntary_liquidation(origin: OriginFor<T>) -> DispatchResult {
+			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			<Self as LendingApi>::set_voluntary_liquidation_flag(borrower_id, true)
+		}
+
+		#[pallet::call_index(14)]
+		#[pallet::weight(Weight::zero())]
+		pub fn stop_voluntary_liquidation(origin: OriginFor<T>) -> DispatchResult {
+			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			<Self as LendingApi>::set_voluntary_liquidation_flag(borrower_id, false)
 		}
 	}
 }

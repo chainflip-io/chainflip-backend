@@ -482,7 +482,8 @@ fn affiliates_with_0_bps_and_swap_id_are_getting_emitted_in_events() {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(1)
+					swap_request_id: SwapRequestId(1),
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 		});
@@ -822,7 +823,8 @@ fn can_handle_swaps_with_zero_outputs() {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(1)
+					swap_request_id: SwapRequestId(1),
+					reason: SwapRequestCompletionReason::Executed
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: SwapId(2),
@@ -835,7 +837,8 @@ fn can_handle_swaps_with_zero_outputs() {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(2)
+					swap_request_id: SwapRequestId(2),
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 
@@ -954,7 +957,8 @@ fn swaps_are_executed_according_to_execute_at_field() {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(1)
+					swap_request_id: SwapRequestId(1),
+					reason: SwapRequestCompletionReason::Executed
 				}),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(2), .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -962,7 +966,8 @@ fn swaps_are_executed_according_to_execute_at_field() {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(2)
+					swap_request_id: SwapRequestId(2),
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 		})
@@ -979,7 +984,8 @@ fn swaps_are_executed_according_to_execute_at_field() {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(3)
+					swap_request_id: SwapRequestId(3),
+					reason: SwapRequestCompletionReason::Executed
 				}),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(4), .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -987,7 +993,8 @@ fn swaps_are_executed_according_to_execute_at_field() {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(4)
+					swap_request_id: SwapRequestId(4),
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 		});
@@ -1092,7 +1099,8 @@ fn swaps_get_retried_after_failure() {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(3)
+					swap_request_id: SwapRequestId(3),
+					reason: SwapRequestCompletionReason::Executed
 				}),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(4), .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -1100,7 +1108,8 @@ fn swaps_get_retried_after_failure() {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(4)
+					swap_request_id: SwapRequestId(4),
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 		})
@@ -1116,7 +1125,8 @@ fn swaps_get_retried_after_failure() {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(1)
+					swap_request_id: SwapRequestId(1),
+					reason: SwapRequestCompletionReason::Executed
 				}),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(2), .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -1124,7 +1134,8 @@ fn swaps_get_retried_after_failure() {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(2)
+					swap_request_id: SwapRequestId(2),
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 		});
@@ -1795,7 +1806,8 @@ mod internal_swaps {
 						amount: EXPECTED_OUTPUT_AMOUNT,
 					}),
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-						swap_request_id: SWAP_REQUEST_ID
+						swap_request_id: SWAP_REQUEST_ID,
+						reason: SwapRequestCompletionReason::Executed
 					}),
 				);
 
@@ -1911,7 +1923,8 @@ mod internal_swaps {
 						amount: EXPECTED_OUTPUT_AMOUNT
 					}),
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-						swap_request_id: SWAP_REQUEST_ID
+						swap_request_id: SWAP_REQUEST_ID,
+						reason: SwapRequestCompletionReason::Expired
 					}),
 				);
 
@@ -2292,6 +2305,7 @@ mod lending_liquidation_swaps {
 					Test,
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 						swap_request_id: SWAP_REQUEST_ID,
+						reason: SwapRequestCompletionReason::Aborted
 					}),
 				);
 
