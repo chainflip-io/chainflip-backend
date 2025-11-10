@@ -82,6 +82,23 @@ impl<AccountId> SwapRequestType<AccountId> {
 						SwapOutputActionEncoded::CreditFlipAndTransferToGateway { account_id },
 				},
 			},
+			SwapRequestType::RegularNoNetworkFee { output_action } =>
+				SwapRequestTypeEncoded::RegularNoNetworkFee {
+					output_action: match output_action {
+						SwapOutputAction::Egress { ccm_deposit_metadata, output_address } =>
+							SwapOutputActionEncoded::Egress {
+								output_address: Converter::to_encoded_address(output_address),
+								ccm_deposit_metadata: ccm_deposit_metadata
+									.map(|metadata| metadata.to_encoded::<Converter>()),
+							},
+						SwapOutputAction::CreditOnChain { account_id } =>
+							SwapOutputActionEncoded::CreditOnChain { account_id },
+						SwapOutputActionGeneric::CreditLendingPool { swap_type } =>
+							SwapOutputActionEncoded::CreditLendingPool { swap_type },
+						SwapOutputAction::CreditFlipAndTransferToGateway { account_id } =>
+							SwapOutputActionEncoded::CreditFlipAndTransferToGateway { account_id },
+					},
+				},
 		}
 	}
 }
@@ -91,6 +108,7 @@ pub enum SwapRequestTypeGeneric<Address, AccountId> {
 	NetworkFee,
 	IngressEgressFee,
 	Regular { output_action: SwapOutputActionGeneric<Address, AccountId> },
+	RegularNoNetworkFee { output_action: SwapOutputActionGeneric<Address, AccountId> },
 }
 
 pub type SwapRequestType<AccountId> = SwapRequestTypeGeneric<ForeignChainAddress, AccountId>;

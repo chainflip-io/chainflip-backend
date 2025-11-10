@@ -2887,20 +2887,26 @@ pub mod pallet {
 						},
 					);
 				},
-				SwapRequestType::Regular { output_action } => {
+				SwapRequestType::Regular { ref output_action } |
+				SwapRequestType::RegularNoNetworkFee { ref output_action } => {
 					let mut dca_state = DcaState::new(net_amount, dca_params.clone());
 					let chunk_input_amount = dca_state.calculate_next_chunk().unwrap_or_default();
 
 					// Choose correct network fee for the swap
-					let mut fees = vec![FeeType::NetworkFee(NetworkFeeTracker::new(
-						Pallet::<T>::get_network_fee_for_swap(
-							input_asset,
-							output_asset,
-							// TODO: see if we want to treat lending swaps as internal for the
-							// purposes of determining network fee?
-							matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
-						),
-					))];
+					let mut fees =
+						if matches!(request_type, SwapRequestType::Regular { output_action: _ }) {
+							vec![FeeType::NetworkFee(NetworkFeeTracker::new(
+								Pallet::<T>::get_network_fee_for_swap(
+									input_asset,
+									output_asset,
+									// TODO: see if we want to treat lending swaps as internal for
+									// the purposes of determining network fee?
+									matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
+								),
+							))]
+						} else {
+							Default::default()
+						};
 
 					// Add broker fees if any
 					if !broker_fees.is_empty() {
@@ -2951,7 +2957,7 @@ pub mod pallet {
 							input_asset,
 							output_asset,
 							state: SwapRequestState::UserSwap {
-								output_action,
+								output_action: output_action.clone(),
 								price_limits_and_expiry,
 								dca_state,
 							},

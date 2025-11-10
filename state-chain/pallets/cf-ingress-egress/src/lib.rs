@@ -2206,7 +2206,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								asset.into(),
 								input_amount,
 								Asset::Flip,
-								SwapRequestType::Regular {
+								SwapRequestType::RegularNoNetworkFee {
 									output_action:
 										SwapOutputAction::CreditFlipAndTransferToGateway {
 											account_id: lp_account.clone(),

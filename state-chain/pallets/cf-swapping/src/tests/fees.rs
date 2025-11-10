@@ -1049,7 +1049,7 @@ fn gas_calculation_can_handle_extreme_swap_rate() {
 					cf_chains::assets::eth::Asset::Flip,
 					1000
 				),
-				14000000
+				9333334
 			);
 		}
 
