@@ -1184,6 +1184,25 @@ fn loan_account_serialization() {
 }
 
 #[test]
+fn lending_supply_positions_serialization() {
+	let value = LendingPoolAndSupplyPositions::<AccountId32, U256> {
+		asset: Asset::Usdc,
+		positions: vec![
+			LendingSupplyPosition {
+				lp_id: AccountId32::new([0x11; 32]),
+				total_amount: 123456.into(),
+			},
+			LendingSupplyPosition {
+				lp_id: AccountId32::new([0x12; 32]),
+				total_amount: 234567.into(),
+			},
+		],
+	};
+
+	insta::assert_json_snapshot!(value);
+}
+
+#[test]
 fn lending_config_serialization() {
 	let config = RpcLendingConfig {
 		ltv_thresholds: LtvThresholds {

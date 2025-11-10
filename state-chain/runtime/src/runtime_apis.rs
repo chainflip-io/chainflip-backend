@@ -39,7 +39,10 @@ use frame_support::sp_runtime::AccountId32;
 use pallet_cf_elections::electoral_systems::oracle_price::price::PriceAsset;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
-pub use pallet_cf_lending_pools::{BoostPoolDetails, RpcLendingPool, RpcLoanAccount};
+pub use pallet_cf_lending_pools::{
+	BoostPoolDetails, LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLendingPool,
+	RpcLoanAccount,
+};
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -842,6 +845,9 @@ decl_runtime_apis!(
 		fn cf_loan_accounts(
 			borrower_id: Option<AccountId32>,
 		) -> Vec<RpcLoanAccount<AccountId32, AssetAmount>>;
+		fn cf_lending_pool_supply_balances(
+			asset: Option<Asset>,
+		) -> Vec<LendingPoolAndSupplyPositions<AccountId32, AssetAmount>>;
 		fn cf_lending_config() -> RpcLendingConfig;
 		fn cf_evm_calldata(
 			caller: EthereumAddress,

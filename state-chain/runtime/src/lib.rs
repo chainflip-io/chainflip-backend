@@ -113,7 +113,9 @@ use pallet_cf_validator::{
 	DelegationAmount, DelegationSlasher, DelegationSnapshot,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-use runtime_apis::{ChainAccounts, EvmCallDetails, RpcLendingPool, RpcLoanAccount};
+use runtime_apis::{
+	ChainAccounts, EvmCallDetails, LendingPoolAndSupplyPositions, RpcLendingPool, RpcLoanAccount,
+};
 use scale_info::prelude::string::String;
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
@@ -1727,9 +1729,9 @@ impl_runtime_apis! {
 
 			let lending_supply_balances = AssetMap::from_fn(|asset| {
 
-				pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::get(asset).as_mut().and_then(|pool| {
+				pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::get(asset).and_then(|pool| {
 
-					pool.get_total_owed_amount_for_account(&account_id).ok()
+					pool.get_supply_position_for_account(&account_id).ok()
 
 				}).unwrap_or_default()
 
@@ -2810,6 +2812,21 @@ impl_runtime_apis! {
 
 		fn cf_loan_accounts(borrower_id: Option<AccountId>) -> Vec<RpcLoanAccount<AccountId, AssetAmount>> {
 			pallet_cf_lending_pools::get_loan_accounts::<Runtime>(borrower_id)
+		}
+
+		fn cf_lending_pool_supply_balances(
+			asset: Option<Asset>,
+		) -> Vec<LendingPoolAndSupplyPositions<AccountId, AssetAmount>> {
+
+			if let Some(asset) = asset {
+				pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::get(asset).map(|pool| {
+					pool.get_all_supply_positions()
+				}).into_iter().map(|positions| LendingPoolAndSupplyPositions { asset, positions }).collect()
+			} else {
+				pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::iter().map(|(asset, pool)| {
+					LendingPoolAndSupplyPositions { asset, positions: pool.get_all_supply_positions() }
+				}).collect()
+			}
 		}
 
 		fn cf_lending_config() -> RpcLendingConfig {

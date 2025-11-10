@@ -63,7 +63,9 @@ use pallet_cf_environment::{
 	DOMAIN_OFFCHAIN_PREFIX,
 };
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_lending_pools::{RpcLoan, RpcLoanAccount};
+use pallet_cf_lending_pools::{
+	LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLoan, RpcLoanAccount,
+};
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
 	UnidirectionalPoolDepth,
@@ -1283,6 +1285,13 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId, U256>>>;
 
+	#[method(name = "lending_pool_supply_balances")]
+	fn cf_lending_pool_supply_balances(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<LendingPoolAndSupplyPositions<state_chain_runtime::AccountId, U256>>>;
+
 	#[method(name = "lending_config")]
 	fn cf_lending_config(
 		&self,
@@ -1647,6 +1656,31 @@ where
 							})
 							.collect(),
 						liquidation_status: acc.liquidation_status,
+					})
+					.collect()
+			})
+		})
+	}
+
+	fn cf_lending_pool_supply_balances(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<LendingPoolAndSupplyPositions<state_chain_runtime::AccountId, U256>>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			api.cf_lending_pool_supply_balances(hash, asset).map(|pools_and_positions| {
+				pools_and_positions
+					.into_iter()
+					.map(|pool_and_positions| LendingPoolAndSupplyPositions {
+						asset: pool_and_positions.asset,
+						positions: pool_and_positions
+							.positions
+							.into_iter()
+							.map(|position| LendingSupplyPosition {
+								lp_id: position.lp_id,
+								total_amount: position.total_amount.into(),
+							})
+							.collect(),
 					})
 					.collect()
 			})

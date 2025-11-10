@@ -26,9 +26,10 @@ use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
-	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolConfiguration,
-	LiquidationCompletionReason, LiquidationType, LtvThresholds, NetworkFeeContributions,
-	RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolAndSupplyPositions,
+	LendingPoolConfiguration, LendingSupplyPosition, LiquidationCompletionReason, LiquidationType,
+	LtvThresholds, NetworkFeeContributions, RpcLendingPool, RpcLiquidationStatus,
+	RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 };
 
 pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};

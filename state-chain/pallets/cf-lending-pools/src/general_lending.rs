@@ -1587,7 +1587,10 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-pub use rpc::{RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount};
+pub use rpc::{
+	LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLendingPool, RpcLiquidationStatus,
+	RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+};
 
 pub mod rpc {
 
@@ -1603,7 +1606,6 @@ pub mod rpc {
 		pub principal_amount: Amount,
 	}
 
-	// TODO: see what other parameters are needed
 	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 	pub struct RpcLendingPool<Amount> {
 		pub asset: Asset,
@@ -1613,6 +1615,21 @@ pub mod rpc {
 		pub current_interest_rate: Permill,
 		#[serde(flatten)]
 		pub config: LendingPoolConfiguration,
+	}
+
+	/// Total amount of funds (of some asset) owed by a lending pool to account `lp_id`.
+	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+	pub struct LendingSupplyPosition<AccountId, Amount> {
+		pub lp_id: AccountId,
+		pub total_amount: Amount,
+	}
+
+	/// All supply positions for a pool identified by `asset`.
+	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+	pub struct LendingPoolAndSupplyPositions<AccountId, Amount> {
+		#[serde(flatten)]
+		pub asset: Asset,
+		pub positions: Vec<LendingSupplyPosition<AccountId, Amount>>,
 	}
 
 	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
