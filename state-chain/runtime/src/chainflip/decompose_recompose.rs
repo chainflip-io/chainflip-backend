@@ -24,10 +24,7 @@ use sp_std::{mem, prelude::*};
 
 impl WitnessDataExtraction for RuntimeCall {
 	fn is_dot_witnessing(&self) -> bool {
-		if matches!(self, RuntimeCall::PolkadotChainTracking(_)) {
-			return true;
-		}
-		false
+		matches!(self, RuntimeCall::PolkadotChainTracking(_))
 	}
 	fn extract(&mut self) -> Option<Vec<u8>> {
 		match self {
