@@ -2005,7 +2005,8 @@ mod credit_flip_and_transfer {
 						..
 					}),
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-						swap_request_id: SWAP_REQUEST_ID
+						swap_request_id: SWAP_REQUEST_ID,
+						reason: _
 					}),
 				);
 				assert_eq!(
@@ -2070,7 +2071,8 @@ mod credit_flip_and_transfer {
 						..
 					}),
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-						swap_request_id: SWAP_REQUEST_ID
+						swap_request_id: SWAP_REQUEST_ID,
+						reason: _
 					}),
 				);
 
