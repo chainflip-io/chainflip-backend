@@ -1734,11 +1734,23 @@ impl_runtime_apis! {
 
 			});
 
+			let lending_collateral_balances = pallet_cf_lending_pools::LoanAccounts::<Runtime>::get(&account_id).map(|loan_account| {
+				let mut asset_map = AssetMap::<AssetAmount>::default();
+
+				for (asset, amount) in loan_account.get_total_collateral() {
+					asset_map[asset].saturating_accrue(amount);
+				}
+
+				asset_map
+			}).unwrap_or_default();
+
+
 			free_balances
 				.saturating_add(open_order_balances)
 				.saturating_add(boost_pools_balances)
 				.saturating_add(trading_strategies_balances)
 				.saturating_add(lending_supply_balances)
+				.saturating_add(lending_collateral_balances)
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
