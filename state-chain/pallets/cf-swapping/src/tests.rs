@@ -1965,7 +1965,7 @@ mod credit_flip_and_transfer {
 					INPUT_ASSET,
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,
-					SwapRequestType::Regular {
+					SwapRequestType::RegularNoNetworkFee {
 						output_action: SwapOutputAction::CreditFlipAndTransferToGateway {
 							account_id: LP_ACCOUNT,
 						},
@@ -1983,7 +1983,7 @@ mod credit_flip_and_transfer {
 						input_amount: INPUT_AMOUNT,
 						output_asset: OUTPUT_ASSET,
 						origin: SwapOrigin::OnChainAccount(LP_ACCOUNT),
-						request_type: SwapRequestTypeEncoded::Regular {
+						request_type: SwapRequestTypeEncoded::RegularNoNetworkFee {
 							output_action:
 								SwapOutputActionEncoded::CreditFlipAndTransferToGateway {
 									account_id: LP_ACCOUNT
