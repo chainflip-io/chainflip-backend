@@ -55,7 +55,7 @@ mod benchmarks {
 			ForeignChainAddress::Btc(ScriptPubkey::Taproot([4u8; 32])),
 			ForeignChainAddress::Sol(Default::default()),
 		] {
-			T::LpRegistrationApi::register_liquidity_refund_address(&account_id, encoded_address);
+			T::LpRegistrationApi::register_liquidity_refund_address(account_id, encoded_address);
 		}
 	}
 
@@ -82,10 +82,7 @@ mod benchmarks {
 		T::EnsureGovernance::try_successful_origin().unwrap()
 	}
 
-	fn create_loan<T: Config>(borrower: &T::AccountId, amount: AssetAmount) -> GeneralLoan<T>
-	where
-		T: Config,
-	{
+	fn create_loan<T: Config>(borrower: &T::AccountId, amount: AssetAmount) -> GeneralLoan<T> {
 		let collateral = BTreeMap::from([(COLLATERAL_ASSET, amount * 2)]);
 		assert_ok!(Pallet::<T>::request_loan(
 			RawOrigin::Signed(borrower.clone()).into(),
@@ -98,32 +95,38 @@ mod benchmarks {
 		loan_account.loans.get(&LoanId::from(0)).unwrap().clone()
 	}
 
-	fn create_pools_and_loans_for_all_assets<T: Config>(
+	/// Sets up lending pools and creates 2 loans, using 2 assets as collateral.
+	/// This is used as an average use case for a borrower.
+	fn create_pools_and_loans_for_some_assets<T: Config>(
 		borrower: &T::AccountId,
 		lender: &T::AccountId,
+		loan_amount: AssetAmount,
 	) {
-		const AMOUNT: AssetAmount = 100_000_000;
+		const POOLS: [Asset; 2] = [LOAN_ASSET, COLLATERAL_ASSET];
+		const LOANS: [(Asset, Asset); 2] =
+			[(COLLATERAL_ASSET, LOAN_ASSET), (LOAN_ASSET, COLLATERAL_ASSET)];
 
-		// Setup a loan account with some collateral and loans
-		for asset in [Asset::Eth, Asset::Btc, Asset::Sol, Asset::Usdc, Asset::Usdt] {
-			// Setup the pool with a lender
+		// Setup the pools
+		for asset in POOLS {
 			assert_ok!(Pallet::<T>::create_lending_pool(gov_origin::<T>(), asset));
 			set_asset_price_in_usd::<T>(asset, 100_000_000_000);
-			T::Balance::credit_account(&lender, asset, AMOUNT * 2);
+			T::Balance::credit_account(lender, asset, loan_amount * 2);
 			assert_ok!(Pallet::<T>::add_lender_funds(
 				RawOrigin::Signed(lender.clone()).into(),
 				asset,
-				AMOUNT * 2,
+				loan_amount * 2,
 			));
+		}
 
-			// Create the loan with collateral (same assets for simplicity)
-			T::Balance::credit_account(borrower, asset, AMOUNT);
+		// Create the loan with collateral
+		for (loan_asset, collateral_asset) in LOANS {
+			T::Balance::credit_account(borrower, collateral_asset, loan_amount * 2);
 			assert_ok!(Pallet::<T>::request_loan(
 				RawOrigin::Signed(borrower.clone()).into(),
-				asset,
-				AMOUNT / 2,
-				Some(asset),
-				BTreeMap::from([(asset, AMOUNT)]),
+				loan_asset,
+				loan_amount,
+				Some(collateral_asset),
+				BTreeMap::from([(collateral_asset, loan_amount * 2)]),
 			));
 		}
 	}
@@ -437,24 +440,20 @@ mod benchmarks {
 
 	#[benchmark]
 	fn make_repayment() {
-		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
-
+		const AMOUNT: AssetAmount = 100_000_000;
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
-		let origin = RawOrigin::Signed(borrower.clone());
-		let collateral = BTreeMap::from([(COLLATERAL_ASSET, 200_000_000)]);
-		const LOAN_AMOUNT: AssetAmount = 50_000_000;
-		assert_ok!(Pallet::<T>::request_loan(
-			origin.clone().into(),
-			LOAN_ASSET,
-			LOAN_AMOUNT,
-			Some(COLLATERAL_ASSET),
-			collateral
-		));
+		let lender = setup_lp_account::<T>(LOAN_ASSET, 1);
+		create_pools_and_loans_for_some_assets::<T>(&borrower, &lender, AMOUNT);
+
 		let value_before =
 			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap();
 
 		#[extrinsic_call]
-		make_repayment(origin, 0.into(), RepaymentAmount::Exact(5_000_000));
+		make_repayment(
+			RawOrigin::Signed(borrower.clone()),
+			0.into(),
+			RepaymentAmount::Exact(AMOUNT / 2),
+		);
 
 		assert!(
 			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap() <
@@ -516,7 +515,7 @@ mod benchmarks {
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
 		let lender = setup_lp_account::<T>(LOAN_ASSET, 1);
 
-		create_pools_and_loans_for_all_assets::<T>(&borrower, &lender);
+		create_pools_and_loans_for_some_assets::<T>(&borrower, &lender, 100_000_000);
 		let loan_account = LoanAccounts::<T>::get(borrower).unwrap();
 
 		#[block]
@@ -531,6 +530,7 @@ mod benchmarks {
 		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
 		let mut loan = create_loan::<T>(&borrower, 100_000_000);
+		let total_amount_before = GeneralLendingPools::<T>::get(LOAN_ASSET).unwrap().total_amount;
 
 		#[block]
 		{
@@ -541,7 +541,11 @@ mod benchmarks {
 				&LendingConfig::<T>::get(),
 			));
 		}
+
+		// Make sure that some interest was actually charged
 		assert_eq!(loan.last_interest_payment_at, AT_BLOCK.into());
+		let total_amount_after = GeneralLendingPools::<T>::get(LOAN_ASSET).unwrap().total_amount;
+		assert!(total_amount_after > total_amount_before);
 	}
 
 	#[benchmark]
@@ -549,7 +553,7 @@ mod benchmarks {
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
 		let lender = setup_lp_account::<T>(LOAN_ASSET, 1);
 
-		create_pools_and_loans_for_all_assets::<T>(&borrower, &lender);
+		create_pools_and_loans_for_some_assets::<T>(&borrower, &lender, 100_000_000);
 		let loan_account = LoanAccounts::<T>::get(borrower.clone()).unwrap();
 
 		#[block]
@@ -563,7 +567,7 @@ mod benchmarks {
 	fn start_liquidation_swaps() {
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
 		let lender = setup_lp_account::<T>(LOAN_ASSET, 1);
-		create_pools_and_loans_for_all_assets::<T>(&borrower, &lender);
+		create_pools_and_loans_for_some_assets::<T>(&borrower, &lender, 100_000_000);
 		let mut loan_account = LoanAccounts::<T>::get(&borrower).unwrap();
 
 		#[block]
@@ -579,7 +583,7 @@ mod benchmarks {
 	fn abort_liquidation_swaps() {
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
 		let lender = setup_lp_account::<T>(LOAN_ASSET, 1);
-		create_pools_and_loans_for_all_assets::<T>(&borrower, &lender);
+		create_pools_and_loans_for_some_assets::<T>(&borrower, &lender, 100_000_000);
 		let mut loan_account = LoanAccounts::<T>::get(&borrower).unwrap();
 
 		// Start the liquidation swaps
