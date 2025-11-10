@@ -104,7 +104,7 @@ pub mod pallet {
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
 	use frame_support::{
-		dispatch::DispatchInfo,
+		dispatch::{DispatchInfo, PostDispatchInfo},
 		sp_runtime::traits::{Dispatchable, SignedExtension},
 		traits::OriginTrait,
 		DefaultNoBound,
@@ -158,8 +158,11 @@ pub mod pallet {
 		/// The overarching call type.
 		type RuntimeCall: Member
 			+ Parameter
-			+ Dispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin, Info = DispatchInfo>
-			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
+			+ Dispatchable<
+				RuntimeOrigin = <Self as Config>::RuntimeOrigin,
+				Info = DispatchInfo,
+				PostInfo = PostDispatchInfo,
+			> + UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
 			+ From<frame_system::Call<Self>>
 			+ From<Call<Self>>
 			+ GetDispatchInfo
@@ -708,7 +711,7 @@ pub mod pallet {
 			);
 
 			Self::deposit_event(Event::<T>::NonNativeSignedCall);
-			dispatch_result
+			dispatch_result.map(|info| info.into())
 		}
 
 		/// Executes an atomic batch of runtime calls. It will execute as an all-or-nothing.
