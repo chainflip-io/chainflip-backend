@@ -147,7 +147,7 @@ fn can_update_all_config_items() {
 				extra_interest: Permill::from_percent(1),
 				from_origination_fee: Permill::from_percent(2),
 				from_liquidation_fee: Permill::from_percent(3),
-				interest_on_collateral_max: Permill::from_percent(5),
+				low_ltv_penalty_max: Permill::from_percent(5),
 			};
 
 		const NEW_FEE_SWAP_INTERVAL_BLOCKS: u32 = 700;

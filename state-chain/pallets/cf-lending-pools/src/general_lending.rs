@@ -1587,7 +1587,10 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-pub use rpc::{RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount};
+pub use rpc::{
+	LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLendingPool, RpcLiquidationStatus,
+	RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+};
 
 pub mod rpc {
 
@@ -1603,7 +1606,6 @@ pub mod rpc {
 		pub principal_amount: Amount,
 	}
 
-	// TODO: see what other parameters are needed
 	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 	pub struct RpcLendingPool<Amount> {
 		pub asset: Asset,
@@ -1613,6 +1615,21 @@ pub mod rpc {
 		pub current_interest_rate: Permill,
 		#[serde(flatten)]
 		pub config: LendingPoolConfiguration,
+	}
+
+	/// Total amount of funds (of some asset) owed by a lending pool to account `lp_id`.
+	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+	pub struct LendingSupplyPosition<AccountId, Amount> {
+		pub lp_id: AccountId,
+		pub total_amount: Amount,
+	}
+
+	/// All supply positions for a pool identified by `asset`.
+	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+	pub struct LendingPoolAndSupplyPositions<AccountId, Amount> {
+		#[serde(flatten)]
+		pub asset: Asset,
+		pub positions: Vec<LendingSupplyPosition<AccountId, Amount>>,
 	}
 
 	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -1841,8 +1858,8 @@ pub struct NetworkFeeContributions {
 	pub from_origination_fee: Permill,
 	/// The % of the liquidation fee that should be taken as a network fee.
 	pub from_liquidation_fee: Permill,
-	/// Interest on collateral paid when LTV approaches 0
-	pub interest_on_collateral_max: Permill,
+	/// Max value of additional interest/pentalty (at LTV approaching 0%)
+	pub low_ltv_penalty_max: Permill,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -1956,7 +1973,7 @@ impl LendingConfiguration {
 
 	/// Computes an additional annual interest/penalty for loan accounts with LTV below
 	/// `low_ltv` to incentivise capital efficiency. The penalty decreases linearly
-	/// from `interest_on_collateral_max` at 0% LTV to zero at `low_ltv` threshold.
+	/// from `low_ltv_penalty_max` at 0% LTV to zero at `low_ltv` threshold.
 	fn derive_low_ltv_interest_rate_per_year(&self, ltv: FixedU64) -> Permill {
 		let ltv: Permill = ltv.into_clamped_perthing();
 
@@ -1967,7 +1984,7 @@ impl LendingConfiguration {
 		interpolate_linear_segment(
 			Permill::zero(),
 			self.ltv_thresholds.low_ltv,
-			self.network_fee_contributions.interest_on_collateral_max,
+			self.network_fee_contributions.low_ltv_penalty_max,
 			Permill::zero(),
 			ltv,
 		)

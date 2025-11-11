@@ -1184,6 +1184,25 @@ fn loan_account_serialization() {
 }
 
 #[test]
+fn lending_supply_positions_serialization() {
+	let value = LendingPoolAndSupplyPositions::<AccountId32, U256> {
+		asset: Asset::Usdc,
+		positions: vec![
+			LendingSupplyPosition {
+				lp_id: AccountId32::new([0x11; 32]),
+				total_amount: 123456.into(),
+			},
+			LendingSupplyPosition {
+				lp_id: AccountId32::new([0x12; 32]),
+				total_amount: 234567.into(),
+			},
+		],
+	};
+
+	insta::assert_json_snapshot!(value);
+}
+
+#[test]
 fn lending_config_serialization() {
 	let config = RpcLendingConfig {
 		ltv_thresholds: LtvThresholds {
@@ -1199,7 +1218,7 @@ fn lending_config_serialization() {
 			extra_interest: Permill::from_percent(1),
 			from_origination_fee: Permill::from_percent(20),
 			from_liquidation_fee: Permill::from_percent(30),
-			interest_on_collateral_max: Permill::from_percent(50),
+			low_ltv_penalty_max: Permill::from_percent(50),
 		},
 		fee_swap_interval_blocks: 10,
 		interest_payment_interval_blocks: 15,
