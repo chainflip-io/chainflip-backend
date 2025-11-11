@@ -1218,7 +1218,7 @@ fn lending_config_serialization() {
 			extra_interest: Permill::from_percent(1),
 			from_origination_fee: Permill::from_percent(20),
 			from_liquidation_fee: Permill::from_percent(30),
-			interest_on_collateral_max: Permill::from_percent(50),
+			low_ltv_penalty_max: Permill::from_percent(50),
 		},
 		fee_swap_interval_blocks: 10,
 		interest_payment_interval_blocks: 15,

@@ -16,7 +16,7 @@ expression: config
     "extra_interest": 10000,
     "from_origination_fee": 200000,
     "from_liquidation_fee": 300000,
-    "interest_on_collateral_max": 500000
+    "low_ltv_penalty_max": 500000
   },
   "fee_swap_interval_blocks": 10,
   "interest_payment_interval_blocks": 15,

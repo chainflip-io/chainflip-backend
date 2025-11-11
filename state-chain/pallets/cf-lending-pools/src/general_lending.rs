@@ -1858,8 +1858,8 @@ pub struct NetworkFeeContributions {
 	pub from_origination_fee: Permill,
 	/// The % of the liquidation fee that should be taken as a network fee.
 	pub from_liquidation_fee: Permill,
-	/// Interest on collateral paid when LTV approaches 0
-	pub interest_on_collateral_max: Permill,
+	/// Max value of additional interest/pentalty (at LTV approaching 0%)
+	pub low_ltv_penalty_max: Permill,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -1973,7 +1973,7 @@ impl LendingConfiguration {
 
 	/// Computes an additional annual interest/penalty for loan accounts with LTV below
 	/// `low_ltv` to incentivise capital efficiency. The penalty decreases linearly
-	/// from `interest_on_collateral_max` at 0% LTV to zero at `low_ltv` threshold.
+	/// from `low_ltv_penalty_max` at 0% LTV to zero at `low_ltv` threshold.
 	fn derive_low_ltv_interest_rate_per_year(&self, ltv: FixedU64) -> Permill {
 		let ltv: Permill = ltv.into_clamped_perthing();
 
@@ -1984,7 +1984,7 @@ impl LendingConfiguration {
 		interpolate_linear_segment(
 			Permill::zero(),
 			self.ltv_thresholds.low_ltv,
-			self.network_fee_contributions.interest_on_collateral_max,
+			self.network_fee_contributions.low_ltv_penalty_max,
 			Permill::zero(),
 			ltv,
 		)

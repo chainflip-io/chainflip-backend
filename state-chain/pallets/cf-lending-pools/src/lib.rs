@@ -215,7 +215,7 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 		from_origination_fee: Permill::from_percent(20),
 		// 20% of all liquidation fees is paid to the network.
 		from_liquidation_fee: Permill::from_percent(20),
-		interest_on_collateral_max: Permill::from_percent(1),
+		low_ltv_penalty_max: Permill::from_percent(1),
 	},
 	// don't swap more often than every 10 blocks
 	fee_swap_interval_blocks: 10,
