@@ -1643,7 +1643,6 @@ where
 							.map(|loan| RpcLoan {
 								loan_id: loan.loan_id,
 								asset: loan.asset,
-								created_at: loan.created_at,
 								principal_amount: loan.principal_amount.into(),
 							})
 							.collect(),

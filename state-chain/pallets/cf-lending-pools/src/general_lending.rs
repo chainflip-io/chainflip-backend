@@ -775,7 +775,6 @@ pub struct GeneralLoan<T: Config> {
 	pub id: LoanId,
 	pub asset: Asset,
 	pub last_interest_payment_at: BlockNumberFor<T>,
-	pub created_at_block: BlockNumberFor<T>,
 	pub owed_principal: AssetAmount,
 	/// Interest owed on the loan but not yet taken (it is below the threshold)
 	pending_interest: InterestBreakdown,
@@ -1151,7 +1150,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 				id: loan_id,
 				asset,
 				last_interest_payment_at: frame_system::Pallet::<T>::current_block_number(),
-				created_at_block: frame_system::Pallet::<T>::current_block_number(),
 				owed_principal: 0,
 				pending_interest: Default::default(),
 			};
@@ -1602,7 +1600,6 @@ pub mod rpc {
 	pub struct RpcLoan<Amount> {
 		pub loan_id: LoanId,
 		pub asset: Asset,
-		pub created_at: u32,
 		pub principal_amount: Amount,
 	}
 
@@ -1679,7 +1676,6 @@ pub mod rpc {
 				.map(|(loan_id, loan)| RpcLoan {
 					loan_id,
 					asset: loan.asset,
-					created_at: loan.created_at_block.unique_saturated_into(),
 					principal_amount: loan.owed_principal,
 				})
 				.collect(),

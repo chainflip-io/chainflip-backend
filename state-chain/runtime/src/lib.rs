@@ -1711,7 +1711,47 @@ impl_runtime_apis! {
 				LendingPools::boost_pool_account_balance(&account_id, asset)
 			});
 
-			free_balances.saturating_add(open_order_balances).saturating_add(boost_pools_balances)
+			let trading_strategies_balances = {
+
+				let mut asset_map = AssetMap::<AssetAmount>::default();
+
+				for TradingStrategyInfo { balance, .. } in Self::cf_get_trading_strategies(Some(account_id.clone())) {
+					for (asset, amount) in balance {
+						asset_map[asset].saturating_accrue(amount);
+					}
+				}
+
+				asset_map
+			};
+
+
+			let lending_supply_balances = AssetMap::from_fn(|asset| {
+
+				pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::get(asset).as_mut().and_then(|pool| {
+
+					pool.get_total_owed_amount_for_account(&account_id).ok()
+
+				}).unwrap_or_default()
+
+			});
+
+			let lending_collateral_balances = pallet_cf_lending_pools::LoanAccounts::<Runtime>::get(&account_id).map(|loan_account| {
+				let mut asset_map = AssetMap::<AssetAmount>::default();
+
+				for (asset, amount) in loan_account.get_total_collateral() {
+					asset_map[asset].saturating_accrue(amount);
+				}
+
+				asset_map
+			}).unwrap_or_default();
+
+
+			free_balances
+				.saturating_add(open_order_balances)
+				.saturating_add(boost_pools_balances)
+				.saturating_add(trading_strategies_balances)
+				.saturating_add(lending_supply_balances)
+				.saturating_add(lending_collateral_balances)
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
@@ -2692,7 +2732,7 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_get_trading_strategies(lp_id: Option<AccountId>,) -> Vec<TradingStrategyInfo<AssetAmount>> {
+		fn cf_get_trading_strategies(lp_id: Option<AccountId>) -> Vec<TradingStrategyInfo<AssetAmount>> {
 
 			type Strategies = pallet_cf_trading_strategy::Strategies::<Runtime>;
 			type Strategy = pallet_cf_trading_strategy::TradingStrategy;

@@ -1169,7 +1169,6 @@ fn loan_account_serialization() {
 		loans: vec![RpcLoan {
 			loan_id: LoanId(1),
 			asset: Asset::Usdc,
-			created_at: 400,
 			principal_amount: 1000u128.into(),
 		}],
 		liquidation_status: Some(RpcLiquidationStatus {

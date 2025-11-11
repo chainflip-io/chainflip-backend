@@ -176,6 +176,18 @@ where
 		// in the first place)
 		self.available_amount.saturating_accrue(amount);
 	}
+
+	pub fn get_total_owed_amount_for_account(
+		&self,
+		account_id: &AccountId,
+	) -> Result<AssetAmount, LendingPoolError> {
+		let share = self
+			.lender_shares
+			.get(account_id)
+			.ok_or(LendingPoolError::LenderNotFoundInPool)?;
+
+		Ok(*share * self.total_amount)
+	}
 }
 
 #[cfg(test)]
