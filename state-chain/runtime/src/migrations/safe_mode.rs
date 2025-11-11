@@ -6,7 +6,9 @@ use crate::{chainflip::generic_elections::GenericElectionsSafeMode, Runtime};
 pub struct SafeModeMigration;
 
 mod old {
-	use crate::safe_mode::WitnesserCallPermission;
+	use crate::{
+		chainflip::generic_elections::GenericElectionsSafeMode, safe_mode::WitnesserCallPermission,
+	};
 	use codec::{Decode, Encode};
 	use frame_support::instances::*;
 	use scale_info::TypeInfo;
@@ -47,6 +49,7 @@ mod old {
 		pub ingress_egress_arbitrum: pallet_cf_ingress_egress::PalletSafeMode<Instance4>,
 		pub ingress_egress_solana: pallet_cf_ingress_egress::PalletSafeMode<Instance5>,
 		pub ingress_egress_assethub: pallet_cf_ingress_egress::PalletSafeMode<Instance6>,
+		pub elections_generic: GenericElectionsSafeMode,
 	}
 }
 
@@ -86,7 +89,7 @@ impl UncheckedOnRuntimeUpgrade for SafeModeMigration {
                     ingress_egress_arbitrum: old.ingress_egress_arbitrum,
                     ingress_egress_solana: old.ingress_egress_solana,
                     ingress_egress_assethub: old.ingress_egress_assethub,
-                    elections_generic: GenericElectionsSafeMode::code_green(),
+                    elections_generic: old.elections_generic,
 				})
 			},
 		).map_err(|_| {

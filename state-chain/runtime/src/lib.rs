@@ -1478,7 +1478,6 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	MigrationsForV2_0,
-	migrations::ingress_delay::IngressEgressDelay,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1580,6 +1579,22 @@ type MigrationsForV2_0 = (
 		pallet_cf_environment::Pallet<Runtime>,
 		<Runtime as frame_system::Config>::DbWeight,
 	>,
+	instanced_migrations!(
+		module: pallet_cf_ingress_egress,
+		migration: migrations::ingress_delay::IngressEgressDelay,
+		from: 28,
+		to: 29,
+		include_instances: [
+			SolanaInstance,
+		],
+		exclude_instances: [
+			EthereumInstance,
+			PolkadotInstance,
+			BitcoinInstance,
+			ArbitrumInstance,
+			AssethubInstance
+		]
+	),
 );
 
 #[cfg(feature = "runtime-benchmarks")]
