@@ -67,7 +67,7 @@ async function main() {
       }
 
       console.log(
-        `Depositing ${funderLp ? 'directly' : 'via transfer'} - liquidity for ${asset} amount ${amount}`,
+        `Depositing ${funderLp ? 'via internal transfer' : 'directly'} - liquidity for ${asset} amount ${amount}`,
       );
 
       if (funderLp) {
