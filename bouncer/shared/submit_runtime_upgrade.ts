@@ -19,6 +19,7 @@ export async function submitRuntimeUpgradeWithRestrictions(
   // default to false, because try-runtime feature is not always available.
   tryRuntime = false,
 ) {
+  const wasmStats = await fs.stat(wasmPath);
   const runtimeWasm = await readRuntimeWasmFromFile(wasmPath);
 
   await using chainflip = await getChainflipApi();
@@ -37,7 +38,7 @@ export async function submitRuntimeUpgradeWithRestrictions(
     versionPercentRestriction = undefined;
   }
 
-  logger.info('Submitting runtime upgrade.');
+  logger.info(`Submitting runtime upgrade. WASM size is ${wasmStats.size} bytes.`);
   await submitGovernanceExtrinsic((api) =>
     api.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
   );

@@ -43,9 +43,8 @@ use cf_rpc_apis::{
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::rpc::NumberOrHex;
-use codec::Decode;
 use core::ops::Range;
-use frame_system_rpc_runtime_api::AccountNonceApi;
+use ethereum_eip712::eip712::{EIP712Domain, Types};
 use jsonrpsee::{
 	core::async_trait,
 	proc_macros::rpc,
@@ -58,10 +57,7 @@ use jsonrpsee::{
 use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::OraclePrice, price::PriceAsset,
 };
-use pallet_cf_environment::{
-	build_domain_data, EthEncodingType, SolEncodingType, TransactionMetadata,
-	DOMAIN_OFFCHAIN_PREFIX,
-};
+use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_lending_pools::{
 	LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLoan, RpcLoanAccount,
@@ -76,6 +72,7 @@ use sc_client_api::{
 	HeaderBackend, StorageProvider,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
@@ -89,10 +86,11 @@ use state_chain_runtime::{
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DelegationSnapshot, DispatchErrorWithMessage, ElectoralRuntimeApi,
-		EvmCallDetails, FailingWitnessValidators, FeeTypes, LendingPosition,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees, OpenedDepositChannels,
-		OperatorInfo, RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool,
-		RuntimeApiPenalty, SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
+		EncodedNonNativeCall, EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails,
+		FailingWitnessValidators, FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo,
+		LiquidityProviderInfo, NetworkFees, NonceOrAccount, OpenedDepositChannels, OperatorInfo,
+		RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiPenalty,
+		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
 		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
@@ -106,7 +104,6 @@ use std::{
 
 pub mod backend;
 pub mod broker;
-pub mod eip_712_types;
 pub mod lp;
 pub mod monitoring;
 pub mod order_fills;
@@ -115,24 +112,24 @@ pub mod pool_client;
 #[cfg(test)]
 mod tests;
 
-#[derive(Clone, Serialize, Deserialize)]
-pub enum EncodedNonNativeCall {
-	Eip712(eip_712_types::TypedData),
-	String(String),
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Eip712RpcTypedData {
+	/// Signing domain metadata. The signing domain is the intended context for the signature (e.g.
+	/// the dapp, protocol, etc. that it's intended for). This data is used to construct the domain
+	/// separator of the message.
+	#[serde(default)]
+	pub domain: EIP712Domain,
+	/// The custom types used by this message.
+	pub types: Types,
+	#[serde(rename = "primaryType")]
+	/// The type of the message.
+	pub primary_type: String,
+	// The message to be signed.
+	pub message: BTreeMap<String, Value>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Decode, Serialize, Deserialize)]
-pub enum EncodingType {
-	Eth(EthEncodingType),
-	Sol(SolEncodingType),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Decode, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum NonceOrAccount {
-	Nonce(u32),
-	Account(state_chain_runtime::AccountId),
-}
+type RpcEncodedNonNativeCall = EncodedNonNativeCallGeneric<Eip712RpcTypedData>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
@@ -1319,7 +1316,7 @@ pub trait CustomApi {
 		nonce_or_account: NonceOrAccount,
 		encoding: EncodingType,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<(EncodedNonNativeCall, TransactionMetadata)>;
+	) -> RpcResult<(RpcEncodedNonNativeCall, TransactionMetadata)>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1529,9 +1526,7 @@ where
 		+ BlockchainEvents<B>
 		+ CallApiAt<B>
 		+ StorageProvider<B, BE>,
-	C::Api: CustomRuntimeApi<B>
-		+ ElectoralRuntimeApi<B>
-		+ AccountNonceApi<B, state_chain_runtime::AccountId, state_chain_runtime::Nonce>,
+	C::Api: CustomRuntimeApi<B> + ElectoralRuntimeApi<B>,
 {
 	pass_through! {
 		cf_is_auction_phase() -> bool,
@@ -2615,7 +2610,7 @@ where
 		nonce_or_account: NonceOrAccount,
 		encoding: EncodingType,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<(EncodedNonNativeCall, TransactionMetadata)> {
+	) -> RpcResult<(RpcEncodedNonNativeCall, TransactionMetadata)> {
 		self.rpc_backend
 			.with_versioned_runtime_api(at, |api, hash, version| match version {
 				Some(v) if v < 8 => Err(CfApiError::ErrorObject(call_error(
@@ -2623,75 +2618,55 @@ where
 					CfErrorCode::RuntimeApiError,
 				))),
 				_ => {
-					let call_bytes: Vec<u8> = call.into();
-
-					// This will ensure it is a valid RuntimeCall
-					let runtime_call =
-						match state_chain_runtime::RuntimeCall::decode(&mut &call_bytes[..]) {
-							Ok(rc) => rc,
-							Err(err) =>
-								return Err(CfApiError::ErrorObject(ErrorObject::owned(
-									ErrorCode::InvalidParams.code(),
-									format!("Failed to deserialize into a RuntimeCall {:?}", err),
-									None::<()>,
-								))),
-						};
-
-					let (chainflip_network, spec_version, current_block) =
-						api.cf_chainflip_network_and_state(hash).map_err(CfApiError::from)??;
-
-					let transaction_metadata = TransactionMetadata {
-						expiry_block: current_block.saturating_add(blocks_to_expiry),
-						nonce: match nonce_or_account {
-							NonceOrAccount::Nonce(nonce) => nonce,
-							NonceOrAccount::Account(account) => api.account_nonce(hash, account)?,
-						},
-					};
-
-					let encoded_data = match encoding {
-						// Encode domain without the prefix because wallets automatically prefix
-						// the calldata when using personal_sign
-						EncodingType::Eth(EthEncodingType::PersonalSign) =>
-							EncodedNonNativeCall::String(build_domain_data(
-								runtime_call.clone(),
-								&chainflip_network,
-								&transaction_metadata,
-								spec_version,
-							)),
-						EncodingType::Eth(EthEncodingType::Eip712) => {
-							let typed_data: eip_712_types::TypedData =
-								eip_712_types::build_eip712_typed_data(
-									&chainflip_network,
-									runtime_call,
-									&transaction_metadata,
-									spec_version,
-								)
-								.map_err(|e| {
+					let (encoded_call, metadata) = api
+						.cf_encode_non_native_call(
+							hash,
+							call.into(),
+							blocks_to_expiry,
+							nonce_or_account,
+							encoding,
+						)
+						.map_err(CfApiError::from)?
+						.map_err(|e| {
+							CfApiError::ErrorObject(ErrorObject::owned(
+								ErrorCode::InternalError.code(),
+								format!("Failed to encode non native call: {}", e),
+								None::<()>,
+							))
+						})?;
+					let serialized_call = match encoded_call {
+						EncodedNonNativeCall::Eip712(typed_data) => {
+							let message_scale_value: scale_value::Value =
+								typed_data.message.clone().into();
+							let message_json =
+								serde_json::to_value(message_scale_value).map_err(|e| {
 									CfApiError::ErrorObject(ErrorObject::owned(
-										ErrorCode::InvalidParams.code(),
-										format!("Failed to build eip712 typed data: {e}"),
+										ErrorCode::InternalError.code(),
+										format!("Failed to serialize message to JSON: {}", e),
 										None::<()>,
 									))
 								})?;
-							EncodedNonNativeCall::Eip712(typed_data)
+							let message_object = message_json.as_object().ok_or_else(|| {
+								CfApiError::ErrorObject(ErrorObject::owned(
+									ErrorCode::InternalError.code(),
+									"the primary type is not a JSON object but one of the primitive types",
+									None::<()>,
+								))
+							})?;
+
+							RpcEncodedNonNativeCall::Eip712(Eip712RpcTypedData {
+								domain: typed_data.domain,
+								types: typed_data.types,
+								primary_type: typed_data.primary_type,
+								message: message_object.clone().into_iter().collect(),
+							})
 						},
-						EncodingType::Sol(SolEncodingType::Domain) => {
-							let raw_payload = build_domain_data(
-								runtime_call,
-								&chainflip_network,
-								&transaction_metadata,
-								spec_version,
-							);
-							EncodedNonNativeCall::String(format!(
-								"{}{}",
-								DOMAIN_OFFCHAIN_PREFIX, raw_payload,
-							))
-						},
+						EncodedNonNativeCall::String(s) => RpcEncodedNonNativeCall::String(s),
 					};
 					// Return the `transaction_metadata` because it will need
 					// to be submitted as part of the `non_native_signed_call`
-					// and it is being modified here.
-					Ok((encoded_data, transaction_metadata))
+					// and it has been modified in the runtime api.
+					Ok((serialized_call, metadata))
 				},
 			})
 	}

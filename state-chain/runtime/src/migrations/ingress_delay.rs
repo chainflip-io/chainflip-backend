@@ -15,11 +15,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{Runtime, SolanaInstance};
-use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight};
 
 pub struct IngressEgressDelay;
 
-impl OnRuntimeUpgrade for IngressEgressDelay {
+impl UncheckedOnRuntimeUpgrade for IngressEgressDelay {
 	fn on_runtime_upgrade() -> Weight {
 		pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, SolanaInstance>::set(10);
 

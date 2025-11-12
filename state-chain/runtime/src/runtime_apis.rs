@@ -35,8 +35,12 @@ use cf_primitives::{
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
 use core::{ops::Range, str};
+use ethereum_eip712::eip712::TypedData;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_elections::electoral_systems::oracle_price::price::PriceAsset;
+use pallet_cf_environment::{
+	submit_runtime_call::TransactionMetadata, EthEncodingType, SolEncodingType,
+};
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::{
@@ -60,6 +64,27 @@ use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
 };
+
+#[derive(Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
+pub enum EncodedNonNativeCallGeneric<T> {
+	Eip712(T),
+	String(String),
+}
+
+pub type EncodedNonNativeCall = EncodedNonNativeCallGeneric<TypedData>;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
+pub enum EncodingType {
+	Eth(EthEncodingType),
+	Sol(SolEncodingType),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
+#[serde(untagged)]
+pub enum NonceOrAccount {
+	Nonce(u32),
+	Account(AccountId32),
+}
 
 #[derive(PartialEq, Eq, Encode, Decode, Clone, TypeInfo, Serialize, Deserialize, Debug)]
 pub struct LendingPosition<Amount> {
@@ -649,7 +674,7 @@ impl<A> RpcAccountInfoCommonItems<A> {
 //  - Handle the dummy method gracefully in the custom rpc implementation using
 //    runtime_api().api_version().
 decl_runtime_apis!(
-	#[api_version(8)]
+	#[api_version(9)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -866,15 +891,19 @@ decl_runtime_apis!(
 			account: Option<AccountId32>,
 		) -> Vec<DelegationSnapshot<AccountId32, FlipBalance>>;
 		#[changed_in(8)]
-		fn cf_chainflip_network_and_state();
-		fn cf_chainflip_network_and_state(
-		) -> Result<(cf_primitives::ChainflipNetwork, u32, BlockNumber), DispatchErrorWithMessage>;
-		#[changed_in(8)]
 		fn cf_ingress_delay();
 		fn cf_ingress_delay(chain: ForeignChain) -> u32;
 		#[changed_in(8)]
 		fn cf_boost_delay();
 		fn cf_boost_delay(chain: ForeignChain) -> u32;
+		#[changed_in(9)]
+		fn cf_encode_non_native_call();
+		fn cf_encode_non_native_call(
+			call: Vec<u8>,
+			blocks_to_expiry: BlockNumber,
+			nonce_or_account: NonceOrAccount,
+			encoding: EncodingType,
+		) -> Result<(EncodedNonNativeCall, TransactionMetadata), DispatchErrorWithMessage>;
 	}
 );
 
