@@ -2171,7 +2171,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						T::FundAccount::fund_account(
 							lp_account.clone(),
 							funding_amount.into(),
-							FundingSource::InitialFunding,
+							FundingSource::InitialFunding {
+								asset: asset.into(),
+								channel_id: if let DepositOrigin::DepositChannel {
+									channel_id,
+									..
+								} = &origin
+								{
+									Some(*channel_id)
+								} else {
+									None
+								},
+							},
 						);
 						// Increment the nonce to prevent replay attacks
 						frame_system::Pallet::<T>::inc_account_nonce(&lp_account);

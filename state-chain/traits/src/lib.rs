@@ -1346,7 +1346,7 @@ pub trait SpawnAccount {
 pub enum FundingSource {
 	EthTransaction { tx_hash: [u8; 32], funder: cf_chains::eth::Address },
 	Swap { swap_request_id: SwapRequestId },
-	InitialFunding,
+	InitialFunding { channel_id: Option<u64>, asset: Asset },
 }
 
 pub trait FundAccount {
