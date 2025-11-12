@@ -75,9 +75,9 @@ pub struct LoanAccount<T: Config> {
 	borrower_id: T::AccountId,
 	primary_collateral_asset: Asset,
 	collateral: BTreeMap<Asset, AssetAmount>,
-	loans: BTreeMap<LoanId, GeneralLoan<T>>,
-	liquidation_status: LiquidationStatus,
-	voluntary_liquidation_requested: bool,
+	pub(super) loans: BTreeMap<LoanId, GeneralLoan<T>>,
+	pub(super) liquidation_status: LiquidationStatus,
+	pub(super) voluntary_liquidation_requested: bool,
 }
 
 impl<T: Config> LoanAccount<T> {
@@ -194,7 +194,12 @@ impl<T: Config> LoanAccount<T> {
 			.try_fold(0u128, |acc, x| Ok(acc.saturating_add(x?)))
 	}
 
-	pub fn update_liquidation_status(&mut self, borrower_id: &T::AccountId, ltv: FixedU64) {
+	pub fn update_liquidation_status(
+		&mut self,
+		borrower_id: &T::AccountId,
+		ltv: FixedU64,
+		weight_used: &mut Weight,
+	) {
 		let config = LendingConfig::<T>::get();
 
 		// This will saturate at 100%, but that's good enough (none of our thresholds exceed 100%):
@@ -318,9 +323,11 @@ impl<T: Config> LoanAccount<T> {
 				if let Ok(collateral) = self.prepare_collateral_for_liquidation() {
 					self.init_liquidation_swaps(borrower_id, collateral, liquidation_type);
 				}
+				weight_used.saturating_accrue(T::WeightInfo::start_liquidation_swaps());
 			},
 			LiquidationStatusChange::AbortLiquidation { reason } => {
 				self.abort_liquidation_swaps(reason);
+				weight_used.saturating_accrue(T::WeightInfo::abort_liquidation_swaps());
 			},
 			LiquidationStatusChange::ChangeLiquidationType { liquidation_type } => {
 				// Going from one liquidation type to another is always due to LTV change
@@ -328,6 +335,8 @@ impl<T: Config> LoanAccount<T> {
 				if let Ok(collateral) = self.prepare_collateral_for_liquidation() {
 					self.init_liquidation_swaps(borrower_id, collateral, liquidation_type);
 				}
+				weight_used.saturating_accrue(T::WeightInfo::start_liquidation_swaps());
+				weight_used.saturating_accrue(T::WeightInfo::abort_liquidation_swaps());
 			},
 			LiquidationStatusChange::NoChange => { /* nothing to do */ },
 		}
@@ -335,7 +344,7 @@ impl<T: Config> LoanAccount<T> {
 
 	/// Aborts all current liquidation swaps, repays any already swapped principal assets and
 	/// returns remaining collateral assets alongside the corresponding loan information.
-	fn abort_liquidation_swaps(&mut self, reason: LiquidationCompletionReason) {
+	pub(super) fn abort_liquidation_swaps(&mut self, reason: LiquidationCompletionReason) {
 		let (is_voluntary, liquidation_swaps) = match &mut self.liquidation_status {
 			LiquidationStatus::NoLiquidation => {
 				log_or_panic!("Attempting to abort liquidation swaps in no-liquidation state");
@@ -458,7 +467,11 @@ impl<T: Config> LoanAccount<T> {
 	}
 
 	#[transactional]
-	pub fn derive_and_charge_interest(&mut self, ltv: FixedU64) -> DispatchResult {
+	pub fn derive_and_charge_interest(
+		&mut self,
+		ltv: FixedU64,
+		weight_used: &mut Weight,
+	) -> DispatchResult {
 		let config = LendingConfig::<T>::get();
 
 		if self.liquidation_status != LiquidationStatus::NoLiquidation {
@@ -467,6 +480,7 @@ impl<T: Config> LoanAccount<T> {
 		}
 
 		let current_block = frame_system::Pallet::<T>::block_number();
+		weight_used.saturating_accrue(T::DbWeight::get().reads(1));
 
 		for loan in self.loans.values_mut() {
 			let blocks_since_last_payment: u32 = current_block
@@ -475,47 +489,8 @@ impl<T: Config> LoanAccount<T> {
 				.unwrap_or(u32::MAX);
 
 			if blocks_since_last_payment >= config.interest_payment_interval_blocks {
-				let loan_asset = loan.asset;
-
-				let base_interest_rate = {
-					let utilisation = GeneralLendingPools::<T>::get(loan_asset)
-						.map(|pool| pool.get_utilisation())
-						.unwrap_or_default();
-
-					config.derive_base_interest_rate_per_payment_interval(
-						loan_asset,
-						utilisation,
-						blocks_since_last_payment,
-					)
-				};
-
-				let network_interest_rate = config
-					.derive_network_interest_rate_per_payment_interval(blocks_since_last_payment);
-
-				let low_ltv_penalty_rate = config.derive_low_ltv_penalty_rate_per_payment_interval(
-					ltv,
-					blocks_since_last_payment,
-				);
-
-				// Calculating interest in scaled amounts for better precision
-				let owed_principal = ScaledAmountHP::from_asset_amount(loan.owed_principal);
-
-				// Work out how much interest has accrued in loan's asset terms:
-				let network_interest_amount = owed_principal * network_interest_rate;
-				let low_ltv_penalty_amount = owed_principal * low_ltv_penalty_rate;
-				let pool_interest_amount = owed_principal * base_interest_rate;
-
-				// Record the accrued interest amounts. We may or may not charge these immediately
-				// depending on whether the amounts exceed some threshold.
-				loan.pending_interest.network.saturating_accrue(network_interest_amount);
-				loan.pending_interest.pool.saturating_accrue(pool_interest_amount);
-				loan.pending_interest.low_ltv_penalty.saturating_accrue(low_ltv_penalty_amount);
-
-				loan.last_interest_payment_at = current_block;
-
-				loan.charge_pending_interest_if_above_threshold(Some(
-					config.interest_collection_threshold_usd,
-				))?;
+				weight_used.saturating_accrue(T::WeightInfo::loan_charge_interest());
+				loan.charge_interest(ltv, current_block, blocks_since_last_payment, &config)?;
 			}
 		}
 
@@ -529,6 +504,7 @@ impl<T: Config> LoanAccount<T> {
 		&mut self,
 		borrower_id: &T::AccountId,
 		ltv: FixedU64,
+		weight_used: &mut Weight,
 	) -> Result<bool, DispatchError> {
 		let config = LendingConfig::<T>::get();
 
@@ -536,31 +512,15 @@ impl<T: Config> LoanAccount<T> {
 			return Ok(false)
 		}
 
-		let top_up_required_in_usd = {
-			let loan_value_in_usd = self.total_owed_usd_value()?;
-
-			let collateral_required_in_usd = FixedU64::from(config.ltv_thresholds.target)
-				.reciprocal()
-				.map(|ltv_inverted| ltv_inverted.saturating_mul_int(loan_value_in_usd))
-				// This effectively disables auto top up if the ltv target erroneously set to 0:
-				.unwrap_or(0);
-
-			collateral_required_in_usd.saturating_sub(self.total_collateral_usd_value()?)
-		};
-
-		// Auto top up is currently only possible from the primary collateral asset
-		let top_up_required_in_collateral_asset =
-			amount_from_usd_value::<T>(self.primary_collateral_asset, top_up_required_in_usd)?;
-
+		// Ignoring weight of sweep as we expect most borrowers to not have open orders
 		try_sweep::<T>(borrower_id);
 
-		// Don't attempt to charge more than what's available:
-		let top_up_amount = core::cmp::min(
-			T::Balance::get_balance(borrower_id, self.primary_collateral_asset),
-			top_up_required_in_collateral_asset,
-		);
+		weight_used.saturating_accrue(T::WeightInfo::loan_calculate_top_up_amount());
+		let top_up_amount =
+			self.calculate_top_up_amount(borrower_id, config.ltv_thresholds.target)?;
 
 		if top_up_amount > 0 {
+			weight_used.saturating_accrue(T::DbWeight::get().reads_writes(2, 2));
 			T::Balance::try_debit_account(
 				borrower_id,
 				self.primary_collateral_asset,
@@ -581,10 +541,38 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
+	pub(super) fn calculate_top_up_amount(
+		&self,
+		borrower_id: &T::AccountId,
+		ltv_threshold_target: Permill,
+	) -> Result<AssetAmount, Error<T>> {
+		let top_up_required_in_usd = {
+			let loan_value_in_usd = self.total_owed_usd_value()?;
+
+			let collateral_required_in_usd = FixedU64::from(ltv_threshold_target)
+				.reciprocal()
+				.map(|ltv_inverted| ltv_inverted.saturating_mul_int(loan_value_in_usd))
+				// This effectively disables auto top up if the ltv target erroneously set to 0:
+				.unwrap_or(0);
+
+			collateral_required_in_usd.saturating_sub(self.total_collateral_usd_value()?)
+		};
+
+		// Auto top up is currently only possible from the primary collateral asset
+		let top_up_required_in_collateral_asset =
+			amount_from_usd_value::<T>(self.primary_collateral_asset, top_up_required_in_usd)?;
+
+		// Don't attempt to charge more than what's available:
+		Ok(core::cmp::min(
+			T::Balance::get_balance(borrower_id, self.primary_collateral_asset),
+			top_up_required_in_collateral_asset,
+		))
+	}
+
 	/// Split collateral proportionally to the usd value of each loan (to give each loan a fair
 	/// chance of being liquidated without a loss) as a preparation step for liquidation. Returns
 	/// error if oracle prices aren't available.
-	fn prepare_collateral_for_liquidation(
+	pub(super) fn prepare_collateral_for_liquidation(
 		&mut self,
 	) -> Result<Vec<AssetCollateralForLoan>, Error<T>> {
 		let mut prepared_collateral = vec![];
@@ -620,7 +608,7 @@ impl<T: Config> LoanAccount<T> {
 	/// Initiate liquidation swaps for each collateral asset (from collateral either
 	/// prepared by [prepare_collateral_for_liquidation] or collected from previous
 	/// liquidation swaps via [abort_liquidation_swaps]).
-	fn init_liquidation_swaps(
+	pub(super) fn init_liquidation_swaps(
 		&mut self,
 		borrower_id: &T::AccountId,
 		collateral: Vec<AssetCollateralForLoan>,
@@ -796,6 +784,56 @@ impl<T: Config> GeneralLoan<T> {
 		}
 	}
 
+	pub(super) fn charge_interest(
+		&mut self,
+		ltv: FixedU64,
+		current_block: BlockNumberFor<T>,
+		blocks_since_last_payment: u32,
+		config: &LendingConfiguration,
+	) -> DispatchResult {
+		let loan_asset = self.asset;
+
+		let base_interest_rate = {
+			let utilisation = GeneralLendingPools::<T>::get(loan_asset)
+				.map(|pool| pool.get_utilisation())
+				.unwrap_or_default();
+
+			config.derive_base_interest_rate_per_payment_interval(
+				loan_asset,
+				utilisation,
+				blocks_since_last_payment,
+			)
+		};
+
+		let network_interest_rate =
+			config.derive_network_interest_rate_per_payment_interval(blocks_since_last_payment);
+
+		let low_ltv_penalty_rate =
+			config.derive_low_ltv_penalty_rate_per_payment_interval(ltv, blocks_since_last_payment);
+
+		// Calculating interest in scaled amounts for better precision
+		let owed_principal = ScaledAmountHP::from_asset_amount(self.owed_principal);
+
+		// Work out how much interest has accrued in loan's asset terms:
+		let network_interest_amount = owed_principal * network_interest_rate;
+		let low_ltv_penalty_amount = owed_principal * low_ltv_penalty_rate;
+		let pool_interest_amount = owed_principal * base_interest_rate;
+
+		// Record the accrued interest amounts. We may or may not charge these immediately
+		// depending on whether the amounts exceed some threshold.
+		self.pending_interest.network.saturating_accrue(network_interest_amount);
+		self.pending_interest.pool.saturating_accrue(pool_interest_amount);
+		self.pending_interest.low_ltv_penalty.saturating_accrue(low_ltv_penalty_amount);
+
+		self.last_interest_payment_at = current_block;
+
+		self.charge_pending_interest_if_above_threshold(Some(
+			config.interest_collection_threshold_usd,
+		))?;
+
+		Ok(())
+	}
+
 	/// Repays the loan after collecting any pending interest and deducting liquidation fee
 	/// from the provided amount.
 	fn repay_via_liquidation(
@@ -945,7 +983,10 @@ fn get_price<T: Config>(asset: Asset) -> Result<Price, Error<T>> {
 }
 
 /// Uses oracle prices to calculate the USD value of the given asset amount
-fn usd_value_of<T: Config>(asset: Asset, amount: AssetAmount) -> Result<AssetAmount, Error<T>> {
+pub(super) fn usd_value_of<T: Config>(
+	asset: Asset,
+	amount: AssetAmount,
+) -> Result<AssetAmount, Error<T>> {
 	let price_in_usd = get_price::<T>(asset)?;
 	Ok(cf_amm_math::output_amount_ceil(amount.into(), price_in_usd).unique_saturated_into())
 }
@@ -1043,7 +1084,7 @@ fn try_sweep<T: Config>(account_id: &T::AccountId) {
 
 /// Collateral amount linked to a specific loan
 #[derive(Debug)]
-struct AssetCollateralForLoan {
+pub(super) struct AssetCollateralForLoan {
 	loan_id: LoanId,
 	loan_asset: Asset,
 	collateral_asset: Asset,
@@ -1054,20 +1095,29 @@ struct AssetCollateralForLoan {
 /// periodically swap collected fees into each pool's desired asset.
 pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 	let config = LendingConfig::<T>::get();
+	let mut weight_used = T::DbWeight::get().reads(1);
 
 	// Collecting keys to avoid undefined behaviour in `StorageMap`
-	for borrower_id in LoanAccounts::<T>::iter_keys().collect::<Vec<_>>().iter() {
+	for borrower_id in LoanAccounts::<T>::iter_keys()
+		.inspect(|_| weight_used += T::DbWeight::get().reads(1))
+		.collect::<Vec<_>>()
+		.iter()
+	{
 		LoanAccounts::<T>::mutate(borrower_id, |loan_account| {
 			let loan_account = loan_account.as_mut().expect("Using keys read just above");
 
 			// Some of these may fail due to oracle prices being unavailable, but that's
 			// OK and doesn't need any specific error handling (they will simply be re-tried
 			// at a later point).
+			weight_used.saturating_accrue(T::WeightInfo::derive_ltv());
 			if let Ok(ltv) = loan_account.derive_ltv() {
-				let _ = loan_account.derive_and_charge_interest(ltv);
+				let _ = loan_account.derive_and_charge_interest(ltv, &mut weight_used);
 
-				let new_ltv = if let Ok(true) = loan_account.process_auto_top_up(borrower_id, ltv) {
+				let new_ltv = if let Ok(true) =
+					loan_account.process_auto_top_up(borrower_id, ltv, &mut weight_used)
+				{
 					// A successful topup means we have to re-derive LTV
+					weight_used.saturating_accrue(T::WeightInfo::derive_ltv());
 					loan_account.derive_ltv()
 				} else {
 					Ok(ltv)
@@ -1076,40 +1126,51 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 				// This should always be Ok (otherwise we wouldn't be able to derive LTV the first
 				// time), but let's check anyway as a defensive measure:
 				if let Ok(new_ltv) = new_ltv {
-					loan_account.update_liquidation_status(borrower_id, new_ltv);
+					loan_account.update_liquidation_status(borrower_id, new_ltv, &mut weight_used);
 				}
 			}
 		});
 	}
 
-	// Swap fees in every asset every FEE_CHECK_INTERVAL blocks, but only if they exceed
-	// FEE_SWAP_THRESHOLD_USD in value
+	// Swap fees in every asset every fee_swap_interval_blocks, but only if they exceed
+	// fee_swap_threshold_usd in value
 	if current_block % config.fee_swap_interval_blocks.into() == 0u32.into() {
-		// Additionally swap all network fee contributions from fees:
-		for asset in PendingNetworkFees::<T>::iter_keys().collect::<Vec<_>>() {
+		// Swap all network fee contributions from fees:
+		for asset in PendingNetworkFees::<T>::iter_keys()
+			.inspect(|_| weight_used += T::DbWeight::get().reads(1))
+			.collect::<Vec<_>>()
+		{
 			PendingNetworkFees::<T>::mutate(asset, |fee_amount| {
 				// NOTE: if asset is FLIP, we shouldn't need to swap, but it should still work,
 				// and it seems easiest to not write a special case
+				weight_used.saturating_accrue(
+					T::WeightInfo::usd_value_of().saturating_add(T::DbWeight::get().reads(1)),
+				);
 				let Ok(fee_usd_value) = usd_value_of::<T>(asset, *fee_amount) else {
 					// Don't swap yet if we can't determine asset's price
 					return;
 				};
 
 				if fee_usd_value >= config.fee_swap_threshold_usd {
-					let swap_request_id =
-						T::SwapRequestHandler::init_network_fee_swap_request(asset, *fee_amount);
-
-					Pallet::<T>::deposit_event(Event::LendingNetworkFeeSwapInitiated {
-						swap_request_id,
-					});
-
+					initiate_network_fee_swap::<T>(asset, *fee_amount);
 					*fee_amount = 0;
+
+					weight_used.saturating_accrue(
+						T::WeightInfo::initiate_network_fee_swap()
+							.saturating_add(T::DbWeight::get().writes(1)),
+					);
 				}
 			});
 		}
 	}
 
-	Weight::zero()
+	weight_used
+}
+
+pub(super) fn initiate_network_fee_swap<T: Config>(asset: Asset, fee_amount: AssetAmount) {
+	let swap_request_id = T::SwapRequestHandler::init_network_fee_swap_request(asset, fee_amount);
+
+	Pallet::<T>::deposit_event(Event::LendingNetworkFeeSwapInitiated { swap_request_id });
 }
 
 impl<T: Config> LendingApi for Pallet<T> {

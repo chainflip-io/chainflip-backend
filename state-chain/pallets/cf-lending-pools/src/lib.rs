@@ -886,7 +886,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(13)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::change_voluntary_liquidation())]
 		pub fn initiate_voluntary_liquidation(origin: OriginFor<T>) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
@@ -894,7 +894,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(14)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::change_voluntary_liquidation())]
 		pub fn stop_voluntary_liquidation(origin: OriginFor<T>) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
