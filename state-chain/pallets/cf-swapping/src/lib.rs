@@ -1539,12 +1539,12 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// For when the user wants to deposit assets into the Chain but doesn't have
-		/// a statechain account yet. Generates a new deposit address for the user to deposit their
-		/// assets.
+		/// Open a channel that allows a user to create an account by depositing liquidity.
+		///
+		/// The deposit will be partially swapped into FLIP which is used to credit the new account.
 		#[pallet::call_index(18)]
 		#[pallet::weight(Weight::zero())]
-		pub fn request_liquidity_deposit_address_for_external_account(
+		pub fn request_account_creation_deposit_address(
 			origin: OriginFor<T>,
 			signature_data: SignatureData,
 			transaction_metadata: TransactionMetadata,
