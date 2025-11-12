@@ -151,7 +151,10 @@ pub enum PalletConfigUpdate {
 		hard_liquidation: BasisPoints,
 		fee_swap: BasisPoints,
 	},
-	SetLiquidationSwapChunkSizeUsd(AssetAmount),
+	SetLiquidationSwapChunkSizeUsd {
+		soft: AssetAmount,
+		hard: AssetAmount,
+	},
 	SetMinimumAmounts {
 		minimum_loan_amount_usd: AssetAmount,
 		minimum_update_loan_amount_usd: AssetAmount,
@@ -223,7 +226,8 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	interest_collection_threshold_usd: 100_000, // don't collect less than 0.1 USD
 	soft_liquidation_max_oracle_slippage: 50, // 0.5%
 	hard_liquidation_max_oracle_slippage: 500, // 5%
-	liquidation_swap_chunk_size_usd: 10_000_000_000, //10k USD
+	soft_liquidation_swap_chunk_size_usd: 10_000_000_000, //10k USD
+	hard_liquidation_swap_chunk_size_usd: 50_000_000_000, //50k USD
 	fee_swap_max_oracle_slippage: 50,   // 0.5%
 	pool_config_overrides: BTreeMap::new(),
 	minimum_loan_amount_usd: 100_000_000,             // 100 USD
@@ -594,8 +598,9 @@ pub mod pallet {
 							config.hard_liquidation_max_oracle_slippage = *hard_liquidation;
 							config.fee_swap_max_oracle_slippage = *fee_swap;
 						},
-						PalletConfigUpdate::SetLiquidationSwapChunkSizeUsd(amount) => {
-							config.liquidation_swap_chunk_size_usd = *amount;
+						PalletConfigUpdate::SetLiquidationSwapChunkSizeUsd { soft, hard } => {
+							config.soft_liquidation_swap_chunk_size_usd = *soft;
+							config.hard_liquidation_swap_chunk_size_usd = *hard;
 						},
 						PalletConfigUpdate::SetMinimumAmounts {
 							minimum_loan_amount_usd,

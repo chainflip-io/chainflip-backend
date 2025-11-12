@@ -1197,7 +1197,7 @@ fn basic_liquidation() {
 						output_action: SwapOutputAction::CreditLendingPool {
 							swap_type: LendingSwapType::Liquidation {
 								borrower_id: BORROWER,
-								loan_id: LOAN_ID
+								loan_id: LOAN_ID,
 							}
 						}
 					},
@@ -1337,7 +1337,7 @@ fn basic_liquidation() {
 						output_action: SwapOutputAction::CreditLendingPool {
 							swap_type: LendingSwapType::Liquidation {
 								borrower_id: BORROWER,
-								loan_id: LOAN_ID
+								loan_id: LOAN_ID,
 							},
 						}
 					},

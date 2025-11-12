@@ -632,24 +632,70 @@ impl<T: Config> LoanAccount<T> {
 
 		let mut swaps_for_event = BTreeMap::<LoanId, Vec<SwapRequestId>>::new();
 
-		for AssetCollateralForLoan { loan_id, loan_asset, collateral_asset, collateral_amount } in
-			collateral
+		for AssetCollateralForLoan {
+			loan_id,
+			loan_asset: to_asset,
+			collateral_asset: from_asset,
+			collateral_amount: amount_to_swap,
+		} in collateral
 		{
-			let from_asset = collateral_asset;
-			let to_asset = loan_asset;
+			let (chunk_size, max_oracle_price_slippage) =
+				if liquidation_type == LiquidationType::Hard {
+					(
+						config.hard_liquidation_swap_chunk_size_usd,
+						config.hard_liquidation_max_oracle_slippage,
+					)
+				} else {
+					(
+						config.soft_liquidation_swap_chunk_size_usd,
+						config.soft_liquidation_max_oracle_slippage,
+					)
+				};
 
-			let max_slippage = if liquidation_type == LiquidationType::Hard {
-				config.hard_liquidation_max_oracle_slippage
-			} else {
-				config.soft_liquidation_max_oracle_slippage
+			let dca_params = {
+				let number_of_chunks = match usd_value_of::<T>(from_asset, amount_to_swap) {
+					Ok(total_amount_usd) => total_amount_usd.div_ceil(chunk_size) as u32,
+					Err(_) => {
+						// It shouldn't be possible to not get the price here (we don't initiate
+						// liquidations unless we can get prices), but if we do, let's fallback
+						// to DEFAULT_LIQUIDATION_CHUNKS chunks
+						log_or_panic!(
+							"Failed to estimate optimal chunk size for a {}->{} swap",
+							from_asset,
+							to_asset
+						);
+
+						// This number is chosen in attempt to have individual chunks that aren't
+						// too large and can be processed, while keeping the total liquidation
+						// time reasonable, i.e. ~5 mins.
+						const DEFAULT_LIQUIDATION_CHUNKS: u32 = 50;
+						DEFAULT_LIQUIDATION_CHUNKS
+					},
+				};
+
+				DcaParameters { number_of_chunks, chunk_interval: 1 }
 			};
 
-			let swap_request_id = initiate_swap::<T>(
+			let swap_request_id = T::SwapRequestHandler::init_swap_request(
 				from_asset,
-				collateral_amount,
+				amount_to_swap,
 				to_asset,
-				LendingSwapType::Liquidation { borrower_id: borrower_id.clone(), loan_id },
-				max_slippage,
+				SwapRequestType::Regular {
+					output_action: SwapOutputAction::CreditLendingPool {
+						swap_type: LendingSwapType::Liquidation {
+							borrower_id: borrower_id.clone(),
+							loan_id,
+						},
+					},
+				},
+				Default::default(), // broker fees
+				Some(PriceLimitsAndExpiry {
+					expiry_behaviour: ExpiryBehaviour::NoExpiry,
+					min_price: Default::default(),
+					max_oracle_price_slippage: Some(max_oracle_price_slippage),
+				}),
+				Some(dca_params),
+				SwapOrigin::Internal,
 			);
 
 			swaps_for_event.entry(loan_id).or_default().push(swap_request_id);
@@ -971,61 +1017,6 @@ fn amount_from_usd_value<T: Config>(
 	// The "price" of USD in terms of the asset:
 	let price = invert_price(get_price::<T>(asset)?);
 	Ok(cf_amm_math::output_amount_ceil(usd_value.into(), price).unique_saturated_into())
-}
-
-/// A wrapper around `init_swap_request` that uses parameter suitable for a lending pool swap
-fn initiate_swap<T: Config>(
-	from_asset: Asset,
-	amount: AssetAmount,
-	to_asset: Asset,
-	swap_type: LendingSwapType<T::AccountId>,
-	max_oracle_price_slippage: BasisPoints,
-) -> SwapRequestId {
-	let dca_params = match swap_type {
-		LendingSwapType::Liquidation { .. } => {
-			let number_of_chunks = match usd_value_of::<T>(from_asset, amount) {
-				Ok(total_amount_usd) =>
-					(total_amount_usd
-						.div_ceil(LendingConfig::<T>::get().liquidation_swap_chunk_size_usd))
-						as u32,
-				Err(_) => {
-					// It shouldn't be possible to not get the price here (we don't initiate
-					// liquidations unless we can get prices), but if we do, let's fallback
-					// to DEFAULT_LIQUIDATION_CHUNKS chunks
-					log_or_panic!(
-						"Failed to estimate optimal chunk size for a {}->{} swap",
-						from_asset,
-						to_asset
-					);
-
-					// This number is chosen in attempt to have individual chunks that aren't too
-					// large and can be processed, while keeping the total liquidation time
-					// reasonable, i.e. ~5 mins.
-					const DEFAULT_LIQUIDATION_CHUNKS: u32 = 50;
-					DEFAULT_LIQUIDATION_CHUNKS
-				},
-			};
-
-			Some(DcaParameters { number_of_chunks, chunk_interval: 1 })
-		},
-	};
-
-	T::SwapRequestHandler::init_swap_request(
-		from_asset,
-		amount,
-		to_asset,
-		SwapRequestType::Regular {
-			output_action: SwapOutputAction::CreditLendingPool { swap_type },
-		},
-		Default::default(), // broker fees
-		Some(PriceLimitsAndExpiry {
-			expiry_behaviour: ExpiryBehaviour::NoExpiry,
-			min_price: Default::default(),
-			max_oracle_price_slippage: Some(max_oracle_price_slippage),
-		}),
-		dca_params,
-		SwapOrigin::Internal,
-	)
 }
 
 /// Sweeping but it is a no-op if it fails for whatever reason
@@ -1869,8 +1860,10 @@ pub struct LendingConfiguration {
 	pub soft_liquidation_max_oracle_slippage: BasisPoints,
 	/// Hard liquidation will be executed with this oracle slippage limit
 	pub hard_liquidation_max_oracle_slippage: BasisPoints,
-	/// Liquidation swaps will use chunks that are equivalent to this amount of USD
-	pub liquidation_swap_chunk_size_usd: AssetAmount,
+	/// Soft liquidation swaps will use chunks that are equivalent to this amount of USD
+	pub soft_liquidation_swap_chunk_size_usd: AssetAmount,
+	/// Hard liquidation swaps will use chunks that are equivalent to this amount of USD
+	pub hard_liquidation_swap_chunk_size_usd: AssetAmount,
 	/// All fee swaps from lending will be executed with this oracle slippage limit
 	pub fee_swap_max_oracle_slippage: BasisPoints,
 	/// If set for a pool/asset, this configuration will be used instead of the default
