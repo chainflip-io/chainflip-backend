@@ -108,16 +108,6 @@ where
 		}
 	};
 
-	let start_dot = super::dot::start(
-		scope,
-		dot_client,
-		witness_call.clone(),
-		state_chain_client.clone(),
-		state_chain_stream.clone(),
-		epoch_source.clone(),
-		db.clone(),
-	);
-
 	let start_arb = super::arb::start(
 		scope,
 		arb_client.clone(),
