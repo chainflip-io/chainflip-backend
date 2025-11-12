@@ -198,10 +198,9 @@ impl<T: Config> LoanAccount<T> {
 		&mut self,
 		borrower_id: &T::AccountId,
 		ltv: FixedU64,
-	) -> Weight {
-		let mut weight_used = Weight::zero();
+		weight_used: &mut Weight,
+	) {
 		let config = LendingConfig::<T>::get();
-		weight_used.saturating_accrue(T::DbWeight::get().reads(1));
 
 		// This will saturate at 100%, but that's good enough (none of our thresholds exceed 100%):
 		let ltv: Permill = ltv.into_clamped_perthing();
@@ -341,8 +340,6 @@ impl<T: Config> LoanAccount<T> {
 			},
 			LiquidationStatusChange::NoChange => { /* nothing to do */ },
 		}
-
-		weight_used
 	}
 
 	/// Aborts all current liquidation swaps, repays any already swapped principal assets and
@@ -476,7 +473,6 @@ impl<T: Config> LoanAccount<T> {
 		weight_used: &mut Weight,
 	) -> DispatchResult {
 		let config = LendingConfig::<T>::get();
-		weight_used.saturating_accrue(T::DbWeight::get().reads(1));
 
 		if self.liquidation_status != LiquidationStatus::NoLiquidation {
 			// For simplicity, we don't charge interest during liquidations
@@ -1103,7 +1099,11 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 	let mut weight_used = T::DbWeight::get().reads(1);
 
 	// Collecting keys to avoid undefined behaviour in `StorageMap`
-	for borrower_id in LoanAccounts::<T>::iter_keys().collect::<Vec<_>>().iter() {
+	for borrower_id in LoanAccounts::<T>::iter_keys()
+		.inspect(|_| weight_used += T::DbWeight::get().reads(1))
+		.collect::<Vec<_>>()
+		.iter()
+	{
 		LoanAccounts::<T>::mutate(borrower_id, |loan_account| {
 			let loan_account = loan_account.as_mut().expect("Using keys read just above");
 
@@ -1127,9 +1127,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 				// This should always be Ok (otherwise we wouldn't be able to derive LTV the first
 				// time), but let's check anyway as a defensive measure:
 				if let Ok(new_ltv) = new_ltv {
-					weight_used.saturating_accrue(
-						loan_account.update_liquidation_status(borrower_id, new_ltv),
-					);
+					loan_account.update_liquidation_status(borrower_id, new_ltv, &mut weight_used);
 				}
 			}
 		});
@@ -1139,7 +1137,10 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 	// fee_swap_threshold_usd in value
 	if current_block % config.fee_swap_interval_blocks.into() == 0u32.into() {
 		// Swap all network fee contributions from fees:
-		for asset in PendingNetworkFees::<T>::iter_keys().collect::<Vec<_>>() {
+		for asset in PendingNetworkFees::<T>::iter_keys()
+			.inspect(|_| weight_used += T::DbWeight::get().reads(1))
+			.collect::<Vec<_>>()
+		{
 			PendingNetworkFees::<T>::mutate(asset, |fee_amount| {
 				// NOTE: if asset is FLIP, we shouldn't need to swap, but it should still work,
 				// and it seems easiest to not write a special case
