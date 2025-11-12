@@ -653,8 +653,20 @@ impl<T: Config> LoanAccount<T> {
 				};
 
 			let dca_params = {
+				// This number is chosen in attempt to have individual chunks that aren't
+				// too large and can be processed, while keeping the total liquidation
+				// time reasonable, i.e. ~5 mins.
+				const DEFAULT_LIQUIDATION_CHUNKS: u32 = 50;
+
 				let number_of_chunks = match usd_value_of::<T>(from_asset, amount_to_swap) {
-					Ok(total_amount_usd) => total_amount_usd.div_ceil(chunk_size) as u32,
+					Ok(total_amount_usd) => {
+						// Making sure that we don't divide by 0
+						if chunk_size == 0 {
+							DEFAULT_LIQUIDATION_CHUNKS
+						} else {
+							total_amount_usd.div_ceil(chunk_size) as u32
+						}
+					},
 					Err(_) => {
 						// It shouldn't be possible to not get the price here (we don't initiate
 						// liquidations unless we can get prices), but if we do, let's fallback
@@ -665,10 +677,6 @@ impl<T: Config> LoanAccount<T> {
 							to_asset
 						);
 
-						// This number is chosen in attempt to have individual chunks that aren't
-						// too large and can be processed, while keeping the total liquidation
-						// time reasonable, i.e. ~5 mins.
-						const DEFAULT_LIQUIDATION_CHUNKS: u32 = 50;
 						DEFAULT_LIQUIDATION_CHUNKS
 					},
 				};

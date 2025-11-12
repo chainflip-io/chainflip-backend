@@ -151,6 +151,7 @@ pub enum PalletConfigUpdate {
 		hard_liquidation: BasisPoints,
 		fee_swap: BasisPoints,
 	},
+	/// Both values must be non-zero
 	SetLiquidationSwapChunkSizeUsd {
 		soft: AssetAmount,
 		hard: AssetAmount,
@@ -599,6 +600,11 @@ pub mod pallet {
 							config.fee_swap_max_oracle_slippage = *fee_swap;
 						},
 						PalletConfigUpdate::SetLiquidationSwapChunkSizeUsd { soft, hard } => {
+							ensure!(
+								*soft > 0 && *hard > 0,
+								Error::<T>::InvalidConfigurationParameters
+							);
+
 							config.soft_liquidation_swap_chunk_size_usd = *soft;
 							config.hard_liquidation_swap_chunk_size_usd = *hard;
 						},
