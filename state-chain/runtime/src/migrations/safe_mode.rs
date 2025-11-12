@@ -1,7 +1,7 @@
 use cf_traits::SafeMode;
 use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight};
 
-use crate::{chainflip::generic_elections::GenericElectionsSafeMode, Runtime};
+use crate::Runtime;
 
 pub struct SafeModeMigration;
 

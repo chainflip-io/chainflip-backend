@@ -904,12 +904,6 @@ decl_runtime_apis!(
 			nonce_or_account: NonceOrAccount,
 			encoding: EncodingType,
 		) -> Result<(EncodedNonNativeCall, TransactionMetadata), DispatchErrorWithMessage>;
-		#[changed_in(8)]
-		fn cf_ingress_delay();
-		fn cf_ingress_delay(chain: ForeignChain) -> u32;
-		#[changed_in(8)]
-		fn cf_boost_delay();
-		fn cf_boost_delay(chain: ForeignChain) -> u32;
 	}
 );
 
