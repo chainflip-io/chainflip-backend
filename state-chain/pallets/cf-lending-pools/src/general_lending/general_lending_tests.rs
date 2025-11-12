@@ -420,6 +420,7 @@ fn basic_general_lending() {
 						GeneralLoan {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
+							created_at_block: INIT_BLOCK,
 							last_interest_payment_at: INIT_BLOCK,
 							owed_principal: PRINCIPAL + ORIGINATION_FEE,
 							pending_interest: InterestBreakdown::default(),
@@ -853,6 +854,7 @@ fn basic_loan_aggregation() {
 						GeneralLoan {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
+							created_at_block: INIT_BLOCK,
 							last_interest_payment_at: INIT_BLOCK,
 							owed_principal: PRINCIPAL +
 								EXTRA_PRINCIPAL_1 + origination_fee_pool_1 +
@@ -953,6 +955,7 @@ fn basic_loan_aggregation() {
 						GeneralLoan {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
+							created_at_block: INIT_BLOCK,
 							last_interest_payment_at: INIT_BLOCK,
 							// Loan's owed principal has been increased:
 							owed_principal: PRINCIPAL +
@@ -1267,6 +1270,7 @@ fn basic_liquidation() {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
 							last_interest_payment_at: INIT_BLOCK,
+							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL + ORIGINATION_FEE -
 								repaid_amount_1,
 							pending_interest: Default::default()
@@ -2558,6 +2562,7 @@ fn adding_collateral_during_liquidation() {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
 							last_interest_payment_at: INIT_BLOCK,
+							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL + ORIGINATION_FEE -
 								RECOVERED_PRINCIPAL_1 - RECOVERED_PRINCIPAL_2,
 							pending_interest: InterestBreakdown {
@@ -2731,6 +2736,7 @@ mod voluntary_liquidation {
 								asset: LOAN_ASSET,
 								last_interest_payment_at: INIT_BLOCK,
 								owed_principal: PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL,
+								created_at_block: INIT_BLOCK,
 								pending_interest: Default::default()
 							}
 						)]),
@@ -2816,6 +2822,7 @@ mod voluntary_liquidation {
 							asset: LOAN_ASSET,
 							last_interest_payment_at: INIT_BLOCK,
 							owed_principal: PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL_1,
+							created_at_block: INIT_BLOCK,
 							pending_interest: Default::default()
 						}
 					)])
@@ -2899,6 +2906,7 @@ mod voluntary_liquidation {
 							asset: LOAN_ASSET,
 							last_interest_payment_at: INIT_BLOCK,
 							owed_principal: owed_after_liquidation_2,
+							created_at_block: INIT_BLOCK,
 							pending_interest: Default::default()
 						}
 					)])
@@ -3422,6 +3430,7 @@ fn init_liquidation_swaps_test() {
 				GeneralLoan {
 					id: LOAN_ID,
 					asset: Asset::Btc,
+					created_at_block: 0,
 					last_interest_payment_at: 0,
 					owed_principal: 20,
 					pending_interest: Default::default(),
@@ -3432,6 +3441,7 @@ fn init_liquidation_swaps_test() {
 				GeneralLoan {
 					id: LOAN_ID,
 					asset: Asset::Sol,
+					created_at_block: 0,
 					last_interest_payment_at: 0,
 					owed_principal: 2000,
 					pending_interest: Default::default(),
@@ -3633,6 +3643,7 @@ mod rpcs {
 						loans: vec![RpcLoan {
 							loan_id: LOAN_ID,
 							asset: LOAN_ASSET,
+							created_at: INIT_BLOCK as u32,
 							principal_amount: PRINCIPAL + ORIGINATION_FEE,
 						}],
 						liquidation_status: None
@@ -3700,6 +3711,7 @@ mod rpcs {
 							loans: vec![RpcLoan {
 								loan_id: LOAN_ID_2,
 								asset: LOAN_ASSET_2,
+								created_at: INIT_BLOCK as u32,
 								// NOTE: we account for the principal asset already swapped in
 								// liquidation swaps:
 								principal_amount: PRINCIPAL_2 + ORIGINATION_FEE_2 -
@@ -3725,6 +3737,7 @@ mod rpcs {
 							loans: vec![RpcLoan {
 								loan_id: LOAN_ID,
 								asset: LOAN_ASSET,
+								created_at: INIT_BLOCK as u32,
 								principal_amount: PRINCIPAL +
 									ORIGINATION_FEE + pool_interest +
 									network_interest,
