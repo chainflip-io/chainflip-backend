@@ -174,6 +174,10 @@ impl WeightInfo for MockWeightInfo {
 	fn set_vault_swap_minimum_broker_fee() -> Weight {
 		Weight::from_parts(100, 0)
 	}
+
+	fn request_account_creation_deposit_address() -> Weight {
+		Weight::from_parts(100, 0)
+	}
 }
 
 pub struct MockChannelIdAllocator {}

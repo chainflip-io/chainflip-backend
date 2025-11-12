@@ -274,5 +274,23 @@ mod benchmarks {
 		assert_eq!(VaultSwapMinimumBrokerFee::<T>::get(caller.clone()), 100);
 	}
 
+	#[benchmark]
+	fn request_account_creation_deposit_address() {
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Broker,
+		)
+		.unwrap();
+
+		#[extrinsic_call]
+		request_account_creation_deposit_address(
+			RawOrigin::Signed(caller.clone()),
+			SignatureData::benchmark_value(),
+			TransactionMetadata::benchmark_value(),
+			Asset::Eth,
+			0,
+			EncodedAddress::benchmark_value(),
+		);
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

@@ -1543,7 +1543,7 @@ pub mod pallet {
 		///
 		/// The deposit will be partially swapped into FLIP which is used to credit the new account.
 		#[pallet::call_index(18)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::request_account_creation_deposit_address())]
 		pub fn request_account_creation_deposit_address(
 			origin: OriginFor<T>,
 			signature_data: SignatureData,
@@ -1586,7 +1586,7 @@ pub mod pallet {
 			);
 
 			// Simple runtime call for signature verification. Signing over the refund address
-			// and the role to register so they can't be tampered with.
+			// so they can't be tampered with.
 			let remark_data = refund_address.clone().encode();
 			let runtime_call: <T as Config>::RuntimeCall =
 				frame_system::Call::<T>::remark { remark: remark_data }.into();

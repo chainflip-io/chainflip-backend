@@ -58,6 +58,7 @@ pub trait WeightInfo {
 	fn register_affiliate() -> Weight;
 	fn affiliate_withdrawal_request() -> Weight;
 	fn set_vault_swap_minimum_broker_fee() -> Weight;
+	fn request_account_creation_deposit_address() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -301,6 +302,16 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	
+	fn request_account_creation_deposit_address() -> Weight {
+			// Proof Size summary in bytes:
+		//  Measured:  `2109`
+		//  Estimated: `5574`
+		// Minimum execution time: 79_413_000 picoseconds.
+		Weight::from_parts(80_301_000, 5574)
+		.saturating_add(ParityDbWeight::get().reads(13_u64))
+		.saturating_add(ParityDbWeight::get().writes(5_u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -542,5 +553,15 @@ impl WeightInfo for () {
 		Weight::from_parts(14_541_000, 4002)
 			.saturating_add(ParityDbWeight::get().reads(1_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
+	}
+	
+	fn request_account_creation_deposit_address() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `2109`
+		//  Estimated: `5574`
+		// Minimum execution time: 79_413_000 picoseconds.
+		Weight::from_parts(80_301_000, 5574)
+		.saturating_add(ParityDbWeight::get().reads(13_u64))
+		.saturating_add(ParityDbWeight::get().writes(5_u64))
 	}
 }
