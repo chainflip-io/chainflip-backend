@@ -3159,7 +3159,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
-		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
+		if channel_opening_fee > T::Amount::zero() {
+			T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
+		}
 		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
 
 		let deposit_channel = PreallocatedChannels::<T, I>::mutate(requester, |queue| {
