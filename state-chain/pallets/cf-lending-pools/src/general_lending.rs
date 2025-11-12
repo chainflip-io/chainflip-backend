@@ -488,7 +488,10 @@ impl<T: Config> LoanAccount<T> {
 				.try_into()
 				.unwrap_or(u32::MAX);
 
-			if blocks_since_last_payment >= config.interest_payment_interval_blocks {
+			if current_block.saturating_sub(loan.created_at_block) %
+				config.interest_payment_interval_blocks.into() ==
+				0u32.into()
+			{
 				weight_used.saturating_accrue(T::WeightInfo::loan_charge_interest());
 				loan.charge_interest(ltv, current_block, blocks_since_last_payment, &config)?;
 			}
