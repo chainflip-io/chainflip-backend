@@ -281,14 +281,26 @@ mod benchmarks {
 		)
 		.unwrap();
 
+		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 70 };
+
+		let signer: EvmAddress =
+			EvmAddress::from_str("0xa8e70D7C5eC33C4362051f3Be6a959e8EbaB2c14").unwrap();
+		let signature_data: SignatureData = SignatureData::Ethereum {
+            signature: hex_literal::hex!(
+                "23c16bf8f2f7f4a1fddf5c13b0d0fb25ce6c4cee91b7ba17cc14bb53dc7a7b21410eca834cb0c46708e503fabb7526ab7135a25d3e2a938a1b7d82919688e20b1b"
+            ).into(),
+            signer,
+            sig_type: EthEncodingType::Eip712,
+        };
+
 		#[extrinsic_call]
 		request_account_creation_deposit_address(
 			RawOrigin::Signed(caller.clone()),
-			SignatureData::benchmark_value(),
-			TransactionMetadata::benchmark_value(),
+			signature_data,
+			transaction_metadata,
 			Asset::Eth,
 			0,
-			EncodedAddress::benchmark_value(),
+			EncodedAddress::Eth([0x01; 20]),
 		);
 	}
 

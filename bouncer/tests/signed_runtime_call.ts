@@ -416,7 +416,7 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
 
   const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
   await chainflip.tx.swapping
-    .request_account_creation_deposit_address(
+    .requestAccountCreationDepositAddress(
       {
         Ethereum: {
           signature: evmSignatureEip712,

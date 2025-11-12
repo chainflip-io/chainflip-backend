@@ -15,7 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use cf_chains::benchmarking_value::BenchmarkValue;
 use core::primitive::str;
 use ethereum_eip712::eip712::{Eip712, Eip712Error};
 use frame_support::{
@@ -75,23 +74,6 @@ impl SignatureData {
 	}
 }
 
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for SignatureData {
-	fn benchmark_value() -> Self {
-		Self::Solana {
-			signature: SolSignature::benchmark_value(),
-			signer: SolAddress::benchmark_value(),
-			sig_type: SolEncodingType::Domain,
-		}
-	}
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for TransactionMetadata {
-	fn benchmark_value() -> Self {
-		Self { nonce: 0, expiry_block: 10000u32 }
-	}
-}
 /// Executes a batch of calls and returns the total weight or an error with an associated call
 /// index. It will error early as soon as a call fails.
 /// Inspiration from pallet_utility
