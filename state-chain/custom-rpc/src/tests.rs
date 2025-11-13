@@ -403,6 +403,7 @@ fn test_vault_addresses_custom_rpc() {
 		arbitrum: EncodedAddress::Arb([1; 20]),
 		bitcoin: vec![(ID_1.clone(), EncodedAddress::Btc(Vec::new()))],
 		sol_swap_endpoint_program_data_account: EncodedAddress::Sol([2; 32]),
+		usdc_token_mint_pubkey: EncodedAddress::Sol([3; 32]),
 		sol_vault_program: EncodedAddress::Sol([4; 32]),
 		bitcoin_vault: Some(EncodedAddress::Btc([5; 32].into())),
 		solana_sol_vault: Some(EncodedAddress::Sol([6; 32])),
