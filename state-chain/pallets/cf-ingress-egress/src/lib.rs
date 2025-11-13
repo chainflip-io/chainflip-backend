@@ -2930,6 +2930,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// ------ refund parameters -----
 
 		let refund_address = refund_params.refund_address.clone();
+		if refund_address == <<T as Config<I>>::TargetChain as Chain>::BURN_ADDRESS {
+			return ChannelAction::Unrefundable;
+		}
+
 		let Ok(checked_refund_params) =
 			refund_params.map_refund_address_to_foreign_chain_address().into_checked(
 				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
