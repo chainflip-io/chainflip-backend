@@ -17,18 +17,22 @@
 use bitcoin::{hashes::Hash as btcHash, opcodes::all::OP_RETURN, ScriptBuf};
 use cf_amm::math::{bounded_sqrt_price, sqrt_price_to_price};
 use cf_chains::{
+	address::EncodedAddress,
 	assets::btc::Asset as BtcAsset,
 	btc::{
 		deposit_address::DepositAddress, vault_swap_encoding::UtxoEncodedData, ScriptPubkey, Utxo,
 		UtxoId,
 	},
-	Bitcoin, ChannelRefundParametersForChain,
+	evm::U256,
+	Bitcoin, Chain, ChannelRefundParametersForChain,
 };
-use cf_primitives::{AccountId, Beneficiary, ChannelId, DcaParameters};
+
+use cf_primitives::{AccountId, Asset, Beneficiary, ChannelId, DcaParameters};
 use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
 use sp_core::H256;
+use sp_runtime::AccountId32;
 use state_chain_runtime::BitcoinInstance;
 
 use crate::btc::rpc::VerboseTransaction;
@@ -204,6 +208,50 @@ pub fn try_extract_vault_swap_witness(
 	})
 }
 
+pub fn check_for_utxos_targeting_vault(
+	tx: &VerboseTransaction,
+	vault_address: &DepositAddress,
+	channel_id: ChannelId,
+	broker_id: &AccountId,
+) -> Option<VaultDepositWitness> {
+	for (i, utxo) in tx.vout.iter().enumerate() {
+		if utxo.script_pubkey.as_bytes() == vault_address.script_pubkey().bytes() {
+			let tx_id: [u8; 32] = tx.txid.to_byte_array();
+			let deposit_amount = utxo.value.to_sat();
+
+			return Some(VaultDepositWitness {
+				input_asset: NATIVE_ASSET,
+				output_asset: Asset::Eth,
+				deposit_amount,
+				destination_address: EncodedAddress::Eth([0; 20]),
+				tx_id: H256::from(tx_id),
+				deposit_details: Utxo {
+					// It can be any UTXO targeting the vault
+					id: UtxoId { tx_id: tx_id.into(), vout: i as u32 },
+					amount: deposit_amount,
+					deposit_address: vault_address.clone(),
+				},
+				deposit_metadata: None, // No ccm for BTC (yet?)
+				broker_fee: Some(Beneficiary { account: broker_id.clone(), bps: 0 }),
+				affiliate_fees: vec![].try_into().expect("Empty affiliates is always valid"),
+				refund_params: ChannelRefundParametersForChain::<Bitcoin> {
+					retry_duration: 0,
+					refund_address: Bitcoin::BURN_ADDRESS,
+					min_price: U256::from(0),
+					// Bitcoin should never have a ccm refund
+					refund_ccm_metadata: None,
+					max_oracle_price_slippage: None,
+				},
+				dca_params: None,
+				// We never boost wrongly encoded vault swaps
+				boost_fee: 0,
+				channel_id: Some(channel_id),
+				deposit_address: Some(vault_address.script_pubkey()),
+			})
+		}
+	}
+	None
+}
 #[cfg(test)]
 mod tests {
 	use std::sync::LazyLock;
