@@ -447,6 +447,9 @@ pub mod pallet {
 		LendingNetworkFeeSwapInitiated {
 			swap_request_id: SwapRequestId,
 		},
+		WhitelistUpdated {
+			update: WhitelistUpdate<T::AccountId>,
+		},
 	}
 
 	#[derive(PartialEq)]
@@ -931,7 +934,11 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			Whitelist::<T>::mutate(|whitelist| whitelist.apply_update(update.clone()))
-				.map_err(|_| Error::<T>::InvalidConfigurationParameters.into())
+				.map_err(|_| Error::<T>::InvalidConfigurationParameters)?;
+
+			Self::deposit_event(Event::WhitelistUpdated { update });
+
+			Ok(())
 		}
 	}
 }
