@@ -19,6 +19,7 @@ use crate::{
 };
 use minimized_scale_value::MinimizedScaleValue;
 
+pub mod build_eip712_data;
 pub mod eip712;
 pub mod hash;
 pub mod lexer;

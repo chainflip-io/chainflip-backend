@@ -16,13 +16,14 @@ expression: config
     "extra_interest": 10000,
     "from_origination_fee": 200000,
     "from_liquidation_fee": 300000,
-    "interest_on_collateral_max": 500000
+    "low_ltv_penalty_max": 500000
   },
   "fee_swap_interval_blocks": 10,
   "interest_payment_interval_blocks": 15,
   "fee_swap_threshold_usd": "0x1312d00",
   "interest_collection_threshold_usd": "0x1e8480",
-  "liquidation_swap_chunk_size_usd": "0x12a05f200",
+  "soft_liquidation_swap_chunk_size_usd": "0x12a05f200",
+  "hard_liquidation_swap_chunk_size_usd": "0x5d21dba00",
   "soft_liquidation_max_oracle_slippage": 50,
   "hard_liquidation_max_oracle_slippage": 500,
   "fee_swap_max_oracle_slippage": 50,

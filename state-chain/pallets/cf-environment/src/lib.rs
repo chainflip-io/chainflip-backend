@@ -104,7 +104,7 @@ pub mod pallet {
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
 	use frame_support::{
-		dispatch::DispatchInfo,
+		dispatch::{DispatchInfo, PostDispatchInfo},
 		sp_runtime::traits::{Dispatchable, SignedExtension},
 		traits::OriginTrait,
 		DefaultNoBound,
@@ -158,8 +158,11 @@ pub mod pallet {
 		/// The overarching call type.
 		type RuntimeCall: Member
 			+ Parameter
-			+ Dispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin, Info = DispatchInfo>
-			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
+			+ Dispatchable<
+				RuntimeOrigin = <Self as Config>::RuntimeOrigin,
+				Info = DispatchInfo,
+				PostInfo = PostDispatchInfo,
+			> + UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
 			+ From<frame_system::Call<Self>>
 			+ From<Call<Self>>
 			+ GetDispatchInfo
@@ -191,10 +194,6 @@ pub mod pallet {
 		FailedToBuildSolanaApiCall,
 		/// Signer cannot be decoded
 		FailedToDecodeSigner,
-		/// Failed to execute non-native signed call
-		FailedToExecuteNonNativeSignedCall,
-		/// Failed to execute batch
-		FailedToExecuteBatch,
 		/// Nested batches not allowed
 		InvalidNestedBatch,
 		/// Signer is unable to pay fee.
@@ -712,25 +711,25 @@ pub mod pallet {
 			);
 
 			Self::deposit_event(Event::<T>::NonNativeSignedCall);
-			Ok(().into())
+			dispatch_result.map(|info| info.into())
 		}
 
 		/// Executes an atomic batch of runtime calls. It will execute as an all-or-nothing.
+		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(11)]
 		#[pallet::weight({
 			let (dispatch_weight, dispatch_class) = weight_and_dispatch_class::<T>(calls);
 			let dispatch_weight = dispatch_weight.saturating_add(T::WeightInfo::batch(calls.len() as u32));
 			(dispatch_weight, dispatch_class)
 		})]
-		pub fn batch(origin: OriginFor<T>, calls: BatchedCalls<T>) -> DispatchResult {
+		pub fn batch(origin: OriginFor<T>, calls: BatchedCalls<T>) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
-			let _ = batch_all::<T>(account_id.clone(), calls.clone(), T::WeightInfo::batch)
-				.map_err(|_| Error::<T>::FailedToExecuteNonNativeSignedCall)?;
+			batch_all::<T>(account_id.clone(), calls.clone(), T::WeightInfo::batch)?;
 
 			Self::deposit_event(Event::<T>::BatchCompleted);
 
-			Ok(())
+			Ok(().into())
 		}
 	}
 

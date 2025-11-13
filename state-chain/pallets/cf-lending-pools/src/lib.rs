@@ -26,9 +26,10 @@ use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
-	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolConfiguration,
-	LiquidationCompletionReason, LiquidationType, LtvThresholds, NetworkFeeContributions,
-	RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolAndSupplyPositions,
+	LendingPoolConfiguration, LendingSupplyPosition, LiquidationCompletionReason, LiquidationType,
+	LtvThresholds, NetworkFeeContributions, RpcLendingPool, RpcLiquidationStatus,
+	RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 };
 
 pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
@@ -151,7 +152,11 @@ pub enum PalletConfigUpdate {
 		hard_liquidation: BasisPoints,
 		fee_swap: BasisPoints,
 	},
-	SetLiquidationSwapChunkSizeUsd(AssetAmount),
+	/// Both values must be non-zero
+	SetLiquidationSwapChunkSizeUsd {
+		soft: AssetAmount,
+		hard: AssetAmount,
+	},
 	SetMinimumAmounts {
 		minimum_loan_amount_usd: AssetAmount,
 		minimum_update_loan_amount_usd: AssetAmount,
@@ -214,7 +219,7 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 		from_origination_fee: Permill::from_percent(20),
 		// 20% of all liquidation fees is paid to the network.
 		from_liquidation_fee: Permill::from_percent(20),
-		interest_on_collateral_max: Permill::from_percent(1),
+		low_ltv_penalty_max: Permill::from_percent(1),
 	},
 	// don't swap more often than every 10 blocks
 	fee_swap_interval_blocks: 10,
@@ -223,7 +228,8 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	interest_collection_threshold_usd: 100_000, // don't collect less than 0.1 USD
 	soft_liquidation_max_oracle_slippage: 50, // 0.5%
 	hard_liquidation_max_oracle_slippage: 500, // 5%
-	liquidation_swap_chunk_size_usd: 10_000_000_000, //10k USD
+	soft_liquidation_swap_chunk_size_usd: 10_000_000_000, //10k USD
+	hard_liquidation_swap_chunk_size_usd: 50_000_000_000, //50k USD
 	fee_swap_max_oracle_slippage: 50,   // 0.5%
 	pool_config_overrides: BTreeMap::new(),
 	minimum_loan_amount_usd: 100_000_000,             // 100 USD
@@ -594,8 +600,14 @@ pub mod pallet {
 							config.hard_liquidation_max_oracle_slippage = *hard_liquidation;
 							config.fee_swap_max_oracle_slippage = *fee_swap;
 						},
-						PalletConfigUpdate::SetLiquidationSwapChunkSizeUsd(amount) => {
-							config.liquidation_swap_chunk_size_usd = *amount;
+						PalletConfigUpdate::SetLiquidationSwapChunkSizeUsd { soft, hard } => {
+							ensure!(
+								*soft > 0 && *hard > 0,
+								Error::<T>::InvalidConfigurationParameters
+							);
+
+							config.soft_liquidation_swap_chunk_size_usd = *soft;
+							config.hard_liquidation_swap_chunk_size_usd = *hard;
 						},
 						PalletConfigUpdate::SetMinimumAmounts {
 							minimum_loan_amount_usd,
@@ -733,7 +745,6 @@ pub mod pallet {
 
 			let lender_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			// TODO: should enforce:
 			// - The user does not add amount that's too small
 			ensure!(amount > Zero::zero(), Error::<T>::AmountMustBeNonZero);
 
@@ -768,7 +779,6 @@ pub mod pallet {
 				Error::<T>::RemoveLenderFundsDisabled
 			);
 
-			// TODO: should enforce:
 			// 1. The user does not remove amount that's too small
 			// 2. The user does not leave amount in the pool that's too small
 			if let Some(amount) = amount {
@@ -887,7 +897,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(13)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::change_voluntary_liquidation())]
 		pub fn initiate_voluntary_liquidation(origin: OriginFor<T>) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
@@ -895,7 +905,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(14)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::change_voluntary_liquidation())]
 		pub fn stop_voluntary_liquidation(origin: OriginFor<T>) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 

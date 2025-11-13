@@ -612,13 +612,17 @@ fn dynamic_interest_payment_interval() {
 	let interest_payment_first_attempt_block =
 		INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64;
 
+	let interest_payment_second_attempt_block =
+		INIT_BLOCK + 2 * CONFIG.interest_payment_interval_blocks as u64;
+
 	let utilisation = Permill::from_rational(PRINCIPAL + ORIGINATION_FEE, INIT_POOL_AMOUNT);
 
-	// NOTE: amounts calculated using payment interval extended by 1 block
+	// NOTE: because the first payment will be skipped, the interest amounts are calculated using
+	// twice the regular payment interval:
 	let (pool_interest, network_interest) = derive_interest_amounts(
 		PRINCIPAL,
 		utilisation,
-		CONFIG.interest_payment_interval_blocks + 1,
+		2 * CONFIG.interest_payment_interval_blocks,
 	);
 
 	let (network_origination_fee, pool_origination_fee) = take_network_fee(ORIGINATION_FEE);
@@ -643,14 +647,12 @@ fn dynamic_interest_payment_interval() {
 			assert_eq!(get_loan().last_interest_payment_at, INIT_BLOCK);
 
 			// Making oracle price available will cause interest to be
-			// calculated/taken at the next block
+			// calculated/taken at a later point
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 		})
-		.then_execute_at_next_block(|_| {
-			assert_eq!(
-				get_loan().last_interest_payment_at,
-				interest_payment_first_attempt_block + 1
-			);
+		.then_process_blocks_until_block(interest_payment_second_attempt_block)
+		.then_execute_with(|_| {
+			assert_eq!(get_loan().last_interest_payment_at, interest_payment_second_attempt_block);
 
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().total_amount,
@@ -1200,7 +1202,7 @@ fn basic_liquidation() {
 						output_action: SwapOutputAction::CreditLendingPool {
 							swap_type: LendingSwapType::Liquidation {
 								borrower_id: BORROWER,
-								loan_id: LOAN_ID
+								loan_id: LOAN_ID,
 							}
 						}
 					},
@@ -1341,7 +1343,7 @@ fn basic_liquidation() {
 						output_action: SwapOutputAction::CreditLendingPool {
 							swap_type: LendingSwapType::Liquidation {
 								borrower_id: BORROWER,
-								loan_id: LOAN_ID
+								loan_id: LOAN_ID,
 							},
 						}
 					},
@@ -2735,8 +2737,8 @@ mod voluntary_liquidation {
 								id: LOAN_ID,
 								asset: LOAN_ASSET,
 								last_interest_payment_at: INIT_BLOCK,
-								created_at_block: INIT_BLOCK,
 								owed_principal: PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL,
+								created_at_block: INIT_BLOCK,
 								pending_interest: Default::default()
 							}
 						)]),
@@ -2821,8 +2823,8 @@ mod voluntary_liquidation {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
 							last_interest_payment_at: INIT_BLOCK,
-							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL_1,
+							created_at_block: INIT_BLOCK,
 							pending_interest: Default::default()
 						}
 					)])
@@ -2905,8 +2907,8 @@ mod voluntary_liquidation {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
 							last_interest_payment_at: INIT_BLOCK,
-							created_at_block: INIT_BLOCK,
 							owed_principal: owed_after_liquidation_2,
+							created_at_block: INIT_BLOCK,
 							pending_interest: Default::default()
 						}
 					)])

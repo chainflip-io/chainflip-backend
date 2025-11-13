@@ -9,7 +9,8 @@ pub struct LendingPool<AccountId>
 where
 	AccountId: Decode + Encode + Ord + Clone,
 {
-	/// Total amount owed to active lenders (includes what's currently in loans)
+	/// Total amount owed to active lenders (includes what's currently in loans, but excluded
+	/// what's owed to the network).
 	pub total_amount: AssetAmount,
 	/// Amount available to be borrowed
 	pub available_amount: AssetAmount,
@@ -175,6 +176,28 @@ where
 		// not the total amount (as we never deduct borrowed funds from the total amount
 		// in the first place)
 		self.available_amount.saturating_accrue(amount);
+	}
+
+	pub fn get_supply_position_for_account(
+		&self,
+		account_id: &AccountId,
+	) -> Result<AssetAmount, LendingPoolError> {
+		let share = self
+			.lender_shares
+			.get(account_id)
+			.ok_or(LendingPoolError::LenderNotFoundInPool)?;
+
+		Ok(*share * self.total_amount)
+	}
+
+	pub fn get_all_supply_positions(&self) -> Vec<LendingSupplyPosition<AccountId, AssetAmount>> {
+		self.lender_shares
+			.iter()
+			.map(|(lp_id, share)| LendingSupplyPosition {
+				lp_id: lp_id.clone(),
+				total_amount: *share * self.total_amount,
+			})
+			.collect()
 	}
 }
 
