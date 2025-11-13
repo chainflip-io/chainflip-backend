@@ -26,7 +26,10 @@ use crate::{
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Arbitrum;
 use codec::{Decode, Encode, MaxEncodedLen};
-pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Word};
+pub use ethabi::{
+	ethereum_types::{H160, H256},
+	Address, Hash as TxHash, Token, Uint, Word,
+};
 use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -45,6 +48,8 @@ impl Chain for Arbitrum {
 	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount =
 		eth::REFERENCE_ETH_PRICE_IN_USD;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = eth::ONE_ETH;
+	const BURN_ADDRESS: Self::ChainAccount =
+		H160(hex_literal::hex!("000000000000000000000000000000000000dEaD"));
 
 	type ChainCrypto = EvmCrypto;
 	type ChainBlockNumber = u64;

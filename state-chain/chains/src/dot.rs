@@ -350,6 +350,7 @@ impl Chain for Polkadot {
 	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount =
 		crate::hub::REFERENCE_HUBDOT_PRICE_IN_USD;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = crate::hub::ONE_DOT;
+	const BURN_ADDRESS: Self::ChainAccount = PolkadotAccountId([0; 32]);
 
 	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;

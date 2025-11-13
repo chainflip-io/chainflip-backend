@@ -315,6 +315,9 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	/// For example: 1 ETH = 1_000_000_000_000_000_000 wei.
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount;
 
+	/// The burn address for the chain.
+	const BURN_ADDRESS: Self::ChainAccount;
+
 	/// Outputs the root block that witnesses the range of blocks after (not including)
 	/// `block_number`
 	fn checked_block_witness_next(
