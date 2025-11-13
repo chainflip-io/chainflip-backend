@@ -31,7 +31,7 @@ use sp_std::vec::Vec;
 
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{DispatchResult, FixedU64, Perbill},
+	sp_runtime::{DispatchResult, FixedU128, Perbill},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -69,7 +69,7 @@ pub mod pallet {
 	use cf_chains::{AccountOrAddress, Chain};
 	use cf_primitives::{BlockNumber, ChannelId, EgressId};
 	use cf_traits::MinimumDeposit;
-	use frame_support::sp_runtime::{traits::Zero, FixedU64, SaturatedConversion, Saturating};
+	use frame_support::sp_runtime::{traits::Zero, FixedU128, SaturatedConversion, Saturating};
 
 	use super::*;
 
@@ -89,15 +89,15 @@ pub mod pallet {
 	)]
 	pub struct DeltaStats {
 		/// The delta in swap volume since the last sample in USD
-		pub limit_orders_swap_usd_volume: FixedU64,
+		pub limit_orders_swap_usd_volume: FixedU128,
 	}
 
 	impl DeltaStats {
 		pub fn reset(&mut self) {
-			self.limit_orders_swap_usd_volume = FixedU64::zero();
+			self.limit_orders_swap_usd_volume = FixedU128::zero();
 		}
 
-		pub fn on_limit_order(&mut self, usd_amount: FixedU64) {
+		pub fn on_limit_order(&mut self, usd_amount: FixedU128) {
 			self.limit_orders_swap_usd_volume =
 				self.limit_orders_swap_usd_volume.saturating_add(usd_amount);
 		}
@@ -118,18 +118,18 @@ pub mod pallet {
 		Serialize,
 	)]
 	pub struct WindowedEma {
-		pub one_day: FixedU64,
-		pub seven_days: FixedU64,
-		pub thirty_days: FixedU64,
+		pub one_day: FixedU128,
+		pub seven_days: FixedU128,
+		pub thirty_days: FixedU128,
 	}
 
 	impl WindowedEma {
-		pub fn new(initial_val: FixedU64) -> Self {
+		pub fn new(initial_val: FixedU128) -> Self {
 			Self { one_day: initial_val, seven_days: initial_val, thirty_days: initial_val }
 		}
 
 		/// Updates the ema values using the new sample.
-		pub fn update(&mut self, sample: &FixedU64) {
+		pub fn update(&mut self, sample: &FixedU128) {
 			self.one_day = Self::calculate_ema(&self.one_day, sample, ALPHA_HALF_LIFE_1_DAY);
 			self.seven_days = Self::calculate_ema(&self.seven_days, sample, ALPHA_HALF_LIFE_7_DAYS);
 			self.thirty_days =
@@ -139,12 +139,12 @@ pub mod pallet {
 		/// Ema is calculated using the formula:
 		/// EMA_t = alpha * new_sample + (1 - alpha) * EMA_(t-1)
 		fn calculate_ema(
-			current_val: &FixedU64,
-			new_val: &FixedU64,
+			current_val: &FixedU128,
+			new_val: &FixedU128,
 			alpha_perbill: Perbill,
-		) -> FixedU64 {
-			let alpha = FixedU64::from(alpha_perbill);
-			let one_minus_alpha = FixedU64::from_u32(1).saturating_sub(alpha);
+		) -> FixedU128 {
+			let alpha = FixedU128::from(alpha_perbill);
+			let one_minus_alpha = FixedU128::from_u32(1).saturating_sub(alpha);
 			new_val
 				.saturating_mul(alpha)
 				.saturating_add(current_val.saturating_mul(one_minus_alpha))
@@ -170,11 +170,11 @@ pub mod pallet {
 	}
 
 	impl AggStats {
-		pub fn new(limit_swap_usd_volume: FixedU64) -> Self {
+		pub fn new(limit_swap_usd_volume: FixedU128) -> Self {
 			Self { avg_limit_usd_volume: WindowedEma::new(limit_swap_usd_volume) }
 		}
 
-		pub fn update(&mut self, limit_swap_usd_volume: &FixedU64) {
+		pub fn update(&mut self, limit_swap_usd_volume: &FixedU128) {
 			self.avg_limit_usd_volume.update(limit_swap_usd_volume);
 		}
 	}
@@ -672,8 +672,7 @@ impl<T: Config> LpStatsApi for Pallet<T> {
 		LpDeltaStats::<T>::mutate(who, asset, |maybe_stats| {
 			let delta_stats = maybe_stats.get_or_insert_default();
 
-			let fixed_amount = FixedU64::from_rational(usd_amount, 1_000_000u128);
-			delta_stats.on_limit_order(fixed_amount);
+			delta_stats.on_limit_order(FixedU128::from_inner(usd_amount));
 		});
 	}
 }
