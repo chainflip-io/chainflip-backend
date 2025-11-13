@@ -118,6 +118,10 @@ const fn portion_of_amount(fee: Permill, principal: AssetAmount) -> AssetAmount 
 	principal.checked_mul(fee.deconstruct() as u128).unwrap() / Permill::ACCURACY as u128
 }
 
+fn disable_whitelist() {
+	assert_ok!(LendingPools::update_whitelist(RuntimeOrigin::root(), WhitelistUpdate::SetAllowAll));
+}
+
 const ORIGINATION_FEE: AssetAmount = portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL);
 
 /// Takes the full fee and splits it into network fee and the remainder.
@@ -136,6 +140,8 @@ fn take_network_fee(full_amount: AssetAmount) -> (AssetAmount, AssetAmount) {
 
 fn setup_pool_with_funds(loan_asset: Asset, init_amount: AssetAmount) {
 	LendingConfig::<Test>::set(CONFIG);
+
+	disable_whitelist();
 
 	assert_ok!(LendingPools::new_lending_pool(loan_asset));
 
@@ -164,17 +170,8 @@ fn set_asset_price_in_usd(asset: Asset, price: u128) {
 
 #[test]
 fn lender_basic_adding_and_removing_funds() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
-
+	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
 		// Test that it is possible to withdraw funds if you are the sole contributor
-		MockBalance::credit_account(&LENDER, LOAN_ASSET, INIT_POOL_AMOUNT);
-		assert_ok!(LendingPools::add_lender_funds(
-			RuntimeOrigin::signed(LENDER),
-			LOAN_ASSET,
-			INIT_POOL_AMOUNT
-		));
-
 		assert_eq!(MockBalance::get_balance(&LENDER, LOAN_ASSET), 0);
 
 		// Remove 25% of the funds first:
@@ -3040,9 +3037,7 @@ mod safe_mode {
 			)
 		};
 
-		new_test_ext().execute_with(|| {
-			assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
-
+		new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
 			MockBalance::credit_account(&LENDER, LOAN_ASSET, 10 * INIT_POOL_AMOUNT);
 
 			// Adding lender funds is disabled for all assets:
@@ -3094,16 +3089,7 @@ mod safe_mode {
 			)
 		};
 
-		new_test_ext().execute_with(|| {
-			assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
-
-			MockBalance::credit_account(&LENDER, LOAN_ASSET, INIT_POOL_AMOUNT);
-			assert_ok!(LendingPools::add_lender_funds(
-				RuntimeOrigin::signed(LENDER),
-				LOAN_ASSET,
-				INIT_POOL_AMOUNT
-			));
-
+		new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
 			// Withdrawing is disabled for all assets:
 			{
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
@@ -3157,19 +3143,8 @@ mod safe_mode {
 			)
 		};
 
-		new_test_ext().execute_with(|| {
-			assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
-
-			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
-
-			MockBalance::credit_account(&LENDER, LOAN_ASSET, 2 * INIT_POOL_AMOUNT);
+		new_test_ext().with_funded_pool(2 * INIT_POOL_AMOUNT).execute_with(|| {
 			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
-			assert_ok!(LendingPools::add_lender_funds(
-				RuntimeOrigin::signed(LENDER),
-				LOAN_ASSET,
-				2 * INIT_POOL_AMOUNT
-			));
 
 			MockBalance::credit_account(&LP, COLLATERAL_ASSET, 10 * INIT_COLLATERAL);
 
@@ -3252,20 +3227,12 @@ mod safe_mode {
 			)
 		};
 
-		new_test_ext().execute_with(|| {
-			assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
-
+		new_test_ext().with_funded_pool(10 * PRINCIPAL).execute_with(|| {
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 			set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
 			set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
 
-			MockBalance::credit_account(&LENDER, LOAN_ASSET, 10 * PRINCIPAL);
 			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
-			assert_ok!(LendingPools::add_lender_funds(
-				RuntimeOrigin::signed(LENDER),
-				LOAN_ASSET,
-				10 * PRINCIPAL
-			));
 
 			MockBalance::credit_account(&LP, COLLATERAL_ASSET_1, 10 * INIT_COLLATERAL);
 			MockBalance::credit_account(&LP, COLLATERAL_ASSET_2, 10 * INIT_COLLATERAL);
@@ -3342,19 +3309,10 @@ mod safe_mode {
 			)
 		};
 
-		new_test_ext().execute_with(|| {
-			assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
-
+		new_test_ext().with_funded_pool(10 * PRINCIPAL).execute_with(|| {
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 			set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
 			set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
-
-			MockBalance::credit_account(&LENDER, LOAN_ASSET, 10 * PRINCIPAL);
-			assert_ok!(LendingPools::add_lender_funds(
-				RuntimeOrigin::signed(LENDER),
-				LOAN_ASSET,
-				10 * PRINCIPAL
-			));
 
 			MockBalance::credit_account(&LP, COLLATERAL_ASSET_1, 10 * COLLATERAL_AMOUNT);
 			MockBalance::credit_account(&LP, COLLATERAL_ASSET_2, 10 * COLLATERAL_AMOUNT);
@@ -3392,6 +3350,97 @@ mod safe_mode {
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode::code_green());
 				assert_ok!(try_removing_collateral());
 			}
+		});
+	}
+}
+
+mod whitelisting {
+
+	use super::*;
+
+	const WHITELISTED_USER: u64 = LP;
+	const NON_WHITELISTED_USER: u64 = OTHER_LP;
+
+	fn setup_accounts() {
+		for account in [WHITELISTED_USER, NON_WHITELISTED_USER] {
+			MockBalance::credit_account(&account, LOAN_ASSET, INIT_POOL_AMOUNT);
+			MockBalance::credit_account(&account, COLLATERAL_ASSET, INIT_COLLATERAL);
+			MockLpRegistration::register_refund_address(account, LOAN_CHAIN);
+		}
+
+		assert_ok!(LendingPools::update_whitelist(
+			RuntimeOrigin::root(),
+			WhitelistUpdate::SetAllowedAccounts(BTreeSet::from([WHITELISTED_USER]))
+		));
+	}
+
+	#[test]
+	fn adding_lender_funds() {
+		new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
+			setup_accounts();
+
+			assert_ok!(LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(WHITELISTED_USER),
+				LOAN_ASSET,
+				INIT_POOL_AMOUNT
+			));
+
+			assert_noop!(
+				LendingPools::add_lender_funds(
+					RuntimeOrigin::signed(NON_WHITELISTED_USER),
+					LOAN_ASSET,
+					INIT_POOL_AMOUNT
+				),
+				Error::<Test>::AccountNotWhitelisted
+			);
+		});
+	}
+
+	#[test]
+	fn adding_collateral() {
+		new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
+			setup_accounts();
+
+			assert_ok!(LendingPools::add_collateral(
+				RuntimeOrigin::signed(WHITELISTED_USER),
+				Some(COLLATERAL_ASSET),
+				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
+			));
+
+			assert_noop!(
+				LendingPools::add_collateral(
+					RuntimeOrigin::signed(NON_WHITELISTED_USER),
+					Some(COLLATERAL_ASSET),
+					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
+				),
+				Error::<Test>::AccountNotWhitelisted
+			);
+		});
+	}
+
+	#[test]
+	fn request_loan() {
+		new_test_ext().with_funded_pool(2 * INIT_POOL_AMOUNT).execute_with(|| {
+			setup_accounts();
+
+			assert_ok!(LendingPools::request_loan(
+				RuntimeOrigin::signed(WHITELISTED_USER),
+				LOAN_ASSET,
+				PRINCIPAL,
+				Some(COLLATERAL_ASSET),
+				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
+			));
+
+			assert_noop!(
+				LendingPools::request_loan(
+					RuntimeOrigin::signed(NON_WHITELISTED_USER),
+					LOAN_ASSET,
+					PRINCIPAL,
+					Some(COLLATERAL_ASSET),
+					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
+				),
+				Error::<Test>::AccountNotWhitelisted
+			);
 		});
 	}
 }
@@ -4053,7 +4102,7 @@ fn adding_or_removing_collateral_minimum_is_enforced() {
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
 	const COLLATERAL_ASSET_2: Asset = Asset::Flip;
 
-	new_test_ext().execute_with(|| {
+	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
 		set_asset_price_in_usd(COLLATERAL_ASSET, SWAP_RATE);
 		set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
 		MockBalance::credit_account(

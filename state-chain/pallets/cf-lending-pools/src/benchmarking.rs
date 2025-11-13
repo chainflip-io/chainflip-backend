@@ -102,6 +102,8 @@ mod benchmarks {
 		lender: &T::AccountId,
 		loan_amount: AssetAmount,
 	) {
+		disable_whitelist::<T>();
+
 		const POOLS: [Asset; 2] = [LOAN_ASSET, COLLATERAL_ASSET];
 		const LOANS: [(Asset, Asset); 2] =
 			[(COLLATERAL_ASSET, LOAN_ASSET), (LOAN_ASSET, COLLATERAL_ASSET)];
@@ -147,6 +149,31 @@ mod benchmarks {
 		{
 			assert_ok!(Pallet::<T>::update_pallet_config(origin, updates));
 		}
+	}
+
+	#[benchmark]
+	fn update_whitelist() {
+		// Initialise the whitelist with 1000 accounts
+		let initial_accounts: BTreeSet<T::AccountId> =
+			(1..=1000).map(|i| setup_lp_account::<T>(Asset::Eth, i)).collect();
+
+		assert_ok!(Pallet::<T>::update_whitelist(
+			gov_origin::<T>(),
+			WhitelistUpdate::<T::AccountId>::SetAllowedAccounts(initial_accounts.clone())
+		));
+
+		// New accounts to add in the benchmarked section
+		let accounts_to_add: BTreeSet<T::AccountId> =
+			(1001..=2000).map(|i| setup_lp_account::<T>(Asset::Eth, i)).collect();
+
+		let expected_accounts = initial_accounts.union(&accounts_to_add).cloned().collect();
+
+		let update = WhitelistUpdate::<T::AccountId>::AddAllowedAccounts(accounts_to_add);
+
+		#[extrinsic_call]
+		update_whitelist(gov_origin::<T>() as T::RuntimeOrigin, update);
+
+		assert_eq!(Whitelist::<T>::get(), WhitelistStatus::AllowSome(expected_accounts));
 	}
 
 	#[benchmark]
@@ -265,11 +292,20 @@ mod benchmarks {
 		assert_eq!(BoostPools::<T>::iter().count(), 1);
 	}
 
+	fn disable_whitelist<T: Config>() {
+		assert_ok!(Pallet::<T>::update_whitelist(
+			gov_origin::<T>(),
+			WhitelistUpdate::<T::AccountId>::SetAllowAll
+		));
+	}
+
 	// Creates a lending pool for the loan asset and adds a bunch of lenders, leaving seed 0 free
 	// for `setup_lp_account`. Also sets a price for the loan and collateral assets.
 	fn setup_lending_pool<T: Config>(number_of_lenders: u32) {
 		set_asset_price_in_usd::<T>(LOAN_ASSET, 100_000_000_000);
 		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000);
+
+		disable_whitelist::<T>();
 
 		assert_ok!(Pallet::<T>::create_lending_pool(gov_origin::<T>(), LOAN_ASSET));
 
@@ -339,6 +375,7 @@ mod benchmarks {
 	#[benchmark]
 	fn add_collateral() {
 		const AMOUNT: AssetAmount = 100_000_000;
+		disable_whitelist::<T>();
 		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000);
 		let borrower = setup_lp_account::<T>(LOAN_ASSET, 0);
 		let collateral = BTreeMap::from([(COLLATERAL_ASSET, AMOUNT)]);
@@ -468,6 +505,7 @@ mod benchmarks {
 		let collateral =
 			BTreeMap::from([(COLLATERAL_ASSET, 200_000_000), (LOAN_ASSET, 100_000_000)]);
 
+		disable_whitelist::<T>();
 		set_asset_price_in_usd::<T>(LOAN_ASSET, 100_000_000_000);
 		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000);
 		T::Balance::credit_account(&borrower, LOAN_ASSET, 100_000_000);
@@ -672,6 +710,9 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_change_voluntary_liquidation::<Test>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_update_whitelist::<Test>(true);
 		});
 	}
 }
