@@ -492,10 +492,12 @@ pub struct VaultAddresses {
 	pub sol_vault_program: EncodedAddress,
 	pub sol_swap_endpoint_program_data_account: EncodedAddress,
 	// pub solana_usdc_token_vault_ata: EncodedAddress,
-
 	pub bitcoin_vault: Option<EncodedAddress>,
 	pub solana_sol_vault: Option<EncodedAddress>,
 	pub solana_usdc_vault: EncodedAddress,
+	pub solana_vault_swap_account: Option<EncodedAddress>,
+
+	pub predicted_seconds_until_next_vault_rotation: u64,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]

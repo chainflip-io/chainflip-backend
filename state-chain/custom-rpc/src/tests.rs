@@ -407,6 +407,8 @@ fn test_vault_addresses_custom_rpc() {
 		bitcoin_vault: Some(EncodedAddress::Btc([5; 32].into())),
 		solana_sol_vault: Some(EncodedAddress::Sol([6; 32])),
 		solana_usdc_vault: EncodedAddress::Sol([7; 32]),
+		solana_vault_swap_account: Some(EncodedAddress::Sol([8; 32])),
+		predicted_seconds_until_next_vault_rotation: 9,
 	};
 	insta::assert_json_snapshot!(val);
 }

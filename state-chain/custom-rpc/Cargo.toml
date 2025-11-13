@@ -15,6 +15,7 @@ codec = { workspace = true, default-features = true }
 state-chain-runtime = { workspace = true, default-features = true }
 
 anyhow = { workspace = true }
+chrono = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee = { workspace = true, features = ["full"] }

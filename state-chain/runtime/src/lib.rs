@@ -69,7 +69,10 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress, IntoForeignChainAddress},
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
-	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
+	btc::{
+		api::BitcoinApi, deposit_address::DepositAddress, BitcoinCrypto, BitcoinRetryPolicy,
+		ScriptPubkey,
+	},
 	cf_parameters::build_and_encode_cf_parameters,
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
@@ -2624,24 +2627,40 @@ impl_runtime_apis! {
 
 		fn cf_vault_addresses() -> VaultAddresses {
 			let bitcoin_agg_key = <BtcEnvironment as ChainEnvironment<_, cf_chains::btc::AggKey>>::lookup(());
+			let solana_api_environment = Environment::solana_api_environment();
 			VaultAddresses {
 				ethereum: EncodedAddress::Eth(Environment::eth_vault_address().into()),
 				arbitrum: EncodedAddress::Arb(Environment::arb_vault_address().into()),
 				bitcoin: BrokerPrivateBtcChannels::<Runtime>::iter()
-					.flat_map(|(account_id, channel_id)| {
-						let BitcoinPrivateBrokerDepositAddresses { previous, current } = derive_btc_vault_deposit_addresses(channel_id)
+					.map(|(account_id, channel_id)| {
+						let BitcoinPrivateBrokerDepositAddresses { previous: _, current } = derive_btc_vault_deposit_addresses(channel_id)
 							.with_encoded_addresses();
-						previous.into_iter().chain(core::iter::once(current))
-							.map(move |address| (account_id.clone(), address))
+						(account_id, current)
 					})
 					.collect(),
 
-				sol_vault_program: Environment::solana_api_environment().vault_program.into(),
-				sol_swap_endpoint_program_data_account: Environment::solana_api_environment().swap_endpoint_program_data_account.into(),
+				sol_vault_program: solana_api_environment.vault_program.into(),
+				sol_swap_endpoint_program_data_account: solana_api_environment.swap_endpoint_program_data_account.into(),
 				// solana_usdc_token_vault_ata: Environment::solana_api_environment().usdc_token_vault_ata.into(),
 				solana_sol_vault: <SolEnvironment as ChainEnvironment<_, SolAddress>>::lookup(cf_chains::sol::api::CurrentAggKey).map(Into::into),
-				solana_usdc_vault: Environment::solana_api_environment().usdc_token_vault_ata.into(),
-				bitcoin_vault: bitcoin_agg_key.map(|agg_key| EncodedAddress::Btc(agg_key.current.to_vec())),
+				solana_usdc_vault: solana_api_environment.usdc_token_vault_ata.into(),
+				solana_vault_swap_account: sol_prim::address_derivation::derive_swap_endpoint_native_vault_account(
+					solana_api_environment.swap_endpoint_program
+				).ok().map(|account| account.address.into()),
+				bitcoin_vault: bitcoin_agg_key.map(|agg_key| {
+					let vault_address = DepositAddress::new(agg_key.current, 0);
+					EncodedAddress::from_chain_account::<Bitcoin>(
+						vault_address.script_pubkey(),
+						Environment::network_environment(),
+					)
+				}),
+				predicted_seconds_until_next_vault_rotation: {
+					let started = pallet_cf_validator::CurrentEpochStartedAt::<Runtime>::get();
+					let duration = pallet_cf_validator::EpochDuration::<Runtime>::get();
+					let current_height = crate::System::block_number();
+					let blocks_left = started.saturating_add(duration).saturating_sub(current_height);
+					blocks_left as u64 * cf_primitives::SECONDS_PER_BLOCK
+				}
 			}
 		}
 

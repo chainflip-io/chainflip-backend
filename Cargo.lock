@@ -2732,6 +2732,7 @@ dependencies = [
  "cf-node-client",
  "cf-primitives",
  "cf-rpc-apis",
+ "chrono",
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",

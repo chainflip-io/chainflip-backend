@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 #![feature(iterator_try_collect)]
+#![feature(duration_constructors)]
 
 use crate::{backend::CustomRpcBackend, boost_pool_rpc::BoostPoolFeesRpc};
 use boost_pool_rpc::BoostPoolDetailsRpc;
@@ -27,13 +28,7 @@ use cf_chains::{
 	eth::Address as EthereumAddress,
 	CcmChannelMetadataUnchecked, Chain, MAX_CCM_MSG_LENGTH,
 };
-use cf_node_client::{
-	events_decoder,
-	subxt_state_chain_config::cf_static_runtime::{
-		runtime_apis::custom_runtime_api::types::{cf_current_epoch_started_at, cf_epoch_duration},
-		validator::storage::types::current_epoch_started_at,
-	},
-};
+use cf_node_client::events_decoder;
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
@@ -44,9 +39,8 @@ use cf_rpc_apis::{
 		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc, RpcBytes,
 		VaultSwapExtraParametersRpc, VaultSwapInputRpc,
 	},
-	call_error, internal_error,
-	traceability::{AddressAndExplanation, ControlledDepositAddresses, ControlledVaultAddresses},
-	CfErrorCode, NotificationBehaviour, OrderFills, RefundParametersRpc, RpcApiError, RpcResult,
+	call_error, internal_error, CfErrorCode, NotificationBehaviour, OrderFills,
+	RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -100,6 +94,7 @@ use std::{
 	collections::{BTreeMap, BTreeSet, HashMap},
 	marker::PhantomData,
 	sync::Arc,
+	time::Duration,
 };
 
 pub mod backend;
@@ -111,6 +106,24 @@ pub mod pool_client;
 
 #[cfg(test)]
 mod tests;
+
+mod chainflip_transparency {
+	use super::*;
+
+	#[derive(Serialize, Deserialize, Debug, Clone)]
+	pub struct AddressAndExplanation {
+		pub name: String,
+		pub address: AddressString,
+		pub explanation: String,
+		pub rotation_policy: String,
+		pub next_predicted_rotation: Option<String>,
+	}
+
+	pub type ControlledDepositAddresses = HashMap<ForeignChain, Vec<AddressString>>;
+
+	pub type ControlledVaultAddresses = HashMap<ForeignChain, Vec<AddressAndExplanation>>;
+}
+use chainflip_transparency::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
@@ -2493,24 +2506,28 @@ where
 			ethereum,
 			arbitrum,
 			bitcoin,
-			sol_vault_program,
-			sol_swap_endpoint_program_data_account,
+			sol_vault_program: _,
+			sol_swap_endpoint_program_data_account: _,
 			bitcoin_vault,
 			solana_sol_vault,
 			solana_usdc_vault,
+			solana_vault_swap_account,
+			predicted_seconds_until_next_vault_rotation,
 		} = self.cf_vault_addresses(at)?;
 
-		let epoch_started = self.cf_current_epoch_started_at(at)?;
-		let epoch_end = self.cf_epoch_duration(at)?;
-		// let time = self.
-		// let epoch_end =
+		let rotates_every_3_days = "Every 3 days".to_string();
+		let rotates_never = "Never".to_string();
+		let next_predicted_rotation = (chrono::Utc::now() +
+			Duration::from_secs(predicted_seconds_until_next_vault_rotation))
+		.to_string();
 
 		if chain.is_none_or(|chain| chain == ForeignChain::Arbitrum) {
 			result.insert(ForeignChain::Arbitrum, vec![AddressAndExplanation {
 				name: "arbitrum_vault_contract".into(),
 				address: AddressString::from_encoded_address(arbitrum),
 				explanation: "Holds ArbEth and all tokens on Arbitrum. Directly receives user funds in case of smart contract-based vault swaps.".into(),
-				expected_expiry: None,
+				rotation_policy: rotates_never.clone(),
+				next_predicted_rotation: None,
 			}]);
 		}
 
@@ -2518,8 +2535,9 @@ where
 			result.insert(ForeignChain::Ethereum, vec![AddressAndExplanation {
 				name: "ethereum_vault_contract".into(),
 				address: AddressString::from_encoded_address(ethereum),
-				explanation: "Holds Eth and all tokens on Ethereum. Directly receives user funds in case of smart contract-based vault swaps.".into(),
-				expected_expiry: None,
+				explanation: "Holds Eth and all tokens on Ethereum. Directly receives user funds for smart contract-based 'vault swaps'.".into(),
+				rotation_policy: rotates_never.clone(),
+				next_predicted_rotation: None,
 			}]);
 		}
 
@@ -2530,15 +2548,28 @@ where
 					name: "solana_sol_vault".into(),
 					address: AddressString::from_encoded_address(solana_sol_vault),
 					explanation: "Holds Sol on Solana.".into(),
-					expected_expiry: Some("Unknown".into()),
+					rotation_policy: rotates_every_3_days.clone(),
+					next_predicted_rotation: Some(next_predicted_rotation.clone()),
 				})
 			}
 			solana_addresses.push(AddressAndExplanation {
 				name: "solana_usdc_vault".into(),
 				address: AddressString::from_encoded_address(solana_usdc_vault),
-				explanation: "Holds Usdc on Solana.".into(),
-				expected_expiry: None,
+				explanation:
+					"Holds Usdc on Solana. Directly receives user funds for Usdc 'vault swaps'."
+						.into(),
+				rotation_policy: rotates_never.clone(),
+				next_predicted_rotation: None,
 			});
+			if let Some(solana_vault_swap_account) = solana_vault_swap_account {
+				solana_addresses.push(AddressAndExplanation {
+					name: "solana_sol_vault_swap_account".into(),
+					address: AddressString::from_encoded_address(solana_vault_swap_account),
+					explanation: "Special account for 'vault swap' support for Sol on Solana. Receives user funds for Sol vault swaps before they are fetched into the vault.".into(),
+					rotation_policy: rotates_never,
+					next_predicted_rotation: None,
+				})
+			}
 			result.insert(ForeignChain::Solana, solana_addresses);
 		}
 
@@ -2548,16 +2579,20 @@ where
 				bitcoin_addresses.push(AddressAndExplanation {
 					name: "bitcoin_vault".into(),
 					address: AddressString::from_encoded_address(bitcoin_vault),
-					explanation: "Holds Bitcoin. Rotates every 3 days.".into(),
-					expected_expiry: Some("Unknown".into()),
+					explanation: "Holds Bitcoin.".into(),
+					rotation_policy: rotates_every_3_days.clone(),
+					next_predicted_rotation: Some(next_predicted_rotation.clone()),
 				});
 			}
 			bitcoin_addresses.extend(bitcoin.into_iter().map(|(broker_id, address)| {
 				AddressAndExplanation {
-					name: format!("bitcoin_private_vault_deposit_address_for_broker_{broker_id}"),
+					name: format!("bitcoin_vault_swap_address_for_broker_{broker_id}"),
 					address: AddressString::from_encoded_address(address),
-					explanation: "Special per-broker deposit address for vault-swap support on bitcoin. Rotates every 3 days".into(),
-					expected_expiry: Some("Unknown".into()),
+					explanation:
+						"Special per-broker address for 'vault swap' support on bitcoin. Receives user funds for Btc vault swaps before they are fetched into the vault."
+							.into(),
+					rotation_policy: rotates_every_3_days.clone(),
+					next_predicted_rotation: Some(next_predicted_rotation.clone()),
 				}
 			}));
 			result.insert(ForeignChain::Bitcoin, bitcoin_addresses);
