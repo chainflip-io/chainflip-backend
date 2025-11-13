@@ -53,15 +53,15 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled, internal_swaps_enabled);
 
-pub const STATS_UPDATE_INTERVAL_IN_BLOCKS: u64 = 3 * 3600 / SECONDS_PER_BLOCK; // 3 hours
+pub const STATS_UPDATE_INTERVAL_IN_BLOCKS: u64 = 24 * 3600 / SECONDS_PER_BLOCK; // 24 hours
 
 // Alpha half-life factors for exponential moving averages calculated as:
 // Alpha = 1 - e^(-ln 2 * sampling_interval / half_life_period)
 // using a sampling interval defined in `STATS_UPDATE_INTERVAL_IN_BLOCKS`. Make sure to update
 // these half-life values if `STATS_UPDATE_INTERVAL_IN_BLOCKS` is changed.
-pub const ALPHA_HALF_LIFE_1_DAY: Perbill = Perbill::from_parts(82995956);
-pub const ALPHA_HALF_LIFE_7_DAYS: Perbill = Perbill::from_parts(12301340);
-pub const ALPHA_HALF_LIFE_30_DAYS: Perbill = Perbill::from_parts(2883946);
+pub const ALPHA_HALF_LIFE_1_DAY: Perbill = Perbill::from_parts(500_000_000);
+pub const ALPHA_HALF_LIFE_7_DAYS: Perbill = Perbill::from_parts(94_276_335);
+pub const ALPHA_HALF_LIFE_30_DAYS: Perbill = Perbill::from_parts(22_840_031);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -69,10 +69,7 @@ pub mod pallet {
 	use cf_chains::{AccountOrAddress, Chain};
 	use cf_primitives::{BlockNumber, ChannelId, EgressId};
 	use cf_traits::MinimumDeposit;
-	use frame_support::sp_runtime::{
-		traits::{One, Zero},
-		FixedU64, SaturatedConversion, Saturating,
-	};
+	use frame_support::sp_runtime::{traits::Zero, FixedU64, SaturatedConversion, Saturating};
 
 	use super::*;
 
@@ -93,21 +90,16 @@ pub mod pallet {
 	pub struct DeltaStats {
 		/// The delta in swap volume since the last sample in USD
 		pub limit_orders_swap_usd_volume: FixedU64,
-		/// The delta in swap count since the last sample
-		pub limit_orders_swap_count: FixedU64,
 	}
 
 	impl DeltaStats {
 		pub fn reset(&mut self) {
 			self.limit_orders_swap_usd_volume = FixedU64::zero();
-			self.limit_orders_swap_count = FixedU64::zero();
 		}
 
 		pub fn on_limit_order(&mut self, usd_amount: FixedU64) {
 			self.limit_orders_swap_usd_volume =
 				self.limit_orders_swap_usd_volume.saturating_add(usd_amount);
-			self.limit_orders_swap_count =
-				self.limit_orders_swap_count.saturating_add(FixedU64::one());
 		}
 	}
 
@@ -173,22 +165,17 @@ pub mod pallet {
 		Deserialize,
 		Serialize,
 	)]
-	pub struct EmaStats {
-		pub swap_usd_volume: WindowedEma,
-		pub swap_count: WindowedEma,
+	pub struct AggStats {
+		pub avg_limit_usd_volume: WindowedEma,
 	}
 
-	impl EmaStats {
-		pub fn new(swap_usd_volume: FixedU64, swap_count: FixedU64) -> Self {
-			Self {
-				swap_usd_volume: WindowedEma::new(swap_usd_volume),
-				swap_count: WindowedEma::new(swap_count),
-			}
+	impl AggStats {
+		pub fn new(limit_swap_usd_volume: FixedU64) -> Self {
+			Self { avg_limit_usd_volume: WindowedEma::new(limit_swap_usd_volume) }
 		}
 
-		pub fn update(&mut self, swap_usd_volume: &FixedU64, swap_count: &FixedU64) {
-			self.swap_usd_volume.update(swap_usd_volume);
-			self.swap_count.update(swap_count);
+		pub fn update(&mut self, limit_swap_usd_volume: &FixedU64) {
+			self.avg_limit_usd_volume.update(limit_swap_usd_volume);
 		}
 	}
 
@@ -338,8 +325,8 @@ pub mod pallet {
 
 	/// Stores exponential moving average stats for liquidity providers per asset
 	#[pallet::storage]
-	pub type LpEmaStats<T: Config> =
-		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, EmaStats>;
+	pub type LpAggStats<T: Config> =
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AggStats>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -349,7 +336,7 @@ pub mod pallet {
 			let blocks_elapsed = current_block.saturating_sub(StatsLastUpdatedAt::<T>::get());
 
 			if blocks_elapsed.saturated_into::<u64>() >= STATS_UPDATE_INTERVAL_IN_BLOCKS {
-				Self::update_ema_stats();
+				Self::update_agg_stats();
 				// TODO add proper weight benchmark
 				weight_used += T::DbWeight::get().reads_writes(10, 10);
 
@@ -630,9 +617,9 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn update_ema_stats() {
-		// For every existing Lp, update their EMA stats from accumulated delta stats
-		for (lp, asset) in LpEmaStats::<T>::iter_keys().collect::<Vec<_>>() {
+	fn update_agg_stats() {
+		// For every existing Lp, update their Aggregate stats from accumulated delta stats
+		for (lp, asset) in LpAggStats::<T>::iter_keys().collect::<Vec<_>>() {
 			let lp_delta = match LpDeltaStats::<T>::get(&lp, asset) {
 				Some(delta) => {
 					LpDeltaStats::<T>::remove(&lp, asset);
@@ -641,23 +628,16 @@ impl<T: Config> Pallet<T> {
 				None => Default::default(),
 			};
 
-			LpEmaStats::<T>::mutate(&lp, asset, |maybe_ema_stats| {
-				if let Some(ema_stats) = maybe_ema_stats.as_mut() {
-					ema_stats.update(
-						&lp_delta.limit_orders_swap_usd_volume,
-						&lp_delta.limit_orders_swap_count,
-					);
+			LpAggStats::<T>::mutate(&lp, asset, |maybe_agg_stats| {
+				if let Some(agg_stats) = maybe_agg_stats.as_mut() {
+					agg_stats.update(&lp_delta.limit_orders_swap_usd_volume);
 				}
 			});
 		}
 
-		// Any left-over deltas correspond to LPs that didn't have EMA entries yet
+		// Any left-over deltas correspond to LPs that didn't have Aggregate entries yet
 		for (lp, asset, delta) in LpDeltaStats::<T>::iter() {
-			LpEmaStats::<T>::insert(
-				&lp,
-				asset,
-				EmaStats::new(delta.limit_orders_swap_usd_volume, delta.limit_orders_swap_count),
-			);
+			LpAggStats::<T>::insert(&lp, asset, AggStats::new(delta.limit_orders_swap_usd_volume));
 			LpDeltaStats::<T>::remove(&lp, asset)
 		}
 	}
@@ -690,10 +670,10 @@ impl<T: Config> LpStatsApi for Pallet<T> {
 
 	fn on_limit_order_filled(who: &Self::AccountId, asset: &Asset, usd_amount: AssetAmount) {
 		LpDeltaStats::<T>::mutate(who, asset, |maybe_stats| {
-			let stats = maybe_stats.get_or_insert_default();
+			let delta_stats = maybe_stats.get_or_insert_default();
 
 			let fixed_amount = FixedU64::from_rational(usd_amount, 1_000_000u128);
-			stats.on_limit_order(fixed_amount);
+			delta_stats.on_limit_order(fixed_amount);
 		});
 	}
 }

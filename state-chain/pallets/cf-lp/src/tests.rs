@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	mock::*, EmaStats, Error, Event, LiquidityRefundAddress, LpDeltaStats, LpEmaStats,
+	mock::*, AggStats, Error, Event, LiquidityRefundAddress, LpAggStats, LpDeltaStats,
 	PalletSafeMode, ALPHA_HALF_LIFE_1_DAY, ALPHA_HALF_LIFE_30_DAYS, ALPHA_HALF_LIFE_7_DAYS,
 	STATS_UPDATE_INTERVAL_IN_BLOCKS,
 };
@@ -32,7 +32,7 @@ use cf_traits::{
 	LpStatsApi, PriceLimitsAndExpiry, SafeMode, SetSafeMode, SwapOutputAction, SwapRequestType,
 };
 use frame_support::{assert_err, assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
-use sp_runtime::{FixedU64, Perbill, Saturating};
+use sp_runtime::FixedU64;
 
 #[test]
 fn egress_chain_and_asset_must_match() {
@@ -574,21 +574,18 @@ fn is_within_tiny_error(actual: f64, expected: f64) -> bool {
 #[test]
 fn check_ema_alpha_constants_are_correct() {
 	let expected_1day = expected_alpha_half_life(1);
-	assert_eq!(
-		ALPHA_HALF_LIFE_1_DAY.saturating_sub(Perbill::from_float(expected_1day)),
-		Perbill::zero()
-	);
+	assert_eq!(FixedU64::from_perbill(ALPHA_HALF_LIFE_1_DAY), FixedU64::from_float(expected_1day));
 
 	let expected_7days = expected_alpha_half_life(7);
 	assert_eq!(
-		ALPHA_HALF_LIFE_7_DAYS.saturating_sub(Perbill::from_float(expected_7days)),
-		Perbill::zero()
+		FixedU64::from_perbill(ALPHA_HALF_LIFE_7_DAYS),
+		FixedU64::from_float(expected_7days)
 	);
 
 	let expected_30days = expected_alpha_half_life(30);
 	assert_eq!(
-		ALPHA_HALF_LIFE_30_DAYS.saturating_sub(Perbill::from_float(expected_30days)),
-		Perbill::zero()
+		FixedU64::from_perbill(ALPHA_HALF_LIFE_30_DAYS),
+		FixedU64::from_float(expected_30days)
 	);
 }
 
@@ -610,7 +607,6 @@ fn on_limit_order_filled_updates_delta_stats() {
 			deltas_1.limit_orders_swap_usd_volume,
 			FixedU64::from_rational(USD_AMOUNT * 3, 1_000_000u128)
 		);
-		assert_eq!(deltas_1.limit_orders_swap_count, FixedU64::from_u32(3));
 
 		// round2
 		assert!(LpDeltaStats::<Test>::get(LP_ACCOUNT_2, Asset::Eth).is_none());
@@ -622,51 +618,49 @@ fn on_limit_order_filled_updates_delta_stats() {
 			deltas_2.limit_orders_swap_usd_volume,
 			FixedU64::from_rational(USD_AMOUNT, 1_000_000u128)
 		);
-		assert_eq!(deltas_2.limit_orders_swap_count, FixedU64::from_u32(1));
 	});
 }
 // rust
 #[test]
-fn update_ema_stats_updates_correctly() {
+fn update_agg_stats_updates_correctly() {
 	new_test_ext().execute_with(|| {
 		use sp_runtime::FixedU64;
 
 		// Insert pre-existing EMA for LP_ACCOUNT / Eth
-		let pre_existing_ema = EmaStats::new(
+		let pre_existing_ema = AggStats::new(
 			FixedU64::from_u32(1000), // Avg: 1000 USD
-			FixedU64::from_u32(100),  // Avg: 100 swaps
 		);
-		LpEmaStats::<Test>::insert(LP_ACCOUNT, Asset::Eth, pre_existing_ema);
-		// Insert for LP_ACCOUNT with pre-existing ema
+		LpAggStats::<Test>::insert(LP_ACCOUNT, Asset::Eth, pre_existing_ema);
+		// Insert for LP_ACCOUNT with pre-existing AggStats
 		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 700_000_000u128); // 700 usd
 		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 700_000_000u128); // 700 usd
 
-		// Insert for LP_ACCOUNT_2 (no pre-existing EMA; should create new EMA equal to delta)
+		// Insert for LP_ACCOUNT_2 (no pre-existing AggStats; should create new EMA equal to delta)
 		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT_2, &Asset::Flip, 500_000_000u128); // 500 usd
 
 		// Call the update function and verify that delta stats are deleted after the update
-		LiquidityProvider::update_ema_stats();
+		LiquidityProvider::update_agg_stats();
 		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth), None);
 		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip), None);
 
-		let lp1_ema_stats = LpEmaStats::<Test>::get(LP_ACCOUNT, Asset::Eth).unwrap();
+		let lp1_agg_stats = LpAggStats::<Test>::get(LP_ACCOUNT, Asset::Eth).unwrap();
 		assert!(is_within_tiny_error(
-			lp1_ema_stats.swap_usd_volume.one_day.to_float(),
-			expected_ema(pre_existing_ema.swap_usd_volume.one_day, 1400f64, 1u32)
+			lp1_agg_stats.avg_limit_usd_volume.one_day.to_float(),
+			expected_ema(pre_existing_ema.avg_limit_usd_volume.one_day, 1400f64, 1u32)
 		));
 		assert!(is_within_tiny_error(
-			lp1_ema_stats.swap_usd_volume.seven_days.to_float(),
-			expected_ema(pre_existing_ema.swap_usd_volume.seven_days, 1400f64, 7u32)
+			lp1_agg_stats.avg_limit_usd_volume.seven_days.to_float(),
+			expected_ema(pre_existing_ema.avg_limit_usd_volume.seven_days, 1400f64, 7u32)
 		));
 		assert!(is_within_tiny_error(
-			lp1_ema_stats.swap_usd_volume.thirty_days.to_float(),
-			expected_ema(pre_existing_ema.swap_usd_volume.thirty_days, 1400f64, 30u32)
+			lp1_agg_stats.avg_limit_usd_volume.thirty_days.to_float(),
+			expected_ema(pre_existing_ema.avg_limit_usd_volume.thirty_days, 1400f64, 30u32)
 		));
 
 		// Verify new EMA was created for LP_ACCOUNT_2 and is initialized correctly
-		let lp2_ema_stats = LpEmaStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip).unwrap();
-		assert_eq!(lp2_ema_stats.swap_usd_volume.one_day, FixedU64::from_u32(500));
-		assert_eq!(lp2_ema_stats.swap_usd_volume.seven_days, FixedU64::from_u32(500));
-		assert_eq!(lp2_ema_stats.swap_usd_volume.thirty_days, FixedU64::from_u32(500));
+		let lp2_agg_stats = LpAggStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip).unwrap();
+		assert_eq!(lp2_agg_stats.avg_limit_usd_volume.one_day, FixedU64::from_u32(500));
+		assert_eq!(lp2_agg_stats.avg_limit_usd_volume.seven_days, FixedU64::from_u32(500));
+		assert_eq!(lp2_agg_stats.avg_limit_usd_volume.thirty_days, FixedU64::from_u32(500));
 	});
 }
