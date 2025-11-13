@@ -119,7 +119,9 @@ use pallet_cf_validator::{
 	DelegationAmount, DelegationSlasher, DelegationSnapshot,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-use runtime_apis::{ChainAccounts, EvmCallDetails, RpcLendingPool, RpcLoanAccount};
+use runtime_apis::{
+	ChainAccounts, EvmCallDetails, LendingPoolAndSupplyPositions, RpcLendingPool, RpcLoanAccount,
+};
 use scale_info::prelude::{format, string::String};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 

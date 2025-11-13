@@ -891,6 +891,12 @@ decl_runtime_apis!(
 			account: Option<AccountId32>,
 		) -> Vec<DelegationSnapshot<AccountId32, FlipBalance>>;
 		#[changed_in(8)]
+		fn cf_ingress_delay();
+		fn cf_ingress_delay(chain: ForeignChain) -> u32;
+		#[changed_in(8)]
+		fn cf_boost_delay();
+		fn cf_boost_delay(chain: ForeignChain) -> u32;
+		#[changed_in(9)]
 		fn cf_encode_non_native_call();
 		fn cf_encode_non_native_call(
 			call: Vec<u8>,
