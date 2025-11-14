@@ -21,8 +21,8 @@
 use cf_chains::{eth::api::StateChainGatewayAddressProvider, UpdateFlipSupply};
 use cf_primitives::{AssetAmount, EgressId};
 use cf_traits::{
-	impl_pallet_safe_mode, Broadcaster, EgressApi, FlipBurnInfo, Issuance, RewardsDistribution,
-	ScheduledEgressDetails,
+	impl_pallet_safe_mode, Broadcaster, EgressApi, FlipBurnOrMoveInfo, Issuance,
+	RewardsDistribution, ScheduledEgressDetails,
 };
 use codec::MaxEncodedLen;
 use frame_support::storage::transactional::with_storage_layer;
@@ -108,7 +108,7 @@ pub mod pallet {
 		type EthEnvironment: StateChainGatewayAddressProvider;
 
 		/// The interface for accessing the amount of Flip we want burn.
-		type FlipToBurn: FlipBurnInfo;
+		type FlipToBurnOrMove: FlipBurnOrMoveInfo;
 
 		/// API for handling asset egress. Emissions only interacts with Ethereum.
 		type EgressHandler: EgressApi<Ethereum>;
@@ -269,13 +269,14 @@ impl<T: Config> Pallet<T> {
 
 	fn burn_flip_network_fee() {
 		match with_storage_layer(|| {
-			let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
-			if flip_to_burn == Zero::zero() {
+			let flip_to_be_sent_to_gateway = T::FlipToBurnOrMove::take_flip_to_be_sent_to_gateway();
+			let flip_to_burn = T::FlipToBurnOrMove::take_flip_to_burn();
+			if flip_to_burn <= Zero::zero() {
 				return Err(Error::<T>::FlipBalanceBelowBurnThreshold.into())
 			}
 			T::EgressHandler::schedule_egress(
 				cf_chains::assets::eth::Asset::Flip,
-				flip_to_burn,
+				flip_to_burn.saturated_into::<u128>().saturating_add(flip_to_be_sent_to_gateway),
 				T::EthEnvironment::state_chain_gateway_address(),
 				None,
 			)
@@ -285,14 +286,18 @@ impl<T: Config> Pallet<T> {
 					if egress_amount < BURN_FEE_MULTIPLE * fee_withheld {
 						Err(Error::<T>::FlipBalanceBelowBurnThreshold.into())
 					} else {
-						Ok(result)
+						Ok((result, flip_to_be_sent_to_gateway))
 					}
 				},
 			)
 		}) {
-			Ok(ScheduledEgressDetails { egress_id, egress_amount, .. }) => {
-				T::Issuance::burn_offchain(egress_amount.into());
-				Self::deposit_event(Event::NetworkFeeBurned { amount: egress_amount, egress_id });
+			Ok((
+				ScheduledEgressDetails { egress_id, egress_amount, .. },
+				flip_to_be_sent_to_gateway,
+			)) => {
+				let flip_to_burn = egress_amount.saturating_sub(flip_to_be_sent_to_gateway);
+				T::Issuance::burn_offchain(flip_to_burn.into());
+				Self::deposit_event(Event::NetworkFeeBurned { amount: flip_to_burn, egress_id });
 			},
 			Err(e) => {
 				Self::deposit_event(Event::FlipBurnSkipped { reason: e });

@@ -27,7 +27,7 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
 	mocks::{
 		broadcaster::MockBroadcaster, egress_handler::MockEgressHandler,
-		flip_burn_info::MockFlipBurnInfo,
+		flip_burn_info::MockFlipBurnOrMoveInfo,
 	},
 	Issuance, RewardsDistribution, WaivedFees,
 };
@@ -161,7 +161,7 @@ impl pallet_cf_emissions::Config for Test {
 	type EthEnvironment = MockStateChainGatewayProvider;
 	type RewardsDistribution = FlipDistribution;
 	type Broadcaster = MockEmissionsBroadcaster;
-	type FlipToBurn = MockFlipBurnInfo;
+	type FlipToBurnOrMove = MockFlipBurnOrMoveInfo;
 	type SafeMode = MockRuntimeSafeMode;
 	type EgressHandler = MockEgressHandler<Ethereum>;
 	type WeightInfo = ();
@@ -183,6 +183,6 @@ cf_test_utilities::impl_test_helpers! {
 	|| {
 		MockEpochInfo::add_authorities(1);
 		MockEpochInfo::add_authorities(2);
-		MockFlipBurnInfo::set_flip_to_burn(FLIP_TO_BURN);
+		MockFlipBurnOrMoveInfo::set_flip_to_burn(FLIP_TO_BURN);
 	}
 }

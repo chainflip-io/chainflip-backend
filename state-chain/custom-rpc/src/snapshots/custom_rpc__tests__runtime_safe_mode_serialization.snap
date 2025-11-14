@@ -1,5 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
+assertion_line: 712
 expression: val
 ---
 {
@@ -12,7 +13,8 @@ expression: val
   "swapping": {
     "swaps_enabled": true,
     "withdrawals_enabled": true,
-    "broker_registration_enabled": true
+    "broker_registration_enabled": true,
+    "deposit_enabled": true
   },
   "liquidity_provider": {
     "deposit_enabled": true,

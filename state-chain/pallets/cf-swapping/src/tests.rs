@@ -51,6 +51,7 @@ use cf_traits::{
 		pool_price_api::MockPoolPriceApi,
 	},
 	AccountRoleRegistry, AssetConverter, Chainflip, SetSafeMode, SwapExecutionProgress,
+	INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	assert_noop, assert_ok,
@@ -1936,6 +1937,160 @@ mod internal_swaps {
 					MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET),
 					EXPECTED_OUTPUT_AMOUNT
 				);
+			});
+	}
+}
+
+#[cfg(test)]
+mod credit_flip_and_transfer {
+
+	use cf_traits::{mocks::balance_api::MockBalance, FundAccount, SwapOutputActionEncoded};
+
+	use super::*;
+
+	const INPUT_ASSET: Asset = Asset::Eth;
+	const OUTPUT_ASSET: Asset = Asset::Flip;
+
+	const INPUT_AMOUNT: AssetAmount = INITIAL_FLIP_FUNDING;
+	const INPUT_AMOUNT2: AssetAmount = 1000;
+
+	#[test]
+	fn swap_into_flip_to_credit() {
+		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
+			INPUT_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE;
+
+		new_test_ext()
+			.execute_with(|| {
+				Swapping::init_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					SwapRequestType::RegularNoNetworkFee {
+						output_action: SwapOutputAction::CreditFlipAndTransferToGateway {
+							account_id: LP_ACCOUNT,
+							flip_to_subtract_from_swap_output: INITIAL_FLIP_FUNDING,
+						},
+					},
+					Beneficiaries::default(),
+					None,
+					None,
+					SwapOrigin::OnChainAccount(LP_ACCOUNT),
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequested {
+						input_asset: INPUT_ASSET,
+						input_amount: INPUT_AMOUNT,
+						output_asset: OUTPUT_ASSET,
+						origin: SwapOrigin::OnChainAccount(LP_ACCOUNT),
+						request_type: SwapRequestTypeEncoded::RegularNoNetworkFee {
+							output_action:
+								SwapOutputActionEncoded::CreditFlipAndTransferToGateway {
+									account_id: LP_ACCOUNT,
+									flip_to_subtract_from_swap_output: INITIAL_FLIP_FUNDING,
+								}
+						},
+						..
+					})
+				);
+
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), 0);
+			})
+			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_execute_with(|_| {
+				assert_event_sequence!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted {
+						swap_request_id: SWAP_REQUEST_ID,
+						..
+					}),
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+						swap_request_id: SWAP_REQUEST_ID,
+						reason: _
+					}),
+				);
+				assert_eq!(
+					MockFundingInfo::<Test>::get_bond(LP_ACCOUNT),
+					EXPECTED_OUTPUT_AMOUNT.saturating_sub(INITIAL_FLIP_FUNDING)
+				);
+				assert_eq!(FlipToBeSentToGateway::<Test>::get(), EXPECTED_OUTPUT_AMOUNT);
+			});
+	}
+
+	#[test]
+	fn swap_into_flip_to_credit_not_enough_output() {
+		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
+			INPUT_AMOUNT2 * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE;
+
+		new_test_ext()
+			.execute_with(|| {
+				Swapping::init_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT2,
+					OUTPUT_ASSET,
+					SwapRequestType::Regular {
+						output_action: SwapOutputAction::CreditFlipAndTransferToGateway {
+							account_id: LP_ACCOUNT,
+							flip_to_subtract_from_swap_output: INITIAL_FLIP_FUNDING,
+						},
+					},
+					Beneficiaries::default(),
+					None,
+					None,
+					SwapOrigin::OnChainAccount(LP_ACCOUNT),
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequested {
+						input_asset: INPUT_ASSET,
+						input_amount: INPUT_AMOUNT2,
+						output_asset: OUTPUT_ASSET,
+						origin: SwapOrigin::OnChainAccount(LP_ACCOUNT),
+						request_type: SwapRequestTypeEncoded::Regular {
+							output_action:
+								SwapOutputActionEncoded::CreditFlipAndTransferToGateway {
+									account_id: LP_ACCOUNT,
+									flip_to_subtract_from_swap_output: INITIAL_FLIP_FUNDING,
+								}
+						},
+						..
+					})
+				);
+
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), 0);
+				assert_eq!(FlipToBurn::<Test>::get(), 0);
+				assert_eq!(FlipToBeSentToGateway::<Test>::get(), 0);
+			})
+			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_execute_with(|_| {
+				assert_event_sequence!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted {
+						swap_request_id: SWAP_REQUEST_ID,
+						..
+					}),
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+						swap_request_id: SWAP_REQUEST_ID,
+						reason: _
+					}),
+				);
+
+				assert_eq!(
+					FlipToBurn::<Test>::get(),
+					0i128.saturating_sub(
+						INITIAL_FLIP_FUNDING
+							.saturating_sub(EXPECTED_OUTPUT_AMOUNT)
+							.try_into()
+							.unwrap()
+					)
+				);
+				assert_eq!(FlipToBeSentToGateway::<Test>::get(), INITIAL_FLIP_FUNDING);
 			});
 	}
 }

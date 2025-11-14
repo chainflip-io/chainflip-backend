@@ -192,7 +192,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// For when the user wants to deposit assets into the Chain.
-		/// Generates a new deposit address for the user to posit their assets.
+		/// Generates a new deposit address for the user to deposit their assets.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::request_liquidity_deposit_address())]
 		pub fn request_liquidity_deposit_address(
@@ -210,9 +210,11 @@ pub mod pallet {
 				let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
 					T::DepositHandler::request_liquidity_deposit_address(
 						account_id.clone(),
+						account_id.clone(),
 						asset,
 						boost_fee,
 						refund_address,
+						None,
 					)?;
 
 				Self::deposit_event(Event::LiquidityDepositAddressReady {
@@ -470,7 +472,6 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> LpRegistration for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
-	#[cfg(feature = "runtime-benchmarks")]
 	fn register_liquidity_refund_address(
 		account_id: &Self::AccountId,
 		address: ForeignChainAddress,
