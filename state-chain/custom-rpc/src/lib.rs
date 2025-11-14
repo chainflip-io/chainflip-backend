@@ -2512,6 +2512,7 @@ where
 			bitcoin,
 			sol_vault_program: _,
 			sol_swap_endpoint_program_data_account: _,
+			usdc_token_mint_pubkey: _,
 			bitcoin_vault,
 			solana_sol_vault,
 			solana_usdc_token_vault_ata,

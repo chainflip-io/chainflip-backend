@@ -487,6 +487,7 @@ pub struct VaultAddresses {
 	pub bitcoin: Vec<(AccountId32, EncodedAddress)>,
 	pub sol_vault_program: EncodedAddress,
 	pub sol_swap_endpoint_program_data_account: EncodedAddress,
+	pub usdc_token_mint_pubkey: EncodedAddress,
 
 	pub bitcoin_vault: Option<EncodedAddress>,
 	pub solana_sol_vault: Option<EncodedAddress>,
