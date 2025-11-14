@@ -339,6 +339,7 @@ mod benchmarks {
 	#[benchmark]
 	fn add_collateral() {
 		const AMOUNT: AssetAmount = 100_000_000;
+		set_asset_price_in_usd::<T>(LOAN_ASSET, 200_000_000_000);
 		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000);
 		let borrower = setup_lp_account::<T>(LOAN_ASSET, 0);
 		let collateral = BTreeMap::from([(COLLATERAL_ASSET, AMOUNT)]);
@@ -399,6 +400,8 @@ mod benchmarks {
 		let collateral = BTreeMap::from([(COLLATERAL_ASSET, 200_000_000)]);
 		const LOAN_AMOUNT: AssetAmount = 50_000_000;
 
+		let price_cache = OraclePriceCache::<T>::new();
+
 		#[extrinsic_call]
 		request_loan(
 			RawOrigin::Signed(borrower),
@@ -408,12 +411,21 @@ mod benchmarks {
 			collateral,
 		);
 
-		assert!(LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap() > 0);
+		assert!(
+			LoanAccounts::<T>::iter()
+				.next()
+				.unwrap()
+				.1
+				.total_owed_usd_value(&price_cache)
+				.unwrap() > 0
+		);
 	}
 
 	#[benchmark]
 	fn expand_loan() {
 		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
+
+		let price_cache = OraclePriceCache::<T>::new();
 
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
 		let origin = RawOrigin::Signed(borrower.clone());
@@ -426,16 +438,22 @@ mod benchmarks {
 			Some(COLLATERAL_ASSET),
 			collateral
 		));
-		let value_before =
-			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap();
+
+		let total_owed = || {
+			LoanAccounts::<T>::iter()
+				.next()
+				.unwrap()
+				.1
+				.total_owed_usd_value(&price_cache)
+				.unwrap()
+		};
+
+		let owed_before = total_owed();
 
 		#[extrinsic_call]
 		expand_loan(origin, 0.into(), 5_000_000, BTreeMap::from([(COLLATERAL_ASSET, 100_000_000)]));
 
-		assert!(
-			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap() >
-				value_before
-		);
+		assert!(total_owed() > owed_before);
 	}
 
 	#[benchmark]
@@ -445,8 +463,18 @@ mod benchmarks {
 		let lender = setup_lp_account::<T>(LOAN_ASSET, 1);
 		create_pools_and_loans_for_some_assets::<T>(&borrower, &lender, AMOUNT);
 
-		let value_before =
-			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap();
+		let price_cache = OraclePriceCache::<T>::new();
+
+		let total_owed = || {
+			LoanAccounts::<T>::iter()
+				.next()
+				.unwrap()
+				.1
+				.total_owed_usd_value(&price_cache)
+				.unwrap()
+		};
+
+		let owed_before = total_owed();
 
 		#[extrinsic_call]
 		make_repayment(
@@ -455,10 +483,7 @@ mod benchmarks {
 			RepaymentAmount::Exact(AMOUNT / 2),
 		);
 
-		assert!(
-			LoanAccounts::<T>::iter().next().unwrap().1.total_owed_usd_value().unwrap() <
-				value_before
-		);
+		assert!(total_owed() < owed_before);
 	}
 
 	#[benchmark]
@@ -490,10 +515,13 @@ mod benchmarks {
 	fn usd_value_of() {
 		set_asset_price_in_usd::<T>(COLLATERAL_ASSET, 200_000_000_000);
 
+		let price_cache = OraclePriceCache::<T>::new();
+
 		#[block]
 		{
 			assert_eq!(
-				general_lending::usd_value_of::<T>(COLLATERAL_ASSET, 1_000_000).unwrap(),
+				general_lending::usd_value_of::<T>(COLLATERAL_ASSET, 1_000_000, &price_cache)
+					.unwrap(),
 				200_000_000_000_000_000_u128,
 			);
 		}
@@ -518,9 +546,11 @@ mod benchmarks {
 		create_pools_and_loans_for_some_assets::<T>(&borrower, &lender, 100_000_000);
 		let loan_account = LoanAccounts::<T>::get(borrower).unwrap();
 
+		let mut price_cache = OraclePriceCache::<T>::new();
+
 		#[block]
 		{
-			assert_ok!(loan_account.derive_ltv());
+			assert_ok!(loan_account.derive_ltv(&mut price_cache));
 		}
 	}
 
@@ -532,6 +562,8 @@ mod benchmarks {
 		let mut loan = create_loan::<T>(&borrower, 100_000_000);
 		let total_amount_before = GeneralLendingPools::<T>::get(LOAN_ASSET).unwrap().total_amount;
 
+		let price_cache = OraclePriceCache::<T>::new();
+
 		#[block]
 		{
 			assert_ok!(loan.charge_interest(
@@ -539,6 +571,7 @@ mod benchmarks {
 				AT_BLOCK.into(),
 				AT_BLOCK - 1,
 				&LendingConfig::<T>::get(),
+				&price_cache,
 			));
 		}
 
@@ -553,13 +586,18 @@ mod benchmarks {
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
 		let lender = setup_lp_account::<T>(LOAN_ASSET, 1);
 
+		let price_cache = OraclePriceCache::<T>::new();
+
 		create_pools_and_loans_for_some_assets::<T>(&borrower, &lender, 100_000_000);
 		let loan_account = LoanAccounts::<T>::get(borrower.clone()).unwrap();
 
 		#[block]
 		{
-			assert_ok!(loan_account
-				.calculate_top_up_amount(&borrower, LENDING_DEFAULT_CONFIG.ltv_thresholds.target));
+			assert_ok!(loan_account.calculate_top_up_amount(
+				&borrower,
+				LENDING_DEFAULT_CONFIG.ltv_thresholds.target,
+				&price_cache
+			));
 		}
 	}
 
@@ -570,10 +608,17 @@ mod benchmarks {
 		create_pools_and_loans_for_some_assets::<T>(&borrower, &lender, 100_000_000);
 		let mut loan_account = LoanAccounts::<T>::get(&borrower).unwrap();
 
+		let price_cache = OraclePriceCache::<T>::new();
+
 		#[block]
 		{
-			let collateral = loan_account.prepare_collateral_for_liquidation().unwrap();
-			loan_account.init_liquidation_swaps(&borrower, collateral, LiquidationType::Hard);
+			let collateral = loan_account.prepare_collateral_for_liquidation(&price_cache).unwrap();
+			loan_account.init_liquidation_swaps(
+				&borrower,
+				collateral,
+				LiquidationType::Hard,
+				&price_cache,
+			);
 		}
 
 		assert!(matches!(loan_account.liquidation_status, LiquidationStatus::Liquidating { .. }));
@@ -586,14 +631,22 @@ mod benchmarks {
 		create_pools_and_loans_for_some_assets::<T>(&borrower, &lender, 100_000_000);
 		let mut loan_account = LoanAccounts::<T>::get(&borrower).unwrap();
 
+		let price_cache = OraclePriceCache::<T>::new();
+
 		// Start the liquidation swaps
-		let collateral = loan_account.prepare_collateral_for_liquidation().unwrap();
-		loan_account.init_liquidation_swaps(&borrower, collateral, LiquidationType::Hard);
+		let collateral = loan_account.prepare_collateral_for_liquidation(&price_cache).unwrap();
+		loan_account.init_liquidation_swaps(
+			&borrower,
+			collateral,
+			LiquidationType::Hard,
+			&price_cache,
+		);
 		assert!(matches!(loan_account.liquidation_status, LiquidationStatus::Liquidating { .. }));
 
 		#[block]
 		{
-			loan_account.abort_liquidation_swaps(LiquidationCompletionReason::FullySwapped);
+			loan_account
+				.abort_liquidation_swaps(LiquidationCompletionReason::FullySwapped, &price_cache);
 		}
 		assert!(matches!(loan_account.liquidation_status, LiquidationStatus::NoLiquidation));
 	}
