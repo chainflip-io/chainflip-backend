@@ -2514,7 +2514,7 @@ where
 			sol_swap_endpoint_program_data_account: _,
 			bitcoin_vault,
 			solana_sol_vault,
-			solana_usdc_vault,
+			solana_usdc_token_vault_ata,
 			solana_vault_swap_account,
 			predicted_seconds_until_next_vault_rotation,
 		} = self.cf_vault_addresses(at)?;
@@ -2562,7 +2562,7 @@ where
 			}
 			solana_addresses.push(AddressAndExplanation {
 				name: "solana_usdc_vault".into(),
-				address: AddressString::from_encoded_address(solana_usdc_vault),
+				address: AddressString::from_encoded_address(solana_usdc_token_vault_ata),
 				explanation: none_if_compact(
 					"Holds USDC on Solana. Directly receives user funds for USDC vault swaps."
 						.into(),
