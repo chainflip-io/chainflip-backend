@@ -1563,7 +1563,7 @@ pub mod pallet {
 			};
 
 			ensure!(
-				frame_system::Pallet::<T>::account_exists(&signer_account),
+				!frame_system::Pallet::<T>::account_exists(&signer_account),
 				DispatchError::from(Error::<T>::AccountAlreadyExists)
 			);
 			let refund_address_internal =
