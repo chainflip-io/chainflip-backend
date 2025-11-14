@@ -51,6 +51,7 @@ use cf_traits::{
 		pool_price_api::MockPoolPriceApi,
 	},
 	AccountRoleRegistry, AssetConverter, Chainflip, SetSafeMode, SwapExecutionProgress,
+	INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	assert_noop, assert_ok,
@@ -1968,6 +1969,7 @@ mod credit_flip_and_transfer {
 					SwapRequestType::RegularNoNetworkFee {
 						output_action: SwapOutputAction::CreditFlipAndTransferToGateway {
 							account_id: LP_ACCOUNT,
+							flip_to_subtract_from_swap_output: INITIAL_FLIP_FUNDING,
 						},
 					},
 					Beneficiaries::default(),
@@ -1986,7 +1988,8 @@ mod credit_flip_and_transfer {
 						request_type: SwapRequestTypeEncoded::RegularNoNetworkFee {
 							output_action:
 								SwapOutputActionEncoded::CreditFlipAndTransferToGateway {
-									account_id: LP_ACCOUNT
+									account_id: LP_ACCOUNT,
+									flip_to_subtract_from_swap_output: INITIAL_FLIP_FUNDING,
 								}
 						},
 						..
@@ -2032,6 +2035,7 @@ mod credit_flip_and_transfer {
 					SwapRequestType::Regular {
 						output_action: SwapOutputAction::CreditFlipAndTransferToGateway {
 							account_id: LP_ACCOUNT,
+							flip_to_subtract_from_swap_output: INITIAL_FLIP_FUNDING,
 						},
 					},
 					Beneficiaries::default(),
@@ -2050,7 +2054,8 @@ mod credit_flip_and_transfer {
 						request_type: SwapRequestTypeEncoded::Regular {
 							output_action:
 								SwapOutputActionEncoded::CreditFlipAndTransferToGateway {
-									account_id: LP_ACCOUNT
+									account_id: LP_ACCOUNT,
+									flip_to_subtract_from_swap_output: INITIAL_FLIP_FUNDING,
 								}
 						},
 						..

@@ -55,6 +55,7 @@ pub enum SwapOutputActionGeneric<Address, AccountId> {
 	},
 	CreditFlipAndTransferToGateway {
 		account_id: AccountId,
+		flip_to_subtract_from_swap_output: AssetAmount,
 	},
 }
 
@@ -78,8 +79,13 @@ impl<AccountId> SwapRequestType<AccountId> {
 						SwapOutputActionEncoded::CreditOnChain { account_id },
 					SwapOutputActionGeneric::CreditLendingPool { swap_type } =>
 						SwapOutputActionEncoded::CreditLendingPool { swap_type },
-					SwapOutputAction::CreditFlipAndTransferToGateway { account_id } =>
-						SwapOutputActionEncoded::CreditFlipAndTransferToGateway { account_id },
+					SwapOutputAction::CreditFlipAndTransferToGateway {
+						account_id,
+						flip_to_subtract_from_swap_output,
+					} => SwapOutputActionEncoded::CreditFlipAndTransferToGateway {
+						account_id,
+						flip_to_subtract_from_swap_output,
+					},
 				},
 			},
 			SwapRequestType::RegularNoNetworkFee { output_action } =>
@@ -95,8 +101,13 @@ impl<AccountId> SwapRequestType<AccountId> {
 							SwapOutputActionEncoded::CreditOnChain { account_id },
 						SwapOutputActionGeneric::CreditLendingPool { swap_type } =>
 							SwapOutputActionEncoded::CreditLendingPool { swap_type },
-						SwapOutputAction::CreditFlipAndTransferToGateway { account_id } =>
-							SwapOutputActionEncoded::CreditFlipAndTransferToGateway { account_id },
+						SwapOutputAction::CreditFlipAndTransferToGateway {
+							account_id,
+							flip_to_subtract_from_swap_output,
+						} => SwapOutputActionEncoded::CreditFlipAndTransferToGateway {
+							account_id,
+							flip_to_subtract_from_swap_output,
+						},
 					},
 				},
 		}

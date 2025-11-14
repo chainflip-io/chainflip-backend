@@ -2221,6 +2221,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									output_action:
 										SwapOutputAction::CreditFlipAndTransferToGateway {
 											account_id: lp_account.clone(),
+											flip_to_subtract_from_swap_output: INITIAL_FLIP_FUNDING,
 										},
 								},
 								BoundedVec::new(),

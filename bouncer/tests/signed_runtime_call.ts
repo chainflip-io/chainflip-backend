@@ -439,6 +439,7 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
   const eventResult = await observeEvent(logger, 'swapping:AccountCreationDepositAddressReady', {
     test: (event) =>
       event.data.requestedBy === broker.address && event.data.requestedFor === evmScAccount,
+    historicalCheckBlocks: 10,
   }).event;
   const depositAddress = eventResult.data.depositAddress[shortChainFromAsset(asset)];
 

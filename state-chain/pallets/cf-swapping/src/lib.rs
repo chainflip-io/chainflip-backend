@@ -36,7 +36,7 @@ use cf_traits::{
 	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo,
 	FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry,
 	SwapOutputAction, SwapParameterValidation, SwapRequestHandler, SwapRequestType,
-	SwapRequestTypeEncoded, SwapType, SwappingApi, INITIAL_FLIP_FUNDING,
+	SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -1562,9 +1562,10 @@ pub mod pallet {
 				return Err(DispatchError::from(Error::<T>::InvalidUserSignatureData));
 			};
 
-			if frame_system::Pallet::<T>::account_exists(&signer_account) {
-				return Err(DispatchError::from(Error::<T>::AccountAlreadyExists));
-			}
+			ensure!(
+				frame_system::Pallet::<T>::account_exists(&signer_account),
+				DispatchError::from(Error::<T>::AccountAlreadyExists)
+			);
 			let refund_address_internal =
 				T::AddressConverter::decode_and_validate_address_for_asset(
 					refund_address.clone(),
@@ -2306,27 +2307,34 @@ pub mod pallet {
 										dca_state.accumulated_output_amount,
 									);
 								},
-								SwapOutputAction::CreditFlipAndTransferToGateway { account_id } =>
+								SwapOutputAction::CreditFlipAndTransferToGateway {
+									account_id,
+									flip_to_subtract_from_swap_output,
+								} =>
 									if request.output_asset == Asset::Flip {
-										if output_amount < INITIAL_FLIP_FUNDING {
+										if output_amount < *flip_to_subtract_from_swap_output {
 											// In the rare event that this occurs we will track the
 											// deficit and offset it against the next burn
 											FlipToBurn::<T>::mutate(|total| {
 												total.saturating_reduce(
-													INITIAL_FLIP_FUNDING
+													flip_to_subtract_from_swap_output
 														.saturating_sub(output_amount)
 														.try_into()
 														.unwrap_or(i128::MAX),
 												);
 											});
 											FlipToBeSentToGateway::<T>::mutate(|total| {
-												total.saturating_accrue(INITIAL_FLIP_FUNDING);
+												total.saturating_accrue(
+													*flip_to_subtract_from_swap_output,
+												);
 											});
 										} else {
 											T::FundAccount::fund_account(
 												account_id.clone(),
 												output_amount
-													.saturating_sub(INITIAL_FLIP_FUNDING)
+													.saturating_sub(
+														*flip_to_subtract_from_swap_output,
+													)
 													.into(),
 												FundingSource::Swap { swap_request_id },
 											);
