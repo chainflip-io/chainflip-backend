@@ -2636,18 +2636,8 @@ where
 						})?;
 					let serialized_call = match encoded_call {
 						EncodedNonNativeCall::Eip712(typed_data) => {
-							let message_scale_value: scale_value::Value = typed_data
-								.message
-								.clone()
-								.stringify_integers()
-								.map_err(|e| {
-									CfApiError::ErrorObject(ErrorObject::owned(
-										ErrorCode::InternalError.code(),
-										format!("Failed to stringify numbers: {}", e),
-										None::<()>,
-									))
-								})?
-								.into();
+							let message_scale_value: scale_value::Value =
+								typed_data.message.clone().stringify_integers().into();
 							let message_json =
 								serde_json::to_value(message_scale_value).map_err(|e| {
 									CfApiError::ErrorObject(ErrorObject::owned(
