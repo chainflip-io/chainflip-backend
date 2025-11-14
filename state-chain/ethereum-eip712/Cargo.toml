@@ -24,6 +24,7 @@ tiny-keccak = { version = "2.0.2", features = [
 unicode-xid = { version = "0.2", features = ["no_std"] }
 
 [dev-dependencies]
+ethers-core = { workspace = true }
 cf-utilities = { workspace = true, default-features = true, features = [
     "test-utils",
 ] }

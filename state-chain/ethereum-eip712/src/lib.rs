@@ -21,6 +21,8 @@ use minimized_scale_value::MinimizedScaleValue;
 
 pub mod build_eip712_data;
 pub mod eip712;
+#[cfg(test)]
+pub mod extra_tests;
 pub mod hash;
 pub mod lexer;
 pub mod minimized_scale_value;
@@ -389,6 +391,8 @@ pub fn scale_value_bytes_to_hex(v: Value) -> Result<Value, &'static str> {
 								ValueDef::Primitive(Primitive::String(s)) => Ok(s
 									.parse()
 									.map_err(|_| "the string is not a valid u8 number")?),
+								ValueDef::Primitive(Primitive::U128(b)) =>
+									Ok(b.try_into().map_err(|_| "u128 to u8 conversion failed")?),
 								_ => Err("Expected u8 primitive"),
 							})
 							.collect::<Result<Vec<u8>, _>>()?,
