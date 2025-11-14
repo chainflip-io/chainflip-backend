@@ -29,7 +29,7 @@ pub use general_lending::{
 	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolAndSupplyPositions,
 	LendingPoolConfiguration, LendingSupplyPosition, LiquidationCompletionReason, LiquidationType,
 	LtvThresholds, NetworkFeeContributions, RpcLendingPool, RpcLiquidationStatus,
-	RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+	RpcLiquidationSwap, RpcLoan, RpcLoanAccount, WhitelistStatus, WhitelistUpdate,
 };
 
 pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
@@ -342,6 +342,10 @@ pub mod pallet {
 	pub type PendingNetworkFees<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
+	/// Determines which accounts are allowed to use lending extrinsics.
+	#[pallet::storage]
+	pub type Whitelist<T: Config> = StorageValue<_, WhitelistStatus<T::AccountId>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -448,6 +452,9 @@ pub mod pallet {
 		LendingNetworkFeeSwapInitiated {
 			swap_request_id: SwapRequestId,
 		},
+		WhitelistUpdated {
+			update: WhitelistUpdate<T::AccountId>,
+		},
 	}
 
 	#[derive(PartialEq)]
@@ -509,6 +516,8 @@ pub mod pallet {
 		AmountBelowMinimum,
 		/// No refund address has been set for the loan asset.
 		NoRefundAddressSet,
+		/// Access denied as account is not in the whitelist.
+		AccountNotWhitelisted,
 	}
 
 	#[pallet::hooks]
@@ -745,6 +754,11 @@ pub mod pallet {
 
 			let lender_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
+			ensure!(
+				Whitelist::<T>::get().is_allowed(&lender_id),
+				Error::<T>::AccountNotWhitelisted
+			);
+
 			// - The user does not add amount that's too small
 			ensure!(amount > Zero::zero(), Error::<T>::AmountMustBeNonZero);
 
@@ -816,6 +830,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
+			ensure!(
+				Whitelist::<T>::get().is_allowed(&borrower_id),
+				Error::<T>::AccountNotWhitelisted
+			);
+
 			<Self as LendingApi>::add_collateral(&borrower_id, primary_collateral_asset, collateral)
 		}
 
@@ -840,6 +859,11 @@ pub mod pallet {
 			extra_collateral: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			ensure!(
+				Whitelist::<T>::get().is_allowed(&borrower_id),
+				Error::<T>::AccountNotWhitelisted
+			);
 
 			Self::new_loan(
 				borrower_id,
@@ -910,6 +934,22 @@ pub mod pallet {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			<Self as LendingApi>::set_voluntary_liquidation_flag(borrower_id, false)
+		}
+
+		#[pallet::call_index(15)]
+		#[pallet::weight(T::WeightInfo::update_whitelist())]
+		pub fn update_whitelist(
+			origin: OriginFor<T>,
+			update: WhitelistUpdate<T::AccountId>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			Whitelist::<T>::mutate(|whitelist| whitelist.apply_update(update.clone()))
+				.map_err(|_| Error::<T>::InvalidConfigurationParameters)?;
+
+			Self::deposit_event(Event::WhitelistUpdated { update });
+
+			Ok(())
 		}
 	}
 }

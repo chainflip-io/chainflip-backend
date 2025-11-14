@@ -13,6 +13,9 @@ use super::*;
 mod general_lending_tests;
 
 mod general_lending_pool;
+mod whitelist;
+
+pub use whitelist::{WhitelistStatus, WhitelistUpdate};
 
 pub use general_lending_pool::LendingPool;
 
