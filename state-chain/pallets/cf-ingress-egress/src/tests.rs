@@ -2920,7 +2920,7 @@ mod evm_transaction_rejection {
 	};
 	use cf_chains::{
 		assets::eth::Asset as EthAsset, evm::H256, ChannelLifecycleHooks,
-		DepositDetailsToTransactionInId, Ethereum,
+		DepositDetailsToTransactionInId, Ethereum, FetchForRejection,
 	};
 	use cf_traits::{
 		mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, DepositApi,
@@ -3091,9 +3091,9 @@ mod evm_transaction_rejection {
 			let api_call = pending_api_calls[0].clone();
 
 			match api_call {
-				MockEthereumApiCall::RejectCall { deposit_details, deposit_fetch_id, .. } => {
+				MockEthereumApiCall::RejectCall { deposit_details, fetch, .. } => {
 					assert_eq!(deposit_details.deposit_ids().unwrap(), vec![tx_id]);
-					assert!(deposit_fetch_id.is_some());
+					assert_matches!(fetch, FetchForRejection::Fetch { .. });
 				},
 				_ => panic!("Expected a RejectCall"),
 			}
@@ -3614,11 +3614,9 @@ mod evm_transaction_rejection {
 				let api_call = pending_api_calls[0].clone();
 
 				match api_call {
-					MockEthereumApiCall::RejectCall {
-						deposit_details, deposit_fetch_id, ..
-					} => {
+					MockEthereumApiCall::RejectCall { deposit_details, fetch, .. } => {
 						assert_eq!(deposit_details.deposit_ids().unwrap(), vec![tx_id]);
-						assert!(deposit_fetch_id.is_none());
+						assert_eq!(fetch, FetchForRejection::NotRequired);
 					},
 					_ => panic!("Expected a RejectCall"),
 				}

@@ -170,18 +170,19 @@ where
 {
 	fn new_unsigned(
 		deposit_details: <Bitcoin as Chain>::DepositDetails,
-		refund_address: <Bitcoin as Chain>::ChainAccount,
-		refund_amount: Option<<Bitcoin as Chain>::ChainAmount>,
 		_asset: <Bitcoin as Chain>::ChainAsset,
-		_deposit_fetch_id: Option<<Bitcoin as Chain>::DepositFetchId>,
+		_fetch: FetchForRejection<Bitcoin>,
+		transfer: TransferForRejection<Bitcoin>,
 	) -> Result<Self, RejectError> {
 		let agg_key = <E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(RejectError::Other)?;
-		let amount = refund_amount.ok_or(RejectError::Other)?;
+		let TransferForRejection::Transfer { address, amount } = transfer else {
+			return Err(RejectError::Other);
+		};
 
 		Ok(Self::NoChangeTransfer(BitcoinTransaction::create_new_unsigned(
 			&agg_key,
 			vec![deposit_details],
-			vec![BitcoinOutput { amount, script_pubkey: refund_address }],
+			vec![BitcoinOutput { amount, script_pubkey: address }],
 		)))
 	}
 }

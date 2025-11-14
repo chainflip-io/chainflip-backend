@@ -889,13 +889,24 @@ pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn consolidate_utxos() -> Result<Self, ConsolidationError>;
 }
 
+#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+pub enum FetchForRejection<C: Chain> {
+	Fetch { deposit_fetch_id: C::DepositFetchId },
+	NotRequired,
+}
+
+#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+pub enum TransferForRejection<C: Chain> {
+	Transfer { address: C::ChainAccount, amount: C::ChainAmount },
+	TransferWillBeCcmCallAndIsHandledSeparately,
+}
+
 pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		_deposit_details: C::DepositDetails,
-		_refund_address: C::ChainAccount,
-		_refund_amount: Option<C::ChainAmount>,
 		_asset: C::ChainAsset,
-		_deposit_fetch_id: Option<C::DepositFetchId>,
+		_fetch_request: FetchForRejection<C>,
+		_refund_request: TransferForRejection<C>,
 	) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}
