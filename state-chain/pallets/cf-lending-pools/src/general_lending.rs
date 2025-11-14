@@ -1032,12 +1032,13 @@ impl<T: Config> GeneralLoan<T> {
 
 /// Uses oracle API to get the price and makes sure that it is not stale
 fn get_price<T: Config>(asset: Asset) -> Result<Price, Error<T>> {
-	let price = T::PriceApi::get_price(asset).ok_or(Error::<T>::OraclePriceUnavailable)?.price;
-	// To avoid any division by zero errors later on, we treat zero prices as unavailable
-	if price == Price::zero() {
+	let oracle_price = T::PriceApi::get_price(asset).ok_or(Error::<T>::OraclePriceUnavailable)?;
+	// To avoid any division by zero errors later on, we treat zero prices as unavailable;
+	// stale prices are also considered unavailable.
+	if oracle_price.price == Price::zero() || oracle_price.stale {
 		fail!(Error::<T>::OraclePriceUnavailable);
 	}
-	Ok(price)
+	Ok(oracle_price.price)
 }
 
 /// Uses oracle prices to calculate the USD value of the given asset amount
