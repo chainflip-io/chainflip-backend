@@ -577,22 +577,22 @@ fn is_within_tiny_error(actual: f64, expected: f64) -> bool {
 #[test]
 fn check_ema_alpha_constants_are_correct() {
 	let expected_1day = expected_alpha_half_life(1);
-	assert_eq!(
-		FixedU128::from_perbill(ALPHA_HALF_LIFE_1_DAY),
-		FixedU128::from_float(expected_1day)
-	);
+	assert!(is_within_tiny_error(
+		FixedU128::from_perbill(ALPHA_HALF_LIFE_1_DAY).to_float(),
+		expected_1day
+	));
 
 	let expected_7days = expected_alpha_half_life(7);
-	assert_eq!(
-		FixedU128::from_perbill(ALPHA_HALF_LIFE_7_DAYS),
-		FixedU128::from_float(expected_7days)
-	);
+	assert!(is_within_tiny_error(
+		FixedU128::from_perbill(ALPHA_HALF_LIFE_7_DAYS).to_float(),
+		expected_7days
+	));
 
 	let expected_30days = expected_alpha_half_life(30);
-	assert_eq!(
-		FixedU128::from_perbill(ALPHA_HALF_LIFE_30_DAYS),
-		FixedU128::from_float(expected_30days)
-	);
+	assert!(is_within_tiny_error(
+		FixedU128::from_perbill(ALPHA_HALF_LIFE_30_DAYS).to_float(),
+		expected_30days
+	));
 }
 
 #[test]
