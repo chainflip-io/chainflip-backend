@@ -114,8 +114,10 @@ mod chainflip_transparency {
 	pub struct AddressAndExplanation {
 		pub name: String,
 		pub address: AddressString,
-		pub explanation: String,
-		pub rotation_policy: String,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub explanation: Option<String>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub rotation_policy: Option<String>,
 		pub next_predicted_rotation: Option<String>,
 	}
 
@@ -1280,6 +1282,7 @@ pub trait CustomApi {
 	fn cf_controlled_vault_addresses(
 		&self,
 		chain: Option<cf_primitives::ForeignChain>,
+		compact_reply: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<ControlledVaultAddresses>;
 }
@@ -2498,6 +2501,7 @@ where
 	fn cf_controlled_vault_addresses(
 		&self,
 		chain: Option<cf_primitives::ForeignChain>,
+		compact_reply: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<ControlledVaultAddresses> {
 		let mut result = HashMap::new();
@@ -2515,8 +2519,12 @@ where
 			predicted_seconds_until_next_vault_rotation,
 		} = self.cf_vault_addresses(at)?;
 
-		let rotates_every_3_days = "Every 3 days".to_string();
-		let rotates_never = "Never".to_string();
+		let compact_reply = compact_reply.is_some_and(|compact| compact);
+
+		let none_if_compact = |value| if compact_reply { None } else { Some(value) };
+
+		let rotates_every_3_days = none_if_compact("Every 3 days".to_string());
+		let rotates_never = none_if_compact("Never".to_string());
 		let next_predicted_rotation = (chrono::Utc::now() +
 			Duration::from_secs(predicted_seconds_until_next_vault_rotation))
 		.to_string();
@@ -2525,7 +2533,7 @@ where
 			result.insert(ForeignChain::Arbitrum, vec![AddressAndExplanation {
 				name: "arbitrum_vault_contract".into(),
 				address: AddressString::from_encoded_address(arbitrum),
-				explanation: "Holds ETH and all tokens on Arbitrum. Directly receives user funds in case of smart contract-based vault swaps.".into(),
+				explanation: none_if_compact("Holds ETH and all tokens on Arbitrum. Directly receives user funds in case of smart contract-based vault swaps.".into()),
 				rotation_policy: rotates_never.clone(),
 				next_predicted_rotation: None,
 			}]);
@@ -2535,7 +2543,7 @@ where
 			result.insert(ForeignChain::Ethereum, vec![AddressAndExplanation {
 				name: "ethereum_vault_contract".into(),
 				address: AddressString::from_encoded_address(ethereum),
-				explanation: "Holds ETH and all tokens on Ethereum. Directly receives user funds for smart contract-based vault swaps.".into(),
+				explanation: none_if_compact("Holds ETH and all tokens on Ethereum. Directly receives user funds for smart contract-based vault swaps.".into()),
 				rotation_policy: rotates_never.clone(),
 				next_predicted_rotation: None,
 			}]);
@@ -2547,7 +2555,7 @@ where
 				solana_addresses.push(AddressAndExplanation {
 					name: "solana_sol_vault".into(),
 					address: AddressString::from_encoded_address(solana_sol_vault),
-					explanation: "Holds SOL on Solana.".into(),
+					explanation: none_if_compact("Holds SOL on Solana.".into()),
 					rotation_policy: rotates_every_3_days.clone(),
 					next_predicted_rotation: Some(next_predicted_rotation.clone()),
 				})
@@ -2555,9 +2563,10 @@ where
 			solana_addresses.push(AddressAndExplanation {
 				name: "solana_usdc_vault".into(),
 				address: AddressString::from_encoded_address(solana_usdc_vault),
-				explanation:
+				explanation: none_if_compact(
 					"Holds USDC on Solana. Directly receives user funds for USDC vault swaps."
 						.into(),
+				),
 				rotation_policy: rotates_never.clone(),
 				next_predicted_rotation: None,
 			});
@@ -2565,7 +2574,7 @@ where
 				solana_addresses.push(AddressAndExplanation {
 					name: "solana_sol_vault_swap_account".into(),
 					address: AddressString::from_encoded_address(solana_vault_swap_account),
-					explanation: "Special account for vault swap support for SOL on Solana. Receives user funds for SOL vault swaps before they are fetched into the vault.".into(),
+					explanation: none_if_compact("Special account for vault swap support for SOL on Solana. Receives user funds for SOL vault swaps before they are fetched into the vault.".into()),
 					rotation_policy: rotates_never,
 					next_predicted_rotation: None,
 				})
@@ -2579,7 +2588,7 @@ where
 				bitcoin_addresses.push(AddressAndExplanation {
 					name: "bitcoin_vault".into(),
 					address: AddressString::from_encoded_address(bitcoin_vault),
-					explanation: "Holds BTC on Bitcoin.".into(),
+					explanation: none_if_compact("Holds BTC on Bitcoin.".into()),
 					rotation_policy: rotates_every_3_days.clone(),
 					next_predicted_rotation: Some(next_predicted_rotation.clone()),
 				});
@@ -2588,9 +2597,9 @@ where
 				AddressAndExplanation {
 					name: format!("bitcoin_vault_swap_address_for_broker_{broker_id}"),
 					address: AddressString::from_encoded_address(address),
-					explanation:
+					explanation: none_if_compact(
 						"Special per-broker address for vault swap support on Bitcoin. Receives user funds for BTC vault swaps before they are fetched into the vault."
-							.into(),
+							.into()),
 					rotation_policy: rotates_every_3_days.clone(),
 					next_predicted_rotation: Some(next_predicted_rotation.clone()),
 				}
