@@ -43,7 +43,7 @@ use cf_chains::{
 	ChannelLifecycleHooks, ChannelRefundParameters, ChannelRefundParametersForChain,
 	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, DepositOriginType,
 	ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, FetchForRejection,
-	ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
+	ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, RejectError, SwapOrigin,
 	TransferAssetParams, TransferForRejection,
 };
 use cf_primitives::{
@@ -1806,15 +1806,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// the first api call is either a fetch or nothing,
 				// the actual refund ccm call is done in a second step.
 				//
-				// We currently ignore any errors that can happen in the first step.
-				let _fetch_broadcast_id =
-					<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
+				// If a fetch is not required, we will get a `RejectError::NotRequired`. In that case
+				// we continue. If we get any other error, we abort and record this as failure.
+				match <T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
 						tx.deposit_details.clone(),
 						tx.asset,
 						fetch_command,
 						TransferForRejection::TransferWillBeCcmCallAndIsHandledSeparately,
 					)
-					.map(broadcast_and_finalise_ingress);
+					.map(broadcast_and_finalise_ingress) {
+						Ok(_fetch_broadcast_id) => (),
+						Err(RejectError::NotRequired) => (),
+						Err(_) => return Err(RecordFailureAndAbortRefund)
+				}
 
 				// Solana CCM refunds with ALT is not supported, since we don't want to witness ALTs
 				// here.
