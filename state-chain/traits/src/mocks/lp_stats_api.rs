@@ -1,6 +1,6 @@
 use crate::LpStatsApi;
 use cf_primitives::{Asset, AssetAmount};
-use sp_runtime::{traits::Zero, FixedU64, Saturating};
+use sp_runtime::{traits::Zero, FixedU128, Saturating};
 
 use super::{MockPallet, MockPalletStorage};
 
@@ -22,9 +22,9 @@ impl LpStatsApi for MockLpStatsApi {
 			LP_DELTA_USD_VOLUME,
 			&(lp, asset),
 			|delta| {
-				let delta = delta.get_or_insert(FixedU64::zero());
+				let delta = delta.get_or_insert(FixedU128::zero());
 
-				*delta = delta.saturating_add(FixedU64::from_rational(usd_amount, 1_000_000u128));
+				*delta = delta.saturating_add(FixedU128::from_inner(usd_amount));
 			},
 		);
 	}
