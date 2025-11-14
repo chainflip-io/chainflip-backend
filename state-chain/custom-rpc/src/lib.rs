@@ -2525,7 +2525,7 @@ where
 			result.insert(ForeignChain::Arbitrum, vec![AddressAndExplanation {
 				name: "arbitrum_vault_contract".into(),
 				address: AddressString::from_encoded_address(arbitrum),
-				explanation: "Holds ArbEth and all tokens on Arbitrum. Directly receives user funds in case of smart contract-based vault swaps.".into(),
+				explanation: "Holds ETH and all tokens on Arbitrum. Directly receives user funds in case of smart contract-based vault swaps.".into(),
 				rotation_policy: rotates_never.clone(),
 				next_predicted_rotation: None,
 			}]);
@@ -2535,7 +2535,7 @@ where
 			result.insert(ForeignChain::Ethereum, vec![AddressAndExplanation {
 				name: "ethereum_vault_contract".into(),
 				address: AddressString::from_encoded_address(ethereum),
-				explanation: "Holds Eth and all tokens on Ethereum. Directly receives user funds for smart contract-based 'vault swaps'.".into(),
+				explanation: "Holds ETH and all tokens on Ethereum. Directly receives user funds for smart contract-based vault swaps.".into(),
 				rotation_policy: rotates_never.clone(),
 				next_predicted_rotation: None,
 			}]);
@@ -2547,7 +2547,7 @@ where
 				solana_addresses.push(AddressAndExplanation {
 					name: "solana_sol_vault".into(),
 					address: AddressString::from_encoded_address(solana_sol_vault),
-					explanation: "Holds Sol on Solana.".into(),
+					explanation: "Holds SOL on Solana.".into(),
 					rotation_policy: rotates_every_3_days.clone(),
 					next_predicted_rotation: Some(next_predicted_rotation.clone()),
 				})
@@ -2556,7 +2556,7 @@ where
 				name: "solana_usdc_vault".into(),
 				address: AddressString::from_encoded_address(solana_usdc_vault),
 				explanation:
-					"Holds Usdc on Solana. Directly receives user funds for Usdc 'vault swaps'."
+					"Holds USDC on Solana. Directly receives user funds for USDC vault swaps."
 						.into(),
 				rotation_policy: rotates_never.clone(),
 				next_predicted_rotation: None,
@@ -2565,7 +2565,7 @@ where
 				solana_addresses.push(AddressAndExplanation {
 					name: "solana_sol_vault_swap_account".into(),
 					address: AddressString::from_encoded_address(solana_vault_swap_account),
-					explanation: "Special account for 'vault swap' support for Sol on Solana. Receives user funds for Sol vault swaps before they are fetched into the vault.".into(),
+					explanation: "Special account for vault swap support for SOL on Solana. Receives user funds for SOL vault swaps before they are fetched into the vault.".into(),
 					rotation_policy: rotates_never,
 					next_predicted_rotation: None,
 				})
@@ -2579,7 +2579,7 @@ where
 				bitcoin_addresses.push(AddressAndExplanation {
 					name: "bitcoin_vault".into(),
 					address: AddressString::from_encoded_address(bitcoin_vault),
-					explanation: "Holds Bitcoin.".into(),
+					explanation: "Holds BTC on Bitcoin.".into(),
 					rotation_policy: rotates_every_3_days.clone(),
 					next_predicted_rotation: Some(next_predicted_rotation.clone()),
 				});
@@ -2589,7 +2589,7 @@ where
 					name: format!("bitcoin_vault_swap_address_for_broker_{broker_id}"),
 					address: AddressString::from_encoded_address(address),
 					explanation:
-						"Special per-broker address for 'vault swap' support on bitcoin. Receives user funds for Btc vault swaps before they are fetched into the vault."
+						"Special per-broker address for vault swap support on Bitcoin. Receives user funds for BTC vault swaps before they are fetched into the vault."
 							.into(),
 					rotation_policy: rotates_every_3_days.clone(),
 					next_predicted_rotation: Some(next_predicted_rotation.clone()),
