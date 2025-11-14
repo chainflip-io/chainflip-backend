@@ -1316,6 +1316,7 @@ export async function startEngines(
   localnetInitPath: string,
   binaryPath: string,
   numberOfNodes: 1 | 3,
+  logSuffix = '',
 ) {
   console.log('Starting all the engines');
 
@@ -1323,10 +1324,10 @@ export async function startEngines(
   await execWithLog(
     `${localnetInitPath}/scripts/start-all-engines.sh`,
     [],
-    'start-all-engines-pre-upgrade',
+    'start-all-engines' + logSuffix,
     {
       INIT_RUN: 'false',
-      LOG_SUFFIX: '-pre-upgrade',
+      LOG_SUFFIX: logSuffix,
       NODE_COUNT: nodeCount,
       SELECTED_NODES,
       LOCALNET_INIT_DIR: localnetInitPath,
