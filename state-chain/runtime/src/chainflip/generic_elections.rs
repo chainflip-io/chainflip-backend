@@ -340,6 +340,7 @@ pub fn set_price(asset: any::Asset, price: Price) {
 		asset_pair,
 		AssetState {
 			price: Aggregated { median: price.clone(), iq_range: price.clone()..=price },
+			price_status: PriceStatus::UpToDate,
 			..Default::default()
 		},
 	);
