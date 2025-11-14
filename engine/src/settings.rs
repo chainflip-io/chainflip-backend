@@ -207,7 +207,7 @@ pub struct Settings {
 	pub state_chain: StateChain,
 	// External Chain settings
 	pub eth: Evm,
-	pub dot: Dot,
+	pub dot: Option<Dot>,
 	pub btc: Btc,
 	pub arb: Evm,
 	pub sol: Sol,
@@ -339,7 +339,7 @@ pub struct CommandLineOptions {
 	pub eth_opts: EthOptions,
 
 	#[clap(flatten)]
-	pub dot_opts: DotOptions,
+	pub dot_opts: Option<DotOptions>,
 
 	#[clap(flatten)]
 	pub btc_opts: BtcOptions,
@@ -387,7 +387,7 @@ impl Default for CommandLineOptions {
 			p2p_opts: P2POptions::default(),
 			state_chain_opts: StateChainOptions::default(),
 			eth_opts: EthOptions::default(),
-			dot_opts: DotOptions::default(),
+			dot_opts: None,
 			btc_opts: BtcOptions::default(),
 			arb_opts: ArbOptions::default(),
 			sol_opts: SolOptions::default(),
@@ -570,8 +570,6 @@ impl CfSettings for Settings {
 	fn validate_settings(&mut self, config_root: &Path) -> Result<(), ConfigError> {
 		self.eth.validate_settings()?;
 
-		self.dot.validate_settings()?;
-
 		self.btc.validate_settings()?;
 
 		self.arb.validate_settings()?;
@@ -670,8 +668,6 @@ impl Source for CommandLineOptions {
 		self.state_chain_opts.insert_all(&mut map);
 
 		self.eth_opts.insert_all(&mut map);
-
-		self.dot_opts.insert_all(&mut map);
 
 		self.btc_opts.insert_all(&mut map);
 
@@ -800,20 +796,6 @@ impl BtcOptions {
 	}
 }
 
-impl DotOptions {
-	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option(map, "dot.rpc.ws_endpoint", &self.dot_ws_endpoint);
-		insert_command_line_option(map, "dot.rpc.http_endpoint", &self.dot_http_endpoint);
-
-		insert_command_line_option(map, "dot.backup_rpc.ws_endpoint", &self.dot_backup_ws_endpoint);
-		insert_command_line_option(
-			map,
-			"dot.backup_rpc.http_endpoint",
-			&self.dot_backup_http_endpoint,
-		);
-	}
-}
-
 impl ArbOptions {
 	/// Inserts all the Arb Options into the given map (if Some)
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
@@ -921,8 +903,7 @@ pub mod tests {
 	use crate::constants::{
 		ARB_BACKUP_HTTP_ENDPOINT, ARB_BACKUP_WS_ENDPOINT, ARB_HTTP_ENDPOINT, ARB_WS_ENDPOINT,
 		BTC_BACKUP_HTTP_ENDPOINT, BTC_BACKUP_RPC_PASSWORD, BTC_BACKUP_RPC_USER, BTC_HTTP_ENDPOINT,
-		BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_BACKUP_HTTP_ENDPOINT, DOT_BACKUP_WS_ENDPOINT,
-		DOT_HTTP_ENDPOINT, DOT_WS_ENDPOINT, ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT,
+		BTC_RPC_PASSWORD, BTC_RPC_USER, ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT,
 		ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT, HUB_BACKUP_HTTP_ENDPOINT, HUB_BACKUP_WS_ENDPOINT,
 		HUB_HTTP_ENDPOINT, HUB_WS_ENDPOINT, NODE_P2P_IP_ADDRESS, SOL_BACKUP_HTTP_ENDPOINT,
 		SOL_HTTP_ENDPOINT,
@@ -973,13 +954,6 @@ pub mod tests {
 
 		SOL_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8899",
 
-		DOT_WS_ENDPOINT => "wss://my_fake_polkadot_rpc:443/<secret_key>",
-		DOT_HTTP_ENDPOINT => "https://my_fake_polkadot_rpc:443/<secret_key>",
-		DOT_BACKUP_WS_ENDPOINT =>
-		"wss://second.my_fake_polkadot_rpc:443/<secret_key>",
-		DOT_BACKUP_HTTP_ENDPOINT =>
-		"https://second.my_fake_polkadot_rpc:443/<secret_key>",
-
 		HUB_WS_ENDPOINT => "wss://my_fake_assethub_rpc:443/<secret_key>",
 		HUB_HTTP_ENDPOINT => "https://my_fake_assethub_rpc:443/<secret_key>",
 		HUB_BACKUP_WS_ENDPOINT =>
@@ -1017,20 +991,12 @@ pub mod tests {
 		assert_eq!(settings.arb.nodes.primary.http_endpoint.as_ref(), "http://localhost:8547");
 		assert_eq!(settings.sol.nodes.primary.http_endpoint.as_ref(), "http://localhost:8899");
 		assert_eq!(
-			settings.dot.nodes.primary.ws_endpoint.as_ref(),
-			"wss://my_fake_polkadot_rpc:443/<secret_key>"
-		);
-		assert_eq!(
 			settings.hub.nodes.primary.ws_endpoint.as_ref(),
 			"wss://my_fake_assethub_rpc:443/<secret_key>"
 		);
 		assert_eq!(
 			settings.eth.nodes.backup.unwrap().http_endpoint.as_ref(),
 			"http://second.localhost:8545"
-		);
-		assert_eq!(
-			settings.dot.nodes.backup.unwrap().ws_endpoint.as_ref(),
-			"wss://second.my_fake_polkadot_rpc:443/<secret_key>"
 		);
 		assert_eq!(
 			settings.arb.nodes.backup.unwrap().http_endpoint.as_ref(),
@@ -1114,13 +1080,13 @@ pub mod tests {
 				eth_backup_http_endpoint: Some("http://second_endpoint:4321".to_owned()),
 				eth_private_key_file: Some(PathBuf::from_str("keys/eth_private_key_2").unwrap()),
 			},
-			dot_opts: DotOptions {
+			dot_opts: Some(DotOptions {
 				dot_ws_endpoint: Some("ws://endpoint:4321".to_owned()),
 				dot_http_endpoint: Some("http://endpoint:4321".to_owned()),
 
 				dot_backup_ws_endpoint: Some("ws://second.endpoint:4321".to_owned()),
 				dot_backup_http_endpoint: Some("http://second.endpoint:4321".to_owned()),
-			},
+			}),
 			btc_opts: BtcOptions {
 				btc_http_endpoint: Some("http://btc-endpoint:4321".to_owned()),
 				btc_basic_auth_user: Some("my_username".to_owned()),
@@ -1215,24 +1181,6 @@ pub mod tests {
 		);
 
 		assert!(settings.arb.private_key_file.ends_with("eth_private_key_2"));
-		assert_eq!(
-			opts.dot_opts.dot_ws_endpoint.unwrap(),
-			settings.dot.nodes.primary.ws_endpoint.as_ref()
-		);
-		assert_eq!(
-			opts.dot_opts.dot_http_endpoint.unwrap(),
-			settings.dot.nodes.primary.http_endpoint.as_ref()
-		);
-
-		let dot_backup_node = settings.dot.nodes.backup.unwrap();
-		assert_eq!(
-			opts.dot_opts.dot_backup_ws_endpoint.unwrap(),
-			dot_backup_node.ws_endpoint.as_ref()
-		);
-		assert_eq!(
-			opts.dot_opts.dot_backup_http_endpoint.unwrap(),
-			dot_backup_node.http_endpoint.as_ref()
-		);
 
 		assert_eq!(
 			opts.btc_opts.btc_http_endpoint.unwrap(),
@@ -1309,10 +1257,6 @@ pub mod tests {
 		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node/<secret_key>".into()));
 		assert_ok!(validate_websocket_endpoint("ws://network.my_eth_node/<secret_key>".into()));
 		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node".into()));
-		assert_ok!(validate_websocket_endpoint(
-			"wss://polkadot.api.onfinality.io:443/ws?apikey=00000000-0000-0000-0000-000000000000"
-				.into()
-		));
 		assert_ok!(validate_websocket_endpoint(
 			"wss://username:password@network.my_eth_node:20000".into()
 		));

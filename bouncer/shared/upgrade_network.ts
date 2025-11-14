@@ -211,6 +211,7 @@ async function incompatibleUpgradeNoBuild(
 
   const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
   await execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, [], 'start-all-nodes', {
+    CHAIN: 'dev',
     INIT_RPC_PORT: `9944`,
     KEYS_DIR,
     NODE_COUNT: nodeCount,

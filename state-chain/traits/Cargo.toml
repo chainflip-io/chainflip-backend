@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 log = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
+strum = { version = "0.26.3", default-features = false }
 
 # Internal
 cf-chains = { workspace = true }

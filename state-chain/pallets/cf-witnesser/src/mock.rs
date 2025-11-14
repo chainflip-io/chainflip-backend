@@ -106,6 +106,10 @@ impl WitnessDataExtraction for RuntimeCall {
 			*value = data.iter_mut().map(|encoded| u32::decode(&mut &encoded[..]).unwrap()).sum();
 		}
 	}
+
+	fn is_dot_witnessing(&self) -> bool {
+		false
+	}
 }
 
 pub const ALISSA: <Test as frame_system::Config>::AccountId = 1u64;

@@ -16,9 +16,12 @@
 
 use sp_std::collections::btree_map::BTreeMap;
 
-use crate::lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome};
+use crate::{
+	lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome, LendingSystemApi, LoanId},
+	LendingSwapType,
+};
 
-use cf_primitives::{Asset, AssetAmount, BasisPoints, PrewitnessedDepositId};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, PrewitnessedDepositId, SwapRequestId};
 use frame_support::{pallet_prelude::*, sp_runtime::Percent};
 
 use super::{MockPallet, MockPalletStorage};
@@ -134,5 +137,53 @@ impl BoostApi for MockBoostApi {
 
 	fn process_deposit_as_lost(deposit_id: PrewitnessedDepositId, _asset: Asset) {
 		let _deposit_amount = Self::remove_boosted_deposit(deposit_id);
+	}
+}
+
+pub struct MockLendingSystemApi {}
+
+impl MockPallet for MockLendingSystemApi {
+	const PREFIX: &'static [u8] = b"MockLendingSystemApi";
+}
+
+const LIQUIDATION_SWAP_OUTCOMES: &[u8] = b"LIQUIDATION_SWAP_OUTCOMES";
+
+#[derive(Encode, Decode, PartialEq, Eq, Debug)]
+pub struct LiquidationSwapOutcome {
+	pub borrower_id: u64,
+	pub loan_id: LoanId,
+	pub output_amount: AssetAmount,
+}
+
+impl MockLendingSystemApi {
+	pub fn set_liquidation_swap_outcome(
+		swap_request_id: SwapRequestId,
+		outcome: LiquidationSwapOutcome,
+	) {
+		Self::put_storage(LIQUIDATION_SWAP_OUTCOMES, swap_request_id, outcome);
+	}
+
+	pub fn get_liquidation_swap_outcome(
+		swap_request_id: SwapRequestId,
+	) -> Option<LiquidationSwapOutcome> {
+		Self::get_storage(LIQUIDATION_SWAP_OUTCOMES, swap_request_id)
+	}
+}
+
+impl LendingSystemApi for MockLendingSystemApi {
+	type AccountId = u64;
+
+	fn process_loan_swap_outcome(
+		swap_request_id: SwapRequestId,
+		swap_type: LendingSwapType<Self::AccountId>,
+		output_amount: AssetAmount,
+	) {
+		match swap_type {
+			LendingSwapType::Liquidation { borrower_id, loan_id } =>
+				Self::set_liquidation_swap_outcome(
+					swap_request_id,
+					LiquidationSwapOutcome { borrower_id, loan_id, output_amount },
+				),
+		}
 	}
 }

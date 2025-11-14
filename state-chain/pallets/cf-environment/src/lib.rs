@@ -21,7 +21,8 @@
 
 use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
 pub use crate::submit_runtime_call::{
-	BatchedCalls, Message, TransactionMetadata, MAX_BATCHED_CALLS, UNSIGNED_CALL_VERSION,
+	build_domain_data, BatchedCalls, EthEncodingType, SolEncodingType, TransactionMetadata,
+	DOMAIN_OFFCHAIN_PREFIX, MAX_BATCHED_CALLS,
 };
 use cf_chains::{
 	btc::{
@@ -59,7 +60,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::{vec, vec::Vec};
+use sp_std::{boxed::Box, vec, vec::Vec};
 
 mod benchmarking;
 mod mock;
@@ -96,13 +97,18 @@ pub enum SafeModeUpdate<T: Config> {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::submit_runtime_call::{is_valid_signature, validate_metadata};
+	use crate::submit_runtime_call::{is_valid_signature, validate_metadata, ChainflipExtrinsic};
 
 	use super::*;
 	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum};
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
-	use frame_support::{traits::OriginTrait, DefaultNoBound};
+	use frame_support::{
+		dispatch::{DispatchInfo, PostDispatchInfo},
+		sp_runtime::traits::{Dispatchable, SignedExtension},
+		traits::OriginTrait,
+		DefaultNoBound,
+	};
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -152,12 +158,25 @@ pub mod pallet {
 		/// The overarching call type.
 		type RuntimeCall: Member
 			+ Parameter
-			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
+			+ Dispatchable<
+				RuntimeOrigin = <Self as Config>::RuntimeOrigin,
+				Info = DispatchInfo,
+				PostInfo = PostDispatchInfo,
+			> + UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
 			+ From<frame_system::Call<Self>>
 			+ From<Call<Self>>
 			+ GetDispatchInfo
 			+ IsSubType<Call<Self>>
 			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
+
+		/// Handles fee processing.
+		type TransactionPayments: SignedExtension<
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Call = <Self as Config>::RuntimeCall,
+		>;
+
+		/// Required as a workaround because TransactionPayments doesn't implement Default.
+		type GetTransactionPayments: Get<Self::TransactionPayments>;
 
 		/// Weight information
 		type WeightInfo: WeightInfo;
@@ -173,14 +192,12 @@ pub mod pallet {
 		InvalidUtxoParameters,
 		/// Failed to build Solana Api call. See logs for more details
 		FailedToBuildSolanaApiCall,
-		// Signer cannot be decoded
+		/// Signer cannot be decoded
 		FailedToDecodeSigner,
-		// Failed to execute non-native signed call
-		FailedToExecuteNonNativeSignedCall,
-		// Failed to execute batch
-		FailedToExecuteBatch,
-		// Nested batches not allowed
+		/// Nested batches not allowed
 		InvalidNestedBatch,
+		/// Signer is unable to pay fee.
+		FailedToProcessFee,
 	}
 
 	#[pallet::pallet]
@@ -640,22 +657,25 @@ pub mod pallet {
 			T::AssethubVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)
 		}
 
-		// TODO: PRO-2554 - User should be charged a transaction fee.
-		// We might want to add a check that the signer has balance > 0 as part of
-		// the validate_unsigned.
 		/// Allows for submitting unsigned runtime calls where validation is done on
 		/// the `signature_data` instead. This adds off-chain signing support
 		/// for non-native wallets, such as EVM and Solana wallets.
+		///
+		/// A note on fees: Fees are processed in the extrinsic itself because we need access
+		/// to pre_dispatch_info for post_dispatch processing. The unsigned version of pre_dispatch
+		/// in ValidateUnsigned does not return this info. It should be possible to move this
+		/// processing into the transaction extensions after upgrading Polkadot SDK to a version
+		/// that supports new-style generic transaction extensions.
 		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(10)]
 		#[pallet::weight({
-			let di = message.call.get_dispatch_info();
+			let di = chainflip_extrinsic.call.get_dispatch_info();
 			let dispatch_weight = di.weight.saturating_add(T::WeightInfo::non_native_signed_call());
 			(dispatch_weight, di.class)
 		})]
 		pub fn non_native_signed_call(
 			origin: OriginFor<T>,
-			message: Message<<T as Config>::RuntimeCall>,
+			chainflip_extrinsic: ChainflipExtrinsic<Box<<T as Config>::RuntimeCall>>,
 			signature_data: SignatureData,
 		) -> DispatchResultWithPostInfo {
 			// unsigned extrinsic - validation happens in ValidateUnsigned
@@ -664,28 +684,52 @@ pub mod pallet {
 			let signer_account: T::AccountId =
 				signature_data.signer_account().map_err(|_| Error::<T>::FailedToDecodeSigner)?;
 
-			let _ = message.call.dispatch_bypass_filter(OriginTrait::signed(signer_account))?;
+			// Pre-dispatch fee processing
+			let fee_processor = T::GetTransactionPayments::get();
+			let dispatch_info = chainflip_extrinsic.call.get_dispatch_info();
+			let len = chainflip_extrinsic.call.encoded_size();
+			let pre_dispatch_info = fee_processor
+				.pre_dispatch(&signer_account, &chainflip_extrinsic.call, &dispatch_info, len)
+				.map_err(|_e| Error::<T>::FailedToProcessFee)?;
+
+			// Dispatch the inner call
+			let dispatch_result =
+				chainflip_extrinsic.call.dispatch(OriginTrait::signed(signer_account));
+
+			// Post dispatch fee processing
+			let post_dispatch_info = match dispatch_result {
+				Ok(info) => info,
+				Err(e) => e.post_info,
+			};
+			// Note: the post_dispatch documentation states it should never fail.
+			let _ = T::TransactionPayments::post_dispatch(
+				Some(pre_dispatch_info),
+				&dispatch_info,
+				&post_dispatch_info,
+				len,
+				&dispatch_result.map(|_| ()).map_err(|e| e.error),
+			);
 
 			Self::deposit_event(Event::<T>::NonNativeSignedCall);
-			Ok(().into())
+			dispatch_result.map(|info| info.into())
 		}
 
 		/// Executes an atomic batch of runtime calls. It will execute as an all-or-nothing.
+		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(11)]
 		#[pallet::weight({
 			let (dispatch_weight, dispatch_class) = weight_and_dispatch_class::<T>(calls);
 			let dispatch_weight = dispatch_weight.saturating_add(T::WeightInfo::batch(calls.len() as u32));
 			(dispatch_weight, dispatch_class)
 		})]
-		pub fn batch(origin: OriginFor<T>, calls: BatchedCalls<T>) -> DispatchResult {
+		pub fn batch(origin: OriginFor<T>, calls: BatchedCalls<T>) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
-			let _ = batch_all::<T>(account_id.clone(), calls.clone(), T::WeightInfo::batch)
-				.map_err(|_| Error::<T>::FailedToExecuteNonNativeSignedCall)?;
+			batch_all::<T>(account_id.clone(), calls.clone(), T::WeightInfo::batch)?;
 
 			Self::deposit_event(Event::<T>::BatchCompleted);
 
-			Ok(())
+			Ok(().into())
 		}
 	}
 
@@ -695,23 +739,37 @@ pub mod pallet {
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::non_native_signed_call {
-				message: Message { call: inner_call, metadata },
+				chainflip_extrinsic: ChainflipExtrinsic { call: inner_call, transaction_metadata },
 				signature_data,
 			} = call
 			{
 				let Ok(signer_account) = signature_data.signer_account() else {
 					return Err(InvalidTransaction::BadSigner.into());
 				};
-				let valid_tx = validate_metadata::<T>(metadata, &signer_account)?;
 				ensure!(
-					is_valid_signature(
-						inner_call,
-						ChainflipNetworkName::<T>::get(),
-						metadata,
-						signature_data
-					),
-					InvalidTransaction::BadProof
+					frame_system::Account::<T>::contains_key(&signer_account),
+					InvalidTransaction::BadSigner
 				);
+				T::GetTransactionPayments::get().validate(
+					&signer_account,
+					inner_call,
+					&inner_call.get_dispatch_info(),
+					inner_call.encoded_size(),
+				)?;
+				let valid_tx = validate_metadata::<T>(transaction_metadata, &signer_account)?;
+
+				let runtime_version = <T as frame_system::Config>::Version::get();
+
+				match is_valid_signature(
+					(*inner_call).clone(),
+					&ChainflipNetworkName::<T>::get(),
+					transaction_metadata,
+					signature_data,
+					runtime_version.spec_version,
+				) {
+					Ok(is_valid) => ensure!(is_valid, InvalidTransaction::BadProof),
+					Err(_) => return Err(InvalidTransaction::Custom(0).into()),
+				}
 				Ok(valid_tx)
 			} else {
 				Err(InvalidTransaction::Call.into())
@@ -720,7 +778,7 @@ pub mod pallet {
 
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 			if let Call::non_native_signed_call {
-				message: Message { metadata, .. },
+				chainflip_extrinsic: ChainflipExtrinsic { transaction_metadata, .. },
 				signature_data,
 				..
 			} = call
@@ -730,7 +788,7 @@ pub mod pallet {
 				};
 
 				// Signature validity already checked in `validate_unsigned`
-				let _ = validate_metadata::<T>(metadata, &signer_account)?;
+				let _ = validate_metadata::<T>(transaction_metadata, &signer_account)?;
 				frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
 				Ok(())
 			} else {

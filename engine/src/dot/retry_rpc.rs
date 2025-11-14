@@ -84,7 +84,7 @@ impl DotRetryRpcClient {
 		Ok(DotRetryRpcClient {
 			rpc_retry_client: RetrierClient::new(
 				scope,
-				"dot_rpc",
+				"hub_rpc",
 				futures::future::ready(rpc_client),
 				backup_rpc_client.map(futures::future::ready),
 				POLKADOT_RPC_TIMEOUT,
@@ -92,7 +92,7 @@ impl DotRetryRpcClient {
 			),
 			sub_retry_client: RetrierClient::new(
 				scope,
-				"dot_subscribe",
+				"hub_subscribe",
 				futures::future::ready(sub_client),
 				backup_sub_client.map(futures::future::ready),
 				POLKADOT_RPC_TIMEOUT,

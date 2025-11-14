@@ -103,6 +103,9 @@ pub trait WitnessDataExtraction {
 	/// The combination method should be resistant to minority attacks / outliers. For example,
 	/// medians are resistant to outliers, but means are not.
 	fn combine_and_inject(&mut self, data: &mut [Vec<u8>]);
+
+	// tmp function to make dot witnessing a no-op
+	fn is_dot_witnessing(&self) -> bool;
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -450,7 +453,10 @@ pub mod pallet {
 				.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
 
 			// Register the vote
-			let (extra_data, call_hash) = Self::split_calldata(&mut call);
+			let (extra_data, call_hash, is_dot_witnessing) = Self::split_calldata(&mut call);
+			if is_dot_witnessing {
+				return Ok(())
+			}
 			let num_votes = Votes::<T>::try_mutate::<_, _, _, Error<T>, _>(
 				&epoch_index,
 				&call_hash,
@@ -535,7 +541,7 @@ pub mod pallet {
 
 			ensure!(epoch_index > T::EpochInfo::last_expired_epoch(), Error::<T>::EpochExpired);
 
-			let (_, call_hash) = Self::split_calldata(&mut call.clone());
+			let (_, call_hash, _) = Self::split_calldata(&mut call.clone());
 			ensure!(Votes::<T>::contains_key(epoch_index, call_hash), Error::<T>::InvalidEpoch);
 
 			Self::dispatch_call(epoch_index, T::EpochInfo::epoch_index(), *call, call_hash);
@@ -595,10 +601,10 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn split_calldata(call: &mut <T as Config>::RuntimeCall) -> (Option<Vec<u8>>, CallHash) {
+	fn split_calldata(call: &mut <T as Config>::RuntimeCall) -> (Option<Vec<u8>>, CallHash, bool) {
 		let extra_data = call.extract();
 		// `extract()` modifies the call, so we need to calculate the call hash *after* this.
-		(extra_data, CallHash(call.blake2_256()))
+		(extra_data, CallHash(call.blake2_256()), call.is_dot_witnessing())
 	}
 
 	fn dispatch_call(

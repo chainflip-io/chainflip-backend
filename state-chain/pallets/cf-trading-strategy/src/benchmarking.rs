@@ -37,7 +37,6 @@ fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 	caller
 }
 
-// Keep this to avoid CI warnings about no benchmarks in the crate.
 #[benchmarks]
 mod benchmarks {
 	use super::*;

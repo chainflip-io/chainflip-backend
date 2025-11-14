@@ -15,27 +15,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use cf_chains::evm::{encode, Token, U256};
+use core::primitive::str;
+use ethereum_eip712::{
+	build_eip712_data::build_eip712_typed_data,
+	eip712::{Eip712, Eip712Error},
+};
 use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo},
-	sp_runtime::traits::{Hash, Keccak256},
 	traits::UnfilteredDispatchable,
 	weights::Weight,
 };
+use scale_info::prelude::{
+	format,
+	string::{String, ToString},
+};
 use serde::{Deserialize, Serialize};
+
 pub const ETHEREUM_SIGN_MESSAGE_PREFIX: &str = "\x19Ethereum Signed Message:\n";
-pub const SOLANA_OFFCHAIN_PREFIX: &[u8] = b"\xffsolana offchain";
 pub const MAX_BATCHED_CALLS: u32 = 10u32;
-// Using a str for consistency between EIP-712 and other encodings
-pub const UNSIGNED_CALL_VERSION: &str = "0";
+// We don't use Anza's offchain signing proposal because it's not supported by wallets.
+// The main Solana wallets support utf-8 signing only so we can't use Anza's prefix
+// either. We strip the non-utf-8 characters from Anza's prefix. These transactions won't
+// result in on-chain Solana transactions anyway.
+pub const DOMAIN_OFFCHAIN_PREFIX: &str = "chainflip offchain";
 
 pub type BatchedCalls<T> = BoundedVec<<T as Config>::RuntimeCall, ConstU32<MAX_BATCHED_CALLS>>;
-
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq)]
-pub struct Message<C> {
-	pub call: scale_info::prelude::boxed::Box<C>,
-	pub metadata: TransactionMetadata,
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
 pub struct TransactionMetadata {
@@ -43,20 +47,14 @@ pub struct TransactionMetadata {
 	pub expiry_block: BlockNumber,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub enum EthEncodingType {
 	PersonalSign,
 	Eip712,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub enum SolEncodingType {
-	Domain, /* Using `b"\xffsolana offchain" as per Anza specifications,
-	         * even if we are not using the proposal. Phantom might use
-	         * a different standard though..
-	         * References
-	         * https://docs.anza.xyz/proposals/off-chain-message-signing
-	         * And/or phantom off-chain signing:
-	         * https://github.com/phantom/sign-in-with-solana */
+	Domain,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -124,93 +122,10 @@ pub(crate) fn batch_all<T: Config>(
 	Ok(Some(base_weight.saturating_add(weight)).into())
 }
 
-const EIP712_DOMAIN_TYPE_STR: &str = "EIP712Domain(string name,string version)";
-const EIP712_DOMAIN_PREFIX: [u8; 2] = [0x19, 0x01];
-const EIP712_METADATA_TYPE_STR: &str = "Metadata(uint32 nonce,uint32 expiryBlock)";
-const EIP712_RUNTIMECALL_TYPE_STR: &str = "RuntimeCall(bytes value)";
-const EIP712_TRANSACTION_TYPE_STR: &str = "Transaction(RuntimeCall call,Metadata metadata)";
-
-/// `signer is not technically necessary but is added as part of the metadata so
-/// we add it so is displayed separately to the user in the wallet.
-/// TODO: This is a temporary simplified implementation for basic EIP-712 support
-/// in a specific format. Full logic to be implemented in PRO-2535.
-pub(crate) fn build_eip_712_payload(
-	call: impl Encode,
-	chain_name: &str,
-	version: &str,
-	transaction_metadata: TransactionMetadata,
-) -> Vec<u8> {
-	// -----------------
-	// Domain separator
-	// -----------------
-	// Not using chain_id as this is not an EVM network and the domain name
-	// will act as the replay protection between different Chainflip networks.
-	let type_hash = Keccak256::hash(EIP712_DOMAIN_TYPE_STR.as_bytes());
-	let name_hash = Keccak256::hash(chain_name.as_bytes());
-	let version_hash = Keccak256::hash(version.as_bytes());
-
-	let tokens = vec![
-		Token::FixedBytes(type_hash.as_bytes().to_vec()),
-		Token::FixedBytes(name_hash.as_bytes().to_vec()),
-		Token::FixedBytes(version_hash.as_bytes().to_vec()),
-	];
-
-	// ABI encode
-	let encoded = encode(&tokens);
-	let domain_separator = Keccak256::hash(&encoded);
-
-	// -----------------
-	// Metadata struct
-	// -----------------
-	let metadata_type_str = EIP712_METADATA_TYPE_STR;
-	let metadata_type_hash = Keccak256::hash(metadata_type_str.as_bytes());
-	let metadata_tokens = vec![
-		Token::FixedBytes(metadata_type_hash.as_bytes().to_vec()),
-		Token::Uint(U256::from(transaction_metadata.nonce)),
-		Token::Uint(U256::from(transaction_metadata.expiry_block)),
-	];
-	let encoded_metadata = encode(&metadata_tokens);
-	let metadata_hash = Keccak256::hash(&encoded_metadata);
-
-	// -----------------
-	// RuntimeCall struct
-	// -----------------
-	let runtime_call_type_str = EIP712_RUNTIMECALL_TYPE_STR;
-	let runtime_call_type_hash = Keccak256::hash(runtime_call_type_str.as_bytes());
-
-	let runtime_call_tokens = vec![
-		Token::FixedBytes(runtime_call_type_hash.as_bytes().to_vec()),
-		Token::FixedBytes(Keccak256::hash(&call.encode()).0.to_vec()),
-	];
-	let encoded_runtime_call = encode(&runtime_call_tokens);
-	let runtime_call_hash = Keccak256::hash(&encoded_runtime_call);
-
-	// -----------------
-	// Message struct
-	// -----------------
-	let transaction_type_str = scale_info::prelude::format!(
-		"{}{}{}",
-		EIP712_TRANSACTION_TYPE_STR,
-		metadata_type_str,
-		runtime_call_type_str,
-	);
-	let transaction_type_hash = Keccak256::hash(transaction_type_str.as_bytes());
-	let tokens = vec![
-		Token::FixedBytes(transaction_type_hash.as_bytes().to_vec()),
-		Token::FixedBytes(runtime_call_hash.as_bytes().to_vec()),
-		Token::FixedBytes(metadata_hash.as_bytes().to_vec()),
-	];
-
-	let encoded_message = encode(&tokens);
-	let message_hash = Keccak256::hash(&encoded_message);
-
-	// -----------------
-	// EIP712 digest
-	// -----------------
-	let mut encoded_final = EIP712_DOMAIN_PREFIX.to_vec();
-	encoded_final.extend_from_slice(domain_separator.0.as_slice());
-	encoded_final.extend_from_slice(message_hash.0.as_slice());
-	encoded_final
+#[derive(Encode, Decode, TypeInfo, Debug, Clone, PartialEq)]
+pub struct ChainflipExtrinsic<C> {
+	pub call: C,
+	pub transaction_metadata: TransactionMetadata,
 }
 
 /// Get the accumulated `weight` and the dispatch class for the given `calls`.
@@ -262,62 +177,58 @@ pub(crate) fn validate_metadata<T: Config>(
 	tx_builder.build()
 }
 
-fn build_domain_data(
+pub fn build_domain_data(
 	call: impl Encode,
-	chainflip_network_name: &'static str,
+	chainflip_network: &ChainflipNetwork,
 	transaction_metadata: &TransactionMetadata,
-) -> Vec<u8> {
-	[
-		&call.encode()[..],
-		&chainflip_network_name.encode()[..],
-		&UNSIGNED_CALL_VERSION.encode()[..],
-		&transaction_metadata.encode()[..],
-	]
-	.concat()
-}
-
-fn prefix_and_payload(prefix: &[u8], payload: &[u8]) -> Vec<u8> {
-	[prefix, payload].concat()
+	spec_version: u32,
+) -> String {
+	format!(
+		"/network:{}/version:{}/call:{}/nonce:{}/expiry_block:{}",
+		chainflip_network.as_str(),
+		spec_version,
+		hex::encode(call.encode()),
+		transaction_metadata.nonce,
+		transaction_metadata.expiry_block
+	)
 }
 
 /// Validates the signature, given some call and metadata.
 ///
 /// This call should be kept idempotent: it should not access storage.
 pub(crate) fn is_valid_signature(
-	call: impl Encode,
-	chainflip_network: ChainflipNetwork,
+	call: impl Encode + TypeInfo + 'static,
+	chainflip_network: &ChainflipNetwork,
 	transaction_metadata: &TransactionMetadata,
 	signature_data: &SignatureData,
-) -> bool {
-	let raw_payload = || build_domain_data(&call, chainflip_network.as_str(), transaction_metadata);
+	spec_version: u32,
+) -> Result<bool, Eip712Error> {
+	let raw_payload =
+		|| build_domain_data(&call, chainflip_network, transaction_metadata, spec_version);
 
 	match signature_data {
 		SignatureData::Solana { signature, signer, sig_type } => {
 			let signed_payload = match sig_type {
 				SolEncodingType::Domain =>
-					prefix_and_payload(SOLANA_OFFCHAIN_PREFIX, &raw_payload()),
+					format!("{}{}", DOMAIN_OFFCHAIN_PREFIX, raw_payload()).into_bytes(),
 			};
-			verify_sol_signature(signer, &signed_payload, signature)
+			Ok(verify_sol_signature(signer, &signed_payload, signature))
 		},
 		SignatureData::Ethereum { signature, signer, sig_type } => {
 			let signed_payload = match sig_type {
 				EthEncodingType::PersonalSign => {
 					let payload = raw_payload();
-					let prefix = scale_info::prelude::format!(
-						"{}{}",
-						ETHEREUM_SIGN_MESSAGE_PREFIX,
-						payload.len()
-					);
-					prefix_and_payload(prefix.as_bytes(), &payload)
+					format!("{}{}{}", ETHEREUM_SIGN_MESSAGE_PREFIX, payload.len(), payload)
+						.into_bytes()
 				},
-				EthEncodingType::Eip712 => build_eip_712_payload(
-					call,
-					chainflip_network.as_str(),
-					UNSIGNED_CALL_VERSION,
-					*transaction_metadata,
-				),
+				EthEncodingType::Eip712 => build_eip712_typed_data(
+					ChainflipExtrinsic { call, transaction_metadata: *transaction_metadata },
+					chainflip_network.as_str().to_string(),
+					spec_version,
+				)?
+				.encode_eip712()?,
 			};
-			verify_evm_signature(signer, &signed_payload, signature)
+			Ok(verify_evm_signature(signer, &signed_payload, signature))
 		},
 	}
 }

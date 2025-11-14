@@ -1100,8 +1100,9 @@ export function waitForExt(
   promise: Promise<EventRecord[]>;
   waiter: (result: ISubmittableResult) => void;
 } {
-  const { promise, resolve } = deferredPromise<EventRecord[]>();
+  const { promise, resolve, reject } = deferredPromise<EventRecord[]>();
   let release = !!mutexRelease;
+  const dispatchErrorHandler = handleDispatchError(api, false);
   return {
     promise,
     waiter: ({ events, status, dispatchError }) => {
@@ -1112,11 +1113,28 @@ export function waitForExt(
       logger.debug(`Extrinsic status: ${status.toString()}`);
       if (dispatchError) {
         logger.warn(`Extrinsic error: ${dispatchError.toString()}`);
-        handleDispatchError(api)({ dispatchError });
-      } else if (waitForStatus === 'InBlock' && status.isInBlock === true) {
+        try {
+          dispatchErrorHandler({ dispatchError });
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          reject(err);
+          throwError(logger, err);
+        }
+        return;
+      }
+      if (waitForStatus === 'InBlock' && status.isInBlock === true) {
         resolve(events);
-      } else if (waitForStatus === 'Finalized' && status.isFinalized === true) {
+        return;
+      }
+      if (waitForStatus === 'Finalized' && status.isFinalized === true) {
         resolve(events);
+        return;
+      }
+      if (status.isDropped || status.isInvalid || status.isUsurped || status.isRetracted) {
+        logger.warn(`Extrinsic failed: ${status.toString()}`);
+        const error = new Error(`Extrinsic failed with status: ${status.toString()}`);
+        reject(error);
+        throwError(logger, error);
       }
     },
   };
@@ -1370,16 +1388,25 @@ export function getTimeStamp(): string {
   return `${hours}:${minutes}:${seconds}`;
 }
 
-export async function createEvmWalletAndFund(logger: Logger, asset: Asset): Promise<HDNodeWallet> {
-  const chain = chainFromAsset(asset);
-
+export async function createEvmWallet(chain?: Chain): Promise<HDNodeWallet> {
   const mnemonic = Wallet.createRandom().mnemonic?.phrase ?? '';
   if (mnemonic === '') {
     throw new Error('Failed to create random mnemonic');
   }
-  const wallet = Wallet.fromPhrase(mnemonic).connect(getDefaultProvider(getEvmEndpoint(chain)));
-  await send(logger, chainGasAsset(chain) as SDKAsset, wallet.address, undefined);
-  await send(logger, asset, wallet.address, undefined);
+  const wallet = Wallet.fromPhrase(mnemonic).connect(
+    getDefaultProvider(getEvmEndpoint(chain ?? 'Ethereum')),
+  );
+  return wallet;
+}
+
+export async function createEvmWalletAndFund(logger: Logger, asset: Asset): Promise<HDNodeWallet> {
+  const chain = chainFromAsset(asset);
+  const wallet = await createEvmWallet(chain);
+
+  await Promise.all([
+    send(logger, chainGasAsset(chain) as SDKAsset, wallet.address),
+    send(logger, asset, wallet.address),
+  ]);
   return wallet;
 }
 

@@ -34,6 +34,7 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { newCcmMetadata } from 'shared/swapping';
+import { testSol, testSolVaultSwap } from './broker_level_screening/sol';
 
 const keyring = new Keyring({ type: 'sr25519' });
 const brokerUri = '//BROKER_1';
@@ -658,6 +659,8 @@ export async function testBrokerLevelScreening(
   // test rejection of swaps by the responsible broker
   await Promise.all(
     [
+      testSol(testContext, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
+      testSol(testContext, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
       testEvm(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
       testEvm(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
       testEvm(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
@@ -680,6 +683,8 @@ export async function testBrokerLevelScreening(
     // testBitcoinVaultSwap(testContext),
     testEvmVaultSwap(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmVaultSwap(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    testSolVaultSwap(testContext, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
+    testSolVaultSwap(testContext, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 
   await setMockmode(previousMockmode);

@@ -1,6 +1,6 @@
 [package]
 name = "state-chain-runtime"
-version = "1.12.0"
+version = "2.0.0"
 authors = ["Chainflip Team <https://github.com/chainflip-io>"]
 edition = "2021"
 homepage = "https://chainflip.io"
@@ -24,6 +24,7 @@ log = { workspace = true }
 nanorand = { workspace = true, features = ["wyrand"] }
 serde = { workspace = true, features = ["derive", "alloc"] }
 ethabi = { workspace = true }
+ethereum-eip712 = { workspace = true }
 bitvec = { workspace = true }
 paste = { workspace = true }
 
@@ -104,6 +105,9 @@ frame-system-rpc-runtime-api = { workspace = true }
 pallet-transaction-payment-rpc-runtime-api = { workspace = true }
 
 cf-test-utilities = { workspace = true, optional = true }
+
+# other
+n-functor = { workspace = true }
 
 [dev-dependencies]
 sp-io = { workspace = true, default-features = true }

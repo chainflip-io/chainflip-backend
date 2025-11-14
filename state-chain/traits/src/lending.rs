@@ -14,10 +14,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_primitives::{Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId};
+use cf_primitives::{
+	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
+	SwapRequestId,
+};
+use codec::{Decode, Encode};
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
+use sp_runtime::DispatchResult;
 use sp_std::collections::btree_map::BTreeMap;
 
 use frame_support::pallet_prelude::DispatchError;
+
+use crate::LendingSwapType;
 
 #[derive(Debug)]
 pub struct BoostOutcome {
@@ -28,6 +37,16 @@ pub struct BoostOutcome {
 #[derive(Default, Debug, PartialEq, Eq)]
 pub struct BoostFinalisationOutcome {
 	pub network_fee: AssetAmount,
+}
+
+/// Allows to specify whether a loan should be repaid in full
+/// or only with a specified amount.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, TypeInfo, Encode, Decode)]
+pub enum RepaymentAmount {
+	/// Full repayment
+	Full,
+	/// Only repay with the specified amount
+	Exact(AssetAmount),
 }
 
 pub trait BoostApi {
@@ -41,4 +60,69 @@ pub trait BoostApi {
 	fn finalise_boost(deposit_id: PrewitnessedDepositId, asset: Asset) -> BoostFinalisationOutcome;
 
 	fn process_deposit_as_lost(deposit_id: PrewitnessedDepositId, asset: Asset);
+}
+
+define_wrapper_type!(LoanId, u64, extra_derives: PartialOrd, Ord, Serialize, Deserialize);
+
+impl core::ops::Add<u64> for LoanId {
+	type Output = Self;
+
+	fn add(self, rhs: u64) -> Self::Output {
+		LoanId(self.0 + rhs)
+	}
+}
+
+pub trait LendingApi {
+	type AccountId;
+
+	fn expand_loan(
+		borrower: Self::AccountId,
+		loan_id: LoanId,
+		extra_amount_to_borrow: AssetAmount,
+		extra_collateral: BTreeMap<Asset, AssetAmount>,
+	) -> DispatchResult;
+
+	fn new_loan(
+		borrower: Self::AccountId,
+		asset: Asset,
+		amount_to_borrow: AssetAmount,
+		primary_collateral_asset: Option<Asset>,
+		collateral: BTreeMap<Asset, AssetAmount>,
+	) -> Result<LoanId, DispatchError>;
+
+	fn try_making_repayment(
+		borrower_id: &Self::AccountId,
+		loan_id: LoanId,
+		amount: RepaymentAmount,
+	) -> DispatchResult;
+
+	fn add_collateral(
+		borrower_id: &Self::AccountId,
+		primary_collateral_asset: Option<Asset>,
+		collateral: BTreeMap<Asset, AssetAmount>,
+	) -> DispatchResult;
+
+	fn remove_collateral(
+		borrower_id: &Self::AccountId,
+		collateral: BTreeMap<Asset, AssetAmount>,
+	) -> DispatchResult;
+
+	fn update_primary_collateral_asset(
+		borrower_id: &Self::AccountId,
+		primary_collateral_asset: Asset,
+	) -> DispatchResult;
+
+	/// Can be used to indicate user's intent to trigger (value=true) or stop (value=false)
+	/// voluntary liquidation.
+	fn set_voluntary_liquidation_flag(borrower_id: Self::AccountId, value: bool) -> DispatchResult;
+}
+
+pub trait LendingSystemApi {
+	type AccountId;
+
+	fn process_loan_swap_outcome(
+		swap_request_id: SwapRequestId,
+		swap_type: LendingSwapType<Self::AccountId>,
+		output_amount: AssetAmount,
+	);
 }

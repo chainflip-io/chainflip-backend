@@ -81,6 +81,118 @@ impl SolanaTransactionBuilder {
 		(AccountBump::MAX - bump) as u32 * COMPUTE_UNITS_PER_BUMP_DERIVATION
 	}
 
+	/// Create an instruction for transferring native SOL.
+	/// Returns the instruction and the compute units required for this instruction.
+	fn create_transfer_native_instruction(
+		amount: SolAmount,
+		to: SolAddress,
+		agg_key: SolAddress,
+	) -> (SolInstruction, SolComputeLimit) {
+		let instruction = SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount);
+		(instruction, COMPUTE_UNITS_PER_TRANSFER_NATIVE)
+	}
+
+	/// Create instructions for transferring tokens.
+	/// Returns a vector of instructions needed for token transfer (ATA creation + transfer).
+	fn create_transfer_token_instructions(
+		ata: SolAddress,
+		amount: SolAmount,
+		address: SolAddress,
+		vault_program: SolAddress,
+		vault_program_data_account: SolAddress,
+		token_vault_pda_account: SolAddress,
+		token_vault_ata: SolAddress,
+		token_mint_pubkey: SolAddress,
+		agg_key: SolAddress,
+		token_decimals: u8,
+	) -> Vec<SolInstruction> {
+		vec![
+			AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
+				&agg_key.into(),
+				&address.into(),
+				&token_mint_pubkey.into(),
+				&ata.into(),
+			),
+			VaultProgram::with_id(vault_program).transfer_tokens(
+				amount,
+				token_decimals,
+				vault_program_data_account,
+				agg_key,
+				token_vault_pda_account,
+				token_vault_ata,
+				ata,
+				token_mint_pubkey,
+				token_program_id(),
+			),
+		]
+	}
+
+	/// Create an instruction for fetching assets from a single deposit channel.
+	/// Returns the instruction and the compute units required for this instruction.
+	fn create_fetch_instruction(
+		param: FetchAssetParams<Solana>,
+		sol_api_environment: &SolApiEnvironment,
+		agg_key: SolAddress,
+	) -> Result<(SolInstruction, SolComputeLimit), SolanaTransactionBuildingError> {
+		match param.asset {
+			SolAsset::Sol => {
+				let fetch_pda_and_bump = derive_fetch_account(
+					param.deposit_fetch_id.address,
+					sol_api_environment.vault_program,
+				)
+				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+
+				let compute_units = COMPUTE_UNITS_PER_FETCH_NATIVE +
+					Self::derivation_compute_units(fetch_pda_and_bump.bump);
+
+				let instruction = VaultProgram::with_id(sol_api_environment.vault_program)
+					.fetch_native(
+						param.deposit_fetch_id.channel_id.to_le_bytes().to_vec(),
+						param.deposit_fetch_id.bump,
+						sol_api_environment.vault_program_data_account,
+						agg_key,
+						param.deposit_fetch_id.address,
+						fetch_pda_and_bump.address,
+						system_program_id(),
+					);
+
+				Ok((instruction, compute_units))
+			},
+			SolAsset::SolUsdc => {
+				let ata = derive_associated_token_account(
+					param.deposit_fetch_id.address,
+					sol_api_environment.usdc_token_mint_pubkey,
+				)
+				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+
+				let fetch_pda_and_bump =
+					derive_fetch_account(ata.address, sol_api_environment.vault_program)
+						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+
+				let compute_units = COMPUTE_UNITS_PER_FETCH_TOKEN +
+					Self::derivation_compute_units(fetch_pda_and_bump.bump);
+
+				let instruction = VaultProgram::with_id(sol_api_environment.vault_program)
+					.fetch_tokens(
+						param.deposit_fetch_id.channel_id.to_le_bytes().to_vec(),
+						param.deposit_fetch_id.bump,
+						SOL_USDC_DECIMAL,
+						sol_api_environment.vault_program_data_account,
+						agg_key,
+						param.deposit_fetch_id.address,
+						ata.address,
+						sol_api_environment.usdc_token_vault_ata,
+						sol_api_environment.usdc_token_mint_pubkey,
+						token_program_id(),
+						fetch_pda_and_bump.address,
+						system_program_id(),
+					);
+
+				Ok((instruction, compute_units))
+			},
+		}
+	}
+
 	/// Finalize a Instruction Set. This should be internally called after a instruction set is
 	/// complete. This will add some extra instruction required for the integrity of the Solana
 	/// Transaction.
@@ -143,62 +255,10 @@ impl SolanaTransactionBuilder {
 		let instructions = fetch_params
 			.into_iter()
 			.map(|param| {
-				match param.asset {
-					SolAsset::Sol => {
-						compute_limit += COMPUTE_UNITS_PER_FETCH_NATIVE;
-						let fetch_pda_and_bump = derive_fetch_account(
-							param.deposit_fetch_id.address,
-							sol_api_environment.vault_program,
-						)
-						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-
-						// Add extra compute units for on-chain derivation
-						compute_limit += Self::derivation_compute_units(fetch_pda_and_bump.bump);
-
-						Ok(VaultProgram::with_id(sol_api_environment.vault_program).fetch_native(
-							param.deposit_fetch_id.channel_id.to_le_bytes().to_vec(),
-							param.deposit_fetch_id.bump,
-							sol_api_environment.vault_program_data_account,
-							agg_key,
-							param.deposit_fetch_id.address,
-							fetch_pda_and_bump.address,
-							system_program_id(),
-						))
-					},
-					SolAsset::SolUsdc => {
-						let ata = derive_associated_token_account(
-							param.deposit_fetch_id.address,
-							sol_api_environment.usdc_token_mint_pubkey,
-						)
-						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-
-						compute_limit += COMPUTE_UNITS_PER_FETCH_TOKEN;
-
-						let fetch_pda_and_bump =
-							derive_fetch_account(ata.address, sol_api_environment.vault_program)
-								.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-
-						// Add extra compute units for on-chain derivation
-						compute_limit += Self::derivation_compute_units(fetch_pda_and_bump.bump);
-
-						Ok(VaultProgram::with_id(sol_api_environment.vault_program).fetch_tokens(
-							param.deposit_fetch_id.channel_id.to_le_bytes().to_vec(),
-							param.deposit_fetch_id.bump,
-							SOL_USDC_DECIMAL,
-							sol_api_environment.vault_program_data_account,
-							agg_key,
-							param.deposit_fetch_id.address,
-							// we can unwrap here since we are in token_asset match arm and every
-							// token should have an ata
-							ata.address,
-							sol_api_environment.usdc_token_vault_ata,
-							sol_api_environment.usdc_token_mint_pubkey,
-							token_program_id(),
-							fetch_pda_and_bump.address,
-							system_program_id(),
-						))
-					},
-				}
+				let (instruction, instruction_compute_units) =
+					Self::create_fetch_instruction(param, &sol_api_environment, agg_key)?;
+				compute_limit += instruction_compute_units;
+				Ok(instruction)
 			})
 			.collect::<Result<Vec<_>, SolanaTransactionBuildingError>>()?;
 
@@ -221,17 +281,14 @@ impl SolanaTransactionBuilder {
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
 	) -> Result<SolVersionedTransaction, SolanaTransactionBuildingError> {
-		let instructions =
-			vec![SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount)];
-
+		let (instruction, compute_units) =
+			Self::create_transfer_native_instruction(amount, to, agg_key);
 		Self::build(
-			instructions,
+			vec![instruction],
 			durable_nonce,
 			agg_key.into(),
 			compute_price,
-			compute_limit_with_buffer(
-				BASE_COMPUTE_UNITS_PER_TX + COMPUTE_UNITS_PER_TRANSFER_NATIVE,
-			),
+			compute_limit_with_buffer(BASE_COMPUTE_UNITS_PER_TX + compute_units),
 			vec![],
 		)
 	}
@@ -252,25 +309,18 @@ impl SolanaTransactionBuilder {
 		token_decimals: u8,
 		address_lookup_tables: Vec<SolAddressLookupTableAccount>,
 	) -> Result<SolVersionedTransaction, SolanaTransactionBuildingError> {
-		let instructions = vec![
-			AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
-				&agg_key.into(),
-				&address.into(),
-				&token_mint_pubkey.into(),
-				&ata.into(),
-			),
-			VaultProgram::with_id(vault_program).transfer_tokens(
-				amount,
-				token_decimals,
-				vault_program_data_account,
-				agg_key,
-				token_vault_pda_account,
-				token_vault_ata,
-				ata,
-				token_mint_pubkey,
-				token_program_id(),
-			),
-		];
+		let instructions = Self::create_transfer_token_instructions(
+			ata,
+			amount,
+			address,
+			vault_program,
+			vault_program_data_account,
+			token_vault_pda_account,
+			token_vault_ata,
+			token_mint_pubkey,
+			agg_key,
+			token_decimals,
+		);
 
 		Self::build(
 			instructions,
@@ -278,6 +328,89 @@ impl SolanaTransactionBuilder {
 			agg_key.into(),
 			compute_price,
 			compute_limit_with_buffer(BASE_COMPUTE_UNITS_PER_TX + COMPUTE_UNITS_PER_TRANSFER_TOKEN),
+			address_lookup_tables,
+		)
+	}
+
+	/// Create a refund transaction that fetches native SOL from a deposit channel and transfers it.
+	/// This combines fetch and transfer operations in a single transaction for native SOL refunds.
+	pub fn refund_native(
+		fetch_param: FetchAssetParams<Solana>,
+		transfer_amount: SolAmount,
+		transfer_to: SolAddress,
+		sol_api_environment: SolApiEnvironment,
+		agg_key: SolAddress,
+		durable_nonce: DurableNonceAndAccount,
+		compute_price: SolAmount,
+	) -> Result<SolVersionedTransaction, SolanaTransactionBuildingError> {
+		let (fetch_instruction, fetch_compute_units) =
+			Self::create_fetch_instruction(fetch_param, &sol_api_environment, agg_key)?;
+
+		let (transfer_instruction, transfer_compute_units) =
+			Self::create_transfer_native_instruction(transfer_amount, transfer_to, agg_key);
+
+		let instructions = vec![fetch_instruction, transfer_instruction];
+
+		let total_compute_units =
+			BASE_COMPUTE_UNITS_PER_TX + fetch_compute_units + transfer_compute_units;
+
+		Self::build(
+			instructions,
+			durable_nonce,
+			agg_key.into(),
+			compute_price,
+			compute_limit_with_buffer(total_compute_units),
+			vec![sol_api_environment.address_lookup_table_account],
+		)
+	}
+
+	/// Create a refund transaction that fetches tokens from a deposit channel and transfers them.
+	/// This combines fetch and transfer operations in a single transaction for token refunds.
+	pub fn refund_token(
+		fetch_param: FetchAssetParams<Solana>,
+		transfer_ata: SolAddress,
+		transfer_amount: SolAmount,
+		transfer_to: SolAddress,
+		vault_program: SolAddress,
+		vault_program_data_account: SolAddress,
+		token_vault_pda_account: SolAddress,
+		token_vault_ata: SolAddress,
+		token_mint_pubkey: SolAddress,
+		token_decimals: u8,
+		sol_api_environment: SolApiEnvironment,
+		agg_key: SolAddress,
+		durable_nonce: DurableNonceAndAccount,
+		compute_price: SolAmount,
+		address_lookup_tables: Vec<SolAddressLookupTableAccount>,
+	) -> Result<SolVersionedTransaction, SolanaTransactionBuildingError> {
+		let (fetch_instruction, fetch_compute_units) =
+			Self::create_fetch_instruction(fetch_param, &sol_api_environment, agg_key)?;
+
+		let transfer_instructions = Self::create_transfer_token_instructions(
+			transfer_ata,
+			transfer_amount,
+			transfer_to,
+			vault_program,
+			vault_program_data_account,
+			token_vault_pda_account,
+			token_vault_ata,
+			token_mint_pubkey,
+			agg_key,
+			token_decimals,
+		);
+
+		let mut instructions = vec![fetch_instruction];
+		instructions.extend(transfer_instructions);
+
+		let total_compute_units =
+			BASE_COMPUTE_UNITS_PER_TX + fetch_compute_units + COMPUTE_UNITS_PER_TRANSFER_TOKEN;
+
+		Self::build(
+			instructions,
+			durable_nonce,
+			agg_key.into(),
+			compute_price,
+			compute_limit_with_buffer(total_compute_units),
 			address_lookup_tables,
 		)
 	}

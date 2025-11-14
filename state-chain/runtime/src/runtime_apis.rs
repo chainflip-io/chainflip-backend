@@ -35,11 +35,18 @@ use cf_primitives::{
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
 use core::{ops::Range, str};
+use ethereum_eip712::eip712::TypedData;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_elections::electoral_systems::oracle_price::price::PriceAsset;
+use pallet_cf_environment::{
+	submit_runtime_call::TransactionMetadata, EthEncodingType, SolEncodingType,
+};
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
-pub use pallet_cf_lending_pools::BoostPoolDetails;
+pub use pallet_cf_lending_pools::{
+	BoostPoolDetails, LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLendingPool,
+	RpcLoanAccount,
+};
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -51,11 +58,43 @@ use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
+use sp_core::U256;
 use sp_runtime::{DispatchError, Permill};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
 };
+
+#[derive(Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
+pub enum EncodedNonNativeCallGeneric<T> {
+	Eip712(T),
+	String(String),
+}
+
+pub type EncodedNonNativeCall = EncodedNonNativeCallGeneric<TypedData>;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
+pub enum EncodingType {
+	Eth(EthEncodingType),
+	Sol(SolEncodingType),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
+#[serde(untagged)]
+pub enum NonceOrAccount {
+	Nonce(u32),
+	Account(AccountId32),
+}
+
+#[derive(PartialEq, Eq, Encode, Decode, Clone, TypeInfo, Serialize, Deserialize, Debug)]
+pub struct LendingPosition<Amount> {
+	#[serde(flatten)]
+	pub asset: Asset,
+	// Total amount owed to the lender
+	pub total_amount: Amount,
+	// Total amount available to the lender (equals total_amount if the pool has enough liquidity)
+	pub available_amount: Amount,
+}
 
 pub use pallet_cf_validator::DelegationSnapshot;
 
@@ -317,6 +356,8 @@ pub struct LiquidityProviderInfo {
 	pub balances: Vec<(Asset, AssetAmount)>,
 	pub earned_fees: AssetMap<AssetAmount>,
 	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
+	pub lending_positions: Vec<LendingPosition<AssetAmount>>,
+	pub collateral_balances: Vec<(Asset, AssetAmount)>,
 }
 
 #[derive(Encode, Decode, TypeInfo, Default)]
@@ -406,7 +447,7 @@ pub struct FailingWitnessValidators {
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct ChainAccounts {
-	pub chain_accounts: Vec<EncodedAddress>,
+	pub chain_accounts: Vec<(EncodedAddress, Asset)>,
 }
 
 #[derive(
@@ -444,7 +485,7 @@ impl<AccountId, C> From<ChannelAction<AccountId, C>> for ChannelActionType {
 pub type OpenedDepositChannels = (AccountId32, ChannelActionType, ChainAccounts);
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
-pub enum TransactionScreeningEvent<TxId> {
+pub enum TransactionScreeningEvent<TxId, DepositDetails, Address> {
 	TransactionRejectionRequestReceived {
 		account_id: <Runtime as frame_system::Config>::AccountId,
 		tx_id: TxId,
@@ -457,18 +498,27 @@ pub enum TransactionScreeningEvent<TxId> {
 
 	TransactionRejectedByBroker {
 		refund_broadcast_id: BroadcastId,
-		tx_id: TxId,
+		deposit_details: DepositDetails,
+	},
+
+	ChannelRejectionRequestReceived {
+		account_id: <Runtime as frame_system::Config>::AccountId,
+		deposit_address: Address,
 	},
 }
 
-pub type BrokerRejectionEventFor<C> =
-	TransactionScreeningEvent<<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId>;
+pub type BrokerRejectionEventFor<C> = TransactionScreeningEvent<
+	<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId,
+	<C as Chain>::DepositDetails,
+	<C as Chain>::ChainAccount,
+>;
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct TransactionScreeningEvents {
 	pub btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>>,
 	pub eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>>,
 	pub arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>>,
+	pub sol_events: Vec<BrokerRejectionEventFor<cf_chains::Solana>>,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
@@ -476,6 +526,13 @@ pub struct VaultAddresses {
 	pub ethereum: EncodedAddress,
 	pub arbitrum: EncodedAddress,
 	pub bitcoin: Vec<(AccountId32, EncodedAddress)>,
+
+	// Decide which ones we need:
+	// pub solana_swap_endpoint_native_vault_pda: EncodedAddress,
+	// pub solana_usdc_token_vault_ata: EncodedAddress,
+	pub sol_vault_program: EncodedAddress,
+	pub sol_swap_endpoint_program_data_account: EncodedAddress,
+	pub usdc_token_mint_pubkey: EncodedAddress,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
@@ -517,6 +574,42 @@ mod serialize_vanity_name {
 			Err(_) => serializer.serialize_str("<Invalid UTF-8>"),
 		}
 	}
+}
+
+use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions};
+
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
+pub struct RpcLendingConfig {
+	pub ltv_thresholds: LtvThresholds,
+	pub network_fee_contributions: NetworkFeeContributions,
+	/// Determines how frequently (in blocks) we check if fees should be swapped into the
+	/// pools asset
+	pub fee_swap_interval_blocks: u32,
+	/// Determines how frequently (in blocks) we collect interest payments from loans.
+	pub interest_payment_interval_blocks: u32,
+	/// Fees collected in some asset will be swapped into the pool's asset once their usd value
+	/// reaches this threshold
+	pub fee_swap_threshold_usd: U256,
+	/// If loan account's owed interest reaches this threshold, it will be taken from the
+	/// account's collateral
+	pub interest_collection_threshold_usd: U256,
+	/// Soft liquidation swaps will use chunks that are equivalent to this amount of USD
+	pub soft_liquidation_swap_chunk_size_usd: U256,
+	/// Hard liquidation swaps will use chunks that are equivalent to this amount of USD
+	pub hard_liquidation_swap_chunk_size_usd: U256,
+	/// Soft liquidation will be executed with this oracle slippage limit
+	pub soft_liquidation_max_oracle_slippage: BasisPoints,
+	/// Hard liquidation will be executed with this oracle slippage limit
+	pub hard_liquidation_max_oracle_slippage: BasisPoints,
+	/// All fee swaps from lending will be executed with this oracle slippage limit
+	pub fee_swap_max_oracle_slippage: BasisPoints,
+	/// Minimum equivalent amount of principal that a loan must have at all times.
+	pub minimum_loan_amount_usd: U256,
+	/// Minimum equivalent amount of principal that can be used to expand or repay an existing
+	/// loan.
+	pub minimum_update_loan_amount_usd: U256,
+	/// Minimum equivalent amount of collateral that can be added or removed from a loan account.
+	pub minimum_update_collateral_amount_usd: U256,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
@@ -583,7 +676,7 @@ impl<A> RpcAccountInfoCommonItems<A> {
 //  - Handle the dummy method gracefully in the custom rpc implementation using
 //    runtime_api().api_version().
 decl_runtime_apis!(
-	#[api_version(8)]
+	#[api_version(9)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -775,6 +868,14 @@ decl_runtime_apis!(
 		fn cf_oracle_prices(
 			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		) -> Vec<OraclePrice>;
+		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>>;
+		fn cf_loan_accounts(
+			borrower_id: Option<AccountId32>,
+		) -> Vec<RpcLoanAccount<AccountId32, AssetAmount>>;
+		fn cf_lending_pool_supply_balances(
+			asset: Option<Asset>,
+		) -> Vec<LendingPoolAndSupplyPositions<AccountId32, AssetAmount>>;
+		fn cf_lending_config() -> RpcLendingConfig;
 		fn cf_evm_calldata(
 			caller: EthereumAddress,
 			call: crate::chainflip::ethereum_sc_calls::EthereumSCApi<FlipBalance>,
@@ -792,9 +893,19 @@ decl_runtime_apis!(
 			account: Option<AccountId32>,
 		) -> Vec<DelegationSnapshot<AccountId32, FlipBalance>>;
 		#[changed_in(8)]
-		fn cf_chainflip_network();
-		fn cf_chainflip_network(
-		) -> Result<cf_primitives::ChainflipNetwork, DispatchErrorWithMessage>;
+		fn cf_ingress_delay();
+		fn cf_ingress_delay(chain: ForeignChain) -> u32;
+		#[changed_in(8)]
+		fn cf_boost_delay();
+		fn cf_boost_delay(chain: ForeignChain) -> u32;
+		#[changed_in(9)]
+		fn cf_encode_non_native_call();
+		fn cf_encode_non_native_call(
+			call: Vec<u8>,
+			blocks_to_expiry: BlockNumber,
+			nonce_or_account: NonceOrAccount,
+			encoding: EncodingType,
+		) -> Result<(EncodedNonNativeCall, TransactionMetadata), DispatchErrorWithMessage>;
 	}
 );
 

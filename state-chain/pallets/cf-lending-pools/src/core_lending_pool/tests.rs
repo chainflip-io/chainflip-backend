@@ -25,23 +25,47 @@ const LENDER_1: AccountId = 1;
 const LENDER_2: AccountId = 2;
 const LENDER_3: AccountId = 3;
 
-const LOAN_1: LoanId = LoanId(0);
-const LOAN_2: LoanId = LoanId(1);
+const LOAN_1: CoreLoanId = CoreLoanId(0);
+const LOAN_2: CoreLoanId = CoreLoanId(1);
 
 // The exact value in unimportant in tests
 const USAGE: LoanUsage = LoanUsage::Boost(PrewitnessedDepositId(0));
 
 #[test]
-fn test_scaled_amount() {
-	// This shows that we can have unreasonably large amounts in chains with
+fn test_scaled_amount_for_boost_supports_large_amounts() {
+	// This shows that we can support sufficiently large amounts in chains with
 	// a large number of decimals and still fit into u128 after scaling up:
 	use cf_primitives::FLIPPERINOS_PER_FLIP;
 
-	// 1 trillion FLIP (or ETH; other chains have smaller number of decimals)
+	// 1 trillion FLIP/ETH (other chains have smaller number of decimals)
 	let original = 1_000_000_000_000 * FLIPPERINOS_PER_FLIP;
 	let scaled: ScaledAmount = ScaledAmount::from_asset_amount(original);
 	let recovered = scaled.into_asset_amount();
 	assert_eq!(original, recovered);
+}
+
+#[test]
+fn test_scaled_amount_high_precision_supports_large_amounts() {
+	// This shows that we can support sufficiently large amounts in chains with
+	// a large number of decimals and still fit into u128 after scaling up:
+	use cf_primitives::FLIPPERINOS_PER_FLIP;
+
+	// 100 billion FLIP/ETH (other chains have smaller number of decimals)
+	let original = 100_000_000_000 * FLIPPERINOS_PER_FLIP;
+	let scaled: ScaledAmountHP = ScaledAmountHP::from_asset_amount(original);
+	let recovered = scaled.into_asset_amount();
+	assert_eq!(original, recovered);
+}
+
+#[test]
+fn take_whole_amount() {
+	let mut amount = ScaledAmountHP::from_raw(2_700_000_000);
+
+	// Should return the "whole" part as AssetAmount
+	assert_eq!(amount.take_non_fractional_part(), 2);
+
+	// The remaining fractional part should still be there
+	assert_eq!(amount.as_raw(), 700_000_000);
 }
 
 #[track_caller]
@@ -63,7 +87,7 @@ pub fn check_pool(pool: &CorePool, amounts: impl IntoIterator<Item = (AccountId,
 #[track_caller]
 fn check_pending_withdrawals(
 	pool: &CorePool,
-	withdrawals: impl IntoIterator<Item = (AccountId, Vec<LoanId>)>,
+	withdrawals: impl IntoIterator<Item = (AccountId, Vec<CoreLoanId>)>,
 ) {
 	let expected_withdrawals: BTreeMap<_, BTreeSet<_>> = withdrawals
 		.into_iter()
@@ -76,7 +100,7 @@ fn check_pending_withdrawals(
 #[track_caller]
 fn check_pending_loans(
 	pool: &CorePool,
-	loans: impl IntoIterator<Item = (LoanId, Vec<(AccountId, u16 /* percents */)>)>,
+	loans: impl IntoIterator<Item = (CoreLoanId, Vec<(AccountId, u16 /* percents */)>)>,
 ) {
 	let expected_loans: BTreeMap<_, _> = loans.into_iter().collect();
 
@@ -334,9 +358,9 @@ fn small_rewards_accumulate() {
 
 	const LOAN_1: u64 = 0;
 
-	assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(LoanId(LOAN_1)));
+	assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(CoreLoanId(LOAN_1)));
 
-	pool.make_repayment(LoanId(LOAN_1), SMALL_DEPOSIT + FEE);
+	pool.make_repayment(CoreLoanId(LOAN_1), SMALL_DEPOSIT + FEE);
 
 	// LENDER_2 earns ~0.25 (it is rounded down when converted to AssetAmount,
 	// but the fractional part isn't lost)
@@ -344,8 +368,8 @@ fn small_rewards_accumulate() {
 
 	// 4 more loans like that and LENDER_2 should have withdrawable fees:
 	for loan_id in (LOAN_1 + 1)..=(LOAN_1 + 4) {
-		assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(LoanId(loan_id)));
-		pool.make_repayment(LoanId(loan_id), SMALL_DEPOSIT + FEE);
+		assert_eq!(pool.new_loan(SMALL_DEPOSIT, USAGE), Ok(CoreLoanId(loan_id)));
+		pool.make_repayment(CoreLoanId(loan_id), SMALL_DEPOSIT + FEE);
 	}
 
 	// Note the increase in LENDER_2's balance:

@@ -30,8 +30,9 @@ use cf_chains::{
 use cf_node_client::events_decoder;
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
-	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
+	AccountRole, Affiliates, Asset, AssetAmount, AssetAndAmount, BasisPoints, BlockNumber,
+	BroadcastId, ChannelId, DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer,
+	SwapId, SwapRequestId,
 };
 use cf_rpc_apis::{
 	broker::{
@@ -42,8 +43,8 @@ use cf_rpc_apis::{
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::rpc::NumberOrHex;
-use codec::Decode;
 use core::ops::Range;
+use ethereum_eip712::eip712::{EIP712Domain, Types};
 use jsonrpsee::{
 	core::async_trait,
 	proc_macros::rpc,
@@ -58,6 +59,9 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 };
 use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
+use pallet_cf_lending_pools::{
+	LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLoan, RpcLoanAccount,
+};
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
 	UnidirectionalPoolDepth,
@@ -68,6 +72,7 @@ use sc_client_api::{
 	HeaderBackend, StorageProvider,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
@@ -81,11 +86,12 @@ use state_chain_runtime::{
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DelegationSnapshot, DispatchErrorWithMessage, ElectoralRuntimeApi,
-		EvmCallDetails, FailingWitnessValidators, FeeTypes, LiquidityProviderBoostPoolInfo,
-		LiquidityProviderInfo, NetworkFees, OpenedDepositChannels, OperatorInfo,
-		RpcAccountInfoCommonItems, RuntimeApiPenalty, SimulatedSwapInformation,
-		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
-		VaultAddresses, VaultSwapDetails,
+		EncodedNonNativeCall, EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails,
+		FailingWitnessValidators, FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo,
+		LiquidityProviderInfo, NetworkFees, NonceOrAccount, OpenedDepositChannels, OperatorInfo,
+		RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiPenalty,
+		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
+		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash,
@@ -98,7 +104,6 @@ use std::{
 
 pub mod backend;
 pub mod broker;
-pub mod eip_712_types;
 pub mod lp;
 pub mod monitoring;
 pub mod order_fills;
@@ -107,11 +112,24 @@ pub mod pool_client;
 #[cfg(test)]
 mod tests;
 
-#[derive(Clone, Serialize, Deserialize)]
-pub enum EncodedNonNativeCall {
-	Eip712(eip_712_types::TypedData),
-	Bytes(RpcBytes),
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Eip712RpcTypedData {
+	/// Signing domain metadata. The signing domain is the intended context for the signature (e.g.
+	/// the dapp, protocol, etc. that it's intended for). This data is used to construct the domain
+	/// separator of the message.
+	#[serde(default)]
+	pub domain: EIP712Domain,
+	/// The custom types used by this message.
+	pub types: Types,
+	#[serde(rename = "primaryType")]
+	/// The type of the message.
+	pub primary_type: String,
+	// The message to be signed.
+	pub message: BTreeMap<String, Value>,
 }
+
+type RpcEncodedNonNativeCall = EncodedNonNativeCallGeneric<Eip712RpcTypedData>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
@@ -230,6 +248,8 @@ pub enum RpcAccountInfo {
 		refund_addresses: BTreeMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
 		earned_fees: any::AssetMap<U256>,
 		boost_balances: any::AssetMap<Vec<RpcLiquidityProviderBoostPoolInfo>>,
+		lending_positions: Vec<LendingPosition<U256>>,
+		collateral_balances: Vec<AssetAndAmount<U256>>,
 	},
 	Validator {
 		last_heartbeat: u32,
@@ -299,6 +319,8 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 					refund_addresses: refund_addresses.into_iter().collect(),
 					earned_fees,
 					boost_balances,
+					collateral_balances: vec![],
+					lending_positions: vec![],
 				},
 			},
 			OldRpcAccountInfo::Validator {
@@ -602,6 +624,8 @@ pub struct IngressEgressEnvironment {
 	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
 	pub egress_dust_limits: any::AssetMap<NumberOrHex>,
 	pub channel_opening_fees: HashMap<ForeignChain, NumberOrHex>,
+	pub ingress_delays: HashMap<ForeignChain, u32>,
+	pub boost_delays: HashMap<ForeignChain, u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -1243,6 +1267,34 @@ pub trait CustomApi {
 		base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<OraclePrice>>;
+
+	#[method(name = "lending_pools")]
+	fn cf_lending_pools(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcLendingPool<U256>>>;
+
+	#[method(name = "loan_accounts")]
+	fn cf_loan_accounts(
+		&self,
+		borrower_id: Option<state_chain_runtime::AccountId>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId, U256>>>;
+
+	#[method(name = "lending_pool_supply_balances")]
+	fn cf_lending_pool_supply_balances(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<LendingPoolAndSupplyPositions<state_chain_runtime::AccountId, U256>>>;
+
+	#[method(name = "lending_config")]
+	fn cf_lending_config(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcLendingConfig>;
+
 	#[method(name = "evm_calldata")]
 	fn cf_evm_calldata(
 		&self,
@@ -1260,9 +1312,11 @@ pub trait CustomApi {
 	fn cf_encode_non_native_call(
 		&self,
 		call: RpcBytes,
-		transaction_metadata: TransactionMetadata,
+		blocks_to_expiry: BlockNumber,
+		nonce_or_account: NonceOrAccount,
+		encoding: EncodingType,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<EncodedNonNativeCall>;
+	) -> RpcResult<(RpcEncodedNonNativeCall, TransactionMetadata)>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1525,6 +1579,7 @@ where
 		cf_vault_addresses() -> VaultAddresses,
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
+		cf_lending_config() -> RpcLendingConfig,
 		cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>) -> Vec<OraclePrice>,
 		cf_auction_state() -> RpcAuctionState [map: Into::into],
 	}
@@ -1548,6 +1603,84 @@ where
 			retry_duration: BlockNumber,
 			max_oracle_price_slippage: Option<BasisPoints>,
 		) -> (),
+	}
+
+	fn cf_lending_pools(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcLendingPool<U256>>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			api.cf_lending_pools(hash, asset).map(|lending_pools| {
+				lending_pools
+					.into_iter()
+					.map(|pool| RpcLendingPool::<U256> {
+						asset: pool.asset,
+						total_amount: pool.total_amount.into(),
+						available_amount: pool.available_amount.into(),
+						utilisation_rate: pool.utilisation_rate,
+						current_interest_rate: pool.current_interest_rate,
+						config: pool.config,
+					})
+					.collect()
+			})
+		})
+	}
+
+	fn cf_loan_accounts(
+		&self,
+		borrower_id: Option<state_chain_runtime::AccountId>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId, U256>>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			api.cf_loan_accounts(hash, borrower_id).map(|accounts| {
+				accounts
+					.into_iter()
+					.map(|acc| RpcLoanAccount::<_, U256> {
+						account: acc.account,
+						primary_collateral_asset: acc.primary_collateral_asset,
+						ltv_ratio: acc.ltv_ratio,
+						collateral: acc.collateral.into_iter().map(Into::into).collect(),
+						loans: acc
+							.loans
+							.into_iter()
+							.map(|loan| RpcLoan {
+								loan_id: loan.loan_id,
+								asset: loan.asset,
+								created_at: loan.created_at,
+								principal_amount: loan.principal_amount.into(),
+							})
+							.collect(),
+						liquidation_status: acc.liquidation_status,
+					})
+					.collect()
+			})
+		})
+	}
+
+	fn cf_lending_pool_supply_balances(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<LendingPoolAndSupplyPositions<state_chain_runtime::AccountId, U256>>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			api.cf_lending_pool_supply_balances(hash, asset).map(|pools_and_positions| {
+				pools_and_positions
+					.into_iter()
+					.map(|pool_and_positions| LendingPoolAndSupplyPositions {
+						asset: pool_and_positions.asset,
+						positions: pool_and_positions
+							.positions
+							.into_iter()
+							.map(|position| LendingSupplyPosition {
+								lp_id: position.lp_id,
+								total_amount: position.total_amount.into(),
+							})
+							.collect(),
+					})
+					.collect()
+			})
+		})
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
@@ -1703,6 +1836,8 @@ where
 									refund_addresses,
 									earned_fees,
 									boost_balances,
+									lending_positions,
+									collateral_balances,
 									..
 								} = api.cf_liquidity_provider_info(hash, account_id.clone())?;
 								let network = api.cf_network_environment(hash)?;
@@ -1721,6 +1856,21 @@ where
 										.iter()
 										.map(|(asset, infos)| {
 											(asset, infos.iter().map(|info| info.into()).collect())
+										})
+										.collect(),
+									lending_positions: lending_positions
+										.into_iter()
+										.map(|pos| LendingPosition {
+											asset: pos.asset,
+											total_amount: pos.total_amount.into(),
+											available_amount: pos.available_amount.into(),
+										})
+										.collect(),
+									collateral_balances: collateral_balances
+										.into_iter()
+										.map(|(asset, amount)| AssetAndAmount {
+											asset,
+											amount: amount.into(),
 										})
 										.collect(),
 								}
@@ -1904,13 +2054,23 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<IngressEgressEnvironment> {
-		self.rpc_backend.with_runtime_api(at, |api, hash| {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
 			let mut witness_safety_margins = HashMap::new();
 			let mut channel_opening_fees = HashMap::new();
+			let mut ingress_delays = HashMap::new();
+			let mut boost_delays = HashMap::new();
 
 			for chain in ForeignChain::iter() {
 				witness_safety_margins.insert(chain, api.cf_witness_safety_margin(hash, chain)?);
 				channel_opening_fees.insert(chain, api.cf_channel_opening_fee(hash, chain)?.into());
+				match version {
+					Some(v) if v >= 8 => {
+						ingress_delays.insert(chain, api.cf_ingress_delay(hash, chain)?);
+						boost_delays.insert(chain, api.cf_boost_delay(hash, chain)?);
+					},
+					// Not defined before v8
+					_ => {},
+				}
 			}
 
 			Ok::<_, CfApiError>(IngressEgressEnvironment {
@@ -1928,6 +2088,8 @@ where
 					api.cf_egress_dust_limit(hash, asset).map(Into::into)
 				})?,
 				channel_opening_fees,
+				ingress_delays,
+				boost_delays,
 			})
 		})
 	}
@@ -2445,9 +2607,11 @@ where
 	fn cf_encode_non_native_call(
 		&self,
 		call: RpcBytes,
-		transaction_metadata: TransactionMetadata,
+		blocks_to_expiry: BlockNumber,
+		nonce_or_account: NonceOrAccount,
+		encoding: EncodingType,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<EncodedNonNativeCall> {
+	) -> RpcResult<(RpcEncodedNonNativeCall, TransactionMetadata)> {
 		self.rpc_backend
 			.with_versioned_runtime_api(at, |api, hash, version| match version {
 				Some(v) if v < 8 => Err(CfApiError::ErrorObject(call_error(
@@ -2455,40 +2619,55 @@ where
 					CfErrorCode::RuntimeApiError,
 				))),
 				_ => {
-					let call_bytes: Vec<u8> = call.into();
-
-					// Not using RuntimeCall as a parameter to this function because it doesn't
-					// have Serialize/Deserialize implemented. We then decode to verify it's a
-					// valid RuntimeCall.
-					if let Err(err) = state_chain_runtime::RuntimeCall::decode(&mut &call_bytes[..])
-					{
-						return Err(CfApiError::ErrorObject(ErrorObject::owned(
-							ErrorCode::InvalidParams.code(),
-							format!("Failed to deserialize into a RuntimeCall {:?}", err),
-							None::<()>,
-						)));
-					}
-					let chainflip_network =
-						api.cf_chainflip_network(hash).map_err(CfApiError::from)??;
-
-					// TODO: We should get an encoding type (PersonalSign, Domain, EIP-712).
-					// Then encode via `build_eip712_typed_data` or `build_domain_data` (with the
-					// right chain's domain). Here we only need to add the Solana prefix because
-					// the Ethereum one is added by default with the personal sign.
-					let typed_data: eip_712_types::TypedData =
-						eip_712_types::build_eip712_typed_data(
-							chainflip_network,
-							call_bytes,
-							transaction_metadata,
+					let (encoded_call, metadata) = api
+						.cf_encode_non_native_call(
+							hash,
+							call.into(),
+							blocks_to_expiry,
+							nonce_or_account,
+							encoding,
 						)
+						.map_err(CfApiError::from)?
 						.map_err(|e| {
 							CfApiError::ErrorObject(ErrorObject::owned(
-								ErrorCode::InvalidParams.code(),
-								format!("Failed to build eip712 typed data: {e}"),
+								ErrorCode::InternalError.code(),
+								format!("Failed to encode non native call: {}", e),
 								None::<()>,
 							))
 						})?;
-					Ok(EncodedNonNativeCall::Eip712(typed_data))
+					let serialized_call = match encoded_call {
+						EncodedNonNativeCall::Eip712(typed_data) => {
+							let message_scale_value: scale_value::Value =
+								typed_data.message.clone().into();
+							let message_json =
+								serde_json::to_value(message_scale_value).map_err(|e| {
+									CfApiError::ErrorObject(ErrorObject::owned(
+										ErrorCode::InternalError.code(),
+										format!("Failed to serialize message to JSON: {}", e),
+										None::<()>,
+									))
+								})?;
+							let message_object = message_json.as_object().ok_or_else(|| {
+								CfApiError::ErrorObject(ErrorObject::owned(
+									ErrorCode::InternalError.code(),
+									"the primary type is not a JSON object but one of the primitive types",
+									None::<()>,
+								))
+							})?;
+
+							RpcEncodedNonNativeCall::Eip712(Eip712RpcTypedData {
+								domain: typed_data.domain,
+								types: typed_data.types,
+								primary_type: typed_data.primary_type,
+								message: message_object.clone().into_iter().collect(),
+							})
+						},
+						EncodedNonNativeCall::String(s) => RpcEncodedNonNativeCall::String(s),
+					};
+					// Return the `transaction_metadata` because it will need
+					// to be submitted as part of the `non_native_signed_call`
+					// and it has been modified in the runtime api.
+					Ok((serialized_call, metadata))
 				},
 			})
 	}

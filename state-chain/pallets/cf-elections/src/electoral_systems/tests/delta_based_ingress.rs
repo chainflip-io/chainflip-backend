@@ -20,7 +20,7 @@ use crate::{
 	ElectionIdentifier, UniqueMonotonicIdentifier,
 };
 use cf_primitives::Asset;
-use cf_traits::IngressSink;
+use cf_traits::{DerivedIngressSink, IngressSink};
 use codec::{Decode, Encode};
 use frame_support::assert_ok;
 use sp_std::collections::btree_map::BTreeMap;
@@ -36,6 +36,10 @@ type Amount = u64;
 type BlockNumber = u64;
 type StateChainBlockNumber = u32;
 
+struct MockDerivedSink;
+impl DerivedIngressSink<AccountId, ()> for MockDerivedSink {
+	fn derive_deposit_details(_account: AccountId) {}
+}
 struct MockIngressSink;
 impl IngressSink for MockIngressSink {
 	type Account = AccountId;
@@ -49,7 +53,7 @@ impl IngressSink for MockIngressSink {
 		asset: Self::Asset,
 		amount: Self::Amount,
 		_block_number: Self::BlockNumber,
-		_details: Self::DepositDetails,
+		_deposit_details: Self::DepositDetails,
 	) {
 		AMOUNT_INGRESSED.with(|cell| {
 			let mut ingresses = cell.borrow_mut();
@@ -66,7 +70,7 @@ impl IngressSink for MockIngressSink {
 }
 
 type SimpleDeltaBasedIngress =
-	DeltaBasedIngress<MockIngressSink, (), AccountId, StateChainBlockNumber>;
+	DeltaBasedIngress<MockIngressSink, MockDerivedSink, (), AccountId, StateChainBlockNumber>;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Encode, Decode)]
 struct DepositChannel {

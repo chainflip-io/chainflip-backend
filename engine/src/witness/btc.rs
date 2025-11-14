@@ -215,12 +215,19 @@ impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnes
 		let Some((txs, response_block_hash)) =
 			query_election_block(&self.client, block_height, election_type).await?
 		else {
+			tracing::warn!("BTC DCW: No block found at height {}.", block_height);
 			return Ok(None)
 		};
 
 		let deposit_addresses = map_script_addresses(deposit_addresses);
 
 		let witnesses = deposit_witnesses(&txs, &deposit_addresses);
+
+		tracing::debug!(
+			"BTC DCW: Found {} deposit witnesses in block at height {}.",
+			witnesses.len(),
+			block_height
+		);
 
 		Ok(Some((witnesses, response_block_hash)))
 	}

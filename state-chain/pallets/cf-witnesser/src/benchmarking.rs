@@ -53,7 +53,7 @@ mod benchmarks {
 		let call: <T as Config>::RuntimeCall = frame_system::Call::remark { remark: vec![] }.into();
 		let epoch = T::EpochInfo::last_expired_epoch() + 1;
 
-		let (_, call_hash) = Pallet::<T>::split_calldata(&mut call.clone());
+		let (_, call_hash, _) = Pallet::<T>::split_calldata(&mut call.clone());
 		Votes::<T>::insert(epoch, call_hash, vec![0x00, 0x01, 0x02]);
 
 		#[block]

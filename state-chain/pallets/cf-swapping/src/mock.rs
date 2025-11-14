@@ -26,7 +26,8 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter, balance_api::MockBalance, bonding::MockBonderFor,
 		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
-		ingress_egress_fee_handler::MockIngressEgressFeeHandler, pool_price_api::MockPoolPriceApi,
+		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
+		lending_pools::MockLendingSystemApi, pool_price_api::MockPoolPriceApi,
 		price_feed_api::MockPriceFeedApi,
 	},
 	AccountRoleRegistry, ChannelIdAllocator, SwappingApi,
@@ -195,6 +196,7 @@ impl pallet_cf_swapping::Config for Test {
 	type WeightInfo = MockWeightInfo;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = MockFeePayment<Self>;
+	type LendingSystemApi = MockLendingSystemApi;
 	type IngressEgressFeeHandler = MockIngressEgressFeeHandler<AnyChain>;
 	type BalanceApi = MockBalance;
 	type ChannelIdAllocator = MockChannelIdAllocator;

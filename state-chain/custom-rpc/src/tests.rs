@@ -2,6 +2,7 @@ use crate::*;
 
 pub mod account_info;
 pub mod before_v7;
+pub mod eip712;
 
 use cf_rpc_apis::{
 	broker::{SwapDepositAddress, WithdrawFeesDetail},
@@ -11,7 +12,7 @@ use cf_rpc_apis::{
 	OrderFilled, RefundParametersRpc, SwapChannelInfo,
 };
 use codec::Encode;
-use pallet_cf_lending_pools::OwedAmount;
+use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions, OwedAmount};
 use pallet_cf_pools::{
 	IncreaseOrDecrease, LimitOrder, LimitOrderLiquidity, PoolOrder, RangeOrder,
 	RangeOrderLiquidity, UnidirectionalSubPoolDepth,
@@ -23,32 +24,32 @@ use std::collections::BTreeSet;
 use cf_chains::{
 	address::EncodedAddress,
 	assets::sol,
-	btc::ScriptPubkey,
+	btc::{deposit_address::DepositAddress, ScriptPubkey, Utxo, UtxoId},
 	ccm_checker::{DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData},
 	dot::PolkadotAccountId,
 	sol::{
 		SolAddress, SolAddressLookupTableAccount, SolApiEnvironment, SolCcmAccounts, SolCcmAddress,
-		SolPubkey,
+		SolPubkey, VaultSwapOrDepositChannelId,
 	},
 	Arbitrum, Bitcoin, CcmAdditionalData, CcmChannelMetadataChecked, Ethereum,
-	EvmVaultSwapExtraParameters, ForeignChainAddress,
+	EvmVaultSwapExtraParameters, ForeignChainAddress, Solana,
 };
 
 use cf_primitives::{
 	chains::assets::{any, arb, btc, dot, eth, hub},
-	ApiWaitForResult, Beneficiary, PrewitnessedDepositId, FLIPPERINOS_PER_FLIP,
+	ApiWaitForResult, AssetAndAmount, Beneficiary, PrewitnessedDepositId, FLIPPERINOS_PER_FLIP,
 };
 
 use state_chain_runtime::{
 	runtime_apis::{
-		BrokerRejectionEventFor, ChannelActionType, EvmCallDetails, NetworkFeeDetails,
-		OpenedDepositChannels,
+		BrokerRejectionEventFor, ChannelActionType, EvmCallDetails, LendingPosition,
+		NetworkFeeDetails, OpenedDepositChannels,
 	},
 	Runtime,
 };
 
 use sp_core::{H160, H256};
-use sp_runtime::AccountId32;
+use sp_runtime::{AccountId32, FixedU64};
 
 /*
 	changing any of these serialization tests signifies a breaking change in the
@@ -114,6 +115,7 @@ fn ccm_unchecked() -> CcmChannelMetadataUnchecked {
 
 #[test]
 fn test_environment_serialization() {
+	#[allow(deprecated)]
 	let env = RpcEnvironment {
 		swapping: SwappingEnvironment {
 			maximum_swap_amounts: any::AssetMap {
@@ -276,6 +278,22 @@ fn test_environment_serialization() {
 				(ForeignChain::Solana, 1000u32.into()),
 				(ForeignChain::Assethub, 1000u32.into()),
 			]),
+			ingress_delays: HashMap::from([
+				(ForeignChain::Bitcoin, 0u32),
+				(ForeignChain::Ethereum, 5u32),
+				(ForeignChain::Polkadot, 2u32),
+				(ForeignChain::Arbitrum, 5u32),
+				(ForeignChain::Solana, 123u32),
+				(ForeignChain::Assethub, 2u32),
+			]),
+			boost_delays: HashMap::from([
+				(ForeignChain::Bitcoin, 0u32),
+				(ForeignChain::Ethereum, 5u32),
+				(ForeignChain::Polkadot, 0u32),
+				(ForeignChain::Arbitrum, 0u32),
+				(ForeignChain::Solana, 456u32),
+				(ForeignChain::Assethub, 2u32),
+			]),
 		},
 		funding: FundingEnvironment {
 			redemption_tax: 0u32.into(),
@@ -386,6 +404,9 @@ fn test_vault_addresses_custom_rpc() {
 		ethereum: EncodedAddress::Eth([0; 20]),
 		arbitrum: EncodedAddress::Arb([1; 20]),
 		bitcoin: vec![(ID_1.clone(), EncodedAddress::Btc(Vec::new()))],
+		sol_swap_endpoint_program_data_account: EncodedAddress::Sol([2; 32]),
+		usdc_token_mint_pubkey: EncodedAddress::Sol([3; 32]),
+		sol_vault_program: EncodedAddress::Sol([4; 32]),
 	};
 	insta::assert_json_snapshot!(val);
 }
@@ -854,19 +875,41 @@ fn vault_swap_input_serialization() {
 fn chain_accounts_serialization() {
 	let val = ChainAccounts {
 		chain_accounts: vec![
-			ForeignChainAddress::Eth(cf_chains::evm::Address::from([1u8; 20]))
-				.to_encoded_address(Default::default()),
-			ForeignChainAddress::Dot(PolkadotAccountId([2u8; 32]))
-				.to_encoded_address(Default::default()),
-			ForeignChainAddress::Btc(ScriptPubkey::P2WPKH([3u8; 20]))
-				.to_encoded_address(Default::default()),
-			ForeignChainAddress::Btc(ScriptPubkey::Taproot([4u8; 32]))
-				.to_encoded_address(Default::default()),
-			ForeignChainAddress::Arb(cf_chains::evm::Address::from([5u8; 20]))
-				.to_encoded_address(Default::default()),
-			ForeignChainAddress::Sol(SolAddress([6u8; 32])).to_encoded_address(Default::default()),
-			ForeignChainAddress::Hub(PolkadotAccountId([7u8; 32]))
-				.to_encoded_address(Default::default()),
+			(
+				ForeignChainAddress::Eth(cf_chains::evm::Address::from([1u8; 20]))
+					.to_encoded_address(Default::default()),
+				Asset::Eth,
+			),
+			(
+				ForeignChainAddress::Dot(PolkadotAccountId([2u8; 32]))
+					.to_encoded_address(Default::default()),
+				Asset::Dot,
+			),
+			(
+				ForeignChainAddress::Btc(ScriptPubkey::P2WPKH([3u8; 20]))
+					.to_encoded_address(Default::default()),
+				Asset::Btc,
+			),
+			(
+				ForeignChainAddress::Btc(ScriptPubkey::Taproot([4u8; 32]))
+					.to_encoded_address(Default::default()),
+				Asset::Btc,
+			),
+			(
+				ForeignChainAddress::Arb(cf_chains::evm::Address::from([5u8; 20]))
+					.to_encoded_address(Default::default()),
+				Asset::ArbEth,
+			),
+			(
+				ForeignChainAddress::Sol(SolAddress([6u8; 32]))
+					.to_encoded_address(Default::default()),
+				Asset::Sol,
+			),
+			(
+				ForeignChainAddress::Hub(PolkadotAccountId([7u8; 32]))
+					.to_encoded_address(Default::default()),
+				Asset::HubDot,
+			),
 		],
 	};
 
@@ -887,7 +930,11 @@ fn transaction_screening_events_serialization() {
 			},
 			BrokerRejectionEventFor::<Bitcoin>::TransactionRejectedByBroker {
 				refund_broadcast_id: 3u32,
-				tx_id: H256([0xe2; 32]),
+				deposit_details: Utxo {
+					id: UtxoId { tx_id: H256([0xe3; 32]), vout: 7 },
+					amount: 1_000_000,
+					deposit_address: DepositAddress::new([0xe2; 32], 1),
+				},
 			},
 		],
 		eth_events: vec![
@@ -901,7 +948,9 @@ fn transaction_screening_events_serialization() {
 			},
 			BrokerRejectionEventFor::<Ethereum>::TransactionRejectedByBroker {
 				refund_broadcast_id: 3u32,
-				tx_id: H256([0xe2; 32]),
+				deposit_details: cf_chains::evm::DepositDetails {
+					tx_hashes: Some(vec![H256([0xe2; 32])]),
+				},
 			},
 		],
 		arb_events: vec![
@@ -915,7 +964,23 @@ fn transaction_screening_events_serialization() {
 			},
 			BrokerRejectionEventFor::<Arbitrum>::TransactionRejectedByBroker {
 				refund_broadcast_id: 3u32,
-				tx_id: H256([0xe2; 32]),
+				deposit_details: cf_chains::evm::DepositDetails {
+					tx_hashes: Some(vec![H256([0xe2; 32])]),
+				},
+			},
+		],
+		sol_events: vec![
+			BrokerRejectionEventFor::<Solana>::TransactionRejectionRequestReceived {
+				account_id: ID_1,
+				tx_id: (SolAddress([0xe1; 32]), 7u64),
+			},
+			BrokerRejectionEventFor::<Solana>::TransactionRejectionRequestExpired {
+				account_id: ID_2,
+				tx_id: (SolAddress([0xe2; 32]), 9u64),
+			},
+			BrokerRejectionEventFor::<Solana>::TransactionRejectedByBroker {
+				refund_broadcast_id: 3u32,
+				deposit_details: VaultSwapOrDepositChannelId::Channel(SolAddress([0xe3; 32])),
 			},
 		],
 	};
@@ -929,17 +994,17 @@ fn opened_deposit_channels_serialization() {
 		(
 			ID_1,
 			ChannelActionType::LiquidityProvision,
-			ChainAccounts { chain_accounts: vec![EncodedAddress::Eth([0x01; 20])] },
+			ChainAccounts { chain_accounts: vec![(EncodedAddress::Eth([0x01; 20]), Asset::Eth)] },
 		),
 		(
 			ID_1,
 			ChannelActionType::Swap,
-			ChainAccounts { chain_accounts: vec![EncodedAddress::Sol([0x02; 32])] },
+			ChainAccounts { chain_accounts: vec![(EncodedAddress::Sol([0x02; 32]), Asset::Sol)] },
 		),
 		(
 			ID_1,
 			ChannelActionType::Refund,
-			ChainAccounts { chain_accounts: vec![EncodedAddress::Eth([0x01; 20])] },
+			ChainAccounts { chain_accounts: vec![(EncodedAddress::Eth([0x01; 20]), Asset::Eth)] },
 		),
 	];
 
@@ -1063,6 +1128,115 @@ fn api_wait_result_serialization() {
 	};
 	insta::assert_json_snapshot!(hash);
 	insta::assert_json_snapshot!(response);
+}
+
+use pallet_cf_lending_pools::{InterestRateConfiguration, LendingPoolConfiguration};
+
+#[test]
+fn lending_pools_serialization() {
+	let pool = RpcLendingPool::<U256> {
+		asset: Asset::Usdc,
+		total_amount: 2_000u128.into(),
+		available_amount: 1_500u128.into(),
+		utilisation_rate: Permill::from_percent(90),
+		current_interest_rate: Permill::from_percent(8),
+		config: LendingPoolConfiguration {
+			origination_fee: Permill::from_parts(100),
+			liquidation_fee: Permill::from_parts(500),
+			interest_rate_curve: InterestRateConfiguration {
+				interest_at_zero_utilisation: Permill::from_percent(2),
+				junction_utilisation: Permill::from_percent(90),
+				interest_at_junction_utilisation: Permill::from_percent(8),
+				interest_at_max_utilisation: Permill::from_percent(50),
+			},
+		},
+	};
+
+	insta::assert_json_snapshot!(pool);
+}
+
+#[test]
+fn loan_account_serialization() {
+	use cf_traits::lending::LoanId;
+	use pallet_cf_lending_pools::{
+		LiquidationType, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan,
+	};
+
+	let loan_account = RpcLoanAccount::<_, U256> {
+		account: ID_1,
+		primary_collateral_asset: Asset::Btc,
+		ltv_ratio: Some(FixedU64::from_rational(4, 3)),
+		collateral: vec![(AssetAndAmount { asset: Asset::Btc, amount: 3u128.into() })],
+		loans: vec![RpcLoan {
+			loan_id: LoanId(1),
+			asset: Asset::Usdc,
+			created_at: 400,
+			principal_amount: 1000u128.into(),
+		}],
+		liquidation_status: Some(RpcLiquidationStatus {
+			liquidation_swaps: vec![RpcLiquidationSwap {
+				swap_request_id: SwapRequestId(1),
+				loan_id: LoanId(1),
+			}],
+			liquidation_type: LiquidationType::SoftVoluntary,
+		}),
+	};
+
+	insta::assert_json_snapshot!(loan_account);
+}
+
+#[test]
+fn lending_supply_positions_serialization() {
+	let value = LendingPoolAndSupplyPositions::<AccountId32, U256> {
+		asset: Asset::Usdc,
+		positions: vec![
+			LendingSupplyPosition {
+				lp_id: AccountId32::new([0x11; 32]),
+				total_amount: 123456.into(),
+			},
+			LendingSupplyPosition {
+				lp_id: AccountId32::new([0x12; 32]),
+				total_amount: 234567.into(),
+			},
+		],
+	};
+
+	insta::assert_json_snapshot!(value);
+}
+
+#[test]
+fn lending_config_serialization() {
+	let config = RpcLendingConfig {
+		ltv_thresholds: LtvThresholds {
+			low_ltv: Permill::from_percent(50),
+			target: Permill::from_percent(75),
+			topup: Permill::from_percent(80),
+			soft_liquidation: Permill::from_percent(90),
+			soft_liquidation_abort: Permill::from_percent(88),
+			hard_liquidation: Permill::from_percent(95),
+			hard_liquidation_abort: Permill::from_percent(93),
+		},
+		network_fee_contributions: NetworkFeeContributions {
+			extra_interest: Permill::from_percent(1),
+			from_origination_fee: Permill::from_percent(20),
+			from_liquidation_fee: Permill::from_percent(30),
+			low_ltv_penalty_max: Permill::from_percent(50),
+		},
+		fee_swap_interval_blocks: 10,
+		interest_payment_interval_blocks: 15,
+		fee_swap_threshold_usd: U256::from(20_000_000),
+		interest_collection_threshold_usd: U256::from(2_000_000),
+		soft_liquidation_swap_chunk_size_usd: U256::from(5_000_000_000u64),
+		hard_liquidation_swap_chunk_size_usd: U256::from(25_000_000_000u64),
+		soft_liquidation_max_oracle_slippage: 50,
+		hard_liquidation_max_oracle_slippage: 500,
+		fee_swap_max_oracle_slippage: 50,
+		minimum_loan_amount_usd: U256::from(100_000),
+		minimum_update_loan_amount_usd: U256::from(50_000),
+		minimum_update_collateral_amount_usd: U256::from(25_000),
+	};
+
+	insta::assert_json_snapshot!(config);
 }
 
 #[test]

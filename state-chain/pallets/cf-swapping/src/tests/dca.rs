@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_traits::SwapExecutionProgress;
 use frame_support::assert_err;
 
 use super::*;
@@ -179,7 +180,8 @@ fn dca_happy_path(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
+					swap_request_id: SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 		});
@@ -227,7 +229,8 @@ fn dca_single_chunk(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
+					swap_request_id: SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Executed
 				})
 			);
 		});
@@ -323,7 +326,8 @@ fn dca_with_fok_full_refund(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
+					swap_request_id: SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Expired
 				}),
 			);
 		});
@@ -443,7 +447,8 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
+					swap_request_id: SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Expired,
 				}),
 			);
 		});
@@ -567,7 +572,8 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
+					swap_request_id: SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 		});
@@ -708,7 +714,8 @@ fn can_handle_dca_chunk_size_of_zero(is_ccm: bool) {
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
+					swap_request_id: SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 		});
@@ -922,7 +929,8 @@ fn dca_with_one_block_interval() {
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
+					swap_request_id: SWAP_REQUEST_ID,
+					reason: SwapRequestCompletionReason::Executed
 				}),
 			);
 		});
@@ -992,6 +1000,14 @@ fn dca_with_one_block_interval_fok() {
 					..
 				})
 			);
+
+			assert_eq!(
+				Swapping::inspect_swap_request(SWAP_REQUEST_ID).unwrap(),
+				SwapExecutionProgress {
+					remaining_input_amount: INPUT_AMOUNT,
+					accumulated_output_amount: 0
+				}
+			);
 		})
 		.then_process_blocks_until_block(CHUNK_1_BLOCK)
 		.then_execute_with(|_| {
@@ -1012,6 +1028,14 @@ fn dca_with_one_block_interval_fok() {
 					execute_at: CHUNK_3_BLOCK,
 					..
 				})
+			);
+
+			assert_eq!(
+				Swapping::inspect_swap_request(SWAP_REQUEST_ID).unwrap(),
+				SwapExecutionProgress {
+					remaining_input_amount: INPUT_AMOUNT - CHUNK_AMOUNT,
+					accumulated_output_amount: CHUNK_OUTPUT
+				}
 			);
 
 			// Make sure the swap queue is correct
@@ -1046,6 +1070,14 @@ fn dca_with_one_block_interval_fok() {
 			// Make sure the old entry was removed from the swap queue and only the new one is there
 			assert_eq!(get_scheduled_swap_block(SwapId(2)), Some(CHUNK_2_RESCHEDULED_AT_BLOCK));
 			assert_eq!(get_scheduled_swap_block(SwapId(3)), Some(CHUNK_3_RESCHEDULED_AT_BLOCK));
+
+			assert_eq!(
+				Swapping::inspect_swap_request(SWAP_REQUEST_ID).unwrap(),
+				SwapExecutionProgress {
+					remaining_input_amount: INPUT_AMOUNT - CHUNK_AMOUNT,
+					accumulated_output_amount: CHUNK_OUTPUT
+				}
+			);
 		})
 		.then_process_blocks_until_block(CHUNK_2_RESCHEDULED_AT_BLOCK)
 		.then_execute_with(|_| {
@@ -1085,5 +1117,7 @@ fn dca_with_one_block_interval_fok() {
 					..
 				})
 			);
+
+			assert_eq!(Swapping::inspect_swap_request(SWAP_REQUEST_ID), None);
 		});
 }

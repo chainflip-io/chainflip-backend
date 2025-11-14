@@ -48,7 +48,6 @@ pub async fn start<StateChainClient>(
 	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	btc_client: BtcCachingClient,
-	dot_client: DotRetryRpcClient,
 	sol_client: SolRetryRpcClient,
 	hub_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
@@ -118,16 +117,6 @@ where
 		db.clone(),
 	);
 
-	let start_dot = super::dot::start(
-		scope,
-		dot_client,
-		witness_call.clone(),
-		state_chain_client.clone(),
-		state_chain_stream.clone(),
-		epoch_source.clone(),
-		db.clone(),
-	);
-
 	let start_arb = super::arb::start(
 		scope,
 		arb_client.clone(),
@@ -155,15 +144,7 @@ where
 	let start_generic_elections =
 		super::generic_elections::start(scope, arb_client, eth_client, state_chain_client);
 
-	try_join!(
-		start_eth,
-		start_dot,
-		start_arb,
-		start_sol,
-		start_btc,
-		start_hub,
-		start_generic_elections
-	)?;
+	try_join!(start_eth, start_arb, start_sol, start_btc, start_hub, start_generic_elections)?;
 
 	Ok(())
 }

@@ -551,7 +551,7 @@ fn gets_rejected_if_vault_transaction_was_aborted_and_rejected() {
 			"Refund broadcast should not have been scheduled!"
 		);
 
-		BitcoinIngressEgress::process_vault_swap_request_full_witness(0, vault_swap);
+		BitcoinIngressEgress::process_vault_swap_request_full_witness_inner(0, vault_swap);
 
 		assert!(
 			MockSwapRequestHandler::<Test>::get_swap_requests().is_empty(),

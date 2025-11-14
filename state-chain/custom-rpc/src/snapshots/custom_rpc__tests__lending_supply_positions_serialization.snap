@@ -1,0 +1,18 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+expression: value
+---
+{
+  "chain": "Ethereum",
+  "asset": "USDC",
+  "positions": [
+    {
+      "lp_id": "5CT5jwBEAhveEjgiSCQbkaKcKcUyF3VJ8qNXM9rXsuQyn3Kd",
+      "total_amount": "0x1e240"
+    },
+    {
+      "lp_id": "5CUQ61VmsjapsAVSAUuTZyGiLDPmi85ZGPCeCefm92CqFA9f",
+      "total_amount": "0x39447"
+    }
+  ]
+}

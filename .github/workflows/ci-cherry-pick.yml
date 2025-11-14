@@ -52,7 +52,7 @@ jobs:
             Original PR: ${{ github.event.pull_request.html_url }}
           branch: pick/non-breaking
           base: '${{ env.RELEASE_BRANCH }}'
-          reviewers: 'martin-chainflip'
+          reviewers: 'dandanlen'
           labels: cherry-pick
           branch-suffix: timestamp
           delete-branch: true

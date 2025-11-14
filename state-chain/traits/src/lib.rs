@@ -27,8 +27,9 @@ mod swapping;
 
 use sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
 pub use swapping::{
-	ExpiryBehaviour, PriceLimitsAndExpiry, SwapOutputAction, SwapOutputActionEncoded,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry, SwapExecutionProgress,
+	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
+	SwapRequestTypeEncoded, SwapType,
 };
 
 pub mod mocks;
@@ -1163,6 +1164,10 @@ pub trait BalanceApi {
 	}
 }
 
+pub trait DerivedIngressSink<Account, DepositDetails> {
+	fn derive_deposit_details(account: Account) -> DepositDetails;
+}
+
 pub trait IngressSink {
 	type Account: Member + Parameter;
 	type Asset: Member + Parameter + Copy;
@@ -1175,7 +1180,7 @@ pub trait IngressSink {
 		asset: Self::Asset,
 		amount: Self::Amount,
 		block_number: Self::BlockNumber,
-		details: Self::DepositDetails,
+		deposit_details: Self::DepositDetails,
 	);
 	fn on_channel_closed(channel: Self::Account);
 }
@@ -1343,4 +1348,6 @@ pub trait PriceFeedApi {
 			None
 		}
 	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_price(asset: Asset, price: Price);
 }
