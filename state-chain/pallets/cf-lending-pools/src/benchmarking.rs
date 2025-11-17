@@ -566,8 +566,7 @@ mod benchmarks {
 		#[block]
 		{
 			assert_eq!(
-				general_lending::usd_value_of::<T>(COLLATERAL_ASSET, 1_000_000, &price_cache)
-					.unwrap(),
+				price_cache.usd_value_of(COLLATERAL_ASSET, 1_000_000).unwrap(),
 				200_000_000_000_000_000_u128,
 			);
 		}

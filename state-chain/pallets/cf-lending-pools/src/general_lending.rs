@@ -197,7 +197,7 @@ impl<T: Config> LoanAccount<T> {
 	) -> Result<AssetAmount, Error<T>> {
 		self.get_total_collateral()
 			.iter()
-			.map(|(asset, amount)| usd_value_of::<T>(*asset, *amount, price_cache))
+			.map(|(asset, amount)| price_cache.usd_value_of(*asset, *amount))
 			.try_fold(0u128, |acc, x| Ok(acc.saturating_add(x?)))
 	}
 
@@ -460,11 +460,10 @@ impl<T: Config> LoanAccount<T> {
 					if let Some(swap_progress) =
 						T::SwapRequestHandler::inspect_swap_request(*swap_request_id)
 					{
-						total_principal_usd_value_in_swaps.saturating_accrue(usd_value_of::<T>(
-							*to_asset,
-							swap_progress.accumulated_output_amount,
-							price_cache,
-						)?);
+						total_principal_usd_value_in_swaps.saturating_accrue(
+							price_cache
+								.usd_value_of(*to_asset, swap_progress.accumulated_output_amount)?,
+						);
 					} else {
 						log_or_panic!("Failed to inspect swap request: {swap_request_id}");
 					}
@@ -598,11 +597,8 @@ impl<T: Config> LoanAccount<T> {
 		};
 
 		// Auto top up is currently only possible from the primary collateral asset
-		let top_up_required_in_collateral_asset = amount_from_usd_value(
-			self.primary_collateral_asset,
-			top_up_required_in_usd,
-			price_cache,
-		)?;
+		let top_up_required_in_collateral_asset = price_cache
+			.amount_from_usd_value(self.primary_collateral_asset, top_up_required_in_usd)?;
 
 		// Don't attempt to charge more than what's available:
 		Ok(core::cmp::min(
@@ -690,29 +686,28 @@ impl<T: Config> LoanAccount<T> {
 				// time reasonable, i.e. ~5 mins.
 				const DEFAULT_LIQUIDATION_CHUNKS: u32 = 50;
 
-				let number_of_chunks =
-					match usd_value_of::<T>(from_asset, amount_to_swap, price_cache) {
-						Ok(total_amount_usd) => {
-							// Making sure that we don't divide by 0
-							if chunk_size == 0 {
-								DEFAULT_LIQUIDATION_CHUNKS
-							} else {
-								total_amount_usd.div_ceil(chunk_size) as u32
-							}
-						},
-						Err(_) => {
-							// It shouldn't be possible to not get the price here (we don't initiate
-							// liquidations unless we can get prices), but if we do, let's fallback
-							// to DEFAULT_LIQUIDATION_CHUNKS chunks
-							log_or_panic!(
-								"Failed to estimate optimal chunk size for a {}->{} swap",
-								from_asset,
-								to_asset
-							);
-
+				let number_of_chunks = match price_cache.usd_value_of(from_asset, amount_to_swap) {
+					Ok(total_amount_usd) => {
+						// Making sure that we don't divide by 0
+						if chunk_size == 0 {
 							DEFAULT_LIQUIDATION_CHUNKS
-						},
-					};
+						} else {
+							total_amount_usd.div_ceil(chunk_size) as u32
+						}
+					},
+					Err(_) => {
+						// It shouldn't be possible to not get the price here (we don't initiate
+						// liquidations unless we can get prices), but if we do, let's fallback
+						// to DEFAULT_LIQUIDATION_CHUNKS chunks
+						log_or_panic!(
+							"Failed to estimate optimal chunk size for a {}->{} swap",
+							from_asset,
+							to_asset
+						);
+
+						DEFAULT_LIQUIDATION_CHUNKS
+					},
+				};
 
 				DcaParameters { number_of_chunks, chunk_interval: 1 }
 			};
@@ -874,7 +869,7 @@ impl<T: Config> GeneralLoan<T> {
 		&self,
 		price_cache: &OraclePriceCache<T>,
 	) -> Result<AssetAmount, Error<T>> {
-		usd_value_of::<T>(self.asset, self.owed_principal, price_cache)
+		price_cache.usd_value_of(self.asset, self.owed_principal)
 	}
 
 	fn collect_pending_interest(&mut self, price_cache: &OraclePriceCache<T>) {
@@ -1033,8 +1028,7 @@ impl<T: Config> GeneralLoan<T> {
 		let charge_fee_if_exceeds_threshold = |fee: &mut ScaledAmountHP| {
 			let fee_taken = if let Some(threshold) = threshold_usd {
 				// If the threshold is provided, take fees only if they exceed it:
-				if usd_value_of::<T>(loan_asset, fee.into_asset_amount(), price_cache)? > threshold
-				{
+				if price_cache.usd_value_of(loan_asset, fee.into_asset_amount())? > threshold {
 					fee.take_non_fractional_part()
 				} else {
 					Default::default()
@@ -1079,50 +1073,6 @@ impl<T: Config> GeneralLoan<T> {
 
 		Ok(())
 	}
-}
-
-struct PriceUnavailableError;
-
-impl<T: Config> From<PriceUnavailableError> for Error<T> {
-	fn from(_: PriceUnavailableError) -> Error<T> {
-		Error::<T>::OraclePriceUnavailable
-	}
-}
-
-/// Uses oracle prices to calculate the USD value of the given asset amount
-pub(super) fn usd_value_of<T: Config>(
-	asset: Asset,
-	amount: AssetAmount,
-	price_cache: &OraclePriceCache<T>,
-) -> Result<AssetAmount, Error<T>> {
-	let price_in_usd = price_cache.get_price(asset)?;
-
-	Ok(cf_amm_math::output_amount_ceil(amount.into(), price_in_usd).unique_saturated_into())
-}
-
-// Uses oracle prices to calculate the total USD value of the entire map of assets
-fn total_usd_value_of<T: Config>(
-	assets_amounts: &BTreeMap<Asset, AssetAmount>,
-	price_cache: &OraclePriceCache<T>,
-) -> Result<AssetAmount, DispatchError> {
-	let mut total_collateral_usd = 0;
-	for (asset, amount) in assets_amounts {
-		total_collateral_usd.saturating_accrue(usd_value_of::<T>(*asset, *amount, price_cache)?);
-	}
-
-	Ok(total_collateral_usd)
-}
-
-/// Uses oracle prices to calculate the amount of `asset` that's equivalent in USD value to
-/// `amount` of USD
-fn amount_from_usd_value<T: Config>(
-	asset: Asset,
-	usd_value: AssetAmount,
-	price_cache: &OraclePriceCache<T>,
-) -> Result<AssetAmount, Error<T>> {
-	// The "price" of USD in terms of the asset:
-	let price = invert_price(price_cache.get_price(asset)?);
-	Ok(cf_amm_math::output_amount_ceil(usd_value.into(), price).unique_saturated_into())
 }
 
 /// Sweeping but it is a no-op if it fails for whatever reason
@@ -1189,6 +1139,42 @@ impl<T: Config> OraclePriceCache<T> {
 			FetchedPrice::Valid(price) => Ok(price),
 			FetchedPrice::Invalid => Err(Error::<T>::OraclePriceUnavailable),
 		}
+	}
+
+	/// Uses oracle prices to calculate the USD value of the given asset amount
+	pub(super) fn usd_value_of(
+		&self,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> Result<AssetAmount, Error<T>> {
+		let price_in_usd = self.get_price(asset)?;
+
+		Ok(cf_amm_math::output_amount_ceil(amount.into(), price_in_usd).unique_saturated_into())
+	}
+
+	// Uses oracle prices to calculate the total USD value of the entire map of assets
+	fn total_usd_value_of(
+		&self,
+		assets_amounts: &BTreeMap<Asset, AssetAmount>,
+	) -> Result<AssetAmount, DispatchError> {
+		let mut total_collateral_usd = 0;
+		for (asset, amount) in assets_amounts {
+			total_collateral_usd.saturating_accrue(self.usd_value_of(*asset, *amount)?);
+		}
+
+		Ok(total_collateral_usd)
+	}
+
+	/// Uses oracle prices to calculate the amount of `asset` that's equivalent in USD value to
+	/// `amount` of USD
+	fn amount_from_usd_value(
+		&self,
+		asset: Asset,
+		usd_value: AssetAmount,
+	) -> Result<AssetAmount, Error<T>> {
+		// The "price" of USD in terms of the asset:
+		let price = invert_price(self.get_price(asset)?);
+		Ok(cf_amm_math::output_amount_ceil(usd_value.into(), price).unique_saturated_into())
 	}
 }
 
@@ -1258,7 +1244,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 				weight_used.saturating_accrue(
 					T::WeightInfo::usd_value_of().saturating_add(T::DbWeight::get().reads(1)),
 				);
-				let Ok(fee_usd_value) = usd_value_of::<T>(asset, *fee_amount, &price_cache) else {
+				let Ok(fee_usd_value) = price_cache.usd_value_of(asset, *fee_amount) else {
 					// Don't swap yet if we can't determine asset's price
 					return;
 				};
@@ -1307,7 +1293,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		let config = LendingConfig::<T>::get();
 		ensure!(
 			amount_to_borrow >=
-				amount_from_usd_value(asset, config.minimum_loan_amount_usd, &price_cache)?,
+				price_cache.amount_from_usd_value(asset, config.minimum_loan_amount_usd)?,
 			Error::<T>::LoanBelowMinimumAmount
 		);
 
@@ -1375,10 +1361,9 @@ impl<T: Config> LendingApi for Pallet<T> {
 			let config = LendingConfig::<T>::get();
 			ensure!(
 				extra_amount_to_borrow >=
-					amount_from_usd_value(
+					price_cache.amount_from_usd_value(
 						loan.asset,
-						config.minimum_update_loan_amount_usd,
-						&price_cache
+						config.minimum_update_loan_amount_usd
 					)?,
 				Error::<T>::AmountBelowMinimum
 			);
@@ -1422,7 +1407,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				RepaymentAmount::Exact(amount) => {
 					if amount < loan.owed_principal {
 						ensure!(
-							usd_value_of::<T>(loan.asset, amount, &price_cache)? >=
+							price_cache.usd_value_of(loan.asset, amount)? >=
 								config.minimum_update_loan_amount_usd,
 							Error::<T>::AmountBelowMinimum
 						);
@@ -1444,7 +1429,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				}
 			} else {
 				ensure!(
-					usd_value_of::<T>(loan.asset, loan.owed_principal, &price_cache)? >=
+					price_cache.usd_value_of(loan.asset, loan.owed_principal)? >=
 						config.minimum_loan_amount_usd,
 					Error::<T>::LoanBelowMinimumAmount
 				);
@@ -1469,7 +1454,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		let price_cache = OraclePriceCache::<T>::default();
 
 		ensure!(
-			total_usd_value_of::<T>(&collateral, &price_cache)? >=
+			price_cache.total_usd_value_of(&collateral)? >=
 				LendingConfig::<T>::get().minimum_update_collateral_amount_usd,
 			Error::<T>::AmountBelowMinimum
 		);
@@ -1514,7 +1499,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 					.map(|remove_amount| remove_amount >= loan_amount)
 					.unwrap_or(false)
 			}) {
-				let total_collateral_usd = total_usd_value_of::<T>(&collateral, &price_cache)?;
+				let total_collateral_usd = price_cache.total_usd_value_of(&collateral)?;
 				ensure!(
 					total_collateral_usd >=
 						LendingConfig::<T>::get().minimum_update_collateral_amount_usd,
