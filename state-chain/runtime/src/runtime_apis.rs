@@ -605,6 +605,9 @@ pub struct RpcLendingConfig {
 	pub fee_swap_max_oracle_slippage: BasisPoints,
 	/// Minimum equivalent amount of principal that a loan must have at all times.
 	pub minimum_loan_amount_usd: U256,
+	/// Minimum amount of that can be added to a lending pool. When removing funds, the user
+	/// can't leave less than this amount in the pool (they should remove all funds instead).
+	pub minimum_supply_amount_usd: U256,
 	/// Minimum equivalent amount of principal that can be used to expand or repay an existing
 	/// loan.
 	pub minimum_update_loan_amount_usd: U256,

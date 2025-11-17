@@ -18,7 +18,7 @@ mod whitelist;
 
 pub use whitelist::{WhitelistStatus, WhitelistUpdate};
 
-pub use general_lending_pool::LendingPool;
+pub use general_lending_pool::{LendingPool, WithdrawnAndRemainingAmounts};
 
 pub enum LoanRepaymentOutcome {
 	// In case of full repayment, we may have some excess amount left
@@ -1294,7 +1294,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		ensure!(
 			amount_to_borrow >=
 				price_cache.amount_from_usd_value(asset, config.minimum_loan_amount_usd)?,
-			Error::<T>::LoanBelowMinimumAmount
+			Error::<T>::RemainingAmountBelowMinimum
 		);
 
 		let loan_id = NextLoanId::<T>::get();
@@ -1431,7 +1431,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				ensure!(
 					price_cache.usd_value_of(loan.asset, loan.owed_principal)? >=
 						config.minimum_loan_amount_usd,
-					Error::<T>::LoanBelowMinimumAmount
+					Error::<T>::RemainingAmountBelowMinimum
 				);
 			}
 
@@ -2084,6 +2084,9 @@ pub struct LendingConfiguration {
 	pub pool_config_overrides: BTreeMap<Asset, LendingPoolConfiguration>,
 	/// Minimum amount of principal that a loan must have at all times.
 	pub minimum_loan_amount_usd: AssetAmount,
+	/// Minimum amount of that can be added to a lending pool. When removing funds, the user
+	/// can't leave less than this amount in the pool (they should remove all funds instead).
+	pub minimum_supply_amount_usd: AssetAmount,
 	/// Minimum equivalent amount of principal that can be used to expand or repay an existing
 	/// loan.
 	pub minimum_update_loan_amount_usd: AssetAmount,

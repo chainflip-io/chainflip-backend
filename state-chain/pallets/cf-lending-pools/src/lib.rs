@@ -23,14 +23,15 @@ mod general_lending;
 mod utils;
 
 use cf_chains::SwapOrigin;
-use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
 	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolAndSupplyPositions,
 	LendingPoolConfiguration, LendingSupplyPosition, LiquidationCompletionReason, LiquidationType,
 	LtvThresholds, NetworkFeeContributions, OraclePriceCache, RpcLendingPool, RpcLiquidationStatus,
 	RpcLiquidationSwap, RpcLoan, RpcLoanAccount, WhitelistStatus, WhitelistUpdate,
+	WithdrawnAndRemainingAmounts,
 };
+use general_lending::{usd_value_of, LoanAccount};
 
 pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
 use boost::{BoostPool, BoostPoolContribution, BoostPoolId};
@@ -161,6 +162,7 @@ pub enum PalletConfigUpdate {
 		minimum_loan_amount_usd: AssetAmount,
 		minimum_update_loan_amount_usd: AssetAmount,
 		minimum_update_collateral_amount_usd: AssetAmount,
+		minimum_supply_amount_usd: AssetAmount,
 	},
 }
 
@@ -234,6 +236,7 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	pool_config_overrides: BTreeMap::new(),
 	minimum_loan_amount_usd: 100_000_000,             // 100 USD
 	minimum_update_loan_amount_usd: 10_000_000,       // 10 USD
+	minimum_supply_amount_usd: 100_000_000,           // 100 USD
 	minimum_update_collateral_amount_usd: 10_000_000, // 10 USD
 };
 
@@ -509,9 +512,9 @@ pub mod pallet {
 		LiquidationInProgress,
 		/// The provided collateral amount is empty/zero.
 		EmptyCollateral,
-		/// The loan amount would be below the minimum allowed.
-		LoanBelowMinimumAmount,
-		/// The amount specified to update a loan or collateral must be at least the minimum
+		/// The loan/supplied amount would be below the minimum allowed.
+		RemainingAmountBelowMinimum,
+		/// The amount specified to update a loan/collateral/supply must be at least the minimum
 		/// allowed amount.
 		AmountBelowMinimum,
 		/// No refund address has been set for the loan asset.
@@ -622,11 +625,13 @@ pub mod pallet {
 							minimum_loan_amount_usd,
 							minimum_update_loan_amount_usd,
 							minimum_update_collateral_amount_usd,
+							minimum_supply_amount_usd,
 						} => {
 							config.minimum_loan_amount_usd = *minimum_loan_amount_usd;
 							config.minimum_update_loan_amount_usd = *minimum_update_loan_amount_usd;
 							config.minimum_update_collateral_amount_usd =
 								*minimum_update_collateral_amount_usd;
+							config.minimum_supply_amount_usd = *minimum_supply_amount_usd;
 						},
 					}
 					Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
@@ -759,8 +764,14 @@ pub mod pallet {
 				Error::<T>::AccountNotWhitelisted
 			);
 
+			let config = LendingConfig::<T>::get();
+			let price_cache = OraclePriceCache::<T>::default();
+
 			// - The user does not add amount that's too small
-			ensure!(amount > Zero::zero(), Error::<T>::AmountMustBeNonZero);
+			ensure!(
+				usd_value_of::<T>(asset, amount, &price_cache)? >= config.minimum_supply_amount_usd,
+				Error::<T>::AmountBelowMinimum
+			);
 
 			// `try_debit_account` does not account for any unswept open positions, so we sweep to
 			// ensure we have the funds in our free balance before attempting to debit the account.
@@ -804,10 +815,24 @@ pub mod pallet {
 			let unlocked_amount = GeneralLendingPools::<T>::try_mutate(asset, |maybe_pool| {
 				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
-				let unlocked_amount =
+				let WithdrawnAndRemainingAmounts { withdrawn_amount, remaining_amount } =
 					pool.remove_funds(&lender_id, amount).map_err(Error::<T>::from)?;
 
-				Ok::<_, DispatchError>(unlocked_amount)
+				let config = LendingConfig::<T>::get();
+
+				let price_cache = OraclePriceCache::<T>::default();
+
+				// Either the user removes everything, or they have to leave at least
+				// the minimum required amount in the pool (to prevent dust amounts from
+				// accumulating):
+				ensure!(
+					remaining_amount == 0 ||
+						usd_value_of::<T>(asset, remaining_amount, &price_cache)? >=
+							config.minimum_supply_amount_usd,
+					Error::<T>::RemainingAmountBelowMinimum
+				);
+
+				Ok::<_, DispatchError>(withdrawn_amount)
 			})?;
 
 			T::Balance::credit_account(&lender_id, asset, unlocked_amount);

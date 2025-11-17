@@ -1232,6 +1232,7 @@ fn lending_config_serialization() {
 		hard_liquidation_max_oracle_slippage: 500,
 		fee_swap_max_oracle_slippage: 50,
 		minimum_loan_amount_usd: U256::from(100_000),
+		minimum_supply_amount_usd: U256::from(100_000),
 		minimum_update_loan_amount_usd: U256::from(50_000),
 		minimum_update_collateral_amount_usd: U256::from(25_000),
 	};
