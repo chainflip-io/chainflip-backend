@@ -12,6 +12,8 @@ pub enum MinimizedPrimitive {
 	String(String),
 	/// A u128 value.
 	U128(u128),
+	/// An i128 value.
+	I128(i128),
 }
 
 impl TryFrom<scale_value::Primitive> for MinimizedPrimitive {
@@ -24,8 +26,7 @@ impl TryFrom<scale_value::Primitive> for MinimizedPrimitive {
 			scale_value::Primitive::U128(n) => MinimizedPrimitive::U128(n),
 			scale_value::Primitive::U256(_) =>
 				return Err("primitive type not supported: found U256"),
-			scale_value::Primitive::I128(_) =>
-				return Err("primitive type not supported: found I128"),
+			scale_value::Primitive::I128(n) => MinimizedPrimitive::I128(n),
 			scale_value::Primitive::I256(_) =>
 				return Err("primitive type not supported: found I256"),
 		})
@@ -39,6 +40,7 @@ impl From<MinimizedPrimitive> for scale_value::Primitive {
 			MinimizedPrimitive::Char(c) => scale_value::Primitive::Char(c as char),
 			MinimizedPrimitive::String(s) => scale_value::Primitive::String(s),
 			MinimizedPrimitive::U128(n) => scale_value::Primitive::U128(n),
+			MinimizedPrimitive::I128(n) => scale_value::Primitive::I128(n),
 		}
 	}
 }
