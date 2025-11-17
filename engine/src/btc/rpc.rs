@@ -176,7 +176,7 @@ async fn call_rpc_raw(
 		.json::<Vec<serde_json::Value>>()
 		.await
 		.map_err(Error::Transport)
-		.and_then(|result| match params {
+		.and_then(|result| match params.clone() {
 			ReqParams::Batch(params) =>
 				if params.len() == result.len() {
 					// a bunch of json result values containing an error and a result field.
@@ -194,11 +194,20 @@ async fn call_rpc_raw(
 	response
 		.into_iter()
 		.map(|r| {
-			let error = &r["error"];
-			if !error.is_null() {
-				Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?))
+			if r.is_object() {
+				let error = &r["error"];
+				if !error.is_null() {
+					Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?))
+				} else {
+					Ok(r["result"].to_owned())
+				}
 			} else {
-				Ok(r["result"].to_owned())
+				tracing::warn!(
+					"The rpc response returned for {method:?} with params: {params:?}
+					was not a valid json object: {:?}",
+					r.clone()
+				);
+				Err(Error::Rpc(serde_json::from_value(r).map_err(Error::Json)?))
 			}
 		})
 		.collect::<Result<_, Error>>()
