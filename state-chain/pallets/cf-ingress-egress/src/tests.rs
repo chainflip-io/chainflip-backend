@@ -3821,3 +3821,38 @@ fn rollback_storage_if_transactional_call_fails() {
 		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 100);
 	});
 }
+
+#[test]
+fn vault_swap_with_burn_refund_address_is_ingressed_but_no_action_dispatched() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(submit_vault_swap_request(
+			Asset::Eth,
+			Asset::Btc,
+			10_000,
+			Default::default(),
+			EncodedAddress::Btc(Default::default()),
+			None,
+			Default::default(),
+			DepositDetails { tx_hashes: None },
+			Beneficiary { account: BROKER, bps: 0 },
+			Default::default(),
+			ChannelRefundParametersForChain::<Ethereum> {
+				retry_duration: 0,
+				refund_address: Ethereum::BURN_ADDRESS.into(),
+				min_price: Default::default(),
+				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
+			},
+			None,
+			0
+		));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised {
+				action: DepositAction::Unrefundable,
+				..
+			})
+		);
+	});
+}

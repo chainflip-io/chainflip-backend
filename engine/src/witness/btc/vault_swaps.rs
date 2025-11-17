@@ -32,7 +32,6 @@ use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
 use sp_core::H256;
-use sp_runtime::AccountId32;
 use state_chain_runtime::BitcoinInstance;
 
 use crate::btc::rpc::VerboseTransaction;
@@ -109,45 +108,38 @@ pub fn try_extract_vault_swap_witness(
 	channel_id: ChannelId,
 	broker_id: &AccountId,
 ) -> Option<VaultDepositWitness> {
-	// A correctly constructed transaction carrying CF swap parameters must have at least 3 outputs:
-	let [utxo_to_vault, nulldata_utxo, change_utxo, ..] = &tx.vout[..] else {
-		return None;
-	};
-
 	// First output must be a deposit into our vault:
+	let utxo_to_vault = &tx.vout[0];
 	if utxo_to_vault.script_pubkey.as_bytes() != vault_address.script_pubkey().bytes() {
 		return None;
 	}
 
-	// Second output must be a nulldata UTXO (with 0 amount):
-	if nulldata_utxo.value.to_sat() != 0 {
-		tracing::warn!(
-			"Observed a tx into our vault's change address, but the value of the second UTXO is non-zero (tx_id: {})",
-			tx.txid
-		);
-		return None;
-	}
+	// Perform all validation checks and extract the needed data
+	let Some((data, refund_address)) = || -> Option<(UtxoEncodedData, ScriptPubkey)> {
+		// A correctly constructed transaction carrying CF swap parameters must have at least 3
+		// outputs:
+		let [_, nulldata_utxo, change_utxo, ..] = &tx.vout[..] else {
+			return None;
+		};
 
-	let Some(mut data) = try_extract_utxo_encoded_data(&nulldata_utxo.script_pubkey) else {
-		tracing::warn!(
-			"Could not extract UTXO encoded data targeting our vault (tx_id: {})",
-			tx.txid
-		);
-		return None;
-	};
+		// Second output must be a nulldata UTXO (with 0 amount):
+		if nulldata_utxo.value.to_sat() != 0 {
+			return None;
+		}
 
-	let Ok(data) = UtxoEncodedData::decode(&mut data) else {
-		tracing::warn!(
-			"Failed to decode UTXO encoded data targeting our vault (tx_id: {})",
-			tx.txid
-		);
-		return None;
-	};
+		let mut encoded_data = try_extract_utxo_encoded_data(&nulldata_utxo.script_pubkey)?;
 
-	// Third output must be a "change utxo" whose address we assume to also be the refund address:
-	let Some(refund_address) = script_buf_to_script_pubkey(&change_utxo.script_pubkey) else {
-		tracing::error!("Failed to extract refund address (tx_id: {})", tx.txid);
-		return None;
+		let Ok(data) = UtxoEncodedData::decode(&mut encoded_data) else {
+			return None;
+		};
+
+		// Third output must be a "change utxo" whose address we assume to also be the refund
+		// address:
+		let refund_address = script_buf_to_script_pubkey(&change_utxo.script_pubkey)?;
+
+		Some((data, refund_address))
+	}() else {
+		return default_vault_swap_witness(tx, vault_address, channel_id, broker_id);
 	};
 
 	let deposit_amount = utxo_to_vault.value.to_sat();
@@ -208,49 +200,47 @@ pub fn try_extract_vault_swap_witness(
 	})
 }
 
-pub fn check_for_utxos_targeting_vault(
+/// Returns a default vault swap witness for a given tx where the first utxo is targeting the vault.
+pub fn default_vault_swap_witness(
 	tx: &VerboseTransaction,
 	vault_address: &DepositAddress,
 	channel_id: ChannelId,
 	broker_id: &AccountId,
 ) -> Option<VaultDepositWitness> {
-	for (i, utxo) in tx.vout.iter().enumerate() {
-		if utxo.script_pubkey.as_bytes() == vault_address.script_pubkey().bytes() {
-			let tx_id: [u8; 32] = tx.txid.to_byte_array();
-			let deposit_amount = utxo.value.to_sat();
+	let tx_id: [u8; 32] = tx.txid.to_byte_array();
+	let deposit_amount = tx.vout[0].value.to_sat();
 
-			return Some(VaultDepositWitness {
-				input_asset: NATIVE_ASSET,
-				output_asset: Asset::Eth,
-				deposit_amount,
-				destination_address: EncodedAddress::Eth([0; 20]),
-				tx_id: H256::from(tx_id),
-				deposit_details: Utxo {
-					// It can be any UTXO targeting the vault
-					id: UtxoId { tx_id: tx_id.into(), vout: i as u32 },
-					amount: deposit_amount,
-					deposit_address: vault_address.clone(),
-				},
-				deposit_metadata: None, // No ccm for BTC (yet?)
-				broker_fee: Some(Beneficiary { account: broker_id.clone(), bps: 0 }),
-				affiliate_fees: vec![].try_into().expect("Empty affiliates is always valid"),
-				refund_params: ChannelRefundParametersForChain::<Bitcoin> {
-					retry_duration: 0,
-					refund_address: Bitcoin::BURN_ADDRESS,
-					min_price: U256::from(0),
-					// Bitcoin should never have a ccm refund
-					refund_ccm_metadata: None,
-					max_oracle_price_slippage: None,
-				},
-				dca_params: None,
-				// We never boost wrongly encoded vault swaps
-				boost_fee: 0,
-				channel_id: Some(channel_id),
-				deposit_address: Some(vault_address.script_pubkey()),
-			})
-		}
-	}
-	None
+	let vault_swap_witness = Some(VaultDepositWitness {
+		input_asset: NATIVE_ASSET,
+		output_asset: Asset::Eth,
+		deposit_amount,
+		destination_address: EncodedAddress::Eth([0; 20]),
+		tx_id: H256::from(tx_id),
+		deposit_details: Utxo {
+			id: UtxoId { tx_id: tx_id.into(), vout: 0 },
+			amount: deposit_amount,
+			deposit_address: vault_address.clone(),
+		},
+		deposit_metadata: None,
+		broker_fee: None,
+		affiliate_fees: vec![].try_into().expect("Empty affiliates is always valid"),
+		refund_params: ChannelRefundParametersForChain::<Bitcoin> {
+			retry_duration: 0,
+			// We use the burn address for the refund address,
+			// This will cause the deposit to be ingressed but without any action dispatched.
+			refund_address: Bitcoin::BURN_ADDRESS,
+			min_price: U256::from(0),
+			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
+		},
+		dca_params: None,
+		// We never boost wrongly encoded vault swaps
+		boost_fee: 0,
+		channel_id: Some(channel_id),
+		deposit_address: Some(vault_address.script_pubkey()),
+	});
+
+	vault_swap_witness
 }
 #[cfg(test)]
 mod tests {

@@ -32,7 +32,7 @@ use super::{
 use crate::{
 	btc::rpc::VerboseTransaction,
 	witness::{
-		btc::vault_swaps::{check_for_utxos_targeting_vault, try_extract_vault_swap_witness},
+		btc::vault_swaps::try_extract_vault_swap_witness,
 		common::{
 			chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
 			RuntimeCallHasChain, RuntimeHasChain,
@@ -164,9 +164,6 @@ pub fn vault_deposits(
 			for (vault, broker, id) in vaults {
 				if let Some(vault_swap) = try_extract_vault_swap_witness(tx, vault, *id, broker) {
 					return Some(vault_swap);
-				} else {
-					//TODO: make it possible to return more than a single vault swap
-					return check_for_utxos_targeting_vault(tx, vault, *id, broker);
 				}
 			}
 			None
