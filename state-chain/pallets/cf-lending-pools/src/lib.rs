@@ -28,7 +28,7 @@ pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
 	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolAndSupplyPositions,
 	LendingPoolConfiguration, LendingSupplyPosition, LiquidationCompletionReason, LiquidationType,
-	LtvThresholds, NetworkFeeContributions, RpcLendingPool, RpcLiquidationStatus,
+	LtvThresholds, NetworkFeeContributions, OraclePriceCache, RpcLendingPool, RpcLiquidationStatus,
 	RpcLiquidationSwap, RpcLoan, RpcLoanAccount, WhitelistStatus, WhitelistUpdate,
 };
 

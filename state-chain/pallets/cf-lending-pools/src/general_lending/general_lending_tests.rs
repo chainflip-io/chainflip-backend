@@ -500,8 +500,6 @@ fn basic_general_lending() {
 				PendingNetworkFees::<Test>::get(LOAN_ASSET),
 				origination_fee_network + network_interest_1
 			);
-
-			// TODO: check that network got its payment
 		})
 		.then_process_blocks_until_block(
 			INIT_BLOCK + 2 * CONFIG.interest_payment_interval_blocks as u64,
@@ -671,7 +669,8 @@ fn collateral_auto_topup() {
 	const EXTRA_FUNDS: AssetAmount = INIT_COLLATERAL;
 
 	fn get_ltv() -> FixedU64 {
-		LoanAccounts::<Test>::get(BORROWER).unwrap().derive_ltv().unwrap()
+		let price_cache = OraclePriceCache::<Test>::default();
+		LoanAccounts::<Test>::get(BORROWER).unwrap().derive_ltv(&price_cache).unwrap()
 	}
 
 	fn get_collateral() -> AssetAmount {
@@ -1230,7 +1229,7 @@ fn basic_liquidation() {
 
 			// Despite collateral having been moved to the swapping pallet, we
 			// can still calculate its value:
-			assert_eq!(loan_account.total_collateral_usd_value().unwrap(), INIT_COLLATERAL);
+			assert_eq!(loan_account.total_collateral_usd_value(&OraclePriceCache::default()).unwrap(), INIT_COLLATERAL);
 
 			assert_has_event::<Test>(RuntimeEvent::LendingPools(
 				Event::<Test>::LiquidationInitiated {
@@ -2433,7 +2432,10 @@ fn adding_collateral_during_liquidation() {
 			// Force liquidation
 			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
 
-			assert_eq!(get_account().derive_ltv().unwrap(), ltv_at_liquidation);
+			assert_eq!(
+				get_account().derive_ltv(&OraclePriceCache::default()).unwrap(),
+				ltv_at_liquidation
+			);
 		})
 		.then_execute_at_next_block(|_| {
 			assert_matches!(
@@ -2467,7 +2469,10 @@ fn adding_collateral_during_liquidation() {
 			);
 
 			// The extra collateral does reduce LTV however:
-			assert!(get_account().derive_ltv().unwrap() < ltv_at_liquidation);
+			assert!(
+				get_account().derive_ltv(&OraclePriceCache::default()).unwrap() <
+					ltv_at_liquidation
+			);
 
 			// Simulate partial liquidation:
 			MockSwapRequestHandler::<Test>::set_swap_request_progress(
@@ -2489,7 +2494,8 @@ fn adding_collateral_during_liquidation() {
 			fund_account_and_add_collateral(EXTRA_COLLATERAL_2);
 
 			assert!(
-				get_account().derive_ltv().unwrap() < CONFIG.ltv_thresholds.hard_liquidation.into()
+				get_account().derive_ltv(&OraclePriceCache::default()).unwrap() <
+					CONFIG.ltv_thresholds.hard_liquidation.into()
 			);
 		})
 		.then_execute_at_next_block(|_| {
@@ -2531,7 +2537,10 @@ fn adding_collateral_during_liquidation() {
 			// soft liquidation to a healthy loan:
 			fund_account_and_add_collateral(EXTRA_COLLATERAL_3);
 
-			assert!(get_account().derive_ltv().unwrap() < CONFIG.ltv_thresholds.target.into());
+			assert!(
+				get_account().derive_ltv(&OraclePriceCache::default()).unwrap() <
+					CONFIG.ltv_thresholds.target.into()
+			);
 
 			// Simulate partial liquidation:
 			MockSwapRequestHandler::<Test>::set_swap_request_progress(
@@ -3509,8 +3518,15 @@ fn init_liquidation_swaps_test() {
 		set_asset_price_in_usd(Asset::Sol, 200);
 		set_asset_price_in_usd(Asset::Usdc, 1);
 
-		let collateral = loan_account.prepare_collateral_for_liquidation().unwrap();
-		loan_account.init_liquidation_swaps(&BORROWER, collateral, LiquidationType::Soft);
+		let collateral = loan_account
+			.prepare_collateral_for_liquidation(&OraclePriceCache::default())
+			.unwrap();
+		loan_account.init_liquidation_swaps(
+			&BORROWER,
+			collateral,
+			LiquidationType::Soft,
+			&OraclePriceCache::default(),
+		);
 
 		let expected_swaps = [
 			(SWAP_1, LOAN_1, Asset::Eth, Asset::Btc, 417),
