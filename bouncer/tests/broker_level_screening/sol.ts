@@ -1,4 +1,4 @@
-import { Chains, InternalAsset } from '@chainflip/cli';
+import { InternalAsset } from '@chainflip/cli';
 import {
   newAssetAddress,
   sleep,
@@ -8,6 +8,7 @@ import {
   observeBalanceIncrease,
   observeCcmReceived,
   observeFetch,
+  Chains,
 } from 'shared/utils';
 import { observeEvent } from 'shared/utils/substrate';
 import { requestNewSwap } from 'shared/perform_swap';

@@ -10,9 +10,10 @@ import { Mutex } from 'async-mutex';
 import {
   Chain as SDKChain,
   InternalAsset as SDKAsset,
-  InternalAssets as Assets,
   assetConstants,
   chainConstants,
+  chainflipAssets,
+  chainflipChains,
 } from '@chainflip/cli';
 import Web3 from 'web3';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
@@ -53,6 +54,14 @@ export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana', 'Bitc
 export const evmChains = ['Ethereum', 'Arbitrum'] as Chain[];
 
 export const testInfoFile = '/tmp/chainflip/test_info.csv';
+
+export const Assets = Object.fromEntries(chainflipAssets.map((asset) => [asset, asset])) as {
+  [K in (typeof chainflipAssets)[number]]: K;
+};
+
+export const Chains = Object.fromEntries(chainflipChains.map((chain) => [chain, chain])) as {
+  [K in (typeof chainflipChains)[number]]: K;
+};
 
 export type Asset = SDKAsset;
 export type Chain = SDKChain;
@@ -280,7 +289,7 @@ export function assetDecimals(asset: Asset): number {
 }
 
 export function chainContractId(chain: Chain): number {
-  if (isSDKChain(chain)) return chainConstants[chain].contractId;
+  if (isSDKChain(chain)) return chainContractId[chain].contractId;
   throw new Error(`Unsupported chain: ${chain}`);
 }
 
@@ -311,7 +320,7 @@ export function amountToFineAmountBigInt(amount: number | string, asset: Asset):
 // State Chain uses non-unique string identifiers for assets.
 export function stateChainAssetFromAsset(asset: Asset): string {
   if (isSDKAsset(asset)) {
-    return assetConstants[asset].asset;
+    return asset.toString();
   }
   throw new Error(`Unsupported asset: ${asset}`);
 }
