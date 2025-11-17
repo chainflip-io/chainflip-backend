@@ -1,4 +1,4 @@
-import { InternalAsset as Asset, Chains } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { Contract, HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
 import BigNumber from 'bignumber.js';
@@ -15,6 +15,7 @@ import {
   decodeDotAddressForContract,
   getEvmEndpoint,
   createStateChainKeypair,
+  Chains,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import { getChainflipApi } from 'shared/utils/substrate';
@@ -85,11 +86,13 @@ export async function executeEvmVaultSwap(
     retry_duration: fokParams.retryDurationBlocks,
     refund_address: fokParams.refundAddress,
     min_price: '0x' + new BigNumber(fokParams.minPriceX128).toString(16),
-    refund_ccm_metadata: fillOrKillParams?.refundCcmMetadata && {
-      message: fillOrKillParams?.refundCcmMetadata.message as `0x${string}`,
-      gas_budget: fillOrKillParams?.refundCcmMetadata.gasBudget,
-      ccm_additional_data: fillOrKillParams?.refundCcmMetadata.ccmAdditionalData,
-    },
+    refund_ccm_metadata: fillOrKillParams?.refundCcmMetadata
+      ? {
+          message: fillOrKillParams.refundCcmMetadata.message,
+          gas_budget: fillOrKillParams.refundCcmMetadata.gasBudget,
+          ccm_additional_data: fillOrKillParams.refundCcmMetadata.ccmAdditionalData,
+        }
+      : undefined,
     max_oracle_price_slippage: undefined,
   };
 

@@ -1,8 +1,9 @@
 import assert from 'assert';
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 // eslint-disable-next-line no-restricted-imports
 import type { KeyringPair } from '@polkadot/keyring/types';
 import {
+  Assets,
   createStateChainKeypair,
   defaultAssetAmounts,
   handleSubstrateError,
@@ -25,8 +26,8 @@ const commissionBps = 100;
 async function testRefundVaultSwap(logger: Logger) {
   logger.info('Starting refund vault swap test...');
 
-  const inputAsset = Assets.Btc;
-  const destAsset = Assets.Usdc;
+  const inputAsset = 'Btc';
+  const destAsset = 'Usdc';
   const balanceObserveTimeout = 60;
   const depositAmount = defaultAssetAmounts(inputAsset);
   const destAddress = await newAssetAddress('Usdc');
@@ -56,7 +57,7 @@ async function testRefundVaultSwap(logger: Logger) {
   let btcBalance = false;
 
   for (let i = 0; i < balanceObserveTimeout; i++) {
-    const refundAddressBalance = await getBalance(Assets.Btc, refundAddress);
+    const refundAddressBalance = await getBalance('Btc', refundAddress);
     if (refundAddressBalance !== '0') {
       btcBalance = true;
       break;
@@ -93,7 +94,7 @@ async function testWithdrawCollectedAffiliateFees(
 
   // Wait for balance change
   for (let i = 0; i < balanceObserveTimeout; i++) {
-    if ((await getBalance(Assets.Usdc, withdrawAddress)) !== '0') {
+    if ((await getBalance('Usdc', withdrawAddress)) !== '0') {
       success = true;
       break;
     }

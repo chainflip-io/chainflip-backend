@@ -1,4 +1,3 @@
-import { InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
 import {
   isValidHexHash,
@@ -15,6 +14,7 @@ import {
   shortChainFromAsset,
   newAssetAddress,
   createStateChainKeypair,
+  Assets,
 } from 'shared/utils';
 import { lpApiRpc } from 'shared/json_rpc';
 import { depositLiquidity } from 'shared/deposit_liquidity';

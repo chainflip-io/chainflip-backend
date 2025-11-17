@@ -3,9 +3,9 @@ import path from 'path';
 import assert from 'assert';
 import { execSync } from 'child_process';
 
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { blake2AsU8a } from 'polkadot/util-crypto';
-import { amountToFineAmount, sleep, assetDecimals } from 'shared/utils';
+import { amountToFineAmount, sleep, assetDecimals, Assets } from 'shared/utils';
 import { specVersion, getNetworkRuntimeVersion } from 'shared/utils/spec_version';
 import { handleDispatchError, submitAndGetEvent } from 'shared/polkadot_utils';
 import { testSwap } from 'shared/swapping';

@@ -1,8 +1,9 @@
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { randomBytes } from 'crypto';
 import {
   amountToFineAmount,
   assetDecimals,
+  Assets,
   decodeDotAddressForContract,
   newAssetAddress,
   observeBalanceIncrease,

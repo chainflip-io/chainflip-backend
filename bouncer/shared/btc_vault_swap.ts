@@ -1,11 +1,11 @@
 import assert from 'assert';
-import { Chains } from '@chainflip/cli';
 import { sendVaultTransaction } from 'shared/send_btc';
 import {
   Asset,
   assetDecimals,
   brokerMutex,
   chainFromAsset,
+  Chains,
   createStateChainKeypair,
   decodeDotAddressForContract,
   fineAmountToAmount,

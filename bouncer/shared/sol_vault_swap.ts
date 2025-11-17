@@ -1,6 +1,6 @@
 import assert from 'assert';
 import * as anchor from '@coral-xyz/anchor';
-import { InternalAsset as Asset, Chains } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import {
   PublicKey,
   sendAndConfirmTransaction,
@@ -23,6 +23,7 @@ import {
   decodeSolAddress,
   decodeDotAddressForContract,
   observeFetch,
+  Chains,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 
@@ -115,11 +116,13 @@ export async function executeSolVaultSwap(
       fillOrKillParams?.refundAddress ?? whaleKeypair.publicKey.toBase58(),
     ),
     min_price: fillOrKillParams?.minPriceX128 ?? '0x0',
-    refund_ccm_metadata: fillOrKillParams?.refundCcmMetadata && {
-      message: fillOrKillParams?.refundCcmMetadata.message as `0x${string}`,
-      gas_budget: fillOrKillParams?.refundCcmMetadata.gasBudget,
-      ccm_additional_data: fillOrKillParams?.refundCcmMetadata.ccmAdditionalData,
-    },
+    refund_ccm_metadata: fillOrKillParams?.refundCcmMetadata
+      ? {
+          message: fillOrKillParams.refundCcmMetadata.message,
+          gas_budget: fillOrKillParams.refundCcmMetadata.gasBudget,
+          ccm_additional_data: fillOrKillParams.refundCcmMetadata.ccmAdditionalData,
+        }
+      : undefined,
     max_oracle_price_slippage: undefined,
   };
   const extraParameters: SolanaVaultSwapExtraParameters = {
