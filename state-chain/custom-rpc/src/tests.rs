@@ -407,6 +407,11 @@ fn test_vault_addresses_custom_rpc() {
 		sol_swap_endpoint_program_data_account: EncodedAddress::Sol([2; 32]),
 		usdc_token_mint_pubkey: EncodedAddress::Sol([3; 32]),
 		sol_vault_program: EncodedAddress::Sol([4; 32]),
+		bitcoin_vault: Some(EncodedAddress::Btc([5; 32].into())),
+		solana_sol_vault: Some(EncodedAddress::Sol([6; 32])),
+		solana_usdc_token_vault_ata: EncodedAddress::Sol([7; 32]),
+		solana_vault_swap_account: Some(EncodedAddress::Sol([8; 32])),
+		predicted_seconds_until_next_vault_rotation: 9,
 	};
 	insta::assert_json_snapshot!(val);
 }

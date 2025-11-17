@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 #![feature(iterator_try_collect)]
+#![feature(duration_constructors)]
 
 use crate::{backend::CustomRpcBackend, boost_pool_rpc::BoostPoolFeesRpc};
 use boost_pool_rpc::BoostPoolDetailsRpc;
@@ -45,6 +46,7 @@ use cf_rpc_apis::{
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
 use ethereum_eip712::eip712::{EIP712Domain, Types};
+use itertools::Itertools;
 use jsonrpsee::{
 	core::async_trait,
 	proc_macros::rpc,
@@ -100,6 +102,7 @@ use std::{
 	collections::{BTreeMap, BTreeSet, HashMap},
 	marker::PhantomData,
 	sync::Arc,
+	time::Duration,
 };
 
 pub mod backend;
@@ -130,6 +133,26 @@ pub struct Eip712RpcTypedData {
 }
 
 type RpcEncodedNonNativeCall = EncodedNonNativeCallGeneric<Eip712RpcTypedData>;
+
+mod chainflip_transparency {
+	use super::*;
+
+	#[derive(Serialize, Deserialize, Debug, Clone)]
+	pub struct AddressAndExplanation {
+		pub name: String,
+		pub address: AddressString,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub explanation: Option<String>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub rotation_policy: Option<String>,
+		pub next_predicted_rotation: Option<String>,
+	}
+
+	pub type ControlledDepositAddresses = HashMap<ForeignChain, Vec<AddressString>>;
+
+	pub type ControlledVaultAddresses = HashMap<ForeignChain, Vec<AddressAndExplanation>>;
+}
+use chainflip_transparency::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
@@ -1317,6 +1340,19 @@ pub trait CustomApi {
 		encoding: EncodingType,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<(RpcEncodedNonNativeCall, TransactionMetadata)>;
+	#[method(name = "controlled_deposit_addresses")]
+	fn cf_controlled_deposit_addresses(
+		&self,
+		chain: Option<cf_primitives::ForeignChain>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ControlledDepositAddresses>;
+	#[method(name = "controlled_vault_addresses")]
+	fn cf_controlled_vault_addresses(
+		&self,
+		chain: Option<cf_primitives::ForeignChain>,
+		compact_reply: Option<bool>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ControlledVaultAddresses>;
 }
 
 /// An RPC extension for the state chain node.
@@ -2670,6 +2706,141 @@ where
 					Ok((serialized_call, metadata))
 				},
 			})
+	}
+
+	fn cf_controlled_deposit_addresses(
+		&self,
+		requested_chain: Option<cf_primitives::ForeignChain>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ControlledDepositAddresses> {
+		Ok(self
+			.cf_all_open_deposit_channels(at)?
+			.into_iter()
+			.flat_map(|(_, _, accounts)| {
+				accounts
+					.chain_accounts
+					.into_iter()
+					.filter(|(address, _asset)| {
+						requested_chain.is_none_or(|chain| chain == address.chain())
+					})
+					.map(|(address, _asset)| {
+						(address.chain(), AddressString::from_encoded_address(address))
+					})
+			})
+			.into_group_map())
+	}
+
+	fn cf_controlled_vault_addresses(
+		&self,
+		chain: Option<cf_primitives::ForeignChain>,
+		compact_reply: Option<bool>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ControlledVaultAddresses> {
+		let mut result = HashMap::new();
+
+		let VaultAddresses {
+			ethereum,
+			arbitrum,
+			bitcoin,
+			sol_vault_program: _,
+			sol_swap_endpoint_program_data_account: _,
+			usdc_token_mint_pubkey: _,
+			bitcoin_vault,
+			solana_sol_vault,
+			solana_usdc_token_vault_ata,
+			solana_vault_swap_account,
+			predicted_seconds_until_next_vault_rotation,
+		} = self.cf_vault_addresses(at)?;
+
+		let compact_reply = compact_reply.is_some_and(|compact| compact);
+
+		let none_if_compact = |value| if compact_reply { None } else { Some(value) };
+
+		let rotates_every_3_days = none_if_compact("Every 3 days".to_string());
+		let rotates_never = none_if_compact("Never".to_string());
+		let next_predicted_rotation = (chrono::Utc::now() +
+			Duration::from_secs(predicted_seconds_until_next_vault_rotation))
+		.to_string();
+
+		if chain.is_none_or(|chain| chain == ForeignChain::Arbitrum) {
+			result.insert(ForeignChain::Arbitrum, vec![AddressAndExplanation {
+				name: "arbitrum_vault_contract".into(),
+				address: AddressString::from_encoded_address(arbitrum),
+				explanation: none_if_compact("Holds ETH and all tokens on Arbitrum. Directly receives user funds in case of smart contract-based vault swaps.".into()),
+				rotation_policy: rotates_never.clone(),
+				next_predicted_rotation: None,
+			}]);
+		}
+
+		if chain.is_none_or(|chain| chain == ForeignChain::Ethereum) {
+			result.insert(ForeignChain::Ethereum, vec![AddressAndExplanation {
+				name: "ethereum_vault_contract".into(),
+				address: AddressString::from_encoded_address(ethereum),
+				explanation: none_if_compact("Holds ETH and all tokens on Ethereum. Directly receives user funds for smart contract-based vault swaps.".into()),
+				rotation_policy: rotates_never.clone(),
+				next_predicted_rotation: None,
+			}]);
+		}
+
+		if chain.is_none_or(|chain| chain == ForeignChain::Solana) {
+			let mut solana_addresses = Vec::new();
+			if let Some(solana_sol_vault) = solana_sol_vault {
+				solana_addresses.push(AddressAndExplanation {
+					name: "solana_sol_vault".into(),
+					address: AddressString::from_encoded_address(solana_sol_vault),
+					explanation: none_if_compact("Holds SOL on Solana.".into()),
+					rotation_policy: rotates_every_3_days.clone(),
+					next_predicted_rotation: Some(next_predicted_rotation.clone()),
+				})
+			}
+			solana_addresses.push(AddressAndExplanation {
+				name: "solana_usdc_vault".into(),
+				address: AddressString::from_encoded_address(solana_usdc_token_vault_ata),
+				explanation: none_if_compact(
+					"Holds USDC on Solana. Directly receives user funds for USDC vault swaps."
+						.into(),
+				),
+				rotation_policy: rotates_never.clone(),
+				next_predicted_rotation: None,
+			});
+			if let Some(solana_vault_swap_account) = solana_vault_swap_account {
+				solana_addresses.push(AddressAndExplanation {
+					name: "solana_sol_vault_swap_account".into(),
+					address: AddressString::from_encoded_address(solana_vault_swap_account),
+					explanation: none_if_compact("Special account for vault swap support for SOL on Solana. Receives user funds for SOL vault swaps before they are fetched into the vault.".into()),
+					rotation_policy: rotates_never,
+					next_predicted_rotation: None,
+				})
+			}
+			result.insert(ForeignChain::Solana, solana_addresses);
+		}
+
+		if chain.is_none_or(|chain| chain == ForeignChain::Bitcoin) {
+			let mut bitcoin_addresses = Vec::new();
+			if let Some(bitcoin_vault) = bitcoin_vault {
+				bitcoin_addresses.push(AddressAndExplanation {
+					name: "bitcoin_vault".into(),
+					address: AddressString::from_encoded_address(bitcoin_vault),
+					explanation: none_if_compact("Holds BTC on Bitcoin.".into()),
+					rotation_policy: rotates_every_3_days.clone(),
+					next_predicted_rotation: Some(next_predicted_rotation.clone()),
+				});
+			}
+			bitcoin_addresses.extend(bitcoin.into_iter().map(|(broker_id, address)| {
+				AddressAndExplanation {
+					name: format!("bitcoin_vault_swap_address_for_broker_{broker_id}"),
+					address: AddressString::from_encoded_address(address),
+					explanation: none_if_compact(
+						"Special per-broker address for vault swap support on Bitcoin. Receives user funds for BTC vault swaps before they are fetched into the vault."
+							.into()),
+					rotation_policy: rotates_every_3_days.clone(),
+					next_predicted_rotation: Some(next_predicted_rotation.clone()),
+				}
+			}));
+			result.insert(ForeignChain::Bitcoin, bitcoin_addresses);
+		}
+
+		Ok(result)
 	}
 }
 
