@@ -3838,7 +3838,7 @@ fn vault_swap_with_burn_refund_address_is_ingressed_but_no_action_dispatched() {
 			Default::default(),
 			ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 0,
-				refund_address: Ethereum::BURN_ADDRESS.into(),
+				refund_address: Ethereum::BURN_ADDRESS,
 				min_price: Default::default(),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,

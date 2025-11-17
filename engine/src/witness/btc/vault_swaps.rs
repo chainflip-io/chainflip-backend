@@ -139,7 +139,7 @@ pub fn try_extract_vault_swap_witness(
 
 		Some((data, refund_address))
 	}() else {
-		return vault_swap_with_burn_refund_address(tx, vault_address, channel_id, broker_id);
+		return vault_swap_with_burn_refund_address(tx, vault_address, channel_id);
 	};
 
 	let deposit_amount = utxo_to_vault.value.to_sat();
@@ -205,7 +205,6 @@ pub fn vault_swap_with_burn_refund_address(
 	tx: &VerboseTransaction,
 	vault_address: &DepositAddress,
 	channel_id: ChannelId,
-	broker_id: &AccountId,
 ) -> Option<VaultDepositWitness> {
 	let utxo_to_vault = &tx.vout[0];
 	if utxo_to_vault.script_pubkey.as_bytes() != vault_address.script_pubkey().bytes() {
@@ -215,7 +214,7 @@ pub fn vault_swap_with_burn_refund_address(
 	let tx_id: [u8; 32] = tx.txid.to_byte_array();
 	let deposit_amount = utxo_to_vault.value.to_sat();
 
-	let vault_swap_witness = Some(VaultDepositWitness {
+	Some(VaultDepositWitness {
 		input_asset: NATIVE_ASSET,
 		output_asset: Asset::Eth,
 		deposit_amount,
@@ -243,9 +242,7 @@ pub fn vault_swap_with_burn_refund_address(
 		boost_fee: 0,
 		channel_id: Some(channel_id),
 		deposit_address: Some(vault_address.script_pubkey()),
-	});
-
-	vault_swap_witness
+	})
 }
 #[cfg(test)]
 mod tests {
