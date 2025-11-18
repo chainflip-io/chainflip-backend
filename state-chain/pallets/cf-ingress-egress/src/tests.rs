@@ -3685,7 +3685,7 @@ fn test_various_refund_reasons() {
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 0,
 				min_price: U256::from(0),
-				refund_address: H160::default(),
+				refund_address: H160([1; 20]),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,
 			},
@@ -3712,7 +3712,7 @@ fn test_various_refund_reasons() {
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 700,
 				min_price: U256::from(0),
-				refund_address: H160::default(),
+				refund_address: H160([1; 20]),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,
 			},
@@ -3739,7 +3739,7 @@ fn test_various_refund_reasons() {
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 0,
 				min_price: U256::from(0),
-				refund_address: H160::default(),
+				refund_address: H160([1; 20]),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,
 			},
