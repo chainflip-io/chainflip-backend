@@ -26,12 +26,12 @@ const commissionBps = 100;
 async function testRefundVaultSwap(logger: Logger) {
   logger.info('Starting refund vault swap test...');
 
-  const inputAsset = 'Btc';
-  const destAsset = 'Usdc';
+  const inputAsset = Assets.Btc;
+  const destAsset = Assets.Usdc;
   const balanceObserveTimeout = 60;
   const depositAmount = defaultAssetAmounts(inputAsset);
-  const destAddress = await newAssetAddress('Usdc');
-  const refundAddress = await newAssetAddress('Btc');
+  const destAddress = await newAssetAddress(destAsset);
+  const refundAddress = await newAssetAddress(Assets.Btc);
   const foKParams = {
     retryDurationBlocks: 100,
     refundAddress,
@@ -57,7 +57,7 @@ async function testRefundVaultSwap(logger: Logger) {
   let btcBalance = false;
 
   for (let i = 0; i < balanceObserveTimeout; i++) {
-    const refundAddressBalance = await getBalance('Btc', refundAddress);
+    const refundAddressBalance = await getBalance(inputAsset, refundAddress);
     if (refundAddressBalance !== '0') {
       btcBalance = true;
       break;
@@ -94,7 +94,7 @@ async function testWithdrawCollectedAffiliateFees(
 
   // Wait for balance change
   for (let i = 0; i < balanceObserveTimeout; i++) {
-    if ((await getBalance('Usdc', withdrawAddress)) !== '0') {
+    if ((await getBalance(Assets.Usdc, withdrawAddress)) !== '0') {
       success = true;
       break;
     }
