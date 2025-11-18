@@ -2882,6 +2882,7 @@ impl_runtime_apis! {
 				hard_liquidation_max_oracle_slippage: config.hard_liquidation_max_oracle_slippage,
 				fee_swap_max_oracle_slippage: config.fee_swap_max_oracle_slippage,
 				minimum_loan_amount_usd: config.minimum_loan_amount_usd.into(),
+				minimum_supply_amount_usd: config.minimum_supply_amount_usd.into(),
 				minimum_update_loan_amount_usd: config.minimum_update_loan_amount_usd.into(),
 				minimum_update_collateral_amount_usd: config.minimum_update_collateral_amount_usd.into(),
 			}

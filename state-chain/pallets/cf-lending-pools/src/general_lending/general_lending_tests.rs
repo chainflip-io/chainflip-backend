@@ -44,9 +44,9 @@ trait LendingTestRunnerExt {
 impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<Test, Ctx> {
 	fn with_funded_pool(self, init_pool_amount: AssetAmount) -> Self {
 		self.then_execute_with(|ctx| {
-			setup_pool_with_funds(LOAN_ASSET, init_pool_amount);
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+			setup_pool_with_funds(LOAN_ASSET, init_pool_amount);
 
 			ctx
 		})
@@ -683,10 +683,9 @@ fn collateral_auto_topup() {
 
 	new_test_ext()
 		.execute_with(|| {
-			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
-
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE * 1_000_000);
 			set_asset_price_in_usd(COLLATERAL_ASSET, 1_000_000);
+			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 			MockBalance::credit_account(
 				&BORROWER,
@@ -774,10 +773,9 @@ fn basic_loan_aggregation() {
 	let (origination_fee_network_3, origination_fee_pool_3) = take_network_fee(ORIGINATION_FEE_3);
 
 	new_test_ext().execute_with(|| {
-		setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
-
 		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+		setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
 		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
@@ -1065,10 +1063,10 @@ fn adding_and_removing_collateral() {
 	const INIT_COLLATERAL_AMOUNT_2: AssetAmount = 1000;
 
 	new_test_ext().execute_with(|| {
-		setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 		set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
 		set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+		setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 		MockBalance::credit_account(
 			&BORROWER,
@@ -1791,12 +1789,11 @@ fn small_interest_amounts_accumulate() {
 
 	new_test_ext()
 		.execute_with(|| {
+			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
 			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 			LendingConfig::<Test>::set(config.clone());
-
-			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
 
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
 			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
@@ -3100,6 +3097,9 @@ mod safe_mode {
 
 	#[test]
 	fn safe_mode_for_removing_lender_funds() {
+		const OTHER_ASSET: Asset = Asset::Eth;
+		assert_ne!(OTHER_ASSET, LOAN_ASSET);
+
 		let try_to_withdraw = || {
 			LendingPools::remove_lender_funds(
 				RuntimeOrigin::signed(LENDER),
@@ -3109,6 +3109,8 @@ mod safe_mode {
 		};
 
 		new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
+			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+			set_asset_price_in_usd(OTHER_ASSET, SWAP_RATE);
 			// Withdrawing is disabled for all assets:
 			{
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
@@ -3131,8 +3133,6 @@ mod safe_mode {
 
 			// Withdrawing is enabled for the requested asset:
 			{
-				const OTHER_ASSET: Asset = Asset::Eth;
-				assert_ne!(OTHER_ASSET, LOAN_ASSET);
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
 					withdraw_lender_funds: SafeModeSet::Amber(BTreeSet::from([OTHER_ASSET])),
 					..PalletSafeMode::code_green()
@@ -3650,14 +3650,14 @@ mod rpcs {
 
 		new_test_ext()
 			.execute_with(|| {
-				setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
-				setup_pool_with_funds(LOAN_ASSET_2, INIT_POOL_AMOUNT * 2);
-
 				set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 				set_asset_price_in_usd(COLLATERAL_ASSET, 1);
 
 				set_asset_price_in_usd(LOAN_ASSET_2, SWAP_RATE);
 				set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+
+				setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
+				setup_pool_with_funds(LOAN_ASSET_2, INIT_POOL_AMOUNT * 2);
 
 				MockBalance::credit_account(
 					&BORROWER,
@@ -3995,7 +3995,7 @@ fn loan_minimum_is_enforced() {
 				Some(COLLATERAL_ASSET),
 				BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_AMOUNT)])
 			),
-			Error::<Test>::LoanBelowMinimumAmount
+			Error::<Test>::RemainingAmountBelowMinimum
 		);
 
 		// A loan equal to or above the minimum amount should be fine
@@ -4013,7 +4013,7 @@ fn loan_minimum_is_enforced() {
 		// Now try and repay an amount that would leave the loan below the minimum
 		assert_noop!(
 			LendingPools::try_making_repayment(&BORROWER, LOAN_ID, RepaymentAmount::Exact(1)),
-			Error::<Test>::LoanBelowMinimumAmount,
+			Error::<Test>::RemainingAmountBelowMinimum,
 		);
 
 		// If we expand the loan so a partial repayment would not take it below the minimum,
@@ -4032,6 +4032,78 @@ fn loan_minimum_is_enforced() {
 			&BORROWER,
 			LOAN_ID,
 			RepaymentAmount::Exact(MIN_LOAN_AMOUNT_ASSET)
+		));
+	});
+}
+
+#[test]
+fn supply_minimum_is_enforced() {
+	const MIN_SUPPLY_AMOUNT_USD: AssetAmount = 1_000_000;
+
+	// Min amount that can be supplied in pool's asset
+	const MIN_SUPPLY_AMOUNT: AssetAmount = MIN_SUPPLY_AMOUNT_USD / SWAP_RATE;
+
+	new_test_ext().execute_with(|| {
+		// Set the minimum supply amount
+		LendingConfig::<Test>::set(LendingConfiguration {
+			minimum_supply_amount_usd: MIN_SUPPLY_AMOUNT_USD,
+			..LendingConfigDefault::get()
+		});
+
+		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+
+		disable_whitelist();
+
+		assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
+
+		MockBalance::credit_account(&LENDER, LOAN_ASSET, 2 * MIN_SUPPLY_AMOUNT);
+
+		// Can't supply below minimum
+		assert_noop!(
+			LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				MIN_SUPPLY_AMOUNT / 2
+			),
+			Error::<Test>::AmountBelowMinimum
+		);
+
+		// Can supply the minimum amount
+		assert_ok!(LendingPools::add_lender_funds(
+			RuntimeOrigin::signed(LENDER),
+			LOAN_ASSET,
+			MIN_SUPPLY_AMOUNT
+		));
+
+		// Add some more to test removing funds
+		assert_ok!(LendingPools::add_lender_funds(
+			RuntimeOrigin::signed(LENDER),
+			LOAN_ASSET,
+			MIN_SUPPLY_AMOUNT
+		));
+
+		// Can't leave less than the minimum in the pool
+		assert_noop!(
+			LendingPools::remove_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				Some(3 * MIN_SUPPLY_AMOUNT / 2)
+			),
+			Error::<Test>::RemainingAmountBelowMinimum
+		);
+
+		// Can remove funds partially (leaves more than the min in the pool):
+		assert_ok!(LendingPools::remove_lender_funds(
+			RuntimeOrigin::signed(LENDER),
+			LOAN_ASSET,
+			Some(MIN_SUPPLY_AMOUNT / 2)
+		));
+
+		// Can remove all funds:
+		assert_ok!(LendingPools::remove_lender_funds(
+			RuntimeOrigin::signed(LENDER),
+			LOAN_ASSET,
+			None
 		));
 	});
 }

@@ -163,6 +163,7 @@ fn can_update_all_config_items() {
 		const NEW_MINIMUM_LOAN_AMOUNT_USD: AssetAmount = 12345;
 		const NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD: AssetAmount = 1234;
 		const NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD: AssetAmount = 567;
+		const NEW_MINIMUM_SUPPLY_AMOUNT_USD: AssetAmount = 7783;
 
 		const UPDATE_NETWORK_FEE_DEDUCTION_FROM_BOOST: PalletConfigUpdate =
 			PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
@@ -216,6 +217,7 @@ fn can_update_all_config_items() {
 			minimum_loan_amount_usd: NEW_MINIMUM_LOAN_AMOUNT_USD,
 			minimum_update_loan_amount_usd: NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD,
 			minimum_update_collateral_amount_usd: NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD,
+			minimum_supply_amount_usd: NEW_MINIMUM_SUPPLY_AMOUNT_USD,
 		};
 
 		// Check that the default values are different from the new ones
@@ -307,6 +309,7 @@ fn can_update_all_config_items() {
 				minimum_loan_amount_usd: NEW_MINIMUM_LOAN_AMOUNT_USD,
 				minimum_update_loan_amount_usd: NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD,
 				minimum_update_collateral_amount_usd: NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD,
+				minimum_supply_amount_usd: NEW_MINIMUM_SUPPLY_AMOUNT_USD,
 				pool_config_overrides: BTreeMap::default(),
 			}
 		);
