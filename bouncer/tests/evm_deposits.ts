@@ -12,8 +12,6 @@ import {
   defaultAssetAmounts,
   chainFromAsset,
   getEvmEndpoint,
-  chainContractId,
-  assetContractId,
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
@@ -21,6 +19,8 @@ import {
   amountToFineAmountBigInt,
   createEvmWalletAndFund,
   decodeFlipAddressForContract,
+  getChainContractId,
+  getAssetContractId,
 } from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { getCFTesterAbi, getEvmVaultAbi } from 'shared/contract_interfaces';
@@ -115,11 +115,11 @@ async function testTxMultipleVaultSwaps(
   const numSwaps = 2;
   const txData = cfTesterContract.methods
     .multipleContractSwap(
-      chainContractId(chainFromAsset(destAsset)),
+      getChainContractId(chainFromAsset(destAsset)),
       destAsset === 'Dot' || destAddress === 'Hub'
         ? decodeDotAddressForContract(destAddress)
         : destAddress,
-      assetContractId(destAsset),
+      getAssetContractId(destAsset),
       getContractAddress(chainFromAsset(sourceAsset), sourceAsset),
       amount,
       // Dummy encoded data containing a refund address and th broker accountId `5FKyTaAoazbwkQ7CHFNJfhWV5sVnRw23HWdPUeQ2tTp3gryJ`.
@@ -314,9 +314,9 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
 
   const txData = cfVaultContract.methods
     .xSwapNative(
-      chainContractId(chainFromAsset(destAsset)),
+      getChainContractId(chainFromAsset(destAsset)),
       destAsset === 'Flip' ? decodeFlipAddressForContract(destAddress) : destAddress,
-      assetContractId(destAsset),
+      getAssetContractId(destAsset),
       cfParameters,
     )
     .encodeABI();

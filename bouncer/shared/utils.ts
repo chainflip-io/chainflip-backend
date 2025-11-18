@@ -15,6 +15,7 @@ import {
   chainflipAssets,
   chainflipChains,
 } from '@chainflip/cli';
+import { chainContractId, assetContractId } from '@chainflip/utils/chainflip';
 import Web3 from 'web3';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
@@ -278,8 +279,8 @@ export function defaultAssetAmounts(asset: Asset): string {
   }
 }
 
-export function assetContractId(asset: Asset): number {
-  if (isSDKAsset(asset)) return assetConstants[asset].contractId;
+export function getAssetContractId(asset: Asset): number {
+  if (isSDKAsset(asset)) return assetContractId[asset];
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
@@ -288,8 +289,8 @@ export function assetDecimals(asset: Asset): number {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
-export function chainContractId(chain: Chain): number {
-  if (isSDKChain(chain)) return chainContractId[chain].contractId;
+export function getChainContractId(chain: Chain): number {
+  if (isSDKChain(chain)) return chainContractId[chain];
   throw new Error(`Unsupported chain: ${chain}`);
 }
 
@@ -320,7 +321,7 @@ export function amountToFineAmountBigInt(amount: number | string, asset: Asset):
 // State Chain uses non-unique string identifiers for assets.
 export function stateChainAssetFromAsset(asset: Asset): string {
   if (isSDKAsset(asset)) {
-    return asset.toString();
+    return assetConstants[asset].symbol;
   }
   throw new Error(`Unsupported asset: ${asset}`);
 }
@@ -984,7 +985,7 @@ export async function observeCcmReceived(
         destAddress,
         'ReceivedxSwapAndCall',
         [
-          chainContractId(chainFromAsset(sourceAsset)).toString(),
+          getChainContractId(chainFromAsset(sourceAsset)).toString(),
           sourceAddress ?? null,
           messageMetadata.message,
           getContractAddress(destChain, destAsset.toString()),
@@ -997,7 +998,7 @@ export async function observeCcmReceived(
     case 'Solana':
       return observeSolanaCcmEvent(
         'ReceivedCcm',
-        chainContractId(chainFromAsset(sourceAsset)).toString(),
+        getChainContractId(chainFromAsset(sourceAsset)).toString(),
         sourceAddress ?? null,
         messageMetadata,
       );
