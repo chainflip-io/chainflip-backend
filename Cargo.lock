@@ -1576,6 +1576,7 @@ dependencies = [
  "cf-primitives",
  "cf-rpc-types",
  "jsonrpsee 0.23.2",
+ "pallet-cf-environment",
  "serde",
  "thiserror 1.0.69",
 ]

@@ -25,6 +25,7 @@ use cf_primitives::{DcaParameters, ForeignChain};
 use cf_rpc_types::{RebalanceOutcome, RedemptionAmount, RedemptionOutcome, RefundParametersRpc};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
+pub use pallet_cf_environment::submit_runtime_call::{SignatureData, TransactionMetadata};
 use pallet_cf_governance::ExecutionMode;
 use serde::Serialize;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -635,6 +636,53 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			extrinsic_data.tx_hash
 		)
 	}
+	async fn request_account_creation_deposit_address(
+		&self,
+		signature_data: SignatureData,
+		transaction_metadata: TransactionMetadata,
+		asset: Asset,
+		boost_fee: Option<BasisPoints>,
+		refund_address: AddressString,
+	) -> Result<AccountCreationDepositAddress> {
+		let submit_signed_extrinsic_fut = self
+			.submit_signed_extrinsic_with_dry_run(
+				pallet_cf_swapping::Call::request_account_creation_deposit_address {
+					signature_data,
+					transaction_metadata,
+					asset,
+					boost_fee: boost_fee.unwrap_or_default(),
+					refund_address: refund_address.try_parse_to_encoded_address(asset.into())?,
+				},
+			)
+			.and_then(|(_, (block_fut, finalized_fut))| async move {
+				let extrinsic_data = block_fut.until_in_block().await?;
+				Ok((
+					extract_account_creation_deposit_address(
+						extrinsic_data.events,
+						extrinsic_data.header,
+					)?,
+					finalized_fut,
+				))
+			})
+			.boxed();
+
+		// Get the pre-allocated channels from the previous finalized block
+		let preallocated_channels_fut =
+			fetch_preallocated_channels(self.base_rpc_client(), self.account_id(), asset.into());
+
+		let ((account_creation_deposit_address, finalized_fut), preallocated_channels) =
+			futures::try_join!(submit_signed_extrinsic_fut, preallocated_channels_fut)?;
+
+		// If the extracted deposit channel was pre-allocated to this broker
+		// in the previous finalized block, we can return it immediately.
+		if preallocated_channels.contains(&account_creation_deposit_address.channel_id) {
+			return Ok(account_creation_deposit_address);
+		};
+
+		// Worst case, we need to wait for the transaction to be finalized.
+		let extrinsic_data = finalized_fut.until_finalized().await?;
+		extract_account_creation_deposit_address(extrinsic_data.events, extrinsic_data.header)
+	}
 }
 
 #[async_trait]
@@ -874,6 +922,37 @@ fn extract_swap_deposit_address(
 				.map_address(|refund_address| {
 					AddressString::from_encoded_address(&refund_address)
 				}),
+		}
+	)
+}
+
+fn extract_account_creation_deposit_address(
+	events: Vec<RuntimeEvent>,
+	header: state_chain_runtime::Header,
+) -> Result<AccountCreationDepositAddress> {
+	extract_event!(
+		events,
+		state_chain_runtime::RuntimeEvent::Swapping,
+		pallet_cf_swapping::Event::AccountCreationDepositAddressReady,
+		{
+			channel_id,
+			asset,
+			deposit_address,
+			requested_by,
+			requested_for,
+			deposit_chain_expiry_block,
+			boost_fee,
+			channel_opening_fee,
+			refund_address
+		},
+		AccountCreationDepositAddress {
+			channel_id: *channel_id,
+			issued_block: header.number,
+			address: AddressString::from_encoded_address(deposit_address),
+			requested_for: requested_for.clone(),
+			deposit_chain_expiry_block: (*deposit_chain_expiry_block).into(),
+			channel_opening_fee: (*channel_opening_fee).into(),
+			refund_address: AddressString::from_encoded_address(refund_address),
 		}
 	)
 }
