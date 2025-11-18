@@ -1221,14 +1221,8 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
   const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals(from));
   const hexPrice = (await chainflipApi.rpc(
     'cf_swap_rate',
-    {
-      chain: chainFromAsset(from),
-      asset: stateChainAssetFromAsset(from),
-    },
-    {
-      chain: chainFromAsset(to),
-      asset: stateChainAssetFromAsset(to),
-    },
+    stateChainAssetFromAsset(from),
+    stateChainAssetFromAsset(to),
     Number(fineFromAmount).toString(16),
   )) as SwapRate;
 
