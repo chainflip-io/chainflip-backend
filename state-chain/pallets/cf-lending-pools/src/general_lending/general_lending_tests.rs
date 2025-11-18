@@ -1021,7 +1021,8 @@ fn swap_collected_network_fees() {
 							accumulated_output_amount: 0,
 							swap_type: SwapRequestType::NetworkFee,
 							broker_fees: Default::default(),
-							origin: SwapOrigin::Internal
+							origin: SwapOrigin::Internal,
+							dca_params: None
 						}
 					),
 					(
@@ -1034,7 +1035,8 @@ fn swap_collected_network_fees() {
 							accumulated_output_amount: 0,
 							swap_type: SwapRequestType::NetworkFee,
 							broker_fees: Default::default(),
-							origin: SwapOrigin::Internal
+							origin: SwapOrigin::Internal,
+							dca_params: None
 						}
 					)
 				])
@@ -1204,7 +1206,8 @@ fn basic_liquidation() {
 						}
 					},
 					broker_fees: Default::default(),
-					origin: SwapOrigin::Internal
+					origin: SwapOrigin::Internal,
+					dca_params: Some(DcaParameters { number_of_chunks: 3, chunk_interval: 1 }),
 				}
 			);
 
@@ -1345,7 +1348,8 @@ fn basic_liquidation() {
 						}
 					},
 					broker_fees: Default::default(),
-					origin: SwapOrigin::Internal
+					origin: SwapOrigin::Internal,
+					dca_params: Some(DcaParameters { number_of_chunks: 2, chunk_interval: 1 }),
 				}
 			);
 
@@ -2400,6 +2404,7 @@ fn adding_collateral_during_liquidation() {
 		},
 		broker_fees: Default::default(),
 		origin: SwapOrigin::Internal,
+		dca_params: Some(DcaParameters { number_of_chunks: 1, chunk_interval: 1 }),
 	};
 
 	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
@@ -2612,6 +2617,7 @@ mod voluntary_liquidation {
 			},
 			broker_fees: Default::default(),
 			origin: SwapOrigin::Internal,
+			dca_params: None,
 		}
 	}
 
@@ -3538,6 +3544,7 @@ fn init_liquidation_swaps_test() {
 					},
 					broker_fees: Default::default(),
 					origin: SwapOrigin::Internal,
+					dca_params: Some(DcaParameters { number_of_chunks: 1, chunk_interval: 1 }),
 				},
 			)
 		})

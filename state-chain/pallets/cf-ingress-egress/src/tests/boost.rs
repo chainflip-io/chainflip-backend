@@ -592,6 +592,7 @@ fn taking_network_fee_from_boost_fee() {
 						origin: SwapOrigin::Internal,
 						remaining_input_amount: 10,
 						accumulated_output_amount: 0,
+						dca_params: None,
 					}
 				)])
 			);
@@ -702,6 +703,10 @@ mod vault_swaps {
 								},
 								remaining_input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
 								accumulated_output_amount: 0,
+								dca_params: Some(DcaParameters {
+									number_of_chunks: 1,
+									chunk_interval: SWAP_DELAY_BLOCKS
+								}),
 							}
 						),
 						(
@@ -715,6 +720,10 @@ mod vault_swaps {
 								origin: SwapOrigin::Internal,
 								remaining_input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
 								accumulated_output_amount: 0,
+								dca_params: Some(DcaParameters {
+									number_of_chunks: 1,
+									chunk_interval: SWAP_DELAY_BLOCKS
+								}),
 							}
 						)
 					])

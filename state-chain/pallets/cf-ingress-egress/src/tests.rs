@@ -43,7 +43,7 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries,
 	Beneficiary, ChannelId, DcaParameters, ForeignChain, PrewitnessedDepositId, SwapRequestId,
-	FLIPPERINOS_PER_FLIP, MAX_AFFILIATES,
+	FLIPPERINOS_PER_FLIP, MAX_AFFILIATES, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -1971,6 +1971,7 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(test_function: i
 						origin: SwapOrigin::Internal,
 						remaining_input_amount: GAS_FEE,
 						accumulated_output_amount: 0,
+						dca_params: None,
 					}
 				),
 				(
@@ -1984,6 +1985,7 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(test_function: i
 						origin: SwapOrigin::Internal,
 						remaining_input_amount: GAS_FEE,
 						accumulated_output_amount: 0,
+						dca_params: None,
 					}
 				),
 				(
@@ -1997,6 +1999,7 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(test_function: i
 						origin: SwapOrigin::Internal,
 						remaining_input_amount: GAS_FEE,
 						accumulated_output_amount: 0,
+						dca_params: None,
 					}
 				)
 			])
@@ -2366,6 +2369,10 @@ fn can_request_swap_via_extrinsic() {
 					},
 					remaining_input_amount: INPUT_AMOUNT,
 					accumulated_output_amount: 0,
+					dca_params: Some(DcaParameters {
+						number_of_chunks: 1,
+						chunk_interval: SWAP_DELAY_BLOCKS
+					}),
 				}
 			)])
 		);
@@ -2441,6 +2448,10 @@ fn vault_swaps_support_affiliate_fees() {
 					},
 					remaining_input_amount: INPUT_AMOUNT,
 					accumulated_output_amount: 0,
+					dca_params: Some(DcaParameters {
+						number_of_chunks: 1,
+						chunk_interval: SWAP_DELAY_BLOCKS
+					}),
 				}
 			)]),
 		);
@@ -2548,6 +2559,10 @@ fn can_request_ccm_swap_via_extrinsic() {
 					},
 					accumulated_output_amount: 0,
 					remaining_input_amount: INPUT_AMOUNT,
+					dca_params: Some(DcaParameters {
+						number_of_chunks: 1,
+						chunk_interval: SWAP_DELAY_BLOCKS
+					}),
 				}
 			)])
 		);
