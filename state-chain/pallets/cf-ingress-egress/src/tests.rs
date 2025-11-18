@@ -2369,10 +2369,7 @@ fn can_request_swap_via_extrinsic() {
 					},
 					remaining_input_amount: INPUT_AMOUNT,
 					accumulated_output_amount: 0,
-					dca_params: Some(DcaParameters {
-						number_of_chunks: 1,
-						chunk_interval: SWAP_DELAY_BLOCKS
-					}),
+					dca_params: None,
 				}
 			)])
 		);
@@ -2448,10 +2445,7 @@ fn vault_swaps_support_affiliate_fees() {
 					},
 					remaining_input_amount: INPUT_AMOUNT,
 					accumulated_output_amount: 0,
-					dca_params: Some(DcaParameters {
-						number_of_chunks: 1,
-						chunk_interval: SWAP_DELAY_BLOCKS
-					}),
+					dca_params: None,
 				}
 			)]),
 		);
@@ -2559,10 +2553,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 					},
 					accumulated_output_amount: 0,
 					remaining_input_amount: INPUT_AMOUNT,
-					dca_params: Some(DcaParameters {
-						number_of_chunks: 1,
-						chunk_interval: SWAP_DELAY_BLOCKS
-					}),
+					dca_params: None,
 				}
 			)])
 		);

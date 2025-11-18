@@ -664,7 +664,10 @@ mod vault_swaps {
 					refund_ccm_metadata: Default::default(),
 					max_oracle_price_slippage: Default::default(),
 				},
-				dca_params: None,
+				dca_params: Some(DcaParameters {
+					number_of_chunks: 1,
+					chunk_interval: SWAP_DELAY_BLOCKS,
+				}),
 				boost_fee: 5,
 			};
 
