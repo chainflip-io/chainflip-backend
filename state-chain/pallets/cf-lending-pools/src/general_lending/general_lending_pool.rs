@@ -39,6 +39,16 @@ impl<T: Config> From<LendingPoolError> for Error<T> {
 	}
 }
 
+/// Result of a successful execution of [LendingPool::remove_funds]
+#[derive(Debug, PartialEq, Eq)]
+pub struct WithdrawnAndRemainingAmounts {
+	/// This much has been withdrawn from the pool (this amount needs to be
+	/// assigned/credited elsewhere).
+	pub withdrawn_amount: AssetAmount,
+	/// This much is left in the pool.
+	pub remaining_amount: AssetAmount,
+}
+
 impl<AccountId> LendingPool<AccountId>
 where
 	AccountId: Decode + Encode + Ord + Clone,
@@ -77,7 +87,7 @@ where
 		&mut self,
 		lender: &AccountId,
 		amount: Option<AssetAmount>,
-	) -> Result<AssetAmount, LendingPoolError> {
+	) -> Result<WithdrawnAndRemainingAmounts, LendingPoolError> {
 		let share = self
 			.lender_shares
 			.get_mut(lender)
@@ -112,7 +122,10 @@ where
 		.map(|(id, parts)| (id.clone(), Perquintill::from_parts(parts)))
 		.collect();
 
-		Ok(amount_to_withdraw)
+		Ok(WithdrawnAndRemainingAmounts {
+			withdrawn_amount: amount_to_withdraw,
+			remaining_amount: remaining_owed_amount,
+		})
 	}
 
 	pub fn provide_funds_for_loan(&mut self, amount: AssetAmount) -> Result<(), LendingPoolError> {
@@ -299,7 +312,10 @@ mod tests {
 		);
 
 		// --- Start removing funds here ---
-		assert_eq!(chp_pool.remove_funds(&LENDER_2, None), Ok(300));
+		assert_eq!(
+			chp_pool.remove_funds(&LENDER_2, None),
+			Ok(WithdrawnAndRemainingAmounts { withdrawn_amount: 300, remaining_amount: 0 })
+		);
 		assert_eq!(chp_pool.total_amount, 800);
 		assert_eq!(chp_pool.available_amount, 800);
 
@@ -311,13 +327,19 @@ mod tests {
 			],
 		);
 
-		assert_eq!(chp_pool.remove_funds(&LENDER_3, None), Ok(300));
+		assert_eq!(
+			chp_pool.remove_funds(&LENDER_3, None),
+			Ok(WithdrawnAndRemainingAmounts { withdrawn_amount: 300, remaining_amount: 0 })
+		);
 		assert_eq!(chp_pool.total_amount, 500);
 		assert_eq!(chp_pool.available_amount, 500);
 
 		check_shares(&chp_pool, [(LENDER_1, Perquintill::from_percent(100))]);
 
-		assert_eq!(chp_pool.remove_funds(&LENDER_1, None), Ok(500));
+		assert_eq!(
+			chp_pool.remove_funds(&LENDER_1, None),
+			Ok(WithdrawnAndRemainingAmounts { withdrawn_amount: 500, remaining_amount: 0 })
+		);
 		assert_eq!(chp_pool.total_amount, 0);
 		assert_eq!(chp_pool.available_amount, 0);
 
@@ -337,7 +359,10 @@ mod tests {
 		assert_eq!(chp_pool.get_utilisation(), Permill::from_percent(60));
 
 		// Lender 1 requests only a portion of their funds:
-		assert_eq!(chp_pool.remove_funds(&LENDER_1, Some(100)), Ok(100));
+		assert_eq!(
+			chp_pool.remove_funds(&LENDER_1, Some(100)),
+			Ok(WithdrawnAndRemainingAmounts { withdrawn_amount: 100, remaining_amount: 400 })
+		);
 
 		assert_eq!(chp_pool.total_amount, 900);
 		assert_eq!(chp_pool.available_amount, 300);
@@ -352,7 +377,10 @@ mod tests {
 		);
 
 		// Lender 1 now requests all remaining funds, but can only get some of them:
-		assert_eq!(chp_pool.remove_funds(&LENDER_1, None), Ok(300));
+		assert_eq!(
+			chp_pool.remove_funds(&LENDER_1, None),
+			Ok(WithdrawnAndRemainingAmounts { withdrawn_amount: 300, remaining_amount: 100 })
+		);
 
 		assert_eq!(chp_pool.get_utilisation(), Permill::from_percent(100));
 

@@ -44,9 +44,9 @@ trait LendingTestRunnerExt {
 impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<Test, Ctx> {
 	fn with_funded_pool(self, init_pool_amount: AssetAmount) -> Self {
 		self.then_execute_with(|ctx| {
-			setup_pool_with_funds(LOAN_ASSET, init_pool_amount);
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+			setup_pool_with_funds(LOAN_ASSET, init_pool_amount);
 
 			ctx
 		})
@@ -500,8 +500,6 @@ fn basic_general_lending() {
 				PendingNetworkFees::<Test>::get(LOAN_ASSET),
 				origination_fee_network + network_interest_1
 			);
-
-			// TODO: check that network got its payment
 		})
 		.then_process_blocks_until_block(
 			INIT_BLOCK + 2 * CONFIG.interest_payment_interval_blocks as u64,
@@ -671,7 +669,8 @@ fn collateral_auto_topup() {
 	const EXTRA_FUNDS: AssetAmount = INIT_COLLATERAL;
 
 	fn get_ltv() -> FixedU64 {
-		LoanAccounts::<Test>::get(BORROWER).unwrap().derive_ltv().unwrap()
+		let price_cache = OraclePriceCache::<Test>::default();
+		LoanAccounts::<Test>::get(BORROWER).unwrap().derive_ltv(&price_cache).unwrap()
 	}
 
 	fn get_collateral() -> AssetAmount {
@@ -684,10 +683,9 @@ fn collateral_auto_topup() {
 
 	new_test_ext()
 		.execute_with(|| {
-			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
-
 			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE * 1_000_000);
 			set_asset_price_in_usd(COLLATERAL_ASSET, 1_000_000);
+			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 			MockBalance::credit_account(
 				&BORROWER,
@@ -775,10 +773,9 @@ fn basic_loan_aggregation() {
 	let (origination_fee_network_3, origination_fee_pool_3) = take_network_fee(ORIGINATION_FEE_3);
 
 	new_test_ext().execute_with(|| {
-		setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
-
 		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+		setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
 		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
@@ -1066,10 +1063,10 @@ fn adding_and_removing_collateral() {
 	const INIT_COLLATERAL_AMOUNT_2: AssetAmount = 1000;
 
 	new_test_ext().execute_with(|| {
-		setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 		set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
 		set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+		setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 		MockBalance::credit_account(
 			&BORROWER,
@@ -1230,7 +1227,7 @@ fn basic_liquidation() {
 
 			// Despite collateral having been moved to the swapping pallet, we
 			// can still calculate its value:
-			assert_eq!(loan_account.total_collateral_usd_value().unwrap(), INIT_COLLATERAL);
+			assert_eq!(loan_account.total_collateral_usd_value(&OraclePriceCache::default()).unwrap(), INIT_COLLATERAL);
 
 			assert_has_event::<Test>(RuntimeEvent::LendingPools(
 				Event::<Test>::LiquidationInitiated {
@@ -1792,12 +1789,11 @@ fn small_interest_amounts_accumulate() {
 
 	new_test_ext()
 		.execute_with(|| {
+			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
 			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 			LendingConfig::<Test>::set(config.clone());
-
-			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
 
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
 			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
@@ -2433,7 +2429,10 @@ fn adding_collateral_during_liquidation() {
 			// Force liquidation
 			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
 
-			assert_eq!(get_account().derive_ltv().unwrap(), ltv_at_liquidation);
+			assert_eq!(
+				get_account().derive_ltv(&OraclePriceCache::default()).unwrap(),
+				ltv_at_liquidation
+			);
 		})
 		.then_execute_at_next_block(|_| {
 			assert_matches!(
@@ -2467,7 +2466,10 @@ fn adding_collateral_during_liquidation() {
 			);
 
 			// The extra collateral does reduce LTV however:
-			assert!(get_account().derive_ltv().unwrap() < ltv_at_liquidation);
+			assert!(
+				get_account().derive_ltv(&OraclePriceCache::default()).unwrap() <
+					ltv_at_liquidation
+			);
 
 			// Simulate partial liquidation:
 			MockSwapRequestHandler::<Test>::set_swap_request_progress(
@@ -2489,7 +2491,8 @@ fn adding_collateral_during_liquidation() {
 			fund_account_and_add_collateral(EXTRA_COLLATERAL_2);
 
 			assert!(
-				get_account().derive_ltv().unwrap() < CONFIG.ltv_thresholds.hard_liquidation.into()
+				get_account().derive_ltv(&OraclePriceCache::default()).unwrap() <
+					CONFIG.ltv_thresholds.hard_liquidation.into()
 			);
 		})
 		.then_execute_at_next_block(|_| {
@@ -2531,7 +2534,10 @@ fn adding_collateral_during_liquidation() {
 			// soft liquidation to a healthy loan:
 			fund_account_and_add_collateral(EXTRA_COLLATERAL_3);
 
-			assert!(get_account().derive_ltv().unwrap() < CONFIG.ltv_thresholds.target.into());
+			assert!(
+				get_account().derive_ltv(&OraclePriceCache::default()).unwrap() <
+					CONFIG.ltv_thresholds.target.into()
+			);
 
 			// Simulate partial liquidation:
 			MockSwapRequestHandler::<Test>::set_swap_request_progress(
@@ -3091,6 +3097,9 @@ mod safe_mode {
 
 	#[test]
 	fn safe_mode_for_removing_lender_funds() {
+		const OTHER_ASSET: Asset = Asset::Eth;
+		assert_ne!(OTHER_ASSET, LOAN_ASSET);
+
 		let try_to_withdraw = || {
 			LendingPools::remove_lender_funds(
 				RuntimeOrigin::signed(LENDER),
@@ -3100,6 +3109,8 @@ mod safe_mode {
 		};
 
 		new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
+			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+			set_asset_price_in_usd(OTHER_ASSET, SWAP_RATE);
 			// Withdrawing is disabled for all assets:
 			{
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
@@ -3122,8 +3133,6 @@ mod safe_mode {
 
 			// Withdrawing is enabled for the requested asset:
 			{
-				const OTHER_ASSET: Asset = Asset::Eth;
-				assert_ne!(OTHER_ASSET, LOAN_ASSET);
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
 					withdraw_lender_funds: SafeModeSet::Amber(BTreeSet::from([OTHER_ASSET])),
 					..PalletSafeMode::code_green()
@@ -3509,8 +3518,15 @@ fn init_liquidation_swaps_test() {
 		set_asset_price_in_usd(Asset::Sol, 200);
 		set_asset_price_in_usd(Asset::Usdc, 1);
 
-		let collateral = loan_account.prepare_collateral_for_liquidation().unwrap();
-		loan_account.init_liquidation_swaps(&BORROWER, collateral, LiquidationType::Soft);
+		let collateral = loan_account
+			.prepare_collateral_for_liquidation(&OraclePriceCache::default())
+			.unwrap();
+		loan_account.init_liquidation_swaps(
+			&BORROWER,
+			collateral,
+			LiquidationType::Soft,
+			&OraclePriceCache::default(),
+		);
 
 		let expected_swaps = [
 			(SWAP_1, LOAN_1, Asset::Eth, Asset::Btc, 417),
@@ -3634,14 +3650,14 @@ mod rpcs {
 
 		new_test_ext()
 			.execute_with(|| {
-				setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
-				setup_pool_with_funds(LOAN_ASSET_2, INIT_POOL_AMOUNT * 2);
-
 				set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
 				set_asset_price_in_usd(COLLATERAL_ASSET, 1);
 
 				set_asset_price_in_usd(LOAN_ASSET_2, SWAP_RATE);
 				set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+
+				setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
+				setup_pool_with_funds(LOAN_ASSET_2, INIT_POOL_AMOUNT * 2);
 
 				MockBalance::credit_account(
 					&BORROWER,
@@ -3979,7 +3995,7 @@ fn loan_minimum_is_enforced() {
 				Some(COLLATERAL_ASSET),
 				BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_AMOUNT)])
 			),
-			Error::<Test>::LoanBelowMinimumAmount
+			Error::<Test>::RemainingAmountBelowMinimum
 		);
 
 		// A loan equal to or above the minimum amount should be fine
@@ -3997,7 +4013,7 @@ fn loan_minimum_is_enforced() {
 		// Now try and repay an amount that would leave the loan below the minimum
 		assert_noop!(
 			LendingPools::try_making_repayment(&BORROWER, LOAN_ID, RepaymentAmount::Exact(1)),
-			Error::<Test>::LoanBelowMinimumAmount,
+			Error::<Test>::RemainingAmountBelowMinimum,
 		);
 
 		// If we expand the loan so a partial repayment would not take it below the minimum,
@@ -4016,6 +4032,78 @@ fn loan_minimum_is_enforced() {
 			&BORROWER,
 			LOAN_ID,
 			RepaymentAmount::Exact(MIN_LOAN_AMOUNT_ASSET)
+		));
+	});
+}
+
+#[test]
+fn supply_minimum_is_enforced() {
+	const MIN_SUPPLY_AMOUNT_USD: AssetAmount = 1_000_000;
+
+	// Min amount that can be supplied in pool's asset
+	const MIN_SUPPLY_AMOUNT: AssetAmount = MIN_SUPPLY_AMOUNT_USD / SWAP_RATE;
+
+	new_test_ext().execute_with(|| {
+		// Set the minimum supply amount
+		LendingConfig::<Test>::set(LendingConfiguration {
+			minimum_supply_amount_usd: MIN_SUPPLY_AMOUNT_USD,
+			..LendingConfigDefault::get()
+		});
+
+		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+
+		disable_whitelist();
+
+		assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
+
+		MockBalance::credit_account(&LENDER, LOAN_ASSET, 2 * MIN_SUPPLY_AMOUNT);
+
+		// Can't supply below minimum
+		assert_noop!(
+			LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				MIN_SUPPLY_AMOUNT / 2
+			),
+			Error::<Test>::AmountBelowMinimum
+		);
+
+		// Can supply the minimum amount
+		assert_ok!(LendingPools::add_lender_funds(
+			RuntimeOrigin::signed(LENDER),
+			LOAN_ASSET,
+			MIN_SUPPLY_AMOUNT
+		));
+
+		// Add some more to test removing funds
+		assert_ok!(LendingPools::add_lender_funds(
+			RuntimeOrigin::signed(LENDER),
+			LOAN_ASSET,
+			MIN_SUPPLY_AMOUNT
+		));
+
+		// Can't leave less than the minimum in the pool
+		assert_noop!(
+			LendingPools::remove_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				Some(3 * MIN_SUPPLY_AMOUNT / 2)
+			),
+			Error::<Test>::RemainingAmountBelowMinimum
+		);
+
+		// Can remove funds partially (leaves more than the min in the pool):
+		assert_ok!(LendingPools::remove_lender_funds(
+			RuntimeOrigin::signed(LENDER),
+			LOAN_ASSET,
+			Some(MIN_SUPPLY_AMOUNT / 2)
+		));
+
+		// Can remove all funds:
+		assert_ok!(LendingPools::remove_lender_funds(
+			RuntimeOrigin::signed(LENDER),
+			LOAN_ASSET,
+			None
 		));
 	});
 }
