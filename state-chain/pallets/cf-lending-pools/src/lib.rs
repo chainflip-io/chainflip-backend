@@ -23,6 +23,7 @@ mod general_lending;
 mod utils;
 
 use cf_chains::SwapOrigin;
+use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{get_lending_pools, get_loan_accounts},
 	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolAndSupplyPositions,
@@ -31,7 +32,6 @@ pub use general_lending::{
 	RpcLiquidationSwap, RpcLoan, RpcLoanAccount, WhitelistStatus, WhitelistUpdate,
 	WithdrawnAndRemainingAmounts,
 };
-use general_lending::{usd_value_of, LoanAccount};
 
 pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
 use boost::{BoostPool, BoostPoolContribution, BoostPoolId};
@@ -765,11 +765,11 @@ pub mod pallet {
 			);
 
 			let config = LendingConfig::<T>::get();
-			let price_cache = OraclePriceCache::<T>::default();
 
 			// - The user does not add amount that's too small
 			ensure!(
-				usd_value_of::<T>(asset, amount, &price_cache)? >= config.minimum_supply_amount_usd,
+				OraclePriceCache::<T>::default().usd_value_of(asset, amount)? >=
+					config.minimum_supply_amount_usd,
 				Error::<T>::AmountBelowMinimum
 			);
 
@@ -820,14 +820,13 @@ pub mod pallet {
 
 				let config = LendingConfig::<T>::get();
 
-				let price_cache = OraclePriceCache::<T>::default();
-
 				// Either the user removes everything, or they have to leave at least
 				// the minimum required amount in the pool (to prevent dust amounts from
 				// accumulating):
 				ensure!(
 					remaining_amount == 0 ||
-						usd_value_of::<T>(asset, remaining_amount, &price_cache)? >=
+						OraclePriceCache::<T>::default()
+							.usd_value_of(asset, remaining_amount)? >=
 							config.minimum_supply_amount_usd,
 					Error::<T>::RemainingAmountBelowMinimum
 				);
