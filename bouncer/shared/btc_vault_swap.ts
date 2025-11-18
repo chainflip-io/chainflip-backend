@@ -3,6 +3,7 @@ import { sendVaultTransaction } from 'shared/send_btc';
 import {
   Asset,
   assetDecimals,
+  Assets,
   brokerMutex,
   chainFromAsset,
   Chains,
@@ -97,7 +98,7 @@ export async function buildAndSendBtcVaultSwap(
   const BtcVaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
     broker.address,
-    stateChainAssetFromAsset('Btc'),
+    stateChainAssetFromAsset(Assets.Btc),
     stateChainAssetFromAsset(destinationAsset),
     chainFromAsset(destinationAsset) === Chains.Polkadot
       ? decodeDotAddressForContract(destinationAddress)
