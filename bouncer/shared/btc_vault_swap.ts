@@ -97,8 +97,8 @@ export async function buildAndSendBtcVaultSwap(
   const BtcVaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
     broker.address,
-    { chain: 'Bitcoin', asset: stateChainAssetFromAsset('Btc') },
-    { chain: chainFromAsset(destinationAsset), asset: stateChainAssetFromAsset(destinationAsset) },
+    stateChainAssetFromAsset('Btc'),
+    stateChainAssetFromAsset(destinationAsset),
     chainFromAsset(destinationAsset) === Chains.Polkadot
       ? decodeDotAddressForContract(destinationAddress)
       : destinationAddress,

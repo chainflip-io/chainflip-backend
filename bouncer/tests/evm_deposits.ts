@@ -303,8 +303,8 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
   const cfParameters = (await chainflip.rpc(
     `cf_encode_cf_parameters`,
     new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_1').address,
-    { chain: chainFromAsset(sourceAsset), asset: stateChainAssetFromAsset(sourceAsset) },
-    { chain: chainFromAsset(destAsset), asset: stateChainAssetFromAsset(destAsset) },
+    stateChainAssetFromAsset(sourceAsset),
+    stateChainAssetFromAsset(destAsset),
     destAddress,
     1, // broker_comission
     refundParams,

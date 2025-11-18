@@ -15,7 +15,12 @@ import {
   chainflipAssets,
   chainflipChains,
 } from '@chainflip/cli';
-import { chainContractId, assetContractId } from '@chainflip/utils/chainflip';
+import {
+  chainContractId,
+  assetContractId,
+  AssetAndChain,
+  AssetSymbol,
+} from '@chainflip/utils/chainflip';
 import Web3 from 'web3';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
@@ -316,14 +321,6 @@ export function chainGasAsset(chain: Chain): Asset {
 export function amountToFineAmountBigInt(amount: number | string, asset: Asset): bigint {
   const stringAmount = typeof amount === 'number' ? amount.toString() : amount;
   return BigInt(amountToFineAmount(stringAmount, assetDecimals(asset)));
-}
-
-// State Chain uses non-unique string identifiers for assets.
-export function stateChainAssetFromAsset(asset: Asset): string {
-  if (isSDKAsset(asset)) {
-    return assetConstants[asset].symbol;
-  }
-  throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export async function runWithTimeout<T>(
@@ -681,6 +678,16 @@ export async function newAddress(
 export function chainFromAsset(asset: Asset): Chain {
   if (isSDKAsset(asset)) return assetConstants[asset].chain;
   if (asset === 'Sol' || asset === 'SolUsdc') return 'Solana';
+  throw new Error(`Unsupported asset: ${asset}`);
+}
+
+export function stateChainAssetFromAsset(asset: Asset): AssetAndChain {
+  if (isSDKAsset(asset)) {
+    return {
+      chain: chainFromAsset(asset),
+      asset: assetConstants[asset].symbol as AssetSymbol,
+    } as AssetAndChain;
+  }
   throw new Error(`Unsupported asset: ${asset}`);
 }
 

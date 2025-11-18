@@ -138,8 +138,8 @@ export async function executeSolVaultSwap(
   const vaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
     brokerFees.account,
-    { chain: chainFromAsset(srcAsset), asset: stateChainAssetFromAsset(srcAsset) },
-    { chain: chainFromAsset(destAsset), asset: stateChainAssetFromAsset(destAsset) },
+    stateChainAssetFromAsset(srcAsset),
+    stateChainAssetFromAsset(destAsset),
     chainFromAsset(destAsset) === Chains.Polkadot
       ? decodeDotAddressForContract(destAddress)
       : destAddress,
