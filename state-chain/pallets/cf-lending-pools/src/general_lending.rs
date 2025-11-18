@@ -207,7 +207,7 @@ impl<T: Config> LoanAccount<T> {
 		ltv: FixedU64,
 		price_cache: &OraclePriceCache<T>,
 		weight_used: &mut Weight,
-	) {
+	) -> Result<(), Error<T>> {
 		let config = LendingConfig::<T>::get();
 
 		// This will saturate at 100%, but that's good enough (none of our thresholds exceed 100%):
@@ -328,14 +328,8 @@ impl<T: Config> LoanAccount<T> {
 
 		match new_status {
 			LiquidationStatusChange::HealthyToLiquidation { liquidation_type } => {
-				if let Ok(collateral) = self.prepare_collateral_for_liquidation(price_cache) {
-					self.init_liquidation_swaps(
-						borrower_id,
-						collateral,
-						liquidation_type,
-						price_cache,
-					);
-				}
+				let collateral = self.prepare_collateral_for_liquidation(price_cache)?;
+				self.init_liquidation_swaps(borrower_id, collateral, liquidation_type, price_cache);
 				weight_used.saturating_accrue(T::WeightInfo::start_liquidation_swaps());
 			},
 			LiquidationStatusChange::AbortLiquidation { reason } => {
@@ -345,19 +339,15 @@ impl<T: Config> LoanAccount<T> {
 			LiquidationStatusChange::ChangeLiquidationType { liquidation_type } => {
 				// Going from one liquidation type to another is always due to LTV change
 				self.abort_liquidation_swaps(LiquidationCompletionReason::LtvChange, price_cache);
-				if let Ok(collateral) = self.prepare_collateral_for_liquidation(price_cache) {
-					self.init_liquidation_swaps(
-						borrower_id,
-						collateral,
-						liquidation_type,
-						price_cache,
-					);
-				}
+				let collateral = self.prepare_collateral_for_liquidation(price_cache)?;
+				self.init_liquidation_swaps(borrower_id, collateral, liquidation_type, price_cache);
 				weight_used.saturating_accrue(T::WeightInfo::start_liquidation_swaps());
 				weight_used.saturating_accrue(T::WeightInfo::abort_liquidation_swaps());
 			},
 			LiquidationStatusChange::NoChange => { /* nothing to do */ },
 		}
+
+		Ok(())
 	}
 
 	/// Aborts all current liquidation swaps, repays any already swapped principal assets and
@@ -1192,14 +1182,16 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 		.collect::<Vec<_>>()
 		.iter()
 	{
-		LoanAccounts::<T>::mutate(borrower_id, |loan_account| {
+		// Not being able to process a loan account is acceptable (expected when oracle
+		// prices are down).
+		let _ = LoanAccounts::<T>::try_mutate(borrower_id, |loan_account| {
 			let loan_account = loan_account.as_mut().expect("Using keys read just above");
 
 			// Some of these may fail due to oracle prices being unavailable, but that's
 			// OK and doesn't need any specific error handling (they will simply be re-tried
 			// at a later point).
 			weight_used.saturating_accrue(T::WeightInfo::derive_ltv());
-			if let Ok(ltv) = loan_account.derive_ltv(&price_cache) {
+			loan_account.derive_ltv(&price_cache).and_then(|ltv| {
 				let _ =
 					loan_account.derive_and_charge_interest(ltv, &price_cache, &mut weight_used);
 
@@ -1216,17 +1208,17 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 					Ok(ltv)
 				};
 
-				// This should always be Ok (otherwise we wouldn't be able to derive LTV the first
-				// time), but let's check anyway as a defensive measure:
-				if let Ok(new_ltv) = new_ltv {
+				// `new_ltv` should always be Ok (otherwise we wouldn't be able to derive LTV the
+				// first time), but let's avoid unwrapping as a defensive measure:
+				new_ltv.and_then(|new_ltv| {
 					loan_account.update_liquidation_status(
 						borrower_id,
 						new_ltv,
 						&price_cache,
 						&mut weight_used,
-					);
-				}
-			}
+					)
+				})
+			})
 		});
 	}
 
