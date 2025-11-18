@@ -57,8 +57,7 @@ impl Chain for Ethereum {
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = REFERENCE_ETH_PRICE_IN_USD;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = ONE_ETH;
-	const BURN_ADDRESS: Self::ChainAccount =
-		H160(hex_literal::hex!("000000000000000000000000000000000000dEaD"));
+	const BURN_ADDRESS: Self::ChainAccount = H160([0; 20]);
 
 	type ChainCrypto = evm::EvmCrypto;
 	type ChainBlockNumber = u64;
