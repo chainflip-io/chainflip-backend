@@ -1,4 +1,4 @@
-import { InternalAsset as Asset, Chain, Asset as SCAsset, broker } from '@chainflip/cli';
+import { InternalAsset as Asset, broker } from '@chainflip/cli';
 import {
   decodeDotAddressForContract,
   chainFromAsset,
@@ -8,6 +8,7 @@ import {
 } from 'shared/utils';
 import { Logger } from 'shared/utils/logger';
 import { brokerApiEndpoint } from 'shared/json_rpc';
+import { AssetAndChain, AssetSymbol } from '@chainflip/utils/chainflip';
 
 const defaultCommissionBps = 100; // 1%
 
@@ -49,11 +50,15 @@ export async function newSwap(
     try {
       await broker.requestSwapDepositAddress(
         {
-          srcAsset: stateChainAssetFromAsset(sourceAsset) as SCAsset,
-          destAsset: stateChainAssetFromAsset(destAsset) as SCAsset,
-          srcChain: chainFromAsset(sourceAsset) as Chain,
+          srcAsset: {
+            chain: chainFromAsset(sourceAsset),
+            asset: stateChainAssetFromAsset(sourceAsset) as AssetSymbol,
+          } as AssetAndChain,
+          destAsset: {
+            chain: chainFromAsset(destAsset),
+            asset: stateChainAssetFromAsset(destAsset) as AssetSymbol,
+          } as AssetAndChain,
           destAddress: destinationAddress,
-          destChain: chainFromAsset(destAsset) as Chain,
           ccmParams: messageMetadata && {
             message: messageMetadata.message,
             gasBudget: messageMetadata.gasBudget.toString(),
