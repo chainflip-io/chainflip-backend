@@ -106,8 +106,8 @@ export async function executeEvmVaultSwap(
   const vaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
     createStateChainKeypair(brokerUri).address,
-    { chain: srcChain, asset: stateChainAssetFromAsset(sourceAsset) },
-    { chain: destChain, asset: stateChainAssetFromAsset(destAsset) },
+    stateChainAssetFromAsset(sourceAsset),
+    stateChainAssetFromAsset(destAsset),
     destChain === Chains.Polkadot || destChain === Chains.Assethub
       ? decodeDotAddressForContract(destAddress)
       : destAddress,
