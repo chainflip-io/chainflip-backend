@@ -901,7 +901,7 @@ pub mod pallet {
 			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
-			refund_address: ForeignChainAddress,
+			refund_address: EncodedAddress,
 		},
 	}
 	#[pallet::error]
@@ -1624,7 +1624,7 @@ pub mod pallet {
 				deposit_chain_expiry_block: expiry_block,
 				boost_fee,
 				channel_opening_fee,
-				refund_address: refund_address_internal,
+				refund_address: T::AddressConverter::to_encoded_address(refund_address_internal),
 			});
 
 			Ok(())

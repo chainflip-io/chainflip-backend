@@ -57,7 +57,7 @@ pub enum SolEncodingType {
 	Domain,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub enum SignatureData {
 	Solana { signature: SolSignature, signer: SolAddress, sig_type: SolEncodingType },
 	Ethereum { signature: EthereumSignature, signer: EvmAddress, sig_type: EthEncodingType },
