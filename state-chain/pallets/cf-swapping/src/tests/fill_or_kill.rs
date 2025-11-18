@@ -976,8 +976,8 @@ mod oracle_swaps {
 		const OUTPUT_AMOUNT: AssetAmount = 5200905; // 0.052 BTC
 
 		// Real price values
-		static ETH_PRICE: &str = "1564376722621961188695537"; // $4597.29
-		static BTC_PRICE: &str = "378682551463232527188289505131228391"; // $111284.80
+		static ETH_PRICE: &str = "1564376722621961188695537448999"; // $4597.29
+		static BTC_PRICE: &str = "378682551463232527188289505131228390582386"; // $111284.80
 
 		// oracle amount = 5,205,144
 		// delta = 0.00081438669% = 8.14 bps

@@ -1119,7 +1119,7 @@ impl cf_traits::PriceFeedApi for ChainlinkOracle {
 		decode_and_get_latest_oracle_price::<TypesFor<Chainlink>>(asset)
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
+	#[cfg(any(feature = "runtime-integration-tests", feature = "runtime-benchmarks"))]
 	fn set_price(asset: assets::any::Asset, price: cf_primitives::Price) {
 		generic_elections::set_price(asset, price);
 	}
