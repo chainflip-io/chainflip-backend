@@ -936,14 +936,12 @@ fn extract_account_creation_deposit_address(
 		pallet_cf_swapping::Event::AccountCreationDepositAddressReady,
 		{
 			channel_id,
-			asset,
 			deposit_address,
-			requested_by,
 			requested_for,
 			deposit_chain_expiry_block,
-			boost_fee,
 			channel_opening_fee,
-			refund_address
+			refund_address,
+			..
 		},
 		AccountCreationDepositAddress {
 			channel_id: *channel_id,
