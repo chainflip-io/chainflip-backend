@@ -737,7 +737,7 @@ fn collateral_auto_topup() {
 			// The user only had a small amount in their balance, all of it gets used:
 			assert_eq!(get_collateral(), INIT_COLLATERAL + COLLATERAL_TOPUP);
 			assert_eq!(get_ltv(), FixedU64::from_rational(853_618_983, 1_000_000_000)); // ~85%
-			assert_eq!(MockBalance::get_balance(&LENDER, COLLATERAL_ASSET), 0);
+			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
 
 			// After we give the user more funds, auto-top up should bring CR back to target
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, EXTRA_FUNDS);
