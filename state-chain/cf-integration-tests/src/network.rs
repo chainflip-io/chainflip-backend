@@ -23,7 +23,9 @@ use crate::threshold_signing::{
 use cf_chains::{address::EncodedAddress, evm::TransactionFee};
 use cf_primitives::{AccountRole, BlockNumber, FlipBalance, TxId};
 use cf_test_utilities::assert_events_eq;
-use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, KeyRotator};
+use cf_traits::{
+	AccountRoleRegistry, Chainflip, EpochInfo, FundAccount, FundingSource, KeyRotator,
+};
 use cfe_events::{KeyHandoverRequest, ThresholdSignatureRequest, TxBroadcastRequest};
 use chainflip_node::test_account_from_seed;
 use codec::{Decode, Encode};
@@ -628,9 +630,8 @@ pub fn on_contract_event(event: &ContractEvent) {
 			println!("Funding account {:?}", validator_id);
 			pallet_cf_funding::Pallet::<Runtime>::fund_account(
 				validator_id.clone(),
-				ETH_ZERO_ADDRESS,
 				*amount,
-				TX_HASH,
+				FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
 			);
 		},
 		ContractEvent::Redeemed { node_id, amount } => {
@@ -887,9 +888,8 @@ pub fn fund_authorities_and_join_auction(
 pub fn new_account(account_id: &AccountId, role: AccountRole) {
 	Funding::fund_account(
 		account_id.clone(),
-		Default::default(),
 		FLIPPERINOS_PER_FLIP,
-		Default::default(),
+		FundingSource::EthTransaction { tx_hash: Default::default(), funder: Default::default() },
 	);
 	AccountRoles::on_new_account(account_id);
 	assert_ok!(AccountRoles::register_account_role(account_id, role));

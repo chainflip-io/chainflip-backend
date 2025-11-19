@@ -26,7 +26,7 @@ use crate::{
 };
 
 use cf_primitives::{AccountRole, FlipBalance};
-use cf_traits::{AccountInfo, EpochInfo};
+use cf_traits::{AccountInfo, EpochInfo, FundAccount, FundingSource};
 use frame_support::assert_ok;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
 use sp_runtime::{traits::Zero, PerU16};
@@ -66,7 +66,14 @@ fn setup_delegation(
 	let delegators: BTreeMap<_, _> = delegators
 		.into_iter()
 		.map(|(d, stake)| {
-			Funding::fund_account(d.clone(), Default::default(), stake, Default::default());
+			Funding::fund_account(
+				d.clone(),
+				stake,
+				FundingSource::EthTransaction {
+					tx_hash: Default::default(),
+					funder: Default::default(),
+				},
+			);
 			assert_ok!(Validator::delegate(
 				RuntimeOrigin::signed(d.clone()),
 				operator.clone(),

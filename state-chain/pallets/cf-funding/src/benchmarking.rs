@@ -20,7 +20,7 @@ use super::*;
 
 use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::AccountRole;
-use cf_traits::Chainflip;
+use cf_traits::{Chainflip, FundAccount, FundingSource};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
@@ -32,9 +32,8 @@ use sp_std::vec;
 fn fund_with_minimum<T: Config>(account_id: &T::AccountId) {
 	Pallet::<T>::fund_account(
 		account_id.clone(),
-		Default::default(),
 		MinimumFunding::<T>::get(),
-		Default::default(),
+		FundingSource::EthTransaction { tx_hash: Default::default(), funder: Default::default() },
 	);
 }
 
