@@ -200,7 +200,7 @@ It will still output to both `stdout` and the `bouncer.log` file.
 import { globalLogger } from 'shared/utils/logger';
 
 globalLogger.info('Executing my command');
-await observeEvent(globalLogger, 'someEvent');
+await observeEvent(globalLogger, 'some:Event').event;
 ```
 
 ### Debugging

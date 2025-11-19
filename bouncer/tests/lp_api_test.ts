@@ -485,7 +485,7 @@ async function testInternalSwap(logger: Logger) {
       event.data.accountId === lp.address &&
       Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
     historicalCheckBlocks: 3,
-  });
+  }).event;
 }
 
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected

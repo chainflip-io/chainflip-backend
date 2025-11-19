@@ -141,7 +141,7 @@ async function lendingTestForAsset(
   await observeEvent(logger, 'lendingPools:InterestTaken', {
     test: (event) => Number(event.data.loanId) === loanId,
     timeoutSeconds: 15,
-  });
+  }).event;
   assert(
     (await getLoan(lp.address)).principal_amount > loan.principal_amount,
     `Loan amount did not increase due to interest, expected more than ${loan.principal_amount} ${loanAsset}`,
