@@ -527,9 +527,6 @@ export function observeEvents<T = any>(
   }: Options<T> | AbortableOptions<T> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
-  if (!expectedSection || !expectedMethod) {
-    throw new Error(`Invalid event format: ${eventName}`);
-  }
   const startTime = Date.now();
   logger.debug(`Observing event ${eventName}`);
 

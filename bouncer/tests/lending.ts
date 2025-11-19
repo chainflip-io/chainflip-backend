@@ -81,7 +81,7 @@ async function lendingTestForAsset(
   await extrinsicSubmitter.submit(
     chainflip.tx.lendingPools.addCollateral(
       collateralAsset,
-      new Map(collateral.map(([asset, amount]) => [{ [asset]: {} }, amount])),
+      new Map(collateral.map(([asset, amount]) => [{ [asset]: {} }, { Exact: amount }])),
     ),
   );
 
@@ -130,8 +130,6 @@ async function lendingTestForAsset(
   // Make sure the origination fee was added to the loan amount
   const loan = await getLoan(lp.address);
   assert(loan !== undefined, 'Did not find a loan on the account');
-  logger.info(`type 1 = ${typeof loan.loan_id}`);
-  logger.info(`type 2 = ${typeof loanId}`);
   assert.strictEqual(loanId, loan.loan_id, `Loan ID does not match ${loanId} !== ${loan.loan_id}`);
   assert(
     BigInt(loan.principal_amount) > amountToFineAmountBigInt(loanAmount, loanAsset),
@@ -140,11 +138,10 @@ async function lendingTestForAsset(
 
   // Wait for some interest
   await sleep(6000);
-  const interestTakenEvent = await observeEvent(logger, 'lendingPools:InterestTaken', {
+  await observeEvent(logger, 'lendingPools:InterestTaken', {
     test: (event) => Number(event.data.loanId) === loanId,
     timeoutSeconds: 15,
-  }).event;
-  logger.debug(`Interest taken event: ${JSON.stringify(interestTakenEvent)}`);
+  });
   assert(
     (await getLoan(lp.address)).principal_amount > loan.principal_amount,
     `Loan amount did not increase due to interest, expected more than ${loan.principal_amount} ${loanAsset}`,
@@ -220,7 +217,7 @@ async function lendingTestForAsset(
 
 export async function lendingTest(testContext: TestContext): Promise<void> {
   // Change the interest interval to 1 block and the threshold to minimum for testing
-  testContext.logger.debug(`Setting interest payment interval to 1 block`);
+  testContext.logger.debug(`Setting interest payment interval to 1 block and threshold to 1 usd`);
   await submitGovernanceExtrinsic((api) =>
     api.tx.lendingPools.updatePalletConfig([
       { SetInterestPaymentIntervalBlocks: 1 },

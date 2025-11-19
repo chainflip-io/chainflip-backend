@@ -1456,9 +1456,6 @@ export async function submitExtrinsic(
 ) {
   const account = createStateChainKeypair(uri);
   const [expectedSection, expectedMethod] = findEvent.split(':');
-  if (!expectedSection || !expectedMethod) {
-    throw new Error(`Invalid event format: ${findEvent}`);
-  }
   const release = await mutex.acquire(uri);
   const { promise, waiter } = waitForExt(api, logger, 'InBlock');
   const nonce = (await api.rpc.system.accountNextIndex(account.address)) as unknown as number;
