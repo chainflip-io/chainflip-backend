@@ -316,7 +316,7 @@ pub fn initial_state(
 	}
 }
 
-#[cfg(feature = "runtime-benchmarks")]
+#[cfg(any(feature = "runtime-benchmarks", feature = "runtime-integration-tests"))]
 pub fn set_price(asset: any::Asset, price: Price) {
 	use pallet_cf_elections::electoral_systems::oracle_price::{
 		chainlink::statechain_price_to_chainlink_price, price::StatechainPrice,

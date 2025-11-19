@@ -263,3 +263,4 @@ try-runtime = [
 ]
 metadata-hash = ["substrate-wasm-builder/metadata-hash"]
 mocks = ["cf-chains/mocks", "cf-traits/mocks"]
+runtime-integration-tests = ["cf-traits/runtime-integration-tests", "pallet-cf-elections/runtime-integration-tests"]
