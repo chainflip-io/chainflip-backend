@@ -134,7 +134,7 @@ fn can_update_all_config_items() {
 
 		const NEW_LTV_THRESHOLDS: LtvThresholds = LtvThresholds {
 			target: Permill::from_percent(61),
-			topup: Permill::from_percent(71),
+			topup: Some(Permill::from_percent(71)),
 			soft_liquidation: Permill::from_percent(81),
 			soft_liquidation_abort: Permill::from_percent(80),
 			hard_liquidation: Permill::from_percent(91),

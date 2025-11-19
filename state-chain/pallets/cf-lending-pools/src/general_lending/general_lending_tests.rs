@@ -687,6 +687,17 @@ fn collateral_auto_topup() {
 			set_asset_price_in_usd(COLLATERAL_ASSET, 1_000_000);
 			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
+			// Enable auto top-up for this test.
+			assert_ok!(Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::root(),
+				bounded_vec![PalletConfigUpdate::SetLtvThresholds {
+					ltv_thresholds: LtvThresholds {
+						topup: Some(Permill::from_percent(85)),
+						..CONFIG.ltv_thresholds
+					}
+				}],
+			));
+
 			MockBalance::credit_account(
 				&BORROWER,
 				COLLATERAL_ASSET,

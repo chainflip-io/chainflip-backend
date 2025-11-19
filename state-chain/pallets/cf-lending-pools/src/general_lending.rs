@@ -535,7 +535,7 @@ impl<T: Config> LoanAccount<T> {
 	) -> Result<bool, DispatchError> {
 		let config = LendingConfig::<T>::get();
 
-		if ltv <= config.ltv_thresholds.topup.into() {
+		if config.ltv_thresholds.topup.is_none_or(|threshold| ltv <= threshold.into()) {
 			return Ok(false)
 		}
 
@@ -1996,7 +1996,7 @@ pub struct LtvThresholds {
 	/// ratio (principal/collateral) would exceed this threshold.
 	pub target: Permill,
 	/// Reaching this threshold will trigger a top-up of the collateral
-	pub topup: Permill,
+	pub topup: Option<Permill>,
 	/// Reaching this threshold will trigger soft liquidation account's loans
 	pub soft_liquidation: Permill,
 	/// If a loan that's being liquidated reaches this threshold, it will be considered
@@ -2016,10 +2016,10 @@ pub struct LtvThresholds {
 
 impl LtvThresholds {
 	pub fn validate(&self) -> DispatchResult {
+		ensure!(self.soft_liquidation <= self.hard_liquidation, "Invalid LTV thresholds");
 		ensure!(
-			self.target <= self.topup &&
-				self.topup <= self.soft_liquidation &&
-				self.soft_liquidation <= self.hard_liquidation,
+			self.topup
+				.is_none_or(|topup| self.target <= topup && topup <= self.soft_liquidation),
 			"Invalid LTV thresholds"
 		);
 
