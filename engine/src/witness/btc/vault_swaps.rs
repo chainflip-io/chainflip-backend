@@ -109,7 +109,7 @@ pub fn try_extract_vault_swap_witness(
 	broker_id: &AccountId,
 ) -> Option<VaultDepositWitness> {
 	// First output must be a deposit into our vault:
-	let utxo_to_vault = &tx.vout[0];
+	let utxo_to_vault = &tx.vout.get(0)?;
 	if utxo_to_vault.script_pubkey.as_bytes() != private_broker_channel.script_pubkey().bytes() {
 		return None;
 	}
