@@ -43,7 +43,7 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries,
 	Beneficiary, ChannelId, DcaParameters, ForeignChain, PrewitnessedDepositId, SwapRequestId,
-	MAX_AFFILIATES,
+	FLIPPERINOS_PER_FLIP, MAX_AFFILIATES,
 };
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -63,9 +63,9 @@ use cf_traits::{
 		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
-	AccountRoleRegistry, BalanceApi, DepositApi, EgressApi, EpochInfo,
-	FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, SafeMode, ScheduledEgressDetails,
-	SwapOutputAction, SwapRequestType,
+	AccountRoleRegistry, AdditionalDepositAction, BalanceApi, DepositApi, EgressApi, EpochInfo,
+	FetchesTransfersLimitProvider, FundAccount, FundingInfo, GetBlockHeight, SafeMode,
+	ScheduledEgressDetails, SwapOutputAction, SwapRequestType, INITIAL_FLIP_FUNDING,
 };
 use std::collections::{BTreeMap, HashSet};
 
@@ -299,9 +299,11 @@ fn request_address_and_deposit(
 ) -> (ChannelId, <Ethereum as Chain>::ChainAccount) {
 	let (id, address, ..) = EthereumIngressEgress::request_liquidity_deposit_address(
 		who,
+		who,
 		asset,
 		0,
 		ForeignChainAddress::Eth(Default::default()),
+		None,
 	)
 	.unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
@@ -575,6 +577,7 @@ fn reused_address_channel_id_matches() {
 			ChannelAction::LiquidityProvision {
 				lp_account: 0,
 				refund_address: ForeignChainAddress::Eth([0u8; 20].into()),
+				additional_action: None,
 			},
 			0,
 		)
@@ -655,9 +658,11 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 		.then_execute_at_next_block(|_| {
 			let (_, address, ..) = EthereumIngressEgress::request_liquidity_deposit_address(
 				ALICE,
+				ALICE,
 				ETH,
 				0,
 				ForeignChainAddress::Eth(Default::default()),
+				None,
 			)
 			.unwrap();
 			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
@@ -671,9 +676,11 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 		.then_execute_at_next_block(|address| {
 			let (_, address2, ..) = EthereumIngressEgress::request_liquidity_deposit_address(
 				ALICE,
+				ALICE,
 				ETH,
 				0,
 				ForeignChainAddress::Eth(Default::default()),
+				None,
 			)
 			.unwrap();
 			let address2: <Ethereum as Chain>::ChainAccount = address2.try_into().unwrap();
@@ -984,9 +991,11 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 
 		let (_id, address, ..) = EthereumIngressEgress::request_liquidity_deposit_address(
 			ALICE,
+			ALICE,
 			ASSET,
 			0,
 			ForeignChainAddress::Eth(Default::default()),
+			None,
 		)
 		.unwrap();
 		let deposit_address = address.try_into().unwrap();
@@ -1611,6 +1620,7 @@ fn preallocated_channels_from_global_pool() {
 		let chan_action = ChannelAction::LiquidityProvision {
 			lp_account: ALICE,
 			refund_address: ForeignChainAddress::Eth(Default::default()),
+			additional_action: None,
 		};
 
 		// STEP 1: If we allocate a channel, it should be one from the global pool.
@@ -1714,6 +1724,7 @@ fn preallocated_channels_no_global_pool() {
 		let chan_action = ChannelAction::LiquidityProvision {
 			lp_account: ALICE,
 			refund_address: ForeignChainAddress::Eth(Default::default()),
+			additional_action: None,
 		};
 
 		// STEP 1: If we allocate a channel, it should be newly generated with id of 1
@@ -1801,6 +1812,7 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 			ChannelAction::LiquidityProvision {
 				lp_account: CHANNEL_REQUESTER,
 				refund_address: ForeignChainAddress::Eth(Default::default()),
+				additional_action: None,
 			},
 			0
 		));
@@ -1818,6 +1830,7 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 				ChannelAction::LiquidityProvision {
 					lp_account: CHANNEL_REQUESTER,
 					refund_address: ForeignChainAddress::Eth(Default::default()),
+					additional_action: None,
 				},
 				0
 			),
@@ -2023,7 +2036,8 @@ fn safe_mode_prevents_deposit_channel_creation() {
 			EthAsset::Eth,
 			ChannelAction::LiquidityProvision {
 				lp_account: 0,
-				refund_address: ForeignChainAddress::Eth(Default::default())
+				refund_address: ForeignChainAddress::Eth(Default::default()),
+				additional_action: None,
 			},
 			0,
 		));
@@ -2044,7 +2058,8 @@ fn safe_mode_prevents_deposit_channel_creation() {
 				EthAsset::Eth,
 				ChannelAction::LiquidityProvision {
 					lp_account: 0,
-					refund_address: ForeignChainAddress::Eth(Default::default())
+					refund_address: ForeignChainAddress::Eth(Default::default()),
+					additional_action: None,
 				},
 				0,
 			),
@@ -2110,9 +2125,11 @@ fn trigger_n_fetches(n: usize) -> Vec<H160> {
 	for i in 1..=n {
 		let (_, address, ..) = EthereumIngressEgress::request_liquidity_deposit_address(
 			i.try_into().unwrap(),
+			i.try_into().unwrap(),
 			ASSET,
 			0,
 			ForeignChainAddress::Eth(Default::default()),
+			None,
 		)
 		.unwrap();
 
@@ -2710,6 +2727,7 @@ fn private_and_regular_channel_ids_do_not_overlap() {
 				ChannelAction::LiquidityProvision {
 					lp_account: 0,
 					refund_address: ForeignChainAddress::Eth(Default::default()),
+					additional_action: None,
 				},
 				0,
 			)
@@ -2783,6 +2801,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 		action: ChannelAction::LiquidityProvision {
 			lp_account: 0,
 			refund_address: ForeignChainAddress::Eth(Default::default()),
+			additional_action: None,
 		},
 		boost_fee: 5,
 		channel_id: None,
@@ -2835,6 +2854,63 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 	});
 }
 
+#[test]
+fn additional_action_correctly_prefund_and_create_account() {
+	const DEPOSIT_AMOUNT: AssetAmount = 1_000_000_000_000_000_000;
+	const LP_ACCOUNT: u64 = 0;
+
+	let full_witness = || {
+		EthereumIngressEgress::process_full_witness_deposit_inner(
+			None,
+			EthAsset::Eth,
+			DEPOSIT_AMOUNT,
+			Default::default(),
+			BoostStatus::NotBoosted,
+			0,
+			None,
+			ChannelAction::LiquidityProvision {
+				lp_account: LP_ACCOUNT,
+				refund_address: ForeignChainAddress::Eth(Default::default()),
+				additional_action: Some(AdditionalDepositAction::FundFlip {
+					flip_amount_to_credit: FLIPPERINOS_PER_FLIP * 10,
+				}),
+			},
+			0,
+			DepositOrigin::DepositChannel {
+				deposit_address: Default::default(),
+				channel_id: 0,
+				deposit_block_height: 0,
+				broker_id: BROKER,
+			},
+		)
+	};
+
+	new_test_ext().execute_with(|| {
+		assert_eq!(MockFundingInfo::<Test>::get_bond(LP_ACCOUNT), 0);
+		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::is_unregistered(
+			&LP_ACCOUNT
+		));
+		assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, Asset::Eth), 0);
+
+		assert!(full_witness().is_ok());
+
+		let credited_balance = MockBalance::get_balance(&LP_ACCOUNT, Asset::Eth);
+		let swapped_amount = DEPOSIT_AMOUNT.saturating_sub(credited_balance);
+
+		let funding_swap = MockSwapRequestHandler::<Test>::get_swap_requests()
+			.get(&SwapRequestId(0))
+			.unwrap()
+			.clone();
+
+		assert_eq!(funding_swap.input_amount, swapped_amount);
+		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(
+			&LP_ACCOUNT,
+			AccountRole::LiquidityProvider
+		));
+		assert_eq!(MockFundingInfo::<Test>::get_bond(LP_ACCOUNT), INITIAL_FLIP_FUNDING);
+	});
+}
+
 #[cfg(test)]
 mod evm_transaction_rejection {
 	use super::*;
@@ -2844,7 +2920,7 @@ mod evm_transaction_rejection {
 	};
 	use cf_chains::{
 		assets::eth::Asset as EthAsset, evm::H256, ChannelLifecycleHooks,
-		DepositDetailsToTransactionInId, Ethereum,
+		DepositDetailsToTransactionInId, Ethereum, FetchForRejection,
 	};
 	use cf_traits::{
 		mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, DepositApi,
@@ -2871,9 +2947,11 @@ mod evm_transaction_rejection {
 			let (_, deposit_address, block, _) =
 				EthereumIngressEgress::request_liquidity_deposit_address(
 					BROKER,
+					BROKER,
 					ETH,
 					0,
 					ForeignChainAddress::Eth(Default::default()),
+					None,
 				)
 				.unwrap();
 
@@ -2940,9 +3018,11 @@ mod evm_transaction_rejection {
 			let (_, deposit_address, block, _) =
 				EthereumIngressEgress::request_liquidity_deposit_address(
 					BROKER,
+					BROKER,
 					ETH,
 					0,
 					ForeignChainAddress::Eth(Default::default()),
+					None,
 				)
 				.unwrap();
 			let deposit_address: <Ethereum as Chain>::ChainAccount =
@@ -3011,9 +3091,9 @@ mod evm_transaction_rejection {
 			let api_call = pending_api_calls[0].clone();
 
 			match api_call {
-				MockEthereumApiCall::RejectCall { deposit_details, deposit_fetch_id, .. } => {
+				MockEthereumApiCall::RejectCall { deposit_details, fetch, .. } => {
 					assert_eq!(deposit_details.deposit_ids().unwrap(), vec![tx_id]);
-					assert!(deposit_fetch_id.is_some());
+					assert_matches!(fetch, FetchForRejection::Fetch { .. });
 				},
 				_ => panic!("Expected a RejectCall"),
 			}
@@ -3034,9 +3114,11 @@ mod evm_transaction_rejection {
 
 			let (_, deposit_address, block, _) = EthereumIngressEgress::request_liquidity_deposit_address(
 				ALICE,
+				ALICE,
 				ETH,
 				0,
 				ForeignChainAddress::Eth(Default::default()),
+				None,
 			)
 			.unwrap();
 
@@ -3532,11 +3614,9 @@ mod evm_transaction_rejection {
 				let api_call = pending_api_calls[0].clone();
 
 				match api_call {
-					MockEthereumApiCall::RejectCall {
-						deposit_details, deposit_fetch_id, ..
-					} => {
+					MockEthereumApiCall::RejectCall { deposit_details, fetch, .. } => {
 						assert_eq!(deposit_details.deposit_ids().unwrap(), vec![tx_id]);
-						assert!(deposit_fetch_id.is_none());
+						assert_eq!(fetch, FetchForRejection::NotRequired);
 					},
 					_ => panic!("Expected a RejectCall"),
 				}

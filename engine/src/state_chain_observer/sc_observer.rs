@@ -249,7 +249,6 @@ pub async fn start<
 	sc_block_stream: BlockStream,
 	eth_rpc: EvmRpc,
 	arb_rpc: EvmRpc,
-	dot_rpc: DotRpc,
 	btc_rpc: BtcRpc,
 	sol_rpc: SolRpc,
 	hub_rpc: DotRpc,
@@ -481,28 +480,8 @@ where
                                             });
                                         }
                                     }
-                                    CfeEvent::DotTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {
-                                        if nominee == account_id {
-                                            let dot_rpc = dot_rpc.clone();
-                                            let state_chain_client = state_chain_client.clone();
-                                            scope.spawn(async move {
-                                                match dot_rpc.submit_raw_encoded_extrinsic(payload.encoded_extrinsic).await {
-                                                    Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
-                                                    Err(error) => {
-                                                        error!("Error on Polkadot TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
-                                                        state_chain_client.finalize_signed_extrinsic(
-                                                            RuntimeCall::PolkadotBroadcaster(
-                                                                pallet_cf_broadcast::Call::transaction_failed {
-                                                                    broadcast_id,
-                                                                },
-                                                            ),
-                                                        )
-                                                        .await;
-                                                    }
-                                                }
-                                                Ok(())
-                                            });
-                                        }
+                                    CfeEvent::DotTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { .. }) => {
+                                        warn!("Polkadot is disabled, there shouldn't be any Polkadot Broadcast request going on");
                                     }
                                     CfeEvent::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {
                                         if nominee == account_id {
@@ -594,7 +573,7 @@ where
                                                 match sol_rpc.broadcast_transaction(payload).await {
                                                     Ok(tx_signature) => info!("Solana TransactionBroadcastRequest {broadcast_id:?} success: tx_signature: {tx_signature:?}"),
                                                     Err(error) => {
-                                                        error!("Error on Solana TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                                        warn!("Error on Solana TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
                                                         state_chain_client.finalize_signed_extrinsic(
                                                             RuntimeCall::SolanaBroadcaster(
                                                                 pallet_cf_broadcast::Call::transaction_failed {

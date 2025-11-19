@@ -48,12 +48,13 @@ use crate::{
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, CcmData, ChannelActionType, DelegationInfo,
-		DispatchErrorWithMessage, FailingWitnessValidators, FeeTypes, LendingPosition,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFeeDetails, NetworkFees,
-		OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RpcLendingConfig,
-		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
-		TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvent,
-		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		DispatchErrorWithMessage, EncodedNonNativeCall, EncodingType, FailingWitnessValidators,
+		FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
+		NetworkFeeDetails, NetworkFees, NonceOrAccount, OpenedDepositChannels, OperatorInfo,
+		RpcAccountInfoCommonItems, RpcLendingConfig, RuntimeApiPenalty,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
+		TradingStrategyLimits, TransactionScreeningEvent, TransactionScreeningEvents,
+		ValidatorInfo, VaultAddresses, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -93,12 +94,17 @@ use cf_traits::{
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
+use ethereum_eip712::{build_eip712_data::build_eip712_typed_data, eip712::TypedData};
 use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
 pub use frame_system::Call as SystemCall;
 use monitoring_apis::MonitoringDataV2;
 use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::{get_latest_oracle_prices, OraclePrice},
 	price::PriceAsset,
+};
+use pallet_cf_environment::{
+	build_domain_data, submit_runtime_call::ChainflipExtrinsic, EthEncodingType, SolEncodingType,
+	TransactionMetadata, DOMAIN_OFFCHAIN_PREFIX,
 };
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
@@ -113,8 +119,10 @@ use pallet_cf_validator::{
 	DelegationAmount, DelegationSlasher, DelegationSnapshot,
 };
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-use runtime_apis::{ChainAccounts, EvmCallDetails, RpcLendingPool, RpcLoanAccount};
-use scale_info::prelude::string::String;
+use runtime_apis::{
+	ChainAccounts, EvmCallDetails, LendingPoolAndSupplyPositions, RpcLendingPool, RpcLoanAccount,
+};
+use scale_info::prelude::{format, string::String};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
 use crate::chainflip::ethereum_sc_calls::EthereumSCApi;
@@ -313,6 +321,16 @@ parameter_types! {
 	};
 }
 
+/// A workaround for the lack of `Default` implementation on
+/// `pallet_transaction_payment::ChargeTransactionPayment`.
+pub struct GetTransactionPayments;
+
+impl Get<pallet_transaction_payment::ChargeTransactionPayment<Runtime>> for GetTransactionPayments {
+	fn get() -> pallet_transaction_payment::ChargeTransactionPayment<Runtime> {
+		pallet_transaction_payment::ChargeTransactionPayment::from(Default::default())
+	}
+}
+
 impl pallet_cf_environment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -329,6 +347,8 @@ impl pallet_cf_environment::Config for Runtime {
 	type CurrentReleaseVersion = CurrentReleaseVersion;
 	type SolEnvironment = SolEnvironment;
 	type SolanaBroadcaster = SolanaBroadcaster;
+	type TransactionPayments = pallet_transaction_payment::ChargeTransactionPayment<Self>;
+	type GetTransactionPayments = GetTransactionPayments;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
@@ -356,6 +376,10 @@ impl pallet_cf_swapping::Config for Runtime {
 	type Bonder = Bonder<Runtime>;
 	type PriceFeedApi = ChainlinkOracle;
 	type LendingSystemApi = LendingPools;
+	type FundAccount = Funding;
+	type MinimumFunding = Funding;
+	type RuntimeCall = RuntimeCall;
+	type ChainflipNetwork = chainflip::ChainflipNetworkProvider;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -454,6 +478,8 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -484,6 +510,8 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -514,6 +542,8 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -544,6 +574,8 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -574,6 +606,8 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
@@ -604,6 +638,8 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_pools::Config for Runtime {
@@ -668,6 +704,7 @@ impl pallet_session::historical::Config for Runtime {
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(50);
+const BLOCK_LENGTH_RATIO: Perbill = Perbill::from_percent(40);
 
 parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
@@ -679,7 +716,7 @@ parameter_types! {
 			NORMAL_DISPATCH_RATIO,
 		);
 	pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength
-		::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
+		::max_with_normal_ratio(1024 * 1024 * 625 / 100, BLOCK_LENGTH_RATIO);
 }
 
 // Configure FRAME pallets to include in runtime.
@@ -844,7 +881,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type RewardsDistribution = DelegatedRewardsDistribution<Runtime, FlipIssuance<Runtime>>;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type EthEnvironment = EvmEnvironment;
-	type FlipToBurn = Swapping;
+	type FlipToBurnOrMove = Swapping;
 	type EgressHandler = pallet_cf_ingress_egress::Pallet<Runtime, EthereumInstance>;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
@@ -1193,6 +1230,7 @@ impl pallet_cf_lending_pools::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type PriceApi = ChainlinkOracle;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 #[frame_support::runtime]
@@ -1456,7 +1494,6 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	MigrationsForV2_0,
-	migrations::ingress_delay::IngressEgressDelay,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1506,6 +1543,7 @@ type PalletMigrations = (
 	pallet_cf_lending_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_elections::migrations::PalletMigration<Runtime, BitcoinInstance>,
+	pallet_cf_elections::migrations::PalletMigration<Runtime, ()>,
 );
 
 pub struct NoopMigration;
@@ -1557,6 +1595,22 @@ type MigrationsForV2_0 = (
 		pallet_cf_environment::Pallet<Runtime>,
 		<Runtime as frame_system::Config>::DbWeight,
 	>,
+	instanced_migrations!(
+		module: pallet_cf_ingress_egress,
+		migration: migrations::ingress_delay::IngressEgressDelay,
+		from: 28,
+		to: 29,
+		include_instances: [
+			SolanaInstance,
+		],
+		exclude_instances: [
+			EthereumInstance,
+			PolkadotInstance,
+			BitcoinInstance,
+			ArbitrumInstance,
+			AssethubInstance
+		]
+	),
 );
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -1697,7 +1751,47 @@ impl_runtime_apis! {
 				LendingPools::boost_pool_account_balance(&account_id, asset)
 			});
 
-			free_balances.saturating_add(open_order_balances).saturating_add(boost_pools_balances)
+			let trading_strategies_balances = {
+
+				let mut asset_map = AssetMap::<AssetAmount>::default();
+
+				for TradingStrategyInfo { balance, .. } in Self::cf_get_trading_strategies(Some(account_id.clone())) {
+					for (asset, amount) in balance {
+						asset_map[asset].saturating_accrue(amount);
+					}
+				}
+
+				asset_map
+			};
+
+
+			let lending_supply_balances = AssetMap::from_fn(|asset| {
+
+				pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::get(asset).and_then(|pool| {
+
+					pool.get_supply_position_for_account(&account_id).ok()
+
+				}).unwrap_or_default()
+
+			});
+
+			let lending_collateral_balances = pallet_cf_lending_pools::LoanAccounts::<Runtime>::get(&account_id).map(|loan_account| {
+				let mut asset_map = AssetMap::<AssetAmount>::default();
+
+				for (asset, amount) in loan_account.get_total_collateral() {
+					asset_map[asset].saturating_accrue(amount);
+				}
+
+				asset_map
+			}).unwrap_or_default();
+
+
+			free_balances
+				.saturating_add(open_order_balances)
+				.saturating_add(boost_pools_balances)
+				.saturating_add(trading_strategies_balances)
+				.saturating_add(lending_supply_balances)
+				.saturating_add(lending_collateral_balances)
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
@@ -1975,7 +2069,12 @@ impl_runtime_apis! {
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_fee(asset, IngressOrEgress::IngressDepositChannel)
 					))
 				},
-				ForeignChainAndAsset::Solana(asset) => Some(SolanaChainTrackingProvider::estimate_fee(asset, IngressOrEgress::IngressDepositChannel).into()),
+				ForeignChainAndAsset::Solana(asset) => {
+					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Solana>(
+						asset,
+						SolanaChainTrackingProvider::estimate_fee(asset, IngressOrEgress::IngressDepositChannel)
+					).into())
+				},
 				ForeignChainAndAsset::Assethub(asset) => {
 					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Assethub>(
 						asset,
@@ -2001,7 +2100,12 @@ impl_runtime_apis! {
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_fee(asset, IngressOrEgress::Egress)
 					))
 				},
-				ForeignChainAndAsset::Solana(asset) => Some(SolanaChainTrackingProvider::estimate_fee(asset, IngressOrEgress::Egress).into()),
+				ForeignChainAndAsset::Solana(asset) => {
+					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Solana>(
+						asset,
+						SolanaChainTrackingProvider::estimate_fee(asset, IngressOrEgress::Egress)
+					).into())
+				},
 				ForeignChainAndAsset::Assethub(asset) => {
 					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Assethub>(
 						asset,
@@ -2181,6 +2285,28 @@ impl_runtime_apis! {
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::channel_opening_fee(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::Pallet::<Runtime, SolanaInstance>::channel_opening_fee(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::Pallet::<Runtime, AssethubInstance>::channel_opening_fee(),
+			}
+		}
+
+		fn cf_ingress_delay(chain: ForeignChain) -> u32 {
+			match chain {
+				ForeignChain::Ethereum => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, EthereumInstance>::get(),
+				ForeignChain::Polkadot => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, PolkadotInstance>::get(),
+				ForeignChain::Bitcoin => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, BitcoinInstance>::get(),
+				ForeignChain::Arbitrum => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, ArbitrumInstance>::get(),
+				ForeignChain::Solana => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, SolanaInstance>::get(),
+				ForeignChain::Assethub => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, AssethubInstance>::get(),
+			}
+		}
+
+		fn cf_boost_delay(chain: ForeignChain) -> u32 {
+			match chain {
+				ForeignChain::Ethereum => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, EthereumInstance>::get(),
+				ForeignChain::Polkadot => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, PolkadotInstance>::get(),
+				ForeignChain::Bitcoin => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, BitcoinInstance>::get(),
+				ForeignChain::Arbitrum => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, ArbitrumInstance>::get(),
+				ForeignChain::Solana => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, SolanaInstance>::get(),
+				ForeignChain::Assethub => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, AssethubInstance>::get(),
 			}
 		}
 
@@ -2646,7 +2772,7 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_get_trading_strategies(lp_id: Option<AccountId>,) -> Vec<TradingStrategyInfo<AssetAmount>> {
+		fn cf_get_trading_strategies(lp_id: Option<AccountId>) -> Vec<TradingStrategyInfo<AssetAmount>> {
 
 			type Strategies = pallet_cf_trading_strategy::Strategies::<Runtime>;
 			type Strategy = pallet_cf_trading_strategy::TradingStrategy;
@@ -2726,6 +2852,21 @@ impl_runtime_apis! {
 			pallet_cf_lending_pools::get_loan_accounts::<Runtime>(borrower_id)
 		}
 
+		fn cf_lending_pool_supply_balances(
+			asset: Option<Asset>,
+		) -> Vec<LendingPoolAndSupplyPositions<AccountId, AssetAmount>> {
+
+			if let Some(asset) = asset {
+				pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::get(asset).map(|pool| {
+					pool.get_all_supply_positions()
+				}).into_iter().map(|positions| LendingPoolAndSupplyPositions { asset, positions }).collect()
+			} else {
+				pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::iter().map(|(asset, pool)| {
+					LendingPoolAndSupplyPositions { asset, positions: pool.get_all_supply_positions() }
+				}).collect()
+			}
+		}
+
 		fn cf_lending_config() -> RpcLendingConfig {
 			let config = pallet_cf_lending_pools::LendingConfig::<Runtime>::get();
 			RpcLendingConfig {
@@ -2735,11 +2876,13 @@ impl_runtime_apis! {
 				interest_payment_interval_blocks: config.interest_payment_interval_blocks,
 				fee_swap_threshold_usd: config.fee_swap_threshold_usd.into(),
 				interest_collection_threshold_usd: config.interest_collection_threshold_usd.into(),
-				liquidation_swap_chunk_size_usd: config.liquidation_swap_chunk_size_usd.into(),
+				soft_liquidation_swap_chunk_size_usd: config.soft_liquidation_swap_chunk_size_usd.into(),
+				hard_liquidation_swap_chunk_size_usd: config.hard_liquidation_swap_chunk_size_usd.into(),
 				soft_liquidation_max_oracle_slippage: config.soft_liquidation_max_oracle_slippage,
 				hard_liquidation_max_oracle_slippage: config.hard_liquidation_max_oracle_slippage,
 				fee_swap_max_oracle_slippage: config.fee_swap_max_oracle_slippage,
 				minimum_loan_amount_usd: config.minimum_loan_amount_usd.into(),
+				minimum_supply_amount_usd: config.minimum_supply_amount_usd.into(),
 				minimum_update_loan_amount_usd: config.minimum_update_loan_amount_usd.into(),
 				minimum_update_collateral_amount_usd: config.minimum_update_collateral_amount_usd.into(),
 			}
@@ -2789,14 +2932,75 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_chainflip_network_and_state(
-		) -> Result< (cf_primitives::ChainflipNetwork, u32, BlockNumber), DispatchErrorWithMessage> {
-			let version = <Runtime as frame_system::Config>::Version::get();
+		fn cf_encode_non_native_call(
+			call: Vec<u8>,
+			blocks_to_expiry: BlockNumber,
+			nonce_or_account: NonceOrAccount,
+			encoding: EncodingType,
+		) -> Result< (EncodedNonNativeCall, TransactionMetadata), DispatchErrorWithMessage> {
+			let spec_version = <Runtime as frame_system::Config>::Version::get().spec_version;
 			let current_block_number = <frame_system::Pallet<Runtime>>::block_number();
-			Ok( (pallet_cf_environment::ChainflipNetworkName::<Runtime>::get(), version.spec_version, current_block_number))
+			let chainflip_network = <pallet_cf_environment::ChainflipNetworkName::<Runtime>>::get();
+
+			// Ensure it is a valid RuntimeCall
+			let runtime_call =
+				match RuntimeCall::decode(&mut &call[..]) {
+					Ok(rc) => rc,
+					Err(_) => {
+						return Err(DispatchErrorWithMessage::from(
+							"Failed to deserialize into a RuntimeCall",
+						));
+					},
+				};
+
+			let transaction_metadata = TransactionMetadata {
+				expiry_block: current_block_number.saturating_add(blocks_to_expiry),
+				nonce: match nonce_or_account {
+					NonceOrAccount::Nonce(nonce) => nonce,
+					NonceOrAccount::Account(account) => System::account_nonce(account),
+				},
+			};
+			let encoded_data = match encoding {
+				EncodingType::Eth(EthEncodingType::PersonalSign) =>
+					// Encode domain without the prefix because EVM wallets automatically
+					// prefix the calldata when using personal_sign
+					EncodedNonNativeCall::String(build_domain_data(
+						runtime_call.clone(),
+						&chainflip_network,
+						&transaction_metadata,
+						spec_version,
+					)),
+				EncodingType::Eth(EthEncodingType::Eip712) => {
+					let chainflip_extrinsic = ChainflipExtrinsic { call: runtime_call, transaction_metadata };
+					let typed_data: TypedData =
+						build_eip712_typed_data(
+							chainflip_extrinsic,
+							chainflip_network.as_str().to_string(),
+							spec_version,
+						)
+						.map_err(|_| {
+							DispatchErrorWithMessage::from(
+								"Failed to build eip712 typed data"
+							)
+						})?;
+					EncodedNonNativeCall::Eip712(typed_data)
+				},
+				EncodingType::Sol(SolEncodingType::Domain) => {
+					let raw_payload = build_domain_data(
+						runtime_call,
+						&chainflip_network,
+						&transaction_metadata,
+						spec_version,
+					);
+					EncodedNonNativeCall::String(format!(
+						"{}{}",
+						DOMAIN_OFFCHAIN_PREFIX, raw_payload,
+					))
+				},
+			};
+			Ok((encoded_data, transaction_metadata))
+
 		}
-
-
 	}
 
 

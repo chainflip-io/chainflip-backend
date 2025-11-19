@@ -1,5 +1,15 @@
 import { TestContext } from 'shared/utils/test_context';
-import { createEvmWallet, decodeSolAddress, externalChainToScAccount } from 'shared/utils';
+import { InternalAsset as Asset } from '@chainflip/cli';
+import {
+  createEvmWallet,
+  createStateChainKeypair,
+  decodeSolAddress,
+  externalChainToScAccount,
+  handleSubstrateError,
+  newAssetAddress,
+  shortChainFromAsset,
+  sleep,
+} from 'shared/utils';
 import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { globalLogger, Logger } from 'shared/utils/logger';
@@ -7,7 +17,23 @@ import { fundFlip } from 'shared/fund_flip';
 import z from 'zod';
 import { ApiPromise } from '@polkadot/api';
 import { signBytes, getUtf8Encoder, generateKeyPairSigner } from '@solana/kit';
+import { send } from 'shared/send';
+import { setupBrokerAccount } from 'shared/setup_account';
+import { Enum, Bytes as TsBytes } from 'scale-ts';
 
+/// Codecs for the special LP deposit channel opening
+const encodedAddressCodec = Enum({
+  Eth: TsBytes(20), // [u8; 20]
+  Dot: TsBytes(32), // [u8; 32]
+  Btc: TsBytes(), // Vec<u8>
+  Arb: TsBytes(20), // [u8; 20]
+  Sol: TsBytes(32), // [u8; 32]
+  Hub: TsBytes(32), // [u8; 32]
+});
+
+const remarkDataCodec = encodedAddressCodec;
+
+/// EIP-712 payloads schema
 const eipPayloadSchema = z.object({
   domain: z.any(),
   types: z.any(),
@@ -269,10 +295,214 @@ async function testEvmPersonalSign(logger: Logger) {
   await observeNonNativeSignedCallAndRole(logger, evmScAccount);
 }
 
+// Testing encoding of a few values in the EIP-712 payload, mainly for u128 and U256
+// that can be problematic between Rust and JS big ints. This can be removed once we
+// have more extensive tests in PRO-2584.
+async function testEvmEip712Encoding(logger: Logger) {
+  await using chainflip = await getChainflipApi();
+
+  const evmWallet = await createEvmWallet();
+  const evmScAccount = externalChainToScAccount(evmWallet.address);
+
+  const call = chainflip.tx.liquidityProvider.scheduleSwap(
+    '1000000000000000000000',
+    'Flip',
+    'Usdc',
+    50,
+    {
+      maxOraclePriceSlippage: null,
+      minPrice: 1000000000000000,
+    },
+    null,
+  );
+
+  const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
+
+  const response = await chainflip.rpc(
+    'cf_encode_non_native_call',
+    hexRuntimeCall,
+    blocksToExpiry,
+    evmScAccount,
+    { Eth: 'Eip712' },
+  );
+
+  const [eipPayload, transactionMetadata] = encodeNonNativeCallResponseSchema.parse(response);
+  logger.debug('eipPayload', JSON.stringify(eipPayload, null, 2));
+  logger.debug('transactionMetadata', JSON.stringify(transactionMetadata, null, 2));
+
+  const parsedPayload = encodedNonNativeCallSchema.parse(eipPayload);
+  const { domain, types, message } = parsedPayload.Eip712;
+  delete types.EIP712Domain;
+
+  // Overriding with these values make the signing work but then it will fail
+  // validation as it is not matching what the SC encodes.
+  // message.call.pallet_cf_lp____pallet____Call__schedule_swap__e1c6eb2b_0.amount =
+  //   '1000000000000000000000';
+  // message.call.pallet_cf_lp____pallet____Call__schedule_swap__e1c6eb2b_0.price_limits.min_price =
+  //   '1000000000000000';
+
+  const evmSignatureEip712 = await evmWallet.signTypedData(domain, types, message);
+
+  // If the signing works proceed to fund the account and submit the call to ensure it works.
+  // Doing it afterwards to make debugging of the signing faster (not waiting for the funding).
+  await fundFlip(logger, evmScAccount, '1000');
+
+  await chainflip.tx.environment
+    .nonNativeSignedCall(
+      {
+        call: hexRuntimeCall,
+        transactionMetadata: {
+          nonce: transactionMetadata.nonce,
+          expiryBlock: transactionMetadata.expiry_block,
+        },
+      },
+      {
+        Ethereum: {
+          signature: evmSignatureEip712,
+          signer: evmWallet.address,
+          sigType: 'Eip712',
+        },
+      },
+    )
+    .send();
+}
+
+async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
+  await using chainflip = await getChainflipApi();
+
+  const initialFlipToBeSentToGateway = (
+    await chainflip.query.swapping.flipToBeSentToGateway()
+  ).toJSON() as number;
+
+  logger.info('Setting up a broker account');
+  const brokerUri = `//BROKER_SPECIAL_DEPOSIT_CHANNEL`;
+  const broker = createStateChainKeypair(brokerUri);
+  await setupBrokerAccount(logger, brokerUri);
+
+  const evmWallet = await createEvmWallet();
+  const evmScAccount = externalChainToScAccount(evmWallet.address);
+  logger.info('evmScAccount for special LP deposit channel:', evmScAccount);
+  const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
+  const refundAddress = await newAssetAddress(asset, brokerUri + Math.random() * 100);
+
+  let addressBytes;
+
+  if (asset === 'Btc') {
+    // In prod we should encode the BTC with the adequate encoding, this is to keep it simple
+    addressBytes = new Uint8Array(Buffer.from(refundAddress, 'utf-8'));
+  } else {
+    addressBytes = new Uint8Array(Buffer.from(refundAddress.slice(2), 'hex'));
+  }
+
+  const remarkData = remarkDataCodec.enc({ tag: shortChainFromAsset(asset), value: addressBytes });
+
+  const call = chainflip.tx.system.remark(Array.from(remarkData));
+  const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
+
+  const response = await chainflip.rpc(
+    'cf_encode_non_native_call',
+    hexRuntimeCall,
+    blocksToExpiry,
+    evmNonce,
+    { Eth: 'Eip712' },
+  );
+
+  const [eipPayload, transactionMetadata] = encodeNonNativeCallResponseSchema.parse(response);
+  const parsedPayload = encodedNonNativeCallSchema.parse(eipPayload);
+  const { domain, types, message } = parsedPayload.Eip712;
+  delete types.EIP712Domain;
+
+  const evmSignatureEip712 = await evmWallet.signTypedData(domain, types, message);
+
+  const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
+  await chainflip.tx.swapping
+    .requestAccountCreationDepositAddress(
+      {
+        Ethereum: {
+          signature: evmSignatureEip712,
+          signer: evmWallet.address,
+          sigType: 'Eip712',
+        },
+      },
+      {
+        nonce: transactionMetadata.nonce,
+        expiryBlock: transactionMetadata.expiry_block,
+      },
+      asset,
+      0,
+      { [shortChainFromAsset(asset).toLowerCase()]: refundAddress },
+    )
+    .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
+
+  logger.info('Opening special deposit channel and depositing..');
+
+  const eventResult = await observeEvent(logger, 'swapping:AccountCreationDepositAddressReady', {
+    test: (event) =>
+      event.data.requestedBy === broker.address && event.data.requestedFor === evmScAccount,
+    historicalCheckBlocks: 10,
+  }).event;
+  const depositAddress = eventResult.data.depositAddress[shortChainFromAsset(asset)];
+
+  await send(logger, asset, depositAddress);
+
+  logger.info('Waiting for FLIP balance to be credited...');
+
+  let attempt = 0;
+  let flipBalanceCredited = false;
+  let flipToGatewayIncreased = false;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    // Check FLIP balance if not already credited
+    if (!flipBalanceCredited) {
+      const account = (await chainflip.query.flip.account(evmScAccount)).toJSON() as {
+        balance: string;
+      };
+      const balance = BigInt(account.balance);
+
+      if (balance > 0) {
+        logger.info('FLIP balance credited successfully');
+        flipBalanceCredited = true;
+      }
+    }
+
+    // Check FLIP to be sent to Gateway if not already increased
+    if (!flipToGatewayIncreased) {
+      const flipToBeSentToGateway = (
+        await chainflip.query.swapping.flipToBeSentToGateway()
+      ).toJSON() as number;
+
+      if (flipToBeSentToGateway > initialFlipToBeSentToGateway) {
+        logger.info('FLIP to be sent to Gateway increased successfully');
+        flipToGatewayIncreased = true;
+      }
+    }
+
+    // Break if both conditions are met
+    if (flipBalanceCredited && flipToGatewayIncreased) {
+      break;
+    }
+
+    if (attempt >= 10) {
+      if (!flipBalanceCredited) {
+        throw new Error('Timeout waiting for FLIP balance to be credited');
+      }
+      if (!flipToGatewayIncreased) {
+        throw new Error('Timeout waiting for FLIP to be sent to Gateway to increase');
+      }
+    }
+    attempt++;
+    await sleep(6000);
+  }
+}
+
 export async function testSignedRuntimeCall(testContext: TestContext) {
   await Promise.all([
     testEvmEip712(testContext.logger.child({ tag: `EvmSignedCall` })),
     testSvmDomain(testContext.logger.child({ tag: `SvmDomain` })),
     testEvmPersonalSign(testContext.logger.child({ tag: `EvmPersonalSign` })),
+    testEvmEip712Encoding(testContext.logger.child({ tag: `EvmEip712Encoding` })),
+    testSpecialLpDeposit(testContext.logger.child({ tag: `SpecialLpDeposit` }), 'Btc'),
+    testSpecialLpDeposit(testContext.logger.child({ tag: `SpecialLpDeposit` }), 'Eth'),
   ]);
 }

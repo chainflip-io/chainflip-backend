@@ -15,8 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	ccm_checker::VersionedSolanaCcmAdditionalData, Chain, RejectCall, RejectError,
-	SetGovKeyWithAggKeyError,
+	ccm_checker::VersionedSolanaCcmAdditionalData, Chain, FetchForRejection, RejectCall,
+	RejectError, SetGovKeyWithAggKeyError, TransferForRejection,
 };
 use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -809,10 +809,9 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<Environment> {
 	fn new_unsigned(
 		deposit_details: <Solana as Chain>::DepositDetails,
-		refund_address: <Solana as Chain>::ChainAccount,
-		refund_amount: Option<<Solana as Chain>::ChainAmount>,
 		asset: <Solana as Chain>::ChainAsset,
-		deposit_fetch_id: Option<<Solana as Chain>::DepositFetchId>,
+		fetch: FetchForRejection<Solana>,
+		transfer: TransferForRejection<Solana>,
 	) -> Result<Self, RejectError> {
 		// Lookup environment variables
 		let agg_key = Environment::current_agg_key().map_err(|_| RejectError::Other)?;
@@ -823,19 +822,22 @@ impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<
 		// Deposit channels should provide a deposit_fetch_id and Vault swaps should not have one.
 		// If that's not the case, don't do the refund to be on the safe side.
 		if (matches!(deposit_details, VaultSwapOrDepositChannelId::VaultSwapAccount(_)) &&
-			deposit_fetch_id.is_some()) ||
+			matches!(fetch, FetchForRejection::Fetch { .. })) ||
 			(matches!(deposit_details, VaultSwapOrDepositChannelId::Channel(_)) &&
-				deposit_fetch_id.is_none())
+				matches!(fetch, FetchForRejection::NotRequired))
 		{
 			return Err(RejectError::FailedToBuildRejection);
 		}
 
-		let transaction = match (refund_amount, deposit_fetch_id, asset) {
-			// Vault swap with no refund amount doesn't require any action
-			(None, None, _) => return Err(RejectError::NotRequired),
-			// Just fetch from deposit channel - no refund amount specified
-			(None, Some(fetch_id), asset) => {
-				let fetch_params = FetchAssetParams { deposit_fetch_id: fetch_id, asset };
+		use FetchForRejection::*;
+		use TransferForRejection::*;
+		let transaction = match (transfer, fetch, asset) {
+			// Vault swap with a separate ccm refund doesn't require any action
+			(TransferWillBeCcmCallAndIsHandledSeparately, NotRequired, _) =>
+				return Err(RejectError::NotRequired),
+			// Just fetch from deposit channel - refund will be separate ccm call
+			(TransferWillBeCcmCallAndIsHandledSeparately, Fetch { deposit_fetch_id }, asset) => {
+				let fetch_params = FetchAssetParams { deposit_fetch_id, asset };
 				SolanaTransactionBuilder::fetch_from(
 					vec![fetch_params],
 					sol_api_environment,
@@ -845,12 +847,12 @@ impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<
 				)
 			},
 			// Fetch native and transfer (refund) user
-			(Some(amount), Some(fetch_id), SolAsset::Sol) => {
-				let fetch_param = FetchAssetParams { deposit_fetch_id: fetch_id, asset };
+			(Transfer { address, amount }, Fetch { deposit_fetch_id }, SolAsset::Sol) => {
+				let fetch_param = FetchAssetParams { deposit_fetch_id, asset };
 				SolanaTransactionBuilder::refund_native(
 					fetch_param,
 					amount,
-					refund_address,
+					address,
 					sol_api_environment,
 					agg_key,
 					durable_nonce,
@@ -858,18 +860,18 @@ impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<
 				)
 			},
 			// Fetch token and transfer (refund) user
-			(Some(amount), Some(fetch_id), SolAsset::SolUsdc) => {
+			(Transfer { address, amount }, Fetch { deposit_fetch_id }, SolAsset::SolUsdc) => {
 				let ata = derive_associated_token_account(
-					refund_address,
+					address,
 					sol_api_environment.usdc_token_mint_pubkey,
 				)
 				.map_err(|_| RejectError::Other)?;
-				let fetch_params = FetchAssetParams { deposit_fetch_id: fetch_id, asset };
+				let fetch_params = FetchAssetParams { deposit_fetch_id, asset };
 				SolanaTransactionBuilder::refund_token(
 					fetch_params,
 					ata.address,
 					amount,
-					refund_address,
+					address,
 					sol_api_environment.vault_program,
 					sol_api_environment.vault_program_data_account,
 					sol_api_environment.token_vault_pda_account,
@@ -885,25 +887,26 @@ impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<
 			},
 			// Refund user without fetch - Vault swap will already have deposited the funds to our
 			// Vault
-			(Some(amount), None, SolAsset::Sol) => SolanaTransactionBuilder::transfer_native(
-				amount,
-				refund_address,
-				agg_key,
-				durable_nonce,
-				compute_price,
-			),
+			(Transfer { address, amount }, NotRequired, SolAsset::Sol) =>
+				SolanaTransactionBuilder::transfer_native(
+					amount,
+					address,
+					agg_key,
+					durable_nonce,
+					compute_price,
+				),
 			// Refund user without fetch - the fetching of tokens for Vault swaps is done separately
 			// as part of the environment's pallet `fetch_and_batch_close_vault_swap_accounts`.
-			(Some(amount), None, SolAsset::SolUsdc) => {
+			(Transfer { address, amount }, NotRequired, SolAsset::SolUsdc) => {
 				let ata = derive_associated_token_account(
-					refund_address,
+					address,
 					sol_api_environment.usdc_token_mint_pubkey,
 				)
 				.map_err(|_| RejectError::Other)?;
 				SolanaTransactionBuilder::transfer_token(
 					ata.address,
 					amount,
-					refund_address,
+					address,
 					sol_api_environment.vault_program,
 					sol_api_environment.vault_program_data_account,
 					sol_api_environment.token_vault_pda_account,

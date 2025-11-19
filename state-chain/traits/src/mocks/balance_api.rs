@@ -127,7 +127,6 @@ impl MockLpRegistration {
 impl LpRegistration for MockLpRegistration {
 	type AccountId = u64;
 
-	#[cfg(feature = "runtime-benchmarks")]
 	fn register_liquidity_refund_address(
 		who: &Self::AccountId,
 		address: cf_chains::ForeignChainAddress,

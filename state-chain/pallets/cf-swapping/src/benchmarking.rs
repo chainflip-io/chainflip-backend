@@ -26,7 +26,7 @@ use cf_primitives::{AccountRole, AffiliateShortId, Beneficiary, FLIPPERINOS_PER_
 use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::{
-	assert_ok,
+	assert_err, assert_ok,
 	traits::{OnNewAccount, OriginTrait, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
@@ -272,6 +272,68 @@ mod benchmarks {
 		set_vault_swap_minimum_broker_fee(RawOrigin::Signed(caller.clone()), 100);
 
 		assert_eq!(VaultSwapMinimumBrokerFee::<T>::get(caller.clone()), 100);
+	}
+
+	#[benchmark]
+	fn request_account_creation_deposit_address() {
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Broker,
+		)
+		.unwrap();
+
+		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
+
+		let origin = RawOrigin::Signed(caller.clone());
+		let require_channel_call = Call::<T>::request_swap_deposit_address {
+			source_asset: Asset::Eth,
+			destination_asset: Asset::Usdc,
+			destination_address: EncodedAddress::benchmark_value(),
+			broker_commission: 10,
+			boost_fee: 0,
+			channel_metadata: None,
+			refund_parameters: ChannelRefundParametersUncheckedEncoded {
+				retry_duration: 100,
+				refund_address: EncodedAddress::benchmark_value(),
+				min_price: U256::from(0),
+				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
+			},
+		};
+
+		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: u32::MAX };
+
+		// Junk data to make sure the signature verification fails
+		let signer: EthereumAddress = [0u8; 20].into();
+		let signature_data: SignatureData = SignatureData::Ethereum {
+			signature: [0u8; 65].into(),
+			signer,
+			sig_type: pallet_cf_environment::EthEncodingType::Eip712,
+		};
+
+		let request_account_creation_call = Call::<T>::request_account_creation_deposit_address {
+			signature_data,
+			transaction_metadata,
+			asset: Asset::Eth,
+			boost_fee: 0,
+			refund_address: EncodedAddress::Eth([0x01; 20]),
+		};
+
+		// Since having a correct signature it is not so easy we estimate the extrinsic weight by:
+		// - opening a channel
+		// - calling request_account_creation_deposit_address which will fail but it will still
+		//   perform the signature verification
+		// This should give us a good estimate of the weight of the extrinsic. It might be a bit
+		// over-estimated since it opens a channel for a swap, which needs to perform more checks
+		// than the liquidity one.
+		#[block]
+		{
+			assert_ok!(require_channel_call.dispatch_bypass_filter(origin.clone().into()));
+
+			assert_err!(
+				request_account_creation_call.dispatch_bypass_filter(origin.into()),
+				Error::<T>::InvalidUserSignatureData
+			);
+		}
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

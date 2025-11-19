@@ -21,4 +21,4 @@ use crate::Pallet;
 mod vote_storage_migration;
 
 pub type PalletMigration<T, I> =
-	(vote_storage_migration::VoteStorageMigration<T, I>, PlaceholderMigration<6, Pallet<T, I>>);
+	(vote_storage_migration::VoteStorageMigration<T, I>, PlaceholderMigration<7, Pallet<T, I>>);

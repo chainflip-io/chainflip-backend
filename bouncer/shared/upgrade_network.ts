@@ -171,7 +171,7 @@ async function incompatibleUpgradeNoBuild(
   // Since the new engine contains the old one.
   logger.info('Killing the old engines');
   await killEngines();
-  await startEngines(localnetInitPath, binaryPath, numberOfNodes);
+  await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test-1');
 
   await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, true);
 
@@ -237,20 +237,8 @@ async function incompatibleUpgradeNoBuild(
   const output = execSync("ps -o pid -o comm | grep chainflip-node | awk '{print $1}'");
   logger.info('New node PID: ' + output.toString());
 
-  // Restart the engines
-  await execWithLog(
-    `${localnetInitPath}/scripts/start-all-engines.sh`,
-    [],
-    'start-all-engines-post-upgrade',
-    {
-      INIT_RUN: 'false',
-      LOG_SUFFIX: '-post-upgrade',
-      NODE_COUNT: nodeCount,
-      SELECTED_NODES,
-      LOCALNET_INIT_DIR: localnetInitPath,
-      BINARY_ROOT_PATH: binaryPath,
-    },
-  );
+  // Engines crash when the node shuts down, so we need to restart them.
+  await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test-2');
 
   await sleep(4000);
 

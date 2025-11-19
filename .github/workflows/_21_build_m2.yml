@@ -25,7 +25,7 @@ env:
 jobs:
   compile:
     runs-on: namespace-profile-${{ inputs.ci-runner }}
-    timeout-minutes: 40
+    timeout-minutes: 80
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11

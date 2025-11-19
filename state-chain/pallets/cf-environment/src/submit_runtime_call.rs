@@ -16,7 +16,10 @@
 
 use super::*;
 use core::primitive::str;
-use ethereum_eip712::eip712::{Eip712, Eip712Error};
+use ethereum_eip712::{
+	build_eip712_data::build_eip712_typed_data,
+	eip712::{Eip712, Eip712Error},
+};
 use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo},
 	traits::UnfilteredDispatchable,
@@ -54,7 +57,7 @@ pub enum SolEncodingType {
 	Domain,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub enum SignatureData {
 	Solana { signature: SolSignature, signer: SolAddress, sig_type: SolEncodingType },
 	Ethereum { signature: EthereumSignature, signer: EvmAddress, sig_type: EthEncodingType },
@@ -125,46 +128,6 @@ pub struct ChainflipExtrinsic<C> {
 	pub transaction_metadata: TransactionMetadata,
 }
 
-/// `signer is not technically necessary but is added as part of the metadata so
-/// we add it so is displayed separately to the user in the wallet.
-/// TODO: This is a temporary simplified implementation for basic EIP-712 support
-/// in a specific format. Full logic to be implemented in PRO-2535.
-pub(crate) fn build_eip_712_payload(
-	call: impl Encode + TypeInfo + 'static,
-	chain_name: &str,
-	version: &str,
-	transaction_metadata: TransactionMetadata,
-) -> Result<Vec<u8>, Eip712Error> {
-	let domain = ethereum_eip712::eip712::EIP712Domain {
-		name: Some(chain_name.to_string()),
-		version: Some(version.to_string()),
-		chain_id: None,
-		verifying_contract: None,
-		salt: None,
-	};
-
-	let mut typed_data = ethereum_eip712::encode_eip712_using_type_info(
-		ChainflipExtrinsic { call, transaction_metadata },
-		domain,
-	)?;
-
-	typed_data.types.insert(
-		"EIP712Domain".to_string(),
-		vec![
-			ethereum_eip712::eip712::Eip712DomainType {
-				name: "name".to_string(),
-				r#type: "string".to_string(),
-			},
-			ethereum_eip712::eip712::Eip712DomainType {
-				name: "version".to_string(),
-				r#type: "string".to_string(),
-			},
-		],
-	);
-
-	typed_data.encode_eip712()
-}
-
 /// Get the accumulated `weight` and the dispatch class for the given `calls`.
 pub(crate) fn weight_and_dispatch_class<T: Config>(
 	calls: &[<T as Config>::RuntimeCall],
@@ -233,7 +196,7 @@ pub fn build_domain_data(
 /// Validates the signature, given some call and metadata.
 ///
 /// This call should be kept idempotent: it should not access storage.
-pub(crate) fn is_valid_signature(
+pub fn is_valid_signature(
 	call: impl Encode + TypeInfo + 'static,
 	chainflip_network: &ChainflipNetwork,
 	transaction_metadata: &TransactionMetadata,
@@ -258,12 +221,12 @@ pub(crate) fn is_valid_signature(
 					format!("{}{}{}", ETHEREUM_SIGN_MESSAGE_PREFIX, payload.len(), payload)
 						.into_bytes()
 				},
-				EthEncodingType::Eip712 => build_eip_712_payload(
-					call,
-					chainflip_network.as_str(),
-					&format!("{}", spec_version),
-					*transaction_metadata,
-				)?,
+				EthEncodingType::Eip712 => build_eip712_typed_data(
+					ChainflipExtrinsic { call, transaction_metadata: *transaction_metadata },
+					chainflip_network.as_str().to_string(),
+					spec_version,
+				)?
+				.encode_eip712()?,
 			};
 			Ok(verify_evm_signature(signer, &signed_payload, signature))
 		},

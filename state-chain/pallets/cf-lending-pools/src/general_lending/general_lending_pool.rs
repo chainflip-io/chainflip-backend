@@ -9,7 +9,8 @@ pub struct LendingPool<AccountId>
 where
 	AccountId: Decode + Encode + Ord + Clone,
 {
-	/// Total amount owed to active lenders (includes what's currently in loans)
+	/// Total amount owed to active lenders (includes what's currently in loans, but excluded
+	/// what's owed to the network).
 	pub total_amount: AssetAmount,
 	/// Amount available to be borrowed
 	pub available_amount: AssetAmount,
@@ -36,6 +37,16 @@ impl<T: Config> From<LendingPoolError> for Error<T> {
 			LendingPoolError::LenderNotFoundInPool => Error::<T>::LenderNotFoundInPool,
 		}
 	}
+}
+
+/// Result of a successful execution of [LendingPool::remove_funds]
+#[derive(Debug, PartialEq, Eq)]
+pub struct WithdrawnAndRemainingAmounts {
+	/// This much has been withdrawn from the pool (this amount needs to be
+	/// assigned/credited elsewhere).
+	pub withdrawn_amount: AssetAmount,
+	/// This much is left in the pool.
+	pub remaining_amount: AssetAmount,
 }
 
 impl<AccountId> LendingPool<AccountId>
@@ -76,7 +87,7 @@ where
 		&mut self,
 		lender: &AccountId,
 		amount: Option<AssetAmount>,
-	) -> Result<AssetAmount, LendingPoolError> {
+	) -> Result<WithdrawnAndRemainingAmounts, LendingPoolError> {
 		let share = self
 			.lender_shares
 			.get_mut(lender)
@@ -111,7 +122,10 @@ where
 		.map(|(id, parts)| (id.clone(), Perquintill::from_parts(parts)))
 		.collect();
 
-		Ok(amount_to_withdraw)
+		Ok(WithdrawnAndRemainingAmounts {
+			withdrawn_amount: amount_to_withdraw,
+			remaining_amount: remaining_owed_amount,
+		})
 	}
 
 	pub fn provide_funds_for_loan(&mut self, amount: AssetAmount) -> Result<(), LendingPoolError> {
@@ -175,6 +189,28 @@ where
 		// not the total amount (as we never deduct borrowed funds from the total amount
 		// in the first place)
 		self.available_amount.saturating_accrue(amount);
+	}
+
+	pub fn get_supply_position_for_account(
+		&self,
+		account_id: &AccountId,
+	) -> Result<AssetAmount, LendingPoolError> {
+		let share = self
+			.lender_shares
+			.get(account_id)
+			.ok_or(LendingPoolError::LenderNotFoundInPool)?;
+
+		Ok(*share * self.total_amount)
+	}
+
+	pub fn get_all_supply_positions(&self) -> Vec<LendingSupplyPosition<AccountId, AssetAmount>> {
+		self.lender_shares
+			.iter()
+			.map(|(lp_id, share)| LendingSupplyPosition {
+				lp_id: lp_id.clone(),
+				total_amount: *share * self.total_amount,
+			})
+			.collect()
 	}
 }
 
@@ -276,7 +312,10 @@ mod tests {
 		);
 
 		// --- Start removing funds here ---
-		assert_eq!(chp_pool.remove_funds(&LENDER_2, None), Ok(300));
+		assert_eq!(
+			chp_pool.remove_funds(&LENDER_2, None),
+			Ok(WithdrawnAndRemainingAmounts { withdrawn_amount: 300, remaining_amount: 0 })
+		);
 		assert_eq!(chp_pool.total_amount, 800);
 		assert_eq!(chp_pool.available_amount, 800);
 
@@ -288,13 +327,19 @@ mod tests {
 			],
 		);
 
-		assert_eq!(chp_pool.remove_funds(&LENDER_3, None), Ok(300));
+		assert_eq!(
+			chp_pool.remove_funds(&LENDER_3, None),
+			Ok(WithdrawnAndRemainingAmounts { withdrawn_amount: 300, remaining_amount: 0 })
+		);
 		assert_eq!(chp_pool.total_amount, 500);
 		assert_eq!(chp_pool.available_amount, 500);
 
 		check_shares(&chp_pool, [(LENDER_1, Perquintill::from_percent(100))]);
 
-		assert_eq!(chp_pool.remove_funds(&LENDER_1, None), Ok(500));
+		assert_eq!(
+			chp_pool.remove_funds(&LENDER_1, None),
+			Ok(WithdrawnAndRemainingAmounts { withdrawn_amount: 500, remaining_amount: 0 })
+		);
 		assert_eq!(chp_pool.total_amount, 0);
 		assert_eq!(chp_pool.available_amount, 0);
 
@@ -314,7 +359,10 @@ mod tests {
 		assert_eq!(chp_pool.get_utilisation(), Permill::from_percent(60));
 
 		// Lender 1 requests only a portion of their funds:
-		assert_eq!(chp_pool.remove_funds(&LENDER_1, Some(100)), Ok(100));
+		assert_eq!(
+			chp_pool.remove_funds(&LENDER_1, Some(100)),
+			Ok(WithdrawnAndRemainingAmounts { withdrawn_amount: 100, remaining_amount: 400 })
+		);
 
 		assert_eq!(chp_pool.total_amount, 900);
 		assert_eq!(chp_pool.available_amount, 300);
@@ -329,7 +377,10 @@ mod tests {
 		);
 
 		// Lender 1 now requests all remaining funds, but can only get some of them:
-		assert_eq!(chp_pool.remove_funds(&LENDER_1, None), Ok(300));
+		assert_eq!(
+			chp_pool.remove_funds(&LENDER_1, None),
+			Ok(WithdrawnAndRemainingAmounts { withdrawn_amount: 300, remaining_amount: 100 })
+		);
 
 		assert_eq!(chp_pool.get_utilisation(), Permill::from_percent(100));
 

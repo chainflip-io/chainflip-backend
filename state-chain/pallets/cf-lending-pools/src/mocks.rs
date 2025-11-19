@@ -19,7 +19,7 @@ use cf_chains::Ethereum;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		egress_handler::MockEgressHandler, pool_api::MockPoolApi,
+		balance_api::MockLpRegistration, egress_handler::MockEgressHandler, pool_api::MockPoolApi,
 		swap_request_api::MockSwapRequestHandler,
 	},
 	AccountRoleRegistry,
@@ -47,9 +47,10 @@ impl pallet_cf_lending_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type Balance = cf_traits::mocks::balance_api::MockBalance;
+	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type PoolApi = MockPoolApi;
 	type PriceApi = cf_traits::mocks::price_feed_api::MockPriceFeedApi;
-	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
+	type LpRegistrationApi = MockLpRegistration;
 	type SafeMode = MockRuntimeSafeMode;
 }
 

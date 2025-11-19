@@ -17,6 +17,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extract_if)]
 #![feature(map_try_insert)]
+#![feature(try_blocks)]
+#![feature(stmt_expr_attributes)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -40,8 +42,9 @@ use cf_chains::{
 	CcmDepositMetadataChecked, CcmDepositMetadataUnchecked, CcmMessage, Chain, ChainCrypto,
 	ChannelLifecycleHooks, ChannelRefundParameters, ChannelRefundParametersForChain,
 	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, DepositOriginType,
-	ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
-	IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin, TransferAssetParams,
+	ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, FetchForRejection,
+	ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, RejectError, SwapOrigin,
+	TransferAssetParams, TransferForRejection,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary,
@@ -53,12 +56,13 @@ use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode,
 	lending::{BoostApi, BoostOutcome},
-	AccountRoleRegistry, AdjustedFeeEstimationApi, AffiliateRegistry, AssetConverter,
-	AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
+	AccountRoleRegistry, AdditionalDepositAction, AdjustedFeeEstimationApi, AffiliateRegistry,
+	AssetConverter, AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
-	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
-	NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails, SwapOutputAction,
-	SwapParameterValidation, SwapRequestHandler, SwapRequestType,
+	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, IngressEgressFeeApi,
+	IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider, OnDeposit,
+	ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
+	SwapRequestType, INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -209,6 +213,12 @@ enum FullWitnessDepositOutcome {
 	BoostConsumed,
 	BoostNotConsumed,
 }
+
+enum RejectionRefundDidntSucceed {
+	RetryLater,
+	RecordFailureAndAbortRefund,
+}
+
 mod deposit_origin {
 
 	use super::*;
@@ -324,7 +334,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(28);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(29);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -557,6 +567,7 @@ pub mod pallet {
 		LiquidityProvision {
 			lp_account: AccountId,
 			refund_address: ForeignChainAddress,
+			additional_action: Option<AdditionalDepositAction>,
 		},
 		Refund {
 			reason: RefundReason,
@@ -719,6 +730,13 @@ pub mod pallet {
 
 		#[pallet::constant]
 		type ScreeningBrokerId: Get<Self::AccountId>;
+
+		type FundAccount: FundAccount<
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
+		>;
+
+		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -1293,66 +1311,73 @@ pub mod pallet {
 			if T::AllowTransactionReports::get() {
 				let mut deferred_rejections = Vec::new();
 
-				for tx in ScheduledTransactionsForRejection::<T, I>::take() {
-					let Ok(refund_address) = tx.refund_address.clone().try_into() else {
-						FailedRejections::<T, I>::append(tx.clone());
-						continue;
+				// ----------
+				// extracting refund address
+				// ----------
+				let get_refund_address = |tx: &TransactionRejectionDetails<T, I>| {
+					if let Ok(refund_address) = tx.refund_address.clone().try_into() {
+						Ok(refund_address)
+					} else {
+						Err(RejectionRefundDidntSucceed::RecordFailureAndAbortRefund)
+					}
+				};
+
+				// ----------
+				// extracting fetch id
+				//  - for deposit channels we need a fetch id
+				//  - for vault swaps we don't need one
+				// ----------
+				let get_fetch_id = |tx: &TransactionRejectionDetails<T, I>| -> Result<_, RejectionRefundDidntSucceed> {
+
+					// the tx has no associated deposit_address so it must be a vault swap without fetch id
+					let Some(deposit_address) = tx.deposit_address.clone() else {
+						return Ok(None);
 					};
 
-					// Below we're calling
-					// `Self::try_broadcast_rejection_refund_or_store_tx_details` which assumes
-					// that this check has been done.
-					if let Some(limit) = T::FetchesTransfersLimitProvider::maybe_transfers_limit() {
-						// In case we don't have enough nonces we put the tx back to be retried next
-						// block
-						if limit.is_zero() {
-							deferred_rejections.push(tx);
-							continue;
-						}
-					}
+					// lookup the deposit address, and if:
+					//  - there's no deposit channel with this address, so we assume it's a vault swap
+					//  - it belongs to a deposit channel, we extract the fetch id from the deposit details.
+					//    But: sometimes we cannot yet fetch, so we check for that.
+					DepositChannelLookup::<T, I>::mutate(deposit_address, |details| match details {
+						None => Ok(None),
+						Some(details) => {
+							let can_fetch = details.deposit_channel.state.can_fetch();
 
-					match tx.deposit_address {
-						Some(ref deposit_address) => {
-							if !DepositChannelLookup::<T, I>::contains_key(deposit_address) {
-								Self::try_broadcast_rejection_refund_or_store_tx_details(
-									tx.clone(),
-									refund_address,
-									None,
-								);
-								continue;
-							}
-
-							let maybe_fetch_id =
-								DepositChannelLookup::<T, I>::mutate(deposit_address, |details| {
-									details.as_mut().and_then(|details| {
-										let can_fetch = details.deposit_channel.state.can_fetch();
-
-										if can_fetch {
-											let fetch_id = details.deposit_channel.fetch_id();
-											details.deposit_channel.state.on_fetch_scheduled();
-											Some(fetch_id)
-										} else {
-											None
-										}
-									})
-								});
-
-							if let Some(fetch_id) = maybe_fetch_id {
-								Self::try_broadcast_rejection_refund_or_store_tx_details(
-									tx,
-									refund_address,
-									Some(fetch_id),
-								);
+							// check if we can fetch from the deposit channel (sometimes not possible while
+							// contracts have to be deployed on evm chains)
+							if can_fetch {
+								let fetch_id = details.deposit_channel.fetch_id();
+								details.deposit_channel.state.on_fetch_scheduled();
+								Ok(Some(fetch_id))
 							} else {
-								deferred_rejections.push(tx);
+								Err(RejectionRefundDidntSucceed::RetryLater)
 							}
+						}
+					})
+				};
+
+				for tx in ScheduledTransactionsForRejection::<T, I>::take() {
+					match try {
+						Self::try_broadcast_rejection_refund(
+							tx.clone(),
+							get_refund_address(&tx)?,
+							get_fetch_id(&tx)?,
+						)?
+					} {
+						Ok(broadcast_id) => {
+							Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
+								broadcast_id,
+								tx_id: tx.deposit_details.clone(),
+							});
 						},
-						None => {
-							Self::try_broadcast_rejection_refund_or_store_tx_details(
-								tx,
-								refund_address,
-								None,
-							);
+						Err(RejectionRefundDidntSucceed::RetryLater) => {
+							deferred_rejections.push(tx);
+						},
+						Err(RejectionRefundDidntSucceed::RecordFailureAndAbortRefund) => {
+							FailedRejections::<T, I>::append(tx.clone());
+							Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
+								tx_id: tx.deposit_details.clone(),
+							});
 						},
 					}
 				}
@@ -1712,98 +1737,113 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	// WARNING: This function assumes that
-	// `T::FetchesTransfersLimitProvider::maybe_transfers_limit() > 0`
-	fn try_broadcast_rejection_refund_or_store_tx_details(
+	fn try_broadcast_rejection_refund(
 		tx: TransactionRejectionDetails<T, I>,
 		refund_address: TargetChainAccount<T, I>,
 		deposit_fetch_id: Option<<T::TargetChain as Chain>::DepositFetchId>,
-	) {
-		let AmountAndFeesWithheld {
-			amount_after_fees: amount_after_ingress_fees,
-			fees_withheld: _,
-		} = Self::withhold_ingress_or_egress_fee(
-			if deposit_fetch_id.is_some() {
-				IngressOrEgress::IngressDepositChannel
-			} else {
-				IngressOrEgress::IngressVaultSwap
-			},
-			tx.asset,
-			tx.amount,
-		);
-		let AmountAndFeesWithheld { amount_after_fees: amount_to_refund, fees_withheld: _ } =
-			Self::withhold_ingress_or_egress_fee(
-				match tx.refund_ccm_metadata {
-					Some(ref refund_ccm) => IngressOrEgress::EgressCcm {
-						gas_budget: refund_ccm.channel_metadata.gas_budget,
-						message_length: refund_ccm.channel_metadata.message.len(),
-					},
-					None => IngressOrEgress::Egress,
-				},
-				tx.asset,
-				amount_after_ingress_fees,
-			);
+	) -> Result<BroadcastId, RejectionRefundDidntSucceed> {
+		use RejectionRefundDidntSucceed::*;
 
-		// By building the ccm call, we will know if a separate "fetch" is required as part of the
-		// refund.
-		let no_ccm_refund = tx.refund_ccm_metadata.is_none();
-		match <T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
-			tx.deposit_details.clone(),
-			refund_address.clone(),
-			no_ccm_refund.then_some(amount_to_refund),
-			tx.asset,
-			deposit_fetch_id,
-		) {
-			Ok(api_call) => {
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
-					api_call,
-					tx.deposit_address.clone().map(|deposit_address| {
-						Call::finalise_ingress { addresses: vec![deposit_address] }.into()
-					}),
-					|_| None,
-				);
-				// Only emit TransactionRejectedByBroker for the actual egress (refund) transaction
-				if no_ccm_refund {
-					Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
-						broadcast_id,
-						tx_id: tx.deposit_details.clone(),
-					});
-				}
-			},
-			Err(cf_chains::RejectError::NotRequired) => (),
-			Err(_) =>
-			// Only consider it failed if we are not doing a ccm refund
-				if no_ccm_refund {
-					FailedRejections::<T, I>::append(tx.clone());
-					Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
-						tx_id: tx.deposit_details.clone(),
-					});
-				},
+		// This function is only doing the maybe_transfers_limit (most restrictive) and not the
+		// maybe_fetches_limit checks that the `do_egress_scheduled_*` are doing.
+		if let Some(limit) = T::FetchesTransfersLimitProvider::maybe_transfers_limit() {
+			// In case we don't have enough nonces we will schedule this tx to be retried in the
+			// next block.
+			if limit.is_zero() {
+				return Err(RetryLater);
+			}
+		}
+
+		let (ingress_type, fetch_command) = {
+			match deposit_fetch_id {
+				Some(deposit_fetch_id) => (
+					IngressOrEgress::IngressDepositChannel,
+					FetchForRejection::Fetch { deposit_fetch_id },
+				),
+				None => (IngressOrEgress::IngressVaultSwap, FetchForRejection::NotRequired),
+			}
 		};
 
-		if let Some(ref ccm_refund_metadata) = tx.refund_ccm_metadata {
-			let handle_ccm_failure = || {
-				FailedRejections::<T, I>::append(tx.clone());
-				Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
-					tx_id: tx.deposit_details.clone(),
-				});
-			};
-
-			// Solana CCM refunds with ALT is not supported, since we don't want to witness ALTs
-			// here.
-			if ccm_refund_metadata
-				.channel_metadata
-				.ccm_additional_data
-				.alt_addresses()
-				.map(|alts| !alts.is_empty())
-				.unwrap_or(false)
-			{
-				debug_assert!(false, "Solana refund CCM with ALTs is not supported");
-				handle_ccm_failure();
-				return;
+		let egress_type = {
+			match tx.refund_ccm_metadata {
+				Some(ref refund_ccm) => IngressOrEgress::EgressCcm {
+					gas_budget: refund_ccm.channel_metadata.gas_budget,
+					message_length: refund_ccm.channel_metadata.message.len(),
+				},
+				None => IngressOrEgress::Egress,
 			}
+		};
 
-			if let Ok(api_call) =
+		// withhold both ingress and egress fees
+		let amount_after_ingress_fees =
+			Self::withhold_ingress_or_egress_fee(ingress_type, tx.asset, tx.amount)
+				.amount_after_fees;
+		let amount_to_refund =
+			Self::withhold_ingress_or_egress_fee(egress_type, tx.asset, amount_after_ingress_fees)
+				.amount_after_fees;
+
+		// this is the function we use to broadcast, used multiple times below
+		let broadcast_and_finalise_ingress = |api_call| {
+			T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+				api_call,
+				tx.deposit_address.clone().map(|deposit_address| {
+					Call::finalise_ingress { addresses: vec![deposit_address] }.into()
+				}),
+				|_| None,
+			)
+		};
+
+		// the actual refund logic depends on whether we're doing a ccm refund or not
+		#[rustfmt::skip]
+		match tx.refund_ccm_metadata {
+			// Case 1: simple transfer without ccm
+			None => {
+				<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
+					tx.deposit_details.clone(),
+					tx.asset,
+					fetch_command,
+					TransferForRejection::Transfer {
+						address: refund_address,
+						amount: amount_to_refund,
+					},
+				)
+				.map_err(|_| RecordFailureAndAbortRefund)
+				.map(broadcast_and_finalise_ingress)
+			},
+			// Case 2: ccm refund
+			Some(ref ccm_refund_metadata) => {
+				// the first api call is either a fetch or nothing,
+				// the actual refund ccm call is done in a second step.
+				//
+				// If a fetch is not required, we will get a `RejectError::NotRequired`. In that case
+				// we continue. If we get any other error, we abort and record this as failure.
+				match <T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
+						tx.deposit_details.clone(),
+						tx.asset,
+						fetch_command,
+						TransferForRejection::TransferWillBeCcmCallAndIsHandledSeparately,
+					)
+					.map(broadcast_and_finalise_ingress) {
+						Ok(_fetch_broadcast_id) => (),
+						Err(RejectError::NotRequired) => (),
+						Err(_) => return Err(RecordFailureAndAbortRefund)
+				}
+
+				// Solana CCM refunds with ALT is not supported, since we don't want to witness ALTs
+				// here.
+				if ccm_refund_metadata
+					.channel_metadata
+					.ccm_additional_data
+					.alt_addresses()
+					.map(|alts| !alts.is_empty())
+					.unwrap_or(false)
+				{
+					debug_assert!(false, "Solana refund CCM with ALTs is not supported");
+					return Err(RecordFailureAndAbortRefund);
+				}
+
+				// We try to construct the call and broadcast it. If the call can't be constructed,
+				// we record this as failure.
 				<T::ChainApiCall as ExecutexSwapAndCall<T::TargetChain>>::new_unsigned(
 					TransferAssetParams {
 						asset: tx.asset,
@@ -1815,24 +1855,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ccm_refund_metadata.channel_metadata.gas_budget,
 					ccm_refund_metadata.channel_metadata.message.to_vec(),
 					ccm_refund_metadata.channel_metadata.ccm_additional_data.clone(),
-				) {
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
-					api_call,
-					tx.deposit_address.clone().map(|deposit_address| {
-						Call::finalise_ingress { addresses: vec![deposit_address] }.into()
-					}),
-					|_| None,
-				);
-				Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
-					broadcast_id,
-					tx_id: tx.deposit_details.clone(),
-				});
-			} else {
-				// NOTE: This could be appending a rejection that might have an already successful
-				// fetch (RejectCall) but not the CCM refund. We must ensure that
-				// FailedRejections are not being retried.
-				handle_ccm_failure();
-			}
+				)
+				.map_err(|_| RecordFailureAndAbortRefund)
+				.map(broadcast_and_finalise_ingress)
+			},
 		}
 	}
 
@@ -2147,8 +2173,91 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		origin: DepositOrigin<T, I>,
 	) -> DepositAction<T, I> {
 		match action.clone() {
-			ChannelAction::LiquidityProvision { lp_account, .. } => {
-				T::Balance::credit_account(&lp_account, asset.into(), amount_after_fees.into());
+			ChannelAction::LiquidityProvision { lp_account, additional_action, refund_address } => {
+				let used_for_flip_funding_swap = match additional_action {
+					Some(AdditionalDepositAction::FundFlip { flip_amount_to_credit })
+						if !frame_system::Pallet::<T>::account_exists(&lp_account) =>
+					{
+						let is_flip_asset = matches!(asset.into(), Asset::Flip);
+						let funding_amount = if is_flip_asset {
+							core::cmp::min(flip_amount_to_credit, amount_after_fees.into())
+						} else {
+							INITIAL_FLIP_FUNDING
+						};
+
+						T::FundAccount::fund_account(
+							lp_account.clone(),
+							funding_amount.into(),
+							FundingSource::InitialFunding {
+								asset: asset.into(),
+								channel_id: if let DepositOrigin::DepositChannel {
+									channel_id,
+									..
+								} = &origin
+								{
+									Some(*channel_id)
+								} else {
+									None
+								},
+							},
+						);
+						// Increment the nonce to prevent replay attacks
+						frame_system::Pallet::<T>::inc_account_nonce(&lp_account);
+
+						let _ = T::AccountRoleRegistry::register_account_role(
+							&lp_account,
+							AccountRole::LiquidityProvider,
+						);
+						T::LpRegistrationApi::register_liquidity_refund_address(
+							&lp_account,
+							refund_address,
+						);
+
+						if is_flip_asset {
+							funding_amount
+						} else {
+							let input_amount =
+								T::AssetConverter::calculate_input_for_desired_output(
+									asset.into(),
+									Asset::Flip,
+									flip_amount_to_credit,
+									false,
+								)
+								.unwrap_or(
+									pallet_cf_swapping::utilities::estimated_20usd_input(
+										asset.into(),
+									) / 20,
+								);
+							let input_amount =
+								core::cmp::min(input_amount, amount_after_fees.into());
+							T::SwapRequestHandler::init_swap_request(
+								asset.into(),
+								input_amount,
+								Asset::Flip,
+								SwapRequestType::RegularNoNetworkFee {
+									output_action:
+										SwapOutputAction::CreditFlipAndTransferToGateway {
+											account_id: lp_account.clone(),
+											flip_to_subtract_from_swap_output: INITIAL_FLIP_FUNDING,
+										},
+								},
+								BoundedVec::new(),
+								None,
+								None,
+								SwapOrigin::OnChainAccount(lp_account.clone()),
+							);
+							input_amount
+						}
+					},
+					_ => 0u128,
+				};
+				T::Balance::credit_account(
+					&lp_account,
+					asset.into(),
+					Into::<u128>::into(amount_after_fees)
+						.saturating_sub(used_for_flip_funding_swap),
+				);
+
 				DepositAction::LiquidityProvision { lp_account }
 			},
 			ChannelAction::Swap {
@@ -3068,7 +3177,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
-		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
+		if channel_opening_fee > T::Amount::zero() {
+			T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
+		}
 		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
 
 		let deposit_channel = PreallocatedChannels::<T, I>::mutate(requester, |queue| {
@@ -3383,20 +3494,23 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	type AccountId = T::AccountId;
 	type Amount = T::Amount;
 
-	// This should be callable by the LP pallet.
+	// This should be callable by the LP pallet and also by the broker (when creating liquidity
+	// deposit channels for unfunded evm/sol based accounts)
 	fn request_liquidity_deposit_address(
+		requester_account: T::AccountId,
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
 		boost_fee: BasisPoints,
 		refund_address: ForeignChainAddress,
+		additional_action: Option<AdditionalDepositAction>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
 		let (deposit_channel, expiry_block, channel_opening_fee) = Self::open_channel(
-			&lp_account,
+			&requester_account,
 			source_asset,
-			ChannelAction::LiquidityProvision { lp_account: lp_account.clone(), refund_address },
+			ChannelAction::LiquidityProvision { lp_account, refund_address, additional_action },
 			boost_fee,
 		)?;
 

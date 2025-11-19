@@ -147,7 +147,7 @@ fn can_update_all_config_items() {
 				extra_interest: Permill::from_percent(1),
 				from_origination_fee: Permill::from_percent(2),
 				from_liquidation_fee: Permill::from_percent(3),
-				interest_on_collateral_max: Permill::from_percent(5),
+				low_ltv_penalty_max: Permill::from_percent(5),
 			};
 
 		const NEW_FEE_SWAP_INTERVAL_BLOCKS: u32 = 700;
@@ -158,10 +158,12 @@ fn can_update_all_config_items() {
 		const NEW_ORACLE_SLIPPAGE_FEE_SWAP: BasisPoints = 45;
 		const NEW_INTEREST_COLLECTION_THRESHOLD_USD: AssetAmount = 46;
 
-		const NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD: AssetAmount = 30_000_000_000;
+		const NEW_SOFT_LIQUIDATION_SWAP_CHUNK_SIZE_USD: AssetAmount = 30_000_000_000;
+		const NEW_HARD_LIQUIDATION_SWAP_CHUNK_SIZE_USD: AssetAmount = 45_000_000_000;
 		const NEW_MINIMUM_LOAN_AMOUNT_USD: AssetAmount = 12345;
 		const NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD: AssetAmount = 1234;
 		const NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD: AssetAmount = 567;
+		const NEW_MINIMUM_SUPPLY_AMOUNT_USD: AssetAmount = 7783;
 
 		const UPDATE_NETWORK_FEE_DEDUCTION_FROM_BOOST: PalletConfigUpdate =
 			PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
@@ -206,12 +208,16 @@ fn can_update_all_config_items() {
 			};
 
 		const UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD: PalletConfigUpdate =
-			PalletConfigUpdate::SetLiquidationSwapChunkSizeUsd(NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD);
+			PalletConfigUpdate::SetLiquidationSwapChunkSizeUsd {
+				soft: NEW_SOFT_LIQUIDATION_SWAP_CHUNK_SIZE_USD,
+				hard: NEW_HARD_LIQUIDATION_SWAP_CHUNK_SIZE_USD,
+			};
 
 		const UPDATE_LOAN_MINIMUMS: PalletConfigUpdate = PalletConfigUpdate::SetMinimumAmounts {
 			minimum_loan_amount_usd: NEW_MINIMUM_LOAN_AMOUNT_USD,
 			minimum_update_loan_amount_usd: NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD,
 			minimum_update_collateral_amount_usd: NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD,
+			minimum_supply_amount_usd: NEW_MINIMUM_SUPPLY_AMOUNT_USD,
 		};
 
 		// Check that the default values are different from the new ones
@@ -242,8 +248,12 @@ fn can_update_all_config_items() {
 			NEW_ORACLE_SLIPPAGE_FEE_SWAP
 		);
 		assert_ne!(
-			LendingConfig::<Test>::get().liquidation_swap_chunk_size_usd,
-			NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD
+			LendingConfig::<Test>::get().soft_liquidation_swap_chunk_size_usd,
+			NEW_SOFT_LIQUIDATION_SWAP_CHUNK_SIZE_USD
+		);
+		assert_ne!(
+			LendingConfig::<Test>::get().hard_liquidation_swap_chunk_size_usd,
+			NEW_HARD_LIQUIDATION_SWAP_CHUNK_SIZE_USD
 		);
 		assert_ne!(
 			LendingConfig::<Test>::get().minimum_loan_amount_usd,
@@ -293,11 +303,13 @@ fn can_update_all_config_items() {
 				interest_collection_threshold_usd: NEW_INTEREST_COLLECTION_THRESHOLD_USD,
 				soft_liquidation_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_SOFT_LIQUIDATION,
 				hard_liquidation_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_HARD_LIQUIDATION,
-				liquidation_swap_chunk_size_usd: NEW_LIQUIDATION_SWAP_CHUNK_SIZE_USD,
+				soft_liquidation_swap_chunk_size_usd: NEW_SOFT_LIQUIDATION_SWAP_CHUNK_SIZE_USD,
+				hard_liquidation_swap_chunk_size_usd: NEW_HARD_LIQUIDATION_SWAP_CHUNK_SIZE_USD,
 				fee_swap_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_FEE_SWAP,
 				minimum_loan_amount_usd: NEW_MINIMUM_LOAN_AMOUNT_USD,
 				minimum_update_loan_amount_usd: NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD,
 				minimum_update_collateral_amount_usd: NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD,
+				minimum_supply_amount_usd: NEW_MINIMUM_SUPPLY_AMOUNT_USD,
 				pool_config_overrides: BTreeMap::default(),
 			}
 		);

@@ -18,6 +18,8 @@ use cf_primitives::{
 	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
 	SwapRequestId,
 };
+use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::DispatchResult;
 use sp_std::collections::btree_map::BTreeMap;
@@ -35,6 +37,16 @@ pub struct BoostOutcome {
 #[derive(Default, Debug, PartialEq, Eq)]
 pub struct BoostFinalisationOutcome {
 	pub network_fee: AssetAmount,
+}
+
+/// Allows to specify whether a loan should be repaid in full
+/// or only with a specified amount.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, TypeInfo, Encode, Decode)]
+pub enum RepaymentAmount {
+	/// Full repayment
+	Full,
+	/// Only repay with the specified amount
+	Exact(AssetAmount),
 }
 
 pub trait BoostApi {
@@ -81,7 +93,7 @@ pub trait LendingApi {
 	fn try_making_repayment(
 		borrower_id: &Self::AccountId,
 		loan_id: LoanId,
-		amount: AssetAmount,
+		amount: RepaymentAmount,
 	) -> DispatchResult;
 
 	fn add_collateral(
@@ -99,6 +111,10 @@ pub trait LendingApi {
 		borrower_id: &Self::AccountId,
 		primary_collateral_asset: Asset,
 	) -> DispatchResult;
+
+	/// Can be used to indicate user's intent to trigger (value=true) or stop (value=false)
+	/// voluntary liquidation.
+	fn set_voluntary_liquidation_flag(borrower_id: Self::AccountId, value: bool) -> DispatchResult;
 }
 
 pub trait LendingSystemApi {

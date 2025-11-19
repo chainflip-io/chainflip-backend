@@ -172,11 +172,11 @@ export async function doPerformSwap(
     ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
     : Promise.resolve();
 
-  await (senderType === SenderType.Address
+  const txId = await (senderType === SenderType.Address
     ? send(logger, sourceAsset, depositAddress, amount)
     : sendViaCfTester(logger, sourceAsset, depositAddress));
 
-  logger.debug(`Funded the address`);
+  logger.debug(`Funded the address with tx ${txId}`);
 
   swapContext?.updateStatus(logger, SwapStatus.Funded);
 

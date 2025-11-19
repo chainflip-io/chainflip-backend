@@ -23,12 +23,11 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets, AssetAmount, ChannelId};
 #[cfg(feature = "runtime-benchmarks")]
-use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
-		egress_handler::MockEgressHandler, pool_api::MockPoolApi,
+		egress_handler::MockEgressHandler, fee_payment::MockFeePayment, pool_api::MockPoolApi,
 		swap_request_api::MockSwapRequestHandler,
 	},
 	AccountRoleRegistry, BalanceApi, BoostBalancesApi, MinimumDeposit,

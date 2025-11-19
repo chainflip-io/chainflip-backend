@@ -1101,8 +1101,9 @@ export function waitForExt(
   promise: Promise<EventRecord[]>;
   waiter: (result: ISubmittableResult) => void;
 } {
-  const { promise, resolve } = deferredPromise<EventRecord[]>();
+  const { promise, resolve, reject } = deferredPromise<EventRecord[]>();
   let release = !!mutexRelease;
+  const dispatchErrorHandler = handleDispatchError(api, false);
   return {
     promise,
     waiter: ({ events, status, dispatchError }) => {
@@ -1113,11 +1114,28 @@ export function waitForExt(
       logger.trace(`Extrinsic status: ${status.toString()}`);
       if (dispatchError) {
         logger.warn(`Extrinsic error: ${dispatchError.toString()}`);
-        handleDispatchError(api)({ dispatchError });
-      } else if (waitForStatus === 'InBlock' && status.isInBlock === true) {
+        try {
+          dispatchErrorHandler({ dispatchError });
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          reject(err);
+          throwError(logger, err);
+        }
+        return;
+      }
+      if (waitForStatus === 'InBlock' && status.isInBlock === true) {
         resolve(events);
-      } else if (waitForStatus === 'Finalized' && status.isFinalized === true) {
+        return;
+      }
+      if (waitForStatus === 'Finalized' && status.isFinalized === true) {
         resolve(events);
+        return;
+      }
+      if (status.isDropped || status.isInvalid || status.isUsurped || status.isRetracted) {
+        logger.warn(`Extrinsic failed: ${status.toString()}`);
+        const error = new Error(`Extrinsic failed with status: ${status.toString()}`);
+        reject(error);
+        throwError(logger, error);
       }
     },
   };
@@ -1299,6 +1317,7 @@ export async function startEngines(
   localnetInitPath: string,
   binaryPath: string,
   numberOfNodes: 1 | 3,
+  logSuffix = '',
 ) {
   console.log('Starting all the engines');
 
@@ -1306,10 +1325,10 @@ export async function startEngines(
   await execWithLog(
     `${localnetInitPath}/scripts/start-all-engines.sh`,
     [],
-    'start-all-engines-pre-upgrade',
+    'start-all-engines' + logSuffix,
     {
       INIT_RUN: 'false',
-      LOG_SUFFIX: '-pre-upgrade',
+      LOG_SUFFIX: logSuffix,
       NODE_COUNT: nodeCount,
       SELECTED_NODES,
       LOCALNET_INIT_DIR: localnetInitPath,

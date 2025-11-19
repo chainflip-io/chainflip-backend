@@ -33,9 +33,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo, IngressEgressFeeApi,
-	PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo,
+	FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry,
+	SwapOutputAction, SwapParameterValidation, SwapRequestHandler, SwapRequestType,
+	SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -49,6 +50,9 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use pallet_cf_environment::submit_runtime_call::{
+	is_valid_signature, SignatureData, TransactionMetadata,
+};
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::{
 	helpers_128bit::multiply_by_rational_with_rounding,
@@ -359,6 +363,16 @@ impl<T: Config> From<DispatchError> for BatchExecutionError<T> {
 	}
 }
 
+#[derive(Clone, Copy, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+pub enum SwapRequestCompletionReason {
+	/// Aborted explicitly without waiting for timeout (e.g. used in liquidation swaps).
+	Aborted,
+	/// Auto-aborted due to reaching timeout (usually due to failing to meet min price limit).
+	Expired,
+	/// Fully swapped.
+	Executed,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct DcaState {
 	scheduled_chunks: BTreeSet<SwapId>,
@@ -481,7 +495,7 @@ pub enum PalletConfigUpdate<T: Config> {
 }
 
 impl_pallet_safe_mode! {
-	PalletSafeMode; swaps_enabled, withdrawals_enabled, broker_registration_enabled,
+	PalletSafeMode; swaps_enabled, withdrawals_enabled, broker_registration_enabled, deposit_enabled
 }
 
 fn address_error_to_pallet_error<T>(error: AddressError) -> Error<T>
@@ -508,8 +522,9 @@ pub mod pallet {
 		PriceLimits, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{
-		lending::LendingSystemApi, AccountRoleRegistry, Chainflip, EgressApi, PoolPriceProvider,
-		PriceFeedApi, ScheduledEgressDetails, SwapExecutionProgress,
+		lending::LendingSystemApi, AccountRoleRegistry, AdditionalDepositAction, Chainflip,
+		EgressApi, FundAccount, PoolPriceProvider, PriceFeedApi, ScheduledEgressDetails,
+		SwapExecutionProgress,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
@@ -559,6 +574,11 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 
+		type FundAccount: FundAccount<
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
+		>;
+
 		type PoolPriceApi: PoolPriceProvider;
 
 		type PriceFeedApi: PriceFeedApi;
@@ -569,6 +589,13 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Amount = <Self as Chainflip>::Amount,
 		>;
+
+		type MinimumFunding: GetMinimumFunding;
+
+		type RuntimeCall: Member + Parameter + From<frame_system::Call<Self>> + From<Call<Self>>;
+
+		/// For getting the Chainflip network.
+		type ChainflipNetwork: ChainflipNetworkInfo;
 	}
 
 	#[pallet::pallet]
@@ -604,7 +631,11 @@ pub mod pallet {
 
 	/// FLIP ready to be burned.
 	#[pallet::storage]
-	pub type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+	pub type FlipToBurn<T: Config> = StorageValue<_, i128, ValueQuery>;
+
+	/// FLIP ready to be sent to gateway.
+	#[pallet::storage]
+	pub type FlipToBeSentToGateway<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
 	/// Interval at which we buy FLIP in order to burn it.
 	#[pallet::storage]
@@ -723,6 +754,7 @@ pub mod pallet {
 		},
 		SwapRequestCompleted {
 			swap_request_id: SwapRequestId,
+			reason: SwapRequestCompletionReason,
 		},
 		/// An new swap deposit channel has been opened.
 		SwapDepositAddressReady {
@@ -859,6 +891,18 @@ pub mod pallet {
 			swap_id: SwapId,
 			reason: SwapFailureReason,
 		},
+		AccountCreationDepositAddressReady {
+			channel_id: ChannelId,
+			asset: Asset,
+			deposit_address: EncodedAddress,
+			requested_by: T::AccountId,
+			// account the funds will be credited to upon deposit
+			requested_for: T::AccountId,
+			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
+			boost_fee: BasisPoints,
+			channel_opening_fee: T::Amount,
+			refund_address: EncodedAddress,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -931,6 +975,16 @@ pub mod pallet {
 		CcmUnsupportedForRefundChain,
 		/// Oracle price not available for one or more of the assets.
 		OraclePriceNotAvailable,
+		/// The provided Signature Data is invalid
+		InvalidUserSignatureData,
+		/// The provided Transaction Metadata is invalid
+		InvalidTransactionMetadata,
+		/// Failed to encode data
+		CannotEncodeData,
+		/// Liquidity deposit is disabled due to Safe Mode.
+		LiquidityDepositDisabled,
+		/// Account already exists, cannot opet a creation deposit channel
+		AccountAlreadyExists,
 	}
 
 	#[pallet::genesis_config]
@@ -1484,6 +1538,97 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Open a channel that allows a user to create an account by depositing liquidity.
+		///
+		/// The deposit will be partially swapped into FLIP which is used to credit the new account.
+		#[pallet::call_index(18)]
+		#[pallet::weight(T::WeightInfo::request_account_creation_deposit_address())]
+		pub fn request_account_creation_deposit_address(
+			origin: OriginFor<T>,
+			signature_data: SignatureData,
+			transaction_metadata: TransactionMetadata,
+			asset: Asset,
+			boost_fee: BasisPoints,
+			refund_address: EncodedAddress,
+		) -> DispatchResult {
+			ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
+
+			let requested_by = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			let Ok(signer_account) =
+				signature_data.signer_account::<<T as frame_system::Config>::AccountId>()
+			else {
+				return Err(DispatchError::from(Error::<T>::InvalidUserSignatureData));
+			};
+
+			ensure!(
+				!frame_system::Pallet::<T>::account_exists(&signer_account),
+				DispatchError::from(Error::<T>::AccountAlreadyExists)
+			);
+			let refund_address_internal =
+				T::AddressConverter::decode_and_validate_address_for_asset(
+					refund_address.clone(),
+					asset,
+				)
+				.map_err(|_| Error::<T>::IncompatibleAssetAndAddress)?;
+
+			// Manual metadata validation because the `validate_metadata` function has
+			// mempool-specific logic
+			let tx_nonce: <T as frame_system::Config>::Nonce = transaction_metadata.nonce.into();
+			ensure!(
+				tx_nonce == 0u32.into(),
+				DispatchError::from(Error::<T>::InvalidTransactionMetadata)
+			);
+			ensure!(
+				BlockNumberFor::<T>::from(transaction_metadata.expiry_block) >
+					frame_system::Pallet::<T>::block_number(),
+				DispatchError::from(Error::<T>::InvalidTransactionMetadata)
+			);
+
+			// Simple runtime call for signature verification. Signing over the refund address
+			// so they can't be tampered with.
+			let remark_data = refund_address.clone().encode();
+			let runtime_call: <T as Config>::RuntimeCall =
+				frame_system::Call::<T>::remark { remark: remark_data }.into();
+
+			match is_valid_signature(
+				runtime_call,
+				&T::ChainflipNetwork::chainflip_network(),
+				&transaction_metadata,
+				&signature_data,
+				<T as frame_system::Config>::Version::get().spec_version,
+			) {
+				Ok(is_valid) => ensure!(is_valid, Error::<T>::InvalidUserSignatureData),
+				Err(_) => return Err(Error::<T>::CannotEncodeData.into()),
+			}
+
+			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
+				T::DepositHandler::request_liquidity_deposit_address(
+					requested_by.clone(),
+					signer_account.clone(),
+					asset,
+					boost_fee,
+					refund_address_internal.clone(),
+					Some(AdditionalDepositAction::FundFlip {
+						flip_amount_to_credit: T::MinimumFunding::get_min_funding_amount(),
+					}),
+				)?;
+
+			Self::deposit_event(Event::AccountCreationDepositAddressReady {
+				channel_id,
+				asset,
+				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
+				requested_by,
+				requested_for: signer_account,
+				deposit_chain_expiry_block: expiry_block,
+				boost_fee,
+				channel_opening_fee,
+				refund_address: T::AddressConverter::to_encoded_address(refund_address_internal),
+			});
+
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -2025,6 +2170,9 @@ pub mod pallet {
 							SwapOutputAction::CreditLendingPool { swap_type } => {
 								log_or_panic!("Unexpected refund of a loan swap: {swap_type:?}");
 							},
+							SwapOutputAction::CreditFlipAndTransferToGateway { .. } => {
+								log_or_panic!("Unexpected refund of initial funding swap: {swap_request_id:?}");
+							},
 						}
 					}
 				},
@@ -2034,7 +2182,10 @@ pub mod pallet {
 					);
 				},
 			};
-			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id: request.id });
+			Self::deposit_event(Event::<T>::SwapRequestCompleted {
+				swap_request_id: request.id,
+				reason: SwapRequestCompletionReason::Expired,
+			});
 		}
 
 		// Removes the swap from the scheduled swaps and returns the input amount of the canceled
@@ -2156,6 +2307,44 @@ pub mod pallet {
 										dca_state.accumulated_output_amount,
 									);
 								},
+								SwapOutputAction::CreditFlipAndTransferToGateway {
+									account_id,
+									flip_to_subtract_from_swap_output,
+								} =>
+									if request.output_asset == Asset::Flip {
+										if output_amount < *flip_to_subtract_from_swap_output {
+											// In the rare event that this occurs we will track the
+											// deficit and offset it against the next burn
+											FlipToBurn::<T>::mutate(|total| {
+												total.saturating_reduce(
+													flip_to_subtract_from_swap_output
+														.saturating_sub(output_amount)
+														.try_into()
+														.unwrap_or(i128::MAX),
+												);
+											});
+											FlipToBeSentToGateway::<T>::mutate(|total| {
+												total.saturating_accrue(
+													*flip_to_subtract_from_swap_output,
+												);
+											});
+										} else {
+											T::FundAccount::fund_account(
+												account_id.clone(),
+												output_amount
+													.saturating_sub(
+														*flip_to_subtract_from_swap_output,
+													)
+													.into(),
+												FundingSource::Swap { swap_request_id },
+											);
+											FlipToBeSentToGateway::<T>::mutate(|total| {
+												total.saturating_accrue(output_amount);
+											});
+										}
+									} else {
+										log_or_panic!("Encountered transfer to gateway swap for asset that isn't Flip: {swap_request_id:?}");
+									},
 							}
 							true
 						} else {
@@ -2165,7 +2354,7 @@ pub mod pallet {
 				SwapRequestState::NetworkFee => {
 					if swap.output_asset() == Asset::Flip {
 						FlipToBurn::<T>::mutate(|total| {
-							total.saturating_accrue(output_amount);
+							total.saturating_accrue(output_amount.try_into().unwrap_or(i128::MAX));
 						});
 					} else {
 						log_or_panic!(
@@ -2193,7 +2382,10 @@ pub mod pallet {
 			};
 
 			if request_completed {
-				Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
+				Self::deposit_event(Event::<T>::SwapRequestCompleted {
+					swap_request_id,
+					reason: SwapRequestCompletionReason::Executed,
+				});
 			} else {
 				SwapRequests::<T>::insert(swap_request_id, request);
 			}
@@ -2703,20 +2895,26 @@ pub mod pallet {
 						},
 					);
 				},
-				SwapRequestType::Regular { output_action } => {
+				SwapRequestType::Regular { ref output_action } |
+				SwapRequestType::RegularNoNetworkFee { ref output_action } => {
 					let mut dca_state = DcaState::new(net_amount, dca_params.clone());
 					let chunk_input_amount = dca_state.calculate_next_chunk().unwrap_or_default();
 
 					// Choose correct network fee for the swap
-					let mut fees = vec![FeeType::NetworkFee(NetworkFeeTracker::new(
-						Pallet::<T>::get_network_fee_for_swap(
-							input_asset,
-							output_asset,
-							// TODO: see if we want to treat lending swaps as internal for the
-							// purposes of determining network fee?
-							matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
-						),
-					))];
+					let mut fees =
+						if matches!(request_type, SwapRequestType::Regular { output_action: _ }) {
+							vec![FeeType::NetworkFee(NetworkFeeTracker::new(
+								Pallet::<T>::get_network_fee_for_swap(
+									input_asset,
+									output_asset,
+									// TODO: see if we want to treat lending swaps as internal for
+									// the purposes of determining network fee?
+									matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
+								),
+							))]
+						} else {
+							Default::default()
+						};
 
 					// Add broker fees if any
 					if !broker_fees.is_empty() {
@@ -2767,7 +2965,7 @@ pub mod pallet {
 							input_asset,
 							output_asset,
 							state: SwapRequestState::UserSwap {
-								output_action,
+								output_action: output_action.clone(),
 								price_limits_and_expiry,
 								dca_state,
 							},
@@ -2813,7 +3011,10 @@ pub mod pallet {
 				}
 			}
 
-			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
+			Self::deposit_event(Event::<T>::SwapRequestCompleted {
+				swap_request_id,
+				reason: SwapRequestCompletionReason::Aborted,
+			});
 
 			Some(swap_progress)
 		}
@@ -2856,7 +3057,7 @@ pub mod pallet {
 				return Some(desired_output_amount)
 			}
 
-			let estimation_input = utilities::fee_estimation_basis(input_asset);
+			let estimation_input = utilities::estimated_20usd_input(input_asset);
 
 			let estimation_output = with_transaction_unchecked(|| {
 				TransactionOutcome::Rollback(if with_network_fee {
@@ -2890,9 +3091,12 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
-	fn take_flip_to_burn() -> AssetAmount {
+impl<T: Config> cf_traits::FlipBurnOrMoveInfo for Pallet<T> {
+	fn take_flip_to_burn() -> i128 {
 		FlipToBurn::<T>::take()
+	}
+	fn take_flip_to_be_sent_to_gateway() -> AssetAmount {
+		FlipToBeSentToGateway::<T>::take()
 	}
 }
 
@@ -2995,7 +3199,7 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 	}
 }
 
-pub(crate) mod utilities {
+pub mod utilities {
 	use super::*;
 
 	/// The amount of a non-gas asset to be used for transaction fee estimation.
@@ -3004,7 +3208,7 @@ pub(crate) mod utilities {
 	///
 	/// The value should be large enough to allow a good estimation of the fee, but small enough
 	/// to not exhaust the pool liquidity.
-	pub(crate) fn fee_estimation_basis(asset: Asset) -> u128 {
+	pub fn estimated_20usd_input(asset: Asset) -> u128 {
 		use cf_primitives::FLIPPERINOS_PER_FLIP;
 
 		const ETH_DECIMALS: u32 = 18;
@@ -3013,10 +3217,10 @@ pub(crate) mod utilities {
 		const SOL_DECIMALS: u32 = 9;
 
 		/// ~20 Dollars.
-		const FLIP_ESTIMATION_CAP: u128 = 25 * FLIPPERINOS_PER_FLIP;
+		const FLIP_ESTIMATION_CAP: u128 = 50 * FLIPPERINOS_PER_FLIP;
 		const USD_ESTIMATION_CAP: u128 = 20_000_000;
 		const ETH_ESTIMATION_CAP: u128 = 5 * 10u128.pow(ETH_DECIMALS - 3);
-		const DOT_ESTIMATION_CAP: u128 = 5 * 10u128.pow(DOT_DECIMALS);
+		const DOT_ESTIMATION_CAP: u128 = 7 * 10u128.pow(DOT_DECIMALS);
 		const BTC_ESTIMATION_CAP: u128 = 2 * 10u128.pow(BTC_DECIMALS - 4);
 		const SOL_ESTIMATION_CAP: u128 = 10 * 10u128.pow(SOL_DECIMALS - 2);
 

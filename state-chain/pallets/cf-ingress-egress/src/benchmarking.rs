@@ -80,6 +80,7 @@ mod benchmarks {
 					ChannelAction::<T::AccountId, TargetChainAccount<T, I>>::LiquidityProvision {
 						lp_account: account("doogle", 0, 0),
 						refund_address: ForeignChainAddress::benchmark_value(),
+						additional_action: None,
 					},
 				boost_fee: 0,
 				boost_status: BoostStatus::NotBoosted,
@@ -126,6 +127,7 @@ mod benchmarks {
 					ChannelAction::<T::AccountId, TargetChainAccount<T, I>>::LiquidityProvision {
 						lp_account: account("doogle", 0, 0),
 						refund_address: ForeignChainAddress::benchmark_value(),
+						additional_action: None,
 					},
 				boost_fee: 0,
 				boost_status: BoostStatus::NotBoosted,
@@ -194,6 +196,7 @@ mod benchmarks {
 			ChannelAction::LiquidityProvision {
 				lp_account: lp_account.clone(),
 				refund_address: ForeignChainAddress::benchmark_value(),
+				additional_action: None,
 			},
 			fee_tier,
 		)

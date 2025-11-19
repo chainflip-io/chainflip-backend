@@ -14,19 +14,21 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::Pallet;
-use cf_runtime_utilities::PlaceholderMigration;
-use frame_support::migrations::VersionedMigration;
+use crate::{Runtime, SolanaInstance};
+use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 
-mod additional_channel_action;
+pub struct FlipToBurn;
 
-pub type PalletMigration<T, I> = (
-	VersionedMigration<
-		28,
-		29,
-		additional_channel_action::AdditionalChannelAction<T, I>,
-		Pallet<T, I>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	PlaceholderMigration<29, Pallet<T, I>>,
-);
+impl OnRuntimeUpgrade for FlipToBurn {
+	fn on_runtime_upgrade() -> Weight {
+		pallet_cf_swapping::FlipToBurn::<Runtime>::translate(|burn_amount: Option<Option<u128>>|{
+			if let Some(burn_amount) = burn_amount {
+				burn_amount.try_into().unwrap_or(i128::MAX)
+			} 
+		}).map_err(|_| {
+			log::warn!("Migration for FlipToBurn was not able to interpret the existing storage in the old format!")
+		});
+
+		Weight::zero()
+	}
+}
