@@ -1,7 +1,7 @@
-import { InternalAsset as Asset, broker } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { Contract, HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
-import assert from 'assert';
+import BigNumber from 'bignumber.js';
 import Web3 from 'web3';
 import {
   getContractAddress,
@@ -14,14 +14,29 @@ import {
   newAssetAddress,
   decodeDotAddressForContract,
   getEvmEndpoint,
+  createStateChainKeypair,
   Chains,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
+import { getChainflipApi } from 'shared/utils/substrate';
+import { ChannelRefundParameters } from 'shared/sol_vault_swap';
 import { Logger } from 'shared/utils/logger';
 import { getErc20abi } from 'shared/contract_interfaces';
-import { brokerApiEndpoint } from './json_rpc';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
+
+interface EvmVaultSwapDetails {
+  chain: 'Ethereum' | 'Arbitrum';
+  calldata: string;
+  value: string;
+  to: string;
+}
+
+interface EvmVaultSwapExtraParameters {
+  chain: 'Ethereum' | 'Arbitrum';
+  input_amount: string;
+  refund_parameters: ChannelRefundParameters;
+}
 
 export async function executeEvmVaultSwap(
   logger: Logger,
@@ -47,6 +62,11 @@ export async function executeEvmVaultSwap(
   const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
   const refundAddress =
     optionalRefundAddress ?? (await newAssetAddress(sourceAsset, randomBytes(32).toString('hex')));
+  const fokParams = fillOrKillParams ?? {
+    retryDurationBlocks: 0,
+    refundAddress,
+    minPriceX128: '0',
+  };
   const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
   const evmWallet = wallet ?? (await createEvmWalletAndFund(logger, sourceAsset));
 
@@ -60,54 +80,60 @@ export async function executeEvmVaultSwap(
     );
   }
 
-  logger.trace('Requesting vault swap parameter encoding');
-  const vaultSwapDetails = await broker.requestSwapParameterEncoding(
-    {
-      srcAsset: stateChainAssetFromAsset(sourceAsset),
-      srcAddress: evmWallet.address,
-      destAsset: stateChainAssetFromAsset(destAsset),
-      destAddress:
-        destChain === Chains.Polkadot || destChain === Chains.Assethub
-          ? decodeDotAddressForContract(destAddress)
-          : destAddress,
-      commissionBps: brokerCommissionBps,
-      ccmParams: messageMetadata && {
-        message: messageMetadata.message,
-        gasBudget: messageMetadata.gasBudget,
-        ccmAdditionalData: messageMetadata.ccmAdditionalData,
-      },
-      fillOrKillParams: fillOrKillParams ?? {
-        retryDurationBlocks: 0,
-        refundAddress,
-        minPriceX128: '0',
-      },
-      maxBoostFeeBps: boostFeeBps ?? 0,
-      amount: fineAmount,
-      dcaParams: dcaParams && {
-        numberOfChunks: dcaParams.numberOfChunks,
-        chunkIntervalBlocks: dcaParams.chunkIntervalBlocks,
-      },
-      affiliates: affiliateFees.map((fee) => ({
-        account: fee.accountAddress,
-        commissionBps: fee.commissionBps,
-      })),
-    },
-    {
-      url: brokerApiEndpoint,
-    },
-    'backspin',
-  );
+  await using chainflip = await getChainflipApi();
 
-  assert(
-    vaultSwapDetails.chain === 'Ethereum' || vaultSwapDetails.chain === 'Arbitrum',
-    `Expected chain to be Ethereum or Arbitrum, got ${vaultSwapDetails.chain}`,
-  );
+  const refundParams: ChannelRefundParameters = {
+    retry_duration: fokParams.retryDurationBlocks,
+    refund_address: fokParams.refundAddress,
+    min_price: '0x' + new BigNumber(fokParams.minPriceX128).toString(16),
+    refund_ccm_metadata: fillOrKillParams?.refundCcmMetadata
+      ? {
+          message: fillOrKillParams.refundCcmMetadata.message,
+          gas_budget: fillOrKillParams.refundCcmMetadata.gasBudget,
+          ccm_additional_data: fillOrKillParams.refundCcmMetadata.ccmAdditionalData,
+        }
+      : undefined,
+    max_oracle_price_slippage: undefined,
+  };
+
+  const extraParameters: EvmVaultSwapExtraParameters = {
+    chain: srcChain as 'Ethereum' | 'Arbitrum',
+    input_amount: '0x' + new BigNumber(fineAmount).toString(16),
+    refund_parameters: refundParams,
+  };
+
+  logger.trace('Requesting vault swap parameter encoding');
+  const vaultSwapDetails = (await chainflip.rpc(
+    `cf_request_swap_parameter_encoding`,
+    createStateChainKeypair(brokerUri).address,
+    stateChainAssetFromAsset(sourceAsset),
+    stateChainAssetFromAsset(destAsset),
+    destChain === Chains.Polkadot || destChain === Chains.Assethub
+      ? decodeDotAddressForContract(destAddress)
+      : destAddress,
+    brokerCommissionBps,
+    extraParameters,
+    messageMetadata && {
+      message: messageMetadata.message as `0x${string}`,
+      gas_budget: messageMetadata.gasBudget,
+      ccm_additional_data: messageMetadata.ccmAdditionalData,
+    },
+    boostFeeBps ?? 0,
+    affiliateFees.map((fee) => ({
+      account: fee.accountAddress,
+      bps: fee.commissionBps,
+    })),
+    dcaParams && {
+      number_of_chunks: dcaParams.numberOfChunks,
+      chunk_interval: dcaParams.chunkIntervalBlocks,
+    },
+  )) as unknown as EvmVaultSwapDetails;
 
   const web3 = new Web3(getEvmEndpoint(srcChain));
   const tx = {
     to: vaultSwapDetails.to,
     data: vaultSwapDetails.calldata,
-    value: vaultSwapDetails.value.toString(),
+    value: new BigNumber(vaultSwapDetails.value.slice(2), 16).toString(),
     gas: srcChain === 'Arbitrum' ? 32000000 : 5000000,
   };
 

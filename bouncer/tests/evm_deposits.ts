@@ -3,6 +3,7 @@ import { InternalAsset as Asset, broker } from '@chainflip/cli';
 import { doPerformSwap, requestNewSwap } from 'shared/perform_swap';
 import { prepareSwap, testSwap } from 'shared/swapping';
 import BigNumber from 'bignumber.js';
+import { Keyring } from '@polkadot/api';
 import {
   observeFetch,
   sleep,
