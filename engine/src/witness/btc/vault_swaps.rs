@@ -104,18 +104,27 @@ type VaultDepositWitness =
 
 pub fn try_extract_vault_swap_witness(
 	tx: &VerboseTransaction,
-	vault_address: &DepositAddress,
+	private_broker_channel: &DepositAddress,
 	channel_id: ChannelId,
 	broker_id: &AccountId,
 ) -> Option<VaultDepositWitness> {
 	// First output must be a deposit into our vault:
 	let utxo_to_vault = &tx.vout[0];
-	if utxo_to_vault.script_pubkey.as_bytes() != vault_address.script_pubkey().bytes() {
+	if utxo_to_vault.script_pubkey.as_bytes() != private_broker_channel.script_pubkey().bytes() {
 		return None;
 	}
 
+	let deposit_details = Utxo {
+		id: UtxoId {
+			tx_id: tx.txid.to_byte_array().into(),
+			vout: utxo_to_vault.n.try_into().ok()?,
+		},
+		amount: utxo_to_vault.value.to_sat(),
+		deposit_address: private_broker_channel.clone(),
+	};
+
 	// Perform all validation checks and extract the needed data
-	let Some((data, refund_address)) = || -> Option<(UtxoEncodedData, ScriptPubkey)> {
+	let decode_vault_swap_witness = || -> Option<VaultDepositWitness> {
 		// A correctly constructed transaction carrying CF swap parameters must have at least 3
 		// outputs:
 		let [_, nulldata_utxo, change_utxo, ..] = &tx.vout[..] else {
@@ -136,67 +145,66 @@ pub fn try_extract_vault_swap_witness(
 		// Third output must be a "change utxo" whose address we assume to also be the refund
 		// address:
 		let refund_address = script_buf_to_script_pubkey(&change_utxo.script_pubkey)?;
+		let deposit_amount = deposit_details.amount;
 
-		Some((data, refund_address))
-	}() else {
-		return vault_swap_with_burn_refund_address(tx, vault_address, channel_id);
+		Some(VaultDepositWitness {
+			input_asset: NATIVE_ASSET,
+			output_asset: data.output_asset,
+			deposit_amount,
+			destination_address: data.output_address,
+			tx_id: deposit_details.id.tx_id,
+			deposit_details: deposit_details.clone(),
+			deposit_metadata: None, // No ccm for BTC (yet?)
+			broker_fee: Some(Beneficiary {
+				account: broker_id.clone(),
+				bps: data.parameters.broker_fee.into(),
+			}),
+			affiliate_fees: data
+				.parameters
+				.affiliates
+				.into_iter()
+				.map(Into::into)
+				.collect_vec()
+				.try_into()
+				.expect(
+					"runtime supports at least as many affiliates as we allow in UTXO encoding",
+				),
+			refund_params: ChannelRefundParametersForChain::<Bitcoin> {
+				retry_duration: data.parameters.retry_duration.into(),
+				refund_address,
+				// Derive min price (encoded as min output amount to save space):
+				min_price: sqrt_price_to_price(bounded_sqrt_price(
+					data.parameters.min_output_amount.into(),
+					deposit_amount.into(),
+				)),
+				// Bitcoin should never have a ccm refund
+				refund_ccm_metadata: None,
+				max_oracle_price_slippage: if data.parameters.max_oracle_price_slippage == u8::MAX {
+					None
+				} else {
+					Some(data.parameters.max_oracle_price_slippage.into())
+				},
+			},
+			dca_params: Some(DcaParameters {
+				number_of_chunks: data.parameters.number_of_chunks.into(),
+				chunk_interval: data.parameters.chunk_interval.into(),
+			}),
+			// This is only to be checked in the pre-witnessed version
+			boost_fee: data.parameters.boost_fee.into(),
+			channel_id: Some(channel_id),
+			deposit_address: Some(private_broker_channel.script_pubkey()),
+		})
 	};
 
-	let deposit_amount = utxo_to_vault.value.to_sat();
-
-	// Derive min price (encoded as min output amount to save space):
-	let min_price = sqrt_price_to_price(bounded_sqrt_price(
-		data.parameters.min_output_amount.into(),
-		deposit_amount.into(),
-	));
-
-	let tx_id: [u8; 32] = tx.txid.to_byte_array();
-
-	Some(VaultDepositWitness {
-		input_asset: NATIVE_ASSET,
-		output_asset: data.output_asset,
-		deposit_amount,
-		destination_address: data.output_address,
-		tx_id: H256::from(tx_id),
-		deposit_details: Utxo {
-			// we require the deposit to be the first UTXO
-			id: UtxoId { tx_id: tx_id.into(), vout: 0 },
-			amount: deposit_amount,
-			deposit_address: vault_address.clone(),
-		},
-		deposit_metadata: None, // No ccm for BTC (yet?)
-		broker_fee: Some(Beneficiary {
-			account: broker_id.clone(),
-			bps: data.parameters.broker_fee.into(),
-		}),
-		affiliate_fees: data
-			.parameters
-			.affiliates
-			.into_iter()
-			.map(Into::into)
-			.collect_vec()
-			.try_into()
-			.expect("runtime supports at least as many affiliates as we allow in UTXO encoding"),
-		refund_params: ChannelRefundParametersForChain::<Bitcoin> {
-			retry_duration: data.parameters.retry_duration.into(),
-			refund_address,
-			min_price,
-			// Bitcoin should never have a ccm refund
-			refund_ccm_metadata: None,
-			max_oracle_price_slippage: if data.parameters.max_oracle_price_slippage == u8::MAX {
-				None
-			} else {
-				Some(data.parameters.max_oracle_price_slippage.into())
-			},
-		},
-		dca_params: Some(DcaParameters {
-			number_of_chunks: data.parameters.number_of_chunks.into(),
-			chunk_interval: data.parameters.chunk_interval.into(),
-		}),
-		// This is only to be checked in the pre-witnessed version
-		boost_fee: data.parameters.boost_fee.into(),
-		channel_id: Some(channel_id),
-		deposit_address: Some(vault_address.script_pubkey()),
+	decode_vault_swap_witness().or_else(|| {
+		Some(VaultDepositWitness::unrefundable(
+			Some(channel_id),
+			Some(private_broker_channel.script_pubkey()),
+			NATIVE_ASSET,
+			deposit_details.amount,
+			deposit_details.id.tx_id,
+			deposit_details,
+		))
 	})
 }
 

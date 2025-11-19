@@ -3825,26 +3825,17 @@ fn rollback_storage_if_transactional_call_fails() {
 #[test]
 fn vault_swap_with_burn_refund_address_is_ingressed_but_no_action_dispatched() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(submit_vault_swap_request(
-			Asset::Eth,
-			Asset::Btc,
-			10_000,
-			Default::default(),
-			EncodedAddress::Btc(Default::default()),
-			None,
-			Default::default(),
-			DepositDetails { tx_hashes: None },
-			Beneficiary { account: BROKER, bps: 0 },
-			Default::default(),
-			ChannelRefundParametersForChain::<Ethereum> {
-				retry_duration: 0,
-				refund_address: Ethereum::BURN_ADDRESS,
-				min_price: Default::default(),
-				refund_ccm_metadata: None,
-				max_oracle_price_slippage: None,
-			},
-			None,
-			0
+		assert_ok!(EthereumIngressEgress::vault_swap_request(
+			RuntimeOrigin::root(),
+			0,
+			Box::new(VaultDepositWitness::unrefundable(
+				Default::default(),
+				Default::default(),
+				EthAsset::Eth,
+				10_000,
+				Default::default(),
+				DepositDetails { tx_hashes: None }
+			))
 		));
 
 		assert_has_matching_event!(
