@@ -722,6 +722,7 @@ where
 		SolanaElections(_) |
 		BitcoinElections(_) |
 		GenericElections(_) |
+		EthereumElections(_) |
 		TradingStrategy(_) => {},
 		LendingPools(_) => {},
 	};

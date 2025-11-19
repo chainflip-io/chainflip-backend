@@ -15,8 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod chain_tracking;
-mod sc_utils;
-mod state_chain_gateway;
+pub mod sc_utils;
+pub mod state_chain_gateway;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -74,20 +74,6 @@ where
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
 {
-	let state_chain_gateway_address = state_chain_client
-        .storage_value::<pallet_cf_environment::EthereumStateChainGatewayAddress<state_chain_runtime::Runtime>>(
-            state_chain_client.latest_finalized_block().hash,
-        )
-        .await
-        .context("Failed to get StateChainGateway address from SC")?;
-
-	let key_manager_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_block().hash,
-		)
-		.await
-		.context("Failed to get KeyManager address from SC")?;
-
 	let vault_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumVaultAddress<state_chain_runtime::Runtime>>(
 			state_chain_client.latest_finalized_block().hash,
@@ -101,13 +87,6 @@ where
 		)
 		.await
 		.expect("Failed to get Address Checker contract address from SC");
-
-	let sc_utils_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumScUtilsAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_block().hash,
-		)
-		.await
-		.expect("Failed to get Sc Utils contract address from SC");
 
 	let supported_erc20_tokens: HashMap<EthAsset, H160> = state_chain_client
 		.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>, _>(
@@ -163,24 +142,6 @@ where
 		.clone()
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await;
-
-	eth_safe_vault_source
-		.clone()
-		.key_manager_witnessing(process_call.clone(), eth_client.clone(), key_manager_address)
-		.continuous("KeyManager".to_string(), db.clone())
-		.logging("KeyManager")
-		.spawn(scope);
-
-	eth_safe_vault_source
-		.clone()
-		.state_chain_gateway_witnessing(
-			process_call.clone(),
-			eth_client.clone(),
-			state_chain_gateway_address,
-		)
-		.continuous("StateChainGateway".to_string(), db.clone())
-		.logging("StateChainGateway")
-		.spawn(scope);
 
 	eth_safe_vault_source_deposit_addresses
 		.clone()
@@ -247,17 +208,6 @@ where
 		)
 		.continuous("Vault".to_string(), db.clone())
 		.logging("Vault")
-		.spawn(scope);
-
-	eth_safe_vault_source
-		.sc_utils_witnessing(
-			process_call,
-			eth_client.clone(),
-			sc_utils_address,
-			supported_erc20_tokens,
-		)
-		.continuous("ScUtils".to_string(), db)
-		.logging("ScUtils")
 		.spawn(scope);
 
 	Ok(())

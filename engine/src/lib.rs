@@ -36,7 +36,9 @@ pub mod dot;
 pub mod evm;
 pub mod sol;
 
-use crate::state_chain_observer::client::CreateStateChainClientError;
+use crate::{
+	evm::cached_rpc::EvmCachingClient, state_chain_observer::client::CreateStateChainClientError,
+};
 use ::multisig::{
 	bitcoin::BtcSigning, ed25519::SolSigning, eth::EthSigning, polkadot::PolkadotSigning,
 };
@@ -249,7 +251,7 @@ async fn run_main(
 			scope.spawn(sol_multisig_client_backend_future);
 
 			// Create all the clients
-			let eth_client = {
+			let (eth_caching_client, eth_client) = {
 				let expected_eth_chain_id = web3::types::U256::from(
 					state_chain_client
 						.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
@@ -258,7 +260,7 @@ async fn run_main(
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
 				);
-				EvmRetryRpcClient::<EvmRpcSigningClient>::new(
+				let client = EvmRetryRpcClient::<EvmRpcSigningClient>::new(
 					scope,
 					settings.eth.private_key_file,
 					settings.eth.nodes,
@@ -267,7 +269,8 @@ async fn run_main(
 					"eth_subscribe_client",
 					"Ethereum",
 					cf_chains::Ethereum::WITNESS_PERIOD,
-				)?
+				)?;
+				(EvmCachingClient::new(scope, client.clone()), client)
 			};
 			let arb_client = {
 				let expected_arb_chain_id = web3::types::U256::from(
@@ -337,7 +340,7 @@ async fn run_main(
 
 			witness::start::start(
 				scope,
-				eth_client.clone(),
+				eth_caching_client,
 				arb_client.clone(),
 				btc_client.clone(),
 				sol_client.clone(),

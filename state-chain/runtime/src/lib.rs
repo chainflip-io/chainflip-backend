@@ -1215,6 +1215,15 @@ impl pallet_cf_elections::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 }
 
+impl pallet_cf_elections::Config<Instance1> for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = <Ethereum as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
+	type RuntimeEvent = RuntimeEvent;
+	type ElectoralSystemRunner = chainflip::ethereum_elections::EthereumElectoralSystemRunner;
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+	type ElectoralSystemConfiguration = chainflip::ethereum_elections::ElectoralSystemConfiguration;
+	type SafeMode = RuntimeSafeMode;
+}
+
 impl pallet_cf_trading_strategy::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;
@@ -1372,6 +1381,8 @@ mod runtime {
 
 	#[runtime::pallet_index(55)]
 	pub type GenericElections = pallet_cf_elections;
+	#[runtime::pallet_index(56)]
+	pub type EthereumElections = pallet_cf_elections<Instance1>;
 }
 
 /// The address format for describing accounts.
@@ -1443,6 +1454,7 @@ pub type PalletExecutionOrder = (
 	SolanaElections,
 	BitcoinElections,
 	GenericElections,
+	EthereumElections,
 	// Vaults
 	EthereumVault,
 	PolkadotVault,
@@ -1679,6 +1691,14 @@ impl_runtime_apis! {
 
 		fn cf_generic_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
 			GenericElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+		}
+
+		fn cf_ethereum_electoral_data(account_id: AccountId) -> Vec<u8> {
+			EthereumElections::electoral_data(&account_id).encode()
+		}
+
+		fn cf_ethereum_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+			EthereumElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
 		}
 	}
 

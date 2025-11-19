@@ -385,6 +385,7 @@ impl_tuple_benchmark_value!(A, B, C, D);
 impl_tuple_benchmark_value!(A, B, C, D, EE);
 impl_tuple_benchmark_value!(A, B, C, D, EE, F);
 impl_tuple_benchmark_value!(A, B, C, D, EE, F, G);
+impl_tuple_benchmark_value!(A, B, C, D, EE, F, G, HH);
 
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for DecodedCcmAdditionalData {

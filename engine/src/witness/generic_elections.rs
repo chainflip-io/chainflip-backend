@@ -14,6 +14,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+	elections::voter_api::{CompositeVoter, VoterApi},
+	evm::{
+		cached_rpc::AddressCheckerRetryRpcApiWithResult,
+		rpc::{address_checker::PriceFeedData as EthPriceFeedData, EvmRpcSigningClient},
+	},
+	state_chain_observer::client::{
+		chain_api::ChainApi, electoral_api::ElectoralApi,
+		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+	},
+	EvmCachingClient, EvmRetryRpcClient,
+};
+use anyhow::{anyhow, Result};
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
@@ -27,19 +40,6 @@ use pallet_cf_elections::{
 };
 use sp_core::U256;
 use state_chain_runtime::chainflip::generic_elections::*;
-
-use crate::{
-	elections::voter_api::{CompositeVoter, VoterApi},
-	evm::{
-		retry_rpc::{address_checker::AddressCheckerRetryRpcApi, EvmRetryRpcClient},
-		rpc::{address_checker::PriceFeedData as EthPriceFeedData, EvmRpcSigningClient},
-	},
-	state_chain_observer::client::{
-		chain_api::ChainApi, electoral_api::ElectoralApi,
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-	},
-};
-use anyhow::{anyhow, Result};
 
 /// IMPORTANT: These strings have to match with the price feed "description" as returned by
 /// chainlink.
@@ -58,7 +58,7 @@ pub fn asset_pair_from_description(description: String) -> Option<ChainlinkAsset
 #[derive(Clone)]
 struct OraclePriceVoter {
 	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
-	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
+	eth_client: EvmCachingClient<EvmRpcSigningClient>,
 }
 
 #[derive(Debug, Clone)]
@@ -203,7 +203,7 @@ use std::{collections::BTreeMap, sync::Arc};
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
-	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
+	eth_client: EvmCachingClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
 ) -> Result<()>
 where
