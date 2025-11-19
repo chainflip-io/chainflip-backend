@@ -1349,7 +1349,7 @@ fn basic_liquidation() {
 					},
 					broker_fees: Default::default(),
 					origin: SwapOrigin::Internal,
-					dca_params: Some(DcaParameters { number_of_chunks: 2, chunk_interval: 1 }),
+					dca_params: Some(DcaParameters { number_of_chunks: 1, chunk_interval: 1 }),
 				}
 			);
 
@@ -2391,7 +2391,7 @@ fn adding_collateral_during_liquidation() {
 		));
 	};
 
-	let swap_request = |input_amount| MockSwapRequest {
+	let swap_request = |input_amount, chunks| MockSwapRequest {
 		input_asset: COLLATERAL_ASSET,
 		output_asset: LOAN_ASSET,
 		input_amount,
@@ -2404,7 +2404,7 @@ fn adding_collateral_during_liquidation() {
 		},
 		broker_fees: Default::default(),
 		origin: SwapOrigin::Internal,
-		dca_params: Some(DcaParameters { number_of_chunks: 1, chunk_interval: 1 }),
+		dca_params: Some(DcaParameters { number_of_chunks: chunks, chunk_interval: 1 }),
 	};
 
 	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
@@ -2457,7 +2457,7 @@ fn adding_collateral_during_liquidation() {
 
 			assert_eq!(
 				MockSwapRequestHandler::<Test>::get_swap_requests(),
-				BTreeMap::from([(LIQUIDATION_SWAP_1, swap_request(INIT_COLLATERAL))])
+				BTreeMap::from([(LIQUIDATION_SWAP_1, swap_request(INIT_COLLATERAL, 1))])
 			);
 
 			// Adding a small amount will improve LTV, but not enough to change liquidation
@@ -2527,7 +2527,7 @@ fn adding_collateral_during_liquidation() {
 			// This time the extra collateral does get included in the swap:
 			assert_eq!(
 				MockSwapRequestHandler::<Test>::get_swap_requests(),
-				BTreeMap::from([(LIQUIDATION_SWAP_2, swap_request(INPUT_AMOUNT))])
+				BTreeMap::from([(LIQUIDATION_SWAP_2, swap_request(INPUT_AMOUNT, 5))])
 			);
 
 			assert_eq!(get_account().collateral, BTreeMap::default());
@@ -2600,7 +2600,7 @@ mod voluntary_liquidation {
 
 	use super::*;
 
-	fn mock_liquidation_swap(input_amount: AssetAmount) -> MockSwapRequest {
+	fn mock_liquidation_swap(input_amount: AssetAmount, chunks: u32) -> MockSwapRequest {
 		MockSwapRequest {
 			input_asset: COLLATERAL_ASSET,
 			output_asset: LOAN_ASSET,
@@ -2617,7 +2617,7 @@ mod voluntary_liquidation {
 			},
 			broker_fees: Default::default(),
 			origin: SwapOrigin::Internal,
-			dca_params: None,
+			dca_params: Some(DcaParameters { number_of_chunks: chunks, chunk_interval: 1 }),
 		}
 	}
 
@@ -2791,7 +2791,7 @@ mod voluntary_liquidation {
 			PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL_1 - SWAPPED_PRINCIPAL_2 +
 				liquidation_fee;
 
-		// Thrid liquidation will result in this much extra principal (after repaying
+		// Third liquidation will result in this much extra principal (after repaying
 		// the loan in full).
 		const SWAPPED_PRINCIPAL_EXTRA: AssetAmount = PRINCIPAL / 50;
 
@@ -2802,7 +2802,7 @@ mod voluntary_liquidation {
 			.with_default_loan()
 			.with_voluntary_liquidation()
 			.then_execute_with(|_| {
-				// Simulate partial execution of the liquidaiton swap. This won't be enough
+				// Simulate partial execution of the liquidation swap. This won't be enough
 				// to repay the loan yet.
 				MockSwapRequestHandler::<Test>::set_swap_request_progress(
 					LIQUIDATION_SWAP_1,
@@ -2859,7 +2859,7 @@ mod voluntary_liquidation {
 					MockSwapRequestHandler::<Test>::get_swap_requests(),
 					BTreeMap::from([(
 						LIQUIDATION_SWAP_2,
-						mock_liquidation_swap(INIT_COLLATERAL - SWAPPED_COLLATERAL_1)
+						mock_liquidation_swap(INIT_COLLATERAL - SWAPPED_COLLATERAL_1, 3)
 					)])
 				);
 
@@ -2886,7 +2886,7 @@ mod voluntary_liquidation {
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. }) => 0
 				);
 
-				// Simulate partial execution of the liquidaiton swap. This won't be enough
+				// Simulate partial execution of the liquidation swap. This won't be enough
 				// to repay the loan yet.
 				MockSwapRequestHandler::<Test>::set_swap_request_progress(
 					LIQUIDATION_SWAP_2,
@@ -2944,7 +2944,8 @@ mod voluntary_liquidation {
 					BTreeMap::from([(
 						LIQUIDATION_SWAP_3,
 						mock_liquidation_swap(
-							INIT_COLLATERAL - SWAPPED_COLLATERAL_1 - SWAPPED_COLLATERAL_2
+							INIT_COLLATERAL - SWAPPED_COLLATERAL_1 - SWAPPED_COLLATERAL_2,
+							3
 						)
 					)])
 				);
