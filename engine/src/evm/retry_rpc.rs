@@ -521,6 +521,178 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 }
 
 #[async_trait::async_trait]
+impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
+	async fn get_logs_range(
+		&self,
+		range: std::ops::RangeInclusive<u64>,
+		contract_address: H160,
+	) -> anyhow::Result<Vec<Log>> {
+		assert!(!range.is_empty());
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new(
+					"get_logs_range".to_string(),
+					Some(format!("{range:?}, {contract_address:?}")),
+				),
+				Box::pin(move |client| {
+					let range = range.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						client
+							.get_logs(
+								// The `from_block` and `to_block` are inclusive
+								Filter::new()
+									.address(contract_address)
+									.from_block(*range.start())
+									.to_block(*range.end()),
+							)
+							.await
+					})
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> anyhow::Result<Vec<Log>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new(
+					"get_logs".to_string(),
+					Some(format!("{block_hash:?}, {contract_address:?}")),
+				),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						client
+							.get_logs(
+								Filter::new().address(contract_address).at_block_hash(block_hash),
+							)
+							.await
+					})
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn chain_id(&self) -> anyhow::Result<U256> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("chain_id".to_string(), None),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.chain_id().await })
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<TransactionReceipt> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("transaction_receipt".to_string(), Some(format!("{tx_hash:?}"))),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.transaction_receipt(tx_hash).await })
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn block(&self, block_number: U64) -> anyhow::Result<Block<H256>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("block".to_string(), Some(format!("{block_number}"))),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.block(block_number).await })
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("block_by_hash".to_string(), Some(format!("{block_hash}"))),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.block_by_hash(block_hash).await })
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn block_with_txs(&self, block_number: U64) -> anyhow::Result<Block<Transaction>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("block_with_txs".to_string(), Some(format!("{block_number}"))),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.block_with_txs(block_number).await })
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn fee_history(
+		&self,
+		block_count: U256,
+		newest_block: BlockNumber,
+		reward_percentiles: Vec<f64>,
+	) -> anyhow::Result<FeeHistory> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new(
+					"fee_history".to_string(),
+					Some(format!("{block_count}, {newest_block}, {reward_percentiles:?}")),
+				),
+				Box::pin(move |client| {
+					let reward_percentiles = reward_percentiles.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						client.fee_history(block_count, newest_block, &reward_percentiles).await
+					})
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<Transaction> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("get_transaction".to_string(), Some(format!("{tx_hash:?}"))),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.get_transaction(tx_hash).await })
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn get_block_number(&self) -> Result<U64> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("get_block_number".to_string(), None),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.get_block_number().await })
+				}),
+				2,
+			)
+			.await
+	}
+}
+
+#[async_trait::async_trait]
 impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmRetryRpcClient<Rpc> {
 	/// Estimates gas and then sends the transaction to the network.
 	async fn broadcast_transaction(

@@ -70,6 +70,7 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_funded: u128) {
 		let bidder_origin: OriginFor<T> = RawOrigin::Signed(bidder.clone()).into();
 		pallet_cf_funding::Pallet::<T>::fund_account(
 			bidder.clone(),
+			Default::default(),
 			(flip_funded * FLIPPERINOS_PER_FLIP).unique_saturated_into(),
 			FundingSource::EthTransaction {
 				tx_hash: Default::default(),
