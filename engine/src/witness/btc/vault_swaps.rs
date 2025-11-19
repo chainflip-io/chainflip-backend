@@ -17,21 +17,18 @@
 use bitcoin::{hashes::Hash as btcHash, opcodes::all::OP_RETURN, ScriptBuf};
 use cf_amm::math::{bounded_sqrt_price, sqrt_price_to_price};
 use cf_chains::{
-	address::EncodedAddress,
 	assets::btc::Asset as BtcAsset,
 	btc::{
 		deposit_address::DepositAddress, vault_swap_encoding::UtxoEncodedData, ScriptPubkey, Utxo,
 		UtxoId,
 	},
-	evm::U256,
-	Bitcoin, Chain, ChannelRefundParametersForChain,
+	Bitcoin, ChannelRefundParametersForChain,
 };
 
-use cf_primitives::{AccountId, Asset, Beneficiary, ChannelId, DcaParameters};
+use cf_primitives::{AccountId, Beneficiary, ChannelId, DcaParameters};
 use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
-use sp_core::H256;
 use state_chain_runtime::BitcoinInstance;
 
 use crate::btc::rpc::VerboseTransaction;
@@ -109,7 +106,7 @@ pub fn try_extract_vault_swap_witness(
 	broker_id: &AccountId,
 ) -> Option<VaultDepositWitness> {
 	// First output must be a deposit into our vault:
-	let utxo_to_vault = &tx.vout.get(0)?;
+	let utxo_to_vault = &tx.vout.first()?;
 	if utxo_to_vault.script_pubkey.as_bytes() != private_broker_channel.script_pubkey().bytes() {
 		return None;
 	}
@@ -208,50 +205,6 @@ pub fn try_extract_vault_swap_witness(
 	})
 }
 
-/// Returns a default vault swap witness for a given tx where the first utxo is targeting the vault.
-pub fn vault_swap_with_burn_refund_address(
-	tx: &VerboseTransaction,
-	vault_address: &DepositAddress,
-	channel_id: ChannelId,
-) -> Option<VaultDepositWitness> {
-	let utxo_to_vault = &tx.vout[0];
-	if utxo_to_vault.script_pubkey.as_bytes() != vault_address.script_pubkey().bytes() {
-		return None;
-	}
-
-	let tx_id: [u8; 32] = tx.txid.to_byte_array();
-	let deposit_amount = utxo_to_vault.value.to_sat();
-
-	Some(VaultDepositWitness {
-		input_asset: NATIVE_ASSET,
-		output_asset: Asset::Eth,
-		deposit_amount,
-		destination_address: EncodedAddress::Eth([0; 20]),
-		tx_id: H256::from(tx_id),
-		deposit_details: Utxo {
-			id: UtxoId { tx_id: tx_id.into(), vout: 0 },
-			amount: deposit_amount,
-			deposit_address: vault_address.clone(),
-		},
-		deposit_metadata: None,
-		broker_fee: None,
-		affiliate_fees: vec![].try_into().expect("Empty affiliates is always valid"),
-		refund_params: ChannelRefundParametersForChain::<Bitcoin> {
-			retry_duration: 0,
-			// We use the burn address for the refund address,
-			// This will cause the deposit to be ingressed but without any action dispatched.
-			refund_address: Bitcoin::BURN_ADDRESS,
-			min_price: U256::from(0),
-			refund_ccm_metadata: None,
-			max_oracle_price_slippage: None,
-		},
-		dca_params: None,
-		// We never boost wrongly encoded vault swaps
-		boost_fee: 0,
-		channel_id: Some(channel_id),
-		deposit_address: Some(vault_address.script_pubkey()),
-	})
-}
 #[cfg(test)]
 mod tests {
 	use std::sync::LazyLock;
