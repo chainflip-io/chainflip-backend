@@ -22,7 +22,7 @@ use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
-	Bonding, Chainflip, SetSafeMode, Slashing,
+	Bonding, Chainflip, FundAccount, SetSafeMode, Slashing,
 };
 use sp_core::H160;
 
@@ -49,13 +49,25 @@ fn funded_amount_is_added_and_subtracted() {
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
 		assert!(!frame_system::Pallet::<Test>::account_exists(&BOB));
 
-		Funding::fund_account(ALICE, ETH_ZERO_ADDRESS, AMOUNT_A1, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT_A1,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
 		// Read pallet storage and assert the balance was added.
 		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT_A1);
 
 		// Add some more
-		Funding::fund_account(ALICE, ETH_ZERO_ADDRESS, AMOUNT_A2, TX_HASH);
-		Funding::fund_account(BOB, ETH_ZERO_ADDRESS, AMOUNT_B, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT_A2,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
+		Funding::fund_account(
+			BOB,
+			AMOUNT_B,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
 
 		// Both accounts should now be created.
 		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
@@ -140,7 +152,11 @@ fn redeeming_unredeemable_is_err() {
 		assert_eq!(Flip::total_balance_of(&ALICE), 0u128);
 
 		// Add some funds.
-		Funding::fund_account(ALICE, ETH_ZERO_ADDRESS, AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
 
 		// Try to, and fail, redeem an amount that would leave the balance below the minimum.
 		let excessive_redemption = AMOUNT - MIN_FUNDING + 1;
@@ -187,7 +203,11 @@ fn cannot_double_redeem() {
 		let (amount_a1, amount_a2) = (45u128, 21u128);
 
 		// Add some funds.
-		Funding::fund_account(ALICE, ETH_ZERO_ADDRESS, amount_a1 + amount_a2, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			amount_a1 + amount_a2,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
 
 		// Redeem a portion.
 		assert_ok!(Funding::redeem(
@@ -237,7 +257,11 @@ fn redemption_cannot_occur_without_funding_first() {
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
 
 		// Add some funds.
-		Funding::fund_account(ALICE, ETH_ZERO_ADDRESS, FUNDING_AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			FUNDING_AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
 
 		// The act of funding creates the account.
 		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
@@ -294,8 +318,16 @@ fn cannot_redeem_bond() {
 		MockEpochInfo::add_authorities(ALICE);
 
 		// Alice and Bob fund the same amount.
-		Funding::fund_account(ALICE, ETH_ZERO_ADDRESS, AMOUNT, TX_HASH);
-		Funding::fund_account(BOB, ETH_ZERO_ADDRESS, AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
+		Funding::fund_account(
+			BOB,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
 
 		// Alice becomes an authority
 		Bonder::<Test>::update_bond(&ALICE, BOND);
@@ -353,7 +385,11 @@ fn can_only_redeem_if_redemption_check_passes() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 45;
 
-		Funding::fund_account(ALICE, ETH_ZERO_ADDRESS, AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
 			&ALICE
 		));
@@ -390,7 +426,11 @@ fn test_redeem_all() {
 		const BOND: u128 = 55;
 
 		// Add some funds.
-		Funding::fund_account(ALICE, ETH_ZERO_ADDRESS, AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_ZERO_ADDRESS },
+		);
 
 		// Alice becomes an authority.
 		Bonder::<Test>::update_bond(&ALICE, BOND);
@@ -427,8 +467,16 @@ fn redemption_expiry_removes_redemption() {
 		const RESTRICTED_ADDRESS: EthereumAddress = EthereumAddress::repeat_byte(0x02);
 
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
-		Funding::fund_account(ALICE, RESTRICTED_ADDRESS, RESTRICTED_AMOUNT, TX_HASH);
-		Funding::fund_account(ALICE, ETH_DUMMY_ADDR, TOTAL_FUNDS - RESTRICTED_AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			RESTRICTED_AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: RESTRICTED_ADDRESS },
+		);
+		Funding::fund_account(
+			ALICE,
+			TOTAL_FUNDS - RESTRICTED_AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_DUMMY_ADDR },
+		);
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			TO_REDEEM.into(),
@@ -486,8 +534,16 @@ fn restore_restricted_balance_when_redemption_expires() {
 	fn do_test(redeem_amount: RedemptionAmount<u128>) {
 		new_test_ext().execute_with(|| {
 			RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
-			Funding::fund_account(ALICE, RESTRICTED_ADDRESS, RESTRICTED_AMOUNT, TX_HASH);
-			Funding::fund_account(ALICE, ETH_DUMMY_ADDR, TOTAL_FUNDS - RESTRICTED_AMOUNT, TX_HASH);
+			Funding::fund_account(
+				ALICE,
+				RESTRICTED_AMOUNT,
+				FundingSource::EthTransaction { tx_hash: TX_HASH, funder: RESTRICTED_ADDRESS },
+			);
+			Funding::fund_account(
+				ALICE,
+				TOTAL_FUNDS - RESTRICTED_AMOUNT,
+				FundingSource::EthTransaction { tx_hash: TX_HASH, funder: ETH_DUMMY_ADDR },
+			);
 			assert_ok!(Funding::redeem(
 				RuntimeOrigin::signed(ALICE),
 				redeem_amount,
@@ -536,7 +592,14 @@ fn restore_restricted_balance_when_redemption_expires() {
 #[test]
 fn runtime_safe_mode_blocks_redemption_requests() {
 	new_test_ext().execute_with(|| {
-		Funding::fund_account(ALICE, Default::default(), 1_000, Default::default());
+		Funding::fund_account(
+			ALICE,
+			1_000,
+			FundingSource::EthTransaction {
+				tx_hash: Default::default(),
+				funder: Default::default(),
+			},
+		);
 
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 		assert_noop!(
@@ -570,7 +633,11 @@ fn restricted_funds_getting_recorded() {
 
 		// Add some funds, we use the zero address here to denote that we should be
 		// able to redeem to any address in future
-		Funding::fund_account(ALICE, RESTRICTED_ADDRESS, AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: RESTRICTED_ADDRESS },
+		);
 
 		assert_eq!(
 			RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
@@ -602,8 +669,16 @@ fn restricted_funds_pay_redemption_tax() {
 		const REDEEM_AMOUNT: FlipBalance = 10;
 
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
-		Funding::fund_account(ALICE, RESTRICTED_ADDRESS, RESTRICTED_AMOUNT, TX_HASH);
-		Funding::fund_account(ALICE, UNRESTRICTED_ADDRESS, UNRESTRICTED_AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			RESTRICTED_AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: RESTRICTED_ADDRESS },
+		);
+		Funding::fund_account(
+			ALICE,
+			UNRESTRICTED_AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: UNRESTRICTED_ADDRESS },
+		);
 
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
@@ -645,9 +720,21 @@ fn vesting_contracts_test_case() {
 		// Add contract address to list of restricted contracts
 		RestrictedAddresses::<Test>::insert(VESTING_CONTRACT_1, ());
 		RestrictedAddresses::<Test>::insert(VESTING_CONTRACT_2, ());
-		Funding::fund_account(ALICE, VESTING_CONTRACT_1, CONTRACT_1_FUNDS, TX_HASH);
-		Funding::fund_account(ALICE, VESTING_CONTRACT_2, CONTRACT_2_FUNDS, TX_HASH);
-		Funding::fund_account(ALICE, UNRESTRICTED_ADDRESS, EARNED_REWARDS, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			CONTRACT_1_FUNDS,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: VESTING_CONTRACT_1 },
+		);
+		Funding::fund_account(
+			ALICE,
+			CONTRACT_2_FUNDS,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: VESTING_CONTRACT_2 },
+		);
+		Funding::fund_account(
+			ALICE,
+			EARNED_REWARDS,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: UNRESTRICTED_ADDRESS },
+		);
 		// Because 100 is available this should fail
 		assert_noop!(
 			Funding::redeem(
@@ -696,8 +783,16 @@ fn can_withdraw_unrestricted_to_restricted() {
 		// Add restricted addresses.
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_2, ());
-		Funding::fund_account(ALICE, UNRESTRICTED_ADDRESS, AMOUNT, TX_HASH);
-		Funding::fund_account(ALICE, RESTRICTED_ADDRESS_2, AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: UNRESTRICTED_ADDRESS },
+		);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: RESTRICTED_ADDRESS_2 },
+		);
 		// Funds are not restricted, this should be ok.
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
@@ -716,8 +811,16 @@ fn can_withdrawal_also_free_funds_to_restricted_address() {
 		const AMOUNT_1: u128 = 100;
 		const AMOUNT_2: u128 = 50;
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
-		Funding::fund_account(ALICE, RESTRICTED_ADDRESS_1, AMOUNT_1, TX_HASH);
-		Funding::fund_account(ALICE, UNRESTRICTED_ADDRESS, AMOUNT_2, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT_1,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: RESTRICTED_ADDRESS_1 },
+		);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT_2,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: UNRESTRICTED_ADDRESS },
+		);
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			RedemptionAmount::Max,
@@ -737,7 +840,11 @@ fn can_only_redeem_funds_to_bound_address() {
 		const AMOUNT: u128 = 100;
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
 		BoundRedeemAddress::<Test>::insert(ALICE, BOUND_ADDRESS);
-		Funding::fund_account(ALICE, UNRESTRICTED_ADDRESS, AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: UNRESTRICTED_ADDRESS },
+		);
 		assert_noop!(
 			Funding::redeem(
 				RuntimeOrigin::signed(ALICE),
@@ -747,7 +854,11 @@ fn can_only_redeem_funds_to_bound_address() {
 			),
 			Error::<Test>::AccountBindingRestrictionViolated
 		);
-		Funding::fund_account(ALICE, UNRESTRICTED_ADDRESS, AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: UNRESTRICTED_ADDRESS },
+		);
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			AMOUNT.into(),
@@ -766,9 +877,21 @@ fn redeem_funds_until_restricted_balance_is_zero_and_then_redeem_to_redeem_addre
 		const AMOUNT: u128 = 100;
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
 		BoundRedeemAddress::<Test>::insert(ALICE, REDEEM_ADDRESS);
-		Funding::fund_account(ALICE, UNRESTRICTED_ADDRESS, AMOUNT, TX_HASH);
-		Funding::fund_account(ALICE, RESTRICTED_ADDRESS, AMOUNT, TX_HASH);
-		Funding::fund_account(ALICE, REDEEM_ADDRESS, AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: UNRESTRICTED_ADDRESS },
+		);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: RESTRICTED_ADDRESS },
+		);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: REDEEM_ADDRESS },
+		);
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			(AMOUNT).into(),
@@ -808,9 +931,21 @@ fn redeem_funds_to_restricted_address_overrides_bound_and_executor_restrictions(
 		BoundRedeemAddress::<Test>::insert(ALICE, REDEEM_ADDRESS);
 		BoundExecutorAddress::<Test>::insert(ALICE, EXECUTOR_ADDRESS);
 
-		Funding::fund_account(ALICE, REDEEM_ADDRESS, AMOUNT, TX_HASH);
-		Funding::fund_account(ALICE, REDEEM_ADDRESS, AMOUNT, TX_HASH);
-		Funding::fund_account(ALICE, RESTRICTED_ADDRESS, AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: REDEEM_ADDRESS },
+		);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: REDEEM_ADDRESS },
+		);
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: RESTRICTED_ADDRESS },
+		);
 
 		// Redeem using a wrong executor should fail because we have bounded executor address
 		assert_noop!(
@@ -878,7 +1013,11 @@ mod test_restricted_balances {
 				(RESTRICTED_ADDRESS_2, RESTRICTED_BALANCE_2),
 				(UNRESTRICTED_ADDRESS, UNRESTRICTED_BALANCE + REDEMPTION_TAX),
 			] {
-				Funding::fund_account(ALICE, address, amount, Default::default());
+				Funding::fund_account(
+					ALICE,
+					amount,
+					FundingSource::EthTransaction { tx_hash: TX_HASH, funder: address },
+				);
 			}
 
 			Bonder::<Test>::update_bond(&ALICE, bond);
@@ -1150,7 +1289,11 @@ mod test_restricted_balances {
 			const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 			const AMOUNT: u128 = 100;
 			RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
-			Funding::fund_account(ALICE, RESTRICTED_ADDRESS, AMOUNT, TX_HASH);
+			Funding::fund_account(
+				ALICE,
+				AMOUNT,
+				FundingSource::EthTransaction { tx_hash: TX_HASH, funder: RESTRICTED_ADDRESS },
+			);
 			assert_ok!(Funding::redeem(
 				RuntimeOrigin::signed(ALICE),
 				RedemptionAmount::Max,
@@ -1167,7 +1310,14 @@ mod test_restricted_balances {
 fn cannot_redeem_lower_than_redemption_tax() {
 	new_test_ext().execute_with(|| {
 		const TOTAL_FUNDS: FlipBalance = REDEMPTION_TAX * 10;
-		Funding::fund_account(ALICE, Default::default(), TOTAL_FUNDS, Default::default());
+		Funding::fund_account(
+			ALICE,
+			TOTAL_FUNDS,
+			FundingSource::EthTransaction {
+				tx_hash: Default::default(),
+				funder: Default::default(),
+			},
+		);
 
 		// Can't withdraw TOTAL_FUNDS otherwise not enough is left to pay the tax.
 		assert_noop!(
@@ -1241,15 +1391,13 @@ fn max_redemption_is_net_exact_is_gross() {
 			));
 			Funding::fund_account(
 				ALICE,
-				Default::default(),
 				UNRESTRICTED_AMOUNT,
-				Default::default(),
+				FundingSource::EthTransaction { tx_hash: Default::default(), funder: Default::default() },
 			);
 			Funding::fund_account(
 				ALICE,
-				RESTRICTED_ADDRESS,
 				RESTRICTED_AMOUNT,
-				Default::default(),
+				FundingSource::EthTransaction { tx_hash: Default::default(), funder: RESTRICTED_ADDRESS },
 			);
 			assert_ok!(Funding::redeem(
 				RuntimeOrigin::signed(ALICE),
@@ -1294,9 +1442,23 @@ fn bond_should_count_toward_restricted_balance() {
 			Default::default(),
 		));
 		// Fund the restricted address.
-		Funding::fund_account(ALICE, RESTRICTED_ADDRESS, AMOUNT, Default::default());
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction {
+				tx_hash: Default::default(),
+				funder: RESTRICTED_ADDRESS,
+			},
+		);
 		// Fund an unrestricted address.
-		Funding::fund_account(ALICE, Default::default(), AMOUNT, Default::default());
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction {
+				tx_hash: Default::default(),
+				funder: Default::default(),
+			},
+		);
 		// Set the bond.
 		Bonder::<Test>::update_bond(&ALICE, AMOUNT);
 		// Prof we are setup correctly.
@@ -1320,7 +1482,14 @@ fn bond_should_count_toward_restricted_balance() {
 #[test]
 fn skip_redemption_of_zero_flip() {
 	new_test_ext().execute_with(|| {
-		Funding::fund_account(ALICE, Default::default(), 100, Default::default());
+		Funding::fund_account(
+			ALICE,
+			100,
+			FundingSource::EthTransaction {
+				tx_hash: Default::default(),
+				funder: Default::default(),
+			},
+		);
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			RedemptionAmount::Exact(0),
@@ -1339,7 +1508,14 @@ fn skip_redemption_of_zero_flip() {
 #[test]
 fn ignore_redemption_tax_when_redeeming_all() {
 	new_test_ext().execute_with(|| {
-		Funding::fund_account(ALICE, Default::default(), 100, Default::default());
+		Funding::fund_account(
+			ALICE,
+			100,
+			FundingSource::EthTransaction {
+				tx_hash: Default::default(),
+				funder: Default::default(),
+			},
+		);
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			RedemptionAmount::Max,
@@ -1368,7 +1544,14 @@ fn check_restricted_balances_are_getting_removed() {
 			Default::default(),
 		));
 		// Fund the restricted address.
-		Funding::fund_account(ALICE, RESTRICTED_ADDRESS, AMOUNT, Default::default());
+		Funding::fund_account(
+			ALICE,
+			AMOUNT,
+			FundingSource::EthTransaction {
+				tx_hash: Default::default(),
+				funder: RESTRICTED_ADDRESS,
+			},
+		);
 		assert!(RestrictedBalances::<Test>::contains_key(ALICE));
 		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS), Some(&AMOUNT));
 		assert_ok!(Funding::update_restricted_addresses(
@@ -1429,8 +1612,16 @@ fn can_redeem_if_balance_lower_than_restricted_funds() {
 		const REDEEM_AMOUNT: u128 = 60;
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_2, ());
-		Funding::fund_account(ALICE, RESTRICTED_ADDRESS_1, RESTRICTED_AMOUNT, TX_HASH);
-		Funding::fund_account(ALICE, RESTRICTED_ADDRESS_2, RESTRICTED_AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			RESTRICTED_AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: RESTRICTED_ADDRESS_1 },
+		);
+		Funding::fund_account(
+			ALICE,
+			RESTRICTED_AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: RESTRICTED_ADDRESS_2 },
+		);
 
 		// we want to have a balance < sum of restricted balances
 		FlipSlasher::<Test>::slash_balance(&ALICE, DEBIT_AMOUNT);
@@ -1490,7 +1681,11 @@ fn cannot_redeem_to_non_restricted_address_with_balance_lower_than_restricted_fu
 		const RESTRICTED_AMOUNT: u128 = 150;
 		const REDEEM_AMOUNT: u128 = 60;
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
-		Funding::fund_account(ALICE, RESTRICTED_ADDRESS_1, RESTRICTED_AMOUNT, TX_HASH);
+		Funding::fund_account(
+			ALICE,
+			RESTRICTED_AMOUNT,
+			FundingSource::EthTransaction { tx_hash: TX_HASH, funder: RESTRICTED_ADDRESS_1 },
+		);
 
 		// we want to have a balance < sum of restricted balances
 		FlipSlasher::<Test>::slash_balance(&ALICE, DEBIT_AMOUNT);
@@ -1513,9 +1708,8 @@ fn account_references_must_be_zero_for_full_redeem() {
 	new_test_ext().execute_with(|| {
 		Funding::fund_account(
 			ALICE,
-			Default::default(),
 			FUNDING_AMOUNT,
-			Default::default()
+			FundingSource::EthTransaction { tx_hash: Default::default(), funder: Default::default() }
 		);
 		assert_eq!(
 			frame_system::Pallet::<Test>::providers(&ALICE),
@@ -1773,16 +1967,19 @@ mod utils {
 				let funding_address = setup.funding_address.unwrap_or_default();
 				Funding::fund_account(
 					setup.account(),
-					funding_address,
 					setup.initial_balance,
-					TX_HASH,
+					FundingSource::EthTransaction { tx_hash: TX_HASH, funder: funding_address },
 				);
 			} else {
 				panic!("Account setup requires a non-zero initial balance.");
 			}
 
 			for (amount, address) in setup.deposits.clone().into_iter().rev() {
-				Funding::fund_account(setup.account(), address, amount, TX_HASH);
+				Funding::fund_account(
+					setup.account(),
+					amount,
+					FundingSource::EthTransaction { tx_hash: TX_HASH, funder: address },
+				);
 			}
 
 			if let Some(address) = setup.bound_redeem_address {

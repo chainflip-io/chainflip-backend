@@ -23,7 +23,7 @@ use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_session::Config as SessionConfig;
 
 use cf_primitives::{AccountRole, AssetAmount};
-use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter, SafeMode, SetSafeMode};
+use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter, SafeMode, SetSafeMode, FundAccount, FundingSource};
 use cf_utilities::assert_matches;
 use frame_benchmarking::v2::*;
 use frame_support::{
@@ -78,9 +78,11 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_funded: u128) {
 		let bidder_origin: OriginFor<T> = RawOrigin::Signed(bidder.clone()).into();
 		pallet_cf_funding::Pallet::<T>::fund_account(
 			bidder.clone(),
-			Default::default(),
 			(flip_funded * FLIPPERINOS_PER_FLIP).unique_saturated_into(),
-			Default::default(),
+			FundingSource::EthTransaction {
+				tx_hash: Default::default(),
+				funder: Default::default(),
+			},
 		);
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&bidder);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&bidder));
