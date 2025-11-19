@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { InternalAsset as Asset, broker } from '@chainflip/cli';
 import { doPerformSwap, requestNewSwap } from 'shared/perform_swap';
 import { prepareSwap, testSwap } from 'shared/swapping';
 import BigNumber from 'bignumber.js';
@@ -26,11 +26,12 @@ import { signAndSendTxEvm } from 'shared/send_evm';
 import { getCFTesterAbi, getEvmVaultAbi } from 'shared/contract_interfaces';
 import { send } from 'shared/send';
 
-import { observeEvent, observeBadEvent, getChainflipApi } from 'shared/utils/substrate';
+import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger, throwError } from 'shared/utils/logger';
-import { ChannelRefundParameters } from 'shared/sol_vault_swap';
 import { newEvmAddress } from 'shared/new_evm_address';
+import { brokerApiEndpoint } from 'shared/json_rpc';
+import { FillOrKillParamsX128 } from 'shared/new_swap';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfEvmVaultAbi = await getEvmVaultAbi();
@@ -289,28 +290,31 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
   const cfVaultContract = new web3.eth.Contract(cfEvmVaultAbi, cfVaultAddress);
   const { destAddress, tag } = await prepareSwap(parentLogger, sourceAsset, destAsset);
   const logger = parentLogger.child({ tag });
-  await using chainflip = await getChainflipApi();
 
-  // This will be replaced in PRO-2228 when the SDK is used
-  const refundParams: ChannelRefundParameters = {
-    retry_duration: 10,
-    refund_address: newEvmAddress('refund_eth'),
-    min_price: '0x0',
-    refund_ccm_metadata: undefined,
-    max_oracle_price_slippage: undefined,
+  const fillOrKillParams: FillOrKillParamsX128 = {
+    retryDurationBlocks: 10,
+    refundAddress: newEvmAddress('refund_eth'),
+    minPriceX128: '0',
+    refundCcmMetadata: undefined,
+    maxOraclePriceSlippage: undefined,
   };
 
-  const cfParameters = (await chainflip.rpc(
-    `cf_encode_cf_parameters`,
-    new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_1').address,
-    stateChainAssetFromAsset(sourceAsset),
-    stateChainAssetFromAsset(destAsset),
-    destAddress,
-    1, // broker_comission
-    refundParams,
-  )) as string;
-
   const amount = amountToFineAmountBigInt(defaultAssetAmounts(sourceAsset), sourceAsset);
+
+  const cfParameters = await broker.requestCfParametersEncoding(
+    {
+      srcAsset: stateChainAssetFromAsset(sourceAsset),
+      destAsset: stateChainAssetFromAsset(destAsset),
+      destAddress,
+      commissionBps: 1,
+      fillOrKillParams,
+      amount: amount.toString(),
+      network: 'backspin',
+    },
+    {
+      url: brokerApiEndpoint,
+    },
+  );
 
   const txData = cfVaultContract.methods
     .xSwapNative(
