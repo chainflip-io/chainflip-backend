@@ -122,6 +122,58 @@ export async function buildAndSendBtcVaultSwap(
 
   return txid;
 }
+export async function buildAndSendInvalidBtcVaultSwap(
+  logger: Logger,
+  brokerUri: string,
+  depositAmountBtc: number,
+  destinationAsset: Asset,
+  destinationAddress: string,
+  refundAddress: string,
+  brokerFee: number,
+  affiliateFees: {
+    account: string;
+    bps: number;
+  }[] = [],
+) {
+  await using chainflip = await getChainflipApi();
+
+  await openPrivateBtcChannel(logger, brokerUri);
+  const broker = createStateChainKeypair(brokerUri);
+
+  const extraParameters: BtcVaultSwapExtraParameters = {
+    chain: 'Bitcoin',
+    min_output_amount: '0',
+    retry_duration: 0,
+  };
+
+  const BtcVaultSwapDetails = (await chainflip.rpc(
+    `cf_request_swap_parameter_encoding`,
+    broker.address,
+    { chain: 'Bitcoin', asset: stateChainAssetFromAsset('Btc') },
+    { chain: chainFromAsset(destinationAsset), asset: stateChainAssetFromAsset(destinationAsset) },
+    chainFromAsset(destinationAsset) === Chains.Polkadot
+      ? decodeDotAddressForContract(destinationAddress)
+      : destinationAddress,
+    brokerFee,
+    extraParameters,
+    null, // channel_metadata
+    0, // boost_fee
+    affiliateFees,
+    null, // dca_params
+  )) as unknown as BtcVaultSwapDetails;
+
+  assert.strictEqual(BtcVaultSwapDetails.chain, 'Bitcoin');
+
+  const txid = await sendVaultTransaction(
+    // wrong encoded payload
+    '0x6a3a0101701b90c687681727ada344f4e440f1a82ae548f66400602b04924ddf21970000000000000000ff010002001e02003d7c6c69666949c04689',
+    depositAmountBtc,
+    BtcVaultSwapDetails.deposit_address,
+    refundAddress,
+  );
+
+  return txid;
+}
 
 export async function registerAffiliate(
   logger: Logger,

@@ -59,7 +59,7 @@ pub use crate::assets::sol::Asset as SolAsset;
 use crate::benchmarking_value::BenchmarkValue;
 pub use sol_prim::{
 	consts::{
-		LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT,
+		const_address, LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT,
 		SOLANA_PDA_MAX_SEED_LEN, TOKEN_ACCOUNT_RENT,
 	},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
@@ -135,6 +135,8 @@ impl Chain for Solana {
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 15;
 	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = REFERENCE_SOL_PRICE_IN_USD;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 1_000_000_000u64;
+	const BURN_ADDRESS: Self::ChainAccount =
+		const_address("1nc1nerator11111111111111111111111111111111");
 
 	type ChainCrypto = SolanaCrypto;
 	type ChainBlockNumber = SlotNumber;

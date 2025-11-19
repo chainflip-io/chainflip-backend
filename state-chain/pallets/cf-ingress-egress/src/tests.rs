@@ -3685,7 +3685,7 @@ fn test_various_refund_reasons() {
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 0,
 				min_price: U256::from(0),
-				refund_address: H160::default(),
+				refund_address: H160([1; 20]),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,
 			},
@@ -3712,7 +3712,7 @@ fn test_various_refund_reasons() {
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 700,
 				min_price: U256::from(0),
-				refund_address: H160::default(),
+				refund_address: H160([1; 20]),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,
 			},
@@ -3739,7 +3739,7 @@ fn test_various_refund_reasons() {
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 0,
 				min_price: U256::from(0),
-				refund_address: H160::default(),
+				refund_address: H160([1; 20]),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,
 			},
@@ -3819,5 +3819,31 @@ fn rollback_storage_if_transactional_call_fails() {
 
 		assert!(call_result.is_err(), "Expected the call to fail");
 		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 100);
+	});
+}
+
+#[test]
+fn vault_swap_with_burn_refund_address_is_ingressed_but_no_action_dispatched() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(EthereumIngressEgress::vault_swap_request(
+			RuntimeOrigin::root(),
+			0,
+			Box::new(VaultDepositWitness::unrefundable(
+				Default::default(),
+				Default::default(),
+				EthAsset::Eth,
+				10_000,
+				Default::default(),
+				DepositDetails { tx_hashes: None }
+			))
+		));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::EthereumIngressEgress(Event::DepositFinalised {
+				action: DepositAction::Unrefundable,
+				..
+			})
+		);
 	});
 }
