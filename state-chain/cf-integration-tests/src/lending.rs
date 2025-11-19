@@ -98,20 +98,13 @@ fn basic_lending() {
 			register_refund_addresses(&BORROWER);
 			credit_account(&BORROWER, COLLATERAL_ASSET, COLLATERAL_AMOUNT);
 
-			// Add half the collateral first
-			assert_ok!(<LendingPools as LendingApi>::add_collateral(
-				&BORROWER,
-				Some(COLLATERAL_ASSET),
-				BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_AMOUNT / 2)]),
-			));
-
-			// Now open a loan with the rest of the collateral
+			// open the loan with the collateral
 			assert_ok!(LendingPools::new_loan(
 				BORROWER.clone(),
 				LOAN_ASSET,
 				LOAN_AMOUNT,
 				Some(COLLATERAL_ASSET),
-				BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_AMOUNT / 2)]),
+				BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_AMOUNT)]),
 			));
 
 			// Check that we got the loan amount

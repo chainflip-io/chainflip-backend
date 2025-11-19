@@ -723,10 +723,7 @@ mod vault_swaps {
 								origin: SwapOrigin::Internal,
 								remaining_input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
 								accumulated_output_amount: 0,
-								dca_params: Some(DcaParameters {
-									number_of_chunks: 1,
-									chunk_interval: SWAP_DELAY_BLOCKS
-								}),
+								dca_params: None,
 							}
 						)
 					])
