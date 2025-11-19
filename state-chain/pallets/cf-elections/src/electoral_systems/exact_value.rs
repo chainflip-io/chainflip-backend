@@ -33,7 +33,6 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 /// This electoral system detects if something occurred or not. Voters simply vote if something
 /// happened, and if they haven't seen it happen, they don't vote.
-#[allow(clippy::type_complexity)]
 pub struct ExactValue<
 	Identifier,
 	Value,

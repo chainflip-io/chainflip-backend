@@ -14,6 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::allow_attributes)]
+
 /// Allows the composition of multiple ElectoralSystems while allowing the ability to configure the
 /// `on_finalize` behaviour without exposing the internal composite types.
 pub struct CompositeRunner<T, ValidatorId, StateChainBlockNumber, StorageAccess, H> {

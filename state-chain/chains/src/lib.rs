@@ -135,7 +135,7 @@ pub mod witness_period {
 		_phantom: sp_std::marker::PhantomData<C>,
 	}
 
-	#[allow(clippy::result_unit_err)]
+	#[expect(clippy::result_unit_err)]
 	impl<C: ChainWitnessConfig> BlockWitnessRange<C> {
 		pub fn try_new(root: C::ChainBlockNumber) -> Result<Self, ()> {
 			let result = Self { root, _phantom: Default::default() };
@@ -739,7 +739,6 @@ pub trait SetAggKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	) -> Result<Option<Self>, SetAggKeyWithAggKeyError>;
 }
 
-#[allow(clippy::result_unit_err)]
 pub trait SetGovKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	/// DO NOT OVERRIDE THIS METHOD.
 	///

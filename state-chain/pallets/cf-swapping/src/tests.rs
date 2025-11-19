@@ -734,7 +734,6 @@ fn process_all_into_stable_swaps_first() {
 	});
 }
 
-#[allow(deprecated)]
 #[test]
 fn can_handle_ccm_with_zero_swap_outputs() {
 	const PRINCIPAL_SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;

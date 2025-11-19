@@ -198,8 +198,8 @@ mod tests {
 	use sp_core::U256;
 
 	#[test]
-	#[allow(clippy::inconsistent_digit_grouping)]
-	#[allow(clippy::identity_op)]
+	#[expect(clippy::inconsistent_digit_grouping)]
+	#[expect(clippy::identity_op)]
 	fn test_price_conversion() {
 		// chainlink prices have 8 decimals
 		assert_eq!(ChainlinkPrice::denominator(), U256::from(100_000_000u128));

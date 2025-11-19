@@ -18,6 +18,7 @@
 #![feature(extract_if)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
+#![allow(clippy::allow_attributes)]
 
 use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
 pub use crate::submit_runtime_call::{
@@ -424,7 +425,6 @@ pub mod pallet {
 		/// creation transaction and the tx hash and block number of the Polkadot block the
 		/// vault creation transaction was witnessed in. This extrinsic should complete the Polkadot
 		/// initiation process and the vault should rotate successfully.
-		#[allow(unused_variables)]
 		#[pallet::call_index(1)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
@@ -450,7 +450,7 @@ pub mod pallet {
 
 		/// Manually witnesses the current Bitcoin block number to complete the pending vault
 		/// rotation.
-		#[allow(unused_variables)]
+		#[expect(unused_variables)]
 		#[pallet::call_index(2)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
@@ -633,7 +633,6 @@ pub mod pallet {
 		/// the assethub creation transaction and the tx hash and block number of the Assethub
 		/// block the vault creation transaction was witnessed in. This extrinsic should complete
 		/// the Assethub initiation process and the vault should rotate successfully.
-		#[allow(unused_variables)]
 		#[pallet::call_index(9)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.

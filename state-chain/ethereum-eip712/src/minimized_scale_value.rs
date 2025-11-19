@@ -90,7 +90,7 @@ impl MinimizedScaleValue {
 		}
 	}
 
-	#[allow(clippy::result_unit_err)]
+	#[expect(clippy::result_unit_err)]
 	pub fn extract_hex_bytes(&self) -> Result<Vec<u8>, ()> {
 		if let Self::Primitive(MinimizedPrimitive::String(s)) = self.clone() {
 			hex::decode(s).map_err(|_| ())

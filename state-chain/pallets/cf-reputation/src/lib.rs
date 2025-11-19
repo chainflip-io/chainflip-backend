@@ -327,7 +327,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub accrual_ratio: (ReputationPoints, BlockNumberFor<T>),
-		#[allow(clippy::type_complexity)]
+		#[expect(clippy::type_complexity)]
 		pub penalties: Vec<(T::Offence, (ReputationPoints, BlockNumberFor<T>))>,
 		pub genesis_validators: Vec<T::ValidatorId>,
 	}

@@ -36,7 +36,7 @@ const BLOCKS_PER_TRACE: u32 = 50;
 pub struct ElectionData<ES: ElectoralSystemTypes> {
 	pub height: u32,
 
-	#[allow(clippy::type_complexity)]
+	#[expect(clippy::type_complexity)]
 	pub bitmaps: BTreeMap<
 		UniqueMonotonicIdentifier,
 		Vec<(BitmapComponentOf<ES>, BitVec<u8, bitvec::order::Lsb0>)>,

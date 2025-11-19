@@ -147,7 +147,7 @@ fn to_state_map(
 		.collect::<BTreeMap<_, _>>()
 }
 
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 fn to_properties(
 	channels: impl IntoIterator<Item = DepositChannel>,
 	last_channel_opened_at: StateChainBlockNumber,
@@ -1050,7 +1050,7 @@ fn is_vote_desired_backs_off_as_expected() {
 	const STILL_YOUNG_ELECTION: StateChainBlockNumber = 10;
 
 	// allows us to make the tests a little simpler.
-	#[allow(clippy::assertions_on_constants)]
+	#[expect(clippy::assertions_on_constants)]
 	{
 		assert!(BACKOFF_SETTINGS.backoff_after_blocks % BACKOFF_SETTINGS.backoff_frequency == 0);
 		assert!(STILL_YOUNG_ELECTION < BACKOFF_SETTINGS.backoff_after_blocks);
