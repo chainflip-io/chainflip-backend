@@ -116,6 +116,12 @@ impl EvmRpcApi for EvmRpcClient {
 		})
 	}
 
+	async fn block_by_hash(&self, block_hash: H256) -> Result<Block<H256>> {
+		self.provider.get_block(block_hash).await?.ok_or_else(|| {
+			anyhow!("Getting {} block for block hash {block_hash} returned None", self.chain_name)
+		})
+	}
+
 	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
 		self.provider.get_block_with_txs(block_number).await?.ok_or_else(|| {
 			anyhow!(
@@ -138,6 +144,10 @@ impl EvmRpcApi for EvmRpcClient {
 		self.provider.get_transaction(tx_hash).await?.ok_or_else(|| {
 			anyhow!("Getting {} transaction for tx hash {tx_hash} returned None", self.chain_name)
 		})
+	}
+
+	async fn get_block_number(&self) -> Result<U64> {
+		Ok(self.provider.get_block_number().await?)
 	}
 }
 
@@ -223,6 +233,8 @@ pub trait EvmRpcApi: Send + Sync + Clone + 'static {
 	/// - Request succeeds, but doesn't return a block
 	async fn block(&self, block_number: U64) -> Result<Block<H256>>;
 
+	async fn block_by_hash(&self, block_hash: H256) -> Result<Block<H256>>;
+
 	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>>;
 
 	async fn fee_history(
@@ -233,6 +245,7 @@ pub trait EvmRpcApi: Send + Sync + Clone + 'static {
 	) -> Result<FeeHistory>;
 
 	async fn get_transaction(&self, tx_hash: H256) -> Result<Transaction>;
+	async fn get_block_number(&self) -> Result<U64>;
 }
 
 #[async_trait::async_trait]
@@ -267,6 +280,10 @@ impl EvmRpcApi for EvmRpcSigningClient {
 		self.rpc_client.block(block_number).await
 	}
 
+	async fn block_by_hash(&self, block_hash: H256) -> Result<Block<H256>> {
+		self.rpc_client.block_by_hash(block_hash).await
+	}
+
 	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
 		self.rpc_client.block_with_txs(block_number).await
 	}
@@ -282,6 +299,10 @@ impl EvmRpcApi for EvmRpcSigningClient {
 
 	async fn get_transaction(&self, tx_hash: H256) -> Result<Transaction> {
 		self.rpc_client.get_transaction(tx_hash).await
+	}
+
+	async fn get_block_number(&self) -> Result<U64> {
+		self.rpc_client.get_block_number().await
 	}
 }
 
