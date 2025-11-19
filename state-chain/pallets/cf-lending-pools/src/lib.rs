@@ -206,7 +206,7 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	},
 	ltv_thresholds: LtvThresholds {
 		target: Permill::from_percent(80),
-		topup: Permill::from_percent(85),
+		topup: None,
 		soft_liquidation: Permill::from_percent(90),
 		soft_liquidation_abort: Permill::from_percent(88),
 		hard_liquidation: Permill::from_percent(95),

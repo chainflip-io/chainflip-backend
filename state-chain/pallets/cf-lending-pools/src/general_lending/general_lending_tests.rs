@@ -687,6 +687,17 @@ fn collateral_auto_topup() {
 			set_asset_price_in_usd(COLLATERAL_ASSET, 1_000_000);
 			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
+			// Enable auto top-up for this test.
+			assert_ok!(Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::root(),
+				bounded_vec![PalletConfigUpdate::SetLtvThresholds {
+					ltv_thresholds: LtvThresholds {
+						topup: Some(Permill::from_percent(85)),
+						..CONFIG.ltv_thresholds
+					}
+				}],
+			));
+
 			MockBalance::credit_account(
 				&BORROWER,
 				COLLATERAL_ASSET,
@@ -726,7 +737,7 @@ fn collateral_auto_topup() {
 			// The user only had a small amount in their balance, all of it gets used:
 			assert_eq!(get_collateral(), INIT_COLLATERAL + COLLATERAL_TOPUP);
 			assert_eq!(get_ltv(), FixedU64::from_rational(853_618_983, 1_000_000_000)); // ~85%
-			assert_eq!(MockBalance::get_balance(&LENDER, COLLATERAL_ASSET), 0);
+			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
 
 			// After we give the user more funds, auto-top up should bring CR back to target
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, EXTRA_FUNDS);

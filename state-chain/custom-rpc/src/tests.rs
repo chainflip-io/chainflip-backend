@@ -1210,7 +1210,7 @@ fn lending_config_serialization() {
 		ltv_thresholds: LtvThresholds {
 			low_ltv: Permill::from_percent(50),
 			target: Permill::from_percent(75),
-			topup: Permill::from_percent(80),
+			topup: Some(Permill::from_percent(80)),
 			soft_liquidation: Permill::from_percent(90),
 			soft_liquidation_abort: Permill::from_percent(88),
 			hard_liquidation: Permill::from_percent(95),
