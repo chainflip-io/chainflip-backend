@@ -231,7 +231,6 @@ pub const RAW_SEED_3: [u8; 32] =
 pub const NONCE_3: u32 = 0; //correct nonce has to be provided for this account (see/track onchain)
 
 // FROM: https://github.com/paritytech/polkadot/blob/v0.9.33/runtime/polkadot/src/lib.rs
-#[allow(clippy::unnecessary_cast)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum PolkadotProxyType {
 	Any = 0,
@@ -547,32 +546,30 @@ pub enum PolkadotRuntimeCall {
 }
 
 /// Only used for the migration to Assethub
-#[allow(non_camel_case_types)]
-#[allow(clippy::large_enum_variant)]
+#[expect(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum XcmCall {
 	#[codec(index = 9u8)]
 	limited_teleport_assets {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		beneficiary: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		fee_asset_itme: u32,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		weight_limit: xcm_types::hub_runtime_types::xcm::v3::WeightLimit,
 	},
 }
 
-#[allow(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum SystemCall {}
 
 impl DepositDetailsToTransactionInId<PolkadotCrypto> for u32 {}
 
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum BalancesCall {
 	/// Transfer some liquid free balance to another account.
@@ -584,9 +581,9 @@ pub enum BalancesCall {
 	/// The dispatch origin for this call must be `Signed` by the transactor.
 	#[codec(index = 0u8)]
 	transfer_allow_death {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		dest: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		#[codec(compact)]
 		value: PolkadotBalance,
 	},
@@ -608,14 +605,14 @@ pub enum BalancesCall {
 	/// - O(1). Just like transfer, but reading the user's transferable balance first. #</weight>
 	#[codec(index = 4u8)]
 	transfer_all {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		dest: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		keep_alive: bool,
 	},
 }
 
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum UtilityCall {
 	/// Send a batch of dispatch calls.
@@ -639,7 +636,7 @@ pub enum UtilityCall {
 	/// event is deposited.
 	#[codec(index = 0u8)]
 	batch {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		calls: Vec<PolkadotRuntimeCall>,
 	},
 	/// Send a call through an indexed pseudonym of the sender.
@@ -657,9 +654,9 @@ pub enum UtilityCall {
 	/// The dispatch origin for this call must be _Signed_.
 	#[codec(index = 1u8)]
 	as_derivative {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		index: u16,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		call: Box<PolkadotRuntimeCall>,
 	},
 	/// Send a batch of dispatch calls and atomically execute them.
@@ -678,7 +675,7 @@ pub enum UtilityCall {
 	/// # </weight>
 	#[codec(index = 2u8)]
 	batch_all {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		calls: Vec<PolkadotRuntimeCall>,
 	},
 	/// Send a batch of dispatch calls.
@@ -697,12 +694,12 @@ pub enum UtilityCall {
 	/// # </weight>
 	#[codec(index = 4u8)]
 	force_batch {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		calls: Vec<PolkadotRuntimeCall>,
 	},
 }
 
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum ProxyCall {
 	/// Dispatch the given `call` from an account that the sender is authorised for through
@@ -722,11 +719,11 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 0u8)]
 	proxy {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		real: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		force_proxy_type: Option<PolkadotProxyType>,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		call: Box<PolkadotRuntimeCall>,
 	},
 	/// Register a proxy account for the sender that is able to make calls on its behalf.
@@ -744,11 +741,11 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 1u8)]
 	add_proxy {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		delegate: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		proxy_type: PolkadotProxyType,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		delay: PolkadotBlockNumber,
 	},
 	/// Unregister a proxy account for the sender.
@@ -764,11 +761,11 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 2u8)]
 	remove_proxy {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		delegate: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		proxy_type: PolkadotProxyType,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		delay: PolkadotBlockNumber,
 	},
 	/// Unregister all proxy accounts for the sender.
@@ -807,11 +804,11 @@ pub enum ProxyCall {
 	/// TODO: Might be over counting 1 read
 	#[codec(index = 4u8)]
 	create_pure {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		proxy_type: PolkadotProxyType,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		delay: PolkadotBlockNumber,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		index: u16,
 	},
 	/// Removes a previously spawned anonymous proxy.
@@ -836,16 +833,16 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 5u8)]
 	kill_pure {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		spawner: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		proxy_type: PolkadotProxyType,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		index: u16,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		#[codec(compact)]
 		height: PolkadotBlockNumber,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		#[codec(compact)]
 		ext_index: u32,
 	},
@@ -872,9 +869,9 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 6u8)]
 	announce {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		real: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		call_hash: PolkadotCallHash,
 	},
 	/// Remove a given announcement.
@@ -895,9 +892,9 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 7u8)]
 	remove_announcement {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		real: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		call_hash: PolkadotCallHash,
 	},
 	/// Remove the given announcement of a delegate.
@@ -918,9 +915,9 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 8u8)]
 	reject_announcement {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		delegate: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		call_hash: PolkadotCallHash,
 	},
 	/// Dispatch the given `call` from an account that the sender is authorized for through
@@ -942,13 +939,13 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 9u8)]
 	proxy_announced {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		delegate: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		real: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		force_proxy_type: Option<PolkadotProxyType>,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		call: Box<PolkadotRuntimeCall>,
 	},
 }
@@ -1093,7 +1090,7 @@ mod test_polkadot_extrinsics {
 	#[test]
 	fn decode_into_unchecked_extrinsic() {
 		// These extrinsic bytes were taken from real polkadot extrinsics
-		#[allow(clippy::single_element_loop)]
+		#[expect(clippy::single_element_loop)]
 		for mut bytes in [
 			// Single fetch.
 			&hex_literal::hex!(

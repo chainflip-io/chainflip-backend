@@ -231,7 +231,7 @@ pub struct RpcAccountInfoWrapper {
 	pub role_specific: RpcAccountInfo,
 }
 
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum RpcAccountInfo {
@@ -369,7 +369,7 @@ pub mod account_info_before_api_v7 {
 	use super::*;
 	use state_chain_runtime::runtime_apis::validator_info_before_v7;
 
-	#[allow(clippy::large_enum_variant)]
+	#[expect(clippy::large_enum_variant)]
 	#[derive(Serialize, Deserialize, Clone)]
 	#[serde(tag = "role", rename_all = "snake_case")]
 	pub enum RpcAccountInfo {
@@ -1684,7 +1684,7 @@ where
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
-		#[allow(deprecated)]
+		#[expect(deprecated)]
 		self.rpc_backend
 			.with_runtime_api(None, |api, hash| api.cf_current_compatibility_version(hash))
 	}
@@ -1767,7 +1767,7 @@ where
 									.unwrap_or_default();
 
 								let info = if api_version < 3 {
-									#[allow(deprecated)]
+									#[expect(deprecated)]
 									api.cf_broker_info_before_version_3(hash, account_id.clone())?
 										.into()
 								} else {
@@ -1782,7 +1782,7 @@ where
 								RpcAccountInfo::lp(info, api.cf_network_environment(hash)?, balance)
 							},
 							AccountRole::Validator => {
-								#[allow(deprecated)]
+								#[expect(deprecated)]
 								let info = api.cf_validator_info_before_version_7(hash, &account_id)?;
 
 								RpcAccountInfo::validator(info)

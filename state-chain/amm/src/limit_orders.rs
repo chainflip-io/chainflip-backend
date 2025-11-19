@@ -469,7 +469,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// a PoolPairsMap by the asset they sell.
 	///
 	/// This function never panics.
-	#[allow(clippy::type_complexity)]
 	pub(super) fn collect_all(
 		&mut self,
 	) -> PoolPairsMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>> {
@@ -509,7 +508,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// operation. The positions are grouped into a PoolPairsMap by the asset they sell.
 	///
 	/// This function never panics.
-	#[allow(clippy::type_complexity)]
+	#[expect(clippy::type_complexity)]
 	pub(super) fn set_fees(
 		&mut self,
 		fee_hundredth_pips: u32,

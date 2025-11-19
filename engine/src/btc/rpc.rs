@@ -76,7 +76,7 @@ struct FeeRateResponse {
 	feerate: Option<Amount>,
 
 	// We need it for the deserialization, but we don't use it.
-	#[allow(dead_code)]
+	#[expect(dead_code)]
 	blocks: u32,
 }
 
@@ -546,7 +546,7 @@ impl BtcRpcApi for BtcRpcClient {
 
 #[cfg(test)]
 mod tests {
-	use cf_utilities::{assert_panics, testing::logging::init_test_logger};
+	use cf_utilities::assert_panics;
 
 	use super::*;
 
@@ -563,8 +563,6 @@ mod tests {
 	#[tokio::test]
 	#[ignore = "requires local node, useful for manual testing"]
 	async fn test_btc_async() {
-		init_test_logger();
-
 		let client = BtcRpcClient::new(
 			HttpBasicAuthEndpoint {
 				http_endpoint: "http://localhost:8332".into(),

@@ -180,7 +180,7 @@ enum MessagePrefix {
 	Versioned(u8),
 }
 
-#[allow(clippy::needless_lifetimes)]
+#[expect(clippy::needless_lifetimes)]
 impl<'de> serde::Deserialize<'de> for MessagePrefix {
 	fn deserialize<D>(deserializer: D) -> Result<MessagePrefix, D::Error>
 	where

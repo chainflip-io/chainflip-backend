@@ -139,26 +139,26 @@ pub trait ElectoralSystemTypes: 'static + Sized {
 	type OnFinalizeReturn;
 }
 
-#[allow(type_alias_bounds)]
+#[expect(type_alias_bounds)]
 pub type ElectionIdentifierOf<E: ElectoralSystemTypes> =
 	ElectionIdentifier<<E as ElectoralSystemTypes>::ElectionIdentifierExtra>;
-#[allow(type_alias_bounds)]
+#[expect(type_alias_bounds)]
 pub type AuthorityVoteOf<E: ElectoralSystemTypes> = AuthorityVote<PartialVoteOf<E>, VoteOf<E>>;
-#[allow(type_alias_bounds)]
+#[expect(type_alias_bounds)]
 pub type VoteOf<E: ElectoralSystemTypes> =
 	<<E as ElectoralSystemTypes>::VoteStorage as VoteStorage>::Vote;
-#[allow(type_alias_bounds)]
+#[expect(type_alias_bounds)]
 pub type PartialVoteOf<E: ElectoralSystemTypes> =
 	<<E as ElectoralSystemTypes>::VoteStorage as VoteStorage>::PartialVote;
-#[allow(type_alias_bounds)]
+#[expect(type_alias_bounds)]
 pub type VoteStorageOf<E: ElectoralSystemTypes> = <E as ElectoralSystemTypes>::VoteStorage;
-#[allow(type_alias_bounds)]
+#[expect(type_alias_bounds)]
 pub type IndividualComponentOf<E: ElectoralSystemTypes> =
 	<<E as ElectoralSystemTypes>::VoteStorage as VoteStorage>::IndividualComponent;
-#[allow(type_alias_bounds)]
+#[expect(type_alias_bounds)]
 pub type BitmapComponentOf<E: ElectoralSystemTypes> =
 	<<E as ElectoralSystemTypes>::VoteStorage as VoteStorage>::BitmapComponent;
-#[allow(type_alias_bounds)]
+#[expect(type_alias_bounds)]
 pub type VotePropertiesOf<E: ElectoralSystemTypes> =
 	<<E as ElectoralSystemTypes>::VoteStorage as VoteStorage>::Properties;
 

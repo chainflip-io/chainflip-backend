@@ -425,7 +425,6 @@ pub mod pallet {
 		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
 		/// - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
 		/// - [DuplicateWitness](Error::DuplicateWitness)
-		#[allow(clippy::boxed_local)]
 		#[pallet::call_index(0)]
 		#[pallet::weight((
 			T::WeightInfo::witness_at_epoch().saturating_add(call.get_dispatch_info().weight /

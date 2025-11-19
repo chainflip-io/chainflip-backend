@@ -250,7 +250,7 @@ impl_test_helpers! {
 	}
 }
 
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub trait RequestAddressAndDeposit {
 	fn request_address_and_deposit<I: 'static + Clone>(
 		self,
@@ -329,7 +329,7 @@ where
 	}
 }
 
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub trait RequestAddress {
 	fn request_deposit_addresses<I: 'static + Clone>(
 		self,

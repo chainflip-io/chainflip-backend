@@ -81,6 +81,7 @@ macro_rules! derive_error_enum {
 	) => {
 
 		#[derive_where::derive_where(Debug, PartialEq)]
+		#[allow(clippy::allow_attributes)]
 		#[allow(non_camel_case_types)]
 		pub enum $Error<$($ParamsDef)*> {
 
@@ -99,6 +100,7 @@ macro_rules! derive_error_enum {
 	) => {
 
 		#[derive_where::derive_where(Debug, PartialEq; )]
+		#[allow(clippy::allow_attributes)]
 		#[allow(non_camel_case_types)]
 		pub enum $Error<$($ParamName: $ParamType),*> {
 

@@ -128,7 +128,7 @@ impl AssetPair {
 	}
 
 	pub fn from_swap(from: Asset, to: Asset) -> Option<(Self, Side)> {
-		#[allow(clippy::manual_map)]
+		#[expect(clippy::manual_map)]
 		if let Some(asset_pair) = Self::new(from, to) {
 			Some((asset_pair, Side::Sell))
 		} else if let Some(asset_pair) = Self::new(to, from) {

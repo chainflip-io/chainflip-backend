@@ -42,7 +42,6 @@ pub mod old {
 	}
 
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-	#[allow(clippy::large_enum_variant)]
 	pub enum ChannelAction<AccountId, ChainAccount, CcmMetadata = CcmChannelMetadataChecked> {
 		Swap {
 			destination_asset: Asset,

@@ -115,7 +115,7 @@ fn ccm_unchecked() -> CcmChannelMetadataUnchecked {
 
 #[test]
 fn test_environment_serialization() {
-	#[allow(deprecated)]
+	#[expect(deprecated)]
 	let env = RpcEnvironment {
 		swapping: SwappingEnvironment {
 			maximum_swap_amounts: any::AssetMap {

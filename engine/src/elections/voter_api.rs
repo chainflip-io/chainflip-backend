@@ -63,7 +63,7 @@ pub trait CompositeVoterApi<E: ElectoralSystemRunner> {
 // TODO Combine this into the composite macro PRO-1736
 macro_rules! generate_voter_api_tuple_impls {
     ($module:ident: ($(($electoral_system:ident, $voter:ident)),*$(,)?)) => {
-        #[allow(non_snake_case)]
+        #[expect(non_snake_case)]
         #[async_trait::async_trait]
         impl<$($voter: VoterApi<$electoral_system> + Send + Sync),*, $($electoral_system : ElectoralSystem<ValidatorId = ValidatorId, StateChainBlockNumber = StateChainBlockNumber> + Send + Sync + 'static),*, ValidatorId: MaybeSerializeDeserialize + Member + Parameter, StateChainBlockNumber: MaybeSerializeDeserialize + Member + Parameter + Ord, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, Hooks>> + Send + Sync + 'static, Hooks: Send + Sync + 'static + composite::$module::Hooks<$($electoral_system,)*>> CompositeVoterApi<CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, Hooks>> for CompositeVoter<CompositeRunner<($($electoral_system,)*), ValidatorId, StateChainBlockNumber, StorageAccess, Hooks>, ($($voter,)*)> {
             async fn vote(

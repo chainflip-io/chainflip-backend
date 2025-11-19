@@ -466,7 +466,7 @@ where
 	) -> Result<(), Self::Error>;
 
 	/// Attempt to retrieve a requested signature.
-	#[allow(clippy::type_complexity)]
+	#[expect(clippy::type_complexity)]
 	fn signature_result(
 		request_id: ThresholdSignatureRequestId,
 	) -> (C::AggKey, AsyncResult<Result<C::ThresholdSignature, Vec<Self::ValidatorId>>>);
@@ -602,7 +602,6 @@ pub trait QualifyNode<Id: Ord + Clone> {
 }
 
 /// Qualify if the node has registered
-#[allow(dead_code)]
 pub struct SessionKeysRegistered<T, R>((PhantomData<T>, PhantomData<R>));
 
 impl<T: Chainflip, R: frame_support::traits::ValidatorRegistration<T::ValidatorId>>
@@ -943,7 +942,6 @@ pub trait VaultKeyWitnessedHandler<C: Chain> {
 }
 
 pub trait BroadcastAnyChainGovKey {
-	#[allow(clippy::result_unit_err)]
 	fn broadcast_gov_key(
 		chain: ForeignChain,
 		old_key: Option<Vec<u8>>,

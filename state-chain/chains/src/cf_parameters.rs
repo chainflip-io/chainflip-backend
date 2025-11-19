@@ -184,7 +184,6 @@ pub fn decode_cf_parameters<RefundAddress: Decode, CcmData: Default + Decode>(
 ) -> Result<(VaultSwapParametersV1<RefundAddress>, CcmData), &'static str> {
 	VersionedCfParameters::<RefundAddress, CcmData>::decode(&mut &data[..])
 		.map(|decoded| match decoded {
-			#[allow(deprecated)]
 			VersionedCfParameters::V0(CfParametersV0 {
 				ccm_additional_data,
 				vault_swap_parameters,
@@ -313,7 +312,6 @@ mod tests {
 	}
 
 	#[test]
-	#[allow(deprecated)]
 	fn test_versioned_cf_parameters_v0() {
 		let cf_parameters_v0 = CfParametersV0 {
 			ccm_additional_data: (),
