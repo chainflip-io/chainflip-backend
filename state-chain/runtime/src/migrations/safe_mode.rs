@@ -16,7 +16,13 @@
 
 use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight};
 
-use crate::Runtime;
+use crate::{
+	chainflip::{
+		ethereum_elections::EthereumElectionsSafeMode, generic_elections::GenericElectionsSafeMode,
+	},
+	Runtime,
+};
+pub struct SafeModeMigration;
 
 mod old {
 	use cf_chains::instances::{
@@ -72,34 +78,39 @@ impl UncheckedOnRuntimeUpgrade for SafeModeMigration {
 		let _ = pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
 			|maybe_old: Option<old::RuntimeSafeMode>| {
 				maybe_old.map(|old| crate::safe_mode::RuntimeSafeMode {
-					emissions: old.emissions,
-					funding: old.funding,
-					swapping: old.swapping,
-					liquidity_provider: old.liquidity_provider,
-					validator: old.validator,
-					pools: old.pools,
-					trading_strategies: old.trading_strategies,
-					lending_pools: old.lending_pools,
-					reputation: old.reputation,
-					asset_balances: old.asset_balances,
-					threshold_signature_evm: old.threshold_signature_evm,
-					threshold_signature_bitcoin: old.threshold_signature_bitcoin,
-					threshold_signature_polkadot: old.threshold_signature_polkadot,
-					threshold_signature_solana: old.threshold_signature_solana,
-					broadcast_ethereum: old.broadcast_ethereum,
-					broadcast_bitcoin: old.broadcast_bitcoin,
-					broadcast_polkadot: old.broadcast_polkadot,
-					broadcast_arbitrum: old.broadcast_arbitrum,
-					broadcast_solana: old.broadcast_solana,
-					broadcast_assethub: old.broadcast_assethub,
-					witnesser: old.witnesser,
-					ingress_egress_ethereum: old.ingress_egress_ethereum,
-					ingress_egress_bitcoin: old.ingress_egress_bitcoin,
-					ingress_egress_polkadot: old.ingress_egress_polkadot,
-					ingress_egress_arbitrum: old.ingress_egress_arbitrum,
-					ingress_egress_solana: old.ingress_egress_solana,
-					ingress_egress_assethub: old.ingress_egress_assethub,
+                    emissions: old.emissions,
+                    funding: old.funding,
+                    swapping: old.swapping,
+                    liquidity_provider: old.liquidity_provider,
+                    validator: old.validator,
+                    pools: old.pools,
+                    trading_strategies: old.trading_strategies,
+                    lending_pools: pallet_cf_lending_pools::PalletSafeMode {
+                        add_boost_funds_enabled: old.lending_pools.add_boost_funds_enabled,
+                        stop_boosting_enabled: old.lending_pools.stop_boosting_enabled,
+                        ..pallet_cf_lending_pools::PalletSafeMode::code_green()
+                    },
+                    reputation: old.reputation,
+                    asset_balances: old.asset_balances,
+                    threshold_signature_evm: old.threshold_signature_evm,
+                    threshold_signature_bitcoin: old.threshold_signature_bitcoin,
+                    threshold_signature_polkadot: old.threshold_signature_polkadot,
+                    threshold_signature_solana: old.threshold_signature_solana,
+                    broadcast_ethereum: old.broadcast_ethereum,
+                    broadcast_bitcoin: old.broadcast_bitcoin,
+                    broadcast_polkadot: old.broadcast_polkadot,
+                    broadcast_arbitrum: old.broadcast_arbitrum,
+                    broadcast_solana: old.broadcast_solana,
+                    broadcast_assethub: old.broadcast_assethub,
+                    witnesser: old.witnesser,
+                    ingress_egress_ethereum: old.ingress_egress_ethereum,
+                    ingress_egress_bitcoin: old.ingress_egress_bitcoin,
+                    ingress_egress_polkadot: old.ingress_egress_polkadot,
+                    ingress_egress_arbitrum: old.ingress_egress_arbitrum,
+                    ingress_egress_solana: old.ingress_egress_solana,
+                    ingress_egress_assethub: old.ingress_egress_assethub,
 					elections_generic: old.elections_generic,
+                    ethereum_elections: EthereumElectionsSafeMode::code_green(),
 				})
 			},
 		).map_err(|_| {

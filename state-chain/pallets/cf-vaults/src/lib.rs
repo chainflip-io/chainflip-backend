@@ -173,9 +173,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
-			Self::activate_new_key_for_chain(block_number);
-
-			Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
+			Self::inner_vault_key_rotated_externally(new_public_key, block_number);
 
 			Ok(())
 		}
@@ -233,6 +231,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			<T::Chain as Chain>::saturating_block_witness_next(block_number),
 		);
 		Self::deposit_event(Event::VaultActivationCompleted);
+	}
+
+	pub fn inner_vault_key_rotated_externally(
+		new_public_key: AggKeyFor<T, I>,
+		block_number: ChainBlockNumberFor<T, I>,
+	) {
+		Self::activate_new_key_for_chain(block_number);
+
+		Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
 	}
 }
 

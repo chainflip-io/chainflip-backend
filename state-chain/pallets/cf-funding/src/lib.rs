@@ -39,6 +39,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
 	FundAccount, Funding, FundingSource, GetMinimumFunding, RedemptionCheck, SpawnAccount,
 };
+use cf_utilities::derive_common_traits;
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchResult, GetDispatchInfo},
@@ -52,7 +53,6 @@ use frame_support::{
 		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OriginTrait, StorageVersion,
 		UnfilteredDispatchable, UnixTime,
 	},
-	DebugNoBound,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -631,30 +631,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// **This call can only be dispatched from the configured witness origin.**
-		///
-		/// Funds have been added to an account via the StateChainGateway Smart Contract.
-		///
-		/// If the account doesn't exist, we create it.
-		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::funded())]
-		pub fn funded(
-			origin: OriginFor<T>,
-			account_id: AccountId<T>,
-			amount: FlipBalance<T>,
-			funder: EthereumAddress,
-			// Required to ensure this call is unique per funding event.
-			tx_hash: EthTransactionHash,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-			Self::fund_account(
-				account_id,
-				amount,
-				FundingSource::EthTransaction { tx_hash, funder },
-			);
-			Ok(())
-		}
-
 		/// Get FLIP that is held for me by the system, signed by my authority key.
 		///
 		/// On success, the implementation of [ThresholdSigner] should emit an event. The attached
@@ -742,71 +718,6 @@ pub mod pallet {
 			} else {
 				Self::deposit_event(Event::RedemptionAmountZero { account_id })
 			}
-
-			Ok(())
-		}
-
-		/// **This call can only be dispatched from the configured witness origin.**
-		///
-		/// A redemption request has been finalised.
-		///
-		/// Note that calling this doesn't initiate any protocol changes - the `redemption` has
-		/// already been authorised by authority multisig. This merely signals that the
-		/// redeemer has in fact executed the redemption via the StateChainGateway Smart
-		/// Contract and has received their funds. This allows us to finalise any on-chain cleanup.
-		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::redeemed())]
-		pub fn redeemed(
-			origin: OriginFor<T>,
-			account_id: AccountId<T>,
-			redeemed_amount: FlipBalance<T>,
-			// Required to ensure this call is unique per redemption event.
-			_tx_hash: EthTransactionHash,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			let _ = PendingRedemptions::<T>::take(&account_id)
-				.ok_or(Error::<T>::NoPendingRedemption)?;
-
-			T::Flip::finalize_redemption(&account_id)
-				.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
-
-			Self::kill_account_if_zero_balance(&account_id);
-
-			Self::deposit_event(Event::RedemptionSettled(account_id, redeemed_amount));
-
-			Ok(())
-		}
-
-		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::redemption_expired())]
-		pub fn redemption_expired(
-			origin: OriginFor<T>,
-			account_id: AccountId<T>,
-			// The block number uniquely identifies the redemption expiry for a particular account
-			// when witnessing.
-			_block_number: u64,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			let pending_redemption = PendingRedemptions::<T>::take(&account_id)
-				.ok_or(Error::<T>::NoPendingRedemption)?;
-
-			T::Flip::revert_redemption(&account_id).expect(
-				"Pending Redemption should exist since the corresponding redemption existed",
-			);
-
-			// If the address is still restricted, we update the restricted balances again.
-			if RestrictedAddresses::<T>::contains_key(pending_redemption.redeem_address) {
-				RestrictedBalances::<T>::mutate(&account_id, |restricted_balances| {
-					restricted_balances
-						.entry(pending_redemption.redeem_address)
-						.and_modify(|balance| *balance += pending_redemption.restricted)
-						.or_insert(pending_redemption.restricted);
-				});
-			}
-
-			Self::deposit_event(Event::<T>::RedemptionExpired { account_id });
 
 			Ok(())
 		}
@@ -1126,6 +1037,40 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 	}
+
+	pub fn redeemed(account_id: AccountId<T>, redeemed_amount: FlipBalance<T>) -> DispatchResult {
+		let _ =
+			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
+
+		T::Flip::finalize_redemption(&account_id)
+			.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
+
+		Self::kill_account_if_zero_balance(&account_id);
+
+		Self::deposit_event(Event::RedemptionSettled(account_id, redeemed_amount));
+		Ok(())
+	}
+
+	pub fn redemption_expired(account_id: AccountId<T>) -> DispatchResult {
+		let pending_redemption =
+			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
+
+		T::Flip::revert_redemption(&account_id)
+			.expect("Pending Redemption should exist since the corresponding redemption existed");
+
+		// If the address is still restricted, we update the restricted balances again.
+		if RestrictedAddresses::<T>::contains_key(pending_redemption.redeem_address) {
+			RestrictedBalances::<T>::mutate(&account_id, |restricted_balances| {
+				restricted_balances
+					.entry(pending_redemption.redeem_address)
+					.and_modify(|balance| *balance += pending_redemption.restricted)
+					.or_insert(pending_redemption.restricted);
+			});
+		}
+
+		Self::deposit_event(Event::<T>::RedemptionExpired { account_id });
+		Ok(())
+	}
 }
 
 /// Ensure we clean up account specific items that definitely won't be required once the account
@@ -1234,16 +1179,21 @@ impl<T: Config> GetMinimumFunding for Pallet<T> {
 		MinimumFunding::<T>::get().into()
 	}
 }
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
-pub struct EthereumDepositAndSCCall {
-	pub deposit: EthereumDeposit,
-	pub call: Vec<u8>,
+
+derive_common_traits! {
+	#[derive(PartialOrd, Ord, TypeInfo)]
+	pub struct EthereumDepositAndSCCall {
+		pub deposit: EthereumDeposit,
+		pub call: Vec<u8>,
+	}
 }
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound, Serialize, Deserialize)]
-pub enum EthereumDeposit {
-	FlipToSCGateway { amount: EthAmount },
-	Vault { asset: EthAsset, amount: EthAmount },
-	Transfer { asset: EthAsset, amount: EthAmount, destination: EthereumAddress },
-	NoDeposit,
+derive_common_traits! {
+	#[derive(PartialOrd, Ord, TypeInfo)]
+	pub enum EthereumDeposit {
+		FlipToSCGateway { amount: EthAmount },
+		Vault { asset: EthAsset, amount: EthAmount },
+		Transfer { asset: EthAsset, amount: EthAmount, destination: EthereumAddress },
+		NoDeposit,
+	}
 }
