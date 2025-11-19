@@ -16,6 +16,7 @@
 
 //! Chainflip runtime storage migrations.
 
+pub mod ethereum_elections;
 pub mod housekeeping;
 pub mod ingress_delay;
 pub mod safe_mode;
