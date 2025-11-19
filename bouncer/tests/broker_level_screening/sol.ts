@@ -130,7 +130,7 @@ export async function testSolVaultSwap(
     {
       retryDurationBlocks: 0,
       refundAddress: solanaRefundAddress,
-      minPriceX128: '0x0',
+      minPriceX128: '0',
     },
     undefined,
     [],
