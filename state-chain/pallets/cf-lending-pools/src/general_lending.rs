@@ -973,9 +973,15 @@ impl<T: Config> GeneralLoan<T> {
 	/// [collect_pending_interest]) and that the provided asset is the same as the loan's asset.
 	fn repay_principal(&mut self, provided_amount: AssetAmount) -> LoanRepaymentOutcome {
 		if provided_amount == 0 {
-			// The name is slightly misleading, but the main point is that
-			// we don't have any excess amount left (since 0 is provided).
-			return LoanRepaymentOutcome::PartiallyRepaid;
+			if self.owed_principal > 0 {
+				// The name is slightly misleading, but the main point is that
+				// we don't have any excess amount left (since 0 is provided).
+				return LoanRepaymentOutcome::PartiallyRepaid;
+			} else {
+				// This covers an edge case where another liquidation swap completed earlier (rather
+				// than being aborted) and fully repaid the loan.
+				return LoanRepaymentOutcome::FullyRepaid { excess_amount: 0 };
+			}
 		}
 
 		// Making sure the user doesn't pay more than the total principal plus liquidation fee:
