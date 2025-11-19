@@ -122,7 +122,8 @@ where
 
 	let start_btc = super::btc::start(scope, btc_client, state_chain_client.clone());
 
-	let start_eth = super::eth2::start(scope, eth_client.clone(), state_chain_client.clone());
+	let start_eth =
+		super::eth_elections::start(scope, eth_client.clone(), state_chain_client.clone());
 
 	let start_hub = super::hub::start(
 		scope,
