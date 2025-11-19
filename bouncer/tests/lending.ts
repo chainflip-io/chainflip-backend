@@ -81,7 +81,7 @@ async function lendingTestForAsset(
   await extrinsicSubmitter.submit(
     chainflip.tx.lendingPools.addCollateral(
       collateralAsset,
-      new Map(collateral.map(([asset, amount]) => [{ [asset]: {} }, { Exact: amount }])),
+      new Map(collateral.map(([asset, amount]) => [{ [asset]: {} }, amount])),
     ),
   );
 
@@ -151,10 +151,9 @@ async function lendingTestForAsset(
   logger.debug(`Repaying half the loan`);
   const partialRepaymentAmount = loanAmount / 2;
   await extrinsicSubmitter.submit(
-    chainflip.tx.lendingPools.makeRepayment(
-      loanId,
-      amountToFineAmount(partialRepaymentAmount.toString(), assetDecimals(loanAsset)),
-    ),
+    chainflip.tx.lendingPools.makeRepayment(loanId, {
+      Exact: amountToFineAmount(partialRepaymentAmount.toString(), assetDecimals(loanAsset)),
+    }),
   );
 
   // Check balances
@@ -170,24 +169,16 @@ async function lendingTestForAsset(
     'Did not lose loan asset after partial repayment',
   );
 
-  // Repay the rest of the loan (a bit extra to cover the origination fee and interest)
+  // Repay the rest of the loan (with a bit extra to cover the origination fee and interest)
   assert(
     BigInt((await getLoan(lp.address)).principal_amount) <= loanAssetFreeBalance3,
     'Not enough free balance to fully repay the loan',
-  );
-  const repayFullyAmount = loanAmount - partialRepaymentAmount + extraLoanAssetAmount;
-  assert(
-    loanAssetFreeBalance3 >= amountToFineAmountBigInt(repayFullyAmount, loanAsset),
-    'Missing loan asset before',
   );
   logger.debug(`Repaying the rest of the loan`);
   await submitExtrinsic(
     lpUri,
     chainflip,
-    chainflip.tx.lendingPools.makeRepayment(
-      loanId,
-      amountToFineAmount(repayFullyAmount.toString(), assetDecimals(loanAsset)),
-    ),
+    chainflip.tx.lendingPools.makeRepayment(loanId, 'Full'),
     'lendingPools:LoanSettled',
     logger,
   );
