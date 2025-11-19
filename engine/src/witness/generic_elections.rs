@@ -14,6 +14,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+	elections::voter_api::{CompositeVoter, VoterApi},
+	evm::{
+		cached_rpc::AddressCheckerRetryRpcApiWithResult,
+		rpc::{address_checker::PriceFeedData as EthPriceFeedData, EvmRpcSigningClient},
+	},
+	state_chain_observer::client::{
+		chain_api::ChainApi, electoral_api::ElectoralApi,
+		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+	},
+	EvmCachingClient, EvmRetryRpcClient,
+};
+use anyhow::{anyhow, Result};
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{
@@ -58,7 +71,7 @@ pub fn asset_pair_from_description(description: String) -> Option<ChainlinkAsset
 #[derive(Clone)]
 struct OraclePriceVoter {
 	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
-	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
+	eth_client: EvmCachingClient<EvmRpcSigningClient>,
 }
 
 #[derive(Debug, Clone)]
@@ -203,7 +216,7 @@ use std::{collections::BTreeMap, sync::Arc};
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
-	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
+	eth_client: EvmCachingClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
 ) -> Result<()>
 where

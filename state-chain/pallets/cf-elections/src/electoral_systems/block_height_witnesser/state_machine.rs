@@ -64,11 +64,11 @@ defx! {
 	validate _this (else BlockHeightWitnesserError) {}
 }
 impl<T: BHWTypes> AbstractApi for BlockHeightWitnesser<T> {
-	type Query = HeightWitnesserProperties<T>;
+	type Query = HeightWitnesserProperties<T::Chain>;
 	type Response = NonemptyContinuousHeaders<T::Chain>;
 	type Error = VoteValidationError<T::Chain>;
 	fn validate(
-		query: &HeightWitnesserProperties<T>,
+		query: &HeightWitnesserProperties<T::Chain>,
 		response: &NonemptyContinuousHeaders<T::Chain>,
 	) -> Result<(), Self::Error> {
 		response
@@ -296,7 +296,7 @@ pub mod tests {
 	}
 
 	pub fn generate_input<T: BHWTypes>(
-		properties: HeightWitnesserProperties<T>,
+		properties: HeightWitnesserProperties<T::Chain>,
 	) -> impl Strategy<Value = NonemptyContinuousHeaders<T::Chain>> {
 		arbitrary_with::<NonemptyContinuousHeaders<T::Chain>, _, _>((
 			properties.witness_from_index,
@@ -313,7 +313,7 @@ pub mod tests {
 			Just(BHWPhase::Starting),
 			prop_do! {
 				let is_reorg_without_known_root in any::<bool>();
-				let n in any::<HeightWitnesserProperties<T>>();
+				let n in any::<HeightWitnesserProperties<T::Chain>>();
 				let headers in generate_input::<T>(n);
 				return {
 					let witness_from = if is_reorg_without_known_root {
@@ -357,7 +357,7 @@ pub mod tests {
 			(2..20u32).prop_map(|safety_buffer| BlockHeightWitnesserSettings { safety_buffer }),
 			|index| {
 				prop_do! {
-					let input in generate_input(index);
+					let input in generate_input::<TypesFor<(u32, Vec<u8>, ())>>(index);
 					return input
 				}
 				.boxed()
@@ -399,7 +399,7 @@ pub mod tests {
 			(2..20u32).prop_map(|safety_buffer| BlockHeightWitnesserSettings { safety_buffer }),
 			|index| {
 				prop_do! {
-					let input in generate_input(index);
+					let input in generate_input::<TestTypes2>(index);
 					return input
 				}
 				.boxed()

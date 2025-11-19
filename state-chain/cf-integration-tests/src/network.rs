@@ -21,9 +21,11 @@ use crate::threshold_signing::{
 };
 
 use cf_chains::{address::EncodedAddress, evm::TransactionFee};
+
 use cf_primitives::{
 	AccountRole, BlockNumber, EpochIndex, FlipBalance, TxId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH,
 };
+
 use cf_test_utilities::assert_events_eq;
 use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, KeyRotator};
 use cfe_events::{KeyHandoverRequest, ThresholdSignatureRequest, TxBroadcastRequest};
@@ -60,9 +62,9 @@ type CfeEvent = cfe_events::CfeEvent<<Runtime as Chainflip>::ValidatorId>;
 
 #[derive(Debug, Clone)]
 pub enum ContractEvent {
-	Funded { node_id: NodeId, amount: FlipBalance, epoch: EpochIndex },
+	Funded { node_id: NodeId, amount: FlipBalance },
 
-	Redeemed { node_id: NodeId, amount: FlipBalance, epoch: EpochIndex },
+	Redeemed { node_id: NodeId, amount: FlipBalance },
 }
 
 pub const EVM_FEE: TransactionFee = TransactionFee { effective_gas_price: 1000000, gas_used: 100 };
@@ -113,18 +115,18 @@ pub struct ScGatewayContract {
 }
 
 impl ScGatewayContract {
-	pub fn fund_account(&mut self, node_id: NodeId, amount: FlipBalance, epoch: EpochIndex) {
+	pub fn fund_account(&mut self, node_id: NodeId, amount: FlipBalance) {
 		assert!(amount >= MinimumFunding::<Runtime>::get());
 		let current_amount = self.balances.get(&node_id).unwrap_or(&0);
 		self.balances.insert(node_id.clone(), current_amount + amount);
 
-		self.events.push(ContractEvent::Funded { node_id, amount, epoch });
+		self.events.push(ContractEvent::Funded { node_id, amount });
 	}
 
 	// We don't really care about the process of "registering" and then "executing" redemption here.
 	// The only thing the SC cares about is the *execution* of the redemption.
-	pub fn execute_redemption(&mut self, node_id: NodeId, amount: FlipBalance, epoch: EpochIndex) {
-		self.events.push(ContractEvent::Redeemed { node_id, amount, epoch });
+	pub fn execute_redemption(&mut self, node_id: NodeId, amount: FlipBalance) {
+		self.events.push(ContractEvent::Redeemed { node_id, amount });
 	}
 
 	// Get events for this contract
@@ -232,47 +234,6 @@ impl Engine {
 
 	fn is_current_authority(&self) -> bool {
 		super::is_current_authority(&self.node_id)
-	}
-
-	// Handle events from contract
-	fn on_contract_event(&self, event: &ContractEvent) {
-		if self.is_current_authority() && self.live {
-			match event {
-				ContractEvent::Funded { node_id: validator_id, amount, epoch, .. } => {
-					queue_dispatch_extrinsic(
-						RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
-							call: Box::new(
-								pallet_cf_funding::Call::funded {
-									account_id: validator_id.clone(),
-									amount: *amount,
-									funder: ETH_ZERO_ADDRESS,
-									tx_hash: TX_HASH,
-								}
-								.into(),
-							),
-							epoch_index: *epoch,
-						}),
-						RuntimeOrigin::signed(self.node_id.clone()),
-					);
-				},
-				ContractEvent::Redeemed { node_id, amount, epoch } => {
-					queue_dispatch_extrinsic(
-						RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
-							call: Box::new(
-								pallet_cf_funding::Call::redeemed {
-									account_id: node_id.clone(),
-									redeemed_amount: *amount,
-									tx_hash: TX_HASH,
-								}
-								.into(),
-							),
-							epoch_index: *epoch,
-						}),
-						RuntimeOrigin::signed(self.node_id.clone()),
-					);
-				},
-			}
-		}
 	}
 
 	// Handle events coming in from the state chain
@@ -664,6 +625,24 @@ pub fn dispatch_all_pending_extrinsics() {
 	});
 }
 
+// Handle events from contract
+pub fn on_contract_event(event: &ContractEvent) {
+	match event {
+		ContractEvent::Funded { node_id: validator_id, amount, .. } => {
+			println!("Funding account {:?}", validator_id);
+			pallet_cf_funding::Pallet::<Runtime>::fund_account(
+				validator_id.clone(),
+				ETH_ZERO_ADDRESS,
+				*amount,
+				TX_HASH,
+			);
+		},
+		ContractEvent::Redeemed { node_id, amount } => {
+			let _ = pallet_cf_funding::Pallet::<Runtime>::redeemed(node_id.clone(), *amount);
+		},
+	}
+}
+
 impl Network {
 	pub fn live_nodes(&self) -> Vec<NodeId> {
 		self.engines
@@ -807,9 +786,7 @@ impl Network {
 		for block_number in start_block..(start_block + n) {
 			// Process any external events that have occurred.
 			for event in self.state_chain_gateway_contract.events() {
-				for engine in self.engines.values() {
-					engine.on_contract_event(&event);
-				}
+				on_contract_event(&event);
 			}
 			self.state_chain_gateway_contract.clear();
 
@@ -893,11 +870,7 @@ pub fn fund_authorities_and_join_auction(
 	// We intend for these initially backup nodes to win the auction
 	const INITIAL_FUNDING: FlipBalance = genesis::GENESIS_BALANCE * 2;
 	for node in &init_backup_nodes {
-		testnet.state_chain_gateway_contract.fund_account(
-			node.clone(),
-			INITIAL_FUNDING,
-			GENESIS_EPOCH,
-		);
+		testnet.state_chain_gateway_contract.fund_account(node.clone(), INITIAL_FUNDING);
 	}
 
 	// Allow the funds to be registered, initialise the account keys and peer
@@ -916,11 +889,10 @@ pub fn fund_authorities_and_join_auction(
 }
 
 pub fn new_account(account_id: &AccountId, role: AccountRole) {
-	let _ = Funding::funded(
-		pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
+	Funding::fund_account(
 		account_id.clone(),
-		FLIPPERINOS_PER_FLIP,
 		Default::default(),
+		FLIPPERINOS_PER_FLIP,
 		Default::default(),
 	);
 	AccountRoles::on_new_account(account_id);

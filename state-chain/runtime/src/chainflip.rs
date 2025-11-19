@@ -30,6 +30,8 @@ pub mod bitcoin_block_processor;
 #[macro_use]
 pub mod elections;
 pub mod bitcoin_elections;
+pub mod ethereum_block_processor;
+pub mod ethereum_elections;
 pub mod ethereum_sc_calls;
 pub mod generic_elections;
 pub mod simulate_swap;

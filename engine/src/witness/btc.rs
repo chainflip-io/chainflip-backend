@@ -21,30 +21,28 @@ pub mod vault_swaps;
 
 use crate::{
 	btc::rpc::{BtcRpcApi, VerboseTransaction},
-	witness::btc::fees::predict_fees,
+	witness::{
+		btc::fees::predict_fees,
+		common::block_height::{witness_headers, HeaderClient},
+	},
 };
 use bitcoin::{hashes::Hash, BlockHash};
-use cf_chains::{
-	btc::{self, deposit_address::DepositAddress, BlockNumber, Hash as H256, CHANGE_ADDRESS_SALT},
-	witness_period::SaturatingStep,
+use cf_chains::btc::{
+	self, deposit_address::DepositAddress, BlockNumber, Hash as H256, CHANGE_ADDRESS_SALT,
 };
 use cf_primitives::EpochIndex;
 use futures_core::Future;
 
 use cf_utilities::task_scope::{self, Scope};
-use futures::{future, FutureExt};
+use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystemTypes,
 	electoral_systems::{
-		block_height_witnesser::{
-			primitives::{Header, NonemptyContinuousHeaders},
-			ChainBlockHashOf, ChainTypes, HeightWitnesserProperties,
-		},
+		block_height_witnesser::{primitives::Header, ChainBlockHashOf, ChainTypes},
 		block_witnesser::state_machine::{BWElectionProperties, EngineElectionType},
 	},
 	VoteOf,
 };
-use sp_core::bounded::alloc::collections::VecDeque;
 use state_chain_runtime::{
 	chainflip::bitcoin_elections::{
 		BitcoinBlockHeightWitnesserES, BitcoinChain, BitcoinDepositChannelWitnessingES,
@@ -80,85 +78,50 @@ pub struct BitcoinBlockHeightWitnesserVoter {
 }
 
 #[async_trait::async_trait]
+impl HeaderClient<BlockHeader> for BtcCachingClient {
+	async fn best_block_header(&self) -> anyhow::Result<BlockHeader> {
+		let best_hash = self.best_block_hash().await?;
+		let best_header = self.block_header(best_hash).await?;
+		if best_hash != best_header.hash {
+			anyhow::bail!(
+				"BTC: best_block_hash {best_hash:?} does not match best header hash {:?}",
+				best_header.hash
+			);
+		}
+		Ok(best_header)
+	}
+
+	async fn block_header_by_height(&self, height: u64) -> anyhow::Result<BlockHeader> {
+		let hash = self.block_hash(height).await?;
+		self.block_header(hash).await
+	}
+}
+
+#[async_trait::async_trait]
 impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVoter {
 	async fn vote(
 		&self,
 		_settings: <BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightWitnesserES>>, anyhow::Error> {
-		tracing::debug!("BTC BHW: Block height tracking called properties: {:?}", properties);
-		let HeightWitnesserProperties { witness_from_index } = properties;
-
-		let header_from_btc_header = |header: BlockHeader| -> anyhow::Result<Header<BitcoinChain>> {
-			Ok(Header {
-				block_height: header.height,
-				hash: header.hash.to_byte_array().into(),
-				parent_hash: header
-					.previous_block_hash
-					.ok_or_else(|| anyhow::anyhow!("No parent hash"))?
-					.to_byte_array()
-					.into(),
-			})
-		};
-
-		let best_block_hash = self.client.best_block_hash().await?;
-		let best_block_header = self.client.block_header(best_block_hash).await?;
-		if best_block_hash != best_block_header.hash {
-			bail!(
-				"BTC BHW: best_block_hash {best_block_hash:?} do not match best header hash {:?}",
-				best_block_header.hash
-			);
-		}
-
-		let best_block_header = header_from_btc_header(best_block_header)?;
-		if best_block_header.block_height < witness_from_index {
-			tracing::debug!("BTC BHW: no new blocks found since best block height is {} for witness_from={witness_from_index}", best_block_header.block_height);
-			return Ok(None)
-		} else {
-			// The `latest_block_height == 0` is a special case for when starting up the
-			// electoral system for the first time.
-			let witness_from_index = if witness_from_index == 0 {
-				tracing::debug!(
-					"BTC BHW: election_property=0, best_block_height={}, submitting last 6 blocks.",
-					best_block_header.block_height
-				);
-				best_block_header
-					.block_height
-					.saturating_sub(BITCOIN_MAINNET_SAFETY_BUFFER as u64)
-			} else {
-				witness_from_index
-			};
-
-			// Compute the highest block height we want to fetch a header for,
-			// since for performance reasons we're bounding the number of headers
-			// submitted in one vote. We're submitting at most SAFETY_BUFFER headers.
-			let highest_submitted_height = std::cmp::min(
-				best_block_header.block_height,
-				witness_from_index.saturating_forward(BITCOIN_MAINNET_SAFETY_BUFFER as usize + 1),
-			);
-
-			// request headers for at most SAFETY_BUFFER heights, in parallel
-			let requests = (witness_from_index..highest_submitted_height)
-				.map(|index| async move {
-					header_from_btc_header(
-						self.client.block_header(self.client.block_hash(index).await?).await?,
-					)
+		witness_headers::<BitcoinBlockHeightWitnesserES, _, BlockHeader, BitcoinChain>(
+			&self.client,
+			properties,
+			BITCOIN_MAINNET_SAFETY_BUFFER,
+			|header| {
+				Ok(Header {
+					block_height: header.height,
+					hash: header.hash.to_byte_array().into(),
+					parent_hash: header
+						.previous_block_hash
+						.ok_or_else(|| anyhow::anyhow!("No parent hash"))?
+						.to_byte_array()
+						.into(),
 				})
-				.collect::<Vec<_>>();
-			let mut headers: VecDeque<_> =
-				future::join_all(requests).await.into_iter().collect::<Result<_>>()?;
-
-			// If we submitted all headers up the highest, we also append the highest
-			if highest_submitted_height == best_block_header.block_height {
-				headers.push_back(best_block_header);
-			}
-
-			let headers_len = headers.len();
-			NonemptyContinuousHeaders::try_new(headers)
-				.inspect(|_| tracing::debug!("BTC BHW: Submitting vote for (witness_from={witness_from_index})with {headers_len} headers",))
-				.map(Some)
-				.map_err(|err| anyhow::format_err!("BTC BHW: {err:?}"))
-		}
+			},
+			"BTC BHW",
+		)
+		.await
 	}
 }
 

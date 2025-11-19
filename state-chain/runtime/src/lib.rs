@@ -246,6 +246,8 @@ mod runtime {
 
 	#[runtime::pallet_index(55)]
 	pub type GenericElections = pallet_cf_elections;
+	#[runtime::pallet_index(56)]
+	pub type EthereumElections = pallet_cf_elections<Instance1>;
 }
 
 /// The address format for describing accounts.
@@ -317,6 +319,7 @@ pub type PalletExecutionOrder = (
 	SolanaElections,
 	BitcoinElections,
 	GenericElections,
+	EthereumElections,
 	// Vaults
 	EthereumVault,
 	PolkadotVault,

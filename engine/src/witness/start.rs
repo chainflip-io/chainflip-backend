@@ -20,7 +20,7 @@ use crate::{
 	btc::cached_rpc::BtcCachingClient,
 	db::PersistentKeyDB,
 	dot::retry_rpc::DotRetryRpcClient,
-	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
+	evm::{cached_rpc::EvmCachingClient, retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	sol::retry_rpc::SolRetryRpcClient,
 };
 use cf_utilities::task_scope::Scope;
@@ -32,7 +32,7 @@ use engine_sc_client::{
 	stream_api::{StreamApi, FINALIZED, UNFINALIZED},
 };
 use futures::try_join;
-use state_chain_runtime::{BitcoinInstance, SolanaInstance};
+use state_chain_runtime::{BitcoinInstance, EthereumInstance, SolanaInstance};
 
 use super::common::epoch_source::EpochSource;
 
@@ -45,7 +45,7 @@ use anyhow::Result;
 // point it means that on start up this will block, and the state chain observer will not start.
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
-	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
+	eth_client: EvmCachingClient<EvmRpcSigningClient>,
 	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	btc_client: BtcCachingClient,
 	sol_client: SolRetryRpcClient,
@@ -62,6 +62,7 @@ where
 		+ ElectoralApi<SolanaInstance>
 		+ ElectoralApi<BitcoinInstance>
 		+ ElectoralApi<()>
+		+ ElectoralApi<EthereumInstance>
 		+ 'static
 		+ Send
 		+ Sync,
@@ -107,16 +108,6 @@ where
 		}
 	};
 
-	let start_eth = super::eth::start(
-		scope,
-		eth_client.clone(),
-		witness_call.clone(),
-		state_chain_client.clone(),
-		state_chain_stream.clone(),
-		epoch_source.clone(),
-		db.clone(),
-	);
-
 	let start_arb = super::arb::start(
 		scope,
 		arb_client.clone(),
@@ -130,6 +121,8 @@ where
 	let start_sol = super::sol::start(scope, sol_client, state_chain_client.clone());
 
 	let start_btc = super::btc::start(scope, btc_client, state_chain_client.clone());
+
+	let start_eth = super::eth2::start(scope, eth_client.clone(), state_chain_client.clone());
 
 	let start_hub = super::hub::start(
 		scope,
