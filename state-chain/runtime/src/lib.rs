@@ -1506,6 +1506,7 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	MigrationsForV2_0,
+	migrations::ethereum_elections::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
