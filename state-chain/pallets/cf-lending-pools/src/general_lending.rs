@@ -333,12 +333,12 @@ impl<T: Config> LoanAccount<T> {
 				weight_used.saturating_accrue(T::WeightInfo::start_liquidation_swaps());
 			},
 			LiquidationStatusChange::AbortLiquidation { reason } => {
-				self.abort_liquidation_swaps(reason, price_cache);
+				self.abort_liquidation_swaps(reason);
 				weight_used.saturating_accrue(T::WeightInfo::abort_liquidation_swaps());
 			},
 			LiquidationStatusChange::ChangeLiquidationType { liquidation_type } => {
 				// Going from one liquidation type to another is always due to LTV change
-				self.abort_liquidation_swaps(LiquidationCompletionReason::LtvChange, price_cache);
+				self.abort_liquidation_swaps(LiquidationCompletionReason::LtvChange);
 				let collateral = self.prepare_collateral_for_liquidation(price_cache)?;
 				self.init_liquidation_swaps(borrower_id, collateral, liquidation_type, price_cache);
 				weight_used.saturating_accrue(T::WeightInfo::start_liquidation_swaps());
@@ -352,11 +352,7 @@ impl<T: Config> LoanAccount<T> {
 
 	/// Aborts all current liquidation swaps, repays any already swapped principal assets and
 	/// returns remaining collateral assets alongside the corresponding loan information.
-	pub(super) fn abort_liquidation_swaps(
-		&mut self,
-		reason: LiquidationCompletionReason,
-		price_cache: &OraclePriceCache<T>,
-	) {
+	pub(super) fn abort_liquidation_swaps(&mut self, reason: LiquidationCompletionReason) {
 		let (is_voluntary, liquidation_swaps) = match &mut self.liquidation_status {
 			LiquidationStatus::NoLiquidation => {
 				log_or_panic!("Attempting to abort liquidation swaps in no-liquidation state");
@@ -391,7 +387,6 @@ impl<T: Config> LoanAccount<T> {
 						match loan.repay_via_liquidation(
 							swap_progress.accumulated_output_amount,
 							is_voluntary,
-							price_cache,
 						) {
 							LoanRepaymentOutcome::FullyRepaid { excess_amount } => {
 								fully_repaid_loans.push(loan_id);
@@ -854,6 +849,13 @@ pub struct GeneralLoan<T: Config> {
 	pending_interest: InterestBreakdown,
 }
 
+/// A parameter into [charge_pending_interest_if_above_threshold] grouping the threshold
+/// and price cache together so they can both be wrapped in an Option.
+struct PriceCacheAndThreshold<'a, T: Config> {
+	threshold_usd: AssetAmount,
+	price_cache: &'a OraclePriceCache<T>,
+}
+
 impl<T: Config> GeneralLoan<T> {
 	fn owed_principal_usd_value(
 		&self,
@@ -862,9 +864,9 @@ impl<T: Config> GeneralLoan<T> {
 		price_cache.usd_value_of(self.asset, self.owed_principal)
 	}
 
-	fn collect_pending_interest(&mut self, price_cache: &OraclePriceCache<T>) {
+	fn collect_pending_interest(&mut self) {
 		if self
-			.charge_pending_interest_if_above_threshold(None /* no threshold */, price_cache)
+			.charge_pending_interest_if_above_threshold(None /* no threshold */)
 			.is_err()
 		{
 			log_or_panic!(
@@ -917,10 +919,10 @@ impl<T: Config> GeneralLoan<T> {
 
 		self.last_interest_payment_at = current_block;
 
-		self.charge_pending_interest_if_above_threshold(
-			Some(config.interest_collection_threshold_usd),
+		self.charge_pending_interest_if_above_threshold(Some(PriceCacheAndThreshold {
+			threshold_usd: config.interest_collection_threshold_usd,
 			price_cache,
-		)?;
+		}))?;
 
 		Ok(())
 	}
@@ -931,11 +933,10 @@ impl<T: Config> GeneralLoan<T> {
 		&mut self,
 		provided_amount: AssetAmount,
 		is_voluntary: bool,
-		price_cache: &OraclePriceCache<T>,
 	) -> LoanRepaymentOutcome {
 		let config = LendingConfig::<T>::get();
 
-		self.collect_pending_interest(price_cache);
+		self.collect_pending_interest();
 
 		// Only charge liquidation fee if liquidation was not voluntary
 		let provided_amount_after_fees = if is_voluntary {
@@ -1012,8 +1013,7 @@ impl<T: Config> GeneralLoan<T> {
 
 	fn charge_pending_interest_if_above_threshold(
 		&mut self,
-		threshold_usd: Option<AssetAmount>,
-		price_cache: &OraclePriceCache<T>,
+		price_cache_and_threshold: Option<PriceCacheAndThreshold<T>>,
 	) -> DispatchResult {
 		let loan_asset = self.asset;
 
@@ -1022,9 +1022,11 @@ impl<T: Config> GeneralLoan<T> {
 		}
 
 		let charge_fee_if_exceeds_threshold = |fee: &mut ScaledAmountHP| {
-			let fee_taken = if let Some(threshold) = threshold_usd {
+			let fee_taken = if let Some(PriceCacheAndThreshold { threshold_usd, price_cache }) =
+				price_cache_and_threshold
+			{
 				// If the threshold is provided, take fees only if they exceed it:
-				if price_cache.usd_value_of(loan_asset, fee.into_asset_amount())? > threshold {
+				if price_cache.usd_value_of(loan_asset, fee.into_asset_amount())? > threshold_usd {
 					fee.take_non_fractional_part()
 				} else {
 					Default::default()
@@ -1389,16 +1391,15 @@ impl<T: Config> LendingApi for Pallet<T> {
 	) -> Result<(), DispatchError> {
 		let price_cache = OraclePriceCache::<T>::default();
 		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
-			let config = LendingConfig::<T>::get();
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanNotFound)?;
 
 			let Some(loan) = loan_account.loans.get_mut(&loan_id) else {
 				fail!(Error::<T>::LoanNotFound);
 			};
 
-			let loan_asset = loan.asset;
+			loan.collect_pending_interest();
 
-			loan.collect_pending_interest(&price_cache);
+			let config = LendingConfig::<T>::get();
 
 			let repayment_amount = match repayment_amount {
 				RepaymentAmount::Full => loan.owed_principal,
@@ -1414,6 +1415,8 @@ impl<T: Config> LendingApi for Pallet<T> {
 					amount
 				},
 			};
+
+			let loan_asset = loan.asset;
 
 			T::Balance::try_debit_account(borrower_id, loan_asset, repayment_amount)?;
 
@@ -1587,8 +1590,6 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 		swap_type: LendingSwapType<Self::AccountId>,
 		output_amount: AssetAmount,
 	) {
-		let price_cache = OraclePriceCache::<T>::default();
-
 		match swap_type {
 			LendingSwapType::Liquidation { borrower_id, loan_id } => {
 				LoanAccounts::<T>::mutate_exists(&borrower_id, |maybe_account| {
@@ -1647,11 +1648,7 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 						.get_loan_and_check_asset(loan_id, liquidation_swap.to_asset)
 					{
 						Some(loan) => {
-							match loan.repay_via_liquidation(
-								output_amount,
-								is_voluntary,
-								&price_cache,
-							) {
+							match loan.repay_via_liquidation(output_amount, is_voluntary) {
 								LoanRepaymentOutcome::FullyRepaid { excess_amount } => {
 									// NOTE: we don't need to worry about settling the loan just yet
 									// as there may be more liquidation swaps to process for the
