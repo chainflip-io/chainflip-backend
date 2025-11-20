@@ -15,8 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	mock::*, AggStats, Error, Event, LiquidityRefundAddress, LpAggStats, LpDeltaStats, Pallet,
-	PalletSafeMode, ALPHA_HALF_LIFE_1_DAY, ALPHA_HALF_LIFE_30_DAYS, ALPHA_HALF_LIFE_7_DAYS,
+	mock::*, AggStats, DeltaStats, Error, Event, LiquidityRefundAddress, LpAggStats, LpDeltaStats,
+	Pallet, PalletSafeMode, ALPHA_HALF_LIFE_1_DAY, ALPHA_HALF_LIFE_30_DAYS, ALPHA_HALF_LIFE_7_DAYS,
 	STATS_UPDATE_INTERVAL_IN_BLOCKS,
 };
 use std::collections::BTreeMap;
@@ -628,7 +628,7 @@ fn update_agg_stats_updates_correctly() {
 
 		// Insert pre-existing EMA for LP_ACCOUNT / Eth
 		let pre_existing_ema = AggStats::new(
-			FixedU128::from_inner(1_000_000_000u128), // Avg: 1000 USD
+			DeltaStats { limit_orders_swap_usd_volume: FixedU128::from_inner(1_000_000_000u128) }  // Avg: 1000 USD
 		);
 		LpAggStats::<Test>::insert(LP_ACCOUNT, Asset::Eth, pre_existing_ema);
 		// Insert for LP_ACCOUNT with pre-existing AggStats

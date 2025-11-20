@@ -173,12 +173,12 @@ pub mod pallet {
 	}
 
 	impl AggStats {
-		pub fn new(limit_swap_usd_volume: FixedU128) -> Self {
-			Self { avg_limit_usd_volume: WindowedEma::new(limit_swap_usd_volume) }
+		pub fn new(delta: DeltaStats) -> Self {
+			Self { avg_limit_usd_volume: WindowedEma::new(delta.limit_orders_swap_usd_volume) }
 		}
 
-		pub fn update(&mut self, limit_swap_usd_volume: &FixedU128) {
-			self.avg_limit_usd_volume.update(limit_swap_usd_volume);
+		pub fn update(&mut self, delta: &DeltaStats) {
+			self.avg_limit_usd_volume.update(&delta.limit_orders_swap_usd_volume);
 		}
 	}
 
@@ -331,7 +331,6 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn stats_last_updated_at)]
 	/// Last block number when stats were updated
 	pub type StatsLastUpdatedAt<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
@@ -680,14 +679,14 @@ impl<T: Config> Pallet<T> {
 			execution_weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 			LpAggStats::<T>::mutate(&lp, asset, |maybe_agg_stats| {
 				if let Some(agg_stats) = maybe_agg_stats.as_mut() {
-					agg_stats.update(&lp_delta.limit_orders_swap_usd_volume);
+					agg_stats.update(&lp_delta);
 				}
 			});
 		}
 
 		// Any left-over deltas correspond to LPs that didn't have Aggregate entries yet
 		for (lp, asset, delta) in LpDeltaStats::<T>::iter() {
-			LpAggStats::<T>::insert(&lp, asset, AggStats::new(delta.limit_orders_swap_usd_volume));
+			LpAggStats::<T>::insert(&lp, asset, AggStats::new(delta));
 			LpDeltaStats::<T>::remove(&lp, asset);
 			execution_weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 2));
 		}
