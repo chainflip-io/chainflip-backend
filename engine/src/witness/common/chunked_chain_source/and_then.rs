@@ -75,7 +75,6 @@ where
 							let epoch = epoch.clone();
 							move |header| {
 								let epoch = epoch.clone();
-								#[allow(clippy::redundant_async_block)]
 								header.and_then_data(move |header| async move {
 									(self.f)(epoch, header).await
 								})

@@ -85,6 +85,7 @@ impl Chain for MockEthereum {
 	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount =
 		crate::eth::REFERENCE_ETH_PRICE_IN_USD;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = crate::eth::ONE_ETH;
+	const BURN_ADDRESS: Self::ChainAccount = u64::MAX;
 
 	type ChainCrypto = MockEthereumChainCrypto;
 

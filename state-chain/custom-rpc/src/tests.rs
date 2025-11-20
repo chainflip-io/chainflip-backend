@@ -115,7 +115,7 @@ fn ccm_unchecked() -> CcmChannelMetadataUnchecked {
 
 #[test]
 fn test_environment_serialization() {
-	#[allow(deprecated)]
+	#[expect(deprecated)]
 	let env = RpcEnvironment {
 		swapping: SwappingEnvironment {
 			maximum_swap_amounts: any::AssetMap {
@@ -1164,7 +1164,7 @@ fn loan_account_serialization() {
 
 	let loan_account = RpcLoanAccount::<_, U256> {
 		account: ID_1,
-		primary_collateral_asset: Asset::Btc,
+		collateral_topup_asset: Some(Asset::Btc),
 		ltv_ratio: Some(FixedU64::from_rational(4, 3)),
 		collateral: vec![(AssetAndAmount { asset: Asset::Btc, amount: 3u128.into() })],
 		loans: vec![RpcLoan {
@@ -1210,7 +1210,7 @@ fn lending_config_serialization() {
 		ltv_thresholds: LtvThresholds {
 			low_ltv: Permill::from_percent(50),
 			target: Permill::from_percent(75),
-			topup: Permill::from_percent(80),
+			topup: Some(Permill::from_percent(80)),
 			soft_liquidation: Permill::from_percent(90),
 			soft_liquidation_abort: Permill::from_percent(88),
 			hard_liquidation: Permill::from_percent(95),

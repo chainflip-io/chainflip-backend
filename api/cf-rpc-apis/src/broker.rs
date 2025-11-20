@@ -22,6 +22,7 @@ use jsonrpsee::proc_macros::rpc;
 
 pub use cf_primitives::DcaParameters;
 pub use cf_rpc_types::broker::*;
+pub use pallet_cf_environment::submit_runtime_call::{SignatureData, TransactionMetadata};
 
 #[rpc(server, client, namespace = "broker")]
 pub trait BrokerRpcApi {
@@ -131,4 +132,14 @@ pub trait BrokerRpcApi {
 		&self,
 		minimum_fee_bps: BasisPoints,
 	) -> RpcResult<H256>;
+
+	#[method(name = "request_account_creation_deposit_address", aliases = ["broker_requestAccountCreationDepositAddress"])]
+	async fn request_account_creation_deposit_address(
+		&self,
+		signature_data: SignatureData,
+		transaction_metadata: TransactionMetadata,
+		asset: Asset,
+		boost_fee: Option<BasisPoints>,
+		refund_address: AddressString,
+	) -> RpcResult<AccountCreationDepositAddress>;
 }

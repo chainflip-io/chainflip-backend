@@ -532,7 +532,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn update_primary_collateral_asset() {
+	fn update_collateral_topup_asset() {
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
 		let origin = RawOrigin::Signed(borrower.clone());
 		let collateral =
@@ -549,11 +549,11 @@ mod benchmarks {
 		));
 
 		#[extrinsic_call]
-		update_primary_collateral_asset(origin, LOAN_ASSET);
+		update_collateral_topup_asset(origin, Some(LOAN_ASSET));
 
 		assert_eq!(
-			get_loan_accounts::<T>(Some(borrower)).first().unwrap().primary_collateral_asset,
-			LOAN_ASSET
+			get_loan_accounts::<T>(Some(borrower)).first().unwrap().collateral_topup_asset,
+			Some(LOAN_ASSET)
 		);
 	}
 
@@ -690,8 +690,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			loan_account
-				.abort_liquidation_swaps(LiquidationCompletionReason::FullySwapped, &price_cache);
+			loan_account.abort_liquidation_swaps(LiquidationCompletionReason::FullySwapped);
 		}
 		assert!(matches!(loan_account.liquidation_status, LiquidationStatus::NoLiquidation));
 	}

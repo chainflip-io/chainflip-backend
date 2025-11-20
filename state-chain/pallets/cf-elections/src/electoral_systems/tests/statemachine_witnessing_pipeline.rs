@@ -76,7 +76,7 @@ macro_rules! try_get {
     };
 }
 
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub trait AbstractVoter<M: Statemachine> {
 	fn vote(
 		&mut self,
@@ -87,9 +87,8 @@ pub trait AbstractVoter<M: Statemachine> {
 type Event = String;
 type Types = TypesFor<(u8, u32, Vec<Event>)>;
 
-#[allow(clippy::upper_case_acronyms)]
 type BW = BWStatemachine<Types>;
-#[allow(clippy::upper_case_acronyms)]
+#[expect(clippy::upper_case_acronyms)]
 type BHW = BlockHeightWitnesser<Types>;
 
 const OFFSET: usize = 20;
@@ -205,7 +204,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	enum BWTrace<T: BWTypes, T0: BHWTypes> {
 		Input(InputOf<BWStatemachine<T>>),
 		InputBHW(InputOf<BlockHeightWitnesser<T0>>),
-		#[allow(dead_code)]
+		#[expect(dead_code)]
 		Output(Vec<(ChainBlockNumberOf<T::Chain>, T::Event)>),
 		Event(BlockProcessorEvent<T>),
 		ET(ElectionTrackerEvent<T>),

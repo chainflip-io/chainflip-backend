@@ -671,7 +671,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	#[allow(clippy::type_complexity)]
 	pub(super) fn collect_and_burn(
 		&mut self,
 		lp: &LiquidityProvider,
@@ -755,7 +754,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	#[allow(dead_code)]
 	pub(super) fn collect(
 		&mut self,
 		lp: &LiquidityProvider,

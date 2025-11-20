@@ -90,7 +90,6 @@ derive_common_traits! {
 			height: ChainBlockNumberOf<T::Chain>,
 			ages: Range<u32>,
 		},
-		#[allow(clippy::type_complexity)]
 		DeleteData {
 			blocks: Vec<(ChainBlockNumberOf<T::Chain>, BlockProcessingInfo<T>)>,
 			events: Vec<T::Event>,
@@ -452,7 +451,7 @@ pub(crate) mod tests {
 	/// These events are deleted once latest_in_progress_height is higher than the expiry
 	#[test]
 	fn already_processed_events_saved_and_removed_correctly() {
-		#[allow(clippy::type_complexity)]
+		#[expect(clippy::type_complexity)]
 		let mut processor: BlockProcessor<TypesFor<(u8, Vec<u8>, Vec<u8>)>> =
 			BlockProcessor::<Types>::default();
 

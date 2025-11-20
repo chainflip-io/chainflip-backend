@@ -65,6 +65,7 @@ macro_rules! assets {
 		)+
 
 		// Ensures at compile-time all implicit-chain assets use difference json names, as otherwise deserialization is ambiguous.
+		#[allow(clippy::allow_attributes)]
 		#[allow(dead_code, unused_variables)]
 		fn _force_non_overlapping_implicit_assets() {
 			match "" {
@@ -272,7 +273,7 @@ macro_rules! assets {
 					impl TryFrom<any::Asset> for SerdeImplicitChainAsset {
 						type Error = ();
 
-
+						#[allow(clippy::allow_attributes)]
 						#[allow(unused_variables)]
 						fn try_from(value: any::Asset) -> Result<Self, Self::Error> {
 							match value {
@@ -288,6 +289,7 @@ macro_rules! assets {
 						}
 					}
 					impl From<SerdeImplicitChainAsset> for any::Asset {
+						#[allow(clippy::allow_attributes)]
 						#[allow(unused_variables)]
 						fn from(value: SerdeImplicitChainAsset) -> Self {
 							match value {

@@ -35,7 +35,7 @@
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 pub mod hub_runtime_types {
 	use super::*;
 	pub mod asset_hub_polkadot_runtime {

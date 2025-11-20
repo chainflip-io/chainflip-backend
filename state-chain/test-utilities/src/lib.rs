@@ -48,6 +48,13 @@ macro_rules! assert_has_matching_event {
 }
 
 #[macro_export]
+macro_rules! assert_no_matching_event {
+	( $runtime:ty, $event:pat $(if $guard:expr )? $(,)? ) => {
+		$crate::assert_matching_event_count!($runtime, $event $(if $guard)? => 0);
+	};
+}
+
+#[macro_export]
 macro_rules! assert_matching_event_count {
 	( $runtime:ty, $event:pat $(if $guard:expr )? => $value:literal $(,)? ) => {
 		$crate::assert_matching_event_count!($runtime, $event $(if $guard)? => |count| count == $value);

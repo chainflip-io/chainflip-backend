@@ -223,6 +223,23 @@ where
 		self
 	}
 
+	/// Process the next `n` blocks, executing `f` and hooks
+	#[track_caller]
+	pub fn then_process_blocks_with(
+		mut self,
+		n: u32,
+		f: impl Fn(Ctx) -> Ctx + Clone,
+	) -> TestExternalities<Runtime, Ctx> {
+		for _ in 0..n {
+			let f = f.clone();
+			self = self.ext.execute_at_next_block(
+				#[track_caller]
+				move || f(self.context),
+			)
+		}
+		self
+	}
+
 	/// Keep processing blocks up to and including the given block number.
 	pub fn then_process_blocks_until_block(
 		mut self,

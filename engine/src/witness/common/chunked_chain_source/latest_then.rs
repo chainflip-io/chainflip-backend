@@ -62,7 +62,6 @@ where
 				async move {
 					let apply_then = |header: Header<_, _, _>| {
 						let epoch = epoch.clone();
-						#[allow(clippy::redundant_async_block)]
 						header
 							.then_data(move |header| async move { then_fn(epoch, header).await })
 							.boxed()

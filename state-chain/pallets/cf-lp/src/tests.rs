@@ -486,6 +486,7 @@ fn schedule_swap_checks() {
 				origin: cf_chains::SwapOrigin::OnChainAccount(LP_ACCOUNT),
 				remaining_input_amount: INPUT_AMOUNT,
 				accumulated_output_amount: 0,
+				dca_params: None,
 			})])
 		);
 
