@@ -532,7 +532,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn update_primary_collateral_asset() {
+	fn update_collateral_topup_asset() {
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
 		let origin = RawOrigin::Signed(borrower.clone());
 		let collateral =
@@ -549,11 +549,11 @@ mod benchmarks {
 		));
 
 		#[extrinsic_call]
-		update_primary_collateral_asset(origin, LOAN_ASSET);
+		update_collateral_topup_asset(origin, Some(LOAN_ASSET));
 
 		assert_eq!(
-			get_loan_accounts::<T>(Some(borrower)).first().unwrap().primary_collateral_asset,
-			LOAN_ASSET
+			get_loan_accounts::<T>(Some(borrower)).first().unwrap().collateral_topup_asset,
+			Some(LOAN_ASSET)
 		);
 	}
 
@@ -745,7 +745,7 @@ mod benchmarks {
 			_make_repayment::<Test>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_update_primary_collateral_asset::<Test>(true);
+			_update_collateral_topup_asset::<Test>(true);
 		});
 		new_test_ext().execute_with(|| {
 			_usd_value_of::<Test>(true);

@@ -86,7 +86,7 @@ pub trait LendingApi {
 		borrower: Self::AccountId,
 		asset: Asset,
 		amount_to_borrow: AssetAmount,
-		primary_collateral_asset: Option<Asset>,
+		collateral_topup_asset: Option<Asset>,
 		collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<LoanId, DispatchError>;
 
@@ -98,7 +98,7 @@ pub trait LendingApi {
 
 	fn add_collateral(
 		borrower_id: &Self::AccountId,
-		primary_collateral_asset: Option<Asset>,
+		collateral_topup_asset: Option<Asset>,
 		collateral: BTreeMap<Asset, AssetAmount>,
 	) -> DispatchResult;
 
@@ -107,9 +107,9 @@ pub trait LendingApi {
 		collateral: BTreeMap<Asset, AssetAmount>,
 	) -> DispatchResult;
 
-	fn update_primary_collateral_asset(
+	fn update_collateral_topup_asset(
 		borrower_id: &Self::AccountId,
-		primary_collateral_asset: Asset,
+		collateral_topup_asset: Option<Asset>,
 	) -> DispatchResult;
 
 	/// Can be used to indicate user's intent to trigger (value=true) or stop (value=false)

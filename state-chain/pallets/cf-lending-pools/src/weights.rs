@@ -62,7 +62,7 @@ pub trait WeightInfo {
 	fn request_loan() -> Weight;
 	fn expand_loan() -> Weight;
 	fn make_repayment() -> Weight;
-	fn update_primary_collateral_asset() -> Weight;
+	fn update_collateral_topup_asset() -> Weight;
 	fn usd_value_of() -> Weight;
 	fn initiate_network_fee_swap() -> Weight;
 	fn derive_ltv() -> Weight;
@@ -347,7 +347,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `LendingPools::LoanAccounts` (r:1 w:1)
 	/// Proof: `LendingPools::LoanAccounts` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn update_primary_collateral_asset() -> Weight {
+	fn update_collateral_topup_asset() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `785`
 		//  Estimated: `4250`
@@ -745,7 +745,7 @@ impl WeightInfo for () {
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `LendingPools::LoanAccounts` (r:1 w:1)
 	/// Proof: `LendingPools::LoanAccounts` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn update_primary_collateral_asset() -> Weight {
+	fn update_collateral_topup_asset() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `785`
 		//  Estimated: `4250`

@@ -405,9 +405,9 @@ pub mod pallet {
 			loan_id: LoanId,
 			extra_principal_amount: AssetAmount,
 		},
-		PrimaryCollateralAssetUpdated {
+		CollateralTopupAssetUpdated {
 			borrower_id: T::AccountId,
-			primary_collateral_asset: Asset,
+			collateral_topup_asset: Option<Asset>,
 		},
 		OriginationFeeTaken {
 			loan_id: LoanId,
@@ -849,7 +849,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::add_collateral())]
 		pub fn add_collateral(
 			origin: OriginFor<T>,
-			primary_collateral_asset: Option<Asset>,
+			collateral_topup_asset: Option<Asset>,
 			collateral: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
@@ -859,7 +859,7 @@ pub mod pallet {
 				Error::<T>::AccountNotWhitelisted
 			);
 
-			<Self as LendingApi>::add_collateral(&borrower_id, primary_collateral_asset, collateral)
+			<Self as LendingApi>::add_collateral(&borrower_id, collateral_topup_asset, collateral)
 		}
 
 		#[pallet::call_index(8)]
@@ -879,7 +879,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			loan_asset: Asset,
 			loan_amount: AssetAmount,
-			primary_collateral_asset: Option<Asset>,
+			collateral_topup_asset: Option<Asset>,
 			extra_collateral: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
@@ -893,7 +893,7 @@ pub mod pallet {
 				borrower_id,
 				loan_asset,
 				loan_amount,
-				primary_collateral_asset,
+				collateral_topup_asset,
 				extra_collateral,
 			)?;
 
@@ -901,16 +901,16 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::update_primary_collateral_asset())]
-		pub fn update_primary_collateral_asset(
+		#[pallet::weight(T::WeightInfo::update_collateral_topup_asset())]
+		pub fn update_collateral_topup_asset(
 			origin: OriginFor<T>,
-			primary_collateral_asset: Asset,
+			collateral_topup_asset: Option<Asset>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			<Self as LendingApi>::update_primary_collateral_asset(
+			<Self as LendingApi>::update_collateral_topup_asset(
 				&borrower_id,
-				primary_collateral_asset,
+				collateral_topup_asset,
 			)
 		}
 
