@@ -1748,6 +1748,242 @@ fn liquidation_with_outstanding_principal_and_owed_network_fees() {
 		});
 }
 
+mod multi_asset_collateral_liquidation {
+
+	use super::*;
+
+	fn get_loan_account() -> LoanAccount<Test> {
+		LoanAccounts::<Test>::get(BORROWER).unwrap()
+	}
+
+	fn add_second_asset_collateral() {
+		// Add collateral in a different asset to trigger multiple liquidation liquidation
+		// swap
+		set_asset_price_in_usd(OTHER_COLLATERAL_ASSET, 1);
+
+		MockBalance::credit_account(&BORROWER, OTHER_COLLATERAL_ASSET, INIT_COLLATERAL);
+
+		assert_ok!(LendingPools::add_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			None,
+			BTreeMap::from([(OTHER_COLLATERAL_ASSET, OTHER_COLLATERAL_ASSET_AMOUNT)]),
+		));
+	}
+
+	const OTHER_COLLATERAL_ASSET: Asset = Asset::Usdc;
+	const OTHER_COLLATERAL_ASSET_AMOUNT: AssetAmount = INIT_COLLATERAL / 10;
+
+	// This should trigger soft liquidation
+	const NEW_SWAP_RATE: u128 = 27;
+
+	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
+	const LIQUIDATION_SWAP_2: SwapRequestId = SwapRequestId(1);
+
+	/// Two liquidation swaps: swap 1 executes partially, but does not repay the loan yet;
+	/// swap 2 executes fully, which aborts liquidation as together with swap 1 we have enough
+	/// funds to fully repay the loan.
+	#[test]
+	fn one_liquidation_swap_completes_the_other_aborted_due_to_low_ltv() {
+		// Swap 1 will be a partial swap
+		const SWAP_1_REMAINING_INPUT: AssetAmount = INIT_COLLATERAL / 10;
+		const SWAP_1_OUTPUT_AMOUNT: AssetAmount = 82 * PRINCIPAL / 100;
+
+		const TOTAL_OWED: AssetAmount = PRINCIPAL + ORIGINATION_FEE;
+
+		// Swap 2 will result in this much excess amount in loan asset (after taking
+		// the output from swap 1 into account).
+		const EXCESS_AMOUNT: AssetAmount = PRINCIPAL / 100;
+
+		// Swap 2 will be a full swap
+		const SWAP_2_OUTPUT_AMOUNT: AssetAmount = TOTAL_OWED - SWAP_1_OUTPUT_AMOUNT + EXCESS_AMOUNT;
+
+		let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAP_2_OUTPUT_AMOUNT;
+		let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) *
+			(TOTAL_OWED + liquidation_fee_1 - SWAP_2_OUTPUT_AMOUNT);
+
+		let total_liquidation_fee = liquidation_fee_1 + liquidation_fee_2;
+
+		// The intention is to have some amount left after liquidation fees to be added to
+		// collateral:
+		assert!(EXCESS_AMOUNT > total_liquidation_fee);
+
+		new_test_ext()
+			.with_funded_pool(INIT_POOL_AMOUNT)
+			.with_default_loan()
+			.execute_with(|| {
+				add_second_asset_collateral();
+				// Change oracle price to trigger liquidation
+				set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+			})
+			.then_execute_at_next_block(|_| {
+				assert_eq!(
+					get_loan_account().liquidation_status,
+					LiquidationStatus::Liquidating {
+						liquidation_swaps: BTreeMap::from([
+							(
+								LIQUIDATION_SWAP_1,
+								LiquidationSwap {
+									loan_id: LOAN_ID,
+									from_asset: COLLATERAL_ASSET,
+									to_asset: LOAN_ASSET
+								}
+							),
+							(
+								LIQUIDATION_SWAP_2,
+								LiquidationSwap {
+									loan_id: LOAN_ID,
+									from_asset: OTHER_COLLATERAL_ASSET,
+									to_asset: LOAN_ASSET
+								}
+							)
+						]),
+						liquidation_type: LiquidationType::Soft
+					}
+				);
+
+				// Swap 1 gets executed partially
+				MockSwapRequestHandler::<Test>::set_swap_request_progress(
+					LIQUIDATION_SWAP_1,
+					SwapExecutionProgress {
+						remaining_input_amount: SWAP_1_REMAINING_INPUT,
+						accumulated_output_amount: SWAP_1_OUTPUT_AMOUNT,
+					},
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				// We are still liquidating:
+				assert_matches!(
+					get_loan_account().liquidation_status,
+					LiquidationStatus::Liquidating { .. }
+				);
+
+				// Swap 2 executes fully and repays the loan in full
+				LendingPools::process_loan_swap_outcome(
+					LIQUIDATION_SWAP_2,
+					LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
+					SWAP_2_OUTPUT_AMOUNT,
+				);
+
+				// One liquidation swap still remains:
+				assert_eq!(
+					get_loan_account().liquidation_status,
+					LiquidationStatus::Liquidating {
+						liquidation_swaps: BTreeMap::from([(
+							LIQUIDATION_SWAP_1,
+							LiquidationSwap {
+								loan_id: LOAN_ID,
+								from_asset: COLLATERAL_ASSET,
+								to_asset: LOAN_ASSET
+							}
+						)]),
+						liquidation_type: LiquidationType::Soft
+					}
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				// The remaining liquidation swap should be aborted here:
+				assert_eq!(get_loan_account().liquidation_status, LiquidationStatus::NoLiquidation);
+
+				// The loan has been settled:
+				assert_eq!(get_loan_account().loans, Default::default());
+
+				// Collateral from both swaps should be returned to the collateral balance:
+				assert_eq!(
+					get_loan_account().collateral,
+					BTreeMap::from([
+						(LOAN_ASSET, EXCESS_AMOUNT - total_liquidation_fee),
+						(COLLATERAL_ASSET, SWAP_1_REMAINING_INPUT)
+					])
+				);
+			});
+	}
+
+	/// Two liquidation swaps: swap 1 executes fully and covers the loan in full; by the time
+	/// swap 2 is aborted the loan is already repaid (though not settled), and all its funds
+	/// (remaning input + collected output) to the users collateral. Only then does the loan
+	/// get settled.
+	#[test]
+	fn one_liquidation_swap_comletely_covers_the_loan_the_other_aborts() {
+		const TOTAL_OWED: AssetAmount = PRINCIPAL + ORIGINATION_FEE;
+
+		let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * TOTAL_OWED;
+
+		const EXCESS_AMOUNT: AssetAmount = PRINCIPAL / 100;
+
+		// Swap 1 will be executed fully with some excess amount of the total owed principal
+		let swap_1_output_amount = TOTAL_OWED + EXCESS_AMOUNT + liquidation_fee;
+
+		// Swap 2 will only be executed half way through
+		const SWAP_2_REMAINING_INPUT_AMOUNT: AssetAmount = OTHER_COLLATERAL_ASSET_AMOUNT / 2;
+		const SWAP_2_OUTPUT_AMOUNT: AssetAmount = (OTHER_COLLATERAL_ASSET_AMOUNT / 2) / SWAP_RATE;
+
+		new_test_ext()
+			.with_funded_pool(INIT_POOL_AMOUNT)
+			.with_default_loan()
+			.execute_with(|| {
+				add_second_asset_collateral();
+				// Change oracle price to trigger liquidation
+				set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+			})
+			.then_execute_at_next_block(|_| {
+				// Swap 2 gets executed partially
+				MockSwapRequestHandler::<Test>::set_swap_request_progress(
+					LIQUIDATION_SWAP_2,
+					SwapExecutionProgress {
+						remaining_input_amount: SWAP_2_REMAINING_INPUT_AMOUNT,
+						accumulated_output_amount: SWAP_2_OUTPUT_AMOUNT,
+					},
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				// We are still liquidating:
+				assert_matches!(
+					get_loan_account().liquidation_status,
+					LiquidationStatus::Liquidating { .. }
+				);
+
+				// Swap 1 executes fully and immediately repays the loan in full
+				LendingPools::process_loan_swap_outcome(
+					LIQUIDATION_SWAP_1,
+					LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
+					swap_1_output_amount,
+				);
+
+				// One liquidation swap still remains:
+				assert_eq!(
+					get_loan_account().liquidation_status,
+					LiquidationStatus::Liquidating {
+						liquidation_swaps: BTreeMap::from([(
+							LIQUIDATION_SWAP_2,
+							LiquidationSwap {
+								loan_id: LOAN_ID,
+								from_asset: OTHER_COLLATERAL_ASSET,
+								to_asset: LOAN_ASSET
+							}
+						)]),
+						liquidation_type: LiquidationType::Soft
+					}
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				// The remaining liquidation swap should be aborted here:
+				assert_eq!(get_loan_account().liquidation_status, LiquidationStatus::NoLiquidation);
+
+				// The loan has been settled:
+				assert_eq!(get_loan_account().loans, Default::default());
+
+				// Collateral from both swaps should be returned to the collateral balance:
+				assert_eq!(
+					get_loan_account().collateral,
+					BTreeMap::from([
+						(LOAN_ASSET, EXCESS_AMOUNT + SWAP_2_OUTPUT_AMOUNT),
+						(OTHER_COLLATERAL_ASSET, SWAP_2_REMAINING_INPUT_AMOUNT)
+					])
+				);
+			});
+	}
+}
+
 #[test]
 fn small_interest_amounts_accumulate() {
 	const PRINCIPAL: AssetAmount = 10_000_000;

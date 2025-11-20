@@ -690,8 +690,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			loan_account
-				.abort_liquidation_swaps(LiquidationCompletionReason::FullySwapped, &price_cache);
+			loan_account.abort_liquidation_swaps(LiquidationCompletionReason::FullySwapped);
 		}
 		assert!(matches!(loan_account.liquidation_status, LiquidationStatus::NoLiquidation));
 	}
