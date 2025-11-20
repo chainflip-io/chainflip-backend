@@ -1164,7 +1164,7 @@ fn loan_account_serialization() {
 
 	let loan_account = RpcLoanAccount::<_, U256> {
 		account: ID_1,
-		primary_collateral_asset: Asset::Btc,
+		collateral_topup_asset: Some(Asset::Btc),
 		ltv_ratio: Some(FixedU64::from_rational(4, 3)),
 		collateral: vec![(AssetAndAmount { asset: Asset::Btc, amount: 3u128.into() })],
 		loans: vec![RpcLoan {

@@ -1,7 +1,9 @@
 use crate::mocks::*;
 use cf_amm_math::PRICE_FRACTIONAL_BITS;
 use cf_chains::{evm::U256, ForeignChain};
-use cf_test_utilities::{assert_event_sequence, assert_has_event, assert_matching_event_count};
+use cf_test_utilities::{
+	assert_event_sequence, assert_has_event, assert_matching_event_count, assert_no_matching_event,
+};
 use cf_traits::{
 	lending::LendingSystemApi,
 	mocks::{
@@ -62,7 +64,7 @@ impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<T
 					BORROWER,
 					LOAN_ASSET,
 					PRINCIPAL,
-					Some(COLLATERAL_ASSET),
+					None,
 					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
 				),
 				Ok(LOAN_ID)
@@ -343,13 +345,7 @@ fn basic_general_lending() {
 			let collateral = BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]);
 
 			assert_eq!(
-				LendingPools::new_loan(
-					BORROWER,
-					LOAN_ASSET,
-					PRINCIPAL,
-					Some(COLLATERAL_ASSET),
-					collateral.clone(),
-				),
+				LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None, collateral.clone(),),
 				Ok(LOAN_ID)
 			);
 
@@ -357,10 +353,6 @@ fn basic_general_lending() {
 			// referencing it (e.g. OriginationFeeTaken)
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::LendingPools(Event::<Test>::PrimaryCollateralAssetUpdated{
-					borrower_id: BORROWER,
-					primary_collateral_asset: COLLATERAL_ASSET,
-				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LoanCreated {
 					loan_id: LOAN_ID,
 					borrower_id: BORROWER,
@@ -376,6 +368,13 @@ fn basic_general_lending() {
 					loan_id: LOAN_ID,
 					..
 				})
+			);
+			assert_no_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::CollateralTopupAssetUpdated {
+					borrower_id: BORROWER,
+					collateral_topup_asset: Some(COLLATERAL_ASSET),
+				}),
 			);
 
 			assert_has_event::<Test>(RuntimeEvent::LendingPools(
@@ -408,7 +407,7 @@ fn basic_general_lending() {
 				LoanAccounts::<Test>::get(BORROWER),
 				Some(LoanAccount {
 					borrower_id: BORROWER,
-					primary_collateral_asset: COLLATERAL_ASSET,
+					collateral_topup_asset: None,
 					collateral: BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
 					liquidation_status: LiquidationStatus::NoLiquidation,
 					voluntary_liquidation_requested: false,
@@ -578,7 +577,7 @@ fn basic_general_lending() {
 				LoanAccounts::<Test>::get(BORROWER),
 				Some(LoanAccount {
 					borrower_id: BORROWER,
-					primary_collateral_asset: COLLATERAL_ASSET,
+					collateral_topup_asset: None,
 					liquidation_status: LiquidationStatus::NoLiquidation,
 					voluntary_liquidation_requested: false,
 					// Note that we don't automatically release the collateral:
@@ -854,7 +853,7 @@ fn basic_loan_aggregation() {
 				LoanAccounts::<Test>::get(BORROWER).unwrap(),
 				LoanAccount {
 					borrower_id: BORROWER,
-					primary_collateral_asset: COLLATERAL_ASSET,
+					collateral_topup_asset: Some(COLLATERAL_ASSET),
 					collateral: BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
 					loans: BTreeMap::from([(
 						LOAN_ID,
@@ -951,7 +950,7 @@ fn basic_loan_aggregation() {
 				LoanAccounts::<Test>::get(BORROWER).unwrap(),
 				LoanAccount {
 					borrower_id: BORROWER,
-					primary_collateral_asset: COLLATERAL_ASSET,
+					collateral_topup_asset: Some(COLLATERAL_ASSET),
 					// Loan's collateral has been increased:
 					collateral: BTreeMap::from([(
 						COLLATERAL_ASSET,
@@ -1103,9 +1102,9 @@ fn adding_and_removing_collateral() {
 
 		assert_event_sequence!(
 			Test,
-			RuntimeEvent::LendingPools(Event::<Test>::PrimaryCollateralAssetUpdated{
+			RuntimeEvent::LendingPools(Event::<Test>::CollateralTopupAssetUpdated {
 				borrower_id: BORROWER,
-				primary_collateral_asset: COLLATERAL_ASSET_1,
+				collateral_topup_asset: Some(COLLATERAL_ASSET_1),
 			}),
 			RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
 				borrower_id: BORROWER,
@@ -1119,7 +1118,7 @@ fn adding_and_removing_collateral() {
 			LoanAccounts::<Test>::get(BORROWER).unwrap(),
 			LoanAccount {
 				borrower_id: BORROWER,
-				primary_collateral_asset: COLLATERAL_ASSET_1,
+				collateral_topup_asset: Some(COLLATERAL_ASSET_1),
 				collateral: collateral.clone(),
 				loans: BTreeMap::default(),
 				liquidation_status: LiquidationStatus::NoLiquidation,
@@ -1266,7 +1265,7 @@ fn basic_liquidation() {
 				LoanAccounts::<Test>::get(BORROWER),
 				Some(LoanAccount {
 					borrower_id: BORROWER,
-					primary_collateral_asset: COLLATERAL_ASSET,
+					collateral_topup_asset: None,
 					liquidation_status: LiquidationStatus::NoLiquidation,
 					voluntary_liquidation_requested: false,
 					// Note that we don't automatically release the collateral:
@@ -1454,7 +1453,7 @@ fn basic_liquidation() {
 				LoanAccounts::<Test>::get(BORROWER),
 				Some(LoanAccount {
 					borrower_id: BORROWER,
-					primary_collateral_asset: COLLATERAL_ASSET,
+					collateral_topup_asset: None,
 					collateral: BTreeMap::from([(LOAN_ASSET, excess_principal)]),
 					liquidation_status: LiquidationStatus::NoLiquidation,
 					voluntary_liquidation_requested: false,
@@ -1524,7 +1523,7 @@ fn liquidation_fully_repays_loan_when_aborted() {
 				LoanAccounts::<Test>::get(BORROWER),
 				Some(LoanAccount {
 					borrower_id: BORROWER,
-					primary_collateral_asset: COLLATERAL_ASSET,
+					collateral_topup_asset: None,
 					liquidation_status: LiquidationStatus::NoLiquidation,
 					voluntary_liquidation_requested: false,
 					collateral: BTreeMap::from([
@@ -2143,26 +2142,26 @@ fn borrowing_disallowed_during_liquidation() {
 }
 
 #[test]
-fn updating_primary_collateral_asset() {
-	const NEW_PRIMARY_ASSEET: Asset = Asset::Btc;
+fn updating_collateral_topup_asset() {
+	const COLLATERAL_TOPUP_ASSET: Asset = Asset::Btc;
 
-	assert_ne!(COLLATERAL_ASSET, NEW_PRIMARY_ASSEET);
+	assert_ne!(COLLATERAL_ASSET, COLLATERAL_TOPUP_ASSET);
 
 	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
 		// Must have LP role:
 		assert_noop!(
-			LendingPools::update_primary_collateral_asset(
+			LendingPools::update_collateral_topup_asset(
 				RuntimeOrigin::signed(NON_LP),
-				NEW_PRIMARY_ASSEET
+				Some(COLLATERAL_TOPUP_ASSET)
 			),
 			DispatchError::BadOrigin
 		);
 
 		// Must alreaady have a loan account:
 		assert_noop!(
-			LendingPools::update_primary_collateral_asset(
+			LendingPools::update_collateral_topup_asset(
 				RuntimeOrigin::signed(BORROWER),
-				NEW_PRIMARY_ASSEET
+				Some(COLLATERAL_TOPUP_ASSET)
 			),
 			Error::<Test>::LoanAccountNotFound
 		);
@@ -2176,15 +2175,15 @@ fn updating_primary_collateral_asset() {
 			BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
 		));
 
-		assert_ok!(LendingPools::update_primary_collateral_asset(
+		assert_ok!(LendingPools::update_collateral_topup_asset(
 			RuntimeOrigin::signed(BORROWER),
-			NEW_PRIMARY_ASSEET
+			Some(COLLATERAL_TOPUP_ASSET)
 		));
 
 		assert_has_event::<Test>(RuntimeEvent::LendingPools(
-			Event::<Test>::PrimaryCollateralAssetUpdated {
+			Event::<Test>::CollateralTopupAssetUpdated {
 				borrower_id: BORROWER,
-				primary_collateral_asset: NEW_PRIMARY_ASSEET,
+				collateral_topup_asset: Some(COLLATERAL_TOPUP_ASSET),
 			},
 		));
 	});
@@ -2569,7 +2568,7 @@ fn adding_collateral_during_liquidation() {
 				get_account(),
 				LoanAccount {
 					borrower_id: BORROWER,
-					primary_collateral_asset: COLLATERAL_ASSET,
+					collateral_topup_asset: None,
 					collateral: BTreeMap::from([(
 						COLLATERAL_ASSET,
 						INIT_COLLATERAL +
@@ -2669,7 +2668,7 @@ mod voluntary_liquidation {
 					LoanAccounts::<Test>::get(BORROWER).unwrap(),
 					LoanAccount {
 						borrower_id: BORROWER,
-						primary_collateral_asset: COLLATERAL_ASSET,
+						collateral_topup_asset: None,
 						collateral: BTreeMap::from([
 							(COLLATERAL_ASSET, INIT_COLLATERAL - SWAPPED_COLLATERAL),
 							(LOAN_ASSET, EXCESS_PRINCIPAL)
@@ -2744,7 +2743,7 @@ mod voluntary_liquidation {
 					LoanAccounts::<Test>::get(BORROWER).unwrap(),
 					LoanAccount {
 						borrower_id: BORROWER,
-						primary_collateral_asset: COLLATERAL_ASSET,
+						collateral_topup_asset: None,
 						// Part of collateral was used in liquidation:
 						collateral: BTreeMap::from([(
 							COLLATERAL_ASSET,
@@ -2998,7 +2997,7 @@ mod voluntary_liquidation {
 					LoanAccounts::<Test>::get(BORROWER).unwrap(),
 					LoanAccount {
 						borrower_id: BORROWER,
-						primary_collateral_asset: COLLATERAL_ASSET,
+						collateral_topup_asset: None,
 						collateral: BTreeMap::from([(LOAN_ASSET, SWAPPED_PRINCIPAL_EXTRA)]),
 						loans: Default::default(),
 						liquidation_status: LiquidationStatus::NoLiquidation,
@@ -3500,7 +3499,7 @@ fn init_liquidation_swaps_test() {
 
 	let mut loan_account = LoanAccount::<Test> {
 		borrower_id: BORROWER,
-		primary_collateral_asset: Asset::Eth,
+		collateral_topup_asset: Some(Asset::Eth),
 		collateral: BTreeMap::from([(Asset::Eth, 500), (Asset::Usdc, 1_000_000)]),
 		loans: BTreeMap::from([
 			(
@@ -3720,7 +3719,7 @@ mod rpcs {
 					super::rpc::get_loan_accounts::<Test>(Some(BORROWER)),
 					vec![RpcLoanAccount {
 						account: BORROWER,
-						primary_collateral_asset: COLLATERAL_ASSET,
+						collateral_topup_asset: Some(COLLATERAL_ASSET),
 						ltv_ratio: Some(FixedU64::from_rational(750_075, 1_000_000)),
 						collateral: vec![AssetAndAmount {
 							asset: COLLATERAL_ASSET,
@@ -3786,7 +3785,7 @@ mod rpcs {
 					vec![
 						RpcLoanAccount {
 							account: BORROWER_2,
-							primary_collateral_asset: COLLATERAL_ASSET_2,
+							collateral_topup_asset: Some(COLLATERAL_ASSET_2),
 							ltv_ratio: Some(FixedU64::from_rational(1_173_483_333, 1_000_000_000)),
 							// NOTE: all of collateral is in liquidation swaps, but we include
 							// any amount that has not been swapped yet:
@@ -3813,7 +3812,7 @@ mod rpcs {
 						},
 						RpcLoanAccount {
 							account: BORROWER,
-							primary_collateral_asset: COLLATERAL_ASSET,
+							collateral_topup_asset: Some(COLLATERAL_ASSET),
 							// LTV slightly increased due to interest payment:
 							ltv_ratio: Some(FixedU64::from_rational(750_075_090, 1_000_000_000)),
 							collateral: vec![AssetAndAmount {

@@ -1638,7 +1638,7 @@ where
 					.into_iter()
 					.map(|acc| RpcLoanAccount::<_, U256> {
 						account: acc.account,
-						primary_collateral_asset: acc.primary_collateral_asset,
+						collateral_topup_asset: acc.collateral_topup_asset,
 						ltv_ratio: acc.ltv_ratio,
 						collateral: acc.collateral.into_iter().map(Into::into).collect(),
 						loans: acc
