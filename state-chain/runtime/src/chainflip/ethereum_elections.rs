@@ -599,8 +599,8 @@ impl UpdateFeeHook<EthereumTrackedData> for EthereumFeeUpdateHook {
 	}
 }
 
-const FEE_HISTORY_WINDOW: u64 = 5;
-const PRIORITY_FEE_PERCENTILE: u64 = 50;
+pub const FEE_HISTORY_WINDOW: u64 = 5;
+pub const PRIORITY_FEE_PERCENTILE: u64 = 50;
 
 /// Settings are FEE_HISTORY_WINDOW and PRIORITY_FEE_PERCENTILE (previously hardcoded in the engine)
 pub type EthereumFeeTracking = UnsafeMedian<
